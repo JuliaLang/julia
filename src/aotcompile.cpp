@@ -273,6 +273,8 @@ void replaceUsesWithLoad(Function &F, function_ref<GlobalVariable *(Instruction 
 extern "C" JL_DLLEXPORT
 void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode, int _external_linkage, size_t _world)
 {
+    uint64_t start = jl_hrtime();
+    uint64_t end = 0;
     ++CreateNativeCalls;
     CreateNativeMax.updateMax(jl_array_len(methods));
     if (cgparams == NULL)
@@ -464,6 +466,8 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     if (ctx.getContext()) {
         jl_ExecutionEngine->releaseContext(std::move(ctx));
     }
+    end = jl_hrtime();
+    dbgs() << "jl_create_native: " << (end - start) / 1e9 << "s\n";
     return (void*)data;
 }
 
@@ -517,6 +521,8 @@ void jl_dump_native_impl(void *native_code,
         const char *asm_fname,
         const char *sysimg_data, size_t sysimg_len, ios_t *s)
 {
+    uint64_t start = jl_hrtime();
+    uint64_t end = 0;
     JL_TIMING(NATIVE_DUMP);
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
     auto TSCtx = data->M.getContext();
@@ -575,6 +581,12 @@ void jl_dump_native_impl(void *native_code,
 
     bool imaging_mode = imaging_default() || jl_options.outputo;
 
+    end = jl_hrtime();
+
+    dbgs() << "setup time: " << (end - start) / 1e9 << "s\n";
+
+    start = jl_hrtime();
+
     // add metadata information
     if (imaging_mode) {
         emit_offset_table(*dataM, data->jl_sysimg_gvars, "jl_sysimg_gvars", T_psize);
@@ -590,6 +602,12 @@ void jl_dump_native_impl(void *native_code,
                                      jlRTLD_DEFAULT_var,
                                      "jl_RTLD_DEFAULT_handle_pointer"));
     }
+
+    end = jl_hrtime();
+
+    dbgs() << "metadata time: " << (end - start) / 1e9 << "s\n";
+
+    start = jl_hrtime();
 
     // do the actual work
     auto add_output = [&] (Module &M, StringRef unopt_bc_Name, StringRef bc_Name, StringRef obj_Name, StringRef asm_Name) {
@@ -618,6 +636,9 @@ void jl_dump_native_impl(void *native_code,
         }
         assert(!verifyModule(M, &errs()));
 
+        uint64_t start = jl_hrtime();
+        end = 0;
+
 #ifndef JL_USE_NEW_PM
         legacy::PassManager optimizer;
         addTargetPasses(&optimizer, TM->getTargetTriple(), TM->getTargetIRAnalysis());
@@ -639,6 +660,10 @@ void jl_dump_native_impl(void *native_code,
         optimizer.run(M);
         assert(!verifyModule(M, &errs()));
 
+        end = jl_hrtime();
+
+        dbgs() << "optimize time: " << (end - start) / 1e9 << "s\n";
+
         if (bc_fname) {
             SmallVector<char, 0> Buffer;
             raw_svector_ostream OS(Buffer);
@@ -648,6 +673,8 @@ void jl_dump_native_impl(void *native_code,
             MPM.addPass(BitcodeWriterPass(OS));
             emit_result(bc_Archive, Buffer, bc_Name, outputs);
         }
+
+        start = jl_hrtime();
 
         if (obj_fname) {
             SmallVector<char, 0> Buffer;
@@ -659,6 +686,10 @@ void jl_dump_native_impl(void *native_code,
             emitter.run(M);
             emit_result(obj_Archive, Buffer, obj_Name, outputs);
         }
+
+        end = jl_hrtime();
+
+        dbgs() << "codegen time: " << (end - start) / 1e9 << "s\n";
 
         if (asm_fname) {
             SmallVector<char, 0> Buffer;
@@ -673,6 +704,12 @@ void jl_dump_native_impl(void *native_code,
     };
 
     add_output(*dataM, "unopt.bc", "text.bc", "text.o", "text.s");
+
+    end = jl_hrtime();
+
+    dbgs() << "text output time: " << (end - start) / 1e9 << "s\n";
+
+    start = jl_hrtime();
 
     orc::ThreadSafeModule sysimage(std::make_unique<Module>("sysimage", Context), TSCtx);
     auto sysimageM = sysimage.getModuleUnlocked();
@@ -751,6 +788,12 @@ void jl_dump_native_impl(void *native_code,
     }
     add_output(*sysimageM, "data.bc", "data.bc", "data.o", "data.s");
 
+    end = jl_hrtime();
+
+    dbgs() << "data module time: " << (end - start) / 1e9 << "s\n";
+
+    start = jl_hrtime();
+
     object::Archive::Kind Kind = getDefaultForHost(TheTriple);
     if (unopt_bc_fname)
         handleAllErrors(writeArchive(unopt_bc_fname, unopt_bc_Archive, true,
@@ -764,6 +807,10 @@ void jl_dump_native_impl(void *native_code,
     if (asm_fname)
         handleAllErrors(writeArchive(asm_fname, asm_Archive, true,
                     Kind, true, false), reportWriterError);
+    
+    end = jl_hrtime();
+
+    dbgs() << "archive time: " << (end - start) / 1e9 << "s\n";
 
     delete data;
 }
