@@ -425,15 +425,15 @@ end
 
 """
     allunique(itr) -> Bool
-    allunique(f, xs)
+    allunique(f, itr) -> Bool
 
 Return `true` if all values from `itr` are distinct when compared with [`isequal`](@ref).
-The second form takes `itr = (f(x) for x in xs)`.
+Or if all `f(x) for x in itr` are distinct, for `allunique(f, itr)`.
 
 See also: [`unique`](@ref), [`issorted`](@ref), [`allequal`](@ref).
 
 !!! compat "Julia 1.10"
-    The method `allunique(f, xs)` requires at least Julia 1.10.
+    The method `allunique(f, itr)` requires at least Julia 1.10.
 
 # Examples
 ```jldoctest
@@ -520,10 +520,10 @@ end
 
 """
     allequal(itr) -> Bool
-    allequal(f, xs)
+    allequal(f, itr) -> Bool
 
 Return `true` if all values from `itr` are equal when compared with [`isequal`](@ref).
-The second form takes `itr = (f(x) for x in xs)`.
+Or if all `f(x) for x in itr` are equal, for `allequal(f, itr)`.
 
 See also: [`unique`](@ref), [`allunique`](@ref).
 
@@ -531,7 +531,7 @@ See also: [`unique`](@ref), [`allunique`](@ref).
     The `allequal` function requires at least Julia 1.8.
 
 !!! compat "Julia 1.10"
-    The method `allequal(f, xs)` requires at least Julia 1.10.
+    The method `allequal(f, itr)` requires at least Julia 1.10.
 
 # Examples
 ```jldoctest
