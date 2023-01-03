@@ -7,7 +7,10 @@ See [`CRC32c.crc32c`](@ref) for more information.
 """
 module CRC32c
 
-import Base.FastContiguousSubArray
+# contiguous byte arrays compatible with underlying C API
+const ByteArray = Union{Array{UInt8},
+                        Base.FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N,
+                        Base.CodeUnits{UInt8, String}, Base.CodeUnits{UInt8, SubString{String}}}
 
 export crc32c
 
@@ -35,7 +38,7 @@ but note that the result may be endian-dependent.
 function crc32c end
 
 
-crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N}, crc::UInt32=0x00000000) = Base._crc32c(a, crc)
+crc32c(a::ByteArray, crc::UInt32=0x00000000) = Base.unsafe_crc32c(a, length(a) % Csize_t, crc)
 crc32c(s::Union{String, SubString{String}}, crc::UInt32=0x00000000) = Base._crc32c(s, crc)
 
 """
@@ -48,5 +51,17 @@ mixed with a starting `crc` integer.  If `nb` is not supplied, then
 crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000) = Base._crc32c(io, nb, crc)
 crc32c(io::IO, crc::UInt32=0x00000000) = Base._crc32c(io, crc)
 crc32c(io::IOStream, crc::UInt32=0x00000000) = Base._crc32c(io, crc)
+
+# optimized (copy-free) crc of IOBuffer
+const ByteBuffer = Base.GenericIOBuffer{<:ByteArray}
+crc32c(buf::ByteBuffer, crc::UInt32=0x00000000) = crc32c(buf, buf.size - position(buf), crc)
+function crc32c(buf::ByteBuffer, nb::Integer, crc::UInt32=0x00000000)
+    nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0, got $nb"))
+    isreadable(buf) || throw(ArgumentError("read failed, IOBuffer is not readable"))
+    nb = min(nb, buf.size - position(buf))
+    crc = GC.@preserve buf Base.unsafe_crc32c(pointer(buf.data) + position(buf), nb % Csize_t, crc)
+    buf.ptr += nb
+    return crc
+end
 
 end
