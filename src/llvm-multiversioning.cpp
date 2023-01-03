@@ -222,8 +222,6 @@ struct CloneCtx {
         int idx;
         uint32_t flags;
         std::unique_ptr<ValueToValueMapTy> vmap; // ValueToValueMapTy is not movable....
-        // function ids that needs relocation to be initialized
-        std::set<uint32_t> relocs{};
         Target(int idx, const jl_target_spec_t &spec) :
             idx(idx),
             flags(spec.flags),
@@ -290,8 +288,6 @@ private:
     std::vector<std::pair<Constant*,uint32_t>> gv_relocs{};
     // Mapping from function id (i.e. 0-based index in `fvars`) to GVs to be initialized.
     std::map<uint32_t,GlobalVariable*> const_relocs;
-    // Functions that were referred to by a global alias, and might not have other uses.
-    std::set<uint32_t> alias_relocs;
     bool has_veccall{false};
     bool has_cloneall{false};
     bool allow_bad_fvars{false};
@@ -734,13 +730,6 @@ void CloneCtx::rewrite_alias(GlobalAlias *alias, Function *F)
     uint32_t id;
     GlobalVariable *slot;
     std::tie(id, slot) = get_reloc_slot(F);
-    for (auto &grp: groups) {
-        grp.relocs.insert(id);
-        for (auto &tgt: grp.clones) {
-            tgt.relocs.insert(id);
-        }
-    }
-    alias_relocs.insert(id);
 
     auto BB = BasicBlock::Create(F->getContext(), "top", trampoline);
     IRBuilder<> irbuilder(BB);
@@ -884,15 +873,6 @@ void CloneCtx::fix_inst_uses()
                 if (!use_f->getName().endswith(suffix))
                     return nullptr;
                 std::tie(id, slot) = get_reloc_slot(orig_f);
-
-                grp.relocs.insert(id);
-                for (auto &tgt: grp.clones) {
-                    // The enclosing function of the use is cloned,
-                    // no need to deal with this use on this target.
-                    if (map_get(*tgt.vmap, use_f))
-                        continue;
-                    tgt.relocs.insert(id);
-                }
                 return slot;
             }, tbaa_const);
         }
@@ -1018,11 +998,9 @@ void CloneCtx::emit_metadata()
             }
             auto it = const_relocs.find(id);
             if (it != const_relocs.end()) {
+                shared_relocs.insert(id);
                 values.push_back(id_v);
                 values.push_back(get_ptrdiff32(it->second, gbase));
-            }
-            if (alias_relocs.find(id) != alias_relocs.end()) {
-                shared_relocs.insert(id);
             }
         }
         values[0] = ConstantInt::get(T_int32, values.size() / 2);
@@ -1046,7 +1024,7 @@ void CloneCtx::emit_metadata()
                 auto grp = static_cast<Group*>(tgt);
                 count = jl_sysimg_tag_mask;
                 for (uint32_t j = 0; j < nfvars; j++) {
-                    if (shared_relocs.count(j) || tgt->relocs.count(j)) {
+                    if (shared_relocs.count(j)) {
                         count++;
                         idxs.push_back(j);
                     }
@@ -1061,7 +1039,7 @@ void CloneCtx::emit_metadata()
                 idxs.push_back(baseidx);
                 for (uint32_t j = 0; j < nfvars; j++) {
                     auto base_f = grp->base_func(fvars[j]);
-                    if (shared_relocs.count(j) || tgt->relocs.count(j)) {
+                    if (shared_relocs.count(j)) {
                         count++;
                         idxs.push_back(jl_sysimg_tag_mask | j);
                         auto f = map_get(*tgt->vmap, base_f, base_f);
