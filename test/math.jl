@@ -494,27 +494,30 @@ end
             @test cospi(convert(T,-1.5))::fT === zero(fT)
             @test_throws DomainError cospi(convert(T,Inf))
         end
+
         @testset "Check exact values" begin
-            # If the machine supports fused multiply add (fma), we require exact equality.
+            # If the machine supports fma (fused multiply add), we require exact equality.
             # Otherwise, we only require approximate equality.
             if has_fma[T]
-                @info "On this machine, FMA is supported for $(T), so we will test for exact equality"
                 my_eq = (==)
+                @debug "On this machine, FMA is supported for $(T), so we will test for exact equality" my_eq
             else
-                @info "On this machine, FMA is not supported for $(T), so we will test for approximate equality"
                 my_eq = isapprox
+                @debug "On this machine, FMA is not supported for $(T), so we will test for approximate equality" my_eq
             end
-            @test sind(convert(T,30)) == 0.5
-            @test cosd(convert(T,60)) == 0.5
-            @test sind(convert(T,150)) == 0.5
-            @test my_eq(sinpi(one(T)/convert(T,6)), 0.5)
-            @test my_eq(sincospi(one(T)/convert(T,6))[1], 0.5)
-            @test_throws DomainError sind(convert(T,Inf))
-            @test_throws DomainError cosd(convert(T,Inf))
-            T != Float32 && @test my_eq(cospi(one(T)/convert(T,3)), 0.5)
-            T != Float32 && @test my_eq(sincospi(one(T)/convert(T,3))[2], 0.5)
-            T == Rational{Int} && @test my_eq(sinpi(5//6), 0.5)
-            T == Rational{Int} && @test my_eq(sincospi(5//6)[1], 0.5)
+            @testset let context=(T, has_fma[T], my_eq)
+                @test sind(convert(T,30)) == 0.5
+                @test cosd(convert(T,60)) == 0.5
+                @test sind(convert(T,150)) == 0.5
+                @test my_eq(sinpi(one(T)/convert(T,6)), 0.5)
+                @test my_eq(sincospi(one(T)/convert(T,6))[1], 0.5)
+                @test_throws DomainError sind(convert(T,Inf))
+                @test_throws DomainError cosd(convert(T,Inf))
+                T != Float32 && @test my_eq(cospi(one(T)/convert(T,3)), 0.5)
+                T != Float32 && @test my_eq(sincospi(one(T)/convert(T,3))[2], 0.5)
+                T == Rational{Int} && @test my_eq(sinpi(5//6), 0.5)
+                T == Rational{Int} && @test my_eq(sincospi(5//6)[1], 0.5)
+            end
         end
     end
     scdm = sincosd(missing)
