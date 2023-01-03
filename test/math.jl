@@ -16,6 +16,7 @@ has_fma_Float64() = Core.Compiler.have_fma(Float64)
 
 has_fma = Dict(
     Int => has_fma_Int(),
+    Rational{Int} => has_fma_Int(),
     Float32 => has_fma_Float32(),
     Float64 => has_fma_Float64(),
 )
