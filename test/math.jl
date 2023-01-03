@@ -484,11 +484,7 @@ end
         @testset "Check exact values" begin
             # If the machine supports fused multiply add (fma), we require exact equality.
             # Otherwise, we only require approximate equality.
-            if Core.Compiler.have_fma(T)
-                my_eq = (x, y) -> x == y
-            else
-                my_eq = (x, y) -> x ≈ y
-            end
+            my_eq = Core.Compiler.have_fma(T) ? (==) : isapprox
             @test sind(convert(T,30)) == 0.5
             @test cosd(convert(T,60)) == 0.5
             @test sind(convert(T,150)) == 0.5
