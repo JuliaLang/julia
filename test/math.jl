@@ -494,7 +494,7 @@ end
             @test cospi(convert(T,-1.5))::fT === zero(fT)
             @test_throws DomainError cospi(convert(T,Inf))
         end
-        @testset "Check exact values" begin
+        @testset begin
             # If the machine supports fma (fused multiply add), we require exact equality.
             # Otherwise, we only require approximate equality.
             if has_fma[T]
