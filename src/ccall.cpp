@@ -987,7 +987,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     // save the module to be linked later.
     // we cannot do this right now, because linking mutates the destination module,
     // which might invalidate LLVM values cached in cgval_t's (specifically constant arrays)
-    ctx.llvmcall_modules.push_back(orc::ThreadSafeModule(std::move(Mod), ctx.emission_context.tsctx));
+    ctx.llvmcall_modules.push_back(std::move(Mod));
 
     JL_GC_POP();
 
