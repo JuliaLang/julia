@@ -345,7 +345,7 @@ by putting it before the function call, like this:
 
     @code_native syntax=:intel debuginfo=:default binary=true dump_module=false f(x)
 
-* Set assembly syntax by setting `syntax` to `:att` (default) for AT&T syntax or `:intel` for Intel syntax.
+* Set assembly syntax by setting `syntax` to `:intel` (default) for Intel syntax or `:att` for AT&T syntax.
 * Specify verbosity of code comments by setting `debuginfo` to `:source` (default) or `:none`.
 * If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
 * If `dump_module` is `false`, do not print metadata such as rodata or directives.
