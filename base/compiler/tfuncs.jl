@@ -301,7 +301,7 @@ add_tfunc(Core.Intrinsics.arraylen, 1, 1, @nospecs((𝕃::AbstractLattice, x)->I
     elseif !hasintersect(widenconst(cnd), Bool)
         return Bottom
     end
-    return tmerge(x, y)
+    return tmerge(𝕃, x, y)
 end
 add_tfunc(Core.ifelse, 3, 3, ifelse_tfunc, 1)
 
@@ -2117,6 +2117,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     typeassert,
     typeof,
     compilerbarrier,
+    Core._typevar
 ]
 
 const _ARGMEM_BUILTINS = Any[
@@ -2131,7 +2132,6 @@ const _ARGMEM_BUILTINS = Any[
 const _INCONSISTENT_INTRINSICS = Any[
     Intrinsics.pointerref,      # this one is volatile
     Intrinsics.arraylen,        # this one is volatile
-    Intrinsics.sqrt_llvm_fast,  # this one may differ at runtime (by a few ulps)
     Intrinsics.have_fma,        # this one depends on the runtime environment
     Intrinsics.cglobal,         # cglobal lookup answer changes at runtime
     # ... and list fastmath intrinsics:
