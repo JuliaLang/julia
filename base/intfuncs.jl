@@ -1088,3 +1088,27 @@ Base.@assume_effects :terminates_locally function binomial(n::T, k::T) where T<:
     end
     copysign(x, sgn)
 end
+
+"""
+    binomial(x::Number, k::Integer)
+
+The generalized binomial coefficient, defined for `k ≥ 0` by
+the polynomial
+```math
+\\frac{1}{k!} \\prod_{j=0}^{k-1} (x - j)
+```
+For the case of integer `x`, this is equivalent to the ordinary
+integer binomial coefficient
+```math
+\\binom{n}{k} = \\frac{n!}{k! (n-k)!}
+```
+
+# External links
+* [Binomial coefficient](https://en.wikipedia.org/wiki/Binomial_coefficient) on Wikipedia.
+"""
+function binomial(x::Number, k::Integer)
+    k < 0 && throw(DomainError("k=$k must be non-negative"))
+    # we don't use prod(i -> (x-i+1), 1:k) / factorial(k),
+    # and instead divide each term by i, to avoid spurious overflow.
+    return prod(i -> (x-(i-1))/i, OneTo(k), init=oneunit(x)/one(k))
+end
