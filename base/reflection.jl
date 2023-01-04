@@ -1789,7 +1789,9 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
             end
         end
         # if ml-matches reported the existence of an ambiguity over their
-        # intersection, see if both m1 and m2 may be involved in it
+        # intersection, see if both m1 and m2 seem to be involved in it
+        # (if one was fully dominated by a different method, we want to will
+        # report the other ambiguous pair)
         have_m1 = have_m2 = false
         for match in ms
             match = match::Core.MethodMatch
@@ -1814,18 +1816,14 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
                     minmax = m
                 end
             end
-            if minmax === nothing
+            if minmax === nothing || minmax == m1 || minmax == m2
                 return true
             end
             for match in ms
                 m = match.method
                 m === minmax && continue
-                if match.fully_covers
-                    if !morespecific(minmax.sig, m.sig)
-                        return true
-                    end
-                else
-                    if morespecific(m.sig, minmax.sig)
+                if !morespecific(minmax.sig, m.sig)
+                    if match.full_covers || !morespecific(m.sig, minmax.sig)
                         return true
                     end
                 end
@@ -1842,12 +1840,12 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         if ti2 <: m1.sig && ti2 <: m2.sig
             ti = ti2
         elseif ti != ti2
-            # TODO: this would be the correct way to handle this case, but
+            # TODO: this would be the more correct way to handle this case, but
             #       people complained so we don't do it
-            # inner(ti2) || return false
-            return false # report that the type system failed to decide if it was ambiguous by saying they definitely aren't
+            #inner(ti2) || return false # report that the type system failed to decide if it was ambiguous by saying they definitely are
+            return false # report that the type system failed to decide if it was ambiguous by saying they definitely are not
         else
-            return false # report that the type system failed to decide if it was ambiguous by saying they definitely aren't
+            return false # report that the type system failed to decide if it was ambiguous by saying they definitely are not
         end
     end
     inner(ti) || return false
