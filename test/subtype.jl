@@ -2339,6 +2339,12 @@ let S = Tuple{Val{Tuple{2, 1}}, Any},
     (intersection_env(S, T)[2]...,) == (1, 2, Tuple{1, 2})
 end
 
+#https://github.com/JuliaLang/julia/pull/31167#issuecomment-1358381818
+let S = Tuple{Type{T2}, T2, Val{T2}} where {T2<:Val{S2} where {S2<:Val}},
+    T = Tuple{Union{Type{T}, Type{S}}, Union{Val{T}, Val{S}}, Union{Val{T}, S}} where T<:Val{A} where A where S<:Val
+    @test typeintersect(S, T, !Union{})
+end
+
 @testset "known subtype/intersect issue" begin
     #issue 45874
     # Causes a hang due to jl_critical_error calling back into malloc...

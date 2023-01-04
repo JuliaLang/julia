@@ -364,6 +364,17 @@ static int in_union(jl_value_t *u, jl_value_t *x) JL_NOTSAFEPOINT
     return in_union(((jl_uniontype_t*)u)->a, x) || in_union(((jl_uniontype_t*)u)->b, x);
 }
 
+static int obviously_in_union(jl_value_t *u, jl_value_t *x) JL_NOTSAFEPOINT
+{
+    if (jl_is_uniontype(x))
+        return obviously_in_union(u, ((jl_uniontype_t*)x)->a) &&
+               obviously_in_union(u, ((jl_uniontype_t*)x)->b);
+    if (jl_is_uniontype(u))
+        return obviously_in_union(((jl_uniontype_t*)u)->a, x) ||
+               obviously_in_union(((jl_uniontype_t*)u)->b, x);
+    return jl_egal(u, x);
+}
+
 static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
 {
     if (a == b || a == (jl_value_t*)jl_any_type || b == (jl_value_t*)jl_any_type)
@@ -2268,6 +2279,8 @@ static jl_value_t *bound_var_below(jl_tvar_t *tv, jl_varbinding_t *bb, jl_stenv_
 
 static int try_subtype_in_env(jl_value_t *a, jl_value_t *b, jl_stenv_t *e, int R, int d)
 {
+    if (a == jl_bottom_type || b == (jl_value_t*)jl_any_type || obviously_in_union(b, a))
+        return 1;
     jl_value_t *root=NULL; jl_savedenv_t se;
     JL_GC_PUSH1(&root);
     save_env(e, &root, &se);
