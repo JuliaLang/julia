@@ -1105,6 +1105,11 @@ integer binomial coefficient
 \\binom{n}{k} = \\frac{n!}{k! (n-k)!}
 ```
 
+Further generalizations to non-integer `k` are mathematically possible, but
+involve the Gamma function and/or the beta function, which are
+not provided by the Julia standard library but are available
+in external packages such as [SpecialFunctions.jl](https://github.com/JuliaMath/SpecialFunctions.jl).
+
 # External links
 * [Binomial coefficient](https://en.wikipedia.org/wiki/Binomial_coefficient) on Wikipedia.
 """
