@@ -863,16 +863,16 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // merging the `alloca` for the unboxed data and the `alloca` created by the `alloc_opt`
     // pass.
     PM->add(createAllocOptPass());
+    PM->add(createInstSimplifyLegacyPass());
+    PM->add(createJumpThreadingPass());
+    PM->add(createCorrelatedValuePropagationPass());
+    PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
     // consider AggressiveInstCombinePass at optlevel > 2
     PM->add(createInstructionCombiningPass());
-    PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
     if (dump_native)
         PM->add(createMultiVersioningPass(external_use));
     PM->add(createCPUFeaturesPass());
     PM->add(createSROAPass());
-    PM->add(createInstSimplifyLegacyPass());
-    PM->add(createJumpThreadingPass());
-    PM->add(createCorrelatedValuePropagationPass());
 
     PM->add(createReassociatePass());
 
