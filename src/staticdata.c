@@ -1,4 +1,3 @@
-
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
@@ -499,7 +498,7 @@ static void jl_load_sysimg_so(void)
 
 #define NBOX_C 1024
 
-static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v)
+static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v) JL_NOTSAFEPOINT
 {
     // ignore items that are given a special relocation representation
     if (s->incremental && jl_object_in_image(v))
@@ -3204,8 +3203,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         cachesizes->fptrlist = sizeof_fptr_record;
     }
 
-    if (!s.incremental)
-        jl_init_codegen();
     s.s = &sysimg;
     jl_update_all_fptrs(&s, image); // fptr relocs and registration
     if (!ccallable_list) {

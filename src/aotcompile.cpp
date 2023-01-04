@@ -63,7 +63,7 @@ using namespace llvm;
 #include "jitlayers.h"
 #include "serialize.h"
 #include "julia_assert.h"
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 
 #define DEBUG_TYPE "julia_aotcompile"
 

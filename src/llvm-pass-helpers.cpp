@@ -12,7 +12,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
 
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 #include "julia_assert.h"
 #include "llvm-pass-helpers.h"
 

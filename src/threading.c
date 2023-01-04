@@ -402,7 +402,7 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     return ptls;
 }
 
-JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
+JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void) JL_NOTSAFEPOINT_LEAVE
 {
     // initialize this thread (assign tid, create heap, set up root task)
     jl_ptls_t ptls = jl_init_threadtls(-1);
@@ -417,7 +417,7 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
     return &ct->gcstack;
 }
 
-static void jl_delete_thread(void *value)
+static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 {
     jl_ptls_t ptls = (jl_ptls_t)value;
     // Acquire the profile write lock, to ensure we are not racing with the `kill`

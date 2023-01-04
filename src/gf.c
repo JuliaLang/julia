@@ -1678,7 +1678,7 @@ static int typemap_search(jl_typemap_entry_t *entry, void *closure)
 
 static jl_typemap_entry_t *do_typemap_search(jl_methtable_t *mt JL_PROPAGATES_ROOT, jl_method_t *method) JL_NOTSAFEPOINT;
 
-#ifndef __clang_gcanalyzer__
+#ifndef __clang_gcanalyzer__ /* in general, jl_typemap_visitor could be a safepoint, but not for typemap_search */
 static jl_typemap_entry_t *do_typemap_search(jl_methtable_t *mt JL_PROPAGATES_ROOT, jl_method_t *method) JL_NOTSAFEPOINT {
     jl_value_t *closure = (jl_value_t*)(method);
     if (jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), typemap_search, &closure))
