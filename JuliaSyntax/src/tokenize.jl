@@ -16,9 +16,13 @@ include("tokenize_utils.jl")
 TOKEN_ERROR_DESCRIPTION = Dict{Kind, String}(
     K"ErrorEofMultiComment" => "unterminated multi-line comment #= ... =#",
     K"ErrorInvalidNumericConstant" => "invalid numeric constant",
-    K"ErrorInvalidOperator" => "invalid operator",
     K"ErrorInvalidInterpolationTerminator" => "interpolated variable ends with invalid character; use `\$(...)` instead",
-    K"error" => "unknown error",
+    K"ErrorNumericOverflow"=>"overflow in numeric literal",
+    K"ErrorInvalidEscapeSequence"=>"invalid string escape sequence",
+    K"ErrorOverLongCharacter"=>"character literal contains multiple characters",
+    K"ErrorInvalidOperator" => "invalid operator",
+    K"Error**" => "use `x^y` instead of `x**y` for exponentiation, and `x...` instead of `**x` for splatting",
+    K"error" => "unknown error token",
 )
 
 struct Token
@@ -618,10 +622,14 @@ function lex_less(l::Lexer)
         return emit(l, K"<|")
     elseif dpeekchar(l) == ('-', '-')
         readchar(l); readchar(l)
-        if accept(l, '>')
-            return emit(l, K"<-->")
+        if accept(l, '-')
+            return emit_error(l, K"ErrorInvalidOperator")
         else
-            return emit(l, K"<--")
+            if accept(l, '>')
+                return emit(l, K"<-->")
+            else
+                return emit(l, K"<--")
+            end
         end
     else
         return emit(l, K"<")
@@ -713,7 +721,7 @@ end
 
 function lex_star(l::Lexer)
     if accept(l, '*')
-        return emit_error(l, K"ErrorInvalidOperator") # "**" is an invalid operator use ^
+        return emit_error(l, K"Error**") # "**" is an invalid operator use ^
     elseif accept(l, '=')
         return emit(l, K"*=")
     end
@@ -811,7 +819,7 @@ function lex_digit(l::Lexer, kind)
             accept(l, "+-−")
             if accept_batch(l, isdigit)
                 pc,ppc = dpeekchar(l)
-                if pc === '.' && !dotop2(ppc, ' ')
+                if pc === '.' && !dotop2(ppc)
                     accept(l, '.')
                     return emit_error(l, K"ErrorInvalidNumericConstant")
                 end
@@ -829,7 +837,7 @@ function lex_digit(l::Lexer, kind)
         accept(l, "+-−")
         if accept_batch(l, isdigit)
             pc,ppc = dpeekchar(l)
-            if pc === '.' && !dotop2(ppc, ' ')
+            if pc === '.' && !dotop2(ppc)
                 accept(l, '.')
                 return emit_error(l, K"ErrorInvalidNumericConstant")
             end
@@ -959,7 +967,12 @@ function lex_dot(l::Lexer)
         if accept(l, '.')
             return emit(l, K"...")
         else
-            return emit(l, K"..")
+            if dotop2(peekchar(l))
+                readchar(l)
+                return emit_error(l, K"ErrorInvalidOperator")
+            else
+                return emit(l, K"..")
+            end
         end
     elseif Base.isdigit(peekchar(l))
         return lex_digit(l, K"Float")

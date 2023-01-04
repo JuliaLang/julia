@@ -829,7 +829,7 @@ end
 # flisp: parse-range
 function parse_range(ps::ParseState)
     mark = position(ps)
-    parse_expr(ps)
+    parse_invalid_ops(ps)
     initial_tok = peek_token(ps)
     initial_kind = kind(initial_tok)
     if initial_kind != K":" && is_prec_colon(initial_kind)
@@ -837,7 +837,7 @@ function parse_range(ps::ParseState)
         # a … b    ==>   (call-i a … b)
         # a .… b    ==>  (dotcall-i a … b)
         bump_dotsplit(ps)
-        parse_expr(ps)
+        parse_invalid_ops(ps)
         emit(ps, mark, is_dotted(initial_tok) ? K"dotcall" : K"call", INFIX_FLAG)
     elseif initial_kind == K":" && ps.range_colon_enabled
         # a ? b : c:d   ==>   (? a b (call-i c : d))
@@ -864,7 +864,7 @@ function parse_range(ps::ParseState)
                 bump(ps) # K"<" or K">"
                 emit(ps, emark, K"error",
                      error="Invalid `:$ks` found, maybe replace with `$ks:`")
-                parse_expr(ps)
+                parse_invalid_ops(ps)
                 emit(ps, mark, K"call", INFIX_FLAG)
                 break
             end
@@ -891,7 +891,7 @@ function parse_range(ps::ParseState)
                 emit(ps, mark, K"call", INFIX_FLAG)
                 return
             end
-            parse_expr(ps)
+            parse_invalid_ops(ps)
             if n_colons == 2
                 emit(ps, mark, K"call", INFIX_FLAG)
                 n_colons = 0
@@ -908,6 +908,23 @@ function parse_range(ps::ParseState)
     if peek(ps) == K"..."
         bump(ps, TRIVIA_FLAG)
         emit(ps, mark, K"...")
+    end
+end
+
+# Parse invalid binary operators
+#
+# Having this is unnecessary, but it improves error messages and the
+# error-containing parse tree.
+#
+# a--b  ==>  (call-i a (error) b)
+function parse_invalid_ops(ps::ParseState)
+    mark = position(ps)
+    parse_expr(ps)
+    while (t = peek_token(ps); kind(t) in KSet"ErrorInvalidOperator Error**")
+        bump_trivia(ps)
+        bump_dotsplit(ps)
+        parse_expr(ps)
+        emit(ps, mark, is_dotted(t) ? K"dotcall" : K"call", INFIX_FLAG)
     end
 end
 
@@ -3518,6 +3535,10 @@ function parse_atom(ps::ParseState, check_identifiers=true)
               "premature end of input" :
               "unexpected closing token"
         bump_invisible(ps, K"error", error=msg)
+    elseif is_error(leading_kind)
+        # Errors for bad tokens are emitted in validate_tokens() rather than
+        # here.
+        bump(ps)
     else
         bump(ps, error="invalid syntax atom")
     end

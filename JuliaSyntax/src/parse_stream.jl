@@ -72,7 +72,8 @@ function Base.summary(head::SyntaxHead)
 end
 
 function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
-    str = is_error(kind(head)) ? "error" : untokenize(kind(head); unique=unique)::String
+    str = (is_error(kind(head)) ? untokenize(kind(head); unique=false) :
+           untokenize(kind(head); unique=unique))::String
     if is_dotted(head)
         str = "."*str
     end
@@ -850,7 +851,7 @@ end
 #-------------------------------------------------------------------------------
 # ParseStream Post-processing
 
-function validate_literal_tokens(stream::ParseStream)
+function validate_tokens(stream::ParseStream)
     text = sourcetext(stream)
     toks = stream.tokens
     charbuf = IOBuffer()
@@ -860,7 +861,7 @@ function validate_literal_tokens(stream::ParseStream)
         fbyte = toks[i-1].next_byte
         nbyte = t.next_byte
         lbyte = prevind(text, t.next_byte)
-        had_error = false
+        error_kind = K"None"
         if k in KSet"Integer BinInt OctInt HexInt"
             # The following shouldn't be able to error...
             # parse_int_literal
@@ -882,7 +883,7 @@ function validate_literal_tokens(stream::ParseStream)
             elseif code == :overflow
                 emit_diagnostic(stream, fbyte, lbyte,
                                 error="overflow in floating point literal")
-                had_error = true
+                error_kind = K"ErrorNumericOverflow"
             elseif underflow0
                 emit_diagnostic(stream, fbyte, lbyte,
                                 warning="underflow to zero in floating point literal")
@@ -892,11 +893,13 @@ function validate_literal_tokens(stream::ParseStream)
             truncate(charbuf, 0)
             had_error = unescape_julia_string(charbuf, text, fbyte,
                                               nbyte, stream.diagnostics)
-            if !had_error
+            if had_error
+                error_kind = K"ErrorInvalidEscapeSequence"
+            else
                 seek(charbuf,0)
                 read(charbuf, Char)
                 if !eof(charbuf)
-                    had_error = true
+                    error_kind = K"ErrorOverLongCharacter"
                     emit_diagnostic(stream, fbyte, lbyte,
                                     error="character literal contains multiple characters")
                 end
@@ -904,9 +907,16 @@ function validate_literal_tokens(stream::ParseStream)
         elseif k == K"String" && !has_flags(t, RAW_STRING_FLAG)
             had_error = unescape_julia_string(devnull, text, fbyte,
                                               nbyte, stream.diagnostics)
+            if had_error
+                error_kind = K"ErrorInvalidEscapeSequence"
+            end
+        elseif is_error(k) && k != K"error"
+            # Emit messages for non-generic token errors
+            emit_diagnostic(stream, fbyte, lbyte,
+                            error=Tokenize.TOKEN_ERROR_DESCRIPTION[k])
         end
-        if had_error
-            toks[i] = SyntaxToken(SyntaxHead(K"error", EMPTY_FLAGS),
+        if error_kind != K"None"
+            toks[i] = SyntaxToken(SyntaxHead(error_kind, EMPTY_FLAGS),
                                   t.orig_kind, t.next_byte)
         end
     end

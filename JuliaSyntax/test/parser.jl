@@ -1,7 +1,7 @@
 function test_parse(production, code; v=v"1.6", expr=false)
     stream = ParseStream(code, version=v)
     production(ParseState(stream))
-    JuliaSyntax.validate_literal_tokens(stream)
+    JuliaSyntax.validate_tokens(stream)
     t = build_tree(GreenNode, stream, wrap_toplevel_as_kind=K"None")
     source = SourceFile(code)
     s = SyntaxNode(source, t)
@@ -126,6 +126,9 @@ tests = [
         "x..."     => "(... x)"
         "x:y..."   => "(... (call-i x : y))"
         "x..y..."  => "(... (call-i x .. y))"
+    ],
+    JuliaSyntax.parse_invalid_ops => [
+        "a--b"  =>  "(call-i a (ErrorInvalidOperator) b)"
     ],
     JuliaSyntax.parse_expr => [
         "a - b - c"  => "(call-i (call-i a - b) - c)"
@@ -870,11 +873,11 @@ tests = [
     ],
     JuliaSyntax.parse_atom => [
         # errors in literals
-        "\"\\xqqq\""  =>  "(string (error))"
-        "'ab'"        =>  "(char (error))"
-        "'\\xq'"      =>  "(char (error))"
-        "10.0e1000'"  =>  "(error)"
-        "10.0f100'"   =>  "(error)"
+        "\"\\xqqq\""  =>  "(string (ErrorInvalidEscapeSequence))"
+        "'\\xq'"      =>  "(char (ErrorInvalidEscapeSequence))"
+        "'ab'"        =>  "(char (ErrorOverLongCharacter))"
+        "10.0e1000'"  =>  "(ErrorNumericOverflow)"
+        "10.0f100'"   =>  "(ErrorNumericOverflow)"
     ],
     JuliaSyntax.parse_docstring => [
         """ "notdoc" ]        """ => "(string \"notdoc\")"
