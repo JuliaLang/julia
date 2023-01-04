@@ -147,25 +147,23 @@ readchar(io::IO) = eof(io) ? EOF_CHAR : read(io, Char)
     0x0000ffe9 <= c <= 0x0000ffec
 end
 
-function dotop2(pc, dpc)
+function dotop2(pc)
     dotop1(pc) ||
     pc =='+' ||
     pc =='-' ||
+    pc =='−' ||
     pc =='*' ||
     pc =='/' ||
     pc =='\\' ||
     pc =='^' ||
     pc =='<' ||
     pc =='>' ||
-    pc =='&' && dpc === '=' ||
     pc =='&' ||
     pc =='%' ||
-    pc == '=' && dpc != '>' ||
-    pc == '|' && dpc != '|' ||
-    pc == '!' && dpc == '=' ||
+    pc == '=' ||
+    pc == '|' ||
     pc == '⊻' ||
-    pc == '÷' ||
-    pc == '=' && dpc == '>'
+    pc == '÷'
 end
 
 # suffix operators

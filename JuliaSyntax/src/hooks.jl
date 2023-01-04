@@ -35,14 +35,12 @@ function _incomplete_tag(n::SyntaxNode)
         return :none
     end
     # TODO: Check error hits last character
-    if kind(c) == K"error" && begin
+    if kind(c) == K"ErrorEofMultiComment"
+        return :comment
+    elseif kind(c) == K"error" && begin
                 cs = children(c)
                 length(cs) > 0
             end
-        k1 = kind(cs[1])
-        if k1 == K"ErrorEofMultiComment"
-            return :comment
-        end
         for cc in cs
             if kind(cc) == K"error"
                 return :other

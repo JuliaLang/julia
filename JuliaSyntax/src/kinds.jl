@@ -16,8 +16,10 @@ const _kind_names =
         # Tokenization errors
         "ErrorEofMultiComment"
         "ErrorInvalidNumericConstant"
-        "ErrorInvalidOperator"
         "ErrorInvalidInterpolationTerminator"
+        "ErrorNumericOverflow"
+        "ErrorInvalidEscapeSequence"
+        "ErrorOverLongCharacter"
         # Generic error
         "error"
     "END_ERRORS"
@@ -94,6 +96,9 @@ const _kind_names =
     "END_DELIMITERS"
 
     "BEGIN_OPS"
+    "ErrorInvalidOperator"
+    "Error**"
+
     "..."
 
     # Level 1
@@ -1009,8 +1014,11 @@ const _nonunique_kind_names = Set([
 
     K"ErrorEofMultiComment"
     K"ErrorInvalidNumericConstant"
-    K"ErrorInvalidOperator"
     K"ErrorInvalidInterpolationTerminator"
+    K"ErrorNumericOverflow"
+    K"ErrorInvalidEscapeSequence"
+    K"ErrorOverLongCharacter"
+    K"ErrorInvalidOperator"
 
     K"Integer"
     K"BinInt"
@@ -1049,7 +1057,7 @@ end
 #-------------------------------------------------------------------------------
 # Predicates
 is_contextual_keyword(k::Kind) = K"BEGIN_CONTEXTUAL_KEYWORDS" < k < K"END_CONTEXTUAL_KEYWORDS"
-is_error(k::Kind) = K"BEGIN_ERRORS" < k < K"END_ERRORS"
+is_error(k::Kind) = K"BEGIN_ERRORS" < k < K"END_ERRORS" || k == K"ErrorInvalidOperator" || k == K"Error**"
 is_keyword(k::Kind) = K"BEGIN_KEYWORDS" < k < K"END_KEYWORDS"
 is_block_continuation_keyword(k::Kind) = K"BEGIN_BLOCK_CONTINUATION_KEYWORDS" < k < K"END_BLOCK_CONTINUATION_KEYWORDS"
 is_literal(k::Kind) = K"BEGIN_LITERAL" < k < K"END_LITERAL"

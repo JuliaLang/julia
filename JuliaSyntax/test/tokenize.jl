@@ -231,6 +231,7 @@ end
 
     @test toks("#=# text=#") == ["#=# text=#"=>K"Comment"]
 
+    @test toks("#=   #=   =#") == ["#=   #=   =#"=>K"ErrorEofMultiComment"]
     @test toks("#=#==#=#") == ["#=#==#=#"=>K"Comment"]
     @test toks("#=#==#=")  == ["#=#==#="=>K"ErrorEofMultiComment"]
 end
@@ -314,11 +315,6 @@ end
 
 @testset "issue in PR #45" begin
     @test length(collect(tokenize("x)"))) == 3
-end
-
-@testset "errors" begin
-    @test tok("#=   #=   =#", 1).kind == K"ErrorEofMultiComment"
-    @test tok("aa **",        3).kind == K"ErrorInvalidOperator"
 end
 
 @testset "xor_eq" begin
@@ -772,7 +768,11 @@ end
     test_error(tok("0b3",1),     K"ErrorInvalidNumericConstant")
     test_error(tok("0op",1),     K"ErrorInvalidNumericConstant")
     test_error(tok("--",1),      K"ErrorInvalidOperator")
-    test_error(tok("1**2",2),    K"ErrorInvalidOperator")
+
+    @test toks("1**2") == ["1"=>K"Integer", "**"=>K"Error**", "2"=>K"Integer"]
+    @test toks("a<---b") == ["a"=>K"Identifier", "<---"=>K"ErrorInvalidOperator", "b"=>K"Identifier"]
+    @test toks("a..+b") == ["a"=>K"Identifier", "..+"=>K"ErrorInvalidOperator", "b"=>K"Identifier"]
+    @test toks("a..−b") == ["a"=>K"Identifier", "..−"=>K"ErrorInvalidOperator", "b"=>K"Identifier"]
 end
 
 @testset "hat suffix" begin
