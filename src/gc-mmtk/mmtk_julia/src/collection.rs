@@ -62,10 +62,6 @@ impl Collection<JuliaVM> for VMCollection {
     fn block_for_gc(tls: VMMutatorThread) {
         info!("Triggered GC!");
 
-        unsafe {
-            AtomicBool::store(&BLOCK_FOR_GC, true, Ordering::SeqCst);
-        }
-
         let tls_ptr = match tls {
             VMMutatorThread(t) => match t {
                 VMThread(ptr) => ptr,
@@ -74,12 +70,16 @@ impl Collection<JuliaVM> for VMCollection {
 
         let old_state = unsafe { ((*UPCALLS).set_gc_initial_state)(tls_ptr) };
 
-        if old_state as u32 == u32::MAX {
+        if old_state == -1 {
             info!("Multiple threads entered GC simultaneously.");
             return;
         }
 
         unsafe { ((*UPCALLS).wait_for_the_world)() };
+
+        unsafe {
+            AtomicBool::store(&BLOCK_FOR_GC, true, Ordering::SeqCst);
+        }
 
         let last_err = unsafe { ((*UPCALLS).get_jl_last_err)() };
 
@@ -87,19 +87,21 @@ impl Collection<JuliaVM> for VMCollection {
             ((*UPCALLS).calculate_roots)(tls_ptr);
         }
 
-        let &(ref lock, ref cvar) = &*STW_COND.clone();
-        let mut count = lock.lock().unwrap();
-        *count += 1;
+        {
+            let &(ref lock, ref cvar) = &*STW_COND.clone();
+            let mut count = lock.lock().unwrap();
 
-        info!("Blocking for GC!");
+            info!("Blocking for GC!");
 
-        unsafe {
-            AtomicBool::store(&WORLD_HAS_STOPPED, true, Ordering::SeqCst);
-        }
+            
+            unsafe {
+                AtomicBool::store(&WORLD_HAS_STOPPED, true, Ordering::SeqCst);
+            }
 
-        unsafe {
-            while AtomicBool::load(&BLOCK_FOR_GC, Ordering::SeqCst) {
-                count = cvar.wait(count).unwrap();
+            unsafe {
+                while AtomicBool::load(&BLOCK_FOR_GC, Ordering::SeqCst) {
+                    count = cvar.wait(count).unwrap();
+                }
             }
         }
 
