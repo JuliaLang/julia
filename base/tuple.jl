@@ -73,14 +73,15 @@ keys(@nospecialize t::Tuple) = OneTo(length(t))
 prevind(@nospecialize(t::Tuple), i::Integer) = Int(i)-1
 nextind(@nospecialize(t::Tuple), i::Integer) = Int(i)+1
 
+@noinline function throw_eachindex_mismatch_indices(::Tuple{}, inds...)
+    throw(DimensionMismatch("all inputs to eachindex must have the same length, got $(join(inds, ", ", " and "))"))
+end
+
 function keys(t::Tuple, t2::Tuple...)
     @inline
-    OneTo(_maxlength(t, t2...))
-end
-_maxlength(t::Tuple) = length(t)
-function _maxlength(t::Tuple, t2::Tuple, t3::Tuple...)
-    @inline
-    max(length(t), _maxlength(t2, t3...))
+    lent = length(t)
+    all(x->length(x) == lent, t2) || throw_eachindex_mismatch_indices((), t, t2...)
+    Base.OneTo(lent)
 end
 
 # this allows partial evaluation of bounded sequences of next() calls on tuples,
