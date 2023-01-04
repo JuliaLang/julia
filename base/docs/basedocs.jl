@@ -499,7 +499,8 @@ sense to write something like `let x = x`, since the two `x` variables are disti
 the left-hand side locally shadowing the `x` from the outer scope. This can even
 be a useful idiom as new local variables are freshly created each time local scopes
 are entered, but this is only observable in the case of variables that outlive their
-scope via closures.
+scope via closures.  A `let` variable without an assignment, such as `var2` in the
+example above, declares a new local variable that is not yet bound to a value.
 
 By contrast, [`begin`](@ref) blocks also group multiple expressions together but do
 not introduce scope or have the special assignment syntax.
