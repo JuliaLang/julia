@@ -809,7 +809,11 @@ restart_switch:
                         jl_errorf("julia: invalid argument to --heap-size-hint (%s)", optarg);
                         break;
                 }
-                jl_options.heap_size_hint = (uint64_t)(value * multiplier);
+                double sz = value * multiplier;
+                if (isnan(sz) || sz < 0) {
+                    jl_errorf("julia: invalid argument to --heap-size-hint (%s)", optarg);
+                }
+                jl_options.heap_size_hint = sz < UINT64_MAX ? (uint64_t)sz : UINT64_MAX;
             }
             if (jl_options.heap_size_hint == 0)
                 jl_errorf("julia: invalid argument to --heap-size-hint without memory size specified");
