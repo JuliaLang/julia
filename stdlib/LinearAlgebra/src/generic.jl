@@ -947,12 +947,18 @@ dot(x::AbstractVector, transA::Transpose{<:Real}, y::AbstractVector) = adjoint(d
     rank(A::AbstractMatrix; atol::Real=0, rtol::Real=atol>0 ? 0 : n*ϵ)
     rank(A::AbstractMatrix, rtol::Real)
 
-Compute the rank of a matrix by counting how many singular
-values of `A` have magnitude greater than `max(atol, rtol*σ₁)` where `σ₁` is
-`A`'s largest singular value. `atol` and `rtol` are the absolute and relative
+Compute the numerical rank of a matrix by counting how many outputs of 
+`svdvals(A)` have magnitude greater than `max(atol, rtol*σ₁)` where `σ₁` is
+`A`'s largest calculated singular value. `atol` and `rtol` are the absolute and relative
 tolerances, respectively. The default relative tolerance is `n*ϵ`, where `n`
 is the size of the smallest dimension of `A`, and `ϵ` is the [`eps`](@ref) of
 the element type of `A`.
+
+!!! note
+`rank` may miscount singular values very close to the threshold due to
+the limits of numerical singular value decomposition. This may result in 
+variations across operating systems and minor versions of Julia. This 
+is especially true for ill conditioned matrices.
 
 !!! compat "Julia 1.1"
     The `atol` and `rtol` keyword arguments requires at least Julia 1.1.
@@ -981,7 +987,7 @@ function rank(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A)...)
     isempty(A) && return 0 # 0-dimensional case
     s = svdvals(A)
     tol = max(atol, rtol*s[1])
-    count(x -> x > tol, s)
+    count(>(tol), s)
 end
 rank(x::Union{Number,AbstractVector}) = iszero(x) ? 0 : 1
 
