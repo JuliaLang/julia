@@ -1148,7 +1148,7 @@ dimension), `;;;` concatenates along the third dimension, etc. Such a separator
 can also be used in last position in the square brackets to add trailing
 dimensions of length 1.
 
-`;` in first position inside of parentheses can be used to construct a named
+A `;` in first position inside of parentheses can be used to construct a named
 tuple. The same `(; ...)` syntax on the left side of an assignment allows for
 property destructuring.
 
