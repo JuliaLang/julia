@@ -264,16 +264,20 @@ Under the name `f`, the function does not support infix notation, however.
 
 A few special expressions correspond to calls to functions with non-obvious names. These are:
 
-| Expression        | Calls                   |
-|:----------------- |:----------------------- |
-| `[A B C ...]`     | [`hcat`](@ref)          |
-| `[A; B; C; ...]`  | [`vcat`](@ref)          |
-| `[A B; C D; ...]` | [`hvcat`](@ref)         |
-| `A'`              | [`adjoint`](@ref)       |
-| `A[i]`            | [`getindex`](@ref)      |
-| `A[i] = x`        | [`setindex!`](@ref)     |
-| `A.n`             | [`getproperty`](@ref Base.getproperty) |
-| `A.n = x`         | [`setproperty!`](@ref Base.setproperty!) |
+| Expression            | Calls                   |
+|:--------------------- |:----------------------- |
+| `[A B C ...]`         | [`hcat`](@ref)          |
+| `[A; B; C; ...]`      | [`vcat`](@ref)          |
+| `[A B; C D; ...]`     | [`hvcat`](@ref)         |
+| `[A; B;; C; D;; ...]` | [`hvncat`](@ref)        |
+| `A'`                  | [`adjoint`](@ref)       |
+| `A[i]`                | [`getindex`](@ref)      |
+| `A[i] = x`            | [`setindex!`](@ref)     |
+| `A.n`                 | [`getproperty`](@ref Base.getproperty) |
+| `A.n = x`             | [`setproperty!`](@ref Base.setproperty!) |
+
+Note that expressions similar to `[A; B;; C; D;; ...]` but with more than two
+consecutive `;` also correspond to `hvncat` calls.
 
 ## [Anonymous Functions](@id man-anonymous-functions)
 
