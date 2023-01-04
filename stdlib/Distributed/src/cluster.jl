@@ -268,6 +268,7 @@ function start_worker(out::IO, cookie::AbstractString=readline(stdin); close_std
         # To prevent hanging processes on remote machines, newly launched workers exit if the
         # master process does not connect in time.
         check_master_connect()
+        Logging.global_logger(RemoteLogger(1, Logging.Info))
         while true; wait(); end
     catch err
         print(stderr, "unhandled exception on $(myid()): $(err)\nexiting.\n")

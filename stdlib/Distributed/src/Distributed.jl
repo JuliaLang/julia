@@ -99,6 +99,7 @@ hash(r::RRID, h::UInt) = hash(r.whence, hash(r.id, h))
 ==(r::RRID, s::RRID) = (r.whence==s.whence && r.id==s.id)
 
 include("clusterserialize.jl")
+include("logger.jl")
 include("cluster.jl")   # cluster setup and management, addprocs
 include("messages.jl")
 include("process_messages.jl")  # process incoming messages
