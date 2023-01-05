@@ -1220,7 +1220,7 @@ function iterate(A::AbstractArray, state=(eachindex(A),))
     A[y[1]], (state[1], tail(y)...)
 end
 
-isempty(a::AbstractArray) = (length(a) == 0)
+isempty(a::AbstractArray) = (length(a) <= 0)
 
 
 ## range conversions ##
