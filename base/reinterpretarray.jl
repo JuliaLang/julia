@@ -172,7 +172,7 @@ struct TypecastNone <: TypecastStyle end
 function TypecastStyle(T::Type, S::Type)
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
         return TypecastToSimilar()
-    elseif sizeof(T) == sizeof(S) 
+    elseif sizeof(T) == sizeof(S)
         return TypecastToSimilarWithFields()
     elseif  (sizeof(T) % sizeof(S)) == 0
         return TypecastToLarger()
