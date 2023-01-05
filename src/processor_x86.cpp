@@ -219,7 +219,7 @@ constexpr auto btver2 = btver1 | get_feature_masks(sse41, sse42, avx, aes, pclmu
                                                    movbe, xsave, xsaveopt);
 
 constexpr auto bdver1 = amdfam10 | get_feature_masks(xop, fma4, avx, ssse3, sse41, sse42, aes,
-                                                     prfchw, pclmul, xsave, lwp);
+                                                     prfchw, pclmul, xsave);
 constexpr auto bdver2 = bdver1 | get_feature_masks(f16c, bmi, tbm, fma);
 constexpr auto bdver3 = bdver2 | get_feature_masks(xsaveopt, fsgsbase);
 constexpr auto bdver4 = bdver3 | get_feature_masks(avx2, bmi2, mwaitx, movbe, rdrnd);

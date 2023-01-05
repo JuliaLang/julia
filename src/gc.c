@@ -360,7 +360,7 @@ static void finalize_object(arraylist_t *list, jl_value_t *o,
 
 // The first two entries are assumed to be empty and the rest are assumed to
 // be pointers to `jl_value_t` objects
-static void jl_gc_push_arraylist(jl_task_t *ct, arraylist_t *list)
+static void jl_gc_push_arraylist(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOINT
 {
     void **items = list->items;
     items[0] = (void*)JL_GC_ENCODE_PUSHARGS(list->len - 2);
@@ -371,7 +371,7 @@ static void jl_gc_push_arraylist(jl_task_t *ct, arraylist_t *list)
 // Same assumption as `jl_gc_push_arraylist`. Requires the finalizers lock
 // to be hold for the current thread and will release the lock when the
 // function returns.
-static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list)
+static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOINT_LEAVE
 {
     // Avoid marking `ct` as non-migratable via an `@async` task (as noted in the docstring
     // of `finalizer`) in a finalizer:
@@ -395,7 +395,7 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list)
 
 static uint64_t finalizer_rngState[4];
 
-void jl_rng_split(uint64_t to[4], uint64_t from[4]);
+void jl_rng_split(uint64_t to[4], uint64_t from[4]) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_gc_init_finalizer_rng_state(void)
 {
@@ -3490,13 +3490,15 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
         gc_cblist_pre_gc, (collection));
 
     if (!jl_atomic_load_relaxed(&jl_gc_disable_counter)) {
-        JL_LOCK_NOGC(&finalizers_lock);
+        JL_LOCK_NOGC(&finalizers_lock); // all the other threads are stopped, so this does not make sense, right? otherwise, failing that, this seems like plausibly a deadlock
+#ifndef __clang_gcanalyzer__
         if (_jl_gc_collect(ptls, collection)) {
             // recollect
             int ret = _jl_gc_collect(ptls, JL_GC_AUTO);
             (void)ret;
             assert(!ret);
         }
+#endif
         JL_UNLOCK_NOGC(&finalizers_lock);
     }
 
@@ -3889,8 +3891,8 @@ static void *gc_perm_alloc_large(size_t sz, int zero, unsigned align, unsigned o
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
-    uintptr_t base = (uintptr_t)(zero ? calloc(1, sz) : malloc(sz));
-    if (base == 0)
+    void *base = zero ? calloc(1, sz) : malloc(sz);
+    if (base == NULL)
         jl_throw(jl_memory_exception);
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
@@ -3898,8 +3900,8 @@ static void *gc_perm_alloc_large(size_t sz, int zero, unsigned align, unsigned o
     errno = last_errno;
     jl_may_leak(base);
     assert(align > 0);
-    unsigned diff = (offset - base) % align;
-    return (void*)(base + diff);
+    unsigned diff = (offset - (uintptr_t)base) % align;
+    return (void*)((char*)base + diff);
 }
 
 STATIC_INLINE void *gc_try_perm_alloc_pool(size_t sz, unsigned align, unsigned offset) JL_NOTSAFEPOINT
