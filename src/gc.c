@@ -412,6 +412,7 @@ static void run_finalizers(jl_task_t *ct)
 {
 #ifdef MMTKHEAP
     mmtk_jl_run_finalizers(ct->ptls);
+    return;
 #endif
     // Racy fast path:
     // The race here should be OK since the race can only happen if
