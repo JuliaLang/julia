@@ -64,7 +64,8 @@ kw"export"
 
 `as` is used as a keyword to rename an identifier brought into scope by
 `import` or `using`, for the purpose of working around name conflicts as
-well as for shortening names.
+well as for shortening names.  (Outside of `import` or `using` statements,
+`as` is not a keyword and can be used as an ordinary identifier.)
 
 `import BenchMarkTools as BT` brings the imported `BenchMarkTools` package
 into scope as `BT`.
