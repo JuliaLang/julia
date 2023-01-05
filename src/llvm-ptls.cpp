@@ -23,7 +23,7 @@
 
 #include "julia.h"
 #include "julia_internal.h"
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 #include "julia_assert.h"
 
 #define DEBUG_TYPE "lower_ptls"

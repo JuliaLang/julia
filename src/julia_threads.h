@@ -354,10 +354,10 @@ STATIC_INLINE int8_t jl_gc_state_save_and_set(jl_ptls_t ptls,
     return jl_gc_state_set(ptls, state, jl_atomic_load_relaxed(&ptls->gc_state));
 }
 #ifdef __clang_gcanalyzer__
-int8_t jl_gc_unsafe_enter(jl_ptls_t ptls); // Can be a safepoint
-int8_t jl_gc_unsafe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT;
-int8_t jl_gc_safe_enter(jl_ptls_t ptls) JL_NOTSAFEPOINT;
-int8_t jl_gc_safe_leave(jl_ptls_t ptls, int8_t state); // Can be a safepoint
+int8_t jl_gc_unsafe_enter(jl_ptls_t ptls) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE; // this could be a safepoint, but we will assume it is not
+void jl_gc_unsafe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
+int8_t jl_gc_safe_enter(jl_ptls_t ptls) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
+void jl_gc_safe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT_LEAVE; // this might not be a safepoint, but we have to assume it could be (statically)
 #else
 #define jl_gc_unsafe_enter(ptls) jl_gc_state_save_and_set(ptls, 0)
 #define jl_gc_unsafe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), 0))
