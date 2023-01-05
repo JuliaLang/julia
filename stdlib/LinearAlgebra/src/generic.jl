@@ -955,10 +955,13 @@ is the size of the smallest dimension of `A`, and `ϵ` is the [`eps`](@ref) of
 the element type of `A`.
 
 !!! note
-`rank` may miscount singular values very close to the threshold due to
-the limits of numerical singular value decomposition. This may result in 
-variations across operating systems and minor versions of Julia. This 
-is especially true for ill conditioned matrices.
+    Numerical rank can be a sensitive and imprecise characterization of
+    ill-conditioned matrices with singular values that are close to the threshold
+    tolerance `max(atol, rtol*σ₁)`. In such cases, slight perturbations to the
+    singular value computation or to the matrix can change the result of `rank`
+    by pushing one or more singular values across the threshold. These variations
+    can even occur due to changes in floating-point errors between different Julia
+    versions, architectures, compilers, or operating systems.
 
 !!! compat "Julia 1.1"
     The `atol` and `rtol` keyword arguments requires at least Julia 1.1.
