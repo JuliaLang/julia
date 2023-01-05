@@ -72,7 +72,7 @@ into scope as `BT`.
 `import CSV: read as rd, write as wd` brings the `read` and `write` methods
 from `CSV` into scope as `rd` and `wd` respectively.
 
-`as` works with `using` only when single identifiers are brought into scope.
+`as` works with `using` only when individual identifiers are brought into scope.
 E.g `using CSV: read as rd` or `using CSV: read as rd, write as wd` works,
 but this: `using CSV as rd`, throws an error, since it operates on all of the
 `export`ed names in `CSV`.
