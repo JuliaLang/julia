@@ -75,8 +75,8 @@ from `LinearAlgebra` into scope as `eig` and `chol` respectively.
 
 `as` works with `using` only when individual identifiers are brought into scope.
 For example, `using LinearAlgebra: eigen as eig` or `using LinearAlgebra: eigen as eig, cholesky as chol` works,
-but this: `using CSV as rd`, throws an error, since it operates on all of the
-`export`ed names in `CSV`.
+but `using LinearAlgebra as LA` is invalid syntax, since it is nonsensical to
+rename *all* exported names from `LinearAlgebra` to `LA`.
 """
 kw"as"
 
