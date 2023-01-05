@@ -2112,7 +2112,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                     e isa IOError || rethrow()
                     # Windows prevents renaming a file that is in use so if there is a Julia session started
                     # with a package image loaded, we cannot rename that file.
-                    # The code belows append a `_i` to the name of the cache file where `i` is the smallest number such that 
+                    # The code belows append a `_i` to the name of the cache file where `i` is the smallest number such that
                     # that cache file does not exist.
                     ocachename, ocacheext = splitext(ocachefile)
                     old_cachefiles = filter(x->startswith(x, basename(ocachename)) && endswith(x, ocacheext), readdir(cachepath))
