@@ -614,6 +614,7 @@ tests = [
         "import \$A.@x"  =>  "(import (. (\$ A) @x))"
         "import A.B"  =>  "(import (. A B))"
         "import A.B.C"  =>  "(import (. A B C))"
+        "import A.:+"  =>  "(import (. A +))"
         "import A.=="  =>  "(import (. A ==))"
         "import A.⋆.f" =>  "(import (. A ⋆ f))"
         "import A..."  =>  "(import (. A ..))"
