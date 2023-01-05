@@ -367,6 +367,28 @@ static int in_union(jl_value_t *u, jl_value_t *x) JL_NOTSAFEPOINT
     return in_union(((jl_uniontype_t*)u)->a, x) || in_union(((jl_uniontype_t*)u)->b, x);
 }
 
+static int obviously_in_union(jl_value_t *u, jl_value_t *x)
+{
+    jl_value_t *a = NULL, *b = NULL;
+    if (jl_is_uniontype(x)) {
+        a = ((jl_uniontype_t*)x)->a;
+        b = ((jl_uniontype_t*)x)->b;
+        JL_GC_PUSH2(&a, &b);
+        int res = obviously_in_union(u, a) && obviously_in_union(u, b);
+        JL_GC_POP();
+        return res;
+    }
+    if (jl_is_uniontype(u)) {
+        a = ((jl_uniontype_t*)u)->a;
+        b = ((jl_uniontype_t*)u)->b;
+        JL_GC_PUSH2(&a, &b);
+        int res = obviously_in_union(a, x) || obviously_in_union(b, x);
+        JL_GC_POP();
+        return res;
+    }
+    return obviously_egal(u, x);
+}
+
 static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
 {
     if (a == b || a == (jl_value_t*)jl_any_type || b == (jl_value_t*)jl_any_type)
@@ -464,9 +486,9 @@ static jl_value_t *simple_join(jl_value_t *a, jl_value_t *b)
         return a;
     if (!(jl_is_type(a) || jl_is_typevar(a)) || !(jl_is_type(b) || jl_is_typevar(b)))
         return (jl_value_t*)jl_any_type;
-    if (jl_is_uniontype(a) && in_union(a, b))
+    if (jl_is_uniontype(a) && obviously_in_union(a, b))
         return a;
-    if (jl_is_uniontype(b) && in_union(b, a))
+    if (jl_is_uniontype(b) && obviously_in_union(b, a))
         return b;
     if (jl_is_kind(a) && jl_is_type_type(b) && jl_typeof(jl_tparam0(b)) == a)
         return a;
@@ -485,9 +507,10 @@ static jl_value_t *simple_join(jl_value_t *a, jl_value_t *b)
     return jl_new_struct(jl_uniontype_type, a, b);
 }
 
-// compute a greatest lower bound of `a` and `b`
-// in many cases, we need to over-estimate this by returning `b`.
-static jl_value_t *simple_meet(jl_value_t *a, jl_value_t *b)
+// Compute a greatest lower bound of `a` and `b`
+// For the subtype path, we need to over-estimate this by returning `b` in many cases.
+// But for `merge_env`, we'd better under-estimate and return a `Union{}`
+static jl_value_t *simple_meet(jl_value_t *a, jl_value_t *b, int overesi)
 {
     if (a == (jl_value_t*)jl_any_type || b == jl_bottom_type || obviously_egal(a,b))
         return b;
@@ -495,9 +518,9 @@ static jl_value_t *simple_meet(jl_value_t *a, jl_value_t *b)
         return a;
     if (!(jl_is_type(a) || jl_is_typevar(a)) || !(jl_is_type(b) || jl_is_typevar(b)))
         return jl_bottom_type;
-    if (jl_is_uniontype(a) && in_union(a, b))
+    if (jl_is_uniontype(a) && obviously_in_union(a, b))
         return b;
-    if (jl_is_uniontype(b) && in_union(b, a))
+    if (jl_is_uniontype(b) && obviously_in_union(b, a))
         return a;
     if (jl_is_kind(a) && jl_is_type_type(b) && jl_typeof(jl_tparam0(b)) == a)
         return b;
@@ -513,7 +536,7 @@ static jl_value_t *simple_meet(jl_value_t *a, jl_value_t *b)
         if (jl_subtype(a, b)) return a;
         if (jl_subtype(b, a)) return b;
     }
-    return b;
+    return overesi ? b : jl_bottom_type;
 }
 
 static jl_unionall_t *rename_unionall(jl_unionall_t *u)
@@ -655,7 +678,7 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
         JL_GC_POP();
     }
     else {
-        bb->ub = simple_meet(bb->ub, a);
+        bb->ub = simple_meet(bb->ub, a, 1);
     }
     assert(bb->ub != (jl_value_t*)b);
     if (jl_is_typevar(a)) {
@@ -3356,7 +3379,7 @@ static int merge_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se, int co
             // only merge lb/ub/innervars if this var occurs.
             b1 = jl_svecref(*root, n);
             b2 = v->lb;
-            jl_svecset(*root, n, b1 ? simple_meet(b1, b2) : b2);
+            jl_svecset(*root, n, b1 ? simple_meet(b1, b2, 0) : b2);
             b1 = jl_svecref(*root, n+1);
             b2 = v->ub;
             jl_svecset(*root, n+1, b1 ? simple_join(b1, b2) : b2);

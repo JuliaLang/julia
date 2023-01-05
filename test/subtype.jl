@@ -2322,6 +2322,12 @@ struct T48006{A1,A2,A3} end
                Tuple{T48006{F2, I, S2}, I} where {F2<:Real, I<:Int, S2<:Union{Int8, Val{F2}}},
                Tuple{T48006{Float64, Int, S1}, Int} where S1<:Union{Val{Float64}, Int8})
 
+
+f48167(::Type{Val{L2}}, ::Type{Union{Val{L1}, Set{R}}}) where {L1, R, L2<:L1} = 1
+f48167(::Type{Val{L1}}, ::Type{Union{Val{L2}, Set{R}}}) where {L1, R, L2<:L1} = 2
+f48167(::Type{Val{L}}, ::Type{Union{Val{L}, Set{R}}}) where {L, R} = 3
+@test f48167(Val{Nothing}, Union{Val{Nothing}, Set{Int}}) == 3
+
 @testset "known subtype/intersect issue" begin
     #issue 45874
     # Causes a hang due to jl_critical_error calling back into malloc...
