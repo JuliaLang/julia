@@ -216,6 +216,17 @@ static void restore_env(jl_stenv_t *e, jl_value_t *root, jl_savedenv_t *se) JL_N
         memset(&e->envout[e->envidx], 0, (e->envsz - e->envidx)*sizeof(void*));
 }
 
+static int current_env_length(jl_stenv_t *e)
+{
+    jl_varbinding_t *v = e->vars;
+    int len = 0;
+    while (v) {
+        len++;
+        v = v->prev;
+    }
+    return len;
+}
+
 // type utilities
 
 // quickly test that two types are identical
