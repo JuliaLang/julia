@@ -442,7 +442,7 @@ static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionT
     if (!target) {
         target = Function::Create(FT, Function::ExternalLinkage, alias, M);
     }
-    Function *interposer = Function::Create(FT, Function::WeakAnyLinkage, name, M);
+    Function *interposer = Function::Create(FT, Function::InternalLinkage, name, M);
     appendToCompilerUsed(M, {interposer});
 
     llvm::IRBuilder<> builder(BasicBlock::Create(M.getContext(), "top", interposer));
