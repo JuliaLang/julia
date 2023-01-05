@@ -68,35 +68,6 @@ extern "C" JL_DLLEXPORT void jl_coverage_visit_line(const char *filename_, size_
     (*ptr)++;
 }
 
-// Memory allocation log (malloc_log)
-
-static logdata_t mallocData;
-
-JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(StringRef filename, int line)
-{
-    return allocLine(mallocData[filename], line);
-}
-
-// Resets the malloc counts.
-extern "C" JL_DLLEXPORT void jl_clear_malloc_data(void)
-{
-    logdata_t::iterator it = mallocData.begin();
-    for (; it != mallocData.end(); it++) {
-        std::vector<logdata_block*> &bytes = (*it).second;
-        std::vector<logdata_block*>::iterator itb;
-        for (itb = bytes.begin(); itb != bytes.end(); itb++) {
-            if (*itb) {
-                logdata_block &data = **itb;
-                for (int i = 0; i < logdata_blocksize; i++) {
-                    if (data[i] > 0)
-                        data[i] = 1;
-                }
-            }
-        }
-    }
-    jl_gc_sync_total_bytes(0);
-}
-
 static void write_log_data(logdata_t &logData, const char *extension)
 {
     std::string base = std::string(jl_options.julia_bindir);
@@ -204,11 +175,4 @@ extern "C" JL_DLLEXPORT void jl_write_coverage_data(const char *output)
         raw_string_ostream(stm) << "." << uv_os_getpid() << ".cov";
         write_log_data(coverageData, stm.c_str());
     }
-}
-
-extern "C" JL_DLLEXPORT void jl_write_malloc_log(void)
-{
-    std::string stm;
-    raw_string_ostream(stm) << "." << uv_os_getpid() << ".mem";
-    write_log_data(mallocData, stm.c_str());
 }

@@ -2122,7 +2122,7 @@ JL_DLLEXPORT void jl_set_ARGS(int argc, char **argv);
 
 JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 
-// Settings for code_coverage and malloc_log
+// Settings for code_coverage
 // NOTE: if these numbers change, test/cmdlineargs.jl will have to be updated
 #define JL_LOG_NONE 0
 #define JL_LOG_USER 1

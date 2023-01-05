@@ -7,7 +7,7 @@ using InteractiveUtils
 using Libdl
 
 const opt_level = Base.JLOptions().opt_level
-const coverage = (Base.JLOptions().code_coverage > 0) || (Base.JLOptions().malloc_log > 0)
+const coverage = Base.JLOptions().code_coverage > 0
 const Iptr = sizeof(Int) == 8 ? "i64" : "i32"
 
 const is_debug_build = Base.isdebugbuild()

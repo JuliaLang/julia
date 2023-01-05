@@ -369,46 +369,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         rm(covfile)
     end
 
-    # --track-allocation
-    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0"`) == "false"
-    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0" --track-allocation=none`) == "false"
-
-    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0" --track-allocation`) == "true"
-    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0" --track-allocation=user`) == "true"
-    mktempdir() do dir
-        helperdir = joinpath(@__DIR__, "testhelpers")
-        inputfile = joinpath(dir, "allocation_file.jl")
-        cp(joinpath(helperdir,"allocation_file.jl"), inputfile)
-        pid = readchomp(`$exename -E "getpid()" -L $inputfile --track-allocation=user`)
-        memfile = "$inputfile.$pid.mem"
-        got = readlines(memfile)
-        rm(memfile)
-        @test popfirst!(got) == "        0 g(x) = x + 123456"
-        @test popfirst!(got) == "        - function f(x)"
-        @test popfirst!(got) == "        -     []"
-        if Sys.WORD_SIZE == 64
-            # P64 pools with 64 bit tags
-            @test popfirst!(got) == "       16     Base.invokelatest(g, 0)"
-            @test popfirst!(got) == "       32     Base.invokelatest(g, x)"
-        elseif 12 == (() -> @allocated ccall(:jl_gc_allocobj, Ptr{Cvoid}, (Csize_t,), 8))()
-            # See if we have a 12-byte pool with 32 bit tags (MAX_ALIGN = 4)
-            @test popfirst!(got) == "       12     Base.invokelatest(g, 0)"
-            @test popfirst!(got) == "       24     Base.invokelatest(g, x)"
-        else # MAX_ALIGN >= 8
-            @test popfirst!(got) == "        8     Base.invokelatest(g, 0)"
-            @test popfirst!(got) == "       32     Base.invokelatest(g, x)"
-        end
-        if Sys.WORD_SIZE == 64
-            @test popfirst!(got) == "       48     []"
-        else
-            @test popfirst!(got) == "       32     []"
-        end
-        @test popfirst!(got) == "        - end"
-        @test popfirst!(got) == "        - f(1.23)"
-        @test isempty(got) || got
-    end
-
-
     # --optimize
     @test readchomp(`$exename -E "Base.JLOptions().opt_level"`) == "2"
     @test readchomp(`$exename -E "Base.JLOptions().opt_level" -O`) == "3"

@@ -564,22 +564,6 @@ callers(func::Function, bt::Vector, lidict::LineInfoFlatDict; kwargs...) =
     callers(string(func), bt, lidict; kwargs...)
 callers(func::Function; kwargs...) = callers(string(func), retrieve()...; kwargs...)
 
-##
-## For --track-allocation
-##
-# Reset the malloc log. Used to avoid counting memory allocated during
-# compilation.
-
-"""
-    clear_malloc_data()
-
-Clears any stored memory allocation data when running julia with `--track-allocation`.
-Execute the command(s) you want to test (to force JIT-compilation), then call
-[`clear_malloc_data`](@ref). Then execute your command(s) again, quit
-Julia, and examine the resulting `*.mem` files.
-"""
-clear_malloc_data() = ccall(:jl_clear_malloc_data, Cvoid, ())
-
 # C wrappers
 function start_timer()
     check_init() # if the profile buffer hasn't been initialized, initialize with default size

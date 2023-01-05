@@ -2237,20 +2237,6 @@ static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
     visitLine(ctx, jl_coverage_data_pointer(filename, line), ConstantInt::get(getInt64Ty(ctx.builder.getContext()), 1), "lcnt");
 }
 
-// Memory allocation log (malloc_log)
-
-static void mallocVisitLine(jl_codectx_t &ctx, StringRef filename, int line, Value *sync)
-{
-    if (ctx.emission_context.imaging)
-        return; // TODO
-    if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
-        return;
-    Value *addend = sync
-        ? ctx.builder.CreateCall(prepare_call(sync_gc_total_bytes_func), {sync})
-        : ctx.builder.CreateCall(prepare_call(diff_gc_total_bytes_func), {});
-    visitLine(ctx, jl_malloc_data_pointer(filename, line), addend, "bytecnt");
-}
-
 // --- constant determination ---
 
 static void show_source_loc(jl_codectx_t &ctx, JL_STREAM *out)
@@ -6681,11 +6667,8 @@ static jl_llvm_functions_t
 
     // step 1b. unpack debug information
     int coverage_mode = jl_options.code_coverage;
-    int malloc_log_mode = jl_options.malloc_log;
     if (!JL_FEAT_TEST(ctx, code_coverage))
         coverage_mode = JL_LOG_NONE;
-    if (!JL_FEAT_TEST(ctx, track_allocations))
-        malloc_log_mode = JL_LOG_NONE;
 
     StringRef dbgFuncName = ctx.name;
     int toplineno = -1;
@@ -7552,11 +7535,6 @@ static jl_llvm_functions_t
                 (in_user_code && coverage_mode == JL_LOG_USER) ||
                 (is_tracked && coverage_mode == JL_LOG_PATH));
     };
-    auto do_malloc_log = [&] (bool in_user_code, bool is_tracked) {
-        return (malloc_log_mode == JL_LOG_ALL ||
-                (in_user_code && malloc_log_mode == JL_LOG_USER) ||
-                (is_tracked && malloc_log_mode == JL_LOG_PATH));
-    };
     std::vector<unsigned> current_lineinfo, new_lineinfo;
     auto coverageVisitStmt = [&] (size_t dbg) {
         if (dbg == 0 || dbg >= linetable.size())
@@ -7579,16 +7557,6 @@ static jl_llvm_functions_t
             }
         }
         new_lineinfo.clear();
-    };
-    auto mallocVisitStmt = [&] (unsigned dbg, Value *sync) {
-        if (!do_malloc_log(mod_is_user_mod, mod_is_tracked) || dbg == 0) {
-            if (do_malloc_log(true, mod_is_tracked) && sync)
-                ctx.builder.CreateCall(prepare_call(sync_gc_total_bytes_func), {sync});
-            return;
-        }
-        while (linetable.at(dbg).inlined_at)
-            dbg = linetable.at(dbg).inlined_at;
-        mallocVisitLine(ctx, ctx.file, linetable.at(dbg).line, sync);
     };
     if (coverage_mode != JL_LOG_NONE) {
         // record all lines that could be covered
@@ -7648,8 +7616,6 @@ static jl_llvm_functions_t
     }
 
     Value *sync_bytes = nullptr;
-    if (do_malloc_log(true, mod_is_tracked))
-        sync_bytes = ctx.builder.CreateCall(prepare_call(diff_gc_total_bytes_func), {});
     { // coverage for the function definition line number
         const auto &topinfo = linetable.at(0);
         if (linetable.size() > 1) {
