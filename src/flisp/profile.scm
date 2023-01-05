@@ -69,4 +69,3 @@
           (for-each (lambda (k)
                       (put! *profiles* k (cons 0 (cons 0 0))))
                     (table.keys *profiles*)))))
-

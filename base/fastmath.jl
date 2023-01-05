@@ -41,6 +41,8 @@ const fast_op =
          :!= => :ne_fast,
          :< => :lt_fast,
          :<= => :le_fast,
+         :> => :gt_fast,
+         :>= => :ge_fast,
          :abs => :abs_fast,
          :abs2 => :abs2_fast,
          :cmp => :cmp_fast,
@@ -182,6 +184,8 @@ eq_fast(x::T, y::T) where {T<:FloatTypes} = eq_float_fast(x, y)
 ne_fast(x::T, y::T) where {T<:FloatTypes} = ne_float_fast(x, y)
 lt_fast(x::T, y::T) where {T<:FloatTypes} = lt_float_fast(x, y)
 le_fast(x::T, y::T) where {T<:FloatTypes} = le_float_fast(x, y)
+gt_fast(x, y) = lt_fast(y, x)
+ge_fast(x, y) = le_fast(y, x)
 
 isinf_fast(x) = false
 isfinite_fast(x) = true
@@ -279,8 +283,8 @@ exp10_fast(x::Union{Float32,Float64}) = Base.Math.exp10_fast(x)
 
 # builtins
 
-pow_fast(x::Float32, y::Integer) = ccall("llvm.powi.f32", llvmcall, Float32, (Float32, Int32), x, y)
-pow_fast(x::Float64, y::Integer) = ccall("llvm.powi.f64", llvmcall, Float64, (Float64, Int32), x, y)
+pow_fast(x::Float32, y::Integer) = ccall("llvm.powi.f32.i32", llvmcall, Float32, (Float32, Int32), x, y)
+pow_fast(x::Float64, y::Integer) = ccall("llvm.powi.f64.i32", llvmcall, Float64, (Float64, Int32), x, y)
 pow_fast(x::FloatTypes, ::Val{p}) where {p} = pow_fast(x, p) # inlines already via llvm.powi
 @inline pow_fast(x, v::Val) = Base.literal_pow(^, x, v)
 

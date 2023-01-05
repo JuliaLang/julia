@@ -185,32 +185,32 @@ Hello World!
 | `jl_uv_write()`                | `jl_uv.c`       | called though [`ccall`](@ref)                        |
 | `julia_write_282942`           | `stream.jl`     | function `write!(s::IO, a::Array{T}) where T`        |
 | `julia_print_284639`           | `ascii.jl`      | `print(io::IO, s::String) = (write(io, s); nothing)` |
-| `jlcall_print_284639`          |                 |                                                      |
-| `jl_apply()`                   | `julia.h`       |                                                      |
-| `jl_trampoline()`              | `builtins.c`    |                                                      |
-| `jl_apply()`                   | `julia.h`       |                                                      |
+| `jlcall_print_284639`          |                 |                                                      |
+| `jl_apply()`                   | `julia.h`       |                                                      |
+| `jl_trampoline()`              | `builtins.c`    |                                                      |
+| `jl_apply()`                   | `julia.h`       |                                                      |
 | `jl_apply_generic()`           | `gf.c`          | `Base.print(Base.TTY, String)`                       |
-| `jl_apply()`                   | `julia.h`       |                                                      |
-| `jl_trampoline()`              | `builtins.c`    |                                                      |
-| `jl_apply()`                   | `julia.h`       |                                                      |
+| `jl_apply()`                   | `julia.h`       |                                                      |
+| `jl_trampoline()`              | `builtins.c`    |                                                      |
+| `jl_apply()`                   | `julia.h`       |                                                      |
 | `jl_apply_generic()`           | `gf.c`          | `Base.print(Base.TTY, String, Char, Char...)`        |
-| `jl_apply()`                   | `julia.h`       |                                                      |
-| `jl_f_apply()`                 | `builtins.c`    |                                                      |
-| `jl_apply()`                   | `julia.h`       |                                                      |
-| `jl_trampoline()`              | `builtins.c`    |                                                      |
-| `jl_apply()`                   | `julia.h`       |                                                      |
+| `jl_apply()`                   | `julia.h`       |                                                      |
+| `jl_f_apply()`                 | `builtins.c`    |                                                      |
+| `jl_apply()`                   | `julia.h`       |                                                      |
+| `jl_trampoline()`              | `builtins.c`    |                                                      |
+| `jl_apply()`                   | `julia.h`       |                                                      |
 | `jl_apply_generic()`           | `gf.c`          | `Base.println(Base.TTY, String, String...)`          |
-| `jl_apply()`                   | `julia.h`       |                                                      |
-| `jl_trampoline()`              | `builtins.c`    |                                                      |
-| `jl_apply()`                   | `julia.h`       |                                                      |
+| `jl_apply()`                   | `julia.h`       |                                                      |
+| `jl_trampoline()`              | `builtins.c`    |                                                      |
+| `jl_apply()`                   | `julia.h`       |                                                      |
 | `jl_apply_generic()`           | `gf.c`          | `Base.println(String,)`                              |
-| `jl_apply()`                   | `julia.h`       |                                                      |
-| `do_call()`                    | `interpreter.c` |                                                      |
-| `eval_body()`                  | `interpreter.c` |                                                      |
-| `jl_interpret_toplevel_thunk`  | `interpreter.c` |                                                      |
-| `jl_toplevel_eval_flex`        | `toplevel.c`    |                                                      |
-| `jl_toplevel_eval_in`          | `toplevel.c`    |                                                      |
-| `Core.eval`                    | `boot.jl`       |                                                      |
+| `jl_apply()`                   | `julia.h`       |                                                      |
+| `do_call()`                    | `interpreter.c` |                                                      |
+| `eval_body()`                  | `interpreter.c` |                                                      |
+| `jl_interpret_toplevel_thunk`  | `interpreter.c` |                                                      |
+| `jl_toplevel_eval_flex`        | `toplevel.c`    |                                                      |
+| `jl_toplevel_eval_in`          | `toplevel.c`    |                                                      |
+| `Core.eval`                    | `boot.jl`       |                                                      |
 
 Since our example has just one function call, which has done its job of printing "Hello World!",
 the stack now rapidly unwinds back to `main()`.

@@ -192,8 +192,8 @@ for (S, H) in ((:Symmetric, :Hermitian), (:Hermitian, :Symmetric))
     end
 end
 
-convert(T::Type{<:Symmetric}, m::Union{Symmetric,Hermitian}) = m isa T ? m : T(m)
-convert(T::Type{<:Hermitian}, m::Union{Symmetric,Hermitian}) = m isa T ? m : T(m)
+convert(::Type{T}, m::Union{Symmetric,Hermitian}) where {T<:Symmetric} = m isa T ? m : T(m)::T
+convert(::Type{T}, m::Union{Symmetric,Hermitian}) where {T<:Hermitian} = m isa T ? m : T(m)::T
 
 const HermOrSym{T,        S} = Union{Hermitian{T,S}, Symmetric{T,S}}
 const RealHermSym{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}}
@@ -363,6 +363,7 @@ Base.copy(A::Adjoint{<:Any,<:Symmetric}) =
 Base.copy(A::Transpose{<:Any,<:Hermitian}) =
     Hermitian(copy(transpose(A.parent.data)), ifelse(A.parent.uplo == 'U', :L, :U))
 
+tr(A::Symmetric) = tr(A.data) # to avoid AbstractMatrix fallback (incl. allocations)
 tr(A::Hermitian) = real(tr(A.data))
 
 Base.conj(A::HermOrSym) = typeof(A)(conj(A.data), A.uplo)
@@ -622,10 +623,10 @@ det(A::RealHermSymComplexHerm) = real(det(_factorize(A; check=false)))
 det(A::Symmetric{<:Real}) = det(_factorize(A; check=false))
 det(A::Symmetric) = det(_factorize(A; check=false))
 
-\(A::HermOrSym{<:Any,<:StridedMatrix}, B::AbstractVector) = \(factorize(A), B)
+\(A::HermOrSym, B::AbstractVector) = \(factorize(A), B)
 # Bunch-Kaufman solves can not utilize BLAS-3 for multiple right hand sides
 # so using LU is faster for AbstractMatrix right hand side
-\(A::HermOrSym{<:Any,<:StridedMatrix}, B::AbstractMatrix) = \(lu(A), B)
+\(A::HermOrSym, B::AbstractMatrix) = \(lu(A), B)
 
 function _inv(A::HermOrSym)
     n = checksquare(A)
@@ -643,6 +644,7 @@ function _inv(A::HermOrSym)
     end
     B
 end
+# StridedMatrix restriction seems necessary due to inv! call in _inv above
 inv(A::Hermitian{<:Any,<:StridedMatrix}) = Hermitian(_inv(A), sym_uplo(A.uplo))
 inv(A::Symmetric{<:Any,<:StridedMatrix}) = Symmetric(_inv(A), sym_uplo(A.uplo))
 

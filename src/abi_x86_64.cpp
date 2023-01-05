@@ -153,6 +153,10 @@ void classifyType(Classification& accum, jl_datatype_t *dt, uint64_t offset) con
             jl_value_t *ty = jl_field_type(dt, i);
             if (jl_field_isptr(dt, i))
                 ty = (jl_value_t*)jl_voidpointer_type;
+            else if (!jl_is_datatype(ty)) { // inline union
+                accum.addField(offset, Memory);
+                continue;
+            }
             classifyType(accum, (jl_datatype_t*)ty, offset + jl_field_offset(dt, i));
         }
     }
@@ -202,7 +206,6 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *T
     else if (jl_is_structtype(dt)) {
         // spill to memory even though we would ordinarily pass
         // it in registers
-        Type* Ty = preferred_llvm_type(dt, false, ctx);
         ab.addByValAttr(Ty);
         return true;
     }

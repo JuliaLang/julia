@@ -1,16 +1,18 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+original_depot_path = copy(Base.DEPOT_PATH)
+
 using Test
 
 # Tests for @__LINE__ inside and outside of macros
-@test (@__LINE__) == 6
+@test (@__LINE__) == 8
 
 macro macro_caller_lineno()
-    @test 9 == (@__LINE__) != __source__.line > 12
+    @test 11 == (@__LINE__) != __source__.line > 14
     return __source__.line
 end
 
-@test @macro_caller_lineno() == (@__LINE__) > 12
+@test @macro_caller_lineno() == (@__LINE__) > 14
 
 # @__LINE__ in a macro expands to the location of the macrocall in the source
 # while __source__.line is the location of the macro caller
@@ -124,6 +126,7 @@ let uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
     @test string(uuid) == uuidstr == sprint(print, uuid)
     @test "check $uuid" == "check $uuidstr"
     @test UUID(UInt128(uuid)) == uuid
+    @test UUID(uuid) === uuid
     @test UUID(convert(NTuple{2, UInt64}, uuid)) == uuid
     @test UUID(convert(NTuple{4, UInt32}, uuid)) == uuid
 
@@ -234,6 +237,7 @@ append!(empty!(DEPOT_PATH), [mktempdir(), joinpath(@__DIR__, "depot")])
 @test watcher_counter[] == 0
 @test_logs (:error, r"active project callback .* failed") Base.set_active_project(nothing)
 @test watcher_counter[] == 1
+pop!(Base.active_project_callbacks)
 
 @test load_path() == [joinpath(@__DIR__, "project", "Project.toml")]
 
@@ -355,6 +359,13 @@ module NotPkgModule; end
         @test pkgdir(Foo.SubFoo1, "src") == normpath(abspath(@__DIR__, "project/deps/Foo1/src"))
         @test pkgdir(Foo.SubFoo2, "src") == normpath(abspath(@__DIR__, "project/deps/Foo1/src"))
         @test pkgdir(NotPkgModule, "src") === nothing
+    end
+
+    @testset "pkgversion" begin
+        @test pkgversion(Foo) == v"1.2.3"
+        @test pkgversion(Foo.SubFoo1) == v"1.2.3"
+        @test pkgversion(Foo.SubFoo2) == v"1.2.3"
+        @test pkgversion(NotPkgModule) === nothing
     end
 
 end
@@ -651,6 +662,7 @@ finally
     Base.set_active_project(old_act_proj)
     popfirst!(LOAD_PATH)
 end
+@test pkgversion(TestPkg) == v"1.2.3"
 
 @testset "--project and JULIA_PROJECT paths should be absolutified" begin
     mktempdir() do dir; cd(dir) do
@@ -720,25 +732,37 @@ end
     end
 end
 
+@testset "Issue #25719" begin
+    empty!(LOAD_PATH)
+    @test Base.root_module(Core, :Core) == Core
+    push!(LOAD_PATH, "@stdlib")
+    @test Base.root_module(Base, :Test) == Test
+    @test_throws KeyError(:SomeNonExistentPackage) Base.root_module(Base, :SomeNonExistentPackage)
+end
+
 ## cleanup after tests ##
 
 for env in keys(envs)
     rm(env, force=true, recursive=true)
 end
 for depot in depots
-    rm(depot, force=true, recursive=true)
+    try
+        rm(depot, force=true, recursive=true)
+    catch err
+        @show err
+    end
 end
 
 append!(empty!(LOAD_PATH), saved_load_path)
 append!(empty!(DEPOT_PATH), saved_depot_path)
-for _ = 1:2 pop!(Base.active_project_callbacks) end
+pop!(Base.active_project_callbacks)
 Base.set_active_project(saved_active_project)
 @test watcher_counter[] == 3
 
 # issue #28190
-module Foo; import Libdl; end
-import .Foo.Libdl; import Libdl
-@test Foo.Libdl === Libdl
+module Foo28190; import Libdl; end
+import .Foo28190.Libdl; import Libdl
+@test Foo28190.Libdl === Libdl
 
 @testset "include with mapexpr" begin
     let exprs = Any[]
@@ -801,8 +825,10 @@ end
         try
             push!(LOAD_PATH, tmp)
             write(joinpath(tmp, "BadCase.jl"), "module badcase end")
-            @test_throws ErrorException("package `BadCase` did not define the expected module `BadCase`, \
-                                        check for typos in package module name") (@eval using BadCase)
+            @test_logs (:warn, r"The call to compilecache failed.*") match_mode=:any begin
+                @test_throws ErrorException("package `BadCase` did not define the expected module `BadCase`, \
+                    check for typos in package module name") (@eval using BadCase)
+            end
         finally
             copy!(LOAD_PATH, old_loadpath)
         end
@@ -910,3 +936,95 @@ end
         end
     end
 end
+
+
+@testset "Loading with incomplete manifest/depot #45977" begin
+    mktempdir() do tmp
+        # Set up a stacked env.
+        cp(joinpath(@__DIR__, "depot"), joinpath(tmp, "depot"))
+
+        mkdir(joinpath(tmp, "Env1"))
+        mkdir(joinpath(tmp, "Global"))
+
+        for env in ["Env1", "Global"]
+            write(joinpath(tmp, env, "Project.toml"), """
+            [deps]
+            Baz = "6801f525-dc68-44e8-a4e8-cabd286279e7"
+            """)
+        end
+
+        write(joinpath(tmp, "Global", "Manifest.toml"), """
+            [[Baz]]
+            uuid = "6801f525-dc68-44e8-a4e8-cabd286279e7"
+            git-tree-sha1 = "efc7e24c53d6a328011975294a2c75fed2f9800a"
+            """)
+
+        # This SHA does not exist in the depot.
+        write(joinpath(tmp, "Env1", "Manifest.toml"), """
+            [[Baz]]
+            uuid = "6801f525-dc68-44e8-a4e8-cabd286279e7"
+            git-tree-sha1 = "5f2f6e72d001b014b48b26ec462f3714c342e167"
+            """)
+
+
+        old_load_path = copy(LOAD_PATH)
+        old_depot_path = copy(DEPOT_PATH)
+        try
+            empty!(LOAD_PATH)
+            push!(empty!(DEPOT_PATH), joinpath(tmp, "depot"))
+
+            push!(LOAD_PATH, joinpath(tmp, "Global"))
+
+            pkg = Base.identify_package("Baz")
+            # Package in manifest in current env not present in depot
+            @test Base.locate_package(pkg) !== nothing
+
+            pushfirst!(LOAD_PATH, joinpath(tmp, "Env1"))
+
+            @test Base.locate_package(pkg) === nothing
+
+            write(joinpath(tmp, "Env1", "Manifest.toml"), """
+            """)
+            # Package in current env not present in manifest
+            pkg, env = Base.identify_package_env("Baz")
+            @test Base.locate_package(pkg, env) === nothing
+        finally
+            copy!(LOAD_PATH, old_load_path)
+            copy!(DEPOT_PATH, old_depot_path)
+        end
+    end
+end
+
+@testset "Extensions" begin
+    old_depot_path = copy(DEPOT_PATH)
+    try
+        tmp = mktempdir()
+        push!(empty!(DEPOT_PATH), joinpath(tmp, "depot"))
+
+        proj = joinpath(@__DIR__, "project", "Extensions", "HasDepWithExtensions.jl")
+        for compile in (`--compiled-modules=no`, ``, ``) # Once when requiring precomilation, once where it is already precompiled
+            cmd = `$(Base.julia_cmd()) $compile --project=$proj --startup-file=no -e '
+                begin
+                using HasExtensions
+                # Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly got an extension")
+                HasExtensions.ext_loaded && error("ext_loaded set")
+                using HasDepWithExtensions
+                # Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
+                HasExtensions.ext_loaded || error("ext_loaded not set")
+                HasExtensions.ext_folder_loaded && error("ext_folder_loaded set")
+                HasDepWithExtensions.do_something() || error("do_something errored")
+                using ExtDep2
+                HasExtensions.ext_folder_loaded || error("ext_folder_loaded not set")
+
+                end
+            '`
+            @test success(cmd)
+        end
+    finally
+        copy!(DEPOT_PATH, old_depot_path)
+    end
+end
+
+
+empty!(Base.DEPOT_PATH)
+append!(Base.DEPOT_PATH, original_depot_path)

@@ -15,7 +15,7 @@ up to 100 tasks will be used for concurrent mapping.
 
 `ntasks` can also be specified as a zero-arg function. In this case, the
 number of tasks to run in parallel is checked before processing every element and a new
-task started if the value of `ntasks_func` is less than the current number
+task started if the value of `ntasks_func` is greater than the current number
 of tasks.
 
 If `batch_size` is specified, the collection is processed in batch mode. `f` must

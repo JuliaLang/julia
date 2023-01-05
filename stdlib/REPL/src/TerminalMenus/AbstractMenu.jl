@@ -131,7 +131,7 @@ end
 """
     header(m::AbstractMenu) -> String
 
-Returns a header string to be printed above the menu.
+Return a header string to be printed above the menu.
 Defaults to "".
 """
 header(m::AbstractMenu) = ""
@@ -192,7 +192,7 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Unio
         REPL.Terminals.raw!(term, true)
         true
     catch err
-        suppress_output || @warn("TerminalMenus: Unable to enter raw mode: $err")
+        suppress_output || @warn "TerminalMenus: Unable to enter raw mode: " exception=(err, catch_backtrace())
         false
     end
     # hide the cursor

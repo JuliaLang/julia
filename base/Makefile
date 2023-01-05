@@ -1,7 +1,6 @@
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BUILDDIR := .
 JULIAHOME := $(abspath $(SRCDIR)/..)
-include $(JULIAHOME)/deps/Versions.make
 include $(JULIAHOME)/Make.inc
 
 TAGGED_RELEASE_BANNER := ""
@@ -47,8 +46,6 @@ else
 	@echo "const MACHINE = \"$(XC_HOST)\"" >> $@
 endif
 	@echo "const libm_name = \"$(LIBMNAME)\"" >> $@
-	@echo "const libblas_name = \"$(LIBBLASNAME)\"" >> $@
-	@echo "const liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
 ifeq ($(USE_BLAS64), 1)
 	@echo "const USE_BLAS64 = true" >> $@
 else
@@ -84,6 +81,10 @@ ifeq ($(DARWIN_FRAMEWORK), 1)
 	@echo "const DARWIN_FRAMEWORK_NAME = \"$(FRAMEWORK_NAME)\"" >> $@
 else
 	@echo "const DARWIN_FRAMEWORK = false" >> $@
+endif
+ifeq ($(OS), Darwin)
+	@echo "const MACOS_PRODUCT_VERSION = \"$(shell sw_vers -productVersion)\"" >> $@
+	@echo "const MACOS_PLATFORM_VERSION = \"$(shell xcrun --show-sdk-version)\"" >> $@
 endif
 	@echo "const BUILD_TRIPLET = \"$(BB_TRIPLET_LIBGFORTRAN_CXXABI)\"" >> $@
 
@@ -171,7 +172,7 @@ $$(build_private_libdir)/$$(libname_$2):
 		REALPATH=$$(libpath_$2); \
 		$$(call resolve_path,REALPATH) && \
 		[ -e "$$$$REALPATH" ] && \
-		([ ! -e "$$@" ] || rm "$$@") && \
+		rm -f "$$@" && \
 		echo ln -sf "$$$$REALPATH" "$$@" && \
 		ln -sf "$$$$REALPATH" "$$@"; \
 	else \
@@ -195,8 +196,20 @@ endif
 
 $(build_bindir)/7z$(EXE):
 	[ -e "$(7Z_PATH)" ] && \
-	([ ! -e "$@" ] || rm "$@") && \
+	rm -f "$@" && \
 	ln -svf "$(7Z_PATH)" "$@"
+
+symlink_lld: $(build_bindir)/lld$(EXE)
+
+ifneq ($(USE_SYSTEM_LLD),0)
+SYMLINK_SYSTEM_LIBRARIES += symlink_lld
+LLD_PATH := $(shell which lld$(EXE))
+endif
+
+$(build_bindir)/lld$(EXE):
+	[ -e "$(LLD_PATH)" ] && \
+	rm -f "$@" && \
+	ln -svf "$(LLD_PATH)" "$@"
 
 # the following excludes: libuv.a, libutf8proc.a
 
@@ -206,7 +219,21 @@ else ifneq ($(USE_SYSTEM_OPENLIBM),0)
 $(eval $(call symlink_system_library,OPENLIBM,$(LIBMNAME)))
 endif
 
+# On macOS, libgcc_s has soversion 1.1 always on aarch64 and only for GCC 12+
+# (-> libgfortran 5) on x86_64
+ifeq ($(OS),Darwin)
+ifeq ($(ARCH),aarch64)
+$(eval $(call symlink_system_library,CSL,libgcc_s,1.1))
+else
+ifeq ($(LIBGFORTRAN_VERSION),5)
+$(eval $(call symlink_system_library,CSL,libgcc_s,1.1))
+else
 $(eval $(call symlink_system_library,CSL,libgcc_s,1))
+endif
+endif
+else
+$(eval $(call symlink_system_library,CSL,libgcc_s,1))
+endif
 ifneq (,$(LIBGFORTRAN_VERSION))
 $(eval $(call symlink_system_library,CSL,libgfortran,$(LIBGFORTRAN_VERSION)))
 endif
@@ -256,7 +283,7 @@ $(build_private_libdir)/libLLVM.$(SHLIB_EXT):
 	REALPATH=$(LLVM_CONFIG_HOST_LIBS) && \
 	$(call resolve_path,REALPATH) && \
 	[ -e "$$REALPATH" ] && \
-	([ ! -e "$@" ] || rm "$@") && \
+	rm -f "$@" && \
 	echo ln -sf "$$REALPATH" "$@" && \
 	ln -sf "$$REALPATH" "$@"
 ifneq ($(USE_SYSTEM_LLVM),0)

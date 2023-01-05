@@ -5,7 +5,11 @@ Base.Threads.@threads
 Base.Threads.foreach
 Base.Threads.@spawn
 Base.Threads.threadid
+Base.Threads.maxthreadid
 Base.Threads.nthreads
+Base.Threads.threadpool
+Base.Threads.nthreadpools
+Base.Threads.threadpoolsize
 ```
 
 See also [Multi-Threading](@ref man-multithreading).
@@ -49,7 +53,7 @@ Base.Threads.atomic_min!
 Base.Threads.atomic_fence
 ```
 
-## ccall using a threadpool (Experimental)
+## ccall using a libuv threadpool (Experimental)
 
 ```@docs
 Base.@threadcall

@@ -25,7 +25,7 @@ $(eval $(call staged-install, \
 	LIBWHICH_INSTALL,,,))
 
 clean-libwhich:
-	-rm $(BUILDDIR)/$(LIBWHICH_SRC_DIR)/build-compiled
+	-rm -f $(BUILDDIR)/$(LIBWHICH_SRC_DIR)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(LIBWHICH_SRC_DIR) clean
 
 get-libwhich: $(LIBWHICH_SRC_FILE)

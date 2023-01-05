@@ -12,24 +12,22 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
 
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 #include "julia_assert.h"
 #include "llvm-pass-helpers.h"
 
 using namespace llvm;
 
 JuliaPassContext::JuliaPassContext()
-    : T_size(nullptr), T_int8(nullptr), T_int32(nullptr),
-        T_pint8(nullptr), T_jlvalue(nullptr), T_prjlvalue(nullptr),
-        T_ppjlvalue(nullptr), T_pjlvalue(nullptr), T_pjlvalue_der(nullptr),
-        T_ppjlvalue_der(nullptr),
+    : T_prjlvalue(nullptr),
 
         tbaa_gcframe(nullptr), tbaa_tag(nullptr),
 
-        pgcstack_getter(nullptr), gc_flush_func(nullptr),
+        pgcstack_getter(nullptr), adoptthread_func(nullptr), gc_flush_func(nullptr),
         gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
         pointer_from_objref_func(nullptr), alloc_obj_func(nullptr),
-        typeof_func(nullptr), write_barrier_func(nullptr), module(nullptr)
+        typeof_func(nullptr), write_barrier_func(nullptr),
+        call_func(nullptr), call2_func(nullptr), module(nullptr)
 {
 }
 
@@ -45,6 +43,7 @@ void JuliaPassContext::initFunctions(Module &M)
     tbaa_tag = tbaa_make_child_with_context(llvmctx, "jtbaa_tag", tbaa_data_scalar).first;
 
     pgcstack_getter = M.getFunction("julia.get_pgcstack");
+    adoptthread_func = M.getFunction("julia.get_pgcstack_or_new");
     gc_flush_func = M.getFunction("julia.gcroot_flush");
     gc_preserve_begin_func = M.getFunction("llvm.julia.gc_preserve_begin");
     gc_preserve_end_func = M.getFunction("llvm.julia.gc_preserve_end");
@@ -52,6 +51,8 @@ void JuliaPassContext::initFunctions(Module &M)
     typeof_func = M.getFunction("julia.typeof");
     write_barrier_func = M.getFunction("julia.write_barrier");
     alloc_obj_func = M.getFunction("julia.gc_alloc_obj");
+    call_func = M.getFunction("julia.call");
+    call2_func = M.getFunction("julia.call2");
 }
 
 void JuliaPassContext::initAll(Module &M)
@@ -61,27 +62,20 @@ void JuliaPassContext::initAll(Module &M)
 
     // Then initialize types and metadata nodes.
     auto &ctx = M.getContext();
-    T_size = M.getDataLayout().getIntPtrType(ctx);
-    T_int8 = Type::getInt8Ty(ctx);
-    T_pint8 = PointerType::get(T_int8, 0);
-    T_int32 = Type::getInt32Ty(ctx);
 
     // Construct derived types.
-    T_jlvalue = StructType::get(ctx);
-    T_pjlvalue = PointerType::get(T_jlvalue, 0);
-    T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
-    T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
-    T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
-    T_ppjlvalue_der = PointerType::get(T_prjlvalue, AddressSpace::Derived);
-    T_pppjlvalue = PointerType::get(T_ppjlvalue, 0);
+    T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
 }
 
 llvm::CallInst *JuliaPassContext::getPGCstack(llvm::Function &F) const
 {
-    for (auto I = F.getEntryBlock().begin(), E = F.getEntryBlock().end();
-         pgcstack_getter && I != E; ++I) {
-        if (CallInst *callInst = dyn_cast<CallInst>(&*I)) {
-            if (callInst->getCalledOperand() == pgcstack_getter) {
+    if (!pgcstack_getter && !adoptthread_func)
+        return nullptr;
+    for (auto &I : F.getEntryBlock()) {
+        if (CallInst *callInst = dyn_cast<CallInst>(&I)) {
+            Value *callee = callInst->getCalledOperand();
+            if ((pgcstack_getter && callee == pgcstack_getter) ||
+                (adoptthread_func && callee == adoptthread_func)) {
                 return callInst;
             }
         }
@@ -130,7 +124,6 @@ namespace jl_intrinsics {
     {
         addRetAttr(target, Attribute::NoAlias);
         addRetAttr(target, Attribute::NonNull);
-        target->addFnAttr(Attribute::getWithAllocSizeArgs(context, 1, None)); // returns %1 bytes
         return target;
     }
 
@@ -140,7 +133,7 @@ namespace jl_intrinsics {
             return Function::Create(
                 FunctionType::get(
                     PointerType::get(context.T_prjlvalue, 0),
-                    {PointerType::get(context.T_prjlvalue, 0), context.T_int32},
+                    {PointerType::get(context.T_prjlvalue, 0), Type::getInt32Ty(context.getLLVMContext())},
                     false),
                 Function::ExternalLinkage,
                 GET_GC_FRAME_SLOT_NAME);
@@ -152,11 +145,14 @@ namespace jl_intrinsics {
             auto intrinsic = Function::Create(
                 FunctionType::get(
                     context.T_prjlvalue,
-                    { context.T_pint8, context.T_size },
+                    { Type::getInt8PtrTy(context.getLLVMContext()),
+                        sizeof(size_t) == sizeof(uint32_t) ?
+                        Type::getInt32Ty(context.getLLVMContext()) :
+                        Type::getInt64Ty(context.getLLVMContext()) },
                     false),
                 Function::ExternalLinkage,
                 GC_ALLOC_BYTES_NAME);
-
+            intrinsic->addFnAttr(Attribute::getWithAllocSizeArgs(context.getLLVMContext(), 1, None));
             return addGCAllocAttributes(intrinsic, context.getLLVMContext());
         });
 
@@ -164,7 +160,7 @@ namespace jl_intrinsics {
         NEW_GC_FRAME_NAME,
         [](const JuliaPassContext &context) {
             auto intrinsic = Function::Create(
-                FunctionType::get(PointerType::get(context.T_prjlvalue, 0), {context.T_int32}, false),
+                FunctionType::get(PointerType::get(context.T_prjlvalue, 0), {Type::getInt32Ty(context.getLLVMContext())}, false),
                 Function::ExternalLinkage,
                 NEW_GC_FRAME_NAME);
             addRetAttr(intrinsic, Attribute::NoAlias);
@@ -179,7 +175,7 @@ namespace jl_intrinsics {
             return Function::Create(
                 FunctionType::get(
                     Type::getVoidTy(context.getLLVMContext()),
-                    {PointerType::get(context.T_prjlvalue, 0), context.T_int32},
+                    {PointerType::get(context.T_prjlvalue, 0), Type::getInt32Ty(context.getLLVMContext())},
                     false),
                 Function::ExternalLinkage,
                 PUSH_GC_FRAME_NAME);
@@ -225,11 +221,14 @@ namespace jl_well_known {
             auto bigAllocFunc = Function::Create(
                 FunctionType::get(
                     context.T_prjlvalue,
-                    { context.T_pint8, context.T_size },
+                    { Type::getInt8PtrTy(context.getLLVMContext()),
+                        sizeof(size_t) == sizeof(uint32_t) ?
+                        Type::getInt32Ty(context.getLLVMContext()) :
+                        Type::getInt64Ty(context.getLLVMContext()) },
                     false),
                 Function::ExternalLinkage,
                 GC_BIG_ALLOC_NAME);
-
+            bigAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(context.getLLVMContext(), 1, None));
             return addGCAllocAttributes(bigAllocFunc, context.getLLVMContext());
         });
 
@@ -239,11 +238,11 @@ namespace jl_well_known {
             auto poolAllocFunc = Function::Create(
                 FunctionType::get(
                     context.T_prjlvalue,
-                    { context.T_pint8, context.T_int32, context.T_int32 },
+                    { Type::getInt8PtrTy(context.getLLVMContext()), Type::getInt32Ty(context.getLLVMContext()), Type::getInt32Ty(context.getLLVMContext()) },
                     false),
                 Function::ExternalLinkage,
                 GC_POOL_ALLOC_NAME);
-
+            poolAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(context.getLLVMContext(), 2, None));
             return addGCAllocAttributes(poolAllocFunc, context.getLLVMContext());
         });
 

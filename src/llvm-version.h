@@ -13,6 +13,10 @@
     #error Only LLVM versions >= 12.0.0 are supported by Julia
 #endif
 
+#if JL_LLVM_VERSION >= 150000
+#define JL_LLVM_OPAQUE_POINTERS 1
+#endif
+
 #ifdef __cplusplus
 #if defined(__GNUC__) && (__GNUC__ >= 9)
 // Added in GCC 9, this warning is annoying

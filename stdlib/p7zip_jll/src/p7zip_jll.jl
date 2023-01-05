@@ -35,7 +35,7 @@ else
     const pathsep = ':'
 end
 
-function adjust_ENV!(env::Dict, PATH::String, LIBPATH::String, adjust_PATH::Bool, adjust_LIBPATH::Bool)
+function adjust_ENV!(env::Dict{keytype(Base.EnvDict),valtype(Base.EnvDict)}, PATH::String, LIBPATH::String, adjust_PATH::Bool, adjust_LIBPATH::Bool)
     if adjust_LIBPATH
         LIBPATH_base = get(env, LIBPATH_env, expanduser(LIBPATH_default))
         if !isempty(LIBPATH_base)

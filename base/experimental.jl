@@ -129,11 +129,34 @@ Set the maximum number of potentially-matching methods considered when running i
 for methods defined in the current module. This setting affects inference of calls with
 incomplete knowledge of the argument types.
 
+The benefit of this setting is to avoid excessive compilation and reduce invalidation risks
+in poorly-inferred cases. For example, when `@max_methods 2` is set and there are two
+potentially-matching methods returning different types inside a function body, then Julia
+will compile subsequent calls for both types so that the compiled function body accounts
+for both possibilities. Also the compiled code is vulnerable to invalidations that would
+happen when either of the two methods gets invalidated. This speculative compilation and
+these invalidations can be avoided by setting `@max_methods 1` and allowing the compiled
+code to resort to runtime dispatch instead.
+
 Supported values are `1`, `2`, `3`, `4`, and `default` (currently equivalent to `3`).
 """
 macro max_methods(n::Int)
     0 < n < 5 || error("We must have that `1 <= max_methods <= 4`, but `max_methods = $n`.")
     return Expr(:meta, :max_methods, n)
+end
+
+"""
+    Experimental.@max_methods n::Int function fname end
+
+Set the maximum number of potentially-matching methods considered when running inference
+for the generic function `fname`. Overrides any module-level or global inference settings
+for max_methods. This setting is global for the entire generic function (or more precisely
+the MethodTable).
+"""
+macro max_methods(n::Int, fdef::Expr)
+    0 < n <= 255 || error("We must have that `1 <= max_methods <= 255`, but `max_methods = $n`.")
+    (fdef.head === :function && length(fdef.args) == 1) || error("Second argument must be a function forward declaration")
+    return :(typeof($(esc(fdef))).name.max_methods = $(UInt8(n)))
 end
 
 """
