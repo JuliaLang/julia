@@ -2568,6 +2568,10 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     if (jl_is_long(vb->ub) && jl_is_typevar(vb->lb)) {
         varval = vb->ub;
     }
+    else if (!jl_is_type(vb->lb) && !jl_is_typevar(vb->lb) && vb->ub == (jl_value_t *)jl_any_type) {
+        // 1<:x<:Any
+        varval = vb->lb;
+    }
     else if (obviously_egal(vb->lb, vb->ub)) {
         // given x<:T<:x, substitute x for T
         varval = vb->ub;

@@ -2333,6 +2333,12 @@ let S = Tuple{T2, V2} where {T2, N2, V2<:(Array{S2, N2} where {S2 <: T2})},
     @testintersect(S, T, !Union{})
 end
 
+let S = Tuple{Val{Tuple{2, 1}}, Any},
+    T = T = Tuple{Val{S}, Real} where {Y, X, S<:Tuple{Y, X}}
+    @testintersect(S, T, Tuple{Val{Tuple{2, 1}}, Real})
+    (intersection_env(S, T)[2]...,) == (1, 2, Tuple{1, 2})
+end
+
 @testset "known subtype/intersect issue" begin
     #issue 45874
     # Causes a hang due to jl_critical_error calling back into malloc...
