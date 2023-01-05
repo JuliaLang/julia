@@ -155,6 +155,13 @@ typedef struct _jl_image_fptrs_t {
     const uint32_t *clone_idxs;
 } jl_image_fptrs_t;
 
+typedef struct {
+    uint64_t base;
+    uintptr_t *gvars_base;
+    const int32_t *gvars_offsets;
+    jl_image_fptrs_t fptrs;
+} jl_image_t;
+
 /**
  * Initialize the processor dispatch system with sysimg `hdl` (also initialize the sysimg itself).
  * The dispatch system will find the best implementation to be used in this session.
@@ -165,8 +172,8 @@ typedef struct _jl_image_fptrs_t {
  *
  * Return the data about the function pointers selected.
  */
-jl_image_fptrs_t jl_init_processor_sysimg(void *hdl);
-jl_image_fptrs_t jl_init_processor_pkgimg(void *hdl);
+jl_image_t jl_init_processor_sysimg(void *hdl);
+jl_image_t jl_init_processor_pkgimg(void *hdl);
 
 // Return the name of the host CPU as a julia string.
 JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void);
