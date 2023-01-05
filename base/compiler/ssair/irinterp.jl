@@ -232,7 +232,7 @@ function reprocess_instruction!(interp::AbstractInterpreter,
             (; rt, effects) = abstract_eval_statement_expr(interp, inst, nothing, ir, irsv.mi)
             # All other effects already guaranteed effect free by construction
             if is_nothrow(effects)
-                ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+                ir.stmts[idx][:flag] |= IR_FLAG_NOTHROW
                 if isa(rt, Const) && is_inlineable_constant(rt.val)
                     ir.stmts[idx][:inst] = quoted(rt.val)
                 end
@@ -242,7 +242,7 @@ function reprocess_instruction!(interp::AbstractInterpreter,
             if mi′ !== irsv.mi # prevent infinite loop
                 rt, nothrow = concrete_eval_invoke(interp, inst, mi′, irsv)
                 if nothrow
-                    ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+                    ir.stmts[idx][:flag] |= IR_FLAG_NOTHROW
                     if isa(rt, Const) && is_inlineable_constant(rt.val)
                         ir.stmts[idx][:inst] = quoted(rt.val)
                     end
