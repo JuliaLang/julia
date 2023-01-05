@@ -538,7 +538,7 @@ private:
     OptSelLayerT OptSelLayer;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
-std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &ctx, bool imaging_mode, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple());
+std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &ctx, bool imaging_mode, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple()) JL_NOTSAFEPOINT;
 inline orc::ThreadSafeModule jl_create_ts_module(StringRef name, orc::ThreadSafeContext ctx, bool imaging_mode, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple()) JL_NOTSAFEPOINT {
     auto lock = ctx.getLock();
     return orc::ThreadSafeModule(jl_create_llvm_module(name, *ctx.getContext(), imaging_mode, DL, triple), ctx);
