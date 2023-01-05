@@ -927,6 +927,8 @@ function find_all_in_cache_path(pkg::PkgId)
 end
 
 ocachefile_from_cachefile(cachefile) = string(chopsuffix(cachefile, ".ji"), ".", Base.Libc.dlext)
+cachefile_from_ocachefile(cachefile) = string(chopsuffix(cachefile, ".$(Base.Libc.dlext)"), ".ji")
+
 
 # use an Int counter so that nested @time_imports calls all remain open
 const TIMING_IMPORTS = Threads.Atomic{Int}(0)
@@ -2091,7 +2093,6 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             if pkg.uuid !== nothing
                 entrypath, entryfile = cache_file_entry(pkg)
                 cachefiles = filter!(x -> startswith(x, entryfile * "_") && endswith(x, ".ji"), readdir(cachepath))
-
                 if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES[]
                     idx = findmin(mtime.(joinpath.(cachepath, cachefiles)))[2]
                     evicted_cachefile = joinpath(cachepath, cachefiles[idx])
@@ -2104,11 +2105,37 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                 end
             end
 
+            if cache_objects
+                try
+                    rename(tmppath_so, ocachefile::String; force=true)
+                catch e
+                    e isa IOError || rethrow()
+                    # Windows prevents renaming a file that is in use so if there is a Julia session started
+                    # with a package image loaded, we cannot rename that file.
+                    # The code belows append a `_i` to the name of the cache file where `i` is the smallest number such that 
+                    # that cache file does not exist.
+                    ocachename, ocacheext = splitext(ocachefile)
+                    old_cachefiles = filter(x->startswith(x, basename(ocachename)) && endswith(x, ocacheext), readdir(cachepath))
+                    nums = Set(1:length(old_cachefiles))
+                    for file in old_cachefiles
+                        name = splitext(file)[1]
+                        s = split(name, '_')
+                        if length(s) == 3 # e.g. lLvWP_g5TNZ_3
+                            i = tryparse(Int, last(s))
+                            if i !== nothing
+                                delete!(nums, i)
+                            end
+                        end
+                    end
+                    # TODO: Risk for a race here if some other process grabs this name before us
+                    num = isempty(nums) ? 1 : minimum(nums)
+                    ocachefile = ocachename * "_$num" * ocacheext
+                    cachefile = cachefile_from_ocachefile(ocachefile)
+                    rename(tmppath_so, ocachefile::String; force=true)
+                end
+            end
             # this is atomic according to POSIX (not Win32):
             rename(tmppath, cachefile; force=true)
-            if cache_objects
-                rename(tmppath_so, ocachefile::String; force=true)
-            end
             return cachefile, ocachefile
         end
     finally
