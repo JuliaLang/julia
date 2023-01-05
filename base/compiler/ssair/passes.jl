@@ -796,7 +796,6 @@ end
     end && return nothing
 
     arg = sig.parameters[i]
-    isa(arg, DataType) || return nothing
 
     rarg = def.args[2 + i]
     isa(rarg, SSAValue) || return nothing
@@ -805,6 +804,10 @@ end
         rarg = argdef.args[1]
         isa(rarg, SSAValue) || return nothing
         argdef = compact[rarg][:inst]
+    else
+        isa(arg, DataType) || return nothing
+        isType(arg) || return nothing
+        arg = arg.parameters[1]
     end
 
     is_known_call(argdef, Core.apply_type, compact) || return nothing
@@ -815,15 +818,23 @@ end
     applyT = applyT.val
 
     isa(applyT, UnionAll) || return nothing
+    # N.B.: At the moment we only lift the valI == 1 case, so we
+    # only need to look at the outermost tvar.
     applyTvar = applyT.var
     applyTbody = applyT.body
 
-    isa(applyTbody, DataType) || return nothing
-    applyTbody.name == arg.name || return nothing
-    length(applyTbody.parameters) == length(arg.parameters) == 1 || return nothing
-    applyTbody.parameters[1] === applyTvar || return nothing
-    arg.parameters[1] === tvar || return nothing
-    return LiftedValue(argdef.args[3])
+    arg = unwrap_unionall(arg)
+    applyTbody = unwrap_unionall(applyTbody)
+
+    (isa(arg, DataType) && isa(applyTbody, DataType)) || return nothing
+    applyTbody.name === arg.name || return nothing
+    length(applyTbody.parameters) == length(arg.parameters) || return nothing
+    for i = 1:length(applyTbody.parameters)
+        if applyTbody.parameters[i] === applyTvar && arg.parameters[i] === tvar
+            return LiftedValue(argdef.args[3])
+        end
+    end
+    return nothing
 end
 
 # NOTE we use `IdSet{Int}` instead of `BitSet` for in these passes since they work on IR after inlining,

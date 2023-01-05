@@ -1221,3 +1221,11 @@ function a47180(b; stdout )
     c
 end
 @test isa(a47180(``; stdout), Base.AbstractCmd)
+
+# Test that _compute_sparams can be eliminated for NamedTuple
+named_tuple_elim(name::Symbol, result) = NamedTuple{(name,)}(result)
+let src = code_typed1(named_tuple_elim, Tuple{Symbol, Tuple})
+    @test count(iscall((src, Core._compute_sparams)), src.code) == 0 &&
+          count(iscall((src, Core._svec_ref)), src.code) == 0 &&
+          count(iscall(x->!isa(argextype(x, src).val, Core.Builtin)), src.code) == 0
+end
