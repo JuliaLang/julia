@@ -57,9 +57,7 @@ GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M)
 static bool runtime_sym_gvs(jl_codectx_t &ctx, const char *f_lib, const char *f_name,
                             GlobalVariable *&lib, GlobalVariable *&sym)
 {
-    auto &TSM = ctx.emission_context.shared_module(*jl_Module);
-    //Safe b/c emission context holds context lock
-    auto M = TSM.getModuleUnlocked();
+    auto M = &ctx.emission_context.shared_module(*jl_Module);
     bool runtime_lib = false;
     GlobalVariable *libptrgv;
     jl_codegen_params_t::SymMapGV *symMap;
@@ -238,8 +236,7 @@ static GlobalVariable *emit_plt_thunk(
         bool runtime_lib)
 {
     ++PLTThunks;
-    auto &TSM = ctx.emission_context.shared_module(*jl_Module);
-    Module *M = TSM.getModuleUnlocked();
+    auto M = &ctx.emission_context.shared_module(*jl_Module);
     PointerType *funcptype = PointerType::get(functype, 0);
     libptrgv = prepare_global_in(M, libptrgv);
     llvmgv = prepare_global_in(M, llvmgv);
@@ -987,7 +984,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     // save the module to be linked later.
     // we cannot do this right now, because linking mutates the destination module,
     // which might invalidate LLVM values cached in cgval_t's (specifically constant arrays)
-    ctx.llvmcall_modules.push_back(orc::ThreadSafeModule(std::move(Mod), ctx.emission_context.tsctx));
+    ctx.llvmcall_modules.push_back(std::move(Mod));
 
     JL_GC_POP();
 

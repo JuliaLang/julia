@@ -67,7 +67,6 @@ DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeModule, LLVMOrcThreadSafeModul
 void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis) JL_NOTSAFEPOINT;
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false, bool external_use=false) JL_NOTSAFEPOINT;
 void addMachinePasses(legacy::PassManagerBase *PM, int optlevel) JL_NOTSAFEPOINT;
-void jl_finalize_module(orc::ThreadSafeModule  m) JL_NOTSAFEPOINT;
 void jl_merge_module(orc::ThreadSafeModule &dest, orc::ThreadSafeModule src) JL_NOTSAFEPOINT;
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M) JL_NOTSAFEPOINT;
 DataLayout jl_create_datalayout(TargetMachine &TM) JL_NOTSAFEPOINT;
@@ -182,6 +181,10 @@ typedef std::tuple<jl_returninfo_t::CallingConv, unsigned, llvm::Function*, bool
 typedef struct _jl_codegen_params_t {
     orc::ThreadSafeContext tsctx;
     orc::ThreadSafeContext::Lock tsctx_lock;
+
+    inline LLVMContext &getContext() {
+        return *tsctx.getContext();
+    }
     typedef StringMap<GlobalVariable*> SymMapGV;
     // outputs
     std::vector<std::pair<jl_code_instance_t*, jl_codegen_call_target_t>> workqueue;
@@ -208,8 +211,8 @@ typedef struct _jl_codegen_params_t {
     DenseMap<AttributeList, std::map<
         std::tuple<GlobalVariable*, FunctionType*, CallingConv::ID>,
         GlobalVariable*>> allPltMap;
-    orc::ThreadSafeModule _shared_module;
-    inline orc::ThreadSafeModule &shared_module(Module &from);
+    std::unique_ptr<Module> _shared_module;
+    inline Module &shared_module(Module &from);
     // inputs
     size_t world = 0;
     const jl_cgparams_t *params = &jl_default_cgparams;
@@ -535,18 +538,22 @@ private:
     OptSelLayerT OptSelLayer;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
-orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext ctx, bool imaging_mode, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple()) JL_NOTSAFEPOINT;
+std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &ctx, bool imaging_mode, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple()) JL_NOTSAFEPOINT;
+inline orc::ThreadSafeModule jl_create_ts_module(StringRef name, orc::ThreadSafeContext ctx, bool imaging_mode, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple()) JL_NOTSAFEPOINT {
+    auto lock = ctx.getLock();
+    return orc::ThreadSafeModule(jl_create_llvm_module(name, *ctx.getContext(), imaging_mode, DL, triple), ctx);
+}
 
-orc::ThreadSafeModule &jl_codegen_params_t::shared_module(Module &from) JL_NOTSAFEPOINT {
+Module &jl_codegen_params_t::shared_module(Module &from) JL_NOTSAFEPOINT {
     if (!_shared_module) {
-        _shared_module = jl_create_llvm_module("globals", tsctx, imaging, from.getDataLayout(), Triple(from.getTargetTriple()));
+        _shared_module = jl_create_llvm_module("globals", getContext(), imaging, from.getDataLayout(), Triple(from.getTargetTriple()));
         assert(&from.getContext() == tsctx.getContext() && "Module context differs from codegen_params context!");
     } else {
-        assert(&from.getContext() == _shared_module.getContext().getContext() && "Module context differs from shared module context!");
-        assert(from.getDataLayout() == _shared_module.getModuleUnlocked()->getDataLayout() && "Module data layout differs from shared module data layout!");
-        assert(from.getTargetTriple() == _shared_module.getModuleUnlocked()->getTargetTriple() && "Module target triple differs from shared module target triple!");
+        assert(&from.getContext() == &getContext() && "Module context differs from shared module context!");
+        assert(from.getDataLayout() == _shared_module->getDataLayout() && "Module data layout differs from shared module data layout!");
+        assert(from.getTargetTriple() == _shared_module->getTargetTriple() && "Module target triple differs from shared module target triple!");
     }
-    return _shared_module;
+    return *_shared_module;
 }
 
 Pass *createLowerPTLSPass(bool imaging_mode) JL_NOTSAFEPOINT;

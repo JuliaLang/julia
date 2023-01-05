@@ -199,17 +199,17 @@ static jl_callptr_t _jl_compile_codeinst(
     jl_workqueue_t emitted;
     {
         orc::ThreadSafeModule result_m =
-            jl_create_llvm_module(name_from_method_instance(codeinst->def), params.tsctx, params.imaging);
+            jl_create_ts_module(name_from_method_instance(codeinst->def), params.tsctx, params.imaging);
         jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, src, params);
         if (result_m)
             emitted[codeinst] = {std::move(result_m), std::move(decls)};
         {
-            auto temp_module = jl_create_llvm_module(name_from_method_instance(codeinst->def), params.tsctx, params.imaging);
-            jl_compile_workqueue(emitted, *temp_module.getModuleUnlocked(), params, CompilationPolicy::Default);
+            auto temp_module = jl_create_llvm_module(name_from_method_instance(codeinst->def), params.getContext(), params.imaging);
+            jl_compile_workqueue(emitted, *temp_module, params, CompilationPolicy::Default);
         }
 
         if (params._shared_module)
-            jl_ExecutionEngine->addModule(std::move(params._shared_module));
+            jl_ExecutionEngine->addModule(orc::ThreadSafeModule(std::move(params._shared_module), params.tsctx));
         StringMap<orc::ThreadSafeModule*> NewExports;
         StringMap<void*> NewGlobals;
         for (auto &global : params.globals) {
@@ -316,7 +316,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
         if (!pparams) {
             ctx = jl_ExecutionEngine->acquireContext();
         }
-        backing = jl_create_llvm_module("cextern", pparams ? pparams->tsctx : ctx, pparams ? pparams->imaging : imaging_default());
+        backing = jl_create_ts_module("cextern", pparams ? pparams->tsctx : ctx, pparams ? pparams->imaging : imaging_default());
         into = &backing;
     }
     JL_LOCK(&jl_codegen_lock);
@@ -334,7 +334,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
             jl_jit_globals(params.globals);
             assert(params.workqueue.empty());
             if (params._shared_module)
-                jl_ExecutionEngine->addModule(std::move(params._shared_module));
+                jl_ExecutionEngine->addModule(orc::ThreadSafeModule(std::move(params._shared_module), params.tsctx));
         }
         if (success && llvmmod == NULL)
             jl_ExecutionEngine->addModule(std::move(*into));
