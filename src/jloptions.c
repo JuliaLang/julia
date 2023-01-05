@@ -809,7 +809,7 @@ restart_switch:
                         jl_errorf("julia: invalid argument to --heap-size-hint (%s)", optarg);
                         break;
                 }
-                double sz = value * multiplier;
+                long double sz = value * multiplier;
                 if (isnan(sz) || sz < 0) {
                     jl_errorf("julia: invalid argument to --heap-size-hint (%s)", optarg);
                 }
