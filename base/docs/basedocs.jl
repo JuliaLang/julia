@@ -67,8 +67,8 @@ kw"export"
 well as for shortening names.  (Outside of `import` or `using` statements,
 `as` is not a keyword and can be used as an ordinary identifier.)
 
-`import BenchMarkTools as BT` brings the imported `BenchMarkTools` package
-into scope as `BT`.
+`import LinearAlgebra as LA` brings the imported `LinearAlgebra` standard library
+into scope as `LA`.
 
 `import LinearAlgebra: eigen as eig, cholesky as chol` brings the `eigen` and `cholesky` methods
 from `LinearAlgebra` into scope as `eig` and `chol` respectively.
