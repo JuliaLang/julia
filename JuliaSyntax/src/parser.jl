@@ -2520,6 +2520,12 @@ function parse_import_path(ps::ParseState)
             # import A.B.C  ==>  (import (. A B C))
             bump_disallowed_space(ps)
             bump(ps, TRIVIA_FLAG)
+            if peek(ps) == K":"
+                # import A.:+  ==>  (import (. A +))
+                bump_disallowed_space(ps)
+                emit_diagnostic(ps, warning="quoting with `:` in import is unnecessary")
+                bump(ps, TRIVIA_FLAG)
+            end
             parse_atsym(ps)
         elseif is_dotted(t)
             # Resolve tokenization ambiguity: In imports, dots are part of the
@@ -2534,10 +2540,6 @@ function parse_import_path(ps::ParseState)
             end
             bump_trivia(ps)
             bump_split(ps, (1,K".",TRIVIA_FLAG), (1,k,EMPTY_FLAGS))
-        # elseif k == K".."
-        #     # The flisp parser does this, but it's nonsense?
-        #     # import A..  !=>  (import (. A .))
-        #     bump_split(ps, (1,K".",TRIVIA_FLAG), (1,K".",EMPTY_FLAGS))
         elseif k == K"..."
             # Import the .. operator
             # import A...  ==>  (import (. A ..))
