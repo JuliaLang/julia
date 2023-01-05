@@ -13,6 +13,8 @@
 #include "julia_internal.h"
 #ifdef _OS_WINDOWS_
 #include <direct.h>
+#define STRSAFE_NO_DEPRECATE
+#include <strsafe.h>
 #else
 #include <unistd.h>
 #include <dlfcn.h>
@@ -160,17 +162,26 @@ JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOI
     if (!len) return NULL;
     WCHAR *wfilename = (WCHAR*)alloca(len * sizeof(WCHAR));
     if (!MultiByteToWideChar(CP_UTF8, 0, filename, -1, wfilename, len)) return NULL;
-    /* Treat `AddDllDirectory` like `(DY)LD_LIBRARY_PATH` on other platforms.
-        In Julia on Windows, user directories can be added to the DLL search path as follows.
-        `library::String = pwd()`
-        `@ccall "kernel32".AddDllDirectory(library::Cwstring)::Ptr{Nothing}`
-        https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-adddlldirectory
-        Consider `LOAD_LIBRARY_SEARCH_DEFAULT_DIRS` or
-      `LOAD_LIBRARY_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR` for use below. */
-    lib = LoadLibraryExW(wfilename, NULL, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_USER_DIRS); // this is LOAD_LIBRARY_SEARCH_DEFAULT_DIRS with ALTERED_SEARCH_PATH
+    /* Treat `AddDllDirectory` like `(DY)LD_LIBRARY_PATH` on other platforms as Julia 1.10.
+       In Julia on Windows, user directories can be added to the DLL search path as follows.
+       `library::String = pwd()`
+       `@ccall "kernel32".AddDllDirectory(library::Cwstring)::Ptr{Nothing}`
+       https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-adddlldirectory
+       dwFlags below is LOAD_LIBRARY_SEARCH_DEFAULT_DIRS with ALTERED_SEARCH_PATH
+       and without LOAD_LIBRARY_SEARCH_APPLICATION_DIR.
+    */
+    const DWORD dwFlags = LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_USER_DIRS;
+    /* First, try searching for the file name without local prefix directory prefix.*/
+    HANDLE lib = LoadLibraryExW(wfilename, NULL, dwFlags);
     if (!lib) {
-        lib = LoadLibraryExW(".\\" wfilename, NULL, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_USER_DIRS);
+        /* Second, try searching for the file name with local prefix directory prefix.*/
+        size_t prepended_len = len+3;
+        WCHAR *prepended_wfilename = (WCHAR*) alloca(prepended_len * sizeof(WCHAR));
+        HRESULT status = StringCchPrintfW(prepended_wfilename, prepended_len, L"%s%s", L".\\", wfilename);
+        if (status != S_OK) return NULL;
+        lib = LoadLibraryExW(prepended_wfilename, NULL, dwFlags);
         if (!lib) {
+            /* Third, try the old loading mechanism used before Julia 1.10. */
             lib = LoadLibraryExW(wfilename, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
         }
     }
