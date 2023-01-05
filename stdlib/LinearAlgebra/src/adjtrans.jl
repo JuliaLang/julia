@@ -406,6 +406,7 @@ Base.mapreducedim!(f::typeof(identity), op::Union{typeof(*),typeof(Base.mul_prod
     (Base.mapreducedim!(f∘adjoint, op, switch_dim12(B), parent(A)); B)
 
 switch_dim12(B::AbstractVector) = permutedims(B)
+switch_dim12(B::AbstractVector{<:Number}) = transpose(B) # avoid allocs due to permutedims
 switch_dim12(B::AbstractArray{<:Any,0}) = B
 switch_dim12(B::AbstractArray) = PermutedDimsArray(B, (2, 1, ntuple(Base.Fix1(+,2), ndims(B) - 2)...))
 
