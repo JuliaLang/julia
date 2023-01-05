@@ -14,7 +14,7 @@
 #include <llvm/Support/Debug.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 #include "julia.h"
 #include "julia_internal.h"
 #include "llvm-pass-helpers.h"
@@ -200,17 +200,21 @@ Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
     builder.SetCurrentDebugLocation(target->getDebugLoc());
     auto ptls = target->getArgOperand(0);
     CallInst *newI;
+    Attribute derefAttr;
     if (offset < 0) {
         newI = builder.CreateCall(
             bigAllocFunc,
             { ptls, ConstantInt::get(getSizeTy(F.getContext()), sz + sizeof(void*)) });
+        derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), sz + sizeof(void*));
     }
     else {
         auto pool_offs = ConstantInt::get(Type::getInt32Ty(F.getContext()), offset);
         auto pool_osize = ConstantInt::get(Type::getInt32Ty(F.getContext()), osize);
         newI = builder.CreateCall(poolAllocFunc, { ptls, pool_offs, pool_osize });
+        derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), osize);
     }
     newI->setAttributes(newI->getCalledFunction()->getAttributes());
+    newI->addRetAttr(derefAttr);
     newI->takeName(target);
     return newI;
 }

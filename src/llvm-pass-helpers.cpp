@@ -12,7 +12,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
 
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 #include "julia_assert.h"
 #include "llvm-pass-helpers.h"
 
@@ -124,7 +124,6 @@ namespace jl_intrinsics {
     {
         addRetAttr(target, Attribute::NoAlias);
         addRetAttr(target, Attribute::NonNull);
-        target->addFnAttr(Attribute::getWithAllocSizeArgs(context, 1, None)); // returns %1 bytes
         return target;
     }
 
@@ -153,7 +152,7 @@ namespace jl_intrinsics {
                     false),
                 Function::ExternalLinkage,
                 GC_ALLOC_BYTES_NAME);
-
+            intrinsic->addFnAttr(Attribute::getWithAllocSizeArgs(context.getLLVMContext(), 1, None));
             return addGCAllocAttributes(intrinsic, context.getLLVMContext());
         });
 
@@ -229,7 +228,7 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_BIG_ALLOC_NAME);
-
+            bigAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(context.getLLVMContext(), 1, None));
             return addGCAllocAttributes(bigAllocFunc, context.getLLVMContext());
         });
 
@@ -243,7 +242,7 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_POOL_ALLOC_NAME);
-
+            poolAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(context.getLLVMContext(), 2, None));
             return addGCAllocAttributes(poolAllocFunc, context.getLLVMContext());
         });
 

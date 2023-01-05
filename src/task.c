@@ -620,7 +620,7 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
     sanitizer_finish_switch_fiber(ptls->previous_task, jl_atomic_load_relaxed(&ptls->current_task));
 }
 
-JL_DLLEXPORT void jl_switch(void)
+JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
 {
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
@@ -628,6 +628,7 @@ JL_DLLEXPORT void jl_switch(void)
     if (t == ct) {
         return;
     }
+    int8_t gc_state = jl_gc_unsafe_enter(ptls);
     if (t->started && t->stkbuf == NULL)
         jl_error("attempt to switch to exited task");
     if (ptls->in_finalizer)
@@ -641,7 +642,6 @@ JL_DLLEXPORT void jl_switch(void)
 
     // Store old values on the stack and reset
     sig_atomic_t defer_signal = ptls->defer_signal;
-    int8_t gc_state = jl_gc_unsafe_enter(ptls);
     int finalizers_inhibited = ptls->finalizers_inhibited;
     ptls->finalizers_inhibited = 0;
 
@@ -681,16 +681,16 @@ JL_DLLEXPORT void jl_switch(void)
     (void)ct;
 #endif
 
-    jl_gc_unsafe_leave(ptls, gc_state);
     sig_atomic_t other_defer_signal = ptls->defer_signal;
     ptls->defer_signal = defer_signal;
     if (other_defer_signal && !defer_signal)
         jl_sigint_safepoint(ptls);
 
     JL_PROBE_RT_RUN_TASK(ct);
+    jl_gc_unsafe_leave(ptls, gc_state);
 }
 
-JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
+JL_DLLEXPORT void jl_switchto(jl_task_t **pt) JL_NOTSAFEPOINT_ENTER // n.b. this does not actually enter a safepoint
 {
     jl_set_next_task(*pt);
     jl_switch();
@@ -938,7 +938,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->threadpoolid = ct->threadpoolid;
     t->ptls = NULL;
     t->world_age = ct->world_age;
-    t->reentrant_codegen = 0;
+    t->reentrant_timing = 0;
     t->reentrant_inference = 0;
     t->inference_start_time = 0;
 
@@ -1526,7 +1526,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->sticky = 1;
     ct->ptls = ptls;
     ct->world_age = 1; // OK to run Julia code on this task
-    ct->reentrant_codegen = 0;
+    ct->reentrant_timing = 0;
     ct->reentrant_inference = 0;
     ct->inference_start_time = 0;
     ptls->root_task = ct;
