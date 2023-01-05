@@ -69,8 +69,8 @@ well as for shortening names.
 `import BenchMarkTools as BT` brings the imported `BenchMarkTools` package
 into scope as `BT`.
 
-`import CSV: read as rd, write as wd` brings the `read` and `write` methods
-from `CSV` into scope as `rd` and `wd` respectively.
+`import LinearAlgebra: eigen as eig, cholesky as chol` brings the `eigen` and `cholesky` methods
+from `LinearAlgebra` into scope as `eig` and `chol` respectively.
 
 `as` works with `using` only when individual identifiers are brought into scope.
 For example, `using LinearAlgebra: eigen as eig` or `using LinearAlgebra: eigen as eig, cholesky as chol` works,
