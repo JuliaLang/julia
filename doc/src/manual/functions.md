@@ -392,9 +392,8 @@ julia> x.a
 2
 ```
 
-Named tuples are very similar to tuples, except that fields can additionally be accessed by name
-using dot syntax (`x.a`) in addition to the regular indexing syntax
-(`x[1]`).
+The fields of named tuples can be accessed by name using dot syntax (`x.a`) in
+addition to the regular indexing syntax (`x[1]` or `x[:a]`).
 
 ## [Destructuring Assignment and Multiple Return Values](@id destructuring-assignment)
 
@@ -854,7 +853,8 @@ end
 ```
 
 Inside `f`, `kwargs` will be an immutable key-value iterator over a named tuple.
-Named tuples (as well as dictionaries with keys of `Symbol`) can be passed as
+Named tuples (as well as dictionaries with keys of `Symbol`, and other iterators
+yielding two-value collections with symbol as first values) can be passed as
 keyword arguments using a semicolon in a call, e.g. `f(x, z=1; kwargs...)`.
 
 If a keyword argument is not assigned a default value in the method definition,
