@@ -306,7 +306,6 @@ _isvalid_utf8(s::Union{String,FastContiguousSubArray{UInt8,1,Vector{UInt8}}}) =
     # 1: valid ASCII
     # 2: valid UTF-8
 function byte_string_classify(s::Union{String,FastContiguousSubArray{UInt8,1,Vector{UInt8}}})
-    bytes = unsafe_wrap(Vector{UInt8}, s)
     GC.@preserve s byte_string_classify(unsafe_wrap(Vector{UInt8}, s))
 end
 
