@@ -12,7 +12,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
 
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 #include "julia_assert.h"
 #include "llvm-pass-helpers.h"
 
@@ -27,8 +27,7 @@ JuliaPassContext::JuliaPassContext()
         gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
         pointer_from_objref_func(nullptr), alloc_obj_func(nullptr),
         typeof_func(nullptr), write_barrier_func(nullptr),
-        write_barrier_binding_func(nullptr), call_func(nullptr),
-        call2_func(nullptr), module(nullptr)
+        call_func(nullptr), call2_func(nullptr), module(nullptr)
 {
 }
 
@@ -51,7 +50,6 @@ void JuliaPassContext::initFunctions(Module &M)
     pointer_from_objref_func = M.getFunction("julia.pointer_from_objref");
     typeof_func = M.getFunction("julia.typeof");
     write_barrier_func = M.getFunction("julia.write_barrier");
-    write_barrier_binding_func = M.getFunction("julia.write_barrier_binding");
     alloc_obj_func = M.getFunction("julia.gc_alloc_obj");
     call_func = M.getFunction("julia.call");
     call2_func = M.getFunction("julia.call2");
@@ -118,7 +116,6 @@ namespace jl_intrinsics {
     static const char *PUSH_GC_FRAME_NAME = "julia.push_gc_frame";
     static const char *POP_GC_FRAME_NAME = "julia.pop_gc_frame";
     static const char *QUEUE_GC_ROOT_NAME = "julia.queue_gc_root";
-    static const char *QUEUE_GC_BINDING_NAME = "julia.queue_gc_binding";
 
     // Annotates a function with attributes suitable for GC allocation
     // functions. Specifically, the return value is marked noalias and nonnull.
@@ -127,7 +124,6 @@ namespace jl_intrinsics {
     {
         addRetAttr(target, Attribute::NoAlias);
         addRetAttr(target, Attribute::NonNull);
-        target->addFnAttr(Attribute::getWithAllocSizeArgs(context, 1, None)); // returns %1 bytes
         return target;
     }
 
@@ -156,7 +152,7 @@ namespace jl_intrinsics {
                     false),
                 Function::ExternalLinkage,
                 GC_ALLOC_BYTES_NAME);
-
+            intrinsic->addFnAttr(Attribute::getWithAllocSizeArgs(context.getLLVMContext(), 1, None));
             return addGCAllocAttributes(intrinsic, context.getLLVMContext());
         });
 
@@ -210,27 +206,12 @@ namespace jl_intrinsics {
             intrinsic->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
             return intrinsic;
         });
-
-    const IntrinsicDescription queueGCBinding(
-        QUEUE_GC_BINDING_NAME,
-        [](const JuliaPassContext &context) {
-            auto intrinsic = Function::Create(
-                FunctionType::get(
-                    Type::getVoidTy(context.getLLVMContext()),
-                    { context.T_prjlvalue },
-                    false),
-                Function::ExternalLinkage,
-                QUEUE_GC_BINDING_NAME);
-            intrinsic->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
-            return intrinsic;
-        });
 }
 
 namespace jl_well_known {
     static const char *GC_BIG_ALLOC_NAME = XSTR(jl_gc_big_alloc);
     static const char *GC_POOL_ALLOC_NAME = XSTR(jl_gc_pool_alloc);
     static const char *GC_QUEUE_ROOT_NAME = XSTR(jl_gc_queue_root);
-    static const char *GC_QUEUE_BINDING_NAME = XSTR(jl_gc_queue_binding);
 
     using jl_intrinsics::addGCAllocAttributes;
 
@@ -247,7 +228,7 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_BIG_ALLOC_NAME);
-
+            bigAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(context.getLLVMContext(), 1, None));
             return addGCAllocAttributes(bigAllocFunc, context.getLLVMContext());
         });
 
@@ -261,22 +242,8 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_POOL_ALLOC_NAME);
-
+            poolAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(context.getLLVMContext(), 2, None));
             return addGCAllocAttributes(poolAllocFunc, context.getLLVMContext());
-        });
-
-    const WellKnownFunctionDescription GCQueueBinding(
-        GC_QUEUE_BINDING_NAME,
-        [](const JuliaPassContext &context) {
-            auto func = Function::Create(
-                FunctionType::get(
-                    Type::getVoidTy(context.getLLVMContext()),
-                    { context.T_prjlvalue },
-                    false),
-                Function::ExternalLinkage,
-                GC_QUEUE_BINDING_NAME);
-            func->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
-            return func;
         });
 
     const WellKnownFunctionDescription GCQueueRoot(

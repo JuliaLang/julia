@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-abstract type MethodTableView; end
-
 struct MethodLookupResult
     # Really Vector{Core.MethodMatch}, but it's easier to represent this as
     # and work with Vector{Any} on the C side.
@@ -57,30 +55,30 @@ Overlays another method table view with an additional local fast path cache that
 can respond to repeated, identical queries faster than the original method table.
 """
 struct CachedMethodTable{T} <: MethodTableView
-    cache::IdDict{MethodMatchKey, Union{Missing,MethodMatchResult}}
+    cache::IdDict{MethodMatchKey, Union{Nothing,MethodMatchResult}}
     table::T
 end
-CachedMethodTable(table::T) where T = CachedMethodTable{T}(IdDict{MethodMatchKey, Union{Missing,MethodMatchResult}}(), table)
+CachedMethodTable(table::T) where T = CachedMethodTable{T}(IdDict{MethodMatchKey, Union{Nothing,MethodMatchResult}}(), table)
 
 """
     findall(sig::Type, view::MethodTableView; limit::Int=-1) ->
-        MethodMatchResult(matches::MethodLookupResult, overlayed::Bool) or missing
+        MethodMatchResult(matches::MethodLookupResult, overlayed::Bool) or nothing
 
 Find all methods in the given method table `view` that are applicable to the given signature `sig`.
 If no applicable methods are found, an empty result is returned.
-If the number of applicable methods exceeded the specified `limit`, `missing` is returned.
+If the number of applicable methods exceeded the specified `limit`, `nothing` is returned.
 Note that the default setting `limit=-1` does not limit the number of applicable methods.
 `overlayed` indicates if any of the matching methods comes from an overlayed method table.
 """
 function findall(@nospecialize(sig::Type), table::InternalMethodTable; limit::Int=-1)
     result = _findall(sig, nothing, table.world, limit)
-    result === missing && return missing
+    result === nothing && return nothing
     return MethodMatchResult(result, false)
 end
 
 function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int=-1)
     result = _findall(sig, table.mt, table.world, limit)
-    result === missing && return missing
+    result === nothing && return nothing
     nr = length(result)
     if nr ≥ 1 && result[nr].fully_covers
         # no need to fall back to the internal method table
@@ -88,7 +86,7 @@ function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int
     end
     # fall back to the internal method table
     fallback_result = _findall(sig, nothing, table.world, limit)
-    fallback_result === missing && return missing
+    fallback_result === nothing && return nothing
     # merge the fallback match results with the internal method table
     return MethodMatchResult(
         MethodLookupResult(
@@ -105,10 +103,8 @@ function _findall(@nospecialize(sig::Type), mt::Union{Nothing,Core.MethodTable},
     _max_val = RefValue{UInt}(typemax(UInt))
     _ambig = RefValue{Int32}(0)
     ms = _methods_by_ftype(sig, mt, limit, world, false, _min_val, _max_val, _ambig)
-    if ms === false
-        return missing
-    end
-    return MethodLookupResult(ms::Vector{Any}, WorldRange(_min_val[], _max_val[]), _ambig[] != 0)
+    isa(ms, Vector) || return nothing
+    return MethodLookupResult(ms, WorldRange(_min_val[], _max_val[]), _ambig[] != 0)
 end
 
 function findall(@nospecialize(sig::Type), table::CachedMethodTable; limit::Int=-1)

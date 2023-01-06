@@ -13,7 +13,7 @@
 // Ref https://www.uclibc.org/docs/tls.pdf
 // For variant 1 JL_ELF_TLS_INIT_SIZE is the size of the thread control block (TCB)
 // For variant 2 JL_ELF_TLS_INIT_SIZE is 0
-#ifdef _OS_LINUX_
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
 #  if defined(_CPU_X86_64_) || defined(_CPU_X86_)
 #    define JL_ELF_TLS_VARIANT 2
 #    define JL_ELF_TLS_INIT_SIZE 0
@@ -28,6 +28,11 @@
 
 #ifdef JL_ELF_TLS_VARIANT
 #  include <link.h>
+#endif
+
+// `ElfW` was added to FreeBSD in 12.3 but we still support 12.2
+#if defined(_OS_FREEBSD_) && !defined(ElfW)
+#  define ElfW(x) __ElfN(x)
 #endif
 
 #ifdef __cplusplus
@@ -291,8 +296,10 @@ JL_DLLEXPORT jl_gcframe_t **jl_get_pgcstack(void) JL_GLOBALLY_ROOTED
 
 void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t *k)
 {
+#ifndef __clang_gcanalyzer__
     if (jl_get_pgcstack_cb == jl_get_pgcstack_init)
         jl_get_pgcstack_init();
+#endif
     // for codegen
     *f = jl_get_pgcstack_cb;
     *k = jl_pgcstack_key;
@@ -395,7 +402,7 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     return ptls;
 }
 
-JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
+JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void) JL_NOTSAFEPOINT_LEAVE
 {
     // initialize this thread (assign tid, create heap, set up root task)
     jl_ptls_t ptls = jl_init_threadtls(-1);
@@ -406,11 +413,11 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
     JL_GC_PROMISE_ROOTED(ct);
-
+    uv_random(NULL, NULL, &ct->rngState, sizeof(ct->rngState), 0, NULL);
     return &ct->gcstack;
 }
 
-static void jl_delete_thread(void *value)
+static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 {
     jl_ptls_t ptls = (jl_ptls_t)value;
     // Acquire the profile write lock, to ensure we are not racing with the `kill`

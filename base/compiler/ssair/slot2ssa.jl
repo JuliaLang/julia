@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+const UnoptSlot = Union{SlotNumber, TypedSlot}
+
 mutable struct SlotInfo
     defs::Vector{Int}
     uses::Vector{Int}
@@ -15,23 +17,23 @@ function scan_entry!(result::Vector{SlotInfo}, idx::Int, @nospecialize(stmt))
         push!(result[slot_id(stmt.slot)].defs, idx)
         return
     elseif isexpr(stmt, :(=))
-        if isa(stmt.args[1], SlotNumber)
-            push!(result[slot_id(stmt.args[1])].defs, idx)
+        arg1 = stmt.args[1]
+        if isa(arg1, SlotNumber)
+            push!(result[slot_id(arg1)].defs, idx)
         end
         stmt = stmt.args[2]
     end
-    if isa(stmt, Union{SlotNumber, TypedSlot})
+    if isa(stmt, UnoptSlot)
         push!(result[slot_id(stmt)].uses, idx)
         return
     end
     for op in userefs(stmt)
         val = op[]
-        if isa(val, Union{SlotNumber, TypedSlot})
+        if isa(val, UnoptSlot)
             push!(result[slot_id(val)].uses, idx)
         end
     end
 end
-
 
 function scan_slot_def_use(nargs::Int, ci::CodeInfo, code::Vector{Any})
     nslots = length(ci.slotflags)
@@ -62,13 +64,12 @@ function renumber_ssa!(@nospecialize(stmt), ssanums::Vector{SSAValue}, new_ssa::
     return ssamap(val->renumber_ssa(val, ssanums, new_ssa), stmt)
 end
 
-function make_ssa!(ci::CodeInfo, code::Vector{Any}, idx, slot, @nospecialize(typ))
-    (idx == 0) && return Argument(slot)
+function make_ssa!(ci::CodeInfo, code::Vector{Any}, idx::Int, @nospecialize(typ))
     stmt = code[idx]
     @assert isexpr(stmt, :(=))
     code[idx] = stmt.args[2]
     (ci.ssavaluetypes::Vector{Any})[idx] = typ
-    idx
+    return SSAValue(idx)
 end
 
 function new_to_regular(@nospecialize(stmt), new_offset::Int)
@@ -82,7 +83,7 @@ function new_to_regular(@nospecialize(stmt), new_offset::Int)
     return urs[]
 end
 
-function fixup_slot!(ir::IRCode, ci::CodeInfo, idx::Int, slot::Int, @nospecialize(stmt::Union{SlotNumber, TypedSlot}), @nospecialize(ssa))
+function fixup_slot!(ir::IRCode, ci::CodeInfo, idx::Int, slot::Int, stmt::UnoptSlot, @nospecialize(ssa))
     # We don't really have the information here to get rid of these.
     # We'll do so later
     if ssa === UNDEF_TOKEN
@@ -103,34 +104,34 @@ function fixup_slot!(ir::IRCode, ci::CodeInfo, idx::Int, slot::Int, @nospecializ
     @assert false # unreachable
 end
 
-function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt))
-    if isa(stmt, Union{SlotNumber, TypedSlot}) && cond(stmt)
-        return fixup_slot!(ir, ci, idx, slot_id(stmt), stmt, rename(stmt))
+function fixemup!(@specialize(slot_filter), @specialize(rename_slot), ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt))
+    if isa(stmt, UnoptSlot) && slot_filter(stmt)
+        return fixup_slot!(ir, ci, idx, slot_id(stmt), stmt, rename_slot(stmt))
     end
     if isexpr(stmt, :(=))
-        stmt.args[2] = fixemup!(cond, rename, ir, ci, idx, stmt.args[2])
+        stmt.args[2] = fixemup!(slot_filter, rename_slot, ir, ci, idx, stmt.args[2])
         return stmt
     end
     if isa(stmt, PhiNode)
         for i = 1:length(stmt.edges)
             isassigned(stmt.values, i) || continue
             val = stmt.values[i]
-            isa(val, Union{SlotNumber, TypedSlot}) || continue
-            cond(val) || continue
+            isa(val, UnoptSlot) || continue
+            slot_filter(val) || continue
             bb_idx = block_for_inst(ir.cfg, Int(stmt.edges[i]))
             from_bb_terminator = last(ir.cfg.blocks[bb_idx].stmts)
-            stmt.values[i] = fixup_slot!(ir, ci, from_bb_terminator, slot_id(val), val, rename(val))
+            stmt.values[i] = fixup_slot!(ir, ci, from_bb_terminator, slot_id(val), val, rename_slot(val))
         end
         return stmt
     end
     if isexpr(stmt, :isdefined)
         val = stmt.args[1]
-        if isa(val, Union{SlotNumber, TypedSlot})
+        if isa(val, UnoptSlot)
             slot = slot_id(val)
             if (ci.slotflags[slot] & SLOT_USEDUNDEF) == 0
                 return true
             else
-                ssa = rename(val)
+                ssa = rename_slot(val)
                 if ssa === UNDEF_TOKEN
                     return false
                 elseif !isa(ssa, SSAValue) && !isa(ssa, NewSSAValue)
@@ -145,8 +146,8 @@ function fixemup!(cond, rename, ir::IRCode, ci::CodeInfo, idx::Int, @nospecializ
     urs = userefs(stmt)
     for op in urs
         val = op[]
-        if isa(val, Union{SlotNumber, TypedSlot}) && cond(val)
-            x = fixup_slot!(ir, ci, idx, slot_id(val), val, rename(val))
+        if isa(val, UnoptSlot) && slot_filter(val)
+            x = fixup_slot!(ir, ci, idx, slot_id(val), val, rename_slot(val))
             # We inserted an undef error node. Delete subsequent statement
             # to avoid confusing the optimizer
             if x === UNDEF_TOKEN
@@ -171,12 +172,12 @@ end
 
 function fixup_uses!(ir::IRCode, ci::CodeInfo, code::Vector{Any}, uses::Vector{Int}, slot::Int, @nospecialize(ssa))
     for use in uses
-        code[use] = fixemup!(stmt->slot_id(stmt)==slot, stmt->ssa, ir, ci, use, code[use])
+        code[use] = fixemup!(x::UnoptSlot->slot_id(x)==slot, stmt::UnoptSlot->ssa, ir, ci, use, code[use])
     end
 end
 
 function rename_uses!(ir::IRCode, ci::CodeInfo, idx::Int, @nospecialize(stmt), renames::Vector{Any})
-    return fixemup!(stmt->true, stmt->renames[slot_id(stmt)], ir, ci, idx, stmt)
+    return fixemup!(stmt::UnoptSlot->true, stmt::UnoptSlot->renames[slot_id(stmt)], ir, ci, idx, stmt)
 end
 
 function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{CallInfo})
@@ -337,7 +338,9 @@ function iterated_dominance_frontier(cfg::CFG, liveness::BlockLiveness, domtree:
 end
 
 function rename_incoming_edge(old_edge::Int, old_to::Int, result_order::Vector{Int}, bb_rename::Vector{Int})
+    old_edge == 0 && return 0
     new_edge_from = bb_rename[old_edge]
+    new_edge_from < 0 && return new_edge_from
     if old_edge == old_to - 1
         # Could have been a crit edge break
         if new_edge_from < length(result_order) && result_order[new_edge_from + 1] == 0
@@ -363,7 +366,7 @@ function rename_phinode_edges(node::PhiNode, bb::Int, result_order::Vector{Int},
     new_edges = Int32[]
     for (idx, edge) in pairs(node.edges)
         edge = Int(edge)
-        (edge == 0 || bb_rename[edge] != 0) || continue
+        (edge == 0 || bb_rename[edge] != -1) || continue
         new_edge_from = edge == 0 ? 0 : rename_incoming_edge(edge, bb, result_order, bb_rename)
         push!(new_edges, new_edge_from)
         if isassigned(node.values, idx)
@@ -386,7 +389,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
     # First compute the new order of basic blocks
     result_order = Int[]
     stack = Int[]
-    bb_rename = zeros(Int, length(ir.cfg.blocks))
+    bb_rename = fill(-1, length(ir.cfg.blocks))
     node = 1
     ncritbreaks = 0
     nnewfallthroughs = 0
@@ -497,7 +500,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         bb_start_off += length(inst_range)
         local new_preds, new_succs
         let bb = bb, bb_rename = bb_rename, result_order = result_order
-            new_preds = Int[i == 0 ? 0 : rename_incoming_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].preds]
+            new_preds = Int[bb for bb in (rename_incoming_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].preds) if bb != -1]
             new_succs = Int[             rename_outgoing_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].succs]
         end
         new_bbs[new_bb] = BasicBlock(inst_range, new_preds, new_succs)
@@ -563,7 +566,8 @@ function compute_live_ins(cfg::CFG, defs::Vector{Int}, uses::Vector{Int})
     BlockLiveness(bb_defs, bb_uses)
 end
 
-function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode, sptypes::Vector{Any}, slottypes::Vector{Any}, nstmts::Int)
+function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode,
+    sptypes::Vector{Any}, slottypes::Vector{Any}, nstmts::Int, 𝕃ₒ::AbstractLattice)
     new_typ = Union{}
     for i = 1:length(node.values)
         if isa(node, PhiNode) && !isassigned(node.values, i)
@@ -582,7 +586,7 @@ function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode
         while isa(typ, DelayedTyp)
             typ = types(ir)[new_to_regular(typ.phi::NewSSAValue, nstmts)]
         end
-        new_typ = tmerge(OptimizerLattice(), new_typ, was_maybe_undef ? MaybeUndef(typ) : typ)
+        new_typ = tmerge(𝕃ₒ, new_typ, was_maybe_undef ? MaybeUndef(typ) : typ)
     end
     return new_typ
 end
@@ -602,12 +606,11 @@ struct NewPhiCNode
 end
 
 function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
-                        defuses::Vector{SlotInfo}, slottypes::Vector{Any})
+                        defuses::Vector{SlotInfo}, slottypes::Vector{Any},
+                        𝕃ₒ::AbstractLattice)
     code = ir.stmts.inst
     cfg = ir.cfg
     catch_entry_blocks = TryCatchRegion[]
-    lattice = OptimizerLattice()
-    ⊑ₒ = ⊑(lattice)
     for idx in 1:length(code)
         stmt = code[idx]
         if isexpr(stmt, :enter)
@@ -655,7 +658,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
             else
                 val = code[slot.defs[]].args[2]
                 typ = typ_for_val(val, ci, ir.sptypes, slot.defs[], slottypes)
-                ssaval = SSAValue(make_ssa!(ci, code, slot.defs[], idx, typ))
+                ssaval = make_ssa!(ci, code, slot.defs[], typ)
                 fixup_uses!(ir, ci, code, slot.uses, idx, ssaval)
             end
             continue
@@ -744,7 +747,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
             if isa(typ, DelayedTyp)
                 push!(type_refine_phi, ssaval.id)
             end
-            new_typ = isa(typ, DelayedTyp) ? Union{} : tmerge(lattice, old_entry[:type], typ)
+            new_typ = isa(typ, DelayedTyp) ? Union{} : tmerge(𝕃ₒ, old_entry[:type], typ)
             old_entry[:type] = new_typ
             old_entry[:inst] = node
             incoming_vals[slot] = ssaval
@@ -784,30 +787,33 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
                 end
                 code[idx] = stmt
                 # Record a store
-                if isexpr(stmt, :(=)) && isa(stmt.args[1], SlotNumber)
-                    id = slot_id(stmt.args[1])
-                    val = stmt.args[2]
-                    typ = typ_for_val(val, ci, ir.sptypes, idx, slottypes)
-                    # Having UNDEF_TOKEN appear on the RHS is possible if we're on a dead branch.
-                    # Do something reasonable here, by marking the LHS as undef as well.
-                    if val !== UNDEF_TOKEN
-                        incoming_vals[id] = SSAValue(make_ssa!(ci, code, idx, id, typ)::Int)
-                    else
-                        code[idx] = nothing
-                        incoming_vals[id] = UNDEF_TOKEN
-                    end
-                    enter_block = item
-                    while haskey(exc_handlers, enter_block)
-                        (; enter_block, leave_block) = exc_handlers[enter_block]
-                        cidx = findfirst((; slot)::NewPhiCNode->slot_id(slot)==id, new_phic_nodes[leave_block])
-                        if cidx !== nothing
-                            node = UpsilonNode(incoming_vals[id])
-                            if incoming_vals[id] === UNDEF_TOKEN
-                                node = UpsilonNode()
-                                typ = MaybeUndef(Union{})
+                if isexpr(stmt, :(=))
+                    arg1 = stmt.args[1]
+                    if isa(arg1, SlotNumber)
+                        id = slot_id(arg1)
+                        val = stmt.args[2]
+                        typ = typ_for_val(val, ci, ir.sptypes, idx, slottypes)
+                        # Having UNDEF_TOKEN appear on the RHS is possible if we're on a dead branch.
+                        # Do something reasonable here, by marking the LHS as undef as well.
+                        if val !== UNDEF_TOKEN
+                            incoming_vals[id] = make_ssa!(ci, code, idx, typ)
+                        else
+                            code[idx] = nothing
+                            incoming_vals[id] = UNDEF_TOKEN
+                        end
+                        enter_block = item
+                        while haskey(exc_handlers, enter_block)
+                            (; enter_block, leave_block) = exc_handlers[enter_block]
+                            cidx = findfirst((; slot)::NewPhiCNode->slot_id(slot)==id, new_phic_nodes[leave_block])
+                            if cidx !== nothing
+                                node = UpsilonNode(incoming_vals[id])
+                                if incoming_vals[id] === UNDEF_TOKEN
+                                    node = UpsilonNode()
+                                    typ = MaybeUndef(Union{})
+                                end
+                                push!(new_phic_nodes[leave_block][cidx].node.values,
+                                      NewSSAValue(insert_node!(ir, idx, NewInstruction(node, typ), true).id - length(ir.stmts)))
                             end
-                            push!(new_phic_nodes[leave_block][cidx].node.values,
-                                  NewSSAValue(insert_node!(ir, idx, NewInstruction(node, typ), true).id - length(ir.stmts)))
                         end
                     end
                 end
@@ -878,7 +884,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
                 while isa(typ, DelayedTyp)
                     typ = types(ir)[new_to_regular(typ.phi::NewSSAValue, nstmts)]
                 end
-                new_typ = tmerge(lattice, new_typ, typ)
+                new_typ = tmerge(𝕃ₒ, new_typ, typ)
             end
             node[:type] = new_typ
         end
@@ -891,8 +897,8 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
         changed = false
         for new_idx in type_refine_phi
             node = new_nodes.stmts[new_idx]
-            new_typ = recompute_type(node[:inst]::Union{PhiNode,PhiCNode}, ci, ir, ir.sptypes, slottypes, nstmts)
-            if !(node[:type] ⊑ₒ new_typ) || !(new_typ ⊑ₒ node[:type])
+            new_typ = recompute_type(node[:inst]::Union{PhiNode,PhiCNode}, ci, ir, ir.sptypes, slottypes, nstmts, 𝕃ₒ)
+            if !⊑(𝕃ₒ, node[:type], new_typ) || !⊑(𝕃ₒ, new_typ, node[:type])
                 node[:type] = new_typ
                 changed = true
             end

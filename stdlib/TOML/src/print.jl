@@ -122,8 +122,11 @@ end
 
 is_table(value)           = isa(value, AbstractDict)
 is_array_of_tables(value) = isa(value, AbstractArray) &&
-                            length(value) > 0 && isa(value[1], AbstractDict)
-is_tabular(value)         = is_table(value) || is_array_of_tables(value)
+                            length(value) > 0 && (
+                                isa(value, AbstractArray{<:AbstractDict}) ||
+                                all(v -> isa(v, AbstractDict), value)
+                            )
+is_tabular(value)         = is_table(value) || @invokelatest(is_array_of_tables(value))
 
 function print_table(f::MbyFunc, io::IO, a::AbstractDict,
     ks::Vector{String} = String[];
@@ -173,7 +176,7 @@ function print_table(f::MbyFunc, io::IO, a::AbstractDict,
             # Use runtime dispatch here since the type of value seems not to be enforced other than as AbstractDict
             @invokelatest print_table(f, io, value, ks; indent = indent + header, first_block = header, sorted=sorted, by=by)
             pop!(ks)
-        elseif is_array_of_tables(value)
+        elseif @invokelatest(is_array_of_tables(value))
             # print array of tables
             first_block || println(io)
             first_block = false

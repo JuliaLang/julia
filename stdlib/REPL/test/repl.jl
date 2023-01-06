@@ -1641,6 +1641,10 @@ fake_repl() do stdin_write, stdout_read, repl
     s = sendrepl2("REPL\n", "In [10]")
     @test contains(s, "Out[9]: REPL")
 
+    # Test for https://github.com/JuliaLang/julia/issues/46451
+    s = sendrepl2("x_47878 = range(-1; stop = 1)\n", "-1:1")
+    @test contains(s, "Out[11]: -1:1")
+
     write(stdin_write, '\x04')
     Base.wait(repltask)
 end
