@@ -512,6 +512,7 @@ static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionT
     builder.CreateRet(val);
 }
 
+void multiversioning_preannotate(Module &M);
 
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
@@ -589,6 +590,17 @@ void jl_dump_native_impl(void *native_code,
 
     // add metadata information
     if (imaging_mode) {
+        multiversioning_preannotate(*dataM);
+        {
+            DenseSet<GlobalValue *> fvars(data->jl_sysimg_fvars.begin(), data->jl_sysimg_fvars.end());
+            for (auto &F : *dataM) {
+                if (F.hasFnAttribute("julia.mv.reloc") || F.hasFnAttribute("julia.mv.fvar")) {
+                    if (fvars.insert(&F).second) {
+                        data->jl_sysimg_fvars.push_back(&F);
+                    }
+                }
+            }
+        }
         emit_offset_table(*dataM, data->jl_sysimg_gvars, "jl_sysimg_gvars", T_psize);
         emit_offset_table(*dataM, data->jl_sysimg_fvars, "jl_sysimg_fvars", T_psize);
 
