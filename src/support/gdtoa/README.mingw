@@ -1,0 +1,20 @@
+The gdtoa code here is based on David M. Gay's original
+gdtoa source at http://www.netlib.org/fp/ from Sep. 27,
+2010. The major changes between the original source and
+the mingw port here include:
+
+* IBM, CRAY and VAX code removed.
+* KR_headers, ANSI, Void and Char ifdefs are removed.
+* gdtoa symbols are prepended with "__".
+* g_xfmt() uses __fpclassifyl() instead of interpreting
+  the flags bit-wise.
+* lo0bits() and hi0bits() of misc.c replaced by wrappers
+  to gcc's __builtin_clz()
+* The double/ulong union renamed from U to dbl_union
+  (grep'ped better..)
+* A few compiler warning fixes here and there.
+* A few other insignificant changes (if any..)
+
+MinGW specific compile-time definitions are at the top of
+gdtoaimp.h and gdtoa.h headers.
+
