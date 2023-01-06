@@ -482,15 +482,13 @@ julia> trailing_ones(3)
 """
 trailing_ones(x::Integer) = trailing_zeros(~x)
 
-# the suffix "2" means base 2
 """
     top_set_bit(x::Integer) -> Integer
 
-The number of bits used to represent `x` in its binary representation, excluding
-leading zeros.
+The number of bits in `x`'s binary representation, excluding leading zeros.
 
-Equivalently, The position of the most significant set bit in `x`'s binary
-representation, when measured from the least significant side.
+Equivalently, the position of the most significant set bit in `x`'s binary
+representation, measured from the least significant side.
 
 Negative `x` are only supported when `x::BitSigned`.
 
