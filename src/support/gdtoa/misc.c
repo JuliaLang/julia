@@ -29,6 +29,7 @@ THIS SOFTWARE.
 /* Please send bug reports to David M. Gay (dmg at acm dot org,
  * with " at " changed at "@" and " dot " changed to ".").	*/
 
+#define NLOCKS 2
 
 #if defined(__MINGW32__) || defined(__MINGW64__)
 /* we have to include windows.h before gdtoa
@@ -37,8 +38,6 @@ THIS SOFTWARE.
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
-
-#define NLOCKS 2
 
 #ifdef USE_WIN32_SL
 /* Use spin locks. */
@@ -105,6 +104,22 @@ static void dtoa_unlock (int n)
 #define ACQUIRE_DTOA_LOCK(n) dtoa_lock(n)
 #define FREE_DTOA_LOCK(n) dtoa_unlock(n)
 #endif	/* USE_WIN32_SL */
+
+#else
+
+#include <pthread.h>
+
+static pthread_mutex_t dtoa_pthread[NLOCKS] = {PTHREAD_MUTEX_INITIALIZER, PTHREAD_MUTEX_INITIALIZER};
+static void dtoa_lock (int n)
+{
+    pthread_mutex_lock(&dtoa_pthread[n]);
+}
+static void dtoa_unlock (int n)
+{
+    pthread_mutex_unlock(&dtoa_pthread[n]);
+}
+#define ACQUIRE_DTOA_LOCK(n) dtoa_lock(n)
+#define FREE_DTOA_LOCK(n) dtoa_unlock(n)
 
 #endif	/* __MINGW32__ / __MINGW64__ */
 

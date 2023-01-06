@@ -15,6 +15,7 @@ The following components included in Julia `Base` have their own separate licens
 
 - base/ryu/* [Boost] (see [ryu](https://github.com/ulfjack/ryu/blob/master/LICENSE-Boost))
 - base/special/{rem_pio2,hyperbolic}.jl [Freely distributable with preserved copyright notice] (see [FDLIBM](https://www.netlib.org/fdlibm))
+- src/support/gdtoa [Freely distributable with preserved copyright notice] (see [FDLIBM](https://www.netlib.org/fdlibm))
 
 The Julia language links to the following external libraries, which have their
 own licenses:

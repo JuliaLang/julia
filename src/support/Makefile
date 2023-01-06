@@ -9,7 +9,10 @@ JCPPFLAGS += $(CPPFLAGS)
 JLDFLAGS += $(LDFLAGS)
 
 SRCS := hashing timefuncs ptrhash operators utf8 ios htable bitvector \
-	int2str libsupportinit arraylist strtod rle
+	int2str libsupportinit arraylist rle strtod \
+	$(addprefix gdtoa/,dmisc dtoa gdtoa gethex gmisc \
+		hd_init hexnan misc qnan smisc strtodg strtodnrp strtof strtopx sum ulp)
+
 ifeq ($(OS),WINNT)
 SRCS += asprintf strptime
 ifeq ($(ARCH),i686)
@@ -19,7 +22,8 @@ SRCS += _setjmp.win64
 endif
 endif
 
-HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h
+HEADERS := $(wildcard $(SRCDIR)/*.h) $(LIBUV_INC)/uv.h
+GDTOA_HEADERS := $(wildcard $(SRCDIR)/gdtoa/*.h)
 
 OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
@@ -33,8 +37,10 @@ SHIPFLAGS += $(FLAGS)
 
 default: release
 
-$(BUILDDIR):
-	mkdir -p $(BUILDDIR)
+BUILDDIRS := $(BUILDDIR) $(BUILDDIR)/gdtoa
+
+$(BUILDDIRS):
+	mkdir -p $@
 
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(JCFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
@@ -44,6 +50,11 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.S | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(SHIPFLAGS) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.S | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
+
+$(BUILDDIR)/gdtoa/%.o: $(SRCDIR)/gdtoa/%.c $(GDTOA_HEADERS) | $(BUILDDIR)/gdtoa
+	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(JCFLAGS) $(SHIPFLAGS) $(DISABLE_ASSERTIONS) -c $< -o $@)
+$(BUILDDIR)/gdtoa/%.dbg.obj: $(SRCDIR)/gdtoa/%.c $(GDTOA_HEADERS) | $(BUILDDIR)/gdtoa
+	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 $(BUILDDIR)/host/Makefile:
 	mkdir -p $(BUILDDIR)/host
@@ -73,9 +84,12 @@ $(BUILDDIR)/host/libsupport-debug.a: $(BUILDDIR)/host/Makefile
 clean:
 	rm -f $(BUILDDIR)/*.o
 	rm -f $(BUILDDIR)/*.dbg.obj
+	rm -f $(BUILDDIR)/gdtoa/*.o
+	rm -f $(BUILDDIR)/gdtoa/*.dbg.obj
 	rm -f $(BUILDDIR)/*.a
 	rm -f $(BUILDDIR)/*~ *#
 	rm -f $(BUILDDIR)/core*
 	rm -f $(BUILDDIR)/libsupport.a
 	rm -f $(BUILDDIR)/libsupport-debug.a
+	rm -f $(BUILDDIR)/host/gdtoa/*
 	rm -f $(BUILDDIR)/host/*

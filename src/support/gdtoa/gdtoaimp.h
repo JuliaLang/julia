@@ -176,11 +176,20 @@ THIS SOFTWARE.
 #include "gdtoa.h"
 #include "gd_qnan.h"
 
-#if defined(__MINGW32__) || defined(__MINGW64__)
+// Settings for Julia build
 #define MULTIPLE_THREADS 1
-#define USE_LOCALE 1
+//#undef USE_LOCALE
+//#undef Honor_FLT_ROUNDS
 #define NO_LOCALE_CACHE 1
-#endif		/* MinGW */
+#ifndef __cdecl
+#define __cdecl
+#endif
+#ifdef USE_LOCALE
+#error USE_LOCALE
+#endif
+#ifdef Honor_FLT_ROUNDS
+#error Honor_FLT_ROUNDS
+#endif
 
 #ifdef Honor_FLT_ROUNDS
 #include <fenv.h>
