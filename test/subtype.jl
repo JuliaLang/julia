@@ -1893,10 +1893,10 @@ end
 
 let
     # issue #22787
-    # for now check that these don't stack overflow
-    t = typeintersect(Tuple{Type{Q}, Q, Ref{Q}} where Q<:Ref,
-                      Tuple{Type{S}, Union{Ref{S}, Ref{R}}, R} where R where S)
-    @test_broken t != Union{}
+    @testintersect(Tuple{Type{Q}, Q, Ref{Q}} where Q<:Ref,
+                   Tuple{Type{S}, Union{Ref{S}, Ref{R}}, R} where R where S,
+                   !Union{})
+
     t = typeintersect(Tuple{Type{T}, T, Ref{T}} where T,
                       Tuple{Type{S}, Ref{S}, S} where S)
     @test_broken t != Union{}

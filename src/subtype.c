@@ -2535,6 +2535,39 @@ static int var_occurs_inside(jl_value_t *v, jl_tvar_t *var, int inside, int want
     return 0;
 }
 
+static jl_value_t *omit_bad_union(jl_value_t *u, jl_tvar_t *t)
+{
+    if (!jl_has_typevar(u, t))
+        return u; // return u if possible as many checks use `==`.
+    jl_value_t *res = NULL;
+    if (jl_is_unionall(u)) {
+        jl_tvar_t *var = ((jl_unionall_t *)u)->var;
+        jl_value_t *ub = var->ub, *body = ((jl_unionall_t *)u)->body;
+        JL_GC_PUSH3(&ub, &body, &var);
+        assert(var != t);
+        ub = omit_bad_union(ub, t);
+        body = omit_bad_union(body, t);
+        if (ub != NULL && body != NULL && !jl_has_typevar(var->lb, t)) {
+            if (ub != var->ub)
+                var = jl_new_typevar(var->name, var->lb, ub);
+            res = jl_new_struct(jl_unionall_type, var, body);
+        }
+        JL_GC_POP();
+    }
+    else if (jl_is_uniontype(u)) {
+        jl_value_t *a = ((jl_uniontype_t *)u)->a;
+        jl_value_t *b = ((jl_uniontype_t *)u)->b;
+        JL_GC_PUSH2(&a, &b);
+        a = omit_bad_union(a, t);
+        b = omit_bad_union(b, t);
+        res = a == NULL ? b :
+              b == NULL ? a :
+              jl_new_struct(jl_uniontype_type, a, b);
+        JL_GC_POP();
+    }
+    return res;
+}
+
 // Caller might not have rooted `res`
 static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbinding_t *vb, jl_unionall_t *u, jl_stenv_t *e)
 {
@@ -2618,8 +2651,11 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         }
         if (jl_has_typevar(btemp->ub, vb->var)) {
             if (vb->ub == (jl_value_t*)btemp->var) {
-                JL_GC_POP();
-                return jl_bottom_type;
+                btemp->ub = omit_bad_union(btemp->ub, vb->var);
+                if (btemp->ub == NULL) {
+                    JL_GC_POP();
+                    return jl_bottom_type;
+                }
             }
             if (varval) {
                 JL_TRY {
@@ -2739,9 +2775,16 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
             // T=Bottom in covariant position
             res = jl_bottom_type;
         }
-        else if (jl_has_typevar(vb->lb, u->var) || jl_has_typevar(vb->ub, u->var)) {
+        else if (jl_has_typevar(vb->lb, u->var)) {
             // fail on circular constraints
             res = jl_bottom_type;
+        }
+        else {
+            JL_GC_PUSH1(&res);
+            vb->ub = omit_bad_union(vb->ub, u->var);
+            JL_GC_POP();
+            if (vb->ub == NULL)
+                res = jl_bottom_type;
         }
     }
     if (res != jl_bottom_type)
