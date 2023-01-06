@@ -124,7 +124,9 @@ function _reducedim_init(f, op, fv, fop, A, region)
 end
 
 # initialization when computing minima and maxima requires a little care
-for (f1, f2, initval, typeextreme) in ((:min, :max, :Inf, :typemax), (:max, :min, :(-Inf), :typemin))
+for (f1, f2, initval, typeextreme) in ((:min, :max, :Inf, :typemax), (:max, :min, :(-Inf), :typemin),
+                                       (:(FastMath.min_fast), :(FastMath.max_fast), :Inf, :typemax),
+                                       (:(FastMath.max_fast), :(FastMath.min_fast), :(-Inf), :typemin))
     @eval function reducedim_init(f, op::typeof($f1), A::AbstractArray, region)
         # First compute the reduce indices. This will throw an ArgumentError
         # if any region is invalid
