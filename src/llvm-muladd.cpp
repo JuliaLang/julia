@@ -1,7 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#define DEBUG_TYPE "combine_muladd"
-#undef DEBUG
 #include "llvm-version.h"
 #include "passes.h"
 
@@ -25,6 +23,9 @@
 #include "julia.h"
 #include "julia_assert.h"
 
+#define DEBUG_TYPE "combine_muladd"
+#undef DEBUG
+
 using namespace llvm;
 STATISTIC(TotalContracted, "Total number of multiplies marked for FMA");
 
@@ -40,7 +41,7 @@ STATISTIC(TotalContracted, "Total number of multiplies marked for FMA");
  */
 
 // Return true if we changed the mulOp
-static bool checkCombine(Value *maybeMul)
+static bool checkCombine(Value *maybeMul) JL_NOTSAFEPOINT
 {
     auto mulOp = dyn_cast<Instruction>(maybeMul);
     if (!mulOp || mulOp->getOpcode() != Instruction::FMul)
@@ -58,7 +59,7 @@ static bool checkCombine(Value *maybeMul)
     return false;
 }
 
-static bool combineMulAdd(Function &F)
+static bool combineMulAdd(Function &F) JL_NOTSAFEPOINT
 {
     bool modified = false;
     for (auto &BB: F) {
@@ -83,11 +84,13 @@ static bool combineMulAdd(Function &F)
             }
         }
     }
-    assert(!verifyFunction(F));
+#ifdef JL_VERIFY_PASSES
+    assert(!verifyFunction(F, &errs()));
+#endif
     return modified;
 }
 
-PreservedAnalyses CombineMulAdd::run(Function &F, FunctionAnalysisManager &AM)
+PreservedAnalyses CombineMulAdd::run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT
 {
     if (combineMulAdd(F)) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();

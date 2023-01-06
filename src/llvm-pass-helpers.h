@@ -10,6 +10,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
 #include <llvm/IR/Value.h>
+#include "analyzer_annotations.h"
 
 struct JuliaPassContext;
 
@@ -19,7 +20,7 @@ namespace jl_intrinsics {
     // intrinsics and declare new intrinsics if necessary.
     struct IntrinsicDescription final {
         // The type of function that declares an intrinsic.
-        typedef llvm::Function *(*DeclarationFunction)(const JuliaPassContext&);
+        typedef llvm::Function *(*DeclarationFunction)(const JuliaPassContext&) JL_NOTSAFEPOINT;
 
         // Creates an intrinsic description with a particular
         // name and declaration function.
@@ -50,6 +51,7 @@ struct JuliaPassContext {
 
     // Intrinsics.
     llvm::Function *pgcstack_getter;
+    llvm::Function *adoptthread_func;
     llvm::Function *gc_flush_func;
     llvm::Function *gc_preserve_begin_func;
     llvm::Function *gc_preserve_end_func;
@@ -57,7 +59,8 @@ struct JuliaPassContext {
     llvm::Function *alloc_obj_func;
     llvm::Function *typeof_func;
     llvm::Function *write_barrier_func;
-    llvm::Function *write_barrier_binding_func;
+    llvm::Function *call_func;
+    llvm::Function *call2_func;
 
     // Creates a pass context. Type and function pointers
     // are set to `nullptr`. Metadata nodes are initialized.
@@ -123,9 +126,6 @@ namespace jl_intrinsics {
 
     // `julia.queue_gc_root`: an intrinsic that queues a GC root.
     extern const IntrinsicDescription queueGCRoot;
-
-    // `julia.queue_gc_binding`: an intrinsic that queues a binding for GC.
-    extern const IntrinsicDescription queueGCBinding;
 }
 
 // A namespace for well-known Julia runtime function descriptions.
@@ -146,9 +146,6 @@ namespace jl_well_known {
 
     // `jl_gc_queue_root`: queues a GC root.
     extern const WellKnownFunctionDescription GCQueueRoot;
-
-    // `jl_gc_queue_binding`: queues a binding for GC.
-    extern const WellKnownFunctionDescription GCQueueBinding;
 }
 
 #endif

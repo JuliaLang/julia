@@ -35,7 +35,7 @@ elseif Sys.iswindows()
     const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"
 
     function splitdrive(path::String)
-        m = match(r"^([^\\]+:|\\\\[^\\]+\\[^\\]+|\\\\\?\\UNC\\[^\\]+\\[^\\]+|\\\\\?\\[^\\]+:|)(.*)$"s, path)
+        m = match(r"^([^\\]+:|\\\\[^\\]+\\[^\\]+|\\\\\?\\UNC\\[^\\]+\\[^\\]+|\\\\\?\\[^\\]+:|)(.*)$"s, path)::AbstractMatch
         String(something(m.captures[1])), String(something(m.captures[2]))
     end
 else
@@ -415,6 +415,16 @@ normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 
 Convert a path to an absolute path by adding the current directory if necessary.
 Also normalizes the path as in [`normpath`](@ref).
+
+# Example
+
+If you are in a directory called `JuliaExample` and the data you are using is two levels up relative to the `JuliaExample` directory, you could write:
+
+abspath("../../data")
+
+Which gives a path like `"/home/JuliaUser/data/"`.
+
+See also [`joinpath`](@ref), [`pwd`](@ref), [`expanduser`](@ref).
 """
 function abspath(a::String)::String
     if !isabspath(a)
@@ -542,8 +552,8 @@ On Windows, case sensitivity is applied to every part of the path except drive l
 `path` and `startpath` refer to different drives, the absolute path of `path` is returned.
 """
 function relpath(path::String, startpath::String = ".")
-    isempty(path) && throw(ArgumentError("`path` must be specified"))
-    isempty(startpath) && throw(ArgumentError("`startpath` must be specified"))
+    isempty(path) && throw(ArgumentError("`path` must be non-empty"))
+    isempty(startpath) && throw(ArgumentError("`startpath` must be non-empty"))
     curdir = "."
     pardir = ".."
     path == startpath && return curdir

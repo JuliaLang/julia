@@ -87,7 +87,7 @@ is in the repository.
 
 # Examples
 ```julia-repl
-julia> repo = LibGit2.GitRepo(repo_path);
+julia> repo = GitRepo(repo_path);
 
 julia> LibGit2.add!(repo, test_file);
 
@@ -230,7 +230,7 @@ Return `true` if `a`, a [`GitHash`](@ref) in string form, is an ancestor of
 
 # Examples
 ```julia-repl
-julia> repo = LibGit2.GitRepo(repo_path);
+julia> repo = GitRepo(repo_path);
 
 julia> LibGit2.add!(repo, test_file1);
 
@@ -477,7 +477,7 @@ current changes. Note that this detaches the current HEAD.
 
 # Examples
 ```julia
-repo = LibGit2.init(repo_path)
+repo = LibGit2.GitRepo(repo_path)
 open(joinpath(LibGit2.path(repo), "file1"), "w") do f
     write(f, "111\n")
 end

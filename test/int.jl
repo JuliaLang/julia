@@ -124,7 +124,7 @@ end
 @test mod(123, UInt8) === 0x7b
 
 primitive type MyBitsType <: Signed 8 end
-@test_throws ErrorException ~reinterpret(MyBitsType, 0x7b)
+@test_throws MethodError ~reinterpret(MyBitsType, 0x7b)
 @test signed(MyBitsType) === MyBitsType
 
 UItypes = Base.BitUnsigned_types
@@ -197,6 +197,17 @@ end
                 end
                 @test val >> scount === val >> ucount
                 @test val >> -scount === val << ucount
+            end
+        end
+        for T2 in Base.BitInteger_types
+            for op in (>>, <<, >>>)
+                if sizeof(T2)==sizeof(Int) || T <: Signed || (op==>>>) || T2 <: Unsigned
+                    @test Core.Compiler.is_total(Base.infer_effects(op, (T, T2)))
+                else
+                    @test Core.Compiler.is_foldable(Base.infer_effects(op, (T, T2)))
+                    # #47835, TODO implement interval arithmetic analysis
+                    @test_broken Core.Compiler.is_nothrow(Base.infer_effects(op, (T, T2)))
+                end
             end
         end
     end

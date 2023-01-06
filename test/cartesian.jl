@@ -530,3 +530,9 @@ end
     @test isassigned(A, CartesianIndex(1, 2), 3)
     @test !isassigned(A, CartesianIndex(5, 2), 3)
 end
+
+@testset "`CartedianIndex(x::Union{Integer,CartedianIndex}...)`'s stability" begin
+    CI = CartesianIndex
+    inds2 = (1, CI(1, 2), 1, CI(1, 2), 1, CI(1, 2), 1)
+    @test (@inferred CI(inds2)) == CI(1, 1, 2, 1, 1, 2, 1, 1, 2, 1)
+end

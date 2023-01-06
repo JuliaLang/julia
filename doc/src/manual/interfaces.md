@@ -85,20 +85,14 @@ julia> for item in Squares(7)
 ```
 
 We can use many of the builtin methods that work with iterables,
-like [`in`](@ref), or [`mean`](@ref) and [`std`](@ref) from the
-`Statistics` standard library module:
+like [`in`](@ref) or [`sum`](@ref):
 
 ```jldoctest squaretype
 julia> 25 in Squares(10)
 true
 
-julia> using Statistics
-
-julia> mean(Squares(100))
-3383.5
-
-julia> std(Squares(100))
-3024.355854282583
+julia> sum(Squares(100))
+338350
 ```
 
 There are a few more methods we can extend to give Julia more information about this iterable
@@ -226,10 +220,10 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 | `size(A)`                                       |                                        | Returns a tuple containing the dimensions of `A`                                      |
 | `getindex(A, i::Int)`                           |                                        | (if `IndexLinear`) Linear scalar indexing                                             |
 | `getindex(A, I::Vararg{Int, N})`                |                                        | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexing             |
-| `setindex!(A, v, i::Int)`                       |                                        | (if `IndexLinear`) Scalar indexed assignment                                          |
-| `setindex!(A, v, I::Vararg{Int, N})`            |                                        | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexed assignment   |
 | **Optional methods**                            | **Default definition**                 | **Brief description**                                                                 |
 | `IndexStyle(::Type)`                            | `IndexCartesian()`                     | Returns either `IndexLinear()` or `IndexCartesian()`. See the description below.      |
+| `setindex!(A, v, i::Int)`                       |                                        | (if `IndexLinear`) Scalar indexed assignment                                          |
+| `setindex!(A, v, I::Vararg{Int, N})`            |                                        | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexed assignment   |
 | `getindex(A, I...)`                             | defined in terms of scalar `getindex`  | [Multidimensional and nonscalar indexing](@ref man-array-indexing)                    |
 | `setindex!(A, X, I...)`                            | defined in terms of scalar `setindex!` | [Multidimensional and nonscalar indexed assignment](@ref man-array-indexing)          |
 | `iterate`                                       | defined in terms of scalar `getindex`  | Iteration                                                                             |
@@ -468,10 +462,17 @@ Not all types support `axes` and indexing, but many are convenient to allow in b
 The [`Base.broadcastable`](@ref) function is called on each argument to broadcast, allowing
 it to return something different that supports `axes` and indexing. By
 default, this is the identity function for all `AbstractArray`s and `Number`s — they already
-support `axes` and indexing. For a handful of other types (including but not limited to
-types themselves, functions, special singletons like [`missing`](@ref) and [`nothing`](@ref), and dates),
-`Base.broadcastable` returns the argument wrapped in a `Ref` to act as a 0-dimensional
-"scalar" for the purposes of broadcasting. Custom types can similarly specialize
+support `axes` and indexing.
+
+If a type is intended to act like a "0-dimensional scalar" (a single object) rather than as a
+container for broadcasting, then the following method should be defined:
+```julia
+Base.broadcastable(o::MyType) = Ref(o)
+```
+that returns the argument wrapped in a 0-dimensional [`Ref`](@ref) container.   For example, such a wrapper
+method is defined for types themselves, functions, special singletons like [`missing`](@ref) and [`nothing`](@ref), and dates.
+
+Custom array-like types can specialize
 `Base.broadcastable` to define their shape, but they should follow the convention that
 `collect(Base.broadcastable(x)) == collect(x)`. A notable exception is `AbstractString`;
 strings are special-cased to behave as scalars for the purposes of broadcast even though
@@ -745,7 +746,7 @@ in one or two dimensional outputs, but produce an `Array` for any other dimensio
 
 | Methods to implement              | Default definition           | Brief description                                                                     |
 |:--------------------------------- |:---------------------------- |:------------------------------------------------------------------------------------- |
-| `propertynames(x::ObjType, private::Bool=false)` | `fieldnames(typeof((x))`     | Return a tuple of the properties (`x.property`) of an object `x`. If `private=true`, also return fieldnames intended to be kept as private |
+| `propertynames(x::ObjType, private::Bool=false)` | `fieldnames(typeof(x))`     | Return a tuple of the properties (`x.property`) of an object `x`. If `private=true`, also return property names intended to be kept as private |
 | `getproperty(x::ObjType, s::Symbol)`       | `getfield(x, s)`     | Return property `s` of `x`. `x.s` calls `getproperty(x, :s)`.  |
 | `setproperty!(x::ObjType, s::Symbol, v)`   | `setfield!(x, s, v)` | Set property `s` of `x` to `v`. `x.s = v` calls `setproperty!(x, :s, v)`. Should return `v`.|
 
@@ -791,9 +792,9 @@ defined to add new functionality:
 julia> Base.propertynames(::Point, private::Bool=false) = private ? (:x, :y, :r, :ϕ) : (:x, :y)
 
 julia> function Base.getproperty(p::Point, s::Symbol)
-           if s == :x
+           if s === :x
                return getfield(p, :r) * cos(getfield(p, :ϕ))
-           elseif s == :y
+           elseif s === :y
                return getfield(p, :r) * sin(getfield(p, :ϕ))
            else
                # This allows accessing fields with p.r and p.ϕ
@@ -802,12 +803,12 @@ julia> function Base.getproperty(p::Point, s::Symbol)
        end
 
 julia> function Base.setproperty!(p::Point, s::Symbol, f)
-           if s == :x
+           if s === :x
                y = p.y
                setfield!(p, :r, sqrt(f^2 + y^2))
                setfield!(p, :ϕ, atan(y, f))
                return f
-           elseif s == :y
+           elseif s === :y
                x = p.x
                setfield!(p, :r, sqrt(x^2 + f^2))
                setfield!(p, :ϕ, atan(f, x))

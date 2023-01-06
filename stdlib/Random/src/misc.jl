@@ -264,6 +264,7 @@ julia> shuffle(rng, Vector(1:10))
 shuffle(r::AbstractRNG, a::AbstractArray) = shuffle!(r, copymutable(a))
 shuffle(a::AbstractArray) = shuffle(default_rng(), a)
 
+shuffle(r::AbstractRNG, a::Base.OneTo) = randperm(r, last(a))
 
 ## randperm & randperm!
 

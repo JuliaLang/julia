@@ -98,6 +98,9 @@ typedef struct {
 #if defined(_COMPILER_TSAN_ENABLED_)
     void *tsan_state;
 #endif
+#if defined(_COMPILER_ASAN_ENABLED_)
+    void *asan_fake_stack;
+#endif
 } jl_ucontext_t;
 
 
@@ -147,7 +150,6 @@ typedef struct {
     struct _bigval_t *big_objects;
 
     // variables for tracking "remembered set"
-    arraylist_t rem_bindings;
     arraylist_t _remset[2]; // contains jl_value_t*
     // lower bound of the number of pointers inside remembered values
     int remset_nptr;
@@ -201,6 +203,7 @@ typedef struct {
 } jl_gc_mark_cache_t;
 
 struct _jl_bt_element_t;
+
 // This includes all the thread local states we care about for a thread.
 // Changes to TLS field types must be reflected in codegen.
 #define JL_MAX_BT_SIZE 80000
@@ -278,9 +281,13 @@ typedef struct _jl_tls_states_t {
         uint64_t sleep_enter;
         uint64_t sleep_leave;
     )
-} jl_tls_states_t;
 
-typedef jl_tls_states_t *jl_ptls_t;
+    // some hidden state (usually just because we don't have the type's size declaration)
+#ifdef LIBRARY_EXPORTS
+    uv_mutex_t sleep_lock;
+    uv_cond_t wake_signal;
+#endif
+} jl_tls_states_t;
 
 #ifndef LIBRARY_EXPORTS
 // deprecated (only for external consumers)
@@ -347,17 +354,16 @@ STATIC_INLINE int8_t jl_gc_state_save_and_set(jl_ptls_t ptls,
     return jl_gc_state_set(ptls, state, jl_atomic_load_relaxed(&ptls->gc_state));
 }
 #ifdef __clang_gcanalyzer__
-int8_t jl_gc_unsafe_enter(jl_ptls_t ptls); // Can be a safepoint
-int8_t jl_gc_unsafe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT;
-int8_t jl_gc_safe_enter(jl_ptls_t ptls) JL_NOTSAFEPOINT;
-int8_t jl_gc_safe_leave(jl_ptls_t ptls, int8_t state); // Can be a safepoint
+int8_t jl_gc_unsafe_enter(jl_ptls_t ptls) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE; // this could be a safepoint, but we will assume it is not
+void jl_gc_unsafe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
+int8_t jl_gc_safe_enter(jl_ptls_t ptls) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
+void jl_gc_safe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT_LEAVE; // this might not be a safepoint, but we have to assume it could be (statically)
 #else
 #define jl_gc_unsafe_enter(ptls) jl_gc_state_save_and_set(ptls, 0)
 #define jl_gc_unsafe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), 0))
 #define jl_gc_safe_enter(ptls) jl_gc_state_save_and_set(ptls, JL_GC_STATE_SAFE)
 #define jl_gc_safe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), JL_GC_STATE_SAFE))
 #endif
-JL_DLLEXPORT void (jl_gc_safepoint)(void);
 
 JL_DLLEXPORT void jl_gc_enable_finalizers(struct _jl_task_t *ct, int on);
 JL_DLLEXPORT void jl_gc_disable_finalizers_internal(void);

@@ -4,10 +4,10 @@ using Test
 using Base.Threads
 
 @test nthreadpools() == 2
-@test threadpool() == :default
-@test threadpool(2) == :interactive
-dtask() = @test threadpool(current_task()) == :default
-itask() = @test threadpool(current_task()) == :interactive
+@test threadpool() === :default
+@test threadpool(2) === :interactive
+dtask() = @test threadpool(current_task()) === :default
+itask() = @test threadpool(current_task()) === :interactive
 dt1 = @spawn dtask()
 dt2 = @spawn :default dtask()
 it = @spawn :interactive itask()

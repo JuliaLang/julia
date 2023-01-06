@@ -80,6 +80,12 @@ function in(idx::Int, bsbmp::BitSetBoundedMinPrioritySet)
     return idx in bsbmp.elems
 end
 
+function append!(bsbmp::BitSetBoundedMinPrioritySet, itr)
+    for val in itr
+        push!(bsbmp, val)
+    end
+end
+
 mutable struct InferenceState
     #= information about this method instance =#
     linfo::MethodInstance
@@ -100,7 +106,7 @@ mutable struct InferenceState
     bb_vartables::Vector{Union{Nothing,VarTable}} # nothing if not analyzed yet
     ssavaluetypes::Vector{Any}
     stmt_edges::Vector{Union{Nothing,Vector{Any}}}
-    stmt_info::Vector{Any}
+    stmt_info::Vector{CallInfo}
 
     #= intermediate states for interprocedural abstract interpretation =#
     pclimitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on currpc ssavalue
@@ -146,7 +152,7 @@ mutable struct InferenceState
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
         nstmts = length(code)
         stmt_edges = Union{Nothing, Vector{Any}}[ nothing for i = 1:nstmts ]
-        stmt_info = Any[ nothing for i = 1:nstmts ]
+        stmt_info = CallInfo[ NoCallInfo() for i = 1:nstmts ]
 
         nslots = length(src.slotflags)
         slottypes = Vector{Any}(undef, nslots)
@@ -178,9 +184,9 @@ mutable struct InferenceState
         #       are stronger than the inbounds assumptions, since the latter
         #       requires dynamic reachability, while the former is global).
         inbounds = inbounds_option()
-        inbounds_taints_consistency = !(inbounds === :on || (inbounds === :default && !any_inbounds(code)))
-        consistent = inbounds_taints_consistency ? TRISTATE_UNKNOWN : ALWAYS_TRUE
-        ipo_effects = Effects(EFFECTS_TOTAL; consistent, inbounds_taints_consistency)
+        noinbounds = inbounds === :on || (inbounds === :default && !any_inbounds(code))
+        consistent = noinbounds ? ALWAYS_TRUE : ALWAYS_FALSE
+        ipo_effects = Effects(EFFECTS_TOTAL; consistent, noinbounds)
 
         params = InferenceParams(interp)
         restrict_abstract_call_sites = isa(linfo.def, Module)
@@ -206,11 +212,13 @@ end
 
 Effects(state::InferenceState) = state.ipo_effects
 
-function tristate_merge!(caller::InferenceState, effects::Effects)
-    caller.ipo_effects = tristate_merge(caller.ipo_effects, effects)
+function merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::Effects)
+    caller.ipo_effects = merge_effects(caller.ipo_effects, effects)
 end
-tristate_merge!(caller::InferenceState, callee::InferenceState) =
-    tristate_merge!(caller, Effects(callee))
+
+merge_effects!(interp::AbstractInterpreter, caller::InferenceState, callee::InferenceState) =
+    merge_effects!(interp, caller, Effects(callee))
+merge_effects!(interp::AbstractInterpreter, caller::IRCode, effects::Effects) = nothing
 
 is_effect_overridden(sv::InferenceState, effect::Symbol) = is_effect_overridden(sv.linfo, effect)
 function is_effect_overridden(linfo::MethodInstance, effect::Symbol)
@@ -220,10 +228,22 @@ end
 is_effect_overridden(method::Method, effect::Symbol) = is_effect_overridden(decode_effects_override(method.purity), effect)
 is_effect_overridden(override::EffectsOverride, effect::Symbol) = getfield(override, effect)
 
+add_remark!(::AbstractInterpreter, sv::Union{InferenceState, IRCode}, remark) = return
+
+function bail_out_toplevel_call(::AbstractInterpreter, @nospecialize(callsig), sv::Union{InferenceState, IRCode})
+    return isa(sv, InferenceState) && sv.restrict_abstract_call_sites && !isdispatchtuple(callsig)
+end
+function bail_out_call(::AbstractInterpreter, @nospecialize(rt), sv::Union{InferenceState, IRCode})
+    return rt === Any
+end
+function bail_out_apply(::AbstractInterpreter, @nospecialize(rt), sv::Union{InferenceState, IRCode})
+    return rt === Any
+end
+
 function any_inbounds(code::Vector{Any})
-    for i=1:length(code)
+    for i = 1:length(code)
         stmt = code[i]
-        if isa(stmt, Expr) && stmt.head === :inbounds
+        if isexpr(stmt, :inbounds)
             return true
         end
     end
@@ -363,55 +383,50 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
     for i = 1:length(sp)
         v = sp[i]
         if v isa TypeVar
-            fromArg = 0
-            # if this parameter came from arg::Type{T}, then `arg` is more precise than
-            # Type{T} where lb<:T<:ub
-            sig = linfo.def.sig
-            temp = sig
+            temp = linfo.def.sig
             for j = 1:i-1
                 temp = temp.body
             end
-            Pi = temp.var
+            vᵢ = (temp::UnionAll).var
             while temp isa UnionAll
                 temp = temp.body
             end
             sigtypes = (temp::DataType).parameters
             for j = 1:length(sigtypes)
-                tj = sigtypes[j]
-                if isType(tj) && tj.parameters[1] === Pi
-                    fromArg = j
-                    break
+                sⱼ = sigtypes[j]
+                if isType(sⱼ) && sⱼ.parameters[1] === vᵢ
+                    # if this parameter came from `arg::Type{T}`,
+                    # then `arg` is more precise than `Type{T} where lb<:T<:ub`
+                    ty = fieldtype(linfo.specTypes, j)
+                    @goto ty_computed
                 end
             end
-            if fromArg > 0
-                ty = fieldtype(linfo.specTypes, fromArg)
+            ub = v.ub
+            while ub isa TypeVar
+                ub = ub.ub
+            end
+            if has_free_typevars(ub)
+                ub = Any
+            end
+            lb = v.lb
+            while lb isa TypeVar
+                lb = lb.lb
+            end
+            if has_free_typevars(lb)
+                lb = Bottom
+            end
+            if Any <: ub && lb <: Bottom
+                ty = Any
             else
-                ub = v.ub
-                while ub isa TypeVar
-                    ub = ub.ub
-                end
-                if has_free_typevars(ub)
-                    ub = Any
-                end
-                lb = v.lb
-                while lb isa TypeVar
-                    lb = lb.lb
-                end
-                if has_free_typevars(lb)
-                    lb = Bottom
-                end
-                if Any <: ub && lb <: Bottom
-                    ty = Any
-                else
-                    tv = TypeVar(v.name, lb, ub)
-                    ty = UnionAll(tv, Type{tv})
-                end
+                tv = TypeVar(v.name, lb, ub)
+                ty = UnionAll(tv, Type{tv})
             end
         elseif isvarargtype(v)
             ty = Int
         else
             ty = Const(v)
         end
+        @label ty_computed
         sp[i] = ty
     end
     return sp
@@ -428,14 +443,14 @@ end
 
 update_valid_age!(edge::InferenceState, sv::InferenceState) = update_valid_age!(sv, edge.valid_worlds)
 
-function record_ssa_assign!(ssa_id::Int, @nospecialize(new), frame::InferenceState)
+function record_ssa_assign!(𝕃ᵢ::AbstractLattice, ssa_id::Int, @nospecialize(new), frame::InferenceState)
     ssavaluetypes = frame.ssavaluetypes
     old = ssavaluetypes[ssa_id]
-    if old === NOT_FOUND || !(new ⊑ old)
+    if old === NOT_FOUND || !⊑(𝕃ᵢ, new, old)
         # typically, we expect that old ⊑ new (that output information only
         # gets less precise with worse input information), but to actually
         # guarantee convergence we need to use tmerge here to ensure that is true
-        ssavaluetypes[ssa_id] = old === NOT_FOUND ? new : tmerge(old, new)
+        ssavaluetypes[ssa_id] = old === NOT_FOUND ? new : tmerge(𝕃ᵢ, old, new)
         W = frame.ip
         for r in frame.ssavalue_uses[ssa_id]
             if was_reached(frame, r)
@@ -452,35 +467,49 @@ function record_ssa_assign!(ssa_id::Int, @nospecialize(new), frame::InferenceSta
     return nothing
 end
 
-function add_cycle_backedge!(frame::InferenceState, caller::InferenceState, currpc::Int)
+function add_cycle_backedge!(caller::InferenceState, frame::InferenceState, currpc::Int)
     update_valid_age!(frame, caller)
     backedge = (caller, currpc)
     contains_is(frame.cycle_backedges, backedge) || push!(frame.cycle_backedges, backedge)
-    add_backedge!(frame.linfo, caller)
+    add_backedge!(caller, frame.linfo)
     return frame
 end
 
 # temporarily accumulate our edges to later add as backedges in the callee
-function add_backedge!(li::MethodInstance, caller::InferenceState)
-    isa(caller.linfo.def, Method) || return # don't add backedges to toplevel exprs
-    edges = caller.stmt_edges[caller.currpc]
-    if edges === nothing
-        edges = caller.stmt_edges[caller.currpc] = []
+function add_backedge!(caller::InferenceState, li::MethodInstance)
+    edges = get_stmt_edges!(caller)
+    if edges !== nothing
+        push!(edges, li)
     end
-    push!(edges, li)
+    return nothing
+end
+
+function add_invoke_backedge!(caller::InferenceState, @nospecialize(invokesig::Type), li::MethodInstance)
+    edges = get_stmt_edges!(caller)
+    if edges !== nothing
+        push!(edges, invokesig, li)
+    end
     return nothing
 end
 
 # used to temporarily accumulate our no method errors to later add as backedges in the callee method table
-function add_mt_backedge!(mt::Core.MethodTable, @nospecialize(typ), caller::InferenceState)
-    isa(caller.linfo.def, Method) || return # don't add backedges to toplevel exprs
+function add_mt_backedge!(caller::InferenceState, mt::Core.MethodTable, @nospecialize(typ))
+    edges = get_stmt_edges!(caller)
+    if edges !== nothing
+        push!(edges, mt, typ)
+    end
+    return nothing
+end
+
+function get_stmt_edges!(caller::InferenceState)
+    if !isa(caller.linfo.def, Method)
+        return nothing # don't add backedges to toplevel exprs
+    end
     edges = caller.stmt_edges[caller.currpc]
     if edges === nothing
         edges = caller.stmt_edges[caller.currpc] = []
     end
-    push!(edges, mt)
-    push!(edges, typ)
-    return nothing
+    return edges
 end
 
 function empty_backedges!(frame::InferenceState, currpc::Int = frame.currpc)
@@ -503,3 +532,12 @@ function print_callstack(sv::InferenceState)
 end
 
 get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]
+add_curr_ssaflag!(sv::InferenceState, flag::UInt8) = sv.src.ssaflags[sv.currpc] |= flag
+sub_curr_ssaflag!(sv::InferenceState, flag::UInt8) = sv.src.ssaflags[sv.currpc] &= ~flag
+
+function narguments(sv::InferenceState)
+    def = sv.linfo.def
+    isva = isa(def, Method) && def.isva
+    nargs = length(sv.result.argtypes) - isva
+    return nargs
+end

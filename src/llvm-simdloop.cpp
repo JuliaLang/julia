@@ -3,8 +3,6 @@
 #include "llvm-version.h"
 #include "passes.h"
 
-#define DEBUG_TYPE "lower_simd_loop"
-
 // This file defines a LLVM pass that:
 // 1. Set's loop information in form of metadata
 // 2. If the metadata contains `julia.simdloop` finds reduction chains and marks
@@ -30,6 +28,8 @@
 
 #include "julia_assert.h"
 
+#define DEBUG_TYPE "lower_simd_loop"
+
 using namespace llvm;
 
 STATISTIC(TotalMarkedLoops, "Total number of loops marked with simdloop");
@@ -38,12 +38,13 @@ STATISTIC(SimdLoops, "Number of loops with SIMD instructions");
 STATISTIC(IVDepInstructions, "Number of instructions marked ivdep");
 STATISTIC(ReductionChains, "Number of reduction chains folded");
 STATISTIC(ReductionChainLength, "Total sum of instructions folded from reduction chain");
+STATISTIC(MaxChainLength, "Max length of reduction chain");
 STATISTIC(AddChains, "Addition reduction chains");
 STATISTIC(MulChains, "Multiply reduction chains");
 
 namespace {
 
-static unsigned getReduceOpcode(Instruction *J, Instruction *operand)
+static unsigned getReduceOpcode(Instruction *J, Instruction *operand) JL_NOTSAFEPOINT
 {
     switch (J->getOpcode()) {
     case Instruction::FSub:
@@ -66,7 +67,7 @@ static unsigned getReduceOpcode(Instruction *J, Instruction *operand)
 /// If Phi is part of a reduction cycle of FAdd, FSub, FMul or FDiv,
 /// mark the ops as permitting reassociation/commuting.
 /// As of LLVM 4.0, FDiv is not handled by the loop vectorizer
-static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L)
+static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) JL_NOTSAFEPOINT
 {
     typedef SmallVector<Instruction*, 8> chainVector;
     chainVector chain;
@@ -119,14 +120,17 @@ static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L)
             break;
     }
     ++ReductionChains;
+    int length = 0;
     for (chainVector::const_iterator K=chain.begin(); K!=chain.end(); ++K) {
         LLVM_DEBUG(dbgs() << "LSL: marking " << **K << "\n");
         (*K)->setFast(true);
-        ++ReductionChainLength;
+        ++length;
     }
+    ReductionChainLength += length;
+    MaxChainLength.updateMax(length);
 }
 
-static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Function &)> GetLI)
+static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Function &)> GetLI) JL_NOTSAFEPOINT
 {
     bool Changed = false;
     std::vector<Instruction*> ToDelete;
@@ -228,8 +232,9 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
     for (Instruction *I : ToDelete)
         I->deleteValue();
     marker->eraseFromParent();
-
-    assert(!verifyModule(M));
+#ifdef JL_VERIFY_PASSES
+    assert(!verifyModule(M, &errs()));
+#endif
     return Changed;
 }
 
@@ -279,7 +284,7 @@ public:
 
     Function *loopinfo_marker = M.getFunction("julia.loopinfo_marker");
 
-    auto GetLI = [this](Function &F) -> LoopInfo & {
+    auto GetLI = [this](Function &F) JL_NOTSAFEPOINT -> LoopInfo & {
         return getAnalysis<LoopInfoWrapperPass>(F).getLoopInfo();
     };
 

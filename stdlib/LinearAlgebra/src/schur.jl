@@ -68,7 +68,7 @@ Base.iterate(S::Schur, ::Val{:values}) = (S.values, Val(:done))
 Base.iterate(S::Schur, ::Val{:done}) = nothing
 
 """
-    schur!(A::StridedMatrix) -> F::Schur
+    schur!(A) -> F::Schur
 
 Same as [`schur`](@ref) but uses the input argument `A` as workspace.
 
@@ -101,6 +101,8 @@ julia> A
 ```
 """
 schur!(A::StridedMatrix{<:BlasFloat}) = Schur(LinearAlgebra.LAPACK.gees!('V', A)...)
+
+schur!(A::UpperHessenberg{T}) where {T<:BlasFloat} = Schur(LinearAlgebra.LAPACK.hseqr!(parent(A))...)
 
 """
     schur(A) -> F::Schur
@@ -153,6 +155,7 @@ true
 ```
 """
 schur(A::AbstractMatrix{T}) where {T} = schur!(copy_similar(A, eigtype(T)))
+schur(A::UpperHessenberg{T}) where {T} = schur!(copy_similar(A, eigtype(T)))
 function schur(A::RealHermSymComplexHerm)
     F = eigen(A; sortby=nothing)
     return Schur(typeof(F.vectors)(Diagonal(F.values)), F.vectors, F.values)

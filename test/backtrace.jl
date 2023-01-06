@@ -35,7 +35,7 @@ catch err
     @test endswith(string(lkup[2].file), "backtrace.jl")
     @test lkup[2].line == 42
     # TODO: we don't support surface AST locations with inlined function names
-    @test_broken lkup[1].func == :inlfunc
+    @test_broken lkup[1].func === :inlfunc
     @test endswith(string(lkup[1].file), "backtrace.jl")
     @test lkup[1].line == 37
 end
@@ -106,10 +106,10 @@ lkup = map(lookup, bt())
 hasbt = hasbt2 = false
 for sfs in lkup
     for sf in sfs
-        if sf.func == :bt
+        if sf.func === :bt
             global hasbt = true
         end
-        if sf.func == :bt2
+        if sf.func === :bt2
             global hasbt2 = true
         end
     end
@@ -125,10 +125,10 @@ lkup = map(lookup, btmacro())
 hasme = hasbtmacro = false
 for sfs in lkup
     for sf in sfs
-        if sf.func == Symbol("macro expansion")
+        if sf.func === Symbol("macro expansion")
             global hasme = true
         end
-        if sf.func == :btmacro
+        if sf.func === :btmacro
             global hasbtmacro = true
         end
     end
@@ -175,7 +175,7 @@ let bt, found = false
         bt = backtrace()
     end
     for frame in map(lookup, bt)
-        if frame[1].line == @__LINE__() - 3 && frame[1].file == Symbol(@__FILE__)
+        if frame[1].line == @__LINE__() - 3 && frame[1].file === Symbol(@__FILE__)
             found = true; break
         end
     end
@@ -187,7 +187,7 @@ let bt, found = false
     @debug ""
     bt = backtrace()
     for frame in map(lookup, bt)
-        if frame[1].line == @__LINE__() - 2 && frame[1].file == Symbol(@__FILE__)
+        if frame[1].line == @__LINE__() - 2 && frame[1].file === Symbol(@__FILE__)
             found = true; break
         end
     end
@@ -205,8 +205,8 @@ let trace = try
     catch
         stacktrace(catch_backtrace())
     end
-    @test trace[1].func == Symbol("top-level scope")
-    @test trace[1].file == :a_filename
+    @test trace[1].func === Symbol("top-level scope")
+    @test trace[1].file === :a_filename
     @test trace[1].line == 2
 end
 let trace = try
@@ -219,8 +219,8 @@ let trace = try
     catch
         stacktrace(catch_backtrace())
     end
-    @test trace[1].func == Symbol("top-level scope")
-    @test trace[1].file == :a_filename
+    @test trace[1].func === Symbol("top-level scope")
+    @test trace[1].file === :a_filename
     @test trace[1].line == 2
 end
 

@@ -8,6 +8,19 @@ function isnan_type(::Type{T}, x) where T
     isa(x, T) && isnan(x)
 end
 
+# has_fma has no runtime support.
+# So we need function wrappers to make this work.
+has_fma_Int() = Core.Compiler.have_fma(Int)
+has_fma_Float32() = Core.Compiler.have_fma(Float32)
+has_fma_Float64() = Core.Compiler.have_fma(Float64)
+
+has_fma = Dict(
+    Int => has_fma_Int(),
+    Rational{Int} => has_fma_Int(),
+    Float32 => has_fma_Float32(),
+    Float64 => has_fma_Float64(),
+)
+
 @testset "clamp" begin
     @test clamp(0, 1, 3) == 1
     @test clamp(1, 1, 3) == 1
@@ -481,18 +494,29 @@ end
             @test cospi(convert(T,-1.5))::fT === zero(fT)
             @test_throws DomainError cospi(convert(T,Inf))
         end
-        @testset "Check exact values" begin
-            @test sind(convert(T,30)) == 0.5
-            @test cosd(convert(T,60)) == 0.5
-            @test sind(convert(T,150)) == 0.5
-            @test sinpi(one(T)/convert(T,6)) == 0.5
-            @test sincospi(one(T)/convert(T,6))[1] == 0.5
-            @test_throws DomainError sind(convert(T,Inf))
-            @test_throws DomainError cosd(convert(T,Inf))
-            T != Float32 && @test cospi(one(T)/convert(T,3)) == 0.5
-            T != Float32 && @test sincospi(one(T)/convert(T,3))[2] == 0.5
-            T == Rational{Int} && @test sinpi(5//6) == 0.5
-            T == Rational{Int} && @test sincospi(5//6)[1] == 0.5
+        @testset begin
+            # If the machine supports fma (fused multiply add), we require exact equality.
+            # Otherwise, we only require approximate equality.
+            if has_fma[T]
+                my_eq = (==)
+                @debug "On this machine, FMA is supported for $(T), so we will test for exact equality" my_eq
+            else
+                my_eq = isapprox
+                @debug "On this machine, FMA is not supported for $(T), so we will test for approximate equality" my_eq
+            end
+            @testset let context=(T, has_fma[T], my_eq)
+                @test sind(convert(T,30)) == 0.5
+                @test cosd(convert(T,60)) == 0.5
+                @test sind(convert(T,150)) == 0.5
+                @test my_eq(sinpi(one(T)/convert(T,6)), 0.5)
+                @test my_eq(sincospi(one(T)/convert(T,6))[1], 0.5)
+                @test_throws DomainError sind(convert(T,Inf))
+                @test_throws DomainError cosd(convert(T,Inf))
+                T != Float32 && @test my_eq(cospi(one(T)/convert(T,3)), 0.5)
+                T != Float32 && @test my_eq(sincospi(one(T)/convert(T,3))[2], 0.5)
+                T == Rational{Int} && @test my_eq(sinpi(5//6), 0.5)
+                T == Rational{Int} && @test my_eq(sincospi(5//6)[1], 0.5)
+            end
         end
     end
     scdm = sincosd(missing)
@@ -546,7 +570,11 @@ end
     @test sinc(0.00099) ≈ 0.9999983878009009 rtol=1e-15
     @test sinc(0.05f0) ≈ 0.9958927352435614 rtol=1e-7
     @test sinc(0.0499f0) ≈ 0.9959091277049384 rtol=1e-7
-    @test cosc(0.14) ≈ -0.4517331883801308 rtol=1e-15
+    if has_fma[Float64]
+        @test cosc(0.14) ≈ -0.4517331883801308 rtol=1e-15
+    else
+        @test cosc(0.14) ≈ -0.4517331883801308 rtol=1e-14
+    end
     @test cosc(0.1399) ≈ -0.45142306168781854 rtol=1e-14
     @test cosc(0.26f0) ≈ -0.7996401373462212 rtol=5e-7
     @test cosc(0.2599f0) ≈ -0.7993744054401625 rtol=5e-7
@@ -1280,7 +1308,7 @@ struct BadFloatWrapper <: AbstractFloat
     x::Float64
 end
 
-@testset "not impelemented errors" begin
+@testset "not implemented errors" begin
     x = BadFloatWrapper(1.9)
     for f in (sin, cos, tan, sinh, cosh, tanh, atan, acos, asin, asinh, acosh, atanh, exp, log1p, expm1, log) #exp2, exp10 broken for now
         @test_throws MethodError f(x)
@@ -1325,8 +1353,12 @@ end
     for T in (Float16, Float32, Float64)
         for x in (0.0, -0.0, 1.0, 10.0, 2.0, Inf, NaN, -Inf, -NaN)
             for y in (0.0, -0.0, 1.0, -3.0,-10.0 , Inf, NaN, -Inf, -NaN)
-                got, expected = T(x)^T(y), T(big(x))^T(y)
-                @test isnan_type(T, got) && isnan_type(T, expected) || (got === expected)
+                got, expected = T(x)^T(y), T(big(x)^T(y))
+                if isnan(expected)
+                    @test isnan_type(T, got) || T.((x,y))
+                else
+                    @test got == expected || T.((x,y))
+                end
             end
         end
         for _ in 1:2^16
@@ -1358,6 +1390,7 @@ end
     end
     # test for large negative exponent where error compensation matters
     @test 0.9999999955206014^-1.0e8 == 1.565084574870928
+    @test 3e18^20 == Inf
 end
 
 # Test that sqrt behaves correctly and doesn't exhibit fp80 double rounding.
@@ -1448,4 +1481,23 @@ end
 @testset "Issue #44336" begin
     f44336()
     @test (@allocated f44336()) == 0
+end
+
+# test constant-foldability
+for fn in (:sin, :cos, :tan, :log, :log2, :log10, :log1p, :exponent, :sqrt, :cbrt,
+           :asin, :atan, :acos, :sinh, :cosh, :tanh, :asinh, :acosh, :atanh,
+           :exp, :exp2, :exp10, :expm1
+           )
+    for T in (Float16, Float32, Float64)
+        f = getfield(@__MODULE__, fn)
+        eff = Base.infer_effects(f, (T,))
+        @test Core.Compiler.is_foldable(eff)
+    end
+end
+for T in (Float16, Float32, Float64)
+    for f in (exp, exp2, exp10)
+        @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (T,)))
+    end
+    @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,Int)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,T)))
 end

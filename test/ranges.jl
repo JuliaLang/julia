@@ -518,8 +518,10 @@ end
         @test !(3.5 in 1:5)
         @test (3 in 1:5)
         @test (3 in 5:-1:1)
-        #@test (3 in 3+0*(1:5))
-        #@test !(4 in 3+0*(1:5))
+        @test (3 in 3 .+ 0*(1:5))
+        @test !(4 in 3 .+ 0*(1:5))
+        @test 0. in (0. .* (1:10))
+        @test !(0.1 in (0. .* (1:10)))
 
         let r = 0.0:0.01:1.0
             @test (r[30] in r)
@@ -536,8 +538,17 @@ end
             x = (NaN16, Inf32, -Inf64, 1//0, -1//0)
             @test !(x in r)
         end
+
+        @test 1e40 ∉ 0:1.0 # Issue #45747
+        @test 1e20 ∉ 0:1e-20:1e-20
+        @test 1e20 ∉ 0:1e-20
+        @test 1.0  ∉ 0:1e-20:1e-20
+        @test 0.5  ∉ 0:1e-20:1e-20
+        @test 1    ∉ 0:1e-20:1e-20
+
+        @test_broken 17.0 ∈ 0:1e40 # Don't support really long ranges
     end
-    @testset "in() works across types, including non-numeric types (#21728)" begin
+    @testset "in() works across types, including non-numeric types (#21728 and #45646)" begin
         @test 1//1 in 1:3
         @test 1//1 in 1.0:3.0
         @test !(5//1 in 1:3)
@@ -558,6 +569,22 @@ end
         @test !(Complex(1, 0) in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
         @test !(π in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
         @test !("a" in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
+
+        # We use Ducks because of their propensity to stand in a row and because we know
+        # that no additional methods (e.g. isfinite) are defined specifically for Ducks.
+        struct Duck
+            location::Int
+        end
+        Base.:+(x::Duck, y::Int) = Duck(x.location + y)
+        Base.:-(x::Duck, y::Int) = Duck(x.location - y)
+        Base.:-(x::Duck, y::Duck) = x.location - y.location
+        Base.isless(x::Duck, y::Duck) = isless(x.location, y.location)
+
+        @test Duck(3) ∈ Duck(1):2:Duck(5)
+        @test Duck(3) ∈ Duck(5):-2:Duck(2)
+        @test Duck(4) ∉ Duck(5):-2:Duck(1)
+        @test Duck(4) ∈ Duck(1):Duck(5)
+        @test Duck(0) ∉ Duck(1):Duck(5)
     end
 end
 @testset "indexing range with empty range (#4309)" begin
@@ -874,7 +901,6 @@ end
 @testset "Inexact errors on 32 bit architectures. #22613" begin
     @test first(range(log(0.2), stop=log(10.0), length=10)) == log(0.2)
     @test last(range(log(0.2), stop=log(10.0), length=10)) == log(10.0)
-    @test length(Base.floatrange(-3e9, 1.0, 1, 1.0)) == 1
 end
 
 @testset "ranges with very small endpoints for type $T" for T = (Float32, Float64)
@@ -2032,8 +2058,17 @@ end
 end
 
 @testset "length(StepRange()) type stability" begin
-    typeof(length(StepRange(1,Int128(1),1))) == typeof(length(StepRange(1,Int128(1),0)))
-    typeof(checked_length(StepRange(1,Int128(1),1))) == typeof(checked_length(StepRange(1,Int128(1),0)))
+    for SR in (StepRange{Int,Int128}, StepRange{Int8,Int128})
+        r1, r2 = SR(1, 1, 1), SR(1, 1, 0)
+        @test typeof(length(r1)) == typeof(checked_length(r1)) ==
+              typeof(length(r2)) == typeof(checked_length(r2))
+    end
+    SR = StepRange{Union{Int64,Int128},Int}
+    test_length(r, l) = length(r) === checked_length(r) === l
+    @test test_length(SR(Int64(1), 1, Int128(1)), Int128(1))
+    @test test_length(SR(Int64(1), 1, Int128(0)), Int128(0))
+    @test test_length(SR(Int64(1), 1, Int64(1)), Int64(1))
+    @test test_length(SR(Int64(1), 1, Int64(0)), Int64(0))
 end
 
 @testset "LinRange eltype for element types that wrap integers" begin
@@ -2347,3 +2382,13 @@ end
 @test isempty(range(typemax(Int), length=0, step=UInt(2)))
 
 @test length(range(1, length=typemax(Int128))) === typemax(Int128)
+
+@testset "firstindex(::StepRange{<:Base.BitInteger})" begin
+    test_firstindex(x) = firstindex(x) === first(Base.axes1(x))
+    for T in Base.BitInteger_types, S in Base.BitInteger_types
+        @test test_firstindex(StepRange{T,S}(1, 1, 1))
+        @test test_firstindex(StepRange{T,S}(1, 1, 0))
+    end
+    @test test_firstindex(StepRange{Union{Int64,Int128},Int}(Int64(1), 1, Int128(1)))
+    @test test_firstindex(StepRange{Union{Int64,Int128},Int}(Int64(1), 1, Int128(0)))
+end

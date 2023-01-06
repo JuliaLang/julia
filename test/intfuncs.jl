@@ -519,3 +519,9 @@ end
         @test binomial(x...) == (x != (false,true))
     end
 end
+
+# concrete-foldability
+@test Base.infer_effects(gcd, (Int,Int)) |> Core.Compiler.is_foldable
+@test Base.infer_effects(gcdx, (Int,Int)) |> Core.Compiler.is_foldable
+@test Base.infer_effects(invmod, (Int,Int)) |> Core.Compiler.is_foldable
+@test Base.infer_effects(binomial, (Int,Int)) |> Core.Compiler.is_foldable

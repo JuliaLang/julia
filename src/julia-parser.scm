@@ -1352,7 +1352,7 @@
 
 (define (rewrap-where x w)
   (if (and (pair? w) (eq? (car w) 'where))
-      (list 'where (rewrap-where x (cadr w)) (caddr w))
+      (list* 'where (rewrap-where x (cadr w)) (cddr w))
       x))
 
 (define (parse-struct-field s)

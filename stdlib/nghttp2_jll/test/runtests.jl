@@ -11,5 +11,5 @@ end
 
 @testset "nghttp2_jll" begin
     info = unsafe_load(ccall((:nghttp2_version,libnghttp2), Ptr{nghttp2_info}, (Cint,), 0))
-    @test VersionNumber(unsafe_string(info.version_str)) == v"1.47.0"
+    @test VersionNumber(unsafe_string(info.version_str)) == v"1.48.0"
 end

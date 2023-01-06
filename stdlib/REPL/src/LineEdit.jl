@@ -49,6 +49,9 @@ mutable struct Prompt <: TextInterface
     prompt_prefix::Union{String,Function}
     # Same as prefix except after the prompt
     prompt_suffix::Union{String,Function}
+    output_prefix::Union{String,Function}
+    output_prefix_prefix::Union{String,Function}
+    output_prefix_suffix::Union{String,Function}
     keymap_dict::Dict{Char,Any}
     repl::Union{AbstractREPL,Nothing}
     complete::CompletionProvider
@@ -63,6 +66,7 @@ show(io::IO, x::Prompt) = show(io, string("Prompt(\"", prompt_string(x.prompt), 
 
 mutable struct MIState
     interface::ModalInterface
+    active_module::Module
     current_mode::TextInterface
     aborted::Bool
     mode_state::IdDict{TextInterface,ModeState}
@@ -74,7 +78,7 @@ mutable struct MIState
     current_action::Symbol
 end
 
-MIState(i, c, a, m) = MIState(i, c, a, m, String[], 0, Char[], 0, :none, :none)
+MIState(i, mod, c, a, m) = MIState(i, mod, c, a, m, String[], 0, Char[], 0, :none, :none)
 
 const BufferLike = Union{MIState,ModeState,IOBuffer}
 const State = Union{MIState,ModeState}
@@ -176,6 +180,10 @@ struct EmptyHistoryProvider <: HistoryProvider end
 reset_state(::EmptyHistoryProvider) = nothing
 
 complete_line(c::EmptyCompletionProvider, s) = String[], "", true
+
+# complete_line can be specialized for only two arguments, when the active module
+# doesn't matter (e.g. Pkg does this)
+complete_line(c::CompletionProvider, s, ::Module) = complete_line(c, s)
 
 terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
@@ -317,23 +325,28 @@ end
 
 # Show available completions
 function show_completions(s::PromptState, completions::Vector{String})
-    colmax = maximum(map(length, completions))
-    num_cols = max(div(width(terminal(s)), colmax+2), 1)
-    entries_per_col, r = divrem(length(completions), num_cols)
-    entries_per_col += r != 0
     # skip any lines of input after the cursor
     cmove_down(terminal(s), input_string_newlines_aftercursor(s))
     println(terminal(s))
-    for row = 1:entries_per_col
-        for col = 0:num_cols
-            idx = row + col*entries_per_col
-            if idx <= length(completions)
-                cmove_col(terminal(s), (colmax+2)*col+1)
+    if any(Base.Fix1(occursin, '\n'), completions)
+        foreach(Base.Fix1(println, terminal(s)), completions)
+    else
+        colmax = 2 + maximum(length, completions; init=1) # n.b. length >= textwidth
+        num_cols = max(div(width(terminal(s)), colmax), 1)
+        n = length(completions)
+        entries_per_col = cld(n, num_cols)
+        idx = 0
+        for _ in 1:entries_per_col
+            for col = 0:(num_cols-1)
+                idx += 1
+                idx > n && break
+                cmove_col(terminal(s), colmax*col+1)
                 print(terminal(s), completions[idx])
             end
+            println(terminal(s))
         end
-        println(terminal(s))
     end
+
     # make space for the prompt
     for i = 1:input_string_newlines(s)
         println(terminal(s))
@@ -343,7 +356,7 @@ end
 # Prompt Completions
 function complete_line(s::MIState)
     set_action!(s, :complete_line)
-    if complete_line(state(s), s.key_repeats)
+    if complete_line(state(s), s.key_repeats, s.active_module)
         return refresh_line(s)
     else
         beep(s)
@@ -351,8 +364,8 @@ function complete_line(s::MIState)
     end
 end
 
-function complete_line(s::PromptState, repeats::Int)
-    completions, partial, should_complete = complete_line(s.p.complete, s)::Tuple{Vector{String},String,Bool}
+function complete_line(s::PromptState, repeats::Int, mod::Module)
+    completions, partial, should_complete = complete_line(s.p.complete, s, mod)::Tuple{Vector{String},String,Bool}
     isempty(completions) && return false
     if !should_complete
         # should_complete is false for cases where we only want to show
@@ -1088,7 +1101,7 @@ end
 
 function edit_transpose_chars(buf::IOBuffer)
     # Moving left but not transpoing anything is intentional, and matches Emacs's behavior
-    eof(buf) && char_move_left(buf)
+    eof(buf) && position(buf) !== 0 && char_move_left(buf)
     position(buf) == 0 && return false
     char_move_left(buf)
     pos = position(buf)
@@ -1318,9 +1331,9 @@ end
 function edit_input(s, f = (filename, line, column) -> InteractiveUtils.edit(filename, line, column))
     mode_name = guess_current_mode_name(s)
     filename = tempname()
-    if mode_name == :julia
+    if mode_name === :julia
         filename *= ".jl"
-    elseif mode_name == :shell
+    elseif mode_name === :shell
         filename *= ".sh"
     end
     buf = buffer(s)
@@ -1356,6 +1369,49 @@ function edit_input(s, f = (filename, line, column) -> InteractiveUtils.edit(fil
         write(buf, str)
         seek(buf, pos) # restore state from before edit
         refresh_line(s)
+    end
+end
+
+# return the identifier under the cursor, possibly with other words concatenated
+# to it with dots (e.g. "A.B.C" in "X; A.B.C*3", if the cursor is between "A" and "C")
+function current_word_with_dots(buf::IOBuffer)
+    pos = position(buf)
+    while true
+        char_move_word_right(buf)
+        if eof(buf) || peek(buf, Char) != '.'
+            break
+        end
+    end
+    pend = position(buf)
+    while true
+        char_move_word_left(buf)
+        p = position(buf)
+        p == 0 && break
+        seek(buf, p-1)
+        if peek(buf, Char) != '.'
+            seek(buf, p)
+            break
+        end
+    end
+    pbegin = position(buf)
+    word = pend > pbegin ?
+        String(buf.data[pbegin+1:pend]) :
+        ""
+    seek(buf, pos)
+    word
+end
+
+current_word_with_dots(s::MIState) = current_word_with_dots(buffer(s))
+
+function activate_module(s::MIState)
+    word = current_word_with_dots(s);
+    isempty(word) && return beep(s)
+    try
+        mod = Base.Core.eval(Base.active_module(), Base.Meta.parse(word))
+        REPL.activate(mod)
+        edit_clear(s)
+    catch
+        beep(s)
     end
 end
 
@@ -1399,7 +1455,6 @@ default_completion_cb(::IOBuffer) = []
 default_enter_cb(_) = true
 
 write_prompt(terminal::AbstractTerminal, s::PromptState, color::Bool) = write_prompt(terminal, s.p, color)
-
 function write_prompt(terminal::AbstractTerminal, p::Prompt, color::Bool)
     prefix = prompt_string(p.prompt_prefix)
     suffix = prompt_string(p.prompt_suffix)
@@ -1408,6 +1463,17 @@ function write_prompt(terminal::AbstractTerminal, p::Prompt, color::Bool)
     width = write_prompt(terminal, p.prompt, color)
     color && write(terminal, Base.text_colors[:normal])
     write(terminal, suffix)
+    return width
+end
+
+function write_output_prefix(io::IO, p::Prompt, color::Bool)
+    prefix = prompt_string(p.output_prefix_prefix)
+    suffix = prompt_string(p.output_prefix_suffix)
+    print(io, prefix)
+    color && write(io, Base.text_colors[:bold])
+    width = write_prompt(io, p.output_prefix, color)
+    color && write(io, Base.text_colors[:normal])
+    print(io, suffix)
     return width
 end
 
@@ -1442,7 +1508,7 @@ end
 end
 
 # returns the width of the written prompt
-function write_prompt(terminal, s::Union{AbstractString,Function}, color::Bool)
+function write_prompt(terminal::Union{IO, AbstractTerminal}, s::Union{AbstractString,Function}, color::Bool)
     @static Sys.iswindows() && _reset_console_mode()
     promptstr = prompt_string(s)::String
     write(terminal, promptstr)
@@ -1500,7 +1566,7 @@ function normalize_keys(keymap::Union{Dict{Char,Any},AnyDict})
     return ret
 end
 
-function add_nested_key!(keymap::Dict, key::Union{String, Char}, value; override = false)
+function add_nested_key!(keymap::Dict{Char, Any}, key::Union{String, Char}, value; override::Bool = false)
     y = iterate(key)
     while y !== nothing
         c, i = y
@@ -1515,7 +1581,7 @@ function add_nested_key!(keymap::Dict, key::Union{String, Char}, value; override
         elseif !(c in keys(keymap) && isa(keymap[c], Dict))
             keymap[c] = Dict{Char,Any}()
         end
-        keymap = keymap[c]
+        keymap = keymap[c]::Dict{Char, Any}
     end
 end
 
@@ -1660,7 +1726,7 @@ end
 function getEntry(keymap::Dict{Char,Any},key::Union{String,Char})
     v = keymap
     for c in key
-        if !haskey(v,c)
+        if !(haskey(v,c)::Bool)
             return nothing
         end
         v = v[c]
@@ -1980,8 +2046,8 @@ setmodifiers!(p::Prompt, m::Modifiers) = setmodifiers!(p.complete, m)
 setmodifiers!(c) = nothing
 
 # Search Mode completions
-function complete_line(s::SearchState, repeats)
-    completions, partial, should_complete = complete_line(s.histprompt.complete, s)
+function complete_line(s::SearchState, repeats, mod::Module)
+    completions, partial, should_complete = complete_line(s.histprompt.complete, s, mod)
     # For now only allow exact completions in search mode
     if length(completions) == 1
         prev_pos = position(s)
@@ -2401,6 +2467,7 @@ AnyDict(
     "\el" => (s::MIState,o...)->edit_lower_case(s),
     "\ec" => (s::MIState,o...)->edit_title_case(s),
     "\ee" => (s::MIState,o...) -> edit_input(s),
+    "\em" => (s::MIState, o...) -> activate_module(s)
 )
 
 const history_keymap = AnyDict(
@@ -2437,6 +2504,7 @@ const prefix_history_keymap = merge!(
         end,
         # match escape sequences for pass through
         "^x*" => "*",
+        "\em*" => "*",
         "\e*" => "*",
         "\e[*" => "*",
         "\eO*"  => "*",
@@ -2536,6 +2604,9 @@ function Prompt(prompt
     ;
     prompt_prefix = "",
     prompt_suffix = "",
+    output_prefix = "",
+    output_prefix_prefix = "",
+    output_prefix_suffix = "",
     keymap_dict = default_keymap_dict,
     repl = nothing,
     complete = EmptyCompletionProvider(),
@@ -2544,8 +2615,8 @@ function Prompt(prompt
     hist = EmptyHistoryProvider(),
     sticky = false)
 
-    return Prompt(prompt, prompt_prefix, prompt_suffix, keymap_dict, repl,
-        complete, on_enter, on_done, hist, sticky)
+    return Prompt(prompt, prompt_prefix, prompt_suffix, output_prefix, output_prefix_prefix, output_prefix_suffix,
+                   keymap_dict, repl, complete, on_enter, on_done, hist, sticky)
 end
 
 run_interface(::Prompt) = nothing
@@ -2555,7 +2626,7 @@ init_state(terminal, prompt::Prompt) =
                 #=indent(spaces)=# -1, Threads.SpinLock(), 0.0, -Inf, nothing)
 
 function init_state(terminal, m::ModalInterface)
-    s = MIState(m, m.modes[1], false, IdDict{Any,Any}())
+    s = MIState(m, Main, m.modes[1], false, IdDict{Any,Any}())
     for mode in m.modes
         s.mode_state[mode] = init_state(terminal, mode)
     end

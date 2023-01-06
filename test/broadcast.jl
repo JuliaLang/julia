@@ -699,11 +699,11 @@ end
     @test_throws Base.CanonicalIndexError A[2] .= 0
     @test_throws MethodError A[3] .= 0
     A = [[1, 2, 3], 4:5]
-    @test A isa Vector{Vector{Int}}
     A[1] .= 0
-    A[2] .= 0
-    @test A[1] == [0, 0, 0]
-    @test A[2] == [0, 0]
+    @test A[1] isa Vector{Int}
+    @test A[2] isa UnitRange
+    @test A[1] == [0,0,0]
+    @test_throws Base.CanonicalIndexError A[2] .= 0
 end
 
 # Issue #22180
@@ -1116,7 +1116,15 @@ end
     @inferred(test(x, y)) == [0, 0]
 end
 
+@testset "issue #45903, in place broadcast into a bit-masked bitmatrix" begin
+    A = BitArray(ones(3,3))
+    pos = randn(3,3)
+    A[pos .< 0] .= false
+    @test all(>=(0), pos[A])
+    @test count(A) == count(>=(0), pos)
+end
+
 # test that `Broadcast` definition is defined as total and eligible for concrete evaluation
 import Base.Broadcast: BroadcastStyle, DefaultArrayStyle
 @test Base.infer_effects(BroadcastStyle, (DefaultArrayStyle{1},DefaultArrayStyle{2},)) |>
-    Core.Compiler.is_concrete_eval_eligible
+    Core.Compiler.is_foldable
