@@ -484,29 +484,32 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 
 # the suffix "2" means base 2
 """
-    ndigits0z2(x::Integer) -> Integer
+    top_set_bit(x::Integer) -> Integer
 
 The number of bits used to represent `x` in its binary representation, excluding
 leading zeros.
 
-Negative `x` is only supported when `x::BitSigned`.
+Equivalently, The position of the most significant set bit in `x`'s binary
+representation, when measured from the least significant side.
 
-`ndigits0z2` is internal and will eventually be replaced by constant propagation.
+Negative `x` are only supported when `x::BitSigned`.
+
+`top_set_bit` is internal and will eventually be replaced by constant propagation.
 
 See also: [`ndigits0z`](@ref), [`ndigits`](@ref).
 
 # Examples
 ```jldoctest
-julia> ndigits0z2(4)
+julia> top_set_bit(4)
 3
 
-julia> ndigits0z2(0)
+julia> top_set_bit(0)
 0
 
-julia> ndigits0z2(-1)
+julia> top_set_bit(-1)
 64
 """
-ndigits0z2(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
+top_set_bit(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
 
 ## integer comparisons ##
 

@@ -447,10 +447,10 @@ end
     @test leading_zeros(Int32(1)) == 31
     @test leading_zeros(UInt32(Int64(2) ^ 32 - 2)) == 0
 
-    @test Base.ndigits0z2(3) == 2
-    @test Base.ndigits0z2(-Int64(17)) == 64
-    @test Base.ndigits0z2(big(15)) != Base.ndigits0z2(big(16)) == Base.ndigits0z2(big(17)) == 5
-    @test_throws DomainError Base.ndigits0z2(big(-17))
+    @test Base.top_set_bit(3) == 2
+    @test Base.top_set_bit(-Int64(17)) == 64
+    @test Base.top_set_bit(big(15)) != Base.top_set_bit(big(16)) == Base.top_set_bit(big(17)) == 5
+    @test_throws DomainError Base.top_set_bit(big(-17))
 
     struct MyInt <: Integer
         x::Int
@@ -460,21 +460,21 @@ end
 
     for n in 0:100
         x = ceil(Int, log2(n + 1))
-        @test x == Base.ndigits0z2(Int128(n)) == Base.ndigits0z2(unsigned(Int128(n)))
-        @test x == Base.ndigits0z2(Int32(n)) == Base.ndigits0z2(unsigned(Int64(n)))
-        @test x == Base.ndigits0z2(Int8(n)) == Base.ndigits0z2(unsigned(Int8(n)))
-        @test x == Base.ndigits0z2(big(n))   # BigInt fallback
-        @test x == Base.ndigits0z2(MyInt(n)) # generic fallback
+        @test x == Base.top_set_bit(Int128(n)) == Base.top_set_bit(unsigned(Int128(n)))
+        @test x == Base.top_set_bit(Int32(n)) == Base.top_set_bit(unsigned(Int64(n)))
+        @test x == Base.top_set_bit(Int8(n)) == Base.top_set_bit(unsigned(Int8(n)))
+        @test x == Base.top_set_bit(big(n))   # BigInt fallback
+        @test x == Base.top_set_bit(MyInt(n)) # generic fallback
     end
 
     for n in -10:-1
-        @test 128 == Base.ndigits0z2(Int128(n)) == Base.ndigits0z2(unsigned(Int128(n)))
-        @test 32  == Base.ndigits0z2(Int32(n)) == Base.ndigits0z2(unsigned(Int32(n)))
-        @test 8   == Base.ndigits0z2(Int8(n)) == Base.ndigits0z2(unsigned(Int8(n)))
-        @test_throws DomainError Base.ndigits0z2(big(n))
+        @test 128 == Base.top_set_bit(Int128(n)) == Base.top_set_bit(unsigned(Int128(n)))
+        @test 32  == Base.top_set_bit(Int32(n)) == Base.top_set_bit(unsigned(Int32(n)))
+        @test 8   == Base.top_set_bit(Int8(n)) == Base.top_set_bit(unsigned(Int8(n)))
+        @test_throws DomainError Base.top_set_bit(big(n))
         # This error message should never be exposed to the end user anyway.
         err = n == -1 ? InexactError : DomainError
-        @test_throws err Base.ndigits0z2(MyInt(n))
+        @test_throws err Base.top_set_bit(MyInt(n))
     end
 
     @test count_zeros(Int64(1)) == 63
