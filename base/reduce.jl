@@ -1329,14 +1329,7 @@ function _simple_count(::typeof(identity), x::Array{Bool}, init::T=0) where {T}
     return n
 end
 
-function _mapped_eltype(f, A)
-    elT = eltype(A) # try this
-    if elT === Any
-        elT = @default_eltype(A) # try again
-    end
-    fT = _return_type(f, Tuple{elT}) # determine type of f(A[i]), if possible
-    return isconcretetype(fT) ? fT : Any # always widen this to `Any` if non-concrete
-end
+_mapped_eltype(f, A) = _return_type(f, Tuple{@default_eltype(A)})
 
 """
     Base._makefast_reduction(op, T) -> (pre, op_fast, post)
