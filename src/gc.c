@@ -3054,12 +3054,11 @@ JL_DLLEXPORT int jl_gc_enable(int on)
     }
     else if (prev && !on) {
 #ifdef MMTKHEAP
-        if (jl_atomic_load(&jl_gc_disable_counter) == 0) {
-            disable_collection();
-        }
+        disable_collection();
 #endif
         // enable -> disable
         jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
+
         // check if the GC is running and wait for it to finish
         jl_gc_safepoint_(ptls);
     }
@@ -3610,6 +3609,7 @@ void jl_gc_init(void)
     char* max_size_def = getenv("MMTK_MAX_HSIZE");
     char* max_size_gb = getenv("MMTK_MAX_HSIZE_G");
 
+    // default min heap currently set as Julia's default_collect_interval
     if (min_size_def != NULL) {
         char *p;
         double min_size = strtod(min_size_def, &p);
@@ -3622,6 +3622,7 @@ void jl_gc_init(void)
         min_heap_size = default_collect_interval;
     }
 
+    // default max heap currently set as 70% the free memory in the system
     if (max_size_def != NULL) {
         char *p;
         double max_size = strtod(max_size_def, &p);
@@ -3634,7 +3635,13 @@ void jl_gc_init(void)
         max_heap_size = uv_get_free_memory() * 70 / 100;
     }
 
-    gc_init(min_heap_size, max_heap_size, &mmtk_upcalls, (sizeof(jl_taggedvalue_t))); // currently set as 6GB or 70% the free memory in the system
+    // if only max size is specified initialize MMTk with a fixed size heap
+    if (max_size_def != NULL || max_size_gb != NULL && (min_size_def == NULL && min_size_gb == NULL)) {
+        gc_init(0, max_heap_size, &mmtk_upcalls, (sizeof(jl_taggedvalue_t)));
+    } else {
+        gc_init(min_heap_size, max_heap_size, &mmtk_upcalls, (sizeof(jl_taggedvalue_t)));
+    }
+
 #endif
     jl_gc_mark_sp_t sp = {NULL, NULL, NULL, NULL};
     gc_mark_loop(NULL, sp);
