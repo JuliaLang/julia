@@ -253,6 +253,8 @@ function reprocess_instruction!(interp::AbstractInterpreter,
         rt = tmeet(typeinf_lattice(interp), argextype(inst.val, ir), widenconst(inst.typ))
     elseif inst === nothing
         return false
+    elseif isa(inst, GlobalRef)
+        # GlobalRef is not refinable
     else
         ccall(:jl_, Cvoid, (Any,), inst)
         error()
