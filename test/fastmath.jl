@@ -220,6 +220,16 @@ end
     @test @fastmath(minimum(Float32[4 5 6; 7 8 9]; dims=2)) == Float32[4.0; 7.0;;]
     @test @fastmath(maximum(abs, [4+im -5 6-im; -7 8 -9]; dims=1)) == [7.0 8.0 9.0]
     @test @fastmath(minimum(cbrt, [4 -5 6; -7 8 -9]; dims=2)) == cbrt.([-5; -9;;])
+
+    x = randn(3,4,5)
+    x1 = sum(x; dims=1)
+    x23 = sum(x; dims=(2,3))
+    @test @fastmath(maximum!(x1, x)) ≈ maximum(x; dims=1)
+    @test x1 ≈ maximum(x; dims=1)
+    @test @fastmath(minimum!(x23, x)) ≈ minimum(x; dims=(2,3))
+    @test x23 ≈ minimum(x; dims=(2,3))
+    @test @fastmath(maximum!(abs, x23, x .+ im)) ≈ maximum(abs, x .+ im; dims=(2,3))
+    @test @fastmath(minimum!(abs2, x1, x .+ im)) ≈ minimum(abs2, x .+ im; dims=1)
 end
 
 @testset "issue #10544" begin
