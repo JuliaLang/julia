@@ -2197,7 +2197,7 @@ function getfield_effects(argtypes::Vector{Any}, @nospecialize(rt))
         # If we cannot independently prove inboundsness, taint consistency.
         # The inbounds-ness assertion requires dynamic reachability, while
         # :consistent needs to be true for all input values.
-        # N.B. We do not taint for `--check-bounds=no` here -that happens in
+        # N.B. We do not taint for `--check-bounds=no` here that happens in
         # InferenceState.
         consistent = ALWAYS_FALSE
     end

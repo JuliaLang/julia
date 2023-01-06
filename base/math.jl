@@ -177,9 +177,9 @@ julia> evalpoly(2, (1, 2, 3))
 function evalpoly(x, p::Tuple)
     if @generated
         N = length(p.parameters::Core.SimpleVector)
-        ex = :(p[end])
+        ex = :(getfield(p,$N))
         for i in N-1:-1:1
-            ex = :(muladd(x, $ex, p[$i]))
+            ex = :(muladd(x, $ex, getfield(p,$i)))
         end
         ex
     else
@@ -192,7 +192,7 @@ evalpoly(x, p::AbstractVector) = _evalpoly(x, p)
 function _evalpoly(x, p)
     Base.require_one_based_indexing(p)
     N = length(p)
-    ex = p[end]
+    ex = p[N]
     for i in N-1:-1:1
         ex = muladd(x, ex, p[i])
     end
@@ -202,14 +202,14 @@ end
 function evalpoly(z::Complex, p::Tuple)
     if @generated
         N = length(p.parameters)
-        a = :(p[end])
-        b = :(p[end-1])
+        a = :(getfield(p,$N))
+        b = :(getfield(p,$N-1))
         as = []
         for i in N-2:-1:1
             ai = Symbol("a", i)
             push!(as, :($ai = $a))
             a = :(muladd(r, $ai, $b))
-            b = :(muladd(-s, $ai, p[$i]))
+            b = :(muladd(-s, $ai, getfield(p,$i)))
         end
         ai = :a0
         push!(as, :($ai = $a))
@@ -224,8 +224,7 @@ function evalpoly(z::Complex, p::Tuple)
         _evalpoly(z, p)
     end
 end
-evalpoly(z::Complex, p::Tuple{<:Any}) = p[1]
-
+evalpoly(z::Complex, p::Tuple{<:Any}) = getfield(p,1)
 
 evalpoly(z::Complex, p::AbstractVector) = _evalpoly(z, p)
 
@@ -296,9 +295,10 @@ end
 # polynomial evaluation using compensated summation.
 # much more accurate, especially when lo can be combined with other rounding errors
 Base.@assume_effects :terminates_locally @inline function exthorner(x, p::Tuple)
-    hi, lo = p[end], zero(x)
-    for i in length(p)-1:-1:1
-        pi = getfield(p, i) # needed to prove consistency
+    N = length(p)
+    hi, lo = getfield(p,N), zero(x)
+    for i in N-1:-1:1
+        pi = getfield(p,i) # needed to prove consistency
         prod, err = two_mul(hi,x)
         hi = pi+prod
         lo = fma(lo, x, prod - (hi - pi) + err)

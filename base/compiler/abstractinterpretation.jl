@@ -2170,21 +2170,22 @@ function abstract_eval_cfunction(interp::AbstractInterpreter, e::Expr, vtypes::V
 end
 
 function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, sv::Union{InferenceState, IRCode})
+    rt = Any
     head = e.head
     if head === :static_parameter
         n = e.args[1]::Int
-        t = Any
         if 1 <= n <= length(sv.sptypes)
-            t = sv.sptypes[n]
+            rt = sv.sptypes[n]
         end
-        return t
     elseif head === :boundscheck
-        return Bool
+        merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE, noinbounds=false))
+        rt = Bool
+    elseif head === :inbounds
+        merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE, noinbounds=false))
     elseif head === :the_exception
         merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE))
-        return Any
     end
-    return Any
+    return rt
 end
 
 function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::Union{VarTable, Nothing}, sv::Union{InferenceState, IRCode})
