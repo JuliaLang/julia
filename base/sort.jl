@@ -86,7 +86,7 @@ issorted(itr;
     issorted(itr, ord(lt,by,rev,order))
 
 function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
-    _sort!(v, InitialOptimizations(QuickerSort(k)), o, (;))
+    _sort!(v, InitialOptimizations(QuickBufferSort(k)), o, (;))
     maybeview(v, k)
 end
 
@@ -953,12 +953,12 @@ end
 
 
 """
-    QuickerSort(next::Algorithm=SMALL_ALGORITHM) <: Algorithm
-    QuickerSort(lo::Union{Integer, Missing}, hi::Union{Integer, Missing}=lo, next::Algorithm=SMALL_ALGORITHM) <: Algorithm
+    QuickBufferSort(next::Algorithm=SMALL_ALGORITHM) <: Algorithm
+    QuickBufferSort(lo::Union{Integer, Missing}, hi::Union{Integer, Missing}=lo, next::Algorithm=SMALL_ALGORITHM) <: Algorithm
 
-Use the `QuickerSort` algorithm with the `next` algorithm as a base case.
+Use the `QuickBufferSort` algorithm with the `next` algorithm as a base case.
 
-`QuickerSort` is like `QuickSort`, but utilizes scratch space to operate faster and allow
+`QuickBufferSort` is like `QuickSort`, but utilizes scratch space to operate faster and allow
 for the possibility of maintaining stability.
 
 If `lo` and `hi` are provided, finds and sorts the elements in the range `lo:hi`, reordering
@@ -976,17 +976,17 @@ Characteristics:
   * *quadratic worst case runtime* in pathological cases
   (vanishingly rare for non-malicious input)
 """
-struct QuickerSort{L<:Union{Integer,Missing}, H<:Union{Integer,Missing}, T<:Algorithm} <: Algorithm
+struct QuickBufferSort{L<:Union{Integer,Missing}, H<:Union{Integer,Missing}, T<:Algorithm} <: Algorithm
     lo::L
     hi::H
     next::T
 end
-QuickerSort(next::Algorithm=SMALL_ALGORITHM) = QuickerSort(missing, missing, next)
-QuickerSort(lo::Union{Integer, Missing}, hi::Union{Integer, Missing}) = QuickerSort(lo, hi, SMALL_ALGORITHM)
-QuickerSort(lo::Union{Integer, Missing}, next::Algorithm=SMALL_ALGORITHM) = QuickerSort(lo, lo, next)
-QuickerSort(r::OrdinalRange, next::Algorithm=SMALL_ALGORITHM) = QuickerSort(first(r), last(r), next)
+QuickBufferSort(next::Algorithm=SMALL_ALGORITHM) = QuickBufferSort(missing, missing, next)
+QuickBufferSort(lo::Union{Integer, Missing}, hi::Union{Integer, Missing}) = QuickBufferSort(lo, hi, SMALL_ALGORITHM)
+QuickBufferSort(lo::Union{Integer, Missing}, next::Algorithm=SMALL_ALGORITHM) = QuickBufferSort(lo, lo, next)
+QuickBufferSort(r::OrdinalRange, next::Algorithm=SMALL_ALGORITHM) = QuickBufferSort(first(r), last(r), next)
 
-# select a pivot for QuickerSort
+# select a pivot for QuickBufferSort
 #
 # This method is redefined to rand(lo:hi) in Random.jl
 # We can't use rand here because it is not available in Core.Compiler and
@@ -1029,7 +1029,7 @@ function partition!(t::AbstractVector, lo::Integer, hi::Integer, offset::Integer
     pivot_index
 end
 
-function _sort!(v::AbstractVector, a::QuickerSort, o::Ordering, kw;
+function _sort!(v::AbstractVector, a::QuickBufferSort, o::Ordering, kw;
                 t=nothing, offset=nothing, swap=false, rev=false)
     @getkw lo hi scratch
 
@@ -1047,7 +1047,7 @@ function _sort!(v::AbstractVector, a::QuickerSort, o::Ordering, kw;
         end
         swap = !swap
 
-        # For QuickerSort(), a.lo === a.hi === missing, so the first two branches get skipped
+        # For QuickBufferSort(), a.lo === a.hi === missing, so the first two branches get skipped
         if !ismissing(a.lo) && j <= a.lo # Skip sorting the lower part
             swap && copyto!(v, lo, t, lo+offset, j-lo)
             rev && reverse!(v, lo, j-1)
@@ -1245,7 +1245,7 @@ the initial optimizations because they can change the input vector's type and or
 make them `UIntMappable`.
 
 If the input is not [`UIntMappable`](@ref), then we perform a presorted check and dispatch
-to [`QuickerSort`](@ref).
+to [`QuickBufferSort`](@ref).
 
 Otherwise, we dispatch to [`InsertionSort`](@ref) for inputs with `length <= 40` and then
 perform a presorted check ([`CheckSorted`](@ref)).
@@ -1277,7 +1277,7 @@ Consequently, we apply [`RadixSort`](@ref) for any reasonably long inputs that r
 stage.
 
 Finally, if the input has length less than 80, we dispatch to [`InsertionSort`](@ref) and
-otherwise we dispatch to [`QuickerSort`](@ref).
+otherwise we dispatch to [`QuickBufferSort`](@ref).
 """
 const DEFAULT_STABLE = InitialOptimizations(
     IsUIntMappable(
@@ -1287,9 +1287,9 @@ const DEFAULT_STABLE = InitialOptimizations(
                     ConsiderCountingSort(
                         ConsiderRadixSort(
                             Small{80}(
-                                QuickerSort())))))),
+                                QuickBufferSort())))))),
         StableCheckSorted(
-            QuickerSort())))
+            QuickBufferSort())))
 """
     DEFAULT_UNSTABLE
 
@@ -1494,7 +1494,7 @@ function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
     end
 
     # do partial quicksort
-    _sort!(ix, InitialOptimizations(QuickerSort(k)), Perm(ord(lt, by, rev, order), v), (;))
+    _sort!(ix, InitialOptimizations(QuickBufferSort(k)), Perm(ord(lt, by, rev, order), v), (;))
 
     maybeview(ix, k)
 end
