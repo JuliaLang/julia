@@ -164,19 +164,28 @@ See [`keys`](@ref keys(::RegexMatch)) for more information.
 
 # Examples
 ```jldoctest
-julia> m = match(r"(?<hour>\\d+):(?<minute>\\d+)(am|pm)?", "11:30 in the morning")
+julia> m = match(r"(?<hour>\d+):(?<minute>\d+)(am|pm)?", "The time is 11:30")
 RegexMatch("11:30", hour="11", minute="30", 3=nothing)
+
+julia> m.match
+"11:30"
+
+julia> m.captures
+3-element Vector{Union{Nothing, SubString{String}}}:
+ "11"
+ "30"
+ nothing
+
+julia> m.captures[2]    # same as m[2]
+"30"
+
+julia> m["minute"]
+"30"
 
 julia> hr, min, ampm = m;
 
 julia> hr
 "11"
-
-julia> m["minute"]
-"30"
-
-julia> m.match
-"11:30"
 ```
 """
 struct RegexMatch <: AbstractMatch
