@@ -958,7 +958,7 @@ the element type of `A`.
     Numerical rank can be a sensitive and imprecise characterization of
     ill-conditioned matrices with singular values that are close to the threshold
     tolerance `max(atol, rtol*σ₁)`. In such cases, slight perturbations to the
-    singular value computation or to the matrix can change the result of `rank`
+    singular-value computation or to the matrix can change the result of `rank`
     by pushing one or more singular values across the threshold. These variations
     can even occur due to changes in floating-point errors between different Julia
     versions, architectures, compilers, or operating systems.
