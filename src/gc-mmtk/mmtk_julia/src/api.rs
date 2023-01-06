@@ -4,11 +4,12 @@
 use crate::reference_glue::JuliaFinalizableObject;
 use crate::JuliaVM;
 use crate::Julia_Upcalls;
+use crate::FINALIZER_ROOTS;
 use crate::SINGLETON;
 use crate::UPCALLS;
 use crate::{
     get_mutator_ref, set_julia_obj_header_size, ARE_MUTATORS_BLOCKED, BUILDER, DISABLED_GC,
-    FINALIZERS_RUNNING, MUTATORS, MUTATOR_TLS, UC_COND, USER_TRIGGERED_GC,
+    FINALIZERS_RUNNING, MUTATORS, MUTATOR_TLS, USER_TRIGGERED_GC,
 };
 use libc::c_char;
 use log::info;
@@ -59,10 +60,27 @@ pub extern "C" fn gc_init(
         if let Some(plan) = force_plan {
             builder.options.plan.set(plan);
         }
-        let success = builder.options.gc_trigger.set(
-            mmtk::util::options::GCTriggerSelector::DynamicHeapSize(min_heap_size, max_heap_size),
-        );
-        // let success = builder.options.heap_size.set(heap_size);
+        let success;
+        if min_heap_size != 0 {
+            info!(
+                "Setting mmtk heap size to a variable size with min-max of {}-{} (in bytes)",
+                min_heap_size, max_heap_size
+            );
+            success = builder.options.gc_trigger.set(
+                mmtk::util::options::GCTriggerSelector::DynamicHeapSize(
+                    min_heap_size,
+                    max_heap_size,
+                ),
+            );
+        } else {
+            info!(
+                "Setting mmtk heap size to a fixed max of {} (in bytes)",
+                max_heap_size
+            );
+            success = builder.options.gc_trigger.set(
+                mmtk::util::options::GCTriggerSelector::FixedHeapSize(max_heap_size),
+            );
+        }
         assert!(
             success,
             "Failed to set heap size to {}-{}",
@@ -192,23 +210,10 @@ pub extern "C" fn disable_collection() {
         AtomicBool::store(&DISABLED_GC, true, Ordering::SeqCst);
     }
 
-    if AtomicBool::load(&FINALIZERS_RUNNING, Ordering::SeqCst) {
-        return;
-    }
-
-    let triggered_gc = AtomicBool::load(&USER_TRIGGERED_GC, Ordering::SeqCst);
-    if triggered_gc {
-        let &(ref lock, ref cvar) = &*UC_COND.clone();
-        let mut count = lock.lock().unwrap();
-        *count += 1;
-
-        let old_state = unsafe { ((*UPCALLS).wait_in_a_safepoint)() };
-
-        while AtomicBool::load(&USER_TRIGGERED_GC, Ordering::SeqCst) {
-            count = cvar.wait(count).unwrap();
-        }
-
-        unsafe { ((*UPCALLS).exit_from_safepoint)(old_state) }
+    // if user has triggered GC, wait until GC is finished
+    while AtomicBool::load(&USER_TRIGGERED_GC, Ordering::SeqCst) {
+        info!("Waiting for a triggered gc to finish...");
+        unsafe { ((*UPCALLS).wait_in_a_safepoint)() };
     }
 }
 
@@ -245,15 +250,11 @@ pub extern "C" fn modify_check(object: ObjectReference) {
 #[no_mangle]
 pub extern "C" fn handle_user_collection_request(tls: VMMutatorThread) {
     AtomicBool::store(&USER_TRIGGERED_GC, true, Ordering::SeqCst);
-    let disabled_gc = AtomicBool::load(&DISABLED_GC, Ordering::SeqCst);
-    if disabled_gc {
+    if AtomicBool::load(&DISABLED_GC, Ordering::SeqCst) {
         AtomicBool::store(&USER_TRIGGERED_GC, false, Ordering::SeqCst);
         return;
     }
     memory_manager::handle_user_collection_request::<JuliaVM>(&SINGLETON, tls);
-    AtomicBool::store(&USER_TRIGGERED_GC, false, Ordering::SeqCst);
-    let &(_, ref cvar) = &*UC_COND.clone();
-    cvar.notify_all();
 }
 
 #[no_mangle]
@@ -304,7 +305,17 @@ pub extern "C" fn run_finalizers_for_obj(obj: ObjectReference) {
     let finalizable_objs = memory_manager::get_finalizers_for(&SINGLETON, obj);
 
     for obj in finalizable_objs {
+        // if the finalizer function triggers GC you don't want the object to be GC-ed
+        {
+            let mut fin_roots = FINALIZER_ROOTS.write().unwrap();
+            fin_roots.push(obj);
+        }
         unsafe { ((*UPCALLS).run_finalizer_function)(obj.0, obj.1, obj.2) }
+        {
+            let mut fin_roots = FINALIZER_ROOTS.write().unwrap();
+            let fin_root = fin_roots.pop();
+            assert_eq!(obj, fin_root.unwrap());
+        }
     }
 
     if !finalizers_running {

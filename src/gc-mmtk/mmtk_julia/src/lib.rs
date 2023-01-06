@@ -95,8 +95,6 @@ lazy_static! {
         RwLock::new(HashMap::new());
     pub static ref STW_COND: Arc<(Mutex<usize>, Condvar)> =
         Arc::new((Mutex::new(0), Condvar::new()));
-    pub static ref UC_COND: Arc<(Mutex<usize>, Condvar)> =
-        Arc::new((Mutex::new(0), Condvar::new()));
     pub static ref STOP_MUTATORS: Arc<(Mutex<usize>, Condvar)> =
         Arc::new((Mutex::new(0), Condvar::new()));
     pub static ref ROOTS: Mutex<HashSet<Address>> = Mutex::new(HashSet::new());

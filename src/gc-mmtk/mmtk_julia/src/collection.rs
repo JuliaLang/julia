@@ -1,9 +1,9 @@
 use crate::object_model::BI_MARKING_METADATA_SPEC;
-use crate::JuliaVM;
 use crate::{
     spawn_collector_thread, BI_METADATA_END_ALIGNED_UP, BI_METADATA_START_ALIGNED_DOWN,
     FINALIZER_ROOTS, SINGLETON, UPCALLS,
 };
+use crate::{JuliaVM, USER_TRIGGERED_GC};
 use log::{info, trace};
 use mmtk::memory_manager;
 use mmtk::util::alloc::AllocationError;
@@ -93,7 +93,6 @@ impl Collection<JuliaVM> for VMCollection {
 
             info!("Blocking for GC!");
 
-            
             unsafe {
                 AtomicBool::store(&WORLD_HAS_STOPPED, true, Ordering::SeqCst);
             }
@@ -106,13 +105,14 @@ impl Collection<JuliaVM> for VMCollection {
         }
 
         info!("GC Done!");
+        if AtomicBool::load(&USER_TRIGGERED_GC, Ordering::SeqCst) {
+            AtomicBool::store(&USER_TRIGGERED_GC, false, Ordering::SeqCst);
+        }
 
         unsafe { ((*UPCALLS).set_gc_final_state)(old_state) };
 
-        if !AtomicBool::load(&FINALIZERS_RUNNING, Ordering::SeqCst) {
-            info!("Finalizing objects!");
-            unsafe { ((*UPCALLS).mmtk_jl_run_finalizers)(tls_ptr) };
-        }
+        info!("Finalizing objects!");
+        unsafe { ((*UPCALLS).mmtk_jl_run_finalizers)(tls_ptr) };
 
         unsafe { ((*UPCALLS).set_jl_last_err)(last_err) };
         info!("Finished blocking mutator for GC!");
@@ -157,6 +157,7 @@ pub extern "C" fn mmtk_run_finalizers(at_exit: bool) {
         let mut all_finalizable = memory_manager::get_all_finalizers(&SINGLETON);
 
         {
+            // if the finalizer function triggers GC you don't want the objects to be GC-ed
             let mut fin_roots = FINALIZER_ROOTS.write().unwrap();
 
             for obj in all_finalizable.iter() {
@@ -184,7 +185,21 @@ pub extern "C" fn mmtk_run_finalizers(at_exit: bool) {
             let to_be_finalized = memory_manager::get_finalized_object(&SINGLETON);
 
             match to_be_finalized {
-                Some(obj) => unsafe { ((*UPCALLS).run_finalizer_function)(obj.0, obj.1, obj.2) },
+                Some(obj) => {
+                    // if the finalizer function triggers GC you don't want the object to be GC-ed
+                    {
+                        let mut fin_roots = FINALIZER_ROOTS.write().unwrap();
+                        fin_roots.push(obj);
+                    }
+
+                    unsafe { ((*UPCALLS).run_finalizer_function)(obj.0, obj.1, obj.2) }
+
+                    {
+                        let mut fin_roots = FINALIZER_ROOTS.write().unwrap();
+                        let fin_root = fin_roots.pop();
+                        assert_eq!(to_be_finalized, fin_root);
+                    }
+                }
                 None => break,
             }
         }
