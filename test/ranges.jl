@@ -1716,7 +1716,6 @@ end
     @test_throws BoundsError (false:true)[3]
 end
 
-
 module NonStandardIntegerRangeTest
 
 using Test
