@@ -316,6 +316,9 @@ pairwise_blocksize(f, op) = 1024
 # This combination appears to show a benefit from a larger block size
 pairwise_blocksize(::typeof(abs2), ::typeof(+)) = 4096
 
+# The following operations prefer non-pairwise reduction.
+pairwise_blocksize(_, ::Union{typeof(min),typeof(max)}) = typemax(Int)
+pairwise_blocksize(_, ::Union{typeof(|),typeof(&)}) = typemax(Int)
 
 # handling empty arrays
 _empty_reduce_error() = throw(ArgumentError("reducing over an empty collection is not allowed"))
@@ -815,6 +818,8 @@ function _extrema_rf(x::NTuple{2,T}, y::NTuple{2,T}) where {T<:IEEEFloat}
     z2 = ifelse(anynan, x1-y1, ifelse(signbit(x2-y2), y2, x2))
     z1, z2
 end
+
+pairwise_blocksize(::ExtremaMap, ::typeof(_extrema_rf)) = typemax(Int)
 
 ## findmax, findmin, argmax & argmin
 
