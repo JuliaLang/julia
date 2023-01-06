@@ -84,7 +84,10 @@ const fast_op =
          :sinh => :sinh_fast,
          :sqrt => :sqrt_fast,
          :tan => :tan_fast,
-         :tanh => :tanh_fast)
+         :tanh => :tanh_fast,
+         # reductions
+         :maximum => :maximum_fast,
+         :minimum => :minimum_fast)
 
 const rewrite_op =
     Dict(:+= => :+,
@@ -365,5 +368,12 @@ for f in (:^, :atan, :hypot, :log)
         $f_fast(x::T, y::T) where {T<:Number} = $f(x, y)
     end
 end
+
+# Reductions
+maximum_fast(a; kw...) = Base.reduce(max_fast, a; kw...)
+minimum_fast(a; kw...) = Base.reduce(min_fast, a; kw...)
+
+maximum_fast(f, a; kw...) = Base.mapreduce(f, max_fast, a; kw...)
+minimum_fast(f, a; kw...) = Base.mapreduce(f, min_fast, a; kw...)
 
 end

@@ -207,6 +207,21 @@ end
         @test @fastmath(cis(third)) ≈ cis(third)
     end
 end
+
+@testset "reductions" begin
+    @test @fastmath(maximum([1,2,3])) == 3
+    @test @fastmath(minimum([1,2,3])) == 1
+    @test @fastmath(maximum(abs2, [1,2,3+0im])) == 9
+    @test @fastmath(minimum(sqrt, [1,2,3])) == 1
+    @test @fastmath(maximum(Float32[4 5 6; 7 8 9])) == 9.0f0
+    @test @fastmath(minimum(Float32[4 5 6; 7 8 9])) == 4.0f0
+
+    @test @fastmath(maximum(Float32[4 5 6; 7 8 9]; dims=1)) == Float32[7.0 8.0 9.0]
+    @test @fastmath(minimum(Float32[4 5 6; 7 8 9]; dims=2)) == Float32[4.0; 7.0;;]
+    @test @fastmath(maximum(abs, [4+im -5 6-im; -7 8 -9]; dims=1)) == [7.0 8.0 9.0]
+    @test @fastmath(minimum(cbrt, [4 -5 6; -7 8 -9]; dims=2)) == cbrt.([-5; -9;;])
+end
+
 @testset "issue #10544" begin
     a = fill(1.,2,2)
     b = fill(1.,2,2)
