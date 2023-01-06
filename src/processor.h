@@ -162,6 +162,38 @@ typedef struct {
     jl_image_fptrs_t fptrs;
 } jl_image_t;
 
+typedef struct {
+    uint32_t version;
+    uint32_t nshards;
+    uint32_t nfvars;
+    uint32_t ngvars;
+} jl_image_header_t;
+
+typedef struct {
+    const char *fvar_base;
+    const int32_t *fvar_offsets;
+    const uint32_t *fvar_idxs;
+    uintptr_t *gvar_base;
+    const int32_t *gvar_offsets;
+    const uint32_t *gvar_idxs;
+    const int32_t *clone_slots;
+    const int32_t *clone_offsets;
+    const uint32_t *clone_idxs;
+} jl_image_shard_t;
+
+typedef struct {
+    void *pgcstack_func_slot;
+    void *pgcstack_key_slot;
+    size_t *tls_offset;
+} jl_image_ptls_t;
+
+typedef struct {
+    const jl_image_header_t *header;
+    const jl_image_shard_t *shards; // nshards-length array
+    const jl_image_ptls_t *ptls;
+    const void *target_data;
+} jl_image_pointers_t;
+
 /**
  * Initialize the processor dispatch system with sysimg `hdl` (also initialize the sysimg itself).
  * The dispatch system will find the best implementation to be used in this session.

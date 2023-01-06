@@ -424,7 +424,8 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         //Safe b/c context is locked by params
         GlobalVariable *G = cast<GlobalVariable>(clone.getModuleUnlocked()->getNamedValue(global));
         G->setInitializer(ConstantPointerNull::get(cast<PointerType>(G->getValueType())));
-        G->setLinkage(GlobalVariable::InternalLinkage);
+        G->setLinkage(GlobalValue::ExternalLinkage);
+        G->setVisibility(GlobalValue::HiddenVisibility);
         data->jl_sysimg_gvars.push_back(G);
     }
     CreateNativeGlobals += gvars.size();
@@ -446,9 +447,9 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         //Safe b/c context is locked by params
         for (GlobalObject &G : clone.getModuleUnlocked()->global_objects()) {
             if (!G.isDeclaration()) {
-                G.setLinkage(Function::InternalLinkage);
+                G.setLinkage(GlobalValue::ExternalLinkage);
+                G.setVisibility(GlobalValue::HiddenVisibility);
                 makeSafeName(G);
-                addComdat(&G);
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
                 // Add unwind exception personalities to functions to handle async exceptions
                 if (Function *F = dyn_cast<Function>(&G))
@@ -513,6 +514,63 @@ static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionT
 }
 
 void multiversioning_preannotate(Module &M);
+
+static GlobalVariable *emit_shard_table(Module &M, Type *T_size, Type *T_psize, unsigned threads) {
+    SmallVector<Constant *, 0> tables(sizeof(jl_image_shard_t) / sizeof(void *) * threads);
+    for (unsigned i = 0; i < threads; i++) {
+        auto suffix = "_" + std::to_string(i);
+        auto create_gv = [&](StringRef name, bool constant) {
+            auto gv = new GlobalVariable(M, T_size, constant,
+                                         GlobalValue::ExternalLinkage, nullptr, name + suffix);
+            gv->setVisibility(GlobalValue::HiddenVisibility);
+            return gv;
+        };
+        auto table = tables.data() + i * sizeof(jl_image_shard_t) / sizeof(void *);
+        table[offsetof(jl_image_shard_t, fvar_base) / sizeof(void*)] = create_gv("jl_fvar_base", false);
+        table[offsetof(jl_image_shard_t, fvar_offsets) / sizeof(void*)] = create_gv("jl_fvar_offsets", true);
+        table[offsetof(jl_image_shard_t, fvar_idxs) / sizeof(void*)] = create_gv("jl_fvar_idxs", true);
+        table[offsetof(jl_image_shard_t, gvar_base) / sizeof(void*)] = create_gv("jl_gvar_base", false);
+        table[offsetof(jl_image_shard_t, gvar_offsets) / sizeof(void*)] = create_gv("jl_gvar_offsets", true);
+        table[offsetof(jl_image_shard_t, gvar_idxs) / sizeof(void*)] = create_gv("jl_gvar_idxs", true);
+        table[offsetof(jl_image_shard_t, clone_slots) / sizeof(void*)] = create_gv("jl_clone_slots", true);
+        table[offsetof(jl_image_shard_t, clone_offsets) / sizeof(void*)] = create_gv("jl_clone_offsets", true);
+        table[offsetof(jl_image_shard_t, clone_idxs) / sizeof(void*)] = create_gv("jl_clone_idxs", true);
+    }
+    auto tables_arr = ConstantArray::get(ArrayType::get(T_psize, tables.size()), tables);
+    auto tables_gv = new GlobalVariable(M, tables_arr->getType(), false,
+                                        GlobalValue::ExternalLinkage, tables_arr, "jl_shard_tables");
+    tables_gv->setVisibility(GlobalValue::HiddenVisibility);
+    return tables_gv;
+}
+
+static GlobalVariable *emit_ptls_table(Module &M, Type *T_size, Type *T_psize) {
+    std::array<Constant *, 3> ptls_table{
+        new GlobalVariable(M, T_size, false, GlobalValue::ExternalLinkage, Constant::getNullValue(T_size), "jl_pgcstack_func_slot"),
+        new GlobalVariable(M, T_size, false, GlobalValue::ExternalLinkage, Constant::getNullValue(T_size), "jl_pgcstack_key_slot"),
+        new GlobalVariable(M, T_size, false, GlobalValue::ExternalLinkage, Constant::getNullValue(T_size), "jl_tls_offset"),
+    };
+    for (auto &gv : ptls_table)
+        cast<GlobalVariable>(gv)->setVisibility(GlobalValue::HiddenVisibility);
+    auto ptls_table_arr = ConstantArray::get(ArrayType::get(T_psize, ptls_table.size()), ptls_table);
+    auto ptls_table_gv = new GlobalVariable(M, ptls_table_arr->getType(), false,
+                                            GlobalValue::ExternalLinkage, ptls_table_arr, "jl_ptls_table");
+    ptls_table_gv->setVisibility(GlobalValue::HiddenVisibility);
+    return ptls_table_gv;
+}
+
+static GlobalVariable *emit_image_header(Module &M, unsigned threads, unsigned nfvars, unsigned ngvars) {
+    constexpr uint32_t version = 1;
+    std::array<uint32_t, 4> header{
+        version,
+        threads,
+        nfvars,
+        ngvars,
+    };
+    auto header_arr = ConstantDataArray::get(M.getContext(), header);
+    auto header_gv = new GlobalVariable(M, header_arr->getType(), false,
+                                        GlobalValue::InternalLinkage, header_arr, "jl_image_header");
+    return header_gv;
+}
 
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
@@ -588,6 +646,10 @@ void jl_dump_native_impl(void *native_code,
 
     start = jl_hrtime();
 
+    unsigned threads = 1;
+    unsigned nfvars = 0;
+    unsigned ngvars = 0;
+
     // add metadata information
     if (imaging_mode) {
         multiversioning_preannotate(*dataM);
@@ -601,8 +663,27 @@ void jl_dump_native_impl(void *native_code,
                 }
             }
         }
-        emit_offset_table(*dataM, data->jl_sysimg_gvars, "jl_sysimg_gvars", T_psize);
-        emit_offset_table(*dataM, data->jl_sysimg_fvars, "jl_sysimg_fvars", T_psize);
+        nfvars = data->jl_sysimg_fvars.size();
+        ngvars = data->jl_sysimg_gvars.size();
+        emit_offset_table(*dataM, data->jl_sysimg_gvars, "jl_gvars", T_psize);
+        emit_offset_table(*dataM, data->jl_sysimg_fvars, "jl_fvars", T_psize);
+        std::vector<uint32_t> idxs;
+        idxs.resize(data->jl_sysimg_gvars.size());
+        std::iota(idxs.begin(), idxs.end(), 0);
+        auto gidxs = ConstantDataArray::get(Context, idxs);
+        auto gidxs_var = new GlobalVariable(*dataM, gidxs->getType(), true,
+                                            GlobalVariable::ExternalLinkage,
+                                            gidxs, "jl_gvar_idxs");
+        gidxs_var->setVisibility(GlobalValue::HiddenVisibility);
+        idxs.clear();
+        idxs.resize(data->jl_sysimg_fvars.size());
+        std::iota(idxs.begin(), idxs.end(), 0);
+        auto fidxs = ConstantDataArray::get(Context, idxs);
+        auto fidxs_var = new GlobalVariable(*dataM, fidxs->getType(), true,
+                                            GlobalVariable::ExternalLinkage,
+                                            fidxs, "jl_fvar_idxs");
+        fidxs_var->setVisibility(GlobalValue::HiddenVisibility);
+        dataM->addModuleFlag(Module::Error, "julia.mv.suffix", MDString::get(Context, "_0"));
 
         // reflect the address of the jl_RTLD_DEFAULT_handle variable
         // back to the caller, so that we can check for consistency issues
@@ -789,10 +870,23 @@ void jl_dump_native_impl(void *native_code,
             data.insert(data.end(), specdata.begin(), specdata.end());
         }
         auto value = ConstantDataArray::get(Context, data);
-        addComdat(new GlobalVariable(*sysimageM, value->getType(), true,
-                                      GlobalVariable::ExternalLinkage,
-                                      value, "jl_dispatch_target_ids"));
-
+        auto target_ids = new GlobalVariable(*sysimageM, value->getType(), true,
+                                      GlobalVariable::InternalLinkage,
+                                      value, "jl_dispatch_target_ids");
+        auto shards = emit_shard_table(*sysimageM, T_size, T_psize, threads);
+        auto ptls = emit_ptls_table(*sysimageM, T_size, T_psize);
+        auto header = emit_image_header(*sysimageM, threads, nfvars, ngvars);
+        auto AT = ArrayType::get(T_psize, 4);
+        auto pointers = new GlobalVariable(*sysimageM, AT, false,
+                                           GlobalVariable::ExternalLinkage,
+                                           ConstantArray::get(AT, {
+                                                ConstantExpr::getBitCast(header, T_psize),
+                                                ConstantExpr::getBitCast(shards, T_psize),
+                                                ConstantExpr::getBitCast(ptls, T_psize),
+                                                ConstantExpr::getBitCast(target_ids, T_psize)
+                                           }),
+                                           "jl_image_pointers");
+        addComdat(pointers);
         if (s) {
             write_int32(s, data.size());
             ios_write(s, (const char *)data.data(), data.size());

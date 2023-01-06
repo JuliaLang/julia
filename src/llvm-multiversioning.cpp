@@ -516,8 +516,8 @@ static inline std::vector<T*> consume_gv(Module &M, const char *name, bool allow
 CloneCtx::CloneCtx(Module &M, bool allow_bad_fvars)
     : tbaa_const(tbaa_make_child_with_context(M.getContext(), "jtbaa_const", nullptr, true).first),
       specs(jl_get_llvm_clone_targets()),
-      fvars(consume_gv<Function>(M, "jl_sysimg_fvars", allow_bad_fvars)),
-      gvars(consume_gv<Constant>(M, "jl_sysimg_gvars", false)),
+      fvars(consume_gv<Function>(M, "jl_fvars", allow_bad_fvars)),
+      gvars(consume_gv<Constant>(M, "jl_gvars", false)),
       M(M),
       allow_bad_fvars(allow_bad_fvars)
 {
@@ -547,7 +547,7 @@ CloneCtx::CloneCtx(Module &M, bool allow_bad_fvars)
     for (uint32_t i = 0; i < nfvars; i++)
         func_ids[fvars[i]] = i + 1;
     for (auto &F: M) {
-        if (F.empty())
+        if (F.empty() && !F.hasFnAttribute("julia.mv.clones"))
             continue;
         orig_funcs.push_back(&F);
     }
@@ -898,19 +898,6 @@ void CloneCtx::fix_inst_uses()
     }
 }
 
-template<typename T>
-static inline T *add_comdat(T *G)
-{
-#if defined(_OS_WINDOWS_)
-    // add __declspec(dllexport) to everything marked for export
-    if (G->getLinkage() == GlobalValue::ExternalLinkage)
-        G->setDLLStorageClass(GlobalValue::DLLExportStorageClass);
-    else
-        G->setDLLStorageClass(GlobalValue::DefaultStorageClass);
-#endif
-    return G;
-}
-
 static Constant *get_ptrdiff32(Constant *ptr, Constant *base)
 {
     if (ptr->getType()->isPointerTy())
@@ -920,7 +907,7 @@ static Constant *get_ptrdiff32(Constant *ptr, Constant *base)
 }
 
 template<typename T>
-static Constant *emit_offset_table(Module &M, const std::vector<T*> &vars, StringRef name)
+static Constant *emit_offset_table(Module &M, const std::vector<T*> &vars, StringRef name, StringRef suffix)
 {
     auto T_int32 = Type::getInt32Ty(M.getContext());
     auto T_size = getSizeTy(M.getContext());
@@ -928,11 +915,14 @@ static Constant *emit_offset_table(Module &M, const std::vector<T*> &vars, Strin
     Constant *base = nullptr;
     if (nvars > 0) {
         base = ConstantExpr::getBitCast(vars[0], T_size->getPointerTo());
-        add_comdat(GlobalAlias::create(T_size, 0, GlobalVariable::ExternalLinkage,
-                                       name + "_base",
-                                       base, &M));
+        auto ga = GlobalAlias::create(T_size, 0, GlobalVariable::ExternalLinkage,
+                                       name + "_base" + suffix,
+                                       base, &M);
+        ga->setVisibility(GlobalValue::HiddenVisibility);
     } else {
-        base = add_comdat(new GlobalVariable(M, T_size, true, GlobalValue::ExternalLinkage, Constant::getNullValue(T_size), name + "_base"));
+        auto gv = new GlobalVariable(M, T_size, true, GlobalValue::ExternalLinkage, Constant::getNullValue(T_size), name + "_base" + suffix);
+        gv->setVisibility(GlobalValue::HiddenVisibility);
+        base = gv;
     }
     auto vbase = ConstantExpr::getPtrToInt(base, T_size);
     std::vector<Constant*> offsets(nvars + 1);
@@ -943,10 +933,11 @@ static Constant *emit_offset_table(Module &M, const std::vector<T*> &vars, Strin
             offsets[i + 1] = get_ptrdiff32(vars[i], vbase);
     }
     ArrayType *vars_type = ArrayType::get(T_int32, nvars + 1);
-    add_comdat(new GlobalVariable(M, vars_type, true,
+    auto gv = new GlobalVariable(M, vars_type, true,
                                   GlobalVariable::ExternalLinkage,
                                   ConstantArray::get(vars_type, offsets),
-                                  name + "_offsets"));
+                                  name + "_offsets" + suffix);
+    gv->setVisibility(GlobalValue::HiddenVisibility);
     return vbase;
 }
 
@@ -958,9 +949,17 @@ void CloneCtx::emit_metadata()
         return;
     }
 
+    StringRef suffix;
+    if (auto suffix_md = M.getModuleFlag("julia.mv.suffix")) {
+        suffix = cast<MDString>(suffix_md)->getString();
+    }
+
     // Store back the information about exported functions.
-    auto fbase = emit_offset_table(M, fvars, "jl_sysimg_fvars");
-    auto gbase = emit_offset_table(M, gvars, "jl_sysimg_gvars");
+    auto fbase = emit_offset_table(M, fvars, "jl_fvar", suffix);
+    auto gbase = emit_offset_table(M, gvars, "jl_gvar", suffix);
+
+    M.getGlobalVariable("jl_fvar_idxs")->setName("jl_fvar_idxs" + suffix);
+    M.getGlobalVariable("jl_gvar_idxs")->setName("jl_gvar_idxs" + suffix);
 
     uint32_t ntargets = specs.size();
 
@@ -996,9 +995,10 @@ void CloneCtx::emit_metadata()
         }
         values[0] = ConstantInt::get(T_int32, values.size() / 2);
         ArrayType *vars_type = ArrayType::get(T_int32, values.size());
-        add_comdat(new GlobalVariable(M, vars_type, true, GlobalVariable::ExternalLinkage,
+        auto gv = new GlobalVariable(M, vars_type, true, GlobalVariable::ExternalLinkage,
                                       ConstantArray::get(vars_type, values),
-                                      "jl_dispatch_reloc_slots"));
+                                      "jl_clone_slots" + suffix);
+        gv->setVisibility(GlobalValue::HiddenVisibility);
     }
 
     // Generate `jl_dispatch_fvars_idxs` and `jl_dispatch_fvars_offsets`
@@ -1046,14 +1046,16 @@ void CloneCtx::emit_metadata()
             idxs[len_idx] = count;
         }
         auto idxval = ConstantDataArray::get(M.getContext(), idxs);
-        add_comdat(new GlobalVariable(M, idxval->getType(), true,
+        auto gv1 = new GlobalVariable(M, idxval->getType(), true,
                                       GlobalVariable::ExternalLinkage,
-                                      idxval, "jl_dispatch_fvars_idxs"));
+                                      idxval, "jl_clone_idxs" + suffix);
+        gv1->setVisibility(GlobalValue::HiddenVisibility);
         ArrayType *offsets_type = ArrayType::get(Type::getInt32Ty(M.getContext()), offsets.size());
-        add_comdat(new GlobalVariable(M, offsets_type, true,
+        auto gv2 = new GlobalVariable(M, offsets_type, true,
                                       GlobalVariable::ExternalLinkage,
                                       ConstantArray::get(offsets_type, offsets),
-                                      "jl_dispatch_fvars_offsets"));
+                                      "jl_clone_offsets" + suffix);
+        gv2->setVisibility(GlobalValue::HiddenVisibility);
     }
 }
 
@@ -1070,8 +1072,8 @@ static bool runMultiVersioning(Module &M, bool allow_bad_fvars)
     if (M.getName() == "sysimage")
         return false;
 
-    GlobalVariable *fvars = M.getGlobalVariable("jl_sysimg_fvars");
-    GlobalVariable *gvars = M.getGlobalVariable("jl_sysimg_gvars");
+    GlobalVariable *fvars = M.getGlobalVariable("jl_fvars");
+    GlobalVariable *gvars = M.getGlobalVariable("jl_gvars");
     if (allow_bad_fvars && (!fvars || !fvars->hasInitializer() || !isa<ConstantArray>(fvars->getInitializer()) ||
                             !gvars || !gvars->hasInitializer() || !isa<ConstantArray>(gvars->getInitializer())))
         return false;

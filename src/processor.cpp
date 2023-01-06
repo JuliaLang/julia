@@ -21,6 +21,8 @@
 #include <dlfcn.h>
 #endif
 
+#include <iostream>
+
 // CPU target string is a list of strings separated by `;` each string starts with a CPU
 // or architecture name and followed by an optional list of features separated by `,`.
 // A "generic" or empty CPU name means the basic required feature set of the target ISA
@@ -629,46 +631,41 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
 {
     jl_image_t res{};
 
+    const jl_image_pointers_t *pointers;
+    jl_dlsym(hdl, "jl_image_pointers", (void**)&pointers, 1);
+
+    const void *ids = pointers->target_data;
+    uint32_t target_idx = callback(ids);
+
+    std::cout << "Finished callback\n";
+
+    auto shard = pointers->shards[0];
+
+    std::cout << "Shard access is ok\n";
+
     // .data base
-    char *data_base;
-    jl_dlsym(hdl, "jl_sysimg_gvars_base", (void**)&data_base, 1);
-
-    {
-        void *pgcstack_func_slot;
-        if (jl_dlsym(hdl, "jl_pgcstack_func_slot", &pgcstack_func_slot, 0)) {
-            void *pgcstack_key_slot;
-            jl_dlsym(hdl, "jl_pgcstack_key_slot", &pgcstack_key_slot, 1);
-            jl_pgcstack_getkey((jl_get_pgcstack_func**)pgcstack_func_slot, (jl_pgcstack_key_t*)pgcstack_key_slot);
-
-            size_t *tls_offset_idx;
-            jl_dlsym(hdl, "jl_tls_offset", (void **)&tls_offset_idx, 1);
-            *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
-        }
-    }
+    char *data_base = (char *)shard.gvar_base;
 
     // .text base
-    char *text_base;
-    jl_dlsym(hdl, "jl_sysimg_fvars_base", (void**)&text_base, 1);
+    const char *text_base = shard.fvar_base;
 
-    const int32_t *offsets;
-    jl_dlsym(hdl, "jl_sysimg_fvars_offsets", (void**)&offsets, 1);
+    const int32_t *offsets = shard.fvar_offsets;
     uint32_t nfunc = offsets[0];
     offsets++;
 
-    const void *ids;
-    jl_dlsym(hdl, "jl_dispatch_target_ids", (void**)&ids, 1);
-    uint32_t target_idx = callback(ids);
+    std::cout << "Initial offsets\n";
 
-    const int32_t *reloc_slots;
-    jl_dlsym(hdl, "jl_dispatch_reloc_slots", (void **)&reloc_slots, 1);
+    const int32_t *reloc_slots = shard.clone_slots;
+    std::cout << reloc_slots << "\n";
     const uint32_t nreloc = reloc_slots[0];
     reloc_slots += 1;
-    const uint32_t *clone_idxs;
-    const int32_t *clone_offsets;
-    jl_dlsym(hdl, "jl_dispatch_fvars_idxs", (void**)&clone_idxs, 1);
-    jl_dlsym(hdl, "jl_dispatch_fvars_offsets", (void**)&clone_offsets, 1);
+    std::cout << "Set reloc_slots\n";
+    const uint32_t *clone_idxs = shard.clone_idxs;
+    const int32_t *clone_offsets = shard.clone_offsets;
     uint32_t tag_len = clone_idxs[0];
     clone_idxs += 1;
+
+    std::cout << "Set clone_idxs\n";
 
     assert(tag_len & jl_sysimg_tag_mask);
     std::vector<const int32_t*> base_offsets = {offsets};
@@ -687,6 +684,8 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
         tag_len = clone_idxs[-1];
         base_offsets.push_back(tag_len & jl_sysimg_tag_mask ? clone_offsets : nullptr);
     }
+
+    std::cout << "Set offsets\n";
 
     bool clone_all = (tag_len & jl_sysimg_tag_mask) != 0;
     // Fill in return value
@@ -741,23 +740,36 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
         (void)found;
     }
 
+    std::cout << "Finished relocation\n";
+
     res.fptrs.base = text_base;
     res.fptrs.offsets = offsets;
     res.gvars_base = (uintptr_t *)data_base;
-    jl_dlsym(hdl, "jl_sysimg_gvars_offsets", (void **)&res.gvars_offsets, 1);
+    res.gvars_offsets = shard.gvar_offsets;
     res.gvars_offsets += 1;
 
 #ifdef _OS_WINDOWS_
     res.base = (intptr_t)hdl;
 #else
     Dl_info dlinfo;
-    if (dladdr((void*)res.gvars_base, &dlinfo) != 0) {
+    if (dladdr((void*)pointers, &dlinfo) != 0) {
         res.base = (intptr_t)dlinfo.dli_fbase;
     }
     else {
         res.base = 0;
     }
 #endif
+
+    std::cout << "Starting ptls\n";
+
+    {
+        void *pgcstack_func_slot = pointers->ptls->pgcstack_func_slot;
+        void *pgcstack_key_slot = pointers->ptls->pgcstack_key_slot;
+        jl_pgcstack_getkey((jl_get_pgcstack_func**)pgcstack_func_slot, (jl_pgcstack_key_t*)pgcstack_key_slot);
+
+        size_t *tls_offset_idx = pointers->ptls->tls_offset;
+        *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
+    }
 
     return res;
 }
