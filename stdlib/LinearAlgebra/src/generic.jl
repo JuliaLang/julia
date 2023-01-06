@@ -947,7 +947,7 @@ dot(x::AbstractVector, transA::Transpose{<:Real}, y::AbstractVector) = adjoint(d
     rank(A::AbstractMatrix; atol::Real=0, rtol::Real=atol>0 ? 0 : n*ϵ)
     rank(A::AbstractMatrix, rtol::Real)
 
-Compute the numerical rank of a matrix by counting how many outputs of 
+Compute the numerical rank of a matrix by counting how many outputs of
 `svdvals(A)` are greater than `max(atol, rtol*σ₁)` where `σ₁` is `A`'s largest
 calculated singular value. `atol` and `rtol` are the absolute and relative
 tolerances, respectively. The default relative tolerance is `n*ϵ`, where `n`
