@@ -252,6 +252,8 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
 # certain `op` (e.g. `min` and `max`) may have their own specialized versions.
 @noinline function mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted,
                                   ifirst::Integer, ilast::Integer, blksize::Int)
+    Eltype = _mapped_eltype(f, A)
+    pre, op_fast, post = _makefast_reduction(op, Eltype)
     if ifirst == ilast
         @inbounds a1 = A[ifirst]
         return mapreduce_first(f, op, a1)
@@ -259,12 +261,12 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
         # sequential portion
         @inbounds a1 = A[ifirst]
         @inbounds a2 = A[ifirst+1]
-        v = op(f(a1), f(a2))
+        v = op_fast(pre(f(a1)), pre(f(a2)))
         @simd for i = ifirst + 2 : ilast
             @inbounds ai = A[i]
-            v = op(v, f(ai))
+            v = op_fast(v, pre(f(ai)))
         end
-        return v
+        return post(v)
     else
         # pairwise portion
         imid = ifirst + (ilast - ifirst) >> 1
@@ -423,10 +425,7 @@ The default is `reduce_first(op, f(x))`.
 """
 mapreduce_first(f, op, x) = reduce_first(op, f(x))
 
-function _mapreduce(f, op, A::AbstractArrayOrBroadcasted)
-    pre_f, op_fast, post = _makefast_mapreduction(f, op, A) # find an accelerator, if available
-    return post(_mapreduce(pre_f, op_fast, IndexStyle(A), A))
-end
+_mapreduce(f, op, A::AbstractArrayOrBroadcasted) = _mapreduce(f, op, IndexStyle(A), A)
 
 function _mapreduce(f, op, ::IndexLinear, A::AbstractArrayOrBroadcasted)
     inds = LinearIndices(A)
@@ -1325,37 +1324,13 @@ function _simple_count(::typeof(identity), x::Array{Bool}, init::T=0) where {T}
     return n
 end
 
-"""
-    Base._FastMapReduce(transform, mapfun)
-
-Essentially a [`ComposedFunction`](@ref) but with limited functionality and
-a few specialized methods so that it can initialize collections properly.
-
-Used with `mapreduce` in some situations.
-"""
-struct _FastMapReduce{A,B}
-    trans::A
-    f::B
-end
-# (c::_FastMapReduce)(x...; kw...) = c.trans(c.f(x...; kw...)) # behave like trans ∘ f
-(c::_FastMapReduce)(x) = c.trans(c.f(x)) # behave like trans ∘ f
-mapreduce_empty(c::_FastMapReduce, op, T) = c.trans(mapreduce_empty(c.f, op, T))
-mapreduce_first(c::_FastMapReduce, op, x) = c.trans(mapreduce_first(c.f, op, x))
-
-"""
-    Base._makefast_mapreduction(f, op, A) -> (pre_f, op_fast, post)
-
-Wrapper to call `Base._makefast_reduction(op, T)`, where `T` is the return type of
-`f(::eltype(A))`, and compose the resulting `pre`-function with `f` to make `pre_f`.
-"""
-function _makefast_mapreduction(f, op, A)
+function _mapped_eltype(f, A)
     elT = eltype(A) # try this
-    if elT == Any
+    if elT === Any
         elT = @default_eltype(A) # try again
     end
     fT = _return_type(f, Tuple{elT}) # determine type of f(A[i]), if possible
-    pre, op_fast, post = _makefast_reduction(op, fT) # find an accelerator, if available
-    return _FastMapReduce(pre, f), op_fast, post
+    return isconcretetype(fT) ? fT : Any # always widen this to `Any` if non-concrete
 end
 
 """

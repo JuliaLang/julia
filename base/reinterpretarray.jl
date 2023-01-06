@@ -757,23 +757,25 @@ end
 
 @noinline function mapreduce_impl(f::F, op::OP, A::AbstractArrayOrBroadcasted,
                                   ifirst::SCI, ilast::SCI, blksize::Int) where {F,OP,SCI<:SCartesianIndex2{K}} where K
+    Eltype = _mapped_eltype(f, A)
+    pre, op_fast, post = _makefast_reduction(op, Eltype)
     if ilast.j - ifirst.j < blksize
         # sequential portion
         @inbounds a1 = A[ifirst]
         @inbounds a2 = A[SCI(2,ifirst.j)]
-        v = op(f(a1), f(a2))
+        v = op_fast(pre(f(a1)), pre(f(a2)))
         @simd for i = ifirst.i + 2 : K
             @inbounds ai = A[SCI(i,ifirst.j)]
-            v = op(v, f(ai))
+            v = op_fast(v, pre(f(ai)))
         end
         # Remaining columns
         for j = ifirst.j+1 : ilast.j
             @simd for i = 1:K
                 @inbounds ai = A[SCI(i,j)]
-                v = op(v, f(ai))
+                v = op_fast(v, pre(f(ai)))
             end
         end
-        return v
+        return post(v)
     else
         # pairwise portion
         jmid = ifirst.j + (ilast.j - ifirst.j) >> 1
