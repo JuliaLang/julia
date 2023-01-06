@@ -298,7 +298,8 @@ function _isvalid_utf8(bytes::Vector{UInt8})
     return (final_state & UInt64(63)) == _UTF8_DFA_ACCEPT
 end
 
-_isvalid_utf8(s::Union{String,FastContiguousSubArray{UInt8,1,Vector{UInt8}}}) = _isvalid_utf8(unsafe_wrap(Vector{UInt8}, s))
+_isvalid_utf8(s::Union{String,FastContiguousSubArray{UInt8,1,Vector{UInt8}}}) =
+    GC.@preserve s _isvalid_utf8(unsafe_wrap(Vector{UInt8}, s))
 
 # Classifcations of string
     # 0: neither valid ASCII nor UTF-8
@@ -306,7 +307,7 @@ _isvalid_utf8(s::Union{String,FastContiguousSubArray{UInt8,1,Vector{UInt8}}}) = 
     # 2: valid UTF-8
 function byte_string_classify(s::Union{String,FastContiguousSubArray{UInt8,1,Vector{UInt8}}})
     bytes = unsafe_wrap(Vector{UInt8}, s)
-    byte_string_classify(bytes, kwargs...)
+    GC.@preserve s byte_string_classify(unsafe_wrap(Vector{UInt8}, s))
 end
 
 function byte_string_classify(bytes::Vector{UInt8})
@@ -316,8 +317,7 @@ function byte_string_classify(bytes::Vector{UInt8})
 end
 
 function isvalid(::Type{String}, s::Union{FastContiguousSubArray{UInt8,1,Vector{UInt8}},String})
-    bytes = unsafe_wrap(Vector{UInt8}, s)
-    isvalid(String,bytes)
+    GC.@preserve s isvalid(String,unsafe_wrap(Vector{UInt8}, s))
 end
 isvalid(::Type{String}, bytes::Vector{UInt8}) = @inline _isvalid_utf8(bytes)
 
