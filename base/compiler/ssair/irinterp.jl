@@ -104,7 +104,7 @@ struct IRInterpretationState
     lazydomtree::LazyDomtree
     function IRInterpretationState(interp::AbstractInterpreter,
         ir::IRCode, mi::MethodInstance, world::UInt, argtypes::Vector{Any})
-        argtypes = va_process_argtypes(argtypes, mi)
+        argtypes = va_process_argtypes(typeinf_lattice(interp), argtypes, mi)
         for i = 1:length(argtypes)
             argtypes[i] = widenslotwrapper(argtypes[i])
         end

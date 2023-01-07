@@ -927,18 +927,18 @@ struct ConditionalArgtypes <: ForwardableArgtypes
 end
 
 """
-    matching_cache_argtypes(linfo::MethodInstance, argtypes::ConditionalArgtypes)
+    matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance, argtypes::ConditionalArgtypes)
 
 The implementation is able to forward `Conditional` of `argtypes`,
 as well as the other general extended lattice inforamtion.
 """
-function matching_cache_argtypes(linfo::MethodInstance, argtypes::ConditionalArgtypes)
+function matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance, argtypes::ConditionalArgtypes)
     (; arginfo, sv) = argtypes
     (; fargs, argtypes) = arginfo
     given_argtypes = Vector{Any}(undef, length(argtypes))
     def = linfo.def::Method
     nargs = Int(def.nargs)
-    cache_argtypes, overridden_by_const = matching_cache_argtypes(linfo)
+    cache_argtypes, overridden_by_const = matching_cache_argtypes(𝕃, linfo)
     local condargs = nothing
     for i in 1:length(argtypes)
         argtype = argtypes[i]
@@ -969,7 +969,7 @@ function matching_cache_argtypes(linfo::MethodInstance, argtypes::ConditionalArg
     end
     if condargs !== nothing
         given_argtypes = let condargs=condargs
-            va_process_argtypes(given_argtypes, linfo) do isva_given_argtypes::Vector{Any}, last::Int
+            va_process_argtypes(𝕃, given_argtypes, linfo) do isva_given_argtypes::Vector{Any}, last::Int
                 # invalidate `Conditional` imposed on varargs
                 for (slotid, i) in condargs
                     if slotid ≥ last && (1 ≤ i ≤ length(isva_given_argtypes)) # `Conditional` is already widened to vararg-tuple otherwise
@@ -979,9 +979,9 @@ function matching_cache_argtypes(linfo::MethodInstance, argtypes::ConditionalArg
             end
         end
     else
-        given_argtypes = va_process_argtypes(given_argtypes, linfo)
+        given_argtypes = va_process_argtypes(𝕃, given_argtypes, linfo)
     end
-    return pick_const_args!(cache_argtypes, overridden_by_const, given_argtypes)
+    return pick_const_args!(𝕃, cache_argtypes, overridden_by_const, given_argtypes)
 end
 
 function abstract_call_method_with_const_args(interp::AbstractInterpreter,
