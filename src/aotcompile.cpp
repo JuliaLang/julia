@@ -568,34 +568,27 @@ struct Partition {
 static void get_fvars_gvars(Module &M, DenseMap<GlobalValue *, unsigned> &fvars, DenseMap<GlobalValue *, unsigned> &gvars) {
     auto fvars_gv = M.getGlobalVariable("jl_fvars");
     auto gvars_gv = M.getGlobalVariable("jl_gvars");
-    assert(fvars_gv);
-    assert(gvars_gv);
-    auto fvars_init = cast<ConstantArray>(fvars_gv->getInitializer());
-    auto gvars_init = cast<ConstantArray>(gvars_gv->getInitializer());
-    std::string suffix;
-    if (auto md = M.getModuleFlag("julia.mv.suffix")) {
-        suffix = cast<MDString>(md)->getString().str();
-    }
     auto fvars_idxs = M.getGlobalVariable("jl_fvar_idxs");
     auto gvars_idxs = M.getGlobalVariable("jl_gvar_idxs");
+    assert(fvars_gv);
+    assert(gvars_gv);
     assert(fvars_idxs);
     assert(gvars_idxs);
-    auto fvars_idxs_init = cast<ConstantDataArray>(fvars_idxs->getInitializer());
-    auto gvars_idxs_init = cast<ConstantDataArray>(gvars_idxs->getInitializer());
+    auto fvars_init = cast<ConstantArray>(fvars_gv->getInitializer());
+    auto gvars_init = cast<ConstantArray>(gvars_gv->getInitializer());
     for (unsigned i = 0; i < fvars_init->getNumOperands(); ++i) {
         auto gv = cast<GlobalValue>(fvars_init->getOperand(i)->stripPointerCasts());
-        auto idx = fvars_idxs_init->getElementAsInteger(i);
-        fvars[gv] = idx;
+        fvars[gv] = i;
     }
     for (unsigned i = 0; i < gvars_init->getNumOperands(); ++i) {
         auto gv = cast<GlobalValue>(gvars_init->getOperand(i)->stripPointerCasts());
-        auto idx = gvars_idxs_init->getElementAsInteger(i);
-        gvars[gv] = idx;
+        gvars[gv] = i;
     }
     fvars_gv->eraseFromParent();
     gvars_gv->eraseFromParent();
     fvars_idxs->eraseFromParent();
     gvars_idxs->eraseFromParent();
+    dbgs() << "Finished getting fvars/gvars\n";
 }
 
 static size_t getFunctionWeight(const Function &F)
