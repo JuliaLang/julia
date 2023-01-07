@@ -3150,6 +3150,18 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                     return res;
                 }
                 record_var_occurrence(yy, e, param);
+                if (yub == ylb && jl_is_typevar(yub)) {
+                    // We always set inner var equal to outer.
+                    if (!yy || yy->offset == 0)
+                        return intersect(x, yub, e, param);
+                    // try to propagate the y's offset to yub.
+                    jl_varbinding_t *tvb = lookup(e, (jl_tvar_t*)yub);
+                    assert(tvb && tvb->offset == 0);
+                    tvb->offset = yy->offset;
+                    jl_value_t *res = intersect(x, yub, e, param);
+                    tvb->offset = 0;
+                    return res;
+                }
                 if (!jl_is_type(ylb) && !jl_is_typevar(ylb)) {
                     if (xx)
                         return set_var_to_const(xx, ylb, yy);
