@@ -429,12 +429,12 @@ julia> thisind("α", 3)
 
 julia> thisind("α", 4)
 ERROR: BoundsError: attempt to access 2-codeunit String at index [4]
-Valid indices are between 1 and 1.
+Valid indices are 1.
 [...]
 
 julia> thisind("α", -1)
 ERROR: BoundsError: attempt to access 2-codeunit String at index [-1]
-Valid indices are between 1 and 1.
+Valid indices are 1.
 [...]
 ```
 """
@@ -485,7 +485,7 @@ julia> prevind("α", 1)
 
 julia> prevind("α", 0)
 ERROR: BoundsError: attempt to access 2-codeunit String at index [0]
-Valid indices are between 1 and 1.
+Valid indices are 1.
 [...]
 
 julia> prevind("α", 2, 2)
@@ -545,7 +545,7 @@ julia> nextind("α", 1)
 
 julia> nextind("α", 3)
 ERROR: BoundsError: attempt to access 2-codeunit String at index [3]
-Valid indices are between 1 and 1.
+Valid indices are 1.
 [...]
 
 julia> nextind("α", 0, 2)

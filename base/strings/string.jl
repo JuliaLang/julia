@@ -27,13 +27,21 @@ function Base.showerror(io::IO, exc::StringIndexError)
     end
 end
 
-describe_valid_indices(io::IO, a::AbstractString, i=nothing) = print(io,
-                                                                     "\nValid indices are between ",
-                                                                     firstindex(a),
-                                                                     " and ",
-                                                                     thisind(a, ncodeunits(a)),
-                                                                     '.'
-                                                                    )
+function describe_valid_indices(io::IO, a::AbstractString, i=nothing)
+    firstind = firstindex(a)
+    lastind = thisind(a, ncodeunits(a))
+    if firstind == lastind
+        print(io, "\nValid indices are ", firstind, '.')
+        return
+    end
+    print(io,
+          "\nValid indices are between ",
+          firstindex(a),
+          " and ",
+          thisind(a, ncodeunits(a)),
+          '.'
+         )
+end
 
 const ByteArray = Union{CodeUnits{UInt8,String}, Vector{UInt8},Vector{Int8}, FastContiguousSubArray{UInt8,1,CodeUnits{UInt8,String}}, FastContiguousSubArray{UInt8,1,Vector{UInt8}}, FastContiguousSubArray{Int8,1,Vector{Int8}}}
 
