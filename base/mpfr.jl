@@ -17,7 +17,7 @@ import
         cbrt, typemax, typemin, unsafe_trunc, floatmin, floatmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
         isone, big, _string_n, decompose, minmax,
-        sinpi, cospi, sind, cosd, tand, asind, acosd, atand
+        sinpi, cospi, sincospi, sind, cosd, tand, asind, acosd, atand
 
 import ..Rounding: rounding_raw, setrounding_raw
 
@@ -792,6 +792,7 @@ for f in (:sin, :cos, :tan, :sec, :csc, :acos, :asin, :atan, :acosh, :asinh, :at
         end
     end
 end
+sincospi(x::BigFloat) = (sinpi(x), cospi(x))
 
 function atan(y::BigFloat, x::BigFloat)
     z = BigFloat()
