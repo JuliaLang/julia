@@ -2505,6 +2505,30 @@ function check_clone_targets(clone_targets)
     end
 end
 
+struct CacheFlags
+    # ??OOCDDP - see jl_cache_flags
+    use_pkgimages::Bool
+    debug_level::Int
+    check_bounds::Bool
+    opt_level::Int
+
+    CacheFlags(f::Int) = CacheFlags(UInt8(f))
+    function CacheFlags(f::UInt8)
+        s = bitstring(f)
+        use_pkgimages = parse(Bool, s[end])
+        debug_level = parse(Int, s[end-2:end-1], base=2)
+        check_bounds = parse(Bool, s[end-3])
+        opt_level = parse(Int, s[end-5:end-4], base=2)
+        new(use_pkgimages, debug_level, check_bounds, opt_level)
+    end
+end
+function show(io::IO, cf::CacheFlags)
+    print(io, "use_pkgimages = ", cf.use_pkgimages)
+    print(io, ", debug_level = ", cf.debug_level)
+    print(io, ", check_bounds = ", cf.check_bounds)
+    print(io, ", opt_level = ", cf.opt_level)
+end
+
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
 @constprop :none function stale_cachefile(modpath::String, cachefile::String; ignore_loaded::Bool = false)
@@ -2523,7 +2547,11 @@ end
             return true # ignore empty file
         end
         if ccall(:jl_match_cache_flags, UInt8, (UInt8,), flags) == 0
-            @debug "Rejecting cache file $cachefile for $modkey since the flags are mismatched" cachefile_flags=flags current_flags=ccall(:jl_cache_flags, UInt8, ())
+            @debug """
+            Rejecting cache file $cachefile for $modkey since the flags are mismatched
+              current session: $(CacheFlags(ccall(:jl_cache_flags, UInt8, ())))
+              cache file:      $(CacheFlags(flags))
+            """
             return true
         end
         pkgimage = !isempty(clone_targets)
