@@ -93,7 +93,7 @@ function printvalue(f::MbyFunc, io::IO, value::TOMLValue)
     value isa Dates.Time     ? Base.print(io, Dates.format(value, Dates.dateformat"HH:MM:SS.sss")) :
     value isa Dates.Date     ? Base.print(io, Dates.format(value, Dates.dateformat"YYYY-mm-dd")) :
     value isa Bool           ? Base.print(io, value ? "true" : "false") :
-    value isa Integer        ? Base.show(io, value) :  # Julia's own printing should be compatible with TOML on integers
+    value isa Integer        ? print_integer(io, value) :  # Julia's own printing should be compatible with TOML on integers
     value isa AbstractFloat  ? Base.print(io, isnan(value) ? "nan" :
                                               isinf(value) ? string(value > 0 ? "+" : "-", "inf") :
                                               Float64(value)) :  # TOML specifies IEEE 754 binary64 for float
@@ -117,7 +117,7 @@ end
 
 log2i(x::Integer) = typeof(x)(floor(log2(x)))
 
-function print_integer(f::MbyFunc, io::IO, value::Integer)
+function print_integer(io::IO, value::Integer)
     value isa Signed && return Base.show(io, value)
     # unsigned integers are printed as hex
     n = (log2i(value)÷4) + 1
