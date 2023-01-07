@@ -592,7 +592,7 @@ end
 in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}}) = sym_in(x, itr)
 
 function describe_valid_indices(io::IO, a::Tuple, i=nothing)
-    print(io, "Valid indices are ")
+    print(io, "\nValid indices are ")
     show_index(io, axes(a))
     print(io, '.')
 end

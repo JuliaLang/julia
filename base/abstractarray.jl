@@ -744,7 +744,7 @@ checkbounds_indices(::Type{Bool}, ::Tuple{}, ::Tuple{}) = true
 throw_boundserror(A, I) = (@noinline; throw(BoundsError(A, I)))
 
 function describe_valid_indices(io::IO, a::AbstractArray{<:Any}, i=nothing)
-    print(io, "Valid indices are ")
+    print(io, "\nValid indices are ")
     show_index(io, axes(a))
     print(io, '.')
 end

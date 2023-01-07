@@ -76,9 +76,8 @@ function showerror(io::IO, ex::BoundsError)
 end
 
 Experimental.register_error_hint(BoundsError) do io, ex
-    print(io,'\n')
     if ~isdefined(ex, :a)
-        return print(io, "No description of valid indices available.")
+        return print(io, "\nNo description of valid indices available.")
     end
     if isdefined(ex, :i)
         return describe_valid_indices(io, ex.a, ex.i)
@@ -90,11 +89,11 @@ end
     describe_valid_indices(io, a, i)
 
 Describe valid ways to index `a` in human-readable form. This should typically be a full
-sentence starting "Valid indices are ". Will be shown to the user upon `BoundsError`.
+sentence starting "\nValid indices are ". Will be shown to the user upon `BoundsError`.
 
 `i` may be ignored, but could be used to determine what information to show.
 """
-describe_valid_indices(io::IO, a, i) = print(io, "No description of valid indices available.")
+describe_valid_indices(io::IO, a, i) = print(io, "\nNo description of valid indices available.")
 
 
 function showerror(io::IO, ex::TypeError)

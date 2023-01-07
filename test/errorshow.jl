@@ -289,7 +289,7 @@ struct Bounded  # not an AbstractArray
 end
 Base.getindex(b::Bounded, i) = checkindex(Bool, 1:b.bound, i) || throw(BoundsError(b, i))
 Base.summary(io::IO, b::Bounded) = print(io, "$(b.bound)-size Bounded")
-Base.describe_valid_indices(io::IO, b::Bounded, i=nothing) = print(io, "Valid indices are 1:$(b.bound).")
+Base.describe_valid_indices(io::IO, b::Bounded, i=nothing) = print(io, "\nValid indices are 1:$(b.bound).")
 let undefvar
     err_str = @except_strbt sqrt(-1) DomainError
     @test occursin("Try sqrt(Complex(x)).", err_str)
@@ -314,7 +314,7 @@ let undefvar
     @test err_str == "BoundsError: attempt to access 3-element Vector{$Int} at index [6×7 BitMatrix]\nValid indices are 1:3."
 
     err_str = @except_str Bounded(2)[3] BoundsError
-    @test err_str == "BoundsError: attempt to access 2-size Bounded at index [3]"
+    @test err_str == "BoundsError: attempt to access 2-size Bounded at index [3]\nValid indices are 1:2."
 
     err_str = @except_str 0::Bool TypeError
     @test err_str == "TypeError: non-boolean ($Int) used in boolean context"

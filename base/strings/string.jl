@@ -28,7 +28,7 @@ function Base.showerror(io::IO, exc::StringIndexError)
 end
 
 describe_valid_indices(io::IO, a::AbstractString, i=nothing) = print(io,
-                                                                     "Valid indices are between ",
+                                                                     "\nValid indices are between ",
                                                                      firstindex(a),
                                                                      " and ",
                                                                      thisind(a, ncodeunits(a)),
