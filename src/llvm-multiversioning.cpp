@@ -131,7 +131,8 @@ static uint32_t collect_func_info(Function &F, bool &has_veccall)
                 }
                 // Check for BFloat16 when they are added to julia can be done here
             }
-            if (has_veccall && (flag & JL_TARGET_CLONE_SIMD) && (flag & JL_TARGET_CLONE_MATH)) {
+            uint32_t veccall_flags = JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH | JL_TARGET_CLONE_CPU | JL_TARGET_CLONE_FLOAT16;
+            if (has_veccall && (flag & veccall_flags) == veccall_flags) {
                 return flag;
             }
         }

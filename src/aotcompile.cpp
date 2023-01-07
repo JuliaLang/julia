@@ -606,8 +606,8 @@ static size_t getFunctionWeight(const Function &F)
     return weight;
 }
 
-
-static bool verify_partitioning(const SmallVectorImpl<Partition> &partitions, const Module &M) {
+//Inline to fool gcc into not complaining about unused function when asserts are disabled
+static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partitions, const Module &M) {
     StringMap<uint32_t> GVNames;
     bool bad = false;
     for (uint32_t i = 0; i < partitions.size(); i++) {
