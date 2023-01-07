@@ -424,7 +424,7 @@ above the maxima, but `A[0, 0]` will happily evaluate. If this is by intention,
 we can update the error message:
 
 ```jldoctest squarevectype
-julia> Base.describe_valid_indices(io::IO, A::SparseArray, i=nothing) = print(io, "Valid indices are <= ", A.dims, '.')
+julia> Base.describe_valid_indices(io::IO, A::SparseArray, i=nothing) = print(io, "\nValid indices are <= ", A.dims, '.')
 
 julia> A[0, 0]
 0.0
