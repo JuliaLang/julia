@@ -647,7 +647,7 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
     std::vector<std::pair<uint32_t, const char *>> clones;
 
     for (unsigned i = 0; i < pointers->header->nshards; i++) {
-        auto shard = pointers->shards[0];
+        auto shard = pointers->shards[i];
 
         // .data base
         char *data_base = (char *)shard.gvar_base;
@@ -657,6 +657,7 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
 
         const int32_t *offsets = shard.fvar_offsets;
         uint32_t nfunc = offsets[0];
+        assert(nfunc <= pointers->header->nfvars);
         offsets++;
         const int32_t *reloc_slots = shard.clone_slots;
         const uint32_t nreloc = reloc_slots[0];
@@ -747,6 +748,7 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
 
         auto gidxs = shard.gvar_idxs;
         unsigned ngvars = shard.gvar_offsets[0];
+        assert(ngvars <= pointers->header->ngvars);
         for (uint32_t i = 0; i < ngvars; i++) {
             gvars[gidxs[i]] = data_base + shard.gvar_offsets[i+1];
         }
@@ -756,6 +758,7 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
         auto offsets = (int32_t *) malloc(sizeof(int32_t) * fvars.size());
         res.fptrs.base = fvars[0];
         for (size_t i = 0; i < fvars.size(); i++) {
+            assert(fvars[i] && "Missing function pointer!");
             offsets[i] = fvars[i] - res.fptrs.base;
         }
         res.fptrs.offsets = offsets;
@@ -766,12 +769,14 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
         auto offsets = (int32_t *) malloc(sizeof(int32_t) * gvars.size());
         res.gvars_base = (uintptr_t *)gvars[0];
         for (size_t i = 0; i < gvars.size(); i++) {
+            assert(gvars[i] && "Missing global variable pointer!");
             offsets[i] = gvars[i] - (const char *)res.gvars_base;
         }
         res.gvars_offsets = offsets;
     }
 
     if (!clones.empty()) {
+        assert(!fvars.empty());
         std::sort(clones.begin(), clones.end());
         auto clone_offsets = (int32_t *) malloc(sizeof(int32_t) * clones.size());
         auto clone_idxs = (uint32_t *) malloc(sizeof(uint32_t) * clones.size());

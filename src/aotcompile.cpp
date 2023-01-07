@@ -51,6 +51,7 @@
 // for outputting code
 #include <llvm/Bitcode/BitcodeWriter.h>
 #include <llvm/Bitcode/BitcodeWriterPass.h>
+#include <llvm/Bitcode/BitcodeReader.h>
 #include "llvm/Object/ArchiveWriter.h"
 #include <llvm/IR/IRPrintingPasses.h>
 
@@ -74,19 +75,13 @@ STATISTIC(CreateNativeMethods, "Number of methods compiled for jl_create_native"
 STATISTIC(CreateNativeMax, "Max number of methods compiled at once for jl_create_native");
 STATISTIC(CreateNativeGlobals, "Number of globals compiled for jl_create_native");
 
-template<class T> // for GlobalObject's
-static T *addComdat(T *G)
+static void addComdat(GlobalValue *G, Triple &T)
 {
-#if defined(_OS_WINDOWS_)
-    if (!G->isDeclaration()) {
+    if (T.isOSBinFormatCOFF() && !G->isDeclaration()) {
         // add __declspec(dllexport) to everything marked for export
-        if (G->getLinkage() == GlobalValue::ExternalLinkage)
-            G->setDLLStorageClass(GlobalValue::DLLExportStorageClass);
-        else
-            G->setDLLStorageClass(GlobalValue::DefaultStorageClass);
+        assert(G->hasExternalLinkage() && "Cannot set DLLExport on non-external linkage!");
+        G->setDLLStorageClass(GlobalValue::DLLExportStorageClass);
     }
-#endif
-    return G;
 }
 
 
@@ -472,15 +467,6 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     return (void*)data;
 }
 
-
-static void emit_result(std::vector<NewArchiveMember> &Archive, SmallVectorImpl<char> &OS,
-        StringRef Name, std::vector<std::string> &outputs)
-{
-    outputs.push_back({ OS.data(), OS.size() });
-    Archive.push_back(NewArchiveMember(MemoryBufferRef(outputs.back(), Name)));
-    OS.clear();
-}
-
 static object::Archive::Kind getDefaultForHost(Triple &triple)
 {
       if (triple.isOSDarwin())
@@ -572,6 +558,584 @@ static GlobalVariable *emit_image_header(Module &M, unsigned threads, unsigned n
     return header_gv;
 }
 
+struct Partition {
+    StringSet<> globals;
+    StringMap<unsigned> fvars;
+    StringMap<unsigned> gvars;
+    size_t weight;
+};
+
+static void get_fvars_gvars(Module &M, DenseMap<GlobalValue *, unsigned> &fvars, DenseMap<GlobalValue *, unsigned> &gvars) {
+    auto fvars_gv = M.getGlobalVariable("jl_fvars");
+    auto gvars_gv = M.getGlobalVariable("jl_gvars");
+    assert(fvars_gv);
+    assert(gvars_gv);
+    auto fvars_init = cast<ConstantArray>(fvars_gv->getInitializer());
+    auto gvars_init = cast<ConstantArray>(gvars_gv->getInitializer());
+    std::string suffix;
+    if (auto md = M.getModuleFlag("julia.mv.suffix")) {
+        suffix = cast<MDString>(md)->getString().str();
+    }
+    auto fvars_idxs = M.getGlobalVariable("jl_fvar_idxs");
+    auto gvars_idxs = M.getGlobalVariable("jl_gvar_idxs");
+    assert(fvars_idxs);
+    assert(gvars_idxs);
+    auto fvars_idxs_init = cast<ConstantDataArray>(fvars_idxs->getInitializer());
+    auto gvars_idxs_init = cast<ConstantDataArray>(gvars_idxs->getInitializer());
+    for (unsigned i = 0; i < fvars_init->getNumOperands(); ++i) {
+        auto gv = cast<GlobalValue>(fvars_init->getOperand(i)->stripPointerCasts());
+        auto idx = fvars_idxs_init->getElementAsInteger(i);
+        fvars[gv] = idx;
+    }
+    for (unsigned i = 0; i < gvars_init->getNumOperands(); ++i) {
+        auto gv = cast<GlobalValue>(gvars_init->getOperand(i)->stripPointerCasts());
+        auto idx = gvars_idxs_init->getElementAsInteger(i);
+        gvars[gv] = idx;
+    }
+    fvars_gv->eraseFromParent();
+    gvars_gv->eraseFromParent();
+    fvars_idxs->eraseFromParent();
+    gvars_idxs->eraseFromParent();
+}
+
+static size_t getFunctionWeight(const Function &F)
+{
+    size_t weight = 1;
+    for (const BasicBlock &BB : F) {
+        weight += BB.size();
+    }
+    // more basic blocks = more complex than just sum of insts,
+    // add some weight to it
+    weight += F.size();
+    if (F.hasFnAttribute("julia.mv.clones")) {
+        weight *= F.getFnAttribute("julia.mv.clones").getValueAsString().count(',') + 1;
+    }
+    return weight;
+}
+
+
+static bool verify_partitioning(const SmallVectorImpl<Partition> &partitions, const Module &M) {
+    StringMap<uint32_t> GVNames;
+    bool bad = false;
+    for (uint32_t i = 0; i < partitions.size(); i++) {
+        for (auto &name : partitions[i].globals) {
+            if (GVNames.count(name.getKey())) {
+                bad = true;
+                dbgs() << "Duplicate global name " << name.getKey() << " in partitions " << i << " and " << GVNames[name.getKey()] << "\n";
+            }
+            GVNames[name.getKey()] = i;
+        }
+        dbgs() << "partition: " << i << " fvars: " << partitions[i].fvars.size() << " gvars: " << partitions[i].gvars.size() << "\n";
+    }
+    for (auto &GV : M.globals()) {
+        if (GV.isDeclaration()) {
+            if (GVNames.count(GV.getName())) {
+                bad = true;
+                dbgs() << "Global " << GV.getName() << " is a declaration but is in partition " << GVNames[GV.getName()] << "\n";
+            }
+        } else {
+            if (!GVNames.count(GV.getName())) {
+                bad = true;
+                dbgs() << "Global " << GV << " not in any partition\n";
+            }
+            if (!GV.hasExternalLinkage()) {
+                bad = true;
+                dbgs() << "Global " << GV << " has non-external linkage " << GV.getLinkage() << " but is in partition " << GVNames[GV.getName()] << "\n";
+            }
+        }
+    }
+    return !bad;
+}
+
+// Chop a module up as equally as possible into threads partitions
+static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
+    //Start by stripping fvars and gvars, which helpfully removes their uses as well
+    DenseMap<GlobalValue *, unsigned> fvars, gvars;
+    get_fvars_gvars(M, fvars, gvars);
+
+    // Partition by union-find, since we only have def->use traversal right now
+    struct Partitioner {
+        struct Node {
+            GlobalValue *GV;
+            unsigned parent;
+            unsigned size;
+            size_t weight;
+        };
+        std::vector<Node> nodes;
+        DenseMap<GlobalValue *, unsigned> node_map;
+        unsigned merged;
+
+        unsigned make(GlobalValue *GV, size_t weight) {
+            unsigned idx = nodes.size();
+            nodes.push_back({GV, idx, 1, weight});
+            node_map[GV] = idx;
+            return idx;
+        }
+
+        unsigned find(unsigned idx) {
+            while (nodes[idx].parent != idx) {
+                nodes[idx].parent = nodes[nodes[idx].parent].parent;
+                idx = nodes[idx].parent;
+            }
+            return idx;
+        }
+
+        unsigned merge(unsigned x, unsigned y) {
+            x = find(x);
+            y = find(y);
+            if (x == y)
+                return x;
+            if (nodes[x].size < nodes[y].size)
+                std::swap(x, y);
+            nodes[y].parent = x;
+            nodes[x].size += nodes[y].size;
+            nodes[x].weight += nodes[y].weight;
+            merged++;
+            return x;
+        }
+    };
+
+    Partitioner partitioner;
+
+    for (auto &G : M.global_values()) {
+        if (G.isDeclaration())
+            continue;
+        if (isa<Function>(G)) {
+            partitioner.make(&G, getFunctionWeight(cast<Function>(G)));
+        } else {
+            partitioner.make(&G, 1);
+        }
+    }
+
+    // Merge all uses to go together into the same partition
+    for (unsigned i = 0; i < partitioner.nodes.size(); ++i) {
+        for (ConstantUses<GlobalValue> uses(partitioner.nodes[i].GV, M); !uses.done(); uses.next()) {
+            auto val = uses.get_info().val;
+            auto idx = partitioner.node_map.find(val);
+            assert(idx != partitioner.node_map.end());
+            partitioner.merge(i, idx->second);
+        }
+    }
+
+    SmallVector<Partition, 32> partitions(threads);
+    // always get the smallest partition first
+    auto pcomp = [](const Partition *p1, const Partition *p2) {
+        return p1->weight > p2->weight;
+    };
+    std::priority_queue<Partition *, std::vector<Partition *>, decltype(pcomp)> pq(pcomp);
+    for (unsigned i = 0; i < threads; ++i) {
+        pq.push(&partitions[i]);
+    }
+    
+    // Assign the root of each partition to a partition, then assign its children to the same one
+    for (unsigned i = 0; i < partitioner.nodes.size(); ++i) {
+        auto root = partitioner.find(i);
+        if (partitioner.nodes[root].GV) {
+            auto &node = partitioner.nodes[root];
+            auto &P = *pq.top();
+            pq.pop();
+            auto name = node.GV->getName();
+            P.globals.insert(name);
+            if (fvars.count(node.GV))
+                P.fvars[name] = fvars[node.GV];
+            if (gvars.count(node.GV))
+                P.gvars[name] = gvars[node.GV];
+            P.weight += node.weight;
+            node.GV = nullptr;
+            node.size = &P - partitions.data();
+            pq.push(&P);
+        }
+        if (root != i) {
+            auto &node = partitioner.nodes[i];
+            assert(node.GV != nullptr);
+            // we assigned its root already, so just add it to the root's partition
+            // don't touch the priority queue, since we're not changing the weight
+            auto &P = partitions[partitioner.nodes[root].size];
+            auto name = node.GV->getName();
+            P.globals.insert(name);
+            if (fvars.count(node.GV))
+                P.fvars[name] = fvars[node.GV];
+            if (gvars.count(node.GV))
+                P.gvars[name] = gvars[node.GV];
+            node.GV = nullptr;
+            node.size = partitioner.nodes[root].size;
+        }
+    }
+
+    assert(verify_partitioning(partitions, M) && "Partitioning failed to partition globals correctly");
+
+    return partitions;
+}
+
+static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *outputs, StringRef name,
+                    NewArchiveMember *unopt, NewArchiveMember *opt, NewArchiveMember *obj, NewArchiveMember *asm_) {
+    auto TM = std::unique_ptr<TargetMachine>(
+        SourceTM.getTarget().createTargetMachine(
+            SourceTM.getTargetTriple().str(),
+            SourceTM.getTargetCPU(),
+            SourceTM.getTargetFeatureString(),
+            SourceTM.Options,
+            SourceTM.getRelocationModel(),
+            SourceTM.getCodeModel(),
+            SourceTM.getOptLevel()));
+
+    if (unopt) {
+        raw_string_ostream OS(*outputs);
+        PassBuilder PB;
+        AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
+        ModulePassManager MPM;
+        MPM.addPass(BitcodeWriterPass(OS));
+        outputs++;
+        *outputs = (name + "_unopt.bc").str();
+        *unopt = NewArchiveMember(MemoryBufferRef(OS.str(), *outputs));
+        outputs++;
+    }
+    if (!opt && !obj && !asm_) {
+        return;
+    }
+    assert(!verifyModule(M, &errs()));
+
+    uint64_t start = jl_hrtime();
+    uint64_t end = 0;
+
+#ifndef JL_USE_NEW_PM
+    legacy::PassManager optimizer;
+    addTargetPasses(&optimizer, TM->getTargetTriple(), TM->getTargetIRAnalysis());
+    addOptimizationPasses(&optimizer, jl_options.opt_level, true, true);
+    addMachinePasses(&optimizer, jl_options.opt_level);
+#else
+
+    auto PMTM = std::unique_ptr<TargetMachine>(
+        SourceTM.getTarget().createTargetMachine(
+            SourceTM.getTargetTriple().str(),
+            SourceTM.getTargetCPU(),
+            SourceTM.getTargetFeatureString(),
+            SourceTM.Options,
+            SourceTM.getRelocationModel(),
+            SourceTM.getCodeModel(),
+            SourceTM.getOptLevel()));
+    NewPM optimizer{std::move(PMTM), getOptLevel(jl_options.opt_level), OptimizationOptions::defaults(true, true)};
+#endif
+    optimizer.run(M);
+    assert(!verifyModule(M, &errs()));
+
+    end = jl_hrtime();
+
+    dbgs() << "optimize time: " << (end - start) / 1e9 << "s\n";
+
+    if (opt) {
+        raw_string_ostream OS(*outputs);
+        PassBuilder PB;
+        AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
+        ModulePassManager MPM;
+        MPM.addPass(BitcodeWriterPass(OS));
+        outputs++;
+        *outputs = (name + "_opt.bc").str();
+        *opt = NewArchiveMember(MemoryBufferRef(OS.str(), *outputs));
+        outputs++;
+    }
+
+    start = jl_hrtime();
+
+    if (obj) {
+        SmallVector<char, 0> Buffer;
+        raw_svector_ostream OS(Buffer);
+        legacy::PassManager emitter;
+        addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
+        if (TM->addPassesToEmitFile(emitter, OS, nullptr, CGFT_ObjectFile, false))
+            jl_safe_printf("ERROR: target does not support generation of object files\n");
+        emitter.run(M);
+        *outputs = { Buffer.data(), Buffer.size() };
+        outputs++;
+        *outputs = (name + ".o").str();
+        *obj = NewArchiveMember(MemoryBufferRef(outputs[-1], *outputs));
+        outputs++;
+    }
+
+    end = jl_hrtime();
+
+    dbgs() << "codegen time: " << (end - start) / 1e9 << "s\n";
+
+    if (asm_) {
+        SmallVector<char, 0> Buffer;
+        raw_svector_ostream OS(Buffer);
+        legacy::PassManager emitter;
+        addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
+        if (TM->addPassesToEmitFile(emitter, OS, nullptr, CGFT_AssemblyFile, false))
+            jl_safe_printf("ERROR: target does not support generation of assembly files\n");
+        emitter.run(M);
+        *outputs = { Buffer.data(), Buffer.size() };
+        outputs++;
+        *outputs = (name + ".s").str();
+        *asm_ = NewArchiveMember(MemoryBufferRef(outputs[-1], *outputs));
+        outputs++;
+    }
+}
+
+static auto serializeModule(const Module &M) {
+    SmallVector<char, 0> ClonedModuleBuffer;
+    BitcodeWriter BCWriter(ClonedModuleBuffer);
+    BCWriter.writeModule(M);
+    BCWriter.writeSymtab();
+    BCWriter.writeStrtab();
+    return ClonedModuleBuffer;
+}
+
+static void materializePreserved(Module &M, Partition &partition) {
+    DenseSet<GlobalValue *> Preserve;
+    for (auto &GV : M.global_values()) {
+        if (!GV.isDeclaration()) {
+            if (partition.globals.count(GV.getName())) {
+                Preserve.insert(&GV);
+            }
+        }
+    }
+    for (auto &F : M.functions()) {
+        if (!F.isDeclaration()) {
+            if (!Preserve.contains(&F)) {
+                F.deleteBody();
+                F.setLinkage(GlobalValue::ExternalLinkage);
+            }
+        }
+    }
+    for (auto &GV : M.globals()) {
+        if (!GV.isDeclaration()) {
+            if (!Preserve.contains(&GV)) {
+                GV.setInitializer(nullptr);
+                GV.setLinkage(GlobalValue::ExternalLinkage);
+            }
+        }
+    }
+    SmallVector<std::pair<GlobalAlias *, GlobalValue *>> DeletedAliases;
+    for (auto &GA : M.aliases()) {
+        if (!GA.isDeclaration()) {
+            if (!Preserve.contains(&GA)) {
+                if (GA.getValueType()->isFunctionTy()) {
+                    DeletedAliases.push_back({ &GA, Function::Create(cast<FunctionType>(GA.getValueType()), GlobalValue::ExternalLinkage, "", &M) });
+                } else {
+                    DeletedAliases.push_back({ &GA, new GlobalVariable(M, GA.getValueType(), false, GlobalValue::ExternalLinkage, nullptr) });
+                }
+            }
+        }
+    }
+    cantFail(M.materializeAll());
+    for (auto &Deleted : DeletedAliases) {
+        Deleted.second->takeName(Deleted.first);
+        Deleted.first->replaceAllUsesWith(Deleted.second);
+        Deleted.first->eraseFromParent();
+    }
+}
+
+static void construct_vars(Module &M, Partition &partition) {
+    std::vector<std::pair<uint32_t, GlobalValue *>> fvar_pairs;
+    fvar_pairs.reserve(partition.fvars.size());
+    for (auto &fvar : partition.fvars) {
+        auto F = M.getFunction(fvar.first());
+        assert(F);
+        assert(!F->isDeclaration());
+        fvar_pairs.push_back({ fvar.second, F });
+    }
+    std::vector<GlobalValue *> fvars;
+    std::vector<uint32_t> fvar_idxs;
+    fvars.reserve(fvar_pairs.size());
+    fvar_idxs.reserve(fvar_pairs.size());
+    std::sort(fvar_pairs.begin(), fvar_pairs.end());
+    for (auto &fvar : fvar_pairs) {
+        fvars.push_back(fvar.second);
+        fvar_idxs.push_back(fvar.first);
+    }
+    std::vector<std::pair<uint32_t, GlobalValue *>> gvar_pairs;
+    gvar_pairs.reserve(partition.gvars.size());
+    for (auto &gvar : partition.gvars) {
+        auto GV = M.getGlobalVariable(gvar.first());
+        assert(GV);
+        assert(!GV->isDeclaration());
+        gvar_pairs.push_back({ gvar.second, GV });
+    }
+    std::vector<GlobalValue *> gvars;
+    std::vector<uint32_t> gvar_idxs;
+    gvars.reserve(gvar_pairs.size());
+    gvar_idxs.reserve(gvar_pairs.size());
+    std::sort(gvar_pairs.begin(), gvar_pairs.end());
+    for (auto &gvar : gvar_pairs) {
+        gvars.push_back(gvar.second);
+        gvar_idxs.push_back(gvar.first);
+    }
+
+    // Now commit the fvars, gvars, and idxs
+    auto T_psize = M.getDataLayout().getIntPtrType(M.getContext())->getPointerTo();
+    emit_offset_table(M, fvars, "jl_fvars", T_psize);
+    emit_offset_table(M, gvars, "jl_gvars", T_psize);
+    auto fidxs = ConstantDataArray::get(M.getContext(), fvar_idxs);
+    auto fidxs_var = new GlobalVariable(M, fidxs->getType(), true,
+                                        GlobalVariable::ExternalLinkage,
+                                        fidxs, "jl_fvar_idxs");
+    fidxs_var->setVisibility(GlobalValue::HiddenVisibility);
+    auto gidxs = ConstantDataArray::get(M.getContext(), gvar_idxs);
+    auto gidxs_var = new GlobalVariable(M, gidxs->getType(), true,
+                                        GlobalVariable::ExternalLinkage,
+                                        gidxs, "jl_gvar_idxs");
+    gidxs_var->setVisibility(GlobalValue::HiddenVisibility);
+}
+
+static void dropUnusedDeclarations(Module &M) {
+    SmallVector<GlobalValue *> unused;
+    for (auto &G : M.global_values()) {
+        if (G.isDeclaration()) {
+            if (G.use_empty()) {
+                unused.push_back(&G);
+            } else {
+                G.setDSOLocal(false); // These are never going to be seen in the same module again
+                G.setVisibility(GlobalValue::DefaultVisibility);
+            }
+        }
+    }
+    for (auto &G : unused)
+        G->eraseFromParent();
+}
+
+static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &outputs, StringRef name,
+                std::vector<NewArchiveMember> &unopt, std::vector<NewArchiveMember> &opt,
+                std::vector<NewArchiveMember> &obj, std::vector<NewArchiveMember> &asm_,
+                bool unopt_out, bool opt_out, bool obj_out, bool asm_out,
+                unsigned threads) {
+    uint64_t start = 0, end = 0;
+    unsigned outcount = unopt_out + opt_out + obj_out + asm_out;
+    assert(outcount);
+    outputs.resize(outputs.size() + outcount * threads * 2);
+    unopt.resize(unopt.size() + unopt_out * threads);
+    opt.resize(opt.size() + opt_out * threads);
+    obj.resize(obj.size() + obj_out * threads);
+    asm_.resize(asm_.size() + asm_out * threads);
+    if (threads == 1) {
+        start = jl_hrtime();
+        add_output_impl(M, TM, outputs.data() + outputs.size() - outcount * 2, name,
+                        unopt_out ? unopt.data() + unopt.size() - 1 : nullptr,
+                        opt_out ? opt.data() + opt.size() - 1 : nullptr,
+                        obj_out ? obj.data() + obj.size() - 1 : nullptr,
+                        asm_out ? asm_.data() + asm_.size() - 1 : nullptr);
+        end = jl_hrtime();
+        dbgs() << "Time to add output: " << (end - start) / 1e9 << "s\n";
+        return;
+    }
+    
+    start = jl_hrtime();
+    uint64_t counter = 0;
+    for (auto &G : M.global_values()) {
+        if (!G.isDeclaration() && !G.hasName()) {
+            G.setName("jl_ext_" + Twine(counter++));
+        }
+    }
+    auto partitions = partitionModule(M, threads);
+    end = jl_hrtime();
+    dbgs() << "Time to partition module: " << (end - start) / 1e9 << "s\n";
+    start = jl_hrtime();
+    auto serialized = serializeModule(M);
+    end = jl_hrtime();
+    dbgs() << "Time to serialize module: " << (end - start) / 1e9 << "s\n";
+
+    auto outstart = outputs.data() + outputs.size() - outcount * threads * 2;
+    auto unoptstart = unopt_out ? unopt.data() + unopt.size() - threads : nullptr;
+    auto optstart = opt_out ? opt.data() + opt.size() - threads : nullptr;
+    auto objstart = obj_out ? obj.data() + obj.size() - threads : nullptr;
+    auto asmstart = asm_out ? asm_.data() + asm_.size() - threads : nullptr;
+
+    std::vector<std::thread> workers(threads);
+    for (unsigned i = 0; i < threads; i++) {
+        workers[i] = std::thread([&, i](){
+            LLVMContext ctx;
+            uint64_t start = 0;
+            uint64_t end = 0;
+            start = jl_hrtime();
+            auto M = cantFail(getLazyBitcodeModule(MemoryBufferRef(StringRef(serialized.data(), serialized.size()), "Optimized"), ctx), "Error loading module");
+            end = jl_hrtime();
+            dbgs() << "Deserialization time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
+
+            dbgs() << "Starting shard " << i << " with weight=" << partitions[i].weight << "\n";
+
+            start = jl_hrtime();
+            materializePreserved(*M, partitions[i]);
+            end = jl_hrtime();
+            dbgs() << "Materialization time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
+            
+            start = jl_hrtime();
+            construct_vars(*M, partitions[i]);
+            M->setModuleFlag(Module::Error, "julia.mv.suffix", MDString::get(M->getContext(), "_" + std::to_string(i)));
+            end = jl_hrtime();
+
+            dbgs() << "Construction time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
+
+            start = jl_hrtime();
+            dropUnusedDeclarations(*M);
+            end = jl_hrtime();
+
+            dbgs() << "Declaration deletion time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
+
+            start = jl_hrtime();
+            add_output_impl(*M, TM, outstart + i * outcount * 2, name,
+                            unoptstart ? unoptstart + i : nullptr,
+                            optstart ? optstart + i : nullptr,
+                            objstart ? objstart + i : nullptr,
+                            asmstart ? asmstart + i : nullptr);
+            end = jl_hrtime();
+
+            dbgs() << "Output time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
+        });
+    }
+
+    start = jl_hrtime();
+    for (auto &w : workers)
+        w.join();
+    end = jl_hrtime();
+
+    dbgs() << "Total time for parallel output: " << (end - start) / 1e9 << "s\n";
+}
+
+unsigned compute_image_thread_count(Module &M) {
+    // 32-bit systems are very memory-constrained
+#ifdef _P32
+    return 1;
+#endif
+    unsigned threads = std::max(llvm::hardware_concurrency().compute_thread_count() / 2, 1u);
+
+    // memory limit check
+    // many threads use a lot of memory, so limit on constrained memory systems
+    size_t available = uv_get_available_memory();
+    size_t weight = 0;
+    for (auto &GV : M.global_values()) {
+        if (GV.isDeclaration())
+            continue;
+        if (isa<Function>(GV)) {
+            weight += getFunctionWeight(cast<Function>(GV));
+        } else {
+            weight += 1;
+        }
+    }
+    if (weight == 0) {
+        dbgs() << "No globals in module, using 1 thread\n";
+        return 1;
+    }
+    // crude estimate, available / (weight * fudge factor) = max threads
+    size_t fudge = 10;
+    unsigned max_threads = std::max(available / (weight * fudge), (size_t)1);
+    dbgs() << "Weight: " << weight << ", available: " << available << ", wanted: " << threads << ", max threads: " << max_threads << "\n";
+    threads = std::min(threads, max_threads);
+
+    // environment variable override
+    const char *env_threads = getenv("JULIA_IMAGE_THREADS");
+    if (env_threads) {
+        char *endptr;
+        unsigned long requested = strtoul(env_threads, &endptr, 10);
+        if (*endptr || !requested) {
+            jl_safe_printf("WARNING: invalid value '%s' for JULIA_IMAGE_THREADS\n", env_threads);
+        } else {
+            threads = requested;
+        }
+    }
+
+    return threads;
+}
+
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
 extern "C" JL_DLLEXPORT
@@ -584,6 +1148,11 @@ void jl_dump_native_impl(void *native_code,
     uint64_t end = 0;
     JL_TIMING(NATIVE_DUMP);
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
+    if (!bc_fname && !unopt_bc_fname && !obj_fname && !asm_fname) {
+        dbgs() << "No output requested, skipping native code dump?\n";
+        delete data;
+        return;
+    }
     auto TSCtx = data->M.getContext();
     auto lock = TSCtx.getLock();
     LLVMContext &Context = *TSCtx.getContext();
@@ -646,7 +1215,7 @@ void jl_dump_native_impl(void *native_code,
 
     start = jl_hrtime();
 
-    unsigned threads = 1;
+    unsigned threads = compute_image_thread_count(*dataM);
     unsigned nfvars = 0;
     unsigned ngvars = 0;
 
@@ -693,7 +1262,7 @@ void jl_dump_native_impl(void *native_code,
                                      true,
                                      GlobalVariable::ExternalLinkage,
                                      jlRTLD_DEFAULT_var,
-                                     "jl_RTLD_DEFAULT_handle_pointer"));
+                                     "jl_RTLD_DEFAULT_handle_pointer"), TheTriple);
     }
 
     end = jl_hrtime();
@@ -702,101 +1271,14 @@ void jl_dump_native_impl(void *native_code,
 
     start = jl_hrtime();
 
-    // do the actual work
-    auto add_output = [&] (Module &M, StringRef unopt_bc_Name, StringRef bc_Name, StringRef obj_Name, StringRef asm_Name) {
-
-        auto TM = std::unique_ptr<TargetMachine>(
-            SourceTM->getTarget().createTargetMachine(
-                SourceTM->getTargetTriple().str(),
-                SourceTM->getTargetCPU(),
-                SourceTM->getTargetFeatureString(),
-                SourceTM->Options,
-                SourceTM->getRelocationModel(),
-                SourceTM->getCodeModel(),
-                SourceTM->getOptLevel()));
-
-        if (unopt_bc_fname) {
-            SmallVector<char, 0> Buffer;
-            raw_svector_ostream OS(Buffer);
-            PassBuilder PB;
-            AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
-            ModulePassManager MPM;
-            MPM.addPass(BitcodeWriterPass(OS));
-            emit_result(unopt_bc_Archive, Buffer, unopt_bc_Name, outputs);
-        }
-        if (!bc_fname && !obj_fname && !asm_fname) {
-            return;
-        }
-        assert(!verifyModule(M, &errs()));
-
-        uint64_t start = jl_hrtime();
-        end = 0;
-
-#ifndef JL_USE_NEW_PM
-        legacy::PassManager optimizer;
-        addTargetPasses(&optimizer, TM->getTargetTriple(), TM->getTargetIRAnalysis());
-        addOptimizationPasses(&optimizer, jl_options.opt_level, true, true);
-        addMachinePasses(&optimizer, jl_options.opt_level);
-#else
-
-        auto PMTM = std::unique_ptr<TargetMachine>(
-            SourceTM->getTarget().createTargetMachine(
-                SourceTM->getTargetTriple().str(),
-                SourceTM->getTargetCPU(),
-                SourceTM->getTargetFeatureString(),
-                SourceTM->Options,
-                SourceTM->getRelocationModel(),
-                SourceTM->getCodeModel(),
-                SourceTM->getOptLevel()));
-        NewPM optimizer{std::move(PMTM), getOptLevel(jl_options.opt_level), OptimizationOptions::defaults(true, true)};
-#endif
-        optimizer.run(M);
-        assert(!verifyModule(M, &errs()));
-
-        end = jl_hrtime();
-
-        dbgs() << "optimize time: " << (end - start) / 1e9 << "s\n";
-
-        if (bc_fname) {
-            SmallVector<char, 0> Buffer;
-            raw_svector_ostream OS(Buffer);
-            PassBuilder PB;
-            AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
-            ModulePassManager MPM;
-            MPM.addPass(BitcodeWriterPass(OS));
-            emit_result(bc_Archive, Buffer, bc_Name, outputs);
-        }
-
-        start = jl_hrtime();
-
-        if (obj_fname) {
-            SmallVector<char, 0> Buffer;
-            raw_svector_ostream OS(Buffer);
-            legacy::PassManager emitter;
-            addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
-            if (TM->addPassesToEmitFile(emitter, OS, nullptr, CGFT_ObjectFile, false))
-                jl_safe_printf("ERROR: target does not support generation of object files\n");
-            emitter.run(M);
-            emit_result(obj_Archive, Buffer, obj_Name, outputs);
-        }
-
-        end = jl_hrtime();
-
-        dbgs() << "codegen time: " << (end - start) / 1e9 << "s\n";
-
-        if (asm_fname) {
-            SmallVector<char, 0> Buffer;
-            raw_svector_ostream OS(Buffer);
-            legacy::PassManager emitter;
-            addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
-            if (TM->addPassesToEmitFile(emitter, OS, nullptr, CGFT_AssemblyFile, false))
-                jl_safe_printf("ERROR: target does not support generation of assembly files\n");
-            emitter.run(M);
-            emit_result(asm_Archive, Buffer, asm_Name, outputs);
-        }
-    };
-
-    add_output(*dataM, "unopt.bc", "text.bc", "text.o", "text.s");
+    auto compile = [&](Module &M, StringRef name, unsigned threads) { add_output(
+            M, *SourceTM, outputs, name,
+            unopt_bc_Archive, bc_Archive, obj_Archive, asm_Archive,
+            !!unopt_bc_fname, !!bc_fname, !!obj_fname, !!asm_fname,
+            threads
+    ); };
+    
+    compile(*dataM, "text", threads);
 
     end = jl_hrtime();
 
@@ -804,8 +1286,7 @@ void jl_dump_native_impl(void *native_code,
 
     start = jl_hrtime();
 
-    orc::ThreadSafeModule sysimage(std::make_unique<Module>("sysimage", Context), TSCtx);
-    auto sysimageM = sysimage.getModuleUnlocked();
+    auto sysimageM = std::make_unique<Module>("sysimage", Context);
     sysimageM->setTargetTriple(dataM->getTargetTriple());
     sysimageM->setDataLayout(dataM->getDataLayout());
 #if JL_LLVM_VERSION >= 130000
@@ -846,13 +1327,15 @@ void jl_dump_native_impl(void *native_code,
     if (sysimg_data) {
         Constant *data = ConstantDataArray::get(Context,
             ArrayRef<uint8_t>((const unsigned char*)sysimg_data, sysimg_len));
-        addComdat(new GlobalVariable(*sysimageM, data->getType(), false,
+        auto sysdata = new GlobalVariable(*sysimageM, data->getType(), false,
                                      GlobalVariable::ExternalLinkage,
-                                     data, "jl_system_image_data"))->setAlignment(Align(64));
+                                     data, "jl_system_image_data");
+        sysdata->setAlignment(Align(64));
+        addComdat(sysdata, TheTriple);
         Constant *len = ConstantInt::get(T_size, sysimg_len);
         addComdat(new GlobalVariable(*sysimageM, len->getType(), true,
                                      GlobalVariable::ExternalLinkage,
-                                     len, "jl_system_image_size"));
+                                     len, "jl_system_image_size"), TheTriple);
     }
     if (imaging_mode) {
         auto specs = jl_get_llvm_clone_targets();
@@ -886,13 +1369,13 @@ void jl_dump_native_impl(void *native_code,
                                                 ConstantExpr::getBitCast(target_ids, T_psize)
                                            }),
                                            "jl_image_pointers");
-        addComdat(pointers);
+        addComdat(pointers, TheTriple);
         if (s) {
             write_int32(s, data.size());
             ios_write(s, (const char *)data.data(), data.size());
         }
     }
-    add_output(*sysimageM, "data.bc", "data.bc", "data.o", "data.s");
+    compile(*sysimageM, "data", 1);
 
     end = jl_hrtime();
 
