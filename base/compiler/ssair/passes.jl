@@ -805,7 +805,6 @@ end
         isa(rarg, SSAValue) || return nothing
         argdef = compact[rarg][:inst]
     else
-        isa(arg, DataType) || return nothing
         isType(arg) || return nothing
         arg = arg.parameters[1]
     end
