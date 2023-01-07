@@ -424,7 +424,7 @@ void CloneCtx::prepare_slots()
                 extern_relocs[F] = GV;
             } else {
                 auto id = get_func_id(F);
-                auto GV = new GlobalVariable(M, F->getType(), false, GlobalValue::InternalLinkage, Constant::getNullValue(F->getType()), F->getName() + ".reloc_slot");
+                auto GV = new GlobalVariable(M, F->getType(), false, GlobalValue::ExternalLinkage, Constant::getNullValue(F->getType()), F->getName() + ".reloc_slot");
                 GV->setVisibility(GlobalValue::HiddenVisibility);
                 const_relocs[id] = GV;
             }
