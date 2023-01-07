@@ -213,13 +213,12 @@ function _tuple_unique_fieldtypes(@nospecialize t)
     t´ = unwrap_unionall(t)
     # Given t = Tuple{Vararg{S}} where S<:Real, the various
     # unwrapping/wrapping/va-handling here will return Real
-    if t isa Union
+    if t´ isa Union
         union!(types, _tuple_unique_fieldtypes(rewrap_unionall(t´.a, t)))
         union!(types, _tuple_unique_fieldtypes(rewrap_unionall(t´.b, t)))
     else
-        r = Union{}
         for ti in (t´::DataType).parameters
-            r = push!(types, rewrap_unionall(unwrapva(ti), t))
+            push!(types, rewrap_unionall(unwrapva(ti), t))
         end
     end
     return Core.svec(types...)
@@ -583,6 +582,7 @@ any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
 
 # a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
 function sym_in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}})
+    @noinline
     @_total_meta
     for y in itr
         y === x && return true
