@@ -636,7 +636,7 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
 
     const void *ids = pointers->target_data;
     uint32_t target_idx = callback(ids);
-    
+
     if (pointers->header->version != 1) {
         jl_error("Image file is not compatible with this version of Julia");
     }

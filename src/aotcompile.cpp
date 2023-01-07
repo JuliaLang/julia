@@ -719,7 +719,7 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
     for (unsigned i = 0; i < threads; ++i) {
         pq.push(&partitions[i]);
     }
-    
+
     // Assign the root of each partition to a partition, then assign its children to the same one
     for (unsigned i = 0; i < partitioner.nodes.size(); ++i) {
         auto root = partitioner.find(i);
@@ -1011,7 +1011,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
         dbgs() << "Time to add output: " << (end - start) / 1e9 << "s\n";
         return;
     }
-    
+
     start = jl_hrtime();
     uint64_t counter = 0;
     for (auto &G : M.global_values()) {
@@ -1050,7 +1050,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
             materializePreserved(*M, partitions[i]);
             end = jl_hrtime();
             dbgs() << "Materialization time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
-            
+
             start = jl_hrtime();
             construct_vars(*M, partitions[i]);
             M->setModuleFlag(Module::Error, "julia.mv.suffix", MDString::get(M->getContext(), "_" + std::to_string(i)));
@@ -1270,7 +1270,7 @@ void jl_dump_native_impl(void *native_code,
             !!unopt_bc_fname, !!bc_fname, !!obj_fname, !!asm_fname,
             threads
     ); };
-    
+
     compile(*dataM, "text", threads);
 
     end = jl_hrtime();
@@ -1389,7 +1389,7 @@ void jl_dump_native_impl(void *native_code,
     if (asm_fname)
         handleAllErrors(writeArchive(asm_fname, asm_Archive, true,
                     Kind, true, false), reportWriterError);
-    
+
     end = jl_hrtime();
 
     dbgs() << "archive time: " << (end - start) / 1e9 << "s\n";

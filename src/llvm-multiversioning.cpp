@@ -924,7 +924,7 @@ static bool runMultiVersioning(Module &M, bool allow_bad_fvars)
         return false;
 
     CloneCtx clone(M, allow_bad_fvars);
-    
+
     clone.prepare_slots();
 
     clone.clone_decls();
