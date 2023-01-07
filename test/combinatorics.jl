@@ -44,6 +44,7 @@ end
     @test invperm((1,2)) == (1,2)
     @test invperm((2,1)) == (2,1)
     @test_throws ArgumentError invperm((1,3))
+    @test_throws ArgumentError invperm((1,1))
 
     push!(p, 1)
     @test !isperm(p)

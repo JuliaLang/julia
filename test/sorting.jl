@@ -918,6 +918,14 @@ end
     @test bsqs()                            === bsqs(missing, missing, InsertionSort)
 end
 
+@testset "QuickerSort allocations on non-concrete eltype" begin
+    v = Vector{Union{Nothing, Bool}}(rand(Bool, 10000))
+    @test 4 == @allocations sort(v)
+    @test 4 == @allocations sort(v; alg=Base.Sort.QuickerSort())
+    # it would be nice if these numbers were lower (1 or 2), but these
+    # test that we don't have O(n) allocations due to type instability
+end
+
 function test_allocs()
     v = rand(10)
     i = randperm(length(v))

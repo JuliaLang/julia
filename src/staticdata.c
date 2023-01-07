@@ -1,4 +1,3 @@
-
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
@@ -499,7 +498,7 @@ static void jl_load_sysimg_so(void)
 
 #define NBOX_C 1024
 
-static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v)
+static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v) JL_NOTSAFEPOINT
 {
     // ignore items that are given a special relocation representation
     if (s->incremental && jl_object_in_image(v))
@@ -2615,7 +2614,12 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
         } else {
             checksumpos_ff = checksumpos;
         }
-        jl_gc_enable_finalizers(ct, 0); // make sure we don't run any Julia code concurrently after this point
+        {
+            // make sure we don't run any Julia code concurrently after this point
+            jl_gc_enable_finalizers(ct, 0);
+            assert(ct->reentrant_inference == 0);
+            ct->reentrant_inference = (uint16_t)-1;
+        }
         jl_prepare_serialization_data(mod_array, newly_inferred, jl_worklist_key(worklist), &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
 
         // Generate _native_data`
@@ -2639,7 +2643,9 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     jl_save_system_image_to_stream(ff, worklist, extext_methods, new_specializations, method_roots_list, ext_targets, edges);
     native_functions = NULL;
     if (worklist) {
-        jl_gc_enable_finalizers(ct, 1); // make sure we don't run any Julia code concurrently before this point
+        // Re-enable running julia code for postoutput hooks, atexit, etc.
+        jl_gc_enable_finalizers(ct, 1);
+        ct->reentrant_inference = 0;
         jl_precompile_toplevel_module = NULL;
     }
 
@@ -3204,8 +3210,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         cachesizes->fptrlist = sizeof_fptr_record;
     }
 
-    if (!s.incremental)
-        jl_init_codegen();
     s.s = &sysimg;
     jl_update_all_fptrs(&s, image); // fptr relocs and registration
     if (!ccallable_list) {

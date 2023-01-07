@@ -15,6 +15,17 @@ Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "
 import .FakePTYs: open_fake_pty
 using Base.Meta
 
+## Debugging options
+# Disable parallel precompiles generation by setting `false`
+const PARALLEL_PRECOMPILATION = true
+
+# View the code sent to the repl by setting this to `stdout`
+const debug_output = devnull # or stdout
+
+# Disable fancy printing
+const fancyprint = (stdout isa Base.TTY) && (get(ENV, "CI", nothing) != "true")
+##
+
 CTRL_C = '\x03'
 UP_ARROW = "\e[A"
 DOWN_ARROW = "\e[B"
@@ -163,7 +174,7 @@ Pkg = get(Base.loaded_modules,
 
 if Pkg !== nothing
     # TODO: Split Pkg precompile script into REPL and script part
-    repl_script *= Pkg.precompile_script
+    repl_script = Pkg.precompile_script * repl_script # do larger workloads first for better parallelization
 end
 
 FileWatching = get(Base.loaded_modules,
@@ -224,7 +235,7 @@ Profile = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile"),
           nothing)
 if Profile !== nothing
-    repl_script *= Profile.precompile_script
+    repl_script = Profile.precompile_script * repl_script # do larger workloads first for better parallelization
     hardcoded_precompile_statements *= """
     precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Int, UInt})
     precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Int, UnitRange{UInt}})
@@ -238,12 +249,6 @@ const JULIA_PROMPT = "julia> "
 const PKG_PROMPT = "pkg> "
 const SHELL_PROMPT = "shell> "
 const HELP_PROMPT = "help?> "
-
-# You can disable parallel precompiles generation by setting `false`
-const PARALLEL_PRECOMPILATION = true
-
-# You can disable fancy printing
-const fancyprint = (stdout isa Base.TTY) && (get(ENV, "CI", nothing) != "true")
 
 # Printing the current state
 let
@@ -286,7 +291,6 @@ ansi_disablecursor = "\e[?25l"
 
 generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printed
     start_time = time_ns()
-    debug_output = devnull # or stdout
     sysimg = Base.unsafe_string(Base.JLOptions().image_file)
 
     # Extract the precompile statements from the precompile file
@@ -352,6 +356,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
     step2 = @async mktemp() do precompile_file, precompile_file_h
         print_state("step2" => "R")
         # Collect statements from running a REPL process and replaying our REPL script
+        touch(precompile_file)
         pts, ptm = open_fake_pty()
         blackhole = Sys.isunix() ? "/dev/null" : "nul"
         if have_repl
@@ -388,48 +393,66 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             close(output_copy)
             close(ptm)
         end
-        # wait for the definitive prompt before start writing to the TTY
-        readuntil(output_copy, JULIA_PROMPT)
-        sleep(0.1)
-        readavailable(output_copy)
-        # Input our script
-        if have_repl
-            precompile_lines = split(repl_script::String, '\n'; keepempty=false)
-            curr = 0
-            for l in precompile_lines
-                sleep(0.1)
-                curr += 1
-                print_state("repl" => "$curr/$(length(precompile_lines))")
-                # consume any other output
-                bytesavailable(output_copy) > 0 && readavailable(output_copy)
-                # push our input
-                write(debug_output, "\n#### inputting statement: ####\n$(repr(l))\n####\n")
-                write(ptm, l, "\n")
-                readuntil(output_copy, "\n")
-                # wait for the next prompt-like to appear
-                readuntil(output_copy, "\n")
-                strbuf = ""
-                while !eof(output_copy)
-                    strbuf *= String(readavailable(output_copy))
-                    occursin(JULIA_PROMPT, strbuf) && break
-                    occursin(PKG_PROMPT, strbuf) && break
-                    occursin(SHELL_PROMPT, strbuf) && break
-                    occursin(HELP_PROMPT, strbuf) && break
+        repl_inputter = @async begin
+            # wait for the definitive prompt before start writing to the TTY
+            readuntil(output_copy, JULIA_PROMPT)
+            sleep(0.1)
+            readavailable(output_copy)
+            # Input our script
+            if have_repl
+                precompile_lines = split(repl_script::String, '\n'; keepempty=false)
+                curr = 0
+                for l in precompile_lines
                     sleep(0.1)
+                    curr += 1
+                    print_state("repl" => "$curr/$(length(precompile_lines))")
+                    # consume any other output
+                    bytesavailable(output_copy) > 0 && readavailable(output_copy)
+                    # push our input
+                    write(debug_output, "\n#### inputting statement: ####\n$(repr(l))\n####\n")
+                    write(ptm, l, "\n")
+                    readuntil(output_copy, "\n")
+                    # wait for the next prompt-like to appear
+                    readuntil(output_copy, "\n")
+                    strbuf = ""
+                    while !eof(output_copy)
+                        strbuf *= String(readavailable(output_copy))
+                        occursin(JULIA_PROMPT, strbuf) && break
+                        occursin(PKG_PROMPT, strbuf) && break
+                        occursin(SHELL_PROMPT, strbuf) && break
+                        occursin(HELP_PROMPT, strbuf) && break
+                        sleep(0.1)
+                    end
                 end
             end
+            write(ptm, "exit()\n")
+            wait(tee)
+            success(p) || Base.pipeline_error(p)
+            close(ptm)
+            write(debug_output, "\n#### FINISHED ####\n")
         end
-        write(ptm, "exit()\n")
-        wait(tee)
-        success(p) || Base.pipeline_error(p)
-        close(ptm)
-        write(debug_output, "\n#### FINISHED ####\n")
 
         n_step2 = 0
-        for statement in split(read(precompile_file, String), '\n')
+        precompile_copy = Base.BufferStream()
+        buffer_reader = @async for statement in eachline(precompile_copy)
+            print_state("step2" => "R$n_step2")
             push!(statements_step2, statement)
             n_step2 += 1
         end
+
+        open(precompile_file, "r") do io
+            while true
+                # We need to allways call eof(io) for bytesavailable(io) to work
+                eof(io) && istaskdone(repl_inputter) && eof(io) && break
+                if bytesavailable(io) == 0
+                    sleep(0.1)
+                    continue
+                end
+                write(precompile_copy, readavailable(io))
+            end
+        end
+        close(precompile_copy)
+        wait(buffer_reader)
         close(statements_step2)
         print_state("step2" => "F$n_step2")
         return :ok
