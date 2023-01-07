@@ -1365,6 +1365,7 @@ missing
 
 julia> popat!(a, 4)
 ERROR: BoundsError: attempt to access 3-element Vector{Int64} at index [4]
+Valid indices are 1:3.
 [...]
 ```
 """

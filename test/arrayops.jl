@@ -3020,29 +3020,29 @@ end
     b = IOBuffer()
     showerror(b, err)
     @test String(take!(b)) ==
-        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, 1:2]"
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, 1:2]\nValid indices are [1:2, 1:2]."
 
     err = try x[10, trues(2)]; catch err; err; end
     b = IOBuffer()
     showerror(b, err)
     @test String(take!(b)) ==
-        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, 2-element BitVector]"
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, 2-element BitVector]\nValid indices are [1:2, 1:2]."
 
     # Also test : directly for custom types for which it may appear as-is
     err = BoundsError(x, (10, :))
     showerror(b, err)
     @test String(take!(b)) ==
-        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, :]"
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, :]\nValid indices are [1:2, 1:2]."
 
     err = BoundsError(x, "bad index")
     showerror(b, err)
     @test String(take!(b)) ==
-        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [\"bad index\"]"
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [\"bad index\"]\nValid indices are [1:2, 1:2]."
 
     err = BoundsError(x, (10, "bad index"))
     showerror(b, err)
     @test String(take!(b)) ==
-        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, \"bad index\"]"
+        "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, \"bad index\"]\nValid indices are [1:2, 1:2]."
 end
 
 @testset "inference of Union{T,Nothing} arrays 26771" begin

@@ -608,6 +608,7 @@ julia> f2() = @inbounds return g(1:2, -1);
 
 julia> f1()
 ERROR: BoundsError: attempt to access 2-element UnitRange{Int64} at index [-1]
+Valid indices are 1:2.
 Stacktrace:
  [1] throw_boundserror(::UnitRange{Int64}, ::Tuple{Int64}) at ./abstractarray.jl:455
  [2] checkbounds at ./abstractarray.jl:420 [inlined]
