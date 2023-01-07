@@ -1109,38 +1109,41 @@ julia> ([1, 2, 3], [4, 5, 6]) .+ tuple([1, 2, 3])
 ([2, 4, 6], [5, 7, 9])
 ```
 
-
-In all these that have been said, do note that not all operations requires you vectorizing or broadcasting for
-elementwise operations. For some binary operators (e.g `*`, `+`), when used with an array and a scalar, or
-between two arrays, an elementwise operation is *normally* performed. This is important to note because whichever
-style you may choose to use, though the end results will be the same, their execution speeds and allocations may be
-different (depending on the sizes of the arrays).
-
-For example, the `+` operator when used on two arrays of same sizes and dimensions performs elementwise addition,
-just as `.+` would have done:
-
-```jldoctest
-julia> [1, 2] .+ [3, 4]
-2-element Vector{Int64}:
- 4
- 6
-
-julia> [1, 2] + [3, 4]
-2-element Vector{Int64}:
- 4
- 6
-```
-
-However, calling `@time` on these two operations (performed on a small dataset), we see the difference:
+It is important to note that not all operations requires you vectorizing or broadcasting for
+elementwise operations; for some binary operators (e.g `*`, `+`), when used with a 1D-array and a scalar,
+or between two 1D-arrays, an elementwise operation is *normally* performed. Though the returned value will
+be the same, their execution speeds and allocations may be different (depending on the sizes of the arrays).
+For example, the `+` operator when used on two 1D arrays of same sizes performs elementwise addition,
+just as `.+` would have done too:
 
 ```julia-repl
-julia> a = rand(Float64, 100); b = rand(Float64, 100);
+julia> a = rand(Int8, 5); b = rand(Int8, 5);
 
+julia> a + b
+5-element Vector{Int8}:
+ -83
+ -72
+ -84
+ -77
+ 121
+
+julia> a .+ b
+5-element Vector{Int8}:
+ -83
+ -72
+ -84
+ -77
+ 121
+```
+
+Using `@time`, we see the difference in the execution time and number of allocations:
+
+```julia-repl
 julia> @time a + b;
-  0.000007 seconds (1 allocation: 896 bytes)
+  0.000005 seconds (1 allocation: 64 bytes)
 
 julia> @time a .+ b;
-  0.000026 seconds (3 allocations: 960 bytes)
+  0.000031 seconds (3 allocations: 128 bytes)
 ```
 
 On a large dataset, the time difference may be very small, but the allocations will most likely be different.
