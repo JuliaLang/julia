@@ -2292,8 +2292,34 @@ static jl_value_t *bound_var_below(jl_tvar_t *tv, jl_varbinding_t *bb, jl_stenv_
     return (jl_value_t*)tv;
 }
 
+static int subtype_by_bounds(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_NOTSAFEPOINT;
+
+// similar to `subtype_by_bounds`, used to avoid stack-overflow caused by circulation constraints.
+static int try_subtype_by_bounds(jl_value_t *a, jl_value_t *b, jl_stenv_t *e)
+{
+    if (jl_is_uniontype(a))
+        return try_subtype_by_bounds(((jl_uniontype_t *)a)->a, b, e) &&
+               try_subtype_by_bounds(((jl_uniontype_t *)a)->b, b, e);
+    else if (jl_is_uniontype(b))
+        return try_subtype_by_bounds(a, ((jl_uniontype_t *)b)->a, e) ||
+               try_subtype_by_bounds(a, ((jl_uniontype_t *)b)->b, e);
+    else if (jl_egal(a, b))
+        return 1;
+    else if (!jl_is_typevar(b))
+        return 0;
+    jl_varbinding_t *vb = e->vars;
+    while (vb != NULL) {
+        if (subtype_by_bounds(b, (jl_value_t *)vb->var, e) && obviously_in_union(a, vb->ub))
+            return 1;
+        vb = vb->prev;
+    }
+    return 0;
+}
+
 static int try_subtype_in_env(jl_value_t *a, jl_value_t *b, jl_stenv_t *e, int R, int d)
 {
+    if (a == jl_bottom_type || b == (jl_value_t *)jl_any_type || try_subtype_by_bounds(a, b, e))
+        return 1;
     jl_value_t *root=NULL; jl_savedenv_t se;
     JL_GC_PUSH1(&root);
     save_env(e, &root, &se);

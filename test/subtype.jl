@@ -2286,10 +2286,8 @@ T46784{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}}, M, Union{Abstr
 let S = Tuple{Type{T},Array{Union{T,Missing},N}} where {T,N},
     T = Tuple{Type{T},Array{Union{T,Nothing},N}} where {T,N}
     @testintersect(S, T, !Union{})
-    I = typeintersect(S, T)
-    @test (Tuple{Type{Any},Array{Any,N}} where {N}) <: I
-    @test_broken I <: S
-    @test_broken I <: T
+    @test_broken typeintersect(S, T) != S
+    @test_broken typeintersect(T, S) != T
 end
 
 #issue 46736
