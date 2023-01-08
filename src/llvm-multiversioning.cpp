@@ -35,7 +35,7 @@
 #include <set>
 #include <vector>
 
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 #include "julia_assert.h"
 
 #define DEBUG_TYPE "julia_multiversioning"
@@ -51,7 +51,7 @@ void replaceUsesWithLoad(Function &F, function_ref<GlobalVariable *(Instruction 
 
 namespace {
 constexpr uint32_t clone_mask =
-    JL_TARGET_CLONE_LOOP | JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH | JL_TARGET_CLONE_CPU;
+    JL_TARGET_CLONE_LOOP | JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH | JL_TARGET_CLONE_CPU | JL_TARGET_CLONE_FLOAT16;
 
 // Treat identical mapping as missing and return `def` in that case.
 // We mainly need this to identify cloned function using value map after LLVM cloning
@@ -498,7 +498,8 @@ uint32_t CloneCtx::collect_func_info(Function &F)
                     // Check for BFloat16 when they are added to julia can be done here
                 }
             }
-            if (has_veccall && (flag & JL_TARGET_CLONE_SIMD) && (flag & JL_TARGET_CLONE_MATH)) {
+            if (has_veccall && (flag & JL_TARGET_CLONE_SIMD) && (flag & JL_TARGET_CLONE_MATH) &&
+               (flag & JL_TARGET_CLONE_CPU) && (flag & JL_TARGET_CLONE_FLOAT16)) {
                 return flag;
             }
         }

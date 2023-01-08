@@ -880,10 +880,8 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
         if (jl_egal(rhs, old))
             return;
         if (jl_typeof(rhs) != jl_typeof(old) || jl_is_type(rhs) || jl_is_module(rhs)) {
-#ifndef __clang_gcanalyzer__
             jl_errorf("invalid redefinition of constant %s",
                       jl_symbol_name(b->name));
-#endif
         }
         jl_safe_printf("WARNING: redefinition of constant %s. This may fail, cause incorrect answers, or produce other errors.\n",
                        jl_symbol_name(b->name));

@@ -310,7 +310,7 @@ static Value *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
     }
     if (gv == nullptr)
         gv = new GlobalVariable(*M, ctx.types().T_pjlvalue,
-                                false, GlobalVariable::PrivateLinkage,
+                                false, GlobalVariable::ExternalLinkage,
                                 NULL, localname);
     // LLVM passes sometimes strip metadata when moving load around
     // since the load at the new location satisfy the same condition as the original one.

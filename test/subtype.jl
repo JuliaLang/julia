@@ -2286,6 +2286,39 @@ T46784{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}}, M, Union{Abstr
 @testintersect(T46784{T,S} where {T,S}, T46784, !Union{})
 @test_broken T46784 <: T46784{T,S} where {T,S}
 
+#issue 36185
+let S = Tuple{Type{T},Array{Union{T,Missing},N}} where {T,N},
+    T = Tuple{Type{T},Array{Union{T,Nothing},N}} where {T,N}
+    @testintersect(S, T, !Union{})
+    I = typeintersect(S, T)
+    @test (Tuple{Type{Any},Array{Any,N}} where {N}) <: I
+    @test_broken I <: S
+    @test_broken I <: T
+end
+
+#issue 46736
+let S = Tuple{Val{T}, T} where {S1,T<:Val{Union{Nothing,S1}}},
+    T = Tuple{Val{Val{Union{Nothing, S2}}}, Any} where S2
+    @testintersect(S, T, !Union{})
+    # not ideal (`S1` should be unbounded)
+    @test_broken testintersect(S, T) == Tuple{Val{Val{Union{Nothing, S1}}}, Val{Union{Nothing, S1}}} where S1<:(Union{Nothing, S2} where S2)
+end
+
+#issue #47874:case1
+let S1 = Tuple{Int, Any, Union{Val{C1}, C1}} where {R1<:Real, C1<:Union{Complex{R1}, R1}},
+    S2 = Tuple{Int, Any, Union{Val{C1}, C1} where {R1<:Real, C1<:Union{Complex{R1}, R1}}},
+    T1 = Tuple{Any, Int, Union{Val{C2}, C2}} where {R2<:Real, C2<:Union{Complex{R2}, R2}},
+    T2 = Tuple{Any, Int, V} where {R2<:Real, C2<:Union{Complex{R2}, R2}, V<:Union{Val{C2}, C2}}
+    for S in (S1, S2), T in (T1, T2)
+        @testintersect(S, T, !Union{})
+    end
+end
+
+let S = Tuple{T2, V2} where {T2, N2, V2<:(Array{S2, N2} where {S2 <: T2})},
+    T = Tuple{V1, T1} where {T1, N1, V1<:(Array{S1, N1} where {S1 <: T1})}
+    @testintersect(S, T, !Union{})
+end
+
 @testset "known subtype/intersect issue" begin
     #issue 45874
     # Causes a hang due to jl_critical_error calling back into malloc...
@@ -2312,10 +2345,6 @@ T46784{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}}, M, Union{Abstr
     A = Tuple{Tuple{Int, Int, Vararg{Int, N}}, Tuple{Int, Vararg{Int, N}}, Tuple{Vararg{Int, N}}} where N
     B = Tuple{NTuple{N, Int}, NTuple{N, Int}, NTuple{N, Int}} where N
     @test_broken !(A <: B)
-
-    #issue 36185
-    @test_broken typeintersect((Tuple{Type{T},Array{Union{T,Missing},N}} where {T,N}),
-                               (Tuple{Type{T},Array{Union{T,Nothing},N}} where {T,N})) <: Any
 
     #issue 35698
     @test_broken typeintersect(Type{Tuple{Array{T,1} where T}}, UnionAll) != Union{}
