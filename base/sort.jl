@@ -86,7 +86,7 @@ issorted(itr;
     issorted(itr, ord(lt,by,rev,order))
 
 function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
-    _sort!(v, InitialOptimizations(QuickBufferSort(k)), o, (;))
+    _sort!(v, InitialOptimizations(ScratchQuickSort(k)), o, (;))
     maybeview(v, k)
 end
 
@@ -953,12 +953,12 @@ end
 
 
 """
-    QuickBufferSort(next::Algorithm=SMALL_ALGORITHM) <: Algorithm
-    QuickBufferSort(lo::Union{Integer, Missing}, hi::Union{Integer, Missing}=lo, next::Algorithm=SMALL_ALGORITHM) <: Algorithm
+    ScratchQuickSort(next::Algorithm=SMALL_ALGORITHM) <: Algorithm
+    ScratchQuickSort(lo::Union{Integer, Missing}, hi::Union{Integer, Missing}=lo, next::Algorithm=SMALL_ALGORITHM) <: Algorithm
 
-Use the `QuickBufferSort` algorithm with the `next` algorithm as a base case.
+Use the `ScratchQuickSort` algorithm with the `next` algorithm as a base case.
 
-`QuickBufferSort` is like `QuickSort`, but utilizes scratch space to operate faster and allow
+`ScratchQuickSort` is like `QuickSort`, but utilizes scratch space to operate faster and allow
 for the possibility of maintaining stability.
 
 If `lo` and `hi` are provided, finds and sorts the elements in the range `lo:hi`, reordering
@@ -976,17 +976,17 @@ Characteristics:
   * *quadratic worst case runtime* in pathological cases
   (vanishingly rare for non-malicious input)
 """
-struct QuickBufferSort{L<:Union{Integer,Missing}, H<:Union{Integer,Missing}, T<:Algorithm} <: Algorithm
+struct ScratchQuickSort{L<:Union{Integer,Missing}, H<:Union{Integer,Missing}, T<:Algorithm} <: Algorithm
     lo::L
     hi::H
     next::T
 end
-QuickBufferSort(next::Algorithm=SMALL_ALGORITHM) = QuickBufferSort(missing, missing, next)
-QuickBufferSort(lo::Union{Integer, Missing}, hi::Union{Integer, Missing}) = QuickBufferSort(lo, hi, SMALL_ALGORITHM)
-QuickBufferSort(lo::Union{Integer, Missing}, next::Algorithm=SMALL_ALGORITHM) = QuickBufferSort(lo, lo, next)
-QuickBufferSort(r::OrdinalRange, next::Algorithm=SMALL_ALGORITHM) = QuickBufferSort(first(r), last(r), next)
+ScratchQuickSort(next::Algorithm=SMALL_ALGORITHM) = ScratchQuickSort(missing, missing, next)
+ScratchQuickSort(lo::Union{Integer, Missing}, hi::Union{Integer, Missing}) = ScratchQuickSort(lo, hi, SMALL_ALGORITHM)
+ScratchQuickSort(lo::Union{Integer, Missing}, next::Algorithm=SMALL_ALGORITHM) = ScratchQuickSort(lo, lo, next)
+ScratchQuickSort(r::OrdinalRange, next::Algorithm=SMALL_ALGORITHM) = ScratchQuickSort(first(r), last(r), next)
 
-# select a pivot for QuickBufferSort
+# select a pivot for ScratchQuickSort
 #
 # This method is redefined to rand(lo:hi) in Random.jl
 # We can't use rand here because it is not available in Core.Compiler and
@@ -1029,7 +1029,7 @@ function partition!(t::AbstractVector, lo::Integer, hi::Integer, offset::Integer
     pivot_index
 end
 
-function _sort!(v::AbstractVector, a::QuickBufferSort, o::Ordering, kw;
+function _sort!(v::AbstractVector, a::ScratchQuickSort, o::Ordering, kw;
                 t=nothing, offset=nothing, swap=false, rev=false)
     @getkw lo hi scratch
 
@@ -1047,7 +1047,7 @@ function _sort!(v::AbstractVector, a::QuickBufferSort, o::Ordering, kw;
         end
         swap = !swap
 
-        # For QuickBufferSort(), a.lo === a.hi === missing, so the first two branches get skipped
+        # For ScratchQuickSort(), a.lo === a.hi === missing, so the first two branches get skipped
         if !ismissing(a.lo) && j <= a.lo # Skip sorting the lower part
             swap && copyto!(v, lo, t, lo+offset, j-lo)
             rev && reverse!(v, lo, j-1)
@@ -1245,7 +1245,7 @@ the initial optimizations because they can change the input vector's type and or
 make them `UIntMappable`.
 
 If the input is not [`UIntMappable`](@ref), then we perform a presorted check and dispatch
-to [`QuickBufferSort`](@ref).
+to [`ScratchQuickSort`](@ref).
 
 Otherwise, we dispatch to [`InsertionSort`](@ref) for inputs with `length <= 40` and then
 perform a presorted check ([`CheckSorted`](@ref)).
@@ -1277,7 +1277,7 @@ Consequently, we apply [`RadixSort`](@ref) for any reasonably long inputs that r
 stage.
 
 Finally, if the input has length less than 80, we dispatch to [`InsertionSort`](@ref) and
-otherwise we dispatch to [`QuickBufferSort`](@ref).
+otherwise we dispatch to [`ScratchQuickSort`](@ref).
 """
 const DEFAULT_STABLE = InitialOptimizations(
     IsUIntMappable(
@@ -1287,9 +1287,9 @@ const DEFAULT_STABLE = InitialOptimizations(
                     ConsiderCountingSort(
                         ConsiderRadixSort(
                             Small{80}(
-                                QuickBufferSort())))))),
+                                ScratchQuickSort())))))),
         StableCheckSorted(
-            QuickBufferSort())))
+            ScratchQuickSort())))
 """
     DEFAULT_UNSTABLE
 
@@ -1494,7 +1494,7 @@ function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
     end
 
     # do partial quicksort
-    _sort!(ix, InitialOptimizations(QuickBufferSort(k)), Perm(ord(lt, by, rev, order), v), (;))
+    _sort!(ix, InitialOptimizations(ScratchQuickSort(k)), Perm(ord(lt, by, rev, order), v), (;))
 
     maybeview(ix, k)
 end
