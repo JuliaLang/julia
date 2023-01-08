@@ -584,6 +584,7 @@ Sys.islinux(p::AbstractPlatform) = os(p) == "linux"
 Sys.iswindows(p::AbstractPlatform) = os(p) == "windows"
 Sys.isfreebsd(p::AbstractPlatform) = os(p) == "freebsd"
 Sys.isbsd(p::AbstractPlatform) = os(p) ∈ ("freebsd", "macos")
+Sys.isunix(p::AbstractPlatform) = Sys.isbsd(p) || Sys.islinux(p)
 
 const arch_mapping = Dict(
     "x86_64" => "(x86_|amd)64",

@@ -127,6 +127,7 @@ const DC3 = 2.48015872894767294178e-05
 const DC4 = -2.75573143513906633035e-07
 const DC5 = 2.08757232129817482790e-09
 const DC6 = -1.13596475577881948265e-11
+
 """
     cos_kernel(y)
 
@@ -722,23 +723,46 @@ function acos(x::T) where T <: Union{Float32, Float64}
     end
 end
 
-# multiply in extended precision
-function mulpi_ext(x::Float64)
-    m = 3.141592653589793
-    m_hi = 3.1415926218032837
-    m_lo = 3.178650954705639e-8
-
-    x_hi = reinterpret(Float64, reinterpret(UInt64,x) & 0xffff_ffff_f800_0000)
-    x_lo = x-x_hi
-
-    y_hi = m*x
-    y_lo = x_hi * m_lo + (x_lo* m_hi + ((x_hi*m_hi-y_hi) + x_lo*m_lo))
-
-    DoubleFloat64(y_hi,y_lo)
+# Uses minimax polynomial of sin(π * x) for π * x in [0, .25]
+@inline function sinpi_kernel(x::Float64)
+    x² = x*x
+    x⁴ = x²*x²
+    r  = evalpoly(x², (2.5501640398773415, -0.5992645293202981, 0.08214588658006512,
+                      -7.370429884921779e-3, 4.662827319453555e-4, -2.1717412523382308e-5))
+    return muladd(3.141592653589793, x, x*muladd(-5.16771278004997,
+                  x², muladd(x⁴, r,  1.2245907532225998e-16)))
 end
-mulpi_ext(x::Float32) = DoubleFloat32(pi*Float64(x))
-mulpi_ext(x::Rational) = mulpi_ext(float(x))
-mulpi_ext(x::Real) = pi*x # Fallback
+@inline function sinpi_kernel(x::Float32)
+    x = Float64(x)
+    return Float32(x*evalpoly(x*x, (3.1415926535762266, -5.167712769188119,
+                                    2.5501626483206374, -0.5992021090314925, 0.08100185277841528)))
+end
+
+@inline function sinpi_kernel(x::Float16)
+    x = Float32(x)
+    return Float16(x*evalpoly(x*x, (3.1415927f0, -5.1677127f0, 2.5501626f0, -0.5992021f0, 0.081001855f0)))
+end
+
+# Uses minimax polynomial of cos(π * x) for π * x in [0, .25]
+@inline function cospi_kernel(x::Float64)
+    x² = x*x
+    r = x²*evalpoly(x², (4.058712126416765, -1.3352627688537357, 0.23533063027900392,
+                        -0.025806887811869204, 1.9294917136379183e-3, -1.0368935675474665e-4))
+    a_x² = 4.934802200544679 * x²
+    a_x²lo = muladd(3.109686485461973e-16, x², muladd(4.934802200544679, x², -a_x²))
+
+    w  = 1.0-a_x²
+    return w + muladd(x², r, ((1.0-w)-a_x²) - a_x²lo)
+end
+@inline function cospi_kernel(x::Float32)
+    x = Float64(x)
+    return Float32(evalpoly(x*x, (1.0, -4.934802200541122, 4.058712123568637,
+                                 -1.3352624040152927, 0.23531426791507182, -0.02550710082498761)))
+end
+@inline function cospi_kernel(x::Float16)
+    x = Float32(x)
+    return Float16(evalpoly(x*x, (1.0f0, -4.934802f0, 4.058712f0, -1.3352624f0, 0.23531426f0, -0.0255071f0)))
+end
 
 """
     sinpi(x)
@@ -747,118 +771,62 @@ Compute ``\\sin(\\pi x)`` more accurately than `sin(pi*x)`, especially for large
 
 See also [`sind`](@ref), [`cospi`](@ref), [`sincospi`](@ref).
 """
-function sinpi(x::T) where T<:AbstractFloat
+function sinpi(_x::T) where T<:Union{IEEEFloat, Rational}
+    x = abs(_x)
     if !isfinite(x)
         isnan(x) && return x
         throw(DomainError(x, "`x` cannot be infinite."))
     end
+    # For large x, answers are all 1 or zero.
+    if T <: AbstractFloat
+        x >= maxintfloat(T) && return copysign(zero(T), _x)
+    end
 
-    ax = abs(x)
-    s = maxintfloat(T)/2
-    ax >= s && return copysign(zero(T),x) # integer-valued
-
-    # reduce to interval [-1,1]
-    # assumes RoundNearest rounding mode
-    t = 3*s
-    rx = x-((x+t)-t) # zeros may be incorrectly signed
-    arx = abs(rx)
-
-    if (arx == 0) | (arx == 1)
-        copysign(zero(T),x)
-    elseif arx < 0.25
-        sin_kernel(mulpi_ext(rx))
-    elseif arx < 0.75
-        y = mulpi_ext(T(0.5) - arx)
-        copysign(cos_kernel(y),rx)
+    # reduce to interval [0, 0.5]
+    n = round(2*x)
+    rx = float(muladd(T(-.5), n, x))
+    n = Int64(n) & 3
+    if n==0
+        res = sinpi_kernel(rx)
+    elseif n==1
+        res = cospi_kernel(rx)
+    elseif n==2
+        res = zero(T)-sinpi_kernel(rx)
     else
-        y = mulpi_ext(copysign(one(T),rx) - rx)
-        sin_kernel(y)
+        res = zero(T)-cospi_kernel(rx)
     end
+    return ifelse(signbit(_x), -res, res)
 end
-
-# Rationals
-function sinpi(x::T) where T<:Rational
-    Tf = float(T)
-    if !isfinite(x)
-        throw(DomainError(x, "`x` must be finite."))
-    end
-
-    # until we get an IEEE remainder function (#9283)
-    rx = rem(x,2)
-    if rx > 1
-        rx -= 2
-    elseif rx < -1
-        rx += 2
-    end
-    arx = abs(rx)
-
-    if (arx == 0) | (arx == 1)
-        copysign(zero(Tf),x)
-    elseif arx < 0.25
-        sin_kernel(mulpi_ext(rx))
-    elseif arx < 0.75
-        y = mulpi_ext(T(0.5) - arx)
-        copysign(cos_kernel(y),rx)
-    else
-        y = mulpi_ext(copysign(one(T),rx) - rx)
-        sin_kernel(y)
-    end
-end
-
 """
     cospi(x)
 
 Compute ``\\cos(\\pi x)`` more accurately than `cos(pi*x)`, especially for large `x`.
 """
-function cospi(x::T) where T<:AbstractFloat
+function cospi(x::T) where T<:Union{IEEEFloat, Rational}
+    x = abs(x)
     if !isfinite(x)
         isnan(x) && return x
         throw(DomainError(x, "`x` cannot be infinite."))
     end
+    # For large x, answers are all 1 or zero.
+    if T <: AbstractFloat
+        x >= maxintfloat(T) && return one(T)
+    end
 
-    ax = abs(x)
-    s = maxintfloat(T)
-    ax >= s && return one(T) # even integer-valued
-
-    # reduce to interval [-1,1], then [0,1]
-    # assumes RoundNearest rounding mode
-    rx = abs(ax-((ax+s)-s))
-
-    if rx <= 0.25
-        cos_kernel(mulpi_ext(rx))
-    elseif rx < 0.75
-        y = mulpi_ext(T(0.5) - rx)
-        sin_kernel(y)
+    # reduce to interval [0, 0.5]
+    n = round(2*x)
+    rx = float(muladd(T(-.5), n, x))
+    n = Int64(n) & 3
+    if n==0
+        return cospi_kernel(rx)
+    elseif n==1
+        return zero(T)-sinpi_kernel(rx)
+    elseif n==2
+        return zero(T)-cospi_kernel(rx)
     else
-        y = mulpi_ext(one(T) - rx)
-        -cos_kernel(y)
+        return sinpi_kernel(rx)
     end
 end
-
-# Rationals
-function cospi(x::T) where T<:Rational
-    if !isfinite(x)
-        throw(DomainError(x, "`x` must be finite."))
-    end
-
-    ax = abs(x)
-    # until we get an IEEE remainder function (#9283)
-    rx = rem(ax,2)
-    if rx > 1
-        rx = 2-rx
-    end
-
-    if rx <= 0.25
-        cos_kernel(mulpi_ext(rx))
-    elseif rx < 0.75
-        y = mulpi_ext(T(0.5) - rx)
-        sin_kernel(y)
-    else
-        y = mulpi_ext(one(T) - rx)
-        -cos_kernel(y)
-    end
-end
-
 """
     sincospi(x)
 
@@ -870,74 +838,41 @@ where `x` is in radians), returning a tuple `(sine, cosine)`.
 
 See also: [`cispi`](@ref), [`sincosd`](@ref), [`sinpi`](@ref).
 """
-function sincospi(x::T) where T<:AbstractFloat
+function sincospi(_x::T) where T<:Union{IEEEFloat, Rational}
+    x = abs(_x)
     if !isfinite(x)
         isnan(x) && return x, x
         throw(DomainError(x, "`x` cannot be infinite."))
     end
+    # For large x, answers are all 1 or zero.
+    if T <: AbstractFloat
+        x >= maxintfloat(T) && return (copysign(zero(T), _x), one(T))
+    end
 
-    ax = abs(x)
-    s = maxintfloat(T)
-    ax >= s && return (copysign(zero(T), x), one(T)) # even integer-valued
-
-    # reduce to interval [-1,1]
-    # assumes RoundNearest rounding mode
-    t = 3*(s/2)
-    rx = x-((x+t)-t) # zeros may be incorrectly signed
-    arx = abs(rx)
-
-    # same selection scheme as sinpi and cospi
-    if (arx == 0) | (arx == 1)
-        return copysign(zero(T), x), ifelse(ax % 2 == 0, one(T), -one(T))
-    elseif arx < 0.25
-        return sincos_kernel(mulpi_ext(rx))
-    elseif arx < 0.75
-        y = mulpi_ext(T(0.5) - arx)
-        return copysign(cos_kernel(y), rx), sin_kernel(y)
+    # reduce to interval [0, 0.5]
+    n = round(2*x)
+    rx = float(muladd(T(-.5), n, x))
+    n = Int64(n) & 3
+    si, co = sinpi_kernel(rx),cospi_kernel(rx)
+    if n==0
+        si, co = si, co
+    elseif n==1
+        si, co  = co, zero(T)-si
+    elseif n==2
+        si, co  = zero(T)-si, zero(T)-co
     else
-        y_si = mulpi_ext(copysign(one(T), rx) - rx)
-        y_co = mulpi_ext(one(T) - arx)
-        return sin_kernel(y_si), -cos_kernel(y_co)
+        si, co  = zero(T)-co, si
     end
-end
-
-# Rationals
-function sincospi(x::T) where T<:Rational
-    Tf = float(T)
-    if !isfinite(x)
-        throw(DomainError(x, "`x` must be finite."))
-    end
-
-    # until we get an IEEE remainder function (#9283)
-    rx = rem(x,2)
-    if rx > 1
-        rx -= 2
-    elseif rx < -1
-        rx += 2
-    end
-    arx = abs(rx)
-
-    # same selection scheme as sinpi and cospi
-    if (arx == 0) | (arx == 1)
-        return copysign(zero(Tf),x), ifelse(iseven(numerator(x)), one(Tf), -one(Tf))
-    elseif arx < 0.25
-        return sincos_kernel(mulpi_ext(rx))
-    elseif arx < 0.75
-        y = mulpi_ext(T(0.5) - arx)
-        return copysign(cos_kernel(y), rx), sin_kernel(y)
-    else
-        y_si = mulpi_ext(copysign(one(T), rx) - rx)
-        y_co = mulpi_ext(one(T) - arx)
-        return sin_kernel(y_si), -cos_kernel(y_co)
-    end
+    si = ifelse(signbit(_x), -si, si)
+    return si, co
 end
 
 sinpi(x::Integer) = x >= 0 ? zero(float(x)) : -zero(float(x))
 cospi(x::Integer) = isodd(x) ? -one(float(x)) : one(float(x))
 sincospi(x::Integer) = (sinpi(x), cospi(x))
-sinpi(x::Real) = sinpi(float(x))
-cospi(x::Real) = cospi(float(x))
-sincospi(x::Real) = sincospi(float(x))
+sinpi(x::Real) = sin(pi*x)
+cospi(x::Real) = cos(pi*x)
+sincospi(x::Real) = sincos(pi*x)
 
 function sinpi(z::Complex{T}) where T
     F = float(T)

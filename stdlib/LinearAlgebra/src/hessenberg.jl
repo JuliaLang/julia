@@ -151,21 +151,25 @@ function \(U::UnitUpperTriangular, H::UpperHessenberg)
 end
 
 function *(H::UpperHessenberg, B::Bidiagonal)
-    A = A_mul_B_td!(_initarray(*, eltype(B), eltype(H), H), H, B)
+    TS = promote_op(matprod, eltype(H), eltype(B))
+    A = mul!(similar(H, TS, size(H)), H, B)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 function *(B::Bidiagonal, H::UpperHessenberg)
-    A = A_mul_B_td!(_initarray(*, eltype(B), eltype(H), H), B, H)
+    TS = promote_op(matprod, eltype(B), eltype(H))
+    A = mul!(similar(H, TS, size(H)), B, H)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 
 function /(H::UpperHessenberg, B::Bidiagonal)
-    A = _rdiv!(_initarray(/, eltype(H), eltype(B), H), H, B)
+    T = typeof(oneunit(eltype(H))/oneunit(eltype(B)))
+    A = _rdiv!(similar(H, T, size(H)), H, B)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 
 function \(B::Bidiagonal, H::UpperHessenberg)
-    A = ldiv!(_initarray(\, eltype(B), eltype(H), H), B, H)
+    T = typeof(oneunit(eltype(B))\oneunit(eltype(H)))
+    A = ldiv!(similar(H, T, size(H)), B, H)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 

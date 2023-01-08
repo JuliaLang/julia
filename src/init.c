@@ -237,7 +237,7 @@ JL_DLLEXPORT void jl_raise(int signo)
 #endif
 }
 
-JL_DLLEXPORT void jl_atexit_hook(int exitcode)
+JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
 {
     uv_tty_reset_mode();
 
@@ -269,11 +269,15 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     if (jl_base_module) {
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f != NULL) {
+            jl_value_t **fargs;
+            JL_GC_PUSHARGS(fargs, 2);
+            fargs[0] = f;
+            fargs[1] = jl_box_int32(exitcode);
             JL_TRY {
                 assert(ct);
                 size_t last_age = ct->world_age;
                 ct->world_age = jl_get_world_counter();
-                jl_apply(&f, 1);
+                jl_apply(fargs, 2);
                 ct->world_age = last_age;
             }
             JL_CATCH {
@@ -282,6 +286,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
                 jlbacktrace(); // written to STDERR_FILENO
             }
+            JL_GC_POP();
         }
     }
 
@@ -778,6 +783,10 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
         jl_install_default_signal_handlers();
 
     jl_gc_init();
+
+    arraylist_new(&jl_linkage_blobs, 0);
+    arraylist_new(&jl_image_relocs, 0);
+
     jl_ptls_t ptls = jl_init_threadtls(0);
 #pragma GCC diagnostic push
 #if defined(_COMPILER_GCC_) && __GNUC__ >= 12
@@ -798,13 +807,13 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         jl_preload_sysimg_so(jl_options.image_file);
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
+    jl_init_codegen();
 
     if (jl_options.image_file) {
         jl_restore_system_image(jl_options.image_file);
     } else {
         jl_init_types();
-        jl_global_roots_table = jl_alloc_vec_any(16);
-        jl_init_codegen();
+        jl_global_roots_table = jl_alloc_vec_any(0);
     }
 
     jl_init_common_symbols();
@@ -812,7 +821,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
     jl_init_serializer();
 
     if (!jl_options.image_file) {
-        jl_core_module = jl_new_module(jl_symbol("Core"));
+        jl_core_module = jl_new_module(jl_symbol("Core"), NULL);
         jl_core_module->parent = jl_core_module;
         jl_type_typename->mt->module = jl_core_module;
         jl_top_module = jl_core_module;
@@ -893,7 +902,7 @@ static void post_boot_hooks(void)
     jl_pair_type           = core("Pair");
     jl_kwcall_func         = core("kwcall");
     jl_kwcall_mt           = ((jl_datatype_t*)jl_typeof(jl_kwcall_func))->name->mt;
-    jl_kwcall_mt->max_args = 0;
+    jl_atomic_store_relaxed(&jl_kwcall_mt->max_args, 0);
 
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;

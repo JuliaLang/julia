@@ -218,6 +218,17 @@ Random.seed!(1)
             end
         end
 
+        @testset "trace" begin
+            for uplo in (:U, :L)
+                B = Bidiagonal(dv, ev, uplo)
+                if relty <: Integer
+                    @test tr(B) == tr(Matrix(B))
+                else
+                    @test tr(B) ≈ tr(Matrix(B)) rtol=2eps(relty)
+                end
+            end
+        end
+
         Tfull = Array(T)
         @testset "Linear solves" begin
             if relty <: AbstractFloat

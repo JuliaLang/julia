@@ -112,7 +112,7 @@ function Core.kwcall(kwargs, ::typeof(invoke), f, T, args...)
     return invoke(Core.kwcall, T, kwargs, f, args...)
 end
 # invoke does not have its own call cache, but kwcall for invoke does
-typeof(invoke).name.mt.max_args = 3 # invoke, f, T, args...
+setfield!(typeof(invoke).name.mt, :max_args, 3, :monotonic) # invoke, f, T, args...
 
 # core operations & types
 include("promotion.jl")
@@ -168,6 +168,7 @@ include("idset.jl")
 include("iterators.jl")
 using .Iterators: zip, enumerate, only
 using .Iterators: Flatten, Filter, product  # for generators
+using .Iterators: Stateful    # compat (was formerly used in reinterpretarray.jl)
 
 include("namedtuple.jl")
 
@@ -417,6 +418,7 @@ include("threadcall.jl")
 include("uuid.jl")
 include("pkgid.jl")
 include("toml_parser.jl")
+include("linking.jl")
 include("loading.jl")
 
 # misc useful functions & macros
@@ -444,6 +446,10 @@ end
 for m in methods(include)
     delete_method(m)
 end
+
+# This method is here only to be overwritten during the test suite to test
+# various sysimg related invalidation scenarios.
+a_method_to_overwrite_in_test() = inferencebarrier(1)
 
 # These functions are duplicated in client.jl/include(::String) for
 # nicer stacktraces. Modifications here have to be backported there

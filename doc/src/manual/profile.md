@@ -362,7 +362,7 @@ Passing `sample_rate=1.0` will make it record everything (which is slow);
     `Profile.Allocs.UnknownType`.
 
     You can read more about the missing types and the plan to improve this, here:
-    <https://github.com/JuliaLang/julia/issues/43688>.
+    [issue #43688](https://github.com/JuliaLang/julia/issues/43688).
 
 ## External Profiling
 

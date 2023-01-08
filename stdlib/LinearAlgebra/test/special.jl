@@ -191,7 +191,7 @@ end
         push!(mats, SymTridiagonal(Vector{T}(diag), Vector{T}(offdiag)))
     end
 
-    for op in (+,*) # to do: fix when operation is - and the matrix has a range as the underlying representation and we get a step size of 0.
+    for op in (+,-,*)
         for A in mats
             for B in mats
                 @test (op)(A, B) ≈ (op)(Matrix(A), Matrix(B)) ≈ Matrix((op)(A, B))
@@ -205,6 +205,17 @@ end
                 @test (op)(B, A) ≈ (op)(B, Matrix(A)) ≈ Matrix((op)(B, A))
             end
         end
+    end
+    diag = [randn(ComplexF64, 2, 2) for _ in 1:3]
+    odiag = [randn(ComplexF64, 2, 2) for _ in 1:2]
+    for A in (Diagonal(diag),
+                Bidiagonal(diag, odiag, :U),
+                Bidiagonal(diag, odiag, :L),
+                Tridiagonal(odiag, diag, odiag),
+                SymTridiagonal(diag, odiag)), B in uniformscalingmats
+        @test (A + B)::typeof(A) == (B + A)::typeof(A)
+        @test (A - B)::typeof(A) == ((A + (-B))::typeof(A))
+        @test (B - A)::typeof(A) == ((B + (-A))::typeof(A))
     end
 end
 

@@ -73,7 +73,7 @@ const char *jl_crtdll_name = CRTDLL_BASENAME ".dll";
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
 
 #ifdef _OS_WINDOWS_
-static void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT
+void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT
 {
     DWORD res;
     LPWSTR errmsg;
@@ -409,11 +409,7 @@ JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int t
         char err[256];
         win32_formatmessage(GetLastError(), err, sizeof(err));
 #endif
-#ifndef __clang_gcanalyzer__
-        // Hide the error throwing from the analyser since there isn't a way to express
-        // "safepoint only when throwing error" currently.
         jl_errorf("could not load symbol \"%s\":\n%s", symbol, err);
-#endif
     }
     return symbol_found;
 }

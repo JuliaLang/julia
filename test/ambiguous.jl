@@ -350,6 +350,7 @@ f35983(::Type, ::Type) = 2
 @test first(Base.methods(f35983, (Any, Any))).sig == Tuple{typeof(f35983), Type, Type}
 let ambig = Ref{Int32}(0)
     ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, nothing, -1, typemax(UInt), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test ms isa Vector
     @test length(ms) == 1
     @test ambig[] == 0
 end
@@ -358,6 +359,7 @@ f35983(::Type{Int16}, ::Any) = 3
 @test length(Base.methods(f35983, (Type, Type))) == 1
 let ambig = Ref{Int32}(0)
     ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, nothing, -1, typemax(UInt), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test ms isa Vector
     @test length(ms) == 2
     @test ambig[] == 1
 end
