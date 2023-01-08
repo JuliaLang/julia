@@ -207,7 +207,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
         IRBuilder<> builder(fastTerm->getParent());
         fastTerm->removeFromParent();
         MDNode *tbaa = tbaa_gcframe;
-        Value *prior = emit_gc_unsafe_enter(builder, get_current_ptls_from_task(builder, get_current_task_from_pgcstack(builder, pgcstack), tbaa));
+        Value *prior = emit_gc_unsafe_enter(builder, get_current_ptls_from_task(builder, get_current_task_from_pgcstack(builder, pgcstack), tbaa), true);
         builder.Insert(fastTerm);
         phi->addIncoming(pgcstack, fastTerm->getParent());
         // emit pre-return cleanup
@@ -219,7 +219,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
             for (auto &BB : *pgcstack->getParent()->getParent()) {
                 if (isa<ReturnInst>(BB.getTerminator())) {
                     IRBuilder<> builder(BB.getTerminator());
-                    emit_gc_unsafe_leave(builder, get_current_ptls_from_task(builder, get_current_task_from_pgcstack(builder, phi), tbaa), last_gc_state);
+                    emit_gc_unsafe_leave(builder, get_current_ptls_from_task(builder, get_current_task_from_pgcstack(builder, phi), tbaa), last_gc_state, true);
                 }
             }
         }

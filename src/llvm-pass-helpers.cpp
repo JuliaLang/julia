@@ -119,6 +119,7 @@ namespace jl_intrinsics {
     static const char *POP_GC_FRAME_NAME = "julia.pop_gc_frame";
     static const char *QUEUE_GC_ROOT_NAME = "julia.queue_gc_root";
     static const char *QUEUE_GC_BINDING_NAME = "julia.queue_gc_binding";
+    static const char *SAFEPOINT_NAME = "julia.safepoint";
 
     static auto T_size_t(const JuliaPassContext &context) {
         return sizeof(size_t) == sizeof(uint32_t) ?
@@ -226,6 +227,22 @@ namespace jl_intrinsics {
                     false),
                 Function::ExternalLinkage,
                 QUEUE_GC_BINDING_NAME);
+            intrinsic->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
+            return intrinsic;
+        });
+
+    const IntrinsicDescription safepoint(
+        SAFEPOINT_NAME,
+        [](const JuliaPassContext &context) {
+            auto T_size = getSizeTy(context.getLLVMContext());
+            auto T_psize = T_size->getPointerTo();
+            auto intrinsic = Function::Create(
+                FunctionType::get(
+                    Type::getVoidTy(context.getLLVMContext()),
+                    {T_psize},
+                    false),
+                Function::ExternalLinkage,
+                SAFEPOINT_NAME);
             intrinsic->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
             return intrinsic;
         });

@@ -129,6 +129,9 @@ namespace jl_intrinsics {
 
     // `julia.queue_gc_binding`: an intrinsic that queues a binding for GC.
     extern const IntrinsicDescription queueGCBinding;
+
+    // `julia.safepoint`: an intrinsic that triggers a GC safepoint.
+    extern const IntrinsicDescription safepoint;
 }
 
 // A namespace for well-known Julia runtime function descriptions.
