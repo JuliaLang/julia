@@ -48,7 +48,7 @@ JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
 void jl_init_main_module(void)
 {
     assert(jl_main_module == NULL);
-    jl_main_module = jl_new_module(jl_symbol("Main"));
+    jl_main_module = jl_new_module(jl_symbol("Main"), NULL);
     jl_main_module->parent = jl_main_module;
     jl_set_const(jl_main_module, jl_symbol("Core"),
                  (jl_value_t*)jl_core_module);
@@ -134,7 +134,8 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         jl_type_error("module", (jl_value_t*)jl_symbol_type, (jl_value_t*)name);
     }
 
-    jl_module_t *newm = jl_new_module(name);
+    int is_parent__toplevel__ = jl_is__toplevel__mod(parent_module);
+    jl_module_t *newm = jl_new_module(name, is_parent__toplevel__ ? NULL : parent_module);
     jl_value_t *form = (jl_value_t*)newm;
     JL_GC_PUSH1(&form);
     JL_LOCK(&jl_modules_mutex);
@@ -145,7 +146,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
 
     // copy parent environment info into submodule
     newm->uuid = parent_module->uuid;
-    if (jl_is__toplevel__mod(parent_module)) {
+    if (is_parent__toplevel__) {
         newm->parent = newm;
         jl_register_root_module(newm);
         if (jl_options.incremental) {
@@ -153,7 +154,6 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         }
     }
     else {
-        newm->parent = parent_module;
         jl_binding_t *b = jl_get_binding_wr(parent_module, name, 1);
         jl_declare_constant(b);
         jl_value_t *old = NULL;
@@ -579,7 +579,7 @@ int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
 static jl_method_instance_t *method_instance_for_thunk(jl_code_info_t *src, jl_module_t *module)
 {
     jl_method_instance_t *li = jl_new_method_instance_uninit();
-    li->uninferred = (jl_value_t*)src;
+    jl_atomic_store_relaxed(&li->uninferred, (jl_value_t*)src);
     li->specTypes = (jl_value_t*)jl_emptytuple_type;
     li->def.module = module;
     return li;

@@ -1077,8 +1077,7 @@ Base.setindex!(s::SafeRef, x) = setfield!(s, 1, x)
     noninlined_dce_new(s)
     nothing
 end
-# should be resolved once we merge https://github.com/JuliaLang/julia/pull/43923
-@test_broken fully_eliminated((Union{Symbol,String},)) do s
+@test fully_eliminated((Union{Symbol,String},)) do s
     noninlined_dce_new(s)
     nothing
 end
@@ -1664,8 +1663,11 @@ let src = code_typed1(call_twice_sitofp, (Int,))
 end
 
 # Test getfield modeling of Type{Ref{_A}} where _A
-@test Core.Compiler.getfield_tfunc(Type, Core.Compiler.Const(:parameters)) !== Union{}
-@test !isa(Core.Compiler.getfield_tfunc(Type{Tuple{Union{Int, Float64}, Int}}, Core.Compiler.Const(:name)), Core.Compiler.Const)
+let getfield_tfunc(@nospecialize xs...) =
+        Core.Compiler.getfield_tfunc(Core.Compiler.fallback_lattice, xs...)
+    @test getfield_tfunc(Type, Core.Const(:parameters)) !== Union{}
+    @test !isa(getfield_tfunc(Type{Tuple{Union{Int, Float64}, Int}}, Core.Const(:name)), Core.Const)
+end
 @test fully_eliminated(Base.ismutable, Tuple{Base.RefValue})
 
 # TODO: Remove compute sparams for vararg_retrival
@@ -1815,4 +1817,51 @@ let ir = Base.code_ircode(big_tuple_test1, Tuple{})[1][1]
     ir = Core.Compiler.cfg_simplify!(ir)
     ir = Core.Compiler.compact!(ir, true)
     @test length(ir.stmts) == 1
+end
+
+# inlineable but removable call should be eligible for DCE
+Base.@assume_effects :removable @inline function inlineable_effect_free(a::Float64)
+    a == Inf && return zero(a)
+    return sin(a) + cos(a)
+end
+@test fully_eliminated((Float64,)) do a
+    b = inlineable_effect_free(a)
+    c = inlineable_effect_free(b)
+    nothing
+end
+
+# https://github.com/JuliaLang/julia/issues/47374
+function f47374(x)
+    [f47374(i, x) for i in 1:1]
+end
+function f47374(i::Int, x)
+    return 1.0
+end
+@test f47374(rand(1)) == Float64[1.0]
+
+# compiler should recognize effectful :static_parameter
+# https://github.com/JuliaLang/julia/issues/45490
+issue45490_1(x::Union{T, Nothing}, y::Union{T, Nothing}) where {T} = T
+issue45490_2(x::Union{T, Nothing}, y::Union{T, Nothing}) where {T} = (typeof(T); nothing)
+for f = (issue45490_1, issue45490_2)
+    src = code_typed1(f, (Any,Any))
+    @test any(src.code) do @nospecialize x
+        isexpr(x, :static_parameter)
+    end
+    @test_throws UndefVarError f(nothing, nothing)
+end
+
+# inline effect-free :static_parameter, required for semi-concrete interpretation accuracy
+# https://github.com/JuliaLang/julia/issues/47349
+function make_issue47349(::Val{N}) where {N}
+    pickargs(::Val{N}) where {N} = (@nospecialize(x::Tuple)) -> x[N]
+    return pickargs(Val{N-1}())
+end
+let src = code_typed1(make_issue47349(Val{4}()), (Any,))
+    @test !any(src.code) do @nospecialize x
+        isexpr(x, :static_parameter)
+    end
+    @test Base.return_types((Int,)) do x
+        make_issue47349(Val(4))((x,nothing,Int))
+    end |> only === Type{Int}
 end

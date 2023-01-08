@@ -209,12 +209,46 @@ for (fJ, fC) in ((:si,:Clong), (:ui,:Culong))
 end
 
 function BigFloat(x::Float64, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
-    z = BigFloat(;precision=precision)
-    ccall((:mpfr_set_d, :libmpfr), Int32, (Ref{BigFloat}, Float64, MPFRRoundingMode), z, x, r)
-    if isnan(x) && signbit(x) != signbit(z)
-        z.sign = -z.sign
+    z = BigFloat(;precision)
+    # punt on the hard case where we might have to deal with rounding
+    # we could use this path in all cases, but mpfr_set_d has a lot of overhead.
+    if precision <= Base.significand_bits(Float64)
+        ccall((:mpfr_set_d, :libmpfr), Int32, (Ref{BigFloat}, Float64, MPFRRoundingMode), z, x, r)
+        if isnan(x) && signbit(x) != signbit(z)
+            z.sign = -z.sign
+        end
+        return z
     end
-    return z
+    z.sign = 1-2*signbit(x)
+    if iszero(x) || !isfinite(x)
+        if isinf(x)
+            z.exp = Clong(2) - typemax(Clong)
+        elseif isnan(x)
+            z.exp = Clong(1) - typemax(Clong)
+        else
+            z.exp = - typemax(Clong)
+        end
+        return z
+    end
+    z.exp = 1 + exponent(x)
+    # BigFloat doesn't have an implicit bit
+    val = reinterpret(UInt64, significand(x))<<11 | typemin(Int64)
+    nlimbs = (precision + 8*Core.sizeof(Limb) - 1) ÷ (8*Core.sizeof(Limb))
+
+    # Limb is a CLong which is a UInt32 on windows (thank M$) which makes this more complicated and slower.
+    if Limb === UInt64
+        for i in 1:nlimbs-1
+            unsafe_store!(z.d, 0x0, i)
+        end
+        unsafe_store!(z.d, val, nlimbs)
+    else
+        for i in 1:nlimbs-2
+            unsafe_store!(z.d, 0x0, i)
+        end
+        unsafe_store!(z.d, val % UInt32, nlimbs-1)
+        unsafe_store!(z.d, (val >> 32) % UInt32, nlimbs)
+    end
+    z
 end
 
 function BigFloat(x::BigInt, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])

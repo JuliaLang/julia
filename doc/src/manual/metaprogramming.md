@@ -11,6 +11,21 @@ code in Julia are represented by Julia data structures, powerful [reflection](ht
 capabilities are available to explore the internals of a program and its types just like any other
 data.
 
+!!! warning
+    Metaprogramming is a powerful tool, but it introduces complexity that can make code more
+    difficult to understand. For example, it can be surprisingly hard to get scope rules
+    correct. Metaprogramming should typically be used only when other approaches such as
+    [higher order functions](@ref man-anonymous-functions) and
+    [closures](https://en.wikipedia.org/wiki/Closure_(computer_programming)) cannot be applied.
+
+    `eval` and defining new macros should be typically used as a last resort. It is almost
+    never a good idea to use `Meta.parse` or convert an arbitrary string into Julia code. For
+    manipulating Julia code, use the `Expr` data structure directly to avoid the complexity
+    of how Julia syntax is parsed.
+
+    The best uses of metaprogramming often implement most of their functionality in runtime
+    helper functions, striving to minimize the amount of code they generate.
+
 ## Program representation
 
 Every Julia program starts life as a string:
@@ -425,7 +440,7 @@ value 1 and the variable `b`. Note the important distinction between the way `a`
 
 As hinted above, one extremely useful feature of Julia is the capability to generate and manipulate
 Julia code within Julia itself. We have already seen one example of a function returning [`Expr`](@ref)
-objects: the [`parse`](@ref) function, which takes a string of Julia code and returns the corresponding
+objects: the [`Meta.parse`](@ref) function, which takes a string of Julia code and returns the corresponding
 `Expr`. A function can also take one or more `Expr` objects as arguments, and return another
 `Expr`. Here is a simple, motivating example:
 

@@ -428,6 +428,11 @@ function -(A::UnitUpperTriangular)
     UpperTriangular(Anew)
 end
 
+tr(A::LowerTriangular) = tr(A.data)
+tr(A::UnitLowerTriangular) = size(A, 1) * oneunit(eltype(A))
+tr(A::UpperTriangular) = tr(A.data)
+tr(A::UnitUpperTriangular) = size(A, 1) * oneunit(eltype(A))
+
 # copy and scale
 function copyto!(A::T, B::T) where T<:Union{UpperTriangular,UnitUpperTriangular}
     n = size(B,1)
@@ -960,7 +965,7 @@ function lmul!(A::UnitLowerTriangular, B::AbstractVecOrMat)
     B
 end
 
-function rmul!(A::AbstractVecOrMat, B::UpperTriangular)
+function rmul!(A::AbstractMatrix, B::UpperTriangular)
     require_one_based_indexing(A, B)
     m, n = size(A)
     if size(B, 1) != n
@@ -977,7 +982,7 @@ function rmul!(A::AbstractVecOrMat, B::UpperTriangular)
     end
     A
 end
-function rmul!(A::AbstractVecOrMat, B::UnitUpperTriangular)
+function rmul!(A::AbstractMatrix, B::UnitUpperTriangular)
     require_one_based_indexing(A, B)
     m, n = size(A)
     if size(B, 1) != n
@@ -995,7 +1000,7 @@ function rmul!(A::AbstractVecOrMat, B::UnitUpperTriangular)
     A
 end
 
-function rmul!(A::AbstractVecOrMat, B::LowerTriangular)
+function rmul!(A::AbstractMatrix, B::LowerTriangular)
     require_one_based_indexing(A, B)
     m, n = size(A)
     if size(B, 1) != n
@@ -1012,7 +1017,7 @@ function rmul!(A::AbstractVecOrMat, B::LowerTriangular)
     end
     A
 end
-function rmul!(A::AbstractVecOrMat, B::UnitLowerTriangular)
+function rmul!(A::AbstractMatrix, B::UnitLowerTriangular)
     require_one_based_indexing(A, B)
     m, n = size(A)
     if size(B, 1) != n

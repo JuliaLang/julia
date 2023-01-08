@@ -636,4 +636,11 @@ end
     @test mapreduce(string, *, [1 2; 3 4]') == mapreduce(string, *, copy([1 2; 3 4]')) == "1234"
 end
 
+@testset "trace" begin
+    for T in (Float64, ComplexF64), t in (adjoint, transpose)
+        A = randn(T, 10, 10)
+        @test tr(t(A)) == tr(copy(t(A))) == t(tr(A))
+    end
+end
+
 end # module TestAdjointTranspose
