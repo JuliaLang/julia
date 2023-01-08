@@ -492,8 +492,6 @@ representation, measured from the least significant side.
 
 Negative `x` are only supported when `x::BitSigned`.
 
-`top_set_bit` is internal and will eventually be replaced by constant propagation.
-
 See also: [`ndigits0z`](@ref), [`ndigits`](@ref).
 
 # Examples
