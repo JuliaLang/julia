@@ -1244,8 +1244,6 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             ssa_rename[idx] = stmt
         else
             result[result_idx][:inst] = stmt
-            result[result_idx][:type] = argextype(stmt, compact)
-            result[result_idx][:flag] = flag
             result_idx += 1
         end
     elseif isa(stmt, GotoNode)
