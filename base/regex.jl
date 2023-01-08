@@ -182,7 +182,7 @@ julia> m.captures[2]    # same as m[2]
 julia> m["minute"]
 "30"
 
-julia> hr, min, ampm = m;
+julia> hr, min, ampm = m; # destructure capture groups by iteration
 
 julia> hr
 "11"
