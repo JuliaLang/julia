@@ -3237,7 +3237,9 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                 }
                 if (!ccheck)
                     return jl_bottom_type;
-                if (var_occurs_inside(xub, (jl_tvar_t*)y, 0, 0) && var_occurs_inside(yub, (jl_tvar_t*)x, 0, 0)) {
+                if ((jl_has_typevar(xub, (jl_tvar_t*)y) || jl_has_typevar(xub, (jl_tvar_t*)x)) &&
+                    (jl_has_typevar(yub, (jl_tvar_t*)x) || jl_has_typevar(yub, (jl_tvar_t*)y))) {
+                    // TODO: This doesn't make much sense.
                     // circular constraint. the result will be Bottom, but in the meantime
                     // we need to avoid computing intersect(xub, yub) since it won't terminate.
                     return y;

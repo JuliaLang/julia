@@ -2320,11 +2320,22 @@ struct T48006{A1,A2,A3} end
                Tuple{T48006{F2, I, S2}, I} where {F2<:Real, I<:Int, S2<:Union{Int8, Val{F2}}},
                Tuple{T48006{Float64, Int, S1}, Int} where S1<:Union{Val{Float64}, Int8})
 
-
 f48167(::Type{Val{L2}}, ::Type{Union{Val{L1}, Set{R}}}) where {L1, R, L2<:L1} = 1
 f48167(::Type{Val{L1}}, ::Type{Union{Val{L2}, Set{R}}}) where {L1, R, L2<:L1} = 2
 f48167(::Type{Val{L}}, ::Type{Union{Val{L}, Set{R}}}) where {L, R} = 3
 @test f48167(Val{Nothing}, Union{Val{Nothing}, Set{Int}}) == 3
+
+# https://github.com/JuliaLang/julia/pull/31167#issuecomment-1358381818
+let S = Tuple{Type{T1}, T1, Val{T1}} where T1<:(Val{S1} where S1<:Val),
+    T = Tuple{Union{Type{T2}, Type{S2}}, Union{Val{T2}, Val{S2}}, Union{Val{T2}, S2}} where T2<:Val{A2} where A2 where S2<:Val
+    I1 = typeintersect(S, T)
+    I2 = typeintersect(T, S)
+    @test I1 !== Union{} && I2 !== Union{}
+    @test_broken I1 <: S
+    @test_broken I2 <: T
+    @test I2 <: S
+    @test_broken I2 <: T
+end
 
 @testset "known subtype/intersect issue" begin
     #issue 45874
