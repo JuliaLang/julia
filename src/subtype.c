@@ -2380,6 +2380,9 @@ static int _reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e)
 {
     if (in_union(x, (jl_value_t*)y))
         return 1;
+    if (jl_is_uniontype(x))
+        return _reachable_var(((jl_uniontype_t *)x)->a, y, e) ||
+               _reachable_var(((jl_uniontype_t *)x)->b, y, e);
     if (!jl_is_typevar(x))
         return 0;
     jl_varbinding_t *xv = lookup(e, (jl_tvar_t*)x);
