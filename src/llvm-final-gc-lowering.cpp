@@ -26,6 +26,7 @@ STATISTIC(PopGCFrameCount, "Number of lowered popGCFrameFunc intrinsics");
 STATISTIC(GetGCFrameSlotCount, "Number of lowered getGCFrameSlotFunc intrinsics");
 STATISTIC(GCAllocBytesCount, "Number of lowered GCAllocBytesFunc intrinsics");
 STATISTIC(QueueGCRootCount, "Number of lowered queueGCRootFunc intrinsics");
+STATISTIC(SafepointCount, "Number of lowered safepoint intrinsics");
 
 using namespace llvm;
 
@@ -66,6 +67,9 @@ private:
 
     // Lowers a `julia.queue_gc_root` intrinsic.
     Value *lowerQueueGCRoot(CallInst *target, Function &F);
+
+    // Lowers a `julia.safepoint` intrinsic.
+    Value *lowerSafepoint(CallInst *target, Function &F);
 };
 
 Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
@@ -188,6 +192,18 @@ Value *FinalLowerGC::lowerQueueGCRoot(CallInst *target, Function &F)
     return target;
 }
 
+Value *FinalLowerGC::lowerSafepoint(CallInst *target, Function &F)
+{
+    ++SafepointCount;
+    assert(target->arg_size() == 1);
+    IRBuilder<> builder(target->getContext());
+    builder.SetInsertPoint(target);
+    auto T_size = getSizeTy(builder.getContext());
+    Value* signal_page = target->getOperand(0);
+    Value* load = builder.CreateLoad(T_size, signal_page, true);
+    return load;
+}
+
 Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
 {
     ++GCAllocBytesCount;
@@ -292,16 +308,20 @@ static void replaceInstruction(
 
 bool FinalLowerGC::runOnFunction(Function &F)
 {
-    LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Processing function " << F.getName() << "\n");
     // Check availability of functions again since they might have been deleted.
     initFunctions(*F.getParent());
-    if (!pgcstack_getter && !adoptthread_func)
+    if (!pgcstack_getter && !adoptthread_func) {
+        LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Skipping function " << F.getName() << "\n");
         return false;
+    }
 
     // Look for a call to 'julia.get_pgcstack'.
     pgcstack = getPGCstack(F);
-    if (!pgcstack)
+    if (!pgcstack) {
+        LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Skipping function " << F.getName() << " no pgcstack\n");
         return false;
+    }
+    LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Processing function " << F.getName() << "\n");
 
     // Acquire intrinsic functions.
     auto newGCFrameFunc = getOrNull(jl_intrinsics::newGCFrame);
@@ -310,6 +330,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
     auto getGCFrameSlotFunc = getOrNull(jl_intrinsics::getGCFrameSlot);
     auto GCAllocBytesFunc = getOrNull(jl_intrinsics::GCAllocBytes);
     auto queueGCRootFunc = getOrNull(jl_intrinsics::queueGCRoot);
+    auto safepointFunc = getOrNull(jl_intrinsics::safepoint);
 
     // Lower all calls to supported intrinsics.
     for (BasicBlock &BB : F) {
@@ -321,6 +342,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
             }
 
             Value *callee = CI->getCalledOperand();
+            assert(callee);
 
             if (callee == newGCFrameFunc) {
                 replaceInstruction(CI, lowerNewGCFrame(CI, F), it);
@@ -341,6 +363,10 @@ bool FinalLowerGC::runOnFunction(Function &F)
             }
             else if (callee == queueGCRootFunc) {
                 replaceInstruction(CI, lowerQueueGCRoot(CI, F), it);
+            }
+            else if (callee == safepointFunc) {
+                lowerSafepoint(CI, F);
+                it = CI->eraseFromParent();
             }
             else {
                 ++it;
