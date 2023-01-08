@@ -2527,25 +2527,30 @@ function check_clone_targets(clone_targets)
 end
 
 struct CacheFlags
-    # ??OOCDDP - see jl_cache_flags
+    # ?OOICDDP - see jl_cache_flags
     use_pkgimages::Bool
     debug_level::Int
     check_bounds::Bool
+    inline::Bool
     opt_level::Int
 
-    CacheFlags(f::Int) = CacheFlags(UInt8(f))
     function CacheFlags(f::UInt8)
         use_pkgimages = Bool(f & 1)
         debug_level = Int((f >> 1) & 3)
-        check_bounds = Bool((f >> 2) & 1)
-        opt_level = Int((f >> 4) & 3)
-        new(use_pkgimages, debug_level, check_bounds, opt_level)
+        check_bounds = Bool((f >> 3) & 1)
+        inline = Bool((f >> 3) & 1)
+        opt_level = Int((f >> 5) & 3) # define OPT_LEVEL in statiddata_utils
+        new(use_pkgimages, debug_level, check_bounds, inline, opt_level)
     end
 end
+CacheFlags(f::Int) = CacheFlags(UInt8(f))
+CacheFlags() = CacheFlags(ccall(:jl_cache_flags, UInt8, ()))
+
 function show(io::IO, cf::CacheFlags)
     print(io, "use_pkgimages = ", cf.use_pkgimages)
     print(io, ", debug_level = ", cf.debug_level)
     print(io, ", check_bounds = ", cf.check_bounds)
+    print(io, ", inline = ", cf.inline)
     print(io, ", opt_level = ", cf.opt_level)
 end
 
@@ -2569,7 +2574,7 @@ end
         if ccall(:jl_match_cache_flags, UInt8, (UInt8,), flags) == 0
             @debug """
             Rejecting cache file $cachefile for $modkey since the flags are mismatched
-              current session: $(CacheFlags(ccall(:jl_cache_flags, UInt8, ())))
+              current session: $(CacheFlags())
               cache file:      $(CacheFlags(flags))
             """
             return true

@@ -1025,6 +1025,16 @@ end
     end
 end
 
+@testset "CacheFlags" begin
+    cf = Base.CacheFlags()
+    opts = Base.JLOptions()
+    @test cf.use_pkgimages == opts.use_pkgimages
+    @test cf.debug_level == opts.debug_level
+    @test cf.check_bounds == opts.check_bounds
+    @test cf.inline == opts.can_inline
+    @test cf.opt_level == opts.opt_level
+    # TODO start processes with different flags and check that cache flags are correct.
+end
 
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
