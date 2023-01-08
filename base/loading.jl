@@ -2514,11 +2514,10 @@ struct CacheFlags
 
     CacheFlags(f::Int) = CacheFlags(UInt8(f))
     function CacheFlags(f::UInt8)
-        s = bitstring(f)
-        use_pkgimages = parse(Bool, s[end])
-        debug_level = parse(Int, s[end-2:end-1], base=2)
-        check_bounds = parse(Bool, s[end-3])
-        opt_level = parse(Int, s[end-5:end-4], base=2)
+        use_pkgimages = Bool(f & 1)
+        debug_level = Int((f >> 1) & 3)
+        check_bounds = Bool((f >> 2) & 1)
+        opt_level = Int((f >> 4) & 3)
         new(use_pkgimages, debug_level, check_bounds, opt_level)
     end
 end
