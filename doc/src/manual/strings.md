@@ -213,13 +213,11 @@ Using an index less than `begin` (`1`) or greater than `end` raises an error:
 
 ```jldoctest helloworldstring
 julia> str[begin-1]
-ERROR: BoundsError: attempt to access 14-codeunit String at index [0]
-Valid indices are between 1 and 14.
+ERROR: BoundsError: attempt to access 14-codeunit String at index [0], valid indices are between 1 and 14
 [...]
 
 julia> str[end+1]
 ERROR: BoundsError: attempt to access 14-codeunit String at index [15]
-Valid indices are between 1 and 14.
 [...]
 ```
 

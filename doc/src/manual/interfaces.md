@@ -402,10 +402,10 @@ perhaps range-types `Ind` of your own design. For more information, see
 [Arrays with custom indices](@ref man-custom-indices).
 
 When a user indexes into an array using an invalid index, a 'BoundsError' is
-thrown. Along with this error, a hint is printed telling the user which indices
-they *could* have used. If there is a more intuitive description of your type's
-valid indices than the default, which uses `axes(A)`, you can define a method
-to `describe_valid_indices(io::IO, A, i)`. If, for instance, we wanted to
+thrown. Along with this error, a hint can be printed telling the user which
+indices they *could* have used. If there is a more intuitive description of your
+type's valid indices than the default, which uses `axes(A)`, you can define a
+method to `describe_valid_indices(io::IO, A, i)`. If, for instance, we wanted to
 protect our `SparseArray` from bounds errors, we could redefine `getindex`:
 
 ```jldoctest squarevectype
@@ -416,22 +416,20 @@ julia> function Base.getindex(A::SparseArray{T,N}, I::Vararg{Int,N}) where {T,N}
 
 julia> A[4, 3]
 ERROR: BoundsError: attempt to access 3×3 SparseArray{Float64, 2} at index [4, 3]
-Valid indices are [1:3, 1:3].
 ```
 
-So far, this message is not entirely true. We implemented a check for indices
+This message could be made more informative. We implemented a check for indices
 above the maxima, but `A[0, 0]` will happily evaluate. If this is by intention,
 we can update the error message:
 
 ```jldoctest squarevectype
-julia> Base.describe_valid_indices(io::IO, A::SparseArray, i=nothing) = print(io, "\nValid indices are <= ", A.dims, '.')
+julia> Base.describe_valid_indices(io::IO, A::SparseArray, i=nothing) = print(io, ", valid indices are <= ", A.dims)
 
 julia> A[0, 0]
 0.0
 
 julia> A[4, 3]
-ERROR: BoundsError: attempt to access 3×3 SparseArray{Float64, 2} at index [4, 3]
-Valid indices are <= (3, 3).
+ERROR: BoundsError: attempt to access 3×3 SparseArray{Float64, 2} at index [4, 3], valid indices are <= (3, 3)
 ```
 
 ## [Strided Arrays](@id man-interface-strided-arrays)

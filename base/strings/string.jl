@@ -28,18 +28,11 @@ function Base.showerror(io::IO, exc::StringIndexError)
 end
 
 function describe_valid_indices(io::IO, a::AbstractString, i=nothing)
-    firstind = firstindex(a)
-    lastind = thisind(a, ncodeunits(a))
-    if firstind == lastind
-        print(io, "\nValid indices are ", firstind, '.')
-        return
-    end
     print(io,
-          "\nValid indices are between ",
+          ", valid indices are between ",
           firstindex(a),
           " and ",
-          thisind(a, ncodeunits(a)),
-          '.'
+          lastindex(a)
          )
 end
 

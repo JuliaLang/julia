@@ -103,7 +103,7 @@ end
     @test endswith(sprint(show, @test_throws str->occursin("a t", str) error("a test")),
                    "Message: \"a test\"")
     @test endswith(sprint(show, @test_throws ["BoundsError", "access", "1-element", "at index [2]"] [1][2]),
-                   "Message: \"BoundsError: attempt to access 1-element Vector{$Int} at index [2]\\nValid indices are 1.\"")
+                   "Message: \"BoundsError: attempt to access 1-element Vector{$Int} at index [2]\"")
     @test_throws "\"" throw("\"")
     @test_throws Returns(false) throw(Returns(false))
 end

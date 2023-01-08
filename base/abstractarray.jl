@@ -744,9 +744,11 @@ checkbounds_indices(::Type{Bool}, ::Tuple{}, ::Tuple{}) = true
 throw_boundserror(A, I) = (@noinline; throw(BoundsError(A, I)))
 
 function describe_valid_indices(io::IO, a::AbstractArray{<:Any}, i=nothing)
-    print(io, "\nValid indices are ")
-    show_index(io, axes(a))
-    print(io, '.')
+    if any(x->!isa(x, OneTo), axes(a))
+        print(io, ", valid indices are ")
+        return show_index(io, axes(a))
+    end
+    any(iszero, i) && print(io, ", by default indices start from 1")
 end
 
 # check along a single dimension

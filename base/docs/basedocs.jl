@@ -401,7 +401,6 @@ Assignment at out-of-bounds indices does not grow a collection. If the collectio
 ```jldoctest
 julia> a = [1, 1]; a[3] = 2
 ERROR: BoundsError: attempt to access 2-element Array{Int64, 1} at index [3]
-Valid indices are 1:2.
 [...]
 
 julia> push!(a, 2, 3)
@@ -1676,19 +1675,16 @@ julia> A = fill(1.0, 7);
 
 julia> A[8]
 ERROR: BoundsError: attempt to access 7-element Vector{Float64} at index [8]
-Valid indices are 1:7.
 
 
 julia> B = fill(1.0, (2,3));
 
 julia> B[2, 4]
 ERROR: BoundsError: attempt to access 2×3 Matrix{Float64} at index [2, 4]
-Valid indices are [1:2, 1:3].
 
 
 julia> B[9]
 ERROR: BoundsError: attempt to access 2×3 Matrix{Float64} at index [9]
-Valid indices are [1:2, 1:3].
 
 ```
 """

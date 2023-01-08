@@ -920,7 +920,6 @@ julia> A[1, 3, 2] # Omits the fourth dimension (length 1)
 
 julia> A[1, 3] # Attempts to omit dimensions 3 & 4 (lengths 2 and 1)
 ERROR: BoundsError: attempt to access 3×4×2×1 reshape(::UnitRange{Int64}, 3, 4, 2, 1) with eltype Int64 at index [1, 3]
-Valid indices are [1:3, 1:4, 1:2, 1].
 
 julia> A[19] # Linear indexing
 19

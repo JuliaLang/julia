@@ -289,7 +289,7 @@ struct Bounded  # not an AbstractArray
 end
 Base.getindex(b::Bounded, i) = checkindex(Bool, 1:b.bound, i) || throw(BoundsError(b, i))
 Base.summary(io::IO, b::Bounded) = print(io, "$(b.bound)-size Bounded")
-Base.describe_valid_indices(io::IO, b::Bounded, i=nothing) = print(io, "\nValid indices are 1:$(b.bound).")
+Base.describe_valid_indices(io::IO, b::Bounded, i=nothing) = print(io, ", valid indices are 1:$(b.bound)")
 let undefvar
     err_str = @except_strbt sqrt(-1) DomainError
     @test occursin("Try sqrt(Complex(x)).", err_str)
@@ -304,17 +304,17 @@ let undefvar
     @test occursin("DomainError with [0.0 -1.0 …", err_str)
 
     err_str = @except_str (1, 2, 3)[4] BoundsError
-    @test err_str == "BoundsError: attempt to access Tuple{$Int, $Int, $Int} at index [4]\nValid indices are 1:3."
+    @test err_str == "BoundsError: attempt to access Tuple{$Int, $Int, $Int} at index [4]"
 
     err_str = @except_str [5, 4, 3][-2, 1] BoundsError
-    @test err_str == "BoundsError: attempt to access 3-element Vector{$Int} at index [-2, 1]\nValid indices are 1:3."
+    @test err_str == "BoundsError: attempt to access 3-element Vector{$Int} at index [-2, 1]"
     err_str = @except_str [5, 4, 3][1:5] BoundsError
-    @test err_str == "BoundsError: attempt to access 3-element Vector{$Int} at index [1:5]\nValid indices are 1:3."
+    @test err_str == "BoundsError: attempt to access 3-element Vector{$Int} at index [1:5]"
     err_str = @except_str [5, 4, 3][trues(6,7)] BoundsError
-    @test err_str == "BoundsError: attempt to access 3-element Vector{$Int} at index [6×7 BitMatrix]\nValid indices are 1:3."
+    @test err_str == "BoundsError: attempt to access 3-element Vector{$Int} at index [6×7 BitMatrix]"
 
     err_str = @except_str Bounded(2)[3] BoundsError
-    @test err_str == "BoundsError: attempt to access 2-size Bounded at index [3]\nValid indices are 1:2."
+    @test err_str == "BoundsError: attempt to access 2-size Bounded at index [3], valid indices are 1:2"
 
     err_str = @except_str 0::Bool TypeError
     @test err_str == "TypeError: non-boolean ($Int) used in boolean context"

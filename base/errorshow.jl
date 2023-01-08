@@ -32,17 +32,9 @@ showerror(io::IO, ex) = show(io, ex)
 show_index(io::IO, x::Any) = show(io, x)
 show_index(io::IO, x::Slice) = show_index(io, x.indices)
 show_index(io::IO, x::LogicalIndex) = summary(io, x.mask)
-function show_index(io::IO, x::OneTo)
-    if x.stop == 1
-        return print(io, '1')
-    end
-    print(io, "1:", x.stop)
-end
+show_index(io::IO, x::OneTo) = print(io, "1:", x.stop)
 show_index(io::IO, x::Colon) = print(io, ':')
 function show_index(io::IO, x::Tuple)
-    if length(x) == 1
-        return show_index(io, only(x))
-    end
     print(io, '[')
     show_index(io, first(x))
     for el in x[2:end]
@@ -76,12 +68,8 @@ function showerror(io::IO, ex::BoundsError)
 end
 
 Experimental.register_error_hint(BoundsError) do io, ex
-    if ~isdefined(ex, :a)
-        return print(io, "\nNo description of valid indices available.")
-    end
-    if isdefined(ex, :i)
-        return describe_valid_indices(io, ex.a, ex.i)
-    end
+    isdefined(ex, :a) || return nothing
+    isdefined(ex, :i) && return describe_valid_indices(io, ex.a, ex.i)
     describe_valid_indices(io, ex.a)
 end
 
@@ -89,11 +77,11 @@ end
     describe_valid_indices(io, a, i)
 
 Describe valid ways to index `a` in human-readable form. This should typically be a full
-sentence starting "\nValid indices are ". Will be shown to the user upon `BoundsError`.
+clause starting ", valid indices are ". Will be shown to the user upon `BoundsError`.
 
 `i` may be ignored, but could be used to determine what information to show.
 """
-describe_valid_indices(io::IO, a, i) = print(io, "\nNo description of valid indices available.")
+describe_valid_indices(io::IO, a, i) = nothing
 
 
 function showerror(io::IO, ex::TypeError)

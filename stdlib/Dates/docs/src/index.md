@@ -366,7 +366,6 @@ function `dayabbr` will throw an error.
 ```jldoctest tdate2
 julia> Dates.dayabbr(t;locale="french")
 ERROR: BoundsError: attempt to access 1-element Vector{String} at index [5]
-Valid indices are 1.
 Stacktrace:
 [...]
 ```
