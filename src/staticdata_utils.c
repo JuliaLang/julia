@@ -642,6 +642,7 @@ JL_DLLEXPORT uint8_t jl_cache_flags(void)
     flags |= (jl_options.opt_level & 3) << 4;
     // NOTES:
     // In contrast to check-bounds, inline has no "observable effect"
+    // CacheFlags in loading.jl should be kept in-sync with this
     return flags;
 }
 
