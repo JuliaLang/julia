@@ -3275,6 +3275,7 @@ end
                     return true
                 end
             end
+            tracked_path = JLOptions().tracked_path == C_NULL ? "" : unsafe_string(JLOptions().tracked_path)
             for chi in includes
                 f, fsize_req, hash_req, ftime_req = chi.filename, chi.fsize, chi.hash, chi.mtime
                 if startswith(f, "@depot/")
@@ -3284,11 +3285,14 @@ end
                 if !ispath(f)
                     _f = fixup_stdlib_path(f)
                     if isfile(_f) && startswith(_f, Sys.STDLIB)
+                        check_if_tracked(_f, tracked_path, cachefile) && return true
                         continue
                     end
                     @debug "Rejecting stale cache file $cachefile because file $f does not exist"
                     return true
                 end
+                check_if_tracked(f, tracked_path, cachefile) && return true
+                
                 if ftime_req >= 0.0
                     # this is an include_dependency for which we only recorded the mtime
                     ftime = mtime(f)
@@ -3339,6 +3343,18 @@ end
     finally
         close(io)
     end
+end
+
+function check_if_tracked(included_file::String, tracked_path::String, cachefile::String)
+    if JLOptions().use_pkgimages != 0 && JLOptions().code_coverage == 3 && occursin(tracked_path, included_file)
+        @debug "Rejecting cache file $cachefile because included file $included_file is being tracked by --code-coverage=@$tracked_path"
+        return true
+    end
+    if JLOptions().use_pkgimages != 0 && JLOptions().malloc_log == 3 && occursin(tracked_path, included_file)
+        @debug "Rejecting cache file $cachefile because included file $included_file is being tracked by --track-allocation=@$tracked_path"
+        return true
+    end
+    return false
 end
 
 """
