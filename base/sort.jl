@@ -4,8 +4,8 @@ module Sort
 
 using Base.Order
 
-using Base: copymutable, midpoint, require_one_based_indexing,
-    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType
+using Base: copymutable, midpoint, require_one_based_indexing, uinttype,
+    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, top_set_bit
 
 import Base:
     sort,
@@ -611,9 +611,6 @@ struct IEEEFloatOptimization{T <: Algorithm} <: Algorithm
     next::T
 end
 
-UIntType(::Type{Float16}) = UInt16
-UIntType(::Type{Float32}) = UInt32
-UIntType(::Type{Float64}) = UInt64
 after_zero(::ForwardOrdering, x) = !signbit(x)
 after_zero(::ReverseOrdering, x) = signbit(x)
 is_concrete_IEEEFloat(T::Type) = T <: Base.IEEEFloat && isconcretetype(T)
@@ -621,7 +618,7 @@ function _sort!(v::AbstractVector, a::IEEEFloatOptimization, o::Ordering, kw)
     @getkw lo hi
     if is_concrete_IEEEFloat(eltype(v)) && o isa DirectOrdering
         lo, hi = send_to_end!(isnan, v, o, true; lo, hi)
-        iv = reinterpret(UIntType(eltype(v)), v)
+        iv = reinterpret(uinttype(eltype(v)), v)
         j = send_to_end!(x -> after_zero(o, x), v; lo, hi)
         scratch = _sort!(iv, a.next, Reverse, (;kw..., lo, hi=j))
         if scratch === nothing # Union split
@@ -631,7 +628,7 @@ function _sort!(v::AbstractVector, a::IEEEFloatOptimization, o::Ordering, kw)
         end
     elseif eltype(v) <: Integer && o isa Perm && o.order isa DirectOrdering && is_concrete_IEEEFloat(eltype(o.data))
         lo, hi = send_to_end!(i -> isnan(@inbounds o.data[i]), v, o.order, true; lo, hi)
-        ip = reinterpret(UIntType(eltype(o.data)), o.data)
+        ip = reinterpret(uinttype(eltype(o.data)), o.data)
         j = send_to_end!(i -> after_zero(o.order, @inbounds o.data[i]), v; lo, hi)
         scratch = _sort!(v, a.next, Perm(Reverse, ip), (;kw..., lo, hi=j))
         if scratch === nothing # Union split
