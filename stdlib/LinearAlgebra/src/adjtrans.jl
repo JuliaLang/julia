@@ -292,7 +292,6 @@ wrapperop(::Adjoint) = adjoint
 wrapperop(::Transpose) = transpose
 
 # the following fallbacks can be removed if Adjoint/Transpose are restricted to AbstractVecOrMat
-length(A::AdjOrTrans) = length(A.parent)
 size(A::AdjOrTrans) = reverse(size(A.parent))
 axes(A::AdjOrTrans) = reverse(axes(A.parent))
 # AbstractArray interface, basic definitions

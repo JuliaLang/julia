@@ -86,6 +86,8 @@ Factorization{T}(F::Factorization{T}) where {T} = F
 # This no longer looks odd since the return _is_ a Factorization!
 Factorization{T}(A::AdjointFactorization) where {T} =
     adjoint(Factorization{T}(parent(A)))
+Factorization{T}(A::TransposeFactorization) where {T} =
+    transpose(Factorization{T}(parent(A)))
 inv(F::Factorization{T}) where {T} = (n = size(F, 1); ldiv!(F, Matrix{T}(I, n, n)))
 
 Base.hash(F::Factorization, h::UInt) = mapreduce(f -> hash(getfield(F, f)), hash, 1:nfields(F); init=h)
@@ -139,7 +141,6 @@ function (\)(F::Factorization, B::AbstractVecOrMat)
     TFB = typeof(oneunit(eltype(F)) / oneunit(eltype(B)))
     ldiv!(F, copy_similar(B, TFB))
 end
-(\)(F::TransposeFactorization{<:Real}, B::AbstractVecOrMat) = adjoint(F.parent) \ B
 (\)(F::TransposeFactorization, B::AbstractVecOrMat) = conj!(adjoint(F.parent) \ conj.(B))
 
 function (/)(B::AbstractMatrix, F::Factorization)

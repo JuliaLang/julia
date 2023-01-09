@@ -72,9 +72,8 @@ Base.iterate(S::LU, ::Val{:U}) = (S.U, Val(:p))
 Base.iterate(S::LU, ::Val{:p}) = (S.p, Val(:done))
 Base.iterate(S::LU, ::Val{:done}) = nothing
 
-adjoint(F::LU) = AdjointFactorization(F)
-transpose(F::LU) = TransposeFactorization(F)
 # LU prefers transpose over adjoint in the real case, override the generic fallback
+adjoint(F::LU{<:Real}) = TransposeFactorization(F)
 transpose(F::LU{<:Real}) = TransposeFactorization(F)
 
 # the following method is meant to catch calls to lu!(A::LAPACKArray) without a pivoting stategy
