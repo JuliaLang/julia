@@ -2030,15 +2030,15 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         ++EmittedProbeCalls;
         if (symarg.jl_ptr != NULL) {
             emit_error(ctx, "probecall doesn't support dynamic pointers");
-            return jl_cgval_t(ctx.builder.getContext());
+            return jl_cgval_t();
         }
         else if (symarg.fptr != NULL) {
             emit_error(ctx, "probecall doesn't support static pointers");
-            return jl_cgval_t(ctx.builder.getContext());
+            return jl_cgval_t();
         }
         else if (symarg.f_lib != NULL) {
             emit_error(ctx, "probecall doesn't support dynamic libraries");
-            return jl_cgval_t(ctx.builder.getContext());
+            return jl_cgval_t();
         }
         else {
             assert(symarg.f_name != NULL);
