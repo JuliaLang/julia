@@ -100,11 +100,11 @@ function isvalid(s::SubString, i::Integer)
     @inbounds return ib && isvalid(s.string, s.offset + i)::Bool
 end
 
-byte_string_classify(s::SubString{String}) =
-    ccall(:u8_isvalid, Int32, (Ptr{UInt8}, Int), s, sizeof(s))
+# byte_string_classify(s::SubString{String}) =
+#     ccall(:u8_isvalid, Int32, (Ptr{UInt8}, Int), s, sizeof(s))
 
-isvalid(::Type{String}, s::SubString{String}) = byte_string_classify(s) ≠ 0
-isvalid(s::SubString{String}) = isvalid(String, s)
+# isvalid(::Type{String}, s::SubString{String}) = byte_string_classify(s) ≠ 0
+# isvalid(s::SubString{String}) = isvalid(String, s)
 
 thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)
 nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
