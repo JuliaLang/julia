@@ -693,7 +693,7 @@ static const auto jlgetbindingorerror_func = new JuliaFunction{
     nullptr,
 };
 static const auto jlgetbindingwrorerror_func = new JuliaFunction{
-    XSTR(jl_get_binding_wr_or_error),
+    XSTR(jl_get_binding_wr),
     [](LLVMContext &C) {
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
         return FunctionType::get(T_pjlvalue,
@@ -4212,11 +4212,18 @@ static void undef_var_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_sym_t *name)
 static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t *s,
                                      jl_binding_t **pbnd, bool assign)
 {
-    jl_binding_t *b = NULL;
-    if (assign)
-        b = jl_get_binding_wr(m, s, 0);
-    else
-        b = jl_get_binding(m, s);
+    jl_binding_t *b = jl_get_module_binding(m, s, 1);
+    if (assign) {
+        if (jl_atomic_load_relaxed(&b->owner) == NULL)
+            // not yet declared
+            b = NULL;
+    }
+    else {
+        b = jl_atomic_load_relaxed(&b->owner);
+        if (b == NULL)
+            // try to look this up now
+            b = jl_get_binding(m, s);
+    }
     if (b == NULL) {
         // var not found. switch to delayed lookup.
         Constant *initnul = Constant::getNullValue(ctx.types().T_pjlvalue);
@@ -8461,7 +8468,7 @@ static void init_jit_functions(void)
     add_named_global(jlcheckassign_func, &jl_checked_assignment);
     add_named_global(jldeclareconst_func, &jl_declare_constant);
     add_named_global(jlgetbindingorerror_func, &jl_get_binding_or_error);
-    add_named_global(jlgetbindingwrorerror_func, &jl_get_binding_wr_or_error);
+    add_named_global(jlgetbindingwrorerror_func, &jl_get_binding_wr);
     add_named_global(jlboundp_func, &jl_boundp);
     for (auto it : builtin_func_map())
         add_named_global(it.second, it.first);
