@@ -164,7 +164,7 @@ See [`keys`](@ref keys(::RegexMatch)) for more information.
 
 # Examples
 ```jldoctest
-julia> m = match(r"(?<hour>\\d+):(?<minute>\\d+)(am|pm)?", "The time is 11:30")
+julia> m = match(r"(?<hour>\\d+):(?<minute>\\d+)(am|pm)?", "11:30 in the morning")
 RegexMatch("11:30", hour="11", minute="30", 3=nothing)
 
 julia> m.match
@@ -176,8 +176,6 @@ julia> m.captures
  "30"
  nothing
 
-julia> m.captures[2]    # same as m[2]
-"30"
 
 julia> m["minute"]
 "30"
