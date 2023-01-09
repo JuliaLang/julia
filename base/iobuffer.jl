@@ -203,7 +203,7 @@ function read_sub(from::GenericIOBuffer, a::AbstractArray{T}, offs, nel) where T
         GC.@preserve a unsafe_read(from, pointer(a, offs), nb)
     else
         for i = offs:offs+nel-1
-            a[i] = read(to, T)
+            a[i] = read(from, T)
         end
     end
     return a
