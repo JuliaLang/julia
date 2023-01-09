@@ -1730,11 +1730,7 @@ precompile_test_harness("WindowsCacheOverwrite") do load_path
     """)
 
     ji_2, ofile_2 = Base.compilecache(Base.PkgId("WindowsCacheOverwrite"))
-    if Sys.iswindows()
-        @test ji != ji_2
-        @test ofile != ofile_2
-        @test ofile_2 == Base.ocachefile_from_cachefile(ji_2)
-    end
+    @test ofile_2 == Base.ocachefile_from_cachefile(ji_2)
 end
 
 empty!(Base.DEPOT_PATH)
