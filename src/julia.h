@@ -539,14 +539,15 @@ typedef struct _jl_datatype_t {
     const jl_datatype_layout_t *layout;
     // memoized properties (set on construction)
     uint32_t hash;
-    uint8_t hasfreetypevars:1; // majority part of isconcrete computation
-    uint8_t isconcretetype:1; // whether this type can have instances
-    uint8_t isdispatchtuple:1; // aka isleaftupletype
-    uint8_t isbitstype:1; // relevant query for C-api and type-parameters
-    uint8_t zeroinit:1; // if one or more fields requires zero-initialization
-    uint8_t has_concrete_subtype:1; // If clear, no value will have this datatype
-    uint8_t cached_by_hash:1; // stored in hash-based set cache (instead of linear cache)
-    uint8_t isprimitivetype:1; // whether this is declared with 'primitive type' keyword (sized, no fields, and immutable)
+    uint16_t hasfreetypevars:1; // majority part of isconcrete computation
+    uint16_t isconcretetype:1; // whether this type can have instances
+    uint16_t isdispatchtuple:1; // aka isleaftupletype
+    uint16_t isbitstype:1; // relevant query for C-api and type-parameters
+    uint16_t zeroinit:1; // if one or more fields requires zero-initialization
+    uint16_t has_concrete_subtype:1; // If clear, no value will have this datatype
+    uint16_t cached_by_hash:1; // stored in hash-based set cache (instead of linear cache)
+    uint16_t isprimitivetype:1; // whether this is declared with 'primitive type' keyword (sized, no fields, and immutable)
+    uint16_t ismutationfree:1; // whether any mutable memory is reachable through this type (in the type or via fields)
 } jl_datatype_t;
 
 typedef struct _jl_vararg_t {

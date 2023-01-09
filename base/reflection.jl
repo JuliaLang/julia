@@ -580,7 +580,7 @@ function isprimitivetype(@nospecialize t)
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
-    return (t.flags & 0x80) == 0x80
+    return (t.flags & 0x0080) == 0x0080
 end
 
 """
@@ -606,7 +606,7 @@ julia> isbitstype(Complex)
 false
 ```
 """
-isbitstype(@nospecialize t) = (@_total_meta; isa(t, DataType) && (t.flags & 0x8) == 0x8)
+isbitstype(@nospecialize t) = (@_total_meta; isa(t, DataType) && (t.flags & 0x0008) == 0x0008)
 
 """
     isbits(x)
@@ -622,7 +622,28 @@ Determine whether type `T` is a tuple "leaf type",
 meaning it could appear as a type signature in dispatch
 and has no subtypes (or supertypes) which could appear in a call.
 """
-isdispatchtuple(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x4) == 0x4)
+isdispatchtuple(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x0004) == 0x0004)
+
+
+datatype_ismutationfree(dt::DataType) = (@_total_meta; (dt.flags & 0x0100) == 0x0100)
+
+"""
+    ismutationfree(T)
+
+Determine whether type `T` is mutation free in the sense that no mutable memory
+is reachable from this type (either in the type itself) or through any fields.
+Note that the type itself need not be immutable. For example, an empty mutable
+type is `ismutabletype`, but also `ismutationfree`.
+"""
+function ismutationfree(@nospecialize(t::Type))
+    t = unwrap_unionall(t)
+    if isa(t, DataType)
+        return datatype_ismutationfree(t)
+    elseif isa(t, Union)
+        return ismutationfree(t.a) && ismutationfree(t.b)
+    end
+    return false
+end
 
 iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
 isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
@@ -667,7 +688,7 @@ julia> isconcretetype(Union{Int,String})
 false
 ```
 """
-isconcretetype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x2) == 0x2)
+isconcretetype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x0002) == 0x0002)
 
 """
     isabstracttype(T)

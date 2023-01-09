@@ -104,6 +104,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->zeroinit = 0;
     t->has_concrete_subtype = 1;
     t->cached_by_hash = 0;
+    t->ismutationfree = 0;
     t->name = NULL;
     t->super = NULL;
     t->parameters = NULL;
@@ -446,6 +447,20 @@ static void throw_ovf(int should_malloc, void *desc, jl_datatype_t* st, int offs
     jl_errorf("type %s has field offset %d that exceeds the page size", jl_symbol_name(st->name->name), offset);
 }
 
+static int is_type_mutationfree(jl_value_t *t)
+{
+    t = jl_unwrap_unionall(t);
+    if (jl_is_uniontype(t)) {
+        jl_uniontype_t *u = (jl_uniontype_t*)t;
+        return is_type_mutationfree(u->a) && is_type_mutationfree(u->b);
+    }
+    if (jl_is_datatype(t)) {
+        return ((jl_datatype_t*)t)->ismutationfree;
+    }
+    // Free tvars, etc.
+    return 0;
+}
+
 void jl_compute_field_offsets(jl_datatype_t *st)
 {
     const uint64_t max_offset = (((uint64_t)1) << 32) - 1;
@@ -461,6 +476,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         st->has_concrete_subtype = 1;
     }
     int isbitstype = st->isconcretetype && st->name->mayinlinealloc;
+    int ismutationfree = !w->layout || !jl_is_layout_opaque(w->layout);
     // If layout doesn't depend on type parameters, it's stored in st->name->wrapper
     // and reused by all subtypes.
     if (w->layout) {
@@ -511,9 +527,10 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         }
     }
 
-    for (i = 0; isbitstype && i < nfields; i++) {
+    for (i = 0; (isbitstype || ismutationfree) && i < nfields; i++) {
         jl_value_t *fld = jl_field_type(st, i);
-        isbitstype = jl_isbits(fld);
+        isbitstype &= jl_isbits(fld);
+        ismutationfree &= (!st->name->mutabl || jl_field_isconst(st, i)) && is_type_mutationfree(fld);
     }
 
     // if we didn't reuse the layout above, compute it now
@@ -645,6 +662,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     // now finish deciding if this instantiation qualifies for special properties
     assert(!isbitstype || st->layout->npointers == 0); // the definition of isbits
     st->isbitstype = isbitstype;
+    st->ismutationfree = ismutationfree;
     jl_maybe_allocate_singleton_instance(st);
     return;
 }
@@ -791,6 +809,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
     // (dta->name->names == svec() && dta->layout && dta->layout->size != 0)
     // and we easily have a free bit for it in the DataType flags
     bt->isprimitivetype = 1;
+    bt->ismutationfree = 1;
     bt->isbitstype = (parameters == jl_emptysvec);
     bt->layout = jl_get_layout(nbytes, 0, 0, alignm, 0, NULL, NULL);
     bt->instance = NULL;

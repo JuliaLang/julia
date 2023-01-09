@@ -93,7 +93,7 @@ function datatype_min_ninitialized(t::DataType)
     return length(t.name.names) - t.name.n_uninitialized
 end
 
-has_concrete_subtype(d::DataType) = d.flags & 0x20 == 0x20 # n.b. often computed only after setting the type and layout fields
+has_concrete_subtype(d::DataType) = d.flags & 0x0020 == 0x0020 # n.b. often computed only after setting the type and layout fields
 
 # determine whether x is a valid lattice element tag
 # For example, Type{v} is not valid if v is a value
@@ -353,18 +353,6 @@ function _is_immutable_type(@nospecialize ty)
 end
 
 is_mutation_free_argtype(@nospecialize argtype) =
-    is_mutation_free_type(widenconst(ignorelimited(argtype)))
+    ismutationfree(widenconst(ignorelimited(argtype)))
 is_mutation_free_type(@nospecialize ty) =
-    _is_mutation_free_type(unwrap_unionall(ty))
-function _is_mutation_free_type(@nospecialize ty)
-    if isa(ty, Union)
-        return _is_mutation_free_type(ty.a) && _is_mutation_free_type(ty.b)
-    end
-    if isType(ty) || ty === DataType || ty === String || ty === Symbol || ty === SimpleVector
-        return true
-    end
-    # this is okay as access and modification on global state are tracked separately
-    ty === Module && return true
-    # TODO improve this analysis, e.g. allow `Some{Symbol}`
-    return isbitstype(ty)
-end
+    ismutationfree(ty)
