@@ -694,3 +694,8 @@ end
 @test Base.infer_effects(Tuple{Nothing}) do x
     WrapperOneField{typeof(x)}.instance
 end |> Core.Compiler.is_total
+
+# Flow-sensitive consistenct for _typevar
+@test Base.infer_effects() do
+    return WrapperOneField == (WrapperOneField{T} where T)
+end |> Core.Compiler.is_total

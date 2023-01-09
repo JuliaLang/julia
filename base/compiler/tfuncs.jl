@@ -2249,7 +2249,8 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         effect_free = get_binding_type_effect_free(argtypes[1], argtypes[2]) ? ALWAYS_TRUE : ALWAYS_FALSE
         return Effects(EFFECTS_TOTAL; effect_free)
     else
-        consistent = contains_is(_CONSISTENT_BUILTINS, f) ? ALWAYS_TRUE : ALWAYS_FALSE
+        consistent = contains_is(_CONSISTENT_BUILTINS, f) ? ALWAYS_TRUE :
+            (f === Core._typevar) ? CONSISTENT_IF_NOTRETURNED : ALWAYS_FALSE
         if f === setfield! || f === arrayset
             effect_free = EFFECT_FREE_IF_INACCESSIBLEMEMONLY
         elseif contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)
