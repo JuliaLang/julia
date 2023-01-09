@@ -104,23 +104,10 @@ function printvalue(f::MbyFunc, io::IO, value::TOMLValue)
     error("internal error in TOML printing, unhandled value")
 end
 
-function log2i(x::Base.BitUnsigned)
-    N = (sizeof(x) ÷ 4) - 1
-    return N - leading_zeros(x)
-end
-
-function log2i(x::Base.BitSigned)
-    N = (sizeof(x) ÷ 4) - 1
-    !signbit(x) && return N - leading_zeros(x)
-    throw(ErrorException("nonnegative expected ($x)"))
-end
-
-log2i(x::Integer) = typeof(x)(floor(log2(x)))
-
 function print_integer(io::IO, value::Integer)
     value isa Signed && return Base.show(io, value)
     # unsigned integers are printed as hex
-    n = (log2i(value)÷4) + 1
+    n = Base.top_set_bit(value) ÷ 4 + 1
     isodd(n) && (n += 1)
     Base.print(io, "0x", string(value, base=16, pad=n))
     return
