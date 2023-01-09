@@ -676,3 +676,11 @@ mksparamunused(x) = (SparamUnused(x); nothing)
 let src = code_typed1(mksparamunused, (Any,))
     @test count(isnew, src.code) == 0
 end
+
+# Effects for getfield of type instance
+struct WrapperOneField{T}
+    x::T
+end
+Base.infer_effects(Tuple{Nothing}) do x
+    WrapperOneField{typeof(x)}.instance
+end |> Core.Compiler.is_total

@@ -1226,6 +1226,16 @@ end
 end
 
 @nospecs function getfield_notundefined(typ0, name)
+    if isa(typ0, Const) && isa(name, Const)
+        namev = name.val
+        if isa(namev, Symbol) || isa(namev, Int)
+            # Fields are not allowed to transition from defined to undefined, so
+            # even if the field is not const, all we need to check here is that
+            # it is defined here.
+            return isdefined(typ0.val, namev)
+        end
+    end
+    typ0 = widenconst(typ0)
     typ = unwrap_unionall(typ0)
     if isa(typ, Union)
         return getfield_notundefined(rewrap_unionall(typ.a, typ0), name) &&
@@ -2172,13 +2182,14 @@ function getfield_effects(argtypes::Vector{Any}, @nospecialize(rt))
     isempty(argtypes) && return EFFECTS_THROWS
     obj = argtypes[1]
     isvarargtype(obj) && return Effects(EFFECTS_THROWS; consistent=ALWAYS_FALSE)
-    consistent = is_immutable_argtype(obj) ? ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
+    consistent = (is_immutable_argtype(obj) || is_mutation_free_argtype(obj)) ?
+        ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
     # access to `isbitstype`-field initialized with undefined value leads to undefined behavior
     # so should taint `:consistent`-cy while access to uninitialized non-`isbitstype` field
     # throws `UndefRefError` so doesn't need to taint it
     # NOTE `getfield_notundefined` conservatively checks if this field is never initialized
     # with undefined value so that we don't taint `:consistent`-cy too aggressively here
-    if !(length(argtypes) ≥ 2 && getfield_notundefined(widenconst(obj), argtypes[2]))
+    if !(length(argtypes) ≥ 2 && getfield_notundefined(obj, argtypes[2]))
         consistent = ALWAYS_FALSE
     end
     nothrow = getfield_nothrow(argtypes, true)
