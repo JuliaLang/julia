@@ -1943,7 +1943,7 @@ maybe_apply_initial_optimizations(alg::InsertionSortAlg) = InitialOptimizations(
 
 # selectpivot!
 #
-# Given 3 locations in an array (lo, mi, and hi), sort v[lo], v[mi], v[hi]) and
+# Given 3 locations in an array (lo, mi, and hi), sort v[lo], v[mi], v[hi] and
 # choose the middle value as a pivot
 #
 # Upon return, the pivot is in v[lo], and v[hi] is guaranteed to be
