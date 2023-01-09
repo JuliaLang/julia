@@ -1256,7 +1256,7 @@ end
         # initialized with undefined value so to avoid being too conservative
         fcnt = fieldcount_noerror(typ)
         fcnt === nothing && return false
-        all(i::Int->is_undefref_fieldtype(fieldtype(typ,i)), 1:fcnt) && return true
+        all(i::Int->is_undefref_fieldtype(fieldtype(typ,i)), (datatype_min_ninitialized(typ)+1):fcnt) && return true
         return false
     end
     name = name.val

@@ -224,6 +224,10 @@ struct Maybe{T}
 end
 Base.getindex(x::Maybe) = x.x
 
+struct SyntacticallyDefined{T}
+    x::T
+end
+
 import Core.Compiler: Const, getfield_notundefined
 for T = (Base.RefValue, Maybe) # both mutable and immutable
     for name = (Const(1), Const(:x))
@@ -265,6 +269,8 @@ for TupleType = Any[Tuple{Int,Int,Int}, Tuple{Int,Vararg{Int}}, Tuple{Any}, Tupl
     FieldType = Any[Int, Symbol, Any]
     @test getfield_notundefined(TupleType, FieldType)
 end
+# skip analysis on fields that are known to be defined syntactically
+@test Core.Compiler.getfield_notundefined(SyntacticallyDefined{Float64}, Symbol)
 # high-level tests for `getfield_notundefined`
 @test Base.infer_effects() do
     Maybe{Int}()
@@ -303,6 +309,9 @@ let f() = Ref{String}()[]
         f() # this call should be concrete evaluated
     end |> only === Union{}
 end
+@test Base.infer_effects((SyntacticallyDefined{Float64}, Symbol)) do w, s
+    getfield(w, s)
+end |> Core.Compiler.is_foldable
 
 # effects propagation for `Core.invoke` calls
 # https://github.com/JuliaLang/julia/issues/44763
@@ -677,10 +686,11 @@ let src = code_typed1(mksparamunused, (Any,))
     @test count(isnew, src.code) == 0
 end
 
-# Effects for getfield of type instance
 struct WrapperOneField{T}
     x::T
 end
-Base.infer_effects(Tuple{Nothing}) do x
+
+# Effects for getfield of type instance
+@test Base.infer_effects(Tuple{Nothing}) do x
     WrapperOneField{typeof(x)}.instance
 end |> Core.Compiler.is_total
