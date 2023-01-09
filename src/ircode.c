@@ -114,13 +114,9 @@ static void jl_encode_as_indexed_root(jl_ircode_state *s, jl_value_t *v)
         write_uint8(s->s, TAG_METHODROOT);
         write_uint8(s->s, id);
     }
-    else if (id <= UINT16_MAX) {
-        write_uint8(s->s, TAG_LONG_METHODROOT);
-        write_uint16(s->s, id);
-    }
     else {
         assert(id <= UINT32_MAX);
-        write_uint8(s->s, TAG_32BIT_METHODROOT);
+        write_uint8(s->s, TAG_LONG_METHODROOT);
         write_uint32(s->s, id);
     }
 }
@@ -649,21 +645,17 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
     case TAG_RELOC_METHODROOT:
         key = read_uint64(s->s);
         tag = read_uint8(s->s);
-        assert(tag == TAG_METHODROOT || tag == TAG_LONG_METHODROOT || tag == TAG_32BIT_METHODROOT);
+        assert(tag == TAG_METHODROOT || tag == TAG_LONG_METHODROOT);
         int index = -1;
         if (tag == TAG_METHODROOT)
             index = read_uint8(s->s);
         else if (tag == TAG_LONG_METHODROOT)
-            index = read_uint16(s->s);
-        else if (tag == TAG_32BIT_METHODROOT)
             index = read_uint32(s->s);
         assert(index >= 0);
         return lookup_root(s->method, key, index);
     case TAG_METHODROOT:
         return lookup_root(s->method, 0, read_uint8(s->s));
     case TAG_LONG_METHODROOT:
-        return lookup_root(s->method, 0, read_uint16(s->s));
-    case TAG_32BIT_METHODROOT:
         return lookup_root(s->method, 0, read_uint32(s->s));
     case TAG_SVEC: JL_FALLTHROUGH; case TAG_LONG_SVEC:
         return jl_decode_value_svec(s, tag);
