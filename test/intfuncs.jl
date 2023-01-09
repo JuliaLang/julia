@@ -267,6 +267,9 @@ end
     @test powermod(2, -2, 5) == 4
     @test powermod(2, -1, -5) == -2
     @test powermod(2, -2, -5) == -1
+
+    @test powermod(2, typemin(Int128), 5) == 1
+    @test powermod(2, typemin(Int128), -5) == -4
 end
 
 @testset "nextpow/prevpow" begin

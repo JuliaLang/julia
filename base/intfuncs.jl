@@ -369,7 +369,7 @@ julia> powermod(5, 3, 19)
 ```
 """
 function powermod(x::Integer, p::Integer, m::T) where T<:Integer
-    p < 0 && p == typemin(typeof(p)) && return powermod(invmod(x, m), -BigInt(p), m)
+    p < 0 && p == typemin(typeof(p)) && return mod(powermod(invmod(x, m), -(p÷2), m)^2, m)
     p < 0 && return powermod(invmod(x, m), -p, m)
     p == 0 && return mod(one(m),m)
     (m == 1 || m == -1) && return zero(m)
