@@ -394,6 +394,10 @@ end
                 @test Hermitian(aherm)\b ≈ aherm\b
                 @test Symmetric(asym)\x  ≈ asym\x
                 @test Symmetric(asym)\b  ≈ asym\b
+                @test Hermitian(Diagonal(aherm))\x ≈ Diagonal(aherm)\x
+                @test Hermitian(Matrix(Diagonal(aherm)))\b ≈ Diagonal(aherm)\b
+                @test Symmetric(Diagonal(asym))\x  ≈ Diagonal(asym)\x
+                @test Symmetric(Matrix(Diagonal(asym)))\b  ≈ Diagonal(asym)\b
             end
         end
         @testset "generalized dot product" begin
@@ -401,6 +405,8 @@ end
                 @test dot(x, Hermitian(aherm, uplo), y) ≈ dot(x, Hermitian(aherm, uplo)*y) ≈ dot(x, Matrix(Hermitian(aherm, uplo)), y)
                 @test dot(x, Hermitian(aherm, uplo), x) ≈ dot(x, Hermitian(aherm, uplo)*x) ≈ dot(x, Matrix(Hermitian(aherm, uplo)), x)
             end
+            @test dot(x, Hermitian(Diagonal(aherm)), y) ≈ dot(x, Hermitian(Diagonal(aherm))*y) ≈ dot(x, Matrix(Hermitian(Diagonal(aherm))), y)
+            @test dot(x, Hermitian(Diagonal(aherm)), x) ≈ dot(x, Hermitian(Diagonal(aherm))*x) ≈ dot(x, Matrix(Hermitian(Diagonal(aherm))), x)
             if eltya <: Real
                 for uplo in (:U, :L)
                     @test dot(x, Symmetric(aherm, uplo), y) ≈ dot(x, Symmetric(aherm, uplo)*y) ≈ dot(x, Matrix(Symmetric(aherm, uplo)), y)
