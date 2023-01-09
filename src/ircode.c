@@ -652,11 +652,11 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
         assert(tag == TAG_METHODROOT || tag == TAG_LONG_METHODROOT || tag == TAG_32BIT_METHODROOT);
         int index = -1;
         if (tag == TAG_METHODROOT)
-            return index = read_uint8(s->s);
+            index = read_uint8(s->s);
         else if (tag == TAG_LONG_METHODROOT)
-            return index = read_uint16(s->s);
+            index = read_uint16(s->s);
         else if (tag == TAG_32BIT_METHODROOT)
-            return index = read_uint32(s->s);
+            index = read_uint32(s->s);
         assert(index >= 0);
         return lookup_root(s->method, key, index);
     case TAG_METHODROOT:
