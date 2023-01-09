@@ -832,7 +832,7 @@ _hypot(x::ComplexF16, y::ComplexF16) = Float16(_hypot(ComplexF32(x), ComplexF32(
 
 function _hypot(x::NTuple{N,<:Number}) where {N}
     maxabs = maximum(abs, x)
-    if any(isinf, x)
+    if isnan(maxabs) && any(isinf, x)
         return typeof(maxabs)(Inf)
     elseif (iszero(maxabs) || isinf(maxabs))
         return maxabs
