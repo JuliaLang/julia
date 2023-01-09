@@ -496,13 +496,13 @@ See also: [`ndigits0z`](@ref), [`ndigits`](@ref).
 
 # Examples
 ```jldoctest
-julia> top_set_bit(4)
+julia> Base.top_set_bit(4)
 3
 
-julia> top_set_bit(0)
+julia> Base.top_set_bit(0)
 0
 
-julia> top_set_bit(-1)
+julia> Base.top_set_bit(-1)
 64
 ```
 """
