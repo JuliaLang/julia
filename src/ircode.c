@@ -650,13 +650,14 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
         key = read_uint64(s->s);
         tag = read_uint8(s->s);
         assert(tag == TAG_METHODROOT || tag == TAG_LONG_METHODROOT || tag == TAG_32BIT_METHODROOT);
-        int index;
+        int index = -1;
         if (tag == TAG_METHODROOT)
             return index = read_uint8(s->s);
         else if (tag == TAG_LONG_METHODROOT)
             return index = read_uint16(s->s);
         else if (tag == TAG_32BIT_METHODROOT)
             return index = read_uint32(s->s);
+        assert(index >= 0);
         return lookup_root(s->method, key, index);
     case TAG_METHODROOT:
         return lookup_root(s->method, 0, read_uint8(s->s));
