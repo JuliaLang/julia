@@ -885,7 +885,7 @@ ConsiderRadixSort(next) = ConsiderRadixSort(RadixSort(), next)
 function _sort!(v::AbstractVector, a::ConsiderRadixSort, o::DirectOrdering, kw)
     @getkw lo hi mn mx
     urange = uint_map(mx, o)-uint_map(mn, o)
-    bits = unsigned(8sizeof(urange) - leading_zeros(urange))
+    bits = unsigned(top_set_bit(urange))
     if sizeof(eltype(v)) <= 8 && bits+70 < 22log(hi-lo)
         _sort!(v, a.radix, o, kw)
     else
@@ -920,7 +920,7 @@ function _sort!(v::AbstractVector, a::RadixSort, o::DirectOrdering, kw)
     @getkw lo hi mn mx scratch
     umn = uint_map(mn, o)
     urange = uint_map(mx, o)-umn
-    bits = unsigned(8sizeof(urange) - leading_zeros(urange))
+    bits = unsigned(top_set_bit(urange))
 
     # At this point, we are committed to radix sort.
     u = uint_map!(v, lo, hi, o)

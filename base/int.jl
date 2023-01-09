@@ -504,6 +504,7 @@ julia> top_set_bit(0)
 
 julia> top_set_bit(-1)
 64
+```
 """
 top_set_bit(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
 
