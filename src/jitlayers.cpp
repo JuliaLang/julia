@@ -1148,7 +1148,7 @@ namespace {
                 {
                     auto stream = *jl_ExecutionEngine->get_dump_llvm_opt_stream();
                     if (stream && should_dump_opt_stats) {
-                        jl_printf(stream, "%s", before_stats_ss.str().c_str());
+                        ios_printf(stream, "%s", before_stats_ss.str().c_str());
                         end_time = jl_hrtime();
                         ios_printf(stream, "  time_ns: %" PRIu64 "\n", end_time - start_time);
                         ios_printf(stream, "  optlevel: %d\n", optlevel);
