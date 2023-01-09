@@ -574,8 +574,9 @@ end
     end
     return false
 end
-@nospecs function typevar_nothrow(n, lb, ub)
-    (n ⊑ Symbol) || return false
+@nospecs function typevar_nothrow(𝕃::AbstractLattice, n, lb, ub)
+    ⊑ = Core.Compiler.:⊑(𝕃)
+    n ⊑ Symbol || return false
     typebound_nothrow(lb) || return false
     typebound_nothrow(ub) || return false
     return true
@@ -2004,7 +2005,7 @@ end
         return arraysize_nothrow(argtypes[1], argtypes[2])
     elseif f === Core._typevar
         na == 3 || return false
-        return typevar_nothrow(argtypes[1], argtypes[2], argtypes[3])
+        return typevar_nothrow(𝕃, argtypes[1], argtypes[2], argtypes[3])
     elseif f === invoke
         return false
     elseif f === getfield

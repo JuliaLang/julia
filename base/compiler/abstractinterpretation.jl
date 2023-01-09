@@ -1836,14 +1836,13 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
     return rt
 end
 
-function abstract_call_unionall(argtypes::Vector{Any})
+function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{Any})
     if length(argtypes) == 3
         canconst = true
         a2 = argtypes[2]
         a3 = argtypes[3]
-        nothrow = a2 ⊑ TypeVar && (
-                a3 ⊑ Type ||
-                a3 ⊑ TypeVar)
+        ⊑ᵢ = ⊑(typeinf_lattice(interp))
+        nothrow = a2 ⊑ᵢ TypeVar && (a3 ⊑ᵢ Type || a3 ⊑ᵢ TypeVar)
         if isa(a3, Const)
             body = a3.val
         elseif isType(a3)
@@ -1852,7 +1851,7 @@ function abstract_call_unionall(argtypes::Vector{Any})
         else
             return CallMeta(Any, Effects(EFFECTS_TOTAL; nothrow), NoCallInfo())
         end
-        if !isa(body, Type) && !isa(body, TypeVar)
+        if !(isa(body, Type) || isa(body, TypeVar))
             return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
         end
         if has_free_typevars(body)
@@ -1864,7 +1863,7 @@ function abstract_call_unionall(argtypes::Vector{Any})
             else
                 return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
             end
-            !isa(tv, TypeVar) && return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
+            isa(tv, TypeVar) || return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
             body = UnionAll(tv, body)
         end
         ret = canconst ? Const(body) : Type{body}
@@ -1983,10 +1982,10 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             ub_var = argtypes[3]
         end
         pT = typevar_tfunc(𝕃ᵢ, n, lb_var, ub_var)
-        return CallMeta(pT,
-            builtin_effects(𝕃ᵢ, Core._typevar, Any[n, lb_var, ub_var], pT), NoCallInfo())
+        effects = builtin_effects(𝕃ᵢ, Core._typevar, Any[n, lb_var, ub_var], pT)
+        return CallMeta(pT, effects, NoCallInfo())
     elseif f === UnionAll
-        return abstract_call_unionall(argtypes)
+        return abstract_call_unionall(interp, argtypes)
     elseif f === Tuple && la == 2
         aty = argtypes[2]
         ty = isvarargtype(aty) ? unwrapva(aty) : widenconst(aty)
