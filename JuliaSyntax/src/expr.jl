@@ -48,6 +48,8 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
             return GlobalRef(Core, :var"@doc")
         elseif kind(node) == K"core_@cmd"
             return GlobalRef(Core, :var"@cmd")
+        elseif kind(node) == K"MacroName" && val === Symbol("@.")
+            return Symbol("@__dot__")
         else
             return val
         end
@@ -152,9 +154,6 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
     # Special cases for various expression heads
     loc = source_location(LineNumberNode, node.source, node.position)
     if headsym === :macrocall
-        if args[1] == Symbol("@.")
-            args[1] = Symbol("@__dot__")
-        end
         reorder_parameters!(args, 2)
         insert!(args, 2, loc)
     elseif headsym in (:dotcall, :call)

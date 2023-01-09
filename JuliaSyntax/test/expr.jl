@@ -261,5 +261,6 @@
                                                   Expr(:parameters, Expr(:kw, :b, 2)), Expr(:(=), :a, 1))
         # @__dot__
         @test parse(Expr, "@.") == Expr(:macrocall, Symbol("@__dot__"), LineNumberNode(1))
+        @test parse(Expr, "using A: @.") == Expr(:using, Expr(Symbol(":"), Expr(:., :A), Expr(:., Symbol("@__dot__"))))
     end
 end
