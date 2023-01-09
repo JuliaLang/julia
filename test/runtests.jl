@@ -102,7 +102,7 @@ cd(@__DIR__) do
     #   * https://github.com/JuliaLang/julia/pull/29384
     #   * https://github.com/JuliaLang/julia/pull/40348
     n = 1
-    JULIA_TEST_USE_MULTIPLE_WORKERS = Base.get_bool_env("JULIA_TEST_USE_MULTIPLE_WORKERS")
+    JULIA_TEST_USE_MULTIPLE_WORKERS = Base.get_bool_env("JULIA_TEST_USE_MULTIPLE_WORKERS", false)
     # If the `JULIA_TEST_USE_MULTIPLE_WORKERS` environment variable is set to `true`, we use
     # multiple worker processes regardless of the value of `net_on`.
     # Otherwise, we use multiple worker processes if and only if `net_on` is true.

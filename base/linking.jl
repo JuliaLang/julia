@@ -63,7 +63,7 @@ end
 const VERBOSE = Ref{Bool}(false)
 
 function __init__()
-    VERBOSE[] = get_bool_env("JULIA_VERBOSE_LINKING")
+    VERBOSE[] = Base.get_bool_env("JULIA_VERBOSE_LINKING", false)
 
     __init_lld_path()
     PATH[] = dirname(lld_path[])
