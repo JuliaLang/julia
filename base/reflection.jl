@@ -114,13 +114,6 @@ function binding_module(m::Module, s::Symbol)
     return unsafe_pointer_to_objref(p)::Module
 end
 
-function resolve(g::GlobalRef; force::Bool=false)
-    if force || isbindingresolved(g.mod, g.name)
-        return GlobalRef(binding_module(g.mod, g.name), g.name)
-    end
-    return g
-end
-
 const _NAMEDTUPLE_NAME = NamedTuple.body.body.name
 
 function _fieldnames(@nospecialize t)
@@ -268,8 +261,7 @@ isconst(m::Module, s::Symbol) =
     ccall(:jl_is_const, Cint, (Any, Any), m, s) != 0
 
 function isconst(g::GlobalRef)
-    g.binding != C_NULL && return ccall(:jl_binding_is_const, Cint, (Ptr{Cvoid},), g.binding) != 0
-    return isconst(g.mod, g.name)
+    return ccall(:jl_globalref_is_const, Cint, (Any,), g) != 0
 end
 
 """

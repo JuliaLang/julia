@@ -392,16 +392,16 @@ void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, void
                     g_snapshot->names.find_or_create_string_id(path));
 }
 
-void _gc_heap_snapshot_record_module_to_binding(jl_module_t* module, jl_binding_t* binding) JL_NOTSAFEPOINT
+void _gc_heap_snapshot_record_module_to_binding(jl_module_t *module, jl_sym_t *name, jl_binding_t *binding) JL_NOTSAFEPOINT
 {
     auto from_node_idx = record_node_to_gc_snapshot((jl_value_t*)module);
-    auto to_node_idx = record_pointer_to_gc_snapshot(binding, sizeof(jl_binding_t), jl_symbol_name(binding->name));
+    auto to_node_idx = record_pointer_to_gc_snapshot(binding, sizeof(jl_binding_t), jl_symbol_name(name));
 
     jl_value_t *value = jl_atomic_load_relaxed(&binding->value);
     auto value_idx = value ? record_node_to_gc_snapshot(value) : 0;
     jl_value_t *ty = jl_atomic_load_relaxed(&binding->ty);
     auto ty_idx = ty ? record_node_to_gc_snapshot(ty) : 0;
-    jl_value_t *globalref = jl_atomic_load_relaxed(&binding->globalref);
+    jl_value_t *globalref = (jl_value_t*)binding->globalref;
     auto globalref_idx = globalref ? record_node_to_gc_snapshot(globalref) : 0;
 
     auto &from_node = g_snapshot->nodes[from_node_idx];

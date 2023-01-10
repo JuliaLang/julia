@@ -2534,14 +2534,12 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
 end
 
 function isdefined_globalref(g::GlobalRef)
-    g.binding != C_NULL && return ccall(:jl_binding_boundp, Cint, (Ptr{Cvoid},), g.binding) != 0
-    return isdefined(g.mod, g.name)
+    return ccall(:jl_globalref_boundp, Cint, (Any,), g) != 0
 end
 
 function abstract_eval_globalref(g::GlobalRef)
     if isdefined_globalref(g) && isconst(g)
-        g.binding != C_NULL && return Const(ccall(:jl_binding_value, Any, (Ptr{Cvoid},), g.binding))
-        return Const(getglobal(g.mod, g.name))
+        return Const(ccall(:jl_get_globalref_value, Any, (Any,), g))
     end
     ty = ccall(:jl_get_binding_type, Any, (Any, Any), g.mod, g.name)
     ty === nothing && return Any

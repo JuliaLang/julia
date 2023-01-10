@@ -55,7 +55,6 @@
     XX(jl_atomic_swap_bits) \
     XX(jl_backtrace_from_here) \
     XX(jl_base_relative_to) \
-    XX(jl_binding_owner) \
     XX(jl_binding_resolved_p) \
     XX(jl_bitcast) \
     XX(jl_boundp) \
@@ -210,7 +209,6 @@
     XX(jl_get_binding) \
     XX(jl_get_binding_for_method_def) \
     XX(jl_get_binding_or_error) \
-    XX(jl_get_binding_wr_or_error) \
     XX(jl_get_binding_wr) \
     XX(jl_get_cpu_name) \
     XX(jl_get_current_task) \
@@ -224,7 +222,6 @@
     XX(jl_get_julia_bin) \
     XX(jl_get_julia_bindir) \
     XX(jl_get_method_inferred) \
-    XX(jl_get_module_binding) \
     XX(jl_get_module_compile) \
     XX(jl_get_module_infer) \
     XX(jl_get_module_of_binding) \
