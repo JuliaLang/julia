@@ -601,20 +601,21 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
 {
     jl_queue_for_serialization(s, m->name);
     jl_queue_for_serialization(s, m->parent);
-    size_t i;
-    void **table = m->bindings.table;
-    for (i = 0; i < m->bindings.size; i += 2) {
-        if (table[i+1] != HT_NOTFOUND) {
-            jl_sym_t *name = (jl_sym_t*)table[i];
-            jl_queue_for_serialization(s, (jl_value_t*)name);
-            jl_binding_t *b = (jl_binding_t*)table[i+1];
-            if (name == jl_docmeta_sym && jl_atomic_load_relaxed(&b->value) && jl_options.strip_metadata)
+    jl_queue_for_serialization(s, m->bindings);
+    jl_queue_for_serialization(s, m->bindingkeyset);
+    if (jl_options.strip_metadata) {
+        jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
+        for (size_t i = 0; i < jl_svec_len(table); i++) {
+            jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
+            if ((void*)b == jl_nothing)
+                break;
+            jl_sym_t *name = b->globalref->name;
+            if (name == jl_docmeta_sym && jl_atomic_load_relaxed(&b->value))
                 record_field_change((jl_value_t**)&b->value, jl_nothing);
-            jl_queue_for_serialization(s, jl_module_globalref(m, name));
         }
     }
 
-    for (i = 0; i < m->usings.len; i++) {
+    for (size_t i = 0; i < m->usings.len; i++) {
         jl_queue_for_serialization(s, (jl_value_t*)m->usings.items[i]);
     }
 }
@@ -991,28 +992,13 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
     newm->parent = NULL;
     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, parent)));
     arraylist_push(&s->relocs_list, (void*)backref_id(s, m->parent, s->link_ids_relocs));
-    newm->primary_world = jl_atomic_load_acquire(&jl_world_counter);
-
-    // write out the bindings table as a list
-    // immediately after jl_module_t
-    // (the ptrhash will need to be recreated on load)
-    size_t count = 0;
-    size_t i;
-    void **table = m->bindings.table;
-    for (i = 0; i < m->bindings.size; i += 2) {
-        if (table[i+1] != HT_NOTFOUND) {
-            jl_globalref_t *gr = ((jl_binding_t*)table[i+1])->globalref;
-            assert(gr && gr->mod == m && gr->name == (jl_sym_t*)table[i]);
-            write_pointerfield(s, (jl_value_t*)gr);
-            tot += sizeof(void*);
-            count += 1;
-        }
-    }
-    assert(ios_pos(s->s) - reloc_offset == tot);
-    newm = (jl_module_t*)&s->s->buf[reloc_offset]; // buf might have been reallocated
-    newm->bindings.size = count; // stash the count in newm->size
-    newm->bindings.table = NULL;
-    memset(&newm->bindings._space, 0, sizeof(newm->bindings._space));
+    newm->bindings = NULL;
+    arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, bindings)));
+    arraylist_push(&s->relocs_list, (void*)backref_id(s, m->bindings, s->link_ids_relocs));
+    newm->bindingkeyset = NULL;
+    arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, bindingkeyset)));
+    arraylist_push(&s->relocs_list, (void*)backref_id(s, m->bindingkeyset, s->link_ids_relocs));
+    newm->primary_world = ~(size_t)0;
 
     // write out the usings list
     memset(&newm->usings._space, 0, sizeof(newm->usings._space));
@@ -1040,6 +1026,7 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
             tot += sizeof(void*);
         }
     }
+    assert(ios_pos(s->s) - reloc_offset == tot);
 }
 
 static void record_gvars(jl_serializer_state *s, arraylist_t *globals) JL_NOTSAFEPOINT
@@ -3083,16 +3070,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             // and we are already bad at that
             jl_module_t *mod = (jl_module_t*)obj;
             mod->build_id.hi = checksum;
-            size_t nbindings = mod->bindings.size;
-            htable_new(&mod->bindings, nbindings);
-            jl_globalref_t **pgr = (jl_globalref_t**)&mod[1];
-            for (size_t i = 0; i < nbindings; i++) {
-                jl_globalref_t *gr = pgr[i];
-                jl_binding_t *b = gr->binding;
-                assert(gr->mod == mod);
-                assert(b && (!b->globalref || b->globalref->mod == mod));
-                ptrhash_put(&mod->bindings, gr->name, b);
-            }
+            mod->primary_world = world;
             if (mod->usings.items != &mod->usings._space[0]) {
                 // arraylist_t assumes we called malloc to get this memory, so make that true now
                 void **newitems = (void**)malloc_s(mod->usings.max * sizeof(void*));
