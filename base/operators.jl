@@ -531,40 +531,40 @@ afoldl(op, a) = a
 function afoldl(op, a, bs...)
     l = length(bs)
     i =  0; y = a;            l == i && return y
-    #@nexprs 31 i -> (y = op(y, getfield(bs,i)); l == i && return y)
-    i =  1; y = op(y, getfield(bs,i)); l == i && return y
-    i =  2; y = op(y, getfield(bs,i)); l == i && return y
-    i =  3; y = op(y, getfield(bs,i)); l == i && return y
-    i =  4; y = op(y, getfield(bs,i)); l == i && return y
-    i =  5; y = op(y, getfield(bs,i)); l == i && return y
-    i =  6; y = op(y, getfield(bs,i)); l == i && return y
-    i =  7; y = op(y, getfield(bs,i)); l == i && return y
-    i =  8; y = op(y, getfield(bs,i)); l == i && return y
-    i =  9; y = op(y, getfield(bs,i)); l == i && return y
-    i = 10; y = op(y, getfield(bs,i)); l == i && return y
-    i = 11; y = op(y, getfield(bs,i)); l == i && return y
-    i = 12; y = op(y, getfield(bs,i)); l == i && return y
-    i = 13; y = op(y, getfield(bs,i)); l == i && return y
-    i = 14; y = op(y, getfield(bs,i)); l == i && return y
-    i = 15; y = op(y, getfield(bs,i)); l == i && return y
-    i = 16; y = op(y, getfield(bs,i)); l == i && return y
-    i = 17; y = op(y, getfield(bs,i)); l == i && return y
-    i = 18; y = op(y, getfield(bs,i)); l == i && return y
-    i = 19; y = op(y, getfield(bs,i)); l == i && return y
-    i = 20; y = op(y, getfield(bs,i)); l == i && return y
-    i = 21; y = op(y, getfield(bs,i)); l == i && return y
-    i = 22; y = op(y, getfield(bs,i)); l == i && return y
-    i = 23; y = op(y, getfield(bs,i)); l == i && return y
-    i = 24; y = op(y, getfield(bs,i)); l == i && return y
-    i = 25; y = op(y, getfield(bs,i)); l == i && return y
-    i = 26; y = op(y, getfield(bs,i)); l == i && return y
-    i = 27; y = op(y, getfield(bs,i)); l == i && return y
-    i = 28; y = op(y, getfield(bs,i)); l == i && return y
-    i = 29; y = op(y, getfield(bs,i)); l == i && return y
-    i = 30; y = op(y, getfield(bs,i)); l == i && return y
-    i = 31; y = op(y, getfield(bs,i)); l == i && return y
+    #@nexprs 31 i -> (y = op(y, bs[i]); l == i && return y)
+    i =  1; y = op(y, bs[i]); l == i && return y
+    i =  2; y = op(y, bs[i]); l == i && return y
+    i =  3; y = op(y, bs[i]); l == i && return y
+    i =  4; y = op(y, bs[i]); l == i && return y
+    i =  5; y = op(y, bs[i]); l == i && return y
+    i =  6; y = op(y, bs[i]); l == i && return y
+    i =  7; y = op(y, bs[i]); l == i && return y
+    i =  8; y = op(y, bs[i]); l == i && return y
+    i =  9; y = op(y, bs[i]); l == i && return y
+    i = 10; y = op(y, bs[i]); l == i && return y
+    i = 11; y = op(y, bs[i]); l == i && return y
+    i = 12; y = op(y, bs[i]); l == i && return y
+    i = 13; y = op(y, bs[i]); l == i && return y
+    i = 14; y = op(y, bs[i]); l == i && return y
+    i = 15; y = op(y, bs[i]); l == i && return y
+    i = 16; y = op(y, bs[i]); l == i && return y
+    i = 17; y = op(y, bs[i]); l == i && return y
+    i = 18; y = op(y, bs[i]); l == i && return y
+    i = 19; y = op(y, bs[i]); l == i && return y
+    i = 20; y = op(y, bs[i]); l == i && return y
+    i = 21; y = op(y, bs[i]); l == i && return y
+    i = 22; y = op(y, bs[i]); l == i && return y
+    i = 23; y = op(y, bs[i]); l == i && return y
+    i = 24; y = op(y, bs[i]); l == i && return y
+    i = 25; y = op(y, bs[i]); l == i && return y
+    i = 26; y = op(y, bs[i]); l == i && return y
+    i = 27; y = op(y, bs[i]); l == i && return y
+    i = 28; y = op(y, bs[i]); l == i && return y
+    i = 29; y = op(y, bs[i]); l == i && return y
+    i = 30; y = op(y, bs[i]); l == i && return y
+    i = 31; y = op(y, bs[i]); l == i && return y
     for i in (i + 1):l
-        y = op(y, getfield(bs,i))
+        y = op(y, bs[i])
     end
     return y
 end

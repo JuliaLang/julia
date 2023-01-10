@@ -415,13 +415,13 @@ Ln2(::Type{Float32}) = -0.6931472f0
                      0.001388888889068783, 0.00019841269447671544, 2.480157691845342e-5,
                      2.7558212415361945e-6, 2.758218402815439e-7, 2.4360682937111612e-8))
     p2 = exthorner(x, (1.0, .5, p))
-    return fma(x, getfield(p2,1), x*getfield(p2,2))
+    return fma(x, p2[1], x*p2[2])
 end
 @inline function expm1_small(x::Float32)
     p = evalpoly(x, (0.16666666f0, 0.041666627f0, 0.008333682f0,
                      0.0013908712f0, 0.0001933096f0))
     p2 = exthorner(x, (1f0, .5f0, p))
-    return fma(x, getfield(p2,1), x*getfield(p2,2))
+    return fma(x, p2[1], x*p2[2])
 end
 
 function expm1(x::Float64)
