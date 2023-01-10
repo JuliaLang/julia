@@ -62,6 +62,10 @@ impl Collection<JuliaVM> for VMCollection {
     fn block_for_gc(tls: VMMutatorThread) {
         info!("Triggered GC!");
 
+        unsafe {
+            AtomicBool::store(&BLOCK_FOR_GC, true, Ordering::SeqCst);
+        }
+
         let tls_ptr = match tls {
             VMMutatorThread(t) => match t {
                 VMThread(ptr) => ptr,
@@ -76,10 +80,6 @@ impl Collection<JuliaVM> for VMCollection {
         }
 
         unsafe { ((*UPCALLS).wait_for_the_world)() };
-
-        unsafe {
-            AtomicBool::store(&BLOCK_FOR_GC, true, Ordering::SeqCst);
-        }
 
         let last_err = unsafe { ((*UPCALLS).get_jl_last_err)() };
 
@@ -161,7 +161,8 @@ pub extern "C" fn mmtk_run_finalizers(at_exit: bool) {
             let mut fin_roots = FINALIZER_ROOTS.write().unwrap();
 
             for obj in all_finalizable.iter() {
-                fin_roots.push(*obj);
+                let inserted = fin_roots.insert(*obj);
+                assert!(inserted);
             }
         }
 
@@ -173,8 +174,8 @@ pub extern "C" fn mmtk_run_finalizers(at_exit: bool) {
                     ((*UPCALLS).run_finalizer_function)(obj.0, obj.1, obj.2);
                     {
                         let mut fin_roots = FINALIZER_ROOTS.write().unwrap();
-                        let fin_root = fin_roots.pop();
-                        assert_eq!(to_be_finalized, fin_root);
+                        let removed = fin_roots.remove(&obj);
+                        assert!(removed);
                     }
                 },
                 None => break,
@@ -189,15 +190,16 @@ pub extern "C" fn mmtk_run_finalizers(at_exit: bool) {
                     // if the finalizer function triggers GC you don't want the object to be GC-ed
                     {
                         let mut fin_roots = FINALIZER_ROOTS.write().unwrap();
-                        fin_roots.push(obj);
+                        let inserted = fin_roots.insert(obj);
+                        assert!(inserted);
                     }
 
                     unsafe { ((*UPCALLS).run_finalizer_function)(obj.0, obj.1, obj.2) }
 
                     {
                         let mut fin_roots = FINALIZER_ROOTS.write().unwrap();
-                        let fin_root = fin_roots.pop();
-                        assert_eq!(to_be_finalized, fin_root);
+                        let removed = fin_roots.remove(&obj);
+                        assert!(removed);
                     }
                 }
                 None => break,

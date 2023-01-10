@@ -1,6 +1,7 @@
 // All functions here are extern function. There is no point for marking them as unsafe.
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
+use crate::BLOCK_FOR_GC;
 use crate::reference_glue::JuliaFinalizableObject;
 use crate::JuliaVM;
 use crate::Julia_Upcalls;
@@ -206,12 +207,12 @@ pub extern "C" fn enable_collection() {
 #[no_mangle]
 pub extern "C" fn disable_collection() {
     if AtomicBool::load(&DISABLED_GC, Ordering::SeqCst) == false {
-        memory_manager::disable_collection(&SINGLETON);
         AtomicBool::store(&DISABLED_GC, true, Ordering::SeqCst);
+        memory_manager::disable_collection(&SINGLETON);
     }
 
     // if user has triggered GC, wait until GC is finished
-    while AtomicBool::load(&USER_TRIGGERED_GC, Ordering::SeqCst) {
+    while AtomicBool::load(&USER_TRIGGERED_GC, Ordering::SeqCst) || unsafe { AtomicBool::load(&BLOCK_FOR_GC, Ordering::SeqCst) } {
         info!("Waiting for a triggered gc to finish...");
         unsafe { ((*UPCALLS).wait_in_a_safepoint)() };
     }
@@ -304,17 +305,21 @@ pub extern "C" fn run_finalizers_for_obj(obj: ObjectReference) {
 
     let finalizable_objs = memory_manager::get_finalizers_for(&SINGLETON, obj);
 
-    for obj in finalizable_objs {
+    for obj in finalizable_objs.iter() {
         // if the finalizer function triggers GC you don't want the object to be GC-ed
         {
             let mut fin_roots = FINALIZER_ROOTS.write().unwrap();
-            fin_roots.push(obj);
+            let inserted = fin_roots.insert(*obj);
+            assert!(inserted);
         }
+    }
+
+    for obj in finalizable_objs {
         unsafe { ((*UPCALLS).run_finalizer_function)(obj.0, obj.1, obj.2) }
         {
             let mut fin_roots = FINALIZER_ROOTS.write().unwrap();
-            let fin_root = fin_roots.pop();
-            assert_eq!(obj, fin_root.unwrap());
+            let removed = fin_roots.remove(&obj);
+            assert!(removed);
         }
     }
 
