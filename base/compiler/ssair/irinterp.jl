@@ -104,7 +104,7 @@ struct IRInterpretationState
     lazydomtree::LazyDomtree
     function IRInterpretationState(interp::AbstractInterpreter,
         ir::IRCode, mi::MethodInstance, world::UInt, argtypes::Vector{Any})
-        argtypes = va_process_argtypes(argtypes, mi)
+        argtypes = va_process_argtypes(typeinf_lattice(interp), argtypes, mi)
         for i = 1:length(argtypes)
             argtypes[i] = widenslotwrapper(argtypes[i])
         end
@@ -173,9 +173,17 @@ function abstract_eval_phi_stmt(interp::AbstractInterpreter, phi::PhiNode, ::Int
     return abstract_eval_phi(interp, phi, nothing, irsv.ir)
 end
 
+function propagate_control_effects!(interp::AbstractInterpreter, idx::Int, stmt::GotoIfNot,
+        irsv::IRInterpretationState, reprocess::Union{Nothing, BitSet, BitSetBoundedMinPrioritySet})
+    # Nothing to do for most abstract interpreters, but if the abstract
+    # interpreter has control-dependent lattice effects, it can override
+    # this method.
+    return false
+end
+
 function reprocess_instruction!(interp::AbstractInterpreter,
     idx::Int, bb::Union{Int, Nothing}, @nospecialize(inst), @nospecialize(typ),
-    irsv::IRInterpretationState)
+    irsv::IRInterpretationState, reprocess::Union{Nothing, BitSet, BitSetBoundedMinPrioritySet})
     ir = irsv.ir
     if isa(inst, GotoIfNot)
         cond = inst.cond
@@ -222,7 +230,7 @@ function reprocess_instruction!(interp::AbstractInterpreter,
             end
             return true
         end
-        return false
+        return propagate_control_effects!(interp, idx, inst, irsv, reprocess)
     end
 
     rt = nothing
@@ -308,8 +316,9 @@ function process_terminator!(ir::IRCode, idx::Int, bb::Int,
     end
 end
 
+default_reprocess(interp::AbstractInterpreter, irsv::IRInterpretationState) = nothing
 function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState;
-    extra_reprocess::Union{Nothing,BitSet} = nothing)
+    extra_reprocess::Union{Nothing,BitSet} = default_reprocess(interp, irsv))
     (; ir, tpdum, ssa_refined) = irsv
 
     bbs = ir.cfg.blocks
@@ -327,7 +336,13 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
         for idx = stmts
             inst = ir.stmts[idx][:inst]
             typ = ir.stmts[idx][:type]
-            any_refined = extra_reprocess === nothing ? false : (idx in extra_reprocess)
+            any_refined = false
+            if extra_reprocess !== nothing
+                if idx in extra_reprocess
+                    pop!(extra_reprocess, idx)
+                    any_refined = true
+                end
+            end
             for ur in userefs(inst)
                 val = ur[]
                 if isa(val, Argument)
@@ -342,11 +357,13 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
                 delete!(ssa_refined, idx)
             end
             if any_refined && reprocess_instruction!(interp,
-                idx, bb, inst, typ, irsv)
+                idx, bb, inst, typ, irsv, extra_reprocess)
                 push!(ssa_refined, idx)
             end
-            if idx == lstmt && process_terminator!(ir, idx, bb, all_rets, ip)
-                @goto residual_scan
+            if idx == lstmt
+                if process_terminator!(ir, idx, bb, all_rets, ip)
+                    @goto residual_scan
+                end
             end
             if typ === Bottom && !isa(inst, PhiNode)
                 break
@@ -358,6 +375,9 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
     # Slow path
     begin @label residual_scan
         stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))
+        if extra_reprocess !== nothing
+            append!(stmt_ip, extra_reprocess)
+        end
 
         # Slow Path Phase 1.A: Complete use scanning
         while !isempty(ip)
@@ -410,7 +430,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
             inst = ir.stmts[idx][:inst]
             typ = ir.stmts[idx][:type]
             if reprocess_instruction!(interp,
-                idx, nothing, inst, typ, irsv)
+                idx, nothing, inst, typ, irsv, stmt_ip)
                 append!(stmt_ip, tpdum[idx])
             end
         end

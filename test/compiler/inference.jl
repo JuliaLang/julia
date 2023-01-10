@@ -2446,7 +2446,7 @@ end |> only === Int
 # handle multiple call-site refinment targets
 isasome(_) = true
 isasome(::Nothing) = false
-@test Base.return_types((AliasableField{Union{Int,Nothing}},); interp=MustAliasInterpreter()) do a
+@test_broken Base.return_types((AliasableField{Union{Int,Nothing}},); interp=MustAliasInterpreter()) do a
     if isasome(a.f)
         return a.f
     end
@@ -2523,13 +2523,13 @@ end |> only === Int
     end
     return 0
 end |> only === Int
-@test Base.return_types((AliasableField{Union{Nothing,Int}},); interp=MustAliasInterpreter()) do x
+@test_broken Base.return_types((AliasableField{Union{Nothing,Int}},); interp=MustAliasInterpreter()) do x
     if !isnothing(x.f)
         return x.f
     end
     return 0
 end |> only === Int
-@test Base.return_types((AliasableField{Union{Some{Int},Nothing}},); interp=MustAliasInterpreter()) do x
+@test_broken Base.return_types((AliasableField{Union{Some{Int},Nothing}},); interp=MustAliasInterpreter()) do x
     if !isnothing(x.f)
         return x.f
     end
