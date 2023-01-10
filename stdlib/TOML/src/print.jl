@@ -107,7 +107,7 @@ end
 function print_integer(io::IO, value::Integer)
     value isa Signed && return Base.show(io, value)
     # unsigned integers are printed as hex
-    n = Base.top_set_bit(value) ÷ 4 + 1
+    n = ndigits(value, base=16)
     isodd(n) && (n += 1)
     Base.print(io, "0x", string(value, base=16, pad=n))
     return
