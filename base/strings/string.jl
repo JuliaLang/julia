@@ -314,6 +314,7 @@ function byte_string_classify(bytes::Vector{UInt8})
 end
 
 isvalid(::Type{String}, bytes::AbstractVector{UInt8}) = @inline _isvalid_utf8(bytes)
+isvalid(::Type{String}, s::AbstractString) = @inline _isvalid_utf8(codeunits(s))
 
 isvalid(s::AbstractString) = isvalid(String, codeunits(s))
 
