@@ -3244,15 +3244,14 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
         ios_bufmode(f, bm_none);
         JL_SIGATOMIC_BEGIN();
         size_t len = dataendpos - datastartpos;
-        char *sysimg = (char*)jl_gc_perm_alloc(len, 0, 64, 0);
+        // char *sysimg = (char*)jl_gc_perm_alloc(len, 0, 64, 0);
         ios_seek(f, datastartpos);
-        if (ios_readall(f, sysimg, len) != len || jl_crc32c(0, sysimg, len) != (uint32_t)checksum) {
+        if (jl_crc32c(0, &f->buf[f->bpos], len) != (uint32_t)checksum) {
             restored = jl_get_exceptionf(jl_errorexception_type, "Error reading system image file.");
             JL_SIGATOMIC_END();
         }
         else {
-            ios_close(f);
-            ios_static_buffer(f, sysimg, len);
+            ios_static_buffer(f, &f->buf[f->bpos], len);
             htable_new(&new_code_instance_validate, 0);
             pkgcachesizes cachesizes;
             jl_restore_system_image_from_stream_(f, image, depmods, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges, &base, &ccallable_list, &cachesizes);
