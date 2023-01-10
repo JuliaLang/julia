@@ -17,14 +17,16 @@ function hasuniquerep(@nospecialize t)
     isa(t, TypeVar) && return false # TypeVars are identified by address, not equality
     iskindtype(typeof(t)) || return true # non-types are always compared by egal in the type system
     isconcretetype(t) && return true # these are also interned and pointer comparable
-    if isa(t, DataType) && t.name !== Tuple.name && !isvarargtype(t) # invariant DataTypes
-        return _all(hasuniquerep, t.parameters)
+    if isa(t, Union)
+        return hasuniquerep(t.a) && hasuniquerep(t.b)
+    elseif isa(t, DataType) && t.name !== Tuple.name && !isvarargtype(t) # invariant DataTypes
+        return all(hasuniquerep, t.parameters)
     end
     return false
 end
 
 """
-    isTypeDataType(@nospecialize t) -> Bool
+    isTypeDataType(t) -> Bool
 
 For a type `t` test whether ∀S s.t. `isa(S, rewrap_unionall(Type{t}, ...))`,
 we have `isa(S, DataType)`. In particular, if a statement is typed as `Type{t}`

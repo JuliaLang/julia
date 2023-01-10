@@ -5608,6 +5608,11 @@ end |> only === Float64
     Val(countvars50037(1, var))
 end == Val{1}
 
+# `isconstType` for `Union`-types
+@test Base.infer_return_type((Type{Union{Int,UInt}},)) do T
+    Base.allocatedinline(T) ? nothing : missing
+end === Nothing
+
 # Issue #52168
 f52168(x, t::Type) = x::NTuple{2, Base.inferencebarrier(t)::Type}
 @test f52168((1, 2.), Any) === (1, 2.)
