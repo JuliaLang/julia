@@ -1066,5 +1066,26 @@ end
     end
 end
 
+@testset "--pkgimages=no" begin
+    old_depot_path = copy(DEPOT_PATH)
+    try
+        tmp = mktempdir()
+        push!(empty!(DEPOT_PATH), joinpath(tmp, "depot"))
+
+        proj = joinpath(@__DIR__, "project", "Extensions", "HasDepWithExtensions.jl")
+        for compile in (`--pkgimages=no`, `--pkgimages=no`) # Once when requiring precomilation, once where it is already precompiled
+            cmd = `$(Base.julia_cmd()) $compile --project=$proj --startup-file=no -e '
+                begin
+                using HasExtensions
+                using HasDepWithExtensions
+                end
+            '`
+            @test success(cmd)
+        end
+    finally
+        copy!(DEPOT_PATH, old_depot_path)
+    end
+end
+
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
