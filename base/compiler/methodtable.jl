@@ -54,7 +54,7 @@ end
 Overlays another method table view with an additional local fast path cache that
 can respond to repeated, identical queries faster than the original method table.
 """
-struct CachedMethodTable{T} <: MethodTableView
+struct CachedMethodTable{T<:MethodTableView} <: MethodTableView
     cache::IdDict{MethodMatchKey, Union{Nothing,MethodMatchResult}}
     table::T
 end
