@@ -271,6 +271,8 @@ for TupleType = Any[Tuple{Int,Int,Int}, Tuple{Int,Vararg{Int}}, Tuple{Any}, Tupl
 end
 # skip analysis on fields that are known to be defined syntactically
 @test Core.Compiler.getfield_notundefined(SyntacticallyDefined{Float64}, Symbol)
+@test Core.Compiler.getfield_notundefined(Const(Main), Const(:var))
+@test Core.Compiler.getfield_notundefined(Const(Main), Const(42))
 # high-level tests for `getfield_notundefined`
 @test Base.infer_effects() do
     Maybe{Int}()
