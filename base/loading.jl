@@ -2538,7 +2538,7 @@ struct CacheFlags
         use_pkgimages = Bool(f & 1)
         debug_level = Int((f >> 1) & 3)
         check_bounds = Bool((f >> 3) & 1)
-        inline = Bool((f >> 3) & 1)
+        inline = Bool((f >> 4) & 1)
         opt_level = Int((f >> 5) & 3) # define OPT_LEVEL in statiddata_utils
         new(use_pkgimages, debug_level, check_bounds, inline, opt_level)
     end
