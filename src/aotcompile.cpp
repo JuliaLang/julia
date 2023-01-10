@@ -601,7 +601,10 @@ static size_t getFunctionWeight(const Function &F)
     // add some weight to it
     weight += F.size();
     if (F.hasFnAttribute("julia.mv.clones")) {
-        weight *= F.getFnAttribute("julia.mv.clones").getValueAsString().count(',') + 1;
+        auto val = F.getFnAttribute("julia.mv.clones").getValueAsString();
+        // base16, so must be at most 4 * length bits long
+        // popcount gives number of clones
+        weight *= APInt(val.size() * 4, val, 16).countPopulation() + 1;
     }
     return weight;
 }
@@ -761,7 +764,8 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
 }
 
 static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *outputs, StringRef name,
-                    NewArchiveMember *unopt, NewArchiveMember *opt, NewArchiveMember *obj, NewArchiveMember *asm_) {
+                    NewArchiveMember *unopt, NewArchiveMember *opt, NewArchiveMember *obj, NewArchiveMember *asm_,
+                    std::stringstream &stream, unsigned i) {
     auto TM = std::unique_ptr<TargetMachine>(
         SourceTM.getTarget().createTargetMachine(
             SourceTM.getTargetTriple().str(),
@@ -814,7 +818,7 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
 
     end = jl_hrtime();
 
-    dbgs() << "optimize time: " << (end - start) / 1e9 << "s\n";
+    stream << "optimize time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
 
     if (opt) {
         raw_string_ostream OS(*outputs);
@@ -847,7 +851,7 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
 
     end = jl_hrtime();
 
-    dbgs() << "codegen time: " << (end - start) / 1e9 << "s\n";
+    stream << "codegen time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
 
     if (asm_) {
         SmallVector<char, 0> Buffer;
@@ -1002,11 +1006,14 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
     asm_.resize(asm_.size() + asm_out * threads);
     if (threads == 1) {
         start = jl_hrtime();
+        std::stringstream stream;
         add_output_impl(M, TM, outputs.data() + outputs.size() - outcount * 2, name,
                         unopt_out ? unopt.data() + unopt.size() - 1 : nullptr,
                         opt_out ? opt.data() + opt.size() - 1 : nullptr,
                         obj_out ? obj.data() + obj.size() - 1 : nullptr,
-                        asm_out ? asm_.data() + asm_.size() - 1 : nullptr);
+                        asm_out ? asm_.data() + asm_.size() - 1 : nullptr,
+                        stream, 0);
+        dbgs() << stream.str();
         end = jl_hrtime();
         dbgs() << "Time to add output: " << (end - start) / 1e9 << "s\n";
         return;
@@ -1034,6 +1041,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
     auto asmstart = asm_out ? asm_.data() + asm_.size() - threads : nullptr;
 
     std::vector<std::thread> workers(threads);
+    std::vector<std::stringstream> stderrs(threads);
     for (unsigned i = 0; i < threads; i++) {
         workers[i] = std::thread([&, i](){
             LLVMContext ctx;
@@ -1042,43 +1050,46 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
             start = jl_hrtime();
             auto M = cantFail(getLazyBitcodeModule(MemoryBufferRef(StringRef(serialized.data(), serialized.size()), "Optimized"), ctx), "Error loading module");
             end = jl_hrtime();
-            dbgs() << "Deserialization time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
+            stderrs[i] << "Deserialization time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
 
-            dbgs() << "Starting shard " << i << " with weight=" << partitions[i].weight << "\n";
+            stderrs[i] << "Starting shard " << i << " with weight=" << partitions[i].weight << "\n";
 
             start = jl_hrtime();
             materializePreserved(*M, partitions[i]);
             end = jl_hrtime();
-            dbgs() << "Materialization time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
+            stderrs[i] << "Materialization time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
 
             start = jl_hrtime();
             construct_vars(*M, partitions[i]);
             M->setModuleFlag(Module::Error, "julia.mv.suffix", MDString::get(M->getContext(), "_" + std::to_string(i)));
             end = jl_hrtime();
 
-            dbgs() << "Construction time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
+            stderrs[i] << "Construction time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
 
             start = jl_hrtime();
             dropUnusedDeclarations(*M);
             end = jl_hrtime();
 
-            dbgs() << "Declaration deletion time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
+            stderrs[i] << "Declaration deletion time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
 
             start = jl_hrtime();
             add_output_impl(*M, TM, outstart + i * outcount * 2, name,
                             unoptstart ? unoptstart + i : nullptr,
                             optstart ? optstart + i : nullptr,
                             objstart ? objstart + i : nullptr,
-                            asmstart ? asmstart + i : nullptr);
+                            asmstart ? asmstart + i : nullptr,
+                            stderrs[i], i);
             end = jl_hrtime();
 
-            dbgs() << "Output time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
+            stderrs[i] << "Output time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
         });
     }
 
     start = jl_hrtime();
     for (auto &w : workers)
         w.join();
+    for (auto &str : stderrs)
+        dbgs() << str.str();
     end = jl_hrtime();
 
     dbgs() << "Total time for parallel output: " << (end - start) / 1e9 << "s\n";
@@ -1087,32 +1098,46 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
 unsigned compute_image_thread_count(Module &M) {
     // 32-bit systems are very memory-constrained
 #ifdef _P32
+    dbgs() << "Threads: 1\n";
     return 1;
 #endif
-    unsigned threads = std::max(llvm::hardware_concurrency().compute_thread_count() / 2, 1u);
-
-    // memory limit check
-    // many threads use a lot of memory, so limit on constrained memory systems
-    size_t available = uv_get_available_memory();
     size_t weight = 0;
+    size_t globals = 0;
     for (auto &GV : M.global_values()) {
         if (GV.isDeclaration())
             continue;
+        globals++;
         if (isa<Function>(GV)) {
             weight += getFunctionWeight(cast<Function>(GV));
         } else {
             weight += 1;
         }
     }
-    if (weight == 0) {
-        dbgs() << "No globals in module, using 1 thread\n";
+    dbgs() << "Module weight: " << weight << "\n";
+    if (weight < 1000) {
+        dbgs() << "Low module complexity bailout\n";
+        dbgs() << "Threads: 1\n";
         return 1;
     }
+
+    unsigned threads = std::max(llvm::hardware_concurrency().compute_thread_count() / 2, 1u);
+
+    // memory limit check
+    // many threads use a lot of memory, so limit on constrained memory systems
+    size_t available = uv_get_available_memory();
     // crude estimate, available / (weight * fudge factor) = max threads
     size_t fudge = 10;
     unsigned max_threads = std::max(available / (weight * fudge), (size_t)1);
-    dbgs() << "Weight: " << weight << ", available: " << available << ", wanted: " << threads << ", max threads: " << max_threads << "\n";
-    threads = std::min(threads, max_threads);
+    if (max_threads < threads) {
+        dbgs() << "Memory limiting threads to " << max_threads << "\n";
+        threads = max_threads;
+    }
+
+    max_threads = globals / 100;
+    if (max_threads < threads) {
+        dbgs() << "Low global count limiting threads to " << max_threads << " (" << globals << "globals)\n";
+        threads = max_threads;
+    }
 
     // environment variable override
     const char *env_threads = getenv("JULIA_IMAGE_THREADS");
@@ -1122,9 +1147,14 @@ unsigned compute_image_thread_count(Module &M) {
         if (*endptr || !requested) {
             jl_safe_printf("WARNING: invalid value '%s' for JULIA_IMAGE_THREADS\n", env_threads);
         } else {
+            dbgs() << "Overriding threads to " << requested << "\n";
             threads = requested;
         }
     }
+
+    threads = std::max(threads, 1u);
+
+    dbgs() << "Threads: " << threads << "\n";
 
     return threads;
 }
@@ -1208,7 +1238,7 @@ void jl_dump_native_impl(void *native_code,
 
     start = jl_hrtime();
 
-    unsigned threads = compute_image_thread_count(*dataM);
+    unsigned threads = 1;
     unsigned nfvars = 0;
     unsigned ngvars = 0;
 
@@ -1225,6 +1255,7 @@ void jl_dump_native_impl(void *native_code,
                 }
             }
         }
+        threads = compute_image_thread_count(*dataM);
         nfvars = data->jl_sysimg_fvars.size();
         ngvars = data->jl_sysimg_gvars.size();
         emit_offset_table(*dataM, data->jl_sysimg_gvars, "jl_gvars", T_psize);

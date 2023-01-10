@@ -313,8 +313,6 @@ private:
     // Map from original function to one based index in `fvars`
     std::map<const Function*,uint32_t> func_ids{};
     std::vector<Function*> orig_funcs{};
-    std::vector<uint32_t> func_infos{};
-    std::set<Function*> cloned{};
     // GV addresses and their corresponding function id (i.e. 0-based index in `fvars`)
     std::vector<std::pair<Constant*,uint32_t>> gv_relocs{};
     // Mapping from function id (i.e. 0-based index in `fvars`) to GVs to be initialized.
@@ -650,7 +648,7 @@ void CloneCtx::fix_gv_uses()
         return changed;
     };
     for (auto orig_f: orig_funcs) {
-        if (groups.size() == 1 && !cloned.count(orig_f))
+        if (!orig_f->hasFnAttribute("julia.mv.clones"))
             continue;
         while (single_pass(orig_f)) {
         }
@@ -813,7 +811,7 @@ void CloneCtx::emit_metadata()
     std::set<uint32_t> shared_relocs;
     {
         auto T_int32 = Type::getInt32Ty(M.getContext());
-        std::stable_sort(gv_relocs.begin(), gv_relocs.end(),
+        std::sort(gv_relocs.begin(), gv_relocs.end(),
                          [] (const std::pair<Constant*,uint32_t> &lhs,
                              const std::pair<Constant*,uint32_t> &rhs) {
                              return lhs.second < rhs.second;
