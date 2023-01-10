@@ -293,7 +293,7 @@ const _UTF8_DFA_INVALID = UInt64(6) # If the state machine is ever in this state
 end
 
 # This is a shift based utf-8 DFA that works on string that are a contiguous block
-_isvalid_utf8(bytes::AbstractVector{UInt8}) = isvalid_utf8_dfa(_UTF8_DFA_ACCEPT, bytes) == _UTF8_DFA_ACCEPT
+_isvalid_utf8(bytes::AbstractVector{UInt8}) = _isvalid_utf8_dfa(_UTF8_DFA_ACCEPT, bytes) == _UTF8_DFA_ACCEPT
 
 _isvalid_utf8(s::AbstractString) = _isvalid_utf8(codeunits(s))
 
