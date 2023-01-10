@@ -1227,12 +1227,14 @@ end
 
 @nospecs function getfield_notundefined(typ0, name)
     if isa(typ0, Const) && isa(name, Const)
+        typv = typ0.val
         namev = name.val
+        isa(typv, Module) && return true
         if isa(namev, Symbol) || isa(namev, Int)
             # Fields are not allowed to transition from defined to undefined, so
             # even if the field is not const, all we need to check here is that
             # it is defined here.
-            return isdefined(typ0.val, namev)
+            return isdefined(typv, namev)
         end
     end
     typ0 = widenconst(typ0)
