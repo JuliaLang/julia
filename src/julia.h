@@ -6,7 +6,7 @@
 #ifdef LIBRARY_EXPORTS
 // Generated file, needs to be searched in include paths so that the builddir
 // retains priority
-#include <jl_internal_funcs.inc>
+#include "jl_internal_funcs.inc"
 #undef jl_setjmp
 #undef jl_longjmp
 #undef jl_egal
