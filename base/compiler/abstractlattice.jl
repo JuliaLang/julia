@@ -1,6 +1,5 @@
 # TODO add more documentations
 
-abstract type AbstractLattice end
 function widenlattice end
 function is_valid_lattice_norec end
 
