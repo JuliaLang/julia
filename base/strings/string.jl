@@ -314,7 +314,7 @@ end
 isvalid(::Type{String}, bytes::AbstractVector{UInt8}) = @inline _isvalid_utf8(bytes)
 isvalid(::Type{String}, s::AbstractString) = @inline _isvalid_utf8(codeunits(s))
 
-isvalid(s::AbstractString) = isvalid(String, codeunits(s))
+@inline isvalid(s::AbstractString) = @inline isvalid(String, codeunits(s))
 
 is_valid_continuation(c) = c & 0xc0 == 0x80
 
