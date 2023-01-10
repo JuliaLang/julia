@@ -282,21 +282,18 @@ end
 const _UTF8_DFA_ACCEPT = UInt64(0) #This state represents the start and end of any valid string
 const _UTF8_DFA_INVALID = UInt64(6) # If the state machine is ever in this state just stop
 
-# This function is designed so that you could use it on strings with discontinous memmory layouts
-# by only feeding it contiguous block and keeping track of the state inbetween.
-# Furthermore you could check in returned value is _UTF8_DFA_INVALID and stop as invalid if it was.
-@propagate_inbounds function _isvalid_utf8_dfa(bytes::AbstractVector{UInt8},state::UInt64 = _UTF8_DFA_ACCEPT)
-    f(byte) = @inbounds _UTF8_DFA_TABLE[byte+1]
-    op(s, byte_dfa) = byte_dfa >> (s & UInt64(63))
-    final_state = mapfoldl(f, op, bytes, init = state)
-    return (final_state & UInt64(63))
+# The dfa step is broken out so that it may be used in other functions
+@inline _utf_dfa_step(state::UInt64, byte::UInt8) = @inbounds (_UTF8_DFA_TABLE[byte+1] >> state) & UInt64(63)
+
+@inline function _isvalid_utf8_dfa(state::UInt64, bytes::AbstractVector{UInt8}, first::Int = 1, last::Int = length(bytes))
+    for i = first:last
+       @inbounds state = _utf_dfa_step(state, bytes[i])
+   end
+   return (state)
 end
 
 # This is a shift based utf-8 DFA that works on string that are a contiguous block
-function _isvalid_utf8(bytes::AbstractVector{UInt8})
-    final_state = _isvalid_utf8_dfa(bytes, _UTF8_DFA_ACCEPT)
-    return (final_state & UInt64(63)) == _UTF8_DFA_ACCEPT
-end
+_isvalid_utf8(bytes::AbstractVector{UInt8}) = isvalid_utf8_dfa(_UTF8_DFA_ACCEPT, bytes) == _UTF8_DFA_ACCEPT
 
 _isvalid_utf8(s::AbstractString) = _isvalid_utf8(codeunits(s))
 
