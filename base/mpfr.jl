@@ -16,7 +16,8 @@ import
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, lerpi,
         cbrt, typemax, typemin, unsafe_trunc, floatmin, floatmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
-        isone, big, _string_n, decompose, minmax
+        isone, big, _string_n, decompose, minmax,
+        sinpi, cospi, sincospi, sind, cosd, tand, asind, acosd, atand
 
 import ..Rounding: rounding_raw, setrounding_raw
 
@@ -780,7 +781,7 @@ function sum(arr::AbstractArray{BigFloat})
 end
 
 # Functions for which NaN results are converted to DomainError, following Base
-for f in (:sin, :cos, :tan, :sec, :csc, :acos, :asin, :atan, :acosh, :asinh, :atanh)
+for f in (:sin, :cos, :tan, :sec, :csc, :acos, :asin, :atan, :acosh, :asinh, :atanh, :sinpi, :cospi)
     @eval begin
         function ($f)(x::BigFloat)
             isnan(x) && return x
@@ -791,12 +792,39 @@ for f in (:sin, :cos, :tan, :sec, :csc, :acos, :asin, :atan, :acosh, :asinh, :at
         end
     end
 end
+sincospi(x::BigFloat) = (sinpi(x), cospi(x))
 
 function atan(y::BigFloat, x::BigFloat)
     z = BigFloat()
     ccall((:mpfr_atan2, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode), z, y, x, ROUNDING_MODE[])
     return z
 end
+
+# degree functions
+for f in (:sin, :cos, :tan)
+    @eval begin
+        function ($(Symbol(f,:d)))(x::BigFloat)
+            isnan(x) && return x
+            z = BigFloat()
+            ccall(($(string(:mpfr_,f,:u)), :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Culong, MPFRRoundingMode), z, x, 360, ROUNDING_MODE[])
+            isnan(z) && throw(DomainError(x, "NaN result for non-NaN input."))
+            return z
+        end
+        function ($(Symbol(:a,f,:d)))(x::BigFloat)
+            isnan(x) && return x
+            z = BigFloat()
+            ccall(($(string(:mpfr_a,f,:u)), :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Culong, MPFRRoundingMode), z, x, 360, ROUNDING_MODE[])
+            isnan(z) && throw(DomainError(x, "NaN result for non-NaN input."))
+            return z
+        end
+    end
+end
+function atand(y::BigFloat, x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_atan2u, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, Culong, MPFRRoundingMode), z, y, x, 360, ROUNDING_MODE[])
+    return z
+end
+
 
 # Utility functions
 ==(x::BigFloat, y::BigFloat) = ccall((:mpfr_equal_p, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), x, y) != 0
@@ -1053,7 +1081,7 @@ function _string(x::BigFloat, fmt::String)::String
     isfinite(x) || return string(Float64(x))
     _prettify_bigfloat(string_mpfr(x, fmt))
 end
-_string(x::BigFloat) = _string(x, "%.Re")
+_string(x::BigFloat) = _string(x, "%Re")
 _string(x::BigFloat, k::Integer) = _string(x, "%.$(k)Re")
 
 string(b::BigFloat) = _string(b)
