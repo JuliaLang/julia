@@ -369,9 +369,12 @@ julia> powermod(5, 3, 19)
 ```
 """
 function powermod(x::Integer, p::Integer, m::T) where T<:Integer
-    p < 0 && p == typemin(typeof(p)) && return mod(powermod(invmod(x, m), -(p÷2), m)^2, m)
-    p < 0 && return powermod(invmod(x, m), -p, m)
     p == 0 && return mod(one(m),m)
+    # When the concrete type of p is sigened and has the lowerst value,
+    # `p != 0 && p == -p` is equivalent to `p == typemin(typeof(p))` due to 2's complement repretations.
+    # It needs special handling otherwise will cause overflow problem.
+    p == -p && return mod(powermod(invmod(x, m), -(p÷2), m)^2, m)
+    p < 0 && return powermod(invmod(x, m), -p, m)
     (m == 1 || m == -1) && return zero(m)
     b = oftype(m,mod(x,m))  # this also checks for divide by zero
 
