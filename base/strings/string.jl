@@ -223,7 +223,7 @@ end
     it contains the number of bit needed to shift the state it is transitioning to shifted into
     the position of the current state.
 
-    Example: character class 1 is encoded in below
+    Example: character class 1 is encoded as below
                     Current State        |    9 |    8 |    7 |    6 |    5 |    4 |    3 |    2 |    1 |    0 |
                     Next State           |    1 |    3 |    3 |    1 |    2 |    1 |    2 |    0 |    1 |    1 |
                     Shift required       |  6*1 |  6*3 |  6*3 |  6*1 |  6*2 |  6*1 |  6*2 |  6*0 |  6*1 |  6*1 |
@@ -233,11 +233,12 @@ end
     Now if the current state was 5 the state::UInt64 would have the first 6 bit representing 5*6 = 30
     so when the next character class is 7 row is in row::UInt64:
             The reduction operation:
-                state =  byte_dfa         >>                        (state & UInt64(63))
-                        | Shift to get the next state shift  | Mask first 6 bits of starting state to get the current shift ie 30
+                state =  (   byte_dfa >>  state )            & UInt64(63)
+                        | Shift to get the next state shift  | Mask the first six bits so that the new state is represended by the shift
             Would result in the state being 2 which is a shift of 12:
-                state = 0b0000|000110|010010|010010|000110|001100|000110|001100|000000|000110|000110 >> 30
-                state = 0b0000|000000|000000|000000|000000|000000|000110|010010|010010|000110|001100|
+                (byte_dfa    =  0b0000|000110|010010|010010|000110|001100|000110|001100|000000|000110|000110 
+                >> 30    )   => 0b0000|000000|000000|000000|000000|000000|000110|010010|010010|000110|001100
+                & UInt64(63) => 0b0000|000000|000000|000000|000000|000000|000000|000000|000000|000000|001100
 =#
 
 # Fill the table with 256 UInt64 representing the DFA transitions for all bytes
@@ -293,9 +294,9 @@ const _UTF8_DFA_INVALID = UInt64(6) # If the state machine is ever in this state
 end
 
 # This is a shift based utf-8 DFA that works on string that are a contiguous block
-_isvalid_utf8(bytes::AbstractVector{UInt8}) = _isvalid_utf8_dfa(_UTF8_DFA_ACCEPT, bytes) == _UTF8_DFA_ACCEPT
+@inline _isvalid_utf8(bytes::AbstractVector{UInt8}) = _isvalid_utf8_dfa(_UTF8_DFA_ACCEPT, bytes) == _UTF8_DFA_ACCEPT
 
-_isvalid_utf8(s::AbstractString) = _isvalid_utf8(codeunits(s))
+@inline _isvalid_utf8(s::AbstractString) = _isvalid_utf8(codeunits(s))
 
 # Classifcations of string
     # 0: neither valid ASCII nor UTF-8
