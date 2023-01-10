@@ -38,7 +38,7 @@ STATISTIC(LoweredWithoutFMA, "Number of have_fma's that were lowered to false");
 extern JuliaOJIT *jl_ExecutionEngine;
 
 // whether this platform unconditionally (i.e. without needing multiversioning) supports FMA
-Optional<bool> always_have_fma(Function &intr) {
+Optional<bool> always_have_fma(Function &intr) JL_NOTSAFEPOINT {
     auto intr_name = intr.getName();
     auto typ = intr_name.substr(strlen("julia.cpu.have_fma."));
 
@@ -50,7 +50,7 @@ Optional<bool> always_have_fma(Function &intr) {
 #endif
 }
 
-bool have_fma(Function &intr, Function &caller) {
+bool have_fma(Function &intr, Function &caller) JL_NOTSAFEPOINT {
     auto unconditional = always_have_fma(intr);
     if (unconditional.hasValue())
         return unconditional.getValue();
@@ -67,7 +67,7 @@ bool have_fma(Function &intr, Function &caller) {
     for (StringRef Feature : Features)
 #if defined _CPU_ARM_
       if (Feature == "+vfp4")
-        return typ == "f32" || typ == "f64";
+        return typ == "f32" || typ == "f64";lowerCPUFeatures
       else if (Feature == "+vfp4sp")
         return typ == "f32";
 #else
@@ -78,7 +78,7 @@ bool have_fma(Function &intr, Function &caller) {
     return false;
 }
 
-void lowerHaveFMA(Function &intr, Function &caller, CallInst *I) {
+void lowerHaveFMA(Function &intr, Function &caller, CallInst *I) JL_NOTSAFEPOINT {
     if (have_fma(intr, caller)) {
         ++LoweredWithFMA;
         I->replaceAllUsesWith(ConstantInt::get(I->getType(), 1));
@@ -89,7 +89,7 @@ void lowerHaveFMA(Function &intr, Function &caller, CallInst *I) {
     return;
 }
 
-bool lowerCPUFeatures(Module &M)
+bool lowerCPUFeatures(Module &M) JL_NOTSAFEPOINT
 {
     SmallVector<Instruction*,6> Materialized;
 
@@ -130,7 +130,7 @@ PreservedAnalyses CPUFeatures::run(Module &M, ModuleAnalysisManager &AM)
 namespace {
 struct CPUFeaturesLegacy : public ModulePass {
     static char ID;
-    CPUFeaturesLegacy() : ModulePass(ID) {};
+    CPUFeaturesLegacy() JL_NOTSAFEPOINT : ModulePass(ID) {};
 
     bool runOnModule(Module &M)
     {

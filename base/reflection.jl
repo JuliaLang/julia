@@ -527,6 +527,10 @@ Return `true` if and only if value `v` is mutable.  See [Mutable Composite Types
 for a discussion of immutability. Note that this function works on values, so if you
 give it a `DataType`, it will tell you that a value of the type is mutable.
 
+!!! note
+    For technical reasons, `ismutable` returns `true` for values of certain special types
+    (for example `String` and `Symbol`) even though they cannot be mutated in a permissible way.
+
 See also [`isbits`](@ref), [`isstructtype`](@ref).
 
 # Examples
@@ -786,6 +790,7 @@ julia> Base.fieldindex(Foo, :z, false)
 """
 function fieldindex(T::DataType, name::Symbol, err::Bool=true)
     @_foldable_meta
+    @noinline
     return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
 end
 
@@ -800,6 +805,7 @@ end
 
 function argument_datatype(@nospecialize t)
     @_total_meta
+    @noinline
     return ccall(:jl_argument_datatype, Any, (Any,), t)::Union{Nothing,DataType}
 end
 

@@ -51,8 +51,8 @@ struct debug_link_info {
 };
 
 #if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || (defined(_OS_DARWIN_) && defined(LLVM_SHLIB)))
-extern "C" void __register_frame(void*);
-extern "C" void __deregister_frame(void*);
+extern "C" void __register_frame(void*) JL_NOTSAFEPOINT;
+extern "C" void __deregister_frame(void*) JL_NOTSAFEPOINT;
 
 template <typename callback>
 static void processFDEs(const char *EHFrameAddr, size_t EHFrameSize, callback f)
@@ -77,7 +77,7 @@ static void processFDEs(const char *EHFrameAddr, size_t EHFrameSize, callback f)
 }
 #endif
 
-std::string JITDebugInfoRegistry::mangle(StringRef Name, const DataLayout &DL) JL_NOTSAFEPOINT
+std::string JITDebugInfoRegistry::mangle(StringRef Name, const DataLayout &DL)
 {
     std::string MangledName;
     {
@@ -87,11 +87,11 @@ std::string JITDebugInfoRegistry::mangle(StringRef Name, const DataLayout &DL) J
     return MangledName;
 }
 
-void JITDebugInfoRegistry::add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL) JL_NOTSAFEPOINT {
+void JITDebugInfoRegistry::add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL) {
     (**codeinst_in_flight)[mangle(name, DL)] = codeinst;
 }
 
-jl_method_instance_t *JITDebugInfoRegistry::lookupLinfo(size_t pointer) JL_NOTSAFEPOINT
+jl_method_instance_t *JITDebugInfoRegistry::lookupLinfo(size_t pointer)
 {
     jl_lock_profile();
     auto region = linfomap.lower_bound(pointer);
@@ -104,17 +104,17 @@ jl_method_instance_t *JITDebugInfoRegistry::lookupLinfo(size_t pointer) JL_NOTSA
 
 //Protected by debuginfo_asyncsafe (profile) lock
 JITDebugInfoRegistry::objectmap_t &
-JITDebugInfoRegistry::getObjectMap() JL_NOTSAFEPOINT
+JITDebugInfoRegistry::getObjectMap()
 {
     return objectmap;
 }
 
-void JITDebugInfoRegistry::add_image_info(image_info_t info) JL_NOTSAFEPOINT {
+void JITDebugInfoRegistry::add_image_info(image_info_t info) {
     (**this->image_info)[info.base] = info;
 }
 
 
-bool JITDebugInfoRegistry::get_image_info(uint64_t base, JITDebugInfoRegistry::image_info_t *info) const JL_NOTSAFEPOINT {
+bool JITDebugInfoRegistry::get_image_info(uint64_t base, JITDebugInfoRegistry::image_info_t *info) const {
     auto infos = *this->image_info;
     auto it = infos->find(base);
     if (it != infos->end()) {
@@ -125,11 +125,11 @@ bool JITDebugInfoRegistry::get_image_info(uint64_t base, JITDebugInfoRegistry::i
 }
 
 JITDebugInfoRegistry::Locked<JITDebugInfoRegistry::objfilemap_t>::LockT
-JITDebugInfoRegistry::get_objfile_map() JL_NOTSAFEPOINT {
+JITDebugInfoRegistry::get_objfile_map() {
     return *this->objfilemap;
 }
 
-JITDebugInfoRegistry::JITDebugInfoRegistry() JL_NOTSAFEPOINT { }
+JITDebugInfoRegistry::JITDebugInfoRegistry() { }
 
 struct unw_table_entry
 {
@@ -140,7 +140,7 @@ struct unw_table_entry
 // some actions aren't signal (especially profiler) safe so we acquire a lock
 // around them to establish a mutual exclusion with unwinding from a signal
 template <typename T>
-static void jl_profile_atomic(T f)
+static void jl_profile_atomic(T f) JL_NOTSAFEPOINT
 {
     assert(0 == jl_lock_profile_rd_held());
     jl_lock_profile_wr();
@@ -187,7 +187,7 @@ static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnnam
         if (mod_size && !SymLoadModuleEx(GetCurrentProcess(), NULL, NULL, NULL, (DWORD64)Section, mod_size, NULL, SLMFLAG_VIRTUAL)) {
             static int warned = 0;
             if (!warned) {
-                jl_printf(JL_STDERR, "WARNING: failed to insert module info for backtrace: %lu\n", GetLastError());
+                jl_safe_printf("WARNING: failed to insert module info for backtrace: %lu\n", GetLastError());
                 warned = 1;
             }
         }
@@ -200,17 +200,17 @@ static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnnam
             name[len-1] = 0;
             if (!SymAddSymbol(GetCurrentProcess(), (ULONG64)Section, name,
                         (DWORD64)Code, (DWORD)Size, 0)) {
-                jl_printf(JL_STDERR, "WARNING: failed to insert function name %s into debug info: %lu\n", name, GetLastError());
+                jl_safe_printf("WARNING: failed to insert function name %s into debug info: %lu\n", name, GetLastError());
             }
         }
         uv_mutex_unlock(&jl_in_stackwalk);
     }
 #if defined(_CPU_X86_64_)
-    jl_profile_atomic([&]() {
+    jl_profile_atomic([&]() JL_NOTSAFEPOINT {
         if (!RtlAddFunctionTable(tbl, 1, (DWORD64)Section)) {
             static int warned = 0;
             if (!warned) {
-                jl_printf(JL_STDERR, "WARNING: failed to insert function stack unwind info: %lu\n", GetLastError());
+                jl_safe_printf("WARNING: failed to insert function stack unwind info: %lu\n", GetLastError());
                 warned = 1;
             }
         }
@@ -268,7 +268,7 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
         di->u.rti.name_ptr = 0;
         di->u.rti.table_data = arm_exidx_addr;
         di->u.rti.table_len = arm_exidx_len;
-        jl_profile_atomic([&]() {
+        jl_profile_atomic([&]() JL_NOTSAFEPOINT {
             _U_dyn_register(di);
         });
         break;
@@ -370,7 +370,7 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
                 codeinst_in_flight.erase(codeinst_it);
             }
         }
-        jl_profile_atomic([&]() {
+        jl_profile_atomic([&]() JL_NOTSAFEPOINT {
             if (codeinst)
                 linfomap[Addr] = std::make_pair(Size, codeinst->def);
             if (first) {
@@ -388,7 +388,7 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
 
 void jl_register_jit_object(const object::ObjectFile &Object,
                             std::function<uint64_t(const StringRef &)> getLoadAddress,
-                            std::function<void *(void *)> lookupWriteAddress)
+                            std::function<void *(void *)> lookupWriteAddress) JL_NOTSAFEPOINT
 {
     getJITDebugRegistry().registerJITObject(Object, getLoadAddress, lookupWriteAddress);
 }
@@ -544,7 +544,7 @@ void JITDebugInfoRegistry::libc_frames_t::libc_register_frame(const char *Entry)
         jl_atomic_store_release(&this->libc_register_frame_, libc_register_frame_);
     }
     assert(libc_register_frame_);
-    jl_profile_atomic([&]() {
+    jl_profile_atomic([&]() JL_NOTSAFEPOINT {
         libc_register_frame_(const_cast<char *>(Entry));
         __register_frame(const_cast<char *>(Entry));
     });
@@ -557,7 +557,7 @@ void JITDebugInfoRegistry::libc_frames_t::libc_deregister_frame(const char *Entr
         jl_atomic_store_release(&this->libc_deregister_frame_, libc_deregister_frame_);
     }
     assert(libc_deregister_frame_);
-    jl_profile_atomic([&]() {
+    jl_profile_atomic([&]() JL_NOTSAFEPOINT {
         libc_deregister_frame_(const_cast<char *>(Entry));
         __deregister_frame(const_cast<char *>(Entry));
     });
@@ -601,7 +601,7 @@ static debug_link_info getDebuglink(const object::ObjectFile &Obj) JL_NOTSAFEPOI
  *   code or tables extracted from it, as desired without restriction.
  */
 static uint32_t
-calc_gnu_debuglink_crc32(const void *buf, size_t size)
+calc_gnu_debuglink_crc32(const void *buf, size_t size) JL_NOTSAFEPOINT
 {
     static const uint32_t g_crc32_tab[] =
     {
@@ -659,7 +659,7 @@ calc_gnu_debuglink_crc32(const void *buf, size_t size)
 }
 
 static Expected<object::OwningBinary<object::ObjectFile>>
-openDebugInfo(StringRef debuginfopath, const debug_link_info &info)
+openDebugInfo(StringRef debuginfopath, const debug_link_info &info) JL_NOTSAFEPOINT
 {
     auto SplitFile = MemoryBuffer::getFile(debuginfopath);
     if (std::error_code EC = SplitFile.getError()) {
@@ -1450,7 +1450,7 @@ static DW_EH_PE parseCIE(const uint8_t *Addr, const uint8_t *End)
 void register_eh_frames(uint8_t *Addr, size_t Size)
 {
     // System unwinder
-    jl_profile_atomic([&]() {
+    jl_profile_atomic([&]() JL_NOTSAFEPOINT {
         __register_frame(Addr);
     });
 
@@ -1578,14 +1578,14 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
     di->start_ip = start_ip;
     di->end_ip = end_ip;
 
-    jl_profile_atomic([&]() {
+    jl_profile_atomic([&]() JL_NOTSAFEPOINT {
         _U_dyn_register(di);
     });
 }
 
 void deregister_eh_frames(uint8_t *Addr, size_t Size)
 {
-    jl_profile_atomic([&]() {
+    jl_profile_atomic([&]() JL_NOTSAFEPOINT {
         __deregister_frame(Addr);
     });
     // Deregistering with our unwinder (_U_dyn_cancel) requires a lookup table

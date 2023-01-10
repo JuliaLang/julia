@@ -1691,6 +1691,48 @@ precompile_test_harness("DynamicExpressions") do load_path
     end
 end
 
+precompile_test_harness("BadInvalidations") do load_path
+    write(joinpath(load_path, "BadInvalidations.jl"),
+    """
+    module BadInvalidations
+        Base.Experimental.@compiler_options compile=min optimize=1
+        getval() = Base.a_method_to_overwrite_in_test()
+        getval()
+    end # module BadInvalidations
+    """)
+    Base.compilecache(Base.PkgId("BadInvalidations"))
+    (@eval Base a_method_to_overwrite_in_test() = inferencebarrier(2))
+    (@eval (using BadInvalidations))
+    Base.invokelatest() do
+        @test BadInvalidations.getval() === 2
+    end
+end
+
+# https://github.com/JuliaLang/julia/issues/48074
+precompile_test_harness("WindowsCacheOverwrite") do load_path
+    # https://github.com/JuliaLang/julia/pull/47184#issuecomment-1364716312
+    write(joinpath(load_path, "WindowsCacheOverwrite.jl"),
+    """
+    module WindowsCacheOverwrite
+
+    end # module
+    """)
+    ji, ofile = Base.compilecache(Base.PkgId("WindowsCacheOverwrite"))
+    (@eval (using WindowsCacheOverwrite))
+
+    write(joinpath(load_path, "WindowsCacheOverwrite.jl"),
+    """
+    module WindowsCacheOverwrite
+
+    f() = "something new"
+
+    end # module
+    """)
+
+    ji_2, ofile_2 = Base.compilecache(Base.PkgId("WindowsCacheOverwrite"))
+    @test ofile_2 == Base.ocachefile_from_cachefile(ji_2)
+end
+
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
 empty!(Base.LOAD_PATH)

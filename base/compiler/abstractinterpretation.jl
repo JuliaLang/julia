@@ -135,6 +135,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     if const_call_result.rt ⊑ₚ rt
                         rt = const_call_result.rt
                         (; effects, const_result, edge) = const_call_result
+                    else
+                        add_remark!(interp, sv, "[constprop] Discarded because the result was wider than inference")
                     end
                 end
                 all_effects = merge_effects(all_effects, effects)
@@ -169,6 +171,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     this_conditional = this_const_conditional
                     this_rt = this_const_rt
                     (; effects, const_result, edge) = const_call_result
+                else
+                    add_remark!(interp, sv, "[constprop] Discarded because the result was wider than inference")
                 end
             end
             all_effects = merge_effects(all_effects, effects)
@@ -535,6 +539,7 @@ end
 
 const RECURSION_UNUSED_MSG = "Bounded recursion detected with unused result. Annotated return type may be wider than true result."
 const RECURSION_MSG = "Bounded recursion detected. Call was widened to force convergence."
+const RECURSION_MSG_HARDLIMIT = "Bounded recursion detected under hardlimit. Call was widened to force convergence."
 
 function abstract_call_method(interp::AbstractInterpreter, method::Method, @nospecialize(sig), sparams::SimpleVector, hardlimit::Bool, si::StmtInfo, sv::InferenceState)
     if method.name === :depwarn && isdefined(Main, :Base) && method.module === Main.Base
@@ -573,6 +578,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
             end
         end
     end
+    washardlimit = hardlimit
 
     if topmost !== nothing
         sigtuple = unwrap_unionall(sig)::DataType
@@ -611,7 +617,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
                 # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
                 return MethodCallResult(Any, true, true, nothing, Effects())
             end
-            add_remark!(interp, sv, RECURSION_MSG)
+            add_remark!(interp, sv, washardlimit ? RECURSION_MSG_HARDLIMIT : RECURSION_MSG)
             topmost = topmost::InferenceState
             parentframe = topmost.parent
             poison_callstack(sv, parentframe === nothing ? topmost : parentframe)
@@ -830,9 +836,7 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
         if is_all_const_arg(arginfo, #=start=#2)
             return true
         else
-            # TODO: `is_nothrow` is not an actual requirement here, this is just a hack
-            # to avoid entering semi concrete eval while it doesn't properly override effects
-            return is_nothrow(result.effects) ? false : nothing
+            return false
         end
     end
     return nothing
@@ -1004,10 +1008,11 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
             ir = codeinst_to_ir(interp, code)
             if isa(ir, IRCode)
                 irsv = IRInterpretationState(interp, ir, mi, sv.world, arginfo.argtypes)
-                rt = ir_abstract_constant_propagation(interp, irsv)
+                rt, nothrow = ir_abstract_constant_propagation(interp, irsv)
                 @assert !(rt isa Conditional || rt isa MustAlias) "invalid lattice element returned from IR interpretation"
                 if !isa(rt, Type) || typeintersect(rt, Bool) === Union{}
-                    return ConstCallResults(rt, SemiConcreteResult(mi, ir, result.effects), result.effects, mi)
+                    new_effects = Effects(result.effects; nothrow=nothrow)
+                    return ConstCallResults(rt, SemiConcreteResult(mi, ir, new_effects), new_effects, mi)
                 end
             end
         end
@@ -1831,14 +1836,13 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
     return rt
 end
 
-function abstract_call_unionall(argtypes::Vector{Any})
+function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{Any})
     if length(argtypes) == 3
         canconst = true
         a2 = argtypes[2]
         a3 = argtypes[3]
-        nothrow = a2 ⊑ TypeVar && (
-                a3 ⊑ Type ||
-                a3 ⊑ TypeVar)
+        ⊑ᵢ = ⊑(typeinf_lattice(interp))
+        nothrow = a2 ⊑ᵢ TypeVar && (a3 ⊑ᵢ Type || a3 ⊑ᵢ TypeVar)
         if isa(a3, Const)
             body = a3.val
         elseif isType(a3)
@@ -1847,7 +1851,7 @@ function abstract_call_unionall(argtypes::Vector{Any})
         else
             return CallMeta(Any, Effects(EFFECTS_TOTAL; nothrow), NoCallInfo())
         end
-        if !isa(body, Type) && !isa(body, TypeVar)
+        if !(isa(body, Type) || isa(body, TypeVar))
             return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
         end
         if has_free_typevars(body)
@@ -1859,7 +1863,7 @@ function abstract_call_unionall(argtypes::Vector{Any})
             else
                 return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
             end
-            !isa(tv, TypeVar) && return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
+            isa(tv, TypeVar) || return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
             body = UnionAll(tv, body)
         end
         ret = canconst ? Const(body) : Type{body}
@@ -1978,10 +1982,10 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             ub_var = argtypes[3]
         end
         pT = typevar_tfunc(𝕃ᵢ, n, lb_var, ub_var)
-        return CallMeta(pT,
-            builtin_effects(𝕃ᵢ, Core._typevar, Any[n, lb_var, ub_var], pT), NoCallInfo())
+        effects = builtin_effects(𝕃ᵢ, Core._typevar, Any[n, lb_var, ub_var], pT)
+        return CallMeta(pT, effects, NoCallInfo())
     elseif f === UnionAll
-        return abstract_call_unionall(argtypes)
+        return abstract_call_unionall(interp, argtypes)
     elseif f === Tuple && la == 2
         aty = argtypes[2]
         ty = isvarargtype(aty) ? unwrapva(aty) : widenconst(aty)
