@@ -2320,10 +2320,11 @@ jl_value_t *jl_fptr_const_return(jl_value_t *f, jl_value_t **args, uint32_t narg
 
 jl_value_t *jl_fptr_args(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
 {
+    jl_fptr_args_t invoke = jl_atomic_load_relaxed(&m->specptr.fptr1);
     while (1) {
-        jl_fptr_args_t invoke = jl_atomic_load_relaxed(&m->specptr.fptr1);
         if (invoke)
             return invoke(f, args, nargs);
+        invoke = jl_atomic_load_acquire(&m->specptr.fptr1); // require forward progress with acquire annotation
     }
 }
 
@@ -2331,10 +2332,11 @@ jl_value_t *jl_fptr_sparam(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_
 {
     jl_svec_t *sparams = m->def->sparam_vals;
     assert(sparams != jl_emptysvec);
+    jl_fptr_sparam_t invoke = jl_atomic_load_relaxed(&m->specptr.fptr3);
     while (1) {
-        jl_fptr_sparam_t invoke = jl_atomic_load_relaxed(&m->specptr.fptr3);
         if (invoke)
             return invoke(f, args, nargs, sparams);
+        invoke = jl_atomic_load_acquire(&m->specptr.fptr3); // require forward progress with acquire annotation
     }
 }
 
