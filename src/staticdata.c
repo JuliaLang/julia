@@ -69,7 +69,6 @@ External links:
 - loc/0 in relocs_list
 
 */
-#include <asm-generic/errno.h>
 #include <stddef.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -88,8 +87,6 @@ External links:
 #include "builtin_proto.h"
 #include "processor.h"
 #include "serialize.h"
-#include "support/dtypes.h"
-#include "support/ios.h"
 
 #ifndef _OS_WINDOWS_
 #include <dlfcn.h>
