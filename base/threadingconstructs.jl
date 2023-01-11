@@ -179,7 +179,7 @@ unsynchronized memory accesses may result in undefined behavior.
 
 For example, the above conditions imply that:
 
-- The lock taken in an iteration *must* be released within the same iteration.
+- A lock taken in an iteration *must* be released within the same iteration.
 - Communicating between iterations using blocking primitives like `Channel`s is incorrect.
 - Write only to locations not shared across iterations (unless a lock or atomic operation is
   used).

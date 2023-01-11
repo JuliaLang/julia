@@ -205,7 +205,7 @@ end
         end
     end
 
-    @assert h.age == age0 "Muliple concurrent writes to Dict detected!"
+    @assert h.age == age0 "Multiple concurrent writes to Dict detected!"
     h.age += 1
     h.slots = slots
     h.keys = keys
@@ -339,6 +339,7 @@ end
 ht_keyindex2!(h::Dict, key) = ht_keyindex2_shorthash!(h, key)[1]
 
 @propagate_inbounds function _setindex!(h::Dict, v, key, index, sh = _shorthash7(hash(key)))
+    h.ndel -= isslotmissing(h, index)
     h.slots[index] = sh
     h.keys[index] = key
     h.vals[index] = v
@@ -629,13 +630,30 @@ function pop!(h::Dict)
 end
 
 function _delete!(h::Dict{K,V}, index) where {K,V}
-    @inbounds h.slots[index] = 0x7f
-    @inbounds _unsetindex!(h.keys, index)
-    @inbounds _unsetindex!(h.vals, index)
-    h.ndel += 1
+    @inbounds begin
+    slots = h.slots
+    sz = length(slots)
+    _unsetindex!(h.keys, index)
+    _unsetindex!(h.vals, index)
+    # if the next slot is empty we don't need a tombstone
+    # and can remove all tombstones that were required by the element we just deleted
+    ndel = 1
+    nextind = (index & (sz-1)) + 1
+    if isslotempty(h, nextind)
+        while true
+            ndel -= 1
+            slots[index] = 0x00
+            index = ((index - 2) & (sz-1)) + 1
+            isslotmissing(h, index) || break
+        end
+    else
+        slots[index] = 0x7f
+    end
+    h.ndel += ndel
     h.count -= 1
     h.age += 1
     return h
+    end
 end
 
 """

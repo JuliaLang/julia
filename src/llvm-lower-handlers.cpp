@@ -24,7 +24,7 @@
 
 #include "julia.h"
 #include "julia_assert.h"
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 #include <map>
 
 #define DEBUG_TYPE "lower_handlers"

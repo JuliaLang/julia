@@ -51,7 +51,7 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
     jl_atomic_store_relaxed(&mt->defs, jl_nothing);
     jl_atomic_store_relaxed(&mt->leafcache, (jl_array_t*)jl_an_empty_vec_any);
     jl_atomic_store_relaxed(&mt->cache, jl_nothing);
-    mt->max_args = 0;
+    jl_atomic_store_relaxed(&mt->max_args, 0);
     mt->backedges = NULL;
     JL_MUTEX_INIT(&mt->writelock);
     mt->offs = 0;
@@ -72,7 +72,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     jl_atomic_store_relaxed(&tn->cache, jl_emptysvec);
     jl_atomic_store_relaxed(&tn->linearcache, jl_emptysvec);
     tn->names = NULL;
-    tn->hash = bitmix(bitmix(module ? module->build_id : 0, name->hash), 0xa1ada1da);
+    tn->hash = bitmix(bitmix(module ? module->build_id.lo : 0, name->hash), 0xa1ada1da);
     tn->_reserved = 0;
     tn->abstract = abstract;
     tn->mutabl = mutabl;
@@ -219,6 +219,7 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
     flddesc->alignment = alignment;
     flddesc->haspadding = haspadding;
     flddesc->fielddesc_type = fielddesc_type;
+    flddesc->padding = 0;
     flddesc->npointers = npointers;
     flddesc->first_ptr = (npointers > 0 ? pointers[0] : -1);
 
@@ -815,6 +816,7 @@ JL_DLLEXPORT jl_datatype_t * jl_new_foreign_type(jl_sym_t *name,
     layout->haspadding = 1;
     layout->npointers = haspointers;
     layout->fielddesc_type = 3;
+    layout->padding = 0;
     jl_fielddescdyn_t * desc =
       (jl_fielddescdyn_t *) ((char *)layout + sizeof(*layout));
     desc->markfunc = markfunc;
@@ -822,6 +824,22 @@ JL_DLLEXPORT jl_datatype_t * jl_new_foreign_type(jl_sym_t *name,
     bt->layout = layout;
     bt->instance = NULL;
     return bt;
+}
+
+JL_DLLEXPORT int jl_reinit_foreign_type(jl_datatype_t *dt,
+                                        jl_markfunc_t markfunc,
+                                        jl_sweepfunc_t sweepfunc)
+{
+    if (!jl_is_foreign_type(dt))
+        return 0;
+    const jl_datatype_layout_t *layout = dt->layout;
+    jl_fielddescdyn_t * desc =
+      (jl_fielddescdyn_t *) ((char *)layout + sizeof(*layout));
+    assert(!desc->markfunc);
+    assert(!desc->sweepfunc);
+    desc->markfunc = markfunc;
+    desc->sweepfunc = sweepfunc;
+    return 1;
 }
 
 JL_DLLEXPORT int jl_is_foreign_type(jl_datatype_t *dt)
@@ -1558,6 +1576,7 @@ static inline void memassign_safe(int hasptr, jl_value_t *parent, char *dst, con
         memmove_refs((void**)dst, (void**)src, nptr);
         jl_gc_multi_wb(parent, src);
         src = (jl_value_t*)((char*)src + nptr * sizeof(void*));
+        dst = dst + nptr * sizeof(void*);
         nb -= nptr * sizeof(void*);
     }
     else {

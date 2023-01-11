@@ -77,6 +77,12 @@ function quoted(@nospecialize(x))
     return is_self_quoting(x) ? x : QuoteNode(x)
 end
 
+############
+# inlining #
+############
+
+const MAX_INLINE_CONST_SIZE = 256
+
 function count_const_size(@nospecialize(x), count_self::Bool = true)
     (x isa Type || x isa Symbol) && return 0
     ismutable(x) && return MAX_INLINE_CONST_SIZE + 1
@@ -152,8 +158,8 @@ function get_compileable_sig(method::Method, @nospecialize(atype), sparams::Simp
         mt, atype, sparams, method)
 end
 
-isa_compileable_sig(@nospecialize(atype), method::Method) =
-    !iszero(ccall(:jl_isa_compileable_sig, Int32, (Any, Any), atype, method))
+isa_compileable_sig(@nospecialize(atype), sparams::SimpleVector, method::Method) =
+    !iszero(ccall(:jl_isa_compileable_sig, Int32, (Any, Any, Any), atype, sparams, method))
 
 # eliminate UnionAll vars that might be degenerate due to having identical bounds,
 # or a concrete upper bound and appearing covariantly.
@@ -200,7 +206,12 @@ function specialize_method(method::Method, @nospecialize(atype), sparams::Simple
     if compilesig
         new_atype = get_compileable_sig(method, atype, sparams)
         new_atype === nothing && return nothing
-        atype = new_atype
+        if atype !== new_atype
+            sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), new_atype, method.sig)::SimpleVector
+            if sparams === sp_[2]::SimpleVector
+                atype = new_atype
+            end
+        end
     end
     if preexisting
         # check cached specializations
@@ -238,7 +249,7 @@ is_no_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x02
 Return an iterator over a list of backedges. Iteration returns `(sig, caller)` elements,
 which will be one of the following:
 
-- `BackedgePair(nothing, caller::MethodInstance)`: a call made by ordinary inferrable dispatch
+- `BackedgePair(nothing, caller::MethodInstance)`: a call made by ordinary inferable dispatch
 - `BackedgePair(invokesig, caller::MethodInstance)`: a call made by `invoke(f, invokesig, args...)`
 - `BackedgePair(specsig, mt::MethodTable)`: an abstract call
 
@@ -291,11 +302,12 @@ end
 #########
 
 function singleton_type(@nospecialize(ft))
+    ft = widenslotwrapper(ft)
     if isa(ft, Const)
         return ft.val
     elseif isconstType(ft)
         return ft.parameters[1]
-    elseif ft isa DataType && isdefined(ft, :instance)
+    elseif issingletontype(ft)
         return ft.instance
     end
     return nothing
@@ -303,7 +315,7 @@ end
 
 function maybe_singleton_const(@nospecialize(t))
     if isa(t, DataType)
-        if isdefined(t, :instance)
+        if issingletontype(t)
             return Const(t.instance)
         elseif isconstType(t)
             return Const(t.parameters[1])

@@ -48,7 +48,7 @@ JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
 void jl_init_main_module(void)
 {
     assert(jl_main_module == NULL);
-    jl_main_module = jl_new_module(jl_symbol("Main"));
+    jl_main_module = jl_new_module(jl_symbol("Main"), NULL);
     jl_main_module->parent = jl_main_module;
     jl_set_const(jl_main_module, jl_symbol("Core"),
                  (jl_value_t*)jl_core_module);
@@ -134,7 +134,8 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         jl_type_error("module", (jl_value_t*)jl_symbol_type, (jl_value_t*)name);
     }
 
-    jl_module_t *newm = jl_new_module(name);
+    int is_parent__toplevel__ = jl_is__toplevel__mod(parent_module);
+    jl_module_t *newm = jl_new_module(name, is_parent__toplevel__ ? NULL : parent_module);
     jl_value_t *form = (jl_value_t*)newm;
     JL_GC_PUSH1(&form);
     JL_LOCK(&jl_modules_mutex);
@@ -145,7 +146,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
 
     // copy parent environment info into submodule
     newm->uuid = parent_module->uuid;
-    if (jl_is__toplevel__mod(parent_module)) {
+    if (is_parent__toplevel__) {
         newm->parent = newm;
         jl_register_root_module(newm);
         if (jl_options.incremental) {
@@ -153,9 +154,8 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         }
     }
     else {
-        newm->parent = parent_module;
-        jl_binding_t *b = jl_get_binding_wr(parent_module, name, 1);
-        jl_declare_constant(b);
+        jl_binding_t *b = jl_get_binding_wr(parent_module, name);
+        jl_declare_constant(b, parent_module, name);
         jl_value_t *old = NULL;
         if (!jl_atomic_cmpswap(&b->value, &old, (jl_value_t*)newm)) {
             if (!jl_is_module(old)) {
@@ -214,11 +214,11 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
             jl_binding_t *b = (jl_binding_t*)table[i];
             // remove non-exported macros
             if (jl_symbol_name(b->name)[0]=='@' &&
-                !b->exportp && b->owner == newm)
+                !b->exportp && b->owner == b)
                 b->value = NULL;
             // error for unassigned exports
             /*
-            if (b->exportp && b->owner==newm && b->value==NULL)
+            if (b->exportp && b->owner==b && b->value==NULL)
                 jl_errorf("identifier %s exported from %s is not initialized",
                           jl_symbol_name(b->name), jl_symbol_name(newm->name));
             */
@@ -314,7 +314,7 @@ void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type) {
             gs = (jl_sym_t*)arg;
         }
         if (!jl_binding_resolved_p(gm, gs)) {
-            jl_binding_t *b = jl_get_binding_wr(gm, gs, 1);
+            jl_binding_t *b = jl_get_binding_wr(gm, gs);
             if (set_type) {
                 jl_value_t *old_ty = NULL;
                 // maybe set the type too, perhaps
@@ -579,7 +579,7 @@ int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
 static jl_method_instance_t *method_instance_for_thunk(jl_code_info_t *src, jl_module_t *module)
 {
     jl_method_instance_t *li = jl_new_method_instance_uninit();
-    li->uninferred = (jl_value_t*)src;
+    jl_atomic_store_relaxed(&li->uninferred, (jl_value_t*)src);
     li->specTypes = (jl_value_t*)jl_emptytuple_type;
     li->def.module = module;
     return li;
@@ -589,25 +589,22 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
 {
     assert(m);
     jl_sym_t *name = asname ? asname : import->name;
-    jl_binding_t *b;
-    if (jl_binding_resolved_p(m, name)) {
-        b = jl_get_binding(m, name);
-        jl_value_t *bv = jl_atomic_load_relaxed(&b->value);
-        if ((!b->constp && b->owner != m) || (bv && bv != (jl_value_t*)import)) {
+    // TODO: this is a bit race-y with what error message we might print
+    jl_binding_t *b = jl_get_module_binding(m, name, 0);
+    jl_binding_t *b2;
+    if (b != NULL && (b2 = jl_atomic_load_relaxed(&b->owner)) != NULL) {
+        if (b2->constp && jl_atomic_load_relaxed(&b2->value) == (jl_value_t*)import)
+            return;
+        if (b2 != b)
             jl_errorf("importing %s into %s conflicts with an existing global",
                       jl_symbol_name(name), jl_symbol_name(m->name));
-        }
     }
     else {
-        b = jl_get_binding_wr(m, name, 1);
-        b->imported = 1;
+        b = jl_get_binding_wr(m, name);
     }
-    if (!b->constp) {
-        // TODO: constp is not threadsafe
-        jl_atomic_store_release(&b->value, (jl_value_t*)import);
-        b->constp = 1;
-        jl_gc_wb(m, (jl_value_t*)import);
-    }
+    jl_declare_constant(b, m, name);
+    jl_checked_assignment(b, m, name, (jl_value_t*)import);
+    b->imported = 1;
 }
 
 // in `import A.B: x, y, ...`, evaluate the `A.B` part if it exists
@@ -844,8 +841,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
             gm = m;
             gs = (jl_sym_t*)arg;
         }
-        jl_binding_t *b = jl_get_binding_wr(gm, gs, 1);
-        jl_declare_constant(b);
+        jl_binding_t *b = jl_get_binding_wr(gm, gs);
+        jl_declare_constant(b, gm, gs);
         JL_GC_POP();
         return jl_nothing;
     }

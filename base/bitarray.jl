@@ -18,7 +18,7 @@ the functions [`trues`](@ref) and [`falses`](@ref).
 
 !!! note
     Due to its packed storage format, concurrent access to the elements of a `BitArray`
-    where at least one of them is a write is not thread safe.
+    where at least one of them is a write is not thread-safe.
 
 """
 mutable struct BitArray{N} <: AbstractArray{Bool, N}
@@ -1545,12 +1545,12 @@ function unsafe_bitfindprev(Bc::Vector{UInt64}, start::Int)
 
     @inbounds begin
         if Bc[chunk_start] & mask != 0
-            return (chunk_start-1) << 6 + (64 - leading_zeros(Bc[chunk_start] & mask))
+            return (chunk_start-1) << 6 + (top_set_bit(Bc[chunk_start] & mask))
         end
 
         for i = (chunk_start-1):-1:1
             if Bc[i] != 0
-                return (i-1) << 6 + (64 - leading_zeros(Bc[i]))
+                return (i-1) << 6 + (top_set_bit(Bc[i]))
             end
         end
     end

@@ -197,10 +197,50 @@ static void jl_close_item_atexit(uv_handle_t *handle)
     }
 }
 
+// This prevents `ct` from returning via error handlers or other unintentional
+// means by destroying some old state before we start destroying that state in atexit hooks.
 void jl_task_frame_noreturn(jl_task_t *ct);
 
-JL_DLLEXPORT void jl_atexit_hook(int exitcode)
+// cause this process to exit with WEXITSTATUS(signo), after waiting to finish all julia, C, and C++ cleanup
+JL_DLLEXPORT void jl_exit(int exitcode)
 {
+    jl_atexit_hook(exitcode);
+    exit(exitcode);
+}
+
+// cause this process to exit with WTERMSIG(signo),
+// fairly aggressively (flushing stderr a bit, and doing a little bit of other
+// external cleanup, but no internal cleanup)
+JL_DLLEXPORT void jl_raise(int signo)
+{
+    uv_tty_reset_mode();
+    fflush(NULL);
+#ifdef _OS_WINDOWS_
+    if (signo == SIGABRT) {
+        signal(signo, SIG_DFL);
+        abort();
+    }
+    // the exit status could also potentially be set to an NTSTATUS value
+    // corresponding to a signal number, but this seems somewhat is uncommon on Windows
+    TerminateProcess(GetCurrentProcess(), 3); // aka _exit
+    abort(); // prior call does not return, because we passed GetCurrentProcess()
+#else
+    signal(signo, SIG_DFL);
+    sigset_t sset;
+    sigemptyset(&sset);
+    sigaddset(&sset, signo);
+    pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
+    raise(signo); // aka pthread_kill(pthread_self(), signo);
+    if (signo == SIGABRT)
+        abort();
+    _exit(128 + signo);
+#endif
+}
+
+JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
+{
+    uv_tty_reset_mode();
+
     if (jl_atomic_load_relaxed(&jl_all_tls_states) == NULL)
         return;
 
@@ -229,11 +269,15 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     if (jl_base_module) {
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f != NULL) {
+            jl_value_t **fargs;
+            JL_GC_PUSHARGS(fargs, 2);
+            fargs[0] = f;
+            fargs[1] = jl_box_int32(exitcode);
             JL_TRY {
                 assert(ct);
                 size_t last_age = ct->world_age;
                 ct->world_age = jl_get_world_counter();
-                jl_apply(&f, 1);
+                jl_apply(fargs, 2);
                 ct->world_age = last_age;
             }
             JL_CATCH {
@@ -242,6 +286,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
                 jlbacktrace(); // written to STDERR_FILENO
             }
+            JL_GC_POP();
         }
     }
 
@@ -738,6 +783,10 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
         jl_install_default_signal_handlers();
 
     jl_gc_init();
+
+    arraylist_new(&jl_linkage_blobs, 0);
+    arraylist_new(&jl_image_relocs, 0);
+
     jl_ptls_t ptls = jl_init_threadtls(0);
 #pragma GCC diagnostic push
 #if defined(_COMPILER_GCC_) && __GNUC__ >= 12
@@ -758,13 +807,13 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         jl_preload_sysimg_so(jl_options.image_file);
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
+    jl_init_codegen();
 
     if (jl_options.image_file) {
         jl_restore_system_image(jl_options.image_file);
     } else {
         jl_init_types();
-        jl_global_roots_table = jl_alloc_vec_any(16);
-        jl_init_codegen();
+        jl_global_roots_table = jl_alloc_vec_any(0);
     }
 
     jl_init_common_symbols();
@@ -772,7 +821,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
     jl_init_serializer();
 
     if (!jl_options.image_file) {
-        jl_core_module = jl_new_module(jl_symbol("Core"));
+        jl_core_module = jl_new_module(jl_symbol("Core"), NULL);
         jl_core_module->parent = jl_core_module;
         jl_type_typename->mt->module = jl_core_module;
         jl_top_module = jl_core_module;
@@ -846,9 +895,6 @@ static void post_boot_hooks(void)
     jl_memory_exception    = jl_new_struct_uninit((jl_datatype_t*)core("OutOfMemoryError"));
     jl_readonlymemory_exception = jl_new_struct_uninit((jl_datatype_t*)core("ReadOnlyMemoryError"));
     jl_typeerror_type      = (jl_datatype_t*)core("TypeError");
-#ifdef SEGV_EXCEPTION
-    jl_segv_exception      = jl_new_struct_uninit((jl_datatype_t*)core("SegmentationFault"));
-#endif
     jl_argumenterror_type  = (jl_datatype_t*)core("ArgumentError");
     jl_methoderror_type    = (jl_datatype_t*)core("MethodError");
     jl_loaderror_type      = (jl_datatype_t*)core("LoadError");
@@ -856,7 +902,7 @@ static void post_boot_hooks(void)
     jl_pair_type           = core("Pair");
     jl_kwcall_func         = core("kwcall");
     jl_kwcall_mt           = ((jl_datatype_t*)jl_typeof(jl_kwcall_func))->name->mt;
-    jl_kwcall_mt->max_args = 0;
+    jl_atomic_store_relaxed(&jl_kwcall_mt->max_args, 0);
 
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;

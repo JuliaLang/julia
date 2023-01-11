@@ -8,6 +8,12 @@ tuple-like collection of values, where each entry has a unique name, represented
 [`Symbol`](@ref). Like `Tuple`s, `NamedTuple`s are immutable; neither the names nor the values
 can be modified in place after construction.
 
+A named tuple can be created as a tuple literal with keys, e.g. `(a=1, b=2)`,
+or as a tuple literal with semicolon after the opening parenthesis, e.g. `(;
+a=1, b=2)` (this form also accepts programmatically generated names as
+described below), or using a `NamedTuple` type as constructor, e.g.
+`NamedTuple{(:a, :b)}((1,2))`.
+
 Accessing the value associated with a name in a named tuple can be done using field
 access syntax, e.g. `x.a`, or using [`getindex`](@ref), e.g. `x[:a]` or `x[(:a, :b)]`.
 A tuple of the names can be obtained using [`keys`](@ref), and a tuple of the values
@@ -51,16 +57,34 @@ julia> collect(pairs(x))
 ```
 
 In a similar fashion as to how one can define keyword arguments programmatically,
-a named tuple can be created by giving a pair `name::Symbol => value` or splatting
-an iterator yielding such pairs after a semicolon inside a tuple literal:
+a named tuple can be created by giving pairs `name::Symbol => value` after a
+semicolon inside a tuple literal. This and the `name=value` syntax can be mixed:
 
 ```jldoctest
-julia> (; :a => 1)
-(a = 1,)
+julia> (; :a => 1, :b => 2, c=3)
+(a = 1, b = 2, c = 3)
+```
+
+The name-value pairs can also be provided by splatting a named tuple or any
+iterator that yields two-value collections holding each a symbol as first
+value:
 
 julia> keys = (:a, :b, :c); values = (1, 2, 3);
 
-julia> (; zip(keys, values)...)
+julia> NamedTuple{keys}(values)
+(a = 1, b = 2, c = 3)
+
+julia> (; (keys .=> values)...)
+(a = 1, b = 2, c = 3)
+
+julia> nt1 = (a=1, b=2);
+
+julia> nt2 = (c=3, d=4);
+
+julia> (; nt1..., nt2..., b=20) # the final b overwrites the value from nt1
+(a = 1, b = 20, c = 3, d = 4)
+
+julia> (; zip(keys, values)...) # zip yields tuples such as (:a, 1)
 (a = 1, b = 2, c = 3)
 ```
 
@@ -135,6 +159,7 @@ firstindex(t::NamedTuple) = 1
 lastindex(t::NamedTuple) = nfields(t)
 getindex(t::NamedTuple, i::Int) = getfield(t, i)
 getindex(t::NamedTuple, i::Symbol) = getfield(t, i)
+getindex(t::NamedTuple, ::Colon) = t
 @inline getindex(t::NamedTuple, idxs::Tuple{Vararg{Symbol}}) = NamedTuple{idxs}(t)
 @inline getindex(t::NamedTuple, idxs::AbstractVector{Symbol}) = NamedTuple{Tuple(idxs)}(t)
 indexed_iterate(t::NamedTuple, i::Int, state=1) = (getfield(t, i), i+1)
@@ -193,6 +218,12 @@ end
 eltype(::Type{T}) where T<:NamedTuple = nteltype(T)
 nteltype(::Type) = Any
 nteltype(::Type{NamedTuple{names,T}} where names) where {T} = eltype(T)
+
+keytype(@nospecialize nt::NamedTuple) = keytype(typeof(nt))
+keytype(@nospecialize T::Type{<:NamedTuple}) = Symbol
+
+valtype(@nospecialize nt::NamedTuple) = valtype(typeof(nt))
+valtype(@nospecialize T::Type{<:NamedTuple}) = eltype(T)
 
 ==(a::NamedTuple{n}, b::NamedTuple{n}) where {n} = Tuple(a) == Tuple(b)
 ==(a::NamedTuple, b::NamedTuple) = false

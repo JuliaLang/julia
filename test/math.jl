@@ -8,6 +8,20 @@ function isnan_type(::Type{T}, x) where T
     isa(x, T) && isnan(x)
 end
 
+# has_fma has no runtime support.
+# So we need function wrappers to make this work.
+has_fma_Int() = Core.Compiler.have_fma(Int)
+has_fma_Float32() = Core.Compiler.have_fma(Float32)
+has_fma_Float64() = Core.Compiler.have_fma(Float64)
+
+has_fma = Dict(
+    Int => has_fma_Int(),
+    Rational{Int} => has_fma_Int(),
+    Float32 => has_fma_Float32(),
+    Float64 => has_fma_Float64(),
+    BigFloat => true,
+)
+
 @testset "clamp" begin
     @test clamp(0, 1, 3) == 1
     @test clamp(1, 1, 3) == 1
@@ -411,47 +425,51 @@ end
     @test rad2deg(pi + (pi/3)*im) ≈ 180 + 60im
 end
 
+# ensure zeros are signed the same
+⩲(x,y) = typeof(x) == typeof(y) && x == y && signbit(x) == signbit(y)
+⩲(x::Tuple, y::Tuple) = length(x) == length(y) && all(map(⩲,x,y))
+
 @testset "degree-based trig functions" begin
-    @testset "$T" for T = (Float32,Float64,Rational{Int})
+    @testset "$T" for T = (Float32,Float64,Rational{Int},BigFloat)
         fT = typeof(float(one(T)))
         fTsc = typeof( (float(one(T)), float(one(T))) )
         for x = -400:40:400
-            @test sind(convert(T,x))::fT ≈ convert(fT,sin(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
-            @test cosd(convert(T,x))::fT ≈ convert(fT,cos(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
+            @test sind(convert(T,x))::fT ≈ sin(pi*convert(fT,x)/180) atol=eps(deg2rad(convert(fT,x)))
+            @test cosd(convert(T,x))::fT ≈ cos(pi*convert(fT,x)/180) atol=eps(deg2rad(convert(fT,x)))
 
             s,c = sincosd(convert(T,x))
-            @test s::fT ≈ convert(fT,sin(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
-            @test c::fT ≈ convert(fT,cos(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
+            @test s::fT ≈ sin(pi*convert(fT,x)/180) atol=eps(deg2rad(convert(fT,x)))
+            @test c::fT ≈ cos(pi*convert(fT,x)/180) atol=eps(deg2rad(convert(fT,x)))
         end
         @testset "sind" begin
-            @test sind(convert(T,0.0))::fT === zero(fT)
-            @test sind(convert(T,180.0))::fT === zero(fT)
-            @test sind(convert(T,360.0))::fT === zero(fT)
-            T != Rational{Int} && @test sind(convert(T,-0.0))::fT === -zero(fT)
-            @test sind(convert(T,-180.0))::fT === -zero(fT)
-            @test sind(convert(T,-360.0))::fT === -zero(fT)
+            @test sind(convert(T,0.0))::fT ⩲ zero(fT)
+            @test sind(convert(T,180.0))::fT ⩲ zero(fT)
+            @test sind(convert(T,360.0))::fT ⩲ zero(fT)
+            T != Rational{Int} && @test sind(convert(T,-0.0))::fT ⩲ -zero(fT)
+            @test sind(convert(T,-180.0))::fT ⩲ -zero(fT)
+            @test sind(convert(T,-360.0))::fT ⩲ -zero(fT)
             if T <: AbstractFloat
                 @test isnan(sind(T(NaN)))
             end
         end
         @testset "cosd" begin
-            @test cosd(convert(T,90))::fT === zero(fT)
-            @test cosd(convert(T,270))::fT === zero(fT)
-            @test cosd(convert(T,-90))::fT === zero(fT)
-            @test cosd(convert(T,-270))::fT === zero(fT)
+            @test cosd(convert(T,90))::fT ⩲ zero(fT)
+            @test cosd(convert(T,270))::fT ⩲ zero(fT)
+            @test cosd(convert(T,-90))::fT ⩲ zero(fT)
+            @test cosd(convert(T,-270))::fT ⩲ zero(fT)
             if T <: AbstractFloat
                 @test isnan(cosd(T(NaN)))
             end
         end
         @testset "sincosd" begin
-            @test sincosd(convert(T,-360))::fTsc === ( -zero(fT),  one(fT) )
-            @test sincosd(convert(T,-270))::fTsc === (   one(fT), zero(fT) )
-            @test sincosd(convert(T,-180))::fTsc === ( -zero(fT), -one(fT) )
-            @test sincosd(convert(T, -90))::fTsc === (  -one(fT), zero(fT) )
-            @test sincosd(convert(T,   0))::fTsc === (  zero(fT),  one(fT) )
-            @test sincosd(convert(T,  90))::fTsc === (   one(fT), zero(fT) )
-            @test sincosd(convert(T, 180))::fTsc === (  zero(fT), -one(fT) )
-            @test sincosd(convert(T, 270))::fTsc === (  -one(fT), zero(fT) )
+            @test sincosd(convert(T,-360))::fTsc ⩲ ( -zero(fT),  one(fT) )
+            @test sincosd(convert(T,-270))::fTsc ⩲ (   one(fT), zero(fT) )
+            @test sincosd(convert(T,-180))::fTsc ⩲ ( -zero(fT), -one(fT) )
+            @test sincosd(convert(T, -90))::fTsc ⩲ (  -one(fT), zero(fT) )
+            @test sincosd(convert(T,   0))::fTsc ⩲ (  zero(fT),  one(fT) )
+            @test sincosd(convert(T,  90))::fTsc ⩲ (   one(fT), zero(fT) )
+            @test sincosd(convert(T, 180))::fTsc ⩲ (  zero(fT), -one(fT) )
+            @test sincosd(convert(T, 270))::fTsc ⩲ (  -one(fT), zero(fT) )
             if T <: AbstractFloat
                 @test_throws DomainError sincosd(T(Inf))
                 @test all(isnan.(sincosd(T(NaN))))
@@ -463,36 +481,47 @@ end
             "sincospi" => (x->sincospi(x)[1], x->sincospi(x)[2])
         )
             @testset "pi * $x" for x = -3:0.3:3
-                @test sinpi(convert(T,x))::fT ≈ convert(fT,sin(pi*x)) atol=eps(pi*convert(fT,x))
-                @test cospi(convert(T,x))::fT ≈ convert(fT,cos(pi*x)) atol=eps(pi*convert(fT,x))
+                @test sinpi(convert(T,x))::fT ≈ sin(pi*convert(fT,x)) atol=eps(pi*convert(fT,x))
+                @test cospi(convert(T,x))::fT ≈ cos(pi*convert(fT,x)) atol=eps(pi*convert(fT,x))
             end
 
-            @test sinpi(convert(T,0.0))::fT === zero(fT)
-            @test sinpi(convert(T,1.0))::fT === zero(fT)
-            @test sinpi(convert(T,2.0))::fT === zero(fT)
-            T != Rational{Int} && @test sinpi(convert(T,-0.0))::fT === -zero(fT)
-            @test sinpi(convert(T,-1.0))::fT === -zero(fT)
-            @test sinpi(convert(T,-2.0))::fT === -zero(fT)
+            @test sinpi(convert(T,0.0))::fT ⩲ zero(fT)
+            @test sinpi(convert(T,1.0))::fT ⩲ zero(fT)
+            @test sinpi(convert(T,2.0))::fT ⩲ zero(fT)
+            T != Rational{Int} && @test sinpi(convert(T,-0.0))::fT ⩲ -zero(fT)
+            @test sinpi(convert(T,-1.0))::fT ⩲ -zero(fT)
+            @test sinpi(convert(T,-2.0))::fT ⩲ -zero(fT)
             @test_throws DomainError sinpi(convert(T,Inf))
 
-            @test cospi(convert(T,0.5))::fT === zero(fT)
-            @test cospi(convert(T,1.5))::fT === zero(fT)
-            @test cospi(convert(T,-0.5))::fT === zero(fT)
-            @test cospi(convert(T,-1.5))::fT === zero(fT)
+            @test cospi(convert(T,0.5))::fT ⩲ zero(fT)
+            @test cospi(convert(T,1.5))::fT ⩲ zero(fT)
+            @test cospi(convert(T,-0.5))::fT ⩲ zero(fT)
+            @test cospi(convert(T,-1.5))::fT ⩲ zero(fT)
             @test_throws DomainError cospi(convert(T,Inf))
         end
-        @testset "Check exact values" begin
-            @test sind(convert(T,30)) == 0.5
-            @test cosd(convert(T,60)) == 0.5
-            @test sind(convert(T,150)) == 0.5
-            @test sinpi(one(T)/convert(T,6)) == 0.5
-            @test sincospi(one(T)/convert(T,6))[1] == 0.5
-            @test_throws DomainError sind(convert(T,Inf))
-            @test_throws DomainError cosd(convert(T,Inf))
-            T != Float32 && @test cospi(one(T)/convert(T,3)) == 0.5
-            T != Float32 && @test sincospi(one(T)/convert(T,3))[2] == 0.5
-            T == Rational{Int} && @test sinpi(5//6) == 0.5
-            T == Rational{Int} && @test sincospi(5//6)[1] == 0.5
+        @testset begin
+            # If the machine supports fma (fused multiply add), we require exact equality.
+            # Otherwise, we only require approximate equality.
+            if has_fma[T]
+                my_eq = (==)
+                @debug "On this machine, FMA is supported for $(T), so we will test for exact equality" my_eq
+            else
+                my_eq = isapprox
+                @debug "On this machine, FMA is not supported for $(T), so we will test for approximate equality" my_eq
+            end
+            @testset let context=(T, has_fma[T], my_eq)
+                @test sind(convert(T,30)) == 0.5
+                @test cosd(convert(T,60)) == 0.5
+                @test sind(convert(T,150)) == 0.5
+                @test my_eq(sinpi(one(T)/convert(T,6)), 0.5)
+                @test my_eq(sincospi(one(T)/convert(T,6))[1], 0.5)
+                @test_throws DomainError sind(convert(T,Inf))
+                @test_throws DomainError cosd(convert(T,Inf))
+                fT == Float64 && @test my_eq(cospi(one(T)/convert(T,3)), 0.5)
+                fT == Float64 && @test my_eq(sincospi(one(T)/convert(T,3))[2], 0.5)
+                T == Rational{Int} && @test my_eq(sinpi(5//6), 0.5)
+                T == Rational{Int} && @test my_eq(sincospi(5//6)[1], 0.5)
+            end
         end
     end
     scdm = sincosd(missing)
@@ -538,15 +567,19 @@ end
             end
         end
     end
-    @test @inferred(sinc(0//1)) === 1.0
-    @test @inferred(cosc(0//1)) === -0.0
+    @test @inferred(sinc(0//1)) ⩲ 1.0
+    @test @inferred(cosc(0//1)) ⩲ -0.0
 
     # test right before/after thresholds of Taylor series
     @test sinc(0.001) ≈ 0.999998355066745 rtol=1e-15
     @test sinc(0.00099) ≈ 0.9999983878009009 rtol=1e-15
     @test sinc(0.05f0) ≈ 0.9958927352435614 rtol=1e-7
     @test sinc(0.0499f0) ≈ 0.9959091277049384 rtol=1e-7
-    @test cosc(0.14) ≈ -0.4517331883801308 rtol=1e-15
+    if has_fma[Float64]
+        @test cosc(0.14) ≈ -0.4517331883801308 rtol=1e-15
+    else
+        @test cosc(0.14) ≈ -0.4517331883801308 rtol=1e-14
+    end
     @test cosc(0.1399) ≈ -0.45142306168781854 rtol=1e-14
     @test cosc(0.26f0) ≈ -0.7996401373462212 rtol=5e-7
     @test cosc(0.2599f0) ≈ -0.7993744054401625 rtol=5e-7

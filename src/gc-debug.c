@@ -90,7 +90,7 @@ void add_lostval_parent(jl_value_t *parent)
    At this point you should be able to run under gdb and use a hw watch to look for writes
    at the exact addr of the slot (use something like watch *slot_addr if *slot_addr == val).
  - If it went well you are now stopped at the exact point the problem is happening.
-   Backtraces in JIT'd code wont work for me (but I'm not sure they should) so in that
+   Backtraces in JIT'd code won't work for me (but I'm not sure they should) so in that
    case you can try to jl_throw(something) from gdb.
  */
 // this does not yet detect missing writes from marked to marked_noesc
@@ -1385,8 +1385,8 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_off
                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
                 break;
             }
-            jl_safe_printf("%p:  %s Module (bindings) %p (bits %d) -- [%p, %p)\n",
-                           (void*)data, prefix, (void*)data->parent, (int)data->bits,
+            jl_safe_printf("%p:  %s Module (bindings) %p -- [%p, %p)\n",
+                           (void*)data, prefix, (void*)data->parent,
                            (void*)data->begin, (void*)data->end);
         }
         else {

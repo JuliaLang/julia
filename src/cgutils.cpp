@@ -310,7 +310,7 @@ static Value *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
     }
     if (gv == nullptr)
         gv = new GlobalVariable(*M, ctx.types().T_pjlvalue,
-                                false, GlobalVariable::PrivateLinkage,
+                                false, GlobalVariable::ExternalLinkage,
                                 NULL, localname);
     // LLVM passes sometimes strip metadata when moving load around
     // since the load at the new location satisfy the same condition as the original one.
@@ -488,7 +488,8 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_binding_t *p)
     if (!ctx.emission_context.imaging)
         return literal_static_pointer_val(p, ctx.types().T_pjlvalue);
     // bindings are prefixed with jl_bnd#
-    Value *pgv = julia_pgv(ctx, "jl_bnd#", p->name, p->owner, p);
+    jl_globalref_t *gr = p->globalref;
+    Value *pgv = gr ? julia_pgv(ctx, "jl_bnd#", gr->name, gr->mod, p) : julia_pgv(ctx, "jl_bnd#", p);
     return tbaa_decorate(ctx.tbaa().tbaa_const, maybe_mark_load_dereferenceable(
             ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue, pgv, Align(sizeof(void*))),
             false, sizeof(jl_binding_t), alignof(jl_binding_t)));
@@ -526,11 +527,14 @@ static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
 {
     // emit a literal_pointer_val to a jl_binding_t
     // binding->value are prefixed with *
-    if (ctx.emission_context.imaging)
-        return tbaa_decorate(ctx.tbaa().tbaa_const, ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue,
-                    julia_pgv(ctx, "*", b->name, b->owner, b), Align(sizeof(void*))));
-    else
+    if (ctx.emission_context.imaging) {
+        jl_globalref_t *gr = b->globalref;
+        Value *pgv = gr ? julia_pgv(ctx, "*", gr->name, gr->mod, b) : julia_pgv(ctx, "*jl_bnd#", b);
+        return tbaa_decorate(ctx.tbaa().tbaa_const, ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue, pgv, Align(sizeof(void*))));
+    }
+    else {
         return literal_static_pointer_val(b, ctx.types().T_pjlvalue);
+    }
 }
 
 // --- mapping between julia and llvm types ---
@@ -2121,7 +2125,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         emit_lockstate_value(ctx, parent, false);
     if (parent != NULL) {
         if (isreplacefield) {
-            // TOOD: avoid this branch if we aren't making a write barrier
+            // TODO: avoid this branch if we aren't making a write barrier
             BasicBlock *BB = BasicBlock::Create(ctx.builder.getContext(), "xchg_wb", ctx.f);
             DoneBB = BasicBlock::Create(ctx.builder.getContext(), "done_xchg_wb", ctx.f);
             ctx.builder.CreateCondBr(Success, BB, DoneBB);
@@ -3455,6 +3459,10 @@ static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt)
     Function *F = prepare_call(jl_alloc_obj_func);
     auto call = ctx.builder.CreateCall(F, {current_task, ConstantInt::get(getSizeTy(ctx.builder.getContext()), static_size), maybe_decay_untracked(ctx, jt)});
     call->setAttributes(F->getAttributes());
+    if (static_size > 0)
+    {
+        call->addRetAttr(Attribute::getWithDereferenceableBytes(ctx.builder.getContext(),static_size));
+    }
     return call;
 }
 
@@ -3486,14 +3494,6 @@ static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, ArrayRef<Value*
         decay_ptrs.push_back(maybe_decay_untracked(ctx, emit_bitcast(ctx, ptr, ctx.types().T_prjlvalue)));
     }
     ctx.builder.CreateCall(prepare_call(jl_write_barrier_func), decay_ptrs);
-}
-
-static void emit_write_barrier_binding(jl_codectx_t &ctx, Value *parent, Value *ptr)
-{
-    SmallVector<Value*, 8> decay_ptrs;
-    decay_ptrs.push_back(maybe_decay_untracked(ctx, emit_bitcast(ctx, parent, ctx.types().T_prjlvalue)));
-    decay_ptrs.push_back(maybe_decay_untracked(ctx, emit_bitcast(ctx, ptr, ctx.types().T_prjlvalue)));
-    ctx.builder.CreateCall(prepare_call(jl_write_barrier_binding_func), decay_ptrs);
 }
 
 static void find_perm_offsets(jl_datatype_t *typ, SmallVector<unsigned,4> &res, unsigned offset)

@@ -295,7 +295,6 @@ function retry(f;  delays=ExponentialBackOff(), check=nothing)
             try
                 return f(args...; kwargs...)
             catch e
-                y === nothing && rethrow()
                 if check !== nothing
                     result = check(state, e)
                     state, retry_or_not = length(result) == 2 ? result : (state, result)

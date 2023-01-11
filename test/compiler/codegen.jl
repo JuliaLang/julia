@@ -10,7 +10,7 @@ const opt_level = Base.JLOptions().opt_level
 const coverage = (Base.JLOptions().code_coverage > 0) || (Base.JLOptions().malloc_log > 0)
 const Iptr = sizeof(Int) == 8 ? "i64" : "i32"
 
-const is_debug_build = ccall(:jl_is_debugbuild, Cint, ()) != 0
+const is_debug_build = Base.isdebugbuild()
 function libjulia_codegen_name()
     is_debug_build ? "libjulia-codegen-debug" : "libjulia-codegen"
 end
@@ -781,3 +781,16 @@ f_isdefined_nospecialize(@nospecialize(x)) = isdefined(x, 1)
 # Test codegen for isa(::Any, Type)
 f_isa_type(@nospecialize(x)) = isa(x, Type)
 @test !occursin("jl_isa", get_llvm(f_isa_type, Tuple{Any}, true, false, false))
+
+# Issue #47247
+f47247(a::Ref{Int}, b::Nothing) = setfield!(a, :x, b)
+@test_throws TypeError f47247(Ref(5), nothing)
+
+@testset "regression in generic_bitcast: should support Union{} values" begin
+    f(x) = Core.bitcast(UInt64, x)
+    @test occursin("llvm.trap", get_llvm(f, Tuple{Union{}}))
+end
+
+f48085(@nospecialize x...) = length(x)
+@test Core.Compiler.get_compileable_sig(which(f48085, (Vararg{Any},)), Tuple{typeof(f48085), Vararg{Int}}, Core.svec()) === nothing
+@test Core.Compiler.get_compileable_sig(which(f48085, (Vararg{Any},)), Tuple{typeof(f48085), Int, Vararg{Int}}, Core.svec()) === Tuple{typeof(f48085), Any, Vararg{Any}}

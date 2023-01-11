@@ -24,13 +24,14 @@ end
 """
     Diagonal(V::AbstractVector)
 
-Construct a matrix with `V` as its diagonal.
+Construct a lazy matrix with `V` as its diagonal.
 
-See also [`diag`](@ref), [`diagm`](@ref).
+See also [`UniformScaling`](@ref) for the lazy identity matrix `I`,
+[`diagm`](@ref) to make a dense matrix, and [`diag`](@ref) to extract diagonal elements.
 
 # Examples
 ```jldoctest
-julia> Diagonal([1, 10, 100])
+julia> d = Diagonal([1, 10, 100])
 3×3 Diagonal{$Int, Vector{$Int}}:
  1   ⋅    ⋅
  ⋅  10    ⋅
@@ -40,6 +41,30 @@ julia> diagm([7, 13])
 2×2 Matrix{$Int}:
  7   0
  0  13
+
+julia> ans + I
+2×2 Matrix{Int64}:
+ 8   0
+ 0  14
+
+julia> I(2)
+2×2 Diagonal{Bool, Vector{Bool}}:
+ 1  ⋅
+ ⋅  1
+```
+
+Note that a one-column matrix is not treated like a vector, but instead calls the
+method `Diagonal(A::AbstractMatrix)` which extracts 1-element `diag(A)`:
+
+```jldoctest
+julia> A = transpose([7.0 13.0])
+2×1 transpose(::Matrix{Float64}) with eltype Float64:
+  7.0
+ 13.0
+
+julia> Diagonal(A)
+1×1 Diagonal{Float64, Vector{Float64}}:
+ 7.0
 ```
 """
 Diagonal(V::AbstractVector)
@@ -96,7 +121,7 @@ Construct an uninitialized `Diagonal{T}` of length `n`. See `undef`.
 Diagonal{T}(::UndefInitializer, n::Integer) where T = Diagonal(Vector{T}(undef, n))
 
 similar(D::Diagonal, ::Type{T}) where {T} = Diagonal(similar(D.diag, T))
-similar(::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = zeros(T, dims...)
+similar(D::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = similar(D.diag, T, dims)
 
 copyto!(D1::Diagonal, D2::Diagonal) = (copyto!(D1.diag, D2.diag); D1)
 
@@ -245,8 +270,12 @@ function (*)(D::Diagonal, V::AbstractVector)
 end
 
 (*)(A::AbstractMatrix, D::Diagonal) =
+    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A, D)
+(*)(A::HermOrSym, D::Diagonal) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A, D)
 (*)(D::Diagonal, A::AbstractMatrix) =
+    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), D, A)
+(*)(D::Diagonal, A::HermOrSym) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), D, A)
 
 rmul!(A::AbstractMatrix, D::Diagonal) = @inline mul!(A, A, D)
@@ -377,11 +406,8 @@ end
 mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, alpha::Number, beta::Number) =
     _muldiag!(C, Da, Db, alpha, beta)
 
-_init(op, A::AbstractArray{<:Number}, B::AbstractArray{<:Number}) =
-    (_ -> zero(typeof(op(oneunit(eltype(A)), oneunit(eltype(B))))))
-_init(op, A::AbstractArray, B::AbstractArray) = promote_op(op, eltype(A), eltype(B))
-
-/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(_init(/, A, D).(A), A, D)
+/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(similar(A, _init_eltype(/, eltype(A), eltype(D))), A, D)
+/(A::HermOrSym, D::Diagonal) = _rdiv!(similar(A, _init_eltype(/, eltype(A), eltype(D)), size(A)), A, D)
 rdiv!(A::AbstractVecOrMat, D::Diagonal) = @inline _rdiv!(A, A, D)
 # avoid copy when possible via internal 3-arg backend
 function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
@@ -406,8 +432,8 @@ function \(D::Diagonal, B::AbstractVector)
     isnothing(j) || throw(SingularException(j))
     return D.diag .\ B
 end
-\(D::Diagonal, B::AbstractMatrix) =
-    ldiv!(_init(\, D, B).(B), D, B)
+\(D::Diagonal, B::AbstractMatrix) = ldiv!(similar(B, _init_eltype(\, eltype(D), eltype(B))), D, B)
+\(D::Diagonal, B::HermOrSym) = ldiv!(similar(B, _init_eltype(\, eltype(D), eltype(B)), size(B)), D, B)
 
 ldiv!(D::Diagonal, B::AbstractVecOrMat) = @inline ldiv!(B, D, B)
 function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
@@ -787,12 +813,12 @@ function svd(D::Diagonal{T}) where {T<:Number}
 end
 
 # disambiguation methods: * and / of Diagonal and Adj/Trans AbsVec
-*(x::AdjointAbsVec, D::Diagonal) = Adjoint(map((t,s) -> t'*s, D.diag, parent(x)))
-*(x::TransposeAbsVec, D::Diagonal) = Transpose(map((t,s) -> transpose(t)*s, D.diag, parent(x)))
+*(u::AdjointAbsVec, D::Diagonal) = (D'u')'
+*(u::TransposeAbsVec, D::Diagonal) = transpose(transpose(D) * transpose(u))
 *(x::AdjointAbsVec,   D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
 *(x::TransposeAbsVec, D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
-/(u::AdjointAbsVec, D::Diagonal) = adjoint(adjoint(D) \ u.parent)
-/(u::TransposeAbsVec, D::Diagonal) = transpose(transpose(D) \ u.parent)
+/(u::AdjointAbsVec, D::Diagonal) = (D' \ u')'
+/(u::TransposeAbsVec, D::Diagonal) = transpose(transpose(D) \ transpose(u))
 # disambiguation methods: Call unoptimized version for user defined AbstractTriangular.
 *(A::AbstractTriangular, D::Diagonal) = @invoke *(A::AbstractMatrix, D::Diagonal)
 *(D::Diagonal, A::AbstractTriangular) = @invoke *(D::Diagonal, A::AbstractMatrix)

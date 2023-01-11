@@ -23,24 +23,27 @@ function show(io::IO, ::MIME"text/plain", r::LinRange)
     print_range(io, r)
 end
 
+function _isself(@nospecialize(ft))
+    name = ft.name.mt.name
+    mod = parentmodule(ft)  # NOTE: not necessarily the same as ft.name.mt.module
+    return isdefined(mod, name) && ft == typeof(getfield(mod, name))
+end
+
 function show(io::IO, ::MIME"text/plain", f::Function)
     get(io, :compact, false)::Bool && return show(io, f)
     ft = typeof(f)
-    mt = ft.name.mt
+    name = ft.name.mt.name
     if isa(f, Core.IntrinsicFunction)
         print(io, f)
         id = Core.Intrinsics.bitcast(Int32, f)
         print(io, " (intrinsic function #$id)")
     elseif isa(f, Core.Builtin)
-        print(io, mt.name, " (built-in function)")
+        print(io, name, " (built-in function)")
     else
-        name = mt.name
-        isself = isdefined(ft.name.module, name) &&
-                 ft == typeof(getfield(ft.name.module, name))
         n = length(methods(f))
         m = n==1 ? "method" : "methods"
         sname = string(name)
-        ns = (isself || '#' in sname) ? sname : string("(::", ft, ")")
+        ns = (_isself(ft) || '#' in sname) ? sname : string("(::", ft, ")")
         what = startswith(ns, '@') ? "macro" : "generic function"
         print(io, ns, " (", what, " with $n $m)")
     end
@@ -570,7 +573,7 @@ modulesof!(s::Set{Module}, x::TypeVar) = modulesof!(s, x.ub)
 function modulesof!(s::Set{Module}, x::Type)
     x = unwrap_unionall(x)
     if x isa DataType
-        push!(s, x.name.module)
+        push!(s, parentmodule(x))
     elseif x isa Union
         modulesof!(s, x.a)
         modulesof!(s, x.b)
@@ -1001,9 +1004,9 @@ end
 # If an object with this name exists in 'from', we need to check that it's the same binding
 # and that it's not deprecated.
 function isvisible(sym::Symbol, parent::Module, from::Module)
-    owner = ccall(:jl_binding_owner, Any, (Any, Any), parent, sym)
-    from_owner = ccall(:jl_binding_owner, Any, (Any, Any), from, sym)
-    return owner !== nothing && from_owner === owner &&
+    owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), parent, sym)
+    from_owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), from, sym)
+    return owner !== C_NULL && from_owner === owner &&
         !isdeprecated(parent, sym) &&
         isdefined(from, sym) # if we're going to return true, force binding resolution
 end
@@ -1839,10 +1842,10 @@ function allow_macroname(ex)
     end
 end
 
-function is_core_macro(arg::GlobalRef, macro_name::AbstractString)
-    arg == GlobalRef(Core, Symbol(macro_name))
-end
+is_core_macro(arg::GlobalRef, macro_name::AbstractString) = is_core_macro(arg, Symbol(macro_name))
+is_core_macro(arg::GlobalRef, macro_name::Symbol) = arg == GlobalRef(Core, macro_name)
 is_core_macro(@nospecialize(arg), macro_name::AbstractString) = false
+is_core_macro(@nospecialize(arg), macro_name::Symbol) = false
 
 # symbol for IOContext flag signaling whether "begin" is treated
 # as an ordinary symbol, which is true in indexing expressions.
@@ -1878,8 +1881,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             # .
             print(io, '.')
             # item
-            parens = !(field isa Symbol) || (field::Symbol in quoted_syms)
-            quoted = parens || isoperator(field)
+            if isa(field, Symbol)
+                parens = field in quoted_syms
+                quoted = parens || isoperator(field)
+            else
+                parens = quoted = true
+            end
             quoted && print(io, ':')
             parens && print(io, '(')
             show_unquoted(io, field, indent, 0, quote_level)
@@ -2003,10 +2010,11 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
 
         # binary operator (i.e. "x + y")
         elseif func_prec > 0 # is a binary operator
+            func = func::Symbol    # operator_precedence returns func_prec == 0 for non-Symbol
             na = length(func_args)
-            if (na == 2 || (na > 2 && isa(func, Symbol) && func in (:+, :++, :*)) || (na == 3 && func === :(:))) &&
+            if (na == 2 || (na > 2 && func in (:+, :++, :*)) || (na == 3 && func === :(:))) &&
                     all(a -> !isa(a, Expr) || a.head !== :..., func_args)
-                sep = func === :(:) ? "$func" : " " * convert(String, string(func))::String * " "   # if func::Any, avoid string interpolation (invalidation)
+                sep = func === :(:) ? "$func" : " $func "
 
                 if func_prec <= prec
                     show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, quote_level, true)
@@ -2165,12 +2173,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     elseif head === :macrocall && nargs >= 2
         # handle some special syntaxes
         # `a b c`
-        if is_core_macro(args[1], "@cmd")
+        if is_core_macro(args[1], :var"@cmd")
             print(io, "`", args[3], "`")
         # 11111111111111111111, 0xfffffffffffffffff, 1111...many digits...
-        elseif is_core_macro(args[1], "@int128_str") ||
-               is_core_macro(args[1], "@uint128_str") ||
-               is_core_macro(args[1], "@big_str")
+        elseif is_core_macro(args[1], :var"@int128_str") ||
+               is_core_macro(args[1], :var"@uint128_str") ||
+               is_core_macro(args[1], :var"@big_str")
             print(io, args[3])
         # x"y" and x"y"z
         elseif isa(args[1], Symbol) && nargs >= 3 && isa(args[3], String) &&
@@ -2401,11 +2409,10 @@ end
 # `io` should contain the UnionAll env of the signature
 function show_signature_function(io::IO, @nospecialize(ft), demangle=false, fargname="", html=false, qualified=false)
     uw = unwrap_unionall(ft)
-    if ft <: Function && isa(uw, DataType) && isempty(uw.parameters) &&
-        isdefined(uw.name.module, uw.name.mt.name) &&
-        ft == typeof(getfield(uw.name.module, uw.name.mt.name))
-        if qualified && !is_exported_from_stdlib(uw.name.mt.name, uw.name.module) && uw.name.module !== Main
-            print_within_stacktrace(io, uw.name.module, '.', bold=true)
+    if ft <: Function && isa(uw, DataType) && isempty(uw.parameters) && _isself(uw)
+        uwmod = parentmodule(uw)
+        if qualified && !is_exported_from_stdlib(uw.name.mt.name, uwmod) && uwmod !== Main
+            print_within_stacktrace(io, uwmod, '.', bold=true)
         end
         s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.mt.name), context=io)
         print_within_stacktrace(io, s, bold=true)

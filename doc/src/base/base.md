@@ -188,6 +188,7 @@ Base.fieldcount
 Base.hasfield
 Core.nfields
 Base.isconst
+Base.isfieldatomic
 ```
 
 ### Memory layout
@@ -332,6 +333,7 @@ Base.@timev
 Base.@timed
 Base.@elapsed
 Base.@allocated
+Base.@allocations
 Base.EnvDict
 Base.ENV
 Base.Sys.STDLIB

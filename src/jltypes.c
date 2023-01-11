@@ -573,7 +573,7 @@ JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
 static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n)
 {
     size_t j;
-    // TOOD: This shouldn't be necessary
+    // TODO: This shouldn't be necessary
     JL_GC_PROMISE_ROOTED(tt);
     size_t tnp = jl_nparams(tt);
     if (n != tnp)
@@ -609,7 +609,7 @@ static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n)
 static int typekeyvalue_eq(jl_datatype_t *tt, jl_value_t *key1, jl_value_t **key, size_t n, int leaf)
 {
     size_t j;
-    // TOOD: This shouldn't be necessary
+    // TODO: This shouldn't be necessary
     JL_GC_PROMISE_ROOTED(tt);
     size_t tnp = jl_nparams(tt);
     if (n != tnp)
@@ -1093,12 +1093,36 @@ jl_value_t *jl_unwrap_unionall(jl_value_t *v)
 }
 
 // wrap `t` in the same unionalls that surround `u`
+// where `t` is derived from `u`, so the error checks in jl_type_unionall are unnecessary
 jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u)
 {
     if (!jl_is_unionall(u))
         return t;
-    JL_GC_PUSH1(&t);
     t = jl_rewrap_unionall(t, ((jl_unionall_t*)u)->body);
+    jl_tvar_t *v = ((jl_unionall_t*)u)->var;
+    // normalize `T where T<:S` => S
+    if (t == (jl_value_t*)v)
+        return v->ub;
+    // where var doesn't occur in body just return body
+    if (!jl_has_typevar(t, v))
+        return t;
+    JL_GC_PUSH1(&t);
+    //if (v->lb == v->ub)  // TODO maybe
+    //    t = jl_substitute_var(body, v, v->ub);
+    //else
+    t = jl_new_struct(jl_unionall_type, v, t);
+    JL_GC_POP();
+    return t;
+}
+
+// wrap `t` in the same unionalls that surround `u`
+// where `t` is extended from `u`, so the checks in jl_rewrap_unionall are unnecessary
+jl_value_t *jl_rewrap_unionall_(jl_value_t *t, jl_value_t *u)
+{
+    if (!jl_is_unionall(u))
+        return t;
+    t = jl_rewrap_unionall_(t, ((jl_unionall_t*)u)->body);
+    JL_GC_PUSH1(&t);
     t = jl_new_struct(jl_unionall_type, ((jl_unionall_t*)u)->var, t);
     JL_GC_POP();
     return t;
@@ -1886,7 +1910,7 @@ jl_datatype_t *jl_wrap_Type(jl_value_t *t)
 jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n)
 {
     if (n) {
-        if (jl_is_typevar(n)) {
+        if (jl_is_typevar(n) || jl_is_uniontype(jl_unwrap_unionall(n))) {
             // TODO: this is disabled due to #39698; it is also inconsistent
             // with other similar checks, where we usually only check substituted
             // values and not the bounds of variables.
@@ -2050,7 +2074,9 @@ void jl_init_types(void) JL_GC_DISABLED
             jl_any_type /*jl_int32_type*/,
             jl_any_type /*jl_uint8_type*/);
     const static uint32_t datatype_constfields[1] = { 0x00000057 }; // (1<<0)|(1<<1)|(1<<2)|(1<<4)|(1<<6)
+    const static uint32_t datatype_atomicfields[1] = { 0x00000028 }; // (1<<3)|(1<<5)
     jl_datatype_type->name->constfields = datatype_constfields;
+    jl_datatype_type->name->atomicfields = datatype_atomicfields;
     jl_precompute_memoized_dt(jl_datatype_type, 1);
 
     jl_typename_type->name = jl_new_typename_in(jl_symbol("TypeName"), core, 0, 1);
@@ -2074,7 +2100,9 @@ void jl_init_types(void) JL_GC_DISABLED
                                       jl_any_type /*jl_uint8_type*/,
                                       jl_any_type /*jl_uint8_type*/);
     const static uint32_t typename_constfields[1] = { 0x00003a3f }; // (1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<4)|(1<<5)|(1<<9)|(1<<11)|(1<<12)|(1<<13)
+    const static uint32_t typename_atomicfields[1] = { 0x00000180 }; // (1<<7)|(1<<8)
     jl_typename_type->name->constfields = typename_constfields;
+    jl_typename_type->name->atomicfields = typename_atomicfields;
     jl_precompute_memoized_dt(jl_typename_type, 1);
 
     jl_methtable_type->name = jl_new_typename_in(jl_symbol("MethodTable"), core, 0, 1);
@@ -2093,7 +2121,9 @@ void jl_init_types(void) JL_GC_DISABLED
                                        jl_any_type/*voidpointer*/, jl_any_type/*int32*/,
                                        jl_any_type/*uint8*/, jl_any_type/*uint8*/);
     const static uint32_t methtable_constfields[1] = { 0x00000020 }; // (1<<5);
+    const static uint32_t methtable_atomicfields[1] = { 0x0000001e }; // (1<<1)|(1<<2)|(1<<3)|(1<<4);
     jl_methtable_type->name->constfields = methtable_constfields;
+    jl_methtable_type->name->atomicfields = methtable_atomicfields;
     jl_precompute_memoized_dt(jl_methtable_type, 1);
 
     jl_symbol_type->name = jl_new_typename_in(jl_symbol("Symbol"), core, 0, 1);
@@ -2133,21 +2163,27 @@ void jl_init_types(void) JL_GC_DISABLED
                                         jl_perm_symsvec(2, "a", "b"),
                                         jl_svec(2, jl_any_type, jl_any_type),
                                         jl_emptysvec, 0, 0, 2);
+    // It seems like we probably usually end up needing the box for kinds (used in an Any context), so force it to exist
+    jl_uniontype_type->name->mayinlinealloc = 0;
 
     jl_tvar_type = jl_new_datatype(jl_symbol("TypeVar"), core, jl_any_type, jl_emptysvec,
                                    jl_perm_symsvec(3, "name", "lb", "ub"),
                                    jl_svec(3, jl_symbol_type, jl_any_type, jl_any_type),
                                    jl_emptysvec, 0, 1, 3);
+    const static uint32_t tvar_constfields[1] = { 0x00000007 }; // all fields are constant, even though TypeVar itself has identity
+    jl_tvar_type->name->constfields = tvar_constfields;
 
     jl_unionall_type = jl_new_datatype(jl_symbol("UnionAll"), core, type_type, jl_emptysvec,
                                        jl_perm_symsvec(2, "var", "body"),
                                        jl_svec(2, jl_tvar_type, jl_any_type),
                                        jl_emptysvec, 0, 0, 2);
+    jl_unionall_type->name->mayinlinealloc = 0;
 
     jl_vararg_type = jl_new_datatype(jl_symbol("TypeofVararg"), core, jl_any_type, jl_emptysvec,
                                             jl_perm_symsvec(2, "T", "N"),
                                             jl_svec(2, jl_any_type, jl_any_type),
                                             jl_emptysvec, 0, 0, 0);
+    jl_vararg_type->name->mayinlinealloc = 0;
 
     jl_svec_t *anytuple_params = jl_svec(1, jl_wrap_vararg((jl_value_t*)jl_any_type, (jl_value_t*)NULL));
     jl_anytuple_type = jl_new_datatype(jl_symbol("Tuple"), core, jl_any_type, anytuple_params,
@@ -2243,6 +2279,8 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type),
                         jl_emptysvec,
                         0, 1, 6);
+    const static uint32_t typemap_level_atomicfields[1] = { 0x0000003f }; // (1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<4)|(1<<5)
+    jl_typemap_level_type->name->atomicfields = typemap_level_atomicfields;
 
     jl_typemap_entry_type =
         jl_new_datatype(jl_symbol("TypeMapEntry"), core, jl_any_type, jl_emptysvec,
@@ -2270,8 +2308,10 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_bool_type),
                         jl_emptysvec,
                         0, 1, 4);
-    const static uint32_t typemap_entry_constfields[1] = { 0x000003fe }; // (1<<1)|(1<<2)|(1<<3)|(1<<4)|(1<<5)|(1<<6)|(1<<7)|(1<<8)|(1<<9);
+    const static uint32_t typemap_entry_constfields[1] = { 0x000003fe }; // (1<<1)|(1<<2)|(1<<3)|(1<<4)|(1<<5)|(1<<6)|(1<<7)|(1<<8)|(1<<9)
+    const static uint32_t typemap_entry_atomicfields[1] = { 0x00000001 }; // (1<<0)
     jl_typemap_entry_type->name->constfields = typemap_entry_constfields;
+    jl_typemap_entry_type->name->atomicfields = typemap_entry_atomicfields;
 
     jl_function_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Function"), core, jl_any_type, jl_emptysvec);
     jl_builtin_type  = jl_new_abstracttype((jl_value_t*)jl_symbol("Builtin"), core, jl_function_type, jl_emptysvec);
@@ -2529,8 +2569,12 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_bool_type),
                         jl_emptysvec,
                         0, 1, 3);
+    // These fields should be constant, but Serialization wants to mutate them in initialization
     //const static uint32_t method_instance_constfields[1] = { 0x00000007 }; // (1<<0)|(1<<1)|(1<<2);
+    const static uint32_t method_instance_atomicfields[1] = { 0x00000148 }; // (1<<3)|(1<<6)|(1<<8);
+    //Fields 4 and 5 must be protected by method->write_lock, and thus all operations on jl_method_instance_t are threadsafe. TODO: except inInference
     //jl_method_instance_type->name->constfields = method_instance_constfields;
+    jl_method_instance_type->name->atomicfields = method_instance_atomicfields;
 
     jl_code_instance_type =
         jl_new_datatype(jl_symbol("CodeInstance"), core,
@@ -2570,6 +2614,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_code_instance_type->types, 1, jl_code_instance_type);
     const static uint32_t code_instance_constfields[1]  = { 0b000001010110001 }; // Set fields 1, 5-6, 8, 10 as const
     const static uint32_t code_instance_atomicfields[1] = { 0b110100101000010 }; // Set fields 2, 7, 9, 12, 14-15 as atomic
+    //Fields 3-4 are only operated on by construction and deserialization, so are const at runtime
     //Fields 11 and 15 must be protected by locks, and thus all operations on jl_code_instance_t are threadsafe
     jl_code_instance_type->name->constfields = code_instance_constfields;
     jl_code_instance_type->name->atomicfields = code_instance_atomicfields;
@@ -2581,7 +2626,7 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_partial_struct_type = jl_new_datatype(jl_symbol("PartialStruct"), core, jl_any_type, jl_emptysvec,
                                        jl_perm_symsvec(2, "typ", "fields"),
-                                       jl_svec2(jl_datatype_type, jl_array_any_type),
+                                       jl_svec2(jl_any_type, jl_array_any_type),
                                        jl_emptysvec, 0, 0, 2);
 
     jl_interconditional_type = jl_new_datatype(jl_symbol("InterConditional"), core, jl_any_type, jl_emptysvec,
@@ -2682,10 +2727,20 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_value_t *pointer_void = jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_nothing_type);
 
+    jl_binding_type =
+        jl_new_datatype(jl_symbol("Binding"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(5, "value", "globalref", "owner", "ty", "flags"),
+                        jl_svec(5, jl_any_type, jl_any_type/*jl_globalref_type*/, jl_any_type/*jl_binding_type*/, jl_type_type, jl_uint8_type),
+                        jl_emptysvec, 0, 1, 0);
+    const static uint32_t binding_atomicfields[] = { 0x0015 }; // Set fields 1, 3, 4 as atomic
+    jl_binding_type->name->atomicfields = binding_atomicfields;
+    const static uint32_t binding_constfields[] = { 0x0002 }; // Set fields 2 as constant
+    jl_binding_type->name->constfields = binding_constfields;
+
     jl_globalref_type =
         jl_new_datatype(jl_symbol("GlobalRef"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(3, "mod", "name", "binding"),
-                        jl_svec(3, jl_module_type, jl_symbol_type, pointer_void),
+                        jl_svec(3, jl_module_type, jl_symbol_type, jl_binding_type),
                         jl_emptysvec, 0, 0, 3);
 
     tv = jl_svec2(tvar("A"), tvar("R"));
@@ -2727,6 +2782,8 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_method_instance_type->types, 6, jl_code_instance_type);
     jl_svecset(jl_code_instance_type->types, 13, jl_voidpointer_type);
     jl_svecset(jl_code_instance_type->types, 14, jl_voidpointer_type);
+    jl_svecset(jl_binding_type->types, 1, jl_globalref_type);
+    jl_svecset(jl_binding_type->types, 2, jl_binding_type);
 
     jl_compute_field_offsets(jl_datatype_type);
     jl_compute_field_offsets(jl_typename_type);
@@ -2742,9 +2799,6 @@ void jl_init_types(void) JL_GC_DISABLED
 
     // override the preferred layout for a couple types
     jl_lineinfonode_type->name->mayinlinealloc = 0; // FIXME: assumed to be a pointer by codegen
-    // It seems like we probably usually end up needing the box for kinds (used in an Any context)--but is that true?
-    jl_uniontype_type->name->mayinlinealloc = 0;
-    jl_unionall_type->name->mayinlinealloc = 0;
 }
 
 #ifdef __cplusplus

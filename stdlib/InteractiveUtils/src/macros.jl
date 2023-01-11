@@ -57,7 +57,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                 dotfuncdef = Expr(:local, Expr(:(=), Expr(:call, dotfuncname, xargs...), ex))
                 return quote
                     $(esc(dotfuncdef))
-                    local args = typesof($(map(esc, args)...))
+                    local args = $typesof($(map(esc, args)...))
                     $(fcn)($(esc(dotfuncname)), args; $(kws...))
                 end
             elseif !codemacro
@@ -81,7 +81,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                                   :(error("expression is not a function call"))
                               end)
                         else
-                            local args = typesof($(map(esc, ex0.args)...))
+                            local args = $typesof($(map(esc, ex0.args)...))
                             $(fcn)(Base.getproperty, args)
                         end
                     end
@@ -359,6 +359,8 @@ See also: [`code_native`](@ref), [`@code_llvm`](@ref), [`@code_typed`](@ref) and
 
 A macro to execute an expression and produce a report of any time spent importing packages and their
 dependencies. Any compilation time will be reported as a percentage, and how much of which was recompilation, if any.
+
+On Julia 1.9+ [package extensions](@ref man-extensions) will show as Parent → Extension.
 
 !!! note
     During the load process a package sequentially imports all of its dependencies, not just its direct dependencies.

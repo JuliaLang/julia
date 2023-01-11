@@ -57,8 +57,8 @@ function (*)(A::AbstractMatrix{T}, x::AbstractVector{S}) where {T,S}
 end
 
 # these will throw a DimensionMismatch unless B has 1 row (or 1 col for transposed case):
-(*)(a::AbstractVector, tB::Transpose{<:Any,<:AbstractMatrix}) = reshape(a, length(a), 1) * tB
-(*)(a::AbstractVector, adjB::Adjoint{<:Any,<:AbstractMatrix}) = reshape(a, length(a), 1) * adjB
+(*)(a::AbstractVector, tB::TransposeAbsMat) = reshape(a, length(a), 1) * tB
+(*)(a::AbstractVector, adjB::AdjointAbsMat) = reshape(a, length(a), 1) * adjB
 (*)(a::AbstractVector, B::AbstractMatrix) = reshape(a, length(a), 1) * B
 
 @inline mul!(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T},
@@ -807,7 +807,7 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
         end
         for k = 1:mB
             aoffs = (k-1)*Astride
-            b = _add(B[k], false)
+            b = _add(B[k])
             for i = 1:mA
                 C[i] += A[aoffs + i] * b
             end
