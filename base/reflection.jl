@@ -624,7 +624,6 @@ and has no subtypes (or supertypes) which could appear in a call.
 """
 isdispatchtuple(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x0004) == 0x0004)
 
-
 datatype_ismutationfree(dt::DataType) = (@_total_meta; (dt.flags & 0x0100) == 0x0100)
 
 """
@@ -646,6 +645,21 @@ function ismutationfree(@nospecialize(t::Type))
 end
 
 datatype_isidentityfree(dt::DataType) = (@_total_meta; (dt.flags & 0x0200) == 0x0200)
+
+"""
+    isidentityfree(T)
+
+Determine whether type `T` is identity free in the sense that this type or any
+reachable through its fields has non-content-based identity.
+"""
+function isidentityfree(@nospecialize(t::Type))
+    t = unwrap_unionall(t)
+    if isa(t, DataType)
+        return datatype_isidentityfree(t)
+    elseif isa(t, Union)
+        return isidentityfree(t.a) && isidentityfree(t.b)
+    end
+end
 
 iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
 isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
