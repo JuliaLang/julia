@@ -2918,12 +2918,12 @@ The syntax `a.b` calls `getproperty(a, :b)`.
 The syntax `@atomic order a.b` calls `getproperty(a, :b, :order)` and
 the syntax `@atomic a.b` calls `getproperty(a, :b, :sequentially_consistent)`.
 `getproperty(name)` creates a function that returns the property `name` using
-[`getproperty(x, name)`] i.e. a function equivalent to `x -> getproperty(x, name)`. 
-The returned function is of type `Base.Fix2{typeof(getproperty)}`, 
+[`getproperty(x, name)`] i.e. a function equivalent to `x -> getproperty(x, name)`.
+The returned function is of type `Base.Fix2{typeof(getproperty)}`,
 which can be used to implement specialized methods.
 
-!!! compat "Julia 1.9"
-    `getproperty(name)` requires Julia 1.9.
+!!! compat "Julia 1.10"
+    `getproperty(name)` requires Julia 1.10.
 
 # Examples
 ```jldoctest

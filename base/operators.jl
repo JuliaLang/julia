@@ -1219,8 +1219,8 @@ Create a function that indicates whether its argument has the property `name` us
 The returned function is of type `Base.Fix2{typeof(hasproperty)}`, which can be
 used to implement specialized methods.
 
-!!! compat "Julia 1.9"
-    This functionality requires at least Julia 1.9.
+!!! compat "Julia 1.10"
+    This functionality requires at least Julia 1.10.
 """
 hasproperty(s::Union{Symbol,String,Int}) = Fix2(hasproperty, s)
 
