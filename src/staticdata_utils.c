@@ -393,14 +393,15 @@ static void jl_collect_extext_methods_from_mod(jl_array_t *s, jl_module_t *m)
         s = NULL; // do not collect any methods
     size_t i;
     void **table = m->bindings.table;
-    for (i = 1; i < m->bindings.size; i += 2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
-            if (b->owner == m && b->value && b->constp) {
+    for (i = 0; i < m->bindings.size; i += 2) {
+        if (table[i+1] != HT_NOTFOUND) {
+            jl_sym_t *name = (jl_sym_t*)table[i];
+            jl_binding_t *b = (jl_binding_t*)table[i+1];
+            if (b->owner == b && b->value && b->constp) {
                 jl_value_t *bv = jl_unwrap_unionall(b->value);
                 if (jl_is_datatype(bv)) {
                     jl_typename_t *tn = ((jl_datatype_t*)bv)->name;
-                    if (tn->module == m && tn->name == b->name && tn->wrapper == b->value) {
+                    if (tn->module == m && tn->name == name && tn->wrapper == b->value) {
                         jl_methtable_t *mt = tn->mt;
                         if (mt != NULL &&
                                 (jl_value_t*)mt != jl_nothing &&
@@ -414,14 +415,14 @@ static void jl_collect_extext_methods_from_mod(jl_array_t *s, jl_module_t *m)
                 }
                 else if (jl_is_module(b->value)) {
                     jl_module_t *child = (jl_module_t*)b->value;
-                    if (child != m && child->parent == m && child->name == b->name) {
+                    if (child != m && child->parent == m && child->name == name) {
                         // this is the original/primary binding for the submodule
                         jl_collect_extext_methods_from_mod(s, (jl_module_t*)b->value);
                     }
                 }
                 else if (jl_is_mtable(b->value)) {
                     jl_methtable_t *mt = (jl_methtable_t*)b->value;
-                    if (mt->module == m && mt->name == b->name) {
+                    if (mt->module == m && mt->name == name) {
                         // this is probably an external method table, so let's assume so
                         // as there is no way to precisely distinguish them,
                         // and the rest of this serializer does not bother
