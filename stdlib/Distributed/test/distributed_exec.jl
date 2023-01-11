@@ -668,6 +668,29 @@ wp = WorkerPool(workers())
 wp = WorkerPool(2:3)
 @test sort(unique(pmap(_->myid(), wp, 1:100))) == [2,3]
 
+# wait on worker pool
+wp = WorkerPool(2:2)
+w = take!(wp)
+
+# local call to _wait
+@test !isready(wp)
+t = @async wait(wp)
+@test !istaskdone(t)
+put!(wp, w)
+# avoid race condition
+sleep(0.1)
+@test istaskdone(t)
+
+# remote call to _wait
+take!(wp)
+@test !isready(wp)
+f = @spawnat w wait(wp)
+@test !isready(f)
+# avoid race condition
+sleep(0.1)
+put!(wp, w)
+@test isready(f)
+
 # CachingPool tests
 wp = CachingPool(workers())
 @test [1:100...] == pmap(x->x, wp, 1:100)
