@@ -236,7 +236,7 @@ end
                 state =  (   byte_dfa >>  state )            & UInt64(63)
                         | Shift to get the next state shift  | Mask the first six bits so that the new state is represended by the shift
             Would result in the state being 2 which is a shift of 12:
-                (byte_dfa    =  0b0000|000110|010010|010010|000110|001100|000110|001100|000000|000110|000110 
+                (byte_dfa    =  0b0000|000110|010010|010010|000110|001100|000110|001100|000000|000110|000110
                 >> 30    )   => 0b0000|000000|000000|000000|000000|000000|000110|010010|010010|000110|001100
                 & UInt64(63) => 0b0000|000000|000000|000000|000000|000000|000000|000000|000000|000000|001100
 =#
