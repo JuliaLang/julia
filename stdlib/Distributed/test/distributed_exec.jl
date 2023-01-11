@@ -677,19 +677,17 @@ w = take!(wp)
 t = @async wait(wp)
 @test !istaskdone(t)
 put!(wp, w)
-# avoid race condition
-sleep(0.1)
-@test istaskdone(t)
+status = timedwait(() -> istaskdone(t), 10)
+@test status == :ok
 
 # remote call to _wait
 take!(wp)
 @test !isready(wp)
 f = @spawnat w wait(wp)
 @test !isready(f)
-# avoid race condition
-sleep(0.1)
 put!(wp, w)
-@test isready(f)
+status = timedwait(() -> isready(f), 10)
+@test status == :ok
 
 # CachingPool tests
 wp = CachingPool(workers())
