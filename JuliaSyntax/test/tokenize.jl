@@ -769,10 +769,21 @@ end
     test_error(tok("0op",1),     K"ErrorInvalidNumericConstant")
     test_error(tok("--",1),      K"ErrorInvalidOperator")
 
+    @test toks("1e+")   == ["1e+"=>K"ErrorInvalidNumericConstant"]
+    @test toks("1.0e+") == ["1.0e+"=>K"ErrorInvalidNumericConstant"]
+    @test toks("0x.")   == ["0x."=>K"ErrorInvalidNumericConstant"]
+
     @test toks("1**2") == ["1"=>K"Integer", "**"=>K"Error**", "2"=>K"Integer"]
     @test toks("a<---b") == ["a"=>K"Identifier", "<---"=>K"ErrorInvalidOperator", "b"=>K"Identifier"]
     @test toks("a..+b") == ["a"=>K"Identifier", "..+"=>K"ErrorInvalidOperator", "b"=>K"Identifier"]
     @test toks("a..−b") == ["a"=>K"Identifier", "..−"=>K"ErrorInvalidOperator", "b"=>K"Identifier"]
+
+    @test toks("1.+2") == ["1."=>K"ErrorAmbiguousNumericConstant", "+"=>K"+", "2"=>K"Integer"]
+    @test toks("1.+ ") == ["1."=>K"ErrorAmbiguousNumericConstant", "+"=>K"+", " "=>K"Whitespace"]
+    @test toks("1.⤋")  == ["1."=>K"ErrorAmbiguousNumericConstant", "⤋"=>K"⤋"]
+    @test toks("1.?")  == ["1."=>K"ErrorAmbiguousNumericConstant", "?"=>K"?"]
+
+    @test toks("\x00") == ["\x00"=>K"ErrorUnknownCharacter"]
 end
 
 @testset "hat suffix" begin
@@ -784,21 +795,6 @@ end
     s = "+¹"
     @test is_operator(tok(s, 1).kind)
     @test untokenize(collect(tokenize(s))[1], s) == s
-end
-
-@testset "invalid float juxt" begin
-    s = "1.+2"
-    @test tok(s, 1).kind == K"error"
-    @test is_operator(tok(s, 2).kind)
-    test_roundtrip("1234.+1", K"error", "1234.")
-    @test tok("1.+ ").kind == K"error"
-    @test tok("1.⤋").kind  == K"error"
-    @test tok("1.?").kind == K"error"
-end
-
-@testset "invalid hexadecimal" begin
-    s = "0x."
-    tok(s, 1).kind === K"error"
 end
 
 @testset "circ arrow right op" begin
