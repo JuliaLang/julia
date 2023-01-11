@@ -487,7 +487,7 @@ end |> Core.Compiler.is_inaccessiblememonly
 @test Base.infer_effects() do
     ConstantType{Any}()
 end |> Core.Compiler.is_inaccessiblememonly
-@test_broken Base.infer_effects() do
+@test Base.infer_effects() do
     constant_global_nonisbits
 end |> Core.Compiler.is_inaccessiblememonly
 @test Base.infer_effects() do
@@ -708,6 +708,13 @@ end
 @test Base.infer_effects(Tuple{Nothing}) do x
     WrapperOneField{typeof(x)}.instance
 end |> Core.Compiler.is_total
+@test Base.infer_effects(Tuple{WrapperOneField{Float64}, Symbol}) do w, s
+    getfield(w, s)
+end |> Core.Compiler.is_foldable
+@test Core.Compiler.getfield_notundefined(WrapperOneField{Float64}, Symbol)
+@test Base.infer_effects(Tuple{WrapperOneField{Symbol}, Symbol}) do w, s
+    getfield(w, s)
+end |> Core.Compiler.is_foldable
 
 # Flow-sensitive consistenct for _typevar
 @test Base.infer_effects() do
