@@ -2357,6 +2357,11 @@ end
                Tuple{Type{Vector{Union{T, R}}}, Matrix{Union{T, R}}} where {R<:Real, T<:Real},
                Union{})
 
+#issue 26487
+@testintersect(Tuple{Type{Tuple{T,Val{T}}}, Val{T}} where T,
+               Tuple{Type{Tuple{Val{T},T}}, Val{T}} where T,
+               Union{})
+
 @testset "known subtype/intersect issue" begin
     #issue 45874
     # Causes a hang due to jl_critical_error calling back into malloc...
@@ -2383,9 +2388,6 @@ end
 
     #issue 33137
     @test_broken (Tuple{Q,Int} where Q<:Int) <: Tuple{T,T} where T
-
-    #issue 26487
-    @test_broken typeintersect(Tuple{Type{Tuple{T,Val{T}}}, Val{T}} where T, Tuple{Type{Tuple{Val{T},T}}, Val{T}} where T) <: Any
 
     # issue 24333
     @test_broken (Type{Union{Ref,Cvoid}} <: Type{Union{T,Cvoid}} where T)

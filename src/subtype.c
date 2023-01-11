@@ -3249,7 +3249,15 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                     return jl_bottom_type;
                 }
                 int ccheck;
-                if (yub == xub ||
+                if (xlb == xub && ylb == yub &&
+                    jl_has_typevar(xlb, (jl_tvar_t *)y) &&
+                    jl_has_typevar(ylb, (jl_tvar_t *)x)) {
+                    // specical case for e.g.
+                    // 1) Val{Y}<:X<:Val{Y} && Val{X}<:Y<:Val{X}
+                    // 2) Y<:X<:Y && Val{X}<:Y<:Val{X} => Val{Y}<:Y<:Val{Y}
+                    ccheck = 0;
+                }
+                else if (yub == xub ||
                     (subtype_by_bounds(xlb, yub, e) && subtype_by_bounds(ylb, xub, e))) {
                     ccheck = 1;
                 }
