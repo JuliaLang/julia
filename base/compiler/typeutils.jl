@@ -336,11 +336,13 @@ end
 is_consistent_argtype(@nospecialize ty) = is_consistent_type(widenconst(ignorelimited(ty)))
 is_consistent_type(@nospecialize ty) = _is_consistent_type(unwrap_unionall(ty))
 function _is_consistent_type(@nospecialize ty)
+    ty = unwrap_unionall(ty)
     if isa(ty, Union)
         return is_consistent_type(ty.a) && is_consistent_type(ty.b)
+    elseif isa(ty, DataType)
+        return datatype_isidentityfree(ty)
     end
-    # N.B. String and Symbol are mutable, but also egal always, and so they never be inconsistent
-    return ty === String || ty === Symbol || isbitstype(ty)
+    return false
 end
 
 is_immutable_argtype(@nospecialize ty) = is_immutable_type(widenconst(ignorelimited(ty)))
