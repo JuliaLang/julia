@@ -1548,6 +1548,9 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     // create and initialize new type
     ndt = jl_new_uninitialized_datatype();
     ndt->isprimitivetype = dt->isprimitivetype;
+    // Usually dt won't have ismutationfree set at this point, but it is
+    // overriden for `Type`, which we handle here.
+    ndt->ismutationfree = dt->ismutationfree;
     // associate these parameters with the new type on
     // the stack, in case one of its field types references it.
     top.tt = (jl_datatype_t*)ndt;
@@ -2072,7 +2075,7 @@ void jl_init_types(void) JL_GC_DISABLED
             jl_any_type, // instance
             jl_any_type /*jl_voidpointer_type*/,
             jl_any_type /*jl_int32_type*/,
-            jl_any_type /*jl_uint8_type*/);
+            jl_any_type /*jl_uint16_type*/);
     const static uint32_t datatype_constfields[1] = { 0x00000057 }; // (1<<0)|(1<<1)|(1<<2)|(1<<4)|(1<<6)
     const static uint32_t datatype_atomicfields[1] = { 0x00000028 }; // (1<<3)|(1<<5)
     jl_datatype_type->name->constfields = datatype_constfields;
@@ -2761,7 +2764,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_uint8pointer_type = (jl_datatype_t*)jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_uint8_type);
     jl_svecset(jl_datatype_type->types, 5, jl_voidpointer_type);
     jl_svecset(jl_datatype_type->types, 6, jl_int32_type);
-    jl_svecset(jl_datatype_type->types, 7, jl_uint8_type);
+    jl_svecset(jl_datatype_type->types, 7, jl_uint16_type);
     jl_svecset(jl_typename_type->types, 1, jl_module_type);
     jl_svecset(jl_typename_type->types, 3, jl_voidpointer_type);
     jl_svecset(jl_typename_type->types, 4, jl_voidpointer_type);
@@ -2796,6 +2799,20 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_compute_field_offsets(jl_unionall_type);
     jl_compute_field_offsets(jl_simplevector_type);
     jl_compute_field_offsets(jl_symbol_type);
+
+    // override ismutationfree for builtin types that are mutable for identity
+    jl_string_type->ismutationfree = jl_string_type->isidentityfree = 1;
+    jl_symbol_type->ismutationfree = jl_symbol_type->isidentityfree = 1;
+    jl_simplevector_type->ismutationfree = jl_simplevector_type->isidentityfree = 1;
+    jl_datatype_type->ismutationfree = 1;
+    ((jl_datatype_t*)jl_type_type->body)->ismutationfree = 1;
+
+    // Technically not ismutationfree, but there's a separate system to deal
+    // with mutations for global state.
+    jl_module_type->ismutationfree = 1;
+
+    // Array's mutable data is hidden, so we need to override it
+    ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_array_type))->ismutationfree = 0;
 
     // override the preferred layout for a couple types
     jl_lineinfonode_type->name->mayinlinealloc = 0; // FIXME: assumed to be a pointer by codegen
