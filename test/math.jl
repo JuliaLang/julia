@@ -1352,9 +1352,9 @@ end
 
 @testset "pow" begin
     # tolerance by type for regular powers
-    POW_TOLS = Dict(Float16=>[.51, .51, 2.0, 1.5],
-                    Float32=>[.51, .51, 2.0, 1.5],
-                    Float64=>[1.0, 1.5, 2.0, 1.5])
+    POW_TOLS = Dict(Float16=>[.51, .51, .51, 2.0, 1.5],
+                    Float32=>[.51, .51, .51, 2.0, 1.5],
+                    Float64=>[.55, 0.8, 1.5, 2.0, 1.5])
     for T in (Float16, Float32, Float64)
         for x in (0.0, -0.0, 1.0, 10.0, 2.0, Inf, NaN, -Inf, -NaN)
             for y in (0.0, -0.0, 1.0, -3.0,-10.0 , Inf, NaN, -Inf, -NaN)
@@ -1372,9 +1372,11 @@ end
             got, expected = x^y, widen(x)^y
             if isfinite(eps(T(expected)))
                 if y == T(-2) # unfortunately x^-2 is less accurate for performance reasons.
-                    @test abs(expected-got) <= POW_TOLS[T][3]*eps(T(expected)) || (x,y)
-                elseif y == T(3) # unfortunately x^3 is less accurate for performance reasons.
                     @test abs(expected-got) <= POW_TOLS[T][4]*eps(T(expected)) || (x,y)
+                elseif y == T(3) # unfortunately x^3 is less accurate for performance reasons.
+                    @test abs(expected-got) <= POW_TOLS[T][5]*eps(T(expected)) || (x,y)
+                elseif issubnormal(got)
+                    @test abs(expected-got) <= POW_TOLS[T][2]*eps(T(expected)) || (x,y)
                 else
                     @test abs(expected-got) <= POW_TOLS[T][1]*eps(T(expected)) || (x,y)
                 end
@@ -1385,7 +1387,7 @@ end
             x=rand(T)*floatmin(T); y=rand(T)*3-T(1.2)
             got, expected = x^y, widen(x)^y
             if isfinite(eps(T(expected)))
-                @test abs(expected-got) <= POW_TOLS[T][2]*eps(T(expected)) || (x,y)
+                @test abs(expected-got) <= POW_TOLS[T][3]*eps(T(expected)) || (x,y)
             end
         end
         # test (-x)^y for y larger than typemax(Int)
