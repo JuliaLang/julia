@@ -989,8 +989,8 @@ QuickerSort(r::OrdinalRange, next::Algorithm=SMALL_ALGORITHM) = QuickerSort(firs
 # sets `pivot_dest[pivot_index+pivot_index_offset] = pivot` and returns that index.
 function partition!(t::AbstractVector, lo::Integer, hi::Integer, offset::Integer, o::Ordering,
         v::AbstractVector, rev::Bool, pivot_dest::AbstractVector, pivot_index_offset::Integer)
-    # Ideally we would use `pivot_index = rand(lo:hi)`, but a dependency on Random.jl
-    # complicates things and some folks object to mutating the global RNG in sorting.
+    # Ideally we would use `pivot_index = rand(lo:hi)`, but that requires Random.jl
+    # and would mutate the global RNG in sorting.
     pivot_index = typeof(hi-lo)(hash(lo) % (hi-lo+1)) + lo
     @inbounds begin
         pivot = v[pivot_index]
