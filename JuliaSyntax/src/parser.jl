@@ -3181,6 +3181,11 @@ function parse_string(ps::ParseState, raw::Bool)
         k = kind(t)
         if k == K"$"
             @assert !raw  # The lexer detects raw strings separately
+            if prev_chunk_newline
+                # """\n$x\n a"""  ==>  (string-s x "\n" " a")
+                indent_ref_i = first_byte(t)
+                indent_ref_len = 0
+            end
             bump(ps, TRIVIA_FLAG)
             k = peek(ps)
             if k == K"("
