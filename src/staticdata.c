@@ -69,17 +69,27 @@ External links:
 - loc/0 in relocs_list
 
 */
+#include <asm-generic/errno.h>
+#include <stddef.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/file.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h> // printf
 #include <inttypes.h> // PRIxPTR
-
+#include <zstd.h>
+#include <zstd_errors.h>
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_gcext.h"
 #include "builtin_proto.h"
 #include "processor.h"
 #include "serialize.h"
+#include "support/dtypes.h"
+#include "support/ios.h"
 
 #ifndef _OS_WINDOWS_
 #include <dlfcn.h>
@@ -2259,7 +2269,8 @@ static void jl_save_system_image_to_stream(ios_t *f,
     htable_new(&nullptrs, 0);
     arraylist_new(&object_worklist, 0);
     arraylist_new(&serialization_queue, 0);
-    ios_t sysimg, const_data, symbols, relocs, gvar_record, fptr_record;
+    ios_t sysimg, const_data, symbols, relocs, gvar_record, fptr_record, full_data;
+    ios_mem(&full_data,0);
     ios_mem(&sysimg, 0);
     ios_mem(&const_data, 0);
     ios_mem(&symbols, 0);
@@ -2405,46 +2416,47 @@ static void jl_save_system_image_to_stream(ios_t *f,
     htable_free(&s.callers_with_edges);
 
     // step 3: combine all of the sections into one file
-    assert(ios_pos(f) % JL_CACHE_BYTE_ALIGNMENT == 0);
-    write_uint(f, sysimg.size - sizeof(uintptr_t));
+    assert(ios_pos(&full_data) % JL_CACHE_BYTE_ALIGNMENT == 0);
+    // write_uint(&full_data, 123456789);
+    write_uint(&full_data, sysimg.size - sizeof(uintptr_t));
     ios_seek(&sysimg, sizeof(uintptr_t));
-    ios_copyall(f, &sysimg);
+    ios_copyall(&full_data, &sysimg);
     ios_close(&sysimg);
 
-    write_uint(f, const_data.size);
+    write_uint(&full_data, const_data.size);
     // realign stream to max-alignment for data
-    write_padding(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(f));
+    write_padding(&full_data, LLT_ALIGN(ios_pos(&full_data), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(&full_data));
     ios_seek(&const_data, 0);
-    ios_copyall(f, &const_data);
+    ios_copyall(&full_data, &const_data);
     ios_close(&const_data);
 
-    write_uint(f, symbols.size);
-    write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
+    write_uint(&full_data, symbols.size);
+    write_padding(&full_data, LLT_ALIGN(ios_pos(&full_data), 8) - ios_pos(&full_data));
     ios_seek(&symbols, 0);
-    ios_copyall(f, &symbols);
+    ios_copyall(&full_data, &symbols);
     ios_close(&symbols);
 
-    write_uint(f, relocs.size);
-    write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
+    write_uint(&full_data, relocs.size);
+    write_padding(&full_data, LLT_ALIGN(ios_pos(&full_data), 8) - ios_pos(&full_data));
     ios_seek(&relocs, 0);
-    ios_copyall(f, &relocs);
+    ios_copyall(&full_data, &relocs);
     ios_close(&relocs);
 
-    write_uint(f, gvar_record.size);
-    write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
+    write_uint(&full_data, gvar_record.size);
+    write_padding(&full_data, LLT_ALIGN(ios_pos(&full_data), 8) - ios_pos(&full_data));
     ios_seek(&gvar_record, 0);
-    ios_copyall(f, &gvar_record);
+    ios_copyall(&full_data, &gvar_record);
     ios_close(&gvar_record);
 
-    write_uint(f, fptr_record.size);
-    write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
+    write_uint(&full_data, fptr_record.size);
+    write_padding(&full_data, LLT_ALIGN(ios_pos(&full_data), 8) - ios_pos(&full_data));
     ios_seek(&fptr_record, 0);
-    ios_copyall(f, &fptr_record);
+    ios_copyall(&full_data, &fptr_record);
     ios_close(&fptr_record);
 
     { // step 4: record locations of special roots
-        write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
-        s.s = f;
+        write_padding(&full_data, LLT_ALIGN(ios_pos(&full_data), 8) - ios_pos(&full_data));
+        s.s = &full_data;
         if (worklist == NULL) {
             size_t i;
             for (i = 0; tags[i] != NULL; i++) {
@@ -2453,9 +2465,9 @@ static void jl_save_system_image_to_stream(ios_t *f,
             }
             jl_write_value(&s, jl_global_roots_table);
             jl_write_value(&s, s.ptls->root_task->tls);
-            write_uint32(f, jl_get_gs_ctr());
-            write_uint(f, jl_atomic_load_acquire(&jl_world_counter));
-            write_uint(f, jl_typeinf_world);
+            write_uint32(&full_data, jl_get_gs_ctr());
+            write_uint(&full_data, jl_atomic_load_acquire(&jl_world_counter));
+            write_uint(&full_data, jl_typeinf_world);
         }
         else {
             jl_write_value(&s, worklist);
@@ -2474,23 +2486,36 @@ static void jl_save_system_image_to_stream(ios_t *f,
             jl_write_value(&s, ext_targets);
             jl_write_value(&s, edges);
         }
-        write_uint32(f, jl_array_len(s.link_ids_gctags));
-        ios_write(f, (char*)jl_array_data(s.link_ids_gctags), jl_array_len(s.link_ids_gctags)*sizeof(uint64_t));
-        write_uint32(f, jl_array_len(s.link_ids_relocs));
-        ios_write(f, (char*)jl_array_data(s.link_ids_relocs), jl_array_len(s.link_ids_relocs)*sizeof(uint64_t));
-        write_uint32(f, jl_array_len(s.link_ids_gvars));
-        ios_write(f, (char*)jl_array_data(s.link_ids_gvars), jl_array_len(s.link_ids_gvars)*sizeof(uint64_t));
-        write_uint32(f, jl_array_len(s.link_ids_external_fnvars));
-        ios_write(f, (char*)jl_array_data(s.link_ids_external_fnvars), jl_array_len(s.link_ids_external_fnvars)*sizeof(uint64_t));
-        write_uint32(f, external_fns_begin);
+        write_uint32(&full_data, jl_array_len(s.link_ids_gctags));
+        ios_write(&full_data, (char*)jl_array_data(s.link_ids_gctags), jl_array_len(s.link_ids_gctags)*sizeof(uint64_t));
+        write_uint32(&full_data, jl_array_len(s.link_ids_relocs));
+        ios_write(&full_data, (char*)jl_array_data(s.link_ids_relocs), jl_array_len(s.link_ids_relocs)*sizeof(uint64_t));
+        write_uint32(&full_data, jl_array_len(s.link_ids_gvars));
+        ios_write(&full_data, (char*)jl_array_data(s.link_ids_gvars), jl_array_len(s.link_ids_gvars)*sizeof(uint64_t));
+        write_uint32(&full_data, jl_array_len(s.link_ids_external_fnvars));
+        ios_write(&full_data, (char*)jl_array_data(s.link_ids_external_fnvars), jl_array_len(s.link_ids_external_fnvars)*sizeof(uint64_t));
+        write_uint32(&full_data, external_fns_begin);
         jl_write_arraylist(s.s, &s.ccallable_list);
     }
     // Write the build_id key
     uint64_t buildid = 0;
     if (worklist)
         buildid = jl_worklist_key(worklist);
-    write_uint32(f, buildid >> 32);
-    write_uint32(f, buildid & (((uint64_t)1 << 32) - 1));
+    write_uint32(&full_data, buildid >> 32);
+    write_uint32(&full_data, buildid & (((uint64_t)1 << 32) - 1));
+
+    size_t c_buff_size = ZSTD_compressBound(full_data.size);
+    void* c_buff = malloc(c_buff_size);
+    size_t const c_size = ZSTD_compress(c_buff, c_buff_size, full_data.buf, full_data.size, 5);
+    uint64_t temp_cache_id = buildid; //name of the file to cache the decompressed data on load
+    write_uint64(f, temp_cache_id);
+    write_uint64(f, full_data.size);
+    write_uint64(f, c_size);
+    ios_write(f, c_buff, c_size);
+    ios_seek(&full_data, 0);
+    // jl_printf(JL_STDOUT,"%s\n", ZSTD_getErrorString(ZSTD_getErrorCode(cSize)));
+    free(c_buff);
+    ios_close(&full_data);
 
     assert(object_worklist.len == 0);
     arraylist_free(&object_worklist);
@@ -2672,6 +2697,38 @@ JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
 // }
 #endif
 
+
+static void jl_store_cache_data(void *data, size_t r_size, size_t c_size, int fd)
+{
+    if (flock(fd, LOCK_EX|LOCK_NB)!=0)
+        return;
+    ftruncate(fd, r_size);
+    void *map = mmap(0, r_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    size_t d_size = ZSTD_decompress(map, r_size, data, c_size);
+    assert(d_size == r_size);
+    msync(map, d_size, MS_SYNC);
+    munmap(map, d_size);
+    flock(fd, LOCK_UN);
+}
+
+static void* jl_get_cache(void *data, size_t r_size, size_t c_size, uint64_t cache_id)
+{
+    char buffer [100];
+    snprintf(buffer, 100, "/tmp/pkgcache%ld.data", cache_id);
+    int fd = open(buffer, O_RDWR | O_CREAT, (mode_t)0600);
+    struct stat filestat;
+    int should_write = (fstat(fd, &filestat) != 0) || (filestat.st_size < r_size);
+    if (should_write)
+        jl_store_cache_data(data, r_size, c_size, fd);
+    flock(fd, LOCK_SH);
+    void *map = mmap(0, r_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+    flock(fd, LOCK_UN);
+    close(fd);
+    return map;
+}
+
+
+
 static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl_array_t *depmods, uint64_t checksum,
                                 /* outputs */    jl_array_t **restored,         jl_array_t **init_order,
                                                  jl_array_t **extext_methods,
@@ -2699,46 +2756,61 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     htable_t new_dt_objs;
     htable_new(&new_dt_objs, 0);
     arraylist_new(&deser_sym, 0);
+    uint64_t temp_cache_id = read_uint64(f);
 
+    size_t storedr_size= read_uint64(f);
+    size_t c_size= read_uint64(f);
+
+    size_t r_size = ZSTD_getFrameContentSize(f->buf + f->bpos, c_size);
+    assert(storedr_size == r_size);
+    // void* rBuff = jl_gc_perm_alloc(rSize, 0, 64, 0);
+    void *data = jl_get_cache(f->buf + f->bpos, r_size, c_size, temp_cache_id);
+    ios_t full_data;
+    ios_static_buffer(&full_data, data, r_size);
+
+
+    // jl_printf(JL_STDOUT,"%s\n", ZSTD_getErrorString(ZSTD_getErrorCode(rSize)));
+    // jl_printf(JL_STDOUT,"%s\n", ZSTD_getErrorString(ZSTD_getErrorCode(dSize)));
     // step 1: read section map
-    assert(ios_pos(f) == 0 && f->bm == bm_mem);
-    size_t sizeof_sysimg = read_uint(f);
-    ios_static_buffer(&sysimg, f->buf, sizeof_sysimg + sizeof(uintptr_t));
-    ios_skip(f, sizeof_sysimg);
+    // assert(ios_pos(f) == 0 && f->bm == bm_mem);
+    ios_seek(&full_data, 0);
+    size_t sizeof_sysimg = read_uint(&full_data);
+    ios_static_buffer(&sysimg, full_data.buf, sizeof_sysimg + sizeof(uintptr_t));
+    ios_skip(&full_data, sizeof_sysimg);
 
-    size_t sizeof_constdata = read_uint(f);
+    size_t sizeof_constdata = read_uint(&full_data);
     // realign stream to max-alignment for data
-    ios_seek(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT));
-    ios_static_buffer(&const_data, f->buf + f->bpos, sizeof_constdata);
-    ios_skip(f, sizeof_constdata);
+    ios_seek(&full_data, LLT_ALIGN(ios_pos(&full_data), JL_CACHE_BYTE_ALIGNMENT));
+    ios_static_buffer(&const_data, full_data.buf + full_data.bpos, sizeof_constdata);
+    ios_skip(&full_data, sizeof_constdata);
 
-    size_t sizeof_symbols = read_uint(f);
-    ios_seek(f, LLT_ALIGN(ios_pos(f), 8));
-    ios_static_buffer(&symbols, f->buf + f->bpos, sizeof_symbols);
-    ios_skip(f, sizeof_symbols);
+    size_t sizeof_symbols = read_uint(&full_data);
+    ios_seek(&full_data, LLT_ALIGN(ios_pos(&full_data), 8));
+    ios_static_buffer(&symbols, full_data.buf + full_data.bpos, sizeof_symbols);
+    ios_skip(&full_data, sizeof_symbols);
 
-    size_t sizeof_relocations = read_uint(f);
-    ios_seek(f, LLT_ALIGN(ios_pos(f), 8));
-    assert(!ios_eof(f));
-    ios_static_buffer(&relocs, f->buf + f->bpos, sizeof_relocations);
-    ios_skip(f, sizeof_relocations);
+    size_t sizeof_relocations = read_uint(&full_data);
+    ios_seek(&full_data, LLT_ALIGN(ios_pos(&full_data), 8));
+    assert(!ios_eof(&full_data));
+    ios_static_buffer(&relocs, full_data.buf + full_data.bpos, sizeof_relocations);
+    ios_skip(&full_data, sizeof_relocations);
 
-    size_t sizeof_gvar_record = read_uint(f);
-    ios_seek(f, LLT_ALIGN(ios_pos(f), 8));
-    assert(!ios_eof(f));
-    ios_static_buffer(&gvar_record, f->buf + f->bpos, sizeof_gvar_record);
-    ios_skip(f, sizeof_gvar_record);
+    size_t sizeof_gvar_record = read_uint(&full_data);
+    ios_seek(&full_data, LLT_ALIGN(ios_pos(&full_data), 8));
+    assert(!ios_eof(&full_data));
+    ios_static_buffer(&gvar_record, full_data.buf + full_data.bpos, sizeof_gvar_record);
+    ios_skip(&full_data, sizeof_gvar_record);
 
-    size_t sizeof_fptr_record = read_uint(f);
-    ios_seek(f, LLT_ALIGN(ios_pos(f), 8));
-    assert(!ios_eof(f));
-    ios_static_buffer(&fptr_record, f->buf + f->bpos, sizeof_fptr_record);
-    ios_skip(f, sizeof_fptr_record);
+    size_t sizeof_fptr_record = read_uint(&full_data);
+    ios_seek(&full_data, LLT_ALIGN(ios_pos(&full_data), 8));
+    assert(!ios_eof(&full_data));
+    ios_static_buffer(&fptr_record, full_data.buf + full_data.bpos, sizeof_fptr_record);
+    ios_skip(&full_data, sizeof_fptr_record);
 
     // step 2: get references to special values
-    ios_seek(f, LLT_ALIGN(ios_pos(f), 8));
-    assert(!ios_eof(f));
-    s.s = f;
+    ios_seek(&full_data, LLT_ALIGN(ios_pos(&full_data), 8));
+    assert(!ios_eof(&full_data));
+    s.s = &full_data;
     uintptr_t offset_restored = 0, offset_init_order = 0, offset_extext_methods = 0, offset_new_specializations = 0, offset_method_roots_list = 0;
     uintptr_t offset_ext_targets = 0, offset_edges = 0;
     if (!s.incremental) {
@@ -2756,9 +2828,9 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         jl_init_int32_int64_cache();
         jl_init_box_caches();
 
-        uint32_t gs_ctr = read_uint32(f);
-        jl_atomic_store_release(&jl_world_counter, read_uint(f));
-        jl_typeinf_world = read_uint(f);
+        uint32_t gs_ctr = read_uint32(&full_data);
+        jl_atomic_store_release(&jl_world_counter, read_uint(&full_data));
+        jl_typeinf_world = read_uint(&full_data);
         jl_set_gs_ctr(gs_ctr);
     }
     else {
@@ -2771,27 +2843,27 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         offset_ext_targets = jl_read_offset(&s);
         offset_edges = jl_read_offset(&s);
     }
-    size_t nlinks_gctags = read_uint32(f);
+    size_t nlinks_gctags = read_uint32(&full_data);
     if (nlinks_gctags > 0) {
         s.link_ids_gctags = jl_alloc_array_1d(jl_array_uint64_type, nlinks_gctags);
-        ios_read(f, (char*)jl_array_data(s.link_ids_gctags), nlinks_gctags * sizeof(uint64_t));
+        ios_read(&full_data, (char*)jl_array_data(s.link_ids_gctags), nlinks_gctags * sizeof(uint64_t));
     }
-    size_t nlinks_relocs = read_uint32(f);
+    size_t nlinks_relocs = read_uint32(&full_data);
     if (nlinks_relocs > 0) {
         s.link_ids_relocs = jl_alloc_array_1d(jl_array_uint64_type, nlinks_relocs);
-        ios_read(f, (char*)jl_array_data(s.link_ids_relocs), nlinks_relocs * sizeof(uint64_t));
+        ios_read(&full_data, (char*)jl_array_data(s.link_ids_relocs), nlinks_relocs * sizeof(uint64_t));
     }
-    size_t nlinks_gvars = read_uint32(f);
+    size_t nlinks_gvars = read_uint32(&full_data);
     if (nlinks_gvars > 0) {
         s.link_ids_gvars = jl_alloc_array_1d(jl_array_uint64_type, nlinks_gvars);
-        ios_read(f, (char*)jl_array_data(s.link_ids_gvars), nlinks_gvars * sizeof(uint64_t));
+        ios_read(&full_data, (char*)jl_array_data(s.link_ids_gvars), nlinks_gvars * sizeof(uint64_t));
     }
-    size_t nlinks_external_fnvars = read_uint32(f);
+    size_t nlinks_external_fnvars = read_uint32(&full_data);
     if (nlinks_external_fnvars > 0) {
         s.link_ids_external_fnvars = jl_alloc_array_1d(jl_array_uint64_type, nlinks_external_fnvars);
-        ios_read(f, (char*)jl_array_data(s.link_ids_external_fnvars), nlinks_external_fnvars * sizeof(uint64_t));
+        ios_read(&full_data, (char*)jl_array_data(s.link_ids_external_fnvars), nlinks_external_fnvars * sizeof(uint64_t));
     }
-    uint32_t external_fns_begin = read_uint32(f);
+    uint32_t external_fns_begin = read_uint32(&full_data);
     jl_read_arraylist(s.s, ccallable_list ? ccallable_list : &s.ccallable_list);
     if (s.incremental) {
         assert(restored && init_order && extext_methods && new_specializations && method_roots_list && ext_targets && edges);
@@ -3185,12 +3257,13 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     arraylist_push(&jl_image_relocs, (void*)relocs_base);
 
     // jl_printf(JL_STDOUT, "%ld blobs to link against\n", jl_linkage_blobs.len >> 1);
-    uint64_t buildid = (((uint64_t)read_uint32(f)) << 32) | read_uint32(f);
+    uint64_t buildid = (((uint64_t)read_uint32(&full_data)) << 32) | read_uint32(&full_data);
     if (!jl_build_ids)
         jl_build_ids = jl_alloc_array_1d(jl_array_uint64_type, 0);
     jl_array_grow_end(jl_build_ids, 1);
     uint64_t *build_id_data = (uint64_t*)jl_array_data(jl_build_ids);
     build_id_data[jl_array_len(jl_build_ids)-1] = buildid;
+    ios_close(&full_data);
     jl_gc_enable(en);
 }
 
