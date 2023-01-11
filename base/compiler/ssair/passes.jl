@@ -1203,7 +1203,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
     # Check #3
     dominates(domtree, finalizer_bb, bb_insert_block) || return nothing
 
-    if !inlining.params.assume_fatal_throw
+    if !OptimizationParams(inlining.interp).assume_fatal_throw
         # Collect all reachable blocks between the finalizer registration and the
         # insertion point
         blocks = finalizer_bb == bb_insert_block ? Int[finalizer_bb] :
