@@ -12,19 +12,6 @@ include("tokenize_utils.jl")
 #-------------------------------------------------------------------------------
 # Tokens
 
-# Error kind => description
-TOKEN_ERROR_DESCRIPTION = Dict{Kind, String}(
-    K"ErrorEofMultiComment" => "unterminated multi-line comment #= ... =#",
-    K"ErrorInvalidNumericConstant" => "invalid numeric constant",
-    K"ErrorInvalidInterpolationTerminator" => "interpolated variable ends with invalid character; use `\$(...)` instead",
-    K"ErrorNumericOverflow"=>"overflow in numeric literal",
-    K"ErrorInvalidEscapeSequence"=>"invalid string escape sequence",
-    K"ErrorOverLongCharacter"=>"character literal contains multiple characters",
-    K"ErrorInvalidOperator" => "invalid operator",
-    K"Error**" => "use `x^y` instead of `x**y` for exponentiation, and `x...` instead of `**x` for splatting",
-    K"error" => "unknown error token",
-)
-
 struct Token
     kind::Kind
     # Offsets into a string or buffer
@@ -283,11 +270,11 @@ function emit(l::Lexer, kind::Kind, maybe_op=true)
 end
 
 """
-    emit_error(l::Lexer, err::Kind=K"error")
+    emit_error(l::Lexer, err::Kind)
 
 Returns an `K"error"` token with error `err` and starts a new `Token`.
 """
-function emit_error(l::Lexer, err::Kind = K"error")
+function emit_error(l::Lexer, err::Kind)
     @assert is_error(err)
     return emit(l, err)
 end
@@ -387,7 +374,7 @@ function _next_token(l::Lexer, c)
     elseif (k = get(UNICODE_OPS, c, K"error")) != K"error"
         return emit(l, k)
     else
-        emit_error(l)
+        emit_error(l, K"ErrorUnknownCharacter")
     end
 end
 
@@ -785,7 +772,7 @@ function lex_digit(l::Lexer, kind)
             return emit_error(l, K"ErrorInvalidNumericConstant")
         elseif is_operator_start_char(ppc) && ppc !== ':'
             readchar(l)
-            return emit_error(l)
+            return emit_error(l, K"ErrorAmbiguousNumericConstant")
         elseif (!(isdigit(ppc) ||
             iswhitespace(ppc) ||
             is_identifier_start_char(ppc)
@@ -824,7 +811,7 @@ function lex_digit(l::Lexer, kind)
                     return emit_error(l, K"ErrorInvalidNumericConstant")
                 end
             else
-                return emit_error(l)
+                return emit_error(l, K"ErrorInvalidNumericConstant")
             end
         elseif pc == '.' && (is_identifier_start_char(ppc) || ppc == EOF_CHAR)
             readchar(l)
@@ -842,7 +829,7 @@ function lex_digit(l::Lexer, kind)
                 return emit_error(l, K"ErrorInvalidNumericConstant")
             end
         else
-            return emit_error(l)
+            return emit_error(l, K"ErrorInvalidNumericConstant")
         end
     elseif position(l) - startpos(l) == 1 && l.chars[1] == '0'
         kind == K"Integer"

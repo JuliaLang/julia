@@ -16,10 +16,12 @@ const _kind_names =
         # Tokenization errors
         "ErrorEofMultiComment"
         "ErrorInvalidNumericConstant"
+        "ErrorAmbiguousNumericConstant"
         "ErrorInvalidInterpolationTerminator"
         "ErrorNumericOverflow"
         "ErrorInvalidEscapeSequence"
         "ErrorOverLongCharacter"
+        "ErrorUnknownCharacter"
         # Generic error
         "error"
     "END_ERRORS"
@@ -1014,10 +1016,12 @@ const _nonunique_kind_names = Set([
 
     K"ErrorEofMultiComment"
     K"ErrorInvalidNumericConstant"
+    K"ErrorAmbiguousNumericConstant"
     K"ErrorInvalidInterpolationTerminator"
     K"ErrorNumericOverflow"
     K"ErrorInvalidEscapeSequence"
     K"ErrorOverLongCharacter"
+    K"ErrorUnknownCharacter"
     K"ErrorInvalidOperator"
 
     K"Integer"
@@ -1053,6 +1057,20 @@ function untokenize(k::Kind; unique=true)
     end
 end
 
+# Error kind => description
+_token_error_descriptions = Dict{Kind, String}(
+    K"ErrorEofMultiComment" => "unterminated multi-line comment #= ... =#",
+    K"ErrorInvalidNumericConstant" => "invalid numeric constant",
+    K"ErrorAmbiguousNumericConstant" => "ambiguous `.` syntax; add whitespace to clarify (eg `1.+2` might be `1.0+2` or `1 .+ 2`)",
+    K"ErrorInvalidInterpolationTerminator" => "interpolated variable ends with invalid character; use `\$(...)` instead",
+    K"ErrorNumericOverflow"=>"overflow in numeric literal",
+    K"ErrorInvalidEscapeSequence"=>"invalid string escape sequence",
+    K"ErrorOverLongCharacter"=>"character literal contains multiple characters",
+    K"ErrorUnknownCharacter"=>"unknown unicode character",
+    K"ErrorInvalidOperator" => "invalid operator",
+    K"Error**" => "use `x^y` instead of `x**y` for exponentiation, and `x...` instead of `**x` for splatting",
+    K"error" => "unknown error token",
+)
 
 #-------------------------------------------------------------------------------
 # Predicates
