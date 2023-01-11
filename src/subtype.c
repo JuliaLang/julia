@@ -2630,8 +2630,10 @@ static jl_value_t *omit_bad_union(jl_value_t *u, jl_tvar_t *t)
         ub = omit_bad_union(ub, t);
         body = omit_bad_union(body, t);
         if (ub != NULL && body != NULL && !jl_has_typevar(var->lb, t)) {
-            if (ub != var->ub)
+            if (ub != var->ub) {
                 var = jl_new_typevar(var->name, var->lb, ub);
+                body = jl_substitute_var(body, ((jl_unionall_t *)u)->var, (jl_value_t *)var);
+            }
             res = jl_new_struct(jl_unionall_type, var, body);
         }
         JL_GC_POP();
