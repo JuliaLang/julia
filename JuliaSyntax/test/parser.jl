@@ -816,6 +816,7 @@ tests = [
         ((v=v"1.8",), "[\n  ;; \n ]")  =>  "(ncat-2)"
         ((v=v"1.7",), "[;;]")  =>  "(ncat-2 (error))"
         # parse_string
+        "\"\"\"\n\$x\n a\"\"\"" => "(string-s x \"\\n\" \" a\")"
         "\"a \$(x + y) b\""  =>  "(string \"a \" (call-i x + y) \" b\")"
         "\"hi\$(\"ho\")\""   =>  "(string \"hi\" (string \"ho\"))"
         "\"a \$foo b\""  =>  "(string \"a \" foo \" b\")"
