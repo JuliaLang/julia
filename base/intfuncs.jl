@@ -370,7 +370,7 @@ julia> powermod(5, 3, 19)
 """
 function powermod(x::Integer, p::Integer, m::T) where T<:Integer
     p == 0 && return mod(one(m),m)
-    # When the concrete type of p is sigened and has the lowerst value,
+    # When the concrete type of p is signed and has the lowest value,
     # `p != 0 && p == -p` is equivalent to `p == typemin(typeof(p))` for 2's complement representation.
     # but will work for integer types like `BigInt` that don't have `typemin` defined
     # It needs special handling otherwise will cause overflow problem.
