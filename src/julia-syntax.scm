@@ -4181,7 +4181,8 @@ f(x) = yt(x)
                 (block ,@body))))
           ;; remaining `::` expressions are type assertions
           ((|::|)
-           (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap defined toplevel interp opaq globals))
+           (cl-convert `(= ,(cadr e) (call (core typeassert) ,@(cdr e)))
+                       fname lam namemap defined toplevel interp opaq globals))
           ;; remaining `decl` expressions are only type assertions if the
           ;; argument is global or a non-symbol.
           ((decl)
