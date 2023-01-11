@@ -271,6 +271,8 @@ for TupleType = Any[Tuple{Int,Int,Int}, Tuple{Int,Vararg{Int}}, Tuple{Any}, Tupl
 end
 # skip analysis on fields that are known to be defined syntactically
 @test Core.Compiler.getfield_notundefined(SyntacticallyDefined{Float64}, Symbol)
+@test Core.Compiler.getfield_notundefined(Const(Main), Const(:var))
+@test Core.Compiler.getfield_notundefined(Const(Main), Const(42))
 # high-level tests for `getfield_notundefined`
 @test Base.infer_effects() do
     Maybe{Int}()
@@ -323,15 +325,27 @@ invoke44763(x) = @invoke increase_x44763!(x)
 end |> only === Int
 @test x44763 == 0
 
+# `@inbounds`/`@boundscheck` expression should taint :consistent-cy correctly
+# https://github.com/JuliaLang/julia/issues/48099
+function A1_inbounds()
+    r = 0
+    @inbounds begin
+        @boundscheck r += 1
+    end
+    return r
+end
+@test !Core.Compiler.is_consistent(Base.infer_effects(A1_inbounds))
+
 # Test that purity doesn't try to accidentally run unreachable code due to
 # boundscheck elimination
 function f_boundscheck_elim(n)
-    # Inbounds here assumes that this is only ever called with n==0, but of
+    # Inbounds here assumes that this is only ever called with `n==0`, but of
     # course the compiler has no way of knowing that, so it must not attempt
-    # to run the @inbounds `getfield(sin, 1)`` that ntuple generates.
+    # to run the `@inbounds getfield(sin, 1)` that `ntuple` generates.
     ntuple(x->(@inbounds getfield(sin, x)), n)
 end
-@test Tuple{} <: code_typed(f_boundscheck_elim, Tuple{Int})[1][2]
+@test !Core.Compiler.is_consistent(Base.infer_effects(f_boundscheck_elim, (Int,)))
+@test Tuple{} <: only(Base.return_types(f_boundscheck_elim, (Int,)))
 
 # Test that purity modeling doesn't accidentally introduce new world age issues
 f_redefine_me(x) = x+1

@@ -2543,7 +2543,7 @@ module_binding: {
                 continue;
             verify_parent1("module", binding->parent, begin, "binding_buff");
             // Record the size used for the box for non-const bindings
-            gc_heap_snapshot_record_module_to_binding(binding->parent, b);
+            gc_heap_snapshot_record_module_to_binding(binding->parent, (jl_sym_t*)begin[-1], b);
             if (gc_try_setmark((jl_value_t*)b, &binding->nptr, &tag, &bits)) {
                 begin += 2;
                 binding->begin = begin;
