@@ -158,6 +158,9 @@ function get_compileable_sig(method::Method, @nospecialize(atype), sparams::Simp
         mt, atype, sparams, method)
 end
 
+function isa_compileable_sig(mi::MethodInstance)
+    return isa_compileable_sig(mi.specTypes, mi.sparam_vals, mi.def::Method)
+end
 isa_compileable_sig(@nospecialize(atype), sparams::SimpleVector, method::Method) =
     !iszero(ccall(:jl_isa_compileable_sig, Int32, (Any, Any, Any), atype, sparams, method))
 

@@ -40,27 +40,119 @@ const IR_FLAG_REFINED     = 0x01 << 7
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
 # This corresponds to the type of `CodeInfo`'s `inlining_cost` field
-const InlineCostType = UInt16
-const MAX_INLINE_COST = typemax(InlineCostType)
-const MIN_INLINE_COST = InlineCostType(10)
+const InliningCost = UInt16
+const MAX_INLINING_COST = const DECLARED_NOINLINE_COST = typemax(InliningCost)
+const DEFAULT_INLINEABLE_COST = UInt16(10)
+const MIN_INLINING_COST = const DECLARED_INLINE_COST = zero(InliningCost)
+
 const MaybeCompressed = Union{CodeInfo, String}
 
-is_inlineable(@nospecialize src::MaybeCompressed) =
-    ccall(:jl_ir_inlining_cost, InlineCostType, (Any,), src) != MAX_INLINE_COST
-set_inlineable!(src::CodeInfo, val::Bool) =
-    src.inlining_cost = (val ? MIN_INLINE_COST : MAX_INLINE_COST)
-
-function inline_cost_clamp(x::Int)::InlineCostType
-    x > MAX_INLINE_COST && return MAX_INLINE_COST
-    x < MIN_INLINE_COST && return MIN_INLINE_COST
-    return convert(InlineCostType, x)
-end
+inlining_cost(@nospecialize src::MaybeCompressed) = ccall(:jl_ir_inlining_cost, InliningCost, (Any,), src)
 
 is_declared_inline(@nospecialize src::MaybeCompressed) =
     ccall(:jl_ir_flag_inlining, UInt8, (Any,), src) == 1
 
 is_declared_noinline(@nospecialize src::MaybeCompressed) =
     ccall(:jl_ir_flag_inlining, UInt8, (Any,), src) == 2
+
+is_source_inferred(@nospecialize src::MaybeCompressed) =
+    ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
+
+struct InlineabilityInfo
+    rt
+    mi::MethodInstance
+    InlineabilityInfo(@nospecialize(rt), mi::MethodInstance) = new(rt, mi)
+end
+
+"""
+    is_inlineable(interp::AbstractInterpreter, src::MaybeCompressed,
+                  metainfo::Union{InlineabilityInfo,Nothing}=nothing) -> Bool
+
+Determine if `src` is eligible for inlining using `OptimizationParams` of `interp`.
+This query assumes `src` has been inferred and `src.inlining_cost` has been computed.
+If `ibinfo::InlineabilityInfo` is available, take it into account
+to add extra inlining willingness.
+"""
+function is_inlineable(interp::AbstractInterpreter, @nospecialize(src::MaybeCompressed),
+                       ibinfo::Union{InlineabilityInfo,Nothing}=nothing)
+    @assert is_source_inferred(src) "source isn't inferred"
+    # compute the cost (size) of inlining this code
+    params = OptimizationParams(interp)
+    cost_threshold = default = params.inline_cost_threshold
+    # if the method is declared as `@inline`, increase the cost threshold 20x
+    if is_declared_inline(src)
+        cost_threshold += 19*default
+    end
+    if ibinfo !== nothing
+        # if the inferred return type is non-concrete tuple, add extra inlining willingness
+        # in hopes of splitting it up
+        if ⊑(ipo_lattice(interp), ibinfo.rt, Tuple) && !isconcretetype(ibinfo.rt)
+            cost_threshold += params.inline_tupleret_bonus
+        end
+        # and a few functions get special treatment
+        def = ibinfo.mi.def
+        if isa(def, Method)
+            mod = def.module
+            if mod === _topmod(mod)
+                name = def.name
+                if name === :iterate || name === :unsafe_convert || name === :cconvert
+                    cost_threshold += 4*default
+                end
+            end
+        end
+    end
+    return inlining_cost(src) ≤ cost_threshold
+end
+
+struct InliningInfo
+    rt::Any
+    mi::MethodInstance
+    argtypes::Vector{Any}
+    info::CallInfo
+    stmt_flag::UInt8
+    function InliningInfo(@nospecialize(rt), mi::MethodInstance, argtypes::Vector{Any},
+                          @nospecialize(info::CallInfo), stmt_flag::UInt8)
+        return new(rt, mi, argtypes, info, stmt_flag)
+    end
+end
+
+"""
+    inlining_policy(interp::AbstractInterpreter, src, iinfo::InliningInfo) -> newsrc
+
+Determine if `src` should be inlined, and if so, return `newsrc` that can be handled and
+inlined by the inlining algorithm, otherwise return `nothing`.
+"""
+function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), iinfo::InliningInfo)
+    if isa(src, MaybeCompressed)
+        if is_source_inferred(src)
+            if is_stmt_inline(iinfo.stmt_flag) || is_inlineable(interp, src, InlineabilityInfo(iinfo.rt, iinfo.mi))
+                return src
+            end
+        end
+    elseif src === nothing && is_stmt_inline(iinfo.stmt_flag)
+        # if this statement is forced to be inlined, make an additional effort to find the
+        # inferred source in the local cache
+        # we still won't find a source for recursive call because the "single-level" inlining
+        # seems to be more trouble and complex than it's worth
+        inf_result = cache_lookup(optimizer_lattice(interp), iinfo.mi, iinfo.argtypes, get_inference_cache(interp))
+        if inf_result !== nothing
+            src = inf_result.src
+            if isa(src, CodeInfo) && is_source_inferred(src)
+                return src
+            end
+        end
+    elseif isa(src, IRCode)
+        return src
+    elseif isa(src, SemiConcreteResult)
+        # For `NativeInterpreter`, `SemiConcreteResult` may be produced for
+        # a `@noinline`-declared method when it's marked as `@constprop :aggressive`.
+        # Suppress the inlining here.
+        if !is_declared_noinline(iinfo.mi.def::Method)
+            return src
+        end
+    end
+    return nothing
+end
 
 #####################
 # OptimizationState #
@@ -83,44 +175,6 @@ function add_backedge!(et::EdgeTracker, mi::MethodInstance)
 end
 function add_invoke_backedge!(et::EdgeTracker, @nospecialize(invokesig), mi::MethodInstance)
     push!(et.edges, invokesig, mi)
-    return nothing
-end
-
-is_source_inferred(@nospecialize src::MaybeCompressed) =
-    ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
-
-function inlining_policy(interp::AbstractInterpreter,
-    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt8, mi::MethodInstance,
-    argtypes::Vector{Any})
-    if isa(src, MaybeCompressed)
-        is_source_inferred(src) || return nothing
-        src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
-        return src_inlineable ? src : nothing
-    elseif src === nothing && is_stmt_inline(stmt_flag)
-        # if this statement is forced to be inlined, make an additional effort to find the
-        # inferred source in the local cache
-        # we still won't find a source for recursive call because the "single-level" inlining
-        # seems to be more trouble and complex than it's worth
-        inf_result = cache_lookup(optimizer_lattice(interp), mi, argtypes, get_inference_cache(interp))
-        inf_result === nothing && return nothing
-        src = inf_result.src
-        if isa(src, CodeInfo)
-            src_inferred = is_source_inferred(src)
-            return src_inferred ? src : nothing
-        else
-            return nothing
-        end
-    elseif isa(src, IRCode)
-        return src
-    elseif isa(src, SemiConcreteResult)
-        if is_declared_noinline(mi.def::Method)
-            # For `NativeInterpreter`, `SemiConcreteResult` may be produced for
-            # a `@noinline`-declared method when it's marked as `@constprop :aggressive`.
-            # Suppress the inlining here.
-            return nothing
-        end
-        return src
-    end
     return nothing
 end
 
@@ -437,30 +491,13 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
         end
     end
     if force_noinline
-        set_inlineable!(src, false)
+        src.inlining_cost = DECLARED_NOINLINE_COST
     elseif isa(def, Method)
         if is_declared_inline(src) && isdispatchtuple(specTypes)
             # obey @inline declaration if a dispatch barrier would not help
-            set_inlineable!(src, true)
+            src.inlining_cost = DECLARED_INLINE_COST
         else
-            # compute the cost (size) of inlining this code
-            params = OptimizationParams(interp)
-            cost_threshold = default = params.inline_cost_threshold
-            if ⊑(optimizer_lattice(interp), result, Tuple) && !isconcretetype(widenconst(result))
-                cost_threshold += params.inline_tupleret_bonus
-            end
-            # if the method is declared as `@inline`, increase the cost threshold 20x
-            if is_declared_inline(src)
-                cost_threshold += 19*default
-            end
-            # a few functions get special treatment
-            if def.module === _topmod(def.module)
-                name = def.name
-                if name === :iterate || name === :unsafe_convert || name === :cconvert
-                    cost_threshold += 4*default
-                end
-            end
-            src.inlining_cost = inline_cost(ir, params, union_penalties, cost_threshold)
+            src.inlining_cost = inlining_cost(ir, OptimizationParams(interp), union_penalties)
         end
     end
     return nothing
@@ -766,16 +803,16 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{Cod
     return thiscost
 end
 
-function inline_cost(ir::IRCode, params::OptimizationParams, union_penalties::Bool=false,
-                       cost_threshold::Integer=params.inline_cost_threshold)::InlineCostType
+function inlining_cost(ir::IRCode, params::OptimizationParams,
+                       union_penalties::Bool=false)
     bodycost::Int = 0
     for line = 1:length(ir.stmts)
         stmt = ir.stmts[line][:inst]
         thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, union_penalties, params)
         bodycost = plus_saturate(bodycost, thiscost)
-        bodycost > cost_threshold && return MAX_INLINE_COST
+        bodycost > MAX_INLINING_COST && return MAX_INLINING_COST
     end
-    return inline_cost_clamp(bodycost)
+    return convert(InliningCost, bodycost)
 end
 
 function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeInfo, IRCode}, sptypes::Vector{VarState}, unionpenalties::Bool, params::OptimizationParams)

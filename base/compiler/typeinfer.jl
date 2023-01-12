@@ -226,7 +226,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceResult)
         if opt.ir !== nothing
             if caller.must_be_codeinf
                 caller.src = ir_to_codeinf!(opt)
-            elseif is_inlineable(opt.src)
+            elseif is_inlineable(interp, opt.src, InlineabilityInfo(caller.result, caller.linfo))
                 # TODO: If the CFG is too big, inlining becomes more expensive and if we're going to
                 # use this IR over and over, it's worth simplifying it. Round trips through
                 # CodeInstance do this implicitly, since they recompute the CFG, so try to
@@ -325,6 +325,11 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult,
             const_flags = 0x00
         end
     end
+    mi = result.linfo
+    rettype = widenconst(result_type)
+    min_world, max_world = first(valid_worlds), last(valid_worlds)
+    # TODO: Actually do something with non-IPO effects
+    ipo_effects = effects = encode_effects(result.ipo_effects)
     relocatability = 0x0
     if isa(inferred_result, String)
         t = @_gc_preserve_begin inferred_result
@@ -334,22 +339,28 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult,
         relocatability = 0x1
     end
     # relocatability = isa(inferred_result, String) ? inferred_result[end] : UInt8(0)
-    return CodeInstance(result.linfo,
-        widenconst(result_type), rettype_const, inferred_result,
-        const_flags, first(valid_worlds), last(valid_worlds),
-        # TODO: Actually do something with non-IPO effects
-        encode_effects(result.ipo_effects), encode_effects(result.ipo_effects), result.argescapes,
-        relocatability)
+    precompile = false
+    if isa(interp, NativeInterpreter)
+        if inferred_result !== nothing
+            src = inferred_result::MaybeCompressed
+            if !is_inlineable(interp, src, InlineabilityInfo(result_type, mi))
+                precompile = true
+            end
+        end
+    end
+    return CodeInstance(mi, rettype, rettype_const,
+                        inferred_result, const_flags, min_world, max_world,
+                        ipo_effects, effects, result.argescapes,
+                        relocatability, precompile)
 end
 
-function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo)
-    def = linfo.def
-    toplevel = !isa(def, Method)
-    if toplevel
-        return ci
-    end
+function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo)
+    def = mi.def
+    isa(def, Method) || return ci
     if may_discard_trees(interp)
-        cache_the_tree = ci.inferred && (is_inlineable(ci) || isa_compileable_sig(linfo.specTypes, linfo.sparam_vals, def))
+        cache_the_tree = ci.inferred && (
+            is_inlineable(interp, ci, InlineabilityInfo(ci.rettype, mi)) ||
+            isa_compileable_sig(mi))
     else
         cache_the_tree = true
     end
@@ -547,13 +558,13 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         # we can throw everything else away now
         me.result.src = nothing
         me.cached = false
-        set_inlineable!(me.src, false)
+        me.src.inlining_cost = DECLARED_NOINLINE_COST
         unlock_mi_inference(interp, me.linfo)
     elseif limited_src
         # a type result will be cached still, but not this intermediate work:
         # we can throw everything else away now
         me.result.src = nothing
-        set_inlineable!(me.src, false)
+        me.src.inlining_cost = DECLARED_NOINLINE_COST
     else
         # annotate fulltree with type information,
         # either because we are the outermost code, or we might use this later
@@ -1019,7 +1030,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
             tree.codelocs = Int32[1]
             tree.linetable = LineInfoNode[LineInfoNode(method.module, mi, method.file, method.line, Int32(0))]
             tree.ssaflags = UInt8[0]
-            set_inlineable!(tree, true)
+            tree.inlining_cost = DEFAULT_INLINEABLE_COST
             tree.parent = mi
             tree.rettype = Core.Typeof(rettype_const)
             tree.min_world = code.min_world

@@ -1183,7 +1183,7 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     if format_version(s) < 22
         inlining_cost = deserialize(s)
         if isa(inlining_cost, Bool)
-            Core.Compiler.set_inlineable!(ci, inlining_cost)
+            ci.inlining_cost = inlining_cost ? Core.Compiler.DEFAULT_INLINEABLE_COST : Core.Compiler.MAX_INLINING_COST
         else
             ci.inlining_cost = inlining_cost
         end

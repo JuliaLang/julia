@@ -295,19 +295,6 @@ using Core.Compiler: is_declared_inline, is_declared_noinline
     @test !is_declared_noinline(only(methods() do x x end))
 end
 
-using Core.Compiler: is_inlineable, set_inlineable!
-
-@testset "basic set_inlineable! functionality" begin
-    ci = code_typed1() do
-        x -> x
-    end
-    set_inlineable!(ci, true)
-    @test is_inlineable(ci)
-    set_inlineable!(ci, false)
-    @test !is_inlineable(ci)
-    @test_throws MethodError set_inlineable!(ci, 5)
-end
-
 const _a_global_array = [1]
 f_inline_global_getindex() = _a_global_array[1]
 let ci = code_typed(f_inline_global_getindex, Tuple{})[1].first
