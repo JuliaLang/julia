@@ -199,11 +199,12 @@ end
         Validation States
             0 -> UTF8_ACCEPT is the start state and represents a complete UTF-8 String as well
                         ASCII only strings will never leave this state
-            1 -> UTF8_INVALID is only reached by invalid bytes and once in this state will not
+            1 -> UTF8_INVALID is only reached by invalid bytes and once in this state it will not change
+                    as seen by all 1s in that column of table below
             2 -> One valid continuation byte needed to return to state 0
         3,4,5 -> Two valid continuation bytes needed to return to state 0
         6,7,8 -> Three valids continuation bytes needed to return to state 0
-            9 -> Not important and not used which is why it is all ones
+            9 -> Not used which is why it always transitions to state 1
                         Current State
                     0̲  1̲  2̲  3̲  4̲  5̲  6̲  7̲  8̲  9̲
                 0 | 0  1  1  1  1  1  1  1  1  1
@@ -289,8 +290,8 @@ const _UTF8_DFA_INVALID = UInt64(6) # If the state machine is ever in this state
 @inline function _isvalid_utf8_dfa(state::UInt64, bytes::AbstractVector{UInt8}, first::Int = 1, last::Int = length(bytes))
     for i = first:last
        @inbounds state = _utf_dfa_step(state, bytes[i])
-   end
-   return (state)
+    end
+    return (state)
 end
 
 # This is a shift based utf-8 DFA that works on string that are a contiguous block
