@@ -986,21 +986,15 @@ QuickerSort(lo::Union{Integer, Missing}, hi::Union{Integer, Missing}) = QuickerS
 QuickerSort(lo::Union{Integer, Missing}, next::Algorithm=SMALL_ALGORITHM) = QuickerSort(lo, lo, next)
 QuickerSort(r::OrdinalRange, next::Algorithm=SMALL_ALGORITHM) = QuickerSort(first(r), last(r), next)
 
-# select a pivot for QuickerSort
-#
-# This method is redefined to rand(lo:hi) in Random.jl
-# We can't use rand here because it is not available in Core.Compiler and
-# because rand is defined in the stdlib Random.jl after sorting is used in Base.
-select_pivot(lo::Integer, hi::Integer) = typeof(hi-lo)(hash(lo) % (hi-lo+1)) + lo
-
 # select a pivot, partition v[lo:hi] according
 # to the pivot, and store the result in t[lo:hi].
 #
-# returns (pivot, pivot_index) where pivot_index is the location the pivot
-# should end up, but does not set t[pivot_index] = pivot
+# sets `pivot_dest[pivot_index+pivot_index_offset] = pivot` and returns that index.
 function partition!(t::AbstractVector, lo::Integer, hi::Integer, offset::Integer, o::Ordering,
         v::AbstractVector, rev::Bool, pivot_dest::AbstractVector, pivot_index_offset::Integer)
-    pivot_index = select_pivot(lo, hi)
+    # Ideally we would use `pivot_index = rand(lo:hi)`, but that requires Random.jl
+    # and would mutate the global RNG in sorting.
+    pivot_index = typeof(hi-lo)(hash(lo) % (hi-lo+1)) + lo
     @inbounds begin
         pivot = v[pivot_index]
         while lo < pivot_index
