@@ -2527,7 +2527,7 @@ function check_clone_targets(clone_targets)
 end
 
 struct CacheFlags
-    # ?OOICDDP - see jl_cache_flags
+    # OOICCDDP - see jl_cache_flags
     use_pkgimages::Bool
     debug_level::Int
     check_bounds::Bool
@@ -2537,9 +2537,9 @@ struct CacheFlags
     function CacheFlags(f::UInt8)
         use_pkgimages = Bool(f & 1)
         debug_level = Int((f >> 1) & 3)
-        check_bounds = Bool((f >> 3) & 1)
-        inline = Bool((f >> 4) & 1)
-        opt_level = Int((f >> 5) & 3) # define OPT_LEVEL in statiddata_utils
+        check_bounds = Bool((f >> 3) & 3)
+        inline = Bool((f >> 5) & 1)
+        opt_level = Int((f >> 6) & 3) # define OPT_LEVEL in statiddata_utils
         new(use_pkgimages, debug_level, check_bounds, inline, opt_level)
     end
 end
