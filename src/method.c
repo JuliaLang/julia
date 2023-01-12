@@ -473,7 +473,6 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->min_world = 1;
     src->max_world = ~(size_t)0;
     src->inferred = 0;
-    src->inlining_cost = UINT16_MAX;
     src->propagate_inbounds = 0;
     src->pure = 0;
     src->has_fcall = 0;
@@ -481,6 +480,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->constprop = 0;
     src->inlining = 0;
     src->purity.bits = 0;
+    src->inlining_cost = UINT16_MAX;
     return src;
 }
 

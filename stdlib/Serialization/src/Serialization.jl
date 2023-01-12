@@ -79,7 +79,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 21 # do not make changes without bumping the version #!
+const ser_version = 22 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -1182,11 +1182,13 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
         end
     end
     ci.inferred = deserialize(s)
-    inlining = deserialize(s)
-    if isa(inlining, Bool)
-        Core.Compiler.set_inlineable!(ci, inlining)
-    else
-        ci.inlining_cost = inlining
+    if format_version(s) < 22
+        inlining_cost = deserialize(s)
+        if isa(inlining_cost, Bool)
+            Core.Compiler.set_inlineable!(ci, inlining_cost)
+        else
+            ci.inlining_cost = inlining_cost
+        end
     end
     ci.propagate_inbounds = deserialize(s)
     ci.pure = deserialize(s)
@@ -1201,6 +1203,9 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     end
     if format_version(s) >= 17
         ci.purity = deserialize(s)::UInt8
+    end
+    if format_version(s) >= 22
+        ci.inlining_cost = deserialize(s)::UInt16
     end
     return ci
 end
