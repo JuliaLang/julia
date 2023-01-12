@@ -177,16 +177,7 @@ mutable struct InferenceState
 
         valid_worlds = WorldRange(src.min_world, src.max_world == typemax(UInt) ? get_world_counter() : src.max_world)
         bestguess = Bottom
-        # TODO: Currently, any :inbounds declaration taints consistency,
-        #       because we cannot be guaranteed whether or not boundschecks
-        #       will be eliminated and if they are, we cannot be guaranteed
-        #       that no undefined behavior will occur (the effects assumptions
-        #       are stronger than the inbounds assumptions, since the latter
-        #       requires dynamic reachability, while the former is global).
-        inbounds = inbounds_option()
-        noinbounds = inbounds === :on || (inbounds === :default && all(flag::UInt8->iszero(flag&IR_FLAG_INBOUNDS), src.ssaflags))
-        consistent = noinbounds ? ALWAYS_TRUE : ALWAYS_FALSE
-        ipo_effects = Effects(EFFECTS_TOTAL; consistent, noinbounds)
+        ipo_effects = Effects(EFFECTS_TOTAL)
 
         params = InferenceParams(interp)
         restrict_abstract_call_sites = isa(linfo.def, Module)
