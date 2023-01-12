@@ -910,10 +910,10 @@ static void post_boot_hooks(void)
     jl_init_box_caches();
 
     // set module field of primitive types
-    int i;
-    void **table = jl_core_module->bindings.table;
-    for (i = 1; i < jl_core_module->bindings.size; i += 2) {
-        if (table[i] != HT_NOTFOUND) {
+    jl_svec_t *bindings = jl_atomic_load_relaxed(&jl_core_module->bindings);
+    jl_value_t **table = jl_svec_data(bindings);
+    for (size_t i = 0; i < jl_svec_len(bindings); i++) {
+        if (table[i] != jl_nothing) {
             jl_binding_t *b = (jl_binding_t*)table[i];
             jl_value_t *v = jl_atomic_load_relaxed(&b->value);
             if (v) {

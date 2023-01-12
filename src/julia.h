@@ -584,8 +584,9 @@ typedef struct _jl_module_t {
     JL_DATA_TYPE
     jl_sym_t *name;
     struct _jl_module_t *parent;
+    _Atomic(jl_svec_t*) bindings;
+    _Atomic(jl_array_t*) bindingkeyset; // index lookup by name into bindings
     // hidden fields:
-    htable_t bindings;
     arraylist_t usings;  // modules with all bindings potentially imported
     jl_uuid_t build_id;
     jl_uuid_t uuid;
@@ -648,12 +649,12 @@ typedef struct _jl_typemap_level_t {
 // contains the TypeMap for one Type
 typedef struct _jl_methtable_t {
     JL_DATA_TYPE
-    jl_sym_t *name; // sometimes a hack used by serialization to handle kwsorter
+    jl_sym_t *name; // sometimes used for debug printing
     _Atomic(jl_typemap_t*) defs;
     _Atomic(jl_array_t*) leafcache;
     _Atomic(jl_typemap_t*) cache;
     _Atomic(intptr_t) max_args;  // max # of non-vararg arguments in a signature
-    jl_module_t *module; // used for incremental serialization to locate original binding
+    jl_module_t *module; // sometimes used for debug printing
     jl_array_t *backedges; // (sig, caller::MethodInstance) pairs
     jl_mutex_t writelock;
     uint8_t offs;  // 0, or 1 to skip splitting typemap on first (function) argument
@@ -986,9 +987,10 @@ STATIC_INLINE jl_value_t *jl_svecset(
 {
     assert(jl_typeis(t,jl_simplevector_type));
     assert(i < jl_svec_len(t));
-    // TODO: while svec is supposedly immutable, in practice we sometimes publish it first
-    // and set the values lazily. Those users should be using jl_atomic_store_release here.
-    jl_svec_data(t)[i] = (jl_value_t*)x;
+    // while svec is supposedly immutable, in practice we sometimes publish it
+    // first and set the values lazily. Those users occasionally might need to
+    // instead use jl_atomic_store_release here.
+    jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)jl_svec_data(t) + i, (jl_value_t*)x);
     jl_gc_wb(t, x);
     return (jl_value_t*)x;
 }
