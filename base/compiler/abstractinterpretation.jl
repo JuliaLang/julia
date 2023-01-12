@@ -223,7 +223,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         method = match.method
         sig = match.spec_types
         mi = specialize_method(match; preexisting=true)
-        if mi !== nothing && !const_prop_methodinstance_heuristic(interp, match, mi, arginfo, sv)
+        if mi !== nothing && !const_prop_methodinstance_heuristic(interp, mi, arginfo, sv)
             csig = get_compileable_sig(method, sig, match.sparams)
             if csig !== nothing && csig !== sig
                 abstract_call_method(interp, method, csig, match.sparams, multiple_matches, StmtInfo(false), sv)
@@ -1087,7 +1087,7 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter,
         return nothing
     end
     mi = mi::MethodInstance
-    if !force && !const_prop_methodinstance_heuristic(interp, match, mi, arginfo, sv)
+    if !force && !const_prop_methodinstance_heuristic(interp, mi, arginfo, sv)
         add_remark!(interp, sv, "[constprop] Disabled by method instance heuristic")
         return nothing
     end
@@ -1239,8 +1239,8 @@ end
 # where we would spend a lot of time, but are probably unlikely to get an improved
 # result anyway.
 function const_prop_methodinstance_heuristic(interp::AbstractInterpreter,
-    match::MethodMatch, mi::MethodInstance, arginfo::ArgInfo, sv::InferenceState)
-    method = match.method
+    mi::MethodInstance, arginfo::ArgInfo, sv::InferenceState)
+    method = mi.def::Method
     if method.is_for_opaque_closure
         # Not inlining an opaque closure can be very expensive, so be generous
         # with the const-prop-ability. It is quite possible that we can't infer
@@ -1248,34 +1248,37 @@ function const_prop_methodinstance_heuristic(interp::AbstractInterpreter,
         # isn't particularly helpful here.
         return true
     end
-    # Peek at the inferred result for the function to determine if the optimizer
-    # was able to cut it down to something simple (inlineable in particular).
-    # If so, there's a good chance we might be able to const prop all the way
-    # through and learn something new.
-    if isdefined(method, :source) && is_inlineable(method.source)
+    # now check if the source of this method instance is inlineable, since the extended type
+    # information we have here would be discarded if it is not inlined into a callee context
+    # (modulo the inferred return type that can be potentially refined)
+    if is_declared_inline(method)
+        # this method is declared as `@inline` and will be inlined
         return true
+    end
+    flag = get_curr_ssaflag(sv)
+    if is_stmt_inline(flag)
+        # force constant propagation for a call that is going to be inlined
+        # since the inliner will try to find this constant result
+        # if these constant arguments arrive there
+        return true
+    elseif is_stmt_noinline(flag)
+        # this call won't be inlined, thus this constant-prop' will most likely be unfruitful
+        return false
     else
-        flag = get_curr_ssaflag(sv)
-        if is_stmt_inline(flag)
-            # force constant propagation for a call that is going to be inlined
-            # since the inliner will try to find this constant result
-            # if these constant arguments arrive there
-            return true
-        elseif is_stmt_noinline(flag)
-            # this call won't be inlined, thus this constant-prop' will most likely be unfruitful
-            return false
-        else
-            code = get(code_cache(interp), mi, nothing)
-            if isdefined(code, :inferred)
-                if isa(code, CodeInstance)
-                    inferred = @atomic :monotonic code.inferred
-                else
-                    inferred = code.inferred
-                end
-                # TODO propagate a specific `CallInfo` that conveys information about this call
-                if inlining_policy(interp, inferred, NoCallInfo(), IR_FLAG_NULL, mi, arginfo.argtypes) !== nothing
-                    return true
-                end
+        # Peek at the inferred result for the method to determine if the optimizer
+        # was able to cut it down to something simple (inlineable in particular).
+        # If so, there will be a good chance we might be able to const prop
+        # all the way through and learn something new.
+        code = get(code_cache(interp), mi, nothing)
+        if isdefined(code, :inferred)
+            if isa(code, CodeInstance)
+                inferred = @atomic :monotonic code.inferred
+            else
+                inferred = code.inferred
+            end
+            # TODO propagate a specific `CallInfo` that conveys information about this call
+            if inlining_policy(interp, inferred, NoCallInfo(), IR_FLAG_NULL, mi, arginfo.argtypes) !== nothing
+                return true
             end
         end
     end
