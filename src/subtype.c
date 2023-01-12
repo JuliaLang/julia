@@ -2406,43 +2406,31 @@ static int subtype_in_env_existential(jl_value_t *x, jl_value_t *y, jl_stenv_t *
 }
 
 // See if var y is reachable from x via bounds; used to avoid cycles.
-static int _reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e)
+static int _reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e, jl_typeenv_t *log)
 {
     if (in_union(x, (jl_value_t*)y))
         return 1;
     if (jl_is_uniontype(x))
-        return _reachable_var(((jl_uniontype_t *)x)->a, y, e) ||
-               _reachable_var(((jl_uniontype_t *)x)->b, y, e);
+        return _reachable_var(((jl_uniontype_t *)x)->a, y, e, log) ||
+               _reachable_var(((jl_uniontype_t *)x)->b, y, e, log);
     if (!jl_is_typevar(x))
         return 0;
+    jl_typeenv_t *t = log;
+    while (t != NULL) {
+        if (x == (jl_value_t *)t->var)
+            return 0;
+        t = t->prev;
+    }
     jl_varbinding_t *xv = lookup(e, (jl_tvar_t*)x);
-    if (xv == NULL || xv->right)
-        return 0;
-    xv->right = 1;
-    return _reachable_var(xv->ub, y, e) || _reachable_var(xv->lb, y, e);
+    jl_value_t *lb = xv == NULL ? ((jl_tvar_t*)x)->lb : xv->lb;
+    jl_value_t *ub = xv == NULL ? ((jl_tvar_t*)x)->ub : xv->ub;
+    jl_typeenv_t newlog = { (jl_tvar_t*)x, NULL, log };
+    return _reachable_var(ub, y, e, &newlog) || _reachable_var(lb, y, e, &newlog);
 }
 
 static int reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e)
 {
-    int len = current_env_length(e);
-    int8_t *rs = (int8_t*)malloc_s(len);
-    int n = 0;
-    jl_varbinding_t *v = e->vars;
-    while (n < len) {
-        assert(v != NULL);
-        rs[n++] = v->right;
-        v->right = 0;
-        v = v->prev;
-    }
-    int res = _reachable_var(x, y, e);
-    n = 0; v = e->vars;
-    while (n < len) {
-        assert(v != NULL);
-        v->right = rs[n++];
-        v = v->prev;
-    }
-    free(rs);
-    return res;
+    return _reachable_var(x, y, e, NULL);
 }
 
 // check whether setting v == t implies v == SomeType{v}, which is unsatisfiable.
@@ -2630,8 +2618,10 @@ static jl_value_t *omit_bad_union(jl_value_t *u, jl_tvar_t *t)
         ub = omit_bad_union(ub, t);
         body = omit_bad_union(body, t);
         if (ub != NULL && body != NULL && !jl_has_typevar(var->lb, t)) {
-            if (ub != var->ub)
+            if (ub != var->ub) {
                 var = jl_new_typevar(var->name, var->lb, ub);
+                body = jl_substitute_var(body, ((jl_unionall_t *)u)->var, (jl_value_t *)var);
+            }
             res = jl_new_struct(jl_unionall_type, var, body);
         }
         JL_GC_POP();
@@ -3259,7 +3249,15 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                     return jl_bottom_type;
                 }
                 int ccheck;
-                if (yub == xub ||
+                if (xlb == xub && ylb == yub &&
+                    jl_has_typevar(xlb, (jl_tvar_t *)y) &&
+                    jl_has_typevar(ylb, (jl_tvar_t *)x)) {
+                    // specical case for e.g.
+                    // 1) Val{Y}<:X<:Val{Y} && Val{X}<:Y<:Val{X}
+                    // 2) Y<:X<:Y && Val{X}<:Y<:Val{X} => Val{Y}<:Y<:Val{Y}
+                    ccheck = 0;
+                }
+                else if (yub == xub ||
                     (subtype_by_bounds(xlb, yub, e) && subtype_by_bounds(ylb, xub, e))) {
                     ccheck = 1;
                 }
