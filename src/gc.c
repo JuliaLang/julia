@@ -2537,22 +2537,35 @@ module_binding: {
         gc_mark_binding_t *binding = gc_pop_markdata(&sp, gc_mark_binding_t);
         jl_binding_t **begin = binding->begin;
         jl_binding_t **end = binding->end;
-        for (; begin < end; begin += 2) {
+        for (; begin < end; begin++) {
             jl_binding_t *b = *begin;
-            if (b == (jl_binding_t*)HT_NOTFOUND)
+            if (b == (jl_binding_t*)jl_nothing)
                 continue;
             verify_parent1("module", binding->parent, begin, "binding_buff");
             // Record the size used for the box for non-const bindings
             gc_heap_snapshot_record_module_to_binding(binding->parent, b);
             if (gc_try_setmark((jl_value_t*)b, &binding->nptr, &tag, &bits)) {
-                begin += 2;
+                begin++;
                 binding->begin = begin;
                 gc_repush_markdata(&sp, gc_mark_binding_t);
                 new_obj = (jl_value_t*)b;
                 goto mark;
             }
         }
+        binding->begin = begin;
         jl_module_t *m = binding->parent;
+        jl_value_t *bindings = (jl_value_t*)jl_atomic_load_relaxed(&m->bindings);
+        if (gc_try_setmark(bindings, &binding->nptr, &tag, &bits)) {
+            gc_repush_markdata(&sp, gc_mark_binding_t);
+            new_obj = (jl_value_t*)bindings;
+            goto mark;
+        }
+        jl_value_t *bindingkeyset = (jl_value_t*)jl_atomic_load_relaxed(&m->bindingkeyset);
+        if (gc_try_setmark(bindingkeyset, &binding->nptr, &tag, &bits)) {
+            gc_repush_markdata(&sp, gc_mark_binding_t);
+            new_obj = bindingkeyset;
+            goto mark;
+        }
         int scanparent = gc_try_setmark((jl_value_t*)m->parent, &binding->nptr, &tag, &bits);
         size_t nusings = m->usings.len;
         if (nusings) {
@@ -2760,8 +2773,9 @@ mark: {
             else if (foreign_alloc)
                 objprofile_count(vt, bits == GC_OLD_MARKED, sizeof(jl_module_t));
             jl_module_t *m = (jl_module_t*)new_obj;
-            jl_binding_t **table = (jl_binding_t**)m->bindings.table;
-            size_t bsize = m->bindings.size;
+            jl_svec_t *bindings = jl_atomic_load_relaxed(&m->bindings);
+            jl_binding_t **table = (jl_binding_t**)jl_svec_data(bindings);
+            size_t bsize = jl_svec_len(bindings);
             uintptr_t nptr = ((bsize + m->usings.len + 1) << 2) | (bits & GC_OLD);
             gc_mark_binding_t markdata = {m, table + 1, table + bsize, nptr};
             gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(module_binding),

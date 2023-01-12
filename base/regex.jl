@@ -167,16 +167,23 @@ See [`keys`](@ref keys(::RegexMatch)) for more information.
 julia> m = match(r"(?<hour>\\d+):(?<minute>\\d+)(am|pm)?", "11:30 in the morning")
 RegexMatch("11:30", hour="11", minute="30", 3=nothing)
 
-julia> hr, min, ampm = m;
+julia> m.match
+"11:30"
 
-julia> hr
-"11"
+julia> m.captures
+3-element Vector{Union{Nothing, SubString{String}}}:
+ "11"
+ "30"
+ nothing
+
 
 julia> m["minute"]
 "30"
 
-julia> m.match
-"11:30"
+julia> hr, min, ampm = m; # destructure capture groups by iteration
+
+julia> hr
+"11"
 ```
 """
 struct RegexMatch <: AbstractMatch

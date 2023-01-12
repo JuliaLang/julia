@@ -391,46 +391,47 @@ static void jl_collect_extext_methods_from_mod(jl_array_t *s, jl_module_t *m)
 {
     if (s && !jl_object_in_image((jl_value_t*)m))
         s = NULL; // do not collect any methods
-    size_t i;
-    void **table = m->bindings.table;
-    for (i = 1; i < m->bindings.size; i += 2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
-            if (b->owner == m && b->value && b->constp) {
-                jl_value_t *bv = jl_unwrap_unionall(b->value);
-                if (jl_is_datatype(bv)) {
-                    jl_typename_t *tn = ((jl_datatype_t*)bv)->name;
-                    if (tn->module == m && tn->name == b->name && tn->wrapper == b->value) {
-                        jl_methtable_t *mt = tn->mt;
-                        if (mt != NULL &&
-                                (jl_value_t*)mt != jl_nothing &&
-                                (mt != jl_type_type_mt && mt != jl_nonfunction_mt)) {
-                            assert(mt->module == tn->module);
-                            jl_collect_methtable_from_mod(s, mt);
-                            if (s)
-                                jl_collect_missing_backedges(mt);
-                        }
-                    }
-                }
-                else if (jl_is_module(b->value)) {
-                    jl_module_t *child = (jl_module_t*)b->value;
-                    if (child != m && child->parent == m && child->name == b->name) {
-                        // this is the original/primary binding for the submodule
-                        jl_collect_extext_methods_from_mod(s, (jl_module_t*)b->value);
-                    }
-                }
-                else if (jl_is_mtable(b->value)) {
-                    jl_methtable_t *mt = (jl_methtable_t*)b->value;
-                    if (mt->module == m && mt->name == b->name) {
-                        // this is probably an external method table, so let's assume so
-                        // as there is no way to precisely distinguish them,
-                        // and the rest of this serializer does not bother
-                        // to handle any method tables specially
-                        jl_collect_methtable_from_mod(s, (jl_methtable_t*)bv);
+    jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
+    for (size_t i = 0; i < jl_svec_len(table); i++) {
+        jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
+        if ((void*)b == jl_nothing)
+            break;
+        jl_sym_t *name = b->globalref->name;
+        if (b->owner == b && b->value && b->constp) {
+            jl_value_t *bv = jl_unwrap_unionall(b->value);
+            if (jl_is_datatype(bv)) {
+                jl_typename_t *tn = ((jl_datatype_t*)bv)->name;
+                if (tn->module == m && tn->name == name && tn->wrapper == b->value) {
+                    jl_methtable_t *mt = tn->mt;
+                    if (mt != NULL &&
+                            (jl_value_t*)mt != jl_nothing &&
+                            (mt != jl_type_type_mt && mt != jl_nonfunction_mt)) {
+                        assert(mt->module == tn->module);
+                        jl_collect_methtable_from_mod(s, mt);
+                        if (s)
+                            jl_collect_missing_backedges(mt);
                     }
                 }
             }
+            else if (jl_is_module(b->value)) {
+                jl_module_t *child = (jl_module_t*)b->value;
+                if (child != m && child->parent == m && child->name == name) {
+                    // this is the original/primary binding for the submodule
+                    jl_collect_extext_methods_from_mod(s, (jl_module_t*)b->value);
+                }
+            }
+            else if (jl_is_mtable(b->value)) {
+                jl_methtable_t *mt = (jl_methtable_t*)b->value;
+                if (mt->module == m && mt->name == name) {
+                    // this is probably an external method table, so let's assume so
+                    // as there is no way to precisely distinguish them,
+                    // and the rest of this serializer does not bother
+                    // to handle any method tables specially
+                    jl_collect_methtable_from_mod(s, (jl_methtable_t*)bv);
+                }
+            }
         }
+        table = jl_atomic_load_relaxed(&m->bindings);
     }
 }
 
@@ -512,7 +513,7 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets)
 
             if (jl_is_method_instance(callee)) {
                 jl_methtable_t *mt = jl_method_get_table(((jl_method_instance_t*)callee)->def.method);
-                if (!jl_object_in_image((jl_value_t*)mt->module))
+                if (!jl_object_in_image((jl_value_t*)mt))
                     continue;
             }
 
@@ -525,6 +526,7 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets)
                 size_t min_valid = 0;
                 size_t max_valid = ~(size_t)0;
                 if (invokeTypes) {
+                    assert(jl_is_method_instance(callee));
                     jl_methtable_t *mt = jl_method_get_table(((jl_method_instance_t*)callee)->def.method);
                     if ((jl_value_t*)mt == jl_nothing) {
                         callee_ids = NULL; // invalid
@@ -621,6 +623,7 @@ JL_DLLEXPORT uint8_t jl_cache_flags(void)
     flags |= (jl_options.opt_level & 3) << 4;
     // NOTES:
     // In contrast to check-bounds, inline has no "observable effect"
+    // CacheFlags in loading.jl should be kept in-sync with this
     return flags;
 }
 

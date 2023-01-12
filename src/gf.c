@@ -172,7 +172,7 @@ static jl_method_instance_t *jl_specializations_get_linfo_(jl_method_t *m JL_PRO
             if (!hv)
                 i -= 1;
             assert(jl_svecref(specializations, i) == jl_nothing);
-            jl_svecset(specializations, i, mi); // jl_atomic_store_release?
+            jl_svecset(specializations, i, mi); // jl_atomic_store_relaxed?
             if (hv) {
                 // TODO: fuse lookup and insert steps?
                 jl_smallintset_insert(&m->speckeyset, (jl_value_t*)m, speccache_hash, i, specializations);
@@ -471,38 +471,38 @@ int foreach_mtable_in_module(
         int (*visit)(jl_methtable_t *mt, void *env),
         void *env)
 {
-    size_t i;
-    void **table = m->bindings.table;
-    for (i = 1; i < m->bindings.size; i += 2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
-            JL_GC_PROMISE_ROOTED(b);
-            if (b->owner == m && b->constp) {
-                jl_value_t *v = jl_atomic_load_relaxed(&b->value);
-                if (v) {
-                    jl_value_t *uw = jl_unwrap_unionall(v);
-                    if (jl_is_datatype(uw)) {
-                        jl_typename_t *tn = ((jl_datatype_t*)uw)->name;
-                        if (tn->module == m && tn->name == b->name && tn->wrapper == v) {
-                            // this is the original/primary binding for the type (name/wrapper)
-                            jl_methtable_t *mt = tn->mt;
-                            if (mt != NULL && (jl_value_t*)mt != jl_nothing && mt != jl_type_type_mt && mt != jl_nonfunction_mt) {
-                                if (!visit(mt, env))
-                                    return 0;
-                            }
-                        }
-                    }
-                    else if (jl_is_module(v)) {
-                        jl_module_t *child = (jl_module_t*)v;
-                        if (child != m && child->parent == m && child->name == b->name) {
-                            // this is the original/primary binding for the submodule
-                            if (!foreach_mtable_in_module(child, visit, env))
+    jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
+    for (size_t i = 0; i < jl_svec_len(table); i++) {
+        jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
+        if ((void*)b == jl_nothing)
+            break;
+        jl_sym_t *name = b->globalref->name;
+        if (jl_atomic_load_relaxed(&b->owner) == b && b->constp) {
+            jl_value_t *v = jl_atomic_load_relaxed(&b->value);
+            if (v) {
+                jl_value_t *uw = jl_unwrap_unionall(v);
+                if (jl_is_datatype(uw)) {
+                    jl_typename_t *tn = ((jl_datatype_t*)uw)->name;
+                    if (tn->module == m && tn->name == name && tn->wrapper == v) {
+                        // this is the original/primary binding for the type (name/wrapper)
+                        jl_methtable_t *mt = tn->mt;
+                        if (mt != NULL && (jl_value_t*)mt != jl_nothing && mt != jl_type_type_mt && mt != jl_nonfunction_mt) {
+                            if (!visit(mt, env))
                                 return 0;
                         }
                     }
                 }
+                else if (jl_is_module(v)) {
+                    jl_module_t *child = (jl_module_t*)v;
+                    if (child != m && child->parent == m && child->name == name) {
+                        // this is the original/primary binding for the submodule
+                        if (!foreach_mtable_in_module(child, visit, env))
+                            return 0;
+                    }
+                }
             }
         }
+        table = jl_atomic_load_relaxed(&m->bindings);
     }
     return 1;
 }
@@ -584,15 +584,12 @@ jl_value_t *jl_nth_slot_type(jl_value_t *sig, size_t i) JL_NOTSAFEPOINT
 {
     sig = jl_unwrap_unionall(sig);
     size_t len = jl_nparams(sig);
-    if (len == 0)
-        return NULL;
     if (i < len-1)
         return jl_tparam(sig, i);
-    if (jl_is_vararg(jl_tparam(sig, len-1)))
-        return jl_unwrap_vararg(jl_tparam(sig, len-1));
-    if (i == len-1)
-        return jl_tparam(sig, i);
-    return NULL;
+    jl_value_t *p = jl_tparam(sig, len-1);
+    if (jl_is_vararg(p))
+        p = jl_unwrap_vararg(p);
+    return p;
 }
 
 // if concrete_match returns false, the sig may specify `Type{T::DataType}`, while the `tt` contained DataType
@@ -660,31 +657,62 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
 
 // get the compilation signature specialization for this method
 static void jl_compilation_sig(
-    jl_tupletype_t *const tt, // the original tupletype of the call : this is expected to be a relative simple type (no Varags, Union, UnionAll, etc.)
+    jl_tupletype_t *const tt, // the original tupletype of the call (or DataType from precompile)
     jl_svec_t *sparams,
     jl_method_t *definition,
     intptr_t nspec,
     // output:
     jl_svec_t **const newparams JL_REQUIRE_ROOTED_SLOT)
 {
+    assert(jl_is_tuple_type(tt));
+    jl_value_t *decl = definition->sig;
+    size_t nargs = definition->nargs; // == jl_nparams(jl_unwrap_unionall(decl));
+
     if (definition->generator) {
         // staged functions aren't optimized
         // so assume the caller was intelligent about calling us
         return;
     }
-    if (definition->sig == (jl_value_t*)jl_anytuple_type && jl_atomic_load_relaxed(&definition->unspecialized)) {
+
+    if (decl == (jl_value_t*)jl_anytuple_type && jl_atomic_load_relaxed(&definition->unspecialized)) {
         *newparams = jl_anytuple_type->parameters; // handle builtin methods
         return;
     }
 
-    jl_value_t *decl = definition->sig;
-    assert(jl_is_tuple_type(tt));
+    // some early sanity checks
     size_t i, np = jl_nparams(tt);
-    size_t nargs = definition->nargs; // == jl_nparams(jl_unwrap_unionall(decl));
+    switch (jl_va_tuple_kind((jl_datatype_t*)decl)) {
+    case JL_VARARG_NONE:
+        if (jl_is_va_tuple(tt))
+            // odd
+            return;
+        if (np != nargs)
+            // there are not enough input parameters to make this into a compilation sig
+            return;
+        break;
+    case JL_VARARG_INT:
+    case JL_VARARG_BOUND:
+        if (jl_is_va_tuple(tt))
+            // the length needed is not known, but required for compilation
+            return;
+        if (np < nargs - 1)
+            // there are not enough input parameters to make this into a compilation sig
+            return;
+        break;
+    case JL_VARARG_UNBOUND:
+        if (np < nspec && jl_is_va_tuple(tt))
+            // there are insufficient given parameters for jl_isa_compileable_sig now to like this type
+            // (there were probably fewer methods defined when we first selected this signature)
+            return;
+        break;
+    }
+
     jl_value_t *type_i = NULL;
     JL_GC_PUSH1(&type_i);
     for (i = 0; i < np; i++) {
         jl_value_t *elt = jl_tparam(tt, i);
+        if (jl_is_vararg(elt))
+            elt = jl_unwrap_vararg(elt);
         jl_value_t *decl_i = jl_nth_slot_type(decl, i);
         type_i = jl_rewrap_unionall(decl_i, decl);
         size_t i_arg = (i < nargs - 1 ? i : nargs - 1);
@@ -732,14 +760,12 @@ static void jl_compilation_sig(
             if (!jl_has_free_typevars(decl_i) && !jl_is_kind(decl_i)) {
                 if (decl_i != elt) {
                     if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
+                    // n.b. it is possible here that !(elt <: decl_i), if elt was something unusual from intersection
+                    // so this might narrow the result slightly, though still being compatible with the declared signature
                     jl_svecset(*newparams, i, (jl_value_t*)decl_i);
                 }
                 continue;
             }
-        }
-
-        if (jl_is_vararg(elt)) {
-            continue;
         }
 
         if (jl_types_equal(elt, (jl_value_t*)jl_type_type)) { // elt == Type{T} where T
@@ -827,7 +853,7 @@ static void jl_compilation_sig(
     // in general, here we want to find the biggest type that's not a
     // supertype of any other method signatures. so far we are conservative
     // and the types we find should be bigger.
-    if (jl_nparams(tt) >= nspec && jl_va_tuple_kind((jl_datatype_t*)decl) == JL_VARARG_UNBOUND) {
+    if (np >= nspec && jl_va_tuple_kind((jl_datatype_t*)decl) == JL_VARARG_UNBOUND) {
         if (!*newparams) *newparams = tt->parameters;
         type_i = jl_svecref(*newparams, nspec - 2);
         // if all subsequent arguments are subtypes of type_i, specialize
@@ -2076,7 +2102,9 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, jl_value_t *
     if (ambig != NULL)
         *ambig = 0;
     jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)types);
-    if (jl_is_tuple_type(unw) && (unw == (jl_value_t*)jl_emptytuple_type || jl_tparam0(unw) == jl_bottom_type))
+    if (!jl_is_tuple_type(unw))
+        return (jl_value_t*)jl_an_empty_vec_any;
+    if (unw == (jl_value_t*)jl_emptytuple_type || jl_tparam0(unw) == jl_bottom_type)
         return (jl_value_t*)jl_an_empty_vec_any;
     if (mt == jl_nothing)
         mt = (jl_value_t*)jl_method_table_for(unw);
@@ -2173,8 +2201,8 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
     if (codeinst)
         return codeinst;
 
-    // if mi has a better (wider) signature for compilation use that instead
-    // and just copy it here for caching
+    // if mi has a better (wider) signature preferred for compilation use that
+    // instead and just copy it here for caching
     jl_method_instance_t *mi2 = jl_normalize_to_compilable_mi(mi);
     if (mi2 != mi) {
         jl_code_instance_t *codeinst2 = jl_compile_method_internal(mi2, world);
@@ -2363,7 +2391,7 @@ JL_DLLEXPORT jl_value_t *jl_normalize_to_compilable_sig(jl_methtable_t *mt, jl_t
 jl_method_instance_t *jl_normalize_to_compilable_mi(jl_method_instance_t *mi JL_PROPAGATES_ROOT)
 {
     jl_method_t *def = mi->def.method;
-    if (!jl_is_method(def))
+    if (!jl_is_method(def) || !jl_is_datatype(mi->specTypes))
         return mi;
     jl_methtable_t *mt = jl_method_get_table(def);
     if ((jl_value_t*)mt == jl_nothing)
@@ -2445,7 +2473,7 @@ jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types JL_PROPAGATES
 
 // Get a MethodInstance for a precompile() call. This uses a special kind of lookup that
 // tries to find a method for which the requested signature is compileable.
-jl_method_instance_t *jl_get_compile_hint_specialization(jl_tupletype_t *types JL_PROPAGATES_ROOT, size_t world, size_t *min_valid, size_t *max_valid, int mt_cache)
+static jl_method_instance_t *jl_get_compile_hint_specialization(jl_tupletype_t *types JL_PROPAGATES_ROOT, size_t world, size_t *min_valid, size_t *max_valid, int mt_cache)
 {
     if (jl_has_free_typevars((jl_value_t*)types))
         return NULL; // don't poison the cache due to a malformed query
@@ -2468,7 +2496,7 @@ jl_method_instance_t *jl_get_compile_hint_specialization(jl_tupletype_t *types J
     if (n == 1) {
         match = (jl_method_match_t*)jl_array_ptr_ref(matches, 0);
     }
-    else {
+    else if (jl_is_datatype(types)) {
         // first, select methods for which `types` is compileable
         size_t count = 0;
         for (i = 0; i < n; i++) {
@@ -2839,7 +2867,9 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint
 static jl_method_match_t *_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT, jl_value_t *mt, size_t world, size_t *min_valid, size_t *max_valid)
 {
     jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)types);
-    if (jl_is_tuple_type(unw) && jl_tparam0(unw) == jl_bottom_type)
+    if (!jl_is_tuple_type(unw))
+        return NULL;
+    if (jl_tparam0(unw) == jl_bottom_type)
         return NULL;
     if (mt == jl_nothing)
         mt = (jl_value_t*)jl_method_table_for(unw);
