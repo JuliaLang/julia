@@ -1025,6 +1025,18 @@ end
     end
 end
 
+pkgimage(val) = val ? `--pkgimage=yes` : `--pkgimage=no`
+opt_level(val) = `-O$val`
+debug_level(val) = `-g$val`
+inline(val) = val ? `--inline=yes` : `--inline=no`
+check_bounds(val) = if val == 0
+    `--check_bounds=auto`
+elseif val == 1
+    `--check_bounds=yes`
+elseif val == 2
+    `--check_bounds=no`
+end
+
 @testset "CacheFlags" begin
     cf = Base.CacheFlags()
     opts = Base.JLOptions()
@@ -1033,7 +1045,24 @@ end
     @test cf.check_bounds == opts.check_bounds
     @test cf.inline == opts.can_inline
     @test cf.opt_level == opts.opt_level
-    # TODO start processes with different flags and check that cache flags are correct.
+
+    # OOICCDDP
+    for (P, D, C, I, O) in (0:1, 0:2, 0:2, 0:1, 0:3)
+        julia = joinpath(Sys.BINDIR, julia_exename())
+        cmd = `$julia $(pkgimage(P)) $(opt_level(O) $(debug_level(D)) $(check_bounds(C) $(inline(I)))) -e '
+        begin
+            using Test
+            cf = Base.CacheFlags()
+            opts = Base.JLOptions()
+            @test cf.use_pkgimages == opts.use_pkgimages == $P
+            @test cf.debug_level == opts.debug_level == $D
+            @test cf.check_bounds == opts.check_bounds == $C
+            @test cf.inline == opts.can_inline == $I
+            @test cf.opt_level == opts.opt_level == $O
+        end
+        '`
+        @test success(cmd)
+    end
 end
 
 empty!(Base.DEPOT_PATH)
