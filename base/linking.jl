@@ -96,7 +96,10 @@ function ld()
     else
         flavor = "gnu"
     end
-
+    if haskey(ENV,"JULIA_PKGIMG_LINKER")
+        ld = ENV["JULIA_PKGIMG_LINKER"]
+        return `$ld $default_args`
+    end
     `$(lld()) -flavor $flavor $default_args`
 end
 
@@ -107,7 +110,7 @@ else
 end
 
 const NO_WHOLE_ARCHIVE = if Sys.isapple()
-    ""
+    ``
 else
     "--no-whole-archive"
 end
@@ -136,7 +139,7 @@ function link_image_cmd(path, out)
         LIBS = (LIBS..., "-lopenlibm", "-lssp", "-lgcc_s", "-lgcc", "-lmsvcrt")
     end
 
-    V = VERBOSE[] ? "--verbose" : ""
+    V = VERBOSE[] ? "--verbose" : ``
     `$(ld()) $V $SHARED -o $out $WHOLE_ARCHIVE $path $NO_WHOLE_ARCHIVE $LIBDIR $PRIVATE_LIBDIR $SHLIBDIR $LIBS`
 end
 
