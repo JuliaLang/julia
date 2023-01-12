@@ -333,17 +333,9 @@ end
 
 # this query is specially written for `adjust_effects` and returns true if a value of this type
 # never involves inconsistency of mutable objects that are allocated somewhere within a call graph
-is_consistent_argtype(@nospecialize ty) = is_consistent_type(widenconst(ignorelimited(ty)))
-is_consistent_type(@nospecialize ty) = _is_consistent_type(unwrap_unionall(ty))
-function _is_consistent_type(@nospecialize ty)
-    ty = unwrap_unionall(ty)
-    if isa(ty, Union)
-        return is_consistent_type(ty.a) && is_consistent_type(ty.b)
-    elseif isa(ty, DataType)
-        return datatype_isidentityfree(ty)
-    end
-    return false
-end
+is_consistent_argtype(@nospecialize ty) =
+    is_consistent_type(widenconst(ignorelimited(ty)))
+is_consistent_type(@nospecialize ty) = isidentityfree(ty)
 
 is_immutable_argtype(@nospecialize ty) = is_immutable_type(widenconst(ignorelimited(ty)))
 is_immutable_type(@nospecialize ty) = _is_immutable_type(unwrap_unionall(ty))
@@ -355,6 +347,5 @@ function _is_immutable_type(@nospecialize ty)
 end
 
 is_mutation_free_argtype(@nospecialize argtype) =
-    ismutationfree(widenconst(ignorelimited(argtype)))
-is_mutation_free_type(@nospecialize ty) =
-    ismutationfree(ty)
+    is_mutation_free_type(widenconst(ignorelimited(argtype)))
+is_mutation_free_type(@nospecialize ty) = ismutationfree(ty)
