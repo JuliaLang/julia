@@ -1,10 +1,10 @@
 // All functions here are extern function. There is no point for marking them as unsafe.
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
-use crate::BLOCK_FOR_GC;
 use crate::reference_glue::JuliaFinalizableObject;
 use crate::JuliaVM;
 use crate::Julia_Upcalls;
+use crate::BLOCK_FOR_GC;
 use crate::FINALIZER_ROOTS;
 use crate::SINGLETON;
 use crate::UPCALLS;
@@ -212,7 +212,9 @@ pub extern "C" fn disable_collection() {
     }
 
     // if user has triggered GC, wait until GC is finished
-    while AtomicBool::load(&USER_TRIGGERED_GC, Ordering::SeqCst) || unsafe { AtomicBool::load(&BLOCK_FOR_GC, Ordering::SeqCst) } {
+    while AtomicBool::load(&USER_TRIGGERED_GC, Ordering::SeqCst)
+        || AtomicBool::load(&BLOCK_FOR_GC, Ordering::SeqCst)
+    {
         info!("Waiting for a triggered gc to finish...");
         unsafe { ((*UPCALLS).wait_in_a_safepoint)() };
     }

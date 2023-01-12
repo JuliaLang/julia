@@ -70,13 +70,16 @@ lazy_static! {
 
 #[link(kind = "static", name = "runtime_gc_c")]
 extern "C" {
-    pub static BLOCK_FOR_GC: AtomicBool;
-    pub static CURRENT_BLOCK_SIZE: usize;
-    pub static WORLD_HAS_STOPPED: AtomicBool;
     pub static JULIA_HEADER_SIZE: usize;
     pub static BI_METADATA_START_ALIGNED_DOWN: usize;
     pub static BI_METADATA_END_ALIGNED_UP: usize;
 }
+
+#[no_mangle]
+pub static BLOCK_FOR_GC: AtomicBool = AtomicBool::new(false);
+
+#[no_mangle]
+pub static WORLD_HAS_STOPPED: AtomicBool = AtomicBool::new(false);
 
 #[no_mangle]
 pub static SCHEDULED_FINALIZATION: AtomicBool = AtomicBool::new(false);
@@ -98,7 +101,8 @@ lazy_static! {
     pub static ref STOP_MUTATORS: Arc<(Mutex<usize>, Condvar)> =
         Arc::new((Mutex::new(0), Condvar::new()));
     pub static ref ROOTS: Mutex<HashSet<Address>> = Mutex::new(HashSet::new());
-    pub static ref FINALIZER_ROOTS: RwLock<HashSet<JuliaFinalizableObject>> = RwLock::new(HashSet::new());
+    pub static ref FINALIZER_ROOTS: RwLock<HashSet<JuliaFinalizableObject>> =
+        RwLock::new(HashSet::new());
     pub static ref MUTATOR_TLS: RwLock<HashSet<String>> = RwLock::new(HashSet::new());
     pub static ref MUTATORS: RwLock<Vec<ObjectReference>> = RwLock::new(vec![]);
 }
@@ -108,7 +112,6 @@ lazy_static! {
 extern "C" {
     pub fn spawn_collector_thread(tls: VMThread, ctx: *mut GCWorker<JuliaVM>, kind: i32);
     pub fn set_julia_obj_header_size(size: usize);
-    pub fn increase_alloc_number();
     pub fn reset_mutator_count();
     pub fn get_next_julia_mutator() -> usize;
     pub fn get_mutator_ref(mutator: *mut Mutator<JuliaVM>) -> ObjectReference;

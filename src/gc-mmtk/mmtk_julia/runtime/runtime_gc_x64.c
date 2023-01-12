@@ -3,8 +3,6 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-bool BLOCK_FOR_GC = 0;
-bool WORLD_HAS_STOPPED = 0;
 long JULIA_HEADER_SIZE = 0;
 long BI_METADATA_START_ALIGNED_DOWN = 0;
 long BI_METADATA_END_ALIGNED_UP = 0;

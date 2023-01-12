@@ -27,20 +27,17 @@ impl Collection<JuliaVM> for VMCollection {
         F: FnMut(&'static mut Mutator<JuliaVM>),
     {
         // Wait for all mutators to stop and all finalizers to run
-        unsafe {
-            while !AtomicBool::load(&WORLD_HAS_STOPPED, Ordering::SeqCst) {
-                // Stay here while the world has not stopped
-                // FIXME add wait var
-            }
+        while !AtomicBool::load(&WORLD_HAS_STOPPED, Ordering::SeqCst) {
+            // Stay here while the world has not stopped
+            // FIXME add wait var
         }
+
         trace!("Stopped the world!")
     }
 
     fn resume_mutators(_tls: VMWorkerThread) {
-        unsafe {
-            AtomicBool::store(&BLOCK_FOR_GC, false, Ordering::SeqCst);
-            AtomicBool::store(&WORLD_HAS_STOPPED, false, Ordering::SeqCst);
-        }
+        AtomicBool::store(&BLOCK_FOR_GC, false, Ordering::SeqCst);
+        AtomicBool::store(&WORLD_HAS_STOPPED, false, Ordering::SeqCst);
 
         let &(_, ref cvar) = &*STW_COND.clone();
         cvar.notify_all();
@@ -62,9 +59,7 @@ impl Collection<JuliaVM> for VMCollection {
     fn block_for_gc(tls: VMMutatorThread) {
         info!("Triggered GC!");
 
-        unsafe {
-            AtomicBool::store(&BLOCK_FOR_GC, true, Ordering::SeqCst);
-        }
+        AtomicBool::store(&BLOCK_FOR_GC, true, Ordering::SeqCst);
 
         let tls_ptr = match tls {
             VMMutatorThread(t) => match t {
@@ -93,14 +88,10 @@ impl Collection<JuliaVM> for VMCollection {
 
             info!("Blocking for GC!");
 
-            unsafe {
-                AtomicBool::store(&WORLD_HAS_STOPPED, true, Ordering::SeqCst);
-            }
+            AtomicBool::store(&WORLD_HAS_STOPPED, true, Ordering::SeqCst);
 
-            unsafe {
-                while AtomicBool::load(&BLOCK_FOR_GC, Ordering::SeqCst) {
-                    count = cvar.wait(count).unwrap();
-                }
+            while AtomicBool::load(&BLOCK_FOR_GC, Ordering::SeqCst) {
+                count = cvar.wait(count).unwrap();
             }
         }
 
