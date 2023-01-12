@@ -52,11 +52,11 @@ end
     @test testval("+1_000" , 1000  |> Int64)
     @test testval("-1_000" , -1000 |> Int64)
 
-    @test testval("0x6E"    ,0x6E|> UInt64)
-    @test testval("0x8f1e"  , 0x8f1e|> UInt64)
-    @test testval("0x765f3173"  , 0x765f3173|> UInt64)
-    @test testval("0xc13b830a807cc7f4" , 0xc13b830a807cc7f4|> UInt64)
-    @test testval("0x937efe_0a4241_edb24a04b97bd90ef363" , 0x937efe0a4241edb24a04b97bd90ef363 |> UInt128)
+    @test testval("0x6E", 0x6E|> UInt64)
+    @test testval("0x8f1e", 0x8f1e|> UInt64)
+    @test testval("0x765f3173", 0x765f3173|> UInt64)
+    @test testval("0xc13b830a807cc7f4", 0xc13b830a807cc7f4|> UInt64)
+    @test testval("0x937efe_0a4241_edb24a04b97bd90ef363", 0x937efe0a4241edb24a04b97bd90ef363 |> UInt128)
 
     @test testval("0o140", 0o140 |> UInt64) # UInt8
     @test testval("0o46244", 0o46244 |> UInt64) # UInt16
