@@ -307,13 +307,11 @@ end
 f_29115(x) = (x...,)
 @test @allocated(f_29115(1)) == 0
 @test @allocated(f_29115(1=>2)) == 0
-let ci = code_typed(f_29115, Tuple{Int64})[1].first
-    @test length(ci.code) == 2 && isexpr(ci.code[1], :call) &&
-        ci.code[1].args[1] === GlobalRef(Core, :tuple)
+let src = code_typed(f_29115, Tuple{Int64}) |> only |> first
+    @test iscall((src, tuple), src.code[end-1])
 end
-let ci = code_typed(f_29115, Tuple{Pair{Int64, Int64}})[1].first
-    @test length(ci.code) == 4 && isexpr(ci.code[1], :call) &&
-        ci.code[end-1].args[1] === GlobalRef(Core, :tuple)
+let src = code_typed(f_29115, Tuple{Pair{Int64, Int64}}) |> only |> first
+    @test iscall((src, tuple), src.code[end-1])
 end
 
 # Issue #37182 & #37555 - Inlining of pending nodes

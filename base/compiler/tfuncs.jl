@@ -574,8 +574,9 @@ end
     end
     return false
 end
-@nospecs function typevar_nothrow(n, lb, ub)
-    (n ⊑ Symbol) || return false
+@nospecs function typevar_nothrow(𝕃::AbstractLattice, n, lb, ub)
+    ⊑ = Core.Compiler.:⊑(𝕃)
+    n ⊑ Symbol || return false
     typebound_nothrow(lb) || return false
     typebound_nothrow(ub) || return false
     return true
@@ -1225,6 +1226,18 @@ end
 end
 
 @nospecs function getfield_notundefined(typ0, name)
+    if isa(typ0, Const) && isa(name, Const)
+        typv = typ0.val
+        namev = name.val
+        isa(typv, Module) && return true
+        if isa(namev, Symbol) || isa(namev, Int)
+            # Fields are not allowed to transition from defined to undefined, so
+            # even if the field is not const, all we need to check here is that
+            # it is defined here.
+            return isdefined(typv, namev)
+        end
+    end
+    typ0 = widenconst(typ0)
     typ = unwrap_unionall(typ0)
     if isa(typ, Union)
         return getfield_notundefined(rewrap_unionall(typ.a, typ0), name) &&
@@ -1245,7 +1258,7 @@ end
         # initialized with undefined value so to avoid being too conservative
         fcnt = fieldcount_noerror(typ)
         fcnt === nothing && return false
-        all(i::Int->is_undefref_fieldtype(fieldtype(typ,i)), 1:fcnt) && return true
+        all(i::Int->is_undefref_fieldtype(fieldtype(typ,i)), (datatype_min_ninitialized(typ)+1):fcnt) && return true
         return false
     end
     name = name.val
@@ -2004,7 +2017,7 @@ end
         return arraysize_nothrow(argtypes[1], argtypes[2])
     elseif f === Core._typevar
         na == 3 || return false
-        return typevar_nothrow(argtypes[1], argtypes[2], argtypes[3])
+        return typevar_nothrow(𝕃, argtypes[1], argtypes[2], argtypes[3])
     elseif f === invoke
         return false
     elseif f === getfield
@@ -2171,13 +2184,14 @@ function getfield_effects(argtypes::Vector{Any}, @nospecialize(rt))
     isempty(argtypes) && return EFFECTS_THROWS
     obj = argtypes[1]
     isvarargtype(obj) && return Effects(EFFECTS_THROWS; consistent=ALWAYS_FALSE)
-    consistent = is_immutable_argtype(obj) ? ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
+    consistent = (is_immutable_argtype(obj) || is_mutation_free_argtype(obj)) ?
+        ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
     # access to `isbitstype`-field initialized with undefined value leads to undefined behavior
     # so should taint `:consistent`-cy while access to uninitialized non-`isbitstype` field
     # throws `UndefRefError` so doesn't need to taint it
     # NOTE `getfield_notundefined` conservatively checks if this field is never initialized
     # with undefined value so that we don't taint `:consistent`-cy too aggressively here
-    if !(length(argtypes) ≥ 2 && getfield_notundefined(widenconst(obj), argtypes[2]))
+    if !(length(argtypes) ≥ 2 && getfield_notundefined(obj, argtypes[2]))
         consistent = ALWAYS_FALSE
     end
     nothrow = getfield_nothrow(argtypes, true)
@@ -2185,7 +2199,7 @@ function getfield_effects(argtypes::Vector{Any}, @nospecialize(rt))
         # If we cannot independently prove inboundsness, taint consistency.
         # The inbounds-ness assertion requires dynamic reachability, while
         # :consistent needs to be true for all input values.
-        # N.B. We do not taint for `--check-bounds=no` here -that happens in
+        # N.B. We do not taint for `--check-bounds=no` here that happens in
         # InferenceState.
         consistent = ALWAYS_FALSE
     end
@@ -2237,7 +2251,8 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         effect_free = get_binding_type_effect_free(argtypes[1], argtypes[2]) ? ALWAYS_TRUE : ALWAYS_FALSE
         return Effects(EFFECTS_TOTAL; effect_free)
     else
-        consistent = contains_is(_CONSISTENT_BUILTINS, f) ? ALWAYS_TRUE : ALWAYS_FALSE
+        consistent = contains_is(_CONSISTENT_BUILTINS, f) ? ALWAYS_TRUE :
+            (f === Core._typevar) ? CONSISTENT_IF_NOTRETURNED : ALWAYS_FALSE
         if f === setfield! || f === arrayset
             effect_free = EFFECT_FREE_IF_INACCESSIBLEMEMONLY
         elseif contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)

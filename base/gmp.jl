@@ -10,7 +10,7 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, 
              trailing_zeros, trailing_ones, count_ones, count_zeros, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
-             sign, hastypemax, isodd, iseven, digits!, hash, hash_integer
+             sign, hastypemax, isodd, iseven, digits!, hash, hash_integer, top_set_bit
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -396,7 +396,7 @@ function Float64(x::BigInt, ::RoundingMode{:Nearest})
         z = Float64((unsafe_load(x.d, 2) % UInt64) << BITS_PER_LIMB + unsafe_load(x.d))
     else
         y1 = unsafe_load(x.d, xsize) % UInt64
-        n = 64 - leading_zeros(y1)
+        n = top_set_bit(y1)
         # load first 54(1 + 52 bits of fraction + 1 for rounding)
         y = y1 >> (n - (precision(Float64)+1))
         if Limb == UInt64
@@ -585,6 +585,12 @@ end
 Number of ones in the binary representation of abs(x).
 """
 count_ones_abs(x::BigInt) = iszero(x) ? 0 : MPZ.mpn_popcount(x)
+
+function top_set_bit(x::BigInt)
+    x < 0 && throw(DomainError(x, "top_set_bit only supports negative arguments when they have type BitSigned."))
+    x == 0 && return 0
+    Int(ccall((:__gmpz_sizeinbase, :libgmp), Csize_t, (Base.GMP.MPZ.mpz_t, Cint), x, 2))
+end
 
 divrem(x::BigInt, y::BigInt) = MPZ.tdiv_qr(x, y)
 divrem(x::BigInt, y::Integer) = MPZ.tdiv_qr(x, big(y))
