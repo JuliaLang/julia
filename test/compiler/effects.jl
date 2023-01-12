@@ -720,3 +720,13 @@ end |> Core.Compiler.is_foldable
 @test Base.infer_effects() do
     return WrapperOneField == (WrapperOneField{T} where T)
 end |> Core.Compiler.is_total
+
+# Test that dead `@inbounds` does not taint consistency
+@test Base.infer_effects() do
+    false && @inbounds (1,2,3)[1]
+    return 1
+end |> Core.Compiler.is_total
+
+@test Base.infer_effects(Tuple{Int64}) do i
+    @inbounds (1,2,3)[i]
+end |> !Core.Compiler.is_consistent

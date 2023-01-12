@@ -607,6 +607,10 @@ currently equivalent to the following `setting`s:
     however, that by the `:consistent`-cy requirements, any such annotated call
     must consistently throw given the same argument values.
 
+!!! note
+    An explict `@inbounds` annotation inside the function will also disable
+    constant propagation and not be overriden by :foldable.
+
 ---
 ## `:removable`
 
