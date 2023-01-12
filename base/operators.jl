@@ -1212,6 +1212,19 @@ used to implement specialized methods.
 <(x) = Fix2(<, x)
 
 """
+    hasproperty(name::Symbol)
+
+Create a function that indicates whether its argument has the property `name` using
+[`hasproperty(x, name)`](@ref), i.e. a function equivalent to `x -> hasproperty(x, name)`.
+The returned function is of type `Base.Fix2{typeof(hasproperty)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.10"
+    This functionality requires at least Julia 1.10.
+"""
+hasproperty(s::Union{Symbol,String,Int}) = Fix2(hasproperty, s)
+
+"""
     Splat(f)
 
 Equivalent to
