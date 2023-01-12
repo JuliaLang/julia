@@ -209,7 +209,11 @@ function mmap(io::IO,
 
     file_desc = gethandle(io)
     szfile = convert(Csize_t, len + offset)
-    requestedSizeLarger = szfile > filesize(io)
+    requestedSizeLarger = false
+    if io isa Mmap.Anonymous
+    else
+        requestedSizeLarger = szfile > filesize(io)
+    end
     # platform-specific mmapping
     @static if Sys.isunix()
         prot, flags, iswrite = settings(file_desc, shared)
