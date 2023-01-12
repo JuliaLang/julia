@@ -1883,20 +1883,16 @@ struct AlmostLU{T, S<:AbstractMatrix{T}}
 end
 let X1 = Tuple{AlmostLU, Vector{T}} where T,
     X2 = Tuple{AlmostLU{S, X} where X<:Matrix, Vector{S}} where S<:Union{Float32, Float64},
-    I = typeintersect(X1, X2)
-    # TODO: the quality of this intersection is not great; for now just test that it
-    # doesn't stack overflow
-    @test I<:X1 || I<:X2
-    actual = Tuple{Union{AlmostLU{S, X} where X<:Matrix{S}, AlmostLU{S, <:Matrix}}, Vector{S}} where S<:Union{Float32, Float64}
-    @test I == actual
+    I = Tuple{AlmostLU{T, S} where S<:Matrix{T}, Vector{T}} where T<:Union{Float32, Float64}
+    @testintersect(X1, X2, I)
 end
 
 let
     # issue #22787
-    # for now check that these don't stack overflow
-    t = typeintersect(Tuple{Type{Q}, Q, Ref{Q}} where Q<:Ref,
-                      Tuple{Type{S}, Union{Ref{S}, Ref{R}}, R} where R where S)
-    @test_broken t != Union{}
+    @testintersect(Tuple{Type{Q}, Q, Ref{Q}} where Q<:Ref,
+                   Tuple{Type{S}, Union{Ref{S}, Ref{R}}, R} where R where S,
+                   !Union{})
+
     t = typeintersect(Tuple{Type{T}, T, Ref{T}} where T,
                       Tuple{Type{S}, Ref{S}, S} where S)
     @test_broken t != Union{}
@@ -2290,10 +2286,8 @@ T46784{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}}, M, Union{Abstr
 let S = Tuple{Type{T},Array{Union{T,Missing},N}} where {T,N},
     T = Tuple{Type{T},Array{Union{T,Nothing},N}} where {T,N}
     @testintersect(S, T, !Union{})
-    I = typeintersect(S, T)
-    @test (Tuple{Type{Any},Array{Any,N}} where {N}) <: I
-    @test_broken I <: S
-    @test_broken I <: T
+    @test_broken typeintersect(S, T) != S
+    @test_broken typeintersect(T, S) != T
 end
 
 #issue 46736
@@ -2314,10 +2308,59 @@ let S1 = Tuple{Int, Any, Union{Val{C1}, C1}} where {R1<:Real, C1<:Union{Complex{
     end
 end
 
+#issue #47874:case2
+let S = Tuple{Int, Vararg{Val{C} where C<:Union{Complex{R}, R}}} where R
+    T = Tuple{Any, Vararg{Val{C} where C<:Union{Complex{R}, R}}} where R<:Real
+    I  = Tuple{Any, Vararg{Val{C} where C<:Union{Complex{R}, R}}} where R<:Real
+    @testintersect(S, T, !Union{})
+    @test_broken typeintersect(S, T) == I
+    @test_broken typeintersect(T, S) == I
+end
+
+#issue #47874:case3
+let S = Tuple{Int, Tuple{Vararg{Val{C1} where C1<:Union{Complex{R1}, R1}}} where R1<:(Union{Real, V1} where V1), Tuple{Vararg{Val{C2} where C2<:Union{Complex{R2}, Complex{R3}, R3}}} where {R2<:(Union{Real, V2} where V2), R3<:Union{Complex{R2}, Real, R2}}},
+    T = Tuple{Any, Tuple{Vararg{Val{CC1} where CC1<:Union{Complex{R}, R}}}, Tuple{Vararg{Val{CC2} where CC2<:Union{Complex{R}, R}}}} where R<:Real
+    @testintersect(S, T, !Union{})
+end
+
 let S = Tuple{T2, V2} where {T2, N2, V2<:(Array{S2, N2} where {S2 <: T2})},
     T = Tuple{V1, T1} where {T1, N1, V1<:(Array{S1, N1} where {S1 <: T1})}
     @testintersect(S, T, !Union{})
 end
+
+# A simple case which has a small local union.
+# make sure the env is not widened too much when we intersect(Int8, Int8).
+struct T48006{A1,A2,A3} end
+@testintersect(Tuple{T48006{Float64, Int, S1}, Int} where {F1<:Real, S1<:Union{Int8, Val{F1}}},
+               Tuple{T48006{F2, I, S2}, I} where {F2<:Real, I<:Int, S2<:Union{Int8, Val{F2}}},
+               Tuple{T48006{Float64, Int, S1}, Int} where S1<:Union{Val{Float64}, Int8})
+
+f48167(::Type{Val{L2}}, ::Type{Union{Val{L1}, Set{R}}}) where {L1, R, L2<:L1} = 1
+f48167(::Type{Val{L1}}, ::Type{Union{Val{L2}, Set{R}}}) where {L1, R, L2<:L1} = 2
+f48167(::Type{Val{L}}, ::Type{Union{Val{L}, Set{R}}}) where {L, R} = 3
+@test f48167(Val{Nothing}, Union{Val{Nothing}, Set{Int}}) == 3
+
+# https://github.com/JuliaLang/julia/pull/31167#issuecomment-1358381818
+let S = Tuple{Type{T1}, T1, Val{T1}} where T1<:(Val{S1} where S1<:Val),
+    T = Tuple{Union{Type{T2}, Type{S2}}, Union{Val{T2}, Val{S2}}, Union{Val{T2}, S2}} where T2<:Val{A2} where A2 where S2<:Val
+    I1 = typeintersect(S, T)
+    I2 = typeintersect(T, S)
+    @test I1 !== Union{} && I2 !== Union{}
+    @test_broken I1 <: S
+    @test_broken I2 <: T
+    @test I2 <: S
+    @test_broken I2 <: T
+end
+
+#issue 44395
+@testintersect(Tuple{Type{T}, T} where {T <: Vector{Union{T, R}} where {R<:Real, T<:Real}},
+               Tuple{Type{Vector{Union{T, R}}}, Matrix{Union{T, R}}} where {R<:Real, T<:Real},
+               Union{})
+
+#issue 26487
+@testintersect(Tuple{Type{Tuple{T,Val{T}}}, Val{T}} where T,
+               Tuple{Type{Tuple{Val{T},T}}, Val{T}} where T,
+               Union{})
 
 @testset "known subtype/intersect issue" begin
     #issue 45874
@@ -2327,12 +2370,6 @@ end
     #     @test_broken S <: T
     #     @test_broken typeintersect(S,T) === S
     # end
-
-    #issue 44395
-    @test_broken typeintersect(
-        Tuple{Type{T}, T} where {T <: Vector{Union{T, R}} where {R<:Real, T<:Real}},
-        Tuple{Type{Vector{Union{T, R}}}, Matrix{Union{T, R}}} where {R<:Real, T<:Real},
-    ) === Union{}
 
     #issue 41561
     @test_broken typeintersect(Tuple{Vector{VT}, Vector{VT}} where {N1, VT<:AbstractVector{N1}},
@@ -2351,9 +2388,6 @@ end
 
     #issue 33137
     @test_broken (Tuple{Q,Int} where Q<:Int) <: Tuple{T,T} where T
-
-    #issue 26487
-    @test_broken typeintersect(Tuple{Type{Tuple{T,Val{T}}}, Val{T}} where T, Tuple{Type{Tuple{Val{T},T}}, Val{T}} where T) <: Any
 
     # issue 24333
     @test_broken (Type{Union{Ref,Cvoid}} <: Type{Union{T,Cvoid}} where T)

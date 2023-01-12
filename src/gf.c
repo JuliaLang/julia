@@ -172,7 +172,7 @@ static jl_method_instance_t *jl_specializations_get_linfo_(jl_method_t *m JL_PRO
             if (!hv)
                 i -= 1;
             assert(jl_svecref(specializations, i) == jl_nothing);
-            jl_svecset(specializations, i, mi); // jl_atomic_store_release?
+            jl_svecset(specializations, i, mi); // jl_atomic_store_relaxed?
             if (hv) {
                 // TODO: fuse lookup and insert steps?
                 jl_smallintset_insert(&m->speckeyset, (jl_value_t*)m, speccache_hash, i, specializations);
@@ -471,38 +471,38 @@ int foreach_mtable_in_module(
         int (*visit)(jl_methtable_t *mt, void *env),
         void *env)
 {
-    size_t i;
-    void **table = m->bindings.table;
-    for (i = 1; i < m->bindings.size; i += 2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
-            JL_GC_PROMISE_ROOTED(b);
-            if (b->owner == m && b->constp) {
-                jl_value_t *v = jl_atomic_load_relaxed(&b->value);
-                if (v) {
-                    jl_value_t *uw = jl_unwrap_unionall(v);
-                    if (jl_is_datatype(uw)) {
-                        jl_typename_t *tn = ((jl_datatype_t*)uw)->name;
-                        if (tn->module == m && tn->name == b->name && tn->wrapper == v) {
-                            // this is the original/primary binding for the type (name/wrapper)
-                            jl_methtable_t *mt = tn->mt;
-                            if (mt != NULL && (jl_value_t*)mt != jl_nothing && mt != jl_type_type_mt && mt != jl_nonfunction_mt) {
-                                if (!visit(mt, env))
-                                    return 0;
-                            }
-                        }
-                    }
-                    else if (jl_is_module(v)) {
-                        jl_module_t *child = (jl_module_t*)v;
-                        if (child != m && child->parent == m && child->name == b->name) {
-                            // this is the original/primary binding for the submodule
-                            if (!foreach_mtable_in_module(child, visit, env))
+    jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
+    for (size_t i = 0; i < jl_svec_len(table); i++) {
+        jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
+        if ((void*)b == jl_nothing)
+            break;
+        jl_sym_t *name = b->globalref->name;
+        if (jl_atomic_load_relaxed(&b->owner) == b && b->constp) {
+            jl_value_t *v = jl_atomic_load_relaxed(&b->value);
+            if (v) {
+                jl_value_t *uw = jl_unwrap_unionall(v);
+                if (jl_is_datatype(uw)) {
+                    jl_typename_t *tn = ((jl_datatype_t*)uw)->name;
+                    if (tn->module == m && tn->name == name && tn->wrapper == v) {
+                        // this is the original/primary binding for the type (name/wrapper)
+                        jl_methtable_t *mt = tn->mt;
+                        if (mt != NULL && (jl_value_t*)mt != jl_nothing && mt != jl_type_type_mt && mt != jl_nonfunction_mt) {
+                            if (!visit(mt, env))
                                 return 0;
                         }
                     }
                 }
+                else if (jl_is_module(v)) {
+                    jl_module_t *child = (jl_module_t*)v;
+                    if (child != m && child->parent == m && child->name == name) {
+                        // this is the original/primary binding for the submodule
+                        if (!foreach_mtable_in_module(child, visit, env))
+                            return 0;
+                    }
+                }
             }
         }
+        table = jl_atomic_load_relaxed(&m->bindings);
     }
     return 1;
 }

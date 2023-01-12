@@ -927,18 +927,18 @@ struct ConditionalArgtypes <: ForwardableArgtypes
 end
 
 """
-    matching_cache_argtypes(linfo::MethodInstance, argtypes::ConditionalArgtypes)
+    matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance, argtypes::ConditionalArgtypes)
 
 The implementation is able to forward `Conditional` of `argtypes`,
 as well as the other general extended lattice inforamtion.
 """
-function matching_cache_argtypes(linfo::MethodInstance, argtypes::ConditionalArgtypes)
+function matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance, argtypes::ConditionalArgtypes)
     (; arginfo, sv) = argtypes
     (; fargs, argtypes) = arginfo
     given_argtypes = Vector{Any}(undef, length(argtypes))
     def = linfo.def::Method
     nargs = Int(def.nargs)
-    cache_argtypes, overridden_by_const = matching_cache_argtypes(linfo)
+    cache_argtypes, overridden_by_const = matching_cache_argtypes(𝕃, linfo)
     local condargs = nothing
     for i in 1:length(argtypes)
         argtype = argtypes[i]
@@ -969,7 +969,7 @@ function matching_cache_argtypes(linfo::MethodInstance, argtypes::ConditionalArg
     end
     if condargs !== nothing
         given_argtypes = let condargs=condargs
-            va_process_argtypes(given_argtypes, linfo) do isva_given_argtypes::Vector{Any}, last::Int
+            va_process_argtypes(𝕃, given_argtypes, linfo) do isva_given_argtypes::Vector{Any}, last::Int
                 # invalidate `Conditional` imposed on varargs
                 for (slotid, i) in condargs
                     if slotid ≥ last && (1 ≤ i ≤ length(isva_given_argtypes)) # `Conditional` is already widened to vararg-tuple otherwise
@@ -979,9 +979,9 @@ function matching_cache_argtypes(linfo::MethodInstance, argtypes::ConditionalArg
             end
         end
     else
-        given_argtypes = va_process_argtypes(given_argtypes, linfo)
+        given_argtypes = va_process_argtypes(𝕃, given_argtypes, linfo)
     end
-    return pick_const_args!(cache_argtypes, overridden_by_const, given_argtypes)
+    return pick_const_args!(𝕃, cache_argtypes, overridden_by_const, given_argtypes)
 end
 
 function abstract_call_method_with_const_args(interp::AbstractInterpreter,
@@ -2169,22 +2169,35 @@ function abstract_eval_cfunction(interp::AbstractInterpreter, e::Expr, vtypes::V
     nothing
 end
 
-function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, sv::Union{InferenceState, IRCode})
+function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable, Nothing}, sv::Union{InferenceState, IRCode})
+    rt = Any
     head = e.head
     if head === :static_parameter
         n = e.args[1]::Int
-        t = Any
         if 1 <= n <= length(sv.sptypes)
-            t = sv.sptypes[n]
+            rt = sv.sptypes[n]
         end
-        return t
     elseif head === :boundscheck
-        return Bool
+        if isa(sv, InferenceState)
+            stmt = sv.src.code[sv.currpc]
+            if isexpr(stmt, :call)
+                f = abstract_eval_value(interp, stmt.args[1], vtypes, sv)
+                if f isa Const && f.val === getfield
+                    # boundscheck of `getfield` call is analyzed by tfunc potentially without
+                    # tainting :consistent-cy when it's known to be nothrow
+                    @goto delay_effects_analysis
+                end
+            end
+        end
+        merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE, noinbounds=false))
+        @label delay_effects_analysis
+        rt = Bool
+    elseif head === :inbounds
+        merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE, noinbounds=false))
     elseif head === :the_exception
         merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE))
-        return Any
     end
-    return Any
+    return rt
 end
 
 function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::Union{VarTable, Nothing}, sv::Union{InferenceState, IRCode})
@@ -2214,7 +2227,7 @@ end
 
 function abstract_eval_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::Union{VarTable, Nothing}, sv::Union{InferenceState, IRCode})
     if isa(e, Expr)
-        return abstract_eval_value_expr(interp, e, sv)
+        return abstract_eval_value_expr(interp, e, vtypes, sv)
     else
         typ = abstract_eval_special_value(interp, e, vtypes, sv)
         return collect_limitations!(typ, sv)
@@ -2443,7 +2456,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         effects = EFFECTS_THROWS
         merge_effects!(interp, sv, effects)
     else
-        t = abstract_eval_value_expr(interp, e, sv)
+        t = abstract_eval_value_expr(interp, e, vtypes, sv)
     end
     return RTEffects(t, effects)
 end
@@ -2521,14 +2534,12 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
 end
 
 function isdefined_globalref(g::GlobalRef)
-    g.binding != C_NULL && return ccall(:jl_binding_boundp, Cint, (Ptr{Cvoid},), g.binding) != 0
-    return isdefined(g.mod, g.name)
+    return ccall(:jl_globalref_boundp, Cint, (Any,), g) != 0
 end
 
 function abstract_eval_globalref(g::GlobalRef)
     if isdefined_globalref(g) && isconst(g)
-        g.binding != C_NULL && return Const(ccall(:jl_binding_value, Any, (Ptr{Cvoid},), g.binding))
-        return Const(getglobal(g.mod, g.name))
+        return Const(ccall(:jl_get_globalref_value, Any, (Any,), g))
     end
     ty = ccall(:jl_get_binding_type, Any, (Any, Any), g.mod, g.name)
     ty === nothing && return Any
