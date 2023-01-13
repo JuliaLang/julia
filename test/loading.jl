@@ -1061,7 +1061,7 @@ end
             @test cf.opt_level == opts.opt_level == $O
         end
         """
-        cmd = `$julia $(pkgimage(P)) $(opt_level(O) $(debug_level(D)) $(check_bounds(C) $(inline(I)))) -e $script`
+        cmd = `$julia $(pkgimage(P)) $(opt_level(O)) $(debug_level(D)) $(check_bounds(C)) $(inline(I)) -e $script`
         @test success(pipeline(cmd; stderr))
     end
 end
