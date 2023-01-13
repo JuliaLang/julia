@@ -376,11 +376,11 @@ reverse(nt::NamedTuple) = NamedTuple{reverse(keys(nt))}(reverse(values(nt)))
     (names...,)
 end
 
-@assume_effects :total function diff_types(@nospecialize(a::NamedTuple), @nospecialize(names::Tuple{Vararg{Symbol}}))
+@assume_effects :foldable function diff_types(@nospecialize(a::NamedTuple), @nospecialize(names::Tuple{Vararg{Symbol}}))
     return Tuple{Any[ fieldtype(typeof(a), names[n]) for n in 1:length(names) ]...}
 end
 
-@assume_effects :total function diff_fallback(@nospecialize(a::NamedTuple), @nospecialize(an::Tuple{Vararg{Symbol}}), @nospecialize(bn::Tuple{Vararg{Symbol}}))
+@assume_effects :foldable function diff_fallback(@nospecialize(a::NamedTuple), @nospecialize(an::Tuple{Vararg{Symbol}}), @nospecialize(bn::Tuple{Vararg{Symbol}}))
     names = diff_names(an, bn)
     isempty(names) && return (;)
     types = diff_types(a, names)
