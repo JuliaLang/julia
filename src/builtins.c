@@ -462,7 +462,7 @@ JL_CALLABLE(jl_f_typeof)
     return jl_typeof(args[0]);
 }
 
-JL_CALLABLE(jl_f_sizeof)
+JL_CALLABLE(    )
 {
     JL_NARGS(sizeof, 1, 1);
     jl_value_t *x = args[0];
@@ -492,7 +492,9 @@ JL_CALLABLE(jl_f_sizeof)
     if (jl_is_array(x)) {
         return jl_box_long(jl_array_len(x) * ((jl_array_t*)x)->elsize);
     }
-    //TODO: jl_buffer_t
+    if (jl_is_buffer(x)) {
+        return jl_box_long(jl_buffer_len(x) * jl_buffer_elsize(x));
+    }
     if (jl_is_string(x))
         return jl_box_long(jl_string_len(x));
     if (jl_is_symbol(x))
