@@ -2045,14 +2045,13 @@ function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::
         end
     elseif head === :boundscheck
         if isa(sv, InferenceState)
-            flag = sv.src.ssaflags[sv.currpc]
-            # If there is no particular @inbounds for this function, then we only taint `noinbounds`,
-            # which will subsequently taint consistency if this function is called from another
-            # function that uses `@inbounds`. However, if this :boundscheck is itself within an
+            # If there is no particular `@inbounds` for this function, then we only taint `:noinbounds`,
+            # which will subsequently taint `:consistent`-cy if this function is called from another
+            # function that uses `@inbounds`. However, if this `:boundscheck` is itself within an
             # `@inbounds` region, its value depends on `--check-bounds`, so we need to taint
-            # consistency here also.
+            # `:consistent`-cy here also.
             merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; noinbounds=false,
-                consistent = (flag & IR_FLAG_INBOUNDS) != 0 ? ALWAYS_FALSE : ALWAYS_TRUE))
+                consistent = (get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) != 0 ? ALWAYS_FALSE : ALWAYS_TRUE))
         end
         rt = Bool
     elseif head === :inbounds
@@ -2333,8 +2332,8 @@ function abstract_eval_phi(interp::AbstractInterpreter, phi::PhiNode, vtypes::Un
 end
 
 function stmt_taints_inbounds_consistency(sv::InferenceState)
-    flag = sv.src.ssaflags[sv.currpc]
-    return sv.src.propagate_inbounds || (flag & IR_FLAG_INBOUNDS) != 0
+    sv.src.propagate_inbounds && return true
+    return (get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) != 0
 end
 
 function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
@@ -2346,13 +2345,12 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
     end
     (;rt, effects) = abstract_eval_statement_expr(interp, e, vtypes, sv, nothing)
     if !effects.noinbounds
-        flag = sv.src.ssaflags[sv.currpc]
         if !sv.src.propagate_inbounds
             # The callee read our inbounds flag, but unless we propagate inbounds,
             # we ourselves don't read our parent's inbounds.
             effects = Effects(effects; noinbounds=true)
         end
-        if (flag & IR_FLAG_INBOUNDS) != 0
+        if (get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) != 0
             effects = Effects(effects; consistent=ALWAYS_FALSE)
         end
     end

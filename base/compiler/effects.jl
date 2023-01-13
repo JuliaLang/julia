@@ -40,8 +40,8 @@ following meanings:
     This state corresponds to LLVM's `inaccessiblemem_or_argmemonly` function attribute.
 - `nonoverlayed::Bool`: indicates that any methods that may be called within this method
   are not defined in an [overlayed method table](@ref OverlayMethodTable).
-- `noinbounds::Bool`: If set, indicates that this method does not read the parent's :inbounds
-  state. In particular, it does not have any reached :boundscheck exprs, not propagates inbounds
+- `noinbounds::Bool`: If set, indicates that this method does not read the parent's `:inbounds`
+  state. In particular, it does not have any reached `:boundscheck` exprs, not propagates inbounds
   to any children that do.
 
 Note that the representations above are just internal implementation details and thus likely
