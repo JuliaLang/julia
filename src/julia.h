@@ -196,6 +196,9 @@ STATIC_INLINE int jl_array_ndimwords(uint32_t ndims) JL_NOTSAFEPOINT
 
 typedef struct _jl_datatype_t jl_tupletype_t;
 struct _jl_code_instance_t;
+typedef struct _jl_method_instance_t jl_method_instance_t;
+typedef struct _jl_globalref_t jl_globalref_t;
+
 
 // TypeMap is an implicitly defined type
 // that can consist of any of the following nodes:
@@ -225,8 +228,6 @@ typedef jl_value_t *(*jl_fptr_sparam_t)(jl_value_t*, jl_value_t**, uint32_t, jl_
 
 extern jl_call_t jl_fptr_interpret_call;
 JL_DLLEXPORT extern jl_callptr_t jl_fptr_interpret_call_addr;
-
-typedef struct _jl_method_instance_t jl_method_instance_t;
 
 typedef struct _jl_line_info_node_t {
     struct _jl_module_t *module;
@@ -282,13 +283,15 @@ typedef struct _jl_code_info_t {
     size_t max_world;
     // various boolean properties:
     uint8_t inferred;
-    uint16_t inlining_cost;
     uint8_t propagate_inbounds;
     uint8_t pure;
     uint8_t has_fcall;
     // uint8 settings
+    uint8_t inlining; // 0 = default; 1 = @inline; 2 = @noinline
     uint8_t constprop; // 0 = use heuristic; 1 = aggressive; 2 = none
     _jl_purity_overrides_t purity;
+    // uint16 settings
+    uint16_t inlining_cost;
 } jl_code_info_t;
 
 // This type describes a single method definition, and stores data
@@ -312,7 +315,7 @@ typedef struct _jl_method_t {
     jl_value_t *slot_syms; // compacted list of slot names (String)
     jl_value_t *external_mt; // reference to the method table this method is part of, null if part of the internal table
     jl_value_t *source;  // original code template (jl_code_info_t, but may be compressed), null for builtins
-    _Atomic(struct _jl_method_instance_t*) unspecialized;  // unspecialized executable method instance, or null
+    _Atomic(jl_method_instance_t*) unspecialized;  // unspecialized executable method instance, or null
     jl_value_t *generator;  // executable code-generating function if available
     jl_array_t *roots;  // pointers in generated code (shared to reduce memory), or null
     // Identify roots by module-of-origin. We only track the module for roots added during incremental compilation.
@@ -337,6 +340,7 @@ typedef struct _jl_method_t {
     uint32_t nospecialize;  // bit flags: which arguments should not be specialized
     uint32_t nkw;           // # of leading arguments that are actually keyword arguments
                             // of another method.
+    // various boolean properties
     uint8_t isva;
     uint8_t pure;
     uint8_t is_for_opaque_closure;
@@ -373,7 +377,7 @@ struct _jl_method_instance_t {
 };
 
 // OpaqueClosure
-typedef struct jl_opaque_closure_t {
+typedef struct _jl_opaque_closure_t {
     JL_DATA_TYPE
     jl_value_t *captures;
     size_t world;
@@ -538,14 +542,16 @@ typedef struct _jl_datatype_t {
     const jl_datatype_layout_t *layout;
     // memoized properties (set on construction)
     uint32_t hash;
-    uint8_t hasfreetypevars:1; // majority part of isconcrete computation
-    uint8_t isconcretetype:1; // whether this type can have instances
-    uint8_t isdispatchtuple:1; // aka isleaftupletype
-    uint8_t isbitstype:1; // relevant query for C-api and type-parameters
-    uint8_t zeroinit:1; // if one or more fields requires zero-initialization
-    uint8_t has_concrete_subtype:1; // If clear, no value will have this datatype
-    uint8_t cached_by_hash:1; // stored in hash-based set cache (instead of linear cache)
-    uint8_t isprimitivetype:1; // whether this is declared with 'primitive type' keyword (sized, no fields, and immutable)
+    uint16_t hasfreetypevars:1; // majority part of isconcrete computation
+    uint16_t isconcretetype:1; // whether this type can have instances
+    uint16_t isdispatchtuple:1; // aka isleaftupletype
+    uint16_t isbitstype:1; // relevant query for C-api and type-parameters
+    uint16_t zeroinit:1; // if one or more fields requires zero-initialization
+    uint16_t has_concrete_subtype:1; // If clear, no value will have this datatype
+    uint16_t cached_by_hash:1; // stored in hash-based set cache (instead of linear cache)
+    uint16_t isprimitivetype:1; // whether this is declared with 'primitive type' keyword (sized, no fields, and immutable)
+    uint16_t ismutationfree:1; // whether any mutable memory is reachable through this type (in the type or via fields)
+    uint16_t isidentityfree:1; // whether this type or any object reachable through its fields has non-content-based identity
 } jl_datatype_t;
 
 typedef struct _jl_vararg_t {
@@ -554,21 +560,21 @@ typedef struct _jl_vararg_t {
     jl_value_t *N;
 } jl_vararg_t;
 
-typedef struct {
+typedef struct _jl_weakref_t {
     JL_DATA_TYPE
     jl_value_t *value;
 } jl_weakref_t;
 
-typedef struct {
+typedef struct _jl_binding_t {
     JL_DATA_TYPE
-    jl_sym_t *name;
     _Atomic(jl_value_t*) value;
-    _Atomic(jl_value_t*) globalref;  // cached GlobalRef for this binding
-    struct _jl_module_t* owner;  // for individual imported bindings -- TODO: make _Atomic
+    jl_globalref_t *globalref;  // cached GlobalRef for this binding
+    _Atomic(struct _jl_binding_t*) owner;  // for individual imported bindings (NULL until 'resolved')
     _Atomic(jl_value_t*) ty;  // binding type
     uint8_t constp:1;
     uint8_t exportp:1;
     uint8_t imported:1;
+    uint8_t usingfailed:1;
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
 } jl_binding_t;
 
@@ -581,8 +587,9 @@ typedef struct _jl_module_t {
     JL_DATA_TYPE
     jl_sym_t *name;
     struct _jl_module_t *parent;
+    _Atomic(jl_svec_t*) bindings;
+    _Atomic(jl_array_t*) bindingkeyset; // index lookup by name into bindings
     // hidden fields:
-    htable_t bindings;
     arraylist_t usings;  // modules with all bindings potentially imported
     jl_uuid_t build_id;
     jl_uuid_t uuid;
@@ -598,11 +605,10 @@ typedef struct _jl_module_t {
     intptr_t hash;
 } jl_module_t;
 
-typedef struct {
+typedef struct _jl_globalref_t {
     jl_module_t *mod;
     jl_sym_t *name;
-    // Not serialized. Caches the value of jl_get_binding(mod, name).
-    jl_binding_t *bnd_cache;
+    jl_binding_t *binding;
 } jl_globalref_t;
 
 // one Type-to-Value entry
@@ -646,12 +652,12 @@ typedef struct _jl_typemap_level_t {
 // contains the TypeMap for one Type
 typedef struct _jl_methtable_t {
     JL_DATA_TYPE
-    jl_sym_t *name; // sometimes a hack used by serialization to handle kwsorter
+    jl_sym_t *name; // sometimes used for debug printing
     _Atomic(jl_typemap_t*) defs;
     _Atomic(jl_array_t*) leafcache;
     _Atomic(jl_typemap_t*) cache;
     _Atomic(intptr_t) max_args;  // max # of non-vararg arguments in a signature
-    jl_module_t *module; // used for incremental serialization to locate original binding
+    jl_module_t *module; // sometimes used for debug printing
     jl_array_t *backedges; // (sig, caller::MethodInstance) pairs
     jl_mutex_t writelock;
     uint8_t offs;  // 0, or 1 to skip splitting typemap on first (function) argument
@@ -984,9 +990,10 @@ STATIC_INLINE jl_value_t *jl_svecset(
 {
     assert(jl_typeis(t,jl_simplevector_type));
     assert(i < jl_svec_len(t));
-    // TODO: while svec is supposedly immutable, in practice we sometimes publish it first
-    // and set the values lazily. Those users should be using jl_atomic_store_release here.
-    jl_svec_data(t)[i] = (jl_value_t*)x;
+    // while svec is supposedly immutable, in practice we sometimes publish it
+    // first and set the values lazily. Those users occasionally might need to
+    // instead use jl_atomic_store_release here.
+    jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)jl_svec_data(t) + i, (jl_value_t*)x);
     jl_gc_wb(t, x);
     return (jl_value_t*)x;
 }
@@ -1490,7 +1497,7 @@ JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, size_t len);
 JL_DLLEXPORT jl_sym_t *jl_get_root_symbol(void);
 JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
                                                  jl_module_t *module,
-                                                 _Atomic(jl_value_t*) *bp, jl_value_t *bp_owner,
+                                                 _Atomic(jl_value_t*) *bp,
                                                  jl_binding_t *bnd);
 JL_DLLEXPORT jl_method_t *jl_method_def(jl_svec_t *argdata, jl_methtable_t *mt, jl_code_info_t *f, jl_module_t *module);
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo);
@@ -1627,20 +1634,20 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_if_bound(jl_module_t *m, jl_sym_t *var
 JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_get_binding_type(jl_module_t *m, jl_sym_t *var);
 // get binding for assignment
-JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int alloc);
-JL_DLLEXPORT jl_binding_t *jl_get_binding_wr_or_error(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
+JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var);
-JL_DLLEXPORT int jl_binding_is_const(jl_binding_t *b);
-JL_DLLEXPORT int jl_binding_boundp(jl_binding_t *b);
+JL_DLLEXPORT int jl_globalref_is_const(jl_globalref_t *gr);
+JL_DLLEXPORT int jl_globalref_boundp(jl_globalref_t *gr);
+JL_DLLEXPORT jl_value_t *jl_get_globalref_value(jl_globalref_t *gr);
 JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT);
 JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT);
-JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs JL_MAYBE_UNROOTED);
-JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b);
+JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs JL_MAYBE_UNROOTED);
+JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var);
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from);
 JL_DLLEXPORT void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
 JL_DLLEXPORT void jl_module_use_as(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname);
@@ -1834,13 +1841,16 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr JL_MAYBE_UNROOTED);
 JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code);
 JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_array_t *data);
 JL_DLLEXPORT uint8_t jl_ir_flag_inferred(jl_array_t *data) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint8_t jl_ir_flag_inlining(jl_array_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ir_flag_pure(jl_array_t *data) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint8_t jl_ir_flag_has_fcall(jl_array_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint16_t jl_ir_inlining_cost(jl_array_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT ssize_t jl_ir_nslots(jl_array_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ir_slotflag(jl_array_t *data, size_t i) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_compress_argnames(jl_array_t *syms);
 JL_DLLEXPORT jl_array_t *jl_uncompress_argnames(jl_value_t *syms);
 JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i);
+
 
 JL_DLLEXPORT int jl_is_operator(char *sym);
 JL_DLLEXPORT int jl_is_unary_operator(char *sym);

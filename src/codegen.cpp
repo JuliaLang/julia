@@ -662,20 +662,25 @@ static const auto jlvboundserror_func = new JuliaFunction{
 };
 static const auto jluboundserror_func = new JuliaFunction{
     XSTR(jl_bounds_error_unboxed_int),
-    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
+    [](LLVMContext &C) {
+        return FunctionType::get(getVoidTy(C),
             {PointerType::get(getInt8Ty(C), AddressSpace::Derived), JuliaType::get_pjlvalue_ty(C), getSizeTy(C)}, false); },
     get_attrs_noreturn,
 };
 static const auto jlcheckassign_func = new JuliaFunction{
     XSTR(jl_checked_assignment),
-    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {JuliaType::get_pjlvalue_ty(C), PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
+    [](LLVMContext &C) {
+        auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
+        return FunctionType::get(getVoidTy(C),
+            {T_pjlvalue, T_pjlvalue, T_pjlvalue, PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
     nullptr,
 };
 static const auto jldeclareconst_func = new JuliaFunction{
     XSTR(jl_declare_constant),
-    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {JuliaType::get_pjlvalue_ty(C)}, false); },
+    [](LLVMContext &C) {
+        auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
+        return FunctionType::get(getVoidTy(C),
+            {T_pjlvalue, T_pjlvalue, T_pjlvalue}, false); },
     nullptr,
 };
 static const auto jlgetbindingorerror_func = new JuliaFunction{
@@ -688,7 +693,7 @@ static const auto jlgetbindingorerror_func = new JuliaFunction{
     nullptr,
 };
 static const auto jlgetbindingwrorerror_func = new JuliaFunction{
-    XSTR(jl_get_binding_wr_or_error),
+    XSTR(jl_get_binding_wr),
     [](LLVMContext &C) {
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
         return FunctionType::get(T_pjlvalue,
@@ -770,8 +775,7 @@ static const auto jlgenericfunction_func = new JuliaFunction{
         auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
         auto T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
         auto T_pprjlvalue = PointerType::get(T_prjlvalue, 0);
-        return FunctionType::get(T_prjlvalue,
-                {T_pjlvalue, T_pjlvalue, T_pprjlvalue, T_pjlvalue, T_pjlvalue}, false);
+        return FunctionType::get(T_prjlvalue, {T_pjlvalue, T_pjlvalue, T_pprjlvalue, T_pjlvalue}, false);
     },
     nullptr,
 };
@@ -2258,9 +2262,9 @@ static void show_source_loc(jl_codectx_t &ctx, JL_STREAM *out)
     jl_printf(out, "in %s at %s", ctx.name, ctx.file.str().c_str());
 }
 
-static void cg_bdw(jl_codectx_t &ctx, jl_binding_t *b)
+static void cg_bdw(jl_codectx_t &ctx, jl_sym_t *var, jl_binding_t *b)
 {
-    jl_binding_deprecation_warning(ctx.module, b);
+    jl_binding_deprecation_warning(ctx.module, var, b);
     if (b->deprecated == 1 && jl_options.depwarn) {
         show_source_loc(ctx, JL_STDERR);
         jl_printf(JL_STDERR, "\n");
@@ -2322,7 +2326,7 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
         jl_binding_t *b = jl_get_binding(jl_globalref_mod(ex), s);
         if (b && b->constp) {
             if (b->deprecated)
-                cg_bdw(ctx, b);
+                cg_bdw(ctx, s, b);
             return jl_atomic_load_relaxed(&b->value);
         }
         return NULL;
@@ -2344,7 +2348,7 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
                         jl_binding_t *b = jl_get_binding(m, s);
                         if (b && b->constp) {
                             if (b->deprecated)
-                                cg_bdw(ctx, b);
+                                cg_bdw(ctx, s, b);
                             return jl_atomic_load_relaxed(&b->value);
                         }
                     }
@@ -2603,8 +2607,12 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
     return emit_checked_var(ctx, bp, name, false, ctx.tbaa().tbaa_binding);
 }
 
-static void emit_globalset(jl_codectx_t &ctx, jl_binding_t *bnd, Value *bp, const jl_cgval_t &rval_info, AtomicOrdering Order)
+static bool emit_globalset(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *sym, const jl_cgval_t &rval_info, AtomicOrdering Order)
 {
+    jl_binding_t *bnd = NULL;
+    Value *bp = global_binding_pointer(ctx, mod, sym, &bnd, true);
+    if (bp == NULL)
+        return false;
     Value *rval = boxed(ctx, rval_info);
     if (bnd && !bnd->constp) {
         jl_value_t *ty = jl_atomic_load_relaxed(&bnd->ty);
@@ -2613,10 +2621,12 @@ static void emit_globalset(jl_codectx_t &ctx, jl_binding_t *bnd, Value *bp, cons
             v->setOrdering(Order);
             tbaa_decorate(ctx.tbaa().tbaa_binding, v);
             emit_write_barrier(ctx, bp, rval);
-            return;
+            return true;
         }
     }
-    ctx.builder.CreateCall(prepare_call(jlcheckassign_func), { bp, mark_callee_rooted(ctx, rval) });
+    ctx.builder.CreateCall(prepare_call(jlcheckassign_func),
+            { bp, literal_pointer_val(ctx, (jl_value_t*)mod), literal_pointer_val(ctx, (jl_value_t*)sym), mark_callee_rooted(ctx, rval) });
+    return true;
 }
 
 static Value *emit_box_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2,
@@ -2915,15 +2925,10 @@ static bool emit_f_opglobal(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     if (sym.constant && jl_is_symbol(sym.constant)) {
         jl_sym_t *name = (jl_sym_t*)sym.constant;
         if (mod.constant && jl_is_module(mod.constant)) {
-            jl_binding_t *bnd = NULL;
-            Value *bp = global_binding_pointer(ctx, (jl_module_t*)mod.constant, name, &bnd, true);
-            if (bp) {
-                emit_globalset(ctx, bnd, bp, val, get_llvm_atomic_order(order));
+            if (emit_globalset(ctx, (jl_module_t*)mod.constant, name, val, get_llvm_atomic_order(order)))
                 *ret = val;
-            }
-            else {
+            else
                 *ret = jl_cgval_t(); // unreachable
-            }
             return true;
         }
     }
@@ -4207,11 +4212,18 @@ static void undef_var_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_sym_t *name)
 static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t *s,
                                      jl_binding_t **pbnd, bool assign)
 {
-    jl_binding_t *b = NULL;
-    if (assign)
-        b = jl_get_binding_wr(m, s, 0);
-    else
-        b = jl_get_binding(m, s);
+    jl_binding_t *b = jl_get_module_binding(m, s, 1);
+    if (assign) {
+        if (jl_atomic_load_relaxed(&b->owner) == NULL)
+            // not yet declared
+            b = NULL;
+    }
+    else {
+        b = jl_atomic_load_relaxed(&b->owner);
+        if (b == NULL)
+            // try to look this up now
+            b = jl_get_binding(m, s);
+    }
     if (b == NULL) {
         // var not found. switch to delayed lookup.
         Constant *initnul = Constant::getNullValue(ctx.types().T_pjlvalue);
@@ -4238,18 +4250,18 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
         return p;
     }
     if (assign) {
-        if (b->owner != m) {
-            char *msg;
-            (void)asprintf(&msg, "cannot assign a value to imported variable %s.%s from module %s",
-                    jl_symbol_name(b->owner->name), jl_symbol_name(s), jl_symbol_name(m->name));
-            emit_error(ctx, msg);
-            free(msg);
+        if (jl_atomic_load_relaxed(&b->owner) != b) {
+            // this will fail at runtime, so defer to the runtime to create the error
+            ctx.builder.CreateCall(prepare_call(jlgetbindingwrorerror_func),
+                    { literal_pointer_val(ctx, (jl_value_t*)m),
+                      literal_pointer_val(ctx, (jl_value_t*)s) });
+            CreateTrap(ctx.builder);
             return NULL;
         }
     }
     else {
         if (b->deprecated)
-            cg_bdw(ctx, b);
+            cg_bdw(ctx, s, b);
     }
     *pbnd = b;
     return julia_binding_gv(ctx, b);
@@ -4524,7 +4536,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
     jl_value_t *ssavalue_types = (jl_value_t*)ctx.source->ssavaluetypes;
     jl_value_t *phiType = NULL;
     if (jl_is_array(ssavalue_types)) {
-        phiType = jl_widen_core_extended_info(jl_array_ptr_ref(ssavalue_types, idx));
+        phiType = jl_array_ptr_ref(ssavalue_types, idx);
     } else {
         phiType = (jl_value_t*)jl_any_type;
     }
@@ -4633,7 +4645,7 @@ static void emit_ssaval_assign(jl_codectx_t &ctx, ssize_t ssaidx_0based, jl_valu
         // e.g. sometimes the information is inconsistent after inlining getfield on a Tuple
         jl_value_t *ssavalue_types = (jl_value_t*)ctx.source->ssavaluetypes;
         if (jl_is_array(ssavalue_types)) {
-            jl_value_t *declType = jl_widen_core_extended_info(jl_array_ptr_ref(ssavalue_types, ssaidx_0based));
+            jl_value_t *declType = jl_array_ptr_ref(ssavalue_types, ssaidx_0based);
             if (declType != slot.typ) {
                 slot = update_julia_type(ctx, slot, declType);
             }
@@ -4711,20 +4723,20 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r, ssi
         return emit_varinfo_assign(ctx, vi, rval_info, l);
     }
 
-    jl_binding_t *bnd = NULL;
-    Value *bp = NULL;
-    if (jl_is_symbol(l))
-        bp = global_binding_pointer(ctx, ctx.module, (jl_sym_t*)l, &bnd, true);
+    jl_module_t *mod;
+    jl_sym_t *sym;
+    if (jl_is_symbol(l)) {
+        mod = ctx.module;
+        sym = (jl_sym_t*)l;
+    }
     else {
         assert(jl_is_globalref(l));
-        bp = global_binding_pointer(ctx, jl_globalref_mod(l), jl_globalref_name(l), &bnd, true);
+        mod = jl_globalref_mod(l);
+        sym = jl_globalref_name(l);
     }
-    if (bp != NULL) {
-        emit_globalset(ctx, bnd, bp, rval_info, AtomicOrdering::Release);
-        // Global variable. Does not need debug info because the debugger knows about
-        // its memory location.
-    }
-    return;
+    emit_globalset(ctx, mod, sym, rval_info, AtomicOrdering::Release);
+    // Global variable. Does not need debug info because the debugger knows about
+    // its memory location.
 }
 
 static void emit_upsilonnode(jl_codectx_t &ctx, ssize_t phic, jl_value_t *val)
@@ -4972,7 +4984,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
     }
     if (jl_is_pinode(expr)) {
         Value *skip = NULL;
-        return convert_julia_type(ctx, emit_expr(ctx, jl_fieldref_noalloc(expr, 0)), jl_widen_core_extended_info(jl_fieldref_noalloc(expr, 1)), &skip);
+        return convert_julia_type(ctx, emit_expr(ctx, jl_fieldref_noalloc(expr, 0)), jl_fieldref_noalloc(expr, 1), &skip);
     }
     if (!jl_is_expr(expr)) {
         jl_value_t *val = expr;
@@ -5010,13 +5022,13 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
     else if (head == jl_invoke_sym) {
         assert(ssaidx_0based >= 0);
         jl_value_t *expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type :
-            jl_widen_core_extended_info(jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaidx_0based));
+            jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaidx_0based);
         return emit_invoke(ctx, ex, expr_t);
     }
     else if (head == jl_invoke_modify_sym) {
         assert(ssaidx_0based >= 0);
         jl_value_t *expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type :
-            jl_widen_core_extended_info(jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaidx_0based));
+            jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaidx_0based);
         return emit_invoke_modify(ctx, ex, expr_t);
     }
     else if (head == jl_call_sym) {
@@ -5026,8 +5038,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             // TODO: this case is needed for the call to emit_expr in emit_llvmcall
             expr_t = (jl_value_t*)jl_any_type;
         else {
-            expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type :
-                jl_widen_core_extended_info(jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaidx_0based));
+            expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type : jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaidx_0based);
             is_promotable = ctx.ssavalue_usecount.at(ssaidx_0based) == 1;
         }
         jl_cgval_t res = emit_call(ctx, ex, expr_t, is_promotable);
@@ -5064,7 +5075,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             jl_value_t *mn = args[0];
             assert(jl_is_symbol(mn) || jl_is_slot(mn));
 
-            Value *bp = NULL, *name, *bp_owner = Constant::getNullValue(ctx.types().T_pjlvalue);
+            Value *bp = NULL, *name;
             jl_binding_t *bnd = NULL;
             bool issym = jl_is_symbol(mn);
             bool isglobalref = !issym && jl_is_globalref(mn);
@@ -5089,17 +5100,16 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
                 }
                 bp = julia_binding_gv(ctx, bnd);
                 bp = julia_binding_pvalue(ctx, bp);
-                bp_owner = literal_pointer_val(ctx, (jl_value_t*)mod);
             }
             else if (jl_is_slot(mn) || jl_is_argument(mn)) {
+                // XXX: eval_methoddef does not have this code branch
                 int sl = jl_slot_number(mn)-1;
                 jl_varinfo_t &vi = ctx.slots[sl];
                 bp = vi.boxroot;
                 name = literal_pointer_val(ctx, (jl_value_t*)slot_symbol(ctx, sl));
             }
             if (bp) {
-                Value *mdargs[5] = { name, literal_pointer_val(ctx, (jl_value_t*)mod), bp,
-                                    bp_owner, literal_pointer_val(ctx, bnd) };
+                Value *mdargs[] = { name, literal_pointer_val(ctx, (jl_value_t*)mod), bp, literal_pointer_val(ctx, bnd) };
                 jl_cgval_t gf = mark_julia_type(
                         ctx,
                         ctx.builder.CreateCall(prepare_call(jlgenericfunction_func), makeArrayRef(mdargs)),
@@ -5138,7 +5148,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             jl_binding_t *bnd = NULL;
             Value *bp = global_binding_pointer(ctx, mod, sym, &bnd, true);
             if (bp)
-                ctx.builder.CreateCall(prepare_call(jldeclareconst_func), bp);
+                ctx.builder.CreateCall(prepare_call(jldeclareconst_func),
+                        { bp, literal_pointer_val(ctx, (jl_value_t*)mod), literal_pointer_val(ctx, (jl_value_t*)sym) });
         }
     }
     else if (head == jl_new_sym) {
@@ -6866,7 +6877,7 @@ static jl_llvm_functions_t
         FnAttrs.addAttribute(polly::PollySkipFnAttr);
 #endif
 
-    if (jl_has_meta(stmts, jl_noinline_sym))
+    if (src->inlining == 2)
         FnAttrs.addAttribute(Attribute::NoInline);
 
 #ifdef JL_DEBUG_BUILD
@@ -7147,7 +7158,7 @@ static jl_llvm_functions_t
                 }
                 jl_varinfo_t &vi = (ctx.phic_slots.emplace(i, jl_varinfo_t(ctx.builder.getContext())).first->second =
                                     jl_varinfo_t(ctx.builder.getContext()));
-                jl_value_t *typ = jl_widen_core_extended_info(jl_array_ptr_ref(src->ssavaluetypes, i));
+                jl_value_t *typ = jl_array_ptr_ref(src->ssavaluetypes, i);
                 vi.used = true;
                 vi.isVolatile = true;
                 vi.value = mark_julia_type(ctx, (Value*)NULL, false, typ);
@@ -8456,7 +8467,7 @@ static void init_jit_functions(void)
     add_named_global(jlcheckassign_func, &jl_checked_assignment);
     add_named_global(jldeclareconst_func, &jl_declare_constant);
     add_named_global(jlgetbindingorerror_func, &jl_get_binding_or_error);
-    add_named_global(jlgetbindingwrorerror_func, &jl_get_binding_wr_or_error);
+    add_named_global(jlgetbindingwrorerror_func, &jl_get_binding_wr);
     add_named_global(jlboundp_func, &jl_boundp);
     for (auto it : builtin_func_map())
         add_named_global(it.second, it.first);

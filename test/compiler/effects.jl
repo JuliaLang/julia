@@ -224,6 +224,10 @@ struct Maybe{T}
 end
 Base.getindex(x::Maybe) = x.x
 
+struct SyntacticallyDefined{T}
+    x::T
+end
+
 import Core.Compiler: Const, getfield_notundefined
 for T = (Base.RefValue, Maybe) # both mutable and immutable
     for name = (Const(1), Const(:x))
@@ -265,6 +269,10 @@ for TupleType = Any[Tuple{Int,Int,Int}, Tuple{Int,Vararg{Int}}, Tuple{Any}, Tupl
     FieldType = Any[Int, Symbol, Any]
     @test getfield_notundefined(TupleType, FieldType)
 end
+# skip analysis on fields that are known to be defined syntactically
+@test Core.Compiler.getfield_notundefined(SyntacticallyDefined{Float64}, Symbol)
+@test Core.Compiler.getfield_notundefined(Const(Main), Const(:var))
+@test Core.Compiler.getfield_notundefined(Const(Main), Const(42))
 # high-level tests for `getfield_notundefined`
 @test Base.infer_effects() do
     Maybe{Int}()
@@ -303,6 +311,9 @@ let f() = Ref{String}()[]
         f() # this call should be concrete evaluated
     end |> only === Union{}
 end
+@test Base.infer_effects((SyntacticallyDefined{Float64}, Symbol)) do w, s
+    getfield(w, s)
+end |> Core.Compiler.is_foldable
 
 # effects propagation for `Core.invoke` calls
 # https://github.com/JuliaLang/julia/issues/44763
@@ -314,15 +325,27 @@ invoke44763(x) = @invoke increase_x44763!(x)
 end |> only === Int
 @test x44763 == 0
 
+# `@inbounds`/`@boundscheck` expression should taint :consistent-cy correctly
+# https://github.com/JuliaLang/julia/issues/48099
+function A1_inbounds()
+    r = 0
+    @inbounds begin
+        @boundscheck r += 1
+    end
+    return r
+end
+@test !Core.Compiler.is_consistent(Base.infer_effects(A1_inbounds))
+
 # Test that purity doesn't try to accidentally run unreachable code due to
 # boundscheck elimination
 function f_boundscheck_elim(n)
-    # Inbounds here assumes that this is only ever called with n==0, but of
+    # Inbounds here assumes that this is only ever called with `n==0`, but of
     # course the compiler has no way of knowing that, so it must not attempt
-    # to run the @inbounds `getfield(sin, 1)`` that ntuple generates.
+    # to run the `@inbounds getfield(sin, 1)` that `ntuple` generates.
     ntuple(x->(@inbounds getfield(sin, x)), n)
 end
-@test Tuple{} <: code_typed(f_boundscheck_elim, Tuple{Int})[1][2]
+@test !Core.Compiler.is_consistent(Base.infer_effects(f_boundscheck_elim, (Int,)))
+@test Tuple{} <: only(Base.return_types(f_boundscheck_elim, (Int,)))
 
 # Test that purity modeling doesn't accidentally introduce new world age issues
 f_redefine_me(x) = x+1
@@ -464,7 +487,7 @@ end |> Core.Compiler.is_inaccessiblememonly
 @test Base.infer_effects() do
     ConstantType{Any}()
 end |> Core.Compiler.is_inaccessiblememonly
-@test_broken Base.infer_effects() do
+@test Base.infer_effects() do
     constant_global_nonisbits
 end |> Core.Compiler.is_inaccessiblememonly
 @test Base.infer_effects() do
@@ -676,3 +699,35 @@ mksparamunused(x) = (SparamUnused(x); nothing)
 let src = code_typed1(mksparamunused, (Any,))
     @test count(isnew, src.code) == 0
 end
+
+struct WrapperOneField{T}
+    x::T
+end
+
+# Effects for getfield of type instance
+@test Base.infer_effects(Tuple{Nothing}) do x
+    WrapperOneField{typeof(x)}.instance
+end |> Core.Compiler.is_total
+@test Base.infer_effects(Tuple{WrapperOneField{Float64}, Symbol}) do w, s
+    getfield(w, s)
+end |> Core.Compiler.is_foldable
+@test Core.Compiler.getfield_notundefined(WrapperOneField{Float64}, Symbol)
+@test Base.infer_effects(Tuple{WrapperOneField{Symbol}, Symbol}) do w, s
+    getfield(w, s)
+end |> Core.Compiler.is_foldable
+
+# Flow-sensitive consistenct for _typevar
+@test Base.infer_effects() do
+    return WrapperOneField == (WrapperOneField{T} where T)
+end |> Core.Compiler.is_total
+
+# Test that dead `@inbounds` does not taint consistency
+# https://github.com/JuliaLang/julia/issues/48243
+@test Base.infer_effects() do
+    false && @inbounds (1,2,3)[1]
+    return 1
+end |> Core.Compiler.is_total
+
+@test Base.infer_effects(Tuple{Int64}) do i
+    @inbounds (1,2,3)[i]
+end |> !Core.Compiler.is_consistent

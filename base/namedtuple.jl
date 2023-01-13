@@ -219,6 +219,12 @@ eltype(::Type{T}) where T<:NamedTuple = nteltype(T)
 nteltype(::Type) = Any
 nteltype(::Type{NamedTuple{names,T}} where names) where {T} = eltype(T)
 
+keytype(@nospecialize nt::NamedTuple) = keytype(typeof(nt))
+keytype(@nospecialize T::Type{<:NamedTuple}) = Symbol
+
+valtype(@nospecialize nt::NamedTuple) = valtype(typeof(nt))
+valtype(@nospecialize T::Type{<:NamedTuple}) = eltype(T)
+
 ==(a::NamedTuple{n}, b::NamedTuple{n}) where {n} = Tuple(a) == Tuple(b)
 ==(a::NamedTuple, b::NamedTuple) = false
 
@@ -261,6 +267,19 @@ end
     return Tuple{Any[ fieldtype(sym_in(names[n], bn) ? b : a, names[n]) for n in 1:length(names) ]...}
 end
 
+@assume_effects :foldable function merge_fallback(@nospecialize(a::NamedTuple), @nospecialize(b::NamedTuple),
+        @nospecialize(an::Tuple{Vararg{Symbol}}), @nospecialize(bn::Tuple{Vararg{Symbol}}))
+    names = merge_names(an, bn)
+    types = merge_types(names, typeof(a), typeof(b))
+    n = length(names)
+    A = Vector{Any}(undef, n)
+    for i=1:n
+        n = names[i]
+        A[i] = getfield(sym_in(n, bn) ? b : a, n)
+    end
+    NamedTuple{names}((A...,))::NamedTuple{names, types}
+end
+
 """
     merge(a::NamedTuple, bs::NamedTuple...)
 
@@ -293,9 +312,7 @@ function merge(a::NamedTuple{an}, b::NamedTuple{bn}) where {an, bn}
         vals = Any[ :(getfield($(sym_in(names[n], bn) ? :b : :a), $(QuoteNode(names[n])))) for n in 1:length(names) ]
         :( NamedTuple{$names,$types}(($(vals...),)) )
     else
-        names = merge_names(an, bn)
-        types = merge_types(names, typeof(a), typeof(b))
-        NamedTuple{names,types}(map(n->getfield(sym_in(n, bn) ? b : a, n), names))
+        merge_fallback(a, b, an, bn)
     end
 end
 
@@ -359,6 +376,23 @@ reverse(nt::NamedTuple) = NamedTuple{reverse(keys(nt))}(reverse(values(nt)))
     (names...,)
 end
 
+@assume_effects :foldable function diff_types(@nospecialize(a::NamedTuple), @nospecialize(names::Tuple{Vararg{Symbol}}))
+    return Tuple{Any[ fieldtype(typeof(a), names[n]) for n in 1:length(names) ]...}
+end
+
+@assume_effects :foldable function diff_fallback(@nospecialize(a::NamedTuple), @nospecialize(an::Tuple{Vararg{Symbol}}), @nospecialize(bn::Tuple{Vararg{Symbol}}))
+    names = diff_names(an, bn)
+    isempty(names) && return (;)
+    types = diff_types(a, names)
+    n = length(names)
+    A = Vector{Any}(undef, n)
+    for i=1:n
+        n = names[i]
+        A[i] = getfield(a, n)
+    end
+    NamedTuple{names}((A...,))::NamedTuple{names, types}
+end
+
 """
     structdiff(a::NamedTuple, b::Union{NamedTuple,Type{NamedTuple}})
 
@@ -374,13 +408,7 @@ function structdiff(a::NamedTuple{an}, b::Union{NamedTuple{bn}, Type{NamedTuple{
         vals = Any[ :(getfield(a, $(idx[n]))) for n in 1:length(idx) ]
         return :( NamedTuple{$names,$types}(($(vals...),)) )
     else
-        names = diff_names(an, bn)
-        # N.B this early return is necessary to get a better type stability,
-        # and also allows us to cut off the cost from constructing
-        # potentially type unstable closure passed to the `map` below
-        isempty(names) && return (;)
-        types = Tuple{Any[ fieldtype(typeof(a), names[n]) for n in 1:length(names) ]...}
-        return NamedTuple{names,types}(map(n::Symbol->getfield(a, n), names))
+        return diff_fallback(a, an, bn)
     end
 end
 

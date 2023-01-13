@@ -39,15 +39,24 @@ const TOP_TUPLE = GlobalRef(Core, :tuple)
 const InlineCostType = UInt16
 const MAX_INLINE_COST = typemax(InlineCostType)
 const MIN_INLINE_COST = InlineCostType(10)
+const MaybeCompressed = Union{CodeInfo, Vector{UInt8}}
 
-is_inlineable(src::Union{CodeInfo, Vector{UInt8}}) = ccall(:jl_ir_inlining_cost, InlineCostType, (Any,), src) != MAX_INLINE_COST
-set_inlineable!(src::CodeInfo, val::Bool) = src.inlining_cost = (val ? MIN_INLINE_COST : MAX_INLINE_COST)
+is_inlineable(@nospecialize src::MaybeCompressed) =
+    ccall(:jl_ir_inlining_cost, InlineCostType, (Any,), src) != MAX_INLINE_COST
+set_inlineable!(src::CodeInfo, val::Bool) =
+    src.inlining_cost = (val ? MIN_INLINE_COST : MAX_INLINE_COST)
 
 function inline_cost_clamp(x::Int)::InlineCostType
     x > MAX_INLINE_COST && return MAX_INLINE_COST
     x < MIN_INLINE_COST && return MIN_INLINE_COST
     return convert(InlineCostType, x)
 end
+
+is_declared_inline(@nospecialize src::MaybeCompressed) =
+    ccall(:jl_ir_flag_inlining, UInt8, (Any,), src) == 1
+
+is_declared_noinline(@nospecialize src::MaybeCompressed) =
+    ccall(:jl_ir_flag_inlining, UInt8, (Any,), src) == 2
 
 #####################
 # OptimizationState #
@@ -73,16 +82,16 @@ function add_invoke_backedge!(et::EdgeTracker, @nospecialize(invokesig), mi::Met
     return nothing
 end
 
-is_source_inferred(@nospecialize(src::Union{CodeInfo, Vector{UInt8}})) =
+is_source_inferred(@nospecialize src::MaybeCompressed) =
     ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
 
 function inlining_policy(interp::AbstractInterpreter,
     @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt8, mi::MethodInstance,
     argtypes::Vector{Any})
-    if isa(src, CodeInfo) || isa(src, Vector{UInt8})
-        src_inferred = is_source_inferred(src)
+    if isa(src, MaybeCompressed)
+        is_source_inferred(src) || return nothing
         src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
-        return src_inferred && src_inlineable ? src : nothing
+        return src_inlineable ? src : nothing
     elseif src === nothing && is_stmt_inline(stmt_flag)
         # if this statement is forced to be inlined, make an additional effort to find the
         # inferred source in the local cache
@@ -100,8 +109,12 @@ function inlining_policy(interp::AbstractInterpreter,
     elseif isa(src, IRCode)
         return src
     elseif isa(src, SemiConcreteResult)
-        # For NativeInterpreter, SemiConcreteResult are only produced if they're supposed
-        # to be inlined.
+        if is_declared_noinline(mi.def::Method)
+            # For `NativeInterpreter`, `SemiConcreteResult` may be produced for
+            # a `@noinline`-declared method when it's marked as `@constprop :aggressive`.
+            # Suppress the inlining here.
+            return nothing
+        end
         return src
     end
     return nothing
@@ -179,27 +192,28 @@ function ir_to_codeinf!(opt::OptimizationState)
     optdef = linfo.def
     replace_code_newstyle!(src, opt.ir::IRCode, isa(optdef, Method) ? Int(optdef.nargs) : 0)
     opt.ir = nothing
-    widencompileronly!(src)
-    src.rettype = widenconst(src.rettype)
+    widen_all_consts!(src)
     src.inferred = true
     # finish updating the result struct
     validate_code_in_debug_mode(linfo, src, "optimized")
     return src
 end
 
-# widen extended lattice elements in type annotations so that they are recognizable by the codegen system.
-function widencompileronly!(src::CodeInfo)
+# widen all Const elements in type annotations
+function widen_all_consts!(src::CodeInfo)
     ssavaluetypes = src.ssavaluetypes::Vector{Any}
     for i = 1:length(ssavaluetypes)
-        ssavaluetypes[i] = widencompileronly(ssavaluetypes[i])
+        ssavaluetypes[i] = widenconst(ssavaluetypes[i])
     end
 
     for i = 1:length(src.code)
         x = src.code[i]
         if isa(x, PiNode)
-            src.code[i] = PiNode(x.val, widencompileronly(x.typ))
+            src.code[i] = PiNode(x.val, widenconst(x.typ))
         end
     end
+
+    src.rettype = widenconst(src.rettype)
 
     return src
 end
@@ -412,7 +426,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     (; def, specTypes) = linfo
 
     analyzed = nothing # `ConstAPI` if this call can use constant calling convention
-    force_noinline = _any(x::Expr -> x.head === :meta && x.args[1] === :noinline, ir.meta)
+    force_noinline = is_declared_noinline(src)
 
     # compute inlining and other related optimizations
     result = caller.result
@@ -482,15 +496,16 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
         else
             force_noinline = true
         end
-        if !is_inlineable(src) && result === Bottom
+        if !is_declared_inline(src) && result === Bottom
             force_noinline = true
         end
     end
     if force_noinline
         set_inlineable!(src, false)
     elseif isa(def, Method)
-        if is_inlineable(src) && isdispatchtuple(specTypes)
+        if is_declared_inline(src) && isdispatchtuple(specTypes)
             # obey @inline declaration if a dispatch barrier would not help
+            set_inlineable!(src, true)
         else
             # compute the cost (size) of inlining this code
             cost_threshold = default = params.inline_cost_threshold
@@ -498,7 +513,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
                 cost_threshold += params.inline_tupleret_bonus
             end
             # if the method is declared as `@inline`, increase the cost threshold 20x
-            if is_inlineable(src)
+            if is_declared_inline(src)
                 cost_threshold += 19*default
             end
             # a few functions get special treatment

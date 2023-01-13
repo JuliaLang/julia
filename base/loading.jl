@@ -927,6 +927,8 @@ function find_all_in_cache_path(pkg::PkgId)
 end
 
 ocachefile_from_cachefile(cachefile) = string(chopsuffix(cachefile, ".ji"), ".", Base.Libc.dlext)
+cachefile_from_ocachefile(cachefile) = string(chopsuffix(cachefile, ".$(Base.Libc.dlext)"), ".ji")
+
 
 # use an Int counter so that nested @time_imports calls all remain open
 const TIMING_IMPORTS = Threads.Atomic{Int}(0)
@@ -2091,7 +2093,6 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             if pkg.uuid !== nothing
                 entrypath, entryfile = cache_file_entry(pkg)
                 cachefiles = filter!(x -> startswith(x, entryfile * "_") && endswith(x, ".ji"), readdir(cachepath))
-
                 if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES[]
                     idx = findmin(mtime.(joinpath.(cachepath, cachefiles)))[2]
                     evicted_cachefile = joinpath(cachepath, cachefiles[idx])
@@ -2104,11 +2105,31 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                 end
             end
 
+            if cache_objects
+                try
+                    rename(tmppath_so, ocachefile::String; force=true)
+                catch e
+                    e isa IOError || rethrow()
+                    isfile(ocachefile) || rethrow()
+                    # Windows prevents renaming a file that is in use so if there is a Julia session started
+                    # with a package image loaded, we cannot rename that file.
+                    # The code belows append a `_i` to the name of the cache file where `i` is the smallest number such that
+                    # that cache file does not exist.
+                    ocachename, ocacheext = splitext(ocachefile)
+                    old_cachefiles = Set(readdir(cachepath))
+                    num = 1
+                    while true
+                        ocachefile = ocachename * "_$num" * ocacheext
+                        in(basename(ocachefile), old_cachefiles) || break
+                        num += 1
+                    end
+                    # TODO: Risk for a race here if some other process grabs this name before us
+                    cachefile = cachefile_from_ocachefile(ocachefile)
+                    rename(tmppath_so, ocachefile::String; force=true)
+                end
+            end
             # this is atomic according to POSIX (not Win32):
             rename(tmppath, cachefile; force=true)
-            if cache_objects
-                rename(tmppath_so, ocachefile::String; force=true)
-            end
             return cachefile, ocachefile
         end
     finally
@@ -2505,6 +2526,29 @@ function check_clone_targets(clone_targets)
     end
 end
 
+struct CacheFlags
+    # ??OOCDDP - see jl_cache_flags
+    use_pkgimages::Bool
+    debug_level::Int
+    check_bounds::Bool
+    opt_level::Int
+
+    CacheFlags(f::Int) = CacheFlags(UInt8(f))
+    function CacheFlags(f::UInt8)
+        use_pkgimages = Bool(f & 1)
+        debug_level = Int((f >> 1) & 3)
+        check_bounds = Bool((f >> 2) & 1)
+        opt_level = Int((f >> 4) & 3)
+        new(use_pkgimages, debug_level, check_bounds, opt_level)
+    end
+end
+function show(io::IO, cf::CacheFlags)
+    print(io, "use_pkgimages = ", cf.use_pkgimages)
+    print(io, ", debug_level = ", cf.debug_level)
+    print(io, ", check_bounds = ", cf.check_bounds)
+    print(io, ", opt_level = ", cf.opt_level)
+end
+
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
 @constprop :none function stale_cachefile(modpath::String, cachefile::String; ignore_loaded::Bool = false)
@@ -2523,7 +2567,11 @@ end
             return true # ignore empty file
         end
         if ccall(:jl_match_cache_flags, UInt8, (UInt8,), flags) == 0
-            @debug "Rejecting cache file $cachefile for $modkey since the flags are mismatched" cachefile_flags=flags current_flags=ccall(:jl_cache_flags, UInt8, ())
+            @debug """
+            Rejecting cache file $cachefile for $modkey since the flags are mismatched
+              current session: $(CacheFlags(ccall(:jl_cache_flags, UInt8, ())))
+              cache file:      $(CacheFlags(flags))
+            """
             return true
         end
         pkgimage = !isempty(clone_targets)

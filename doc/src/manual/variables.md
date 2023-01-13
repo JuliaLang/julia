@@ -81,7 +81,7 @@ julia> pi
 π = 3.1415926535897...
 
 julia> pi = 3
-ERROR: cannot assign a value to imported variable MathConstants.pi from module Main
+ERROR: cannot assign a value to imported variable Base.pi from module Main
 
 julia> sqrt(100)
 10.0
