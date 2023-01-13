@@ -1212,41 +1212,54 @@ used to implement specialized methods.
 <(x) = Fix2(<, x)
 
 """
-    Splat(f)
+    splat(f)
 
 Equivalent to
 ```julia
     my_splat(f) = args->f(args...)
 ```
 i.e. given a function returns a new function that takes one argument and splats
-its argument into the original function. This is useful as an adaptor to pass
-a multi-argument function in a context that expects a single argument, but
-passes a tuple as that single argument. Additionally has pretty printing.
-
-!!! compat "Julia 1.9"
-    This function was introduced in Julia 1.9, replacing `Base.splat(f)`.
+it into the original function. This is useful as an adaptor to pass a
+multi-argument function in a context that expects a single argument, but passes
+a tuple as that single argument.
 
 # Example usage:
 ```jldoctest
-julia> map(Base.Splat(+), zip(1:3,4:6))
+julia> map(splat(+), zip(1:3,4:6))
 3-element Vector{Int64}:
  5
  7
  9
 
-julia> my_add = Base.Splat(+)
-Splat(+)
+julia> my_add = splat(+)
+splat(+)
 
 julia> my_add((1,2,3))
 6
 ```
+"""
+splat(f) = Splat(f)
+
+"""
+    Base.Splat{F} <: Function
+
+Represents a splatted function. That is
+```julia
+Base.Splat(f)(args) === f(args...)
+```
+The preferred way to construct an instance of `Base.Splat` is to use the [`splat`](@ref) function.
+
+!!! compat "Julia 1.9"
+    Splat requires at least Julia 1.9. In earlier versions `splat` returns an anonymous function instead.
+
+See also [`splat`](@ref).
 """
 struct Splat{F} <: Function
     f::F
     Splat(f) = new{Core.Typeof(f)}(f)
 end
 (s::Splat)(args) = s.f(args...)
-print(io::IO, s::Splat) = print(io, "Splat(", s.f, ')')
+print(io::IO, s::Splat) = print(io, "splat(", s.f, ')')
 show(io::IO, s::Splat) = print(io, s)
 
 ## in and related operators
