@@ -348,6 +348,10 @@ USE_RV := 0
 #XC_HOST := i686-w64-mingw32
 #XC_HOST := x86_64-w64-mingw32
 
+
+USE_SYSTEM_LINKER:=0
+SYSTEM_LINKER_PATH:=`ld`
+
 # Path to cmake (override in Make.user if needed)
 CMAKE ?= cmake
 CMAKE_GENERATOR ?= make

@@ -86,6 +86,10 @@ ifeq ($(OS), Darwin)
 	@echo "const MACOS_PRODUCT_VERSION = \"$(shell sw_vers -productVersion)\"" >> $@
 	@echo "const MACOS_PLATFORM_VERSION = \"$(shell xcrun --show-sdk-version)\"" >> $@
 endif
+ifeq ($(USE_SYSTEM_LINKER), 1)
+	@echo "const USE_SYSTEM_LINKER = true" >> $@
+	@echo "const SYSTEM_LINKER_PATH = \"$(SYSTEM_LINKER_PATH)\"" >> $@
+endif
 	@echo "const BUILD_TRIPLET = \"$(BB_TRIPLET_LIBGFORTRAN_CXXABI)\"" >> $@
 
 	@# This to ensure that we always rebuild this file, but only when it is modified do we touch build_h.jl,
@@ -96,6 +100,7 @@ endif
 	else \
 		rm -f $@; \
 	fi
+
 
 $(BUILDDIR)/version_git.jl.phony: $(SRCDIR)/version_git.sh
 ifneq ($(NO_GIT), 1)
