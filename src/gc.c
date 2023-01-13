@@ -447,12 +447,13 @@ static void run_finalizers(jl_task_t *ct)
 
 JL_DLLEXPORT void jl_gc_run_pending_finalizers(jl_task_t *ct)
 {
+
+    if (ct == NULL)
+        ct = jl_current_task;
 #ifdef MMTKHEAP
     mmtk_jl_run_pending_finalizers(ct->ptls);
     return;
 #endif
-    if (ct == NULL)
-        ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
     if (!ptls->in_finalizer && ptls->locks.len == 0 && ptls->finalizers_inhibited == 0) {
         ptls->in_finalizer = 1;
