@@ -267,7 +267,7 @@ end
     return Tuple{Any[ fieldtype(sym_in(names[n], bn) ? b : a, names[n]) for n in 1:length(names) ]...}
 end
 
-@assume_effects :total function merge_fallback(@nospecialize(a::NamedTuple), @nospecialize(b::NamedTuple),
+@assume_effects :foldable function merge_fallback(@nospecialize(a::NamedTuple), @nospecialize(b::NamedTuple),
         @nospecialize(an::Tuple{Vararg{Symbol}}), @nospecialize(bn::Tuple{Vararg{Symbol}}))
     names = merge_names(an, bn)
     types = merge_types(names, typeof(a), typeof(b))
