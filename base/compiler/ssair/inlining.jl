@@ -916,22 +916,11 @@ function validate_sparams(sparams::SimpleVector)
 end
 
 function may_have_fcalls(m::Method)
-    may_have_fcall = true
-    if isdefined(m, :source)
-        src = m.source
-        isa(src, Vector{UInt8}) && (src = uncompressed_ir(m))
-        if isa(src, CodeInfo)
-            may_have_fcall = src.has_fcall
-        end
-    end
-    return may_have_fcall
+    isdefined(m, :source) || return true
+    src = m.source
+    isa(src, CodeInfo) || isa(src, Vector{UInt8}) || return true
+    return ccall(:jl_ir_flag_has_fcall, Bool, (Any,), src)
 end
-
-function can_inline_typevars(method::Method, argtypes::Vector{Any})
-    may_have_fcalls(method) && return false
-    return true
-end
-can_inline_typevars(m::MethodMatch, argtypes::Vector{Any}) = can_inline_typevars(m.method, argtypes)
 
 function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
     @nospecialize(info::CallInfo), flag::UInt8, state::InliningState;
@@ -958,7 +947,7 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
     end
 
     if !validate_sparams(match.sparams)
-        (allow_typevars && can_inline_typevars(match, argtypes)) || return nothing
+        (allow_typevars && !may_have_fcalls(match.method)) || return nothing
     end
 
     # See if there exists a specialization for this method signature
@@ -1469,7 +1458,7 @@ function handle_const_prop_result!(cases::Vector{InliningCase},
     spec_types = mi.specTypes
     allow_abstract || isdispatchtuple(spec_types) || return false
     if !validate_sparams(mi.sparam_vals)
-        (allow_typevars && can_inline_typevars(mi.def, argtypes)) || return false
+        (allow_typevars && !may_have_fcalls(mi.def::Method)) || return false
     end
     item = resolve_todo(mi, result.result, argtypes, info, flag, state)
     item === nothing && return false
