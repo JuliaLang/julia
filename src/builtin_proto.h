@@ -28,6 +28,8 @@ DECLARE_BUILTIN(apply_type);
 DECLARE_BUILTIN(arrayref);
 DECLARE_BUILTIN(arrayset);
 DECLARE_BUILTIN(arraysize);
+DECLARE_BUILTIN(bufferref);
+DECLARE_BUILTIN(bufferset);
 DECLARE_BUILTIN(_call_in_world);
 DECLARE_BUILTIN(_call_in_world_total);
 DECLARE_BUILTIN(_call_latest);

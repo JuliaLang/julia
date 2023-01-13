@@ -231,7 +231,9 @@ struct jl_typecache_t {
     Type *T_ppjlvalue;
     Type *T_pprjlvalue;
     StructType *T_jlarray;
+    StructType *T_jlbuffer;
     Type *T_pjlarray;
+    Type *T_pjlbuffer;
     FunctionType *T_jlfunc;
     FunctionType *T_jlfuncparams;
 
@@ -274,7 +276,10 @@ struct jl_typecache_t {
         static_assert(sizeof(jl_array_flags_t) == sizeof(int16_t),
                     "Size of jl_array_flags_t is not the same as int16_t");
         T_jlarray = StructType::get(context, makeArrayRef(vaelts));
+
         T_pjlarray = PointerType::get(T_jlarray, 0);
+        T_jlbuffer = StructType::get(context, makeArrayRef(vaelts));
+        T_pjlbuffer = PointerType::get(T_jlbuffer, 0);
     }
 };
 
@@ -1196,6 +1201,8 @@ static const auto &builtin_func_map() {
           { jl_f_const_arrayref_addr,     new JuliaFunction{XSTR(jl_f_const_arrayref), get_func_sig, get_func_attrs} },
           { jl_f_arrayset_addr,           new JuliaFunction{XSTR(jl_f_arrayset), get_func_sig, get_func_attrs} },
           { jl_f_arraysize_addr,          new JuliaFunction{XSTR(jl_f_arraysize), get_func_sig, get_func_attrs} },
+          { jl_f_bufferset_addr,          new JuliaFunction{XSTR(jl_f_bufferset), get_func_sig, get_func_attrs} },
+          { jl_f_bufferref_addr,          new JuliaFunction{XSTR(jl_f_bufferref), get_func_sig, get_func_attrs} },
           { jl_f_apply_type_addr,         new JuliaFunction{XSTR(jl_f_apply_type), get_func_sig, get_func_attrs} },
           { jl_f_donotdelete_addr,        new JuliaFunction{XSTR(jl_f_donotdelete), get_donotdelete_sig, get_donotdelete_func_attrs} },
           { jl_f_compilerbarrier_addr,    new JuliaFunction{XSTR(jl_f_compilerbarrier), get_func_sig, get_func_attrs} },

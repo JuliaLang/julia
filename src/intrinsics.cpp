@@ -1155,6 +1155,8 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
             return emit_runtime_call(ctx, f, argv, nargs);
         return mark_julia_type(ctx, emit_arraylen(ctx, x), false, jl_long_type);
     }
+    case bufferlen:
+        return mark_julia_type(ctx, emit_bufferlen(ctx, argv[0]), false, jl_long_type);
     case pointerref:
         ++Emitted_pointerref;
         assert(nargs == 3);

@@ -2674,6 +2674,17 @@ static Value *emit_arraylen(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
     return emit_arraylen_prim(ctx, tinfo);
 }
 
+static Value *emit_bufferlen(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
+{
+    Value *t = boxed(ctx, tinfo);
+    MDNode *tbaa = ctx.tbaa().tbaa_arraylen;
+    Value *addr = ctx.builder.CreateStructGEP(ctx.types().T_jlbuffer,
+            emit_bitcast(ctx, decay_derived(ctx, t), ctx.types().T_pjlbuffer),
+                                          1); //index (not offset) of length field in jl_parray_llvmt
+    LoadInst *len = ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()), addr, Align(sizeof(size_t)));
+    return tbaa_decorate(tbaa, len);
+}
+
 static Value *emit_arrayptr_internal(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *t, unsigned AS, bool isboxed)
 {
     ++EmittedArrayptr;

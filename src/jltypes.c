@@ -2346,6 +2346,17 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_atomic_store_relaxed(&jl_nonfunction_mt->leafcache, (jl_array_t*)jl_an_empty_vec_any);
     jl_atomic_store_relaxed(&jl_type_type_mt->leafcache, (jl_array_t*)jl_an_empty_vec_any);
 
+    tv = jl_svec1(tvar("T"));
+    jl_buffer_type = (jl_unionall_t*)
+        jl_new_datatype(jl_symbol("Buffer"), core,
+                        (jl_datatype_t*)
+                        jl_apply_type((jl_value_t*)jl_densearray_type, jl_svec_data(tv), 1),
+                        tv,
+                        jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 1, 0)->name->wrapper;
+    jl_buffer_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_buffer_type))->name;
+    jl_compute_field_offsets((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_buffer_type));
+
+
     jl_expr_type =
         jl_new_datatype(jl_symbol("Expr"), core,
                         jl_any_type, jl_emptysvec,

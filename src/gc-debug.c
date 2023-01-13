@@ -1137,6 +1137,15 @@ void gc_stats_big_obj(void)
             }
             ma = ma->next;
         }
+
+        mallocbuffer_t *ma = current_heap->mallocbuffers;
+        while (ma != NULL) {
+            if (gc_marked(jl_astaggedvalue(ma->a)->bits.gc)) {
+                nused++;
+                nbytes += buffer_nbytes(ma->a);
+            }
+            ma = ma->next;
+        }
     }
 
     jl_safe_printf("%lld kB (%lld%% old) in %lld large objects (%lld%% old)\n",

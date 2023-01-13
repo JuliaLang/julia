@@ -42,7 +42,7 @@ endif
 
 SRCS := \
 	jltypes gf typemap smallintset ast builtins module interpreter symbol \
-	dlload sys init task array staticdata toplevel jl_uv datatype \
+	dlload sys init task array buffer staticdata toplevel jl_uv datatype \
 	simplevector runtime_intrinsics precompile jloptions \
 	threading partr stackwalk gc gc-debug gc-pages gc-stacks gc-alloc-profiler method \
 	jlapi signal-handling safepoint timing subtype rtutils gc-heap-snapshot \
