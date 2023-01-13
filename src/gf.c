@@ -3344,7 +3344,6 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                 if (skip[i]) {
                     // if there was a minmax method, we can just pretend the rest are all in the same group:
                     // they're all together but unsorted in the list, since we'll drop them all later anyways
-                    assert(matc->fully_covers != NOT_FULLY_COVERS);
                     if (ambig_groupid[len - 1] > i)
                         ambig_groupid[len - 1] = i; // ambiguity covering range [i:len)
                     break;
@@ -3370,8 +3369,14 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                         // aren't skipping matches and the user doesn't
                         // care if we report any ambiguities
                         continue;
-                    if (jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig))
+                    if (jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig)) {
+                        // Check if `m` covers the entirety of the intersection between m2
+                        // and the requested type. If so, m2 isn't actually ever callable.
+                        if (!subt2 && !rsubt2 && jl_subtype((jl_value_t*)matc2->spec_types, m->sig)) {
+                            skip[j-1] = 1;
+                        }
                         continue;
+                    }
                     if (subt) {
                         ti = (jl_value_t*)matc2->spec_types;
                         isect2 = NULL;

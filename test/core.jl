@@ -7938,3 +7938,10 @@ let spec = only(methods(g47476)).specializations
     @test any(mi -> mi !== nothing && Base.isvatuple(mi.specTypes), spec)
     @test all(mi -> mi === nothing || !Base.has_free_typevars(mi.specTypes), spec)
 end
+
+# Method matches should discard methods fully covered by more specific match
+f_more_specific(::Type{Union{}}) = 1
+f_more_specific(::Type{<:Base.RefValue}) = 2
+f_more_specific(::Type{<:Base.Tuple}) = 3
+f_more_specific(::Type{Tuple{}}) = 4
+@test length(methods(f_more_specific, Tuple{Type{<:Tuple}})) == 3
