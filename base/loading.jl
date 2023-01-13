@@ -2530,7 +2530,7 @@ struct CacheFlags
     # OOICCDDP - see jl_cache_flags
     use_pkgimages::Bool
     debug_level::Int
-    check_bounds::Bool
+    check_bounds::Int
     inline::Bool
     opt_level::Int
 
