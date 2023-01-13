@@ -2461,14 +2461,18 @@ static void jl_save_system_image_to_stream(ios_t *f,
             jl_write_value(&s, ext_targets);
             jl_write_value(&s, edges);
         }
-        write_uint32(f, jl_array_len(s.link_ids_gctags));
-        ios_write(f, (char*)jl_array_data(s.link_ids_gctags), jl_array_len(s.link_ids_gctags)*sizeof(uint64_t));
-        write_uint32(f, jl_array_len(s.link_ids_relocs));
-        ios_write(f, (char*)jl_array_data(s.link_ids_relocs), jl_array_len(s.link_ids_relocs)*sizeof(uint64_t));
-        write_uint32(f, jl_array_len(s.link_ids_gvars));
-        ios_write(f, (char*)jl_array_data(s.link_ids_gvars), jl_array_len(s.link_ids_gvars)*sizeof(uint64_t));
-        write_uint32(f, jl_array_len(s.link_ids_external_fnvars));
-        ios_write(f, (char*)jl_array_data(s.link_ids_external_fnvars), jl_array_len(s.link_ids_external_fnvars)*sizeof(uint64_t));
+        // Write out the link_ids. First we write all the build_ids, and then the RLE-encoded version
+        // with indexed lists.
+        if (!s.incremental) {
+            write_uint32(f, 0);
+        } else {
+            write_uint32(f, jl_array_len(jl_build_ids));
+            ios_write(f, (char*)jl_array_data(jl_build_ids), jl_array_len(jl_build_ids)*sizeof(uint64_t));
+        }
+        write_linkids_rle(f, s.link_ids_gctags, jl_build_ids);
+        write_linkids_rle(f, s.link_ids_relocs, jl_build_ids);
+        write_linkids_rle(f, s.link_ids_gvars, jl_build_ids);
+        write_linkids_rle(f, s.link_ids_external_fnvars, jl_build_ids);
         write_uint32(f, external_fns_begin);
         jl_write_arraylist(s.s, &s.ccallable_list);
     }
@@ -2758,26 +2762,18 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         offset_ext_targets = jl_read_offset(&s);
         offset_edges = jl_read_offset(&s);
     }
-    size_t nlinks_gctags = read_uint32(f);
-    if (nlinks_gctags > 0) {
-        s.link_ids_gctags = jl_alloc_array_1d(jl_array_uint64_type, nlinks_gctags);
-        ios_read(f, (char*)jl_array_data(s.link_ids_gctags), nlinks_gctags * sizeof(uint64_t));
+    size_t n_pkg_build_ids = read_uint32(f);
+    jl_array_t *pkg_build_ids = NULL;
+    if (n_pkg_build_ids > 0) {
+        assert(s.incremental);
+        pkg_build_ids = jl_alloc_array_1d(jl_array_uint64_type, n_pkg_build_ids);
+        ios_read(f, (char*)jl_array_data(pkg_build_ids), n_pkg_build_ids * sizeof(uint64_t));
     }
-    size_t nlinks_relocs = read_uint32(f);
-    if (nlinks_relocs > 0) {
-        s.link_ids_relocs = jl_alloc_array_1d(jl_array_uint64_type, nlinks_relocs);
-        ios_read(f, (char*)jl_array_data(s.link_ids_relocs), nlinks_relocs * sizeof(uint64_t));
-    }
-    size_t nlinks_gvars = read_uint32(f);
-    if (nlinks_gvars > 0) {
-        s.link_ids_gvars = jl_alloc_array_1d(jl_array_uint64_type, nlinks_gvars);
-        ios_read(f, (char*)jl_array_data(s.link_ids_gvars), nlinks_gvars * sizeof(uint64_t));
-    }
-    size_t nlinks_external_fnvars = read_uint32(f);
-    if (nlinks_external_fnvars > 0) {
-        s.link_ids_external_fnvars = jl_alloc_array_1d(jl_array_uint64_type, nlinks_external_fnvars);
-        ios_read(f, (char*)jl_array_data(s.link_ids_external_fnvars), nlinks_external_fnvars * sizeof(uint64_t));
-    }
+    s.link_ids_gctags = read_linkids_rle(f, pkg_build_ids);
+    s.link_ids_relocs = read_linkids_rle(f, pkg_build_ids);
+    s.link_ids_gvars = read_linkids_rle(f, pkg_build_ids);
+    s.link_ids_external_fnvars = read_linkids_rle(f, pkg_build_ids);
+
     uint32_t external_fns_begin = read_uint32(f);
     jl_read_arraylist(s.s, ccallable_list ? ccallable_list : &s.ccallable_list);
     if (s.incremental) {

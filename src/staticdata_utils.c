@@ -9,6 +9,72 @@ static void write_float64(ios_t *s, double x) JL_NOTSAFEPOINT
     write_uint64(s, *((uint64_t*)&x));
 }
 
+static int find_id(uint64_t id, jl_array_t *buildids)
+{
+    size_t l = jl_array_len(buildids);
+    uint64_t *ids = (uint64_t*)jl_array_data(buildids);
+    for (size_t i = 0; i < l; i++)
+        if (id == ids[i])
+            return i;
+    jl_(buildids);
+    jl_errorf("build_id %lx not found", id);
+}
+
+static void write_linkids_rle(ios_t *f, jl_array_t *linkids, jl_array_t *buildids)
+{
+    size_t l = jl_array_len(linkids);
+    write_uint32(f, l);
+    if (!buildids || l == 0) {
+        assert(l == 0);
+    } else {
+        uint64_t *ids = (uint64_t*)jl_array_data(linkids);
+        size_t i0 = 0, i = 1;
+        uint64_t id = ids[i0];
+        while (i <= l) {
+            while (i < l && ids[i] == id)
+                 i++;
+            write_uint32(f, find_id(id, buildids));
+            write_uint32(f, i - i0);
+            i0 = i;
+            if (i0 < l)
+                id = ids[i0];
+            i++;
+        }
+    }
+    // end-of-list sentinel
+    write_uint32(f, 0);
+    write_uint32(f, 0);
+}
+
+static jl_array_t *read_linkids_rle(ios_t *f, jl_array_t *buildids)
+{
+    jl_array_t *linkids = NULL;
+    size_t l = read_uint32(f);
+    if (!buildids || l == 0) {
+        assert(l == 0);
+    } else {
+        linkids = jl_alloc_array_1d(jl_array_uint64_type, l);
+        uint64_t *ids = (uint64_t*)jl_array_data(linkids), *bids = (uint64_t*)jl_array_data(buildids);
+        size_t i = 0, j;
+        while (i < l) {
+            uint32_t k = read_uint32(f);
+            assert(k < jl_array_len(buildids));
+            uint64_t id = bids[k];
+            uint32_t nrpt = read_uint32(f);
+            for (j = 0; j < nrpt; j++, i++)
+                ids[i] = id;
+        }
+        assert(i == l);
+    }
+    // end-of-list sentinel
+    uint32_t dummy = read_uint32(f);
+    assert(dummy == 0);
+    dummy = read_uint32(f);
+    assert(dummy == 0);
+    (void)dummy;
+    return linkids;
+}
+
 // Decide if `t` must be new, because it points to something new.
 // If it is new, the object (in particular, the super field) might not be entirely
 // valid for the cache, so we want to finish transforming it before attempting
