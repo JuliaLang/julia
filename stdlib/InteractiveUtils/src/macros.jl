@@ -360,6 +360,8 @@ See also: [`code_native`](@ref), [`@code_llvm`](@ref), [`@code_typed`](@ref) and
 A macro to execute an expression and produce a report of any time spent importing packages and their
 dependencies. Any compilation time will be reported as a percentage, and how much of which was recompilation, if any.
 
+One line is printed per package or package extension. The duration shown is the time to import that package itself, not including the time to load any of its dependencies.
+
 On Julia 1.9+ [package extensions](@ref man-extensions) will show as Parent → Extension.
 
 !!! note
