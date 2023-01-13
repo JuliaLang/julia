@@ -4,7 +4,7 @@ sizeof(a::Buffer) = Core.sizeof(a)
 
 function isassigned(a::Buffer, i::Int)
     @inline
-    @boundscheck i < length(a) % UInt || return false
+    @boundscheck 0 < i < length(a) % UInt || return false
     ccall(:jl_buffer_isassigned, Cint, (Any, UInt), a, i) == 1
 end
 
