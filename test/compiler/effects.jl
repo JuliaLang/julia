@@ -731,3 +731,11 @@ end |> Core.Compiler.is_total
 @test Base.infer_effects(Tuple{Int64}) do i
     @inbounds (1,2,3)[i]
 end |> !Core.Compiler.is_consistent
+
+# Test that :new of non-concrete, but otherwise known type
+# does not taint consistency.
+@eval struct ImmutRef{T}
+    x::T
+    ImmutRef(x) = $(Expr(:new, :(ImmutRef{typeof(x)}), :x))
+end
+@test Core.Compiler.is_foldable(Base.infer_effects(ImmutRef, Tuple{Any}))

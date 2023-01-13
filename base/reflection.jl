@@ -838,6 +838,25 @@ function argument_datatype(@nospecialize t)
     return ccall(:jl_argument_datatype, Any, (Any,), t)::Union{Nothing,DataType}
 end
 
+function datatype_fieldcount(t::DataType)
+    if t.name === _NAMEDTUPLE_NAME
+        names, types = t.parameters[1], t.parameters[2]
+        if names isa Tuple
+            return length(names)
+        end
+        if types isa DataType && types <: Tuple
+            return fieldcount(types)
+        end
+        return nothing
+    elseif isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
+        return nothing
+    end
+    if isdefined(t, :types)
+        return length(t.types)
+    end
+    return length(t.name.names)
+end
+
 """
     fieldcount(t::Type)
 
@@ -857,25 +876,11 @@ function fieldcount(@nospecialize t)
     if !(t isa DataType)
         throw(TypeError(:fieldcount, DataType, t))
     end
-    if t.name === _NAMEDTUPLE_NAME
-        names, types = t.parameters[1], t.parameters[2]
-        if names isa Tuple
-            return length(names)
-        end
-        if types isa DataType && types <: Tuple
-            return fieldcount(types)
-        end
-        abstr = true
-    else
-        abstr = isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
-    end
-    if abstr
+    fcount = datatype_fieldcount(t)
+    if fcount === nothing
         throw(ArgumentError("type does not have a definite number of fields"))
     end
-    if isdefined(t, :types)
-        return length(t.types)
-    end
-    return length(t.name.names)
+    return fcount
 end
 
 """
