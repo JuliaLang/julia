@@ -208,10 +208,10 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
 #if 0
     // some optional post-processing steps
     size_t i;
-    void **table = newm->bindings.table;
-    for(i=1; i < newm->bindings.size; i+=2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
+    jl_svec_t *table = jl_atomic_load_relaxed(&newm->bindings);
+    for (size_t i = 0; i < jl_svec_len(table); i++) {
+        jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
+        if ((void*)b != jl_nothing) {
             // remove non-exported macros
             if (jl_symbol_name(b->name)[0]=='@' &&
                 !b->exportp && b->owner == b)

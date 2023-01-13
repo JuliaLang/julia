@@ -476,7 +476,6 @@ static int is_type_identityfree(jl_value_t *t)
     return 0;
 }
 
-
 void jl_compute_field_offsets(jl_datatype_t *st)
 {
     const uint64_t max_offset = (((uint64_t)1) << 32) - 1;
@@ -886,7 +885,6 @@ JL_DLLEXPORT int jl_is_foreign_type(jl_datatype_t *dt)
     return jl_is_datatype(dt) && dt->layout && dt->layout->fielddesc_type == 3;
 }
 
-
 // bits constructors ----------------------------------------------------------
 
 #if MAX_ATOMIC_SIZE > MAX_POINTERATOMIC_SIZE
@@ -1223,8 +1221,6 @@ JL_DLLEXPORT jl_value_t *jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_datatype_t
     *((uint8_t*)y + nb) = success ? 1 : 0;
     return y;
 }
-
-
 
 // used by boot.jl
 JL_DLLEXPORT jl_value_t *jl_typemax_uint(jl_value_t *bt)
@@ -1944,7 +1940,6 @@ JL_DLLEXPORT int jl_field_isdefined_checked(jl_value_t *v, size_t i)
         return 0;
     return !!jl_field_isdefined(v, i);
 }
-
 
 JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
 {

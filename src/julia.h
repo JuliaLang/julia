@@ -283,13 +283,15 @@ typedef struct _jl_code_info_t {
     size_t max_world;
     // various boolean properties:
     uint8_t inferred;
-    uint16_t inlining_cost;
     uint8_t propagate_inbounds;
     uint8_t pure;
     uint8_t has_fcall;
     // uint8 settings
+    uint8_t inlining; // 0 = default; 1 = @inline; 2 = @noinline
     uint8_t constprop; // 0 = use heuristic; 1 = aggressive; 2 = none
     _jl_purity_overrides_t purity;
+    // uint16 settings
+    uint16_t inlining_cost;
 } jl_code_info_t;
 
 // This type describes a single method definition, and stores data
@@ -338,6 +340,7 @@ typedef struct _jl_method_t {
     uint32_t nospecialize;  // bit flags: which arguments should not be specialized
     uint32_t nkw;           // # of leading arguments that are actually keyword arguments
                             // of another method.
+    // various boolean properties
     uint8_t isva;
     uint8_t pure;
     uint8_t is_for_opaque_closure;
@@ -584,8 +587,9 @@ typedef struct _jl_module_t {
     JL_DATA_TYPE
     jl_sym_t *name;
     struct _jl_module_t *parent;
+    _Atomic(jl_svec_t*) bindings;
+    _Atomic(jl_array_t*) bindingkeyset; // index lookup by name into bindings
     // hidden fields:
-    htable_t bindings;
     arraylist_t usings;  // modules with all bindings potentially imported
     jl_uuid_t build_id;
     jl_uuid_t uuid;
@@ -648,12 +652,12 @@ typedef struct _jl_typemap_level_t {
 // contains the TypeMap for one Type
 typedef struct _jl_methtable_t {
     JL_DATA_TYPE
-    jl_sym_t *name; // sometimes a hack used by serialization to handle kwsorter
+    jl_sym_t *name; // sometimes used for debug printing
     _Atomic(jl_typemap_t*) defs;
     _Atomic(jl_array_t*) leafcache;
     _Atomic(jl_typemap_t*) cache;
     _Atomic(intptr_t) max_args;  // max # of non-vararg arguments in a signature
-    jl_module_t *module; // used for incremental serialization to locate original binding
+    jl_module_t *module; // sometimes used for debug printing
     jl_array_t *backedges; // (sig, caller::MethodInstance) pairs
     jl_mutex_t writelock;
     uint8_t offs;  // 0, or 1 to skip splitting typemap on first (function) argument
@@ -986,9 +990,10 @@ STATIC_INLINE jl_value_t *jl_svecset(
 {
     assert(jl_typeis(t,jl_simplevector_type));
     assert(i < jl_svec_len(t));
-    // TODO: while svec is supposedly immutable, in practice we sometimes publish it first
-    // and set the values lazily. Those users should be using jl_atomic_store_release here.
-    jl_svec_data(t)[i] = (jl_value_t*)x;
+    // while svec is supposedly immutable, in practice we sometimes publish it
+    // first and set the values lazily. Those users occasionally might need to
+    // instead use jl_atomic_store_release here.
+    jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)jl_svec_data(t) + i, (jl_value_t*)x);
     jl_gc_wb(t, x);
     return (jl_value_t*)x;
 }
@@ -1836,7 +1841,9 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr JL_MAYBE_UNROOTED);
 JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code);
 JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_array_t *data);
 JL_DLLEXPORT uint8_t jl_ir_flag_inferred(jl_array_t *data) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint8_t jl_ir_flag_inlining(jl_array_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ir_flag_pure(jl_array_t *data) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint8_t jl_ir_flag_has_fcall(jl_array_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint16_t jl_ir_inlining_cost(jl_array_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT ssize_t jl_ir_nslots(jl_array_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ir_slotflag(jl_array_t *data, size_t i) JL_NOTSAFEPOINT;

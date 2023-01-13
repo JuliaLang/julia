@@ -6877,7 +6877,7 @@ static jl_llvm_functions_t
         FnAttrs.addAttribute(polly::PollySkipFnAttr);
 #endif
 
-    if (jl_has_meta(stmts, jl_noinline_sym))
+    if (src->inlining == 2)
         FnAttrs.addAttribute(Attribute::NoInline);
 
 #ifdef JL_DEBUG_BUILD
