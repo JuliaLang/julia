@@ -54,6 +54,12 @@ function summarysize(obj;
             if ccall(:jl_array_isassigned, Cint, (Any, UInt), x, i - 1) != 0
                 val = x[i]
             end
+        elseif isa(x, Buffer)
+            @show "here"
+            nf = length(x)
+            if ccall(:jl_buffer_isassigned, Cint, (Any, UInt), x, i - 1) != 0
+                val = x[i]
+            end
         else
             nf = nfields(x)
             ft = typeof(x).types
@@ -129,6 +135,28 @@ end
 function (ss::SummarySize)(obj::Array)
     haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
     headersize = 4*sizeof(Int) + 8 + max(0, ndims(obj)-2)*sizeof(Int)
+    size::Int = headersize
+    datakey = unsafe_convert(Ptr{Cvoid}, obj)
+    if !haskey(ss.seen, datakey)
+        ss.seen[datakey] = true
+        dsize = Core.sizeof(obj)
+        T = eltype(obj)
+        if isbitsunion(T)
+            # add 1 union selector byte for each element
+            dsize += length(obj)
+        end
+        size += dsize
+        if !isempty(obj) && T !== Symbol && (!Base.allocatedinline(T) || (T isa DataType && !Base.datatype_pointerfree(T)))
+            push!(ss.frontier_x, obj)
+            push!(ss.frontier_i, 1)
+        end
+    end
+    return size
+end
+
+function (ss::SummarySize)(obj::Buffer)
+    haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
+    headersize = 3*sizeof(Int)
     size::Int = headersize
     datakey = unsafe_convert(Ptr{Cvoid}, obj)
     if !haskey(ss.seen, datakey)

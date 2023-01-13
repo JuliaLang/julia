@@ -2346,8 +2346,9 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_atomic_store_relaxed(&jl_nonfunction_mt->leafcache, (jl_array_t*)jl_an_empty_vec_any);
     jl_atomic_store_relaxed(&jl_type_type_mt->leafcache, (jl_array_t*)jl_an_empty_vec_any);
 
-    tv = jl_svec1(tvar("T"));
-    jl_svec_t *tv2 = jl_svec2(tvar("N"), jl_box_long(1));
+    jl_tvar_t* tvart = tvar("T");
+    tv = jl_svec1(tvart);
+    jl_svec_t *tv2 = jl_svec2(tvart, jl_box_long(1));
     jl_buffer_type = (jl_unionall_t*)
         jl_new_datatype(jl_symbol("Buffer"), core,
                         (jl_datatype_t*)
