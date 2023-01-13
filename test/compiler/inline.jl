@@ -1660,16 +1660,37 @@ end
     end
 end
 
-# Test that semi-concrete eval can inline constant results
 function twice_sitofp(x::Int, y::Int)
     x = Base.sitofp(Float64, x)
     y = Base.sitofp(Float64, y)
     return (x, y)
 end
-call_twice_sitofp(x::Int) = twice_sitofp(x, 2)
 
-let src = code_typed1(call_twice_sitofp, (Int,))
+# Test that semi-concrete eval can inline constant results
+let src = code_typed1((Int,)) do x
+        twice_sitofp(x, 2)
+    end
     @test count(iscall((src, Base.sitofp)), src.code) == 1
+end
+
+# `@noinline` annotations with semi-concrete eval
+let src = code_typed1((Int,)) do x
+        @noinline twice_sitofp(x, 2)
+    end
+    @test count(isinvoke(:twice_sitofp), src.code) == 1
+end
+
+# `Base.@constprop :aggressive` forces semi-concrete eval, but it should still not be inlined
+@noinline Base.@constprop :aggressive function twice_sitofp_noinline(x::Int, y::Int)
+    x = Base.sitofp(Float64, x)
+    y = Base.sitofp(Float64, y)
+    return (x, y)
+end
+
+let src = code_typed1((Int,)) do x
+        twice_sitofp_noinline(x, 2)
+    end
+    @test count(isinvoke(:twice_sitofp_noinline), src.code) == 1
 end
 
 # Test getfield modeling of Type{Ref{_A}} where _A

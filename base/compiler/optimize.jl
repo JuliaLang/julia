@@ -109,8 +109,12 @@ function inlining_policy(interp::AbstractInterpreter,
     elseif isa(src, IRCode)
         return src
     elseif isa(src, SemiConcreteResult)
-        # For NativeInterpreter, SemiConcreteResult are only produced if they're supposed
-        # to be inlined.
+        if is_declared_noinline(mi.def::Method)
+            # For `NativeInterpreter`, `SemiConcreteResult` may be produced for
+            # a `@noinline`-declared method when it's marked as `@constprop :aggressive`.
+            # Suppress the inlining here.
+            return nothing
+        end
         return src
     end
     return nothing
