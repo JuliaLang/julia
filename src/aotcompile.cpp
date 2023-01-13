@@ -962,8 +962,9 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         aggressiveSimplifyCFGOptions
     ));
     PM->add(createSLPVectorizerPass());
-    // might need this after LLVM 11:
-    //PM->add(createVectorCombinePass());
+    PM->add(createVectorCombinePass());
+    PM->add(createLoopUnrollPass(opt_level, false, false, -1, -1, 0, 1, 0, 1)); // need runtime unrolling because our loops
+                                                                                // may have weird lengths
 
     PM->add(createAggressiveDCEPass());
 
