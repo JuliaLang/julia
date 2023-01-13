@@ -172,10 +172,11 @@ typedef struct {
 typedef struct {
     uint8_t how:2;
     uint8_t pooled:1;
+    uint8_t ptrarray:1;
+    uint8_t hasptr:1;
     uint8_t isshared:1;
     uint8_t isaligned:1;
-    uint8_t isinlinealloc:1;
-    uint8_t extra:2;
+    uint8_t extra:1;
 } jl_buffer_flags_t;
 
 typedef struct {
@@ -1023,6 +1024,7 @@ STATIC_INLINE jl_value_t *jl_svecset(
 #define jl_array_data_owner(a) (*((jl_value_t**)((char*)a + jl_array_data_owner_offset(jl_array_ndims(a)))))
 
 JL_DLLEXPORT char *jl_array_typetagdata(jl_array_t *a) JL_NOTSAFEPOINT;
+JL_DLLEXPORT char *jl_buffer_typetagdata(jl_buffer_t *a) JL_NOTSAFEPOINT;
 
 #ifdef __clang_gcanalyzer__
 jl_value_t **jl_array_ptr_data(jl_array_t *a JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
@@ -1030,8 +1032,14 @@ STATIC_INLINE jl_value_t *jl_array_ptr_ref(void *a JL_PROPAGATES_ROOT, size_t i)
 STATIC_INLINE jl_value_t *jl_array_ptr_set(
     void *a JL_ROOTING_ARGUMENT, size_t i,
     void *x JL_ROOTED_ARGUMENT) JL_NOTSAFEPOINT;
+jl_value_t **jl_buffer_ptr_data(jl_buffer_t *a JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
+STATIC_INLINE jl_value_t *jl_buffer_ptr_ref(void *a JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
+STATIC_INLINE jl_value_t *jl_buffer_ptr_set(
+    void *a JL_ROOTING_ARGUMENT, size_t i,
+    void *x JL_ROOTED_ARGUMENT) JL_NOTSAFEPOINT;
 #else
 #define jl_array_ptr_data(a)  ((jl_value_t**)((jl_array_t*)(a))->data)
+#define jl_buffer_ptr_data(a)  ((jl_value_t**)((jl_buffer_t*)(a))->data)
 STATIC_INLINE jl_value_t *jl_array_ptr_ref(void *a JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
 {
     assert(((jl_array_t*)a)->flags.ptrarray);
@@ -1048,6 +1056,28 @@ STATIC_INLINE jl_value_t *jl_array_ptr_set(
     if (x) {
         if (((jl_array_t*)a)->flags.how == 3) {
             a = jl_array_data_owner(a);
+        }
+        jl_gc_wb(a, x);
+    }
+    return (jl_value_t*)x;
+}
+STATIC_INLINE jl_value_t *jl_buffer_ptr_ref(void *a JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
+{
+    assert(((jl_buffer_t*)a)->flags.ptrarray);
+    assert(i < jl_buffer_len(a));
+    return jl_atomic_load_relaxed(((_Atomic(jl_value_t*)*)(jl_buffer_data(a))) + i);
+}
+STATIC_INLINE jl_value_t *jl_buffer_ptr_set(
+    void *a JL_ROOTING_ARGUMENT, size_t i,
+    void *x JL_ROOTED_ARGUMENT) JL_NOTSAFEPOINT
+{
+    assert(((jl_buffer_t*)a)->flags.ptrarray);
+    assert(i < jl_buffer_len(a));
+    jl_atomic_store_release(((_Atomic(jl_value_t*)*)(jl_buffer_data(a))) + i, (jl_value_t*)x);
+    if (x) {
+        if (((jl_buffer_t*)a)->flags.how == 3) {
+            assert(0);
+            // a = jl_buffer_data_owner(a);
         }
         jl_gc_wb(a, x);
     }
@@ -1284,7 +1314,7 @@ static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEP
 #define jl_is_llvmpointer(v) (((jl_datatype_t*)jl_typeof(v))->name == jl_llvmpointer_typename)
 #define jl_is_intrinsic(v)   jl_typeis(v,jl_intrinsic_type)
 #define jl_array_isbitsunion(a) (!(((jl_array_t*)(a))->flags.ptrarray) && jl_is_uniontype(jl_tparam0(jl_typeof(a))))
-#define jl_buffer_isbitsunion(a) ((((jl_buffer_t*)(a))->flags.isinlinealloc) && jl_is_uniontype(jl_tparam0(jl_typeof(a))))
+#define jl_buffer_isbitsunion(a) ((((jl_buffer_t*)(a))->flags.ptrarray) && jl_is_uniontype(jl_tparam0(jl_typeof(a))))
 
 JL_DLLEXPORT int jl_subtype(jl_value_t *a, jl_value_t *b);
 

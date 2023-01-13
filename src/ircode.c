@@ -335,6 +335,45 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
         write_int32(s->s, jl_string_len(v));
         ios_write(s->s, jl_string_data(v), jl_string_len(v));
     }
+    else if (as_literal && jl_is_buffer(v)) {
+        jl_buffer_t *ar = (jl_buffer_t*)v;
+        jl_value_t *et = jl_tparam0(jl_typeof(ar));
+        write_uint8(s->s, TAG_BUFFER);
+        jl_encode_value(s, jl_box_long(ar->length));
+        jl_encode_value(s, jl_typeof(ar));
+        size_t l = jl_buffer_len(ar);
+        if (ar->flags.ptrarray) {
+            for (i = 0; i < l; i++) {
+                jl_value_t *e = jl_buffer_ptr_ref(v, i);
+                jl_encode_value(s, e);
+            }
+        }
+        else if (ar->flags.hasptr) {
+            const char *data = (const char*)jl_buffer_data(ar);
+            uint16_t elsz = jl_buffer_elsize(ar);
+            size_t j, np = ((jl_datatype_t*)et)->layout->npointers;
+            for (i = 0; i < l; i++) {
+                const char *start = data;
+                for (j = 0; j < np; j++) {
+                    uint32_t ptr = jl_ptr_offset((jl_datatype_t*)et, j);
+                    const jl_value_t *const *fld = &((const jl_value_t *const *)data)[ptr];
+                    if ((const char*)fld != start)
+                        ios_write(s->s, start, (const char*)fld - start);
+                    JL_GC_PROMISE_ROOTED(*fld);
+                    jl_encode_value(s, *fld);
+                    start = (const char*)&fld[1];
+                }
+                data += elsz;
+                if (data != start)
+                    ios_write(s->s, start, data - start);
+            }
+        }
+        else {
+            ios_write(s->s, (char*)jl_buffer_data(ar), l * jl_buffer_elsize(ar));
+            if (jl_buffer_isbitsunion(ar))
+                ios_write(s->s, jl_buffer_typetagdata(ar), l);
+        }
+    }
     else if (as_literal && jl_is_array(v)) {
         jl_array_t *ar = (jl_array_t*)v;
         jl_value_t *et = jl_tparam0(jl_typeof(ar));
@@ -461,6 +500,49 @@ static jl_value_t *jl_decode_value_svec(jl_ircode_state *s, uint8_t tag) JL_GC_D
         data[i] = jl_decode_value(s);
     }
     return (jl_value_t*)sv;
+}
+
+static jl_value_t *jl_decode_value_buffer(jl_ircode_state *s, uint8_t tag) JL_GC_DISABLED
+{
+    size_t len = jl_unbox_long(jl_decode_value(s));
+    jl_value_t *aty = jl_decode_value(s);
+    jl_buffer_t *a = jl_new_buffer(aty, len);
+    if (a->flags.ptrarray) {
+        jl_value_t **data = (jl_value_t**)jl_buffer_data(a);
+        size_t i, numel = jl_buffer_len(a);
+        for (i = 0; i < numel; i++) {
+            data[i] = jl_decode_value(s);
+        }
+        assert(jl_astaggedvalue(a)->bits.gc == GC_CLEAN); // gc is disabled
+    }
+    else if (a->flags.hasptr) {
+        size_t i, numel = jl_buffer_len(a);
+        char *data = (char*)jl_buffer_data(a);
+        uint16_t elsz = jl_buffer_elsize(a);
+        jl_datatype_t *et = (jl_datatype_t*)jl_tparam0(jl_typeof(a));
+        size_t j, np = et->layout->npointers;
+        for (i = 0; i < numel; i++) {
+            char *start = data;
+            for (j = 0; j < np; j++) {
+                uint32_t ptr = jl_ptr_offset(et, j);
+                jl_value_t **fld = &((jl_value_t**)data)[ptr];
+                if ((char*)fld != start)
+                    ios_readall(s->s, start, (const char*)fld - start);
+                *fld = jl_decode_value(s);
+                start = (char*)&fld[1];
+            }
+            data += elsz;
+            if (data != start)
+                ios_readall(s->s, start, data - start);
+        }
+        assert(jl_astaggedvalue(a)->bits.gc == GC_CLEAN); // gc is disabled
+    }
+    else {
+        size_t extra = jl_buffer_isbitsunion(a) ? jl_buffer_len(a) : 0;
+        size_t tot = jl_buffer_len(a) * jl_buffer_elsize(a) + extra;
+        ios_readall(s->s, (char*)jl_buffer_data(a), tot);
+    }
+    return (jl_value_t*)a;
 }
 
 static jl_value_t *jl_decode_value_array(jl_ircode_state *s, uint8_t tag) JL_GC_DISABLED
@@ -672,6 +754,8 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
         return v;
     case TAG_ARRAY: JL_FALLTHROUGH; case TAG_ARRAY1D:
         return jl_decode_value_array(s, tag);
+    case TAG_BUFFER:
+        return jl_decode_value_buffer(s, tag);
     case TAG_EXPR:      JL_FALLTHROUGH;
     case TAG_LONG_EXPR: JL_FALLTHROUGH;
     case TAG_CALL1:     JL_FALLTHROUGH;
@@ -1116,6 +1200,7 @@ void jl_init_serializer(void)
     deser_tag[TAG_SLOTNUMBER] = (jl_value_t*)jl_slotnumber_type;
     deser_tag[TAG_SVEC] = (jl_value_t*)jl_simplevector_type;
     deser_tag[TAG_ARRAY] = (jl_value_t*)jl_array_type;
+    deser_tag[TAG_BUFFER] = (jl_value_t*)jl_buffer_type;
     deser_tag[TAG_EXPR] = (jl_value_t*)jl_expr_type;
     deser_tag[TAG_PHINODE] = (jl_value_t*)jl_phinode_type;
     deser_tag[TAG_PHICNODE] = (jl_value_t*)jl_phicnode_type;
