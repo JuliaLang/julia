@@ -361,6 +361,7 @@ for f in (Base.merge, Base.structdiff)
     end
     @test Core.Compiler.return_type(f, Tuple{NamedTuple, NamedTuple}) == NamedTuple
 end
+@test Core.Compiler.is_foldable(Base.infer_effects(pairs, Tuple{NamedTuple}))
 
 # Test that merge/diff preserves nt field types
 let a = Base.NamedTuple{(:a, :b), Tuple{Any, Any}}((1, 2)), b = Base.NamedTuple{(:b,), Tuple{Float64}}(3)
