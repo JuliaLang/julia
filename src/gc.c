@@ -447,6 +447,10 @@ static void run_finalizers(jl_task_t *ct)
 
 JL_DLLEXPORT void jl_gc_run_pending_finalizers(jl_task_t *ct)
 {
+#ifdef MMTKHEAP
+    mmtk_jl_run_pending_finalizers(ct->ptls);
+    return;
+#endif
     if (ct == NULL)
         ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
