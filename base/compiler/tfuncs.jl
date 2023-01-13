@@ -280,11 +280,11 @@ add_tfunc(Core.Intrinsics.llvmcall, 3, INT_INF, llvmcall_tfunc, 10)
     isa(t, Const) && return isa(t.val, Type) ? Ptr{t.val} : Ptr
     return isType(t) ? Ptr{t.parameters[1]} : Ptr
 end
-add_tfunc(Core.Intrinsics.cglobal, 1, 2, cglobal_tfunc, 5)
 
-add_tfunc(Core.Intrinsics.have_fma, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Bool), 1)
 add_tfunc(Core.Intrinsics.arraylen, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Int), 4)
 add_tfunc(Core.Intrinsics.bufferlen, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Int), 4)
+add_tfunc(Core.Intrinsics.have_fma, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Bool), 1)
+add_tfunc(Core.Intrinsics.cglobal, 1, 2, cglobal_tfunc, 5)
 
 # builtin functions
 # =================
@@ -1894,11 +1894,27 @@ end
 add_tfunc(arrayref, 3, INT_INF, arrayref_tfunc, 20)
 add_tfunc(const_arrayref, 3, INT_INF, arrayref_tfunc, 20)
 
+@nospecs function bufferref_tfunc(𝕃::AbstractLattice, boundscheck, ary, idx)
+    return _bufferref_tfunc(𝕃, boundscheck, ary, idx)
+end
+@nospecs function _bufferref_tfunc(𝕃::AbstractLattice, boundscheck, ary, idx)
+    buffer_builtin_common_errorcheck(boundscheck, ary, idx) || return Bottom
+    return buffer_elmtype(ary)
+end
+add_tfunc(Core.bufferref, 3, INT_INF, bufferref_tfunc, 20)
+# add_tfunc(const_bufferref, 3, INT_INF, bufferref_tfunc, 20)
+
 @nospecs function arrayset_tfunc(𝕃::AbstractLattice, boundscheck, ary, item, idxs...)
     hasintersect(widenconst(item), _arrayref_tfunc(𝕃, boundscheck, ary, idxs)) || return Bottom
     return ary
 end
 add_tfunc(arrayset, 4, INT_INF, arrayset_tfunc, 20)
+
+@nospecs function bufferset_tfunc(𝕃::AbstractLattice, boundscheck, ary, item, idx)
+    hasintersect(widenconst(item), _bufferref_tfunc(𝕃, boundscheck, ary, idx)) || return Bottom
+    return ary
+end
+add_tfunc(Core.bufferset, 4, INT_INF, bufferset_tfunc, 20)
 
 @nospecs function array_builtin_common_errorcheck(boundscheck, ary, @nospecialize idxs::Tuple)
     hasintersect(widenconst(boundscheck), Bool) || return false
@@ -1911,9 +1927,32 @@ add_tfunc(arrayset, 4, INT_INF, arrayset_tfunc, 20)
     return true
 end
 
+@nospecs function buffer_builtin_common_errorcheck(boundscheck, ary, idx)
+    hasintersect(widenconst(boundscheck), Bool) || return false
+    hasintersect(widenconst(ary), Buffer) || return false
+    hasintersect(idx, Int) || return false
+    return true
+end
+
 function array_elmtype(@nospecialize ary)
     a = widenconst(ary)
     if !has_free_typevars(a) && a <: Array
+        a0 = a
+        if isa(a, UnionAll)
+            a = unwrap_unionall(a0)
+        end
+        if isa(a, DataType)
+            T = a.parameters[1]
+            valid_as_lattice(T) || return Bottom
+            return rewrap_unionall(T, a0)
+        end
+    end
+    return Any
+end
+
+function buffer_elmtype(@nospecialize ary)
+    a = widenconst(ary)
+    if !has_free_typevars(a) && a <: Buffer
         a0 = a
         if isa(a, UnionAll)
             a = unwrap_unionall(a0)
@@ -1956,6 +1995,17 @@ function array_type_undefable(@nospecialize(arytype))
     end
 end
 
+function buffer_type_undefable(@nospecialize(arytype))
+    if isa(arytype, Union)
+        return buffer_type_undefable(arytype.a) || buffer_type_undefable(arytype.b)
+    elseif isa(arytype, UnionAll)
+        return true
+    else
+        elmtype = (arytype::DataType).parameters[1]
+        return !(elmtype isa Type && (isbitstype(elmtype) || isbitsunion(elmtype)))
+    end
+end
+
 function array_builtin_common_nothrow(argtypes::Vector{Any}, first_idx_idx::Int)
     length(argtypes) >= 4 || return false
     boundscheck = argtypes[1]
@@ -1964,6 +2014,25 @@ function array_builtin_common_nothrow(argtypes::Vector{Any}, first_idx_idx::Int)
     # If we could potentially throw undef ref errors, bail out now.
     arytype = widenconst(arytype)
     array_type_undefable(arytype) && return false
+    # If we have @inbounds (first argument is false), we're allowed to assume
+    # we don't throw bounds errors.
+    if isa(boundscheck, Const)
+        !(boundscheck.val::Bool) && return true
+    end
+    # Else we can't really say anything here
+    # TODO: In the future we may be able to track the shapes of arrays though
+    # inference.
+    return false
+end
+
+function buffer_builtin_common_nothrow(argtypes::Vector{Any}, first_idx_idx::Int)
+    length(argtypes) >= 4 || return false
+    boundscheck = argtypes[1]
+    arytype = argtypes[2]
+    buffer_builtin_common_typecheck(boundscheck, arytype, argtypes, first_idx_idx) || return false
+    # If we could potentially throw undef ref errors, bail out now.
+    arytype = widenconst(arytype)
+    buffer_type_undefable(arytype) && return false
     # If we have @inbounds (first argument is false), we're allowed to assume
     # we don't throw bounds errors.
     if isa(boundscheck, Const)
@@ -1984,7 +2053,27 @@ end
     return true
 end
 
+@nospecs function buffer_builtin_common_typecheck(boundscheck, arytype,
+    argtypes::Vector{Any}, first_idx_idx::Int)
+    (boundscheck ⊑ Bool && arytype ⊑ Buffer) || return false
+    for i = first_idx_idx:length(argtypes)
+        argtypes[i] ⊑ Int || return false
+    end
+    return true
+end
+
 @nospecs function arrayset_typecheck(arytype, elmtype)
+    # Check that we can determine the element type
+    arytype = widenconst(arytype)
+    isa(arytype, DataType) || return false
+    elmtype_expected = arytype.parameters[1]
+    isa(elmtype_expected, Type) || return false
+    # Check that the element type is compatible with the element we're assigning
+    elmtype ⊑ elmtype_expected || return false
+    return true
+end
+
+@nospecs function bufferset_typecheck(arytype, elmtype)
     # Check that we can determine the element type
     arytype = widenconst(arytype)
     isa(arytype, DataType) || return false
@@ -2004,6 +2093,12 @@ end
         return arrayset_typecheck(argtypes[2], argtypes[3])
     elseif f === arrayref || f === const_arrayref
         return array_builtin_common_nothrow(argtypes, 3)
+    elseif f === Core.bufferset
+        buffer_builtin_common_nothrow(argtypes, 4) || return false
+        # Additionally check element type compatibility
+        return bufferset_typecheck(argtypes[2], argtypes[3])
+    elseif f === Core.bufferref # || f === const_bufferref
+        return buffer_builtin_common_nothrow(argtypes, 3)
     elseif f === Core._expr
         length(argtypes) >= 1 || return false
         return argtypes[1] ⊑ Symbol
@@ -2091,7 +2186,7 @@ const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
 # known to be effect-free (but not necessarily nothrow)
 const _EFFECT_FREE_BUILTINS = [
     fieldtype, apply_type, isa, UnionAll,
-    getfield, arrayref, const_arrayref, isdefined, Core.sizeof,
+    getfield, arrayref, const_arrayref, Core.bufferref, isdefined, Core.sizeof,
     Core.ifelse, Core._typevar, (<:),
     typeassert, throw, arraysize, getglobal, compilerbarrier
 ]
@@ -2137,6 +2232,8 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
 const _ARGMEM_BUILTINS = Any[
     arrayref,
     arrayset,
+    Core.bufferref,
+    Core.bufferset,
     modifyfield!,
     replacefield!,
     setfield!,

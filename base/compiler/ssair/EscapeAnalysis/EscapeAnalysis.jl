@@ -18,7 +18,7 @@ import ._TOP_MOD: ==, getindex, setindex!
 import Core:
     MethodInstance, Const, Argument, SSAValue, PiNode, PhiNode, UpsilonNode, PhiCNode,
     ReturnNode, GotoNode, GotoIfNot, SimpleVector, MethodMatch, CodeInstance,
-    sizeof, ifelse, arrayset, arrayref, arraysize
+    sizeof, ifelse, arrayset, arrayref, bufferset, bufferref, arraysize
 import ._TOP_MOD:     # Base definitions
     @__MODULE__, @eval, @assert, @specialize, @nospecialize, @inbounds, @inline, @noinline,
     @label, @goto, !, !==, !=, ≠, +, -, *, ≤, <, ≥, >, &, |, <<, error, missing, copy,
