@@ -284,6 +284,7 @@ add_tfunc(Core.Intrinsics.cglobal, 1, 2, cglobal_tfunc, 5)
 
 add_tfunc(Core.Intrinsics.have_fma, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Bool), 1)
 add_tfunc(Core.Intrinsics.arraylen, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Int), 4)
+add_tfunc(Core.Intrinsics.bufferlen, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Int), 4)
 
 # builtin functions
 # =================
@@ -2145,6 +2146,7 @@ const _ARGMEM_BUILTINS = Any[
 const _INCONSISTENT_INTRINSICS = Any[
     Intrinsics.pointerref,      # this one is volatile
     Intrinsics.arraylen,        # this one is volatile
+    Intrinsics.bufferlen,        # this one is volatile
     Intrinsics.have_fma,        # this one depends on the runtime environment
     Intrinsics.cglobal,         # cglobal lookup answer changes at runtime
     # ... and list fastmath intrinsics:
@@ -2384,6 +2386,9 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Vector{Any})
     if f === Intrinsics.arraylen
         return argtypes[1] ⊑ Array
     end
+    if f === Intrinsics.bufferlen
+        return argtypes[1] ⊑ Buffer
+    end
     if f === Intrinsics.bitcast
         ty, isexact, isconcrete = instanceof_tfunc(argtypes[1])
         xty = widenconst(argtypes[2])
@@ -2422,6 +2427,7 @@ function is_pure_intrinsic_infer(f::IntrinsicFunction)
              f === Intrinsics.pointerset || # this one is never effect-free
              f === Intrinsics.llvmcall ||   # this one is never effect-free
              f === Intrinsics.arraylen ||   # this one is volatile
+             f === Intrinsics.bufferlen ||   # this one is volatile
              f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
              f === Intrinsics.have_fma ||  # this one depends on the runtime environment
              f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime

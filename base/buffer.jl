@@ -1,11 +1,11 @@
-size(a::Buffer) = (Core.bufferlen(a),)
-length(a::Buffer) = Core.bufferlen(a)
+size(a::Buffer) = (Core.Intrinsics.bufferlen(a),)
+length(a::Buffer) = Core.Intrinsics.bufferlen(a)
 sizeof(a::Buffer) = Core.sizeof(a)
 
 function isassigned(a::Buffer, i::Int)
     @inline
-    @boundscheck ii < length(a) % UInt || return false
-    ccall(:jl_buffer_isassigned, Cint, (Any, UInt), a, ii) == 1
+    @boundscheck i < length(a) % UInt || return false
+    ccall(:jl_buffer_isassigned, Cint, (Any, UInt), a, i) == 1
 end
 
 @eval getindex(A::Buffer, i1::Int) = Core.bufferref($(Expr(:boundscheck)), A, i1)
