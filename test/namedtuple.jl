@@ -353,3 +353,9 @@ end
     @test mapfoldl(abs, Pair{Any,Any}, NamedTuple(Symbol(:x,i) => i for i in 1:30)) == mapfoldl(abs, Pair{Any,Any}, [1:30;])
     @test_throws "reducing over an empty collection" mapfoldl(abs, =>, (;))
 end
+
+# Test effect/inference for merge/diff of unknown NamedTuples
+for f in (Base.merge, Base.structdiff)
+    @test Core.Compiler.is_foldable(Base.infer_effects(f, Tuple{NamedTuple, NamedTuple}))
+    @test Core.Compiler.return_type(f, Tuple{NamedTuple, NamedTuple}) == NamedTuple
+end
