@@ -96,8 +96,8 @@ function ld()
     else
         flavor = "gnu"
     end
-    if haskey(ENV,"JULIA_PKGIMG_LINKER")
-        ld = ENV["JULIA_PKGIMG_LINKER"]
+    if Base.USE_SYSTEM_LINKER
+        ld = Base.SYSTEM_LINKER_PATH
         return `$ld $default_args`
     end
     `$(lld()) -flavor $flavor $default_args`
