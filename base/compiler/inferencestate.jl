@@ -177,7 +177,7 @@ mutable struct InferenceState
 
         valid_worlds = WorldRange(src.min_world, src.max_world == typemax(UInt) ? get_world_counter() : src.max_world)
         bestguess = Bottom
-        ipo_effects = Effects(EFFECTS_TOTAL)
+        ipo_effects = EFFECTS_TOTAL
 
         params = InferenceParams(interp)
         restrict_abstract_call_sites = isa(linfo.def, Module)
