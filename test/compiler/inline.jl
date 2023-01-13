@@ -273,18 +273,28 @@ f34900(x, y::Int) = y
 f34900(x::Int, y::Int) = invoke(f34900, Tuple{Int, Any}, x, y)
 @test fully_eliminated(f34900, Tuple{Int, Int}; retval=Core.Argument(2))
 
-using Core.Compiler: is_inlineable, set_inlineable!
+using Core.Compiler: is_declared_inline, is_declared_noinline
 
-@testset "check jl_ir_inlining_cost for inline macro" begin
-    @test is_inlineable(only(methods(@inline x -> x)).source)
-    @test is_inlineable(only(methods(x -> (@inline; x))).source)
-    @test !is_inlineable(only(methods(x -> x)).source)
-    @test is_inlineable(only(methods(@inline function f(x) x end)).source)
-    @test is_inlineable(only(methods(function f(x) @inline; x end)).source)
-    @test !is_inlineable(only(methods(function f(x) x end)).source)
-    @test is_inlineable(only(methods() do x @inline; x end).source)
-    @test !is_inlineable(only(methods() do x x end).source)
+@testset "is_declared_[no]inline" begin
+    @test is_declared_inline(only(methods(@inline x -> x)))
+    @test is_declared_inline(only(methods(x -> (@inline; x))))
+    @test is_declared_inline(only(methods(@inline function f(x) x end)))
+    @test is_declared_inline(only(methods(function f(x) @inline; x end)))
+    @test is_declared_inline(only(methods() do x @inline; x end))
+    @test is_declared_noinline(only(methods(@noinline x -> x)))
+    @test is_declared_noinline(only(methods(x -> (@noinline; x))))
+    @test is_declared_noinline(only(methods(@noinline function f(x) x end)))
+    @test is_declared_noinline(only(methods(function f(x) @noinline; x end)))
+    @test is_declared_noinline(only(methods() do x @noinline; x end))
+    @test !is_declared_inline(only(methods(x -> x)))
+    @test !is_declared_noinline(only(methods(x -> x)))
+    @test !is_declared_inline(only(methods(function f(x) x end)))
+    @test !is_declared_noinline(only(methods(function f(x) x end)))
+    @test !is_declared_inline(only(methods() do x x end))
+    @test !is_declared_noinline(only(methods() do x x end))
 end
+
+using Core.Compiler: is_inlineable, set_inlineable!
 
 @testset "basic set_inlineable! functionality" begin
     ci = code_typed1() do
@@ -1567,16 +1577,18 @@ end
     end
 end
 
+using Core.Compiler: is_declared_inline, is_declared_noinline
+
 # https://github.com/JuliaLang/julia/issues/45050
 @testset "propagate :meta annotations to keyword sorter methods" begin
     # @inline, @noinline, @constprop
     let @inline f(::Any; x::Int=1) = 2x
-        @test is_inlineable(only(methods(f)).source)
-        @test is_inlineable(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).source)
+        @test is_declared_inline(only(methods(f)))
+        @test is_declared_inline(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
     end
     let @noinline f(::Any; x::Int=1) = 2x
-        @test !is_inlineable(only(methods(f)).source)
-        @test !is_inlineable(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).source)
+        @test is_declared_noinline(only(methods(f)))
+        @test is_declared_noinline(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
     end
     let Base.@constprop :aggressive f(::Any; x::Int=1) = 2x
         @test Core.Compiler.is_aggressive_constprop(only(methods(f)))
@@ -1602,9 +1614,9 @@ end
     end
     # propagate multiple metadata also
     let @inline Base.@assume_effects :notaskstate Base.@constprop :aggressive f(::Any; x::Int=1) = (@nospecialize; 2x)
-        @test is_inlineable(only(methods(f)).source)
+        @test is_declared_inline(only(methods(f)))
         @test Core.Compiler.is_aggressive_constprop(only(methods(f)))
-        @test is_inlineable(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).source)
+        @test is_declared_inline(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
         @test Core.Compiler.is_aggressive_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
         @test only(methods(f)).nospecialize == -1
         @test only(methods(Core.kwcall, (Any, typeof(f), Vararg))).nospecialize == -1

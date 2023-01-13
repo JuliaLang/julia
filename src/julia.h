@@ -288,6 +288,7 @@ typedef struct _jl_code_info_t {
     uint8_t pure;
     uint8_t has_fcall;
     // uint8 settings
+    uint8_t inlining; // 0 = default; 1 = @inline; 2 = @noinline
     uint8_t constprop; // 0 = use heuristic; 1 = aggressive; 2 = none
     _jl_purity_overrides_t purity;
 } jl_code_info_t;
@@ -1838,6 +1839,7 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr JL_MAYBE_UNROOTED);
 JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code);
 JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_array_t *data);
 JL_DLLEXPORT uint8_t jl_ir_flag_inferred(jl_array_t *data) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint8_t jl_ir_flag_inlining(jl_array_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ir_flag_pure(jl_array_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint16_t jl_ir_inlining_cost(jl_array_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT ssize_t jl_ir_nslots(jl_array_t *data) JL_NOTSAFEPOINT;

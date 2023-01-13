@@ -599,6 +599,7 @@ typedef struct {
     uint8_t pure:1;
     uint8_t propagate_inbounds:1;
     uint8_t inferred:1;
+    uint8_t inlining:2; // 0 = use heuristic; 1 = aggressive; 2 = none
     uint8_t constprop:2; // 0 = use heuristic; 1 = aggressive; 2 = none
 } jl_code_info_flags_bitfield_t;
 
