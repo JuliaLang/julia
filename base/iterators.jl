@@ -85,6 +85,11 @@ and_iteratorsize(a, b) = SizeUnknown()
 and_iteratoreltype(iel::T, ::T) where {T} = iel
 and_iteratoreltype(a, b) = EltypeUnknown()
 
+# Extend and_iteratoreltype to handle any number of arguments.
+and_iteratoreltype() = HasEltype()
+and_iteratoreltype(a) = a
+and_iteratoreltype(a, tail...) = and_iteratoreltype(a, and_iteratoreltype(tail...))
+
 ## Reverse-order iteration for arrays and other collections.  Collections
 ## should implement iterate etcetera if possible/practical.
 """
@@ -453,7 +458,7 @@ end
 _zip_isdone(::Tuple{}, ::Tuple{}) = (false, ())
 
 IteratorSize(::Type{Zip{Is}}) where {Is<:Tuple} = zip_iteratorsize(ntuple(n -> IteratorSize(fieldtype(Is, n)), _counttuple(Is)::Int)...)
-IteratorEltype(::Type{Zip{Is}}) where {Is<:Tuple} = zip_iteratoreltype(ntuple(n -> IteratorEltype(fieldtype(Is, n)), _counttuple(Is)::Int)...)
+IteratorEltype(::Type{Zip{Is}}) where {Is<:Tuple} = and_iteratoreltype(ntuple(n -> IteratorEltype(fieldtype(Is, n)), _counttuple(Is)::Int)...)
 
 zip_iteratorsize() = IsInfinite()
 zip_iteratorsize(I) = I
@@ -463,10 +468,6 @@ zip_iteratorsize(::HasShape, ::IsInfinite) = HasLength()
 zip_iteratorsize(a::IsInfinite, b) = zip_iteratorsize(b,a)
 zip_iteratorsize(a::IsInfinite, b::IsInfinite) = IsInfinite()
 zip_iteratorsize(a, b, tail...) = zip_iteratorsize(a, zip_iteratorsize(b, tail...))
-
-zip_iteratoreltype() = HasEltype()
-zip_iteratoreltype(a) = a
-zip_iteratoreltype(a, tail...) = and_iteratoreltype(a, zip_iteratoreltype(tail...))
 
 reverse(z::Zip) = Zip(Base.map(reverse, z.is)) # n.b. we assume all iterators are the same length
 last(z::Zip) = getindex.(z.is, minimum(Base.map(lastindex, z.is)))
@@ -1173,7 +1174,7 @@ _flatteneltype(I, et) = EltypeUnknown()
 # More refined handling of eltype and IteratorEltype for heterogeneous inner iterators,
 # when the outer iterator is a tuple.
 eltype(::Type{Flatten{I}}) where {I <: Tuple} = Base.typejoin(map(eltype, fieldtypes(I))...)
-IteratorEltype(::Type{Flatten{I}}) where {I <: Tuple} = zip_iteratoreltype(map(IteratorEltype, fieldtypes(I))...)
+IteratorEltype(::Type{Flatten{I}}) where {I <: Tuple} = and_iteratoreltype(map(IteratorEltype, fieldtypes(I))...)
 
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:NTuple{N,Any}}) where {N} = HasLength()
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Tuple}) = SizeUnknown()
