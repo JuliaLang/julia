@@ -609,7 +609,7 @@ julia> replace("abcdeγfgh", !isascii=>' ') # replace non-ASCII chars with space
 "abcde fgh"
 ```
 """
-isascii(c::Char) = bswap(reinterpret(UInt32, c)) < 0x80
+isascii(c::Char) = c <= '\x7f'
 isascii(s::AbstractString) = all(isascii, s)
 isascii(c::AbstractChar) = UInt32(c) < 0x80
 
