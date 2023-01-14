@@ -2930,6 +2930,21 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
     return res;
 }
 
+
+static void restore_occurs_cov(jl_stenv_t *e, jl_savedenv_t *se)
+{
+    jl_varbinding_t *v = e->vars;
+    int j = 0;
+    while (v != NULL) {
+        int8_t temp = se->buf[j+2];
+        if (v->occurs_inv == 0 && v->occurs_cov < temp)
+            v->occurs_cov = temp;
+        j += 3;
+        v = v->prev;
+    }
+}
+
+
 static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, int param)
 {
     jl_value_t *res=NULL, *save=NULL;
@@ -2946,10 +2961,14 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
     }
     else if (res != jl_bottom_type) {
         if (vb.concrete || vb.occurs_inv>1 || vb.intvalued > 1 || u->var->lb != jl_bottom_type || (vb.occurs_inv && vb.occurs_cov)) {
+            jl_savedenv_t se2;
+            save_env(e, NULL, &se2);
             restore_env(e, NULL, &se);
             vb.occurs = vb.occurs_cov = vb.occurs_inv = 0;
             vb.constraintkind = vb.concrete ? 1 : 2;
             res = intersect_unionall_(t, u, e, R, param, &vb);
+            restore_occurs_cov(e, &se2);
+            free_env(&se2);
         }
         else if (vb.occurs_cov && !var_occurs_invariant(u->body, u->var, 0)) {
             restore_env(e, save, &se);
