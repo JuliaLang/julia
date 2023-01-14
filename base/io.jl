@@ -835,6 +835,40 @@ function readuntil(s::IO, delim::AbstractChar; keep::Bool=false)
     return String(take!(out))
 end
 
+# read at most length(buffer) bytes; there is also an optimize method
+# for IOStream.
+function _readuntil!(s::IO, buffer::AbstractVector{UInt8}, delim::UInt8)
+    buflen = length(buffer)
+    iszero(buflen) && return 0
+    nwritten = 0
+    for c in readeach(s, UInt8)
+        @inbounds buffer[begin+nwritten] = c
+        nwritten += 1
+        if c == delim || nwritten == buflen
+            break
+        end
+    end
+    return nwritten
+end
+
+"""
+    readuntil!(s::IO, buffer::AbstractVector{UInt8}, delim::UInt8)
+
+Read bytes from `s` and write them into `buffer` until a byte `== delim`
+is written.  Returns the number of bytes written into `buffer`.
+
+The size of `buffer` will be increased (via `resize!`) if needed, but it will
+never be decreased.
+"""
+function readuntil!(s::IO, buffer::AbstractVector{UInt8}, delim::UInt8)
+    n = 0
+    @inbounds while true
+        n += _readuntil!(s, @view(buffer[begin+n:end]), delim)
+        (buffer[end] == delim || eof(s)) && return n
+        resize!(buffer, 2*length(buffer)+1)
+    end
+end
+
 function readuntil(s::IO, delim::T; keep::Bool=false) where T
     out = (T === UInt8 ? StringVector(0) : Vector{T}())
     for c in readeach(s, T)
