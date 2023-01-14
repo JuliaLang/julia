@@ -324,6 +324,9 @@ end
 zero(D::Diagonal) = Diagonal(zero.(D.diag))
 oneunit(D::Diagonal) = Diagonal(oneunit.(D.diag))
 
+dot(x::AbstractVector, A::RealHermSymComplexHerm{<:Any,<:Diagonal}, y::AbstractVector) =
+    dot(x, A.data, y)
+
 # equals and approx equals methods for structured matrices
 # SymTridiagonal == Tridiagonal is already defined in tridiag.jl
 

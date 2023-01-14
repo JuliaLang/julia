@@ -578,8 +578,6 @@ end
 
 *(A::HermOrSym, B::HermOrSym) = A * copyto!(similar(parent(B)), B)
 
-dot(x::AbstractVector, A::RealHermSymComplexHerm{<:Any,<:Diagonal}, y::AbstractVector) =
-    dot(x, A.data, y)
 function dot(x::AbstractVector, A::RealHermSymComplexHerm, y::AbstractVector)
     require_one_based_indexing(x, y)
     n = length(x)
