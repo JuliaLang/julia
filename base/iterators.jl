@@ -15,7 +15,7 @@ using .Base:
     AbstractRange, AbstractUnitRange, UnitRange, LinearIndices,
     (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, missing,
     any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
-    tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape
+    tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, typejoin
 using Core: @doc
 
 if Base !== Core.Compiler
@@ -1164,8 +1164,15 @@ julia> [(x,y) for x in 0:1 for y in 'a':'c']  # collects generators involving It
 """
 flatten(itr) = Flatten(itr)
 
-eltype(::Type{Flatten{I}}) where {I} = eltype(eltype(I))
 eltype(::Type{Flatten{Tuple{}}}) = eltype(Tuple{})
+eltype(::Type{Base.Iterators.Flatten{T}}) where T = tuple_eltype_join(T)
+
+tuple_eltype_join(::Type{Tuple{T}}) where T = eltype(T)
+function tuple_eltype_join(::Type{T}) where {T <: Tuple}
+    E = eltype(Base.tuple_type_head(T))
+    E === Any ? Any : typejoin(E, tuple_eltype_join(Base.tuple_type_tail(T)))
+end
+
 IteratorEltype(::Type{Flatten{I}}) where {I} = _flatteneltype(I, IteratorEltype(I))
 IteratorEltype(::Type{Flatten{Tuple{}}}) = IteratorEltype(Tuple{})
 _flatteneltype(I, ::HasEltype) = IteratorEltype(eltype(I))
