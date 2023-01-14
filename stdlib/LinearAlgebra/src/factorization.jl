@@ -138,7 +138,7 @@ end
 
 function (\)(F::Factorization, B::AbstractVecOrMat)
     require_one_based_indexing(B)
-    TFB = typeof(oneunit(eltype(F)) / oneunit(eltype(B)))
+    TFB = typeof(oneunit(eltype(F)) \ oneunit(eltype(B)))
     ldiv!(F, copy_similar(B, TFB))
 end
 (\)(F::TransposeFactorization, B::AbstractVecOrMat) = conj!(adjoint(F.parent) \ conj.(B))
