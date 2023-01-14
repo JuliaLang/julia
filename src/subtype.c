@@ -2599,6 +2599,36 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     return (jl_value_t*)b;
 }
 
+static jl_value_t *intersect_concrete_covariant_var(jl_tvar_t *x, jl_tvar_t *y, jl_stenv_t *e, int flipped)
+{
+    jl_varbinding_t *xx = lookup(e, x), *yy = lookup(e, y);
+    assert(xx != NULL && yy != NULL);
+    while (xx->lb == xx->ub && jl_is_typevar(xx->lb)) {
+        jl_varbinding_t *temp = lookup(e, (jl_tvar_t *)xx->lb);
+        if (temp == NULL)
+            break;
+        x = (jl_tvar_t *)xx->lb;
+        xx = temp;
+        record_var_occurrence(xx, e, 1);
+    }
+    while (yy->lb == yy->ub && jl_is_typevar(yy->lb)) {
+        jl_varbinding_t *temp = lookup(e, (jl_tvar_t *)yy->lb);
+        if (temp == NULL)
+            break;
+        y = (jl_tvar_t *)yy->lb;
+        yy = temp;
+        record_var_occurrence(yy, e, 1);
+    }
+    int x_occurs_inv = xx->occurs_inv;
+    int y_occurs_inv = yy->occurs_inv;
+    // treat them as invariant var (as we want to set them equal.)
+    jl_value_t *res = flipped ? intersect((jl_value_t *)y, (jl_value_t *)x, e, 2) :
+                                intersect((jl_value_t *)x, (jl_value_t *)y, e, 2);
+    xx->occurs_inv = x_occurs_inv;
+    yy->occurs_inv = y_occurs_inv;
+    return res;
+}
+
 // test whether `var` occurs inside constructors. `want_inv` tests only inside
 // invariant constructors. `inside` means we are currently inside a constructor of the
 // requested kind.
@@ -3338,6 +3368,8 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
             }
             record_var_occurrence(xx, e, param);
             record_var_occurrence(yy, e, param);
+            if (param == 1 && xx && yy && xx->concrete && yy->concrete)
+                return intersect_concrete_covariant_var((jl_tvar_t*)x, (jl_tvar_t*)y, e, R);
             if (xx && yy && xx->concrete && !yy->concrete) {
                 return intersect_var((jl_tvar_t*)x, y, e, R, param);
             }
