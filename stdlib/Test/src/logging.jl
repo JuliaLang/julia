@@ -26,6 +26,7 @@ struct LogRecord
     id
     file
     line
+    trace
     kwargs
 end
 LogRecord(args...; kwargs...) = LogRecord(args..., kwargs)
@@ -93,7 +94,7 @@ function Logging.shouldlog(logger::TestLogger, level, _module, group, id)
 end
 
 function Logging.handle_message(logger::TestLogger, level, msg, _module,
-                                group, id, file, line; kwargs...)
+                                group, id, file, line; trace=nothing, kwargs...)
     @nospecialize
     if logger.respect_maxlog
         maxlog = get(kwargs, :maxlog, nothing)
@@ -103,7 +104,7 @@ function Logging.handle_message(logger::TestLogger, level, msg, _module,
             remaining > 0 || return
         end
     end
-    push!(logger.logs, LogRecord(level, msg, _module, group, id, file, line, kwargs))
+    push!(logger.logs, LogRecord(level, msg, _module, group, id, file, line, trace, kwargs))
 end
 
 # Catch exceptions for the test logger only if specified

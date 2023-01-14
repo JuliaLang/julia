@@ -104,7 +104,7 @@ function termlength(str)
 end
 
 function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module, group, id,
-                        filepath, line; kwargs...)
+                        filepath, line; trace=nothing, kwargs...)
     @nospecialize
     hasmaxlog = haskey(kwargs, :maxlog) ? 1 : 0
     maxlog = get(kwargs, :maxlog, nothing)
@@ -152,6 +152,13 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
                   msglines[end].indent + termlength(msglines[end].msg) +
                   (isempty(suffix) ? 0 : length(suffix)+minsuffixpad)
     justify_width = min(logger.right_justify, dsize[2])
+    if !isnothing(trace)
+        push!(msglines, (indent=0, msg="Stacktrace:"))
+        for line in trace[4:end] # skip the first two which will fall in logger code
+            line.file == Symbol("./boot.jl") && line.func == :eval && break
+            push!(msglines, (indent=2, msg=SubString(sprint(show,line))))
+        end
+    end
     if nonpadwidth > justify_width && !isempty(suffix)
         push!(msglines, (indent=0, msg=SubString("")))
         minsuffixpad = 0

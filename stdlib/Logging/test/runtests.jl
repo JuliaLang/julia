@@ -4,6 +4,18 @@ using Test, Logging
 
 import Logging: min_enabled_level, shouldlog, handle_message
 
+macro capture_stderr(ex)
+    quote
+        mktemp() do fname, f
+            redirect_stderr(f) do
+                $(esc(ex))
+            end
+            seekstart(f)
+            read(f, String)
+        end
+    end
+end
+
 @noinline func1() = backtrace()
 
 @testset "Logging" begin
@@ -256,6 +268,23 @@ end
     \e[36m\e[1m│ \e[22m\e[39mline2
     \e[36m\e[1m└ \e[22m\e[39m\e[90mSUFFIX\e[39m
     """
+
+    @testset "Log with optional stacktrace via JULIA_LOG_TRACE=true" begin
+        withenv("JULIA_LOG_TRACE" => true) do
+            str = @capture_stderr @info "msg"
+            @test startswith(str, "┌ Info: msg\n│ Stacktrace:\n│")
+            str = @capture_stderr @warn "msg"
+            @test startswith(str, "┌ Warning: msg\n│ Stacktrace:\n│")
+            str = @capture_stderr @error "msg"
+            @test startswith(str, "┌ Error: msg\n│ Stacktrace:\n│")
+        end
+        str = @capture_stderr @info "msg" include_trace = true
+        @test startswith(str, "┌ Info: msg\n│ Stacktrace:\n│")
+        str = @capture_stderr @warn "msg" include_trace = true
+        @test startswith(str, "┌ Warning: msg\n│ Stacktrace:\n│")
+        str = @capture_stderr @error "msg" include_trace = true
+        @test startswith(str, "┌ Error: msg\n│ Stacktrace:\n│")
+    end
 
 end
 

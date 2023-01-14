@@ -319,14 +319,32 @@ function issimplekw(@nospecialize val)
     return false
 end
 
-# Generate code for logging macros
+function log_trace(kwargs)
+    do_trace = if Base.get_bool_env("JULIA_LOG_TRACE", false)
+        true
+    elseif get(kwargs, :include_trace, false) === true
+        kwargs = Base.structdiff(kwargs, NamedTuple{(:include_trace,)})
+        true
+    else
+        false
+    end
+    if do_trace
+        try
+            error()
+        catch
+            return stacktrace(catch_backtrace()), kwargs
+        end
+    else
+        return nothing, kwargs
+    end
+end
 function logmsg_code(_module, file, line, level, message, exs...)
     @nospecialize
     log_data = process_logmsg_exs(_module, file, line, level, message, exs...)
     if !isa(message, Symbol) && issimple(message) && isempty(log_data.kwargs)
         logrecord = quote
             msg = $(message)
-            kwargs = (;)
+            trace, kwargs = log_trace((;))
             true
         end
     elseif issimple(message) && all(issimplekw, log_data.kwargs)
@@ -346,7 +364,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
             let err = $checkerrors
                 if err === nothing
                     msg = $(message)
-                    kwargs = (;$(log_data.kwargs...))
+                    trace, kwargs = log_trace((;$(log_data.kwargs...)))
                     true
                 else
                     @invokelatest logging_error(logger, level, _module, group, id, file, line, err, false)
@@ -358,7 +376,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
         logrecord = quote
             try
                 msg = $(esc(message))
-                kwargs = (;$(log_data.kwargs...))
+                trace, kwargs = log_trace((;$(log_data.kwargs...)))
                 true
             catch err
                 @invokelatest logging_error(logger, level, _module, group, id, file, line, err, true)
@@ -384,10 +402,10 @@ function logmsg_code(_module, file, line, level, message, exs...)
                             file = Base.fixup_stdlib_path(file)
                         end
                         line = $(log_data._line)
-                        local msg, kwargs
+                        local msg, kwargs, trace
                         $(logrecord) && invokelatest(handle_message,
                             logger, level, msg, _module, group, id, file, line;
-                            kwargs...)
+                            trace, kwargs...)
                     end
                 end
             end
@@ -662,7 +680,7 @@ min_enabled_level(logger::SimpleLogger) = logger.min_level
 catch_exceptions(logger::SimpleLogger) = false
 
 function handle_message(logger::SimpleLogger, level::LogLevel, message, _module, group, id,
-                        filepath, line; kwargs...)
+                        filepath, line; trace=nothing, kwargs...)
     @nospecialize
     maxlog = get(kwargs, :maxlog, nothing)
     if maxlog isa Core.BuiltinInts
@@ -678,6 +696,13 @@ function handle_message(logger::SimpleLogger, level::LogLevel, message, _module,
     iob = IOContext(buf, stream)
     levelstr = level == Warn ? "Warning" : string(level)
     msglines = eachsplit(chomp(convert(String, string(message))::String), '\n')
+    if !isnothing(trace)
+        push!(msglines, "Stacktrace:")
+        for line in trace[4:end] # skip the first two which will fall in logger code
+            line.file == Symbol("./boot.jl") && line.func == :eval && break
+            push!(msglines, "  " * sprint(show,line))
+        end
+    end
     msg1, rest = Iterators.peel(msglines)
     println(iob, "┌ ", levelstr, ": ", msg1)
     for msg in rest
