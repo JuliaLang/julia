@@ -474,6 +474,7 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
     if (killed) {
         *pt = NULL; // can't fail after here: clear the gc-root for the target task now
         lastt->gcstack = NULL;
+        lastt->eh = NULL;
         if (!lastt->copy_stack && lastt->stkbuf) {
             // early free of stkbuf back to the pool
             jl_release_task_stack(ptls, lastt);

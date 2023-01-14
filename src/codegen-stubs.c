@@ -58,7 +58,7 @@ JL_DLLEXPORT int jl_compile_extern_c_fallback(LLVMOrcThreadSafeModuleRef llvmmod
     return 0;
 }
 
-JL_DLLEXPORT void jl_teardown_codegen_fallback(void)
+JL_DLLEXPORT void jl_teardown_codegen_fallback(void) JL_NOTSAFEPOINT
 {
 }
 
