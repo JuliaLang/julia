@@ -1025,6 +1025,46 @@ end
     end
 end
 
+pkgimage(val) = val == 1 ? `--pkgimage=yes` : `--pkgimage=no`
+opt_level(val) = `-O$val`
+debug_level(val) = `-g$val`
+inline(val) = val == 1 ? `--inline=yes` : `--inline=no`
+check_bounds(val) = if val == 0
+    `--check-bounds=auto`
+elseif val == 1
+    `--check-bounds=yes`
+elseif val == 2
+    `--check-bounds=no`
+end
+
+@testset "CacheFlags" begin
+    cf = Base.CacheFlags()
+    opts = Base.JLOptions()
+    @test cf.use_pkgimages == opts.use_pkgimages
+    @test cf.debug_level == opts.debug_level
+    @test cf.check_bounds == opts.check_bounds
+    @test cf.inline == opts.can_inline
+    @test cf.opt_level == opts.opt_level
+
+    # OOICCDDP
+    for (P, D, C, I, O) in Iterators.product(0:1, 0:2, 0:2, 0:1, 0:3)
+        julia = joinpath(Sys.BINDIR, Base.julia_exename())
+        script = """
+        using Test
+        let
+            cf = Base.CacheFlags()
+            opts = Base.JLOptions()
+            @test cf.use_pkgimages == opts.use_pkgimages == $P
+            @test cf.debug_level == opts.debug_level == $D
+            @test cf.check_bounds == opts.check_bounds == $C
+            @test cf.inline == opts.can_inline == $I
+            @test cf.opt_level == opts.opt_level == $O
+        end
+        """
+        cmd = `$julia $(pkgimage(P)) $(opt_level(O)) $(debug_level(D)) $(check_bounds(C)) $(inline(I)) -e $script`
+        @test success(pipeline(cmd; stderr))
+    end
+end
 
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
