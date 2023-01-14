@@ -36,15 +36,23 @@ is now a no-op ([#47979]). It previously exposed unsafe behavior ([#47977]).
 Standard library changes
 ------------------------
 
-
 #### Package Manager
 
 - "Package Extensions": support for loading a piece of code based on other
   packages being loaded in the Julia session.
   This has similar applications as the Requires.jl package but also
   supports precompilation and setting compatibility.
+
 #### LinearAlgebra
 
+- `AbstractQ` no longer subtypes to `AbstractMatrix`. Moreover, `adjoint(Q::AbstractQ)`
+  no longer wraps `Q` in an `Adjoint` type, but instead in an `AdjointQ`, that itself
+  subtypes `AbstractQ`. This change accounts for the fact that typically `AbstractQ`
+  instances behave like function-based, matrix-backed linear operators, and hence don't
+  allow for efficient indexing. Also, many `AbstractQ` types can act on vectors/matrices
+  of different size, acting like a matrix with context-dependent size. With this change,
+  `AbstractQ` has a well-defined API that is described in detail in the Julia documentation
+  ([#46196]).
 
 #### Printf
 
