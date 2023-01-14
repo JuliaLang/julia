@@ -7087,7 +7087,7 @@ static jl_llvm_functions_t
         FnAttrs.addAttribute(polly::PollySkipFnAttr);
 #endif
 
-    if (jl_has_meta(stmts, jl_noinline_sym))
+    if (src->inlining == 2)
         FnAttrs.addAttribute(Attribute::NoInline);
 
 #ifdef JL_DEBUG_BUILD
@@ -8874,7 +8874,7 @@ extern "C" JL_DLLEXPORT void jl_init_codegen_impl(void)
     init_jit_functions();
 }
 
-extern "C" JL_DLLEXPORT void jl_teardown_codegen_impl()
+extern "C" JL_DLLEXPORT void jl_teardown_codegen_impl() JL_NOTSAFEPOINT
 {
     // output LLVM timings and statistics
     reportAndResetTimings();

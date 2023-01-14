@@ -223,7 +223,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         method = match.method
         sig = match.spec_types
         mi = specialize_method(match; preexisting=true)
-        if mi !== nothing && !const_prop_methodinstance_heuristic(interp, match, mi, arginfo, sv)
+        if mi !== nothing && !const_prop_methodinstance_heuristic(interp, mi, arginfo, sv)
             csig = get_compileable_sig(method, sig, match.sparams)
             if csig !== nothing && csig !== sig
                 abstract_call_method(interp, method, csig, match.sparams, multiple_matches, StmtInfo(false), sv)
@@ -828,9 +828,18 @@ end
 # - false: eligible for semi-concrete evaluation
 # - nothing: not eligible for either of it
 function concrete_eval_eligible(interp::AbstractInterpreter,
-    @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo)
+    @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, sv::InferenceState)
     # disable all concrete-evaluation if this function call is tainted by some overlayed
     # method since currently there is no direct way to execute overlayed methods
+    if inbounds_option() === :off
+        # Disable concrete evaluation in `--check-bounds=no` mode, since we cannot be sure
+        # that inferred effects are accurate.
+        return nothing
+    elseif !result.effects.noinbounds && stmt_taints_inbounds_consistency(sv)
+        # If the current statement is @inbounds or we propagate inbounds, the call's consistency
+        # is tainted and not consteval eligible.
+        return nothing
+    end
     isoverlayed(method_table(interp)) && !is_nonoverlayed(result.effects) && return nothing
     if f !== nothing && result.edge !== nothing && is_foldable(result.effects)
         if is_all_const_arg(arginfo, #=start=#2)
@@ -869,7 +878,7 @@ end
 function concrete_eval_call(interp::AbstractInterpreter,
     @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, si::StmtInfo,
     sv::InferenceState, invokecall::Union{Nothing,InvokeCall}=nothing)
-    eligible = concrete_eval_eligible(interp, f, result, arginfo)
+    eligible = concrete_eval_eligible(interp, f, result, arginfo, sv)
     eligible === nothing && return false
     if eligible
         args = collect_const_args(arginfo, #=start=#2)
@@ -1087,7 +1096,7 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter,
         return nothing
     end
     mi = mi::MethodInstance
-    if !force && !const_prop_methodinstance_heuristic(interp, match, mi, arginfo, sv)
+    if !force && !const_prop_methodinstance_heuristic(interp, mi, arginfo, sv)
         add_remark!(interp, sv, "[constprop] Disabled by method instance heuristic")
         return nothing
     end
@@ -1239,8 +1248,8 @@ end
 # where we would spend a lot of time, but are probably unlikely to get an improved
 # result anyway.
 function const_prop_methodinstance_heuristic(interp::AbstractInterpreter,
-    match::MethodMatch, mi::MethodInstance, arginfo::ArgInfo, sv::InferenceState)
-    method = match.method
+    mi::MethodInstance, arginfo::ArgInfo, sv::InferenceState)
+    method = mi.def::Method
     if method.is_for_opaque_closure
         # Not inlining an opaque closure can be very expensive, so be generous
         # with the const-prop-ability. It is quite possible that we can't infer
@@ -1248,34 +1257,37 @@ function const_prop_methodinstance_heuristic(interp::AbstractInterpreter,
         # isn't particularly helpful here.
         return true
     end
-    # Peek at the inferred result for the function to determine if the optimizer
-    # was able to cut it down to something simple (inlineable in particular).
-    # If so, there's a good chance we might be able to const prop all the way
-    # through and learn something new.
-    if isdefined(method, :source) && is_inlineable(method.source)
+    # now check if the source of this method instance is inlineable, since the extended type
+    # information we have here would be discarded if it is not inlined into a callee context
+    # (modulo the inferred return type that can be potentially refined)
+    if is_declared_inline(method)
+        # this method is declared as `@inline` and will be inlined
         return true
+    end
+    flag = get_curr_ssaflag(sv)
+    if is_stmt_inline(flag)
+        # force constant propagation for a call that is going to be inlined
+        # since the inliner will try to find this constant result
+        # if these constant arguments arrive there
+        return true
+    elseif is_stmt_noinline(flag)
+        # this call won't be inlined, thus this constant-prop' will most likely be unfruitful
+        return false
     else
-        flag = get_curr_ssaflag(sv)
-        if is_stmt_inline(flag)
-            # force constant propagation for a call that is going to be inlined
-            # since the inliner will try to find this constant result
-            # if these constant arguments arrive there
-            return true
-        elseif is_stmt_noinline(flag)
-            # this call won't be inlined, thus this constant-prop' will most likely be unfruitful
-            return false
-        else
-            code = get(code_cache(interp), mi, nothing)
-            if isdefined(code, :inferred)
-                if isa(code, CodeInstance)
-                    inferred = @atomic :monotonic code.inferred
-                else
-                    inferred = code.inferred
-                end
-                # TODO propagate a specific `CallInfo` that conveys information about this call
-                if inlining_policy(interp, inferred, NoCallInfo(), IR_FLAG_NULL, mi, arginfo.argtypes) !== nothing
-                    return true
-                end
+        # Peek at the inferred result for the method to determine if the optimizer
+        # was able to cut it down to something simple (inlineable in particular).
+        # If so, there will be a good chance we might be able to const prop
+        # all the way through and learn something new.
+        code = get(code_cache(interp), mi, nothing)
+        if isdefined(code, :inferred)
+            if isa(code, CodeInstance)
+                inferred = @atomic :monotonic code.inferred
+            else
+                inferred = code.inferred
+            end
+            # TODO propagate a specific `CallInfo` that conveys information about this call
+            if inlining_policy(interp, inferred, NoCallInfo(), IR_FLAG_NULL, mi, arginfo.argtypes) !== nothing
+                return true
             end
         end
     end
@@ -2179,21 +2191,17 @@ function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::
         end
     elseif head === :boundscheck
         if isa(sv, InferenceState)
-            stmt = sv.src.code[sv.currpc]
-            if isexpr(stmt, :call)
-                f = abstract_eval_value(interp, stmt.args[1], vtypes, sv)
-                if f isa Const && f.val === getfield
-                    # boundscheck of `getfield` call is analyzed by tfunc potentially without
-                    # tainting :consistent-cy when it's known to be nothrow
-                    @goto delay_effects_analysis
-                end
-            end
+            # If there is no particular `@inbounds` for this function, then we only taint `:noinbounds`,
+            # which will subsequently taint `:consistent`-cy if this function is called from another
+            # function that uses `@inbounds`. However, if this `:boundscheck` is itself within an
+            # `@inbounds` region, its value depends on `--check-bounds`, so we need to taint
+            # `:consistent`-cy here also.
+            merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; noinbounds=false,
+                consistent = (get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) != 0 ? ALWAYS_FALSE : ALWAYS_TRUE))
         end
-        merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE, noinbounds=false))
-        @label delay_effects_analysis
         rt = Bool
     elseif head === :inbounds
-        merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE, noinbounds=false))
+        @assert false && "Expected this to have been moved into flags"
     elseif head === :the_exception
         merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE))
     end
@@ -2269,7 +2277,6 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
             arginfo = ArgInfo(ea, argtypes)
             si = StmtInfo(isa(sv, IRCode) ? true : !call_result_unused(sv, sv.currpc))
             (; rt, effects, info) = abstract_call(interp, arginfo, si, sv)
-            merge_effects!(interp, sv, effects)
             if isa(sv, InferenceState)
                 sv.stmt_info[sv.currpc] = info
                 # mark this call statement as DCE-elgible
@@ -2341,7 +2348,6 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
             t = refine_partial_type(t)
         end
         effects = Effects(EFFECTS_TOTAL; consistent, nothrow)
-        merge_effects!(interp, sv, effects)
     elseif ehead === :splatnew
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
         nothrow = false # TODO: More precision
@@ -2362,7 +2368,6 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         end
         consistent = !ismutabletype(t) ? ALWAYS_TRUE : CONSISTENT_IF_NOTRETURNED
         effects = Effects(EFFECTS_TOTAL; consistent, nothrow)
-        merge_effects!(interp, sv, effects)
     elseif ehead === :new_opaque_closure
         t = Union{}
         effects = Effects() # TODO
@@ -2390,7 +2395,6 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
     elseif ehead === :foreigncall
         (;rt, effects) = abstract_eval_foreigncall(interp, e, vtypes, sv, mi)
         t = rt
-        merge_effects!(interp, sv, effects)
         if isa(sv, InferenceState)
             # mark this call statement as DCE-elgible
             if is_removable_if_unused(effects)
@@ -2401,17 +2405,14 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         end
     elseif ehead === :cfunction
         effects = EFFECTS_UNKNOWN
-        merge_effects!(interp, sv, effects)
         t = e.args[1]
         isa(t, Type) || (t = Any)
         abstract_eval_cfunction(interp, e, vtypes, sv)
     elseif ehead === :method
         t = (length(e.args) == 1) ? Any : Nothing
         effects = EFFECTS_UNKNOWN
-        merge_effects!(interp, sv, effects)
     elseif ehead === :copyast
         effects = EFFECTS_UNKNOWN
-        merge_effects!(interp, sv, effects)
         t = abstract_eval_value(interp, e.args[1], vtypes, sv)
         if t isa Const && t.val isa Expr
             # `copyast` makes copies of Exprs
@@ -2422,6 +2423,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
     elseif ehead === :isdefined
         sym = e.args[1]
         t = Bool
+        effects = EFFECTS_TOTAL
         if isa(sym, SlotNumber)
             vtyp = vtypes[slot_id(sym)]
             if vtyp.typ === Bottom
@@ -2454,9 +2456,9 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         @label always_throw
         t = Bottom
         effects = EFFECTS_THROWS
-        merge_effects!(interp, sv, effects)
     else
         t = abstract_eval_value_expr(interp, e, vtypes, sv)
+        effects = EFFECTS_TOTAL
     end
     return RTEffects(t, effects)
 end
@@ -2511,6 +2513,11 @@ function abstract_eval_phi(interp::AbstractInterpreter, phi::PhiNode, vtypes::Un
     return rt
 end
 
+function stmt_taints_inbounds_consistency(sv::InferenceState)
+    sv.src.propagate_inbounds && return true
+    return (get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) != 0
+end
+
 function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
     if !isa(e, Expr)
         if isa(e, PhiNode)
@@ -2519,6 +2526,17 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         return abstract_eval_special_value(interp, e, vtypes, sv)
     end
     (;rt, effects) = abstract_eval_statement_expr(interp, e, vtypes, sv, nothing)
+    if !effects.noinbounds
+        if !sv.src.propagate_inbounds
+            # The callee read our inbounds flag, but unless we propagate inbounds,
+            # we ourselves don't read our parent's inbounds.
+            effects = Effects(effects; noinbounds=true)
+        end
+        if (get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) != 0
+            effects = Effects(effects; consistent=ALWAYS_FALSE)
+        end
+    end
+    merge_effects!(interp, sv, effects)
     e = e::Expr
     @assert !isa(rt, TypeVar) "unhandled TypeVar"
     rt = maybe_singleton_const(rt)

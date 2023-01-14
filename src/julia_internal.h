@@ -596,9 +596,11 @@ STATIC_INLINE jl_value_t *undefref_check(jl_datatype_t *dt, jl_value_t *v) JL_NO
 // -- helper types -- //
 
 typedef struct {
-    uint8_t pure:1;
-    uint8_t propagate_inbounds:1;
     uint8_t inferred:1;
+    uint8_t propagate_inbounds:1;
+    uint8_t pure:1;
+    uint8_t has_fcall:1;
+    uint8_t inlining:2; // 0 = use heuristic; 1 = aggressive; 2 = none
     uint8_t constprop:2; // 0 = use heuristic; 1 = aggressive; 2 = none
 } jl_code_info_flags_bitfield_t;
 
@@ -866,7 +868,7 @@ void jl_init_thread_heap(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 void jl_init_int32_int64_cache(void);
 JL_DLLEXPORT void jl_init_options(void);
 
-void jl_teardown_codegen(void);
+void jl_teardown_codegen(void) JL_NOTSAFEPOINT;
 
 void jl_set_base_ctx(char *__stk);
 
@@ -918,7 +920,7 @@ void jl_safepoint_defer_sigint(void);
 // Return `1` if the sigint should be delivered and `0` if there's no sigint
 // to be delivered.
 int jl_safepoint_consume_sigint(void);
-void jl_wake_libuv(void);
+void jl_wake_libuv(void) JL_NOTSAFEPOINT;
 
 void jl_set_pgcstack(jl_gcframe_t **) JL_NOTSAFEPOINT;
 #if defined(_OS_DARWIN_)

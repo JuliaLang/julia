@@ -145,7 +145,7 @@ static _Atomic(int) support_conservative_marking = 0;
  * threads that enters `jl_gc_collect()` at the same time (or later calling
  * from unmanaged code) will wait in `jl_gc_collect()` until the GC is finished.
  *
- * Before starting the mark phase the GC thread calls `jl_safepoint_gc_start()`
+ * Before starting the mark phase the GC thread calls `jl_safepoint_start_gc()`
  * and `jl_gc_wait_for_the_world()`
  * to make sure all the thread are in a safe state for the GC. The function
  * activates the safepoint and wait for all the threads to get ready for the
