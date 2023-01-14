@@ -504,6 +504,9 @@ The delimiter can be a `UInt8`, `AbstractChar`, string, or vector.
 Keyword argument `keep` controls whether the delimiter is included in the result.
 The text is assumed to be encoded in UTF-8.
 
+See also [`readuntil!`](@ref) to write in-place into a buffer rather than
+allocating a string.
+
 # Examples
 ```jldoctest
 julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
@@ -835,6 +838,36 @@ function readuntil(s::IO, delim::AbstractChar; keep::Bool=false)
     return String(take!(out))
 end
 
+function readuntil(s::IO, delim::T; keep::Bool=false) where T
+    out = (T === UInt8 ? StringVector(0) : Vector{T}())
+    for c in readeach(s, T)
+        if c == delim
+            keep && push!(out, c)
+            break
+        end
+        push!(out, c)
+    end
+    return out
+end
+
+"""
+    readuntil!(stream::IO, buffer::AbstractVector{UInt8}, delim)
+
+Read bytes from `stream` and write them into `buffer` until the given
+delimiter is read and written, or until the end of the stream is reached.
+Returns the number of bytes written into `buffer` (including the delimiter).
+
+The delimiter can be a `UInt8`, `AbstractChar`, string, or vector of `UInt8`.
+The input stream is assumed to be encoded in UTF-8.
+
+See also the similar function [`readuntil`](@ref), which returns a
+newly allocated `String` rather than writing into a buffer.
+
+!!! compat "Julia 1.10"
+    The `readuntil!` function was added in Julia 1.10.
+"""
+function readuntil! end
+
 # read at most length(buffer) bytes; there is also an optimized method
 # for IOStreams in iostream.jl
 function _readuntil!(s::IO, buffer::AbstractVector{UInt8}, delim::UInt8)
@@ -851,16 +884,6 @@ function _readuntil!(s::IO, buffer::AbstractVector{UInt8}, delim::UInt8)
     return nwritten
 end
 
-"""
-    readuntil!(s::IO, buffer::AbstractVector{UInt8}, delim::UInt8)
-
-Read bytes from `s` and write them into `buffer` until a byte `== delim`
-is written or [`eof(s)`](@ref) is reached.  Returns the number of bytes
-written into `buffer`.
-
-The size of `buffer` will be increased (via `resize!`) if needed, but it will
-never be decreased.
-"""
 function readuntil!(s::IO, buffer::AbstractVector{UInt8}, delim::UInt8)
     n = 0
     @inbounds while true
@@ -870,16 +893,25 @@ function readuntil!(s::IO, buffer::AbstractVector{UInt8}, delim::UInt8)
     end
 end
 
-function readuntil(s::IO, delim::T; keep::Bool=false) where T
-    out = (T === UInt8 ? StringVector(0) : Vector{T}())
-    for c in readeach(s, T)
-        if c == delim
-            keep && push!(out, c)
-            break
-        end
-        push!(out, c)
+function readuntil!(s::IO, buffer::AbstractVector{UInt8}, delim::AbstractVector{UInt8})
+    out = IOBuffer(buffer, write=true)
+    readuntil_vector!(s, delim, true, out)
+    return out.size
+end
+
+function readuntil!(s::IO, buffer::AbstractVector{UInt8}, delim::AbstractString)
+    codeunit(delim) === UInt8 || throw(ArgumentError("readuntil! delimiter must have UInt8 codeunits"))
+    return readuntil!(s, buffer, codeunits(delim))
+end
+
+function readuntil!(s::IO, buffer::AbstractVector{UInt8}, delim::AbstractChar)
+    delim ≤ '\x7f' && return readuntil!(s, buffer, delim % UInt8)
+    out = IOBuffer(buffer, write=true)
+    for c in readeach(s, Char)
+        write(out, c)
+        c == delim && break
     end
-    return out
+    return out.size
 end
 
 # requires that indices for target are the integer unit range from firstindex to lastindex
