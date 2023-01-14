@@ -89,6 +89,8 @@ endif
 ifeq ($(USE_SYSTEM_LINKER), 1)
 	@echo "const USE_SYSTEM_LINKER = true" >> $@
 	@echo "const SYSTEM_LINKER_PATH = \"$(SYSTEM_LINKER_PATH)\"" >> $@
+else
+	@echo "const USE_SYSTEM_LINKER = false" >> $@
 endif
 	@echo "const BUILD_TRIPLET = \"$(BB_TRIPLET_LIBGFORTRAN_CXXABI)\"" >> $@
 
