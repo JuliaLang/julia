@@ -835,8 +835,8 @@ function readuntil(s::IO, delim::AbstractChar; keep::Bool=false)
     return String(take!(out))
 end
 
-# read at most length(buffer) bytes; there is also an optimize method
-# for IOStream.
+# read at most length(buffer) bytes; there is also an optimized method
+# for IOStreams in iostream.jl
 function _readuntil!(s::IO, buffer::AbstractVector{UInt8}, delim::UInt8)
     buflen = length(buffer)
     iszero(buflen) && return 0
@@ -855,7 +855,8 @@ end
     readuntil!(s::IO, buffer::AbstractVector{UInt8}, delim::UInt8)
 
 Read bytes from `s` and write them into `buffer` until a byte `== delim`
-is written.  Returns the number of bytes written into `buffer`.
+is written or [`eof(s)`](@ref) is reached.  Returns the number of bytes
+written into `buffer`.
 
 The size of `buffer` will be increased (via `resize!`) if needed, but it will
 never be decreased.
