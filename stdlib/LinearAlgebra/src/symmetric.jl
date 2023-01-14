@@ -317,6 +317,7 @@ function fillstored!(A::HermOrSym{T}, x) where T
     return A
 end
 
+Base.isreal(A::HermOrSym{<:Real}) = true
 function Base.isreal(A::HermOrSym)
     n = size(A, 1)
     @inbounds if A.uplo == 'U'
@@ -577,6 +578,8 @@ end
 
 *(A::HermOrSym, B::HermOrSym) = A * copyto!(similar(parent(B)), B)
 
+dot(x::AbstractVector, A::RealHermSymComplexHerm{<:Any,<:Diagonal}, y::AbstractVector) =
+    dot(x, A.data, y)
 function dot(x::AbstractVector, A::RealHermSymComplexHerm, y::AbstractVector)
     require_one_based_indexing(x, y)
     n = length(x)
@@ -584,7 +587,6 @@ function dot(x::AbstractVector, A::RealHermSymComplexHerm, y::AbstractVector)
     data = A.data
     r = dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
     iszero(n) && return r
-    isdiag(A) && return dot(x, Diagonal(A), y)
     if A.uplo == 'U'
         @inbounds for j = 1:length(y)
             r += dot(x[j], real(data[j,j]), y[j])
