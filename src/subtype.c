@@ -3258,6 +3258,49 @@ static int subtype_by_bounds(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_NOT
     return compareto_var(x, (jl_tvar_t*)y, e, -1) || compareto_var(y, (jl_tvar_t*)x, e, 1);
 }
 
+static int intersect_var_ccheck_in_env(jl_value_t *xlb, jl_value_t *xub, jl_value_t *ylb, jl_value_t *yub, int R, jl_stenv_t *e)
+{
+    int easy_check1 = xlb == jl_bottom_type ||
+                      yub == (jl_value_t *)jl_any_type ||
+                      obviously_in_union(yub, xlb);
+    int easy_check2 = ylb == jl_bottom_type ||
+                      xub == (jl_value_t *)jl_any_type ||
+                      obviously_in_union(xub, ylb);
+    if (easy_check1 && easy_check2)
+        return 1;
+    jl_value_t *root=NULL;
+    jl_savedenv_t se;
+    int ccheck = 0;
+    JL_GC_PUSH1(&root);
+    save_env(e, &root, &se);
+    // first try normal flip.
+    if (R) flip_vars(e);
+    ccheck = (easy_check1 || subtype_in_env(xlb, yub, e)) &&
+             (easy_check2 || subtype_in_env(ylb, xub, e));
+    if (R) flip_vars(e);
+    if (!ccheck) {
+        // then try reverse flip.
+        restore_env(e, root, &se);
+        if (!R) flip_vars(e);
+        ccheck = (easy_check1 || subtype_in_env(xlb, yub, e)) &&
+                (easy_check2 || subtype_in_env(ylb, xub, e));
+        if (!R) flip_vars(e);
+    }
+    if (!ccheck) {
+        // then try existential.
+        restore_env(e, root, &se);
+        ccheck = easy_check1 || subtype_in_env_existential(xlb, yub, e, 0, e->invdepth);
+        if (!easy_check1) restore_env(e, root, &se);
+        if (ccheck) {
+            ccheck = easy_check2 || subtype_in_env_existential(ylb, xub, e, 0, e->invdepth);
+            if (!easy_check2) restore_env(e, root, &se);
+        }
+    }
+    free_env(&se);
+    JL_GC_POP();
+    return ccheck;
+}
+
 // `param` means we are currently looking at a parameter of a type constructor
 // (as opposed to being outside any type constructor, or comparing variable bounds).
 // this is used to record the positions where type variables occur for the
@@ -3345,9 +3388,8 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                     ccheck = 1;
                 }
                 else {
-                    if (R) flip_vars(e);
-                    ccheck = subtype_in_env(xlb, yub, e) && subtype_in_env(ylb, xub, e);
-                    if (R) flip_vars(e);
+                    // try many subtype check to avoid false `Union{}`
+                    ccheck = intersect_var_ccheck_in_env(xlb, xub, ylb, yub, R, e);
                 }
                 if (!ccheck)
                     return jl_bottom_type;
