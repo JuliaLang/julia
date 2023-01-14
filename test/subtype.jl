@@ -2455,5 +2455,7 @@ end
 @testintersect(Val{S} where {I,S<:Tuple{I,I,Any}},      Val{S} where {I,S<:Tuple{I,Any,I}},       Val{S} where {I,S<:Tuple{I,I,I}})
 @testintersect(Val{S} where {I>:Int,S<:Tuple{I,I,Any}}, Val{S} where {I,S<:Tuple{I,Any,I}},       Val{S} where {I>:Int,S<:Tuple{I,I,I}})
 @testintersect(Val{S} where {I>:Int,S<:Tuple{I,I,Any}}, Val{S} where {I<:Real,S<:Tuple{I,Any,I}}, Val{S} where {Int<:I<:Real,S<:Tuple{I,I,I}})
-# TODO: broken due to egal `Union{}` from invalid concrete low bound.
-# @testintersect(Val{S} where {I>:Int,S<:Tuple{I,I,Any}}, Val{S} where {I>:Int8,S<:Tuple{I,Any,I}}, Val{Union{}})
+@testintersect(Val{S} where {I>:Int,S<:Tuple{I,I,Any}}, Val{S} where {I>:Int8,S<:Tuple{I,Any,I}}, Val{Union{}})
+
+@testintersect(Tuple{S} where {I>:Int,S<:Tuple{I,I,Any}}, Tuple{S} where {I>:Int8,S<:Tuple{I,Any,I}}, Union{})
+@testintersect(Tuple{Tuple{I},I} where {I}, Tuple{I,I} where {I}, Union{})
