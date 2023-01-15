@@ -69,6 +69,7 @@ Base.dump
 Meta.@dump
 Base.readline
 Base.readuntil
+Base.readuntil!
 Base.readlines
 Base.eachline
 Base.displaysize
