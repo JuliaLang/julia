@@ -145,6 +145,7 @@ for (name, f) in l
 
     verbose && println("$name readuntil...")
     for (t, s, m, kept) in [
+            ("a", "", "", ""),
             ("a", "ab", "a", "a"),
             ("b", "ab", "b", "b"),
             ("α", "αγ", "α", "α"),
@@ -152,16 +153,19 @@ for (name, f) in l
             ("bc", "abc", "bc", "bc"),
             ("αβ", "αβγ", "αβ", "αβ"),
             ("aaabc", "ab", "aa", "aaab"),
+            ("aaabc", "b", "aaa", "aaab"),
             ("aaabc", "ac", "aaabc", "aaabc"),
             ("aaabc", "aab", "a", "aaab"),
             ("aaabc", "aac", "aaabc", "aaabc"),
             ("αααβγ", "αβ", "αα", "αααβ"),
+            ("αααβγ", "β", "ααα", "αααβ"),
             ("αααβγ", "ααβ", "α", "αααβ"),
             ("αααβγ", "αγ", "αααβγ", "αααβγ"),
             ("barbarbarians", "barbarian", "bar", "barbarbarian"),
             ("abcaabcaabcxl", "abcaabcx", "abca", "abcaabcaabcx"),
             ("abbaabbaabbabbaax", "abbaabbabbaax", "abba", "abbaabbaabbabbaax"),
             ("abbaabbabbaabbaabbabbaax", "abbaabbabbaax", "abbaabbabba", "abbaabbabbaabbaabbabbaax"),
+            ('a'^500 * 'x' * "bbbb", "x", 'a'^500, 'a'^500 * 'x'),
            ]
         local t, s, m, kept
         @test readuntil(io(t), s) == m
@@ -174,6 +178,12 @@ for (name, f) in l
         @test readuntil(io(t), unsafe_wrap(Vector{UInt8},s), keep=true) == unsafe_wrap(Vector{UInt8},kept)
         @test readuntil(io(t), collect(s)::Vector{Char}) == Vector{Char}(m)
         @test readuntil(io(t), collect(s)::Vector{Char}, keep=true) == Vector{Char}(kept)
+
+        for blen in (0,1,100)
+            b = Vector{UInt8}(undef, blen)
+            n = readuntil!(io(t), b, s)
+            @test b[1:n] == codeunits(kept)
+        end
     end
     cleanup()
 

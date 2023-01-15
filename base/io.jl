@@ -888,7 +888,7 @@ function readuntil!(s::IO, buffer::AbstractVector{UInt8}, delim::UInt8)
     n = 0
     @inbounds while true
         n += _readuntil!(s, view(buffer, firstindex(buffer)+n:lastindex(buffer)), delim)
-        (buffer[n] == delim || eof(s)) && return n
+        ((n > 0 && buffer[n] == delim) || eof(s)) && return n
         resize!(buffer, 2*length(buffer)+128)
     end
 end
@@ -900,6 +900,11 @@ function readuntil!(s::IO, buffer::AbstractVector{UInt8}, delim::AbstractVector{
 end
 
 function readuntil!(s::IO, buffer::AbstractVector{UInt8}, delim::AbstractString)
+    # small-string delim optimizations
+    x = Iterators.peel(delim)
+    isnothing(x) && return 0
+    c, rest = x
+    isempty(rest) && return readuntil!(s, buffer, c)
     codeunit(delim) === UInt8 || throw(ArgumentError("readuntil! delimiter must have UInt8 codeunits"))
     return readuntil!(s, buffer, codeunits(delim))
 end
@@ -913,6 +918,11 @@ function readuntil!(s::IO, buffer::AbstractVector{UInt8}, delim::AbstractChar)
     end
     return out.size
 end
+
+readuntil!(io::AbstractPipe, buffer::AbstractVector{UInt8}, delim::UInt8) = readuntil!(pipe_reader(io)::IO, buffer, delim)
+readuntil!(io::AbstractPipe, buffer::AbstractVector{UInt8}, delim::AbstractChar) = readuntil!(pipe_reader(io)::IO, buffer, ardelimg)
+readuntil!(io::AbstractPipe, buffer::AbstractVector{UInt8}, delim::AbstractString) = readuntil!(pipe_reader(io)::IO, buffer, delim)
+readuntil!(io::AbstractPipe, buffer::AbstractVector{UInt8}, delim::AbstractVector{UInt8}) = readuntil!(pipe_reader(io)::IO, buffer, delim)
 
 # requires that indices for target are the integer unit range from firstindex to lastindex
 # returns whether the delimiter was matched
