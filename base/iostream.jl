@@ -452,7 +452,7 @@ function _readuntil!(s::IOStream,
                      buffer::Union{Vector{UInt8},FastContiguousSubArray{UInt8,1,<:Vector{UInt8}}},
                      delim::UInt8)
     @_lock_ios s return Int(ccall(:jl_readuntil_buf, Csize_t, (Ptr{Cvoid}, UInt8, Ptr{UInt8}, Csize_t),
-                                  s.ios, delim, buf, length(buf) % Csize_t))
+                                  s.ios, delim, buffer, length(buffer) % Csize_t))
 end
 
 function readbytes_all!(s::IOStream,

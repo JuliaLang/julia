@@ -320,37 +320,36 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
 JL_DLLEXPORT size_t jl_readuntil_buf(ios_t *s, uint8_t delim, uint8_t *buf, size_t buflen)
 {
     // manually inlined common case
-    char *pd = (char*)memchr(s->buf + s->bpos, delim, (size_t)(s->size - s->bpos));
+    size_t avail = (size_t)(s->size - s->bpos);
+    if (avail > buflen) avail = buflen;
+    char *pd = (char*)memchr(s->buf + s->bpos, delim, avail);
     if (pd) {
         size_t n = pd - (s->buf + s->bpos) + 1;
-        if (n < buflen) n = buflen;
         memcpy(buf, s->buf + s->bpos, n);
         s->bpos += n;
         return n;
     }
     else {
+        size_t total = avail;
+        memcpy(buf, s->buf + s->bpos, avail);
+        s->bpos += avail;
+        if (avail == buflen) return total;
+
         // code derived from ios_copyuntil
-        size_t total = 0, avail = (size_t)(s->size - s->bpos);
         while (!ios_eof(s)) {
-            if (avail == 0) {
-                avail = ios_readprep(s, 160);
-                if (avail == 0) return total;
-            }
-            else if (avail > buflen)
-                avail = buflen;
+            avail = ios_readprep(s, 160); // read LINE_CHUNK_SIZE
+            if (avail == 0) break;
+            if (total+avail > buflen) avail = buflen-total;
             char *pd = (char*)memchr(s->buf+s->bpos, delim, avail);
             if (pd == NULL) {
-                memcpy(buf, s->buf+s->bpos, avail);
+                memcpy(buf+total, s->buf+s->bpos, avail);
                 s->bpos += avail;
                 total += avail;
-                buflen -= avail;
-                if (buflen == 0) return total;
-                buf += avail;
-                avail = 0;
+                if (buflen == total) return total;
             }
             else {
                 size_t ntowrite = pd - (s->buf+s->bpos) + 1;
-                memcpy(buf, s->buf+s->bpos, ntowrite);
+                memcpy(buf+total, s->buf+s->bpos, ntowrite);
                 s->bpos += ntowrite;
                 total += ntowrite;
                 return total;
