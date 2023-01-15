@@ -28,6 +28,11 @@ using .JuliaSyntax:
     fl_parseall,
     fl_parse
 
+if VERSION < v"1.6"
+    # Compat stuff which might not be in Base for older versions
+    using JuliaSyntax: isnothing, only, peek
+end
+
 function remove_macro_linenums!(ex)
     if Meta.isexpr(ex, :macrocall)
         ex.args[2] = nothing
@@ -69,7 +74,7 @@ function parse_diff(text, showfunc=dump)
 end
 
 function kw_to_eq(ex)
-    return Meta.isexpr(:kw, ex) ? Expr(:(=), ex.args...) : ex
+    return Meta.isexpr(ex, :kw) ? Expr(:(=), ex.args...) : ex
 end
 
 function triple_string_roughly_equal(str, fl_str)

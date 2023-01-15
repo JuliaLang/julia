@@ -20,7 +20,13 @@ include("expr.jl")
 @testset "Parsing literals from strings" begin
     include("value_parsing.jl")
 end
-include("hooks.jl")
-include("parse_packages.jl")
 include("source_files.jl")
+
+if VERSION >= v"1.6"
+    # Tests restricted to 1.6+ due to
+    # * Core._parse hook doesn't exist on v1.5 and lower
+    # * Reference parser bugs which would need workarounds for package parse comparisons
+    include("hooks.jl")
+    include("parse_packages.jl")
+end
 

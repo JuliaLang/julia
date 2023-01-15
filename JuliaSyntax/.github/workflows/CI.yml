@@ -13,7 +13,14 @@ jobs:
       fail-fast: false
       matrix:
         version:
+          - '1.0'
+          - '1.1'
+          - '1.2'
+          - '1.3'
+          - '1.4'
+          - '1.5'
           - '1.6'
+          - '1.7'
           - '1'
           - 'nightly'
         os:
@@ -22,6 +29,26 @@ jobs:
           - windows-latest
         arch:
           - x64
+        exclude:
+          # Test all OS's on
+          # - 1.0
+          # - 1.6
+          # - 1
+          # - nightly
+          # but remove some configurations from the build matrix to reduce CI time.
+          # See https://github.com/marketplace/actions/setup-julia-environment
+          - {os: 'macOS-latest', version: '1.1'}
+          - {os: 'macOS-latest', version: '1.2'}
+          - {os: 'macOS-latest', version: '1.3'}
+          - {os: 'macOS-latest', version: '1.4'}
+          - {os: 'macOS-latest', version: '1.5'}
+          - {os: 'macOS-latest', version: '1.7'}
+          - {os: 'windows-latest', version: '1.1'}
+          - {os: 'windows-latest', version: '1.2'}
+          - {os: 'windows-latest', version: '1.3'}
+          - {os: 'windows-latest', version: '1.4'}
+          - {os: 'windows-latest', version: '1.5'}
+          - {os: 'windows-latest', version: '1.7'}
     steps:
       - uses: actions/checkout@v2
       - uses: julia-actions/setup-julia@v1
