@@ -32,7 +32,7 @@ Logging.with_logger(logger) do
             e2 = open(deserialize, fpath*".Expr")
             @assert Meta.isexpr(e2, :toplevel)
             try
-                e1 = JuliaSyntax.parseall(Expr, code, filename=fpath)
+                e1 = JuliaSyntax.parseall(Expr, code, filename=fpath, ignore_warnings=true)
                 if !exprs_roughly_equal(e2, e1)
                     mismatch_count += 1
                     @error("Parsers succeed but disagree",
