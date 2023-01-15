@@ -913,7 +913,7 @@ function validate_tokens(stream::ParseStream)
         elseif is_error(k) && k != K"error"
             # Emit messages for non-generic token errors
             emit_diagnostic(stream, fbyte, lbyte,
-                            error=Tokenize.TOKEN_ERROR_DESCRIPTION[k])
+                            error=_token_error_descriptions[k])
         end
         if error_kind != K"None"
             toks[i] = SyntaxToken(SyntaxHead(error_kind, EMPTY_FLAGS),
