@@ -889,7 +889,7 @@ function readuntil!(s::IO, buffer::AbstractVector{UInt8}, delim::UInt8)
     @inbounds while true
         n += _readuntil!(s, view(buffer, firstindex(buffer)+n:lastindex(buffer)), delim)
         (buffer[n] == delim || eof(s)) && return n
-        resize!(buffer, 2*length(buffer)+1)
+        resize!(buffer, 2*length(buffer)+128)
     end
 end
 
