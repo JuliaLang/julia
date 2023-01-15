@@ -27,6 +27,8 @@ Build system changes
 New library functions
 ---------------------
 
+* `readuntil!(io, buf, delim)` reads data into a pre-allocated buffer until `delim` ([#48273]).
+
 
 New library features
 --------------------
