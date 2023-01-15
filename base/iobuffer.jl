@@ -516,32 +516,26 @@ function occursin(delim::UInt8, buf::GenericIOBuffer)
     return false
 end
 
+function readuntil!(io::GenericIOBuffer, buffer::AbstractVector{UInt8}, delim::UInt8)
+    data = view(io.data, io.ptr:io.size)
+    # note: findfirst + copyto! is much faster than a single loop
+    #       except for nout ≲ 20.  A single loop is 2x faster for nout=5.
+    nout = something(findfirst(==(delim), data), length(data))
+    nout > length(buffer) && resize!(buffer, nout)
+    copyto!(buffer, firstindex(buffer), data, 1, nout)
+    io.ptr += nout
+    return nout
+end
+
 function readuntil(io::GenericIOBuffer, delim::UInt8; keep::Bool=false)
     lb = 70
     A = StringVector(lb)
-    nread = 0
-    nout = 0
-    data = io.data
-    for i = io.ptr : io.size
-        @inbounds b = data[i]
-        nread += 1
-        if keep || b != delim
-            nout += 1
-            if nout > lb
-                lb = nout*2
-                resize!(A, lb)
-            end
-            @inbounds A[nout] = b
-        end
-        if b == delim
-            break
-        end
-    end
-    io.ptr += nread
-    if lb != nout
+    nout = readuntil!(io, A, delim)
+    @inbounds nout -= !keep & (A[nout] == delim)
+    if length(A) != nout
         resize!(A, nout)
     end
-    A
+    return A
 end
 
 # copy-free crc32c of IOBuffer:
