@@ -25,6 +25,9 @@ Language changes
 Compiler/Runtime improvements
 -----------------------------
 
+* The package precompilation process now saves native code into a "pkgimage", meaning that code generated during the
+  precompilation process will not require compilation after package load, resulting in much faster time to first
+  execution (TTFX), often referred to as time to first plot ([#44527]) ([#47184]).
 * The known quadratic behavior of type inference is now fixed and inference uses less memory in general.
   Certain edge cases with auto-generated long functions (e.g. ModelingToolkit.jl with partial
   differential equations and large causal models) should see significant compile-time improvements ([#45276], [#45404]).
