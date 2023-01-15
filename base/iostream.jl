@@ -448,8 +448,9 @@ function readline(s::IOStream; keep::Bool=false)
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, keep ? 0 : 2)
 end
 
-function _readuntil!(buffer::Union{Vector{UInt8},FastContiguousSubArray{UInt8,1,<:Vector{UInt8}}},
-                    s::IOStream, delim::UInt8)
+function _readuntil!(s::IOStream,
+                     buffer::Union{Vector{UInt8},FastContiguousSubArray{UInt8,1,<:Vector{UInt8}}},
+                     delim::UInt8)
     @_lock_ios s return Int(ccall(:jl_readuntil_buf, Csize_t, (Ptr{Cvoid}, UInt8, Ptr{UInt8}, Csize_t),
                                   s.ios, delim, buf, length(buf) % Csize_t))
 end
