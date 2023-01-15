@@ -206,7 +206,7 @@ if Sys.isbsd() || Sys.islinux()
                 end
                 """
             iob = Base.BufferStream()
-            p = run(pipeline(`$cmd -e $script`, stderr = devnull, stdout = iob), wait = false)
+            p = run(pipeline(`$cmd -e $script`, stderr = iob, stdout = devnull), wait = false)
             t = Timer(120) do t
                 # should be under 10 seconds, so give it 2 minutes then report failure
                 println("KILLING BY PROFILE TEST WATCHDOG\n")
