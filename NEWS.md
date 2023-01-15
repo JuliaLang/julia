@@ -21,6 +21,7 @@ Build system changes
 
 New library functions
 ---------------------
+* `copyuntil(out, io, delim)` copies data into an `out` stream` until `delim` ([#48273]).
 
 New library features
 --------------------
