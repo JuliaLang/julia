@@ -1,9 +1,11 @@
 # Full-scale parsing tests of JuliaSyntax itself, Julia Base, etc.
 
+juliasyntax_dir = joinpath(@__DIR__, "..")
 @testset "Parse JuliaSyntax" begin
-    pkgdir = joinpath(@__DIR__, "..")
-    test_parse_all_in_path(joinpath(pkgdir, "src"))
-    test_parse_all_in_path(joinpath(pkgdir, "test"))
+    test_parse_all_in_path(joinpath(juliasyntax_dir, "src"))
+end
+@testset "Parse JuliaSyntax tests" begin
+    test_parse_all_in_path(joinpath(juliasyntax_dir, "test"))
 end
 
 base_path = let
