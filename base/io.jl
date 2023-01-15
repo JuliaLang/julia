@@ -808,7 +808,7 @@ end
 readuntil_string(s::IO, delim::UInt8, keep::Bool) = String(readuntil(s, delim, keep=keep))::String
 
 function readuntil(s::IO, delim::AbstractChar; keep::Bool=false)
-    if delim ≤ '\x7f'
+    if isascii(delim)
         return readuntil_string(s, delim % UInt8, keep)
     end
     out = IOBuffer()
@@ -925,7 +925,7 @@ function readuntil(io::IO, target::AbstractString; keep::Bool=false)
     x = Iterators.peel(target)
     isnothing(x) && return ""
     c, rest = x
-    if isempty(rest) && c <= '\x7f'
+    if isempty(rest) && isascii(c)
         return readuntil_string(io, c % UInt8, keep)
     end
     # convert String to a utf8-byte-iterator
