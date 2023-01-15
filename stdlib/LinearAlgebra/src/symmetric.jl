@@ -240,7 +240,6 @@ end
 
 diag(A::Symmetric) = symmetric.(diag(parent(A)), sym_uplo(A.uplo))
 diag(A::Hermitian) = hermitian.(diag(parent(A)), sym_uplo(A.uplo))
-isdiag(A::HermOrSym) = isdiag(parent(A))
 
 # For A<:Union{Symmetric,Hermitian}, similar(A[, neweltype]) should yield a matrix with the same
 # symmetry type, uplo flag, and underlying storage type as A. The following methods cover these cases.
