@@ -343,7 +343,8 @@ See documentation in [Handling Operating System Variation](@ref).
 
 !!! note
     Not to be confused with `Sys.isbsd()`, which is `true` on FreeBSD but also on
-    other BSD-based systems. `Sys.isfreebsd()` refers only to FreeBSD."""
+    other BSD-based systems. `Sys.isfreebsd()` refers only to FreeBSD.
+"""
 isfreebsd(os::Symbol) = (os === :FreeBSD)
 
 """
