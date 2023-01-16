@@ -1457,6 +1457,14 @@ A variable referring to the last computed value, automatically set at the intera
 kw"ans"
 
 """
+    err
+
+A variable referring to the last thrown errors, automatically set at the interactive prompt.
+The thrown errors are collected in a stack of exceptions.
+"""
+kw"err"
+
+"""
     devnull
 
 Used in a stream redirect to discard all data written to it. Essentially equivalent to
