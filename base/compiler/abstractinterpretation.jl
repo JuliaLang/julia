@@ -2291,33 +2291,14 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         t = rt
     elseif ehead === :new
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
-        nothrow = true
-        if isconcretedispatch(t)
-            ismutable = ismutabletype(t)
-            fcount = fieldcount(t)
+        ut = unwrap_unionall(t)
+        consistent = ALWAYS_FALSE
+        nothrow = false
+        if isa(ut, DataType) && !isabstracttype(ut)
+            ismutable = ismutabletype(ut)
+            fcount = datatype_fieldcount(ut)
             nargs = length(e.args) - 1
-            @assert fcount ≥ nargs "malformed :new expression" # syntactically enforced by the front-end
-            ats = Vector{Any}(undef, nargs)
-            local anyrefine = false
-            local allconst = true
-            for i = 1:nargs
-                at = widenslotwrapper(abstract_eval_value(interp, e.args[i+1], vtypes, sv))
-                ft = fieldtype(t, i)
-                nothrow && (nothrow = at ⊑ᵢ ft)
-                at = tmeet(𝕃ᵢ, at, ft)
-                at === Bottom && @goto always_throw
-                if ismutable && !isconst(t, i)
-                    ats[i] = ft # can't constrain this field (as it may be modified later)
-                    continue
-                end
-                allconst &= isa(at, Const)
-                if !anyrefine
-                    anyrefine = has_nontrivial_extended_info(𝕃ᵢ, at) || # extended lattice information
-                                ⋤(𝕃ᵢ, at, ft) # just a type-level information, but more precise than the declared type
-                end
-                ats[i] = at
-            end
-            if fcount > nargs && any(i::Int -> !is_undefref_fieldtype(fieldtype(t, i)), (nargs+1):fcount)
+            if fcount === nothing || (fcount > nargs && any(i::Int -> !is_undefref_fieldtype(fieldtype(t, i)), (nargs+1):fcount))
                 # allocation with undefined field leads to undefined behavior and should taint `:consistent`-cy
                 consistent = ALWAYS_FALSE
             elseif ismutable
@@ -2327,25 +2308,47 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
             else
                 consistent = ALWAYS_TRUE
             end
-            # For now, don't allow:
-            # - Const/PartialStruct of mutables (but still allow PartialStruct of mutables
-            #   with `const` fields if anything refined)
-            # - partially initialized Const/PartialStruct
-            if fcount == nargs
-                if consistent === ALWAYS_TRUE && allconst
-                    argvals = Vector{Any}(undef, nargs)
-                    for j in 1:nargs
-                        argvals[j] = (ats[j]::Const).val
+            if isconcretedispatch(t)
+                nothrow = true
+                @assert fcount !== nothing && fcount ≥ nargs "malformed :new expression" # syntactically enforced by the front-end
+                ats = Vector{Any}(undef, nargs)
+                local anyrefine = false
+                local allconst = true
+                for i = 1:nargs
+                    at = widenslotwrapper(abstract_eval_value(interp, e.args[i+1], vtypes, sv))
+                    ft = fieldtype(t, i)
+                    nothrow && (nothrow = at ⊑ᵢ ft)
+                    at = tmeet(𝕃ᵢ, at, ft)
+                    at === Bottom && @goto always_throw
+                    if ismutable && !isconst(t, i)
+                        ats[i] = ft # can't constrain this field (as it may be modified later)
+                        continue
                     end
-                    t = Const(ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), t, argvals, nargs))
-                elseif anyrefine
-                    t = PartialStruct(t, ats)
+                    allconst &= isa(at, Const)
+                    if !anyrefine
+                        anyrefine = has_nontrivial_extended_info(𝕃ᵢ, at) || # extended lattice information
+                                    ⋤(𝕃ᵢ, at, ft) # just a type-level information, but more precise than the declared type
+                    end
+                    ats[i] = at
                 end
+                # For now, don't allow:
+                # - Const/PartialStruct of mutables (but still allow PartialStruct of mutables
+                #   with `const` fields if anything refined)
+                # - partially initialized Const/PartialStruct
+                if fcount == nargs
+                    if consistent === ALWAYS_TRUE && allconst
+                        argvals = Vector{Any}(undef, nargs)
+                        for j in 1:nargs
+                            argvals[j] = (ats[j]::Const).val
+                        end
+                        t = Const(ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), t, argvals, nargs))
+                    elseif anyrefine
+                        t = PartialStruct(t, ats)
+                    end
+                end
+            else
+                t = refine_partial_type(t)
             end
-        else
-            consistent = ALWAYS_FALSE
-            nothrow = false
-            t = refine_partial_type(t)
         end
         effects = Effects(EFFECTS_TOTAL; consistent, nothrow)
     elseif ehead === :splatnew

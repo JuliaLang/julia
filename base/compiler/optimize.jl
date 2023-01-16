@@ -311,7 +311,9 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
                 isconcretedispatch(typ) || return (false, false, false)
             end
             typ = typ::DataType
-            fieldcount(typ) >= length(args) - 1 || return (false, false, false)
+            fcount = datatype_fieldcount(typ)
+            fcount === nothing && return (false, false, false)
+            fcount >= length(args) - 1 || return (false, false, false)
             for fld_idx in 1:(length(args) - 1)
                 eT = argextype(args[fld_idx + 1], src)
                 fT = fieldtype(typ, fld_idx)
