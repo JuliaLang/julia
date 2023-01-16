@@ -325,7 +325,7 @@ zero(D::Diagonal) = Diagonal(zero.(D.diag))
 oneunit(D::Diagonal) = Diagonal(oneunit.(D.diag))
 
 isdiag(A::HermOrSym{<:Any,<:Diagonal}) = isdiag(parent(A))
-dot(x::AbstractVector, A::HermOrSym{<:Real,<:Diagonal}, y::AbstractVector) =
+dot(x::AbstractVector, A::RealHermSymComplexSym{<:Real,<:Diagonal}, y::AbstractVector) =
     dot(x, A.data, y)
 
 # equals and approx equals methods for structured matrices

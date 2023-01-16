@@ -413,8 +413,8 @@ end
                 @test dot(x, Hermitian(aherm, uplo), y) ≈ dot(x, Hermitian(aherm, uplo)*y) ≈ dot(x, Matrix(Hermitian(aherm, uplo)), y)
                 @test dot(x, Hermitian(aherm, uplo), x) ≈ dot(x, Hermitian(aherm, uplo)*x) ≈ dot(x, Matrix(Hermitian(aherm, uplo)), x)
             end
-            @test dot(x, Hermitian(Diagonal(aherm)), y) ≈ dot(x, Hermitian(Diagonal(aherm))*y) ≈ dot(x, Matrix(Hermitian(Diagonal(aherm))), y)
-            @test dot(x, Hermitian(Diagonal(aherm)), x) ≈ dot(x, Hermitian(Diagonal(aherm))*x) ≈ dot(x, Matrix(Hermitian(Diagonal(aherm))), x)
+            @test dot(x, Hermitian(Diagonal(a)), y) ≈ dot(x, Hermitian(Diagonal(a))*y) ≈ dot(x, Matrix(Hermitian(Diagonal(a))), y)
+            @test dot(x, Hermitian(Diagonal(a)), x) ≈ dot(x, Hermitian(Diagonal(a))*x) ≈ dot(x, Matrix(Hermitian(Diagonal(a))), x)
             if eltya <: Real
                 for uplo in (:U, :L)
                     @test dot(x, Symmetric(aherm, uplo), y) ≈ dot(x, Symmetric(aherm, uplo)*y) ≈ dot(x, Matrix(Symmetric(aherm, uplo)), y)
