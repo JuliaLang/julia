@@ -1268,6 +1268,13 @@ end
     @test last(itr, 25) !== itr
     @test last(itr, 1) == [itr[end]]
     @test_throws ArgumentError last(itr, -6)
+
+    @testset "overflow (issue #45842)" begin
+        @test_throws OverflowError first(typemin(Int):typemax(Int), 10)
+        @test first(2:typemax(Int)-1, typemax(Int)÷2) === 2:((typemax(Int)÷2) + 1)
+        @test last(2:typemax(Int), typemax(Int)÷2) ===
+            range(stop=typemax(Int), length=typemax(Int)÷2)
+    end
 end
 
 @testset "Base.rest" begin

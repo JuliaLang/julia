@@ -116,7 +116,7 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
                 }
             }
             if (!ft->layout->haspadding) {
-                if (!bits_equal(ao, bo, ft->size))
+                if (!bits_equal(ao, bo, ft->layout->size))
                     return 0;
             }
             else {
@@ -198,7 +198,7 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
             return egal_types(vma->N, vmb->N, env, tvar_names);
         return !vma->N && !vmb->N;
     }
-    if (dt == jl_symbol_type)
+    if (dt == jl_symbol_type || dt == jl_module_type)
         return 0;
     assert(!dt->name->mutabl);
     return jl_egal__bits(a, b, dt);
@@ -413,6 +413,10 @@ static uintptr_t NOINLINE jl_object_id__cold(jl_datatype_t *dt, jl_value_t *v) J
 #else
         return memhash32_seed(jl_string_data(v), jl_string_len(v), 0xedc3b677);
 #endif
+    }
+    if (dt == jl_module_type) {
+        jl_module_t *m = (jl_module_t*)v;
+        return m->hash;
     }
     if (dt->name->mutabl)
         return inthash((uintptr_t)v);
@@ -1190,49 +1194,55 @@ JL_CALLABLE(jl_f_getglobal)
         JL_TYPECHK(getglobal, symbol, args[2]);
         order = jl_get_atomic_order_checked((jl_sym_t*)args[2], 1, 0);
     }
-    JL_TYPECHK(getglobal, module, args[0]);
-    JL_TYPECHK(getglobal, symbol, args[1]);
+    jl_module_t *mod = (jl_module_t*)args[0];
+    jl_sym_t *sym = (jl_sym_t*)args[1];
+    JL_TYPECHK(getglobal, module, (jl_value_t*)mod);
+    JL_TYPECHK(getglobal, symbol, (jl_value_t*)sym);
     if (order == jl_memory_order_notatomic)
         jl_atomic_error("getglobal: module binding cannot be read non-atomically");
-    jl_value_t *v = jl_eval_global_var((jl_module_t*)args[0], (jl_sym_t*)args[1]);
+    jl_value_t *v = jl_eval_global_var(mod, sym);
     // is seq_cst already, no fence needed
     return v;
 }
 
 JL_CALLABLE(jl_f_setglobal)
 {
-    enum jl_memory_order order = jl_memory_order_monotonic;
+    enum jl_memory_order order = jl_memory_order_release;
     JL_NARGS(setglobal!, 3, 4);
     if (nargs == 4) {
         JL_TYPECHK(setglobal!, symbol, args[3]);
         order = jl_get_atomic_order_checked((jl_sym_t*)args[3], 0, 1);
     }
-    JL_TYPECHK(setglobal!, module, args[0]);
-    JL_TYPECHK(setglobal!, symbol, args[1]);
+    jl_module_t *mod = (jl_module_t*)args[0];
+    jl_sym_t *var = (jl_sym_t*)args[1];
+    JL_TYPECHK(setglobal!, module, (jl_value_t*)mod);
+    JL_TYPECHK(setglobal!, symbol, (jl_value_t*)var);
     if (order == jl_memory_order_notatomic)
         jl_atomic_error("setglobal!: module binding cannot be written non-atomically");
     // is seq_cst already, no fence needed
-    jl_binding_t *b = jl_get_binding_wr_or_error((jl_module_t*)args[0], (jl_sym_t*)args[1]);
-    jl_checked_assignment(b, args[2]);
+    jl_binding_t *b = jl_get_binding_wr(mod, var);
+    jl_checked_assignment(b, mod, var, args[2]);
     return args[2];
 }
 
 JL_CALLABLE(jl_f_get_binding_type)
 {
     JL_NARGS(get_binding_type, 2, 2);
-    JL_TYPECHK(get_binding_type, module, args[0]);
-    JL_TYPECHK(get_binding_type, symbol, args[1]);
     jl_module_t *mod = (jl_module_t*)args[0];
-    jl_sym_t *sym = (jl_sym_t*)args[1];
-    jl_value_t *ty = jl_binding_type(mod, sym);
+    jl_sym_t *var = (jl_sym_t*)args[1];
+    JL_TYPECHK(get_binding_type, module, (jl_value_t*)mod);
+    JL_TYPECHK(get_binding_type, symbol, (jl_value_t*)var);
+    jl_value_t *ty = jl_get_binding_type(mod, var);
     if (ty == (jl_value_t*)jl_nothing) {
-        jl_binding_t *b = jl_get_binding_wr(mod, sym, 0);
-        if (b && b->owner == mod) {
-            jl_value_t *old_ty = NULL;
-            jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
-            return jl_atomic_load_relaxed(&b->ty);
-        }
-        return (jl_value_t*)jl_any_type;
+        jl_binding_t *b = jl_get_module_binding(mod, var, 0);
+        if (b == NULL)
+            return (jl_value_t*)jl_any_type;
+        jl_binding_t *b2 = jl_atomic_load_relaxed(&b->owner);
+        if (b2 != b)
+            return (jl_value_t*)jl_any_type;
+        jl_value_t *old_ty = NULL;
+        jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
+        return jl_atomic_load_relaxed(&b->ty);
     }
     return ty;
 }
@@ -1240,18 +1250,21 @@ JL_CALLABLE(jl_f_get_binding_type)
 JL_CALLABLE(jl_f_set_binding_type)
 {
     JL_NARGS(set_binding_type!, 2, 3);
-    JL_TYPECHK(set_binding_type!, module, args[0]);
-    JL_TYPECHK(set_binding_type!, symbol, args[1]);
+    jl_module_t *m = (jl_module_t*)args[0];
+    jl_sym_t *s = (jl_sym_t*)args[1];
+    JL_TYPECHK(set_binding_type!, module, (jl_value_t*)m);
+    JL_TYPECHK(set_binding_type!, symbol, (jl_value_t*)s);
     jl_value_t *ty = nargs == 2 ? (jl_value_t*)jl_any_type : args[2];
     JL_TYPECHK(set_binding_type!, type, ty);
-    jl_binding_t *b = jl_get_binding_wr((jl_module_t*)args[0], (jl_sym_t*)args[1], 1);
+    jl_binding_t *b = jl_get_binding_wr(m, s);
     jl_value_t *old_ty = NULL;
     if (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, ty) && ty != old_ty) {
         if (nargs == 2)
             return jl_nothing;
-        jl_errorf("cannot set type for global %s. It already has a value or is already set to a different type.",
-                  jl_symbol_name(b->name));
+        jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
+                  jl_symbol_name(m->name), jl_symbol_name(s));
     }
+    jl_gc_wb_binding(b, ty);
     return jl_nothing;
 }
 
@@ -1268,7 +1281,8 @@ static int is_nestable_type_param(jl_value_t *t)
         size_t i, l = jl_nparams(t);
         for (i = 0; i < l; i++) {
             jl_value_t *pi = jl_tparam(t, i);
-            if (!(pi == (jl_value_t*)jl_symbol_type || jl_isbits(pi) || is_nestable_type_param(pi)))
+            if (!(pi == (jl_value_t*)jl_symbol_type || jl_isbits(pi) || is_nestable_type_param(pi) ||
+        jl_is_module(pi)))
                 return 0;
         }
         return 1;
@@ -1283,7 +1297,8 @@ int jl_valid_type_param(jl_value_t *v)
     if (jl_is_vararg(v))
         return 0;
     // TODO: maybe more things
-    return jl_is_type(v) || jl_is_typevar(v) || jl_is_symbol(v) || jl_isbits(jl_typeof(v));
+    return jl_is_type(v) || jl_is_typevar(v) || jl_is_symbol(v) || jl_isbits(jl_typeof(v)) ||
+        jl_is_module(v);
 }
 
 JL_CALLABLE(jl_f_apply_type)
@@ -1751,7 +1766,8 @@ static int equiv_type(jl_value_t *ta, jl_value_t *tb)
           dta->name->abstract == dtb->name->abstract &&
           dta->name->mutabl == dtb->name->mutabl &&
           dta->name->n_uninitialized == dtb->name->n_uninitialized &&
-          (jl_svec_len(jl_field_names(dta)) != 0 || dta->size == dtb->size) &&
+          dta->isprimitivetype == dtb->isprimitivetype &&
+          (!dta->isprimitivetype || dta->layout->size == dtb->layout->size) &&
           (dta->name->atomicfields == NULL
            ? dtb->name->atomicfields == NULL
            : (dtb->name->atomicfields != NULL &&
@@ -1894,7 +1910,7 @@ void jl_init_intrinsic_properties(void) JL_GC_DISABLED
 
 void jl_init_intrinsic_functions(void) JL_GC_DISABLED
 {
-    jl_module_t *inm = jl_new_module(jl_symbol("Intrinsics"));
+    jl_module_t *inm = jl_new_module(jl_symbol("Intrinsics"), NULL);
     inm->parent = jl_core_module;
     jl_set_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm);
     jl_mk_builtin_func(jl_intrinsic_type, "IntrinsicFunction", jl_f_intrinsic_call);
@@ -2049,6 +2065,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("UpsilonNode", (jl_value_t*)jl_upsilonnode_type);
     add_builtin("QuoteNode", (jl_value_t*)jl_quotenode_type);
     add_builtin("NewvarNode", (jl_value_t*)jl_newvarnode_type);
+    add_builtin("Binding", (jl_value_t*)jl_binding_type);
     add_builtin("GlobalRef", (jl_value_t*)jl_globalref_type);
     add_builtin("NamedTuple", (jl_value_t*)jl_namedtuple_type);
 

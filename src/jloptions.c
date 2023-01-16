@@ -71,6 +71,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         JL_OPTIONS_HANDLE_SIGNALS_ON,
                         JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES,
                         JL_OPTIONS_USE_COMPILED_MODULES_YES,
+                        JL_OPTIONS_USE_PKGIMAGES_YES,
                         NULL, // bind-to
                         NULL, // output-bc
                         NULL, // output-unopt-bc
@@ -92,7 +93,7 @@ JL_DLLEXPORT void jl_init_options(void)
 
 static const char usage[] = "\n    julia [switches] -- [programfile] [args...]\n\n";
 static const char opts[]  =
-    "Switches (a '*' marks the default value, if applicable):\n\n"
+    "Switches (a '*' marks the default value, if applicable; settings marked '($)' may trigger package precompilation):\n\n"
     " -v, --version              Display version information\n"
     " -h, --help                 Print this message (--help-hidden for more)\n"
     " --help-hidden              Uncommon options not shown by `-h`\n\n"
@@ -107,7 +108,9 @@ static const char opts[]  =
     " --sysimage-native-code={yes*|no}\n"
     "                            Use native code from system image if available\n"
     " --compiled-modules={yes*|no}\n"
-    "                            Enable or disable incremental precompilation of modules\n\n"
+    "                            Enable or disable incremental precompilation of modules\n"
+    " --pkgimages={yes*|no}\n"
+    "                            Enable or disable usage of native code caching in the form of pkgimages ($)\n\n"
 
     // actions
     " -e, --eval <expr>          Evaluate <expr>\n"
@@ -130,7 +133,7 @@ static const char opts[]  =
     " --machine-file <file>     Run processes on hosts listed in <file>\n\n"
 
     // interactive options
-    " -i                         Interactive mode; REPL runs and `isinteractive()` is true\n"
+    " -i, --interactive          Interactive mode; REPL runs and `isinteractive()` is true\n"
     " -q, --quiet                Quiet startup: no banner, suppress REPL warnings\n"
     " --banner={yes|no|auto*}    Enable or disable startup banner\n"
     " --color={yes|no|auto*}     Enable or disable color text\n"
@@ -143,16 +146,16 @@ static const char opts[]  =
 
     // code generation options
     " -C, --cpu-target <target>  Limit usage of CPU features up to <target>; set to `help` to see the available options\n"
-    " -O, --optimize={0,1,2*,3}  Set the optimization level (level 3 if `-O` is used without a level)\n"
+    " -O, --optimize={0,1,2*,3}  Set the optimization level (level 3 if `-O` is used without a level) ($)\n"
     " --min-optlevel={0*,1,2,3}  Set a lower bound on the optimization level\n"
 #ifdef JL_DEBUG_BUILD
-        " -g [{0,1,2*}]              Set the level of debug info generation in the julia-debug build\n"
+        " -g, --debug-info=[{0,1,2*}] Set the level of debug info generation in the julia-debug build ($)\n"
 #else
-        " -g [{0,1*,2}]              Set the level of debug info generation (level 2 if `-g` is used without a level)\n"
+        " -g, --debug-info=[{0,1*,2}] Set the level of debug info generation (level 2 if `-g` is used without a level) ($)\n"
 #endif
     " --inline={yes*|no}         Control whether inlining is permitted, including overriding @inline declarations\n"
     " --check-bounds={yes|no|auto*}\n"
-    "                            Emit bounds checks always, never, or respect @inbounds declarations\n"
+    "                            Emit bounds checks always, never, or respect @inbounds declarations ($)\n"
 #ifdef USE_POLLY
     " --polly={yes*|no}          Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)\n"
 #endif
@@ -239,6 +242,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_banner,
            opt_sysimage_native_code,
            opt_compiled_modules,
+           opt_pkgimages,
            opt_machine_file,
            opt_project,
            opt_bug_report,
@@ -256,6 +260,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "version",         no_argument,       0, 'v' },
         { "help",            no_argument,       0, 'h' },
         { "help-hidden",     no_argument,       0, opt_help_hidden },
+        { "interactive",     no_argument,       0, 'i' },
         { "quiet",           no_argument,       0, 'q' },
         { "banner",          required_argument, 0, opt_banner },
         { "home",            required_argument, 0, 'H' },
@@ -266,6 +271,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "sysimage",        required_argument, 0, 'J' },
         { "sysimage-native-code", required_argument, 0, opt_sysimage_native_code },
         { "compiled-modules",required_argument, 0, opt_compiled_modules },
+        { "pkgimages",       required_argument, 0, opt_pkgimages },
         { "cpu-target",      required_argument, 0, 'C' },
         { "procs",           required_argument, 0, 'p' },
         { "threads",         required_argument, 0, 't' },
@@ -279,6 +285,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "track-allocation",optional_argument, 0, opt_track_allocation },
         { "optimize",        optional_argument, 0, 'O' },
         { "min-optlevel",    optional_argument, 0, opt_optlevel_min },
+        { "debug-info",      optional_argument, 0, 'g' },
         { "check-bounds",    required_argument, 0, opt_check_bounds },
         { "output-bc",       required_argument, 0, opt_output_bc },
         { "output-unopt-bc", required_argument, 0, opt_output_unopt_bc },
@@ -315,6 +322,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
     const char **cmds = NULL;
     int codecov = JL_LOG_NONE;
     int malloclog = JL_LOG_NONE;
+    int pkgimage_explicit = 0;
     int argc = *argcp;
     char **argv = *argvp;
     char *endptr;
@@ -441,6 +449,15 @@ restart_switch:
                 jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_NO;
             else
                 jl_errorf("julia: invalid argument to --compiled-modules={yes|no} (%s)", optarg);
+            break;
+        case opt_pkgimages:
+            pkgimage_explicit = 1;
+            if (!strcmp(optarg,"yes"))
+                jl_options.use_pkgimages = JL_OPTIONS_USE_PKGIMAGES_YES;
+            else if (!strcmp(optarg,"no"))
+                jl_options.use_pkgimages = JL_OPTIONS_USE_PKGIMAGES_NO;
+            else
+                jl_errorf("julia: invalid argument to --pkgimage={yes|no} (%s)", optarg);
             break;
         case 'C': // cpu-target
             jl_options.cpu_target = strdup(optarg);
@@ -790,8 +807,6 @@ restart_switch:
                             break;
                     }
                     jl_options.heap_size_hint = (uint64_t)(value * multiplier);
-
-                    jl_gc_set_max_memory(jl_options.heap_size_hint);
                 }
             }
             if (jl_options.heap_size_hint == 0)
@@ -802,6 +817,13 @@ restart_switch:
             jl_errorf("julia: unhandled option -- %c\n"
                       "This is a bug, please report it.", c);
         }
+    }
+    if (codecov || malloclog) {
+        if (pkgimage_explicit && jl_options.use_pkgimages) {
+            jl_errorf("julia: Can't use --pkgimages=yes together "
+                      "with --track-allocation or --code-coverage.");
+        }
+        jl_options.use_pkgimages = 0;
     }
     jl_options.code_coverage = codecov;
     jl_options.malloc_log = malloclog;

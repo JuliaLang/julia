@@ -13,7 +13,7 @@
 // Ref https://www.uclibc.org/docs/tls.pdf
 // For variant 1 JL_ELF_TLS_INIT_SIZE is the size of the thread control block (TCB)
 // For variant 2 JL_ELF_TLS_INIT_SIZE is 0
-#ifdef _OS_LINUX_
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
 #  if defined(_CPU_X86_64_) || defined(_CPU_X86_)
 #    define JL_ELF_TLS_VARIANT 2
 #    define JL_ELF_TLS_INIT_SIZE 0
@@ -28,6 +28,11 @@
 
 #ifdef JL_ELF_TLS_VARIANT
 #  include <link.h>
+#endif
+
+// `ElfW` was added to FreeBSD in 12.3 but we still support 12.2
+#if defined(_OS_FREEBSD_) && !defined(ElfW)
+#  define ElfW(x) __ElfN(x)
 #endif
 
 #ifdef __cplusplus
@@ -254,7 +259,7 @@ static jl_gcframe_t **jl_get_pgcstack_init(void)
     // are used. Since the address of TLS variables should be constant,
     // changing the getter address can result in weird crashes.
 
-    // This is clearly not thread safe but should be fine since we
+    // This is clearly not thread-safe but should be fine since we
     // make sure the tls states callback is finalized before adding
     // multiple threads
 #  if JL_USE_IFUNC
@@ -291,8 +296,10 @@ JL_DLLEXPORT jl_gcframe_t **jl_get_pgcstack(void) JL_GLOBALLY_ROOTED
 
 void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t *k)
 {
+#ifndef __clang_gcanalyzer__
     if (jl_get_pgcstack_cb == jl_get_pgcstack_init)
         jl_get_pgcstack_init();
+#endif
     // for codegen
     *f = jl_get_pgcstack_cb;
     *k = jl_pgcstack_key;
@@ -395,7 +402,7 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     return ptls;
 }
 
-JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
+JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void) JL_NOTSAFEPOINT_LEAVE
 {
     // initialize this thread (assign tid, create heap, set up root task)
     jl_ptls_t ptls = jl_init_threadtls(-1);
@@ -406,15 +413,26 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
     JL_GC_PROMISE_ROOTED(ct);
-
+    uv_random(NULL, NULL, &ct->rngState, sizeof(ct->rngState), 0, NULL);
     return &ct->gcstack;
 }
 
-static void jl_delete_thread(void *value)
+void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT;
+
+static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 {
+#ifndef _OS_WINDOWS_
+    pthread_setspecific(jl_task_exit_key, NULL);
+#endif
     jl_ptls_t ptls = (jl_ptls_t)value;
+    // safepoint until GC exit, in case GC was running concurrently while in
+    // prior unsafe-region (before we let it release the stack memory)
+    (void)jl_gc_unsafe_enter(ptls);
+    jl_atomic_store_relaxed(&ptls->sleep_check_state, 2); // dead, interpreted as sleeping and unwakeable
+    jl_fence();
+    jl_wakeup_thread(0); // force thread 0 to see that we do not have the IO lock (and am dead)
     // Acquire the profile write lock, to ensure we are not racing with the `kill`
-    // call in the profile code which will also try to look at these variables.
+    // call in the profile code which will also try to look at this thread.
     // We have no control over when the user calls pthread_join, so we must do
     // this here by blocking. This also synchronizes our read of `current_task`
     // (which is the flag we currently use to check the liveness state of a thread).
@@ -427,11 +445,22 @@ static void jl_delete_thread(void *value)
 #else
     pthread_mutex_lock(&in_signal_lock);
 #endif
-#ifndef _OS_WINDOWS_
-    pthread_setspecific(jl_task_exit_key, NULL);
-#endif
+    // need to clear pgcstack and eh, but we can clear everything now too
+    jl_task_frame_noreturn(jl_atomic_load_relaxed(&ptls->current_task));
+    if (jl_set_task_tid(ptls->root_task, ptls->tid)) {
+        // the system will probably free this stack memory soon
+        // so prevent any other thread from accessing it later
+        jl_task_frame_noreturn(ptls->root_task);
+    }
+    else {
+        // Uh oh. The user cleared the sticky bit so it started running
+        // elsewhere, then called pthread_exit on this thread. This is not
+        // recoverable. Though we could just hang here, a fatal message is better.
+        jl_safe_printf("fatal: thread exited from wrong Task.\n");
+        abort();
+    }
     jl_atomic_store_relaxed(&ptls->current_task, NULL); // dead
-    jl_atomic_store_relaxed(&ptls->sleep_check_state, 2); // dead, interpreted as sleeping and unwakeable
+    // finally, release all of the locks we had grabbed
 #ifdef _OS_WINDOWS_
     jl_unlock_profile_wr();
 #elif defined(JL_DISABLE_LIBUNWIND)
@@ -441,8 +470,14 @@ static void jl_delete_thread(void *value)
 #else
     pthread_mutex_unlock(&in_signal_lock);
 #endif
+    // then park in safe-region
     (void)jl_gc_safe_enter(ptls);
 }
+
+//// debugging hack: if we are exiting too fast for error message printing on threads,
+//// enabling this will stall that first thread just before exiting, to give
+//// the other threads time to fail and emit their failure message
+//__attribute__((destructor)) static void _waitthreaddeath(void) { sleep(1); }
 
 JL_DLLEXPORT jl_mutex_t jl_codegen_lock;
 jl_mutex_t typecache_lock;

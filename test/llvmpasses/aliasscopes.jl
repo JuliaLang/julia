@@ -18,8 +18,8 @@ import Base.Experimental: Const, @aliasscope
 function simple(A, B)
     @aliasscope @inbounds for I in eachindex(A, B)
         A[I] = Const(B)[I]
-# CHECK: load double, {{.*}} !alias.scope [[SCOPE:![0-9]+]]
-# CHECK: store double {{.*}} !noalias [[SCOPE]]
+# CHECK: load double, {{.*}} !alias.scope [[SCOPE_LD:![0-9]+]]
+# CHECK: store double {{.*}} !noalias [[SCOPE_ST:![0-9]+]]
     end
     return 0 # return nothing causes japi1
 end
@@ -28,8 +28,8 @@ end
 function constargs(A, B::Const)
     @aliasscope @inbounds for I in eachindex(A, B)
         A[I] = B[I]
-# CHECK: load double, {{.*}} !alias.scope [[SCOPE2:![0-9]+]]
-# CHECK: store double {{.*}} !noalias [[SCOPE2]]
+# CHECK: load double, {{.*}} !alias.scope [[SCOPE2_LD:![0-9]+]]
+# CHECK: store double {{.*}} !noalias [[SCOPE2_ST:![0-9]+]]
     end
     return 0
 end
@@ -40,10 +40,10 @@ function micro_ker!(AB, Ac, Bc, kc, offSetA, offSetB)
     @inbounds @aliasscope for k in 1:kc
         for j in 1:NR, i in 1:MR
             AB[i+(j-1)*MR] = muladd(Const(Ac)[offSetA+i], Const(Bc)[offSetB+j], Const(AB)[i+(j-1)*MR])
-# CHECK: load double, {{.*}} !alias.scope [[SCOPE3:![0-9]+]]
-# CHECK: load double, {{.*}} !alias.scope [[SCOPE3]]
-# CHECK: load double, {{.*}} !alias.scope [[SCOPE3]]
-# CHECK: store double {{.*}} !noalias [[SCOPE3]]
+# CHECK: load double, {{.*}} !alias.scope [[SCOPE3_LD:![0-9]+]]
+# CHECK: load double, {{.*}} !alias.scope [[SCOPE3_LD]]
+# CHECK: load double, {{.*}} !alias.scope [[SCOPE3_LD]]
+# CHECK: store double {{.*}} !noalias [[SCOPE3_ST:![0-9]+]]
         end
         offSetA += MR
         offSetB += NR
@@ -51,9 +51,14 @@ function micro_ker!(AB, Ac, Bc, kc, offSetA, offSetB)
     return
 end
 
-# CHECK: [[SCOPE]] = !{[[ALIASSCOPE:![0-9]+]]}
-# CHECK: [[ALIASSCOPE]] = !{!"aliasscope", [[MDNODE:![0-9]+]]}
-# CHECK: [[MDNODE]] = !{!"simple"}
+# CHECK-DAG: [[SCOPE_LD]] = !{[[ALIASSCOPE:![0-9]+]]
+# CHECK-DAG: [[SCOPE_ST]] = !{[[ALIASSCOPE]]
+# CHECK-DAG: [[SCOPE2_LD]] = !{[[ALIASSCOPE2:![0-9]+]]
+# CHECK-DAG: [[SCOPE2_ST]] = !{[[ALIASSCOPE2]]
+# CHECK-DAG: [[SCOPE3_LD]] = !{[[ALIASSCOPE3:![0-9]+]]
+# CHECK-DAG: [[SCOPE3_ST]] = !{[[ALIASSCOPE3]]
+# CHECK-DAG: [[ALIASSCOPE]] = !{!"aliasscope", [[MDNODE:![0-9]+]]}
+# CHECK-DAG: [[MDNODE]] = !{!"simple"}
 
 emit(simple, Vector{Float64}, Vector{Float64})
 emit(constargs, Vector{Float64}, Const{Float64, 1})

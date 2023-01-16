@@ -36,7 +36,7 @@ const AbstractMatrix{T} = AbstractArray{T,2}
 Union type of [`AbstractVector{T}`](@ref) and [`AbstractMatrix{T}`](@ref).
 """
 const AbstractVecOrMat{T} = Union{AbstractVector{T}, AbstractMatrix{T}}
-const RangeIndex = Union{Int, AbstractRange{Int}, AbstractUnitRange{Int}}
+const RangeIndex = Union{<:BitInteger, AbstractRange{<:BitInteger}}
 const DimOrInd = Union{Integer, AbstractUnitRange}
 const IntOrInd = Union{Int, AbstractUnitRange}
 const DimsOrInds{N} = NTuple{N,DimOrInd}
@@ -215,8 +215,8 @@ sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)
     @inline
+    @boundscheck checkbounds(Bool, a, i...) || return false
     ii = (_sub2ind(size(a), i...) % UInt) - 1
-    @boundscheck ii < length(a) % UInt || return false
     ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
 end
 
@@ -1259,7 +1259,12 @@ end
 """
     sizehint!(s, n) -> s
 
-Suggest that collection `s` reserve capacity for at least `n` elements. This can improve performance.
+Suggest that collection `s` reserve capacity for at least `n` elements. That is, if
+you expect that you're going to have to push a lot of values onto `s`, you can avoid
+the cost of incremental reallocation by doing it once up front; this can improve
+performance.
+
+See also [`resize!`](@ref).
 
 # Notes on the performance model
 
@@ -2725,7 +2730,8 @@ keepat!(a::Vector, m::AbstractVector{Bool}) = _keepat!(a, m)
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.
 
-_unique_filter!(pred, update!, state) = function (x)
+_unique_filter!(pred::P, update!::U, state) where {P,U} = function (x)
+    # P, U force specialization
     if pred(x, state)
         update!(state, x)
         true
@@ -2751,7 +2757,7 @@ union!(v::AbstractVector{T}, itrs...) where {T} =
 symdiff!(v::AbstractVector{T}, itrs...) where {T} =
     _grow!(_shrink_filter!(symdiff!(Set{T}(), v, itrs...)), v, itrs)
 
-function _shrink!(shrinker!, v::AbstractVector, itrs)
+function _shrink!(shrinker!::F, v::AbstractVector, itrs) where F
     seen = Set{eltype(v)}()
     filter!(_grow_filter!(seen), v)
     shrinker!(seen, itrs...)
@@ -2763,7 +2769,7 @@ setdiff!(  v::AbstractVector, itrs...) = _shrink!(setdiff!, v, itrs)
 
 vectorfilter(T::Type, f, v) = T[x for x in v if f(x)]
 
-function _shrink(shrinker!, itr, itrs)
+function _shrink(shrinker!::F, itr, itrs) where F
     T = promote_eltype(itr, itrs...)
     keep = shrinker!(Set{T}(itr), itrs...)
     vectorfilter(T, _shrink_filter!(keep), itr)

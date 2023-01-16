@@ -230,7 +230,7 @@ function cstr(s)
     if Base.containsnul(s)
         throw(ArgumentError("strings containing NUL cannot be passed to spawned processes"))
     end
-    return String(s)
+    return String(s)::String
 end
 
 # convert various env representations into an array of "key=val" strings

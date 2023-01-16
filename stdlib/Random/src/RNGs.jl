@@ -726,8 +726,8 @@ jump!(r::MersenneTwister, steps::Integer) = copy!(r, jump(r, steps))
 # parameters in the tuples are:
 # 1: .adv_jump (jump steps)
 # 2: .adv (number of generated floats at the DSFMT_state level since seeding, besides jumps)
-# 3, 4: .adv_vals, .idxF (counters to reconstruct the float chache, optional if 5-6 not shown))
-# 5, 6: .adv_ints, .idxI (counters to reconstruct the integer chache, optional)
+# 3, 4: .adv_vals, .idxF (counters to reconstruct the float cache, optional if 5-6 not shown))
+# 5, 6: .adv_ints, .idxI (counters to reconstruct the integer cache, optional)
 
 Random.MersenneTwister(seed::Union{Integer,Vector{UInt32}}, advance::NTuple{6,Integer}) =
     advance!(MersenneTwister(seed), advance...)

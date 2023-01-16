@@ -303,8 +303,8 @@ provides several tools measure this:
 
 ### `@time`
 
-The total amount of allocation can be measured with [`@time`](@ref) and [`@allocated`](@ref), and
-specific lines triggering allocation can often be inferred from profiling via the cost of garbage
+The total amount of allocation can be measured with [`@time`](@ref), [`@allocated`](@ref) and [`@allocations`](@ref),
+and specific lines triggering allocation can often be inferred from profiling via the cost of garbage
 collection that these lines incur. However, sometimes it is more efficient to directly measure
 the amount of memory allocated by each line of code.
 
@@ -362,7 +362,7 @@ Passing `sample_rate=1.0` will make it record everything (which is slow);
     `Profile.Allocs.UnknownType`.
 
     You can read more about the missing types and the plan to improve this, here:
-    <https://github.com/JuliaLang/julia/issues/43688>.
+    [issue #43688](https://github.com/JuliaLang/julia/issues/43688).
 
 ## External Profiling
 

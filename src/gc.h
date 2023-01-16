@@ -191,7 +191,6 @@ typedef struct {
     jl_binding_t **begin; // The first slot to be scanned.
     jl_binding_t **end; // The end address (after the last slot to be scanned)
     uintptr_t nptr; // See notes about `nptr` above.
-    uint8_t bits; // GC bits of the module (the bits to mark the binding buffer with)
 } gc_mark_binding_t;
 
 // Finalizer (or object) list
@@ -379,7 +378,7 @@ typedef struct {
     int ub;
 } pagetable_t;
 
-#ifdef __clang_gcanalyzer__
+#ifdef __clang_gcanalyzer__ /* clang may not have __builtin_ffs */
 unsigned ffs_u32(uint32_t bitvec) JL_NOTSAFEPOINT;
 #else
 STATIC_INLINE unsigned ffs_u32(uint32_t bitvec)

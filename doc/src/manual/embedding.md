@@ -406,8 +406,10 @@ As an alternative for very simple cases, it is possible to just create a global 
 per pointer using
 
 ```c
-jl_binding_t *bp = jl_get_binding_wr(jl_main_module, jl_symbol("var"), 1);
-jl_checked_assignment(bp, val);
+jl_module_t *mod = jl_main_module;
+jl_sym_t *var = jl_symbol("var");
+jl_binding_t *bp = jl_get_binding_wr(mod, var);
+jl_checked_assignment(bp, mod, var, val);
 ```
 
 ### Updating fields of GC-managed objects
@@ -670,7 +672,7 @@ int main()
     jl_eval_string("func(i) = ccall(:c_func, Float64, (Int32,), i)");
 
     // Call func() multiple times, using multiple threads to do so
-    jl_eval_string("println(Base.threadpoolsize())");
+    jl_eval_string("println(Threads.threadpoolsize())");
     jl_eval_string("use(i) = println(\"[J $(Threads.threadid())] i = $(i) -> $(func(i))\")");
     jl_eval_string("Threads.@threads for i in 1:5 use(i) end");
 

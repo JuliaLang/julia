@@ -426,6 +426,9 @@ There is much more to say about how instances of composite types are created, bu
 depends on both [Parametric Types](@ref) and on [Methods](@ref), and is sufficiently important
 to be addressed in its own section: [Constructors](@ref man-constructors).
 
+For many user-defined types `X`, you may want to define a method [`Base.broadcastable(x::X) = Ref(x)`](@ref man-interfaces-broadcasting)
+so that instances of that type act as 0-dimensional "scalars" for [broadcasting](@ref Broadcasting).
+
 ## Mutable Composite Types
 
 If a composite type is declared with `mutable struct` instead of `struct`, then instances of
@@ -1612,5 +1615,5 @@ in unfavorable cases, you can easily end up making the performance of your code 
  In particular, you would never want to write actual code as illustrated above.  For more information
 about the proper (and improper) uses of `Val`, please read [the more extensive discussion in the performance tips](@ref man-performance-value-type).
 
-[^1]: "Small" is defined by the `MAX_UNION_SPLITTING` constant, which is currently set to 4.
+[^1]: "Small" is defined by the `max_union_splitting` configuration, which currently defaults to 4.
 [^2]: A few popular languages have singleton types, including Haskell, Scala and Ruby.

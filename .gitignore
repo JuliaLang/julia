@@ -33,7 +33,7 @@
 .DS_Store
 .idea/*
 .vscode/*
-
+*.heapsnapshot
 # Buildkite: Ignore the entire .buildkite directory
 /.buildkite
 
