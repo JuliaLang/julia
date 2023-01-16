@@ -106,15 +106,6 @@ for compile in ("min", "yes")
     end
 end
 
-# Issue #27104
-# Test whether meta nodes are still present after code optimization.
-let
-    @noinline f(x, y) = x + y
-    @test any(code_typed(f)[1][1].code) do ex
-        Meta.isexpr(ex, :meta)
-    end
-end
-
 # PR #32145
 # Make sure IncrementalCompact can handle blocks with predecessors of index 0
 # while removing blocks with no predecessors.

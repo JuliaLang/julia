@@ -681,7 +681,7 @@ clear!(wp)
 # - ssh addprocs requires sshd to be running locally with passwordless login enabled.
 # The test block is enabled by defining env JULIA_TESTFULL=1
 
-DoFullTest = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+DoFullTest = Base.get_bool_env("JULIA_TESTFULL", false)
 
 if DoFullTest
     println("Testing exception printing on remote worker from a `remote_do` call")

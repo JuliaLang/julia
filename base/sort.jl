@@ -5,7 +5,7 @@ module Sort
 using Base.Order
 
 using Base: copymutable, midpoint, require_one_based_indexing, uinttype,
-    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType
+    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, top_set_bit
 
 import Base:
     sort,
@@ -86,7 +86,7 @@ issorted(itr;
     issorted(itr, ord(lt,by,rev,order))
 
 function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
-    _sort!(v, InitialOptimizations(QuickerSort(k)), o, (;))
+    _sort!(v, InitialOptimizations(ScratchQuickSort(k)), o, (;))
     maybeview(v, k)
 end
 
@@ -885,7 +885,7 @@ ConsiderRadixSort(next) = ConsiderRadixSort(RadixSort(), next)
 function _sort!(v::AbstractVector, a::ConsiderRadixSort, o::DirectOrdering, kw)
     @getkw lo hi mn mx
     urange = uint_map(mx, o)-uint_map(mn, o)
-    bits = unsigned(8sizeof(urange) - leading_zeros(urange))
+    bits = unsigned(top_set_bit(urange))
     if sizeof(eltype(v)) <= 8 && bits+70 < 22log(hi-lo)
         _sort!(v, a.radix, o, kw)
     else
@@ -920,7 +920,7 @@ function _sort!(v::AbstractVector, a::RadixSort, o::DirectOrdering, kw)
     @getkw lo hi mn mx scratch
     umn = uint_map(mn, o)
     urange = uint_map(mx, o)-umn
-    bits = unsigned(8sizeof(urange) - leading_zeros(urange))
+    bits = unsigned(top_set_bit(urange))
 
     # At this point, we are committed to radix sort.
     u = uint_map!(v, lo, hi, o)
@@ -950,12 +950,12 @@ end
 
 
 """
-    QuickerSort(next::Algorithm=SMALL_ALGORITHM) <: Algorithm
-    QuickerSort(lo::Union{Integer, Missing}, hi::Union{Integer, Missing}=lo, next::Algorithm=SMALL_ALGORITHM) <: Algorithm
+    ScratchQuickSort(next::Algorithm=SMALL_ALGORITHM) <: Algorithm
+    ScratchQuickSort(lo::Union{Integer, Missing}, hi::Union{Integer, Missing}=lo, next::Algorithm=SMALL_ALGORITHM) <: Algorithm
 
-Use the `QuickerSort` algorithm with the `next` algorithm as a base case.
+Use the `ScratchQuickSort` algorithm with the `next` algorithm as a base case.
 
-`QuickerSort` is like `QuickSort`, but utilizes scratch space to operate faster and allow
+`ScratchQuickSort` is like `QuickSort`, but utilizes scratch space to operate faster and allow
 for the possibility of maintaining stability.
 
 If `lo` and `hi` are provided, finds and sorts the elements in the range `lo:hi`, reordering
@@ -973,31 +973,25 @@ Characteristics:
   * *quadratic worst case runtime* in pathological cases
   (vanishingly rare for non-malicious input)
 """
-struct QuickerSort{L<:Union{Integer,Missing}, H<:Union{Integer,Missing}, T<:Algorithm} <: Algorithm
+struct ScratchQuickSort{L<:Union{Integer,Missing}, H<:Union{Integer,Missing}, T<:Algorithm} <: Algorithm
     lo::L
     hi::H
     next::T
 end
-QuickerSort(next::Algorithm=SMALL_ALGORITHM) = QuickerSort(missing, missing, next)
-QuickerSort(lo::Union{Integer, Missing}, hi::Union{Integer, Missing}) = QuickerSort(lo, hi, SMALL_ALGORITHM)
-QuickerSort(lo::Union{Integer, Missing}, next::Algorithm=SMALL_ALGORITHM) = QuickerSort(lo, lo, next)
-QuickerSort(r::OrdinalRange, next::Algorithm=SMALL_ALGORITHM) = QuickerSort(first(r), last(r), next)
-
-# select a pivot for QuickerSort
-#
-# This method is redefined to rand(lo:hi) in Random.jl
-# We can't use rand here because it is not available in Core.Compiler and
-# because rand is defined in the stdlib Random.jl after sorting is used in Base.
-select_pivot(lo::Integer, hi::Integer) = typeof(hi-lo)(hash(lo) % (hi-lo+1)) + lo
+ScratchQuickSort(next::Algorithm=SMALL_ALGORITHM) = ScratchQuickSort(missing, missing, next)
+ScratchQuickSort(lo::Union{Integer, Missing}, hi::Union{Integer, Missing}) = ScratchQuickSort(lo, hi, SMALL_ALGORITHM)
+ScratchQuickSort(lo::Union{Integer, Missing}, next::Algorithm=SMALL_ALGORITHM) = ScratchQuickSort(lo, lo, next)
+ScratchQuickSort(r::OrdinalRange, next::Algorithm=SMALL_ALGORITHM) = ScratchQuickSort(first(r), last(r), next)
 
 # select a pivot, partition v[lo:hi] according
 # to the pivot, and store the result in t[lo:hi].
 #
-# returns (pivot, pivot_index) where pivot_index is the location the pivot
-# should end up, but does not set t[pivot_index] = pivot
+# sets `pivot_dest[pivot_index+pivot_index_offset] = pivot` and returns that index.
 function partition!(t::AbstractVector, lo::Integer, hi::Integer, offset::Integer, o::Ordering,
         v::AbstractVector, rev::Bool, pivot_dest::AbstractVector, pivot_index_offset::Integer)
-    pivot_index = select_pivot(lo, hi)
+    # Ideally we would use `pivot_index = rand(lo:hi)`, but that requires Random.jl
+    # and would mutate the global RNG in sorting.
+    pivot_index = typeof(hi-lo)(hash(lo) % (hi-lo+1)) + lo
     @inbounds begin
         pivot = v[pivot_index]
         while lo < pivot_index
@@ -1026,7 +1020,7 @@ function partition!(t::AbstractVector, lo::Integer, hi::Integer, offset::Integer
     pivot_index
 end
 
-function _sort!(v::AbstractVector, a::QuickerSort, o::Ordering, kw;
+function _sort!(v::AbstractVector, a::ScratchQuickSort, o::Ordering, kw;
                 t=nothing, offset=nothing, swap=false, rev=false)
     @getkw lo hi scratch
 
@@ -1044,7 +1038,7 @@ function _sort!(v::AbstractVector, a::QuickerSort, o::Ordering, kw;
         end
         swap = !swap
 
-        # For QuickerSort(), a.lo === a.hi === missing, so the first two branches get skipped
+        # For ScratchQuickSort(), a.lo === a.hi === missing, so the first two branches get skipped
         if !ismissing(a.lo) && j <= a.lo # Skip sorting the lower part
             swap && copyto!(v, lo, t, lo+offset, j-lo)
             rev && reverse!(v, lo, j-1)
@@ -1242,7 +1236,7 @@ the initial optimizations because they can change the input vector's type and or
 make them `UIntMappable`.
 
 If the input is not [`UIntMappable`](@ref), then we perform a presorted check and dispatch
-to [`QuickerSort`](@ref).
+to [`ScratchQuickSort`](@ref).
 
 Otherwise, we dispatch to [`InsertionSort`](@ref) for inputs with `length <= 40` and then
 perform a presorted check ([`CheckSorted`](@ref)).
@@ -1274,7 +1268,7 @@ Consequently, we apply [`RadixSort`](@ref) for any reasonably long inputs that r
 stage.
 
 Finally, if the input has length less than 80, we dispatch to [`InsertionSort`](@ref) and
-otherwise we dispatch to [`QuickerSort`](@ref).
+otherwise we dispatch to [`ScratchQuickSort`](@ref).
 """
 const DEFAULT_STABLE = InitialOptimizations(
     IsUIntMappable(
@@ -1284,9 +1278,9 @@ const DEFAULT_STABLE = InitialOptimizations(
                     ConsiderCountingSort(
                         ConsiderRadixSort(
                             Small{80}(
-                                QuickerSort())))))),
+                                ScratchQuickSort())))))),
         StableCheckSorted(
-            QuickerSort())))
+            ScratchQuickSort())))
 """
     DEFAULT_UNSTABLE
 
@@ -1491,7 +1485,7 @@ function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
     end
 
     # do partial quicksort
-    _sort!(ix, InitialOptimizations(QuickerSort(k)), Perm(ord(lt, by, rev, order), v), (;))
+    _sort!(ix, InitialOptimizations(ScratchQuickSort(k)), Perm(ord(lt, by, rev, order), v), (;))
 
     maybeview(ix, k)
 end
@@ -1943,7 +1937,7 @@ maybe_apply_initial_optimizations(alg::InsertionSortAlg) = InitialOptimizations(
 
 # selectpivot!
 #
-# Given 3 locations in an array (lo, mi, and hi), sort v[lo], v[mi], v[hi]) and
+# Given 3 locations in an array (lo, mi, and hi), sort v[lo], v[mi], v[hi] and
 # choose the middle value as a pivot
 #
 # Upon return, the pivot is in v[lo], and v[hi] is guaranteed to be

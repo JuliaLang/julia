@@ -183,7 +183,7 @@ static int sleep_check_after_threshold(uint64_t *start_cycles)
 }
 
 
-static int wake_thread(int16_t tid)
+static int wake_thread(int16_t tid) JL_NOTSAFEPOINT
 {
     jl_ptls_t other = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     int8_t state = sleeping;
@@ -201,7 +201,7 @@ static int wake_thread(int16_t tid)
 }
 
 
-static void wake_libuv(void)
+static void wake_libuv(void) JL_NOTSAFEPOINT
 {
     JULIA_DEBUG_SLEEPWAKE( io_wakeup_enter = cycleclock() );
     jl_wake_libuv();
@@ -209,7 +209,7 @@ static void wake_libuv(void)
 }
 
 /* ensure thread tid is awake if necessary */
-JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
+JL_DLLEXPORT void jl_wakeup_thread(int16_t tid) JL_NOTSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     int16_t self = jl_atomic_load_relaxed(&ct->tid);

@@ -345,7 +345,7 @@ by putting it before the function call, like this:
 
     @code_native syntax=:intel debuginfo=:default binary=true dump_module=false f(x)
 
-* Set assembly syntax by setting `syntax` to `:att` (default) for AT&T syntax or `:intel` for Intel syntax.
+* Set assembly syntax by setting `syntax` to `:intel` (default) for Intel syntax or `:att` for AT&T syntax.
 * Specify verbosity of code comments by setting `debuginfo` to `:source` (default) or `:none`.
 * If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
 * If `dump_module` is `false`, do not print metadata such as rodata or directives.
@@ -359,6 +359,8 @@ See also: [`code_native`](@ref), [`@code_llvm`](@ref), [`@code_typed`](@ref) and
 
 A macro to execute an expression and produce a report of any time spent importing packages and their
 dependencies. Any compilation time will be reported as a percentage, and how much of which was recompilation, if any.
+
+One line is printed per package or package extension. The duration shown is the time to import that package itself, not including the time to load any of its dependencies.
 
 On Julia 1.9+ [package extensions](@ref man-extensions) will show as Parent → Extension.
 
