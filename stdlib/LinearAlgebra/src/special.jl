@@ -324,6 +324,7 @@ end
 zero(D::Diagonal) = Diagonal(zero.(D.diag))
 oneunit(D::Diagonal) = Diagonal(oneunit.(D.diag))
 
+isdiag(A::HermOrSym{<:Any,<:Diagonal}) = isdiag(parent(A))
 dot(x::AbstractVector, A::RealHermSymComplexHerm{<:Any,<:Diagonal}, y::AbstractVector) =
     dot(x, A.data, y)
 
