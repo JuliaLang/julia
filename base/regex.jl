@@ -204,8 +204,8 @@ That is, `idx` will be in the return value even if `m[idx] == nothing`.
 Unnamed capture groups will have integer keys corresponding to their index.
 Named capture groups will have string keys.
 
-!!! compat "Julia 1.6"
-    This method was added in Julia 1.6
+!!! compat "Julia 1.7"
+    This method was added in Julia 1.7
 
 # Examples
 ```jldoctest
