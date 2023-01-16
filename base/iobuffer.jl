@@ -531,7 +531,7 @@ function readuntil(io::GenericIOBuffer, delim::UInt8; keep::Bool=false)
     lb = 70
     A = StringVector(lb)
     nout = readuntil!(io, A, delim)
-    @inbounds nout -= !keep & (A[nout] == delim)
+    @inbounds nout -= !keep & (nout > 0 && A[nout] == delim)
     if length(A) != nout
         resize!(A, nout)
     end
