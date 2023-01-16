@@ -365,7 +365,8 @@ See documentation in [Handling Operating System Variation](@ref).
 
 !!! note
     Not to be confused with `Sys.isbsd()`, which is `true` on NetBSD but also on
-    other BSD-based systems. `Sys.isnetbsd()` refers only to NetBSD."""
+    other BSD-based systems. `Sys.isnetbsd()` refers only to NetBSD.
+"""
 isnetbsd(os::Symbol) = (os === :NetBSD)
 
 """
