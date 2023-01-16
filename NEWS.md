@@ -166,7 +166,7 @@ Standard library changes
 
 #### Distributed
 
-* The package environment (active project, `LOAD_PATH`, `DEPOT_PATH`) is now propagated when adding *local* workers
+* The active package environment is now propagated when adding *local* workers
   (e.g. with `addprocs(N::Int)` or through the `--procs=N` command line flag) ([#43270]).
 * `addprocs` for local workers now accepts the `env` keyword argument for passing environment variables to worker
   processes. This was already supported for remote workers ([#43270]).
