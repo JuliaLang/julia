@@ -76,8 +76,16 @@ end
             end
             @testset "diag" begin
                 D = Diagonal(x)
-                @test diag(Symmetric(D, :U))::Vector == x
-                @test diag(Hermitian(D, :U))::Vector == real(x)
+                DM = Matrix(D)
+                B = diagm(-1 => x, 1 => x)
+                for uplo in (:U, :L)
+                    @test diag(Symmetric(D, uplo))::Vector == x
+                    @test diag(Hermitian(D, uplo))::Vector == real(x)
+                    @test isdiag(Symmetric(DM, uplo))
+                    @test isdiag(Hermitian(DM, uplo))
+                    @test !isdiag(Symmetric(B, uplo))
+                    @test !isdiag(Hermitian(B, uplo))
+                end
             end
             @testset "similar" begin
                 @test isa(similar(Symmetric(asym)), Symmetric{eltya})
