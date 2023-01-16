@@ -355,7 +355,8 @@ See documentation in [Handling Operating System Variation](@ref).
 
 !!! note
     Not to be confused with `Sys.isbsd()`, which is `true` on OpenBSD but also on
-    other BSD-based systems. `Sys.isopenbsd()` refers only to OpenBSD."""
+    other BSD-based systems. `Sys.isopenbsd()` refers only to OpenBSD.
+"""
 isopenbsd(os::Symbol) = (os === :OpenBSD)
 
 """
