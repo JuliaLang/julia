@@ -24,7 +24,7 @@ checknonsingular(info) = checknonsingular(info, RowMaximum())
 """
     issuccess(F::Factorization)
 
-Test that a factorization of a matrix succeeded..
+Test that a factorization of a matrix succeeded.
 
 ```jldoctest
 julia> F = cholesky([1 0; 0 1]);
