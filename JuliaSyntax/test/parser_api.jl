@@ -82,14 +82,13 @@
     end
 
     @testset "error/warning handling" begin
-        # ignore_warnings
-        parse_sexpr(s;kws...) = sprint(show, MIME("text/x.sexpression"), parse(SyntaxNode, s; kws...))
-        @test_throws JuliaSyntax.ParseError parse_sexpr("try finally catch ex end")
-        @test parse_sexpr("try finally catch ex end", ignore_warnings=true) ==
+        parseshow(s;kws...) = sprint(show, MIME("text/x.sexpression"), parse(SyntaxNode, s; kws...))
+        @test_throws JuliaSyntax.ParseError parseshow("try finally catch ex end")
+        @test parseshow("try finally catch ex end", ignore_warnings=true) ==
             "(try_finally_catch (block) false false false (block) ex (block))"
         # ignore_errors
-        @test_throws JuliaSyntax.ParseError parse_sexpr("[a; b, c]")
-        @test_throws JuliaSyntax.ParseError parse_sexpr("[a; b, c]", ignore_warnings=true)
-        @test parse_sexpr("[a; b, c]", ignore_errors=true) == "(vcat a b (error-t) c)"
+        @test_throws JuliaSyntax.ParseError parseshow("[a; b, c]")
+        @test_throws JuliaSyntax.ParseError parseshow("[a; b, c]", ignore_warnings=true)
+        @test parseshow("[a; b, c]", ignore_errors=true) == "(vcat a b (error-t) c)"
     end
 end
