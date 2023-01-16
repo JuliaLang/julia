@@ -199,7 +199,7 @@ if Sys.isbsd() || Sys.islinux()
         let cmd = Base.julia_cmd()
             script = """
                 x = rand(1000, 1000)
-                println("started")
+                println(stderr, "started")
                 while true
                     x * x
                     yield()
