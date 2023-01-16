@@ -781,4 +781,4 @@ namedtup = (;a=1, b=2, c=3)
     }
 
 # Make sure that tuple iteration is foldable
-@test Core.Compiler.is_foldable(Base.infer_effects(iterate, Tuple{NTuple{4, Float64}, Int64}))
+@test Core.Compiler.is_foldable(Base.infer_effects(iterate, Tuple{NTuple{4, Float64}, Int}))
