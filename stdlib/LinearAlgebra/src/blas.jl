@@ -982,7 +982,7 @@ The scalar inputs `α` and `β` must be complex or real numbers.
 
 The array inputs `x`, `y` and `AP` must all be of `ComplexF32` or `ComplexF64` type.
 
-Return the updated `y`..
+Return the updated `y`.
 """
 hpmv!
 
