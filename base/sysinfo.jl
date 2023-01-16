@@ -376,7 +376,8 @@ See documentation in [Handling Operating System Variation](@ref).
 
 !!! note
     Not to be confused with `Sys.isbsd()`, which is `true` on DragonFly but also on
-    other BSD-based systems. `Sys.isdragonfly()` refers only to DragonFly."""
+    other BSD-based systems. `Sys.isdragonfly()` refers only to DragonFly.
+"""
 isdragonfly(os::Symbol) = (os === :DragonFly)
 
 """
