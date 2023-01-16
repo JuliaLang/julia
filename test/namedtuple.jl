@@ -84,6 +84,9 @@ end
 @test eltype(NamedTuple{(:x, :y),Tuple{Union{Missing, Int},Union{Missing, Float64}}}(
     (missing, missing))) === Union{Real, Missing}
 
+@test valtype((a=[1,2], b=[3,4])) === Vector{Int}
+@test keytype((a=[1,2], b=[3,4])) === Symbol
+
 @test Tuple((a=[1,2], b=[3,4])) == ([1,2], [3,4])
 @test Tuple(NamedTuple()) === ()
 @test Tuple((x=4, y=5, z=6)) == (4,5,6)
@@ -349,4 +352,10 @@ end
     @test mapfoldl(abs, =>, (;), init=-10) == -10
     @test mapfoldl(abs, Pair{Any,Any}, NamedTuple(Symbol(:x,i) => i for i in 1:30)) == mapfoldl(abs, Pair{Any,Any}, [1:30;])
     @test_throws "reducing over an empty collection" mapfoldl(abs, =>, (;))
+end
+
+# Test effect/inference for merge/diff of unknown NamedTuples
+for f in (Base.merge, Base.structdiff)
+    @test Core.Compiler.is_foldable(Base.infer_effects(f, Tuple{NamedTuple, NamedTuple}))
+    @test Core.Compiler.return_type(f, Tuple{NamedTuple, NamedTuple}) == NamedTuple
 end

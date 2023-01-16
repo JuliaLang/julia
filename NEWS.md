@@ -30,7 +30,8 @@ New library functions
 
 New library features
 --------------------
-
+The `initialized=true` keyword assignment for `sortperm!` and `partialsortperm!`
+is now a no-op ([#47979]). It previously exposed unsafe behavior ([#47977]).
 
 Standard library changes
 ------------------------
@@ -80,6 +81,10 @@ Standard library changes
 
 #### DelimitedFiles
 
+
+#### InteractiveUtils
+
+ * `code_native` and `@code_native` now default to intel syntax instead of AT&T.
 
 Deprecated or removed
 ---------------------

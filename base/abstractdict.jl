@@ -551,10 +551,12 @@ setindex!(t::AbstractDict, v, k1, k2, ks...) = setindex!(t, v, tuple(k1,k2,ks...
 
 get!(t::AbstractDict, key, default) = get!(() -> default, t, key)
 function get!(default::Callable, t::AbstractDict{K,V}, key) where K where V
-    haskey(t, key) && return t[key]
-    val = default()
-    t[key] = val
-    return val
+    key = convert(K, key)
+    if haskey(t, key)
+        return t[key]
+    else
+        return t[key] = convert(V, default())
+    end
 end
 
 push!(t::AbstractDict, p::Pair) = setindex!(t, p.second, p.first)
@@ -573,7 +575,7 @@ function convert(::Type{T}, x::AbstractDict) where T<:AbstractDict
 end
 
 # hashing objects by identity
-_tablesz(x::T) where T <: Integer = x < 16 ? T(16) : one(T)<<((sizeof(T)<<3)-leading_zeros(x-one(T)))
+_tablesz(x::T) where T <: Integer = x < 16 ? T(16) : one(T)<<(top_set_bit(x-one(T)))
 
 TP{K,V} = Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
 

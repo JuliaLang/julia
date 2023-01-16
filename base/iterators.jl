@@ -346,7 +346,7 @@ the `zip` iterator is a tuple of values of its subiterators.
 
     `zip()` with no arguments yields an infinite iterator of empty tuples.
 
-See also: [`enumerate`](@ref), [`Splat`](@ref Base.Splat).
+See also: [`enumerate`](@ref), [`Base.splat`](@ref).
 
 # Examples
 ```jldoctest

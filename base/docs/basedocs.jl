@@ -499,7 +499,8 @@ sense to write something like `let x = x`, since the two `x` variables are disti
 the left-hand side locally shadowing the `x` from the outer scope. This can even
 be a useful idiom as new local variables are freshly created each time local scopes
 are entered, but this is only observable in the case of variables that outlive their
-scope via closures.
+scope via closures.  A `let` variable without an assignment, such as `var2` in the
+example above, declares a new local variable that is not yet bound to a value.
 
 By contrast, [`begin`](@ref) blocks also group multiple expressions together but do
 not introduce scope or have the special assignment syntax.
@@ -1141,8 +1142,16 @@ Adding `;` at the end of a line in the REPL will suppress printing the result of
 
 In function declarations, and optionally in calls, `;` separates regular arguments from keywords.
 
-While constructing arrays, if the arguments inside the square brackets are separated by `;`
-then their contents are vertically concatenated together.
+In array literals, arguments separated by semicolons have their contents
+concatenated together. A separator made of a single `;` concatenates vertically
+(i.e. along the first dimension), `;;` concatenates horizontally (second
+dimension), `;;;` concatenates along the third dimension, etc. Such a separator
+can also be used in last position in the square brackets to add trailing
+dimensions of length 1.
+
+A `;` in first position inside of parentheses can be used to construct a named
+tuple. The same `(; ...)` syntax on the left side of an assignment allows for
+property destructuring.
 
 In the standard REPL, typing `;` on an empty line will switch to shell mode.
 
@@ -1166,10 +1175,39 @@ julia> function plot(x, y; style="solid", width=1, color="black")
            ###
        end
 
-julia> [1 2; 3 4]
+julia> A = [1 2; 3 4]
 2×2 Matrix{Int64}:
  1  2
  3  4
+
+julia> [1; 3;; 2; 4;;; 10*A]
+2×2×2 Array{Int64, 3}:
+[:, :, 1] =
+ 1  2
+ 3  4
+
+[:, :, 2] =
+ 10  20
+ 30  40
+
+julia> [2; 3;;;]
+2×1×1 Array{Int64, 3}:
+[:, :, 1] =
+ 2
+ 3
+
+julia> nt = (; x=1) # without the ; or a trailing comma this would assign to x
+(x = 1,)
+
+julia> key = :a; c = 3;
+
+julia> nt2 = (; key => 1, b=2, c, nt.x)
+(a = 1, b = 2, c = 3, x = 1)
+
+julia> (; b, x) = nt2; # set variables b and x using property destructuring
+
+julia> b, x
+(2, 1)
 
 julia> ; # upon typing ;, the prompt changes (in place) to: shell>
 shell> echo hello
@@ -2078,7 +2116,7 @@ Symbol(x...)
 
 Construct a tuple of the given objects.
 
-See also [`Tuple`](@ref), [`NamedTuple`](@ref).
+See also [`Tuple`](@ref), [`ntuple`](@ref), [`NamedTuple`](@ref).
 
 # Examples
 ```jldoctest
@@ -2776,17 +2814,48 @@ Vararg
 """
     Tuple{Types...}
 
-Tuples are an abstraction of the arguments of a function – without the function itself. The salient aspects of
-a function's arguments are their order and their types. Therefore a tuple type is similar to a parameterized
-immutable type where each parameter is the type of one field. Tuple types may have any number of parameters.
+A tuple is a fixed-length container that can hold any values of different
+types, but cannot be modified (it is immutable). The values can be accessed via
+indexing. Tuple literals are written with commas and parentheses:
+
+```jldoctest
+julia> (1, 1+1)
+(1, 2)
+
+julia> (1,)
+(1,)
+
+julia> x = (0.0, "hello", 6*7)
+(0.0, "hello", 42)
+
+julia> x[2]
+"hello"
+
+julia> typeof(x)
+Tuple{Float64, String, Int64}
+```
+
+A length-1 tuple must be written with a comma, `(1,)`, since `(1)` would just
+be a parenthesized value. `()` represents the empty (length-0) tuple.
+
+A tuple can be constructed from an iterator by using a `Tuple` type as constructor:
+
+```jldoctest
+julia> Tuple(["a", 1])
+("a", 1)
+
+julia> Tuple{String, Float64}(["a", 1])
+("a", 1.0)
+```
 
 Tuple types are covariant in their parameters: `Tuple{Int}` is a subtype of `Tuple{Any}`. Therefore `Tuple{Any}`
 is considered an abstract type, and tuple types are only concrete if their parameters are. Tuples do not have
 field names; fields are only accessed by index.
+Tuple types may have any number of parameters.
 
 See the manual section on [Tuple Types](@ref).
 
-See also [`Vararg`](@ref), [`NTuple`](@ref), [`tuple`](@ref), [`NamedTuple`](@ref).
+See also [`Vararg`](@ref), [`NTuple`](@ref), [`ntuple`](@ref), [`tuple`](@ref), [`NamedTuple`](@ref).
 """
 Tuple
 
@@ -2850,8 +2919,8 @@ the syntax `@atomic a.b` calls `getproperty(a, :b, :sequentially_consistent)`.
 
 # Examples
 ```jldoctest
-julia> struct MyType
-           x
+julia> struct MyType{T <: Number}
+           x::T
        end
 
 julia> function Base.getproperty(obj::MyType, sym::Symbol)
@@ -2870,6 +2939,11 @@ julia> obj.special
 julia> obj.x
 1
 ```
+
+One should overload `getproperty` only when necessary, as it can be confusing if
+the behavior of the syntax `obj.f` is unusual.
+Also note that using methods is often preferable. See also this style guide documentation
+for more information: [Prefer exported methods over direct field access](@ref).
 
 See also [`getfield`](@ref Core.getfield),
 [`propertynames`](@ref Base.propertynames) and

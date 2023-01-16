@@ -215,8 +215,8 @@ sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)
     @inline
+    @boundscheck checkbounds(Bool, a, i...) || return false
     ii = (_sub2ind(size(a), i...) % UInt) - 1
-    @boundscheck ii < length(a) % UInt || return false
     ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
 end
 
