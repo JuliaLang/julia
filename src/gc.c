@@ -1874,6 +1874,8 @@ STATIC_INLINE jl_value_t *gc_mark_obj8(jl_ptls_t ptls, char *obj8_parent, uint8_
                 gc_try_claim_and_push(mq, new_obj, &nptr);
             }
             else {
+                // Unroll marking of last item to avoid pushing
+                // and popping it right away
                 jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
                 nptr |= !gc_old(o->header);
                 if (!gc_try_setmark_tag(o, GC_MARKED)) new_obj = NULL;
@@ -1904,6 +1906,8 @@ STATIC_INLINE jl_value_t *gc_mark_obj16(jl_ptls_t ptls, char *obj16_parent, uint
                 gc_try_claim_and_push(mq, new_obj, &nptr);
             }
             else {
+                // Unroll marking of last item to avoid pushing
+                // and popping it right away
                 jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
                 nptr |= !gc_old(o->header);
                 if (!gc_try_setmark_tag(o, GC_MARKED)) new_obj = NULL;
@@ -1933,6 +1937,8 @@ STATIC_INLINE jl_value_t *gc_mark_obj32(jl_ptls_t ptls, char *obj32_parent, uint
                 gc_try_claim_and_push(mq, new_obj, &nptr);
             }
             else {
+                // Unroll marking of last item to avoid pushing
+                // and popping it right away
                 jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
                 nptr |= !gc_old(o->header);
                 if (!gc_try_setmark_tag(o, GC_MARKED)) new_obj = NULL;
@@ -1950,6 +1956,7 @@ STATIC_INLINE void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_v
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_value_t *new_obj;
     // Decide whether need to chunk objary
+    (void)jl_assume(step > 0);
     size_t nobjs = (obj_end - obj_begin) / step;
     if (nobjs > MAX_REFS_AT_ONCE) {
         jl_gc_chunk_t c = {GC_objary_chunk, obj_parent, obj_begin + step * MAX_REFS_AT_ONCE,

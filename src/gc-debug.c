@@ -200,8 +200,10 @@ static void gc_verify_track(jl_ptls_t ptls)
 {
     do {
         jl_gc_markqueue_t mq;
-        mq.current = mq.start = (ptls->mark_queue).start;
-        mq.end = (ptls->mark_queue).end;
+        mq.current = mq.start = ptls->mark_queue.start;
+        mq.end = ptls->mark_queue.end;
+        mq.current_chunk = mq.chunk_start = ptls->mark_queue.chunk_start;
+        mq.chunk_end = ptls->mark_queue.chunk_end;
         arraylist_push(&lostval_parents_done, lostval);
         jl_safe_printf("Now looking for %p =======\n", lostval);
         clear_mark(GC_CLEAN);
@@ -247,8 +249,10 @@ static void gc_verify_track(jl_ptls_t ptls)
 void gc_verify(jl_ptls_t ptls)
 {
     jl_gc_markqueue_t mq;
-    mq.current = mq.start = (ptls->mark_queue).start;
-    mq.end = (ptls->mark_queue).end;
+    mq.current = mq.start = ptls->mark_queue.start;
+    mq.end = ptls->mark_queue.end;
+    mq.current_chunk = mq.chunk_start = ptls->mark_queue.chunk_start;
+    mq.chunk_end = ptls->mark_queue.chunk_end;
     lostval = NULL;
     lostval_parents.len = 0;
     lostval_parents_done.len = 0;
