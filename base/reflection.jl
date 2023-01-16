@@ -1488,9 +1488,10 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         types = to_tuple_type(types)
-        argtypes = Any[types.parameters...]
+        argtypes = Any[Core.Compiler.Const(f), types.parameters...]
         rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
-        return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f, argtypes, rt)
+        return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f,
+            Core.Compiler.ArgInfo(nothing, argtypes), rt)
     end
     tt = signature_type(f, types)
     result = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))

@@ -67,7 +67,7 @@ end
 
 function iterate(@nospecialize(t::Tuple), i::Int=1)
     @inline
-    return (1 <= i <= length(t)) ? (@inbounds t[i], i + 1) : nothing
+    return (1 <= i <= length(t)) ? (t[i], i + 1) : nothing
 end
 
 keys(@nospecialize t::Tuple) = OneTo(length(t))
