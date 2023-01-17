@@ -3,6 +3,7 @@
 #include "llvm-version.h"
 #include "platform.h"
 #include <stdint.h>
+#include <sstream>
 
 #include "llvm/IR/Mangler.h"
 #include <llvm/ADT/Statistic.h>
@@ -195,17 +196,17 @@ static jl_callptr_t _jl_compile_codeinst(
     jl_workqueue_t emitted;
     {
         orc::ThreadSafeModule result_m =
-            jl_create_llvm_module(name_from_method_instance(codeinst->def), params.tsctx, params.imaging);
+            jl_create_ts_module(name_from_method_instance(codeinst->def), params.tsctx, params.imaging);
         jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, src, params);
         if (result_m)
             emitted[codeinst] = {std::move(result_m), std::move(decls)};
         {
-            auto temp_module = jl_create_llvm_module(name_from_method_instance(codeinst->def), params.tsctx, params.imaging);
-            jl_compile_workqueue(emitted, *temp_module.getModuleUnlocked(), params, CompilationPolicy::Default);
+            auto temp_module = jl_create_llvm_module(name_from_method_instance(codeinst->def), params.getContext(), params.imaging);
+            jl_compile_workqueue(emitted, *temp_module, params, CompilationPolicy::Default);
         }
 
         if (params._shared_module)
-            jl_ExecutionEngine->addModule(std::move(params._shared_module));
+            jl_ExecutionEngine->addModule(orc::ThreadSafeModule(std::move(params._shared_module), params.tsctx));
         StringMap<orc::ThreadSafeModule*> NewExports;
         StringMap<void*> NewGlobals;
         for (auto &global : params.globals) {
@@ -296,7 +297,7 @@ extern "C" JL_DLLEXPORT
 int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
 {
     auto ct = jl_current_task;
-    ct->reentrant_codegen++;
+    ct->reentrant_timing++;
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -309,7 +310,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
         if (!pparams) {
             ctx = jl_ExecutionEngine->acquireContext();
         }
-        backing = jl_create_llvm_module("cextern", pparams ? pparams->tsctx : ctx, pparams ? pparams->imaging : imaging_default());
+        backing = jl_create_ts_module("cextern", pparams ? pparams->tsctx : ctx, pparams ? pparams->imaging : imaging_default());
         into = &backing;
     }
     JL_LOCK(&jl_codegen_lock);
@@ -327,14 +328,16 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
             jl_jit_globals(params.globals);
             assert(params.workqueue.empty());
             if (params._shared_module)
-                jl_ExecutionEngine->addModule(std::move(params._shared_module));
+                jl_ExecutionEngine->addModule(orc::ThreadSafeModule(std::move(params._shared_module), params.tsctx));
         }
         if (success && llvmmod == NULL)
             jl_ExecutionEngine->addModule(std::move(*into));
     }
     JL_UNLOCK(&jl_codegen_lock);
-    if (!--ct->reentrant_codegen && measure_compile_time_enabled)
-        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
+    if (!--ct->reentrant_timing && measure_compile_time_enabled) {
+        auto end = jl_hrtime();
+        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, end - compiler_start_time);
+    }
     if (ctx.getContext()) {
         jl_ExecutionEngine->releaseContext(std::move(ctx));
     }
@@ -389,7 +392,7 @@ extern "C" JL_DLLEXPORT
 jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
     auto ct = jl_current_task;
-    ct->reentrant_codegen++;
+    ct->reentrant_timing++;
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     bool is_recompile = false;
@@ -442,10 +445,11 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
         codeinst = NULL;
     }
     JL_UNLOCK(&jl_codegen_lock);
-    if (!--ct->reentrant_codegen && measure_compile_time_enabled) {
+    if (!--ct->reentrant_timing && measure_compile_time_enabled) {
         uint64_t t_comp = jl_hrtime() - compiler_start_time;
-        if (is_recompile)
+        if (is_recompile) {
             jl_atomic_fetch_add_relaxed(&jl_cumulative_recompile_time, t_comp);
+        }
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, t_comp);
     }
     JL_GC_POP();
@@ -459,7 +463,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         return;
     }
     auto ct = jl_current_task;
-    ct->reentrant_codegen++;
+    ct->reentrant_timing++;
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -493,8 +497,10 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         JL_GC_POP();
     }
     JL_UNLOCK(&jl_codegen_lock); // Might GC
-    if (!--ct->reentrant_codegen && measure_compile_time_enabled)
-        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
+    if (!--ct->reentrant_timing && measure_compile_time_enabled) {
+        auto end = jl_hrtime();
+        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, end - compiler_start_time);
+    }
 }
 
 
@@ -515,7 +521,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
             // (using sentinel value `1` instead)
             // so create an exception here so we can print pretty our lies
             auto ct = jl_current_task;
-            ct->reentrant_codegen++;
+            ct->reentrant_timing++;
             uint64_t compiler_start_time = 0;
             uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
             if (measure_compile_time_enabled)
@@ -545,8 +551,10 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
                 JL_GC_POP();
             }
             JL_UNLOCK(&jl_codegen_lock);
-            if (!--ct->reentrant_codegen && measure_compile_time_enabled)
-                jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
+            if (!--ct->reentrant_timing && measure_compile_time_enabled) {
+                auto end = jl_hrtime();
+                jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, end - compiler_start_time);
+            }
         }
         if (specfptr != 0)
             return jl_dump_fptr_asm(specfptr, raw_mc, asm_variant, debuginfo, binary);
@@ -1089,23 +1097,29 @@ namespace {
         OptimizerResultT operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) {
             TSM.withModuleDo([&](Module &M) {
                 uint64_t start_time = 0;
+                std::stringstream before_stats_ss;
+                bool should_dump_opt_stats = false;
                 {
                     auto stream = *jl_ExecutionEngine->get_dump_llvm_opt_stream();
                     if (stream) {
+                        // Ensures that we don't _just_ write the second part of the YAML object
+                        should_dump_opt_stats = true;
+                        // We use a stringstream to later atomically write a YAML object
+                        // without the need to hold the stream lock over the optimization
                         // Print LLVM function statistics _before_ optimization
                         // Print all the information about this invocation as a YAML object
-                        jl_printf(stream, "- \n");
+                        before_stats_ss << "- \n";
                         // We print the name and some statistics for each function in the module, both
                         // before optimization and again afterwards.
-                        jl_printf(stream, "  before: \n");
+                        before_stats_ss << "  before: \n";
                         for (auto &F : M.functions()) {
                             if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
                                 continue;
                             }
                             // Each function is printed as a YAML object with several attributes
-                            jl_printf(stream, "    \"%s\":\n", F.getName().str().c_str());
-                            jl_printf(stream, "        instructions: %u\n", F.getInstructionCount());
-                            jl_printf(stream, "        basicblocks: %zd\n", countBasicBlocks(F));
+                            before_stats_ss << "    \"" << F.getName().str().c_str() << "\":\n";
+                            before_stats_ss << "        instructions: " << F.getInstructionCount() << "\n";
+                            before_stats_ss << "        basicblocks: " << countBasicBlocks(F) << "\n";
                         }
 
                         start_time = jl_hrtime();
@@ -1122,7 +1136,8 @@ namespace {
                 uint64_t end_time = 0;
                 {
                     auto stream = *jl_ExecutionEngine->get_dump_llvm_opt_stream();
-                    if (stream) {
+                    if (stream && should_dump_opt_stats) {
+                        jl_printf(stream, "%s", before_stats_ss.str().c_str());
                         end_time = jl_hrtime();
                         jl_printf(stream, "  time_ns: %" PRIu64 "\n", end_time - start_time);
                         jl_printf(stream, "  optlevel: %d\n", optlevel);

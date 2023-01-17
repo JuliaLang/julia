@@ -1458,7 +1458,7 @@ public:
     bool external_linkage = false;
     const jl_cgparams_t *params = NULL;
 
-    std::vector<orc::ThreadSafeModule> llvmcall_modules;
+    std::vector<std::unique_ptr<Module>> llvmcall_modules;
 
     jl_codectx_t(LLVMContext &llvmctx, jl_codegen_params_t &params)
       : builder(llvmctx),
@@ -2073,22 +2073,21 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
     return jl_cgval_t(v, typ, new_tindex);
 }
 
-orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext context, bool imaging_mode, const DataLayout &DL, const Triple &triple)
+std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &context, bool imaging_mode, const DataLayout &DL, const Triple &triple)
 {
     ++ModulesCreated;
-    auto lock = context.getLock();
-    Module *m = new Module(name, *context.getContext());
-    orc::ThreadSafeModule TSM(std::unique_ptr<Module>(m), std::move(context));
+    auto m = std::make_unique<Module>(name, context);
     // Some linkers (*cough* OS X) don't understand DWARF v4, so we use v2 in
     // imaging mode. The structure of v4 is slightly nicer for debugging JIT
     // code.
     if (!m->getModuleFlag("Dwarf Version")) {
         int dwarf_version = 4;
-#ifdef _OS_DARWIN_
-        if (imaging_mode)
+    if (triple.isOSDarwin()) {
+        if (imaging_mode) {
             dwarf_version = 2;
-#endif
-        m->addModuleFlag(llvm::Module::Warning, "Dwarf Version", dwarf_version);
+        }
+    }
+    m->addModuleFlag(llvm::Module::Warning, "Dwarf Version", dwarf_version);
     }
     if (!m->getModuleFlag("Debug Info Version"))
         m->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
@@ -2105,7 +2104,7 @@ orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeConte
 #if defined(JL_DEBUG_BUILD) && JL_LLVM_VERSION >= 130000
     m->setStackProtectorGuard("global");
 #endif
-    return TSM;
+    return m;
 }
 
 static void jl_init_function(Function *F)
@@ -4886,7 +4885,7 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     ir = jl_uncompress_ir(closure_method, ci, (jl_array_t*)inferred);
 
     // TODO: Emit this inline and outline it late using LLVM's coroutine support.
-    orc::ThreadSafeModule closure_m = jl_create_llvm_module(
+    orc::ThreadSafeModule closure_m = jl_create_ts_module(
             name_from_method_instance(mi), ctx.emission_context.tsctx,
             ctx.emission_context.imaging,
             jl_Module->getDataLayout(), Triple(jl_Module->getTargetTriple()));
@@ -8108,14 +8107,15 @@ static jl_llvm_functions_t
 
     // link the dependent llvmcall modules, but switch their function's linkage to internal
     // so that they don't conflict when they show up in the execution engine.
-    for (auto &TSMod : ctx.llvmcall_modules) {
+    Linker L(*jl_Module);
+    for (auto &Mod : ctx.llvmcall_modules) {
         SmallVector<std::string, 1> Exports;
-        TSMod.withModuleDo([&](Module &Mod) {
-            for (const auto &F: Mod.functions())
-                if (!F.isDeclaration())
-                    Exports.push_back(F.getName().str());
-        });
-        jl_merge_module(TSM, std::move(TSMod));
+        for (const auto &F: Mod->functions())
+            if (!F.isDeclaration())
+                Exports.push_back(F.getName().str());
+        bool error = L.linkInModule(std::move(Mod));
+        assert(!error && "linking llvmcall modules failed");
+        (void)error;
         for (auto FN: Exports)
             jl_Module->getFunction(FN)->setLinkage(GlobalVariable::InternalLinkage);
     }
@@ -8318,7 +8318,7 @@ void jl_compile_workqueue(
                     src = jl_type_infer(codeinst->def, jl_atomic_load_acquire(&jl_world_counter), 0);
                     if (src) {
                         orc::ThreadSafeModule result_m =
-                        jl_create_llvm_module(name_from_method_instance(codeinst->def),
+                        jl_create_ts_module(name_from_method_instance(codeinst->def),
                             params.tsctx, params.imaging,
                             original.getDataLayout(), Triple(original.getTargetTriple()));
                         result.second = jl_emit_code(result_m, codeinst->def, src, src->rettype, params);
@@ -8327,7 +8327,7 @@ void jl_compile_workqueue(
                 }
                 else {
                     orc::ThreadSafeModule result_m =
-                        jl_create_llvm_module(name_from_method_instance(codeinst->def),
+                        jl_create_ts_module(name_from_method_instance(codeinst->def),
                             params.tsctx, params.imaging,
                             original.getDataLayout(), Triple(original.getTargetTriple()));
                     result.second = jl_emit_codeinst(result_m, codeinst, NULL, params);

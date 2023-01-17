@@ -632,16 +632,18 @@ static void write_mod_list(ios_t *s, jl_array_t *a)
     write_int32(s, 0);
 }
 
+// OPT_LEVEL should always be the upper bits
+#define OPT_LEVEL 6
+
 JL_DLLEXPORT uint8_t jl_cache_flags(void)
 {
-    // ??OOCDDP
+    // OOICCDDP
     uint8_t flags = 0;
-    flags |= (jl_options.use_pkgimages & 1);
-    flags |= (jl_options.debug_level & 3) << 1;
-    flags |= (jl_options.check_bounds & 1) << 2;
-    flags |= (jl_options.opt_level & 3) << 4;
-    // NOTES:
-    // In contrast to check-bounds, inline has no "observable effect"
+    flags |= (jl_options.use_pkgimages & 1); // 0-bit
+    flags |= (jl_options.debug_level & 3) << 1; // 1-2 bit
+    flags |= (jl_options.check_bounds & 3) << 3; // 3-4 bit
+    flags |= (jl_options.can_inline & 1) << 5; // 5-bit
+    flags |= (jl_options.opt_level & 3) << OPT_LEVEL; // 6-7 bit
     return flags;
 }
 
@@ -657,13 +659,13 @@ JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t flags)
         return 1;
     }
 
-    // 2. Check all flags that must be exact
-    uint8_t mask = (1 << 4)-1;
+    // 2. Check all flags, execept opt level must be exact
+    uint8_t mask = (1 << OPT_LEVEL)-1;
     if ((flags & mask) != (current_flags & mask))
         return 0;
     // 3. allow for higher optimization flags in cache
-    flags >>= 4;
-    current_flags >>= 4;
+    flags >>= OPT_LEVEL;
+    current_flags >>= OPT_LEVEL;
     return flags >= current_flags;
 }
 

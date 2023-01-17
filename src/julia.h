@@ -1943,7 +1943,7 @@ typedef struct _jl_task_t {
     size_t bufsz; // actual sizeof stkbuf
     uint64_t inference_start_time; // time when inference started
     uint16_t reentrant_inference; // How many times we've reentered inference
-    uint16_t reentrant_codegen; // How many times we've reentered codegen
+    uint16_t reentrant_timing; // How many times we've reentered timing
     unsigned int copy_stack:31; // sizeof stack for copybuf
     unsigned int started:1;
 } jl_task_t;
