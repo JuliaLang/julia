@@ -194,7 +194,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 conditionals[2][i] = tmerge(conditionals[2][i], cnd.elsetype)
             end
         end
-        if bail_out_call(interp, rettype, sv)
+        if bail_out_call(interp, rettype, sv, effects)
+            add_remark!(interp, sv, "One of the matched returned maximally imprecise information. Bailing on call.")
             break
         end
     end
@@ -838,6 +839,7 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
     elseif !result.effects.noinbounds && stmt_taints_inbounds_consistency(sv)
         # If the current statement is @inbounds or we propagate inbounds, the call's consistency
         # is tainted and not consteval eligible.
+        add_remark!(interp, sv, "[constprop] Concrete evel disabled for inbounds")
         return nothing
     end
     isoverlayed(method_table(interp)) && !is_nonoverlayed(result.effects) && return nothing

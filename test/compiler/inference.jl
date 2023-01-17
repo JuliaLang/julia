@@ -4697,3 +4697,10 @@ Base.@constprop :aggressive type_level_recurse1(x...) = x[1] == 2 ? 1 : (length(
 Base.@constprop :aggressive type_level_recurse2(x...) = type_level_recurse1(x...)
 type_level_recurse_entry() = Val{type_level_recurse1(1)}()
 @test Base.return_types(type_level_recurse_entry, ()) |> only == Val{1}
+
+# Test that inference doesn't give up if it can potentially refine effects,
+# even if the return type is Any.
+f_no_bail_effects_any(x::Any) = x
+f_no_bail_effects_any(x::NamedTuple{(:x,), Tuple{Any}}) = getfield(x, 1)
+g_no_bail_effects_any(x::Any) = f_no_bail_effects_any(x)
+@test Core.Compiler.is_total(Base.infer_effects(g_no_bail_effects_any, Tuple{Any}))
