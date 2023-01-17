@@ -273,12 +273,12 @@ static void jl_collect_methods(htable_t *mset, jl_array_t *new_specializations)
     }
 }
 
-static void jl_collect_new_roots(jl_array_t *roots, htable_t *mset, uint64_t key)
+static void jl_collect_new_roots(jl_array_t *roots, const htable_t *mset, uint64_t key)
 {
     size_t i, sz = mset->size;
     int nwithkey;
     jl_method_t *m;
-    void **table = mset->table;
+    void *const *table = mset->table;
     jl_array_t *newroots = NULL;
     JL_GC_PUSH1(&newroots);
     for (i = 0; i < sz; i += 2) {
@@ -369,6 +369,8 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure)
     if (s && !jl_object_in_image((jl_value_t*)m->module)) {
         jl_array_ptr_1d_push(s, (jl_value_t*)m);
     }
+    if (edges_map == NULL)
+        return 1;
     jl_svec_t *specializations = m->specializations;
     size_t i, l = jl_svec_len(specializations);
     for (i = 0; i < l; i++) {
@@ -379,9 +381,14 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure)
     return 1;
 }
 
-static void jl_collect_methtable_from_mod(jl_array_t *s, jl_methtable_t *mt)
+static int jl_collect_methtable_from_mod(jl_methtable_t *mt, void *env)
 {
-    jl_typemap_visitor(mt->defs, jl_collect_methcache_from_mod, (void*)s);
+    if (!jl_object_in_image((jl_value_t*)mt))
+        env = NULL; // do not collect any methods from here
+    jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), jl_collect_methcache_from_mod, env);
+    if (env && edges_map)
+        jl_collect_missing_backedges(mt);
+    return 1;
 }
 
 // Collect methods of external functions defined by modules in the worklist
@@ -389,50 +396,7 @@ static void jl_collect_methtable_from_mod(jl_array_t *s, jl_methtable_t *mt)
 // Also collect relevant backedges
 static void jl_collect_extext_methods_from_mod(jl_array_t *s, jl_module_t *m)
 {
-    if (s && !jl_object_in_image((jl_value_t*)m))
-        s = NULL; // do not collect any methods
-    jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
-    for (size_t i = 0; i < jl_svec_len(table); i++) {
-        jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
-        if ((void*)b == jl_nothing)
-            break;
-        jl_sym_t *name = b->globalref->name;
-        if (b->owner == b && b->value && b->constp) {
-            jl_value_t *bv = jl_unwrap_unionall(b->value);
-            if (jl_is_datatype(bv)) {
-                jl_typename_t *tn = ((jl_datatype_t*)bv)->name;
-                if (tn->module == m && tn->name == name && tn->wrapper == b->value) {
-                    jl_methtable_t *mt = tn->mt;
-                    if (mt != NULL &&
-                            (jl_value_t*)mt != jl_nothing &&
-                            (mt != jl_type_type_mt && mt != jl_nonfunction_mt)) {
-                        assert(mt->module == tn->module);
-                        jl_collect_methtable_from_mod(s, mt);
-                        if (s)
-                            jl_collect_missing_backedges(mt);
-                    }
-                }
-            }
-            else if (jl_is_module(b->value)) {
-                jl_module_t *child = (jl_module_t*)b->value;
-                if (child != m && child->parent == m && child->name == name) {
-                    // this is the original/primary binding for the submodule
-                    jl_collect_extext_methods_from_mod(s, (jl_module_t*)b->value);
-                }
-            }
-            else if (jl_is_mtable(b->value)) {
-                jl_methtable_t *mt = (jl_methtable_t*)b->value;
-                if (mt->module == m && mt->name == name) {
-                    // this is probably an external method table, so let's assume so
-                    // as there is no way to precisely distinguish them,
-                    // and the rest of this serializer does not bother
-                    // to handle any method tables specially
-                    jl_collect_methtable_from_mod(s, (jl_methtable_t*)bv);
-                }
-            }
-        }
-        table = jl_atomic_load_relaxed(&m->bindings);
-    }
+    foreach_mtable_in_module(m, jl_collect_methtable_from_mod, s);
 }
 
 static void jl_record_edges(jl_method_instance_t *caller, arraylist_t *wq, jl_array_t *edges)
