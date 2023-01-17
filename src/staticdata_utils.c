@@ -1231,3 +1231,56 @@ JL_DLLEXPORT uint64_t jl_read_verify_header(ios_t *s, uint8_t *pkgimage, int64_t
     }
     return checksum;
 }
+
+// Returns `depmodidxs` where `udeps[depmodidxs[i]]` corresponds to `build_ids[i]`
+static jl_array_t *image_to_depmodidx(jl_array_t *build_ids,  jl_array_t *udeps)
+{
+    if (!udeps || !build_ids)
+        return NULL;
+    size_t j = 0, lbids = jl_array_len(build_ids), ldeps = jl_array_len(udeps);
+    uint64_t *bids = (uint64_t*)jl_array_data(build_ids);
+    jl_array_t *depmodidxs = jl_alloc_array_1d(jl_array_int32_type, lbids);
+    int32_t *dmidxs = (int32_t*)jl_array_data(depmodidxs);
+    for (size_t i = 0; i < lbids; i++) {
+        dmidxs[i] = -1;
+        uint64_t bid = bids[i];
+        j = 0;   // sad that this is of O(M*N)
+        while (j < ldeps) {
+            jl_value_t *deptuple = jl_array_ptr_ref(udeps, j);
+            jl_module_t *depmod = (jl_module_t*)jl_fieldref(deptuple, 0);  // evaluating module
+            jl_module_t *depmod_top = depmod;
+            while (depmod_top->parent != jl_main_module && depmod_top->parent != depmod_top)
+                depmod_top = depmod_top->parent;
+            if (depmod_top == jl_base_module) {
+                dmidxs[i] = 0;
+                break;
+            }
+            if (depmod_top->build_id.lo == bid) {
+                dmidxs[i] = j;
+                break;
+            }
+            j++;
+        }
+        assert(dmidxs[i] >= 0);
+    }
+    return depmodidxs;
+}
+
+// Returns `imageidxs` where `imageidxs[i]` is the blob corresponding to `depmods[i]`
+static jl_array_t *depmod_to_imageidx(jl_array_t *depmods)
+{
+    if (!depmods)
+        return NULL;
+    size_t ldeps = jl_array_len(depmods);
+    jl_array_t *imageidxs = jl_alloc_array_1d(jl_array_int32_type, ldeps);
+    int32_t *imgidxs = (int32_t*)jl_array_data(imageidxs);
+    for (size_t i = 0; i < ldeps; i++) {
+        imgidxs[i] = -1;
+        jl_value_t *depmod = jl_array_ptr_ref(depmods, i);
+        assert(jl_is_module(depmod));
+        size_t j = external_blob_index(depmod);
+        assert(j < 1<<31);
+        imgidxs[i] = (int32_t)j;
+    }
+    return imageidxs;
+}
