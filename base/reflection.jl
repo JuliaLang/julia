@@ -1858,7 +1858,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
                 m = match.method
                 m === minmax && continue
                 if !morespecific(minmax.sig, m.sig)
-                    if match.full_covers || !morespecific(m.sig, minmax.sig)
+                    if match.fully_covers || !morespecific(m.sig, minmax.sig)
                         return true
                     end
                 end
