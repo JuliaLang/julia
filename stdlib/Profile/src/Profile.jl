@@ -1250,7 +1250,7 @@ every object as one so they can be easily counted. Otherwise, report the
 actual size.
 """
 function take_heap_snapshot(io::IOStream, all_one::Bool=false)
-    @Base._lock_ios(io, ccall(:jl_gc_take_heap_snapshot, Cvoid, (Ptr{Cvoid}, Cchar), io.handle, Cchar(all_one)))
+    Base.@_lock_ios(io, ccall(:jl_gc_take_heap_snapshot, Cvoid, (Ptr{Cvoid}, Cchar), io.handle, Cchar(all_one)))
 end
 function take_heap_snapshot(filepath::String, all_one::Bool=false)
     open(filepath, "w") do io
