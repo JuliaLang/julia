@@ -2178,6 +2178,7 @@ STATIC_INLINE void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent
     gc_try_claim_and_push(mq, bindings, &nptr);
     jl_value_t *bindingkeyset = (jl_value_t *)jl_atomic_load_relaxed(&mb_parent->bindingkeyset);
     gc_try_claim_and_push(mq, bindingkeyset, &nptr);
+    gc_try_claim_and_push(mq, (jl_value_t *)mb_parent->parent, &nptr);
     size_t nusings = mb_parent->usings.len;
     if (nusings > 0) {
         // this is only necessary because bindings for "using" modules
