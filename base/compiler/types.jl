@@ -153,7 +153,7 @@ struct InferenceParams
 end
 function InferenceParams(
     params::InferenceParams = InferenceParams( # default constructor
-        #=max_methods::Int=# 3,
+        #=max_methods::Int=# 1,
         #=max_union_splitting::Int=# 4,
         #=max_apply_union_enum::Int=# 8,
         #=max_tuple_splat::Int=# 32,
