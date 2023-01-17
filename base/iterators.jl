@@ -225,6 +225,13 @@ end
     (i, n[1]), (i-1, ri, n[2])
 end
 
+keys(e::Enumerate) = OneTo(length(e.itr))
+
+# This will work even when keys doesn't (due to length being undefined)
+pairs(e::Enumerate) = map(e) do (i, el)
+    Pair(i, el)
+end
+
 """
     pairs(IndexLinear(), A)
     pairs(IndexCartesian(), A)

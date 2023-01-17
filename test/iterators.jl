@@ -80,12 +80,25 @@ let b = IOBuffer("foo\n")
     @test collect(Base.EachLine(b, keep=true, ondone=()->0)) == ["foo\n"]
 end
 
-# enumerate (issue #6284)
-let b = IOBuffer("1\n2\n3\n"), a = []
-    for (i,x) in enumerate(eachline(b))
-        push!(a, (i,x))
+@testset "Iterators.enumerate" begin
+    # issue #6284
+    let b = IOBuffer("1\n2\n3\n"), a = []
+        for (i,x) in enumerate(eachline(b))
+            push!(a, (i,x))
+        end
+        @test a == [(1,"1"),(2,"2"),(3,"3")]
     end
-    @test a == [(1,"1"),(2,"2"),(3,"3")]
+
+    # keys and pairs
+    let it = enumerate(zip(1:2, 3:4))
+        @test collect(keys(it)) == [1, 2]
+        @test collect(pairs(it)) == [1=>(1,3), 2=>(2,4)]
+    end
+
+    # pairs when length (and hence keys) is undefined
+    let b = IOBuffer("1\n2\n3\n"), it=enumerate(eachline(b))
+        @test collect(pairs(it)) == [1=>"1", 2=>"2", 3=>"3"]
+    end
 end
 
 # zip eachline (issue #7369)
