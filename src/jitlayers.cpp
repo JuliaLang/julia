@@ -1103,6 +1103,9 @@ namespace {
         int optlevel;
         PMCreator(TargetMachine &TM, int optlevel) JL_NOTSAFEPOINT
             : TM(cantFail(createJTMBFromTM(TM, optlevel).createTargetMachine())), optlevel(optlevel) {}
+        // overload for newpm compatibility
+        PMCreator(TargetMachine &TM, int optlevel, std::vector<std::function<void()>> &) JL_NOTSAFEPOINT
+            : PMCreator(TM, optlevel) {}
         PMCreator(const PMCreator &other) JL_NOTSAFEPOINT
             : PMCreator(*other.TM, other.optlevel) {}
         PMCreator(PMCreator &&other) JL_NOTSAFEPOINT
@@ -1128,18 +1131,23 @@ namespace {
     struct PMCreator {
         orc::JITTargetMachineBuilder JTMB;
         OptimizationLevel O;
-        PMCreator(TargetMachine &TM, int optlevel) JL_NOTSAFEPOINT
-            : JTMB(createJTMBFromTM(TM, optlevel)), O(getOptLevel(optlevel)) {}
+        std::vector<std::function<void()>> &printers;
+        PMCreator(TargetMachine &TM, int optlevel, std::vector<std::function<void()>> &printers) JL_NOTSAFEPOINT
+            : JTMB(createJTMBFromTM(TM, optlevel)), O(getOptLevel(optlevel)), printers(printers) {}
 
         auto operator()() JL_NOTSAFEPOINT {
-            return std::make_unique<NewPM>(cantFail(JTMB.createTargetMachine()), O);
+            auto NPM = std::make_unique<NewPM>(cantFail(JTMB.createTargetMachine()), O);
+            printers.push_back([NPM = NPM.get()]() JL_NOTSAFEPOINT {
+                NPM->printTimers();
+            });
+            return NPM;
         }
     };
 #endif
 
     struct OptimizerT {
-        OptimizerT(TargetMachine &TM, int optlevel) JL_NOTSAFEPOINT
-            : optlevel(optlevel), PMs(PMCreator(TM, optlevel)) {}
+        OptimizerT(TargetMachine &TM, int optlevel, std::vector<std::function<void()>> &printers) JL_NOTSAFEPOINT
+            : optlevel(optlevel), PMs(PMCreator(TM, optlevel, printers)) {}
         OptimizerT(OptimizerT&) JL_NOTSAFEPOINT = delete;
         OptimizerT(OptimizerT&&) JL_NOTSAFEPOINT = default;
 
@@ -1247,11 +1255,11 @@ llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
     return jl_data_layout;
 }
 
-JuliaOJIT::PipelineT::PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel)
+JuliaOJIT::PipelineT::PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel, std::vector<std::function<void()>> &PrintLLVMTimers)
   : CompileLayer(BaseLayer.getExecutionSession(), BaseLayer,
       std::make_unique<CompilerT>(orc::irManglingOptionsFromTargetOptions(TM.Options), TM, optlevel)),
     OptimizeLayer(CompileLayer.getExecutionSession(), CompileLayer,
-            llvm::orc::IRTransformLayer::TransformFunction(OptimizerT(TM, optlevel))) {}
+            llvm::orc::IRTransformLayer::TransformFunction(OptimizerT(TM, optlevel, PrintLLVMTimers))) {}
 
 #ifdef _COMPILER_ASAN_ENABLED_
 int64_t ___asan_globals_registered;
@@ -1289,10 +1297,10 @@ JuliaOJIT::JuliaOJIT()
 #endif
     LockLayer(ObjectLayer),
     Pipelines{
-        std::make_unique<PipelineT>(LockLayer, *TM, 0),
-        std::make_unique<PipelineT>(LockLayer, *TM, 1),
-        std::make_unique<PipelineT>(LockLayer, *TM, 2),
-        std::make_unique<PipelineT>(LockLayer, *TM, 3),
+        std::make_unique<PipelineT>(LockLayer, *TM, 0, PrintLLVMTimers),
+        std::make_unique<PipelineT>(LockLayer, *TM, 1, PrintLLVMTimers),
+        std::make_unique<PipelineT>(LockLayer, *TM, 2, PrintLLVMTimers),
+        std::make_unique<PipelineT>(LockLayer, *TM, 3, PrintLLVMTimers),
     },
     OptSelLayer(Pipelines)
 {
@@ -1591,6 +1599,16 @@ size_t JuliaOJIT::getTotalBytes() const
     return getRTDyldMemoryManagerTotalBytes(MemMgr.get());
 }
 #endif
+
+void JuliaOJIT::printTimers()
+{
+#ifdef JL_USE_NEW_PM
+    for (auto &printer : PrintLLVMTimers) {
+        printer();
+    }
+#endif
+    reportAndResetTimings();
+}
 
 JuliaOJIT *jl_ExecutionEngine;
 

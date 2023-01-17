@@ -600,6 +600,10 @@ void NewPM::run(Module &M) {
 #endif
 }
 
+void NewPM::printTimers() {
+    SI.getTimePasses().print();
+}
+
 OptimizationLevel getOptLevel(int optlevel) {
     switch (std::min(std::max(optlevel, 0), 3)) {
         case 0:

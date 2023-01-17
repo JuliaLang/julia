@@ -107,6 +107,8 @@ struct NewPM {
     ~NewPM() JL_NOTSAFEPOINT;
 
     void run(Module &M) JL_NOTSAFEPOINT;
+
+    void printTimers() JL_NOTSAFEPOINT;
 };
 
 struct AnalysisManagers {
@@ -424,7 +426,7 @@ public:
         std::unique_ptr<WNMutex> mutex;
     };
     struct PipelineT {
-        PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel);
+        PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel, std::vector<std::function<void()>> &PrintLLVMTimers);
         CompileLayerT CompileLayer;
         OptimizeLayerT OptimizeLayer;
     };
@@ -494,6 +496,7 @@ public:
     TargetIRAnalysis getTargetIRAnalysis() const JL_NOTSAFEPOINT;
 
     size_t getTotalBytes() const JL_NOTSAFEPOINT;
+    void printTimers() JL_NOTSAFEPOINT;
 
     jl_locked_stream &get_dump_emitted_mi_name_stream() JL_NOTSAFEPOINT {
         return dump_emitted_mi_name_stream;
@@ -525,6 +528,8 @@ private:
     jl_locked_stream dump_emitted_mi_name_stream;
     jl_locked_stream dump_compiles_stream;
     jl_locked_stream dump_llvm_opt_stream;
+
+    std::vector<std::function<void()>> PrintLLVMTimers;
 
     ResourcePool<orc::ThreadSafeContext, 0, std::queue<orc::ThreadSafeContext>> ContextPool;
 
