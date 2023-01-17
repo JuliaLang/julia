@@ -26,6 +26,10 @@ line. A common pattern includes the following elements:
 
     end
     ```
+    The key here is to encapsulate the code in a module.
+    If it were not so, and the code was ran directly in the `Main` module of the REPL,
+    you would not be able to remove methods or edit `struct` definitions, without restarting Julia.
+    
   * **Put your test code in another file.** Create another file, say `tst.jl`, which looks like
 
     ```julia
