@@ -39,9 +39,9 @@ function profile_printing_listener()
             wait(PROFILE_PRINT_COND[])
             peek_report[]()
             if get(ENV, "JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", nothing) === "1"
-                println("Saving heap snapshot...")
+                println(stderr, "Saving heap snapshot...")
                 fname = take_heap_snapshot()
-                println("Heap snapshot saved to `$(fname)`")
+                println(stderr, "Heap snapshot saved to `$(fname)`")
             end
         end
     catch ex
@@ -54,9 +54,9 @@ end
 # An internal function called to show the report after an information request (SIGINFO or SIGUSR1).
 function _peek_report()
     iob = IOBuffer()
-    ioc = IOContext(IOContext(iob, stdout), :displaysize=>displaysize(stdout))
+    ioc = IOContext(IOContext(iob, stderr), :displaysize=>displaysize(stderr))
     print(ioc, groupby = [:thread, :task])
-    Base.print(stdout, String(take!(iob)))
+    Base.print(stderr, String(take!(iob)))
 end
 # This is a ref so that it can be overridden by other profile info consumers.
 const peek_report = Ref{Function}(_peek_report)
