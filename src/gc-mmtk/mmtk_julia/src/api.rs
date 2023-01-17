@@ -317,12 +317,12 @@ pub extern "C" fn run_finalizers_for_obj(obj: ObjectReference) {
     }
 
     for obj in finalizable_objs {
-        unsafe { ((*UPCALLS).run_finalizer_function)(obj.0, obj.1, obj.2) }
         {
             let mut fin_roots = FINALIZER_ROOTS.write().unwrap();
             let removed = fin_roots.remove(&obj);
             assert!(removed);
         }
+        unsafe { ((*UPCALLS).run_finalizer_function)(obj.0, obj.1, obj.2) }
     }
 
     if !finalizers_running {

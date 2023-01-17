@@ -56,7 +56,8 @@ impl Scanning<JuliaVM> for VMScanning {
 
         // processing finalizer roots
         for obj in fin_roots.iter() {
-            if !obj.2 { // not a void pointer
+            if !obj.2 {
+                // not a void pointer
                 let obj_ref = ObjectReference::from_raw_address((*obj).1);
                 roots_to_scan.push(obj_ref);
             }

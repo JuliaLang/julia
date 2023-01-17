@@ -24,7 +24,8 @@ impl Finalizable for JuliaFinalizableObject {
     }
     fn keep_alive<E: ProcessEdgesWork>(&mut self, trace: &mut E) {
         self.set_reference(trace.trace_object(self.get_reference()));
-        if !self.2 { // not a void pointer
+        if !self.2 {
+            // not a void pointer
             trace.trace_object(ObjectReference::from_raw_address(self.1));
         }
     }
