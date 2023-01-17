@@ -1173,7 +1173,7 @@ _flatteneltype(I, ::HasEltype) = IteratorEltype(eltype(I))
 _flatteneltype(I, et) = EltypeUnknown()
 # More refined handling of eltype and IteratorEltype for heterogeneous inner iterators,
 # when the outer iterator is a tuple.
-eltype(::Type{Flatten{I}}) where {I <: Tuple} = Base.typejoin(map(eltype, fieldtypes(I))...)
+eltype(::Type{Flatten{I}}) where {I <: Tuple} = eltype(Tuple{map(eltype, fieldtypes(I))...})
 IteratorEltype(::Type{Flatten{I}}) where {I <: Tuple} = and_iteratoreltype(map(IteratorEltype, fieldtypes(I))...)
 
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:NTuple{N,Any}}) where {N} = HasLength()
