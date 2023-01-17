@@ -51,7 +51,8 @@ Standard library changes
   instances behave like function-based, matrix-backed linear operators, and hence don't
   allow for efficient indexing. Also, many `AbstractQ` types can act on vectors/matrices
   of different size, acting like a matrix with context-dependent size. With this change,
-  `AbstractQ` has a well-defined API that is described in detail in the Julia documentation
+  `AbstractQ` has a well-defined API that is described in detail in the
+  [Julia documentation](https://docs.julialang.org/en/v1/stdlib/LinearAlgebra/#man-linalg-abstractq)
   ([#46196]).
 
 #### Printf
