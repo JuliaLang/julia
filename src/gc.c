@@ -777,7 +777,7 @@ STATIC_INLINE void gc_queue_big_marked(jl_ptls_t ptls, bigval_t *hdr,
     ptls->gc_cache.nbig_obj = nobj + 1;
 }
 
-// TODO: write docstring
+// Atomically set the mark bit for object and return whether it was previously unmarked
 FORCE_INLINE int gc_try_setmark_tag(jl_taggedvalue_t *o, uint8_t mark_mode) JL_NOTSAFEPOINT
 {
     assert(gc_marked(mark_mode));
