@@ -82,6 +82,10 @@ ifeq ($(DARWIN_FRAMEWORK), 1)
 else
 	@echo "const DARWIN_FRAMEWORK = false" >> $@
 endif
+ifeq ($(OS), Darwin)
+	@echo "const MACOS_PRODUCT_VERSION = \"$(shell sw_vers -productVersion)\"" >> $@
+	@echo "const MACOS_PLATFORM_VERSION = \"$(shell xcrun --show-sdk-version)\"" >> $@
+endif
 	@echo "const BUILD_TRIPLET = \"$(BB_TRIPLET_LIBGFORTRAN_CXXABI)\"" >> $@
 
 	@# This to ensure that we always rebuild this file, but only when it is modified do we touch build_h.jl,
@@ -215,8 +219,18 @@ else ifneq ($(USE_SYSTEM_OPENLIBM),0)
 $(eval $(call symlink_system_library,OPENLIBM,$(LIBMNAME)))
 endif
 
-ifeq ($(APPLE_ARCH),arm64)
+# On macOS, libgcc_s has soversion 1.1 always on aarch64 and only for GCC 12+
+# (-> libgfortran 5) on x86_64
+ifeq ($(OS),Darwin)
+ifeq ($(ARCH),aarch64)
 $(eval $(call symlink_system_library,CSL,libgcc_s,1.1))
+else
+ifeq ($(LIBGFORTRAN_VERSION),5)
+$(eval $(call symlink_system_library,CSL,libgcc_s,1.1))
+else
+$(eval $(call symlink_system_library,CSL,libgcc_s,1))
+endif
+endif
 else
 $(eval $(call symlink_system_library,CSL,libgcc_s,1))
 endif

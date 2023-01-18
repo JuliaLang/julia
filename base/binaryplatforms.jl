@@ -278,7 +278,7 @@ get_compare_strategy(p::AbstractPlatform, key::String, default = compare_default
     compare_default(a::String, b::String, a_requested::Bool, b_requested::Bool)
 
 Default comparison strategy that falls back to `a == b`.  This only ever happens if both
-`a` and `b` request this strategy, as any other strategy is preferrable to this one.
+`a` and `b` request this strategy, as any other strategy is preferable to this one.
 """
 function compare_default(a::String, b::String, a_requested::Bool, b_requested::Bool)
     return a == b
@@ -584,6 +584,7 @@ Sys.islinux(p::AbstractPlatform) = os(p) == "linux"
 Sys.iswindows(p::AbstractPlatform) = os(p) == "windows"
 Sys.isfreebsd(p::AbstractPlatform) = os(p) == "freebsd"
 Sys.isbsd(p::AbstractPlatform) = os(p) ∈ ("freebsd", "macos")
+Sys.isunix(p::AbstractPlatform) = Sys.isbsd(p) || Sys.islinux(p)
 
 const arch_mapping = Dict(
     "x86_64" => "(x86_|amd)64",
@@ -872,7 +873,7 @@ function detect_libstdcxx_version(max_minor_version::Int=30)
     end
 
     # Brute-force our way through GLIBCXX_* symbols to discover which version we're linked against
-    hdl = Libdl.dlopen(first(libstdcxx_paths))
+    hdl = Libdl.dlopen(first(libstdcxx_paths))::Ptr{Cvoid}
     # Try all GLIBCXX versions down to GCC v4.8:
     # https://gcc.gnu.org/onlinedocs/libstdc++/manual/abi.html
     for minor_version in max_minor_version:-1:18

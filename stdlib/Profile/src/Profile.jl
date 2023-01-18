@@ -31,13 +31,18 @@ macro profile(ex)
     end
 end
 
-# triggers printing the report after a SIGINFO/SIGUSR1 profile request
+# triggers printing the report and (optionally) saving a heap snapshot after a SIGINFO/SIGUSR1 profile request
 const PROFILE_PRINT_COND = Ref{Base.AsyncCondition}()
 function profile_printing_listener()
     try
         while true
             wait(PROFILE_PRINT_COND[])
             peek_report[]()
+            if get(ENV, "JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", nothing) === "1"
+                println(stderr, "Saving heap snapshot...")
+                fname = take_heap_snapshot()
+                println(stderr, "Heap snapshot saved to `$(fname)`")
+            end
         end
     catch ex
         if !isa(ex, InterruptException)
@@ -49,9 +54,9 @@ end
 # An internal function called to show the report after an information request (SIGINFO or SIGUSR1).
 function _peek_report()
     iob = IOBuffer()
-    ioc = IOContext(IOContext(iob, stdout), :displaysize=>displaysize(stdout))
+    ioc = IOContext(IOContext(iob, stderr), :displaysize=>displaysize(stderr))
     print(ioc, groupby = [:thread, :task])
-    Base.print(stdout, String(take!(iob)))
+    Base.print(stderr, String(take!(iob)))
 end
 # This is a ref so that it can be overridden by other profile info consumers.
 const peek_report = Ref{Function}(_peek_report)
@@ -1245,7 +1250,7 @@ every object as one so they can be easily counted. Otherwise, report the
 actual size.
 """
 function take_heap_snapshot(io::IOStream, all_one::Bool=false)
-    @Base._lock_ios(io, ccall(:jl_gc_take_heap_snapshot, Cvoid, (Ptr{Cvoid}, Cchar), io.handle, Cchar(all_one)))
+    Base.@_lock_ios(io, ccall(:jl_gc_take_heap_snapshot, Cvoid, (Ptr{Cvoid}, Cchar), io.handle, Cchar(all_one)))
 end
 function take_heap_snapshot(filepath::String, all_one::Bool=false)
     open(filepath, "w") do io

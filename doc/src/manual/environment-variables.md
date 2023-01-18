@@ -162,9 +162,13 @@ The absolute path `REPL.find_hist_file()` of the REPL's history file. If
 $(DEPOT_PATH[1])/logs/repl_history.jl
 ```
 
-### `JULIA_MAX_NUM_PRECOMPILE_FILES`
+### [`JULIA_MAX_NUM_PRECOMPILE_FILES`](@id env-max-num-precompile-files)
 
 Sets the maximum number of different instances of a single package that are to be stored in the precompile cache (default = 10).
+
+### `JULIA_VERBOSE_LINKING`
+
+If set to true, linker commands will be displayed during precompilation.
 
 ## Pkg.jl
 

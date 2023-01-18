@@ -28,7 +28,7 @@
 #include <llvm/InitializePasses.h>
 
 #include "passes.h"
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 #include "julia.h"
 #include "julia_internal.h"
 #include "llvm-pass-helpers.h"
@@ -58,6 +58,7 @@ static void removeGCPreserve(CallInst *call, Instruction *val)
     ++RemovedGCPreserve;
     auto replace = Constant::getNullValue(val->getType());
     call->replaceUsesOfWith(val, replace);
+    call->setAttributes(AttributeList());
     for (auto &arg: call->args()) {
         if (!isa<Constant>(arg.get())) {
             return;
@@ -661,8 +662,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
                 }
                 return;
             }
-            if (pass.write_barrier_func == callee ||
-                pass.write_barrier_binding_func == callee) {
+            if (pass.write_barrier_func == callee) {
                 ++RemovedWriteBarriers;
                 call->eraseFromParent();
                 return;
@@ -770,8 +770,7 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
                 call->eraseFromParent();
                 return;
             }
-            if (pass.write_barrier_func == callee ||
-                pass.write_barrier_binding_func == callee) {
+            if (pass.write_barrier_func == callee) {
                 ++RemovedWriteBarriers;
                 call->eraseFromParent();
                 return;
@@ -1069,8 +1068,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 call->eraseFromParent();
                 return;
             }
-            if (pass.write_barrier_func == callee ||
-                pass.write_barrier_binding_func == callee) {
+            if (pass.write_barrier_func == callee) {
                 ++RemovedWriteBarriers;
                 call->eraseFromParent();
                 return;
@@ -1093,7 +1091,6 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 }
                 auto new_call = builder.CreateCall(pass.gc_preserve_begin_func, operands);
                 new_call->takeName(call);
-                new_call->setAttributes(call->getAttributes());
                 call->replaceAllUsesWith(new_call);
                 call->eraseFromParent();
                 return;

@@ -1020,7 +1020,7 @@ end
 
 else
 
-@test_broken "cfunction: no support for closures on this platform"
+@test_broken "cfunction: no support for closures on this platform" === nothing
 
 end
 
@@ -1793,7 +1793,7 @@ end
     @test_throws ArgumentError("args in @ccall need type annotations. 'x' doesn't have one.") ccall_macro_parse(:( foo(x)::Cint ))
     # missing type annotations on varargs arguments
     @test_throws ArgumentError("args in @ccall need type annotations. 'y' doesn't have one.") ccall_macro_parse(:( foo(x::Cint ; y)::Cint ))
-    # no reqired args on varargs call
+    # no required args on varargs call
     @test_throws ArgumentError("C ABI prohibits vararg without one required argument") ccall_macro_parse(:( foo(; x::Cint)::Cint ))
     # not a function pointer
     @test_throws ArgumentError("interpolated function `PROGRAM_FILE` was not a Ptr{Cvoid}, but String") @ccall $PROGRAM_FILE("foo"::Cstring)::Cvoid
@@ -1921,7 +1921,7 @@ end
 end
 
 @testset "ccall_effects" begin
-    ctest_total(x) = @Base.assume_effects :total @ccall libccalltest.ctest(x::Complex{Int})::Complex{Int}
+    ctest_total(x) = Base.@assume_effects :total @ccall libccalltest.ctest(x::Complex{Int})::Complex{Int}
     ctest_total_const() = Val{ctest_total(1 + 2im)}()
     Core.Compiler.return_type(ctest_total_const, Tuple{}) == Val{2 + 0im}
 end

@@ -674,8 +674,13 @@ function do_broken_test(result::ExecutionResult, orig_expr)
     # Assume the test is broken and only change if the result is true
     if isa(result, Returned)
         value = result.value
-        if isa(value, Bool) && value
-            testres = Error(:test_unbroken, orig_expr, value, nothing, result.source)
+        if isa(value, Bool)
+            if value
+                testres = Error(:test_unbroken, orig_expr, value, nothing, result.source)
+            end
+        else
+            # If the result is non-Boolean, this counts as an Error
+            testres = Error(:test_nonbool, orig_expr, value, nothing, result.source)
         end
     end
     record(get_testset(), testres)
@@ -1309,7 +1314,7 @@ end
     @testset [CustomTestSet] [option=val  ...] ["description"] begin ... end
     @testset [CustomTestSet] [option=val  ...] ["description \$v"] for v in (...) ... end
     @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] for v in (...), w in (...) ... end
-    @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] foo()
+    @testset [CustomTestSet] [option=val  ...] ["description"] foo()
     @testset let v = (...) ... end
 
 # With begin/end or function call
@@ -1327,12 +1332,12 @@ also be used for any nested `@testset` invocations. The given options are only
 applied to the test set where they are given. The default test set type
 accepts three boolean options:
 - `verbose`: if `true`, the result summary of the nested testsets is shown even
-when they all pass (the default is `false`).
+  when they all pass (the default is `false`).
 - `showtiming`: if `true`, the duration of each displayed testset is shown
-(the default is `true`).
+  (the default is `true`).
 - `failfast`: if `true`, any test failure or error will cause the testset and any
-child testsets to return immediately (the default is `false`). This can also be set
-globally via the env var `JULIA_TEST_FAILFAST`.
+  child testsets to return immediately (the default is `false`).
+  This can also be set globally via the env var `JULIA_TEST_FAILFAST`.
 
 !!! compat "Julia 1.8"
     `@testset foo()` requires at least Julia 1.8.
@@ -1342,7 +1347,8 @@ globally via the env var `JULIA_TEST_FAILFAST`.
 
 The description string accepts interpolation from the loop indices.
 If no description is provided, one is constructed based on the variables.
-If a function call is provided, its name will be used. Explicit description strings override this behavior.
+If a function call is provided, its name will be used.
+Explicit description strings override this behavior.
 
 By default the `@testset` macro will return the testset object itself, though
 this behavior can be customized in other testset types. If a `for` loop is used
@@ -1413,7 +1419,7 @@ macro testset(args...)
         error("Expected function call, begin/end block or for loop as argument to @testset")
     end
 
-    FAIL_FAST[] = something(tryparse(Bool, get(ENV, "JULIA_TEST_FAILFAST", "false")), false)
+    FAIL_FAST[] = Base.get_bool_env("JULIA_TEST_FAILFAST", false)
 
     if tests.head === :for
         return testset_forloop(args, tests, __source__)
@@ -1850,7 +1856,7 @@ function detect_ambiguities(mods::Module...;
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)
             m.sig == Tuple && continue # ignore Builtins
-            is_in_mods(m.module, recursive, mods) || continue
+            is_in_mods(parentmodule(m), recursive, mods) || continue
             world = Base.get_world_counter()
             ambig = Ref{Int32}(0)
             ms = Base._methods_by_ftype(m.sig, nothing, -1, world, true, Ref(typemin(UInt)), Ref(typemax(UInt)), ambig)::Vector
@@ -1883,7 +1889,7 @@ function detect_ambiguities(mods::Module...;
             f = Base.unwrap_unionall(getfield(mod, n))
             if isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
                 push!(work, f)
-            elseif isa(f, DataType) && isdefined(f.name, :mt) && f.name.module === mod && f.name.name === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
+            elseif isa(f, DataType) && isdefined(f.name, :mt) && parentmodule(f) === mod && nameof(f) === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
                 examine(f.name.mt)
             end
         end
@@ -1904,8 +1910,8 @@ be suppressed by supplying a collection of `GlobalRef`s for which
 the warning can be skipped. For example, setting
 
 ```
-allow_undefineds = Set([GlobalRef(Base, :active_repl),
-                        GlobalRef(Base, :active_repl_backend)])
+allowed_undefineds = Set([GlobalRef(Base, :active_repl),
+                          GlobalRef(Base, :active_repl_backend)])
 ```
 
 would suppress warnings about `Base.active_repl` and
@@ -1922,7 +1928,7 @@ function detect_unbound_args(mods...;
     mods = collect(mods)::Vector{Module}
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)
-            is_in_mods(m.module, recursive, mods) || continue
+            is_in_mods(parentmodule(m), recursive, mods) || continue
             has_unbound_vars(m.sig) || continue
             tuple_sig = Base.unwrap_unionall(m.sig)::DataType
             if Base.isvatuple(tuple_sig)
@@ -1954,7 +1960,7 @@ function detect_unbound_args(mods...;
             f = Base.unwrap_unionall(getfield(mod, n))
             if isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
                 push!(work, f)
-            elseif isa(f, DataType) && isdefined(f.name, :mt) && f.name.module === mod && f.name.name === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
+            elseif isa(f, DataType) && isdefined(f.name, :mt) && parentmodule(f) === mod && nameof(f) === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
                 examine(f.name.mt)
             end
         end

@@ -525,7 +525,7 @@ at the time `k` is compiled.
 
 ### Be aware of when Julia avoids specializing
 
-As a heuristic, Julia avoids automatically specializing on argument type parameters in three
+As a heuristic, Julia avoids automatically [specializing](@ref man-method-specializations) on argument type parameters in three
 specific cases: `Type`, `Function`, and `Vararg`. Julia will always specialize when the argument is
 used within the method, but not if the argument is just passed through to another function. This
 usually has no performance impact at runtime and
@@ -611,8 +611,8 @@ end
 This can be written more concisely and efficiently as:
 
 ```julia
-norm(x::Vector) = sqrt(real(dot(x, x)))
-norm(A::Matrix) = maximum(svdvals(A))
+mynorm(x::Vector) = sqrt(real(dot(x, x)))
+mynorm(A::Matrix) = maximum(svdvals(A))
 ```
 
 It should however be noted that the compiler is quite efficient at optimizing away the dead branches in code
@@ -831,10 +831,10 @@ This might be worthwhile when either of the following are true:
   * You require CPU-intensive processing on each `Car`, and it becomes vastly more efficient if you
     know the `Make` and `Model` at compile time and the total number of different `Make` or `Model`
     that will be used is not too large.
-  * You have homogenous lists of the same type of `Car` to process, so that you can store them all
+  * You have homogeneous lists of the same type of `Car` to process, so that you can store them all
     in an `Array{Car{:Honda,:Accord},N}`.
 
-When the latter holds, a function processing such a homogenous array can be productively specialized:
+When the latter holds, a function processing such a homogeneous array can be productively specialized:
 Julia knows the type of each element in advance (all objects in the container have the same concrete
 type), so Julia can "look up" the correct method calls when the function is being compiled (obviating
 the need to check at run-time) and thereby emit efficient code for processing the whole list.

@@ -256,7 +256,7 @@ runviews(SB::AbstractArray{T,0}, indexN, indexNN, indexNNN) where {T} = nothing
 
 ######### Tests #########
 
-testfull = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+testfull = Base.get_bool_env("JULIA_TESTFULL", false)
 
 ### Views from Arrays ###
 index5 = (1, :, 2:5, [4,1,5], reshape([2]), view(1:5,[2 3 4 1]))  # all work with at least size 5

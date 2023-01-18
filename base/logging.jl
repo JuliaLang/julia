@@ -349,7 +349,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
                     kwargs = (;$(log_data.kwargs...))
                     true
                 else
-                    logging_error(logger, level, _module, group, id, file, line, err, false)
+                    @invokelatest logging_error(logger, level, _module, group, id, file, line, err, false)
                     false
                 end
             end
@@ -361,7 +361,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
                 kwargs = (;$(log_data.kwargs...))
                 true
             catch err
-                logging_error(logger, level, _module, group, id, file, line, err, true)
+                @invokelatest logging_error(logger, level, _module, group, id, file, line, err, true)
                 false
             end
         end
@@ -378,14 +378,14 @@ function logmsg_code(_module, file, line, level, message, exs...)
                     id = $(log_data._id)
                     # Second chance at an early bail-out (before computing the message),
                     # based on arbitrary logger-specific logic.
-                    if _invoked_shouldlog(logger, level, _module, group, id)
+                    if invokelatest(shouldlog, logger, level, _module, group, id)
                         file = $(log_data._file)
                         if file isa String
                             file = Base.fixup_stdlib_path(file)
                         end
                         line = $(log_data._line)
                         local msg, kwargs
-                        $(logrecord) && handle_message(
+                        $(logrecord) && invokelatest(handle_message,
                             logger, level, msg, _module, group, id, file, line;
                             kwargs...)
                     end

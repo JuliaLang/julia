@@ -256,9 +256,7 @@ function showerror(io::IO, ex::MethodError)
     elseif isempty(methods(f)) && !isa(f, Function) && !isa(f, Type)
         print(io, "objects of type ", ft, " are not callable")
     else
-        if ft <: Function && isempty(ft.parameters) &&
-                isdefined(ft.name.module, name) &&
-                ft == typeof(getfield(ft.name.module, name))
+        if ft <: Function && isempty(ft.parameters) && _isself(ft)
             f_is_function = true
         end
         print(io, "no method matching ")
@@ -541,7 +539,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 end
                 println(iob)
 
-                m = parentmodule_before_main(method.module)
+                m = parentmodule_before_main(method)
                 modulecolor = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
                 print_module_path_file(iob, m, string(file), line; modulecolor, digit_align_width = 3)
 
@@ -696,7 +694,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
 end
 
 # Gets the topmost parent module that isn't Main
-function parentmodule_before_main(m)
+function parentmodule_before_main(m::Module)
     while parentmodule(m) !== m
         pm = parentmodule(m)
         pm == Main && break
@@ -704,6 +702,7 @@ function parentmodule_before_main(m)
     end
     m
 end
+parentmodule_before_main(x) = parentmodule_before_main(parentmodule(x))
 
 # Print a stack frame where the module color is set manually with `modulecolor`.
 function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolor)
@@ -850,10 +849,11 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
             code = lkup.linfo
             if code isa MethodInstance
                 def = code.def
-                if def isa Method
-                    if def.name === :kwcall && def.module === Core
-                        continue
-                    end
+                if def isa Method && def.name !== :kwcall && def.sig <: Tuple{typeof(Core.kwcall),Any,Any,Vararg}
+                    # hide kwcall() methods, which are probably internal keyword sorter methods
+                    # (we print the internal method instead, after demangling
+                    # the argument list, since it has the right line number info)
+                    continue
                 end
             elseif !lkup.from_c
                 lkup.func === :kwcall && continue

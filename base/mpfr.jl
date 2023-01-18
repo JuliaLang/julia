@@ -16,7 +16,8 @@ import
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, lerpi,
         cbrt, typemax, typemin, unsafe_trunc, floatmin, floatmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
-        isone, big, _string_n, decompose, minmax
+        isone, big, _string_n, decompose, minmax,
+        sinpi, cospi, sincospi, sind, cosd, tand, asind, acosd, atand
 
 import ..Rounding: rounding_raw, setrounding_raw
 
@@ -209,12 +210,46 @@ for (fJ, fC) in ((:si,:Clong), (:ui,:Culong))
 end
 
 function BigFloat(x::Float64, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
-    z = BigFloat(;precision=precision)
-    ccall((:mpfr_set_d, :libmpfr), Int32, (Ref{BigFloat}, Float64, MPFRRoundingMode), z, x, r)
-    if isnan(x) && signbit(x) != signbit(z)
-        z.sign = -z.sign
+    z = BigFloat(;precision)
+    # punt on the hard case where we might have to deal with rounding
+    # we could use this path in all cases, but mpfr_set_d has a lot of overhead.
+    if precision <= Base.significand_bits(Float64)
+        ccall((:mpfr_set_d, :libmpfr), Int32, (Ref{BigFloat}, Float64, MPFRRoundingMode), z, x, r)
+        if isnan(x) && signbit(x) != signbit(z)
+            z.sign = -z.sign
+        end
+        return z
     end
-    return z
+    z.sign = 1-2*signbit(x)
+    if iszero(x) || !isfinite(x)
+        if isinf(x)
+            z.exp = Clong(2) - typemax(Clong)
+        elseif isnan(x)
+            z.exp = Clong(1) - typemax(Clong)
+        else
+            z.exp = - typemax(Clong)
+        end
+        return z
+    end
+    z.exp = 1 + exponent(x)
+    # BigFloat doesn't have an implicit bit
+    val = reinterpret(UInt64, significand(x))<<11 | typemin(Int64)
+    nlimbs = (precision + 8*Core.sizeof(Limb) - 1) ÷ (8*Core.sizeof(Limb))
+
+    # Limb is a CLong which is a UInt32 on windows (thank M$) which makes this more complicated and slower.
+    if Limb === UInt64
+        for i in 1:nlimbs-1
+            unsafe_store!(z.d, 0x0, i)
+        end
+        unsafe_store!(z.d, val, nlimbs)
+    else
+        for i in 1:nlimbs-2
+            unsafe_store!(z.d, 0x0, i)
+        end
+        unsafe_store!(z.d, val % UInt32, nlimbs-1)
+        unsafe_store!(z.d, (val >> 32) % UInt32, nlimbs)
+    end
+    z
 end
 
 function BigFloat(x::BigInt, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
@@ -746,7 +781,7 @@ function sum(arr::AbstractArray{BigFloat})
 end
 
 # Functions for which NaN results are converted to DomainError, following Base
-for f in (:sin, :cos, :tan, :sec, :csc, :acos, :asin, :atan, :acosh, :asinh, :atanh)
+for f in (:sin, :cos, :tan, :sec, :csc, :acos, :asin, :atan, :acosh, :asinh, :atanh, :sinpi, :cospi)
     @eval begin
         function ($f)(x::BigFloat)
             isnan(x) && return x
@@ -757,12 +792,39 @@ for f in (:sin, :cos, :tan, :sec, :csc, :acos, :asin, :atan, :acosh, :asinh, :at
         end
     end
 end
+sincospi(x::BigFloat) = (sinpi(x), cospi(x))
 
 function atan(y::BigFloat, x::BigFloat)
     z = BigFloat()
     ccall((:mpfr_atan2, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode), z, y, x, ROUNDING_MODE[])
     return z
 end
+
+# degree functions
+for f in (:sin, :cos, :tan)
+    @eval begin
+        function ($(Symbol(f,:d)))(x::BigFloat)
+            isnan(x) && return x
+            z = BigFloat()
+            ccall(($(string(:mpfr_,f,:u)), :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Culong, MPFRRoundingMode), z, x, 360, ROUNDING_MODE[])
+            isnan(z) && throw(DomainError(x, "NaN result for non-NaN input."))
+            return z
+        end
+        function ($(Symbol(:a,f,:d)))(x::BigFloat)
+            isnan(x) && return x
+            z = BigFloat()
+            ccall(($(string(:mpfr_a,f,:u)), :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Culong, MPFRRoundingMode), z, x, 360, ROUNDING_MODE[])
+            isnan(z) && throw(DomainError(x, "NaN result for non-NaN input."))
+            return z
+        end
+    end
+end
+function atand(y::BigFloat, x::BigFloat)
+    z = BigFloat()
+    ccall((:mpfr_atan2u, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, Culong, MPFRRoundingMode), z, y, x, 360, ROUNDING_MODE[])
+    return z
+end
+
 
 # Utility functions
 ==(x::BigFloat, y::BigFloat) = ccall((:mpfr_equal_p, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), x, y) != 0
@@ -1019,7 +1081,7 @@ function _string(x::BigFloat, fmt::String)::String
     isfinite(x) || return string(Float64(x))
     _prettify_bigfloat(string_mpfr(x, fmt))
 end
-_string(x::BigFloat) = _string(x, "%.Re")
+_string(x::BigFloat) = _string(x, "%Re")
 _string(x::BigFloat, k::Integer) = _string(x, "%.$(k)Re")
 
 string(b::BigFloat) = _string(b)

@@ -12,6 +12,12 @@ using ..LinearAlgebra: libblastrampoline, BlasFloat, BlasInt, LAPACKException, D
 
 using Base: iszero, require_one_based_indexing
 
+
+# Legacy binding maintained for backwards-compatibility but new packages
+# should not look at this, instead preferring to parse the output
+# of BLAS.get_config()
+const liblapack = libblastrampoline
+
 #Generic LAPACK error handlers
 """
 Handle only negative LAPACK error codes
@@ -5734,6 +5740,104 @@ for (ormhr, elty) in
         end
     end
 end
+
+for (hseqr, elty) in
+    ((:zhseqr_,:ComplexF64),
+     (:chseqr_,:ComplexF32))
+    @eval begin
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOB, COMPZ
+        #       INTEGER            N, ILO, IHI, LWORK, LDH, LDZ, INFO
+        # *     ..
+        # *     .. Array Arguments ..
+        #       COMPLEX*16         H( LDH, * ), Z( LDZ, * ), WORK( * )
+        function hseqr!(job::AbstractChar, compz::AbstractChar, ilo::Integer, ihi::Integer,
+                        H::AbstractMatrix{$elty}, Z::AbstractMatrix{$elty})
+            require_one_based_indexing(H, Z)
+            chkstride1(H)
+            n = checksquare(H)
+            checksquare(Z) == n || throw(DimensionMismatch())
+            ldh = max(1, stride(H, 2))
+            ldz = max(1, stride(Z, 2))
+            w = similar(H, $elty, n)
+            work = Vector{$elty}(undef, 1)
+            lwork = BlasInt(-1)
+            info = Ref{BlasInt}()
+            for i = 1:2  # first call returns lwork as work[1]
+                ccall((@blasfunc($hseqr), libblastrampoline), Cvoid,
+                    (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
+                    Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
+                    Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
+                    Ptr{BlasInt}),
+                    job, compz, n, ilo, ihi,
+                    H, ldh, w, Z, ldz, work,
+                    lwork, info)
+                chklapackerror(info[])
+                if i == 1
+                    lwork = BlasInt(real(work[1]))
+                    resize!(work, lwork)
+                end
+            end
+            H, Z, w
+        end
+    end
+end
+
+for (hseqr, elty) in
+    ((:dhseqr_,:Float64),
+     (:shseqr_,:Float32))
+    @eval begin
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOB, COMPZ
+        #       INTEGER            N, ILO, IHI, LWORK, LDH, LDZ, INFO
+        # *     ..
+        # *     .. Array Arguments ..
+        #       COMPLEX*16         H( LDH, * ), Z( LDZ, * ), WORK( * )
+        function hseqr!(job::AbstractChar, compz::AbstractChar, ilo::Integer, ihi::Integer,
+                        H::AbstractMatrix{$elty}, Z::AbstractMatrix{$elty})
+            require_one_based_indexing(H, Z)
+            chkstride1(H)
+            n = checksquare(H)
+            checksquare(Z) == n || throw(DimensionMismatch())
+            ldh = max(1, stride(H, 2))
+            ldz = max(1, stride(Z, 2))
+            wr = similar(H, $elty, n)
+            wi = similar(H, $elty, n)
+            work = Vector{$elty}(undef, 1)
+            lwork = BlasInt(-1)
+            info = Ref{BlasInt}()
+            for i = 1:2  # first call returns lwork as work[1]
+                ccall((@blasfunc($hseqr), libblastrampoline), Cvoid,
+                    (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
+                    Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ptr{$elty},
+                    Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
+                    Ptr{BlasInt}),
+                    job, compz, n, ilo, ihi,
+                    H, ldh, wr, wi, Z, ldz, work,
+                    lwork, info)
+                chklapackerror(info[])
+                if i == 1
+                    lwork = BlasInt(real(work[1]))
+                    resize!(work, lwork)
+                end
+            end
+            H, Z, complex.(wr, wi)
+        end
+    end
+end
+hseqr!(H::StridedMatrix{T}, Z::StridedMatrix{T}) where {T<:BlasFloat} = hseqr!('S', 'V', 1, size(H, 1), H, Z)
+hseqr!(H::StridedMatrix{T}) where {T<:BlasFloat} = hseqr!('S', 'I', 1, size(H, 1), H, similar(H))
+
+"""
+    hseqr!(job, compz, ilo, ihi, H, Z) -> (H, Z, w)
+
+Computes all eigenvalues and (optionally) the Schur factorization of a matrix
+reduced to Hessenberg form. If `H` is balanced with `gebal!`
+then `ilo` and `ihi` are the outputs of `gebal!`. Otherwise they should be
+`ilo = 1` and `ihi = size(H,2)`. `tau` contains the elementary reflectors of
+the factorization.
+"""
+hseqr!(job::AbstractChar, compz::AbstractChar, ilo::Integer, ihi::Integer, H::AbstractMatrix, Z::AbstractMatrix)
 
 for (hetrd, elty) in
     ((:dsytrd_,Float64),

@@ -11,6 +11,8 @@ A compact way of representing the type for a tuple of length `N` where all eleme
 julia> isa((1, 2, 3, 4, 5, 6), NTuple{6, Int})
 true
 ```
+
+See also [`ntuple`](@ref).
 """
 NTuple
 
@@ -65,7 +67,7 @@ end
 
 function iterate(@nospecialize(t::Tuple), i::Int=1)
     @inline
-    return (1 <= i <= length(t)) ? (@inbounds t[i], i + 1) : nothing
+    return (1 <= i <= length(t)) ? (t[i], i + 1) : nothing
 end
 
 keys(@nospecialize t::Tuple) = OneTo(length(t))
@@ -211,13 +213,12 @@ function _tuple_unique_fieldtypes(@nospecialize t)
     t´ = unwrap_unionall(t)
     # Given t = Tuple{Vararg{S}} where S<:Real, the various
     # unwrapping/wrapping/va-handling here will return Real
-    if t isa Union
+    if t´ isa Union
         union!(types, _tuple_unique_fieldtypes(rewrap_unionall(t´.a, t)))
         union!(types, _tuple_unique_fieldtypes(rewrap_unionall(t´.b, t)))
     else
-        r = Union{}
         for ti in (t´::DataType).parameters
-            r = push!(types, rewrap_unionall(unwrapva(ti), t))
+            push!(types, rewrap_unionall(unwrapva(ti), t))
         end
     end
     return Core.svec(types...)
@@ -232,6 +233,21 @@ function _compute_eltype(@nospecialize t)
         return promote_typejoin(a, b)
     end
 end
+
+# We'd like to be able to infer eltype(::Tuple), which needs to be able to
+# look at these four methods:
+#
+# julia> methods(Base.eltype, Tuple{Type{<:Tuple}})
+# 4 methods for generic function "eltype" from Base:
+# [1] eltype(::Type{Union{}})
+#  @ abstractarray.jl:234
+# [2] eltype(::Type{Tuple{}})
+#  @ tuple.jl:199
+# [3] eltype(t::Type{<:Tuple{Vararg{E}}}) where E
+#  @ tuple.jl:200
+# [4] eltype(t::Type{<:Tuple})
+#  @ tuple.jl:209
+typeof(function eltype end).name.max_methods = UInt8(4)
 
 # version of tail that doesn't throw on empty tuples (used in array indexing)
 safe_tail(t::Tuple) = tail(t)
@@ -325,8 +341,6 @@ function map(f, t1::Any32, t2::Any32, ts::Any32...)
     end
     (A...,)
 end
-
-_foldl_impl(op, init, itr::Tuple) = afoldl(op, init, itr...)
 
 # type-stable padding
 fill_to_length(t::NTuple{N,Any}, val, ::Val{N}) where {N} = t
@@ -583,6 +597,7 @@ any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
 
 # a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
 function sym_in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}})
+    @noinline
     @_total_meta
     for y in itr
         y === x && return true
