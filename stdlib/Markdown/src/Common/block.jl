@@ -16,10 +16,9 @@ function paragraph(stream::IO, md::MD)
     push!(md, p)
     skipwhitespace(stream)
     prev_char = '\n'
-    while !eof(stream)
-        char = read(stream, Char)
+    for char in readeach(stream, Char)
         if char == '\n' || char == '\r'
-            char == '\r' && !eof(stream) && Char(peek(stream)) == '\n' && read(stream, Char)
+            char == '\r' && !eof(stream) && peek(stream, Char) == '\n' && read(stream, Char)
             if prev_char == '\\'
                 write(buffer, '\n')
             elseif blankline(stream) || parse(stream, md, breaking = true)
@@ -53,7 +52,7 @@ function hashheader(stream::IO, md::MD)
         eatindent(stream) || return false
         level = 0
         while startswith(stream, '#') level += 1 end
-        level < 1 || level > 6 && return false
+        (level < 1 || level > 6) && return false
 
         c = ' '
         # Allow empty headers, but require a space
@@ -62,7 +61,7 @@ function hashheader(stream::IO, md::MD)
 
         if c != '\n' # Empty header
             h = strip(readline(stream))
-            h = match(r"(.*?)( +#+)?$", h).captures[1]
+            h = (match(r"(.*?)( +#+)?$", h)::AbstractMatch).captures[1]
             buffer = IOBuffer()
             print(buffer, h)
             push!(md.content, Header(parseinline(seek(buffer, 0), md), level))
@@ -137,11 +136,11 @@ function footnote(stream::IO, block::MD)
         if isempty(str)
             return false
         else
-            ref = match(regex, str).captures[1]
+            ref = (match(regex, str)::AbstractMatch).captures[1]
             buffer = IOBuffer()
             write(buffer, readline(stream, keep=true))
             while !eof(stream)
-                if startswith(stream, "    ")
+                if startswith(stream, "    ") || startswith(stream, "\t")
                     write(buffer, readline(stream, keep=true))
                 elseif blankline(stream)
                     write(buffer, '\n')
@@ -211,12 +210,12 @@ function admonition(stream::IO, block::MD)
             let untitled = r"^([a-z]+)$",          # !!! <CATEGORY_NAME>
                 titled   = r"^([a-z]+) \"(.*)\"$", # !!! <CATEGORY_NAME> "<TITLE>"
                 line     = strip(readline(stream))
-                if contains(line, untitled)
-                    m = match(untitled, line)
+                if occursin(untitled, line)
+                    m = match(untitled, line)::AbstractMatch
                     # When no title is provided we use CATEGORY_NAME, capitalising it.
-                    m.captures[1], ucfirst(m.captures[1])
-                elseif contains(line, titled)
-                    m = match(titled, line)
+                    m.captures[1], uppercasefirst(m.captures[1])
+                elseif occursin(titled, line)
+                    m = match(titled, line)::AbstractMatch
                     # To have a blank TITLE provide an explicit empty string as TITLE.
                     m.captures[1], m.captures[2]
                 else
@@ -225,10 +224,10 @@ function admonition(stream::IO, block::MD)
                     return false
                 end
             end
-        # Consume the following indented (4 spaces) block.
+        # Consume the following indented (4 spaces or tab) block.
         buffer = IOBuffer()
         while !eof(stream)
-            if startswith(stream, "    ")
+            if startswith(stream, "    ") || startswith(stream, "\t")
                 write(buffer, readline(stream, keep=true))
             elseif blankline(stream)
                 write(buffer, '\n')
@@ -250,12 +249,11 @@ end
 mutable struct List
     items::Vector{Any}
     ordered::Int # `-1` is unordered, `>= 0` is ordered.
-
-    List(x::AbstractVector, b::Integer) = new(x, b)
-    List(x::AbstractVector) = new(x, -1)
-    List(b::Integer) = new(Any[], b)
+    loose::Bool # TODO: Renderers should use this field
 end
-
+List(x::AbstractVector, b::Integer) = List(x, b, false)
+List(x::AbstractVector) = List(x, -1)
+List(b::Integer) = List(Any[], b)
 List(xs...) = List(vcat(xs...))
 
 isordered(list::List) = list.ordered >= 0
@@ -270,13 +268,13 @@ function list(stream::IO, block::MD)
         indent = isempty(bullet) ? (return false) : length(bullet)
         # Calculate the starting number and regex to use for bullet matching.
         initial, regex =
-            if contains(bullet, BULLETS)
+            if occursin(BULLETS, bullet)
                 # An unordered list. Use `-1` to flag the list as unordered.
                 -1, BULLETS
-            elseif contains(bullet, r"^ {0,3}\d+(\.|\))( |$)")
+            elseif occursin(r"^ {0,3}\d+(\.|\))( |$)", bullet)
                 # An ordered list. Either with `1. ` or `1) ` style numbering.
-                r = contains(bullet, ".") ? r"^ {0,3}(\d+)\.( |$)" : r"^ {0,3}(\d+)\)( |$)"
-                Base.parse(Int, match(r, bullet).captures[1]), r
+                r = occursin(".", bullet) ? r"^ {0,3}(\d+)\.( |$)" : r"^ {0,3}(\d+)\)( |$)"
+                Base.parse(Int, (match(r, bullet)::AbstractMatch).captures[1]), r
             else
                 # Failed to match any bullets. This branch shouldn't actually be needed
                 # since the `NUM_OR_BULLETS` regex should cover this, but we include it
@@ -302,8 +300,8 @@ function list(stream::IO, block::MD)
                     println(buffer)
                 end
             else
-                newline = false
                 if startswith(stream, " "^indent)
+                    newline && (list.loose = true)
                     # Indented text that is part of the current list item.
                     print(buffer, readline(stream, keep=true))
                 else
@@ -314,11 +312,13 @@ function list(stream::IO, block::MD)
                         break
                     else
                         # Start of a new list item.
+                        newline && (list.loose = true)
                         count += 1
                         count > 1 && pushitem!(list, buffer)
                         print(buffer, readline(stream, keep=true))
                     end
                 end
+                newline = false
             end
         end
         count == length(list.items) || pushitem!(list, buffer)
@@ -338,8 +338,7 @@ end
 function horizontalrule(stream::IO, block::MD)
    withstream(stream) do
        n, rule = 0, ' '
-       while !eof(stream)
-           char = read(stream, Char)
+       for char in readeach(stream, Char)
            char == '\n' && break
            isspace(char) && continue
            if n==0 || char==rule

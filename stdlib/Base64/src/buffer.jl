@@ -7,7 +7,7 @@ mutable struct Buffer
     size::Int
 
     function Buffer(bufsize)
-        data = Vector{UInt8}(uninitialized, bufsize)
+        data = Vector{UInt8}(undef, bufsize)
         return new(data, pointer(data), 0)
     end
 end
@@ -28,8 +28,8 @@ end
 
 function read_to_buffer(io::IO, buffer::Buffer)
     offset = buffer.ptr - pointer(buffer.data)
-    copyto!(buffer.data, 1, buffer.data, offset, buffer.size)
-    buffer.ptr = pointer(buffer.data) + buffer.size
+    copyto!(buffer.data, 1, buffer.data, offset + 1, buffer.size)
+    buffer.ptr = pointer(buffer.data)
     if !eof(io)
         n = min(bytesavailable(io), capacity(buffer) - buffer.size)
         unsafe_read(io, buffer.ptr + buffer.size, n)

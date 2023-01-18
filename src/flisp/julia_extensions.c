@@ -31,6 +31,14 @@ static int is_bom(uint32_t wc)
     return wc == 0xFEFF;
 }
 
+static int safe_peekutf8(fl_context_t *fl_ctx, ios_t *s, uint32_t *pwc)
+{
+    int result = ios_peekutf8(s, pwc);
+    if (result == 0)
+        lerror(fl_ctx, fl_ctx->IOError, "invalid UTF-8 sequence");
+    return result;
+}
+
 value_t fl_skipws(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "skip-ws", nargs, 2);
@@ -39,7 +47,7 @@ value_t fl_skipws(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     uint32_t wc=0;
     value_t skipped = fl_ctx->F;
     while (1) {
-        if (ios_peekutf8(s, &wc) == IOS_EOF) {
+        if (safe_peekutf8(fl_ctx, s, &wc) == IOS_EOF) {
             ios_getutf8(s, &wc);  // to set EOF flag if this is a true EOF
             if (!ios_eof(s))
                 lerror(fl_ctx, symbol(fl_ctx, "error"), "incomplete character");
@@ -62,8 +70,11 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_category_t cat)
             cat == UTF8PROC_CATEGORY_LT || cat == UTF8PROC_CATEGORY_LM ||
             cat == UTF8PROC_CATEGORY_LO || cat == UTF8PROC_CATEGORY_NL ||
             cat == UTF8PROC_CATEGORY_SC ||  // allow currency symbols
-            // other symbols, but not arrows
-            (cat == UTF8PROC_CATEGORY_SO && !(wc >= 0x2190 && wc <= 0x21FF)) ||
+            // other symbols, but not arrows or replacement characters
+            (cat == UTF8PROC_CATEGORY_SO && !(wc >= 0x2190 && wc <= 0x21FF) &&
+             wc != 0xfffc && wc != 0xfffd &&
+             wc != 0x233f &&  // notslash
+             wc != 0x00a6) || // broken bar
 
             // math symbol (category Sm) whitelist
             (wc >= 0x2140 && wc <= 0x2a1c &&
@@ -71,9 +82,10 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_category_t cat)
               wc == 0x223f || wc == 0x22be || wc == 0x22bf || // ∿, ⊾, ⊿
               wc == 0x22a4 || wc == 0x22a5 ||   // ⊤ ⊥
 
-              (wc >= 0x2202 && wc <= 0x2233 &&
+              (wc >= 0x2200 && wc <= 0x2233 &&
                (wc == 0x2202 || wc == 0x2205 || wc == 0x2206 || // ∂, ∅, ∆
                 wc == 0x2207 || wc == 0x220e || wc == 0x220f || // ∇, ∎, ∏
+                wc == 0x2200 || wc == 0x2203 || wc == 0x2204 || // ∀, ∃, ∄
                 wc == 0x2210 || wc == 0x2211 || // ∐, ∑
                 wc == 0x221e || wc == 0x221f || // ∞, ∟
                 wc >= 0x222b)) || // ∫, ∬, ∭, ∮, ∯, ∰, ∱, ∲, ∳
@@ -106,7 +118,10 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_category_t cat)
 
             // Other_ID_Start
             wc == 0x2118 || wc == 0x212E || // ℘, ℮
-            (wc >= 0x309B && wc <= 0x309C)); // katakana-hiragana sound marks
+            (wc >= 0x309B && wc <= 0x309C) || // katakana-hiragana sound marks
+
+            // bold-digits and double-struck digits
+            (wc >= 0x1D7CE && wc <= 0x1D7E1)); // 𝟎 through 𝟗 (inclusive), 𝟘 through 𝟡 (inclusive)
 }
 
 JL_DLLEXPORT int jl_id_start_char(uint32_t wc)
@@ -132,9 +147,7 @@ JL_DLLEXPORT int jl_id_char(uint32_t wc)
         cat == UTF8PROC_CATEGORY_SK || cat == UTF8PROC_CATEGORY_ME ||
         cat == UTF8PROC_CATEGORY_NO ||
         // primes (single, double, triple, their reverses, and quadruple)
-        (wc >= 0x2032 && wc <= 0x2037) || (wc == 0x2057) ||
-        // Other_ID_Continue
-        wc == 0x0387 || wc == 0x19da || (wc >= 0x1369 && wc <= 0x1371))
+        (wc >= 0x2032 && wc <= 0x2037) || (wc == 0x2057))
         return 1;
     return 0;
 }
@@ -142,9 +155,9 @@ JL_DLLEXPORT int jl_id_char(uint32_t wc)
 #include "julia_opsuffs.h"
 
 // chars that can follow an operator (e.g. +) and be parsed as part of the operator
-int jl_op_suffix_char(uint32_t wc)
+JL_DLLEXPORT int jl_op_suffix_char(uint32_t wc)
 {
-    static htable_t jl_opsuffs;
+    static htable_t jl_opsuffs; // XXX: requires uv_once
     if (!jl_opsuffs.size) { // initialize hash table of suffixes
         size_t i, opsuffs_len = sizeof(opsuffs) / (sizeof(uint32_t));
         htable_t *h = htable_new(&jl_opsuffs, opsuffs_len);
@@ -173,7 +186,18 @@ static int never_id_char(uint32_t wc)
           (wc < 0xff &&
            cat >= UTF8PROC_CATEGORY_PD && cat <= UTF8PROC_CATEGORY_PO) ||
 
-          wc == '`');
+          wc == '`' ||
+
+          // mathematical brackets
+          (wc >= 0x27e6 && wc <= 0x27ef) ||
+          // angle, corner, and lenticular brackets
+          (wc >= 0x3008 && wc <= 0x3011) ||
+          // tortoise shell, square, and more lenticular brackets
+          (wc >= 0x3014 && wc <= 0x301b) ||
+          // fullwidth parens
+          (wc == 0xff08 || wc == 0xff09) ||
+          // fullwidth square brackets
+          (wc == 0xff3b || wc == 0xff3d));
 }
 
 value_t fl_julia_identifier_char(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
@@ -229,6 +253,7 @@ value_t fl_julia_strip_op_suffix(fl_context_t *fl_ctx, value_t *args, uint32_t n
     if (!op[i]) return args[0]; // no suffix to strip
     if (!i) return args[0]; // only suffix chars --- might still be a valid identifier
     char *opnew = strncpy((char*)malloc(i+1), op, i);
+    // TODO: if argument to opnew == NULL
     opnew[i] = 0;
     value_t opnew_symbol = symbol(fl_ctx, opnew);
     free(opnew);
@@ -241,6 +266,7 @@ value_t fl_julia_underscore_symbolp(fl_context_t *fl_ctx, value_t *args, uint32_
     argcount(fl_ctx, "underscore-symbol?", nargs, 1);
     if (!issymbol(args[0])) return fl_ctx->F;
     char *op = symbol_name(fl_ctx, args[0]);
+    if (*op == '\0') return fl_ctx->F; // return false for empty symbol
     while (*op == '_') ++op;
     return *op ? fl_ctx->F : fl_ctx->T;
 }
@@ -249,7 +275,7 @@ value_t fl_julia_underscore_symbolp(fl_context_t *fl_ctx, value_t *args, uint32_
 
 utf8proc_int32_t jl_charmap_map(utf8proc_int32_t c, void *ctx)
 {
-    static htable_t jl_charmap;
+    static htable_t jl_charmap; // XXX: requires uv_once
     if (!jl_charmap.size) { // initialize hash table
         size_t i, charmap_len = sizeof(charmap) / (2*sizeof(uint32_t));
         htable_t *h = htable_new(&jl_charmap, charmap_len);
@@ -302,28 +328,86 @@ value_t fl_accum_julia_symbol(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     ios_t *s = fl_toiostream(fl_ctx, args[1], "accum-julia-symbol");
     if (!iscprim(args[0]) || ((cprim_t*)ptr(args[0]))->type != fl_ctx->wchartype)
         type_error(fl_ctx, "accum-julia-symbol", "wchar", args[0]);
-    uint32_t wc = *(uint32_t*)cp_data((cprim_t*)ptr(args[0]));
+    uint32_t wc = *(uint32_t*)cp_data((cprim_t*)ptr(args[0])); // peek the first character we'll read
     ios_t str;
-    int allascii=1;
+    int allascii = 1;
     ios_mem(&str, 0);
     do {
-        allascii &= (wc <= 0x7f);
         ios_getutf8(s, &wc);
         if (wc == '!') {
-            uint32_t nwc;
+            uint32_t nwc = 0;
             ios_peekutf8(s, &nwc);
             // make sure != is always an operator
             if (nwc == '=') {
-                ios_ungetc('!', s);
+                ios_skip(s, -1);
                 break;
             }
         }
+        allascii &= (wc <= 0x7f);
         ios_pututf8(&str, wc);
-        if (ios_peekutf8(s, &wc) == IOS_EOF)
+        if (safe_peekutf8(fl_ctx, s, &wc) == IOS_EOF)
             break;
     } while (jl_id_char(wc));
     ios_pututf8(&str, 0);
     return symbol(fl_ctx, allascii ? str.buf : normalize(fl_ctx, str.buf));
+}
+
+/* convert a string to a symbol, first applying normalization */
+value_t fl_string2normsymbol(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    argcount(fl_ctx, "string->normsymbol", nargs, 1);
+    if (!fl_isstring(fl_ctx, args[0]))
+        type_error(fl_ctx, "string->normsymbol", "string", args[0]);
+    return symbol(fl_ctx, normalize(fl_ctx, (char*)cvalue_data(args[0])));
+}
+
+static uint32_t _iterate_continued(uint8_t *s, size_t n, size_t *i, uint32_t u) {
+    if (u < 0xc0000000) { ++*i; return u; }
+    uint8_t b;
+
+    if (++*i >= n) return u;
+    b = s[*i]; // cont byte 1
+    if ((b & 0xc0) != 0x80) return u;
+    u |= (uint32_t)b << 16;
+
+    if (++*i >= n || u < 0xe0000000) return u;
+    b = s[*i]; // cont byte 2
+    if ((b & 0xc0) != 0x80) return u;
+    u |= (uint32_t)b << 8;
+
+    if (++*i >= n || u < 0xf0000000) return u;
+    b = s[*i]; // cont byte 3
+    if ((b & 0xc0) != 0x80) return u;
+    u |= (uint32_t)b; ++*i;
+
+    return u;
+}
+
+static uint32_t _string_only_julia_char(uint8_t *s, size_t n) {
+    if (!(0 < n && n <= 4))
+        return -1;
+    size_t i = 0;
+    uint8_t b = s[i];
+    uint32_t u = (uint32_t)b << 24;
+    if (0x80 <= b && b <= 0xf7)
+        u = _iterate_continued(s, n, &i, u);
+    else
+        i = 1;
+    if (i < n)
+        return -1;
+    return u;
+}
+
+value_t fl_string_only_julia_char(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) {
+    argcount(fl_ctx, "string.only-julia-char", nargs, 1);
+    if (!fl_isstring(fl_ctx, args[0]))
+        type_error(fl_ctx, "string.only-julia-char", "string", args[0]);
+    uint8_t *s = (uint8_t*)cvalue_data(args[0]);
+    size_t len = cv_len((cvalue_t*)ptr(args[0]));
+    uint32_t u = _string_only_julia_char(s, len);
+    if (u == (uint32_t)-1)
+        return fl_ctx->F;
+    return fl_list2(fl_ctx, fl_ctx->jl_char_sym, mk_uint32(fl_ctx, u));
 }
 
 static const builtinspec_t julia_flisp_func_info[] = {
@@ -335,6 +419,8 @@ static const builtinspec_t julia_flisp_func_info[] = {
     { "op-suffix-char?", fl_julia_op_suffix_char },
     { "strip-op-suffix", fl_julia_strip_op_suffix },
     { "underscore-symbol?", fl_julia_underscore_symbolp },
+    { "string->normsymbol", fl_string2normsymbol },
+    { "string.only-julia-char", fl_string_only_julia_char },
     { NULL, NULL }
 };
 

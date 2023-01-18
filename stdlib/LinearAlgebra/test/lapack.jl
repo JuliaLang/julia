@@ -11,7 +11,7 @@ using LinearAlgebra: BlasInt
 @test_throws ArgumentError LinearAlgebra.LAPACK.chktrans('Z')
 
 @testset "syevr" begin
-    srand(123)
+    Random.seed!(123)
     Ainit = randn(5,5)
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         if elty == ComplexF32 || elty == ComplexF64
@@ -24,10 +24,10 @@ using LinearAlgebra: BlasInt
         vals, Z = LAPACK.syevr!('V', copy(Asym))
         @test Z*(Diagonal(vals)*Z') ≈ Asym
         @test all(vals .> 0.0)
-        @test LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] ≈ vals[vals .< 1.0]
-        @test LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] ≈ vals[4:5]
-        @test vals ≈ LAPACK.syev!('N','U',copy(Asym))
-        @test_throws DimensionMismatch LAPACK.sygvd!(1,'V','U',copy(Asym),Matrix{elty}(uninitialized,6,6))
+        @test LAPACK.syevr!('N', 'V', 'U', copy(Asym), 0.0, 1.0, 4, 5, -1.0)[1] ≈ vals[vals .< 1.0]
+        @test LAPACK.syevr!('N', 'I', 'U', copy(Asym), 0.0, 1.0, 4, 5, -1.0)[1] ≈ vals[4:5]
+        @test vals ≈ LAPACK.syev!('N', 'U', copy(Asym))
+        @test_throws DimensionMismatch LAPACK.sygvd!(1, 'V', 'U', copy(Asym), zeros(elty, 6, 6))
     end
 end
 
@@ -105,7 +105,7 @@ end
         D = LAPACK.gbtrs!('N',2,1,6,AB,ipiv,D)
         A = diagm(-2 => dl2, -1 => dl, 0 => d, 1 => du)
         @test A\C ≈ D
-        @test_throws DimensionMismatch LAPACK.gbtrs!('N',2,1,6,AB,ipiv,Matrix{elty}(uninitialized,7,6))
+        @test_throws DimensionMismatch LAPACK.gbtrs!('N',2,1,6,AB,ipiv,Matrix{elty}(undef,7,6))
         @test_throws LinearAlgebra.LAPACKException LAPACK.gbtrf!(2,1,6,zeros(elty,6,6))
     end
 end
@@ -113,9 +113,9 @@ end
 
 @testset "geqp3, geqrt error handling" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        x10, x11 = Vector{elty}.(uninitialized, (10, 11))
-        y10, y11 = Vector{LinearAlgebra.BlasInt}.(uninitialized, (10, 11))
-        A10x10, A11x10, A10x11, A11x11 = Matrix{elty}.(uninitialized, ((10,10), (11,10), (10,11), (11,11)))
+        x10, x11 = Vector{elty}.(undef, (10, 11))
+        y10, y11 = Vector{LinearAlgebra.BlasInt}.(undef, (10, 11))
+        A10x10, A11x10, A10x11, A11x11 = Matrix{elty}.(undef, ((10,10), (11,10), (10,11), (11,11)))
         @test_throws DimensionMismatch LAPACK.geqlf!(A10x10, x11)
         @test_throws DimensionMismatch LAPACK.gelqf!(A10x10, x11)
         @test_throws DimensionMismatch LAPACK.geqp3!(A10x10, y11, x10)
@@ -130,8 +130,8 @@ end
 
 @testset "gels, gesv, getrs, getri error handling" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        A10x10, B11x11 = Matrix{elty}.(uninitialized, ((10,10), (11,11)))
-        x10, x11 = Vector{LinearAlgebra.BlasInt}.(uninitialized, (10, 11))
+        A10x10, B11x11 = Matrix{elty}.(undef, ((10,10), (11,11)))
+        x10, x11 = Vector{LinearAlgebra.BlasInt}.(undef, (10, 11))
         @test_throws DimensionMismatch LAPACK.gels!('N',A10x10,B11x11)
         @test_throws DimensionMismatch LAPACK.gels!('T',A10x10,B11x11)
         @test_throws DimensionMismatch LAPACK.gesv!(A10x10,B11x11)
@@ -196,19 +196,20 @@ end
 
 @testset "gebal/gebak" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        A = rand(elty,10,10) * Diagonal(exp10.(range(-10, stop=10, length=10)))
+        typescale = log10(eps(real(elty))) / 3 * 2
+        A = rand(elty,10,10) * Diagonal(exp10.(range(typescale, stop=-typescale, length=10)))
         B = copy(A)
         ilo, ihi, scale = LAPACK.gebal!('S',B)
         Bvs = eigvecs(B)
         Avs = eigvecs(A)
         Bvs = LAPACK.gebak!('S','R',ilo,ihi,scale,Bvs)
-        @test norm(diff(Avs ./ Bvs, 1)) < 100 * eps(abs(float(one(elty))))
+        @test norm(diff(Avs ./ Bvs, dims=1)) < 100 * eps(abs(float(one(elty))))
     end
 end
 
 @testset "gels" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        srand(913)
+        Random.seed!(913)
         A = rand(elty,10,10)
         X = rand(elty,10)
         B,Y,z = LAPACK.gels!('N',copy(A),copy(X))
@@ -231,7 +232,7 @@ end
     @testset for elty in (ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         Aw, Avl, Avr = LAPACK.geev!('N','V',copy(A))
-        fA = eigfact(A)
+        fA = eigen(A, sortby=nothing)
         @test fA.values  ≈ Aw
         @test fA.vectors ≈ Avr
     end
@@ -259,14 +260,14 @@ end
         d  = rand(elty,10)
         dl = rand(elty,9)
         b  = rand(elty,10)
-        y10 = Vector{BlasInt}(uninitialized, 10)
-        x9, x11 = Vector{elty}.(uninitialized, (9, 11))
+        y10 = Vector{BlasInt}(undef, 10)
+        x9, x11 = Vector{elty}.(undef, (9, 11))
         @test_throws DimensionMismatch LAPACK.gttrf!(x11, d, du)
         @test_throws DimensionMismatch LAPACK.gttrf!(dl, d, x11)
         @test_throws DimensionMismatch LAPACK.gttrs!('N', x11, d, du, x9, y10, b)
         @test_throws DimensionMismatch LAPACK.gttrs!('N', dl, d, x11, x9, y10, b)
         @test_throws DimensionMismatch LAPACK.gttrs!('N', dl, d, du, x9, y10, x11)
-        A = lufact(Tridiagonal(dl,d,du))
+        A = lu(Tridiagonal(dl,d,du))
         b  = rand(elty,10,5)
         c = copy(b)
         dl,d,du,du2,ipiv = LAPACK.gttrf!(dl,d,du)
@@ -361,7 +362,7 @@ end
         B,ipiv = LAPACK.sytrf!('U',B)
         @test triu(inv(A)) ≈ triu(LAPACK.sytri!('U',B,ipiv)) rtol=eps(cond(A))
         @test_throws DimensionMismatch LAPACK.sytrs!('U',B,ipiv,rand(elty,11,5))
-        @test LAPACK.sytrf!('U',zeros(elty,0,0)) == (zeros(elty,0,0),zeros(BlasInt,0))
+        @test LAPACK.sytrf!('U',zeros(elty,0,0)) == (zeros(elty,0,0),zeros(BlasInt,0),zero(BlasInt))
     end
 
     # Rook-pivoting variants
@@ -372,7 +373,7 @@ end
         B,ipiv = LAPACK.sytrf_rook!('U', B)
         @test triu(inv(A)) ≈ triu(LAPACK.sytri_rook!('U', B, ipiv)) rtol=eps(cond(A))
         @test_throws DimensionMismatch LAPACK.sytrs_rook!('U', B, ipiv, rand(elty, 11, 5))
-        @test LAPACK.sytrf_rook!('U',zeros(elty, 0, 0)) == (zeros(elty, 0, 0),zeros(BlasInt, 0))
+        @test LAPACK.sytrf_rook!('U',zeros(elty, 0, 0)) == (zeros(elty, 0, 0),zeros(BlasInt, 0),zero(BlasInt))
         A = rand(elty, 10, 10)
         A = A + transpose(A) #symmetric!
         b = rand(elty, 10)
@@ -407,10 +408,10 @@ end
     @testset for elty in (Float32, Float64)
         d = rand(elty,10)
         e = rand(elty,9)
-        @test_throws DimensionMismatch LAPACK.stev!('U',d,rand(elty,10))
+        @test_throws DimensionMismatch LAPACK.stev!('U',d,rand(elty,11))
         @test_throws DimensionMismatch LAPACK.stebz!('A','B',zero(elty),zero(elty),0,0,-1.,d,rand(elty,10))
-        @test_throws DimensionMismatch LAPACK.stegr!('N','A',d,rand(elty,10),zero(elty),zero(elty),0,0)
-        @test_throws DimensionMismatch LAPACK.stein!(d,zeros(elty,10),zeros(elty,10),zeros(BlasInt,10),zeros(BlasInt,10))
+        @test_throws DimensionMismatch LAPACK.stegr!('N','A',d,rand(elty,11),zero(elty),zero(elty),0,0)
+        @test_throws DimensionMismatch LAPACK.stein!(d,zeros(elty,11),zeros(elty,10),zeros(BlasInt,10),zeros(BlasInt,10))
         @test_throws DimensionMismatch LAPACK.stein!(d,e,zeros(elty,11),zeros(BlasInt,10),zeros(BlasInt,10))
     end
 end
@@ -422,6 +423,45 @@ end
         B = copy(A)
         @test inv(A) ≈ LAPACK.trtri!('U','N',B)
         @test_throws DimensionMismatch LAPACK.trtrs!('U','N','N',B,zeros(elty,11,10))
+    end
+end
+
+@testset "larfg & larf" begin
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
+        ## larfg
+        Random.seed!(0)
+        x  = rand(elty, 5)
+        v  = copy(x)
+        τ = LinearAlgebra.LAPACK.larfg!(v)
+        H = (I - τ*v*v')
+        # for complex input, LAPACK wants a conjugate transpose of H (check clarfg docs)
+        y = elty <: Complex ? H'*x : H*x
+        # we have rotated a vector
+        @test norm(y) ≈ norm(x)
+        # an annihilated almost all the first column
+        @test norm(y[2:end], Inf) < 10*eps(real(one(elty)))
+
+        ## larf
+        C = rand(elty, 5, 5)
+        C_norm = norm(C, 2)
+        v = C[1:end, 1]
+        τ = LinearAlgebra.LAPACK.larfg!(v)
+        LinearAlgebra.LAPACK.larf!('L', v, conj(τ), C)
+        # we have applied a unitary transformation
+        @test norm(C, 2) ≈ C_norm
+        # an annihilated almost all the first column
+        @test norm(C[2:end, 1], Inf) < 10*eps(real(one(elty)))
+
+        # apply left and right
+        C1 = rand(elty, 5, 5)
+        C2 = rand(elty, 5, 5)
+        C = C2*C1
+
+        v = C1[1:end, 1]
+        τ = LinearAlgebra.LAPACK.larfg!(v)
+        LinearAlgebra.LAPACK.larf!('L', v,      τ, C1)
+        LinearAlgebra.LAPACK.larf!('R', v, conj(τ), C2)
+        @test C ≈ C2*C1
     end
 end
 
@@ -443,7 +483,7 @@ end
 
 @testset "sysv" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        srand(123)
+        Random.seed!(123)
         A = rand(elty,10,10)
         A = A + transpose(A) #symmetric!
         b = rand(elty,10)
@@ -456,7 +496,7 @@ end
 
 @testset "hesv" begin
     @testset for elty in (ComplexF32, ComplexF64)
-        srand(935)
+        Random.seed!(935)
         A = rand(elty,10,10)
         A = A + A' #hermitian!
         b = rand(elty,10)
@@ -486,8 +526,8 @@ end
         B = rand(elty,10,10)
         C = copy(B)
         @test A\B ≈ LAPACK.ptsv!(rdv,ev,C)
-        @test_throws DimensionMismatch LAPACK.ptsv!(rdv,Vector{elty}(uninitialized,10),C)
-        @test_throws DimensionMismatch LAPACK.ptsv!(rdv,ev,Matrix{elty}(uninitialized,11,11))
+        @test_throws DimensionMismatch LAPACK.ptsv!(rdv,Vector{elty}(undef,10),C)
+        @test_throws DimensionMismatch LAPACK.ptsv!(rdv,ev,Matrix{elty}(undef,11,11))
     end
 end
 
@@ -506,12 +546,12 @@ end
         C = copy(B)
         if elty <: Complex
             @test A\B ≈ LAPACK.pttrs!('U',rdv,ev,C)
-            @test_throws DimensionMismatch LAPACK.pttrs!('U',rdv,Vector{elty}(uninitialized,10),C)
-            @test_throws DimensionMismatch LAPACK.pttrs!('U',rdv,ev,Matrix{elty}(uninitialized,11,11))
+            @test_throws DimensionMismatch LAPACK.pttrs!('U',rdv,Vector{elty}(undef,10),C)
+            @test_throws DimensionMismatch LAPACK.pttrs!('U',rdv,ev,Matrix{elty}(undef,11,11))
         else
             @test A\B ≈ LAPACK.pttrs!(rdv,ev,C)
-            @test_throws DimensionMismatch LAPACK.pttrs!(rdv,Vector{elty}(uninitialized,10),C)
-            @test_throws DimensionMismatch LAPACK.pttrs!(rdv,ev,Matrix{elty}(uninitialized,11,11))
+            @test_throws DimensionMismatch LAPACK.pttrs!(rdv,Vector{elty}(undef,10),C)
+            @test_throws DimensionMismatch LAPACK.pttrs!(rdv,ev,Matrix{elty}(undef,11,11))
         end
     end
 end
@@ -531,11 +571,11 @@ end
         C = copy(B)
         D,C = LAPACK.posv!('U',D,C)
         @test A\B ≈ C
-        offsizemat = Matrix{elty}(uninitialized, n+1, n+1)
+        offsizemat = Matrix{elty}(undef, n+1, n+1)
         @test_throws DimensionMismatch LAPACK.posv!('U', D, offsizemat)
         @test_throws DimensionMismatch LAPACK.potrs!('U', D, offsizemat)
 
-        @test LAPACK.potrs!('U',Matrix{elty}(uninitialized,0,0),elty[]) == elty[]
+        @test LAPACK.potrs!('U',Matrix{elty}(undef,0,0),elty[]) == elty[]
     end
 end
 
@@ -561,18 +601,18 @@ end
 @testset "trrfs & trevc" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         T = triu(rand(elty,10,10))
-        S = copy(T)
+        v = eigvecs(T, sortby=nothing)[:,1]
         select = zeros(LinearAlgebra.BlasInt,10)
         select[1] = 1
         select,Vr = LAPACK.trevc!('R','S',select,copy(T))
-        @test Vr ≈ eigvecs(S)[:,1]
+        @test Vr ≈ v
         select = zeros(LinearAlgebra.BlasInt,10)
         select[1] = 1
         select,Vl = LAPACK.trevc!('L','S',select,copy(T))
         select = zeros(LinearAlgebra.BlasInt,10)
         select[1] = 1
         select,Vln,Vrn = LAPACK.trevc!('B','S',select,copy(T))
-        @test Vrn ≈ eigvecs(S)[:,1]
+        @test Vrn ≈ v
         @test Vln ≈ Vl
         @test_throws ArgumentError LAPACK.trevc!('V','S',select,copy(T))
         @test_throws DimensionMismatch LAPACK.trrfs!('U','N','N',T,rand(elty,10,10),rand(elty,10,11))
@@ -629,7 +669,7 @@ end
 
 @testset "Julia vs LAPACK" begin
     # Test our own linear algebra functionality against LAPACK
-    @testset for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         for nn in (5,10,15)
             if elty <: Real
                 A = convert(Matrix{elty}, randn(10,nn))
@@ -660,7 +700,13 @@ end
 
 # Issue 14065 (and 14220)
 let A = [NaN NaN; NaN NaN]
-    @test_throws ArgumentError eigfact(A)
+    @test_throws ArgumentError eigen(A)
 end
+
+# Issue #42762 https://github.com/JuliaLang/julia/issues/42762
+# Tests geqrf! and gerqf! with null column dimensions
+a = zeros(2,0), zeros(0)
+@test LinearAlgebra.LAPACK.geqrf!(a...) === a
+@test LinearAlgebra.LAPACK.gerqf!(a...) === a
 
 end # module TestLAPACK

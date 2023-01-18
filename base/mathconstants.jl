@@ -23,9 +23,17 @@ Base.@irrational catalan  0.91596559417721901505  catalan
 
 The constant pi.
 
+Unicode `π` can be typed by writing `\\pi` then pressing tab in the Julia REPL, and in many editors.
+
+See also: [`sinpi`](@ref), [`sincospi`](@ref), [`deg2rad`](@ref).
+
+# Examples
 ```jldoctest
 julia> pi
 π = 3.1415926535897...
+
+julia> 1/2pi
+0.15915494309189535
 ```
 """
 π, const pi = π
@@ -36,9 +44,20 @@ julia> pi
 
 The constant ℯ.
 
+Unicode `ℯ` can be typed by writing `\\euler` and pressing tab in the Julia REPL, and in many editors.
+
+See also: [`exp`](@ref), [`cis`](@ref), [`cispi`](@ref).
+
+# Examples
 ```jldoctest
 julia> ℯ
 ℯ = 2.7182818284590...
+
+julia> log(ℯ)
+1
+
+julia> ℯ^(im)π ≈ -1
+true
 ```
 """
 ℯ, const e = ℯ
@@ -49,9 +68,15 @@ julia> ℯ
 
 Euler's constant.
 
+# Examples
 ```jldoctest
 julia> Base.MathConstants.eulergamma
 γ = 0.5772156649015...
+
+julia> dx = 10^-6;
+
+julia> sum(-exp(-x) * log(x) for x in dx:dx:100) * dx
+0.5772078382499133
 ```
 """
 γ, const eulergamma = γ
@@ -62,9 +87,13 @@ julia> Base.MathConstants.eulergamma
 
 The golden ratio.
 
+# Examples
 ```jldoctest
 julia> Base.MathConstants.golden
 φ = 1.6180339887498...
+
+julia> (2ans - 1)^2 ≈ 5
+true
 ```
 """
 φ, const golden = φ
@@ -74,9 +103,13 @@ julia> Base.MathConstants.golden
 
 Catalan's constant.
 
+# Examples
 ```jldoctest
 julia> Base.MathConstants.catalan
 catalan = 0.9159655941772...
+
+julia> sum(log(x)/(1+x^2) for x in 1:0.01:10^6) * 0.01
+0.9159466120554123
 ```
 """
 catalan
@@ -89,5 +122,11 @@ Base.literal_pow(::typeof(^), ::Irrational{:ℯ}, ::Val{p}) where {p} = exp(p)
 
 Base.log(::Irrational{:ℯ}) = 1 # use 1 to correctly promote expressions like log(x)/log(ℯ)
 Base.log(::Irrational{:ℯ}, x::Number) = log(x)
+
+Base.sin(::Irrational{:π}) = 0.0
+Base.cos(::Irrational{:π}) = -1.0
+Base.sincos(::Irrational{:π}) = (0.0, -1.0)
+Base.tan(::Irrational{:π}) = 0.0
+Base.cot(::Irrational{:π}) = -1/0
 
 end # module

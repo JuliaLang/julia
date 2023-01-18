@@ -34,8 +34,8 @@ struct SSHManager <: ClusterManager
 end
 
 
-function check_addprocs_args(kwargs)
-    valid_kw_names = collect(keys(default_addprocs_params()))
+function check_addprocs_args(manager, kwargs)
+    valid_kw_names = keys(default_addprocs_params(manager))
     for keyname in keys(kwargs)
         !(keyname in valid_kw_names) && throw(ArgumentError("Invalid keyword argument $(keyname)"))
     end
@@ -51,30 +51,54 @@ end
 """
     addprocs(machines; tunnel=false, sshflags=\`\`, max_parallel=10, kwargs...) -> List of process identifiers
 
-Add processes on remote machines via SSH. Requires `julia` to be installed in the same
-location on each node, or to be available via a shared file system.
+Add worker processes on remote machines via SSH. Configuration is done with keyword
+arguments (see below). In particular, the `exename` keyword can be used to specify
+the path to the `julia` binary on the remote machine(s).
 
-`machines` is a vector of machine specifications. Workers are started for each specification.
+`machines` is a vector of "machine specifications" which are given as strings of
+the form `[user@]host[:port] [bind_addr[:port]]`. `user` defaults to current user and `port`
+to the standard SSH port. If `[bind_addr[:port]]` is specified, other workers will connect
+to this worker at the specified `bind_addr` and `port`.
 
-A machine specification is either a string `machine_spec` or a tuple - `(machine_spec, count)`.
+It is possible to launch multiple processes on a remote host by using a tuple in the
+`machines` vector or the form `(machine_spec, count)`, where `count` is the number of
+workers to be launched on the specified host. Passing `:auto` as the worker count will
+launch as many workers as the number of CPU threads on the remote host.
 
-`machine_spec` is a string of the form `[user@]host[:port] [bind_addr[:port]]`. `user`
-defaults to current user, `port` to the standard ssh port. If `[bind_addr[:port]]` is
-specified, other workers will connect to this worker at the specified `bind_addr` and
-`port`.
+**Examples**:
+```julia
+addprocs([
+    "remote1",               # one worker on 'remote1' logging in with the current username
+    "user@remote2",          # one worker on 'remote2' logging in with the 'user' username
+    "user@remote3:2222",     # specifying SSH port to '2222' for 'remote3'
+    ("user@remote4", 4),     # launch 4 workers on 'remote4'
+    ("user@remote5", :auto), # launch as many workers as CPU threads on 'remote5'
+])
+```
 
-`count` is the number of workers to be launched on the specified host. If specified as
-`:auto` it will launch as many workers as the number of cores on the specific host.
-
-Keyword arguments:
+**Keyword arguments**:
 
 * `tunnel`: if `true` then SSH tunneling will be used to connect to the worker from the
   master process. Default is `false`.
 
-* `sshflags`: specifies additional ssh options, e.g. ```sshflags=\`-i /home/foo/bar.pem\````
+* `multiplex`: if `true` then SSH multiplexing is used for SSH tunneling. Default is `false`.
+
+* `ssh`: the name or path of the SSH client executable used to start the workers.
+  Default is `"ssh"`.
+
+* `sshflags`: specifies additional ssh options, e.g. ``` sshflags=\`-i /home/foo/bar.pem\` ```
 
 * `max_parallel`: specifies the maximum number of workers connected to in parallel at a
   host. Defaults to 10.
+
+* `shell`: specifies the type of shell to which ssh connects on the workers.
+
+    + `shell=:posix`: a POSIX-compatible Unix/Linux shell
+      (sh, ksh, bash, dash, zsh, etc.). The default.
+
+    + `shell=:csh`: a Unix C shell (csh, tcsh).
+
+    + `shell=:wincmd`: Microsoft Windows `cmd.exe`.
 
 * `dir`: specifies the working directory on the workers. Defaults to the host's current
   directory (as found by `pwd()`)
@@ -83,7 +107,9 @@ Keyword arguments:
   processes. Default is `false`.
 
 * `exename`: name of the `julia` executable. Defaults to `"\$(Sys.BINDIR)/julia"` or
-  `"\$(Sys.BINDIR)/julia-debug"` as the case may be.
+  `"\$(Sys.BINDIR)/julia-debug"` as the case may be. It is recommended that a common Julia
+  version is used on all remote machines because serialization and code distribution might
+  fail otherwise.
 
 * `exeflags`: additional flags passed to the worker processes.
 
@@ -104,8 +130,22 @@ Keyword arguments:
   are setup lazily, i.e. they are setup at the first instance of a remote call between
   workers. Default is true.
 
+* `env`: provide an array of string pairs such as
+  `env=["JULIA_DEPOT_PATH"=>"/depot"]` to request that environment variables
+  are set on the remote machine. By default only the environment variable
+  `JULIA_WORKER_TIMEOUT` is passed automatically from the local to the remote
+  environment.
 
-Environment variables :
+* `cmdline_cookie`: pass the authentication cookie via the `--worker` commandline
+   option. The (more secure) default behaviour of passing the cookie via ssh stdio
+   may hang with Windows workers that use older (pre-ConPTY) Julia or Windows versions,
+   in which case `cmdline_cookie=true` offers a work-around.
+
+!!! compat "Julia 1.6"
+    The keyword arguments `ssh`, `shell`, `env` and `cmdline_cookie`
+    were added in Julia 1.6.
+
+Environment variables:
 
 If the master process fails to establish a connection with a newly launched worker within
 60.0 seconds, the worker treats it as a fatal situation and terminates.
@@ -113,42 +153,90 @@ This timeout can be controlled via environment variable `JULIA_WORKER_TIMEOUT`.
 The value of `JULIA_WORKER_TIMEOUT` on the master process specifies the number of seconds a
 newly launched worker waits for connection establishment.
 """
-function addprocs(machines::AbstractVector; tunnel=false, sshflags=``, max_parallel=10, kwargs...)
-    check_addprocs_args(kwargs)
-    addprocs(SSHManager(machines); tunnel=tunnel, sshflags=sshflags, max_parallel=max_parallel, kwargs...)
+function addprocs(machines::AbstractVector; kwargs...)
+    manager = SSHManager(machines)
+    check_addprocs_args(manager, kwargs)
+    addprocs(manager; kwargs...)
 end
 
+default_addprocs_params(::SSHManager) =
+    merge(default_addprocs_params(),
+          Dict{Symbol,Any}(
+              :ssh            => "ssh",
+              :sshflags       => ``,
+              :shell          => :posix,
+              :cmdline_cookie => false,
+              :env            => [],
+              :tunnel         => false,
+              :multiplex      => false,
+              :max_parallel   => 10))
 
 function launch(manager::SSHManager, params::Dict, launched::Array, launch_ntfy::Condition)
     # Launch one worker on each unique host in parallel. Additional workers are launched later.
     # Wait for all launches to complete.
-    launch_tasks = Vector{Any}(uninitialized, length(manager.machines))
-
-    for (i,(machine, cnt)) in enumerate(manager.machines)
+    @sync for (i, (machine, cnt)) in enumerate(manager.machines)
         let machine=machine, cnt=cnt
-            launch_tasks[i] = @schedule try
-                    launch_on_machine(manager, machine, cnt, params, launched, launch_ntfy)
-                catch e
-                    print(stderr, "exception launching on machine $(machine) : $(e)\n")
-                end
+             @async try
+                launch_on_machine(manager, $machine, $cnt, params, launched, launch_ntfy)
+            catch e
+                print(stderr, "exception launching on machine $(machine) : $(e)\n")
+            end
         end
     end
-
-    for t in launch_tasks
-        wait(t)
-    end
-
     notify(launch_ntfy)
 end
 
 
-show(io::IO, manager::SSHManager) = println(io, "SSHManager(machines=", manager.machines, ")")
+Base.show(io::IO, manager::SSHManager) = print(io, "SSHManager(machines=", manager.machines, ")")
 
 
-function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, launch_ntfy::Condition)
+function parse_machine(machine::AbstractString)
+    hoststr = ""
+    portnum = nothing
+
+    if machine[begin] == '['  # ipv6 bracket notation (RFC 2732)
+        ipv6_end = findlast(']', machine)
+        if ipv6_end === nothing
+            throw(ArgumentError("invalid machine definition format string: invalid port format \"$machine\""))
+        end
+        hoststr = machine[begin+1 : prevind(machine,ipv6_end)]
+        machine_def = split(machine[ipv6_end : end] , ':')
+    else    # ipv4
+        machine_def = split(machine, ':')
+        hoststr = machine_def[1]
+    end
+
+    if length(machine_def) > 2
+        throw(ArgumentError("invalid machine definition format string: invalid port format \"$machine_def\""))
+    end
+
+    if length(machine_def) == 2
+        portstr = machine_def[2]
+
+        portnum = tryparse(Int, portstr)
+        if portnum === nothing
+            msg = "invalid machine definition format string: invalid port format \"$machine_def\""
+            throw(ArgumentError(msg))
+        end
+
+        if portnum < 1 || portnum > 65535
+            msg = "invalid machine definition format string: invalid port number \"$machine_def\""
+            throw(ArgumentError(msg))
+        end
+    end
+    (hoststr, portnum)
+end
+
+function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, params::Dict, launched::Array, launch_ntfy::Condition)
+    shell = params[:shell]
+    ssh = params[:ssh]
     dir = params[:dir]
     exename = params[:exename]
     exeflags = params[:exeflags]
+    tunnel = params[:tunnel]
+    multiplex = params[:multiplex]
+    cmdline_cookie = params[:cmdline_cookie]
+    env = Dict{String,String}(params[:env])
 
     # machine could be of the format [user@]host[:port] bind_addr[:bind_port]
     # machine format string is split on whitespace
@@ -159,38 +247,92 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     if length(machine_bind) > 1
         exeflags = `--bind-to $(machine_bind[2]) $exeflags`
     end
-    exeflags = `$exeflags --worker`
+    if cmdline_cookie
+        exeflags = `$exeflags --worker=$(cluster_cookie())`
+    else
+        exeflags = `$exeflags --worker`
+    end
 
-    machine_def = split(machine_bind[1], ':')
-    # if this machine def has a port number, add the port information to the ssh flags
-    if length(machine_def) > 2
-        throw(ArgumentError("invalid machine definition format string: invalid port format \"$machine_def\""))
-    end
-    host = machine_def[1]
-    portopt = ``
-    if length(machine_def) == 2
-        portstr = machine_def[2]
-        if !all(isdigit, portstr) || (p = parse(Int,portstr); p < 1 || p > 65535)
-            msg = "invalid machine definition format string: invalid port format \"$machine_def\""
-            throw(ArgumentError(msg))
-        end
-        portopt = ` -p $(machine_def[2]) `
-    end
+    host, portnum = parse_machine(machine_bind[1])
+    portopt = portnum === nothing ? `` : `-p $portnum`
     sshflags = `$(params[:sshflags]) $portopt`
+
+    if tunnel
+        # First it checks if ssh multiplexing has been already enabled and the master process is running.
+        # If it's already running, later ssh sessions also use the same ssh multiplexing session even if
+        # `multiplex` is not explicitly specified; otherwise the tunneling session launched later won't
+        # go to background and hang. This is because of OpenSSH implementation.
+        if success(`$ssh $sshflags -O check $host`)
+            multiplex = true
+        elseif multiplex
+            # automatically create an SSH multiplexing session at the next SSH connection
+            controlpath = "~/.ssh/julia-%r@%h:%p"
+            sshflags = `$sshflags -o ControlMaster=auto -o ControlPath=$controlpath -o ControlPersist=no`
+        end
+    end
 
     # Build up the ssh command
 
-    # the default worker timeout
-    tval = get(ENV, "JULIA_WORKER_TIMEOUT", "")
+    # pass on some environment variables by default
+    for var in ["JULIA_WORKER_TIMEOUT"]
+        if !haskey(env, var) && haskey(ENV, var)
+            env[var] = ENV[var]
+        end
+    end
 
     # Julia process with passed in command line flag arguments
-    cmds = """
-        cd -- $(shell_escape_posixly(dir))
-        $(isempty(tval) ? "" : "export JULIA_WORKER_TIMEOUT=$(shell_escape_posixly(tval))")
-        $(shell_escape_posixly(exename)) $(shell_escape_posixly(exeflags))"""
+    if shell === :posix
+        # ssh connects to a POSIX shell
 
-    # shell login (-l) with string command (-c) to launch julia process
-    cmd = `sh -l -c $cmds`
+        cmds = "exec $(shell_escape_posixly(exename)) $(shell_escape_posixly(exeflags))"
+        # set environment variables
+        for (var, val) in env
+            occursin(r"^[a-zA-Z_][a-zA-Z_0-9]*\z", var) ||
+                throw(ArgumentError("invalid env key $var"))
+            cmds = "export $(var)=$(shell_escape_posixly(val))\n$cmds"
+        end
+        # change working directory
+        cmds = "cd -- $(shell_escape_posixly(dir))\n$cmds"
+
+        # shell login (-l) with string command (-c) to launch julia process
+        remotecmd = shell_escape_posixly(`sh -l -c $cmds`)
+
+    elseif shell === :csh
+        # ssh connects to (t)csh
+
+        remotecmd = "exec $(shell_escape_csh(exename)) $(shell_escape_csh(exeflags))"
+
+        # set environment variables
+        for (var, val) in env
+            occursin(r"^[a-zA-Z_][a-zA-Z_0-9]*\z", var) ||
+                throw(ArgumentError("invalid env key $var"))
+            remotecmd = "setenv $(var) $(shell_escape_csh(val))\n$remotecmd"
+        end
+        # change working directory
+        if dir !== nothing && dir != ""
+            remotecmd = "cd $(shell_escape_csh(dir))\n$remotecmd"
+        end
+
+    elseif shell === :wincmd
+        # ssh connects to Windows cmd.exe
+
+        any(c -> c == '"', exename) && throw(ArgumentError("invalid exename"))
+
+        remotecmd = shell_escape_wincmd(escape_microsoft_c_args(exename, exeflags...))
+        # change working directory
+        if dir !== nothing && dir != ""
+            any(c -> c == '"', dir) && throw(ArgumentError("invalid dir"))
+            remotecmd = "pushd \"$(dir)\" && $remotecmd"
+        end
+        # set environment variables
+        for (var, val) in env
+            occursin(r"^[a-zA-Z0-9_()[\]{}\$\\/#',;\.@!?*+-]+\z", var) || throw(ArgumentError("invalid env key $var"))
+            remotecmd = "set $(var)=$(shell_escape_wincmd(val))&& $remotecmd"
+        end
+
+    else
+        throw(ArgumentError("invalid shell"))
+    end
 
     # remote launch with ssh with given ssh flags / host / port information
     # -T → disable pseudo-terminal allocation
@@ -198,7 +340,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     # -x → disable X11 forwarding
     # -o ClearAllForwardings → option if forwarding connections and
     #                          forwarded connections are causing collisions
-    cmd = `ssh -T -a -x -o ClearAllForwardings=yes $sshflags $host $(shell_escape_posixly(cmd))`
+    cmd = `$ssh -T -a -x -o ClearAllForwardings=yes $sshflags $host $remotecmd`
 
     # launch the remote Julia process
 
@@ -206,12 +348,13 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     # the initial julia process (Ctrl-C and teardown methods are handled through messages)
     # for the launched processes.
     io = open(detach(cmd), "r+")
-    write_cookie(io)
+    cmdline_cookie || write_cookie(io)
 
     wconfig = WorkerConfig()
     wconfig.io = io.out
     wconfig.host = host
-    wconfig.tunnel = params[:tunnel]
+    wconfig.tunnel = tunnel
+    wconfig.multiplex = multiplex
     wconfig.sshflags = sshflags
     wconfig.exeflags = exeflags
     wconfig.exename = exename
@@ -226,7 +369,8 @@ end
 
 
 function manage(manager::SSHManager, id::Integer, config::WorkerConfig, op::Symbol)
-    if op == :interrupt
+    id = Int(id)
+    if op === :interrupt
         ospid = config.ospid
         if ospid !== nothing
             host = notnothing(config.host)
@@ -256,25 +400,32 @@ end
 
 
 """
-    ssh_tunnel(user, host, bind_addr, port, sshflags) -> localport
+    ssh_tunnel(user, host, bind_addr, port, sshflags, multiplex) -> localport
 
 Establish an SSH tunnel to a remote worker.
 Return a port number `localport` such that `localhost:localport` connects to `host:port`.
 """
-function ssh_tunnel(user, host, bind_addr, port, sshflags)
+function ssh_tunnel(user, host, bind_addr, port, sshflags, multiplex)
     port = Int(port)
     cnt = ntries = 100
-    # if we cannot do port forwarding, bail immediately
+
     # the connection is forwarded to `port` on the remote server over the local port `localport`
-    # the -f option backgrounds the ssh session
-    # `sleep 60` command specifies that an alloted time of 60 seconds is allowed to start the
-    # remote julia process and establish the network connections specified by the process topology.
-    # If no connections are made within 60 seconds, ssh will exit and an error will be printed on the
-    # process that launched the remote process.
-    ssh = `ssh -T -a -x -o ExitOnForwardFailure=yes`
     while cnt > 0
         localport = next_tunnel_port()
-        if success(detach(`$ssh -f $sshflags $user@$host -L $localport:$bind_addr:$port sleep 60`))
+        if multiplex
+            # It assumes that an ssh multiplexing session has been already started by the remote worker.
+            cmd = `ssh $sshflags -O forward -L $localport:$bind_addr:$port $user@$host`
+        else
+            # if we cannot do port forwarding, fail immediately
+            # the -f option backgrounds the ssh session
+            # `sleep 60` command specifies that an allotted time of 60 seconds is allowed to start the
+            # remote julia process and establish the network connections specified by the process topology.
+            # If no connections are made within 60 seconds, ssh will exit and an error will be printed on the
+            # process that launched the remote process.
+            ssh = `ssh -T -a -x -o ExitOnForwardFailure=yes`
+            cmd = detach(`$ssh -f $sshflags $user@$host -L $localport:$bind_addr:$port sleep 60`)
+        end
+        if success(cmd)
             return localport
         end
         cnt -= 1
@@ -287,46 +438,73 @@ end
 
 # LocalManager
 struct LocalManager <: ClusterManager
-    np::Integer
+    np::Int
     restrict::Bool  # Restrict binding to 127.0.0.1 only
 end
 
 """
-    addprocs(; kwargs...) -> List of process identifiers
+    addprocs(np::Integer=Sys.CPU_THREADS; restrict=true, kwargs...) -> List of process identifiers
 
-Equivalent to `addprocs(Sys.CPU_CORES; kwargs...)`
+Launch `np` workers on the local host using the in-built `LocalManager`.
 
-Note that workers do not run a `.julia/config/startup.jl` startup script, nor do they synchronize
-their global state (such as global variables, new method definitions, and loaded modules) with any
-of the other running processes.
+Local workers inherit the current package environment (i.e., active project,
+[`LOAD_PATH`](@ref), and [`DEPOT_PATH`](@ref)) from the main process.
+
+**Keyword arguments**:
+ - `restrict::Bool`: if `true` (default) binding is restricted to `127.0.0.1`.
+ - `dir`, `exename`, `exeflags`, `env`, `topology`, `lazy`, `enable_threaded_blas`: same effect
+   as for `SSHManager`, see documentation for [`addprocs(machines::AbstractVector)`](@ref).
+
+!!! compat "Julia 1.9"
+    The inheriting of the package environment and the `env` keyword argument were
+    added in Julia 1.9.
 """
-addprocs(; kwargs...) = addprocs(Sys.CPU_CORES; kwargs...)
-
-"""
-    addprocs(np::Integer; restrict=true, kwargs...) -> List of process identifiers
-
-Launches workers using the in-built `LocalManager` which only launches workers on the
-local host. This can be used to take advantage of multiple cores. `addprocs(4)` will add 4
-processes on the local machine. If `restrict` is `true`, binding is restricted to
-`127.0.0.1`. Keyword args `dir`, `exename`, `exeflags`, `topology`, `lazy` and
-`enable_threaded_blas` have the same effect as documented for `addprocs(machines)`.
-"""
-function addprocs(np::Integer; restrict=true, kwargs...)
-    check_addprocs_args(kwargs)
-    addprocs(LocalManager(np, restrict); kwargs...)
+function addprocs(np::Integer=Sys.CPU_THREADS; restrict=true, kwargs...)
+    manager = LocalManager(np, restrict)
+    check_addprocs_args(manager, kwargs)
+    addprocs(manager; kwargs...)
 end
 
-show(io::IO, manager::LocalManager) = println(io, "LocalManager()")
+Base.show(io::IO, manager::LocalManager) = print(io, "LocalManager()")
 
 function launch(manager::LocalManager, params::Dict, launched::Array, c::Condition)
     dir = params[:dir]
     exename = params[:exename]
     exeflags = params[:exeflags]
     bind_to = manager.restrict ? `127.0.0.1` : `$(LPROC.bind_addr)`
+    env = Dict{String,String}(params[:env])
+
+    # TODO: Maybe this belongs in base/initdefs.jl as a package_environment() function
+    #       together with load_path() etc. Might be useful to have when spawning julia
+    #       processes outside of Distributed.jl too.
+    # JULIA_(LOAD|DEPOT)_PATH are used to populate (LOAD|DEPOT)_PATH on startup,
+    # but since (LOAD|DEPOT)_PATH might have changed they are re-serialized here.
+    # Users can opt-out of this by passing `env = ...` to addprocs(...).
+    pathsep = Sys.iswindows() ? ";" : ":"
+    if get(env, "JULIA_LOAD_PATH", nothing) === nothing
+        env["JULIA_LOAD_PATH"] = join(LOAD_PATH, pathsep)
+    end
+    if get(env, "JULIA_DEPOT_PATH", nothing) === nothing
+        env["JULIA_DEPOT_PATH"] = join(DEPOT_PATH, pathsep)
+    end
+
+    # If we haven't explicitly asked for threaded BLAS, prevent OpenBLAS from starting
+    # up with multiple threads, thereby sucking up a bunch of wasted memory on Windows.
+    if !params[:enable_threaded_blas] &&
+       get(env, "OPENBLAS_NUM_THREADS", nothing) === nothing
+        env["OPENBLAS_NUM_THREADS"] = "1"
+    end
+    # Set the active project on workers using JULIA_PROJECT.
+    # Users can opt-out of this by (i) passing `env = ...` or (ii) passing
+    # `--project=...` as `exeflags` to addprocs(...).
+    project = Base.ACTIVE_PROJECT[]
+    if project !== nothing && get(env, "JULIA_PROJECT", nothing) === nothing
+        env["JULIA_PROJECT"] = project
+    end
 
     for i in 1:manager.np
         cmd = `$(julia_cmd(exename)) $exeflags --bind-to $bind_to --worker`
-        io = open(detach(setenv(cmd, dir=dir)), "r+")
+        io = open(detach(setenv(addenv(cmd, env), dir=dir)), "r+")
         write_cookie(io)
 
         wconfig = WorkerConfig()
@@ -340,7 +518,7 @@ function launch(manager::LocalManager, params::Dict, launched::Array, c::Conditi
 end
 
 function manage(manager::LocalManager, id::Integer, config::WorkerConfig, op::Symbol)
-    if op == :interrupt
+    if op === :interrupt
         kill(config.process, 2)
     end
 end
@@ -373,7 +551,7 @@ manage
 struct DefaultClusterManager <: ClusterManager
 end
 
-const tunnel_hosts_map = Dict{AbstractString, Semaphore}()
+const tunnel_hosts_map = Dict{String, Semaphore}()
 
 """
     connect(manager::ClusterManager, pid::Int, config::WorkerConfig) -> (instrm::IO, outstrm::IO)
@@ -394,17 +572,17 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
 
     # master connecting to workers
     if config.io !== nothing
-        (bind_addr, port) = read_worker_host_port(config.io)
-        pubhost = coalesce(config.host, bind_addr)
+        (bind_addr, port::Int) = read_worker_host_port(config.io)
+        pubhost = something(config.host, bind_addr)
         config.host = pubhost
         config.port = port
     else
         pubhost = notnothing(config.host)
         port = notnothing(config.port)
-        bind_addr = coalesce(config.bind_addr, pubhost)
+        bind_addr = something(config.bind_addr, pubhost)
     end
 
-    tunnel = coalesce(config.tunnel, false)
+    tunnel = something(config.tunnel, false)
 
     s = split(pubhost,'@')
     user = ""
@@ -422,14 +600,16 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
 
     if tunnel
         if !haskey(tunnel_hosts_map, pubhost)
-            tunnel_hosts_map[pubhost] = Semaphore(coalesce(config.max_parallel, typemax(Int)))
+            tunnel_hosts_map[pubhost] = Semaphore(something(config.max_parallel, typemax(Int)))
         end
         sem = tunnel_hosts_map[pubhost]
 
         sshflags = notnothing(config.sshflags)
+        multiplex = something(config.multiplex, false)
         acquire(sem)
         try
-            (s, bind_addr) = connect_to_worker(pubhost, bind_addr, port, user, sshflags)
+            (s, bind_addr, forward) = connect_to_worker_with_tunnel(pubhost, bind_addr, port, user, sshflags, multiplex)
+            config.forward = forward
         finally
             release(sem)
         end
@@ -452,67 +632,84 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
 end
 
 function connect_w2w(pid::Int, config::WorkerConfig)
-    (rhost, rport) = notnothing(config.connect_at)
+    (rhost, rport) = notnothing(config.connect_at)::Tuple{String, Int}
     config.host = rhost
     config.port = rport
     (s, bind_addr) = connect_to_worker(rhost, rport)
     (s,s)
 end
 
-const client_port = Ref{Cushort}(0)
+const client_port = Ref{UInt16}(0)
 
-function socket_reuse_port()
+function socket_reuse_port(iptype)
     if ccall(:jl_has_so_reuseport, Int32, ()) == 1
-        s = TCPSocket(delay = false)
+        sock = TCPSocket(delay = false)
 
         # Some systems (e.g. Linux) require the port to be bound before setting REUSEPORT
         bind_early = Sys.islinux()
 
-        bind_early && bind_client_port(s)
-        rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Cvoid},), s.handle)
+        bind_early && bind_client_port(sock, iptype)
+        rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Cvoid},), sock.handle)
         if rc < 0
+            close(sock)
+
             # This is an issue only on systems with lots of client connections, hence delay the warning
             nworkers() > 128 && @warn "Error trying to reuse client port number, falling back to regular socket" maxlog=1
 
             # provide a clean new socket
             return TCPSocket()
         end
-        bind_early || bind_client_port(s)
-        return s
+        bind_early || bind_client_port(sock, iptype)
+        return sock
     else
         return TCPSocket()
     end
 end
 
-function bind_client_port(s)
-    err = ccall(:jl_tcp_bind, Int32, (Ptr{Cvoid}, UInt16, UInt32, Cuint),
-                            s.handle, hton(client_port[]), hton(UInt32(0)), 0)
-    uv_error("bind() failed", err)
-
-    _addr, port = getsockname(s)
-    client_port[] = port
-    return s
+function bind_client_port(sock::TCPSocket, iptype)
+    bind_host = iptype(0)
+    if Sockets.bind(sock, bind_host, client_port[])
+        _addr, port = getsockname(sock)
+        client_port[] = port
+    end
+    return sock
 end
 
 function connect_to_worker(host::AbstractString, port::Integer)
-    s = socket_reuse_port()
-    connect(s, host, UInt16(port))
-
     # Avoid calling getaddrinfo if possible - involves a DNS lookup
     # host may be a stringified ipv4 / ipv6 address or a dns name
     bind_addr = nothing
     try
-        bind_addr = string(parse(IPAddr,host))
+        bind_addr = parse(IPAddr,host)
     catch
-        bind_addr = string(getaddrinfo(host))
+        bind_addr = getaddrinfo(host)
     end
-    (s, bind_addr)
+
+    iptype = typeof(bind_addr)
+    sock = socket_reuse_port(iptype)
+    connect(sock, bind_addr, UInt16(port))
+
+    (sock, string(bind_addr))
 end
 
 
-function connect_to_worker(host::AbstractString, bind_addr::AbstractString, port::Integer, tunnel_user::AbstractString, sshflags)
-    s = connect("localhost", ssh_tunnel(tunnel_user, host, bind_addr, UInt16(port), sshflags))
-    (s, bind_addr)
+function connect_to_worker_with_tunnel(host::AbstractString, bind_addr::AbstractString, port::Integer, tunnel_user::AbstractString, sshflags, multiplex)
+    localport = ssh_tunnel(tunnel_user, host, bind_addr, UInt16(port), sshflags, multiplex)
+    s = connect("localhost", localport)
+    forward = "$localport:$bind_addr:$port"
+    (s, bind_addr, forward)
+end
+
+
+function cancel_ssh_tunnel(config::WorkerConfig)
+    host = notnothing(config.host)
+    sshflags = notnothing(config.sshflags)
+    tunnel = something(config.tunnel, false)
+    multiplex = something(config.multiplex, false)
+    if tunnel && multiplex
+        forward = notnothing(config.forward)
+        run(`ssh $sshflags -O cancel -L $forward $host`)
+    end
 end
 
 
@@ -526,7 +723,35 @@ It should cause the remote worker specified by `pid` to exit.
 on `pid`.
 """
 function kill(manager::ClusterManager, pid::Int, config::WorkerConfig)
-    remote_do(exit, pid) # For TCP based transports this will result in a close of the socket
-                       # at our end, which will result in a cleanup of the worker.
+    remote_do(exit, pid)
     nothing
+end
+
+function kill(manager::SSHManager, pid::Int, config::WorkerConfig)
+    remote_do(exit, pid)
+    cancel_ssh_tunnel(config)
+    nothing
+end
+
+function kill(manager::LocalManager, pid::Int, config::WorkerConfig; exit_timeout = 15, term_timeout = 15)
+    # First, try sending `exit()` to the remote over the usual control channels
+    remote_do(exit, pid)
+
+    timer_task = @async begin
+        sleep(exit_timeout)
+
+        # Check to see if our child exited, and if not, send an actual kill signal
+        if !process_exited(config.process)
+            @warn("Failed to gracefully kill worker $(pid), sending SIGTERM")
+            kill(config.process, Base.SIGTERM)
+
+            sleep(term_timeout)
+            if !process_exited(config.process)
+                @warn("Worker $(pid) ignored SIGTERM, sending SIGKILL")
+                kill(config.process, Base.SIGKILL)
+            end
+        end
+    end
+    errormonitor(timer_task)
+    return nothing
 end

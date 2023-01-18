@@ -47,8 +47,23 @@ static uint32_t sysimg_init_cb(const void *id)
             best_idx = i;
         }
     }
-    target = sysimg[best_idx];
     jit_targets.push_back(std::move(target));
+    return best_idx;
+}
+
+static uint32_t pkgimg_init_cb(const void *id)
+{
+    TargetData<1> target = jit_targets.front();
+    // Find the last name match or use the default one.
+    uint32_t best_idx = 0;
+    auto pkgimg = deserialize_target_data<1>((const uint8_t*)id);
+    for (uint32_t i = 0; i < pkgimg.size(); i++) {
+        auto &imgt = pkgimg[i];
+        if (imgt.name == target.name) {
+            best_idx = i;
+        }
+    }
+
     return best_idx;
 }
 
@@ -97,11 +112,20 @@ get_llvm_target_str(const TargetData<1> &data)
 
 using namespace Fallback;
 
-jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl)
+jl_image_fptrs_t jl_init_processor_sysimg(void *hdl)
 {
     if (!jit_targets.empty())
         jl_error("JIT targets already initialized");
     return parse_sysimg(hdl, sysimg_init_cb);
+}
+
+jl_image_fptrs_t jl_init_processor_pkgimg(void *hdl)
+{
+    if (jit_targets.empty())
+        jl_error("JIT targets not initialized");
+    if (jit_targets.size() > 1)
+        jl_error("Expected only one JIT target");
+    return parse_sysimg(hdl, pkgimg_init_cb);
 }
 
 std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)
@@ -118,7 +142,7 @@ const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
     return res;
 }
 
-std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void)
+extern "C" std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void)
 {
     if (jit_targets.empty())
         jl_error("JIT targets not initialized");
@@ -146,6 +170,11 @@ JL_DLLEXPORT void jl_dump_host_cpu(void)
     jl_safe_printf("Features: %s\n", jl_get_cpu_features_llvm().c_str());
 }
 
+JL_DLLEXPORT void jl_check_pkgimage_clones(char *data)
+{
+    pkgimg_init_cb(data);
+}
+
 extern "C" int jl_test_cpu_feature(jl_cpu_feature_t)
 {
     return 0;
@@ -159,4 +188,14 @@ extern "C" JL_DLLEXPORT int32_t jl_get_zero_subnormals(void)
 extern "C" JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
 {
     return isZero;
+}
+
+extern "C" JL_DLLEXPORT int32_t jl_get_default_nans(void)
+{
+    return 0;
+}
+
+extern "C" JL_DLLEXPORT int32_t jl_set_default_nans(int8_t isDefault)
+{
+    return isDefault;
 }

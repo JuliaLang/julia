@@ -76,7 +76,7 @@ end
 
 function rst(io::IO, md::Admonition)
     s = sprint(rst, md.content)
-    title = md.title == ucfirst(md.category) ? "" : md.title
+    title = md.title == uppercasefirst(md.category) ? "" : md.title
     println(io, ".. ", md.category, "::", isempty(title) ? "" : " $title")
     for line in split(rstrip(s), "\n")
         println(io, isempty(line) ? "" : "   ", line)
@@ -115,7 +115,7 @@ rstinline(io::IO, md::Vector) = !isempty(md) && rstinline(io, md...)
 # rstinline(io::IO, md::Image) = rstinline(io, ".. image:: ", md.url)
 
 function rstinline(io::IO, md::Link)
-    if contains(md.url, r":(func|obj|ref|exc|class|const|data):`\.*")
+    if occursin(r":(func|obj|ref|exc|class|const|data):`\.*", md.url)
         rstinline(io, md.url)
     else
         rstinline(io, "`", md.text, " <", md.url, ">`_")

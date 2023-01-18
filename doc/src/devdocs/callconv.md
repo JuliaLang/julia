@@ -21,7 +21,7 @@ signature.
 A small return values is returned as LLVM return values. A large return values is returned via
 the "structure return" (`sret`) convention, where the caller provides a pointer to a return slot.
 
-An argument or return values thta is a homogeneous tuple is sometimes represented as an LLVM vector
+An argument or return values that is a homogeneous tuple is sometimes represented as an LLVM vector
 instead of an LLVM array.
 
 ## JL Call Convention

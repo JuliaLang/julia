@@ -100,24 +100,28 @@ Note that `a` is written to [`stdout`](@ref) by the [`write`](@ref) function and
 value is `1` (since `0x61` is one byte).
 
 For text I/O, use the [`print`](@ref) or [`show`](@ref) methods, depending on your needs (see
-the Julia Base reference for a detailed discussion of the difference between the two):
+the documentation for these two methods for a detailed discussion of the difference between them):
 
 ```jldoctest
 julia> print(stdout, 0x61)
 97
 ```
 
+See [Custom pretty-printing](@ref man-custom-pretty-printing) for more information on how to
+implement display methods for custom types.
+
 ## IO Output Contextual Properties
 
 Sometimes IO output can benefit from the ability to pass contextual information into show methods.
 The [`IOContext`](@ref) object provides this framework for associating arbitrary metadata with an IO object.
-For example, [`showcompact`](@ref) adds a hinting parameter to the IO object that the invoked show method
-should print a shorter output (if applicable).
+For example, `:compact => true` adds a hinting parameter to the IO object that the invoked show method
+should print a shorter output (if applicable). See the [`IOContext`](@ref) documentation for a list
+of common properties.
 
 ## Working with Files
 
 Like many other environments, Julia has an [`open`](@ref) function, which takes a filename and
-returns an `IOStream` object that you can use to read and write things from the file. For example,
+returns an [`IOStream`](@ref) object that you can use to read and write things from the file. For example,
 if we have a file, `hello.txt`, whose contents are `Hello, World!`:
 
 ```julia-repl
@@ -182,16 +186,20 @@ julia> open("hello.txt") do f
 
 ## A simple TCP example
 
-Let's jump right in with a simple example involving TCP sockets. Let's first create a simple server:
+Let's jump right in with a simple example involving TCP sockets.
+This functionality is in a standard library package called `Sockets`.
+Let's first create a simple server:
 
 ```julia-repl
-julia> @async begin
+julia> using Sockets
+
+julia> errormonitor(@async begin
            server = listen(2000)
            while true
                sock = accept(server)
                println("Hello World\n")
            end
-       end
+       end)
 Task (runnable) @0x00007fd31dc11ae0
 ```
 
@@ -202,31 +210,31 @@ same function may also be used to create various other kinds of servers:
 
 ```julia-repl
 julia> listen(2000) # Listens on localhost:2000 (IPv4)
-Base.TCPServer(active)
+Sockets.TCPServer(active)
 
 julia> listen(ip"127.0.0.1",2000) # Equivalent to the first
-Base.TCPServer(active)
+Sockets.TCPServer(active)
 
 julia> listen(ip"::1",2000) # Listens on localhost:2000 (IPv6)
-Base.TCPServer(active)
+Sockets.TCPServer(active)
 
 julia> listen(IPv4(0),2001) # Listens on port 2001 on all IPv4 interfaces
-Base.TCPServer(active)
+Sockets.TCPServer(active)
 
 julia> listen(IPv6(0),2001) # Listens on port 2001 on all IPv6 interfaces
-Base.TCPServer(active)
+Sockets.TCPServer(active)
 
 julia> listen("testsocket") # Listens on a UNIX domain socket
-Base.PipeServer(active)
+Sockets.PipeServer(active)
 
 julia> listen("\\\\.\\pipe\\testsocket") # Listens on a Windows named pipe
-Base.PipeServer(active)
+Sockets.PipeServer(active)
 ```
 
 Note that the return type of the last invocation is different. This is because this server does not
 listen on TCP, but rather on a named pipe (Windows) or UNIX domain socket. Also note that Windows
 named pipe format has to be a specific pattern such that the name prefix (`\\.\pipe\`) uniquely
-identifies the [file type](https://msdn.microsoft.com/en-us/library/windows/desktop/aa365783(v=vs.85).aspx).
+identifies the [file type](https://docs.microsoft.com/windows/desktop/ipc/pipe-names).
 The difference between TCP and named pipes or
 UNIX domain sockets is subtle and has to do with the [`accept`](@ref) and [`connect`](@ref)
 methods. The [`accept`](@ref) method retrieves a connection to the client that is connecting on
@@ -257,23 +265,23 @@ printed the message and waited for the next client. Reading and writing works in
 To see this, consider the following simple echo server:
 
 ```julia-repl
-julia> @async begin
+julia> errormonitor(@async begin
            server = listen(2001)
            while true
                sock = accept(server)
                @async while isopen(sock)
-                   write(sock,readline(sock))
+                   write(sock, readline(sock, keep=true))
                end
            end
-       end
+       end)
 Task (runnable) @0x00007fd31dc12e60
 
 julia> clientside = connect(2001)
 TCPSocket(RawFD(28) open, 0 bytes waiting)
 
-julia> @async while true
-           write(stdout,readline(clientside))
-       end
+julia> errormonitor(@async while isopen(clientside)
+           write(stdout, readline(clientside, keep=true))
+       end)
 Task (runnable) @0x00007fd31dc11870
 
 julia> println(clientside,"Hello World from the Echo Server")
@@ -303,4 +311,108 @@ resolution:
 ```julia-repl
 julia> getaddrinfo("google.com")
 ip"74.125.226.225"
+```
+
+## Asynchronous I/O
+
+
+All I/O operations exposed by [`Base.read`](@ref) and [`Base.write`](@ref) can be performed
+asynchronously through the use of [coroutines](@ref man-tasks). You can create a new coroutine to
+read from or write to a stream using the [`@async`](@ref) macro:
+
+```julia-repl
+julia> task = @async open("foo.txt", "w") do io
+           write(io, "Hello, World!")
+       end;
+
+julia> wait(task)
+
+julia> readlines("foo.txt")
+1-element Array{String,1}:
+ "Hello, World!"
+```
+
+It's common to run into situations where you want to perform multiple asynchronous operations
+concurrently and wait until they've all completed. You can use the [`@sync`](@ref) macro to cause
+your program to block until all of the coroutines it wraps around have exited:
+
+```julia-repl
+julia> using Sockets
+
+julia> @sync for hostname in ("google.com", "github.com", "julialang.org")
+           @async begin
+               conn = connect(hostname, 80)
+               write(conn, "GET / HTTP/1.1\r\nHost:$(hostname)\r\n\r\n")
+               readline(conn, keep=true)
+               println("Finished connection to $(hostname)")
+           end
+       end
+Finished connection to google.com
+Finished connection to julialang.org
+Finished connection to github.com
+```
+
+## Multicast
+
+Julia supports [multicast](https://datatracker.ietf.org/doc/html/rfc1112) over IPv4 and IPv6 using the User Datagram Protocol ([UDP](https://datatracker.ietf.org/doc/html/rfc768)) as transport.
+
+Unlike the Transmission Control Protocol ([TCP](https://datatracker.ietf.org/doc/html/rfc793)), UDP makes almost no assumptions about the needs of the application.
+TCP provides flow control (it accelerates and decelerates to maximize throughput), reliability (lost or corrupt packets are automatically retransmitted), sequencing (packets are ordered by the operating system before they are given to the application), segment size, and session setup and teardown.
+UDP provides no such features.
+
+A common use for UDP is in multicast applications.
+TCP is a stateful protocol for communication between exactly two devices.
+UDP can use special multicast addresses to allow simultaneous communication between many devices.
+
+### Receiving IP Multicast Packets
+
+To transmit data over UDP multicast, simply `recv` on the socket, and the first packet received will be returned. Note that it may not be the first packet that you sent however!
+
+```julia
+using Sockets
+group = ip"228.5.6.7"
+socket = Sockets.UDPSocket()
+bind(socket, ip"0.0.0.0", 6789)
+join_multicast_group(socket, group)
+println(String(recv(socket)))
+leave_multicast_group(socket, group)
+close(socket)
+```
+
+### Sending IP Multicast Packets
+
+To transmit data over UDP multicast, simply `send` to the socket.
+Notice that it is not necessary for a sender to join the multicast group.
+
+```julia
+using Sockets
+group = ip"228.5.6.7"
+socket = Sockets.UDPSocket()
+send(socket, group, 6789, "Hello over IPv4")
+close(socket)
+```
+
+### IPv6 Example
+
+This example gives the same functionality as the previous program, but uses IPv6 as the network-layer protocol.
+
+Listener:
+```julia
+using Sockets
+group = Sockets.IPv6("ff05::5:6:7")
+socket = Sockets.UDPSocket()
+bind(socket, Sockets.IPv6("::"), 6789)
+join_multicast_group(socket, group)
+println(String(recv(socket)))
+leave_multicast_group(socket, group)
+close(socket)
+```
+
+Sender:
+```julia
+using Sockets
+group = Sockets.IPv6("ff05::5:6:7")
+socket = Sockets.UDPSocket()
+send(socket, group, 6789, "Hello over IPv6")
+close(socket)
 ```

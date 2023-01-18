@@ -302,6 +302,14 @@ end
     @test checked_abs(BigInt(1)) == BigInt(1)
     @test checked_neg(BigInt(-1)) == BigInt(1)
     @test checked_neg(BigInt(1)) == BigInt(-1)
+    @test checked_add(BigInt(1), BigInt(1)) == BigInt(2)
+    @test checked_sub(BigInt(1), BigInt(2)) == BigInt(-1)
+    @test checked_mul(BigInt(2), BigInt(10)) == BigInt(20)
+    @test checked_div(BigInt(10), BigInt(2)) == BigInt(5)
+    @test checked_rem(BigInt(9), BigInt(4)) == BigInt(1)
+    @test checked_fld(BigInt(10), BigInt(3)) == BigInt(3)
+    @test checked_mod(BigInt(9), BigInt(4)) == BigInt(1)
+    @test checked_cld(BigInt(10), BigInt(3)) == BigInt(4)
 end
 
 @testset "Additional tests" begin
@@ -333,4 +341,20 @@ end
     @test checked_mul(UInt128(3), UInt128(4)) === UInt128(12)
     @test_throws OverflowError checked_mul(UInt128(2)^127, UInt128(2))
 
+end
+
+@testset "Multiple arguments for add, mul" begin
+    @test checked_add(1, 2, 3) === 6
+    @test checked_add(1, 2, 3, 4) === 10
+    @test checked_add(1, 2, 3, 4, 5) === 15
+    @test checked_add(1, 2, 3, 4, 5, 6) === 21
+    @test checked_add(1, 2, 3, 4, 5, 6, 7) === 28
+    @test checked_add(1, 2, 3, 4, 5, 6, 7, 8) === 36
+
+    @test checked_mul(1, 2, 3) === 6
+    @test checked_mul(1, 2, 3, 4) === 24
+    @test checked_mul(1, 2, 3, 4, 5) === 120
+    @test checked_mul(1, 2, 3, 4, 5, 6) === 720
+    @test checked_mul(1, 2, 3, 4, 5, 6, 7) === 5040
+    @test checked_mul(1, 2, 3, 4, 5, 6, 7, 8) === 40320
 end

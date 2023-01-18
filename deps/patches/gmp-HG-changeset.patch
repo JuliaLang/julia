@@ -1,0 +1,520 @@
+
+# HG changeset patch
+# User Torbjorn Granlund <tg@gmplib.org>
+# Date 1606685500 -3600
+# Node ID 5f32dbc41afc1f8cd77af1614f0caeb24deb7d7b
+# Parent  94c84d919f83ba963ed1809f8e80c7bef32db55c
+Avoid the x18 register since it is reserved on Darwin.
+
+diff -r 94c84d919f83 -r 5f32dbc41afc mpn/arm64/aors_n.asm
+--- a/mpn/arm64/aors_n.asm	Sat Nov 28 23:38:32 2020 +0100
++++ b/mpn/arm64/aors_n.asm	Sun Nov 29 22:31:40 2020 +0100
+@@ -68,7 +68,7 @@
+ EPILOGUE()
+ PROLOGUE(func_n)
+ 	CLRCY
+-L(ent):	lsr	x18, n, #2
++L(ent):	lsr	x17, n, #2
+ 	tbz	n, #0, L(bx0)
+ 
+ L(bx1):	ldr	x7, [up]
+@@ -77,7 +77,7 @@
+ 	str	x13, [rp],#8
+ 	tbnz	n, #1, L(b11)
+ 
+-L(b01):	cbz	x18, L(ret)
++L(b01):	cbz	x17, L(ret)
+ 	ldp	x4, x5, [up,#8]
+ 	ldp	x8, x9, [vp,#8]
+ 	sub	up, up, #8
+@@ -88,7 +88,7 @@
+ 	ldp	x10, x11, [vp,#8]
+ 	add	up, up, #8
+ 	add	vp, vp, #8
+-	cbz	x18, L(end)
++	cbz	x17, L(end)
+ 	b	L(top)
+ 
+ L(bx0):	tbnz	n, #1, L(b10)
+@@ -101,7 +101,7 @@
+ 
+ L(b10):	ldp	x6, x7, [up]
+ 	ldp	x10, x11, [vp]
+-	cbz	x18, L(end)
++	cbz	x17, L(end)
+ 
+ 	ALIGN(16)
+ L(top):	ldp	x4, x5, [up,#16]
+@@ -114,8 +114,8 @@
+ 	ADDSUBC	x12, x4, x8
+ 	ADDSUBC	x13, x5, x9
+ 	stp	x12, x13, [rp],#16
+-	sub	x18, x18, #1
+-	cbnz	x18, L(top)
++	sub	x17, x17, #1
++	cbnz	x17, L(top)
+ 
+ L(end):	ADDSUBC	x12, x6, x10
+ 	ADDSUBC	x13, x7, x11
+diff -r 94c84d919f83 -r 5f32dbc41afc mpn/arm64/aorsmul_1.asm
+--- a/mpn/arm64/aorsmul_1.asm	Sat Nov 28 23:38:32 2020 +0100
++++ b/mpn/arm64/aorsmul_1.asm	Sun Nov 29 22:31:40 2020 +0100
+@@ -32,10 +32,15 @@
+ 
+ include(`../config.m4')
+ 
+-C	     cycles/limb
+-C Cortex-A53	9.3-9.8
+-C Cortex-A57	 7.0
+-C X-Gene	 5.0
++C	       addmul_1        submul_1
++C	     cycles/limb     cycles/limb
++C Cortex-A53	9.3-9.8		9.3-9.8
++C Cortex-A55    9.0-9.5		9.3-9.8
++C Cortex-A57	 7		 7
++C Cortex-A72
++C Cortex-A73	 6		 6
++C X-Gene	 5		 5
++C Apple M1	 1.75		 1.75
+ 
+ C NOTES
+ C  * It is possible to keep the carry chain alive between the addition blocks
+diff -r 94c84d919f83 -r 5f32dbc41afc mpn/arm64/aorsorrlshC_n.asm
+--- a/mpn/arm64/aorsorrlshC_n.asm	Sat Nov 28 23:38:32 2020 +0100
++++ b/mpn/arm64/aorsorrlshC_n.asm	Sun Nov 29 22:31:40 2020 +0100
+@@ -65,14 +65,14 @@
+ 
+ ASM_START()
+ PROLOGUE(func_n)
+-	lsr	x18, n, #2
++	lsr	x6, n, #2
+ 	tbz	n, #0, L(bx0)
+ 
+ L(bx1):	ldr	x5, [up]
+ 	tbnz	n, #1, L(b11)
+ 
+ L(b01):	ldr	x11, [vp]
+-	cbz	x18, L(1)
++	cbz	x6, L(1)
+ 	ldp	x8, x9, [vp,#8]
+ 	lsl	x13, x11, #LSH
+ 	ADDSUB(	x15, x13, x5)
+@@ -94,7 +94,7 @@
+ 	ADDSUB(	x17, x13, x5)
+ 	str	x17, [rp],#8
+ 	sub	up, up, #8
+-	cbz	x18, L(end)
++	cbz	x6, L(end)
+ 	b	L(top)
+ 
+ L(bx0):	tbnz	n, #1, L(b10)
+@@ -107,7 +107,7 @@
+ L(b10):	CLRRCY(	x9)
+ 	ldp	x10, x11, [vp]
+ 	sub	up, up, #16
+-	cbz	x18, L(end)
++	cbz	x6, L(end)
+ 
+ 	ALIGN(16)
+ L(top):	ldp	x4, x5, [up,#16]
+@@ -124,8 +124,8 @@
+ 	ADDSUBC(x16, x12, x4)
+ 	ADDSUBC(x17, x13, x5)
+ 	stp	x16, x17, [rp],#16
+-	sub	x18, x18, #1
+-	cbnz	x18, L(top)
++	sub	x6, x6, #1
++	cbnz	x6, L(top)
+ 
+ L(end):	ldp	x4, x5, [up,#16]
+ 	extr	x12, x10, x9, #RSH
+diff -r 94c84d919f83 -r 5f32dbc41afc mpn/arm64/cnd_aors_n.asm
+--- a/mpn/arm64/cnd_aors_n.asm	Sat Nov 28 23:38:32 2020 +0100
++++ b/mpn/arm64/cnd_aors_n.asm	Sun Nov 29 22:31:40 2020 +0100
+@@ -65,7 +65,7 @@
+ 
+ 	CLRCY
+ 
+-	lsr	x18, n, #2
++	lsr	x17, n, #2
+ 	tbz	n, #0, L(bx0)
+ 
+ L(bx1):	ldr	x13, [vp]
+@@ -75,7 +75,7 @@
+ 	str	x9, [rp]
+ 	tbnz	n, #1, L(b11)
+ 
+-L(b01):	cbz	x18, L(rt)
++L(b01):	cbz	x17, L(rt)
+ 	ldp	x12, x13, [vp,#8]
+ 	ldp	x10, x11, [up,#8]
+ 	sub	up, up, #8
+@@ -86,7 +86,7 @@
+ L(b11):	ldp	x12, x13, [vp,#8]!
+ 	ldp	x10, x11, [up,#8]!
+ 	sub	rp, rp, #8
+-	cbz	x18, L(end)
++	cbz	x17, L(end)
+ 	b	L(top)
+ 
+ L(bx0):	ldp	x12, x13, [vp]
+@@ -99,7 +99,7 @@
+ 	b	L(mid)
+ 
+ L(b10):	sub	rp, rp, #16
+-	cbz	x18, L(end)
++	cbz	x17, L(end)
+ 
+ 	ALIGN(16)
+ L(top):	bic	x6, x12, cnd
+@@ -116,8 +116,8 @@
+ 	ADDSUBC	x9, x11, x7
+ 	ldp	x10, x11, [up,#32]!
+ 	stp	x8, x9, [rp,#32]!
+-	sub	x18, x18, #1
+-	cbnz	x18, L(top)
++	sub	x17, x17, #1
++	cbnz	x17, L(top)
+ 
+ L(end):	bic	x6, x12, cnd
+ 	bic	x7, x13, cnd
+diff -r 94c84d919f83 -r 5f32dbc41afc mpn/arm64/logops_n.asm
+--- a/mpn/arm64/logops_n.asm	Sat Nov 28 23:38:32 2020 +0100
++++ b/mpn/arm64/logops_n.asm	Sun Nov 29 22:31:40 2020 +0100
+@@ -78,7 +78,7 @@
+ 
+ ASM_START()
+ PROLOGUE(func)
+-	lsr	x18, n, #2
++	lsr	x17, n, #2
+ 	tbz	n, #0, L(bx0)
+ 
+ L(bx1):	ldr	x7, [up]
+@@ -88,7 +88,7 @@
+ 	str	x15, [rp],#8
+ 	tbnz	n, #1, L(b11)
+ 
+-L(b01):	cbz	x18, L(ret)
++L(b01):	cbz	x17, L(ret)
+ 	ldp	x4, x5, [up,#8]
+ 	ldp	x8, x9, [vp,#8]
+ 	sub	up, up, #8
+@@ -99,7 +99,7 @@
+ 	ldp	x10, x11, [vp,#8]
+ 	add	up, up, #8
+ 	add	vp, vp, #8
+-	cbz	x18, L(end)
++	cbz	x17, L(end)
+ 	b	L(top)
+ 
+ L(bx0):	tbnz	n, #1, L(b10)
+@@ -110,7 +110,7 @@
+ 
+ L(b10):	ldp	x6, x7, [up]
+ 	ldp	x10, x11, [vp]
+-	cbz	x18, L(end)
++	cbz	x17, L(end)
+ 
+ 	ALIGN(16)
+ L(top):	ldp	x4, x5, [up,#16]
+@@ -127,8 +127,8 @@
+ 	POSTOP(	x12)
+ 	POSTOP(	x13)
+ 	stp	x12, x13, [rp],#16
+-	sub	x18, x18, #1
+-	cbnz	x18, L(top)
++	sub	x17, x17, #1
++	cbnz	x17, L(top)
+ 
+ L(end):	LOGOP(	x12, x6, x10)
+ 	LOGOP(	x13, x7, x11)
+diff -r 94c84d919f83 -r 5f32dbc41afc mpn/arm64/lshift.asm
+--- a/mpn/arm64/lshift.asm	Sat Nov 28 23:38:32 2020 +0100
++++ b/mpn/arm64/lshift.asm	Sun Nov 29 22:31:40 2020 +0100
+@@ -61,7 +61,7 @@
+ 	add	rp, rp_arg, n, lsl #3
+ 	add	up, up, n, lsl #3
+ 	sub	tnc, xzr, cnt
+-	lsr	x18, n, #2
++	lsr	x17, n, #2
+ 	tbz	n, #0, L(bx0)
+ 
+ L(bx1):	ldr	x4, [up,#-8]
+@@ -69,7 +69,7 @@
+ 
+ L(b01):	NSHIFT	x0, x4, tnc
+ 	PSHIFT	x2, x4, cnt
+-	cbnz	x18, L(gt1)
++	cbnz	x17, L(gt1)
+ 	str	x2, [rp,#-8]
+ 	ret
+ L(gt1):	ldp	x4, x5, [up,#-24]
+@@ -89,7 +89,7 @@
+ 	PSHIFT	x13, x5, cnt
+ 	NSHIFT	x10, x4, tnc
+ 	PSHIFT	x2, x4, cnt
+-	cbnz	x18, L(gt2)
++	cbnz	x17, L(gt2)
+ 	orr	x10, x10, x13
+ 	stp	x2, x10, [rp,#-16]
+ 	ret
+@@ -123,11 +123,11 @@
+ 	orr	x11, x12, x2
+ 	stp	x10, x11, [rp,#-32]!
+ 	PSHIFT	x2, x4, cnt
+-L(lo0):	sub	x18, x18, #1
++L(lo0):	sub	x17, x17, #1
+ L(lo3):	NSHIFT	x10, x6, tnc
+ 	PSHIFT	x13, x7, cnt
+ 	NSHIFT	x12, x7, tnc
+-	cbnz	x18, L(top)
++	cbnz	x17, L(top)
+ 
+ L(end):	orr	x10, x10, x13
+ 	orr	x11, x12, x2
+diff -r 94c84d919f83 -r 5f32dbc41afc mpn/arm64/lshiftc.asm
+--- a/mpn/arm64/lshiftc.asm	Sat Nov 28 23:38:32 2020 +0100
++++ b/mpn/arm64/lshiftc.asm	Sun Nov 29 22:31:40 2020 +0100
+@@ -61,7 +61,7 @@
+ 	add	rp, rp_arg, n, lsl #3
+ 	add	up, up, n, lsl #3
+ 	sub	tnc, xzr, cnt
+-	lsr	x18, n, #2
++	lsr	x17, n, #2
+ 	tbz	n, #0, L(bx0)
+ 
+ L(bx1):	ldr	x4, [up,#-8]
+@@ -69,7 +69,7 @@
+ 
+ L(b01):	NSHIFT	x0, x4, tnc
+ 	PSHIFT	x2, x4, cnt
+-	cbnz	x18, L(gt1)
++	cbnz	x17, L(gt1)
+ 	mvn	x2, x2
+ 	str	x2, [rp,#-8]
+ 	ret
+@@ -90,7 +90,7 @@
+ 	PSHIFT	x13, x5, cnt
+ 	NSHIFT	x10, x4, tnc
+ 	PSHIFT	x2, x4, cnt
+-	cbnz	x18, L(gt2)
++	cbnz	x17, L(gt2)
+ 	eon	x10, x10, x13
+ 	mvn	x2, x2
+ 	stp	x2, x10, [rp,#-16]
+@@ -125,11 +125,11 @@
+ 	eon	x11, x12, x2
+ 	stp	x10, x11, [rp,#-32]!
+ 	PSHIFT	x2, x4, cnt
+-L(lo0):	sub	x18, x18, #1
++L(lo0):	sub	x17, x17, #1
+ L(lo3):	NSHIFT	x10, x6, tnc
+ 	PSHIFT	x13, x7, cnt
+ 	NSHIFT	x12, x7, tnc
+-	cbnz	x18, L(top)
++	cbnz	x17, L(top)
+ 
+ L(end):	eon	x10, x10, x13
+ 	eon	x11, x12, x2
+diff -r 94c84d919f83 -r 5f32dbc41afc mpn/arm64/mul_1.asm
+--- a/mpn/arm64/mul_1.asm	Sat Nov 28 23:38:32 2020 +0100
++++ b/mpn/arm64/mul_1.asm	Sun Nov 29 22:31:40 2020 +0100
+@@ -56,7 +56,7 @@
+ 
+ PROLOGUE(mpn_mul_1)
+ 	adds	x4, xzr, xzr		C clear register and cy flag
+-L(com):	lsr	x18, n, #2
++L(com):	lsr	x17, n, #2
+ 	tbnz	n, #0, L(bx1)
+ 
+ L(bx0):	mov	x11, x4
+@@ -65,7 +65,7 @@
+ L(b10):	ldp	x4, x5, [up]
+ 	mul	x8, x4, v0
+ 	umulh	x10, x4, v0
+-	cbz	x18, L(2)
++	cbz	x17, L(2)
+ 	ldp	x6, x7, [up,#16]!
+ 	mul	x9, x5, v0
+ 	b	L(mid)-8
+@@ -80,7 +80,7 @@
+ 	str	x9, [rp],#8
+ 	tbnz	n, #1, L(b10)
+ 
+-L(b01):	cbz	x18, L(1)
++L(b01):	cbz	x17, L(1)
+ 
+ L(b00):	ldp	x6, x7, [up]
+ 	mul	x8, x6, v0
+@@ -90,8 +90,8 @@
+ 	adcs	x12, x8, x11
+ 	umulh	x11, x7, v0
+ 	add	rp, rp, #16
+-	sub	x18, x18, #1
+-	cbz	x18, L(end)
++	sub	x17, x17, #1
++	cbz	x17, L(end)
+ 
+ 	ALIGN(16)
+ L(top):	mul	x8, x4, v0
+@@ -110,8 +110,8 @@
+ 	stp	x12, x13, [rp],#32
+ 	adcs	x12, x8, x11
+ 	umulh	x11, x7, v0
+-	sub	x18, x18, #1
+-	cbnz	x18, L(top)
++	sub	x17, x17, #1
++	cbnz	x17, L(top)
+ 
+ L(end):	mul	x8, x4, v0
+ 	adcs	x13, x9, x10
+diff -r 94c84d919f83 -r 5f32dbc41afc mpn/arm64/rsh1aors_n.asm
+--- a/mpn/arm64/rsh1aors_n.asm	Sat Nov 28 23:38:32 2020 +0100
++++ b/mpn/arm64/rsh1aors_n.asm	Sun Nov 29 22:31:40 2020 +0100
+@@ -59,7 +59,7 @@
+ 
+ ASM_START()
+ PROLOGUE(func_n)
+-	lsr	x18, n, #2
++	lsr	x6, n, #2
+ 
+ 	tbz	n, #0, L(bx0)
+ 
+@@ -69,7 +69,7 @@
+ 
+ L(b01):	ADDSUB	x13, x5, x9
+ 	and	x10, x13, #1
+-	cbz	x18, L(1)
++	cbz	x6, L(1)
+ 	ldp	x4, x5, [up],#48
+ 	ldp	x8, x9, [vp],#48
+ 	ADDSUBC	x14, x4, x8
+@@ -80,8 +80,8 @@
+ 	ADDSUBC	x12, x4, x8
+ 	ADDSUBC	x13, x5, x9
+ 	str	x17, [rp], #24
+-	sub	x18, x18, #1
+-	cbz	x18, L(end)
++	sub	x6, x6, #1
++	cbz	x6, L(end)
+ 	b	L(top)
+ 
+ L(1):	cset	x14, COND
+@@ -97,7 +97,7 @@
+ 	ldp	x8, x9, [vp],#32
+ 	ADDSUBC	x12, x4, x8
+ 	ADDSUBC	x13, x5, x9
+-	cbz	x18, L(3)
++	cbz	x6, L(3)
+ 	ldp	x4, x5, [up,#-16]
+ 	ldp	x8, x9, [vp,#-16]
+ 	extr	x17, x12, x15, #1
+@@ -117,7 +117,7 @@
+ 	ADDSUB	x12, x4, x8
+ 	ADDSUBC	x13, x5, x9
+ 	and	x10, x12, #1
+-	cbz	x18, L(2)
++	cbz	x6, L(2)
+ 	ldp	x4, x5, [up,#-16]
+ 	ldp	x8, x9, [vp,#-16]
+ 	ADDSUBC	x14, x4, x8
+@@ -134,8 +134,8 @@
+ 	ADDSUBC	x12, x4, x8
+ 	ADDSUBC	x13, x5, x9
+ 	add	rp, rp, #16
+-	sub	x18, x18, #1
+-	cbz	x18, L(end)
++	sub	x6, x6, #1
++	cbz	x6, L(end)
+ 
+ 	ALIGN(16)
+ L(top):	ldp	x4, x5, [up,#-16]
+@@ -152,8 +152,8 @@
+ 	ADDSUBC	x12, x4, x8
+ 	ADDSUBC	x13, x5, x9
+ 	stp	x16, x17, [rp],#32
+-	sub	x18, x18, #1
+-	cbnz	x18, L(top)
++	sub	x6, x6, #1
++	cbnz	x6, L(top)
+ 
+ L(end):	extr	x16, x15, x14, #1
+ 	extr	x17, x12, x15, #1
+diff -r 94c84d919f83 -r 5f32dbc41afc mpn/arm64/rshift.asm
+--- a/mpn/arm64/rshift.asm	Sat Nov 28 23:38:32 2020 +0100
++++ b/mpn/arm64/rshift.asm	Sun Nov 29 22:31:40 2020 +0100
+@@ -60,7 +60,7 @@
+ PROLOGUE(mpn_rshift)
+ 	mov	rp, rp_arg
+ 	sub	tnc, xzr, cnt
+-	lsr	x18, n, #2
++	lsr	x17, n, #2
+ 	tbz	n, #0, L(bx0)
+ 
+ L(bx1):	ldr	x5, [up]
+@@ -68,7 +68,7 @@
+ 
+ L(b01):	NSHIFT	x0, x5, tnc
+ 	PSHIFT	x2, x5, cnt
+-	cbnz	x18, L(gt1)
++	cbnz	x17, L(gt1)
+ 	str	x2, [rp]
+ 	ret
+ L(gt1):	ldp	x4, x5, [up,#8]
+@@ -89,7 +89,7 @@
+ 	PSHIFT	x13, x4, cnt
+ 	NSHIFT	x10, x5, tnc
+ 	PSHIFT	x2, x5, cnt
+-	cbnz	x18, L(gt2)
++	cbnz	x17, L(gt2)
+ 	orr	x10, x10, x13
+ 	stp	x10, x2, [rp]
+ 	ret
+@@ -121,11 +121,11 @@
+ 	orr	x11, x12, x2
+ 	stp	x11, x10, [rp,#32]!
+ 	PSHIFT	x2, x5, cnt
+-L(lo0):	sub	x18, x18, #1
++L(lo0):	sub	x17, x17, #1
+ L(lo3):	NSHIFT	x10, x7, tnc
+ 	NSHIFT	x12, x6, tnc
+ 	PSHIFT	x13, x6, cnt
+-	cbnz	x18, L(top)
++	cbnz	x17, L(top)
+ 
+ L(end):	orr	x10, x10, x13
+ 	orr	x11, x12, x2
+diff -r 94c84d919f83 -r 5f32dbc41afc mpn/arm64/sqr_diag_addlsh1.asm
+--- a/mpn/arm64/sqr_diag_addlsh1.asm	Sat Nov 28 23:38:32 2020 +0100
++++ b/mpn/arm64/sqr_diag_addlsh1.asm	Sun Nov 29 22:31:40 2020 +0100
+@@ -47,7 +47,7 @@
+ ASM_START()
+ PROLOGUE(mpn_sqr_diag_addlsh1)
+ 	ldr	x15, [up],#8
+-	lsr	x18, n, #1
++	lsr	x14, n, #1
+ 	tbz	n, #0, L(bx0)
+ 
+ L(bx1):	adds	x7, xzr, xzr
+@@ -62,8 +62,8 @@
+ 	ldr	x17, [up],#16
+ 	ldp	x6, x7, [tp],#32
+ 	umulh	x11, x15, x15
+-	sub	x18, x18, #1
+-	cbz	x18, L(end)
++	sub	x14, x14, #1
++	cbz	x14, L(end)
+ 
+ 	ALIGN(16)
+ L(top):	extr	x9, x6, x5, #63
+@@ -84,8 +84,8 @@
+ 	extr	x8, x5, x4, #63
+ 	stp	x12, x13, [rp],#16
+ 	adcs	x12, x8, x10
+-	sub	x18, x18, #1
+-	cbnz	x18, L(top)
++	sub	x14, x14, #1
++	cbnz	x14, L(top)
+ 
+ L(end):	extr	x9, x6, x5, #63
+ 	mul	x10, x17, x17

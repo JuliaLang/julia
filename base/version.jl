@@ -1,19 +1,51 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-## semantic version numbers (http://semver.org)
+## semantic version numbers (https://semver.org/)
+
+const VerTuple = Tuple{Vararg{Union{UInt64,String}}}
 
 const VInt = UInt32
+"""
+    VersionNumber
 
+Version number type which follows the specifications of
+[semantic versioning (semver)](https://semver.org/), composed of major, minor
+and patch numeric values, followed by pre-release and build
+alpha-numeric annotations.
+
+`VersionNumber` objects can be compared with all of the standard comparison
+operators (`==`, `<`, `<=`, etc.), with the result following semver rules.
+
+See also [`@v_str`](@ref) to efficiently construct `VersionNumber` objects
+from semver-format literal strings, [`VERSION`](@ref) for the `VersionNumber`
+of Julia itself, and [Version Number Literals](@ref man-version-number-literals)
+in the manual.
+
+# Examples
+```jldoctest
+julia> a = VersionNumber(1, 2, 3)
+v"1.2.3"
+
+julia> a >= v"1.2"
+true
+
+julia> b = VersionNumber("2.0.1-rc1")
+v"2.0.1-rc1"
+
+julia> b >= v"2.0.1"
+false
+```
+"""
 struct VersionNumber
     major::VInt
     minor::VInt
     patch::VInt
-    prerelease::Tuple{Vararg{Union{UInt64,String}}}
-    build::Tuple{Vararg{Union{UInt64,String}}}
+    prerelease::VerTuple
+    build::VerTuple
 
     function VersionNumber(major::VInt, minor::VInt, patch::VInt,
-            pre::Tuple{Vararg{Union{UInt64,String}}},
-            bld::Tuple{Vararg{Union{UInt64,String}}})
+            pre::VerTuple,
+            bld::VerTuple)
         major >= 0 || throw(ArgumentError("invalid negative major version: $major"))
         minor >= 0 || throw(ArgumentError("invalid negative minor version: $minor"))
         patch >= 0 || throw(ArgumentError("invalid negative patch version: $patch"))
@@ -21,7 +53,7 @@ struct VersionNumber
             if ident isa Integer
                 ident >= 0 || throw(ArgumentError("invalid negative pre-release identifier: $ident"))
             else
-                if !contains(ident, r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i) ||
+                if !occursin(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
                     isempty(ident) && !(length(pre)==1 && isempty(bld))
                     throw(ArgumentError("invalid pre-release identifier: $(repr(ident))"))
                 end
@@ -31,7 +63,7 @@ struct VersionNumber
             if ident isa Integer
                 ident >= 0 || throw(ArgumentError("invalid negative build identifier: $ident"))
             else
-                if !contains(ident, r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i) ||
+                if !occursin(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
                     isempty(ident) && length(bld)!=1
                     throw(ArgumentError("invalid build identifier: $(repr(ident))"))
                 end
@@ -48,6 +80,7 @@ VersionNumber(major::Integer, minor::Integer = 0, patch::Integer = 0,
         map(x->x isa Integer ? UInt64(x) : String(x), bld))
 
 VersionNumber(v::Tuple) = VersionNumber(v...)
+VersionNumber(v::VersionNumber) = v
 
 function print(io::IO, v::VersionNumber)
     v == typemax(VersionNumber) && return print(io, "∞")
@@ -67,6 +100,8 @@ function print(io::IO, v::VersionNumber)
 end
 show(io::IO, v::VersionNumber) = print(io, "v\"", v, "\"")
 
+Broadcast.broadcastable(v::VersionNumber) = Ref(v)
+
 const VERSION_REGEX = r"^
     v?                                      # prefix        (optional)
     (\d+)                                   # major         (required)
@@ -80,19 +115,17 @@ const VERSION_REGEX = r"^
 $"ix
 
 function split_idents(s::AbstractString)
-    idents = split(s, '.')
-    ntuple(length(idents)) do i
-        ident = idents[i]
-        contains(ident, r"^\d+$") ? parse(UInt64, ident) : String(ident)
-    end
+    idents = eachsplit(s, '.')
+    pidents = Union{UInt64,String}[occursin(r"^\d+$", ident) ? parse(UInt64, ident) : String(ident) for ident in idents]
+    return tuple(pidents...)::VerTuple
 end
 
-function VersionNumber(v::AbstractString)
+function tryparse(::Type{VersionNumber}, v::AbstractString)
     v == "∞" && return typemax(VersionNumber)
-    m = match(VERSION_REGEX, v)
-    m === nothing && throw(ArgumentError("invalid version string: $v"))
+    m = match(VERSION_REGEX, String(v)::String)
+    m === nothing && return nothing
     major, minor, patch, minus, prerl, plus, build = m.captures
-    major = parse(VInt, major)
+    major = parse(VInt, major::AbstractString)
     minor = minor !== nothing ? parse(VInt, minor) : VInt(0)
     patch = patch !== nothing ? parse(VInt, patch) : VInt(0)
     if prerl !== nothing && !isempty(prerl) && prerl[1] == '-'
@@ -100,37 +133,52 @@ function VersionNumber(v::AbstractString)
     end
     prerl = prerl !== nothing ? split_idents(prerl) : minus !== nothing ? ("",) : ()
     build = build !== nothing ? split_idents(build) : plus  !== nothing ? ("",) : ()
-    return VersionNumber(major, minor, patch, prerl, build)
+    return VersionNumber(major, minor, patch, prerl::VerTuple, build::VerTuple)
 end
 
-macro v_str(v); VersionNumber(v); end
+function parse(::Type{VersionNumber}, v::AbstractString)
+    ver = tryparse(VersionNumber, v)
+    ver === nothing && throw(ArgumentError("invalid version string: $v"))
+    return ver
+end
 
-typemin(::Type{VersionNumber}) = v"0-"
+VersionNumber(v::AbstractString) = parse(VersionNumber, v)
+
+"""
+    @v_str
+
+String macro used to parse a string to a [`VersionNumber`](@ref).
+
+# Examples
+```jldoctest
+julia> v"1.2.3"
+v"1.2.3"
+
+julia> v"2.0.1-rc1"
+v"2.0.1-rc1"
+```
+"""
+macro v_str(v); VersionNumber(v); end
 
 function typemax(::Type{VersionNumber})
     ∞ = typemax(VInt)
     VersionNumber(∞, ∞, ∞, (), ("",))
 end
 
+typemin(::Type{VersionNumber}) = v"0-"
+
 ident_cmp(a::Integer, b::Integer) = cmp(a, b)
 ident_cmp(a::Integer, b::String ) = isempty(b) ? +1 : -1
 ident_cmp(a::String,  b::Integer) = isempty(a) ? -1 : +1
 ident_cmp(a::String,  b::String ) = cmp(a, b)
 
-function ident_cmp(
-    A::Tuple{Vararg{Union{Integer,String}}},
-    B::Tuple{Vararg{Union{Integer,String}}},
-)
-    i = start(A)
-    j = start(B)
-    while !done(A,i) && !done(B,i)
-       a,i = next(A,i)
-       b,j = next(B,j)
-       c = ident_cmp(a,b)
-       (c != 0) && return c
+function ident_cmp(A::VerTuple, B::VerTuple)
+    for (a, b) in Iterators.Zip{Tuple{VerTuple,VerTuple}}((A, B))
+        c = ident_cmp(a, b)
+        (c != 0) && return c
     end
-    done(A,i) && !done(B,j) ? -1 :
-    !done(A,i) && done(B,j) ? +1 : 0
+    length(A) < length(B) ? -1 :
+    length(B) < length(A) ? +1 : 0
 end
 
 function ==(a::VersionNumber, b::VersionNumber)
@@ -183,37 +231,17 @@ nextpatch(v::VersionNumber) = v < thispatch(v) ? thispatch(v) : VersionNumber(v.
 nextminor(v::VersionNumber) = v < thisminor(v) ? thisminor(v) : VersionNumber(v.major, v.minor+1, 0)
 nextmajor(v::VersionNumber) = v < thismajor(v) ? thismajor(v) : VersionNumber(v.major+1, 0, 0)
 
-function check_new_version(existing::Vector{VersionNumber}, ver::VersionNumber)
-    @assert issorted(existing)
-    if isempty(existing)
-        for v in [v"0", v"0.0.1", v"0.1", v"1"]
-            lowerbound(v) <= ver <= v && return
-        end
-        error("$ver is not a valid initial version (try 0.0.0, 0.0.1, 0.1 or 1.0)")
-    end
-    idx = searchsortedlast(existing, ver)
-    prv = existing[idx]
-    ver == prv && error("version $ver already exists")
-    nxt = thismajor(ver) != thismajor(prv) ? nextmajor(prv) :
-          thisminor(ver) != thisminor(prv) ? nextminor(prv) : nextpatch(prv)
-    ver <= nxt || error("$ver skips over $nxt")
-    thispatch(ver) <= ver && return # regular or build release
-    idx < length(existing) && thispatch(existing[idx+1]) <= nxt &&
-        error("$ver is a pre-release of existing version $(existing[idx+1])")
-    return # acceptable new version
-end
-
 ## julia version info
 
 """
     VERSION
 
-A `VersionNumber` object describing which version of Julia is in use. For details see
+A [`VersionNumber`](@ref) object describing which version of Julia is in use. See also
 [Version Number Literals](@ref man-version-number-literals).
 """
 const VERSION = try
     ver = VersionNumber(VERSION_STRING)
-    if !isempty(ver.prerelease)
+    if !isempty(ver.prerelease) && !GIT_VERSION_INFO.tagged_commit
         if GIT_VERSION_INFO.build_number >= 0
             ver = VersionNumber(ver.major, ver.minor, ver.patch, (ver.prerelease..., GIT_VERSION_INFO.build_number), ver.build)
         else
@@ -229,7 +257,15 @@ catch e
     VersionNumber(0)
 end
 
-const libllvm_version = VersionNumber(libllvm_version_string)
+const libllvm_version = if endswith(libllvm_version_string, "jl")
+    # strip the "jl" SONAME suffix (JuliaLang/julia#33058)
+    # (LLVM does never report a prerelease version anyway)
+    VersionNumber(libllvm_version_string[1:end-2])
+else
+    VersionNumber(libllvm_version_string)
+end
+
+libllvm_path() = ccall(:jl_get_libllvm, Any, ())
 
 function banner(io::IO = stdout)
     if GIT_VERSION_INFO.tagged_commit
@@ -250,9 +286,10 @@ function banner(io::IO = stdout)
             commit_string = "$(branch)/$(commit) (fork: $(distance) commits, $(days) $(unit))"
         end
     end
-    commit_date = !isempty(GIT_VERSION_INFO.date_string) ? " ($(GIT_VERSION_INFO.date_string))" : ""
 
-    if get(io, :color, false)
+    commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" : " ($(split(Base.GIT_VERSION_INFO.date_string)[1]))"
+
+    if get(io, :color, false)::Bool
         c = text_colors
         tx = c[:normal] # text
         jl = c[:normal] # julia
@@ -262,25 +299,25 @@ function banner(io::IO = stdout)
         d4 = c[:bold] * c[:magenta] # fourth dot
 
         print(io,"""               $(d3)_$(tx)
-           $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  A fresh approach to technical computing
-          $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  Documentation: https://docs.julialang.org
-           $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?help\" for help.
+           $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  Documentation: https://docs.julialang.org
+          $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
+           $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
           $(jl)| | | | | | |/ _` |$(tx)  |
           $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
          $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
-        $(jl)|__/$(tx)                   |  $(Sys.MACHINE)
+        $(jl)|__/$(tx)                   |
 
         """)
     else
         print(io,"""
                        _
-           _       _ _(_)_     |  A fresh approach to technical computing
-          (_)     | (_) (_)    |  Documentation: https://docs.julialang.org
-           _ _   _| |_  __ _   |  Type \"?help\" for help.
+           _       _ _(_)_     |  Documentation: https://docs.julialang.org
+          (_)     | (_) (_)    |
+           _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
           | | | | | | |/ _` |  |
           | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
          _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
-        |__/                   |  $(Sys.MACHINE)
+        |__/                   |
 
         """)
     end

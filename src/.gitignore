@@ -10,6 +10,7 @@
 /julia_flisp.boot
 /julia_flisp.boot.inc
 /flisp.boot.inc
+/jl_internal_funcs.inc
 
 /libjulia-debug.a
 /libjulia-debug.so
@@ -18,3 +19,10 @@
 /libjulia-release.so
 /libjulia-release.dylib
 /julia_version.h
+/flisp/host
+/support/host
+/base/
+
+# Clang compilation database
+/compile_commands*.json
+.clangd/

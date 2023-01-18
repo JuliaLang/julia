@@ -2,6 +2,11 @@
 
 // Processor feature detection
 
+#include "llvm-version.h"
+#include <llvm/ADT/StringRef.h>
+#include <llvm/Support/MathExtras.h>
+#include <llvm/Support/raw_ostream.h>
+
 #include "processor.h"
 
 #include "julia.h"
@@ -9,10 +14,6 @@
 
 #include <map>
 #include <algorithm>
-
-#include "llvm-version.h"
-#include <llvm/ADT/StringRef.h>
-#include <llvm/Support/MathExtras.h>
 
 #include "julia_assert.h"
 
@@ -72,7 +73,7 @@
 //
 //     Optimize only for size. Clang's `-Oz`.
 
-bool jl_processor_print_help = false;
+JL_DLLEXPORT bool jl_processor_print_help = false;
 
 namespace {
 
@@ -400,6 +401,8 @@ static inline std::vector<uint8_t> serialize_target_data(llvm::StringRef name,
 {
     std::vector<uint8_t> res;
     auto add_data = [&] (const void *data, size_t sz) {
+        if (sz == 0)
+            return;
         size_t old_sz = res.size();
         res.resize(old_sz + sz);
         memcpy(&res[old_sz], data, sz);
@@ -618,26 +621,42 @@ static inline std::vector<TargetData<n>> &get_cmdline_targets(F &&feature_cb)
 // Load sysimg, use the `callback` for dispatch and perform all relocations
 // for the selected target.
 template<typename F>
-static inline jl_sysimg_fptrs_t parse_sysimg(void *hdl, F &&callback)
+static inline jl_image_fptrs_t parse_sysimg(void *hdl, F &&callback)
 {
-    jl_sysimg_fptrs_t res = {nullptr, 0, nullptr, 0, nullptr, nullptr};
-    // .data base
-    auto data_base = (char*)jl_dlsym(hdl, "jl_sysimg_gvars_base");
-    // .text base
-    res.base = (const char*)jl_dlsym(hdl, "jl_sysimg_fvars_base");
-    auto offsets = ((const int32_t*)jl_dlsym(hdl, "jl_sysimg_fvars_offsets")) + 1;
-    uint32_t nfunc = ((const uint32_t*)offsets)[-1];
-    res.offsets = offsets;
+    jl_image_fptrs_t res = {nullptr, 0, nullptr, 0, nullptr, nullptr};
 
-    void *ids = jl_dlsym(hdl, "jl_dispatch_target_ids");
+    // .data base
+    char *data_base;
+    if (!jl_dlsym(hdl, "jl_sysimg_gvars_base", (void**)&data_base, 0)) {
+        data_base = NULL;
+    }
+    // .text base
+    char *text_base;
+    if (!jl_dlsym(hdl, "jl_sysimg_fvars_base", (void**)&text_base, 0)) {
+        text_base = NULL;
+    }
+    res.base = text_base;
+
+    int32_t *offsets;
+    jl_dlsym(hdl, "jl_sysimg_fvars_offsets", (void**)&offsets, 1);
+    uint32_t nfunc = offsets[0];
+    res.offsets = offsets + 1;
+
+    void *ids;
+    jl_dlsym(hdl, "jl_dispatch_target_ids", &ids, 1);
     uint32_t target_idx = callback(ids);
 
-    auto reloc_slots = ((const int32_t*)jl_dlsym(hdl, "jl_dispatch_reloc_slots")) + 1;
-    auto nreloc = ((const uint32_t*)reloc_slots)[-1];
-    auto clone_idxs = (const uint32_t*)jl_dlsym(hdl, "jl_dispatch_fvars_idxs");
-    auto clone_offsets = (const int32_t*)jl_dlsym(hdl, "jl_dispatch_fvars_offsets");
+    int32_t *reloc_slots;
+    jl_dlsym(hdl, "jl_dispatch_reloc_slots", (void **)&reloc_slots, 1);
+    const uint32_t nreloc = reloc_slots[0];
+    reloc_slots += 1;
+    uint32_t *clone_idxs;
+    int32_t *clone_offsets;
+    jl_dlsym(hdl, "jl_dispatch_fvars_idxs", (void**)&clone_idxs, 1);
+    jl_dlsym(hdl, "jl_dispatch_fvars_offsets", (void**)&clone_offsets, 1);
     uint32_t tag_len = clone_idxs[0];
     clone_idxs += 1;
+
     assert(tag_len & jl_sysimg_tag_mask);
     std::vector<const int32_t*> base_offsets = {res.offsets};
     // Find target
@@ -698,6 +717,7 @@ static inline jl_sysimg_fptrs_t parse_sysimg(void *hdl, F &&callback)
             if (reloc_idx == idx) {
                 found = true;
                 auto slot = (const void**)(data_base + reloc_slots[reloc_i * 2 + 1]);
+                assert(slot);
                 *slot = offset + res.base;
             }
             else if (reloc_idx > idx) {

@@ -24,7 +24,7 @@ Given an AbstractArray `A`, create a view `B` such that the
 dimensions appear to be permuted. Similar to `permutedims`, except
 that no copying occurs (`B` shares storage with `A`).
 
-See also: [`permutedims`](@ref).
+See also [`permutedims`](@ref), [`invperm`](@ref).
 
 # Examples
 ```jldoctest
@@ -46,8 +46,11 @@ function PermutedDimsArray(data::AbstractArray{T,N}, perm) where {T,N}
 end
 
 Base.parent(A::PermutedDimsArray) = A.parent
-Base.size(A::PermutedDimsArray{T,N,perm}) where {T,N,perm}    = genperm(size(parent(A)),    perm)
+Base.size(A::PermutedDimsArray{T,N,perm}) where {T,N,perm} = genperm(size(parent(A)), perm)
 Base.axes(A::PermutedDimsArray{T,N,perm}) where {T,N,perm} = genperm(axes(parent(A)), perm)
+Base.has_offset_axes(A::PermutedDimsArray) = Base.has_offset_axes(A.parent)
+
+Base.similar(A::PermutedDimsArray, T::Type, dims::Base.Dims) = similar(parent(A), T, dims)
 
 Base.unsafe_convert(::Type{Ptr{T}}, A::PermutedDimsArray{T}) where {T} = Base.unsafe_convert(Ptr{T}, parent(A))
 
@@ -62,6 +65,7 @@ function Base.strides(A::PermutedDimsArray{T,N,perm}) where {T,N,perm}
     s = strides(parent(A))
     ntuple(d->s[perm[d]], Val(N))
 end
+Base.elsize(::Type{<:PermutedDimsArray{<:Any, <:Any, <:Any, <:Any, P}}) where {P} = Base.elsize(P)
 
 @inline function Base.getindex(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm}
     @boundscheck checkbounds(A, I...)
@@ -80,15 +84,15 @@ end
 """
     permutedims(A::AbstractArray, perm)
 
-Permute the dimensions of array `A`. `perm` is a vector specifying a permutation of length
-`ndims(A)`.
+Permute the dimensions of array `A`. `perm` is a vector or a tuple of length `ndims(A)`
+specifying the permutation.
 
-See also: [`PermutedDimsArray`](@ref).
+See also [`permutedims!`](@ref), [`PermutedDimsArray`](@ref), [`transpose`](@ref), [`invperm`](@ref).
 
 # Examples
 ```jldoctest
 julia> A = reshape(Vector(1:8), (2,2,2))
-2×2×2 Array{Int64,3}:
+2×2×2 Array{Int64, 3}:
 [:, :, 1] =
  1  3
  2  4
@@ -97,15 +101,37 @@ julia> A = reshape(Vector(1:8), (2,2,2))
  5  7
  6  8
 
-julia> permutedims(A, [3, 2, 1])
-2×2×2 Array{Int64,3}:
+julia> perm = (3, 1, 2); # put the last dimension first
+
+julia> B = permutedims(A, perm)
+2×2×2 Array{Int64, 3}:
 [:, :, 1] =
- 1  3
- 5  7
+ 1  2
+ 5  6
 
 [:, :, 2] =
- 2  4
- 6  8
+ 3  4
+ 7  8
+
+julia> A == permutedims(B, invperm(perm)) # the inverse permutation
+true
+```
+
+For each dimension `i` of `B = permutedims(A, perm)`, its corresponding dimension of `A`
+will be `perm[i]`. This means the equality `size(B, i) == size(A, perm[i])` holds.
+
+```jldoctest
+julia> A = randn(5, 7, 11, 13);
+
+julia> perm = [4, 1, 3, 2];
+
+julia> B = permutedims(A, perm);
+
+julia> size(B)
+(13, 5, 11, 7)
+
+julia> size(A)[perm] == ans
+true
 ```
 """
 function permutedims(A::AbstractArray, perm)
@@ -121,7 +147,7 @@ the matrix. Differs from `LinearAlgebra`'s [`transpose`](@ref) in that the
 operation is not recursive.
 
 # Examples
-```jldoctest
+```jldoctest; setup = :(using LinearAlgebra)
 julia> a = [1 2; 3 4];
 
 julia> b = [5 6; 7 8];
@@ -131,17 +157,17 @@ julia> c = [9 10; 11 12];
 julia> d = [13 14; 15 16];
 
 julia> X = [[a] [b]; [c] [d]]
-2×2 Array{Array{Int64,2},2}:
+2×2 Matrix{Matrix{Int64}}:
  [1 2; 3 4]     [5 6; 7 8]
  [9 10; 11 12]  [13 14; 15 16]
 
 julia> permutedims(X)
-2×2 Array{Array{Int64,2},2}:
+2×2 Matrix{Matrix{Int64}}:
  [1 2; 3 4]  [9 10; 11 12]
  [5 6; 7 8]  [13 14; 15 16]
 
 julia> transpose(X)
-2×2 LinearAlgebra.Transpose{LinearAlgebra.Transpose{Int64,Array{Int64,2}},Array{Array{Int64,2},2}}:
+2×2 transpose(::Matrix{Matrix{Int64}}) with eltype Transpose{Int64, Matrix{Int64}}:
  [1 3; 2 4]  [9 11; 10 12]
  [5 7; 6 8]  [13 15; 14 16]
 ```
@@ -156,22 +182,22 @@ Differs from `LinearAlgebra`'s [`transpose`](@ref) in that
 the operation is not recursive.
 
 # Examples
-```jldoctest
+```jldoctest; setup = :(using LinearAlgebra)
 julia> permutedims([1, 2, 3, 4])
-1×4 Array{Int64,2}:
+1×4 Matrix{Int64}:
  1  2  3  4
 
 julia> V = [[[1 2; 3 4]]; [[5 6; 7 8]]]
-2-element Array{Array{Int64,2},1}:
+2-element Vector{Matrix{Int64}}:
  [1 2; 3 4]
  [5 6; 7 8]
 
 julia> permutedims(V)
-1×2 Array{Array{Int64,2},2}:
+1×2 Matrix{Matrix{Int64}}:
  [1 2; 3 4]  [5 6; 7 8]
 
 julia> transpose(V)
-1×2 LinearAlgebra.Transpose{LinearAlgebra.Transpose{Int64,Array{Int64,2}},Array{Array{Int64,2},1}}:
+1×2 transpose(::Vector{Matrix{Int64}}) with eltype Transpose{Int64, Matrix{Int64}}:
  [1 3; 2 4]  [5 7; 6 8]
 ```
 """
@@ -212,7 +238,7 @@ function _copy!(P::PermutedDimsArray{T,N,perm}, src) where {T,N,perm}
         copyto!(parent(P), src) # it's not permuted
     else
         R1 = CartesianIndices(axes(src)[1:d])
-        d1 = findfirst(equalto(d+1), perm)::Int  # first permuted dim of dest
+        d1 = findfirst(isequal(d+1), perm)::Int  # first permuted dim of dest
         R2 = CartesianIndices(axes(src)[d+2:d1-1])
         R3 = CartesianIndices(axes(src)[d1+1:end])
         _permutedims!(P, src, R1, R2, R3, d+1, d1)
@@ -250,11 +276,32 @@ end
     P
 end
 
+const CommutativeOps = Union{typeof(+),typeof(Base.add_sum),typeof(min),typeof(max),typeof(Base._extrema_rf),typeof(|),typeof(&)}
+
+function Base._mapreduce_dim(f, op::CommutativeOps, init::Base._InitialValue, A::PermutedDimsArray, dims::Colon)
+    Base._mapreduce_dim(f, op, init, parent(A), dims)
+end
+function Base._mapreduce_dim(f::typeof(identity), op::Union{typeof(Base.mul_prod),typeof(*)}, init::Base._InitialValue, A::PermutedDimsArray{<:Union{Real,Complex}}, dims::Colon)
+    Base._mapreduce_dim(f, op, init, parent(A), dims)
+end
+
+function Base.mapreducedim!(f, op::CommutativeOps, B::AbstractArray{T,N}, A::PermutedDimsArray{S,N,perm,iperm}) where {T,S,N,perm,iperm}
+    C = PermutedDimsArray{T,N,iperm,perm,typeof(B)}(B) # make the inverse permutation for the output
+    Base.mapreducedim!(f, op, C, parent(A))
+    B
+end
+function Base.mapreducedim!(f::typeof(identity), op::Union{typeof(Base.mul_prod),typeof(*)}, B::AbstractArray{T,N}, A::PermutedDimsArray{<:Union{Real,Complex},N,perm,iperm}) where {T,N,perm,iperm}
+    C = PermutedDimsArray{T,N,iperm,perm,typeof(B)}(B) # make the inverse permutation for the output
+    Base.mapreducedim!(f, op, C, parent(A))
+    B
+end
+
 function Base.showarg(io::IO, A::PermutedDimsArray{T,N,perm}, toplevel) where {T,N,perm}
     print(io, "PermutedDimsArray(")
     Base.showarg(io, parent(A), false)
     print(io, ", ", perm, ')')
     toplevel && print(io, " with eltype ", eltype(A))
+    return nothing
 end
 
 end

@@ -3,10 +3,12 @@
 using Test, Distributed, Random, Serialization, Sockets
 import Distributed: launch, manage
 
+@test cluster_cookie() isa String
+
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 
 @test Distributed.extract_imports(:(begin; import Foo, Bar; let; using Baz; end; end)) ==
-      [:Foo, :Bar, :Baz]
+      Any[:(import Foo, Bar), :(using Baz)]
 
 # Test a few "remote" invocations when no workers are present
 @test remote(myid)() == 1
@@ -18,10 +20,40 @@ include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 addprocs_with_testenv(4)
 @test nprocs() == 5
 
+# distributed loading of packages
+
+# setup
+@everywhere begin
+    old_act_proj = Base.ACTIVE_PROJECT[]
+    pushfirst!(Base.LOAD_PATH, "@")
+    Base.ACTIVE_PROJECT[] = joinpath(Sys.BINDIR, "..", "share", "julia", "test", "TestPkg")
+end
+
+# cause precompilation of TestPkg to avoid race condition
+Base.compilecache(Base.identify_package("TestPkg"))
+
+@everywhere using TestPkg
+@everywhere using TestPkg
+
+@everywhere begin
+    Base.ACTIVE_PROJECT[] = old_act_proj
+    popfirst!(Base.LOAD_PATH)
+end
+
 @everywhere using Test, Random, LinearAlgebra
 
 id_me = myid()
 id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
+
+# Test role
+@everywhere using Distributed
+@test Distributed.myrole() === :master
+for wid = workers()
+    wrole = remotecall_fetch(wid) do
+        Distributed.myrole()
+    end
+    @test wrole === :worker
+end
 
 # Test remote()
 let
@@ -31,7 +63,7 @@ let
     count_condition = Condition()
 
     function remote_wait(c)
-        @async begin
+        @async_logerr begin
             count += 1
             remote(take!)(c)
             count -= 1
@@ -55,7 +87,7 @@ let
         @test count == testcount
         put!(c, "foo")
         testcount -= 1
-        wait(count_condition)
+        (count == testcount) || wait(count_condition)
         @test count == testcount
         @test isready(pool) == true
     end
@@ -74,7 +106,7 @@ let
         @test count == testcount
         put!(c, "foo")
         testcount -= 1
-        wait(count_condition)
+        (count == testcount) || wait(count_condition)
         @test count == testcount
         @test isready(pool) == true
     end
@@ -94,11 +126,44 @@ function testf(id)
     @test_throws ErrorException put!(f, :OK) # Cannot put! to a already set future
     @test_throws MethodError take!(f) # take! is unsupported on a Future
 
-    @test fetch(f) == :OK
+    @test fetch(f) === :OK
 end
 
 testf(id_me)
 testf(id_other)
+
+function poll_while(f::Function; timeout_seconds::Integer = 120)
+    start_time = time_ns()
+    while f()
+        sleep(1)
+        if ( ( time_ns() - start_time )/1e9 ) > timeout_seconds
+            @error "Timed out" timeout_seconds
+            return false
+        end
+    end
+    return true
+end
+
+function _getenv_include_thread_unsafe()
+    environment_variable_name = "JULIA_TEST_INCLUDE_THREAD_UNSAFE"
+    default_value = "false"
+    environment_variable_value = strip(get(ENV, environment_variable_name, default_value))
+    b = parse(Bool, environment_variable_value)::Bool
+    return b
+end
+const _env_include_thread_unsafe = _getenv_include_thread_unsafe()
+function include_thread_unsafe_tests()
+    if Threads.maxthreadid() > 1
+        if _env_include_thread_unsafe
+            return true
+        end
+        msg = "Skipping a thread-unsafe test because `Threads.maxthreadid() > 1`"
+        @warn msg Threads.maxthreadid()
+        Test.@test_broken false
+        return false
+    end
+    return true
+end
 
 # Distributed GC tests for Futures
 function test_futures_dgc(id)
@@ -111,8 +176,7 @@ function test_futures_dgc(id)
     @test fetch(f) == id
     @test f.v !== nothing
     yield(); # flush gc msgs
-    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == false
-
+    @test poll_while(() -> remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid))
 
     # if unfetched, it should be deleted after a finalize
     f = remotecall(myid, id)
@@ -121,7 +185,7 @@ function test_futures_dgc(id)
     @test f.v === nothing
     finalize(f)
     yield(); # flush gc msgs
-    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == false
+    @test poll_while(() -> remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid))
 end
 
 test_futures_dgc(id_me)
@@ -154,7 +218,7 @@ isready(f)
 @test remotecall_fetch(k->haskey(Distributed.PGRP.refs, k), wid1, fid) == true
 put!(f, :OK)
 @test remotecall_fetch(k->haskey(Distributed.PGRP.refs, k), wid1, fid) == false
-@test fetch(f) == :OK
+@test fetch(f) === :OK
 
 # RemoteException should be thrown on a put! when another process has set the value
 f = Future(wid1)
@@ -196,8 +260,7 @@ remotecall_fetch(f25847, id_other, f)
 
 finalize(f)
 yield() # flush gc msgs
-@test false == remotecall_fetch(chk_rrid->haskey(Distributed.PGRP.refs, chk_rrid), id_other, rrid)
-
+@test poll_while(() -> remotecall_fetch(chk_rrid->(yield(); haskey(Distributed.PGRP.refs, chk_rrid)), id_other, rrid))
 
 # Distributed GC tests for RemoteChannels
 function test_remoteref_dgc(id)
@@ -207,11 +270,11 @@ function test_remoteref_dgc(id)
 
     # remote value should be deleted after finalizing the ref
     @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid) == true
-    @test fetch(rr) == :OK
+    @test fetch(rr) === :OK
     @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid) == true
     finalize(rr)
     yield(); # flush gc msgs
-    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid) == false
+    @test poll_while(() -> remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid))
 end
 test_remoteref_dgc(id_me)
 test_remoteref_dgc(id_other)
@@ -224,18 +287,22 @@ let wid1 = workers()[1],
     fstore = RemoteChannel(wid2)
 
     put!(fstore, rr)
-    @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    if include_thread_unsafe_tests()
+        @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    end
     finalize(rr) # finalize locally
     yield() # flush gc msgs
-    @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    if include_thread_unsafe_tests()
+        @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    end
     remotecall_fetch(r -> (finalize(take!(r)); yield(); nothing), wid2, fstore) # finalize remotely
     sleep(0.5) # to ensure that wid2 messages have been executed on wid1
-    @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == false
+    @test poll_while(() -> remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid))
 end
 
 # Tests for issue #23109 - should not hang.
-f = @spawn rand(1, 1)
-@sync begin
+f = @spawnat :any rand(1, 1)
+Base.Experimental.@sync begin
     for _ in 1:10
         @async fetch(f)
     end
@@ -243,7 +310,7 @@ end
 
 wid1, wid2 = workers()[1:2]
 f = @spawnat wid1 rand(1,1)
-@sync begin
+Base.Experimental.@sync begin
     @async fetch(f)
     @async remotecall_fetch(()->fetch(f), wid2)
 end
@@ -282,6 +349,9 @@ function test_regular_io_ser(ref::Distributed.AbstractRemoteRef)
         v = getfield(ref2, fld)
         if isa(v, Number)
             @test v === zero(typeof(v))
+        elseif fld === :lock
+            @test v isa ReentrantLock
+            @test !islocked(v)
         elseif v !== nothing
             error(string("Add test for field ", fld))
         end
@@ -304,7 +374,7 @@ workloads = Int[sum(ids .== i) for i in 2:nprocs()]
 @test_throws ArgumentError timedwait(()->false, 0.1, pollint=-0.5)
 
 # specify pids for pmap
-@test sort(workers()[1:2]) == sort(unique(pmap(WorkerPool(workers()[1:2]), x->(sleep(0.1);myid()), 1:10)))
+@test sort(workers()[1:2]) == sort(unique(pmap(x->(sleep(0.1);myid()), WorkerPool(workers()[1:2]), 1:10)))
 
 # Testing buffered  and unbuffered reads
 # This large array should write directly to the socket
@@ -342,11 +412,13 @@ end
 @test [fetch(rr) for rr in rr_list] == [:OK for x in 1:ntasks]
 
 function test_channel(c)
+    @test isopen(c) == true
     put!(c, 1)
     put!(c, "Hello")
     put!(c, 5.0)
 
     @test isready(c) == true
+    @test isopen(c) == true
     @test fetch(c) == 1
     @test fetch(c) == 1   # Should not have been popped previously
     @test take!(c) == 1
@@ -354,7 +426,9 @@ function test_channel(c)
     @test fetch(c) == 5.0
     @test take!(c) == 5.0
     @test isready(c) == false
+    @test isopen(c) == true
     close(c)
+    @test isopen(c) == false
 end
 
 test_channel(Channel(10))
@@ -365,17 +439,17 @@ c=Channel{Int}(1)
 
 # test channel iterations
 function test_iteration(in_c, out_c)
-    t=@schedule for v in in_c
+    t=@async for v in in_c
         put!(out_c, v)
     end
 
-    isa(in_c, Channel) && @test isopen(in_c) == true
+    @test isopen(in_c) == true
     put!(in_c, 1)
     @test take!(out_c) == 1
     put!(in_c, "Hello")
     close(in_c)
     @test take!(out_c) == "Hello"
-    isa(in_c, Channel) && @test isopen(in_c) == false
+    @test isopen(in_c) == false
     @test_throws InvalidStateException put!(in_c, :foo)
     yield()
     @test istaskdone(t) == true
@@ -394,16 +468,16 @@ try
 catch ex
     @test typeof(ex) == CompositeException
     @test length(ex) == 5
-    @test typeof(ex.exceptions[1]) == CapturedException
-    @test typeof(ex.exceptions[1].ex) == ErrorException
+    @test typeof(ex.exceptions[1]) == TaskFailedException
+    @test typeof(ex.exceptions[1].task.exception) == ErrorException
     # test start, next, and done
     for (i, i_ex) in enumerate(ex)
-        @test i == parse(Int, i_ex.ex.msg)
+        @test i == parse(Int, i_ex.task.exception.msg)
     end
     # test showerror
     err_str = sprint(showerror, ex)
     err_one_str = sprint(showerror, ex.exceptions[1])
-    @test err_str == err_one_str * "\n\n...and 4 more exception(s).\n"
+    @test err_str == err_one_str * "\n\n...and 4 more exceptions.\n"
 end
 @test sprint(showerror, CompositeException()) == "CompositeException()\n"
 
@@ -454,8 +528,8 @@ let ex
     bt = ex.captured.processed_bt::Array{Any,1}
     @test length(bt) > 1
     frame, repeated = bt[1]::Tuple{Base.StackTraces.StackFrame, Int}
-    @test frame.func == :foo
-    @test frame.linfo == nothing
+    @test frame.func === :foo
+    @test frame.linfo === nothing
     @test repeated == 1
 end
 
@@ -466,7 +540,7 @@ end
 pmap_args = [
                 (:distributed, [:default, false]),
                 (:batch_size, [:default,2]),
-                (:on_error, [:default, e -> (e.msg == "foobar" ? true : rethrow(e))]),
+                (:on_error, [:default, e -> (e.msg == "foobar" ? true : rethrow())]),
                 (:retry_delays, [:default, fill(0.001, 1000)]),
                 (:retry_check, [:default, (s,e) -> (s,endswith(e.msg,"foobar"))]),
             ]
@@ -526,9 +600,9 @@ function walk_args(i)
 
         try
             results_test(pmap(mapf, data; kwargs...))
-        catch e
+        catch
             println("pmap executing with args : ", kwargs)
-            rethrow(e)
+            rethrow()
         end
 
         return
@@ -546,7 +620,7 @@ walk_args(1)
 
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "generic_map_tests.jl"))
 empty_pool = WorkerPool([myid()])
-pmap_fallback = (f, c...) -> pmap(empty_pool, f, c...)
+pmap_fallback = (f, c...) -> pmap(f, empty_pool, c...)
 generic_map_tests(pmap_fallback)
 
 # pmap with various types. Test for equivalence with map
@@ -572,8 +646,8 @@ end
 n = 10
 as = [rand(4,4) for i in 1:n]
 bs = deepcopy(as)
-cs = collect(Distributed.pgenerate(x->(sleep(rand()*0.1); svdfact(x)), bs))
-svdas = map(svdfact, as)
+cs = collect(Distributed.pgenerate(x->(sleep(rand()*0.1); svd(x)), bs))
+svdas = map(svd, as)
 for i in 1:n
     @test cs[i].U ≈ svdas[i].U
     @test cs[i].S ≈ svdas[i].S
@@ -589,13 +663,14 @@ pmap(_->myid(), 1:nworkers())  # priming run
 
 # Same tests with custom worker pools.
 wp = WorkerPool(workers())
-@test nworkers() == length(unique(pmap(wp, _->myid(), 1:100)))
-@test nworkers() == length(unique(remotecall_fetch(wp->pmap(wp, _->myid(), 1:100), id_other, wp)))
-
+@test nworkers() == length(unique(pmap(_->myid(), wp, 1:100)))
+@test nworkers() == length(unique(remotecall_fetch(wp->pmap(_->myid(), wp, 1:100), id_other, wp)))
+wp = WorkerPool(2:3)
+@test sort(unique(pmap(_->myid(), wp, 1:100))) == [2,3]
 
 # CachingPool tests
 wp = CachingPool(workers())
-@test [1:100...] == pmap(wp, x->x, 1:100)
+@test [1:100...] == pmap(x->x, wp, 1:100)
 
 clear!(wp)
 @test length(wp.map_obj2ref) == 0
@@ -606,7 +681,7 @@ clear!(wp)
 # - ssh addprocs requires sshd to be running locally with passwordless login enabled.
 # The test block is enabled by defining env JULIA_TESTFULL=1
 
-DoFullTest = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+DoFullTest = Base.get_bool_env("JULIA_TESTFULL", false)
 
 if DoFullTest
     println("Testing exception printing on remote worker from a `remote_do` call")
@@ -636,12 +711,12 @@ if Sys.isunix() # aka have ssh
             w_in_remote = sort(remotecall_fetch(workers, p))
             try
                 @test intersect(new_pids, w_in_remote) == new_pids
-            catch e
+            catch
                 print("p       :     $p\n")
                 print("newpids :     $new_pids\n")
                 print("w_in_remote : $w_in_remote\n")
                 print("intersect   : $(intersect(new_pids, w_in_remote))\n\n\n")
-                rethrow(e)
+                rethrow()
             end
         end
 
@@ -671,7 +746,7 @@ if Sys.isunix() # aka have ssh
 
     print("\nMixed ssh addprocs with :auto\n")
     new_pids = addprocs_with_testenv(["localhost", ("127.0.0.1", :auto), "localhost"]; sshflags=sshflags)
-    @test length(new_pids) == (2 + Sys.CPU_CORES)
+    @test length(new_pids) == (2 + Sys.CPU_THREADS)
     test_n_remove_pids(new_pids)
 
     print("\nMixed ssh addprocs with numeric counts\n")
@@ -683,6 +758,14 @@ if Sys.isunix() # aka have ssh
     new_pids = addprocs_with_testenv([("localhost", num_workers)]; tunnel=true, sshflags=sshflags)
     @test length(new_pids) == num_workers
     test_n_remove_pids(new_pids)
+
+    print("\nssh addprocs with tunnel (SSH multiplexing)\n")
+    new_pids = addprocs_with_testenv([("localhost", num_workers)]; tunnel=true, multiplex=true, sshflags=sshflags)
+    @test length(new_pids) == num_workers
+    controlpath = joinpath(homedir(), ".ssh", "julia-$(ENV["USER"])@localhost:22")
+    @test issocket(controlpath)
+    test_n_remove_pids(new_pids)
+    @test :ok == timedwait(()->!issocket(controlpath), 10.0; pollint=0.5)
 
     print("\nAll supported formats for hostname\n")
     h1 = "localhost"
@@ -712,7 +795,7 @@ end # full-test
 
 let t = @task 42
     schedule(t, ErrorException(""), error=true)
-    @test_throws ErrorException Base._wait(t)
+    @test_throws TaskFailedException(t) Base.wait(t)
 end
 
 # issue #8207
@@ -726,16 +809,20 @@ end
 # issue #13168
 function f13168(n)
     val = 0
-    for i=1:n val+=sum(rand(n,n)^2) end
-    val
+    for i = 1:n
+        val += sum(rand(n, n)^2)
+    end
+    return val
 end
 let t = schedule(@task f13168(100))
-    @test t.state == :queued
+    @test t.state === :runnable
+    @test t.queue !== nothing
     @test_throws ErrorException schedule(t)
     yield()
-    @test t.state == :done
+    @test t.state === :done
+    @test t.queue === nothing
     @test_throws ErrorException schedule(t)
-    @test isa(fetch(t),Float64)
+    @test isa(fetch(t), Float64)
 end
 
 # issue #13122
@@ -753,6 +840,16 @@ end
 v15406 = remotecall_wait(() -> 1, id_other)
 fetch(v15406)
 remotecall_wait(fetch, id_other, v15406)
+
+
+# issue #43396
+# Covers the remote fetch where the value returned is `nothing`
+# May be caused by attempting to unwrap a non-`Some` type with `something`
+# `call_on_owner` ref fetches return values not wrapped in `Some`
+# and have to be returned directly
+@test nothing === fetch(remotecall(() -> nothing, workers()[1]))
+@test 10 === fetch(remotecall(() -> 10, workers()[1]))
+
 
 # Test various forms of remotecall* invocations
 
@@ -783,6 +880,34 @@ remote_do(fut->put!(fut, myid()), id_me, f)
 f=Future(id_other)
 remote_do(fut->put!(fut, myid()), id_other, f)
 @test fetch(f) == id_other
+
+# Github issue #29932
+rc_unbuffered = RemoteChannel(()->Channel{Vector{Float64}}(0))
+@test eltype(rc_unbuffered) == Vector{Float64}
+
+@async begin
+    # Trigger direct write (no buffering) of largish array
+    array_sz = Int(Base.SZ_UNBUFFERED_IO/8) + 1
+    largev = zeros(array_sz)
+    for i in 1:10
+        largev[1] = float(i)
+        put!(rc_unbuffered, largev)
+    end
+end
+
+@test remotecall_fetch(rc -> begin
+        for i in 1:10
+            take!(rc)[1] != float(i) && error("Failed")
+        end
+        return :OK
+    end, id_other, rc_unbuffered) === :OK
+
+# github issue 33972
+rc_unbuffered_other = RemoteChannel(()->Channel{Int}(0), id_other)
+close(rc_unbuffered_other)
+try; take!(rc_unbuffered_other); catch; end
+@test !remotecall_fetch(rc -> islocked(Distributed.lookup_ref(remoteref_id(rc)).synctake),
+                        id_other, rc_unbuffered_other)
 
 # github PR #14456
 n = DoFullTest ? 6 : 5
@@ -868,11 +993,11 @@ end
 let
     @test_throws RemoteException remotecall_fetch(()->LocalFoo.foo, 2)
 
-    bad_thunk = ()->NonexistantModule.f()
+    bad_thunk = ()->NonexistentModule.f()
     @test_throws RemoteException remotecall_fetch(bad_thunk, 2)
 
     # Test that the stream is still usable
-    @test remotecall_fetch(()->:test,2) == :test
+    @test remotecall_fetch(()->:test,2) === :test
     ref = remotecall(bad_thunk, 2)
     @test_throws RemoteException fetch(ref)
 end
@@ -914,13 +1039,15 @@ let (p, p2) = filter!(p -> p != myid(), procs())
             if procs isa Int
                 ex = Any[excpt]
             else
-                ex = Any[ (ex::CapturedException).ex for ex in (excpt::CompositeException).exceptions ]
+                ex = (excpt::CompositeException).exceptions
             end
             for (p, ex) in zip(procs, ex)
                 local p
                 if procs isa Int || p != myid()
                     @test (ex::RemoteException).pid == p
                     ex = ((ex::RemoteException).captured::CapturedException).ex
+                else
+                    ex = (ex::TaskFailedException).task.exception
                 end
                 @test (ex::ErrorException).msg == msg
             end
@@ -934,29 +1061,8 @@ end
 
 # Test addprocs enable_threaded_blas parameter
 
-const get_num_threads = function() # anonymous so it will be serialized when called
-    blas = LinearAlgebra.BLAS.vendor()
-    # Wrap in a try to catch unsupported blas versions
-    try
-        if blas == :openblas
-            return ccall((:openblas_get_num_threads, Base.libblas_name), Cint, ())
-        elseif blas == :openblas64
-            return ccall((:openblas_get_num_threads64_, Base.libblas_name), Cint, ())
-        elseif blas == :mkl
-            return ccall((:MKL_Get_Max_Num_Threads, Base.libblas_name), Cint, ())
-        end
-
-        # OSX BLAS looks at an environment variable
-        if Sys.isapple()
-            return ENV["VECLIB_MAXIMUM_THREADS"]
-        end
-    end
-
-    return nothing
-end
-
 function get_remote_num_threads(processes_added)
-    return [remotecall_fetch(get_num_threads, proc_id) for proc_id in processes_added]
+    return [remotecall_fetch(BLAS.get_num_threads, proc_id) for proc_id in processes_added]
 end
 
 function test_blas_config(pid, expected)
@@ -969,11 +1075,11 @@ function test_blas_config(pid, expected)
 end
 
 function test_add_procs_threaded_blas()
-    if get_num_threads() === nothing
+    master_blas_thread_count = BLAS.get_num_threads()
+    if master_blas_thread_count === nothing
         @warn "Skipping blas num threads tests due to unsupported blas version"
         return
     end
-    master_blas_thread_count = get_num_threads()
 
     # Test with default enable_threaded_blas false
     processes_added = addprocs_with_testenv(2)
@@ -982,7 +1088,7 @@ function test_add_procs_threaded_blas()
     end
 
     # Master thread should not have changed
-    @test get_num_threads() == master_blas_thread_count
+    @test BLAS.get_num_threads() == master_blas_thread_count
 
     # Threading disabled in children by default
     thread_counts_by_process = get_remote_num_threads(processes_added)
@@ -996,9 +1102,9 @@ function test_add_procs_threaded_blas()
         test_blas_config(proc_id, true)
     end
 
-    @test get_num_threads() == master_blas_thread_count
+    @test BLAS.get_num_threads() == master_blas_thread_count
 
-    # BLAS.set_num_threads(`num`) doesn't  cause get_num_threads to return `num`
+    # BLAS.set_num_threads(`num`) doesn't  cause BLAS.get_num_threads to return `num`
     # depending on the machine, the BLAS version, and BLAS configuration, so
     # we need a very lenient test.
     thread_counts_by_process = get_remote_num_threads(processes_added)
@@ -1010,6 +1116,7 @@ end
 test_add_procs_threaded_blas()
 
 #19687
+if false ### TODO: The logic that is supposed to implement this is racy - Disabled for now
 # ensure no race conditions between rmprocs and addprocs
 for i in 1:5
     p = addprocs_with_testenv(1)[1]
@@ -1023,7 +1130,7 @@ for i in 1:5
     p = addprocs_with_testenv(1)[1]
     np = nprocs()
     @spawnat p sleep(5)
-    Base._wait(rmprocs(p; waitfor=0))
+    Base.wait(rmprocs(p; waitfor=0))
     for pid in procs()
         @test pid == remotecall_fetch(myid, pid)
     end
@@ -1035,9 +1142,10 @@ if DoFullTest
     pids=addprocs_with_testenv(4);
     @test_throws ErrorException rmprocs(pids; waitfor=0.001);
     # wait for workers to be removed
-    while any(occursin(procs()), pids)
+    while any(in(procs()), pids)
         sleep(0.1)
     end
+end
 end
 
 # Test addprocs/rmprocs from master node only
@@ -1067,11 +1175,11 @@ function launch(manager::ErrorSimulator, params::Dict, launched::Array, c::Condi
     dir = params[:dir]
 
     cmd = `$(Base.julia_cmd(exename)) --startup-file=no`
-    if manager.mode == :timeout
+    if manager.mode === :timeout
         cmd = `$cmd -e "sleep(10)"`
-    elseif manager.mode == :ntries
+    elseif manager.mode === :ntries
         cmd = `$cmd -e "[println(x) for x in 1:1001]"`
-    elseif manager.mode == :exit
+    elseif manager.mode === :exit
         cmd = `$cmd -e "exit(-1)"`
     else
         error("Unknown mode")
@@ -1100,8 +1208,8 @@ append!(testruns, [
 for (addp_testf, expected_errstr, env) in testruns
     old_stdout = stdout
     stdout_out, stdout_in = redirect_stdout()
-    stdout_txt = @schedule filter!(readlines(stdout_out)) do s
-            return !startswith(s, "\tFrom failed worker startup:\t")
+    stdout_txt = @async filter!(readlines(stdout_out)) do s
+            return !startswith(s, "\tFrom worker startup:\t")
         end
     try
         withenv(env...) do
@@ -1113,7 +1221,7 @@ for (addp_testf, expected_errstr, env) in testruns
         close(stdout_in)
         @test isempty(fetch(stdout_txt))
         @test isa(ex, CompositeException)
-        @test ex.exceptions[1].ex.msg == expected_errstr
+        @test ex.exceptions[1].task.exception.msg == expected_errstr
     end
 end
 
@@ -1161,6 +1269,29 @@ v5 = FooStructEverywhere
 v6 = FooModEverywhere
 @test remotecall_fetch(()->v5, id_other) === FooStructEverywhere
 @test remotecall_fetch(()->v6, id_other) === FooModEverywhere
+
+# hash value same but different object instance
+v7 = ones(10)
+oid1 = objectid(v7)
+hval1 = hash(v7)
+@test v7 == @fetchfrom id_other v7
+remote_oid1 = @fetchfrom id_other objectid(v7)
+
+v7 = ones(10)
+@test oid1 != objectid(v7)
+@test hval1 == hash(v7)
+@test remote_oid1 != @fetchfrom id_other objectid(v7)
+
+
+# Github issue #31252
+v31252 = :a
+@test :a == @fetchfrom id_other v31252
+
+v31252 = :b
+@test :b == @fetchfrom id_other v31252
+
+v31252 = :a
+@test :a == @fetchfrom id_other v31252
 
 
 # Test that a global is not being repeatedly serialized when
@@ -1259,16 +1390,12 @@ global ids_func = ()->ids_cleanup
 clust_ser = (Distributed.worker_from_id(id_other)).w_serializer
 @test remotecall_fetch(ids_func, id_other) == ids_cleanup
 
-@test haskey(clust_ser.glbs_sent, objectid(ids_cleanup))
-finalize(ids_cleanup)
-@test !haskey(clust_ser.glbs_sent, objectid(ids_cleanup))
-
 # TODO Add test for cleanup from `clust_ser.glbs_in_tnobj`
 
 # reported github issues - Mostly tests with globals and various distributed macros
 #2669, #5390
 v2669=10
-@test fetch(@spawn (1+v2669)) == 11
+@test fetch(@spawnat :any (1+v2669)) == 11
 
 #12367
 refs = []
@@ -1300,9 +1427,16 @@ let thrown = false
         thrown = true
         local b = IOBuffer()
         showerror(b, e)
-        @test contains(String(take!(b)), "sqrt will only return")
+        @test occursin("sqrt will only return", String(take!(b)))
     end
     @test thrown
+end
+
+# issue #34333
+let
+    @test fetch(remotecall(Float64, id_other, 1)) == Float64(1)
+    @test fetch(remotecall_wait(Float64, id_other, 1)) == Float64(1)
+    @test remotecall_fetch(Float64, id_other, 1) == Float64(1)
 end
 
 #19463
@@ -1374,7 +1508,7 @@ try
     error("unexpected")
 catch ex
     @test isa(ex.captured.ex.exceptions[1].ex, ErrorException)
-    @test contains(ex.captured.ex.exceptions[1].ex.msg, "BoundsError")
+    @test occursin("BoundsError", ex.captured.ex.exceptions[1].ex.msg)
     @test ex.captured.ex.exceptions[2].ex == UndefVarError(:DontExistOn1)
 end
 
@@ -1389,12 +1523,18 @@ let
         mkdir(tmp_dir2)
         write(tmp_file, "23.32 + 32 + myid() + include(\"testfile2\")")
         write(tmp_file2, "myid() * 2")
-        @test_throws(ErrorException("could not open file $(joinpath(@__DIR__, "testfile"))"),
-                     include("testfile"))
-        @test_throws(ErrorException("could not open file $(joinpath(@__DIR__, "testfile2"))"),
-                     include("testfile2"))
-        @test_throws(ErrorException("could not open file $(joinpath(@__DIR__, "2", "testfile"))"),
-                     include(joinpath("2", "testfile")))
+        function test_include_fails_to_open_file(fname)
+            try
+                include(fname)
+            catch exc
+                path = joinpath(@__DIR__, fname)
+                @test exc isa SystemError
+                @test exc.prefix == "opening file $(repr(path))"
+            end
+        end
+        test_include_fails_to_open_file("testfile")
+        test_include_fails_to_open_file("testfile2")
+        test_include_fails_to_open_file(joinpath("2", "testfile2"))
         @test include(tmp_file) == 58.32
         @test remotecall_fetch(include, proc[1], joinpath("2", "testfile")) == 55.32 + proc[1] * 3
     finally
@@ -1405,7 +1545,7 @@ let
         #rm(tmp_dir, force=true)
     end
 end
-# cookie and comand line option `--worker` tests. remove workers, set cookie and test
+# cookie and command line option `--worker` tests. remove workers, set cookie and test
 struct WorkerArgTester <: ClusterManager
     worker_opt
     write_cookie
@@ -1445,12 +1585,53 @@ cluster_cookie("foobar") # custom cookie
 npids = addprocs_with_testenv(WorkerArgTester(`--worker=foobar`, false))
 @test remotecall_fetch(myid, npids[1]) == npids[1]
 
+# tests for start_worker options to retain stdio (issue #31035)
+struct RetainStdioTester <: ClusterManager
+    close_stdin::Bool
+    stderr_to_stdout::Bool
+end
+
+function launch(manager::RetainStdioTester, params::Dict, launched::Array, c::Condition)
+    dir = params[:dir]
+    exename = params[:exename]
+    exeflags = params[:exeflags]
+
+    jlcmd = "using Distributed; start_worker(\"\"; close_stdin=$(manager.close_stdin), stderr_to_stdout=$(manager.stderr_to_stdout));"
+    cmd = detach(setenv(`$exename $exeflags --bind-to $(Distributed.LPROC.bind_addr) -e $jlcmd`, dir=dir))
+    proc = open(cmd, "r+")
+
+    wconfig = WorkerConfig()
+    wconfig.process = proc
+    wconfig.io = proc.out
+    push!(launched, wconfig)
+
+    notify(c)
+end
+manage(::RetainStdioTester, ::Integer, ::WorkerConfig, ::Symbol) = nothing
+
+
+nprocs()>1 && rmprocs(workers())
+cluster_cookie("")
+
+for close_stdin in (true, false), stderr_to_stdout in (true, false)
+    local npids = addprocs_with_testenv(RetainStdioTester(close_stdin,stderr_to_stdout))
+    @test remotecall_fetch(myid, npids[1]) == npids[1]
+    if close_stdin
+        @test remotecall_fetch(()->stdin === devnull && !isreadable(stdin), npids[1])
+    else
+        @test remotecall_fetch(()->stdin !== devnull && isopen(stdin) && isreadable(stdin), npids[1])
+    end
+    @test stderr_to_stdout == remotecall_fetch(()->(stderr === stdout), npids[1])
+    rmprocs(npids)
+end
+
 # Issue # 22865
 # Must be run on a new cluster, i.e., all workers must be in the same state.
-rmprocs(workers())
+@assert nprocs() == 1
 p1,p2 = addprocs_with_testenv(2)
 @everywhere f22865(p) = remotecall_fetch(x->x.*2, p, fill(1.,2))
 @test fill(2.,2) == remotecall_fetch(f22865, p1, p2)
+rmprocs(p1, p2)
 
 function reuseport_tests()
     # Run the test on all processes.
@@ -1482,17 +1663,217 @@ function reuseport_tests()
     end
 
     # Ensure that the code has indeed been successfully executed everywhere
-    @test all(occursin(results), procs())
+    @test all(in(results), procs())
 end
 
 # Test that the client port is reused. SO_REUSEPORT may not be supported on
 # all UNIX platforms, Linux kernels prior to 3.9 and older versions of OSX
+@assert nprocs() == 1
+addprocs_with_testenv(4; lazy=false)
 if ccall(:jl_has_so_reuseport, Int32, ()) == 1
-    rmprocs(workers())
-    addprocs_with_testenv(4; lazy=false)
     reuseport_tests()
 else
     @info "SO_REUSEPORT is unsupported, skipping reuseport tests"
+end
+
+# issue #27933
+a27933 = :_not_defined_27933
+@test remotecall_fetch(()->a27933, first(workers())) === a27933
+
+# PR #28651
+for T in (UInt8, Int8, UInt16, Int16, UInt32, Int32, UInt64)
+    local n = @distributed (+) for i in Base.OneTo(T(10))
+        i
+    end
+    @test n == 55
+end
+
+# issue #28966
+let code = """
+    import Distributed
+    Distributed.addprocs(1)
+    Distributed.@everywhere f() = myid()
+    for w in Distributed.workers()
+        @assert Distributed.remotecall_fetch(f, w) == w
+    end
+    """
+    @test success(`$(Base.julia_cmd()) --startup-file=no -e $code`)
+end
+
+# PR 32431: tests for internal Distributed.head_and_tail
+let (h, t) = Distributed.head_and_tail(1:10, 3)
+    @test h == 1:3
+    @test collect(t) == 4:10
+end
+let (h, t) = Distributed.head_and_tail(1:10, 0)
+    @test h == []
+    @test collect(t) == 1:10
+end
+let (h, t) = Distributed.head_and_tail(1:3, 5)
+    @test h == 1:3
+    @test collect(t) == []
+end
+let (h, t) = Distributed.head_and_tail(1:3, 3)
+    @test h == 1:3
+    @test collect(t) == []
+end
+let (h, t) = Distributed.head_and_tail(Int[], 3)
+    @test h == []
+    @test collect(t) == []
+end
+let (h, t) = Distributed.head_and_tail(Int[], 0)
+    @test h == []
+    @test collect(t) == []
+end
+
+# issue #35937
+let e = @test_throws RemoteException pmap(1) do _
+            wait(@async error(42))
+        end
+    # check that the inner TaskFailedException is correctly formed & can be printed
+    es = sprint(showerror, e.value)
+    @test contains(es, ":\nTaskFailedException\nStacktrace:\n")
+    @test contains(es, "\n\n    nested task error:")
+    @test contains(es, "\n\n    nested task error: 42\n")
+end
+
+# issue #27429, propagate relative `include` path to workers
+@everywhere include("includefile.jl")
+for p in procs()
+    @test @fetchfrom(p, i27429) == 27429
+end
+
+# Propagation of package environments for local workers (#28781)
+let julia = `$(Base.julia_cmd()) --startup-file=no`; mktempdir() do tmp
+    project = mkdir(joinpath(tmp, "project"))
+    depots = [mkdir(joinpath(tmp, "depot1")), mkdir(joinpath(tmp, "depot2"))]
+    load_path = [mkdir(joinpath(tmp, "load_path")), "@stdlib", "@"]
+    pathsep = Sys.iswindows() ? ";" : ":"
+    env = Dict(
+        "JULIA_DEPOT_PATH" => join(depots, pathsep),
+        "JULIA_LOAD_PATH" => join(load_path, pathsep),
+        # Explicitly propagate `TMPDIR`, in the event that we're running on a
+        # CI system where `TMPDIR` is special.
+        "TMPDIR" => dirname(tmp),
+    )
+    setupcode = """
+    using Distributed, Test
+    @everywhere begin
+        depot_path() = DEPOT_PATH
+        load_path() = LOAD_PATH
+        active_project() = Base.ACTIVE_PROJECT[]
+    end
+    """
+    testcode = setupcode * """
+    for w in workers()
+        @test remotecall_fetch(depot_path, w)          == DEPOT_PATH
+        @test remotecall_fetch(load_path, w)           == LOAD_PATH
+        @test remotecall_fetch(Base.load_path, w)      == Base.load_path()
+        @test remotecall_fetch(active_project, w)      == Base.ACTIVE_PROJECT[]
+        @test remotecall_fetch(Base.active_project, w) == Base.active_project()
+    end
+    """
+    # No active project
+    extracode = """
+    for w in workers()
+        @test remotecall_fetch(active_project, w) === Base.ACTIVE_PROJECT[] === nothing
+    end
+    """
+    cmd = setenv(`$(julia) -p1 -e $(testcode * extracode)`, env)
+    @test success(cmd)
+    # --project
+    extracode = """
+    for w in workers()
+        @test remotecall_fetch(active_project, w) == Base.ACTIVE_PROJECT[] ==
+              $(repr(project))
+    end
+    """
+    cmd = setenv(`$(julia) --project=$(project) -p1 -e $(testcode * extracode)`, env)
+    @test success(cmd)
+    # JULIA_PROJECT
+    cmd = setenv(`$(julia) -p1 -e $(testcode * extracode)`,
+                 (env["JULIA_PROJECT"] = project; env))
+    @test success(cmd)
+    # Pkg.activate(...)
+    activateish = """
+    Base.ACTIVE_PROJECT[] = $(repr(project))
+    using Distributed
+    addprocs(1)
+    """
+    cmd = setenv(`$(julia) -e $(activateish * testcode * extracode)`, env)
+    @test success(cmd)
+    # JULIA_(LOAD|DEPOT)_PATH
+    shufflecode = """
+    d = reverse(DEPOT_PATH)
+    append!(empty!(DEPOT_PATH), d)
+    l = reverse(LOAD_PATH)
+    append!(empty!(LOAD_PATH), l)
+    """
+    addcode = """
+    using Distributed
+    addprocs(1) # after shuffling
+    """
+    extracode = """
+    for w in workers()
+        @test remotecall_fetch(load_path, w) == $(repr(reverse(load_path)))
+        @test remotecall_fetch(depot_path, w) == $(repr(reverse(depots)))
+    end
+    """
+    cmd = setenv(`$(julia) -e $(shufflecode * addcode * testcode * extracode)`, env)
+    @test success(cmd)
+    # Mismatch when shuffling after proc addition
+    failcode = shufflecode * setupcode * """
+    for w in workers()
+        @test remotecall_fetch(load_path, w) == reverse(LOAD_PATH) == $(repr(load_path))
+        @test remotecall_fetch(depot_path, w) == reverse(DEPOT_PATH) == $(repr(depots))
+    end
+    """
+    cmd = setenv(`$(julia) -p1 -e $(failcode)`, env)
+    @test success(cmd)
+    # Passing env or exeflags to addprocs(...) to override defaults
+    envcode = """
+    using Distributed
+    project = mktempdir()
+    env = Dict(
+        "JULIA_LOAD_PATH" => LOAD_PATH[1],
+        "JULIA_DEPOT_PATH" => DEPOT_PATH[1],
+        "TMPDIR" => ENV["TMPDIR"],
+    )
+    addprocs(1; env = env, exeflags = `--project=\$(project)`)
+    env["JULIA_PROJECT"] = project
+    addprocs(1; env = env)
+    """ * setupcode * """
+    for w in workers()
+        @test remotecall_fetch(depot_path, w)          == [DEPOT_PATH[1]]
+        @test remotecall_fetch(load_path, w)           == [LOAD_PATH[1]]
+        @test remotecall_fetch(active_project, w)      == project
+        @test remotecall_fetch(Base.active_project, w) == joinpath(project, "Project.toml")
+    end
+    """
+    cmd = setenv(`$(julia) -e $(envcode)`, env)
+    @test success(cmd)
+end end
+
+include("splitrange.jl")
+
+# Clear all workers for timeout tests (issue #45785)
+rmprocs(workers())
+begin
+    # First, assert that we get no messages when we close a cooperative worker
+    w = only(addprocs(1))
+    @test_nowarn begin
+        wait(rmprocs([w]))
+    end
+
+    # Next, ensure we get a log message when a worker does not cleanly exit
+    w = only(addprocs(1))
+    @test_logs (:warn, r"sending SIGTERM") begin
+        remote_do(w) do
+            # Cause the 'exit()' message that `rmprocs()` sends to do nothing
+            Core.eval(Base, :(exit() = nothing))
+        end
+        wait(rmprocs([w]))
+    end
 end
 
 # Run topology tests last after removing all workers, since a given

@@ -2,11 +2,11 @@
 
 ## [Iteration](@id lib-collections-iteration)
 
-Sequential iteration is implemented by the methods [`start`](@ref), [`done`](@ref), and [`next`](@ref).
+Sequential iteration is implemented by the [`iterate`](@ref) function.
 The general `for` loop:
 
 ```julia
-for i = I   # or  "for i in I"
+for i in iter   # or  "for i = iter"
     # body
 end
 ```
@@ -14,10 +14,11 @@ end
 is translated into:
 
 ```julia
-state = start(I)
-while !done(I, state)
-    (i, state) = next(I, state)
+next = iterate(iter)
+while next !== nothing
+    (i, state) = next
     # body
+    next = iterate(iter, state)
 end
 ```
 
@@ -26,17 +27,15 @@ See the [manual section on the iteration interface](@ref man-interface-iteration
 iterable type.
 
 ```@docs
-Base.start
-Base.done
-Base.next
+Base.iterate
 Base.IteratorSize
 Base.IteratorEltype
 ```
 
 Fully implemented by:
 
-  * `AbstractRange`
-  * `UnitRange`
+  * [`AbstractRange`](@ref)
+  * [`UnitRange`](@ref)
   * `Tuple`
   * `Number`
   * [`AbstractArray`](@ref)
@@ -50,18 +49,30 @@ Fully implemented by:
   * [`Pair`](@ref)
   * [`NamedTuple`](@ref)
 
+## Constructors and Types
+
+```@docs
+Base.AbstractRange
+Base.OrdinalRange
+Base.AbstractUnitRange
+Base.StepRange
+Base.UnitRange
+Base.LinRange
+```
+
 ## General Collections
 
 ```@docs
 Base.isempty
 Base.empty!
 Base.length
+Base.checked_length
 ```
 
 Fully implemented by:
 
-  * `AbstractRange`
-  * `UnitRange`
+  * [`AbstractRange`](@ref)
+  * [`UnitRange`](@ref)
   * `Tuple`
   * `Number`
   * [`AbstractArray`](@ref)
@@ -77,31 +88,27 @@ Fully implemented by:
 
 ```@docs
 Base.in
+Base.:∉
 Base.eltype
 Base.indexin
 Base.unique
 Base.unique!
 Base.allunique
-Base.reduce(::Any, ::Any, ::Any)
+Base.allequal
 Base.reduce(::Any, ::Any)
-Base.foldl(::Any, ::Any, ::Any)
+Base.reduce(::Any, ::AbstractArray)
 Base.foldl(::Any, ::Any)
-Base.foldr(::Any, ::Any, ::Any)
 Base.foldr(::Any, ::Any)
-Base.maximum(::Any)
-Base.maximum(::Any, ::Any)
+Base.maximum
 Base.maximum!
-Base.minimum(::Any)
-Base.minimum(::Any, ::Any)
+Base.minimum
 Base.minimum!
-Base.extrema(::Any)
-Base.extrema(::AbstractArray, ::Any)
+Base.extrema
+Base.extrema!
 Base.argmax
 Base.argmin
-Base.findmax(::Any)
-Base.findmax(::AbstractArray, ::Any)
-Base.findmin(::Any)
-Base.findmin(::AbstractArray, ::Any)
+Base.findmax
+Base.findmin
 Base.findmax!
 Base.findmin!
 Base.sum
@@ -115,29 +122,26 @@ Base.all(::Any)
 Base.all(::AbstractArray, ::Any)
 Base.all!
 Base.count
-Base.any(::Any, ::Any)
-Base.all(::Any, ::Any)
 Base.foreach
 Base.map
 Base.map!
-Base.mapreduce(::Any, ::Any, ::Any, ::Any)
 Base.mapreduce(::Any, ::Any, ::Any)
-Base.mapfoldl(::Any, ::Any, ::Any, ::Any)
 Base.mapfoldl(::Any, ::Any, ::Any)
-Base.mapfoldr(::Any, ::Any, ::Any, ::Any)
 Base.mapfoldr(::Any, ::Any, ::Any)
 Base.first
 Base.last
+Base.front
+Base.tail
 Base.step
 Base.collect(::Any)
 Base.collect(::Type, ::Any)
-Base.issubset(::Any, ::Any)
 Base.filter
 Base.filter!
 Base.replace(::Any, ::Pair...)
-Base.replace(::Base.Callable, ::Any, ::Any)
 Base.replace(::Base.Callable, ::Any)
 Base.replace!
+Base.rest
+Base.split_rest
 ```
 
 ## Indexable Collections
@@ -158,8 +162,8 @@ Fully implemented by:
 
 Partially implemented by:
 
-  * `AbstractRange`
-  * `UnitRange`
+  * [`AbstractRange`](@ref)
+  * [`UnitRange`](@ref)
   * `Tuple`
   * `AbstractString`
   * [`Dict`](@ref)
@@ -177,6 +181,8 @@ two functions for custom types to override how they are stored in a hash table.
 
 [`WeakKeyDict`](@ref) is a hash table implementation where the keys are weak references to objects, and
 thus may be garbage collected even when referenced in a hash table.
+Like `Dict` it uses `hash` for hashing and `isequal` for equality, unlike `Dict` it does
+not convert keys on insertion.
 
 [`Dict`](@ref)s can be created by passing pair objects constructed with `=>` to a [`Dict`](@ref)
 constructor: `Dict("A"=>1, "B"=>2)`. This call will attempt to infer type information from the
@@ -191,15 +197,14 @@ for the key `x`).  Multiple arguments to `D[...]` are converted to tuples; for e
 `D[x,y]`  is equivalent to `D[(x,y)]`, i.e. it refers to the value keyed by the tuple `(x,y)`.
 
 ```@docs
+Base.AbstractDict
 Base.Dict
 Base.IdDict
 Base.WeakKeyDict
 Base.ImmutableDict
 Base.haskey
-Base.get(::Any, ::Any, ::Any)
 Base.get
-Base.get!(::Any, ::Any, ::Any)
-Base.get!(::Function, ::Any, ::Any)
+Base.get!
 Base.getkey
 Base.delete!
 Base.pop!(::Any, ::Any, ::Any)
@@ -207,8 +212,9 @@ Base.keys
 Base.values
 Base.pairs
 Base.merge
-Base.merge!(::Associative, ::Associative...)
-Base.merge!(::Function, ::Associative, ::Associative...)
+Base.mergewith
+Base.merge!
+Base.mergewith!
 Base.sizehint!
 Base.keytype
 Base.valtype
@@ -233,6 +239,7 @@ Partially implemented by:
 ## Set-Like Collections
 
 ```@docs
+Base.AbstractSet
 Base.Set
 Base.BitSet
 Base.union
@@ -244,6 +251,10 @@ Base.symdiff
 Base.symdiff!
 Base.intersect!
 Base.issubset
+Base.:⊈
+Base.:⊊
+Base.issetequal
+Base.isdisjoint
 ```
 
 Fully implemented by:
@@ -260,10 +271,12 @@ Partially implemented by:
 ```@docs
 Base.push!
 Base.pop!
+Base.popat!
 Base.pushfirst!
 Base.popfirst!
 Base.insert!
 Base.deleteat!
+Base.keepat!
 Base.splice!
 Base.resize!
 Base.append!
