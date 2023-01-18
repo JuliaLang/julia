@@ -659,6 +659,8 @@ function isidentityfree(@nospecialize(t::Type))
     elseif isa(t, Union)
         return isidentityfree(t.a) && isidentityfree(t.b)
     end
+    # TypeVar, etc.
+    return false
 end
 
 iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
