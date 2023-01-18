@@ -186,6 +186,12 @@ For example, the above conditions imply that:
 - The value of [`threadid()`](@ref Threads.threadid) may change even within a single
   iteration.
 
+The keywords `continue` and `break` can be used in conjuction with `@threads`. They have the following meaning:
+
+- `continue` skips the rest of the current iteration.
+- `break` gives julia freedom to skip any future iteration. There is however no guarantee
+  about any future iteration being skipped. Typically `break` will skip only some iterations.
+
 ## Schedulers
 
 Without the scheduler argument, the exact scheduling is unspecified and varies across Julia

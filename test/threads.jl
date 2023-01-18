@@ -327,3 +327,37 @@ end
     @test_throws ArgumentError @macroexpand(@threads 1) # arg isn't an Expr
     @test_throws ArgumentError @macroexpand(@threads if true 1 end) # arg doesn't start with for
 end
+
+@testset "@threads continue" begin
+    out = zeros(10)
+    @threads for i in 1:10
+        iseven(i) && continue
+        out[i] = i
+    end
+    @test out == [1,0,3,0,5,0,7,0,9,0]
+
+    out = zeros(10)
+    @threads :dynamic for i in 1:10
+        iseven(i) && continue
+        out[i] = i
+    end
+    @test out == [1,0,3,0,5,0,7,0,9,0]
+
+    out = zeros(10)
+    @threads :static for i in 1:10
+        iseven(i) && continue
+        out[i] = i
+    end
+    @test out == [1,0,3,0,5,0,7,0,9,0]
+end
+
+@testset "@threads break" begin
+    out = zeros(100)
+    @threads for i in 1:100
+        if i > 5
+            break
+        end
+        out[i] = i
+    end
+    @test out[1:5] == 1:5
+end
