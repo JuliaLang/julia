@@ -1414,7 +1414,7 @@ end
             ocachefile = nothing
             continue
         end
-        restored = _include_from_serialized(pkg, path_to_try, ocachefile::String, staledeps::Vector{Any})
+        restored = _include_from_serialized(pkg, path_to_try, ocachefile, staledeps::Vector{Any})
         if !isa(restored, Module)
             @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
         else
