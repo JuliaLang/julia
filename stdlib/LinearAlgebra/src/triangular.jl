@@ -6,8 +6,7 @@
 abstract type AbstractTriangular{T} <: AbstractMatrix{T} end
 
 # First loop through all methods that don't need special care for upper/lower and unit diagonal
-for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
-          :UnitUpperTriangular)
+for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTriangular)
     @eval begin
         struct $t{T,S<:AbstractMatrix{T}} <: AbstractTriangular{T}
             data::S
