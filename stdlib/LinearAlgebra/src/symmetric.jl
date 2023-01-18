@@ -868,6 +868,7 @@ as a [`Symmetric`](@ref) matrix.
 """
 symmetricpart(A::AbstractMatrix{T}, uplo=:U) where {T} =
     symmetricpart!(copyto!(similar(A, typeof(one(T) / 2)), A), uplo)
+symmetricpart(x::Number) = x
 
 """
     symmetricpart!(A, uplo=:U)
@@ -879,7 +880,7 @@ and return `Symmetric(A, uplo)`.
     This function requires Julia 1.10 or later.
 """
 symmetricpart!(A::AbstractMatrix, uplo::Symbol=:U) =
-    Symmetric(_hermorsympart!(identity, identity, A, char_uplo(uplo)), uplo)
+    Symmetric(_hermorsympart!(symmetricpart, transpose, A, char_uplo(uplo)), uplo)
 
 """
     hermitianpart(A, uplo=:U)
@@ -892,6 +893,7 @@ as a [`Hermitian`](@ref) matrix.
 """
 hermitianpart(A::AbstractMatrix{T}, uplo=:U) where {T} =
     hermitianpart!(copyto!(similar(A, typeof(one(T) / 2)), A), uplo)
+hermitianpart(x::Number) = real(x)
 
 """
     hermitianpart!(A, uplo=:U)
@@ -903,7 +905,7 @@ and return `Hermitian(A, uplo)`.
     This function requires Julia 1.10 or later.
 """
 hermitianpart!(A::AbstractMatrix, uplo::Symbol=:U) =
-    Hermitian(_hermorsympart!(real, conj, A, char_uplo(uplo)), uplo)
+    Hermitian(_hermorsympart!(hermitianpart, adjoint, A, char_uplo(uplo)), uplo)
 
 function _hermorsympart!(real::Function, conj::Function, A::AbstractMatrix, uplo::Char)
     require_one_based_indexing(A)
