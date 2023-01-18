@@ -84,6 +84,9 @@ end
 @test eltype(NamedTuple{(:x, :y),Tuple{Union{Missing, Int},Union{Missing, Float64}}}(
     (missing, missing))) === Union{Real, Missing}
 
+@test valtype((a=[1,2], b=[3,4])) === Vector{Int}
+@test keytype((a=[1,2], b=[3,4])) === Symbol
+
 @test Tuple((a=[1,2], b=[3,4])) == ([1,2], [3,4])
 @test Tuple(NamedTuple()) === ()
 @test Tuple((x=4, y=5, z=6)) == (4,5,6)
@@ -349,4 +352,18 @@ end
     @test mapfoldl(abs, =>, (;), init=-10) == -10
     @test mapfoldl(abs, Pair{Any,Any}, NamedTuple(Symbol(:x,i) => i for i in 1:30)) == mapfoldl(abs, Pair{Any,Any}, [1:30;])
     @test_throws "reducing over an empty collection" mapfoldl(abs, =>, (;))
+end
+
+# Test effect/inference for merge/diff of unknown NamedTuples
+for f in (Base.merge, Base.structdiff)
+    let eff = Base.infer_effects(f, Tuple{NamedTuple, NamedTuple})
+        @test Core.Compiler.is_foldable(eff) && eff.nonoverlayed
+    end
+    @test Core.Compiler.return_type(f, Tuple{NamedTuple, NamedTuple}) == NamedTuple
+end
+
+# Test that merge/diff preserves nt field types
+let a = Base.NamedTuple{(:a, :b), Tuple{Any, Any}}((1, 2)), b = Base.NamedTuple{(:b,), Tuple{Float64}}(3)
+    @test typeof(Base.merge(a, b)) == Base.NamedTuple{(:a, :b), Tuple{Any, Float64}}
+    @test typeof(Base.structdiff(a, b)) == Base.NamedTuple{(:a,), Tuple{Any}}
 end

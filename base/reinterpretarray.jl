@@ -725,11 +725,18 @@ end
 @assume_effects :total function array_subpadding(S, T)
     lcm_size = lcm(sizeof(S), sizeof(T))
     s, t = CyclePadding(S), CyclePadding(T)
-    isempty(t) && return true
-    isempty(s) && return false
     checked_size = 0
-    ps, sstate = iterate(s)   # use of Stateful harms inference and makes this vulnerable to invalidation
-    pad, tstate = iterate(t)
+    # use of Stateful harms inference and makes this vulnerable to invalidation
+    (pad, tstate) = let
+        it = iterate(t)
+        it === nothing && return true
+        it
+    end
+    (ps, sstate) = let
+        it = iterate(s)
+        it === nothing && return false
+        it
+    end
     while checked_size < lcm_size
         while true
             # See if there's corresponding padding in S

@@ -10,6 +10,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
 #include <llvm/IR/Value.h>
+#include "analyzer_annotations.h"
 
 struct JuliaPassContext;
 
@@ -19,7 +20,7 @@ namespace jl_intrinsics {
     // intrinsics and declare new intrinsics if necessary.
     struct IntrinsicDescription final {
         // The type of function that declares an intrinsic.
-        typedef llvm::Function *(*DeclarationFunction)(const JuliaPassContext&);
+        typedef llvm::Function *(*DeclarationFunction)(const JuliaPassContext&) JL_NOTSAFEPOINT;
 
         // Creates an intrinsic description with a particular
         // name and declaration function.
@@ -125,6 +126,9 @@ namespace jl_intrinsics {
 
     // `julia.queue_gc_root`: an intrinsic that queues a GC root.
     extern const IntrinsicDescription queueGCRoot;
+
+    // `julia.safepoint`: an intrinsic that triggers a GC safepoint.
+    extern const IntrinsicDescription safepoint;
 }
 
 // A namespace for well-known Julia runtime function descriptions.

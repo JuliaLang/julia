@@ -936,7 +936,7 @@ end
 
 ## from general iterable to any array
 
-# This is `@Experimental.max_methods 1 function copyto! end`, which is not
+# This is `Experimental.@max_methods 1 function copyto! end`, which is not
 # defined at this point in bootstrap.
 typeof(function copyto! end).name.max_methods = UInt8(1)
 

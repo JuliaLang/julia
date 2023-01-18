@@ -12,7 +12,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
 
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 #include "julia_assert.h"
 #include "llvm-pass-helpers.h"
 
@@ -116,6 +116,7 @@ namespace jl_intrinsics {
     static const char *PUSH_GC_FRAME_NAME = "julia.push_gc_frame";
     static const char *POP_GC_FRAME_NAME = "julia.pop_gc_frame";
     static const char *QUEUE_GC_ROOT_NAME = "julia.queue_gc_root";
+    static const char *SAFEPOINT_NAME = "julia.safepoint";
 
     // Annotates a function with attributes suitable for GC allocation
     // functions. Specifically, the return value is marked noalias and nonnull.
@@ -124,7 +125,6 @@ namespace jl_intrinsics {
     {
         addRetAttr(target, Attribute::NoAlias);
         addRetAttr(target, Attribute::NonNull);
-        target->addFnAttr(Attribute::getWithAllocSizeArgs(context, 1, None)); // returns %1 bytes
         return target;
     }
 
@@ -153,7 +153,7 @@ namespace jl_intrinsics {
                     false),
                 Function::ExternalLinkage,
                 GC_ALLOC_BYTES_NAME);
-
+            intrinsic->addFnAttr(Attribute::getWithAllocSizeArgs(context.getLLVMContext(), 1, None));
             return addGCAllocAttributes(intrinsic, context.getLLVMContext());
         });
 
@@ -207,6 +207,22 @@ namespace jl_intrinsics {
             intrinsic->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
             return intrinsic;
         });
+
+    const IntrinsicDescription safepoint(
+        SAFEPOINT_NAME,
+        [](const JuliaPassContext &context) {
+            auto T_size = getSizeTy(context.getLLVMContext());
+            auto T_psize = T_size->getPointerTo();
+            auto intrinsic = Function::Create(
+                FunctionType::get(
+                    Type::getVoidTy(context.getLLVMContext()),
+                    {T_psize},
+                    false),
+                Function::ExternalLinkage,
+                SAFEPOINT_NAME);
+            intrinsic->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
+            return intrinsic;
+        });
 }
 
 namespace jl_well_known {
@@ -229,7 +245,7 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_BIG_ALLOC_NAME);
-
+            bigAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(context.getLLVMContext(), 1, None));
             return addGCAllocAttributes(bigAllocFunc, context.getLLVMContext());
         });
 
@@ -243,7 +259,7 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_POOL_ALLOC_NAME);
-
+            poolAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(context.getLLVMContext(), 2, None));
             return addGCAllocAttributes(poolAllocFunc, context.getLLVMContext());
         });
 

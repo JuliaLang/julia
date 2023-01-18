@@ -524,7 +524,7 @@ JL_DLLEXPORT jl_value_t *jl_stdout_obj(void) JL_NOTSAFEPOINT
 {
     if (jl_base_module == NULL)
         return NULL;
-    jl_binding_t *stdout_obj = jl_get_module_binding(jl_base_module, jl_symbol("stdout"));
+    jl_binding_t *stdout_obj = jl_get_module_binding(jl_base_module, jl_symbol("stdout"), 0);
     return stdout_obj ? jl_atomic_load_relaxed(&stdout_obj->value) : NULL;
 }
 
@@ -532,7 +532,7 @@ JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT
 {
     if (jl_base_module == NULL)
         return NULL;
-    jl_binding_t *stderr_obj = jl_get_module_binding(jl_base_module, jl_symbol("stderr"));
+    jl_binding_t *stderr_obj = jl_get_module_binding(jl_base_module, jl_symbol("stderr"), 0);
     return stderr_obj ? jl_atomic_load_relaxed(&stderr_obj->value) : NULL;
 }
 
@@ -625,9 +625,9 @@ JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt JL_PROPAGATES_ROO
 static int is_globname_binding(jl_value_t *v, jl_datatype_t *dv) JL_NOTSAFEPOINT
 {
     jl_sym_t *globname = dv->name->mt != NULL ? dv->name->mt->name : NULL;
-    if (globname && dv->name->module && jl_binding_resolved_p(dv->name->module, globname)) {
-        jl_binding_t *b = jl_get_module_binding(dv->name->module, globname);
-        if (b && b->constp) {
+    if (globname && dv->name->module) {
+        jl_binding_t *b = jl_get_module_binding(dv->name->module, globname, 0);
+        if (b && jl_atomic_load_relaxed(&b->owner) && b->constp) {
             jl_value_t *bv = jl_atomic_load_relaxed(&b->value);
             // The `||` makes this function work for both function instances and function types.
             if (bv == v || jl_typeof(bv) == v)

@@ -37,6 +37,7 @@ Base.which(::Any, ::Any)
 Base.methods
 Base.@show
 ans
+err
 Base.active_project
 Base.set_active_project
 ```
@@ -259,7 +260,7 @@ new
 Base.:(|>)
 Base.:(∘)
 Base.ComposedFunction
-Base.Splat
+Base.splat
 Base.Fix1
 Base.Fix2
 ```

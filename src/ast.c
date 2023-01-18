@@ -156,8 +156,8 @@ static value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint
     (void)tosymbol(fl_ctx, args[0], "defined-julia-global");
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
     jl_sym_t *var = jl_symbol(symbol_name(fl_ctx, args[0]));
-    jl_binding_t *b = jl_get_module_binding(ctx->module, var);
-    return (b != NULL && b->owner == ctx->module) ? fl_ctx->T : fl_ctx->F;
+    jl_binding_t *b = jl_get_module_binding(ctx->module, var, 0);
+    return (b != NULL && jl_atomic_load_relaxed(&b->owner) == b) ? fl_ctx->T : fl_ctx->F;
 }
 
 static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_NOTSAFEPOINT

@@ -386,8 +386,10 @@ function isvatuple(@nospecialize(t))
     return false
 end
 
-unwrapva(t::Core.TypeofVararg) = isdefined(t, :T) ? t.T : Any
-unwrapva(@nospecialize(t)) = t
+function unwrapva(@nospecialize(t))
+    isa(t, Core.TypeofVararg) || return t
+    return isdefined(t, :T) ? t.T : Any
+end
 
 function unconstrain_vararg_length(va::Core.TypeofVararg)
     # construct a new Vararg type where its length is unconstrained,

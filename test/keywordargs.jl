@@ -181,7 +181,7 @@ end
     @test test4538_2(x=2) == 2
 
     # that, but in a module
-    @Foo4538.TEST()
+    Foo4538.@TEST()
     @test test4538_foo_2() == 1
     @test test4538_foo_2(x=2) == 2
 

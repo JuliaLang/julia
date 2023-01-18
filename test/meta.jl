@@ -144,8 +144,8 @@ baremodule B
     x = 1
     module M; x = 2; end
     import Base
-    @Base.eval x = 3
-    @Base.eval M x = 4
+    Base.@eval x = 3
+    Base.@eval M x = 4
 end
 @test B.x == 3
 @test B.M.x == 4
