@@ -1,0 +1,10 @@
+# https://github.com/JuliaLang/julia/issues/4533
+{
+   msync unwind
+   Memcheck:Param
+   write(buf)
+   ...
+   fun:validate_mem
+   ...
+   fun:rec_backtrace
+}

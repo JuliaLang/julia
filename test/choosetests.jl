@@ -28,11 +28,23 @@ const TESTNAMES = [
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
         "channels", "iostream", "secretbuffer", "specificity",
         "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",
-        "smallarrayshrink", "opaque_closure", "filesystem", "download"
+        "smallarrayshrink", "opaque_closure", "filesystem", "download",
 ]
 
-"""
+const INTERNET_REQUIRED_LIST = [
+    "Artifacts",
+    "Downloads",
+    "LazyArtifacts",
+    "LibCURL",
+    "LibGit2",
+    "Pkg",
+    "TOML",
+    "download",
+]
 
+const NETWORK_REQUIRED_LIST = vcat(INTERNET_REQUIRED_LIST, ["Sockets"])
+
+"""
 `(; tests, net_on, exit_on_error, seed) = choosetests(choices)` selects a set of tests to be
 run. `choices` should be a vector of test names; if empty or set to
 `["all"]`, all tests are selected.
@@ -65,7 +77,7 @@ function choosetests(choices = [])
     exit_on_error = false
     use_revise = false
     seed = rand(RandomDevice(), UInt128)
-    force_net = false
+    ci_option_passed = false
     dryrun = false
 
     for (i, t) in enumerate(choices)
@@ -77,9 +89,9 @@ function choosetests(choices = [])
         elseif t == "--revise"
             use_revise = true
         elseif startswith(t, "--seed=")
-            seed = parse(UInt128, t[8:end])
-        elseif t == "--force-net"
-            force_net = true
+            seed = parse(UInt128, t[(length("--seed=") + 1):end])
+        elseif t == "--ci"
+            ci_option_passed = true
         elseif t == "--help-list"
             dryrun = true
         elseif t == "--help"
@@ -98,7 +110,11 @@ function choosetests(choices = [])
 
                   Or prefix a name with `-` (such as `-core`) to skip a particular test.
                 """)
-            return [], false, false, false, UInt128(0)
+            return (; tests = [],
+                      net_on = false,
+                      exit_on_error = false,
+                      use_revise = false,
+                      seed = UInt128(0))
         elseif startswith(t, "--")
             error("unknown option: $t")
         elseif startswith(t, "-")
@@ -129,18 +145,24 @@ function choosetests(choices = [])
        end
     end
 
-    explicit_pkg     = "Pkg"            in tests
-    explicit_libgit2 = "LibGit2/online" in tests
+    explicit_pkg            = "Pkg"            in tests
+    explicit_libgit2_online = "LibGit2/online" in tests
 
     filtertests!(tests, "unicode", ["unicode/utf8"])
     filtertests!(tests, "strings", ["strings/basic", "strings/search", "strings/util",
                    "strings/io", "strings/types"])
     # do subarray before sparse but after linalg
     filtertests!(tests, "subarray")
-    filtertests!(tests, "compiler", ["compiler/inference", "compiler/validation",
-        "compiler/ssair", "compiler/irpasses", "compiler/codegen",
-        "compiler/inline", "compiler/contextual"])
+    filtertests!(tests, "compiler", [
+        "compiler/datastructures", "compiler/inference", "compiler/effects",
+        "compiler/validation", "compiler/ssair", "compiler/irpasses",
+        "compiler/codegen", "compiler/inline", "compiler/contextual",
+        "compiler/AbstractInterpreter", "compiler/EscapeAnalysis/local",
+        "compiler/EscapeAnalysis/interprocedural"])
+    filtertests!(tests, "compiler/EscapeAnalysis", [
+        "compiler/EscapeAnalysis/local", "compiler/EscapeAnalysis/interprocedural"])
     filtertests!(tests, "stdlib", STDLIBS)
+    filtertests!(tests, "internet_required", INTERNET_REQUIRED_LIST)
     # do ambiguous first to avoid failing if ambiguities are introduced by other tests
     filtertests!(tests, "ambiguous")
 
@@ -151,28 +173,37 @@ function choosetests(choices = [])
         filter!(x -> (x != "Profile"), tests)
     end
 
-    net_required_for = ["download", "Sockets", "LibGit2", "LibCURL", "Downloads",
-                        "Artifacts", "LazyArtifacts"]
-    net_on = true
-    try
-        ipa = getipaddr()
-    catch ex
-        if force_net
-            msg = "Networking is unavailable, and the `--force-net` option was passed"
-            @error msg
-            rethrow()
-        end
-        @warn "Networking unavailable: Skipping tests [" * join(net_required_for, ", ") * "]"
-        net_on = false
-    end
-
-    if !net_on
-        filter!(!in(net_required_for), tests)
-    end
-
     if ccall(:jl_running_on_valgrind,Cint,()) != 0 && "rounding" in tests
         @warn "Running under valgrind: Skipping rounding tests"
         filter!(x -> x != "rounding", tests)
+    end
+
+    net_required_for = filter!(in(tests), NETWORK_REQUIRED_LIST)
+    net_on = true
+    JULIA_TEST_NETWORKING_AVAILABLE = get(ENV, "JULIA_TEST_NETWORKING_AVAILABLE", "") |>
+                                      strip |>
+                                      lowercase |>
+                                      s -> tryparse(Bool, s) |>
+                                      x -> x === true
+    # If the `JULIA_TEST_NETWORKING_AVAILABLE` environment variable is set to `true`, we
+    # always set `net_on` to `true`.
+    # Otherwise, we set `net_on` to true if and only if networking is actually available.
+    if !JULIA_TEST_NETWORKING_AVAILABLE
+        try
+            getipaddr()
+        catch
+            if ci_option_passed
+                @error("Networking unavailable, but `--ci` was passed")
+                rethrow()
+            end
+            net_on = false
+            if isempty(net_required_for)
+                @warn "Networking unavailable"
+            else
+                @warn "Networking unavailable: Skipping tests [" * join(net_required_for, ", ") * "]"
+                filter!(!in(net_required_for), tests)
+            end
+        end
     end
 
     filter!(!in(tests), unhandled)
@@ -194,8 +225,8 @@ function choosetests(choices = [])
     filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
     append!(tests, new_tests)
 
-    requested_all || explicit_pkg     || filter!(x -> x != "Pkg",            tests)
-    requested_all || explicit_libgit2 || filter!(x -> x != "LibGit2/online", tests)
+    requested_all || explicit_pkg            || filter!(x -> x != "Pkg",            tests)
+    requested_all || explicit_libgit2_online || filter!(x -> x != "LibGit2/online", tests)
 
     # Filter out tests from the test groups in the stdlibs
     filter!(!in(tests), unhandled)

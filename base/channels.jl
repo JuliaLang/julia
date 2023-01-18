@@ -33,7 +33,7 @@ mutable struct Channel{T} <: AbstractChannel{T}
     cond_take::Threads.Condition                 # waiting for data to become available
     cond_wait::Threads.Condition                 # waiting for data to become maybe available
     cond_put::Threads.Condition                  # waiting for a writeable slot
-    state::Symbol
+    @atomic state::Symbol
     excp::Union{Exception, Nothing}      # exception to be thrown when state !== :open
 
     data::Vector{T}
@@ -63,6 +63,7 @@ Channel(sz=0) = Channel{Any}(sz)
 
 Create a new task from `func`, bind it to a new channel of type
 `T` and size `size`, and schedule the task, all in a single call.
+The channel is automatically closed when the task terminates.
 
 `func` must accept the bound channel as its only argument.
 
@@ -167,6 +168,8 @@ isbuffered(c::Channel) = c.sz_max==0 ? false : true
 
 function check_channel_state(c::Channel)
     if !isopen(c)
+        # if the monotonic load succeed, now do an acquire fence
+        (@atomic :acquire c.state) === :open && concurrency_violation()
         excp = c.excp
         excp !== nothing && throw(excp)
         throw(closed_exception())
@@ -183,8 +186,8 @@ Close a channel. An exception (optionally given by `excp`), is thrown by:
 function close(c::Channel, excp::Exception=closed_exception())
     lock(c)
     try
-        c.state = :closed
         c.excp = excp
+        @atomic :release c.state = :closed
         notify_error(c.cond_take, excp)
         notify_error(c.cond_wait, excp)
         notify_error(c.cond_put, excp)
@@ -193,7 +196,7 @@ function close(c::Channel, excp::Exception=closed_exception())
     end
     nothing
 end
-isopen(c::Channel) = (c.state === :open)
+isopen(c::Channel) = ((@atomic :monotonic c.state) === :open)
 
 """
     bind(chnl::Channel, task::Task)
@@ -339,6 +342,7 @@ function put_buffered(c::Channel, v)
             check_channel_state(c)
             wait(c.cond_put)
         end
+        check_channel_state(c)
         push!(c.data, v)
         did_buffer = true
         # notify all, since some of the waiters may be on a "fetch" call.
@@ -361,6 +365,7 @@ function put_unbuffered(c::Channel, v)
             notify(c.cond_wait)
             wait(c.cond_put)
         end
+        check_channel_state(c)
         # unfair scheduled version of: notify(c.cond_take, v, false, false); yield()
         popfirst!(c.cond_take.waitq)
     finally
@@ -375,8 +380,26 @@ end
 """
     fetch(c::Channel)
 
-Wait for and get the first available item from the channel. Does not
-remove the item. `fetch` is unsupported on an unbuffered (0-size) channel.
+Waits for and returns (without removing) the first available item from the `Channel`.
+Note: `fetch` is unsupported on an unbuffered (0-size) `Channel`.
+
+# Examples
+
+Buffered channel:
+```jldoctest
+julia> c = Channel(3) do ch
+           foreach(i -> put!(ch, i), 1:3)
+       end;
+
+julia> fetch(c)
+1
+
+julia> collect(c)  # item is not removed
+3-element Vector{Any}:
+ 1
+ 2
+ 3
+```
 """
 fetch(c::Channel) = isbuffered(c) ? fetch_buffered(c) : fetch_unbuffered(c)
 function fetch_buffered(c::Channel)
@@ -397,10 +420,32 @@ fetch_unbuffered(c::Channel) = throw(ErrorException("`fetch` is not supported on
 """
     take!(c::Channel)
 
-Remove and return a value from a [`Channel`](@ref). Blocks until data is available.
+Removes and returns a value from a [`Channel`](@ref) in order. Blocks until data is available.
+For unbuffered channels, blocks until a [`put!`](@ref) is performed by a different task.
 
-For unbuffered channels, blocks until a [`put!`](@ref) is performed by a different
-task.
+# Examples
+
+Buffered channel:
+```jldoctest
+julia> c = Channel(1);
+
+julia> put!(c, 1);
+
+julia> take!(c)
+1
+```
+
+Unbuffered channel:
+```jldoctest
+julia> c = Channel(0);
+
+julia> task = Task(() -> put!(c, 1));
+
+julia> schedule(task);
+
+julia> take!(c)
+1
+```
 """
 take!(c::Channel) = isbuffered(c) ? take_buffered(c) : take_unbuffered(c)
 function take_buffered(c::Channel)
@@ -434,11 +479,41 @@ end
 """
     isready(c::Channel)
 
-Determine whether a [`Channel`](@ref) has a value stored to it. Returns
-immediately, does not block.
+Determines whether a [`Channel`](@ref) has a value stored in it.
+Returns immediately, does not block.
 
-For unbuffered channels returns `true` if there are tasks waiting
-on a [`put!`](@ref).
+For unbuffered channels returns `true` if there are tasks waiting on a [`put!`](@ref).
+
+# Examples
+
+Buffered channel:
+```jldoctest
+julia> c = Channel(1);
+
+julia> isready(c)
+false
+
+julia> put!(c, 1);
+
+julia> isready(c)
+true
+```
+
+Unbuffered channel:
+```jldoctest
+julia> c = Channel();
+
+julia> isready(c)  # no tasks waiting to put!
+false
+
+julia> task = Task(() -> put!(c, 1));
+
+julia> schedule(task);  # schedule a put! task
+
+julia> isready(c)
+true
+```
+
 """
 isready(c::Channel) = n_avail(c) > 0
 isempty(c::Channel) = n_avail(c) == 0
@@ -452,6 +527,30 @@ lock(f, c::Channel) = lock(f, c.cond_take)
 unlock(c::Channel) = unlock(c.cond_take)
 trylock(c::Channel) = trylock(c.cond_take)
 
+"""
+    wait(c::Channel)
+
+Blocks until the `Channel` [`isready`](@ref).
+
+```jldoctest
+julia> c = Channel(1);
+
+julia> isready(c)
+false
+
+julia> task = Task(() -> wait(c));
+
+julia> schedule(task);
+
+julia> istaskdone(task)  # task is blocked because channel is not ready
+false
+
+julia> put!(c, 1);
+
+julia> istaskdone(task)  # task is now unblocked
+true
+```
+"""
 function wait(c::Channel)
     isready(c) && return
     lock(c)
@@ -488,14 +587,18 @@ function show(io::IO, ::MIME"text/plain", c::Channel)
 end
 
 function iterate(c::Channel, state=nothing)
-    try
-        return (take!(c), nothing)
-    catch e
-        if isa(e, InvalidStateException) && e.state === :closed
-            return nothing
-        else
-            rethrow()
+    if isopen(c) || isready(c)
+        try
+            return (take!(c), nothing)
+        catch e
+            if isa(e, InvalidStateException) && e.state === :closed
+                return nothing
+            else
+                rethrow()
+            end
         end
+    else
+        return nothing
     end
 end
 

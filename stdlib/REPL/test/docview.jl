@@ -42,6 +42,14 @@ end
     @test REPL.insert_hlines(IOBuffer(), nothing) === nothing
 end
 
+@testset "Check @var_str also completes to var\"\" in REPL.doc_completions()" begin
+    checks = ["var", "raw", "r"]
+    symbols = "@" .* checks .* "_str"
+    results = checks .* "\"\""
+    for (i,r) in zip(symbols,results)
+        @test r ∈ REPL.doc_completions(i)
+    end
+end
 @testset "fuzzy score" begin
     # https://github.com/JunoLab/FuzzyCompletions.jl/issues/7
     # shouldn't throw when there is a space in a middle of query
@@ -50,4 +58,10 @@ end
 
 @testset "Unicode doc lookup (#41589)" begin
     @test REPL.lookup_doc(:(÷=)) isa Markdown.MD
+end
+
+@testset "#44009" begin
+    R = Complex{<:Integer}
+    b = REPL.Binding(@__MODULE__, :R)
+    @test REPL.summarize(b, Tuple{}) isa Markdown.MD
 end

@@ -1,6 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-/* Bring in definitions for `_OS_X_`, `PATH_MAX` and `PATHSEPSTRING`, `jl_ptls_t`, etc... */
+/* Bring in definitions for `_OS_X_`, `JL_PATH_MAX` and `PATHSEPSTRING`, `jl_ptls_t`, etc... */
 #include "../src/support/platform.h"
 #include "../src/support/dirpath.h"
 #include "../src/julia_fasttls.h"
@@ -20,9 +20,8 @@
 #define strchr loader_strchr
 #define malloc loader_malloc
 #define realloc loader_realloc
+#define free loader_free
 #endif
-
-#include <stdint.h>
 
 #ifdef _OS_WINDOWS_
 
@@ -48,6 +47,8 @@
 #include <dlfcn.h>
 
 #endif
+
+#include <stdint.h>
 
 // Borrow definition from `support/dtypes.h`
 #ifdef _OS_WINDOWS_
@@ -92,8 +93,8 @@ static void * lookup_symbol(const void * lib_handle, const char * symbol_name);
 
 #ifdef _OS_WINDOWS_
 LPWSTR *CommandLineToArgv(LPWSTR lpCmdLine, int *pNumArgs);
-int wchar_to_utf8(const wchar_t * wstr, char *str, size_t maxlen);
-int utf8_to_wchar(const char * str, wchar_t *wstr, size_t maxlen);
+char *wchar_to_utf8(const wchar_t * wstr);
+wchar_t *utf8_to_wchar(const char * str);
 void setup_stdio(void);
 #endif
 

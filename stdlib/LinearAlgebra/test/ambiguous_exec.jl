@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, LinearAlgebra, SparseArrays
+using Test, LinearAlgebra
 let ambig = detect_ambiguities(LinearAlgebra; recursive=true)
     @test isempty(ambig)
     ambig = Set{Any}(((m1.sig, m2.sig) for (m1, m2) in ambig))

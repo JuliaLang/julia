@@ -103,6 +103,8 @@
     ALIAS(llvmcall, llvmcall) \
     /*  object access */ \
     ADD_I(arraylen, 1) \
+    /*  cpu feature tests */ \
+    ADD_I(have_fma, 1) \
     /*  hidden intrinsics */ \
     ADD_HIDDEN(cglobal_auto, 1)
 

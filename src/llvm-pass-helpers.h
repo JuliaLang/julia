@@ -10,6 +10,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
 #include <llvm/IR/Value.h>
+#include "analyzer_annotations.h"
 
 struct JuliaPassContext;
 
@@ -19,7 +20,7 @@ namespace jl_intrinsics {
     // intrinsics and declare new intrinsics if necessary.
     struct IntrinsicDescription final {
         // The type of function that declares an intrinsic.
-        typedef llvm::Function *(*DeclarationFunction)(const JuliaPassContext&);
+        typedef llvm::Function *(*DeclarationFunction)(const JuliaPassContext&) JL_NOTSAFEPOINT;
 
         // Creates an intrinsic description with a particular
         // name and declaration function.
@@ -40,20 +41,9 @@ namespace jl_intrinsics {
 // from modules or add them if they're not available yet.
 // Mainly useful for building Julia-specific LLVM passes.
 struct JuliaPassContext {
-    // Standard types.
-    llvm::Type *T_size;
-    llvm::Type *T_int8;
-    llvm::Type *T_int32;
-    llvm::PointerType *T_pint8;
 
     // Types derived from 'jl_value_t'.
-    llvm::Type *T_jlvalue;
     llvm::PointerType *T_prjlvalue;
-    llvm::PointerType *T_pppjlvalue;
-    llvm::PointerType *T_ppjlvalue;
-    llvm::PointerType *T_pjlvalue;
-    llvm::PointerType *T_pjlvalue_der;
-    llvm::PointerType *T_ppjlvalue_der;
 
     // TBAA metadata nodes.
     llvm::MDNode *tbaa_gcframe;
@@ -61,6 +51,7 @@ struct JuliaPassContext {
 
     // Intrinsics.
     llvm::Function *pgcstack_getter;
+    llvm::Function *adoptthread_func;
     llvm::Function *gc_flush_func;
     llvm::Function *gc_preserve_begin_func;
     llvm::Function *gc_preserve_end_func;
@@ -68,6 +59,8 @@ struct JuliaPassContext {
     llvm::Function *alloc_obj_func;
     llvm::Function *typeof_func;
     llvm::Function *write_barrier_func;
+    llvm::Function *call_func;
+    llvm::Function *call2_func;
 
     // Creates a pass context. Type and function pointers
     // are set to `nullptr`. Metadata nodes are initialized.
@@ -133,6 +126,9 @@ namespace jl_intrinsics {
 
     // `julia.queue_gc_root`: an intrinsic that queues a GC root.
     extern const IntrinsicDescription queueGCRoot;
+
+    // `julia.safepoint`: an intrinsic that triggers a GC safepoint.
+    extern const IntrinsicDescription safepoint;
 }
 
 // A namespace for well-known Julia runtime function descriptions.

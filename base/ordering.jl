@@ -6,7 +6,7 @@ module Order
 import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 import .Base:
-    AbstractVector, @propagate_inbounds, isless, identity, getindex,
+    AbstractVector, @propagate_inbounds, isless, identity, getindex, reverse,
     +, -, !, &, <, |
 
 ## notions of element ordering ##
@@ -45,6 +45,14 @@ end
 ReverseOrdering(rev::ReverseOrdering) = rev.fwd
 ReverseOrdering(fwd::Fwd) where {Fwd} = ReverseOrdering{Fwd}(fwd)
 ReverseOrdering() = ReverseOrdering(ForwardOrdering())
+
+"""
+    reverse(o::Base.Ordering)
+
+reverses ordering specified by `o`.
+
+"""
+reverse(o::Ordering) = ReverseOrdering(o)
 
 const DirectOrdering = Union{ForwardOrdering,ReverseOrdering{ForwardOrdering}}
 
@@ -114,7 +122,7 @@ lt(o::Lt,                    a, b) = o.lt(a,b)
 @propagate_inbounds function lt(p::Perm, a::Integer, b::Integer)
     da = p.data[a]
     db = p.data[b]
-    lt(p.order, da, db) | (!lt(p.order, db, da) & (a < b))
+    (lt(p.order, da, db)::Bool) | (!(lt(p.order, db, da)::Bool) & (a < b))
 end
 
 _ord(lt::typeof(isless), by::typeof(identity), order::Ordering) = order

@@ -89,7 +89,7 @@ JL_FEATURE_DEF(lzcnt, 32 * 5 + 5, 0)
 JL_FEATURE_DEF(sse4a, 32 * 5 + 6, 0)
 JL_FEATURE_DEF(prfchw, 32 * 5 + 8, 0)
 JL_FEATURE_DEF(xop, 32 * 5 + 11, 0)
-JL_FEATURE_DEF(lwp, 32 * 5 + 15, 0)
+// JL_FEATURE_DEF(lwp, 32 * 5 + 15, 0) Deprecated
 JL_FEATURE_DEF(fma4, 32 * 5 + 16, 0)
 JL_FEATURE_DEF(tbm, 32 * 5 + 21, 0)
 JL_FEATURE_DEF(mwaitx, 32 * 5 + 29, 0)
@@ -108,6 +108,7 @@ JL_FEATURE_DEF(clzero, 32 * 8 + 0, 0)
 JL_FEATURE_DEF(wbnoinvd, 32 * 8 + 9, 0)
 
 // EAX=7,ECX=1: EAX
+JL_FEATURE_DEF(avxvnni, 32 * 9 + 4, 120000)
 JL_FEATURE_DEF(avx512bf16, 32 * 9 + 5, 0)
 
 // EAX=0x14,ECX=0: EBX

@@ -1,4 +1,5 @@
-; RUN: opt -load libjulia-internal%shlibext -LateLowerGCFrame -FinalLowerGC -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -LateLowerGCFrame -FinalLowerGC -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LateLowerGCFrame),FinalLowerGC' -S %s | FileCheck %s
 
 
 declare {}*** @julia.ptls_states()
@@ -6,6 +7,7 @@ declare {}*** @julia.get_pgcstack()
 declare void @jl_safepoint()
 declare void @one_arg_boxed({} addrspace(10)*)
 declare {} addrspace(10)* @ijl_box_int64(i64)
+declare {} addrspace(10)* @allocate_some_value()
 
 define void @argument_refinement({} addrspace(10)* %a) {
 ; CHECK-LABEL: @argument_refinement
@@ -52,8 +54,6 @@ define void @heap_refinement2(i64 %a) {
     %loaded2 = load i64, i64 addrspace(10)* %casted2
     ret void
 }
-
-declare {} addrspace(10)* @allocate_some_value()
 
 ; Check that the way we compute rooting is compatible with refinements
 define void @issue22770() {

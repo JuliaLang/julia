@@ -56,9 +56,10 @@ const ISAs_by_family = Dict(
     "aarch64" => [
         # Implicit in all sets, because always required: fp, asimd
         "armv8.0-a" => ISA(Set{UInt32}()),
-        "armv8.1-a" => ISA(Set((JL_AArch64_lse, JL_AArch64_crc, JL_AArch64_rdm))),
-        "armv8.2-a+crypto" => ISA(Set((JL_AArch64_lse, JL_AArch64_crc, JL_AArch64_rdm, JL_AArch64_aes, JL_AArch64_sha2))),
-        "armv8.4-a+crypto+sve" => ISA(Set((JL_AArch64_lse, JL_AArch64_crc, JL_AArch64_rdm, JL_AArch64_fp16fml, JL_AArch64_aes, JL_AArch64_sha2, JL_AArch64_dotprod, JL_AArch64_sve))),
+        "armv8.1-a" => ISA(Set((JL_AArch64_v8_1a, JL_AArch64_lse, JL_AArch64_crc, JL_AArch64_rdm))),
+        "armv8.2-a+crypto" => ISA(Set((JL_AArch64_v8_2a, JL_AArch64_lse, JL_AArch64_crc, JL_AArch64_rdm, JL_AArch64_aes, JL_AArch64_sha2))),
+        "a64fx" => ISA(Set((JL_AArch64_v8_2a, JL_AArch64_lse, JL_AArch64_crc, JL_AArch64_rdm, JL_AArch64_sha2, JL_AArch64_ccpp, JL_AArch64_complxnum, JL_AArch64_fullfp16, JL_AArch64_sve))),
+        "apple_m1" => ISA(Set((JL_AArch64_v8_5a, JL_AArch64_lse, JL_AArch64_crc, JL_AArch64_rdm, JL_AArch64_aes, JL_AArch64_sha2, JL_AArch64_sha3, JL_AArch64_ccpp, JL_AArch64_complxnum, JL_AArch64_fp16fml, JL_AArch64_fullfp16, JL_AArch64_dotprod, JL_AArch64_rcpc, JL_AArch64_altnzcv))),
     ],
     "powerpc64le" => [
         # We have no way to test powerpc64le features yet, so we're only going to declare the lowest ISA:
@@ -88,14 +89,27 @@ function normalize_arch(arch::String)
     return arch
 end
 
+let
+    # Collect all relevant features for the current architecture, if any.
+    FEATURES = UInt32[]
+    arch = normalize_arch(String(Sys.ARCH))
+    if arch in keys(ISAs_by_family)
+        for isa in ISAs_by_family[arch]
+            unique!(append!(FEATURES, last(isa).features))
+        end
+    end
+
+    # Use `@eval` to inline the list of features.
+    @eval function cpu_isa()
+        return ISA(Set{UInt32}(feat for feat in $(FEATURES) if test_cpu_feature(feat)))
+    end
+end
+
 """
     cpu_isa()
 
 Return the [`ISA`](@ref) (instruction set architecture) of the current CPU.
 """
-function cpu_isa()
-    all_features = last(last(get(ISAs_by_family, normalize_arch(String(Sys.ARCH)), "" => [ISA(Set{UInt32}())]))).features
-    return ISA(Set{UInt32}(feat for feat in all_features if test_cpu_feature(feat)))
-end
+cpu_isa
 
 end # module CPUID

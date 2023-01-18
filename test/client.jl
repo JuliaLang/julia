@@ -12,7 +12,7 @@ nested_error_pattern = r"""
     ERROR: DivideError: integer division error
     Stacktrace:.*
 
-    caused by: UndefVarError: __not_a_binding__ not defined
+    caused by: UndefVarError: `__not_a_binding__` not defined
     Stacktrace:.*
     """s
 
@@ -31,7 +31,7 @@ nested_error_pattern = r"""
         DivideError: integer division error
         Stacktrace:.*
 
-        caused by: UndefVarError: __not_a_binding__ not defined
+        caused by: UndefVarError: `__not_a_binding__` not defined
         Stacktrace:.*
         """s, sprint(show, excs))
 end
@@ -42,4 +42,13 @@ end
     Base.eval_user_input(errio, nested_error_expr, true)
     err_str = String(take!(errio))
     @test occursin(nested_error_pattern, err_str)
+end
+
+@testset "display_error(io, er, bt) works" begin
+    errio = IOBuffer()
+    Base.display_error(errio, ErrorException, [])
+    err_str = String(take!(errio))
+    @test occursin(r"""
+        ERROR: ErrorException
+        """s, err_str)
 end
