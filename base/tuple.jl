@@ -234,6 +234,21 @@ function _compute_eltype(@nospecialize t)
     end
 end
 
+# We'd like to be able to infer eltype(::Tuple), which needs to be able to
+# look at these four methods:
+#
+# julia> methods(Base.eltype, Tuple{Type{<:Tuple}})
+# 4 methods for generic function "eltype" from Base:
+# [1] eltype(::Type{Union{}})
+#  @ abstractarray.jl:234
+# [2] eltype(::Type{Tuple{}})
+#  @ tuple.jl:199
+# [3] eltype(t::Type{<:Tuple{Vararg{E}}}) where E
+#  @ tuple.jl:200
+# [4] eltype(t::Type{<:Tuple})
+#  @ tuple.jl:209
+typeof(function eltype end).name.max_methods = UInt8(4)
+
 # version of tail that doesn't throw on empty tuples (used in array indexing)
 safe_tail(t::Tuple) = tail(t)
 safe_tail(t::Tuple{}) = ()
