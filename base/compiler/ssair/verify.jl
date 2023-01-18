@@ -111,9 +111,9 @@ function verify_ir(ir::IRCode, print::Bool=true,
                 error("")
             end
             if !(idx in ir.cfg.blocks[s].preds)
-                #@Base.show ir.cfg
-                #@Base.show ir
-                #@Base.show ir.argtypes
+                #Base.@show ir.cfg
+                #Base.@show ir
+                #Base.@show ir.argtypes
                 @verify_error "Successor $s of block $idx not in predecessor list"
                 error("")
             end
@@ -192,8 +192,8 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     end
                 end
                 if !(edge == 0 && bb == 1) && !(edge in ir.cfg.blocks[bb].preds)
-                    #@Base.show ir.argtypes
-                    #@Base.show ir
+                    #Base.@show ir.argtypes
+                    #Base.@show ir
                     @verify_error "Edge $edge of φ node $idx not in predecessor list"
                     error("")
                 end

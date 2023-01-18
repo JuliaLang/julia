@@ -364,7 +364,7 @@ struct RealConstrained{T <: Real}; end
 struct Big
     x::NTuple{1024, Int}
 end
-@Base.pure Big() = Big(ntuple(identity, 1024))
+Base.@pure Big() = Big(ntuple(identity, 1024))
 function pure_elim_full()
     Big()
     nothing
