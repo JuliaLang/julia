@@ -64,8 +64,8 @@ function __init__()
     global libgomp_handle = dlopen(libgomp)
     global libgomp_path = dlpath(libgomp_handle)
     @static if libc(HostPlatform()) != "musl"
-        global libssp_handle = dlopen(libssp)
-        global libssp_path = dlpath(libssp_handle)
+        global libssp_handle = dlopen(libssp; throw_error = false)
+        global libssp_path = libssp_handle === nothing ? nothing : dlpath(libssp_handle)
     end
     global artifact_dir = dirname(Sys.BINDIR)
     LIBPATH[] = dirname(libgcc_s_path)
