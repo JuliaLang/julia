@@ -861,8 +861,8 @@ end
 Return the symmetric part of the square matrix `A`, defined as `(A + transpose(A)) / 2`,
 as a [`Symmetric`](@ref) matrix.
 
-!!! compat "Julia 1.8"
-    This function requires Julia 1.8 or later.
+!!! compat "Julia 1.10"
+    This function requires Julia 1.10 or later.
 """
 symmetricpart(A::AbstractMatrix{T}, uplo=:U) where {T} =
     symmetricpart!(copyto!(similar(A, typeof(one(T) / 2)), A), uplo)
@@ -873,8 +873,8 @@ symmetricpart(A::AbstractMatrix{T}, uplo=:U) where {T} =
 Overwrite the square matrix `A` with its symmetric part, `(A + transpose(A)) / 2`,
 and return `Symmetric(A, uplo)`.
 
-!!! compat "Julia 1.8"
-    This function requires Julia 1.8 or later.
+!!! compat "Julia 1.10"
+    This function requires Julia 1.10 or later.
 """
 symmetricpart!(A::AbstractMatrix, uplo::Symbol=:U) =
     Symmetric(_hermorsympart!(identity, identity, A, char_uplo(uplo)), uplo)
@@ -885,8 +885,8 @@ symmetricpart!(A::AbstractMatrix, uplo::Symbol=:U) =
 Return the Hermitian part of the square matrix `A`, defined as `(A + A') / 2`,
 as a [`Hermitian`](@ref) matrix.
 
-!!! compat "Julia 1.8"
-    This function requires Julia 1.8 or later.
+!!! compat "Julia 1.10"
+    This function requires Julia 1.10 or later.
 """
 hermitianpart(A::AbstractMatrix{T}, uplo=:U) where {T} =
     hermitianpart!(copyto!(similar(A, typeof(one(T) / 2)), A), uplo)
@@ -897,8 +897,8 @@ hermitianpart(A::AbstractMatrix{T}, uplo=:U) where {T} =
 Overwrite the square matrix `A` with its Hermitian part, `(A + A') / 2`,
 and return `Hermitian(A, uplo)`.
 
-!!! compat "Julia 1.8"
-    This function requires Julia 1.8 or later.
+!!! compat "Julia 1.10"
+    This function requires Julia 1.10 or later.
 """
 hermitianpart!(A::AbstractMatrix, uplo::Symbol=:U) =
     Hermitian(_hermorsympart!(real, conj, A, char_uplo(uplo)), uplo)
