@@ -295,6 +295,8 @@ macro eval(mod, ex)
     return Expr(:escape, Expr(:call, GlobalRef(Core, :eval), mod, Expr(:quote, ex)))
 end
 
+# use `@eval` here to directly form `:new` expressions avoid implicit `convert`s
+# in order to achieve better effects inference
 @eval struct Pairs{K, V, I, A} <: AbstractDict{K, V}
     data::A
     itr::I
