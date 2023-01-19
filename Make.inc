@@ -1526,6 +1526,19 @@ LIBGCC_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/$(L
 endif
 LIBGCC_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/$(LIBGCC_NAME))
 
+# We only bother to define this on Linux, as that's the only platform that does libstdc++ probing
+# On all other platforms, the LIBSTDCXX_*_DEPLIB variables will be empty.
+ifeq ($(OS),Linux)
+LIBSTDCXX_NAME := libstdc++.so.6
+ifeq ($(USE_SYSTEM_CSL),1)
+LIBSTDCXX_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_private_shlibdir)/$(LIBSTDCXX_NAME))
+else
+LIBSTDCXX_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/$(LIBSTDCXX_NAME))
+endif
+LIBSTDCXX_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/$(LIBSTDCXX_NAME))
+endif
+
+
 # USE_SYSTEM_LIBM and USE_SYSTEM_OPENLIBM causes it to get symlinked into build_private_shlibdir
 ifeq ($(USE_SYSTEM_LIBM),1)
 LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
@@ -1548,10 +1561,10 @@ LIBM_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/$(LIBMN
 # That second point will no longer be true for most deps once they are placed within Artifacts directories.
 # Note that we prefix `libjulia-codegen` and `libjulia-internal` with `@` to signify to the loader that it
 # should not automatically dlopen() it in its loading loop.
-LOADER_BUILD_DEP_LIBS = $(LIBGCC_BUILD_DEPLIB):$(LIBM_BUILD_DEPLIB):@$(LIBJULIAINTERNAL_BUILD_DEPLIB):@$(LIBJULIACODEGEN_BUILD_DEPLIB):
-LOADER_DEBUG_BUILD_DEP_LIBS = $(LIBGCC_BUILD_DEPLIB):$(LIBM_BUILD_DEPLIB):@$(LIBJULIAINTERNAL_DEBUG_BUILD_DEPLIB):@$(LIBJULIACODEGEN_DEBUG_BUILD_DEPLIB):
-LOADER_INSTALL_DEP_LIBS = $(LIBGCC_INSTALL_DEPLIB):$(LIBM_INSTALL_DEPLIB):@$(LIBJULIAINTERNAL_INSTALL_DEPLIB):@$(LIBJULIACODEGEN_INSTALL_DEPLIB):
-LOADER_DEBUG_INSTALL_DEP_LIBS = $(LIBGCC_INSTALL_DEPLIB):$(LIBM_INSTALL_DEPLIB):@$(LIBJULIAINTERNAL_DEBUG_INSTALL_DEPLIB):@$(LIBJULIACODEGEN_DEBUG_INSTALL_DEPLIB):
+LOADER_BUILD_DEP_LIBS = $(LIBGCC_BUILD_DEPLIB):$(LIBM_BUILD_DEPLIB):@$(LIBSTDCXX_BUILD_DEPLIB):@$(LIBJULIAINTERNAL_BUILD_DEPLIB):@$(LIBJULIACODEGEN_BUILD_DEPLIB):
+LOADER_DEBUG_BUILD_DEP_LIBS = $(LIBGCC_BUILD_DEPLIB):$(LIBM_BUILD_DEPLIB):@$(LIBSTDCXX_BUILD_DEPLIB):@$(LIBJULIAINTERNAL_DEBUG_BUILD_DEPLIB):@$(LIBJULIACODEGEN_DEBUG_BUILD_DEPLIB):
+LOADER_INSTALL_DEP_LIBS = $(LIBGCC_INSTALL_DEPLIB):$(LIBM_INSTALL_DEPLIB):@$(LIBSTDCXX_INSTALL_DEPLIB):@$(LIBJULIAINTERNAL_INSTALL_DEPLIB):@$(LIBJULIACODEGEN_INSTALL_DEPLIB):
+LOADER_DEBUG_INSTALL_DEP_LIBS = $(LIBGCC_INSTALL_DEPLIB):$(LIBM_INSTALL_DEPLIB):@$(LIBSTDCXX_INSTALL_DEPLIB):@$(LIBJULIAINTERNAL_DEBUG_INSTALL_DEPLIB):@$(LIBJULIACODEGEN_DEBUG_INSTALL_DEPLIB):
 
 # Colors for make
 ifndef VERBOSE
