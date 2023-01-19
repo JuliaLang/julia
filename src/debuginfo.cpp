@@ -503,7 +503,7 @@ static int lookup_pointer(
                 std::size_t semi_pos = func_name.find(';');
                 if (semi_pos != std::string::npos) {
                     func_name = func_name.substr(0, semi_pos);
-                    frame->linfo = NULL;  // Looked up on Julia side
+                    frame->linfo = NULL; // Looked up on Julia side
                 }
             }
         }
