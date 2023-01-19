@@ -195,7 +195,8 @@ function encode_effects(e::Effects)
            ((e.terminates          % UInt32) << 7) |
            ((e.notaskstate         % UInt32) << 8) |
            ((e.inaccessiblememonly % UInt32) << 9) |
-           ((e.nonoverlayed        % UInt32) << 11)
+           ((e.nonoverlayed        % UInt32) << 11)|
+           ((e.noinbounds          % UInt32) << 12)
 end
 
 function decode_effects(e::UInt32)
