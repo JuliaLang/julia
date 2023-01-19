@@ -1112,7 +1112,6 @@ function insert_extension_triggers(pkg::PkgId)
     pkg.uuid === nothing && return
     for env in load_path()
         insert_extension_triggers(env, pkg)
-        break # For now, only insert triggers for packages in the first load_path.
     end
 end
 
