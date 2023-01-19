@@ -485,7 +485,7 @@ julia> remotecall_fetch(sqrt, 2, 4)
 julia> remotecall_fetch(sqrt, 2, -4)
 ERROR: On worker 2:
 DomainError with -4.0:
-sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+sqrt was called with a negative real argument but will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 ...
 ```
 """
