@@ -156,9 +156,7 @@ function concrete_eval_invoke(interp::AbstractInterpreter,
         catch
             return Pair{Any, Bool}(Union{}, false)
         end
-        if is_inlineable_constant(value)
-            return Pair{Any, Bool}(Const(value), true)
-        end
+        return Pair{Any, Bool}(Const(value), true)
     else
         ir′ = codeinst_to_ir(interp, code)
         if ir′ !== nothing
