@@ -1,3 +1,21 @@
+# Compatibility hacks for older Julia versions
+if VERSION < v"1.1"
+    isnothing(x) = x === nothing
+end
+if VERSION < v"1.4"
+    function only(x::AbstractVector)
+        if length(x) != 1
+            error("Collection must contain exactly 1 element")
+        end
+        return x[1]
+    end
+end
+if VERSION < v"1.5"
+    import Base.peek
+end
+
+#--------------------------------------------------
+#
 # Internal error, used as assertion failure for cases we expect can't happen.
 @noinline function internal_error(strs...)
     error("Internal error: ", strs...)

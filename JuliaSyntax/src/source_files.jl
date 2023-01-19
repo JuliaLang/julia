@@ -65,7 +65,8 @@ function source_line_range(source::SourceFile, byte_index;
 end
 
 function source_location(::Type{LineNumberNode}, source::SourceFile, byte_index)
-    LineNumberNode(source_line(source, byte_index), source.filename)
+    LineNumberNode(source_line(source, byte_index),
+                   isnothing(source.filename) ? nothing : Symbol(source.filename))
 end
 
 function Base.show(io::IO, ::MIME"text/plain", source::SourceFile)

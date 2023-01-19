@@ -66,7 +66,7 @@ octint(s) = parse_uint_literal(s, K"OctInt")
         @test hexint("0x10000000000000000") === UInt128(0x10000000000000000)
         @test hexint("0xffffffffffffffffffffffffffffffff") === UInt128(0xffffffffffffffffffffffffffffffff)
         @test (n = hexint("0x100000000000000000000000000000000");
-               n isa BigInt && n == 0x100000000000000000000000000000000)
+               n isa BigInt && n == big"0x100000000000000000000000000000000")
     end
     @testset "HexInt string length limits for different types" begin
         @test hexint("0x00")  === UInt8(0)
@@ -94,7 +94,7 @@ octint(s) = parse_uint_literal(s, K"OctInt")
         @test binint("0b10000000000000000000000000000000000000000000000000000000000000000") === UInt128(0x10000000000000000)
         @test binint("0b11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111") === UInt128(0xffffffffffffffffffffffffffffffff)
         @test (n = binint("0b100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
-               n isa BigInt && n == 0x100000000000000000000000000000000)
+               n isa BigInt && n == big"0x100000000000000000000000000000000")
     end
     @testset "BinInt string length limits for different types" begin
         @test binint("0b00000000")  === UInt8(0)
@@ -122,7 +122,7 @@ octint(s) = parse_uint_literal(s, K"OctInt")
         @test octint("0o2000000000000000000000") === UInt128(0x10000000000000000)
         @test octint("0o3777777777777777777777777777777777777777777") === UInt128(0xffffffffffffffffffffffffffffffff)
         @test (n = octint("0o4000000000000000000000000000000000000000000");
-               n isa BigInt && n == 0x100000000000000000000000000000000)
+               n isa BigInt && n == big"0x100000000000000000000000000000000")
     end
     @testset "OctInt string length limits for different types" begin
         @test octint("0o000")  === UInt8(0)

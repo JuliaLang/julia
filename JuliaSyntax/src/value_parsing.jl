@@ -122,7 +122,7 @@ end
 @inline function _unsafe_parse_float(::Type{Float64}, ptr, strsize)
     Libc.errno(0)
     endptr = Ref{Ptr{UInt8}}(C_NULL)
-    x = @ccall jl_strtod_c(ptr::Ptr{UInt8}, endptr::Ptr{Ptr{UInt8}})::Cdouble
+    x = ccall(:jl_strtod_c, Cdouble, (Ptr{UInt8}, Ptr{Ptr{UInt8}}), ptr, endptr)
     @check endptr[] == ptr + strsize
     status = :ok
     if Libc.errno() == Libc.ERANGE
@@ -155,13 +155,13 @@ end
         # strtof seems buggy on windows and doesn't set ERANGE correctly on
         # overflow. See also
         # https://github.com/JuliaLang/julia/issues/46544
-        x = Float32(@ccall jl_strtod_c(ptr::Ptr{UInt8}, endptr::Ptr{Ptr{UInt8}})::Cdouble)
+        x = Float32(ccall(:jl_strtod_c, Cdouble, (Ptr{UInt8}, Ptr{Ptr{UInt8}}), ptr, endptr))
         if isinf(x)
             status = :overflow
             # Underflow not detected, but that will only be a warning elsewhere.
         end
     else
-        x = @ccall jl_strtof_c(ptr::Ptr{UInt8}, endptr::Ptr{Ptr{UInt8}})::Cfloat
+        x = ccall(:jl_strtof_c, Cfloat, (Ptr{UInt8}, Ptr{Ptr{UInt8}}), ptr, endptr)
     end
     @check endptr[] == ptr + strsize
     if Libc.errno() == Libc.ERANGE
