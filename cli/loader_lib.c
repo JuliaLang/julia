@@ -366,6 +366,50 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
 
     void *cxx_handle;
 
+    // We keep track of "special" libraries names (ones whose name is prefixed with `@`)
+    // which are libraries that we want to load in some special, custom way.
+    // The current list is:
+    // special_library_names = {
+    //   libstdc++,
+    //   libjulia-internal,
+    //   libjulia-codegen,
+    // }
+    int special_idx = 0;
+    char * special_library_names[3] = {NULL};
+    while (1) {
+        // try to find next colon character; if we can't, break out
+        char * colon = strchr(curr_dep, ':');
+        if (colon == NULL)
+            break;
+
+        // If this library name starts with `@`, don't open it here (but mark it as special)
+        if (curr_dep[0] == '@') {
+            if (special_idx > sizeof(special_library_names)/sizeof(char *)) {
+                jl_loader_print_stderr("ERROR: Too many special library names specified, check LOADER_BUILD_DEP_LIBS and friends!\n");
+                exit(1);
+            }
+            special_library_names[special_idx] = curr_dep + 1;
+            special_idx += 1;
+
+            // Chop the string at the colon so it's a valid-ending-string
+            *colon = '\0';
+        }
+
+        // Skip to next dep
+        curr_dep = colon + 1;
+    }
+
+    // Assert that we have exactly the right number of special library names
+    if (special_idx != sizeof(special_library_names)/sizeof(char *)) {
+        jl_loader_print_stderr("ERROR: Too few special library names specified, check LOADER_BUILD_DEP_LIBS and friends!\n");
+        exit(1);
+    }
+
+    // Unpack our special library names.  This is why ordering of library names matters.
+    char * bundled_libstdcxx_path = special_library_names[0];
+    libjulia_internal = load_library(special_library_names[1], lib_dir, 1);
+    void *libjulia_codegen = load_library(special_library_names[2], lib_dir, 0);
+
 #if defined(_OS_LINUX_)
     int do_probe = 1;
     int done_probe = 0;
@@ -391,16 +435,10 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
         }
     }
     if (!done_probe) {
-        const static char bundled_path[256] = "\0*libstdc++.so.6";
-        load_library(&bundled_path[2], lib_dir, 1);
+        load_library(bundled_libstdcxx_path, lib_dir, 1);
     }
 #endif
 
-    // We keep track of "special" libraries names (ones whose name is prefixed with `@`)
-    // which are libraries that we want to load in some special, custom way, such as
-    // `libjulia-internal` or `libjulia-codegen`.
-    int special_idx = 0;
-    char * special_library_names[2] = {NULL};
     while (1) {
         // try to find next colon character; if we can't, break out
         char * colon = strchr(curr_dep, ':');
@@ -410,16 +448,8 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
         // Chop the string at the colon so it's a valid-ending-string
         *colon = '\0';
 
-        // If this library name starts with `@`, don't open it here (but mark it as special)
-        if (curr_dep[0] == '@') {
-            if (special_idx > sizeof(special_library_names)/sizeof(char *)) {
-                jl_loader_print_stderr("ERROR: Too many special library names specified, check LOADER_BUILD_DEP_LIBS and friends!\n");
-                exit(1);
-            }
-            special_library_names[special_idx] = curr_dep + 1;
-            special_idx += 1;
-        }
-        else {
+        // If this library name starts with `@`, don't open it here
+        if (curr_dep[0] != '@') {
             load_library(curr_dep, lib_dir, 1);
         }
 
@@ -427,14 +457,6 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
         curr_dep = colon + 1;
     }
 
-    if (special_idx != sizeof(special_library_names)/sizeof(char *)) {
-        jl_loader_print_stderr("ERROR: Too few special library names specified, check LOADER_BUILD_DEP_LIBS and friends!\n");
-        exit(1);
-    }
-
-    // Unpack our special library names.  This is why ordering of library names matters.
-    libjulia_internal = load_library(special_library_names[0], lib_dir, 1);
-    void *libjulia_codegen = load_library(special_library_names[1], lib_dir, 0);
     const char * const * codegen_func_names;
     const char *codegen_liberr;
     if (libjulia_codegen == NULL) {
