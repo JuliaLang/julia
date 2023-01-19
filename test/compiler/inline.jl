@@ -1896,3 +1896,17 @@ let src = code_typed1(make_issue47349(Val{4}()), (Any,))
         make_issue47349(Val(4))((x,nothing,Int))
     end |> only === Type{Int}
 end
+
+# Test that irinterp can make use of constant results even if they're big
+# Check that pure functions with non-inlineable results still get deleted
+struct BigSemi
+    x::NTuple{1024, Int}
+end
+@Base.assume_effects :total @noinline make_big_tuple(x::Int) = ntuple(x->x+1, 1024)::NTuple{1024, Int}
+BigSemi(y::Int, x::Int) = BigSemi(make_big_tuple(x))
+function elim_full_ir(y)
+    bs = BigSemi(y, 10)
+    return Val{bs.x[1]}()
+end
+
+@test fully_eliminated(elim_full_ir, Tuple{Int})
