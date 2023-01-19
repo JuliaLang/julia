@@ -378,7 +378,7 @@ typedef struct {
     int ub;
 } pagetable_t;
 
-#ifdef __clang_gcanalyzer__
+#ifdef __clang_gcanalyzer__ /* clang may not have __builtin_ffs */
 unsigned ffs_u32(uint32_t bitvec) JL_NOTSAFEPOINT;
 #else
 STATIC_INLINE unsigned ffs_u32(uint32_t bitvec)

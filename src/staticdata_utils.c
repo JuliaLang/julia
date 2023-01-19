@@ -167,7 +167,7 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
     if (jl_is_method(mod))
         mod = ((jl_method_t*)mod)->module;
     assert(jl_is_module(mod));
-    if (mi->precompiled || !jl_object_in_image((jl_value_t*)mod)) {
+    if (mi->precompiled || !jl_object_in_image((jl_value_t*)mod) || type_in_worklist(mi->specTypes)) {
         return 1;
     }
     if (!mi->backedges) {
@@ -391,46 +391,47 @@ static void jl_collect_extext_methods_from_mod(jl_array_t *s, jl_module_t *m)
 {
     if (s && !jl_object_in_image((jl_value_t*)m))
         s = NULL; // do not collect any methods
-    size_t i;
-    void **table = m->bindings.table;
-    for (i = 1; i < m->bindings.size; i += 2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
-            if (b->owner == m && b->value && b->constp) {
-                jl_value_t *bv = jl_unwrap_unionall(b->value);
-                if (jl_is_datatype(bv)) {
-                    jl_typename_t *tn = ((jl_datatype_t*)bv)->name;
-                    if (tn->module == m && tn->name == b->name && tn->wrapper == b->value) {
-                        jl_methtable_t *mt = tn->mt;
-                        if (mt != NULL &&
-                                (jl_value_t*)mt != jl_nothing &&
-                                (mt != jl_type_type_mt && mt != jl_nonfunction_mt)) {
-                            assert(mt->module == tn->module);
-                            jl_collect_methtable_from_mod(s, mt);
-                            if (s)
-                                jl_collect_missing_backedges(mt);
-                        }
-                    }
-                }
-                else if (jl_is_module(b->value)) {
-                    jl_module_t *child = (jl_module_t*)b->value;
-                    if (child != m && child->parent == m && child->name == b->name) {
-                        // this is the original/primary binding for the submodule
-                        jl_collect_extext_methods_from_mod(s, (jl_module_t*)b->value);
-                    }
-                }
-                else if (jl_is_mtable(b->value)) {
-                    jl_methtable_t *mt = (jl_methtable_t*)b->value;
-                    if (mt->module == m && mt->name == b->name) {
-                        // this is probably an external method table, so let's assume so
-                        // as there is no way to precisely distinguish them,
-                        // and the rest of this serializer does not bother
-                        // to handle any method tables specially
-                        jl_collect_methtable_from_mod(s, (jl_methtable_t*)bv);
+    jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
+    for (size_t i = 0; i < jl_svec_len(table); i++) {
+        jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
+        if ((void*)b == jl_nothing)
+            break;
+        jl_sym_t *name = b->globalref->name;
+        if (b->owner == b && b->value && b->constp) {
+            jl_value_t *bv = jl_unwrap_unionall(b->value);
+            if (jl_is_datatype(bv)) {
+                jl_typename_t *tn = ((jl_datatype_t*)bv)->name;
+                if (tn->module == m && tn->name == name && tn->wrapper == b->value) {
+                    jl_methtable_t *mt = tn->mt;
+                    if (mt != NULL &&
+                            (jl_value_t*)mt != jl_nothing &&
+                            (mt != jl_type_type_mt && mt != jl_nonfunction_mt)) {
+                        assert(mt->module == tn->module);
+                        jl_collect_methtable_from_mod(s, mt);
+                        if (s)
+                            jl_collect_missing_backedges(mt);
                     }
                 }
             }
+            else if (jl_is_module(b->value)) {
+                jl_module_t *child = (jl_module_t*)b->value;
+                if (child != m && child->parent == m && child->name == name) {
+                    // this is the original/primary binding for the submodule
+                    jl_collect_extext_methods_from_mod(s, (jl_module_t*)b->value);
+                }
+            }
+            else if (jl_is_mtable(b->value)) {
+                jl_methtable_t *mt = (jl_methtable_t*)b->value;
+                if (mt->module == m && mt->name == name) {
+                    // this is probably an external method table, so let's assume so
+                    // as there is no way to precisely distinguish them,
+                    // and the rest of this serializer does not bother
+                    // to handle any method tables specially
+                    jl_collect_methtable_from_mod(s, (jl_methtable_t*)bv);
+                }
+            }
         }
+        table = jl_atomic_load_relaxed(&m->bindings);
     }
 }
 
@@ -512,7 +513,7 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets)
 
             if (jl_is_method_instance(callee)) {
                 jl_methtable_t *mt = jl_method_get_table(((jl_method_instance_t*)callee)->def.method);
-                if (!jl_object_in_image((jl_value_t*)mt->module))
+                if (!jl_object_in_image((jl_value_t*)mt))
                     continue;
             }
 
@@ -525,6 +526,7 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets)
                 size_t min_valid = 0;
                 size_t max_valid = ~(size_t)0;
                 if (invokeTypes) {
+                    assert(jl_is_method_instance(callee));
                     jl_methtable_t *mt = jl_method_get_table(((jl_method_instance_t*)callee)->def.method);
                     if ((jl_value_t*)mt == jl_nothing) {
                         callee_ids = NULL; // invalid
@@ -611,11 +613,48 @@ static void write_mod_list(ios_t *s, jl_array_t *a)
     write_int32(s, 0);
 }
 
+// OPT_LEVEL should always be the upper bits
+#define OPT_LEVEL 6
+
+JL_DLLEXPORT uint8_t jl_cache_flags(void)
+{
+    // OOICCDDP
+    uint8_t flags = 0;
+    flags |= (jl_options.use_pkgimages & 1); // 0-bit
+    flags |= (jl_options.debug_level & 3) << 1; // 1-2 bit
+    flags |= (jl_options.check_bounds & 3) << 3; // 3-4 bit
+    flags |= (jl_options.can_inline & 1) << 5; // 5-bit
+    flags |= (jl_options.opt_level & 3) << OPT_LEVEL; // 6-7 bit
+    return flags;
+}
+
+JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t flags)
+{
+    // 1. Check which flags are relevant
+    uint8_t current_flags = jl_cache_flags();
+    uint8_t supports_pkgimage = (current_flags & 1);
+    uint8_t is_pkgimage = (flags & 1);
+
+    // For .ji packages ignore other flags
+    if (!supports_pkgimage && !is_pkgimage) {
+        return 1;
+    }
+
+    // 2. Check all flags, execept opt level must be exact
+    uint8_t mask = (1 << OPT_LEVEL)-1;
+    if ((flags & mask) != (current_flags & mask))
+        return 0;
+    // 3. allow for higher optimization flags in cache
+    flags >>= OPT_LEVEL;
+    current_flags >>= OPT_LEVEL;
+    return flags >= current_flags;
+}
+
 // "magic" string and version header of .ji file
 static const int JI_FORMAT_VERSION = 12;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
-static void write_header(ios_t *s)
+static int64_t write_header(ios_t *s, uint8_t pkgimage)
 {
     ios_write(s, JI_MAGIC, strlen(JI_MAGIC));
     write_uint16(s, JI_FORMAT_VERSION);
@@ -627,7 +666,12 @@ static void write_header(ios_t *s)
     const char *branch = jl_git_branch(), *commit = jl_git_commit();
     ios_write(s, branch, strlen(branch)+1);
     ios_write(s, commit, strlen(commit)+1);
+    write_uint8(s, pkgimage);
+    int64_t checksumpos = ios_pos(s);
     write_uint64(s, 0); // eventually will hold checksum for the content portion of this (build_id.hi)
+    write_uint64(s, 0); // eventually will hold dataendpos
+    write_uint64(s, 0); // eventually will hold datastartpos
+    return checksumpos;
 }
 
 // serialize information about the result of deserializing this file
@@ -1206,9 +1250,10 @@ static int readstr_verify(ios_t *s, const char *str, int include_null)
     return 1;
 }
 
-JL_DLLEXPORT uint64_t jl_read_verify_header(ios_t *s)
+JL_DLLEXPORT uint64_t jl_read_verify_header(ios_t *s, uint8_t *pkgimage, int64_t *dataendpos, int64_t *datastartpos)
 {
     uint16_t bom;
+    uint64_t checksum = 0;
     if (readstr_verify(s, JI_MAGIC, 0) &&
         read_uint16(s) == JI_FORMAT_VERSION &&
         ios_read(s, (char *) &bom, 2) == 2 && bom == BOM &&
@@ -1218,6 +1263,11 @@ JL_DLLEXPORT uint64_t jl_read_verify_header(ios_t *s)
         readstr_verify(s, JULIA_VERSION_STRING, 1) &&
         readstr_verify(s, jl_git_branch(), 1) &&
         readstr_verify(s, jl_git_commit(), 1))
-        return read_uint64(s);
-    return 0;
+    {
+        *pkgimage = read_uint8(s);
+        checksum = read_uint64(s);
+        *datastartpos = (int64_t)read_uint64(s);
+        *dataendpos = (int64_t)read_uint64(s);
+    }
+    return checksum;
 }

@@ -154,7 +154,7 @@ end
 
 # issue #34769
 function idle_callback(handle)
-    idle = @Base.handle_as handle UvTestIdle
+    idle = Base.@handle_as handle UvTestIdle
     if idle.active
         idle.count += 1
         if idle.count == 1

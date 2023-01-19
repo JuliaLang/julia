@@ -1194,11 +1194,13 @@ JL_CALLABLE(jl_f_getglobal)
         JL_TYPECHK(getglobal, symbol, args[2]);
         order = jl_get_atomic_order_checked((jl_sym_t*)args[2], 1, 0);
     }
-    JL_TYPECHK(getglobal, module, args[0]);
-    JL_TYPECHK(getglobal, symbol, args[1]);
+    jl_module_t *mod = (jl_module_t*)args[0];
+    jl_sym_t *sym = (jl_sym_t*)args[1];
+    JL_TYPECHK(getglobal, module, (jl_value_t*)mod);
+    JL_TYPECHK(getglobal, symbol, (jl_value_t*)sym);
     if (order == jl_memory_order_notatomic)
         jl_atomic_error("getglobal: module binding cannot be read non-atomically");
-    jl_value_t *v = jl_eval_global_var((jl_module_t*)args[0], (jl_sym_t*)args[1]);
+    jl_value_t *v = jl_eval_global_var(mod, sym);
     // is seq_cst already, no fence needed
     return v;
 }
@@ -1211,32 +1213,36 @@ JL_CALLABLE(jl_f_setglobal)
         JL_TYPECHK(setglobal!, symbol, args[3]);
         order = jl_get_atomic_order_checked((jl_sym_t*)args[3], 0, 1);
     }
-    JL_TYPECHK(setglobal!, module, args[0]);
-    JL_TYPECHK(setglobal!, symbol, args[1]);
+    jl_module_t *mod = (jl_module_t*)args[0];
+    jl_sym_t *var = (jl_sym_t*)args[1];
+    JL_TYPECHK(setglobal!, module, (jl_value_t*)mod);
+    JL_TYPECHK(setglobal!, symbol, (jl_value_t*)var);
     if (order == jl_memory_order_notatomic)
         jl_atomic_error("setglobal!: module binding cannot be written non-atomically");
     // is seq_cst already, no fence needed
-    jl_binding_t *b = jl_get_binding_wr_or_error((jl_module_t*)args[0], (jl_sym_t*)args[1]);
-    jl_checked_assignment(b, args[2]);
+    jl_binding_t *b = jl_get_binding_wr(mod, var);
+    jl_checked_assignment(b, mod, var, args[2]);
     return args[2];
 }
 
 JL_CALLABLE(jl_f_get_binding_type)
 {
     JL_NARGS(get_binding_type, 2, 2);
-    JL_TYPECHK(get_binding_type, module, args[0]);
-    JL_TYPECHK(get_binding_type, symbol, args[1]);
     jl_module_t *mod = (jl_module_t*)args[0];
-    jl_sym_t *sym = (jl_sym_t*)args[1];
-    jl_value_t *ty = jl_get_binding_type(mod, sym);
+    jl_sym_t *var = (jl_sym_t*)args[1];
+    JL_TYPECHK(get_binding_type, module, (jl_value_t*)mod);
+    JL_TYPECHK(get_binding_type, symbol, (jl_value_t*)var);
+    jl_value_t *ty = jl_get_binding_type(mod, var);
     if (ty == (jl_value_t*)jl_nothing) {
-        jl_binding_t *b = jl_get_binding_wr(mod, sym, 0);
-        if (b && b->owner == mod) {
-            jl_value_t *old_ty = NULL;
-            jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
-            return jl_atomic_load_relaxed(&b->ty);
-        }
-        return (jl_value_t*)jl_any_type;
+        jl_binding_t *b = jl_get_module_binding(mod, var, 0);
+        if (b == NULL)
+            return (jl_value_t*)jl_any_type;
+        jl_binding_t *b2 = jl_atomic_load_relaxed(&b->owner);
+        if (b2 != b)
+            return (jl_value_t*)jl_any_type;
+        jl_value_t *old_ty = NULL;
+        jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
+        return jl_atomic_load_relaxed(&b->ty);
     }
     return ty;
 }
@@ -1244,17 +1250,19 @@ JL_CALLABLE(jl_f_get_binding_type)
 JL_CALLABLE(jl_f_set_binding_type)
 {
     JL_NARGS(set_binding_type!, 2, 3);
-    JL_TYPECHK(set_binding_type!, module, args[0]);
-    JL_TYPECHK(set_binding_type!, symbol, args[1]);
+    jl_module_t *m = (jl_module_t*)args[0];
+    jl_sym_t *s = (jl_sym_t*)args[1];
+    JL_TYPECHK(set_binding_type!, module, (jl_value_t*)m);
+    JL_TYPECHK(set_binding_type!, symbol, (jl_value_t*)s);
     jl_value_t *ty = nargs == 2 ? (jl_value_t*)jl_any_type : args[2];
     JL_TYPECHK(set_binding_type!, type, ty);
-    jl_binding_t *b = jl_get_binding_wr((jl_module_t*)args[0], (jl_sym_t*)args[1], 1);
+    jl_binding_t *b = jl_get_binding_wr(m, s);
     jl_value_t *old_ty = NULL;
     if (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, ty) && ty != old_ty) {
         if (nargs == 2)
             return jl_nothing;
-        jl_errorf("cannot set type for global %s. It already has a value or is already set to a different type.",
-                  jl_symbol_name(b->name));
+        jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
+                  jl_symbol_name(m->name), jl_symbol_name(s));
     }
     jl_gc_wb_binding(b, ty);
     return jl_nothing;

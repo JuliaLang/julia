@@ -674,8 +674,13 @@ function do_broken_test(result::ExecutionResult, orig_expr)
     # Assume the test is broken and only change if the result is true
     if isa(result, Returned)
         value = result.value
-        if isa(value, Bool) && value
-            testres = Error(:test_unbroken, orig_expr, value, nothing, result.source)
+        if isa(value, Bool)
+            if value
+                testres = Error(:test_unbroken, orig_expr, value, nothing, result.source)
+            end
+        else
+            # If the result is non-Boolean, this counts as an Error
+            testres = Error(:test_nonbool, orig_expr, value, nothing, result.source)
         end
     end
     record(get_testset(), testres)
@@ -1414,7 +1419,7 @@ macro testset(args...)
         error("Expected function call, begin/end block or for loop as argument to @testset")
     end
 
-    FAIL_FAST[] = something(tryparse(Bool, get(ENV, "JULIA_TEST_FAILFAST", "false")), false)
+    FAIL_FAST[] = Base.get_bool_env("JULIA_TEST_FAILFAST", false)
 
     if tests.head === :for
         return testset_forloop(args, tests, __source__)

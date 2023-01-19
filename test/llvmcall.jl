@@ -205,6 +205,23 @@ module CcallableRetTypeTest
     @test do_the_call() === 42.0
 end
 
+# Issue #48093 - test that non-external globals are not deduplicated
+function kernel()
+    Base.llvmcall(("""
+        @shmem = internal global i8 0, align 8
+        define void @entry() {
+            store i8 1, i8* @shmem
+            ret void
+        }""", "entry"), Cvoid, Tuple{})
+    Base.llvmcall(("""
+        @shmem = internal global i8 0, align 8
+        define i8 @entry() {
+            %1 = load i8, i8* @shmem
+            ret i8 %1
+        }""", "entry"), UInt8, Tuple{})
+end
+@test kernel() == 0x00
+
 # If this test breaks, you've probably broken Cxx.jl - please check
 module LLVMCallFunctionTest
     using Base: llvmcall

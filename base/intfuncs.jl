@@ -369,8 +369,19 @@ julia> powermod(5, 3, 19)
 ```
 """
 function powermod(x::Integer, p::Integer, m::T) where T<:Integer
-    p < 0 && return powermod(invmod(x, m), -p, m)
     p == 0 && return mod(one(m),m)
+    # When the concrete type of p is signed and has the lowest value,
+    # `p != 0 && p == -p` is equivalent to `p == typemin(typeof(p))` for 2's complement representation.
+    # but will work for integer types like `BigInt` that don't have `typemin` defined
+    # It needs special handling otherwise will cause overflow problem.
+    if p == -p
+        t = powermod(invmod(x, m), -(p÷2), m)
+        t = mod(widemul(t, t), m)
+        iseven(p) && return t
+        #else odd
+        return mod(widemul(t, invmod(x, m)), m)
+    end
+    p < 0 && return powermod(invmod(x, m), -p, m)
     (m == 1 || m == -1) && return zero(m)
     b = oftype(m,mod(x,m))  # this also checks for divide by zero
 
@@ -391,9 +402,9 @@ end
 # optimization: promote the modulus m to BigInt only once (cf. widemul in generic powermod above)
 powermod(x::Integer, p::Integer, m::Union{Int128,UInt128}) = oftype(m, powermod(x, p, big(m)))
 
-_nextpow2(x::Unsigned) = oneunit(x)<<((sizeof(x)<<3)-leading_zeros(x-oneunit(x)))
+_nextpow2(x::Unsigned) = oneunit(x)<<(top_set_bit(x-oneunit(x)))
 _nextpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -_nextpow2(unsigned(-x)) : _nextpow2(unsigned(x)))
-_prevpow2(x::Unsigned) = one(x) << unsigned((sizeof(x)<<3)-leading_zeros(x)-1)
+_prevpow2(x::Unsigned) = one(x) << unsigned(top_set_bit(x)-1)
 _prevpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -_prevpow2(unsigned(-x)) : _prevpow2(unsigned(x)))
 
 """
@@ -526,7 +537,7 @@ const powers_of_ten = [
     0x002386f26fc10000, 0x016345785d8a0000, 0x0de0b6b3a7640000, 0x8ac7230489e80000,
 ]
 function bit_ndigits0z(x::Base.BitUnsigned64)
-    lz = (sizeof(x)<<3)-leading_zeros(x)
+    lz = top_set_bit(x)
     nd = (1233*lz)>>12+1
     nd -= x < powers_of_ten[nd]
 end
@@ -571,12 +582,12 @@ function ndigits0zpb(x::Integer, b::Integer)
     x = abs(x)
     if x isa Base.BitInteger
         x = unsigned(x)::Unsigned
-        b == 2  && return sizeof(x)<<3 - leading_zeros(x)
-        b == 8  && return (sizeof(x)<<3 - leading_zeros(x) + 2) ÷ 3
+        b == 2  && return top_set_bit(x)
+        b == 8  && return (top_set_bit(x) + 2) ÷ 3
         b == 16 && return sizeof(x)<<1 - leading_zeros(x)>>2
         b == 10 && return bit_ndigits0z(x)
         if ispow2(b)
-            dv, rm = divrem(sizeof(x)<<3 - leading_zeros(x), trailing_zeros(b))
+            dv, rm = divrem(top_set_bit(x), trailing_zeros(b))
             return iszero(rm) ? dv : dv + 1
         end
     end
@@ -638,6 +649,9 @@ function ndigits0z(x::Integer, b::Integer)
     end
 end
 
+# Extends the definition in base/int.jl
+top_set_bit(x::Integer) = ceil(Integer, log2(x + oneunit(x)))
+
 """
     ndigits(n::Integer; base::Integer=10, pad::Integer=1)
 
@@ -673,7 +687,7 @@ ndigits(x::Integer; base::Integer=10, pad::Integer=1) = max(pad, ndigits0z(x, ba
 ## integer to string functions ##
 
 function bin(x::Unsigned, pad::Int, neg::Bool)
-    m = 8 * sizeof(x) - leading_zeros(x)
+    m = top_set_bit(x)
     n = neg + max(pad, m)
     a = StringVector(n)
     # for i in 0x0:UInt(n-1) # automatic vectorization produces redundant codes
@@ -700,7 +714,7 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
 end
 
 function oct(x::Unsigned, pad::Int, neg::Bool)
-    m = div(8 * sizeof(x) - leading_zeros(x) + 2, 3)
+    m = div(top_set_bit(x) + 2, 3)
     n = neg + max(pad, m)
     a = StringVector(n)
     i = n

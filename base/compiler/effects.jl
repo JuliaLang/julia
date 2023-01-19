@@ -48,9 +48,9 @@ following meanings:
     This state corresponds to LLVM's `inaccessiblemem_or_argmemonly` function attribute.
 - `nonoverlayed::Bool`: indicates that any methods that may be called within this method
   are not defined in an [overlayed method table](@ref OverlayMethodTable).
-- `noinbounds::Bool`: indicates this method can't be `:consistent` because of bounds checking.
-  This effect is currently only set on `InferenceState` construction and used to taint
-  `:consistent`-cy before caching. We may want to track it with more accuracy in the future.
+- `noinbounds::Bool`: If set, indicates that this method does not read the parent's `:inbounds`
+  state. In particular, it does not have any reached `:boundscheck` exprs, not propagates inbounds
+  to any children that do.
 
 Note that the representations above are just internal implementation details and thus likely
 to change in the future. See [`Base.@assume_effects`](@ref) for more detailed explanation

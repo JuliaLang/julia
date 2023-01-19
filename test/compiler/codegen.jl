@@ -790,3 +790,10 @@ f47247(a::Ref{Int}, b::Nothing) = setfield!(a, :x, b)
     f(x) = Core.bitcast(UInt64, x)
     @test occursin("llvm.trap", get_llvm(f, Tuple{Union{}}))
 end
+
+f48085(@nospecialize x...) = length(x)
+@test Core.Compiler.get_compileable_sig(which(f48085, (Vararg{Any},)), Tuple{typeof(f48085), Vararg{Int}}, Core.svec()) === nothing
+@test Core.Compiler.get_compileable_sig(which(f48085, (Vararg{Any},)), Tuple{typeof(f48085), Int, Vararg{Int}}, Core.svec()) === Tuple{typeof(f48085), Any, Vararg{Any}}
+
+# Make sure that the bounds check is elided in tuple iteration
+@test !occursin("call void @", get_llvm(iterate, Tuple{NTuple{4, Float64}, Int}))

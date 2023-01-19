@@ -145,7 +145,7 @@ static _Atomic(int) support_conservative_marking = 0;
  * threads that enters `jl_gc_collect()` at the same time (or later calling
  * from unmanaged code) will wait in `jl_gc_collect()` until the GC is finished.
  *
- * Before starting the mark phase the GC thread calls `jl_safepoint_gc_start()`
+ * Before starting the mark phase the GC thread calls `jl_safepoint_start_gc()`
  * and `jl_gc_wait_for_the_world()`
  * to make sure all the thread are in a safe state for the GC. The function
  * activates the safepoint and wait for all the threads to get ready for the
@@ -360,7 +360,7 @@ static void finalize_object(arraylist_t *list, jl_value_t *o,
 
 // The first two entries are assumed to be empty and the rest are assumed to
 // be pointers to `jl_value_t` objects
-static void jl_gc_push_arraylist(jl_task_t *ct, arraylist_t *list)
+static void jl_gc_push_arraylist(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOINT
 {
     void **items = list->items;
     items[0] = (void*)JL_GC_ENCODE_PUSHARGS(list->len - 2);
@@ -371,7 +371,7 @@ static void jl_gc_push_arraylist(jl_task_t *ct, arraylist_t *list)
 // Same assumption as `jl_gc_push_arraylist`. Requires the finalizers lock
 // to be hold for the current thread and will release the lock when the
 // function returns.
-static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list)
+static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NOTSAFEPOINT_LEAVE
 {
     // Avoid marking `ct` as non-migratable via an `@async` task (as noted in the docstring
     // of `finalizer`) in a finalizer:
@@ -395,7 +395,7 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list)
 
 static uint64_t finalizer_rngState[4];
 
-void jl_rng_split(uint64_t to[4], uint64_t from[4]);
+void jl_rng_split(uint64_t to[4], uint64_t from[4]) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_gc_init_finalizer_rng_state(void)
 {
@@ -2537,22 +2537,35 @@ module_binding: {
         gc_mark_binding_t *binding = gc_pop_markdata(&sp, gc_mark_binding_t);
         jl_binding_t **begin = binding->begin;
         jl_binding_t **end = binding->end;
-        for (; begin < end; begin += 2) {
+        for (; begin < end; begin++) {
             jl_binding_t *b = *begin;
-            if (b == (jl_binding_t*)HT_NOTFOUND)
+            if (b == (jl_binding_t*)jl_nothing)
                 continue;
             verify_parent1("module", binding->parent, begin, "binding_buff");
             // Record the size used for the box for non-const bindings
             gc_heap_snapshot_record_module_to_binding(binding->parent, b);
             if (gc_try_setmark((jl_value_t*)b, &binding->nptr, &tag, &bits)) {
-                begin += 2;
+                begin++;
                 binding->begin = begin;
                 gc_repush_markdata(&sp, gc_mark_binding_t);
                 new_obj = (jl_value_t*)b;
                 goto mark;
             }
         }
+        binding->begin = begin;
         jl_module_t *m = binding->parent;
+        jl_value_t *bindings = (jl_value_t*)jl_atomic_load_relaxed(&m->bindings);
+        if (gc_try_setmark(bindings, &binding->nptr, &tag, &bits)) {
+            gc_repush_markdata(&sp, gc_mark_binding_t);
+            new_obj = (jl_value_t*)bindings;
+            goto mark;
+        }
+        jl_value_t *bindingkeyset = (jl_value_t*)jl_atomic_load_relaxed(&m->bindingkeyset);
+        if (gc_try_setmark(bindingkeyset, &binding->nptr, &tag, &bits)) {
+            gc_repush_markdata(&sp, gc_mark_binding_t);
+            new_obj = bindingkeyset;
+            goto mark;
+        }
         int scanparent = gc_try_setmark((jl_value_t*)m->parent, &binding->nptr, &tag, &bits);
         size_t nusings = m->usings.len;
         if (nusings) {
@@ -2760,8 +2773,9 @@ mark: {
             else if (foreign_alloc)
                 objprofile_count(vt, bits == GC_OLD_MARKED, sizeof(jl_module_t));
             jl_module_t *m = (jl_module_t*)new_obj;
-            jl_binding_t **table = (jl_binding_t**)m->bindings.table;
-            size_t bsize = m->bindings.size;
+            jl_svec_t *bindings = jl_atomic_load_relaxed(&m->bindings);
+            jl_binding_t **table = (jl_binding_t**)jl_svec_data(bindings);
+            size_t bsize = jl_svec_len(bindings);
             uintptr_t nptr = ((bsize + m->usings.len + 1) << 2) | (bits & GC_OLD);
             gc_mark_binding_t markdata = {m, table + 1, table + bsize, nptr};
             gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(module_binding),
@@ -3490,13 +3504,15 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
         gc_cblist_pre_gc, (collection));
 
     if (!jl_atomic_load_relaxed(&jl_gc_disable_counter)) {
-        JL_LOCK_NOGC(&finalizers_lock);
+        JL_LOCK_NOGC(&finalizers_lock); // all the other threads are stopped, so this does not make sense, right? otherwise, failing that, this seems like plausibly a deadlock
+#ifndef __clang_gcanalyzer__
         if (_jl_gc_collect(ptls, collection)) {
             // recollect
             int ret = _jl_gc_collect(ptls, JL_GC_AUTO);
             (void)ret;
             assert(!ret);
         }
+#endif
         JL_UNLOCK_NOGC(&finalizers_lock);
     }
 
@@ -3889,8 +3905,8 @@ static void *gc_perm_alloc_large(size_t sz, int zero, unsigned align, unsigned o
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
-    uintptr_t base = (uintptr_t)(zero ? calloc(1, sz) : malloc(sz));
-    if (base == 0)
+    void *base = zero ? calloc(1, sz) : malloc(sz);
+    if (base == NULL)
         jl_throw(jl_memory_exception);
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
@@ -3898,8 +3914,8 @@ static void *gc_perm_alloc_large(size_t sz, int zero, unsigned align, unsigned o
     errno = last_errno;
     jl_may_leak(base);
     assert(align > 0);
-    unsigned diff = (offset - base) % align;
-    return (void*)(base + diff);
+    unsigned diff = (offset - (uintptr_t)base) % align;
+    return (void*)((char*)base + diff);
 }
 
 STATIC_INLINE void *gc_try_perm_alloc_pool(size_t sz, unsigned align, unsigned offset) JL_NOTSAFEPOINT
