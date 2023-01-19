@@ -45,9 +45,9 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
                       Symbol("@big_str")
             return Expr(:macrocall, GlobalRef(Core, macname), nothing, str)
         elseif kind(node) == K"core_@doc"
-            return GlobalRef(Core, :var"@doc")
+            return GlobalRef(Core, Symbol("@doc"))
         elseif kind(node) == K"core_@cmd"
-            return GlobalRef(Core, :var"@cmd")
+            return GlobalRef(Core, Symbol("@cmd"))
         elseif kind(node) == K"MacroName" && val === Symbol("@.")
             return Symbol("@__dot__")
         else

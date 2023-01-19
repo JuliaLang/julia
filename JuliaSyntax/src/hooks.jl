@@ -237,8 +237,21 @@ end
 function _fl_parse_hook(code, filename, lineno, offset, options)
     @static if VERSION >= v"1.8.0-DEV.1370" # https://github.com/JuliaLang/julia/pull/43876
         return Core.Compiler.fl_parse(code, filename, lineno, offset, options)
-    else
+    elseif VERSION >= v"1.6"
         return Core.Compiler.fl_parse(code, filename, offset, options)
+    else
+        if options === :all
+            ex = Base.parse_input_line(String(code), filename=filename, depwarn=false)
+            if !Meta.isexpr(ex, :toplevel)
+                ex = Expr(:toplevel, ex)
+            end
+            return ex, sizeof(code)
+        elseif options === :statement || options == :atom
+            ex, pos = Meta.parse(code, offset+1, greedy=options==:statement, raise=false)
+            return ex, pos-1
+        else
+            error("Unknown parse options $options")
+        end
     end
 end
 
@@ -248,7 +261,7 @@ end
 # FIXME: Improve this in Base somehow?
 Base.Meta.ParseError(e::JuliaSyntax.ParseError) = e
 
-const _default_parser = Core._parse
+const _default_parser = VERSION < v"1.6" ? nothing : Core._parse
 
 """
     enable_in_core!([enable=true; freeze_world_age, debug_filename])
@@ -266,6 +279,9 @@ Keyword arguments:
 """
 function enable_in_core!(enable=true; freeze_world_age = true,
         debug_filename   = get(ENV, "JULIA_SYNTAX_DEBUG_FILE", nothing))
+    if VERSION < v"1.6"
+        error("Cannot use JuliaSyntax as the main Julia parser in Julia version $VERSION < 1.6")
+    end
     _parser_world_age[] = freeze_world_age ? Base.get_world_counter() : _latest_world
     if enable && !isnothing(debug_filename)
         _debug_log[] = open(debug_filename, "w")

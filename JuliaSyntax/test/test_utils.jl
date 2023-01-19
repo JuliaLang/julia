@@ -28,6 +28,11 @@ using .JuliaSyntax:
     fl_parseall,
     fl_parse
 
+if VERSION < v"1.6"
+    # Compat stuff which might not be in Base for older versions
+    using JuliaSyntax: isnothing, only, peek
+end
+
 function remove_macro_linenums!(ex)
     if Meta.isexpr(ex, :macrocall)
         ex.args[2] = nothing
@@ -69,7 +74,7 @@ function parse_diff(text, showfunc=dump)
 end
 
 function kw_to_eq(ex)
-    return Meta.isexpr(:kw, ex) ? Expr(:(=), ex.args...) : ex
+    return Meta.isexpr(ex, :kw) ? Expr(:(=), ex.args...) : ex
 end
 
 function triple_string_roughly_equal(str, fl_str)
@@ -346,6 +351,7 @@ function show_green_tree(code; version::VersionNumber=v"1.6")
     sprint(show, MIME"text/plain"(), t, code)
 end
 
+
 #-------------------------------------------------------------------------------
 # Parse s-expressions
 function parse_sexpr(code)
@@ -384,17 +390,3 @@ function parse_sexpr(code)
 end
 
 
-@testset "Test tools" begin
-    @test exprs_roughly_equal(Expr(:global, :x, :y),
-                              Expr(:global, Expr(:tuple, :x, :y)))
-    @test exprs_roughly_equal(Expr(:local, :x, :y),
-                              Expr(:local, Expr(:tuple, :x, :y)))
-    @test exprs_roughly_equal(1.5,
-                              Expr(:call, :*, 1.5, :f))
-    @test exprs_roughly_equal(1.5,
-                              Expr(:call, :*, 1.5, :f0))
-    @test exprs_roughly_equal(Expr(:do, Expr(:macrocall, Symbol("@f"), LineNumberNode(1), Expr(:kw, :a, 1)),
-                                   Expr(:->, Expr(:tuple), Expr(:block, LineNumberNode(1)))),
-                              Expr(:do, Expr(:macrocall, Symbol("@f"), LineNumberNode(1), Expr(:(=), :a, 1)),
-                                   Expr(:->, Expr(:tuple), Expr(:block, LineNumberNode(1)))))
-end
