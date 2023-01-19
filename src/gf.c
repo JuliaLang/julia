@@ -281,11 +281,9 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
         return NULL;
     jl_task_t *ct = jl_current_task;
     if (ct->reentrant_inference == (uint16_t)-1) {
-        // TODO: We should avoid attempting to re-inter inference here at all
-        // and turn on this warning, but that requires further refactoring
-        // of the precompile code, so for now just catch that case here.
-        //jl_printf(JL_STDERR, "ERROR: Attempted to enter inference while writing out image.");
-        return NULL;
+        // We must avoid attempting to re-enter inference here
+        assert(0 && "attempted to enter inference while writing out image");
+        abort();
     }
     if (ct->reentrant_inference > 2)
         return NULL;
@@ -487,6 +485,7 @@ int foreach_mtable_in_module(
                             // this is the original/primary binding for the type (name/wrapper)
                             jl_methtable_t *mt = tn->mt;
                             if (mt != NULL && (jl_value_t*)mt != jl_nothing && mt != jl_type_type_mt && mt != jl_nonfunction_mt) {
+                                assert(mt->module == m);
                                 if (!visit(mt, env))
                                     return 0;
                             }
@@ -497,6 +496,15 @@ int foreach_mtable_in_module(
                         if (child != m && child->parent == m && child->name == b->name) {
                             // this is the original/primary binding for the submodule
                             if (!foreach_mtable_in_module(child, visit, env))
+                                return 0;
+                        }
+                    }
+                    else if (jl_is_mtable(v)) {
+                        jl_methtable_t *mt = (jl_methtable_t*)v;
+                        if (mt->module == m && mt->name == b->name) {
+                            // this is probably an external method table here, so let's
+                            // assume so as there is no way to precisely distinguish them
+                            if (!visit(mt, env))
                                 return 0;
                         }
                     }
