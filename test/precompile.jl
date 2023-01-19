@@ -261,6 +261,10 @@ precompile_test_harness(false) do dir
 
               # check that @ccallable works from precompiled modules
               Base.@ccallable Cint f35014(x::Cint) = x+Cint(1)
+
+              # check that Tasks work from serialized state
+              ch1 = Channel(x -> nothing)
+              ch2 = Channel(x -> (push!(x, 2); nothing), Inf)
           end
           """)
     # Issue #12623
@@ -310,6 +314,13 @@ precompile_test_harness(false) do dir
         @test Foo.layout2 == Any[Ptr{Int8}(0), Ptr{Int16}(0), Ptr{Int32}(-1)]
         @test typeof.(Foo.layout2) == [Ptr{Int8}, Ptr{Int16}, Ptr{Int32}]
         @test Foo.layout3 == ["ab", "cd", "ef", "gh", "ij"]
+
+        @test !isopen(Foo.ch1)
+        @test !isopen(Foo.ch2)
+        @test !isready(Foo.ch1)
+        @test isready(Foo.ch2)
+        @test take!(Foo.ch2) === 2
+        @test !isready(Foo.ch2)
     end
 
     @eval begin function ccallable_test()

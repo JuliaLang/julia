@@ -316,6 +316,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
                 current = current == 4 ? 1 : current + 1
             end
         end
+        close(t)
     end
 
     # Collect statements from running the script
