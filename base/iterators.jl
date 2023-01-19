@@ -290,8 +290,8 @@ length(v::Pairs) = length(getfield(v, :itr))
 axes(v::Pairs) = axes(getfield(v, :itr))
 size(v::Pairs) = size(getfield(v, :itr))
 
-@propagate_inbounds function _pairs_elt(p::Pairs{K, V}, idx) where {K, V}
-    return Pair{K, V}(idx, getfield(p, :data)[idx])
+Base.@eval @propagate_inbounds function _pairs_elt(p::Pairs{K, V}, idx) where {K, V}
+    return $(Expr(:new, :(Pair{K, V}), :idx, :(getfield(p, :data)[idx])))
 end
 
 @propagate_inbounds function iterate(p::Pairs{K, V}, state...) where {K, V}
