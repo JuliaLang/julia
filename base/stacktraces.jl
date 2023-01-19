@@ -124,7 +124,7 @@ function lookup_inline_frame_info(func::Symbol, file::Symbol, linenum::Int, inli
     TODO: If a backtrack has failed, do we need to backtrack again later if another Method
     or Symbol match is found? Or can a limit on the subsequent backtracks be placed?
     =#
-    for (i, line) ∈ enumerate(inlinetable)
+    for (i, line) in enumerate(inlinetable)
         Base.IRShow.method_name(line) == func && line.file ∈ (file, filestripped) && line.line == linenum || continue
         if line.method isa MethodInstance
             linfo = line.method
@@ -132,7 +132,7 @@ function lookup_inline_frame_info(func::Symbol, file::Symbol, linenum::Int, inli
         elseif line.method isa Method || line.method isa Symbol
             linfo = line.method isa Method ? line.method : line.module
             # backtrack to find the matching MethodInstance, if possible
-            for j ∈ (i - 1):-1:1
+            for j in (i - 1):-1:1
                 nextline = inlinetable[j]
                 nextline.inlined_at == line.inlined_at && Base.IRShow.method_name(line) == Base.IRShow.method_name(nextline) && line.file == nextline.file || break
                 if nextline.method isa MethodInstance
@@ -156,7 +156,7 @@ function lookup_inline_frame_info(func::Symbol, file::Symbol, miroots::Vector{An
     if length(matches) > 1
         # ambiguous, check if method is same and return that instead
         all_matched = true
-        for m ∈ matches
+        for m in matches
             all_matched = m.def.line == matches[1].def.line &&
                 m.def.module == matches[1].def.module
             all_matched || break
@@ -166,7 +166,7 @@ function lookup_inline_frame_info(func::Symbol, file::Symbol, miroots::Vector{An
         end
         # all else fails, return module if they match, or give up
         all_matched = true
-        for m ∈ matches
+        for m in matches
             all_matched = m.def.module == matches[1].def.module
             all_matched || break
         end
@@ -192,7 +192,7 @@ Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
     inlinetable = get_inlinetable(parent_linfo)
     miroots = inlinetable === nothing ? get_method_instance_roots(parent_linfo) : nothing # fallback if linetable missing
     res = Vector{StackFrame}(undef, length(infos))
-    for i ∈ reverse(1:length(infos))
+    for i in reverse(1:length(infos))
         info = infos[i]::Core.SimpleVector
         @assert(length(info) == 6)
         func = info[1]::Symbol
