@@ -843,8 +843,8 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
         return nothing
     end
     isoverlayed(method_table(interp)) && !is_nonoverlayed(result.effects) && return nothing
-    if f !== nothing && result.edge !== nothing && is_foldable(result.effects)
-        if is_all_const_arg(arginfo, #=start=#2)
+    if result.edge !== nothing && is_foldable(result.effects)
+        if f !== nothing && is_all_const_arg(arginfo, #=start=#2)
             return true
         else
             return false
