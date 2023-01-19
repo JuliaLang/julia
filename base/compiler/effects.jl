@@ -207,7 +207,8 @@ function decode_effects(e::UInt32)
         _Bool((e >> 7) & 0x01),
         _Bool((e >> 8) & 0x01),
         UInt8((e >> 9) & 0x03),
-        _Bool((e >> 11) & 0x01))
+        _Bool((e >> 11) & 0x01),
+        _Bool((e >> 12) & 0x01))
 end
 
 struct EffectsOverride
