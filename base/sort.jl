@@ -1978,9 +1978,9 @@ struct MergeSortAlg     <: Algorithm end
 """
     PartialQuickSort{T <: Union{Integer,OrdinalRange}}
 
-Indicate that a sorting function should use the partial quick sort
-algorithm. Partial quick sort returns the smallest `k` elements sorted from smallest
-to largest, finding them and sorting them using [`QuickSort`](@ref).
+Indicate that a sorting function should use the partial quick sort algorithm.
+Partial quick sort is like quick sort, but is only required to find and sort the
+elements that would end up in `v[k]` were `v` fully sorted.
 
 Characteristics:
   * *not stable*: does not preserve the ordering of elements that
@@ -1988,6 +1988,27 @@ Characteristics:
     ignores case).
   * *in-place* in memory.
   * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
+
+Note that `PartialQuickSort(k)` does not necessarily sort the whole array. For example,
+
+```jldoctest
+julia> x = rand(100);
+
+julia> k = 50:100;
+
+julia> s1 = sort(x; alg=QuickSort);
+
+julia> s2 = sort(x; alg=PartialQuickSort(k));
+
+julia> map(issorted, (s1, s2))
+(true, false)
+
+julia> map(x->issorted(x[k]), (s1, s2))
+(true, true)
+
+julia> s1[k] == s2[k]
+true
+```
 """
 struct PartialQuickSort{T <: Union{Integer,OrdinalRange}} <: Algorithm
     k::T
@@ -2022,7 +2043,8 @@ Characteristics:
   * *stable*: preserves the ordering of elements that compare
     equal (e.g. "a" and "A" in a sort of letters that ignores
     case).
-  * *not in-place* in memory.
+  * *not in-place* in memory — requires a temporary
+    array of half the size of the input array.
   * *divide-and-conquer* sort strategy.
 """
 const MergeSort     = MergeSortAlg()
