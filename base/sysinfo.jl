@@ -20,8 +20,8 @@ export BINDIR,
        loadavg,
        free_memory,
        total_memory,
-       physical_free_memory,
-       physical_total_memory,
+       free_physical_memory,
+       total_physical_memory,
        isapple,
        isbsd,
        isdragonfly,
@@ -279,11 +279,12 @@ This amount may be constrained, e.g., by Linux control groups. For the unconstra
 amount, see `Sys.physical_memory()`.
 """
 function total_memory()
-    memory = ccall(:uv_get_constrained_memory, UInt64, ())
-    if memory == 0
-        return total_physical_memory()
+    constrained = ccall(:uv_get_constrained_memory, UInt64, ())
+    physical = total_physical_memory()
+    if 0 < constrained <= physical
+        return constrained
     else
-        return memory
+        return physical
     end
 end
 

@@ -177,16 +177,7 @@ mutable struct InferenceState
 
         valid_worlds = WorldRange(src.min_world, src.max_world == typemax(UInt) ? get_world_counter() : src.max_world)
         bestguess = Bottom
-        # TODO: Currently, any :inbounds declaration taints consistency,
-        #       because we cannot be guaranteed whether or not boundschecks
-        #       will be eliminated and if they are, we cannot be guaranteed
-        #       that no undefined behavior will occur (the effects assumptions
-        #       are stronger than the inbounds assumptions, since the latter
-        #       requires dynamic reachability, while the former is global).
-        inbounds = inbounds_option()
-        noinbounds = inbounds === :on || (inbounds === :default && !any_inbounds(code))
-        consistent = noinbounds ? ALWAYS_TRUE : ALWAYS_FALSE
-        ipo_effects = Effects(EFFECTS_TOTAL; consistent, noinbounds)
+        ipo_effects = EFFECTS_TOTAL
 
         params = InferenceParams(interp)
         restrict_abstract_call_sites = isa(linfo.def, Module)
@@ -233,21 +224,11 @@ add_remark!(::AbstractInterpreter, sv::Union{InferenceState, IRCode}, remark) = 
 function bail_out_toplevel_call(::AbstractInterpreter, @nospecialize(callsig), sv::Union{InferenceState, IRCode})
     return isa(sv, InferenceState) && sv.restrict_abstract_call_sites && !isdispatchtuple(callsig)
 end
-function bail_out_call(::AbstractInterpreter, @nospecialize(rt), sv::Union{InferenceState, IRCode})
-    return rt === Any
+function bail_out_call(::AbstractInterpreter, @nospecialize(rt), sv::Union{InferenceState, IRCode}, effects::Effects)
+    return rt === Any && !is_foldable(effects)
 end
 function bail_out_apply(::AbstractInterpreter, @nospecialize(rt), sv::Union{InferenceState, IRCode})
     return rt === Any
-end
-
-function any_inbounds(code::Vector{Any})
-    for i = 1:length(code)
-        stmt = code[i]
-        if isexpr(stmt, :inbounds)
-            return true
-        end
-    end
-    return false
 end
 
 was_reached(sv::InferenceState, pc::Int) = sv.ssavaluetypes[pc] !== NOT_FOUND
@@ -383,55 +364,50 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
     for i = 1:length(sp)
         v = sp[i]
         if v isa TypeVar
-            fromArg = 0
-            # if this parameter came from arg::Type{T}, then `arg` is more precise than
-            # Type{T} where lb<:T<:ub
-            sig = linfo.def.sig
-            temp = sig
+            temp = linfo.def.sig
             for j = 1:i-1
                 temp = temp.body
             end
-            Pi = temp.var
+            vᵢ = (temp::UnionAll).var
             while temp isa UnionAll
                 temp = temp.body
             end
             sigtypes = (temp::DataType).parameters
             for j = 1:length(sigtypes)
-                tj = sigtypes[j]
-                if isType(tj) && tj.parameters[1] === Pi
-                    fromArg = j
-                    break
+                sⱼ = sigtypes[j]
+                if isType(sⱼ) && sⱼ.parameters[1] === vᵢ
+                    # if this parameter came from `arg::Type{T}`,
+                    # then `arg` is more precise than `Type{T} where lb<:T<:ub`
+                    ty = fieldtype(linfo.specTypes, j)
+                    @goto ty_computed
                 end
             end
-            if fromArg > 0
-                ty = fieldtype(linfo.specTypes, fromArg)
+            ub = v.ub
+            while ub isa TypeVar
+                ub = ub.ub
+            end
+            if has_free_typevars(ub)
+                ub = Any
+            end
+            lb = v.lb
+            while lb isa TypeVar
+                lb = lb.lb
+            end
+            if has_free_typevars(lb)
+                lb = Bottom
+            end
+            if Any <: ub && lb <: Bottom
+                ty = Any
             else
-                ub = v.ub
-                while ub isa TypeVar
-                    ub = ub.ub
-                end
-                if has_free_typevars(ub)
-                    ub = Any
-                end
-                lb = v.lb
-                while lb isa TypeVar
-                    lb = lb.lb
-                end
-                if has_free_typevars(lb)
-                    lb = Bottom
-                end
-                if Any <: ub && lb <: Bottom
-                    ty = Any
-                else
-                    tv = TypeVar(v.name, lb, ub)
-                    ty = UnionAll(tv, Type{tv})
-                end
+                tv = TypeVar(v.name, lb, ub)
+                ty = UnionAll(tv, Type{tv})
             end
         elseif isvarargtype(v)
             ty = Int
         else
             ty = Const(v)
         end
+        @label ty_computed
         sp[i] = ty
     end
     return sp
@@ -537,6 +513,8 @@ function print_callstack(sv::InferenceState)
 end
 
 get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]
+add_curr_ssaflag!(sv::InferenceState, flag::UInt8) = sv.src.ssaflags[sv.currpc] |= flag
+sub_curr_ssaflag!(sv::InferenceState, flag::UInt8) = sv.src.ssaflags[sv.currpc] &= ~flag
 
 function narguments(sv::InferenceState)
     def = sv.linfo.def

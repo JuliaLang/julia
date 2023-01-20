@@ -28,7 +28,7 @@ all: debug release
 # sort is used to remove potential duplicates
 DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_includedir) $(build_includedir)/julia $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_datarootdir)/julia/stdlib $(build_man1dir))
 ifneq ($(BUILDROOT),$(JULIAHOME))
-BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src src/flisp src/support src/clangsa cli doc deps stdlib test test/clangsa test/embedding test/llvmpasses)
+BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src src/flisp src/support src/clangsa cli doc deps stdlib test test/clangsa test/embedding test/gcext test/llvmpasses)
 BUILDDIRMAKE := $(addsuffix /Makefile,$(BUILDDIRS)) $(BUILDROOT)/sysimage.mk
 DIRS += $(BUILDDIRS)
 $(BUILDDIRMAKE): | $(BUILDDIRS)
@@ -152,8 +152,10 @@ release-candidate: release testall
 	@echo 10. Follow packaging instructions in doc/build/distributing.md to create binary packages for all platforms
 	@echo 11. Upload to AWS, update https://julialang.org/downloads and http://status.julialang.org/stable links
 	@echo 12. Update checksums on AWS for tarball and packaged binaries
-	@echo 13. Announce on mailing lists
-	@echo 14. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
+	@echo 13. Update versions.json
+	@echo 14. Push to Juliaup (https://github.com/JuliaLang/juliaup/wiki/Adding-a-Julia-version)
+	@echo 15. Announce on mailing lists
+	@echo 16. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
 	@echo
 
 $(build_man1dir)/julia.1: $(JULIAHOME)/doc/man/julia.1 | $(build_man1dir)
@@ -260,13 +262,21 @@ ifeq ($(OS),WINNT)
 	-$(INSTALL_M) $(wildcard $(build_bindir)/*.dll) $(DESTDIR)$(bindir)/
 ifeq ($(JULIA_BUILD_MODE),release)
 	-$(INSTALL_M) $(build_libdir)/libjulia.dll.a $(DESTDIR)$(libdir)/
+	-$(INSTALL_M) $(build_libdir)/libjulia-internal.dll.a $(DESTDIR)$(libdir)/
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	-$(INSTALL_M) $(build_libdir)/libjulia-debug.dll.a $(DESTDIR)$(libdir)/
+	-$(INSTALL_M) $(build_libdir)/libjulia-internal-debug.dll.a $(DESTDIR)$(libdir)/
 endif
 
 	# We have a single exception; we want 7z.dll to live in libexec, not bin, so that 7z.exe can find it.
 	-mv $(DESTDIR)$(bindir)/7z.dll $(DESTDIR)$(libexecdir)/
 	-$(INSTALL_M) $(build_bindir)/libopenlibm.dll.a $(DESTDIR)$(libdir)/
+	-$(INSTALL_M) $(build_libdir)/libssp.dll.a $(DESTDIR)$(libdir)/
+	# The rest are compiler dependencies, as an example memcpy is exported by msvcrt
+	# These are files from mingw32 and required for creating shared libraries like our caches.
+	-$(INSTALL_M) $(build_libdir)/libgcc_s.a $(DESTDIR)$(libdir)/
+	-$(INSTALL_M) $(build_libdir)/libgcc.a $(DESTDIR)$(libdir)/
+	-$(INSTALL_M) $(build_libdir)/libmsvcrt.a $(DESTDIR)$(libdir)/
 else
 
 # Copy over .dSYM directories directly for Darwin
@@ -331,6 +341,11 @@ else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 endif
 
+	# Cache stdlibs
+	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no $(JULIAHOME)/contrib/cache_stdlibs.jl)
+	# CI uses `--check-bounds=yes` which impacts the cache flags
+	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes $(JULIAHOME)/contrib/cache_stdlibs.jl)
+
 	# Copy in all .jl sources as well
 	mkdir -p $(DESTDIR)$(datarootdir)/julia/base $(DESTDIR)$(datarootdir)/julia/test
 	cp -R -L $(JULIAHOME)/base/* $(DESTDIR)$(datarootdir)/julia/base
@@ -384,8 +399,18 @@ endif
 	fi;
 endif
 
-	# Set rpath for libjulia-internal, which is moving from `../lib` to `../lib/julia`.  We only need to do this for Linux/FreeBSD
-ifneq (,$(findstring $(OS),Linux FreeBSD))
+	# Set rpath for libjulia-internal, which is moving from `../lib` to `../lib/julia`.
+ifeq ($(OS), Darwin)
+ifneq ($(DARWIN_FRAMEWORK),1)
+ifeq ($(JULIA_BUILD_MODE),release)
+	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel)/ $(DESTDIR)$(private_libdir)/libjulia-internal.$(SHLIB_EXT)
+	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel)/ $(DESTDIR)$(private_libdir)/libjulia-codegen.$(SHLIB_EXT)
+else ifeq ($(JULIA_BUILD_MODE),debug)
+	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel)/ $(DESTDIR)$(private_libdir)/libjulia-internal-debug.$(SHLIB_EXT)
+	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel)/ $(DESTDIR)$(private_libdir)/libjulia-codegen-debug.$(SHLIB_EXT)
+endif
+endif
+else ifneq (,$(findstring $(OS),Linux FreeBSD))
 ifeq ($(JULIA_BUILD_MODE),release)
 	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-internal.$(SHLIB_EXT)
 	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-codegen.$(SHLIB_EXT)
@@ -399,12 +424,6 @@ endif
 ifeq ($(OS), Linux)
 	-$(PATCHELF) --set-rpath '$$ORIGIN' $(DESTDIR)$(private_shlibdir)/libLLVM.$(SHLIB_EXT)
 endif
-
-	# Replace libstdc++ path, which is also moving from `lib` to `../lib/julia`.
-ifeq ($(OS),Linux)
-	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT),\*libstdc++\.so\.6$$,*$(call dep_lib_path,$(shlibdir),$(private_shlibdir)/libstdc++.so.6))
-endif
-
 
 ifneq ($(LOADER_BUILD_DEP_LIBS),$(LOADER_INSTALL_DEP_LIBS))
 	# Next, overwrite relative path to libjulia-internal in our loader if $$(LOADER_BUILD_DEP_LIBS) != $$(LOADER_INSTALL_DEP_LIBS)

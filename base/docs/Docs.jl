@@ -39,7 +39,7 @@ You can document an object after its definition by
     @doc "foo" function_to_doc
     @doc "bar" TypeToDoc
 
-For macros, the syntax is `@doc "macro doc" :(@Module.macro)` or `@doc "macro doc"
+For macros, the syntax is `@doc "macro doc" :(Module.@macro)` or `@doc "macro doc"
 :(string_macro"")` for string macros. Without the quote `:()` the expansion of the macro
 will be documented.
 

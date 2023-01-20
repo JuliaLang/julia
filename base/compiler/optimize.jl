@@ -39,15 +39,24 @@ const TOP_TUPLE = GlobalRef(Core, :tuple)
 const InlineCostType = UInt16
 const MAX_INLINE_COST = typemax(InlineCostType)
 const MIN_INLINE_COST = InlineCostType(10)
+const MaybeCompressed = Union{CodeInfo, Vector{UInt8}}
 
-is_inlineable(src::Union{CodeInfo, Vector{UInt8}}) = ccall(:jl_ir_inlining_cost, InlineCostType, (Any,), src) != MAX_INLINE_COST
-set_inlineable!(src::CodeInfo, val::Bool) = src.inlining_cost = (val ? MIN_INLINE_COST : MAX_INLINE_COST)
+is_inlineable(@nospecialize src::MaybeCompressed) =
+    ccall(:jl_ir_inlining_cost, InlineCostType, (Any,), src) != MAX_INLINE_COST
+set_inlineable!(src::CodeInfo, val::Bool) =
+    src.inlining_cost = (val ? MIN_INLINE_COST : MAX_INLINE_COST)
 
 function inline_cost_clamp(x::Int)::InlineCostType
     x > MAX_INLINE_COST && return MAX_INLINE_COST
     x < MIN_INLINE_COST && return MIN_INLINE_COST
     return convert(InlineCostType, x)
 end
+
+is_declared_inline(@nospecialize src::MaybeCompressed) =
+    ccall(:jl_ir_flag_inlining, UInt8, (Any,), src) == 1
+
+is_declared_noinline(@nospecialize src::MaybeCompressed) =
+    ccall(:jl_ir_flag_inlining, UInt8, (Any,), src) == 2
 
 #####################
 # OptimizationState #
@@ -73,16 +82,16 @@ function add_invoke_backedge!(et::EdgeTracker, @nospecialize(invokesig), mi::Met
     return nothing
 end
 
-is_source_inferred(@nospecialize(src::Union{CodeInfo, Vector{UInt8}})) =
+is_source_inferred(@nospecialize src::MaybeCompressed) =
     ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
 
 function inlining_policy(interp::AbstractInterpreter,
     @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt8, mi::MethodInstance,
     argtypes::Vector{Any})
-    if isa(src, CodeInfo) || isa(src, Vector{UInt8})
-        src_inferred = is_source_inferred(src)
+    if isa(src, MaybeCompressed)
+        is_source_inferred(src) || return nothing
         src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
-        return src_inferred && src_inlineable ? src : nothing
+        return src_inlineable ? src : nothing
     elseif src === nothing && is_stmt_inline(stmt_flag)
         # if this statement is forced to be inlined, make an additional effort to find the
         # inferred source in the local cache
@@ -100,8 +109,12 @@ function inlining_policy(interp::AbstractInterpreter,
     elseif isa(src, IRCode)
         return src
     elseif isa(src, SemiConcreteResult)
-        # For NativeInterpreter, SemiConcreteResult are only produced if they're supposed
-        # to be inlined.
+        if is_declared_noinline(mi.def::Method)
+            # For `NativeInterpreter`, `SemiConcreteResult` may be produced for
+            # a `@noinline`-declared method when it's marked as `@constprop :aggressive`.
+            # Suppress the inlining here.
+            return nothing
+        end
         return src
     end
     return nothing
@@ -238,13 +251,13 @@ end
 
 Returns a tuple of `(:consistent, :effect_free_and_nothrow, :nothrow)` flags for a given statement.
 """
-function stmt_effect_flags(lattice::AbstractLattice, @nospecialize(stmt), @nospecialize(rt), src::Union{IRCode,IncrementalCompact})
+function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospecialize(rt), src::Union{IRCode,IncrementalCompact})
     # TODO: We're duplicating analysis from inference here.
     isa(stmt, PiNode) && return (true, true, true)
     isa(stmt, PhiNode) && return (true, true, true)
     isa(stmt, ReturnNode) && return (true, false, true)
     isa(stmt, GotoNode) && return (true, false, true)
-    isa(stmt, GotoIfNot) && return (true, false, argextype(stmt.cond, src) ⊑ₒ Bool)
+    isa(stmt, GotoIfNot) && return (true, false, ⊑(𝕃ₒ, argextype(stmt.cond, src), Bool))
     isa(stmt, Slot) && return (true, false, false) # Slots shouldn't occur in the IR at this point, but let's be defensive here
     if isa(stmt, GlobalRef)
         nothrow = isdefined(stmt.mod, stmt.name)
@@ -266,7 +279,7 @@ function stmt_effect_flags(lattice::AbstractLattice, @nospecialize(stmt), @nospe
             if f === UnionAll
                 # TODO: This is a weird special case - should be determined in inference
                 argtypes = Any[argextype(args[arg], src) for arg in 2:length(args)]
-                nothrow = _builtin_nothrow(lattice, f, argtypes, rt)
+                nothrow = _builtin_nothrow(𝕃ₒ, f, argtypes, rt)
                 return (true, nothrow, nothrow)
             end
             if f === Intrinsics.cglobal
@@ -276,8 +289,8 @@ function stmt_effect_flags(lattice::AbstractLattice, @nospecialize(stmt), @nospe
             isa(f, Builtin) || return (false, false, false)
             # Needs to be handled in inlining to look at the callee effects
             f === Core._apply_iterate && return (false, false, false)
-            argtypes = Any[argextype(args[arg], src) for arg in 2:length(args)]
-            effects = builtin_effects(lattice, f, argtypes, rt)
+            argtypes = Any[argextype(args[arg], src) for arg in 1:length(args)]
+            effects = builtin_effects(𝕃ₒ, f, ArgInfo(args, argtypes), rt)
             consistent = is_consistent(effects)
             effect_free = is_effect_free(effects)
             nothrow = is_nothrow(effects)
@@ -298,7 +311,9 @@ function stmt_effect_flags(lattice::AbstractLattice, @nospecialize(stmt), @nospe
                 isconcretedispatch(typ) || return (false, false, false)
             end
             typ = typ::DataType
-            fieldcount(typ) >= length(args) - 1 || return (false, false, false)
+            fcount = datatype_fieldcount(typ)
+            fcount === nothing && return (false, false, false)
+            fcount >= length(args) - 1 || return (false, false, false)
             for fld_idx in 1:(length(args) - 1)
                 eT = argextype(args[fld_idx + 1], src)
                 fT = fieldtype(typ, fld_idx)
@@ -308,7 +323,7 @@ function stmt_effect_flags(lattice::AbstractLattice, @nospecialize(stmt), @nospe
                 if !isexact && has_free_typevars(fT)
                     return (false, false, false)
                 end
-                eT ⊑ₒ fT || return (false, false, false)
+                ⊑(𝕃ₒ, eT, fT) || return (false, false, false)
             end
             return (false, true, true)
         elseif head === :foreigncall
@@ -324,11 +339,11 @@ function stmt_effect_flags(lattice::AbstractLattice, @nospecialize(stmt), @nospe
             typ = argextype(args[1], src)
             typ, isexact = instanceof_tfunc(typ)
             isexact || return (false, false, false)
-            typ ⊑ₒ Tuple || return (false, false, false)
+            ⊑(𝕃ₒ, typ, Tuple) || return (false, false, false)
             rt_lb = argextype(args[2], src)
             rt_ub = argextype(args[3], src)
             source = argextype(args[4], src)
-            if !(rt_lb ⊑ₒ Type && rt_ub ⊑ₒ Type && source ⊑ₒ Method)
+            if !(⊑(𝕃ₒ, rt_lb, Type) && ⊑(𝕃ₒ, rt_ub, Type) && ⊑(𝕃ₒ, source, Method))
                 return (false, false, false)
             end
             return (false, true, true)
@@ -413,7 +428,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     (; def, specTypes) = linfo
 
     analyzed = nothing # `ConstAPI` if this call can use constant calling convention
-    force_noinline = _any(x::Expr -> x.head === :meta && x.args[1] === :noinline, ir.meta)
+    force_noinline = is_declared_noinline(src)
 
     # compute inlining and other related optimizations
     result = caller.result
@@ -483,15 +498,16 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
         else
             force_noinline = true
         end
-        if !is_inlineable(src) && result === Bottom
+        if !is_declared_inline(src) && result === Bottom
             force_noinline = true
         end
     end
     if force_noinline
         set_inlineable!(src, false)
     elseif isa(def, Method)
-        if is_inlineable(src) && isdispatchtuple(specTypes)
+        if is_declared_inline(src) && isdispatchtuple(specTypes)
             # obey @inline declaration if a dispatch barrier would not help
+            set_inlineable!(src, true)
         else
             # compute the cost (size) of inlining this code
             cost_threshold = default = params.inline_cost_threshold
@@ -499,7 +515,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
                 cost_threshold += params.inline_tupleret_bonus
             end
             # if the method is declared as `@inline`, increase the cost threshold 20x
-            if is_inlineable(src)
+            if is_declared_inline(src)
                 cost_threshold += 19*default
             end
             # a few functions get special treatment
@@ -580,7 +596,7 @@ function run_passes(
     # @timeit "verify 2" verify_ir(ir)
     @pass "compact 2" ir = compact!(ir)
     @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
-    @pass "ADCE"      ir = adce_pass!(ir)
+    @pass "ADCE"      ir = adce_pass!(ir, sv.inlining)
     @pass "type lift" ir = type_lift_pass!(ir)
     @pass "compact 3" ir = compact!(ir)
     if JLOptions().debug_level == 2
@@ -650,7 +666,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                 insert!(codelocs, idx + 1, codelocs[idx])
                 insert!(ssavaluetypes, idx + 1, Union{})
                 insert!(stmtinfo, idx + 1, NoCallInfo())
-                insert!(ssaflags, idx + 1, ssaflags[idx])
+                insert!(ssaflags, idx + 1, IR_FLAG_NOTHROW)
                 if ssachangemap === nothing
                     ssachangemap = fill(0, nstmts)
                 end
@@ -700,7 +716,8 @@ function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     nargs = isa(svdef, Method) ? Int(svdef.nargs) : 0
     @timeit "domtree 1" domtree = construct_domtree(ir.cfg.blocks)
     defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.inst)
-    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, sv.slottypes) # consumes `ir`
+    𝕃ₒ = optimizer_lattice(sv.inlining.interp)
+    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, sv.slottypes, 𝕃ₒ) # consumes `ir`
     return ir
 end
 
@@ -737,7 +754,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             end
             return T_IFUNC_COST[iidx]
         end
-        if isa(f, Builtin)
+        if isa(f, Builtin) && f !== invoke
             # The efficiency of operations like a[i] and s.b
             # depend strongly on whether the result can be
             # inferred, so check the type of ex

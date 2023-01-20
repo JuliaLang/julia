@@ -4,7 +4,6 @@ Julia v1.10 Release Notes
 New language features
 ---------------------
 
-
 Language changes
 ----------------
 
@@ -31,7 +30,8 @@ New library functions
 
 New library features
 --------------------
-
+The `initialized=true` keyword assignment for `sortperm!` and `partialsortperm!`
+is now a no-op ([#47979]). It previously exposed unsafe behavior ([#47977]).
 
 Standard library changes
 ------------------------
@@ -39,6 +39,10 @@ Standard library changes
 
 #### Package Manager
 
+- "Package Extensions": support for loading a piece of code based on other
+  packages being loaded in the Julia session.
+  This has similar applications as the Requires.jl package but also
+  supports precompilation and setting compatibility.
 #### LinearAlgebra
 
 
@@ -63,6 +67,9 @@ Standard library changes
 #### Test
 
 
+* The `@test_broken` macro (or `@test` with `broken=true`) now complains if the test expression returns a
+  non-boolean value in the same way as a non-broken test. ([#47804])
+
 #### Dates
 
 
@@ -74,6 +81,10 @@ Standard library changes
 
 #### DelimitedFiles
 
+
+#### InteractiveUtils
+
+ * `code_native` and `@code_native` now default to intel syntax instead of AT&T.
 
 Deprecated or removed
 ---------------------

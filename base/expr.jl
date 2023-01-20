@@ -436,6 +436,7 @@ The following `setting`s are supported.
 - `:notaskstate`
 - `:inaccessiblememonly`
 - `:foldable`
+- `:removable`
 - `:total`
 
 # Extended help
@@ -596,7 +597,6 @@ global state or mutable memory pointed to by its arguments.
 This setting is a convenient shortcut for the set of effects that the compiler
 requires to be guaranteed to constant fold a call at compile time. It is
 currently equivalent to the following `setting`s:
-
 - `:consistent`
 - `:effect_free`
 - `:terminates_globally`
@@ -606,6 +606,20 @@ currently equivalent to the following `setting`s:
     attempt constant propagation and note any thrown error at compile time. Note
     however, that by the `:consistent`-cy requirements, any such annotated call
     must consistently throw given the same argument values.
+
+!!! note
+    An explicit `@inbounds` annotation inside the function will also disable
+    constant folding and not be overriden by `:foldable`.
+
+---
+## `:removable`
+
+This setting is a convenient shortcut for the set of effects that the compiler
+requires to be guaranteed to delete a call whose result is unused at compile time.
+It is currently equivalent to the following `setting`s:
+- `:effect_free`
+- `:nothrow`
+- `:terminates_globally`
 
 ---
 ## `:total`
@@ -666,6 +680,8 @@ macro assume_effects(args...)
             inaccessiblememonly = val
         elseif setting === :foldable
             consistent = effect_free = terminates_globally = val
+        elseif setting === :removable
+            effect_free = nothrow = terminates_globally = val
         elseif setting === :total
             consistent = effect_free = nothrow = terminates_globally = notaskstate = inaccessiblememonly = val
         else

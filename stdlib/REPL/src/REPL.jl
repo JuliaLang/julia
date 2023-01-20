@@ -1248,7 +1248,7 @@ function setup_interface(
                 @goto writeback
             end
             try
-                InteractiveUtils.edit(linfos[n][1], linfos[n][2])
+                InteractiveUtils.edit(Base.fixup_stdlib_path(linfos[n][1]), linfos[n][2])
             catch ex
                 ex isa ProcessFailedException || ex isa Base.IOError || ex isa SystemError || rethrow()
                 @info "edit failed" _exception=ex
@@ -1404,9 +1404,9 @@ end
 
 function out_transform(@nospecialize(x), n::Ref{Int})
     return quote
-        let x = $x
-            $capture_result($n, x)
-            x
+        let __temp_val_a72df459 = $x
+            $capture_result($n, __temp_val_a72df459)
+            __temp_val_a72df459
         end
     end
 end

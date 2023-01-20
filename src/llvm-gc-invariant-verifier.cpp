@@ -26,7 +26,7 @@
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
 
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 #include "julia.h"
 
 #define DEBUG_TYPE "verify_gc_invariants"
