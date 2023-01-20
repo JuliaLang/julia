@@ -4,7 +4,7 @@
 
 isreal(x::AbstractArray) = all(isreal,x)
 iszero(x::AbstractArray) = all(iszero,x)
-isreal(x::AbstractArray{<:Real}) = true
+
 
 ## Constructors ##
 
@@ -118,7 +118,7 @@ julia> A
 ```
 """
 conj!(A::AbstractArray{<:Number}) = (@inbounds broadcast!(conj, A, A); A)
-conj!(x::AbstractArray{<:Real}) = x
+
 
 """
     conj(A::AbstractArray)
@@ -143,7 +143,7 @@ julia> conj(fill(2 - im))
 ```
 """
 conj(A::AbstractArray) = broadcast_preserving_zero_d(conj, A)
-conj(A::AbstractArray{<:Real}) = A
+
 
 """
     real(A::AbstractArray)
@@ -168,7 +168,7 @@ julia> real(fill(2 - im))
 ```
 """
 real(A::AbstractArray) = broadcast_preserving_zero_d(real, A)
-real(A::AbstractArray{<:Real}) = A
+
 
 """
     imag(A::AbstractArray)
@@ -192,7 +192,7 @@ julia> imag(fill(2 - im))
 ```
 """
 imag(A::AbstractArray) = broadcast_preserving_zero_d(imag, A)
-imag(A::AbstractArray{<:Real}) = zero(A)
+
 
 """
     reim(A::AbstractArray)

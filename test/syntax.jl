@@ -1576,9 +1576,6 @@ struct X29064
 end
 @test X29064(1) isa X29064
 
-# issue #27268
-function f27268()
-    g(col::AbstractArray{<:Real}) = col
 end
 function f27268_2()
     g(col::AbstractArray{T} where T<:Real) = col

@@ -136,9 +136,6 @@ lcm(a::Real, b::Real, c::Real...) = lcm(a, lcm(b, c...))
 gcd(a::T, b::T) where T<:Real = throw(MethodError(gcd, (a,b)))
 lcm(a::T, b::T) where T<:Real = throw(MethodError(lcm, (a,b)))
 
-gcd(abc::AbstractArray{<:Real}) = reduce(gcd, abc; init=zero(eltype(abc)))
-lcm(abc::AbstractArray{<:Real}) = reduce(lcm, abc; init=one(eltype(abc)))
-
 function gcd(abc::AbstractArray{<:Integer})
     a = zero(eltype(abc))
     for b in abc
