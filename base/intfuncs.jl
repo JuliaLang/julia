@@ -375,13 +375,15 @@ function powermod(x::Integer, p::Integer, m::T) where T<:Integer
     # but will work for integer types like `BigInt` that don't have `typemin` defined
     # It needs special handling otherwise will cause overflow problem.
     if p == -p
-        t = powermod(invmod(x, m), -(p÷2), m)
+        imod = invmod(x, m)
+        t::T = powermod(imod, -(p÷2), m)
         t = mod(widemul(t, t), m)
-        iseven(p) && return t
+        isodd(p) && t = mod(widemul(t, imod), m)
         #else odd
-        return mod(widemul(t, invmod(x, m)), m)
+        return t
+    elseif p < 0
+        return powermod(invmod(x, m), -p, m)
     end
-    p < 0 && return powermod(invmod(x, m), -p, m)
     (m == 1 || m == -1) && return zero(m)
     b = oftype(m,mod(x,m))  # this also checks for divide by zero
 
