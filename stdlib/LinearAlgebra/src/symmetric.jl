@@ -17,34 +17,37 @@ end
 Construct a `Symmetric` view of the upper (if `uplo = :U`) or lower (if `uplo = :L`)
 triangle of the matrix `A`.
 
+To compute the Hermitian part `(A + A') / 2` of `A`, use [`hermitianpart`](@ref).
+
 # Examples
 ```jldoctest
-julia> A = [1 0 2 0 3; 0 4 0 5 0; 6 0 7 0 8; 0 9 0 1 0; 2 0 3 0 4]
-5×5 Matrix{Int64}:
- 1  0  2  0  3
- 0  4  0  5  0
- 6  0  7  0  8
- 0  9  0  1  0
- 2  0  3  0  4
+julia> A = [1 2 3; 4 5 6; 7 8 9]
+3×3 Matrix{Int64}:
+ 1  2  3
+ 4  5  6
+ 7  8  9
 
 julia> Supper = Symmetric(A)
-5×5 Symmetric{Int64, Matrix{Int64}}:
- 1  0  2  0  3
- 0  4  0  5  0
- 2  0  7  0  8
- 0  5  0  1  0
- 3  0  8  0  4
+3×3 Symmetric{Int64, Matrix{Int64}}:
+ 1  2  3
+ 2  5  6
+ 3  6  9
 
 julia> Slower = Symmetric(A, :L)
-5×5 Symmetric{Int64, Matrix{Int64}}:
- 1  0  6  0  2
- 0  4  0  9  0
- 6  0  7  0  3
- 0  9  0  1  0
- 2  0  3  0  4
+3×3 Symmetric{Int64, Matrix{Int64}}:
+ 1  4  7
+ 4  5  8
+ 7  8  9
+
+julia> hermitianpart(A)
+3×3 Hermitian{Float64, Matrix{Float64}}:
+ 1.0  3.0  5.0
+ 3.0  5.0  7.0
+ 5.0  7.0  9.0
 ```
 
-Note that `Supper` will not be equal to `Slower` unless `A` is itself symmetric (e.g. if `A == transpose(A)`).
+Note that `Supper` will not be equal to `Slower` unless `A` is itself symmetric (e.g. if
+`A == transpose(A)`).
 """
 function Symmetric(A::AbstractMatrix, uplo::Symbol=:U)
     checksquare(A)
@@ -99,25 +102,33 @@ end
 Construct a `Hermitian` view of the upper (if `uplo = :U`) or lower (if `uplo = :L`)
 triangle of the matrix `A`.
 
+To compute the Hermitian part of `A`, use [`hermitianpart`](@ref).
+
 # Examples
 ```jldoctest
-julia> A = [1 0 2+2im 0 3-3im; 0 4 0 5 0; 6-6im 0 7 0 8+8im; 0 9 0 1 0; 2+2im 0 3-3im 0 4];
+julia> A = [1 2+2im 3-3im; 4 5 6-6im; 7 8+8im 9]
+3×3 Matrix{Complex{Int64}}:
+ 1+0im  2+2im  3-3im
+ 4+0im  5+0im  6-6im
+ 7+0im  8+8im  9+0im
 
 julia> Hupper = Hermitian(A)
-5×5 Hermitian{Complex{Int64}, Matrix{Complex{Int64}}}:
- 1+0im  0+0im  2+2im  0+0im  3-3im
- 0+0im  4+0im  0+0im  5+0im  0+0im
- 2-2im  0+0im  7+0im  0+0im  8+8im
- 0+0im  5+0im  0+0im  1+0im  0+0im
- 3+3im  0+0im  8-8im  0+0im  4+0im
+3×3 Hermitian{Complex{Int64}, Matrix{Complex{Int64}}}:
+ 1+0im  2+2im  3-3im
+ 2-2im  5+0im  6-6im
+ 3+3im  6+6im  9+0im
 
 julia> Hlower = Hermitian(A, :L)
-5×5 Hermitian{Complex{Int64}, Matrix{Complex{Int64}}}:
- 1+0im  0+0im  6+6im  0+0im  2-2im
- 0+0im  4+0im  0+0im  9+0im  0+0im
- 6-6im  0+0im  7+0im  0+0im  3+3im
- 0+0im  9+0im  0+0im  1+0im  0+0im
- 2+2im  0+0im  3-3im  0+0im  4+0im
+3×3 Hermitian{Complex{Int64}, Matrix{Complex{Int64}}}:
+ 1+0im  4+0im  7+0im
+ 4+0im  5+0im  8-8im
+ 7+0im  8+8im  9+0im
+
+julia> hermitianpart(A)
+3×3 Hermitian{ComplexF64, Matrix{ComplexF64}}:
+ 1.0+0.0im  3.0+1.0im  5.0-1.5im
+ 3.0-1.0im  5.0+0.0im  7.0-7.0im
+ 5.0+1.5im  7.0+7.0im  9.0+0.0im
 ```
 
 Note that `Hupper` will not be equal to `Hlower` unless `A` is itself Hermitian (e.g. if `A == adjoint(A)`).
@@ -883,23 +894,28 @@ symmetricpart!(A::AbstractMatrix, uplo::Symbol=:U) =
     Symmetric(_hermorsympart!(symmetricpart, transpose, A, char_uplo(uplo)), uplo)
 
 """
-    hermitianpart(A, uplo=:U)
+    hermitianpart(A, uplo=:U) -> Hermitian
 
 Return the Hermitian part of the square matrix `A`, defined as `(A + A') / 2`,
-as a [`Hermitian`](@ref) matrix.
+as a [`Hermitian`](@ref) matrix. For real matrices `A`, this is also known as the symmetric
+part of `A`. The optional argument `uplo` controls whether the upper
+(`uplo = :U`) or lower (`uplo = :L`) triangle of the underlying matrix is explicitly
+filled. The opposite triangle is then only implicitly filled via the [`Hermitian`](@ref)
+view, which, for real matrices, is equivalent to a [`Symmetric`](@ref) view.
 
 !!! compat "Julia 1.10"
     This function requires Julia 1.10 or later.
 """
 hermitianpart(A::AbstractMatrix{T}, uplo=:U) where {T} =
-    hermitianpart!(copyto!(similar(A, typeof(one(T) / 2)), A), uplo)
+    hermitianpart!(copy_similar(A, typeof(one(T) / 2)), uplo)
 hermitianpart(x::Number) = real(x)
 
 """
-    hermitianpart!(A, uplo=:U)
+    hermitianpart!(A, uplo=:U) -> Hermitian
 
-Overwrite the square matrix `A` with its Hermitian part, `(A + A') / 2`,
-and return `Hermitian(A, uplo)`.
+Overwrite the upper (`uplo = :U`) or lower (`uplo = :L`) triangle of the square matrix `A`
+with its Hermitian part `(A + A') / 2`, and return `Hermitian(A, uplo)`. For real matrices
+`A`, this is also known as the symmetric part of `A`.
 
 !!! compat "Julia 1.10"
     This function requires Julia 1.10 or later.
