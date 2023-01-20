@@ -911,41 +911,47 @@ function try_compute_fieldidx(typ::DataType, @nospecialize(field))
     return field
 end
 
-function getfield_boundscheck(argtypes::Vector{Any}) # ::Union{Bool, Nothing}
-    if length(argtypes) == 2
-        return true
-    elseif length(argtypes) == 3
-        boundscheck = argtypes[3]
-        isvarargtype(boundscheck) && return nothing
-        if widenconst(boundscheck) === Symbol
-            return true
-        end
+function getfield_boundscheck((; fargs, argtypes)::ArgInfo) # Symbol
+    farg = nothing
+    if length(argtypes) == 3
+        return :on
     elseif length(argtypes) == 4
+        fargs !== nothing && (farg = fargs[4])
         boundscheck = argtypes[4]
+        isvarargtype(boundscheck) && return :unknown
+        if widenconst(boundscheck) === Symbol
+            return :on
+        end
+    elseif length(argtypes) == 5
+        fargs !== nothing && (farg = fargs[5])
+        boundscheck = argtypes[5]
     else
-        return nothing
+        return :unknown
     end
-    isvarargtype(boundscheck) && return nothing
-    widenconst(boundscheck) === Bool || return nothing
+    isvarargtype(boundscheck) && return :unknown
     boundscheck = widenconditional(boundscheck)
-    if isa(boundscheck, Const)
-        return boundscheck.val::Bool
-    else
-        return nothing
+    if widenconst(boundscheck) === Bool
+        if isa(boundscheck, Const)
+            return boundscheck.val::Bool ? :on : :off
+        elseif farg !== nothing && isexpr(farg, :boundscheck)
+            return :boundscheck
+        end
     end
+    return :unknown
 end
 
-function getfield_nothrow(argtypes::Vector{Any}, boundscheck::Union{Bool,Nothing}=getfield_boundscheck(argtypes))
-    boundscheck === nothing && return false
+function getfield_nothrow(arginfo::ArgInfo, boundscheck::Symbol=getfield_boundscheck(arginfo))
+    (;argtypes) = arginfo
+    boundscheck === :unknown && return false
     ordering = Const(:not_atomic)
-    if length(argtypes) == 3
-        isvarargtype(argtypes[3]) && return false
-        if widenconst(argtypes[3]) !== Bool
-            ordering = argtypes[3]
+    if length(argtypes) == 4
+        isvarargtype(argtypes[4]) && return false
+        if widenconst(argtypes[4]) !== Bool
+            ordering = argtypes[4]
         end
-    elseif length(argtypes) == 4
-        ordering = argtypes[4]
-    elseif length(argtypes) != 2
+    elseif length(argtypes) == 5
+        ordering = argtypes[5]
+    elseif length(argtypes) != 3
         return false
     end
     isvarargtype(ordering) && return false
@@ -955,7 +961,7 @@ function getfield_nothrow(argtypes::Vector{Any}, boundscheck::Union{Bool,Nothing
         if ordering !== :not_atomic # TODO: this is assuming not atomic
             return false
         end
-        return getfield_nothrow(argtypes[1], argtypes[2], !(boundscheck === false))
+        return getfield_nothrow(argtypes[2], argtypes[3], !(boundscheck === :off))
     else
         return false
     end
@@ -1037,7 +1043,9 @@ end
     end
     return getfield_tfunc(𝕃, s00, name)
 end
-@nospecs getfield_tfunc(𝕃::AbstractLattice, s00, name) = _getfield_tfunc(𝕃, s00, name, false)
+@nospecs function getfield_tfunc(𝕃::AbstractLattice, s00, name)
+    _getfield_tfunc(𝕃, s00, name, false)
+end
 
 function _getfield_fieldindex(s::DataType, name::Const)
     nv = name.val
@@ -2021,7 +2029,7 @@ end
     elseif f === invoke
         return false
     elseif f === getfield
-        return getfield_nothrow(argtypes)
+        return getfield_nothrow(ArgInfo(nothing, Any[Const(f), argtypes...]))
     elseif f === setfield!
         if na == 3
             return setfield!_nothrow(𝕃, argtypes[1], argtypes[2], argtypes[3])
@@ -2179,10 +2187,11 @@ function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
     return Effects(EFFECTS_TOTAL; consistent, nothrow)
 end
 
-function getfield_effects(argtypes::Vector{Any}, @nospecialize(rt))
+function getfield_effects(arginfo::ArgInfo, @nospecialize(rt))
+    (;argtypes) = arginfo
     # consistent if the argtype is immutable
-    isempty(argtypes) && return EFFECTS_THROWS
-    obj = argtypes[1]
+    length(argtypes) < 3 && return EFFECTS_THROWS
+    obj = argtypes[2]
     isvarargtype(obj) && return Effects(EFFECTS_THROWS; consistent=ALWAYS_FALSE)
     consistent = (is_immutable_argtype(obj) || is_mutation_free_argtype(obj)) ?
         ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
@@ -2191,20 +2200,26 @@ function getfield_effects(argtypes::Vector{Any}, @nospecialize(rt))
     # throws `UndefRefError` so doesn't need to taint it
     # NOTE `getfield_notundefined` conservatively checks if this field is never initialized
     # with undefined value so that we don't taint `:consistent`-cy too aggressively here
-    if !(length(argtypes) ≥ 2 && getfield_notundefined(obj, argtypes[2]))
+    if !(length(argtypes) ≥ 3 && getfield_notundefined(obj, argtypes[3]))
         consistent = ALWAYS_FALSE
     end
-    nothrow = getfield_nothrow(argtypes, true)
-    if !nothrow && getfield_boundscheck(argtypes) !== true
-        # If we cannot independently prove inboundsness, taint consistency.
-        # The inbounds-ness assertion requires dynamic reachability, while
-        # :consistent needs to be true for all input values.
-        # N.B. We do not taint for `--check-bounds=no` here that happens in
-        # InferenceState.
-        consistent = ALWAYS_FALSE
+    nothrow = getfield_nothrow(arginfo, :on)
+    if !nothrow
+        bcheck = getfield_boundscheck(arginfo)
+        if !(bcheck === :on || bcheck === :boundscheck)
+            # If we cannot independently prove inboundsness, taint consistency.
+            # The inbounds-ness assertion requires dynamic reachability, while
+            # :consistent needs to be true for all input values.
+            # However, as a special exception, we do allow literal `:boundscheck`.
+            # `:consistent`-cy will be tainted in any caller using `@inbounds` based
+            # on the `:noinbounds` effect.
+            # N.B. We do not taint for `--check-bounds=no` here. That is handled
+            # in concrete evaluation.
+            consistent = ALWAYS_FALSE
+        end
     end
     if hasintersect(widenconst(obj), Module)
-        inaccessiblememonly = getglobal_effects(argtypes, rt).inaccessiblememonly
+        inaccessiblememonly = getglobal_effects(argtypes[2:end], rt).inaccessiblememonly
     elseif is_mutation_free_argtype(obj)
         inaccessiblememonly = ALWAYS_TRUE
     else
@@ -2233,17 +2248,20 @@ function getglobal_effects(argtypes::Vector{Any}, @nospecialize(rt))
     return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly)
 end
 
-function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argtypes::Vector{Any}, @nospecialize(rt))
+function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), arginfo::ArgInfo, @nospecialize(rt))
     if isa(f, IntrinsicFunction)
-        return intrinsic_effects(f, argtypes)
+        return intrinsic_effects(f, arginfo.argtypes[2:end])
     end
 
     @assert !contains_is(_SPECIAL_BUILTINS, f)
 
+    if f === getfield
+        return getfield_effects(arginfo, rt)
+    end
+    argtypes = arginfo.argtypes[2:end]
+
     if f === isdefined
         return isdefined_effects(𝕃, argtypes)
-    elseif f === getfield
-        return getfield_effects(argtypes, rt)
     elseif f === getglobal
         return getglobal_effects(argtypes, rt)
     elseif f === Core.get_binding_type

@@ -462,9 +462,9 @@ end |> Core.Compiler.is_consistent
 end |> Core.Compiler.is_effect_free
 
 # `getfield_effects` handles access to union object nicely
-@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Any[Some{String}, Core.Const(:value)], String))
-@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Any[Some{Symbol}, Core.Const(:value)], Symbol))
-@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Any[Union{Some{Symbol},Some{String}}, Core.Const(:value)], Union{Symbol,String}))
+@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Some{String}, Core.Const(:value)]), String))
+@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Some{Symbol}, Core.Const(:value)]), Symbol))
+@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Union{Some{Symbol},Some{String}}, Core.Const(:value)]), Union{Symbol,String}))
 @test Base.infer_effects((Bool,)) do c
     obj = c ? Some{String}("foo") : Some{Symbol}(:bar)
     return getfield(obj, :value)
@@ -688,7 +688,8 @@ end # @testset "effects analysis on array construction" begin
 end # @testset "effects analysis on array ops" begin
 
 # Test that builtin_effects handles vararg correctly
-@test !Core.Compiler.is_nothrow(Core.Compiler.builtin_effects(Core.Compiler.fallback_lattice, Core.isdefined, Any[String, Vararg{Any}], Bool))
+@test !Core.Compiler.is_nothrow(Core.Compiler.builtin_effects(Core.Compiler.fallback_lattice, Core.isdefined,
+    Core.Compiler.ArgInfo(nothing, Any[Core.Compiler.Const(Core.isdefined), String, Vararg{Any}]), Bool))
 
 # Test that :new can be eliminated even if an sparam is unknown
 struct SparamUnused{T}
@@ -731,3 +732,11 @@ end |> Core.Compiler.is_total
 @test Base.infer_effects(Tuple{Int64}) do i
     @inbounds (1,2,3)[i]
 end |> !Core.Compiler.is_consistent
+
+# Test that :new of non-concrete, but otherwise known type
+# does not taint consistency.
+@eval struct ImmutRef{T}
+    x::T
+    ImmutRef(x) = $(Expr(:new, :(ImmutRef{typeof(x)}), :x))
+end
+@test Core.Compiler.is_foldable(Base.infer_effects(ImmutRef, Tuple{Any}))

@@ -659,6 +659,8 @@ function isidentityfree(@nospecialize(t::Type))
     elseif isa(t, Union)
         return isidentityfree(t.a) && isidentityfree(t.b)
     end
+    # TypeVar, etc.
+    return false
 end
 
 iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
@@ -838,6 +840,25 @@ function argument_datatype(@nospecialize t)
     return ccall(:jl_argument_datatype, Any, (Any,), t)::Union{Nothing,DataType}
 end
 
+function datatype_fieldcount(t::DataType)
+    if t.name === _NAMEDTUPLE_NAME
+        names, types = t.parameters[1], t.parameters[2]
+        if names isa Tuple
+            return length(names)
+        end
+        if types isa DataType && types <: Tuple
+            return fieldcount(types)
+        end
+        return nothing
+    elseif isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
+        return nothing
+    end
+    if isdefined(t, :types)
+        return length(t.types)
+    end
+    return length(t.name.names)
+end
+
 """
     fieldcount(t::Type)
 
@@ -857,25 +878,11 @@ function fieldcount(@nospecialize t)
     if !(t isa DataType)
         throw(TypeError(:fieldcount, DataType, t))
     end
-    if t.name === _NAMEDTUPLE_NAME
-        names, types = t.parameters[1], t.parameters[2]
-        if names isa Tuple
-            return length(names)
-        end
-        if types isa DataType && types <: Tuple
-            return fieldcount(types)
-        end
-        abstr = true
-    else
-        abstr = isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
-    end
-    if abstr
+    fcount = datatype_fieldcount(t)
+    if fcount === nothing
         throw(ArgumentError("type does not have a definite number of fields"))
     end
-    if isdefined(t, :types)
-        return length(t.types)
-    end
-    return length(t.name.names)
+    return fcount
 end
 
 """
@@ -1488,9 +1495,10 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         types = to_tuple_type(types)
-        argtypes = Any[types.parameters...]
-        rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
-        return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f, argtypes, rt)
+        argtypes = Any[Core.Compiler.Const(f), types.parameters...]
+        rt = Core.Compiler.builtin_tfunction(interp, f, argtypes[2:end], nothing)
+        return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f,
+            Core.Compiler.ArgInfo(nothing, argtypes), rt)
     end
     tt = signature_type(f, types)
     result = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
@@ -1852,7 +1860,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
                 m = match.method
                 m === minmax && continue
                 if !morespecific(minmax.sig, m.sig)
-                    if match.full_covers || !morespecific(m.sig, minmax.sig)
+                    if match.fully_covers || !morespecific(m.sig, minmax.sig)
                         return true
                     end
                 end

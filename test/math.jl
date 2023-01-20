@@ -1352,9 +1352,9 @@ end
 
 @testset "pow" begin
     # tolerance by type for regular powers
-    POW_TOLS = Dict(Float16=>[.51, .51, 2.0, 1.5],
-                    Float32=>[.51, .51, 2.0, 1.5],
-                    Float64=>[1.0, 1.5, 2.0, 1.5])
+    POW_TOLS = Dict(Float16=>[.51, .51, .51, 2.0, 1.5],
+                    Float32=>[.51, .51, .51, 2.0, 1.5],
+                    Float64=>[.55, 0.8, 1.5, 2.0, 1.5])
     for T in (Float16, Float32, Float64)
         for x in (0.0, -0.0, 1.0, 10.0, 2.0, Inf, NaN, -Inf, -NaN)
             for y in (0.0, -0.0, 1.0, -3.0,-10.0 , Inf, NaN, -Inf, -NaN)
@@ -1372,9 +1372,11 @@ end
             got, expected = x^y, widen(x)^y
             if isfinite(eps(T(expected)))
                 if y == T(-2) # unfortunately x^-2 is less accurate for performance reasons.
-                    @test abs(expected-got) <= POW_TOLS[T][3]*eps(T(expected)) || (x,y)
-                elseif y == T(3) # unfortunately x^3 is less accurate for performance reasons.
                     @test abs(expected-got) <= POW_TOLS[T][4]*eps(T(expected)) || (x,y)
+                elseif y == T(3) # unfortunately x^3 is less accurate for performance reasons.
+                    @test abs(expected-got) <= POW_TOLS[T][5]*eps(T(expected)) || (x,y)
+                elseif issubnormal(got)
+                    @test abs(expected-got) <= POW_TOLS[T][2]*eps(T(expected)) || (x,y)
                 else
                     @test abs(expected-got) <= POW_TOLS[T][1]*eps(T(expected)) || (x,y)
                 end
@@ -1385,7 +1387,7 @@ end
             x=rand(T)*floatmin(T); y=rand(T)*3-T(1.2)
             got, expected = x^y, widen(x)^y
             if isfinite(eps(T(expected)))
-                @test abs(expected-got) <= POW_TOLS[T][2]*eps(T(expected)) || (x,y)
+                @test abs(expected-got) <= POW_TOLS[T][3]*eps(T(expected)) || (x,y)
             end
         end
         # test (-x)^y for y larger than typemax(Int)
@@ -1396,6 +1398,9 @@ end
     # test for large negative exponent where error compensation matters
     @test 0.9999999955206014^-1.0e8 == 1.565084574870928
     @test 3e18^20 == Inf
+    # two cases where we have observed > 1 ULP in the past
+    @test 0.0013653274095082324^-97.60372292227069 == 4.088393948750035e279
+    @test 8.758520413376658e-5^70.55863059215994 == 5.052076767078296e-287
 end
 
 # Test that sqrt behaves correctly and doesn't exhibit fp80 double rounding.
