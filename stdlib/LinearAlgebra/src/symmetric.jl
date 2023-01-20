@@ -910,10 +910,9 @@ hermitianpart!(A::AbstractMatrix, uplo::Symbol=:U) =
 function _hermorsympart!(real::Function, conj::Function, A::AbstractMatrix, uplo::Char)
     require_one_based_indexing(A)
     n = checksquare(A)
-    triangle = uplo === 'U' ? (j -> 1:(j - 1)) : (j -> (j + 1):n)
     @inbounds for j in 1:n
         A[j, j] = real(A[j, j])
-        for i in triangle(j)
+        for i in (uplo === 'U' ? (1:(j - 1)) : ((j + 1):n))
             A[i, j] = (A[i, j] + conj(A[j, i])) / 2
         end
     end
