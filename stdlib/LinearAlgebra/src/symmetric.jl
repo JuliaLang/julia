@@ -17,7 +17,15 @@ end
 Construct a `Symmetric` view of the upper (if `uplo = :U`) or lower (if `uplo = :L`)
 triangle of the matrix `A`.
 
-To compute the Hermitian part `(A + A') / 2` of `A`, use [`hermitianpart`](@ref).
+`Symmetric` views are mainly useful for real-symmetric matrices, for which
+specialized algorithms (e.g. for eigenproblems) are enabled for `Symmetric` types.
+More generally, see also `Hermitian(A)` for Hermitian matrices `A == A'`, which 
+is effectively equivalent to `Symmetric` for real matrices but is also useful for
+complex matrices.  (Whereas complex `Symmetric` matrices are supported but have few
+if any specialized algorithms.)
+
+To compute the symmetric part of a real matrix, or more generally the Hermitian part `(A + A') / 2` of
+a real or complex matrix `A`, use [`hermitianpart`](@ref).
 
 # Examples
 ```jldoctest
