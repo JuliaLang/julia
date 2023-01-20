@@ -1,0 +1,15 @@
+name: Check Labels
+
+on:
+  pull_request:
+    types: [labeled, unlabeled, opened, edited, synchronize]
+jobs:
+  enforce-label:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: yogevbd/enforce-label-action@2.2.2
+      with:
+        # REQUIRED_LABELS_ANY: "bug,enhancement,skip-changelog"
+        # REQUIRED_LABELS_ANY_DESCRIPTION: "Select at least one label ['bug','enhancement','skip-changelog']"
+        BANNED_LABELS: "needs docs,needs compat annotation,needs more info,needs nanosoldier run,needs news,needs pkgeval,needs tests,DO NOT MERGE"
+        BANNED_LABELS_DESCRIPTION: "PRs with the ${bannedLabel.name} label should not be merged"
