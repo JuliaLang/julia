@@ -4,7 +4,7 @@ Julia v1.9 Release Notes
 New language features
 ---------------------
 
-* It is now possible to assign to bindings in another module using `setproperty!(::Module, ::Symbol, x)` ([#44137]).
+* It is now possible to assign to bindings in another module using `setproperty!(::Module, ::Symbol, x)` ([#44137]) ([#44231]).
 * Slurping in assignments is now also allowed in non-final position. This is handled via `Base.split_rest` ([#42902]).
 * Character literals now support the same syntax allowed in string literals; i.e. the syntax can
   represent invalid UTF-8 sequences as allowed by the `Char` type ([#44989]).
@@ -12,7 +12,7 @@ New language features
 * Nested combinations of tuples and named tuples of symbols are now allowed as type parameters ([#46300]).
 * New builtins `getglobal(::Module, ::Symbol[, order])` and `setglobal!(::Module, ::Symbol, x[, order])`
   for reading from and writing to globals. `getglobal` should now be preferred for accessing globals over
-  `getfield` ([#44137]).
+  `getfield` ([#44137]) ([#44231]).
 
 Language changes
 ----------------
@@ -215,6 +215,7 @@ Tooling Improvements
 [#43270]: https://github.com/JuliaLang/julia/issues/43270
 [#43334]: https://github.com/JuliaLang/julia/issues/43334
 [#44137]: https://github.com/JuliaLang/julia/issues/44137
+[#44231]: https://github.com/JuliaLang/julia/issues/44231
 [#44266]: https://github.com/JuliaLang/julia/issues/44266
 [#44358]: https://github.com/JuliaLang/julia/issues/44358
 [#44360]: https://github.com/JuliaLang/julia/issues/44360
