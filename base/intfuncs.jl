@@ -378,7 +378,7 @@ function powermod(x::Integer, p::Integer, m::T) where T<:Integer
         imod = invmod(x, m)
         t::T = powermod(imod, -(p÷2), m)
         t = mod(widemul(t, t), m)
-        isodd(p) && t = mod(widemul(t, imod), m)
+        isodd(p) && (t = mod(widemul(t, imod), m))
         #else odd
         return t
     elseif p < 0
