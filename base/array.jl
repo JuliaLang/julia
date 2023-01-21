@@ -214,7 +214,7 @@ elsize(@nospecialize _::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)
 sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)
-    @inline
+    @_propagate_inbounds_meta
     @boundscheck checkbounds(Bool, a, i...) || return false
     ii = (_sub2ind(size(a), i...) % UInt) - 1
     ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
