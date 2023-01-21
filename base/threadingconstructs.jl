@@ -191,7 +191,7 @@ The keywords `continue` and `break` can be used in conjuction with `@threads`. T
 - `continue` skips the rest of the current iteration.
 - `break` gives julia freedom to skip any iteration not yet executed. 
   There is however no guarantee about particular iterations being skipped. 
-  Which iterations exectly are skipped is an implementation detail and schedular dependent.
+  Which iterations exectly are skipped is an implementation detail and scheduler dependent.
   Typically the loop is subdivided into blocks and a break statement will only skip the remainder
   of the surrounding block.
 
