@@ -376,8 +376,8 @@ function powermod(x::Integer, p::Integer, m::T) where T<:Integer
     # It needs special handling otherwise will cause overflow problem.
     if p == -p
         imod = invmod(x, m)
-        t::T = powermod(imod, -(p÷2), m)
-        t = mod(widemul(t, t), m)
+        thalf = powermod(imod, -(p÷2), m)
+        t::T = mod(widemul(thalf, thalf), m)
         isodd(p) && (t = mod(widemul(t, imod), m))
         #else odd
         return t
