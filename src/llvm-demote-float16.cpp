@@ -57,7 +57,7 @@ bool have_fp16(Function &caller) {
     if (FS.find("+fp16fml") != llvm::StringRef::npos || FS.find("+fullfp16") != llvm::StringRef::npos){
         return true;
     }
-#else
+#elif defined(_CPU_X86_64_)
     if (FS.find("+avx512fp16") != llvm::StringRef::npos){
         return true;
     }
