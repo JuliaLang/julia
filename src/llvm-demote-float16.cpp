@@ -62,6 +62,7 @@ bool have_fp16(Function &caller) {
         return true;
     }
 #endif
+    (void)FS;
     return false;
 }
 
