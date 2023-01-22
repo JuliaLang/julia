@@ -525,6 +525,7 @@ julia> Broadcast.broadcast_shape((1,), (1,5), (4,5,3))
 (4, 5, 3)
 ```
 """
+function broadcast_shape end
 # shape (i.e., tuple-of-indices) inputs
 broadcast_shape(shape::Tuple) = shape
 broadcast_shape(shape::Tuple, shape1::Tuple, shapes::Tuple...) = broadcast_shape(_bcs(shape, shape1), shapes...)
