@@ -57,24 +57,23 @@ Dict{String, Int64} with 2 entries:
 mutable struct Dict{K,V} <: AbstractDict{K,V}
     # Metadata: empty => 0x00, removed => 0x7f, full => 0b1[7 most significant hash bits]
     slots::Vector{UInt8}
-    keys::Array{K,1}
-    vals::Array{V,1}
+    keys::Vector{K}
+    vals::Vector{V}
     ndel::Int
     count::Int
     age::UInt
-    idxfloor::Int  # an index <= the indices of all used slots
     maxprobe::Int
 
     function Dict{K,V}() where V where K
         n = 16
-        new(zeros(UInt8,n), Vector{K}(undef, n), Vector{V}(undef, n), 0, 0, 0, n, 0)
+        new(zeros(UInt8,n), Vector{K}(undef, n), Vector{V}(undef, n), 0, 0, 0, 0)
     end
     function Dict{K,V}(d::Dict{K,V}) where V where K
         new(copy(d.slots), copy(d.keys), copy(d.vals), d.ndel, d.count, d.age,
-            d.idxfloor, d.maxprobe)
+            d.maxprobe)
     end
-    function Dict{K, V}(slots, keys, vals, ndel, count, age, idxfloor, maxprobe) where {K, V}
-        new(slots, keys, vals, ndel, count, age, idxfloor, maxprobe)
+    function Dict{K, V}(slots, keys, vals, ndel, count, age, maxprobe) where {K, V}
+        new(slots, keys, vals, ndel, count, age, maxprobe)
     end
 end
 function Dict{K,V}(kv) where V where K
@@ -170,7 +169,6 @@ end
     sz = length(olds)
     newsz = _tablesz(newsz)
     h.age += 1
-    h.idxfloor = 1
     if h.count == 0
         resize!(h.slots, newsz)
         fill!(h.slots, 0x0)
@@ -253,7 +251,6 @@ function empty!(h::Dict{K,V}) where V where K
     h.ndel = 0
     h.count = 0
     h.age += 1
-    h.idxfloor = sz
     return h
 end
 
@@ -345,9 +342,6 @@ ht_keyindex2!(h::Dict, key) = ht_keyindex2_shorthash!(h, key)[1]
     h.vals[index] = v
     h.count += 1
     h.age += 1
-    if index < h.idxfloor
-        h.idxfloor = index
-    end
 
     sz = length(h.keys)
     # Rehash now if necessary
@@ -622,7 +616,7 @@ end
 
 function pop!(h::Dict)
     isempty(h) && throw(ArgumentError("dict must be non-empty"))
-    idx = skip_deleted_floor!(h)
+    idx = skip_deleted(h, 1)
     @inbounds key = h.keys[idx]
     @inbounds val = h.vals[idx]
     _delete!(h, idx)
@@ -696,24 +690,17 @@ function skip_deleted(h::Dict, i)
     end
     return 0
 end
-function skip_deleted_floor!(h::Dict)
-    idx = skip_deleted(h, h.idxfloor)
-    if idx != 0
-        h.idxfloor = idx
-    end
-    idx
-end
 
 @propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V} = i == 0 ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i == typemax(Int) ? 0 : i+1)
 @propagate_inbounds function iterate(t::Dict)
-    _iterate(t, skip_deleted(t, t.idxfloor))
+    _iterate(t, skip_deleted(t, 1))
 end
 @propagate_inbounds iterate(t::Dict, i) = _iterate(t, skip_deleted(t, i))
 
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
-@propagate_inbounds function Base.iterate(v::T, i::Int = v.dict.idxfloor) where T <: Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}}
+@propagate_inbounds function Base.iterate(v::T, i::Int = 1) where T <: Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}}
     i == 0 && return nothing
     i = skip_deleted(v.dict, i)
     i == 0 && return nothing
@@ -741,7 +728,7 @@ function map!(f, iter::ValueIterator{<:Dict})
     dict = iter.dict
     vals = dict.vals
     # @inbounds is here so that it gets propagated to isslotfilled
-    @inbounds for i = dict.idxfloor:lastindex(vals)
+    @inbounds for i = eachindex(vals)
         if isslotfilled(dict, i)
             vals[i] = f(vals[i])
         end

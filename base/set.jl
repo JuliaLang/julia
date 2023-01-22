@@ -52,7 +52,7 @@ function Set{T}(s::KeySet{T, <:Dict{T}}) where {T}
     slots = copy(d.slots)
     keys = copy(d.keys)
     vals = similar(d.vals, Nothing)
-    _Set(Dict{T,Nothing}(slots, keys, vals, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe))
+    _Set(Dict{T,Nothing}(slots, keys, vals, d.ndel, d.count, d.age, d.maxprobe))
 end
 
 Set(itr) = _Set(itr, IteratorEltype(itr))
