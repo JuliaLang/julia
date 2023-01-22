@@ -61,8 +61,8 @@ mutable struct Dict{K,V} <: AbstractDict{K,V}
     vals::Vector{V}
     ndel::Int
     count::Int
-    age::UInt
-    maxprobe::Int
+    age::UInt32
+    maxprobe::Int32
 
     function Dict{K,V}() where V where K
         n = 16
