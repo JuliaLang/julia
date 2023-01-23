@@ -1541,7 +1541,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
             end
         end
         if largs == 1 # Union{T} --> T
-            u1 = typeintersect(widenconst(args[1]), Type)
+            u1 = typeintersect(widenconst(args[1]), Union{Type,TypeVar})
             valid_as_lattice(u1) || return Bottom
             return u1
         end

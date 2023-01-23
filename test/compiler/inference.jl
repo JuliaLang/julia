@@ -2364,9 +2364,9 @@ end |> only === Int
 # Equivalence of Const(T.instance) and T for singleton types
 @test Const(nothing) ⊑ Nothing && Nothing ⊑ Const(nothing)
 
-# Don't pessimize apply_type to anything worse than Type and yield Bottom for invalid Unions
+# Don't pessimize apply_type to anything worse than Type (or TypeVar) and yield Bottom for invalid Unions
 @test only(Base.return_types(Core.apply_type, Tuple{Type{Union}})) == Type{Union{}}
-@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any})) == Type
+@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any})) == Union{Type,TypeVar}
 @test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any,Any})) == Type
 @test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Int})) == Union{}
 @test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any,Int})) == Union{}
@@ -4277,3 +4277,6 @@ end
 # Issue #46839: `abstract_invoke` should handle incorrect call type
 @test only(Base.return_types(()->invoke(BitSet, Any, x), ())) === Union{}
 @test only(Base.return_types(()->invoke(BitSet, Union{Tuple{Int32},Tuple{Int64}}, 1), ())) === Union{}
+
+# issue #48374
+@test (() -> Union{<:Nothing})() == Nothing
