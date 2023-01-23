@@ -24,9 +24,14 @@ end
 
 # Dict
 
-# These can be changed, to trade off better performance for space
-const global maxallowedprobe = 16
-const global maxprobeshift   = 6
+# This can be changed, to trade off better performance for space
+# https://doi.org/10.1016/0196-6774(87)90040-X shows that the expected
+# maximum probe size with linear probing is
+# ln(size(dict))/(a - 1 - ln(a)) where a is the load
+# for a load factor of 2/3rds which we aim for, the factor ends up being .961
+# and 10 is pretty close.
+const global maxprobefactor = 10
+
 
 """
     Dict([itr])
@@ -316,7 +321,7 @@ function ht_keyindex2_shorthash!(h::Dict{K,V}, key) where V where K
 
     avail < 0 && return avail, sh
 
-    maxallowed = max(maxallowedprobe, sz>>maxprobeshift)
+    maxallowed = top_set_bit(sz)*maxprobefactor
     # Check if key is not present, may need to keep searching to find slot
     @inbounds while iter < maxallowed
         if !isslotfilled(h,index)
