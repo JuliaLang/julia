@@ -180,11 +180,7 @@ function choosetests(choices = [])
 
     net_required_for = filter!(in(tests), NETWORK_REQUIRED_LIST)
     net_on = true
-    JULIA_TEST_NETWORKING_AVAILABLE = get(ENV, "JULIA_TEST_NETWORKING_AVAILABLE", "") |>
-                                      strip |>
-                                      lowercase |>
-                                      s -> tryparse(Bool, s) |>
-                                      x -> x === true
+    JULIA_TEST_NETWORKING_AVAILABLE = Base.get_bool_env("JULIA_TEST_NETWORKING_AVAILABLE", false) === true
     # If the `JULIA_TEST_NETWORKING_AVAILABLE` environment variable is set to `true`, we
     # always set `net_on` to `true`.
     # Otherwise, we set `net_on` to true if and only if networking is actually available.
