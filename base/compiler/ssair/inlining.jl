@@ -916,22 +916,11 @@ function validate_sparams(sparams::SimpleVector)
 end
 
 function may_have_fcalls(m::Method)
-    may_have_fcall = true
-    if isdefined(m, :source)
-        src = m.source
-        isa(src, Vector{UInt8}) && (src = uncompressed_ir(m))
-        if isa(src, CodeInfo)
-            may_have_fcall = src.has_fcall
-        end
-    end
-    return may_have_fcall
+    isdefined(m, :source) || return true
+    src = m.source
+    isa(src, CodeInfo) || isa(src, Vector{UInt8}) || return true
+    return ccall(:jl_ir_flag_has_fcall, Bool, (Any,), src)
 end
-
-function can_inline_typevars(method::Method, argtypes::Vector{Any})
-    may_have_fcalls(method) && return false
-    return true
-end
-can_inline_typevars(m::MethodMatch, argtypes::Vector{Any}) = can_inline_typevars(m.method, argtypes)
 
 function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
     @nospecialize(info::CallInfo), flag::UInt8, state::InliningState;
@@ -958,7 +947,7 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
     end
 
     if !validate_sparams(match.sparams)
-        (allow_typevars && can_inline_typevars(match, argtypes)) || return nothing
+        (allow_typevars && !may_have_fcalls(match.method)) || return nothing
     end
 
     # See if there exists a specialization for this method signature
@@ -1174,7 +1163,7 @@ function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
     result = info.result
     invokesig = sig.argtypes
     if isa(result, ConcreteResult)
-        item = concrete_result_item(result, state, info; invokesig)
+        item = concrete_result_item(result, info, state; invokesig)
     else
         argtypes = invoke_rewrite(sig.argtypes)
         if isa(result, ConstPropResult)
@@ -1305,12 +1294,12 @@ function handle_any_const_result!(cases::Vector{InliningCase},
     @nospecialize(info::CallInfo), flag::UInt8, state::InliningState;
     allow_abstract::Bool, allow_typevars::Bool)
     if isa(result, ConcreteResult)
-        return handle_concrete_result!(cases, result, state, info)
+        return handle_concrete_result!(cases, result, info, state)
     end
     if isa(result, SemiConcreteResult)
         result = inlining_policy(state.interp, result, info, flag, result.mi, argtypes)
         if isa(result, SemiConcreteResult)
-            return handle_semi_concrete_result!(cases, result; allow_abstract)
+            return handle_semi_concrete_result!(cases, result, info, flag, state; allow_abstract)
         end
     end
     if isa(result, ConstPropResult)
@@ -1469,7 +1458,7 @@ function handle_const_prop_result!(cases::Vector{InliningCase},
     spec_types = mi.specTypes
     allow_abstract || isdispatchtuple(spec_types) || return false
     if !validate_sparams(mi.sparam_vals)
-        (allow_typevars && can_inline_typevars(mi.def, argtypes)) || return false
+        (allow_typevars && !may_have_fcalls(mi.def::Method)) || return false
     end
     item = resolve_todo(mi, result.result, argtypes, info, flag, state)
     item === nothing && return false
@@ -1477,17 +1466,33 @@ function handle_const_prop_result!(cases::Vector{InliningCase},
     return true
 end
 
-function handle_semi_concrete_result!(cases::Vector{InliningCase}, result::SemiConcreteResult; allow_abstract::Bool)
+function semiconcrete_result_item(result::SemiConcreteResult,
+        @nospecialize(info::CallInfo), flag::UInt8, state::InliningState)
+    mi = result.mi
+    if !state.params.inlining || is_stmt_noinline(flag)
+        et = InliningEdgeTracker(state.et, nothing)
+        return compileable_specialization(mi, result.effects, et, info;
+            compilesig_invokes=state.params.compilesig_invokes)
+    else
+        return InliningTodo(mi, result.ir, result.effects)
+    end
+end
+
+function handle_semi_concrete_result!(cases::Vector{InliningCase}, result::SemiConcreteResult,
+        @nospecialize(info::CallInfo), flag::UInt8, state::InliningState;
+        allow_abstract::Bool)
     mi = result.mi
     spec_types = mi.specTypes
     allow_abstract || isdispatchtuple(spec_types) || return false
     validate_sparams(mi.sparam_vals) || return false
-    push!(cases, InliningCase(spec_types, InliningTodo(mi, result.ir, result.effects)))
+    item = semiconcrete_result_item(result, info, flag, state)
+    item === nothing && return false
+    push!(cases, InliningCase(spec_types, item))
     return true
 end
 
-function handle_concrete_result!(cases::Vector{InliningCase}, result::ConcreteResult, state::InliningState, @nospecialize(info::CallInfo))
-    case = concrete_result_item(result, state, info)
+function handle_concrete_result!(cases::Vector{InliningCase}, result::ConcreteResult, @nospecialize(info::CallInfo), state::InliningState)
+    case = concrete_result_item(result, info, state)
     push!(cases, InliningCase(result.mi.specTypes, case))
     return true
 end
@@ -1495,7 +1500,7 @@ end
 may_inline_concrete_result(result::ConcreteResult) =
     isdefined(result, :result) && is_inlineable_constant(result.result)
 
-function concrete_result_item(result::ConcreteResult, state::InliningState, @nospecialize(info::CallInfo);
+function concrete_result_item(result::ConcreteResult, @nospecialize(info::CallInfo), state::InliningState;
     invokesig::Union{Nothing,Vector{Any}}=nothing)
     if !may_inline_concrete_result(result)
         et = InliningEdgeTracker(state.et, invokesig)
@@ -1537,9 +1542,16 @@ function handle_opaque_closure_call!(todo::Vector{Pair{Int,Any}},
         validate_sparams(mi.sparam_vals) || return nothing
         item = resolve_todo(mi, result.result, sig.argtypes, info, flag, state)
     elseif isa(result, ConcreteResult)
-        item = concrete_result_item(result, state, info)
+        item = concrete_result_item(result, info, state)
     else
-        item = analyze_method!(info.match, sig.argtypes, info, flag, state; allow_typevars=false)
+        if isa(result, SemiConcreteResult)
+            result = inlining_policy(state.interp, result, info, flag, result.mi, sig.argtypes)
+        end
+        if isa(result, SemiConcreteResult)
+            item = semiconcrete_result_item(result, info, flag, state)
+        else
+            item = analyze_method!(info.match, sig.argtypes, info, flag, state; allow_typevars=false)
+        end
     end
     handle_single_case!(todo, ir, idx, stmt, item, state.params)
     return nothing

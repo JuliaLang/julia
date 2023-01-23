@@ -55,7 +55,7 @@ function _search(a::ByteArray, b::AbstractChar, i::Integer = 1)
     if isascii(b)
         _search(a,UInt8(b),i)
     else
-        _search(a,unsafe_wrap(Vector{UInt8},string(b)),i).start
+        _search(a,codeunits(string(b)),i).start
     end
 end
 
@@ -98,7 +98,7 @@ function _rsearch(a::ByteArray, b::AbstractChar, i::Integer = length(a))
     if isascii(b)
         _rsearch(a,UInt8(b),i)
     else
-        _rsearch(a,unsafe_wrap(Vector{UInt8},string(b)),i).start
+        _rsearch(a,codeunits(string(b)),i).start
     end
 end
 
@@ -189,7 +189,7 @@ function _searchindex(s::Union{AbstractString,ByteArray},
         if i === nothing return 0 end
         ii = nextind(s, i)::Int
         a = Iterators.Stateful(trest)
-        matched = all(Splat(==), zip(SubString(s, ii), a))
+        matched = all(splat(==), zip(SubString(s, ii), a))
         (isempty(a) && matched) && return i
         i = ii
     end
@@ -207,7 +207,7 @@ _nthbyte(t::AbstractVector, index) = t[index + (firstindex(t)-1)]
 function _searchindex(s::String, t::String, i::Integer)
     # Check for fast case of a single byte
     lastindex(t) == 1 && return something(findnext(isequal(t[1]), s, i), 0)
-    _searchindex(unsafe_wrap(Vector{UInt8},s), unsafe_wrap(Vector{UInt8},t), i)
+    _searchindex(codeunits(s), codeunits(t), i)
 end
 
 function _searchindex(s::AbstractVector{<:Union{Int8,UInt8}},
@@ -506,7 +506,7 @@ function _rsearchindex(s::AbstractString,
         a = Iterators.Stateful(trest)
         b = Iterators.Stateful(Iterators.reverse(
             pairs(SubString(s, 1, ii))))
-        matched = all(Splat(==), zip(a, (x[2] for x in b)))
+        matched = all(splat(==), zip(a, (x[2] for x in b)))
         if matched && isempty(a)
             isempty(b) && return firstindex(s)
             return nextind(s, popfirst!(b)[1])::Int
@@ -521,7 +521,7 @@ function _rsearchindex(s::String, t::String, i::Integer)
         return something(findprev(isequal(t[1]), s, i), 0)
     elseif lastindex(t) != 0
         j = i ≤ ncodeunits(s) ? nextind(s, i)-1 : i
-        return _rsearchindex(unsafe_wrap(Vector{UInt8}, s), unsafe_wrap(Vector{UInt8}, t), j)
+        return _rsearchindex(codeunits(s), codeunits(t), j)
     elseif i > sizeof(s)
         return 0
     elseif i == 0

@@ -291,7 +291,7 @@ end
 @testset "concatenations of annotated types" begin
     N = 4
     # The tested annotation types
-    testfull = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+    testfull = Base.get_bool_env("JULIA_TESTFULL", false)
     utriannotations = (UpperTriangular, UnitUpperTriangular)
     ltriannotations = (LowerTriangular, UnitLowerTriangular)
     triannotations = (utriannotations..., ltriannotations...)

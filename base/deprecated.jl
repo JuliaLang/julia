@@ -318,8 +318,6 @@ const var"@_noinline_meta" = var"@noinline"
 
 # BEGIN 1.9 deprecations
 
-@deprecate splat(x) Splat(x) false
-
 # We'd generally like to avoid direct external access to internal fields
 # Core.Compiler.is_inlineable and Core.Compiler.set_inlineable! move towards this direction,
 # but we need to keep these around for compat

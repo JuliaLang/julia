@@ -315,7 +315,9 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                 if (ma == (jl_value_t*)jl_pure_sym)
                     li->pure = 1;
                 else if (ma == (jl_value_t*)jl_inline_sym)
-                    li->inlining_cost = 0x10; // This corresponds to MIN_INLINE_COST
+                    li->inlining = 1;
+                else if (ma == (jl_value_t*)jl_noinline_sym)
+                    li->inlining = 2;
                 else if (ma == (jl_value_t*)jl_propagate_inbounds_sym)
                     li->propagate_inbounds = 1;
                 else if (ma == (jl_value_t*)jl_aggressive_constprop_sym)
@@ -471,13 +473,14 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->min_world = 1;
     src->max_world = ~(size_t)0;
     src->inferred = 0;
-    src->inlining_cost = UINT16_MAX;
     src->propagate_inbounds = 0;
     src->pure = 0;
     src->has_fcall = 0;
     src->edges = jl_nothing;
     src->constprop = 0;
+    src->inlining = 0;
     src->purity.bits = 0;
+    src->inlining_cost = UINT16_MAX;
     return src;
 }
 
@@ -892,25 +895,24 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
 JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
                                                  jl_module_t *module,
                                                  _Atomic(jl_value_t*) *bp,
-                                                 jl_value_t *bp_owner,
                                                  jl_binding_t *bnd)
 {
     jl_value_t *gf = NULL;
 
     assert(name && bp);
     if (bnd && jl_atomic_load_relaxed(&bnd->value) != NULL && !bnd->constp)
-        jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(bnd->name));
+        jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(name));
     gf = jl_atomic_load_relaxed(bp);
     if (gf != NULL) {
         if (!jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(gf)) && !jl_is_type(gf))
             jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(name));
     }
     if (bnd)
-        bnd->constp = 1;
+        bnd->constp = 1; // XXX: use jl_declare_constant and jl_checked_assignment
     if (gf == NULL) {
         gf = (jl_value_t*)jl_new_generic_function(name, module);
         jl_atomic_store(bp, gf); // TODO: fix constp assignment data race
-        if (bp_owner) jl_gc_wb(bp_owner, gf);
+        if (bnd) jl_gc_wb(bnd, gf);
     }
     return gf;
 }

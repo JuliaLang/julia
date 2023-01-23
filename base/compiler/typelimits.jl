@@ -422,8 +422,7 @@ end
 
         # Approximated types are lattice equal. Merge causes.
         if suba && subb
-            causes = merge_causes(causesa, causesb)
-            issimplertype(lattice, typeb, typea) && return LimitedAccuracy(typeb, causesb)
+            return LimitedAccuracy(typeb, merge_causes(causesa, causesb))
         elseif suba
             issimplertype(lattice, typeb, typea) && return LimitedAccuracy(typeb, causesb)
             causes = causesb
@@ -453,6 +452,7 @@ end
         subb = ⊑(lattice, typeb, typea)
     end
 
+    suba && subb && return LimitedAccuracy(typea, causes)
     subb && issimplertype(lattice, typea, typeb) && return LimitedAccuracy(typea, causes)
     return LimitedAccuracy(tmerge(widenlattice(lattice), typea, typeb), causes)
 end

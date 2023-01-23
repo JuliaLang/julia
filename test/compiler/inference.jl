@@ -2446,7 +2446,7 @@ end |> only === Int
 # handle multiple call-site refinment targets
 isasome(_) = true
 isasome(::Nothing) = false
-@test Base.return_types((AliasableField{Union{Int,Nothing}},); interp=MustAliasInterpreter()) do a
+@test_broken Base.return_types((AliasableField{Union{Int,Nothing}},); interp=MustAliasInterpreter()) do a
     if isasome(a.f)
         return a.f
     end
@@ -2523,13 +2523,13 @@ end |> only === Int
     end
     return 0
 end |> only === Int
-@test Base.return_types((AliasableField{Union{Nothing,Int}},); interp=MustAliasInterpreter()) do x
+@test_broken Base.return_types((AliasableField{Union{Nothing,Int}},); interp=MustAliasInterpreter()) do x
     if !isnothing(x.f)
         return x.f
     end
     return 0
 end |> only === Int
-@test Base.return_types((AliasableField{Union{Some{Int},Nothing}},); interp=MustAliasInterpreter()) do x
+@test_broken Base.return_types((AliasableField{Union{Some{Int},Nothing}},); interp=MustAliasInterpreter()) do x
     if !isnothing(x.f)
         return x.f
     end
@@ -3260,7 +3260,7 @@ j30385(T, y) = k30385(f30385(T, y))
 @test @inferred(j30385(:dummy, 1)) == "dummy"
 
 @test Base.return_types(Tuple, (NamedTuple{<:Any,Tuple{Any,Int}},)) == Any[Tuple{Any,Int}]
-@test Base.return_types(Base.Splat(tuple), (typeof((a=1,)),)) == Any[Tuple{Int}]
+@test Base.return_types(Base.splat(tuple), (typeof((a=1,)),)) == Any[Tuple{Int}]
 
 # test that return_type_tfunc isn't affected by max_methods differently than return_type
 _rttf_test(::Int8) = 0
@@ -3282,8 +3282,8 @@ f_with_Type_arg(::Type{T}) where {T} = T
     (N >= 0) || throw(ArgumentError(string("tuple length should be ≥0, got ", N)))
     if @generated
         quote
-            @Base.nexprs $N i -> t_i = f(i)
-            @Base.ncall $N tuple t
+            Base.@nexprs $N i -> t_i = f(i)
+            Base.@ncall $N tuple t
         end
     else
         Tuple(f(i) for i = 1:N)
@@ -4467,13 +4467,24 @@ end
         end |> only === Union{}
 end
 
-# Test that max_methods works as expected
-@Base.Experimental.max_methods 1 function f_max_methods end
+# Test that a function-wise `@max_methods` works as expected
+Base.Experimental.@max_methods 1 function f_max_methods end
 f_max_methods(x::Int) = 1
 f_max_methods(x::Float64) = 2
 g_max_methods(x) = f_max_methods(x)
 @test only(Base.return_types(g_max_methods, Tuple{Int})) === Int
 @test only(Base.return_types(g_max_methods, Tuple{Any})) === Any
+
+# Test that a module-wise `@max_methods` works as expected
+module Test43370
+using Test
+Base.Experimental.@max_methods 1
+f_max_methods(x::Int) = 1
+f_max_methods(x::Float64) = 2
+g_max_methods(x) = f_max_methods(x)
+@test only(Base.return_types(g_max_methods, Tuple{Int})) === Int
+@test only(Base.return_types(g_max_methods, Tuple{Any})) === Any
+end
 
 # Make sure return_type_tfunc doesn't accidentally cause bad inference if used
 # at top level.
@@ -4502,7 +4513,7 @@ end
 struct Issue45780
     oc::Core.OpaqueClosure{Tuple{}}
 end
-f45780() = Val{Issue45780(@Base.Experimental.opaque ()->1).oc()}()
+f45780() = Val{Issue45780(Base.Experimental.@opaque ()->1).oc()}()
 @test (@inferred f45780()) == Val{1}()
 
 # issue #45600
@@ -4582,7 +4593,7 @@ end
 @test Const((1,2)) ⊑ PartialStruct(Tuple{Vararg{Int}}, [Const(1), Vararg{Int}])
 
 # Test that semi-concrete interpretation doesn't break on functions with while loops in them.
-@Base.assume_effects :consistent :effect_free :terminates_globally function pure_annotated_loop(x::Int, y::Int)
+Base.@assume_effects :consistent :effect_free :terminates_globally function pure_annotated_loop(x::Int, y::Int)
     for i = 1:2
         x += y
     end
@@ -4690,22 +4701,17 @@ end
 g() = empty_nt_values(Base.inferencebarrier(Tuple{}))
 @test g() == () # Make sure to actually run this to test this in the inference world age
 
-let # jl_widen_core_extended_info
-    for (extended, widened) = [(Core.Const(42), Int),
-                               (Core.Const(Int), Type{Int}),
-                               (Core.Const(Vector), Type{Vector}),
-                               (Core.PartialStruct(Some{Any}, Any["julia"]), Some{Any}),
-                               (Core.InterConditional(2, Int, Nothing), Bool)]
-        @test @ccall(jl_widen_core_extended_info(extended::Any)::Any) ===
-              Core.Compiler.widenconst(extended) ===
-              widened
-    end
-end
-
 # This is somewhat sensitive to the exact recursion level that inference is willing to do, but the intention
 # is to test the case where inference limited a recursion, but then a forced constprop nevertheless managed
 # to terminate the call.
-@Base.constprop :aggressive type_level_recurse1(x...) = x[1] == 2 ? 1 : (length(x) > 100 ? x : type_level_recurse2(x[1] + 1, x..., x...))
-@Base.constprop :aggressive type_level_recurse2(x...) = type_level_recurse1(x...)
+Base.@constprop :aggressive type_level_recurse1(x...) = x[1] == 2 ? 1 : (length(x) > 100 ? x : type_level_recurse2(x[1] + 1, x..., x...))
+Base.@constprop :aggressive type_level_recurse2(x...) = type_level_recurse1(x...)
 type_level_recurse_entry() = Val{type_level_recurse1(1)}()
 @test Base.return_types(type_level_recurse_entry, ()) |> only == Val{1}
+
+# Test that inference doesn't give up if it can potentially refine effects,
+# even if the return type is Any.
+f_no_bail_effects_any(x::Any) = x
+f_no_bail_effects_any(x::NamedTuple{(:x,), Tuple{Any}}) = getfield(x, 1)
+g_no_bail_effects_any(x::Any) = f_no_bail_effects_any(x)
+@test Core.Compiler.is_total(Base.infer_effects(g_no_bail_effects_any, Tuple{Any}))

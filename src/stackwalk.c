@@ -214,10 +214,10 @@ NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip
     int r = jl_unw_get(&context);
     if (r < 0)
         return 0;
-    jl_gcframe_t *pgcstack = jl_pgcstack;
     bt_cursor_t cursor;
-    if (!jl_unw_init(&cursor, &context))
+    if (!jl_unw_init(&cursor, &context) || maxsize == 0)
         return 0;
+    jl_gcframe_t *pgcstack = jl_pgcstack;
     size_t bt_size = 0;
     jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, skip + 1, &pgcstack, 0);
     return bt_size;

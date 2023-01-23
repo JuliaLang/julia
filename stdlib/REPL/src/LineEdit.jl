@@ -452,7 +452,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     # Write out the prompt string
     lindent = write_prompt(termbuf, prompt, hascolor(terminal))::Int
     # Count the '\n' at the end of the line if the terminal emulator does (specific to DOS cmd prompt)
-    miscountnl = @static Sys.iswindows() ? (isa(Terminals.pipe_reader(terminal), Base.TTY) && !Base.ispty(Terminals.pipe_reader(terminal))) : false
+    miscountnl = @static Sys.iswindows() ? (isa(Terminals.pipe_reader(terminal), Base.TTY) && !(Base.ispty(Terminals.pipe_reader(terminal)))::Bool) : false
 
     # Now go through the buffer line by line
     seek(buf, 0)
