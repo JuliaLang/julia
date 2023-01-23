@@ -228,7 +228,7 @@ function shuffle!(r::AbstractRNG, a::AbstractArray)
     mask = 3
     @inbounds for i = 2:n
         j = 1 + rand(r, ltm52(i, mask))
-        a[i], a[j] = a[j], a[i]
+        @inbounds a[i], a[j] = a[j], a[i]
         i == 1 + mask && (mask = 2 * mask + 1)
     end
     return a
