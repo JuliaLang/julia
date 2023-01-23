@@ -19,7 +19,7 @@ triangle of the matrix `A`.
 
 `Symmetric` views are mainly useful for real-symmetric matrices, for which
 specialized algorithms (e.g. for eigenproblems) are enabled for `Symmetric` types.
-More generally, see also `Hermitian(A)` for Hermitian matrices `A == A'`, which 
+More generally, see also [`Hermitian(A)`](@ref) for Hermitian matrices `A == A'`, which
 is effectively equivalent to `Symmetric` for real matrices but is also useful for
 complex matrices.  (Whereas complex `Symmetric` matrices are supported but have few
 if any specialized algorithms.)
