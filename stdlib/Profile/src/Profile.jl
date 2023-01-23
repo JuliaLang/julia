@@ -38,7 +38,7 @@ function profile_printing_listener()
         while true
             wait(PROFILE_PRINT_COND[])
             peek_report[]()
-            if get(ENV, "JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", nothing) === "1"
+            if Base.get_bool_env("JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", false) === true
                 println(stderr, "Saving heap snapshot...")
                 fname = take_heap_snapshot()
                 println(stderr, "Heap snapshot saved to `$(fname)`")
