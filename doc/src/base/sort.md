@@ -203,7 +203,7 @@ Base.Sort.defalg(::AbstractArray{<:Union{SmallInlineStrings, Missing}}) = Inline
     The default sorting algorithm (returned by `Base.Sort.defalg`) is guaranteed
     to be stable since Julia 1.9. Previous versions had unstable edge cases when sorting numeric arrays.
 
-## Alternate orderings
+## Alternate Orderings
 
 By default, `sort` and related functions use [`isless`](@ref) to compare two
 elements in order to determine which should come first. The

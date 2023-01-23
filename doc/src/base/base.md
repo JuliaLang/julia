@@ -126,6 +126,7 @@ Core.:(===)
 Core.isa
 Base.isequal
 Base.isless
+Base.isunordered
 Base.ifelse
 Core.typeassert
 Core.typeof

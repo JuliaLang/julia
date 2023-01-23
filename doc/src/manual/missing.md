@@ -88,7 +88,7 @@ true
 ```
 
 The [`isless`](@ref) operator is another exception: `missing` is considered
-as greater than any other value. This operator is used by [`sort`](@ref),
+as greater than any other value. This operator is used by [`sort!`](@ref),
 which therefore places `missing` values after all other values:
 
 ```jldoctest
