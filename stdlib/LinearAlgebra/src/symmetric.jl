@@ -911,6 +911,8 @@ part of `A`. The optional argument `uplo` controls whether the upper
 filled. The opposite triangle is then only implicitly filled via the [`Hermitian`](@ref)
 view, which, for real matrices, is equivalent to a [`Symmetric`](@ref) view.
 
+See also [`hermitianpart!`](@ref) for the corresponding in-place operation.
+
 !!! compat "Julia 1.10"
     This function requires Julia 1.10 or later.
 """
@@ -924,6 +926,8 @@ hermitianpart(x::Number) = real(x)
 Overwrite the upper (`uplo = :U`) or lower (`uplo = :L`) triangle of the square matrix `A`
 with its Hermitian part `(A + A') / 2`, and return `Hermitian(A, uplo)`. For real matrices
 `A`, this is also known as the symmetric part of `A`.
+
+See also [`hermitianpart`](@ref).
 
 !!! compat "Julia 1.10"
     This function requires Julia 1.10 or later.
