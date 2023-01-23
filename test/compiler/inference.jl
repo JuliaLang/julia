@@ -2732,9 +2732,9 @@ end |> only === Int
 # correct `apply_type` inference of `NamedTuple{(), <:Any}`
 @test (() -> NamedTuple{(), <:Any})() isa UnionAll
 
-# Don't pessimize apply_type to anything worse than Type and yield Bottom for invalid Unions
+# Don't pessimize apply_type to anything worse than Type (or TypeVar) and yield Bottom for invalid Unions
 @test only(Base.return_types(Core.apply_type, Tuple{Type{Union}})) == Type{Union{}}
-@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any})) == Type
+@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any})) == Union{Type,TypeVar}
 @test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any,Any})) == Type
 @test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Int})) == Union{}
 @test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any,Int})) == Union{}
@@ -4715,3 +4715,6 @@ f_no_bail_effects_any(x::Any) = x
 f_no_bail_effects_any(x::NamedTuple{(:x,), Tuple{Any}}) = getfield(x, 1)
 g_no_bail_effects_any(x::Any) = f_no_bail_effects_any(x)
 @test Core.Compiler.is_total(Base.infer_effects(g_no_bail_effects_any, Tuple{Any}))
+
+# issue #48374
+@test (() -> Union{<:Nothing})() == Nothing
