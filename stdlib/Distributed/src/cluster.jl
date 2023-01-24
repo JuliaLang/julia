@@ -1345,9 +1345,10 @@ function process_opts(opts)
     end
 
     # Propagate --threads to workers
-    threads = get_threads_spec(opts)
+    threads = opts.nthreads > 0 ? `--threads=$(opts.nthreads)` : ``
+    gcthreads = opts.ngcthreads > 0 ? `--gcthreads=$(opts.ngcthreads)` : ``
 
-    exeflags = `$threads`
+    exeflags = `$threads $gcthreads`
 
     # add processors
     if opts.nprocs > 0

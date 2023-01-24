@@ -38,6 +38,7 @@ Compiler/Runtime improvements
 * All uses of the `@pure` macro in `Base` have been replaced with the now-preferred `Base.@assume_effects` ([#44776]).
 * `invoke(f, invokesig, args...)` calls to a less-specific method than would normally be chosen
   for `f(args...)` are no longer spuriously invalidated when loading package precompile files ([#46010]).
+* The mark phase of the Garbage Collector is now multi-threaded ([#48600]).
 
 Command-line option changes
 ---------------------------
@@ -49,6 +50,8 @@ Command-line option changes
   number of interactive threads to create (`auto` currently means 1) ([#42302]).
 * New option `--heap-size-hint=<size>` suggests a size limit to invoke garbage collection more eagerly.
   The size may be specified in bytes, kilobytes (1000k), megabytes (300M), or gigabytes (1.5G) ([#45369]).
+* New option `--gcthreads` to set how many threads will be used by the Garbage Collector ([#48600]).
+  The default is set to `N/2` where `N` is the amount of worker threads (`--threads`) used by Julia.
 
 Multi-threading changes
 -----------------------
