@@ -65,11 +65,13 @@ end
     @test !(-1 in BitSet(1:10))
 end
 
-# # issue #8570
-# This requires 2^29 bytes of storage, which is too much for a simple test
-# s = BitSet(typemax(Int32))
-# @test length(s) === 1
-# for b in s; b; end
+@testset "issue #8570" begin
+    let s
+        @test 400 > @allocated s = BitSet(typemax(Int32))
+        @test length(s) === 1
+        @test only(s) == typemax(Int32)
+    end
+end
 
 @testset "union!, symdiff!" begin
     i = BitSet([1, 2, 3])
@@ -196,7 +198,7 @@ end
 
     @test intersect(BitSet([1,2,3])) == BitSet([1,2,3])
     @test intersect(BitSet(1:7), BitSet(3:10)) ==
-    	  intersect(BitSet(3:10), BitSet(1:7)) == BitSet(3:7)
+          intersect(BitSet(3:10), BitSet(1:7)) == BitSet(3:7)
     @test intersect(BitSet(1:10), BitSet(1:4), 1:5, [2,3,10]) == BitSet([2,3])
 end
 
@@ -244,6 +246,9 @@ end
 
     @test issubset(BitSet([1, 2, 4]), BitSet(1:10))
     @test issubset(BitSet([]), BitSet([]))
+    @test issubset(BitSet([0]), BitSet([-1,0]))
+    @test !issubset(BitSet([-1]), BitSet([]))
+    @test !issubset(BitSet([65]), BitSet([]))
     @test BitSet([1, 2, 4]) < BitSet(1:10)
     @test !(BitSet([]) < BitSet([]))
     @test BitSet([1, 2, 4]) <= BitSet(1:10)
@@ -347,4 +352,13 @@ end
     @test_throws ArgumentError BitSet(typemax(Int):Int128(typemax(Int))+1)
     # union! with an empty range doesn't modify the BitSet
     @test union!(x, b:a) == y
+end
+
+@testset "union!(::BitSet, ::AbstractUnitRange) when two ranges do not overlap" begin
+    # see #45574
+    a, b = rand(-10000:-5000), rand(5000:10000)
+    c, d = minmax(rand(20000:30000, 2)...)
+    @test length(union!(BitSet(a:b), c:d)) == length(a:b) + length(c:d)
+    c, d = minmax(rand(-30000:-20000, 2)...)
+    @test length(union!(BitSet(a:b), c:d)) == length(a:b) + length(c:d)
 end

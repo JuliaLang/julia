@@ -94,18 +94,18 @@ end
 
 # other Integer types of enum members
 @enum Test3::UInt8 _one_Test3=0x01 _two_Test3=0x02 _three_Test3=0x03
-@test Test3.size == 1
+@test Core.sizeof(Test3) == 1
 @test UInt8(_one_Test3) === 0x01
 @test length(instances(Test3)) == 3
 
 @enum Test4::UInt16 _one_Test4=0x01 _two_Test4=0x0002 _three_Test4=0x03
-@test Test4.size == 2
+@test Core.sizeof(Test4) == 2
 
 @enum Test5::UInt32 _one_Test5=0x01 _two_Test5=0x00000002 _three_Test5=0x00000003
-@test Test5.size == 4
+@test Core.sizeof(Test5) == 4
 
 @enum Test6::UInt128 _one_Test6=0x00000000000000000000000000000001 _two_Test6=0x00000000000000000000000000000002
-@test Test6.size == 16
+@test Core.sizeof(Test6) == 16
 @test typeof(Integer(_one_Test6)) == UInt128
 
 # enum values must be integers
@@ -143,6 +143,10 @@ let io = IOBuffer()
     @test String(take!(io)) == sprint(print, Fruit)
 end
 
+# Test printing of invalid enums
+@test repr("text/plain", reinterpret(Fruit, Int32(11))) == "<invalid #11>::Fruit = 11"
+@test repr("text/plain", reinterpret(Fruit, Int32(-5))) == "<invalid #-5>::Fruit = -5"
+
 @enum LogLevel DEBUG INFO WARN ERROR CRITICAL
 @test DEBUG < CRITICAL
 
@@ -160,6 +164,9 @@ end
 @test repr("text/plain", sevn)  == "$(string(sevn))::UI8 = 0x07"
 @test repr("text/plain", fiftn) == "$(string(fiftn))::UI8 = 0xf0"
 
+@test repr("text/plain", reinterpret(UI8, 0x01)) == "<invalid #1>::UI8 = 0x01"
+@test repr("text/plain", reinterpret(UI8, 0xff)) == "<invalid #255>::UI8 = 0xff"
+
 # test block form
 @enum BritishFood begin
     blackpudding = 1
@@ -167,6 +174,10 @@ end
     haggis       = 4
 end
 @test Int(haggis) == 4
+
+@enum HashEnum1 Enum1_a=1
+@enum HashEnum2 Enum2_a=1
+@test hash(Enum1_a) != hash(Enum2_a)
 
 @test (Vector{Fruit}(undef, 3) .= apple) == [apple, apple, apple]
 
@@ -200,3 +211,13 @@ end
     alphabet_z = 26
 end
 @test alphabet_z == Alphabet(26)
+
+let b = IOBuffer()
+    show(b, MIME"text/plain"(), Enum)
+    @test String(take!(b)) == "Enum"
+    b = IOBuffer()
+    show(b, MIME"text/plain"(), Union{Alphabet, BritishFood})
+    str = String(take!(b))
+    p = string(@__MODULE__)
+    @test str == "Union{$p.Alphabet, $p.BritishFood}" || str == "Union{$p.BritishFood, $p.Alphabet}"
+end

@@ -1,0 +1,26 @@
+From 3732420725efbf410df5863b91a09ca214ee18ba Mon Sep 17 00:00:00 2001
+From: "Y. Yang" <metab0t@users.noreply.github.com>
+Date: Thu, 16 Jun 2022 19:16:37 +0800
+Subject: [PATCH] Fix DLL import library name
+
+https://aur.archlinux.org/packages/mingw-w64-libssh2
+https://cmake.org/cmake/help/latest/prop_tgt/IMPORT_PREFIX.html
+---
+ src/CMakeLists.txt | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index cb8fee1..17ecefd 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -220,6 +220,7 @@ endif()
+ add_library(libssh2 ${SOURCES})
+ # we want it to be called libssh2 on all platforms
+ set_target_properties(libssh2 PROPERTIES PREFIX "")
++set_target_properties(libssh2 PROPERTIES IMPORT_PREFIX "")
+ 
+ target_compile_definitions(libssh2 PRIVATE ${PRIVATE_COMPILE_DEFINITIONS})
+ target_include_directories(libssh2
+-- 
+2.36.1
+

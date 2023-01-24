@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ## Tests for the abstract array interfaces and operations with arrays
 ## with different indexing rules
 
@@ -52,3 +54,15 @@ Base.similar(A::TSlow, ::Type{T}, dims::Dims) where {T} = TSlow(T, dims)
 Base.IndexStyle(::Type{A}) where {A<:TSlow} = IndexCartesian()
 Base.getindex(A::TSlow{T,N}, i::Vararg{Int,N}) where {T,N} = get(A.data, i, zero(T))
 Base.setindex!(A::TSlow{T,N}, v, i::Vararg{Int,N}) where {T,N} = (A.data[i] = v)
+
+# An array type that just passes through to the parent
+struct WrapperArray{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
+    parent::A
+end
+Base.IndexStyle(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = IndexStyle(A)
+Base.parent(A::WrapperArray) = A.parent
+Base.size(A::WrapperArray) = size(A.parent)
+Base.axes(A::WrapperArray) = axes(A.parent)
+Base.getindex(A::WrapperArray, i::Int...) = A.parent[i...]
+Base.setindex!(A::WrapperArray, v, i::Int...) = A.parent[i...] = v
+Base.similar(A::WrapperArray, ::Type{T}, dims::Dims) where T = similar(A.parent, T, dims)

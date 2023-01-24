@@ -69,5 +69,5 @@ function outputline(io, name)
     println(io, "jl_symbol(\"", name, "\"),")
 end
 
-open(f->foreach(l->outputline(f,l), take(syms, 106)), "common_symbols1.inc", "w")
-open(f->foreach(l->outputline(f,l), take(drop(syms, 106), 254)), "common_symbols2.inc", "w")
+open(f->foreach(l->outputline(f,l), take(syms, 100)), "common_symbols1.inc", "w")
+open(f->foreach(l->outputline(f,l), take(drop(syms, 100), 254)), "common_symbols2.inc", "w")

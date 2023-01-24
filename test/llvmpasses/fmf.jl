@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # REQUIRES: x86_64
 # RUN: julia --startup-file=no %s %t -O && llvm-link -S %t/* -o %t/module.ll
 # RUN: cat %t/module.ll | llc - -mtriple=x86_64-- -mattr=fma | FileCheck %s

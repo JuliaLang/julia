@@ -42,7 +42,7 @@ splat2(5, 2)
 splat2(1:3, 5.2)
 @test String(take!(stagediobuf)) == "(UnitRange{$intstr}, Float64)"
 splat2(3, 5:2:7)
-@test String(take!(stagediobuf)) == "($intstr, StepRange{$intstr,$intstr})"
+@test String(take!(stagediobuf)) == "($intstr, StepRange{$intstr, $intstr})"
 splat2(1, 2, 3, 4)
 @test String(take!(stagediobuf)) == "($intstr, $intstr, $intstr, $intstr)"
 splat2(1, 2, 3)
@@ -247,9 +247,9 @@ f22440kernel(::Type{T}) where {T} = one(T)
 f22440kernel(::Type{T}) where {T<:AbstractFloat} = zero(T)
 
 @generated function f22440(y)
-    sig, spvals, method = Base._methods_by_ftype(Tuple{typeof(f22440kernel),y}, -1, typemax(UInt))[1]
-    code_info = Base.uncompressed_ir(method)
-    Meta.partially_inline!(code_info.code, Any[], sig, Any[spvals...], 0, 0, :propagate)
+    match = Base._methods_by_ftype(Tuple{typeof(f22440kernel),y}, -1, typemax(UInt))[1]
+    code_info = Base.uncompressed_ir(match.method)
+    Meta.partially_inline!(code_info.code, Any[], match.spec_types, Any[match.sparams...], 0, 0, :propagate)
     return code_info
 end
 
@@ -303,4 +303,32 @@ end
 @generated function f33243()
     :(global x33243 = 2)
 end
-@test_throws ErrorException f33243()
+@test f33243() === 2
+@test x33243 === 2
+
+# https://github.com/JuliaDebug/CassetteOverlay.jl/issues/12
+# generated function with varargs and unfortunately placed unused slot
+@generated function f_vararg_generated(args...)
+    :($args)
+end
+g_vararg_generated() = f_vararg_generated((;), (;), Base.inferencebarrier((;)))
+let tup = g_vararg_generated()
+    @test all(==(typeof((;))), tup)
+    # This is just to make sure that the test is actually testing what we want -
+    # the test only works if there's an unused that matches the position of the
+    # inferencebarrier argument above (N.B. the generator function itself
+    # shifts everything over by 1)
+    @test only(code_lowered(only(methods(f_vararg_generated)).generator.gen)).slotflags[5] == UInt8(0x00)
+end
+
+# respect a given linetable in code generation
+# https://github.com/JuliaLang/julia/pull/47750
+let match = Base._which(Tuple{typeof(sin),Int})
+    mi = Core.Compiler.specialize_method(match)
+    lwr = Core.Compiler.retrieve_code_info(mi)
+    @test all(lin->lin.method===:sin, lwr.linetable)
+    @generated sin_generated(a) = lwr
+    src = only(code_lowered(sin_generated, (Int,)))
+    @test all(lin->lin.method===:sin, src.linetable)
+    @test sin_generated(42) == sin(42)
+end

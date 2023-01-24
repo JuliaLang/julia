@@ -198,6 +198,7 @@ end
 
 function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeFormat))
     i, end_pos = firstindex(s), lastindex(s)
+    i > end_pos && throw(ArgumentError("Cannot parse an empty string as a DateTime"))
 
     local dy
     dm = dd = Int64(1)
@@ -279,20 +280,22 @@ end
 
 function Base.parse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
     pos, len = firstindex(str), lastindex(str)
+    pos > len && throw(ArgumentError("Cannot parse an empty string as a Date or Time"))
     val = tryparsenext_internal(T, str, pos, len, df, true)
     @assert val !== nothing
     values, endpos = val
-    return T(values...)
+    return T(values...)::T
 end
 
 function Base.tryparse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
     pos, len = firstindex(str), lastindex(str)
+    pos > len && return nothing
     res = tryparsenext_internal(T, str, pos, len, df, false)
     res === nothing && return nothing
     values, endpos = res
     if validargs(T, values...) === nothing
         # TODO: validargs gets called twice, since it's called again in the T constructor
-        return T(values...)
+        return T(values...)::T
     end
     return nothing
 end

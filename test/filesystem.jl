@@ -10,6 +10,7 @@ mktempdir() do dir
   # test filesystem truncate (shorten)
   file = Base.Filesystem.open(filename, Base.Filesystem.JL_O_RDWR)
   Base.Filesystem.truncate(file, 2)
+  text = text[1:2]
   @test length(read(file)) == 2
   close(file)
 
@@ -32,4 +33,10 @@ mktempdir() do dir
   @test res == UInt8[text..., (i > 20 for i in (length(text) + 1):length(res))...]
   close(file)
 
+end
+
+import Base.Filesystem: S_IRUSR, S_IRGRP, S_IROTH
+@testset "types of permission mask constants" begin
+  @test S_IRUSR & ~S_IRGRP == S_IRUSR
+  @test typeof(S_IRUSR) == typeof(S_IRGRP) == typeof(S_IROTH)
 end

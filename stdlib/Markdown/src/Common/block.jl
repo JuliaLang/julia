@@ -16,10 +16,9 @@ function paragraph(stream::IO, md::MD)
     push!(md, p)
     skipwhitespace(stream)
     prev_char = '\n'
-    while !eof(stream)
-        char = read(stream, Char)
+    for char in readeach(stream, Char)
         if char == '\n' || char == '\r'
-            char == '\r' && !eof(stream) && Char(peek(stream)) == '\n' && read(stream, Char)
+            char == '\r' && !eof(stream) && peek(stream, Char) == '\n' && read(stream, Char)
             if prev_char == '\\'
                 write(buffer, '\n')
             elseif blankline(stream) || parse(stream, md, breaking = true)
@@ -62,7 +61,7 @@ function hashheader(stream::IO, md::MD)
 
         if c != '\n' # Empty header
             h = strip(readline(stream))
-            h = match(r"(.*?)( +#+)?$", h).captures[1]
+            h = (match(r"(.*?)( +#+)?$", h)::AbstractMatch).captures[1]
             buffer = IOBuffer()
             print(buffer, h)
             push!(md.content, Header(parseinline(seek(buffer, 0), md), level))
@@ -137,11 +136,11 @@ function footnote(stream::IO, block::MD)
         if isempty(str)
             return false
         else
-            ref = match(regex, str).captures[1]
+            ref = (match(regex, str)::AbstractMatch).captures[1]
             buffer = IOBuffer()
             write(buffer, readline(stream, keep=true))
             while !eof(stream)
-                if startswith(stream, "    ")
+                if startswith(stream, "    ") || startswith(stream, "\t")
                     write(buffer, readline(stream, keep=true))
                 elseif blankline(stream)
                     write(buffer, '\n')
@@ -212,11 +211,11 @@ function admonition(stream::IO, block::MD)
                 titled   = r"^([a-z]+) \"(.*)\"$", # !!! <CATEGORY_NAME> "<TITLE>"
                 line     = strip(readline(stream))
                 if occursin(untitled, line)
-                    m = match(untitled, line)
+                    m = match(untitled, line)::AbstractMatch
                     # When no title is provided we use CATEGORY_NAME, capitalising it.
                     m.captures[1], uppercasefirst(m.captures[1])
                 elseif occursin(titled, line)
-                    m = match(titled, line)
+                    m = match(titled, line)::AbstractMatch
                     # To have a blank TITLE provide an explicit empty string as TITLE.
                     m.captures[1], m.captures[2]
                 else
@@ -225,10 +224,10 @@ function admonition(stream::IO, block::MD)
                     return false
                 end
             end
-        # Consume the following indented (4 spaces) block.
+        # Consume the following indented (4 spaces or tab) block.
         buffer = IOBuffer()
         while !eof(stream)
-            if startswith(stream, "    ")
+            if startswith(stream, "    ") || startswith(stream, "\t")
                 write(buffer, readline(stream, keep=true))
             elseif blankline(stream)
                 write(buffer, '\n')
@@ -275,7 +274,7 @@ function list(stream::IO, block::MD)
             elseif occursin(r"^ {0,3}\d+(\.|\))( |$)", bullet)
                 # An ordered list. Either with `1. ` or `1) ` style numbering.
                 r = occursin(".", bullet) ? r"^ {0,3}(\d+)\.( |$)" : r"^ {0,3}(\d+)\)( |$)"
-                Base.parse(Int, match(r, bullet).captures[1]), r
+                Base.parse(Int, (match(r, bullet)::AbstractMatch).captures[1]), r
             else
                 # Failed to match any bullets. This branch shouldn't actually be needed
                 # since the `NUM_OR_BULLETS` regex should cover this, but we include it
@@ -339,8 +338,7 @@ end
 function horizontalrule(stream::IO, block::MD)
    withstream(stream) do
        n, rule = 0, ' '
-       while !eof(stream)
-           char = read(stream, Char)
+       for char in readeach(stream, Char)
            char == '\n' && break
            isspace(char) && continue
            if n==0 || char==rule

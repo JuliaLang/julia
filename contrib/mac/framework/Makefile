@@ -143,7 +143,7 @@ endif
 	# cleanup unnecessary install outputs
 	rm $(DESTDIR)$(datarootdir)/julia/startup.jl
 	rm -rf $(DESTDIR)$(datarootdir)/icons $(DESTDIR)$(datarootdir)/applications $(DESTDIR)$(datarootdir)/appdata
-	find $(DESTDIR)$(prefix)/$(framework_directory) \( -name '.DS_Store' -o -name '.gitignore' -o -name Makefile -o -name .travis.yml -o -name .codecov.yml \) -delete
+	find $(DESTDIR)$(prefix)/$(framework_directory) \( -name '.DS_Store' -o -name '.gitignore' -o -name Makefile -o -name .codecov.yml \) -delete
 
 	# Include Julia's license info
 	$(INSTALL_F) $(JULIAHOME)/LICENSE.md $(DESTDIR)$(prefix)/$(framework_resources)
@@ -159,7 +159,7 @@ endif
 	#NB: must be the last lines of the recipe, else signature may be invalidated.
 
 	# Codesign should look at the embedded Info.plist to get the signing identifier.
-	# See JLDFLAGS in Make.inc for Darwin platform and Info.plist target in ui/Makefile.
+	# See JLDFLAGS in Make.inc for Darwin platform and Info.plist target in cli/Makefile.
 	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v $(darwin_codesign_options) $(darwin_codesign_julia_options) $(DESTDIR)$(prefix)/$(framework_helpers)/julia
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	codesign -s "$(DARWIN_CODESIGN_KEYCHAIN_IDENTITY)" -v $(darwin_codesign_options) $(darwin_codesign_julia_options) $(DESTDIR)$(prefix)/$(framework_helpers)/julia-debug

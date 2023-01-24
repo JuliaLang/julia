@@ -25,9 +25,14 @@ export GitError
             ECERTIFICATE    = Cint(-17), # server certificate is invalid
             EAPPLIED        = Cint(-18), # patch/merge has already been applied
             EPEEL           = Cint(-19), # the requested peel operation is not possible
-            EEOF            = Cint(-20), # Unexpted EOF
+            EEOF            = Cint(-20), # unexpected EOF
             PASSTHROUGH     = Cint(-30), # internal only
-            ITEROVER        = Cint(-31)) # signals end of iteration
+            ITEROVER        = Cint(-31), # signals end of iteration
+            RETRY           = Cint(-32), # internal only
+            EMISMATCH       = Cint(-33), # hashsum mismatch in object
+            EINDEXDIRTY     = Cint(-34), # unsaved changes in the index would be overwritten
+            EAPPLYFAIL      = Cint(-35), # patch application failed
+            EOWNER          = Cint(-36)) # the object is not owned by the current user
 
 @enum(Class, None,
              NoMemory,
@@ -58,7 +63,12 @@ export GitError
              Callback,
              CherryPick,
              Describe,
-             Rebase)
+             Rebase,
+             Filesystem,
+             Patch,
+             WorkTree,
+             SHA1,
+             HTTP)
 
 struct ErrorStruct
     message::Ptr{UInt8}
@@ -68,7 +78,7 @@ end
 struct GitError <: Exception
     class::Class
     code::Code
-    msg::AbstractString
+    msg::String
 end
 Base.show(io::IO, err::GitError) = print(io, "GitError(Code:$(err.code), Class:$(err.class), $(err.msg))")
 
@@ -86,8 +96,8 @@ function last_error()
     return (err_class, err_msg)
 end
 
-function GitError(code::Integer)
-    err_code = Code(code)
+GitError(err_code::Integer) = GitError(Code(err_code))
+function GitError(err_code::Code)
     err_class, err_msg = last_error()
     return GitError(err_class, err_code, err_msg)
 end

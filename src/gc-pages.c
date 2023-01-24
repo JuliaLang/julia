@@ -82,7 +82,7 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void) JL_NOTSAFEPOINT
             block_pg_cnt = pg_cnt = min_block_pg_alloc;
         }
         else {
-            JL_UNLOCK_NOGC(&gc_perm_lock);
+            uv_mutex_unlock(&gc_perm_lock);
             jl_throw(jl_memory_exception);
         }
     }
@@ -110,7 +110,7 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void) JL_NOTSAFEPOINT
             i = REGION_INDEX(ptr);
             info.pagetable_i = i % 32;
             info.pagetable_i32 = i / 32;
-            msk = (1 << info.pagetable_i);
+            msk = (1u << info.pagetable_i);
             if ((memory_map.freemap1[info.pagetable_i32] & msk) == 0)
                 memory_map.freemap1[info.pagetable_i32] |= msk; // has free
             info.pagetable1 = *(ppagetable1 = &memory_map.meta1[i]);
@@ -126,7 +126,7 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void) JL_NOTSAFEPOINT
             i = REGION1_INDEX(ptr);
             info.pagetable1_i = i % 32;
             info.pagetable1_i32 = i / 32;
-            msk = (1 << info.pagetable1_i);
+            msk = (1u << info.pagetable1_i);
             if ((info.pagetable1->freemap0[info.pagetable1_i32] & msk) == 0)
                 info.pagetable1->freemap0[info.pagetable1_i32] |= msk; // has free
             info.pagetable0 = *(ppagetable0 = &info.pagetable1->meta0[i]);
@@ -142,7 +142,7 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void) JL_NOTSAFEPOINT
             i = REGION0_INDEX(ptr);
             info.pagetable0_i = i % 32;
             info.pagetable0_i32 = i / 32;
-            msk = (1 << info.pagetable0_i);
+            msk = (1u << info.pagetable0_i);
             info.pagetable0->freemap[info.pagetable0_i32] |= msk; // is free
             pmeta = &info.pagetable0->meta[i];
             info.meta = (*pmeta = &page_meta[pg]);
@@ -159,7 +159,7 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void) JL_NOTSAFEPOINT
                GC_PAGE_SZ * pg_cnt - LLT_ALIGN(GC_PAGE_SZ * pg, jl_page_size));
 #endif
         if (pg == 0) {
-            JL_UNLOCK_NOGC(&gc_perm_lock);
+            uv_mutex_unlock(&gc_perm_lock);
             jl_throw(jl_memory_exception);
         }
     }
@@ -171,7 +171,7 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void) JL_NOTSAFEPOINT
 NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
 {
     struct jl_gc_metadata_ext info;
-    JL_LOCK_NOGC(&gc_perm_lock);
+    uv_mutex_lock(&gc_perm_lock);
 
     int last_errno = errno;
 #ifdef _OS_WINDOWS_
@@ -210,10 +210,10 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
                             goto have_free_page; // break out of all of these loops
                         }
                     }
-                    info.pagetable1->freemap0[info.pagetable1_i32] &= ~(uint32_t)(1 << info.pagetable1_i); // record that this was full
+                    info.pagetable1->freemap0[info.pagetable1_i32] &= ~(uint32_t)(1u << info.pagetable1_i); // record that this was full
                 }
             }
-            memory_map.freemap1[info.pagetable_i32] &= ~(uint32_t)(1 << info.pagetable_i); // record that this was full
+            memory_map.freemap1[info.pagetable_i32] &= ~(uint32_t)(1u << info.pagetable_i); // record that this was full
         }
     }
 
@@ -241,10 +241,10 @@ have_free_page:
         info.pagetable0->ub = info.pagetable0_i32;
 
     // mark this entry as in-use and not free
-    info.pagetable0->freemap[info.pagetable0_i32] &= ~(uint32_t)(1 << info.pagetable0_i);
-    info.pagetable0->allocmap[info.pagetable0_i32] |= (uint32_t)(1 << info.pagetable0_i);
-    info.pagetable1->allocmap0[info.pagetable1_i32] |= (uint32_t)(1 << info.pagetable1_i);
-    memory_map.allocmap1[info.pagetable_i32] |= (uint32_t)(1 << info.pagetable_i);
+    info.pagetable0->freemap[info.pagetable0_i32] &= ~(uint32_t)(1u << info.pagetable0_i);
+    info.pagetable0->allocmap[info.pagetable0_i32] |= (uint32_t)(1u << info.pagetable0_i);
+    info.pagetable1->allocmap0[info.pagetable1_i32] |= (uint32_t)(1u << info.pagetable1_i);
+    memory_map.allocmap1[info.pagetable_i32] |= (uint32_t)(1u << info.pagetable_i);
 
 #ifdef _OS_WINDOWS_
     VirtualAlloc(info.meta->data, GC_PAGE_SZ, MEM_COMMIT, PAGE_READWRITE);
@@ -255,7 +255,7 @@ have_free_page:
     errno = last_errno;
     current_pg_count++;
     gc_final_count_page(current_pg_count);
-    JL_UNLOCK_NOGC(&gc_perm_lock);
+    uv_mutex_unlock(&gc_perm_lock);
     return info.meta;
 }
 
@@ -265,18 +265,18 @@ void jl_gc_free_page(void *p) JL_NOTSAFEPOINT
     // update the allocmap and freemap to indicate this contains a free entry
     struct jl_gc_metadata_ext info = page_metadata_ext(p);
     uint32_t msk;
-    msk = (uint32_t)(1 << info.pagetable0_i);
+    msk = (uint32_t)(1u << info.pagetable0_i);
     assert(!(info.pagetable0->freemap[info.pagetable0_i32] & msk));
     assert(info.pagetable0->allocmap[info.pagetable0_i32] & msk);
     info.pagetable0->allocmap[info.pagetable0_i32] &= ~msk;
     info.pagetable0->freemap[info.pagetable0_i32] |= msk;
 
-    msk = (uint32_t)(1 << info.pagetable1_i);
+    msk = (uint32_t)(1u << info.pagetable1_i);
     assert(info.pagetable1->allocmap0[info.pagetable1_i32] & msk);
     if ((info.pagetable1->freemap0[info.pagetable1_i32] & msk) == 0)
         info.pagetable1->freemap0[info.pagetable1_i32] |= msk;
 
-    msk = (uint32_t)(1 << info.pagetable_i);
+    msk = (uint32_t)(1u << info.pagetable_i);
     assert(memory_map.allocmap1[info.pagetable_i32] & msk);
     if ((memory_map.freemap1[info.pagetable_i32] & msk) == 0)
         memory_map.freemap1[info.pagetable_i32] |= msk;
@@ -294,7 +294,7 @@ void jl_gc_free_page(void *p) JL_NOTSAFEPOINT
         p = otherp;
         while (n_pages--) {
             struct jl_gc_metadata_ext info = page_metadata_ext(otherp);
-            msk = (uint32_t)(1 << info.pagetable0_i);
+            msk = (uint32_t)(1u << info.pagetable0_i);
             if (info.pagetable0->allocmap[info.pagetable0_i32] & msk)
                 goto no_decommit;
             otherp = (void*)((char*)otherp + GC_PAGE_SZ);
@@ -302,9 +302,24 @@ void jl_gc_free_page(void *p) JL_NOTSAFEPOINT
     }
 #ifdef _OS_WINDOWS_
     VirtualFree(p, decommit_size, MEM_DECOMMIT);
+#elif defined(MADV_FREE)
+    static int supports_madv_free = 1;
+    if (supports_madv_free) {
+        if (madvise(p, decommit_size, MADV_FREE) == -1) {
+            assert(errno == EINVAL);
+            supports_madv_free = 0;
+        }
+    }
+    if (!supports_madv_free) {
+        madvise(p, decommit_size, MADV_DONTNEED);
+    }
 #else
     madvise(p, decommit_size, MADV_DONTNEED);
 #endif
+    /* TODO: Should we leave this poisoned and rather allow the GC to read poisoned pointers from
+     *       the page when it sweeps pools?
+     */
+    msan_unpoison(p, decommit_size);
 
 no_decommit:
     // new pages are now available starting at max of lb and pagetable_i32

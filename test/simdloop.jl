@@ -92,19 +92,6 @@ import Base.SimdLoop.SimdError
 
 # Test that @simd rejects inner loop body with invalid control flow statements
 # issue #8613
-macro test_throws(ty, ex)
-    return quote
-        Test.@test_throws $(esc(ty)) try
-            $(esc(ex))
-        catch err
-            @test err isa LoadError
-            @test err.file === $(string(__source__.file))
-            @test err.line === $(__source__.line + 1)
-            rethrow(err.error)
-        end
-    end
-end
-
 @test_throws SimdError("break is not allowed inside a @simd loop body") @macroexpand begin
     @simd for x = 1:10
         x == 1 && break

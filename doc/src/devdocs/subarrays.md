@@ -18,15 +18,15 @@ DocTestSetup = :(import Random; Random.seed!(1234))
 julia> A = rand(2,3,4);
 
 julia> S1 = view(A, :, 1, 2:3)
-2×2 view(::Array{Float64,3}, :, 1, 2:3) with eltype Float64:
- 0.200586  0.066423
- 0.298614  0.956753
+2×2 view(::Array{Float64, 3}, :, 1, 2:3) with eltype Float64:
+ 0.839622  0.711389
+ 0.967143  0.103929
 
 julia> S2 = view(A, 1, :, 2:3)
-3×2 view(::Array{Float64,3}, 1, :, 2:3) with eltype Float64:
- 0.200586  0.066423
- 0.246837  0.646691
- 0.648882  0.276021
+3×2 view(::Array{Float64, 3}, 1, :, 2:3) with eltype Float64:
+ 0.839622  0.711389
+ 0.789764  0.806704
+ 0.566704  0.962715
 ```
 ```@meta
 DocTestSetup = nothing
@@ -154,7 +154,7 @@ julia> A = reshape(1:4*2, 4, 2)
  4  8
 
 julia> diff(A[2:2:4,:][:])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  2
  2
  2
@@ -174,7 +174,7 @@ julia> A = reshape(1:5*2, 5, 2)
  5  10
 
 julia> diff(A[2:2:4,:][:])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  2
  3
  2

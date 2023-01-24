@@ -258,6 +258,11 @@ const REMOTE_DOWNLOAD_TAGS_AUTO        = Cint(1)
 const REMOTE_DOWNLOAD_TAGS_NONE        = Cint(2)
 const REMOTE_DOWNLOAD_TAGS_ALL         = Cint(3)
 
+# remote_redirect
+const REMOTE_REDIRECT_NONE    = Cuint(1 << 0)
+const REMOTE_REDIRECT_INITIAL = Cuint(1 << 1)
+const REMOTE_REDIRECT_ALL     = Cuint(1 << 2)
+
 # clone
 const CLONE_LOCAL_AUTO     = Cint(0)
 const CLONE_LOCAL          = Cint(1)
@@ -307,6 +312,34 @@ const STATUS_OPT_NO_REFRESH                       = Cuint(1 << 12)
 const STATUS_OPT_UPDATE_INDEX                     = Cuint(1 << 13)
 const STATUS_OPT_INCLUDE_UNREADABLE               = Cuint(1 << 14)
 const STATUS_OPT_INCLUDE_UNREADABLE_AS_UNTRACKED  = Cuint(1 << 15)
+
+# certificate types from `enum git_cert_t` in `cert.h`.
+const CERT_TYPE_TLS = 1 # GIT_CERT_X509
+const CERT_TYPE_SSH = 2 # GIT_CERT_HOSTKEY_LIBSSH2
+
+# certificate callback return values
+const PASSTHROUGH = -30
+const CERT_REJECT = -1
+const CERT_ACCEPT =  0
+
+# certificate hash flags
+const CERT_SSH_MD5    = 1 << 0
+const CERT_SSH_SHA1   = 1 << 1
+const CERT_SSH_SHA256 = 1 << 2
+
+# libssh2 known host constants
+const LIBSSH2_KNOWNHOST_TYPE_PLAIN  = 1
+const LIBSSH2_KNOWNHOST_TYPE_SHA1   = 2
+const LIBSSH2_KNOWNHOST_TYPE_CUSTOM = 3
+
+const LIBSSH2_KNOWNHOST_KEYENC_RAW    = 1 << 16
+const LIBSSH2_KNOWNHOST_KEYENC_BASE64 = 2 << 16
+
+# libssh2 host check return values
+const LIBSSH2_KNOWNHOST_CHECK_MATCH    = 0
+const LIBSSH2_KNOWNHOST_CHECK_MISMATCH = 1
+const LIBSSH2_KNOWNHOST_CHECK_NOTFOUND = 2
+const LIBSSH2_KNOWNHOST_CHECK_FAILURE  = 3
 
 @enum(GIT_SUBMODULE_IGNORE, SUBMODULE_IGNORE_UNSPECIFIED  = -1, # use the submodule's configuration
                             SUBMODULE_IGNORE_NONE         = 1,  # any change or untracked == dirty
@@ -413,7 +446,6 @@ These are used to select which global option to set or get and are used in `git_
                SET_TEMPLATE_PATH        = 11,
                SET_SSL_CERT_LOCATIONS   = 12)
 
-
 """
 Option flags for `GitProxy`.
 
@@ -424,5 +456,16 @@ Option flags for `GitProxy`.
 @enum(GIT_PROXY, PROXY_NONE,
                  PROXY_AUTO,
                  PROXY_SPECIFIED)
+
+# Available tracing levels.
+@enum GIT_TRACE_LEVEL begin
+    TRACE_NONE
+    TRACE_FATAL
+    TRACE_ERROR
+    TRACE_WARN
+    TRACE_INFO
+    TRACE_DEBUG
+    TRACE_TRACE
+end
 
 end

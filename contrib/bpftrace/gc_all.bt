@@ -1,0 +1,44 @@
+#!/usr/bin/env bpftrace
+
+BEGIN
+{
+    printf("Tracing Julia GC Times... Hit Ctrl-C to end.\n");
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:gc__begin
+{
+    $now = nsecs;
+    @time[pid] = $now;
+    @start[pid] = $now;
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:gc__stop_the_world
+/@start[pid]/
+{
+    $now = nsecs;
+    @stop_the_world_usecs[pid] = hist(($now - @time[pid]) / 1000);
+    @time[pid] = $now;
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:gc__end
+/@start[pid]/
+{
+    $now = nsecs;
+    @gc_total_usecs[pid] = hist(($now - @start[pid]) / 1000);
+    @gc_phase_usecs[pid] = hist(($now - @time[pid]) / 1000);
+    @time[pid] = $now;
+    delete(@start[pid]);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:gc__finalizer
+/@time[pid]/
+{
+    @finalizer[pid] = hist((nsecs - @time[pid]) / 1000);
+    delete(@time[pid]);
+}
+
+END
+{
+    clear(@start);
+    clear(@time);
+}

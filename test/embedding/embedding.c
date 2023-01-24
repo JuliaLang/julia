@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <math.h>
 
-JULIA_DEFINE_FAST_TLS() // only define this once, in an executable
+JULIA_DEFINE_FAST_TLS // only define this once, in an executable
 
 #ifdef _OS_WINDOWS_
 __declspec(dllexport) __cdecl
@@ -32,12 +32,21 @@ jl_value_t *checked_eval_string(const char* code)
 
 int main()
 {
+    // check that setting options works
+    jl_options.opt_level = 1;
+
     jl_init();
 
     {
         // Simple running of Julia code
 
         checked_eval_string("println(sqrt(2.0))");
+    }
+
+    if (jl_options.opt_level != 1) {
+        jl_printf(jl_stderr_stream(), "setting jl_options didn't work\n");
+        jl_atexit_hook(1);
+        exit(1);
     }
 
     {
@@ -56,6 +65,14 @@ int main()
         jl_value_t* argument = jl_box_float64(2.0);
         jl_value_t* ret = jl_call1(func, argument);
         double retDouble = jl_unbox_float64(ret);
+        printf("sqrt(2.0) in C: %e\n", retDouble);
+        fflush(stdout);
+    }
+
+    {
+        // Same as above but using `@cfunction`
+        double (*sqrt_jl)(double) = jl_unbox_voidpointer(jl_eval_string("@cfunction(sqrt, Float64, (Float64,))"));
+        double retDouble = sqrt_jl(2.0);
         printf("sqrt(2.0) in C: %e\n", retDouble);
         fflush(stdout);
     }
@@ -161,7 +178,7 @@ int main()
         // disable the package manager
         "    ENV[\"JULIA_PKGDIR\"] = joinpath(dir, \"disabled\")\n"
         // locate files relative to the "embedding" executable
-        "    stdlib = filter(env -> startswith(Base.find_package(Base, \"Distributed\"), env), Base.load_path())[end]\n"
+        "    stdlib = filter(env -> startswith(Base.find_package(\"Distributed\"), env), Base.load_path())[end]\n"
         "    push!(empty!(LOAD_PATH), dir, stdlib)\n"
         "end"
         );
@@ -173,6 +190,13 @@ int main()
         // Main.include and Main.eval exist (#28825)
         checked_eval_string("include(\"include_and_eval.jl\")");
         checked_eval_string("f28825()");
+    }
+
+    JL_TRY {
+        jl_error("exception thrown");
+    }
+    JL_CATCH {
+        jl_printf(jl_stderr_stream(), "exception caught from C\n");
     }
 
     int ret = 0;

@@ -10,7 +10,7 @@ using Random
 
     # Check that resizing empty source vector does not corrupt string
     b = IOBuffer()
-    write(b, "ab")
+    @inferred write(b, "ab")
     x = take!(b)
     s = String(x)
     resize!(x, 0)
@@ -166,6 +166,37 @@ end
     @test endswith(z)(z)
 end
 
+@testset "SubStrings and Views" begin
+    x = "abcdefg"
+    @testset "basic unit range" begin
+        @test SubString(x, 2:4) == "bcd"
+        @test view(x, 2:4) == "bcd"
+        @test view(x, 2:4) isa SubString
+        @test (@view x[4:end]) == "defg"
+        @test (@view x[4:end]) isa SubString
+    end
+
+    @testset "other AbstractUnitRanges" begin
+        @test SubString(x, Base.OneTo(3)) == "abc"
+        @test view(x, Base.OneTo(4)) == "abcd"
+        @test view(x, Base.OneTo(4)) isa SubString
+    end
+
+    @testset "views but not view" begin
+        # We don't (at present) make non-contiguous SubStrings with views
+        @test_throws MethodError (@view x[[1,3,5]])
+        @test (@views (x[[1,3,5]])) isa String
+
+        # We don't (at present) make single character SubStrings with views
+        @test_throws MethodError (@view x[3])
+        @test (@views (x[3])) isa Char
+
+        @test (@views (x[3], x[1:2], x[[1,4]])) isa Tuple{Char, SubString, String}
+        @test (@views (x[3], x[1:2], x[[1,4]])) == ('c', "ab", "ad")
+    end
+end
+
+
 @testset "filter specialization on String issue #32460" begin
      @test filter(x -> x ∉ ['작', 'Ï', 'z', 'ξ'],
                   GenericString("J'étais n작작é pour plaiÏre à toute âξme un peu fière")) ==
@@ -232,8 +263,10 @@ end
     for c in x
         nb += write(f, c)
     end
-    @test nb == 3
+    @test nb === 3
     @test String(take!(f)) == "123"
+
+    @test all(T -> T <: Union{Union{}, Int}, Base.return_types(write, (IO, AbstractString)))
 end
 
 @testset "issue #7248" begin
@@ -385,7 +418,7 @@ end
     end
     @test nextind("fóobar", 0, 3) == 4
 
-    @test Symbol(gstr) == Symbol("12")
+    @test Symbol(gstr) === Symbol("12")
 
     @test sizeof(gstr) == 2
     @test ncodeunits(gstr) == 2
@@ -402,6 +435,9 @@ end
         @test all(x -> x == "12", svec)
         @test svec isa Vector{AbstractString}
     end
+    # test startswith and endswith for AbstractString
+    @test endswith(GenericString("abcd"), GenericString("cd"))
+    @test startswith(GenericString("abcd"), GenericString("ab"))
 end
 
 @testset "issue #10307" begin
@@ -544,7 +580,9 @@ end
     for (rng, flg) in ((0x00:0x9f, false), (0xa0:0xbf, true), (0xc0:0xff, false))
         for cont in rng
             @test isvalid(String, UInt8[0xe0, cont]) == false
-            @test isvalid(String, UInt8[0xe0, cont, 0x80]) == flg
+            bytes = UInt8[0xe0, cont, 0x80]
+            @test isvalid(String, bytes) == flg
+            @test isvalid(String, @view(bytes[1:end])) == flg # contiguous subarray support
         end
     end
     # Check three-byte sequences
@@ -645,6 +683,7 @@ end
 Base.iterate(x::CharStr) = iterate(x.chars)
 Base.iterate(x::CharStr, i::Int) = iterate(x.chars, i)
 Base.lastindex(x::CharStr) = lastindex(x.chars)
+Base.length(x::CharStr) = length(x.chars)
 @testset "cmp without UTF-8 indexing" begin
     # Simple case, with just ANSI Latin 1 characters
     @test "áB" != CharStr("áá") # returns false with bug
@@ -668,15 +707,17 @@ end
         @test_throws ArgumentError repeat(c, -1)
         @test_throws ArgumentError repeat(s, -1)
         @test_throws ArgumentError repeat(S, -1)
-        @test repeat(c, 0) === ""
-        @test repeat(s, 0) === ""
-        @test repeat(S, 0) === ""
-        @test repeat(c, 1) === s
-        @test repeat(s, 1) === s
-        @test repeat(S, 1) === S
-        @test repeat(c, 3) === S
-        @test repeat(s, 3) === S
-        @test repeat(S, 3) === S*S*S
+        for T in (Int, UInt)
+            @test repeat(c, T(0)) === ""
+            @test repeat(s, T(0)) === ""
+            @test repeat(S, T(0)) === ""
+            @test repeat(c, T(1)) === s
+            @test repeat(s, T(1)) === s
+            @test repeat(S, T(1)) === S
+            @test repeat(c, T(3)) === S
+            @test repeat(s, T(3)) === S
+            @test repeat(S, T(3)) === S*S*S
+        end
     end
     # Issue #32160 (string allocation unsigned overflow)
     @test_throws OutOfMemoryError repeat('x', typemax(Csize_t))
@@ -684,6 +725,11 @@ end
 @testset "issue #12495: check that logical indexing attempt raises ArgumentError" begin
     @test_throws ArgumentError "abc"[[true, false, true]]
     @test_throws ArgumentError "abc"[BitArray([true, false, true])]
+end
+
+@testset "issue #46039 enhance StringIndexError display" begin
+    @test sprint(showerror, StringIndexError("αn", 2)) == "StringIndexError: invalid index [2], valid nearby indices [1]=>'α', [3]=>'n'"
+    @test sprint(showerror, StringIndexError("α\n", 2)) == "StringIndexError: invalid index [2], valid nearby indices [1]=>'α', [3]=>'\\n'"
 end
 
 @testset "concatenation" begin
@@ -817,7 +863,7 @@ end
                     p = prevind(s, p)
                     @test prevind(s, x, j) == p
                 end
-                if n ≤ ncodeunits(s)
+                if n ≤ ncodeunits(s)
                     n = nextind(s, n)
                     @test nextind(s, x, j) == n
                 end
@@ -1002,8 +1048,9 @@ let s = "∀x∃y", u = codeunits(s)
     @test u[1] == 0xe2
     @test u[2] == 0x88
     @test u[8] == 0x79
-    @test_throws ErrorException (u[1] = 0x00)
+    @test_throws Base.CanonicalIndexError (u[1] = 0x00)
     @test collect(u) == b"∀x∃y"
+    @test Base.elsize(u) == Base.elsize(typeof(u)) == 1
 end
 
 # issue #24388
@@ -1040,4 +1087,61 @@ let x = SubString("ab", 1, 1)
     y = convert(SubString{String}, x)
     @test y === x
     chop("ab") === chop.(["ab"])[1]
+end
+
+@testset "show StringIndexError" begin
+    str = "abcdefghκijklmno"
+    e = StringIndexError(str, 10)
+    @test sprint(showerror, e) == "StringIndexError: invalid index [10], valid nearby indices [9]=>'κ', [11]=>'i'"
+    str = "κ"
+    e = StringIndexError(str, 2)
+    @test sprint(showerror, e) == "StringIndexError: invalid index [2], valid nearby index [1]=>'κ'"
+end
+
+@testset "summary" begin
+    @test sprint(summary, "foα") == "4-codeunit String"
+    @test sprint(summary, SubString("foα", 2)) == "3-codeunit SubString{String}"
+    @test sprint(summary, "") == "empty String"
+end
+
+@testset "Plug holes in test coverage" begin
+    @test_throws MethodError checkbounds(Bool, "abc", [1.0, 2.0])
+
+    apple_uint8 = Vector{UInt8}("Apple")
+    @test apple_uint8 == [0x41, 0x70, 0x70, 0x6c, 0x65]
+
+    Base.String(::tstStringType) = "Test"
+    abstract_apple = tstStringType(apple_uint8)
+    @test hash(abstract_apple, UInt(1)) == hash("Test", UInt(1))
+
+    @test length("abc", 1, 3) == length("abc", UInt(1), UInt(3))
+
+    @test isascii(GenericString("abc"))
+
+    code_units = Base.CodeUnits("abc")
+    @test Base.IndexStyle(Base.CodeUnits) == IndexLinear()
+    @test Base.elsize(code_units) == sizeof(UInt8)
+    @test Base.unsafe_convert(Ptr{Int8}, code_units) == Base.unsafe_convert(Ptr{Int8}, code_units.s)
+end
+
+@testset "LazyString" begin
+    @test repr(lazy"$(1+2) is 3") == "\"3 is 3\""
+    let d = Dict(lazy"$(1+2) is 3" => 3)
+        @test d["3 is 3"] == 3
+    end
+    l = lazy"1+2"
+    @test isequal( l, lazy"1+2" )
+    @test ncodeunits(l) == ncodeunits("1+2")
+    @test codeunit(l) == UInt8
+    @test codeunit(l,2) == 0x2b
+    @test isvalid(l, 1)
+    @test Base.infer_effects((Any,)) do a
+        throw(lazy"a is $a")
+    end |> Core.Compiler.is_foldable
+    @test Base.infer_effects((Int,)) do a
+        if a < 0
+            throw(DomainError(a, lazy"$a isn't positive"))
+        end
+        return a
+    end |> Core.Compiler.is_foldable
 end

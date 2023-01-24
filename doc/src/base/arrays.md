@@ -30,6 +30,9 @@ Base.StridedArray
 Base.StridedVector
 Base.StridedMatrix
 Base.StridedVecOrMat
+Base.Slices
+Base.RowSlices
+Base.ColumnSlices
 Base.getindex(::Type, ::Any...)
 Base.zeros
 Base.ones
@@ -40,6 +43,7 @@ Base.trues
 Base.falses
 Base.fill
 Base.fill!
+Base.empty
 Base.similar
 ```
 
@@ -51,6 +55,7 @@ Base.size
 Base.axes(::Any)
 Base.axes(::AbstractArray, ::Any)
 Base.length(::AbstractArray)
+Base.keys(::AbstractArray)
 Base.eachindex
 Base.IndexStyle
 Base.IndexLinear
@@ -91,6 +96,7 @@ Base.Broadcast.result_style
 Base.getindex(::AbstractArray, ::Any...)
 Base.setindex!(::AbstractArray, ::Any, ::Any...)
 Base.copyto!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)
+Base.copy!
 Base.isassigned
 Base.Colon
 Base.CartesianIndex
@@ -100,6 +106,7 @@ Base.LinearIndices
 Base.to_indices
 Base.checkbounds
 Base.checkindex
+Base.elsize
 ```
 
 ## Views (SubArrays and other view types)
@@ -127,6 +134,7 @@ Base.reinterpret
 Base.reshape
 Base.dropdims
 Base.vec
+Base.SubArray
 ```
 
 ## Concatenation and permutation
@@ -136,6 +144,8 @@ Base.cat
 Base.vcat
 Base.hcat
 Base.hvcat
+Base.hvncat
+Base.stack
 Base.vect
 Base.circshift
 Base.circshift!

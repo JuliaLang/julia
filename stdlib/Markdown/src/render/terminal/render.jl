@@ -70,7 +70,7 @@ end
 function term(io::IO, md::List, columns)
     for (i, point) in enumerate(md.items)
         print(io, ' '^2margin, isordered(md) ? "$(i + md.ordered - 1). " : "•  ")
-        print_wrapped(io, width = columns-(4margin+2), pre = ' '^(2margin+2),
+        print_wrapped(io, width = columns-(4margin+2), pre = ' '^(2margin+3),
                           i = 2margin+2) do io
             term(io, point, columns - 10)
         end
@@ -88,7 +88,8 @@ function _term_header(io::IO, md, char, columns)
         if line_no > 1
             line_width = max(line_width, div(columns, 3))
         end
-        char != ' ' && print(io, '\n', ' '^(margin), char^line_width)
+        header_width = max(0, line_width-margin)
+        char != ' ' && header_width > 0 && print(io, '\n', ' '^(margin), char^header_width)
     end
 end
 

@@ -7,8 +7,7 @@ using Base.GMP.MPZ
 
 export DSFMT_state, dsfmt_get_min_array_size, dsfmt_get_idstring,
        dsfmt_init_gen_rand, dsfmt_init_by_array, dsfmt_gv_init_by_array,
-       dsfmt_fill_array_close_open!, dsfmt_fill_array_close1_open2!,
-       win32_SystemFunction036!
+       dsfmt_fill_array_close_open!, dsfmt_fill_array_close1_open2!
 
 "Mersenne Exponent"
 const MEXP = 19937

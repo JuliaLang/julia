@@ -1,10 +1,27 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 """
     IdDict([itr])
 
-`IdDict{K,V}()` constructs a hash table using object-id as hash and
+`IdDict{K,V}()` constructs a hash table using [`objectid`](@ref) as hash and
 `===` as equality with keys of type `K` and values of type `V`.
 
-See [`Dict`](@ref) for further help.
+See [`Dict`](@ref) for further help. In the example below, The `Dict`
+keys are all `isequal` and therefore get hashed the same, so they get overwritten.
+The `IdDict` hashes by object-id, and thus preserves the 3 different keys.
+
+# Examples
+```julia-repl
+julia> Dict(true => "yes", 1 => "no", 1.0 => "maybe")
+Dict{Real, String} with 1 entry:
+  1.0 => "maybe"
+
+julia> IdDict(true => "yes", 1 => "no", 1.0 => "maybe")
+IdDict{Any, String} with 3 entries:
+  true => "yes"
+  1.0  => "maybe"
+  1    => "no"
+```
 """
 mutable struct IdDict{K,V} <: AbstractDict{K,V}
     ht::Vector{Any}
@@ -51,7 +68,7 @@ end
 
 empty(d::IdDict, ::Type{K}, ::Type{V}) where {K, V} = IdDict{K,V}()
 
-function rehash!(d::IdDict, newsz = length(d.ht))
+function rehash!(d::IdDict, newsz = length(d.ht)%UInt)
     d.ht = ccall(:jl_idtable_rehash, Vector{Any}, (Any, Csize_t), d.ht, newsz)
     d
 end
@@ -72,7 +89,7 @@ function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where
         val = convert(V, val)
     end
     if d.ndel >= ((3*length(d.ht))>>2)
-        rehash!(d, max(length(d.ht)>>1, 32))
+        rehash!(d, max((length(d.ht)%UInt)>>1, 32))
         d.ndel = 0
     end
     inserted = RefValue{Cint}(0)
@@ -85,8 +102,9 @@ function get(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {
     val = ccall(:jl_eqtable_get, Any, (Any, Any, Any), d.ht, key, default)
     val === default ? default : val::V
 end
+
 function getindex(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
-    val = get(d, key, secret_table_token)
+    val = ccall(:jl_eqtable_get, Any, (Any, Any, Any), d.ht, key, secret_table_token)
     val === secret_table_token && throw(KeyError(key))
     return val::V
 end
@@ -125,7 +143,7 @@ end
 _oidd_nextind(a, i) = reinterpret(Int, ccall(:jl_eqtable_nextind, Csize_t, (Any, Csize_t), a, i))
 
 function iterate(d::IdDict{K,V}, idx=0) where {K, V}
-    idx = _oidd_nextind(d.ht, idx)
+    idx = _oidd_nextind(d.ht, idx%UInt)
     idx == -1 && return nothing
     return (Pair{K, V}(d.ht[idx + 1]::K, d.ht[idx + 2]::V), idx + 2)
 end
@@ -134,23 +152,38 @@ length(d::IdDict) = d.count
 
 copy(d::IdDict) = typeof(d)(d)
 
-get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V} = (d[key] = get(d, key, default))::V
+function get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V}
+    val = ccall(:jl_eqtable_get, Any, (Any, Any, Any), d.ht, key, secret_table_token)
+    if val === secret_table_token
+        val = isa(default, V) ? default : convert(V, default)
+        setindex!(d, val, key)
+        return val
+    else
+        return val::V
+    end
+end
 
 function get(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
-    val = get(d, key, secret_table_token)
+    val = ccall(:jl_eqtable_get, Any, (Any, Any, Any), d.ht, key, secret_table_token)
     if val === secret_table_token
-        val = default()
+        return default()
+    else
+        return val::V
     end
-    return val
 end
 
 function get!(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
-    val = get(d, key, secret_table_token)
+    val = ccall(:jl_eqtable_get, Any, (Any, Any, Any), d.ht, key, secret_table_token)
     if val === secret_table_token
         val = default()
+        if !isa(val, V)
+            val = convert(V, val)::V
+        end
         setindex!(d, val, key)
+        return val
+    else
+        return val::V
     end
-    return val
 end
 
 in(@nospecialize(k), v::KeySet{<:Any,<:IdDict}) = get(v.dict, k, secret_table_token) !== secret_table_token

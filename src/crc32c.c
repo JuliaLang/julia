@@ -45,7 +45,7 @@
 #include "julia_internal.h"
 #include "processor.h"
 
-#ifdef _CPU_AARCH64_
+#if defined(_CPU_AARCH64_) && defined(_OS_LINUX_)
 #  include <sys/auxv.h>
 #endif
 
@@ -80,7 +80,7 @@ JL_UNUSED static inline uint32_t crc32c_shift(const uint32_t zeros[][256], uint3
         zeros[2][(crc >> 16) & 0xff] ^ zeros[3][crc >> 24];
 }
 
-#if (defined(_CPU_X86_64_) || defined(_CPU_X86_)) && !defined(_COMPILER_MICROSOFT_)
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
 #  ifdef _CPU_X86_64_
 #    define CRC32_PTR "crc32q"
 #  else
@@ -204,7 +204,11 @@ static crc32c_func_t crc32c_dispatch(void)
 #    define crc32c_dispatch_ifunc "crc32c_dispatch"
 #  endif
 #elif defined(_CPU_AARCH64_)
+#ifdef _COMPILER_CLANG_
+#define CRC_TARGET __attribute__((target("crc")))
+#else
 #define CRC_TARGET __attribute__((target("+crc")))
+#endif
 /* Compute CRC-32C using the ARMv8 CRC32 extension. */
 CRC_TARGET static inline uint32_t crc32cx(uint32_t crc, uint64_t val)
 {
@@ -331,7 +335,11 @@ JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len)
 {
     return crc32c_armv8(crc, buf, len);
 }
-#  else
+#  elif defined(_OS_DARWIN_)
+// All Apple chips that run Darwin should have crc32 support.
+// If that ever changes for some reason, this could be detected via the hw.optional.crc32 sysctl
+#  error Darwin/ARM64, but no CRC32 support?
+#  elif defined(_OS_LINUX_)
 static crc32c_func_t crc32c_dispatch(unsigned long hwcap)
 {
     if (hwcap & (1 << JL_AArch64_crc))
@@ -341,6 +349,8 @@ static crc32c_func_t crc32c_dispatch(unsigned long hwcap)
 // For ifdef detection below
 #    define crc32c_dispatch() crc32c_dispatch(getauxval(AT_HWCAP))
 #    define crc32c_dispatch_ifunc "crc32c_dispatch"
+#  else
+#  pragma message("CRC32 feature detection not implemented for this OS. Falling back to software version.")
 #  endif
 #else
 // If we don't have any accelerated version to define, just make the _sw version define

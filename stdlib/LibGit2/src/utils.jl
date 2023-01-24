@@ -37,8 +37,8 @@ function version()
     major = Ref{Cint}(0)
     minor = Ref{Cint}(0)
     patch = Ref{Cint}(0)
-    ccall((:git_libgit2_version, :libgit2), Cvoid,
-          (Ref{Cint}, Ref{Cint}, Ref{Cint}), major, minor, patch)
+    @check ccall((:git_libgit2_version, :libgit2), Cint,
+                 (Ref{Cint}, Ref{Cint}, Ref{Cint}), major, minor, patch)
     return VersionNumber(major[], minor[], patch[])
 end
 const VERSION = version()
@@ -171,7 +171,7 @@ end
 
 function credential_identifier(url::AbstractString)
     m = match(URL_REGEX, url)
-    scheme = something(m[:scheme], "")
-    host = m[:host]
+    scheme = something(m[:scheme], SubString(""))
+    host = something(m[:host])
     credential_identifier(scheme, host)
 end
