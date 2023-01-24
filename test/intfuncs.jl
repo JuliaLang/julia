@@ -554,6 +554,14 @@ end
     for x in ((false,false), (false,true), (true,false), (true,true))
         @test binomial(x...) == (x != (false,true))
     end
+
+    # binomial(x,k) for non-integer x
+    @test @inferred(binomial(10.0,3)) === 120.0
+    @test @inferred(binomial(10//1,3)) === 120//1
+    @test binomial(2.5,3) ≈ 5//16 === binomial(5//2,3)
+    @test binomial(2.5,0) == 1.0
+    @test binomial(35.0, 30) ≈ binomial(35, 30) # naive method overflows
+    @test binomial(2.5,-1) == 0.0
 end
 
 # concrete-foldability
