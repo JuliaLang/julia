@@ -462,8 +462,12 @@ show(x) = show(stdout, x)
 show_default(io::IO, @nospecialize(x)) = _show_default(io, inferencebarrier(x))
 
 function _show_default(io::IO, @nospecialize(x))
-    t = typeof(x)
-    show(io, inferencebarrier(t)::DataType)
+    t = inferencebarrier(typeof(x))::DataType
+    if is_silent_type(t)
+        show_type_name(io, t.name)
+    else
+        show(io, t)
+    end
     print(io, '(')
     nf = nfields(x)
     nb = sizeof(x)::Int
@@ -557,6 +561,11 @@ show(io::IO, ::MIME"text/plain", ::Core.TypeofBottom) = print(io, "Union{}")
 function print_without_params(@nospecialize(x))
     b = unwrap_unionall(x)
     return isa(b, DataType) && b.name.wrapper === x
+end
+
+function is_silent_type(@nospecialize(x))
+    b = unwrap_unionall(x)
+    return isa(b, DataType) && b.name.flags & 0x8 != 0
 end
 
 function io_has_tvar_name(io::IOContext, name::Symbol, @nospecialize(x))
@@ -1092,7 +1101,11 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
         end
     else
         show_type_name(io, x.name)
-        show_typeparams(io, parameters, (unwrap_unionall(x.name.wrapper)::DataType).parameters, wheres)
+        if n > 0 && get(io, :compact, false)::Bool && is_silent_type(x) && !has_free_typevars(x)
+            print(io, "{...}")
+        else
+            show_typeparams(io, parameters, (unwrap_unionall(x.name.wrapper)::DataType).parameters, wheres)
+        end
     end
 end
 

@@ -368,4 +368,12 @@ adding them to the global method table.
 """
 :@MethodTable
 
+function silence!(@nospecialize t)
+    tn = (Base.unwrap_unionall(t)::DataType).name
+    offs = Base.fieldoffset(Core.TypeName, Base.fieldindex(Core.TypeName, :flags))
+    unsafe_store!(Ptr{UInt8}(pointer_from_objref(tn) + offs), tn.flags | 0x8)
+    println("the deed is done")
+    nothing
+end
+
 end

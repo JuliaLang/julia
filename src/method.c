@@ -973,6 +973,29 @@ JL_DLLEXPORT jl_methtable_t *jl_argument_method_table(jl_value_t *argt JL_PROPAG
     return nth_methtable(argt, 0);
 }
 
+static void silent_params_check(jl_value_t *ty)
+{
+    if (jl_is_uniontype(ty)) {
+        silent_params_check(((jl_uniontype_t*)ty)->a);
+        silent_params_check(((jl_uniontype_t*)ty)->b);
+    }
+    else if (jl_is_unionall(ty)) {
+        silent_params_check(((jl_unionall_t*)ty)->var->lb);
+        silent_params_check(((jl_unionall_t*)ty)->var->ub);
+        silent_params_check(((jl_unionall_t*)ty)->body);
+    }
+    else if (jl_is_datatype(ty)) {
+        jl_datatype_t *dt = (jl_datatype_t*)ty;
+        if (dt->name->silentparams && dt != (jl_datatype_t*)jl_unwrap_unionall(dt->name->wrapper))
+            jl_exceptionf(jl_argumenterror_type,
+                          "cannot dispatch on parameters of type %s",
+                          jl_symbol_name(dt->name->name));
+        size_t i, l = jl_nparams(dt);
+        for (i = 0; i < l; i++)
+            silent_params_check(jl_tparam(dt, i));
+    }
+}
+
 jl_array_t *jl_all_methods JL_GLOBALLY_ROOTED;
 
 JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
@@ -1052,6 +1075,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
                       jl_symbol_name(file),
                       line);
     }
+    silent_params_check(argtype);
 
 
     if (!jl_is_code_info(f)) {
