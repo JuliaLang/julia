@@ -2595,3 +2595,16 @@ end
     ir = Core.Compiler.complete(compact)
     verify_display(ir)
 end
+
+@testset "quiet type parameters" begin
+    struct HasQuietParams{A,B,C}
+        a::A
+        b::B
+        c::C
+        Base.Experimental.@quietparams
+    end
+    obj = HasQuietParams(1,2,:a)
+    @test repr(obj) == "$(@__MODULE__).HasQuietParams(1, 2, :a)"
+    trace = try; error(obj); catch; stacktrace(catch_backtrace()); end
+    @test contains(sprint(io->Base.show_backtrace(io, trace)), "HasQuietParams{...}")
+end

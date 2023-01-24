@@ -368,4 +368,6 @@ adding them to the global method table.
 """
 :@MethodTable
 
+macro quietparams() Expr(:meta, :quietparams) end
+
 end

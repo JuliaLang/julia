@@ -384,6 +384,8 @@
 
 (define (make-decl n t) `(|::| ,n ,t))
 
+(define (make-bool x) (if x '(true) '(false)))
+
 (define (ssavalue? e)
   (and (pair? e) (eq? (car e) 'ssavalue)))
 
