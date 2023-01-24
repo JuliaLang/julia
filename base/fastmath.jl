@@ -84,7 +84,12 @@ const fast_op =
          :sinh => :sinh_fast,
          :sqrt => :sqrt_fast,
          :tan => :tan_fast,
-         :tanh => :tanh_fast)
+         :tanh => :tanh_fast,
+         # reductions
+         :maximum => :maximum_fast,
+         :minimum => :minimum_fast,
+         :maximum! => :maximum!_fast,
+         :minimum! => :minimum!_fast)
 
 const rewrite_op =
     Dict(:+= => :+,
@@ -365,5 +370,28 @@ for f in (:^, :atan, :hypot, :log)
         $f_fast(x::T, y::T) where {T<:Number} = $f(x, y)
     end
 end
+
+# Reductions
+
+maximum_fast(a; kw...) = Base.reduce(max_fast, a; kw...)
+minimum_fast(a; kw...) = Base.reduce(min_fast, a; kw...)
+
+maximum_fast(f, a; kw...) = Base.mapreduce(f, max_fast, a; kw...)
+minimum_fast(f, a; kw...) = Base.mapreduce(f, min_fast, a; kw...)
+
+Base.reducedim_init(f, ::typeof(max_fast), A::AbstractArray, region) =
+    Base.reducedim_init(f, max, A::AbstractArray, region)
+Base.reducedim_init(f, ::typeof(min_fast), A::AbstractArray, region) =
+    Base.reducedim_init(f, min, A::AbstractArray, region)
+
+maximum!_fast(r::AbstractArray, A::AbstractArray; kw...) =
+    maximum!_fast(identity, r, A; kw...)
+minimum!_fast(r::AbstractArray, A::AbstractArray; kw...) =
+    minimum!_fast(identity, r, A; kw...)
+
+maximum!_fast(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
+    Base.mapreducedim!(f, max_fast, Base.initarray!(r, f, max, init, A), A)
+minimum!_fast(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
+    Base.mapreducedim!(f, min_fast, Base.initarray!(r, f, min, init, A), A)
 
 end

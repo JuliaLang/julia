@@ -273,12 +273,12 @@ static void jl_collect_methods(htable_t *mset, jl_array_t *new_specializations)
     }
 }
 
-static void jl_collect_new_roots(jl_array_t *roots, htable_t *mset, uint64_t key)
+static void jl_collect_new_roots(jl_array_t *roots, const htable_t *mset, uint64_t key)
 {
     size_t i, sz = mset->size;
     int nwithkey;
     jl_method_t *m;
-    void **table = mset->table;
+    void *const *table = mset->table;
     jl_array_t *newroots = NULL;
     JL_GC_PUSH1(&newroots);
     for (i = 0; i < sz; i += 2) {
@@ -369,6 +369,8 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure)
     if (s && !jl_object_in_image((jl_value_t*)m->module)) {
         jl_array_ptr_1d_push(s, (jl_value_t*)m);
     }
+    if (edges_map == NULL)
+        return 1;
     jl_svec_t *specializations = m->specializations;
     size_t i, l = jl_svec_len(specializations);
     for (i = 0; i < l; i++) {
@@ -379,9 +381,14 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure)
     return 1;
 }
 
-static void jl_collect_methtable_from_mod(jl_array_t *s, jl_methtable_t *mt)
+static int jl_collect_methtable_from_mod(jl_methtable_t *mt, void *env)
 {
-    jl_typemap_visitor(mt->defs, jl_collect_methcache_from_mod, (void*)s);
+    if (!jl_object_in_image((jl_value_t*)mt))
+        env = NULL; // do not collect any methods from here
+    jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), jl_collect_methcache_from_mod, env);
+    if (env && edges_map)
+        jl_collect_missing_backedges(mt);
+    return 1;
 }
 
 // Collect methods of external functions defined by modules in the worklist
@@ -389,49 +396,7 @@ static void jl_collect_methtable_from_mod(jl_array_t *s, jl_methtable_t *mt)
 // Also collect relevant backedges
 static void jl_collect_extext_methods_from_mod(jl_array_t *s, jl_module_t *m)
 {
-    if (s && !jl_object_in_image((jl_value_t*)m))
-        s = NULL; // do not collect any methods
-    size_t i;
-    void **table = m->bindings.table;
-    for (i = 1; i < m->bindings.size; i += 2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
-            if (b->owner == m && b->value && b->constp) {
-                jl_value_t *bv = jl_unwrap_unionall(b->value);
-                if (jl_is_datatype(bv)) {
-                    jl_typename_t *tn = ((jl_datatype_t*)bv)->name;
-                    if (tn->module == m && tn->name == b->name && tn->wrapper == b->value) {
-                        jl_methtable_t *mt = tn->mt;
-                        if (mt != NULL &&
-                                (jl_value_t*)mt != jl_nothing &&
-                                (mt != jl_type_type_mt && mt != jl_nonfunction_mt)) {
-                            assert(mt->module == tn->module);
-                            jl_collect_methtable_from_mod(s, mt);
-                            if (s)
-                                jl_collect_missing_backedges(mt);
-                        }
-                    }
-                }
-                else if (jl_is_module(b->value)) {
-                    jl_module_t *child = (jl_module_t*)b->value;
-                    if (child != m && child->parent == m && child->name == b->name) {
-                        // this is the original/primary binding for the submodule
-                        jl_collect_extext_methods_from_mod(s, (jl_module_t*)b->value);
-                    }
-                }
-                else if (jl_is_mtable(b->value)) {
-                    jl_methtable_t *mt = (jl_methtable_t*)b->value;
-                    if (mt->module == m && mt->name == b->name) {
-                        // this is probably an external method table, so let's assume so
-                        // as there is no way to precisely distinguish them,
-                        // and the rest of this serializer does not bother
-                        // to handle any method tables specially
-                        jl_collect_methtable_from_mod(s, (jl_methtable_t*)bv);
-                    }
-                }
-            }
-        }
-    }
+    foreach_mtable_in_module(m, jl_collect_methtable_from_mod, s);
 }
 
 static void jl_record_edges(jl_method_instance_t *caller, arraylist_t *wq, jl_array_t *edges)
@@ -512,7 +477,7 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets)
 
             if (jl_is_method_instance(callee)) {
                 jl_methtable_t *mt = jl_method_get_table(((jl_method_instance_t*)callee)->def.method);
-                if (!jl_object_in_image((jl_value_t*)mt->module))
+                if (!jl_object_in_image((jl_value_t*)mt))
                     continue;
             }
 
@@ -525,6 +490,7 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets)
                 size_t min_valid = 0;
                 size_t max_valid = ~(size_t)0;
                 if (invokeTypes) {
+                    assert(jl_is_method_instance(callee));
                     jl_methtable_t *mt = jl_method_get_table(((jl_method_instance_t*)callee)->def.method);
                     if ((jl_value_t*)mt == jl_nothing) {
                         callee_ids = NULL; // invalid
@@ -611,16 +577,18 @@ static void write_mod_list(ios_t *s, jl_array_t *a)
     write_int32(s, 0);
 }
 
+// OPT_LEVEL should always be the upper bits
+#define OPT_LEVEL 6
+
 JL_DLLEXPORT uint8_t jl_cache_flags(void)
 {
-    // ??OOCDDP
+    // OOICCDDP
     uint8_t flags = 0;
-    flags |= (jl_options.use_pkgimages & 1);
-    flags |= (jl_options.debug_level & 3) << 1;
-    flags |= (jl_options.check_bounds & 1) << 2;
-    flags |= (jl_options.opt_level & 3) << 4;
-    // NOTES:
-    // In contrast to check-bounds, inline has no "observable effect"
+    flags |= (jl_options.use_pkgimages & 1); // 0-bit
+    flags |= (jl_options.debug_level & 3) << 1; // 1-2 bit
+    flags |= (jl_options.check_bounds & 3) << 3; // 3-4 bit
+    flags |= (jl_options.can_inline & 1) << 5; // 5-bit
+    flags |= (jl_options.opt_level & 3) << OPT_LEVEL; // 6-7 bit
     return flags;
 }
 
@@ -636,13 +604,13 @@ JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t flags)
         return 1;
     }
 
-    // 2. Check all flags that must be exact
-    uint8_t mask = (1 << 4)-1;
+    // 2. Check all flags, execept opt level must be exact
+    uint8_t mask = (1 << OPT_LEVEL)-1;
     if ((flags & mask) != (current_flags & mask))
         return 0;
     // 3. allow for higher optimization flags in cache
-    flags >>= 4;
-    current_flags >>= 4;
+    flags >>= OPT_LEVEL;
+    current_flags >>= OPT_LEVEL;
     return flags >= current_flags;
 }
 

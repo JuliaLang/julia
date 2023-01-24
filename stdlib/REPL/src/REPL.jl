@@ -14,6 +14,7 @@ Run Evaluate Print Loop (REPL)
 module REPL
 
 Base.Experimental.@optlevel 1
+Base.Experimental.@max_methods 1
 
 using Base.Meta, Sockets
 import InteractiveUtils

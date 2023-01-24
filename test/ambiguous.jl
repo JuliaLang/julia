@@ -153,9 +153,17 @@ ambig(x::Int8, y) = 1
 ambig(x::Integer, y) = 2
 ambig(x, y::Int) = 3
 end
-
 ambs = detect_ambiguities(Ambig5)
 @test length(ambs) == 2
+
+module Ambig48312
+ambig(::Integer, ::Int) = 1
+ambig(::Int, ::Integer) = 2
+ambig(::Signed, ::Int) = 3
+ambig(::Int, ::Signed) = 4
+end
+ambs = detect_ambiguities(Ambig48312)
+@test length(ambs) == 4
 
 # Test that Core and Base are free of ambiguities
 # not using isempty so this prints more information when it fails

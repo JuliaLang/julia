@@ -111,7 +111,7 @@ const get_bool_env_falsy = (
     "0")
 
 """
-    Base.get_bool_env(name::String, default::Bool = false)::Union{Bool,Nothing}
+    Base.get_bool_env(name::String, default::Bool)::Union{Bool,Nothing}
 
 Evaluate whether the value of environnment variable `name` is a truthy or falsy string,
 and return `nothing` if it is not recognized as either. If the variable is not set, or is set to "",
@@ -121,7 +121,7 @@ Recognized values are the following, and their Capitalized and UPPERCASE forms:
     truthy: "t", "true", "y", "yes", "1"
     falsy:  "f", "false", "n", "no", "0"
 """
-function get_bool_env(name::String, default::Bool = false)
+function get_bool_env(name::String, default::Bool)
     haskey(ENV, name) || return default
     val = ENV[name]
     if isempty(val)

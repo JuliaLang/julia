@@ -858,7 +858,7 @@ function show_ir_stmts(io::IO, ir::Union{IRCode, CodeInfo, IncrementalCompact}, 
     return bb_idx
 end
 
-function finish_show_ir(io::IO, cfg, config::IRShowConfig)
+function finish_show_ir(io::IO, cfg::CFG, config::IRShowConfig)
     max_bb_idx_size = length(string(length(cfg.blocks)))
     config.line_info_preprinter(io, " "^(max_bb_idx_size + 2), 0)
     return nothing
@@ -1012,6 +1012,8 @@ function Base.show(io::IO, e::Effects)
     printstyled(io, effectbits_letter(e, :notaskstate, 's'); color=effectbits_color(e, :notaskstate))
     print(io, ',')
     printstyled(io, effectbits_letter(e, :inaccessiblememonly, 'm'); color=effectbits_color(e, :inaccessiblememonly))
+    print(io, ',')
+    printstyled(io, effectbits_letter(e, :noinbounds, 'i'); color=effectbits_color(e, :noinbounds))
     print(io, ')')
     e.nonoverlayed || printstyled(io, '′'; color=:red)
 end

@@ -1000,24 +1000,37 @@ end
     try
         tmp = mktempdir()
         push!(empty!(DEPOT_PATH), joinpath(tmp, "depot"))
-
         proj = joinpath(@__DIR__, "project", "Extensions", "HasDepWithExtensions.jl")
-        for compile in (`--compiled-modules=no`, ``, ``) # Once when requiring precomilation, once where it is already precompiled
-            cmd = `$(Base.julia_cmd()) $compile --project=$proj --startup-file=no -e '
-                begin
-                using HasExtensions
-                # Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly got an extension")
-                HasExtensions.ext_loaded && error("ext_loaded set")
-                using HasDepWithExtensions
-                # Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
-                HasExtensions.ext_loaded || error("ext_loaded not set")
-                HasExtensions.ext_folder_loaded && error("ext_folder_loaded set")
-                HasDepWithExtensions.do_something() || error("do_something errored")
-                using ExtDep2
-                HasExtensions.ext_folder_loaded || error("ext_folder_loaded not set")
 
+        function gen_extension_cmd(compile)
+            ```$(Base.julia_cmd()) $compile --startup-file=no -e '
+                begin
+                    using HasExtensions
+                    # Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly got an extension")
+                    HasExtensions.ext_loaded && error("ext_loaded set")
+                    using HasDepWithExtensions
+                    # Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
+                    HasExtensions.ext_loaded || error("ext_loaded not set")
+                    HasExtensions.ext_folder_loaded && error("ext_folder_loaded set")
+                    HasDepWithExtensions.do_something() || error("do_something errored")
+                    using ExtDep2
+                    HasExtensions.ext_folder_loaded || error("ext_folder_loaded not set")
                 end
-            '`
+                '
+            ```
+        end
+
+        for compile in (`--compiled-modules=no`, ``, ``) # Once when requiring precomilation, once where it is already precompiled
+            cmd = gen_extension_cmd(compile)
+            withenv("JULIA_LOAD_PATH" => proj) do
+                @test success(cmd)
+            end
+        end
+
+        # 48351
+        sep = Sys.iswindows() ? ';' : ':'
+        withenv("JULIA_LOAD_PATH" => join([mktempdir(), proj], sep)) do
+            cmd = gen_extension_cmd(``)
             @test success(cmd)
         end
     finally
@@ -1025,6 +1038,46 @@ end
     end
 end
 
+pkgimage(val) = val == 1 ? `--pkgimage=yes` : `--pkgimage=no`
+opt_level(val) = `-O$val`
+debug_level(val) = `-g$val`
+inline(val) = val == 1 ? `--inline=yes` : `--inline=no`
+check_bounds(val) = if val == 0
+    `--check-bounds=auto`
+elseif val == 1
+    `--check-bounds=yes`
+elseif val == 2
+    `--check-bounds=no`
+end
+
+@testset "CacheFlags" begin
+    cf = Base.CacheFlags()
+    opts = Base.JLOptions()
+    @test cf.use_pkgimages == opts.use_pkgimages
+    @test cf.debug_level == opts.debug_level
+    @test cf.check_bounds == opts.check_bounds
+    @test cf.inline == opts.can_inline
+    @test cf.opt_level == opts.opt_level
+
+    # OOICCDDP
+    for (P, D, C, I, O) in Iterators.product(0:1, 0:2, 0:2, 0:1, 0:3)
+        julia = joinpath(Sys.BINDIR, Base.julia_exename())
+        script = """
+        using Test
+        let
+            cf = Base.CacheFlags()
+            opts = Base.JLOptions()
+            @test cf.use_pkgimages == opts.use_pkgimages == $P
+            @test cf.debug_level == opts.debug_level == $D
+            @test cf.check_bounds == opts.check_bounds == $C
+            @test cf.inline == opts.can_inline == $I
+            @test cf.opt_level == opts.opt_level == $O
+        end
+        """
+        cmd = `$julia $(pkgimage(P)) $(opt_level(O)) $(debug_level(D)) $(check_bounds(C)) $(inline(I)) -e $script`
+        @test success(pipeline(cmd; stderr))
+    end
+end
 
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
