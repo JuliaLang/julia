@@ -77,7 +77,7 @@ function kw_to_eq(ex)
     return Meta.isexpr(ex, :kw) ? Expr(:(=), ex.args...) : ex
 end
 
-function triple_string_roughly_equal(str, fl_str)
+function triple_string_roughly_equal(fl_str, str)
     # Allow some leeway for a bug in the reference parser with
     # triple quoted strings
     lines = split(str, '\n')
@@ -85,8 +85,14 @@ function triple_string_roughly_equal(str, fl_str)
     if length(lines) != length(fl_lines)
         return false
     end
-    for (line1, line2) in zip(lines, fl_lines)
-        if !all(c in " \t" for c in line2) && !endswith(line1, line2)
+    has_whitespace_only_line =
+        any(!isempty(fl_line) && all(c in " \t" for c in fl_line)
+            for fl_line in fl_lines)
+    if !has_whitespace_only_line
+        return str == fl_str
+    end
+    for (line, fl_line) in zip(lines, fl_lines)
+        if !all(c in " \t" for c in fl_line) && !endswith(line, fl_line)
             return false
         end
     end
@@ -107,22 +113,33 @@ function exprs_roughly_equal(fl_ex, ex)
             if fl_ex == ex
                 return true
             else
-                return triple_string_roughly_equal(ex, fl_ex)
+                return triple_string_roughly_equal(fl_ex, ex)
             end
         else
             return fl_ex == ex
         end
     end
+    # Ignore differences in line number nodes within block-like constructs
+    fl_args = fl_ex.head in (:block, :quote, :toplevel) ?
+              filter(x->!(x isa LineNumberNode), fl_ex.args) :
+              fl_ex.args
+    args = ex.head in (:block, :quote, :toplevel) ?
+           filter(x->!(x isa LineNumberNode), ex.args) :
+           ex.args
+    if (fl_ex.head == :block && ex.head == :tuple && 
+        length(fl_args) == 2 && length(args) == 2 &&
+        Meta.isexpr(args[1], :parameters, 1) &&
+        exprs_roughly_equal(fl_args[2], args[1].args[1]) &&
+        exprs_roughly_equal(fl_args[1], args[2]))
+        # Allow `(a; b,)`:
+        # * Reference parser produces a block
+        # * New parser produces a frankentuple
+        return true
+    end
     if fl_ex.head != ex.head
         return false
     end
     h = ex.head
-    fl_args = fl_ex.args
-    args = ex.args
-    if ex.head in (:block, :quote, :toplevel)
-        fl_args = filter(x->!(x isa LineNumberNode), fl_args)
-        args    = filter(x->!(x isa LineNumberNode), args)
-    end
     if (h == :global || h == :local) && length(args) == 1 && Meta.isexpr(args[1], :tuple)
         # Allow invalid syntax like `global (x, y)`
         args = args[1].args
