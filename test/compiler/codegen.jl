@@ -797,3 +797,10 @@ f48085(@nospecialize x...) = length(x)
 
 # Make sure that the bounds check is elided in tuple iteration
 @test !occursin("call void @", get_llvm(iterate, Tuple{NTuple{4, Float64}, Int}))
+
+# issue #34459
+function f34459(args...)
+    Base.pointerset(args[1], 1, 1, 1)
+    return
+end
+@test !occursin("jl_f_tuple", get_llvm(f34459, Tuple{Ptr{Int}, Type{Int}}, true, false, false))
