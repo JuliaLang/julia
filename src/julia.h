@@ -95,10 +95,9 @@ struct _jl_taggedvalue_bits {
 
 JL_EXTENSION struct _jl_taggedvalue_t {
     union {
-        uintptr_t header;
-        jl_taggedvalue_t *next;
-        jl_value_t *type; // 16-byte aligned
-        struct _jl_taggedvalue_bits bits;
+        jl_taggedvalue_t *next; // used only while in GC free list
+        _Atomic(uintptr_t) valuetag; // 16-byte aligned value, plus GC tag bits
+        const struct _jl_taggedvalue_bits bits;
     };
     // jl_value_t value;
 };
@@ -108,21 +107,26 @@ JL_DLLEXPORT jl_taggedvalue_t *_jl_astaggedvalue(jl_value_t *v JL_PROPAGATES_ROO
 #define jl_astaggedvalue(v) _jl_astaggedvalue((jl_value_t*)(v))
 jl_value_t *_jl_valueof(jl_taggedvalue_t *tv JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 #define jl_valueof(v) _jl_valueof((jl_taggedvalue_t*)(v))
-JL_DLLEXPORT jl_value_t *_jl_typeof(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
-#define jl_typeof(v) _jl_typeof((jl_value_t*)(v))
+JL_DLLEXPORT jl_value_t *_jl_get_typeof(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 #else
 #define jl_astaggedvalue(v)                                             \
     ((jl_taggedvalue_t*)((char*)(v) - sizeof(jl_taggedvalue_t)))
 #define jl_valueof(v)                                           \
     ((jl_value_t*)((char*)(v) + sizeof(jl_taggedvalue_t)))
-#define jl_typeof(v)                                                    \
-    ((jl_value_t*)(jl_astaggedvalue(v)->header & ~(uintptr_t)15))
+static inline jl_value_t *_jl_get_typeof(jl_value_t *v)
+{
+    jl_taggedvalue_t *tag = jl_astaggedvalue(v);
+    uintptr_t valuetag = jl_atomic_load_relaxed(&tag->valuetag) & ~(uintptr_t)15;
+    return (jl_value_t*)(valuetag + ((uintptr_t)v & ~(uintptr_t)15));
+}
 #endif
-static inline void jl_set_typeof(void *v, void *t) JL_NOTSAFEPOINT
+#define jl_typeof(v) _jl_get_typeof((jl_value_t*)(v))
+static inline void jl_set_typeof(void *v, const void *t) JL_NOTSAFEPOINT
 {
     // Do not call this on a value that is already initialized.
     jl_taggedvalue_t *tag = jl_astaggedvalue(v);
-    jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)&tag->type, (jl_value_t*)t);
+    uintptr_t valuetag = (uintptr_t)t - ((uintptr_t)v & ~(uintptr_t)15);
+    jl_atomic_store_relaxed(&tag->valuetag, valuetag);
 }
 #define jl_typeis(v,t) (jl_typeof(v)==(jl_value_t*)(t))
 

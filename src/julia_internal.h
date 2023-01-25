@@ -505,9 +505,10 @@ STATIC_INLINE jl_value_t *jl_gc_permobj(size_t sz, void *ty) JL_NOTSAFEPOINT
                                                  sizeof(void*) * 2 : 16));
     jl_taggedvalue_t *o = (jl_taggedvalue_t*)jl_gc_perm_alloc(allocsz, 0, align,
                                                               sizeof(void*) % align);
-    uintptr_t tag = (uintptr_t)ty;
-    o->header = tag | GC_OLD_MARKED;
-    return jl_valueof(o);
+    jl_value_t *v = jl_valueof(o);
+    uintptr_t tag = (uintptr_t)ty | GC_OLD_MARKED;
+    jl_set_typeof(v, (void*)tag);
+    return v;
 }
 jl_value_t *jl_permbox8(jl_datatype_t *t, int8_t x);
 jl_value_t *jl_permbox16(jl_datatype_t *t, int16_t x);

@@ -371,7 +371,7 @@ private:
     SmallVector<int, 1> GetPHIRefinements(PHINode *phi, State &S);
     void FixUpRefinements(ArrayRef<int> PHINumbers, State &S);
     void RefineLiveSet(LargeSparseBitVector &LS, State &S, const std::vector<int> &CalleeRoots);
-    Value *EmitTagPtr(IRBuilder<> &builder, Type *T, Value *V);
+    Value *EmitTagPtr(IRBuilder<> &builder, Value *V);
     Value *EmitLoadTag(IRBuilder<> &builder, Value *V);
 };
 
@@ -2206,30 +2206,21 @@ std::vector<int> LateLowerGCFrame::ColorRoots(const State &S) {
     return Colors;
 }
 
-// Size of T is assumed to be `sizeof(void*)`
-Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Value *V)
+Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Value *V)
 {
-    auto T_size = getSizeTy(T->getContext());
-    assert(T == T_size || isa<PointerType>(T));
+    auto T_size = getSizeTy(V->getContext());
     auto TV = cast<PointerType>(V->getType());
-    auto cast = builder.CreateBitCast(V, T->getPointerTo(TV->getAddressSpace()));
-    return builder.CreateInBoundsGEP(T, cast, ConstantInt::get(T_size, -1));
+    auto cast = builder.CreateBitCast(V, T_size->getPointerTo(TV->getAddressSpace()));
+    return builder.CreateInBoundsGEP(T_size, cast, ConstantInt::get(T_size, -1));
 }
 
 Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Value *V)
 {
-    auto T_size = getSizeTy(builder.getContext());
-    auto addr = EmitTagPtr(builder, T_size, V);
+    auto T_size = getSizeTy(V->getContext());
+    auto addr = EmitTagPtr(builder, V);
     LoadInst *load = builder.CreateAlignedLoad(T_size, addr, Align(sizeof(size_t)));
     load->setOrdering(AtomicOrdering::Unordered);
     load->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
-    MDBuilder MDB(load->getContext());
-    auto *NullInt = ConstantInt::get(T_size, 0);
-    // We can be sure that the tag is larger than page size.
-    // Hopefully this is enough to convince LLVM that the value is still not NULL
-    // after masking off the tag bits
-    auto *NonNullInt = ConstantExpr::getAdd(NullInt, ConstantInt::get(T_size, 4096));
-    load->setMetadata(LLVMContext::MD_range, MDB.createRange(NonNullInt, NullInt));
     return load;
 }
 
@@ -2384,22 +2375,23 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                                         MDNode::get(LI->getContext(), { op }));
                     }
                 }
-                // As a last resort, if we didn't manage to strip down the tag
-                // for LLVM, emit an alignment assumption.
                 auto tag_type = tag->getType();
                 if (tag_type->isPointerTy()) {
+                    // As a last resort, if we didn't manage to strip down the tag
+                    // for LLVM, emit an alignment assumption.
                     auto &DL = CI->getModule()->getDataLayout();
                     auto align = tag->getPointerAlignment(DL).value();
-                    if (align < 16) {
-                        // On 5 <= LLVM < 12, it is illegal to call this on
-                        // non-integral pointer. This relies on stripping the
-                        // non-integralness from datalayout before this pass
+                    //tag_type = T_size->getPointerTo(tag_type->getPointerAddressSpace();
+                    //tag = builder.CreateBitCast(tag, tag_type);
+                    //tag = builder.CreateGEP(T_size, tag, makeArrayRef(tag_offset));
+                    if (align < 16)
                         builder.CreateAlignmentAssumption(DL, tag, 16);
-                    }
+                    tag = builder.CreatePtrToInt(tag, T_size);
                 }
+                tag = builder.CreateSub(tag, builder.CreateAnd(builder.CreatePtrToInt(newI, T_size), ~(uint64_t)15)); // round to nearest aligned pointer
                 // Set the tag.
                 StoreInst *store = builder.CreateAlignedStore(
-                    tag, EmitTagPtr(builder, tag_type, newI), Align(sizeof(size_t)));
+                    tag, EmitTagPtr(builder, newI), Align(sizeof(size_t)));
                 store->setOrdering(AtomicOrdering::Unordered);
                 store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
 
@@ -2413,13 +2405,16 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 assert(CI->arg_size() == 1);
                 IRBuilder<> builder(CI);
                 builder.SetCurrentDebugLocation(CI->getDebugLoc());
-                auto tag = EmitLoadTag(builder, CI->getArgOperand(0));
-                auto masked = builder.CreateAnd(tag, ConstantInt::get(T_size, ~(uintptr_t)15));
-                auto typ = builder.CreateAddrSpaceCast(builder.CreateIntToPtr(masked, JuliaType::get_pjlvalue_ty(masked->getContext())),
-                                                       T_prjlvalue);
-                typ->takeName(CI);
-                CI->replaceAllUsesWith(typ);
-                UpdatePtrNumbering(CI, typ, S);
+                Value *taggedvalue = CI->getArgOperand(0);
+                Value *tag = EmitLoadTag(builder, taggedvalue);
+                taggedvalue = builder.CreateAnd(builder.CreatePtrToInt(taggedvalue, T_size), ConstantInt::get(T_size, ~(uint64_t)15));
+                tag = builder.CreateAnd(tag, ConstantInt::get(T_size, ~(uintptr_t)15));
+                tag = builder.CreateAdd(tag, taggedvalue);
+                tag = builder.CreateIntToPtr(tag, JuliaType::get_pjlvalue_ty(tag->getContext()));
+                tag = builder.CreateAddrSpaceCast(tag, T_prjlvalue);
+                tag->takeName(CI);
+                CI->replaceAllUsesWith(tag);
+                UpdatePtrNumbering(CI, tag, S);
             } else if (write_barrier_func && callee == write_barrier_func) {
                 // The replacement for this requires creating new BasicBlocks
                 // which messes up the loop. Queue all of them to be replaced later.

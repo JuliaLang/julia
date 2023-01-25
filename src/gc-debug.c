@@ -349,10 +349,8 @@ static void gc_verify_tags_page(jl_gc_pagemeta_t *pg)
         if (!in_freelist) {
             jl_value_t *dt = jl_typeof(jl_valueof(v));
             if (dt != (jl_value_t*)jl_buff_tag &&
-                    // the following are used by the deserializer to invalidate objects
-                    v->header != 0x10 && v->header != 0x20 &&
-                    v->header != 0x30 && v->header != 0x40 &&
-                    v->header != 0x50 && v->header != 0x60) {
+                    // the following is used by the deserializer to invalidate objects
+                    memcmp(&v->header, 0xba, sizeof(v->header))) {
                 assert(jl_typeof(dt) == (jl_value_t*)jl_datatype_type);
             }
         }
@@ -1284,10 +1282,11 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_markqueue_t *mq, int off
     jl_value_t **end = mq->current + offset;
     for (; start < end; start++) {
         jl_value_t *obj = *start;
+        jl_value_t *objt = jl_typeof(obj);
         jl_taggedvalue_t *o = jl_astaggedvalue(obj);
-        jl_safe_printf("Queued object: %p :: (tag: %zu) (bits: %zu)\n", obj,
-                       (uintptr_t)o->header, ((uintptr_t)o->header & 3));
-        jl_((void*)(jl_datatype_t *)(o->header & ~(uintptr_t)0xf));
+        jl_safe_printf("Queued object: %p :: (tag: %p) (bits: %u)\n", obj,
+                       objt, (unsigned)o->bits.gc);
+        jl_(objt);
     }
     jl_set_safe_restore(old_buf);
 }

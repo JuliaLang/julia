@@ -40,7 +40,7 @@ static jl_sym_t *mk_symbol(const char *str, size_t len) JL_NOTSAFEPOINT
     jl_taggedvalue_t *tag = (jl_taggedvalue_t*)jl_gc_perm_alloc_nolock(nb, 0, sizeof(void*), 0);
     sym = (jl_sym_t*)jl_valueof(tag);
     // set to old marked so that we won't look at it in the GC or write barrier.
-    tag->header = ((uintptr_t)jl_symbol_type) | GC_OLD_MARKED;
+    jl_set_typeof(sym, (void*)((uintptr_t)jl_symbol_type | GC_OLD_MARKED));
     jl_atomic_store_relaxed(&sym->left, NULL);
     jl_atomic_store_relaxed(&sym->right, NULL);
     sym->hash = hash_symbol(str, len);

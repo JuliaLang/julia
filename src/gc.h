@@ -119,13 +119,7 @@ JL_EXTENSION typedef struct _bigval_t {
     // (16 pointers of 4 bytes each) - (4 other pointers in struct)
     void *_padding[16 - 4];
 #endif
-    //struct jl_taggedvalue_t <>;
-    union {
-        uintptr_t header;
-        struct {
-            uintptr_t gc:2;
-        } bits;
-    };
+    uintptr_t header; //struct jl_taggedvalue_t <>;
     // must be 64-byte aligned here, in 32 & 64 bit modes
 } bigval_t;
 
@@ -293,6 +287,11 @@ STATIC_INLINE int gc_old(uintptr_t bits) JL_NOTSAFEPOINT
 STATIC_INLINE uintptr_t gc_set_bits(uintptr_t tag, int bits) JL_NOTSAFEPOINT
 {
     return (tag & ~(uintptr_t)3) | bits;
+}
+
+STATIC_INLINE uintptr_t gc_bits(uintptr_t tag) JL_NOTSAFEPOINT
+{
+    return tag & 3;
 }
 
 STATIC_INLINE uintptr_t gc_ptr_tag(void *v, uintptr_t mask) JL_NOTSAFEPOINT

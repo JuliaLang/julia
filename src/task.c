@@ -1487,9 +1487,15 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     } bootstrap_task = {0};
     jl_set_pgcstack(&bootstrap_task.value.gcstack);
     bootstrap_task.value.ptls = ptls;
-    if (jl_nothing == NULL) // make a placeholder
-        jl_nothing = jl_gc_permobj(0, jl_nothing_type);
+    if (jl_nothing == NULL) { // make a placeholder
+        assert(jl_nothing_type == NULL);
+        jl_nothing = jl_gc_permobj(0, NULL);
+        jl_atomic_store_relaxed(&jl_astaggedvalue(jl_nothing)->valuetag, 0 | GC_OLD_MARKED);
+    }
     jl_task_t *ct = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t), jl_task_type);
+    if (jl_task_type == NULL) { // for bootstrapping
+        jl_atomic_store_relaxed(&jl_astaggedvalue(ct)->valuetag, 0);
+    }
     memset(ct, 0, sizeof(jl_task_t));
     void *stack = stack_lo;
     size_t ssize = (char*)stack_hi - (char*)stack_lo;

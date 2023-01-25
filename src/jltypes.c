@@ -2153,7 +2153,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_nothing_type = jl_new_datatype(jl_symbol("Nothing"), core, jl_any_type, jl_emptysvec,
                                       jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 0, 0);
     jl_void_type = jl_nothing_type; // deprecated alias
-    jl_astaggedvalue(jl_nothing)->header = ((uintptr_t)jl_nothing_type) | GC_OLD_MARKED;
+    jl_set_typeof(jl_nothing, (void*)((uintptr_t)jl_nothing_type | jl_atomic_load_relaxed(&jl_astaggedvalue(jl_nothing)->valuetag)));
     jl_nothing_type->instance = jl_nothing;
 
     jl_datatype_t *type_type = (jl_datatype_t*)jl_type_type;
@@ -2728,7 +2728,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         0, 1, 6);
     jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);
     jl_svecset(jl_task_type->types, 0, listt);
-    jl_astaggedvalue(jl_current_task)->header = (uintptr_t)jl_task_type | jl_astaggedvalue(jl_current_task)->header;
+    jl_set_typeof(jl_current_task, (void*)((uintptr_t)jl_task_type | jl_atomic_load_relaxed(&jl_astaggedvalue(jl_current_task)->valuetag)));
 
     jl_value_t *pointer_void = jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_nothing_type);
 
