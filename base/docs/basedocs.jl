@@ -2252,6 +2252,77 @@ instruction, otherwise it'll use a loop.
 replacefield!
 
 """
+    getglobal(module::Module, name::Symbol, [order::Symbol=:monotonic])
+
+Retrieve the value of the binding `name` from the module `module`. Optionally, an
+ordering can be defined for the operation, otherwise it defaults to monotonic.
+
+While accessing module bindings using [`getfield`](@ref) is still supported to
+maintain compatibility, using `getglobal` should always be preferred since
+`getglobal` allows for control over atomic ordering (`getfield` is always
+monotonic) and better signifies the code's intent both to the user as well as the
+compiler.
+
+Most users should not have to call this function directly -- The
+[`getproperty`](@ref Base.getproperty) function or corresponding syntax (i.e.
+`module.name`) should be preferred in all but few very specific use cases.
+
+See also [`getproperty`](@ref Base.getproperty) and [`setglobal!`](@ref).
+
+# Examples
+```jldoctest
+julia> a = 1
+1
+
+julia> module M
+       a = 2
+       end
+Main.M
+
+julia> getglobal(Main, :a)
+1
+
+julia> getglobal(M, :a)
+2
+```
+"""
+getglobal
+
+"""
+    setglobal!(module::Module, name::Symbol, x, [order::Symbol=:monotonic])
+
+Set or change the value of the binding `name` in the module `module` to `x`. No
+type conversion is performed, so if a type has already been declared for the
+binding, `x` must be of appropriate type or an error is thrown.
+
+Additionally, an ordering can be specified for this operation, otherwise it
+defaults to monotonic.
+
+Users will typically access this functionality through the
+[`setproperty!`](@ref Base.setproperty!) function or corresponding syntax
+(i.e. `module.name = x`) instead, so this is intended only for very specific use
+cases.
+
+See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal!`](@ref)
+
+# Examples
+```jldoctest
+julia> module M end
+Main.M
+
+julia> M.a  # same as `getglobal(M, :a)`
+ERROR: UndefVarError: `a` not defined
+
+julia> setglobal!(M, :a, 1)
+1
+
+julia> M.a
+1
+```
+"""
+setglobal!
+
+"""
     typeof(x)
 
 Get the concrete type of `x`.
