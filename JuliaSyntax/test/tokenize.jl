@@ -921,6 +921,25 @@ end
     @test (t = last(collect(tokenize("+*"))); (t.startbyte, t.endbyte)) == (2,1)
 end
 
+@testset "invalid UTF-8 characters" begin
+    bad_chars = [
+        first("\xe2")              # malformed
+        first("\xc0\x9b")          # overlong
+        first("\xf0\x83\x99\xae")  # overlong
+    ]
+
+    @testset "bad char $(repr(c))" for c in bad_chars
+        @test Tokenize.is_identifier_char(c) == false
+        @test Tokenize.is_identifier_start_char(c) == false
+        @test Tokenize.is_never_id_char(c) == true
+        @test Tokenize.dotop1(c) == false
+        @test Tokenize.isopsuffix(c) == false
+        @test Tokenize.is_operator_start_char(c) == false
+        @test Tokenize.iswhitespace(c) == false
+        @test Tokenize.ishex(c) == false
+    end
+end
+
 @testset "dotop miscellanea" begin
     @test strtok("a .-> b")  ==  ["a", " ", ".-", ">", " ", "b", ""]
     @test strtok(".>: b")    ==  [".>:", " ", "b", ""]
@@ -931,16 +950,6 @@ end
     @test strtok("a &&₁ b")  ==  ["a", " ", "&&", "₁", " ", "b", ""]
     @test strtok("a &&̄ b")   ==  ["a", " ", "&&", "̄", " ", "b", ""]
     @test strtok("a .&&₁ b") ==  ["a", " ", ".&&", "₁", " ", "b", ""]
-end
-
-@testset "malformed strings" begin
-    malformed = first("\xe2")
-    @test Tokenize.is_identifier_char(malformed) == false
-    @test Tokenize.is_identifier_start_char(malformed) == false
-    @test Tokenize.is_never_id_char(malformed) == true
-    @test Tokenize.dotop1(malformed) == false
-    @test Tokenize.isopsuffix(malformed) == false
-    @test Tokenize.is_operator_start_char(malformed) == false
 end
 
 end

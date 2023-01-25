@@ -48,7 +48,7 @@ end
 @inline ishex(c::Char) = isdigit(c) || ('a' <= c <= 'f') || ('A' <= c <= 'F')
 @inline isbinary(c::Char) = c == '0' || c == '1'
 @inline isoctal(c::Char) =  '0' ≤ c ≤ '7'
-@inline iswhitespace(c::Char) = Base.isspace(c) || c === '\ufeff'
+@inline iswhitespace(c::Char) = (Base.isvalid(c) && Base.isspace(c)) || c === '\ufeff'
 
 struct StringState
     triplestr::Bool
