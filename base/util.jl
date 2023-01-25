@@ -151,6 +151,8 @@ Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notab
 
 !!! compat "Julia 1.9"
     The keyword argument `cpu_target` was added.
+    
+    The flag `--pkgimages` was added in Julia 1.9.
 """
 function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Union{Nothing,String} = nothing)
     opts = JLOptions()
