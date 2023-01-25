@@ -85,7 +85,7 @@ function show(io::IO, x::Rational)
     show(io, numerator(x))
 
     if isone(denominator(x)) && (
-        (get(io, :compact, false) || get(io, :typeinfo, Number) <: Rational
+        get(io, :compact, false) || get(io, :typeinfo, Number) <: Rational
     )
         return
     end
