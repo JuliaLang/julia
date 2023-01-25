@@ -1025,9 +1025,10 @@ function parse_unary_subtype(ps::ParseState)
         else
             # <: x          ==>  (<:-pre x)
             # <: A where B  ==>  (<:-pre (where A B))
+            # <: <: x       ==>  (<:-pre (<:-pre x))
             mark = position(ps)
             bump(ps, TRIVIA_FLAG)
-            parse_where(ps, parse_juxtapose)
+            parse_unary_subtype(ps)
             # Flisp parser handled this, but I don't know how it can happen...
             @check peek_behind(ps).kind != K"tuple"
             emit(ps, mark, kind(t), PREFIX_OP_FLAG)
@@ -1162,9 +1163,7 @@ function parse_unary(ps::ParseState)
     if ( 
             !is_operator(op_k)           ||
             is_word_operator(op_k)       ||
-            # TODO(jb): `?` should probably not be listed here
-            # except for the syntax hack in osutils.jl
-            (op_k in KSet": ' .' ?")     ||
+            (op_k in KSet": ' .'")       ||
             (is_syntactic_unary_op(op_k) && !is_dotted(op_t)) ||
             is_syntactic_operator(op_k)
         )
@@ -1693,8 +1692,10 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 emit(ps, mark, K"curly")
             end
         elseif k in KSet" \" \"\"\" ` ``` " &&
-                !preceding_whitespace(t) &&
-                maybe_strmac && peek_behind(ps, macro_name_position).kind == K"Identifier"
+                !preceding_whitespace(t) && maybe_strmac &&
+                (# Must mirror the logic in lex_quote() for consistency
+                 origk = peek_behind(ps, macro_name_position).orig_kind;
+                 origk == K"Identifier" || is_contextual_keyword(origk) || is_word_operator(origk))
             # Custom string and command literals
             # x"str" ==> (macrocall @x_str (string-r "str"))
             # x`str` ==> (macrocall @x_cmd (cmdstring-r "str"))

@@ -238,6 +238,7 @@ tests = [
         "/x"     => "(call-pre (error /) x)"
         "+₁ x"   => "(call-pre (error +₁) x)"
         ".<: x"  => "(dotcall-pre (error .<:) x)"
+        "?\"str\"" => """(call-pre (error ?) (string "str"))"""
     ],
     JuliaSyntax.parse_factor => [
         "x^y"      =>  "(call-i x ^ y)"
@@ -257,6 +258,7 @@ tests = [
         "<:{T}(x::T)"   =>  "(call (curly <: T) (::-i x T))"
         "<:(x::T)"      =>  "(<:-pre (::-i x T))"
         "<: x"          =>  "(<:-pre x)"
+        "<: <: x"       =>  "(<:-pre (<:-pre x))"
         "<: A where B"  =>  "(<:-pre (where A B))"
         # Really for parse_where
         "x where \n {T}"  =>  "(where x T)"
@@ -388,6 +390,8 @@ tests = [
         "x`str`"     => """(macrocall @x_cmd (cmdstring-r "str"))"""
         "x\"\""      => """(macrocall @x_str (string-r ""))"""
         "x``"        => """(macrocall @x_cmd (cmdstring-r ""))"""
+        "in\"str\""  => """(macrocall @in_str (string-r "str"))"""
+        "outer\"str\"" => """(macrocall @outer_str (string-r "str"))"""
         # Triple quoted procesing for custom strings
         "r\"\"\"\nx\"\"\""        => raw"""(macrocall @r_str (string-sr "x"))"""
         "r\"\"\"\n x\n y\"\"\""   => raw"""(macrocall @r_str (string-sr "x\n" "y"))"""

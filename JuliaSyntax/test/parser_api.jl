@@ -90,5 +90,11 @@
         @test_throws JuliaSyntax.ParseError parseshow("[a; b, c]")
         @test_throws JuliaSyntax.ParseError parseshow("[a; b, c]", ignore_warnings=true)
         @test parseshow("[a; b, c]", ignore_errors=true) == "(vcat a b (error-t) c)"
+        # errors in literals
+        @test parseshow("\"\\z\"", ignore_errors=true) == "(string (ErrorInvalidEscapeSequence))"
+        @test parseshow("'\\z'", ignore_errors=true) == "(char (ErrorInvalidEscapeSequence))"
+        @test parseshow("'abc'", ignore_errors=true) == "(char (ErrorOverLongCharacter))"
+        @test parseshow("1e1000", ignore_errors=true) == "(ErrorNumericOverflow)"
+        @test parseshow("1f1000", ignore_errors=true) == "(ErrorNumericOverflow)"
     end
 end

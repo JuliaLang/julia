@@ -29,18 +29,19 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         val_str = view(source, val_range)
         # Here we parse the values eagerly rather than representing them as
         # strings. Maybe this is good. Maybe not.
+        #
+        # Any errors parsing literals are represented as ErrorVal() - this can
+        # happen when the user sets `ignore_errors=true` during parsing.
         val = if k == K"Integer"
             parse_int_literal(val_str)
         elseif k == K"Float"
             v, code = parse_float_literal(Float64, source.code, position,
                                           position+span(raw))
-            @check code == :ok || code == :underflow
-            v
+            (code == :ok || code == :underflow) ? v : ErrorVal()
         elseif k == K"Float32"
             v, code = parse_float_literal(Float32, source.code, position,
                                           position+span(raw))
-            @check code == :ok || code == :underflow
-            v
+            (code == :ok || code == :underflow) ? v : ErrorVal()
         elseif k in KSet"BinInt OctInt HexInt"
             parse_uint_literal(val_str, k)
         elseif k == K"true"
@@ -49,14 +50,15 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             false
         elseif k == K"Char"
             io = IOBuffer()
-            ds = Diagnostic[]
             had_error = unescape_julia_string(io, source.code, position,
-                                              position+span(raw), ds)
-            @check !had_error && isempty(ds)
-            seek(io, 0)
-            c = read(io, Char)
-            @check eof(io)
-            c
+                                              position+span(raw), Diagnostic[])
+            if had_error
+                ErrorVal()
+            else
+                seek(io, 0)
+                c = read(io, Char)
+                eof(io) ? c : ErrorVal()
+            end
         elseif k == K"Identifier"
             if has_flags(head(raw), RAW_STRING_FLAG)
                 io = IOBuffer()
@@ -70,15 +72,14 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             Symbol(val_str)
         elseif k in KSet"String CmdString"
             io = IOBuffer()
+            had_error = false
             if has_flags(head(raw), RAW_STRING_FLAG)
                 unescape_raw_string(io, val_str, k == K"CmdString")
             else
-                ds = Diagnostic[]
                 had_error = unescape_julia_string(io, source.code, position,
-                                                  position+span(raw), ds)
-                @check !had_error && isempty(ds)
+                                                  position+span(raw), Diagnostic[])
             end
-            String(take!(io))
+            had_error ? ErrorVal() : String(take!(io))
         elseif is_operator(k)
             isempty(val_range)  ?
                 Symbol(untokenize(k)) : # synthetic invisible tokens
