@@ -1312,4 +1312,12 @@ end
         end
     end
 end
+
+@testset "CPU time counter" begin
+    t = Threads.@spawn begin
+        peakflops()
+    end
+    @test t.cpu_time_ns > 0
+end
+
 end # main testset
