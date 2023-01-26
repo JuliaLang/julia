@@ -636,6 +636,7 @@ type is `ismutabletype`, but also `ismutationfree`.
 """
 function ismutationfree(@nospecialize(t))
     t = unwrap_unionall(t)
+    t = t == Type{Union{}} ? Core.TypeofBottom : t #Normalize Union{} to get the correct flags
     if isa(t, DataType)
         return datatype_ismutationfree(t)
     elseif isa(t, Union)
