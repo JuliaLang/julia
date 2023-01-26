@@ -1022,7 +1022,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
                 rt, nothrow = ir_abstract_constant_propagation(interp, irsv)
                 @assert !(rt isa Conditional || rt isa MustAlias) "invalid lattice element returned from IR interpretation"
                 if !isa(rt, Type) || typeintersect(rt, Bool) === Union{}
-                    new_effects = Effects(result.effects; nothrow=nothrow)
+                    new_effects = Effects(result.effects; nothrow= nothrow ? ALWAYS_TRUE : ALWAYS_FALSE)
                     return ConstCallResults(rt, SemiConcreteResult(mi, ir, new_effects), new_effects, mi)
                 end
             end
@@ -1863,7 +1863,7 @@ function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{An
             body = a3.parameters[1]
             canconst = false
         else
-            return CallMeta(Any, Effects(EFFECTS_TOTAL; nothrow), NoCallInfo())
+            return CallMeta(Any, Effects(EFFECTS_TOTAL; nothrow = nothrow ? ALWAYS_TRUE : ALWAYS_FALSE), NoCallInfo())
         end
         if !(isa(body, Type) || isa(body, TypeVar))
             return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
@@ -1881,7 +1881,7 @@ function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{An
             body = UnionAll(tv, body)
         end
         ret = canconst ? Const(body) : Type{body}
-        return CallMeta(ret, Effects(EFFECTS_TOTAL; nothrow), NoCallInfo())
+        return CallMeta(ret, Effects(EFFECTS_TOTAL; nothrow = nothrow ? ALWAYS_TRUE : ALWAYS_FALSE), NoCallInfo())
     end
     return CallMeta(Any, EFFECTS_UNKNOWN, NoCallInfo())
 end
