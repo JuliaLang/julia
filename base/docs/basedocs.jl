@@ -2267,6 +2267,9 @@ Most users should not have to call this function directly -- The
 [`getproperty`](@ref Base.getproperty) function or corresponding syntax (i.e.
 `module.name`) should be preferred in all but few very specific use cases.
 
+!!! compat "Julia 1.9"
+    This function requires Julia 1.9 or later.
+
 See also [`getproperty`](@ref Base.getproperty) and [`setglobal!`](@ref).
 
 # Examples
@@ -2303,7 +2306,10 @@ Users will typically access this functionality through the
 (i.e. `module.name = x`) instead, so this is intended only for very specific use
 cases.
 
-See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal!`](@ref)
+!!! compat "Julia 1.9"
+    This function requires Julia 1.9 or later.
+
+See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal`](@ref)
 
 # Examples
 ```jldoctest
