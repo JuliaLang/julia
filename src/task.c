@@ -294,7 +294,7 @@ void JL_NORETURN jl_finish_task(jl_task_t *t)
 {
     jl_task_t *ct = jl_current_task;
     JL_PROBE_RT_FINISH_TASK(ct);
-    ct->cpu_time_ns += jl_hrtime() - ct->last_scheduled_time_ns;
+    ct->cpu_time_ns += jl_hrtime() - ct->last_scheduled_ns;
     JL_SIGATOMIC_BEGIN();
     if (jl_atomic_load_relaxed(&t->_isexception))
         jl_atomic_store_release(&t->_state, JL_TASK_STATE_FAILED);
