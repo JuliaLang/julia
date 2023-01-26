@@ -740,3 +740,6 @@ end |> !Core.Compiler.is_consistent
     ImmutRef(x) = $(Expr(:new, :(ImmutRef{typeof(x)}), :x))
 end
 @test Core.Compiler.is_foldable(Base.infer_effects(ImmutRef, Tuple{Any}))
+
+@test Core.Compiler.is_total(Base.infer_effects(typejoin, ()))
+#Test that returning Union{} doesn't taint effects
