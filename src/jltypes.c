@@ -2707,7 +2707,8 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "_state",
                                         "sticky",
                                         "_isexception",
-                                        "priority"),
+                                        "priority",
+                                        "cpu_time_ns"),
                         jl_svec(15,
                                 jl_any_type,
                                 jl_any_type,
@@ -2723,7 +2724,8 @@ void jl_init_types(void) JL_GC_DISABLED
                                 jl_uint8_type,
                                 jl_bool_type,
                                 jl_bool_type,
-                                jl_uint16_type),
+                                jl_uint16_type,
+                                jl_uint64_type),
                         jl_emptysvec,
                         0, 1, 6);
     jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);
