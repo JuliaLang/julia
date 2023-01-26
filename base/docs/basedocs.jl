@@ -2279,10 +2279,9 @@ julia> a = 1
 
 julia> module M
        a = 2
-       end
-Main.M
+       end;
 
-julia> getglobal(Main, :a)
+julia> getglobal(@__MODULE__, :a)
 1
 
 julia> getglobal(M, :a)
@@ -2313,8 +2312,7 @@ See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal`](@ref)
 
 # Examples
 ```jldoctest
-julia> module M end
-Main.M
+julia> module M end;
 
 julia> M.a  # same as `getglobal(M, :a)`
 ERROR: UndefVarError: `a` not defined
