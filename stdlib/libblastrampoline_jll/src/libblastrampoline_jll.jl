@@ -19,11 +19,11 @@ libblastrampoline_handle = C_NULL
 libblastrampoline_path = ""
 
 const libblastrampoline = if Sys.iswindows()
-    "libblastrampoline.dll"
+    "libblastrampoline-5.dll"
 elseif Sys.isapple()
-    "@rpath/libblastrampoline.dylib"
+    "@rpath/libblastrampoline.5.dylib"
 else
-    "libblastrampoline.so"
+    "libblastrampoline.so.5"
 end
 
 function __init__()
