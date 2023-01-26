@@ -2255,7 +2255,8 @@ replacefield!
     getglobal(module::Module, name::Symbol, [order::Symbol=:monotonic])
 
 Retrieve the value of the binding `name` from the module `module`. Optionally, an
-ordering can be defined for the operation, otherwise it defaults to monotonic.
+atomic ordering can be defined for the operation, otherwise it defaults to
+monotonic.
 
 While accessing module bindings using [`getfield`](@ref) is still supported to
 maintain compatibility, using `getglobal` should always be preferred since
@@ -2297,7 +2298,7 @@ Set or change the value of the binding `name` in the module `module` to `x`. No
 type conversion is performed, so if a type has already been declared for the
 binding, `x` must be of appropriate type or an error is thrown.
 
-Additionally, an ordering can be specified for this operation, otherwise it
+Additionally, an atomic ordering can be specified for this operation, otherwise it
 defaults to monotonic.
 
 Users will typically access this functionality through the
