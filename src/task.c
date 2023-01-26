@@ -737,7 +737,7 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
 
     JL_PROBE_RT_RUN_TASK(ct);
     ct->last_scheduled_ns = jl_hrtime();
-    
+
     jl_gc_unsafe_leave(ptls, gc_state);
 }
 
@@ -1149,6 +1149,8 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->ptls = NULL;
     t->world_age = ct->world_age;
     t->reentrant_timing = 0;
+    t->last_scheduled_ns = 0;
+    t->cpu_time_ns = 0;
     jl_timing_task_init(t);
 
     if (t->ctx.copy_stack)
@@ -1599,6 +1601,8 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->ptls = ptls;
     ct->world_age = 1; // OK to run Julia code on this task
     ct->reentrant_timing = 0;
+    ct->last_scheduled_ns = 0;
+    ct->cpu_time_ns = 0;
     ptls->root_task = ct;
     jl_atomic_store_relaxed(&ptls->current_task, ct);
     JL_GC_PROMISE_ROOTED(ct);
