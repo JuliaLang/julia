@@ -2286,6 +2286,11 @@ typedef struct _jl_task_t {
     // uint8_t padding1;
     // multiqueue priority
     uint16_t priority;
+    
+    // CPU time tracking
+    // TODO: int32 of ms instead?
+    uint64_t last_scheduled_ns; // timestamp this task was last scheduled (TODO: move to hidden?)
+    uint64_t cpu_time_ns; // time this task has spent running; updated when it yields
 
 // hidden state:
     // cached floating point environment

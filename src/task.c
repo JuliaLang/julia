@@ -700,6 +700,7 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
         jl_error("cannot switch to task running on another thread");
 
     JL_PROBE_RT_PAUSE_TASK(ct);
+    ct->cpu_time_ns += jl_hrtime() - ct->last_scheduled_ns;
 
     // Store old values on the stack and reset
     sig_atomic_t defer_signal = ptls->defer_signal;
@@ -735,6 +736,8 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
         jl_sigint_safepoint(ptls);
 
     JL_PROBE_RT_RUN_TASK(ct);
+    ct->last_scheduled_ns = jl_hrtime();
+    
     jl_gc_unsafe_leave(ptls, gc_state);
 }
 
