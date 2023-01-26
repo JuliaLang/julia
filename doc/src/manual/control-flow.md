@@ -830,7 +830,7 @@ and [`current_exceptions`](@ref) functions for more advanced error handling.
 ### `else` Clauses
 
 !!! compat "Julia 1.8"
-    This functionality requires Julia 1.8.
+    This functionality requires at least Julia 1.8.
 
 In some cases, one may not only want to appropriately handle the error case, but also want to run
 some code only if the `try` block succeeds. For this, an `else` clause can be specified after the
