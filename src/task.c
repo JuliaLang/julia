@@ -691,7 +691,7 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
 
     JL_PROBE_RT_RUN_TASK(ct);
     ct->last_scheduled_ns = jl_hrtime();
-    
+
     jl_gc_unsafe_leave(ptls, gc_state);
 }
 
