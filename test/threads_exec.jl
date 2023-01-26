@@ -1317,6 +1317,7 @@ end
     t = Threads.@spawn begin
         peakflops()
     end
+    wait(t)
     @test t.cpu_time_ns > 0
 end
 
