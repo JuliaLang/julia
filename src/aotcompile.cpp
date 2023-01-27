@@ -1168,16 +1168,18 @@ unsigned compute_image_thread_count(Module &M) {
 
     // more defaults
     if (!env_threads_set && threads > 1) {
-        if (jl_options.nthreads && jl_options.nthreads < threads) {
-            dbgs() << "Overriding threads to " << jl_options.nthreads << " due to -t option\n";
-            threads = jl_options.nthreads;
-        } else if (auto fallbackenv = getenv(NUM_THREADS_NAME)) {
+        if (jl_options.nthreads) {
+            if (static_cast<unsigned>(jl_options.nthreads) < threads) {
+                dbgs() << "Overriding threads to " << jl_options.nthreads << " due to -t option\n";
+                threads = jl_options.nthreads;
+            }
+        } else if (auto fallbackenv = getenv("JULIA_CPU_THREADS")) {
             char *endptr;
             unsigned long requested = strtoul(fallbackenv, &endptr, 10);
             if (*endptr || !requested) {
-                jl_safe_printf("WARNING: invalid value '%s' for %s\m", fallbackenv, NUM_THREADS_NAME);
+                jl_safe_printf("WARNING: invalid value '%s' for JULIA_CPU_THREADS\n", fallbackenv);
             } else if (requested < threads) {
-                dbgs() << "Overriding threads to " << requested << " due to " << NUM_THREADS_NAME << "\n";
+                dbgs() << "Overriding threads to " << requested << " due to JULIA_CPU_THREADS\n";
                 threads = requested;
             }
         }
@@ -1355,20 +1357,23 @@ void jl_dump_native_impl(void *native_code,
     sysimageM->setStackProtectorGuard(dataM->getStackProtectorGuard());
     sysimageM->setOverrideStackAlignment(dataM->getOverrideStackAlignment());
 #endif
-    // We would like to emit an alias or an weakref alias to redirect these symbols
-    // but LLVM doesn't let us emit a GlobalAlias to a declaration...
-    // So for now we inject a definition of these functions that calls our runtime
-    // functions. We do so after optimization to avoid cloning these functions.
-    injectCRTAlias(*sysimageM, "__gnu_h2f_ieee", "julia__gnu_h2f_ieee",
-            FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
-    injectCRTAlias(*sysimageM, "__extendhfsf2", "julia__gnu_h2f_ieee",
-            FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
-    injectCRTAlias(*sysimageM, "__gnu_f2h_ieee", "julia__gnu_f2h_ieee",
-            FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
-    injectCRTAlias(*sysimageM, "__truncsfhf2", "julia__gnu_f2h_ieee",
-            FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
-    injectCRTAlias(*sysimageM, "__truncdfhf2", "julia__truncdfhf2",
-            FunctionType::get(Type::getHalfTy(Context), { Type::getDoubleTy(Context) }, false));
+
+    if (!TheTriple.isOSDarwin()) {
+        // We would like to emit an alias or an weakref alias to redirect these symbols
+        // but LLVM doesn't let us emit a GlobalAlias to a declaration...
+        // So for now we inject a definition of these functions that calls our runtime
+        // functions. We do so after optimization to avoid cloning these functions.
+        injectCRTAlias(*sysimageM, "__gnu_h2f_ieee", "julia__gnu_h2f_ieee",
+                FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
+        injectCRTAlias(*sysimageM, "__extendhfsf2", "julia__gnu_h2f_ieee",
+                FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
+        injectCRTAlias(*sysimageM, "__gnu_f2h_ieee", "julia__gnu_f2h_ieee",
+                FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
+        injectCRTAlias(*sysimageM, "__truncsfhf2", "julia__gnu_f2h_ieee",
+                FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
+        injectCRTAlias(*sysimageM, "__truncdfhf2", "julia__truncdfhf2",
+                FunctionType::get(Type::getHalfTy(Context), { Type::getDoubleTy(Context) }, false));
+    }
 
     if (TheTriple.isOSWindows()) {
         // Windows expect that the function `_DllMainStartup` is present in an dll.
@@ -1444,16 +1449,7 @@ void jl_dump_native_impl(void *native_code,
         "data.o",
         "data.s"
     };
-    dbgs() << "Dumping sysimage data module\n";
-    for (auto &F : *sysimageM) {
-        dbgs() << F << "\n";
-    }
-    dbgs() << *sysimageM << "\n";
     compile(*sysimageM, data_names, 1);
-    dbgs() << "Post-optimization sysimageM\n";
-    for (auto &F : *sysimageM) {
-        dbgs() << F << "\n";
-    }
 
     end = jl_hrtime();
 
