@@ -152,7 +152,6 @@ static void annotate_module_clones(Module &M) {
     auto specs = jl_get_llvm_clone_targets();
     std::vector<APInt> clones(orig_funcs.size(), APInt(specs.size(), 0));
     BitVector subtarget_cloned(orig_funcs.size());
-    bool check_relocs = false;
 
     std::vector<unsigned> func_infos(orig_funcs.size());
     for (unsigned i = 0; i < orig_funcs.size(); i++) {
@@ -163,7 +162,6 @@ static void annotate_module_clones(Module &M) {
             for (unsigned j = 0; j < orig_funcs.size(); j++) {
                 clones[j].setBit(i);
             }
-            check_relocs = true;
         } else {
             unsigned flag = specs[i].flags & clone_mask;
             std::set<Function*> sets[2];
@@ -217,7 +215,11 @@ static void annotate_module_clones(Module &M) {
             }
         }
     }
-    if (check_relocs) {
+    // if there's only one target, we won't need any relocation slots
+    // but even if there is one clone_all and one non-clone_all, we still need
+    // to check for relocation slots because we must fixup instruction uses to
+    // point at the right function.
+    if (specs.size() > 1) {
         for (unsigned i = 0; i < orig_funcs.size(); i++) {
             auto &F = *orig_funcs[i];
             if (subtarget_cloned[i] && !ConstantUses<Instruction>(orig_funcs[i], M).done()) {
