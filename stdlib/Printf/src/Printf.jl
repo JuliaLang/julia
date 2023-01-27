@@ -995,8 +995,6 @@ Use shorter of decimal or scientific 1.23 1.23e+07
 
 julia> @printf "Use dynamic width and precision  %*.*f" 10 2 0.12345
 Use dynamic width and precision        0.12
-
-
 ```
 For a systematic specification of the format, see [here](https://www.cplusplus.com/reference/cstdio/printf/).
 See also [`@sprintf`](@ref) to get the result as a `String` instead of it being printed.
