@@ -212,7 +212,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     elseif isa(matches, MethodMatches) ? (!matches.fullmatch || any_ambig(matches)) :
             (!all(matches.fullmatches) || any_ambig(matches))
         # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
-        all_effects = Effects(all_effects; nothrow=false)
+        all_effects = Effects(all_effects; nothrow=ALWAYS_FALSE)
     end
 
     rettype = from_interprocedural!(𝕃ₚ, rettype, sv, arginfo, conditionals)
@@ -1022,7 +1022,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
                 rt, nothrow = ir_abstract_constant_propagation(interp, irsv)
                 @assert !(rt isa Conditional || rt isa MustAlias) "invalid lattice element returned from IR interpretation"
                 if !isa(rt, Type) || typeintersect(rt, Bool) === Union{}
-                    new_effects = Effects(result.effects; nothrow=nothrow)
+                    new_effects = Effects(result.effects; nothrow= nothrow ? ALWAYS_TRUE : ALWAYS_FALSE)
                     return ConstCallResults(rt, SemiConcreteResult(mi, ir, new_effects), new_effects, mi)
                 end
             end
@@ -1863,7 +1863,7 @@ function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{An
             body = a3.parameters[1]
             canconst = false
         else
-            return CallMeta(Any, Effects(EFFECTS_TOTAL; nothrow), NoCallInfo())
+            return CallMeta(Any, Effects(EFFECTS_TOTAL; nothrow = nothrow ? ALWAYS_TRUE : ALWAYS_FALSE), NoCallInfo())
         end
         if !(isa(body, Type) || isa(body, TypeVar))
             return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
@@ -1881,7 +1881,7 @@ function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{An
             body = UnionAll(tv, body)
         end
         ret = canconst ? Const(body) : Type{body}
-        return CallMeta(ret, Effects(EFFECTS_TOTAL; nothrow), NoCallInfo())
+        return CallMeta(ret, Effects(EFFECTS_TOTAL; nothrow = nothrow ? ALWAYS_TRUE : ALWAYS_FALSE), NoCallInfo())
     end
     return CallMeta(Any, EFFECTS_UNKNOWN, NoCallInfo())
 end
@@ -2085,7 +2085,7 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
         (aty, rty) = (unwrap_unionall(ftt)::DataType).parameters
         rty = rewrap_unionall(rty isa TypeVar ? rty.lb : rty, ftt)
         if !(rt ⊑ₚ rty && tuple_tfunc(𝕃ₚ, arginfo.argtypes[2:end]) ⊑ₚ rewrap_unionall(aty, ftt))
-            effects = Effects(effects; nothrow=false)
+            effects = Effects(effects; nothrow=ALWAYS_FALSE)
         end
     end
     rt = from_interprocedural!(𝕃ₚ, rt, sv, arginfo, match.spec_types)
@@ -2219,7 +2219,7 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
     elseif isa(e, SlotNumber)
         vtyp = vtypes[slot_id(e)]
         if vtyp.undef
-            merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; nothrow=false))
+            merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; nothrow=ALWAYS_FALSE))
         end
         return vtyp.typ
     elseif isa(e, Argument)
@@ -2353,7 +2353,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
                 t = refine_partial_type(t)
             end
         end
-        effects = Effects(EFFECTS_TOTAL; consistent, nothrow)
+        effects = Effects(EFFECTS_TOTAL; consistent, nothrow = nothrow ? ALWAYS_TRUE : ALWAYS_FALSE)
     elseif ehead === :splatnew
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
         nothrow = false # TODO: More precision
@@ -2373,7 +2373,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
             t = refine_partial_type(t)
         end
         consistent = !ismutabletype(t) ? ALWAYS_TRUE : CONSISTENT_IF_NOTRETURNED
-        effects = Effects(EFFECTS_TOTAL; consistent, nothrow)
+        effects = Effects(EFFECTS_TOTAL; consistent, nothrow = nothrow ? ALWAYS_TRUE : ALWAYS_FALSE)
     elseif ehead === :new_opaque_closure
         t = Union{}
         effects = Effects() # TODO
@@ -2500,7 +2500,7 @@ function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, vtypes:
         effects = Effects(
             override.consistent          ? ALWAYS_TRUE : effects.consistent,
             override.effect_free         ? ALWAYS_TRUE : effects.effect_free,
-            override.nothrow             ? true        : effects.nothrow,
+            override.nothrow             ? ALWAYS_TRUE : effects.nothrow,
             override.terminates_globally ? true        : effects.terminates,
             override.notaskstate         ? true        : effects.notaskstate,
             override.inaccessiblememonly ? ALWAYS_TRUE : effects.inaccessiblememonly,
@@ -2589,13 +2589,14 @@ function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, fram
         consistent = inaccessiblememonly = ALWAYS_TRUE
         rt = Union{}
     end
+    nothrow = nothrow ? ALWAYS_TRUE : ALWAYS_FALSE
     merge_effects!(interp, frame, Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly))
     return rt
 end
 
 function handle_global_assignment!(interp::AbstractInterpreter, frame::InferenceState, lhs::GlobalRef, @nospecialize(newty))
     effect_free = ALWAYS_FALSE
-    nothrow = global_assignment_nothrow(lhs.mod, lhs.name, newty)
+    nothrow = global_assignment_nothrow(lhs.mod, lhs.name, newty) ? ALWAYS_TRUE : ALWAYS_FALSE
     inaccessiblememonly = ALWAYS_FALSE
     merge_effects!(interp, frame, Effects(EFFECTS_TOTAL; effect_free, nothrow, inaccessiblememonly))
     return nothing

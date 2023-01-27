@@ -1,5 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include <algorithm>
 #undef DEBUG
 #include "llvm-version.h"
 #include "platform.h"
@@ -584,6 +585,64 @@ static AttributeList get_attrs_zext(LLVMContext &C)
                 {Attributes(C, {Attribute::ZExt})});
 }
 
+static AttributeList get_attrs_ipoeffects(LLVMContext &C, jl_code_instance_t *ci, bool has_ptr_arg = true)
+{
+    uint32_t e = ci->ipo_purity_bits;
+    bool consistent = (e >> 0) & 0x07;
+    bool effect_free = (e >> 3) & 0x03;
+    uint8_t nothrow = (e >> 5) & 0x03;
+    bool terminates = (e >> 7) & 0x01;
+    bool notaskstate = (e >> 8) & 0x01;
+    uint8_t inaccessiblememonly = (e >> 9) & 0x03;
+    bool nonoverlayed = (e >> 11) & 0x01;
+#if JL_LLVM_VERSION >= 140000
+    AttrBuilder attr(C);
+#else
+    AttrBuilder attr;
+#endif
+    if (consistent == 0){
+        attr.addAttribute("consistent");
+    }
+    if (effect_free == 0){
+        attr.addAttribute("effect_free");
+        // attr.addAttribute(Attribute::NoUnwind);
+    }
+    if (inaccessiblememonly == 0) {
+        attr.addAttribute("inaccessiblememonly");
+    } else if (inaccessiblememonly == 2){
+        attr.addAttribute("inaccessiblememorargmemonly");
+    }
+    if (consistent == 0 && effect_free == 0 && inaccessiblememonly == 0 && has_ptr_arg == false){
+        attr.addAttribute(Attribute::ReadNone);
+        // attr.addAttribute(Attribute::ReadOnly);
+    } else if (effect_free == 0) {
+        // attr.addAttribute(Attribute::ReadOnly);
+    } else if (inaccessiblememonly == 0) {
+        attr.addAttribute("inaccessiblememonly");
+        attr.addAttribute(Attribute::InaccessibleMemOnly);
+    } else if (inaccessiblememonly == 2){
+        attr.addAttribute("inaccessiblememorargmemonly");
+        attr.addAttribute(Attribute::InaccessibleMemOrArgMemOnly);
+    }
+    if (nothrow == 0){ // nothrow === ALWAYS_TRUE means strict nothrow
+        attr.addAttribute("nothrow_strict");
+        attr.addAttribute(Attribute::NoUnwind);
+    } else if (nothrow ==2) {
+        attr.addAttribute("nothrow");
+    }
+    if (terminates == 1){
+        attr.addAttribute(Attribute::WillReturn);
+        attr.addAttribute("terminates");
+    }
+    if (consistent == 0 && terminates == 1 && effect_free == 0 && terminates == 1 && inaccessiblememonly == 0)
+        // attr.addAttribute(Attribute::Speculatable);
+    if (notaskstate == 1)
+        attr.addAttribute("notaskstate");
+    if (nonoverlayed == 1)
+        attr.addAttribute("nonoverlayed");
+    attr.addAttribute(std::to_string(e));
+    return AttributeList::get(C,AttributeSet::get(C, attr), AttributeSet(), None);
+}
 
 // global vars
 static const auto jlRTLD_DEFAULT_var = new JuliaVariable{
@@ -4061,6 +4120,14 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction *theFptr, Value *t
     return emit_jlcall(ctx, prepare_call(theFptr), theF, argv, nargs, trampoline);
 }
 
+bool hasPtrArg(Function *fun)
+{
+    for (auto& arg : fun->args()) {
+        if (arg.getType()->isPointerTy())
+            return true;
+    }
+    return false;
+}
 
 static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_t *mi, jl_value_t *jlretty, StringRef specFunctionObject,
                                           const jl_cgval_t *argv, size_t nargs, jl_returninfo_t::CallingConv *cc, unsigned *return_roots, jl_value_t *inferred_retty)
@@ -4069,6 +4136,12 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
     // emit specialized call site
     bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
     jl_returninfo_t returninfo = get_specsig_function(ctx, jl_Module, specFunctionObject, mi->specTypes, jlretty, is_opaque_closure);
+    jl_value_t *ci = ctx.params->lookup(mi, ctx.world, ctx.world); // TODO: need to use the right pair world here
+    jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
+    if (ci != jl_nothing) {
+        auto attrs = get_attrs_ipoeffects(ctx.builder.getContext(), codeinst, hasPtrArg(returninfo.decl));
+        returninfo.decl->setAttributes(AttributeList::get(ctx.builder.getContext(), {returninfo.decl->getAttributes(), attrs}));
+    }
     FunctionType *cft = returninfo.decl->getFunctionType();
     *cc = returninfo.cc;
     *return_roots = returninfo.return_roots;
@@ -4139,7 +4212,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
     }
     assert(idx == nfargs);
     CallInst *call = ctx.builder.CreateCall(returninfo.decl, ArrayRef<Value*>(&argvals[0], nfargs));
-    call->setAttributes(returninfo.decl->getAttributes());
+    call->setAttributes(returninfo.decl->getAttributes().removeFnAttributes(ctx.builder.getContext()));
 
     jl_cgval_t retval;
     switch (returninfo.cc) {
@@ -4177,12 +4250,16 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
     return update_julia_type(ctx, retval, inferred_retty);
 }
 
-static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_value_t *jlretty, StringRef specFunctionObject,
+static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_method_instance_t *mi, jl_value_t *jlretty, StringRef specFunctionObject,
                                           const jl_cgval_t *argv, size_t nargs, jl_value_t *inferred_retty)
 {
     auto theFptr = cast<Function>(
         jl_Module->getOrInsertFunction(specFunctionObject, ctx.types().T_jlfunc).getCallee());
     addRetAttr(theFptr, Attribute::NonNull);
+    jl_value_t *ci = ctx.params->lookup(mi, ctx.world, ctx.world); // TODO: need to use the right pair world here
+    jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
+    if (ci != jl_nothing)
+        theFptr->setAttributes(AttributeList::get(ctx.builder.getContext(), {theFptr->getAttributes(), get_attrs_ipoeffects(ctx.builder.getContext(), codeinst)}));
     Value *ret = emit_jlcall(ctx, theFptr, nullptr, argv, nargs, julia_call);
     return update_julia_type(ctx, mark_julia_type(ctx, ret, true, jlretty), inferred_retty);
 }
@@ -4218,7 +4295,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
             FunctionType *ft = ctx.f->getFunctionType();
             StringRef protoname = ctx.f->getName();
             if (ft == ctx.types().T_jlfunc) {
-                result = emit_call_specfun_boxed(ctx, ctx.rettype, protoname, argv, nargs, rt);
+                result = emit_call_specfun_boxed(ctx, mi, ctx.rettype, protoname, argv, nargs, rt);
                 handled = true;
             }
             else if (ft != ctx.types().T_jlfuncparams) {
@@ -4280,14 +4357,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                     if (specsig)
                         result = emit_call_specfun_other(ctx, mi, codeinst->rettype, protoname, argv, nargs, &cc, &return_roots, rt);
                     else
-                        result = emit_call_specfun_boxed(ctx, codeinst->rettype, protoname, argv, nargs, rt);
-                    if (external) {
-                        assert(!need_to_emit);
-                        auto calledF = jl_Module->getFunction(protoname);
-                        assert(calledF);
-                        // TODO: Check if already present?
-                        ctx.external_calls[std::make_tuple(codeinst, specsig)] = calledF;
-                    }
+                        result = emit_call_specfun_boxed(ctx, mi, codeinst->rettype, protoname, argv, nargs, rt);
                     handled = true;
                     if (need_to_emit) {
                         Function *trampoline_decl = cast<Function>(jl_Module->getNamedValue(protoname));
@@ -5638,7 +5708,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     theFarg = track_pjlvalue(ctx, theFarg);
     auto args = f->arg_begin();
     CallInst *r = ctx.builder.CreateCall(theFunc, { &*args, &*++args, &*++args, theFarg });
-    r->setAttributes(theFunc->getAttributes());
+    r->setAttributes(theFunc->getAttributes().removeFnAttributes(ctx.builder.getContext()));
     ctx.builder.CreateRet(r);
     return f;
 }
@@ -6545,6 +6615,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
     ctx.linfo = lam;
     ctx.rettype = jlretty;
     ctx.world = 0;
+
 
     BasicBlock *b0 = BasicBlock::Create(ctx.builder.getContext(), "top", w);
     ctx.builder.SetInsertPoint(b0);
@@ -7728,8 +7799,8 @@ static jl_llvm_functions_t
     Instruction &prologue_end = ctx.builder.GetInsertBlock()->back();
 
     // step 11a. Emit the entry safepoint
-    if (JL_FEAT_TEST(ctx, safepoint_on_entry))
-        emit_gc_safepoint(ctx.builder, get_current_ptls(ctx), ctx.tbaa().tbaa_const);
+    // if (JL_FEAT_TEST(ctx, safepoint_on_entry))
+        // emit_gc_safepoint(ctx.builder, get_current_ptls(ctx), ctx.tbaa().tbaa_const);
 
     // step 11b. Do codegen in control flow order
     std::vector<int> workstack;

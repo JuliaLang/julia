@@ -2183,7 +2183,8 @@ function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
     na == 0 && return EFFECTS_THROWS
     obj = argtypes[1]
     consistent = is_immutable_argtype(unwrapva(obj)) ? ALWAYS_TRUE : ALWAYS_FALSE
-    nothrow = !isvarargtype(argtypes[end]) && na == 2 && isdefined_nothrow(𝕃, obj, argtypes[2])
+    nothrow = !isvarargtype(argtypes[end]) && na == 2 && isdefined_nothrow(𝕃, obj, argtypes[2]) ?
+        ALWAYS_TRUE : ALWAYS_FALSE
     return Effects(EFFECTS_TOTAL; consistent, nothrow)
 end
 
@@ -2218,6 +2219,7 @@ function getfield_effects(arginfo::ArgInfo, @nospecialize(rt))
             consistent = ALWAYS_FALSE
         end
     end
+    nothrow = nothrow ? ALWAYS_TRUE : ALWAYS_FALSE
     if hasintersect(widenconst(obj), Module)
         inaccessiblememonly = getglobal_effects(argtypes[2:end], rt).inaccessiblememonly
     elseif is_mutation_free_argtype(obj)
@@ -2245,6 +2247,7 @@ function getglobal_effects(argtypes::Vector{Any}, @nospecialize(rt))
             end
         end
     end
+    nothrow = nothrow ? ALWAYS_TRUE : ALWAYS_FALSE
     return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly)
 end
 
@@ -2278,7 +2281,11 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argin
         else
             effect_free = ALWAYS_FALSE
         end
-        nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && builtin_nothrow(𝕃, f, argtypes, rt))
+        if (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && builtin_nothrow(𝕃, f, argtypes, rt))
+            nothrow = ALWAYS_TRUE
+        else
+            nothrow = ALWAYS_FALSE
+        end
         if contains_is(_INACCESSIBLEMEM_BUILTINS, f)
             inaccessiblememonly = ALWAYS_TRUE
         elseif contains_is(_ARGMEM_BUILTINS, f)
@@ -2460,7 +2467,8 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
 
     consistent = contains_is(_INCONSISTENT_INTRINSICS, f) ? ALWAYS_FALSE : ALWAYS_TRUE
     effect_free = !(f === Intrinsics.pointerset) ? ALWAYS_TRUE : ALWAYS_FALSE
-    nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && intrinsic_nothrow(f, argtypes))
+    nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && intrinsic_nothrow(f, argtypes)) ?
+        ALWAYS_TRUE : ALWAYS_FALSE
 
     return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow)
 end
@@ -2657,7 +2665,7 @@ function alloc_array_ndims(name::Symbol)
 end
 
 function alloc_array_effects(@specialize(abstract_eval), args::Vector{Any}, ndims::Int)
-    nothrow = alloc_array_nothrow(abstract_eval, args, ndims)
+    nothrow = alloc_array_nothrow(abstract_eval, args, ndims) ? ALWAYS_TRUE : ALWAYS_FALSE
     return Effects(EFFECTS_TOTAL; consistent=CONSISTENT_IF_NOTRETURNED, nothrow)
 end
 
@@ -2676,7 +2684,7 @@ function alloc_array_nothrow(@specialize(abstract_eval), args::Vector{Any}, ndim
 end
 
 function new_array_effects(@specialize(abstract_eval), args::Vector{Any})
-    nothrow = new_array_nothrow(abstract_eval, args)
+    nothrow = new_array_nothrow(abstract_eval, args) ? ALWAYS_TRUE : ALWAYS_FALSE
     return Effects(EFFECTS_TOTAL; consistent=CONSISTENT_IF_NOTRETURNED, nothrow)
 end
 
