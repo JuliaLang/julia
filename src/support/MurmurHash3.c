@@ -8,11 +8,10 @@
 // non-native version will be less than optimal.
 
 #include "MurmurHash3.h"
+#include "dtypes.h"
 
 //-----------------------------------------------------------------------------
 // Platform-specific functions and macros
-
-#define FORCE_INLINE inline __attribute__((always_inline))
 
 static inline uint32_t rotl32 ( uint32_t x, int8_t r )
 {
