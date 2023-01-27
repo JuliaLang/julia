@@ -1153,14 +1153,33 @@ unsigned compute_image_thread_count(Module &M) {
 
     // environment variable override
     const char *env_threads = getenv("JULIA_IMAGE_THREADS");
+    bool env_threads_set = false;
     if (env_threads) {
         char *endptr;
         unsigned long requested = strtoul(env_threads, &endptr, 10);
         if (*endptr || !requested) {
             jl_safe_printf("WARNING: invalid value '%s' for JULIA_IMAGE_THREADS\n", env_threads);
         } else {
-            dbgs() << "Overriding threads to " << requested << "\n";
+            dbgs() << "Overriding threads to " << requested << " due to JULIA_IMAGE_THREADS\n";
             threads = requested;
+            env_threads_set = true;
+        }
+    }
+
+    // more defaults
+    if (!env_threads_set && threads > 1) {
+        if (jl_options.nthreads && jl_options.nthreads < threads) {
+            dbgs() << "Overriding threads to " << jl_options.nthreads << " due to -t option\n";
+            threads = jl_options.nthreads;
+        } else if (auto fallbackenv = getenv(NUM_THREADS_NAME)) {
+            char *endptr;
+            unsigned long requested = strtoul(fallbackenv, &endptr, 10);
+            if (*endptr || !requested) {
+                jl_safe_printf("WARNING: invalid value '%s' for %s\m", fallbackenv, NUM_THREADS_NAME);
+            } else if (requested < threads) {
+                dbgs() << "Overriding threads to " << requested << " due to " << NUM_THREADS_NAME << "\n";
+                threads = requested;
+            }
         }
     }
 
@@ -1426,10 +1445,15 @@ void jl_dump_native_impl(void *native_code,
         "data.s"
     };
     dbgs() << "Dumping sysimage data module\n";
+    for (auto &F : *sysimageM) {
+        dbgs() << F << "\n";
+    }
     dbgs() << *sysimageM << "\n";
     compile(*sysimageM, data_names, 1);
     dbgs() << "Post-optimization sysimageM\n";
-    dbgs() << *sysimageM << "\n";
+    for (auto &F : *sysimageM) {
+        dbgs() << F << "\n";
+    }
 
     end = jl_hrtime();
 
