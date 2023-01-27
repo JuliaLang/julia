@@ -3,6 +3,7 @@
 using Test
 using Base.Threads
 using Base.Threads: SpinLock, threadpoolsize
+using LinearAlgebra: peakflops
 
 # for cfunction_closure
 include("testenv.jl")
