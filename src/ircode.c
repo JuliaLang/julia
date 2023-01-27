@@ -761,7 +761,9 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
 
 // --- entry points ---
 
-JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
+typedef jl_value_t jl_string_t; // for local expressibility
+
+JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
 {
     JL_TIMING(AST_COMPRESS, AST_COMPRESS);
     JL_LOCK(&m->writelock); // protect the roots array (Might GC)
@@ -841,7 +843,7 @@ JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     write_uint8(s.s, s.relocatability);
 
     ios_flush(s.s);
-    jl_array_t *v = jl_take_buffer(&dest);
+    jl_string_t *v = jl_pchar_to_string(s.s->buf, s.s->size);
     ios_close(s.s);
     if (jl_array_len(m->roots) == 0) {
         m->roots = NULL;
@@ -854,19 +856,19 @@ JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     return v;
 }
 
-JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_array_t *data)
+JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_string_t *data)
 {
     if (jl_is_code_info(data))
         return (jl_code_info_t*)data;
     JL_TIMING(AST_UNCOMPRESS, AST_UNCOMPRESS);
     JL_LOCK(&m->writelock); // protect the roots array (Might GC)
     assert(jl_is_method(m));
-    assert(jl_typetagis(data, jl_array_uint8_type));
+    assert(jl_is_string(data));
     size_t i;
     ios_t src;
     ios_mem(&src, 0);
-    ios_setbuf(&src, (char*)data->data, jl_array_len(data), 0);
-    src.size = jl_array_len(data);
+    ios_setbuf(&src, (char*)jl_string_data(data), jl_string_len(data), 0);
+    src.size = jl_string_len(data);
     int en = jl_gc_enable(0); // Might GC
     jl_ircode_state s = {
         &src,
@@ -939,42 +941,42 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     return code;
 }
 
-JL_DLLEXPORT uint8_t jl_ir_flag_inferred(jl_array_t *data)
+JL_DLLEXPORT uint8_t jl_ir_flag_inferred(jl_string_t *data)
 {
     if (jl_is_code_info(data))
         return ((jl_code_info_t*)data)->inferred;
-    assert(jl_typetagis(data, jl_array_uint8_type));
+    assert(jl_is_string(data));
     jl_code_info_flags_t flags;
-    flags.packed = ((uint8_t*)data->data)[0];
+    flags.packed = jl_string_data(data)[0];
     return flags.bits.inferred;
 }
 
-JL_DLLEXPORT uint8_t jl_ir_flag_inlining(jl_array_t *data)
+JL_DLLEXPORT uint8_t jl_ir_flag_inlining(jl_string_t *data)
 {
     if (jl_is_code_info(data))
         return ((jl_code_info_t*)data)->inlining;
-    assert(jl_typetagis(data, jl_array_uint8_type));
+    assert(jl_is_string(data));
     jl_code_info_flags_t flags;
-    flags.packed = ((uint8_t*)data->data)[0];
+    flags.packed = jl_string_data(data)[0];
     return flags.bits.inlining;
 }
 
-JL_DLLEXPORT uint8_t jl_ir_flag_has_fcall(jl_array_t *data)
+JL_DLLEXPORT uint8_t jl_ir_flag_has_fcall(jl_string_t *data)
 {
     if (jl_is_code_info(data))
         return ((jl_code_info_t*)data)->has_fcall;
-    assert(jl_typetagis(data, jl_array_uint8_type));
+    assert(jl_is_string(data));
     jl_code_info_flags_t flags;
-    flags.packed = ((uint8_t*)data->data)[0];
+    flags.packed = jl_string_data(data)[0];
     return flags.bits.has_fcall;
 }
 
-JL_DLLEXPORT uint16_t jl_ir_inlining_cost(jl_array_t *data)
+JL_DLLEXPORT uint16_t jl_ir_inlining_cost(jl_string_t *data)
 {
     if (jl_is_code_info(data))
         return ((jl_code_info_t*)data)->inlining_cost;
-    assert(jl_typetagis(data, jl_array_uint8_type));
-    uint16_t res = jl_load_unaligned_i16((char*)data->data + 2);
+    assert(jl_is_string(data));
+    uint16_t res = jl_load_unaligned_i16(jl_string_data(data) + 2);
     return res;
 }
 
@@ -1004,26 +1006,26 @@ JL_DLLEXPORT jl_value_t *jl_compress_argnames(jl_array_t *syms)
     return str;
 }
 
-JL_DLLEXPORT ssize_t jl_ir_nslots(jl_array_t *data)
+JL_DLLEXPORT ssize_t jl_ir_nslots(jl_value_t *data)
 {
     if (jl_is_code_info(data)) {
         jl_code_info_t *func = (jl_code_info_t*)data;
         return jl_array_len(func->slotnames);
     }
     else {
-        assert(jl_typetagis(data, jl_array_uint8_type));
-        int nslots = jl_load_unaligned_i32((char*)data->data + 2 + sizeof(uint16_t));
+        assert(jl_is_string(data));
+        int nslots = jl_load_unaligned_i32(jl_string_data(data) + 2 + sizeof(uint16_t));
         return nslots;
     }
 }
 
-JL_DLLEXPORT uint8_t jl_ir_slotflag(jl_array_t *data, size_t i)
+JL_DLLEXPORT uint8_t jl_ir_slotflag(jl_string_t *data, size_t i)
 {
     assert(i < jl_ir_nslots(data));
     if (jl_is_code_info(data))
         return ((uint8_t*)((jl_code_info_t*)data)->slotflags->data)[i];
-    assert(jl_typetagis(data, jl_array_uint8_type));
-    return ((uint8_t*)data->data)[2 + sizeof(uint16_t) + sizeof(int32_t) + i];
+    assert(jl_is_string(data));
+    return jl_string_data(data)[2 + sizeof(uint16_t) + sizeof(int32_t) + i];
 }
 
 JL_DLLEXPORT jl_array_t *jl_uncompress_argnames(jl_value_t *syms)

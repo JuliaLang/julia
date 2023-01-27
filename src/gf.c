@@ -443,7 +443,7 @@ JL_DLLEXPORT jl_value_t *jl_rettype_inferred(jl_method_instance_t *mi, size_t mi
     while (codeinst) {
         if (codeinst->min_world <= min_world && max_world <= codeinst->max_world) {
             jl_value_t *code = jl_atomic_load_relaxed(&codeinst->inferred);
-            if (code && (code == jl_nothing || jl_ir_flag_inferred((jl_array_t*)code)))
+            if (code && (code == jl_nothing || jl_ir_flag_inferred(code)))
                 return (jl_value_t*)codeinst;
         }
         codeinst = jl_atomic_load_relaxed(&codeinst->next);

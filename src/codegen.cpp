@@ -5252,7 +5252,7 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     }
     ++EmittedOpaqueClosureFunctions;
 
-    ir = jl_uncompress_ir(closure_method, ci, (jl_array_t*)inferred);
+    ir = jl_uncompress_ir(closure_method, ci, (jl_value_t*)inferred);
 
     // TODO: Emit this inline and outline it late using LLVM's coroutine support.
     orc::ThreadSafeModule closure_m = jl_create_ts_module(
@@ -8648,7 +8648,7 @@ jl_llvm_functions_t jl_emit_codeinst(
             return jl_emit_oc_wrapper(m, params, codeinst->def, codeinst->rettype);
         }
         if (src && (jl_value_t*)src != jl_nothing && jl_is_method(def))
-            src = jl_uncompress_ir(def, codeinst, (jl_array_t*)src);
+            src = jl_uncompress_ir(def, codeinst, (jl_value_t*)src);
         if (!src || !jl_is_code_info(src)) {
             JL_GC_POP();
             m = orc::ThreadSafeModule();
@@ -8677,7 +8677,7 @@ jl_llvm_functions_t jl_emit_codeinst(
         }
 
         if (params.world) {// don't alter `inferred` when the code is not directly being used
-            auto inferred = jl_atomic_load_relaxed(&codeinst->inferred);
+            jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
             // don't change inferred state
             if (inferred) {
                 jl_method_t *def = codeinst->def->def.method;
@@ -8689,8 +8689,8 @@ jl_llvm_functions_t jl_emit_codeinst(
                     if (inferred != (jl_value_t*)src) {
                         if (jl_is_method(def)) {
                             src = (jl_code_info_t*)jl_compress_ir(def, src);
-                            assert(jl_typetagis(src, jl_array_uint8_type));
-                            codeinst->relocatability = ((uint8_t*)jl_array_data(src))[jl_array_len(src)-1];
+                            assert(jl_is_string(src));
+                            codeinst->relocatability = jl_string_data(src)[jl_string_len(src)-1];
                         }
                         jl_atomic_store_release(&codeinst->inferred, (jl_value_t*)src);
                         jl_gc_wb(codeinst, src);
@@ -8701,7 +8701,7 @@ jl_llvm_functions_t jl_emit_codeinst(
                             inferred != jl_nothing &&
                             // don't delete inlineable code, unless it is constant
                             (jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr ||
-                                (jl_ir_inlining_cost((jl_array_t*)inferred) == UINT16_MAX)) &&
+                                (jl_ir_inlining_cost(inferred) == UINT16_MAX)) &&
                             // don't delete code when generating a precompile file
                             !(params.imaging || jl_options.incremental)) {
                         // if not inlineable, code won't be needed again
