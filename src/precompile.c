@@ -75,6 +75,8 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         return;
     }
 
+    jl_task_wait_empty();
+
     if (!jl_module_init_order) {
         jl_printf(JL_STDERR, "WARNING: --output requested, but no modules defined during run\n");
         return;

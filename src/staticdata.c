@@ -2170,9 +2170,8 @@ JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val JL_MAYBE_UNROOTED)
 }
 
 static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *newly_inferred, uint64_t worklist_key,
-                           /* outputs */  jl_array_t **extext_methods,
-                                          jl_array_t **new_specializations, jl_array_t **method_roots_list,
-                                          jl_array_t **ext_targets, jl_array_t **edges)
+                           /* outputs */  jl_array_t **extext_methods, jl_array_t **new_specializations,
+                                          jl_array_t **method_roots_list, jl_array_t **ext_targets, jl_array_t **edges)
 {
     // extext_methods: [method1, ...], worklist-owned "extending external" methods added to functions owned by modules outside the worklist
     // ext_targets: [invokesig1, callee1, matches1, ...] non-worklist callees of worklist-owned methods
@@ -2180,24 +2179,19 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
     //              `invoke` dispatch: invokesig is signature, callee is MethodInstance
     //              abstract call: callee is signature
     // edges: [caller1, ext_targets_indexes1, ...] for worklist-owned methods calling external methods
-
     assert(edges_map == NULL);
-    JL_GC_PUSH1(&edges_map);
 
-    // Save the inferred code from newly inferred, external methods
     htable_new(&external_mis, 0);  // we need external_mis until after `jl_collect_edges` finishes
+    // Save the inferred code from newly inferred, external methods
     *new_specializations = queue_external_cis(newly_inferred);
-    // Collect the new method roots
-    htable_t methods_with_newspecs;
-    htable_new(&methods_with_newspecs, 0);
-    jl_collect_methods(&methods_with_newspecs, *new_specializations);
-    *method_roots_list = jl_alloc_vec_any(0);
-    jl_collect_new_roots(*method_roots_list, &methods_with_newspecs, worklist_key);
-    htable_free(&methods_with_newspecs);
 
     // Collect method extensions and edges data
-    edges_map = jl_alloc_vec_any(0);
+    JL_GC_PUSH1(&edges_map);
+    if (edges)
+        edges_map = jl_alloc_vec_any(0);
     *extext_methods = jl_alloc_vec_any(0);
+    jl_collect_methtable_from_mod(jl_type_type_mt, *extext_methods);
+    jl_collect_methtable_from_mod(jl_nonfunction_mt, *extext_methods);
     size_t i, len = jl_array_len(mod_array);
     for (i = 0; i < len; i++) {
         jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_array, i);
@@ -2205,15 +2199,23 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
         if (m->parent == m) // some toplevel modules (really just Base) aren't actually
             jl_collect_extext_methods_from_mod(*extext_methods, m);
     }
-    jl_collect_methtable_from_mod(*extext_methods, jl_type_type_mt);
-    jl_collect_missing_backedges(jl_type_type_mt);
-    jl_collect_methtable_from_mod(*extext_methods, jl_nonfunction_mt);
-    jl_collect_missing_backedges(jl_nonfunction_mt);
-    // jl_collect_extext_methods_from_mod and jl_collect_missing_backedges also accumulate data in callers_with_edges.
-    // Process this to extract `edges` and `ext_targets`.
-    *ext_targets = jl_alloc_vec_any(0);
-    *edges = jl_alloc_vec_any(0);
-    jl_collect_edges(*edges, *ext_targets);
+
+    if (edges) {
+        jl_collect_missing_backedges(jl_type_type_mt);
+        jl_collect_missing_backedges(jl_nonfunction_mt);
+        // jl_collect_extext_methods_from_mod and jl_collect_missing_backedges also accumulate data in callers_with_edges.
+        // Process this to extract `edges` and `ext_targets`.
+        *ext_targets = jl_alloc_vec_any(0);
+        *edges = jl_alloc_vec_any(0);
+        *method_roots_list = jl_alloc_vec_any(0);
+        // Collect the new method roots
+        htable_t methods_with_newspecs;
+        htable_new(&methods_with_newspecs, 0);
+        jl_collect_methods(&methods_with_newspecs, *new_specializations);
+        jl_collect_new_roots(*method_roots_list, &methods_with_newspecs, worklist_key);
+        htable_free(&methods_with_newspecs);
+        jl_collect_edges(*edges, *ext_targets);
+    }
     htable_free(&external_mis);
     assert(edges_map == NULL); // jl_collect_edges clears this when done
 
@@ -2501,9 +2503,8 @@ static void jl_save_system_image_to_stream(ios_t *f,
     jl_gc_enable(en);
 }
 
-static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_array_t **mod_array, jl_array_t **udeps, int64_t *srctextpos, int64_t *checksumpos)
+static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_array_t *mod_array, jl_array_t **udeps, int64_t *srctextpos, int64_t *checksumpos)
 {
-    *mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
     assert(jl_precompile_toplevel_module == NULL);
     jl_precompile_toplevel_module = (jl_module_t*)jl_array_ptr_ref(worklist, jl_array_len(worklist)-1);
 
@@ -2519,7 +2520,7 @@ static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_a
     // write description of requirements for loading (modules that must be pre-loaded if initialization is to succeed)
     // this can return errors during deserialize,
     // best to keep it early (before any actual initialization)
-    write_mod_list(f, *mod_array);
+    write_mod_list(f, mod_array);
 }
 
 JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *worklist, bool_t emit_split,
@@ -2550,49 +2551,58 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     int64_t checksumpos_ff = 0;
     int64_t datastartpos = 0;
     JL_GC_PUSH6(&mod_array, &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
+
     if (worklist) {
-        jl_write_header_for_incremental(f, worklist, &mod_array, udeps, srctextpos, &checksumpos);
+        mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
+        // Generate _native_data`
+        if (jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm) {
+            jl_prepare_serialization_data(mod_array, newly_inferred, jl_worklist_key(worklist),
+                                          &extext_methods, &new_specializations, NULL, NULL, NULL);
+            jl_precompile_toplevel_module = (jl_module_t*)jl_array_ptr_ref(worklist, jl_array_len(worklist)-1);
+            *_native_data = jl_precompile_worklist(worklist, extext_methods, new_specializations);
+            jl_precompile_toplevel_module = NULL;
+            extext_methods = NULL;
+            new_specializations = NULL;
+        }
+        jl_write_header_for_incremental(f, worklist, mod_array, udeps, srctextpos, &checksumpos);
         if (emit_split) {
             checksumpos_ff = write_header(ff, 1);
             write_uint8(ff, jl_cache_flags());
             write_mod_list(ff, mod_array);
-        } else {
+        }
+        else {
             checksumpos_ff = checksumpos;
         }
-        {
-            // make sure we don't run any Julia code concurrently after this point
-            jl_gc_enable_finalizers(ct, 0);
-            assert(ct->reentrant_inference == 0);
-            ct->reentrant_inference = (uint16_t)-1;
-        }
-        jl_prepare_serialization_data(mod_array, newly_inferred, jl_worklist_key(worklist), &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
+    }
+    else {
+        *_native_data = jl_precompile(jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL);
+    }
 
-        // Generate _native_data`
-        if (jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm) {
-            jl_precompile_toplevel_module = (jl_module_t*)jl_array_ptr_ref(worklist, jl_array_len(worklist)-1);
-            *_native_data = jl_precompile_worklist(worklist, extext_methods, new_specializations);
-            jl_precompile_toplevel_module = NULL;
-        }
-
+    // Make sure we don't run any Julia code concurrently after this point
+    // since it will invalidate our serialization preparations
+    jl_gc_enable_finalizers(ct, 0);
+    assert(ct->reentrant_inference == 0);
+    ct->reentrant_inference = (uint16_t)-1;
+    if (worklist) {
+        jl_prepare_serialization_data(mod_array, newly_inferred, jl_worklist_key(worklist),
+                                      &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
         if (!emit_split) {
             write_int32(f, 0); // No clone_targets
             write_padding(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(f));
-        } else {
+        }
+        else {
             write_padding(ff, LLT_ALIGN(ios_pos(ff), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(ff));
         }
         datastartpos = ios_pos(ff);
-    } else {
-        *_native_data = jl_precompile(jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL);
     }
     native_functions = *_native_data;
     jl_save_system_image_to_stream(ff, worklist, extext_methods, new_specializations, method_roots_list, ext_targets, edges);
     native_functions = NULL;
-    if (worklist) {
-        // Re-enable running julia code for postoutput hooks, atexit, etc.
-        jl_gc_enable_finalizers(ct, 1);
-        ct->reentrant_inference = 0;
-        jl_precompile_toplevel_module = NULL;
-    }
+    // make sure we don't run any Julia code concurrently before this point
+    // Re-enable running julia code for postoutput hooks, atexit, etc.
+    jl_gc_enable_finalizers(ct, 1);
+    ct->reentrant_inference = 0;
+    jl_precompile_toplevel_module = NULL;
 
     if (worklist) {
         // Go back and update the checksum in the header

@@ -1713,7 +1713,7 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
             end
         end
         if largs == 1 # Union{T} --> T
-            u1 = typeintersect(widenconst(args[1]), Type)
+            u1 = typeintersect(widenconst(args[1]), Union{Type,TypeVar})
             valid_as_lattice(u1) || return Bottom
             return u1
         end

@@ -104,11 +104,11 @@ struct IRInterpretationState
     lazydomtree::LazyDomtree
     function IRInterpretationState(interp::AbstractInterpreter,
         ir::IRCode, mi::MethodInstance, world::UInt, argtypes::Vector{Any})
-        argtypes = va_process_argtypes(typeinf_lattice(interp), argtypes, mi)
+        argtypes = va_process_argtypes(optimizer_lattice(interp), argtypes, mi)
         for i = 1:length(argtypes)
             argtypes[i] = widenslotwrapper(argtypes[i])
         end
-        argtypes_refined = Bool[!⊑(typeinf_lattice(interp), ir.argtypes[i], argtypes[i]) for i = 1:length(argtypes)]
+        argtypes_refined = Bool[!⊑(optimizer_lattice(interp), ir.argtypes[i], argtypes[i]) for i = 1:length(argtypes)]
         empty!(ir.argtypes)
         append!(ir.argtypes, argtypes)
         tpdum = TwoPhaseDefUseMap(length(ir.stmts))
@@ -268,7 +268,7 @@ function reprocess_instruction!(interp::AbstractInterpreter,
         # Handled at the very end
         return false
     elseif isa(inst, PiNode)
-        rt = tmeet(typeinf_lattice(interp), argextype(inst.val, ir), widenconst(inst.typ))
+        rt = tmeet(optimizer_lattice(interp), argextype(inst.val, ir), widenconst(inst.typ))
     elseif inst === nothing
         return false
     elseif isa(inst, GlobalRef)
@@ -277,7 +277,7 @@ function reprocess_instruction!(interp::AbstractInterpreter,
         ccall(:jl_, Cvoid, (Any,), inst)
         error()
     end
-    if rt !== nothing && !⊑(typeinf_lattice(interp), typ, rt)
+    if rt !== nothing && !⊑(optimizer_lattice(interp), typ, rt)
         ir.stmts[idx][:type] = rt
         return true
     end
@@ -444,7 +444,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
             end
             inst = ir.stmts[idx][:inst]::ReturnNode
             rt = argextype(inst.val, ir)
-            ultimate_rt = tmerge(typeinf_lattice(interp), ultimate_rt, rt)
+            ultimate_rt = tmerge(optimizer_lattice(interp), ultimate_rt, rt)
         end
     end
 

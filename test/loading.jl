@@ -1000,24 +1000,37 @@ end
     try
         tmp = mktempdir()
         push!(empty!(DEPOT_PATH), joinpath(tmp, "depot"))
-
         proj = joinpath(@__DIR__, "project", "Extensions", "HasDepWithExtensions.jl")
-        for compile in (`--compiled-modules=no`, ``, ``) # Once when requiring precomilation, once where it is already precompiled
-            cmd = `$(Base.julia_cmd()) $compile --project=$proj --startup-file=no -e '
-                begin
-                using HasExtensions
-                # Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly got an extension")
-                HasExtensions.ext_loaded && error("ext_loaded set")
-                using HasDepWithExtensions
-                # Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
-                HasExtensions.ext_loaded || error("ext_loaded not set")
-                HasExtensions.ext_folder_loaded && error("ext_folder_loaded set")
-                HasDepWithExtensions.do_something() || error("do_something errored")
-                using ExtDep2
-                HasExtensions.ext_folder_loaded || error("ext_folder_loaded not set")
 
+        function gen_extension_cmd(compile)
+            ```$(Base.julia_cmd()) $compile --startup-file=no -e '
+                begin
+                    using HasExtensions
+                    # Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly got an extension")
+                    HasExtensions.ext_loaded && error("ext_loaded set")
+                    using HasDepWithExtensions
+                    # Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
+                    HasExtensions.ext_loaded || error("ext_loaded not set")
+                    HasExtensions.ext_folder_loaded && error("ext_folder_loaded set")
+                    HasDepWithExtensions.do_something() || error("do_something errored")
+                    using ExtDep2
+                    HasExtensions.ext_folder_loaded || error("ext_folder_loaded not set")
                 end
-            '`
+                '
+            ```
+        end
+
+        for compile in (`--compiled-modules=no`, ``, ``) # Once when requiring precomilation, once where it is already precompiled
+            cmd = gen_extension_cmd(compile)
+            withenv("JULIA_LOAD_PATH" => proj) do
+                @test success(cmd)
+            end
+        end
+
+        # 48351
+        sep = Sys.iswindows() ? ';' : ':'
+        withenv("JULIA_LOAD_PATH" => join([mktempdir(), proj], sep)) do
+            cmd = gen_extension_cmd(``)
             @test success(cmd)
         end
     finally

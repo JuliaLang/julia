@@ -375,7 +375,7 @@ There `where` argument provides the context from where to search for the
 package: in this case it first checks if the name matches the context itself,
 otherwise it searches all recursive dependencies (from the resolved manifest of
 each environment) until it locates the context `where`, and from there
-identifies the dependency with with the corresponding name.
+identifies the dependency with the corresponding name.
 
 ```julia-repl
 julia> Base.identify_package("Pkg") # Pkg is a dependency of the default environment
@@ -1112,7 +1112,6 @@ function insert_extension_triggers(pkg::PkgId)
     pkg.uuid === nothing && return
     for env in load_path()
         insert_extension_triggers(env, pkg)
-        break # For now, only insert triggers for packages in the first load_path.
     end
 end
 
