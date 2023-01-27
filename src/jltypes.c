@@ -2259,8 +2259,8 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_abstractstring_type = jl_new_abstracttype((jl_value_t*)jl_symbol("AbstractString"), core, jl_any_type, jl_emptysvec);
     jl_string_type = jl_new_datatype(jl_symbol("String"), core, jl_abstractstring_type, jl_emptysvec,
                                      jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 1, 0);
-    jl_string_type->instance = NULL;
-    jl_compute_field_offsets(jl_string_type);
+    assert(jl_string_type->instance == NULL);
+    jl_compute_field_offsets(jl_string_type); // re-compute now that we assigned jl_string_type
     jl_an_empty_string = jl_pchar_to_string("\0", 1);
     *(size_t*)jl_an_empty_string = 0;
 
