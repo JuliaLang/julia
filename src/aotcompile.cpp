@@ -610,11 +610,11 @@ static size_t getFunctionWeight(const Function &F)
     return weight;
 }
 
-#ifndef NDEBUG
 
 static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partitions, const Module &M) {
-    StringMap<uint32_t> GVNames;
     bool bad = false;
+#ifdef JL_DEBUG_BUILD
+    StringMap<uint32_t> GVNames;
     for (uint32_t i = 0; i < partitions.size(); i++) {
         for (auto &name : partitions[i].globals) {
             if (GVNames.count(name.getKey())) {
@@ -642,10 +642,9 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
             }
         }
     }
+#endif
     return !bad;
 }
-
-#endif
 
 // Chop a module up as equally as possible into threads partitions
 static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
@@ -772,7 +771,9 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
         }
     }
 
-    assert(verify_partitioning(partitions, M) && "Partitioning failed to partition globals correctly");
+    bool verified = verify_partitioning(partitions, M);
+    assert(verified && "Partitioning failed to partition globals correctly");
+    (void) verified;
 
     return partitions;
 }
@@ -1135,10 +1136,14 @@ unsigned compute_image_thread_count(Module &M) {
     // crude estimate, available / (weight * fudge factor) = max threads
     size_t fudge = 10;
     unsigned max_threads = std::max(available / (weight * fudge), (size_t)1);
-    if (max_threads < threads) {
-        dbgs() << "Memory limiting threads to " << max_threads << "\n";
-        threads = max_threads;
-    }
+    dbgs() << "Available memory: " << available << " bytes\n";
+    dbgs() << "Max threads: " << max_threads << "\n";
+    dbgs() << "Temporarily disabling memory limiting threads\n";
+    //TODO reenable
+    // if (max_threads < threads) {
+    //     dbgs() << "Memory limiting threads to " << max_threads << "\n";
+    //     threads = max_threads;
+    // }
 
     max_threads = globals / 100;
     if (max_threads < threads) {
@@ -1420,7 +1425,11 @@ void jl_dump_native_impl(void *native_code,
         "data.o",
         "data.s"
     };
+    dbgs() << "Dumping sysimage data module\n";
+    dbgs() << *sysimageM << "\n";
     compile(*sysimageM, data_names, 1);
+    dbgs() << "Post-optimization sysimageM\n";
+    dbgs() << *sysimageM << "\n";
 
     end = jl_hrtime();
 
