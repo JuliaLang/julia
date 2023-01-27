@@ -610,7 +610,8 @@ static size_t getFunctionWeight(const Function &F)
     return weight;
 }
 
-//Inline to fool gcc into not complaining about unused function when asserts are disabled
+#ifndef NDEBUG
+
 static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partitions, const Module &M) {
     StringMap<uint32_t> GVNames;
     bool bad = false;
@@ -643,6 +644,8 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
     }
     return !bad;
 }
+
+#endif
 
 // Chop a module up as equally as possible into threads partitions
 static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
