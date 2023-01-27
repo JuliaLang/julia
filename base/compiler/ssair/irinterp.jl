@@ -121,7 +121,7 @@ end
 function codeinst_to_ir(interp::AbstractInterpreter, code::CodeInstance)
     src = code.inferred
     mi = code.def
-    if isa(src, Vector{UInt8})
+    if isa(src, String)
         src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, C_NULL, src)::CodeInfo
     else
         isa(src, CodeInfo) || return nothing

@@ -416,7 +416,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
         if ((jl_value_t*)src == jl_nothing)
             src = NULL;
         else if (jl_is_method(mi->def.method))
-            src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
+            src = jl_uncompress_ir(mi->def.method, codeinst, (jl_value_t*)src);
     }
     else {
         // identify whether this is an invalidated method that is being recompiled
@@ -489,7 +489,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
                 src = jl_code_for_staged(unspec->def);
             }
             if (src && (jl_value_t*)src != jl_nothing)
-                src = jl_uncompress_ir(def, NULL, (jl_array_t*)src);
+                src = jl_uncompress_ir(def, NULL, (jl_value_t*)src);
         }
         else {
             src = (jl_code_info_t*)jl_atomic_load_relaxed(&unspec->def->uninferred);
@@ -545,7 +545,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
                         src = def->generator ? jl_code_for_staged(mi) : (jl_code_info_t*)def->source;
                     }
                     if (src && (jl_value_t*)src != jl_nothing)
-                        src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
+                        src = jl_uncompress_ir(mi->def.method, codeinst, (jl_value_t*)src);
                 }
                 fptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->invoke);
                 specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);

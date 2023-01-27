@@ -2050,7 +2050,7 @@ static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, int orig
     int compressed = 0;
     if (!jl_is_code_info(ci_)) {
         compressed = 1;
-        ci = jl_uncompress_ir(m, NULL, (jl_array_t*)ci_);
+        ci = jl_uncompress_ir(m, NULL, (jl_value_t*)ci_);
     }
     else {
         ci = (jl_code_info_t*)ci_;
@@ -2773,15 +2773,17 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
 
     // step 1: read section map
     assert(ios_pos(f) == 0 && f->bm == bm_mem);
-    size_t sizeof_sysimg = read_uint(f);
-    ios_static_buffer(&sysimg, f->buf, sizeof_sysimg + sizeof(uintptr_t));
-    ios_skip(f, sizeof_sysimg);
+    size_t sizeof_sysdata = read_uint(f);
+    ios_static_buffer(&sysimg, f->buf, sizeof_sysdata + sizeof(uintptr_t));
+    ios_skip(f, sizeof_sysdata);
 
     size_t sizeof_constdata = read_uint(f);
     // realign stream to max-alignment for data
     ios_seek(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT));
     ios_static_buffer(&const_data, f->buf + f->bpos, sizeof_constdata);
     ios_skip(f, sizeof_constdata);
+
+    size_t sizeof_sysimg = f->bpos;
 
     size_t sizeof_symbols = read_uint(f);
     ios_seek(f, LLT_ALIGN(ios_pos(f), 8));
@@ -2958,7 +2960,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             }
         }
         jl_value_t *otyp = jl_typeof(obj);   // the original type of the object that was written here
-        assert(image_base < (char*)obj && (char*)obj <= image_base + sizeof_sysimg + sizeof(uintptr_t));
+        assert(image_base < (char*)obj && (char*)obj <= image_base + sizeof_sysimg);
         if (otyp == (jl_value_t*)jl_datatype_type) {
             jl_datatype_t *dt = (jl_datatype_t*)obj[0], *newdt;
             if (jl_is_datatype(dt)) {
@@ -2996,7 +2998,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             newobj = (jl_value_t*)newdt;
         }
         else {
-            assert(!(image_base < (char*)otyp && (char*)otyp <= image_base + sizeof_sysimg + sizeof(uintptr_t)));
+            assert(!(image_base < (char*)otyp && (char*)otyp <= image_base + sizeof_sysimg));
             assert(jl_is_datatype_singleton((jl_datatype_t*)otyp) && "unreachable");
             newobj = ((jl_datatype_t*)otyp)->instance;
             assert(newobj != jl_nothing);
@@ -3006,7 +3008,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             jl_set_typeof(jl_valueof(pfld), (void*)((uintptr_t)newobj | GC_OLD));
         else
             *pfld = (uintptr_t)newobj;
-        assert(!(image_base < (char*)newobj && (char*)newobj <= image_base + sizeof_sysimg + sizeof(uintptr_t)));
+        assert(!(image_base < (char*)newobj && (char*)newobj <= image_base + sizeof_sysimg));
         assert(jl_typeis(obj, otyp));
     }
     // A few fields (reached via super) might be self-recursive. This is rare, but handle them now.
@@ -3019,7 +3021,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         assert(jl_is_datatype(dt));
         jl_value_t *newobj = (jl_value_t*)dt;
         *pfld = (uintptr_t)newobj;
-        assert(!(image_base < (char*)newobj && (char*)newobj <= image_base + sizeof_sysimg + sizeof(uintptr_t)));
+        assert(!(image_base < (char*)newobj && (char*)newobj <= image_base + sizeof_sysimg));
     }
     arraylist_free(&delay_list);
     // now that all the fields of dt are assigned and unique, copy them into
@@ -3085,7 +3087,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         }
         jl_value_t *otyp = jl_typeof(obj);   // the original type of the object that was written here
         if (otyp == (jl_value_t*)jl_method_instance_type) {
-            assert(image_base < (char*)obj && (char*)obj <= image_base + sizeof_sysimg + sizeof(uintptr_t));
+            assert(image_base < (char*)obj && (char*)obj <= image_base + sizeof_sysimg);
             jl_value_t *m = obj[0];
             if (jl_is_method_instance(m)) {
                 newobj = m; // already done
@@ -3102,7 +3104,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             abort(); // should be unreachable
         }
         *pfld = (uintptr_t)newobj;
-        assert(!(image_base < (char*)newobj && (char*)newobj <= image_base + sizeof_sysimg + sizeof(uintptr_t)));
+        assert(!(image_base < (char*)newobj && (char*)newobj <= image_base + sizeof_sysimg));
         assert(jl_typeis(obj, otyp));
     }
     arraylist_free(&s.uniquing_types);
@@ -3210,7 +3212,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                "   reloc list: %8u\n"
                "    gvar list: %8u\n"
                "    fptr list: %8u\n",
-            (unsigned)sizeof_sysimg,
+            (unsigned)sizeof_sysdata,
             (unsigned)sizeof_constdata,
             (unsigned)sizeof_symbols,
             (unsigned)sizeof_tags,
@@ -3219,7 +3221,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             (unsigned)sizeof_fptr_record);
     }
     if (cachesizes) {
-        cachesizes->sysdata = sizeof_sysimg;
+        cachesizes->sysdata = sizeof_sysdata;
         cachesizes->isbitsdata = sizeof_constdata;
         cachesizes->symboldata = sizeof_symbols;
         cachesizes->tagslist = sizeof_tags;
@@ -3247,7 +3249,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     // Prepare for later external linkage against the sysimg
     // Also sets up images for protection against garbage collection
     arraylist_push(&jl_linkage_blobs, (void*)image_base);
-    arraylist_push(&jl_linkage_blobs, (void*)(image_base + sizeof_sysimg + sizeof(uintptr_t)));
+    arraylist_push(&jl_linkage_blobs, (void*)(image_base + sizeof_sysimg));
     arraylist_push(&jl_image_relocs, (void*)relocs_base);
 
     // jl_printf(JL_STDOUT, "%ld blobs to link against\n", jl_linkage_blobs.len >> 1);
