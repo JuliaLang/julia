@@ -779,26 +779,31 @@ end
 @testset "symmetric and hermitian parts" begin
     for T in [Float32, Complex{Float32}, Int32, Rational{Int32},
               Complex{Int32}, Complex{Rational{Int32}}]
-        for (f, f!, t) in [(hermitianpart, hermitianpart!, adjoint),
-                           (symmetricpart, symmetricpart!, transpose)]
-            X = T[1 2 3; 4 5 6; 7 8 9]
-            T <: Complex && (X .+= im .* X)
+        f, f!, t = hermitianpart, hermitianpart!, T <: Real ? transpose : adjoint
+        X = T[1 2 3; 4 5 6; 7 8 9]
+        T <: Complex && (X .+= im .* X)
+        Xc = copy(X)
+        Y = (X + t(X)) / 2
+        U = f(X)
+        L = f(X, :L)
+        @test U == L == Y
+        U = f(X, :U, true)
+        L = f(X, :L, true)
+        @test parent(U) == U == parent(L) == L == Y
+        if T <: AbstractFloat || real(T) <: AbstractFloat
+            HU = f!(copy(X))
+            @test HU == Y
+            HU = f!(Xc, :U, true)
+            @test parent(HU) == HU == Y
+            @test triu(Xc) == triu(Y)
+            HL = f!(copy(X), :L)
+            @test HL == Y
             Xc = copy(X)
-            Y = (X + t(X)) / 2
-            U = f(X)
-            L = f(X, :L)
-            @test U == L == Y
-            if T <: AbstractFloat || real(T) <: AbstractFloat
-                HU = f!(X)
-                @test HU == Y
-                @test triu(X) == triu(Y)
-                HL = f!(Xc, :L)
-                @test HL == Y
-                @test tril(Xc) == tril(Y)
-            end
+            HL = f!(Xc, :L, true)
+            @test parent(HL) == HL == Y
+            @test tril(Xc) == tril(Y)
         end
     end
-    @test_throws DimensionMismatch symmetricpart([1.0 2.0 3.0; 4.0 5.0 6.0])
     @test_throws DimensionMismatch hermitianpart([1.0 2.0 3.0; 4.0 5.0 6.0])
 end
 
