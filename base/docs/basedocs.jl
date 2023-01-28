@@ -2708,8 +2708,9 @@ Infix `x*y*z*...` calls this function with all arguments, i.e. `*(x, y, z, ...)`
 which by default then calls `(x*y) * z * ...` starting from the left.
 
 Juxtaposition such as `2pi` also calls `*(2, pi)`. Note that this operation
-has higher precedence than a literal `*`, so that for instance `1/2pi == 1/(2 * pi)`,
-but lower precedence than `^`, so that `5x^2 == 5 * (x^2)`.
+has higher precedence than a literal `*`. Note also that juxtaposition "0x..."
+(integer zero times a variable whose name starts with `x`) is forbidden as
+it clashes with unsigned integers literals: `0x01 isa UInt8`.
 
 Note that overflow is possible for most integer types, including the default `Int`,
 when multiplying large numbers.
