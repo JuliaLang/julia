@@ -156,7 +156,7 @@ function copyto!(dest::Diagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     !isstructurepreserving(bc) && !fzeropreserving(bc) && return copyto!(dest, convert(Broadcasted{Nothing}, bc))
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
-    for i in axs[1]
+    @inbounds for i in axs[1]
         dest.diag[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, i))
     end
     return dest
