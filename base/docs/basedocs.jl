@@ -2146,7 +2146,7 @@ end
     Like [`Int`](@ref $Int), the alias `UInt` may point to either `UInt32` or `UInt64`,
     according to the value of `Sys.WORD_SIZE` on a given computer.
 
-    Printed in hexadecimal, thus `UInt(15) === $(repr(UInt(15)))`.
+    Printed and parsed in hexadecimal: `UInt(15) === $(repr(UInt(15)))`.
     """
     $(Symbol(UInt))
 end
