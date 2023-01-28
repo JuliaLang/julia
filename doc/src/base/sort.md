@@ -1,7 +1,7 @@
 # Sorting and Related Functions
 
-Julia has an extensive, flexible API for sorting and interacting with already-sorted arrays
-of values. By default, Julia picks reasonable algorithms and sorts in ascending order:
+Julia has an extensive, flexible API for sorting and interacting with already-sorted arrays of
+values. By default, Julia picks reasonable algorithms and sorts in standard ascending order:
 
 ```jldoctest
 julia> sort([2,3,1])
@@ -11,7 +11,7 @@ julia> sort([2,3,1])
  3
 ```
 
-You can sort in reverse order as well:
+You can easily sort in reverse order as well:
 
 ```jldoctest
 julia> sort([2,3,1], rev=true)
@@ -36,8 +36,8 @@ julia> a
  3
 ```
 
-Instead of directly sorting an array, you can compute a permutation of the array's
-indices that puts the array into sorted order:
+Instead of directly sorting an array, you can compute a permutation of the array's indices that
+puts the array into sorted order:
 
 ```julia-repl
 julia> v = randn(5)
@@ -65,7 +65,7 @@ julia> v[p]
   0.382396
 ```
 
-Arrays can be sorted according to an arbitrary transformation of their values:
+Arrays can easily be sorted according to an arbitrary transformation of their values:
 
 ```julia-repl
 julia> sort(v, by=abs)
@@ -101,12 +101,9 @@ julia> sort(v, alg=InsertionSort)
   0.382396
 ```
 
-All the sorting and order related functions rely on a "less than" relation defining a
-[strict weak order](https://en.wikipedia.org/wiki/Weak_ordering#Strict_weak_orderings)
+All the sorting and order related functions rely on a "less than" relation defining a total order
 on the values to be manipulated. The `isless` function is invoked by default, but the relation
-can be specified via the `lt` keyword, a function that takes two array elements and returns true
-if and only if the first argument is "less than" the second. See [Alternate orderings](@ref) for
-more info.
+can be specified via the `lt` keyword.
 
 ## Sorting Functions
 
@@ -162,21 +159,23 @@ Base.Sort.defalg(::AbstractArray{<:Union{SmallInlineStrings, Missing}}) = Inline
 ```
 
 !!! compat "Julia 1.9"
-    The default sorting algorithm (returned by `Base.Sort.defalg`) is guaranteed to be stable
-    since Julia 1.9. Previous versions had unstable edge cases when sorting numeric arrays.
+    The default sorting algorithm (returned by `Base.Sort.defalg`) is guaranteed to
+    be stable since Julia 1.9. Previous versions had unstable edge cases when
+    sorting numeric arrays.
 
-## Alternate Orderings
+## Alternate orderings
 
-By default, `sort`, `searchsorted`, and related functions use [`isless`](@ref) to compare
-two elements in order to determine which should come first. The
-[`Base.Order.Ordering`](@ref) abstract type provides a mechanism for defining alternate
-orderings on the same set of elements. Instances of `Ordering` define a
-[strict weak order](https://en.wikipedia.org/wiki/Weak_ordering#Strict_weak_orderings).
-To be a strict weak order, for any elements `a`, `b`, `c` the following hold:
+By default, `sort` and related functions use [`isless`](@ref) to compare two
+elements in order to determine which should come first. The
+[`Base.Order.Ordering`](@ref) abstract type provides a mechanism for defining
+alternate orderings on the same set of elements. Instances of `Ordering` define
+a [total order](https://en.wikipedia.org/wiki/Total_order) on a set of elements,
+so that for any elements `a`, `b`, `c` the following hold:
 
-* `lt(a, b) && lt(b, a) === false`;
-* if `lt(a, b) && lt(b, c)`, then `lt(a, c)`; and
-* if `!lt(a, b) && !lt(b, c)`, then `!lt(a, c)`
+* Exactly one of the following is true: `a` is less than `b`, `b` is less than
+  `a`, or `a` and `b` are equal (according to [`isequal`](@ref)).
+* The relation is transitive - if `a` is less than `b` and `b` is less than `c`
+  then `a` is less than `c`.
 
 The [`Base.Order.lt`](@ref) function works as a generalization of `isless` to
 test whether `a` is less than `b` according to a given order.
