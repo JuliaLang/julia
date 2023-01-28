@@ -781,7 +781,7 @@ end
     @test (Printf.@sprintf("%d4%n", 123, x); x[] == 4)
     @test (Printf.@sprintf("%s%n", "😉", x); x[] == 4)
     @test (Printf.@sprintf("%s%n", "1234", x); x[] == 4)
-
+end
 
 @testset "dynamic" begin
 
