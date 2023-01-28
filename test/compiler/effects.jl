@@ -741,5 +741,5 @@ end |> !Core.Compiler.is_consistent
 end
 @test Core.Compiler.is_foldable(Base.infer_effects(ImmutRef, Tuple{Any}))
 
+@test Base.ismutationfree(Type{Union{}})
 @test Core.Compiler.is_total(Base.infer_effects(typejoin, ()))
-#Test that returning Union{} doesn't taint effects
