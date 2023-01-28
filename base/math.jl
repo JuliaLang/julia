@@ -841,17 +841,6 @@ function _hypot(x::NTuple{N,<:Number}) where {N}
     end
 end
 
-function _hypot(x::NTuple{N,T}) where {N,T<:IEEEFloat}
-    infT = convert(T, Inf)
-    x = abs.(x) # doesn't change result but enables computational shortcuts
-    any(==(infT), x) && return infT # return Inf even if an argument is NaN
-    maxabs = reinterpret(T, maximum(z -> reinterpret(Signed, z), x)) # for abs(::IEEEFloat) values, a ::BitInteger cast does not change the result
-    iszero(maxabs) && return maxabs
-    y = abs2.(x ./ maxabs)
-    a2 = @fastmath reduce(+, y) # allow sum to be reordered
-    return sqrt(a2) * maxabs
-end
-
 atan(y::Real, x::Real) = atan(promote(float(y),float(x))...)
 atan(y::T, x::T) where {T<:AbstractFloat} = Base.no_op_err("atan", T)
 
