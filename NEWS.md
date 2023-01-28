@@ -33,6 +33,7 @@ New library features
 * The `initialized=true` keyword assignment for `sortperm!` and `partialsortperm!`
   is now a no-op ([#47979]). It previously exposed unsafe behavior ([#47977]).
 * `binomial(x, k)` now supports non-integer `x` ([#48124]).
+* A `CartesianIndex` is now treated as a "scalar" for broadcasting ([#47044]).
 
 Standard library changes
 ------------------------
