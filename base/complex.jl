@@ -214,7 +214,7 @@ function show(io::IO, z::Complex)
     print(io, "im")
 end
 show(io::IO, z::Complex{Bool}) =
-    print(io, z == im ? "im" : "Complex($(z.re),$(z.im))")
+    print(io, z == im ? "im" : iszero(z) ? "$(z.im)*im" : "Complex($(z.re),$(z.im))")
 
 function show_unquoted(io::IO, z::Complex, ::Int, prec::Int)
     if operator_precedence(:+) <= prec

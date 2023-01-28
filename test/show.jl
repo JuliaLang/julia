@@ -1550,6 +1550,7 @@ end
 @testset "alignment for complex arrays" begin # (#34763)
     @test replstr([ 1e-7 + 2.0e-11im, 2.0e-5 + 4e0im]) == "2-element Vector{ComplexF64}:\n 1.0e-7 + 2.0e-11im\n 2.0e-5 + 4.0im"
     @test replstr([ 1f-7 + 2.0f-11im, 2.0f-5 + 4f0im]) == "2-element Vector{ComplexF32}:\n 1.0f-7 + 2.0f-11im\n 2.0f-5 + 4.0f0im"
+    @test replstr([im false*im; false*im im]) == "2×2 Matrix{Complex{Bool}}:\n       im  false*im\n false*im        im"
 end
 
 @testset "display arrays non-compactly when size(⋅, 2) == 1" begin
