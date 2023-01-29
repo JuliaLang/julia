@@ -375,7 +375,7 @@ There `where` argument provides the context from where to search for the
 package: in this case it first checks if the name matches the context itself,
 otherwise it searches all recursive dependencies (from the resolved manifest of
 each environment) until it locates the context `where`, and from there
-identifies the dependency with with the corresponding name.
+identifies the dependency with the corresponding name.
 
 ```julia-repl
 julia> Base.identify_package("Pkg") # Pkg is a dependency of the default environment
@@ -865,7 +865,11 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
             uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
             extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
             if extensions !== nothing && haskey(extensions, pkg.name) && uuid !== nothing && uuid5(UUID(uuid), pkg.name) == pkg.uuid
-                p = normpath(dirname(locate_package(PkgId(UUID(uuid), name))), "..")
+                parent_path = locate_package(PkgId(UUID(uuid), name))
+                if parent_path === nothing
+                    error("failed to find source of parent package: \"$name\"")
+                end
+                p = normpath(dirname(parent_path), "..")
                 extfiledir = joinpath(p, "ext", pkg.name, pkg.name * ".jl")
                 isfile(extfiledir) && return extfiledir
                 return joinpath(p, "ext", pkg.name * ".jl")
@@ -1108,7 +1112,6 @@ function insert_extension_triggers(pkg::PkgId)
     pkg.uuid === nothing && return
     for env in load_path()
         insert_extension_triggers(env, pkg)
-        break # For now, only insert triggers for packages in the first load_path.
     end
 end
 
@@ -1138,10 +1141,10 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
                         dep_name in weakdeps || continue
                         entries::Vector{Any}
                         if length(entries) != 1
-                            error("expected a single entry for $(repr(name)) in $(repr(project_file))")
+                            error("expected a single entry for $(repr(dep_name)) in $(repr(project_file))")
                         end
                         entry = first(entries)::Dict{String, Any}
-                        uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
+                        uuid = entry["uuid"]::String
                         d_weakdeps[dep_name] = uuid
                     end
                     @assert length(d_weakdeps) == length(weakdeps)
@@ -1247,7 +1250,7 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
         loading = get(package_locks, modkey, false)
         if loading !== false
             # load already in progress for this module
-            loaded = wait(loading)
+            loaded = wait(loading::Threads.Condition)
         else
             package_locks[modkey] = Threads.Condition(require_lock)
             try
@@ -1282,7 +1285,7 @@ function _tryrequire_from_serialized(modkey::PkgId, path::String, ocachepath::Un
         loading = get(package_locks, modkey, false)
         if loading !== false
             # load already in progress for this module
-            loaded = wait(loading)
+            loaded = wait(loading::Threads.Condition)
         else
             for i in 1:length(depmods)
                 dep = depmods[i]
@@ -1324,7 +1327,7 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
         pkgimage = !isempty(clone_targets)
         if pkgimage
             ocachepath !== nothing || return ArgumentError("Expected ocachepath to be provided")
-            isfile(ocachepath) || return ArgumentError("Ocachepath $ocachpath is not a file.")
+            isfile(ocachepath) || return ArgumentError("Ocachepath $ocachepath is not a file.")
             ocachepath == ocachefile_from_cachefile(path) || return ArgumentError("$ocachepath is not the expected ocachefile")
             # TODO: Check for valid clone_targets?
             isvalid_pkgimage_crc(io, ocachepath) || return ArgumentError("Invalid checksum in cache file $ocachepath.")
@@ -1404,13 +1407,13 @@ end
                 staledeps = true
                 break
             end
-            staledeps[i] = dep
+            (staledeps::Vector{Any})[i] = dep
         end
         if staledeps === true
             ocachefile = nothing
             continue
         end
-        restored = _include_from_serialized(pkg, path_to_try, ocachefile, staledeps)
+        restored = _include_from_serialized(pkg, path_to_try, ocachefile, staledeps::Vector{Any})
         if !isa(restored, Module)
             @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
         else
@@ -1667,7 +1670,7 @@ function _require(pkg::PkgId, env=nothing)
     loading = get(package_locks, pkg, false)
     if loading !== false
         # load already in progress for this module
-        return wait(loading)
+        return wait(loading::Threads.Condition)
     end
     package_locks[pkg] = Threads.Condition(require_lock)
 
@@ -2160,12 +2163,12 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                     rename(tmppath_so, ocachefile::String; force=true)
                 catch e
                     e isa IOError || rethrow()
-                    isfile(ocachefile) || rethrow()
+                    isfile(ocachefile::String) || rethrow()
                     # Windows prevents renaming a file that is in use so if there is a Julia session started
                     # with a package image loaded, we cannot rename that file.
                     # The code belows append a `_i` to the name of the cache file where `i` is the smallest number such that
                     # that cache file does not exist.
-                    ocachename, ocacheext = splitext(ocachefile)
+                    ocachename, ocacheext = splitext(ocachefile::String)
                     old_cachefiles = Set(readdir(cachepath))
                     num = 1
                     while true
@@ -2185,7 +2188,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     finally
         rm(tmppath, force=true)
         if cache_objects
-            rm(tmppath_o, force=true)
+            rm(tmppath_o::String, force=true)
             rm(tmppath_so, force=true)
         end
     end

@@ -23,7 +23,7 @@ const PARALLEL_PRECOMPILATION = true
 const debug_output = devnull # or stdout
 
 # Disable fancy printing
-const fancyprint = (stdout isa Base.TTY) && (get(ENV, "CI", nothing) != "true")
+const fancyprint = (stdout isa Base.TTY) && Base.get_bool_env("CI", false) !== true
 ##
 
 CTRL_C = '\x03'
@@ -316,6 +316,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
                 current = current == 4 ? 1 : current + 1
             end
         end
+        close(t)
     end
 
     # Collect statements from running the script

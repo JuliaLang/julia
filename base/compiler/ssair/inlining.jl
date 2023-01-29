@@ -1466,21 +1466,27 @@ function handle_const_prop_result!(cases::Vector{InliningCase},
     return true
 end
 
+function semiconcrete_result_item(result::SemiConcreteResult,
+        @nospecialize(info::CallInfo), flag::UInt8, state::InliningState)
+    mi = result.mi
+    if !state.params.inlining || is_stmt_noinline(flag)
+        et = InliningEdgeTracker(state.et, nothing)
+        return compileable_specialization(mi, result.effects, et, info;
+            compilesig_invokes=state.params.compilesig_invokes)
+    else
+        return InliningTodo(mi, result.ir, result.effects)
+    end
+end
+
 function handle_semi_concrete_result!(cases::Vector{InliningCase}, result::SemiConcreteResult,
-    @nospecialize(info::CallInfo), flag::UInt8, state::InliningState;
-    allow_abstract::Bool)
+        @nospecialize(info::CallInfo), flag::UInt8, state::InliningState;
+        allow_abstract::Bool)
     mi = result.mi
     spec_types = mi.specTypes
     allow_abstract || isdispatchtuple(spec_types) || return false
     validate_sparams(mi.sparam_vals) || return false
-    if !state.params.inlining || is_stmt_noinline(flag)
-        et = InliningEdgeTracker(state.et, nothing)
-        item = compileable_specialization(mi, result.effects, et, info;
-            compilesig_invokes=state.params.compilesig_invokes)
-        item === nothing && return false
-    else
-        item = InliningTodo(mi, result.ir, result.effects)
-    end
+    item = semiconcrete_result_item(result, info, flag, state)
+    item === nothing && return false
     push!(cases, InliningCase(spec_types, item))
     return true
 end
@@ -1538,7 +1544,14 @@ function handle_opaque_closure_call!(todo::Vector{Pair{Int,Any}},
     elseif isa(result, ConcreteResult)
         item = concrete_result_item(result, info, state)
     else
-        item = analyze_method!(info.match, sig.argtypes, info, flag, state; allow_typevars=false)
+        if isa(result, SemiConcreteResult)
+            result = inlining_policy(state.interp, result, info, flag, result.mi, sig.argtypes)
+        end
+        if isa(result, SemiConcreteResult)
+            item = semiconcrete_result_item(result, info, flag, state)
+        else
+            item = analyze_method!(info.match, sig.argtypes, info, flag, state; allow_typevars=false)
+        end
     end
     handle_single_case!(todo, ir, idx, stmt, item, state.params)
     return nothing

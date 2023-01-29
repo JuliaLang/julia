@@ -14,6 +14,7 @@ Run Evaluate Print Loop (REPL)
 module REPL
 
 Base.Experimental.@optlevel 1
+Base.Experimental.@max_methods 1
 
 using Base.Meta, Sockets
 import InteractiveUtils
@@ -388,6 +389,7 @@ end
 mutable struct BasicREPL <: AbstractREPL
     terminal::TextTerminal
     waserror::Bool
+    frontend_task::Task
     BasicREPL(t) = new(t, false)
 end
 
@@ -395,6 +397,7 @@ outstream(r::BasicREPL) = r.terminal
 hascolor(r::BasicREPL) = hascolor(r.terminal)
 
 function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
+    repl.frontend_task = current_task()
     d = REPLDisplay(repl)
     dopushdisplay = !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
@@ -461,6 +464,7 @@ mutable struct LineEditREPL <: AbstractREPL
     last_shown_line_infos::Vector{Tuple{String,Int}}
     interface::ModalInterface
     backendref::REPLBackendRef
+    frontend_task::Task
     function LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors)
         opts = Options()
         opts.hascolor = hascolor
@@ -1280,6 +1284,7 @@ function setup_interface(
 end
 
 function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
+    repl.frontend_task = current_task()
     d = REPLDisplay(repl)
     dopushdisplay = repl.specialdisplay === nothing && !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
@@ -1305,6 +1310,7 @@ mutable struct StreamREPL <: AbstractREPL
     input_color::String
     answer_color::String
     waserror::Bool
+    frontend_task::Task
     StreamREPL(stream,pc,ic,ac) = new(stream,pc,ic,ac,false)
 end
 StreamREPL(stream::IO) = StreamREPL(stream, Base.text_colors[:green], Base.input_color(), Base.answer_color())
@@ -1363,6 +1369,7 @@ ends_with_semicolon(code::Union{String,SubString{String}}) =
     contains(_rm_strings_and_comments(code), r";\s*$")
 
 function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
+    repl.frontend_task = current_task()
     have_color = hascolor(repl)
     Base.banner(repl.stream)
     d = REPLDisplay(repl)

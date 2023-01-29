@@ -129,6 +129,12 @@ function NamedTuple{names, T}(nt::NamedTuple) where {names, T <: Tuple}
     end
 end
 
+# Like NamedTuple{names, T} as a constructor, but omits the additional
+# `convert` call, when the types are known to match the fields
+@eval function _new_NamedTuple(T::Type{NamedTuple{NTN, NTT}} where {NTN, NTT}, args::Tuple)
+    $(Expr(:splatnew, :T, :args))
+end
+
 function NamedTuple{names}(nt::NamedTuple) where {names}
     if @generated
         idx = Int[ fieldindex(nt, names[n]) for n in 1:length(names) ]
@@ -137,7 +143,7 @@ function NamedTuple{names}(nt::NamedTuple) where {names}
     else
         length_names = length(names::Tuple)
         types = Tuple{(fieldtype(typeof(nt), names[n]) for n in 1:length_names)...}
-        NamedTuple{names, types}(map(Fix1(getfield, nt), names))
+        _new_NamedTuple(NamedTuple{names, types}, map(Fix1(getfield, nt), names))
     end
 end
 
@@ -277,7 +283,7 @@ end
         n = names[i]
         A[i] = getfield(sym_in(n, bn) ? b : a, n)
     end
-    NamedTuple{names}((A...,))::NamedTuple{names, types}
+    _new_NamedTuple(NamedTuple{names, types}, (A...,))
 end
 
 """
@@ -310,7 +316,7 @@ function merge(a::NamedTuple{an}, b::NamedTuple{bn}) where {an, bn}
         names = merge_names(an, bn)
         types = merge_types(names, a, b)
         vals = Any[ :(getfield($(sym_in(names[n], bn) ? :b : :a), $(QuoteNode(names[n])))) for n in 1:length(names) ]
-        :( NamedTuple{$names,$types}(($(vals...),)) )
+        :( _new_NamedTuple(NamedTuple{$names,$types}, ($(vals...),)) )
     else
         merge_fallback(a, b, an, bn)
     end
@@ -356,7 +362,7 @@ function merge(a::NamedTuple, itr)
     merge(a, NamedTuple{(names...,)}((vals...,)))
 end
 
-keys(nt::NamedTuple{names}) where {names} = names
+keys(nt::NamedTuple{names}) where {names} = names::Tuple{Vararg{Symbol}}
 values(nt::NamedTuple) = Tuple(nt)
 haskey(nt::NamedTuple, key::Union{Integer, Symbol}) = isdefined(nt, key)
 get(nt::NamedTuple, key::Union{Integer, Symbol}, default) = isdefined(nt, key) ? getfield(nt, key) : default
@@ -390,7 +396,7 @@ end
         n = names[i]
         A[i] = getfield(a, n)
     end
-    NamedTuple{names}((A...,))::NamedTuple{names, types}
+    _new_NamedTuple(NamedTuple{names, types}, (A...,))
 end
 
 """
@@ -406,7 +412,7 @@ function structdiff(a::NamedTuple{an}, b::Union{NamedTuple{bn}, Type{NamedTuple{
         idx = Int[ fieldindex(a, names[n]) for n in 1:length(names) ]
         types = Tuple{Any[ fieldtype(a, idx[n]) for n in 1:length(idx) ]...}
         vals = Any[ :(getfield(a, $(idx[n]))) for n in 1:length(idx) ]
-        return :( NamedTuple{$names,$types}(($(vals...),)) )
+        return :( _new_NamedTuple(NamedTuple{$names,$types}, ($(vals...),)) )
     else
         return diff_fallback(a, an, bn)
     end

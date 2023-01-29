@@ -356,6 +356,15 @@ end
 
 # Test effect/inference for merge/diff of unknown NamedTuples
 for f in (Base.merge, Base.structdiff)
-    @test Core.Compiler.is_foldable(Base.infer_effects(f, Tuple{NamedTuple, NamedTuple}))
+    let eff = Base.infer_effects(f, Tuple{NamedTuple, NamedTuple})
+        @test Core.Compiler.is_foldable(eff) && eff.nonoverlayed
+    end
     @test Core.Compiler.return_type(f, Tuple{NamedTuple, NamedTuple}) == NamedTuple
+end
+@test Core.Compiler.is_foldable(Base.infer_effects(pairs, Tuple{NamedTuple}))
+
+# Test that merge/diff preserves nt field types
+let a = Base.NamedTuple{(:a, :b), Tuple{Any, Any}}((1, 2)), b = Base.NamedTuple{(:b,), Tuple{Float64}}(3)
+    @test typeof(Base.merge(a, b)) == Base.NamedTuple{(:a, :b), Tuple{Any, Float64}}
+    @test typeof(Base.structdiff(a, b)) == Base.NamedTuple{(:a,), Tuple{Any}}
 end

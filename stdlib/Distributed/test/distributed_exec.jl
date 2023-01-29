@@ -302,7 +302,7 @@ end
 
 # Tests for issue #23109 - should not hang.
 f = @spawnat :any rand(1, 1)
-@Base.Experimental.sync begin
+Base.Experimental.@sync begin
     for _ in 1:10
         @async fetch(f)
     end
@@ -310,7 +310,7 @@ end
 
 wid1, wid2 = workers()[1:2]
 f = @spawnat wid1 rand(1,1)
-@Base.Experimental.sync begin
+Base.Experimental.@sync begin
     @async fetch(f)
     @async remotecall_fetch(()->fetch(f), wid2)
 end

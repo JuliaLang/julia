@@ -32,21 +32,6 @@ An `AbstractDict{K, V}` should be an iterator of `Pair{K, V}`.
 """
 abstract type AbstractDict{K,V} end
 
-"""
-    Iterators.Pairs(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
-
-Transforms an indexable container into a Dictionary-view of the same data.
-Modifying the key-space of the underlying data may invalidate this object.
-"""
-struct Pairs{K, V, I, A} <: AbstractDict{K, V}
-    data::A
-    itr::I
-end
-Pairs{K, V}(data::A, itr::I) where {K, V, I, A} = Pairs{K, V, I, A}(data, itr)
-Pairs{K}(data::A, itr::I) where {K, I, A} = Pairs{K, eltype(A), I, A}(data, itr)
-Pairs(data::A, itr::I) where  {I, A} = Pairs{eltype(I), eltype(A), I, A}(data, itr)
-pairs(::Type{NamedTuple}) = Pairs{Symbol, V, NTuple{N, Symbol}, NamedTuple{names, T}} where {V, N, names, T<:NTuple{N, Any}}
-
 ## optional pretty printer:
 #const NamedTuplePair{N, V, names, T<:NTuple{N, Any}} = Pairs{Symbol, V, NTuple{N, Symbol}, NamedTuple{names, T}}
 #export NamedTuplePair
@@ -309,6 +294,26 @@ end
 macro eval(mod, ex)
     return Expr(:escape, Expr(:call, GlobalRef(Core, :eval), mod, Expr(:quote, ex)))
 end
+
+# use `@eval` here to directly form `:new` expressions avoid implicit `convert`s
+# in order to achieve better effects inference
+@eval struct Pairs{K, V, I, A} <: AbstractDict{K, V}
+    data::A
+    itr::I
+    Pairs{K, V, I, A}(data, itr) where {K, V, I, A} = $(Expr(:new, :(Pairs{K, V, I, A}), :(convert(A, data)), :(convert(I, itr))))
+    Pairs{K, V}(data::A, itr::I) where {K, V, I, A} = $(Expr(:new, :(Pairs{K, V, I, A}), :data, :itr))
+    Pairs{K}(data::A, itr::I) where {K, I, A} = $(Expr(:new, :(Pairs{K, eltype(A), I, A}), :data, :itr))
+    Pairs(data::A, itr::I) where  {I, A} = $(Expr(:new, :(Pairs{eltype(I), eltype(A), I, A}), :data, :itr))
+end
+pairs(::Type{NamedTuple}) = Pairs{Symbol, V, NTuple{N, Symbol}, NamedTuple{names, T}} where {V, N, names, T<:NTuple{N, Any}}
+
+"""
+    Iterators.Pairs(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
+
+Transforms an indexable container into a Dictionary-view of the same data.
+Modifying the key-space of the underlying data may invalidate this object.
+"""
+Pairs
 
 argtail(x, rest...) = rest
 

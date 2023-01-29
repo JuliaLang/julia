@@ -289,8 +289,8 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             isa(f, Builtin) || return (false, false, false)
             # Needs to be handled in inlining to look at the callee effects
             f === Core._apply_iterate && return (false, false, false)
-            argtypes = Any[argextype(args[arg], src) for arg in 2:length(args)]
-            effects = builtin_effects(𝕃ₒ, f, argtypes, rt)
+            argtypes = Any[argextype(args[arg], src) for arg in 1:length(args)]
+            effects = builtin_effects(𝕃ₒ, f, ArgInfo(args, argtypes), rt)
             consistent = is_consistent(effects)
             effect_free = is_effect_free(effects)
             nothrow = is_nothrow(effects)
@@ -311,7 +311,9 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
                 isconcretedispatch(typ) || return (false, false, false)
             end
             typ = typ::DataType
-            fieldcount(typ) >= length(args) - 1 || return (false, false, false)
+            fcount = datatype_fieldcount(typ)
+            fcount === nothing && return (false, false, false)
+            fcount >= length(args) - 1 || return (false, false, false)
             for fld_idx in 1:(length(args) - 1)
                 eT = argextype(args[fld_idx + 1], src)
                 fT = fieldtype(typ, fld_idx)

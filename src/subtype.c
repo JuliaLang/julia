@@ -1243,6 +1243,19 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
     return ans;
 }
 
+static int equal_unions(jl_uniontype_t *x, jl_uniontype_t *y, jl_stenv_t *e)
+{
+    jl_value_t *saved=NULL; jl_savedenv_t se;
+    JL_GC_PUSH1(&saved);
+    save_env(e, &saved, &se);
+    int eq = forall_exists_equal(x->a, y->a, e) && forall_exists_equal(x->b, y->b, e);
+    if (!eq)
+        restore_env(e, saved, &se);
+    free_env(&se);
+    JL_GC_POP();
+    return eq;
+}
+
 // `param` means we are currently looking at a parameter of a type constructor
 // (as opposed to being outside any type constructor, or comparing variable bounds).
 // this is used to record the positions where type variables occur for the
@@ -1431,6 +1444,27 @@ static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     if ((is_indefinite_length_tuple_type(x) && is_definite_length_tuple_type(y)) ||
         (is_definite_length_tuple_type(x) && is_indefinite_length_tuple_type(y)))
         return 0;
+
+    if (jl_is_uniontype(x) && jl_is_uniontype(y)) {
+        // For 2 unions, try a more efficient greedy algorithm that compares the unions
+        // componentwise. If it returns `false`, we forget it and proceed with the usual
+        // algorithm. If it returns `true` we try returning `true`, but need to come back
+        // here to try the usual algorithm if subtyping later fails.
+        jl_unionstate_t *state = &e->Runions;
+        jl_saved_unionstate_t oldRunions; push_unionstate(&oldRunions, state);
+        if (state->depth >= state->used) {
+            statestack_set(state, state->used, 0);
+            state->used++;
+        }
+        int ui = statestack_get(state, state->depth);
+        state->depth++;
+        if (ui == 0) {
+            state->more = state->depth; // memorize that this was the deepest available choice
+            if (equal_unions((jl_uniontype_t*)x, (jl_uniontype_t*)y, e))
+                return 1;
+            pop_unionstate(state, &oldRunions);
+        }
+    }
 
     jl_saved_unionstate_t oldLunions; push_unionstate(&oldLunions, &e->Lunions);
     e->Lunions.used = 0;

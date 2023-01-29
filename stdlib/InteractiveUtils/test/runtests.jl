@@ -331,7 +331,7 @@ end
 
 # manually generate a broken function, which will break codegen
 # and make sure Julia doesn't crash
-@eval @noinline @Base.constprop :none f_broken_code() = 0
+@eval @noinline Base.@constprop :none f_broken_code() = 0
 let m = which(f_broken_code, ())
    let src = Base.uncompressed_ast(m)
        src.code = Any[
