@@ -229,7 +229,7 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid) JL_NOTSAFEPOINT
     }
     else {
         // something added to the sticky-queue: notify that thread
-        if (wake_thread(tid)) {
+        if (wake_thread(tid) && uvlock != ct) {
             // check if we need to notify uv_run too
             jl_fence();
             jl_ptls_t other = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
@@ -237,7 +237,7 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid) JL_NOTSAFEPOINT
             // now that we have changed the thread to not-sleeping, ensure that
             // either it has not yet acquired the libuv lock, or that it will
             // observe the change of state to not_sleeping
-            if (uvlock != ct && jl_atomic_load_relaxed(&jl_uv_mutex.owner) == tid_task)
+            if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == tid_task)
                 wake_libuv();
         }
     }
@@ -386,7 +386,16 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
             }
             else if (ptls->tid == 0) {
                 uvlock = 1;
-                JL_UV_LOCK(); // jl_mutex_lock(&jl_uv_mutex);
+                JL_UV_LOCK();
+            }
+            else {
+                // Since we might have started some IO work, we might need
+                // to ensure tid = 0 will go watch that new event source.
+                // If trylock would have succeeded, that may have been our
+                // responsibility, so need to make sure thread 0 will take care
+                // of us.
+                if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == NULL) // aka trylock
+                    jl_wakeup_thread(0);
             }
             if (uvlock) {
                 int enter_eventloop = may_sleep(ptls);
