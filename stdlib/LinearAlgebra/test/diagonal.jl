@@ -1140,8 +1140,13 @@ Base.size(::SMatrix1) = (1, 1)
 end
 
 @testset "copyto! with UniformScaling" begin
-    D = Diagonal(FillArrays.Fill(1, InfiniteArrays.Infinity()))
-    @test copyto!(D, I) === D
+    @testset "Fill" begin
+        for len in (4, InfiniteArrays.Infinity())
+            d = FillArrays.Fill(1, len)
+            D = Diagonal(d)
+            @test copyto!(D, I) === D
+        end
+    end
     D = Diagonal(fill(2, 2))
     copyto!(D, I)
     @test all(isone, diag(D))

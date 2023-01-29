@@ -801,10 +801,14 @@ end
 end
 
 @testset "copyto! with UniformScaling" begin
-    rd = FillArrays.Fill(1, InfiniteArrays.Infinity())
-    rud = FillArrays.Fill(0, InfiniteArrays.Infinity())
-    B = Bidiagonal(rd, rud, :U)
-    @test copyto!(B, I) === B
+    @testset "Fill" begin
+        for len in (4, InfiniteArrays.Infinity())
+            d = FillArrays.Fill(1, len)
+            ud = FillArrays.Fill(0, len-1)
+            B = Bidiagonal(d, ud, :U)
+            @test copyto!(B, I) === B
+        end
+    end
     B = Bidiagonal(fill(2, 4), fill(3, 3), :U)
     copyto!(B, I)
     @test all(isone, diag(B))

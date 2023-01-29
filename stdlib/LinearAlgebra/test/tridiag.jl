@@ -746,11 +746,15 @@ using .Main.SizedArrays
 end
 
 @testset "copyto! with UniformScaling" begin
-    rd = FillArrays.Fill(1, InfiniteArrays.Infinity())
-    rud = FillArrays.Fill(0, InfiniteArrays.Infinity())
     @testset "Tridiagonal" begin
-        T = Tridiagonal(rud, rd, rud)
-        @test copyto!(T, I) === T
+        @testset "Fill" begin
+            for len in (4, InfiniteArrays.Infinity())
+                d = FillArrays.Fill(1, len)
+                ud = FillArrays.Fill(0, len-1)
+                T = Tridiagonal(ud, d, ud)
+                @test copyto!(T, I) === T
+            end
+        end
         T = Tridiagonal(fill(3, 3), fill(2, 4), fill(3, 3))
         copyto!(T, I)
         @test all(isone, diag(T))
@@ -758,8 +762,14 @@ end
         @test all(iszero, diag(T, -1))
     end
     @testset "SymTridiagonal" begin
-        ST = SymTridiagonal(rd, rud)
-        @test copyto!(ST, I) === ST
+        @testset "Fill" begin
+            for len in (4, InfiniteArrays.Infinity())
+                d = FillArrays.Fill(1, len)
+                ud = FillArrays.Fill(0, len-1)
+                ST = SymTridiagonal(d, ud)
+                @test copyto!(ST, I) === ST
+            end
+        end
         ST = SymTridiagonal(fill(2, 4), fill(3, 3))
         copyto!(ST, I)
         @test all(isone, diag(ST))
