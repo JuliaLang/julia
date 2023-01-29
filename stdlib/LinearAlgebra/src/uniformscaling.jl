@@ -381,6 +381,21 @@ function copyto!(A::AbstractMatrix, J::UniformScaling)
     return A
 end
 
+_copyto_diagonal!(A::Diagonal, λ) = A.diag .= λ
+function _copyto_diagonal!(A::Union{Bidiagonal, SymTridiagonal}, λ)
+    A.ev .= 0
+    A.dv .= λ
+end
+function _copyto_diagonal!(A::Tridiagonal, λ)
+    A.dl .= 0
+    A.du .= 0
+    A.d .= λ
+end
+function copyto!(A::Union{Diagonal, Bidiagonal, Tridiagonal, SymTridiagonal}, J::UniformScaling)
+    _copyto_diagonal!(A, J.λ)
+    A
+end
+
 function cond(J::UniformScaling{T}) where T
     onereal = inv(one(real(J.λ)))
     return J.λ ≠ zero(T) ? onereal : oftype(onereal, Inf)

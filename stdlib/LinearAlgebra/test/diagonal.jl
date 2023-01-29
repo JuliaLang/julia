@@ -12,6 +12,12 @@ using .Main.Furlongs
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
+isdefined(Main, :InfiniteArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "InfiniteArrays.jl"))
+using .Main.InfiniteArrays
+
+isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
+using .Main.FillArrays
+
 const n=12 # Size of matrix problem to test
 Random.seed!(1)
 
@@ -1131,6 +1137,14 @@ Base.size(::SMatrix1) = (1, 1)
     C = map(a -> SMatrix1(string(a)), A)
     @test C == fill(SMatrix1(string(1)), 1, 1)
     @test C isa Matrix{SMatrix1{String}}
+end
+
+@testset "copyto! with UniformScaling" begin
+    D = Diagonal(FillArrays.Fill(1, InfiniteArrays.Infinity()))
+    @test copyto!(D, I) === D
+    D = Diagonal(fill(2, 2))
+    copyto!(D, I)
+    @test all(isone, diag(D))
 end
 
 end # module TestDiagonal

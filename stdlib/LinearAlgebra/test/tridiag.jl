@@ -9,6 +9,12 @@ const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
 using .Main.Quaternions
 
+isdefined(Main, :InfiniteArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "InfiniteArrays.jl"))
+using .Main.InfiniteArrays
+
+isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
+using .Main.FillArrays
+
 include("testutils.jl") # test_approx_eq_modphase
 
 #Test equivalence of eigenvectors/singular vectors taking into account possible phase (sign) differences
@@ -738,4 +744,28 @@ using .Main.SizedArrays
         @test S !== Tridiagonal(diag(Sdense, 1), diag(Sdense),  diag(Sdense, 1)) !== S
     end
 end
+
+@testset "copyto! with UniformScaling" begin
+    rd = FillArrays.Fill(1, InfiniteArrays.Infinity())
+    rud = FillArrays.Fill(0, InfiniteArrays.Infinity())
+    @testset "Tridiagonal" begin
+        T = Tridiagonal(rud, rd, rud)
+        @test copyto!(T, I) === T
+        T = Tridiagonal(fill(3, 3), fill(2, 4), fill(3, 3))
+        copyto!(T, I)
+        @test all(isone, diag(T))
+        @test all(iszero, diag(T, 1))
+        @test all(iszero, diag(T, -1))
+    end
+    @testset "SymTridiagonal" begin
+        ST = SymTridiagonal(rd, rud)
+        @test copyto!(ST, I) === ST
+        ST = SymTridiagonal(fill(2, 4), fill(3, 3))
+        copyto!(ST, I)
+        @test all(isone, diag(ST))
+        @test all(iszero, diag(ST, 1))
+        @test all(iszero, diag(ST, -1))
+    end
+end
+
 end # module TestTridiagonal

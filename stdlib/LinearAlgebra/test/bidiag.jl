@@ -13,6 +13,12 @@ using .Main.Furlongs
 isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
 using .Main.Quaternions
 
+isdefined(Main, :InfiniteArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "InfiniteArrays.jl"))
+using .Main.InfiniteArrays
+
+isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
+using .Main.FillArrays
+
 include("testutils.jl") # test_approx_eq_modphase
 
 n = 10 #Size of test matrix
@@ -792,6 +798,17 @@ end
             @test iszero(BL[i,j])
         end
     end
+end
+
+@testset "copyto! with UniformScaling" begin
+    rd = FillArrays.Fill(1, InfiniteArrays.Infinity())
+    rud = FillArrays.Fill(0, InfiniteArrays.Infinity())
+    B = Bidiagonal(rd, rud, :U)
+    @test copyto!(B, I) === B
+    B = Bidiagonal(fill(2, 4), fill(3, 3), :U)
+    copyto!(B, I)
+    @test all(isone, diag(B))
+    @test all(iszero, diag(B, 1))
 end
 
 end # module TestBidiagonal
