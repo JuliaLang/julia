@@ -2607,11 +2607,12 @@ end
         @test occursin("(a, [b])", repr)
         @test occursin("(x, y::Integer)", repr)
     end
-    f44434_3(a, b::Integer=5) = pass
+    # use @eval to avoid a warning about method definition overwritten
+    @eval f44434_3(a, b::Integer=5) = pass
     let repr = sprint(show, "text/plain", methods(f44434_3))
         @test occursin("(a, [b::Integer])", repr)
     end
-    f44434_3(x, y::Integer) = pass
+    @eval f44434_3(x, y::Integer) = pass
     let repr = sprint(show, "text/plain", methods(f44434_3))
         @test !occursin("(a, [b::Integer])", repr)
         @test occursin("(a)", repr)

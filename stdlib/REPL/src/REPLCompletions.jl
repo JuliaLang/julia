@@ -651,13 +651,6 @@ function complete_methods_args(ex::Expr, context_module::Module, default_any::Bo
     return detect_args_kwargs(ex.args, context_module, default_any, false)
 end
 
-function iskwsortermethod(@nospecialize(funct), args_ex::Vector{Any})
-    length(args_ex) < 2 && return false
-    args_ex[1] === Any || return false
-    funct == try; Core.kwftype(args_ex[2]); catch ex; ex isa ErrorException || rethrow(); return false; end || return false
-    true
-end
-
 function complete_methods!(out::Vector{Completion}, @nospecialize(funct), args_ex::Vector{Any}, kwargs_ex::Set{Symbol}, max_method_completions::Int, kwargs_flag::Int)
     # Input types and number of arguments
     varargs_position = findall(Base.isvarargtype, args_ex)
@@ -683,11 +676,11 @@ function complete_methods!(out::Vector{Completion}, @nospecialize(funct), args_e
     isempty(m) && return
     first_m = (m[1]::Core.MethodMatch).method
     if first_m.sig === Tuple # Builtin
-        push!(out, MethodCompletion(Any[t_in], Base.FactoredMethod(first_m, false)))
+        push!(out, MethodCompletion(Any[t_in], Base.FactoredMethod(first_m)))
         return
     end
     ml = Base.MethodList([(match::Core.MethodMatch).method for match in m], Base.get_methodtable(first_m))
-    fml = Base.FactoredMethodList(ml, iskwsortermethod(funct, args_ex))
+    fml = Base.FactoredMethodList(ml)
     for (fm, pos) in zip(fml.list, fml.positions)
         if kwargs_flag == 1
             # If there is a semicolon, the number of non-keyword arguments in the
@@ -869,13 +862,13 @@ function complete_keyword_argument(partial, last_idx, context_module)
     kwargs_flag == 2 && return fail # one of the previous kwargs is invalid
 
     # get the list of possible kw method table
-    kwt = try; Core.kwftype(funct); catch ex; ex isa ErrorException || rethrow(); return fail; end
+    kwt = typeof(Core.kwcall)
     _completions = Completion[]
     complete_methods!(_completions, kwt, Any[Any, funct, args_ex...], kwargs_ex, MAX_METHOD_COMPLETIONS, kwargs_flag)
     isempty(_completions) && return fail
 
     factoredmethods = if first(_completions) isa TextCompletion
-        Base.FactoredMethodList(Base.MethodList(kwt.name.mt), true).list
+        Base.FactoredMethodList(Base.MethodList(kwt.name.mt)).list
     else
         Base.FactoredMethod[(m::MethodCompletion).method for m in _completions]
     end

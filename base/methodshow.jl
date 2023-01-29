@@ -202,7 +202,9 @@ function sym_to_string(sym)
 end
 
 
-function kwsortermethod_kwargs(m::Method)
+function kwargnames(m::Method)
+    sig = unwrap_unionall(m.sig).parameters
+    (length(sig) == 0 || sig[1] !== typeof(Core.kwcall)) && return kwarg_decl(m)
     kwargs = Symbol[]
     for x in Iterators.drop(eachsplit(m.slot_syms, '\0'), m.nargs)
         if !isempty(x) && !occursin('#', x)
@@ -210,7 +212,6 @@ function kwsortermethod_kwargs(m::Method)
         end
     end
     return kwargs
-    println('\n', m, '\n', collect(Iterators.drop(eachsplit(m.slot_syms, '\0'), m.nargs)), '\n')
 end
 
 # type for pretty-printing methods corresponding to the same definition site with different
@@ -219,8 +220,8 @@ struct FactoredMethod
     m::Vector{Method} # the different methods, by order of increasing nargs
     kwargs::Vector{Symbol}
 end
-function FactoredMethod(m::Method, kwsortermethod)
-    FactoredMethod([m], kwsortermethod ? kwsortermethod_kwargs(m) : kwarg_decl(m))
+function FactoredMethod(m::Method)
+    FactoredMethod([m], kwargnames(m))
 end
 
 struct FactoredMethodList
@@ -229,10 +230,10 @@ struct FactoredMethodList
     ms::MethodList
 end
 
-function FactoredMethodList(ms::MethodList, kwsortermethod=false)
+function FactoredMethodList(ms::MethodList)
     isempty(ms) && return FactoredMethodList(FactoredMethod[], Vector{Int}[], ms)
     I = sortperm(ms.ms; by=m->(m.line, m.file, m.nargs))
-    list = FactoredMethod[FactoredMethod(ms[I[1]], kwsortermethod)]
+    list = FactoredMethod[FactoredMethod(ms[I[1]])]
     positions = Vector{Int}[[I[1]]]
     for _i in 2:length(ms)
         i = I[_i]
@@ -256,12 +257,12 @@ function FactoredMethodList(ms::MethodList, kwsortermethod=false)
                 newmethod = false
                 push!(last(list).m, m)
                  # we assert that only one of the methods has kwargs, if any
-                append!(last(list).kwargs, kwsortermethod ? kwsortermethod_kwargs(m) : kwarg_decl(m))
+                append!(last(list).kwargs, kwargnames(m))
                 push!(last(positions), i)
             end
         end
         if newmethod
-            push!(list, FactoredMethod(m, kwsortermethod))
+            push!(list, FactoredMethod(m))
             push!(positions, [i])
         end
     end
