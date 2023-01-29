@@ -146,12 +146,12 @@ By default, the `sort` family of functions uses stable sorting algorithms that a
 on most inputs. The exact algorithm choice is an implementation detail to allow for
 future performance improvements. Currently, a hybrid of `RadixSort`, `ScratchQuickSort`,
 `InsertionSort`, and `CountingSort` is used based on input type, size, and composition.
-Implementation details are subject to change but currently availible in the extended help
+Implementation details are subject to change but currently available in the extended help
 of `??Base.DEFAULT_STABLE` and the docstrings of internal sorting algorithms listed there.
 
 You can explicitly specify your preferred algorithm with the `alg` keyword
 (e.g. `sort!(v, alg=PartialQuickSort(10:20))`) or reconfigure the default sorting algorithm
-for a custom types by adding a specialized method to the `Base.Sort.defalg` function.
+for custom types by adding a specialized method to the `Base.Sort.defalg` function.
 For example, [InlineStrings.jl](https://github.com/JuliaStrings/InlineStrings.jl/blob/v1.3.2/src/InlineStrings.jl#L903)
 defines the following method:
 ```julia
