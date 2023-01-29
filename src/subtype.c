@@ -1476,10 +1476,11 @@ static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     jl_saved_unionstate_t oldLunions; push_unionstate(&oldLunions, &e->Lunions);
 
     int limit_slow = !jl_has_free_typevars(x) || !jl_has_free_typevars(y);
-    int sub = local_forall_exists_subtype(x, y, e, 2, limit_slow);
+    int sub = local_forall_exists_subtype(x, y, e, 2, limit_slow) &&
+              local_forall_exists_subtype(y, x, e, 0, 0);
 
     pop_unionstate(&e->Lunions, &oldLunions);
-    return sub && subtype(y, x, e, 0);
+    return sub;
 }
 
 static int exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_value_t *saved, jl_savedenv_t *se, int param)

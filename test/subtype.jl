@@ -1480,10 +1480,12 @@ f24521(::Type{T}, ::Type{T}) where {T} = T
 @test f24521(Tuple{Vararg{Int64}}, Tuple{Vararg{Int64,N}} where N) == Tuple{Vararg{Int64,N}} where N
 
 # issue #26654
-@test_broken !(Ref{Union{Int64, Ref{Number}}} <: Ref{Union{Ref{T}, T}} where T)
-@test_broken !(Ref{Union{Int64, Val{Number}}} <: Ref{Union{Val{T}, T}} where T)
-@test_broken !(Ref{Union{Ref{Number}, Int64}} <: Ref{Union{Ref{T}, T}} where T)
-@test_broken !(Ref{Union{Val{Number}, Int64}} <: Ref{Union{Val{T}, T}} where T)
+@test !(Ref{Union{Int64, Ref{Number}}} <: Ref{Union{Ref{T}, T}} where T)
+@test !(Ref{Union{Int64, Val{Number}}} <: Ref{Union{Val{T}, T}} where T)
+@test !(Ref{Union{Ref{Number}, Int64}} <: Ref{Union{Ref{T}, T}} where T)
+@test !(Ref{Union{Val{Number}, Int64}} <: Ref{Union{Val{T}, T}} where T)
+@test !(Val{Ref{Union{Int64, Ref{Number}}}} <: Val{S} where {S<:Ref{Union{Ref{T}, T}} where T})
+@test !(Tuple{Ref{Union{Int64, Ref{Number}}}} <: Tuple{S} where {S<:Ref{Union{Ref{T}, T}} where T})
 
 # issue #26180
 @test !(Ref{Union{Ref{Int64}, Ref{Number}}} <: Ref{Ref{T}} where T)
