@@ -279,8 +279,9 @@ end
 end
 
 @testset "HeapSnapshot" begin
-    tmpfile = tempname()
-    fname = read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot(\"$tmpfile\"))"`, String)
+    fname = cd(mktempdir()) do
+        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`, String)
+    end
 
     @test isfile(fname)
 
