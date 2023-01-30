@@ -697,13 +697,13 @@ function skip_deleted(h::Dict, i)
 end
 
 
+@propagate_inbounds function iterate(t::Dict)
+    isempty(t) && return nothing
+    _iterate(t, t.count==0 ? 0 : skip_deleted(t, 1))
+end
 @propagate_inbounds function _iterate(t::Dict{K,V}, i) where {K,V}
     # overflow check not needed on i+1 because a dict that large would more than fill memory
-    isempty(t) && return nothing
     return (Pair{K,V}(t.keys[i],t.vals[i]), i+1)
-end
-@propagate_inbounds function iterate(t::Dict)
-    _iterate(t, t.count==0 ? 0 : skip_deleted(t, 1))
 end
 @propagate_inbounds iterate(t::Dict, i) = _iterate(t, skip_deleted(t, i))
 
