@@ -696,25 +696,39 @@ function skip_deleted(h::Dict, i)
     return 0
 end
 
-@propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V} = i == 0 ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i == typemax(Int) ? 0 : i+1)
+
+function @propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V}
+    # overflow check not needed on i+1 because a dict that large would more than fill memory
+    isempty(t) && return nothing
+    return (Pair{K,V}(t.keys[i],t.vals[i]), i+1)
+end
 @propagate_inbounds function iterate(t::Dict)
-    _iterate(t, skip_deleted(t, 1))
+    _iterate(t, t.count==0 ? 0 : skip_deleted(t, 1))
 end
 @propagate_inbounds iterate(t::Dict, i) = _iterate(t, skip_deleted(t, i))
 
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
-@propagate_inbounds function Base.iterate(v::T, i::Int = 1) where T <: Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}}
-    i == 0 && return nothing
+
+@propagate_inbounds function Base.iterate(v::T) where T <: Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}}
+    isempty(v) && return nothing
+    i = skip_deleted(v.dict, 1)
+    vals = T <: KeySet ? v.dict.keys : v.dict.vals
+    # overflow check not needed on i+1 because a dict that large would more than fill memory
+    (@inbounds vals[i], i+1)
+end
+
+@propagate_inbounds function Base.iterate(v::T, i::Int) where T <: Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}}
     i = skip_deleted(v.dict, i)
     i == 0 && return nothing
     vals = T <: KeySet ? v.dict.keys : v.dict.vals
-    (@inbounds vals[i], i == typemax(Int) ? 0 : i+1)
+    # overflow check not needed on i+1 because a dict that large would more than fill memory
+    (@inbounds vals[i], i+1)
 end
 
 function filter!(pred, h::Dict{K,V}) where {K,V}
-    h.count == 0 && return h
+    isempty(h) && return h
     @inbounds for i=1:length(h.slots)
         if ((h.slots[i] & 0x80) != 0) && !pred(Pair{K,V}(h.keys[i], h.vals[i]))
             _delete!(h, i)
