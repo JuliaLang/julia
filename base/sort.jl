@@ -1112,6 +1112,13 @@ function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsig
         shift < bits || return true
     end
 end
+
+macro repeat4x(a)
+    quote
+        $a; $a; $a; $a
+    end |> esc
+end
+
 function radix_sort_pass!(t, lo, hi, offset, counts, v, shift, chunk_size)
     mask = UInt(1) << chunk_size - 1  # mask is defined in pass so that the compiler
     @inbounds begin                   #  ↳ knows it's shape
@@ -1130,14 +1137,27 @@ function radix_sort_pass!(t, lo, hi, offset, counts, v, shift, chunk_size)
         # belongs, not the number of elements in each bucket. We will put the first element
         # of bucket 0x00 in t[counts[1]], the next element of bucket 0x00 in t[counts[1]+1],
         # and the last element of bucket 0x00 in t[counts[2]-1].
-
-        for k in lo:hi
+		
+		#loop unrolled 4x
+        k = lo
+        while k <= hi - 4
+            @repeat4x begin
+                x = v[k]                  # lookup the element
+                i = (x >> shift)&mask + 1 # compute its bucket's index for this pass
+                j = counts[i]             # lookup the target index
+                t[j + offset] = x         # put the element where it belongs
+                counts[i] = j + 1         # increment the target index for the next
+                k += 1                    #  ↳ element in this bucket
+            end
+        end                           
+        while k <= hi
             x = v[k]                  # lookup the element
             i = (x >> shift)&mask + 1 # compute its bucket's index for this pass
             j = counts[i]             # lookup the target index
             t[j + offset] = x         # put the element where it belongs
             counts[i] = j + 1         # increment the target index for the next
-        end                           #  ↳ element in this bucket
+            k += 1                    #  ↳ element in this bucket
+        end
     end
 end
 function radix_chunk_size_heuristic(lo::Integer, hi::Integer, bits::Unsigned)
