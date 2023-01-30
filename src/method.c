@@ -438,19 +438,19 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
 JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
 {
     jl_task_t *ct = jl_current_task;
-    jl_method_instance_t *li =
+    jl_method_instance_t *mi =
         (jl_method_instance_t*)jl_gc_alloc(ct->ptls, sizeof(jl_method_instance_t),
                                            jl_method_instance_type);
-    li->def.value = NULL;
-    li->specTypes = NULL;
-    li->sparam_vals = jl_emptysvec;
-    jl_atomic_store_relaxed(&li->uninferred, NULL);
-    li->backedges = NULL;
-    li->callbacks = NULL;
-    jl_atomic_store_relaxed(&li->cache, NULL);
-    li->inInference = 0;
-    jl_atomic_store_relaxed(&li->precompiled, 0);
-    return li;
+    mi->def.value = NULL;
+    mi->specTypes = NULL;
+    mi->sparam_vals = jl_emptysvec;
+    jl_atomic_store_relaxed(&mi->uninferred, NULL);
+    mi->backedges = NULL;
+    mi->callbacks = NULL;
+    jl_atomic_store_relaxed(&mi->cache, NULL);
+    mi->inInference = 0;
+    jl_atomic_store_relaxed(&mi->precompiled, 0);
+    return mi;
 }
 
 JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
