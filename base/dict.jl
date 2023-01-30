@@ -28,7 +28,7 @@ end
 # https://doi.org/10.1016/0196-6774(87)90040-X shows that the expected
 # maximum probe size with linear probing is
 # ln(size(dict))/(a - 1 - ln(a)) where a is the load
-# for a load factor of 2/3rds which we aim for, the factor ends up being .961
+# for a load factor of 2/3rds which we aim for, the factor ends up being 9.61
 # and 10 is pretty close.
 const maxprobefactor = 10
 
@@ -697,7 +697,7 @@ function skip_deleted(h::Dict, i)
 end
 
 
-function @propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V}
+@propagate_inbounds function _iterate(t::Dict{K,V}, i) where {K,V}
     # overflow check not needed on i+1 because a dict that large would more than fill memory
     isempty(t) && return nothing
     return (Pair{K,V}(t.keys[i],t.vals[i]), i+1)
