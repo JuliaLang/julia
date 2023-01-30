@@ -1137,7 +1137,7 @@ function radix_sort_pass!(t, lo, hi, offset, counts, v, shift, chunk_size)
         # belongs, not the number of elements in each bucket. We will put the first element
         # of bucket 0x00 in t[counts[1]], the next element of bucket 0x00 in t[counts[1]+1],
         # and the last element of bucket 0x00 in t[counts[2]-1].
-		
+
 		#loop unrolled 4x
         k = lo
         while k <= hi - 4
@@ -1149,7 +1149,7 @@ function radix_sort_pass!(t, lo, hi, offset, counts, v, shift, chunk_size)
                 counts[i] = j + 1         # increment the target index for the next
                 k += 1                    #  ↳ element in this bucket
             end
-        end                           
+        end
         while k <= hi
             x = v[k]                  # lookup the element
             i = (x >> shift)&mask + 1 # compute its bucket's index for this pass
