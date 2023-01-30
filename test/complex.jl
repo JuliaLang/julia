@@ -1209,3 +1209,8 @@ end
     @test !iseven(7+0im) && isodd(7+0im)
     @test !iseven(6+1im) && !isodd(7+1im)
 end
+
+@test "inv for special values" begin
+    inv(0.2 + 0.0im) == 5.0 - 0.0im
+    inv(0.2 - 0.0im) == 5.0 + 0.0im
+end
