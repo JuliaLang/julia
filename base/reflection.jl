@@ -308,8 +308,6 @@ function isfieldatomic(@nospecialize(t::Type), s::Int)
     return unsafe_load(Ptr{UInt32}(atomicfields), 1 + s÷32) & (1 << (s%32)) != 0
 end
 
-
-
 """
     @locals()
 
