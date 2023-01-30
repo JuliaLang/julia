@@ -316,8 +316,8 @@ julia> searchsorted([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
 julia> searchsorted([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 1:0
 
-julia> searchsorted([1=>"one", 2=>"two", 4=>"four"], 2, by=first) # compare the keys of the pairs
-2:2
+julia> searchsorted([1=>"one", 2=>"two", 2=>"two", 4=>"four"], 2=>"two", by=first) # compare the keys of the pairs
+2:3
 ```
 """ searchsorted
 
@@ -351,7 +351,7 @@ julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
 julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 1
 
-julia> searchsortedfirst([1=>"one", 2=>"two", 4=>"four"], 3, by=first) # Compare the keys of the pairs
+julia> searchsortedfirst([1=>"one", 2=>"two", 4=>"four"], 3=>"three", by=first) # Compare the keys of the pairs
 3
 ```
 """ searchsortedfirst
@@ -382,7 +382,7 @@ julia> searchsortedlast([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
 julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 0
 
-julia> searchsortedlast([1=>"one", 2=>"two", 4=>"four"], 3, by=first) # compare the keys of the pairs
+julia> searchsortedlast([1=>"one", 2=>"two", 4=>"four"], 3=>"three", by=first) # compare the keys of the pairs
 2
 ```
 """ searchsortedlast
