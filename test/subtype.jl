@@ -2436,3 +2436,7 @@ let A = Tuple{Type{T}, T} where T,
     C = Tuple{Type{MyType47877{W, V} where V<:Union{MyAbstract47877{W}, Base.BitInteger}}, MyType47877{W, V} where V<:Union{MyAbstract47877{W}, Base.BitInteger}} where W<:Base.BitInteger
     @test typeintersect(B, A) == C
 end
+
+let a = (isodd(i) ? Pair{Char, String} : Pair{String, String} for i in 1:2000)
+    @test Tuple{Type{Pair{Union{Char, String}, String}}, a...} <: Tuple{Type{Pair{K, V}}, Vararg{Pair{A, B} where B where A}} where V where K
+end
