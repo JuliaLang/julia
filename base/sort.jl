@@ -5,7 +5,7 @@ module Sort
 using Base.Order
 
 using Base: copymutable, midpoint, require_one_based_indexing, uinttype,
-    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, top_set_bit
+    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, top_set_bit, Cartesian
 
 import Base:
     sort,
@@ -1112,13 +1112,6 @@ function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsig
         shift < bits || return true
     end
 end
-
-macro repeat4x(a)
-    quote
-        $a; $a; $a; $a
-    end |> esc
-end
-
 function radix_sort_pass!(t, lo, hi, offset, counts, v, shift, chunk_size)
     mask = UInt(1) << chunk_size - 1  # mask is defined in pass so that the compiler
     @inbounds begin                   #  ↳ knows it's shape
@@ -1141,7 +1134,7 @@ function radix_sort_pass!(t, lo, hi, offset, counts, v, shift, chunk_size)
 		#loop unrolled 4x
         k = lo
         while k <= hi - 4
-            @repeat4x begin
+            Cartesian.@nexprs 4 _ -> begin
                 x = v[k]                  # lookup the element
                 i = (x >> shift)&mask + 1 # compute its bucket's index for this pass
                 j = counts[i]             # lookup the target index
