@@ -30,7 +30,7 @@ end
 # ln(size(dict))/(a - 1 - ln(a)) where a is the load
 # for a load factor of 2/3rds which we aim for, the factor ends up being .961
 # and 10 is pretty close.
-const global maxprobefactor = 10
+const maxprobefactor = 10
 
 
 """
