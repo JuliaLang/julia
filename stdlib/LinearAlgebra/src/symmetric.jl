@@ -877,74 +877,46 @@ for func in (:log, :sqrt)
 end
 
 """
-    symmetricpart(A, uplo=:U)
+    hermitianpart(A, uplo=:U) -> Hermitian
 
-Return the symmetric part of the square matrix `A`, defined as `(A + transpose(A)) / 2`,
-as a [`Symmetric`](@ref) matrix.
-
-!!! compat "Julia 1.10"
-    This function requires Julia 1.10 or later.
-"""
-symmetricpart(A::AbstractMatrix{T}, uplo=:U) where {T} =
-    symmetricpart!(copyto!(similar(A, typeof(one(T) / 2)), A), uplo)
-symmetricpart(x::Number) = x
-
-"""
-    symmetricpart!(A, uplo=:U)
-
-Overwrite the square matrix `A` with its symmetric part, `(A + transpose(A)) / 2`,
-and return `Symmetric(A, uplo)`.
-
-!!! compat "Julia 1.10"
-    This function requires Julia 1.10 or later.
-"""
-symmetricpart!(A::AbstractMatrix, uplo::Symbol=:U) =
-    Symmetric(_hermorsympart!(symmetricpart, transpose, A, char_uplo(uplo)), uplo)
-
-"""
-    hermitianpart(A, uplo=:U, full=false) -> Hermitian
-
-Return the Hermitian part of the square matrix `A`, defined as `(A + A') / 2`,
-as a [`Hermitian`](@ref) matrix. For real matrices `A`, this is also known as the symmetric
-part of `A`. The first optional argument `uplo` controls whether the upper
-(`uplo = :U`) or lower (`uplo = :L`) triangle of the matrix underlying the [`Hermitian`](@ref)
-view is explicitly filled. Unless the second optional argument `full=true` (in which case the
-full underlying matrix is filled with the Hermitian part), the opposite triangle is then
-only implicitly filled via the [`Hermitian`](@ref) view. For real matrices, the latter is
-equivalent to a [`Symmetric`](@ref) view.
+Return the Hermitian part of the square matrix `A`, defined as `(A + A') / 2`, as a
+[`Hermitian`](@ref) matrix. For real matrices `A`, this is also known as the symmetric part
+of `A`. The optional argument `uplo` controls the corresponding argument of the
+[`Hermitian`](@ref) view. For real matrices, the latter is equivalent to a
+[`Symmetric`](@ref) view.
 
 See also [`hermitianpart!`](@ref) for the corresponding in-place operation.
 
 !!! compat "Julia 1.10"
     This function requires Julia 1.10 or later.
 """
-hermitianpart(A::AbstractMatrix{T}, uplo=:U, full::Bool = false) where {T} =
-    hermitianpart!(copy_similar(A, typeof(one(T) / 2)), uplo, full)
-hermitianpart(x::Number, uplo=:U, full::Bool=false) = real(x)
+hermitianpart(A::AbstractMatrix{T}, uplo::Symbol=:U) where {T} =
+    hermitianpart!(copy_similar(A, Base.promote_op(/, T, Int)), uplo)
+hermitianpart(x::Number, uplo::Symbol=:U) = real(x)
 
 """
-    hermitianpart!(A, uplo=:U, full=false) -> Hermitian
+    hermitianpart!(A, uplo=:U) -> Hermitian
 
-Overwrite the upper (`uplo = :U`) or lower (`uplo = :L`) triangle of the square matrix `A`
-with its Hermitian part `(A + A') / 2`, and return `Hermitian(A, uplo)`. For real matrices
-`A`, this is also known as the symmetric part of `A`.
+Overwrite the square matrix `A` with its Hermitian part `(A + A') / 2`, and return
+[`Hermitian(A, uplo)`](@ref). For real matrices `A`, this is also known as the symmetric
+part of `A`.
 
 See also [`hermitianpart`](@ref).
 
 !!! compat "Julia 1.10"
     This function requires Julia 1.10 or later.
 """
-hermitianpart!(A::AbstractMatrix, uplo::Symbol=:U, full::Bool = false) =
-    Hermitian(_hermorsympart!(a -> hermitianpart(a, uplo, full), adjoint, A, char_uplo(uplo), full), uplo)
+hermitianpart!(A::AbstractMatrix, uplo::Symbol=:U) =
+    Hermitian(_hermorsympart!(a -> hermitianpart(a, uplo), adjoint, A), uplo)
 
-@inline function _hermorsympart!(real::Function, conj::Function, A::AbstractMatrix, uplo::Char, full::Bool)
+@inline function _hermorsympart!(real::Function, conj::Function, A::AbstractMatrix)
     require_one_based_indexing(A)
     n = checksquare(A)
     @inbounds for j in 1:n
         A[j, j] = real(A[j, j])
-        for i in (uplo === 'U' ? (1:(j - 1)) : ((j + 1):n))
+        for i in 1:j-1
             A[i, j] = val = (A[i, j] + conj(A[j, i])) / 2
-            full && (A[j, i] = conj(val))
+            A[j, i] = conj(val)
         end
     end
     return A

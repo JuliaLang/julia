@@ -787,24 +787,20 @@ end
         U = f(X)
         L = f(X, :L)
         @test U == L == Y
-        U = f(X, :U, true)
-        L = f(X, :L, true)
-        @test parent(U) == U == parent(L) == L == Y
         if T <: AbstractFloat || real(T) <: AbstractFloat
-            HU = f!(copy(X))
+            HU = f!(X)
             @test HU == Y
-            HU = f!(Xc, :U, true)
-            @test parent(HU) == HU == Y
-            @test triu(Xc) == triu(Y)
-            HL = f!(copy(X), :L)
+            @test triu(X) == triu(Y)
+            HL = f!(Xc, :L)
             @test HL == Y
-            Xc = copy(X)
-            HL = f!(Xc, :L, true)
-            @test parent(HL) == HL == Y
             @test tril(Xc) == tril(Y)
         end
     end
-    @test_throws DimensionMismatch hermitianpart([1.0 2.0 3.0; 4.0 5.0 6.0])
+    @test_throws DimensionMismatch hermitianpart(ones(1,2))
+    for T in (Float64, ComplexF64)
+        A = [randn(T, 2, 2) for _ in 1:2, _ in 1:2]
+        @test hermitianpart(A) == (A + A')/2
+    end
 end
 
 end # module TestSymmetric

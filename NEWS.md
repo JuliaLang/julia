@@ -43,9 +43,11 @@ Standard library changes
   packages being loaded in the Julia session.
   This has similar applications as the Requires.jl package but also
   supports precompilation and setting compatibility.
-#### LinearAlgebra
-* New functions `symmetricpart`, `symmetricpart!`, `hermitianpart`, and `hermitianpart!` for extracting the symmetric or Hermitian part of a matrix ([#31836]).
 
+#### LinearAlgebra
+
+- New functions `hermitianpart`, and `hermitianpart!` for extracting the Hermitian
+  (real symmetric) part of a matrix ([#31836]).
 
 #### Printf
 
