@@ -376,11 +376,11 @@ function powermod(x::Integer, p::Integer, m::T) where T<:Integer
     # It needs special handling otherwise will cause overflow problem.
     if p == -p
         imod = invmod(x, m)
-        thalf = powermod(imod, -(p÷2), m)
-        t::T = mod(widemul(thalf, thalf), m)
-        isodd(p) && (t = mod(widemul(t, imod), m))
+        rhalf = powermod(imod, -(p÷2), m)
+        r::T = mod(widemul(rhalf, rhalf), m)
+        isodd(p) && (r = mod(widemul(r, imod), m))
         #else odd
-        return t
+        return r
     elseif p < 0
         return powermod(invmod(x, m), -p, m)
     end
@@ -388,7 +388,7 @@ function powermod(x::Integer, p::Integer, m::T) where T<:Integer
     b = oftype(m,mod(x,m))  # this also checks for divide by zero
 
     t = prevpow(2, p)
-    r::T = 1
+    r = 1
     while true
         if p >= t
             r = mod(widemul(r,b),m)
