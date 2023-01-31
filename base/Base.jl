@@ -418,6 +418,7 @@ include("threadcall.jl")
 include("uuid.jl")
 include("pkgid.jl")
 include("toml_parser.jl")
+include("linking.jl")
 include("loading.jl")
 
 # misc useful functions & macros
@@ -445,6 +446,10 @@ end
 for m in methods(include)
     delete_method(m)
 end
+
+# This method is here only to be overwritten during the test suite to test
+# various sysimg related invalidation scenarios.
+a_method_to_overwrite_in_test() = inferencebarrier(1)
 
 # These functions are duplicated in client.jl/include(::String) for
 # nicer stacktraces. Modifications here have to be backported there

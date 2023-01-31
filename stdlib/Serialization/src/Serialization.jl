@@ -79,7 +79,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 20 # do not make changes without bumping the version #!
+const ser_version = 22 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -1027,8 +1027,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     nargs = deserialize(s)::Int32
     isva = deserialize(s)::Bool
     is_for_opaque_closure = false
-    constprop = 0x00
-    purity = 0x00
+    constprop = purity = 0x00
     template_or_is_opaque = deserialize(s)
     if isa(template_or_is_opaque, Bool)
         is_for_opaque_closure = template_or_is_opaque
@@ -1183,22 +1182,30 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
         end
     end
     ci.inferred = deserialize(s)
-    inlining = deserialize(s)
-    if isa(inlining, Bool)
-        Core.Compiler.set_inlineable!(ci, inlining)
-    else
-        ci.inlining_cost = inlining
+    if format_version(s) < 22
+        inlining_cost = deserialize(s)
+        if isa(inlining_cost, Bool)
+            Core.Compiler.set_inlineable!(ci, inlining_cost)
+        else
+            ci.inlining_cost = inlining_cost
+        end
     end
     ci.propagate_inbounds = deserialize(s)
     ci.pure = deserialize(s)
     if format_version(s) >= 20
         ci.has_fcall = deserialize(s)
     end
+    if format_version(s) >= 21
+        ci.inlining = deserialize(s)::UInt8
+    end
     if format_version(s) >= 14
         ci.constprop = deserialize(s)::UInt8
     end
     if format_version(s) >= 17
         ci.purity = deserialize(s)::UInt8
+    end
+    if format_version(s) >= 22
+        ci.inlining_cost = deserialize(s)::UInt16
     end
     return ci
 end

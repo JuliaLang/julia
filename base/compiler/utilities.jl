@@ -226,6 +226,27 @@ function specialize_method(match::MethodMatch; kwargs...)
 end
 
 """
+    is_declared_inline(method::Method) -> Bool
+
+Check if `method` is declared as `@inline`.
+"""
+is_declared_inline(method::Method) = _is_declared_inline(method, true)
+
+"""
+    is_declared_noinline(method::Method) -> Bool
+
+Check if `method` is declared as `@noinline`.
+"""
+is_declared_noinline(method::Method) = _is_declared_inline(method, false)
+
+function _is_declared_inline(method::Method, inline::Bool)
+    isdefined(method, :source) || return false
+    src = method.source
+    isa(src, MaybeCompressed) || return false
+    return (inline ? is_declared_inline : is_declared_noinline)(src)
+end
+
+"""
     is_aggressive_constprop(method::Union{Method,CodeInfo}) -> Bool
 
 Check if `method` is declared as `Base.@constprop :aggressive`.

@@ -276,18 +276,20 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
     # information cached inside the payload.
     if isempty(p.url)
         p.url = unsafe_string(url_ptr)
-        m = match(URL_REGEX, p.url)
+        m = match(URL_REGEX, p.url)::RegexMatch
 
         p.scheme = something(m[:scheme], SubString(""))
         p.username = something(m[:user], SubString(""))
-        p.host = m[:host]
+        p.host = something(m[:host])
 
         # When an explicit credential is supplied we will make sure to use the given
         # credential during the first callback by modifying the allowed types. The
         # modification only is in effect for the first callback since `allowed_types` cannot
         # be mutated.
-        if p.explicit !== nothing
-            cred = p.explicit
+        cache = p.cache
+        explicit = p.explicit
+        if explicit !== nothing
+            cred = explicit
 
             # Copy explicit credentials to avoid mutating approved credentials.
             # invalidation fix from cred being non-inferrable
@@ -300,16 +302,15 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
             else
                 allowed_types &= Cuint(0)  # Unhandled credential type
             end
-        elseif p.cache !== nothing
+        elseif cache !== nothing
             cred_id = credential_identifier(p.scheme, p.host)
 
             # Perform a deepcopy as we do not want to mutate approved cached credentials
-            if haskey(p.cache, cred_id)
-                # invalidation fix from p.cache[cred_id] being non-inferrable
-                p.credential = Base.invokelatest(deepcopy, p.cache[cred_id])
+            if haskey(cache, cred_id)
+                # invalidation fix from cache[cred_id] being non-inferrable
+                p.credential = Base.invokelatest(deepcopy, cache[cred_id])
             end
         end
-
         p.first_pass = true
     else
         p.first_pass = false
@@ -447,7 +448,7 @@ function ssh_knownhost_check(
 )
     if (m = match(r"^(.+):(\d+)$", host)) !== nothing
         host = m.captures[1]
-        port = parse(Int, m.captures[2])
+        port = parse(Int, something(m.captures[2]))
     else
         port = 22 # default SSH port
     end

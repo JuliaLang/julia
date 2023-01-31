@@ -37,6 +37,7 @@ Base.which(::Any, ::Any)
 Base.methods
 Base.@show
 ans
+err
 Base.active_project
 Base.set_active_project
 ```
@@ -143,6 +144,8 @@ Base.hasproperty
 Core.getfield
 Core.setfield!
 Core.isdefined
+Core.getglobal
+Core.setglobal!
 Base.@isdefined
 Base.convert
 Base.promote
@@ -259,7 +262,7 @@ new
 Base.:(|>)
 Base.:(∘)
 Base.ComposedFunction
-Base.Splat
+Base.splat
 Base.Fix1
 Base.Fix2
 ```

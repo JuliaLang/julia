@@ -387,6 +387,22 @@ let # should work with constant globals
     @test count(isnew, src.code) == 0
 end
 
+# don't SROA statement that may throw
+# https://github.com/JuliaLang/julia/issues/48067
+function issue48067(a::Int, b)
+   r = Ref(a)
+   try
+       setfield!(r, :x, b)
+       nothing
+   catch err
+       getfield(r, :x)
+   end
+end
+let src = code_typed1(issue48067, (Int,String))
+    @test any(iscall((src, setfield!)), src.code)
+end
+@test issue48067(42, "julia") == 42
+
 # should work nicely with inlining to optimize away a complicated case
 # adapted from http://wiki.luajit.org/Allocation-Sinking-Optimization#implementation%5B
 struct Point
@@ -1205,3 +1221,11 @@ function a47180(b; stdout )
     c
 end
 @test isa(a47180(``; stdout), Base.AbstractCmd)
+
+# Test that _compute_sparams can be eliminated for NamedTuple
+named_tuple_elim(name::Symbol, result) = NamedTuple{(name,)}(result)
+let src = code_typed1(named_tuple_elim, Tuple{Symbol, Tuple})
+    @test count(iscall((src, Core._compute_sparams)), src.code) == 0 &&
+          count(iscall((src, Core._svec_ref)), src.code) == 0 &&
+          count(iscall(x->!isa(argextype(x, src).val, Core.Builtin)), src.code) == 0
+end

@@ -17,6 +17,7 @@ the following methods to satisfy the `AbstractInterpreter` API requirement:
 - `code_cache(interp::NewInterpreter)` - return the global inference cache
 """
 abstract type AbstractInterpreter end
+abstract type AbstractLattice end
 
 struct ArgInfo
     fargs::Union{Nothing,Vector{Any}}
@@ -57,11 +58,11 @@ mutable struct InferenceResult
             WorldRange(), Effects(), Effects(), nothing, true)
     end
 end
-function InferenceResult(linfo::MethodInstance)
-    return InferenceResult(linfo, matching_cache_argtypes(linfo)...)
+function InferenceResult(linfo::MethodInstance; lattice::AbstractLattice=fallback_lattice)
+    return InferenceResult(linfo, matching_cache_argtypes(lattice, linfo)...)
 end
-function InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes)
-    return InferenceResult(linfo, matching_cache_argtypes(linfo, argtypes)...)
+function InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes; lattice::AbstractLattice=fallback_lattice)
+    return InferenceResult(linfo, matching_cache_argtypes(lattice, linfo, argtypes)...)
 end
 
 """

@@ -32,7 +32,7 @@
 
 #include <llvm/InitializePasses.h>
 
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"

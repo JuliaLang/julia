@@ -93,7 +93,7 @@ function datatype_min_ninitialized(t::DataType)
     return length(t.name.names) - t.name.n_uninitialized
 end
 
-has_concrete_subtype(d::DataType) = d.flags & 0x20 == 0x20 # n.b. often computed only after setting the type and layout fields
+has_concrete_subtype(d::DataType) = d.flags & 0x0020 == 0x0020 # n.b. often computed only after setting the type and layout fields
 
 # determine whether x is a valid lattice element tag
 # For example, Type{v} is not valid if v is a value
@@ -333,15 +333,9 @@ end
 
 # this query is specially written for `adjust_effects` and returns true if a value of this type
 # never involves inconsistency of mutable objects that are allocated somewhere within a call graph
-is_consistent_argtype(@nospecialize ty) = is_consistent_type(widenconst(ignorelimited(ty)))
-is_consistent_type(@nospecialize ty) = _is_consistent_type(unwrap_unionall(ty))
-function _is_consistent_type(@nospecialize ty)
-    if isa(ty, Union)
-        return is_consistent_type(ty.a) && is_consistent_type(ty.b)
-    end
-    # N.B. String and Symbol are mutable, but also egal always, and so they never be inconsistent
-    return ty === String || ty === Symbol || isbitstype(ty)
-end
+is_consistent_argtype(@nospecialize ty) =
+    is_consistent_type(widenconst(ignorelimited(ty)))
+is_consistent_type(@nospecialize ty) = isidentityfree(ty)
 
 is_immutable_argtype(@nospecialize ty) = is_immutable_type(widenconst(ignorelimited(ty)))
 is_immutable_type(@nospecialize ty) = _is_immutable_type(unwrap_unionall(ty))
@@ -354,17 +348,4 @@ end
 
 is_mutation_free_argtype(@nospecialize argtype) =
     is_mutation_free_type(widenconst(ignorelimited(argtype)))
-is_mutation_free_type(@nospecialize ty) =
-    _is_mutation_free_type(unwrap_unionall(ty))
-function _is_mutation_free_type(@nospecialize ty)
-    if isa(ty, Union)
-        return _is_mutation_free_type(ty.a) && _is_mutation_free_type(ty.b)
-    end
-    if isType(ty) || ty === DataType || ty === String || ty === Symbol || ty === SimpleVector
-        return true
-    end
-    # this is okay as access and modification on global state are tracked separately
-    ty === Module && return true
-    # TODO improve this analysis, e.g. allow `Some{Symbol}`
-    return isbitstype(ty)
-end
+is_mutation_free_type(@nospecialize ty) = ismutationfree(ty)

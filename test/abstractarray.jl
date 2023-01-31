@@ -993,9 +993,9 @@ end
     end
 
     i = CartesianIndex(17,-2)
-    @test CR .+ i === i .+ CR === CartesianIndices((19:21, -1:3))
-    @test CR .- i === CartesianIndices((-15:-13, 3:7))
-    @test collect(i .- CR) == Ref(i) .- collect(CR)
+    @test CR .+ i === i .+ CR === CartesianIndices((19:21, -1:3)) == collect(CR) .+ i
+    @test CR .- i === CartesianIndices((-15:-13, 3:7)) == collect(CR) .- i
+    @test collect(i .- CR) == Ref(i) .- collect(CR) == i .- collect(CR)
 end
 
 @testset "issue #25770" begin

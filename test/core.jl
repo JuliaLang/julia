@@ -57,14 +57,14 @@ mutable struct ABCDconst
     c
     const d::Union{Int,Nothing}
 end
-@test_throws(ErrorException("invalid redefinition of constant ABCDconst"),
+@test_throws(ErrorException("invalid redefinition of constant $(nameof(curmod)).ABCDconst"),
     mutable struct ABCDconst
         const a
         const b::Int
         c
         d::Union{Int,Nothing}
     end)
-@test_throws(ErrorException("invalid redefinition of constant ABCDconst"),
+@test_throws(ErrorException("invalid redefinition of constant $(nameof(curmod)).ABCDconst"),
     mutable struct ABCDconst
         a
         b::Int
@@ -780,11 +780,15 @@ let
     @test isassigned(a,1) && !isassigned(a,2)
     a = Vector{Float64}(undef,1)
     @test isassigned(a,1)
+    @test isassigned(a,1,1)
     @test isassigned(a)
     @test !isassigned(a,2)
     a = Array{Float64}(undef, 2, 2, 2)
     @test isassigned(a,1)
-    @test isassigned(a)
+    @test isassigned(a,8)
+    @test isassigned(a,2,2,2)
+    @test isassigned(a,2,2,2,1)
+    @test !isassigned(a)
     @test !isassigned(a,9)
     a = Array{Float64}(undef, 1)
     @test isassigned(a,1)
@@ -792,8 +796,15 @@ let
     @test !isassigned(a,2)
     a = Array{Float64}(undef, 2, 2, 2, 2)
     @test isassigned(a,1)
-    @test isassigned(a)
+    @test isassigned(a,2,2,2,2)
+    @test isassigned(a,2,2,2,2,1)
+    @test isassigned(a,16)
+    @test !isassigned(a)
     @test !isassigned(a,17)
+    @test !isassigned(a,3,1,1,1)
+    @test !isassigned(a,1,3,1,1)
+    @test !isassigned(a,1,1,3,1)
+    @test !isassigned(a,1,1,1,3)
 end
 
 # isassigned, issue #11167
@@ -5952,7 +5963,7 @@ module GlobalDef18933
         global sincos
         nothing
     end
-    @test which(Main, :sincos) === Base.Math
+    @test which(@__MODULE__, :sincos) === Base.Math
     @test @isdefined sincos
     @test sincos === Base.sincos
 end
@@ -7524,7 +7535,7 @@ end
 struct X36104; x::Int; end
 @test fieldtypes(X36104) == (Int,)
 primitive type P36104 8 end
-@test_throws ErrorException("invalid redefinition of constant P36104") @eval(primitive type P36104 16 end)
+@test_throws ErrorException("invalid redefinition of constant $(nameof(curmod)).P36104") @eval(primitive type P36104 16 end)
 
 # Malformed invoke
 f_bad_invoke(x::Int) = invoke(x, (Any,), x)
