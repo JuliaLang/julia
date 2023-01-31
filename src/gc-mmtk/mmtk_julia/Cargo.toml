@@ -10,7 +10,7 @@ edition = "2018"
 [package.metadata.julia]
 # Our CI matches the following line and extract mmtk/julia. If this line is updated, please check ci yaml files and make sure it works.
 julia_repo = "https://github.com/mmtk/julia.git"
-julia_version = "5bcb1de5b95c374893f6f9c9405fb10114180af9"
+julia_version = "134f3e7dfaa04511a2f81f4a40cdc85f4e433706"
 
 [lib]
 crate-type = ["staticlib", "rlib", "dylib"]
@@ -23,9 +23,7 @@ built = "*"
 [dependencies]
 libc = "0.2"
 lazy_static = "1.1"
-mmtk = { git = "https://github.com/udesou/mmtk-core.git", branch="master", version = "*" }
-# mmtk = { git = "https://github.com/mmtk/mmtk-core.git", branch="master", version = "*" }
-# mmtk = { path = "/home/eduardo/mmtk-core", version="*" }
+mmtk = { git = "https://github.com/mmtk/mmtk-core.git", rev = "a272c2399df39177361788449b1f96d060a86080" }
 log = {version = "0.4", features = ["max_level_trace", "release_max_level_off"] }
 enum-map = "=2.1"
 atomic = "0.4.6"
