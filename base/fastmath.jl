@@ -41,6 +41,8 @@ const fast_op =
          :!= => :ne_fast,
          :< => :lt_fast,
          :<= => :le_fast,
+         :> => :gt_fast,
+         :>= => :ge_fast,
          :abs => :abs_fast,
          :abs2 => :abs2_fast,
          :cmp => :cmp_fast,
@@ -82,7 +84,12 @@ const fast_op =
          :sinh => :sinh_fast,
          :sqrt => :sqrt_fast,
          :tan => :tan_fast,
-         :tanh => :tanh_fast)
+         :tanh => :tanh_fast,
+         # reductions
+         :maximum => :maximum_fast,
+         :minimum => :minimum_fast,
+         :maximum! => :maximum!_fast,
+         :minimum! => :minimum!_fast)
 
 const rewrite_op =
     Dict(:+= => :+,
@@ -182,6 +189,8 @@ eq_fast(x::T, y::T) where {T<:FloatTypes} = eq_float_fast(x, y)
 ne_fast(x::T, y::T) where {T<:FloatTypes} = ne_float_fast(x, y)
 lt_fast(x::T, y::T) where {T<:FloatTypes} = lt_float_fast(x, y)
 le_fast(x::T, y::T) where {T<:FloatTypes} = le_float_fast(x, y)
+gt_fast(x, y) = lt_fast(y, x)
+ge_fast(x, y) = le_fast(y, x)
 
 isinf_fast(x) = false
 isfinite_fast(x) = true
@@ -279,8 +288,8 @@ exp10_fast(x::Union{Float32,Float64}) = Base.Math.exp10_fast(x)
 
 # builtins
 
-pow_fast(x::Float32, y::Integer) = ccall("llvm.powi.f32", llvmcall, Float32, (Float32, Int32), x, y)
-pow_fast(x::Float64, y::Integer) = ccall("llvm.powi.f64", llvmcall, Float64, (Float64, Int32), x, y)
+pow_fast(x::Float32, y::Integer) = ccall("llvm.powi.f32.i32", llvmcall, Float32, (Float32, Int32), x, y)
+pow_fast(x::Float64, y::Integer) = ccall("llvm.powi.f64.i32", llvmcall, Float64, (Float64, Int32), x, y)
 pow_fast(x::FloatTypes, ::Val{p}) where {p} = pow_fast(x, p) # inlines already via llvm.powi
 @inline pow_fast(x, v::Val) = Base.literal_pow(^, x, v)
 
@@ -361,5 +370,28 @@ for f in (:^, :atan, :hypot, :log)
         $f_fast(x::T, y::T) where {T<:Number} = $f(x, y)
     end
 end
+
+# Reductions
+
+maximum_fast(a; kw...) = Base.reduce(max_fast, a; kw...)
+minimum_fast(a; kw...) = Base.reduce(min_fast, a; kw...)
+
+maximum_fast(f, a; kw...) = Base.mapreduce(f, max_fast, a; kw...)
+minimum_fast(f, a; kw...) = Base.mapreduce(f, min_fast, a; kw...)
+
+Base.reducedim_init(f, ::typeof(max_fast), A::AbstractArray, region) =
+    Base.reducedim_init(f, max, A::AbstractArray, region)
+Base.reducedim_init(f, ::typeof(min_fast), A::AbstractArray, region) =
+    Base.reducedim_init(f, min, A::AbstractArray, region)
+
+maximum!_fast(r::AbstractArray, A::AbstractArray; kw...) =
+    maximum!_fast(identity, r, A; kw...)
+minimum!_fast(r::AbstractArray, A::AbstractArray; kw...) =
+    minimum!_fast(identity, r, A; kw...)
+
+maximum!_fast(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
+    Base.mapreducedim!(f, max_fast, Base.initarray!(r, f, max, init, A), A)
+minimum!_fast(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
+    Base.mapreducedim!(f, min_fast, Base.initarray!(r, f, min, init, A), A)
 
 end

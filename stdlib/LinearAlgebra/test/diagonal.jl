@@ -2,10 +2,17 @@
 
 module TestDiagonal
 
-using Test, LinearAlgebra, SparseArrays, Random
+using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasFloat, BlasComplex
 
-n=12 #Size of matrix problem to test
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
+using .Main.Furlongs
+
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
+
+const n=12 # Size of matrix problem to test
 Random.seed!(1)
 
 @testset for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
@@ -147,7 +154,6 @@ Random.seed!(1)
                 @test_throws DimensionMismatch ldiv!(D, fill(elty(1), n + 1))
                 @test_throws SingularException ldiv!(Diagonal(zeros(relty, n)), copy(v))
                 b = rand(elty, n, n)
-                b = sparse(b)
                 @test ldiv!(D, copy(b)) ≈ Array(D)\Array(b)
                 @test_throws SingularException ldiv!(Diagonal(zeros(elty, n)), copy(b))
                 b = view(rand(elty, n), Vector(1:n))
@@ -157,7 +163,6 @@ Random.seed!(1)
                 @test c ≈ d
                 @test_throws SingularException ldiv!(Diagonal(zeros(elty, n)), b)
                 b = rand(elty, n+1, n+1)
-                b = sparse(b)
                 @test_throws DimensionMismatch ldiv!(D, copy(b))
                 b = view(rand(elty, n+1), Vector(1:n+1))
                 @test_throws DimensionMismatch ldiv!(D, b)
@@ -190,7 +195,7 @@ Random.seed!(1)
         end
 
         if relty <: BlasFloat
-            for b in (rand(elty,n,n), sparse(rand(elty,n,n)), rand(elty,n), sparse(rand(elty,n)))
+            for b in (rand(elty,n,n), rand(elty,n))
                 @test lmul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
                 @test lmul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
                 @test lmul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
@@ -346,8 +351,12 @@ Random.seed!(1)
 
     @testset "Eigensystem" begin
         eigD = eigen(D)
-        @test Diagonal(eigD.values) ≈ D
+        @test Diagonal(eigD.values) == D
         @test eigD.vectors == Matrix(I, size(D))
+        eigsortD = eigen(D, sortby=LinearAlgebra.eigsortby)
+        @test eigsortD.values !== D.diag
+        @test eigsortD.values == sort(D.diag, by=LinearAlgebra.eigsortby)
+        @test Matrix(eigsortD) == D
     end
 
     @testset "ldiv" begin
@@ -388,8 +397,8 @@ Random.seed!(1)
     @testset "similar" begin
         @test isa(similar(D), Diagonal{elty})
         @test isa(similar(D, Int), Diagonal{Int})
-        @test isa(similar(D, (3,2)), SparseMatrixCSC{elty})
-        @test isa(similar(D, Int, (3,2)), SparseMatrixCSC{Int})
+        @test isa(similar(D, (3,2)), Matrix{elty})
+        @test isa(similar(D, Int, (3,2)), Matrix{Int})
     end
 
     # Issue number 10036
@@ -413,6 +422,22 @@ Random.seed!(1)
         @test svd(D).V == V
     end
 
+    @testset "svd/eigen with Diagonal{Furlong}" begin
+        Du = Furlong.(D)
+        @test Du isa Diagonal{<:Furlong{1}}
+        F = svd(Du)
+        U, s, V = F
+        @test map(x -> x.val, Matrix(F)) ≈ map(x -> x.val, Du)
+        @test svdvals(Du) == s
+        @test U isa AbstractMatrix{<:Furlong{0}}
+        @test V isa AbstractMatrix{<:Furlong{0}}
+        @test s isa AbstractVector{<:Furlong{1}}
+        E = eigen(Du)
+        vals, vecs = E
+        @test Matrix(E) == Du
+        @test vals isa AbstractVector{<:Furlong{1}}
+        @test vecs isa AbstractMatrix{<:Furlong{0}}
+    end
 end
 
 @testset "rdiv! (#40887)" begin
@@ -437,10 +462,54 @@ end
     @test kron(Ad, Ad).diag == kron([1, 2, 3], [1, 2, 3])
 end
 
+# Define a vector type that does not support `deleteat!`, to ensure that `kron` handles this
+struct SimpleVector{T} <: AbstractVector{T}
+    vec::Vector{T}
+end
+SimpleVector(x::SimpleVector) = SimpleVector(Vector(x.vec))
+SimpleVector{T}(::UndefInitializer, n::Integer) where {T} = SimpleVector(Vector{T}(undef, n))
+Base.:(==)(x::SimpleVector, y::SimpleVector) = x == y
+Base.axes(x::SimpleVector) = axes(x.vec)
+Base.convert(::Type{Vector{T}}, x::SimpleVector) where {T} = convert(Vector{T}, x.vec)
+Base.convert(::Type{Vector}, x::SimpleVector{T}) where {T} = convert(Vector{T}, x)
+Base.convert(::Type{Array{T}}, x::SimpleVector) where {T} = convert(Vector{T}, x)
+Base.convert(::Type{Array}, x::SimpleVector) = convert(Vector, x)
+Base.copyto!(x::SimpleVector, y::SimpleVector) = (copyto!(x.vec, y.vec); x)
+Base.eltype(::Type{SimpleVector{T}}) where {T} = T
+Base.getindex(x::SimpleVector, ind...) = getindex(x.vec, ind...)
+Base.kron(x::SimpleVector, y::SimpleVector) = SimpleVector(kron(x.vec, y.vec))
+Base.promote_rule(::Type{<:AbstractVector{T}}, ::Type{SimpleVector{U}}) where {T,U} = Vector{promote_type(T, U)}
+Base.promote_rule(::Type{SimpleVector{T}}, ::Type{SimpleVector{U}}) where {T,U} = SimpleVector{promote_type(T, U)}
+Base.setindex!(x::SimpleVector, val, ind...) = (setindex!(x.vec, val, ind...), x)
+Base.similar(x::SimpleVector, ::Type{T}) where {T} = SimpleVector(similar(x.vec, T))
+Base.similar(x::SimpleVector, ::Type{T}, dims::Dims{1}) where {T} = SimpleVector(similar(x.vec, T, dims))
+Base.size(x::SimpleVector) = size(x.vec)
+
+@testset "kron (issue #46456)" for repr in Any[identity, SimpleVector]
+    A = Diagonal(repr(randn(10)))
+    BL = Bidiagonal(repr(randn(10)), repr(randn(9)), :L)
+    BU = Bidiagonal(repr(randn(10)), repr(randn(9)), :U)
+    C = SymTridiagonal(repr(randn(10)), repr(randn(9)))
+    Cl = SymTridiagonal(repr(randn(10)), repr(randn(10)))
+    D = Tridiagonal(repr(randn(9)), repr(randn(10)), repr(randn(9)))
+    @test kron(A, BL)::Bidiagonal == kron(Array(A), Array(BL))
+    @test kron(A, BU)::Bidiagonal == kron(Array(A), Array(BU))
+    @test kron(A, C)::SymTridiagonal == kron(Array(A), Array(C))
+    @test kron(A, Cl)::SymTridiagonal == kron(Array(A), Array(Cl))
+    @test kron(A, D)::Tridiagonal == kron(Array(A), Array(D))
+end
+
 @testset "svdvals and eigvals (#11120/#11247)" begin
     D = Diagonal(Matrix{Float64}[randn(3,3), randn(2,2)])
     @test sort([svdvals(D)...;], rev = true) ≈ svdvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
     @test sort([eigvals(D)...;], by=LinearAlgebra.eigsortby) ≈ eigvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
+end
+
+@testset "eigvals should return a copy of the diagonal" begin
+    D = Diagonal([1, 2, 3])
+    lam = eigvals(D)
+    D[3,3] = 4 # should not affect lam
+    @test lam == [1, 2, 3]
 end
 
 @testset "eigmin (#27847)" begin
@@ -497,13 +566,21 @@ end
 end
 
 @testset "inverse" begin
-    for d in (randn(n), [1, 2, 3], [1im, 2im, 3im])
+    for d in Any[randn(n), Int[], [1, 2, 3], [1im, 2im, 3im], [1//1, 2//1, 3//1], [1+1im//1, 2//1, 3im//1]]
         D = Diagonal(d)
         @test inv(D) ≈ inv(Array(D))
     end
     @test_throws SingularException inv(Diagonal(zeros(n)))
     @test_throws SingularException inv(Diagonal([0, 1, 2]))
     @test_throws SingularException inv(Diagonal([0im, 1im, 2im]))
+end
+
+@testset "pseudoinverse" begin
+    for d in Any[randn(n), zeros(n), Int[], [0, 2, 0.003], [0im, 1+2im, 0.003im], [0//1, 2//1, 3//100], [0//1, 1//1+2im, 3im//100]]
+        D = Diagonal(d)
+        @test pinv(D) ≈ pinv(Array(D))
+        @test pinv(D, 1.0e-2) ≈ pinv(Array(D), 1.0e-2)
+    end
 end
 
 # allow construct from range
@@ -605,12 +682,22 @@ end
     mul!(D2, D, D)
     @test D2 == D * D
 
-    D2[diagind(D2)] .= D[diagind(D)]
+    copyto!(D2, D)
     lmul!(D, D2)
     @test D2 == D * D
-    D2[diagind(D2)] .= D[diagind(D)]
+    copyto!(D2, D)
     rmul!(D2, D)
     @test D2 == D * D
+end
+
+@testset "multiplication of 2 Diagonal and a Matrix (#46400)" begin
+    A = randn(10, 10)
+    D = Diagonal(randn(10))
+    D2 = Diagonal(randn(10))
+    @test D * A * D2 ≈ D * (A * D2)
+    @test D * A * D2 ≈ (D * A) * D2
+    @test_throws DimensionMismatch Diagonal(ones(9)) * A * D2
+    @test_throws DimensionMismatch D * A * Diagonal(ones(9))
 end
 
 @testset "multiplication of QR Q-factor and Diagonal (#16615 spot test)" begin
@@ -651,13 +738,6 @@ end
 
     @test tr(D) == 10
     @test det(D) == 4
-
-    # sparse matrix block diagonals
-    s = SparseArrays.sparse([1 2; 3 4])
-    D = Diagonal([s, s])
-    @test D[1, 1] == s
-    @test D[1, 2] == zero(s)
-    @test isa(D[2, 1], SparseMatrixCSC)
 end
 
 @testset "linear solve for block diagonal matrices" begin
@@ -763,6 +843,16 @@ end
     @test_throws DimensionMismatch lmul!(Diagonal([1]), [1,2,3]) # nearby
 end
 
+@testset "Multiplication of a Diagonal with an OffsetArray" begin
+    # Offset indices should throw
+    D = Diagonal(1:4)
+    A = OffsetArray(rand(4,4), 2, 2)
+    @test_throws ArgumentError D * A
+    @test_throws ArgumentError A * D
+    @test_throws ArgumentError mul!(similar(A, size(A)), A, D)
+    @test_throws ArgumentError mul!(similar(A, size(A)), D, A)
+end
+
 @testset "Triangular division by Diagonal #27989" begin
     K = 5
     for elty in (Float32, Float64, ComplexF32, ComplexF64)
@@ -816,6 +906,10 @@ end
             DS = D \ M
             @test DS isa Tridiagonal
             DM = D \ Mm
+            for i in -1:1; @test diag(DS, i) ≈ diag(DM, i) end
+            DS = M / D
+            @test DS isa Tridiagonal
+            DM = Mm / D
             for i in -1:1; @test diag(DS, i) ≈ diag(DM, i) end
         end
     end
@@ -883,10 +977,14 @@ end
     @test s1 == prod(sign, d)
 end
 
-@testset "Empty (#35424)" begin
+@testset "Empty (#35424) & size checks (#47060)" begin
     @test zeros(0)'*Diagonal(zeros(0))*zeros(0) === 0.0
     @test transpose(zeros(0))*Diagonal(zeros(Complex{Int}, 0))*zeros(0) === 0.0 + 0.0im
     @test dot(zeros(Int32, 0), Diagonal(zeros(Int, 0)), zeros(Int16, 0)) === 0
+    @test_throws DimensionMismatch zeros(2)' * Diagonal(zeros(2)) * zeros(3)
+    @test_throws DimensionMismatch zeros(3)' * Diagonal(zeros(2)) * zeros(2)
+    @test_throws DimensionMismatch dot(zeros(2), Diagonal(zeros(2)), zeros(3))
+    @test_throws DimensionMismatch dot(zeros(3), Diagonal(zeros(2)), zeros(2))
 end
 
 @testset "Diagonal(undef)" begin
@@ -1010,6 +1108,29 @@ end
     @test outTri === mul!(outTri, D, UTriA, 2, 1)::Tri == mul!(out, D, Matrix(UTriA), 2, 1)
     @test outTri === mul!(outTri, TriA, D, 2, 1)::Tri == mul!(out, Matrix(TriA), D, 2, 1)
     @test outTri === mul!(outTri, UTriA, D, 2, 1)::Tri == mul!(out, Matrix(UTriA), D, 2, 1)
+end
+
+struct SMatrix1{T} <: AbstractArray{T,2}
+    elt::T
+end
+Base.:(==)(A::SMatrix1, B::SMatrix1) = A.elt == B.elt
+Base.zero(::Type{SMatrix1{T}}) where {T} = SMatrix1(zero(T))
+Base.iszero(A::SMatrix1) = iszero(A.elt)
+Base.getindex(A::SMatrix1, inds...) = A.elt
+Base.size(::SMatrix1) = (1, 1)
+@testset "map for Diagonal matrices (#46292)" begin
+    A = Diagonal([1])
+    @test A isa Diagonal{Int,Vector{Int}}
+    @test 2*A isa Diagonal{Int,Vector{Int}}
+    @test A.+1 isa Matrix{Int}
+    # Numeric element types remain diagonal
+    B = map(SMatrix1, A)
+    @test B == fill(SMatrix1(1), 1, 1)
+    @test B isa Diagonal{SMatrix1{Int},Vector{SMatrix1{Int}}}
+    # Non-numeric element types become dense
+    C = map(a -> SMatrix1(string(a)), A)
+    @test C == fill(SMatrix1(string(1)), 1, 1)
+    @test C isa Matrix{SMatrix1{String}}
 end
 
 end # module TestDiagonal

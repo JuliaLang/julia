@@ -37,10 +37,10 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
 
         @testset for isview in (false,true)
             let a = isview ? view(a, 1:m - 1, 1:n - 1) : a, b = isview ? view(b, 1:m - 1) : b, m = m - isview, n = n - isview
-                lqa   = lq(a)
+                lqa = lq(a)
                 x = lqa\b
-                l,q   = lqa.L, lqa.Q
-                qra   = qr(a, ColumnNorm())
+                l, q = lqa.L, lqa.Q
+                qra = qr(a, ColumnNorm())
                 @testset "Basic ops" begin
                     @test size(lqa,1) == size(a,1)
                     @test size(lqa,3) == 1
@@ -62,6 +62,10 @@ rectangularQ(Q::LinearAlgebra.LQPackedQ) = convert(Array, Q)
                     @test Array{eltya}(q) ≈ Matrix(q)
                 end
                 @testset "Binary ops" begin
+                    k = size(a, 2)
+                    T = Tridiagonal(rand(eltya, k-1), rand(eltya, k), rand(eltya, k-1))
+                    @test lq(T) * T ≈ T * T rtol=3000ε
+                    @test lqa * T ≈ a * T rtol=3000ε
                     @test a*x ≈ b rtol=3000ε
                     @test x ≈ qra \ b rtol=3000ε
                     @test lqa*x ≈ a*x rtol=3000ε
@@ -205,7 +209,7 @@ end
     show(bf, "text/plain", lq(Matrix(I, 4, 4)))
     seekstart(bf)
     @test String(take!(bf)) == """
-LinearAlgebra.LQ{Float64, Matrix{Float64}}
+LinearAlgebra.LQ{Float64, Matrix{Float64}, Vector{Float64}}
 L factor:
 4×4 Matrix{Float64}:
  1.0  0.0  0.0  0.0
@@ -213,7 +217,7 @@ L factor:
  0.0  0.0  1.0  0.0
  0.0  0.0  0.0  1.0
 Q factor:
-4×4 LinearAlgebra.LQPackedQ{Float64, Matrix{Float64}}:
+4×4 LinearAlgebra.LQPackedQ{Float64, Matrix{Float64}, Vector{Float64}}:
  1.0  0.0  0.0  0.0
  0.0  1.0  0.0  0.0
  0.0  0.0  1.0  0.0

@@ -37,9 +37,10 @@
 ;; parser entry points
 
 ;; parse one expression (if greedy) or atom, returning end position
-(define (jl-parse-one str filename pos0 greedy)
+(define (jl-parse-one str filename pos0 greedy (lineno 1))
   (let ((inp (open-input-string str)))
     (io.seek inp pos0)
+    (io.set-lineno! inp lineno)
     (with-bindings ((current-filename (symbol filename)))
      (let ((expr (error-wrap (lambda ()
                                (if greedy
@@ -78,13 +79,17 @@
    (io.close io)))
 
 ;; parse all expressions in a string, the same way files are parsed
-(define (jl-parse-all str filename)
-  (parse-all- (open-input-string str) filename))
+(define (jl-parse-all str filename (lineno 1))
+  (let ((io (open-input-string str)))
+    (io.set-lineno! io lineno)
+    (parse-all- io filename)))
 
-(define (jl-parse-file filename)
+(define (jl-parse-file filename (lineno 1))
   (trycatch
-   (parse-all- (open-input-file filename) filename)
-   (lambda (e) #f)))
+    (let ((io (open-input-string str)))
+      (io.set-lineno! io lineno)
+      (parse-all- io filename))
+    (lambda (e) #f)))
 
 ;; lowering entry points
 

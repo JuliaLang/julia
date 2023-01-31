@@ -80,6 +80,13 @@ today() = Date(now())
     now(::Type{UTC}) -> DateTime
 
 Return a `DateTime` corresponding to the user's system time as UTC/GMT.
+For other time zones, see the TimeZones.jl package.
+
+# Example
+```julia
+julia> now(UTC)
+2023-01-04T10:52:24.864
+```
 """
 now(::Type{UTC}) = unix2datetime(time())
 

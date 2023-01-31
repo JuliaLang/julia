@@ -144,8 +144,8 @@ baremodule B
     x = 1
     module M; x = 2; end
     import Base
-    @Base.eval x = 3
-    @Base.eval M x = 4
+    Base.@eval x = 3
+    Base.@eval M x = 4
 end
 @test B.x == 3
 @test B.M.x == 4
@@ -221,8 +221,8 @@ let a = 1
     @test @macroexpand @is_dollar_expr $a
 end
 
-@test Meta.parseatom("@foo", 1, filename=:bar)[1].args[2].file == :bar
-@test Meta.parseall("@foo", filename=:bar).args[1].file == :bar
+@test Meta.parseatom("@foo", 1, filename=:bar)[1].args[2].file === :bar
+@test Meta.parseall("@foo", filename=:bar).args[1].file === :bar
 
 _lower(m::Module, ex, world::UInt) = ccall(:jl_expand_in_world, Any, (Any, Ref{Module}, Cstring, Cint, Csize_t), ex, m, "none", 0, world)
 

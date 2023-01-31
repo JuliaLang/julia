@@ -124,8 +124,15 @@ end
         end
 
         # test cholesky of 2x2 Strang matrix
-        S = Matrix{eltya}(SymTridiagonal([2, 2], [-1]))
+        S = SymTridiagonal{eltya}([2, 2], [-1])
+        for uplo in (:U, :L)
+            @test Matrix(@inferred cholesky(Hermitian(S, uplo))) ≈ S
+            if eltya <: Real
+                @test Matrix(@inferred cholesky(Symmetric(S, uplo))) ≈ S
+            end
+        end
         @test Matrix(cholesky(S).U) ≈ [2 -1; 0 sqrt(eltya(3))] / sqrt(eltya(2))
+        @test Matrix(cholesky(S)) ≈ S
 
         # test extraction of factor and re-creating original matrix
         if eltya <: Real
@@ -291,6 +298,14 @@ end
     @test sum(sum(norm, U'*U - XX)) < eps()
 end
 
+@testset "Non-strided Cholesky solves" begin
+    B = randn(5, 5)
+    v = rand(5)
+    @test cholesky(Diagonal(v)) \ B ≈ Diagonal(v) \ B
+    @test B / cholesky(Diagonal(v)) ≈ B / Diagonal(v)
+    @test inv(cholesky(Diagonal(v)))::Diagonal ≈ Diagonal(1 ./ v)
+end
+
 struct WrappedVector{T} <: AbstractVector{T}
     data::Vector{T}
 end
@@ -364,6 +379,10 @@ end
     @test D ≈ CD.L * CD.U
     @test CD.info == 0
 
+    F = cholesky(Hermitian(I(3)))
+    @test F isa Cholesky{Float64,<:Diagonal}
+    @test Matrix(F) ≈ I(3)
+
     # real, failing
     @test_throws PosDefException cholesky(Diagonal([1.0, -2.0]))
     Dnpd = cholesky(Diagonal([1.0, -2.0]); check = false)
@@ -371,9 +390,9 @@ end
 
     # complex
     D = complex(D)
-    CD = cholesky(D)
-    CM = cholesky(Matrix(D))
-    @test CD isa Cholesky{ComplexF64}
+    CD = cholesky(Hermitian(D))
+    CM = cholesky(Matrix(Hermitian(D)))
+    @test CD isa Cholesky{ComplexF64,<:Diagonal}
     @test CD.U ≈ Diagonal(.√d) ≈ CM.U
     @test D ≈ CD.L * CD.U
     @test CD.info == 0
@@ -386,6 +405,12 @@ end
 
     # InexactError for Int
     @test_throws InexactError cholesky!(Diagonal([2, 1]))
+end
+
+@testset "Cholesky for AbstractMatrix" begin
+    S = SymTridiagonal(fill(2.0, 4), ones(3))
+    C = cholesky(S)
+    @test C.L * C.U ≈ S
 end
 
 @testset "constructor with non-BlasInt arguments" begin
@@ -402,9 +427,6 @@ end
 
     factors, uplo, piv, rank, tol, info =
         cholp.factors, cholp.uplo, cholp.piv, cholp.rank, cholp.tol, cholp.info
-
-    @test CholeskyPivoted(factors, uplo, Vector{Int32}(piv), rank, tol, info) == cholp
-    @test CholeskyPivoted(factors, uplo, Vector{Int64}(piv), rank, tol, info) == cholp
 
     @test CholeskyPivoted(factors, uplo, piv, Int32(rank), tol, info) == cholp
     @test CholeskyPivoted(factors, uplo, piv, Int64(rank), tol, info) == cholp
@@ -498,6 +520,15 @@ end
     @test B.U ≈ B32.U
     @test B.L ≈ B32.L
     @test B.UL ≈ B32.UL
+    @test Matrix(B) ≈ A
+    B = cholesky(A, RowMaximum())
+    B32 = cholesky(Float32.(A), RowMaximum())
+    @test B isa CholeskyPivoted{Float16,Matrix{Float16}}
+    @test B.U isa UpperTriangular{Float16, Matrix{Float16}}
+    @test B.L isa LowerTriangular{Float16, Matrix{Float16}}
+    @test B.U ≈ B32.U
+    @test B.L ≈ B32.L
+    @test Matrix(B) ≈ A
 end
 
 @testset "det and logdet" begin

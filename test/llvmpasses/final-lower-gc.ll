@@ -1,4 +1,6 @@
 ; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -FinalLowerGC -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='FinalLowerGC' -S %s | FileCheck %s
+
 
 @tag = external addrspace(10) global {}
 
@@ -57,7 +59,7 @@ top:
   %pgcstack = call {}*** @julia.get_pgcstack()
   %ptls = call {}*** @julia.ptls_states()
   %ptls_i8 = bitcast {}*** %ptls to i8*
-; CHECK: %v = call noalias nonnull {} addrspace(10)* @ijl_gc_pool_alloc
+; CHECK: %v = call noalias nonnull dereferenceable({{[0-9]+}}) {} addrspace(10)* @ijl_gc_pool_alloc
   %v = call {} addrspace(10)* @julia.gc_alloc_bytes(i8* %ptls_i8, i64 8)
   %0 = bitcast {} addrspace(10)* %v to {} addrspace(10)* addrspace(10)*
   %1 = getelementptr {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %0, i64 -1

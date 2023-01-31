@@ -4,6 +4,7 @@
 #define JL_IOS_H
 
 #include <stdarg.h>
+#include <sys/types.h>
 #include "analyzer_annotations.h"
 
 #ifdef __cplusplus
@@ -127,8 +128,8 @@ void ios_init_stdstreams(void);
 
 /* high-level functions - output */
 JL_DLLEXPORT int ios_pututf8(ios_t *s, uint32_t wc);
-JL_DLLEXPORT int ios_printf(ios_t *s, const char *format, ...);
-JL_DLLEXPORT int ios_vprintf(ios_t *s, const char *format, va_list args);
+JL_DLLEXPORT int ios_printf(ios_t *s, const char *format, ...) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int ios_vprintf(ios_t *s, const char *format, va_list args) JL_NOTSAFEPOINT;
 
 /* high-level stream functions - input */
 JL_DLLEXPORT int ios_getutf8(ios_t *s, uint32_t *pwc);
