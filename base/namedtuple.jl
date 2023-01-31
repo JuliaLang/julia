@@ -179,8 +179,11 @@ nextind(@nospecialize(t::NamedTuple), i::Integer) = Int(i)+1
 convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names,T}) where {names,T<:Tuple} = nt
 convert(::Type{NamedTuple{names}}, nt::NamedTuple{names}) where {names} = nt
 
-function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {names,T<:Tuple}
-    NamedTuple{names,T}(T(nt))::NamedTuple{names,T}
+function convert(::Type{NamedTuple{names,T1}}, nt::NamedTuple{names,T2}) where {names,T1<:Tuple,T2<:Tuple}
+    if (T1<:T2)
+        return nt
+    end
+    NamedTuple{names,T1}(T1(nt))::NamedTuple{names,T1}
 end
 
 if nameof(@__MODULE__) === :Base
