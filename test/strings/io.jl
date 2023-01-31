@@ -219,6 +219,10 @@ end
         """
 end
 
+@testset "sprint honoring IOcontext" begin
+    @test sprint(show, Base.Dict[], context=(:compact=>false, :module=>nothing))[1:4] === "Base"
+end
+
 @testset "#11659" begin
     # The indentation code was not correctly counting tab stops
     @test Base.indentation("      \t") == (8, true)
