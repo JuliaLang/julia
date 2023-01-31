@@ -219,8 +219,8 @@ end
         """
 end
 
-@testset "sprint honoring IOcontext" begin
-    @test sprint(show, Base.Dict[], context=(:compact=>false, :module=>nothing))[1:4] === "Base"
+@testset "sprint honoring IOContext" begin
+    @test startswith(sprint(show, Base.Dict[], context=(:compact=>false, :module=>nothing)), "Base.Dict")
 end
 
 @testset "#11659" begin
