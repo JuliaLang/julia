@@ -619,7 +619,7 @@ See also: [`iszero`](@ref), [`isone`](@ref), [`isinf`](@ref), [`ismissing`](@ref
 isnan(x::AbstractFloat) = (x != x)::Bool
 isnan(x::Number) = false
 
-isfinite(x::AbstractFloat) = x - x == 0
+isfinite(x::AbstractFloat) = !isnan(x - x)
 isfinite(x::Real) = decompose(x)[3] != 0
 isfinite(x::Integer) = true
 
