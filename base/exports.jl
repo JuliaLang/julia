@@ -63,6 +63,8 @@ export
     Matrix,
     MergeSort,
     Missing,
+    NDArray,
+    NDAbstractArray,
     NTuple,
     IdDict,
     OrdinalRange,

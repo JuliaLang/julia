@@ -31,6 +31,17 @@ elements of type `T`. Alias for [`AbstractArray{T,2}`](@ref).
 const AbstractMatrix{T} = AbstractArray{T,2}
 
 """
+    NDAbstractArray{N,T}
+
+Supertype for N-dimensional arrays (or array-like types) with
+elements of type `T`. Alias for [`AbstractArray{T,N}`](@ref).
+
+`NDAbstractArray{1}` can also be written as [`AbstractVector`](@ref)
+`NDAbstractArray{2}` can also be written as [`AbstractMatrix`](@ref)
+"""
+const NDAbstractArray{N,T} = AbstractArray{T,N}
+
+"""
     AbstractVecOrMat{T}
 
 Union type of [`AbstractVector{T}`](@ref) and [`AbstractMatrix{T}`](@ref).
@@ -69,6 +80,16 @@ See also [`fill`](@ref), [`zeros`](@ref), [`undef`](@ref) and [`similar`](@ref)
 for creating matrices.
 """
 const Matrix{T} = Array{T,2}
+
+"""
+    NDArray{N,T} <: NDAbstractArray{N,T}
+
+N-dimensional dense array with elements of type `T`. Alias for [`Array{T,N}`](@ref).
+
+`NDArray{1}` can be written as [`Vector`](@ref)
+`NDArray{2}` can be written as [`Matrix`](@ref)
+"""
+const NDArray{N,T} = Array{T,N}
 
 """
     VecOrMat{T}
