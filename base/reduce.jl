@@ -1354,7 +1354,7 @@ count(itr; init=0) = count(identity, itr; init)
 
 count(f, itr; init=0) = _simple_count(f, itr, init)
 
-_simple_count(pred, itr, init) = sum(pred(i)::Bool for i in itr; init)
+_simple_count(pred, itr, init) = sum(_bool(pred), itr; init)
 
 function _simple_count(::typeof(identity), x::Array{Bool}, init::T=0) where {T}
     n::T = init
