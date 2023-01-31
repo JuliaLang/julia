@@ -472,10 +472,6 @@ function inv(z::Complex{T}) where T<:Union{Float16,Float32}
 end
 function inv(w::ComplexF64)
     c, d = reim(w)
-    if d === 0.0
-        return ComplexF64(1/c, -0.0)
-    elseif d === -0.0
-        return ComplexF64(1/c,  0.0)
     if d == 0.0
         return ComplexF64(1/c, -d)
     end
