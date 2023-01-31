@@ -2372,6 +2372,11 @@ end
 abstract type P47654{A} end
 @test Wrapper47654{P47654, Vector{Union{P47654,Nothing}}} <: Wrapper47654
 
+#issue 41561
+@testintersect(Tuple{Vector{VT}, Vector{VT}} where {N1, VT<:AbstractVector{N1}},
+               Tuple{Vector{VN} where {N, VN<:AbstractVector{N}}, Vector{Vector{Float64}}},
+               Tuple{Vector{Vector{Float64}}, Vector{Vector{Float64}}})
+
 @testset "known subtype/intersect issue" begin
     #issue 45874
     # Causes a hang due to jl_critical_error calling back into malloc...
@@ -2381,9 +2386,6 @@ abstract type P47654{A} end
     #     @test_broken typeintersect(S,T) === S
     # end
 
-    #issue 41561
-    @test_broken typeintersect(Tuple{Vector{VT}, Vector{VT}} where {N1, VT<:AbstractVector{N1}},
-                Tuple{Vector{VN} where {N, VN<:AbstractVector{N}}, Vector{Vector{Float64}}}) !== Union{}
     #issue 40865
     @test_broken Tuple{Set{Ref{Int}}, Set{Ref{Int}}} <: Tuple{Set{KV}, Set{K}} where {K,KV<:Union{K,Ref{K}}}
     @test_broken Tuple{Set{Val{Int}}, Set{Val{Int}}} <: Tuple{Set{KV}, Set{K}} where {K,KV<:Union{K,Val{K}}}
@@ -2435,3 +2437,25 @@ let A = Tuple{Type{T}, T} where T,
     C = Tuple{Type{MyType47877{W, V} where V<:Union{MyAbstract47877{W}, Base.BitInteger}}, MyType47877{W, V} where V<:Union{MyAbstract47877{W}, Base.BitInteger}} where W<:Base.BitInteger
     @test typeintersect(B, A) == C
 end
+
+# test equality of concrete covariant var.
+@testintersect(Tuple{I,I,Any} where {I},      Tuple{I,Any,I} where {I},       Tuple{I,I,I} where {I})
+@testintersect(Tuple{I,I,Any} where {I>:Int}, Tuple{Any,I,I} where {I},       Tuple{I,I,I} where {I>:Int})
+@testintersect(Tuple{I,Any,I} where {I>:Int}, Tuple{Any,I,I} where {I<:Real}, Tuple{I,I,I} where {Int<:I<:Real})
+@testintersect(Tuple{I,I,Any} where {I>:Int}, Tuple{I,Any,I} where {I>:Int8}, Union{})
+@testintersect(Tuple{I,I,Real} where {I},     Tuple{Integer,I,I} where {I},   Tuple{I,I,I} where {I<:Integer})
+
+@testintersect(Tuple{I,I,S} where {S,I},       Tuple{I,S,I} where {S,I},       Tuple{I,I,I} where {I})
+@testintersect(Tuple{I,I,S} where {S,I>:Int},  Tuple{S,I,I} where {S,I},       Tuple{I,I,I} where {I>:Int})
+@testintersect(Tuple{I,S,I} where {S,I>:Int},  Tuple{S,I,I} where {S,I<:Real}, Tuple{I,I,I} where {Int<:I<:Real})
+@testintersect(Tuple{I,I,S} where {S,I>:Int},  Tuple{I,S,I} where {S,I>:Int8}, Union{})
+# TODO: This should be narrower.
+@testintersect(Tuple{I,I,S} where {S<:Real,I}, Tuple{S,I,I} where {S>:Int,I},  Tuple{I,I,I} where {I<:Real})
+
+@testintersect(Val{S} where {I,S<:Tuple{I,I,Any}},      Val{S} where {I,S<:Tuple{I,Any,I}},       Val{S} where {I,S<:Tuple{I,I,I}})
+@testintersect(Val{S} where {I>:Int,S<:Tuple{I,I,Any}}, Val{S} where {I,S<:Tuple{I,Any,I}},       Val{S} where {I>:Int,S<:Tuple{I,I,I}})
+@testintersect(Val{S} where {I>:Int,S<:Tuple{I,I,Any}}, Val{S} where {I<:Real,S<:Tuple{I,Any,I}}, Val{S} where {Int<:I<:Real,S<:Tuple{I,I,I}})
+@testintersect(Val{S} where {I>:Int,S<:Tuple{I,I,Any}}, Val{S} where {I>:Int8,S<:Tuple{I,Any,I}}, Val{Union{}})
+
+@testintersect(Tuple{S} where {I>:Int,S<:Tuple{I,I,Any}}, Tuple{S} where {I>:Int8,S<:Tuple{I,Any,I}}, Union{})
+@testintersect(Tuple{Tuple{I},I} where {I}, Tuple{I,I} where {I}, Union{})
