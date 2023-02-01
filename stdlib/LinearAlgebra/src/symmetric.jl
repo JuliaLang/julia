@@ -908,7 +908,7 @@ See also [`hermitianpart`](@ref).
 hermitianpart!(A::AbstractMatrix, uplo::Symbol=:U) = Hermitian(_hermitianpart!(A), uplo)
 
 _hermitianpart(A::AbstractMatrix) = _hermitianpart!(copy_similar(A, Base.promote_op(/, eltype(A), Int)))
-_hermitianpart(a::Number) = real(a)
+_hermitianpart(a::T) where {T<:Number} = convert(Base.promote_op(/, T, Int), real(a))
 
 function _hermitianpart!(A)
     require_one_based_indexing(A)
