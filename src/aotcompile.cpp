@@ -938,6 +938,7 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
 }
 
 static auto serializeModule(const Module &M) {
+    assert(!verifyModule(M, &errs()) && "Serializing invalid module!");
     SmallVector<char, 0> ClonedModuleBuffer;
     BitcodeWriter BCWriter(ClonedModuleBuffer);
     BCWriter.writeModule(M);
@@ -976,9 +977,16 @@ static void materializePreserved(Module &M, Partition &partition) {
         if (!GA.isDeclaration()) {
             if (!Preserve.contains(&GA)) {
                 if (GA.getValueType()->isFunctionTy()) {
-                    DeletedAliases.push_back({ &GA, Function::Create(cast<FunctionType>(GA.getValueType()), GlobalValue::ExternalLinkage, "", &M) });
+                    auto F = Function::Create(cast<FunctionType>(GA.getValueType()), GlobalValue::ExternalLinkage, "", &M);
+                    // This is an extremely sad hack to make sure the global alias never points to an extern function
+                    auto BB = BasicBlock::Create(M.getContext(), "", F);
+                    new UnreachableInst(M.getContext(), BB);
+                    GA.setAliasee(F);
+
+                    DeletedAliases.push_back({ &GA, F });
                 } else {
-                    DeletedAliases.push_back({ &GA, new GlobalVariable(M, GA.getValueType(), false, GlobalValue::ExternalLinkage, nullptr) });
+                    auto GV = new GlobalVariable(M, GA.getValueType(), false, GlobalValue::ExternalLinkage, Constant::getNullValue(GA.getValueType()));
+                    DeletedAliases.push_back({ &GA, GV });
                 }
             }
         }
@@ -988,6 +996,12 @@ static void materializePreserved(Module &M, Partition &partition) {
         Deleted.second->takeName(Deleted.first);
         Deleted.first->replaceAllUsesWith(Deleted.second);
         Deleted.first->eraseFromParent();
+        // undo our previous sad hack
+        if (auto F = dyn_cast<Function>(Deleted.second)) {
+            F->deleteBody();
+        } else {
+            cast<GlobalVariable>(Deleted.second)->setInitializer(nullptr);
+        }
     }
 }
 
