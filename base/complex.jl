@@ -475,6 +475,9 @@ function inv(w::ComplexF64)
     if d == 0.0
         return ComplexF64(1/c, -d)
     end
+    if c == 0.0
+        return ComplexF64(c, -1/d)
+    end
     absc, absd = abs(c), abs(d)
     cd, dc = ifelse(absc>absd, (absc, absd), (absd, absc))
     # no overflow from abs2

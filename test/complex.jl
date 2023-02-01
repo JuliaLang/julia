@@ -1210,7 +1210,10 @@ end
     @test !iseven(6+1im) && !isodd(7+1im)
 end
 
-@test "inv for special values" begin
-    inv(0.2 + 0.0im) == 5.0 - 0.0im
-    inv(0.2 - 0.0im) == 5.0 + 0.0im
+@testset "inv for special values" begin
+    @test inv(0.2 + 0.0im) == 5.0 - 0.0im
+    @test inv(0.2 - 0.0im) == 5.0 + 0.0im
+    @test inv(0.0 + 0.2im) == 0.0 - 5.0im
+    @test inv(0.0 - 0.2im) == 0.0 + 5.0im
+    @test inv(complex(0.2,0.0)) == inv(complex(0.2,0.0)*im)*im
 end
