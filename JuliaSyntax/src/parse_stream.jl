@@ -778,8 +778,15 @@ function steal_token_bytes!(stream::ParseStream, pos::ParseStreamPosition, numby
     return t2_is_empty
 end
 
+# Get position of last item emitted into the output stream
 function Base.position(stream::ParseStream)
     ParseStreamPosition(lastindex(stream.tokens), lastindex(stream.ranges))
+end
+
+# Get position of next item to be emitted into the output stream
+# TODO: Figure out how to remove this? It's only used with emit_diagnostic
+function next_position(stream::ParseStream)
+    ParseStreamPosition(lastindex(stream.tokens)+1, lastindex(stream.ranges)+1)
 end
 
 """
@@ -835,10 +842,6 @@ end
 function emit_diagnostic(stream::ParseStream, mark::ParseStreamPosition; kws...)
     emit_diagnostic(stream, token_first_byte(stream, mark.token_index),
                      _next_byte(stream) - 1; kws...)
-end
-
-function emit_diagnostic(stream::ParseStream, r::NTuple{2,ParseStreamPosition}; kws...)
-    emit_diagnostic(stream, first(r), last(r); kws...)
 end
 
 function emit_diagnostic(stream::ParseStream, mark::ParseStreamPosition,
