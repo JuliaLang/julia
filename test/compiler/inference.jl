@@ -2747,6 +2747,17 @@ end |> only === Int
 @test only(Base.return_types(Core.apply_type, Tuple{Any})) == Any
 @test only(Base.return_types(Core.apply_type, Tuple{Any,Any})) == Any
 
+# `apply_type_tfunc` accuracy for constrained type construction
+# https://github.com/JuliaLang/julia/issues/47089
+import Core: Const
+import Core.Compiler: apply_type_tfunc
+struct Issue47089{A,B} end
+let 𝕃 = Core.Compiler.fallback_lattice
+    A = Type{<:Integer}
+    @test apply_type_tfunc(𝕃, Const(Issue47089), A, A) <: (Type{Issue47089{A,B}} where {A<:Integer, B<:Integer})
+end
+@test only(Base.return_types(keys, (Dict{String},))) == Base.KeySet{String, T} where T<:(Dict{String})
+
 # PR 27351, make sure optimized type intersection for method invalidation handles typevars
 
 abstract type AbstractT27351 end
@@ -3696,10 +3707,10 @@ Base.iterate(::Itr41839_3 , i) = i < 16 ? (i, i + 1) : nothing
 
 # issue #32699
 f32699(a) = (id = a[1],).id
-@test Base.return_types(f32699, (Vector{Union{Int,Missing}},)) == Any[Union{Int,Missing}]
+@test only(Base.return_types(f32699, (Vector{Union{Int,Missing}},))) == Union{Int,Missing}
 g32699(a) = Tuple{a}
-@test Base.return_types(g32699, (Type{<:Integer},))[1] == Type{<:Tuple{Any}}
-@test Base.return_types(g32699, (Type,))[1] == Type{<:Tuple}
+@test only(Base.return_types(g32699, (Type{<:Integer},))) <: Type{<:Tuple{Any}}
+@test only(Base.return_types(g32699, (Type,))) <: Type{<:Tuple}
 
 # Inference precision of union-split calls
 function f_apply_union_split(fs, x)
