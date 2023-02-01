@@ -146,8 +146,6 @@ export
     svdvals!,
     svdvals,
     sylvester,
-    symmetricpart,
-    symmetricpart!,
     tr,
     transpose,
     transpose!,
