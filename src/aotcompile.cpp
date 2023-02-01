@@ -57,6 +57,7 @@
 
 #include <llvm/IR/LegacyPassManagers.h>
 #include <llvm/Transforms/Utils/Cloning.h>
+#include <llvm/Support/FormatAdapters.h>
 #include <llvm/Linker/Linker.h>
 
 
@@ -269,8 +270,6 @@ void replaceUsesWithLoad(Function &F, function_ref<GlobalVariable *(Instruction 
 extern "C" JL_DLLEXPORT
 void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode, int _external_linkage, size_t _world)
 {
-    uint64_t start = jl_hrtime();
-    uint64_t end = 0;
     ++CreateNativeCalls;
     CreateNativeMax.updateMax(jl_array_len(methods));
     if (cgparams == NULL)
@@ -463,8 +462,6 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     if (ctx.getContext()) {
         jl_ExecutionEngine->releaseContext(std::move(ctx));
     }
-    end = jl_hrtime();
-    dbgs() << "jl_create_native: " << (end - start) / 1e9 << "s\n";
     return (void*)data;
 }
 
@@ -589,7 +586,6 @@ static void get_fvars_gvars(Module &M, DenseMap<GlobalValue *, unsigned> &fvars,
     gvars_gv->eraseFromParent();
     fvars_idxs->eraseFromParent();
     gvars_idxs->eraseFromParent();
-    dbgs() << "Finished getting fvars/gvars\n";
 }
 
 static size_t getFunctionWeight(const Function &F)
@@ -778,9 +774,74 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
     return partitions;
 }
 
+struct ImageTimer {
+    uint64_t elapsed = 0;
+    std::string name;
+    std::string desc;
+
+    void startTimer() {
+        elapsed = jl_hrtime();
+    }
+
+    void stopTimer() {
+        elapsed = jl_hrtime() - elapsed;
+    }
+
+    void init(const Twine &name, const Twine &desc) {
+        this->name = name.str();
+        this->desc = desc.str();
+    }
+
+    operator bool() const {
+        return elapsed != 0;
+    }
+
+    void print(raw_ostream &out, bool clear=false) {
+        if (!*this)
+            return;
+        out << llvm::formatv("{0:F3}  ", elapsed / 1e9) << name << "  " << desc << "\n";
+        if (clear)
+            elapsed = 0;
+    }
+};
+
+struct ShardTimers {
+    ImageTimer deserialize;
+    ImageTimer materialize;
+    ImageTimer construct;
+    ImageTimer deletion;
+    // impl timers
+    ImageTimer unopt;
+    ImageTimer optimize;
+    ImageTimer opt;
+    ImageTimer obj;
+    ImageTimer asm_;
+
+    std::string name;
+    std::string desc;
+
+    void print(raw_ostream &out, bool clear=false) {
+        StringRef sep = "===-------------------------------------------------------------------------===";
+        out << formatv("{0}\n{1}\n{0}\n", sep, fmt_align(name + " : " + desc, AlignStyle::Center, sep.size()));
+        auto total = deserialize.elapsed + materialize.elapsed + construct.elapsed + deletion.elapsed +
+            unopt.elapsed + optimize.elapsed + opt.elapsed + obj.elapsed + asm_.elapsed;
+        out << "Time (s)  Name  Description\n";
+        deserialize.print(out, clear);
+        materialize.print(out, clear);
+        construct.print(out, clear);
+        deletion.print(out, clear);
+        unopt.print(out, clear);
+        optimize.print(out, clear);
+        opt.print(out, clear);
+        obj.print(out, clear);
+        asm_.print(out, clear);
+        out << llvm::formatv("{0:F3}  total  Total time taken\n", total / 1e9);
+    }
+};
+
 static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *outputs, ArrayRef<StringRef> names,
                     NewArchiveMember *unopt, NewArchiveMember *opt, NewArchiveMember *obj, NewArchiveMember *asm_,
-                    std::stringstream &stream, unsigned i) {
+                    ShardTimers &timers, unsigned shardidx) {
     assert(names.size() == 4);
     auto TM = std::unique_ptr<TargetMachine>(
         SourceTM.getTarget().createTargetMachine(
@@ -793,6 +854,7 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
             SourceTM.getOptLevel()));
 
     if (unopt) {
+        timers.unopt.startTimer();
         raw_string_ostream OS(*outputs);
         PassBuilder PB;
         AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
@@ -800,14 +862,14 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
         MPM.addPass(BitcodeWriterPass(OS));
         *unopt = NewArchiveMember(MemoryBufferRef(*outputs, names[0]));
         outputs++;
+        timers.unopt.stopTimer();
     }
     if (!opt && !obj && !asm_) {
         return;
     }
     assert(!verifyModule(M, &errs()));
 
-    uint64_t start = jl_hrtime();
-    uint64_t end = 0;
+    timers.optimize.startTimer();
 
 #ifndef JL_USE_NEW_PM
     legacy::PassManager optimizer;
@@ -829,12 +891,11 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
 #endif
     optimizer.run(M);
     assert(!verifyModule(M, &errs()));
-
-    end = jl_hrtime();
-
-    stream << "optimize time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
+    
+    timers.optimize.stopTimer();
 
     if (opt) {
+        timers.opt.startTimer();
         raw_string_ostream OS(*outputs);
         PassBuilder PB;
         AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
@@ -842,11 +903,11 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
         MPM.addPass(BitcodeWriterPass(OS));
         *opt = NewArchiveMember(MemoryBufferRef(*outputs, names[1]));
         outputs++;
+        timers.opt.stopTimer();
     }
 
-    start = jl_hrtime();
-
     if (obj) {
+        timers.obj.startTimer();
         SmallVector<char, 0> Buffer;
         raw_svector_ostream OS(Buffer);
         legacy::PassManager emitter;
@@ -857,13 +918,11 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
         *outputs = { Buffer.data(), Buffer.size() };
         *obj = NewArchiveMember(MemoryBufferRef(*outputs, names[2]));
         outputs++;
+        timers.obj.stopTimer();
     }
 
-    end = jl_hrtime();
-
-    stream << "codegen time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
-
     if (asm_) {
+        timers.asm_.startTimer();
         SmallVector<char, 0> Buffer;
         raw_svector_ostream OS(Buffer);
         legacy::PassManager emitter;
@@ -874,6 +933,7 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
         *outputs = { Buffer.data(), Buffer.size() };
         *asm_ = NewArchiveMember(MemoryBufferRef(*outputs, names[3]));
         outputs++;
+        timers.asm_.stopTimer();
     }
 }
 
@@ -1004,7 +1064,6 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
                 std::vector<NewArchiveMember> &obj, std::vector<NewArchiveMember> &asm_,
                 bool unopt_out, bool opt_out, bool obj_out, bool asm_out,
                 unsigned threads) {
-    uint64_t start = 0, end = 0;
     unsigned outcount = unopt_out + opt_out + obj_out + asm_out;
     assert(outcount);
     outputs.resize(outputs.size() + outcount * threads);
@@ -1012,22 +1071,64 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
     opt.resize(opt.size() + opt_out * threads);
     obj.resize(obj.size() + obj_out * threads);
     asm_.resize(asm_.size() + asm_out * threads);
+    auto name = names[2];
+    name.consume_back(".o");
+    TimerGroup timer_group("add_output", ("Time to optimize and emit LLVM module " + name).str());
+    SmallVector<ShardTimers, 1> timers(threads);
+    for (unsigned i = 0; i < threads; ++i) {
+        auto idx = std::to_string(i);
+        timers[i].name = "shard_" + idx;
+        timers[i].desc = ("Timings for " + name + " module shard " + idx).str();
+        timers[i].deserialize.init("deserialize_" + idx, "Deserialize module");
+        timers[i].materialize.init("materialize_" + idx, "Materialize declarations");
+        timers[i].construct.init("construct_" + idx, "Construct partitioned definitions");
+        timers[i].deletion.init("deletion_" + idx, "Delete dead declarations");
+        timers[i].unopt.init("unopt_" + idx, "Emit unoptimized bitcode");
+        timers[i].optimize.init("optimize_" + idx, "Optimize shard");
+        timers[i].opt.init("opt_" + idx, "Emit optimized bitcode");
+        timers[i].obj.init("obj_" + idx, "Emit object file");
+        timers[i].asm_.init("asm_" + idx, "Emit assembly file");
+    }
+    Timer partition_timer("partition", "Partition module", timer_group);
+    Timer serialize_timer("serialize", "Serialize module", timer_group);
+    Timer output_timer("output", "Add outputs", timer_group);
+    bool report_timings = false;
+    if (auto env = getenv("JULIA_IMAGE_TIMINGS")) {
+        char *endptr;
+        unsigned long val = strtoul(env, &endptr, 10);
+        if (endptr != env && !*endptr && val <= 1) {
+            report_timings = val;
+        } else {
+            if (StringRef("true").compare_insensitive(env) == 0)
+                report_timings = true;
+            else if (StringRef("false").compare_insensitive(env) == 0)
+                report_timings = false;
+            else
+                errs() << "WARNING: Invalid value for JULIA_IMAGE_TIMINGS: " << env << "\n";
+        }
+    }
     if (threads == 1) {
-        start = jl_hrtime();
-        std::stringstream stream;
+        output_timer.startTimer();
         add_output_impl(M, TM, outputs.data() + outputs.size() - outcount, names,
                         unopt_out ? unopt.data() + unopt.size() - 1 : nullptr,
                         opt_out ? opt.data() + opt.size() - 1 : nullptr,
                         obj_out ? obj.data() + obj.size() - 1 : nullptr,
                         asm_out ? asm_.data() + asm_.size() - 1 : nullptr,
-                        stream, 0);
-        dbgs() << stream.str();
-        end = jl_hrtime();
-        dbgs() << "Time to add output: " << (end - start) / 1e9 << "s\n";
+                        timers[0], 0);
+        output_timer.stopTimer();
+
+        if (!report_timings) {
+            timer_group.clear();
+        } else {
+            timer_group.print(dbgs(), true);
+            for (auto &t : timers) {
+                t.print(dbgs(), true);
+            }
+        }
         return;
     }
 
-    start = jl_hrtime();
+    partition_timer.startTimer();
     uint64_t counter = 0;
     for (auto &G : M.global_values()) {
         if (!G.isDeclaration() && !G.hasName()) {
@@ -1035,12 +1136,12 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
         }
     }
     auto partitions = partitionModule(M, threads);
-    end = jl_hrtime();
-    dbgs() << "Time to partition module: " << (end - start) / 1e9 << "s\n";
-    start = jl_hrtime();
+    partition_timer.stopTimer();
+    serialize_timer.startTimer();
     auto serialized = serializeModule(M);
-    end = jl_hrtime();
-    dbgs() << "Time to serialize module: " << (end - start) / 1e9 << "s\n";
+    serialize_timer.stopTimer();
+
+    output_timer.startTimer();
 
     auto outstart = outputs.data() + outputs.size() - outcount * threads;
     auto unoptstart = unopt_out ? unopt.data() + unopt.size() - threads : nullptr;
@@ -1049,64 +1150,56 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
     auto asmstart = asm_out ? asm_.data() + asm_.size() - threads : nullptr;
 
     std::vector<std::thread> workers(threads);
-    std::vector<std::stringstream> stderrs(threads);
     for (unsigned i = 0; i < threads; i++) {
         workers[i] = std::thread([&, i](){
             LLVMContext ctx;
-            uint64_t start = 0;
-            uint64_t end = 0;
-            start = jl_hrtime();
+            timers[i].deserialize.startTimer();
             auto M = cantFail(getLazyBitcodeModule(MemoryBufferRef(StringRef(serialized.data(), serialized.size()), "Optimized"), ctx), "Error loading module");
-            end = jl_hrtime();
-            stderrs[i] << "Deserialization time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
+            timers[i].deserialize.stopTimer();
 
-            stderrs[i] << "Starting shard " << i << " with weight=" << partitions[i].weight << "\n";
+            // dbgs() << "Starting shard " << i << " with weight=" << partitions[i].weight << "\n";
 
-            start = jl_hrtime();
+            timers[i].materialize.startTimer();
             materializePreserved(*M, partitions[i]);
-            end = jl_hrtime();
-            stderrs[i] << "Materialization time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
+            timers[i].materialize.stopTimer();
 
-            start = jl_hrtime();
+            timers[i].construct.startTimer();
             construct_vars(*M, partitions[i]);
             M->setModuleFlag(Module::Error, "julia.mv.suffix", MDString::get(M->getContext(), "_" + std::to_string(i)));
-            end = jl_hrtime();
+            timers[i].construct.stopTimer();
 
-            stderrs[i] << "Construction time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
-
-            start = jl_hrtime();
+            timers[i].deletion.startTimer();
             dropUnusedDeclarations(*M);
-            end = jl_hrtime();
+            timers[i].deletion.stopTimer();
 
-            stderrs[i] << "Declaration deletion time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
-
-            start = jl_hrtime();
             add_output_impl(*M, TM, outstart + i * outcount, names,
                             unoptstart ? unoptstart + i : nullptr,
                             optstart ? optstart + i : nullptr,
                             objstart ? objstart + i : nullptr,
                             asmstart ? asmstart + i : nullptr,
-                            stderrs[i], i);
-            end = jl_hrtime();
-
-            stderrs[i] << "Output time for shard " << i << ": " << (end - start) / 1e9 << "s\n";
+                            timers[i], i);
         });
     }
 
-    start = jl_hrtime();
     for (auto &w : workers)
         w.join();
-    for (auto &str : stderrs)
-        dbgs() << str.str();
-    end = jl_hrtime();
 
-    dbgs() << "Total time for parallel output: " << (end - start) / 1e9 << "s\n";
+    output_timer.stopTimer();
+    
+    if (!report_timings) {
+        timer_group.clear();
+    } else {
+        timer_group.print(dbgs(), true);
+        for (auto &t : timers) {
+            t.print(dbgs(), true);
+        }
+    }
 }
 
 unsigned compute_image_thread_count(Module &M) {
     // 32-bit systems are very memory-constrained
 #ifdef _P32
-    dbgs() << "Threads: 1\n";
+    // dbgs() << "Threads: 1\n";
     return 1;
 #endif
     size_t weight = 0;
@@ -1121,10 +1214,10 @@ unsigned compute_image_thread_count(Module &M) {
             weight += 1;
         }
     }
-    dbgs() << "Module weight: " << weight << "\n";
+    // dbgs() << "Module weight: " << weight << "\n";
     if (weight < 1000) {
-        dbgs() << "Low module complexity bailout\n";
-        dbgs() << "Threads: 1\n";
+        // dbgs() << "Low module complexity bailout\n";
+        // dbgs() << "Threads: 1\n";
         return 1;
     }
 
@@ -1136,9 +1229,9 @@ unsigned compute_image_thread_count(Module &M) {
     // crude estimate, available / (weight * fudge factor) = max threads
     size_t fudge = 10;
     unsigned max_threads = std::max(available / (weight * fudge), (size_t)1);
-    dbgs() << "Available memory: " << available << " bytes\n";
-    dbgs() << "Max threads: " << max_threads << "\n";
-    dbgs() << "Temporarily disabling memory limiting threads\n";
+    // dbgs() << "Available memory: " << available << " bytes\n";
+    // dbgs() << "Max threads: " << max_threads << "\n";
+    // dbgs() << "Temporarily disabling memory limiting threads\n";
     //TODO reenable
     // if (max_threads < threads) {
     //     dbgs() << "Memory limiting threads to " << max_threads << "\n";
@@ -1147,7 +1240,7 @@ unsigned compute_image_thread_count(Module &M) {
 
     max_threads = globals / 100;
     if (max_threads < threads) {
-        dbgs() << "Low global count limiting threads to " << max_threads << " (" << globals << "globals)\n";
+        // dbgs() << "Low global count limiting threads to " << max_threads << " (" << globals << "globals)\n";
         threads = max_threads;
     }
 
@@ -1160,7 +1253,7 @@ unsigned compute_image_thread_count(Module &M) {
         if (*endptr || !requested) {
             jl_safe_printf("WARNING: invalid value '%s' for JULIA_IMAGE_THREADS\n", env_threads);
         } else {
-            dbgs() << "Overriding threads to " << requested << " due to JULIA_IMAGE_THREADS\n";
+            // dbgs() << "Overriding threads to " << requested << " due to JULIA_IMAGE_THREADS\n";
             threads = requested;
             env_threads_set = true;
         }
@@ -1168,18 +1261,13 @@ unsigned compute_image_thread_count(Module &M) {
 
     // more defaults
     if (!env_threads_set && threads > 1) {
-        if (jl_options.nthreads) {
-            if (static_cast<unsigned>(jl_options.nthreads) < threads) {
-                dbgs() << "Overriding threads to " << jl_options.nthreads << " due to -t option\n";
-                threads = jl_options.nthreads;
-            }
-        } else if (auto fallbackenv = getenv("JULIA_CPU_THREADS")) {
+        if (auto fallbackenv = getenv("JULIA_CPU_THREADS")) {
             char *endptr;
             unsigned long requested = strtoul(fallbackenv, &endptr, 10);
             if (*endptr || !requested) {
                 jl_safe_printf("WARNING: invalid value '%s' for JULIA_CPU_THREADS\n", fallbackenv);
             } else if (requested < threads) {
-                dbgs() << "Overriding threads to " << requested << " due to JULIA_CPU_THREADS\n";
+                // dbgs() << "Overriding threads to " << requested << " due to JULIA_CPU_THREADS\n";
                 threads = requested;
             }
         }
@@ -1187,7 +1275,7 @@ unsigned compute_image_thread_count(Module &M) {
 
     threads = std::max(threads, 1u);
 
-    dbgs() << "Threads: " << threads << "\n";
+    // dbgs() << "Threads: " << threads << "\n";
 
     return threads;
 }
@@ -1200,12 +1288,10 @@ void jl_dump_native_impl(void *native_code,
         const char *asm_fname,
         const char *sysimg_data, size_t sysimg_len, ios_t *s)
 {
-    uint64_t start = jl_hrtime();
-    uint64_t end = 0;
     JL_TIMING(NATIVE_DUMP);
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
     if (!bc_fname && !unopt_bc_fname && !obj_fname && !asm_fname) {
-        dbgs() << "No output requested, skipping native code dump?\n";
+        // dbgs() << "No output requested, skipping native code dump?\n";
         delete data;
         return;
     }
@@ -1265,12 +1351,6 @@ void jl_dump_native_impl(void *native_code,
 
     bool imaging_mode = imaging_default() || jl_options.outputo;
 
-    end = jl_hrtime();
-
-    dbgs() << "setup time: " << (end - start) / 1e9 << "s\n";
-
-    start = jl_hrtime();
-
     unsigned threads = 1;
     unsigned nfvars = 0;
     unsigned ngvars = 0;
@@ -1322,12 +1402,6 @@ void jl_dump_native_impl(void *native_code,
                                      "jl_RTLD_DEFAULT_handle_pointer"), TheTriple);
     }
 
-    end = jl_hrtime();
-
-    dbgs() << "metadata time: " << (end - start) / 1e9 << "s\n";
-
-    start = jl_hrtime();
-
     auto compile = [&](Module &M, ArrayRef<StringRef> names, unsigned threads) { add_output(
             M, *SourceTM, outputs, names,
             unopt_bc_Archive, bc_Archive, obj_Archive, asm_Archive,
@@ -1343,12 +1417,6 @@ void jl_dump_native_impl(void *native_code,
     };
 
     compile(*dataM, text_names, threads);
-
-    end = jl_hrtime();
-
-    dbgs() << "text output time: " << (end - start) / 1e9 << "s\n";
-
-    start = jl_hrtime();
 
     auto sysimageM = std::make_unique<Module>("sysimage", Context);
     sysimageM->setTargetTriple(dataM->getTargetTriple());
@@ -1451,12 +1519,6 @@ void jl_dump_native_impl(void *native_code,
     };
     compile(*sysimageM, data_names, 1);
 
-    end = jl_hrtime();
-
-    dbgs() << "data module time: " << (end - start) / 1e9 << "s\n";
-
-    start = jl_hrtime();
-
     object::Archive::Kind Kind = getDefaultForHost(TheTriple);
     if (unopt_bc_fname)
         handleAllErrors(writeArchive(unopt_bc_fname, unopt_bc_Archive, true,
@@ -1470,10 +1532,6 @@ void jl_dump_native_impl(void *native_code,
     if (asm_fname)
         handleAllErrors(writeArchive(asm_fname, asm_Archive, true,
                     Kind, true, false), reportWriterError);
-
-    end = jl_hrtime();
-
-    dbgs() << "archive time: " << (end - start) / 1e9 << "s\n";
 
     delete data;
 }

@@ -915,8 +915,9 @@ static bool runMultiVersioning(Module &M, bool allow_bad_fvars)
     //     * Cloned function -> Original function (add as we clone functions)
     //     * Original function -> Base function (target specific and updated by LLVM)
     //     * ID -> relocation slots (const).
-    if (M.getName() == "sysimage")
+    if (!M.getModuleFlag("julia.mv.enable")) {
         return false;
+    }
 
     GlobalVariable *fvars = M.getGlobalVariable("jl_fvars");
     GlobalVariable *gvars = M.getGlobalVariable("jl_gvars");
@@ -986,6 +987,7 @@ static RegisterPass<MultiVersioningLegacy> X("JuliaMultiVersioning", "JuliaMulti
 void multiversioning_preannotate(Module &M)
 {
     annotate_module_clones(M);
+    M.addModuleFlag(Module::ModFlagBehavior::Error, "julia.mv.enable", 1);
 }
 
 void replaceUsesWithLoad(Function &F, function_ref<GlobalVariable *(Instruction &I)> should_replace, MDNode *tbaa_const) {
