@@ -73,9 +73,9 @@ const modules = Module[]
 const META    = gensym(:meta)
 const METAType = IdDict{Any,Any}
 
-function meta(m::Module)
+function meta(m::Module; autoinit::Bool=true)
     if !isdefined(m, META) || getfield(m, META) === nothing
-        initmeta(m)
+        autoinit ? initmeta(m) : return nothing
     end
     return getfield(m, META)::METAType
 end
@@ -161,7 +161,8 @@ end
 function docstr(binding::Binding, typesig = Union{})
     @nospecialize typesig
     for m in modules
-        dict = meta(m)
+        dict = meta(m; autoinit=false)
+        isnothing(dict) && continue
         if haskey(dict, binding)
             docs = dict[binding].docs
             if haskey(docs, typesig)

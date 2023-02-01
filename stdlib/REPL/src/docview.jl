@@ -164,7 +164,8 @@ function doc(binding::Binding, sig::Type = Union{})
     results, groups = DocStr[], MultiDoc[]
     # Lookup `binding` and `sig` for matches in all modules of the docsystem.
     for mod in modules
-        dict = meta(mod)
+        dict = meta(mod; autoinit=false)
+        isnothing(dict) && continue
         if haskey(dict, binding)
             multidoc = dict[binding]
             push!(groups, multidoc)
@@ -565,7 +566,8 @@ Return documentation for a particular `field` of a type if it exists.
 """
 function fielddoc(binding::Binding, field::Symbol)
     for mod in modules
-        dict = meta(mod)
+        dict = meta(mod; autoinit=false)
+        isnothing(dict) && continue
         if haskey(dict, binding)
             multidoc = dict[binding]
             if haskey(multidoc.docs, Union{})
@@ -834,7 +836,9 @@ function apropos(io::IO, needle::Regex)
     for mod in modules
         # Module doc might be in README.md instead of the META dict
         docsearch(doc(mod), needle) && println(io, mod)
-        for (k, v) in meta(mod)
+        dict = meta(mod; autoinit=false)
+        isnothing(dict) && continue
+        for (k, v) in dict
             docsearch(v, needle) && println(io, k)
         end
     end
