@@ -113,6 +113,10 @@ function Base.position(ps::ParseState, args...)
     position(ps.stream, args...)
 end
 
+function next_position(ps::ParseState, args...)
+    next_position(ps.stream, args...)
+end
+
 function emit(ps::ParseState, args...; kws...)
     emit(ps.stream, args...; kws...)
 end
@@ -1232,11 +1236,15 @@ function parse_unary(ps::ParseState)
         # last case wrong)
         op_pos = bump_dotsplit(ps, emit_dot_node=true)
 
-        # Setup possible whitespace error between operator and (
-        ws_mark = position(ps)
-        bump_trivia(ps)
-        ws_mark_end = position(ps)
-        ws_error_pos = emit(ps, ws_mark, K"TOMBSTONE")
+        space_before_paren = preceding_whitespace(t2)
+        if space_before_paren
+            # Setup possible whitespace error between operator and (
+            ws_node_mark = position(ps)
+            ws_mark = next_position(ps)
+            bump_trivia(ps)
+            ws_error_pos = emit(ps, ws_node_mark, K"TOMBSTONE")
+            ws_mark_end = next_position(ps)
+        end
 
         mark_before_paren = position(ps)
         bump(ps, TRIVIA_FLAG) # (
@@ -1251,7 +1259,7 @@ function parse_unary(ps::ParseState)
         # The precedence between unary + and any following infix ^ depends on
         # whether the parens are a function call or not
         if opts.is_paren_call
-            if preceding_whitespace(t2)
+            if space_before_paren
                 # Whitespace not allowed before prefix function call bracket
                 # + (a,b)   ==> (call + (error) a b)
                 reset_node!(ps, ws_error_pos, kind=K"error")
@@ -1592,7 +1600,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 # A.B.@x  ==>  (macrocall (. (. A (quote B)) (quote @x)))
                 # @A.B.x  ==>  (macrocall (. (. A (quote B)) (quote @x)))
                 # A.@B.x  ==>  (macrocall (. (. A (error-t) B) (quote @x)))
-                emit_diagnostic(ps, macro_atname_range,
+                emit_diagnostic(ps, macro_atname_range...,
                     error="`@` must appear on first or last macro name component")
                 bump(ps, TRIVIA_FLAG, error="Unexpected `.` after macro name")
             else
@@ -1646,7 +1654,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 end
                 parse_macro_name(ps)
                 macro_name_position = position(ps)
-                macro_atname_range = (m, macro_name_position)
+                macro_atname_range = (m, next_position(ps))
                 emit(ps, m, K"quote")
                 emit(ps, mark, K".")
             elseif k == K"'"
@@ -2484,10 +2492,12 @@ function parse_import_path(ps::ParseState)
     # import . .A    ==> (import (. . . A))
     first_dot = true
     while true
-        m = position(ps)
-        bump_trivia(ps)
-        m2 = position(ps)
-        k = peek(ps)
+        t = peek_token(ps)
+        k = kind(t)
+        if !first_dot && preceding_whitespace(t)
+            emit_diagnostic(ps, whitespace=true,
+                            warning="space between dots in import path")
+        end
         if k == K"."
             bump(ps)
         elseif k == K".."
@@ -2496,9 +2506,6 @@ function parse_import_path(ps::ParseState)
             bump_split(ps, (1,K".",EMPTY_FLAGS), (1,K".",EMPTY_FLAGS), (1,K".",EMPTY_FLAGS))
         else
             break
-        end
-        if !first_dot && m != m2
-            emit_diagnostic(ps, m, m2, warning="space between dots in import path")
         end
         first_dot = false
     end
