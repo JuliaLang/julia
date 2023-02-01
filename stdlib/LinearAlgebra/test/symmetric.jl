@@ -776,7 +776,7 @@ end
     end
 end
 
-@testset "symmetric and hermitian part" begin
+@testset "hermitian part" begin
     for T in [Float32, Complex{Float32}, Int32, Rational{Int32},
               Complex{Int32}, Complex{Rational{Int32}}]
         f, f!, t = hermitianpart, hermitianpart!, T <: Real ? transpose : adjoint

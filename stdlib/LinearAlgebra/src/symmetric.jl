@@ -881,7 +881,7 @@ end
 
 Return the Hermitian part of the square matrix `A`, defined as `(A + A') / 2`, as a
 [`Hermitian`](@ref) matrix. For real matrices `A`, this is also known as the symmetric part
-of `A`. The optional argument `uplo` controls the corresponding argument of the
+of `A`; it is also sometimes called the "operator real part". The optional argument `uplo` controls the corresponding argument of the
 [`Hermitian`](@ref) view. For real matrices, the latter is equivalent to a
 [`Symmetric`](@ref) view.
 
@@ -896,11 +896,11 @@ hermitianpart(a::Number) = _hermitianpart(a)
 """
     hermitianpart!(A, uplo=:U) -> Hermitian
 
-Overwrite the square matrix `A` with its Hermitian part `(A + A') / 2`, and return
+Overwrite the square matrix `A` in-place with its Hermitian part `(A + A') / 2`, and return
 [`Hermitian(A, uplo)`](@ref). For real matrices `A`, this is also known as the symmetric
 part of `A`.
 
-See also [`hermitianpart`](@ref).
+See also [`hermitianpart`](@ref) for the corresponding out-of-place operation.
 
 !!! compat "Julia 1.10"
     This function requires Julia 1.10 or later.
@@ -910,7 +910,7 @@ hermitianpart!(A::AbstractMatrix, uplo::Symbol=:U) = Hermitian(_hermitianpart!(A
 _hermitianpart(A::AbstractMatrix) = _hermitianpart!(copy_similar(A, Base.promote_op(/, eltype(A), Int)))
 _hermitianpart(a::T) where {T<:Number} = convert(Base.promote_op(/, T, Int), real(a))
 
-function _hermitianpart!(A)
+function _hermitianpart!(A::AbstractMatrix)
     require_one_based_indexing(A)
     n = checksquare(A)
     @inbounds for j in 1:n
