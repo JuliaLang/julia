@@ -938,6 +938,17 @@ end
     end
 end
 
+@testset "Conversion to Type{Union{String, SubString{String}}}" begin
+    str::String = "abc"
+    substr = SubString(str, 1, 3)
+    for T in [typeof(str), typeof(substr)]
+        conv_str = convert(T, str)
+        conv_substr = convert(T, substr)
+        @test typeof(conv_str) == T
+        @test typeof(conv_substr) == T
+    end
+end
+
 @test unsafe_wrap(Vector{UInt8},"\xcc\xdd\xee\xff\x80") == [0xcc,0xdd,0xee,0xff,0x80]
 
 @test iterate("a", 1)[2] == 2
