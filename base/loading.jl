@@ -1357,7 +1357,6 @@ end
 @constprop :none function _require_search_from_serialized(pkg::PkgId, sourcepath::String, build_id::UInt128)
     assert_havelock(require_lock)
     paths = find_all_in_cache_path(pkg)
-    ocachefile = nothing
     for path_to_try in paths::Vector{String}
         staledeps = stale_cachefile(pkg, build_id, sourcepath, path_to_try)
         if staledeps === true
@@ -1370,26 +1369,18 @@ end
             dep isa Module && continue
             modpath, modkey, modbuild_id = dep::Tuple{String, PkgId, UInt128}
             modpaths = find_all_in_cache_path(modkey)
-            modfound = false
-            for modpath_to_try in modpaths::Vector{String}
+            for modpath_to_try in modpaths
                 modstaledeps = stale_cachefile(modkey, modbuild_id, modpath, modpath_to_try)
                 if modstaledeps === true
                     continue
                 end
                 modstaledeps, modocachepath = modstaledeps::Tuple{Vector{Any}, Union{Nothing, String}}
                 staledeps[i] = (modpath, modkey, modpath_to_try, modstaledeps, modocachepath)
-                modfound = true
-                break
+                @goto check_next_dep
             end
-            if !modfound
-                @debug "Rejecting cache file $path_to_try because required dependency $modkey with build ID $(UUID(modbuild_id)) is missing from the cache."
-                staledeps = true
-                break
-            end
-        end
-        if staledeps === true
-            ocachefile = nothing
-            continue
+            @debug "Rejecting cache file $path_to_try because required dependency $modkey with build ID $(UUID(modbuild_id)) is missing from the cache."
+            @goto check_next_path
+            @label check_next_dep
         end
         try
             touch(path_to_try) # update timestamp of precompilation file
@@ -1404,23 +1395,17 @@ end
             dep = _tryrequire_from_serialized(modkey, modcachepath, modocachepath, modpath, modstaledeps)
             if !isa(dep, Module)
                 @debug "Rejecting cache file $path_to_try because required dependency $modkey failed to load from cache file for $modcachepath." exception=dep
-                staledeps = true
-                break
+                @goto check_next_path
             end
-            (staledeps::Vector{Any})[i] = dep
+            staledeps[i] = dep
         end
-        if staledeps === true
-            ocachefile = nothing
-            continue
-        end
-        restored = _include_from_serialized(pkg, path_to_try, ocachefile, staledeps::Vector{Any})
-        if !isa(restored, Module)
-            @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
-        else
-            return restored
-        end
+        restored = _include_from_serialized(pkg, path_to_try, ocachefile, staledeps)
+        isa(restored, Module) && return restored
+        @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
+        continue
+        @label check_next_path
     end
-    return
+    return nothing
 end
 
 # to synchronize multiple tasks trying to import/using something
