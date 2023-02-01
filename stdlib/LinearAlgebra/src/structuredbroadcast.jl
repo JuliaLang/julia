@@ -10,7 +10,7 @@ StructuredMatrixStyle{T}(::Val{N}) where {T,N} = Broadcast.DefaultArrayStyle{N}(
 
 const StructuredMatrix = Union{Diagonal,Bidiagonal,SymTridiagonal,Tridiagonal,LowerTriangular,UnitLowerTriangular,UpperTriangular,UnitUpperTriangular}
 for ST in Base.uniontypes(StructuredMatrix)
-    @eval Broadcast.BroadcastStyle(::Type{<:$ST}) = StructuredMatrixStyle{$ST}()
+    @eval Broadcast.BroadcastStyle(::Type{<:$ST}) = $(StructuredMatrixStyle{ST}())
 end
 
 # Promotion of broadcasts between structured matrices. This is slightly unusual
@@ -46,7 +46,6 @@ Broadcast.BroadcastStyle(::StructuredMatrixStyle{UnitLowerTriangular}, ::Structu
 Broadcast.BroadcastStyle(::StructuredMatrixStyle{UnitUpperTriangular}, ::StructuredMatrixStyle{<:Union{Diagonal,UpperTriangular,UnitUpperTriangular}}) =
     StructuredMatrixStyle{UpperTriangular}()
 
-# TODO: drop StructuredMatrixStyle{Matrix}
 Broadcast.BroadcastStyle(::StructuredMatrixStyle{<:Union{LowerTriangular,UnitLowerTriangular}}, ::StructuredMatrixStyle{<:Union{UpperTriangular,UnitUpperTriangular}}) =
     StructuredMatrixStyle{Matrix}()
 Broadcast.BroadcastStyle(::StructuredMatrixStyle{<:Union{UpperTriangular,UnitUpperTriangular}}, ::StructuredMatrixStyle{<:Union{LowerTriangular,UnitLowerTriangular}}) =
