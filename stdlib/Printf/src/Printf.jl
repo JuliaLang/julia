@@ -307,24 +307,6 @@ end
     (Spec{T}(spec.leftalign, spec.plus, spec.space, zero, spec.hash, width, precision, false, false), argp)
 end
 
-
-@inline function rmdynamic(spec::Spec{T}, args, argp) where {T}
-    zero, width, precision = spec.zero, spec.width, spec.precision
-    if spec.dynamic_width
-        width = args[argp]
-        argp += 1
-    end
-    if spec.dynamic_precision
-        precision = args[argp]
-        if zero && T <: Ints && precision > 0
-            zero = false
-        end
-        argp += 1
-    end
-    (Spec{T}(spec.leftalign, spec.plus, spec.space, zero, spec.hash, width, precision, false, false), argp)
-end
-
-
 @inline function fmt(buf, pos, args, argp, spec::Spec{T}) where {T}
     spec, argp = rmdynamic(spec, args, argp)
     (fmt(buf, pos, args[argp], spec), argp+1)
