@@ -1,9 +1,5 @@
-use crate::{init_boot_image_metadata_info, JuliaVM, UPCALLS};
-use mmtk::util::constants::BYTES_IN_PAGE;
+use crate::{JuliaVM, UPCALLS};
 use mmtk::util::copy::*;
-use mmtk::util::metadata::side_metadata::{
-    SideMetadataContext, SideMetadataOffset, SideMetadataSpec,
-};
 use mmtk::util::{Address, ObjectReference};
 use mmtk::vm::ObjectModel;
 use mmtk::vm::*;
@@ -22,21 +18,6 @@ pub(crate) const MARKING_METADATA_SPEC: VMLocalMarkBitSpec =
 
 // pub(crate) const LOCAL_FORWARDING_METADATA_BITS_SPEC: VMLocalForwardingBitsSpec =
 //     VMLocalForwardingBitsSpec::side_after(LOCAL_FORWARDING_POINTER_METADATA_SPEC.as_spec());
-
-pub(crate) const BI_MARKING_METADATA_SPEC: SideMetadataSpec = SideMetadataSpec {
-    name: "BI_MARK",
-    is_global: false,
-    offset: SideMetadataOffset::layout_after(MARKING_METADATA_SPEC.as_spec().extract_side_spec()),
-    log_num_of_bits: 0,
-    log_bytes_in_region: 3,
-};
-
-lazy_static! {
-    pub static ref BI_METADATA_CONTEXT: SideMetadataContext = SideMetadataContext {
-        global: vec![],
-        local: vec![BI_MARKING_METADATA_SPEC],
-    };
-}
 
 /// PolicySpecific mark-and-nursery bits metadata spec
 /// 2-bits per object
@@ -129,25 +110,4 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
 
 pub fn is_object_in_los(object: &ObjectReference) -> bool {
     (*object).to_raw_address().as_usize() > 0x60000000000
-}
-
-#[no_mangle]
-pub extern "C" fn map_boot_image_metadata(start: Address, end: Address) {
-    let start_address_aligned_down = start.align_down(BYTES_IN_PAGE);
-    let end_address_aligned_up = end.align_up(BYTES_IN_PAGE);
-    unsafe {
-        init_boot_image_metadata_info(
-            start_address_aligned_down.as_usize(),
-            end_address_aligned_up.as_usize(),
-        );
-    }
-    let res = BI_METADATA_CONTEXT.try_map_metadata_space(
-        start_address_aligned_down,
-        end_address_aligned_up.as_usize() - start_address_aligned_down.as_usize(),
-    );
-
-    match res {
-        Ok(_) => (),
-        Err(e) => panic!("Mapping failed with error {}", e),
-    }
 }

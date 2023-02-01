@@ -4,13 +4,6 @@
 #include <stdbool.h>
 
 long JULIA_HEADER_SIZE = 0;
-long BI_METADATA_START_ALIGNED_DOWN = 0;
-long BI_METADATA_END_ALIGNED_UP = 0;
-
-void init_boot_image_metadata_info(long start_aligned_down, long end_aligned_up) {
-    BI_METADATA_START_ALIGNED_DOWN = start_aligned_down;
-    BI_METADATA_END_ALIGNED_UP = end_aligned_up;
-}
 
 void* get_mutator_ref(void* mutator) {
     return mutator;

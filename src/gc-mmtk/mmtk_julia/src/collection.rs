@@ -1,14 +1,9 @@
-use crate::object_model::BI_MARKING_METADATA_SPEC;
-use crate::{
-    spawn_collector_thread, BI_METADATA_END_ALIGNED_UP, BI_METADATA_START_ALIGNED_DOWN,
-    FINALIZER_ROOTS, SINGLETON, UPCALLS,
-};
+use crate::{spawn_collector_thread, FINALIZER_ROOTS, SINGLETON, UPCALLS};
 use crate::{JuliaVM, USER_TRIGGERED_GC};
 use log::{info, trace};
 use mmtk::memory_manager;
 use mmtk::util::alloc::AllocationError;
 use mmtk::util::opaque_pointer::*;
-use mmtk::util::Address;
 use mmtk::vm::{Collection, GCThreadContext};
 use mmtk::Mutator;
 use mmtk::MutatorContext;
@@ -41,12 +36,6 @@ impl Collection<JuliaVM> for VMCollection {
 
         let &(_, ref cvar) = &*STW_COND.clone();
         cvar.notify_all();
-        unsafe {
-            BI_MARKING_METADATA_SPEC.bzero_metadata(
-                Address::from_usize(BI_METADATA_START_ALIGNED_DOWN),
-                BI_METADATA_END_ALIGNED_UP - BI_METADATA_START_ALIGNED_DOWN,
-            )
-        }
 
         info!(
             "Live bytes = {}, total bytes = {}",
@@ -181,10 +170,9 @@ pub extern "C" fn mmtk_run_finalizers(at_exit: bool) {
                     {
                         // if the finalizer function triggers GC you don't want the objects to be GC-ed
                         let mut fin_roots = FINALIZER_ROOTS.write().unwrap();
-            
+
                         let inserted = fin_roots.insert(obj);
                         assert!(inserted);
-                        
                     }
                     unsafe { ((*UPCALLS).run_finalizer_function)(obj.0, obj.1, obj.2) }
                     {
@@ -192,7 +180,6 @@ pub extern "C" fn mmtk_run_finalizers(at_exit: bool) {
                         let removed = fin_roots.remove(&obj);
                         assert!(removed);
                     }
-
                 }
                 None => break,
             }

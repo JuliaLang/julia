@@ -71,8 +71,6 @@ lazy_static! {
 #[link(kind = "static", name = "runtime_gc_c")]
 extern "C" {
     pub static JULIA_HEADER_SIZE: usize;
-    pub static BI_METADATA_START_ALIGNED_DOWN: usize;
-    pub static BI_METADATA_END_ALIGNED_UP: usize;
 }
 
 #[no_mangle]
@@ -116,7 +114,6 @@ extern "C" {
     pub fn get_next_julia_mutator() -> usize;
     pub fn get_mutator_ref(mutator: *mut Mutator<JuliaVM>) -> ObjectReference;
     pub fn get_mutator_from_ref(mutator: ObjectReference) -> *mut Mutator<JuliaVM>;
-    pub fn init_boot_image_metadata_info(start_aligned_down: usize, end_aligned_up: usize);
 }
 
 type ProcessEdgeFn =

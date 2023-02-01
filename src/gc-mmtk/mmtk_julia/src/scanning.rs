@@ -3,7 +3,6 @@ use crate::edges::JuliaVMEdge;
 use crate::julia_scanning::process_edge;
 #[cfg(feature = "scan_obj_c")]
 use crate::julia_scanning::process_offset_edge;
-use crate::object_model::BI_MARKING_METADATA_SPEC;
 use crate::FINALIZER_ROOTS;
 use crate::{ROOTS, SINGLETON, UPCALLS};
 use mmtk::memory_manager;
@@ -21,7 +20,6 @@ use mmtk::MMTK;
 use crate::JuliaVM;
 use log::info;
 use std::collections::HashSet;
-use std::sync::atomic::Ordering;
 use std::sync::MutexGuard;
 
 pub struct VMScanning {}
@@ -110,10 +108,7 @@ pub fn process_object(object: ObjectReference, closure: &mut dyn EdgeVisitor<Jul
 
 #[no_mangle]
 pub extern "C" fn object_is_managed_by_mmtk(addr: usize) -> bool {
-    let res = addr >= crate::api::starting_heap_address().as_usize()
-        && addr <= crate::api::last_heap_address().as_usize();
-
-    res
+    crate::api::is_mapped_address(unsafe { Address::from_usize(addr) })
 }
 
 // Sweep malloced arrays work
@@ -133,14 +128,4 @@ impl<VM: VMBinding> GCWork<VM> for SweepMallocedArrays {
         unsafe { ((*UPCALLS).mmtk_sweep_malloced_array)() }
         self.swept = true;
     }
-}
-
-#[no_mangle]
-pub extern "C" fn mark_metadata_scanned(addr: Address) {
-    BI_MARKING_METADATA_SPEC.store_atomic::<u8>(addr, 1, Ordering::SeqCst);
-}
-
-#[no_mangle]
-pub extern "C" fn check_metadata_scanned(addr: Address) -> u8 {
-    BI_MARKING_METADATA_SPEC.load_atomic::<u8>(addr, Ordering::SeqCst)
 }
