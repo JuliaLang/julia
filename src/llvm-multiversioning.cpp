@@ -140,6 +140,64 @@ static uint32_t collect_func_info(Function &F, bool &has_veccall)
     return flag;
 }
 
+struct TargetSpec {
+    std::string cpu_name;
+    std::string cpu_features;
+    uint32_t base;
+    uint32_t flags;
+
+    TargetSpec() = default;
+
+    static TargetSpec fromSpec(jl_target_spec_t &spec) {
+        TargetSpec out;
+        out.cpu_name = spec.cpu_name;
+        out.cpu_features = spec.cpu_features;
+        out.base = spec.base;
+        out.flags = spec.flags;
+        return out;
+    }
+
+    static TargetSpec fromMD(MDTuple *tup) {
+        TargetSpec out;
+        assert(tup->getNumOperands() == 4);
+        out.cpu_name = cast<MDString>(tup->getOperand(0))->getString().str();
+        out.cpu_features = cast<MDString>(tup->getOperand(1))->getString().str();
+        out.base = cast<ConstantInt>(cast<ConstantAsMetadata>(tup->getOperand(2))->getValue())->getZExtValue();
+        out.flags = cast<ConstantInt>(cast<ConstantAsMetadata>(tup->getOperand(3))->getValue())->getZExtValue();
+        return out;
+    }
+
+    MDNode *toMD(LLVMContext &ctx) const {
+        return MDTuple::get(ctx, {
+            MDString::get(ctx, cpu_name),
+            MDString::get(ctx, cpu_features),
+            ConstantAsMetadata::get(ConstantInt::get(Type::getInt32Ty(ctx), base)),
+            ConstantAsMetadata::get(ConstantInt::get(Type::getInt32Ty(ctx), flags))
+        });
+    }
+};
+
+static Optional<std::vector<TargetSpec>> get_target_specs(Module &M) {
+    auto md = M.getModuleFlag("julia.mv.specs");
+    if (!md)
+        return None;
+    auto tup = cast<MDTuple>(md);
+    std::vector<TargetSpec> out(tup->getNumOperands());
+    for (unsigned i = 0; i < tup->getNumOperands(); i++) {
+        out[i] = TargetSpec::fromMD(cast<MDTuple>(tup->getOperand(i).get()));
+    }
+    return out;
+}
+
+static void set_target_specs(Module &M, ArrayRef<TargetSpec> specs) {
+    std::vector<Metadata *> md;
+    md.reserve(specs.size());
+    for (auto &spec: specs) {
+        md.push_back(spec.toMD(M.getContext()));
+    }
+    M.addModuleFlag(Module::Error, "julia.mv.specs", MDTuple::get(M.getContext(), md));
+}
+
 static void annotate_module_clones(Module &M) {
     CallGraph CG(M);
     std::vector<Function *> orig_funcs;
@@ -149,7 +207,17 @@ static void annotate_module_clones(Module &M) {
         orig_funcs.push_back(&F);
     }
     bool has_veccall = false;
-    auto specs = jl_get_llvm_clone_targets();
+    std::vector<TargetSpec> specs;
+    if (auto maybe_specs = get_target_specs(M)) {
+        specs = std::move(*maybe_specs);
+    } else {
+        auto full_specs = jl_get_llvm_clone_targets();
+        specs.reserve(full_specs.size());
+        for (auto &spec: full_specs) {
+            specs.push_back(TargetSpec::fromSpec(spec));
+        }
+        set_target_specs(M, specs);
+    }
     std::vector<APInt> clones(orig_funcs.size(), APInt(specs.size(), 0));
     BitVector subtarget_cloned(orig_funcs.size());
 
@@ -255,6 +323,7 @@ static void annotate_module_clones(Module &M) {
     if (has_veccall) {
         M.addModuleFlag(Module::Max, "julia.mv.veccall", 1);
     }
+    M.addModuleFlag(Module::Error, "julia.mv.annotated", 1);
 }
 
 struct CloneCtx {
@@ -305,7 +374,7 @@ private:
     void rewrite_alias(GlobalAlias *alias, Function* F);
 
     MDNode *tbaa_const;
-    std::vector<jl_target_spec_t> specs;
+    std::vector<TargetSpec> specs;
     std::vector<Group> groups{};
     std::vector<Target *> linearized;
     std::vector<Function*> fvars;
@@ -362,7 +431,7 @@ static inline std::vector<T*> consume_gv(Module &M, const char *name, bool allow
 // Collect basic information about targets and functions.
 CloneCtx::CloneCtx(Module &M, bool allow_bad_fvars)
     : tbaa_const(tbaa_make_child_with_context(M.getContext(), "jtbaa_const", nullptr, true).first),
-      specs(jl_get_llvm_clone_targets()),
+      specs(*get_target_specs(M)),
       fvars(consume_gv<Function>(M, "jl_fvars", allow_bad_fvars)),
       gvars(consume_gv<Constant>(M, "jl_gvars", false)),
       M(M),
@@ -473,24 +542,24 @@ static void clone_function(Function *F, Function *new_f, ValueToValueMapTy &vmap
 #endif
 }
 
-static void add_features(Function *F, StringRef name, StringRef features, uint32_t flags)
+static void add_features(Function *F, TargetSpec &spec)
 {
     auto attr = F->getFnAttribute("target-features");
     if (attr.isStringAttribute()) {
         std::string new_features(attr.getValueAsString());
         new_features += ",";
-        new_features += features;
+        new_features += spec.cpu_features;
         F->addFnAttr("target-features", new_features);
     }
     else {
-        F->addFnAttr("target-features", features);
+        F->addFnAttr("target-features", spec.cpu_features);
     }
-    F->addFnAttr("target-cpu", name);
+    F->addFnAttr("target-cpu", spec.cpu_name);
     if (!F->hasFnAttribute(Attribute::OptimizeNone)) {
-        if (flags & JL_TARGET_OPTSIZE) {
+        if (spec.flags & JL_TARGET_OPTSIZE) {
             F->addFnAttr(Attribute::OptimizeForSize);
         }
-        else if (flags & JL_TARGET_MINSIZE) {
+        else if (spec.flags & JL_TARGET_MINSIZE) {
             F->addFnAttr(Attribute::MinSize);
         }
     }
@@ -514,18 +583,19 @@ void CloneCtx::clone_bodies()
                     if (!F->isDeclaration()) {
                         clone_function(group_F, target_F, *target.vmap);
                     }
-                    add_features(target_F, specs[target.idx].cpu_name,
-                                specs[target.idx].cpu_features, specs[target.idx].flags);
+                    add_features(target_F, specs[target.idx]);
                     target_F->addFnAttr("julia.mv.clone", std::to_string(i));
                 }
             }
+            // don't set the original function's features yet,
+            // since we may clone it for later groups
             if (i != 0) {
-                //TODO should we also do this for target 0?
-                add_features(group_F, specs[groups[i].idx].cpu_name,
-                            specs[groups[i].idx].cpu_features, specs[groups[i].idx].flags);
+                add_features(group_F, specs[groups[i].idx]);
             }
             group_F->addFnAttr("julia.mv.clone", std::to_string(i));
         }
+        // Add features to the original function
+        add_features(F, specs[0]);
     }
 }
 
@@ -917,6 +987,18 @@ static bool runMultiVersioning(Module &M, bool allow_bad_fvars)
     //     * ID -> relocation slots (const).
     if (!M.getModuleFlag("julia.mv.enable")) {
         return false;
+    }
+
+    // for opt testing purposes
+    bool annotated = !!M.getModuleFlag("julia.mv.annotated");
+    if (!annotated) {
+        annotate_module_clones(M);
+    }
+
+    // also for opt testing purposes
+    if (M.getModuleFlag("julia.mv.skipcloning")) {
+        assert(!annotated && "Multiversioning was enabled and annotations were added, but cloning was skipped!");
+        return true;
     }
 
     GlobalVariable *fvars = M.getGlobalVariable("jl_fvars");
