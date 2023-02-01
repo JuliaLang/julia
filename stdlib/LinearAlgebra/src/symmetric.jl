@@ -890,9 +890,8 @@ See also [`hermitianpart!`](@ref) for the corresponding in-place operation.
 !!! compat "Julia 1.10"
     This function requires Julia 1.10 or later.
 """
-hermitianpart(A::AbstractMatrix{T}, uplo::Symbol=:U) where {T} =
-    hermitianpart!(copy_similar(A, Base.promote_op(/, T, Int)), uplo)
-hermitianpart(x::Number, uplo::Symbol=:U) = real(x)
+hermitianpart(A::AbstractMatrix, uplo::Symbol=:U) = Hermitian(_hermitianpart(A), uplo)
+hermitianpart(a::Number) = _hermitianpart(a)
 
 """
     hermitianpart!(A, uplo=:U) -> Hermitian
@@ -906,17 +905,19 @@ See also [`hermitianpart`](@ref).
 !!! compat "Julia 1.10"
     This function requires Julia 1.10 or later.
 """
-hermitianpart!(A::AbstractMatrix, uplo::Symbol=:U) =
-    Hermitian(_hermorsympart!(a -> hermitianpart(a, uplo), adjoint, A), uplo)
+hermitianpart!(A::AbstractMatrix, uplo::Symbol=:U) = Hermitian(_hermitianpart!(A), uplo)
 
-@inline function _hermorsympart!(real::Function, conj::Function, A::AbstractMatrix)
+_hermitianpart(A::AbstractMatrix) = _hermitianpart!(copy_similar(A, Base.promote_op(/, eltype(A), Int)))
+_hermitianpart(a::Number) = real(a)
+
+function _hermitianpart!(A)
     require_one_based_indexing(A)
     n = checksquare(A)
     @inbounds for j in 1:n
-        A[j, j] = real(A[j, j])
+        A[j, j] = _hermitianpart(A[j, j])
         for i in 1:j-1
-            A[i, j] = val = (A[i, j] + conj(A[j, i])) / 2
-            A[j, i] = conj(val)
+            A[i, j] = val = (A[i, j] + adjoint(A[j, i])) / 2
+            A[j, i] = adjoint(val)
         end
     end
     return A
