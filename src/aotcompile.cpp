@@ -891,7 +891,7 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
 #endif
     optimizer.run(M);
     assert(!verifyModule(M, &errs()));
-    
+
     timers.optimize.stopTimer();
 
     if (opt) {
@@ -1185,7 +1185,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
         w.join();
 
     output_timer.stopTimer();
-    
+
     if (!report_timings) {
         timer_group.clear();
     } else {
