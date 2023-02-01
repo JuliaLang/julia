@@ -279,7 +279,10 @@ end
 end
 
 @testset "HeapSnapshot" begin
-    fname = read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`, String)
+    tmpdir = mktempdir()
+    fname = cd(tmpdir) do
+        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`, String)
+    end
 
     @test isfile(fname)
 
@@ -288,6 +291,7 @@ end
     end
 
     rm(fname)
+    rm(tmpdir, force = true, recursive = true)
 end
 
 include("allocs.jl")
