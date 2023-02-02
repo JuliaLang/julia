@@ -620,7 +620,7 @@ static jl_value_t *pick_union_element(jl_value_t *u JL_PROPAGATES_ROOT, jl_stenv
     return u;
 }
 
-static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param);
+static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param, int limit_slow);
 
 // subtype for variable bounds consistency check. needs its own forall/exists environment.
 static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
@@ -636,17 +636,7 @@ static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     if (x == (jl_value_t*)jl_any_type && jl_is_datatype(y))
         return 0;
     jl_saved_unionstate_t oldLunions; push_unionstate(&oldLunions, &e->Lunions);
-    jl_saved_unionstate_t oldRunions; push_unionstate(&oldRunions, &e->Runions);
-    int sub;
-    e->Lunions.used = e->Runions.used = 0;
-    e->Runions.depth = 0;
-    e->Runions.more = 0;
-    e->Lunions.depth = 0;
-    e->Lunions.more = 0;
-
-    sub = forall_exists_subtype(x, y, e, 0);
-
-    pop_unionstate(&e->Runions, &oldRunions);
+    int sub = local_forall_exists_subtype(x, y, e, 0, 1);
     pop_unionstate(&e->Lunions, &oldLunions);
     return sub;
 }
@@ -1258,19 +1248,6 @@ static int subtype_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, in
     return ans;
 }
 
-static int equal_unions(jl_uniontype_t *x, jl_uniontype_t *y, jl_stenv_t *e)
-{
-    jl_value_t *saved=NULL; jl_savedenv_t se;
-    JL_GC_PUSH1(&saved);
-    save_env(e, &saved, &se);
-    int eq = forall_exists_equal(x->a, y->a, e) && forall_exists_equal(x->b, y->b, e);
-    if (!eq)
-        restore_env(e, saved, &se);
-    free_env(&se);
-    JL_GC_POP();
-    return eq;
-}
-
 // `param` means we are currently looking at a parameter of a type constructor
 // (as opposed to being outside any type constructor, or comparing variable bounds).
 // this is used to record the positions where type variables occur for the
@@ -1444,6 +1421,72 @@ static int is_definite_length_tuple_type(jl_value_t *x)
     return k == JL_VARARG_NONE || k == JL_VARARG_INT;
 }
 
+static int _forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param, int *count, int *noRmore);
+
+static int may_contain_union_decision(jl_value_t *x, jl_stenv_t *e, jl_typeenv_t *log) JL_NOTSAFEPOINT
+{
+    if (x == NULL || x == (jl_value_t*)jl_any_type || x == jl_bottom_type)
+        return 0;
+    if (jl_is_unionall(x))
+        return may_contain_union_decision(((jl_unionall_t *)x)->body, e, log);
+    if (jl_is_datatype(x)) {
+        jl_datatype_t *xd = (jl_datatype_t *)x;
+        for (int i = 0; i < jl_nparams(xd); i++) {
+            jl_value_t *param = jl_tparam(xd, i);
+            if (jl_is_vararg(param))
+                param = jl_unwrap_vararg(param);
+            if (may_contain_union_decision(param, e, log))
+                return 1;
+        }
+        return 0;
+    }
+    if (!jl_is_typevar(x))
+        return 1;
+    jl_typeenv_t *t = log;
+    while (t != NULL) {
+        if (x == (jl_value_t *)t->var)
+            return 1;
+        t = t->prev;
+    }
+    jl_typeenv_t newlog = { (jl_tvar_t*)x, NULL, log };
+    jl_varbinding_t *xb = lookup(e, (jl_tvar_t *)x);
+    return may_contain_union_decision(xb ? xb->lb : ((jl_tvar_t *)x)->lb, e, &newlog) ||
+           may_contain_union_decision(xb ? xb->ub : ((jl_tvar_t *)x)->ub, e, &newlog);
+}
+
+static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param, int limit_slow)
+{
+    int16_t oldRmore = e->Runions.more;
+    int sub;
+    if (may_contain_union_decision(y, e, NULL) && pick_union_decision(e, 1) == 0) {
+        jl_saved_unionstate_t oldRunions; push_unionstate(&oldRunions, &e->Runions);
+        e->Lunions.used = e->Runions.used = 0;
+        e->Lunions.depth = e->Runions.depth = 0;
+        e->Lunions.more = e->Runions.more = 0;
+        int count = 0, noRmore = 0;
+        sub = _forall_exists_subtype(x, y, e, param, &count, &noRmore);
+        pop_unionstate(&e->Runions, &oldRunions);
+        // we should not try the slow path if `forall_exists_subtype` has tested all cases;
+        // Once limit_slow == 1, also skip it if
+        // 1) `forall_exists_subtype` return false
+        // 2) the left `Union` looks big
+        if (noRmore || (limit_slow && (count > 3  || !sub)))
+            e->Runions.more = oldRmore;
+    }
+    else {
+        // slow path
+        e->Lunions.used = 0;
+        while (1) {
+            e->Lunions.more = 0;
+            e->Lunions.depth = 0;
+            sub = subtype(x, y, e, param);
+            if (!sub || !next_union_state(e, 0))
+                break;
+        }
+    }
+    return sub;
+}
+
 static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
     if (obviously_egal(x, y)) return 1;
@@ -1452,48 +1495,23 @@ static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         (is_definite_length_tuple_type(x) && is_indefinite_length_tuple_type(y)))
         return 0;
 
-    if (jl_is_uniontype(x) && jl_is_uniontype(y)) {
-        // For 2 unions, try a more efficient greedy algorithm that compares the unions
-        // componentwise. If it returns `false`, we forget it and proceed with the usual
-        // algorithm. If it returns `true` we try returning `true`, but need to come back
-        // here to try the usual algorithm if subtyping later fails.
-        jl_unionstate_t *state = &e->Runions;
-        jl_saved_unionstate_t oldRunions; push_unionstate(&oldRunions, state);
+    if ((jl_is_uniontype(x) && jl_is_uniontype(y))) {
+        // For 2 unions, first try a more efficient greedy algorithm that compares the unions
+        // componentwise. If failed, `exists_subtype` would memorize that this branch should be skipped.
         if (pick_union_decision(e, 1) == 0) {
-            if (equal_unions((jl_uniontype_t*)x, (jl_uniontype_t*)y, e))
-                return 1;
-            pop_unionstate(state, &oldRunions);
+            return forall_exists_equal(((jl_uniontype_t *)x)->a, ((jl_uniontype_t *)y)->a, e) &&
+                   forall_exists_equal(((jl_uniontype_t *)x)->b, ((jl_uniontype_t *)y)->b, e);
         }
     }
 
     jl_saved_unionstate_t oldLunions; push_unionstate(&oldLunions, &e->Lunions);
-    e->Lunions.used = 0;
-    int sub;
 
-    if (!jl_has_free_typevars(x) || !jl_has_free_typevars(y)) {
-        jl_saved_unionstate_t oldRunions; push_unionstate(&oldRunions, &e->Runions);
-        e->Runions.used = 0;
-        e->Runions.depth = 0;
-        e->Runions.more = 0;
-        e->Lunions.depth = 0;
-        e->Lunions.more = 0;
-
-        sub = forall_exists_subtype(x, y, e, 2);
-
-        pop_unionstate(&e->Runions, &oldRunions);
-    }
-    else {
-        while (1) {
-            e->Lunions.more = 0;
-            e->Lunions.depth = 0;
-            sub = subtype(x, y, e, 2);
-            if (!sub || !next_union_state(e, 0))
-                break;
-        }
-    }
+    int limit_slow = !jl_has_free_typevars(x) || !jl_has_free_typevars(y);
+    int sub = local_forall_exists_subtype(x, y, e, 2, limit_slow) &&
+              local_forall_exists_subtype(y, x, e, 0, 0);
 
     pop_unionstate(&e->Lunions, &oldLunions);
-    return sub && subtype(y, x, e, 0);
+    return sub;
 }
 
 static int exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_value_t *saved, jl_savedenv_t *se, int param)
@@ -1520,7 +1538,7 @@ static int exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_value_
     }
 }
 
-static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
+static int _forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param, int *count, int *noRmore)
 {
     // The depth recursion has the following shape, after simplification:
     // ∀₁
@@ -1533,8 +1551,12 @@ static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, in
 
     e->Lunions.used = 0;
     int sub;
+    if (count) *count = 0;
+    if (noRmore) *noRmore = 1;
     while (1) {
         sub = exists_subtype(x, y, e, saved, &se, param);
+        if (count) *count = (*count < 4) ? *count + 1 : 4;
+        if (noRmore) *noRmore = *noRmore && e->Runions.more == 0;
         if (!sub || !next_union_state(e, 0))
             break;
         free_env(&se);
@@ -1544,6 +1566,11 @@ static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, in
     free_env(&se);
     JL_GC_POP();
     return sub;
+}
+
+static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
+{
+    return _forall_exists_subtype(x, y, e, param, NULL, NULL);
 }
 
 static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
