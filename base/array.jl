@@ -36,7 +36,7 @@ const AbstractMatrix{T} = AbstractArray{T,2}
 Union type of [`AbstractVector{T}`](@ref) and [`AbstractMatrix{T}`](@ref).
 """
 const AbstractVecOrMat{T} = Union{AbstractVector{T}, AbstractMatrix{T}}
-const RangeIndex = Union{Int, AbstractRange{Int}, AbstractUnitRange{Int}}
+const RangeIndex = Union{<:BitInteger, AbstractRange{<:BitInteger}}
 const DimOrInd = Union{Integer, AbstractUnitRange}
 const IntOrInd = Union{Int, AbstractUnitRange}
 const DimsOrInds{N} = NTuple{N,DimOrInd}
@@ -152,7 +152,7 @@ size(a::Array{<:Any,N}) where {N} = (@inline; ntuple(M -> size(a, M), Val(N))::D
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
-allocatedinline(T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
+allocatedinline(@nospecialize T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
 
 """
     Base.isbitsunion(::Type{T})
@@ -215,8 +215,8 @@ sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)
     @inline
+    @boundscheck checkbounds(Bool, a, i...) || return false
     ii = (_sub2ind(size(a), i...) % UInt) - 1
-    @boundscheck ii < length(a) % UInt || return false
     ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
 end
 
@@ -610,7 +610,7 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 
 ## Conversions ##
 
-convert(::Type{T}, a::AbstractArray) where {T<:Array} = a isa T ? a : T(a)
+convert(::Type{T}, a::AbstractArray) where {T<:Array} = a isa T ? a : T(a)::T
 
 promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(promote_type(T,S), a, b)
 
@@ -951,6 +951,18 @@ end
 
 Store the given value at the given key or index within a collection. The syntax `a[i,j,...] =
 x` is converted by the compiler to `(setindex!(a, x, i, j, ...); x)`.
+
+# Examples
+```jldoctest
+julia> a = Dict("a"=>1)
+Dict{String, Int64} with 1 entry:
+  "a" => 1
+
+julia> setindex!(a, 2, "b")
+Dict{String, Int64} with 2 entries:
+  "b" => 2
+  "a" => 1
+```
 """
 function setindex! end
 
@@ -1247,7 +1259,12 @@ end
 """
     sizehint!(s, n) -> s
 
-Suggest that collection `s` reserve capacity for at least `n` elements. This can improve performance.
+Suggest that collection `s` reserve capacity for at least `n` elements. That is, if
+you expect that you're going to have to push a lot of values onto `s`, you can avoid
+the cost of incremental reallocation by doing it once up front; this can improve
+performance.
+
+See also [`resize!`](@ref).
 
 # Notes on the performance model
 
@@ -2325,7 +2342,7 @@ findall(testf::Function, A) = collect(first(p) for p in pairs(A) if testf(last(p
 
 # Broadcasting is much faster for small testf, and computing
 # integer indices from logical index using findall has a negligible cost
-findall(testf::Function, A::AbstractArray) = findall(testf.(A))
+findall(testf::F, A::AbstractArray) where {F<:Function} = findall(testf.(A))
 
 """
     findall(A)
@@ -2634,6 +2651,33 @@ function filter!(f, a::AbstractVector)
 end
 
 """
+    filter(f)
+
+Create a function that filters its arguments with function `f` using [`filter`](@ref), i.e.
+a function equivalent to `x -> filter(f, x)`.
+
+The returned function is of type `Base.Fix1{typeof(filter)}`, which can be
+used to implement specialized methods.
+
+# Examples
+```jldoctest
+julia> (1, 2, Inf, 4, NaN, 6) |> filter(isfinite)
+(1, 2, 4, 6)
+
+julia> map(filter(iseven), [1:3, 2:4, 3:5])
+3-element Vector{Vector{Int64}}:
+ [2]
+ [2, 4]
+ [4]
+```
+!!! compat "Julia 1.9"
+    This method requires at least Julia 1.9.
+"""
+function filter(f)
+    Fix1(filter, f)
+end
+
+"""
     keepat!(a::Vector, inds)
     keepat!(a::BitVector, inds)
 
@@ -2686,7 +2730,8 @@ keepat!(a::Vector, m::AbstractVector{Bool}) = _keepat!(a, m)
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.
 
-_unique_filter!(pred, update!, state) = function (x)
+_unique_filter!(pred::P, update!::U, state) where {P,U} = function (x)
+    # P, U force specialization
     if pred(x, state)
         update!(state, x)
         true
@@ -2712,7 +2757,7 @@ union!(v::AbstractVector{T}, itrs...) where {T} =
 symdiff!(v::AbstractVector{T}, itrs...) where {T} =
     _grow!(_shrink_filter!(symdiff!(Set{T}(), v, itrs...)), v, itrs)
 
-function _shrink!(shrinker!, v::AbstractVector, itrs)
+function _shrink!(shrinker!::F, v::AbstractVector, itrs) where F
     seen = Set{eltype(v)}()
     filter!(_grow_filter!(seen), v)
     shrinker!(seen, itrs...)
@@ -2724,7 +2769,7 @@ setdiff!(  v::AbstractVector, itrs...) = _shrink!(setdiff!, v, itrs)
 
 vectorfilter(T::Type, f, v) = T[x for x in v if f(x)]
 
-function _shrink(shrinker!, itr, itrs)
+function _shrink(shrinker!::F, itr, itrs) where F
     T = promote_eltype(itr, itrs...)
     keep = shrinker!(Set{T}(itr), itrs...)
     vectorfilter(T, _shrink_filter!(keep), itr)

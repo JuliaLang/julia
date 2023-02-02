@@ -80,7 +80,8 @@ extern "C" {  // Needed since these functions doesn't take any arguments.
 
 JL_DLLEXPORT void jl_start_alloc_profile(double sample_rate) {
     // We only need to do this once, the first time this is called.
-    while (g_alloc_profile.per_thread_profiles.size() < (size_t)jl_n_threads) {
+    size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    while (g_alloc_profile.per_thread_profiles.size() < nthreads) {
         g_alloc_profile.per_thread_profiles.push_back(jl_per_thread_alloc_profile_t{});
     }
 
@@ -131,7 +132,10 @@ JL_DLLEXPORT void jl_free_alloc_profile() {
 
 void _maybe_record_alloc_to_profile(jl_value_t *val, size_t size, jl_datatype_t *type) JL_NOTSAFEPOINT {
     auto& global_profile = g_alloc_profile;
-    auto thread_id = jl_atomic_load_relaxed(&jl_current_task->tid);
+    size_t thread_id = jl_atomic_load_relaxed(&jl_current_task->tid);
+    if (thread_id >= global_profile.per_thread_profiles.size())
+        return; // ignore allocations on threads started after the alloc-profile started
+
     auto& profile = global_profile.per_thread_profiles[thread_id];
 
     auto sample_val = double(rand()) / double(RAND_MAX);

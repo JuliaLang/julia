@@ -41,7 +41,7 @@ STATISTIC(TotalContracted, "Total number of multiplies marked for FMA");
  */
 
 // Return true if we changed the mulOp
-static bool checkCombine(Value *maybeMul)
+static bool checkCombine(Value *maybeMul) JL_NOTSAFEPOINT
 {
     auto mulOp = dyn_cast<Instruction>(maybeMul);
     if (!mulOp || mulOp->getOpcode() != Instruction::FMul)
@@ -59,7 +59,7 @@ static bool checkCombine(Value *maybeMul)
     return false;
 }
 
-static bool combineMulAdd(Function &F)
+static bool combineMulAdd(Function &F) JL_NOTSAFEPOINT
 {
     bool modified = false;
     for (auto &BB: F) {
@@ -84,11 +84,13 @@ static bool combineMulAdd(Function &F)
             }
         }
     }
+#ifdef JL_VERIFY_PASSES
     assert(!verifyFunction(F, &errs()));
+#endif
     return modified;
 }
 
-PreservedAnalyses CombineMulAdd::run(Function &F, FunctionAnalysisManager &AM)
+PreservedAnalyses CombineMulAdd::run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT
 {
     if (combineMulAdd(F)) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();

@@ -388,6 +388,7 @@ end
 !!! compat "Julia 1.8"
     Using `Base.@assume_effects` requires Julia version 1.8.
 
+# Examples
 ```jldoctest
 julia> Base.@assume_effects :terminates_locally function pow(x)
            # this :terminates_locally allows `pow` to be constant-folded
@@ -435,6 +436,7 @@ The following `setting`s are supported.
 - `:notaskstate`
 - `:inaccessiblememonly`
 - `:foldable`
+- `:removable`
 - `:total`
 
 # Extended help
@@ -595,7 +597,6 @@ global state or mutable memory pointed to by its arguments.
 This setting is a convenient shortcut for the set of effects that the compiler
 requires to be guaranteed to constant fold a call at compile time. It is
 currently equivalent to the following `setting`s:
-
 - `:consistent`
 - `:effect_free`
 - `:terminates_globally`
@@ -605,6 +606,20 @@ currently equivalent to the following `setting`s:
     attempt constant propagation and note any thrown error at compile time. Note
     however, that by the `:consistent`-cy requirements, any such annotated call
     must consistently throw given the same argument values.
+
+!!! note
+    An explicit `@inbounds` annotation inside the function will also disable
+    constant folding and not be overriden by `:foldable`.
+
+---
+## `:removable`
+
+This setting is a convenient shortcut for the set of effects that the compiler
+requires to be guaranteed to delete a call whose result is unused at compile time.
+It is currently equivalent to the following `setting`s:
+- `:effect_free`
+- `:nothrow`
+- `:terminates_globally`
 
 ---
 ## `:total`
@@ -665,6 +680,8 @@ macro assume_effects(args...)
             inaccessiblememonly = val
         elseif setting === :foldable
             consistent = effect_free = terminates_globally = val
+        elseif setting === :removable
+            effect_free = nothrow = terminates_globally = val
         elseif setting === :total
             consistent = effect_free = nothrow = terminates_globally = notaskstate = inaccessiblememonly = val
         else
@@ -874,7 +891,7 @@ the global scope or depending on mutable elements.
 
 See [Metaprogramming](@ref) for further details.
 
-## Example:
+# Examples
 ```jldoctest
 julia> @generated function bar(x)
            if x <: Integer
@@ -948,6 +965,7 @@ This operation translates to a `modifyproperty!(a.b, :x, func, arg2)` call.
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
+# Examples
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
 
@@ -1047,6 +1065,7 @@ This operation translates to a `swapproperty!(a.b, :x, new)` call.
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
+# Examples
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
 
@@ -1093,6 +1112,7 @@ This operation translates to a `replaceproperty!(a.b, :x, expected, desired)` ca
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
+# Examples
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
 
@@ -1108,7 +1128,7 @@ julia> @atomic a.x # fetch field x of a, with sequential consistency
 julia> @atomicreplace a.x 1 => 2 # replace field x of a with 2 if it was 1, with sequential consistency
 (old = 2, success = false)
 
-julia> xchg = 2 => 0; # replace field x of a with 0 if it was 1, with sequential consistency
+julia> xchg = 2 => 0; # replace field x of a with 0 if it was 2, with sequential consistency
 
 julia> @atomicreplace a.x xchg
 (old = 2, success = true)

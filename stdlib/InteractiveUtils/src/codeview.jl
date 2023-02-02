@@ -27,19 +27,19 @@ end
 
 # displaying type warnings
 
-function warntype_type_printer(io::IO, @nospecialize(ty), used::Bool)
-    used || return
-    str = "::$ty"
+function warntype_type_printer(io::IO; @nospecialize(type), used::Bool, show_type::Bool=true, _...)
+    (show_type && used) || return nothing
+    str = "::$type"
     if !highlighting[:warntype]
         print(io, str)
-    elseif ty isa Union && is_expected_union(ty)
+    elseif type isa Union && is_expected_union(type)
         Base.emphasize(io, str, Base.warn_color()) # more mild user notification
-    elseif ty isa Type && (!Base.isdispatchelem(ty) || ty == Core.Box)
+    elseif type isa Type && (!Base.isdispatchelem(type) || type == Core.Box)
         Base.emphasize(io, str)
     else
         Base.printstyled(io, str, color=:cyan) # show the "good" type
     end
-    nothing
+    return nothing
 end
 
 # True if one can be pretty certain that the compiler handles this union well,
@@ -66,7 +66,7 @@ Not all non-leaf types are particularly problematic for performance, and the per
 characteristics of a particular type is an implementation detail of the compiler.
 `code_warntype` will err on the side of coloring types red if they might be a performance
 concern, so some types may be colored red even if they do not impact performance.
-Small unions of concrete types are usually not a concern, so these are highlighed in yellow.
+Small unions of concrete types are usually not a concern, so these are highlighted in yellow.
 
 Keyword argument `debuginfo` may be one of `:source` or `:none` (default), to specify the verbosity of code comments.
 
@@ -140,13 +140,13 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(t=Base.default_tt
                 end
                 print(io, "  ", slotnames[i])
                 if isa(slottypes, Vector{Any})
-                    warntype_type_printer(io, slottypes[i], true)
+                    warntype_type_printer(io; type=slottypes[i], used=true)
                 end
                 println(io)
             end
         end
         print(io, "Body")
-        warntype_type_printer(io, rettype, true)
+        warntype_type_printer(io; type=rettype, used=true)
         println(io)
         irshow_config = Base.IRShow.IRShowConfig(lineprinter(src), warntype_type_printer)
         Base.IRShow.show_ir(lambda_io, src, irshow_config)
@@ -179,7 +179,7 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
     # get the MethodInstance for the method match
     if !isa(f, Core.OpaqueClosure)
         world = Base.get_world_counter()
-        match = Base._which(signature_type(f, t), world)
+        match = Base._which(signature_type(f, t); world)
         linfo = Core.Compiler.specialize_method(match)
         # TODO: use jl_is_cacheable_sig instead of isdispatchtuple
         isdispatchtuple(linfo.specTypes) || (warning = GENERIC_SIG_WARNING)
@@ -268,8 +268,8 @@ Keyword argument `debuginfo` may be one of source (default) or none, to specify 
 """
 function code_llvm(io::IO, @nospecialize(f), @nospecialize(types), raw::Bool,
                    dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default)
-    d = _dump_function(f, types, false, false, !raw, dump_module, :att, optimize, debuginfo, false)
-    if highlighting[:llvm] && get(io, :color, false)
+    d = _dump_function(f, types, false, false, !raw, dump_module, :intel, optimize, debuginfo, false)
+    if highlighting[:llvm] && get(io, :color, false)::Bool
         print_llvm(io, d)
     else
         print(io, d)
@@ -281,12 +281,12 @@ code_llvm(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); raw=false, 
     code_llvm(stdout, f, types; raw, dump_module, optimize, debuginfo)
 
 """
-    code_native([io=stdout,], f, types; syntax=:att, debuginfo=:default, binary=false, dump_module=true)
+    code_native([io=stdout,], f, types; syntax=:intel, debuginfo=:default, binary=false, dump_module=true)
 
 Prints the native assembly instructions generated for running the method matching the given
 generic function and type signature to `io`.
 
-* Set assembly syntax by setting `syntax` to `:att` (default) for AT&T syntax or `:intel` for Intel syntax.
+* Set assembly syntax by setting `syntax` to `:intel` (default) for intel syntax or `:att` for AT&T syntax.
 * Specify verbosity of code comments by setting `debuginfo` to `:source` (default) or `:none`.
 * If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
 * If `dump_module` is `false`, do not print metadata such as rodata or directives.
@@ -294,15 +294,15 @@ generic function and type signature to `io`.
 See also: [`@code_native`](@ref), [`code_llvm`](@ref), [`code_typed`](@ref) and [`code_lowered`](@ref)
 """
 function code_native(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f));
-                     dump_module::Bool=true, syntax::Symbol=:att, debuginfo::Symbol=:default, binary::Bool=false)
+                     dump_module::Bool=true, syntax::Symbol=:intel, debuginfo::Symbol=:default, binary::Bool=false)
     d = _dump_function(f, types, true, false, false, dump_module, syntax, true, debuginfo, binary)
-    if highlighting[:native] && get(io, :color, false)
+    if highlighting[:native] && get(io, :color, false)::Bool
         print_native(io, d)
     else
         print(io, d)
     end
 end
-code_native(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); dump_module::Bool=true, syntax::Symbol=:att, debuginfo::Symbol=:default, binary::Bool=false) =
+code_native(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); dump_module::Bool=true, syntax::Symbol=:intel, debuginfo::Symbol=:default, binary::Bool=false) =
     code_native(stdout, f, types; dump_module, syntax, debuginfo, binary)
 code_native(::IO, ::Any, ::Symbol) = error("invalid code_native call") # resolve ambiguous call
 

@@ -120,11 +120,10 @@ end
 @testset "setting sample count and delay in init" begin
     n_, delay_ = Profile.init()
     n_original = n_
-    nthreads = Sys.iswindows() ? 1 : Threads.nthreads()
     sample_size_bytes = sizeof(Ptr)
     def_n = Sys.iswindows() && Sys.WORD_SIZE == 32 ? 1_000_000 : 10_000_000
-    if Sys.WORD_SIZE == 32 && (def_n * nthreads * sample_size_bytes) > 2^29
-        @test n_ * nthreads * sample_size_bytes <= 2^29
+    if Sys.WORD_SIZE == 32 && (def_n * sample_size_bytes) > 2^29
+        @test n_ * sample_size_bytes <= 2^29
     else
         @test n_ == def_n
     end
@@ -133,8 +132,8 @@ end
     @test delay_ == def_delay
     Profile.init(n=1_000_001, delay=0.0005)
     n_, delay_ = Profile.init()
-    if Sys.WORD_SIZE == 32 && (1_000_001 * nthreads * sample_size_bytes) > 2^29
-        @test n_ * nthreads * sample_size_bytes <= 2^29
+    if Sys.WORD_SIZE == 32 && (1_000_001 * sample_size_bytes) > 2^29
+        @test n_ * sample_size_bytes <= 2^29
     else
         @test n_ == 1_000_001
     end
@@ -199,41 +198,48 @@ if Sys.isbsd() || Sys.islinux()
     @testset "SIGINFO/SIGUSR1 profile triggering" begin
         let cmd = Base.julia_cmd()
             script = """
-                x = rand(1000, 1000)
-                println("started")
-                while true
-                    x * x
-                    yield()
-                end
+                print(stderr, "started\n")
+                eof(stdin)
+                close(t)
                 """
             iob = Base.BufferStream()
-            p = run(pipeline(`$cmd -e $script`, stderr = devnull, stdout = iob), wait = false)
+            notify_exit = Base.PipeEndpoint()
+            p = run(pipeline(`$cmd -e $script`, stdin=notify_exit, stderr=iob, stdout=devnull), wait=false)
             t = Timer(120) do t
                 # should be under 10 seconds, so give it 2 minutes then report failure
                 println("KILLING BY PROFILE TEST WATCHDOG\n")
                 kill(p, Base.SIGTERM)
                 sleep(10)
                 kill(p, Base.SIGKILL)
-                close(iob)
+                close(p)
             end
             try
-                s = readuntil(iob, "started", keep = true)
+                s = readuntil(iob, "started", keep=true)
                 @assert occursin("started", s)
                 @assert process_running(p)
-                for _ in 1:2
-                    sleep(2.5)
+                for i in 1:2
+                    i > 1 && sleep(5)
                     if Sys.isbsd()
                         kill(p, 29) # SIGINFO
                     elseif Sys.islinux()
                         kill(p, 10) # SIGUSR1
                     end
-                    s = readuntil(iob, "Overhead ╎", keep = true)
+                    s = readuntil(iob, "Overhead ╎", keep=true)
                     @test process_running(p)
+                    readavailable(iob)
                     @test occursin("Overhead ╎", s)
                 end
-            finally
-                kill(p, Base.SIGKILL)
+                close(notify_exit) # notify test finished
+                s = read(iob, String) # consume test output
+                wait(p) # wait for test completion
                 close(t)
+            catch
+                close(notify_exit)
+                errs = read(iob, String) # consume test output
+                isempty(errs) || println("CHILD STDERR after test failure: ", errs)
+                wait(p) # wait for test completion
+                close(t)
+                rethrow()
             end
         end
     end
@@ -270,6 +276,22 @@ end
     end
     node = root.down[stackframe(:f1, :file1, 2)]
     @test only(node.down).first == lidict[8]
+end
+
+@testset "HeapSnapshot" begin
+    tmpdir = mktempdir()
+    fname = cd(tmpdir) do
+        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`, String)
+    end
+
+    @test isfile(fname)
+
+    open(fname) do fs
+        @test readline(fs) != ""
+    end
+
+    rm(fname)
+    rm(tmpdir, force = true, recursive = true)
 end
 
 include("allocs.jl")

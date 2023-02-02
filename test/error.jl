@@ -99,3 +99,27 @@ end
         @test s == "MethodError: no method matching f44319(::Int$(Sys.WORD_SIZE))\n\nClosest candidates are:\n  f44319()\n   @ $curmod_str none:0\n"
     end
 end
+
+@testset "All types ending with Exception or Error subtype Exception" begin
+    function test_exceptions(mod, visited=Set{Module}())
+        if mod ∉ visited
+            push!(visited, mod)
+            for name in names(mod, all=true)
+                isdefined(mod, name) || continue
+                value = getfield(mod, name)
+
+                if value isa Module
+                    test_exceptions(value, visited)
+                elseif value isa Type
+                    str = string(value)
+                    if endswith(str, "Exception") || endswith(str, "Error")
+                        @test value <: Exception
+                    end
+                end
+            end
+        end
+        visited
+    end
+    visited = test_exceptions(Base)
+    test_exceptions(Core, visited)
+end

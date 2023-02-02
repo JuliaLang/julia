@@ -154,7 +154,7 @@ while x < 10
 end
 ```
 and notice that it works fine in an interactive environment (like the Julia REPL),
-but gives `UndefVarError: x not defined` when you try to run it in script or other
+but gives ```UndefVarError: `x` not defined``` when you try to run it in script or other
 file.   What is going on is that Julia generally requires you to **be explicit about assigning to global variables in a local scope**.
 
 Here, `x` is a global variable, `while` defines a [local scope](@ref scope-of-variables), and `x += 1` is
@@ -705,7 +705,7 @@ julia> module Foo
 
 julia> Foo.foo()
 ERROR: On worker 2:
-UndefVarError: Foo not defined
+UndefVarError: `Foo` not defined
 Stacktrace:
 [...]
 ```
@@ -726,7 +726,7 @@ julia> @everywhere module Foo
 
 julia> Foo.foo()
 ERROR: On worker 2:
-UndefVarError: gvar not defined
+UndefVarError: `gvar` not defined
 Stacktrace:
 [...]
 ```
@@ -762,7 +762,7 @@ bar (generic function with 1 method)
 
 julia> remotecall_fetch(bar, 2)
 ERROR: On worker 2:
-UndefVarError: #bar not defined
+UndefVarError: `#bar` not defined
 [...]
 
 julia> anon_bar  = ()->1
@@ -1049,7 +1049,7 @@ The Stable version of Julia is the latest released version of Julia, this is the
 It has the latest features, including improved performance.
 The Stable version of Julia is versioned according to [SemVer](https://semver.org/) as v1.x.y.
 A new minor release of Julia corresponding to a new Stable version is made approximately every 4-5 months after a few weeks of testing as a release candidate.
-Unlike the LTS version the a Stable version will not normally receive bugfixes after another Stable version of Julia has been released.
+Unlike the LTS version the Stable version will not normally receive bugfixes after another Stable version of Julia has been released.
 However, upgrading to the next Stable release will always be possible as each release of Julia v1.x will continue to run code written for earlier versions.
 
 You may prefer the LTS (Long Term Support) version of Julia if you are looking for a very stable code base.

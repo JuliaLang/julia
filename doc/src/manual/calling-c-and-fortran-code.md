@@ -817,7 +817,7 @@ end
 ## Garbage Collection Safety
 
 When passing data to a `@ccall`, it is best to avoid using the [`pointer`](@ref) function.
-Instead define a convert method and pass the variables directly to the `@ccall`. `@ccall`
+Instead define a [`Base.cconvert`](@ref) method and pass the variables directly to the `@ccall`. `@ccall`
 automatically arranges that all of its arguments will be preserved from garbage collection until
 the call returns. If a C API will store a reference to memory allocated by Julia, after the `@ccall`
 returns, you must ensure that the object remains visible to the garbage collector. The suggested

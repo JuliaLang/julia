@@ -111,8 +111,6 @@
 
 #include <llvm-c/Disassembler.h>
 
-#include "julia.h"
-#include "julia_internal.h"
 #include "jitlayers.h"
 #include "processor.h"
 
@@ -135,10 +133,11 @@ class DILineInfoPrinter {
         output_source = 1,
     } verbosity = output_source;
 public:
-    DILineInfoPrinter(const char *LineStart, bool bracket_outer)
+    DILineInfoPrinter(const char *LineStart, bool bracket_outer) JL_NOTSAFEPOINT
         : LineStart(LineStart),
           bracket_outer(bracket_outer) {};
-    void SetVerbosity(const char *c)
+    ~DILineInfoPrinter() JL_NOTSAFEPOINT = default;
+    void SetVerbosity(const char *c) JL_NOTSAFEPOINT
     {
         if (StringRef("default") == c) {
             verbosity = output_source;
@@ -151,14 +150,14 @@ public:
         }
     }
 
-    void emit_finish(raw_ostream &Out);
-    void emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> &DI);
+    void emit_finish(raw_ostream &Out) JL_NOTSAFEPOINT;
+    void emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> &DI) JL_NOTSAFEPOINT;
 
     struct repeat {
         size_t times;
         const char *c;
     };
-    struct repeat inlining_indent(const char *c)
+    struct repeat inlining_indent(const char *c) JL_NOTSAFEPOINT
     {
         return repeat{
             std::max(inline_depth + bracket_outer, (uint32_t)1) - 1,
@@ -166,20 +165,20 @@ public:
     }
 
     template<class T>
-    void emit_lineinfo(std::string &Out, T &DI)
+    void emit_lineinfo(std::string &Out, T &DI) JL_NOTSAFEPOINT
     {
         raw_string_ostream OS(Out);
         emit_lineinfo(OS, DI);
     }
 
-    void emit_lineinfo(raw_ostream &Out, DILineInfo &DI)
+    void emit_lineinfo(raw_ostream &Out, DILineInfo &DI) JL_NOTSAFEPOINT
     {
         std::vector<DILineInfo> DIvec(1);
         DIvec[0] = DI;
         emit_lineinfo(Out, DIvec);
     }
 
-    void emit_lineinfo(raw_ostream &Out, DIInliningInfo &DI)
+    void emit_lineinfo(raw_ostream &Out, DIInliningInfo &DI) JL_NOTSAFEPOINT
     {
         uint32_t nframes = DI.getNumberOfFrames();
         std::vector<DILineInfo> DIvec(nframes);
@@ -189,14 +188,14 @@ public:
         emit_lineinfo(Out, DIvec);
     }
 
-    void emit_finish(std::string &Out)
+    void emit_finish(std::string &Out) JL_NOTSAFEPOINT
     {
         raw_string_ostream OS(Out);
         emit_finish(OS);
     }
 };
 
-static raw_ostream &operator<<(raw_ostream &Out, struct DILineInfoPrinter::repeat i)
+static raw_ostream &operator<<(raw_ostream &Out, struct DILineInfoPrinter::repeat i) JL_NOTSAFEPOINT
 {
     while (i.times-- > 0)
         Out << i.c;
@@ -338,27 +337,28 @@ class LineNumberAnnotatedWriter : public AssemblyAnnotationWriter {
     DenseMap<const Instruction *, DILocation *> DebugLoc;
     DenseMap<const Function *, DISubprogram *> Subprogram;
 public:
-    LineNumberAnnotatedWriter(const char *LineStart, bool bracket_outer, const char *debuginfo)
+    LineNumberAnnotatedWriter(const char *LineStart, bool bracket_outer, const char *debuginfo) JL_NOTSAFEPOINT
       : LinePrinter(LineStart, bracket_outer) {
         LinePrinter.SetVerbosity(debuginfo);
     }
-    virtual void emitFunctionAnnot(const Function *, formatted_raw_ostream &);
-    virtual void emitInstructionAnnot(const Instruction *, formatted_raw_ostream &);
-    virtual void emitInstructionAnnot(const DILocation *, formatted_raw_ostream &);
-    virtual void emitBasicBlockEndAnnot(const BasicBlock *, formatted_raw_ostream &);
-    // virtual void printInfoComment(const Value &, formatted_raw_ostream &) {}
+    ~LineNumberAnnotatedWriter() JL_NOTSAFEPOINT = default;
+    virtual void emitFunctionAnnot(const Function *, formatted_raw_ostream &) JL_NOTSAFEPOINT;
+    virtual void emitInstructionAnnot(const Instruction *, formatted_raw_ostream &) JL_NOTSAFEPOINT;
+    virtual void emitInstructionAnnot(const DILocation *, formatted_raw_ostream &) JL_NOTSAFEPOINT;
+    virtual void emitBasicBlockEndAnnot(const BasicBlock *, formatted_raw_ostream &) JL_NOTSAFEPOINT;
+    // virtual void printInfoComment(const Value &, formatted_raw_ostream &) JL_NOTSAFEPOINT {}
 
-    void emitEnd(formatted_raw_ostream &Out) {
+    void emitEnd(formatted_raw_ostream &Out) JL_NOTSAFEPOINT {
         LinePrinter.emit_finish(Out);
         InstrLoc = nullptr;
     }
 
-    void addSubprogram(const Function *F, DISubprogram *SP)
+    void addSubprogram(const Function *F, DISubprogram *SP) JL_NOTSAFEPOINT
     {
         Subprogram[F] = SP;
     }
 
-    void addDebugLoc(const Instruction *I, DILocation *Loc)
+    void addDebugLoc(const Instruction *I, DILocation *Loc) JL_NOTSAFEPOINT
     {
         DebugLoc[I] = Loc;
     }
@@ -424,7 +424,7 @@ void LineNumberAnnotatedWriter::emitBasicBlockEndAnnot(
         emitEnd(Out);
 }
 
-static void jl_strip_llvm_debug(Module *m, bool all_meta, LineNumberAnnotatedWriter *AAW)
+static void jl_strip_llvm_debug(Module *m, bool all_meta, LineNumberAnnotatedWriter *AAW) JL_NOTSAFEPOINT
 {
     // strip metadata from all instructions in all functions in the module
     Instruction *deletelast = nullptr; // can't actually delete until the iterator advances
@@ -475,18 +475,16 @@ static void jl_strip_llvm_debug(Module *m, bool all_meta, LineNumberAnnotatedWri
     //    m->eraseNamedMetadata(md);
 }
 
-void jl_strip_llvm_debug(Module *m)
+void jl_strip_llvm_debug(Module *m) JL_NOTSAFEPOINT
 {
     jl_strip_llvm_debug(m, false, NULL);
 }
 
-void jl_strip_llvm_addrspaces(Module *m)
+void jl_strip_llvm_addrspaces(Module *m) JL_NOTSAFEPOINT
 {
     PassBuilder PB;
     AnalysisManagers AM(PB);
-    ModulePassManager MPM;
-    MPM.addPass(RemoveJuliaAddrspacesPass());
-    MPM.run(*m, AM.MAM);
+    RemoveJuliaAddrspacesPass().run(*m, AM.MAM);
 }
 
 // print an llvm IR acquired from jl_get_llvmf
@@ -545,7 +543,7 @@ static void jl_dump_asm_internal(
         raw_ostream &rstream,
         const char* asm_variant,
         const char* debuginfo,
-        bool binary);
+        bool binary) JL_NOTSAFEPOINT;
 
 // This isn't particularly fast, but neither is printing assembly, and they're only used for interactive mode
 static uint64_t compute_obj_symsize(object::SectionRef Section, uint64_t offset)
@@ -594,7 +592,7 @@ jl_value_t *jl_dump_fptr_asm_impl(uint64_t fptr, char raw_mc, const char* asm_va
     llvm::DIContext *context = NULL;
     if (!jl_DI_for_fptr(fptr, &symsize, &slide, &Section, &context)) {
         if (!jl_dylib_DI_for_fptr(fptr, &Section, &slide, &context,
-                    false, NULL, NULL, NULL, NULL)) {
+                    false, NULL, NULL, NULL, NULL, NULL)) {
             jl_printf(JL_STDERR, "WARNING: Unable to find function pointer\n");
             return jl_pchar_to_string("", 0);
         }
@@ -644,20 +642,21 @@ class SymbolTable {
     uint64_t ip; // virtual instruction pointer of the current instruction
     int64_t slide;
 public:
-    SymbolTable(MCContext &Ctx, const object::ObjectFile *object, int64_t slide, const FuncMCView &MemObj):
-        Ctx(Ctx), MemObj(MemObj), object(object), ip(0), slide(slide) {}
-    const FuncMCView &getMemoryObject() const { return MemObj; }
-    void setPass(int Pass) { this->Pass = Pass; }
-    int getPass() const { return Pass; }
-    void insertAddress(uint64_t addr);
+    SymbolTable(MCContext &Ctx, const object::ObjectFile *object, int64_t slide, const FuncMCView &MemObj) JL_NOTSAFEPOINT
+        : Ctx(Ctx), MemObj(MemObj), object(object), ip(0), slide(slide) {}
+    ~SymbolTable() JL_NOTSAFEPOINT = default;
+    const FuncMCView &getMemoryObject() const JL_NOTSAFEPOINT { return MemObj; }
+    void setPass(int Pass) JL_NOTSAFEPOINT { this->Pass = Pass; }
+    int getPass() const JL_NOTSAFEPOINT { return Pass; }
+    void insertAddress(uint64_t addr) JL_NOTSAFEPOINT;
     // void createSymbol(const char *name, uint64_t addr);
-    void createSymbols();
-    const char *lookupSymbolName(uint64_t addr);
-    MCSymbol *lookupSymbol(uint64_t addr);
-    StringRef getSymbolNameAt(uint64_t offset) const;
-    const char *lookupLocalPC(size_t addr);
-    void setIP(uint64_t addr);
-    uint64_t getIP() const;
+    void createSymbols() JL_NOTSAFEPOINT;
+    const char *lookupSymbolName(uint64_t addr) JL_NOTSAFEPOINT;
+    MCSymbol *lookupSymbol(uint64_t addr) JL_NOTSAFEPOINT;
+    StringRef getSymbolNameAt(uint64_t offset) const JL_NOTSAFEPOINT;
+    const char *lookupLocalPC(size_t addr) JL_NOTSAFEPOINT;
+    void setIP(uint64_t addr) JL_NOTSAFEPOINT;
+    uint64_t getIP() const JL_NOTSAFEPOINT;
 };
 
 void SymbolTable::setIP(uint64_t addr)
@@ -796,7 +795,13 @@ static const char *SymbolLookup(void *DisInfo, uint64_t ReferenceValue, uint64_t
     return NULL;
 }
 
-static int OpInfoLookup(void *DisInfo, uint64_t PC, uint64_t Offset, uint64_t Size,
+static int OpInfoLookup(void *DisInfo, uint64_t PC,
+                        uint64_t Offset,
+#if JL_LLVM_VERSION < 150000
+                        uint64_t Size,
+#else
+                        uint64_t OpSize, uint64_t InstSize,
+#endif
                         int TagType, void *TagBuf)
 {
     SymbolTable *SymTab = (SymbolTable*)DisInfo;
@@ -1050,10 +1055,14 @@ static void jl_dump_asm_internal(
             MCInst Inst;
             MCDisassembler::DecodeStatus S;
             FuncMCView view = memoryObject.slice(Index);
+#if JL_LLVM_VERSION < 150000
+#define getCommentOS() GetCommentOS()
+#endif
             S = DisAsm->getInstruction(Inst, insSize, view, 0,
-                                      /*CStream*/ pass != 0 ? Streamer->GetCommentOS() : nulls());
-            if (pass != 0 && Streamer->GetCommentOS().tell() > 0)
-                Streamer->GetCommentOS() << '\n';
+                                      /*CStream*/ pass != 0 ? Streamer->getCommentOS () : nulls());
+            if (pass != 0 && Streamer->getCommentOS ().tell() > 0)
+                Streamer->getCommentOS () << '\n';
+#undef GetCommentOS
             switch (S) {
             case MCDisassembler::Fail:
                 if (insSize == 0) // skip illegible bytes
@@ -1165,6 +1174,7 @@ public:
           LinePrinter("; ", true, debuginfo),
           RawStream(Buffer),
           Stream(RawStream) {}
+    ~LineNumberPrinterHandler() JL_NOTSAFEPOINT = default;
 
     void emitAndReset() {
         Stream.flush();

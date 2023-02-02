@@ -674,8 +674,13 @@ function do_broken_test(result::ExecutionResult, orig_expr)
     # Assume the test is broken and only change if the result is true
     if isa(result, Returned)
         value = result.value
-        if isa(value, Bool) && value
-            testres = Error(:test_unbroken, orig_expr, value, nothing, result.source)
+        if isa(value, Bool)
+            if value
+                testres = Error(:test_unbroken, orig_expr, value, nothing, result.source)
+            end
+        else
+            # If the result is non-Boolean, this counts as an Error
+            testres = Error(:test_nonbool, orig_expr, value, nothing, result.source)
         end
     end
     record(get_testset(), testres)
@@ -1204,10 +1209,11 @@ function get_test_counts(ts::DefaultTestSet)
         end
     end
     ts.anynonpass = (fails + errors + c_fails + c_errors > 0)
-    duration = if isnothing(ts.time_end)
+    (; time_start, time_end) = ts
+    duration = if isnothing(time_end)
         ""
     else
-        dur_s = ts.time_end - ts.time_start
+        dur_s = time_end - time_start
         if dur_s < 60
             string(round(dur_s, digits = 1), "s")
         else
@@ -1308,13 +1314,13 @@ end
     @testset [CustomTestSet] [option=val  ...] ["description"] begin ... end
     @testset [CustomTestSet] [option=val  ...] ["description \$v"] for v in (...) ... end
     @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] for v in (...), w in (...) ... end
-    @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] foo()
+    @testset [CustomTestSet] [option=val  ...] ["description"] foo()
     @testset let v = (...) ... end
 
 # With begin/end or function call
 
 When @testset is used, with begin/end or a single function call, the macro
-starts a new test set in which to evaulate the given expression.
+starts a new test set in which to evaluate the given expression.
 
 If no custom testset type is given it defaults to creating a `DefaultTestSet`.
 `DefaultTestSet` records all the results and, if there are any `Fail`s or
@@ -1326,19 +1332,23 @@ also be used for any nested `@testset` invocations. The given options are only
 applied to the test set where they are given. The default test set type
 accepts three boolean options:
 - `verbose`: if `true`, the result summary of the nested testsets is shown even
-when they all pass (the default is `false`).
+  when they all pass (the default is `false`).
 - `showtiming`: if `true`, the duration of each displayed testset is shown
-(the default is `true`).
+  (the default is `true`).
 - `failfast`: if `true`, any test failure or error will cause the testset and any
-child testsets to return immediately (the default is `false`). This can also be set
-globally via the env var `JULIA_TEST_FAILFAST`.
+  child testsets to return immediately (the default is `false`).
+  This can also be set globally via the env var `JULIA_TEST_FAILFAST`.
+
+!!! compat "Julia 1.8"
+    `@testset foo()` requires at least Julia 1.8.
 
 !!! compat "Julia 1.9"
     `failfast` requires at least Julia 1.9.
 
 The description string accepts interpolation from the loop indices.
 If no description is provided, one is constructed based on the variables.
-If a function call is provided, its name will be used. Explicit description strings override this behavior.
+If a function call is provided, its name will be used.
+Explicit description strings override this behavior.
 
 By default the `@testset` macro will return the testset object itself, though
 this behavior can be customized in other testset types. If a `for` loop is used
@@ -1383,7 +1393,7 @@ individual tests fail. Transparent test sets do not introduce additional levels
 of nesting in the test set hierarchy and are passed through directly to the
 parent test set (with the context object appended to any failing tests.)
 
-    !!! compat "Julia 1.9"
+!!! compat "Julia 1.9"
     `@testset let` requires at least Julia 1.9.
 
 ## Examples
@@ -1409,7 +1419,7 @@ macro testset(args...)
         error("Expected function call, begin/end block or for loop as argument to @testset")
     end
 
-    FAIL_FAST[] = something(tryparse(Bool, get(ENV, "JULIA_TEST_FAILFAST", "false")), false)
+    FAIL_FAST[] = Base.get_bool_env("JULIA_TEST_FAILFAST", false)
 
     if tests.head === :for
         return testset_forloop(args, tests, __source__)
@@ -1518,7 +1528,7 @@ end
 
 function failfast_print()
     printstyled("\nFail-fast enabled:"; color = Base.error_color(), bold=true)
-    printstyled(" Fail or Error occured\n\n"; color = Base.error_color())
+    printstyled(" Fail or Error occurred\n\n"; color = Base.error_color())
 end
 
 """
@@ -1685,7 +1695,7 @@ end
 """
     get_testset_depth()
 
-Returns the number of active test sets, not including the default test set
+Return the number of active test sets, not including the default test set
 """
 function get_testset_depth()
     testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
@@ -1815,7 +1825,7 @@ end
                                       ambiguous_bottom=false,
                                       allowed_undefineds=nothing)
 
-Returns a vector of `(Method,Method)` pairs of ambiguous methods
+Return a vector of `(Method,Method)` pairs of ambiguous methods
 defined in the specified modules.
 Use `recursive=true` to test in all submodules.
 
@@ -1846,7 +1856,7 @@ function detect_ambiguities(mods::Module...;
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)
             m.sig == Tuple && continue # ignore Builtins
-            is_in_mods(m.module, recursive, mods) || continue
+            is_in_mods(parentmodule(m), recursive, mods) || continue
             world = Base.get_world_counter()
             ambig = Ref{Int32}(0)
             ms = Base._methods_by_ftype(m.sig, nothing, -1, world, true, Ref(typemin(UInt)), Ref(typemax(UInt)), ambig)::Vector
@@ -1879,7 +1889,7 @@ function detect_ambiguities(mods::Module...;
             f = Base.unwrap_unionall(getfield(mod, n))
             if isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
                 push!(work, f)
-            elseif isa(f, DataType) && isdefined(f.name, :mt) && f.name.module === mod && f.name.name === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
+            elseif isa(f, DataType) && isdefined(f.name, :mt) && parentmodule(f) === mod && nameof(f) === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
                 examine(f.name.mt)
             end
         end
@@ -1892,7 +1902,7 @@ end
 """
     detect_unbound_args(mod1, mod2...; recursive=false, allowed_undefineds=nothing)
 
-Returns a vector of `Method`s which may have unbound type parameters.
+Return a vector of `Method`s which may have unbound type parameters.
 Use `recursive=true` to test in all submodules.
 
 By default, any undefined symbols trigger a warning. This warning can
@@ -1900,8 +1910,8 @@ be suppressed by supplying a collection of `GlobalRef`s for which
 the warning can be skipped. For example, setting
 
 ```
-allow_undefineds = Set([GlobalRef(Base, :active_repl),
-                        GlobalRef(Base, :active_repl_backend)])
+allowed_undefineds = Set([GlobalRef(Base, :active_repl),
+                          GlobalRef(Base, :active_repl_backend)])
 ```
 
 would suppress warnings about `Base.active_repl` and
@@ -1918,7 +1928,7 @@ function detect_unbound_args(mods...;
     mods = collect(mods)::Vector{Module}
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)
-            is_in_mods(m.module, recursive, mods) || continue
+            is_in_mods(parentmodule(m), recursive, mods) || continue
             has_unbound_vars(m.sig) || continue
             tuple_sig = Base.unwrap_unionall(m.sig)::DataType
             if Base.isvatuple(tuple_sig)
@@ -1950,7 +1960,7 @@ function detect_unbound_args(mods...;
             f = Base.unwrap_unionall(getfield(mod, n))
             if isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
                 push!(work, f)
-            elseif isa(f, DataType) && isdefined(f.name, :mt) && f.name.module === mod && f.name.name === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
+            elseif isa(f, DataType) && isdefined(f.name, :mt) && parentmodule(f) === mod && nameof(f) === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
                 examine(f.name.mt)
             end
         end
@@ -2124,49 +2134,6 @@ function _check_bitarray_consistency(B::BitArray{N}) where N
     n == 0 && return true
     Bc[end] & Base._msk_end(n) == Bc[end] || (@warn("Nonzero bits in chunk after `BitArray` end"); return false)
     return true
-end
-
-# 0.7 deprecations
-
-begin
-    approx_full(x::AbstractArray) = x
-    approx_full(x::Number) = x
-    approx_full(x) = full(x)
-
-    function test_approx_eq(va, vb, Eps, astr, bstr)
-        va = approx_full(va)
-        vb = approx_full(vb)
-        la, lb = length(LinearIndices(va)), length(LinearIndices(vb))
-        if la != lb
-            error("lengths of ", astr, " and ", bstr, " do not match: ",
-                "\n  ", astr, " (length $la) = ", va,
-                "\n  ", bstr, " (length $lb) = ", vb)
-        end
-        diff = real(zero(eltype(va)))
-        for (xa, xb) = zip(va, vb)
-            if isfinite(xa) && isfinite(xb)
-                diff = max(diff, abs(xa-xb))
-            elseif !isequal(xa,xb)
-                error("mismatch of non-finite elements: ",
-                    "\n  ", astr, " = ", va,
-                    "\n  ", bstr, " = ", vb)
-            end
-        end
-
-        if !isnan(Eps) && !(diff <= Eps)
-            sdiff = string("|", astr, " - ", bstr, "| <= ", Eps)
-            error("assertion failed: ", sdiff,
-                "\n  ", astr, " = ", va,
-                "\n  ", bstr, " = ", vb,
-                "\n  difference = ", diff, " > ", Eps)
-        end
-    end
-
-    array_eps(a::AbstractArray{Complex{T}}) where {T} = eps(float(maximum(x->(isfinite(x) ? abs(x) : T(NaN)), a)))
-    array_eps(a) = eps(float(maximum(x->(isfinite(x) ? abs(x) : oftype(x,NaN)), a)))
-
-    test_approx_eq(va, vb, astr, bstr) =
-        test_approx_eq(va, vb, 1E4*length(LinearIndices(va))*max(array_eps(va), array_eps(vb)), astr, bstr)
 end
 
 include("logging.jl")

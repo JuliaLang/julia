@@ -48,7 +48,7 @@ JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
 void jl_init_main_module(void)
 {
     assert(jl_main_module == NULL);
-    jl_main_module = jl_new_module(jl_symbol("Main"));
+    jl_main_module = jl_new_module(jl_symbol("Main"), NULL);
     jl_main_module->parent = jl_main_module;
     jl_set_const(jl_main_module, jl_symbol("Core"),
                  (jl_value_t*)jl_core_module);
@@ -134,7 +134,8 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         jl_type_error("module", (jl_value_t*)jl_symbol_type, (jl_value_t*)name);
     }
 
-    jl_module_t *newm = jl_new_module(name);
+    int is_parent__toplevel__ = jl_is__toplevel__mod(parent_module);
+    jl_module_t *newm = jl_new_module(name, is_parent__toplevel__ ? NULL : parent_module);
     jl_value_t *form = (jl_value_t*)newm;
     JL_GC_PUSH1(&form);
     JL_LOCK(&jl_modules_mutex);
@@ -145,7 +146,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
 
     // copy parent environment info into submodule
     newm->uuid = parent_module->uuid;
-    if (jl_is__toplevel__mod(parent_module)) {
+    if (is_parent__toplevel__) {
         newm->parent = newm;
         jl_register_root_module(newm);
         if (jl_options.incremental) {
@@ -153,9 +154,8 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         }
     }
     else {
-        newm->parent = parent_module;
-        jl_binding_t *b = jl_get_binding_wr(parent_module, name, 1);
-        jl_declare_constant(b);
+        jl_binding_t *b = jl_get_binding_wr(parent_module, name);
+        jl_declare_constant(b, parent_module, name);
         jl_value_t *old = NULL;
         if (!jl_atomic_cmpswap(&b->value, &old, (jl_value_t*)newm)) {
             if (!jl_is_module(old)) {
@@ -208,17 +208,17 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
 #if 0
     // some optional post-processing steps
     size_t i;
-    void **table = newm->bindings.table;
-    for(i=1; i < newm->bindings.size; i+=2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
+    jl_svec_t *table = jl_atomic_load_relaxed(&newm->bindings);
+    for (size_t i = 0; i < jl_svec_len(table); i++) {
+        jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
+        if ((void*)b != jl_nothing) {
             // remove non-exported macros
             if (jl_symbol_name(b->name)[0]=='@' &&
-                !b->exportp && b->owner == newm)
+                !b->exportp && b->owner == b)
                 b->value = NULL;
             // error for unassigned exports
             /*
-            if (b->exportp && b->owner==newm && b->value==NULL)
+            if (b->exportp && b->owner==b && b->value==NULL)
                 jl_errorf("identifier %s exported from %s is not initialized",
                           jl_symbol_name(b->name), jl_symbol_name(newm->name));
             */
@@ -314,7 +314,7 @@ void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type) {
             gs = (jl_sym_t*)arg;
         }
         if (!jl_binding_resolved_p(gm, gs)) {
-            jl_binding_t *b = jl_get_binding_wr(gm, gs, 1);
+            jl_binding_t *b = jl_get_binding_wr(gm, gs);
             if (set_type) {
                 jl_value_t *old_ty = NULL;
                 // maybe set the type too, perhaps
@@ -340,7 +340,7 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
     return jl_top_module;
 }
 
-static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs, int *has_opaque)
+static void expr_attributes(jl_value_t *v, int *has_ccall, int *has_defs, int *has_opaque)
 {
     if (!jl_is_expr(v))
         return;
@@ -364,11 +364,11 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs, i
         *has_defs = 1;
     }
     else if (head == jl_cfunction_sym) {
-        *has_intrinsics = 1;
+        *has_ccall = 1;
         return;
     }
     else if (head == jl_foreigncall_sym) {
-        *has_intrinsics = 1;
+        *has_ccall = 1;
         return;
     }
     else if (head == jl_new_opaque_closure_sym) {
@@ -393,7 +393,7 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs, i
         }
         if (called != NULL) {
             if (jl_is_intrinsic(called) && jl_unbox_int32(called) == (int)llvmcall) {
-                *has_intrinsics = 1;
+                *has_ccall = 1;
             }
             if (called == jl_builtin__typebody) {
                 *has_defs = 1;
@@ -405,28 +405,28 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs, i
     for (i = 0; i < jl_array_len(e->args); i++) {
         jl_value_t *a = jl_exprarg(e, i);
         if (jl_is_expr(a))
-            expr_attributes(a, has_intrinsics, has_defs, has_opaque);
+            expr_attributes(a, has_ccall, has_defs, has_opaque);
     }
 }
 
-int jl_code_requires_compiler(jl_code_info_t *src)
+int jl_code_requires_compiler(jl_code_info_t *src, int include_force_compile)
 {
     jl_array_t *body = src->code;
     assert(jl_typeis(body, jl_array_any_type));
     size_t i;
-    int has_intrinsics = 0, has_defs = 0, has_opaque = 0;
-    if (jl_has_meta(body, jl_force_compile_sym))
+    int has_ccall = 0, has_defs = 0, has_opaque = 0;
+    if (include_force_compile && jl_has_meta(body, jl_force_compile_sym))
         return 1;
     for(i=0; i < jl_array_len(body); i++) {
         jl_value_t *stmt = jl_array_ptr_ref(body,i);
-        expr_attributes(stmt, &has_intrinsics, &has_defs, &has_opaque);
-        if (has_intrinsics)
+        expr_attributes(stmt, &has_ccall, &has_defs, &has_opaque);
+        if (has_ccall)
             return 1;
     }
     return 0;
 }
 
-static void body_attributes(jl_array_t *body, int *has_intrinsics, int *has_defs, int *has_loops, int *has_opaque, int *forced_compile)
+static void body_attributes(jl_array_t *body, int *has_ccall, int *has_defs, int *has_loops, int *has_opaque, int *forced_compile)
 {
     size_t i;
     *has_loops = 0;
@@ -442,7 +442,7 @@ static void body_attributes(jl_array_t *body, int *has_intrinsics, int *has_defs
                     *has_loops = 1;
             }
         }
-        expr_attributes(stmt, has_intrinsics, has_defs, has_opaque);
+        expr_attributes(stmt, has_ccall, has_defs, has_opaque);
     }
     *forced_compile = jl_has_meta(body, jl_force_compile_sym);
 }
@@ -579,7 +579,7 @@ int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
 static jl_method_instance_t *method_instance_for_thunk(jl_code_info_t *src, jl_module_t *module)
 {
     jl_method_instance_t *li = jl_new_method_instance_uninit();
-    li->uninferred = (jl_value_t*)src;
+    jl_atomic_store_relaxed(&li->uninferred, (jl_value_t*)src);
     li->specTypes = (jl_value_t*)jl_emptytuple_type;
     li->def.module = module;
     return li;
@@ -589,25 +589,22 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
 {
     assert(m);
     jl_sym_t *name = asname ? asname : import->name;
-    jl_binding_t *b;
-    if (jl_binding_resolved_p(m, name)) {
-        b = jl_get_binding(m, name);
-        jl_value_t *bv = jl_atomic_load_relaxed(&b->value);
-        if ((!b->constp && b->owner != m) || (bv && bv != (jl_value_t*)import)) {
+    // TODO: this is a bit race-y with what error message we might print
+    jl_binding_t *b = jl_get_module_binding(m, name, 0);
+    jl_binding_t *b2;
+    if (b != NULL && (b2 = jl_atomic_load_relaxed(&b->owner)) != NULL) {
+        if (b2->constp && jl_atomic_load_relaxed(&b2->value) == (jl_value_t*)import)
+            return;
+        if (b2 != b)
             jl_errorf("importing %s into %s conflicts with an existing global",
                       jl_symbol_name(name), jl_symbol_name(m->name));
-        }
     }
     else {
-        b = jl_get_binding_wr(m, name, 1);
-        b->imported = 1;
+        b = jl_get_binding_wr(m, name);
     }
-    if (!b->constp) {
-        // TODO: constp is not threadsafe
-        jl_atomic_store_release(&b->value, (jl_value_t*)import);
-        b->constp = 1;
-        jl_gc_wb(m, (jl_value_t*)import);
-    }
+    jl_declare_constant(b, m, name);
+    jl_checked_assignment(b, m, name, (jl_value_t*)import);
+    b->imported = 1;
 }
 
 // in `import A.B: x, y, ...`, evaluate the `A.B` part if it exists
@@ -844,8 +841,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
             gm = m;
             gs = (jl_sym_t*)arg;
         }
-        jl_binding_t *b = jl_get_binding_wr(gm, gs, 1);
-        jl_declare_constant(b);
+        jl_binding_t *b = jl_get_binding_wr(gm, gs);
+        jl_declare_constant(b, gm, gs);
         JL_GC_POP();
         return jl_nothing;
     }
@@ -874,16 +871,17 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         return (jl_value_t*)ex;
     }
 
-    int has_intrinsics = 0, has_defs = 0, has_loops = 0, has_opaque = 0, forced_compile = 0;
+    int has_ccall = 0, has_defs = 0, has_loops = 0, has_opaque = 0, forced_compile = 0;
     assert(head == jl_thunk_sym);
     thk = (jl_code_info_t*)jl_exprarg(ex, 0);
-    assert(jl_is_code_info(thk));
-    assert(jl_typeis(thk->code, jl_array_any_type));
-    body_attributes((jl_array_t*)thk->code, &has_intrinsics, &has_defs, &has_loops, &has_opaque, &forced_compile);
+    if (!jl_is_code_info(thk) || !jl_typeis(thk->code, jl_array_any_type)) {
+        jl_eval_errorf(m, "malformed \"thunk\" statement");
+    }
+    body_attributes((jl_array_t*)thk->code, &has_ccall, &has_defs, &has_loops, &has_opaque, &forced_compile);
 
     jl_value_t *result;
-    if (forced_compile || has_intrinsics ||
-            (!has_defs && fast && has_loops &&
+    if (has_ccall ||
+            ((forced_compile || (!has_defs && fast && has_loops)) &&
             jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF &&
             jl_options.compile_enabled != JL_OPTIONS_COMPILE_MIN &&
             jl_get_module_compile(m) != JL_OPTIONS_COMPILE_OFF &&

@@ -153,12 +153,12 @@ function _getenv_include_thread_unsafe()
 end
 const _env_include_thread_unsafe = _getenv_include_thread_unsafe()
 function include_thread_unsafe_tests()
-    if Threads.nthreads() > 1
+    if Threads.maxthreadid() > 1
         if _env_include_thread_unsafe
             return true
         end
-        msg = "Skipping a thread-unsafe test because `Threads.nthreads() > 1`"
-        @warn msg Threads.nthreads()
+        msg = "Skipping a thread-unsafe test because `Threads.maxthreadid() > 1`"
+        @warn msg Threads.maxthreadid()
         Test.@test_broken false
         return false
     end
@@ -302,7 +302,7 @@ end
 
 # Tests for issue #23109 - should not hang.
 f = @spawnat :any rand(1, 1)
-@Base.Experimental.sync begin
+Base.Experimental.@sync begin
     for _ in 1:10
         @async fetch(f)
     end
@@ -310,7 +310,7 @@ end
 
 wid1, wid2 = workers()[1:2]
 f = @spawnat wid1 rand(1,1)
-@Base.Experimental.sync begin
+Base.Experimental.@sync begin
     @async fetch(f)
     @async remotecall_fetch(()->fetch(f), wid2)
 end
@@ -681,7 +681,7 @@ clear!(wp)
 # - ssh addprocs requires sshd to be running locally with passwordless login enabled.
 # The test block is enabled by defining env JULIA_TESTFULL=1
 
-DoFullTest = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+DoFullTest = Base.get_bool_env("JULIA_TESTFULL", false)
 
 if DoFullTest
     println("Testing exception printing on remote worker from a `remote_do` call")
@@ -993,7 +993,7 @@ end
 let
     @test_throws RemoteException remotecall_fetch(()->LocalFoo.foo, 2)
 
-    bad_thunk = ()->NonexistantModule.f()
+    bad_thunk = ()->NonexistentModule.f()
     @test_throws RemoteException remotecall_fetch(bad_thunk, 2)
 
     # Test that the stream is still usable

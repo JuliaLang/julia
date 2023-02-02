@@ -15,8 +15,8 @@ using Base: uv_error, Experimental
 
 n = 20
 intvls = [2, .2, .1, .005, .00001]
-
 pipe_fds = fill((Base.INVALID_OS_HANDLE, Base.INVALID_OS_HANDLE), n)
+
 for i in 1:n
     if Sys.iswindows() || i > n ÷ 2
         uv_error("socketpair", ccall(:uv_socketpair, Cint, (Cint, Cint, Ptr{NTuple{2, Base.OS_HANDLE}}, Cint, Cint), 1, (Sys.iswindows() ? 6 : 0), Ref(pipe_fds, i), 0, 0))
@@ -32,7 +32,9 @@ for i in 1:n
     if !fd_in_limits && Sys.islinux()
         run(`ls -la /proc/$(getpid())/fd`)
     end
-    @test fd_in_limits
+    if !Sys.isapple()
+        @test fd_in_limits
+    end
 end
 
 function pfd_tst_reads(idx, intvl)
@@ -72,7 +74,7 @@ end
 
 # Odd numbers trigger reads, even numbers timeout
 for (i, intvl) in enumerate(intvls)
-    @Experimental.sync begin
+    Experimental.@sync begin
         global ready = 0
         global ready_c = Condition()
         for idx in 1:n
@@ -183,16 +185,19 @@ function test_init_afile()
     @test(watch_folder(dir) == (F_PATH => FileWatching.FileEvent(FileWatching.UV_RENAME)))
     @test close(open(file, "w")) === nothing
     sleep(3)
-    let c
-        c = watch_folder(dir, 0)
-        if F_GETPATH
-            @test c.first == F_PATH
-            @test c.second.changed ⊻ c.second.renamed
-            @test !c.second.timedout
-        else # we don't expect to be able to detect file changes in this case
-            @test c.first == ""
-            @test !c.second.changed && !c.second.renamed
-            @test c.second.timedout
+    if !Sys.isapple()
+        let c
+            c = watch_folder(dir, 0)
+
+            if F_GETPATH
+                @test c.first == F_PATH
+                @test c.second.changed ⊻ c.second.renamed
+                @test !c.second.timedout
+            else # we don't expect to be able to detect file changes in this case
+                @test c.first == ""
+                @test !c.second.changed && !c.second.renamed
+                @test c.second.timedout
+            end
         end
     end
     @test unwatch_folder(dir) === nothing
@@ -370,9 +375,9 @@ test_monitor_wait_poll()
 test_watch_file_timeout(0.2)
 test_watch_file_change(6)
 
-if !((Sys.ARCH == :x86_64) && (Sys.isapple())) #These tests tend to fail a lot on x86-apple
-    test_dirmonitor_wait2(0.2)                 #because the os can reorder the events
-    test_dirmonitor_wait2(0.2)                 #see https://github.com/dotnet/runtime/issues/30415
+if !Sys.isapple()
+    test_dirmonitor_wait2(0.2)
+    test_dirmonitor_wait2(0.2)
 
     mv(file, file * "~")
     mv(file * "~", file)

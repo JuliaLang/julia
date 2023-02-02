@@ -10,7 +10,7 @@ sysimg-bc: $(build_private_libdir)/sys-bc.a
 sysimg-release: $(build_private_libdir)/sys.$(SHLIB_EXT)
 sysimg-debug: $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
 
-VERSDIR := v`cut -d. -f1-2 < $(JULIAHOME)/VERSION`
+VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
 
 $(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%-o.a
 	@$(call PRINT_LINK, $(CXX) $(LDFLAGS) -shared $(fPIC) -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ \
@@ -54,7 +54,7 @@ COMPILER_SRCS += $(shell find $(JULIAHOME)/base/compiler -name \*.jl)
 BASE_SRCS := $(sort $(shell find $(JULIAHOME)/base -name \*.jl -and -not -name sysimg.jl) \
                     $(shell find $(BUILDROOT)/base -name \*.jl  -and -not -name sysimg.jl))
 STDLIB_SRCS := $(JULIAHOME)/base/sysimg.jl $(shell find $(build_datarootdir)/julia/stdlib/$(VERSDIR)/*/src -name \*.jl) \
-                    $(build_prefix)/manifest/Pkg
+                    $(wildcard $(build_prefix)/manifest/$(VERSDIR)/*)
 RELBUILDROOT := $(call rel_path,$(JULIAHOME)/base,$(BUILDROOT)/base)/ # <-- make sure this always has a trailing slash
 
 $(build_private_libdir)/corecompiler.ji: $(COMPILER_SRCS)

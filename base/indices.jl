@@ -476,7 +476,7 @@ struct LinearIndices{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{Int
     indices::R
 end
 convert(::Type{LinearIndices{N,R}}, inds::LinearIndices{N}) where {N,R<:NTuple{N,AbstractUnitRange{Int}}} =
-    LinearIndices{N,R}(convert(R, inds.indices))
+    LinearIndices{N,R}(convert(R, inds.indices))::LinearIndices{N,R}
 
 LinearIndices(::Tuple{}) = LinearIndices{0,typeof(())}(())
 LinearIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} =

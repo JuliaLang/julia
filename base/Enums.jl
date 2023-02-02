@@ -17,7 +17,7 @@ abstract type Enum{T<:Integer} end
 basetype(::Type{<:Enum{T}}) where {T<:Integer} = T
 
 (::Type{T})(x::Enum{T2}) where {T<:Integer,T2<:Integer} = T(bitcast(T2, x))::T
-Base.cconvert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer} = T(x)
+Base.cconvert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer} = T(x)::T
 Base.write(io::IO, x::Enum{T}) where {T<:Integer} = write(io, T(x))
 Base.read(io::IO, ::Type{T}) where {T<:Enum} = T(read(io, basetype(T)))
 
@@ -37,7 +37,7 @@ function Base.show(io::IO, x::Enum)
     sym = _symbol(x)
     if !(get(io, :compact, false)::Bool)
         from = get(io, :module, Base.active_module())
-        def = typeof(x).name.module
+        def = parentmodule(typeof(x))
         if from === nothing || !Base.isvisible(sym, def, from)
             show(io, def)
             print(io, ".")

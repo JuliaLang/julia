@@ -164,7 +164,7 @@ div12(x, y) = div12(promote(x, y)...)
 A number with twice the precision of `T`, e.g., quad-precision if `T =
 Float64`.
 
-!!! warn
+!!! warning
     `TwicePrecision` is an internal type used to increase the
     precision of floating-point ranges, and not intended for external use.
     If you encounter them in real code, the most likely explanation is
@@ -254,7 +254,7 @@ nbitslen(::Type{T}, len, offset) where {T<:IEEEFloat} =
     min(cld(precision(T), 2), nbitslen(len, offset))
 # The +1 here is for safety, because the precision of the significand
 # is 1 bit higher than the number that are explicitly stored.
-nbitslen(len, offset) = len < 2 ? 0 : ceil(Int, log2(max(offset-1, len-offset))) + 1
+nbitslen(len, offset) = len < 2 ? 0 : top_set_bit(max(offset-1, len-offset) - 1) + 1
 
 eltype(::Type{TwicePrecision{T}}) where {T} = T
 
@@ -268,10 +268,10 @@ TwicePrecision{T}(x::Number) where {T} = TwicePrecision{T}(T(x), zero(T))
 
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision{T}) where {T} = x
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision) where {T} =
-    TwicePrecision{T}(convert(T, x.hi), convert(T, x.lo))
+    TwicePrecision{T}(convert(T, x.hi), convert(T, x.lo))::TwicePrecision{T}
 
-convert(::Type{T}, x::TwicePrecision) where {T<:Number} = T(x)
-convert(::Type{TwicePrecision{T}}, x::Number) where {T} = TwicePrecision{T}(x)
+convert(::Type{T}, x::TwicePrecision) where {T<:Number} = T(x)::T
+convert(::Type{TwicePrecision{T}}, x::Number) where {T} = TwicePrecision{T}(x)::TwicePrecision{T}
 
 float(x::TwicePrecision{<:AbstractFloat}) = x
 float(x::TwicePrecision) = TwicePrecision(float(x.hi), float(x.lo))
@@ -310,7 +310,7 @@ function *(x::TwicePrecision, v::Number)
 end
 function *(x::TwicePrecision{<:IEEEFloat}, v::Integer)
     v == 0 && return TwicePrecision(x.hi*v, x.lo*v)
-    nb = ceil(Int, log2(abs(v)))
+    nb = top_set_bit(abs(v)-1)
     u = truncbits(x.hi, nb)
     TwicePrecision(canonicalize2(u*v, ((x.hi-u) + x.lo)*v)...)
 end

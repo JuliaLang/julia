@@ -190,8 +190,8 @@ end
 
 @testset "sprint with context" begin
     function f(io::IO)
-        println(io, "compact => ", get(io, :compact, false))
-        println(io, "limit   => ", get(io, :limit,   false))
+        println(io, "compact => ", get(io, :compact, false)::Bool)
+        println(io, "limit   => ", get(io, :limit,   false)::Bool)
     end
 
     str = sprint(f)
@@ -217,6 +217,10 @@ end
         compact => true
         limit   => true
         """
+end
+
+@testset "sprint honoring IOContext" begin
+    @test startswith(sprint(show, Base.Dict[], context=(:compact=>false, :module=>nothing)), "Base.Dict")
 end
 
 @testset "#11659" begin

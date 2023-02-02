@@ -19,7 +19,8 @@
 
 #include <llvm/Target/TargetMachine.h>
 #include "julia_assert.h"
-#include "debug-registry.h"
+#include "julia.h"
+#include "julia_internal.h"
 #include "platform.h"
 
 #include <stack>
@@ -41,7 +42,9 @@
 // and feature support (e.g. Windows, JITEventListeners for various profilers,
 // etc.). Thus, we currently only use JITLink where absolutely required, that is,
 // for Mac/aarch64.
-#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+// #define JL_FORCE_JITLINK
+
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_) || defined(JL_FORCE_JITLINK)
 # if JL_LLVM_VERSION < 130000
 #  pragma message("On aarch64-darwin, LLVM version >= 13 is required for JITLink; fallback suffers from occasional segfaults")
 # endif
@@ -62,25 +65,29 @@ extern "C" jl_cgparams_t jl_default_cgparams;
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeContext, LLVMOrcThreadSafeContextRef)
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeModule, LLVMOrcThreadSafeModuleRef)
 
-void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis);
-void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false, bool external_use=false);
-void addMachinePasses(legacy::PassManagerBase *PM, int optlevel);
-void jl_finalize_module(orc::ThreadSafeModule  m);
-void jl_merge_module(orc::ThreadSafeModule &dest, orc::ThreadSafeModule src);
-GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M);
-DataLayout jl_create_datalayout(TargetMachine &TM);
+void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis) JL_NOTSAFEPOINT;
+void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false, bool external_use=false) JL_NOTSAFEPOINT;
+void addMachinePasses(legacy::PassManagerBase *PM, int optlevel) JL_NOTSAFEPOINT;
+void jl_merge_module(orc::ThreadSafeModule &dest, orc::ThreadSafeModule src) JL_NOTSAFEPOINT;
+GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M) JL_NOTSAFEPOINT;
+DataLayout jl_create_datalayout(TargetMachine &TM) JL_NOTSAFEPOINT;
 
-static inline bool imaging_default() {
-    return jl_options.image_codegen || (jl_generating_output() && !jl_options.incremental);
+static inline bool imaging_default() JL_NOTSAFEPOINT {
+    return jl_options.image_codegen || (jl_generating_output() && jl_options.use_pkgimages);
 }
 
 struct OptimizationOptions {
     bool lower_intrinsics;
     bool dump_native;
     bool external_use;
+    bool llvm_only;
 
-    static constexpr OptimizationOptions defaults() {
-        return {true, false, false};
+    static constexpr OptimizationOptions defaults(
+        bool lower_intrinsics=true,
+        bool dump_native=false,
+        bool external_use=false,
+        bool llvm_only=false) {
+        return {lower_intrinsics, dump_native, external_use, llvm_only};
     }
 };
 
@@ -92,9 +99,10 @@ struct NewPM {
     ModulePassManager MPM;
     OptimizationLevel O;
 
-    NewPM(std::unique_ptr<TargetMachine> TM, OptimizationLevel O, OptimizationOptions options = OptimizationOptions::defaults());
+    NewPM(std::unique_ptr<TargetMachine> TM, OptimizationLevel O, OptimizationOptions options = OptimizationOptions::defaults()) JL_NOTSAFEPOINT;
+    ~NewPM() JL_NOTSAFEPOINT;
 
-    void run(Module &M);
+    void run(Module &M) JL_NOTSAFEPOINT;
 };
 
 struct AnalysisManagers {
@@ -103,36 +111,48 @@ struct AnalysisManagers {
     CGSCCAnalysisManager CGAM;
     ModuleAnalysisManager MAM;
 
-    AnalysisManagers(PassBuilder &PB);
-    AnalysisManagers(TargetMachine &TM, PassBuilder &PB, OptimizationLevel O);
+    AnalysisManagers(PassBuilder &PB) JL_NOTSAFEPOINT;
+    AnalysisManagers(TargetMachine &TM, PassBuilder &PB, OptimizationLevel O) JL_NOTSAFEPOINT;
+    ~AnalysisManagers() JL_NOTSAFEPOINT;
 };
 
-OptimizationLevel getOptLevel(int optlevel);
+OptimizationLevel getOptLevel(int optlevel) JL_NOTSAFEPOINT;
 
 struct jl_locked_stream {
-    JL_STREAM *stream = nullptr;
+    ios_t *stream = nullptr;
     std::mutex mutex;
 
     struct lock {
         std::unique_lock<std::mutex> lck;
-        JL_STREAM *&stream;
+        ios_t *&stream;
 
-        lock(std::mutex &mutex, JL_STREAM *&stream) : lck(mutex), stream(stream) {}
+        lock(std::mutex &mutex, ios_t *&stream) JL_NOTSAFEPOINT
+            : lck(mutex), stream(stream) {}
+        lock(lock&) = delete;
+        lock(lock&&) JL_NOTSAFEPOINT = default;
+        ~lock() JL_NOTSAFEPOINT = default;
 
-        JL_STREAM *&operator*() {
+        ios_t *&operator*() JL_NOTSAFEPOINT {
             return stream;
         }
 
-        explicit operator bool() {
+        explicit operator bool() JL_NOTSAFEPOINT {
             return !!stream;
         }
 
-        operator JL_STREAM *() {
+        operator ios_t *() JL_NOTSAFEPOINT {
             return stream;
+        }
+
+        operator JL_STREAM *() JL_NOTSAFEPOINT {
+            return (JL_STREAM*)stream;
         }
     };
 
-    lock operator*() {
+    jl_locked_stream() JL_NOTSAFEPOINT = default;
+    ~jl_locked_stream() JL_NOTSAFEPOINT = default;
+
+    lock operator*() JL_NOTSAFEPOINT {
         return lock(mutex, stream);
     }
 };
@@ -162,10 +182,15 @@ typedef std::tuple<jl_returninfo_t::CallingConv, unsigned, llvm::Function*, bool
 typedef struct _jl_codegen_params_t {
     orc::ThreadSafeContext tsctx;
     orc::ThreadSafeContext::Lock tsctx_lock;
+
+    inline LLVMContext &getContext() {
+        return *tsctx.getContext();
+    }
     typedef StringMap<GlobalVariable*> SymMapGV;
     // outputs
     std::vector<std::pair<jl_code_instance_t*, jl_codegen_call_target_t>> workqueue;
     std::map<void*, GlobalVariable*> globals;
+    std::map<std::tuple<jl_code_instance_t*,bool>, Function*> external_fns;
     std::map<jl_datatype_t*, DIType*> ditypes;
     std::map<jl_datatype_t*, Type*> llvmtypes;
     DenseMap<Constant*, GlobalVariable*> mergedConstants;
@@ -187,12 +212,13 @@ typedef struct _jl_codegen_params_t {
     DenseMap<AttributeList, std::map<
         std::tuple<GlobalVariable*, FunctionType*, CallingConv::ID>,
         GlobalVariable*>> allPltMap;
-    orc::ThreadSafeModule _shared_module;
-    inline orc::ThreadSafeModule &shared_module(Module &from);
+    std::unique_ptr<Module> _shared_module;
+    inline Module &shared_module(Module &from);
     // inputs
     size_t world = 0;
     const jl_cgparams_t *params = &jl_default_cgparams;
     bool cache = false;
+    bool external_linkage = false;
     bool imaging;
     _jl_codegen_params_t(orc::ThreadSafeContext ctx) : tsctx(std::move(ctx)), tsctx_lock(tsctx.getLock()), imaging(imaging_default()) {}
 } jl_codegen_params_t;
@@ -213,7 +239,6 @@ jl_llvm_functions_t jl_emit_codeinst(
 enum CompilationPolicy {
     Default = 0,
     Extern = 1,
-    ImagingMode = 2
 };
 
 typedef std::map<jl_code_instance_t*, std::pair<orc::ThreadSafeModule, jl_llvm_functions_t>> jl_workqueue_t;
@@ -227,9 +252,9 @@ void jl_compile_workqueue(
 Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tupletype_t *argt,
     jl_codegen_params_t &params);
 
-void add_named_global(StringRef name, void *addr);
+void add_named_global(StringRef name, void *addr) JL_NOTSAFEPOINT;
 
-static inline Constant *literal_static_pointer_val(const void *p, Type *T)
+static inline Constant *literal_static_pointer_val(const void *p, Type *T) JL_NOTSAFEPOINT
 {
     // this function will emit a static pointer into the generated code
     // the generated code will only be valid during the current session,
@@ -262,6 +287,22 @@ public:
 #else
     typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
 #endif
+    struct LockLayerT : public orc::ObjectLayer {
+
+        LockLayerT(orc::ObjectLayer &BaseLayer) JL_NOTSAFEPOINT : orc::ObjectLayer(BaseLayer.getExecutionSession()), BaseLayer(BaseLayer) {}
+        ~LockLayerT() JL_NOTSAFEPOINT = default;
+
+        void emit(std::unique_ptr<orc::MaterializationResponsibility> R,
+                            std::unique_ptr<MemoryBuffer> O) override {
+#ifndef JL_USE_JITLINK
+            std::lock_guard<std::mutex> lock(EmissionMutex);
+#endif
+            BaseLayer.emit(std::move(R), std::move(O));
+        }
+    private:
+        orc::ObjectLayer &BaseLayer;
+        std::mutex EmissionMutex;
+    };
     typedef orc::IRCompileLayer CompileLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
@@ -276,44 +317,49 @@ public:
     >
     struct ResourcePool {
         public:
-        ResourcePool(std::function<ResourceT()> creator) : creator(std::move(creator)), mutex(std::make_unique<WNMutex>()) {}
+        ResourcePool(std::function<ResourceT()> creator) JL_NOTSAFEPOINT : creator(std::move(creator)), mutex(std::make_unique<WNMutex>()) {}
+        ResourcePool(ResourcePool&) = delete;
+        ResourcePool(ResourcePool&&) JL_NOTSAFEPOINT = default;
+        ~ResourcePool() JL_NOTSAFEPOINT = default;
         class OwningResource {
             public:
-            OwningResource(ResourcePool &pool, ResourceT resource) : pool(pool), resource(std::move(resource)) {}
+            OwningResource(ResourcePool &pool, ResourceT resource) JL_NOTSAFEPOINT // _ENTER
+                : pool(pool), resource(std::move(resource)) {}
             OwningResource(const OwningResource &) = delete;
             OwningResource &operator=(const OwningResource &) = delete;
-            OwningResource(OwningResource &&) = default;
-            OwningResource &operator=(OwningResource &&) = default;
-            ~OwningResource() {
-                if (resource) pool.release(std::move(*resource));
+            OwningResource(OwningResource &&) JL_NOTSAFEPOINT = default;
+            OwningResource &operator=(OwningResource &&) JL_NOTSAFEPOINT = default;
+            ~OwningResource() JL_NOTSAFEPOINT { // _LEAVE
+                if (resource)
+                    pool.release(std::move(*resource));
             }
-            ResourceT release() {
+            ResourceT release() JL_NOTSAFEPOINT {
                 ResourceT res(std::move(*resource));
                 resource.reset();
                 return res;
             }
-            void reset(ResourceT res) {
+            void reset(ResourceT res) JL_NOTSAFEPOINT {
                 *resource = std::move(res);
             }
-            ResourceT &operator*() {
+            ResourceT &operator*() JL_NOTSAFEPOINT {
                 return *resource;
             }
-            ResourceT *operator->() {
+            ResourceT *operator->() JL_NOTSAFEPOINT {
                 return get();
             }
-            ResourceT *get() {
+            ResourceT *get() JL_NOTSAFEPOINT {
                 return resource.getPointer();
             }
-            const ResourceT &operator*() const {
+            const ResourceT &operator*() const JL_NOTSAFEPOINT {
                 return *resource;
             }
-            const ResourceT *operator->() const {
+            const ResourceT *operator->() const JL_NOTSAFEPOINT {
                 return get();
             }
-            const ResourceT *get() const {
+            const ResourceT *get() const JL_NOTSAFEPOINT {
                 return resource.getPointer();
             }
-            explicit operator bool() const {
+            explicit operator bool() const JL_NOTSAFEPOINT {
                 return resource;
             }
             private:
@@ -321,7 +367,7 @@ public:
             llvm::Optional<ResourceT> resource;
         };
 
-        OwningResource operator*() {
+        OwningResource operator*() JL_NOTSAFEPOINT {
             return OwningResource(*this, acquire());
         }
 
@@ -329,7 +375,7 @@ public:
             return **this;
         }
 
-        ResourceT acquire() {
+        ResourceT acquire() JL_NOTSAFEPOINT { // _ENTER
             std::unique_lock<std::mutex> lock(mutex->mutex);
             if (!pool.empty()) {
                 return pop(pool);
@@ -342,20 +388,20 @@ public:
             assert(!pool.empty() && "Expected resource pool to have a value!");
             return pop(pool);
         }
-        void release(ResourceT &&resource) {
+        void release(ResourceT &&resource) JL_NOTSAFEPOINT { // _LEAVE
             std::lock_guard<std::mutex> lock(mutex->mutex);
             pool.push(std::move(resource));
             mutex->empty.notify_one();
         }
         private:
         template<typename T, typename Container>
-        static ResourceT pop(std::queue<T, Container> &pool) {
+        static ResourceT pop(std::queue<T, Container> &pool) JL_NOTSAFEPOINT {
             ResourceT top = std::move(pool.front());
             pool.pop();
             return top;
         }
         template<typename PoolT>
-        static ResourceT pop(PoolT &pool) {
+        static ResourceT pop(PoolT &pool) JL_NOTSAFEPOINT {
             ResourceT top = std::move(pool.top());
             pool.pop();
             return top;
@@ -379,13 +425,14 @@ public:
     struct OptSelLayerT : orc::IRLayer {
 
         template<size_t N>
-        OptSelLayerT(const std::array<std::unique_ptr<PipelineT>, N> &optimizers)
+        OptSelLayerT(const std::array<std::unique_ptr<PipelineT>, N> &optimizers) JL_NOTSAFEPOINT
             : orc::IRLayer(optimizers[0]->OptimizeLayer.getExecutionSession(),
                 optimizers[0]->OptimizeLayer.getManglingOptions()),
             optimizers(optimizers.data()),
             count(N) {
             static_assert(N > 0, "Expected array with at least one optimizer!");
         }
+        ~OptSelLayerT() JL_NOTSAFEPOINT = default;
 
         void emit(std::unique_ptr<orc::MaterializationResponsibility> R, orc::ThreadSafeModule TSM) override;
 
@@ -401,48 +448,45 @@ private:
 
 public:
 
-    JuliaOJIT();
+    JuliaOJIT() JL_NOTSAFEPOINT;
+    ~JuliaOJIT() JL_NOTSAFEPOINT;
 
-    void enableJITDebuggingSupport();
+    void enableJITDebuggingSupport() JL_NOTSAFEPOINT;
 #ifndef JL_USE_JITLINK
     // JITLink doesn't support old JITEventListeners (yet).
-    void RegisterJITEventListener(JITEventListener *L);
+    void RegisterJITEventListener(JITEventListener *L) JL_NOTSAFEPOINT;
 #endif
 
-    orc::SymbolStringPtr mangle(StringRef Name);
-    void addGlobalMapping(StringRef Name, uint64_t Addr);
-    void addModule(orc::ThreadSafeModule M);
+    orc::SymbolStringPtr mangle(StringRef Name) JL_NOTSAFEPOINT;
+    void addGlobalMapping(StringRef Name, uint64_t Addr) JL_NOTSAFEPOINT;
+    void addModule(orc::ThreadSafeModule M) JL_NOTSAFEPOINT;
 
-    JL_JITSymbol findSymbol(StringRef Name, bool ExportedSymbolsOnly);
-    JL_JITSymbol findUnmangledSymbol(StringRef Name);
-    uint64_t getGlobalValueAddress(StringRef Name);
-    uint64_t getFunctionAddress(StringRef Name);
-    StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst);
-    auto getContext() {
+    JL_JITSymbol findSymbol(StringRef Name, bool ExportedSymbolsOnly) JL_NOTSAFEPOINT;
+    JL_JITSymbol findUnmangledSymbol(StringRef Name) JL_NOTSAFEPOINT;
+    uint64_t getGlobalValueAddress(StringRef Name) JL_NOTSAFEPOINT;
+    uint64_t getFunctionAddress(StringRef Name) JL_NOTSAFEPOINT;
+    StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst) JL_NOTSAFEPOINT;
+    auto getContext() JL_NOTSAFEPOINT {
         return *ContextPool;
     }
-    orc::ThreadSafeContext acquireContext() {
+    orc::ThreadSafeContext acquireContext() { // JL_NOTSAFEPOINT_ENTER?
         return ContextPool.acquire();
     }
-    void releaseContext(orc::ThreadSafeContext &&ctx) {
+    void releaseContext(orc::ThreadSafeContext &&ctx) { // JL_NOTSAFEPOINT_LEAVE?
         ContextPool.release(std::move(ctx));
     }
-    const DataLayout& getDataLayout() const;
+    const DataLayout& getDataLayout() const JL_NOTSAFEPOINT;
 
     // TargetMachine pass-through methods
-    std::unique_ptr<TargetMachine> cloneTargetMachine() const;
-    const Triple& getTargetTriple() const;
-    StringRef getTargetFeatureString() const;
-    StringRef getTargetCPU() const;
-    const TargetOptions &getTargetOptions() const;
-    const Target &getTarget() const;
-    TargetIRAnalysis getTargetIRAnalysis() const;
+    std::unique_ptr<TargetMachine> cloneTargetMachine() const JL_NOTSAFEPOINT;
+    const Triple& getTargetTriple() const JL_NOTSAFEPOINT;
+    StringRef getTargetFeatureString() const JL_NOTSAFEPOINT;
+    StringRef getTargetCPU() const JL_NOTSAFEPOINT;
+    const TargetOptions &getTargetOptions() const JL_NOTSAFEPOINT;
+    const Target &getTarget() const JL_NOTSAFEPOINT;
+    TargetIRAnalysis getTargetIRAnalysis() const JL_NOTSAFEPOINT;
 
-    size_t getTotalBytes() const;
-
-    JITDebugInfoRegistry &getDebugInfoRegistry() JL_NOTSAFEPOINT {
-        return DebugRegistry;
-    }
+    size_t getTotalBytes() const JL_NOTSAFEPOINT;
 
     jl_locked_stream &get_dump_emitted_mi_name_stream() JL_NOTSAFEPOINT {
         return dump_emitted_mi_name_stream;
@@ -454,9 +498,9 @@ public:
         return dump_llvm_opt_stream;
     }
 private:
-    std::string getMangledName(StringRef Name);
-    std::string getMangledName(const GlobalValue *GV);
-    void shareStrings(Module &M);
+    std::string getMangledName(StringRef Name) JL_NOTSAFEPOINT;
+    std::string getMangledName(const GlobalValue *GV) JL_NOTSAFEPOINT;
+    void shareStrings(Module &M) JL_NOTSAFEPOINT;
 
     const std::unique_ptr<TargetMachine> TM;
     const DataLayout DL;
@@ -464,8 +508,6 @@ private:
     orc::ExecutionSession ES;
     orc::JITDylib &GlobalJD;
     orc::JITDylib &JD;
-
-    JITDebugInfoRegistry DebugRegistry;
 
     //Map and inc are guarded by RLST_mutex
     std::mutex RLST_mutex{};
@@ -481,49 +523,57 @@ private:
 
 #ifndef JL_USE_JITLINK
     const std::shared_ptr<RTDyldMemoryManager> MemMgr;
+#else
+    std::atomic<size_t> total_size;
+    const std::unique_ptr<jitlink::JITLinkMemoryManager> MemMgr;
 #endif
     ObjLayerT ObjectLayer;
+    LockLayerT LockLayer;
     const std::array<std::unique_ptr<PipelineT>, 4> Pipelines;
     OptSelLayerT OptSelLayer;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
-orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext ctx, bool imaging_mode, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple());
-
-orc::ThreadSafeModule &jl_codegen_params_t::shared_module(Module &from) {
-    if (!_shared_module) {
-        _shared_module = jl_create_llvm_module("globals", tsctx, imaging, from.getDataLayout(), Triple(from.getTargetTriple()));
-        assert(&from.getContext() == tsctx.getContext() && "Module context differs from codegen_params context!");
-    } else {
-        assert(&from.getContext() == _shared_module.getContext().getContext() && "Module context differs from shared module context!");
-        assert(from.getDataLayout() == _shared_module.getModuleUnlocked()->getDataLayout() && "Module data layout differs from shared module data layout!");
-        assert(from.getTargetTriple() == _shared_module.getModuleUnlocked()->getTargetTriple() && "Module target triple differs from shared module target triple!");
-    }
-    return _shared_module;
+std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &ctx, bool imaging_mode, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple()) JL_NOTSAFEPOINT;
+inline orc::ThreadSafeModule jl_create_ts_module(StringRef name, orc::ThreadSafeContext ctx, bool imaging_mode, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple()) JL_NOTSAFEPOINT {
+    auto lock = ctx.getLock();
+    return orc::ThreadSafeModule(jl_create_llvm_module(name, *ctx.getContext(), imaging_mode, DL, triple), ctx);
 }
 
-Pass *createLowerPTLSPass(bool imaging_mode);
-Pass *createCombineMulAddPass();
-Pass *createFinalLowerGCPass();
-Pass *createLateLowerGCFramePass();
-Pass *createLowerExcHandlersPass();
-Pass *createGCInvariantVerifierPass(bool Strong);
-Pass *createPropagateJuliaAddrspaces();
-Pass *createRemoveJuliaAddrspacesPass();
-Pass *createRemoveNIPass();
-Pass *createJuliaLICMPass();
-Pass *createMultiVersioningPass(bool external_use);
-Pass *createAllocOptPass();
-Pass *createDemoteFloat16Pass();
-Pass *createCPUFeaturesPass();
-Pass *createLowerSimdLoopPass();
+Module &jl_codegen_params_t::shared_module(Module &from) JL_NOTSAFEPOINT {
+    if (!_shared_module) {
+        _shared_module = jl_create_llvm_module("globals", getContext(), imaging, from.getDataLayout(), Triple(from.getTargetTriple()));
+        assert(&from.getContext() == tsctx.getContext() && "Module context differs from codegen_params context!");
+    } else {
+        assert(&from.getContext() == &getContext() && "Module context differs from shared module context!");
+        assert(from.getDataLayout() == _shared_module->getDataLayout() && "Module data layout differs from shared module data layout!");
+        assert(from.getTargetTriple() == _shared_module->getTargetTriple() && "Module target triple differs from shared module target triple!");
+    }
+    return *_shared_module;
+}
+
+Pass *createLowerPTLSPass(bool imaging_mode) JL_NOTSAFEPOINT;
+Pass *createCombineMulAddPass() JL_NOTSAFEPOINT;
+Pass *createFinalLowerGCPass() JL_NOTSAFEPOINT;
+Pass *createLateLowerGCFramePass() JL_NOTSAFEPOINT;
+Pass *createLowerExcHandlersPass() JL_NOTSAFEPOINT;
+Pass *createGCInvariantVerifierPass(bool Strong) JL_NOTSAFEPOINT;
+Pass *createPropagateJuliaAddrspaces() JL_NOTSAFEPOINT;
+Pass *createRemoveJuliaAddrspacesPass() JL_NOTSAFEPOINT;
+Pass *createRemoveNIPass() JL_NOTSAFEPOINT;
+Pass *createJuliaLICMPass() JL_NOTSAFEPOINT;
+Pass *createMultiVersioningPass(bool external_use) JL_NOTSAFEPOINT;
+Pass *createAllocOptPass() JL_NOTSAFEPOINT;
+Pass *createDemoteFloat16Pass() JL_NOTSAFEPOINT;
+Pass *createCPUFeaturesPass() JL_NOTSAFEPOINT;
+Pass *createLowerSimdLoopPass() JL_NOTSAFEPOINT;
 
 // NewPM
 #include "passes.h"
 
 // Whether the Function is an llvm or julia intrinsic.
-static inline bool isIntrinsicFunction(Function *F)
+static inline bool isIntrinsicFunction(Function *F) JL_NOTSAFEPOINT
 {
     return F->isIntrinsic() || F->getName().startswith("julia.");
 }
 
-CodeGenOpt::Level CodeGenOptLevelFor(int optlevel);
+CodeGenOpt::Level CodeGenOptLevelFor(int optlevel) JL_NOTSAFEPOINT;

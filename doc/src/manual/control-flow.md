@@ -139,7 +139,7 @@ julia> test(1,2)
 x is less than y.
 
 julia> test(2,1)
-ERROR: UndefVarError: relation not defined
+ERROR: UndefVarError: `relation` not defined
 Stacktrace:
  [1] test(::Int64, ::Int64) at ./none:7
 ```
@@ -433,7 +433,7 @@ julia> for j = 1:3
 3
 
 julia> j
-ERROR: UndefVarError: j not defined
+ERROR: UndefVarError: `j` not defined
 ```
 
 ```jldoctest
@@ -669,7 +669,7 @@ Additionally, some exception types take one or more arguments that are used for 
 
 ```jldoctest
 julia> throw(UndefVarError(:x))
-ERROR: UndefVarError: x not defined
+ERROR: UndefVarError: `x` not defined
 ```
 
 This mechanism can be implemented easily by custom exception types following the way [`UndefVarError`](@ref)
@@ -826,6 +826,44 @@ immediately to a much higher level in the stack of calling functions. There are 
 no error has occurred, but the ability to unwind the stack and pass a value to a higher level
 is desirable. Julia provides the [`rethrow`](@ref), [`backtrace`](@ref), [`catch_backtrace`](@ref)
 and [`current_exceptions`](@ref) functions for more advanced error handling.
+
+### `else` Clauses
+
+!!! compat "Julia 1.8"
+    This functionality requires at least Julia 1.8.
+
+In some cases, one may not only want to appropriately handle the error case, but also want to run
+some code only if the `try` block succeeds. For this, an `else` clause can be specified after the
+`catch` block that is run whenever no error was thrown previously. The advantage over including
+this code in the `try` block instead is that any further errors don't get silently caught by the
+`catch` clause.
+
+```julia
+local x
+try
+    x = read("file", String)
+catch
+    # handle read errors
+else
+    # do something with x
+end
+```
+
+!!! note
+    The `try`, `catch`, `else`, and `finally` clauses each introduce their own scope blocks, so if
+    a variable is only defined in the `try` block, it can not be accessed by the `else` or `finally`
+    clause:
+    ```jldoctest
+    julia> try
+               foo = 1
+           catch
+           else
+               foo
+           end
+    ERROR: UndefVarError: `foo` not defined
+    ```
+    Use the [`local` keyword](@ref local-scope) outside the `try` block to make the variable
+    accessible from anywhere within the outer scope.
 
 ### `finally` Clauses
 

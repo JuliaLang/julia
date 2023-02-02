@@ -1,16 +1,18 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+original_depot_path = copy(Base.DEPOT_PATH)
+
 using Test
 
 # Tests for @__LINE__ inside and outside of macros
-@test (@__LINE__) == 6
+@test (@__LINE__) == 8
 
 macro macro_caller_lineno()
-    @test 9 == (@__LINE__) != __source__.line > 12
+    @test 11 == (@__LINE__) != __source__.line > 14
     return __source__.line
 end
 
-@test @macro_caller_lineno() == (@__LINE__) > 12
+@test @macro_caller_lineno() == (@__LINE__) > 14
 
 # @__LINE__ in a macro expands to the location of the macrocall in the source
 # while __source__.line is the location of the macro caller
@@ -660,7 +662,7 @@ finally
     Base.set_active_project(old_act_proj)
     popfirst!(LOAD_PATH)
 end
-@test Base.pkgorigins[Base.PkgId(UUID("69145d58-7df6-11e8-0660-cf7622583916"), "TestPkg")].version == v"1.2.3"
+@test pkgversion(TestPkg) == v"1.2.3"
 
 @testset "--project and JULIA_PROJECT paths should be absolutified" begin
     mktempdir() do dir; cd(dir) do
@@ -671,10 +673,10 @@ end
         cd("foo")
         @test Base.active_project() == old
         """
-        @test success(`$(Base.julia_cmd()) --startup-file=no --project=foo -e $(script)`)
-        withenv("JULIA_PROJECT" => "foo") do
-            @test success(`$(Base.julia_cmd()) --startup-file=no -e $(script)`)
-        end
+        cmd = `$(Base.julia_cmd()) --startup-file=no -e $(script)`
+        cmd = addenv(cmd, "JULIA_PROJECT" => "foo")
+        cmd = pipeline(cmd; stdout, stderr)
+        @test success(cmd)
     end; end
 end
 
@@ -687,15 +689,16 @@ mktempdir() do dir
     vdir = vdir[2:end] # remove @
     vpath = joinpath(dir, "environments", vdir)
     mkpath(vpath)
-    withenv("JULIA_DEPOT_PATH" => dir) do
-        script = "@assert startswith(Base.active_project(), $(repr(vpath)))"
-        @test success(`$(Base.julia_cmd()) --startup-file=no -e $(script)`)
-    end
+    script = "@assert startswith(Base.active_project(), $(repr(vpath)))"
+    cmd = `$(Base.julia_cmd()) --startup-file=no -e $(script)`
+    cmd = addenv(cmd, "JULIA_DEPOT_PATH" => dir)
+    cmd = pipeline(cmd; stdout, stderr)
+    @test success(cmd)
 end
 
 @testset "expansion of JULIA_LOAD_PATH" begin
     s = Sys.iswindows() ? ';' : ':'
-    tmp = "/foo/bar"
+    tmp = "/this/does/not/exist"
     cases = Dict{Any,Vector{String}}(
         nothing => Base.DEFAULT_LOAD_PATH,
         "" => [],
@@ -704,16 +707,17 @@ end
         "$s$tmp" => [Base.DEFAULT_LOAD_PATH; tmp],
         )
     for (env, result) in pairs(cases)
-        withenv("JULIA_LOAD_PATH" => env) do
-            script = "LOAD_PATH == $(repr(result)) || error()"
-            @test success(`$(Base.julia_cmd()) --startup-file=no -e $script`)
-        end
+        script = "LOAD_PATH == $(repr(result)) || error()"
+        cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
+        cmd = addenv(cmd, "JULIA_LOAD_PATH" => env)
+        cmd = pipeline(cmd; stdout, stderr)
+        @test success(cmd)
     end
 end
 
 @testset "expansion of JULIA_DEPOT_PATH" begin
     s = Sys.iswindows() ? ';' : ':'
-    tmp = "/foo/bar"
+    tmp = "/this/does/not/exist"
     DEFAULT = Base.append_default_depot_path!(String[])
     cases = Dict{Any,Vector{String}}(
         nothing => DEFAULT,
@@ -723,10 +727,11 @@ end
         "$s$tmp" => [DEFAULT; tmp],
         )
     for (env, result) in pairs(cases)
-        withenv("JULIA_DEPOT_PATH" => env) do
-            script = "DEPOT_PATH == $(repr(result)) || error()"
-            @test success(`$(Base.julia_cmd()) --startup-file=no -e $script`)
-        end
+        script = "DEPOT_PATH == $(repr(result)) || error()"
+        cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
+        cmd = addenv(cmd, "JULIA_DEPOT_PATH" => env)
+        cmd = pipeline(cmd; stdout, stderr)
+        @test success(cmd)
     end
 end
 
@@ -744,7 +749,11 @@ for env in keys(envs)
     rm(env, force=true, recursive=true)
 end
 for depot in depots
-    rm(depot, force=true, recursive=true)
+    try
+        rm(depot, force=true, recursive=true)
+    catch err
+        @show err
+    end
 end
 
 append!(empty!(LOAD_PATH), saved_load_path)
@@ -930,3 +939,151 @@ end
         end
     end
 end
+
+
+@testset "Loading with incomplete manifest/depot #45977" begin
+    mktempdir() do tmp
+        # Set up a stacked env.
+        cp(joinpath(@__DIR__, "depot"), joinpath(tmp, "depot"))
+
+        mkdir(joinpath(tmp, "Env1"))
+        mkdir(joinpath(tmp, "Global"))
+
+        for env in ["Env1", "Global"]
+            write(joinpath(tmp, env, "Project.toml"), """
+            [deps]
+            Baz = "6801f525-dc68-44e8-a4e8-cabd286279e7"
+            """)
+        end
+
+        write(joinpath(tmp, "Global", "Manifest.toml"), """
+            [[Baz]]
+            uuid = "6801f525-dc68-44e8-a4e8-cabd286279e7"
+            git-tree-sha1 = "efc7e24c53d6a328011975294a2c75fed2f9800a"
+            """)
+
+        # This SHA does not exist in the depot.
+        write(joinpath(tmp, "Env1", "Manifest.toml"), """
+            [[Baz]]
+            uuid = "6801f525-dc68-44e8-a4e8-cabd286279e7"
+            git-tree-sha1 = "5f2f6e72d001b014b48b26ec462f3714c342e167"
+            """)
+
+
+        old_load_path = copy(LOAD_PATH)
+        old_depot_path = copy(DEPOT_PATH)
+        try
+            empty!(LOAD_PATH)
+            push!(empty!(DEPOT_PATH), joinpath(tmp, "depot"))
+
+            push!(LOAD_PATH, joinpath(tmp, "Global"))
+
+            pkg = Base.identify_package("Baz")
+            # Package in manifest in current env not present in depot
+            @test Base.locate_package(pkg) !== nothing
+
+            pushfirst!(LOAD_PATH, joinpath(tmp, "Env1"))
+
+            @test Base.locate_package(pkg) === nothing
+
+            write(joinpath(tmp, "Env1", "Manifest.toml"), """
+            """)
+            # Package in current env not present in manifest
+            pkg, env = Base.identify_package_env("Baz")
+            @test Base.locate_package(pkg, env) === nothing
+        finally
+            copy!(LOAD_PATH, old_load_path)
+            copy!(DEPOT_PATH, old_depot_path)
+        end
+    end
+end
+
+@testset "Extensions" begin
+    depot_path = mktempdir()
+    try
+        proj = joinpath(@__DIR__, "project", "Extensions", "HasDepWithExtensions.jl")
+
+        function gen_extension_cmd(compile)
+            ```$(Base.julia_cmd()) $compile --startup-file=no -e '
+                begin
+                    push!(empty!(DEPOT_PATH), '$(repr(depot_path))')
+                    using HasExtensions
+                    # Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly got an extension")
+                    HasExtensions.ext_loaded && error("ext_loaded set")
+                    using HasDepWithExtensions
+                    # Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
+                    HasExtensions.ext_loaded || error("ext_loaded not set")
+                    HasExtensions.ext_folder_loaded && error("ext_folder_loaded set")
+                    HasDepWithExtensions.do_something() || error("do_something errored")
+                    using ExtDep2
+                    HasExtensions.ext_folder_loaded || error("ext_folder_loaded not set")
+                end
+                '
+            ```
+        end
+
+        for compile in (`--compiled-modules=no`, ``, ``) # Once when requiring precompilation, once where it is already precompiled
+            cmd = gen_extension_cmd(compile)
+            cmd = addenv(cmd, "JULIA_LOAD_PATH" => proj)
+            cmd = pipeline(cmd; stdout, stderr)
+            @test success(cmd)
+        end
+
+        # 48351
+        sep = Sys.iswindows() ? ';' : ':'
+        cmd = gen_extension_cmd(``)
+        cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([mktempdir(), proj], sep))
+        cmd = pipeline(cmd; stdout, stderr)
+        @test success(cmd)
+    finally
+        try
+            rm(depot_path, force=true, recursive=true)
+        catch err
+            @show err
+        end
+    end
+end
+
+pkgimage(val) = val == 1 ? `--pkgimage=yes` : `--pkgimage=no`
+opt_level(val) = `-O$val`
+debug_level(val) = `-g$val`
+inline(val) = val == 1 ? `--inline=yes` : `--inline=no`
+check_bounds(val) = if val == 0
+    `--check-bounds=auto`
+elseif val == 1
+    `--check-bounds=yes`
+elseif val == 2
+    `--check-bounds=no`
+end
+
+@testset "CacheFlags" begin
+    cf = Base.CacheFlags()
+    opts = Base.JLOptions()
+    @test cf.use_pkgimages == opts.use_pkgimages
+    @test cf.debug_level == opts.debug_level
+    @test cf.check_bounds == opts.check_bounds
+    @test cf.inline == opts.can_inline
+    @test cf.opt_level == opts.opt_level
+
+    # OOICCDDP
+    for (P, D, C, I, O) in Iterators.product(0:1, 0:2, 0:2, 0:1, 0:3)
+        julia = joinpath(Sys.BINDIR, Base.julia_exename())
+        script = """
+        using Test
+        let
+            cf = Base.CacheFlags()
+            opts = Base.JLOptions()
+            @test cf.use_pkgimages == opts.use_pkgimages == $P
+            @test cf.debug_level == opts.debug_level == $D
+            @test cf.check_bounds == opts.check_bounds == $C
+            @test cf.inline == opts.can_inline == $I
+            @test cf.opt_level == opts.opt_level == $O
+        end
+        """
+        cmd = `$julia $(pkgimage(P)) $(opt_level(O)) $(debug_level(D)) $(check_bounds(C)) $(inline(I)) -e $script`
+        @test success(pipeline(cmd; stdout, stderr))
+    end
+end
+
+empty!(Base.DEPOT_PATH)
+append!(Base.DEPOT_PATH, original_depot_path)

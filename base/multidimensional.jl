@@ -32,6 +32,10 @@ module IteratorsMD
     A `CartesianIndex` is sometimes produced by [`eachindex`](@ref), and
     always when iterating with an explicit [`CartesianIndices`](@ref).
 
+    An `I::CartesianIndex` is treated as a "scalar" (not a container)
+    for `broadcast`.   In order to iterate over the components of a
+    `CartesianIndex`, convert it to a tuple with `Tuple(I)`.
+
     # Examples
     ```jldoctest
     julia> A = reshape(Vector(1:16), (2, 2, 2, 2))
@@ -61,6 +65,10 @@ module IteratorsMD
     julia> A[CartesianIndex((1, 1, 2, 1))]
     5
     ```
+
+    !!! compat "Julia 1.10"
+        Using a `CartesianIndex` as a "scalar" for `broadcast` requires
+        Julia 1.10; in previous releases, use `Ref(I)`.
     """
     struct CartesianIndex{N} <: AbstractCartesianIndex{N}
         I::NTuple{N,Int}
@@ -325,7 +333,7 @@ module IteratorsMD
         convert(Tuple{Vararg{UnitRange{Int}}}, R)
 
     convert(::Type{CartesianIndices{N,R}}, inds::CartesianIndices{N}) where {N,R} =
-        CartesianIndices(convert(R, inds.indices))
+        CartesianIndices(convert(R, inds.indices))::CartesianIndices{N,R}
 
     # equality
     Base.:(==)(a::CartesianIndices{N}, b::CartesianIndices{N}) where N =
@@ -712,7 +720,7 @@ checkindex(::Type{Bool}, inds::Tuple, I::CartesianIndices) = all(checkindex.(Boo
 
 # combined count of all indices, including CartesianIndex and
 # AbstractArray{CartesianIndex}
-# rather than returning N, it returns an NTuple{N,Bool} so the result is inferrable
+# rather than returning N, it returns an NTuple{N,Bool} so the result is inferable
 @inline index_ndims(i1, I...) = (true, index_ndims(I...)...)
 @inline function index_ndims(i1::CartesianIndex, I...)
     (map(Returns(true), i1.I)..., index_ndims(I...)...)
@@ -723,7 +731,7 @@ end
 index_ndims() = ()
 
 # combined dimensionality of all indices
-# rather than returning N, it returns an NTuple{N,Bool} so the result is inferrable
+# rather than returning N, it returns an NTuple{N,Bool} so the result is inferable
 @inline index_dimsum(i1, I...) = (index_dimsum(I...)...,)
 @inline index_dimsum(::Colon, I...) = (true, index_dimsum(I...)...)
 @inline index_dimsum(::AbstractArray{Bool}, I...) = (true, index_dimsum(I...)...)
@@ -1348,7 +1356,7 @@ end
 
 # Note: the next two functions rely on the following definition of the conversion to Bool:
 #   convert(::Type{Bool}, x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(...))
-# they're used to pre-emptively check in bulk when possible, which is much faster.
+# they're used to preemptively check in bulk when possible, which is much faster.
 # Also, the functions can be overloaded for custom types T<:Real :
 #  a) in the unlikely eventuality that they use a different logic for Bool conversion
 #  b) to skip the check if not necessary

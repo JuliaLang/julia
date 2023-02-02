@@ -31,10 +31,15 @@ _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
 """
     (:)(start, [step], stop)
 
-Range operator. `a:b` constructs a range from `a` to `b` with a step size of 1 (a [`UnitRange`](@ref))
-, and `a:s:b` is similar but uses a step size of `s` (a [`StepRange`](@ref)).
+Range operator. `a:b` constructs a range from `a` to `b` with a step size
+of 1 (often a [`UnitRange`](@ref)), and `a:s:b` is similar but uses a step
+size of `s` (a [`StepRange`](@ref) or [`StepRangeLen`](@ref)).
+See also [`range`](@ref) for more control.
 
-`:` is also used in indexing to select whole dimensions, e.g. in `A[:, 1]`.
+The operator `:` is also used in indexing to select whole dimensions, e.g. in `A[:, 1]`.
+
+`:` is also used to [`quote`](@ref) code, e.g. `:(x + y) isa Expr` and `:x isa Symbol`.
+Since `:2 isa Int`, it does *not* create a range in indexing: `v[:2] == v[2] != v[begin:2]`.
 """
 (:)(start::T, step, stop::T) where {T} = _colon(start, step, stop)
 (:)(start::T, step, stop::T) where {T<:Real} = _colon(start, step, stop)
@@ -252,7 +257,7 @@ abstract type AbstractRange{T} <: AbstractArray{T,1} end
 RangeStepStyle(::Type{<:AbstractRange}) = RangeStepIrregular()
 RangeStepStyle(::Type{<:AbstractRange{<:Integer}}) = RangeStepRegular()
 
-convert(::Type{T}, r::AbstractRange) where {T<:AbstractRange} = r isa T ? r : T(r)
+convert(::Type{T}, r::AbstractRange) where {T<:AbstractRange} = r isa T ? r : T(r)::T
 
 ## ordinal ranges
 
@@ -283,7 +288,7 @@ abstract type AbstractUnitRange{T} <: OrdinalRange{T,T} end
 Ranges with elements of type `T` with spacing of type `S`. The step
 between each element is constant, and the range is defined in terms
 of a `start` and `stop` of type `T` and a `step` of type `S`. Neither
-`T` nor `S` should be floating point types. The syntax `a:b:c` with `b > 1`
+`T` nor `S` should be floating point types. The syntax `a:b:c` with `b != 0`
 and `a`, `b`, and `c` all integers creates a `StepRange`.
 
 # Examples
@@ -580,9 +585,10 @@ function show(io::IO, r::LinRange{T}) where {T}
     print(io, "LinRange{")
     show(io, T)
     print(io, "}(")
-    show(io, first(r))
+    ioc = IOContext(io, :typeinto=>T)
+    show(ioc, first(r))
     print(io, ", ")
-    show(io, last(r))
+    show(ioc, last(r))
     print(io, ", ")
     show(io, length(r))
     print(io, ')')
@@ -1271,11 +1277,6 @@ el_same(::Type{T}, a::Type{<:AbstractArray{T,n}}, b::Type{<:AbstractArray{S,n}})
 el_same(::Type{T}, a::Type{<:AbstractArray{S,n}}, b::Type{<:AbstractArray{T,n}}) where {T,S,n} = b
 el_same(::Type, a, b) = promote_typejoin(a, b)
 
-promote_result(::Type{<:AbstractArray}, ::Type{<:AbstractArray}, ::Type{T}, ::Type{S}) where {T,S} = (@inline; promote_type(T,S))
-promote_result(::Type{T}, ::Type{S}, ::Type{Bottom}, ::Type{Bottom}) where {T<:AbstractArray,S<:AbstractArray} = (@inline; promote_typejoin(T,S))
-# If no promote_rule is defined, both directions give Bottom. In that case use typejoin on the eltypes instead and give Array as the container.
-promote_result(::Type{<:AbstractArray{T,n}}, ::Type{<:AbstractArray{S,n}}, ::Type{Bottom}, ::Type{Bottom}) where {T,S,n} = (@inline; Array{promote_type(T,S),n})
-
 promote_rule(a::Type{UnitRange{T1}}, b::Type{UnitRange{T2}}) where {T1,T2} =
     el_same(promote_type(T1, T2), a, b)
 UnitRange{T}(r::UnitRange{T}) where {T<:Real} = r
@@ -1396,14 +1397,13 @@ function sum(r::AbstractRange{<:Real})
 end
 
 function _in_range(x, r::AbstractRange)
-    if !isfinite(x)
-        return false
-    elseif iszero(step(r))
-        return !isempty(r) && first(r) == x
-    else
-        n = round(Integer, (x - first(r)) / step(r)) + 1
-        return n >= 1 && n <= length(r) && r[n] == x
-    end
+    isempty(r) && return false
+    f, l = first(r), last(r)
+    # check for NaN, Inf, and large x that may overflow in the next calculation
+    f <= x <= l || l <= x <= f || return false
+    iszero(step(r)) && return true
+    n = round(Integer, (x - f) / step(r)) + 1
+    n >= 1 && n <= length(r) && r[n] == x
 end
 in(x::Real, r::AbstractRange{<:Real}) = _in_range(x, r)
 # This method needs to be defined separately since -(::T, ::T) can be implemented

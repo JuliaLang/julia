@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# Make a copy of the original environment
+original_env = copy(ENV)
+
 using Test, Base.CoreLogging
 import Base.CoreLogging: BelowMinLevel, Debug, Info, Warn, Error,
     handle_message, shouldlog, min_enabled_level, catch_exceptions
@@ -453,4 +456,14 @@ end
     @test isfile(record.file)
 end
 
+end
+
+# Restore the original environment
+for k in keys(ENV)
+    if !haskey(original_env, k)
+        delete!(ENV, k)
+    end
+end
+for (k, v) in pairs(original_env)
+    ENV[k] = v
 end

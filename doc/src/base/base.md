@@ -37,6 +37,7 @@ Base.which(::Any, ::Any)
 Base.methods
 Base.@show
 ans
+err
 Base.active_project
 Base.set_active_project
 ```
@@ -88,6 +89,7 @@ outer
 const
 struct
 mutable struct
+@kwdef
 abstract type
 primitive type
 where
@@ -142,6 +144,8 @@ Base.hasproperty
 Core.getfield
 Core.setfield!
 Core.isdefined
+Core.getglobal
+Core.setglobal!
 Base.@isdefined
 Base.convert
 Base.promote
@@ -187,6 +191,7 @@ Base.fieldcount
 Base.hasfield
 Core.nfields
 Base.isconst
+Base.isfieldatomic
 ```
 
 ### Memory layout
@@ -257,7 +262,7 @@ new
 Base.:(|>)
 Base.:(∘)
 Base.ComposedFunction
-Base.Splat
+Base.splat
 Base.Fix1
 Base.Fix2
 ```
@@ -331,6 +336,7 @@ Base.@timev
 Base.@timed
 Base.@elapsed
 Base.@allocated
+Base.@allocations
 Base.EnvDict
 Base.ENV
 Base.Sys.STDLIB
@@ -346,6 +352,8 @@ Base.Sys.iswindows
 Base.Sys.windows_version
 Base.Sys.free_memory
 Base.Sys.total_memory
+Base.Sys.free_physical_memory
+Base.Sys.total_physical_memory
 Base.Sys.uptime
 Base.Sys.isjsvm
 Base.Sys.loadavg

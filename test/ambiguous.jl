@@ -153,12 +153,17 @@ ambig(x::Int8, y) = 1
 ambig(x::Integer, y) = 2
 ambig(x, y::Int) = 3
 end
-
 ambs = detect_ambiguities(Ambig5)
 @test length(ambs) == 2
 
-
-using LinearAlgebra, SparseArrays, SuiteSparse
+module Ambig48312
+ambig(::Integer, ::Int) = 1
+ambig(::Int, ::Integer) = 2
+ambig(::Signed, ::Int) = 3
+ambig(::Int, ::Signed) = 4
+end
+ambs = detect_ambiguities(Ambig48312)
+@test length(ambs) == 4
 
 # Test that Core and Base are free of ambiguities
 # not using isempty so this prints more information when it fails
@@ -353,14 +358,16 @@ f35983(::Type, ::Type) = 2
 @test first(Base.methods(f35983, (Any, Any))).sig == Tuple{typeof(f35983), Type, Type}
 let ambig = Ref{Int32}(0)
     ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, nothing, -1, typemax(UInt), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test ms isa Vector
     @test length(ms) == 1
     @test ambig[] == 0
 end
 f35983(::Type{Int16}, ::Any) = 3
 @test length(Base.methods_including_ambiguous(f35983, (Type, Type))) == 2
-@test length(Base.methods(f35983, (Type, Type))) == 2
+@test length(Base.methods(f35983, (Type, Type))) == 1
 let ambig = Ref{Int32}(0)
     ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, nothing, -1, typemax(UInt), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test ms isa Vector
     @test length(ms) == 2
     @test ambig[] == 1
 end
@@ -397,5 +404,17 @@ module M43040
 end
 
 @test isempty(detect_ambiguities(M43040; recursive=true))
+
+cc46601(T::Type{<:Core.IntrinsicFunction}, x) = 1
+cc46601(::Type{T}, x::Number) where {T<:AbstractChar} = 2
+cc46601(T::Type{<:Nothing}, x) = 3
+cc46601(::Type{T}, x::T) where {T<:Number} = 4
+cc46601(::Type{T}, arg) where {T<:VecElement} = 5
+cc46601(::Type{T}, x::Number) where {T<:Number} = 6
+@test length(methods(cc46601, Tuple{Type{<:Integer}, Integer})) == 2
+@test length(Base.methods_including_ambiguous(cc46601, Tuple{Type{<:Integer}, Integer})) == 6
+cc46601(::Type{T}, x::Int) where {T<:AbstractString} = 7
+@test length(methods(cc46601, Tuple{Type{<:Integer}, Integer})) == 2
+@test length(Base.methods_including_ambiguous(cc46601, Tuple{Type{<:Integer}, Integer})) == 7
 
 nothing

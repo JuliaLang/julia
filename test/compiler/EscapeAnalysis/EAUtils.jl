@@ -41,13 +41,7 @@ function code_escapes(@nospecialize(f), @nospecialize(types=Base.default_tt(f));
                       interp::Core.Compiler.AbstractInterpreter = Core.Compiler.NativeInterpreter(world),
                       debuginfo::Symbol = :none,
                       optimize::Bool = true)
-    ft = Core.Typeof(f)
-    if isa(types, Type)
-        u = unwrap_unionall(types)
-        tt = rewrap_unionall(Tuple{ft, u.parameters...}, types)
-    else
-        tt = Tuple{ft, types...}
-    end
+    tt = Base.signature_type(f, types)
     interp = EscapeAnalyzer(interp, tt, optimize)
     results = Base.code_typed_by_type(tt; optimize=true, world, interp)
     isone(length(results)) || throw(ArgumentError("`code_escapes` only supports single analysis result"))
@@ -201,7 +195,7 @@ function run_passes_with_ea(interp::EscapeAnalyzer, ci::CodeInfo, sv::Optimizati
                 cache_escapes!(interp, caller, state, cccopy(ir))
             end
         catch err
-            @error "error happened within [IPO EA], insepct `Main.ir` and `Main.nargs`"
+            @error "error happened within [IPO EA], inspect `Main.ir` and `Main.nargs`"
             @eval Main (ir = $ir; nargs = $nargs)
             rethrow(err)
         end
@@ -212,14 +206,14 @@ function run_passes_with_ea(interp::EscapeAnalyzer, ci::CodeInfo, sv::Optimizati
         interp.state = state
         interp.linfo = sv.linfo
     end
-    @timeit "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
+    @timeit "Inlining"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
     # @timeit "verify 2" verify_ir(ir)
     @timeit "compact 2" ir = compact!(ir)
     if caller.linfo.specTypes === interp.entry_tt && interp.optimize
         try
             @timeit "[Local EA]" state = analyze_escapes(ir, nargs, true, get_escape_cache(interp))
         catch err
-            @error "error happened within [Local EA], insepct `Main.ir` and `Main.nargs`"
+            @error "error happened within [Local EA], inspect `Main.ir` and `Main.nargs`"
             @eval Main (ir = $ir; nargs = $nargs)
             rethrow(err)
         end

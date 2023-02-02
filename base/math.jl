@@ -190,6 +190,7 @@ end
 evalpoly(x, p::AbstractVector) = _evalpoly(x, p)
 
 function _evalpoly(x, p)
+    Base.require_one_based_indexing(p)
     N = length(p)
     ex = p[end]
     for i in N-1:-1:1
@@ -229,6 +230,7 @@ evalpoly(z::Complex, p::Tuple{<:Any}) = p[1]
 evalpoly(z::Complex, p::AbstractVector) = _evalpoly(z, p)
 
 function _evalpoly(z::Complex, p)
+    Base.require_one_based_indexing(p)
     length(p) == 1 && return p[1]
     N = length(p)
     a = p[end]
@@ -493,7 +495,7 @@ julia> sind(45)
 0.7071067811865476
 
 julia> sinpi(1/4)
-0.7071067811865476
+0.7071067811865475
 
 julia> round.(sincos(pi/6), digits=3)
 (0.5, 0.866)
@@ -849,26 +851,45 @@ minmax(x::T, y::T) where {T<:AbstractFloat} = min(x, y), max(x, y)
 
 _isless(x::Float16, y::Float16) = signbit(widen(x) - widen(y))
 
+const has_native_fminmax = Sys.ARCH === :aarch64
+@static if has_native_fminmax
+    @eval begin
+        Base.@assume_effects :total @inline llvm_min(x::Float64, y::Float64) = ccall("llvm.minimum.f64", llvmcall, Float64, (Float64, Float64), x, y)
+        Base.@assume_effects :total @inline llvm_min(x::Float32, y::Float32) = ccall("llvm.minimum.f32", llvmcall, Float32, (Float32, Float32), x, y)
+        Base.@assume_effects :total @inline llvm_max(x::Float64, y::Float64) = ccall("llvm.maximum.f64", llvmcall, Float64, (Float64, Float64), x, y)
+        Base.@assume_effects :total @inline llvm_max(x::Float32, y::Float32) = ccall("llvm.maximum.f32", llvmcall, Float32, (Float32, Float32), x, y)
+    end
+end
+
 function min(x::T, y::T) where {T<:Union{Float32,Float64}}
+    @static if has_native_fminmax
+        return llvm_min(x,y)
+    end
     diff = x - y
     argmin = ifelse(signbit(diff), x, y)
     anynan = isnan(x)|isnan(y)
-    ifelse(anynan, diff, argmin)
+    return ifelse(anynan, diff, argmin)
 end
 
 function max(x::T, y::T) where {T<:Union{Float32,Float64}}
+    @static if has_native_fminmax
+        return llvm_max(x,y)
+    end
     diff = x - y
     argmax = ifelse(signbit(diff), y, x)
     anynan = isnan(x)|isnan(y)
-    ifelse(anynan, diff, argmax)
+    return ifelse(anynan, diff, argmax)
 end
 
 function minmax(x::T, y::T) where {T<:Union{Float32,Float64}}
+    @static if has_native_fminmax
+        return llvm_min(x, y), llvm_max(x, y)
+    end
     diff = x - y
     sdiff = signbit(diff)
     min, max = ifelse(sdiff, x, y), ifelse(sdiff, y, x)
     anynan = isnan(x)|isnan(y)
-    ifelse(anynan, diff, min), ifelse(anynan, diff, max)
+    return ifelse(anynan, diff, min), ifelse(anynan, diff, max)
 end
 
 """
@@ -928,18 +949,27 @@ end
 ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 
 """
-    exponent(x::AbstractFloat) -> Int
+    exponent(x) -> Int
 
-Get the exponent of a normalized floating-point number.
 Returns the largest integer `y` such that `2^y ≤ abs(x)`.
+For a normalized floating-point number `x`, this corresponds to the exponent of `x`.
 
 # Examples
 ```jldoctest
+julia> exponent(8)
+3
+
+julia> exponent(64//1)
+6
+
 julia> exponent(6.5)
 2
 
 julia> exponent(16.0)
 4
+
+julia> exponent(3.142e-4)
+-12
 ```
 """
 function exponent(x::T) where T<:IEEEFloat
@@ -1160,7 +1190,7 @@ end
     n == 3 && return x*x*x # keep compatibility with literal_pow
     if n < 0
         rx = inv(x)
-        n==-2 && return rx*rx #keep compatability with literal_pow
+        n==-2 && return rx*rx #keep compatibility with literal_pow
         isfinite(x) && (xnlo = -fma(x, rx, -1.) * rx)
         x = rx
         n = -n
@@ -1176,8 +1206,8 @@ end
         xnlo += err
         n >>>= 1
     end
-    !isfinite(x) && return x*y
-    return muladd(x, y, muladd(y, xnlo, x*ynlo))
+    err = muladd(y, xnlo, x*ynlo)
+    return ifelse(isfinite(x) & isfinite(err), muladd(x, y, err), x*y)
 end
 
 function ^(x::Float32, n::Integer)

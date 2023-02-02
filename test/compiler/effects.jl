@@ -1,6 +1,114 @@
 using Test
 include("irutils.jl")
 
+# Test that the Core._apply_iterate bail path taints effects
+function f_apply_bail(f)
+    f(()...)
+    return nothing
+end
+@test !Core.Compiler.is_removable_if_unused(Base.infer_effects(f_apply_bail))
+@test !fully_eliminated((Function,)) do f
+    f_apply_bail(f)
+    nothing
+end
+
+# Test that arraysize has proper effect modeling
+@test fully_eliminated(M->(size(M, 2); nothing), (Matrix{Float64},))
+
+# Test that effect modeling for return_type doesn't incorrectly pick
+# up the effects of the function being analyzed
+f_throws() = error()
+@noinline function return_type_unused(x)
+    Core.Compiler.return_type(f_throws, Tuple{})
+    return x+1
+end
+@test Core.Compiler.is_removable_if_unused(Base.infer_effects(return_type_unused, (Int,)))
+@test fully_eliminated((Int,)) do x
+    return_type_unused(x)
+    return nothing
+end
+
+# Test that ambiguous calls don't accidentally get nothrow effect
+ambig_effects_test(a::Int, b) = 1
+ambig_effects_test(a, b::Int) = 1
+ambig_effects_test(a, b) = 1
+@test !Core.Compiler.is_nothrow(Base.infer_effects(ambig_effects_test, (Int, Any)))
+global ambig_unknown_type_global::Any = 1
+@noinline function conditionally_call_ambig(b::Bool, a)
+    if b
+        ambig_effects_test(a, ambig_unknown_type_global)
+    end
+    return 0
+end
+@test !fully_eliminated((Bool,)) do b
+    conditionally_call_ambig(b, 1)
+    return nothing
+end
+
+# Test that a missing methtable identification gets tainted
+# appropriately
+struct FCallback; f::Union{Nothing, Function}; end
+f_invoke_callback(fc) = let f=fc.f; (f !== nothing && f(); nothing); end
+@test !Core.Compiler.is_removable_if_unused(Base.infer_effects(f_invoke_callback, (FCallback,)))
+@test !fully_eliminated((FCallback,)) do fc
+    f_invoke_callback(fc)
+    return nothing
+end
+
+# @assume_effects override
+const ___CONST_DICT___ = Dict{Any,Any}(Symbol(c) => i for (i, c) in enumerate('a':'z'))
+Base.@assume_effects :foldable concrete_eval(
+    f, args...; kwargs...) = f(args...; kwargs...)
+@test fully_eliminated() do
+    concrete_eval(getindex, ___CONST_DICT___, :a)
+end
+
+# :removable override
+Base.@assume_effects :removable removable_call(
+    f, args...; kwargs...) = f(args...; kwargs...)
+@test fully_eliminated() do
+    @noinline removable_call(getindex, ___CONST_DICT___, :a)
+    nothing
+end
+
+# terminates_globally override
+# https://github.com/JuliaLang/julia/issues/41694
+Base.@assume_effects :terminates_globally function issue41694(x)
+    res = 1
+    1 < x < 20 || throw("bad")
+    while x > 1
+        res *= x
+        x -= 1
+    end
+    return res
+end
+@test Core.Compiler.is_foldable(Base.infer_effects(issue41694, (Int,)))
+@test fully_eliminated() do
+    issue41694(2)
+end
+
+Base.@assume_effects :terminates_globally function recur_termination1(x)
+    x == 1 && return 1
+    1 < x < 20 || throw("bad")
+    return x * recur_termination1(x-1)
+end
+@test Core.Compiler.is_foldable(Base.infer_effects(recur_termination1, (Int,)))
+@test fully_eliminated() do
+    recur_termination1(12)
+end
+
+Base.@assume_effects :terminates_globally function recur_termination21(x)
+    x == 1 && return 1
+    1 < x < 20 || throw("bad")
+    return recur_termination22(x)
+end
+recur_termination22(x) = x * recur_termination21(x-1)
+@test Core.Compiler.is_foldable(Base.infer_effects(recur_termination21, (Int,)))
+@test Core.Compiler.is_foldable(Base.infer_effects(recur_termination22, (Int,)))
+@test fully_eliminated() do
+    recur_termination21(12) + recur_termination22(12)
+end
+
 # control flow backedge should taint `terminates`
 @test Base.infer_effects((Int,)) do n
     for i = 1:n; end
@@ -104,6 +212,9 @@ function compare_inconsistent(x::T) where T
 end
 @test !compare_inconsistent(3)
 
+# Effect modeling for Core.compilerbarrier
+@test Base.infer_effects(Base.inferencebarrier, Tuple{Any}) |> Core.Compiler.is_removable_if_unused
+
 # allocation/access of uninitialized fields should taint the :consistent-cy
 struct Maybe{T}
     x::T
@@ -112,6 +223,10 @@ struct Maybe{T}
     Maybe(x::T) where T = new{T}(x)
 end
 Base.getindex(x::Maybe) = x.x
+
+struct SyntacticallyDefined{T}
+    x::T
+end
 
 import Core.Compiler: Const, getfield_notundefined
 for T = (Base.RefValue, Maybe) # both mutable and immutable
@@ -154,6 +269,10 @@ for TupleType = Any[Tuple{Int,Int,Int}, Tuple{Int,Vararg{Int}}, Tuple{Any}, Tupl
     FieldType = Any[Int, Symbol, Any]
     @test getfield_notundefined(TupleType, FieldType)
 end
+# skip analysis on fields that are known to be defined syntactically
+@test Core.Compiler.getfield_notundefined(SyntacticallyDefined{Float64}, Symbol)
+@test Core.Compiler.getfield_notundefined(Const(Main), Const(:var))
+@test Core.Compiler.getfield_notundefined(Const(Main), Const(42))
 # high-level tests for `getfield_notundefined`
 @test Base.infer_effects() do
     Maybe{Int}()
@@ -192,6 +311,9 @@ let f() = Ref{String}()[]
         f() # this call should be concrete evaluated
     end |> only === Union{}
 end
+@test Base.infer_effects((SyntacticallyDefined{Float64}, Symbol)) do w, s
+    getfield(w, s)
+end |> Core.Compiler.is_foldable
 
 # effects propagation for `Core.invoke` calls
 # https://github.com/JuliaLang/julia/issues/44763
@@ -203,15 +325,27 @@ invoke44763(x) = @invoke increase_x44763!(x)
 end |> only === Int
 @test x44763 == 0
 
+# `@inbounds`/`@boundscheck` expression should taint :consistent-cy correctly
+# https://github.com/JuliaLang/julia/issues/48099
+function A1_inbounds()
+    r = 0
+    @inbounds begin
+        @boundscheck r += 1
+    end
+    return r
+end
+@test !Core.Compiler.is_consistent(Base.infer_effects(A1_inbounds))
+
 # Test that purity doesn't try to accidentally run unreachable code due to
 # boundscheck elimination
 function f_boundscheck_elim(n)
-    # Inbounds here assumes that this is only ever called with n==0, but of
+    # Inbounds here assumes that this is only ever called with `n==0`, but of
     # course the compiler has no way of knowing that, so it must not attempt
-    # to run the @inbounds `getfield(sin, 1)`` that ntuple generates.
+    # to run the `@inbounds getfield(sin, 1)` that `ntuple` generates.
     ntuple(x->(@inbounds getfield(sin, x)), n)
 end
-@test Tuple{} <: code_typed(f_boundscheck_elim, Tuple{Int})[1][2]
+@test !Core.Compiler.is_consistent(Base.infer_effects(f_boundscheck_elim, (Int,)))
+@test Tuple{} <: only(Base.return_types(f_boundscheck_elim, (Int,)))
 
 # Test that purity modeling doesn't accidentally introduce new world age issues
 f_redefine_me(x) = x+1
@@ -248,7 +382,7 @@ end |> !Core.Compiler.is_foldable
     entry_to_be_invalidated('a')
 end
 
-@test !Core.Compiler.builtin_nothrow(Core.get_binding_type, Any[Rational{Int}, Core.Const(:foo)], Any)
+@test !Core.Compiler.builtin_nothrow(Core.Compiler.fallback_lattice, Core.get_binding_type, Any[Rational{Int}, Core.Const(:foo)], Any)
 
 # Nothrow for assignment to globals
 global glob_assign_int::Int = 0
@@ -267,7 +401,7 @@ end
 
 # we should taint `nothrow` if the binding doesn't exist and isn't fixed yet,
 # as the cached effects can be easily wrong otherwise
-# since the inference curently doesn't track "world-age" of global variables
+# since the inference currently doesn't track "world-age" of global variables
 @eval global_assignment_undefinedyet() = $(GlobalRef(@__MODULE__, :UNDEFINEDYET)) = 42
 setglobal!_nothrow_undefinedyet() = setglobal!(@__MODULE__, :UNDEFINEDYET, 42)
 let effects = Base.infer_effects() do
@@ -328,9 +462,9 @@ end |> Core.Compiler.is_consistent
 end |> Core.Compiler.is_effect_free
 
 # `getfield_effects` handles access to union object nicely
-@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Any[Some{String}, Core.Const(:value)], String))
-@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Any[Some{Symbol}, Core.Const(:value)], Symbol))
-@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Any[Union{Some{Symbol},Some{String}}, Core.Const(:value)], Union{Symbol,String}))
+@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Some{String}, Core.Const(:value)]), String))
+@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Some{Symbol}, Core.Const(:value)]), Symbol))
+@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Union{Some{Symbol},Some{String}}, Core.Const(:value)]), Union{Symbol,String}))
 @test Base.infer_effects((Bool,)) do c
     obj = c ? Some{String}("foo") : Some{Symbol}(:bar)
     return getfield(obj, :value)
@@ -353,7 +487,7 @@ end |> Core.Compiler.is_inaccessiblememonly
 @test Base.infer_effects() do
     ConstantType{Any}()
 end |> Core.Compiler.is_inaccessiblememonly
-@test_broken Base.infer_effects() do
+@test Base.infer_effects() do
     constant_global_nonisbits
 end |> Core.Compiler.is_inaccessiblememonly
 @test Base.infer_effects() do
@@ -552,3 +686,60 @@ end
 end # @testset "effects analysis on array construction" begin
 
 end # @testset "effects analysis on array ops" begin
+
+# Test that builtin_effects handles vararg correctly
+@test !Core.Compiler.is_nothrow(Core.Compiler.builtin_effects(Core.Compiler.fallback_lattice, Core.isdefined,
+    Core.Compiler.ArgInfo(nothing, Any[Core.Compiler.Const(Core.isdefined), String, Vararg{Any}]), Bool))
+
+# Test that :new can be eliminated even if an sparam is unknown
+struct SparamUnused{T}
+    x
+    SparamUnused(x::T) where {T} = new{T}(x)
+end
+mksparamunused(x) = (SparamUnused(x); nothing)
+let src = code_typed1(mksparamunused, (Any,))
+    @test count(isnew, src.code) == 0
+end
+
+struct WrapperOneField{T}
+    x::T
+end
+
+# Effects for getfield of type instance
+@test Base.infer_effects(Tuple{Nothing}) do x
+    WrapperOneField{typeof(x)}.instance
+end |> Core.Compiler.is_total
+@test Base.infer_effects(Tuple{WrapperOneField{Float64}, Symbol}) do w, s
+    getfield(w, s)
+end |> Core.Compiler.is_foldable
+@test Core.Compiler.getfield_notundefined(WrapperOneField{Float64}, Symbol)
+@test Base.infer_effects(Tuple{WrapperOneField{Symbol}, Symbol}) do w, s
+    getfield(w, s)
+end |> Core.Compiler.is_foldable
+
+# Flow-sensitive consistenct for _typevar
+@test Base.infer_effects() do
+    return WrapperOneField == (WrapperOneField{T} where T)
+end |> Core.Compiler.is_total
+
+# Test that dead `@inbounds` does not taint consistency
+# https://github.com/JuliaLang/julia/issues/48243
+@test Base.infer_effects() do
+    false && @inbounds (1,2,3)[1]
+    return 1
+end |> Core.Compiler.is_total
+
+@test Base.infer_effects(Tuple{Int64}) do i
+    @inbounds (1,2,3)[i]
+end |> !Core.Compiler.is_consistent
+
+# Test that :new of non-concrete, but otherwise known type
+# does not taint consistency.
+@eval struct ImmutRef{T}
+    x::T
+    ImmutRef(x) = $(Expr(:new, :(ImmutRef{typeof(x)}), :x))
+end
+@test Core.Compiler.is_foldable(Base.infer_effects(ImmutRef, Tuple{Any}))
+
+@test Base.ismutationfree(Type{Union{}})
+@test Core.Compiler.is_total(Base.infer_effects(typejoin, ()))

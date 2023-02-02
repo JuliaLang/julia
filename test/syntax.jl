@@ -547,7 +547,7 @@ end
 
 # meta nodes for optional positional arguments
 let src = Meta.lower(Main, :(@inline f(p::Int=2) = 3)).args[1].code[end-1].args[3]
-    @test Core.Compiler.is_inlineable(src)
+    @test Core.Compiler.is_declared_inline(src)
 end
 
 # issue #16096
@@ -848,6 +848,14 @@ end
 @test c8925 == 3 && isconst(@__MODULE__, :c8925)
 @test d8925 == 4 && isconst(@__MODULE__, :d8925)
 
+# issue #47168
+let t47168 = (;a47168 = 1, b47168 = 2);
+    global const (;a47168, b47168) = t47168
+    @test a47168 == 1 && isconst(@__MODULE__, :a47168)
+    @test b47168 == 2 && isconst(@__MODULE__, :b47168)
+end
+@test (let x = (;x=1); let (;x) = x; x; end, x; end) == (1, (x = 1,))
+
 # issue #18754: parse ccall as a regular function
 @test Meta.parse("ccall([1], 2)[3]") == Expr(:ref, Expr(:call, :ccall, Expr(:vect, 1), 2), 3)
 @test Meta.parse("ccall(a).member") == Expr(:., Expr(:call, :ccall, :a), QuoteNode(:member))
@@ -869,6 +877,12 @@ let f = function (x::T, y::S) where T<:S where S
         end
     @test f(0,1) === (Int,Int)
 end
+
+# issue #45506
+@test :( function (a) where {B, C} end).args[1] == Expr(:where, Expr(:tuple, :a), :B, :C)
+@test (function(::Type{Tuple{A45506, B45506}}) where {A45506 <: Any, B45506 <: Any}
+    B45506
+end)(Tuple{Int8, Int16}) == Int16
 
 # issue #20541
 @test Meta.parse("[a .!b]") == Expr(:hcat, :a, Expr(:call, :.!, :b))
@@ -1544,9 +1558,8 @@ end
 
 # issue #27129
 f27129(x = 1) = (@inline; x)
-for meth in methods(f27129)
-    src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), meth, C_NULL, meth.source)
-    @test Core.Compiler.is_inlineable(src)
+for method in methods(f27129)
+    @test Core.Compiler.is_declared_inline(method)
 end
 
 # issue #27710
@@ -2268,6 +2281,12 @@ end
 @test Meta.lower(@__MODULE__, Expr(:block, LineNumberNode(101, :some_file), :(f(x,x)=1))) ==
     Expr(:error, "function argument name not unique: \"x\" around some_file:101")
 
+@test Meta.lower(@__MODULE__, Expr(:block, LineNumberNode(102, :some_file), :(function f(x) where T where T; x::T; end))) ==
+    Expr(:error, "function static parameter name not unique: \"T\" around some_file:102")
+
+@test Meta.lower(@__MODULE__, Expr(:block, LineNumberNode(103, :some_file), :(function f(t) where t; x; end))) ==
+    Expr(:error, "function argument and static parameter name not distinct: \"t\" around some_file:103")
+
 # Ensure file names don't leak between `eval`s
 eval(LineNumberNode(11, :incorrect_file))
 let exc = try eval(:(f(x,x)=1)) catch e ; e ; end
@@ -2311,14 +2330,19 @@ f35201(c) = h35201((;c...), k=true)
 f44343(;kw...) = NamedTuple(kw)
 @test f44343(u = (; :a => 1)) === (u = (; :a => 1),)
 
-@testset "issue #34544/35367" begin
-    # Test these evals shouldnt segfault
+@testset "issue #34544/35367/35429" begin
+    # Test these evals shouldn't segfault
     eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar1, Expr(:block)))))
     eval(Expr(:module, true, :bar2, Expr(:block)))
     eval(Expr(:quote, Expr(:module, true, :bar3, Expr(:quote))))
     @test_throws ErrorException eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar4, Expr(:quote)))))
     @test_throws ErrorException eval(Expr(:module, true, :bar5, Expr(:foo)))
     @test_throws ErrorException eval(Expr(:module, true, :bar6, Expr(:quote)))
+
+    #35429
+    @test_throws ErrorException eval(Expr(:thunk, x->x+9))
+    @test_throws ErrorException eval(Expr(:thunk, Meta.parse("x=17")))
+    @test_throws ErrorException eval(Expr(:thunk, Meta.parse("17")))
 end
 
 # issue #35391
@@ -2517,7 +2541,8 @@ using Test
 
 module Mod
 const x = 1
-global maybe_undef
+global maybe_undef, always_undef
+export always_undef
 def() = (global maybe_undef = 0)
 func(x) = 2x + 1
 
@@ -2555,10 +2580,18 @@ import .Mod.maybe_undef as mu
 Mod.def()
 @test mu === 0
 
-using .Mod: func as f
-@test f(10) == 21
-@test !@isdefined(func)
-@test_throws ErrorException("error in method definition: function Mod.func must be explicitly imported to be extended") eval(:(f(x::Int) = x))
+module Mod3
+using ..Mod: func as f
+using ..Mod
+end
+@test Mod3.f(10) == 21
+@test !isdefined(Mod3, :func)
+@test_throws ErrorException("invalid method definition in Mod3: function Mod3.f must be explicitly imported to be extended") Core.eval(Mod3, :(f(x::Int) = x))
+@test !isdefined(Mod3, :always_undef) # resolve this binding now in Mod3
+@test_throws ErrorException("invalid method definition in Mod3: exported function Mod.always_undef does not exist") Core.eval(Mod3, :(always_undef(x::Int) = x))
+@test_throws ErrorException("cannot assign a value to imported variable Mod.always_undef from module Mod3") Core.eval(Mod3, :(const always_undef = 3))
+@test_throws ErrorException("cannot assign a value to imported variable Mod3.f") Core.eval(Mod3, :(const f = 3))
+@test_throws ErrorException("cannot declare Mod.maybe_undef constant; it already has a value") Core.eval(Mod, :(const maybe_undef = 3))
 
 z = 42
 import .z as also_z
@@ -3397,4 +3430,38 @@ f45162(f) = f(x=1)
     @test_parseerror "'\\1000'" "character literal contains multiple characters"
     @test Meta.isexpr(Meta.parse("'a"), :incomplete)
     @test ''' == "'"[1]
+end
+
+# issue #46251
+@test begin; global value = 1; (value, value += 1) end == (1, 2)
+@test begin; global value = 1; "($(value), $(value += 1))" end == "(1, 2)"
+
+# issue #47410
+# note `eval` is needed since this needs to be at the top level
+@test eval(:(if false
+             elseif false || (()->true)()
+                 42
+             end)) == 42
+
+macro _macroexpand(x, m=__module__)
+    :($__source__; macroexpand($m, Expr(:var"hygienic-scope", $(esc(Expr(:quote, x))), $m)))
+end
+
+@testset "unescaping in :global expressions" begin
+    m = @__MODULE__
+    @test @_macroexpand(global x::T) == :(global x::$(GlobalRef(m, :T)))
+    @test @_macroexpand(global (x, $(esc(:y)))) == :(global (x, y))
+    @test @_macroexpand(global (x::S, $(esc(:y))::$(esc(:T)))) ==
+        :(global (x::$(GlobalRef(m, :S)), y::T))
+    @test @_macroexpand(global (; x, $(esc(:y)))) == :(global (; x, y))
+    @test @_macroexpand(global (; x::S, $(esc(:y))::$(esc(:T)))) ==
+        :(global (; x::$(GlobalRef(m, :S)), y::T))
+
+    @test @_macroexpand(global x::T = a) == :(global x::$(GlobalRef(m, :T)) = $(GlobalRef(m, :a)))
+    @test @_macroexpand(global (x, $(esc(:y))) = a) == :(global (x, y) = $(GlobalRef(m, :a)))
+    @test @_macroexpand(global (x::S, $(esc(:y))::$(esc(:T))) = a) ==
+        :(global (x::$(GlobalRef(m, :S)), y::T) = $(GlobalRef(m, :a)))
+    @test @_macroexpand(global (; x, $(esc(:y))) = a) == :(global (; x, y) = $(GlobalRef(m, :a)))
+    @test @_macroexpand(global (; x::S, $(esc(:y))::$(esc(:T))) = a) ==
+        :(global (; x::$(GlobalRef(m, :S)), y::T) = $(GlobalRef(m, :a)))
 end

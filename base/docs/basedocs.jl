@@ -499,7 +499,8 @@ sense to write something like `let x = x`, since the two `x` variables are disti
 the left-hand side locally shadowing the `x` from the outer scope. This can even
 be a useful idiom as new local variables are freshly created each time local scopes
 are entered, but this is only observable in the case of variables that outlive their
-scope via closures.
+scope via closures.  A `let` variable without an assignment, such as `var2` in the
+example above, declares a new local variable that is not yet bound to a value.
 
 By contrast, [`begin`](@ref) blocks also group multiple expressions together but do
 not introduce scope or have the special assignment syntax.
@@ -685,12 +686,11 @@ Expr
 Expr
 
 """
-    (:)(expr)
+    :expr
 
-`:expr` quotes the expression `expr`, returning the abstract syntax tree (AST) of `expr`.
+Quote an expression `expr`, returning the abstract syntax tree (AST) of `expr`.
 The AST may be of type `Expr`, `Symbol`, or a literal value.
-Which of these three types are returned for any given expression is an
-implementation detail.
+The syntax `:identifier` evaluates to a `Symbol`.
 
 See also: [`Expr`](@ref), [`Symbol`](@ref), [`Meta.parse`](@ref)
 
@@ -795,7 +795,7 @@ julia> f(2)
 7
 ```
 
-Anonymous functions can also be defined for multiple argumets.
+Anonymous functions can also be defined for multiple arguments.
 ```jldoctest
 julia> g = (x,y) -> x^2 + y^2
 #2 (generic function with 1 method)
@@ -1142,8 +1142,16 @@ Adding `;` at the end of a line in the REPL will suppress printing the result of
 
 In function declarations, and optionally in calls, `;` separates regular arguments from keywords.
 
-While constructing arrays, if the arguments inside the square brackets are separated by `;`
-then their contents are vertically concatenated together.
+In array literals, arguments separated by semicolons have their contents
+concatenated together. A separator made of a single `;` concatenates vertically
+(i.e. along the first dimension), `;;` concatenates horizontally (second
+dimension), `;;;` concatenates along the third dimension, etc. Such a separator
+can also be used in last position in the square brackets to add trailing
+dimensions of length 1.
+
+A `;` in first position inside of parentheses can be used to construct a named
+tuple. The same `(; ...)` syntax on the left side of an assignment allows for
+property destructuring.
 
 In the standard REPL, typing `;` on an empty line will switch to shell mode.
 
@@ -1167,10 +1175,39 @@ julia> function plot(x, y; style="solid", width=1, color="black")
            ###
        end
 
-julia> [1 2; 3 4]
+julia> A = [1 2; 3 4]
 2×2 Matrix{Int64}:
  1  2
  3  4
+
+julia> [1; 3;; 2; 4;;; 10*A]
+2×2×2 Array{Int64, 3}:
+[:, :, 1] =
+ 1  2
+ 3  4
+
+[:, :, 2] =
+ 10  20
+ 30  40
+
+julia> [2; 3;;;]
+2×1×1 Array{Int64, 3}:
+[:, :, 1] =
+ 2
+ 3
+
+julia> nt = (; x=1) # without the ; or a trailing comma this would assign to x
+(x = 1,)
+
+julia> key = :a; c = 3;
+
+julia> nt2 = (; key => 1, b=2, c, nt.x)
+(a = 1, b = 2, c = 3, x = 1)
+
+julia> (; b, x) = nt2; # set variables b and x using property destructuring
+
+julia> b, x
+(2, 1)
 
 julia> ; # upon typing ;, the prompt changes (in place) to: shell>
 shell> echo hello
@@ -1418,6 +1455,14 @@ kw"var\"name\"", kw"@var_str"
 A variable referring to the last computed value, automatically set at the interactive prompt.
 """
 kw"ans"
+
+"""
+    err
+
+A variable referring to the last thrown errors, automatically set at the interactive prompt.
+The thrown errors are collected in a stack of exceptions.
+"""
+kw"err"
 
 """
     devnull
@@ -1750,7 +1795,7 @@ A symbol in the current scope is not defined.
 # Examples
 ```jldoctest
 julia> a
-ERROR: UndefVarError: a not defined
+ERROR: UndefVarError: `a` not defined
 
 julia> a = 1;
 
@@ -1773,7 +1818,7 @@ julia> function my_func(;my_arg)
 my_func (generic function with 1 method)
 
 julia> my_func()
-ERROR: UndefKeywordError: keyword argument my_arg not assigned
+ERROR: UndefKeywordError: keyword argument `my_arg` not assigned
 Stacktrace:
  [1] my_func() at ./REPL[1]:2
  [2] top-level scope at REPL[2]:1
@@ -2079,7 +2124,7 @@ Symbol(x...)
 
 Construct a tuple of the given objects.
 
-See also [`Tuple`](@ref), [`NamedTuple`](@ref).
+See also [`Tuple`](@ref), [`ntuple`](@ref), [`NamedTuple`](@ref).
 
 # Examples
 ```jldoctest
@@ -2205,6 +2250,82 @@ If supported by the hardware, this may be optimized to the appropriate hardware
 instruction, otherwise it'll use a loop.
 """
 replacefield!
+
+"""
+    getglobal(module::Module, name::Symbol, [order::Symbol=:monotonic])
+
+Retrieve the value of the binding `name` from the module `module`. Optionally, an
+atomic ordering can be defined for the operation, otherwise it defaults to
+monotonic.
+
+While accessing module bindings using [`getfield`](@ref) is still supported to
+maintain compatibility, using `getglobal` should always be preferred since
+`getglobal` allows for control over atomic ordering (`getfield` is always
+monotonic) and better signifies the code's intent both to the user as well as the
+compiler.
+
+Most users should not have to call this function directly -- The
+[`getproperty`](@ref Base.getproperty) function or corresponding syntax (i.e.
+`module.name`) should be preferred in all but few very specific use cases.
+
+!!! compat "Julia 1.9"
+    This function requires Julia 1.9 or later.
+
+See also [`getproperty`](@ref Base.getproperty) and [`setglobal!`](@ref).
+
+# Examples
+```jldoctest
+julia> a = 1
+1
+
+julia> module M
+       a = 2
+       end;
+
+julia> getglobal(@__MODULE__, :a)
+1
+
+julia> getglobal(M, :a)
+2
+```
+"""
+getglobal
+
+"""
+    setglobal!(module::Module, name::Symbol, x, [order::Symbol=:monotonic])
+
+Set or change the value of the binding `name` in the module `module` to `x`. No
+type conversion is performed, so if a type has already been declared for the
+binding, `x` must be of appropriate type or an error is thrown.
+
+Additionally, an atomic ordering can be specified for this operation, otherwise it
+defaults to monotonic.
+
+Users will typically access this functionality through the
+[`setproperty!`](@ref Base.setproperty!) function or corresponding syntax
+(i.e. `module.name = x`) instead, so this is intended only for very specific use
+cases.
+
+!!! compat "Julia 1.9"
+    This function requires Julia 1.9 or later.
+
+See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal`](@ref)
+
+# Examples
+```jldoctest
+julia> module M end;
+
+julia> M.a  # same as `getglobal(M, :a)`
+ERROR: UndefVarError: `a` not defined
+
+julia> setglobal!(M, :a, 1)
+1
+
+julia> M.a
+1
+```
+"""
+setglobal!
 
 """
     typeof(x)
@@ -2777,17 +2898,48 @@ Vararg
 """
     Tuple{Types...}
 
-Tuples are an abstraction of the arguments of a function – without the function itself. The salient aspects of
-a function's arguments are their order and their types. Therefore a tuple type is similar to a parameterized
-immutable type where each parameter is the type of one field. Tuple types may have any number of parameters.
+A tuple is a fixed-length container that can hold any values of different
+types, but cannot be modified (it is immutable). The values can be accessed via
+indexing. Tuple literals are written with commas and parentheses:
+
+```jldoctest
+julia> (1, 1+1)
+(1, 2)
+
+julia> (1,)
+(1,)
+
+julia> x = (0.0, "hello", 6*7)
+(0.0, "hello", 42)
+
+julia> x[2]
+"hello"
+
+julia> typeof(x)
+Tuple{Float64, String, Int64}
+```
+
+A length-1 tuple must be written with a comma, `(1,)`, since `(1)` would just
+be a parenthesized value. `()` represents the empty (length-0) tuple.
+
+A tuple can be constructed from an iterator by using a `Tuple` type as constructor:
+
+```jldoctest
+julia> Tuple(["a", 1])
+("a", 1)
+
+julia> Tuple{String, Float64}(["a", 1])
+("a", 1.0)
+```
 
 Tuple types are covariant in their parameters: `Tuple{Int}` is a subtype of `Tuple{Any}`. Therefore `Tuple{Any}`
 is considered an abstract type, and tuple types are only concrete if their parameters are. Tuples do not have
 field names; fields are only accessed by index.
+Tuple types may have any number of parameters.
 
 See the manual section on [Tuple Types](@ref).
 
-See also [`Vararg`](@ref), [`NTuple`](@ref), [`tuple`](@ref), [`NamedTuple`](@ref).
+See also [`Vararg`](@ref), [`NTuple`](@ref), [`ntuple`](@ref), [`tuple`](@ref), [`NamedTuple`](@ref).
 """
 Tuple
 
@@ -2851,8 +3003,8 @@ the syntax `@atomic a.b` calls `getproperty(a, :b, :sequentially_consistent)`.
 
 # Examples
 ```jldoctest
-julia> struct MyType
-           x
+julia> struct MyType{T <: Number}
+           x::T
        end
 
 julia> function Base.getproperty(obj::MyType, sym::Symbol)
@@ -2871,6 +3023,11 @@ julia> obj.special
 julia> obj.x
 1
 ```
+
+One should overload `getproperty` only when necessary, as it can be confusing if
+the behavior of the syntax `obj.f` is unusual.
+Also note that using methods is often preferable. See also this style guide documentation
+for more information: [Prefer exported methods over direct field access](@ref).
 
 See also [`getfield`](@ref Core.getfield),
 [`propertynames`](@ref Base.propertynames) and
@@ -2899,7 +3056,7 @@ Base.setproperty!
     swapproperty!(x, f::Symbol, v, order::Symbol=:not_atomic)
 
 The syntax `@atomic a.b, _ = c, a.b` returns `(c, swapproperty!(a, :b, c, :sequentially_consistent))`,
-where there must be one getfield expression common to both sides.
+where there must be one `getproperty` expression common to both sides.
 
 See also [`swapfield!`](@ref Core.swapfield!)
 and [`setproperty!`](@ref Base.setproperty!).
@@ -2909,9 +3066,9 @@ Base.swapproperty!
 """
     modifyproperty!(x, f::Symbol, op, v, order::Symbol=:not_atomic)
 
-The syntax `@atomic max(a().b, c)` returns `modifyproperty!(a(), :b,
-max, c, :sequentially_consistent))`, where the first argument must be a
-`getfield` expression and is modified atomically.
+The syntax `@atomic op(x.f, v)` (and its equivalent `@atomic x.f op v`) returns
+`modifyproperty!(x, :f, op, v, :sequentially_consistent)`, where the first argument
+must be a `getproperty` expression and is modified atomically.
 
 Invocation of `op(getproperty(x, f), v)` must return a value that can be stored in the field
 `f` of the object `x` by default.  In particular, unlike the default behavior of
@@ -3021,7 +3178,7 @@ QuoteNode
 
 """
     "
-`"` Is used to delimit string literals.
+`"` Is used to delimit string literals. A trailing `\\` can be used to continue a string literal on the next line.
 
 # Examples
 
@@ -3031,6 +3188,10 @@ julia> "Hello World!"
 
 julia> "Hello World!\\n"
 "Hello World!\\n"
+
+julia> "Hello \\
+        World"
+"Hello World"
 ```
 
 See also [`\"""`](@ref \"\"\").
@@ -3061,7 +3222,7 @@ See also [`"`](@ref \")
 kw"\"\"\""
 
 """
-    donotdelete(args...)
+    Base.donotdelete(args...)
 
 This function prevents dead-code elimination (DCE) of itself and any arguments
 passed to it, but is otherwise the lightest barrier possible. In particular,
@@ -3078,16 +3239,17 @@ This is intended for use in benchmarks that want to guarantee that `args` are
 actually computed. (Otherwise DCE may see that the result of the benchmark is
 unused and delete the entire benchmark code).
 
-**Note**: `donotdelete` does not affect constant folding. For example, in
-          `donotdelete(1+1)`, no add instruction needs to be executed at runtime and
-          the code is semantically equivalent to `donotdelete(2).`
+!!! note
+    `donotdelete` does not affect constant folding. For example, in
+    `donotdelete(1+1)`, no add instruction needs to be executed at runtime and
+    the code is semantically equivalent to `donotdelete(2).`
 
 # Examples
 
 ```julia
 function loop()
     for i = 1:1000
-        # The complier must guarantee that there are 1000 program points (in the correct
+        # The compiler must guarantee that there are 1000 program points (in the correct
         # order) at which the value of `i` is in a register, but has otherwise
         # total control over the program.
         donotdelete(i)
@@ -3096,6 +3258,62 @@ end
 ```
 """
 Base.donotdelete
+
+"""
+    Base.compilerbarrier(setting::Symbol, val)
+
+This function puts a barrier at a specified compilation phase.
+It is supposed to only influence the compilation behavior according to `setting`,
+and its runtime semantics is just to return the second argument `val` (except that
+this function will perform additional checks on `setting` in a case when `setting`
+isn't known precisely at compile-time.)
+
+Currently either of the following `setting`s is allowed:
+- Barriers on abstract interpretation:
+  * `:type`: the return type of this function call will be inferred as `Any` always
+    (the strongest barrier on abstract interpretation)
+  * `:const`: the return type of this function call will be inferred with widening
+    constant information on `val`
+  * `:conditional`: the return type of this function call will be inferred with widening
+    conditional information on `val` (see the example below)
+- Any barriers on optimization aren't implemented yet
+
+!!! note
+    This function is supposed to be used _with `setting` known precisely at compile-time_.
+    Note that in a case when the `setting` isn't known precisely at compile-time, the compiler
+    currently will put the most strongest barrier(s) rather than emitting a compile-time warning.
+
+# Examples
+
+```julia
+julia> Base.return_types((Int,)) do a
+           x = compilerbarrier(:type, a) # `x` won't be inferred as `x::Int`
+           return x
+       end |> only
+Any
+
+julia> Base.return_types() do
+           x = compilerbarrier(:const, 42)
+           if x == 42 # no constant information here, so inference also accounts for the else branch
+               return x # but `x` is still inferred as `x::Int` at least here
+           else
+               return nothing
+           end
+       end |> only
+Union{Nothing, Int64}
+
+julia> Base.return_types((Union{Int,Nothing},)) do a
+           if compilerbarrier(:conditional, isa(a, Int))
+               # the conditional information `a::Int` isn't available here (leading to less accurate return type inference)
+               return a
+           else
+               return nothing
+           end
+       end |> only
+Union{Nothing, Int64}
+```
+"""
+Base.compilerbarrier
 
 """
     Core.finalizer(f, o)
@@ -3110,11 +3328,11 @@ but there are a number of small differences. They are documented here for
 completeness only and (unlike `Base.finalizer`) have no stability guarantees.
 
 The current differences are:
-    - `Core.finalizer` does not check for mutability of `o`. Attempting to register
-      a finalizer for an immutable object is undefined behavior.
-    - The value `f` must be a Julia object. `Core.finalizer` does not support a
-      raw C function pointer.
-    - `Core.finalizer` returns `nothing` rather than `o`.
+- `Core.finalizer` does not check for mutability of `o`. Attempting to register
+  a finalizer for an immutable object is undefined behavior.
+- The value `f` must be a Julia object. `Core.finalizer` does not support a
+  raw C function pointer.
+- `Core.finalizer` returns `nothing` rather than `o`.
 """
 Core.finalizer
 

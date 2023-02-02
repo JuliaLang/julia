@@ -418,7 +418,7 @@ function ssh_tunnel(user, host, bind_addr, port, sshflags, multiplex)
         else
             # if we cannot do port forwarding, fail immediately
             # the -f option backgrounds the ssh session
-            # `sleep 60` command specifies that an alloted time of 60 seconds is allowed to start the
+            # `sleep 60` command specifies that an allotted time of 60 seconds is allowed to start the
             # remote julia process and establish the network connections specified by the process topology.
             # If no connections are made within 60 seconds, ssh will exit and an error will be printed on the
             # process that launched the remote process.
@@ -486,6 +486,13 @@ function launch(manager::LocalManager, params::Dict, launched::Array, c::Conditi
     end
     if get(env, "JULIA_DEPOT_PATH", nothing) === nothing
         env["JULIA_DEPOT_PATH"] = join(DEPOT_PATH, pathsep)
+    end
+
+    # If we haven't explicitly asked for threaded BLAS, prevent OpenBLAS from starting
+    # up with multiple threads, thereby sucking up a bunch of wasted memory on Windows.
+    if !params[:enable_threaded_blas] &&
+       get(env, "OPENBLAS_NUM_THREADS", nothing) === nothing
+        env["OPENBLAS_NUM_THREADS"] = "1"
     end
     # Set the active project on workers using JULIA_PROJECT.
     # Users can opt-out of this by (i) passing `env = ...` or (ii) passing

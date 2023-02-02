@@ -1038,8 +1038,11 @@ true
 ```
 
 Note the use of the `\Q...\E` escape sequence. All characters between the `\Q` and the `\E`
-are interpreted as literal characters (after string interpolation). This escape sequence can
-be useful when interpolating, possibly malicious, user input.
+are interpreted as literal characters. This is convenient for matching characters that
+would otherwise be regex metacharacters. However, caution is needed when using this feature
+together with string interpolation, since the interpolated string might itself contain
+the `\E` sequence, unexpectedly terminating literal matching. User inputs need to be sanitized
+before inclusion in a regex.
 
 ## [Byte Array Literals](@id man-byte-array-literals)
 

@@ -369,9 +369,11 @@ include(m::Module, fname::String) = ccall(:jl_load_, Any, (Any, Any), m, fname)
 
 eval(m::Module, @nospecialize(e)) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
 
-kwfunc(@nospecialize(f)) = ccall(:jl_get_keyword_sorter, Any, (Any,), f)
-
-kwftype(@nospecialize(t)) = typeof(ccall(:jl_get_kwsorter, Any, (Any,), t))
+# dispatch token indicating a kwarg (keyword sorter) call
+function kwcall end
+# deprecated internal functions:
+kwfunc(@nospecialize(f)) = kwcall
+kwftype(@nospecialize(t)) = typeof(kwcall)
 
 mutable struct Box
     contents::Any
@@ -412,7 +414,6 @@ eval(Core, quote
     end
     LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int32, inlined_at::Int32) =
         $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))
-    GlobalRef(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))
     SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))
     TypedSlot(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))
     PhiNode(edges::Array{Int32, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))
@@ -420,25 +421,26 @@ eval(Core, quote
     PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))
     UpsilonNode(@nospecialize(val)) = $(Expr(:new, :UpsilonNode, :val))
     UpsilonNode() = $(Expr(:new, :UpsilonNode))
-    function CodeInstance(
-        mi::MethodInstance, @nospecialize(rettype), @nospecialize(inferred_const),
-        @nospecialize(inferred), const_flags::Int32, min_world::UInt, max_world::UInt,
-        ipo_effects::UInt32, effects::UInt32, @nospecialize(argescapes#=::Union{Nothing,Vector{ArgEscapeInfo}}=#),
-        relocatability::UInt8)
-        return ccall(:jl_new_codeinst, Ref{CodeInstance},
-            (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8),
-            mi, rettype, inferred_const, inferred, const_flags, min_world, max_world,
-            ipo_effects, effects, argescapes,
-            relocatability)
-    end
     Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))
     # NOTE the main constructor is defined within `Core.Compiler`
-    _PartialStruct(typ::DataType, fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))
+    _PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))
     PartialOpaque(@nospecialize(typ), @nospecialize(env), parent::MethodInstance, source) = $(Expr(:new, :PartialOpaque, :typ, :env, :parent, :source))
     InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) = $(Expr(:new, :InterConditional, :slot, :thentype, :elsetype))
     MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) = $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))
 end)
 
+function CodeInstance(
+    mi::MethodInstance, @nospecialize(rettype), @nospecialize(inferred_const),
+    @nospecialize(inferred), const_flags::Int32, min_world::UInt, max_world::UInt,
+    ipo_effects::UInt32, effects::UInt32, @nospecialize(argescapes#=::Union{Nothing,Vector{ArgEscapeInfo}}=#),
+    relocatability::UInt8)
+    return ccall(:jl_new_codeinst, Ref{CodeInstance},
+        (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8),
+        mi, rettype, inferred_const, inferred, const_flags, min_world, max_world,
+        ipo_effects, effects, argescapes,
+        relocatability)
+end
+GlobalRef(m::Module, s::Symbol) = ccall(:jl_module_globalref, Ref{GlobalRef}, (Any, Any), m, s)
 Module(name::Symbol=:anonymous, std_imports::Bool=true, default_names::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool, Bool), name, std_imports, default_names)
 
 function _Task(@nospecialize(f), reserved_stack::Int, completion_future)
@@ -501,16 +503,19 @@ Array{T}(A::AbstractArray{S,N}) where {T,N,S} = Array{T,N}(A)
 AbstractArray{T}(A::AbstractArray{S,N}) where {T,S,N} = AbstractArray{T,N}(A)
 
 # primitive Symbol constructors
+
+## Helper for proper GC rooting without unsafe_convert
+eval(Core, quote
+    _Symbol(ptr::Ptr{UInt8}, sz::Int, root::Any) = $(Expr(:foreigncall, QuoteNode(:jl_symbol_n),
+        Ref{Symbol}, svec(Ptr{UInt8}, Int), 0, QuoteNode(:ccall), :ptr, :sz, :root))
+end)
+
 function Symbol(s::String)
     @_foldable_meta
-    return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
-                 ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s),
-                 sizeof(s))
+    return _Symbol(ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s), sizeof(s), s)
 end
 function Symbol(a::Array{UInt8,1})
-    return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
-                 ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),
-                 Intrinsics.arraylen(a))
+    return _Symbol(ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a), Intrinsics.arraylen(a), a)
 end
 Symbol(s::Symbol) = s
 
@@ -615,7 +620,8 @@ end
 
 NamedTuple() = NamedTuple{(),Tuple{}}(())
 
-NamedTuple{names}(args::Tuple) where {names} = NamedTuple{names,typeof(args)}(args)
+eval(Core, :(NamedTuple{names}(args::Tuple) where {names} =
+             $(Expr(:splatnew, :(NamedTuple{names,typeof(args)}), :args))))
 
 using .Intrinsics: sle_int, add_int
 
@@ -838,8 +844,10 @@ struct Pair{A, B}
     # but also mark the whole function with `@inline` to ensure we will inline it whenever possible
     # (even if `convert(::Type{A}, a::A)` for some reason was expensive)
     Pair(a, b) = new{typeof(a), typeof(b)}(a, b)
-    Pair{A, B}(a::A, b::B) where {A, B} = new(a, b)
-    Pair{Any, Any}(@nospecialize(a::Any), @nospecialize(b::Any)) = new(a, b)
+    function Pair{A, B}(@nospecialize(a), @nospecialize(b)) where {A, B}
+        @inline
+        return new(a::A, b::B)
+    end
 end
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)
