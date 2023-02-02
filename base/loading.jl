@@ -1247,20 +1247,15 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
     if root_module_exists(modkey)
         loaded = root_module(modkey)
     else
-        loading = get(package_locks, modkey, false)
-        if loading !== false
-            # load already in progress for this module
-            loaded = wait(loading::Threads.Condition)
-        else
-            package_locks[modkey] = Threads.Condition(require_lock)
+        loaded = start_loading(modkey)
+        if loaded === nothing
             try
                 modpath = locate_package(modkey)
                 modpath === nothing && return nothing
                 set_pkgorigin_version_path(modkey, String(modpath))
                 loaded = _require_search_from_serialized(modkey, String(modpath), build_id)
             finally
-                loading = pop!(package_locks, modkey)
-                notify(loading, loaded, all=true)
+                end_loading(modkey, loaded)
             end
             if loaded isa Module
                 insert_extension_triggers(modkey)
@@ -1282,26 +1277,21 @@ function _tryrequire_from_serialized(modkey::PkgId, path::String, ocachepath::Un
     if root_module_exists(modkey)
         loaded = root_module(modkey)
     else
-        loading = get(package_locks, modkey, false)
-        if loading !== false
-            # load already in progress for this module
-            loaded = wait(loading::Threads.Condition)
-        else
-            for i in 1:length(depmods)
-                dep = depmods[i]
-                dep isa Module && continue
-                _, depkey, depbuild_id = dep::Tuple{String, PkgId, UInt128}
-                @assert root_module_exists(depkey)
-                dep = root_module(depkey)
-                depmods[i] = dep
-            end
-            package_locks[modkey] = Threads.Condition(require_lock)
+        loaded = start_loading(modkey)
+        if loaded === nothing
             try
+                for i in 1:length(depmods)
+                    dep = depmods[i]
+                    dep isa Module && continue
+                    _, depkey, depbuild_id = dep::Tuple{String, PkgId, UInt128}
+                    @assert root_module_exists(depkey)
+                    dep = root_module(depkey)
+                    depmods[i] = dep
+                end
                 set_pkgorigin_version_path(modkey, sourcepath)
                 loaded = _include_from_serialized(modkey, path, ocachepath, depmods)
             finally
-                loading = pop!(package_locks, modkey)
-                notify(loading, loaded, all=true)
+                end_loading(modkey, loaded)
             end
             if loaded isa Module
                 insert_extension_triggers(modkey)
@@ -1424,7 +1414,65 @@ end
 end
 
 # to synchronize multiple tasks trying to import/using something
-const package_locks = Dict{PkgId,Threads.Condition}()
+const package_locks = Dict{PkgId,Pair{Task,Threads.Condition}}()
+
+debug_loading_deadlocks = true # Enable a slightly more expensive, but more complete algorithm that can handle simultaneous tasks.
+                               # This only triggers if you have multiple tasks trying to load the same package at the same time,
+                               # so it is unlikely to make a difference normally.
+function start_loading(modkey::PkgId)
+    # handle recursive calls to require
+    assert_havelock(require_lock)
+    loading = get(package_locks, modkey, nothing)
+    if loading !== nothing
+        # load already in progress for this module on the task
+        task, cond = loading
+        deps = String[modkey.name]
+        pkgid = modkey
+        assert_havelock(cond.lock)
+        if debug_loading_deadlocks && current_task() !== task
+            waiters = Dict{Task,Pair{Task,PkgId}}() # invert to track waiting tasks => loading tasks
+            for each in package_locks
+                cond2 = each[2][2]
+                assert_havelock(cond2.lock)
+                for waiting in cond2.waitq
+                    push!(waiters, waiting => (each[2][1] => each[1]))
+                end
+            end
+            while true
+                running = get(waiters, task, nothing)
+                running === nothing && break
+                task, pkgid = running
+                push!(deps, pkgid.name)
+                task === current_task() && break
+            end
+        end
+        if current_task() === task
+            others = String[modkey.name] # repeat this to emphasize the cycle here
+            for each in package_locks # list the rest of the packages being loaded too
+                if each[2][1] === task
+                    other = each[1].name
+                    other == modkey.name || other == pkgid.name || push!(others, other)
+                end
+            end
+            msg = sprint(deps, others) do io, deps, others
+                print(io, "deadlock detected in loading ")
+                join(io, deps, " -> ")
+                print(io, " -> ")
+                join(io, others, " && ")
+            end
+            throw(ConcurrencyViolationError(msg))
+        end
+        return wait(cond)
+    end
+    package_locks[modkey] = current_task() => Threads.Condition(require_lock)
+    return
+end
+
+function end_loading(modkey::PkgId, @nospecialize loaded)
+    loading = pop!(package_locks, modkey)
+    notify(loading[2], loaded, all=true)
+    nothing
+end
 
 # to notify downstream consumers that a module was successfully loaded
 # Callbacks take the form (mod::Base.PkgId) -> nothing.
@@ -1666,16 +1714,10 @@ end
 # Returns `nothing` or the new(ish) module
 function _require(pkg::PkgId, env=nothing)
     assert_havelock(require_lock)
-    # handle recursive calls to require
-    loading = get(package_locks, pkg, false)
-    if loading !== false
-        # load already in progress for this module
-        return wait(loading::Threads.Condition)
-    end
-    package_locks[pkg] = Threads.Condition(require_lock)
+    loaded = start_loading(pkg)
+    loaded === nothing || return loaded
 
     last = toplevel_load[]
-    loaded = nothing
     try
         toplevel_load[] = false
         # perform the search operation to select the module file require intends to load
@@ -1753,8 +1795,7 @@ function _require(pkg::PkgId, env=nothing)
         end
     finally
         toplevel_load[] = last
-        loading = pop!(package_locks, pkg)
-        notify(loading, loaded, all=true)
+        end_loading(pkg, loaded)
     end
     return loaded
 end
