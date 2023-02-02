@@ -891,7 +891,6 @@ See also [`hermitianpart!`](@ref) for the corresponding in-place operation.
     This function requires Julia 1.10 or later.
 """
 hermitianpart(A::AbstractMatrix, uplo::Symbol=:U) = Hermitian(_hermitianpart(A), uplo)
-hermitianpart(a::Number) = _hermitianpart(a)
 
 """
     hermitianpart!(A, uplo=:U) -> Hermitian
@@ -908,7 +907,7 @@ See also [`hermitianpart`](@ref) for the corresponding out-of-place operation.
 hermitianpart!(A::AbstractMatrix, uplo::Symbol=:U) = Hermitian(_hermitianpart!(A), uplo)
 
 _hermitianpart(A::AbstractMatrix) = _hermitianpart!(copy_similar(A, Base.promote_op(/, eltype(A), Int)))
-_hermitianpart(a::T) where {T<:Number} = convert(Base.promote_op(/, T, Int), real(a))
+_hermitianpart(a::Number) = real(a)
 
 function _hermitianpart!(A::AbstractMatrix)
     require_one_based_indexing(A)

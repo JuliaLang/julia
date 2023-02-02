@@ -808,8 +808,6 @@ end
         @test Aherm isa Hermitian
         @test Aherm.uplo == LinearAlgebra.char_uplo(uplo)
     end
-    z = 3 + im
-    hermitianpart(z) === only(hermitianpart([z;;]))
 end
 
 end # module TestSymmetric
