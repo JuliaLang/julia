@@ -140,10 +140,6 @@ void jl_safepoint_end_gc(void)
     jl_safepoint_disable(2);
     jl_safepoint_disable(1);
     jl_atomic_store_release(&jl_gc_running, 0);
-#  ifdef __APPLE__
-    // This wakes up other threads on mac.
-    jl_mach_gc_end();
-#  endif
     uv_mutex_unlock(&safepoint_lock);
     uv_cond_broadcast(&safepoint_cond);
 }

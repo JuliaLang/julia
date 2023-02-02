@@ -936,7 +936,7 @@ JL_DLLEXPORT void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t
 extern pthread_mutex_t in_signal_lock;
 #endif
 
-#if !defined(__clang_gcanalyzer__) && !defined(_OS_DARWIN_)
+#if !defined(__clang_gcanalyzer__)
 static inline void jl_set_gc_and_wait(void)
 {
     jl_task_t *ct = jl_current_task;
