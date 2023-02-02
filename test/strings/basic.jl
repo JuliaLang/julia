@@ -939,13 +939,17 @@ end
 end
 
 @testset "Conversion to Type{Union{String, SubString{String}}}" begin
-    str::String = "abc"
-    substr = SubString(str, 1, 3)
-    for T in [typeof(str), typeof(substr)]
+    str = "abc"
+    substr = SubString(str)
+    for T in [String, SubString{String}]
         conv_str = convert(T, str)
         conv_substr = convert(T, substr)
-        @test typeof(conv_str) == T
-        @test typeof(conv_substr) == T
+
+        if T == String
+            @test conv_str === conv_substr === str
+        elseif T == SubString{String}
+            @test conv_str === conv_substr === substr
+        end
     end
 end
 
