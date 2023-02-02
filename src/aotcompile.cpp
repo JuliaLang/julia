@@ -485,8 +485,7 @@ static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionT
     if (!target) {
         target = Function::Create(FT, Function::ExternalLinkage, alias, M);
     }
-    Function *interposer = Function::Create(FT, Function::ExternalLinkage, name, M);
-    interposer->setVisibility(GlobalValue::HiddenVisibility);
+    Function *interposer = Function::Create(FT, Function::InternalLinkage, name, M);
     appendToCompilerUsed(M, {interposer});
 
     llvm::IRBuilder<> builder(BasicBlock::Create(M.getContext(), "top", interposer));
@@ -891,6 +890,30 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
 #endif
     optimizer.run(M);
     assert(!verifyModule(M, &errs()));
+    bool inject_aliases = false;
+    for (auto &F : M.functions()) {
+        if (!F.isDeclaration() && F.getName() != "_DllMainCRTStartup") {
+            inject_aliases = true;
+            break;
+        }
+    }
+    // no need to inject aliases if we have no functions
+    if (inject_aliases) {
+        // We would like to emit an alias or an weakref alias to redirect these symbols
+        // but LLVM doesn't let us emit a GlobalAlias to a declaration...
+        // So for now we inject a definition of these functions that calls our runtime
+        // functions. We do so after optimization to avoid cloning these functions.
+        injectCRTAlias(M, "__gnu_h2f_ieee", "julia__gnu_h2f_ieee",
+                FunctionType::get(Type::getFloatTy(M.getContext()), { Type::getHalfTy(M.getContext()) }, false));
+        injectCRTAlias(M, "__extendhfsf2", "julia__gnu_h2f_ieee",
+                FunctionType::get(Type::getFloatTy(M.getContext()), { Type::getHalfTy(M.getContext()) }, false));
+        injectCRTAlias(M, "__gnu_f2h_ieee", "julia__gnu_f2h_ieee",
+                FunctionType::get(Type::getHalfTy(M.getContext()), { Type::getFloatTy(M.getContext()) }, false));
+        injectCRTAlias(M, "__truncsfhf2", "julia__gnu_f2h_ieee",
+                FunctionType::get(Type::getHalfTy(M.getContext()), { Type::getFloatTy(M.getContext()) }, false));
+        injectCRTAlias(M, "__truncdfhf2", "julia__truncdfhf2",
+                FunctionType::get(Type::getHalfTy(M.getContext()), { Type::getDoubleTy(M.getContext()) }, false));
+    }
 
     timers.optimize.stopTimer();
 
@@ -1439,23 +1462,6 @@ void jl_dump_native_impl(void *native_code,
     sysimageM->setStackProtectorGuard(dataM->getStackProtectorGuard());
     sysimageM->setOverrideStackAlignment(dataM->getOverrideStackAlignment());
 #endif
-
-    if (!TheTriple.isOSDarwin()) {
-        // We would like to emit an alias or an weakref alias to redirect these symbols
-        // but LLVM doesn't let us emit a GlobalAlias to a declaration...
-        // So for now we inject a definition of these functions that calls our runtime
-        // functions. We do so after optimization to avoid cloning these functions.
-        injectCRTAlias(*sysimageM, "__gnu_h2f_ieee", "julia__gnu_h2f_ieee",
-                FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
-        injectCRTAlias(*sysimageM, "__extendhfsf2", "julia__gnu_h2f_ieee",
-                FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
-        injectCRTAlias(*sysimageM, "__gnu_f2h_ieee", "julia__gnu_f2h_ieee",
-                FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
-        injectCRTAlias(*sysimageM, "__truncsfhf2", "julia__gnu_f2h_ieee",
-                FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
-        injectCRTAlias(*sysimageM, "__truncdfhf2", "julia__truncdfhf2",
-                FunctionType::get(Type::getHalfTy(Context), { Type::getDoubleTy(Context) }, false));
-    }
 
     if (TheTriple.isOSWindows()) {
         // Windows expect that the function `_DllMainStartup` is present in an dll.
