@@ -2242,7 +2242,7 @@ JL_DLLEXPORT int jl_gc_mark_queue_obj(jl_ptls_t ptls, jl_value_t *obj)
 JL_DLLEXPORT void jl_gc_mark_queue_objarray(jl_ptls_t ptls, jl_value_t *parent,
                                             jl_value_t **objs, size_t nobjs)
 {
-    uintptr_t nptr = (nobjs << 2) & (jl_astaggedvalue(parent)->bits.gc & 3);
+    uintptr_t nptr = (nobjs << 2) | (jl_astaggedvalue(parent)->bits.gc & 2);
     gc_mark_objarray(ptls, parent, objs, objs + nobjs, 1, nptr);
 }
 
@@ -2540,7 +2540,7 @@ void gc_mark_loop_(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
     while (1) {
         void *new_obj = (void *)gc_markqueue_pop(&ptls->mark_queue);
         // No more objects to mark
-        if (new_obj == NULL) {
+        if (__unlikely(new_obj == NULL)) {
             // TODO: work-stealing comes here...
             return;
         }
