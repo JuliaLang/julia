@@ -260,7 +260,7 @@ getpid() = ccall(:uv_os_getpid, Int32, ())
 ## network functions ##
 
 """
-    gethostname() -> AbstractString
+    gethostname() -> String
 
 Get the local machine's host name.
 """
