@@ -968,17 +968,6 @@ static int check_vararg_length(jl_value_t *v, ssize_t n, jl_stenv_t *e)
 
 static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e);
 
-struct subtype_tuple_env {
-    jl_datatype_t *xd, *yd;
-    jl_value_t *lastx, *lasty;
-    size_t lx, ly;
-    size_t i, j;
-    int vx, vy;
-    jl_value_t *vtx;
-    jl_value_t *vty;
-    jl_vararg_kind_t vvx, vvy;
-} JL_ROOTED_VALUE_COLLECTION;
-
 static int subtype_tuple_varargs(
     jl_vararg_t *vtx, jl_vararg_t *vty,
     size_t vx, size_t vy,
@@ -3071,9 +3060,6 @@ static jl_value_t *intersect_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_sten
                 int len = i > j ? i : j;
                 if ((xb && jl_is_long(xb->lb) && lx-1+jl_unbox_long(xb->lb) != len) ||
                     (yb && jl_is_long(yb->lb) && ly-1+jl_unbox_long(yb->lb) != len)) {
-                    res = jl_bottom_type;
-                }
-                else if (param == 2 && jl_is_unionall(xi) != jl_is_unionall(yi)) {
                     res = jl_bottom_type;
                 }
                 else {
