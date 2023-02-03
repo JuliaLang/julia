@@ -1416,7 +1416,7 @@ end
 # to synchronize multiple tasks trying to import/using something
 const package_locks = Dict{PkgId,Pair{Task,Threads.Condition}}()
 
-debug_loading_deadlocks = true # Enable a slightly more expensive, but more complete algorithm that can handle simultaneous tasks.
+debug_loading_deadlocks::Bool = true # Enable a slightly more expensive, but more complete algorithm that can handle simultaneous tasks.
                                # This only triggers if you have multiple tasks trying to load the same package at the same time,
                                # so it is unlikely to make a difference normally.
 function start_loading(modkey::PkgId)
