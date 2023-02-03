@@ -1076,9 +1076,9 @@ function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
 end
 
 function run_package_callbacks(modkey::PkgId)
+    run_extension_callbacks(modkey)
     assert_havelock(require_lock)
     unlock(require_lock)
-    run_extension_callbacks()
     try
         for callback in package_callbacks
             invokelatest(callback, modkey)
@@ -1099,14 +1099,13 @@ end
 ##############
 
 mutable struct ExtensionId
-    const id::PkgId # Could be symbol?
-    const parentid::PkgId
-    const triggers::Vector{PkgId} # What packages have to be loaded for the extension to get loaded
-    triggered::Bool
-    succeeded::Bool
+    const id::PkgId
+    const parentid::PkgId # just need the name, for printing
+    ntriggers::Int # how many more packages must be defined until this is loaded
 end
 
-const EXT_DORMITORY = ExtensionId[]
+const EXT_DORMITORY = Dict{PkgId,Vector{ExtensionId}}()
+const EXT_DORMITORY_FAILED = ExtensionId[]
 
 function insert_extension_triggers(pkg::PkgId)
     pkg.uuid === nothing && return
@@ -1159,59 +1158,84 @@ end
 function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, <:Any}, weakdeps::Dict{String, <:Any})
     for (ext::String, triggers::Union{String, Vector{String}}) in extensions
         triggers isa String && (triggers = [triggers])
-        triggers_id = PkgId[]
         id = PkgId(uuid5(parent.uuid, ext), ext)
+        gid = ExtensionId(id, parent, 1 + length(triggers))
+        trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, parent)
+        push!(trigger1, gid)
         for trigger in triggers
             # TODO: Better error message if this lookup fails?
             uuid_trigger = UUID(weakdeps[trigger]::String)
-            push!(triggers_id, PkgId(uuid_trigger, trigger))
+            trigger_id = PkgId(uuid_trigger, trigger)
+            if !haskey(Base.loaded_modules, trigger_id) || haskey(package_locks, trigger_id)
+                trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, trigger_id)
+                push!(trigger1, gid)
+            else
+                gid.ntriggers -= 1
+            end
         end
-        gid = ExtensionId(id, parent, triggers_id, false, false)
-        push!(EXT_DORMITORY, gid)
     end
 end
 
-function run_extension_callbacks(; force::Bool=false)
-    try
-        # TODO, if `EXT_DORMITORY` becomes very long, do something smarter
-        for extid in EXT_DORMITORY
-            extid.succeeded && continue
-            !force && extid.triggered && continue
-            if all(x -> haskey(Base.loaded_modules, x) && !haskey(package_locks, x), extid.triggers)
-                ext_not_allowed_load = nothing
-                extid.triggered = true
-                # It is possible that some of the triggers were loaded in an environment
-                # below the one of the parent. This will cause a load failure when the
-                # pkg ext tries to load the triggers. Therefore, check this first
-                # before loading the pkg ext.
-                for trigger in extid.triggers
-                    pkgenv = Base.identify_package_env(extid.id, trigger.name)
-                    if pkgenv === nothing
-                        ext_not_allowed_load = trigger
-                        break
-                    else
-                        pkg, env = pkgenv
-                        path = Base.locate_package(pkg, env)
-                        if path === nothing
-                            ext_not_allowed_load = trigger
-                            break
-                        end
-                    end
-                end
-                if ext_not_allowed_load !== nothing
-                    @debug "Extension $(extid.id.name) of $(extid.parentid.name) not loaded due to \
-                            $(ext_not_allowed_load.name) loaded in environment lower in load path"
-                else
-                    require(extid.id)
-                    @debug "Extension $(extid.id.name) of $(extid.parentid.name) loaded"
-                end
-                extid.succeeded = true
-            end
-        end
+function run_extension_callbacks(extid::ExtensionId)
+    assert_havelock(require_lock)
+    succeeded = try
+        _require_prelocked(extid.id)
+        @debug "Extension $(extid.id.name) of $(extid.parentid.name) loaded"
+        true
     catch
         # Try to continue loading if loading an extension errors
         errs = current_exceptions()
         @error "Error during loading of extension" exception=errs
+        false
+    end
+    return succeeded
+end
+
+function run_extension_callbacks(pkgid::PkgId)
+    assert_havelock(require_lock)
+    # take ownership of extids that depend on this pkgid
+    extids = pop!(EXT_DORMITORY, pkgid, nothing)
+    extids === nothing && return
+    for extid in extids
+        if extid.ntriggers > 0
+            # It is possible that pkgid was loaded in an environment
+            # below the one of the parent. This will cause a load failure when the
+            # pkg ext tries to load the triggers. Therefore, check this first
+            # before loading the pkg ext.
+            pkgenv = Base.identify_package_env(extid.id, pkgid.name)
+            ext_not_allowed_load = false
+            if pkgenv === nothing
+                ext_not_allowed_load = true
+            else
+                pkg, env = pkgenv
+                path = Base.locate_package(pkg, env)
+                if path === nothing
+                    ext_not_allowed_load = true
+                end
+            end
+            if ext_not_allowed_load
+                @debug "Extension $(extid.id.name) of $(extid.parentid.name) will not be loaded \
+                        since $(pkgid.name) loaded in environment lower in load path"
+                # indicate extid is expected to fail
+                extid.ntriggers *= -1
+            else
+                # indicate pkgid is loaded
+                extid.ntriggers -= 1
+            end
+        end
+        if extid.ntriggers < 0
+            # indicate pkgid is loaded
+            extid.ntriggers += 1
+            succeeded = false
+        else
+            succeeded = true
+        end
+        if extid.ntriggers == 0
+            # actually load extid, now that all dependencies are met,
+            # and record the result
+            succeeded = succeeded && run_extension_callbacks(extid)
+            succeeded || push!(EXT_DORMITORY_FAILED, extid)
+        end
     end
     nothing
 end
@@ -1224,7 +1248,19 @@ This is used in cases where the automatic loading of an extension failed
 due to some problem with the extension. Instead of restarting the Julia session,
 the extension can be fixed, and this function run.
 """
-retry_load_extensions() = run_extension_callbacks(; force=true)
+function retry_load_extensions()
+    @lock require_lock begin
+    # this copy is desired since run_extension_callbacks will release this lock
+    # so this can still mutate the list to drop successful ones
+    failed = copy(EXT_DORMITORY_FAILED)
+    empty!(EXT_DORMITORY_FAILED)
+    filter!(failed) do extid
+        return !run_extension_callbacks(extid)
+    end
+    prepend!(EXT_DORMITORY_FAILED, failed)
+    end
+    nothing
+end
 
 """
     get_extension(parent::Module, extension::Symbol)
