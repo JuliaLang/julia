@@ -1075,10 +1075,16 @@ function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
     return restored
 end
 
-function run_package_callbacks(modkey::PkgId)
+
+
+function run_package_callbacks_and_extension_triggers(modkey::PkgId)
+    run_extension_callbacks()
+    run_package_callbacks(modkey)
+end
+
+function run_package_callbacks(modkey)
     assert_havelock(require_lock)
     unlock(require_lock)
-    run_extension_callbacks()
     try
         for callback in package_callbacks
             invokelatest(callback, modkey)
@@ -1202,7 +1208,7 @@ function run_extension_callbacks(; force::Bool=false)
                     @debug "Extension $(extid.id.name) of $(extid.parentid.name) not loaded due to \
                             $(ext_not_allowed_load.name) loaded in environment lower in load path"
                 else
-                    require(extid.id)
+                    _require_prelocked(extid.id)
                     @debug "Extension $(extid.id.name) of $(extid.parentid.name) loaded"
                 end
                 extid.succeeded = true
@@ -1264,7 +1270,7 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
             end
             if loaded isa Module
                 insert_extension_triggers(modkey)
-                run_package_callbacks(modkey)
+                run_package_callbacks_and_extension_triggers(modkey)
             end
         end
     end
@@ -1305,7 +1311,7 @@ function _tryrequire_from_serialized(modkey::PkgId, path::String, ocachepath::Un
             end
             if loaded isa Module
                 insert_extension_triggers(modkey)
-                run_package_callbacks(modkey)
+                run_package_callbacks_and_extension_triggers(modkey)
             end
         end
     end
@@ -1574,7 +1580,7 @@ function _require_prelocked(uuidkey::PkgId, env=nothing)
         end
         insert_extension_triggers(uuidkey)
         # After successfully loading, notify downstream consumers
-        run_package_callbacks(uuidkey)
+        run_package_callbacks_and_extension_triggers(uuidkey)
     else
         newm = root_module(uuidkey)
     end
@@ -1767,7 +1773,7 @@ function _require_from_serialized(uuidkey::PkgId, path::String, ocachepath::Unio
     newm isa Module || throw(newm)
     insert_extension_triggers(uuidkey)
     # After successfully loading, notify downstream consumers
-    run_package_callbacks(uuidkey)
+    run_package_callbacks_and_extension_triggers(uuidkey)
     return newm
     end
 end
