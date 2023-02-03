@@ -364,7 +364,9 @@ struct CloneCtx {
     void clone_decls();
     void clone_bodies();
     void fix_gv_uses();
+    void finalize_orig_clone_attr();
     void fix_inst_uses();
+    void finalize_orig_features();
     void emit_metadata();
 private:
     void prepare_vmap(ValueToValueMapTy &vmap);
@@ -399,6 +401,8 @@ static inline std::vector<T*> consume_gv(Module &M, const char *name, bool allow
     // Strip them from the Module so that it's easier to handle the uses.
     GlobalVariable *gv = M.getGlobalVariable(name);
     assert(gv && gv->hasInitializer());
+    dbgs() << "Consume " << *gv << ":\n";
+    dbgs() << *gv->getType() << "\n";
     ArrayType *Ty = cast<ArrayType>(gv->getInitializer()->getType());
     unsigned nele = Ty->getArrayNumElements();
     std::vector<T*> res(nele);
@@ -417,6 +421,7 @@ static inline std::vector<T*> consume_gv(Module &M, const char *name, bool allow
                 nele--;
                 continue;
             }
+            dbgs() << *val << ": " << *val->getType() << "\n";
             res[i++] = cast<T>(val);
         }
         res.resize(nele);
@@ -584,18 +589,20 @@ void CloneCtx::clone_bodies()
                         clone_function(group_F, target_F, *target.vmap);
                     }
                     add_features(target_F, specs[target.idx]);
-                    target_F->addFnAttr("julia.mv.clone", std::to_string(i));
+                    target_F->addFnAttr("julia.mv.clone", std::to_string(target.idx));
                 }
             }
             // don't set the original function's features yet,
             // since we may clone it for later groups
             if (i != 0) {
                 add_features(group_F, specs[groups[i].idx]);
+                group_F->addFnAttr("julia.mv.clone", std::to_string(groups[i].idx));
             }
-            group_F->addFnAttr("julia.mv.clone", std::to_string(i));
         }
-        // Add features to the original function
-        add_features(F, specs[0]);
+        // still don't set the original function's features yet,
+        // since we'll copy function attributes if we need to rewrite
+        // the alias, and target specific attributes are illegal on
+        // alias trampolines unless the user explicitly specifies them
     }
 }
 
@@ -658,6 +665,11 @@ void CloneCtx::rewrite_alias(GlobalAlias *alias, Function *F)
         Function::Create(F->getFunctionType(), alias->getLinkage(), "", &M);
     trampoline->copyAttributesFrom(F);
     trampoline->takeName(alias);
+    trampoline->setVisibility(alias->getVisibility());
+    // drop multiversioning attributes, add alias attribute for testing purposes
+    trampoline->removeFnAttr("julia.mv.reloc");
+    trampoline->removeFnAttr("julia.mv.clones");
+    trampoline->addFnAttr("julia.mv.alias");
     alias->eraseFromParent();
 
     uint32_t id;
@@ -724,6 +736,15 @@ void CloneCtx::fix_gv_uses()
             continue;
         while (single_pass(orig_f)) {
         }
+    }
+}
+
+void CloneCtx::finalize_orig_clone_attr()
+{
+    for (auto orig_f: orig_funcs) {
+        if (!orig_f->hasFnAttribute("julia.mv.clones"))
+            continue;
+        orig_f->addFnAttr("julia.mv.clone", "0");
     }
 }
 
@@ -811,6 +832,12 @@ void CloneCtx::fix_inst_uses()
                 return slot;
             }, tbaa_const);
         }
+    }
+}
+
+void CloneCtx::finalize_orig_features() {
+    for (auto F : orig_funcs) {
+        add_features(F, specs[0]);
     }
 }
 
@@ -1021,6 +1048,10 @@ static bool runMultiVersioning(Module &M, bool allow_bad_fvars)
     // These relocations must be initialized for **ALL** targets.
     clone.fix_gv_uses();
 
+    // Now we have all the cloned functions, we can set the original functions'
+    // clone attribute to be 0
+    clone.finalize_orig_clone_attr();
+
     // For each group, scan all functions cloned by **PARTIALLY** cloned targets for
     // instruction use.
     // A function needs a const relocation slot if it is cloned and is called by a
@@ -1030,6 +1061,9 @@ static bool runMultiVersioning(Module &M, bool allow_bad_fvars)
     // on all targets, the caller site does not need a relocation slot).
     // A target needs a slot to be initialized iff at least one caller is not initialized.
     clone.fix_inst_uses();
+
+    //Now set the original functions' target-specific attributes, since nobody will look at those again
+    clone.finalize_orig_features();
 
     // Store back sysimg information with the correct format.
     // At this point, we should have fixed up all the uses of the cloned functions
