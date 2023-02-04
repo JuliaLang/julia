@@ -1919,7 +1919,7 @@ static void jl_root_new_gvars(jl_serializer_state *s, jl_image_t *image, uint32_
                 v = (uintptr_t)jl_as_global_root((jl_value_t*)v);
         } else {
             jl_code_instance_t *codeinst = (jl_code_instance_t*) v;
-            assert(codeinst && codeinst->isspecsig);
+            assert(codeinst && (codeinst->specsigflags & 0b01));
             v = (uintptr_t)codeinst->specptr.fptr;
         }
         *gv = v;
