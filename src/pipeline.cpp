@@ -244,9 +244,9 @@ namespace {
 
 //Use for O1 and below
 static void buildBasicPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationLevel O, OptimizationOptions options) JL_NOTSAFEPOINT {
-// #ifdef JL_DEBUG_BUILD
+#ifdef JL_DEBUG_BUILD
     addVerificationPasses(MPM, options.llvm_only);
-// #endif
+#endif
     invokePipelineStartCallbacks(MPM, PB, O);
     MPM.addPass(ConstantMergePass());
     if (!options.dump_native) {
@@ -320,9 +320,9 @@ static void buildBasicPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimiza
 
 //Use for O2 and above
 static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationLevel O, OptimizationOptions options) JL_NOTSAFEPOINT {
-// #ifdef JL_DEBUG_BUILD
+#ifdef JL_DEBUG_BUILD
     addVerificationPasses(MPM, options.llvm_only);
-// #endif
+#endif
     invokePipelineStartCallbacks(MPM, PB, O);
     MPM.addPass(ConstantMergePass());
     {
