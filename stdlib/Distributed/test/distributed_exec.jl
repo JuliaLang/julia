@@ -456,6 +456,32 @@ function test_iteration(in_c, out_c)
 end
 
 test_iteration(Channel(10), Channel(10))
+test_iteration(RemoteChannel(() -> Channel(10)), RemoteChannel(() -> Channel(10)))
+
+@everywhere function test_iteration_take(ch)
+    count = 0
+    for x in ch
+        count += 1
+    end
+    return count
+end
+
+@everywhere function test_iteration_put(ch, total)
+    for i in 1:total
+        put!(ch, i)
+    end
+    close(ch)
+end
+
+let ch = RemoteChannel(() -> Channel(1))
+    @async test_iteration_put(ch, 10)
+    @test 10 == @fetchfrom id_other test_iteration_take(ch)
+    # now reverse
+    ch = RemoteChannel(() -> Channel(1))
+    @spawnat id_other test_iteration_put(ch, 10)
+    @test 10 == test_iteration_take(ch)
+end
+
 # make sure exceptions propagate when waiting on Tasks
 @test_throws CompositeException (@sync (@async error("oops")))
 try
