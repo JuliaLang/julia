@@ -165,6 +165,7 @@ function Base.show(io::IO, t::Fail)
             print(io, "\n     Context: ", t.context)
         end
     end
+    println(io) # add some visual space to separate sequential failures
 end
 
 """
