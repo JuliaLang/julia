@@ -305,28 +305,7 @@ provides several tools measure this:
 
 The total amount of allocation can be measured with [`@time`](@ref), [`@allocated`](@ref) and [`@allocations`](@ref),
 and specific lines triggering allocation can often be inferred from profiling via the cost of garbage
-collection that these lines incur. However, sometimes it is more efficient to directly measure
-the amount of memory allocated by each line of code.
-
-### Line-by-Line Allocation Tracking
-
-To measure allocation line-by-line, start Julia with the `--track-allocation=<setting>` command-line
-option, for which you can choose `none` (the default, do not measure allocation), `user` (measure
-memory allocation everywhere except Julia's core code), or `all` (measure memory allocation at
-each line of Julia code). Allocation gets measured for each line of compiled code. When you quit
-Julia, the cumulative results are written to text files with `.mem` appended after the file name,
-residing in the same directory as the source file. Each line lists the total number of bytes
-allocated. The [`Coverage` package](https://github.com/JuliaCI/Coverage.jl) contains some elementary
-analysis tools, for example to sort the lines in order of number of bytes allocated.
-
-In interpreting the results, there are a few important details. Under the `user` setting, the
-first line of any function directly called from the REPL will exhibit allocation due to events
-that happen in the REPL code itself. More significantly, JIT-compilation also adds to allocation
-counts, because much of Julia's compiler is written in Julia (and compilation usually requires
-memory allocation). The recommended procedure is to force compilation by executing all the commands
-you want to analyze, then call [`Profile.clear_malloc_data()`](@ref) to reset all allocation counters.
- Finally, execute the desired commands and quit Julia to trigger the generation of the `.mem`
-files.
+collection that these lines incur.
 
 ### GC Logging
 

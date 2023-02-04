@@ -2675,7 +2675,6 @@ STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t 
         }
         codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
-    int64_t last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
     int last_errno = errno;
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
@@ -2685,8 +2684,6 @@ STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t 
     SetLastError(last_error);
 #endif
     errno = last_errno;
-    if (jl_options.malloc_log)
-        jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
     jl_callptr_t invoke = jl_atomic_load_relaxed(&codeinst->invoke);
     jl_value_t *res = invoke(F, args, nargs, codeinst);
     return verify_type(res);
@@ -2812,7 +2809,6 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
             jl_typemap_t *cache = jl_atomic_load_relaxed(&mt->cache); // XXX: gc root required?
             entry = jl_typemap_assoc_exact(cache, F, args, nargs, jl_cachearg_offset(mt), world);
             if (entry == NULL) {
-                last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
                 if (tt == NULL) {
                     tt = arg_type_tuple(F, args, nargs);
                     entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
@@ -2844,8 +2840,6 @@ have_entry:
         mfunc = jl_mt_assoc_by_type(mt, tt, world);
         JL_UNLOCK(&mt->writelock);
         JL_GC_POP();
-        if (jl_options.malloc_log)
-            jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
         if (mfunc == NULL) {
 #ifdef JL_TRACE
             if (error_en)
@@ -2951,7 +2945,6 @@ jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t *gf, jl_value
         mfunc = tm->func.linfo;
     }
     else {
-        int64_t last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
         jl_svec_t *tpenv = jl_emptysvec;
         jl_tupletype_t *tt = NULL;
         JL_GC_PUSH2(&tpenv, &tt);
@@ -2972,8 +2965,6 @@ jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t *gf, jl_value
         }
         JL_UNLOCK(&method->writelock);
         JL_GC_POP();
-        if (jl_options.malloc_log)
-            jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
     }
     JL_GC_PROMISE_ROOTED(mfunc);
     size_t world = jl_current_task->world_age;

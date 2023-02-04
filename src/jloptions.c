@@ -50,7 +50,6 @@ JL_DLLEXPORT void jl_init_options(void)
                         0,    // startup file
                         JL_OPTIONS_COMPILE_DEFAULT, // compile_enabled
                         0,    // code_coverage
-                        0,    // malloc_log
                         NULL, // tracked_path
                         2,    // opt_level
                         0,    // opt_level_min
@@ -171,12 +170,6 @@ static const char opts[]  =
     " --code-coverage=tracefile.info\n"
     "                            Append coverage information to the LCOV tracefile (filename supports format tokens)\n"
 // TODO: These TOKENS are defined in `runtime_ccall.cpp`. A more verbose `--help` should include that list here.
-    " --track-allocation[={none*|user|all}]\n"
-    "                            Count bytes allocated by each source line (omitting setting is equivalent to `user`)\n"
-    " --track-allocation=@<path>\n"
-    "                            Count bytes but only in files that fall under the given file path/directory.\n"
-    "                            The `@` prefix is required to select this option. A `@` with no path will track the\n"
-    "                            current directory.\n"
     " --bug-report=KIND          Launch a bug report session. It can be used to start a REPL, run a script, or evaluate\n"
     "                            expressions. It first tries to use BugReporting.jl installed in current environment and\n"
     "                            fallbacks to the latest compatible BugReporting.jl if not. For more information, see\n"
@@ -282,7 +275,6 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "startup-file",    required_argument, 0, opt_startup_file },
         { "compile",         required_argument, 0, opt_compile },
         { "code-coverage",   optional_argument, 0, opt_code_coverage },
-        { "track-allocation",optional_argument, 0, opt_track_allocation },
         { "optimize",        optional_argument, 0, 'O' },
         { "min-optlevel",    optional_argument, 0, opt_optlevel_min },
         { "debug-info",      optional_argument, 0, 'g' },
@@ -590,26 +582,6 @@ restart_switch:
                 codecov = JL_LOG_USER;
             }
             break;
-        case opt_track_allocation:
-            if (optarg != NULL) {
-                if (!strcmp(optarg,"user"))
-                    malloclog = JL_LOG_USER;
-                else if (!strcmp(optarg,"all"))
-                    malloclog = JL_LOG_ALL;
-                else if (!strcmp(optarg,"none"))
-                    malloclog = JL_LOG_NONE;
-                else if (!strncmp(optarg, "@", 1)) {
-                    malloclog = JL_LOG_PATH;
-                    jl_options.tracked_path = optarg + 1; // skip `@`
-                }
-                else
-                    jl_errorf("julia: invalid argument to --track-allocation (%s)", optarg);
-                break;
-            }
-            else {
-                malloclog = JL_LOG_USER;
-            }
-            break;
         case 'O': // optimize
             if (optarg != NULL) {
                 if (!strcmp(optarg,"0"))
@@ -818,15 +790,14 @@ restart_switch:
                       "This is a bug, please report it.", c);
         }
     }
-    if (codecov || malloclog) {
+    if (codecov) {
         if (pkgimage_explicit && jl_options.use_pkgimages) {
             jl_errorf("julia: Can't use --pkgimages=yes together "
-                      "with --track-allocation or --code-coverage.");
+                      "with --code-coverage.");
         }
         jl_options.use_pkgimages = 0;
     }
     jl_options.code_coverage = codecov;
-    jl_options.malloc_log = malloclog;
     int proc_args = *argcp < optind ? *argcp : optind;
     *argvp += proc_args;
     *argcp -= proc_args;
