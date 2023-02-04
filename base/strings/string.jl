@@ -217,10 +217,9 @@ end
     └───────────────────────────────────────────────────────────────────┘
 
         Validation States
-            1 -> _UTF8_DFA_ASCII is the start state and will only stay in this state if the string is only ASCII characters
+            0 -> _UTF8_DFA_ASCII is the start state and will only stay in this state if the string is only ASCII characters
                         If the DFA ends in this state the string is ASCII only
-            1 -> _UTF8_DFA_ACCEPT is the start state and represents a complete UTF-8 String as well
-                        ASCII only strings will never leave this state
+            1 -> _UTF8_DFA_ACCEPT is the valid complete character state of the DFA once it has encountered a UTF-8 Unicode character
             2 -> _UTF8_DFA_INVALID is only reached by invalid bytes and once in this state it will not change
                     as seen by all 1s in that column of table below
             3 -> One valid continuation byte needed to return to state 0
