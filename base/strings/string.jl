@@ -194,31 +194,53 @@ end
 ## checking UTF-8 & ACSII validity ##
 #=
     The UTF-8 Validation is performed by a shift based DFA.
-    Using the state machine diagram found @ https://bjoern.hoehrmann.de/utf-8/decoder/dfa/
+    ┌───────────────────────────────────────────────────────────────────┐
+    │    UTF-8 DFA State Diagram    ┌──────────────2──────────────┐     │
+    │                               ├────────3────────┐           │     │
+    │                 ┌──────────┐  │     ┌─┐        ┌▼┐          │     │
+    │      ASCII      │  UTF-8   │  ├─5──►│9├───1────► │          │     │
+    │                 │          │  │     ├─┤        │ │         ┌▼┐    │
+    │                 │  ┌─0─┐   │  ├─6──►│8├─1,7,9──►4├──1,7,9──► │    │
+    │      ┌─0─┐      │  │   │   │  │     ├─┤        │ │         │ │    │
+    │      │   │      │ ┌▼───┴┐  │  ├─11─►│7├──7,9───► │ ┌───────►3├─┐  │
+    │     ┌▼───┴┐     │ │     │  ▼  │     └─┘        └─┘ │       │ │ │  │
+    │     │  0  ├─────┘ │  1  ├─► ──┤                    │  ┌────► │ │  │
+    │     └─────┘       │     │     │     ┌─┐            │  │    └─┘ │  │
+    │                   └──▲──┘     ├─10─►│5├─────7──────┘  │        │  │
+    │                      │        │     ├─┤               │        │  │
+    │                      │        └─4──►│6├─────1,9───────┘        │  │
+    │          INVALID     │              └─┘                        │  │
+    │           ┌─*─┐      └──────────────────1,7,9──────────────────┘  │
+    │          ┌▼───┴┐                                                  │
+    │          │  2  ◄─── All undefined transitions result in state 2   │
+    │          └─────┘                                                  │
+    └───────────────────────────────────────────────────────────────────┘
 
         Validation States
-            0 -> UTF8_ACCEPT is the start state and represents a complete UTF-8 String as well
+            1 -> _UTF8_DFA_ASCII is the start state and will only stay in this state if the string is only ASCII characters
+                        If the DFA ends in this state the string is ASCII only
+            1 -> _UTF8_DFA_ACCEPT is the start state and represents a complete UTF-8 String as well
                         ASCII only strings will never leave this state
-            1 -> UTF8_INVALID is only reached by invalid bytes and once in this state it will not change
+            2 -> _UTF8_DFA_INVALID is only reached by invalid bytes and once in this state it will not change
                     as seen by all 1s in that column of table below
-            2 -> One valid continuation byte needed to return to state 0
-        3,4,5 -> Two valid continuation bytes needed to return to state 0
-        6,7,8 -> Three valids continuation bytes needed to return to state 0
-            9 -> Not used which is why it always transitions to state 1
+            3 -> One valid continuation byte needed to return to state 0
+        4,5,6 -> Two valid continuation bytes needed to return to state 0
+        7,8,9 -> Three valids continuation bytes needed to return to state 0
+
                         Current State
                     0̲  1̲  2̲  3̲  4̲  5̲  6̲  7̲  8̲  9̲
-                0 | 0  1  1  1  1  1  1  1  1  1
-                1 | 1  1  0  2  1  2  1  3  3  1
-                2 | 2  1  1  1  1  1  1  1  1  1
-                3 | 3  1  1  1  1  1  1  1  1  1
-                4 | 5  1  1  1  1  1  1  1  1  1
-    Character   5 | 8  1  1  1  1  1  1  1  1  1     <- Next State
-    Class       6 | 7  1  1  1  1  1  1  1  1  1
-                7 | 1  1  0  2  2  1  3  3  1  1
-                8 | 1  1  1  1  1  1  1  1  1  1
-                9 | 1  1  0  2  1  2  3  3  1  1
-               10 | 4  1  1  1  1  1  1  1  1  1
-               11 | 6  1  1  1  1  1  1  1  1  1
+                0 | 0  1  2  2  2  2  2  2  2  2
+                1 | 2  2  2  1  3  2  3  2  4  4
+                2 | 3  3  2  2  2  2  2  2  2  2
+                3 | 4  4  2  2  2  2  2  2  2  2
+                4 | 6  6  2  2  2  2  2  2  2  2
+    Character   5 | 9  9  2  2  2  2  2  2  2  2     <- Next State
+    Class       6 | 8  8  2  2  2  2  2  2  2  2
+                7 | 2  2  2  1  3  3  2  4  4  2
+                8 | 2  2  2  2  2  2  2  2  2  2
+                9 | 2  2  2  1  3  2  3  4  4  2
+               10 | 5  5  2  2  2  2  2  2  2  2
+               11 | 7  7  2  2  2  2  2  2  2  2
 
     Each character class row is encoding 10 states shift in 6 bits combined into a UInt64 such that
     it contains the number of bit needed to shift the state it is transitioning to shifted into
@@ -226,19 +248,19 @@ end
 
     Example: character class 1 is encoded as below
                     Current State        |    9 |    8 |    7 |    6 |    5 |    4 |    3 |    2 |    1 |    0 |
-                    Next State           |    1 |    3 |    3 |    1 |    2 |    1 |    2 |    0 |    1 |    1 |
-                    Shift required       |  6*1 |  6*3 |  6*3 |  6*1 |  6*2 |  6*1 |  6*2 |  6*0 |  6*1 |  6*1 |
-                                         |    6 |   18 |   18 |    6 |   12 |    6 |   12 |    0 |    6 |    6 |
-    UInt64(113232530780455302) =   0b0000|000110|010010|010010|000110|001100|000110|001100|000000|000110|000110
+                    Next State           |    4 |    4 |    2 |    3 |    2 |    3 |    1 |    2 |    2 |    2 |
+                    Shift required       |  6*4 |  6*4 |  6*2 |  6*3 |  6*2 |  6*3 |  6*1 |  6*2 |  6*2 |  6*2 |
+                                         |   24 |   24 |   12 |   18 |   12 |   18 |    6 |   12 |   12 |   12 |
+    UInt64(0x061831231218c30c) =   0b0000|011000|011000|001100|010010|001100|010010|000110|001100|001100|001100
 
     Now if the current state was 5 the state::UInt64 would have the first 6 bit representing 5*6 = 30
-    so when the next character class is 7 row is in row::UInt64:
+    so when the next character class is 1 the new state is obtained by the following operations:
             The reduction operation:
                 state =  (   byte_dfa >>  state )            & UInt64(63)
                         | Shift to get the next state shift  | Mask the first six bits so that the new state is represended by the shift
             Would result in the state being 2 which is a shift of 12:
-                (byte_dfa    =  0b0000|000110|010010|010010|000110|001100|000110|001100|000000|000110|000110
-                >> 30    )   => 0b0000|000000|000000|000000|000000|000000|000110|010010|010010|000110|001100
+                (byte_dfa    =  0b0000|011000|011000|001100|010010|001100|010010|000110|001100|001100|001100
+                >> 30    )   => 0b0000|000000|000000|000000|000000|000000|011000|011000|001100|010010|001100
                 & UInt64(63) => 0b0000|000000|000000|000000|000000|000000|000000|000000|000000|000000|001100
 =#
 
@@ -247,23 +269,37 @@ const _UTF8_DFA_TABLE = let # let block rather than function doesn't pollute bas
     num_classes=12
     num_states=10
     bit_per_state = 6
-    # class_repeats represents the 256 byte's classes by storing the (class, #of repeats)
-    class_repeats = [ (0, 128), (1, 16), (9, 16), (7, 32), (8, 2), (2, 30), (10, 1),
-                    (3,  12), (4,  1), (3,  2), (11, 1), (6, 3), (5,  1), (8, 11)]
+
+    character_classes = [   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                            9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
+                            7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+                            7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+                            8, 8, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+                            2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+                           10, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3,
+                           11, 6, 6, 6, 5, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8 ]
 
     # These are the rows discussed in comments above
-    state_arrays = [[ 0, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                    [ 1, 1, 0, 2, 1, 2, 1, 3, 3, 1],
-                    [ 2, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                    [ 3, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                    [ 5, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                    [ 8, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                    [ 7, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                    [ 1, 1, 0, 2, 2, 1, 3, 3, 1, 1],
-                    [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                    [ 1, 1, 0, 2, 1, 2, 3, 3, 1, 1],
-                    [ 4, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                    [ 6, 1, 1, 1, 1, 1, 1, 1, 1, 1]]
+    state_arrays = [[ 0  1  2  2  2  2  2  2  2  2],
+                    [ 2  2  2  1  3  2  3  2  4  4],
+                    [ 3  3  2  2  2  2  2  2  2  2],
+                    [ 4  4  2  2  2  2  2  2  2  2],
+                    [ 6  6  2  2  2  2  2  2  2  2],
+                    [ 9  9  2  2  2  2  2  2  2  2],
+                    [ 8  8  2  2  2  2  2  2  2  2],
+                    [ 2  2  2  1  3  3  2  4  4  2],
+                    [ 2  2  2  2  2  2  2  2  2  2],
+                    [ 2  2  2  1  3  2  3  4  4  2],
+                    [ 5  5  2  2  2  2  2  2  2  2],
+                    [ 7  7  2  2  2  2  2  2  2  2]]
 
     #This converts the state_arrays into the shift encoded UInt64
     class_row = zeros(UInt64, num_classes)
@@ -277,12 +313,13 @@ const _UTF8_DFA_TABLE = let # let block rather than function doesn't pollute bas
         end
         class_row[i]=row
     end
-    mapreduce(t->fill(class_row[t[1]+1],t[2]),vcat,class_repeats)
+    map(c->class_row[c+1],character_classes)
 end
 
 
-const _UTF8_DFA_ACCEPT = UInt64(0) #This state represents the start and end of any valid string
-const _UTF8_DFA_INVALID = UInt64(6) # If the state machine is ever in this state just stop
+const _UTF8_DFA_ASCII = UInt64(0) #This state represents the start and end of any valid string
+const _UTF8_DFA_ACCEPT = UInt64(6) #This state represents the start and end of any valid string
+const _UTF8_DFA_INVALID = UInt64(12) # If the state machine is ever in this state just stop
 
 # The dfa step is broken out so that it may be used in other functions
 @inline _utf_dfa_step(state::UInt64, byte::UInt8) = @inbounds (_UTF8_DFA_TABLE[byte+1] >> state) & UInt64(63)
@@ -295,7 +332,7 @@ const _UTF8_DFA_INVALID = UInt64(6) # If the state machine is ever in this state
 end
 
 # This is a shift based utf-8 DFA that works on string that are a contiguous block
-@inline _isvalid_utf8(bytes::AbstractVector{UInt8}) = _isvalid_utf8_dfa(_UTF8_DFA_ACCEPT, bytes) == _UTF8_DFA_ACCEPT
+@inline _isvalid_utf8(bytes::AbstractVector{UInt8}) = _isvalid_utf8_dfa(_UTF8_DFA_ASCII, bytes) <= _UTF8_DFA_ACCEPT # <= covers _UTF8_DFA_ASCII as well
 
 @inline _isvalid_utf8(s::AbstractString) = _isvalid_utf8(codeunits(s))
 
@@ -307,9 +344,10 @@ end
 
 
 function byte_string_classify(bytes::Vector{UInt8})
-    all(c -> iszero(c & 0x80), bytes) && return 1
-    valid = _isvalid_utf8(bytes)
-    return ifelse(valid, 2, 0)
+    state = _isvalid_utf8_dfa(_UTF8_DFA_ASCII, bytes)
+    state ==  _UTF8_DFA_ASCII && return 1
+    state ==  _UTF8_DFA_ACCEPT && return 2
+    return 0
 end
 
 isvalid(::Type{String}, bytes::AbstractVector{UInt8}) = @inline _isvalid_utf8(bytes)
