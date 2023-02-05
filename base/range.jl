@@ -1257,8 +1257,8 @@ function -(r::LinRange)
     LinRange{typeof(start)}(start, -r.stop, length(r))
 end
 
-rad2deg(r::AbstractRange) = LinRange(rad2deg(r.start), rad2deg(r.stop), length(r))
-deg2rad(r::AbstractRange) = LinRange(deg2rad(r.start), deg2rad(r.stop), length(r))
+rad2deg(r::AbstractRange) = LinRange(rad2deg(first(r)), rad2deg(last(r)), length(r))
+deg2rad(r::AbstractRange) = LinRange(deg2rad(first(r)), deg2rad(last(r)), length(r))
 
 # promote eltype if at least one container wouldn't change, otherwise join container types.
 el_same(::Type{T}, a::Type{<:AbstractArray{T,n}}, b::Type{<:AbstractArray{T,n}}) where {T,n}   = a # we assume a === b
