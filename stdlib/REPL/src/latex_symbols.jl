@@ -235,7 +235,7 @@ const latex_symbols = Dict(
 
     # Misc. Math and Physics
     "\\ldots" => "…",
-    "\\hbar" => "ħ",
+    "\\hbar" => "ℏ",
     "\\del" => "∇",
 
     "\\sout" => "̶",# ulem package, same as Elzbar
