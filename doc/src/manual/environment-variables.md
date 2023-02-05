@@ -78,6 +78,7 @@ and a global configuration search path of
 A directory path that indicates which project should be the initial active project.
 Setting this environment variable has the same effect as specifying the `--project`
 start-up option, but `--project` has higher precedence. If the variable is set to `@.`
+(note the trailing dot)
 then Julia tries to find a project directory that contains `Project.toml` or
 `JuliaProject.toml` file from the current directory and its parents. See also
 the chapter on [Code Loading](@ref code-loading).

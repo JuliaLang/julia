@@ -779,3 +779,7 @@ namedtup = (;a=1, b=2, c=3)
         NamedTuple{(:a, :b), Tuple{Int, Int}},
         NamedTuple{(:c,), Tuple{Int}},
     }
+
+# Make sure that tuple iteration is foldable
+@test Core.Compiler.is_foldable(Base.infer_effects(iterate, Tuple{NTuple{4, Float64}, Int}))
+@test Core.Compiler.is_foldable(Base.infer_effects(eltype, Tuple{Tuple}))

@@ -256,9 +256,12 @@ struct LoadingCache
     env_project_file::Dict{String, Union{Bool, String}}
     project_file_manifest_path::Dict{String, Union{Nothing, String}}
     require_parsed::Set{String}
+    identified_where::Dict{Tuple{PkgId, String}, Union{Nothing, Tuple{PkgId, Union{Nothing, String}}}}
+    identified::Dict{String, Union{Nothing, Tuple{PkgId, Union{Nothing, String}}}}
+    located::Dict{Tuple{PkgId, Union{String, Nothing}}, Union{String, Nothing}}
 end
 const LOADING_CACHE = Ref{Union{LoadingCache, Nothing}}(nothing)
-LoadingCache() = LoadingCache(load_path(), Dict(), Dict(), Dict(), Set())
+LoadingCache() = LoadingCache(load_path(), Dict(), Dict(), Dict(), Set(), Dict(), Dict(), Dict())
 
 
 struct TOMLCache
@@ -311,22 +314,49 @@ is also returned.
 """
 identify_package_env(where::Module, name::String) = identify_package_env(PkgId(where), name)
 function identify_package_env(where::PkgId, name::String)
-    where.name === name && return where, nothing
-    where.uuid === nothing && return identify_package_env(name) # ignore `where`
-    for env in load_path()
-        pkgid = manifest_deps_get(env, where, name)
-        pkgid === nothing && continue # not found--keep looking
-        pkgid.uuid === nothing || return pkgid, env # found in explicit environment--use it
-        return nothing # found in implicit environment--return "not found"
+    cache = LOADING_CACHE[]
+    if cache !== nothing
+        pkg_env = get(cache.identified_where, (where, name), nothing)
+        pkg_env === nothing || return pkg_env
     end
-    return nothing
+    pkg_env = nothing
+    if where.name === name
+        pkg_env = where, nothing
+    elseif where.uuid === nothing
+        pkg_env = identify_package_env(name) # ignore `where`
+    else
+        for env in load_path()
+            pkgid = manifest_deps_get(env, where, name)
+            pkgid === nothing && continue # not found--keep looking
+            if pkgid.uuid !== nothing
+                pkg_env = pkgid, env # found in explicit environment--use it
+            end
+            break # found in implicit environment--return "not found"
+        end
+    end
+    if cache !== nothing
+        cache.identified_where[(where, name)] = pkg_env
+    end
+    return pkg_env
 end
 function identify_package_env(name::String)
-    for env in load_path()
-        uuid = project_deps_get(env, name)
-        uuid === nothing || return uuid, env # found--return it
+    cache = LOADING_CACHE[]
+    if cache !== nothing
+        pkg_env = get(cache.identified, name, nothing)
+        pkg_env === nothing || return pkg_env
     end
-    return nothing
+    pkg_env = nothing
+    for env in load_path()
+        pkg = project_deps_get(env, name)
+        if pkg !== nothing
+            pkg_env = pkg, env # found--return it
+            break
+        end
+    end
+    if cache !== nothing
+        cache.identified[name] = pkg_env
+    end
+    return pkg_env
 end
 
 _nothing_or_first(x) = x === nothing ? nothing : first(x)
@@ -345,7 +375,7 @@ There `where` argument provides the context from where to search for the
 package: in this case it first checks if the name matches the context itself,
 otherwise it searches all recursive dependencies (from the resolved manifest of
 each environment) until it locates the context `where`, and from there
-identifies the dependency with with the corresponding name.
+identifies the dependency with the corresponding name.
 
 ```julia-repl
 julia> Base.identify_package("Pkg") # Pkg is a dependency of the default environment
@@ -376,6 +406,12 @@ julia> Base.locate_package(pkg)
 ```
 """
 function locate_package(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)::Union{Nothing,String}
+    cache = LOADING_CACHE[]
+    if cache !== nothing
+        path = get(cache.located, (pkg, stopenv), nothing)
+        path === nothing || return path
+    end
+    path = nothing
     if pkg.uuid === nothing
         for env in load_path()
             # look for the toplevel pkg `pkg.name` in this entry
@@ -386,25 +422,39 @@ function locate_package(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)::Un
                     # pkg.name is present in this directory or project file,
                     # return the path the entry point for the code, if it could be found
                     # otherwise, signal failure
-                    return implicit_manifest_uuid_path(env, pkg)
+                    path = implicit_manifest_uuid_path(env, pkg)
+                    @goto done
                 end
             end
-            stopenv == env && return nothing
+            stopenv == env && @goto done
         end
     else
         for env in load_path()
             path = manifest_uuid_path(env, pkg)
             # missing is used as a sentinel to stop looking further down in envs
-            path === missing && return nothing
-            path === nothing || return entry_path(path, pkg.name)
+            if path === missing
+                path = nothing
+                @goto done
+            end
+            if path !== nothing
+                path = entry_path(path, pkg.name)
+                @goto done
+            end
             stopenv == env && break
         end
         # Allow loading of stdlibs if the name/uuid are given
         # e.g. if they have been explicitly added to the project/manifest
-        path = manifest_uuid_path(Sys.STDLIB, pkg)
-        path isa String && return entry_path(path, pkg.name)
+        mbypath = manifest_uuid_path(Sys.STDLIB, pkg)
+        if mbypath isa String
+            path = entry_path(mbypath, pkg.name)
+            @goto done
+        end
     end
-    return nothing
+    @label done
+    if cache !== nothing
+        cache.located[(pkg, stopenv)] = path
+    end
+    return path
 end
 
 """
@@ -815,7 +865,11 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
             uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
             extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
             if extensions !== nothing && haskey(extensions, pkg.name) && uuid !== nothing && uuid5(UUID(uuid), pkg.name) == pkg.uuid
-                p = normpath(dirname(locate_package(PkgId(UUID(uuid), name))), "..")
+                parent_path = locate_package(PkgId(UUID(uuid), name))
+                if parent_path === nothing
+                    error("failed to find source of parent package: \"$name\"")
+                end
+                p = normpath(dirname(parent_path), "..")
                 extfiledir = joinpath(p, "ext", pkg.name, pkg.name * ".jl")
                 isfile(extfiledir) && return extfiledir
                 return joinpath(p, "ext", pkg.name * ".jl")
@@ -1058,7 +1112,6 @@ function insert_extension_triggers(pkg::PkgId)
     pkg.uuid === nothing && return
     for env in load_path()
         insert_extension_triggers(env, pkg)
-        break # For now, only insert triggers for packages in the first load_path.
     end
 end
 
@@ -1088,10 +1141,10 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
                         dep_name in weakdeps || continue
                         entries::Vector{Any}
                         if length(entries) != 1
-                            error("expected a single entry for $(repr(name)) in $(repr(project_file))")
+                            error("expected a single entry for $(repr(dep_name)) in $(repr(project_file))")
                         end
                         entry = first(entries)::Dict{String, Any}
-                        uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
+                        uuid = entry["uuid"]::String
                         d_weakdeps[dep_name] = uuid
                     end
                     @assert length(d_weakdeps) == length(weakdeps)
@@ -1164,7 +1217,7 @@ function run_extension_callbacks(; force::Bool=false)
 end
 
 """
-    load_extensions()
+    retry_load_extensions()
 
 Loads all the (not yet loaded) extensions that have their extension-dependencies loaded.
 This is used in cases where the automatic loading of an extension failed
@@ -1194,20 +1247,15 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
     if root_module_exists(modkey)
         loaded = root_module(modkey)
     else
-        loading = get(package_locks, modkey, false)
-        if loading !== false
-            # load already in progress for this module
-            loaded = wait(loading)
-        else
-            package_locks[modkey] = Threads.Condition(require_lock)
+        loaded = start_loading(modkey)
+        if loaded === nothing
             try
                 modpath = locate_package(modkey)
                 modpath === nothing && return nothing
                 set_pkgorigin_version_path(modkey, String(modpath))
                 loaded = _require_search_from_serialized(modkey, String(modpath), build_id)
             finally
-                loading = pop!(package_locks, modkey)
-                notify(loading, loaded, all=true)
+                end_loading(modkey, loaded)
             end
             if loaded isa Module
                 insert_extension_triggers(modkey)
@@ -1229,26 +1277,21 @@ function _tryrequire_from_serialized(modkey::PkgId, path::String, ocachepath::Un
     if root_module_exists(modkey)
         loaded = root_module(modkey)
     else
-        loading = get(package_locks, modkey, false)
-        if loading !== false
-            # load already in progress for this module
-            loaded = wait(loading)
-        else
-            for i in 1:length(depmods)
-                dep = depmods[i]
-                dep isa Module && continue
-                _, depkey, depbuild_id = dep::Tuple{String, PkgId, UInt128}
-                @assert root_module_exists(depkey)
-                dep = root_module(depkey)
-                depmods[i] = dep
-            end
-            package_locks[modkey] = Threads.Condition(require_lock)
+        loaded = start_loading(modkey)
+        if loaded === nothing
             try
+                for i in 1:length(depmods)
+                    dep = depmods[i]
+                    dep isa Module && continue
+                    _, depkey, depbuild_id = dep::Tuple{String, PkgId, UInt128}
+                    @assert root_module_exists(depkey)
+                    dep = root_module(depkey)
+                    depmods[i] = dep
+                end
                 set_pkgorigin_version_path(modkey, sourcepath)
                 loaded = _include_from_serialized(modkey, path, ocachepath, depmods)
             finally
-                loading = pop!(package_locks, modkey)
-                notify(loading, loaded, all=true)
+                end_loading(modkey, loaded)
             end
             if loaded isa Module
                 insert_extension_triggers(modkey)
@@ -1274,7 +1317,7 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
         pkgimage = !isempty(clone_targets)
         if pkgimage
             ocachepath !== nothing || return ArgumentError("Expected ocachepath to be provided")
-            isfile(ocachepath) || return ArgumentError("Ocachepath $ocachpath is not a file.")
+            isfile(ocachepath) || return ArgumentError("Ocachepath $ocachepath is not a file.")
             ocachepath == ocachefile_from_cachefile(path) || return ArgumentError("$ocachepath is not the expected ocachefile")
             # TODO: Check for valid clone_targets?
             isvalid_pkgimage_crc(io, ocachepath) || return ArgumentError("Invalid checksum in cache file $ocachepath.")
@@ -1354,13 +1397,13 @@ end
                 staledeps = true
                 break
             end
-            staledeps[i] = dep
+            (staledeps::Vector{Any})[i] = dep
         end
         if staledeps === true
             ocachefile = nothing
             continue
         end
-        restored = _include_from_serialized(pkg, path_to_try, ocachefile, staledeps)
+        restored = _include_from_serialized(pkg, path_to_try, ocachefile, staledeps::Vector{Any})
         if !isa(restored, Module)
             @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
         else
@@ -1371,7 +1414,65 @@ end
 end
 
 # to synchronize multiple tasks trying to import/using something
-const package_locks = Dict{PkgId,Threads.Condition}()
+const package_locks = Dict{PkgId,Pair{Task,Threads.Condition}}()
+
+debug_loading_deadlocks::Bool = true # Enable a slightly more expensive, but more complete algorithm that can handle simultaneous tasks.
+                               # This only triggers if you have multiple tasks trying to load the same package at the same time,
+                               # so it is unlikely to make a difference normally.
+function start_loading(modkey::PkgId)
+    # handle recursive calls to require
+    assert_havelock(require_lock)
+    loading = get(package_locks, modkey, nothing)
+    if loading !== nothing
+        # load already in progress for this module on the task
+        task, cond = loading
+        deps = String[modkey.name]
+        pkgid = modkey
+        assert_havelock(cond.lock)
+        if debug_loading_deadlocks && current_task() !== task
+            waiters = Dict{Task,Pair{Task,PkgId}}() # invert to track waiting tasks => loading tasks
+            for each in package_locks
+                cond2 = each[2][2]
+                assert_havelock(cond2.lock)
+                for waiting in cond2.waitq
+                    push!(waiters, waiting => (each[2][1] => each[1]))
+                end
+            end
+            while true
+                running = get(waiters, task, nothing)
+                running === nothing && break
+                task, pkgid = running
+                push!(deps, pkgid.name)
+                task === current_task() && break
+            end
+        end
+        if current_task() === task
+            others = String[modkey.name] # repeat this to emphasize the cycle here
+            for each in package_locks # list the rest of the packages being loaded too
+                if each[2][1] === task
+                    other = each[1].name
+                    other == modkey.name || other == pkgid.name || push!(others, other)
+                end
+            end
+            msg = sprint(deps, others) do io, deps, others
+                print(io, "deadlock detected in loading ")
+                join(io, deps, " -> ")
+                print(io, " -> ")
+                join(io, others, " && ")
+            end
+            throw(ConcurrencyViolationError(msg))
+        end
+        return wait(cond)
+    end
+    package_locks[modkey] = current_task() => Threads.Condition(require_lock)
+    return
+end
+
+function end_loading(modkey::PkgId, @nospecialize loaded)
+    loading = pop!(package_locks, modkey)
+    notify(loading[2], loaded, all=true)
+    nothing
+end
 
 # to notify downstream consumers that a module was successfully loaded
 # Callbacks take the form (mod::Base.PkgId) -> nothing.
@@ -1613,16 +1714,10 @@ end
 # Returns `nothing` or the new(ish) module
 function _require(pkg::PkgId, env=nothing)
     assert_havelock(require_lock)
-    # handle recursive calls to require
-    loading = get(package_locks, pkg, false)
-    if loading !== false
-        # load already in progress for this module
-        return wait(loading)
-    end
-    package_locks[pkg] = Threads.Condition(require_lock)
+    loaded = start_loading(pkg)
+    loaded === nothing || return loaded
 
     last = toplevel_load[]
-    loaded = nothing
     try
         toplevel_load[] = false
         # perform the search operation to select the module file require intends to load
@@ -1700,8 +1795,7 @@ function _require(pkg::PkgId, env=nothing)
         end
     finally
         toplevel_load[] = last
-        loading = pop!(package_locks, pkg)
-        notify(loading, loaded, all=true)
+        end_loading(pkg, loaded)
     end
     return loaded
 end
@@ -2110,12 +2204,12 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                     rename(tmppath_so, ocachefile::String; force=true)
                 catch e
                     e isa IOError || rethrow()
-                    isfile(ocachefile) || rethrow()
+                    isfile(ocachefile::String) || rethrow()
                     # Windows prevents renaming a file that is in use so if there is a Julia session started
                     # with a package image loaded, we cannot rename that file.
                     # The code belows append a `_i` to the name of the cache file where `i` is the smallest number such that
                     # that cache file does not exist.
-                    ocachename, ocacheext = splitext(ocachefile)
+                    ocachename, ocacheext = splitext(ocachefile::String)
                     old_cachefiles = Set(readdir(cachepath))
                     num = 1
                     while true
@@ -2135,7 +2229,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     finally
         rm(tmppath, force=true)
         if cache_objects
-            rm(tmppath_o, force=true)
+            rm(tmppath_o::String, force=true)
             rm(tmppath_so, force=true)
         end
     end
@@ -2527,25 +2621,30 @@ function check_clone_targets(clone_targets)
 end
 
 struct CacheFlags
-    # ??OOCDDP - see jl_cache_flags
+    # OOICCDDP - see jl_cache_flags
     use_pkgimages::Bool
     debug_level::Int
-    check_bounds::Bool
+    check_bounds::Int
+    inline::Bool
     opt_level::Int
 
-    CacheFlags(f::Int) = CacheFlags(UInt8(f))
     function CacheFlags(f::UInt8)
         use_pkgimages = Bool(f & 1)
         debug_level = Int((f >> 1) & 3)
-        check_bounds = Bool((f >> 2) & 1)
-        opt_level = Int((f >> 4) & 3)
-        new(use_pkgimages, debug_level, check_bounds, opt_level)
+        check_bounds = Int((f >> 3) & 3)
+        inline = Bool((f >> 5) & 1)
+        opt_level = Int((f >> 6) & 3) # define OPT_LEVEL in statiddata_utils
+        new(use_pkgimages, debug_level, check_bounds, inline, opt_level)
     end
 end
+CacheFlags(f::Int) = CacheFlags(UInt8(f))
+CacheFlags() = CacheFlags(ccall(:jl_cache_flags, UInt8, ()))
+
 function show(io::IO, cf::CacheFlags)
     print(io, "use_pkgimages = ", cf.use_pkgimages)
     print(io, ", debug_level = ", cf.debug_level)
     print(io, ", check_bounds = ", cf.check_bounds)
+    print(io, ", inline = ", cf.inline)
     print(io, ", opt_level = ", cf.opt_level)
 end
 
@@ -2569,7 +2668,7 @@ end
         if ccall(:jl_match_cache_flags, UInt8, (UInt8,), flags) == 0
             @debug """
             Rejecting cache file $cachefile for $modkey since the flags are mismatched
-              current session: $(CacheFlags(ccall(:jl_cache_flags, UInt8, ())))
+              current session: $(CacheFlags())
               cache file:      $(CacheFlags(flags))
             """
             return true
@@ -2717,7 +2816,7 @@ end
 end
 
 """
-    @__FILE__ -> AbstractString
+    @__FILE__ -> String
 
 Expand to a string with the path to the file containing the
 macrocall, or an empty string if evaluated by `julia -e <expr>`.
@@ -2730,7 +2829,7 @@ macro __FILE__()
 end
 
 """
-    @__DIR__ -> AbstractString
+    @__DIR__ -> String
 
 Expand to a string with the absolute path to the directory of the file
 containing the macrocall.

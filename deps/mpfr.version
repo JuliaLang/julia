@@ -2,4 +2,4 @@
 MPFR_JLL_NAME := MPFR
 
 ## source build
-MPFR_VER := 4.1.1
+MPFR_VER := 4.2.0
