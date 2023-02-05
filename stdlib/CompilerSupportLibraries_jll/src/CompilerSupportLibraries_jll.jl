@@ -21,8 +21,6 @@ libstdcxx_handle = C_NULL
 libstdcxx_path = ""
 libgomp_handle = C_NULL
 libgomp_path = ""
-libssp_handle = C_NULL
-libssp_path = ""
 
 if Sys.iswindows()
     if arch(HostPlatform()) == "x86_64"
@@ -64,8 +62,7 @@ function __init__()
     global libgomp_handle = dlopen(libgomp)
     global libgomp_path = dlpath(libgomp_handle)
     @static if libc(HostPlatform()) != "musl"
-        global libssp_handle = dlopen(libssp)
-        global libssp_path = dlpath(libssp_handle)
+        dlopen(libssp; throw_error = false)
     end
     global artifact_dir = dirname(Sys.BINDIR)
     LIBPATH[] = dirname(libgcc_s_path)

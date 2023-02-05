@@ -1354,15 +1354,7 @@ count(itr; init=0) = count(identity, itr; init)
 
 count(f, itr; init=0) = _simple_count(f, itr, init)
 
-_simple_count(pred, itr, init) = _simple_count_helper(Generator(pred, itr), init)
-
-function _simple_count_helper(g, init::T) where {T}
-    n::T = init
-    for x in g
-        n += x::Bool
-    end
-    return n
-end
+_simple_count(pred, itr, init) = sum(_bool(pred), itr; init)
 
 function _simple_count(::typeof(identity), x::Array{Bool}, init::T=0) where {T}
     n::T = init

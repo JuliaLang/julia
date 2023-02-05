@@ -1910,3 +1910,28 @@ function elim_full_ir(y)
 end
 
 @test fully_eliminated(elim_full_ir, Tuple{Int})
+
+# union splitting should account for uncovered call signature
+# https://github.com/JuliaLang/julia/issues/48397
+f48397(::Bool) = :ok
+f48397(::Tuple{String,String}) = :ok
+let src = code_typed1((Union{Bool,Tuple{String,Any}},)) do x
+        f48397(x)
+    end
+    @test any(iscall((src, f48397)), src.code)
+end
+g48397::Union{Bool,Tuple{String,Any}} = ("48397", 48397)
+let res = @test_throws MethodError let
+        Base.Experimental.@force_compile
+        f48397(g48397)
+    end
+    err = res.value
+    @test err.f === f48397 && err.args === (g48397,)
+end
+let res = @test_throws MethodError let
+        Base.Experimental.@force_compile
+        convert(Union{Bool,Tuple{String,String}}, g48397)
+    end
+    err = res.value
+    @test err.f === convert && err.args === (Union{Bool,Tuple{String,String}}, g48397)
+end
