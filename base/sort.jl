@@ -1139,7 +1139,7 @@ function radix_sort_pass!(t, lo, hi, offset, counts, v, shift, chunk_size)
             counts[i] += 1            # increment that bucket's count
         end
 
-        counts[1] = lo                # set target index for the first bucket
+        counts[1] = lo + offset       # set target index for the first bucket
         cumsum!(counts, counts)       # set target indices for subsequent buckets
         # counts[1:mask+1] now stores indices where the first member of each bucket
         # belongs, not the number of elements in each bucket. We will put the first element
@@ -1150,7 +1150,7 @@ function radix_sort_pass!(t, lo, hi, offset, counts, v, shift, chunk_size)
             x = v[k]                  # lookup the element
             i = (x >> shift)&mask + 1 # compute its bucket's index for this pass
             j = counts[i]             # lookup the target index
-            t[j + offset] = x         # put the element where it belongs
+            t[j] = x                  # put the element where it belongs
             counts[i] = j + 1         # increment the target index for the next
         end                           #  ↳ element in this bucket
     end

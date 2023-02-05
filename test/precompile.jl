@@ -1686,62 +1686,71 @@ end
 precompile_test_harness("DynamicExpressions") do load_path
     # https://github.com/JuliaLang/julia/pull/47184#issuecomment-1364716312
     write(joinpath(load_path, "Float16MWE.jl"),
-    """
-    module Float16MWE
-    struct Node{T}
-        val::T
-    end
-    doconvert(::Type{<:Node}, val) = convert(Float16, val)
-    precompile(Tuple{typeof(doconvert), Type{Node{Float16}}, Float64})
-    end # module Float16MWE
-    """)
+        """
+        module Float16MWE
+        struct Node{T}
+            val::T
+        end
+        doconvert(::Type{<:Node}, val) = convert(Float16, val)
+        precompile(Tuple{typeof(doconvert), Type{Node{Float16}}, Float64})
+        end # module Float16MWE
+        """)
     Base.compilecache(Base.PkgId("Float16MWE"))
-    (@eval (using Float16MWE))
-    Base.invokelatest() do
-        @test Float16MWE.doconvert(Float16MWE.Node{Float16}, -1.2) === Float16(-1.2)
-    end
+    @eval using Float16MWE
+    @test @invokelatest(Float16MWE.doconvert(Float16MWE.Node{Float16}, -1.2)) === Float16(-1.2)
 end
 
 precompile_test_harness("BadInvalidations") do load_path
     write(joinpath(load_path, "BadInvalidations.jl"),
-    """
-    module BadInvalidations
+        """
+        module BadInvalidations
         Base.Experimental.@compiler_options compile=min optimize=1
         getval() = Base.a_method_to_overwrite_in_test()
         getval()
-    end # module BadInvalidations
-    """)
+        end # module BadInvalidations
+        """)
     Base.compilecache(Base.PkgId("BadInvalidations"))
-    (@eval Base a_method_to_overwrite_in_test() = inferencebarrier(2))
-    (@eval (using BadInvalidations))
-    Base.invokelatest() do
-        @test BadInvalidations.getval() === 2
-    end
+    @eval Base a_method_to_overwrite_in_test() = inferencebarrier(2)
+    @eval using BadInvalidations
+    @test Base.invokelatest(BadInvalidations.getval) === 2
 end
 
 # https://github.com/JuliaLang/julia/issues/48074
 precompile_test_harness("WindowsCacheOverwrite") do load_path
     # https://github.com/JuliaLang/julia/pull/47184#issuecomment-1364716312
     write(joinpath(load_path, "WindowsCacheOverwrite.jl"),
-    """
-    module WindowsCacheOverwrite
-
-    end # module
-    """)
+        """
+        module WindowsCacheOverwrite
+        end # module
+        """)
     ji, ofile = Base.compilecache(Base.PkgId("WindowsCacheOverwrite"))
-    (@eval (using WindowsCacheOverwrite))
+    @eval using WindowsCacheOverwrite
 
     write(joinpath(load_path, "WindowsCacheOverwrite.jl"),
-    """
-    module WindowsCacheOverwrite
-
-    f() = "something new"
-
-    end # module
-    """)
+        """
+        module WindowsCacheOverwrite
+        f() = "something new"
+        end # module
+        """)
 
     ji_2, ofile_2 = Base.compilecache(Base.PkgId("WindowsCacheOverwrite"))
     @test ofile_2 == Base.ocachefile_from_cachefile(ji_2)
+end
+
+precompile_test_harness("Issue #48391") do load_path
+    write(joinpath(load_path, "I48391.jl"),
+        """
+        module I48391
+        struct SurrealFinite <: Real end
+        precompile(Tuple{typeof(Base.isless), SurrealFinite, SurrealFinite})
+        Base.:(<)(x::SurrealFinite, y::SurrealFinite) = "good"
+        end
+        """)
+    ji, ofile = Base.compilecache(Base.PkgId("I48391"))
+    @eval using I48391
+    x = Base.invokelatest(I48391.SurrealFinite)
+    @test Base.invokelatest(isless, x, x) === "good"
+    @test_throws ErrorException isless(x, x)
 end
 
 empty!(Base.DEPOT_PATH)
