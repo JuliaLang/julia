@@ -472,6 +472,11 @@ end
     @test SymTridiagonal([1, 2], [0])^3 == [1 0; 0 8]
 end
 
+@testset "Issue #48505" begin
+    @test SymTridiagonal([1,2,3],[4,5.0]) == [1.0 4.0 0.0; 4.0 2.0 5.0; 0.0 5.0 3.0]
+    @test Tridiagonal([1, 2], [4, 5, 1], [6.0, 7]) == [4.0 6.0 0.0; 1.0 5.0 7.0; 0.0 2.0 1.0]
+end
+
 @testset "convert for SymTridiagonal" begin
     STF32 = SymTridiagonal{Float32}(fill(1f0, 5), fill(1f0, 4))
     @test convert(SymTridiagonal{Float64}, STF32)::SymTridiagonal{Float64} == STF32

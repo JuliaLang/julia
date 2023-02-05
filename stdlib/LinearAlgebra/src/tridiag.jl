@@ -73,6 +73,10 @@ function SymTridiagonal{T}(dv::AbstractVector, ev::AbstractVector) where {T}
     SymTridiagonal(convert(AbstractVector{T}, dv)::AbstractVector{T},
                    convert(AbstractVector{T}, ev)::AbstractVector{T})
 end
+function SymTridiagonal(dv::AbstractVector, ev::AbstractVector)
+    T = promote_type(eltype(dv), eltype(ev))
+    SymTridiagonal{T}(dv, ev)
+  end
 
 """
     SymTridiagonal(A::AbstractMatrix)
@@ -490,6 +494,10 @@ Tridiagonal(dl::V, d::V, du::V, du2::V) where {T,V<:AbstractVector{T}} = Tridiag
 function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector) where {T}
     Tridiagonal(map(x->convert(AbstractVector{T}, x), (dl, d, du))...)
 end
+function Tridiagonal(dl::AbstractVector, d::AbstractVector, du::AbstractVector)
+   T = promote_type(eltype(dl), eltype(d), eltype(du))
+   Tridiagonal{T}(dl, d, du)
+ end
 function Tridiagonal{T,V}(A::Tridiagonal) where {T,V<:AbstractVector{T}}
     Tridiagonal{T,V}(A.dl, A.d, A.du)
 end
