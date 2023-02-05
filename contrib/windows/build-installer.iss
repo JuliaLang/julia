@@ -147,6 +147,12 @@ end;
 
 procedure CurPageChanged(CurPageID: Integer);
 begin
+  ;  Fixing bug in git Issue #48521
+  if CurPageID = wpSelectProgramGroup then
+    WizardForm.NextButton.Caption := SetupMessage(msgButtonInstall)
+  else
+    WizardForm.NextButton.Caption := SetupMessage(msgButtonNext);
+
   case CurPageID of
     wpWelcome: WizardForm.Color := WizardForm.WelcomePage.Color;
     wpFinished: WizardForm.Color := WizardForm.FinishedPage.Color;
