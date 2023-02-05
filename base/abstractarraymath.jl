@@ -220,6 +220,9 @@ reim(A::AbstractArray)
 +(x::AbstractArray{<:Number}) = x
 *(x::AbstractArray{<:Number,2}) = x
 
+rad2deg(A::AbstractArray) = rad2deg.(A)
+deg2rad(A::AbstractArray) = deg2rad.(A)
+
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
 
 """
