@@ -821,8 +821,8 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                                 end
                             end
                         end
-                        # `name` is not an ext, do standard lookup as if this was the parent
-                        return identify_package(PkgId(UUID(uuid), dep_name), name)
+                        # `name` is not a weak dependency of the extension, not the parent
+                        return nothing
                     end
                 end
             end
