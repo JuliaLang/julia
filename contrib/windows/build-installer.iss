@@ -147,7 +147,7 @@ end;
 
 procedure CurPageChanged(CurPageID: Integer);
 begin
-  ;  Fixing bug in git Issue #48521
+  ;  change button text from "next" to "install" when ReadyPage is disabled.
   if CurPageID = wpSelectProgramGroup then
     WizardForm.NextButton.Caption := SetupMessage(msgButtonInstall)
   else
