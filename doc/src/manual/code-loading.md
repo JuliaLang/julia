@@ -391,8 +391,7 @@ end
 
 When a package with extensions is added to an environment, the `weakdeps` and `extensions` sections
 are stored in the manifest file in the section for that package. The dependency lookup rules for
-a package are the same as for its "parent" except that the listed extension dependencies are also considered as
-dependencies.
+an extension is that they can load the "parent" package and the listed extension dependencies. Other dependencies have to be loaded transitively via the parent pacakge via e.g. `import Parent.Dependency`.
 
 ### [Package/Environment Preferences](@id preferences)
 
