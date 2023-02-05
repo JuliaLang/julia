@@ -1217,7 +1217,7 @@ function run_extension_callbacks(; force::Bool=false)
 end
 
 """
-    load_extensions()
+    retry_load_extensions()
 
 Loads all the (not yet loaded) extensions that have their extension-dependencies loaded.
 This is used in cases where the automatic loading of an extension failed
