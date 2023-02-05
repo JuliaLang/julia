@@ -1757,14 +1757,12 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
             push!(tparams, ai.tv)
         else
             uncertain = true
-            # These blocks improve type info but make compilation a bit slower.
-            # XXX
-            #unw = unwrap_unionall(ai)
-            #isT = isType(unw)
-            #if isT && isa(ai,UnionAll) && contains_is(outervars, ai.var)
-            #    ai = rename_unionall(ai)
-            #    unw = unwrap_unionall(ai)
-            #end
+            unw = unwrap_unionall(ai)
+            isT = isType(unw)
+            if isT && isa(ai,UnionAll) && contains_is(outervars, ai.var)
+                ai = rename_unionall(ai)
+                unw = unwrap_unionall(ai)
+            end
             ai_w = widenconst(ai)
             ub = ai_w isa Type && ai_w <: Type ? instanceof_tfunc(ai)[1] : Any
             if istuple
@@ -1772,19 +1770,17 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
                 # then this could be a Vararg type.
                 if i == largs && ub === Any
                     push!(tparams, Vararg)
-                # XXX
-                #elseif isT
-                #    push!(tparams, rewrap_unionall(unw.parameters[1], ai))
+                elseif isT
+                    push!(tparams, rewrap_unionall(unw.parameters[1], ai))
                 else
                     push!(tparams, Any)
                 end
-            # XXX
-            #elseif isT
-            #    push!(tparams, unw.parameters[1])
-            #    while isa(ai, UnionAll)
-            #        push!(outervars, ai.var)
-            #        ai = ai.body
-            #    end
+            elseif isT
+                push!(tparams, unw.parameters[1])
+                while isa(ai, UnionAll)
+                    push!(outervars, ai.var)
+                    ai = ai.body
+                end
             else
                 # Is this the second parameter to a NamedTuple?
                 if isa(uw, DataType) && uw.name === _NAMEDTUPLE_NAME && isa(ua, UnionAll) && uw.parameters[2] === ua.var
@@ -2278,7 +2274,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argin
         else
             effect_free = ALWAYS_FALSE
         end
-        nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && builtin_nothrow(𝕃, f, argtypes, rt))
+        nothrow = (isempty(argtypes) || !isvarargtype(argtypes[end])) && builtin_nothrow(𝕃, f, argtypes, rt)
         if contains_is(_INACCESSIBLEMEM_BUILTINS, f)
             inaccessiblememonly = ALWAYS_TRUE
         elseif contains_is(_ARGMEM_BUILTINS, f)
@@ -2460,7 +2456,7 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
 
     consistent = contains_is(_INCONSISTENT_INTRINSICS, f) ? ALWAYS_FALSE : ALWAYS_TRUE
     effect_free = !(f === Intrinsics.pointerset) ? ALWAYS_TRUE : ALWAYS_FALSE
-    nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && intrinsic_nothrow(f, argtypes))
+    nothrow = (isempty(argtypes) || !isvarargtype(argtypes[end])) && intrinsic_nothrow(f, argtypes)
 
     return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow)
 end

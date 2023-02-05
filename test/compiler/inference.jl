@@ -27,7 +27,6 @@ let comparison = Tuple{X, X} where X<:Tuple
     @test Core.Compiler.limit_type_size(sig, comparison, comparison, 100, 100) == Tuple{Tuple, Tuple}
     @test Core.Compiler.limit_type_size(sig, ref, comparison, 100, 100) == Tuple{Any, Any}
     @test Core.Compiler.limit_type_size(Tuple{sig}, Tuple{ref}, comparison, 100, 100) == Tuple{Tuple{Any, Any}}
-    @test Core.Compiler.limit_type_size(sig, ref, Tuple{comparison}, 100,  100) == Tuple{Tuple{X, X} where X<:Tuple, Tuple{X, X} where X<:Tuple}
     @test Core.Compiler.limit_type_size(ref, sig, Union{}, 100, 100) == ref
 end
 
@@ -49,6 +48,13 @@ end
 # obtain Vararg with 2 undefined fields
 let va = ccall(:jl_type_intersection_with_env, Any, (Any, Any), Tuple{Tuple}, Tuple{Tuple{Vararg{Any, N}}} where N)[2][1]
     @test Core.Compiler.__limit_type_size(Tuple, va, Core.svec(va, Union{}), 2, 2) === Tuple
+end
+
+mutable struct TS14009{T}; end
+let A = TS14009{TS14009{TS14009{TS14009{TS14009{T}}}}} where {T},
+    B = Base.rewrap_unionall(TS14009{Base.unwrap_unionall(A)}, A)
+
+    @test Core.Compiler.Compiler.limit_type_size(B, A, A, 2, 2) == TS14009
 end
 
 # issue #42835
@@ -81,7 +87,7 @@ end
 @test !Core.Compiler.type_more_complex(Type{1}, Type{2}, Core.svec(), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Union{Float32,Float64}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
 @test !Core.Compiler.type_more_complex(Type{Union{Float32,Float64}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 0, 1, 1)
-@test_broken Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Type{Union{Float32,Float64}}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Type{Union{Float32,Float64}}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Any, Core.svec(Union{Float32,Float64}), 1, 1, 1)
 
 
@@ -2741,6 +2747,17 @@ end |> only === Int
 @test only(Base.return_types(Core.apply_type, Tuple{Any})) == Any
 @test only(Base.return_types(Core.apply_type, Tuple{Any,Any})) == Any
 
+# `apply_type_tfunc` accuracy for constrained type construction
+# https://github.com/JuliaLang/julia/issues/47089
+import Core: Const
+import Core.Compiler: apply_type_tfunc
+struct Issue47089{A,B} end
+let 𝕃 = Core.Compiler.fallback_lattice
+    A = Type{<:Integer}
+    @test apply_type_tfunc(𝕃, Const(Issue47089), A, A) <: (Type{Issue47089{A,B}} where {A<:Integer, B<:Integer})
+end
+@test only(Base.return_types(keys, (Dict{String},))) == Base.KeySet{String, T} where T<:(Dict{String})
+
 # PR 27351, make sure optimized type intersection for method invalidation handles typevars
 
 abstract type AbstractT27351 end
@@ -3690,10 +3707,10 @@ Base.iterate(::Itr41839_3 , i) = i < 16 ? (i, i + 1) : nothing
 
 # issue #32699
 f32699(a) = (id = a[1],).id
-@test Base.return_types(f32699, (Vector{Union{Int,Missing}},)) == Any[Union{Int,Missing}]
+@test only(Base.return_types(f32699, (Vector{Union{Int,Missing}},))) == Union{Int,Missing}
 g32699(a) = Tuple{a}
-@test Base.return_types(g32699, (Type{<:Integer},))[1] == Type{<:Tuple{Any}}
-@test Base.return_types(g32699, (Type,))[1] == Type{<:Tuple}
+@test only(Base.return_types(g32699, (Type{<:Integer},))) <: Type{<:Tuple{Any}}
+@test only(Base.return_types(g32699, (Type,))) <: Type{<:Tuple}
 
 # Inference precision of union-split calls
 function f_apply_union_split(fs, x)
