@@ -95,6 +95,7 @@ function threading_run(fun, static)
     if !isempty(failed_tasks)
         throw(CompositeException(map(TaskFailedException, failed_tasks)))
     end
+    return map(Base.get_task_tls, tasks)
 end
 
 function _threadsfor(iter, lbody, schedule)
@@ -141,13 +142,13 @@ function _threadsfor(iter, lbody, schedule)
         end
         end
         if $(schedule === :dynamic || schedule === :default)
-            threading_run(threadsfor_fun, false)
+            tlss = threading_run(threadsfor_fun, false)
         elseif ccall(:jl_in_threaded_region, Cint, ()) != 0 # :static
             error("`@threads :static` cannot be used concurrently or nested")
         else # :static
-            threading_run(threadsfor_fun, true)
+            tlss = threading_run(threadsfor_fun, true)
         end
-        nothing
+        tlss
     end
 end
 
