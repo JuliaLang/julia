@@ -269,14 +269,6 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
         opt = caller.src
         if opt isa OptimizationState{typeof(interp)} # implies `may_optimize(interp) === true`
             analyzed = optimize(interp, opt, OptimizationParams(interp), caller)
-            if isa(analyzed, ConstAPI)
-                # XXX: The work in ir_to_codeinf! is essentially wasted. The only reason
-                # we're doing it is so that code_llvm can return the code
-                # for the `return ...::Const` (which never runs anyway). We should do this
-                # as a post processing step instead.
-                ir_to_codeinf!(opt)
-                caller.src = analyzed
-            end
             caller.valid_worlds = (opt.inlining.et::EdgeTracker).valid_worlds[]
         end
     end
@@ -300,9 +292,10 @@ function CodeInstance(
     local const_flags::Int32
     result_type = result.result
     @assert !(result_type isa LimitedAccuracy)
-    if inferred_result isa ConstAPI
+
+    if isa(result_type, Const) && is_total(result.ipo_effects)
         # use constant calling convention
-        rettype_const = inferred_result.val
+        rettype_const = result_type.val
         const_flags = 0x3
         inferred_result = nothing
     else
@@ -379,7 +372,7 @@ function transform_result_for_cache(interp::AbstractInterpreter,
         inferred_result = maybe_compress_codeinfo(interp, linfo, inferred_result)
     end
     # The global cache can only handle objects that codegen understands
-    if !isa(inferred_result, Union{CodeInfo, Vector{UInt8}, ConstAPI})
+    if !isa(inferred_result, Union{CodeInfo, Vector{UInt8}})
         inferred_result = nothing
     end
     return inferred_result

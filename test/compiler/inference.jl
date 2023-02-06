@@ -569,16 +569,9 @@ Base.@pure function fpure(a=rand(); b=rand())
     # but would be too big to inline
     return a + b + rand()
 end
-gpure() = fpure()
-gpure(x::Irrational) = fpure(x)
+
 @test which(fpure, ()).pure
 @test which(fpure, (typeof(pi),)).pure
-@test !which(gpure, ()).pure
-@test !which(gpure, (typeof(pi),)).pure
-@test code_typed(gpure, ())[1][1].pure
-@test code_typed(gpure, (typeof(π),))[1][1].pure
-@test gpure() == gpure() == gpure()
-@test gpure(π) == gpure(π) == gpure(π)
 
 # Make sure @pure works for functions using the new syntax
 Base.@pure (fpure2(x::T) where T) = T
@@ -940,13 +933,6 @@ h20704(@nospecialize(x)) = g20704(x)
 Base.@pure c20704() = (f20704(1.0); 1)
 d20704() = c20704()
 @test_throws MethodError d20704()
-
-Base.@pure function a20704(x)
-    rand()
-    42
-end
-aa20704(x) = x(nothing)
-@test code_typed(aa20704, (typeof(a20704),))[1][1].pure
 
 #issue #21065, elision of _apply_iterate when splatted expression is not effect_free
 function f21065(x,y)
