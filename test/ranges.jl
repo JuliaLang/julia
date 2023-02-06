@@ -894,8 +894,8 @@ function range_fuzztests(::Type{T}, niter, nrange) where {T}
         #   last(r)
         #     rat(strt) => eps(strt)/2
         #     rat(Δ)    => (n-1)*eps(Δ)/2
-        #     T(...)    => eps(stop)/2
-        @test stop ≈ last(r) atol = eps((n-1)*Δ)/2 + eps(stop) + eps(strt)/2 + (n-1)*eps(Δ)/2
+        #     T(...)    => eps(last(r))/2
+        @test stop ≈ last(r) atol = eps((n-1)*Δ)/2 + eps(stop)/2 + eps(strt)/2 + (n-1)*eps(Δ)/2 + eps(last(r))/2
         l = range(strt, stop=stop, length=n)
         @test n == length(l)
         @test strt == first(l)
