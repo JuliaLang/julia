@@ -76,7 +76,8 @@ end
 @testset "@test_stream" begin
     @test 1234 === @test_nowarn(1234)
     @test 5678 === @test_warn("WARNING: foo", begin println(stderr, "WARNING: foo"); 5678; end)
-    @test 9876 === @test_out("INFO: foo", begin println(stdout, "INFO: foo"); 9876; end)
+    @test 9876 === @test_stream(stdout, "foo", begin println(stdout, "foo"); 9876; end)
+    @test 5432 === @test_output("INFO: foo", begin println(stdout, "INFO: foo"); 5432; end)
     let a
         @test_throws UndefVarError(:a) a
         @test_nowarn a = 1
