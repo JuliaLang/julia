@@ -711,6 +711,15 @@ julia> .√(1:4)
 """
 sqrt(x)
 
+# get a scaling constant that you can multiply
+function normalize(x::T) where T<:IEEEFloat
+    UT = uinttype(T)
+    xi = reinterpret(UT, x)
+    ans = (~xi-(one(UT)<<significand_bits(T))) & exponent_mask(T)
+    reinterpret(T, ans)
+end
+normalze(x) = inv(x)
+
 """
     hypot(x, y)
 
@@ -785,17 +794,11 @@ function _hypot(x, y)
     end
 
     # Operands do not vary widely
-    scale = eps(typeof(ax))*sqrt(floatmin(ax))  #Rescaling constant
-    if ax > sqrt(floatmax(ax)/2)
-        ax = ax*scale
-        ay = ay*scale
-        scale = inv(scale)
-    elseif ay < sqrt(floatmin(ax))
-        ax = ax/scale
-        ay = ay/scale
-    else
-        scale = oneunit(scale)
-    end
+    scale = normalize(ax)  #Rescaling constant
+    ax = ax*scale
+    ay = ay*scale
+    scale = inv(scale)
+
     h = sqrt(muladd(ax, ax, ay*ay))
     # This branch is correctly rounded but requires a native hardware fma.
     if Core.Intrinsics.have_fma(typeof(h))
