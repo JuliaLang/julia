@@ -1778,6 +1778,7 @@ function parse_resword(ps::ParseState)
     # In normal_context
     # begin f() where T = x end  ==>  (block (= (where (call f) T) x))
     ps = normal_context(ps)
+    bump_trivia(ps)
     mark = position(ps)
     word = peek(ps)
     if word in KSet"begin quote"
@@ -2335,7 +2336,7 @@ function fix_macro_name_kind!(ps::ParseState, macro_name_position, name_kind=not
         # TODO: Clean this up when K"parens" is implemented
         while true
             macro_name_position = ParseStreamPosition(macro_name_position.token_index-1,
-                                                      macro_name_position.range_index)
+                                                      macro_name_position.range_index-1)
             b = peek_behind(ps, macro_name_position)
             k = b.kind
             if !has_flags(b.flags, TRIVIA_FLAG)

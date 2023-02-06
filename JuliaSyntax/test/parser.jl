@@ -1,4 +1,7 @@
-function test_parse(production, code; v=v"1.6", expr=false)
+"""
+Parse string to SyntaxNode tree and show as an sexpression
+"""
+function parse_to_sexpr_str(production, code::AbstractString; v=v"1.6", expr=false)
     stream = ParseStream(code, version=v)
     production(ParseState(stream))
     JuliaSyntax.validate_tokens(stream)
@@ -14,6 +17,24 @@ function test_parse(production, code; v=v"1.6", expr=false)
             sprint(show, MIME("text/x.sexpression"), s)
         end
     end
+end
+
+function test_parse(production, input, output)
+    if !(input isa AbstractString)
+        opts, input = input
+    else
+        opts = NamedTuple()
+    end
+    if output isa Pair
+        @test parse_to_sexpr_str(production, input; opts...) == output[1]
+        @test parse_to_sexpr_str(production, input; opts..., expr=true) == output[2]
+    else
+        @test parse_to_sexpr_str(production, input; opts...) == output
+    end
+end
+
+function test_parse(inout::Pair)
+    test_parse(JuliaSyntax.parse_toplevel, inout...)
 end
 
 # TODO:
@@ -897,6 +918,30 @@ tests = [
     ],
 ]
 
+@testset "Inline test cases" begin
+    @testset "$production" for (production, test_specs) in tests
+        @testset "$(repr(input))" for (input, output) in test_specs
+            test_parse(production, input, output)
+        end
+    end
+end
+
+parseall_test_specs = [
+    # whitespace before keywords in space-insensitive mode
+    "(y::\nif x z end)" => "(toplevel (::-i y (if x (block z))))"
+
+    # The following may not be ideal error recovery! But at least the parser
+    # shouldn't crash
+    "@(x y)" => "(toplevel (macrocall x (error-t @y)))"
+    "|(&\nfunction" => "(toplevel (call | (& (function (error (error)) (block (error)) (error-t))) (error-t)))"
+]
+
+@testset "Parser does not crash on broken code" begin
+    @testset "$(repr(input))" for (input, output) in parseall_test_specs
+        test_parse(JuliaSyntax.parse_toplevel, input, output)
+    end
+end
+
 # Known bugs / incompatibilities
 broken_tests = [
     JuliaSyntax.parse_atom => [
@@ -919,35 +964,19 @@ broken_tests = [
     ]
 ]
 
-@testset "Inline test cases" begin
-    @testset "$production" for (production, test_specs) in tests
-        @testset "$(repr(input))" for (input, output) in test_specs
-            if !(input isa AbstractString)
-                opts, input = input
-            else
-                opts = NamedTuple()
-            end
-            if output isa Pair
-                @test test_parse(production, input; opts...) == output[1]
-                @test test_parse(production, input; opts..., expr=true) == output[2]
-            else
-                @test test_parse(production, input; opts...) == output
-            end
+@testset "Broken $production" for (production, test_specs) in broken_tests
+    @testset "$(repr(input))" for (input,output) in test_specs
+        if !(input isa AbstractString)
+            opts,input = input
+        else
+            opts = NamedTuple()
         end
-    end
-    @testset "Broken $production" for (production, test_specs) in broken_tests
-        @testset "$(repr(input))" for (input,output) in test_specs
-            if !(input isa AbstractString)
-                opts,input = input
-            else
-                opts = NamedTuple()
-            end
-            @test_broken test_parse(production, input; opts...) == output
-        end
+        @test_broken parse_to_sexpr_str(production, input; opts...) == output
     end
 end
 
 @testset "Trivia attachment" begin
+    # TODO: Need to expand this greatly to cover as many forms as possible!
     @test show_green_tree("f(a;b)") == """
          1:6      │[toplevel]
          1:6      │  [call]
@@ -963,15 +992,15 @@ end
 
 @testset "Unicode normalization in tree conversion" begin
     # ɛµ normalizes to εμ
-    @test test_parse(JuliaSyntax.parse_eq, "\u025B\u00B5()") == "(call \u03B5\u03BC)"
-    @test test_parse(JuliaSyntax.parse_eq, "@\u025B\u00B5") == "(macrocall @\u03B5\u03BC)"
-    @test test_parse(JuliaSyntax.parse_eq, "\u025B\u00B5\"\"") == "(macrocall @\u03B5\u03BC_str (string-r \"\"))"
-    @test test_parse(JuliaSyntax.parse_eq, "\u025B\u00B5``") == "(macrocall @\u03B5\u03BC_cmd (cmdstring-r \"\"))"
+    @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "\u025B\u00B5()") == "(call \u03B5\u03BC)"
+    @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "@\u025B\u00B5") == "(macrocall @\u03B5\u03BC)"
+    @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "\u025B\u00B5\"\"") == "(macrocall @\u03B5\u03BC_str (string-r \"\"))"
+    @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "\u025B\u00B5``") == "(macrocall @\u03B5\u03BC_cmd (cmdstring-r \"\"))"
     # · and · normalize to ⋅
-    @test test_parse(JuliaSyntax.parse_eq, "a \u00B7 b") == "(call-i a \u22C5 b)"
-    @test test_parse(JuliaSyntax.parse_eq, "a \u0387 b") == "(call-i a \u22C5 b)"
+    @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "a \u00B7 b") == "(call-i a \u22C5 b)"
+    @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "a \u0387 b") == "(call-i a \u22C5 b)"
     # − normalizes to -
-    @test test_parse(JuliaSyntax.parse_expr, "a \u2212 b")  == "(call-i a - b)"
-    @test test_parse(JuliaSyntax.parse_eq, "a \u2212= b") == "(-= a b)"
-    @test test_parse(JuliaSyntax.parse_eq, "a .\u2212= b") == "(.-= a b)"
+    @test parse_to_sexpr_str(JuliaSyntax.parse_expr, "a \u2212 b")  == "(call-i a - b)"
+    @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "a \u2212= b") == "(-= a b)"
+    @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "a .\u2212= b") == "(.-= a b)"
 end
