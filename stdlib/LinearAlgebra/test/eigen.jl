@@ -255,8 +255,7 @@ end
             @test x'A ≈ x'eigen(A)
             @test tr(A) ≈ tr(eigen(A))
             @test det(A) ≈ det(eigen(A))
-            # for op in (adjoint, transpose, exp, inv, (A -> A^3))
-            for op in (inv, )
+            for op in (adjoint, transpose, exp, inv, (A -> A^3))
                 @assert Matrix(op(eigen(A))) ≈ op(A)
             end
         end

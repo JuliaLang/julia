@@ -669,6 +669,6 @@ mul!(x, E::Eigen, y::AbstractVector) = copyto!(x, E*y)
 
 inv(E::Eigen) = Eigen(map(inv, E.values), copy(E.vectors), E.are_vectors_unitary)
 for f in _matrix_functions
-    @eval $f(E::Eigen) = Eigen(map($f, E.values), copy(E.vectors), E.are_vectors_unitary)
+    @eval Base.$f(E::Eigen) = Eigen(map($f, E.values), copy(E.vectors), E.are_vectors_unitary)
 end
 ^(E::Eigen, x) = Eigen(map(λ -> λ^x, E.values), copy(E.vectors), E.are_vectors_unitary)

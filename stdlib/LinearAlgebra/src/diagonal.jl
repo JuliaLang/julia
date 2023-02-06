@@ -694,7 +694,7 @@ end
 
 # Matrix functions
 for f in _matrix_functions
-    @eval $f(D::Diagonal) = Diagonal($f.(D.diag))
+    @eval Base.$f(D::Diagonal) = Diagonal($f.(D.diag))
 end
 
 function inv(D::Diagonal{T}) where T
