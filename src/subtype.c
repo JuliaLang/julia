@@ -82,6 +82,8 @@ typedef struct jl_varbinding_t {
     int8_t intvalued;
     int8_t limited;
     int16_t depth0;         // # of invariant constructors nested around the UnionAll type for this var
+    // Used to record the offset between `lb::Typevar` if `lb == ub`.
+    int16_t offset;
     // array of typevars that our bounds depend on, whose UnionAlls need to be
     // moved outside ours.
     jl_array_t *innervars;
@@ -582,6 +584,65 @@ static jl_unionall_t *rename_unionall(jl_unionall_t *u)
     return (jl_unionall_t*)t;
 }
 
+// offset tools
+
+#define UNDEF_OFF -32768
+
+#define RESET_OFF(v)                                        \
+    do {                                                    \
+        if ((v)->lb != (v)->ub || !jl_is_typevar((v)->lb))  \
+            (v)->offset = UNDEF_OFF;                        \
+        else {                                              \
+            (v)->offset = 0;                                \
+        }                                                   \
+    } while (0);
+
+// try to propagate x's offset to xub:
+// (1) x = y + Loffset   | xub = y + Loffset - xoffset
+// (2) x = xub + xoffset | （1） + （3） ==> y = xub + (offset_y + offset_x);
+// (3) y = x + offset_y  | the new offsets hold the "oppsite" property!
+#define forward_offset(x, e, R)                             \
+    assert(!(x) || jl_is_typevar((x)->lb));                 \
+    assert(!(x) || (x)->lb == (x)->ub);                     \
+    assert(!(x) || (x)->offset != UNDEF_OFF);               \
+    if (x) {                                                \
+        (e)->Loffset += (R) ? (x)->offset : -(x)->offset;   \
+    }
+
+#define backward_offset(x, e, R)                            \
+    if (x) {                                                \
+        (e)->Loffset -= (R) ? (x)->offset : -(x)->offset;   \
+    }
+
+jl_value_t *outmost_identity(jl_tvar_t *y, jl_stenv_t *e)
+{
+    jl_value_t *res = (jl_value_t *)y;
+    int offset = 0;
+    jl_varbinding_t *temp = lookup(e, y);
+    if (temp) {
+        while (temp->lb == temp->ub && jl_is_typevar(temp->lb)) {
+            jl_varbinding_t *temp2 = lookup(e, (jl_tvar_t *)temp->lb);
+            if (!temp2)
+                break;
+            assert(temp->offset != UNDEF_OFF);
+            offset += temp->offset;
+            y = temp2->var;
+            temp = temp2;
+            if (offset == 0)
+                res = (jl_value_t *)y;
+        }
+    }
+    if (temp && !jl_is_type(temp->lb) && !jl_is_typevar(temp->lb)) {
+        if (offset == 0)
+            return temp->lb;
+        else {
+            assert(jl_is_long(temp->lb));
+            return jl_box_long(jl_unbox_long(temp->lb) + offset);
+        }
+    }
+    return res;
+}
+
 // main subtyping algorithm
 
 static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param);
@@ -889,7 +950,8 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
 {
     u = unalias_unionall(u, e);
     jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0,
-                           R ? e->Rinvdepth : e->invdepth, NULL, e->vars };
+                          R ? e->Rinvdepth : e->invdepth, 0, NULL, e->vars };
+    RESET_OFF(&vb);
     JL_GC_PUSH4(&u, &vb.lb, &vb.ub, &vb.innervars);
     e->vars = &vb;
     int ans;
@@ -2984,7 +3046,8 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
     jl_value_t *res=NULL, *save=NULL;
     jl_savedenv_t se;
     jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0,
-                           R ? e->Rinvdepth : e->invdepth, NULL, e->vars };
+                           R ? e->Rinvdepth : e->invdepth, 0, NULL, e->vars };
+    RESET_OFF(&vb);
     JL_GC_PUSH5(&res, &vb.lb, &vb.ub, &save, &vb.innervars);
     save_env(e, &save, &se);
     res = intersect_unionall_(t, u, e, R, param, &vb);
