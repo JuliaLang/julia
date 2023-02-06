@@ -50,11 +50,14 @@ true
 struct Eigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
     values::U
     vectors::S
-    Eigen{T,V,S,U}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V,S,U} =
-        new(values, vectors)
+    are_vectors_unitary::Bool
+    Eigen{T,V,S,U}(values::AbstractVector{V},
+                   vectors::AbstractMatrix{T},
+                   are_vectors_unitary=false) where {T,V,S,U} =
+        new(values, vectors, are_vectors_unitary)
 end
-Eigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V} =
-    Eigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
+Eigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}, are_vectors_unitary=false) where {T,V} =
+    Eigen{T,V,typeof(vectors),typeof(values)}(values, vectors, are_vectors_unitary)
 
 # Generalized eigenvalue problem.
 """
@@ -647,9 +650,10 @@ function Base.isequal(A::Eigen, B::Eigen)
 end
 
 # Conversion methods
-
 ## Can we determine the source/result is Real?  This is not stored in the type Eigen
-AbstractMatrix(F::Eigen) = F.vectors * Diagonal(F.values) / F.vectors
+AbstractMatrix(F::Eigen) = F.are_vectors_unitary ?
+                             (F.vectors * Diagonal(F.values) * (F.vectors')) :
+                             (F.vectors * Diagonal(F.values) / F.vectors)
 AbstractArray(F::Eigen) = AbstractMatrix(F)
 Matrix(F::Eigen) = Array(AbstractArray(F))
 Array(F::Eigen) = Matrix(F)
