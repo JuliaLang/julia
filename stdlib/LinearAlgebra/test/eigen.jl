@@ -39,7 +39,7 @@ aimg  = randn(n,n)/2
             end
             f = eigen(a)
             @test det(a) ≈ det(f)
-            @test inv(a) ≈ inv(f)
+            @test inv(a) ≈ Matrix(inv(f))
             @test isposdef(a) == isposdef(f)
             @test eigvals(f) === f.values
             @test eigvecs(f) === f.vectors
@@ -52,7 +52,7 @@ aimg  = randn(n,n)/2
                     @test T*v[:,i] ≈ d[i]*v[:,i]
                 end
                 @test det(T) ≈ det(f)
-                @test inv(T) ≈ inv(f)
+                @test inv(T) ≈ Matrix(inv(f))
             end
 
             num_fact = eigen(one(eltya))
@@ -241,6 +241,26 @@ end
     @test F.vectors isa Matrix{ComplexF16}
     @test F.values ≈ F32.values
     @test F.vectors ≈ F32.vectors
+end
+
+@testset "Operations on Eigen" begin
+    Random.seed!(4)
+    for sym = (false, true)
+        for elty = (Float64, ComplexF64)
+            A = randn(elty, 3,3)
+            sym && (A=A+A')
+            @test eigen(A).are_vectors_unitary == sym
+            x = randn(elty, 3)
+            @test A*x ≈ eigen(A)*x
+            @test x'A ≈ x'eigen(A)
+            @test tr(A) ≈ tr(eigen(A))
+            @test det(A) ≈ det(eigen(A))
+            # for op in (adjoint, transpose, exp, inv, (A -> A^3))
+            for op in (inv, )
+                @assert Matrix(op(eigen(A))) ≈ op(A)
+            end
+        end
+    end
 end
 
 end # module TestEigen

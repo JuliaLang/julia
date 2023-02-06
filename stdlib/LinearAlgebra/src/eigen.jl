@@ -187,10 +187,6 @@ Compute the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factor
 which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
 matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
-Iterating the decomposition produces the components `F.values` and `F.vectors`.
-
-The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`](@ref), and [`isposdef`](@ref).
-
 For general nonsymmetric matrices it is possible to specify how the matrix is balanced
 before the eigenvector calculation. The option `permute=true` permutes the matrix to become
 closer to upper triangular, and `scale=true` scales the matrix by its diagonal elements to
@@ -436,9 +432,6 @@ function eigmin(A::Union{Number, AbstractMatrix};
     minimum(v)
 end
 
-inv(A::Eigen) = A.vectors * inv(Diagonal(A.values)) / A.vectors
-det(A::Eigen) = prod(A.values)
-
 # Generalized eigenproblem
 function eigen!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function,Nothing}=eigsortby) where T<:BlasReal
     issymmetric(A) && isposdef(B) && return eigen!(Symmetric(A), Symmetric(B), sortby=sortby)
@@ -476,8 +469,6 @@ Compute the generalized eigenvalue decomposition of `A` and `B`, returning a
 [`GeneralizedEigen`](@ref) factorization object `F` which contains the generalized eigenvalues in
 `F.values` and the generalized eigenvectors in the columns of the matrix `F.vectors`.
 (The `k`th generalized eigenvector can be obtained from the slice `F.vectors[:, k]`.)
-
-Iterating the decomposition produces the components `F.values` and `F.vectors`.
 
 By default, the eigenvalues and vectors are sorted lexicographically by `(real(λ),imag(λ))`.
 A different comparison function `by(λ)` can be passed to `sortby`, or you can pass
@@ -657,3 +648,27 @@ AbstractMatrix(F::Eigen) = F.are_vectors_unitary ?
 AbstractArray(F::Eigen) = AbstractMatrix(F)
 Matrix(F::Eigen) = Array(AbstractArray(F))
 Array(F::Eigen) = Matrix(F)
+
+# Operations on Eigen
+# Only operations that can be efficiently implemented or conserve the eigen type are implemented
+adjoint(E::Eigen) = Eigen(adjoint.(E.values),
+                          copy(adjoint(E.are_vectors_unitary ? (E.vectors') : inv(E.vectors))),
+                          E.are_vectors_unitary)
+transpose(E::Eigen) = Eigen(transpose.(E.values),
+                            copy(transpose(E.are_vectors_unitary ? (E.vectors') : inv(E.vectors))),
+                            E.are_vectors_unitary && (eltype(E) <: Real))
+
+det(A::Eigen) = prod(A.values)
+tr(E::Eigen) = sum(E.values)
+
+*(E::Eigen, x::AbstractVector) = E.vectors * (E.values .* (E.are_vectors_unitary ? (E.vectors'x) : (E.vectors \ x)))
+*(x::Adjoint{<:Any, <:AbstractVector}, E::Eigen) = E.are_vectors_unitary ?
+                                                   ((x*(E.vectors)) * Diagonal(E.values)) * (E.vectors') :
+                                                   ((x*(E.vectors)) * Diagonal(E.values)) / E.vectors
+mul!(x, E::Eigen, y::AbstractVector) = copyto!(x, E*y)
+
+inv(E::Eigen) = Eigen(map(inv, E.values), copy(E.vectors), E.are_vectors_unitary)
+for f in _matrix_functions
+    @eval $f(E::Eigen) = Eigen(map($f, E.values), copy(E.vectors), E.are_vectors_unitary)
+end
+^(E::Eigen, x) = Eigen(map(λ -> λ^x, E.values), copy(E.vectors), E.are_vectors_unitary)
