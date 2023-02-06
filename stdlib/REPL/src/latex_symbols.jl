@@ -2644,6 +2644,7 @@ const symbols_latex_canonical = Dict(
     "ℯ" => "\\euler",
     "♀" => "\\female",
     "≥" => "\\ge",
+    "ℏ" => "\\hbar",
     "⟺" => "\\iff",
     "ℑ" => "\\Im",
     "⟸" => "\\impliedby",
