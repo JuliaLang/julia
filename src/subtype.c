@@ -3639,9 +3639,12 @@ static int merge_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se, int co
         int len = current_env_length(e);
         *root = (jl_value_t*)jl_alloc_svec(len * 3);
         se->buf = (int8_t*)(len > 8 ? malloc_s(len * 3) : &se->_space);
+        se->offbuf = (int16_t*)(len > 8 ? malloc_s(len * 2) : &se->_offspace);
         memset(se->buf, 0, len * 3);
+        for (int i = 0; i < len; i ++ )
+            se->offbuf[i] = UNDEF_OFF;
     }
-    int n = 0;
+    int i = 0, j = 0, k = 0;
     jl_varbinding_t *v = e->vars;
     jl_value_t *b1 = NULL, *b2 = NULL;
     JL_GC_PUSH2(&b1, &b2); // clang-sagc does not understand that *root is rooted already
@@ -3649,29 +3652,56 @@ static int merge_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se, int co
     while (v != NULL) {
         if (v->occurs) {
             // only merge lb/ub/innervars if this var occurs.
-            b1 = jl_svecref(*root, n);
-            b2 = v->lb;
-            jl_svecset(*root, n, b1 ? simple_meet(b1, b2, 0) : b2);
-            b1 = jl_svecref(*root, n+1);
-            b2 = v->ub;
-            jl_svecset(*root, n+1, b1 ? simple_join(b1, b2) : b2);
-            b1 = jl_svecref(*root, n+2);
+            // 1) merge lb/ub/offset
+            jl_value_t *olb = jl_svecref(*root, i);
+            jl_value_t *oub = jl_svecref(*root, i+1);
+            int16_t oboff = se->offbuf[k];
+            if (olb == NULL || oub == NULL) {
+                assert(olb == NULL && oub == NULL);
+                jl_svecset(*root, i, v->lb);
+                jl_svecset(*root, i+1, v->ub);
+                se->offbuf[k] = v->offset;
+            }
+            else if (olb != v->lb || olb != v->ub || oboff != v->offset) {
+                // Give up offset analysis if we meet a real Union
+                if (olb == oub && jl_is_typevar(olb)) {
+                    assert(oboff != UNDEF_OFF);
+                    if (oboff != 0) {
+                        olb = v->var->lb;
+                        oub = v->var->ub;
+                    }
+                }
+                if (v->lb == v->ub && jl_is_typevar(v->lb)) {
+                    assert(v->offset != UNDEF_OFF);
+                    if (v->offset != 0) {
+                        v->lb = v->var->lb;
+                        v->ub = v->var->ub;
+                    }
+                }
+                b1 = olb; b2 = v->lb;
+                jl_svecset(*root, i, simple_meet(b1, b2, 0));
+                b1 = oub; b2 = v->ub;
+                jl_svecset(*root, i+1, simple_join(b1, b2));
+                se->offbuf[k] = UNDEF_OFF;
+            }
+            // 2) merge innervars.
+            b1 = jl_svecref(*root, i+2);
             b2 = (jl_value_t*)v->innervars;
             if (b2 && b1 != b2) {
                 if (b1)
                     jl_array_ptr_1d_append((jl_array_t*)b1, (jl_array_t*)b2);
                 else
-                    jl_svecset(*root, n+2, b2);
+                    jl_svecset(*root, i+2, b2);
             }
             // record the meeted vars.
-            se->buf[n] = 1;
+            se->buf[j] = 1;
         }
         // always merge occurs_inv/cov by max (never decrease)
-        if (v->occurs_inv > se->buf[n+1])
-            se->buf[n+1] = v->occurs_inv;
-        if (v->occurs_cov > se->buf[n+2])
-            se->buf[n+2] = v->occurs_cov;
-        n = n + 3;
+        if (v->occurs_inv > se->buf[j+1])
+            se->buf[j+1] = v->occurs_inv;
+        if (v->occurs_cov > se->buf[j+2])
+            se->buf[j+2] = v->occurs_cov;
+        i += 3; j += 3; k += 1;
         v = v->prev;
     }
     JL_GC_POP();
@@ -3685,20 +3715,24 @@ static void final_merge_env(jl_value_t **merged, jl_savedenv_t *me, jl_value_t *
     assert(l == jl_svec_len(*saved) && l%3 == 0);
     jl_value_t *b1 = NULL, *b2 = NULL;
     JL_GC_PUSH2(&b1, &b2);
-    for (int n = 0; n < l; n = n + 3) {
-        if (jl_svecref(*merged, n) == NULL)
-            jl_svecset(*merged, n, jl_svecref(*saved, n));
-        if (jl_svecref(*merged, n+1) == NULL)
-            jl_svecset(*merged, n+1, jl_svecref(*saved, n+1));
-        b1 = jl_svecref(*merged, n+2);
-        b2 = jl_svecref(*saved , n+2);
+    int i = 0, j = 0, k = 0;
+    while (i < l) {
+        if (jl_svecref(*merged, i) == NULL) {
+            assert(jl_svecref(*merged, i+1) == NULL);
+            jl_svecset(*merged, i, jl_svecref(*saved, i));
+            jl_svecset(*merged, i+1, jl_svecref(*saved, i+1));
+            me->offbuf[k] = se->offbuf[k];
+        }
+        b1 = jl_svecref(*merged, i+2);
+        b2 = jl_svecref(*saved , i+2);
         if (b2 && b1 != b2) {
             if (b1)
                 jl_array_ptr_1d_append((jl_array_t*)b1, (jl_array_t*)b2);
             else
-                jl_svecset(*merged, n+2, b2);
+                jl_svecset(*merged, i+2, b2);
         }
-        me->buf[n] |= se->buf[n];
+        me->buf[j] |= se->buf[j];
+        i += 3; j += 3; k += 1;
     }
     JL_GC_POP();
 }
