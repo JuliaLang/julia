@@ -180,6 +180,18 @@ struct RowNonZero <: PivotingStrategy end
 struct RowMaximum <: PivotingStrategy end
 struct ColumnNorm <: PivotingStrategy end
 
+const _matrix_functions = ( :exp,   :log, :cis,
+                            :expm1, :log1p,
+                            :sqrt,  :cbrt,
+                            :sin,   :cos,   :tan,
+                            :asin,  :acos,  :atan,
+                            :csc,   :sec,   :cot,
+                            :acsc,  :asec,  :acot,
+                            :sinh,  :cosh,  :tanh,
+                            :asinh, :acosh, :atanh,
+                            :csch,  :sech,  :coth,
+                            :acsch, :asech, :acoth )
+
 # Check that stride of matrix/vector is 1
 # Writing like this to avoid splatting penalty when called with multiple arguments,
 # see PR 16416
