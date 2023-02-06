@@ -1184,8 +1184,7 @@ function run_extension_callbacks(extid::ExtensionId)
         true
     catch
         # Try to continue loading if loading an extension errors
-        errs = current_exceptions()
-        @error "Error during loading of extension" exception=errs
+        @error "Error during loading of extension $(extid.id.name) of $(extid.parentid.name)"
         false
     end
     return succeeded
