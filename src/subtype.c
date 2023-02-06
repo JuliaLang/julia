@@ -163,8 +163,10 @@ static void statestack_set(jl_unionstate_t *st, int i, int val) JL_NOTSAFEPOINT
 
 typedef struct {
     int8_t *buf;
+    int16_t *offbuf;
     int rdepth;
     int8_t _space[24];
+    int16_t _offspace[8];
 } jl_savedenv_t;
 
 static void save_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se)
@@ -178,15 +180,18 @@ static void save_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se)
     if (root)
         *root = (jl_value_t*)jl_alloc_svec(len * 3);
     se->buf = (int8_t*)(len > 8 ? malloc_s(len * 3) : &se->_space);
+    se->offbuf = (int16_t*)(len > 8 ? malloc_s(len * 2) : &se->_offspace);
 #ifdef __clang_gcanalyzer__
     memset(se->buf, 0, len * 3);
+    memset(se->offbuf, 0, len * 2);
 #endif
-    int i=0, j=0; v = e->vars;
+    int i=0, j=0, k=0; v = e->vars;
     while (v != NULL) {
         if (root) {
             jl_svecset(*root, i++, v->lb);
             jl_svecset(*root, i++, v->ub);
             jl_svecset(*root, i++, (jl_value_t*)v->innervars);
+            se->offbuf[k++] = v->offset; // This is bound related.
         }
         se->buf[j++] = v->occurs;
         se->buf[j++] = v->occurs_inv;
@@ -200,17 +205,21 @@ static void free_env(jl_savedenv_t *se) JL_NOTSAFEPOINT
 {
     if (se->buf != se->_space)
         free(se->buf);
+    if (se->offbuf != se->_offspace)
+        free(se->offbuf);
     se->buf = NULL;
+    se->offbuf = NULL;
 }
 
 static void restore_env(jl_stenv_t *e, jl_value_t *root, jl_savedenv_t *se) JL_NOTSAFEPOINT
 {
     jl_varbinding_t *v = e->vars;
-    int i = 0, j = 0;
+    int i = 0, j = 0, k = 0;
     while (v != NULL) {
         if (root) v->lb = jl_svecref(root, i++);
         if (root) v->ub = jl_svecref(root, i++);
         if (root) v->innervars = (jl_array_t*)jl_svecref(root, i++);
+        if (root) v->offset = se->offbuf[k++]; // This is bound related.
         v->occurs = se->buf[j++];
         v->occurs_inv = se->buf[j++];
         v->occurs_cov = se->buf[j++];
