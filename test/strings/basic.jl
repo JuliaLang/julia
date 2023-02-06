@@ -1240,7 +1240,7 @@ end
         @test Base._isvalid_utf8_dfa(Base._UTF8_DFA_INVALID,[b],1,1) == Base._UTF8_DFA_INVALID
     end
 end
-@testset "Ensure UTF-8 DFA stays in ASCII State for all ASCII" begin
+@testset "Ensure  UTF-8 DFA stays in ASCII State for all ASCII" begin
     for b = 0x00:0x7F
         @test Base._isvalid_utf8_dfa(Base._UTF8_DFA_ASCII,[b],1,1) == Base._UTF8_DFA_ASCII
     end
