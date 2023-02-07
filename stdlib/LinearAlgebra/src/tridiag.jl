@@ -75,7 +75,7 @@ function SymTridiagonal{T}(dv::AbstractVector, ev::AbstractVector) where {T}
 end
 function SymTridiagonal(dv::AbstractVector, ev::AbstractVector)
     T = promote_type(eltype(dv), eltype(ev))
-    SymTridiagonal{T}(dv, ev)
+    return SymTridiagonal{T}(dv, ev)
   end
 
 """
@@ -496,7 +496,7 @@ function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVecto
 end
 function Tridiagonal(dl::AbstractVector, d::AbstractVector, du::AbstractVector)
    T = promote_type(eltype(dl), eltype(d), eltype(du))
-   Tridiagonal{T}(dl, d, du)
+   return Tridiagonal{T}(dl, d, du)
  end
 function Tridiagonal{T,V}(A::Tridiagonal) where {T,V<:AbstractVector{T}}
     Tridiagonal{T,V}(A.dl, A.d, A.du)
