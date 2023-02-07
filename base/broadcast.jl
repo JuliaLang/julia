@@ -512,6 +512,20 @@ julia> Broadcast.combine_axes(1, 1, 1)
 @inline combine_axes(A, B) = broadcast_shape(axes(A), axes(B))
 combine_axes(A) = axes(A)
 
+"""
+    broadcast_shape(As...) -> Tuple
+
+Determine the result axes for broadcasting across all axes (size Tuples) in `As`.
+
+```jldoctest
+julia> Broadcast.broadcast_shape((1,2), (2,1))
+(2, 2)
+
+julia> Broadcast.broadcast_shape((1,), (1,5), (4,5,3))
+(4, 5, 3)
+```
+"""
+function broadcast_shape end
 # shape (i.e., tuple-of-indices) inputs
 broadcast_shape(shape::Tuple) = shape
 broadcast_shape(shape::Tuple, shape1::Tuple, shapes::Tuple...) = broadcast_shape(_bcs(shape, shape1), shapes...)
@@ -710,7 +724,7 @@ julia> Broadcast.broadcastable("hello") # Strings break convention of matching i
 Base.RefValue{String}("hello")
 ```
 """
-broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair,IO}) = Ref(x)
+broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair,IO,CartesianIndex}) = Ref(x)
 broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
 broadcastable(x::Union{AbstractArray,Number,AbstractChar,Ref,Tuple,Broadcasted}) = x
 # Default to collecting iterables — which will error for non-iterables

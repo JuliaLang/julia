@@ -295,6 +295,8 @@ according to the order specified by the `by`, `lt` and `rev` keywords, assuming 
 is already sorted in that order. Return an empty range located at the insertion point
 if `a` does not contain values equal to `x`.
 
+See [`sort!`](@ref) for an explanation of the keyword arguments `by`, `lt` and `rev`.
+
 See also: [`insorted`](@ref), [`searchsortedfirst`](@ref), [`sort`](@ref), [`findall`](@ref).
 
 # Examples
@@ -313,6 +315,9 @@ julia> searchsorted([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
 
 julia> searchsorted([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 1:0
+
+julia> searchsorted([1=>"one", 2=>"two", 2=>"two", 4=>"four"], 2=>"two", by=first) # compare the keys of the pairs
+2:3
 ```
 """ searchsorted
 
@@ -324,6 +329,8 @@ specified order. Return `lastindex(a) + 1` if `x` is greater than all values in 
 `a` is assumed to be sorted.
 
 `insert!`ing `x` at this index will maintain sorted order.
+
+See [`sort!`](@ref) for an explanation of the keyword arguments `by`, `lt` and `rev`.
 
 See also: [`searchsortedlast`](@ref), [`searchsorted`](@ref), [`findfirst`](@ref).
 
@@ -343,6 +350,9 @@ julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
 
 julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 1
+
+julia> searchsortedfirst([1=>"one", 2=>"two", 4=>"four"], 3=>"three", by=first) # Compare the keys of the pairs
+3
 ```
 """ searchsortedfirst
 
@@ -352,6 +362,8 @@ julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 Return the index of the last value in `a` less than or equal to `x`, according to the
 specified order. Return `firstindex(a) - 1` if `x` is less than all values in `a`. `a` is
 assumed to be sorted.
+
+See [`sort!`](@ref) for an explanation of the keyword arguments `by`, `lt` and `rev`.
 
 # Examples
 ```jldoctest
@@ -369,6 +381,9 @@ julia> searchsortedlast([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
 
 julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 0
+
+julia> searchsortedlast([1=>"one", 2=>"two", 4=>"four"], 3=>"three", by=first) # compare the keys of the pairs
+2
 ```
 """ searchsortedlast
 
@@ -524,7 +539,7 @@ Base.size(v::WithoutMissingVector) = size(v.data)
     send_to_end!(f::Function, v::AbstractVector; [lo, hi])
 
 Send every element of `v` for which `f` returns `true` to the end of the vector and return
-the index of the last element which for which `f` returns `false`.
+the index of the last element for which `f` returns `false`.
 
 `send_to_end!(f, v, lo, hi)` is equivalent to `send_to_end!(f, view(v, lo:hi))+lo-1`
 
@@ -1124,7 +1139,7 @@ function radix_sort_pass!(t, lo, hi, offset, counts, v, shift, chunk_size)
             counts[i] += 1            # increment that bucket's count
         end
 
-        counts[1] = lo                # set target index for the first bucket
+        counts[1] = lo + offset       # set target index for the first bucket
         cumsum!(counts, counts)       # set target indices for subsequent buckets
         # counts[1:mask+1] now stores indices where the first member of each bucket
         # belongs, not the number of elements in each bucket. We will put the first element
@@ -1135,7 +1150,7 @@ function radix_sort_pass!(t, lo, hi, offset, counts, v, shift, chunk_size)
             x = v[k]                  # lookup the element
             i = (x >> shift)&mask + 1 # compute its bucket's index for this pass
             j = counts[i]             # lookup the target index
-            t[j + offset] = x         # put the element where it belongs
+            t[j] = x                  # put the element where it belongs
             counts[i] = j + 1         # increment the target index for the next
         end                           #  ↳ element in this bucket
     end
@@ -1242,7 +1257,7 @@ Otherwise, we dispatch to [`InsertionSort`](@ref) for inputs with `length <= 40`
 perform a presorted check ([`CheckSorted`](@ref)).
 
 We check for short inputs before performing the presorted check to avoid the overhead of the
-check for small inputs. Because the alternate dispatch is to [`InseritonSort`](@ref) which
+check for small inputs. Because the alternate dispatch is to [`InsertionSort`](@ref) which
 has efficient `O(n)` runtime on presorted inputs, the check is not necessary for small
 inputs.
 
@@ -1891,6 +1906,26 @@ Characteristics:
     ignores case).
   * *in-place* in memory.
   * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
+
+  Note that `PartialQuickSort(k)` does not necessarily sort the whole array. For example,
+
+```jldoctest
+julia> x = rand(100);
+
+julia> k = 50:100;
+
+julia> s1 = sort(x; alg=QuickSort);
+
+julia> s2 = sort(x; alg=PartialQuickSort(k));
+
+julia> map(issorted, (s1, s2))
+(true, false)
+
+julia> map(x->issorted(x[k]), (s1, s2))
+(true, true)
+
+julia> s1[k] == s2[k]
+true
 """
 struct PartialQuickSort{T <: Union{Integer,OrdinalRange}} <: Algorithm
     k::T
@@ -1927,6 +1962,8 @@ Characteristics:
     case).
   * *not in-place* in memory.
   * *divide-and-conquer* sort strategy.
+  * *good performance* for large collections but typically not quite as
+    fast as [`QuickSort`](@ref).
 """
 const MergeSort     = MergeSortAlg()
 

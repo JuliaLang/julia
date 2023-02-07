@@ -2204,6 +2204,7 @@ void jl_init_types(void) JL_GC_DISABLED
     ((jl_datatype_t*)jl_type_type)->cached_by_hash = 0;
     jl_type_typename->wrapper = jl_new_struct(jl_unionall_type, tttvar, (jl_value_t*)jl_type_type);
     jl_type_type = (jl_unionall_t*)jl_type_typename->wrapper;
+    ((jl_datatype_t*)jl_type_type->body)->ismutationfree = 1;
 
     jl_typeofbottom_type->super = jl_wrap_Type(jl_bottom_type);
 
@@ -2807,7 +2808,6 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_symbol_type->ismutationfree = jl_symbol_type->isidentityfree = 1;
     jl_simplevector_type->ismutationfree = jl_simplevector_type->isidentityfree = 1;
     jl_datatype_type->ismutationfree = 1;
-    ((jl_datatype_t*)jl_type_type->body)->ismutationfree = 1;
 
     // Technically not ismutationfree, but there's a separate system to deal
     // with mutations for global state.

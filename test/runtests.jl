@@ -243,7 +243,7 @@ cd(@__DIR__) do
                 end
             end
         end
-        o_ts_duration = @elapsed @Experimental.sync begin
+        o_ts_duration = @elapsed Experimental.@sync begin
             for p in workers()
                 @async begin
                     push!(all_tasks, current_task())

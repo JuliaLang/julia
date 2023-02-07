@@ -415,7 +415,7 @@ function ⊑(lattice::InferenceLattice, @nospecialize(a), @nospecialize(b))
 
     # a and b's unlimited types are equal.
     isa(a, LimitedAccuracy) || return false # b is limited, so ε smaller
-    return a.causes ⊆ b.causes
+    return b.causes ⊆ a.causes
 end
 
 function ⊑(lattice::OptimizerLattice, @nospecialize(a), @nospecialize(b))

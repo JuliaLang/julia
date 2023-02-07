@@ -194,7 +194,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 conditionals[2][i] = tmerge(conditionals[2][i], cnd.elsetype)
             end
         end
-        if bail_out_call(interp, rettype, sv)
+        if bail_out_call(interp, rettype, sv, effects)
+            add_remark!(interp, sv, "One of the matched returned maximally imprecise information. Bailing on call.")
             break
         end
     end
@@ -838,11 +839,12 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
     elseif !result.effects.noinbounds && stmt_taints_inbounds_consistency(sv)
         # If the current statement is @inbounds or we propagate inbounds, the call's consistency
         # is tainted and not consteval eligible.
+        add_remark!(interp, sv, "[constprop] Concrete evel disabled for inbounds")
         return nothing
     end
     isoverlayed(method_table(interp)) && !is_nonoverlayed(result.effects) && return nothing
-    if f !== nothing && result.edge !== nothing && is_foldable(result.effects)
-        if is_all_const_arg(arginfo, #=start=#2)
+    if result.edge !== nothing && is_foldable(result.effects)
+        if f !== nothing && is_all_const_arg(arginfo, #=start=#2)
             return true
         else
             return false
@@ -1975,7 +1977,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return abstract_finalizer(interp, argtypes, sv)
         end
         rt = abstract_call_builtin(interp, f, arginfo, sv, max_methods)
-        effects = builtin_effects(𝕃ᵢ, f, argtypes[2:end], rt)
+        effects = builtin_effects(𝕃ᵢ, f, arginfo, rt)
         return CallMeta(rt, effects, NoCallInfo())
     elseif isa(f, Core.OpaqueClosure)
         # calling an OpaqueClosure about which we have no information returns no information
@@ -1994,7 +1996,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             ub_var = argtypes[3]
         end
         pT = typevar_tfunc(𝕃ᵢ, n, lb_var, ub_var)
-        effects = builtin_effects(𝕃ᵢ, Core._typevar, Any[n, lb_var, ub_var], pT)
+        effects = builtin_effects(𝕃ᵢ, Core._typevar, ArgInfo(nothing,
+            Any[Const(Core._typevar), n, lb_var, ub_var]), pT)
         return CallMeta(pT, effects, NoCallInfo())
     elseif f === UnionAll
         return abstract_call_unionall(interp, argtypes)
@@ -2031,7 +2034,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             fargs = nothing
         end
         argtypes = Any[typeof(<:), argtypes[3], argtypes[2]]
-        return CallMeta(abstract_call_known(interp, <:, ArgInfo(fargs, argtypes), si, sv, max_methods).rt, EFFECTS_TOTAL, NoCallInfo())
+        return abstract_call_known(interp, <:, ArgInfo(fargs, argtypes), si, sv, max_methods)
     elseif la == 2 &&
            (a2 = argtypes[2]; isa(a2, Const)) && (svecval = a2.val; isa(svecval, SimpleVector)) &&
            istopfunction(f, :length)
