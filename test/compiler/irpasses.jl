@@ -710,7 +710,7 @@ let m = Meta.@lower 1 + 1
     nstmts = length(src.code)
     src.codelocs = fill(Int32(1), nstmts)
     src.ssaflags = fill(Int32(0), nstmts)
-    ir = Core.Compiler.inflate_ir(src, Any[], Any[Any, Any])
+    ir = Core.Compiler.inflate_ir(src, Any[], Core.Compiler.falses(0), Any[Any, Any])
     @test Core.Compiler.verify_ir(ir) === nothing
     ir = @test_nowarn Core.Compiler.sroa_pass!(ir)
     @test Core.Compiler.verify_ir(ir) === nothing

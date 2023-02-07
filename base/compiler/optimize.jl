@@ -146,6 +146,7 @@ mutable struct OptimizationState{Interp<:AbstractInterpreter}
     stmt_info::Vector{CallInfo}
     mod::Module
     sptypes::Vector{Any}
+    spundefs::BitVector
     slottypes::Vector{Any}
     inlining::InliningState{Interp}
     cfg::Union{Nothing,CFG}
@@ -155,7 +156,7 @@ function OptimizationState(frame::InferenceState, params::OptimizationParams,
     inlining = InliningState(frame, params, interp)
     cfg = recompute_cfg ? nothing : frame.cfg
     return OptimizationState(frame.linfo, frame.src, nothing, frame.stmt_info, frame.mod,
-               frame.sptypes, frame.slottypes, inlining, cfg)
+               frame.sptypes, frame.spundefs, frame.slottypes, inlining, cfg)
 end
 function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::OptimizationParams,
                            interp::AbstractInterpreter)
@@ -166,7 +167,7 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::Optimiz
     else
         nssavalues = length(src.ssavaluetypes::Vector{Any})
     end
-    sptypes = sptypes_from_meth_instance(linfo)
+    sptypes, spundefs = sptypes_from_meth_instance(linfo)
     nslots = length(src.slotflags)
     slottypes = src.slottypes
     if slottypes === nothing
@@ -179,7 +180,7 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::Optimiz
     # Allow using the global MI cache, but don't track edges.
     # This method is mostly used for unit testing the optimizer
     inlining = InliningState(params, interp)
-    return OptimizationState(linfo, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, nothing)
+    return OptimizationState(linfo, src, nothing, stmt_info, mod, sptypes, spundefs, slottypes, inlining, nothing)
 end
 function OptimizationState(linfo::MethodInstance, params::OptimizationParams, interp::AbstractInterpreter)
     src = retrieve_code_info(linfo)
@@ -268,8 +269,8 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
         (; head, args) = stmt
         if head === :static_parameter
             # if we aren't certain enough about the type, it might be an UndefVarError at runtime
-            sptypes = isa(src, IRCode) ? src.sptypes : src.ir.sptypes
-            nothrow = !is_maybeundefsp(sptypes, args[1]::Int)
+            spundefs = isa(src, IRCode) ? src.spundefs : src.ir.spundefs
+            nothrow = !spundefs[args[1]::Int]
             return (true, nothrow, nothrow)
         end
         if head === :call
@@ -377,7 +378,7 @@ function argextype(
     sptypes::Vector{Any}, slottypes::Vector{Any})
     if isa(x, Expr)
         if x.head === :static_parameter
-            return unwrap_maybeundefsp(sptypes, x.args[1]::Int)
+            return sptypes[x.args[1]::Int]
         elseif x.head === :boundscheck
             return Bool
         elseif x.head === :copyast
@@ -699,7 +700,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     if cfg === nothing
         cfg = compute_basic_blocks(code)
     end
-    return IRCode(stmts, cfg, linetable, sv.slottypes, meta, sv.sptypes)
+    return IRCode(stmts, cfg, linetable, sv.slottypes, meta, sv.sptypes, sv.spundefs)
 end
 
 function process_meta!(meta::Vector{Expr}, @nospecialize stmt)

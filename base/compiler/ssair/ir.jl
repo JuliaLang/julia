@@ -335,18 +335,20 @@ struct IRCode
     stmts::InstructionStream
     argtypes::Vector{Any}
     sptypes::Vector{Any}
+    spundefs::BitVector
     linetable::Vector{LineInfoNode}
     cfg::CFG
     new_nodes::NewNodeStream
     meta::Vector{Expr}
 
-    function IRCode(stmts::InstructionStream, cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Expr}, sptypes::Vector{Any})
-        return new(stmts, argtypes, sptypes, linetable, cfg, NewNodeStream(), meta)
+    function IRCode(stmts::InstructionStream, cfg::CFG, linetable::Vector{LineInfoNode},
+                    argtypes::Vector{Any}, meta::Vector{Expr}, sptypes::Vector{Any}, spundefs::BitVector)
+        return new(stmts, argtypes, sptypes, spundefs, linetable, cfg, NewNodeStream(), meta)
     end
     function IRCode(ir::IRCode, stmts::InstructionStream, cfg::CFG, new_nodes::NewNodeStream)
-        return new(stmts, ir.argtypes, ir.sptypes, ir.linetable, cfg, new_nodes, ir.meta)
+        return new(stmts, ir.argtypes, ir.sptypes, ir.spundefs, ir.linetable, cfg, new_nodes, ir.meta)
     end
-    global copy(ir::IRCode) = new(copy(ir.stmts), copy(ir.argtypes), copy(ir.sptypes),
+    global copy(ir::IRCode) = new(copy(ir.stmts), copy(ir.argtypes), copy(ir.sptypes), copy(ir.spundefs),
         copy(ir.linetable), copy(ir.cfg), copy(ir.new_nodes), copy(ir.meta))
 end
 
@@ -358,7 +360,7 @@ for debugging and unit testing of IRCode APIs. The compiler itself should genera
 from the frontend or one of the caches.
 """
 function IRCode()
-    ir = IRCode(InstructionStream(1), CFG([BasicBlock(1:1, Int[], Int[])], Int[1]), LineInfoNode[], Any[], Expr[], Any[])
+    ir = IRCode(InstructionStream(1), CFG([BasicBlock(1:1, Int[], Int[])], Int[1]), LineInfoNode[], Any[], Expr[], Any[], falses(0))
     ir[SSAValue(1)][:inst] = ReturnNode(nothing)
     ir[SSAValue(1)][:type] = Nothing
     ir[SSAValue(1)][:flag] = 0x00

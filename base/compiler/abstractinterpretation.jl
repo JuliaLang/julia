@@ -2192,11 +2192,7 @@ function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::
         nothrow = false
         if 1 <= n <= length(sv.sptypes)
             rt = sv.sptypes[n]
-            if is_maybeundefsp(rt)
-                rt = unwrap_maybeundefsp(rt)
-            else
-                nothrow = true
-            end
+            nothrow = !sv.spundefs[n]
         end
         merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; nothrow))
         return rt
@@ -2460,7 +2456,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         elseif isexpr(sym, :static_parameter)
             n = sym.args[1]::Int
             if 1 <= n <= length(sv.sptypes)
-                if !is_maybeundefsp(sv.sptypes, n)
+                if !sv.spundefs[n]
                     t = Const(true)
                 end
             end

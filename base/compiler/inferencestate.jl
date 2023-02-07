@@ -92,6 +92,7 @@ mutable struct InferenceState
     world::UInt
     mod::Module
     sptypes::Vector{Any}
+    spundefs::BitVector
     slottypes::Vector{Any}
     src::CodeInfo
     cfg::CFG
@@ -141,7 +142,7 @@ mutable struct InferenceState
         world = get_world_counter(interp)
         def = linfo.def
         mod = isa(def, Method) ? def.module : def
-        sptypes = sptypes_from_meth_instance(linfo)
+        sptypes, spundefs = sptypes_from_meth_instance(linfo)
         code = src.code::Vector{Any}
         cfg = compute_basic_blocks(code)
 
@@ -185,7 +186,7 @@ mutable struct InferenceState
         cached = cache === :global
 
         frame = new(
-            linfo, world, mod, sptypes, slottypes, src, cfg,
+            linfo, world, mod, sptypes, spundefs, slottypes, src, cfg,
             currbb, currpc, ip, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
             pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent, inferred,
             result, valid_worlds, bestguess, ipo_effects,
@@ -401,25 +402,7 @@ function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool)
     return false
 end
 
-"""
-    MaybeUndefSP(typ)
-    is_maybeundefsp(typ) -> Bool
-    unwrap_maybeundefsp(typ) -> Any
-
-A special wrapper that represents a static parameter that could be undefined at runtime.
-This does not participate in the native type system nor the inference lattice,
-and it thus should be always unwrapped when performing any type or lattice operations on it.
-"""
-struct MaybeUndefSP
-    typ
-    MaybeUndefSP(@nospecialize typ) = new(typ)
-end
-is_maybeundefsp(@nospecialize typ) = isa(typ, MaybeUndefSP)
-unwrap_maybeundefsp(@nospecialize typ) = isa(typ, MaybeUndefSP) ? typ.typ : typ
-is_maybeundefsp(sptypes::Vector{Any}, idx::Int) = is_maybeundefsp(sptypes[idx])
-unwrap_maybeundefsp(sptypes::Vector{Any}, idx::Int) = unwrap_maybeundefsp(sptypes[idx])
-
-const EMPTY_SPTYPES = Any[]
+const EMPTY_SPTYPES = (Any[], falses(0))
 
 function sptypes_from_meth_instance(linfo::MethodInstance)
     def = linfo.def
@@ -437,10 +420,11 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
     else
         sp = collect(Any, linfo.sparam_vals)
     end
+    spundefs = falses(length(sp))
     for i = 1:length(sp)
         v = sp[i]
         if v isa TypeVar
-            maybe_undef = !constrains_param(v, linfo.specTypes, true)
+            spundefs[i] = !constrains_param(v, linfo.specTypes, true)
             temp = sig
             for j = 1:i-1
                 temp = temp.body
@@ -480,7 +464,6 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
                 ty = UnionAll(tv, Type{tv})
             end
             @label ty_computed
-            maybe_undef && (ty = MaybeUndefSP(ty))
         elseif isvarargtype(v)
             ty = Int
         else
@@ -488,7 +471,7 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
         end
         sp[i] = ty
     end
-    return sp
+    return sp, spundefs
 end
 
 _topmod(sv::InferenceState) = _topmod(sv.mod)

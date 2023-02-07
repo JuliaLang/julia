@@ -9,15 +9,15 @@ This should be used with caution as it is a in-place transformation where the fi
 the original `ci::CodeInfo` are modified.
 """
 function inflate_ir!(ci::CodeInfo, linfo::MethodInstance)
-    sptypes = sptypes_from_meth_instance(linfo)
+    sptypes, spundefs = sptypes_from_meth_instance(linfo)
     if ci.inferred
         argtypes, _ = matching_cache_argtypes(fallback_lattice, linfo)
     else
         argtypes = Any[ Any for i = 1:length(ci.slotflags) ]
     end
-    return inflate_ir!(ci, sptypes, argtypes)
+    return inflate_ir!(ci, sptypes, spundefs, argtypes)
 end
-function inflate_ir!(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
+function inflate_ir!(ci::CodeInfo, sptypes::Vector{Any}, spundefs::BitVector, argtypes::Vector{Any})
     code = ci.code
     cfg = compute_basic_blocks(code)
     for i = 1:length(code)
@@ -46,7 +46,7 @@ function inflate_ir!(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
         linetable = collect(LineInfoNode, linetable::Vector{Any})::Vector{LineInfoNode}
     end
     meta = Expr[]
-    return IRCode(stmts, cfg, linetable, argtypes, meta, sptypes)
+    return IRCode(stmts, cfg, linetable, argtypes, meta, sptypes, spundefs)
 end
 
 """
@@ -58,8 +58,8 @@ Non-destructive version of `inflate_ir!`.
 Mainly used for testing or interactive use.
 """
 inflate_ir(ci::CodeInfo, linfo::MethodInstance) = inflate_ir!(copy(ci), linfo)
-inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any}) = inflate_ir!(copy(ci), sptypes, argtypes)
-inflate_ir(ci::CodeInfo) = inflate_ir(ci, Any[], Any[ ci.slottypes === nothing ? Any : (ci.slottypes::Vector{Any})[i] for i = 1:length(ci.slotflags) ])
+inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, spundefs::BitVector, argtypes::Vector{Any}) = inflate_ir!(copy(ci), sptypes, spundefs, argtypes)
+inflate_ir(ci::CodeInfo) = inflate_ir(ci, Any[], falses(0), Any[ ci.slottypes === nothing ? Any : (ci.slottypes::Vector{Any})[i] for i = 1:length(ci.slotflags) ])
 
 function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
     @assert isempty(ir.new_nodes)
