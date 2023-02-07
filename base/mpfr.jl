@@ -17,7 +17,7 @@ import
         cbrt, typemax, typemin, unsafe_trunc, floatmin, floatmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
         isone, big, _string_n, decompose, minmax,
-        sinpi, cospi, sincospi, sind, cosd, tand, asind, acosd, atand
+        sinpi, cospi, sincospi, tanpi, sind, cosd, tand, asind, acosd, atand
 
 import ..Rounding: rounding_raw, setrounding_raw
 
@@ -790,7 +790,7 @@ function sum(arr::AbstractArray{BigFloat})
 end
 
 # Functions for which NaN results are converted to DomainError, following Base
-for f in (:sin, :cos, :tan, :sec, :csc, :acos, :asin, :atan, :acosh, :asinh, :atanh, :sinpi, :cospi)
+for f in (:sin, :cos, :tan, :sec, :csc, :acos, :asin, :atan, :acosh, :asinh, :atanh, :sinpi, :cospi, :tanpi)
     @eval begin
         function ($f)(x::BigFloat)
             isnan(x) && return x
