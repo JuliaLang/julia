@@ -775,9 +775,13 @@ gotoifnot_throw_check_48583(x) = x ? x : 0
 # unknown :static_parameter should taint :nothrow
 # https://github.com/JuliaLang/julia/issues/46771
 unknown_sparam_throw(::Union{Nothing, Type{T}}) where T = (T; nothing)
+unknown_sparam_nothrow1(x::Ref{T}) where T = (T; nothing)
+unknown_sparam_nothrow2(x::Ref{Ref{T}}) where T = (T; nothing)
 @test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type{Int},)))
+@test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type{<:Integer},)))
+@test !Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type,)))
 @test !Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Nothing,)))
-
-unknown_sparam_nothrow(x::Ref{T}) where {T} = (T; nothing)
-@test_broken Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_nothrow, (Ref,)))
-
+@test !Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Union{Type{Int},Nothing},)))
+@test !Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Any,)))
+@test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_nothrow1, (Ref,)))
+@test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_nothrow2, (Ref{Ref{T}} where T,)))

@@ -2189,12 +2189,16 @@ function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::
     head = e.head
     if head === :static_parameter
         n = e.args[1]::Int
+        nothrow = false
         if 1 <= n <= length(sv.sptypes)
             rt = sv.sptypes[n]
+            if is_maybeundefsp(rt)
+                rt = unwrap_maybeundefsp(rt)
+            else
+                nothrow = true
+            end
         end
-        if !isa(rt, Const)
-            merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; nothrow=false))
-        end
+        merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; nothrow))
         return rt
     elseif head === :boundscheck
         if isa(sv, InferenceState)
@@ -2456,8 +2460,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         elseif isexpr(sym, :static_parameter)
             n = sym.args[1]::Int
             if 1 <= n <= length(sv.sptypes)
-                spty = sv.sptypes[n]
-                if isa(spty, Const)
+                if !is_maybeundefsp(sv.sptypes, n)
                     t = Const(true)
                 end
             end

@@ -1970,54 +1970,11 @@ function detect_unbound_args(mods...;
     return collect(ambs)
 end
 
-# find if var will be constrained to have a definite value
-# in any concrete leaftype subtype of typ
-function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool)
-    typ === var && return true
-    while typ isa UnionAll
-        covariant && constrains_param(var, typ.var.ub, covariant) && return true
-        # typ.var.lb doesn't constrain var
-        typ = typ.body
-    end
-    if typ isa Union
-        # for unions, verify that both options would constrain var
-        ba = constrains_param(var, typ.a, covariant)
-        bb = constrains_param(var, typ.b, covariant)
-        (ba && bb) && return true
-    elseif typ isa DataType
-        # return true if any param constrains var
-        fc = length(typ.parameters)
-        if fc > 0
-            if typ.name === Tuple.name
-                # vararg tuple needs special handling
-                for i in 1:(fc - 1)
-                    p = typ.parameters[i]
-                    constrains_param(var, p, covariant) && return true
-                end
-                lastp = typ.parameters[fc]
-                vararg = Base.unwrap_unionall(lastp)
-                if vararg isa Core.TypeofVararg && isdefined(vararg, :N)
-                    constrains_param(var, vararg.N, covariant) && return true
-                    # T = vararg.parameters[1] doesn't constrain var
-                else
-                    constrains_param(var, lastp, covariant) && return true
-                end
-            else
-                for i in 1:fc
-                    p = typ.parameters[i]
-                    constrains_param(var, p, false) && return true
-                end
-            end
-        end
-    end
-    return false
-end
-
 function has_unbound_vars(@nospecialize sig)
     while sig isa UnionAll
         var = sig.var
         sig = sig.body
-        if !constrains_param(var, sig, true)
+        if !Core.Compiler.constrains_param(var, sig, true)
             return true
         end
     end
