@@ -106,6 +106,7 @@ typedef struct jl_stenv_t {
     int intersection;         // true iff subtype is being called from intersection
     int emptiness_only;       // true iff intersection only needs to test for emptiness
     int triangular;           // when intersecting Ref{X} with Ref{<:Y}
+    int vararglen;            // when intersecting 2 Vararg length
     // Used to represent the length difference between 2 vararg.
     // intersect(X, Y) ==> X = Y + Loffset
     int Loffset;
@@ -796,7 +797,13 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
         bb->ub = simple_meet(bb->ub, a, 1);
     }
     assert(bb->ub != (jl_value_t*)b);
+    if (bb->ub != bb->lb)
+        bb->offset = UNDEF_OFF;
     if (jl_is_typevar(a)) {
+        if (bb->ub == bb->lb && bb->ub == (jl_value_t *)a) {
+            if (bb->offset == UNDEF_OFF)
+                bb->offset = e->Loffset;
+        }
         jl_varbinding_t *aa = lookup(e, (jl_tvar_t*)a);
         if (aa && !aa->right && in_union(bb->lb, a) && bb->depth0 != aa->depth0 && var_outside(e, b, (jl_tvar_t*)a)) {
             // an "exists" var cannot equal a "forall" var inside it unless the forall
@@ -831,7 +838,13 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
     JL_GC_POP();
     // this bound should not be directly circular
     assert(bb->lb != (jl_value_t*)b);
+    if (bb->ub != bb->lb)
+        bb->offset = UNDEF_OFF;
     if (jl_is_typevar(a)) {
+        if (bb->ub == bb->lb && bb->ub == (jl_value_t *)a) {
+            if (bb->offset == UNDEF_OFF)
+                bb->offset = -e->Loffset;
+        }
         jl_varbinding_t *aa = lookup(e, (jl_tvar_t*)a);
         if (aa && !aa->right && bb->depth0 != aa->depth0 && param == 2 && var_outside(e, b, (jl_tvar_t*)a))
             return subtype_left_var(aa->ub, aa->lb, e, param);
@@ -846,7 +859,9 @@ static int subtype_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int R, int pa
         jl_value_t *bub = bb ? bb->ub : ((jl_tvar_t*)b)->ub;
         jl_value_t *blb = bb ? bb->lb : ((jl_tvar_t*)b)->lb;
         if (bub == blb && jl_is_typevar(bub)) {
+            forward_offset(bb, e, R);
             int sub = subtype_var((jl_tvar_t *)bub, a, e, R, param);
+            backward_offset(bb, e, R);
             return sub;
         }
     }
@@ -1405,10 +1420,19 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
                 jl_value_t *xlb = xx ? xx->lb : ((jl_tvar_t*)x)->lb;
                 jl_value_t *yub = yy ? yy->ub : ((jl_tvar_t*)y)->ub;
                 // find equivalence class for typevars during intersection
-                if (xub == xlb && jl_is_typevar(xub))
-                    return subtype(xub, y, e, param);
-                if (yub == ylb && jl_is_typevar(yub))
-                    return subtype(x, yub, e, param);
+                // Also needed for offset anaylsis.
+                if (xub == xlb && jl_is_typevar(xub)) {
+                    forward_offset(xx, e, 0);
+                    int sub = subtype(xub, y, e, param);
+                    backward_offset(xx, e, 0);
+                    return sub;
+                }
+                if (yub == ylb && jl_is_typevar(yub)) {
+                    forward_offset(yy, e, 1);
+                    int sub = subtype(x, yub, e, param);
+                    backward_offset(yy, e, 1);
+                    return sub;
+                }
             }
             int xr = xx && xx->right;  // treat free variables as "forall" (left)
             int yr = yy && yy->right;
@@ -1722,6 +1746,7 @@ static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
     e->intersection = 0;
     e->emptiness_only = 0;
     e->triangular = 0;
+    e->vararglen = 0;
     e->Loffset = 0;
     e->Lunions.depth = 0;      e->Runions.depth = 0;
     e->Lunions.more = 0;       e->Runions.more = 0;
@@ -2447,7 +2472,7 @@ static jl_value_t *intersect_union(jl_value_t *x, jl_uniontype_t *u, jl_stenv_t 
     return R ? intersect(x, choice, e, param) : intersect(choice, x, e, param);
 }
 
-// set a variable to a non-type constant
+// set a variable to a non-type constant (and return the variable's bound if valid)
 static jl_value_t *set_var_to_const(jl_varbinding_t *bb, jl_value_t *v JL_MAYBE_UNROOTED, jl_stenv_t *e, int R)
 {
     int offset = R ? -e->Loffset : e->Loffset;
@@ -2455,12 +2480,8 @@ static jl_value_t *set_var_to_const(jl_varbinding_t *bb, jl_value_t *v JL_MAYBE_
         if (offset == 0)
             bb->lb = bb->ub = v;
         else if (jl_is_long(v)) {
-            size_t iv = jl_unbox_long(v);
-            v = jl_box_long(iv + offset);
+            v = jl_box_long(jl_unbox_long(v) + offset);
             bb->lb = bb->ub = v;
-            // Here we always return the shorter `Vararg`'s length.
-            if (offset > 0)
-                return jl_box_long(iv);
         }
         else
             return jl_bottom_type;
@@ -2468,12 +2489,12 @@ static jl_value_t *set_var_to_const(jl_varbinding_t *bb, jl_value_t *v JL_MAYBE_
     else if (jl_is_long(v) && jl_is_long(bb->lb)) {
         if (jl_unbox_long(v) + offset != jl_unbox_long(bb->lb))
             return jl_bottom_type;
-        // Here we always return the shorter `Vararg`'s length.
-        if (offset < 0) return bb->lb;
+        v = bb->lb;
     }
     else if (!jl_egal(v, bb->lb)) {
         return jl_bottom_type;
     }
+    RESET_OFF(bb);
     return v;
 }
 
@@ -2654,7 +2675,12 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     if (reachable_var(bb->lb, b, e) || reachable_var(bb->ub, b, e))
         return a;
     if (bb->lb == bb->ub && jl_is_typevar(bb->lb)) {
-        return R ? intersect(a, bb->lb, e, param) : intersect(bb->lb, a, e, param);
+        forward_offset(bb, e, R);
+        jl_value_t *res = R ? intersect(a, bb->lb, e, param) : intersect(bb->lb, a, e, param);
+        backward_offset(bb, e, R);
+        if (e->vararglen || bb->offset == 0 || res == jl_bottom_type)
+            return res;
+        return outmost_identity(b, e);
     }
     if (!jl_is_type(a) && !jl_is_typevar(a))
         return set_var_to_const(bb, a, e, R);
@@ -2693,6 +2719,7 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
             if (jl_is_uniontype(ub) && !jl_is_uniontype(a)) {
                 bb->ub = ub;
                 bb->lb = jl_bottom_type;
+                RESET_OFF(bb);
                 ub = (jl_value_t*)b;
             }
         }
@@ -2707,9 +2734,11 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
             // We get a imprecise Tuple here. Don't change `lb` and return the typevar directly.
             if (has_free_vararg_length(ub, e) && !has_free_vararg_length(a, e)) {
                 JL_GC_POP();
+                RESET_OFF(bb);
                 return (jl_value_t*)b;
             }
             bb->lb = ub;
+            RESET_OFF(bb);
         }
         JL_GC_POP();
         return ub;
@@ -2721,6 +2750,7 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         if (e->triangular && check_unsat_bound(ub, b, e))
             return jl_bottom_type;
         set_bound(&bb->ub, ub, b, e);
+        RESET_OFF(bb);
         return (jl_value_t*)b;
     }
     else if (bb->constraintkind == 0) {
@@ -2739,6 +2769,7 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         else if (jl_egal(bb->ub, bb->lb))
             return ub;
         set_bound(&bb->ub, ub, b, e);
+        RESET_OFF(bb);
     }
     return (jl_value_t*)b;
 }
@@ -2823,14 +2854,27 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
 {
     jl_value_t *varval = NULL;
     jl_tvar_t *newvar = vb->var;
-    JL_GC_PUSH2(&res, &newvar);
+    JL_GC_PUSH3(&res, &newvar, &varval);
     // try to reduce var to a single value
     if (jl_is_long(vb->ub) && jl_is_typevar(vb->lb)) {
         varval = vb->ub;
     }
     else if (obviously_egal(vb->lb, vb->ub)) {
         // given x<:T<:x, substitute x for T
-        varval = vb->ub;
+        if (vb->offset == 0 || vb->offset == UNDEF_OFF)
+            varval = vb->ub;
+        else {
+            assert(jl_is_typevar(vb->lb));
+            jl_value_t *temp = outmost_identity((jl_tvar_t *)vb->var, e);
+            if (temp != vb->var) {
+                vb->lb = vb->ub = varval = temp;
+                vb->offset = jl_is_typevar(vb->lb) ? 0 : UNDEF_OFF;
+            }
+            else {
+                vb->lb = vb->var->lb;
+                vb->ub = vb->var->ub;
+            }
+        }
     }
     // TODO: `vb.occurs_cov == 1` here allows substituting Tuple{<:X} => Tuple{X},
     // which is valid but changes some ambiguity errors so we don't need to do it yet.
@@ -3138,11 +3182,19 @@ static jl_value_t *intersect_varargs(jl_vararg_t *vmx, jl_vararg_t *vmy, ssize_t
     }
     if (xp2 && yp2) {
         // Vararg{T,N} <: Vararg{T2,N2}; equate N and N2
+        e->vararglen = 1;
         i2 = intersect_invariant(xp2, yp2, e);
+        e->vararglen = 0;
         if (i2 == NULL || i2 == jl_bottom_type || (jl_is_long(i2) && jl_unbox_long(i2) < 0) ||
             !((jl_is_typevar(i2) && ((jl_tvar_t*)i2)->lb == jl_bottom_type &&
                 ((jl_tvar_t*)i2)->ub == (jl_value_t*)jl_any_type) || jl_is_long(i2))) {
             i2 = jl_bottom_type;
+        }
+        if (i2 != jl_bottom_type) {
+            i2 = offset > 0 ? yp2 : xp2;
+            assert(jl_is_typevar(i2) || jl_is_long(i2));
+            if (jl_is_typevar(i2))
+                i2 = outmost_identity((jl_tvar_t *)i2, e);
         }
     }
     assert(e->Loffset == offset);
@@ -3384,45 +3436,38 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                     record_var_occurrence(yy, e, param);
                     return subtype_in_env(yy->ub, yy->lb, e) ? y : jl_bottom_type;
                 }
+                // we always push var into offset chain.
+                int xoffset = R ? -e->Loffset : e->Loffset;
                 if (xub == xlb && jl_is_typevar(xub)) {
                     record_var_occurrence(xx, e, param);
                     if (y == xub) {
                         record_var_occurrence(yy, e, param);
-                        return y;
+                        if (xx && xx->offset != xoffset)
+                            return jl_bottom_type;
+                        return outmost_identity((jl_tvar_t *)y, e);
                     }
                     if (R) flip_offset(e);
+                    forward_offset(xx, e, 0);
                     jl_value_t *res = intersect(xub, y, e, param);
+                    backward_offset(xx, e, 0);
                     if (R) flip_offset(e);
-                    return res;
+                    if (e->vararglen || !xx || xx->offset == 0 || res == jl_bottom_type)
+                        return res;
+                    return outmost_identity((jl_tvar_t *)x, e);
                 }
                 if (yub == ylb && jl_is_typevar(yub)) {
                     record_var_occurrence(yy, e, param);
                     if (R) flip_offset(e);
+                    forward_offset(yy, e, 1);
                     jl_value_t *res = intersect(x, yub, e, param);
+                    backward_offset(yy, e, 1);
                     if (R) flip_offset(e);
-                    return res;
-                }
-                if (xub == xlb && jl_is_typevar(xub)) {
-                    record_var_occurrence(xx, e, param);
-                    if (y == xub) {
-                        record_var_occurrence(yy, e, param);
-                        return y;
-                    }
-                    if (R) flip_offset(e);
-                    jl_value_t *res = intersect(xub, y, e, param);
-                    if (R) flip_offset(e);
-                    return res;
-                }
-                if (yub == ylb && jl_is_typevar(yub)) {
-                    record_var_occurrence(yy, e, param);
-                    if (R) flip_offset(e);
-                    jl_value_t *res = intersect(x, yub, e, param);
-                    if (R) flip_offset(e);
-                    return res;
+                    if (e->vararglen || !yy || yy->offset == 0 || res == jl_bottom_type)
+                        return res;
+                    return outmost_identity((jl_tvar_t *)y, e);
                 }
                 record_var_occurrence(xx, e, param);
                 record_var_occurrence(yy, e, param);
-                int xoffset = R ? -e->Loffset : e->Loffset;
                 if (!jl_is_type(ylb) && !jl_is_typevar(ylb)) {
                     if (xx)
                         return set_var_to_const(xx, ylb, e, R);
@@ -3494,24 +3539,22 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                     lb = ylb;
                 else
                     lb = simple_join(xlb, ylb);
-                if (yy && xoffset == 0) {
+                if (yy) {
                     yy->lb = lb;
                     if (!reachable_var(ub, (jl_tvar_t*)y, e))
                         yy->ub = ub;
+                    RESET_OFF(yy);
                     assert(yy->ub != y);
                     assert(yy->lb != y);
                 }
-                if (xx && xoffset == 0 && !reachable_var(y, (jl_tvar_t*)x, e)) {
+                if (xx && !reachable_var(y, (jl_tvar_t*)x, e)) {
                     xx->lb = y;
                     xx->ub = y;
+                    if (xx->offset == UNDEF_OFF)
+                        xx->offset = xoffset;
                     assert(xx->ub != x);
                 }
                 JL_GC_POP();
-                // Here we always return the shorter `Vararg`'s length.
-                if (xoffset < 0) {
-                    if (yy) yy->intvalued = 2;
-                    return x;
-                }
                 return y;
             }
             assert(e->Loffset == 0);
