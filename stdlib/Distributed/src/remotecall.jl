@@ -778,3 +778,23 @@ function getindex(r::RemoteChannel, args...)
     end
     return remotecall_fetch(getindex, r.where, r, args...)
 end
+
+function iterate(c::RemoteChannel, state=nothing)
+    if isopen(c) || isready(c)
+        try
+            return (take!(c), nothing)
+        catch e
+            if isa(e, InvalidStateException) ||
+                (isa(e, RemoteException) &&
+                isa(e.captured.ex, InvalidStateException) &&
+                e.captured.ex.state === :closed)
+                return nothing
+            end
+            rethrow()
+        end
+    else
+        return nothing
+    end
+end
+
+IteratorSize(::Type{<:RemoteChannel}) = SizeUnknown()
