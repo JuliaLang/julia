@@ -2676,6 +2676,24 @@ end
     @test rem2pi(T(-8), RoundNearest) ≈ -8+2pi
     @test rem2pi(T(-8), RoundDown)    ≈ -8+4pi
     @test rem2pi(T(-8), RoundUp)      ≈ -8+2pi
+    # to hit n is even and n % 4 == 2 condition
+    @test rem2pi(T(3), RoundToZero)  == 3
+    @test rem2pi(T(3), RoundNearest) == 3
+    @test rem2pi(T(3), RoundDown)    == 3
+    @test rem2pi(T(3), RoundUp)      ≈ 3 - 2π
+    @test rem2pi(T(-3), RoundToZero)  == -3
+    @test rem2pi(T(-3), RoundNearest) == -3
+    @test rem2pi(T(-3), RoundDown)    ≈ -3 + 2π
+    @test rem2pi(T(-3), RoundUp)      == -3
+    # to hit even n condition and n % 4 != 2 condition
+    @test rem2pi(T(13), RoundToZero)  ≈ 13-4π
+    @test rem2pi(T(13), RoundNearest) ≈ 13-4π
+    @test rem2pi(T(13), RoundDown)    ≈ 13-4π
+    @test rem2pi(T(13), RoundUp)      ≈ 13-6π
+    @test rem2pi(T(-13), RoundToZero)  ≈ -13+4π
+    @test rem2pi(T(-13), RoundNearest) ≈ -13+4π
+    @test rem2pi(T(-13), RoundDown)    ≈ -13+6π
+    @test rem2pi(T(-13), RoundUp)      ≈ -13+4π
 end
 
 @testset "PR #36420 $T" for T in (Float16, Float32, Float64)

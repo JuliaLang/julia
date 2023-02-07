@@ -119,6 +119,16 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             @test !istriu(A1')
             @test !istriu(transpose(A1))
         end
+        M = copy(parent(A1))
+        for trans in (adjoint, transpose), k in -1:1
+            triu!(M, k)
+            @test istril(trans(M), -k) == istril(copy(trans(M)), -k) == true
+        end
+        M = copy(parent(A1))
+        for trans in (adjoint, transpose), k in 1:-1:-1
+            tril!(M, k)
+            @test istriu(trans(M), -k) == istriu(copy(trans(M)), -k) == true
+        end
 
         #tril/triu
         if uplo1 === :L

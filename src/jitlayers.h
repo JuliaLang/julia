@@ -19,7 +19,8 @@
 
 #include <llvm/Target/TargetMachine.h>
 #include "julia_assert.h"
-#include "debug-registry.h"
+#include "julia.h"
+#include "julia_internal.h"
 #include "platform.h"
 
 #include <stack>
@@ -487,10 +488,6 @@ public:
 
     size_t getTotalBytes() const JL_NOTSAFEPOINT;
 
-    JITDebugInfoRegistry &getDebugInfoRegistry() JL_NOTSAFEPOINT {
-        return DebugRegistry;
-    }
-
     jl_locked_stream &get_dump_emitted_mi_name_stream() JL_NOTSAFEPOINT {
         return dump_emitted_mi_name_stream;
     }
@@ -511,8 +508,6 @@ private:
     orc::ExecutionSession ES;
     orc::JITDylib &GlobalJD;
     orc::JITDylib &JD;
-
-    JITDebugInfoRegistry DebugRegistry;
 
     //Map and inc are guarded by RLST_mutex
     std::mutex RLST_mutex{};

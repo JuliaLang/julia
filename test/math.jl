@@ -19,6 +19,7 @@ has_fma = Dict(
     Rational{Int} => has_fma_Int(),
     Float32 => has_fma_Float32(),
     Float64 => has_fma_Float64(),
+    BigFloat => true,
 )
 
 @testset "clamp" begin
@@ -424,47 +425,51 @@ end
     @test rad2deg(pi + (pi/3)*im) ≈ 180 + 60im
 end
 
+# ensure zeros are signed the same
+⩲(x,y) = typeof(x) == typeof(y) && x == y && signbit(x) == signbit(y)
+⩲(x::Tuple, y::Tuple) = length(x) == length(y) && all(map(⩲,x,y))
+
 @testset "degree-based trig functions" begin
-    @testset "$T" for T = (Float32,Float64,Rational{Int})
+    @testset "$T" for T = (Float32,Float64,Rational{Int},BigFloat)
         fT = typeof(float(one(T)))
         fTsc = typeof( (float(one(T)), float(one(T))) )
         for x = -400:40:400
-            @test sind(convert(T,x))::fT ≈ convert(fT,sin(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
-            @test cosd(convert(T,x))::fT ≈ convert(fT,cos(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
+            @test sind(convert(T,x))::fT ≈ sin(pi*convert(fT,x)/180) atol=eps(deg2rad(convert(fT,x)))
+            @test cosd(convert(T,x))::fT ≈ cos(pi*convert(fT,x)/180) atol=eps(deg2rad(convert(fT,x)))
 
             s,c = sincosd(convert(T,x))
-            @test s::fT ≈ convert(fT,sin(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
-            @test c::fT ≈ convert(fT,cos(pi/180*x)) atol=eps(deg2rad(convert(fT,x)))
+            @test s::fT ≈ sin(pi*convert(fT,x)/180) atol=eps(deg2rad(convert(fT,x)))
+            @test c::fT ≈ cos(pi*convert(fT,x)/180) atol=eps(deg2rad(convert(fT,x)))
         end
         @testset "sind" begin
-            @test sind(convert(T,0.0))::fT === zero(fT)
-            @test sind(convert(T,180.0))::fT === zero(fT)
-            @test sind(convert(T,360.0))::fT === zero(fT)
-            T != Rational{Int} && @test sind(convert(T,-0.0))::fT === -zero(fT)
-            @test sind(convert(T,-180.0))::fT === -zero(fT)
-            @test sind(convert(T,-360.0))::fT === -zero(fT)
+            @test sind(convert(T,0.0))::fT ⩲ zero(fT)
+            @test sind(convert(T,180.0))::fT ⩲ zero(fT)
+            @test sind(convert(T,360.0))::fT ⩲ zero(fT)
+            T != Rational{Int} && @test sind(convert(T,-0.0))::fT ⩲ -zero(fT)
+            @test sind(convert(T,-180.0))::fT ⩲ -zero(fT)
+            @test sind(convert(T,-360.0))::fT ⩲ -zero(fT)
             if T <: AbstractFloat
                 @test isnan(sind(T(NaN)))
             end
         end
         @testset "cosd" begin
-            @test cosd(convert(T,90))::fT === zero(fT)
-            @test cosd(convert(T,270))::fT === zero(fT)
-            @test cosd(convert(T,-90))::fT === zero(fT)
-            @test cosd(convert(T,-270))::fT === zero(fT)
+            @test cosd(convert(T,90))::fT ⩲ zero(fT)
+            @test cosd(convert(T,270))::fT ⩲ zero(fT)
+            @test cosd(convert(T,-90))::fT ⩲ zero(fT)
+            @test cosd(convert(T,-270))::fT ⩲ zero(fT)
             if T <: AbstractFloat
                 @test isnan(cosd(T(NaN)))
             end
         end
         @testset "sincosd" begin
-            @test sincosd(convert(T,-360))::fTsc === ( -zero(fT),  one(fT) )
-            @test sincosd(convert(T,-270))::fTsc === (   one(fT), zero(fT) )
-            @test sincosd(convert(T,-180))::fTsc === ( -zero(fT), -one(fT) )
-            @test sincosd(convert(T, -90))::fTsc === (  -one(fT), zero(fT) )
-            @test sincosd(convert(T,   0))::fTsc === (  zero(fT),  one(fT) )
-            @test sincosd(convert(T,  90))::fTsc === (   one(fT), zero(fT) )
-            @test sincosd(convert(T, 180))::fTsc === (  zero(fT), -one(fT) )
-            @test sincosd(convert(T, 270))::fTsc === (  -one(fT), zero(fT) )
+            @test sincosd(convert(T,-360))::fTsc ⩲ ( -zero(fT),  one(fT) )
+            @test sincosd(convert(T,-270))::fTsc ⩲ (   one(fT), zero(fT) )
+            @test sincosd(convert(T,-180))::fTsc ⩲ ( -zero(fT), -one(fT) )
+            @test sincosd(convert(T, -90))::fTsc ⩲ (  -one(fT), zero(fT) )
+            @test sincosd(convert(T,   0))::fTsc ⩲ (  zero(fT),  one(fT) )
+            @test sincosd(convert(T,  90))::fTsc ⩲ (   one(fT), zero(fT) )
+            @test sincosd(convert(T, 180))::fTsc ⩲ (  zero(fT), -one(fT) )
+            @test sincosd(convert(T, 270))::fTsc ⩲ (  -one(fT), zero(fT) )
             if T <: AbstractFloat
                 @test_throws DomainError sincosd(T(Inf))
                 @test all(isnan.(sincosd(T(NaN))))
@@ -476,22 +481,22 @@ end
             "sincospi" => (x->sincospi(x)[1], x->sincospi(x)[2])
         )
             @testset "pi * $x" for x = -3:0.3:3
-                @test sinpi(convert(T,x))::fT ≈ convert(fT,sin(pi*x)) atol=eps(pi*convert(fT,x))
-                @test cospi(convert(T,x))::fT ≈ convert(fT,cos(pi*x)) atol=eps(pi*convert(fT,x))
+                @test sinpi(convert(T,x))::fT ≈ sin(pi*convert(fT,x)) atol=eps(pi*convert(fT,x))
+                @test cospi(convert(T,x))::fT ≈ cos(pi*convert(fT,x)) atol=eps(pi*convert(fT,x))
             end
 
-            @test sinpi(convert(T,0.0))::fT === zero(fT)
-            @test sinpi(convert(T,1.0))::fT === zero(fT)
-            @test sinpi(convert(T,2.0))::fT === zero(fT)
-            T != Rational{Int} && @test sinpi(convert(T,-0.0))::fT === -zero(fT)
-            @test sinpi(convert(T,-1.0))::fT === -zero(fT)
-            @test sinpi(convert(T,-2.0))::fT === -zero(fT)
+            @test sinpi(convert(T,0.0))::fT ⩲ zero(fT)
+            @test sinpi(convert(T,1.0))::fT ⩲ zero(fT)
+            @test sinpi(convert(T,2.0))::fT ⩲ zero(fT)
+            T != Rational{Int} && @test sinpi(convert(T,-0.0))::fT ⩲ -zero(fT)
+            @test sinpi(convert(T,-1.0))::fT ⩲ -zero(fT)
+            @test sinpi(convert(T,-2.0))::fT ⩲ -zero(fT)
             @test_throws DomainError sinpi(convert(T,Inf))
 
-            @test cospi(convert(T,0.5))::fT === zero(fT)
-            @test cospi(convert(T,1.5))::fT === zero(fT)
-            @test cospi(convert(T,-0.5))::fT === zero(fT)
-            @test cospi(convert(T,-1.5))::fT === zero(fT)
+            @test cospi(convert(T,0.5))::fT ⩲ zero(fT)
+            @test cospi(convert(T,1.5))::fT ⩲ zero(fT)
+            @test cospi(convert(T,-0.5))::fT ⩲ zero(fT)
+            @test cospi(convert(T,-1.5))::fT ⩲ zero(fT)
             @test_throws DomainError cospi(convert(T,Inf))
         end
         @testset begin
@@ -512,8 +517,8 @@ end
                 @test my_eq(sincospi(one(T)/convert(T,6))[1], 0.5)
                 @test_throws DomainError sind(convert(T,Inf))
                 @test_throws DomainError cosd(convert(T,Inf))
-                T != Float32 && @test my_eq(cospi(one(T)/convert(T,3)), 0.5)
-                T != Float32 && @test my_eq(sincospi(one(T)/convert(T,3))[2], 0.5)
+                fT == Float64 && @test my_eq(cospi(one(T)/convert(T,3)), 0.5)
+                fT == Float64 && @test my_eq(sincospi(one(T)/convert(T,3))[2], 0.5)
                 T == Rational{Int} && @test my_eq(sinpi(5//6), 0.5)
                 T == Rational{Int} && @test my_eq(sincospi(5//6)[1], 0.5)
             end
@@ -562,8 +567,8 @@ end
             end
         end
     end
-    @test @inferred(sinc(0//1)) === 1.0
-    @test @inferred(cosc(0//1)) === -0.0
+    @test @inferred(sinc(0//1)) ⩲ 1.0
+    @test @inferred(cosc(0//1)) ⩲ -0.0
 
     # test right before/after thresholds of Taylor series
     @test sinc(0.001) ≈ 0.999998355066745 rtol=1e-15
@@ -1347,9 +1352,9 @@ end
 
 @testset "pow" begin
     # tolerance by type for regular powers
-    POW_TOLS = Dict(Float16=>[.51, .51, 2.0, 1.5],
-                    Float32=>[.51, .51, 2.0, 1.5],
-                    Float64=>[1.0, 1.5, 2.0, 1.5])
+    POW_TOLS = Dict(Float16=>[.51, .51, .51, 2.0, 1.5],
+                    Float32=>[.51, .51, .51, 2.0, 1.5],
+                    Float64=>[.55, 0.8, 1.5, 2.0, 1.5])
     for T in (Float16, Float32, Float64)
         for x in (0.0, -0.0, 1.0, 10.0, 2.0, Inf, NaN, -Inf, -NaN)
             for y in (0.0, -0.0, 1.0, -3.0,-10.0 , Inf, NaN, -Inf, -NaN)
@@ -1367,9 +1372,11 @@ end
             got, expected = x^y, widen(x)^y
             if isfinite(eps(T(expected)))
                 if y == T(-2) # unfortunately x^-2 is less accurate for performance reasons.
-                    @test abs(expected-got) <= POW_TOLS[T][3]*eps(T(expected)) || (x,y)
-                elseif y == T(3) # unfortunately x^3 is less accurate for performance reasons.
                     @test abs(expected-got) <= POW_TOLS[T][4]*eps(T(expected)) || (x,y)
+                elseif y == T(3) # unfortunately x^3 is less accurate for performance reasons.
+                    @test abs(expected-got) <= POW_TOLS[T][5]*eps(T(expected)) || (x,y)
+                elseif issubnormal(got)
+                    @test abs(expected-got) <= POW_TOLS[T][2]*eps(T(expected)) || (x,y)
                 else
                     @test abs(expected-got) <= POW_TOLS[T][1]*eps(T(expected)) || (x,y)
                 end
@@ -1380,7 +1387,7 @@ end
             x=rand(T)*floatmin(T); y=rand(T)*3-T(1.2)
             got, expected = x^y, widen(x)^y
             if isfinite(eps(T(expected)))
-                @test abs(expected-got) <= POW_TOLS[T][2]*eps(T(expected)) || (x,y)
+                @test abs(expected-got) <= POW_TOLS[T][3]*eps(T(expected)) || (x,y)
             end
         end
         # test (-x)^y for y larger than typemax(Int)
@@ -1391,6 +1398,9 @@ end
     # test for large negative exponent where error compensation matters
     @test 0.9999999955206014^-1.0e8 == 1.565084574870928
     @test 3e18^20 == Inf
+    # two cases where we have observed > 1 ULP in the past
+    @test 0.0013653274095082324^-97.60372292227069 == 4.088393948750035e279
+    @test 8.758520413376658e-5^70.55863059215994 == 5.052076767078296e-287
 end
 
 # Test that sqrt behaves correctly and doesn't exhibit fp80 double rounding.

@@ -906,7 +906,7 @@ mutable struct Demo_20254
 end
 
 # these cause stack overflows and are a little flaky on CI, ref #20256
-if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+if Base.get_bool_env("JULIA_TESTFULL", false)
     function Demo_20254(arr::AbstractArray=Any[])
         Demo_20254(string.(arr))
     end

@@ -1419,7 +1419,7 @@ macro testset(args...)
         error("Expected function call, begin/end block or for loop as argument to @testset")
     end
 
-    FAIL_FAST[] = something(tryparse(Bool, get(ENV, "JULIA_TEST_FAILFAST", "false")), false)
+    FAIL_FAST[] = Base.get_bool_env("JULIA_TEST_FAILFAST", false)
 
     if tests.head === :for
         return testset_forloop(args, tests, __source__)
