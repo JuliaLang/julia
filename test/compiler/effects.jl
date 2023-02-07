@@ -743,3 +743,11 @@ end
 
 @test Base.ismutationfree(Type{Union{}})
 @test Core.Compiler.is_total(Base.infer_effects(typejoin, ()))
+
+
+# GotoIfNot should properly mark itself as throwing when given a non-Bool
+# https://github.com/JuliaLang/julia/pull/48583
+gotoifnot_throw_check_48583(x) = x ? x : 0
+@test !Core.Compiler.is_nothrow(Base.infer_effects(gotoifnot_throw_check_48583, (Missing,)))
+@test !Core.Compiler.is_nothrow(Base.infer_effects(gotoifnot_throw_check_48583, (Any,)))
+@test Core.Compiler.is_nothrow(Base.infer_effects(gotoifnot_throw_check_48583, (Bool,)))
