@@ -109,6 +109,21 @@ recur_termination22(x) = x * recur_termination21(x-1)
     recur_termination21(12) + recur_termination22(12)
 end
 
+# anonymous function support for `@assume_effects`
+@test fully_eliminated() do
+    map((2,3,4)) do x
+        # this :terminates_locally allows this anonymous function to be constant-folded
+        Base.@assume_effects :terminates_locally
+        res = 1
+        1 < x < 20 || error("bad pow")
+        while x > 1
+            res *= x
+            x -= 1
+        end
+        return res
+    end
+end
+
 # control flow backedge should taint `terminates`
 @test Base.infer_effects((Int,)) do n
     for i = 1:n; end
