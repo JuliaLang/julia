@@ -611,15 +611,26 @@ julia> replace("abcdeγfgh", !isascii=>' ') # replace non-ASCII chars with space
 """
 isascii(c::Char) = bswap(reinterpret(UInt32, c)) < 0x80
 isascii(c::AbstractChar) = UInt32(c) < 0x80
+
+function _isascii(bytes, first, last)
+    r = true
+    for n = first:last
+        @inbounds r &= bytes[n] < UInt8(0x80)
+    end
+    return r
+end
+
 function isascii(s::AbstractString)
+    chunk_size = 1024
     bytes = codeunits(s)
     l = ncodeunits(s)
-    ret = true
-    for n = 1:l
-        @inbounds ret &= bytes[n] < UInt8(0x80)
+    l < chunk_size && return _isascii(bytes, 1, l)
+    for n = 1:chunk_size:l
+        _isascii(bytes, n, n + chunk_size - 1) || return false
     end
-    return ret
+    return true
 end
+
 
 ## string map, filter ##
 
