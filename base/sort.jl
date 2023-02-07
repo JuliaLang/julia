@@ -524,7 +524,7 @@ Base.size(v::WithoutMissingVector) = size(v.data)
     send_to_end!(f::Function, v::AbstractVector; [lo, hi])
 
 Send every element of `v` for which `f` returns `true` to the end of the vector and return
-the index of the last element which for which `f` returns `false`.
+the index of the last element for which `f` returns `false`.
 
 `send_to_end!(f, v, lo, hi)` is equivalent to `send_to_end!(f, view(v, lo:hi))+lo-1`
 
@@ -1245,7 +1245,7 @@ Otherwise, we dispatch to [`InsertionSort`](@ref) for inputs with `length <= 40`
 perform a presorted check ([`CheckSorted`](@ref)).
 
 We check for short inputs before performing the presorted check to avoid the overhead of the
-check for small inputs. Because the alternate dispatch is to [`InseritonSort`](@ref) which
+check for small inputs. Because the alternate dispatch is to [`InsertionSort`](@ref) which
 has efficient `O(n)` runtime on presorted inputs, the check is not necessary for small
 inputs.
 
@@ -1906,6 +1906,26 @@ Characteristics:
     ignores case).
   * *in-place* in memory.
   * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
+
+  Note that `PartialQuickSort(k)` does not necessarily sort the whole array. For example,
+
+```jldoctest
+julia> x = rand(100);
+
+julia> k = 50:100;
+
+julia> s1 = sort(x; alg=QuickSort);
+
+julia> s2 = sort(x; alg=PartialQuickSort(k));
+
+julia> map(issorted, (s1, s2))
+(true, false)
+
+julia> map(x->issorted(x[k]), (s1, s2))
+(true, true)
+
+julia> s1[k] == s2[k]
+true
 """
 struct PartialQuickSort{T <: Union{Integer,OrdinalRange}} <: Algorithm
     k::T
@@ -1942,6 +1962,8 @@ Characteristics:
     case).
   * *not in-place* in memory.
   * *divide-and-conquer* sort strategy.
+  * *good performance* for large collections but typically not quite as
+    fast as [`QuickSort`](@ref).
 """
 const MergeSort     = MergeSortAlg()
 

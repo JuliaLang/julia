@@ -91,6 +91,7 @@ endif
 else
 DTRACE_HEADERS :=
 endif
+.SECONDARY: $(addprefix $(BUILDDIR)/,$(DTRACE_HEADERS))
 
 # headers are used for dependency tracking, while public headers will be part of the dist
 UV_HEADERS :=

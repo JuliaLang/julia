@@ -682,6 +682,7 @@ let src = code_typed1(mksparamunused, (Any,))
 end
 
 # Test that dead `@inbounds` does not taint consistency
+# https://github.com/JuliaLang/julia/issues/48243
 @test Base.infer_effects() do
     false && @inbounds (1,2,3)[1]
     return 1

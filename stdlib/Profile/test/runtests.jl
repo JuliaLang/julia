@@ -199,14 +199,14 @@ if Sys.isbsd() || Sys.islinux()
         let cmd = Base.julia_cmd()
             script = """
                 x = rand(1000, 1000)
-                println("started")
+                println(stderr, "started")
                 while true
                     x * x
                     yield()
                 end
                 """
             iob = Base.BufferStream()
-            p = run(pipeline(`$cmd -e $script`, stderr = devnull, stdout = iob), wait = false)
+            p = run(pipeline(`$cmd -e $script`, stderr = iob, stdout = devnull), wait = false)
             t = Timer(120) do t
                 # should be under 10 seconds, so give it 2 minutes then report failure
                 println("KILLING BY PROFILE TEST WATCHDOG\n")
@@ -272,7 +272,10 @@ end
 end
 
 @testset "HeapSnapshot" begin
-    fname = read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`, String)
+    tmpdir = mktempdir()
+    fname = cd(tmpdir) do
+        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`, String)
+    end
 
     @test isfile(fname)
 
@@ -281,6 +284,7 @@ end
     end
 
     rm(fname)
+    rm(tmpdir, force = true, recursive = true)
 end
 
 include("allocs.jl")

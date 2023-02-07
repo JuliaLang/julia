@@ -143,6 +143,8 @@ Base.hasproperty
 Core.getfield
 Core.setfield!
 Core.isdefined
+Core.getglobal
+Core.setglobal!
 Base.@isdefined
 Base.convert
 Base.promote

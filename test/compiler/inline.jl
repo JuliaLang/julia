@@ -1801,3 +1801,22 @@ let src = code_typed1(make_issue47349(Val{4}()), (Any,))
         make_issue47349(Val(4))((x,nothing,Int))
     end |> only === Type{Int}
 end
+
+# union splitting should account for uncovered call signature
+# https://github.com/JuliaLang/julia/issues/48397
+f48397(::Bool) = :ok
+f48397(::Tuple{String,String}) = :ok
+let src = code_typed1((Union{Bool,Tuple{String,Any}},)) do x
+        f48397(x)
+    end
+    @test any(iscall((src, f48397)), src.code)
+end
+g48397::Union{Bool,Tuple{String,Any}} = ("48397", 48397)
+@test_throws MethodError let
+    Base.Experimental.@force_compile
+    f48397(g48397)
+end
+@test_throws MethodError let
+    Base.Experimental.@force_compile
+    convert(Union{Bool,Tuple{String,String}}, g48397)
+end
