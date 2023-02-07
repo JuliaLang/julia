@@ -1890,7 +1890,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             fargs = nothing
         end
         argtypes = Any[typeof(<:), argtypes[3], argtypes[2]]
-        return CallMeta(abstract_call_known(interp, <:, ArgInfo(fargs, argtypes), si, sv, max_methods).rt, EFFECTS_TOTAL, NoCallInfo())
+        return abstract_call_known(interp, <:, ArgInfo(fargs, argtypes), si, sv, max_methods)
     elseif la == 2 &&
            (a2 = argtypes[2]; isa(a2, Const)) && (svecval = a2.val; isa(svecval, SimpleVector)) &&
            istopfunction(f, :length)
