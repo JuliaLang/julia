@@ -148,13 +148,13 @@ uncaught exceptions.
     1.1–1.6, and had a plain Vector-of-tuples as a return type.
 """
 function current_exceptions(task::Task=current_task(); backtrace::Bool=true, time::Bool=true)
-    raw = ccall(:jl_get_excstack, Any, (Any,Cint,Cint), task, backtrace, typemax(Cint))::Vector{Any}
+    raw = ccall(:jl_get_excstack, Any, (Any,Cint,Cint,Cint), task, backtrace, typemax(Cint), time)::Vector{Any}
     formatted = Any[]
     stride = backtrace ? 3 : 1
     for i = reverse(1:stride:length(raw))
         exc = raw[i]
+        tm = time ? exc[end] : nothing
         bt = backtrace ? Base._reformat_bt(raw[i+1],raw[i+2]) : nothing
-        tm = time ? ccall(:jl_clock_now, Any, ())::Any : nothing
         push!(formatted, (exception=exc,backtrace=bt,time=tm))
     end
     ExceptionStack(formatted)
