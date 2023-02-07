@@ -391,6 +391,11 @@ function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool)
                     constrains_param(var, lastp, covariant) && return true
                 end
             else
+                if typ.name === typename(Type) && typ.parameters[1] === var && var.ub === Any
+                    # Types with free type parameters are <: Type cause the typevar
+                    # to be unconstrained because Type{T} with free typevars is illegal
+                    return false
+                end
                 for i in 1:fc
                     p = typ.parameters[i]
                     constrains_param(var, p, false) && return true
