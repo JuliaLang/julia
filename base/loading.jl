@@ -1188,7 +1188,8 @@ function run_extension_callbacks(extid::ExtensionId)
         true
     catch
         # Try to continue loading if loading an extension errors
-        @error "Error during loading of extension $(extid.id.name) of $(extid.parentid.name)"
+        @error "Error during loading of extension $(extid.id.name) of $(extid.parentid.name), \
+                use `Base.retry_load_extensions()` to retry."
         false
     end
     return succeeded
