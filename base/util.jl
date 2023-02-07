@@ -137,7 +137,7 @@ See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
 
 Return a julia command similar to the one of the running process.
 Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-native-code`,
-`--compiled-modules`, `--inline`, `--check-bounds`, `--optimize`, `-g`,
+`--compiled-modules`, `--inline`, `--check-bounds`, `--optimize`, `--min-optlevel`, `-g`,
 `--code-coverage`, `--track-allocation`, `--color`, `--startup-file`, and `--depwarn`
 command line arguments that are not at their default values.
 

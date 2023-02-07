@@ -18,6 +18,7 @@ artifact_dir = ""
 libblastrampoline_handle = C_NULL
 libblastrampoline_path = ""
 
+# NOTE: keep in sync with `Base.libblas_name` and `Base.liblapack_name`.
 const libblastrampoline = if Sys.iswindows()
     "libblastrampoline-5.dll"
 elseif Sys.isapple()

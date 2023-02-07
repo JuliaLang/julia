@@ -2181,7 +2181,6 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
     // edges: [caller1, ext_targets_indexes1, ...] for worklist-owned methods calling external methods
     assert(edges_map == NULL);
 
-    htable_new(&external_mis, 0);  // we need external_mis until after `jl_collect_edges` finishes
     // Save the inferred code from newly inferred, external methods
     *new_specializations = queue_external_cis(newly_inferred);
 
@@ -2209,14 +2208,9 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
         *edges = jl_alloc_vec_any(0);
         *method_roots_list = jl_alloc_vec_any(0);
         // Collect the new method roots
-        htable_t methods_with_newspecs;
-        htable_new(&methods_with_newspecs, 0);
-        jl_collect_methods(&methods_with_newspecs, *new_specializations);
-        jl_collect_new_roots(*method_roots_list, &methods_with_newspecs, worklist_key);
-        htable_free(&methods_with_newspecs);
-        jl_collect_edges(*edges, *ext_targets);
+        jl_collect_new_roots(*method_roots_list, *new_specializations, worklist_key);
+        jl_collect_edges(*edges, *ext_targets, *new_specializations);
     }
-    htable_free(&external_mis);
     assert(edges_map == NULL); // jl_collect_edges clears this when done
 
     JL_GC_POP();

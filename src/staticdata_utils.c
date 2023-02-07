@@ -1,5 +1,5 @@
 static htable_t new_code_instance_validate;
-static htable_t external_mis;
+
 
 // inverse of backedges graph (caller=>callees hash)
 jl_array_t *edges_map JL_GLOBALLY_ROOTED = NULL; // rooted for the duration of our uses of this
@@ -108,11 +108,6 @@ JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* ci)
 }
 
 
-static int method_instance_in_queue(jl_method_instance_t *mi)
-{
-    return ptrhash_get(&external_mis, mi) != HT_NOTFOUND;
-}
-
 // compute whether a type references something internal to worklist
 // and thus could not have existed before deserialize
 // and thus does not need delayed unique-ing
@@ -216,10 +211,10 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
     return found;
 }
 
-// given the list of CodeInstances that were inferred during the
-// build, select those that are (1) external, and (2) are inferred to be called
-// from the worklist or explicitly added by a `precompile` statement.
-// Also prepares for method_instance_in_queue queries.
+// Given the list of CodeInstances that were inferred during the build, select
+// those that are (1) external, (2) still valid, and (3) are inferred to be
+// called from the worklist or explicitly added by a `precompile` statement.
+// These will be preserved in the image.
 static jl_array_t *queue_external_cis(jl_array_t *list)
 {
     if (list == NULL)
@@ -238,17 +233,12 @@ static jl_array_t *queue_external_cis(jl_array_t *list)
         assert(jl_is_code_instance(ci));
         jl_method_instance_t *mi = ci->def;
         jl_method_t *m = mi->def.method;
-        if (jl_is_method(m)) {
-            if (jl_object_in_image((jl_value_t*)m->module)) {
-                if (ptrhash_get(&external_mis, mi) == HT_NOTFOUND) {
-                    int found = has_backedge_to_worklist(mi, &visited, &stack);
-                    assert(found == 0 || found == 1);
-                    assert(stack.len == 0);
-                    if (found == 1) {
-                        ptrhash_put(&external_mis, mi, mi);
-                        jl_array_ptr_1d_push(new_specializations, (jl_value_t*)ci);
-                    }
-                }
+        if (jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
+            int found = has_backedge_to_worklist(mi, &visited, &stack);
+            assert(found == 0 || found == 1);
+            assert(stack.len == 0);
+            if (found == 1 && ci->max_world == ~(size_t)0) {
+                jl_array_ptr_1d_push(new_specializations, (jl_value_t*)ci);
             }
         }
     }
@@ -259,31 +249,25 @@ static jl_array_t *queue_external_cis(jl_array_t *list)
 }
 
 // New roots for external methods
-static void jl_collect_methods(htable_t *mset, jl_array_t *new_specializations)
+static void jl_collect_new_roots(jl_array_t *roots, jl_array_t *new_specializations, uint64_t key)
 {
-    size_t i, l = new_specializations ? jl_array_len(new_specializations) : 0;
-    jl_value_t *v;
-    jl_method_t *m;
-    for (i = 0; i < l; i++) {
-        v = jl_array_ptr_ref(new_specializations, i);
-        assert(jl_is_code_instance(v));
-        m = ((jl_code_instance_t*)v)->def->def.method;
+    htable_t mset;
+    htable_new(&mset, 0);
+    size_t l = new_specializations ? jl_array_len(new_specializations) : 0;
+    for (size_t i = 0; i < l; i++) {
+        jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(new_specializations, i);
+        assert(jl_is_code_instance(ci));
+        jl_method_t *m = ci->def->def.method;
         assert(jl_is_method(m));
-        ptrhash_put(mset, (void*)m, (void*)m);
+        ptrhash_put(&mset, (void*)m, (void*)m);
     }
-}
-
-static void jl_collect_new_roots(jl_array_t *roots, const htable_t *mset, uint64_t key)
-{
-    size_t i, sz = mset->size;
     int nwithkey;
-    jl_method_t *m;
-    void *const *table = mset->table;
+    void *const *table = mset.table;
     jl_array_t *newroots = NULL;
     JL_GC_PUSH1(&newroots);
-    for (i = 0; i < sz; i += 2) {
+    for (size_t i = 0; i < mset.size; i += 2) {
         if (table[i+1] != HT_NOTFOUND) {
-            m = (jl_method_t*)table[i];
+            jl_method_t *m = (jl_method_t*)table[i];
             assert(jl_is_method(m));
             nwithkey = nroots_with_key(m, key);
             if (nwithkey) {
@@ -305,6 +289,7 @@ static void jl_collect_new_roots(jl_array_t *roots, const htable_t *mset, uint64
         }
     }
     JL_GC_POP();
+    htable_free(&mset);
 }
 
 // Create the forward-edge map (caller => callees)
@@ -422,9 +407,18 @@ static void jl_record_edges(jl_method_instance_t *caller, arraylist_t *wq, jl_ar
 // Extract `edges` and `ext_targets` from `edges_map`
 // `edges` = [caller1, targets_indexes1, ...], the list of methods and their edges
 // `ext_targets` is [invokesig1, callee1, matches1, ...], the edges for each target
-static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets)
+static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets, jl_array_t *external_cis)
 {
     size_t world = jl_atomic_load_acquire(&jl_world_counter);
+    htable_t external_mis;
+    htable_new(&external_mis, 0);
+    if (external_cis) {
+        for (size_t i = 0; i < jl_array_len(external_cis); i++) {
+            jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(external_cis, i);
+            jl_method_instance_t *mi = ci->def;
+            ptrhash_put(&external_mis, (void*)mi, (void*)mi);
+        }
+    }
     arraylist_t wq;
     arraylist_new(&wq, 0);
     void **table = (void**)jl_array_data(edges_map);    // edges_map is caller => callees
@@ -438,10 +432,11 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets)
             continue;
         assert(jl_is_method_instance(caller) && jl_is_method(caller->def.method));
         if (!jl_object_in_image((jl_value_t*)caller->def.method->module) ||
-            method_instance_in_queue(caller)) {
+            ptrhash_get(&external_mis, caller) != HT_NOTFOUND) {
             jl_record_edges(caller, &wq, edges);
         }
     }
+    htable_free(&external_mis);
     while (wq.len) {
         jl_method_instance_t *caller = (jl_method_instance_t*)arraylist_pop(&wq);
         jl_record_edges(caller, &wq, edges);
@@ -1061,6 +1056,7 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_a
         htable_reset(&visited, l);
         for (i = 0; i < l; i++) {
             jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(ci_list, i);
+            assert(ci->max_world == 1 || ci->max_world == ~(size_t)0);
             assert(ptrhash_get(&visited, (void*)ci->def) == HT_NOTFOUND);   // check that we don't have multiple cis for same mi
             ptrhash_put(&visited, (void*)ci->def, (void*)ci);
         }
@@ -1121,7 +1117,7 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_a
             assert(jl_is_code_instance(ci));
             jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
             remove_code_instance_from_validation(codeinst); // mark it as handled
-            assert(codeinst->min_world >= world && codeinst->inferred);
+            assert(codeinst->min_world == world && codeinst->inferred);
             codeinst->max_world = ~(size_t)0;
             if (jl_rettype_inferred(caller, world, ~(size_t)0) == jl_nothing) {
                 jl_mi_cache_insert(caller, codeinst);
@@ -1161,8 +1157,8 @@ static void validate_new_code_instances(void)
             //assert(0 && "unexpected unprocessed CodeInstance found");
             jl_code_instance_t *ci = (jl_code_instance_t*)new_code_instance_validate.table[i];
             JL_GC_PROMISE_ROOTED(ci); // TODO: this needs a root (or restructuring to avoid it)
-            assert(ci->min_world >= world && ci->inferred);
-            ci->max_world = ~(size_t)0;
+            assert(ci->min_world == world && ci->inferred);
+            assert(ci->max_world == ~(size_t)0);
             jl_method_instance_t *caller = ci->def;
             if (jl_rettype_inferred(caller, world, ~(size_t)0) == jl_nothing) {
                 jl_mi_cache_insert(caller, ci);
