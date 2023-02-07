@@ -696,16 +696,9 @@ end |> !Core.Compiler.is_consistent
     @inbounds x[1]
 end |> Core.Compiler.is_total
 
-# unknown :static_parameter should taint :nothrow
-# https://github.com/JuliaLang/julia/issues/46771
-unknown_sparam_throw(::Union{Nothing, Type{T}}) where T = (T; nothing)
-unknown_sparam_nothrow1(x::Ref{T}) where T = (T; nothing)
-unknown_sparam_nothrow2(x::Ref{Ref{T}}) where T = (T; nothing)
-@test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type{Int},)))
-@test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type{<:Integer},)))
-@test !Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type,)))
-@test !Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Nothing,)))
-@test !Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Union{Type{Int},Nothing},)))
-@test !Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Any,)))
-@test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_nothrow1, (Ref,)))
-@test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_nothrow2, (Ref{Ref{T}} where T,)))
+# GotoIfNot should properly mark itself as throwing when given a non-Bool
+# https://github.com/JuliaLang/julia/pull/48583
+gotoifnot_throw_check_48583(x) = x ? x : 0
+@test !Core.Compiler.is_nothrow(Base.infer_effects(gotoifnot_throw_check_48583, (Missing,)))
+@test !Core.Compiler.is_nothrow(Base.infer_effects(gotoifnot_throw_check_48583, (Any,)))
+@test Core.Compiler.is_nothrow(Base.infer_effects(gotoifnot_throw_check_48583, (Bool,)))
