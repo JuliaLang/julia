@@ -718,7 +718,7 @@ function normalize(x::T) where T<:IEEEFloat
     ans = (~xi-(one(UT)<<significand_bits(T))) & exponent_mask(T)
     reinterpret(T, ans)
 end
-normalze(x) = inv(x)
+normalize(x) = inv(x)
 
 """
     hypot(x, y)
