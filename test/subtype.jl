@@ -2314,6 +2314,9 @@ end
 
 @test !(Tuple{Any, Any, Any} <: Tuple{Any, Vararg{T}} where T)
 
+# issue #39967
+@test (NTuple{27, T} where {S, T<:Union{Array, Array{S}}}) <: Tuple{Array, Array, Vararg{AbstractArray, 25}}
+
 let a = (isodd(i) ? Pair{Char, String} : Pair{String, String} for i in 1:2000)
     @test Tuple{Type{Pair{Union{Char, String}, String}}, a...} <: Tuple{Type{Pair{K, V}}, Vararg{Pair{A, B} where B where A}} where V where K
 end
