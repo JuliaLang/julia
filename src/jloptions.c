@@ -351,11 +351,14 @@ restart_switch:
                             c = o->val;
                             goto restart_switch;
                         }
-                        else if (o->val <= 0xff && strchr(shortopts, o->val)) {
-                            jl_errorf("option `-%c/--%s` is missing an argument", o->val, o->name);
-                        }
                         else {
-                            jl_errorf("option `--%s` is missing an argument", o->name);
+                            const char *problem = o->has_arg ? "is missing an argument" : "does not accept an argument";
+                            if (o->val <= 0xff && strchr(shortopts, o->val)) {
+                                jl_errorf("option `-%c/--%s` %s", o->val, o->name, problem);
+                            }
+                            else {
+                                jl_errorf("option `--%s` %s", o->name, problem);
+                            }
                         }
                     }
                 }
