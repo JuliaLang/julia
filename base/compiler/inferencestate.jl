@@ -349,7 +349,7 @@ function InferenceState(result::InferenceResult, cache::Symbol, interp::Abstract
 end
 
 """
-    constrains_param(var::TypeVar, sig, covariant::Bool)
+    constrains_param(var::TypeVar, sig, covariant::Bool, type_constrains::Bool)
 
 Check if `var` will be constrained to have a definite value
 in any concrete leaftype subtype of `sig`.
@@ -359,18 +359,22 @@ find a value for a particular type parameter.
 A necessary condition for type intersection to not assign a parameter is that it only
 appears in a `Union[All]` and during subtyping some other union component (that does not
 constrain the type parameter) is selected.
+
+The `type_constrains` flag determines whether Type{T} is considered to be constraining
+`T`. This is not true in general, because of the existence of types with free type
+parameters, however, some callers would like to ignore this corner case.
 """
-function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool)
+function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool, type_constrains::Bool=false)
     typ === var && return true
     while typ isa UnionAll
-        covariant && constrains_param(var, typ.var.ub, covariant) && return true
+        covariant && constrains_param(var, typ.var.ub, covariant, type_constrains) && return true
         # typ.var.lb doesn't constrain var
         typ = typ.body
     end
     if typ isa Union
         # for unions, verify that both options would constrain var
-        ba = constrains_param(var, typ.a, covariant)
-        bb = constrains_param(var, typ.b, covariant)
+        ba = constrains_param(var, typ.a, covariant, type_constrains)
+        bb = constrains_param(var, typ.b, covariant, type_constrains)
         (ba && bb) && return true
     elseif typ isa DataType
         # return true if any param constrains var
@@ -380,25 +384,25 @@ function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool)
                 # vararg tuple needs special handling
                 for i in 1:(fc - 1)
                     p = typ.parameters[i]
-                    constrains_param(var, p, covariant) && return true
+                    constrains_param(var, p, covariant, type_constrains) && return true
                 end
                 lastp = typ.parameters[fc]
                 vararg = unwrap_unionall(lastp)
                 if vararg isa Core.TypeofVararg && isdefined(vararg, :N)
-                    constrains_param(var, vararg.N, covariant) && return true
+                    constrains_param(var, vararg.N, covariant, type_constrains) && return true
                     # T = vararg.parameters[1] doesn't constrain var
                 else
-                    constrains_param(var, lastp, covariant) && return true
+                    constrains_param(var, lastp, covariant, type_constrains) && return true
                 end
             else
                 if typ.name === typename(Type) && typ.parameters[1] === var && var.ub === Any
                     # Types with free type parameters are <: Type cause the typevar
                     # to be unconstrained because Type{T} with free typevars is illegal
-                    return false
+                    return type_constrains
                 end
                 for i in 1:fc
                     p = typ.parameters[i]
-                    constrains_param(var, p, false) && return true
+                    constrains_param(var, p, false, type_constrains) && return true
                 end
             end
         end
@@ -445,7 +449,7 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
     for i = 1:length(sp)
         v = sp[i]
         if v isa TypeVar
-            maybe_undef = !constrains_param(v, linfo.specTypes, true)
+            maybe_undef = !constrains_param(v, linfo.specTypes, #=covariant=#true)
             temp = sig
             for j = 1:i-1
                 temp = temp.body
