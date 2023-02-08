@@ -627,7 +627,7 @@ function isascii(s::AbstractString)
     start = 1
     fastmin(a,b) = ifelse(a < b, a, b)
     while start <= l
-        @inline _isascii(bytes, start, fastmin(l, start + chunk_size)) || return false
+        @inline _isascii(bytes, start, fastmin(l, start+chunk_size-1)) || return false
         start += chunk_size
     end
     return true
