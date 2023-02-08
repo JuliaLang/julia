@@ -759,6 +759,10 @@ end
 @test Base.ismutationfree(Type{Union{}})
 @test Core.Compiler.is_total(Base.infer_effects(typejoin, ()))
 
+# nothrow-ness of subtyping operations
+# https://github.com/JuliaLang/julia/pull/48566
+@test !Core.Compiler.is_nothrow(Base.infer_effects((A,B)->A<:B, (Any,Any)))
+@test !Core.Compiler.is_nothrow(Base.infer_effects((A,B)->A>:B, (Any,Any)))
 
 # GotoIfNot should properly mark itself as throwing when given a non-Bool
 # https://github.com/JuliaLang/julia/pull/48583
