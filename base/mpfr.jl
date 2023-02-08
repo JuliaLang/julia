@@ -734,7 +734,7 @@ end
 
 function log1p(x::BigFloat)
     if x < -1
-        throw(DomainError(x, string("log1p was called with a real argument < -1 but "
+        throw(DomainError(x, string("log1p was called with a real argument < -1 but ",
                           "will only return a complex result if called ",
                           "with a complex argument. Try log1p(complex(x)).")))
     end
