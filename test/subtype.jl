@@ -2415,7 +2415,7 @@ abstract type P47654{A} end
     # issue 22123
     t1 = Ref{Ref{Ref{Union{Int64, T}}} where T}
     t2 = Ref{Ref{Ref{Union{T, S}}} where T} where S
-    @test_broken t1 <: t2
+    @test t1 <: t2
 
     # issue 21153
     @test_broken (Tuple{T1,T1} where T1<:(Val{T2} where T2)) <: (Tuple{Val{S},Val{S}} where S)
@@ -2467,3 +2467,12 @@ end
 
 #issue 48961
 @test !<:(Type{Union{Missing, Int}}, Type{Union{Missing, Nothing, Int}})
+
+#issue 49127
+struct F49127{m,n} <: Function end
+let a = [TypeVar(:V, Union{}, Function) for i in 1:32]
+    b = a[1:end-1]
+    S = foldr((v, d) -> UnionAll(v, d), a; init = foldl((i, j) -> F49127{i, j}, a))
+    T = foldr((v, d) -> UnionAll(v, d), b; init = foldl((i, j) -> F49127{i, j}, b))
+    @test S <: T
+end
