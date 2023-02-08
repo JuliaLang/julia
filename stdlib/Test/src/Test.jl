@@ -713,7 +713,7 @@ Test Passed
 
 julia> @test_throws "Try sqrt(Complex" sqrt(-1)
 Test Passed
-     Message: "DomainError with -1.0:\\nsqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x))."
+     Message: "DomainError with -1.0:\\nsqrt was called with a negative real argument but will only return a complex result if called with a complex argument. Try sqrt(Complex(x))."
 ```
 
 In the final example, instead of matching a single string it could alternatively have been performed with:

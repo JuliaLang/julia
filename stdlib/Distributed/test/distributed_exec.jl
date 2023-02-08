@@ -1453,7 +1453,7 @@ let thrown = false
         thrown = true
         local b = IOBuffer()
         showerror(b, e)
-        @test occursin("sqrt will only return", String(take!(b)))
+        @test occursin("sqrt was called with a negative real argument", String(take!(b)))
     end
     @test thrown
 end
