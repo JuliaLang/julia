@@ -62,7 +62,7 @@ end
 
 struct ConcreteResult
     mi::MethodInstance
-    effects::Effectsz
+    effects::Effects
     result
     ConcreteResult(mi::MethodInstance, effects::Effects) = new(mi, effects)
     ConcreteResult(mi::MethodInstance, effects::Effects, @nospecialize val) = new(mi, effects, val)
