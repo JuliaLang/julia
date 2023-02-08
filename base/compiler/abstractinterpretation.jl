@@ -96,14 +96,10 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     all_effects = EFFECTS_TOTAL
     if !matches.nonoverlayed
         # currently we don't have a good way to execute the overlayed method definition,
-        # so we should give up pure/concrete eval when any of the matched methods is overlayed
+        # so we should give up concrete eval when any of the matched methods is overlayed
         f = nothing
         all_effects = Effects(all_effects; nonoverlayed=false)
     end
-
-    # try pure-evaluation
-    val = pure_eval_call(interp, f, applicable, arginfo)
-    val !== nothing && return CallMeta(val, all_effects, MethodResultPure(info)) # TODO: add some sort of edge(s)
 
     𝕃ₚ = ipo_lattice(interp)
     for i in 1:napplicable
@@ -117,69 +113,34 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             break
         end
         this_rt = Bottom
-        splitunions = false
-        # TODO: this used to trigger a bug in inference recursion detection, and is unmaintained now
-        # sigtuple = unwrap_unionall(sig)::DataType
-        # splitunions = 1 < unionsplitcost(sigtuple.parameters) * napplicable <= InferenceParams(interp).max_union_splitting
-        if splitunions
-            splitsigs = switchtupleunion(sig)
-            for sig_n in splitsigs
-                result = abstract_call_method(interp, method, sig_n, svec(), multiple_matches, si, sv)
-                (; rt, edge, effects) = result
-                this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
-                this_arginfo = ArgInfo(fargs, this_argtypes)
-                const_call_result = abstract_call_method_with_const_args(interp,
-                    result, f, this_arginfo, si, match, sv)
-                const_result = nothing
-                if const_call_result !== nothing
-                    if const_call_result.rt ⊑ₚ rt
-                        rt = const_call_result.rt
-                        (; effects, const_result, edge) = const_call_result
-                    else
-                        add_remark!(interp, sv, "[constprop] Discarded because the result was wider than inference")
-                    end
-                end
-                all_effects = merge_effects(all_effects, effects)
-                push!(const_results, const_result)
-                any_const_result |= const_result !== nothing
-                edge === nothing || push!(edges, edge)
-                this_rt = tmerge(this_rt, rt)
-                if bail_out_call(interp, this_rt, sv)
-                    break
-                end
+        result = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, si, sv)
+        (; rt, edge, effects) = result
+        this_conditional = ignorelimited(rt)
+        this_rt = widenwrappedconditional(rt)
+        # try constant propagation with argtypes for this match
+        # this is in preparation for inlining, or improving the return result
+        this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
+        this_arginfo = ArgInfo(fargs, this_argtypes)
+        const_call_result = abstract_call_method_with_const_args(interp,
+            result, f, this_arginfo, si, match, sv)
+        const_result = nothing
+        if const_call_result !== nothing
+            this_const_conditional = ignorelimited(const_call_result.rt)
+            this_const_rt = widenwrappedconditional(const_call_result.rt)
+            # return type of const-prop' inference can be wider than that of non const-prop' inference
+            # e.g. in cases when there are cycles but cached result is still accurate
+            if this_const_rt ⊑ₚ this_rt
+                this_conditional = this_const_conditional
+                this_rt = this_const_rt
+                (; effects, const_result, edge) = const_call_result
+            else
+                add_remark!(interp, sv, "[constprop] Discarded because the result was wider than inference")
             end
-            this_conditional = ignorelimited(this_rt)
-            this_rt = widenwrappedconditional(this_rt)
-        else
-            result = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, si, sv)
-            (; rt, edge, effects) = result
-            this_conditional = ignorelimited(rt)
-            this_rt = widenwrappedconditional(rt)
-            # try constant propagation with argtypes for this match
-            # this is in preparation for inlining, or improving the return result
-            this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
-            this_arginfo = ArgInfo(fargs, this_argtypes)
-            const_call_result = abstract_call_method_with_const_args(interp,
-                result, f, this_arginfo, si, match, sv)
-            const_result = nothing
-            if const_call_result !== nothing
-                this_const_conditional = ignorelimited(const_call_result.rt)
-                this_const_rt = widenwrappedconditional(const_call_result.rt)
-                # return type of const-prop' inference can be wider than that of non const-prop' inference
-                # e.g. in cases when there are cycles but cached result is still accurate
-                if this_const_rt ⊑ₚ this_rt
-                    this_conditional = this_const_conditional
-                    this_rt = this_const_rt
-                    (; effects, const_result, edge) = const_call_result
-                else
-                    add_remark!(interp, sv, "[constprop] Discarded because the result was wider than inference")
-                end
-            end
-            all_effects = merge_effects(all_effects, effects)
-            push!(const_results, const_result)
-            any_const_result |= const_result !== nothing
-            edge === nothing || push!(edges, edge)
         end
+        all_effects = merge_effects(all_effects, effects)
+        push!(const_results, const_result)
+        any_const_result |= const_result !== nothing
+        edge === nothing || push!(edges, edge)
         @assert !(this_conditional isa Conditional || this_rt isa MustAlias) "invalid lattice element returned from inter-procedural context"
         seen += 1
         rettype = tmerge(𝕃ₚ, rettype, this_rt)
@@ -788,15 +749,6 @@ struct MethodCallResult
     end
 end
 
-function pure_eval_eligible(interp::AbstractInterpreter,
-    @nospecialize(f), applicable::Vector{Any}, arginfo::ArgInfo)
-    # XXX we need to check that this pure function doesn't call any overlayed method
-    return f !== nothing &&
-           length(applicable) == 1 &&
-           is_method_pure(applicable[1]::MethodMatch) &&
-           is_all_const_arg(arginfo, #=start=#2)
-end
-
 function is_method_pure(method::Method, @nospecialize(sig), sparams::SimpleVector)
     if isdefined(method, :generator)
         method.generator.expand_early || return false
@@ -810,11 +762,6 @@ function is_method_pure(method::Method, @nospecialize(sig), sparams::SimpleVecto
 end
 is_method_pure(match::MethodMatch) = is_method_pure(match.method, match.spec_types, match.sparams)
 
-function pure_eval_call(interp::AbstractInterpreter,
-    @nospecialize(f), applicable::Vector{Any}, arginfo::ArgInfo)
-    pure_eval_eligible(interp, f, applicable, arginfo) || return nothing
-    return _pure_eval_call(f, arginfo)
-end
 function _pure_eval_call(@nospecialize(f), arginfo::ArgInfo)
     args = collect_const_args(arginfo, #=start=#2)
     value = try
@@ -2022,7 +1969,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         if isa(rty, Conditional)
             return CallMeta(Conditional(rty.slot, rty.elsetype, rty.thentype), EFFECTS_TOTAL, NoCallInfo()) # swap if-else
         elseif isa(rty, Const)
-            return CallMeta(Const(rty.val === false), EFFECTS_TOTAL, MethodResultPure())
+            return CallMeta(Const(rty.val === false), EFFECTS_TOTAL, NoCallInfo())
         end
         return CallMeta(rty, EFFECTS_TOTAL, NoCallInfo())
     elseif la == 3 && istopfunction(f, :(>:))
@@ -2038,22 +1985,20 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     elseif la == 2 &&
            (a2 = argtypes[2]; isa(a2, Const)) && (svecval = a2.val; isa(svecval, SimpleVector)) &&
            istopfunction(f, :length)
-        # mark length(::SimpleVector) as total
-        return CallMeta(Const(length(svecval)), EFFECTS_TOTAL, MethodResultPure())
+        return CallMeta(Const(length(svecval)), EFFECTS_TOTAL, NoCallInfo())
     elseif la == 3 &&
            (a2 = argtypes[2]; isa(a2, Const)) && (svecval = a2.val; isa(svecval, SimpleVector)) &&
            (a3 = argtypes[3]; isa(a3, Const)) && (idx = a3.val; isa(idx, Int)) &&
            istopfunction(f, :getindex)
-        # mark getindex(::SimpleVector, i::Int) as total
         if 1 <= idx <= length(svecval) && isassigned(svecval, idx)
-            return CallMeta(Const(getindex(svecval, idx)), EFFECTS_TOTAL, MethodResultPure())
+            return CallMeta(Const(getindex(svecval, idx)), EFFECTS_TOTAL, NoCallInfo())
         end
     elseif la == 2 && istopfunction(f, :typename)
-        return CallMeta(typename_static(argtypes[2]), EFFECTS_TOTAL, MethodResultPure())
+        return CallMeta(typename_static(argtypes[2]), EFFECTS_TOTAL, NoCallInfo())
     elseif la == 3 && istopfunction(f, :typejoin)
         if is_all_const_arg(arginfo, #=start=#2)
             val = _pure_eval_call(f, arginfo)
-            return CallMeta(val === nothing ? Type : val, EFFECTS_TOTAL, MethodResultPure())
+            return CallMeta(val === nothing ? Type : val, EFFECTS_TOTAL, NoCallInfo())
         end
     end
     atype = argtypes_to_type(argtypes)

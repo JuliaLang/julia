@@ -1559,7 +1559,6 @@ end
 
 function handle_modifyfield!_call!(ir::IRCode, idx::Int, stmt::Expr, info::ModifyFieldInfo, state::InliningState)
     info = info.info
-    info isa MethodResultPure && (info = info.info)
     info isa ConstCallInfo && (info = info.call)
     info isa MethodMatchInfo || return nothing
     length(info.results) == 1 || return nothing
@@ -1655,11 +1654,6 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
             continue
         end
 
-        # Check whether this call was total and evaluates to a constant
-        if info isa MethodResultPure
-            inline_const_if_inlineable!(ir[SSAValue(idx)]) && continue
-            info = info.info
-        end
         if info === NoCallInfo()
             # Inference determined this couldn't be analyzed. Don't question it.
             continue

@@ -2,7 +2,7 @@
 
 import Core.Compiler:
     MethodInstance, InferenceResult, Signature, ConstPropResult, ConcreteResult,
-    SemiConcreteResult, CallInfo, NoCallInfo, MethodResultPure, MethodMatchInfo,
+    SemiConcreteResult, CallInfo, NoCallInfo, MethodMatchInfo,
     UnionSplitInfo, ConstCallInfo, InvokeCallInfo,
     call_sig, argtypes_to_type, is_builtin, is_return_type, istopfunction,
     validate_sparams, specialize_method, invoke_rewrite
@@ -14,6 +14,7 @@ struct EACallInfo
 end
 
 function resolve_call(ir::IRCode, stmt::Expr, @nospecialize(info::CallInfo))
+    # TODO: if effect free, return true
     sig = call_sig(ir, stmt)
     if sig === nothing
         return missing
@@ -35,9 +36,7 @@ function resolve_call(ir::IRCode, stmt::Expr, @nospecialize(info::CallInfo))
     elseif is_return_type(f)
         return true
     end
-    if info isa MethodResultPure
-        return true
-    elseif info === NoCallInfo
+    if info === NoCallInfo
         return missing
     end
     # TODO handle OpaqueClosureCallInfo

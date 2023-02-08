@@ -376,8 +376,12 @@ helping for type inference.
     In Julia 1.8 and higher, it is favorable to use [`@assume_effects`](@ref) instead of `@pure`.
     This is because `@assume_effects` allows a finer grained control over Julia's purity
     modeling and the effect system enables a wider range of optimizations.
+
+!!! note
+    In Julia 1.10 this is deprecated in favor of [`@assume_effects`](@ref).
+    Specifically, `@assume_effects :total` provides similar guarentees.
 """
 @deprecate
 macro pure(ex)
-    esc(isa(ex, Expr) ? :(Base.@assume_effects :foldable $ex) : ex)
+    esc(isa(ex, Expr) ? :(Base.@assume_effects :total $ex) : ex)
 end

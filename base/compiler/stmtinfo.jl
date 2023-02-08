@@ -62,7 +62,7 @@ end
 
 struct ConcreteResult
     mi::MethodInstance
-    effects::Effects
+    effects::Effectsz
     result
     ConcreteResult(mi::MethodInstance, effects::Effects) = new(mi, effects)
     ConcreteResult(mi::MethodInstance, effects::Effects, @nospecialize val) = new(mi, effects, val)
@@ -90,20 +90,6 @@ end
 nsplit_impl(info::ConstCallInfo) = nsplit(info.call)
 getsplit_impl(info::ConstCallInfo, idx::Int) = getsplit(info.call, idx)
 getresult_impl(info::ConstCallInfo, idx::Int) = info.results[idx]
-
-"""
-    info::MethodResultPure <: CallInfo
-
-This struct represents a method result constant was proven to be
-effect-free, including being no-throw
-"""
-struct MethodResultPure <: CallInfo
-    info::CallInfo
-end
-let instance = MethodResultPure(NoCallInfo())
-    global MethodResultPure
-    MethodResultPure() = instance
-end
 
 """
     ainfo::AbstractIterationInfo
