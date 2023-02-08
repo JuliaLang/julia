@@ -2068,10 +2068,10 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     io = open(pipeline(addenv(`$(julia_cmd(;cpu_target)::Cmd) $(opts)
                               --startup-file=no --history-file=no --warn-overwrite=yes
                               --color=$(have_color === nothing ? "auto" : have_color ? "yes" : "no")
-                              -t1
                               $trace
                               -`,
-                              "OPENBLAS_NUM_THREADS" => 1),
+                              "OPENBLAS_NUM_THREADS" => 1,
+                              "JULIA_NUM_THREADS" => 1),
                        stderr = internal_stderr, stdout = internal_stdout),
               "w", stdout)
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
