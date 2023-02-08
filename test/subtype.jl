@@ -2415,7 +2415,7 @@ abstract type P47654{A} end
     # issue 22123
     t1 = Ref{Ref{Ref{Union{Int64, T}}} where T}
     t2 = Ref{Ref{Ref{Union{T, S}}} where T} where S
-    @test_broken t1 <: t2
+    @test t1 <: t2
 
     # issue 21153
     @test_broken (Tuple{T1,T1} where T1<:(Val{T2} where T2)) <: (Tuple{Val{S},Val{S}} where S)
