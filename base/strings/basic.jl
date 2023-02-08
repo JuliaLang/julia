@@ -624,9 +624,13 @@ function isascii(s::AbstractString)
     chunk_size = 1024
     bytes = codeunits(s)
     l = ncodeunits(s)
-    l < chunk_size && return _isascii(bytes, 1, l)
-    for n = 1:chunk_size:l
-        _isascii(bytes, n, min(l,n + chunk_size - 1)) || return false
+    start = 1
+    chunk_end = ifelse(l < chunk_size, l, start + chunk_size - 1)
+    fastmin(a,b) = ifelse(a < b, a, b)
+    while start <= l
+        @inline _isascii(bytes, start, chunk_end) || return false
+        start += chunk_size
+        chunk_end = fastmin(l,chunk_end + chunk_size)
     end
     return true
 end
