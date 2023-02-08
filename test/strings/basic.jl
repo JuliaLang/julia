@@ -1120,27 +1120,27 @@ end
 end
 
 @testset "isascii" begin
-    N=1
-    @test isascii("S"^N) = true
-    @test isascii("S"^(N - 1)) = true
-    @test isascii("S"^(N + 1)) = true
+    N = 1
+    @test isascii("S"^N) == true
+    @test isascii("S"^(N - 1)) == true
+    @test isascii("S"^(N + 1)) == true
 
-    @test isascii("λ"*("S"^(N))) = false
-    @test isascii(("S"^(N))*"λ") = false
+    @test isascii("λ" * ("S"^(N))) == false
+    @test isascii(("S"^(N)) * "λ") == false
 
     for p = 1:16
         N = 2^p
-        @test isascii("S"^N) = true
-        @test isascii("S"^(N - 1)) = true
-        @test isascii("S"^(N + 1)) = true
+        @test isascii("S"^N) == true
+        @test isascii("S"^(N - 1)) == true
+        @test isascii("S"^(N + 1)) == true
 
-        @test isascii("λ" * ("S"^(N))) = false
-        @test isascii(("S"^(N)) * "λ") = false
-        @test isascii("λ"*("S"^(N - 1))) = false
-        @test isascii(("S"^(N - 1)) * "λ") = false
+        @test isascii("λ" * ("S"^(N))) == false
+        @test isascii(("S"^(N)) * "λ") == false
+        @test isascii("λ"*("S"^(N - 1))) == false
+        @test isascii(("S"^(N - 1)) * "λ") == false
         if N > 4
-            @test isascii("λ" * ("S"^(N - 3))) = false
-            @test isascii(("S"^(N - 3)) * "λ") = false
+            @test isascii("λ" * ("S"^(N - 3))) == false
+            @test isascii(("S"^(N - 3)) * "λ") == false
         end
     end
 end
