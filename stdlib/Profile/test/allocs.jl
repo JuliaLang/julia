@@ -21,7 +21,7 @@ end
     # This test is only really meaningful if we're running on
     # multiple threads, but this isn't true on the windows tests,
     # causing them to fail. So, commenting this assertion out.
-    # @test Threads.nthreads() > 1
+    # @test Threads.nthreads(:default) > 1
 
     function do_work()
         ch = Channel{Vector{Float64}}(Inf)

@@ -458,7 +458,7 @@ a [`CompositeException`](@ref).
 
 # Examples
 ```julia-repl
-julia> Threads.nthreads()
+julia> Threads.nthreads(:default)
 4
 
 julia> @sync begin

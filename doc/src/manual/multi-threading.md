@@ -9,7 +9,7 @@ By default, Julia starts up with a single thread of execution. This can be verif
 command [`Threads.nthreads()`](@ref):
 
 ```jldoctest
-julia> Threads.nthreads()
+julia> Threads.nthreads(:default)
 1
 ```
 
@@ -38,7 +38,7 @@ $ julia --threads 4
 Let's verify there are 4 threads at our disposal.
 
 ```julia-repl
-julia> Threads.nthreads()
+julia> Threads.nthreads(:default)
 4
 ```
 
@@ -104,7 +104,7 @@ the `:interactive` threadpool:
 ```julia-repl
 julia> using Base.Threads
 
-julia> nthreads()
+julia> nthreads(:default)
 4
 
 julia> nthreadpools()
@@ -267,7 +267,7 @@ avoid the race:
 ```julia-repl
 julia> using Base.Threads
 
-julia> Threads.nthreads()
+julia> Threads.nthreads(:default)
 4
 
 julia> acc = Ref(0)
