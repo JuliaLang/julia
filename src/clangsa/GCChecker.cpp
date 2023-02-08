@@ -191,15 +191,6 @@ private:
     }
     return f(TD->getName());
   }
-  static bool isValueCollection(QualType QT) {
-    if (QT->isPointerType() || QT->isArrayType())
-      return isValueCollection(
-          clang::QualType(QT->getPointeeOrArrayElementType(), 0));
-    const TagDecl *TD = QT->getUnqualifiedDesugaredType()->getAsTagDecl();
-    if (!TD)
-      return false;
-    return declHasAnnotation(TD, "julia_rooted_value_collection");
-  }
   template <typename callback>
   static SymbolRef walkToRoot(callback f, const ProgramStateRef &State,
                               const MemRegion *Region);
@@ -768,8 +759,7 @@ static bool isMutexUnlock(StringRef name) {
 #endif
 
 bool GCChecker::isGCTrackedType(QualType QT) {
-  return isValueCollection(QT) ||
-         isJuliaType(
+  return isJuliaType(
              [](StringRef Name) {
                if (Name.endswith_lower("jl_value_t") ||
                    Name.endswith_lower("jl_svec_t") ||

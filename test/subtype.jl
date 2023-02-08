@@ -2426,6 +2426,9 @@ end
 
 @test !(Tuple{Any, Any, Any} <: Tuple{Any, Vararg{T}} where T)
 
+# issue #39967
+@test (NTuple{27, T} where {S, T<:Union{Array, Array{S}}}) <: Tuple{Array, Array, Vararg{AbstractArray, 25}}
+
 abstract type MyAbstract47877{C}; end
 struct MyType47877{A,B} <: MyAbstract47877{A} end
 let A = Tuple{Type{T}, T} where T,
