@@ -331,7 +331,13 @@ function setproperty!(ci::CodeInfo, s::Symbol, v)
     return setfield!(ci, s, convert(fieldtype(CodeInfo, s), v))
 end
 
-@eval Threads nthreads() = threadpoolsize()
+@eval Threads function nthreads()
+    @warn """
+    In julia 1.9+ which supports threadpools (see [link to docs])
+    use of threads should be in the context of which threadpool is going to be used, so `nthreads()` should be
+    replaced with `nthreads(:default)`, or `nthreads(:interactive)` if interactive threads are requrested.""" maxlog = 1
+    threadpoolsize()
+end
 
 @eval Threads begin
     """
