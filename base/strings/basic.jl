@@ -613,11 +613,11 @@ isascii(c::Char) = bswap(reinterpret(UInt32, c)) < 0x80
 isascii(c::AbstractChar) = UInt32(c) < 0x80
 
 function _isascii(bytes, first, last)
-    r = true
+    r = UInt8(0)
     for n = first:last
-        @inbounds r &= bytes[n] < UInt8(0x80)
+        @inbounds r |= bytes[n]
     end
-    return r
+    return r < 0x80
 end
 
 function isascii(s::AbstractString)
@@ -625,12 +625,10 @@ function isascii(s::AbstractString)
     bytes = codeunits(s)
     l = ncodeunits(s)
     start = 1
-    chunk_end = ifelse(l < chunk_size, l, start + chunk_size - 1)
     fastmin(a,b) = ifelse(a < b, a, b)
     while start <= l
-        @inline _isascii(bytes, start, chunk_end) || return false
+        @inline _isascii(bytes, start, fastmin(l, start + chunk_size)) || return false
         start += chunk_size
-        chunk_end = fastmin(l,chunk_end + chunk_size)
     end
     return true
 end
