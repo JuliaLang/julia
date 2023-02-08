@@ -3957,23 +3957,49 @@ g38888() = S38888(Base.inferencebarrier(3), nothing)
 f_inf_error_bottom(x::Vector) = isempty(x) ? error(x[1]) : x
 @test only(Base.return_types(f_inf_error_bottom, Tuple{Vector{Any}})) == Vector{Any}
 
-# @constprop :aggressive
-@noinline g_nonaggressive(y, x) = Val{x}()
-@noinline Base.@constprop :aggressive g_aggressive(y, x) = Val{x}()
+# @constprop annotation
+@noinline f_constprop_simple(f, x) = (f(x); Val{x}())
+Base.@constprop :aggressive f_constprop_aggressive(f, x) = (f(x); Val{x}())
+Base.@constprop :aggressive @noinline f_constprop_aggressive_noinline(f, x) = (f(x); Val{x}())
+Base.@constprop :none f_constprop_none(f, x) = (f(x); Val{x}())
+Base.@constprop :none @inline f_constprop_none_inline(f, x) = (f(x); Val{x}())
 
-f_nonaggressive(x) = g_nonaggressive(x, 1)
-f_aggressive(x) = g_aggressive(x, 1)
+@test !Core.Compiler.is_aggressive_constprop(only(methods(f_constprop_simple)))
+@test !Core.Compiler.is_no_constprop(only(methods(f_constprop_simple)))
+@test Core.Compiler.is_aggressive_constprop(only(methods(f_constprop_aggressive)))
+@test !Core.Compiler.is_no_constprop(only(methods(f_constprop_aggressive)))
+@test Core.Compiler.is_aggressive_constprop(only(methods(f_constprop_aggressive_noinline)))
+@test !Core.Compiler.is_no_constprop(only(methods(f_constprop_aggressive_noinline)))
+@test !Core.Compiler.is_aggressive_constprop(only(methods(f_constprop_none)))
+@test Core.Compiler.is_no_constprop(only(methods(f_constprop_none)))
+@test !Core.Compiler.is_aggressive_constprop(only(methods(f_constprop_none_inline)))
+@test Core.Compiler.is_no_constprop(only(methods(f_constprop_none_inline)))
 
-# The first test just makes sure that improvements to the compiler don't
-# render the annotation effectless.
-@test Base.return_types(f_nonaggressive, Tuple{Int})[1] == Val
-@test Base.return_types(f_aggressive, Tuple{Int})[1] == Val{1}
+# make sure that improvements to the compiler don't render the annotation effectless.
+@test Base.return_types((Function,)) do f
+    f_constprop_simple(f, 1)
+end |> only == Val
+@test Base.return_types((Function,)) do f
+    f_constprop_aggressive(f, 1)
+end |> only == Val{1}
+@test Base.return_types((Function,)) do f
+    f_constprop_aggressive_noinline(f, 1)
+end |> only == Val{1}
+@test Base.return_types((Function,)) do f
+    f_constprop_none(f, 1)
+end |> only == Val
+@test Base.return_types((Function,)) do f
+    f_constprop_none_inline(f, 1)
+end |> only == Val
 
-# @constprop :none
-@noinline Base.@constprop :none g_noaggressive(flag::Bool) = flag ? 1 : 1.0
-ftrue_noaggressive() = g_noaggressive(true)
-@test only(Base.return_types(ftrue_noaggressive, Tuple{})) == Union{Int,Float64}
-
+# anonymous function support for `@constprop`
+@test Base.return_types((Function,)) do f
+    map((1,2,3)) do x
+        Base.@constprop :aggressive
+        f(x)
+        return Val{x}()
+    end
+end |> only == Tuple{Val{1},Val{2},Val{3}}
 
 function splat_lotta_unions()
     a = Union{Tuple{Int},Tuple{String,Vararg{Int}},Tuple{Int,Vararg{Int}}}[(2,)][1]
