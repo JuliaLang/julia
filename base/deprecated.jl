@@ -333,10 +333,10 @@ end
 
 @eval Threads function nthreads()
     @warn """
-    In julia 1.9+ which supports threadpools (see [link to docs])
+    In julia 1.9+ which supports threadpools (and changing threadpool sizes during runtime),
     use of threads should be in the context of which threadpool is going to be used, so `nthreads()` should be
-    replaced with `nthreads(:default)`, or `nthreads(:interactive)` if interactive threads are requrested.""" maxlog = 1
-    threadpoolsize()
+    replaced with `nthreads(:default)`, or `task_local_storage`, as appropriate.""" maxlog = 1
+    return threadpoolsize()
 end
 
 @eval Threads begin
