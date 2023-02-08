@@ -1655,7 +1655,7 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
             continue
         end
 
-        # Check whether this call was @pure and evaluates to a constant
+        # Check whether this call was total and evaluates to a constant
         if info isa MethodResultPure
             inline_const_if_inlineable!(ir[SSAValue(idx)]) && continue
             info = info.info

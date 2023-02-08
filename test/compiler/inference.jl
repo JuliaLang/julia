@@ -563,27 +563,6 @@ f18450() = ifelse(true, Tuple{Vararg{Int}}, Tuple{Vararg})
 # issue #18569
 @test !Core.Compiler.isconstType(Type{Tuple})
 
-# ensure pure attribute applies correctly to all signatures of fpure
-Base.@pure function fpure(a=rand(); b=rand())
-    # use the `rand` function since it is known to be `@inline`
-    # but would be too big to inline
-    return a + b + rand()
-end
-gpure() = fpure()
-gpure(x::Irrational) = fpure(x)
-@test which(fpure, ()).pure
-@test which(fpure, (typeof(pi),)).pure
-@test !which(gpure, ()).pure
-@test !which(gpure, (typeof(pi),)).pure
-@test code_typed(gpure, ())[1][1].pure
-@test code_typed(gpure, (typeof(π),))[1][1].pure
-@test gpure() == gpure() == gpure()
-@test gpure(π) == gpure(π) == gpure(π)
-
-# Make sure @pure works for functions using the new syntax
-Base.@pure (fpure2(x::T) where T) = T
-@test which(fpure2, (Int64,)).pure
-
 # issue #10880
 function cat10880(a, b)
     Tuple{a.parameters..., b.parameters...}
@@ -4716,8 +4695,8 @@ end |> only === Type{Float64}
 global it_count47688 = 0
 struct CountsIterate47688{N}; end
 function Base.iterate(::CountsIterate47688{N}, n=0) where N
-	global it_count47688 += 1
-	n <= N ? (n, n+1) : nothing
+    global it_count47688 += 1
+    n <= N ? (n, n+1) : nothing
 end
 foo47688() = tuple(CountsIterate47688{5}()...)
 bar47688() = foo47688()

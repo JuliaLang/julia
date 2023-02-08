@@ -2038,13 +2038,13 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     elseif la == 2 &&
            (a2 = argtypes[2]; isa(a2, Const)) && (svecval = a2.val; isa(svecval, SimpleVector)) &&
            istopfunction(f, :length)
-        # mark length(::SimpleVector) as @pure
+        # mark length(::SimpleVector) as total
         return CallMeta(Const(length(svecval)), EFFECTS_TOTAL, MethodResultPure())
     elseif la == 3 &&
            (a2 = argtypes[2]; isa(a2, Const)) && (svecval = a2.val; isa(svecval, SimpleVector)) &&
            (a3 = argtypes[3]; isa(a3, Const)) && (idx = a3.val; isa(idx, Int)) &&
            istopfunction(f, :getindex)
-        # mark getindex(::SimpleVector, i::Int) as @pure
+        # mark getindex(::SimpleVector, i::Int) as total
         if 1 <= idx <= length(svecval) && isassigned(svecval, idx)
             return CallMeta(Const(getindex(svecval, idx)), EFFECTS_TOTAL, MethodResultPure())
         end

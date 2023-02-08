@@ -119,22 +119,10 @@ f() = 2
 # Test that MiniCassette is at least somewhat capable by overdubbing gcd
 @test overdub(Ctx(), gcd, 10, 20) === gcd(10, 20)
 
-# Test that pure propagates for Cassette
-Base.@pure isbitstype(T) = Base.isbitstype(T)
-f31012(T) = Val(isbitstype(T))
-@test @inferred(overdub(Ctx(), f31012, Int64)) == Val(true)
-
 @generated bar(::Val{align}) where {align} = :(42)
 foo(i) = i+bar(Val(1))
 
 @test @inferred(overdub(Ctx(), foo, 1)) == 43
-
-# Check that misbehaving pure functions propagate their error
-Base.@pure func1() = 42
-Base.@pure func2() = (this_is_an_exception; func1())
-func3() = func2()
-@test_throws UndefVarError func3()
-
 
 # overlay method tables
 # =====================
