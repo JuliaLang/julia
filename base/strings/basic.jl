@@ -626,7 +626,7 @@ function isascii(s::AbstractString)
     l = ncodeunits(s)
     l < chunk_size && return _isascii(bytes, 1, l)
     for n = 1:chunk_size:l
-        _isascii(bytes, n, n + chunk_size - 1) || return false
+        _isascii(bytes, n, min(l,n + chunk_size - 1)) || return false
     end
     return true
 end
