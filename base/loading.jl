@@ -1637,6 +1637,8 @@ end
 
 require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
 
+const REPL_PKGID = PkgId(UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL")
+
 function _require_prelocked(uuidkey::PkgId, env=nothing)
     assert_havelock(require_lock)
     if !root_module_exists(uuidkey)
@@ -1648,6 +1650,9 @@ function _require_prelocked(uuidkey::PkgId, env=nothing)
         insert_extension_triggers(uuidkey)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
+        if uuidkey == REPL_PKGID
+            REPL_MODULE_REF[] = newm
+        end
     else
         newm = root_module(uuidkey)
     end

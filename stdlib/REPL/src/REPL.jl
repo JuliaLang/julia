@@ -71,10 +71,6 @@ include("docview.jl")
 
 @nospecialize # use only declared type signatures
 
-function __init__()
-    Base.REPL_MODULE_REF[] = REPL
-end
-
 answer_color(::AbstractREPL) = ""
 
 const JULIA_PROMPT = "julia> "
