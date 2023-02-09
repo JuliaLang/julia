@@ -29,7 +29,7 @@ using Core.Compiler: -, +, :, Vector, length, first, empty!, push!, pop!, @inlin
 struct InferenceFrameInfo
     mi::Core.MethodInstance
     world::UInt64
-    sptypes::Vector{Any}
+    sptypes::Vector{Core.Compiler.VarState}
     slottypes::Vector{Any}
     nargs::Int
 end
@@ -89,7 +89,7 @@ function reset_timings()
     empty!(_timings)
     push!(_timings, Timing(
         # The MethodInstance for ROOT(), and default empty values for other fields.
-        InferenceFrameInfo(ROOTmi, 0x0, Any[], Any[Core.Const(ROOT)], 1),
+        InferenceFrameInfo(ROOTmi, 0x0, Core.Compiler.VarState[], Any[Core.Const(ROOT)], 1),
         _time_ns()))
     return nothing
 end
