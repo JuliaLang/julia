@@ -362,6 +362,18 @@ export PKG_CONFIG_LIBDIR = $(JULIAHOME)/usr/lib/pkgconfig
 # Figure out OS and architecture
 BUILD_OS := $(shell uname)
 
+# Set ISMSYS_MINGW64 to 0 or 1
+OSNAME := $(shell uname -o | tr '[:lower:]' '[:upper:]')
+ISMSYS_MINGW64 := 0
+ifneq (,$(findstring MSYS,$(OSNAME)))
+TRIPLET := $(shell $(CC) -dumpmachine)
+ifneq (,$(findstring w64,$(TRIPLET)))
+ifneq (,$(findstring mingw,$(TRIPLET)))
+override ISMSYS_MINGW64 := 1
+endif
+endif
+endif
+
 ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
 XC_HOST ?= $(shell uname -m)-w64-mingw32
 endif
@@ -621,7 +633,11 @@ endif
 ifeq ($(OS), FreeBSD)
 LOCALBASE ?= /usr/local
 else
+ifeq (1,$(ISMSYS_MINGW64))
+LOCALBASE ?= $(MINGW_PREFIX)
+else
 LOCALBASE ?= /usr
+endif
 endif
 
 ifeq (exists, $(shell [ -e $(JULIAHOME)/$(MAKE_USER_FNAME) ] && echo exists ))

@@ -27,8 +27,12 @@ endif
 ifneq ($(VERBOSE), 0)
 CMAKE_COMMON += -DCMAKE_VERBOSE_MAKEFILE=ON
 endif
+ifeq (1,$(ISMSYS_MINGW64))
+CMAKE_COMMON += -DCMAKE_C_COMPILER="$$(cygpath -m $$(which $(CC_BASE)))"
+else
 # The call to which here is to work around https://cmake.org/Bug/view.php?id=14366
 CMAKE_COMMON += -DCMAKE_C_COMPILER="$$(which $(CC_BASE))"
+endif
 ifneq ($(strip $(CMAKE_CC_ARG)),)
 CMAKE_COMMON += -DCMAKE_C_COMPILER_ARG1="$(CMAKE_CC_ARG) $(SANITIZE_OPTS)"
 endif
@@ -47,7 +51,11 @@ endif
 ifeq ($(CMAKE_GENERATOR),Ninja)
 CMAKE_GENERATOR_COMMAND := -G Ninja
 else ifeq ($(CMAKE_GENERATOR),make)
+ifeq (1,$(ISMSYS_MINGW64))
+CMAKE_GENERATOR_COMMAND := -G "MSYS Makefiles"
+else
 CMAKE_GENERATOR_COMMAND := -G "Unix Makefiles"
+endif
 else
 $(error Unknown CMake generator '$(CMAKE_GENERATOR)'. Options are 'Ninja' and 'make')
 endif
@@ -159,11 +167,18 @@ reinstall-$(strip $1):
 	+$$(MAKE) stage-$(strip $1)
 	+$$(MAKE) install-$(strip $1)
 
+ifeq (1,$(ISMSYS_MINGW64))
+# MSys2 has issues with symbolic links
+CREATE_TAR_FLAGS := --dereference -cf
+else
+CREATE_TAR_FLAGS := -cf
+endif
+
 $$(build_staging)/$2.tar: $$(BUILDDIR)/$2/build-compiled
 	rm -rf $$(build_staging)/$2
 	mkdir -p $$(build_staging)/$2$$(build_prefix)
 	$(call $3,$$(BUILDDIR)/$2,$$(build_staging)/$2,$4)
-	cd $$(build_staging)/$2$$(build_prefix) && $$(TAR) -cf $$@.tmp .
+	cd $$(build_staging)/$2$$(build_prefix) && $$(TAR) $$(CREATE_TAR_FLAGS) $$@.tmp .
 	rm -rf $$(build_staging)/$2
 	mv $$@.tmp $$@
 
