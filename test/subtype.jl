@@ -2317,3 +2317,7 @@ end
 let a = (isodd(i) ? Pair{Char, String} : Pair{String, String} for i in 1:2000)
     @test Tuple{Type{Pair{Union{Char, String}, String}}, a...} <: Tuple{Type{Pair{K, V}}, Vararg{Pair{A, B} where B where A}} where V where K
 end
+
+#issue 48582
+@test !<:(Tuple{Pair{<:T,<:T}, Val{S} where {S}} where {T<:Base.BitInteger},
+          Tuple{Pair{<:T,<:T}, Val{Int}} where {T<:Base.BitInteger})
