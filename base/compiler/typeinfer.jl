@@ -293,7 +293,9 @@ function CodeInstance(
     result_type = result.result
     @assert !(result_type isa LimitedAccuracy)
 
-    if isa(result_type, Const) && is_total(result.ipo_effects)
+    if isa(result_type, Const) && is_foldable(result.ipo_effects) &&
+                                  is_nothrow(result.ipo_effects) &&
+                                  is_inlineable_constant(result_type.val)
         # use constant calling convention
         rettype_const = result_type.val
         const_flags = 0x3
@@ -372,7 +374,7 @@ function transform_result_for_cache(interp::AbstractInterpreter,
         inferred_result = maybe_compress_codeinfo(interp, linfo, inferred_result)
     end
     # The global cache can only handle objects that codegen understands
-    if !isa(inferred_result, Union{CodeInfo, Vector{UInt8}})
+    if !isa(inferred_result, MaybeCompressed)
         inferred_result = nothing
     end
     return inferred_result
