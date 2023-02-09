@@ -316,9 +316,9 @@ end
     @test typemin(Int64  ) === Int64(-9223372036854775808)
     @test typemax(Int64  ) === Int64(9223372036854775807)
     @test typemin(UInt64 ) === UInt64(0)
-    @test typemax(UInt64 ) === UInt64(0xffffffffffffffff)
+    @test typemax(UInt64 ) === UInt64(0xffff_ffff_ffff_ffff)
     @test typemin(UInt128) === UInt128(0)
-    @test typemax(UInt128) === UInt128(0xffffffffffffffffffffffffffffffff)
+    @test typemax(UInt128) === UInt128(0xffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff)
     @test typemin(Int128 ) === Int128(-170141183460469231731687303715884105728)
     @test typemax(Int128 ) === Int128(170141183460469231731687303715884105727)
 end
