@@ -1020,7 +1020,7 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
                 elapsed = round((time_ns() - t_before) / 1e6, digits = 1)
                 comp_time, recomp_time = cumulative_compile_time_ns() .- t_comp_before
                 print(lpad(elapsed, 9), " ms  ")
-                for extid in EXT_DORMITORY
+                for extid in values(EXT_DORMITORY)
                     if extid.id == pkg
                         print(extid.parentid.name, " → ")
                         break
@@ -1200,7 +1200,7 @@ function run_extension_callbacks(pkgid::PkgId)
     # take ownership of extids that depend on this pkgid
     extids = pop!(EXT_DORMITORY, pkgid, nothing)
     extids === nothing && return
-    for extid in extids
+    for extid in values(extids)
         if extid.ntriggers > 0
             # It is possible that pkgid was loaded in an environment
             # below the one of the parent. This will cause a load failure when the
