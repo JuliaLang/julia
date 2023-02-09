@@ -32,7 +32,7 @@ export
 # get and set current directory
 
 """
-    pwd() -> AbstractString
+    pwd() -> String
 
 Get the current working directory.
 
@@ -1109,7 +1109,7 @@ function symlink(target::AbstractString, link::AbstractString;
 end
 
 """
-    readlink(path::AbstractString) -> AbstractString
+    readlink(path::AbstractString) -> String
 
 Return the target location a symbolic link `path` points to.
 """

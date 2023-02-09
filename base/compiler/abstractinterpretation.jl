@@ -2034,7 +2034,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             fargs = nothing
         end
         argtypes = Any[typeof(<:), argtypes[3], argtypes[2]]
-        return CallMeta(abstract_call_known(interp, <:, ArgInfo(fargs, argtypes), si, sv, max_methods).rt, EFFECTS_TOTAL, NoCallInfo())
+        return abstract_call_known(interp, <:, ArgInfo(fargs, argtypes), si, sv, max_methods)
     elseif la == 2 &&
            (a2 = argtypes[2]; isa(a2, Const)) && (svecval = a2.val; isa(svecval, SimpleVector)) &&
            istopfunction(f, :length)
@@ -2189,9 +2189,17 @@ function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::
     head = e.head
     if head === :static_parameter
         n = e.args[1]::Int
+        nothrow = false
         if 1 <= n <= length(sv.sptypes)
             rt = sv.sptypes[n]
+            if is_maybeundefsp(rt)
+                rt = unwrap_maybeundefsp(rt)
+            else
+                nothrow = true
+            end
         end
+        merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; nothrow))
+        return rt
     elseif head === :boundscheck
         if isa(sv, InferenceState)
             # If there is no particular `@inbounds` for this function, then we only taint `:noinbounds`,
@@ -2452,8 +2460,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         elseif isexpr(sym, :static_parameter)
             n = sym.args[1]::Int
             if 1 <= n <= length(sv.sptypes)
-                spty = sv.sptypes[n]
-                if isa(spty, Const)
+                if !is_maybeundefsp(sv.sptypes, n)
                     t = Const(true)
                 end
             end
@@ -2893,6 +2900,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         empty!(frame.pclimitations)
                         @goto find_next_bb
                     end
+                    orig_condt = condt
                     if !(isa(condt, Const) || isa(condt, Conditional)) && isa(condx, SlotNumber)
                         # if this non-`Conditional` object is a slot, we form and propagate
                         # the conditional constraint on it
@@ -2924,6 +2932,14 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                             handle_control_backedge!(interp, frame, currpc, stmt.dest)
                             @goto branch
                         else
+                            if !⊑(𝕃ᵢ, orig_condt, Bool)
+                                merge_effects!(interp, frame, EFFECTS_THROWS)
+                                if !hasintersect(widenconst(orig_condt), Bool)
+                                    ssavaluetypes[currpc] = Bottom
+                                    @goto find_next_bb
+                                end
+                            end
+
                             # We continue with the true branch, but process the false
                             # branch here.
                             if isa(condt, Conditional)

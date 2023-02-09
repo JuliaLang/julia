@@ -267,9 +267,9 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
     if isa(stmt, Expr)
         (; head, args) = stmt
         if head === :static_parameter
-            etyp = (isa(src, IRCode) ? src.sptypes : src.ir.sptypes)[args[1]::Int]
             # if we aren't certain enough about the type, it might be an UndefVarError at runtime
-            nothrow = isa(etyp, Const)
+            sptypes = isa(src, IRCode) ? src.sptypes : src.ir.sptypes
+            nothrow = !is_maybeundefsp(sptypes, args[1]::Int)
             return (true, nothrow, nothrow)
         end
         if head === :call
@@ -377,7 +377,7 @@ function argextype(
     sptypes::Vector{Any}, slottypes::Vector{Any})
     if isa(x, Expr)
         if x.head === :static_parameter
-            return sptypes[x.args[1]::Int]
+            return unwrap_maybeundefsp(sptypes, x.args[1]::Int)
         elseif x.head === :boundscheck
             return Bool
         elseif x.head === :copyast

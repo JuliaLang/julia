@@ -2242,7 +2242,7 @@ JL_DLLEXPORT int jl_gc_mark_queue_obj(jl_ptls_t ptls, jl_value_t *obj)
 JL_DLLEXPORT void jl_gc_mark_queue_objarray(jl_ptls_t ptls, jl_value_t *parent,
                                             jl_value_t **objs, size_t nobjs)
 {
-    uintptr_t nptr = (nobjs << 2) & (jl_astaggedvalue(parent)->bits.gc & 3);
+    uintptr_t nptr = (nobjs << 2) | (jl_astaggedvalue(parent)->bits.gc & 2);
     gc_mark_objarray(ptls, parent, objs, objs + nobjs, 1, nptr);
 }
 
@@ -2540,7 +2540,7 @@ void gc_mark_loop_(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
     while (1) {
         void *new_obj = (void *)gc_markqueue_pop(&ptls->mark_queue);
         // No more objects to mark
-        if (new_obj == NULL) {
+        if (__unlikely(new_obj == NULL)) {
             // TODO: work-stealing comes here...
             return;
         }
@@ -2850,16 +2850,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
             gc_cblist_root_scanner, (collection));
     }
     gc_mark_loop(ptls);
-    gc_num.since_sweep += gc_num.allocd;
-    JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes);
-    gc_settime_premark_end();
-    gc_time_mark_pause(gc_start_time, scanned_bytes, perm_scanned_bytes);
-    uint64_t end_mark_time = jl_hrtime();
-    uint64_t mark_time = end_mark_time - start_mark_time;
-    gc_num.mark_time = mark_time;
-    gc_num.total_mark_time += mark_time;
-    int64_t actual_allocd = gc_num.since_sweep;
-    // marking is over
 
     // 4. check for objects to finalize
     clear_weak_refs();
@@ -2897,7 +2887,18 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_mark_finlist(mq, &to_finalize, 0);
     gc_mark_loop(ptls);
     mark_reset_age = 0;
+
+    gc_num.since_sweep += gc_num.allocd;
+    JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes);
+    gc_settime_premark_end();
+    gc_time_mark_pause(gc_start_time, scanned_bytes, perm_scanned_bytes);
+    uint64_t end_mark_time = jl_hrtime();
+    uint64_t mark_time = end_mark_time - start_mark_time;
+    gc_num.mark_time = mark_time;
+    gc_num.total_mark_time += mark_time;
+    int64_t actual_allocd = gc_num.since_sweep;
     gc_settime_postmark_end();
+    // marking is over
 
     // Flush everything in mark cache
     gc_sync_all_caches_nolock(ptls);

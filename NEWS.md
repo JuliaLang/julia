@@ -49,7 +49,7 @@ Standard library changes
 
 
 #### Printf
-
+* Format specifiers now support dynamic width and precision, e.g. `%*s` and `%*.*g` ([#40105]).
 
 #### Profile
 

@@ -216,7 +216,7 @@ end
 function typ_for_val(@nospecialize(x), ci::CodeInfo, sptypes::Vector{Any}, idx::Int, slottypes::Vector{Any})
     if isa(x, Expr)
         if x.head === :static_parameter
-            return sptypes[x.args[1]::Int]
+            return unwrap_maybeundefsp(sptypes, x.args[1]::Int)
         elseif x.head === :boundscheck
             return Bool
         elseif x.head === :copyast
