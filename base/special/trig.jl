@@ -33,11 +33,12 @@ function sin(x::T) where T<:Union{Float32, Float64}
             return x
         end
         return sin_kernel(x)
-    elseif isnan(x)
-        return T(NaN)
-    elseif isinf(x)
-        sin_domain_error(x)
     end
+    if !isfinite(x)
+        isnan(x) && return x
+	sin_domain_error(x)
+    end
+
     n, y = rem_pio2_kernel(x)
     n = n&3
     if n == 0
@@ -102,22 +103,21 @@ function cos(x::T) where T<:Union{Float32, Float64}
             return T(1.0)
         end
         return cos_kernel(x)
-    elseif isnan(x)
-        return T(NaN)
-    elseif isinf(x)
+    end
+    if !isfinite(x)
+        isnan(x) && return x
         cos_domain_error(x)
+    end
+    n, y = rem_pio2_kernel(x)
+    n = n&3
+    if n == 0
+	return cos_kernel(y)
+    elseif n == 1
+	return -sin_kernel(y)
+    elseif n == 2
+	return -cos_kernel(y)
     else
-        n, y = rem_pio2_kernel(x)
-        n = n&3
-        if n == 0
-            return cos_kernel(y)
-        elseif n == 1
-            return -sin_kernel(y)
-        elseif n == 2
-            return -cos_kernel(y)
-        else
-            return sin_kernel(y)
-        end
+	return sin_kernel(y)
     end
 end
 
@@ -178,9 +178,9 @@ function sincos(x::T) where T<:Union{Float32, Float64}
             return x, one(T)
         end
         return sincos_kernel(x)
-    elseif isnan(x)
-        return T(NaN), T(NaN)
-    elseif isinf(x)
+    end
+    if !isfinite(x)
+        isnan(x) && return x, x
         sincos_domain_error(x)
     end
     n, y = rem_pio2_kernel(x)
@@ -220,9 +220,9 @@ function tan(x::T) where T<:Union{Float32, Float64}
             return x
         end
         return tan_kernel(x)
-    elseif isnan(x)
-        return T(NaN)
-    elseif isinf(x)
+    end
+    if !isfinite(x)
+        isnan(x) && return x
         tan_domain_error(x)
     end
     n, y = rem_pio2_kernel(x)
@@ -582,9 +582,8 @@ function atan(y::T, x::T) where T<:Union{Float32, Float64}
     #    S8) ATAN2(+-INF,+INF ) is +-pi/4 ;
     #    S9) ATAN2(+-INF,-INF ) is +-3pi/4;
     #    S10) ATAN2(+-INF, (anything but,0,NaN, and INF)) is +-pi/2;
-    if isnan(x) || isnan(y) # S1 or S2
-        return T(NaN)
-    end
+    isnan(x) && return x
+    isnan(y) && return y
 
     if x == T(1.0) # then y/x = y and x > 0, see M2
         return atan(y)
@@ -724,62 +723,72 @@ function acos(x::T) where T <: Union{Float32, Float64}
 end
 
 # Uses minimax polynomial of sin(π * x) for π * x in [0, .25]
-@inline function sinpi_kernel(x::Float64)
-    sinpi_kernel_wide(x)
+# scale allows the same code to be used for sind. Constant-folding makes both sinpi
+# and sind efficient.
+# Note: 180^9 overflows Int64, so pass in 180.0 as scale for sind and cosd.
+@inline function sinpi_kernel(x::Float64, scale=1)
+    sinpi_kernel_wide(x, scale)
 end
-@inline function sinpi_kernel_wide(x::Float64)
+@inline function sinpi_kernel_wide(x::Float64, scale=1)
     x² = x*x
     x⁴ = x²*x²
-    r  = evalpoly(x², (2.5501640398773415, -0.5992645293202981, 0.08214588658006512,
-                       -7.370429884921779e-3, 4.662827319453555e-4, -2.1717412523382308e-5))
-    return muladd(3.141592653589793, x, x*muladd(-5.16771278004997,
-                  x², muladd(x⁴, r,  1.2245907532225998e-16)))
+    r  = evalpoly(x², (2.5501640398773415 / scale^5, -0.5992645293202981 / scale^7,
+                       0.08214588658006512 / scale^9, -7.370429884921779e-3 / scale^11,
+		       4.662827319453555e-4 / scale^13, -2.1717412523382308e-5 / scale^15))
+    return muladd(3.141592653589793 / scale, x,
+                  x*muladd(-5.16771278004997 / scale^3, x²,
+		           muladd(x⁴, r,  1.2245907532225998e-16 / scale)))
 end
-@inline function sinpi_kernel(x::Float32)
-    Float32(sinpi_kernel_wide(x))
+@inline function sinpi_kernel(x::Float32, scale=1)
+    Float32(sinpi_kernel_wide(x, scale))
 end
-@inline function sinpi_kernel_wide(x::Float32)
+@inline function sinpi_kernel_wide(x::Float32, scale=1)
     x = Float64(x)
-    return x*evalpoly(x*x, (3.1415926535762266, -5.167712769188119,
-                            2.5501626483206374, -0.5992021090314925, 0.08100185277841528))
+    return x*evalpoly(x*x, (3.1415926535762266 / scale, -5.167712769188119 / scale^3,
+                            2.5501626483206374 / scale^5, -0.5992021090314925 / scale^7,
+			    0.08100185277841528 / scale^9))
 end
 
-@inline function sinpi_kernel(x::Float16)
-    Float16(sinpi_kernel_wide(x))
+@inline function sinpi_kernel(x::Float16, scale=1)
+    Float16(sinpi_kernel_wide(x, scale))
 end
-@inline function sinpi_kernel_wide(x::Float16)
+@inline function sinpi_kernel_wide(x::Float16, scale=1)
     x = Float32(x)
-    return x*evalpoly(x*x, (3.1415927f0, -5.1677127f0, 2.5501626f0, -0.5992021f0, 0.081001855f0))
+    return x*evalpoly(x*x, (Float32(3.1415926535762266 / scale), Float32(-5.167712769188119 / scale^3),
+                            Float32(2.5501626483206374 / scale^5), Float32(-0.5992021090314925 / scale^7), Float32(0.08100185277841528 / scale^9)))
 end
 
 # Uses minimax polynomial of cos(π * x) for π * x in [0, .25]
-@inline function cospi_kernel(x::Float64)
-    cospi_kernel_wide(x)
+@inline function cospi_kernel(x::Float64, scale=1)
+    cospi_kernel_wide(x, scale)
 end
-@inline function cospi_kernel_wide(x::Float64)
+@inline function cospi_kernel_wide(x::Float64, scale=1)
     x² = x*x
-    r = x²*evalpoly(x², (4.058712126416765, -1.3352627688537357, 0.23533063027900392,
-                         -0.025806887811869204, 1.9294917136379183e-3, -1.0368935675474665e-4))
-    a_x² = 4.934802200544679 * x²
-    a_x²lo = muladd(3.109686485461973e-16, x², muladd(4.934802200544679, x², -a_x²))
+    r = x²*evalpoly(x², (4.058712126416765 / scale^4, -1.3352627688537357 / scale^6, 0.23533063027900392 / scale^8,
+                         -0.025806887811869204 / scale^10, 1.9294917136379183e-3 / scale^12, -1.0368935675474665e-4 / scale^14))
+    a_x² = 4.934802200544679 / scale^2 * x²
+    a_x²lo = muladd(3.109686485461973e-16 / scale^2, x², muladd(4.934802200544679 / scale^2, x², -a_x²))
 
     w  = 1.0-a_x²
     return w + muladd(x², r, ((1.0-w)-a_x²) - a_x²lo)
 end
-@inline function cospi_kernel(x::Float32)
-    Float32(cospi_kernel_wide(x))
+@inline function cospi_kernel(x::Float32, scale=1)
+    Float32(cospi_kernel_wide(x, scale))
 end
-@inline function cospi_kernel_wide(x::Float32)
+@inline function cospi_kernel_wide(x::Float32, scale=1)
     x = Float64(x)
-    return evalpoly(x*x, (1.0, -4.934802200541122, 4.058712123568637,
-                          -1.3352624040152927, 0.23531426791507182, -0.02550710082498761))
+    return evalpoly(x*x, (1.0, -4.934802200541122 / scale^2, 4.058712123568637 / scale^4,
+                          -1.3352624040152927 / scale^6, 0.23531426791507182 / scale^8,
+			  -0.02550710082498761 / scale^10))
 end
-@inline function cospi_kernel(x::Float16)
-    Float16(cospi_kernel_wide(x))
+@inline function cospi_kernel(x::Float16, scale=1)
+    Float16(cospi_kernel_wide(x, scale))
 end
-@inline function cospi_kernel_wide(x::Float16)
+@inline function cospi_kernel_wide(x::Float16, scale=1)
     x = Float32(x)
-    return evalpoly(x*x, (1.0f0, -4.934802f0, 4.058712f0, -1.3352624f0, 0.23531426f0, -0.0255071f0))
+    return evalpoly(x*x, (1.0f0, Float32(-4.934802200541122 / scale^2), Float32(4.058712123568637 / scale^4),
+                          Float32(-1.3352624040152927 / scale^6), Float32(0.23531426791507182 / scale^8),
+			  Float32(-0.02550710082498761 / scale^10)))
 end
 
 """
@@ -790,11 +799,11 @@ Compute ``\\sin(\\pi x)`` more accurately than `sin(pi*x)`, especially for large
 See also [`sind`](@ref), [`cospi`](@ref), [`sincospi`](@ref).
 """
 function sinpi(_x::T) where T<:Union{IEEEFloat, Rational}
-    x = abs(_x)
-    if !isfinite(x)
-        isnan(x) && return x
-        throw(DomainError(x, "`x` cannot be infinite."))
+    if !isfinite(_x)
+        isnan(_x) && return _x
+        throw(DomainError(_x, "`x` cannot be infinite."))
     end
+    x = abs(_x)
     # For large x, answers are all 1 or zero.
     if T <: AbstractFloat
         x >= maxintfloat(T) && return copysign(zero(T), _x)
@@ -804,11 +813,11 @@ function sinpi(_x::T) where T<:Union{IEEEFloat, Rational}
     n = round(2*x)
     rx = float(muladd(T(-.5), n, x))
     n = Int64(n) & 3
-    if n==0
+    if n == 0
         res = sinpi_kernel(rx)
-    elseif n==1
+    elseif n == 1
         res = cospi_kernel(rx)
-    elseif n==2
+    elseif n == 2
         res = zero(T)-sinpi_kernel(rx)
     else
         res = zero(T)-cospi_kernel(rx)
@@ -821,11 +830,11 @@ end
 Compute ``\\cos(\\pi x)`` more accurately than `cos(pi*x)`, especially for large `x`.
 """
 function cospi(x::T) where T<:Union{IEEEFloat, Rational}
-    x = abs(x)
     if !isfinite(x)
         isnan(x) && return x
         throw(DomainError(x, "`x` cannot be infinite."))
     end
+    x = abs(x)
     # For large x, answers are all 1 or zero.
     if T <: AbstractFloat
         x >= maxintfloat(T) && return one(T)
@@ -835,11 +844,11 @@ function cospi(x::T) where T<:Union{IEEEFloat, Rational}
     n = round(2*x)
     rx = float(muladd(T(-.5), n, x))
     n = Int64(n) & 3
-    if n==0
+    if n == 0
         return cospi_kernel(rx)
-    elseif n==1
+    elseif n == 1
         return zero(T)-sinpi_kernel(rx)
-    elseif n==2
+    elseif n == 2
         return zero(T)-cospi_kernel(rx)
     else
         return sinpi_kernel(rx)
@@ -857,11 +866,11 @@ where `x` is in radians), returning a tuple `(sine, cosine)`.
 See also: [`cispi`](@ref), [`sincosd`](@ref), [`sinpi`](@ref).
 """
 function sincospi(_x::T) where T<:Union{IEEEFloat, Rational}
-    x = abs(_x)
-    if !isfinite(x)
-        isnan(x) && return x, x
-        throw(DomainError(x, "`x` cannot be infinite."))
+    if !isfinite(_x)
+        isnan(_x) && return _x, _x
+        throw(DomainError(_x, "`x` cannot be infinite."))
     end
+    x = abs(_x)
     # For large x, answers are all 1 or zero.
     if T <: AbstractFloat
         x >= maxintfloat(T) && return (copysign(zero(T), _x), one(T))
@@ -899,11 +908,11 @@ See also [`tand`](@ref), [`sinpi`](@ref), [`cospi`](@ref), [`sincospi`](@ref).
 function tanpi(_x::T) where T<:Union{IEEEFloat, Rational}
     # This is modified from sincospi.
     # Would it be faster or more accurate to make a tanpi_kernel?
-    x = abs(_x)
-    if !isfinite(x)
-        isnan(x) && return x
-        throw(DomainError(x, "`x` cannot be infinite."))
+    if !isfinite(_x)
+        isnan(_x) && return _x
+        throw(DomainError(_x, "`x` cannot be infinite."))
     end
+    x = abs(_x)
     # For large x, answers are all zero.
     # All integer values for floats larger than maxintfloat are even.
     if T <: AbstractFloat
@@ -1188,33 +1197,38 @@ deg2rad_ext(x::Float32) = DoubleFloat32(deg2rad(Float64(x)))
 deg2rad_ext(x::Real) = deg2rad(x) # Fallback
 
 function sind(x::Real)
-    if isinf(x)
-        return throw(DomainError(x, "`x` cannot be infinite."))
-    elseif isnan(x)
-        return oftype(x,NaN)
+    if !isfinite(x)
+        isnan(x) && return x
+        throw(DomainError(x, "`x` cannot be infinite."))
     end
 
     rx = copysign(float(rem(x,360)),x)
     arx = abs(rx)
 
-    if rx == zero(rx)
-        return rx
-    elseif arx < oftype(rx,45)
-        return sin_kernel(deg2rad_ext(rx))
-    elseif arx <= oftype(rx,135)
-        y = deg2rad_ext(oftype(rx,90) - arx)
-        return copysign(cos_kernel(y),rx)
-    elseif arx == oftype(rx,180)
-        return copysign(zero(rx),rx)
+    if arx <= oftype(rx,135)
+        if arx < oftype(rx,45)
+            if rx == zero(rx)
+                return rx
+            else
+                return sinpi_kernel(rx, 180.0)
+            end
+        else
+            y = oftype(rx,90) - arx
+            return copysign(cospi_kernel(y, 180.0),rx)
+        end
     elseif arx < oftype(rx,225)
-        y = deg2rad_ext((oftype(rx,180) - arx)*sign(rx))
-        return sin_kernel(y)
+        if arx == oftype(rx,180)
+            return copysign(zero(rx),rx)
+        else
+            y = (oftype(rx,180) - arx)*sign(rx)
+            return sinpi_kernel(y, 180.0)
+        end
     elseif arx <= oftype(rx,315)
-        y = deg2rad_ext(oftype(rx,270) - arx)
-        return -copysign(cos_kernel(y),rx)
+        y = oftype(rx,270) - arx
+        return -copysign(cospi_kernel(y, 180.0),rx)
     else
-        y = deg2rad_ext(rx - copysign(oftype(rx,360),rx))
-        return sin_kernel(y)
+        y = rx - copysign(oftype(rx,360),rx)
+        return sinpi_kernel(y, 180.0)
     end
 end
 
@@ -1222,25 +1236,27 @@ function cosd(x::Real)
     if isinf(x)
         return throw(DomainError(x, "`x` cannot be infinite."))
     elseif isnan(x)
-        return oftype(x,NaN)
+        return x
     end
 
     rx = abs(float(rem(x,360)))
 
-    if rx <= oftype(rx,45)
-        return cos_kernel(deg2rad_ext(rx))
-    elseif rx < oftype(rx,135)
-        y = deg2rad_ext(oftype(rx,90) - rx)
-        return sin_kernel(y)
+    if rx < oftype(rx,135)
+        if rx <= oftype(rx,45)
+            return cospi_kernel(rx, 180.0)
+        else
+            y = oftype(rx,90) - rx
+            return sinpi_kernel(y, 180.0)
+        end
     elseif rx <= oftype(rx,225)
-        y = deg2rad_ext(oftype(rx,180) - rx)
-        return -cos_kernel(y)
+        y = oftype(rx,180) - rx
+        return -cospi_kernel(y, 180.0)
     elseif rx < oftype(rx,315)
-        y = deg2rad_ext(rx - oftype(rx,270))
-        return sin_kernel(y)
+        y = rx - oftype(rx,270)
+        return sinpi_kernel(y, 180.0)
     else
-        y = deg2rad_ext(oftype(rx,360) - rx)
-        return cos_kernel(y)
+        y = oftype(rx,360) - rx
+        return cospi_kernel(y, 180.0)
     end
 end
 
