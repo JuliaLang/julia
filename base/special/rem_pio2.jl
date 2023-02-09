@@ -91,7 +91,7 @@ end
         end
     end
     y2 = (r-y1)-w
-    return unsafe_trunc(Int, fn), DoubleFloat64(y1, y2)
+    return Base.Math.mangleNaN(unsafe_trunc(Int, fn), DoubleFloat64(y1, y2))
 end
 
 
@@ -103,7 +103,7 @@ and the significand of `z1` has 27 trailing zeros.
 """
 function fromfraction(f::Int128)
     if f == 0
-        return (0.0,0.0)
+        return Base.Math.mangleNaN((0.0,0.0))
     end
 
     # 1. get leading term truncated to 26 bits
@@ -117,13 +117,13 @@ function fromfraction(f::Int128)
     # 2. compute remaining term
     x2 = (x - (UInt128(m1) << (n1-53)))
     if x2 == 0
-        return (z1, 0.0)
+        return Base.Math.mangleNaN((z1, 0.0))
     end
     n2 = Base.top_set_bit(x2)
     m2 = (x2 >> (n2-53)) % UInt64
     d2 = ((n2-128+1021) % UInt64) << 52
     z2 = reinterpret(Float64,  s | (d2 + m2))
-    return (z1,z2)
+    return Base.Math.mangleNaN((z1,z2))
 end
 
 # XXX we want to mark :consistent-cy here so that this function can be concrete-folded,
@@ -209,7 +209,7 @@ Base.@assume_effects :consistent function paynehanek(x::Float64)
     pio2_lo = -1.3909067614167116e-8
     y_hi = (z_hi+z_lo)*pio2
     y_lo = (((z_hi*pio2_hi - y_hi) + z_hi*pio2_lo) + z_lo*pio2_hi) + z_lo*pio2_lo
-    return q, DoubleFloat64(y_hi, y_lo)
+    return Base.Math.mangleNaN(q, DoubleFloat64(y_hi, y_lo))
 end
 
 """
@@ -227,22 +227,22 @@ The remainder is given as a double-double pair.
         #  last five bits of xhp == last five bits of highword(pi/2) or
         #  highword(2pi/2) implies |x| ~= pi/2 or 2pi/2,
         if (xhp & 0xfffff) == 0x921fb # use precise Cody Waite scheme
-            return cody_waite_ext_pio2(x, xhp)
+            return Base.Math.mangleNaN(cody_waite_ext_pio2(x, xhp))
         end
         # use Cody Waite with two constants
         #  xhp <= highword(3pi/4) implies |x| ~<= 3pi/4
         if xhp <= 0x4002d97c
             if x > 0.0
-                return cody_waite_2c_pio2(x, 1.0, 1)
+                return Base.Math.mangleNaN(cody_waite_2c_pio2(x, 1.0, 1))
             else
-                return cody_waite_2c_pio2(x, -1.0, -1)
+                return Base.Math.mangleNaN(cody_waite_2c_pio2(x, -1.0, -1))
             end
         # 3pi/4 < |x| <= 5pi/4
         else
             if x > 0.0
-                return cody_waite_2c_pio2(x, 2.0, 2)
+                return Base.Math.mangleNaN(cody_waite_2c_pio2(x, 2.0, 2))
             else
-                return cody_waite_2c_pio2(x, -2.0, -2)
+                return Base.Math.mangleNaN(cody_waite_2c_pio2(x, -2.0, -2))
             end
         end
     end
@@ -252,34 +252,34 @@ The remainder is given as a double-double pair.
         if xhp <= 0x4015fdbc
             #  xhp == highword(3pi/2) implies |x| ~= 3pi/2
             if xhp == 0x4012d97c # use precise Cody Waite scheme
-                return cody_waite_ext_pio2(x, xhp)
+                return Base.Math.mangleNaN(cody_waite_ext_pio2(x, xhp))
             end
             # use Cody Waite with two constants
             if x > 0.0
-                return cody_waite_2c_pio2(x, 3.0, 3)
+                return Base.Math.mangleNaN(cody_waite_2c_pio2(x, 3.0, 3))
             else
-                return cody_waite_2c_pio2(x, -3.0, -3)
+                return Base.Math.mangleNaN(cody_waite_2c_pio2(x, -3.0, -3))
             end
         # 7pi/4 < |x| =< 9pi/4
         else
             #  xhp == highword(4pi/2) implies |x| ~= 4pi/2
             if xhp == 0x401921fb # use precise Cody Waite scheme
-                return cody_waite_ext_pio2(x, xhp)
+                return Base.Math.mangleNaN(cody_waite_ext_pio2(x, xhp))
             end
             # use Cody Waite with two constants
             if x > 0.0
-                return cody_waite_2c_pio2(x, 4.0, 4)
+                return Base.Math.mangleNaN(cody_waite_2c_pio2(x, 4.0, 4))
             else
-                return cody_waite_2c_pio2(x, -4.0, -4)
+                return Base.Math.mangleNaN(cody_waite_2c_pio2(x, -4.0, -4))
             end
         end
     end
     #  xhp < highword(2.0^20*pi/2) implies |x| ~< 2^20*pi/2
     if xhp < 0x413921fb # use precise Cody Waite scheme
-        return cody_waite_ext_pio2(x, xhp)
+        return Base.Math.mangleNaN(cody_waite_ext_pio2(x, xhp))
     end
     # if |x| >= 2^20*pi/2 switch to Payne Hanek
-    return paynehanek(x)
+    return Base.Math.mangleNaN(paynehanek(x))
 end
 
 @inline function rem_pio2_kernel(x::Float32)
@@ -289,8 +289,8 @@ end
         fn = round(xd * (2/pi))
         r  = fma(fn, -pi/2, xd)
         y = fma(fn, -6.123233995736766e-17, r) # big(pi)/2 - pi/2 remainder
-        return unsafe_trunc(Int, fn), DoubleFloat32(y)
+        return Base.Math.mangleNaN(unsafe_trunc(Int, fn), DoubleFloat32(y))
     end
     n, y = @noinline paynehanek(xd)
-    return n, DoubleFloat32(y.hi)
+    return Base.Math.mangleNaN(n, DoubleFloat32(y.hi))
 end

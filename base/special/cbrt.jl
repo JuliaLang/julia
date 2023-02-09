@@ -73,7 +73,7 @@ These implementations assume that NaNs, infinities and zeros have already been f
         u = highword(x) & 0x7fff_ffff
         v = div(u, UInt32(3)) + floor(UInt32, adj * exp2(k))
     end
-    return copysign(fromhighword(T, v), x)
+    return Base.Math.mangleNaN(copysign(fromhighword(T, v), x))
 end
 
 @inline function _improve_cbrt(x::Float32, t::Float32)
@@ -95,7 +95,7 @@ end
     tt3 = tt^3
     tt *= (2*xx + tt3)/(x + 2*tt3)
 
-    return Float32(tt)
+    return Base.Math.mangleNaN(Float32(tt))
 end
 
 @inline function _improve_cbrt(x::Float64, t::Float64)
@@ -136,20 +136,20 @@ end
     w = t+t             # t+t is exact
     r = (r - t)/(w + r) # r-t is exact; w+r ~= 3*t
     t = muladd(t, r, t) # error <= 0.5 + 0.5/3 + epsilon
-    return t
+    return Base.Math.mangleNaN(t)
 end
 
 function cbrt(x::Union{Float32,Float64})
     if !isfinite(x) || iszero(x)
-        return x
+        return Base.Math.mangleNaN(x)
     end
     t = _approx_cbrt(x)
-    return _improve_cbrt(x, t)
+    return Base.Math.mangleNaN(_improve_cbrt(x, t))
 end
 
 function cbrt(a::Float16)
     if !isfinite(a) || iszero(a)
-        return a
+        return Base.Math.mangleNaN(a)
     end
     x = Float32(a)
 
@@ -161,5 +161,5 @@ function cbrt(a::Float16)
     # 2 newton iterations
     t = 0.33333334f0 * (2f0*t + x/(t*t))
     t = 0.33333334f0 * (2f0*t + x/(t*t))
-    return Float16(t)
+    return Base.Math.mangleNaN(Float16(t))
 end

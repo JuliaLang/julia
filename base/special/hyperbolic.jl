@@ -38,7 +38,7 @@ function sinh_kernel(x::Float64)
                              1.6059550718903307e-10, 7.634842144412119e-13,
                              2.9696954760355812e-15))
     hi,lo = exthorner(x2, (1.0, 0.16666666666666635, hi_order))
-    return muladd(x, hi, muladd(x, lo, x*x2lo*0.16666666666666635))
+    return Base.Math.mangleNaN(muladd(x, hi, muladd(x, lo, x*x2lo*0.16666666666666635)))
 end
 # For Float32, using Float64 is simpler, faster, and doesn't require FMA
 function sinh_kernel(x::Float32)
@@ -46,13 +46,13 @@ function sinh_kernel(x::Float32)
     res = evalpoly(x*x, (1.0, 0.1666666779967941, 0.008333336726447933,
                          0.00019841001151414065, 2.7555538207080807e-6,
                          2.5143389765825282e-8, 1.6260094552031644e-10))
-    return Float32(res*x)
+    return Base.Math.mangleNaN(Float32(res*x))
 end
 
 @inline function sinh16_kernel(x::Float32)
     res = evalpoly(x*x, (1.0f0, 0.16666667f0, 0.008333337f0, 0.00019841001f0,
                          2.7555539f-6, 2.514339f-8, 1.6260095f-10))
-    return Float16(res*x)
+    return Base.Math.mangleNaN(Float16(res*x))
 end
 
 function sinh(x::T) where T<:Union{Float32,Float64}
@@ -70,13 +70,13 @@ function sinh(x::T) where T<:Union{Float32,Float64}
 
     absx = abs(x)
     if absx <= SINH_SMALL_X(T)
-        return sinh_kernel(x)
+        return Base.Math.mangleNaN(sinh_kernel(x))
     elseif absx >= H_LARGE_X(T)
         E = exp(T(.5)*absx)
-        return copysign(T(.5)*E*E, x)
+        return Base.Math.mangleNaN(copysign(T(.5)*E*E, x))
     end
     E = exp(absx)
-    return copysign(T(.5)*(E - 1/E),x)
+    return Base.Math.mangleNaN(copysign(T(.5)*(E - 1/E),x))
 end
 
 function Base.sinh(a::Float16)
@@ -84,20 +84,20 @@ function Base.sinh(a::Float16)
     absx = abs(x)
     absx <= SINH_SMALL_X(Float32) && return sinh16_kernel(x)
     E = exp(absx)
-    return Float16(copysign(.5f0*(E - 1/E),x))
+    return Base.Math.mangleNaN(Float16(copysign(.5f0*(E - 1/E),x)))
 end
 
 COSH_SMALL_X(::Type{T}) where T= one(T)
 
 function cosh_kernel(x2::Float32)
-    return evalpoly(x2, (1.0f0, 0.49999997f0, 0.041666888f0, 0.0013882756f0, 2.549933f-5))
+    return Base.Math.mangleNaN(evalpoly(x2, (1.0f0, 0.49999997f0, 0.041666888f0, 0.0013882756f0, 2.549933f-5)))
 end
 
 function cosh_kernel(x2::Float64)
-    return evalpoly(x2, (1.0, 0.5000000000000002, 0.04166666666666269,
+    return Base.Math.mangleNaN(evalpoly(x2, (1.0, 0.5000000000000002, 0.04166666666666269,
                          1.3888888889206764e-3, 2.4801587176784207e-5,
                          2.7557345825742837e-7, 2.0873617441235094e-9,
-                         1.1663435515945578e-11))
+                         1.1663435515945578e-11)))
 end
 
 function cosh(x::T) where T<:Union{Float32,Float64}
@@ -115,13 +115,13 @@ function cosh(x::T) where T<:Union{Float32,Float64}
 
     absx = abs(x)
     if absx <= COSH_SMALL_X(T)
-        return cosh_kernel(x*x)
+        return Base.Math.mangleNaN(cosh_kernel(x*x))
     elseif absx >= H_LARGE_X(T)
         E = exp(T(.5)*absx)
-        return T(.5)*E*E
+        return Base.Math.mangleNaN(T(.5)*E*E)
     end
     E = exp(absx)
-    return T(.5)*(E + 1/E)
+    return Base.Math.mangleNaN(T(.5)*(E + 1/E))
 end
 
 # tanh methods
@@ -130,15 +130,15 @@ TANH_LARGE_X(::Type{Float32}) = 18.0f0
 TANH_SMALL_X(::Type{Float64}) = 1.0
 TANH_SMALL_X(::Type{Float32}) = 1.3862944f0       #2*log(2)
 @inline function tanh_kernel(x::Float64)
-    return evalpoly(x, (1.0, -0.33333333333332904, 0.13333333333267555,
+    return Base.Math.mangleNaN(evalpoly(x, (1.0, -0.33333333333332904, 0.13333333333267555,
                         -0.05396825393066753, 0.02186948742242217,
                         -0.008863215974794633, 0.003591910693118715,
                         -0.0014542587440487815, 0.0005825521659411748,
-                        -0.00021647574085351332, 5.5752458452673005e-5))
+                        -0.00021647574085351332, 5.5752458452673005e-5)))
 end
 @inline function tanh_kernel(x::Float32)
-    return evalpoly(x, (1.0f0, -0.3333312f0, 0.13328037f0,
-                        -0.05350336f0, 0.019975215f0, -0.0050525228f0))
+    return Base.Math.mangleNaN(evalpoly(x, (1.0f0, -0.3333312f0, 0.13328037f0,
+                        -0.05350336f0, 0.019975215f0, -0.0050525228f0)))
 end
 function tanh(x::T) where T<:Union{Float32, Float64}
     # Method
@@ -155,7 +155,7 @@ function tanh(x::T) where T<:Union{Float32, Float64}
     abs2x >= TANH_LARGE_X(T) && return copysign(one(T), x)
     abs2x <= TANH_SMALL_X(T) && return x*tanh_kernel(x*x)
     k = exp(abs2x)
-    return copysign(1 - 2/(k+1), x)
+    return Base.Math.mangleNaN(copysign(1 - 2/(k+1), x))
 end
 
 # Inverse hyperbolic functions
@@ -176,13 +176,13 @@ function asinh(x::T) where T <: Union{Float32, Float64}
     #    d) |x| >= 2^28
     #        return sign(x)*(log(x)+ln2))
     if isnan(x) || isinf(x)
-        return x
+        return Base.Math.mangleNaN(x)
     end
     absx = abs(x)
     if absx < T(2)
         # in a)
         if absx < T(2)^-28
-            return x
+            return Base.Math.mangleNaN(x)
         end
         # in b)
         t = x*x
@@ -195,7 +195,7 @@ function asinh(x::T) where T <: Union{Float32, Float64}
         # in d)
         w = log(absx) + AH_LN2(T)
     end
-    return copysign(w, x)
+    return Base.Math.mangleNaN(copysign(w, x))
 end
 
 # acosh methods
@@ -218,21 +218,21 @@ function acosh(x::T) where T <: Union{Float32, Float64}
     isnan(x) && return x
 
     if x < T(1)
-        return acosh_domain_error(x)
+        return Base.Math.mangleNaN(acosh_domain_error(x))
     elseif x == T(1)
         # in a)
-        return T(0)
+        return Base.Math.mangleNaN(T(0))
     elseif x < T(2)
         # in b)
         t = x - T(1)
-        return log1p(t + sqrt(T(2)*t + t*t))
+        return Base.Math.mangleNaN(log1p(t + sqrt(T(2)*t + t*t)))
     elseif x < T(2)^28
         # in c)
         t = x*x
-        return log(T(2)*x - T(1)/(x+sqrt(t - T(1))))
+        return Base.Math.mangleNaN(log(T(2)*x - T(1)/(x+sqrt(t - T(1)))))
     else
         # in d)
-        return log(x) + AH_LN2(T)
+        return Base.Math.mangleNaN(log(x) + AH_LN2(T))
     end
 end
 
@@ -262,5 +262,5 @@ function atanh(x::T) where T <: Union{Float32, Float64}
         # in b)
         t = log((T(1)+absx)/(T(1)-absx))
     end
-    return T(0.5)*copysign(t, x)
+    return Base.Math.mangleNaN(T(0.5)*copysign(t, x))
 end

@@ -186,7 +186,7 @@ Base.@assume_effects :consistent @inline function log_proc1(y::Float64,mf::Float
     ## Step 4
     m_hi = logbU(Float64, base)
     m_lo = logbL(Float64, base)
-    return fma(m_hi, l_hi, fma(m_hi, (u + (q + l_lo)), m_lo*l_hi))
+    return Base.Math.mangleNaN(fma(m_hi, l_hi, fma(m_hi, (u + (q + l_lo)), m_lo*l_hi)))
 end
 
 # Procedure 2
@@ -212,7 +212,7 @@ end
 
     m_hi = logbU(Float64, base)
     m_lo = logbL(Float64, base)
-    return fma(m_hi, u, fma(m_lo, u, m_hi*fma(fma(-u,f,2(f-u)), g, q)))
+    return Base.Math.mangleNaN(fma(m_hi, u, fma(m_lo, u, m_hi*fma(fma(-u,f,2(f-u)), g, q))))
 end
 
 # Procedure 1
@@ -274,7 +274,7 @@ function _log(x::Float64, base, func)
         # Step 2
         if 0.9394130628134757 < x < 1.0644944589178595
             f = x-1.0
-            return log_proc2(f, base)
+            return Base.Math.mangleNaN(log_proc2(f, base))
         end
 
         # Step 3
@@ -292,7 +292,7 @@ function _log(x::Float64, base, func)
         F = (y + 3.5184372088832e13) - 3.5184372088832e13 # 0x1p-7*round(0x1p7*y)
         f = y-F
 
-        return log_proc1(y,mf,F,f,base)
+        return Base.Math.mangleNaN(log_proc1(y,mf,F,f,base))
     elseif x == 0.0
         -Inf
     elseif isnan(x)
@@ -309,7 +309,7 @@ function _log(x::Float32, base, func)
         # Step 2
         if 0.939413f0 < x < 1.0644945f0
             f = x-1f0
-            return log_proc2(f, base)
+            return Base.Math.mangleNaN(log_proc2(f, base))
         end
 
         # Step 3
@@ -342,11 +342,11 @@ function log1p(x::Float64)
     if x > -1.0
         x == Inf && return x
         if -1.1102230246251565e-16 < x < 1.1102230246251565e-16
-            return x # Inexact
+            return Base.Math.mangleNaN(x) # Inexact
 
         # Step 2
         elseif -0.06058693718652422 < x < 0.06449445891785943
-            return log_proc2(x)
+            return Base.Math.mangleNaN(log_proc2(x))
         end
 
         # Step 3
@@ -375,10 +375,10 @@ function log1p(x::Float32)
     if x > -1f0
         x == Inf32 && return x
         if -5.9604645f-8 < x < 5.9604645f-8
-            return x # Inexact
+            return Base.Math.mangleNaN(x) # Inexact
         # Step 2
         elseif -0.06058694f0 < x < 0.06449446f0
-            return log_proc2(x)
+            return Base.Math.mangleNaN(log_proc2(x))
         end
 
         # Step 3
@@ -552,7 +552,7 @@ const t_log_table_compact = (
  @inline function log_tab_unpack(t::UInt64)
     invc = UInt64(t&UInt64(0xff)|0x1ff00)<<45
     logc = t&(~UInt64(0xff))
-    return (reinterpret(Float64, invc), reinterpret(Float64, logc))
+    return Base.Math.mangleNaN((reinterpret(Float64, invc), reinterpret(Float64, logc)))
 end
 
 # Log implementation that returns 2 numbers which sum to give true value with about 68 bits of precision
@@ -589,5 +589,5 @@ function _log_ext(xu)
     lo4 = t2 - hi + ar2
     p = evalpoly(r, (-0x1.555555555556p-1, 0x1.0000000000006p-1, -0x1.999999959554ep-2, 0x1.555555529a47ap-2, -0x1.2495b9b4845e9p-2, 0x1.0002b8b263fc3p-2))
     lo = lo1 + lo2 + lo3 + muladd(r*ar2, p, lo4)
-    return hi, lo
+    return Base.Math.mangleNaN(hi, lo)
 end

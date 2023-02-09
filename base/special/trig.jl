@@ -30,24 +30,24 @@ function sin(x::T) where T<:Union{Float32, Float64}
     absx = abs(x)
     if absx < T(pi)/4 #|x| ~<= pi/4, no need for reduction
         if absx < sqrt(eps(T))
-            return x
+            return Base.Math.mangleNaN(x)
         end
-        return sin_kernel(x)
+        return Base.Math.mangleNaN(sin_kernel(x))
     elseif isnan(x)
-        return T(NaN)
+        return Base.Math.mangleNaN(T(NaN))
     elseif isinf(x)
         sin_domain_error(x)
     end
     n, y = rem_pio2_kernel(x)
     n = n&3
     if n == 0
-        return sin_kernel(y)
+        return Base.Math.mangleNaN(sin_kernel(y))
     elseif n == 1
-        return cos_kernel(y)
+        return Base.Math.mangleNaN(cos_kernel(y))
     elseif n == 2
-        return -sin_kernel(y)
+        return Base.Math.mangleNaN(-sin_kernel(y))
     else
-        return -cos_kernel(y)
+        return Base.Math.mangleNaN(-cos_kernel(y))
     end
 end
 
@@ -99,24 +99,24 @@ function cos(x::T) where T<:Union{Float32, Float64}
     absx = abs(x)
     if absx < T(pi)/4
         if absx < sqrt(eps(T)/T(2.0))
-            return T(1.0)
+            return Base.Math.mangleNaN(T(1.0))
         end
-        return cos_kernel(x)
+        return Base.Math.mangleNaN(cos_kernel(x))
     elseif isnan(x)
-        return T(NaN)
+        return Base.Math.mangleNaN(T(NaN))
     elseif isinf(x)
         cos_domain_error(x)
     else
         n, y = rem_pio2_kernel(x)
         n = n&3
         if n == 0
-            return cos_kernel(y)
+            return Base.Math.mangleNaN(cos_kernel(y))
         elseif n == 1
-            return -sin_kernel(y)
+            return Base.Math.mangleNaN(-sin_kernel(y))
         elseif n == 2
-            return -cos_kernel(y)
+            return Base.Math.mangleNaN(-cos_kernel(y))
         else
-            return sin_kernel(y)
+            return Base.Math.mangleNaN(sin_kernel(y))
         end
     end
 end
@@ -175,11 +175,11 @@ See also [`cis`](@ref), [`sincospi`](@ref), [`sincosd`](@ref).
 function sincos(x::T) where T<:Union{Float32, Float64}
     if abs(x) < T(pi)/4
         if x == zero(T)
-            return x, one(T)
+            return Base.Math.mangleNaN(x, one(T))
         end
-        return sincos_kernel(x)
+        return Base.Math.mangleNaN(sincos_kernel(x))
     elseif isnan(x)
-        return T(NaN), T(NaN)
+        return Base.Math.mangleNaN(T(NaN), T(NaN))
     elseif isinf(x)
         sincos_domain_error(x)
     end
@@ -190,13 +190,13 @@ function sincos(x::T) where T<:Union{Float32, Float64}
     # ... and use the same selection scheme as above: (sin, cos, -sin, -cos) for
     # for sin and (cos, -sin, -cos, sin) for cos
     if n == 0
-        return si, co
+        return Base.Math.mangleNaN(si, co)
     elseif n == 1
-        return co, -si
+        return Base.Math.mangleNaN(co, -si)
     elseif n == 2
-        return -si, -co
+        return Base.Math.mangleNaN(-si, -co)
     else
-        return -co, si
+        return Base.Math.mangleNaN(-co, si)
     end
 end
 
@@ -217,19 +217,19 @@ function tan(x::T) where T<:Union{Float32, Float64}
     absx = abs(x)
     if absx < T(pi)/4
         if absx < sqrt(eps(T))/2 # first order dominates, but also allows tan(-0)=-0
-            return x
+            return Base.Math.mangleNaN(x)
         end
-        return tan_kernel(x)
+        return Base.Math.mangleNaN(tan_kernel(x))
     elseif isnan(x)
-        return T(NaN)
+        return Base.Math.mangleNaN(T(NaN))
     elseif isinf(x)
         tan_domain_error(x)
     end
     n, y = rem_pio2_kernel(x)
     if iseven(n)
-        return tan_kernel(y,1)
+        return Base.Math.mangleNaN(tan_kernel(y,1))
     else
-        return tan_kernel(y,-1)
+        return Base.Math.mangleNaN(tan_kernel(y,-1))
     end
 end
 
@@ -313,12 +313,12 @@ end
         #     tan(y) = 1 - 2*(tan(y) - (tan(y)^2)/(1+tan(y)))
         #            ≈ 1 - 2*(P(z) - (P(z)^2)/(1+P(z)))
         # where z = y-π/4.
-        return (signbit(y.hi) ? -1.0 : 1.0)*(k - 2*(yhi-(Px^2/(k+Px)-r)))
+        return Base.Math.mangleNaN((signbit(y.hi) ? -1.0 : 1.0)*(k - 2*(yhi-(Px^2/(k+Px)-r))))
     end
     if k == 1
         # Else, we simply return w = P(y) if k == 1 (integer multiple from argument
         # reduction was even)...
-        return Px
+        return Base.Math.mangleNaN(Px)
     else
         # ...or tan(y) ≈ -1.0/(y+r) if !(k == 1) (integer multiple from argument
         # reduction was odd). If 2ulp error is allowed, simply return the frac-
@@ -331,7 +331,7 @@ end
         # zero out low word of t
         t = reinterpret(Float64, (reinterpret(UInt64, t) >> 32) << 32)
         s = 1.0 + t * Px0
-        return t + a * (s + t * v)
+        return Base.Math.mangleNaN(t + a * (s + t * v))
     end
 end
 
@@ -346,10 +346,10 @@ end
     u  = @horner(y², 0.333331395030791399758, 0.133392002712976742718)
     Py  = (y.hi+y³*u)+(y³*y⁴)*(t+y⁴*r)
     if k == 1
-        return Float32(Py)
+        return Base.Math.mangleNaN(Float32(Py))
     end
 
-    return Float32(-1.0/Py)
+    return Base.Math.mangleNaN(Float32(-1.0/Py))
 end
 
 # fallback methods
@@ -409,13 +409,13 @@ arc_q(t::Float32) = @horner(t, 1.0f0, -7.0662963390f-01)
     s = sqrt_llvm(t)
     tRt = arc_tRt(t)
     if abs(x) >= 0.975 # |x| > 0.975
-        return flipsign(pi/2 - (2.0*(s + s*tRt) - pio2_lo), x)
+        return Base.Math.mangleNaN(flipsign(pi/2 - (2.0*(s + s*tRt) - pio2_lo), x))
     else
         s0 = reinterpret(Float64, (reinterpret(UInt64, s) >> 32) << 32)
         c = (t - s0*s0)/(s + s0)
         p = 2.0*s*tRt - (pio2_lo - 2.0*c)
         q = pi/4 - 2.0*s0
-        return flipsign(pi/4 - (p-q), x)
+        return Base.Math.mangleNaN(flipsign(pi/4 - (p-q), x))
     end
 end
 @inline function asin_kernel(t::Float32, x::Float32)
@@ -436,19 +436,19 @@ function asin(x::T) where T<:Union{Float32, Float64}
     absx = abs(x)
     if absx >= T(1.0) # |x|>= 1
         if absx == T(1.0)
-            return flipsign(T(pi)/2, x)
+            return Base.Math.mangleNaN(flipsign(T(pi)/2, x))
         end
         asin_domain_error(x)
     elseif absx < T(1.0)/2
         # if |x| sufficiently small, |x| is a good approximation
         if absx < ASIN_X_MIN_THRESHOLD(T)
-            return x
+            return Base.Math.mangleNaN(x)
         end
-        return muladd(x, arc_tRt(x*x), x)
+        return Base.Math.mangleNaN(muladd(x, arc_tRt(x*x), x))
     end
     # else 1/2 <= |x| < 1
     t = (T(1.0) - absx)/2
-    return asin_kernel(t, x)
+    return Base.Math.mangleNaN(asin_kernel(t, x))
 end
 
 # atan methods
@@ -517,15 +517,15 @@ function atan(x::T) where T<:Union{Float32, Float64}
 
     absx = abs(x)
     if absx >= ATAN_LARGE_X(T)
-        return copysign(T(1.5707963267948966), x)
+        return Base.Math.mangleNaN(copysign(T(1.5707963267948966), x))
     end
     if absx < T(7/16)
         # no reduction needed
         if absx < ATAN_SMALL_X(T)
-            return x
+            return Base.Math.mangleNaN(x)
         end
         p, q = atan_pq(x)
-        return x - x*(p + q)
+        return Base.Math.mangleNaN(x - x*(p + q))
     end
     xsign = sign(x)
     if absx < T(19/16) # 7/16 <= |x| < 19/16
@@ -583,47 +583,47 @@ function atan(y::T, x::T) where T<:Union{Float32, Float64}
     #    S9) ATAN2(+-INF,-INF ) is +-3pi/4;
     #    S10) ATAN2(+-INF, (anything but,0,NaN, and INF)) is +-pi/2;
     if isnan(x) || isnan(y) # S1 or S2
-        return T(NaN)
+        return Base.Math.mangleNaN(T(NaN))
     end
 
     if x == T(1.0) # then y/x = y and x > 0, see M2
-        return atan(y)
+        return Base.Math.mangleNaN(atan(y))
     end
     # generate an m ∈ {0, 1, 2, 3} to branch off of
     m = 2*signbit(x) + 1*signbit(y)
 
     if iszero(y)
         if m == 0 || m == 1
-            return y # atan(+-0, +anything) = +-0
+            return Base.Math.mangleNaN(y) # atan(+-0, +anything) = +-0
         elseif m == 2
-            return T(pi) # atan(+0, -anything) = pi
+            return Base.Math.mangleNaN(T(pi)) # atan(+0, -anything) = pi
         elseif m == 3
-            return -T(pi) # atan(-0, -anything) =-pi
+            return Base.Math.mangleNaN(-T(pi)) # atan(-0, -anything) =-pi
         end
     elseif iszero(x)
-        return flipsign(T(pi)/2, y)
+        return Base.Math.mangleNaN(flipsign(T(pi)/2, y))
     end
 
     if isinf(x)
         if isinf(y)
             if m == 0
-                return T(pi)/4  # atan(+Inf), +Inf))
+                return Base.Math.mangleNaN(T(pi)/4)  # atan(+Inf), +Inf))
             elseif m == 1
-                return -T(pi)/4 # atan(-Inf), +Inf))
+                return Base.Math.mangleNaN(-T(pi)/4) # atan(-Inf), +Inf))
             elseif m == 2
-                return 3*T(pi)/4 # atan(+Inf, -Inf)
+                return Base.Math.mangleNaN(3*T(pi)/4) # atan(+Inf, -Inf)
             elseif m == 3
-                return -3*T(pi)/4 # atan(-Inf,-Inf)
+                return Base.Math.mangleNaN(-3*T(pi)/4) # atan(-Inf,-Inf)
             end
         else
             if m == 0
-                return zero(T)  # atan(+...,+Inf) */
+                return Base.Math.mangleNaN(zero(T) ) # atan(+...,+Inf) */
             elseif m == 1
-                return -zero(T) # atan(-...,+Inf) */
+                return Base.Math.mangleNaN(-zero(T)) # atan(-...,+Inf) */
             elseif m == 2
-                return T(pi)    # atan(+...,-Inf) */
+                return Base.Math.mangleNaN(T(pi)   ) # atan(+...,-Inf) */
             elseif m == 3
-                return -T(pi)   # atan(-...,-Inf) */
+                return Base.Math.mangleNaN(-T(pi)  ) # atan(-...,-Inf) */
             end
         end
     end
@@ -646,13 +646,13 @@ function atan(y::T, x::T) where T<:Union{Float32, Float64}
     end
 
     if m == 0
-        return z # atan(+,+)
+        return Base.Math.mangleNaN(z) # atan(+,+)
     elseif m == 1
-        return -z # atan(-,+)
+        return Base.Math.mangleNaN(-z) # atan(-,+)
     elseif m == 2
-        return T(pi)-(z-ATAN2_PI_LO(T)) # atan(+,-)
+        return Base.Math.mangleNaN(T(pi)-(z-ATAN2_PI_LO(T))) # atan(+,-)
     else # default case m == 3
-        return (z-ATAN2_PI_LO(T))-T(pi) # atan(-,-)
+        return Base.Math.mangleNaN((z-ATAN2_PI_LO(T))-T(pi)) # atan(-,-)
     end
 end
 # acos methods
@@ -702,13 +702,13 @@ function acos(x::T) where T <: Union{Float32, Float64}
         # if |x| sufficiently small, acos(x) ≈ pi/2
         absx < ACOS_X_MIN_THRESHOLD(T) && return T(pi)/2
         # if |x| < 0.5 we have acos(x) = pi/2 - (x + x*x^2*R(x^2))
-        return PIO2_HI(T) - (x - (PIO2_LO(T) - x*arc_tRt(x*x)))
+        return Base.Math.mangleNaN(PIO2_HI(T) - (x - (PIO2_LO(T) - x*arc_tRt(x*x))))
     end
     z = (T(1.0) - absx)*T(0.5)
     zRz = arc_tRt(z)
     s = sqrt_llvm(z)
     if x < T(0.0) # see 2) above
-        return ACOS_PI(T) - T(2.0)*(s + (zRz*s - PIO2_LO(T)))
+        return Base.Math.mangleNaN(ACOS_PI(T) - T(2.0)*(s + (zRz*s - PIO2_LO(T))))
     else # see 3) above
         # if x > 0.5 we have
         # acos(x) = pi/2 - (pi/2 - 2asin(sqrt((1-x)/2)))
@@ -719,7 +719,7 @@ function acos(x::T) where T <: Union{Float32, Float64}
         # for f so that f+c ~ sqrt(z).
         df = ACOS_CORRECT_LOWWORD(T, s)
         c  = (z - df*df)/(s + df)
-        return T(2.0)*(df + (zRz*s + c))
+        return Base.Math.mangleNaN(T(2.0)*(df + (zRz*s + c)))
     end
 end
 
@@ -732,16 +732,16 @@ end
     x⁴ = x²*x²
     r  = evalpoly(x², (2.5501640398773415, -0.5992645293202981, 0.08214588658006512,
                        -7.370429884921779e-3, 4.662827319453555e-4, -2.1717412523382308e-5))
-    return muladd(3.141592653589793, x, x*muladd(-5.16771278004997,
-                  x², muladd(x⁴, r,  1.2245907532225998e-16)))
+    return Base.Math.mangleNaN(muladd(3.141592653589793, x, x*muladd(-5.16771278004997,
+                  x², muladd(x⁴, r,  1.2245907532225998e-16))))
 end
 @inline function sinpi_kernel(x::Float32)
     Float32(sinpi_kernel_wide(x))
 end
 @inline function sinpi_kernel_wide(x::Float32)
     x = Float64(x)
-    return x*evalpoly(x*x, (3.1415926535762266, -5.167712769188119,
-                            2.5501626483206374, -0.5992021090314925, 0.08100185277841528))
+    return Base.Math.mangleNaN(x*evalpoly(x*x, (3.1415926535762266, -5.167712769188119,
+                            2.5501626483206374, -0.5992021090314925, 0.08100185277841528)))
 end
 
 @inline function sinpi_kernel(x::Float16)
@@ -749,7 +749,7 @@ end
 end
 @inline function sinpi_kernel_wide(x::Float16)
     x = Float32(x)
-    return x*evalpoly(x*x, (3.1415927f0, -5.1677127f0, 2.5501626f0, -0.5992021f0, 0.081001855f0))
+    return Base.Math.mangleNaN(x*evalpoly(x*x, (3.1415927f0, -5.1677127f0, 2.5501626f0, -0.5992021f0, 0.081001855f0)))
 end
 
 # Uses minimax polynomial of cos(π * x) for π * x in [0, .25]
@@ -764,22 +764,22 @@ end
     a_x²lo = muladd(3.109686485461973e-16, x², muladd(4.934802200544679, x², -a_x²))
 
     w  = 1.0-a_x²
-    return w + muladd(x², r, ((1.0-w)-a_x²) - a_x²lo)
+    return Base.Math.mangleNaN(w + muladd(x², r, ((1.0-w)-a_x²) - a_x²lo))
 end
 @inline function cospi_kernel(x::Float32)
     Float32(cospi_kernel_wide(x))
 end
 @inline function cospi_kernel_wide(x::Float32)
     x = Float64(x)
-    return evalpoly(x*x, (1.0, -4.934802200541122, 4.058712123568637,
-                          -1.3352624040152927, 0.23531426791507182, -0.02550710082498761))
+    return Base.Math.mangleNaN(evalpoly(x*x, (1.0, -4.934802200541122, 4.058712123568637,
+                          -1.3352624040152927, 0.23531426791507182, -0.02550710082498761)))
 end
 @inline function cospi_kernel(x::Float16)
     Float16(cospi_kernel_wide(x))
 end
 @inline function cospi_kernel_wide(x::Float16)
     x = Float32(x)
-    return evalpoly(x*x, (1.0f0, -4.934802f0, 4.058712f0, -1.3352624f0, 0.23531426f0, -0.0255071f0))
+    return Base.Math.mangleNaN(evalpoly(x*x, (1.0f0, -4.934802f0, 4.058712f0, -1.3352624f0, 0.23531426f0, -0.0255071f0)))
 end
 
 """
@@ -813,7 +813,7 @@ function sinpi(_x::T) where T<:Union{IEEEFloat, Rational}
     else
         res = zero(T)-cospi_kernel(rx)
     end
-    return ifelse(signbit(_x), -res, res)
+    return Base.Math.mangleNaN(ifelse(signbit(_x), -res, res))
 end
 """
     cospi(x)
@@ -836,13 +836,13 @@ function cospi(x::T) where T<:Union{IEEEFloat, Rational}
     rx = float(muladd(T(-.5), n, x))
     n = Int64(n) & 3
     if n==0
-        return cospi_kernel(rx)
+        return Base.Math.mangleNaN(cospi_kernel(rx))
     elseif n==1
-        return zero(T)-sinpi_kernel(rx)
+        return Base.Math.mangleNaN(zero(T)-sinpi_kernel(rx))
     elseif n==2
-        return zero(T)-cospi_kernel(rx)
+        return Base.Math.mangleNaN(zero(T)-cospi_kernel(rx))
     else
-        return sinpi_kernel(rx)
+        return Base.Math.mangleNaN(sinpi_kernel(rx))
     end
 end
 """
@@ -882,7 +882,7 @@ function sincospi(_x::T) where T<:Union{IEEEFloat, Rational}
         si, co  = zero(T)-co, si
     end
     si = ifelse(signbit(_x), -si, si)
-    return si, co
+    return Base.Math.mangleNaN(si, co)
 end
 
 """
@@ -922,7 +922,7 @@ function tanpi(_x::T) where T<:Union{IEEEFloat, Rational}
         si, co  = zero(T)-co, si
     end
     si = ifelse(signbit(_x), -si, si)
-    return float(T)(si / co)
+    return Base.Math.mangleNaN(float(T)(si / co))
 end
 
 sinpi(x::Integer) = x >= 0 ? zero(float(x)) : -zero(float(x))
@@ -1109,9 +1109,9 @@ function _cosc(x::Number)
             s += (δs = term/(1+2n))
             fastabs(δs) ≤ ε && break
         end
-        return π*s
+        return Base.Math.mangleNaN(π*s)
     else
-        return isinf_real(x) ? zero(x) : ((pi*x)*cospi(x)-sinpi(x))/((pi*x)*x)
+        return Base.Math.mangleNaN(isinf_real(x) ? zero(x) : ((pi*x)*cospi(x)-sinpi(x))/((pi*x)*x))
     end
 end
 # hard-code Float64/Float32 Taylor series, with coefficients
@@ -1186,58 +1186,58 @@ deg2rad_ext(x::Real) = deg2rad(x) # Fallback
 
 function sind(x::Real)
     if isinf(x)
-        return throw(DomainError(x, "`x` cannot be infinite."))
+        return Base.Math.mangleNaN(throw(DomainError(x, "`x` cannot be infinite.")))
     elseif isnan(x)
-        return oftype(x,NaN)
+        return Base.Math.mangleNaN(oftype(x,NaN))
     end
 
     rx = copysign(float(rem(x,360)),x)
     arx = abs(rx)
 
     if rx == zero(rx)
-        return rx
+        return Base.Math.mangleNaN(rx)
     elseif arx < oftype(rx,45)
-        return sin_kernel(deg2rad_ext(rx))
+        return Base.Math.mangleNaN(sin_kernel(deg2rad_ext(rx)))
     elseif arx <= oftype(rx,135)
         y = deg2rad_ext(oftype(rx,90) - arx)
-        return copysign(cos_kernel(y),rx)
+        return Base.Math.mangleNaN(copysign(cos_kernel(y),rx))
     elseif arx == oftype(rx,180)
-        return copysign(zero(rx),rx)
+        return Base.Math.mangleNaN(copysign(zero(rx),rx))
     elseif arx < oftype(rx,225)
         y = deg2rad_ext((oftype(rx,180) - arx)*sign(rx))
-        return sin_kernel(y)
+        return Base.Math.mangleNaN(sin_kernel(y))
     elseif arx <= oftype(rx,315)
         y = deg2rad_ext(oftype(rx,270) - arx)
-        return -copysign(cos_kernel(y),rx)
+        return Base.Math.mangleNaN(-copysign(cos_kernel(y),rx))
     else
         y = deg2rad_ext(rx - copysign(oftype(rx,360),rx))
-        return sin_kernel(y)
+        return Base.Math.mangleNaN(sin_kernel(y))
     end
 end
 
 function cosd(x::Real)
     if isinf(x)
-        return throw(DomainError(x, "`x` cannot be infinite."))
+        return Base.Math.mangleNaN(throw(DomainError(x, "`x` cannot be infinite.")))
     elseif isnan(x)
-        return oftype(x,NaN)
+        return Base.Math.mangleNaN(oftype(x,NaN))
     end
 
     rx = abs(float(rem(x,360)))
 
     if rx <= oftype(rx,45)
-        return cos_kernel(deg2rad_ext(rx))
+        return Base.Math.mangleNaN(cos_kernel(deg2rad_ext(rx)))
     elseif rx < oftype(rx,135)
         y = deg2rad_ext(oftype(rx,90) - rx)
-        return sin_kernel(y)
+        return Base.Math.mangleNaN(sin_kernel(y))
     elseif rx <= oftype(rx,225)
         y = deg2rad_ext(oftype(rx,180) - rx)
-        return -cos_kernel(y)
+        return Base.Math.mangleNaN(-cos_kernel(y))
     elseif rx < oftype(rx,315)
         y = deg2rad_ext(rx - oftype(rx,270))
-        return sin_kernel(y)
+        return Base.Math.mangleNaN(sin_kernel(y))
     else
         y = deg2rad_ext(oftype(rx,360) - rx)
-        return cos_kernel(y)
+        return Base.Math.mangleNaN(cos_kernel(y))
     end
 end
 

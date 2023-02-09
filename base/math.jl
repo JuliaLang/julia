@@ -29,6 +29,16 @@ using Core.Intrinsics: sqrt_llvm
 
 using .Base: IEEEFloat
 
+makeNaN() = reinterpret(Float64, rand(UInt64) .| 0x7ff8000000000000)
+makeNan32() = reinterpret(Float32, rand(UInt32) .| 0x7fc00000)
+makeNan16() = reinterpret(Float16, rand(UInt16) .| 0x7e00)
+mangleNaN(x::Float64) = isnan(x) ? makeNaN() : x
+mangleNaN(x::Float32) = isnan(x) ? makeNan32() : x
+mangleNaN(x::Float16) = isnan(x) ? makeNan16() : x
+mangleNaN(x::Complex{<:IEEEFloat}) = Complex(mangleNaN(real(x)), mangleNaN(imag(x)))
+mangleNaN(x) = x
+mangleNaN(x, y...) = (mangleNaN(x), mangleNaN(y...)...)
+
 @noinline function throw_complex_domainerror(f::Symbol, x)
     throw(DomainError(x,
         LazyString(f," was called with a negative real argument but will only return a complex result if called with a complex argument. Try ", f,"(Complex(x)).")))
@@ -49,19 +59,19 @@ end
 @assume_effects :consistent @inline function two_mul(x::Float64, y::Float64)
     if Core.Intrinsics.have_fma(Float64)
         xy = x*y
-        return xy, fma(x, y, -xy)
+        return Base.Math.mangleNaN(xy, fma(x, y, -xy))
     end
-    return Base.twomul(x,y)
+    return Base.Math.mangleNaN(Base.twomul(x,y))
 end
 
 @assume_effects :consistent @inline function two_mul(x::T, y::T) where T<: Union{Float16, Float32}
     if Core.Intrinsics.have_fma(T)
         xy = x*y
-        return xy, fma(x, y, -xy)
+        return Base.Math.mangleNaN(xy, fma(x, y, -xy))
     end
     xy = widen(x)*y
     Txy = T(xy)
-    return Txy, T(xy-Txy)
+    return Base.Math.mangleNaN(Txy, T(xy-Txy))
 end
 
 """
@@ -307,7 +317,7 @@ Base.@assume_effects :terminates_locally @inline function exthorner(x, p::Tuple)
         hi = pi+prod
         lo = fma(lo, x, prod - (hi - pi) + err)
     end
-    return hi, lo
+    return Base.Math.mangleNaN(hi, lo)
 end
 
 """
@@ -774,7 +784,7 @@ function _hypot(x, y)
 
     # Return Inf if either or both inputs is Inf (Compliance with IEEE754)
     if isinf(ax) || isinf(ay)
-        return typeof(axu)(Inf)
+        return Base.Math.mangleNaN(typeof(axu)(Inf))
     end
 
     # Order the operands
@@ -785,7 +795,7 @@ function _hypot(x, y)
 
     # Widely varying operands
     if ay <= ax*sqrt(eps(typeof(ax))/2)  #Note: This also gets ay == 0
-        return axu
+        return Base.Math.mangleNaN(axu)
     end
 
     # Operands do not vary widely
@@ -816,32 +826,32 @@ function _hypot(x, y)
             h -= muladd(delta, delta, muladd(ay, (4*delta - ay), 2*delta*(ax - 2*ay)))/(2*h)
         end
     end
-    return h*scale*oneunit(axu)
+    return Base.Math.mangleNaN(h*scale*oneunit(axu))
 end
 @inline function _hypot(x::Float32, y::Float32)
     if isinf(x) || isinf(y)
-        return Inf32
+        return Base.Math.mangleNaN(Inf32)
     end
     _x, _y = Float64(x), Float64(y)
-    return Float32(sqrt(muladd(_x, _x, _y*_y)))
+    return Base.Math.mangleNaN(Float32(sqrt(muladd(_x, _x, _y*_y))))
 end
 @inline function _hypot(x::Float16, y::Float16)
     if isinf(x) || isinf(y)
-        return Inf16
+        return Base.Math.mangleNaN(Inf16)
     end
     _x, _y = Float32(x), Float32(y)
-    return Float16(sqrt(muladd(_x, _x, _y*_y)))
+    return Base.Math.mangleNaN(Float16(sqrt(muladd(_x, _x, _y*_y))))
 end
 _hypot(x::ComplexF16, y::ComplexF16) = Float16(_hypot(ComplexF32(x), ComplexF32(y)))
 
 function _hypot(x::NTuple{N,<:Number}) where {N}
     maxabs = maximum(abs, x)
     if isnan(maxabs) && any(isinf, x)
-        return typeof(maxabs)(Inf)
+        return Base.Math.mangleNaN(typeof(maxabs)(Inf))
     elseif (iszero(maxabs) || isinf(maxabs))
-        return maxabs
+        return Base.Math.mangleNaN(maxabs)
     else
-        return maxabs * sqrt(sum(y -> abs2(y / maxabs), x))
+        return Base.Math.mangleNaN(maxabs * sqrt(sum(y -> abs2(y / maxabs), x)))
     end
 end
 
@@ -867,33 +877,33 @@ end
 
 function min(x::T, y::T) where {T<:Union{Float32,Float64}}
     @static if has_native_fminmax
-        return llvm_min(x,y)
+        return Base.Math.mangleNaN(llvm_min(x,y))
     end
     diff = x - y
     argmin = ifelse(signbit(diff), x, y)
     anynan = isnan(x)|isnan(y)
-    return ifelse(anynan, diff, argmin)
+    return Base.Math.mangleNaN(ifelse(anynan, diff, argmin))
 end
 
 function max(x::T, y::T) where {T<:Union{Float32,Float64}}
     @static if has_native_fminmax
-        return llvm_max(x,y)
+        return Base.Math.mangleNaN(llvm_max(x,y))
     end
     diff = x - y
     argmax = ifelse(signbit(diff), y, x)
     anynan = isnan(x)|isnan(y)
-    return ifelse(anynan, diff, argmax)
+    return Base.Math.mangleNaN(ifelse(anynan, diff, argmax))
 end
 
 function minmax(x::T, y::T) where {T<:Union{Float32,Float64}}
     @static if has_native_fminmax
-        return llvm_min(x, y), llvm_max(x, y)
+        return Base.Math.mangleNaN(llvm_min(x, y), llvm_max(x, y))
     end
     diff = x - y
     sdiff = signbit(diff)
     min, max = ifelse(sdiff, x, y), ifelse(sdiff, y, x)
     anynan = isnan(x)|isnan(y)
-    return ifelse(anynan, diff, min), ifelse(anynan, diff, max)
+    return Base.Math.mangleNaN(ifelse(anynan, diff, min), ifelse(anynan, diff, max))
 end
 
 """
@@ -924,30 +934,30 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
     # For cases where e of an Integer larger than Int make sure we properly
     # overflow/underflow; this is optimized away otherwise.
     if e > typemax(Int)
-        return flipsign(T(Inf), x)
+        return Base.Math.mangleNaN(flipsign(T(Inf), x))
     elseif e < typemin(Int)
-        return flipsign(T(0.0), x)
+        return Base.Math.mangleNaN(flipsign(T(0.0), x))
     end
     n = e % Int
     k += n
     # overflow, if k is larger than maximum possible exponent
     if k >= exponent_raw_max(T)
-        return flipsign(T(Inf), x)
+        return Base.Math.mangleNaN(flipsign(T(Inf), x))
     end
     if k > 0 # normal case
         xu = (xu & ~exponent_mask(T)) | (rem(k, uinttype(T)) << significand_bits(T))
-        return reinterpret(T, xu)
+        return Base.Math.mangleNaN(reinterpret(T, xu))
     else # subnormal case
         if k <= -significand_bits(T) # underflow
             # overflow, for the case of integer overflow in n + k
             e > 50000 && return flipsign(T(Inf), x)
-            return flipsign(T(0.0), x)
+            return Base.Math.mangleNaN(flipsign(T(0.0), x))
         end
         k += significand_bits(T)
         # z = T(2.0) ^ (-significand_bits(T))
         z = reinterpret(T, rem(exponent_bias(T)-significand_bits(T), uinttype(T)) << significand_bits(T))
         xu = (xu & ~exponent_mask(T)) | (rem(k, uinttype(T)) << significand_bits(T))
-        return z*reinterpret(T, xu)
+        return Base.Math.mangleNaN(z*reinterpret(T, xu))
     end
 end
 ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
@@ -987,7 +997,7 @@ function exponent(x::T) where T<:IEEEFloat
         m = leading_zeros(xs) - exponent_bits(T)
         k = 1 - m
     end
-    return k - exponent_bias(T)
+    return Base.Math.mangleNaN(k - exponent_bias(T))
 end
 
 # Like exponent, but assumes the nothrow precondition. For
@@ -1002,7 +1012,7 @@ function _exponent_finite_nonzero(x::T) where T<:IEEEFloat
         m = leading_zeros(xs) - exponent_bits(T)
         k = 1 - m
     end
-    return k - exponent_bias(T)
+    return Base.Math.mangleNaN(k - exponent_bias(T))
 end
 
 """
@@ -1039,7 +1049,7 @@ function significand(x::T) where T<:IEEEFloat
         xu = xs | (xu & sign_mask(T))
     end
     xu = (xu & ~exponent_mask(T)) | exponent_one(T)
-    return reinterpret(T, xu)
+    return Base.Math.mangleNaN(reinterpret(T, xu))
 end
 
 """
@@ -1067,7 +1077,7 @@ function frexp(x::T) where T<:IEEEFloat
     end
     k -= (exponent_bias(T) - 1)
     xu = (xu & ~exponent_mask(T)) | exponent_half(T)
-    return reinterpret(T, xu), k
+    return Base.Math.mangleNaN(reinterpret(T, xu), k)
 end
 
 # NOTE: This `rem` method is adapted from the msun `remainder` and `remainderf`
@@ -1101,7 +1111,7 @@ function rem(x::T, p::T, ::RoundingMode{:Nearest}) where T<:IEEEFloat
             end
         end
     end
-    return flipsign(x, oldx)
+    return Base.Math.mangleNaN(flipsign(x, oldx))
 end
 
 
@@ -1126,7 +1136,7 @@ function modf(x::T) where T<:IEEEFloat
     isinf(x) && return (copysign(zero(T), x), x)
     ix = trunc(x)
     rx = copysign(x - ix, x)
-    return (rx, ix)
+    return Base.Math.mangleNaN((rx, ix))
 end
 
 # @constprop aggressive to help the compiler see the switch between the integer and float
@@ -1150,7 +1160,7 @@ end
         xu &= ~sign_mask(Float64)
         xu -= UInt64(52) << 52 # mess with the exponent
     end
-    return pow_body(xu, y)
+    return Base.Math.mangleNaN(pow_body(xu, y))
 end
 
 @inline function pow_body(xu::UInt64, y::Float64)
@@ -1158,7 +1168,7 @@ end
     xyhi, xylo = two_mul(logxhi,y)
     xylo = muladd(logxlo, y, xylo)
     hi = xyhi+xylo
-    return Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ))
+    return Base.Math.mangleNaN(Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ)))
 end
 
 @constprop :aggressive function ^(x::T, y::T) where T <: Union{Float16, Float32}
@@ -1175,17 +1185,17 @@ end
     x < 0 && throw_exp_domainerror(x)
     !isfinite(x) && return x*(y>0 || isnan(x))
     x==0 && return abs(y)*T(Inf)*(!(y>0))
-    return pow_body(x, y)
+    return Base.Math.mangleNaN(pow_body(x, y))
 end
 
 @inline function pow_body(x::T, y::T) where T <: Union{Float16, Float32}
-    return T(exp2(log2(abs(widen(x))) * y))
+    return Base.Math.mangleNaN(T(exp2(log2(abs(widen(x))) * y)))
 end
 
 # compensated power by squaring
 @constprop :aggressive @inline function ^(x::Float64, n::Integer)
     n == 0 && return one(x)
-    return pow_body(x, n)
+    return Base.Math.mangleNaN(pow_body(x, n))
 end
 
 @assume_effects :terminates_locally @noinline function pow_body(x::Float64, n::Integer)
@@ -1211,7 +1221,7 @@ end
         n >>>= 1
     end
     err = muladd(y, xnlo, x*ynlo)
-    return ifelse(isfinite(x) & isfinite(err), muladd(x, y, err), x*y)
+    return Base.Math.mangleNaN(ifelse(isfinite(x) & isfinite(err), muladd(x, y, err), x*y))
 end
 
 function ^(x::Float32, n::Integer)
@@ -1233,7 +1243,7 @@ function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
     r = xh+yh
     s = (abs(xh) > abs(yh)) ? (xh-r+yh+yl+xl) : (yh-r+xh+xl+yl)
     zh = r+s
-    return zh
+    return Base.Math.mangleNaN(zh)
 end
 
 # multiples of pi/2, as double-double (ie with "tail")
@@ -1291,18 +1301,18 @@ function rem2pi(x::Float64, ::RoundingMode{:Nearest})
     if iseven(n)
         if n & 2 == 2 # n % 4 == 2: add/subtract pi
             if y.hi <= 0
-                return add22condh(y.hi,y.lo,pi2o2_h,pi2o2_l)
+                return Base.Math.mangleNaN(add22condh(y.hi,y.lo,pi2o2_h,pi2o2_l))
             else
-                return add22condh(y.hi,y.lo,-pi2o2_h,-pi2o2_l)
+                return Base.Math.mangleNaN(add22condh(y.hi,y.lo,-pi2o2_h,-pi2o2_l))
             end
         else          # n % 4 == 0: add 0
-            return y.hi+y.lo
+            return Base.Math.mangleNaN(y.hi+y.lo)
         end
     else
         if n & 2 == 2 # n % 4 == 3: subtract pi/2
-            return add22condh(y.hi,y.lo,-pi1o2_h,-pi1o2_l)
+            return Base.Math.mangleNaN(add22condh(y.hi,y.lo,-pi1o2_h,-pi1o2_l))
         else          # n % 4 == 1: add pi/2
-            return add22condh(y.hi,y.lo,pi1o2_h,pi1o2_l)
+            return Base.Math.mangleNaN(add22condh(y.hi,y.lo,pi1o2_h,pi1o2_l))
         end
     end
 end
@@ -1338,9 +1348,9 @@ function rem2pi(x::Float64, ::RoundingMode{:Down})
 
     if x < pi4o2_h
         if x >= 0
-            return x
+            return Base.Math.mangleNaN(x)
         elseif x > -pi4o2_h
-            return add22condh(x,0.0,pi4o2_h,pi4o2_l)
+            return Base.Math.mangleNaN(add22condh(x,0.0,pi4o2_h,pi4o2_l))
         end
     end
 
@@ -1348,19 +1358,19 @@ function rem2pi(x::Float64, ::RoundingMode{:Down})
 
     if iseven(n)
         if n & 2 == 2 # n % 4 == 2: add pi
-            return add22condh(y.hi,y.lo,pi2o2_h,pi2o2_l)
+            return Base.Math.mangleNaN(add22condh(y.hi,y.lo,pi2o2_h,pi2o2_l))
         else          # n % 4 == 0: add 0 or 2pi
             if y.hi > 0
-                return y.hi+y.lo
+                return Base.Math.mangleNaN(y.hi+y.lo)
             else      # negative: add 2pi
-                return add22condh(y.hi,y.lo,pi4o2_h,pi4o2_l)
+                return Base.Math.mangleNaN(add22condh(y.hi,y.lo,pi4o2_h,pi4o2_l))
             end
         end
     else
         if n & 2 == 2 # n % 4 == 3: add 3pi/2
-            return add22condh(y.hi,y.lo,pi3o2_h,pi3o2_l)
+            return Base.Math.mangleNaN(add22condh(y.hi,y.lo,pi3o2_h,pi3o2_l))
         else          # n % 4 == 1: add pi/2
-            return add22condh(y.hi,y.lo,pi1o2_h,pi1o2_l)
+            return Base.Math.mangleNaN(add22condh(y.hi,y.lo,pi1o2_h,pi1o2_l))
         end
     end
 end
@@ -1369,9 +1379,9 @@ function rem2pi(x::Float64, ::RoundingMode{:Up})
 
     if x > -pi4o2_h
         if x <= 0
-            return x
+            return Base.Math.mangleNaN(x)
         elseif x < pi4o2_h
-            return add22condh(x,0.0,-pi4o2_h,-pi4o2_l)
+            return Base.Math.mangleNaN(add22condh(x,0.0,-pi4o2_h,-pi4o2_l))
         end
     end
 
@@ -1379,19 +1389,19 @@ function rem2pi(x::Float64, ::RoundingMode{:Up})
 
     if iseven(n)
         if n & 2 == 2 # n % 4 == 2: sub pi
-            return add22condh(y.hi,y.lo,-pi2o2_h,-pi2o2_l)
+            return Base.Math.mangleNaN(add22condh(y.hi,y.lo,-pi2o2_h,-pi2o2_l))
         else          # n % 4 == 0: sub 0 or 2pi
             if y.hi < 0
-                return y.hi+y.lo
+                return Base.Math.mangleNaN(y.hi+y.lo)
             else      # positive: sub 2pi
-                return add22condh(y.hi,y.lo,-pi4o2_h,-pi4o2_l)
+                return Base.Math.mangleNaN(add22condh(y.hi,y.lo,-pi4o2_h,-pi4o2_l))
             end
         end
     else
         if n & 2 == 2 # n % 4 == 3: sub pi/2
-            return add22condh(y.hi,y.lo,-pi1o2_h,-pi1o2_l)
+            return Base.Math.mangleNaN(add22condh(y.hi,y.lo,-pi1o2_h,-pi1o2_l))
         else          # n % 4 == 1: sub 3pi/2
-            return add22condh(y.hi,y.lo,-pi3o2_h,-pi3o2_l)
+            return Base.Math.mangleNaN(add22condh(y.hi,y.lo,-pi3o2_h,-pi3o2_l))
         end
     end
 end
@@ -1511,7 +1521,7 @@ for f in (:sin, :cos, :tan, :asin, :atan, :acos,
     @eval function ($f)(x::Real)
         xf = float(x)
         x === xf && throw(MethodError($f, (x,)))
-        return ($f)(xf)
+        return Base.Math.mangleNaN(($f)(xf))
     end
     @eval $(f)(::Missing) = missing
 end

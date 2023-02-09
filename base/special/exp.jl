@@ -71,32 +71,32 @@ LogB(::Val{10}, ::Type{Float16}) = -0.30103f0
 
 # Range reduced kernels
 function expm1b_kernel(::Val{2}, x::Float64)
-    return x * evalpoly(x, (0.6931471805599393, 0.24022650695910058,
-                            0.05550411502333161, 0.009618129548366803))
+    return Base.Math.mangleNaN(x * evalpoly(x, (0.6931471805599393, 0.24022650695910058,
+                            0.05550411502333161, 0.009618129548366803)))
 end
 function expm1b_kernel(::Val{:ℯ}, x::Float64)
-    return x * evalpoly(x, (0.9999999999999912, 0.4999999999999997,
-                            0.1666666857598779, 0.04166666857598777))
+    return Base.Math.mangleNaN(x * evalpoly(x, (0.9999999999999912, 0.4999999999999997,
+                            0.1666666857598779, 0.04166666857598777)))
 end
 function expm1b_kernel(::Val{10}, x::Float64)
-    return x * evalpoly(x, (2.3025850929940255, 2.6509490552391974,
-                            2.034678825384765, 1.1712552025835192))
+    return Base.Math.mangleNaN(x * evalpoly(x, (2.3025850929940255, 2.6509490552391974,
+                            2.034678825384765, 1.1712552025835192)))
 end
 
 function expb_kernel(::Val{2}, x::Float32)
-    return evalpoly(x, (1.0f0, 0.6931472f0, 0.2402265f0,
+    return Base.Math.mangleNaN(evalpoly(x, (1.0f0, 0.6931472f0, 0.2402265f0,
                         0.05550411f0, 0.009618025f0,
-                        0.0013333423f0, 0.00015469732f0, 1.5316464f-5))
+                        0.0013333423f0, 0.00015469732f0, 1.5316464f-5)))
 end
 function expb_kernel(::Val{:ℯ}, x::Float32)
-    return evalpoly(x, (1.0f0, 1.0f0, 0.5f0, 0.16666667f0,
+    return Base.Math.mangleNaN(evalpoly(x, (1.0f0, 1.0f0, 0.5f0, 0.16666667f0,
                         0.041666217f0, 0.008333249f0,
-                        0.001394858f0, 0.00019924171f0))
+                        0.001394858f0, 0.00019924171f0)))
 end
 function expb_kernel(::Val{10}, x::Float32)
-    return evalpoly(x, (1.0f0, 2.3025851f0, 2.650949f0,
+    return Base.Math.mangleNaN(evalpoly(x, (1.0f0, 2.3025851f0, 2.650949f0,
                         2.0346787f0, 1.1712426f0, 0.53937745f0,
-                        0.20788547f0, 0.06837386f0))
+                        0.20788547f0, 0.06837386f0)))
 end
 
 # Table stores data with 60 sig figs by using the fact that the first 12 bits of all the
@@ -180,7 +180,7 @@ Base.@assume_effects :nothrow function table_unpack(ind::Int32)
     j = getfield(J_TABLE, ind) # use getfield so the compiler can prove consistent
     jU = reinterpret(Float64, JU_CONST | (j&JU_MASK))
     jL = reinterpret(Float64, JL_CONST | (j>>8))
-    return jU, jL
+    return Base.Math.mangleNaN(jU, jL)
 end
 
 # Method for Float64
@@ -221,12 +221,12 @@ end
         if k <= -53
             # The UInt64 forces promotion. (Only matters for 32 bit systems.)
             twopk = (k + UInt64(53)) << 52
-            return reinterpret(T, twopk + reinterpret(UInt64, small_part))*0x1p-53
+            return Base.Math.mangleNaN(reinterpret(T, twopk + reinterpret(UInt64, small_part))*0x1p-53)
         end
         #k == 1024 && return (small_part * 2.0) * 2.0^1023
     end
     twopk = Int64(k) << 52
-    return reinterpret(T, twopk + reinterpret(Int64, small_part))
+    return Base.Math.mangleNaN(reinterpret(T, twopk + reinterpret(Int64, small_part)))
 end
 # Computes base^(x+xlo). Used for pow.
 @inline function exp_impl(x::Float64, xlo::Float64, base)
@@ -248,12 +248,12 @@ end
         if k <= -53
             # The UInt64 forces promotion. (Only matters for 32 bit systems.)
             twopk = (k + UInt64(53)) << 52
-            return reinterpret(T, twopk + reinterpret(UInt64, small_part))*0x1p-53
+            return Base.Math.mangleNaN(reinterpret(T, twopk + reinterpret(UInt64, small_part))*0x1p-53)
         end
         #k == 1024 && return (small_part * 2.0) * 2.0^1023
     end
     twopk = Int64(k) << 52
-    return reinterpret(T, twopk + reinterpret(Int64, small_part))
+    return Base.Math.mangleNaN(reinterpret(T, twopk + reinterpret(Int64, small_part)))
 end
 @inline function exp_impl_fast(x::Float64, base)
     T = Float64
@@ -268,7 +268,7 @@ end
     jU = reinterpret(Float64, JU_CONST | (@inbounds J_TABLE[N&255 + 1] & JU_MASK))
     small_part =  muladd(jU, expm1b_kernel(base, r), jU)
     twopk = Int64(k) << 52
-    return reinterpret(T, twopk + reinterpret(Int64, small_part))
+    return Base.Math.mangleNaN(reinterpret(T, twopk + reinterpret(Int64, small_part)))
 end
 
 @inline function exp_impl(x::Float32, base)
@@ -289,7 +289,7 @@ end
         power -= Int32(1)
         small_part *= 2f0
     end
-    return small_part * reinterpret(T, power << Int32(23))
+    return Base.Math.mangleNaN(small_part * reinterpret(T, power << Int32(23)))
 end
 
 @inline function exp_impl_fast(x::Float32, base)
@@ -302,7 +302,7 @@ end
     r = muladd(N_float, LogBL(base, T), r)
     small_part = expb_kernel(base, r)
     twopk = reinterpret(T, (N+Int32(127)) << Int32(23))
-    return twopk*small_part
+    return Base.Math.mangleNaN(twopk*small_part)
 end
 
 @inline function exp_impl(a::Float16, base)
@@ -317,7 +317,7 @@ end
         x < 25 && return zero(Float16)
     end
     twopk = reinterpret(T, (N+Int32(127)) << Int32(23))
-    return Float16(twopk*small_part)
+    return Base.Math.mangleNaN(Float16(twopk*small_part))
 end
 
 for (func, fast_func, base) in ((:exp2,  :exp2_fast,  Val(2)),
@@ -417,19 +417,19 @@ Ln2(::Type{Float32}) = -0.6931472f0
                      0.001388888889068783, 0.00019841269447671544, 2.480157691845342e-5,
                      2.7558212415361945e-6, 2.758218402815439e-7, 2.4360682937111612e-8))
     p2 = exthorner(x, (1.0, .5, p))
-    return fma(x, p2[1], x*p2[2])
+    return Base.Math.mangleNaN(fma(x, p2[1], x*p2[2]))
 end
 @inline function expm1_small(x::Float32)
     p = evalpoly(x, (0.16666666f0, 0.041666627f0, 0.008333682f0,
                      0.0013908712f0, 0.0001933096f0))
     p2 = exthorner(x, (1f0, .5f0, p))
-    return fma(x, p2[1], x*p2[2])
+    return Base.Math.mangleNaN(fma(x, p2[1], x*p2[2]))
 end
 
 function expm1(x::Float64)
     T = Float64
     if -0.2876820724517809 <= x <= 0.22314355131420976
-        return expm1_small(x)
+        return Base.Math.mangleNaN(expm1_small(x))
     elseif !(abs(x)<=MIN_EXP(Float64))
         isnan(x) && return x
         x > MAX_EXP(Float64) && return Inf
@@ -449,14 +449,14 @@ function expm1(x::Float64)
     k>=106 && return reinterpret(Float64, (1022+k) << 52)*(jU + muladd(jU, p, jL))*2
     k>=53 && return twopk*(jU + muladd(jU, p, (jL-twopnk)))
     k<=-2 && return twopk*(jU + muladd(jU, p, jL))-1
-    return twopk*((jU-twopnk) + fma(jU, p, jL))
+    return Base.Math.mangleNaN(twopk*((jU-twopnk) + fma(jU, p, jL)))
 end
 
 function expm1(x::Float32)
     x > MAX_EXP(Float32) && return Inf32
     x < MIN_EXP(Float32) && return -1f0
     if -0.2876821f0 <=x <= 0.22314355f0
-        return expm1_small(x)
+        return Base.Math.mangleNaN(expm1_small(x))
     end
     x = Float64(x)
     N_float = round(x*Ln2INV(Float64))
@@ -466,7 +466,7 @@ function expm1(x::Float32)
                       0.008332997481506921, 0.0013966479175977883, 0.0002004037059220124))
     small_part = r*hi
     twopk = reinterpret(Float64, (N+1023) << 52)
-    return Float32(muladd(twopk, small_part, twopk-1.0))
+    return Base.Math.mangleNaN(Float32(muladd(twopk, small_part, twopk-1.0)))
 end
 
 function expm1(x::Float16)
@@ -474,7 +474,7 @@ function expm1(x::Float16)
     x < MIN_EXP(Float16) && return Float16(-1.0)
     x = Float32(x)
     if -0.2876821f0 <=x <= 0.22314355f0
-        return Float16(x*evalpoly(x, (1f0, .5f0, 0.16666628f0, 0.04166785f0, 0.008351848f0, 0.0013675707f0)))
+        return Base.Math.mangleNaN(Float16(x*evalpoly(x, (1f0, .5f0, 0.16666628f0, 0.04166785f0, 0.008351848f0, 0.0013675707f0))))
     end
     N_float = round(x*Ln2INV(Float32))
     N = unsafe_trunc(UInt32, N_float)
@@ -482,7 +482,7 @@ function expm1(x::Float16)
     hi = evalpoly(r, (1f0, .5f0, 0.16666667f0, 0.041665863f0, 0.008333111f0, 0.0013981499f0, 0.00019983904f0))
     small_part = r*hi
     twopk = reinterpret(Float32, (N+Int32(127)) << Int32(23))
-    return Float16(muladd(twopk, small_part, twopk-1f0))
+    return Base.Math.mangleNaN(Float16(muladd(twopk, small_part, twopk-1f0)))
 end
 
 """
