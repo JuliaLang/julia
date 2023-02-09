@@ -1019,29 +1019,13 @@ STATIC_INLINE jl_value_t *jl_sbufset(
     void *t JL_ROOTING_ARGUMENT JL_PROPAGATES_ROOT,
     size_t i, void *x JL_ROOTED_ARGUMENT) JL_NOTSAFEPOINT;
 #else
-STATIC_INLINE jl_value_t *jl_unsafe_sbufref(void *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
-{
-    // while sbuf is supposedly immutable, in practice we sometimes publish it first
-    // and set the values lazily
-    return jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)jl_svec_data(t) + i);
-}
-STATIC_INLINE jl_value_t *jl_unsafe_sbufset(
-    void *t JL_ROOTING_ARGUMENT JL_PROPAGATES_ROOT,
-    size_t i, void *x JL_ROOTED_ARGUMENT) JL_NOTSAFEPOINT
-{
-    // while sbuf is supposedly immutable, in practice we sometimes publish it
-    // first and set the values lazily. Those users occasionally might need to
-    // instead use jl_atomic_store_release here.
-    jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)jl_sbuf_data(t) + i, (jl_value_t*)x);
-    jl_gc_wb(t, x);
-    return (jl_value_t*)x;
-}
- 
 STATIC_INLINE jl_value_t *jl_sbufref(void *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
 {
     assert(jl_typeis(t,jl_simplevector_type));
     assert(i < jl_sbuf_len(t));
-    return jl_unsafe_sbufref(t, i);
+    // while sbuf is supposedly immutable, in practice we sometimes publish it first
+    // and set the values lazily
+    return jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)jl_svec_data(t) + i);
 }
 STATIC_INLINE jl_value_t *jl_sbufset(
     void *t JL_ROOTING_ARGUMENT JL_PROPAGATES_ROOT,
@@ -1049,7 +1033,12 @@ STATIC_INLINE jl_value_t *jl_sbufset(
 {
     assert(jl_typeis(t,jl_simplevector_type));
     assert(i < jl_sbuf_len(t));
-    return jl_unsafe_sbufset(t, i, x);
+    // while sbuf is supposedly immutable, in practice we sometimes publish it
+    // first and set the values lazily. Those users occasionally might need to
+    // instead use jl_atomic_store_release here.
+    jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)jl_sbuf_data(t) + i, (jl_value_t*)x);
+    jl_gc_wb(t, x);
+    return (jl_value_t*)x;
 }
 #endif
 
