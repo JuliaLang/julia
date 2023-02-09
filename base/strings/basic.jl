@@ -612,13 +612,14 @@ julia> replace("abcdeγfgh", !isascii=>' ') # replace non-ASCII chars with space
 isascii(c::Char) = bswap(reinterpret(UInt32, c)) < 0x80
 isascii(c::AbstractChar) = UInt32(c) < 0x80
 
-function _isascii(bytes, first, last)
+function _isascii(bytes::AbstractVector{UInt8}, first, last)
     r = UInt8(0)
     for n = first:last
         @inbounds r |= bytes[n]
     end
     return r < 0x80
 end
+_isascii(notbytes, first, last) = false #If the CodeUnits are not UInt8 it can not be ascii
 
 function isascii(s::AbstractString)
     chunk_size = 1024
@@ -627,7 +628,7 @@ function isascii(s::AbstractString)
     start = 1
     fastmin(a,b) = ifelse(a < b, a, b)
     while start <= l
-        @inline _isascii(bytes, start, fastmin(l, start + chunk_size)) || return false
+        @inline _isascii(bytes, start, fastmin(l, start+chunk_size-1)) || return false
         start += chunk_size
     end
     return true
