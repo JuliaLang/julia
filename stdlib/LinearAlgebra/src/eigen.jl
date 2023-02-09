@@ -11,12 +11,15 @@ factorization function.
 If `F::Eigen` is the factorization object, the eigenvalues can be obtained via
 `F.values` and the eigenvectors as the columns of the matrix `F.vectors`.
 (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
-
 Iterating the decomposition produces the components `F.values` and `F.vectors`.
+
+The `Eigen` type additionally supports a number of methods that preserve the
+eigenvalue decomposition structure, such as matrix functions (`^`, `inv`,
+`exp`, etc.) or adjoints.
 
 # Examples
 ```jldoctest
-julia> F = eigen([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
+julia> A = [1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0]; F = eigen(A)
 Eigen{Float64, Float64, Matrix{Float64}, Vector{Float64}}
 values:
 3-element Vector{Float64}:
@@ -44,6 +47,9 @@ julia> F.vectors
 julia> vals, vecs = F; # destructuring via iteration
 
 julia> vals == F.values && vecs == F.vectors
+true
+
+julia> Matrix(exp(F)) ≈ exp(A)
 true
 ```
 """

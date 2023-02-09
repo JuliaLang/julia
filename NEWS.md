@@ -47,6 +47,9 @@ Standard library changes
   supports precompilation and setting compatibility.
 #### LinearAlgebra
 
+- The `Eigen` type now supports more methods, such as matrix functions
+  (which return `Eigen` objects), adjoints and matrix-vector product.
+  `inv(::Eigen)` now produces an `Eigen` type instead of a matrix.
 
 #### Printf
 * Format specifiers now support dynamic width and precision, e.g. `%*s` and `%*.*g` ([#40105]).
