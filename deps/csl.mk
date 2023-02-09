@@ -4,6 +4,9 @@ STD_LIB_PATH += :$(shell LANG=C $(FC) -print-search-dirs 2>/dev/null | grep '^li
 ifneq (,$(findstring CYGWIN,$(BUILD_OS))) # the cygwin-mingw32 compiler lies about it search directory paths
 STD_LIB_PATH := $(shell echo '$(STD_LIB_PATH)' | sed -e "s!/lib/!/bin/!g")
 endif
+ifeq (1,$(ISMSYS_MINGW64))
+STD_LIB_PATH := $(LOCALBASE)/bin
+endif
 
 # Given a colon-separated list of paths in $(2), find the location of the library given in $(1)
 define pathsearch
