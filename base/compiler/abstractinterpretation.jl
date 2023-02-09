@@ -1045,7 +1045,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
             return nothing
         end
         argtypes = has_conditional(𝕃ᵢ) ? ConditionalArgtypes(arginfo, sv) : SimpleArgtypes(arginfo.argtypes)
-        inf_result = InferenceResult(mi, argtypes)
+        inf_result = InferenceResult(mi, argtypes, typeinf_lattice(interp))
         if !any(inf_result.overridden_by_const)
             add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
             return nothing

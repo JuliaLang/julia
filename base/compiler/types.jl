@@ -35,8 +35,7 @@ end
 abstract type ForwardableArgtypes end
 
 """
-    InferenceResult(linfo::MethodInstance)
-    InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes)
+    InferenceResult(linfo::MethodInstance, [argtypes::ForwardableArgtypes, 𝕃::AbstractLattice])
 
 A type that represents the result of running type inference on a chunk of code.
 
@@ -58,12 +57,10 @@ mutable struct InferenceResult
             WorldRange(), Effects(), Effects(), nothing, true)
     end
 end
-function InferenceResult(linfo::MethodInstance; lattice::AbstractLattice=fallback_lattice)
-    return InferenceResult(linfo, matching_cache_argtypes(lattice, linfo)...)
-end
-function InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes; lattice::AbstractLattice=fallback_lattice)
-    return InferenceResult(linfo, matching_cache_argtypes(lattice, linfo, argtypes)...)
-end
+InferenceResult(linfo::MethodInstance, 𝕃::AbstractLattice=fallback_lattice) =
+    InferenceResult(linfo, matching_cache_argtypes(𝕃, linfo)...)
+InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes, 𝕃::AbstractLattice=fallback_lattice) =
+    InferenceResult(linfo, matching_cache_argtypes(𝕃, linfo, argtypes)...)
 
 """
     inf_params::InferenceParams
