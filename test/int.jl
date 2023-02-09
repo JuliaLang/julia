@@ -300,6 +300,29 @@ end
     end
 end
 
+@testset "typemin typemax" begin
+    @test typemin(Int8   ) === Int8(-128)
+    @test typemax(Int8   ) === Int8(127)
+    @test typemin(UInt8  ) === UInt8(0)
+    @test typemax(UInt8  ) === UInt8(255)
+    @test typemin(Int16  ) === Int16(-32768)
+    @test typemax(Int16  ) === Int16(32767)
+    @test typemin(UInt16 ) === UInt16(0)
+    @test typemax(UInt16 ) === UInt16(65535)
+    @test typemin(Int32  ) === Int32(-2147483648)
+    @test typemax(Int32  ) === Int32(2147483647)
+    @test typemin(UInt32 ) === UInt32(0)
+    @test typemax(UInt32 ) === UInt32(4294967295)
+    @test typemin(Int64  ) === Int64(-9223372036854775808)
+    @test typemax(Int64  ) === Int64(9223372036854775807)
+    @test typemin(UInt64 ) === UInt64(0)
+    @test typemax(UInt64 ) === UInt64(0xffff_ffff_ffff_ffff)
+    @test typemin(UInt128) === UInt128(0)
+    @test typemax(UInt128) === UInt128(0xffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff)
+    @test typemin(Int128 ) === Int128(-170141183460469231731687303715884105728)
+    @test typemax(Int128 ) === Int128(170141183460469231731687303715884105727)
+end
+
 @testset "issue #15489" begin
     @test 0x00007ffea27edaa0 + (-40) === (-40) + 0x00007ffea27edaa0 === 0x00007ffea27eda78
     @test UInt64(1) * Int64(-1) === typemax(UInt64)
