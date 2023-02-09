@@ -149,13 +149,14 @@ mutable struct OptimizationState{Interp<:AbstractInterpreter}
     slottypes::Vector{Any}
     inlining::InliningState{Interp}
     cfg::Union{Nothing,CFG}
+    insert_coverage::Bool
 end
 function OptimizationState(frame::InferenceState, params::OptimizationParams,
                            interp::AbstractInterpreter, recompute_cfg::Bool=true)
     inlining = InliningState(frame, params, interp)
     cfg = recompute_cfg ? nothing : frame.cfg
     return OptimizationState(frame.linfo, frame.src, nothing, frame.stmt_info, frame.mod,
-               frame.sptypes, frame.slottypes, inlining, cfg)
+               frame.sptypes, frame.slottypes, inlining, cfg, frame.insert_coverage)
 end
 function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::OptimizationParams,
                            interp::AbstractInterpreter)
@@ -540,18 +541,6 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
         linetable = collect(LineInfoNode, linetable::Vector{Any})::Vector{LineInfoNode}
     end
 
-    # check if coverage mode is enabled
-    coverage = coverage_enabled(sv.mod)
-    if !coverage && JLOptions().code_coverage == 3 # path-specific coverage mode
-        for line in linetable
-            if is_file_tracked(line.file)
-                # if any line falls in a tracked file enable coverage for all
-                coverage = true
-                break
-            end
-        end
-    end
-
     # Go through and add an unreachable node after every
     # Union{} call. Then reindex labels.
     code = copy_exprargs(ci.code)
@@ -567,7 +556,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     prevloc = zero(eltype(ci.codelocs))
     while idx <= length(code)
         codeloc = codelocs[idx]
-        if coverage && codeloc != prevloc && codeloc != 0
+        if sv.insert_coverage && codeloc != prevloc && codeloc != 0
             # insert a side-effect instruction before the current instruction in the same basic block
             insert!(code, idx, Expr(:code_coverage_effect))
             insert!(codelocs, idx, codeloc)
@@ -578,7 +567,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                 ssachangemap = fill(0, nstmts)
             end
             if labelchangemap === nothing
-                labelchangemap = coverage ? fill(0, nstmts) : ssachangemap
+                labelchangemap = fill(0, nstmts)
             end
             ssachangemap[oldidx] += 1
             if oldidx < length(labelchangemap)
@@ -599,11 +588,11 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                     ssachangemap = fill(0, nstmts)
                 end
                 if labelchangemap === nothing
-                    labelchangemap = coverage ? fill(0, nstmts) : ssachangemap
+                    labelchangemap = sv.insert_coverage ? fill(0, nstmts) : ssachangemap
                 end
                 if oldidx < length(ssachangemap)
                     ssachangemap[oldidx + 1] += 1
-                    coverage && (labelchangemap[oldidx + 1] += 1)
+                    sv.insert_coverage && (labelchangemap[oldidx + 1] += 1)
                 end
                 idx += 1
             end
