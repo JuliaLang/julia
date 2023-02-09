@@ -697,6 +697,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         (false, "", "ERROR: option `--inline` is missing an argument")
     @test readchomperrors(`$exename --startup-file=no -e "@show ARGS" -now -- julia RUN.jl`) ==
         (false, "", "ERROR: unknown option `-n`")
+    @test readchomperrors(`$exename --interactive=yes`) ==
+        (false, "", "ERROR: option `-i/--interactive` does not accept an argument")
 
     # --compiled-modules={yes|no}
     @test readchomp(`$exename -E "Bool(Base.JLOptions().use_compiled_modules)"`) == "true"
