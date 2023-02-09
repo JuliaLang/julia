@@ -114,6 +114,14 @@ end
 # invoke does not have its own call cache, but kwcall for invoke does
 setfield!(typeof(invoke).name.mt, :max_args, 3, :monotonic) # invoke, f, T, args...
 
+# define applicable(f, T, args...; kwargs...), without kwargs wrapping
+# to forward to applicable
+function Core.kwcall(kwargs, ::typeof(applicable), @nospecialize(args...))
+    @inline
+    return applicable(Core.kwcall, kwargs, args...)
+end
+
+
 # core operations & types
 include("promotion.jl")
 include("tuple.jl")
