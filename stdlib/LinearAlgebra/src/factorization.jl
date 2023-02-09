@@ -123,7 +123,7 @@ end
 (\)(F::TransposeFactorization{T}, B::VecOrMat{Complex{T}}) where {T<:BlasReal} =
     conj!(adjoint(parent(F)) \ conj.(B))
 (\)(F::AdjointFactorization{T}, B::VecOrMat{Complex{T}}) where {T<:BlasReal} =
-    @invoke \(F::typeof(F), B::AbstractVecOrMat) # send to meta-function in LinearAlgebra.jl
+    @invoke \(F::typeof(F), B::VecOrMat)
 
 function (/)(B::VecOrMat{Complex{T}}, F::Factorization{T}) where {T<:BlasReal}
     require_one_based_indexing(B)
@@ -134,7 +134,7 @@ end
 (/)(B::VecOrMat{Complex{T}}, F::TransposeFactorization{T}) where {T<:BlasReal} =
     conj!(adjoint(parent(F)) \ conj.(B))
 (/)(B::VecOrMat{Complex{T}}, F::AdjointFactorization{T}) where {T<:BlasReal} =
-    invoke(/, Tuple{VecOrMat{Complex{T}}, Factorization{T}}, B, F)
+    @invoke /(B::VecOrMat{Complex{T}}, F::Factorization{T})
 
 function (\)(F::Factorization, B::AbstractVecOrMat)
     require_one_based_indexing(B)
