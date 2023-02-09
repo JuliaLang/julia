@@ -220,7 +220,7 @@ Like [`permute!`](@ref), but the inverse of the given permutation is applied.
 
 Note that if you have a pre-allocated output array (e.g. `u = similar(v)`),
 it is quicker to instead employ `u[p] = v`.  (`invpermute!` internally
-requires some data allocation.)
+allocates a copy of the data.)
 
 # Examples
 ```jldoctest
