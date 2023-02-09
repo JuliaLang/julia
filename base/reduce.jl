@@ -1220,7 +1220,7 @@ function _any(f, itr, ::Colon)
         v = f(x)
         if ismissing(v)
             anymissing = true
-        elseif v
+        elseif v == true
             return true
         end
     end
@@ -1241,7 +1241,7 @@ end
     v = f(x)
     if ismissing(v)
         anymissing = true
-    elseif v
+    elseif v == true
         return true
     end
     return _any_tuple(f, anymissing, rest...)
@@ -1288,8 +1288,7 @@ function _all(f, itr, ::Colon)
         v = f(x)
         if ismissing(v)
             anymissing = true
-        # this syntax allows throwing a TypeError for non-Bool, for consistency with any
-        elseif v
+        elseif v == true
             continue
         else
             return false
@@ -1311,8 +1310,7 @@ end
     v = f(x)
     if ismissing(v)
         anymissing = true
-    # this syntax allows throwing a TypeError for non-Bool, for consistency with any
-    elseif v
+    elseif v == true
         nothing
     else
         return false
