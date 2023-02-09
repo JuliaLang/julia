@@ -34,6 +34,7 @@
     XX(jl_densearray_type) \
     XX(jl_diverror_exception) \
     XX(jl_emptysvec) \
+    XX(jl_emptysbuf) \
     XX(jl_emptytuple) \
     XX(jl_emptytuple_type) \
     XX(jl_errorexception_type) \
@@ -94,6 +95,7 @@
     XX(jl_returnnode_type) \
     XX(jl_signed_type) \
     XX(jl_simplevector_type) \
+    XX(jl_simplebuffer_type) \
     XX(jl_slotnumber_type) \
     XX(jl_ssavalue_type) \
     XX(jl_stackovf_exception) \

@@ -30,6 +30,7 @@ static void check_c_types(const char *where, jl_value_t *rt, jl_value_t *at)
     if (!jl_type_mappable_to_c(rt))
         jl_errorf("%s: return type doesn't correspond to a C type", where);
     JL_TYPECHKS(where, simplevector, at);
+    // FIXME JL_TYPECHKS(where, simplebuffer, at);
     int i, l = jl_svec_len(at);
     for (i = 0; i < l; i++) {
         jl_value_t *ati = jl_svecref(at, i);

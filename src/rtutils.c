@@ -552,6 +552,20 @@ static size_t jl_show_svec(JL_STREAM *out, jl_svec_t *t, const char *head, const
     n += jl_printf(out, "%s", cls);
     return n;
 }
+static size_t jl_show_sbuf(JL_STREAM *out, jl_sbuf_t *t, const char *head, const char *opn, const char *cls) JL_NOTSAFEPOINT
+{
+    size_t i, n=0, len = jl_sbuf_len(t);
+    n += jl_printf(out, "%s", head);
+    n += jl_printf(out, "%s", opn);
+    for (i = 0; i < len; i++) {
+        jl_value_t *v = jl_sbufref(t,i);
+        n += jl_static_show(out, v);
+        if (i != len-1)
+            n += jl_printf(out, ", ");
+    }
+    n += jl_printf(out, "%s", cls);
+    return n;
+}
 
 struct recur_list {
     struct recur_list *prev;
@@ -719,6 +733,9 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if (v == (jl_value_t*)jl_simplevector_type) {
         n += jl_printf(out, "Core.SimpleVector");
     }
+    else if (v == (jl_value_t*)jl_simplebuffer_type) {
+        n += jl_printf(out, "Core.SimpleBuffer");
+    }
     else if (v == (jl_value_t*)jl_typename_type) {
         n += jl_printf(out, "Core.TypeName");
     }
@@ -757,6 +774,9 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_simplevector_type) {
         n += jl_show_svec(out, (jl_svec_t*)v, "svec", "(", ")");
+    }
+    else if (vt == jl_simplebuffer_type) {
+        n += jl_show_sbuf(out, (jl_sbuf_t*)v, "sbuf", "(", ")");
     }
     else if (v == (jl_value_t*)jl_unionall_type) {
         // avoid printing `typeof(Type)` for `UnionAll`.

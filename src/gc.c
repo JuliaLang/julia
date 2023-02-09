@@ -911,6 +911,10 @@ void jl_gc_force_mark_old(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT
         size_t l = jl_svec_len(v);
         dtsz = l * sizeof(void*) + sizeof(jl_svec_t);
     }
+    else if (dt == jl_simplebuffer_type) {
+        size_t l = jl_sbuf_len(v);
+        dtsz = l * sizeof(void*) + sizeof(jl_sbuf_t);
+    }
     else if (dt->name == jl_array_typename) {
         jl_array_t *a = (jl_array_t*)v;
         if (!a->flags.pooled)
@@ -2273,6 +2277,21 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             size_t l = jl_svec_len(new_obj);
             jl_value_t **data = jl_svec_data(new_obj);
             size_t dtsz = l * sizeof(void *) + sizeof(jl_svec_t);
+            if (update_meta)
+                gc_setmark(ptls, o, bits, dtsz);
+            else if (foreign_alloc)
+                objprofile_count(vt, bits == GC_OLD_MARKED, dtsz);
+            jl_value_t *objary_parent = new_obj;
+            jl_value_t **objary_begin = data;
+            jl_value_t **objary_end = data + l;
+            uint32_t step = 1;
+            uintptr_t nptr = (l << 2) | (bits & GC_OLD);
+            gc_mark_objarray(ptls, objary_parent, objary_begin, objary_end, step, nptr);
+        }
+        else if (vt == jl_simplebuffer_type) {
+            size_t l = jl_sbuf_len(new_obj);
+            jl_value_t **data = jl_sbuf_data(new_obj);
+            size_t dtsz = l * sizeof(void *) + sizeof(jl_sbuf_t);
             if (update_meta)
                 gc_setmark(ptls, o, bits, dtsz);
             else if (foreign_alloc)

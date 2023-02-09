@@ -152,6 +152,15 @@ typedef struct {
     // jl_value_t *data[];
 } jl_svec_t;
 
+// A SimpleBuffer is a semi-immutable pointer array
+// Data is stored at the end of this variable-length struct.
+typedef struct {
+    JL_DATA_TYPE
+    size_t length;
+    // pointer size aligned
+    // jl_value_t *data[];
+} jl_sbuf_t;
+
 typedef struct {
     /*
       how - allocation style
@@ -705,6 +714,7 @@ extern JL_DLLIMPORT jl_datatype_t *jl_partial_opaque_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_interconditional_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_method_match_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_simplevector_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_simplebuffer_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_typename_t *jl_tuple_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_typename_t *jl_vecelement_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_anytuple_type JL_GLOBALLY_ROOTED;
@@ -803,6 +813,7 @@ extern JL_DLLIMPORT jl_datatype_t *jl_typemap_level_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_typemap_entry_type JL_GLOBALLY_ROOTED;
 
 extern JL_DLLIMPORT jl_svec_t *jl_emptysvec JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_sbuf_t *jl_emptysbuf JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_emptytuple JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_true JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_false JL_GLOBALLY_ROOTED;
@@ -970,6 +981,10 @@ JL_DLLEXPORT void jl_gc_safepoint(void);
 #define jl_svec_set_len_unsafe(t,n) (((jl_svec_t*)(t))->length=(n))
 #define jl_svec_data(t) ((jl_value_t**)((char*)(t) + sizeof(jl_svec_t)))
 
+#define jl_sbuf_len(t)              (((jl_sbuf_t*)(t))->length)
+#define jl_sbuf_set_len_unsafe(t,n) (((jl_sbuf_t*)(t))->length=(n))
+#define jl_sbuf_data(t) ((jl_value_t**)((char*)(t) + sizeof(jl_sbuf_t)))
+
 #ifdef __clang_gcanalyzer__
 STATIC_INLINE jl_value_t *jl_svecref(void *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
 STATIC_INLINE jl_value_t *jl_svecset(
@@ -998,6 +1013,46 @@ STATIC_INLINE jl_value_t *jl_svecset(
     return (jl_value_t*)x;
 }
 #endif
+#ifdef __clang_gcanalyzer__
+STATIC_INLINE jl_value_t *jl_sbufref(void *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
+STATIC_INLINE jl_value_t *jl_sbufset(
+    void *t JL_ROOTING_ARGUMENT JL_PROPAGATES_ROOT,
+    size_t i, void *x JL_ROOTED_ARGUMENT) JL_NOTSAFEPOINT;
+#else
+STATIC_INLINE jl_value_t *jl_unsafe_sbufref(void *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
+{
+    // while sbuf is supposedly immutable, in practice we sometimes publish it first
+    // and set the values lazily
+    return jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)jl_svec_data(t) + i);
+}
+STATIC_INLINE jl_value_t *jl_unsafe_sbufset(
+    void *t JL_ROOTING_ARGUMENT JL_PROPAGATES_ROOT,
+    size_t i, void *x JL_ROOTED_ARGUMENT) JL_NOTSAFEPOINT
+{
+    // while sbuf is supposedly immutable, in practice we sometimes publish it
+    // first and set the values lazily. Those users occasionally might need to
+    // instead use jl_atomic_store_release here.
+    jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)jl_sbuf_data(t) + i, (jl_value_t*)x);
+    jl_gc_wb(t, x);
+    return (jl_value_t*)x;
+}
+ 
+STATIC_INLINE jl_value_t *jl_sbufref(void *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
+{
+    assert(jl_typeis(t,jl_simplevector_type));
+    assert(i < jl_sbuf_len(t));
+    return jl_unsafe_sbufref(t, i);
+}
+STATIC_INLINE jl_value_t *jl_sbufset(
+    void *t JL_ROOTING_ARGUMENT JL_PROPAGATES_ROOT,
+    size_t i, void *x JL_ROOTED_ARGUMENT) JL_NOTSAFEPOINT
+{
+    assert(jl_typeis(t,jl_simplevector_type));
+    assert(i < jl_sbuf_len(t));
+    return jl_unsafe_sbufset(t, i, x);
+}
+#endif
+
 
 #define jl_array_len(a)   (((jl_array_t*)(a))->length)
 #define jl_array_data(a)  ((void*)((jl_array_t*)(a))->data)
@@ -1221,6 +1276,8 @@ static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEP
 #define jl_is_namedtuple(v)  (((jl_datatype_t*)jl_typeof(v))->name == jl_namedtuple_typename)
 #define jl_is_svec(v)        jl_typeis(v,jl_simplevector_type)
 #define jl_is_simplevector(v) jl_is_svec(v)
+#define jl_is_sbuf(v)        jl_typeis(v,jl_simplebuffer_type)
+#define jl_is_simplebuffer(v) jl_is_sbuf(v)
 #define jl_is_datatype(v)    jl_typeis(v,jl_datatype_type)
 #define jl_is_mutable(t)     (((jl_datatype_t*)t)->name->mutabl)
 #define jl_is_mutable_datatype(t) (jl_is_datatype(t) && (((jl_datatype_t*)t)->name->mutabl))
@@ -1488,6 +1545,13 @@ JL_DLLEXPORT jl_svec_t *jl_alloc_svec(size_t n);
 JL_DLLEXPORT jl_svec_t *jl_alloc_svec_uninit(size_t n);
 JL_DLLEXPORT jl_svec_t *jl_svec_copy(jl_svec_t *a);
 JL_DLLEXPORT jl_svec_t *jl_svec_fill(size_t n, jl_value_t *x);
+JL_DLLEXPORT jl_sbuf_t *jl_sbuf(size_t n, ...) JL_MAYBE_UNROOTED;
+JL_DLLEXPORT jl_sbuf_t *jl_sbuf1(void *a);
+JL_DLLEXPORT jl_sbuf_t *jl_sbuf2(void *a, void *b);
+JL_DLLEXPORT jl_sbuf_t *jl_alloc_sbuf(size_t n);
+JL_DLLEXPORT jl_sbuf_t *jl_alloc_sbuf_uninit(size_t n);
+JL_DLLEXPORT jl_sbuf_t *jl_sbuf_copy(jl_sbuf_t *a);
+JL_DLLEXPORT jl_sbuf_t *jl_sbuf_fill(size_t n, jl_value_t *x);
 JL_DLLEXPORT jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *v);
 JL_DLLEXPORT jl_sym_t *jl_symbol(const char *str) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_symbol_lookup(const char *str) JL_NOTSAFEPOINT;

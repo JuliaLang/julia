@@ -117,6 +117,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_datatype_type);
         INSERT_TAG(jl_slotnumber_type);
         INSERT_TAG(jl_simplevector_type);
+        INSERT_TAG(jl_simplebuffer_type);
         INSERT_TAG(jl_array_type);
         INSERT_TAG(jl_typedslot_type);
         INSERT_TAG(jl_expr_type);
@@ -228,6 +229,7 @@ jl_value_t **const*const get_tags(void) {
 
         // other special values
         INSERT_TAG(jl_emptysvec);
+        INSERT_TAG(jl_emptysbuf);
         INSERT_TAG(jl_emptytuple);
         INSERT_TAG(jl_false);
         INSERT_TAG(jl_true);
