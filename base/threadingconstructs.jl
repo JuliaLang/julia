@@ -99,6 +99,13 @@ function threadpooltids(pool::Symbol)
     end
 end
 
+"""
+    Threads.ngcthreads() -> Int
+
+Returns the number of GC threads currently configured.
+"""
+ngcthreads() = Int(unsafe_load(cglobal(:jl_n_gcthreads, Cint))) + 1
+
 function threading_run(fun, static)
     ccall(:jl_enter_threaded_region, Cvoid, ())
     n = threadpoolsize()

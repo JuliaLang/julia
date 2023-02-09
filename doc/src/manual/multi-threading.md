@@ -72,6 +72,15 @@ julia> Threads.threadid()
     three processes have 2 threads enabled. For more fine grained control over worker
     threads use [`addprocs`](@ref) and pass `-t`/`--threads` as `exeflags`.
 
+### Multiple GC Threads
+
+The Garbage Collector (GC) can use multiple threads. The amount used is either half the number
+of compute worker threads or configured by either the `--gcthreads` command line argument or by using the
+[`JULIA_NUM_GC_THREADS`](@ref env-gc-threads) environment variable.
+
+!!! compat "Julia 1.10"
+    The `--gcthreads` command line argument requires at least Julia 1.10.
+
 ## [Threadpools](@id man-threadpools)
 
 When a program's threads are busy with many tasks to run, tasks may experience
