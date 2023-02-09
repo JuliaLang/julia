@@ -26,14 +26,15 @@ Build system changes
 
 New library functions
 ---------------------
-
 * `readuntil!(io, buf, delim)` reads data into a pre-allocated buffer until `delim` ([#48273]).
-
+* `tanpi` is now defined. It computes tan(πx) more accurately than `tan(pi*x)` ([#48575]).
 
 New library features
 --------------------
-The `initialized=true` keyword assignment for `sortperm!` and `partialsortperm!`
-is now a no-op ([#47979]). It previously exposed unsafe behavior ([#47977]).
+* The `initialized=true` keyword assignment for `sortperm!` and `partialsortperm!`
+  is now a no-op ([#47979]). It previously exposed unsafe behavior ([#47977]).
+* `binomial(x, k)` now supports non-integer `x` ([#48124]).
+* A `CartesianIndex` is now treated as a "scalar" for broadcasting ([#47044]).
 
 Standard library changes
 ------------------------
@@ -49,7 +50,7 @@ Standard library changes
 
 
 #### Printf
-
+* Format specifiers now support dynamic width and precision, e.g. `%*s` and `%*.*g` ([#40105]).
 
 #### Profile
 
@@ -83,6 +84,10 @@ Standard library changes
 
 #### DelimitedFiles
 
+
+#### InteractiveUtils
+
+ * `code_native` and `@code_native` now default to intel syntax instead of AT&T.
 
 Deprecated or removed
 ---------------------

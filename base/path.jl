@@ -145,7 +145,7 @@ function _splitdir_nodrive(a::String, b::String)
 end
 
 """
-    dirname(path::AbstractString) -> AbstractString
+    dirname(path::AbstractString) -> String
 
 Get the directory part of a path. Trailing characters ('/' or '\\') in the path are
 counted as part of the path.
@@ -161,10 +161,10 @@ julia> dirname("/home/myuser/")
 
 See also [`basename`](@ref).
 """
- dirname(path::AbstractString) = splitdir(path)[1]
+dirname(path::AbstractString) = splitdir(path)[1]
 
 """
-    basename(path::AbstractString) -> AbstractString
+    basename(path::AbstractString) -> String
 
 Get the file name part of a path.
 
@@ -186,7 +186,7 @@ See also [`dirname`](@ref).
 basename(path::AbstractString) = splitdir(path)[2]
 
 """
-    splitext(path::AbstractString) -> (AbstractString, AbstractString)
+    splitext(path::AbstractString) -> (String, String)
 
 If the last component of a path contains one or more dots, split the path into everything before the
 last dot and everything including and after the dot. Otherwise, return a tuple of the argument
@@ -542,7 +542,7 @@ contractuser(path::AbstractString)
 
 
 """
-    relpath(path::AbstractString, startpath::AbstractString = ".") -> AbstractString
+    relpath(path::AbstractString, startpath::AbstractString = ".") -> String
 
 Return a relative filepath to `path` either from the current directory or from an optional
 start directory. This is a path computation: the filesystem is not accessed to confirm the

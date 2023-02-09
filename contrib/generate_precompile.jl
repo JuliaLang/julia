@@ -23,10 +23,11 @@ const PARALLEL_PRECOMPILATION = true
 const debug_output = devnull # or stdout
 
 # Disable fancy printing
-const fancyprint = (stdout isa Base.TTY) && (get(ENV, "CI", nothing) != "true")
+const fancyprint = (stdout isa Base.TTY) && Base.get_bool_env("CI", false) !== true
 ##
 
 CTRL_C = '\x03'
+CTRL_R = '\x12'
 UP_ARROW = "\e[A"
 DOWN_ARROW = "\e[B"
 
@@ -69,6 +70,7 @@ display([1 2; 3 4])
 @time 1+1
 ; pwd
 $CTRL_C
+$CTRL_R$CTRL_C
 ? reinterpret
 using Ra\t$CTRL_C
 \\alpha\t$CTRL_C
@@ -316,6 +318,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
                 current = current == 4 ? 1 : current + 1
             end
         end
+        close(t)
     end
 
     # Collect statements from running the script

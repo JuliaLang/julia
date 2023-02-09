@@ -367,7 +367,7 @@ function log1p(x::Float64)
     elseif isnan(x)
         NaN
     else
-        throw_complex_domainerror(:log1p, x)
+        throw_complex_domainerror_neg1(:log1p, x)
     end
 end
 
@@ -399,7 +399,7 @@ function log1p(x::Float32)
     elseif isnan(x)
         NaN32
     else
-        throw_complex_domainerror(:log1p, x)
+        throw_complex_domainerror_neg1(:log1p, x)
     end
 end
 

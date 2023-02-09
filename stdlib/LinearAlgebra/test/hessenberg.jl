@@ -24,6 +24,11 @@ let n = 10
         A = Areal
         H = UpperHessenberg(A)
         AH = triu(A,-1)
+        for k in -2:2
+            @test istril(H, k) == istril(AH, k)
+            @test istriu(H, k) == istriu(AH, k)
+            @test (k <= -1 ? istriu(H, k) : !istriu(H, k))
+        end
         @test UpperHessenberg(H) === H
         @test parent(H) === A
         @test Matrix(H) == Array(H) == H == AH

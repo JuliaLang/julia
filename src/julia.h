@@ -1760,6 +1760,7 @@ JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
 JL_DLLEXPORT const char *jl_get_default_sysimg_path(void);
 JL_DLLEXPORT int jl_is_initialized(void);
 JL_DLLEXPORT void jl_atexit_hook(int status);
+JL_DLLEXPORT void jl_task_wait_empty(void);
 JL_DLLEXPORT void jl_postoutput_hook(void);
 JL_DLLEXPORT void JL_NORETURN jl_exit(int status);
 JL_DLLEXPORT void JL_NORETURN jl_raise(int signo);
@@ -2065,7 +2066,7 @@ typedef int jl_uv_os_fd_t;
 
 JL_DLLEXPORT int jl_process_events(void);
 
-JL_DLLEXPORT struct uv_loop_s *jl_global_event_loop(void);
+JL_DLLEXPORT struct uv_loop_s *jl_global_event_loop(void) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_close_uv(struct uv_handle_s *handle);
 

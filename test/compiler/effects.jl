@@ -109,6 +109,21 @@ recur_termination22(x) = x * recur_termination21(x-1)
     recur_termination21(12) + recur_termination22(12)
 end
 
+# anonymous function support for `@assume_effects`
+@test fully_eliminated() do
+    map((2,3,4)) do x
+        # this :terminates_locally allows this anonymous function to be constant-folded
+        Base.@assume_effects :terminates_locally
+        res = 1
+        1 < x < 20 || error("bad pow")
+        while x > 1
+            res *= x
+            x -= 1
+        end
+        return res
+    end
+end
+
 # control flow backedge should taint `terminates`
 @test Base.infer_effects((Int,)) do n
     for i = 1:n; end
@@ -462,9 +477,9 @@ end |> Core.Compiler.is_consistent
 end |> Core.Compiler.is_effect_free
 
 # `getfield_effects` handles access to union object nicely
-@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Any[Some{String}, Core.Const(:value)], String))
-@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Any[Some{Symbol}, Core.Const(:value)], Symbol))
-@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Any[Union{Some{Symbol},Some{String}}, Core.Const(:value)], Union{Symbol,String}))
+@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Some{String}, Core.Const(:value)]), String))
+@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Some{Symbol}, Core.Const(:value)]), Symbol))
+@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Union{Some{Symbol},Some{String}}, Core.Const(:value)]), Union{Symbol,String}))
 @test Base.infer_effects((Bool,)) do c
     obj = c ? Some{String}("foo") : Some{Symbol}(:bar)
     return getfield(obj, :value)
@@ -688,7 +703,8 @@ end # @testset "effects analysis on array construction" begin
 end # @testset "effects analysis on array ops" begin
 
 # Test that builtin_effects handles vararg correctly
-@test !Core.Compiler.is_nothrow(Core.Compiler.builtin_effects(Core.Compiler.fallback_lattice, Core.isdefined, Any[String, Vararg{Any}], Bool))
+@test !Core.Compiler.is_nothrow(Core.Compiler.builtin_effects(Core.Compiler.fallback_lattice, Core.isdefined,
+    Core.Compiler.ArgInfo(nothing, Any[Core.Compiler.Const(Core.isdefined), String, Vararg{Any}]), Bool))
 
 # Test that :new can be eliminated even if an sparam is unknown
 struct SparamUnused{T}
@@ -731,3 +747,41 @@ end |> Core.Compiler.is_total
 @test Base.infer_effects(Tuple{Int64}) do i
     @inbounds (1,2,3)[i]
 end |> !Core.Compiler.is_consistent
+
+# Test that :new of non-concrete, but otherwise known type
+# does not taint consistency.
+@eval struct ImmutRef{T}
+    x::T
+    ImmutRef(x) = $(Expr(:new, :(ImmutRef{typeof(x)}), :x))
+end
+@test Core.Compiler.is_foldable(Base.infer_effects(ImmutRef, Tuple{Any}))
+
+@test Base.ismutationfree(Type{Union{}})
+@test Core.Compiler.is_total(Base.infer_effects(typejoin, ()))
+
+# nothrow-ness of subtyping operations
+# https://github.com/JuliaLang/julia/pull/48566
+@test !Core.Compiler.is_nothrow(Base.infer_effects((A,B)->A<:B, (Any,Any)))
+@test !Core.Compiler.is_nothrow(Base.infer_effects((A,B)->A>:B, (Any,Any)))
+
+# GotoIfNot should properly mark itself as throwing when given a non-Bool
+# https://github.com/JuliaLang/julia/pull/48583
+gotoifnot_throw_check_48583(x) = x ? x : 0
+@test !Core.Compiler.is_nothrow(Base.infer_effects(gotoifnot_throw_check_48583, (Missing,)))
+@test !Core.Compiler.is_nothrow(Base.infer_effects(gotoifnot_throw_check_48583, (Any,)))
+@test Core.Compiler.is_nothrow(Base.infer_effects(gotoifnot_throw_check_48583, (Bool,)))
+
+
+# unknown :static_parameter should taint :nothrow
+# https://github.com/JuliaLang/julia/issues/46771
+unknown_sparam_throw(::Union{Nothing, Type{T}}) where T = (T; nothing)
+unknown_sparam_nothrow1(x::Ref{T}) where T = (T; nothing)
+unknown_sparam_nothrow2(x::Ref{Ref{T}}) where T = (T; nothing)
+@test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type{Int},)))
+@test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type{<:Integer},)))
+@test !Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type,)))
+@test !Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Nothing,)))
+@test !Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Union{Type{Int},Nothing},)))
+@test !Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Any,)))
+@test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_nothrow1, (Ref,)))
+@test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_nothrow2, (Ref{Ref{T}} where T,)))

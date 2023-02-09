@@ -1189,6 +1189,12 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
                 compact.result[stmt][:inst] = nothing
             end
             compact.result[last(stmts)][:inst] = ReturnNode()
+        else
+            # Tell compaction to not schedule this block. A value of -2 here
+            # indicates that the block is not to be scheduled, but there should
+            # still be an (unreachable) BB inserted into the final IR to avoid
+            # disturbing the BB numbering.
+            compact.bb_rename_succ[to] = -2
         end
     else
         # Remove this edge from all phi nodes in `to` block
@@ -1531,7 +1537,7 @@ function iterate_compact(compact::IncrementalCompact)
         resize!(compact, old_result_idx)
     end
     bb = compact.ir.cfg.blocks[active_bb]
-    if compact.cfg_transforms_enabled && active_bb > 1 && active_bb <= length(compact.bb_rename_succ) && compact.bb_rename_succ[active_bb] == -1
+    if compact.cfg_transforms_enabled && active_bb > 1 && active_bb <= length(compact.bb_rename_succ) && compact.bb_rename_succ[active_bb] <= -1
         # Dead block, so kill the entire block.
         compact.idx = last(bb.stmts)
         # Pop any remaining insertion nodes

@@ -6,9 +6,9 @@ How does the Julia runtime execute `julia -e 'println("Hello World!")'` ?
 
 Execution starts at [`main()` in `cli/loader_exe.c`](https://github.com/JuliaLang/julia/blob/master/cli/loader_exe.c),
 which calls `jl_load_repl()` in [`cli/loader_lib.c`](https://github.com/JuliaLang/julia/blob/master/cli/loader_lib.c)
-which loads a few libraries, eventually calling [`repl_entrypoint()` in `src/jlapi.c`](https://github.com/JuliaLang/julia/blob/master/src/jlapi.c).
+which loads a few libraries, eventually calling [`jl_repl_entrypoint()` in `src/jlapi.c`](https://github.com/JuliaLang/julia/blob/master/src/jlapi.c).
 
-`repl_entrypoint()` calls [`libsupport_init()`](https://github.com/JuliaLang/julia/blob/master/src/support/libsupportinit.c)
+`jl_repl_entrypoint()` calls [`libsupport_init()`](https://github.com/JuliaLang/julia/blob/master/src/support/libsupportinit.c)
 to set the C library locale and to initialize the "ios" library (see [`ios_init_stdstreams()`](https://github.com/JuliaLang/julia/blob/master/src/support/ios.c)
 and [Legacy `ios.c` library](@ref Legacy-ios.c-library)).
 
@@ -20,7 +20,7 @@ or early initialization. Other options are handled later by [`exec_options()` in
 
 ## `julia_init()`
 
-[`julia_init()` in `task.c`](https://github.com/JuliaLang/julia/blob/master/src/task.c) is called
+[`julia_init()` in `init.c`](https://github.com/JuliaLang/julia/blob/master/src/init.c) is called
 by `main()` and calls [`_julia_init()` in `init.c`](https://github.com/JuliaLang/julia/blob/master/src/init.c).
 
 `_julia_init()` begins by calling `libsupport_init()` again (it does nothing the second time).

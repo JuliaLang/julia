@@ -69,8 +69,9 @@ end
     @test repr(Any[pi ℯ; ℯ pi]) == "Any[π ℯ; ℯ π]"
     @test string(pi) == "π"
 
-    @test sin(π) === sinpi(1) == tan(π) == sinpi(1 // 1) == 0
-    @test cos(π) === cospi(1) == sec(π) == cospi(1 // 1) == -1
+    @test sin(π) == sind(180) === sinpi(1) === sinpi(1//1) == tan(π) == 0
+    @test tan(π) == tand(180) === tanpi(1) === tanpi(1//1) === -0.0
+    @test cos(π) == cosd(180) === cospi(1) === cospi(1//1) == sec(π) == -1
     @test csc(π) == 1/0 && cot(π) == -1/0
     @test sincos(π) === sincospi(1) == (0, -1)
 end
@@ -181,6 +182,7 @@ end
             @test cbrt(x) ≈ cbrt(big(x))
             @test cos(x) ≈ cos(big(x))
             @test cosh(x) ≈ cosh(big(x))
+	    @test cospi(x) ≈ cospi(big(x))
             @test exp(x) ≈ exp(big(x))
             @test exp10(x) ≈ exp10(big(x))
             @test exp2(x) ≈ exp2(big(x))
@@ -194,9 +196,11 @@ end
             @test log2(x) ≈ log2(big(x))
             @test sin(x) ≈ sin(big(x))
             @test sinh(x) ≈ sinh(big(x))
+            @test sinpi(x) ≈ sinpi(big(x))
             @test sqrt(x) ≈ sqrt(big(x))
             @test tan(x) ≈ tan(big(x))
             @test tanh(x) ≈ tanh(big(x))
+	    @test tanpi(x) ≈ tanpi(big(x))
             @test sec(x) ≈ sec(big(x))
             @test csc(x) ≈ csc(big(x))
             @test secd(x) ≈ secd(big(x))
@@ -499,6 +503,22 @@ end
             @test cospi(convert(T,-1.5))::fT ⩲ zero(fT)
             @test_throws DomainError cospi(convert(T,Inf))
         end
+	@testset "trig pi functions accuracy" for numerator in -20:1:20
+	    for func in (sinpi, cospi, tanpi,
+	                 x -> sincospi(x)[1],
+			 x -> sincospi(x)[2])
+                x = numerator // 20
+		# Check that rational function works
+		@test func(x) ≈ func(BigFloat(x))
+		# Use short value so that wider values will be exactly equal
+		shortx = Float16(x)
+		# Compare to BigFloat value
+		bigvalue = func(BigFloat(shortx))
+		for T in (Float16,Float32,Float64)
+		    @test func(T(shortx)) ≈ T(bigvalue)
+                end
+            end
+	end
         @testset begin
             # If the machine supports fma (fused multiply add), we require exact equality.
             # Otherwise, we only require approximate equality.
@@ -529,14 +549,18 @@ end
     @test ismissing(scdm[2])
 end
 
-@testset "Integer and Inf args for sinpi/cospi/sinc/cosc" begin
+@testset "Integer and Inf args for sinpi/cospi/tanpi/sinc/cosc" begin
     for (sinpi, cospi) in ((sinpi, cospi), (x->sincospi(x)[1], x->sincospi(x)[2]))
-        @test sinpi(1) == 0
-        @test sinpi(-1) == -0
+        @test sinpi(1) === 0.0
+        @test sinpi(-1) === -0.0
         @test cospi(1) == -1
         @test cospi(2) == 1
     end
 
+    @test tanpi(1) === -0.0
+    @test tanpi(-1) === 0.0
+    @test tanpi(2) === 0.0
+    @test tanpi(-2) === -0.0
     @test sinc(1) == 0
     @test sinc(complex(1,0)) == 0
     @test sinc(0) == 1
@@ -589,7 +613,7 @@ end
     end
 end
 
-@testset "Irrational args to sinpi/cospi/sinc/cosc" begin
+@testset "Irrational args to sinpi/cospi/tanpi/sinc/cosc" begin
     for x in (pi, ℯ, Base.MathConstants.golden)
         for (sinpi, cospi) in ((sinpi, cospi), (x->sincospi(x)[1], x->sincospi(x)[2]))
             @test sinpi(x) ≈ Float64(sinpi(big(x)))
@@ -597,6 +621,7 @@ end
             @test sinpi(complex(x, x)) ≈ ComplexF64(sinpi(complex(big(x), big(x))))
             @test cospi(complex(x, x)) ≈ ComplexF64(cospi(complex(big(x), big(x))))
         end
+	@test tanpi(x) ≈ Float64(tanpi(big(x)))
         @test sinc(x)  ≈ Float64(sinc(big(x)))
         @test cosc(x)  ≈ Float64(cosc(big(x)))
         @test sinc(complex(x, x))  ≈ ComplexF64(sinc(complex(big(x),  big(x))))
@@ -626,7 +651,7 @@ end
 end
 
 @testset "trig function type stability" begin
-    @testset "$T $f" for T = (Float32,Float64,BigFloat,Rational{Int16},Complex{Int32},ComplexF16), f = (sind,cosd,sinpi,cospi)
+    @testset "$T $f" for T = (Float32,Float64,BigFloat,Rational{Int16},Complex{Int32},ComplexF16), f = (sind,cosd,sinpi,cospi,tanpi)
         @test Base.return_types(f,Tuple{T}) == [float(T)]
     end
     @testset "$T sincospi" for T = (Float32,Float64,BigFloat,Rational{Int16},Complex{Int32},ComplexF16)
@@ -1352,9 +1377,9 @@ end
 
 @testset "pow" begin
     # tolerance by type for regular powers
-    POW_TOLS = Dict(Float16=>[.51, .51, 2.0, 1.5],
-                    Float32=>[.51, .51, 2.0, 1.5],
-                    Float64=>[1.0, 1.5, 2.0, 1.5])
+    POW_TOLS = Dict(Float16=>[.51, .51, .51, 2.0, 1.5],
+                    Float32=>[.51, .51, .51, 2.0, 1.5],
+                    Float64=>[.55, 0.8, 1.5, 2.0, 1.5])
     for T in (Float16, Float32, Float64)
         for x in (0.0, -0.0, 1.0, 10.0, 2.0, Inf, NaN, -Inf, -NaN)
             for y in (0.0, -0.0, 1.0, -3.0,-10.0 , Inf, NaN, -Inf, -NaN)
@@ -1372,9 +1397,11 @@ end
             got, expected = x^y, widen(x)^y
             if isfinite(eps(T(expected)))
                 if y == T(-2) # unfortunately x^-2 is less accurate for performance reasons.
-                    @test abs(expected-got) <= POW_TOLS[T][3]*eps(T(expected)) || (x,y)
-                elseif y == T(3) # unfortunately x^3 is less accurate for performance reasons.
                     @test abs(expected-got) <= POW_TOLS[T][4]*eps(T(expected)) || (x,y)
+                elseif y == T(3) # unfortunately x^3 is less accurate for performance reasons.
+                    @test abs(expected-got) <= POW_TOLS[T][5]*eps(T(expected)) || (x,y)
+                elseif issubnormal(got)
+                    @test abs(expected-got) <= POW_TOLS[T][2]*eps(T(expected)) || (x,y)
                 else
                     @test abs(expected-got) <= POW_TOLS[T][1]*eps(T(expected)) || (x,y)
                 end
@@ -1385,7 +1412,7 @@ end
             x=rand(T)*floatmin(T); y=rand(T)*3-T(1.2)
             got, expected = x^y, widen(x)^y
             if isfinite(eps(T(expected)))
-                @test abs(expected-got) <= POW_TOLS[T][2]*eps(T(expected)) || (x,y)
+                @test abs(expected-got) <= POW_TOLS[T][3]*eps(T(expected)) || (x,y)
             end
         end
         # test (-x)^y for y larger than typemax(Int)
@@ -1396,6 +1423,9 @@ end
     # test for large negative exponent where error compensation matters
     @test 0.9999999955206014^-1.0e8 == 1.565084574870928
     @test 3e18^20 == Inf
+    # two cases where we have observed > 1 ULP in the past
+    @test 0.0013653274095082324^-97.60372292227069 == 4.088393948750035e279
+    @test 8.758520413376658e-5^70.55863059215994 == 5.052076767078296e-287
 end
 
 # Test that sqrt behaves correctly and doesn't exhibit fp80 double rounding.

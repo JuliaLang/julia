@@ -1967,6 +1967,11 @@ static inline jl_cgval_t update_julia_type(jl_codectx_t &ctx, const jl_cgval_t &
     Type *T = julia_type_to_llvm(ctx, typ);
     if (type_is_ghost(T))
         return ghostValue(ctx, typ);
+    else if (v.TIndex && v.V == NULL) {
+        // type mismatch (there weren't any non-ghost values in the union)
+        CreateTrap(ctx.builder);
+        return jl_cgval_t();
+    }
     return jl_cgval_t(v, typ, NULL);
 }
 
@@ -8874,7 +8879,7 @@ extern "C" JL_DLLEXPORT void jl_init_codegen_impl(void)
     init_jit_functions();
 }
 
-extern "C" JL_DLLEXPORT void jl_teardown_codegen_impl()
+extern "C" JL_DLLEXPORT void jl_teardown_codegen_impl() JL_NOTSAFEPOINT
 {
     // output LLVM timings and statistics
     reportAndResetTimings();
