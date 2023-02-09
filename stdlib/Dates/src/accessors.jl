@@ -32,6 +32,8 @@ function day(days)
     y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
     return c - div(153m - 457, 5)
 end
+
+# ISO year utils
 # https://en.wikipedia.org/wiki/Talk:ISO_week_date#Algorithms
 const WEEK_INDEX = (15, 23, 3, 11)
 function week(days)
@@ -40,6 +42,47 @@ function week(days)
     w = (w * 28 + WEEK_INDEX[c + 1]) % 1461
     return div(w, 28) + 1
 end
+
+"""
+Year defined as ISO year. The equivalent is
+`week(lastdayofyear(dt) - Day(3))`  as 28 december is always in the last week
+"""
+function weeksinyear(dt::DateTime)
+    firstday = firstdayofyear(dt)
+    lastday = lastdayofyear(dt)
+
+    if dayofweek(firstday) == 4 || dayofweek(lastday) == 4
+        return 53
+    end
+    return 52
+end
+
+"""
+Return current ISO year as defined in
+https://en.wikipedia.org/wiki/ISO_week_date
+"""
+function isoyear(dt::DateTime)
+    thisyear = Year(dt)
+    thismonth = Month(dt)
+    weeknumber = week(dt)
+    if weeknumber >= 52 && thismonth.value == 1
+        # If it is january, then its the iso year from before
+        return Year(thisyear.value - 1)
+    elseif weeknumber == 1 && thismonth.value == 12
+        # If it is december, then its the next year
+        return Year(thisyear.value + 1)
+    else
+        return thisyear
+    end
+end
+
+"""
+Return current ISO week date as defined in
+https://en.wikipedia.org/wiki/ISO_week_date
+
+The return type is a tuple of `Year`, `Week` and `Integer` (from 1 to 7)
+"""
+isoweekdate(dt::DateTime) = (isoyear(dt), week(dt), dayofweek(dt))
 
 function quarter(days)
     m = month(days)
