@@ -42,6 +42,7 @@ thefname = "the fname!//\\&\1*"
 include_string_test_func = include_string(@__MODULE__, "include_string_test() = @__FILE__", thefname)
 @test include_string_test_func() == thefname
 @test include_string(@__MODULE__, "Base.source_path()", thefname) == Base.source_path()
+@test isdir(Base.source_dir())
 @test basename(@__FILE__) == "loading.jl"
 @test isabspath(@__FILE__)
 
@@ -981,6 +982,8 @@ end
             pkg = Base.identify_package("Baz")
             # Package in manifest in current env not present in depot
             @test Base.locate_package(pkg) !== nothing
+
+            @test Base.find_package("Baz") !== nothing  # coverage
 
             pushfirst!(LOAD_PATH, joinpath(tmp, "Env1"))
 
