@@ -911,7 +911,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     if frame === false
         # completely new
         lock_mi_inference(interp, mi)
-        result = InferenceResult(mi)
+        result = InferenceResult(mi, typeinf_lattice(interp))
         frame = InferenceState(result, cache, interp) # always use the cache for edge targets
         if frame === nothing
             add_remark!(interp, caller, "Failed to retrieve source")
@@ -985,7 +985,7 @@ end
 function typeinf_frame(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, run_optimizer::Bool)
     mi = specialize_method(method, atype, sparams)::MethodInstance
     ccall(:jl_typeinf_timing_begin, Cvoid, ())
-    result = InferenceResult(mi)
+    result = InferenceResult(mi, typeinf_lattice(interp))
     frame = InferenceState(result, run_optimizer ? :global : :no, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
@@ -1044,7 +1044,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
         return retrieve_code_info(mi)
     end
     lock_mi_inference(interp, mi)
-    result = InferenceResult(mi)
+    result = InferenceResult(mi, typeinf_lattice(interp))
     frame = InferenceState(result, #=cache=#:global, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
@@ -1068,7 +1068,7 @@ function typeinf_type(interp::AbstractInterpreter, method::Method, @nospecialize
             return code.rettype
         end
     end
-    result = InferenceResult(mi)
+    result = InferenceResult(mi, typeinf_lattice(interp))
     typeinf(interp, result, :global)
     ccall(:jl_typeinf_timing_end, Cvoid, ())
     result.result isa InferenceState && return nothing
@@ -1087,7 +1087,7 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, linfo::MethodInstance
             # toplevel lambda - infer directly
             ccall(:jl_typeinf_timing_begin, Cvoid, ())
             if !src.inferred
-                result = InferenceResult(linfo)
+                result = InferenceResult(linfo, typeinf_lattice(interp))
                 frame = InferenceState(result, src, #=cache=#:global, interp)
                 typeinf(interp, frame)
                 @assert frame.inferred # TODO: deal with this better
