@@ -1083,7 +1083,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
         end
         src = @atomic :monotonic code.inferred
     else
-        src = code
+        src = nothing
     end
 
     src = inlining_policy(inlining.interp, src, info, IR_FLAG_NULL, mi, Any[])
