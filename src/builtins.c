@@ -527,6 +527,8 @@ JL_CALLABLE(jl_f_sizeof)
         return jl_box_long(strlen(jl_symbol_name((jl_sym_t*)x)));
     if (jl_is_svec(x))
         return jl_box_long((1+jl_svec_len(x))*sizeof(void*));
+    if (jl_is_sbuf(x))
+        return jl_box_long((1+jl_sbuf_len(x))*sizeof(void*));
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
     assert(jl_is_datatype(dt));
     assert(!dt->name->abstract);
@@ -616,6 +618,20 @@ static jl_value_t *do_apply(jl_value_t **args, uint32_t nargs, jl_value_t *itera
                 JL_GC_PUSH1(&t);
                 for (size_t i = 0; i < n; i++) {
                     jl_svecset(t, i, jl_arrayref((jl_array_t*)args[1], i));
+                }
+                JL_GC_POP();
+                return (jl_value_t*)t;
+            }
+        }
+        else if (f == jl_builtin_sbuf) {
+            if (jl_is_svec(args[1]))
+                return args[1];
+            if (jl_is_array(args[1])) {
+                size_t n = jl_array_len(args[1]);
+                jl_sbuf_t *t = jl_alloc_sbuf(n);
+                JL_GC_PUSH1(&t);
+                for (size_t i = 0; i < n; i++) {
+                    jl_sbufset(t, i, jl_arrayref((jl_array_t*)args[1], i));
                 }
                 JL_GC_POP();
                 return (jl_value_t*)t;
