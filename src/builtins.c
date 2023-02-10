@@ -305,6 +305,19 @@ static uintptr_t NOINLINE hash_svec(jl_svec_t *v) JL_NOTSAFEPOINT
     return h;
 }
 
+static uintptr_t NOINLINE hash_sbuf(jl_sbuf_t *v) JL_NOTSAFEPOINT
+{
+    uintptr_t h = 0;
+    size_t i, l = jl_sbuf_len(v);
+    for (i = 0; i < l; i++) {
+        jl_value_t *x = jl_sbufref(v, i);
+        uintptr_t u = (x == NULL) ? 0 : jl_object_id(x);
+        h = bitmix(h, u);
+    }
+    return h;
+}
+
+
 static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOTSAFEPOINT;
 
 typedef struct _varidx {
@@ -416,6 +429,8 @@ static uintptr_t NOINLINE jl_object_id__cold(jl_datatype_t *dt, jl_value_t *v) J
 {
     if (dt == jl_simplevector_type)
         return hash_svec((jl_svec_t*)v);
+    if (dt == jl_simplebuffer_type)
+        return hash_sbuf((jl_sbuf_t*)v);
     if (dt == jl_datatype_type) {
         jl_datatype_t *dtv = (jl_datatype_t*)v;
         uintptr_t h = ~dtv->name->hash;
@@ -2032,6 +2047,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin__apply_iterate = add_builtin_func("_apply_iterate", jl_f__apply_iterate);
     jl_builtin__expr = add_builtin_func("_expr", jl_f__expr);
     jl_builtin_svec = add_builtin_func("svec", jl_f_svec);
+    jl_builtin_sbuf = add_builtin_func("svec", jl_f_sbuf);
     add_builtin_func("_apply_pure", jl_f__apply_pure);
     add_builtin_func("_call_latest", jl_f__call_latest);
     add_builtin_func("_call_in_world", jl_f__call_in_world);
