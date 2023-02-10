@@ -435,7 +435,7 @@ for (sym, exp, type) in [
         (:mn, :(throw(ArgumentError("mn is needed but has not been computed"))), :(eltype(v))),
         (:mx, :(throw(ArgumentError("mx is needed but has not been computed"))), :(eltype(v))),
         (:scratch, nothing, :(Union{Nothing, Vector})), # could have different eltype
-        (:allow_legacy_dispatch true, Bool)]
+        (:allow_legacy_dispatch, true, Bool)]
     usym = Symbol(:_, sym)
     @eval function $usym(v, o, kw)
         # using missing instead of nothing because scratch could === nothing.
