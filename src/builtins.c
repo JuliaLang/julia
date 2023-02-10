@@ -2047,7 +2047,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin__apply_iterate = add_builtin_func("_apply_iterate", jl_f__apply_iterate);
     jl_builtin__expr = add_builtin_func("_expr", jl_f__expr);
     jl_builtin_svec = add_builtin_func("svec", jl_f_svec);
-    jl_builtin_sbuf = add_builtin_func("svec", jl_f_sbuf);
+    jl_builtin_sbuf = add_builtin_func("sbuf", jl_f_sbuf);
     add_builtin_func("_apply_pure", jl_f__apply_pure);
     add_builtin_func("_call_latest", jl_f__call_latest);
     add_builtin_func("_call_in_world", jl_f__call_in_world);
