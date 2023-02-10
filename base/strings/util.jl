@@ -703,9 +703,7 @@ _pat_replacer(x::Union{Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar
 # note: leave str untyped here to make it easier for packages like StringViews to hook in
 function _replace_init(str, pat_repl::NTuple{N, Pair}, count::Int) where N
     count < 0 && throw(DomainError(count, "`count` must be non-negative."))
-    n = 1
-    e1 = nextind(str, lastindex(str)) # sizeof(str)
-    i = a = firstindex(str)
+    e1 = sizeof(str)+1 # nextind(str, lastindex(str))
     patterns = map(p -> _pat_replacer(first(p)), pat_repl)
     replaces = map(last, pat_repl)
     rs = map(patterns) do p
@@ -722,6 +720,9 @@ end
 # note: leave str untyped here to make it easier for packages like StringViews to hook in
 function _replace_finish(out::IO, str, count::Int,
                          patterns::NTuple{N}, replaces::NTuple{N}, rs::NTuple{N}) where N
+    n = 1
+    e1 = sizeof(str)+1 # nextind(str, lastindex(str))
+    i = a = firstindex(str)
     while true
         p = argmin(map(first, rs)) # TODO: or argmin(rs), to pick the shortest first match ?
         r = rs[p]
