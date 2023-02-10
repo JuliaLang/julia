@@ -786,7 +786,7 @@ function _sort!(v::AbstractVector, a::CheckSorted, o::Ordering, kw)
 
     # For most large arrays, a reverse-sorted check is essentially free (overhead < 1%)
     if hi-lo >= 500 && _issorted(v, lo, hi, ReverseOrdering(o))
-        # If reversing is valid, do so. This does violates stability.
+        # If reversing is valid, do so. This violates stability.
         reverse!(v, lo, hi)
         return scratch
     end
