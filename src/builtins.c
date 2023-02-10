@@ -16,6 +16,7 @@
 #include <inttypes.h>
 #if defined(_OS_WINDOWS_)
 #include <malloc.h>
+
 #else
 #include <unistd.h>
 #endif
@@ -867,6 +868,18 @@ JL_CALLABLE(jl_f_svec)
     return (jl_value_t*)t;
 }
 
+JL_CALLABLE(jl_f_sbuf)
+{
+    size_t i;
+    if (nargs == 0)
+        return (jl_value_t*)jl_emptysbuf;
+    jl_sbuf_t *t = jl_alloc_sbuf_uninit(nargs);
+    for (i = 0; i < nargs; i++) {
+        jl_sbufset(t, i, args[i]);
+    }
+    return (jl_value_t*)t;
+}
+
 // struct operations ------------------------------------------------------------
 
 enum jl_memory_order jl_get_atomic_order(jl_sym_t *order, char loading, char storing)
@@ -1648,6 +1661,23 @@ JL_CALLABLE(jl_f__svec_ref)
     return jl_svec_ref(s, idx-1);
 }
 
+JL_CALLABLE(jl_f__sbuf_ref)
+{
+    JL_NARGS(_sbuf_ref, 3, 3);
+    jl_value_t *b = args[0];
+    jl_sbuf_t *s = (jl_sbuf_t*)args[1];
+    jl_value_t *i = (jl_value_t*)args[2];
+    JL_TYPECHK(_sbuf_ref, bool, b);
+    JL_TYPECHK(_sbuf_ref, simplebuffer, (jl_value_t*)s);
+    JL_TYPECHK(_sbuf_ref, long, i);
+    size_t len = jl_sbuf_len(s);
+    ssize_t idx = jl_unbox_long(i);
+    if (idx < 1 || idx > len) {
+        jl_bounds_error_int((jl_value_t*)s, idx);
+    }
+    return jl_sbuf_ref(s, idx-1);
+}
+
 static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
 {
     size_t nf = jl_svec_len(ft);
@@ -2018,6 +2048,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("finalizer", jl_f_finalizer);
     add_builtin_func("_compute_sparams", jl_f__compute_sparams);
     add_builtin_func("_svec_ref", jl_f__svec_ref);
+    add_builtin_func("_sbuf_ref", jl_f__sbuf_ref);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);

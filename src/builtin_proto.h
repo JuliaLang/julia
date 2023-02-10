@@ -47,6 +47,7 @@ DECLARE_BUILTIN(nfields);
 DECLARE_BUILTIN(setfield);
 DECLARE_BUILTIN(sizeof);
 DECLARE_BUILTIN(svec);
+DECLARE_BUILTIN(sbuf);
 DECLARE_BUILTIN(swapfield);
 DECLARE_BUILTIN(throw);
 DECLARE_BUILTIN(tuple);
@@ -61,6 +62,7 @@ DECLARE_BUILTIN(setglobal);
 DECLARE_BUILTIN(finalizer);
 DECLARE_BUILTIN(_compute_sparams);
 DECLARE_BUILTIN(_svec_ref);
+DECLARE_BUILTIN(_sbuf_ref);
 
 JL_CALLABLE(jl_f__structtype);
 JL_CALLABLE(jl_f__abstracttype);
