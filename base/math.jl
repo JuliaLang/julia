@@ -37,6 +37,7 @@ mangleNaN(x::Float32) = isnan(x) ? makeNan32() : x
 mangleNaN(x::Float16) = isnan(x) ? makeNan16() : x
 mangleNaN(x::Complex{<:IEEEFloat}) = Complex(mangleNaN(real(x)), mangleNaN(imag(x)))
 mangleNaN(x) = x
+mangleNaN(x, y) = (mangleNaN(x), mangleNaN(y))
 mangleNaN(x, y...) = (mangleNaN(x), mangleNaN(y...)...)
 
 @noinline function throw_complex_domainerror(f::Symbol, x)
