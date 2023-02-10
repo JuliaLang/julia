@@ -764,6 +764,11 @@ end
 @testset "Unions with missing" begin
     @test issorted(sort(shuffle!(vcat(fill(missing, 10), rand(Int, 100)))))
     @test issorted(sort(vcat(rand(Int8, 600), [missing])))
+    
+    # Because we define defalg(::AbstractArray{Missing})
+    @test all(fill(missing, 10) .=== sort(fill(missing, 10))) 
+
+    # Unit tests for WithoutMissingVector
     a = [1,7,missing,4]
     @test_throws ArgumentError Base.Sort.WithoutMissingVector(a)
     @test eltype(a[[1,2,4]]) == eltype(a)
