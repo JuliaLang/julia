@@ -243,19 +243,17 @@ end
 
 # Capture group extraction
 getindex(m::RegexMatch, idx::Integer) = m.captures[idx]
-function getindex(m::RegexMatch, name::Symbol)
+function getindex(m::RegexMatch, name::Union{AbstractString,Symbol})
     idx = PCRE.substring_number_from_name(m.regex.regex, name)
     idx <= 0 && error("no capture group named $name found in regex")
     m[idx]
 end
-getindex(m::RegexMatch, name::AbstractString) = m[Symbol(name)]
 
 haskey(m::RegexMatch, idx::Integer) = idx in eachindex(m.captures)
-function haskey(m::RegexMatch, name::Symbol)
+function haskey(m::RegexMatch, name::Union{AbstractString,Symbol})
     idx = PCRE.substring_number_from_name(m.regex.regex, name)
     return idx > 0
 end
-haskey(m::RegexMatch, name::AbstractString) = haskey(m, Symbol(name))
 
 iterate(m::RegexMatch, args...) = iterate(m.captures, args...)
 length(m::RegexMatch) = length(m.captures)
