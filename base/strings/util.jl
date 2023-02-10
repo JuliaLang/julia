@@ -840,12 +840,6 @@ replace(out::IO, s::AbstractString, pat_f::Pair...; count=typemax(Int)) =
 replace(s::AbstractString, pat_f::Pair...; count=typemax(Int)) =
     _replace_str(String(s), pat_f..., count=count)
 
-# no copy needed for SubString{String}
-replace(out::IO, s::SubString{String}, pat_f::Pair...; count=typemax(Int)) =
-    _replace_io(out, s, pat_f..., count=count)
-replace(s::SubString{String}, pat_f::Pair...; count=typemax(Int)) =
-    _replace_str(s, pat_f..., count=count)
-
 
 # TODO: allow transform as the first argument to replace?
 
