@@ -704,10 +704,11 @@ _pat_replacer(x::Union{Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar
 function _replace_init(str, pat_repl::NTuple{N, Pair}, count::Int) where N
     count < 0 && throw(DomainError(count, "`count` must be non-negative."))
     e1 = nextind(str, lastindex(str)) # sizeof(str)+1
+    a = firstindex(str)
     patterns = map(p -> _pat_replacer(first(p)), pat_repl)
     replaces = map(last, pat_repl)
     rs = map(patterns) do p
-        r = findfirst(p, str)
+        r = findnext(p, str, a)
         if r === nothing || first(r) == 0
             return e1+1:0
         end
@@ -718,8 +719,7 @@ function _replace_init(str, pat_repl::NTuple{N, Pair}, count::Int) where N
 end
 
 # note: leave str untyped here to make it easier for packages like StringViews to hook in
-function _replace_finish(io::IO, str, count::Int,
-                         e1::Int, patterns::NTuple{N}, replaces::NTuple{N}, rs::NTuple{N}) where N
+function _replace_finish(io::IO, str, count::Int, e1, patterns, replaces, rs)
     n = 1
     i = a = firstindex(str)
     while true
