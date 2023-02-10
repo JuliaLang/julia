@@ -764,6 +764,13 @@ end
 @testset "Unions with missing" begin
     @test issorted(sort(shuffle!(vcat(fill(missing, 10), rand(Int, 100)))))
     @test issorted(sort(vcat(rand(Int8, 600), [missing])))
+    a = [1,7,missing,4]
+    @test_throws ArgumentError Base.Sort.WithoutMissingVector(a)
+    @test eltype(a[[1,2,4]]) == eltype(a)
+    @test eltype(Base.Sort.WithoutMissingVector(a[[1,2,4]])) == Int
+    am = Base.Sort.WithoutMissingVector(a, unsafe=true)
+    @test am[2] == 7
+    @test eltype(am) == Int
 end
 
 @testset "Specific algorithms" begin
