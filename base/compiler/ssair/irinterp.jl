@@ -144,7 +144,9 @@ function concrete_eval_invoke(interp::AbstractInterpreter,
     inst::Expr, mi::MethodInstance, irsv::IRInterpretationState)
     mi_cache = WorldView(code_cache(interp), irsv.world)
     code = get(mi_cache, mi, nothing)
-    code === nothing && return Pair{Any, Bool}(nothing, false)
+    if code === nothing
+        return Pair{Any, Bool}(nothing, false)
+    end
     argtypes = collect_argtypes(interp, inst.args[2:end], nothing, irsv.ir)
     argtypes === nothing && return Pair{Any, Bool}(Union{}, false)
     effects = decode_effects(code.ipo_purity_bits)

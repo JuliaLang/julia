@@ -129,6 +129,7 @@ mutable struct InferenceState
     # Set by default for toplevel frame.
     restrict_abstract_call_sites::Bool
     cached::Bool # TODO move this to InferenceResult?
+    insert_coverage::Bool
 
     # The interpreter that created this inference state. Not looked at by
     # NativeInterpreter. But other interpreters may use this to detect cycles
@@ -136,7 +137,7 @@ mutable struct InferenceState
 
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState(result::InferenceResult, src::CodeInfo, cache::Symbol,
-        interp::AbstractInterpreter)
+                            interp::AbstractInterpreter)
         linfo = result.linfo
         world = get_world_counter(interp)
         def = linfo.def
@@ -179,6 +180,32 @@ mutable struct InferenceState
         bestguess = Bottom
         ipo_effects = EFFECTS_TOTAL
 
+        # check if coverage mode is enabled
+        insert_coverage = coverage_enabled(mod)
+        if !insert_coverage && JLOptions().code_coverage == 3 # path-specific coverage mode
+            linetable = src.linetable
+            if isa(linetable, Vector{Any})
+                for line in linetable
+                    line = line::LineInfoNode
+                    if is_file_tracked(line.file)
+                        # if any line falls in a tracked file enable coverage for all
+                        insert_coverage = true
+                        break
+                    end
+                end
+            elseif isa(linetable, Vector{LineInfo})
+                for line in linetable
+                    if is_file_tracked(line.file)
+                        insert_coverage = true
+                        break
+                    end
+                end
+            end
+        end
+        if insert_coverage
+            ipo_effects = Effects(ipo_effects; effect_free = ALWAYS_FALSE)
+        end
+
         params = InferenceParams(interp)
         restrict_abstract_call_sites = isa(linfo.def, Module)
         @assert cache === :no || cache === :local || cache === :global
@@ -189,7 +216,7 @@ mutable struct InferenceState
             currbb, currpc, ip, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
             pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent, inferred,
             result, valid_worlds, bestguess, ipo_effects,
-            params, restrict_abstract_call_sites, cached,
+            params, restrict_abstract_call_sites, cached, insert_coverage,
             interp)
 
         # some more setups
