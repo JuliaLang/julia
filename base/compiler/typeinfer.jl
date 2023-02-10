@@ -287,8 +287,8 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     return true
 end
 
-function CodeInstance(
-    result::InferenceResult, @nospecialize(inferred_result), valid_worlds::WorldRange)
+function CodeInstance(interp::AbstractInterpreter, result::InferenceResult,
+                      @nospecialize(inferred_result), valid_worlds::WorldRange)
     local const_flags::Int32
     result_type = result.result
     @assert !(result_type isa LimitedAccuracy)
@@ -297,7 +297,9 @@ function CodeInstance(
         # use constant calling convention
         rettype_const = result_type.val
         const_flags = 0x3
-        inferred_result = nothing
+        if may_discard_trees(interp)
+            inferred_result = nothing
+        end
     else
         if isa(result_type, Const)
             rettype_const = result_type.val
@@ -396,7 +398,7 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
     # TODO: also don't store inferred code if we've previously decided to interpret this function
     if !already_inferred
         inferred_result = transform_result_for_cache(interp, linfo, valid_worlds, result)
-        code_cache(interp)[linfo] = ci = CodeInstance(result, inferred_result, valid_worlds)
+        code_cache(interp)[linfo] = ci = CodeInstance(interp, result, inferred_result, valid_worlds)
         if track_newly_inferred[]
             m = linfo.def
             if isa(m, Method) && m.module != Core
