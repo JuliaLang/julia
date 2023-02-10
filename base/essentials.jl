@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Core: CodeInfo, SimpleVector, donotdelete, compilerbarrier, arrayref
+import Core: CodeInfo, SimpleVector, SimpleBuffer, donotdelete, compilerbarrier, arrayref
 
 const Callable = Union{Function,Type}
 
@@ -698,6 +698,30 @@ error. To still use `@goto`, enclose the `@label` and `@goto` in a block.
 macro goto(name::Symbol)
     return esc(Expr(:symbolicgoto, name))
 end
+
+# SimpleBuffer
+
+@eval getindex(b::SimpleBuffer, i::Int) = Core._sbuf_ref($(Expr(:boundscheck)), b, i)
+length(b::SimpleBuffer) = ccall(:jl_sbuf_len, Int, (Any,), b)
+firstindex(b::SimpleBuffer) = 1
+lastindex(b::SimpleBuffer) = length(b)
+iterate(b::SimpleBuffer, i=1) = (length(b) < i ? nothing : (b[i], i + 1))
+eltype(::Type{SimpleBuffer}) = Any
+keys(b::SimpleBuffer) = OneTo(length(b))
+isempty(b::SimpleBuffer) = (length(b) == 0)
+axes(b::SimpleBuffer) = (OneTo(length(b)),)
+axes(b::SimpleBuffer, d::Integer) = d <= 1 ? axes(b)[d] : OneTo(1)
+
+function ==(v1::SimpleBuffer, v2::SimpleBuffer)
+    length(v1)==length(v2) || return false
+    for i = 1:length(v1)
+        v1[i] == v2[i] || return false
+    end
+    return true
+end
+
+map(f, v::SimpleBuffer) = Any[ f(v[i]) for i = 1:length(v) ]
+
 
 # SimpleVector
 

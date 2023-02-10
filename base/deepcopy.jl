@@ -41,6 +41,15 @@ function deepcopy_internal(x::SimpleVector, stackdict::IdDict)
     return y
 end
 
+function deepcopy_internal(x::SimpleBuffer, stackdict::IdDict)
+    if haskey(stackdict, x)
+        return stackdict[x]
+    end
+    y = Core.sbuf(Any[deepcopy_internal(x[i], stackdict) for i = 1:length(x)]...)
+    stackdict[x] = y
+    return y
+end
+
 function deepcopy_internal(x::String, stackdict::IdDict)
     if haskey(stackdict, x)
         return stackdict[x]

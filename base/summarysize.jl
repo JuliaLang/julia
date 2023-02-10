@@ -49,6 +49,11 @@ function summarysize(obj;
             if isassigned(x, i)
                 val = x[i]
             end
+        elseif isa(x, SimpleBuffer)
+            nf = length(x)
+            if isassigned(x, i)
+                val = x[i]
+            end
         elseif isa(x, Array)
             nf = length(x)
             if ccall(:jl_array_isassigned, Cint, (Any, UInt), x, i - 1) != 0

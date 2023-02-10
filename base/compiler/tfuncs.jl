@@ -532,6 +532,7 @@ end
 add_tfunc(nfields, 1, 1, nfields_tfunc, 1)
 add_tfunc(Core._expr, 1, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->Expr), 100)
 add_tfunc(svec, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->SimpleVector), 20)
+add_tfunc(Core.sbuf, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->SimpleBuffer), 20)
 @nospecs function typevar_tfunc(𝕃::AbstractLattice, n, lb_arg, ub_arg)
     lb = Union{}
     ub = Any
@@ -2102,6 +2103,7 @@ const _EFFECT_FREE_BUILTINS = [
 const _CONSISTENT_BUILTINS = Any[
     tuple, # Tuple is immutable, thus tuples of egal arguments are egal
     svec,  # SimpleVector is immutable, thus svecs of egal arguments are egal
+    Core.sbuf,  # SimpleBuffer is immutable, thus sbufs of egal arguments are egal
     ===,
     typeof,
     nfields,
@@ -2117,6 +2119,7 @@ const _CONSISTENT_BUILTINS = Any[
     setfield!
 ]
 
+# TODO: SimpleBuffer builtins
 const _INACCESSIBLEMEM_BUILTINS = Any[
     (<:),
     (===),
@@ -2125,6 +2128,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     Core.ifelse,
     Core.sizeof,
     svec,
+    Core.sbuf,
     fieldtype,
     isa,
     isdefined,

@@ -483,7 +483,7 @@ LinearIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} =
     LinearIndices(map(r->convert(AbstractUnitRange{Int}, r), inds))
 LinearIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) where {N} =
     LinearIndices(map(_convert2ind, inds))
-LinearIndices(A::Union{AbstractArray,SimpleVector}) = LinearIndices(axes(A))
+LinearIndices(A::Union{AbstractArray,SimpleVector,SimpleBuffer}) = LinearIndices(axes(A))
 
 _convert2ind(i::Integer) = Base.OneTo(i)
 _convert2ind(ind::AbstractUnitRange) = first(ind):last(ind)

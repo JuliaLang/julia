@@ -2667,6 +2667,25 @@ function dump(io::IOContext, x::SimpleVector, n::Int, indent)
     end
     nothing
 end
+function dump(io::IOContext, x::SimpleBuffer, n::Int, indent)
+    if isempty(x)
+        print(io, "empty SimpleBuffer")
+        return
+    end
+    print(io, "SimpleBuffer")
+    if n > 0
+        for i = 1:length(x)
+            println(io)
+            print(io, indent, "  ", i, ": ")
+            if isassigned(x,i)
+                dump(io, x[i], n - 1, string(indent, "  "))
+            else
+                print(io, undef_ref_str)
+            end
+        end
+    end
+    nothing
+end
 
 function dump(io::IOContext, @nospecialize(x), n::Int, indent)
     if x === Union{}
