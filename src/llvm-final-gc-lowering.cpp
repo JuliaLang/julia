@@ -48,6 +48,7 @@ private:
     Function *queueRootFunc;
     Function *poolAllocFunc;
     Function *bigAllocFunc;
+    Function *allocTypedFunc;
     Instruction *pgcstack;
 
     // Lowers a `julia.new_gc_frame` intrinsic.
@@ -235,7 +236,7 @@ Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
     } else {
         auto size = builder.CreateZExtOrTrunc(target->getArgOperand(1), getSizeTy(F.getContext()));
         size = builder.CreateAdd(size, ConstantInt::get(getSizeTy(F.getContext()), sizeof(void*)));
-        newI = builder.CreateCall(bigAllocFunc, { ptls, size });
+        newI = builder.CreateCall(allocTypedFunc, { ptls, size, ConstantPointerNull::get(Type::getInt8PtrTy(F.getContext())) });
         derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), sizeof(void*));
     }
     newI->setAttributes(newI->getCalledFunction()->getAttributes());
@@ -252,8 +253,9 @@ bool FinalLowerGC::doInitialization(Module &M) {
     queueRootFunc = getOrDeclare(jl_well_known::GCQueueRoot);
     poolAllocFunc = getOrDeclare(jl_well_known::GCPoolAlloc);
     bigAllocFunc = getOrDeclare(jl_well_known::GCBigAlloc);
+    allocTypedFunc = getOrDeclare(jl_well_known::GCAllocTyped);
 
-    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc};
+    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc, allocTypedFunc};
     unsigned j = 0;
     for (unsigned i = 0; i < sizeof(functionList) / sizeof(void*); i++) {
         if (!functionList[i])
@@ -269,8 +271,8 @@ bool FinalLowerGC::doInitialization(Module &M) {
 
 bool FinalLowerGC::doFinalization(Module &M)
 {
-    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc};
-    queueRootFunc = poolAllocFunc = bigAllocFunc = nullptr;
+    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc, allocTypedFunc};
+    queueRootFunc = poolAllocFunc = bigAllocFunc = allocTypedFunc = nullptr;
     auto used = M.getGlobalVariable("llvm.compiler.used");
     if (!used)
         return false;
