@@ -719,7 +719,8 @@ function _replace_init(str, pat_repl::NTuple{N, Pair}, count::Int) where N
 end
 
 # note: leave str untyped here to make it easier for packages like StringViews to hook in
-function _replace_finish(io::IO, str, count::Int, e1, patterns, replaces, rs)
+function _replace_finish(io::IO, str, count::Int,
+                         e1::Int, patterns::Tuple, replaces::Tuple, rs::Tuple)
     n = 1
     i = a = firstindex(str)
     while true
@@ -728,9 +729,9 @@ function _replace_finish(io::IO, str, count::Int, e1, patterns, replaces, rs)
         j, k = first(r), last(r)
         j > e1 && break
         if i == a || i <= k
-            # copy io preserved portion
+            # copy out preserved portion
             GC.@preserve str unsafe_write(io, pointer(str, i), UInt(j-i))
-            # copy io replacement string
+            # copy out replacement string
             _replace(io, replaces[p], str, r, patterns[p])
         end
         if k < j
@@ -761,7 +762,7 @@ function _replace_finish(io::IO, str, count::Int, e1, patterns, replaces, rs)
 end
 
 # note: leave str untyped here to make it easier for packages like StringViews to hook in
-function _replace_io(io::IO, retval, str, pat_repl::Pair...; count::Integer=typemax(Int))
+function _replace_(io::IO, str, pat_repl::NTuple{N, Pair}, count::Int) where N
     if count == 0
         write(io, str)
         return io
@@ -776,7 +777,7 @@ function _replace_io(io::IO, retval, str, pat_repl::Pair...; count::Integer=type
 end
 
 # note: leave str untyped here to make it easier for packages like StringViews to hook in
-function _replace_str(str, pat_repl::Pair...; count::Integer=typemax(Int))
+function _replace_(str, pat_repl::NTuple{N, Pair}, count::Int) where N
     count == 0 && return str
     e1, patterns, replaces, rs, notfound = _replace_init(str, pat_repl, count)
     if notfound
@@ -835,10 +836,10 @@ julia> replace("abcabc", "a" => "b", "b" => "c", r".+" => "a")
 ```
 """
 replace(io::IO, s::AbstractString, pat_f::Pair...; count=typemax(Int)) =
-    _replace_io(io, String(s), pat_f..., count=count)
+    _replace_(io, String(s), pat_f, Int(count))
 
 replace(s::AbstractString, pat_f::Pair...; count=typemax(Int)) =
-    _replace_str(String(s), pat_f..., count=count)
+    _replace_(String(s), pat_f, Int(count))
 
 
 # TODO: allow transform as the first argument to replace?
