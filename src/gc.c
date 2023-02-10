@@ -3246,12 +3246,14 @@ void jl_gc_init(void)
     gc_num.allocd = 0;
     gc_num.max_pause = 0;
     gc_num.max_memory = 0;
+    total_mem = uv_get_total_memory();
 
 #ifdef _P64
-    total_mem = uv_get_total_memory();
     uint64_t constrained_mem = uv_get_constrained_memory();
     if (constrained_mem > 0 && constrained_mem < total_mem)
         total_mem = constrained_mem;
+#else
+    total_mem = total_mem > max_total_memory ? max_total_memory : total_mem;
 #endif
 
     total_mem = total_mem / 10 * 6; // 60% of constrained memory
