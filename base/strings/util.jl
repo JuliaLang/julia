@@ -703,25 +703,24 @@ _pat_replacer(x::Union{Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar
 # note: leave str untyped here to make it easier for packages like StringViews to hook in
 function _replace_init(str, pat_repl::NTuple{N, Pair}, count::Int) where N
     count < 0 && throw(DomainError(count, "`count` must be non-negative."))
-    e1 = sizeof(str)+1 # nextind(str, lastindex(str))
+    e1 = nextind(str, lastindex(str)) # sizeof(str)+1
     patterns = map(p -> _pat_replacer(first(p)), pat_repl)
     replaces = map(last, pat_repl)
     rs = map(patterns) do p
-        r = findnext(p, str, a)
+        r = findfirst(p, str)
         if r === nothing || first(r) == 0
             return e1+1:0
         end
         r isa Int && (r = r:r) # findnext / performance fix
         return r
     end
-    return patterns, replaces, rs, all(>(e1), map(first, rs))
+    return e1, patterns, replaces, rs, all(>(e1), map(first, rs))
 end
 
 # note: leave str untyped here to make it easier for packages like StringViews to hook in
 function _replace_finish(io::IO, str, count::Int,
-                         patterns::NTuple{N}, replaces::NTuple{N}, rs::NTuple{N}) where N
+                         e1::Int, patterns::NTuple{N}, replaces::NTuple{N}, rs::NTuple{N}) where N
     n = 1
-    e1 = sizeof(str)+1 # nextind(str, lastindex(str))
     i = a = firstindex(str)
     while true
         p = argmin(map(first, rs)) # TODO: or argmin(rs), to pick the shortest first match ?
@@ -767,25 +766,25 @@ function _replace_io(io::IO, retval, str, pat_repl::Pair...; count::Integer=type
         write(io, str)
         return io
     end
-    patterns, replaces, rs, notfound = _replace_init(str, pat_repl, count)
+    e1, patterns, replaces, rs, notfound = _replace_init(str, pat_repl, count)
     if notfound
         foreach(_free_pat_replacer, patterns)
         write(io, str)
         return io
     end
-    return _replace_finish(io, str, count, patterns, replaces, rs)
+    return _replace_finish(io, str, count, e1, patterns, replaces, rs)
 end
 
 # note: leave str untyped here to make it easier for packages like StringViews to hook in
 function _replace_str(str, pat_repl::Pair...; count::Integer=typemax(Int))
     count == 0 && return str
-    patterns, replaces, rs, notfound = _replace_init(str, pat_repl, count)
+    e1, patterns, replaces, rs, notfound = _replace_init(str, pat_repl, count)
     if notfound
         foreach(_free_pat_replacer, patterns)
         return str
     end
     out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
-    return String(take!(_replace_finish(out, str, count, patterns, replaces, rs)))
+    return String(take!(_replace_finish(out, str, count, e1, patterns, replaces, rs)))
 end
 
 """
