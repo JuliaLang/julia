@@ -843,10 +843,13 @@ function resolve_todo(mi::MethodInstance, result::Union{MethodMatch,InferenceRes
     #XXX: update_valid_age!(min_valid[1], max_valid[1], sv)
     if isa(result, InferenceResult)
         src = result.src
-        if is_total(result.ipo_effects) && isa(result.result, Const)
-            # use constant calling convention
-            add_inlining_backedge!(et, mi)
-            return ConstantCase(quoted(result.result.val))
+        if is_foldable_nothrow(result.ipo_effects)
+            res = result.result
+            if isa(res, Const) && is_inlineable_constant(res.val)
+                # use constant calling convention
+                add_inlining_backedge!(et, mi)
+                return ConstantCase(quoted(res.val))
+            end
         end
         effects = result.ipo_effects
     else
@@ -978,7 +981,7 @@ function handle_single_case!(todo::Vector{Pair{Int,Any}},
     if isa(case, ConstantCase)
         ir[SSAValue(idx)][:inst] = case.val
     elseif isa(case, InvokeCase)
-        is_total(case.effects) && inline_const_if_inlineable!(ir[SSAValue(idx)]) && return nothing
+        is_foldable_nothrow(case.effects) && inline_const_if_inlineable!(ir[SSAValue(idx)]) && return nothing
         isinvoke && rewrite_invoke_exprargs!(stmt)
         stmt.head = :invoke
         pushfirst!(stmt.args, case.invoke)

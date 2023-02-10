@@ -293,9 +293,7 @@ function CodeInstance(
     result_type = result.result
     @assert !(result_type isa LimitedAccuracy)
 
-    if isa(result_type, Const) && is_foldable(result.ipo_effects) &&
-                                  is_nothrow(result.ipo_effects) &&
-                                  is_inlineable_constant(result_type.val)
+    if isa(result_type, Const) && is_foldable_nothrow(result.ipo_effects) && is_inlineable_constant(result_type.val)
         # use constant calling convention
         rettype_const = result_type.val
         const_flags = 0x3
@@ -1007,7 +1005,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
                 tree.slotflags = fill(IR_FLAG_NULL, nargs)
                 tree.ssavaluetypes = 1
                 tree.codelocs = Int32[1]
-                tree.linetable = [LineInfoNode(method.module, method.name, method.file, method.line, Int32(0))]
+                tree.linetable = LineInfoNode[LineInfoNode(method.module, method.name, method.file, method.line, Int32(0))]
                 tree.inferred = true
                 tree.ssaflags = UInt8[0]
                 tree.pure = true
