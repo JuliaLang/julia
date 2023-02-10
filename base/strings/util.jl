@@ -718,7 +718,7 @@ function _replace_init(str, pat_repl::NTuple{N, Pair}, count::Int) where N
 end
 
 # note: leave str untyped here to make it easier for packages like StringViews to hook in
-function _replace_finish(out::IO, str, count::Int,
+function _replace_finish(io::IO, str, count::Int,
                          patterns::NTuple{N}, replaces::NTuple{N}, rs::NTuple{N}) where N
     n = 1
     e1 = sizeof(str)+1 # nextind(str, lastindex(str))
@@ -729,10 +729,10 @@ function _replace_finish(out::IO, str, count::Int,
         j, k = first(r), last(r)
         j > e1 && break
         if i == a || i <= k
-            # copy out preserved portion
-            GC.@preserve str unsafe_write(out, pointer(str, i), UInt(j-i))
-            # copy out replacement string
-            _replace(out, replaces[p], str, r, patterns[p])
+            # copy io preserved portion
+            GC.@preserve str unsafe_write(io, pointer(str, i), UInt(j-i))
+            # copy io replacement string
+            _replace(io, replaces[p], str, r, patterns[p])
         end
         if k < j
             i = j
@@ -757,23 +757,23 @@ function _replace_finish(out::IO, str, count::Int,
         n += 1
     end
     foreach(_free_pat_replacer, patterns)
-    write(out, SubString(str, i))
-    return out
+    write(io, SubString(str, i))
+    return io
 end
 
 # note: leave str untyped here to make it easier for packages like StringViews to hook in
-function _replace_io(out::IO, retval, str, pat_repl::Pair...; count::Integer=typemax(Int))
+function _replace_io(io::IO, retval, str, pat_repl::Pair...; count::Integer=typemax(Int))
     if count == 0
-        write(out, str)
-        return out
+        write(io, str)
+        return io
     end
     patterns, replaces, rs, notfound = _replace_init(str, pat_repl, count)
     if notfound
         foreach(_free_pat_replacer, patterns)
-        write(out, str)
-        return out
+        write(io, str)
+        return io
     end
-    return _replace_finish(out, str, count, patterns, replaces, rs)
+    return _replace_finish(io, str, count, patterns, replaces, rs)
 end
 
 # note: leave str untyped here to make it easier for packages like StringViews to hook in
@@ -789,7 +789,7 @@ function _replace_str(str, pat_repl::Pair...; count::Integer=typemax(Int))
 end
 
 """
-    replace([out::IO], s::AbstractString, pat=>r, [pat2=>r2, ...]; [count::Integer])
+    replace([io::IO], s::AbstractString, pat=>r, [pat2=>r2, ...]; [count::Integer])
 
 Search for the given pattern `pat` in `s`, and replace each occurrence with `r`.
 If `count` is provided, replace at most `count` occurrences.
@@ -802,8 +802,8 @@ If `pat` is a regular expression and `r` is a [`SubstitutionString`](@ref), then
 references in `r` are replaced with the corresponding matched text.
 To remove instances of `pat` from `string`, set `r` to the empty `String` (`""`).
 
-The return value is a new string after the replacements.  If the `out::IO` argument
-is supplied, the transformed string is instead written to `out` (returning `out`).
+The return value is a new string after the replacements.  If the `io::IO` argument
+is supplied, the transformed string is instead written to `io` (returning `io`).
 (For example, this can be used in conjunction with an [`IOBuffer`](@ref) to re-use
 a pre-allocated buffer array in-place.)
 
@@ -815,7 +815,7 @@ patterns will only be applied to the input text, not the replacements.
     Support for multiple patterns requires version 1.7.
 
 !!! compat "Julia 1.10"
-    The `out::IO` argument requires version 1.10.
+    The `io::IO` argument requires version 1.10.
 
 # Examples
 ```jldoctest
@@ -835,8 +835,8 @@ julia> replace("abcabc", "a" => "b", "b" => "c", r".+" => "a")
 "bca"
 ```
 """
-replace(out::IO, s::AbstractString, pat_f::Pair...; count=typemax(Int)) =
-    _replace_io(out, String(s), pat_f..., count=count)
+replace(io::IO, s::AbstractString, pat_f::Pair...; count=typemax(Int)) =
+    _replace_io(io, String(s), pat_f..., count=count)
 
 replace(s::AbstractString, pat_f::Pair...; count=typemax(Int)) =
     _replace_str(String(s), pat_f..., count=count)
