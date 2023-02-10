@@ -64,8 +64,10 @@ extern "C" {
 #define TAG_ARGUMENT           56
 #define TAG_RELOC_METHODROOT   57
 #define TAG_BINDING            58
+#define TAG_SBUF               59
+#define TAG_LONG_SBUF          60
 
-#define LAST_TAG 58
+#define LAST_TAG 60
 
 #define write_uint8(s, n) ios_putc((n), (s))
 #define read_uint8(s) ((uint8_t)ios_getc((s)))

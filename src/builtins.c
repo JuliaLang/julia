@@ -74,6 +74,17 @@ static int NOINLINE compare_svec(jl_svec_t *a, jl_svec_t *b) JL_NOTSAFEPOINT
     }
     return 1;
 }
+static int NOINLINE compare_sbuf(jl_sbuf_t *a, jl_sbuf_t *b) JL_NOTSAFEPOINT
+{
+    size_t i, l = jl_sbuf_len(a);
+    if (l != jl_sbuf_len(b))
+        return 0;
+    for (i = 0; i < l; i++) {
+        if (!jl_egal(jl_sbufref(a, i), jl_sbufref(b, i)))
+            return 0;
+    }
+    return 1;
+}
 
 // See comment above for an explanation of NOINLINE.
 static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_datatype_t *dt) JL_NOTSAFEPOINT
@@ -225,6 +236,8 @@ int jl_egal__special(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b 
 {
     if (dt == jl_simplevector_type)
         return compare_svec((jl_svec_t*)a, (jl_svec_t*)b);
+    if (dt == jl_simplebuffer_type)
+        return compare_sbuf((jl_sbuf_t*)a, (jl_sbuf_t*)b);
     if (dt == jl_datatype_type) {
         jl_datatype_t *dta = (jl_datatype_t*)a;
         jl_datatype_t *dtb = (jl_datatype_t*)b;

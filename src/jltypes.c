@@ -2042,8 +2042,8 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_emptysvec = (jl_svec_t*)jl_gc_permobj(sizeof(void*), jl_simplevector_type);
     jl_svec_set_len_unsafe(jl_emptysvec, 0);
 
-    jl_emptysbuf = (jl_sbuf_t*)jl_gc_permobj(sizeof(void*), jl_simplebuffer_type);
-    jl_sbuf_set_len_unsafe(jl_emptysbuf, 0);
+    // jl_emptysbuf = (jl_sbuf_t*)jl_gc_permobj(sizeof(void*), jl_simplebuffer_type);
+    // jl_sbuf_set_len_unsafe(jl_emptysbuf, 0);
 
     jl_any_type = (jl_datatype_t*)jl_new_abstracttype((jl_value_t*)jl_symbol("Any"), core, NULL, jl_emptysvec);
     jl_any_type->super = jl_any_type;
