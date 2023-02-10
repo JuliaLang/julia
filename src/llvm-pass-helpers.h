@@ -150,9 +150,6 @@ namespace jl_well_known {
     // `jl_gc_queue_root`: queues a GC root.
     extern const WellKnownFunctionDescription GCQueueRoot;
 
-    // `jl_gc_alloc_typed`: allocates bytes.
-    extern const WellKnownFunctionDescription GCAllocTyped;
-    
     // `jl_gc_alloc`: allocates bytes.
     extern const WellKnownFunctionDescription GCAlloc;
 }

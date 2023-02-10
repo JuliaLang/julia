@@ -48,7 +48,6 @@ private:
     Function *queueRootFunc;
     Function *poolAllocFunc;
     Function *bigAllocFunc;
-    Function *allocTypedFunc;
     Function *allocFunc;
     Instruction *pgcstack;
 
@@ -254,10 +253,9 @@ bool FinalLowerGC::doInitialization(Module &M) {
     queueRootFunc = getOrDeclare(jl_well_known::GCQueueRoot);
     poolAllocFunc = getOrDeclare(jl_well_known::GCPoolAlloc);
     bigAllocFunc = getOrDeclare(jl_well_known::GCBigAlloc);
-    allocTypedFunc = getOrDeclare(jl_well_known::GCAllocTyped);
     allocFunc = getOrDeclare(jl_well_known::GCAlloc);
 
-    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc, allocTypedFunc, allocFunc};
+    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc, allocFunc};
     unsigned j = 0;
     for (unsigned i = 0; i < sizeof(functionList) / sizeof(void*); i++) {
         if (!functionList[i])
@@ -273,8 +271,8 @@ bool FinalLowerGC::doInitialization(Module &M) {
 
 bool FinalLowerGC::doFinalization(Module &M)
 {
-    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc, allocTypedFunc, allocFunc};
-    queueRootFunc = poolAllocFunc = bigAllocFunc = allocTypedFunc = allocFunc = nullptr;
+    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc, allocFunc};
+    queueRootFunc = poolAllocFunc = bigAllocFunc = allocFunc = nullptr;
     auto used = M.getGlobalVariable("llvm.compiler.used");
     if (!used)
         return false;
