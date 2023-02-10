@@ -135,6 +135,10 @@ AbstractArray(A::LQ) = AbstractMatrix(A)
 Matrix(A::LQ) = Array(AbstractArray(A))
 Array(A::LQ) = Matrix(A)
 
+transpose(F::LQ{<:Real}) = F'
+transpose(::LQ) =
+    throw(ArgumentError("transpose of LQ decomposition is not supported, consider using adjoint"))
+
 Base.copy(F::AdjointFactorization{T,<:LQ{T}}) where {T} =
     QR{T,typeof(F.parent.factors),typeof(F.parent.τ)}(copy(adjoint(F.parent.factors)), copy(F.parent.τ))
 

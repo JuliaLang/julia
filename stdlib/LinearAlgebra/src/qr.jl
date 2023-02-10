@@ -514,6 +514,7 @@ end
 Base.propertynames(F::QRPivoted, private::Bool=false) =
     (:R, :Q, :p, :P, (private ? fieldnames(typeof(F)) : ())...)
 
+transpose(F::Union{QR{<:Real},QRPivoted{<:Real},QRCompactWY{<:Real}}) = F'
 transpose(::Union{QR,QRPivoted,QRCompactWY}) =
     throw(ArgumentError("transpose of QR decomposition is not supported, consider using adjoint"))
 
