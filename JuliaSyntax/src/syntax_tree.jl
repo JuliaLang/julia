@@ -254,6 +254,10 @@ end
 function Base.getindex(node::Union{SyntaxNode,GreenNode}, path::Int...)
     child(node, path...)
 end
+function Base.lastindex(node::Union{SyntaxNode,GreenNode})
+    length(children(node))
+end
+
 function Base.setindex!(node::SyntaxNode, x::SyntaxNode, path::Int...)
     setchild!(node, path, x)
 end
