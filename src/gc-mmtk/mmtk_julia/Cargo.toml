@@ -23,7 +23,15 @@ built = "*"
 [dependencies]
 libc = "0.2"
 lazy_static = "1.1"
+# Be very careful to commit any changes to the following mmtk dependency, as our CI scripts (including mmtk-core CI)
+# rely on matching these lines to modify them: e.g. comment out the git dependency and use the local path.
+# These changes are safe:
+# - change branch
+# - change repo name
+# But other changes including adding/removing whitespaces in commented lines may break the CI.
 mmtk = { git = "https://github.com/mmtk/mmtk-core.git", rev = "a272c2399df39177361788449b1f96d060a86080" }
+# Uncomment the following to build locally
+# mmtk = { path = "../repos/mmtk-core" }
 log = {version = "0.4", features = ["max_level_trace", "release_max_level_off"] }
 enum-map = "=2.1"
 atomic = "0.4.6"
