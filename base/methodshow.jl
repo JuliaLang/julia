@@ -93,6 +93,7 @@ function kwarg_decl(m::Method, kwtype = nothing)
                 push!(kws, kws[i])
                 deleteat!(kws, i)
             end
+            isempty(kws) && push!(kws,  :var"...")
             return kws
         end
     end
@@ -194,7 +195,9 @@ end
 
 function sym_to_string(sym)
     s = String(sym)
-    if endswith(s, "...")
+    if s === :var"..."
+        return "..."
+    elseif endswith(s, "...")
         return string(sprint(show_sym, Symbol(s[1:end-3])), "...")
     else
         return sprint(show_sym, sym)

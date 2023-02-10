@@ -108,7 +108,7 @@ include("options.jl")
 function Core.kwcall(kwargs, ::typeof(invoke), f, T, args...)
     @inline
     # prepend kwargs and f to the invoked from the user
-    T = rewrap_unionall(Tuple{Any, Core.Typeof(f), (unwrap_unionall(T)::DataType).parameters...}, T)
+    T = rewrap_unionall(Tuple{Core.Typeof(kwargs), Core.Typeof(f), (unwrap_unionall(T)::DataType).parameters...}, T)
     return invoke(Core.kwcall, T, kwargs, f, args...)
 end
 # invoke does not have its own call cache, but kwcall for invoke does
@@ -119,6 +119,10 @@ setfield!(typeof(invoke).name.mt, :max_args, 3, :monotonic) # invoke, f, T, args
 function Core.kwcall(kwargs, ::typeof(applicable), @nospecialize(args...))
     @inline
     return applicable(Core.kwcall, kwargs, args...)
+end
+function Core._hasmethod(@nospecialize(f), @nospecialize(t)) # this function has a special tfunc (TODO: make this a Builtin instead like applicable)
+    tt = rewrap_unionall(Tuple{Core.Typeof(f), (unwrap_unionall(t)::DataType).parameters...}, t)
+    return Core._hasmethod(tt)
 end
 
 
