@@ -2251,12 +2251,12 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                     cachefile = cachefile_from_ocachefile(ocachefile)
                     rename(tmppath_so, ocachefile::String; force=true)
                 end
+                @static if Sys.isapple()
+                    run(`$(Linking.dsymutil()) $ocachefile`, Base.DevNull(), Base.DevNull(), stdout)
+                end
             end
             # this is atomic according to POSIX (not Win32):
             rename(tmppath, cachefile; force=true)
-            @static if Sys.isapple()
-                run(`$(Linking.dsymutil()) $ocachefile`, Base.DevNull(), Base.DevNull(), stdout)
-            end
             return cachefile, ocachefile
         end
     finally
