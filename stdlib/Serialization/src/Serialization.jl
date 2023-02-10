@@ -9,6 +9,7 @@ module Serialization
 
 import Base: GMP, Bottom, unsafe_convert, uncompressed_ast
 import Core: svec, SimpleVector
+import Core: SimpleBuffer
 using Base: unaliascopy, unwrap_unionall, require_one_based_indexing, ntupleany
 using Core.IR
 
@@ -34,6 +35,7 @@ const n_int_literals = 33
 const n_reserved_slots = 24
 const n_reserved_tags = 8
 
+# FIXME add SimpleBuffer to TAGS
 const TAGS = Any[
     Symbol, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128,
     Float16, Float32, Float64, Char, DataType, Union, UnionAll, Core.TypeName, Tuple,
@@ -108,6 +110,7 @@ const FALSE_TAG = sertag(false)
 const EMPTYTUPLE_TAG = sertag(())
 const TUPLE_TAG = sertag(Tuple)
 const SIMPLEVECTOR_TAG = sertag(SimpleVector)
+const SIMPLEBUFFER_TAG = sertag(SimpleBuffer)
 const SYMBOL_TAG = sertag(Symbol)
 const INT8_TAG = sertag(Int8)
 const ARRAY_TAG = findfirst(==(Array), TAGS)%Int32
@@ -208,6 +211,14 @@ end
 
 function serialize(s::AbstractSerializer, v::SimpleVector)
     writetag(s.io, SIMPLEVECTOR_TAG)
+    write(s.io, Int32(length(v)))
+    for x in v
+        serialize(s, x)
+    end
+end
+
+function serialize(s::AbstractSerializer, v::SimpleBuffer)
+    writetag(s.io, SIMPLEBUFFER_TAG)
     write(s.io, Int32(length(v)))
     for x in v
         serialize(s, x)
@@ -900,6 +911,8 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return deserialize_string(s, Int(read(s.io, Int64)::Int64))
     elseif b == SIMPLEVECTOR_TAG
         return deserialize_svec(s)
+    elseif b == SIMPLEBUFFER_TAG
+        return deserialize_sbuf(s)
     elseif b == GLOBALREF_TAG
         return GlobalRef(deserialize(s)::Module, deserialize(s)::Symbol)
     elseif b == FULL_GLOBALREF_TAG
@@ -975,6 +988,12 @@ deserialize_tuple(s::AbstractSerializer, len) = ntupleany(i->deserialize(s), len
 function deserialize_svec(s::AbstractSerializer)
     n = read(s.io, Int32)
     svec(Any[ deserialize(s) for i=1:n ]...)
+end
+
+function deserialize_sbuf(s::AbstractSerializer)
+    n = read(s.io, Int32)
+    # FIXME
+    sbuf(Any[ deserialize(s) for i=1:n ]...)
 end
 
 function deserialize_module(s::AbstractSerializer)
