@@ -1086,6 +1086,17 @@ end
         cmd = `$julia $(pkgimage(P)) $(opt_level(O)) $(debug_level(D)) $(check_bounds(C)) $(inline(I)) -e $script`
         @test success(pipeline(cmd; stdout, stderr))
     end
+
+    cf = Base.CacheFlags(255)
+    @test cf.use_pkgimages
+    @test cf.debug_level == 3
+    @test cf.check_bounds == 3
+    @test cf.inline
+    @test cf.opt_level == 3
+
+    io = PipeBuffer()
+    show(io, cf)
+    @test read(io, String) == "use_pkgimages = true, debug_level = 3, check_bounds = 3, inline = true, opt_level = 3"
 end
 
 empty!(Base.DEPOT_PATH)
