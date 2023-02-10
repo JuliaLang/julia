@@ -152,6 +152,7 @@ Base.promote
 Base.oftype
 Base.widen
 Base.identity
+Base.WeakRef
 ```
 
 ## Properties of Types
