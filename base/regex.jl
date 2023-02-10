@@ -8,7 +8,7 @@ const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.MATCH_INVALID_UTF | PCRE.ALT_BSUX 
 const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
 
 """
-    Regex(pattern[, flags])
+    Regex(pattern[, flags]) <: AbstractPattern
 
 A type representing a regular expression. `Regex` objects can be used to match strings
 with [`match`](@ref).
@@ -139,7 +139,7 @@ in a string using an `AbstractPattern`.
 abstract type AbstractMatch end
 
 """
-    RegexMatch
+    RegexMatch <: AbstractMatch
 
 A type representing a single match to a `Regex` found in a string.
 Typically created from the [`match`](@ref) function.
@@ -499,7 +499,7 @@ function count(t::Union{AbstractChar,AbstractString,AbstractPattern}, s::Abstrac
 end
 
 """
-    SubstitutionString(substr)
+    SubstitutionString(substr) <: AbstractString
 
 Stores the given string `substr` as a `SubstitutionString`, for use in regular expression
 substitutions. Most commonly constructed using the [`@s_str`](@ref) macro.
