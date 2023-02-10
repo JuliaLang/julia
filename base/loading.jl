@@ -2224,7 +2224,9 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                     rm(evicted_cachefile; force=true)
                     try
                         rm(ocachefile_from_cachefile(evicted_cachefile); force=true)
-                        rm(ocachefile_from_cachefile(evicted_cachefile) * ".dSYM"; force=true)
+                        @static if Sys.isapple()
+                            rm(ocachefile_from_cachefile(evicted_cachefile) * ".dSYM"; force=true, recursive=true)
+                        end
                     catch
                     end
                 end
