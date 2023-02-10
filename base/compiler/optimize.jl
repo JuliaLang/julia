@@ -393,11 +393,10 @@ abstract_eval_ssavalue(s::SSAValue, src::Union{IRCode,IncrementalCompact}) = typ
 
 """
     finish(interp::AbstractInterpreter, opt::OptimizationState,
-           params::OptimizationParams, ir::IRCode, caller::InferenceResult) -> analyzed::Nothing
+           params::OptimizationParams, ir::IRCode, caller::InferenceResult)
 
-Post process information derived by Julia-level optimizations for later uses:
-- computes "purity", i.e. side-effect-freeness
-- computes inlining cost
+Post-process information derived by Julia-level optimizations for later use.
+In particular, this function determines the inlineability of the optimized code.
 """
 function finish(interp::AbstractInterpreter, opt::OptimizationState,
                 params::OptimizationParams, ir::IRCode, caller::InferenceResult)

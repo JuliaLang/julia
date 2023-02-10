@@ -4743,7 +4743,7 @@ type_level_recurse_entry() = Val{type_level_recurse1(1)}()
 f_no_bail_effects_any(x::Any) = x
 f_no_bail_effects_any(x::NamedTuple{(:x,), Tuple{Any}}) = getfield(x, 1)
 g_no_bail_effects_any(x::Any) = f_no_bail_effects_any(x)
-@test Core.Compiler.is_total(Base.infer_effects(g_no_bail_effects_any, Tuple{Any}))
+@test Core.Compiler.is_foldable_nothrow(Base.infer_effects(g_no_bail_effects_any, Tuple{Any}))
 
 # issue #48374
 @test (() -> Union{<:Nothing})() == Nothing

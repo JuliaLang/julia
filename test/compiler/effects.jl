@@ -723,7 +723,7 @@ end
 # Effects for getfield of type instance
 @test Base.infer_effects(Tuple{Nothing}) do x
     WrapperOneField{typeof(x)}.instance
-end |> Core.Compiler.is_total
+end |> Core.Compiler.is_foldable_nothrow
 @test Base.infer_effects(Tuple{WrapperOneField{Float64}, Symbol}) do w, s
     getfield(w, s)
 end |> Core.Compiler.is_foldable
@@ -735,14 +735,14 @@ end |> Core.Compiler.is_foldable
 # Flow-sensitive consistenct for _typevar
 @test Base.infer_effects() do
     return WrapperOneField == (WrapperOneField{T} where T)
-end |> Core.Compiler.is_total
+end |> Core.Compiler.is_foldable_nothrow
 
 # Test that dead `@inbounds` does not taint consistency
 # https://github.com/JuliaLang/julia/issues/48243
 @test Base.infer_effects() do
     false && @inbounds (1,2,3)[1]
     return 1
-end |> Core.Compiler.is_total
+end |> Core.Compiler.is_foldable_nothrow
 
 @test Base.infer_effects(Tuple{Int64}) do i
     @inbounds (1,2,3)[i]
@@ -757,7 +757,7 @@ end
 @test Core.Compiler.is_foldable(Base.infer_effects(ImmutRef, Tuple{Any}))
 
 @test Base.ismutationfree(Type{Union{}})
-@test Core.Compiler.is_total(Base.infer_effects(typejoin, ()))
+@test Core.Compiler.is_foldable_nothrow(Base.infer_effects(typejoin, ()))
 
 # nothrow-ness of subtyping operations
 # https://github.com/JuliaLang/julia/pull/48566

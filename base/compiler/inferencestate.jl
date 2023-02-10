@@ -180,28 +180,7 @@ mutable struct InferenceState
         bestguess = Bottom
         ipo_effects = EFFECTS_TOTAL
 
-        # check if coverage mode is enabled
-        insert_coverage = coverage_enabled(mod)
-        if !insert_coverage && JLOptions().code_coverage == 3 # path-specific coverage mode
-            linetable = src.linetable
-            if isa(linetable, Vector{Any})
-                for line in linetable
-                    line = line::LineInfoNode
-                    if is_file_tracked(line.file)
-                        # if any line falls in a tracked file enable coverage for all
-                        insert_coverage = true
-                        break
-                    end
-                end
-            elseif isa(linetable, Vector{LineInfo})
-                for line in linetable
-                    if is_file_tracked(line.file)
-                        insert_coverage = true
-                        break
-                    end
-                end
-            end
-        end
+        insert_coverage = should_insert_coverage(mod, src)
         if insert_coverage
             ipo_effects = Effects(ipo_effects; effect_free = ALWAYS_FALSE)
         end
@@ -342,6 +321,29 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
 
     @assert first(ip) == n + 1
     return handler_at
+end
+
+# check if coverage mode is enabled
+function should_insert_coverage(mod::Module, src::CodeInfo)
+    coverage_enabled(mod) && return true
+    JLOptions().code_coverage == 3 || return false
+    # path-specific coverage mode: if any line falls in a tracked file enable coverage for all
+    linetable = src.linetable
+    if isa(linetable, Vector{Any})
+        for line in linetable
+            line = line::LineInfoNode
+            if is_file_tracked(line.file)
+                return true
+            end
+        end
+    elseif isa(linetable, Vector{LineInfo})
+        for line in linetable
+            if is_file_tracked(line.file)
+                return true
+            end
+        end
+    end
+    return false
 end
 
 """
