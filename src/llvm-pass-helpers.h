@@ -152,6 +152,9 @@ namespace jl_well_known {
 
     // `jl_gc_alloc_typed`: allocates bytes.
     extern const WellKnownFunctionDescription GCAllocTyped;
+    
+    // `jl_gc_alloc`: allocates bytes.
+    extern const WellKnownFunctionDescription GCAlloc;
 }
 
 #endif
