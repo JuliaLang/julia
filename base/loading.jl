@@ -2075,7 +2075,8 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
                               --color=$(have_color === nothing ? "auto" : have_color ? "yes" : "no")
                               $trace
                               -`,
-                              "OPENBLAS_NUM_THREADS" => 1),
+                              "OPENBLAS_NUM_THREADS" => 1,
+                              "JULIA_NUM_THREADS" => 1),
                        stderr = internal_stderr, stdout = internal_stdout),
               "w", stdout)
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
