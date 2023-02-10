@@ -1,13 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# The type of a variable load is either a value or an UndefVarError
-# (only used in abstractinterpret, doesn't appear in optimize)
-struct VarState
-    typ
-    undef::Bool
-    VarState(@nospecialize(typ), undef::Bool) = new(typ, undef)
-end
-
 """
     const VarTable = Vector{VarState}
 
@@ -91,7 +83,7 @@ mutable struct InferenceState
     linfo::MethodInstance
     world::UInt
     mod::Module
-    sptypes::Vector{Any}
+    sptypes::Vector{VarState}
     slottypes::Vector{Any}
     src::CodeInfo
     cfg::CFG
@@ -439,25 +431,7 @@ function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool, typ
     return false
 end
 
-"""
-    MaybeUndefSP(typ)
-    is_maybeundefsp(typ) -> Bool
-    unwrap_maybeundefsp(typ) -> Any
-
-A special wrapper that represents a static parameter that could be undefined at runtime.
-This does not participate in the native type system nor the inference lattice,
-and it thus should be always unwrapped when performing any type or lattice operations on it.
-"""
-struct MaybeUndefSP
-    typ
-    MaybeUndefSP(@nospecialize typ) = new(typ)
-end
-is_maybeundefsp(@nospecialize typ) = isa(typ, MaybeUndefSP)
-unwrap_maybeundefsp(@nospecialize typ) = isa(typ, MaybeUndefSP) ? typ.typ : typ
-is_maybeundefsp(sptypes::Vector{Any}, idx::Int) = is_maybeundefsp(sptypes[idx])
-unwrap_maybeundefsp(sptypes::Vector{Any}, idx::Int) = unwrap_maybeundefsp(sptypes[idx])
-
-const EMPTY_SPTYPES = Any[]
+const EMPTY_SPTYPES = VarState[]
 
 function sptypes_from_meth_instance(linfo::MethodInstance)
     def = linfo.def
@@ -466,28 +440,26 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
     if isempty(linfo.sparam_vals)
         isa(sig, UnionAll) || return EMPTY_SPTYPES
         # linfo is unspecialized
-        sp = Any[]
+        spvals = Any[]
         sig′ = sig
         while isa(sig′, UnionAll)
-            push!(sp, sig′.var)
+            push!(spvals, sig′.var)
             sig′ = sig′.body
         end
     else
-        sp = collect(Any, linfo.sparam_vals)
+        spvals = linfo.sparam_vals
     end
-    for i = 1:length(sp)
-        v = sp[i]
+    nvals = length(spvals)
+    sptypes = Vector{VarState}(undef, nvals)
+    for i = 1:nvals
+        v = spvals[i]
         if v isa TypeVar
-            maybe_undef = !constrains_param(v, linfo.specTypes, #=covariant=#true)
             temp = sig
             for j = 1:i-1
                 temp = temp.body
             end
             vᵢ = (temp::UnionAll).var
-            while temp isa UnionAll
-                temp = temp.body
-            end
-            sigtypes = (temp::DataType).parameters
+            sigtypes = (unwrap_unionall(temp)::DataType).parameters
             for j = 1:length(sigtypes)
                 sⱼ = sigtypes[j]
                 if isType(sⱼ) && sⱼ.parameters[1] === vᵢ
@@ -497,36 +469,32 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
                     @goto ty_computed
                 end
             end
-            ub = v.ub
-            while ub isa TypeVar
-                ub = ub.ub
-            end
+            ub = unwraptv_ub(v)
             if has_free_typevars(ub)
                 ub = Any
             end
-            lb = v.lb
-            while lb isa TypeVar
-                lb = lb.lb
-            end
+            lb = unwraptv_lb(v)
             if has_free_typevars(lb)
                 lb = Bottom
             end
-            if Any <: ub && lb <: Bottom
+            if Any === ub && lb === Bottom
                 ty = Any
             else
                 tv = TypeVar(v.name, lb, ub)
                 ty = UnionAll(tv, Type{tv})
             end
             @label ty_computed
-            maybe_undef && (ty = MaybeUndefSP(ty))
+            undef = !constrains_param(v, linfo.specTypes, #=covariant=#true)
         elseif isvarargtype(v)
             ty = Int
+            undef = false
         else
             ty = Const(v)
+            undef = false
         end
-        sp[i] = ty
+        sptypes[i] = VarState(ty, undef)
     end
-    return sp
+    return sptypes
 end
 
 _topmod(sv::InferenceState) = _topmod(sv.mod)

@@ -145,7 +145,7 @@ mutable struct OptimizationState{Interp<:AbstractInterpreter}
     ir::Union{Nothing, IRCode}
     stmt_info::Vector{CallInfo}
     mod::Module
-    sptypes::Vector{Any}
+    sptypes::Vector{VarState}
     slottypes::Vector{Any}
     inlining::InliningState{Interp}
     cfg::Union{Nothing,CFG}
@@ -253,7 +253,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
         if head === :static_parameter
             # if we aren't certain enough about the type, it might be an UndefVarError at runtime
             sptypes = isa(src, IRCode) ? src.sptypes : src.ir.sptypes
-            nothrow = !is_maybeundefsp(sptypes, args[1]::Int)
+            nothrow = !sptypes[args[1]::Int].undef
             return (true, nothrow, nothrow)
         end
         if head === :call
@@ -343,25 +343,25 @@ end
 
 """
     argextype(x, src::Union{IRCode,IncrementalCompact}) -> t
-    argextype(x, src::CodeInfo, sptypes::Vector{Any}) -> t
+    argextype(x, src::CodeInfo, sptypes::Vector{VarState}) -> t
 
 Return the type of value `x` in the context of inferred source `src`.
 Note that `t` might be an extended lattice element.
 Use `widenconst(t)` to get the native Julia type of `x`.
 """
-argextype(@nospecialize(x), ir::IRCode, sptypes::Vector{Any} = ir.sptypes) =
+argextype(@nospecialize(x), ir::IRCode, sptypes::Vector{VarState} = ir.sptypes) =
     argextype(x, ir, sptypes, ir.argtypes)
-function argextype(@nospecialize(x), compact::IncrementalCompact, sptypes::Vector{Any} = compact.ir.sptypes)
+function argextype(@nospecialize(x), compact::IncrementalCompact, sptypes::Vector{VarState} = compact.ir.sptypes)
     isa(x, AnySSAValue) && return types(compact)[x]
     return argextype(x, compact, sptypes, compact.ir.argtypes)
 end
-argextype(@nospecialize(x), src::CodeInfo, sptypes::Vector{Any}) = argextype(x, src, sptypes, src.slottypes::Vector{Any})
+argextype(@nospecialize(x), src::CodeInfo, sptypes::Vector{VarState}) = argextype(x, src, sptypes, src.slottypes::Vector{Any})
 function argextype(
     @nospecialize(x), src::Union{IRCode,IncrementalCompact,CodeInfo},
-    sptypes::Vector{Any}, slottypes::Vector{Any})
+    sptypes::Vector{VarState}, slottypes::Vector{Any})
     if isa(x, Expr)
         if x.head === :static_parameter
-            return unwrap_maybeundefsp(sptypes, x.args[1]::Int)
+            return sptypes[x.args[1]::Int].typ
         elseif x.head === :boundscheck
             return Bool
         elseif x.head === :copyast
@@ -645,7 +645,7 @@ plus_saturate(x::Int, y::Int) = max(x, y, x+y)
 # known return type
 isknowntype(@nospecialize T) = (T === Union{}) || isa(T, Const) || isconcretetype(widenconst(T))
 
-function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{Any},
+function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{VarState},
                         union_penalties::Bool, params::OptimizationParams, error_path::Bool = false)
     head = ex.head
     if is_meta_expr_head(head)
@@ -736,7 +736,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
     return 0
 end
 
-function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{Any},
+function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{VarState},
                                   union_penalties::Bool, params::OptimizationParams)
     thiscost = 0
     dst(tgt) = isa(src, IRCode) ? first(src.cfg.blocks[tgt].stmts) : tgt
@@ -766,7 +766,7 @@ function inline_cost(ir::IRCode, params::OptimizationParams, union_penalties::Bo
     return inline_cost_clamp(bodycost)
 end
 
-function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeInfo, IRCode}, sptypes::Vector{Any}, unionpenalties::Bool, params::OptimizationParams)
+function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeInfo, IRCode}, sptypes::Vector{VarState}, unionpenalties::Bool, params::OptimizationParams)
     maxcost = 0
     for line = 1:length(body)
         stmt = body[line]
