@@ -23,6 +23,7 @@ n = 5
     LinearAlgebra.rmul!(A::AbstractMatrix, Q::MyQ) = rmul!(A, Q.Q)
     LinearAlgebra.rmul!(A::AbstractMatrix, adjQ::AdjointQ{<:Any,<:MyQ}) = rmul!(A, parent(adjQ).Q')
     Base.convert(::Type{AbstractQ{T}}, Q::MyQ) where {T} = MyQ{T}(Q.Q)
+    LinearAlgebra.det(Q::MyQ) = det(Q.Q)
 
     for T in (Float64, ComplexF64)
         A = rand(T, n, n)
@@ -30,10 +31,12 @@ n = 5
         Q = MyQ(F.Q)
         @test convert(AbstractQ{complex(T)}, Q) isa MyQ{complex(T)}
         @test convert(AbstractQ{complex(T)}, Q') isa AdjointQ{<:complex(T),<:MyQ{complex(T)}}
-        @test Q*I ≈ Q.Q*I rtol=2eps()
-        @test Q'*I ≈ Q.Q'*I rtol=2eps()
-        @test I*Q ≈ Q.Q*I rtol=2eps()
-        @test I*Q' ≈ I*Q.Q' rtol=2eps()
+        @test Q*I ≈ Q.Q*I rtol=2eps(real(T))
+        @test Q'*I ≈ Q.Q'*I rtol=2eps(real(T))
+        @test I*Q ≈ Q.Q*I rtol=2eps(real(T))
+        @test I*Q' ≈ I*Q.Q' rtol=2eps(real(T))
+        @test abs(det(Q)) ≈ 1
+        @test logabsdet(Q)[1] ≈ 0 atol=2eps(real(T))
         y = rand(T, n)
         @test Q * y ≈ Q.Q * y ≈ Q' \ y ≈ ldiv!(Q', copy(y)) ≈ ldiv!(zero(y), Q', y)
         @test Q'y ≈ Q.Q' * y ≈ Q \ y ≈ ldiv!(Q, copy(y)) ≈ ldiv!(zero(y), Q, y)

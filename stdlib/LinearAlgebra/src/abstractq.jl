@@ -175,6 +175,12 @@ ldiv!(Q::AbstractQ, A::AbstractVecOrMat) = lmul!(Q', A)
 ldiv!(C::AbstractVecOrMat, Q::AbstractQ, A::AbstractVecOrMat) = mul!(C, Q', A)
 rdiv!(A::AbstractVecOrMat, Q::AbstractQ) = rmul!(A, Q')
 
+logabsdet(Q::AbstractQ) = (d = det(Q); return log(abs(d)), sign(d))
+function logdet(A::AbstractQ)
+    d, s = logabsdet(A)
+    return d + log(s)
+end
+
 ###########################################################
 ################ Q from QR decompositions #################
 ###########################################################
@@ -495,6 +501,8 @@ function (*)(A::AbstractMatrix, adjQ::AdjointQ{<:Any,<:Union{QRPackedQ,QRCompact
     end
 end
 (*)(u::AdjointAbsVec, Q::AdjointQ{<:Any,<:Union{QRPackedQ,QRCompactWYQ,HessenbergQ}}) = (Q'u')'
+
+det(Q::HessenbergQ) = _det_tau(Q.τ)
 
 ###########################################################
 ################ Q from LQ decomposition ##################
