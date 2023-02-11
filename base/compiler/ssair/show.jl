@@ -331,7 +331,7 @@ function compute_ir_line_annotations(code::IRCode)
             last_stack = stack
             entry = linetable[line]
         end
-        push!(loc_annotations, String(take!(buf)))
+        push!(loc_annotations, String(unsafe_take!(buf)))
         push!(loc_lineno, (lineno != 0 && lineno != last_lineno) ? string(lineno) : "")
         push!(loc_methods, loc_method)
         last_line = line

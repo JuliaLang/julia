@@ -211,6 +211,6 @@ function base64encode(f::Function, args...; context=nothing)
         f(IOContext(b, context), args...)
     end
     close(b)
-    return String(take!(s))
+    return String(unsafe_take!(s))
 end
 base64encode(args...; context=nothing) = base64encode(write, args...; context=context)

@@ -866,6 +866,7 @@ export
     skip,
     skipchars,
     take!,
+    unsafe_take!,
     truncate,
     unmark,
     unsafe_read,

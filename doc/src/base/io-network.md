@@ -10,6 +10,7 @@ Base.open
 Base.IOStream
 Base.IOBuffer
 Base.take!(::Base.GenericIOBuffer)
+Base.unsafe_take!
 Base.fdio
 Base.flush
 Base.close

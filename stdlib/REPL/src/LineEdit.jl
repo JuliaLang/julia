@@ -552,7 +552,7 @@ function refresh_multi_line(terminal::UnixTerminal, args...; kwargs...)
     termbuf = TerminalBuffer(outbuf)
     ret = refresh_multi_line(termbuf, terminal, args...;kwargs...)
     # Output the entire refresh at once
-    write(terminal, take!(outbuf))
+    write(terminal, unsafe_take!(outbuf))
     flush(terminal)
     return ret
 end
@@ -1550,7 +1550,7 @@ function normalize_key(key::Union{String,SubString{String}})
             write(buf, c)
         end
     end
-    return String(take!(buf))
+    return String(unsafe_take!(buf))
 end
 
 function normalize_keys(keymap::Union{Dict{Char,Any},AnyDict})

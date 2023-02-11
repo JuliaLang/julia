@@ -819,7 +819,7 @@ function readuntil(s::IO, delim::AbstractChar; keep::Bool=false)
         end
         write(out, c)
     end
-    return String(take!(out))
+    return String(unsafe_take!(out))
 end
 
 function readuntil(s::IO, delim::T; keep::Bool=false) where T
@@ -1115,7 +1115,7 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
         buf.size = _stripnewline(r.itr.keep, buf.size, buf.data)
         empty!(chunks) # will cause next iteration to terminate
         seekend(r.itr.stream) # reposition to end of stream for isdone
-        s = String(take!(buf))
+        s = String(unsafe_take!(buf))
     else
         # extract the string from chunks[ichunk][inewline+1] to chunks[jchunk][jnewline]
         if ichunk == jchunk # common case: current and previous newline in same chunk
@@ -1132,7 +1132,7 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
             end
             write(buf, view(chunks[jchunk], 1:jnewline))
             buf.size = _stripnewline(r.itr.keep, buf.size, buf.data)
-            s = String(take!(buf))
+            s = String(unsafe_take!(buf))
 
             # overwrite obsolete chunks (ichunk+1:jchunk)
             i = jchunk

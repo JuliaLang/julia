@@ -64,7 +64,7 @@ function parseinline(stream::IO, md::MD, config::Config)
             write(buffer, read(stream, Char))
         end
     end
-    c = String(take!(buffer))
+    c = String(unsafe_take!(buffer))
     !isempty(c) && push!(content, c)
     return content
 end

@@ -737,7 +737,7 @@ function replace(str::String, pat_repl::Vararg{Pair,N}; count::Integer=typemax(I
     end
     foreach(_free_pat_replacer, patterns)
     write(out, SubString(str, i))
-    return String(take!(out))
+    return String(unsafe_take!(out))
 end
 
 
@@ -958,5 +958,5 @@ function Base.rest(s::AbstractString, st...)
     for c in Iterators.rest(s, st...)
         print(io, c)
     end
-    return String(take!(io))
+    return String(unsafe_take!(io))
 end

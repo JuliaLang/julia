@@ -88,7 +88,7 @@ function cflags(doframework)
     if Sys.isunix()
         print(flags, " -fPIC")
     end
-    return String(take!(flags))
+    return String(unsafe_take!(flags))
 end
 
 function allflags(doframework)

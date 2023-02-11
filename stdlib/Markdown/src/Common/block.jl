@@ -114,7 +114,7 @@ function indentcode(stream::IO, block::MD)
                 break
             end
         end
-        code = String(take!(buffer))
+        code = String(unsafe_take!(buffer))
         !isempty(code) && (push!(block, Code(rstrip(code))); return true)
         return false
     end
@@ -178,7 +178,7 @@ function blockquote(stream::IO, block::MD)
         end
         empty && return false
 
-        md = String(take!(buffer))
+        md = String(unsafe_take!(buffer))
         push!(block, BlockQuote(parse(md, flavor = config(block)).content))
         return true
     end
@@ -236,7 +236,7 @@ function admonition(stream::IO, block::MD)
             end
         end
         # Parse the nested block as markdown and create a new Admonition block.
-        nested = parse(String(take!(buffer)), flavor = config(block))
+        nested = parse(String(unsafe_take!(buffer)), flavor = config(block))
         push!(block, Admonition(category, title, nested.content))
         return true
     end

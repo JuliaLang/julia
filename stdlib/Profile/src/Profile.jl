@@ -56,7 +56,7 @@ function _peek_report()
     iob = IOBuffer()
     ioc = IOContext(IOContext(iob, stderr), :displaysize=>displaysize(stderr))
     print(ioc, groupby = [:thread, :task])
-    Base.print(stderr, String(take!(iob)))
+    Base.print(stderr, String(unsafe_take!(iob)))
 end
 # This is a ref so that it can be overridden by other profile info consumers.
 const peek_report = Ref{Function}(_peek_report)

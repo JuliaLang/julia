@@ -558,7 +558,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                     break
                 end
                 i += 1
-                print(io, String(take!(line[1])))
+                print(io, String(unsafe_take!(line[1])))
             end
             println(io) # extra newline for spacing to stacktrace
         end

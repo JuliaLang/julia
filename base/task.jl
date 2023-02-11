@@ -96,7 +96,7 @@ function show_task_exception(io::IO, t::Task; indent = true)
     else
         show_exception_stack(IOContext(b, io), stack)
     end
-    str = String(take!(b))
+    str = String(unsafe_take!(b))
     if indent
         str = replace(str, "\n" => "\n    ")
     end

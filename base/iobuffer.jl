@@ -361,6 +361,9 @@ isopen(io::GenericIOBuffer) = io.readable || io.writable || io.seekable || bytes
 
 Obtain the contents of an `IOBuffer` as an array. Afterwards, the `IOBuffer` is reset to its initial state.
 
+See also [`unsafe_take!`](@ref) as a slightly faster alternative *if* the `IOBuffer` is no longer used
+after `take!`.
+
 # Examples
 ```jldoctest
 julia> io = IOBuffer();
@@ -408,6 +411,28 @@ function take!(io::IOBuffer)
         io.size = 0
     end
     return data
+end
+
+"""
+    unsafe_take!(io::GenericIOBuffer)
+
+Like [`take!`](@ref), obtains the contents of an `IOBuffer` as an array.  However,
+`io` is left in an undefined state and should be regarded as unsafe to use after
+calling `unsafe_take!`.   Requires `iswritable(io) == true`.
+
+This function reduces the number of memory allocations in situations where
+the `IOBuffer` is no longer needed after `take!`.
+"""
+unsafe_take!(io::GenericIOBuffer) = take!(io)
+function unsafe_take!(io::IOBuffer)
+    io.writable || throw(ArgumentError("unsafe_take! requires a writable buffer"))
+    if io.seekable
+        return resize!(io.data, io.size)
+    else
+        nbytes = bytesavailable(io)
+        _deletebeg!(io.data, io.ptr-1)
+        return resize!(io.data, nbytes)
+    end
 end
 
 function write(to::IO, from::GenericIOBuffer)

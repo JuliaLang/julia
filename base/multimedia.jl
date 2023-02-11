@@ -172,7 +172,7 @@ function __binrepr(m::MIME, x, context)
     else
         show(IOContext(s, context), m, x)
     end
-    take!(s)
+    unsafe_take!(s)
 end
 _binrepr(m::MIME, x, context) = __binrepr(m, x, context)
 _binrepr(m::MIME, x::Vector{UInt8}, context) = x

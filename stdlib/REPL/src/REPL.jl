@@ -1354,7 +1354,7 @@ let matchend = Dict("\"" => r"\"", "\"\"\"" => r"\"\"\"", "'" => r"'",
             pos = nextind(code, last(j))
         end
         print(buf, SubString(code, pos, lastindex(code)))
-        return String(take!(buf))
+        return String(unsafe_take!(buf))
     end
 end
 

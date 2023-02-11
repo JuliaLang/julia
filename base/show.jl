@@ -2897,7 +2897,7 @@ summary(io::IO, x) = print(io, typeof(x))
 function summary(x)
     io = IOBuffer()
     summary(io, x)
-    String(take!(io))
+    String(unsafe_take!(io))
 end
 
 ## `summary` for AbstractArrays

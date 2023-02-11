@@ -300,7 +300,7 @@ function transcode(::Type{UInt8}, src::Vector{<:Union{Int32,UInt32}})
     for c in src
         print(buf, Char(c))
     end
-    take!(buf)
+    unsafe_take!(buf)
 end
 transcode(::Type{String}, src::String) = src
 transcode(T, src::String) = transcode(T, codeunits(src))

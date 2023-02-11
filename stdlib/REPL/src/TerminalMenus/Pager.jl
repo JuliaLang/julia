@@ -36,7 +36,7 @@ function pager(terminal, object)
     buffer = IOBuffer()
     ctx = IOContext(buffer, :color => REPL.Terminals.hascolor(terminal), :displaysize => (lines, columns))
     show(ctx, "text/plain", object)
-    pager = Pager(String(take!(buffer)); pagesize = div(lines, 2))
+    pager = Pager(String(unsafe_take!(buffer)); pagesize = div(lines, 2))
     return request(terminal, pager)
 end
 pager(object) = pager(terminal, object)

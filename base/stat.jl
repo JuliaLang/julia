@@ -269,7 +269,7 @@ function filemode_string(mode)
         end
         complete && write(str, "-")
     end
-    return String(take!(str))
+    return String(unsafe_take!(str))
 end
 
 """

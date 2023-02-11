@@ -75,10 +75,10 @@ function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}
     iscolor = get(io, :color, false)::Bool
     try f(IOContext(buf, io), args...)
     finally
-        str = String(take!(buf))
         if !iscolor
-            print(io, str)
+            print(io, String(unsafe_take!(buf)))
         else
+            str = String(take!(buf))
             bold && color === :bold && (color = :nothing)
             underline && color === :underline && (color = :nothing)
             blink && color === :blink && (color = :nothing)
@@ -104,7 +104,7 @@ function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}
                 isempty(line) && continue
                 print(buf, enable_ansi, line, disable_ansi)
             end
-            print(io, String(take!(buf)))
+            print(io, String(unsafe_take!(buf)))
         end
     end
 end

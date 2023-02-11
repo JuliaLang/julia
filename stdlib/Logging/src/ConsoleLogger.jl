@@ -132,7 +132,7 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
         for (key, val) in kwargs
             key === :maxlog && continue
             showvalue(valio, val)
-            vallines = split(String(take!(valbuf)), '\n')
+            vallines = split(String(unsafe_take!(valbuf)), '\n')
             if length(vallines) == 1
                 push!(msglines, (indent=2, msg=SubString("$key = $(vallines[1])")))
             else
@@ -175,6 +175,6 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
         println(iob)
     end
 
-    write(stream, take!(buf))
+    write(stream, unsafe_take!(buf))
     nothing
 end

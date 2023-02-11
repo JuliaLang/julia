@@ -380,7 +380,7 @@ function printmenu(out::IO, m::AbstractMenu, cursoridx::Int; oldstate=nothing, i
         print(buf, "\x1b[$(ncleared-newstate)A")
     end
 
-    print(out, String(take!(buf)))
+    print(out, String(unsafe_take!(buf)))
 
     return newstate
 end

@@ -665,7 +665,7 @@ function titlecase(s::AbstractString; wordsep::Function = !isletter, strict::Boo
         end
         c0 = c
     end
-    return String(take!(b))
+    return String(unsafe_take!(b))
 end
 
 """

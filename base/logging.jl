@@ -688,7 +688,7 @@ function handle_message(logger::SimpleLogger, level::LogLevel, message, _module,
         println(iob, "│   ", key, " = ", val)
     end
     println(iob, "└ @ ", _module, " ", filepath, ":", line)
-    write(stream, take!(buf))
+    write(stream, unsafe_take!(buf))
     nothing
 end
 
