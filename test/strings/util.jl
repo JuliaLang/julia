@@ -342,14 +342,18 @@ end
         @test String(take!(buf)) == "aaazaabbbzzz"
     end
     let tempfile = tempname()
-        open(tempfile, "w") do f
-            replace(f, "aaa", 'a' => 'z', count=0)
-            replace(f, "aaa", 'a' => 'z', count=1)
-            replace(f, "bbb", 'a' => 'z')
-            replace(f, "aaa", 'a' => 'z')
-            print(f, "\n")
+        try
+            open(tempfile, "w") do f
+                replace(f, "aaa", 'a' => 'z', count=0)
+                replace(f, "aaa", 'a' => 'z', count=1)
+                replace(f, "bbb", 'a' => 'z')
+                replace(f, "aaa", 'a' => 'z')
+                print(f, "\n")
+            end
+            @test read(tempfile, String) == "aaazaabbbzzz\n"
+        finally
+            rm(tempfile, force=true)
         end
-        @test read(tempfile, String) == "aaazaabbbzzz\n"
     end
 end
 
