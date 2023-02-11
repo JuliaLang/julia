@@ -179,11 +179,17 @@ for (name, f) in l
         @test readuntil(io(t), collect(s)::Vector{Char}) == Vector{Char}(m)
         @test readuntil(io(t), collect(s)::Vector{Char}, keep=true) == Vector{Char}(kept)
 
-        for blen in (0,1,100)
-            b = Vector{UInt8}(undef, blen)
-            n = readuntil!(io(t), b, s)
-            @test b[1:n] == codeunits(kept)
+        buf = IOBuffer()
+        @test String(take!(readuntil(buf, io(t), s))) == m
+        @test String(take!(readuntil(buf, io(t), s, keep=true))) == kept
+        file = tempname()
+        for (k,m) in ((false, m), (true, kept))
+            open(file, "w") do f
+                @test f == readuntil(f, io(t), s, keep=k)
+            end
+            @test read(file, String) == m
         end
+        rm(file)
     end
     cleanup()
 

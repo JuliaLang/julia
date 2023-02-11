@@ -443,16 +443,43 @@ end
 function readuntil_string(s::IOStream, delim::UInt8, keep::Bool)
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 1, !keep)
 end
+readuntil(s::IOStream, delim::AbstractChar; keep::Bool=false) =
+    delim ≤ '\x7f' ? readuntil_string(s, delim, keep) :
+    String(take!(readuntil(IOBuffer(StringVector(70),write=true), s, delim; keep)))
 
 function readline(s::IOStream; keep::Bool=false)
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, keep ? 0 : 2)
 end
 
-function _readuntil!(s::IOStream,
-                     buffer::Union{Vector{UInt8},FastContiguousSubArray{UInt8,1,<:Vector{UInt8}}},
-                     delim::UInt8)
-    @_lock_ios s return Int(ccall(:jl_readuntil_buf, Csize_t, (Ptr{Cvoid}, UInt8, Ptr{UInt8}, Csize_t),
-                                  s.ios, delim, buffer, length(buffer) % Csize_t))
+function readuntil(out::IOBuffer, s::IOStream, delim::UInt8; keep::Bool=false)
+    d = out.data
+    ptr = (out.append ? out.size+1 : out.ptr)
+    len = length(d)
+    while true
+        GC.@preserve data @_lock_ios s n=
+            Int(ccall(:jl_readuntil_buf, Csize_t, (Ptr{Cvoid}, UInt8, Ptr{UInt8}, Csize_t),
+                s.ios, delim, pointer(d, ptr), (len - ptr + 1) % Csize_t))
+        iszero(n) && break
+        ptr += n
+        if d[ptr-1] == delim
+            keep || (ptr -= 1)
+            break;
+        end
+        (eof(s) || len == out.maxsize) && break
+        len = min(2len + 128, out.maxsize)
+        resize!(d, len)
+    end
+    out.size = max(out.size, ptr - 1)
+    if !out.append
+        out.ptr = ptr
+    end
+    return out
+end
+
+function readuntil(out::IOStream, s::IOStream, delim::UInt8; keep::Bool=false)
+    @_lock_ios out @_lock_ios s ccall(:ios_copyuntil, Csize_t,
+        (Ptr{Cvoid}, Ptr{Cvoid}, UInt8, Cint), out.ios, s.ios, delim, keep)
+    return out
 end
 
 function readbytes_all!(s::IOStream,

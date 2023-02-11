@@ -26,7 +26,7 @@ Build system changes
 
 New library functions
 ---------------------
-* `readuntil!(io, buf, delim)` reads data into a pre-allocated buffer until `delim` ([#48273]).
+* `readuntil(out, io, buf, delim)` reads data into an `out::IO` stream ([#48273]).
 * `tanpi` is now defined. It computes tan(πx) more accurately than `tan(pi*x)` ([#48575]).
 
 New library features
