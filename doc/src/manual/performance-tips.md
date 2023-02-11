@@ -525,7 +525,7 @@ at the time `k` is compiled.
 
 ### Be aware of when Julia avoids specializing
 
-As a heuristic, Julia avoids automatically specializing on argument type parameters in three
+As a heuristic, Julia avoids automatically [specializing](@ref man-method-specializations) on argument type parameters in three
 specific cases: `Type`, `Function`, and `Vararg`. Julia will always specialize when the argument is
 used within the method, but not if the argument is just passed through to another function. This
 usually has no performance impact at runtime and
@@ -611,8 +611,8 @@ end
 This can be written more concisely and efficiently as:
 
 ```julia
-norm(x::Vector) = sqrt(real(dot(x, x)))
-norm(A::Matrix) = maximum(svdvals(A))
+mynorm(x::Vector) = sqrt(real(dot(x, x)))
+mynorm(A::Matrix) = maximum(svdvals(A))
 ```
 
 It should however be noted that the compiler is quite efficient at optimizing away the dead branches in code

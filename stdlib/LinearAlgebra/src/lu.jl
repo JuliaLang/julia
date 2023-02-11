@@ -527,7 +527,14 @@ function lu!(A::Tridiagonal{T,V}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(
     if dl === du
         throw(ArgumentError("off-diagonals of `A` must not alias"))
     end
-    du2 = fill!(similar(d, max(0, n-2)), 0)::V
+    # Check if Tridiagonal matrix already has du2 for pivoting
+    has_du2_defined = isdefined(A, :du2) && length(A.du2) == max(0, n-2)
+    if has_du2_defined
+        du2 = A.du2::V
+    else
+        du2 = similar(d, max(0, n-2))::V
+    end
+    fill!(du2, 0)
 
     @inbounds begin
         for i = 1:n
@@ -582,7 +589,7 @@ function lu!(A::Tridiagonal{T,V}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(
             end
         end
     end
-    B = Tridiagonal{T,V}(dl, d, du, du2)
+    B = has_du2_defined ? A : Tridiagonal{T,V}(dl, d, du, du2)
     check && checknonsingular(info, pivot)
     return LU{T,Tridiagonal{T,V},typeof(ipiv)}(B, ipiv, convert(BlasInt, info))
 end

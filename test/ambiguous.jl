@@ -153,9 +153,17 @@ ambig(x::Int8, y) = 1
 ambig(x::Integer, y) = 2
 ambig(x, y::Int) = 3
 end
-
 ambs = detect_ambiguities(Ambig5)
 @test length(ambs) == 2
+
+module Ambig48312
+ambig(::Integer, ::Int) = 1
+ambig(::Int, ::Integer) = 2
+ambig(::Signed, ::Int) = 3
+ambig(::Int, ::Signed) = 4
+end
+ambs = detect_ambiguities(Ambig48312)
+@test length(ambs) == 4
 
 # Test that Core and Base are free of ambiguities
 # not using isempty so this prints more information when it fails
@@ -350,6 +358,7 @@ f35983(::Type, ::Type) = 2
 @test first(Base.methods(f35983, (Any, Any))).sig == Tuple{typeof(f35983), Type, Type}
 let ambig = Ref{Int32}(0)
     ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, nothing, -1, typemax(UInt), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test ms isa Vector
     @test length(ms) == 1
     @test ambig[] == 0
 end
@@ -358,6 +367,7 @@ f35983(::Type{Int16}, ::Any) = 3
 @test length(Base.methods(f35983, (Type, Type))) == 1
 let ambig = Ref{Int32}(0)
     ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, nothing, -1, typemax(UInt), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    @test ms isa Vector
     @test length(ms) == 2
     @test ambig[] == 1
 end

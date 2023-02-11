@@ -111,7 +111,7 @@ x = 1
 
 Note that the interactive prompt (aka REPL) is in the global scope of the module `Main`.
 
-## Local Scope
+## [Local Scope](@id local-scope)
 
 A new local scope is introduced by most code blocks (see above [table](@ref
 man-scope-table) for a complete list). If such a block is syntactically nested

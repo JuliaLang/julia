@@ -127,24 +127,21 @@ using Core: SlotNumber, Argument
 using Core.Compiler: slot_id, tmerge_fast_path
 import .CC:
     AbstractLattice, BaseInferenceLattice, IPOResultLattice, InferenceLattice, OptimizerLattice,
-    widen, is_valid_lattice, typeinf_lattice, ipo_lattice, optimizer_lattice,
-    widenconst, tmeet, tmerge, ⊑, abstract_eval_special_value, widenreturn,
-    widenlattice
+    widenlattice, is_valid_lattice_norec, typeinf_lattice, ipo_lattice, optimizer_lattice,
+    widenconst, tmeet, tmerge, ⊑, abstract_eval_special_value, widenreturn
 
 @newinterp TaintInterpreter
 struct TaintLattice{PL<:AbstractLattice} <: CC.AbstractLattice
     parent::PL
 end
 CC.widenlattice(𝕃::TaintLattice) = 𝕃.parent
-CC.is_valid_lattice(𝕃::TaintLattice, @nospecialize(elm)) =
-    is_valid_lattice(widenlattice(𝕃), elem) || isa(elm, Taint)
+CC.is_valid_lattice_norec(::TaintLattice, @nospecialize(elm)) = isa(elm, Taint)
 
 struct InterTaintLattice{PL<:AbstractLattice} <: CC.AbstractLattice
     parent::PL
 end
 CC.widenlattice(𝕃::InterTaintLattice) = 𝕃.parent
-CC.is_valid_lattice(𝕃::InterTaintLattice, @nospecialize(elm)) =
-    is_valid_lattice(widenlattice(𝕃), elem) || isa(elm, InterTaint)
+CC.is_valid_lattice_norec(::InterTaintLattice, @nospecialize(elm)) = isa(elm, InterTaint)
 
 const AnyTaintLattice{L} = Union{TaintLattice{L},InterTaintLattice{L}}
 

@@ -3,8 +3,6 @@
 #include <llvm/IR/DataLayout.h>
 
 #include "julia.h"
-#include "julia_internal.h"
-#include "processor.h"
 
 #include <map>
 #include <mutex>
@@ -81,11 +79,11 @@ public:
         ~Locked() JL_NOTSAFEPOINT = default;
     };
 
-    struct sysimg_info_t {
-        uint64_t jl_sysimage_base;
-        jl_sysimg_fptrs_t sysimg_fptrs;
-        jl_method_instance_t **sysimg_fvars_linfo;
-        size_t sysimg_fvars_n;
+    struct image_info_t {
+        uint64_t base;
+        jl_image_fptrs_t fptrs;
+        jl_method_instance_t **fvars_linfo;
+        size_t fvars_n;
     };
 
     struct libc_frames_t {
@@ -122,7 +120,7 @@ private:
     // that it came from (providing name, type signature, file info, etc.)
     Locked<llvm::StringMap<jl_code_instance_t*>> codeinst_in_flight{};
 
-    Locked<sysimg_info_t> sysimg_info{};
+    Locked<llvm::DenseMap<uint64_t, image_info_t>> image_info{};
 
     Locked<objfilemap_t> objfilemap{};
 
@@ -141,7 +139,7 @@ public:
                         std::function<uint64_t(const llvm::StringRef &)> getLoadAddress,
                         std::function<void*(void*)> lookupWriteAddress) JL_NOTSAFEPOINT;
     objectmap_t& getObjectMap() JL_NOTSAFEPOINT;
-    void set_sysimg_info(sysimg_info_t info) JL_NOTSAFEPOINT;
-    Locked<sysimg_info_t>::ConstLockT get_sysimg_info() const JL_NOTSAFEPOINT;
+    void add_image_info(image_info_t info) JL_NOTSAFEPOINT;
+    bool get_image_info(uint64_t base, image_info_t *info) const JL_NOTSAFEPOINT;
     Locked<objfilemap_t>::LockT get_objfile_map() JL_NOTSAFEPOINT;
 };

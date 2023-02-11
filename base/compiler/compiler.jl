@@ -31,6 +31,9 @@ macro noinline() Expr(:meta, :noinline) end
 convert(::Type{Any}, Core.@nospecialize x) = x
 convert(::Type{T}, x::T) where {T} = x
 
+# mostly used by compiler/methodtable.jl, but also by reflection.jl
+abstract type MethodTableView end
+
 # essential files and libraries
 include("essentials.jl")
 include("ctypes.jl")
@@ -47,7 +50,7 @@ ntuple(f, n) = (Any[f(i) for i = 1:n]...,)
 
 # core operations & types
 function return_type end # promotion.jl expects this to exist
-is_return_type(@Core.nospecialize(f)) = f === return_type
+is_return_type(Core.@nospecialize(f)) = f === return_type
 include("promotion.jl")
 include("tuple.jl")
 include("pair.jl")

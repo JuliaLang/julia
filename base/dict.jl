@@ -339,6 +339,7 @@ end
 ht_keyindex2!(h::Dict, key) = ht_keyindex2_shorthash!(h, key)[1]
 
 @propagate_inbounds function _setindex!(h::Dict, v, key, index, sh = _shorthash7(hash(key)))
+    h.ndel -= isslotmissing(h, index)
     h.slots[index] = sh
     h.keys[index] = key
     h.vals[index] = v
@@ -423,7 +424,7 @@ Dict{String, Int64} with 4 entries:
 get!(collection, key, default)
 
 """
-    get!(f::Function, collection, key)
+    get!(f::Union{Function, Type}, collection, key)
 
 Return the value stored for the given key, or if no mapping for the key is present, store
 `key => f()`, and return `f()`.
@@ -449,7 +450,7 @@ Dict{Int64, Int64} with 1 entry:
   2 => 4
 ```
 """
-get!(f::Function, collection, key)
+get!(f::Callable, collection, key)
 
 function get!(default::Callable, h::Dict{K,V}, key0) where V where K
     key = convert(K, key0)
@@ -512,7 +513,7 @@ function get(h::Dict{K,V}, key, default) where V where K
 end
 
 """
-    get(f::Function, collection, key)
+    get(f::Union{Function, Type}, collection, key)
 
 Return the value stored for the given key, or if no mapping for the key is present, return
 `f()`.  Use [`get!`](@ref) to also store the default value in the dictionary.
@@ -526,7 +527,7 @@ get(dict, key) do
 end
 ```
 """
-get(::Function, collection, key)
+get(::Callable, collection, key)
 
 function get(default::Callable, h::Dict{K,V}, key) where V where K
     index = ht_keyindex(h, key)
@@ -629,13 +630,30 @@ function pop!(h::Dict)
 end
 
 function _delete!(h::Dict{K,V}, index) where {K,V}
-    @inbounds h.slots[index] = 0x7f
-    @inbounds _unsetindex!(h.keys, index)
-    @inbounds _unsetindex!(h.vals, index)
-    h.ndel += 1
+    @inbounds begin
+    slots = h.slots
+    sz = length(slots)
+    _unsetindex!(h.keys, index)
+    _unsetindex!(h.vals, index)
+    # if the next slot is empty we don't need a tombstone
+    # and can remove all tombstones that were required by the element we just deleted
+    ndel = 1
+    nextind = (index & (sz-1)) + 1
+    if isslotempty(h, nextind)
+        while true
+            ndel -= 1
+            slots[index] = 0x00
+            index = ((index - 2) & (sz-1)) + 1
+            isslotmissing(h, index) || break
+        end
+    else
+        slots[index] = 0x7f
+    end
+    h.ndel += ndel
     h.count -= 1
     h.age += 1
     return h
+    end
 end
 
 """

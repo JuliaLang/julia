@@ -14,13 +14,17 @@ using .Base:
     @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator,
     AbstractRange, AbstractUnitRange, UnitRange, LinearIndices,
     (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, missing,
-    any, _counttuple, eachindex, ntuple, zero, prod, in, firstindex, lastindex,
+    any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
     tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape
 using Core: @doc
 
 if Base !== Core.Compiler
 using .Base:
     cld, fld, SubArray, view, resize!, IndexCartesian
+using .Base.Checked: checked_mul
+else
+    # Checked.checked_mul is not available during bootstrapping:
+    const checked_mul = *
 end
 
 import .Base:
@@ -286,8 +290,8 @@ length(v::Pairs) = length(getfield(v, :itr))
 axes(v::Pairs) = axes(getfield(v, :itr))
 size(v::Pairs) = size(getfield(v, :itr))
 
-@propagate_inbounds function _pairs_elt(p::Pairs{K, V}, idx) where {K, V}
-    return Pair{K, V}(idx, getfield(p, :data)[idx])
+Base.@eval @propagate_inbounds function _pairs_elt(p::Pairs{K, V}, idx) where {K, V}
+    return $(Expr(:new, :(Pair{K, V}), :idx, :(getfield(p, :data)[idx])))
 end
 
 @propagate_inbounds function iterate(p::Pairs{K, V}, state...) where {K, V}
@@ -342,7 +346,7 @@ the `zip` iterator is a tuple of values of its subiterators.
 
     `zip()` with no arguments yields an infinite iterator of empty tuples.
 
-See also: [`enumerate`](@ref), [`Splat`](@ref Base.Splat).
+See also: [`enumerate`](@ref), [`Base.splat`](@ref).
 
 # Examples
 ```jldoctest
@@ -1055,7 +1059,7 @@ _prod_axes1(a, A) =
     throw(ArgumentError("Cannot compute indices for object of type $(typeof(a))"))
 
 ndims(p::ProductIterator) = length(axes(p))
-length(P::ProductIterator) = prod(size(P))
+length(P::ProductIterator) = reduce(checked_mul, size(P); init=1)
 
 IteratorEltype(::Type{ProductIterator{Tuple{}}}) = HasEltype()
 IteratorEltype(::Type{ProductIterator{Tuple{I}}}) where {I} = IteratorEltype(I)

@@ -20,6 +20,9 @@ ifeq ($(SANITIZE),1)
 MPFR_CONFIGURE_OPTS += --host=none-unknown-linux
 endif
 
+ifeq ($(OS),emscripten)
+MPFR_CONFIGURE_OPTS += CFLAGS="-fPIC"
+endif
 
 $(SRCCACHE)/mpfr-$(MPFR_VER).tar.bz2: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ https://www.mpfr.org/mpfr-$(MPFR_VER)/$(notdir $@)

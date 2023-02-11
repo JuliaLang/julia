@@ -14,7 +14,7 @@
 #include <llvm/Transforms/Utils/ValueMapper.h>
 
 #include "passes.h"
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 
 #define DEBUG_TYPE "remove_addrspaces"
 

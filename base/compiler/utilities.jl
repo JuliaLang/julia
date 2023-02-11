@@ -77,6 +77,12 @@ function quoted(@nospecialize(x))
     return is_self_quoting(x) ? x : QuoteNode(x)
 end
 
+############
+# inlining #
+############
+
+const MAX_INLINE_CONST_SIZE = 256
+
 function count_const_size(@nospecialize(x), count_self::Bool = true)
     (x isa Type || x isa Symbol) && return 0
     ismutable(x) && return MAX_INLINE_CONST_SIZE + 1
@@ -152,8 +158,8 @@ function get_compileable_sig(method::Method, @nospecialize(atype), sparams::Simp
         mt, atype, sparams, method)
 end
 
-isa_compileable_sig(@nospecialize(atype), method::Method) =
-    !iszero(ccall(:jl_isa_compileable_sig, Int32, (Any, Any), atype, method))
+isa_compileable_sig(@nospecialize(atype), sparams::SimpleVector, method::Method) =
+    !iszero(ccall(:jl_isa_compileable_sig, Int32, (Any, Any, Any), atype, sparams, method))
 
 # eliminate UnionAll vars that might be degenerate due to having identical bounds,
 # or a concrete upper bound and appearing covariantly.
@@ -200,7 +206,12 @@ function specialize_method(method::Method, @nospecialize(atype), sparams::Simple
     if compilesig
         new_atype = get_compileable_sig(method, atype, sparams)
         new_atype === nothing && return nothing
-        atype = new_atype
+        if atype !== new_atype
+            sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), new_atype, method.sig)::SimpleVector
+            if sparams === sp_[2]::SimpleVector
+                atype = new_atype
+            end
+        end
     end
     if preexisting
         # check cached specializations
@@ -212,6 +223,27 @@ end
 
 function specialize_method(match::MethodMatch; kwargs...)
     return specialize_method(match.method, match.spec_types, match.sparams; kwargs...)
+end
+
+"""
+    is_declared_inline(method::Method) -> Bool
+
+Check if `method` is declared as `@inline`.
+"""
+is_declared_inline(method::Method) = _is_declared_inline(method, true)
+
+"""
+    is_declared_noinline(method::Method) -> Bool
+
+Check if `method` is declared as `@noinline`.
+"""
+is_declared_noinline(method::Method) = _is_declared_inline(method, false)
+
+function _is_declared_inline(method::Method, inline::Bool)
+    isdefined(method, :source) || return false
+    src = method.source
+    isa(src, MaybeCompressed) || return false
+    return (inline ? is_declared_inline : is_declared_noinline)(src)
 end
 
 """
