@@ -440,10 +440,10 @@ for f in (
 end
 read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io)::IO, byte)::UInt8
 unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io)::IO, p, nb)
-readuntil(io::AbstractPipe, arg::UInt8; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
-readuntil(io::AbstractPipe, arg::AbstractChar; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
-readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
-readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
+readuntil(out::IO, io::AbstractPipe, arg::UInt8; kw...) = readuntil(out, pipe_reader(io)::IO, arg; kw...)
+readuntil(out::IO, io::AbstractPipe, arg::AbstractChar; kw...) = readuntil(out, pipe_reader(io)::IO, arg; kw...)
+readuntil(out::IO, io::AbstractPipe, arg::AbstractString; kw...) = readuntil(out, pipe_reader(io)::IO, arg; kw...)
+readuntil(out::IO, io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(out, pipe_reader(io)::IO, arg; kw...)
 readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io)::IO, target, keep, out)
 readbytes!(io::AbstractPipe, target::AbstractVector{UInt8}, n=length(target)) = readbytes!(pipe_reader(io)::IO, target, n)
 peek(io::AbstractPipe, ::Type{T}) where {T} = peek(pipe_reader(io)::IO, T)::T
@@ -496,16 +496,19 @@ function read! end
 read!(filename::AbstractString, a) = open(io->read!(io, a), convert(String, filename)::String)
 
 """
-    readuntil(stream::IO, delim; keep::Bool = false)
-    readuntil(filename::AbstractString, delim; keep::Bool = false)
+    readuntil([out::IO], stream::IO, delim; keep::Bool = false)
+    readuntil([out::IO], filename::AbstractString, delim; keep::Bool = false)
 
-Read a string from an I/O stream or a file, up to the given delimiter.
+Read a string from an I/O `stream` or a file, up to the given delimiter.
 The delimiter can be a `UInt8`, `AbstractChar`, string, or vector.
 Keyword argument `keep` controls whether the delimiter is included in the result.
 The text is assumed to be encoded in UTF-8.
 
-See also [`readuntil!`](@ref) to write in-place into a buffer rather than
-allocating a string.
+By default, returns a `String` if `delim` is an `AbstractChar` or a string
+or otherwise returns a `Vector{typeof(delim)}`.
+If the optional `out` argument is supplied, then the data is instead written to the `out`
+stream, returning `out`.  (This can be used, for example, to read data into
+a pre-allocated [`IOBuffer`](@ref).)
 
 # Examples
 ```jldoctest
@@ -520,10 +523,13 @@ julia> readuntil("my_file.txt", '.', keep = true)
 julia> rm("my_file.txt")
 ```
 """
-readuntil(filename::AbstractString, args...; kw...) = open(io->readuntil(io, args...; kw...), convert(String, filename)::String)
+readuntil(stream::IO, delim; kw...) = take!(readuntil(IOBuffer(), stream, delim; kw...))
+readuntil(stream::IO, delim::Union{AbstractChar, AbstractString}; kw...) = String(take!(readuntil(IOBuffer(StringVector(70),write=true), stream, delim; kw...)))
+readuntil(out::IO, filename::AbstractString, delim; kw...) = open(io->readuntil(out, io, delim; kw...), convert(String, filename)::String)
+readuntil(filename::AbstractString, delim; kw...) = open(io->readuntil(io, delim; kw...), convert(String, filename)::String)
 
 """
-    readline(io::IO=stdin; keep::Bool=false)
+    readline([out::IO], io::IO=stdin; keep::Bool=false)
     readline(filename::AbstractString; keep::Bool=false)
 
 Read a single line of text from the given I/O stream or file (defaults to `stdin`).
@@ -532,6 +538,8 @@ input end with `'\\n'` or `"\\r\\n"` or the end of an input stream. When `keep` 
 false (as it is by default), these trailing newline characters are removed from the
 line before it is returned. When `keep` is true, they are returned as part of the
 line.
+
+See also [`readuntil`](@ref) for reading until more general delimiters.
 
 # Examples
 ```jldoctest
@@ -819,15 +827,10 @@ end
 # read(io, T) is not defined for other AbstractChar: implementations
 # must provide their own encoding-specific method.
 
-# readuntil_string is useful below since it has
-# an optimized method for s::IOStream
-readuntil_string(s::IO, delim::UInt8, keep::Bool) = String(readuntil(s, delim, keep=keep))::String
-
-function readuntil(s::IO, delim::AbstractChar; keep::Bool=false)
+function readuntil(out::IO, s::IO, delim::AbstractChar; keep::Bool=false)
     if delim ≤ '\x7f'
-        return readuntil_string(s, delim % UInt8, keep)
+        return readuntil(out, s, delim % UInt8; keep)
     end
-    out = IOBuffer()
     for c in readeach(s, Char)
         if c == delim
             keep && write(out, c)
@@ -835,94 +838,27 @@ function readuntil(s::IO, delim::AbstractChar; keep::Bool=false)
         end
         write(out, c)
     end
-    return String(take!(out))
-end
-
-function readuntil(s::IO, delim::T; keep::Bool=false) where T
-    out = (T === UInt8 ? StringVector(0) : Vector{T}())
-    for c in readeach(s, T)
-        if c == delim
-            keep && push!(out, c)
-            break
-        end
-        push!(out, c)
-    end
     return out
 end
 
-"""
-    readuntil!(stream::IO, buffer::AbstractVector{UInt8}, delim)
-
-Read bytes from `stream` and write them into `buffer` until the given
-delimiter is read and written, or until the end of the stream is reached.
-Returns the number of bytes written into `buffer` (including the delimiter).
-
-The delimiter can be a `UInt8`, `AbstractChar`, string, or vector of `UInt8`.
-The input stream is assumed to be encoded in UTF-8.
-
-See also the similar function [`readuntil`](@ref), which returns a
-newly allocated `String` rather than writing into a buffer.
-
-!!! compat "Julia 1.10"
-    The `readuntil!` function was added in Julia 1.10.
-"""
-function readuntil! end
-
-# read at most length(buffer) bytes; there is also an optimized method
-# for IOStreams in iostream.jl
-function _readuntil!(s::IO, buffer::AbstractVector{UInt8}, delim::UInt8)
-    buflen = length(buffer)
-    iszero(buflen) && return 0
-    nwritten = 0
-    for c in readeach(s, UInt8)
-        @inbounds buffer[begin+nwritten] = c
-        nwritten += 1
-        if c == delim || nwritten == buflen
+# note: optimized methods of _readuntil for IOStreams and delim::UInt8 in iostream.jl
+function _readuntil(out, s::IO, delim::T, keep::Bool) where T
+    output! = isa(out, IO) ? write : push!
+    for c in readeach(s, T)
+        if c == delim
+            keep && output(out, c)
             break
         end
+        output(out, c)
     end
-    return nwritten
+    return out
 end
-
-function readuntil!(s::IO, buffer::AbstractVector{UInt8}, delim::UInt8)
-    n = 0
-    @inbounds while true
-        n += _readuntil!(s, view(buffer, firstindex(buffer)+n:lastindex(buffer)), delim)
-        ((n > 0 && buffer[n] == delim) || eof(s)) && return n
-        resize!(buffer, 2*length(buffer)+128)
-    end
-end
-
-function readuntil!(s::IO, buffer::AbstractVector{UInt8}, delim::AbstractVector{UInt8})
-    out = IOBuffer(buffer, write=true)
-    readuntil_vector!(s, delim, true, out)
-    return out.size
-end
-
-function readuntil!(s::IO, buffer::AbstractVector{UInt8}, delim::AbstractString)
-    # small-string delim optimizations
-    x = Iterators.peel(delim)
-    isnothing(x) && return 0
-    c, rest = x
-    isempty(rest) && return readuntil!(s, buffer, c)
-    codeunit(delim) === UInt8 || throw(ArgumentError("readuntil! delimiter must have UInt8 codeunits"))
-    return readuntil!(s, buffer, codeunits(delim))
-end
-
-function readuntil!(s::IO, buffer::AbstractVector{UInt8}, delim::AbstractChar)
-    delim ≤ '\x7f' && return readuntil!(s, buffer, delim % UInt8)
-    out = IOBuffer(buffer, write=true)
-    for c in readeach(s, Char)
-        write(out, c)
-        c == delim && break
-    end
-    return out.size
-end
-
-readuntil!(io::AbstractPipe, buffer::AbstractVector{UInt8}, delim::UInt8) = readuntil!(pipe_reader(io)::IO, buffer, delim)
-readuntil!(io::AbstractPipe, buffer::AbstractVector{UInt8}, delim::AbstractChar) = readuntil!(pipe_reader(io)::IO, buffer, ardelimg)
-readuntil!(io::AbstractPipe, buffer::AbstractVector{UInt8}, delim::AbstractString) = readuntil!(pipe_reader(io)::IO, buffer, delim)
-readuntil!(io::AbstractPipe, buffer::AbstractVector{UInt8}, delim::AbstractVector{UInt8}) = readuntil!(pipe_reader(io)::IO, buffer, delim)
+readuntil(s::IO, delim::T; keep::Bool=false) where T =
+    _readuntil(Vector{T}(), s, delim, keep)
+readuntil(s::IO, delim::UInt8; keep::Bool=false) =
+    _readuntil(StringVector(0), s, delim, keep)
+readuntil(out::IO, s::IO, delim::T; keep::Bool=false) where T =
+    _readuntil(out, s, delim, keep)
 
 # requires that indices for target are the integer unit range from firstindex to lastindex
 # returns whether the delimiter was matched
@@ -1010,20 +946,20 @@ function readuntil_vector!(io::IO, target::AbstractVector{T}, keep::Bool, out) w
     return false
 end
 
-function readuntil(io::IO, target::AbstractString; keep::Bool=false)
+function readuntil(out::IO, io::IO, target::AbstractString; keep::Bool=false)
     # small-string target optimizations
     x = Iterators.peel(target)
-    isnothing(x) && return ""
+    isnothing(x) && return out
     c, rest = x
     if isempty(rest) && c <= '\x7f'
-        return readuntil_string(io, c % UInt8, keep)
+        return readuntil(out, io, c % UInt8; keep)
     end
     # convert String to a utf8-byte-iterator
     if !(target isa String) && !(target isa SubString{String})
         target = String(target)
     end
     target = codeunits(target)::AbstractVector
-    return String(readuntil(io, target, keep=keep))
+    return readuntil(out, io, target, keep=keep)
 end
 
 function readuntil(io::IO, target::AbstractVector{T}; keep::Bool=false) where T
@@ -1031,6 +967,8 @@ function readuntil(io::IO, target::AbstractVector{T}; keep::Bool=false) where T
     readuntil_vector!(io, target, keep, out)
     return out
 end
+readuntil(out::IO, io::IO, target::AbstractVector; keep::Bool=false) =
+    (readuntil_vector!(io, target, keep, out); out)
 
 """
     readchomp(x)

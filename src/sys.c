@@ -288,7 +288,7 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
         ios_t dest;
         ios_mem(&dest, 0);
         ios_setbuf(&dest, (char*)a->data, 80, 0);
-        size_t n = ios_copyuntil(&dest, s, delim);
+        size_t n = ios_copyuntil(&dest, s, delim, 1);
         if (chomp && n > 0 && dest.buf[n - 1] == delim) {
             n--;
             if (chomp == 2 && n > 0 && dest.buf[n - 1] == '\r') {
