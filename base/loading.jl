@@ -2203,6 +2203,9 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                     rm(evicted_cachefile; force=true)
                     try
                         rm(ocachefile_from_cachefile(evicted_cachefile); force=true)
+                        @static if Sys.isapple()
+                            rm(ocachefile_from_cachefile(evicted_cachefile) * ".dSYM"; force=true, recursive=true)
+                        end
                     catch
                     end
                 end
@@ -2229,6 +2232,9 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                     # TODO: Risk for a race here if some other process grabs this name before us
                     cachefile = cachefile_from_ocachefile(ocachefile)
                     rename(tmppath_so, ocachefile::String; force=true)
+                end
+                @static if Sys.isapple()
+                    run(`$(Linking.dsymutil()) $ocachefile`, Base.DevNull(), Base.DevNull(), Base.DevNull())
                 end
             end
             # this is atomic according to POSIX (not Win32):
