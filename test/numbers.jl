@@ -2498,7 +2498,7 @@ Base.abs(x::TestNumber) = TestNumber(abs(x.inner))
         @test_throws ArgumentError Base.multiplicativeinverse(T(0))
     end
 
-    # Division overflow is not handled 
+    # Division overflow is not handled
     T = Int8
     fastd = Base.multiplicativeinverse(T(-1))
     @test_throws DivideError div(typemin(T), T(-1))
