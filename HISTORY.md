@@ -25,6 +25,9 @@ Language changes
 Compiler/Runtime improvements
 -----------------------------
 
+* Time to first execution (TTFX, sometimes called time to first plot) is greatly reduced. Package precompilation now
+  saves native code into a "pkgimage", meaning that code generated during the precompilation process will not
+  require compilation after package load. Use of pkgimages can be disabled via `--pkgimages=no` ([#44527]) ([#47184]).
 * The known quadratic behavior of type inference is now fixed and inference uses less memory in general.
   Certain edge cases with auto-generated long functions (e.g. ModelingToolkit.jl with partial
   differential equations and large causal models) should see significant compile-time improvements ([#45276], [#45404]).
@@ -65,8 +68,6 @@ New library functions
 ---------------------
 
 * New function `Iterators.flatmap` ([#44792]).
-* New helper `Splat(f)` which acts like `x -> f(x...)`, with pretty printing for
-  inspecting which function `f` was originally wrapped ([#42717]).
 * New `pkgversion(m::Module)` function to get the version of the package that loaded
   a given module, similar to `pkgdir(m::Module)` ([#45607]).
 * New function `stack(x)` which generalises `reduce(hcat, x::Vector{<:Vector})` to any dimensionality,
@@ -95,6 +96,8 @@ Standard library changes
 * `@kwdef` is now exported and added to the public API ([#46273]).
 * An issue with order of operations in `fld1` is now fixed ([#28973]).
 * Sorting is now always stable by default, as `QuickSort` was stabilized ([#45222]).
+* `Base.splat` is now exported. The return value is now a `Base.Splat` instead
+  of an anonymous function, which allows for pretty printing ([#42717]).
 
 #### Package Manager
 
@@ -178,7 +181,6 @@ Standard library changes
 Deprecated or removed
 ---------------------
 
-* Unexported `splat` is deprecated in favor of exported `Splat`, which has pretty printing of the wrapped function ([#42717]).
 
 External dependencies
 ---------------------

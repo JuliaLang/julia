@@ -82,6 +82,10 @@ ifeq ($(DARWIN_FRAMEWORK), 1)
 else
 	@echo "const DARWIN_FRAMEWORK = false" >> $@
 endif
+ifeq ($(OS), Darwin)
+	@echo "const MACOS_PRODUCT_VERSION = \"$(shell sw_vers -productVersion)\"" >> $@
+	@echo "const MACOS_PLATFORM_VERSION = \"$(shell xcrun --show-sdk-version)\"" >> $@
+endif
 	@echo "const BUILD_TRIPLET = \"$(BB_TRIPLET_LIBGFORTRAN_CXXABI)\"" >> $@
 
 	@# This to ensure that we always rebuild this file, but only when it is modified do we touch build_h.jl,
@@ -227,6 +231,8 @@ else
 $(eval $(call symlink_system_library,CSL,libgcc_s,1))
 endif
 endif
+else
+$(eval $(call symlink_system_library,CSL,libgcc_s,1))
 endif
 ifneq (,$(LIBGFORTRAN_VERSION))
 $(eval $(call symlink_system_library,CSL,libgfortran,$(LIBGFORTRAN_VERSION)))

@@ -114,13 +114,6 @@ function binding_module(m::Module, s::Symbol)
     return unsafe_pointer_to_objref(p)::Module
 end
 
-function resolve(g::GlobalRef; force::Bool=false)
-    if force || isbindingresolved(g.mod, g.name)
-        return GlobalRef(binding_module(g.mod, g.name), g.name)
-    end
-    return g
-end
-
 const _NAMEDTUPLE_NAME = NamedTuple.body.body.name
 
 function _fieldnames(@nospecialize t)
@@ -268,8 +261,7 @@ isconst(m::Module, s::Symbol) =
     ccall(:jl_is_const, Cint, (Any, Any), m, s) != 0
 
 function isconst(g::GlobalRef)
-    g.binding != C_NULL && return ccall(:jl_binding_is_const, Cint, (Ptr{Cvoid},), g.binding) != 0
-    return isconst(g.mod, g.name)
+    return ccall(:jl_globalref_is_const, Cint, (Any,), g) != 0
 end
 
 """
@@ -294,6 +286,27 @@ function isconst(@nospecialize(t::Type), s::Int)
     return unsafe_load(Ptr{UInt32}(constfields), 1 + s÷32) & (1 << (s%32)) != 0
 end
 
+"""
+    isfieldatomic(t::DataType, s::Union{Int,Symbol}) -> Bool
+
+Determine whether a field `s` is declared `@atomic` in a given type `t`.
+"""
+function isfieldatomic(@nospecialize(t::Type), s::Symbol)
+    t = unwrap_unionall(t)
+    isa(t, DataType) || return false
+    return isfieldatomic(t, fieldindex(t, s, false))
+end
+function isfieldatomic(@nospecialize(t::Type), s::Int)
+    t = unwrap_unionall(t)
+    # TODO: what to do for `Union`?
+    isa(t, DataType) || return false # uncertain
+    ismutabletype(t) || return false # immutable structs are never atomic
+    1 <= s <= length(t.name.names) || return false # OOB reads are not atomic (they always throw)
+    atomicfields = t.name.atomicfields
+    atomicfields === C_NULL && return false
+    s -= 1
+    return unsafe_load(Ptr{UInt32}(atomicfields), 1 + s÷32) & (1 << (s%32)) != 0
+end
 
 """
     @locals()
@@ -504,6 +517,10 @@ Return `true` if and only if value `v` is mutable.  See [Mutable Composite Types
 for a discussion of immutability. Note that this function works on values, so if you
 give it a `DataType`, it will tell you that a value of the type is mutable.
 
+!!! note
+    For technical reasons, `ismutable` returns `true` for values of certain special types
+    (for example `String` and `Symbol`) even though they cannot be mutated in a permissible way.
+
 See also [`isbits`](@ref), [`isstructtype`](@ref).
 
 # Examples
@@ -561,7 +578,7 @@ function isprimitivetype(@nospecialize t)
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
-    return (t.flags & 0x80) == 0x80
+    return (t.flags & 0x0080) == 0x0080
 end
 
 """
@@ -587,7 +604,7 @@ julia> isbitstype(Complex)
 false
 ```
 """
-isbitstype(@nospecialize t) = (@_total_meta; isa(t, DataType) && (t.flags & 0x8) == 0x8)
+isbitstype(@nospecialize t) = (@_total_meta; isa(t, DataType) && (t.flags & 0x0008) == 0x0008)
 
 """
     isbits(x)
@@ -603,7 +620,47 @@ Determine whether type `T` is a tuple "leaf type",
 meaning it could appear as a type signature in dispatch
 and has no subtypes (or supertypes) which could appear in a call.
 """
-isdispatchtuple(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x4) == 0x4)
+isdispatchtuple(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x0004) == 0x0004)
+
+datatype_ismutationfree(dt::DataType) = (@_total_meta; (dt.flags & 0x0100) == 0x0100)
+
+"""
+    ismutationfree(T)
+
+Determine whether type `T` is mutation free in the sense that no mutable memory
+is reachable from this type (either in the type itself) or through any fields.
+Note that the type itself need not be immutable. For example, an empty mutable
+type is `ismutabletype`, but also `ismutationfree`.
+"""
+function ismutationfree(@nospecialize(t))
+    t = unwrap_unionall(t)
+    if isa(t, DataType)
+        return datatype_ismutationfree(t)
+    elseif isa(t, Union)
+        return ismutationfree(t.a) && ismutationfree(t.b)
+    end
+    # TypeVar, etc.
+    return false
+end
+
+datatype_isidentityfree(dt::DataType) = (@_total_meta; (dt.flags & 0x0200) == 0x0200)
+
+"""
+    isidentityfree(T)
+
+Determine whether type `T` is identity free in the sense that this type or any
+reachable through its fields has non-content-based identity.
+"""
+function isidentityfree(@nospecialize(t))
+    t = unwrap_unionall(t)
+    if isa(t, DataType)
+        return datatype_isidentityfree(t)
+    elseif isa(t, Union)
+        return isidentityfree(t.a) && isidentityfree(t.b)
+    end
+    # TypeVar, etc.
+    return false
+end
 
 iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
 isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
@@ -648,7 +705,7 @@ julia> isconcretetype(Union{Int,String})
 false
 ```
 """
-isconcretetype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x2) == 0x2)
+isconcretetype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x0002) == 0x0002)
 
 """
     isabstracttype(T)
@@ -763,6 +820,7 @@ julia> Base.fieldindex(Foo, :z, false)
 """
 function fieldindex(T::DataType, name::Symbol, err::Bool=true)
     @_foldable_meta
+    @noinline
     return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
 end
 
@@ -777,7 +835,27 @@ end
 
 function argument_datatype(@nospecialize t)
     @_total_meta
+    @noinline
     return ccall(:jl_argument_datatype, Any, (Any,), t)::Union{Nothing,DataType}
+end
+
+function datatype_fieldcount(t::DataType)
+    if t.name === _NAMEDTUPLE_NAME
+        names, types = t.parameters[1], t.parameters[2]
+        if names isa Tuple
+            return length(names)
+        end
+        if types isa DataType && types <: Tuple
+            return fieldcount(types)
+        end
+        return nothing
+    elseif isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
+        return nothing
+    end
+    if isdefined(t, :types)
+        return length(t.types)
+    end
+    return length(t.name.names)
 end
 
 """
@@ -799,25 +877,11 @@ function fieldcount(@nospecialize t)
     if !(t isa DataType)
         throw(TypeError(:fieldcount, DataType, t))
     end
-    if t.name === _NAMEDTUPLE_NAME
-        names, types = t.parameters[1], t.parameters[2]
-        if names isa Tuple
-            return length(names)
-        end
-        if types isa DataType && types <: Tuple
-            return fieldcount(types)
-        end
-        abstr = true
-    else
-        abstr = isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
-    end
-    if abstr
+    fcount = datatype_fieldcount(t)
+    if fcount === nothing
         throw(ArgumentError("type does not have a definite number of fields"))
     end
-    if isdefined(t, :types)
-        return length(t.types)
-    end
-    return length(t.name.names)
+    return fcount
 end
 
 """
@@ -1430,9 +1494,10 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         types = to_tuple_type(types)
-        argtypes = Any[types.parameters...]
-        rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
-        return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f, argtypes, rt)
+        argtypes = Any[Core.Compiler.Const(f), types.parameters...]
+        rt = Core.Compiler.builtin_tfunction(interp, f, argtypes[2:end], nothing)
+        return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f,
+            Core.Compiler.ArgInfo(nothing, argtypes), rt)
     end
     tt = signature_type(f, types)
     result = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
@@ -1483,7 +1548,8 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
         else
             empty!(cst)
             resize!(cst, length(code.code))
-            maxcost = Core.Compiler.statement_costs!(cst, code.code, code, Any[match.sparams...], false, params)
+            sptypes = Core.Compiler.VarState[Core.Compiler.VarState(sp, false) for sp in match.sparams]
+            maxcost = Core.Compiler.statement_costs!(cst, code.code, code, sptypes, false, params)
             nd = ndigits(maxcost)
             irshow_config = IRShow.IRShowConfig() do io, linestart, idx
                 print(io, idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1), " ")
@@ -1498,13 +1564,15 @@ end
 print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args...; kwargs...)
 
 function _which(@nospecialize(tt::Type);
-    method_table::Union{Nothing,Core.MethodTable}=nothing,
+    method_table::Union{Nothing,Core.MethodTable,Core.Compiler.MethodTableView}=nothing,
     world::UInt=get_world_counter(),
     raise::Bool=true)
     if method_table === nothing
         table = Core.Compiler.InternalMethodTable(world)
-    else
+    elseif method_table isa Core.MethodTable
         table = Core.Compiler.OverlayMethodTable(world, method_table)
+    else
+        table = method_table
     end
     match, = Core.Compiler.findsup(tt, table)
     if match === nothing
@@ -1758,7 +1826,9 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
             end
         end
         # if ml-matches reported the existence of an ambiguity over their
-        # intersection, see if both m1 and m2 may be involved in it
+        # intersection, see if both m1 and m2 seem to be involved in it
+        # (if one was fully dominated by a different method, we want to will
+        # report the other ambiguous pair)
         have_m1 = have_m2 = false
         for match in ms
             match = match::Core.MethodMatch
@@ -1783,18 +1853,14 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
                     minmax = m
                 end
             end
-            if minmax === nothing
+            if minmax === nothing || minmax == m1 || minmax == m2
                 return true
             end
             for match in ms
                 m = match.method
                 m === minmax && continue
-                if match.fully_covers
-                    if !morespecific(minmax.sig, m.sig)
-                        return true
-                    end
-                else
-                    if morespecific(m.sig, minmax.sig)
+                if !morespecific(minmax.sig, m.sig)
+                    if match.fully_covers || !morespecific(m.sig, minmax.sig)
                         return true
                     end
                 end
@@ -1811,12 +1877,12 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         if ti2 <: m1.sig && ti2 <: m2.sig
             ti = ti2
         elseif ti != ti2
-            # TODO: this would be the correct way to handle this case, but
+            # TODO: this would be the more correct way to handle this case, but
             #       people complained so we don't do it
-            # inner(ti2) || return false
-            return false # report that the type system failed to decide if it was ambiguous by saying they definitely aren't
+            #inner(ti2) || return false # report that the type system failed to decide if it was ambiguous by saying they definitely are
+            return false # report that the type system failed to decide if it was ambiguous by saying they definitely are not
         else
-            return false # report that the type system failed to decide if it was ambiguous by saying they definitely aren't
+            return false # report that the type system failed to decide if it was ambiguous by saying they definitely are not
         end
     end
     inner(ti) || return false

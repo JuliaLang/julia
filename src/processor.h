@@ -135,7 +135,7 @@ JL_DLLEXPORT int jl_test_cpu_feature(jl_cpu_feature_t feature);
 static const uint32_t jl_sysimg_tag_mask = 0x80000000u;
 static const uint32_t jl_sysimg_val_mask = ~((uint32_t)0x80000000u);
 
-typedef struct _jl_sysimg_fptrs_t {
+typedef struct _jl_image_fptrs_t {
     // base function pointer
     const char *base;
     // number of functions
@@ -153,7 +153,7 @@ typedef struct _jl_sysimg_fptrs_t {
     const int32_t *clone_offsets;
     // sorted indices of the cloned functions (including the tag bit)
     const uint32_t *clone_idxs;
-} jl_sysimg_fptrs_t;
+} jl_image_fptrs_t;
 
 /**
  * Initialize the processor dispatch system with sysimg `hdl` (also initialize the sysimg itself).
@@ -165,14 +165,15 @@ typedef struct _jl_sysimg_fptrs_t {
  *
  * Return the data about the function pointers selected.
  */
-jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl);
-jl_sysimg_fptrs_t jl_init_processor_pkgimg(void *hdl);
+jl_image_fptrs_t jl_init_processor_sysimg(void *hdl);
+jl_image_fptrs_t jl_init_processor_pkgimg(void *hdl);
 
 // Return the name of the host CPU as a julia string.
 JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void);
 // Dump the name and feature set of the host CPU
 // For debugging only
 JL_DLLEXPORT void jl_dump_host_cpu(void);
+JL_DLLEXPORT void jl_check_pkgimage_clones(char* data);
 
 JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero);
 JL_DLLEXPORT int32_t jl_get_zero_subnormals(void);
@@ -193,14 +194,14 @@ extern JL_DLLEXPORT bool jl_processor_print_help;
  * If the detected/specified CPU name is not available on the LLVM version specified,
  * a fallback CPU name will be used. Unsupported features will be ignored.
  */
-extern "C" JL_DLLEXPORT std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags);
+extern "C" JL_DLLEXPORT std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags) JL_NOTSAFEPOINT;
 
 /**
  * Returns the CPU name and feature string to be used by LLVM disassembler.
  *
  * This will return a generic CPU name and a full feature string.
  */
-extern "C" JL_DLLEXPORT const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void);
+extern "C" JL_DLLEXPORT const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void) JL_NOTSAFEPOINT;
 
 struct jl_target_spec_t {
     // LLVM target name
@@ -217,9 +218,9 @@ struct jl_target_spec_t {
 /**
  * Return the list of targets to clone
  */
-extern "C" JL_DLLEXPORT std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void);
-std::string jl_get_cpu_name_llvm(void);
-std::string jl_get_cpu_features_llvm(void);
+extern "C" JL_DLLEXPORT std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void) JL_NOTSAFEPOINT;
+std::string jl_get_cpu_name_llvm(void) JL_NOTSAFEPOINT;
+std::string jl_get_cpu_features_llvm(void) JL_NOTSAFEPOINT;
 #endif
 
 #endif

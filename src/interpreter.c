@@ -91,10 +91,9 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
         if (!jl_is_symbol(fname)) {
             jl_error("method: invalid declaration");
         }
-        jl_value_t *bp_owner = (jl_value_t*)modu;
         jl_binding_t *b = jl_get_binding_for_method_def(modu, fname);
         _Atomic(jl_value_t*) *bp = &b->value;
-        jl_value_t *gf = jl_generic_function_def(b->name, b->owner, bp, bp_owner, b);
+        jl_value_t *gf = jl_generic_function_def(fname, modu, bp, b);
         return gf;
     }
 
@@ -153,13 +152,10 @@ jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e)
 
 jl_value_t *jl_eval_globalref(jl_globalref_t *g)
 {
-    if (g->bnd_cache) {
-        jl_value_t *v = jl_atomic_load_relaxed(&g->bnd_cache->value);
-        if (v == NULL)
-            jl_undefined_var_error(g->name);
-        return v;
-    }
-    return jl_eval_global_var(g->mod, g->name);
+    jl_value_t *v = jl_get_globalref_value(g);
+    if (v == NULL)
+        jl_undefined_var_error(g->name);
+    return v;
 }
 
 static int jl_source_nslots(jl_code_info_t *src) JL_NOTSAFEPOINT
@@ -494,8 +490,8 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                         sym = (jl_sym_t*)lhs;
                     }
                     JL_GC_PUSH1(&rhs);
-                    jl_binding_t *b = jl_get_binding_wr_or_error(modu, sym);
-                    jl_checked_assignment(b, rhs);
+                    jl_binding_t *b = jl_get_binding_wr(modu, sym);
+                    jl_checked_assignment(b, modu, sym, rhs);
                     JL_GC_POP();
                 }
             }
@@ -632,7 +628,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
 
 jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi)
 {
-    jl_code_info_t *src = (jl_code_info_t*)mi->uninferred;
+    jl_code_info_t *src = (jl_code_info_t*)jl_atomic_load_relaxed(&mi->uninferred);
     if (jl_is_method(mi->def.value)) {
         if (!src || (jl_value_t*)src == jl_nothing) {
             if (mi->def.method->source) {
@@ -646,7 +642,7 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi)
         if (src && (jl_value_t*)src != jl_nothing) {
             JL_GC_PUSH1(&src);
             src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
-            mi->uninferred = (jl_value_t*)src;
+            jl_atomic_store_release(&mi->uninferred, (jl_value_t*)src);
             jl_gc_wb(mi, src);
             JL_GC_POP();
         }

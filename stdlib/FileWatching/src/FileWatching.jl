@@ -215,7 +215,7 @@ mutable struct _FDWatcher
                 t.refcount = (0, 0)
                 t.active = (false, false)
                 @static if Sys.isunix()
-                    if FDWatchers[t.fdnum] == t
+                    if FDWatchers[t.fdnum] === t
                         FDWatchers[t.fdnum] = nothing
                     end
                 end

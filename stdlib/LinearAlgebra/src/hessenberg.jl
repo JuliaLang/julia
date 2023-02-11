@@ -70,6 +70,11 @@ real(H::UpperHessenberg{<:Real}) = H
 real(H::UpperHessenberg{<:Complex}) = UpperHessenberg(triu!(real(H.data),-1))
 imag(H::UpperHessenberg) = UpperHessenberg(triu!(imag(H.data),-1))
 
+function istriu(A::UpperHessenberg, k::Integer=0)
+    k <= -1 && return true
+    return _istriu(A, k)
+end
+
 function Matrix{T}(H::UpperHessenberg) where T
     m,n = size(H)
     return triu!(copyto!(Matrix{T}(undef, m, n), H.data), -1)
@@ -173,19 +178,15 @@ function *(B::Bidiagonal, H::UpperHessenberg)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 
-/(H::UpperHessenberg, B::Bidiagonal) = _rdiv(H, B)
-/(H::UpperHessenberg{<:Number}, B::Bidiagonal{<:Number}) = _rdiv(H, B)
-function _rdiv(H::UpperHessenberg, B::Bidiagonal)
+function /(H::UpperHessenberg, B::Bidiagonal)
     T = typeof(oneunit(eltype(H))/oneunit(eltype(B)))
-    A = _rdiv!(zeros(T, size(H)), H, B)
+    A = _rdiv!(similar(H, T, size(H)), H, B)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 
-\(B::Bidiagonal{<:Number}, H::UpperHessenberg{<:Number}) = _ldiv(B, H)
-\(B::Bidiagonal, H::UpperHessenberg) = _ldiv(B, H)
-function _ldiv(B::Bidiagonal, H::UpperHessenberg)
+function \(B::Bidiagonal, H::UpperHessenberg)
     T = typeof(oneunit(eltype(B))\oneunit(eltype(H)))
-    A = ldiv!(zeros(T, size(H)), B, H)
+    A = ldiv!(similar(H, T, size(H)), B, H)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 

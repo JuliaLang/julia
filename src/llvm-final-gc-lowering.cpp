@@ -14,7 +14,7 @@
 #include <llvm/Support/Debug.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 #include "julia.h"
 #include "julia_internal.h"
 #include "llvm-pass-helpers.h"
@@ -26,7 +26,7 @@ STATISTIC(PopGCFrameCount, "Number of lowered popGCFrameFunc intrinsics");
 STATISTIC(GetGCFrameSlotCount, "Number of lowered getGCFrameSlotFunc intrinsics");
 STATISTIC(GCAllocBytesCount, "Number of lowered GCAllocBytesFunc intrinsics");
 STATISTIC(QueueGCRootCount, "Number of lowered queueGCRootFunc intrinsics");
-STATISTIC(QueueGCBindingCount, "Number of lowered queueGCBindingFunc intrinsics");
+STATISTIC(SafepointCount, "Number of lowered safepoint intrinsics");
 
 using namespace llvm;
 
@@ -46,9 +46,9 @@ struct FinalLowerGC: private JuliaPassContext {
 
 private:
     Function *queueRootFunc;
-    Function *queueBindingFunc;
     Function *poolAllocFunc;
     Function *bigAllocFunc;
+    Function *allocTypedFunc;
     Instruction *pgcstack;
 
     // Lowers a `julia.new_gc_frame` intrinsic.
@@ -69,8 +69,8 @@ private:
     // Lowers a `julia.queue_gc_root` intrinsic.
     Value *lowerQueueGCRoot(CallInst *target, Function &F);
 
-    // Lowers a `julia.queue_gc_binding` intrinsic.
-    Value *lowerQueueGCBinding(CallInst *target, Function &F);
+    // Lowers a `julia.safepoint` intrinsic.
+    Value *lowerSafepoint(CallInst *target, Function &F);
 };
 
 Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
@@ -193,37 +193,54 @@ Value *FinalLowerGC::lowerQueueGCRoot(CallInst *target, Function &F)
     return target;
 }
 
-Value *FinalLowerGC::lowerQueueGCBinding(CallInst *target, Function &F)
+Value *FinalLowerGC::lowerSafepoint(CallInst *target, Function &F)
 {
-    ++QueueGCBindingCount;
+    ++SafepointCount;
     assert(target->arg_size() == 1);
-    target->setCalledFunction(queueBindingFunc);
-    return target;
+    IRBuilder<> builder(target->getContext());
+    builder.SetInsertPoint(target);
+    auto T_size = getSizeTy(builder.getContext());
+    Value* signal_page = target->getOperand(0);
+    Value* load = builder.CreateLoad(T_size, signal_page, true);
+    return load;
 }
 
 Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
 {
     ++GCAllocBytesCount;
     assert(target->arg_size() == 2);
-    auto sz = (size_t)cast<ConstantInt>(target->getArgOperand(1))->getZExtValue();
-    // This is strongly architecture and OS dependent
-    int osize;
-    int offset = jl_gc_classify_pools(sz, &osize);
+    CallInst *newI;
+
     IRBuilder<> builder(target);
     builder.SetCurrentDebugLocation(target->getDebugLoc());
     auto ptls = target->getArgOperand(0);
-    CallInst *newI;
-    if (offset < 0) {
-        newI = builder.CreateCall(
-            bigAllocFunc,
-            { ptls, ConstantInt::get(getSizeTy(F.getContext()), sz + sizeof(void*)) });
-    }
-    else {
-        auto pool_offs = ConstantInt::get(Type::getInt32Ty(F.getContext()), offset);
-        auto pool_osize = ConstantInt::get(Type::getInt32Ty(F.getContext()), osize);
-        newI = builder.CreateCall(poolAllocFunc, { ptls, pool_offs, pool_osize });
+    Attribute derefAttr;
+
+    if (auto CI = dyn_cast<ConstantInt>(target->getArgOperand(1))) {
+        size_t sz = (size_t)CI->getZExtValue();
+        // This is strongly architecture and OS dependent
+        int osize;
+        int offset = jl_gc_classify_pools(sz, &osize);
+        if (offset < 0) {
+            newI = builder.CreateCall(
+                bigAllocFunc,
+                { ptls, ConstantInt::get(getSizeTy(F.getContext()), sz + sizeof(void*)) });
+            derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), sz + sizeof(void*));
+        }
+        else {
+            auto pool_offs = ConstantInt::get(Type::getInt32Ty(F.getContext()), offset);
+            auto pool_osize = ConstantInt::get(Type::getInt32Ty(F.getContext()), osize);
+            newI = builder.CreateCall(poolAllocFunc, { ptls, pool_offs, pool_osize });
+            derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), osize);
+        }
+    } else {
+        auto size = builder.CreateZExtOrTrunc(target->getArgOperand(1), getSizeTy(F.getContext()));
+        size = builder.CreateAdd(size, ConstantInt::get(getSizeTy(F.getContext()), sizeof(void*)));
+        newI = builder.CreateCall(allocTypedFunc, { ptls, size, ConstantPointerNull::get(Type::getInt8PtrTy(F.getContext())) });
+        derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), sizeof(void*));
     }
     newI->setAttributes(newI->getCalledFunction()->getAttributes());
+    newI->addRetAttr(derefAttr);
     newI->takeName(target);
     return newI;
 }
@@ -234,11 +251,11 @@ bool FinalLowerGC::doInitialization(Module &M) {
 
     // Initialize platform-specific references.
     queueRootFunc = getOrDeclare(jl_well_known::GCQueueRoot);
-    queueBindingFunc = getOrDeclare(jl_well_known::GCQueueBinding);
     poolAllocFunc = getOrDeclare(jl_well_known::GCPoolAlloc);
     bigAllocFunc = getOrDeclare(jl_well_known::GCBigAlloc);
+    allocTypedFunc = getOrDeclare(jl_well_known::GCAllocTyped);
 
-    GlobalValue *functionList[] = {queueRootFunc, queueBindingFunc, poolAllocFunc, bigAllocFunc};
+    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc, allocTypedFunc};
     unsigned j = 0;
     for (unsigned i = 0; i < sizeof(functionList) / sizeof(void*); i++) {
         if (!functionList[i])
@@ -254,8 +271,8 @@ bool FinalLowerGC::doInitialization(Module &M) {
 
 bool FinalLowerGC::doFinalization(Module &M)
 {
-    GlobalValue *functionList[] = {queueRootFunc, queueBindingFunc, poolAllocFunc, bigAllocFunc};
-    queueRootFunc = queueBindingFunc = poolAllocFunc = bigAllocFunc = nullptr;
+    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc, allocTypedFunc};
+    queueRootFunc = poolAllocFunc = bigAllocFunc = allocTypedFunc = nullptr;
     auto used = M.getGlobalVariable("llvm.compiler.used");
     if (!used)
         return false;
@@ -302,16 +319,20 @@ static void replaceInstruction(
 
 bool FinalLowerGC::runOnFunction(Function &F)
 {
-    LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Processing function " << F.getName() << "\n");
     // Check availability of functions again since they might have been deleted.
     initFunctions(*F.getParent());
-    if (!pgcstack_getter && !adoptthread_func)
+    if (!pgcstack_getter && !adoptthread_func) {
+        LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Skipping function " << F.getName() << "\n");
         return false;
+    }
 
     // Look for a call to 'julia.get_pgcstack'.
     pgcstack = getPGCstack(F);
-    if (!pgcstack)
+    if (!pgcstack) {
+        LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Skipping function " << F.getName() << " no pgcstack\n");
         return false;
+    }
+    LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Processing function " << F.getName() << "\n");
 
     // Acquire intrinsic functions.
     auto newGCFrameFunc = getOrNull(jl_intrinsics::newGCFrame);
@@ -320,7 +341,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
     auto getGCFrameSlotFunc = getOrNull(jl_intrinsics::getGCFrameSlot);
     auto GCAllocBytesFunc = getOrNull(jl_intrinsics::GCAllocBytes);
     auto queueGCRootFunc = getOrNull(jl_intrinsics::queueGCRoot);
-    auto queueGCBindingFunc = getOrNull(jl_intrinsics::queueGCBinding);
+    auto safepointFunc = getOrNull(jl_intrinsics::safepoint);
 
     // Lower all calls to supported intrinsics.
     for (BasicBlock &BB : F) {
@@ -332,6 +353,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
             }
 
             Value *callee = CI->getCalledOperand();
+            assert(callee);
 
             if (callee == newGCFrameFunc) {
                 replaceInstruction(CI, lowerNewGCFrame(CI, F), it);
@@ -353,8 +375,9 @@ bool FinalLowerGC::runOnFunction(Function &F)
             else if (callee == queueGCRootFunc) {
                 replaceInstruction(CI, lowerQueueGCRoot(CI, F), it);
             }
-            else if (callee == queueGCBindingFunc) {
-                replaceInstruction(CI, lowerQueueGCBinding(CI, F), it);
+            else if (callee == safepointFunc) {
+                lowerSafepoint(CI, F);
+                it = CI->eraseFromParent();
             }
             else {
                 ++it;
