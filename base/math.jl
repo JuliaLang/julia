@@ -848,10 +848,12 @@ end
 function _hypot(x::NTuple{N,T}) where {N,T<:IEEEFloat}
     infT = convert(T, Inf)
     x = abs.(x) # doesn't change result but enables computational shortcuts
-    any(==(infT), x) && return infT # return Inf even if an argument is NaN
+    # note: any() was causing this to not inline for N=3 but mapreduce() was not
+    mapreduce(==(infT), |, x) && return infT # return Inf even if an argument is NaN
     maxabs = reinterpret(T, maximum(z -> reinterpret(Signed, z), x)) # for abs(::IEEEFloat) values, a ::BitInteger cast does not change the result
     iszero(maxabs) && return maxabs
-    return maxabs * sqrt(sum(y -> abs2(y / maxabs), x))
+    scale,invscale = scaleinv(maxabs)
+    return scale * sqrt(sum(y -> abs2(y * invscale), x))
 end
 
 atan(y::Real, x::Real) = atan(promote(float(y),float(x))...)
@@ -1077,6 +1079,35 @@ function frexp(x::T) where T<:IEEEFloat
     k -= (exponent_bias(T) - 1)
     xu = (xu & ~exponent_mask(T)) | exponent_half(T)
     return reinterpret(T, xu), k
+end
+
+"""
+    scaleinv(x)
+
+Compute `(scale, invscale)` where `scale` and `invscale` are non-subnormal
+(https://en.wikipedia.org/wiki/Subnormal_number) finite powers of two such that
+`scale * invscale == 1` and `scale` is roughly on the order of `abs(x)`.
+Inf, NaN, and zero inputs also result in finite nonzero outputs.
+These values are useful to scale computations to prevent overflow and underflow
+without round-off errors or division.
+
+# Examples
+```jldoctest
+julia> scaleinv(7.5)
+(4.0, 0.25)
+```
+"""
+function scaleinv(x::T) where T<:IEEEFloat
+    # by removing the sign and significand and restricting values to a limited range,
+    # we can invert a number using bit-twiddling instead of division
+    U = uinttype(T)
+    umin = reinterpret(U, floatmin(T))
+    umax = reinterpret(U, inv(floatmin(T)))
+    emask = exponent_mask(T) # used to strip sign and significand
+    u = clamp(reinterpret(U, x) & emask, umin, umax)
+    scale = reinterpret(T, u)
+    invscale = reinterpret(T, umin + umax - u) # inv(scale)
+    return scale, invscale
 end
 
 # NOTE: This `rem` method is adapted from the msun `remainder` and `remainderf`
