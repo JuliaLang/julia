@@ -1082,7 +1082,7 @@ function frexp(x::T) where T<:IEEEFloat
 end
 
 """
-    scaleinv(x)
+    $(@__MODULE__).scaleinv(x)
 
 Compute `(scale, invscale)` where `scale` and `invscale` are non-subnormal
 (https://en.wikipedia.org/wiki/Subnormal_number) finite powers of two such that
@@ -1093,7 +1093,7 @@ without round-off errors or division.
 
 # Examples
 ```jldoctest
-julia> scaleinv(7.5)
+julia> $(@__MODULE__).scaleinv(7.5)
 (4.0, 0.25)
 ```
 """
