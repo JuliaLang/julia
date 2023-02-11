@@ -79,8 +79,8 @@ end
 end
 
 @testset "stability" begin
-    for Alg in [InsertionSort, MergeSort, Base.Sort.QuickerSort(), Base.DEFAULT_STABLE,
-            Base.Sort.QuickerSort(missing, 1729), Base.Sort.QuickerSort(1729, missing)]
+    for Alg in [InsertionSort, MergeSort, Base.Sort.ScratchQuickSort(), Base.DEFAULT_STABLE,
+            Base.Sort.ScratchQuickSort(missing, 1729), Base.Sort.ScratchQuickSort(1729, missing)]
         @test issorted(sort(1:2000, alg=Alg, by=x->0))
         @test issorted(sort(1:2000, alg=Alg, by=x->x÷100))
     end
@@ -333,7 +333,7 @@ end
             @test c == v
 
             # stable algorithms
-            for alg in [MergeSort, Base.Sort.QuickerSort(), Base.Sort.QuickerSort(1:n), Base.DEFAULT_STABLE]
+            for alg in [MergeSort, Base.Sort.ScratchQuickSort(), Base.Sort.ScratchQuickSort(1:n), Base.DEFAULT_STABLE]
                 p = sortperm(v, alg=alg, rev=rev)
                 p2 = sortperm(float(v), alg=alg, rev=rev)
                 @test p == p2
@@ -381,7 +381,7 @@ end
         end
 
         v = randn_with_nans(n,0.1)
-        for alg in [InsertionSort, MergeSort, Base.Sort.QuickerSort(), Base.Sort.QuickerSort(1, n), Base.DEFAULT_UNSTABLE, Base.DEFAULT_STABLE],
+        for alg in [InsertionSort, MergeSort, Base.Sort.ScratchQuickSort(), Base.Sort.ScratchQuickSort(1, n), Base.DEFAULT_UNSTABLE, Base.DEFAULT_STABLE],
             rev in [false,true]
             alg === InsertionSort && n >= 3000 && continue
             # test float sorting with NaNs
@@ -588,7 +588,7 @@ end
 
     @testset "fallback" begin
         @test adaptive_sort_test(rand(1:typemax(Int32), len), by=x->x^2)# fallback
-        @test adaptive_sort_test(rand(Int, len), by=x->0, trusted=Base.Sort.QuickerSort())
+        @test adaptive_sort_test(rand(Int, len), by=x->0, trusted=Base.Sort.ScratchQuickSort())
     end
 
     @test adaptive_sort_test(rand(Int, 20)) # InsertionSort
@@ -692,7 +692,7 @@ end
     # not allowed. Consequently, none of the behavior tested in this
     # testset is guaranteed to work in future minor versions of Julia.
 
-    safe_algs = [InsertionSort, MergeSort, Base.Sort.QuickerSort(), Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
+    safe_algs = [InsertionSort, MergeSort, Base.Sort.ScratchQuickSort(), Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
 
     n = 1000
     v = rand(1:5, n);
@@ -899,8 +899,8 @@ end
     @test issorted(sort(rand(Int8, 600)))
 end
 
-@testset "QuickerSort API" begin
-    bsqs = Base.Sort.QuickerSort
+@testset "ScratchQuickSort API" begin
+    bsqs = Base.Sort.ScratchQuickSort
     @test bsqs(1, 2, MergeSort)             === bsqs(1, 2, MergeSort)
     @test bsqs(missing, 2, MergeSort)       === bsqs(missing, 2, MergeSort)
     @test bsqs(1, missing, MergeSort)       === bsqs(1, missing, MergeSort)
@@ -918,10 +918,10 @@ end
     @test bsqs()                            === bsqs(missing, missing, InsertionSort)
 end
 
-@testset "QuickerSort allocations on non-concrete eltype" begin
+@testset "ScratchQuickSort allocations on non-concrete eltype" begin
     v = Vector{Union{Nothing, Bool}}(rand(Bool, 10000))
     @test 4 == @allocations sort(v)
-    @test 4 == @allocations sort(v; alg=Base.Sort.QuickerSort())
+    @test 4 == @allocations sort(v; alg=Base.Sort.ScratchQuickSort())
     # it would be nice if these numbers were lower (1 or 2), but these
     # test that we don't have O(n) allocations due to type instability
 end

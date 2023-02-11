@@ -17,6 +17,7 @@ the following methods to satisfy the `AbstractInterpreter` API requirement:
 - `code_cache(interp::NewInterpreter)` - return the global inference cache
 """
 abstract type AbstractInterpreter end
+abstract type AbstractLattice end
 
 struct ArgInfo
     fargs::Union{Nothing,Vector{Any}}
@@ -31,11 +32,26 @@ struct StmtInfo
     used::Bool
 end
 
+"""
+    v::VarState
+
+A special wrapper that represents a local variable of a method being analyzed.
+This does not participate in the native type system nor the inference lattice, and it thus
+should be always unwrapped to `v.typ` when performing any type or lattice operations on it.
+`v.undef` represents undefined-ness of this static parameter. If `true`, it means that the
+variable _may_ be undefined at runtime, otherwise it is guaranteed to be defined.
+If `v.typ === Bottom` it means that the variable is strictly undefined.
+"""
+struct VarState
+    typ
+    undef::Bool
+    VarState(@nospecialize(typ), undef::Bool) = new(typ, undef)
+end
+
 abstract type ForwardableArgtypes end
 
 """
-    InferenceResult(linfo::MethodInstance)
-    InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes)
+    InferenceResult(linfo::MethodInstance, [argtypes::ForwardableArgtypes, 𝕃::AbstractLattice])
 
 A type that represents the result of running type inference on a chunk of code.
 
@@ -57,12 +73,10 @@ mutable struct InferenceResult
             WorldRange(), Effects(), Effects(), nothing, true)
     end
 end
-function InferenceResult(linfo::MethodInstance)
-    return InferenceResult(linfo, matching_cache_argtypes(linfo)...)
-end
-function InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes)
-    return InferenceResult(linfo, matching_cache_argtypes(linfo, argtypes)...)
-end
+InferenceResult(linfo::MethodInstance, 𝕃::AbstractLattice=fallback_lattice) =
+    InferenceResult(linfo, matching_cache_argtypes(𝕃, linfo)...)
+InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes, 𝕃::AbstractLattice=fallback_lattice) =
+    InferenceResult(linfo, matching_cache_argtypes(𝕃, linfo, argtypes)...)
 
 """
     inf_params::InferenceParams

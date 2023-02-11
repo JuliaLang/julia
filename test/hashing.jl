@@ -284,3 +284,11 @@ end
         end
     end
 end
+
+if Sys.WORD_SIZE >= 64
+    @testset "very large string" begin
+        N = 2^31+1
+        s = String('\0'^N);
+        objectid(s)
+    end
+end

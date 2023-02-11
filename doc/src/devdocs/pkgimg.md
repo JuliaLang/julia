@@ -43,6 +43,7 @@ that were created with different flags will be rejected.
 
 - `-g`, `--debug-info`: Exact match required since it changes code generation.
 - `--check-bounds`: Exact match required since it changes code generation.
+- `--inline`: Exact match required since it changes code generation.
 - `--pkgimages`: To allow running without object caching enabled.
 - `-O`, `--optimize`: Reject package images generated for a lower optimization level,
   but allow for higher optimization levels to be loaded.

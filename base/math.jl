@@ -5,7 +5,7 @@ module Math
 export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
        asinh, acosh, atanh, sec, csc, cot, asec, acsc, acot,
        sech, csch, coth, asech, acsch, acoth,
-       sinpi, cospi, sincospi, sinc, cosc,
+       sinpi, cospi, sincospi, tanpi, sinc, cosc,
        cosd, cotd, cscd, secd, sind, tand, sincosd,
        acosd, acotd, acscd, asecd, asind, atand,
        rad2deg, deg2rad,
@@ -31,7 +31,11 @@ using .Base: IEEEFloat
 
 @noinline function throw_complex_domainerror(f::Symbol, x)
     throw(DomainError(x,
-        LazyString(f," will only return a complex result if called with a complex argument. Try ", f,"(Complex(x)).")))
+        LazyString(f," was called with a negative real argument but will only return a complex result if called with a complex argument. Try ", f,"(Complex(x)).")))
+end
+@noinline function throw_complex_domainerror_neg1(f::Symbol, x)
+    throw(DomainError(x,
+        LazyString(f," was called with a real argument < -1 but will only return a complex result if called with a complex argument. Try ", f,"(Complex(x)).")))
 end
 @noinline function throw_exp_domainerror(x)
     throw(DomainError(x, LazyString(
@@ -358,14 +362,14 @@ julia> log(4,2)
 
 julia> log(-2, 3)
 ERROR: DomainError with -2.0:
-log will only return a complex result if called with a complex argument. Try log(Complex(x)).
+log was called with a negative real argument but will only return a complex result if called with a complex argument. Try log(Complex(x)).
 Stacktrace:
  [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
 [...]
 
 julia> log(2, -3)
 ERROR: DomainError with -3.0:
-log will only return a complex result if called with a complex argument. Try log(Complex(x)).
+log was called with a negative real argument but will only return a complex result if called with a complex argument. Try log(Complex(x)).
 Stacktrace:
  [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
 [...]
@@ -579,7 +583,7 @@ julia> log(2)
 
 julia> log(-3)
 ERROR: DomainError with -3.0:
-log will only return a complex result if called with a complex argument. Try log(Complex(x)).
+log was called with a negative real argument but will only return a complex result if called with a complex argument. Try log(Complex(x)).
 Stacktrace:
  [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
 [...]
@@ -611,7 +615,7 @@ julia> log2(10)
 
 julia> log2(-2)
 ERROR: DomainError with -2.0:
-log2 will only return a complex result if called with a complex argument. Try log2(Complex(x)).
+log2 was called with a negative real argument but will only return a complex result if called with a complex argument. Try log2(Complex(x)).
 Stacktrace:
  [1] throw_complex_domainerror(f::Symbol, x::Float64) at ./math.jl:31
 [...]
@@ -641,7 +645,7 @@ julia> log10(2)
 
 julia> log10(-2)
 ERROR: DomainError with -2.0:
-log10 will only return a complex result if called with a complex argument. Try log10(Complex(x)).
+log10 was called with a negative real argument but will only return a complex result if called with a complex argument. Try log10(Complex(x)).
 Stacktrace:
  [1] throw_complex_domainerror(f::Symbol, x::Float64) at ./math.jl:31
 [...]
@@ -665,7 +669,7 @@ julia> log1p(0)
 
 julia> log1p(-2)
 ERROR: DomainError with -2.0:
-log1p will only return a complex result if called with a complex argument. Try log1p(Complex(x)).
+log1p was called with a real argument < -1 but will only return a complex result if called with a complex argument. Try log1p(Complex(x)).
 Stacktrace:
  [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
 [...]
@@ -737,7 +741,7 @@ julia> hypot(a, a)
 
 julia> √(a^2 + a^2) # a^2 overflows
 ERROR: DomainError with -2.914184810805068e18:
-sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+sqrt was called with a negative real argument but will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
 [...]
 

@@ -126,6 +126,9 @@ namespace jl_intrinsics {
 
     // `julia.queue_gc_root`: an intrinsic that queues a GC root.
     extern const IntrinsicDescription queueGCRoot;
+
+    // `julia.safepoint`: an intrinsic that triggers a GC safepoint.
+    extern const IntrinsicDescription safepoint;
 }
 
 // A namespace for well-known Julia runtime function descriptions.
@@ -146,6 +149,9 @@ namespace jl_well_known {
 
     // `jl_gc_queue_root`: queues a GC root.
     extern const WellKnownFunctionDescription GCQueueRoot;
+
+    // `jl_gc_alloc_typed`: allocates bytes.
+    extern const WellKnownFunctionDescription GCAllocTyped;
 }
 
 #endif

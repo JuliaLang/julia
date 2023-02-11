@@ -75,6 +75,8 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         return;
     }
 
+    jl_task_wait_empty();
+
     if (!jl_module_init_order) {
         jl_printf(JL_STDERR, "WARNING: --output requested, but no modules defined during run\n");
         return;
@@ -114,8 +116,9 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     ios_t *s = NULL;
     ios_t *z = NULL;
     int64_t srctextpos = 0 ;
-    jl_create_system_image(&native_code, jl_options.incremental ? worklist : NULL, emit_split,
-                           &s, &z, &udeps, &srctextpos);
+    jl_create_system_image(emit_native ? &native_code : NULL,
+                           jl_options.incremental ? worklist : NULL,
+                           emit_split, &s, &z, &udeps, &srctextpos);
 
     if (!emit_split)
         z = s;
