@@ -696,7 +696,7 @@ static jl_value_t *pick_union_element(jl_value_t *u JL_PROPAGATES_ROOT, jl_stenv
 static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param, int limit_slow);
 
 // subtype for variable bounds consistency check. needs its own forall/exists environment.
-static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
+static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_varbinding_t *bb, int R)
 {
     if (jl_is_long(x) && jl_is_long(y))
         return jl_unbox_long(x) == jl_unbox_long(y) + e->Loffset;
@@ -711,12 +711,19 @@ static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     if (x == (jl_value_t*)jl_any_type && jl_is_datatype(y))
         return 0;
     jl_saved_unionstate_t oldLunions; push_unionstate(&oldLunions, &e->Lunions);
-    int sub = local_forall_exists_subtype(x, y, e, 0, 1);
+    int sub;
+    if (bb && bb->lb == bb->ub && jl_is_typevar(bb->lb)) {
+        forward_offset(bb, e, R);
+        sub = local_forall_exists_subtype(x, y, e, 0, 1);
+        backward_offset(bb, e, R);
+    }
+    else
+        sub = local_forall_exists_subtype(x, y, e, 0, 1);
     pop_unionstate(&e->Lunions, &oldLunions);
     return sub;
 }
 
-static int subtype_left_var(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
+static int subtype_left_var(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param, jl_varbinding_t *bb, int R)
 {
     if (jl_is_long(x) && jl_is_long(y))
         return jl_unbox_long(x) == jl_unbox_long(y) + e->Loffset;
@@ -730,7 +737,15 @@ static int subtype_left_var(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int par
         return 1;
     if (x == (jl_value_t*)jl_any_type && jl_is_datatype(y))
         return 0;
-    return subtype(x, y, e, param);
+    int sub;
+    if (bb && bb->lb == bb->ub && jl_is_typevar(bb->lb)) {
+        forward_offset(bb, e, R);
+        sub = subtype(x, y, e, param);
+        backward_offset(bb, e, R);
+    }
+    else
+        sub = subtype(x, y, e, param);
+    return sub;
 }
 
 // use the current context to record where a variable occurred, for the purpose
@@ -772,17 +787,17 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
 {
     jl_varbinding_t *bb = lookup(e, b);
     if (bb == NULL)
-        return e->ignore_free || subtype_left_var(b->ub, a, e, param);
+        return e->ignore_free || subtype_left_var(b->ub, a, e, param, NULL, 0);
     record_var_occurrence(bb, e, param);
     assert(!jl_is_long(a) || e->Loffset == 0);
     if (e->Loffset != 0 && !jl_is_typevar(a) &&
         a != jl_bottom_type && a != (jl_value_t *)jl_any_type)
         return 0;
     if (!bb->right)  // check ∀b . b<:a
-        return subtype_left_var(bb->ub, a, e, param);
+        return subtype_left_var(bb->ub, a, e, param, bb, 0);
     if (bb->ub == a)
-        return 1;
-    if (!((bb->lb == jl_bottom_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ccheck(bb->lb, a, e)))
+        return bb->offset == e->Loffset || bb->offset == UNDEF_OFF;
+    if (!((bb->lb == jl_bottom_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ccheck(bb->lb, a, e, bb, 0)))
         return 0;
     // for this to work we need to compute issub(left,right) before issub(right,left),
     // since otherwise the issub(a, bb.ub) check in var_gt becomes vacuous.
@@ -808,7 +823,7 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
         if (aa && !aa->right && in_union(bb->lb, a) && bb->depth0 != aa->depth0 && var_outside(e, b, (jl_tvar_t*)a)) {
             // an "exists" var cannot equal a "forall" var inside it unless the forall
             // var has equal bounds.
-            return subtype_left_var(aa->ub, aa->lb, e, param);
+            return subtype_left_var(aa->ub, aa->lb, e, param, NULL, 0);
         }
     }
     return 1;
@@ -819,17 +834,17 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
 {
     jl_varbinding_t *bb = lookup(e, b);
     if (bb == NULL)
-        return e->ignore_free || subtype_left_var(a, b->lb, e, param);
+        return e->ignore_free || subtype_left_var(a, b->lb, e, param, NULL, 1);
     record_var_occurrence(bb, e, param);
     assert(!jl_is_long(a) || e->Loffset == 0);
     if (e->Loffset != 0 && !jl_is_typevar(a) &&
         a != jl_bottom_type && a != (jl_value_t *)jl_any_type)
         return 0;
     if (!bb->right)  // check ∀b . b>:a
-        return subtype_left_var(a, bb->lb, e, param);
+        return subtype_left_var(a, bb->lb, e, param, bb, 1);
     if (bb->lb == a)
-        return 1;
-    if (!((bb->ub == (jl_value_t*)jl_any_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ccheck(a, bb->ub, e)))
+        return bb->offset == -e->Loffset || bb->offset == UNDEF_OFF;
+    if (!((bb->ub == (jl_value_t*)jl_any_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ccheck(a, bb->ub, e, bb, 1)))
         return 0;
     jl_value_t *lb = simple_join(bb->lb, a);
     JL_GC_PUSH1(&lb);
@@ -847,7 +862,7 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
         }
         jl_varbinding_t *aa = lookup(e, (jl_tvar_t*)a);
         if (aa && !aa->right && bb->depth0 != aa->depth0 && param == 2 && var_outside(e, b, (jl_tvar_t*)a))
-            return subtype_left_var(aa->ub, aa->lb, e, param);
+            return subtype_left_var(aa->ub, aa->lb, e, param, NULL, 1);
     }
     return 1;
 }
