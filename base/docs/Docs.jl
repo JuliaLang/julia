@@ -517,11 +517,12 @@ function docm(source::LineNumberNode, mod::Module, ex)
     @nospecialize ex
     if isexpr(ex, :->) && length(ex.args) > 1
         return docm(source, mod, ex.args...)
-    else
+    elseif isassigned(Base.REPL_MODULE_REF)
         # TODO: this is a shim to continue to allow `@doc` for looking up docstrings
         REPL = Base.REPL_MODULE_REF[]
         return REPL.lookup_doc(ex)
     end
+    return nothing
 end
 # Drop incorrect line numbers produced by nested macro calls.
 docm(source::LineNumberNode, mod::Module, _, _, x...) = docm(source, mod, x...)

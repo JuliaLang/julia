@@ -3252,14 +3252,9 @@ void jl_gc_init(void)
     uint64_t constrained_mem = uv_get_constrained_memory();
     if (constrained_mem > 0 && constrained_mem < total_mem)
         total_mem = constrained_mem;
+    max_total_memory = total_mem / 10 * 6;
 #endif
 
-    // We allocate with abandon until we get close to the free memory on the machine.
-    uint64_t free_mem = uv_get_available_memory();
-    uint64_t high_water_mark = free_mem / 10 * 7;  // 70% high water mark
-
-    if (high_water_mark < max_total_memory)
-       max_total_memory = high_water_mark;
     t_start = jl_hrtime();
 }
 

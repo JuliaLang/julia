@@ -17,7 +17,7 @@ import
         cbrt, typemax, typemin, unsafe_trunc, floatmin, floatmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
         isone, big, _string_n, decompose, minmax,
-        sinpi, cospi, sincospi, sind, cosd, tand, asind, acosd, atand
+        sinpi, cospi, sincospi, tanpi, sind, cosd, tand, asind, acosd, atand
 
 import ..Rounding: rounding_raw, setrounding_raw
 
@@ -722,7 +722,8 @@ end
 for f in (:log, :log2, :log10)
     @eval function $f(x::BigFloat)
         if x < 0
-            throw(DomainError(x, string($f, " will only return a complex result if called ",
+            throw(DomainError(x, string($f, " was called with a negative real argument but ",
+                              "will only return a complex result if called ",
                               "with a complex argument. Try ", $f, "(complex(x)).")))
         end
         z = BigFloat()
@@ -733,7 +734,8 @@ end
 
 function log1p(x::BigFloat)
     if x < -1
-        throw(DomainError(x, string("log1p will only return a complex result if called ",
+        throw(DomainError(x, string("log1p was called with a real argument < -1 but ",
+                          "will only return a complex result if called ",
                           "with a complex argument. Try log1p(complex(x)).")))
     end
     z = BigFloat()
@@ -790,7 +792,7 @@ function sum(arr::AbstractArray{BigFloat})
 end
 
 # Functions for which NaN results are converted to DomainError, following Base
-for f in (:sin, :cos, :tan, :sec, :csc, :acos, :asin, :atan, :acosh, :asinh, :atanh, :sinpi, :cospi)
+for f in (:sin, :cos, :tan, :sec, :csc, :acos, :asin, :atan, :acosh, :asinh, :atanh, :sinpi, :cospi, :tanpi)
     @eval begin
         function ($f)(x::BigFloat)
             isnan(x) && return x

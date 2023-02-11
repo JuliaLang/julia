@@ -2426,6 +2426,9 @@ end
 
 @test !(Tuple{Any, Any, Any} <: Tuple{Any, Vararg{T}} where T)
 
+# issue #39967
+@test (NTuple{27, T} where {S, T<:Union{Array, Array{S}}}) <: Tuple{Array, Array, Vararg{AbstractArray, 25}}
+
 abstract type MyAbstract47877{C}; end
 struct MyType47877{A,B} <: MyAbstract47877{A} end
 let A = Tuple{Type{T}, T} where T,
@@ -2440,3 +2443,7 @@ end
 let a = (isodd(i) ? Pair{Char, String} : Pair{String, String} for i in 1:2000)
     @test Tuple{Type{Pair{Union{Char, String}, String}}, a...} <: Tuple{Type{Pair{K, V}}, Vararg{Pair{A, B} where B where A}} where V where K
 end
+
+#issue 48582
+@test !<:(Tuple{Pair{<:T,<:T}, Val{S} where {S}} where {T<:Base.BitInteger},
+          Tuple{Pair{<:T,<:T}, Val{Int}} where {T<:Base.BitInteger})

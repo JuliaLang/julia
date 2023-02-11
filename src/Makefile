@@ -382,6 +382,8 @@ $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_SHLIB_EXT) $(build_shlibdir)/libj
 $(build_shlibdir)/libjulia-internal.$(SHLIB_EXT) $(build_shlibdir)/libjulia-internal-debug.$(SHLIB_EXT): $(build_shlibdir)/libjulia-internal%.$(SHLIB_EXT): \
 		$(build_shlibdir)/libjulia-internal%.$(JL_MAJOR_MINOR_SHLIB_EXT)
 	@$(call PRINT_LINK, ln -sf $(notdir $<) $@)
+$(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_MINOR_SHLIB_EXT): $(build_shlibdir)/libjulia-internal.$(SHLIB_EXT)
+$(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(build_shlibdir)/libjulia-internal-debug.$(SHLIB_EXT)
 libjulia-internal-release: $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_SHLIB_EXT) $(build_shlibdir)/libjulia-internal.$(SHLIB_EXT)
 libjulia-internal-debug: $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT) $(build_shlibdir)/libjulia-internal-debug.$(SHLIB_EXT)
 endif
