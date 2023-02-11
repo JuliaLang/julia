@@ -1340,8 +1340,8 @@ julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\n")
 julia> countlines("my_file.txt")
 1
 
-julia> countlines("my_file.txt", eol = '.')
-2
+julia> countlines("my_file.txt", eol = 'n')
+4
 
 julia> rm("my_file.txt")
 
