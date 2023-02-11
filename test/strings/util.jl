@@ -333,6 +333,24 @@ end
     # Issue 36953
     @test replace("abc", "" => "_", count=1) == "_abc"
 
+    # tests for io::IO API (in addition to internals exercised above):
+    let buf = IOBuffer()
+        replace(buf, "aaa", 'a' => 'z', count=0)
+        replace(buf, "aaa", 'a' => 'z', count=1)
+        replace(buf, "bbb", 'a' => 'z')
+        replace(buf, "aaa", 'a' => 'z')
+        @test String(take!(buf)) == "aaazaabbbzzz"
+    end
+    let tempfile = tempname()
+        open(tempfile, "w") do f
+            replace(f, "aaa", 'a' => 'z', count=0)
+            replace(f, "aaa", 'a' => 'z', count=1)
+            replace(f, "bbb", 'a' => 'z')
+            replace(f, "aaa", 'a' => 'z')
+            print(f, "\n")
+        end
+        @test read(tempfile, String) == "aaazaabbbzzz\n"
+    end
 end
 
 @testset "replace many" begin
