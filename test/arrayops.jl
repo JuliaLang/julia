@@ -1172,6 +1172,12 @@ end
     end
 end
 
+@testset "union with Generator" begin
+    fruits = ["apple", "banana", "grapes", "grapes"]
+    @test isequal(union(fruit for fruit in fruits), ["apple", "banana", "grapes"])
+    @test isequal(union(i for i in 1:3), [1, 2, 3])
+end
+
 @testset "mapslices" begin
     local a, b, c, m, h, s
     a = rand(5,5)
