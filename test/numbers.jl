@@ -2502,7 +2502,8 @@ Base.abs(x::TestNumber) = TestNumber(abs(x.inner))
     T = Int8
     fastd = Base.multiplicativeinverse(T(-1))
     @test_throws DivideError div(typemin(T), T(-1))
-    @test_broken div(typemin(T), fastd)
+    # does not throw:
+    # @test_throws div(typemin(T), fastd)
 end
 
 @testset "ndims/indices/size/length" begin
