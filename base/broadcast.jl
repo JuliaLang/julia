@@ -195,7 +195,7 @@ function broadcasted(::OrOr, a, bc::Broadcasted)
 end
 
 Base.convert(::Type{Broadcasted{NewStyle}}, bc::Broadcasted{Style,Axes,F,Args}) where {NewStyle,Style,Axes,F,Args} =
-    Broadcasted{NewStyle,Axes,F,Args}(bc.f, bc.args, bc.axes)
+    Broadcasted{NewStyle,Axes,F,Args}(bc.f, bc.args, bc.axes)::Broadcasted{NewStyle,Axes,F,Args}
 
 function Base.show(io::IO, bc::Broadcasted{Style}) where {Style}
     print(io, Broadcasted)
@@ -244,7 +244,7 @@ Base.IndexStyle(::Type{<:Broadcasted{<:Any}}) = IndexCartesian()
 
 Base.LinearIndices(bc::Broadcasted{<:Any,<:Tuple{Any}}) = LinearIndices(axes(bc))::LinearIndices{1}
 
-Base.ndims(::Broadcasted{<:Any,<:NTuple{N,Any}}) where {N} = N
+Base.ndims(bc::Broadcasted) = ndims(typeof(bc))
 Base.ndims(::Type{<:Broadcasted{<:Any,<:NTuple{N,Any}}}) where {N} = N
 
 Base.size(bc::Broadcasted) = map(length, axes(bc))
@@ -261,7 +261,20 @@ Base.@propagate_inbounds function Base.iterate(bc::Broadcasted, s)
     return (bc[i], (s[1], newstate))
 end
 
-Base.IteratorSize(::Type{<:Broadcasted{<:Any,<:NTuple{N,Base.OneTo}}}) where {N} = Base.HasShape{N}()
+Base.IteratorSize(::Type{T}) where {T<:Broadcasted} = Base.HasShape{ndims(T)}()
+Base.ndims(BC::Type{<:Broadcasted{<:Any,Nothing}}) = _maxndims(fieldtype(BC, 2))
+Base.ndims(::Type{<:Broadcasted{<:AbstractArrayStyle{N},Nothing}}) where {N<:Integer} = N
+
+_maxndims(T::Type{<:Tuple}) = reduce(max, (ntuple(n -> _ndims(fieldtype(T, n)), Base._counttuple(T))))
+_maxndims(::Type{<:Tuple{T}}) where {T} = ndims(T)
+_maxndims(::Type{<:Tuple{T}}) where {T<:Tuple} = _ndims(T)
+function _maxndims(::Type{<:Tuple{T, S}}) where {T, S}
+    return T<:Tuple || S<:Tuple ? max(_ndims(T), _ndims(S)) : max(ndims(T), ndims(S))
+end
+
+_ndims(x) = ndims(x)
+_ndims(::Type{<:Tuple}) = 1
+
 Base.IteratorEltype(::Type{<:Broadcasted}) = Base.EltypeUnknown()
 
 ## Instantiation fills in the "missing" fields in Broadcasted.
@@ -499,6 +512,20 @@ julia> Broadcast.combine_axes(1, 1, 1)
 @inline combine_axes(A, B) = broadcast_shape(axes(A), axes(B))
 combine_axes(A) = axes(A)
 
+"""
+    broadcast_shape(As...) -> Tuple
+
+Determine the result axes for broadcasting across all axes (size Tuples) in `As`.
+
+```jldoctest
+julia> Broadcast.broadcast_shape((1,2), (2,1))
+(2, 2)
+
+julia> Broadcast.broadcast_shape((1,), (1,5), (4,5,3))
+(4, 5, 3)
+```
+"""
+function broadcast_shape end
 # shape (i.e., tuple-of-indices) inputs
 broadcast_shape(shape::Tuple) = shape
 broadcast_shape(shape::Tuple, shape1::Tuple, shapes::Tuple...) = broadcast_shape(_bcs(shape, shape1), shapes...)
@@ -697,7 +724,7 @@ julia> Broadcast.broadcastable("hello") # Strings break convention of matching i
 Base.RefValue{String}("hello")
 ```
 """
-broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair,IO}) = Ref(x)
+broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair,IO,CartesianIndex}) = Ref(x)
 broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
 broadcastable(x::Union{AbstractArray,Number,AbstractChar,Ref,Tuple,Broadcasted}) = x
 # Default to collecting iterables — which will error for non-iterables
@@ -1170,9 +1197,9 @@ end
 end
 Base.@propagate_inbounds dotview(B::BitArray, i::BitArray) = BitMaskedBitArray(B, i)
 Base.show(io::IO, B::BitMaskedBitArray) = foreach(arg->show(io, arg), (typeof(B), (B.parent, B.mask)))
-# Override materialize! to prevent the BitMaskedBitArray from escaping to an overrideable method
+# Override materialize! to prevent the BitMaskedBitArray from escaping to an overridable method
 @inline materialize!(B::BitMaskedBitArray, bc::Broadcasted{<:Any,<:Any,typeof(identity),Tuple{Bool}}) = fill!(B, bc.args[1])
-@inline materialize!(B::BitMaskedBitArray, bc::Broadcasted{<:Any}) = materialize!(SubArray(B.parent, to_indices(B.parent, (B.mask,))), bc)
+@inline materialize!(B::BitMaskedBitArray, bc::Broadcasted{<:Any}) = materialize!(@inbounds(view(B.parent, B.mask)), bc)
 function Base.fill!(B::BitMaskedBitArray, b::Bool)
     Bc = B.parent.chunks
     Ic = B.mask.chunks

@@ -332,6 +332,148 @@ Test.detect_ambiguities
 Test.detect_unbound_args
 ```
 
+## Workflow for Testing Packages
+
+Using the tools available to us in the previous sections, here is a potential workflow of creating a package and adding tests to it.
+
+### Generating an Example Package
+
+For this workflow, we will create a package called `Example`:
+
+```julia
+pkg> generate Example
+shell> cd Example
+shell> mkdir test
+pkg> activate .
+```
+
+### Creating Sample Functions
+
+The number one requirement for testing a package is to have functionality to test.
+For that, we will add some simple functions to `Example` that we can test.
+Add the following to `src/Example.jl`:
+
+```julia
+module Example
+
+function greet()
+    "Hello world!"
+end
+
+function simple_add(a, b)
+    a + b
+end
+
+function type_multiply(a::Float64, b::Float64)
+    a * b
+end
+
+end
+```
+
+### Creating a Test Environment
+
+From within the root of the `Example` package, navigate to the `test` directory, activate a new environment there, and add the `Test` package to the environment:
+
+```julia
+shell> cd test
+pkg> activate .
+(test) pkg> add Test
+```
+
+### Testing Our Package
+
+Now, we are ready to add tests to `Example`.
+It is standard practice to create a file within the `test` directory called `runtests.jl` which contains the test sets we want to run.
+Go ahead and create that file within the `test` directory and add the following code to it:
+
+```julia
+using Example
+using Test
+
+@testset "Example tests" begin
+
+	@testset "Math tests" begin
+		include("math_tests.jl")
+	end
+
+	@testset "Greeting tests" begin
+		include("greeting_tests.jl")
+	end
+end
+```
+
+We will need to create those two included files, `math_tests.jl` and `greeting_tests.jl`, and add some tests to them.
+
+> **Note:** Notice how we did not have to specify add `Example` into the `test` environment's `Project.toml`.
+> This is a benefit of Julia's testing system that you could [read about more here](https://pkgdocs.julialang.org/dev/creating-packages/).
+
+#### Writing Tests for `math_tests.jl`
+
+Using our knowledge of `Test.jl`, here are some example tests we could add to `math_tests.jl`:
+
+```julia
+@testset "Testset 1" begin
+	@test 2 == simple_add(1, 1)
+	@test 3.5 == simple_add(1, 2.5)
+        @test_throws MethodError simple_add(1, "A")
+        @test_throws MethodError simple_add(1, 2, 3)
+end
+
+@testset "Testset 2" begin
+	@test 1.0 == type_multiply(1.0, 1.0)
+        @test isa(type_multiply(2.0, 2.0), Float64)
+	@test_throws MethodError type_multiply(1, 2.5)
+end
+```
+
+#### Writing Tests for `greeting_tests.jl`
+
+Using our knowledge of `Test.jl`, here are some example tests we could add to `math_tests.jl`:
+
+```julia
+@testset "Testset 3" begin
+    @test "Hello world!" == greet()
+    @test_throws MethodError greet("Antonia")
+end
+```
+
+### Testing Our Package
+
+Now that we have added our tests and our `runtests.jl` script in `test`, we can test our `Example` package by going back to the root of the `Example` package environment and reactivating the `Example` environment:
+
+```julia
+shell> cd ..
+pkg> activate .
+```
+
+From there, we can finally run our test suite as follows:
+
+```julia
+(Example) pkg> test
+     Testing Example
+      Status `/tmp/jl_Yngpvy/Project.toml`
+  [fa318bd2] Example v0.1.0 `/home/src/Projects/tmp/errata/Example`
+  [8dfed614] Test `@stdlib/Test`
+      Status `/tmp/jl_Yngpvy/Manifest.toml`
+  [fa318bd2] Example v0.1.0 `/home/src/Projects/tmp/errata/Example`
+  [2a0f44e3] Base64 `@stdlib/Base64`
+  [b77e0a4c] InteractiveUtils `@stdlib/InteractiveUtils`
+  [56ddb016] Logging `@stdlib/Logging`
+  [d6f4376e] Markdown `@stdlib/Markdown`
+  [9a3f8284] Random `@stdlib/Random`
+  [ea8e919c] SHA `@stdlib/SHA`
+  [9e88b42a] Serialization `@stdlib/Serialization`
+  [8dfed614] Test `@stdlib/Test`
+     Testing Running tests...
+Test Summary: | Pass  Total
+Example tests |    9      9
+     Testing Example tests passed
+```
+
+And if all went correctly, you should see a similar output as above.
+Using `Test.jl`, more complicated tests can be added for packages but this should ideally point developers in the direction of how to get started with testing their own created packages.
+
 ```@meta
 DocTestSetup = nothing
 ```

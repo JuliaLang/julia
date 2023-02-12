@@ -32,7 +32,7 @@ export
 # get and set current directory
 
 """
-    pwd() -> AbstractString
+    pwd() -> String
 
 Get the current working directory.
 
@@ -294,7 +294,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
                     rm(joinpath(path, p), force=force, recursive=true)
                 end
             catch err
-                if !(force && isa(err, IOError) && err.code==Base.UV_EACCES)
+                if !(isa(err, IOError) && err.code==Base.UV_EACCES)
                     rethrow(err)
                 end
             end
@@ -629,7 +629,7 @@ end # os-test
 
 Generate a temporary file path. This function only returns a path; no file is
 created. The path is likely to be unique, but this cannot be guaranteed due to
-the very remote posibility of two simultaneous calls to `tempname` generating
+the very remote possibility of two simultaneous calls to `tempname` generating
 the same file name. The name is guaranteed to differ from all files already
 existing at the time of the call to `tempname`.
 
@@ -675,8 +675,9 @@ mktemp(parent)
     mktempdir(parent=tempdir(); prefix=$(repr(temp_prefix)), cleanup=true) -> path
 
 Create a temporary directory in the `parent` directory with a name
-constructed from the given prefix and a random suffix, and return its path.
-Additionally, any trailing `X` characters may be replaced with random characters.
+constructed from the given `prefix` and a random suffix, and return its path.
+Additionally, on some platforms, any trailing `'X'` characters in `prefix` may be replaced
+with random characters.
 If `parent` does not exist, throw an error. The `cleanup` option controls whether
 the temporary directory is automatically deleted when the process exits.
 
@@ -793,6 +794,8 @@ By default, `readdir` sorts the list of names it returns. If you want to skip
 sorting the names and get them in the order that the file system lists them,
 you can use `readdir(dir, sort=false)` to opt out of sorting.
 
+See also: [`walkdir`](@ref).
+
 !!! compat "Julia 1.4"
     The `join` and `sort` keyword arguments require at least Julia 1.4.
 
@@ -891,6 +894,8 @@ The directory tree can be traversed top-down or bottom-up.
 If `walkdir` or `stat` encounters a `IOError` it will rethrow the error by default.
 A custom error handling function can be provided through `onerror` keyword argument.
 `onerror` is called with a `IOError` as argument.
+
+See also: [`readdir`](@ref).
 
 # Examples
 ```julia
@@ -1058,7 +1063,7 @@ See also: [`hardlink`](@ref).
 
 !!! compat "Julia 1.6"
     The `dir_target` keyword argument was added in Julia 1.6.  Prior to this,
-    symlinks to nonexistant paths on windows would always be file symlinks, and
+    symlinks to nonexistent paths on windows would always be file symlinks, and
     relative symlinks to directories were not supported.
 """
 function symlink(target::AbstractString, link::AbstractString;
@@ -1105,7 +1110,7 @@ function symlink(target::AbstractString, link::AbstractString;
 end
 
 """
-    readlink(path::AbstractString) -> AbstractString
+    readlink(path::AbstractString) -> String
 
 Return the target location a symbolic link `path` points to.
 """

@@ -156,8 +156,8 @@ static value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint
     (void)tosymbol(fl_ctx, args[0], "defined-julia-global");
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
     jl_sym_t *var = jl_symbol(symbol_name(fl_ctx, args[0]));
-    jl_binding_t *b = jl_get_module_binding(ctx->module, var);
-    return (b != NULL && b->owner == ctx->module) ? fl_ctx->T : fl_ctx->F;
+    jl_binding_t *b = jl_get_module_binding(ctx->module, var, 0);
+    return (b != NULL && jl_atomic_load_relaxed(&b->owner) == b) ? fl_ctx->T : fl_ctx->F;
 }
 
 static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_NOTSAFEPOINT
@@ -506,6 +506,13 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
                 return jl_true;
             else if (hd == jl_ast_ctx(fl_ctx)->false_sym && llength(e) == 1)
                 return jl_false;
+            else if (hd == fl_ctx->jl_char_sym && llength(e) == 2) {
+                value_t v = car_(cdr_(e));
+                if (!(iscprim(v) && cp_class((cprim_t*)ptr(v)) == fl_ctx->uint32type))
+                    jl_error("malformed julia char");
+                uint32_t c = *(uint32_t*)cp_data((cprim_t*)ptr(v));
+                return jl_box_char(c);
+            }
         }
         if (issymbol(hd))
             sym = scmsym_to_julia(fl_ctx, hd);
@@ -925,7 +932,7 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
         jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(expr, 0);
         JL_GC_PUSH1(&values);
         values = jl_array_copy(values);
-        jl_value_t *ret = jl_new_struct(jl_phinode_type, values);
+        jl_value_t *ret = jl_new_struct(jl_phicnode_type, values);
         JL_GC_POP();
         return ret;
     }

@@ -38,6 +38,7 @@ struct JLOptions
     handle_signals::Int8
     use_sysimage_native_code::Int8
     use_compiled_modules::Int8
+    use_pkgimages::Int8
     bindto::Ptr{UInt8}
     outputbc::Ptr{UInt8}
     outputunoptbc::Ptr{UInt8}
@@ -52,6 +53,7 @@ struct JLOptions
     rr_detach::Int8
     strip_metadata::Int8
     strip_ir::Int8
+    heap_size_hint::UInt64
 end
 
 # This runs early in the sysimage != is not defined yet

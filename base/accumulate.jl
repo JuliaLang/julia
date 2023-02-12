@@ -280,7 +280,7 @@ function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kw...)
     elseif keys(nt) === (:init,)
         out = similar(A, promote_op(op, typeof(nt.init), eltype(A)))
     else
-        throw(ArgumentError("acccumulate does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
+        throw(ArgumentError("accumulate does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
     end
     accumulate!(op, out, A; dims=dims, kw...)
 end
@@ -341,7 +341,7 @@ function accumulate!(op, B, A; dims::Union{Integer, Nothing} = nothing, kw...)
     elseif keys(kw) === (:init,)
         _accumulate!(op, B, A, dims, Some(nt.init))
     else
-        throw(ArgumentError("acccumulate! does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
+        throw(ArgumentError("accumulate! does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
     end
 end
 

@@ -42,6 +42,7 @@ typedef struct {
     int8_t handle_signals;
     int8_t use_sysimage_native_code;
     int8_t use_compiled_modules;
+    int8_t use_pkgimages;
     const char *bindto;
     const char *outputbc;
     const char *outputunoptbc;
@@ -56,6 +57,7 @@ typedef struct {
     int8_t rr_detach;
     int8_t strip_metadata;
     int8_t strip_ir;
+    uint64_t heap_size_hint;
 } jl_options_t;
 
 #endif

@@ -47,6 +47,10 @@ julia> last(sort(results.allocs, by=x->x.size))
 Profile.Allocs.Alloc(Vector{Any}, Base.StackTraces.StackFrame[_new_array_ at array.c:127, ...], 5576)
 ```
 
+The best way to visualize these is currently with the
+[PProf.jl](https://github.com/JuliaPerf/PProf.jl) package,
+by invoking `PProf.Allocs.pprof`.
+
 !!! note
     The current implementation of the Allocations Profiler does not
     capture types for all allocations. Allocations for which the profiler
@@ -54,7 +58,7 @@ Profile.Allocs.Alloc(Vector{Any}, Base.StackTraces.StackFrame[_new_array_ at arr
     `Profile.Allocs.UnknownType`.
 
     You can read more about the missing types and the plan to improve this, here:
-    https://github.com/JuliaLang/julia/issues/43688.
+    <https://github.com/JuliaLang/julia/issues/43688>.
 
 !!! compat "Julia 1.8"
     The allocation profiler was added in Julia 1.8.
@@ -140,8 +144,12 @@ end
 const BacktraceCache = Dict{BTElement,Vector{StackFrame}}
 
 # copied from julia_internal.h
-const JL_BUFF_TAG = UInt(0x4eadc000)
+JL_BUFF_TAG::UInt = ccall(:jl_get_buff_tag, UInt, ())
 const JL_GC_UNKNOWN_TYPE_TAG = UInt(0xdeadaa03)
+
+function __init__()
+    global JL_BUFF_TAG = ccall(:jl_get_buff_tag, UInt, ())
+end
 
 struct CorruptType end
 struct BufferType end

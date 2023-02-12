@@ -8,12 +8,15 @@ module TrickyArithmetic
     Base.convert(::Type{A}, i::Int) = A(i)
     Base.zero(::Union{A, Type{A}}) = A(0)
     Base.one(::Union{A, Type{A}}) = A(1)
+    Base.isfinite(a::A) = isfinite(a.x)
     struct B
         x::Int
     end
     struct C
         x::Int
     end
+    Base.isfinite(b::B) = isfinite(b.x)
+    Base.isfinite(c::C) = isfinite(c.x)
     C(a::A) = C(a.x)
     Base.zero(::Union{C, Type{C}}) = C(0)
     Base.one(::Union{C, Type{C}}) = C(1)
@@ -40,6 +43,7 @@ module TrickyArithmetic
     Base.:(*)(a::Union{A,B,C}, b::D) = b * a
     Base.inv(a::Union{A,B,C}) = A(1) / a
     Base.inv(a::D) = a.d / a.n
+    Base.isfinite(a::D) = isfinite(a.n) && isfinite(a.d)
     Base.:(/)(a::Union{A,B,C}, b::Union{A,B,C}) = D(a, b)
     Base.:(/)(a::D, b::Union{A,B,C}) = a.n / (a.d*b)
     Base.:(/)(a::Union{A,B,C,D}, b::D) = a * inv(b)
