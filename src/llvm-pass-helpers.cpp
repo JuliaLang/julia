@@ -230,7 +230,7 @@ namespace jl_well_known {
     static const char *GC_POOL_ALLOC_NAME = XSTR(jl_gc_pool_alloc);
     static const char *GC_QUEUE_ROOT_NAME = XSTR(jl_gc_queue_root);
     static const char *GC_ALLOC_NAME = XSTR(jl_gc_alloc);
-    
+
     using jl_intrinsics::addGCAllocAttributes;
 
     const WellKnownFunctionDescription GCBigAlloc(
