@@ -444,7 +444,7 @@ function readuntil_string(s::IOStream, delim::UInt8, keep::Bool)
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 1, !keep)
 end
 readuntil(s::IOStream, delim::AbstractChar; keep::Bool=false) =
-    delim ≤ '\x7f' ? readuntil_string(s, delim, keep) :
+    delim ≤ '\x7f' ? readuntil_string(s, delim % UInt8, keep) :
     String(take!(readuntil(IOBuffer(StringVector(70),write=true), s, delim; keep)))
 
 function readline(s::IOStream; keep::Bool=false)
@@ -454,9 +454,10 @@ end
 function readuntil(out::IOBuffer, s::IOStream, delim::UInt8; keep::Bool=false)
     d = out.data
     ptr = (out.append ? out.size+1 : out.ptr)
+    isempty(d) && resize!(d, min(70, out.maxsize))
     len = length(d)
     while true
-        GC.@preserve data @_lock_ios s n=
+        GC.@preserve d @_lock_ios s n=
             Int(ccall(:jl_readuntil_buf, Csize_t, (Ptr{Cvoid}, UInt8, Ptr{UInt8}, Csize_t),
                 s.ios, delim, pointer(d, ptr), (len - ptr + 1) % Csize_t))
         iszero(n) && break
@@ -466,7 +467,7 @@ function readuntil(out::IOBuffer, s::IOStream, delim::UInt8; keep::Bool=false)
             break;
         end
         (eof(s) || len == out.maxsize) && break
-        len = min(2len + 128, out.maxsize)
+        len = min(2len + 64, out.maxsize)
         resize!(d, len)
     end
     out.size = max(out.size, ptr - 1)

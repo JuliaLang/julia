@@ -523,7 +523,7 @@ julia> readuntil("my_file.txt", '.', keep = true)
 julia> rm("my_file.txt")
 ```
 """
-readuntil(stream::IO, delim; kw...) = take!(readuntil(IOBuffer(), stream, delim; kw...))
+readuntil(stream::IO, delim; kw...) = take!(readuntil(IOBuffer(sizehint=70), stream, delim; kw...))
 readuntil(stream::IO, delim::Union{AbstractChar, AbstractString}; kw...) = String(take!(readuntil(IOBuffer(StringVector(70),write=true), stream, delim; kw...)))
 readuntil(out::IO, filename::AbstractString, delim; kw...) = open(io->readuntil(out, io, delim; kw...), convert(String, filename)::String)
 readuntil(filename::AbstractString, delim; kw...) = open(io->readuntil(io, delim; kw...), convert(String, filename)::String)
@@ -846,17 +846,17 @@ function _readuntil(out, s::IO, delim::T, keep::Bool) where T
     output! = isa(out, IO) ? write : push!
     for c in readeach(s, T)
         if c == delim
-            keep && output(out, c)
+            keep && output!(out, c)
             break
         end
-        output(out, c)
+        output!(out, c)
     end
     return out
 end
 readuntil(s::IO, delim::T; keep::Bool=false) where T =
     _readuntil(Vector{T}(), s, delim, keep)
 readuntil(s::IO, delim::UInt8; keep::Bool=false) =
-    _readuntil(StringVector(0), s, delim, keep)
+    _readuntil(resize!(StringVector(70), 0), s, delim, keep)
 readuntil(out::IO, s::IO, delim::T; keep::Bool=false) where T =
     _readuntil(out, s, delim, keep)
 
@@ -963,7 +963,7 @@ function readuntil(out::IO, io::IO, target::AbstractString; keep::Bool=false)
 end
 
 function readuntil(io::IO, target::AbstractVector{T}; keep::Bool=false) where T
-    out = (T === UInt8 ? StringVector(0) : Vector{T}())
+    out = (T === UInt8 ? resize!(StringVector(70), 0) : Vector{T}())
     readuntil_vector!(io, target, keep, out)
     return out
 end
