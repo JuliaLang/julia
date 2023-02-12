@@ -332,7 +332,7 @@ While the right eigenvectors are normalized, we have `F.vectorsl' * F.vectors = 
 
 The returned error bounds for the eigenvectors are estimating the maximal size of the
 sine of the acute angles between the calculated and true vectors. For details see
-[LAPACK](https://netlib.org/lapack/lug/node91.html), [`sintheta`](@ref).
+[LAPACK](https://netlib.org/lapack/lug/node91.html).
 
 # Examples
 ```jldoctest
