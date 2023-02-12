@@ -4,7 +4,7 @@
 """
     Eigen <: Factorization
 
-Matrix factorization type of the eigenvalue/apply decomposition of a square
+Matrix factorization type of the eigenvalue/spectral decomposition of a square
 matrix `A`. This is the return type of [`eigen`](@ref), the corresponding matrix
 factorization function.
 
@@ -332,7 +332,7 @@ While the right eigenvectors are normalized, we have `F.vectorsl' * F.vectors = 
 
 The returned error bounds for the eigenvectors are estimating the maximal size of the
 sine of the acute angles between the calculated and true vectors. For details see
-[LAPACK](https://netlib.org/lapack/lug/node91.html), [`sineacuteangle`](@ref).
+[LAPACK](https://netlib.org/lapack/lug/node91.html), [`sintheta`](@ref).
 
 # Examples
 ```jldoctest
