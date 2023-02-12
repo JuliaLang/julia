@@ -243,4 +243,188 @@ end
     @test F.vectors ≈ F32.vectors
 end
 
+import LinearAlgebra.sintheta
+
+# return permutation p with b[p] ≈ a
+function matchperm(a, b)
+    n = length(a)
+    p = collect(1:n)
+    for i = 1:n
+        s = abs(a[i] - b[p[i]])
+        k = i
+        for j = i+1:n
+            cij = abs(a[i] - b[p[j]])
+            if cij < s
+                k = j
+                s = cij
+            end
+        end
+        if k != i
+            p[k], p[i] = p[i], p[k]
+        end
+    end
+    p
+end
+function permby!(lead, v, a...)
+    p = matchperm(lead, v)
+    v = v[p]
+    x = getindex.(a, :, Ref(p))
+    v, x...
+end
+
+normcol(vl, vr) = vl ./ dot.(eachcol(vl), eachcol(vr))'
+@testset "left vectors and errors - real $elty" for elty in (Float64, Float32, Float16)
+    A = elty[58 9 2; 186 383 96; -912 -1551 -388]
+    val = elty[1, 2, 50]
+    vec = [1 17 1; -51 -834 -2; 201 3277 5]
+
+    vecl = inv(vec)'
+    vec = elty.(vec)
+    vecl = elty.(vecl)
+    epsi = eps(elty) * 500
+
+    gval, vr, vl, eerrbd, verrbd = eigen(A, scale=true, left=true, eerror=true, verror=true)
+    p = matchperm(val, gval)
+    vl1 = normcol(vl, vr)
+
+    @test norm(vl1' * vr - I) <= norm(vl1) * epsi
+    @test norm(A * vr - vr * Diagonal(gval)) <= norm(A) * epsi
+    @test norm(vl' * A - Diagonal(gval) * vl') <= norm(A) * epsi
+
+    val, vec, vecl = permby!(gval, val, vec, vecl)
+    @test all(abs.(gval - val) .<= eerrbd)
+    @test all(sintheta.(eachcol(vr), eachcol(vec)) .<= verrbd)
+    @test all(sintheta.(eachcol(vl), eachcol(vecl)) .<= verrbd)
+end
+
+@testset "left vectors and errors - complex $elty" for elty in (Float64, Float32, Float16)
+    celty = Complex{elty}
+    D = [1 1 0 0; -1 1 0 0; 0 0 1 0; 0 0 0 2]
+    U = [1 1 0 0; 0 1 1 0; 0 0 1 1; 0 0 0 1]
+    A = elty.(float(U * D / U))
+    val = celty[1 - im, 1 + im, 1, 2]
+    vec = celty[2 2 0 0; 1-im 1+im 1 0; 0 0 1 1; 0 0 0 1]
+    vecl = celty[1+im 1-im 0 0; -2im 2im 0 0; 2im -2im 1 0; -2im 2im -1 1]
+    epsi = eps(elty) * 20
+
+    gval, vr, vl, eerrbd, verrbd = eigen(A, scale=true, left=true, eerror=true, verror=true)
+    vl1 = normcol(vl, vr)
+
+    @test norm(vl1' * vr - I) <= norm(vl1) * epsi
+    @test norm(A * vr - vr * Diagonal(gval)) <= norm(A) * epsi
+    @test norm(vl' * A - Diagonal(gval) * vl') <= norm(A) * epsi
+
+    val, vec, vecl = permby!(gval, val, vec, vecl)
+    @test all(abs.(gval - val) .<= eerrbd * 10)
+    @test all(sintheta.(eachcol(vr), eachcol(vec)) .<= verrbd * 2)
+    @test all(sintheta.(eachcol(vl), eachcol(vecl)) .<= verrbd * 15)
+end
+
+@testset "left vectors and errors - $elty" for elty in (ComplexF64, ComplexF32, ComplexF16)
+    vec = [1+0im  2+0im   3+0im
+         0+1im  2+0im   3+0im
+        -1+0im  2+0im  -3+0im]
+    val = [im, 1, 50]
+    A = elty.(float(vec * Diagonal(val) / vec))
+    vecl = inv(vec)'
+    vec = elty.(vec)
+    vecl = elty.(vecl)
+    epsi = eps(real(elty)) * 5
+
+    gval, vr, vl, eerrbd, verrbd = eigen(A, scale=true, left=true, eerror=true, verror=true)
+    vl1 = normcol(vl, vr)
+
+    @test norm(vl1' * vr - I) <= norm(vl1) * epsi
+    @test norm(A * vr - vr * Diagonal(gval)) <= norm(A) * epsi
+    @test norm(vl' * A - Diagonal(gval) * vl') <= norm(A) * epsi
+
+    val, vec, vecl = permby!(gval, val, vec, vecl)
+    @test all(abs.(gval - val) .<= eerrbd * 10)
+    @test all(sintheta.(eachcol(vr), eachcol(vec)) .<= verrbd * 10)
+    @test all(sintheta.(eachcol(vl), eachcol(vecl)) .<= verrbd * 15)
+end
+
+@testset "generalized left vectors - real $elty" for elty in (Float64, Float32, Float16)
+    A = elty[-132   -88    84    104
+             -158.4 -79.2  76.8  129.6
+              129.6  81.6 -79.2 -100.8
+              160    84   -80   -132]
+    B = elty[-60  -50   40    50
+             -69  -46.4 38    58.2
+              58.8 46  -37.6 -48
+              70   50  -40   -60]
+    val = elty[1, 2, 3, 4]
+    vec = [1 -2 -2 -2; 3 -1 -2 -3; 3 -1 -1 -6; 1 -2 -4 -1]
+
+    vecl = inv(B * vec)'
+    vec = elty.(vec)
+    vecl = elty.(vecl)
+    epsi = eps(elty) * 20
+    normab = hypot(norm(A), norm(B))
+
+    gval, vr, vl = eigen(A, B, left=true)
+    vl1 = normcol(vl, B * vr)
+
+    @test norm(vl1' * B * vr - I) <= norm(B) * epsi
+    @test norm(A * vr - B * vr * Diagonal(gval)) <= normab * epsi
+    @test norm(vl' * A - Diagonal(gval) * vl' * B) <= normab * epsi
+
+    val, vec, vecl = permby!(gval, val, vec, vecl)
+    @test all(abs.(gval - val) .<= epsi * normab)
+    @test all(sintheta.(eachcol(vr), eachcol(vec)) .<= epsi * 100)
+    @test all(sintheta.(eachcol(vl), eachcol(vecl)) .<= epsi * 100)
+end
+
+@testset "generalized left vectors - complex $elty" for elty in (Float64, Float32, Float16)
+    celty = Complex{elty}
+    D = [1 1 0 0; -1 1 0 0; 0 0 1 0; 0 0 0 2]
+    U = [1 1 0 0; 0 1 1 0; 0 0 1 1; 0 0 0 1]
+    A = elty.(float(U * D / U))
+    B = elty.(float(U * Diagonal([1,1,3,3]) / U))
+    val = celty[1/3, 2/3, 1-im, 1+im]
+    vec = celty[0 0 2 2; 1 0 1-im 1+im; 1 1 0 0; 0 1 0 0]
+    vecl = celty[0 0 -1+im -1-im; 0 0 2 2; 1 0 -2 -2; -1 1 2 2]
+
+    epsi = eps(elty) * 20
+    normab = hypot(norm(A), norm(B))
+
+    gval, vr, vl = eigen(A, B, left=true)
+    vl1 = normcol(vl, B * vr)
+
+    @test norm(vl1' * B * vr - I) <= norm(B) * epsi
+    @test norm(A * vr - B * vr * Diagonal(gval)) <= normab * epsi
+    @test norm(vl' * A - Diagonal(gval) * vl' * B) <= normab * epsi
+
+    val, vec, vecl = permby!(gval, val, vec, vecl)
+    @test all(abs.(gval - val) .<= epsi * normab)
+    @test all(sintheta.(eachcol(vr), eachcol(vec)) .<= epsi * 100)
+    @test all(sintheta.(eachcol(vl), eachcol(vecl)) .<= epsi * 100)
+end
+
+@testset "generalized left vectors - $elty" for elty in (ComplexF64, ComplexF32, ComplexF16)
+    D = [1 1 0 0; -1 1 0 0; 0 0 1 0; 0 0 0 2]
+    U = [1 1 0 0; 0 1 1 0; 0 0 1 1; 0 0 0 1]
+    A = elty.(float(U * D / U))
+    B = elty.(float(U * Diagonal([1,1,3,3]) / U))
+    A += B .* im
+    val = elty[1/3, 2/3, 1-im, 1+im] .+ im
+    vec = elty[0 0 2 2; 1 0 1-im 1+im; 1 1 0 0; 0 1 0 0]
+    vecl = elty[0 0 -1+im -1-im; 0 0 2 2; 1 0 -2 -2; -1 1 2 2]
+
+    epsi = eps(real(elty)) * 20
+    normab = hypot(norm(A), norm(B))
+
+    gval, vr, vl = eigen(A, B, left=true)
+    vl1 = normcol(vl, B * vr)
+
+    @test norm(vl1' * B * vr - I) <= norm(B) * epsi
+    @test norm(A * vr - B * vr * Diagonal(gval)) <= normab * epsi
+    @test norm(vl' * A - Diagonal(gval) * vl' * B) <= normab * epsi
+
+    val, vec, vecl = permby!(gval, val, vec, vecl)
+    @test all(abs.(gval - val) .<= epsi * normab)
+    @test all(sintheta.(eachcol(vr), eachcol(vec)) .<= epsi * 100)
+    @test all(sintheta.(eachcol(vl), eachcol(vecl)) .<= epsi * 100)
+end
+
 end # module TestEigen

@@ -4,15 +4,23 @@
 """
     Eigen <: Factorization
 
-Matrix factorization type of the eigenvalue/spectral decomposition of a square
+Matrix factorization type of the eigenvalue/apply decomposition of a square
 matrix `A`. This is the return type of [`eigen`](@ref), the corresponding matrix
 factorization function.
 
 If `F::Eigen` is the factorization object, the eigenvalues can be obtained via
-`F.values` and the eigenvectors as the columns of the matrix `F.vectors`.
+`F.values`, the eigenvectors and left eigenvectors as the columns of the matrices
+`F.vectors` and `F.vectorsl`, and error bounds for eigenvalues and eigenvectors
+`F.eerrbd` and `F.verrbd`.
+
 (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
-Iterating the decomposition produces the components `F.values` and `F.vectors`.
+Iterating the decomposition produces the components `F.values`, `F.vectors`, `F.vectorsl`,
+`F.eerrbd`, `F.verrbd`.
+
+The matrix of left eigenvectors is empty, if not opted in by `eigen( ; left=true)`.
+
+The error bounds are empty, if not opted in by `eigen( ; eerror=true, verror=true)`.
 
 # Examples
 ```jldoctest
@@ -47,28 +55,45 @@ julia> vals == F.values && vecs == F.vectors
 true
 ```
 """
-struct Eigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
+struct Eigen{T,V,S<:AbstractMatrix,U<:AbstractVector,R<:AbstractVector} <: Factorization{T}
     values::U
     vectors::S
-    Eigen{T,V,S,U}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V,S,U} =
-        new(values, vectors)
+    vectorsl::S
+    eerrbd::R
+    verrbd::R
+    Eigen{T,V,S,U,R}(values::U, vectors::S, vectorsl::S,
+                     eerrbd::R, verrbd::R,
+                    ) where {T,V,S<:AbstractMatrix{T},U<:AbstractVector{V},R} =
+        new(values, vectors, vectorsl, eerrbd, verrbd)
 end
-Eigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V} =
-    Eigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
+
+function Eigen(values::U,
+               vectors::S,
+               vectorsl::S=vectors,
+               eerrbd::R=emptyvec(T),
+               verrbd::R=emptyvec(T),
+              ) where {T,V,R,S<:AbstractMatrix{T},U<:AbstractVector{V}}
+
+    Eigen{T,V,S,U,R}(values, vectors, vectorsl, eerrbd, verrbd)
+end
 
 # Generalized eigenvalue problem.
 """
     GeneralizedEigen <: Factorization
 
-Matrix factorization type of the generalized eigenvalue/spectral decomposition of
+Matrix factorization type of the generalized eigenvalue/apply decomposition of
 `A` and `B`. This is the return type of [`eigen`](@ref), the corresponding
 matrix factorization function, when called with two matrix arguments.
 
 If `F::GeneralizedEigen` is the factorization object, the eigenvalues can be obtained via
-`F.values` and the eigenvectors as the columns of the matrix `F.vectors`.
+`F.values`, the eigenvectors and left eigenvectors as the columns of the matrices
+`F.vectors` or `F.vectorsl`.
+
 (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
-Iterating the decomposition produces the components `F.values` and `F.vectors`.
+Iterating the decomposition produces the components `F.values`, `F.vectors`, `F.vectorsl`.
+
+The matrix of left eigenvectors is empty, if not opted in by `eigen( ; left=true)`.
 
 # Examples
 ```jldoctest
@@ -112,15 +137,28 @@ true
 struct GeneralizedEigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
     values::U
     vectors::S
-    GeneralizedEigen{T,V,S,U}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V,S,U} =
-        new(values, vectors)
+    vectorsl::S
+    GeneralizedEigen{T,V,S,U}(values::U, vectors::S, vectorsl::S,
+                             ) where {T,V,S<:AbstractMatrix{T},U<:AbstractVector{V}} =
+        new(values, vectors, vectorsl)
 end
-GeneralizedEigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V} =
-    GeneralizedEigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
+function GeneralizedEigen(values::U,
+                          vectors::S,
+                          vectorsl::S=vectors,
+                          eerrbd=nothing,
+                          verrbd=nothing,
+                         ) where {T,V,S<:AbstractMatrix{T},U<:AbstractVector{V}}
+
+    GeneralizedEigen{T,V,S,U}(values, vectors, vectorsl)
+end
 
 # iteration for destructuring into components
 Base.iterate(S::Union{Eigen,GeneralizedEigen}) = (S.values, Val(:vectors))
-Base.iterate(S::Union{Eigen,GeneralizedEigen}, ::Val{:vectors}) = (S.vectors, Val(:done))
+Base.iterate(S::Union{Eigen,GeneralizedEigen}, ::Val{:vectors}) = (S.vectors, Val(:vectorsl))
+Base.iterate(S::Eigen, ::Val{:vectorsl}) = (S.vectorsl, Val(:eerrbd))
+Base.iterate(S::GeneralizedEigen, ::Val{:vectorsl}) = (S.vectorsl, Val(:done))
+Base.iterate(S::Union{Eigen,GeneralizedEigen}, ::Val{:eerrbd}) = (S.eerrbd, Val(:verrbd))
+Base.iterate(S::Union{Eigen,GeneralizedEigen}, ::Val{:verrbd}) = (S.verrbd, Val(:done))
 Base.iterate(S::Union{Eigen,GeneralizedEigen}, ::Val{:done}) = nothing
 
 isposdef(A::Union{Eigen,GeneralizedEigen}) = isreal(A.values) && all(x -> x > 0, A.values)
@@ -128,30 +166,96 @@ isposdef(A::Union{Eigen,GeneralizedEigen}) = isreal(A.values) && all(x -> x > 0,
 # pick a canonical ordering to avoid returning eigenvalues in "random" order
 # as is the LAPACK default (for complex λ — LAPACK sorts by λ for the Hermitian/Symmetric case)
 eigsortby(λ::Real) = λ
-eigsortby(λ::Complex) = (real(λ),imag(λ))
-function sorteig!(λ::AbstractVector, X::AbstractMatrix, sortby::Union{Function,Nothing}=eigsortby)
+eigsortby(λ::Complex) = (real(λ), imag(λ))
+
+# old API for symmetric cases
+function sorteig!(λ::AbstractVector,
+                  X::AbstractMatrix,
+                  sortby::Union{Function,Nothing}=eigsortby,
+                 )
+    sorteig!(sortby, λ, X, X)
+end
+
+# new API with sorting function as first argument
+function sorteig!(sortby::Union{Function,Nothing}, λ::AbstractVector)
+    sortby === nothing ? λ : sort!(λ, by=sortby)
+end
+function sorteig!(sortby::Union{Function,Nothing},
+                  λ::AbstractVector, X::AbstractMatrix, Y::AbstractMatrix,
+                 )
+    z = emptyvec(typeof(λ))
+    sorteig!(sortby, λ, X, Y, z, z)
+end
+function sorteig!(sortby::Union{Function,Nothing},
+                λ::AbstractVector, X::AbstractMatrix, Y::AbstractMatrix,
+                eerrbd::AbstractVector, verrbd::AbstractVector)
+
     if sortby !== nothing && !issorted(λ, by=sortby)
         p = sortperm(λ; alg=QuickSort, by=sortby)
         permute!(λ, p)
-        Base.permutecols!!(X, p)
+        !isempty(eerrbd) && permute!(eerrbd, p)
+        !isempty(verrbd) && permute!(verrbd, p)
+        !isempty(X) && Base.permutecols!!(X, copy(p))
+        !isempty(Y) && X !== Y && Base.permutecols!!(Y, p)
     end
-    return λ, X
+    return λ, X, Y, eerrbd, verrbd
 end
-sorteig!(λ::AbstractVector, sortby::Union{Function,Nothing}=eigsortby) = sortby === nothing ? λ : sort!(λ, by=sortby)
 
 """
-    eigen!(A; permute, scale, sortby)
+    eigen!(A; permute, scale, sortby, left, eerror, verror)
     eigen!(A, B; sortby)
 
 Same as [`eigen`](@ref), but saves space by overwriting the input `A` (and
 `B`), instead of creating a copy.
 """
-function eigen!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where T<:BlasReal
+function eigen!(A::StridedMatrix{T};
+                permute::Bool=true,
+                scale::Bool=true,
+                sortby::Union{Function,Nothing}=eigsortby,
+                left::Bool=false,
+                eerror::Bool=false,
+                verror::Bool=false,
+               ) where T <: Union{BlasReal,BlasComplex}
+
+    right = true
     n = size(A, 2)
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
-    issymmetric(A) && return eigen!(Symmetric(A), sortby=sortby)
-    A, WR, WI, VL, VR, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)
-    iszero(WI) && return Eigen(sorteig!(WR, VR, sortby)...)
+    if T <: Real
+        issymmetric(A) && return eigen!(Symmetric(A); sortby)
+        rx = 3
+    else
+        ishermitian(A) && return eigen!(Hermitian(A); sortby)
+        rx = 2
+    end
+
+    balance, jobvl, jobvr, sense = mapopts(permute, scale, left, true, eerror, verror)
+    res = LAPACK.geevx!(balance, jobvl, jobvr, sense, A)
+
+    A, WR, = res
+    WI = rx == 3 ? res[rx] : zeros(eltype(WR), 0)
+    VL, VR, _, _, scale, abnrm, rconde, rcondv = Iterators.drop(res, rx)
+
+    !eerror && (rconde = emptyvec(T))
+    !verror && (rcondv = emptyvec(T))
+    !left && (VL = similar(A, 0, 0))
+    !right && (VR = similar(A, 0, 0))
+
+    if T <: Complex || iszero(WI)
+        evecr = VR
+        evecl = VL
+        evals = WR
+    else
+        evecr = complexeig(WI, VR)
+        evecl = complexeig(WI, VL)
+        evals = complex.(WR, WI)
+    end
+    fn = epsmch(abnrm)
+    Eigen(sorteig!(sortby, evals, evecr, evecl, fn ./ rconde, fn ./ rcondv)...)
+end
+
+# construct complex eigenvectors from output of geevx
+function complexeig(WI::Vector{T}, VR::Matrix{T}) where T
+    n = min(size(VR)...)
     evec = zeros(Complex{T}, n, n)
     j = 1
     while j <= n
@@ -166,25 +270,47 @@ function eigen!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true, sortb
         end
         j += 1
     end
-    return Eigen(sorteig!(complex.(WR, WI), evec, sortby)...)
-end
-
-function eigen!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where T<:BlasComplex
-    n = size(A, 2)
-    n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
-    ishermitian(A) && return eigen!(Hermitian(A), sortby=sortby)
-    eval, evec = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)[[2,4]]
-    return Eigen(sorteig!(eval, evec, sortby)...)
+    return evec
 end
 
 """
-    eigen(A; permute::Bool=true, scale::Bool=true, sortby) -> Eigen
+    epsmch(abnorm) = xLAMCH('E') * abnrm in LAPACK
+"""
+epsmch(abnrm) = eps(one(abnrm)) / 2 * abnrm
+
+# transform input options of eigen to those of geevx
+function mapopts(permute, scale, left, right, eerror, verror)
+    balance = permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N')
+    jobvl = left || eerror ? 'V' : 'N'
+    jobvr = right || eerror ? 'V' : 'N'
+    sense = eerror && verror ? 'B' : eerror ? 'E' : verror ? 'V' : 'N'
+    balance, jobvl, jobvr, sense
+end
+
+"""
+    sintheta(a::Vector, b::Vector)
+
+Calculate the sine of the acute angle between numeric vectors `a` and `b`.
+
+The calculation is precise for tiny results. If an argument is zero, `0` is returned.
+"""
+function sintheta(a::S, b::T) where {S<:AbstractVector,T<:AbstractVector}
+    a = normalize(a)
+    b = normalize(b)
+    norm(b - a * dot(a, b))
+end
+
+"""
+    eigen(A; permute=true, scale=true, sortby, left=false, eerror=false, verror=false) -> Eigen
 
 Compute the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
 which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
-matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
+matrix `F.vectors`, the optional left eigenvectors in `F.vectorsl`, and optional error bounds
+`F.eerrbd` for the eigenvalues, `F.verrbd` for the eigenvectors.
+(The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
-Iterating the decomposition produces the components `F.values` and `F.vectors`.
+Iterating the decomposition produces the components `F.values, F.vectors, F.vectorsl, F.eerrbd, F.verrbd`.
+The optional outputs default to empty arrays of the appropriate types.
 
 The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`](@ref), and [`isposdef`](@ref).
 
@@ -195,9 +321,18 @@ make rows and columns more equal in norm. The default is `true` for both options
 
 By default, the eigenvalues and vectors are sorted lexicographically by `(real(λ),imag(λ))`.
 A different comparison function `by(λ)` can be passed to `sortby`, or you can pass
-`sortby=nothing` to leave the eigenvalues in an arbitrary order.   Some special matrix types
+`sortby=nothing` to leave the eigenvalues in an arbitrary order. Some special matrix types
 (e.g. [`Diagonal`](@ref) or [`SymTridiagonal`](@ref)) may implement their own sorting convention and not
 accept a `sortby` keyword.
+
+The defining formula are `A * F.vectors == F.vecors * Diagonal(F.values)` and
+`F.vectorsl' * A == F.vectorsl' * Diagonal(F.values)`.
+
+While the right eigenvectors are normalized, we have `F.vectorsl' * F.vectors = I`.
+
+The returned error bounds for the eigenvectors are estimating the maximal size of the
+sine of the acute angles between the calculated and true vectors. For details see
+[LAPACK](https://netlib.org/lapack/lug/node91.html), [`sineacuteangle`](@ref).
 
 # Examples
 ```jldoctest
@@ -232,24 +367,33 @@ julia> vals == F.values && vecs == F.vectors
 true
 ```
 """
-function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where T
+function eigen(A::AbstractMatrix{T}; sortby::Union{Function,Nothing}=eigsortby, kws...) where T
     isdiag(A) && return eigen(Diagonal{eigtype(T)}(diag(A)); sortby)
-    ishermitian(A) && return eigen!(eigencopy_oftype(Hermitian(A), eigtype(T)); sortby)
-    AA = eigencopy_oftype(A, eigtype(T))
-    return eigen!(AA; permute, scale, sortby)
-end
-function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where {T <: Union{Float16,Complex{Float16}}}
-    isdiag(A) && return eigen(Diagonal{eigtype(T)}(diag(A)); sortby)
-    E = if ishermitian(A)
+    E = if T <: Complex && ishermitian(A)
         eigen!(eigencopy_oftype(Hermitian(A), eigtype(T)); sortby)
+    elseif T <: Real && issymmetric(A)
+        eigen!(eigencopy_oftype(Symmetric(A), eigtype(T)); sortby)
     else
-        eigen!(eigencopy_oftype(A, eigtype(T)); permute, scale, sortby)
+        eigen!(eigencopy_oftype(A, eigtype(T)); sortby, kws...)
     end
-    values = convert(AbstractVector{isreal(E.values) ? Float16 : Complex{Float16}}, E.values)
-    vectors = convert(AbstractMatrix{isreal(E.vectors) ? Float16 : Complex{Float16}}, E.vectors)
-    return Eigen(values, vectors)
+    return T <: Union{Float16,Complex{Float16}} ? Eigen_16(E) : E
 end
-eigen(x::Number) = Eigen([x], fill(one(x), 1, 1))
+eigen(x::Number; kws...) = Eigen([x], fill(one(x), 1, 1))
+
+function Eigen_16(E::Eigen)
+    (;values, vectors, vectorsl, eerrbd, verrbd) = E
+    overest = eps(Float16) / eps(eltype(eerrbd))
+    isempty(verrbd) || (verrbd .*= overest)
+    isempty(eerrbd) || (eerrbd .*= overest)
+    Eigen(copy_16.((values, vectors, vectorsl, eerrbd, verrbd))...)
+end
+function Eigen_16(E::GeneralizedEigen)
+    (;values, vectors, vectorsl) = E
+    GeneralizedEigen(copy_16.((values, vectors, vectorsl))...)
+end
+
+copy_16(a::AbstractArray{<:Real}) = copy_similar(a, Float16)
+copy_16(a::AbstractArray{<:Complex}) = copy_similar(a, Complex{Float16})
 
 """
     eigvecs(A; permute::Bool=true, scale::Bool=true, `sortby`) -> Matrix
@@ -302,17 +446,18 @@ julia> A
 ```
 """
 function eigvals!(A::StridedMatrix{<:BlasReal}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby)
-    issymmetric(A) && return sorteig!(eigvals!(Symmetric(A)), sortby)
+    issymmetric(A) && return sorteig!(sortby, eigvals!(Symmetric(A)))
     _, valsre, valsim, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)
-    return sorteig!(iszero(valsim) ? valsre : complex.(valsre, valsim), sortby)
+    return sorteig!(sortby, iszero(valsim) ? valsre : complex.(valsre, valsim))
 end
 function eigvals!(A::StridedMatrix{<:BlasComplex}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby)
-    ishermitian(A) && return sorteig!(eigvals(Hermitian(A)), sortby)
-    return sorteig!(LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)[2], sortby)
+    ishermitian(A) && return sorteig!(sortby, eigvals(Hermitian(A)))
+    return sorteig!(sortby, LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)[2])
 end
 
 # promotion type to use for eigenvalues of a Matrix{T}
 eigtype(T) = promote_type(Float32, typeof(zero(T)/sqrt(abs2(one(T)))))
+emptyvec(T::Type) = zeros(real(eigtype(eltype(T))), 0)
 
 """
     eigvals(A; permute::Bool=true, scale::Bool=true, sortby) -> values
@@ -433,45 +578,71 @@ function eigmin(A::Union{Number, AbstractMatrix};
     minimum(v)
 end
 
-inv(A::Eigen) = A.vectors * inv(Diagonal(A.values)) / A.vectors
+"""
+    apply(f, F::Eigen)
+Construct a matrix from an eigen-decomposition `F` by applying the function to
+the spectrum (diagonal) of `F`.
+"""
+function apply(f, E::Eigen)
+    d = Diagonal(f.(E.values))
+    vr = E.vectors
+    vl = E.vectorsl
+    isempty(vr) && throw(ArgumentError("missing eigenvectors"))
+    vd = vr * d
+    if isempty(vl)
+        vd / vr
+    else
+        D = inv.(dot.(eachcol(vr), eachcol(vl)))
+        vd * (vl ./ D)'
+    end
+end
+Base.inv(A::Eigen) = apply(inv, A)
 det(A::Eigen) = prod(A.values)
 
 # Generalized eigenproblem
-function eigen!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function,Nothing}=eigsortby) where T<:BlasReal
-    issymmetric(A) && isposdef(B) && return eigen!(Symmetric(A), Symmetric(B), sortby=sortby)
-    n = size(A, 1)
-    alphar, alphai, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
-    iszero(alphai) && return GeneralizedEigen(sorteig!(alphar ./ beta, vr, sortby)...)
+function eigen!(A::StridedMatrix{T}, B::StridedMatrix{T};
+                sortby::Union{Function,Nothing}=eigsortby,
+                left::Bool=false,
+               ) where T<:BlasReal
 
-    vecs = zeros(Complex{T}, n, n)
-    j = 1
-    while j <= n
-        if alphai[j] == 0
-            vecs[:,j] = view(vr, :, j)
-        else
-            for i = 1:n
-                vecs[i,j  ] = vr[i,j] + im*vr[i,j+1]
-                vecs[i,j+1] = vr[i,j] - im*vr[i,j+1]
-            end
-            j += 1
+    issymmetric(A) && isposdef(B) && return eigen!(Symmetric(A), Symmetric(B); sortby)
+    n = size(A, 1)
+
+    alphar, alphai, beta, vl, vr = LAPACK.ggev!(left ? 'V' : 'N', 'V', A, B)
+    if iszero(alphai)
+        if !left
+            vl = similar(vr, 0, 0)
         end
-        j += 1
+        GeneralizedEigen(sorteig!(sortby, alphar ./ beta, vr, vl)...)
+    else
+        vecs = complexeig(alphai, vr)
+        if left
+            vl = vr !== vl ? complexeig(alphai, vl) : vecs
+        else
+            vl = similar(vecs, 0, 0)
+        end
+        GeneralizedEigen(sorteig!(sortby, complex.(alphar, alphai)./beta, vecs, vl)...)
     end
-    return GeneralizedEigen(sorteig!(complex.(alphar, alphai)./beta, vecs, sortby)...)
 end
 
-function eigen!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function,Nothing}=eigsortby) where T<:BlasComplex
-    ishermitian(A) && isposdef(B) && return eigen!(Hermitian(A), Hermitian(B), sortby=sortby)
-    alpha, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
-    return GeneralizedEigen(sorteig!(alpha./beta, vr, sortby)...)
+function eigen!(A::StridedMatrix{T}, B::StridedMatrix{T};
+                sortby::Union{Function,Nothing}=eigsortby,
+                left::Bool=false,
+               ) where T<:BlasComplex
+
+    ishermitian(A) && isposdef(B) && return eigen!(Hermitian(A), Hermitian(B); sortby)
+    alpha, beta, vl, vr = LAPACK.ggev!(left ? 'V' : 'N', 'V', A, B)
+    !left && (vl = similar(vr, 0, 0))
+    return GeneralizedEigen(sorteig!(sortby, alpha./beta, vr, vl)...)
 end
 
 """
-    eigen(A, B; sortby) -> GeneralizedEigen
+    eigen(A, B; sortby, left) -> GeneralizedEigen
 
 Compute the generalized eigenvalue decomposition of `A` and `B`, returning a
 [`GeneralizedEigen`](@ref) factorization object `F` which contains the generalized eigenvalues in
 `F.values` and the generalized eigenvectors in the columns of the matrix `F.vectors`.
+If `left == true`, the optional left eigenvectors are stored in `F.vectorsl`.
 (The `k`th generalized eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
 Iterating the decomposition produces the components `F.values` and `F.vectors`.
@@ -479,6 +650,11 @@ Iterating the decomposition produces the components `F.values` and `F.vectors`.
 By default, the eigenvalues and vectors are sorted lexicographically by `(real(λ),imag(λ))`.
 A different comparison function `by(λ)` can be passed to `sortby`, or you can pass
 `sortby=nothing` to leave the eigenvalues in an arbitrary order.
+
+The defining formula are `A * F.vectors == B * F.vecors * Diagonal(F.values)` and
+`F.vectorsl' * A == F.vectorsl' * B * Diagonal(F.values)`.
+
+While the right eigenvectors are normalized, we have `F.vectorsl' * F.vectors = I`.
 
 # Examples
 ```jldoctest
@@ -511,8 +687,10 @@ true
 ```
 """
 function eigen(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}; kws...) where {TA,TB}
+    T = promote_type(TA, TB)
     S = promote_type(eigtype(TA), TB)
-    eigen!(eigencopy_oftype(A, S), eigencopy_oftype(B, S); kws...)
+    E = eigen!(eigencopy_oftype(A, S), eigencopy_oftype(B, S); kws...)
+    return T <: Union{Float16,Complex{Float16}} ? Eigen_16(E) : E
 end
 eigen(A::Number, B::Number) = eigen(fill(A,1,1), fill(B,1,1))
 
@@ -564,14 +742,14 @@ julia> B
 ```
 """
 function eigvals!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function,Nothing}=eigsortby) where T<:BlasReal
-    issymmetric(A) && isposdef(B) && return sorteig!(eigvals!(Symmetric(A), Symmetric(B)), sortby)
-    alphar, alphai, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
-    return sorteig!((iszero(alphai) ? alphar : complex.(alphar, alphai))./beta, sortby)
+    issymmetric(A) && isposdef(B) && return sorteig!(sortby, eigvals!(Symmetric(A), Symmetric(B)))
+    alphar, alphai, beta = LAPACK.ggev!('N', 'N', A, B)
+    return sorteig!(sortby, (iszero(alphai) ? alphar : complex.(alphar, alphai))./beta)
 end
 function eigvals!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function,Nothing}=eigsortby) where T<:BlasComplex
-    ishermitian(A) && isposdef(B) && return sorteig!(eigvals!(Hermitian(A), Hermitian(B)), sortby)
-    alpha, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
-    return sorteig!(alpha./beta, sortby)
+    ishermitian(A) && isposdef(B) && return sorteig!(sortby, eigvals!(Hermitian(A), Hermitian(B)))
+    alpha, beta = LAPACK.ggev!('N', 'N', A, B)
+    return sorteig!(sortby, alpha./beta)
 end
 
 """
@@ -628,28 +806,50 @@ julia> eigvecs(A, B)
 """
 eigvecs(A::AbstractMatrix, B::AbstractMatrix; kws...) = eigvecs(eigen(A, B; kws...))
 
-function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{Eigen,GeneralizedEigen})
+function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{Eigen,GeneralizedEigen})
     summary(io, F); println(io)
     println(io, "values:")
     show(io, mime, F.values)
-    println(io, "\nvectors:")
-    show(io, mime, F.vectors)
+    if !isdefined(F, :vectorsl) || (!isempty(F.vectors) && (F.vectors === F.vectorsl || isempty(F.vectorsl)))
+        println(io, "\nvectors:")
+        show(io, mime, F.vectors)
+    else
+        if !isempty(F.vectors)
+            println(io, "\nright vectors:")
+            show(io, mime, F.vectors)
+        end
+        if !isempty(F.vectorsl)
+            println(io, "\nleft vectors:")
+            show(io, mime, F.vectorsl)
+        end
+    end
+    if isdefined(F, :eerrbd) && !isempty(F.eerrbd)
+        println(io, "\nvalue error bounds:")
+        show(io, mime, F.eerrbd)
+    end
+    if isdefined(F, :verrbd) && !isempty(F.verrbd)
+        println(io, "\nvector error bounds:")
+        show(io, mime, F.verrbd)
+    end
+nothing
 end
 
 function Base.hash(F::Eigen, h::UInt)
-    return hash(F.values, hash(F.vectors, hash(Eigen, h)))
+    return hash(F.values, hash(F.vectors, hash(F.vectorsl, hash(Eigen, h))))
 end
 function Base.:(==)(A::Eigen, B::Eigen)
-    return A.values == B.values && A.vectors == B.vectors
+    return A.values == B.values && A.vectors == B.vectors && A.vectorsl == B.vectorsl
 end
 function Base.isequal(A::Eigen, B::Eigen)
-    return isequal(A.values, B.values) && isequal(A.vectors, B.vectors)
+    return isequal(A.values, B.values) &&
+           isequal(A.vectors, B.vectors) &&
+           isequal(A.vectorsl, B.vectorsl)
 end
 
 # Conversion methods
 
 ## Can we determine the source/result is Real?  This is not stored in the type Eigen
-AbstractMatrix(F::Eigen) = F.vectors * Diagonal(F.values) / F.vectors
+AbstractMatrix(F::Eigen) = apply(identity, F)
 AbstractArray(F::Eigen) = AbstractMatrix(F)
 Matrix(F::Eigen) = Array(AbstractArray(F))
 Array(F::Eigen) = Matrix(F)
