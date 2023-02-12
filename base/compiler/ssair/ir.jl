@@ -334,13 +334,13 @@ end
 struct IRCode
     stmts::InstructionStream
     argtypes::Vector{Any}
-    sptypes::Vector{Any}
+    sptypes::Vector{VarState}
     linetable::Vector{LineInfoNode}
     cfg::CFG
     new_nodes::NewNodeStream
     meta::Vector{Expr}
 
-    function IRCode(stmts::InstructionStream, cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Expr}, sptypes::Vector{Any})
+    function IRCode(stmts::InstructionStream, cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Expr}, sptypes::Vector{VarState})
         return new(stmts, argtypes, sptypes, linetable, cfg, NewNodeStream(), meta)
     end
     function IRCode(ir::IRCode, stmts::InstructionStream, cfg::CFG, new_nodes::NewNodeStream)
@@ -358,7 +358,7 @@ for debugging and unit testing of IRCode APIs. The compiler itself should genera
 from the frontend or one of the caches.
 """
 function IRCode()
-    ir = IRCode(InstructionStream(1), CFG([BasicBlock(1:1, Int[], Int[])], Int[1]), LineInfoNode[], Any[], Expr[], Any[])
+    ir = IRCode(InstructionStream(1), CFG([BasicBlock(1:1, Int[], Int[])], Int[1]), LineInfoNode[], Any[], Expr[], VarState[])
     ir[SSAValue(1)][:inst] = ReturnNode(nothing)
     ir[SSAValue(1)][:type] = Nothing
     ir[SSAValue(1)][:flag] = 0x00

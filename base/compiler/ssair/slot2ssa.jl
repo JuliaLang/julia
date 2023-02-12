@@ -213,10 +213,10 @@ struct DelayedTyp
 end
 
 # maybe use expr_type?
-function typ_for_val(@nospecialize(x), ci::CodeInfo, sptypes::Vector{Any}, idx::Int, slottypes::Vector{Any})
+function typ_for_val(@nospecialize(x), ci::CodeInfo, sptypes::Vector{VarState}, idx::Int, slottypes::Vector{Any})
     if isa(x, Expr)
         if x.head === :static_parameter
-            return sptypes[x.args[1]::Int]
+            return sptypes[x.args[1]::Int].typ
         elseif x.head === :boundscheck
             return Bool
         elseif x.head === :copyast
@@ -567,7 +567,7 @@ function compute_live_ins(cfg::CFG, defs::Vector{Int}, uses::Vector{Int})
 end
 
 function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode,
-    sptypes::Vector{Any}, slottypes::Vector{Any}, nstmts::Int, 𝕃ₒ::AbstractLattice)
+    sptypes::Vector{VarState}, slottypes::Vector{Any}, nstmts::Int, 𝕃ₒ::AbstractLattice)
     new_typ = Union{}
     for i = 1:length(node.values)
         if isa(node, PhiNode) && !isassigned(node.values, i)

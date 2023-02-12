@@ -1637,6 +1637,8 @@ end
 
 require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
 
+const REPL_PKGID = PkgId(UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL")
+
 function _require_prelocked(uuidkey::PkgId, env=nothing)
     assert_havelock(require_lock)
     if !root_module_exists(uuidkey)
@@ -1648,6 +1650,9 @@ function _require_prelocked(uuidkey::PkgId, env=nothing)
         insert_extension_triggers(uuidkey)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
+        if uuidkey == REPL_PKGID
+            REPL_MODULE_REF[] = newm
+        end
     else
         newm = root_module(uuidkey)
     end
@@ -2070,7 +2075,8 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
                               --color=$(have_color === nothing ? "auto" : have_color ? "yes" : "no")
                               $trace
                               -`,
-                              "OPENBLAS_NUM_THREADS" => 1),
+                              "OPENBLAS_NUM_THREADS" => 1,
+                              "JULIA_NUM_THREADS" => 1),
                        stderr = internal_stderr, stdout = internal_stdout),
               "w", stdout)
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
@@ -2219,6 +2225,9 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                     rm(evicted_cachefile; force=true)
                     try
                         rm(ocachefile_from_cachefile(evicted_cachefile); force=true)
+                        @static if Sys.isapple()
+                            rm(ocachefile_from_cachefile(evicted_cachefile) * ".dSYM"; force=true, recursive=true)
+                        end
                     catch
                     end
                 end
@@ -2245,6 +2254,9 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                     # TODO: Risk for a race here if some other process grabs this name before us
                     cachefile = cachefile_from_ocachefile(ocachefile)
                     rename(tmppath_so, ocachefile::String; force=true)
+                end
+                @static if Sys.isapple()
+                    run(`$(Linking.dsymutil()) $ocachefile`, Base.DevNull(), Base.DevNull(), Base.DevNull())
                 end
             end
             # this is atomic according to POSIX (not Win32):

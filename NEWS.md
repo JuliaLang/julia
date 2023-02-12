@@ -26,7 +26,7 @@ Build system changes
 
 New library functions
 ---------------------
-
+* `tanpi` is now defined. It computes tan(πx) more accurately than `tan(pi*x)` ([#48575]).
 
 New library features
 --------------------

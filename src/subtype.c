@@ -968,17 +968,6 @@ static int check_vararg_length(jl_value_t *v, ssize_t n, jl_stenv_t *e)
 
 static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e);
 
-struct subtype_tuple_env {
-    jl_datatype_t *xd, *yd;
-    jl_value_t *lastx, *lasty;
-    size_t lx, ly;
-    size_t i, j;
-    int vx, vy;
-    jl_value_t *vtx;
-    jl_value_t *vty;
-    jl_vararg_kind_t vvx, vvy;
-} JL_ROOTED_VALUE_COLLECTION;
-
 static int subtype_tuple_varargs(
     jl_vararg_t *vtx, jl_vararg_t *vty,
     size_t vx, size_t vy,
@@ -1092,7 +1081,7 @@ static int subtype_tuple_tail(jl_datatype_t *xd, jl_datatype_t *yd, int8_t R, jl
 {
     size_t lx = jl_nparams(xd);
     size_t ly = jl_nparams(yd);
-    size_t i = 0, j = 0, vx = 0, vy = 0, x_reps = 0;
+    size_t i = 0, j = 0, vx = 0, vy = 0, x_reps = 1;
     jl_value_t *lastx = NULL, *lasty = NULL;
     jl_value_t *xi = NULL, *yi = NULL;
 
@@ -1142,25 +1131,21 @@ static int subtype_tuple_tail(jl_datatype_t *xd, jl_datatype_t *yd, int8_t R, jl
             return !!vx;
 
         xi = vx ? jl_unwrap_vararg(xi) : xi;
-        int x_same = lastx && jl_egal(xi, lastx);
-        if (vy) {
-            yi = jl_unwrap_vararg(yi);
-            // keep track of number of consecutive identical types compared to Vararg
-            if (x_same)
-                x_reps++;
-            else
-                x_reps = 1;
-        }
+        yi = vy ? jl_unwrap_vararg(yi) : yi;
+        int x_same = vx > 1 || (lastx && obviously_egal(xi, lastx));
+        int y_same = vy > 1 || (lasty && obviously_egal(yi, lasty));
+        // keep track of number of consecutive identical subtyping
+        x_reps = y_same && x_same ? x_reps + 1 : 1;
         if (x_reps > 2) {
-            // an identical type on the left doesn't need to be compared to a Vararg
+            // an identical type on the left doesn't need to be compared to the same
             // element type on the right more than twice.
         }
         else if (x_same && e->Runions.depth == 0 &&
-            ((yi == lasty && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) ||
+            ((y_same && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) ||
              (yi == lastx && !vx && vy && jl_is_concrete_type(xi)))) {
             // fast path for repeated elements
         }
-        else if (e->Runions.depth == 0 && e->Lunions.depth == 0 && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) {
+        else if (e->Runions.depth == 0 && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) {
             // fast path for separable sub-formulas
             if (!jl_subtype(xi, yi))
                 return 0;
@@ -1269,7 +1254,9 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
             // of unions and vars: if matching `typevar <: union`, first try to match the whole
             // union against the variable before trying to take it apart to see if there are any
             // variables lurking inside.
-            ui = pick_union_decision(e, 1);
+            // note: for forall var, there's no need to split y if it has no free typevars.
+            jl_varbinding_t *xx = lookup(e, (jl_tvar_t *)x);
+            ui = ((xx && xx->right) || jl_has_free_typevars(y)) && pick_union_decision(e, 1);
         }
         if (ui == 1)
             y = pick_union_element(y, e, 1);
@@ -3071,9 +3058,6 @@ static jl_value_t *intersect_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_sten
                 int len = i > j ? i : j;
                 if ((xb && jl_is_long(xb->lb) && lx-1+jl_unbox_long(xb->lb) != len) ||
                     (yb && jl_is_long(yb->lb) && ly-1+jl_unbox_long(yb->lb) != len)) {
-                    res = jl_bottom_type;
-                }
-                else if (param == 2 && jl_is_unionall(xi) != jl_is_unionall(yi)) {
                     res = jl_bottom_type;
                 }
                 else {

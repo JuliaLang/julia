@@ -109,6 +109,21 @@ recur_termination22(x) = x * recur_termination21(x-1)
     recur_termination21(12) + recur_termination22(12)
 end
 
+# anonymous function support for `@assume_effects`
+@test fully_eliminated() do
+    map((2,3,4)) do x
+        # this :terminates_locally allows this anonymous function to be constant-folded
+        Base.@assume_effects :terminates_locally
+        res = 1
+        1 < x < 20 || error("bad pow")
+        while x > 1
+            res *= x
+            x -= 1
+        end
+        return res
+    end
+end
+
 # control flow backedge should taint `terminates`
 @test Base.infer_effects((Int,)) do n
     for i = 1:n; end
@@ -708,7 +723,7 @@ end
 # Effects for getfield of type instance
 @test Base.infer_effects(Tuple{Nothing}) do x
     WrapperOneField{typeof(x)}.instance
-end |> Core.Compiler.is_total
+end |> Core.Compiler.is_foldable_nothrow
 @test Base.infer_effects(Tuple{WrapperOneField{Float64}, Symbol}) do w, s
     getfield(w, s)
 end |> Core.Compiler.is_foldable
@@ -720,14 +735,14 @@ end |> Core.Compiler.is_foldable
 # Flow-sensitive consistenct for _typevar
 @test Base.infer_effects() do
     return WrapperOneField == (WrapperOneField{T} where T)
-end |> Core.Compiler.is_total
+end |> Core.Compiler.is_foldable_nothrow
 
 # Test that dead `@inbounds` does not taint consistency
 # https://github.com/JuliaLang/julia/issues/48243
 @test Base.infer_effects() do
     false && @inbounds (1,2,3)[1]
     return 1
-end |> Core.Compiler.is_total
+end |> Core.Compiler.is_foldable_nothrow
 
 @test Base.infer_effects(Tuple{Int64}) do i
     @inbounds (1,2,3)[i]
@@ -742,4 +757,31 @@ end
 @test Core.Compiler.is_foldable(Base.infer_effects(ImmutRef, Tuple{Any}))
 
 @test Base.ismutationfree(Type{Union{}})
-@test Core.Compiler.is_total(Base.infer_effects(typejoin, ()))
+@test Core.Compiler.is_foldable_nothrow(Base.infer_effects(typejoin, ()))
+
+# nothrow-ness of subtyping operations
+# https://github.com/JuliaLang/julia/pull/48566
+@test !Core.Compiler.is_nothrow(Base.infer_effects((A,B)->A<:B, (Any,Any)))
+@test !Core.Compiler.is_nothrow(Base.infer_effects((A,B)->A>:B, (Any,Any)))
+
+# GotoIfNot should properly mark itself as throwing when given a non-Bool
+# https://github.com/JuliaLang/julia/pull/48583
+gotoifnot_throw_check_48583(x) = x ? x : 0
+@test !Core.Compiler.is_nothrow(Base.infer_effects(gotoifnot_throw_check_48583, (Missing,)))
+@test !Core.Compiler.is_nothrow(Base.infer_effects(gotoifnot_throw_check_48583, (Any,)))
+@test Core.Compiler.is_nothrow(Base.infer_effects(gotoifnot_throw_check_48583, (Bool,)))
+
+
+# unknown :static_parameter should taint :nothrow
+# https://github.com/JuliaLang/julia/issues/46771
+unknown_sparam_throw(::Union{Nothing, Type{T}}) where T = (T; nothing)
+unknown_sparam_nothrow1(x::Ref{T}) where T = (T; nothing)
+unknown_sparam_nothrow2(x::Ref{Ref{T}}) where T = (T; nothing)
+@test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type{Int},)))
+@test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type{<:Integer},)))
+@test !Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type,)))
+@test !Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Nothing,)))
+@test !Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Union{Type{Int},Nothing},)))
+@test !Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Any,)))
+@test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_nothrow1, (Ref,)))
+@test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_nothrow2, (Ref{Ref{T}} where T,)))

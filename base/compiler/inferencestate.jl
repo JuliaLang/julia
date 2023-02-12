@@ -1,13 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# The type of a variable load is either a value or an UndefVarError
-# (only used in abstractinterpret, doesn't appear in optimize)
-struct VarState
-    typ
-    undef::Bool
-    VarState(@nospecialize(typ), undef::Bool) = new(typ, undef)
-end
-
 """
     const VarTable = Vector{VarState}
 
@@ -91,7 +83,7 @@ mutable struct InferenceState
     linfo::MethodInstance
     world::UInt
     mod::Module
-    sptypes::Vector{Any}
+    sptypes::Vector{VarState}
     slottypes::Vector{Any}
     src::CodeInfo
     cfg::CFG
@@ -129,6 +121,7 @@ mutable struct InferenceState
     # Set by default for toplevel frame.
     restrict_abstract_call_sites::Bool
     cached::Bool # TODO move this to InferenceResult?
+    insert_coverage::Bool
 
     # The interpreter that created this inference state. Not looked at by
     # NativeInterpreter. But other interpreters may use this to detect cycles
@@ -136,7 +129,7 @@ mutable struct InferenceState
 
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState(result::InferenceResult, src::CodeInfo, cache::Symbol,
-        interp::AbstractInterpreter)
+                            interp::AbstractInterpreter)
         linfo = result.linfo
         world = get_world_counter(interp)
         def = linfo.def
@@ -179,6 +172,11 @@ mutable struct InferenceState
         bestguess = Bottom
         ipo_effects = EFFECTS_TOTAL
 
+        insert_coverage = should_insert_coverage(mod, src)
+        if insert_coverage
+            ipo_effects = Effects(ipo_effects; effect_free = ALWAYS_FALSE)
+        end
+
         params = InferenceParams(interp)
         restrict_abstract_call_sites = isa(linfo.def, Module)
         @assert cache === :no || cache === :local || cache === :global
@@ -189,7 +187,7 @@ mutable struct InferenceState
             currbb, currpc, ip, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
             pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent, inferred,
             result, valid_worlds, bestguess, ipo_effects,
-            params, restrict_abstract_call_sites, cached,
+            params, restrict_abstract_call_sites, cached, insert_coverage,
             interp)
 
         # some more setups
@@ -317,6 +315,29 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
     return handler_at
 end
 
+# check if coverage mode is enabled
+function should_insert_coverage(mod::Module, src::CodeInfo)
+    coverage_enabled(mod) && return true
+    JLOptions().code_coverage == 3 || return false
+    # path-specific coverage mode: if any line falls in a tracked file enable coverage for all
+    linetable = src.linetable
+    if isa(linetable, Vector{Any})
+        for line in linetable
+            line = line::LineInfoNode
+            if is_file_tracked(line.file)
+                return true
+            end
+        end
+    elseif isa(linetable, Vector{LineInfo})
+        for line in linetable
+            if is_file_tracked(line.file)
+                return true
+            end
+        end
+    end
+    return false
+end
+
 """
     Iterate through all callers of the given InferenceState in the abstract
     interpretation stack (including the given InferenceState itself), vising
@@ -348,31 +369,97 @@ function InferenceState(result::InferenceResult, cache::Symbol, interp::Abstract
     return InferenceState(result, src, cache, interp)
 end
 
+"""
+    constrains_param(var::TypeVar, sig, covariant::Bool, type_constrains::Bool)
+
+Check if `var` will be constrained to have a definite value
+in any concrete leaftype subtype of `sig`.
+
+It is used as a helper to determine whether type intersection is guaranteed to be able to
+find a value for a particular type parameter.
+A necessary condition for type intersection to not assign a parameter is that it only
+appears in a `Union[All]` and during subtyping some other union component (that does not
+constrain the type parameter) is selected.
+
+The `type_constrains` flag determines whether Type{T} is considered to be constraining
+`T`. This is not true in general, because of the existence of types with free type
+parameters, however, some callers would like to ignore this corner case.
+"""
+function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool, type_constrains::Bool=false)
+    typ === var && return true
+    while typ isa UnionAll
+        covariant && constrains_param(var, typ.var.ub, covariant, type_constrains) && return true
+        # typ.var.lb doesn't constrain var
+        typ = typ.body
+    end
+    if typ isa Union
+        # for unions, verify that both options would constrain var
+        ba = constrains_param(var, typ.a, covariant, type_constrains)
+        bb = constrains_param(var, typ.b, covariant, type_constrains)
+        (ba && bb) && return true
+    elseif typ isa DataType
+        # return true if any param constrains var
+        fc = length(typ.parameters)
+        if fc > 0
+            if typ.name === Tuple.name
+                # vararg tuple needs special handling
+                for i in 1:(fc - 1)
+                    p = typ.parameters[i]
+                    constrains_param(var, p, covariant, type_constrains) && return true
+                end
+                lastp = typ.parameters[fc]
+                vararg = unwrap_unionall(lastp)
+                if vararg isa Core.TypeofVararg && isdefined(vararg, :N)
+                    constrains_param(var, vararg.N, covariant, type_constrains) && return true
+                    # T = vararg.parameters[1] doesn't constrain var
+                else
+                    constrains_param(var, lastp, covariant, type_constrains) && return true
+                end
+            else
+                if typ.name === typename(Type) && typ.parameters[1] === var && var.ub === Any
+                    # Types with free type parameters are <: Type cause the typevar
+                    # to be unconstrained because Type{T} with free typevars is illegal
+                    return type_constrains
+                end
+                for i in 1:fc
+                    p = typ.parameters[i]
+                    constrains_param(var, p, false, type_constrains) && return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+const EMPTY_SPTYPES = VarState[]
+
 function sptypes_from_meth_instance(linfo::MethodInstance)
-    toplevel = !isa(linfo.def, Method)
-    if !toplevel && isempty(linfo.sparam_vals) && isa(linfo.def.sig, UnionAll)
+    def = linfo.def
+    isa(def, Method) || return EMPTY_SPTYPES # toplevel
+    sig = def.sig
+    if isempty(linfo.sparam_vals)
+        isa(sig, UnionAll) || return EMPTY_SPTYPES
         # linfo is unspecialized
-        sp = Any[]
-        sig = linfo.def.sig
-        while isa(sig, UnionAll)
-            push!(sp, sig.var)
-            sig = sig.body
+        spvals = Any[]
+        sig′ = sig
+        while isa(sig′, UnionAll)
+            push!(spvals, sig′.var)
+            sig′ = sig′.body
         end
     else
-        sp = collect(Any, linfo.sparam_vals)
+        spvals = linfo.sparam_vals
     end
-    for i = 1:length(sp)
-        v = sp[i]
+    nvals = length(spvals)
+    sptypes = Vector{VarState}(undef, nvals)
+    for i = 1:nvals
+        v = spvals[i]
         if v isa TypeVar
-            temp = linfo.def.sig
+            temp = sig
             for j = 1:i-1
                 temp = temp.body
             end
             vᵢ = (temp::UnionAll).var
-            while temp isa UnionAll
-                temp = temp.body
-            end
-            sigtypes = (temp::DataType).parameters
+            sigtypes = (unwrap_unionall(temp)::DataType).parameters
             for j = 1:length(sigtypes)
                 sⱼ = sigtypes[j]
                 if isType(sⱼ) && sⱼ.parameters[1] === vᵢ
@@ -382,35 +469,32 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
                     @goto ty_computed
                 end
             end
-            ub = v.ub
-            while ub isa TypeVar
-                ub = ub.ub
-            end
+            ub = unwraptv_ub(v)
             if has_free_typevars(ub)
                 ub = Any
             end
-            lb = v.lb
-            while lb isa TypeVar
-                lb = lb.lb
-            end
+            lb = unwraptv_lb(v)
             if has_free_typevars(lb)
                 lb = Bottom
             end
-            if Any <: ub && lb <: Bottom
+            if Any === ub && lb === Bottom
                 ty = Any
             else
                 tv = TypeVar(v.name, lb, ub)
                 ty = UnionAll(tv, Type{tv})
             end
+            @label ty_computed
+            undef = !constrains_param(v, linfo.specTypes, #=covariant=#true)
         elseif isvarargtype(v)
             ty = Int
+            undef = false
         else
             ty = Const(v)
+            undef = false
         end
-        @label ty_computed
-        sp[i] = ty
+        sptypes[i] = VarState(ty, undef)
     end
-    return sp
+    return sptypes
 end
 
 _topmod(sv::InferenceState) = _topmod(sv.mod)

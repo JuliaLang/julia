@@ -42,6 +42,7 @@ thefname = "the fname!//\\&\1*"
 include_string_test_func = include_string(@__MODULE__, "include_string_test() = @__FILE__", thefname)
 @test include_string_test_func() == thefname
 @test include_string(@__MODULE__, "Base.source_path()", thefname) == Base.source_path()
+@test isdir(Base.source_dir())
 @test basename(@__FILE__) == "loading.jl"
 @test isabspath(@__FILE__)
 
@@ -982,6 +983,8 @@ end
             # Package in manifest in current env not present in depot
             @test Base.locate_package(pkg) !== nothing
 
+            @test Base.find_package("Baz") !== nothing  # coverage
+
             pushfirst!(LOAD_PATH, joinpath(tmp, "Env1"))
 
             @test Base.locate_package(pkg) === nothing
@@ -1083,6 +1086,17 @@ end
         cmd = `$julia $(pkgimage(P)) $(opt_level(O)) $(debug_level(D)) $(check_bounds(C)) $(inline(I)) -e $script`
         @test success(pipeline(cmd; stdout, stderr))
     end
+
+    cf = Base.CacheFlags(255)
+    @test cf.use_pkgimages
+    @test cf.debug_level == 3
+    @test cf.check_bounds == 3
+    @test cf.inline
+    @test cf.opt_level == 3
+
+    io = PipeBuffer()
+    show(io, cf)
+    @test read(io, String) == "use_pkgimages = true, debug_level = 3, check_bounds = 3, inline = true, opt_level = 3"
 end
 
 empty!(Base.DEPOT_PATH)
