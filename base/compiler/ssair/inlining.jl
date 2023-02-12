@@ -795,7 +795,19 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
 end
 
 function compileable_specialization(match::MethodMatch, effects::Effects,
-    et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
+        et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
+    if !compilesig_invokes
+        # If there are unknown typevars, this MethodInstance is illegal to
+        # :invoke, but we only check for compilesig usually, so check here to
+        # avoid generating bad code.
+        # TODO: We could also compute the correct type parameters in the runtime
+        # and let this go through, but that requires further changes, because
+        # currently the runtime assumes that a MethodInstance with the appropriate
+        # sparams is created.
+        if _any(t->isa(t, TypeVar), match.sparams)
+            return nothing
+        end
+    end
     mi = specialize_method(match; compilesig=compilesig_invokes)
     mi === nothing && return nothing
     add_inlining_backedge!(et, mi)
@@ -803,11 +815,9 @@ function compileable_specialization(match::MethodMatch, effects::Effects,
 end
 
 function compileable_specialization(linfo::MethodInstance, effects::Effects,
-    et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
-    mi = specialize_method(linfo.def::Method, linfo.specTypes, linfo.sparam_vals; compilesig=compilesig_invokes)
-    mi === nothing && return nothing
-    add_inlining_backedge!(et, mi)
-    return InvokeCase(mi, effects, info)
+        et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
+    return compileable_specialization(MethodMatch(linfo.specTypes,
+     linfo.sparam_vals, linfo.def::Method, false), effects, et, info; compilesig_invokes)
 end
 
 compileable_specialization(result::InferenceResult, args...; kwargs...) = (@nospecialize;
