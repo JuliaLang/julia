@@ -45,8 +45,13 @@ Standard library changes
   packages being loaded in the Julia session.
   This has similar applications as the Requires.jl package but also
   supports precompilation and setting compatibility.
+
 #### LinearAlgebra
 
+* Adjoints and transposes of `Factorization` objects are no longer wrapped in `Adjoint`
+  and `Transpose` wrappers, respectively. Instead, they are wrapped in
+  `AdjointFactorization` and `TranposeFactorization` types, which themselves subtype
+  `Factorization` ([#46874]).
 
 #### Printf
 * Format specifiers now support dynamic width and precision, e.g. `%*s` and `%*.*g` ([#40105]).
