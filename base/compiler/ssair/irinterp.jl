@@ -119,7 +119,7 @@ struct IRInterpretationState
 end
 
 function codeinst_to_ir(interp::AbstractInterpreter, code::CodeInstance)
-    src = code.inferred
+    src = @atomic :monotonic code.inferred
     mi = code.def
     if isa(src, Vector{UInt8})
         src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, C_NULL, src)::CodeInfo

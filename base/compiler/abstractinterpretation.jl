@@ -1281,12 +1281,8 @@ function const_prop_methodinstance_heuristic(interp::AbstractInterpreter,
         # If so, there will be a good chance we might be able to const prop
         # all the way through and learn something new.
         code = get(code_cache(interp), mi, nothing)
-        if isdefined(code, :inferred)
-            if isa(code, CodeInstance)
-                inferred = @atomic :monotonic code.inferred
-            else
-                inferred = code.inferred
-            end
+        if isa(code, CodeInstance)
+            inferred = @atomic :monotonic code.inferred
             # TODO propagate a specific `CallInfo` that conveys information about this call
             if inlining_policy(interp, inferred, NoCallInfo(), IR_FLAG_NULL, mi, arginfo.argtypes) !== nothing
                 return true
