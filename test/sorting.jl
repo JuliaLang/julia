@@ -84,6 +84,8 @@ end
         @test issorted(sort(1:2000, alg=Alg, by=x->0))
         @test issorted(sort(1:2000, alg=Alg, by=x->x÷100))
     end
+    @test sort(1:2000, by=x->x÷100, rev=true) == sort(1:2000, by=x->-x÷100) ==
+        vcat(2000, (x:x+99 for x in 1900:-100:100)..., 1:99)
 end
 
 @testset "partialsort" begin
