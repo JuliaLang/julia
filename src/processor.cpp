@@ -621,9 +621,9 @@ static inline std::vector<TargetData<n>> &get_cmdline_targets(F &&feature_cb)
 // Load sysimg, use the `callback` for dispatch and perform all relocations
 // for the selected target.
 template<typename F>
-static inline jl_sysimg_fptrs_t parse_sysimg(void *hdl, F &&callback)
+static inline jl_image_fptrs_t parse_sysimg(void *hdl, F &&callback)
 {
-    jl_sysimg_fptrs_t res = {nullptr, 0, nullptr, 0, nullptr, nullptr};
+    jl_image_fptrs_t res = {nullptr, 0, nullptr, 0, nullptr, nullptr};
 
     // .data base
     char *data_base;

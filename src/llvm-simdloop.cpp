@@ -44,7 +44,7 @@ STATISTIC(MulChains, "Multiply reduction chains");
 
 namespace {
 
-static unsigned getReduceOpcode(Instruction *J, Instruction *operand)
+static unsigned getReduceOpcode(Instruction *J, Instruction *operand) JL_NOTSAFEPOINT
 {
     switch (J->getOpcode()) {
     case Instruction::FSub:
@@ -67,7 +67,7 @@ static unsigned getReduceOpcode(Instruction *J, Instruction *operand)
 /// If Phi is part of a reduction cycle of FAdd, FSub, FMul or FDiv,
 /// mark the ops as permitting reassociation/commuting.
 /// As of LLVM 4.0, FDiv is not handled by the loop vectorizer
-static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L)
+static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) JL_NOTSAFEPOINT
 {
     typedef SmallVector<Instruction*, 8> chainVector;
     chainVector chain;
@@ -130,7 +130,7 @@ static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L)
     MaxChainLength.updateMax(length);
 }
 
-static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Function &)> GetLI)
+static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Function &)> GetLI) JL_NOTSAFEPOINT
 {
     bool Changed = false;
     std::vector<Instruction*> ToDelete;
@@ -284,7 +284,7 @@ public:
 
     Function *loopinfo_marker = M.getFunction("julia.loopinfo_marker");
 
-    auto GetLI = [this](Function &F) -> LoopInfo & {
+    auto GetLI = [this](Function &F) JL_NOTSAFEPOINT -> LoopInfo & {
         return getAnalysis<LoopInfoWrapperPass>(F).getLoopInfo();
     };
 

@@ -186,10 +186,6 @@ end
 include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
 include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
 
-# These used to be in build_h.jl and are retained for backwards compatibility
-const libblas_name = "libblastrampoline"
-const liblapack_name = "libblastrampoline"
-
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
@@ -289,6 +285,11 @@ include("version.jl")
 include("sysinfo.jl")
 include("libc.jl")
 using .Libc: getpid, gethostname, time
+
+# These used to be in build_h.jl and are retained for backwards compatibility.
+# NOTE: keep in sync with `libblastrampoline_jll.libblastrampoline`.
+const libblas_name = "libblastrampoline" * (Sys.iswindows() ? "-5" : "")
+const liblapack_name = libblas_name
 
 # Logging
 include("logging.jl")
@@ -418,6 +419,7 @@ include("threadcall.jl")
 include("uuid.jl")
 include("pkgid.jl")
 include("toml_parser.jl")
+include("linking.jl")
 include("loading.jl")
 
 # misc useful functions & macros
@@ -445,6 +447,10 @@ end
 for m in methods(include)
     delete_method(m)
 end
+
+# This method is here only to be overwritten during the test suite to test
+# various sysimg related invalidation scenarios.
+a_method_to_overwrite_in_test() = inferencebarrier(1)
 
 # These functions are duplicated in client.jl/include(::String) for
 # nicer stacktraces. Modifications here have to be backported there

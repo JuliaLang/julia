@@ -5,9 +5,12 @@ ifneq ($(USE_BINARYBUILDER_DSFMT),1)
 
 DSFMT_CFLAGS := $(CFLAGS) -DNDEBUG -DDSFMT_MEXP=19937 $(fPIC) -DDSFMT_DO_NOT_USE_OLD_NAMES -DDSFMT_SHLIB $(SANITIZE_OPTS)
 DSFMT_CFLAGS += -O3 -finline-functions -fomit-frame-pointer -fno-strict-aliasing \
-		--param max-inline-insns-single=1800 -Wall  -std=c99 -shared
+		-Wall  -std=c99 -shared
 ifeq ($(ARCH), x86_64)
 DSFMT_CFLAGS += -msse2 -DHAVE_SSE2
+endif
+ifneq ($(OS), emscripten)
+DSFMT_CFLAGS += --param max-inline-insns-single=1800
 endif
 
 $(SRCCACHE)/dsfmt-$(DSFMT_VER).tar.gz: | $(SRCCACHE)

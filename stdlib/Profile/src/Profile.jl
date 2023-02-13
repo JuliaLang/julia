@@ -38,10 +38,10 @@ function profile_printing_listener()
         while true
             wait(PROFILE_PRINT_COND[])
             peek_report[]()
-            if get(ENV, "JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", nothing) === "1"
-                println("Saving heap snapshot...")
+            if Base.get_bool_env("JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", false) === true
+                println(stderr, "Saving heap snapshot...")
                 fname = take_heap_snapshot()
-                println("Heap snapshot saved to `$(fname)`")
+                println(stderr, "Heap snapshot saved to `$(fname)`")
             end
         end
     catch ex
@@ -54,9 +54,9 @@ end
 # An internal function called to show the report after an information request (SIGINFO or SIGUSR1).
 function _peek_report()
     iob = IOBuffer()
-    ioc = IOContext(IOContext(iob, stdout), :displaysize=>displaysize(stdout))
+    ioc = IOContext(IOContext(iob, stderr), :displaysize=>displaysize(stderr))
     print(ioc, groupby = [:thread, :task])
-    Base.print(stdout, String(take!(iob)))
+    Base.print(stderr, String(take!(iob)))
 end
 # This is a ref so that it can be overridden by other profile info consumers.
 const peek_report = Ref{Function}(_peek_report)
@@ -156,7 +156,9 @@ function __init__()
     # used, if not manually initialized before that.
     @static if !Sys.iswindows()
         # triggering a profile via signals is not implemented on windows
-        PROFILE_PRINT_COND[] = Base.AsyncCondition()
+        cond = Base.AsyncCondition()
+        Base.uv_unref(cond.handle)
+        PROFILE_PRINT_COND[] = cond
         ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), PROFILE_PRINT_COND[].handle)
         errormonitor(Threads.@spawn(profile_printing_listener()))
     end
@@ -1250,7 +1252,7 @@ every object as one so they can be easily counted. Otherwise, report the
 actual size.
 """
 function take_heap_snapshot(io::IOStream, all_one::Bool=false)
-    @Base._lock_ios(io, ccall(:jl_gc_take_heap_snapshot, Cvoid, (Ptr{Cvoid}, Cchar), io.handle, Cchar(all_one)))
+    Base.@_lock_ios(io, ccall(:jl_gc_take_heap_snapshot, Cvoid, (Ptr{Cvoid}, Cchar), io.handle, Cchar(all_one)))
 end
 function take_heap_snapshot(filepath::String, all_one::Bool=false)
     open(filepath, "w") do io

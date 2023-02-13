@@ -887,7 +887,15 @@ function range_fuzztests(::Type{T}, niter, nrange) where {T}
         @test m == length(r)
         @test strt == first(r)
         @test Δ == step(r)
-        @test_skip stop ≈ last(r)
+        # potential floating point error:
+        #   stop = strt + (n-1)*Δ
+        #      *          error <= eps((n-1)*Δ)/2 <= abs((n-1)*Δ)/2 * eps(T)
+        #      +          error <= eps(stop)/2    <= abs(stop)/2    * eps(T)
+        #   last(r)
+        #     rat(strt)   error <= eps(strt)/2    <= abs(strt)/2    * eps(T)
+        #     rat(Δ)      error <= (n-1)*eps(Δ)/2 <= abs((n-1)*Δ)/2 * eps(T)
+        #     T(...)      error <= eps(last(r))/2 <= abs(stop)/2    * eps(T)
+        @test stop ≈ last(r) atol = (abs(strt)/2 + (n-1)*abs(Δ) + abs(stop)) * eps(T)
         l = range(strt, stop=stop, length=n)
         @test n == length(l)
         @test strt == first(l)

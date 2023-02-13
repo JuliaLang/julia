@@ -66,6 +66,7 @@ end
     @test isequal(missing, missing)
     @test !isequal(1, missing)
     @test !isequal(missing, 1)
+    @test !isequal('c', missing)
     @test (missing < missing) === missing
     @test (missing < 1) === missing
     @test (1 < missing) === missing

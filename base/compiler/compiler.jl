@@ -50,7 +50,7 @@ ntuple(f, n) = (Any[f(i) for i = 1:n]...,)
 
 # core operations & types
 function return_type end # promotion.jl expects this to exist
-is_return_type(@Core.nospecialize(f)) = f === return_type
+is_return_type(Core.@nospecialize(f)) = f === return_type
 include("promotion.jl")
 include("tuple.jl")
 include("pair.jl")

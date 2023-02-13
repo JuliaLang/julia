@@ -19,7 +19,7 @@
 #include "llvm-pass-helpers.h"
 #include "julia.h"
 #include "llvm-alloc-helpers.h"
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 
 #define DEBUG_TYPE "julia-licm"
 
