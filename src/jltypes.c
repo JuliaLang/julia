@@ -2204,6 +2204,7 @@ void jl_init_types(void) JL_GC_DISABLED
     ((jl_datatype_t*)jl_type_type)->cached_by_hash = 0;
     jl_type_typename->wrapper = jl_new_struct(jl_unionall_type, tttvar, (jl_value_t*)jl_type_type);
     jl_type_type = (jl_unionall_t*)jl_type_typename->wrapper;
+    ((jl_datatype_t*)jl_type_type->body)->ismutationfree = 1;
 
     jl_typeofbottom_type->super = jl_wrap_Type(jl_bottom_type);
 
@@ -2432,7 +2433,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_code_info_type =
         jl_new_datatype(jl_symbol("CodeInfo"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(21,
+                        jl_perm_symsvec(22,
                             "code",
                             "codelocs",
                             "ssavaluetypes",
@@ -2448,13 +2449,14 @@ void jl_init_types(void) JL_GC_DISABLED
                             "min_world",
                             "max_world",
                             "inferred",
-                            "inlining_cost",
                             "propagate_inbounds",
                             "pure",
                             "has_fcall",
+                            "inlining",
                             "constprop",
-                            "purity"),
-                        jl_svec(21,
+                            "purity",
+                            "inlining_cost"),
+                        jl_svec(22,
                             jl_array_any_type,
                             jl_array_int32_type,
                             jl_any_type,
@@ -2470,12 +2472,13 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_ulong_type,
                             jl_ulong_type,
                             jl_bool_type,
-                            jl_uint16_type,
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type,
                             jl_uint8_type,
-                            jl_uint8_type),
+                            jl_uint8_type,
+                            jl_uint8_type,
+                            jl_uint16_type),
                         jl_emptysvec,
                         0, 1, 20);
 
@@ -2805,7 +2808,6 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_symbol_type->ismutationfree = jl_symbol_type->isidentityfree = 1;
     jl_simplevector_type->ismutationfree = jl_simplevector_type->isidentityfree = 1;
     jl_datatype_type->ismutationfree = 1;
-    ((jl_datatype_t*)jl_type_type->body)->ismutationfree = 1;
 
     // Technically not ismutationfree, but there's a separate system to deal
     // with mutations for global state.

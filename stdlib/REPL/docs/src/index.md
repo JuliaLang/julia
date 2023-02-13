@@ -629,7 +629,20 @@ atreplinit() do repl
 end
 ```
 
-to your `startup.jl` file.
+to your `startup.jl` file. In `IPython` mode the variable `Out[n]` (where `n` is an integer) can be used to refer to earlier results:
+
+```julia-repl
+In [1]: 5 + 3
+Out[1]: 8
+
+In [2]: Out[1] + 5
+Out[2]: 13
+
+In [3]: Out
+Out[3]: Dict{Int64, Any} with 2 entries:
+  2 => 13
+  1 => 8
+```
 
 ## TerminalMenus
 

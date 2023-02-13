@@ -315,7 +315,9 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                 if (ma == (jl_value_t*)jl_pure_sym)
                     li->pure = 1;
                 else if (ma == (jl_value_t*)jl_inline_sym)
-                    li->inlining_cost = 0x10; // This corresponds to MIN_INLINE_COST
+                    li->inlining = 1;
+                else if (ma == (jl_value_t*)jl_noinline_sym)
+                    li->inlining = 2;
                 else if (ma == (jl_value_t*)jl_propagate_inbounds_sym)
                     li->propagate_inbounds = 1;
                 else if (ma == (jl_value_t*)jl_aggressive_constprop_sym)
@@ -436,19 +438,19 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
 JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
 {
     jl_task_t *ct = jl_current_task;
-    jl_method_instance_t *li =
+    jl_method_instance_t *mi =
         (jl_method_instance_t*)jl_gc_alloc(ct->ptls, sizeof(jl_method_instance_t),
                                            jl_method_instance_type);
-    li->def.value = NULL;
-    li->specTypes = NULL;
-    li->sparam_vals = jl_emptysvec;
-    jl_atomic_store_relaxed(&li->uninferred, NULL);
-    li->backedges = NULL;
-    li->callbacks = NULL;
-    jl_atomic_store_relaxed(&li->cache, NULL);
-    li->inInference = 0;
-    jl_atomic_store_relaxed(&li->precompiled, 0);
-    return li;
+    mi->def.value = NULL;
+    mi->specTypes = NULL;
+    mi->sparam_vals = jl_emptysvec;
+    jl_atomic_store_relaxed(&mi->uninferred, NULL);
+    mi->backedges = NULL;
+    mi->callbacks = NULL;
+    jl_atomic_store_relaxed(&mi->cache, NULL);
+    mi->inInference = 0;
+    jl_atomic_store_relaxed(&mi->precompiled, 0);
+    return mi;
 }
 
 JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
@@ -471,13 +473,14 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->min_world = 1;
     src->max_world = ~(size_t)0;
     src->inferred = 0;
-    src->inlining_cost = UINT16_MAX;
     src->propagate_inbounds = 0;
     src->pure = 0;
     src->has_fcall = 0;
     src->edges = jl_nothing;
     src->constprop = 0;
+    src->inlining = 0;
     src->purity.bits = 0;
+    src->inlining_cost = UINT16_MAX;
     return src;
 }
 

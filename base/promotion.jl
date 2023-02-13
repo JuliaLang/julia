@@ -116,6 +116,7 @@ function typejoin(@nospecialize(a), @nospecialize(b))
                 if ai === bi || (isa(ai,Type) && isa(bi,Type) && ai <: bi && bi <: ai)
                     aprimary = aprimary{ai}
                 else
+                    aprimary = aprimary::UnionAll
                     # pushfirst!(vars, aprimary.var)
                     _growbeg!(vars, 1)
                     arrayset(false, vars, aprimary.var, 1)

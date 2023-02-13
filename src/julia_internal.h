@@ -576,8 +576,8 @@ STATIC_INLINE void jl_gc_wb_buf(void *parent, void *bufptr, size_t minsz) JL_NOT
     }
 }
 
-void jl_gc_debug_print_status(void);
-JL_DLLEXPORT void jl_gc_debug_critical_error(void);
+void jl_gc_debug_print_status(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_debug_critical_error(void) JL_NOTSAFEPOINT;
 void jl_print_gc_stats(JL_STREAM *s);
 void jl_gc_reset_alloc_count(void);
 uint32_t jl_get_gs_ctr(void);
@@ -596,9 +596,11 @@ STATIC_INLINE jl_value_t *undefref_check(jl_datatype_t *dt, jl_value_t *v) JL_NO
 // -- helper types -- //
 
 typedef struct {
-    uint8_t pure:1;
-    uint8_t propagate_inbounds:1;
     uint8_t inferred:1;
+    uint8_t propagate_inbounds:1;
+    uint8_t pure:1;
+    uint8_t has_fcall:1;
+    uint8_t inlining:2; // 0 = use heuristic; 1 = aggressive; 2 = none
     uint8_t constprop:2; // 0 = use heuristic; 1 = aggressive; 2 = none
 } jl_code_info_flags_bitfield_t;
 
@@ -866,7 +868,7 @@ void jl_init_thread_heap(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 void jl_init_int32_int64_cache(void);
 JL_DLLEXPORT void jl_init_options(void);
 
-void jl_teardown_codegen(void);
+void jl_teardown_codegen(void) JL_NOTSAFEPOINT;
 
 void jl_set_base_ctx(char *__stk);
 
@@ -918,7 +920,7 @@ void jl_safepoint_defer_sigint(void);
 // Return `1` if the sigint should be delivered and `0` if there's no sigint
 // to be delivered.
 int jl_safepoint_consume_sigint(void);
-void jl_wake_libuv(void);
+void jl_wake_libuv(void) JL_NOTSAFEPOINT;
 
 void jl_set_pgcstack(jl_gcframe_t **) JL_NOTSAFEPOINT;
 #if defined(_OS_DARWIN_)
@@ -1188,7 +1190,7 @@ size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize, bt_cont
 #endif
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void);
 void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *ct);
-JL_DLLEXPORT void jl_raise_debugger(void);
+JL_DLLEXPORT void jl_raise_debugger(void) JL_NOTSAFEPOINT;
 int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gdblookup(void* ip) JL_NOTSAFEPOINT;
 void jl_print_native_codeloc(uintptr_t ip) JL_NOTSAFEPOINT;

@@ -106,15 +106,6 @@ for compile in ("min", "yes")
     end
 end
 
-# Issue #27104
-# Test whether meta nodes are still present after code optimization.
-let
-    @noinline f(x, y) = x + y
-    @test any(code_typed(f)[1][1].code) do ex
-        Meta.isexpr(ex, :meta)
-    end
-end
-
 # PR #32145
 # Make sure IncrementalCompact can handle blocks with predecessors of index 0
 # while removing blocks with no predecessors.
@@ -126,8 +117,8 @@ let cfg = CFG(BasicBlock[
     make_bb([2, 3]    , []    ),
 ], Int[])
     insts = Compiler.InstructionStream([], [], Any[], Int32[], UInt8[])
-    code = Compiler.IRCode(insts, cfg, LineInfoNode[], [], Expr[], [])
-    compact = Compiler.IncrementalCompact(code, true)
+    ir = Compiler.IRCode(insts, cfg, Core.LineInfoNode[], Any[], Expr[], Compiler.VarState[])
+    compact = Compiler.IncrementalCompact(ir, true)
     @test length(compact.result_bbs) == 4 && 0 in compact.result_bbs[3].preds
 end
 

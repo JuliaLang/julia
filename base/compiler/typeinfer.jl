@@ -29,7 +29,7 @@ using Core.Compiler: -, +, :, Vector, length, first, empty!, push!, pop!, @inlin
 struct InferenceFrameInfo
     mi::Core.MethodInstance
     world::UInt64
-    sptypes::Vector{Any}
+    sptypes::Vector{Core.Compiler.VarState}
     slottypes::Vector{Any}
     nargs::Int
 end
@@ -89,7 +89,7 @@ function reset_timings()
     empty!(_timings)
     push!(_timings, Timing(
         # The MethodInstance for ROOT(), and default empty values for other fields.
-        InferenceFrameInfo(ROOTmi, 0x0, Any[], Any[Core.Const(ROOT)], 1),
+        InferenceFrameInfo(ROOTmi, 0x0, Core.Compiler.VarState[], Any[Core.Const(ROOT)], 1),
         _time_ns()))
     return nothing
 end
@@ -269,14 +269,6 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
         opt = caller.src
         if opt isa OptimizationState{typeof(interp)} # implies `may_optimize(interp) === true`
             analyzed = optimize(interp, opt, OptimizationParams(interp), caller)
-            if isa(analyzed, ConstAPI)
-                # XXX: The work in ir_to_codeinf! is essentially wasted. The only reason
-                # we're doing it is so that code_llvm can return the code
-                # for the `return ...::Const` (which never runs anyway). We should do this
-                # as a post processing step instead.
-                ir_to_codeinf!(opt)
-                caller.src = analyzed
-            end
             caller.valid_worlds = (opt.inlining.et::EdgeTracker).valid_worlds[]
         end
     end
@@ -295,16 +287,19 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     return true
 end
 
-function CodeInstance(
-    result::InferenceResult, @nospecialize(inferred_result), valid_worlds::WorldRange)
+function CodeInstance(interp::AbstractInterpreter, result::InferenceResult,
+                      @nospecialize(inferred_result), valid_worlds::WorldRange)
     local const_flags::Int32
     result_type = result.result
     @assert !(result_type isa LimitedAccuracy)
-    if inferred_result isa ConstAPI
+
+    if isa(result_type, Const) && is_foldable_nothrow(result.ipo_effects) && is_inlineable_constant(result_type.val)
         # use constant calling convention
-        rettype_const = inferred_result.val
+        rettype_const = result_type.val
         const_flags = 0x3
-        inferred_result = nothing
+        if may_discard_trees(interp)
+            inferred_result = nothing
+        end
     else
         if isa(result_type, Const)
             rettype_const = result_type.val
@@ -379,7 +374,7 @@ function transform_result_for_cache(interp::AbstractInterpreter,
         inferred_result = maybe_compress_codeinfo(interp, linfo, inferred_result)
     end
     # The global cache can only handle objects that codegen understands
-    if !isa(inferred_result, Union{CodeInfo, Vector{UInt8}, ConstAPI})
+    if !isa(inferred_result, MaybeCompressed)
         inferred_result = nothing
     end
     return inferred_result
@@ -403,7 +398,7 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
     # TODO: also don't store inferred code if we've previously decided to interpret this function
     if !already_inferred
         inferred_result = transform_result_for_cache(interp, linfo, valid_worlds, result)
-        code_cache(interp)[linfo] = ci = CodeInstance(result, inferred_result, valid_worlds)
+        code_cache(interp)[linfo] = ci = CodeInstance(interp, result, inferred_result, valid_worlds)
         if track_newly_inferred[]
             m = linfo.def
             if isa(m, Method) && m.module != Core
@@ -911,7 +906,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     if frame === false
         # completely new
         lock_mi_inference(interp, mi)
-        result = InferenceResult(mi)
+        result = InferenceResult(mi, typeinf_lattice(interp))
         frame = InferenceState(result, cache, interp) # always use the cache for edge targets
         if frame === nothing
             add_remark!(interp, caller, "Failed to retrieve source")
@@ -985,7 +980,7 @@ end
 function typeinf_frame(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, run_optimizer::Bool)
     mi = specialize_method(method, atype, sparams)::MethodInstance
     ccall(:jl_typeinf_timing_begin, Cvoid, ())
-    result = InferenceResult(mi)
+    result = InferenceResult(mi, typeinf_lattice(interp))
     frame = InferenceState(result, run_optimizer ? :global : :no, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
@@ -1012,7 +1007,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
                 tree.slotflags = fill(IR_FLAG_NULL, nargs)
                 tree.ssavaluetypes = 1
                 tree.codelocs = Int32[1]
-                tree.linetable = [LineInfoNode(method.module, method.name, method.file, method.line, Int32(0))]
+                tree.linetable = LineInfoNode[LineInfoNode(method.module, method.name, method.file, method.line, Int32(0))]
                 tree.inferred = true
                 tree.ssaflags = UInt8[0]
                 tree.pure = true
@@ -1044,7 +1039,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
         return retrieve_code_info(mi)
     end
     lock_mi_inference(interp, mi)
-    result = InferenceResult(mi)
+    result = InferenceResult(mi, typeinf_lattice(interp))
     frame = InferenceState(result, #=cache=#:global, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
@@ -1068,7 +1063,7 @@ function typeinf_type(interp::AbstractInterpreter, method::Method, @nospecialize
             return code.rettype
         end
     end
-    result = InferenceResult(mi)
+    result = InferenceResult(mi, typeinf_lattice(interp))
     typeinf(interp, result, :global)
     ccall(:jl_typeinf_timing_end, Cvoid, ())
     result.result isa InferenceState && return nothing
@@ -1087,7 +1082,7 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, linfo::MethodInstance
             # toplevel lambda - infer directly
             ccall(:jl_typeinf_timing_begin, Cvoid, ())
             if !src.inferred
-                result = InferenceResult(linfo)
+                result = InferenceResult(linfo, typeinf_lattice(interp))
                 frame = InferenceState(result, src, #=cache=#:global, interp)
                 typeinf(interp, frame)
                 @assert frame.inferred # TODO: deal with this better
