@@ -259,14 +259,14 @@ end
 
 function set_compare_strategy!(p::Platform, key::String, f::Function)
     if !haskey(p.tags, key)
-        throw(ArgumentError("Cannot set comparison strategy for nonexistant tag $(key)!"))
+        throw(ArgumentError("Cannot set comparison strategy for nonexistent tag $(key)!"))
     end
     p.compare_strategies[key] = f
 end
 
 function get_compare_strategy(p::Platform, key::String, default = compare_default)
     if !haskey(p.tags, key)
-        throw(ArgumentError("Cannot get comparison strategy for nonexistant tag $(key)!"))
+        throw(ArgumentError("Cannot get comparison strategy for nonexistent tag $(key)!"))
     end
     return get(p.compare_strategies, key, default)
 end
@@ -278,7 +278,7 @@ get_compare_strategy(p::AbstractPlatform, key::String, default = compare_default
     compare_default(a::String, b::String, a_requested::Bool, b_requested::Bool)
 
 Default comparison strategy that falls back to `a == b`.  This only ever happens if both
-`a` and `b` request this strategy, as any other strategy is preferrable to this one.
+`a` and `b` request this strategy, as any other strategy is preferable to this one.
 """
 function compare_default(a::String, b::String, a_requested::Bool, b_requested::Bool)
     return a == b
@@ -584,6 +584,7 @@ Sys.islinux(p::AbstractPlatform) = os(p) == "linux"
 Sys.iswindows(p::AbstractPlatform) = os(p) == "windows"
 Sys.isfreebsd(p::AbstractPlatform) = os(p) == "freebsd"
 Sys.isbsd(p::AbstractPlatform) = os(p) ∈ ("freebsd", "macos")
+Sys.isunix(p::AbstractPlatform) = Sys.isbsd(p) || Sys.islinux(p)
 
 const arch_mapping = Dict(
     "x86_64" => "(x86_|amd)64",
@@ -872,7 +873,7 @@ function detect_libstdcxx_version(max_minor_version::Int=30)
     end
 
     # Brute-force our way through GLIBCXX_* symbols to discover which version we're linked against
-    hdl = Libdl.dlopen(first(libstdcxx_paths))
+    hdl = Libdl.dlopen(first(libstdcxx_paths))::Ptr{Cvoid}
     # Try all GLIBCXX versions down to GCC v4.8:
     # https://gcc.gnu.org/onlinedocs/libstdc++/manual/abi.html
     for minor_version in max_minor_version:-1:18
@@ -903,7 +904,7 @@ function detect_cxxstring_abi()
     end
 
     function open_libllvm(f::Function)
-        for lib_name in ("libLLVM-13jl", "libLLVM", "LLVM", "libLLVMSupport")
+        for lib_name in ("libLLVM-14jl", "libLLVM", "LLVM", "libLLVMSupport")
             hdl = Libdl.dlopen_e(lib_name)
             if hdl != C_NULL
                 try
@@ -1027,7 +1028,7 @@ function platforms_match(a::AbstractPlatform, b::AbstractPlatform)
 
         # Call the comparator, passing in which objects requested this comparison (one, the other, or both)
         # For some comparators this doesn't matter, but for non-symmetrical comparisons, it does.
-        if !comparator(ak, bk, a_comp == comparator, b_comp == comparator)
+        if !(comparator(ak, bk, a_comp == comparator, b_comp == comparator)::Bool)
             return false
         end
     end

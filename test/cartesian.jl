@@ -515,6 +515,12 @@ end
 f39705() = Base.Cartesian.@nany 0 _ -> true
 @test f39705() === false
 
+@testset "Cartesian @nall macro test" begin
+    i_1, i_2, i_3 = 1, 2, 3;
+    @test Base.Cartesian.@nall 2 d->(i_d <= 2)
+    @test !Base.Cartesian.@nall 3 d->(i_d <= 2)
+end
+
 @testset "CartesianIndices with Bool" begin
     @test @inferred(CartesianIndices((true,))) == CartesianIndices((1,))
     @test @inferred(CartesianIndices((false,))) == CartesianIndices((0,))
@@ -529,4 +535,10 @@ end
     @test isassigned(A, 1, CartesianIndex(2, 3))
     @test isassigned(A, CartesianIndex(1, 2), 3)
     @test !isassigned(A, CartesianIndex(5, 2), 3)
+end
+
+@testset "`CartedianIndex(x::Union{Integer,CartedianIndex}...)`'s stability" begin
+    CI = CartesianIndex
+    inds2 = (1, CI(1, 2), 1, CI(1, 2), 1, CI(1, 2), 1)
+    @test (@inferred CI(inds2)) == CI(1, 1, 2, 1, 1, 2, 1, 1, 2, 1)
 end

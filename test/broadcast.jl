@@ -699,11 +699,11 @@ end
     @test_throws Base.CanonicalIndexError A[2] .= 0
     @test_throws MethodError A[3] .= 0
     A = [[1, 2, 3], 4:5]
-    @test A isa Vector{Vector{Int}}
     A[1] .= 0
-    A[2] .= 0
-    @test A[1] == [0, 0, 0]
-    @test A[2] == [0, 0]
+    @test A[1] isa Vector{Int}
+    @test A[2] isa UnitRange
+    @test A[1] == [0,0,0]
+    @test_throws Base.CanonicalIndexError A[2] .= 0
 end
 
 # Issue #22180
@@ -903,13 +903,13 @@ end
     ys = 1:2:20
     bc = Broadcast.instantiate(Broadcast.broadcasted(*, xs, ys))
     @test IndexStyle(bc) == IndexLinear()
-    @test sum(bc) == mapreduce(Base.Splat(*), +, zip(xs, ys))
+    @test sum(bc) == mapreduce(Base.splat(*), +, zip(xs, ys))
 
     xs2 = reshape(xs, 1, :)
     ys2 = reshape(ys, 1, :)
     bc = Broadcast.instantiate(Broadcast.broadcasted(*, xs2, ys2))
     @test IndexStyle(bc) == IndexCartesian()
-    @test sum(bc) == mapreduce(Base.Splat(*), +, zip(xs, ys))
+    @test sum(bc) == mapreduce(Base.splat(*), +, zip(xs, ys))
 
     xs = 1:5:3*5
     ys = 1:4:3*4
@@ -1104,7 +1104,7 @@ end
     end
     arr = rand(1000)
     @allocated test(arr)
-    @test (@allocated test(arr)) == 0
+    @test (@allocated test(arr)) <= 16
 end
 
 @testset "Fix type unstable .&& #43470" begin
@@ -1116,7 +1116,20 @@ end
     @inferred(test(x, y)) == [0, 0]
 end
 
+@testset "issue #45903, in place broadcast into a bit-masked bitmatrix" begin
+    A = BitArray(ones(3,3))
+    pos = randn(3,3)
+    A[pos .< 0] .= false
+    @test all(>=(0), pos[A])
+    @test count(A) == count(>=(0), pos)
+end
+
+@testset "issue #38432: make CartesianIndex a broadcast scalar" begin
+    @test CartesianIndex(1,2) .+ (CartesianIndex(3,4), CartesianIndex(5,6)) == (CartesianIndex(4, 6), CartesianIndex(6, 8))
+    @test CartesianIndex(1,2) .+ [CartesianIndex(3,4), CartesianIndex(5,6)] == [CartesianIndex(4, 6), CartesianIndex(6, 8)]
+end
+
 # test that `Broadcast` definition is defined as total and eligible for concrete evaluation
 import Base.Broadcast: BroadcastStyle, DefaultArrayStyle
 @test Base.infer_effects(BroadcastStyle, (DefaultArrayStyle{1},DefaultArrayStyle{2},)) |>
-    Core.Compiler.is_concrete_eval_eligible
+    Core.Compiler.is_foldable

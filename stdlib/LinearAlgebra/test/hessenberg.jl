@@ -24,6 +24,11 @@ let n = 10
         A = Areal
         H = UpperHessenberg(A)
         AH = triu(A,-1)
+        for k in -2:2
+            @test istril(H, k) == istril(AH, k)
+            @test istriu(H, k) == istriu(AH, k)
+            @test (k <= -1 ? istriu(H, k) : !istriu(H, k))
+        end
         @test UpperHessenberg(H) === H
         @test parent(H) === A
         @test Matrix(H) == Array(H) == H == AH
@@ -189,6 +194,13 @@ let n = 10
         c = b .+ 1
         @test dot(b, h, c) ≈ dot(h'b, c) ≈ dot(b, HM, c) ≈ dot(HM'b, c)
     end
+end
+
+@testset "hessenberg(::AbstractMatrix)" begin
+    n = 10
+    A = Tridiagonal(rand(n-1), rand(n), rand(n-1))
+    H = hessenberg(A)
+    @test convert(Array, H) ≈ A
 end
 
 # check logdet on a matrix that has a positive determinant

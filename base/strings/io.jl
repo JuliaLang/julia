@@ -125,6 +125,10 @@ function _str_sizehint(x)
         return sizeof(x)
     elseif x isa Char
         return ncodeunits(x)
+    elseif x isa UInt64 || x isa UInt32
+        return ndigits(x)
+    elseif x isa Int64 || x isa Int32
+        return ndigits(x) + (x < zero(x))
     else
         return 8
     end
@@ -201,7 +205,7 @@ function show(
 )
     # compute limit in default case
     if limit === nothing
-        get(io, :limit, false) || return show(io, str)
+        get(io, :limit, false)::Bool || return show(io, str)
         limit = max(20, displaysize(io)[2])
         # one line in collection, seven otherwise
         get(io, :typeinfo, nothing) === nothing && (limit *= 7)

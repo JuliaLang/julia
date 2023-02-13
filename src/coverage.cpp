@@ -17,7 +17,7 @@ using namespace llvm;
 
 static int codegen_imaging_mode(void)
 {
-    return jl_options.image_codegen || (jl_generating_output() && !jl_options.incremental);
+    return jl_options.image_codegen || (jl_generating_output() && jl_options.use_pkgimages);
 }
 
 // Logging for code coverage and memory allocation

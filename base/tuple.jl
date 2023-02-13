@@ -11,6 +11,8 @@ A compact way of representing the type for a tuple of length `N` where all eleme
 julia> isa((1, 2, 3, 4, 5, 6), NTuple{6, Int})
 true
 ```
+
+See also [`ntuple`](@ref).
 """
 NTuple
 
@@ -55,9 +57,9 @@ function setindex(x::Tuple, v, i::Integer)
     _setindex(v, i, x...)
 end
 
-function _setindex(v, i::Integer, args...)
+function _setindex(v, i::Integer, args::Vararg{Any,N}) where {N}
     @inline
-    return ntuple(j -> ifelse(j == i, v, args[j]), length(args))
+    return ntuple(j -> ifelse(j == i, v, args[j]), Val{N}())
 end
 
 
@@ -65,7 +67,7 @@ end
 
 function iterate(@nospecialize(t::Tuple), i::Int=1)
     @inline
-    return (1 <= i <= length(t)) ? (@inbounds t[i], i + 1) : nothing
+    return (1 <= i <= length(t)) ? (t[i], i + 1) : nothing
 end
 
 keys(@nospecialize t::Tuple) = OneTo(length(t))
@@ -186,7 +188,7 @@ function _split_rest(a::Union{AbstractArray, Core.SimpleVector}, n::Int)
     return a[begin:end-n], a[end-n+1:end]
 end
 
-split_rest(t::Tuple, n::Int, i=1) = t[i:end-n], t[end-n+1:end]
+@eval split_rest(t::Tuple, n::Int, i=1) = ($(Expr(:meta, :aggressive_constprop)); (t[i:end-n], t[end-n+1:end]))
 
 # Use dispatch to avoid a branch in first
 first(::Tuple{}) = throw(ArgumentError("tuple must be non-empty"))
@@ -211,13 +213,12 @@ function _tuple_unique_fieldtypes(@nospecialize t)
     t´ = unwrap_unionall(t)
     # Given t = Tuple{Vararg{S}} where S<:Real, the various
     # unwrapping/wrapping/va-handling here will return Real
-    if t isa Union
+    if t´ isa Union
         union!(types, _tuple_unique_fieldtypes(rewrap_unionall(t´.a, t)))
         union!(types, _tuple_unique_fieldtypes(rewrap_unionall(t´.b, t)))
     else
-        r = Union{}
         for ti in (t´::DataType).parameters
-            r = push!(types, rewrap_unionall(unwrapva(ti), t))
+            push!(types, rewrap_unionall(unwrapva(ti), t))
         end
     end
     return Core.svec(types...)
@@ -232,6 +233,21 @@ function _compute_eltype(@nospecialize t)
         return promote_typejoin(a, b)
     end
 end
+
+# We'd like to be able to infer eltype(::Tuple), which needs to be able to
+# look at these four methods:
+#
+# julia> methods(Base.eltype, Tuple{Type{<:Tuple}})
+# 4 methods for generic function "eltype" from Base:
+# [1] eltype(::Type{Union{}})
+#  @ abstractarray.jl:234
+# [2] eltype(::Type{Tuple{}})
+#  @ tuple.jl:199
+# [3] eltype(t::Type{<:Tuple{Vararg{E}}}) where E
+#  @ tuple.jl:200
+# [4] eltype(t::Type{<:Tuple})
+#  @ tuple.jl:209
+typeof(function eltype end).name.max_methods = UInt8(4)
 
 # version of tail that doesn't throw on empty tuples (used in array indexing)
 safe_tail(t::Tuple) = tail(t)
@@ -326,8 +342,6 @@ function map(f, t1::Any32, t2::Any32, ts::Any32...)
     (A...,)
 end
 
-_foldl_impl(op, init, itr::Tuple) = afoldl(op, init, itr...)
-
 # type-stable padding
 fill_to_length(t::NTuple{N,Any}, val, ::Val{N}) where {N} = t
 fill_to_length(t::Tuple{}, val, ::Val{1}) = (val,)
@@ -383,7 +397,7 @@ function _totuple(::Type{T}, itr, s::Vararg{Any,N}) where {T,N}
     # inference may give up in recursive calls, so annotate here to force accurate return type to be propagated
     rT = tuple_type_tail(T)
     ts = _totuple(rT, itr, y[2])::rT
-    return (t1, ts...)
+    return (t1, ts...)::T
 end
 
 # use iterative algorithm for long tuples
@@ -534,7 +548,7 @@ isless(::Tuple, ::Tuple{}) = false
 """
     isless(t1::Tuple, t2::Tuple)
 
-Returns true when t1 is less than t2 in lexicographic order.
+Return `true` when `t1` is less than `t2` in lexicographic order.
 """
 function isless(t1::Tuple, t2::Tuple)
     a, b = t1[1], t2[1]
@@ -581,17 +595,9 @@ any(x::Tuple{Bool}) = x[1]
 any(x::Tuple{Bool, Bool}) = x[1]|x[2]
 any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
 
-# equivalent to any(f, t), to be used only in bootstrap
-_tuple_any(f::Function, t::Tuple) = _tuple_any(f, false, t...)
-function _tuple_any(f::Function, tf::Bool, a, b...)
-    @inline
-    _tuple_any(f, tf | f(a), b...)
-end
-_tuple_any(f::Function, tf::Bool) = tf
-
-
 # a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
 function sym_in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}})
+    @noinline
     @_total_meta
     for y in itr
         y === x && return true
@@ -604,7 +610,7 @@ in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}}) = sym_in(x, itr)
 """
     empty(x::Tuple)
 
-Returns an empty tuple, `()`.
+Return an empty tuple, `()`.
 """
 empty(@nospecialize x::Tuple) = ()
 

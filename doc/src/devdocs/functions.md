@@ -48,7 +48,7 @@ jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs);
 
 Given the above dispatch process, conceptually all that is needed to add a new method is (1) a
 tuple type, and (2) code for the body of the method. `jl_method_def` implements this operation.
-`jl_first_argument_datatype` is called to extract the relevant method table from what would be
+`jl_method_table_for` is called to extract the relevant method table from what would be
 the type of the first argument. This is much more complicated than the corresponding procedure
 during dispatch, since the argument tuple type might be abstract. For example, we can define:
 
@@ -141,9 +141,9 @@ but works reasonably well.
 
 ## Keyword arguments
 
-Keyword arguments work by associating a special, hidden function object with each method table
-that has definitions with keyword arguments. This function is called the "keyword argument sorter"
-or "keyword sorter", or "kwsorter", and is stored in the `kwsorter` field of `MethodTable` objects.
+Keyword arguments work by adding methods to the kwcall function. This function
+is usually the "keyword argument sorter" or "keyword sorter", which then calls
+the inner body of the function (defined anonymously).
 Every definition in the kwsorter function has the same arguments as some definition in the normal
 method table, except with a single `NamedTuple` argument prepended, which gives
 the names and values of passed keyword arguments. The kwsorter's job is to move keyword arguments
@@ -220,10 +220,10 @@ circle((0,0), 1.0, color = red; other...)
 is lowered to:
 
 ```julia
-kwfunc(circle)(merge((color = red,), other), circle, (0,0), 1.0)
+kwcall(merge((color = red,), other), circle, (0,0), 1.0)
 ```
 
- `kwfunc` (also in`Core`) fetches the kwsorter for the called function.
+ `kwcall` (also in`Core`) denotes a kwcall signature and dispatch.
 The keyword splatting operation (written as `other...`) calls the named tuple `merge` function.
 This function further unpacks each *element* of `other`, expecting each one to contain two values
 (a symbol and a value).

@@ -2,7 +2,7 @@
 
 """
     inflate_ir!(ci::CodeInfo, linfo::MethodInstance) -> ir::IRCode
-    inflate_ir!(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any}) -> ir::IRCode
+    inflate_ir!(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any}) -> ir::IRCode
 
 Inflates `ci::CodeInfo`-IR to `ir::IRCode`-format.
 This should be used with caution as it is a in-place transformation where the fields of
@@ -11,13 +11,13 @@ the original `ci::CodeInfo` are modified.
 function inflate_ir!(ci::CodeInfo, linfo::MethodInstance)
     sptypes = sptypes_from_meth_instance(linfo)
     if ci.inferred
-        argtypes, _ = matching_cache_argtypes(linfo, nothing)
+        argtypes, _ = matching_cache_argtypes(fallback_lattice, linfo)
     else
         argtypes = Any[ Any for i = 1:length(ci.slotflags) ]
     end
     return inflate_ir!(ci, sptypes, argtypes)
 end
-function inflate_ir!(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
+function inflate_ir!(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any})
     code = ci.code
     cfg = compute_basic_blocks(code)
     for i = 1:length(code)
@@ -39,7 +39,7 @@ function inflate_ir!(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
     if !isa(ssavaluetypes, Vector{Any})
         ssavaluetypes = Any[ Any for i = 1:ssavaluetypes::Int ]
     end
-    info = Any[nothing for i = 1:nstmts]
+    info = CallInfo[NoCallInfo() for i = 1:nstmts]
     stmts = InstructionStream(code, ssavaluetypes, info, ci.codelocs, ci.ssaflags)
     linetable = ci.linetable
     if !isa(linetable, Vector{LineInfoNode})
@@ -51,15 +51,19 @@ end
 
 """
     inflate_ir(ci::CodeInfo, linfo::MethodInstance) -> ir::IRCode
-    inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any}) -> ir::IRCode
+    inflate_ir(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any}) -> ir::IRCode
     inflate_ir(ci::CodeInfo) -> ir::IRCode
 
 Non-destructive version of `inflate_ir!`.
 Mainly used for testing or interactive use.
 """
 inflate_ir(ci::CodeInfo, linfo::MethodInstance) = inflate_ir!(copy(ci), linfo)
-inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any}) = inflate_ir!(copy(ci), sptypes, argtypes)
-inflate_ir(ci::CodeInfo) = inflate_ir(ci, Any[], Any[ Any for i = 1:length(ci.slotflags) ])
+inflate_ir(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any}) = inflate_ir!(copy(ci), sptypes, argtypes)
+function inflate_ir(ci::CodeInfo)
+    slottypes = ci.slottypes
+    argtypes = Any[ slottypes === nothing ? Any : slottypes[i] for i = 1:length(ci.slotflags) ]
+    return inflate_ir(ci, VarState[], argtypes)
+end
 
 function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
     @assert isempty(ir.new_nodes)
@@ -86,7 +90,7 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
         elseif isa(stmt, GotoIfNot)
             code[i] = GotoIfNot(stmt.cond, first(ir.cfg.blocks[stmt.dest].stmts))
         elseif isa(stmt, PhiNode)
-            code[i] = PhiNode(Int32[last(ir.cfg.blocks[edge].stmts) for edge in stmt.edges], stmt.values)
+            code[i] = PhiNode(Int32[edge == 0 ? 0 : last(ir.cfg.blocks[edge].stmts) for edge in stmt.edges], stmt.values)
         elseif isexpr(stmt, :enter)
             stmt.args[1] = first(ir.cfg.blocks[stmt.args[1]::Int].stmts)
             code[i] = stmt

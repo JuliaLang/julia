@@ -8,7 +8,7 @@ const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.MATCH_INVALID_UTF | PCRE.ALT_BSUX 
 const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
 
 """
-    Regex(pattern[, flags])
+    Regex(pattern[, flags]) <: AbstractPattern
 
 A type representing a regular expression. `Regex` objects can be used to match strings
 with [`match`](@ref).
@@ -139,7 +139,7 @@ in a string using an `AbstractPattern`.
 abstract type AbstractMatch end
 
 """
-    RegexMatch
+    RegexMatch <: AbstractMatch
 
 A type representing a single match to a `Regex` found in a string.
 Typically created from the [`match`](@ref) function.
@@ -167,16 +167,23 @@ See [`keys`](@ref keys(::RegexMatch)) for more information.
 julia> m = match(r"(?<hour>\\d+):(?<minute>\\d+)(am|pm)?", "11:30 in the morning")
 RegexMatch("11:30", hour="11", minute="30", 3=nothing)
 
-julia> hr, min, ampm = m;
+julia> m.match
+"11:30"
 
-julia> hr
-"11"
+julia> m.captures
+3-element Vector{Union{Nothing, SubString{String}}}:
+ "11"
+ "30"
+ nothing
+
 
 julia> m["minute"]
 "30"
 
-julia> m.match
-"11:30"
+julia> hr, min, ampm = m; # destructure capture groups by iteration
+
+julia> hr
+"11"
 ```
 """
 struct RegexMatch <: AbstractMatch
@@ -197,8 +204,8 @@ That is, `idx` will be in the return value even if `m[idx] == nothing`.
 Unnamed capture groups will have integer keys corresponding to their index.
 Named capture groups will have string keys.
 
-!!! compat "Julia 1.6"
-    This method was added in Julia 1.6
+!!! compat "Julia 1.7"
+    This method was added in Julia 1.7
 
 # Examples
 ```jldoctest
@@ -236,19 +243,17 @@ end
 
 # Capture group extraction
 getindex(m::RegexMatch, idx::Integer) = m.captures[idx]
-function getindex(m::RegexMatch, name::Symbol)
+function getindex(m::RegexMatch, name::Union{AbstractString,Symbol})
     idx = PCRE.substring_number_from_name(m.regex.regex, name)
     idx <= 0 && error("no capture group named $name found in regex")
     m[idx]
 end
-getindex(m::RegexMatch, name::AbstractString) = m[Symbol(name)]
 
 haskey(m::RegexMatch, idx::Integer) = idx in eachindex(m.captures)
-function haskey(m::RegexMatch, name::Symbol)
+function haskey(m::RegexMatch, name::Union{AbstractString,Symbol})
     idx = PCRE.substring_number_from_name(m.regex.regex, name)
     return idx > 0
 end
-haskey(m::RegexMatch, name::AbstractString) = haskey(m, Symbol(name))
 
 iterate(m::RegexMatch, args...) = iterate(m.captures, args...)
 length(m::RegexMatch) = length(m.captures)
@@ -466,6 +471,18 @@ original string, otherwise they must be from disjoint character ranges.
 
 !!! compat "Julia 1.7"
       Using a character as the pattern requires at least Julia 1.7.
+
+# Examples
+```jldoctest
+julia> count('a', "JuliaLang")
+2
+
+julia> count(r"a(.)a", "cabacabac", overlap=true)
+3
+
+julia> count(r"a(.)a", "cabacabac")
+2
+```
 """
 function count(t::Union{AbstractChar,AbstractString,AbstractPattern}, s::AbstractString; overlap::Bool=false)
     n = 0
@@ -482,7 +499,7 @@ function count(t::Union{AbstractChar,AbstractString,AbstractPattern}, s::Abstrac
 end
 
 """
-    SubstitutionString(substr)
+    SubstitutionString(substr) <: AbstractString
 
 Stores the given string `substr` as a `SubstitutionString`, for use in regular expression
 substitutions. Most commonly constructed using the [`@s_str`](@ref) macro.
@@ -801,7 +818,7 @@ end
 
 
 """
-    ^(s::Regex, n::Integer)
+    ^(s::Regex, n::Integer) -> Regex
 
 Repeat a regex `n` times.
 
