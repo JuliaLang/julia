@@ -155,7 +155,7 @@ the MethodTable).
 """
 macro max_methods(n::Int, fdef::Expr)
     0 < n <= 255 || error("We must have that `1 <= max_methods <= 255`, but `max_methods = $n`.")
-    (fdef.head == :function && length(fdef.args) == 1) || error("Second argument must be a function forward declaration")
+    (fdef.head === :function && length(fdef.args) == 1) || error("Second argument must be a function forward declaration")
     return :(typeof($(esc(fdef))).name.max_methods = $(UInt8(n)))
 end
 

@@ -27,11 +27,11 @@ import ._TOP_MOD:     # Base definitions
     pop!, push!, pushfirst!, empty!, delete!, max, min, enumerate, unwrap_unionall,
     ismutabletype
 import Core.Compiler: # Core.Compiler specific definitions
-    Bottom, InferenceResult, IRCode, IR_FLAG_EFFECT_FREE,
+    Bottom, OptimizerLattice, InferenceResult, IRCode, IR_FLAG_NOTHROW,
     isbitstype, isexpr, is_meta_expr_head, println, widenconst, argextype, singleton_type,
     fieldcount_noerror, try_compute_field, try_compute_fieldidx, hasintersect, ⊑,
     intrinsic_nothrow, array_builtin_common_typecheck, arrayset_typecheck,
-    setfield!_nothrow, alloc_array_ndims, check_effect_free!
+    setfield!_nothrow, alloc_array_ndims, stmt_effect_free, check_effect_free!
 
 include(x) = _TOP_MOD.include(@__MODULE__, x)
 if _TOP_MOD === Core.Compiler
@@ -42,6 +42,7 @@ end
 
 const AInfo = IdSet{Any}
 const LivenessSet = BitSet
+const 𝕃ₒ = OptimizerLattice()
 
 """
     x::EscapeInfo
@@ -772,7 +773,7 @@ A preparatory linear scan before the escape analysis on `ir` to find:
     This array dimension analysis to compute `arrayinfo` is very local and doesn't account
     for flow-sensitivity nor complex aliasing.
     Ideally this dimension analysis should be done as a part of type inference that
-    propagates array dimenstions in a flow sensitive way.
+    propagates array dimensions in a flow sensitive way.
 """
 function compute_frameinfo(ir::IRCode, call_resolved::Bool)
     nstmts, nnewnodes = length(ir.stmts), length(ir.new_nodes.stmts)
@@ -787,7 +788,7 @@ function compute_frameinfo(ir::IRCode, call_resolved::Bool)
         stmt = inst[:inst]
         if !call_resolved
             # TODO don't call `check_effect_free!` in the inlinear
-            check_effect_free!(ir, idx, stmt, inst[:type])
+            check_effect_free!(ir, idx, stmt, inst[:type], 𝕃ₒ)
         end
         if callinfo !== nothing && isexpr(stmt, :call)
             callinfo[idx] = resolve_call(ir, stmt, inst[:info])
@@ -1078,7 +1079,7 @@ end
     error("unexpected assignment found: inspect `Main.pc` and `Main.pc`")
 end
 
-is_effect_free(ir::IRCode, pc::Int) = getinst(ir, pc)[:flag] & IR_FLAG_EFFECT_FREE ≠ 0
+is_nothrow(ir::IRCode, pc::Int) = getinst(ir, pc)[:flag] & IR_FLAG_NOTHROW ≠ 0
 
 # NOTE if we don't maintain the alias set that is separated from the lattice state, we can do
 # something like below: it essentially incorporates forward escape propagation in our default
@@ -1259,7 +1260,7 @@ function escape_foreigncall!(astate::AnalysisState, pc::Int, args::Vector{Any})
         # end
     end
     # NOTE array allocations might have been proven as nothrow (https://github.com/JuliaLang/julia/pull/43565)
-    nothrow = is_effect_free(astate.ir, pc)
+    nothrow = is_nothrow(astate.ir, pc)
     name_info = nothrow ? ⊥ : ThrownEscape(pc)
     add_escape_change!(astate, name, name_info)
     add_liveness_change!(astate, name, pc)
@@ -1290,7 +1291,7 @@ function escape_call!(astate::AnalysisState, pc::Int, args::Vector{Any}, callinf
         # now cascade to the builtin handling
         escape_call!(astate, pc, args)
         return
-    elseif isa(info, CallInfo)
+    elseif isa(info, EACallInfo)
         for linfo in info.linfos
             escape_invoke!(astate, pc, args, linfo, 1)
         end
@@ -1335,7 +1336,7 @@ function escape_call!(astate::AnalysisState, pc::Int, args::Vector{Any})
         # we escape statements with the `ThrownEscape` property using the effect-freeness
         # computed by `stmt_effect_flags` invoked within inlining
         # TODO throwness ≠ "effect-free-ness"
-        if is_effect_free(astate.ir, pc)
+        if is_nothrow(astate.ir, pc)
             add_liveness_changes!(astate, pc, args, 2)
         else
             add_fallback_changes!(astate, pc, args, 2)
@@ -1441,7 +1442,7 @@ function escape_new!(astate::AnalysisState, pc::Int, args::Vector{Any})
             add_liveness_change!(astate, arg, pc)
         end
     end
-    if !is_effect_free(astate.ir, pc)
+    if !is_nothrow(astate.ir, pc)
         add_thrown_escapes!(astate, pc, args)
     end
 end
@@ -1503,6 +1504,8 @@ function escape_builtin!(::typeof(getfield), astate::AnalysisState, pc::Int, arg
     if isa(obj, SSAValue) || isa(obj, Argument)
         objinfo = estate[obj]
     else
+        # unanalyzable object, so the return value is also unanalyzable
+        add_escape_change!(astate, SSAValue(pc), ⊤)
         return false
     end
     AliasInfo = objinfo.AliasInfo
@@ -1594,12 +1597,16 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
     add_escape_change!(astate, val, ssainfo)
     # compute the throwness of this setfield! call here since builtin_nothrow doesn't account for that
     @label add_thrown_escapes
-    argtypes = Any[]
-    for i = 2:length(args)
-        push!(argtypes, argextype(args[i], ir))
+    if length(args) == 4 && setfield!_nothrow(𝕃ₒ,
+        argextype(args[2], ir), argextype(args[3], ir), argextype(args[4], ir))
+        return true
+    elseif length(args) == 3 && setfield!_nothrow(𝕃ₒ,
+        argextype(args[2], ir), argextype(args[3], ir))
+        return true
+    else
+        add_thrown_escapes!(astate, pc, args, 2)
+        return true
     end
-    setfield!_nothrow(argtypes) || add_thrown_escapes!(astate, pc, args, 2)
-    return true
 end
 
 function escape_builtin!(::typeof(arrayref), astate::AnalysisState, pc::Int, args::Vector{Any})
@@ -1622,6 +1629,8 @@ function escape_builtin!(::typeof(arrayref), astate::AnalysisState, pc::Int, arg
     if isa(ary, SSAValue) || isa(ary, Argument)
         aryinfo = estate[ary]
     else
+        # unanalyzable object, so the return value is also unanalyzable
+        add_escape_change!(astate, SSAValue(pc), ⊤)
         return true
     end
     AliasInfo = aryinfo.AliasInfo
@@ -1875,13 +1884,13 @@ end
 # # COMBAK do we want to enable this (and also backport this to Base for array allocations?)
 # import Core.Compiler: Cint, svec
 # function validate_foreigncall_args(args::Vector{Any},
-#     name::Symbol, @nospecialize(rt), argtypes::SimpleVector, nreq::Int, convension::Symbol)
+#     name::Symbol, @nospecialize(rt), argtypes::SimpleVector, nreq::Int, convention::Symbol)
 #     length(args) ≥ 5 || return false
 #     normalize(args[1]) === name || return false
 #     args[2] === rt || return false
 #     args[3] === argtypes || return false
 #     args[4] === vararg || return false
-#     normalize(args[5]) === convension || return false
+#     normalize(args[5]) === convention || return false
 #     return true
 # end
 

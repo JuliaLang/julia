@@ -196,7 +196,7 @@ end
     bestkey(d, key) = key
     bestkey(d::AbstractDict{K,V}, key) where {K<:AbstractString,V} = string(key)
     bar(x) = bestkey(x, :y)
-    @test bar(Dict(:x => [1,2,5])) == :y
+    @test bar(Dict(:x => [1,2,5])) === :y
     @test bar(Dict("x" => [1,2,5])) == "y"
 end
 
@@ -369,23 +369,107 @@ end
 end
 
 
-struct RainBowString
+struct RainbowString
     s::String
+    bold::Bool
+    other::Bool
+    valid::Bool
+    offset::Int
 end
+RainbowString(s, bold=false, other=false, valid=true) = RainbowString(s, bold, other, valid, 0)
 
-function Base.show(io::IO, rbs::RainBowString)
-    for s in rbs.s
-        _, color = rand(Base.text_colors)
-        print(io, color, s, "\e[0m")
+function Base.show(io::IO, rbs::RainbowString)
+    for (i, s) in enumerate(rbs.s)
+        if i ≤ rbs.offset
+            print(io, s)
+            continue
+        end
+        color = rbs.other ? string("\033[4", rand(1:7), 'm') : Base.text_colors[rand(0:255)]
+        if rbs.bold
+            printstyled(io, color, s; bold=true)
+        else
+            print(io, color, s)
+        end
+        if rbs.valid
+            print(io, '\033', '[', rbs.other ? "0" : "39", 'm')  # end of color marker
+        end
     end
 end
 
 @testset "Display with colors" begin
-    d = Dict([randstring(8) => [RainBowString(randstring(8)) for i in 1:10] for j in 1:5]...)
+    d = Dict([randstring(8) => [RainbowString(randstring(8)) for i in 1:10] for j in 1:5]...)
     str = sprint(io -> show(io, MIME("text/plain"), d); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
     lines = split(str, '\n')
-    @test all(endswith('…'), lines[2:end])
+    @test all(endswith("\033[0m…"), lines[2:end])
     @test all(x -> length(x) > 100, lines[2:end])
+
+    d2 = Dict(:foo => RainbowString("bar"))
+    str2 = sprint(io -> show(io, MIME("text/plain"), d2); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
+    @test !occursin('…', str2)
+    @test endswith(str2, "\033[0m")
+
+    d3 = Dict(:foo => RainbowString("bar", true))
+    str3 = sprint(io -> show(io, MIME("text/plain"), d3); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
+    @test !occursin('…', str3)
+    @test endswith(str3, "\033[0m")
+
+    d4 = Dict(RainbowString(randstring(8), true) => nothing)
+    str4 = sprint(io -> show(io, MIME("text/plain"), d4); context = (:displaysize=>(30,20), :color=>true, :limit=>true))
+    @test endswith(str4, "\033[0m… => nothing")
+
+    d5 = Dict(RainbowString(randstring(30), false, true, false) => nothing)
+    str5 = sprint(io -> show(io, MIME("text/plain"), d5); context = (:displaysize=>(30,30), :color=>true, :limit=>true))
+    @test endswith(str5, "\033[0m… => nothing")
+
+    d6 = Dict(randstring(8) => RainbowString(randstring(30), true, true, false) for _ in 1:3)
+    str6 = sprint(io -> show(io, MIME("text/plain"), d6); context = (:displaysize=>(30,30), :color=>true, :limit=>true))
+    lines6 = split(str6, '\n')
+    @test all(endswith("\033[0m…"), lines6[2:end])
+    @test all(x -> length(x) > 100, lines6[2:end])
+    str6_long = sprint(io -> show(io, MIME("text/plain"), d6); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
+    lines6_long = split(str6_long, '\n')
+    @test all(endswith("\033[0m"), lines6_long[2:end])
+
+    d7 = Dict(randstring(8) => RainbowString(randstring(30)))
+    str7 = sprint(io -> show(io, MIME("text/plain"), d7); context = (:displaysize=>(30,20), :color=>true, :limit=>true))
+    line7 = split(str7, '\n')[2]
+    @test endswith(line7, "\033[0m…")
+    @test length(line7) > 100
+
+    d8 = Dict(:x => RainbowString(randstring(10), false, false, false, 6))
+    str8 = sprint(io -> show(io, MIME("text/plain"), d8); context = (:displaysize=>(30,14), :color=>true, :limit=>true))
+    line8 = split(str8, '\n')[2]
+    @test !occursin("\033[", line8)
+    @test length(line8) == 14
+    str8_long = sprint(io -> show(io, MIME("text/plain"), d8); context = (:displaysize=>(30,16), :color=>true, :limit=>true))
+    line8_long = split(str8_long, '\n')[2]
+    @test endswith(line8_long, "\033[0m…")
+    @test length(line8_long) > 20
+
+    d9 = Dict(:x => RainbowString(repeat('苹', 5), false, true, false))
+    str9 = sprint(io -> show(io, MIME("text/plain"), d9); context = (:displaysize=>(30,15), :color=>true, :limit=>true))
+    @test endswith(str9, "\033[0m…")
+    @test count('苹', str9) == 3
+
+    d10 = Dict(:xy => RainbowString(repeat('苹', 5), false, true, false))
+    str10 = sprint(io -> show(io, MIME("text/plain"), d10); context = (:displaysize=>(30,15), :color=>true, :limit=>true))
+    @test endswith(str10, "\033[0m…")
+    @test count('苹', str10) == 2
+
+    d11 = Dict(RainbowString("abcdefgh", false, true, false) => 0, "123456" => 1)
+    str11 = sprint(io -> show(io, MIME("text/plain"), d11); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
+    _, line11_a, line11_b = split(str11, '\n')
+    @test endswith(line11_a, "h\033[0m => 0") || endswith(line11_b, "h\033[0m => 0")
+    @test endswith(line11_a, "6\" => 1") || endswith(line11_b, "6\" => 1")
+
+    d12 = Dict(RainbowString(repeat(Char(48+i), 4), (i&1)==1, (i&2)==2, (i&4)==4) => i for i in 1:8)
+    str12 = sprint(io -> show(io, MIME("text/plain"), d12); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
+    @test !occursin('…', str12)
+
+    d13 = Dict(RainbowString("foo\nbar") => 74)
+    str13 = sprint(io -> show(io, MIME("text/plain"), d13); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
+    @test count('\n', str13) == 1
+    @test occursin('…', str13)
 end
 
 @testset "Issue #15739" begin # Compact REPL printouts of an `AbstractDict` use brackets when appropriate
@@ -1150,7 +1234,7 @@ end
     @test isempty(findall(isequal(1), Dict()))
     @test isempty(findall(isequal(1), Dict(:a=>2, :b=>3)))
 
-    @test findfirst(isequal(1), Dict(:a=>1, :b=>2)) == :a
+    @test findfirst(isequal(1), Dict(:a=>1, :b=>2)) === :a
     @test findfirst(isequal(1), Dict(:a=>1, :b=>1, :c=>3)) in (:a, :b)
     @test findfirst(isequal(1), Dict()) === nothing
     @test findfirst(isequal(1), Dict(:a=>2, :b=>3)) === nothing

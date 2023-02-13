@@ -27,6 +27,7 @@ for path in eachline(`git ls-files -- $patterns`)
     file_err(msg) = push!(errors, (path, 0, msg))
     line_err(msg) = push!(errors, (path, lineno, msg))
 
+    isfile(path) || continue
     for line in eachline(path, keep=true)
         lineno += 1
         contains(line, '\r')   && file_err("non-UNIX line endings")

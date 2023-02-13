@@ -328,6 +328,7 @@ typedef float    fl_float_t;
 typedef value_t (*builtin_t)(fl_context_t*, value_t*, uint32_t);
 
 value_t cvalue(fl_context_t *fl_ctx, fltype_t *type, size_t sz) JL_NOTSAFEPOINT;
+value_t cvalue_no_finalizer(fl_context_t *fl_ctx, fltype_t *type, size_t sz) JL_NOTSAFEPOINT;
 void add_finalizer(fl_context_t *fl_ctx, cvalue_t *cv);
 void cv_autorelease(fl_context_t *fl_ctx, cvalue_t *cv);
 void cv_pin(fl_context_t *fl_ctx, cvalue_t *cv);

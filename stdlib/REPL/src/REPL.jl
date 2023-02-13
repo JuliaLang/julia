@@ -14,6 +14,7 @@ Run Evaluate Print Loop (REPL)
 module REPL
 
 Base.Experimental.@optlevel 1
+Base.Experimental.@max_methods 1
 
 using Base.Meta, Sockets
 import InteractiveUtils
@@ -69,10 +70,6 @@ include("TerminalMenus/TerminalMenus.jl")
 include("docview.jl")
 
 @nospecialize # use only declared type signatures
-
-function __init__()
-    Base.REPL_MODULE_REF[] = REPL
-end
 
 answer_color(::AbstractREPL) = ""
 
@@ -179,8 +176,8 @@ function check_for_missing_packages_and_run_hooks(ast)
 end
 
 function modules_to_be_loaded(ast::Expr, mods::Vector{Symbol} = Symbol[])
-    ast.head == :quote && return mods # don't search if it's not going to be run during this eval
-    if ast.head in [:using, :import]
+    ast.head === :quote && return mods # don't search if it's not going to be run during this eval
+    if ast.head === :using || ast.head === :import
         for arg in ast.args
             arg = arg::Expr
             arg1 = first(arg.args)
@@ -260,7 +257,12 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
     x = Ref{Any}(x)
     with_repl_linfo(d.repl) do io
         io = IOContext(io, :limit => true, :module => active_module(d)::Module)
-        get(io, :color, false) && write(io, answer_color(d.repl))
+        if d.repl isa LineEditREPL
+            mistate = d.repl.mistate
+            mode = LineEdit.mode(mistate)
+            LineEdit.write_output_prefix(io, mode, get(io, :color, false)::Bool)
+        end
+        get(io, :color, false)::Bool && write(io, answer_color(d.repl))
         if isdefined(d.repl, :options) && isdefined(d.repl.options, :iocontext)
             # this can override the :limit property set initially
             io = foldl(IOContext, d.repl.options.iocontext, init=io)
@@ -354,8 +356,7 @@ end
 
     consumer is an optional function that takes a REPLBackend as an argument
 """
-function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); backend_on_current_task::Bool = true)
-    backend = REPLBackend()
+function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); backend_on_current_task::Bool = true, backend = REPLBackend())
     backend_ref = REPLBackendRef(backend)
     cleanup = @task try
             destroy(backend_ref, t)
@@ -384,6 +385,7 @@ end
 mutable struct BasicREPL <: AbstractREPL
     terminal::TextTerminal
     waserror::Bool
+    frontend_task::Task
     BasicREPL(t) = new(t, false)
 end
 
@@ -391,6 +393,7 @@ outstream(r::BasicREPL) = r.terminal
 hascolor(r::BasicREPL) = hascolor(r.terminal)
 
 function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
+    repl.frontend_task = current_task()
     d = REPLDisplay(repl)
     dopushdisplay = !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
@@ -457,6 +460,7 @@ mutable struct LineEditREPL <: AbstractREPL
     last_shown_line_infos::Vector{Tuple{String,Int}}
     interface::ModalInterface
     backendref::REPLBackendRef
+    frontend_task::Task
     function LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors)
         opts = Options()
         opts.hascolor = hascolor
@@ -467,7 +471,7 @@ mutable struct LineEditREPL <: AbstractREPL
             in_help,envcolors,false,nothing, opts, nothing, Tuple{String,Int}[])
     end
 end
-outstream(r::LineEditREPL) = r.t isa TTYTerminal ? r.t.out_stream : r.t
+outstream(r::LineEditREPL) = (t = r.t; t isa TTYTerminal ? t.out_stream : t)
 specialdisplay(r::LineEditREPL) = r.specialdisplay
 specialdisplay(r::AbstractREPL) = nothing
 terminal(r::LineEditREPL) = r.t
@@ -491,11 +495,16 @@ REPLCompletionProvider() = REPLCompletionProvider(LineEdit.Modifiers())
 mutable struct ShellCompletionProvider <: CompletionProvider end
 struct LatexCompletions <: CompletionProvider end
 
-active_module(repl::LineEditREPL) = repl.mistate === nothing ? Main : repl.mistate.active_module
+function active_module() # this method is also called from Base
+    isdefined(Base, :active_repl) || return Main
+    return active_module(Base.active_repl::AbstractREPL)
+end
+active_module((; mistate)::LineEditREPL) = mistate === nothing ? Main : mistate.active_module
 active_module(::AbstractREPL) = Main
 active_module(d::REPLDisplay) = active_module(d.repl)
 
 setmodifiers!(c::REPLCompletionProvider, m::LineEdit.Modifiers) = c.modifiers = m
+
 """
     activate(mod::Module=Main)
 
@@ -503,9 +512,11 @@ Set `mod` as the default contextual module in the REPL,
 both for evaluating expressions and printing them.
 """
 function activate(mod::Module=Main)
-    Base.active_repl.mistate.active_module = mod
+    mistate = (Base.active_repl::LineEditREPL).mistate
+    mistate === nothing && return nothing
+    mistate.active_module = mod
     Base.load_InteractiveUtils(mod)
-    nothing
+    return nothing
 end
 
 beforecursor(buf::IOBuffer) = String(buf.data[1:buf.ptr-1])
@@ -1055,7 +1066,7 @@ function setup_interface(
 
     shell_prompt_len = length(SHELL_PROMPT)
     help_prompt_len = length(HELP_PROMPT)
-    jl_prompt_regex = r"^(?:\(.+\) )?julia> "
+    jl_prompt_regex = r"^In \[[0-9]+\]: |^(?:\(.+\) )?julia> "
     pkg_prompt_regex = r"^(?:\(.+\) )?pkg> "
 
     # Canonicalize user keymap input
@@ -1237,7 +1248,7 @@ function setup_interface(
                 @goto writeback
             end
             try
-                InteractiveUtils.edit(linfos[n][1], linfos[n][2])
+                InteractiveUtils.edit(Base.fixup_stdlib_path(linfos[n][1]), linfos[n][2])
             catch ex
                 ex isa ProcessFailedException || ex isa Base.IOError || ex isa SystemError || rethrow()
                 @info "edit failed" _exception=ex
@@ -1269,6 +1280,7 @@ function setup_interface(
 end
 
 function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
+    repl.frontend_task = current_task()
     d = REPLDisplay(repl)
     dopushdisplay = repl.specialdisplay === nothing && !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
@@ -1294,6 +1306,7 @@ mutable struct StreamREPL <: AbstractREPL
     input_color::String
     answer_color::String
     waserror::Bool
+    frontend_task::Task
     StreamREPL(stream,pc,ic,ac) = new(stream,pc,ic,ac,false)
 end
 StreamREPL(stream::IO) = StreamREPL(stream, Base.text_colors[:green], Base.input_color(), Base.answer_color())
@@ -1352,6 +1365,7 @@ ends_with_semicolon(code::Union{String,SubString{String}}) =
     contains(_rm_strings_and_comments(code), r";\s*$")
 
 function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
+    repl.frontend_task = current_task()
     have_color = hascolor(repl)
     Base.banner(repl.stream)
     d = REPLDisplay(repl)
@@ -1380,5 +1394,74 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     dopushdisplay && popdisplay(d)
     nothing
 end
+
+module IPython
+
+using ..REPL
+
+__current_ast_transforms() = isdefined(Base, :active_repl_backend) ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
+
+function repl_eval_counter(hp)
+    return length(hp.history) - hp.start_idx
+end
+
+function out_transform(@nospecialize(x), n::Ref{Int})
+    return quote
+        let __temp_val_a72df459 = $x
+            $capture_result($n, __temp_val_a72df459)
+            __temp_val_a72df459
+        end
+    end
+end
+
+function capture_result(n::Ref{Int}, @nospecialize(x))
+    n = n[]
+    mod = REPL.active_module()
+    if !isdefined(mod, :Out)
+        setglobal!(mod, :Out, Dict{Int, Any}())
+    end
+    if x !== getglobal(mod, :Out) && x !== nothing # remove this?
+        getglobal(mod, :Out)[n] = x
+    end
+    nothing
+end
+
+function set_prompt(repl::LineEditREPL, n::Ref{Int})
+    julia_prompt = repl.interface.modes[1]
+    julia_prompt.prompt = function()
+        n[] = repl_eval_counter(julia_prompt.hist)+1
+        string("In [", n[], "]: ")
+    end
+    nothing
+end
+
+function set_output_prefix(repl::LineEditREPL, n::Ref{Int})
+    julia_prompt = repl.interface.modes[1]
+    if REPL.hascolor(repl)
+        julia_prompt.output_prefix_prefix = Base.text_colors[:red]
+    end
+    julia_prompt.output_prefix = () -> string("Out[", n[], "]: ")
+    nothing
+end
+
+function __current_ast_transforms(backend)
+    if backend === nothing
+        isdefined(Base, :active_repl_backend) ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
+    else
+        backend.ast_transforms
+    end
+end
+
+
+function ipython_mode!(repl::LineEditREPL=Base.active_repl, backend=nothing)
+    n = Ref{Int}(0)
+    set_prompt(repl, n)
+    set_output_prefix(repl, n)
+    push!(__current_ast_transforms(backend), @nospecialize(ast) -> out_transform(ast, n))
+    return
+end
+end
+
+import .IPython.ipython_mode!
 
 end # module

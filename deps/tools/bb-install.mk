@@ -5,6 +5,7 @@
 #    4 cxx11)                  # signifies a cxx11 ABI dependency
 
 define bb-install
+include $$(SRCDIR)/$1.version
 TRIPLET_VAR := BB_TRIPLET
 ifeq ($(3),true)
 TRIPLET_VAR := $$(TRIPLET_VAR)_LIBGFORTRAN

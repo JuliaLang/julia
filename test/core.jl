@@ -14,16 +14,32 @@ include("testenv.jl")
 # sanity tests that our built-in types are marked correctly for const fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:def]),
+        (Core.CodeInstance, [:def, :rettype, :rettype_const, :ipo_purity_bits, :argescapes]),
         (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :pure, :is_for_opaque_closure, :constprop=#]),
-        (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals]=#]),
+        (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals=#]),
         (Core.MethodTable, [:module]),
         (Core.TypeMapEntry, [:sig, :simplesig, :guardsigs, :min_world, :max_world, :func, :isleafsig, :issimplesig, :va]),
         (Core.TypeMapLevel, []),
         (Core.TypeName, [:name, :module, :names, :atomicfields, :constfields, :wrapper, :mt, :hash, :n_uninitialized, :flags]),
         (DataType, [:name, :super, :parameters, :instance, :hash]),
+        (TypeVar, [:name, :ub, :lb]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if isconst(T, i))) == Set(c)
+end
+#
+# sanity tests that our built-in types are marked correctly for atomic fields
+for (T, c) in (
+        (Core.CodeInfo, []),
+        (Core.CodeInstance, [:next, :inferred, :purity_bits, :invoke, :specptr, :precompile]),
+        (Core.Method, []),
+        (Core.MethodInstance, [:uninferred, :cache, :precompiled]),
+        (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
+        (Core.TypeMapEntry, [:next]),
+        (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
+        (Core.TypeName, [:cache, :linearcache]),
+        (DataType, [:types, :layout]),
+    )
+    @test Set((fieldname(T, i) for i in 1:fieldcount(T) if Base.isfieldatomic(T, i))) == Set(c)
 end
 
 @test_throws(ErrorException("setfield!: const field .name of type DataType cannot be changed"),
@@ -41,14 +57,14 @@ mutable struct ABCDconst
     c
     const d::Union{Int,Nothing}
 end
-@test_throws(ErrorException("invalid redefinition of constant ABCDconst"),
+@test_throws(ErrorException("invalid redefinition of constant $(nameof(curmod)).ABCDconst"),
     mutable struct ABCDconst
         const a
         const b::Int
         c
         d::Union{Int,Nothing}
     end)
-@test_throws(ErrorException("invalid redefinition of constant ABCDconst"),
+@test_throws(ErrorException("invalid redefinition of constant $(nameof(curmod)).ABCDconst"),
     mutable struct ABCDconst
         a
         b::Int
@@ -674,14 +690,14 @@ end
 f21900_cnt = 0
 function f21900()
     for i = 1:1
-        x = 0
+        x_global_undefined_error = 0
     end
     global f21900_cnt += 1
-    x # should be global
+    x_global_undefined_error # should be global
     global f21900_cnt += -1000
     nothing
 end
-@test_throws UndefVarError(:x) f21900()
+@test_throws UndefVarError(:x_global_undefined_error) f21900()
 @test f21900_cnt == 1
 
 # use @eval so this runs as a toplevel scope block
@@ -764,11 +780,15 @@ let
     @test isassigned(a,1) && !isassigned(a,2)
     a = Vector{Float64}(undef,1)
     @test isassigned(a,1)
+    @test isassigned(a,1,1)
     @test isassigned(a)
     @test !isassigned(a,2)
     a = Array{Float64}(undef, 2, 2, 2)
     @test isassigned(a,1)
-    @test isassigned(a)
+    @test isassigned(a,8)
+    @test isassigned(a,2,2,2)
+    @test isassigned(a,2,2,2,1)
+    @test !isassigned(a)
     @test !isassigned(a,9)
     a = Array{Float64}(undef, 1)
     @test isassigned(a,1)
@@ -776,15 +796,22 @@ let
     @test !isassigned(a,2)
     a = Array{Float64}(undef, 2, 2, 2, 2)
     @test isassigned(a,1)
-    @test isassigned(a)
+    @test isassigned(a,2,2,2,2)
+    @test isassigned(a,2,2,2,2,1)
+    @test isassigned(a,16)
+    @test !isassigned(a)
     @test !isassigned(a,17)
+    @test !isassigned(a,3,1,1,1)
+    @test !isassigned(a,1,3,1,1)
+    @test !isassigned(a,1,1,3,1)
+    @test !isassigned(a,1,1,1,3)
 end
 
 # isassigned, issue #11167
 mutable struct Type11167{T,N} end
 function count11167()
     let cache = Type11167.body.body.name.cache
-        return sum(i -> isassigned(cache, i), 0:length(cache))
+        return count(!isnothing, cache)
     end
 end
 @test count11167() == 0
@@ -1407,6 +1434,7 @@ let
     @test occursin("is not properly aligned to $(sizeof(Int)) bytes", res.value.msg)
     res = @test_throws ArgumentError unsafe_wrap(Array, pointer(a) + 1, (1, 1))
     @test occursin("is not properly aligned to $(sizeof(Int)) bytes", res.value.msg)
+    res = @test_throws MethodError unsafe_wrap(Vector{UInt8}, pointer(Int32[1]), (sizeof(Int32),))
 end
 
 struct FooBar2515
@@ -1987,9 +2015,8 @@ mutable struct TupleParam{P}
     x::Bool
 end
 
-function tupledispatch(a::TupleParam{(1,:a)})
-    a.x
-end
+tupledispatch(a::TupleParam{(1,:a)}) = a.x
+tupledispatch(a::TupleParam{(1,(:a,))}) = 42
 
 # tuples can be used as type params
 let t1 = TupleParam{(1,:a)}(true),
@@ -2001,6 +2028,10 @@ let t1 = TupleParam{(1,:a)}(true),
     # dispatch works properly
     @test tupledispatch(t1) == true
     @test_throws MethodError tupledispatch(t2)
+
+    @test tupledispatch(TupleParam{(1,(:a,))}(true)) === 42
+    @test_throws TypeError TupleParam{NamedTuple{(:a,), Tuple{Any}}((1,))}
+    @test_throws TypeError Val{NamedTuple{(:a,), Tuple{NamedTuple{<:Any,Tuple{Int}}}}(((x=2,),))}
 end
 
 # issue #5254
@@ -2838,10 +2869,10 @@ let f
     end
 end
 for m in methods(f10373)
-    @test m.name == :f10373
+    @test m.name === :f10373
 end
 for m in methods(g10373)
-    @test m.name == :g10373
+    @test m.name === :g10373
 end
 
 # issue #7221
@@ -3607,7 +3638,7 @@ let
         @test false
     catch err
         @test isa(err, TypeError)
-        @test err.func == :Vararg
+        @test err.func === :Vararg
         @test err.expected == Int
         @test err.got == Int
     end
@@ -3617,7 +3648,7 @@ let
         @test false
     catch err
         @test isa(err, TypeError)
-        @test err.func == :Vararg
+        @test err.func === :Vararg
         @test err.expected == Int
         @test err.got == 0x1
     end
@@ -4229,7 +4260,7 @@ end
 let ex = quote
              $(if true; :(test); end)
          end
-    @test ex.args[2] == :test
+    @test ex.args[2] === :test
 end
 
 # issue #15180
@@ -4855,12 +4886,19 @@ let a = Any[]
     @test a == [10, 2]
 end
 
+# issue 47209
+struct f47209
+    x::Int
+    f47209()::Nothing = new(1)
+end
+@test_throws MethodError f47209()
+
 # issue #12096
 let a = Val{Val{TypeVar(:_, Int)}},
     b = Val{Val{x} where x<:Int}
 
-    @test !isdefined(a, :instance)
-    @test  isdefined(b, :instance)
+    @test !Base.issingletontype(a)
+    @test  Base.issingletontype(b)
     @test Base.isconcretetype(b)
 end
 
@@ -5925,7 +5963,7 @@ module GlobalDef18933
         global sincos
         nothing
     end
-    @test which(Main, :sincos) === Base.Math
+    @test which(@__MODULE__, :sincos) === Base.Math
     @test @isdefined sincos
     @test sincos === Base.sincos
 end
@@ -6910,9 +6948,9 @@ g27209(x) = f27209(x ? nothing : 1.0)
 # Issue 27240
 @inline function foo27240()
     if rand(Bool)
-        return foo_nonexistant_27240
+        return foo_nonexistent_27240
     else
-        return bar_nonexistant_27240
+        return bar_nonexistent_27240
     end
 end
 bar27240() = foo27240()
@@ -7497,7 +7535,7 @@ end
 struct X36104; x::Int; end
 @test fieldtypes(X36104) == (Int,)
 primitive type P36104 8 end
-@test_throws ErrorException("invalid redefinition of constant P36104") @eval(primitive type P36104 16 end)
+@test_throws ErrorException("invalid redefinition of constant $(nameof(curmod)).P36104") @eval(primitive type P36104 16 end)
 
 # Malformed invoke
 f_bad_invoke(x::Int) = invoke(x, (Any,), x)
@@ -7818,4 +7856,96 @@ f45350() = (global x45350 = 2)
     # throws because we hit `b.x`
     b = Base.RefValue{Integer}()
     @test_throws Core.UndefRefError Base.unsafe_convert(Ptr{Integer}, b)
+end
+
+# #46503 - redefine `invoke`d methods
+foo46503(@nospecialize(a), b::Union{Vector{Any}, Float64, Nothing}) = rand()
+foo46503(a::Int, b::Nothing) = @invoke foo46503(a::Any, b)
+@test 0 <= foo46503(1, nothing) <= 1
+foo46503(@nospecialize(a), b::Union{Nothing, Float64}) = rand() + 10
+@test 10 <= foo46503(1, nothing) <= 11
+
+@testset "effect override on Symbol(::String)" begin
+    @test Core.Compiler.is_foldable(Base.infer_effects(Symbol, (String,)))
+end
+
+@testset "error message for getfield with bad integer type" begin
+    @test_throws "expected Union{$Int, Symbol}" getfield((1,2), Int8(1))
+end
+
+# Correct isdefined error for isdefined of Module of Int fld
+f_isdefined_one(@nospecialize(x)) = isdefined(x, 1)
+@test (try; f_isdefined_one(@__MODULE__); catch err; err; end).got === 1
+
+# Unspecialized retrieval of vararg length
+fvarargN(x::Tuple{Vararg{Int, N}}) where {N} = N
+fvarargN(args...) = fvarargN(args)
+finvokevarargN() = Base.inferencebarrier(fvarargN)(1, 2, 3)
+@test finvokevarargN() == 3
+
+# Make sure that @specialize actually overrides a module annotation
+module SpecializeModuleTest
+    @nospecialize
+    f(@specialize(x), y) = 2
+    @specialize
+end
+@test methods(SpecializeModuleTest.f)[1].nospecialize & 0b11 == 0b10
+
+let # https://github.com/JuliaLang/julia/issues/46918
+    # jl_get_binding_type shouldn't be unstable
+    code = quote
+        res1 = ccall(:jl_get_binding_type, Any, (Any, Any), Main, :stderr)
+
+        stderr
+
+        res2 = ccall(:jl_get_binding_type, Any, (Any, Any), Main, :stderr)
+
+        res3 = ccall(:jl_get_binding_type, Any, (Any, Any), Main, :stderr)
+
+        print(stdout, res1, " ", res2, " ", res3)
+    end |> x->join(x.args, ';')
+    cmd = `$(Base.julia_cmd()) -e $code` # N.B make sure not to pass this code as `:block`
+    stdout = IOBuffer()
+    stderr = IOBuffer()
+    @test success(pipeline(Cmd(cmd); stdout, stderr))
+    @test isempty(String(take!(stderr))) # make sure no error has happened
+    @test String(take!(stdout)) == "nothing IO IO"
+end
+
+# Modules allowed as type parameters and usable in generated functions
+module ModTparamTest
+    foo_test_mod_tparam() = 1
+end
+foo_test_mod_tparam() = 2
+
+struct ModTparamTestStruct{M}; end
+@generated function ModTparamTestStruct{M}() where {M}
+    return :($(GlobalRef(M, :foo_test_mod_tparam))())
+end
+@test ModTparamTestStruct{@__MODULE__}() == 2
+@test ModTparamTestStruct{ModTparamTest}() == 1
+
+# issue #47476
+f47476(::Union{Int, NTuple{N,Int}}...) where {N} = N
+# force it to populate the MethodInstance specializations cache
+# with the correct sparams
+code_typed(f47476, (Vararg{Union{Int, NTuple{2,Int}}},));
+code_typed(f47476, (Int, Vararg{Union{Int, NTuple{2,Int}}},));
+code_typed(f47476, (Int, Int, Vararg{Union{Int, NTuple{2,Int}}},))
+code_typed(f47476, (Int, Int, Int, Vararg{Union{Int, NTuple{2,Int}}},))
+code_typed(f47476, (Int, Int, Int, Int, Vararg{Union{Int, NTuple{2,Int}}},))
+@test f47476(1, 2, 3, 4, 5, 6, (7, 8)) === 2
+@test_throws UndefVarError(:N) f47476(1, 2, 3, 4, 5, 6, 7)
+
+vect47476(::Type{T}) where {T} = T
+@test vect47476(Type{Type{Type{Int32}}}) === Type{Type{Type{Int32}}}
+@test vect47476(Type{Type{Type{Int64}}}) === Type{Type{Type{Int64}}}
+
+g47476(::Union{Nothing,Int,Val{T}}...) where {T} = T
+@test_throws UndefVarError(:T) g47476(nothing, 1, nothing, 2, nothing, 3, nothing, 4, nothing, 5)
+@test g47476(nothing, 1, nothing, 2, nothing, 3, nothing, 4, nothing, 5, Val(6)) === 6
+let spec = only(methods(g47476)).specializations
+    @test !isempty(spec)
+    @test any(mi -> mi !== nothing && Base.isvatuple(mi.specTypes), spec)
+    @test all(mi -> mi === nothing || !Base.has_free_typevars(mi.specTypes), spec)
 end

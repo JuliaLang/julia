@@ -5,7 +5,7 @@
 ###################################
 
 using Random, Sockets
-using Downloads: download
+using Downloads: Downloads, download
 
 valgrind_off = ccall(:jl_running_on_valgrind, Cint, ()) == 0
 
@@ -20,8 +20,33 @@ shcmd = `sh`
 sleepcmd = `sleep`
 lscmd = `ls`
 havebb = false
+
+function _tryonce_download_from_cache(desired_url::AbstractString)
+    cache_url = "https://cache.julialang.org/foo/$(desired_url)"
+    cache_output_filename = joinpath(mktempdir(), "myfile")
+    cache_response = Downloads.request(
+        cache_url;
+        output = cache_output_filename,
+        throw = false,
+        timeout = 60,
+    )
+    if cache_response isa Downloads.Response
+        if Downloads.status_ok(cache_response.proto, cache_response.status)
+            return cache_output_filename
+        end
+    end
+    return Downloads.download(desired_url; timeout = 60)
+end
+
+function download_from_cache(desired_url::AbstractString)
+    f = () -> _tryonce_download_from_cache(desired_url)
+    delays = Float64[30, 30, 60, 60, 60]
+    g = retry(f; delays)
+    return g()
+end
+
 if Sys.iswindows()
-    busybox = download("https://cache.julialang.org/https://frippery.org/files/busybox/busybox.exe", joinpath(tempdir(), "busybox.exe"))
+    busybox = download_from_cache("https://frippery.org/files/busybox/busybox.exe")
     havebb = try # use busybox-w32 on windows, if available
         success(`$busybox`)
         true

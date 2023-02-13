@@ -164,7 +164,8 @@ function doc(binding::Binding, sig::Type = Union{})
     results, groups = DocStr[], MultiDoc[]
     # Lookup `binding` and `sig` for matches in all modules of the docsystem.
     for mod in modules
-        dict = meta(mod)
+        dict = meta(mod; autoinit=false)
+        isnothing(dict) && continue
         if haskey(dict, binding)
             multidoc = dict[binding]
             push!(groups, multidoc)
@@ -226,11 +227,15 @@ function lookup_doc(ex)
             return Markdown.parse("`x $op= y` is a synonym for `x $eq x $op y`")
         elseif isdotted && ex !== :(..)
             op = str[2:end]
-            return Markdown.parse("`x $ex y` is akin to `broadcast($op, x, y)`. See [`broadcast`](@ref).")
+            if op in ("&&", "||")
+                return Markdown.parse("`x $ex y` broadcasts the boolean operator `$op` to `x` and `y`. See [`broadcast`](@ref).")
+            else
+                return Markdown.parse("`x $ex y` is akin to `broadcast($op, x, y)`. See [`broadcast`](@ref).")
+            end
         end
     end
     binding = esc(bindingexpr(namify(ex)))
-    if isexpr(ex, :call) || isexpr(ex, :macrocall)
+    if isexpr(ex, :call) || isexpr(ex, :macrocall) || isexpr(ex, :where)
         sig = esc(signature(ex))
         :($(doc)($binding, $sig))
     else
@@ -561,7 +566,8 @@ Return documentation for a particular `field` of a type if it exists.
 """
 function fielddoc(binding::Binding, field::Symbol)
     for mod in modules
-        dict = meta(mod)
+        dict = meta(mod; autoinit=false)
+        isnothing(dict) && continue
         if haskey(dict, binding)
             multidoc = dict[binding]
             if haskey(multidoc.docs, Union{})
@@ -733,7 +739,8 @@ function doc_completions(name, mod::Module=Main)
 
     # avoid messing up the order while inserting
     for i in reverse(idxs)
-        insert!(res, i, "$(only(ms[i].captures))\"\"")
+        c = only((ms[i]::AbstractMatch).captures)
+        insert!(res, i, "$(c)\"\"")
     end
     res
 end
@@ -829,7 +836,9 @@ function apropos(io::IO, needle::Regex)
     for mod in modules
         # Module doc might be in README.md instead of the META dict
         docsearch(doc(mod), needle) && println(io, mod)
-        for (k, v) in meta(mod)
+        dict = meta(mod; autoinit=false)
+        isnothing(dict) && continue
+        for (k, v) in dict
             docsearch(v, needle) && println(io, k)
         end
     end

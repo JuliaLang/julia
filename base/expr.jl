@@ -193,7 +193,7 @@ Small functions typically do not need the `@inline` annotation,
 as the compiler does it automatically. By using `@inline` on bigger functions,
 an extra nudge can be given to the compiler to inline it.
 
-`@inline` can be applied immediately before the definition or in its function body.
+`@inline` can be applied immediately before a function definition or within a function body.
 
 ```julia
 # annotate long-form definition
@@ -271,7 +271,7 @@ Small functions are typically inlined automatically.
 By using `@noinline` on small functions, auto-inlining can be
 prevented.
 
-`@noinline` can be applied immediately before the definition or in its function body.
+`@noinline` can be applied immediately before a function definition or within a function body.
 
 ```julia
 # annotate long-form definition
@@ -358,36 +358,71 @@ macro pure(ex)
 end
 
 """
-    @constprop setting ex
+    @constprop setting [ex]
 
-`@constprop` controls the mode of interprocedural constant propagation for the
-annotated function. Two `setting`s are supported:
+Control the mode of interprocedural constant propagation for the annotated function.
 
-- `@constprop :aggressive ex`: apply constant propagation aggressively.
+Two `setting`s are supported:
+
+- `@constprop :aggressive [ex]`: apply constant propagation aggressively.
   For a method where the return type depends on the value of the arguments,
   this can yield improved inference results at the cost of additional compile time.
-- `@constprop :none ex`: disable constant propagation. This can reduce compile
+- `@constprop :none [ex]`: disable constant propagation. This can reduce compile
   times for functions that Julia might otherwise deem worthy of constant-propagation.
   Common cases are for functions with `Bool`- or `Symbol`-valued arguments or keyword arguments.
+
+`@constprop` can be applied immediately before a function definition or within a function body.
+
+```julia
+# annotate long-form definition
+@constprop :aggressive function longdef(x)
+  ...
+end
+
+# annotate short-form definition
+@constprop :aggressive shortdef(x) = ...
+
+# annotate anonymous function that a `do` block creates
+f() do
+    @constprop :aggressive
+    ...
+end
+```
+
+!!! compat "Julia 1.10"
+  The usage within a function body requires at least Julia 1.10.
 """
 macro constprop(setting, ex)
-    if isa(setting, QuoteNode)
-        setting = setting.value
+    sym = constprop_setting(setting)
+    isa(ex, Expr) && return esc(pushmeta!(ex, sym))
+    throw(ArgumentError(LazyString("Bad expression `", ex, "` in `@constprop settings ex`")))
+end
+macro constprop(setting)
+    sym = constprop_setting(setting)
+    return Expr(:meta, sym)
+end
+
+function constprop_setting(@nospecialize setting)
+    isa(setting, QuoteNode) && (setting = setting.value)
+    if setting === :aggressive
+        return :aggressive_constprop
+    elseif setting === :none
+        return :no_constprop
     end
-    setting === :aggressive && return esc(isa(ex, Expr) ? pushmeta!(ex, :aggressive_constprop) : ex)
-    setting === :none && return esc(isa(ex, Expr) ? pushmeta!(ex, :no_constprop) : ex)
-    throw(ArgumentError("@constprop $setting not supported"))
+    throw(ArgumentError(LazyString("@constprop "), setting, "not supported"))
 end
 
 """
-    @assume_effects setting... ex
+    @assume_effects setting... [ex]
 
-`@assume_effects` overrides the compiler's effect modeling for the given method.
-`ex` must be a method definition or `@ccall` expression.
+Override the compiler's effect modeling for the given method or foreign call.
+`@assume_effects` can be applied immediately before a function definition or within a function body.
+It can also be applied immediately before a `@ccall` expression.
 
 !!! compat "Julia 1.8"
     Using `Base.@assume_effects` requires Julia version 1.8.
 
+# Examples
 ```jldoctest
 julia> Base.@assume_effects :terminates_locally function pow(x)
            # this :terminates_locally allows `pow` to be constant-folded
@@ -409,14 +444,37 @@ julia> code_typed() do
 1 ─     return 479001600
 ) => Int64
 
+julia> code_typed() do
+           map((2,3,4)) do x
+               # this :terminates_locally allows this anonymous function to be constant-folded
+               Base.@assume_effects :terminates_locally
+               res = 1
+               1 < x < 20 || error("bad pow")
+               while x > 1
+                   res *= x
+                   x -= 1
+               end
+               return res
+           end
+       end
+1-element Vector{Any}:
+ CodeInfo(
+1 ─     return (2, 6, 24)
+) => Tuple{Int64, Int64, Int64}
+
 julia> Base.@assume_effects :total !:nothrow @ccall jl_type_intersection(Vector{Int}::Any, Vector{<:Integer}::Any)::Any
 Vector{Int64} (alias for Array{Int64, 1})
 ```
 
+!!! compat "Julia 1.10"
+  The usage within a function body requires at least Julia 1.10.
+
 !!! warning
     Improper use of this macro causes undefined behavior (including crashes,
-    incorrect answers, or other hard to track bugs). Use with care and only if
-    absolutely required.
+    incorrect answers, or other hard to track bugs). Use with care and only as a
+    last resort if absolutely required. Even in such a case, you SHOULD take all
+    possible steps to minimize the strength of the effect assertion (e.g.,
+    do not use `:total` if `:nothrow` would have been sufficient).
 
 In general, each `setting` value makes an assertion about the behavior of the
 function, without requiring the compiler to prove that this behavior is indeed
@@ -431,7 +489,9 @@ The following `setting`s are supported.
 - `:terminates_globally`
 - `:terminates_locally`
 - `:notaskstate`
+- `:inaccessiblememonly`
 - `:foldable`
+- `:removable`
 - `:total`
 
 # Extended help
@@ -444,8 +504,8 @@ The `:consistent` setting asserts that for egal (`===`) inputs:
 - If the method returns, the results will always be egal.
 
 !!! note
-    This in particular implies that the return value of the method must be
-    immutable. Multiple allocations of mutable objects (even with identical
+    This in particular implies that the method must not return a freshly allocated
+    mutable object. Multiple allocations of mutable objects (even with identical
     contents) are not egal.
 
 !!! note
@@ -569,12 +629,29 @@ moved between tasks without observable results.
     may still be dead-code-eliminated and thus promoted to `:total`.
 
 ---
+## `:inaccessiblememonly`
+
+The `:inaccessiblememonly` setting asserts that the method does not access or modify
+externally accessible mutable memory. This means the method can access or modify mutable
+memory for newly allocated objects that is not accessible by other methods or top-level
+execution before return from the method, but it can not access or modify any mutable
+global state or mutable memory pointed to by its arguments.
+
+!!! note
+    Below is an incomplete list of examples that invalidate this assumption:
+    - a global reference or `getglobal` call to access a mutable global variable
+    - a global assignment or `setglobal!` call to perform assignment to a non-constant global variable
+    - `setfield!` call that changes a field of a global mutable variable
+
+!!! note
+    This `:inaccessiblememonly` assertion covers any other methods called by the annotated method.
+
+---
 ## `:foldable`
 
 This setting is a convenient shortcut for the set of effects that the compiler
 requires to be guaranteed to constant fold a call at compile time. It is
 currently equivalent to the following `setting`s:
-
 - `:consistent`
 - `:effect_free`
 - `:terminates_globally`
@@ -584,6 +661,20 @@ currently equivalent to the following `setting`s:
     attempt constant propagation and note any thrown error at compile time. Note
     however, that by the `:consistent`-cy requirements, any such annotated call
     must consistently throw given the same argument values.
+
+!!! note
+    An explicit `@inbounds` annotation inside the function will also disable
+    constant folding and not be overriden by `:foldable`.
+
+---
+## `:removable`
+
+This setting is a convenient shortcut for the set of effects that the compiler
+requires to be guaranteed to delete a call whose result is unused at compile time.
+It is currently equivalent to the following `setting`s:
+- `:effect_free`
+- `:nothrow`
+- `:terminates_globally`
 
 ---
 ## `:total`
@@ -595,6 +686,7 @@ the following other `setting`s:
 - `:nothrow`
 - `:terminates_globally`
 - `:notaskstate`
+- `:inaccessiblememonly`
 
 !!! warning
     `:total` is a very strong assertion and will likely gain additional semantics
@@ -623,9 +715,21 @@ Another advantage is that effects introduced by `@assume_effects` are propagated
 callers interprocedurally while a purity defined by `@pure` is not.
 """
 macro assume_effects(args...)
-    (consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate) =
-        (false, false, false, false, false, false, false)
-    for org_setting in args[1:end-1]
+    lastex = args[end]
+    inner = unwrap_macrocalls(lastex)
+    if is_function_def(inner)
+        ex = lastex
+        idx = length(args)-1
+    elseif isexpr(lastex, :macrocall) && lastex.args[1] === Symbol("@ccall")
+        ex = lastex
+        idx = length(args)-1
+    else # anonymous function case
+        ex = nothing
+        idx = length(args)
+    end
+    (consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly) =
+        (false, false, false, false, false, false, false, false)
+    for org_setting in args[1:idx]
         (setting, val) = compute_assumed_setting(org_setting)
         if setting === :consistent
             consistent = val
@@ -639,24 +743,31 @@ macro assume_effects(args...)
             terminates_locally = val
         elseif setting === :notaskstate
             notaskstate = val
+        elseif setting === :inaccessiblememonly
+            inaccessiblememonly = val
         elseif setting === :foldable
             consistent = effect_free = terminates_globally = val
+        elseif setting === :removable
+            effect_free = nothrow = terminates_globally = val
         elseif setting === :total
-            consistent = effect_free = nothrow = terminates_globally = notaskstate = val
+            consistent = effect_free = nothrow = terminates_globally = notaskstate = inaccessiblememonly = val
         else
             throw(ArgumentError("@assume_effects $org_setting not supported"))
         end
     end
-    ex = args[end]
-    isa(ex, Expr) || throw(ArgumentError("Bad expression `$ex` in `@assume_effects [settings] ex`"))
-    if ex.head === :macrocall && ex.args[1] == Symbol("@ccall")
+    if is_function_def(inner)
+        return esc(pushmeta!(ex, :purity,
+            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly))
+    elseif isexpr(ex, :macrocall) && ex.args[1] === Symbol("@ccall")
         ex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
         insert!(ex.args, 3, Core.Compiler.encode_effects_override(Core.Compiler.EffectsOverride(
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate
+            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly,
         )))
         return esc(ex)
+    else # anonymous function case
+        return Expr(:meta, Expr(:purity,
+            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly))
     end
-    return esc(pushmeta!(ex, :purity, consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate))
 end
 
 function compute_assumed_setting(@nospecialize(setting), val::Bool=true)
@@ -850,7 +961,7 @@ the global scope or depending on mutable elements.
 
 See [Metaprogramming](@ref) for further details.
 
-## Example:
+# Examples
 ```jldoctest
 julia> @generated function bar(x)
            if x <: Integer
@@ -924,6 +1035,7 @@ This operation translates to a `modifyproperty!(a.b, :x, func, arg2)` call.
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
+# Examples
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
 
@@ -1023,6 +1135,7 @@ This operation translates to a `swapproperty!(a.b, :x, new)` call.
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
+# Examples
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
 
@@ -1069,6 +1182,7 @@ This operation translates to a `replaceproperty!(a.b, :x, expected, desired)` ca
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
+# Examples
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
 
@@ -1084,7 +1198,7 @@ julia> @atomic a.x # fetch field x of a, with sequential consistency
 julia> @atomicreplace a.x 1 => 2 # replace field x of a with 2 if it was 1, with sequential consistency
 (old = 2, success = false)
 
-julia> xchg = 2 => 0; # replace field x of a with 0 if it was 1, with sequential consistency
+julia> xchg = 2 => 0; # replace field x of a with 0 if it was 2, with sequential consistency
 
 julia> @atomicreplace a.x xchg
 (old = 2, success = true)

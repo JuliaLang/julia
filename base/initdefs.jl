@@ -93,7 +93,6 @@ function append_default_depot_path!(DEPOT_PATH)
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
     path = abspath(Sys.BINDIR, "..", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
-    return DEPOT_PATH
 end
 
 function init_depot_path()
@@ -112,7 +111,6 @@ function init_depot_path()
     else
         append_default_depot_path!(DEPOT_PATH)
     end
-    nothing
 end
 
 ## LOAD_PATH & ACTIVE_PROJECT ##
@@ -222,7 +220,9 @@ function parse_load_path(str::String)
 end
 
 function init_load_path()
-    if haskey(ENV, "JULIA_LOAD_PATH")
+    if Base.creating_sysimg
+        paths = ["@stdlib"]
+    elseif haskey(ENV, "JULIA_LOAD_PATH")
         paths = parse_load_path(ENV["JULIA_LOAD_PATH"])
     else
         paths = filter!(env -> env !== nothing,
@@ -354,8 +354,16 @@ const atexit_hooks = Callable[
 """
     atexit(f)
 
-Register a zero-argument function `f()` to be called at process exit. `atexit()` hooks are
-called in last in first out (LIFO) order and run before object finalizers.
+Register a zero- or one-argument function `f()` to be called at process exit.
+`atexit()` hooks are called in last in first out (LIFO) order and run before
+object finalizers.
+
+If `f` has a method defined for one integer argument, it will be called as
+`f(n::Int32)`, where `n` is the current exit code, otherwise it will be called
+as `f()`.
+
+!!! compat "Julia 1.9"
+    The one-argument form requires Julia 1.9
 
 Exit hooks are allowed to call `exit(n)`, in which case Julia will exit with
 exit code `n` (instead of the original exit code). If more than one exit hook
@@ -365,11 +373,15 @@ LIFO order, "last called" is equivalent to "first registered".)
 """
 atexit(f::Function) = (pushfirst!(atexit_hooks, f); nothing)
 
-function _atexit()
+function _atexit(exitcode::Cint)
     while !isempty(atexit_hooks)
         f = popfirst!(atexit_hooks)
         try
-            f()
+            if hasmethod(f, (Cint,))
+                f(exitcode)
+            else
+                f()
+            end
         catch ex
             showerror(stderr, ex)
             Base.show_backtrace(stderr, catch_backtrace())

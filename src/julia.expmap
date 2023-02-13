@@ -5,6 +5,7 @@
     asprintf;
     bitvector_*;
     ios_*;
+    arraylist_grow;
     small_arraylist_grow;
     jl_*;
     ijl_*;
@@ -37,12 +38,6 @@
     /* freebsd */
     environ;
     __progname;
-
-    /* compiler run-time intrinsics */
-    __gnu_h2f_ieee;
-    __extendhfsf2;
-    __gnu_f2h_ieee;
-    __truncdfhf2;
 
   local:
     *;

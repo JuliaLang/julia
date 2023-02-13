@@ -192,8 +192,8 @@ for (S, H) in ((:Symmetric, :Hermitian), (:Hermitian, :Symmetric))
     end
 end
 
-convert(T::Type{<:Symmetric}, m::Union{Symmetric,Hermitian}) = m isa T ? m : T(m)
-convert(T::Type{<:Hermitian}, m::Union{Symmetric,Hermitian}) = m isa T ? m : T(m)
+convert(::Type{T}, m::Union{Symmetric,Hermitian}) where {T<:Symmetric} = m isa T ? m : T(m)::T
+convert(::Type{T}, m::Union{Symmetric,Hermitian}) where {T<:Hermitian} = m isa T ? m : T(m)::T
 
 const HermOrSym{T,        S} = Union{Hermitian{T,S}, Symmetric{T,S}}
 const RealHermSym{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}}
@@ -240,6 +240,8 @@ end
 
 diag(A::Symmetric) = symmetric.(diag(parent(A)), sym_uplo(A.uplo))
 diag(A::Hermitian) = hermitian.(diag(parent(A)), sym_uplo(A.uplo))
+
+isdiag(A::HermOrSym) = isdiag(A.uplo == 'U' ? UpperTriangular(A.data) : LowerTriangular(A.data))
 
 # For A<:Union{Symmetric,Hermitian}, similar(A[, neweltype]) should yield a matrix with the same
 # symmetry type, uplo flag, and underlying storage type as A. The following methods cover these cases.
@@ -316,6 +318,7 @@ function fillstored!(A::HermOrSym{T}, x) where T
     return A
 end
 
+Base.isreal(A::HermOrSym{<:Real}) = true
 function Base.isreal(A::HermOrSym)
     n = size(A, 1)
     @inbounds if A.uplo == 'U'
@@ -363,6 +366,7 @@ Base.copy(A::Adjoint{<:Any,<:Symmetric}) =
 Base.copy(A::Transpose{<:Any,<:Hermitian}) =
     Hermitian(copy(transpose(A.parent.data)), ifelse(A.parent.uplo == 'U', :L, :U))
 
+tr(A::Symmetric) = tr(A.data) # to avoid AbstractMatrix fallback (incl. allocations)
 tr(A::Hermitian) = real(tr(A.data))
 
 Base.conj(A::HermOrSym) = typeof(A)(conj(A.data), A.uplo)
@@ -577,9 +581,11 @@ end
 
 function dot(x::AbstractVector, A::RealHermSymComplexHerm, y::AbstractVector)
     require_one_based_indexing(x, y)
-    (length(x) == length(y) == size(A, 1)) || throw(DimensionMismatch())
+    n = length(x)
+    (n == length(y) == size(A, 1)) || throw(DimensionMismatch())
     data = A.data
-    r = zero(eltype(x)) * zero(eltype(A)) * zero(eltype(y))
+    r = dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    iszero(n) && return r
     if A.uplo == 'U'
         @inbounds for j = 1:length(y)
             r += dot(x[j], real(data[j,j]), y[j])
@@ -611,7 +617,9 @@ end
 factorize(A::HermOrSym) = _factorize(A)
 function _factorize(A::HermOrSym{T}; check::Bool=true) where T
     TT = typeof(sqrt(oneunit(T)))
-    if TT <: BlasFloat
+    if isdiag(A)
+        return Diagonal(A)
+    elseif TT <: BlasFloat
         return bunchkaufman(A; check=check)
     else # fallback
         return lu(A; check=check)
@@ -622,10 +630,10 @@ det(A::RealHermSymComplexHerm) = real(det(_factorize(A; check=false)))
 det(A::Symmetric{<:Real}) = det(_factorize(A; check=false))
 det(A::Symmetric) = det(_factorize(A; check=false))
 
-\(A::HermOrSym{<:Any,<:StridedMatrix}, B::AbstractVector) = \(factorize(A), B)
+\(A::HermOrSym, B::AbstractVector) = \(factorize(A), B)
 # Bunch-Kaufman solves can not utilize BLAS-3 for multiple right hand sides
 # so using LU is faster for AbstractMatrix right hand side
-\(A::HermOrSym{<:Any,<:StridedMatrix}, B::AbstractMatrix) = \(lu(A), B)
+\(A::HermOrSym, B::AbstractMatrix) = \(isdiag(A) ? Diagonal(A) : lu(A), B)
 
 function _inv(A::HermOrSym)
     n = checksquare(A)
@@ -643,6 +651,7 @@ function _inv(A::HermOrSym)
     end
     B
 end
+# StridedMatrix restriction seems necessary due to inv! call in _inv above
 inv(A::Hermitian{<:Any,<:StridedMatrix}) = Hermitian(_inv(A), sym_uplo(A.uplo))
 inv(A::Symmetric{<:Any,<:StridedMatrix}) = Symmetric(_inv(A), sym_uplo(A.uplo))
 

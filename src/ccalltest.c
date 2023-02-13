@@ -13,7 +13,9 @@
 #ifdef _OS_WINDOWS_
 #  define DLLEXPORT __declspec(dllexport)
 #else
-# if defined(_OS_LINUX_)
+# if defined(_OS_LINUX_) && !defined(_COMPILER_CLANG_)
+// Clang and ld disagree about the proper relocation for STV_PROTECTED, causing
+// linker errors.
 #  define DLLEXPORT __attribute__ ((visibility("protected")))
 # else
 #  define DLLEXPORT __attribute__ ((visibility("default")))

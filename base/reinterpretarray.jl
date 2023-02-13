@@ -25,6 +25,28 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
     end
 
     global reinterpret
+
+    """
+        reinterpret(T::DataType, A::AbstractArray)
+
+    Construct a view of the array with the same binary data as the given
+    array, but with `T` as element type.
+
+    This function also works on "lazy" array whose elements are not computed until they are explicitly retrieved.
+    For instance, `reinterpret` on the range `1:6` works similarly as on the dense vector `collect(1:6)`:
+
+    ```jldoctest
+    julia> reinterpret(Float32, UInt32[1 2 3 4 5])
+    1×5 reinterpret(Float32, ::Matrix{UInt32}):
+    1.0f-45  3.0f-45  4.0f-45  6.0f-45  7.0f-45
+
+    julia> reinterpret(Complex{Int}, 1:6)
+    3-element reinterpret(Complex{$Int}, ::UnitRange{$Int}):
+    1 + 2im
+    3 + 4im
+    5 + 6im
+    ```
+    """
     function reinterpret(::Type{T}, a::A) where {T,N,S,A<:AbstractArray{S, N}}
         function thrownonint(S::Type, T::Type, dim)
             @noinline
@@ -152,23 +174,15 @@ strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = siz
 stride(A::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, k::Integer) =
     k ≤ ndims(A) ? strides(A)[k] : length(A)
 
-function strides(a::ReshapedReinterpretArray)
-    ap = parent(a)
-    els, elp = elsize(a), elsize(ap)
-    stp = strides(ap)
-    els == elp && return stp
-    els < elp && return (1, _checked_strides(stp, els, elp)...)
+function strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped}) where {T,S,IsReshaped}
+    _checkcontiguous(Bool, a) && return size_to_strides(1, size(a)...)
+    stp = strides(parent(a))
+    els, elp = sizeof(T), sizeof(S)
+    els == elp && return stp # 0dim parent is also handled here.
+    IsReshaped && els < elp && return (1, _checked_strides(stp, els, elp)...)
     stp[1] == 1 || throw(ArgumentError("Parent must be contiguous in the 1st dimension!"))
-    return _checked_strides(tail(stp), els, elp)
-end
-
-function strides(a::NonReshapedReinterpretArray)
-    ap = parent(a)
-    els, elp = elsize(a), elsize(ap)
-    stp = strides(ap)
-    els == elp && return stp
-    stp[1] == 1 || throw(ArgumentError("Parent must be contiguous in the 1st dimension!"))
-    return (1, _checked_strides(tail(stp), els, elp)...)
+    st′ = _checked_strides(tail(stp), els, elp)
+    return IsReshaped ? st′ : (1, st′...)
 end
 
 @inline function _checked_strides(stp::Tuple, els::Integer, elp::Integer)
@@ -332,6 +346,8 @@ function axes(a::ReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
     return paxs
 end
 axes(a::NonReshapedReinterpretArray{T,0}) where {T} = ()
+
+has_offset_axes(a::ReinterpretArray) = has_offset_axes(a.parent)
 
 elsize(::Type{<:ReinterpretArray{T}}) where {T} = sizeof(T)
 unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))
@@ -646,7 +662,7 @@ function intersect(p1::Padding, p2::Padding)
     Padding(start, max(0, stop-start))
 end
 
-struct PaddingError
+struct PaddingError <: Exception
     S::Type
     T::Type
 end
@@ -706,25 +722,30 @@ function CyclePadding(T::DataType)
     CyclePadding(pad, as)
 end
 
-using .Iterators: Stateful
 @assume_effects :total function array_subpadding(S, T)
-    checked_size = 0
     lcm_size = lcm(sizeof(S), sizeof(T))
-    s, t = Stateful{<:Any, Any}(CyclePadding(S)),
-           Stateful{<:Any, Any}(CyclePadding(T))
-    isempty(t) && return true
-    isempty(s) && return false
+    s, t = CyclePadding(S), CyclePadding(T)
+    checked_size = 0
+    # use of Stateful harms inference and makes this vulnerable to invalidation
+    (pad, tstate) = let
+        it = iterate(t)
+        it === nothing && return true
+        it
+    end
+    (ps, sstate) = let
+        it = iterate(s)
+        it === nothing && return false
+        it
+    end
     while checked_size < lcm_size
-        # Take padding in T
-        pad = popfirst!(t)
-        # See if there's corresponding padding in S
         while true
-            ps = peek(s)
+            # See if there's corresponding padding in S
             ps.offset > pad.offset && return false
             intersect(ps, pad) == pad && break
-            popfirst!(s)
+            ps, sstate = iterate(s, sstate)
         end
         checked_size = pad.offset + pad.size
+        pad, tstate = iterate(t, tstate)
     end
     return true
 end

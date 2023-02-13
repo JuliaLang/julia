@@ -10,7 +10,6 @@ myzeros(::Type{T}, ::Type{S}, ::Type{R}, dims::Tuple{Vararg{Integer, N}}, dims2:
     seekstart(io)
     @test startswith(readline(io), "MethodInstance for ")
     @test occursin(r"^  from myzeros\(::.*Type.*{T}, ::", readline(io))
-    readline(io) # skip location information from method printing - already tested in base
     @test occursin(r"^Static Parameters$", readline(io))
     @test occursin(r"^  T <: .*Integer", readline(io))
     @test occursin(r"^  .*Signed.* <: R <: .*Real", readline(io))

@@ -70,6 +70,11 @@ real(H::UpperHessenberg{<:Real}) = H
 real(H::UpperHessenberg{<:Complex}) = UpperHessenberg(triu!(real(H.data),-1))
 imag(H::UpperHessenberg) = UpperHessenberg(triu!(imag(H.data),-1))
 
+function istriu(A::UpperHessenberg, k::Integer=0)
+    k <= -1 && return true
+    return _istriu(A, k)
+end
+
 function Matrix{T}(H::UpperHessenberg) where T
     m,n = size(H)
     return triu!(copyto!(Matrix{T}(undef, m, n), H.data), -1)
@@ -164,28 +169,24 @@ end
 
 function *(H::UpperHessenberg, B::Bidiagonal)
     TS = promote_op(matprod, eltype(H), eltype(B))
-    A = A_mul_B_td!(zeros(TS, size(H)), H, B)
+    A = mul!(similar(H, TS, size(H)), H, B)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 function *(B::Bidiagonal, H::UpperHessenberg)
     TS = promote_op(matprod, eltype(B), eltype(H))
-    A = A_mul_B_td!(zeros(TS, size(H)), B, H)
+    A = mul!(similar(H, TS, size(H)), B, H)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 
-/(H::UpperHessenberg, B::Bidiagonal) = _rdiv(H, B)
-/(H::UpperHessenberg{<:Number}, B::Bidiagonal{<:Number}) = _rdiv(H, B)
-function _rdiv(H::UpperHessenberg, B::Bidiagonal)
+function /(H::UpperHessenberg, B::Bidiagonal)
     T = typeof(oneunit(eltype(H))/oneunit(eltype(B)))
-    A = _rdiv!(zeros(T, size(H)), H, B)
+    A = _rdiv!(similar(H, T, size(H)), H, B)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 
-\(B::Bidiagonal{<:Number}, H::UpperHessenberg{<:Number}) = _ldiv(B, H)
-\(B::Bidiagonal, H::UpperHessenberg) = _ldiv(B, H)
-function _ldiv(B::Bidiagonal, H::UpperHessenberg)
+function \(B::Bidiagonal, H::UpperHessenberg)
     T = typeof(oneunit(eltype(B))\oneunit(eltype(H)))
-    A = ldiv!(zeros(T, size(H)), B, H)
+    A = ldiv!(similar(H, T, size(H)), B, H)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 
@@ -434,7 +435,7 @@ Base.iterate(S::Hessenberg, ::Val{:done}) = nothing
 
 hessenberg!(A::StridedMatrix{<:BlasFloat}) = Hessenberg(LAPACK.gehrd!(A)...)
 
-function hessenberg!(A::Union{Symmetric{<:BlasReal},Hermitian{<:BlasFloat}})
+function hessenberg!(A::Union{Symmetric{<:BlasReal,<:StridedMatrix},Hermitian{<:BlasFloat,<:StridedMatrix}})
     factors, τ, d, e = LAPACK.hetrd!(A.uplo, A.data)
     return Hessenberg(factors, τ, SymTridiagonal(d, e), A.uplo)
 end
@@ -502,7 +503,7 @@ true
 ```
 """
 hessenberg(A::AbstractMatrix{T}) where T =
-    hessenberg!(copymutable_oftype(A, eigtype(T)))
+    hessenberg!(eigencopy_oftype(A, eigtype(T)))
 
 function show(io::IO, mime::MIME"text/plain", F::Hessenberg)
     summary(io, F)
