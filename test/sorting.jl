@@ -764,9 +764,9 @@ end
 @testset "Unions with missing" begin
     @test issorted(sort(shuffle!(vcat(fill(missing, 10), rand(Int, 100)))))
     @test issorted(sort(vcat(rand(Int8, 600), [missing])))
-    
+
     # Because we define defalg(::AbstractArray{Missing})
-    @test all(fill(missing, 10) .=== sort(fill(missing, 10))) 
+    @test all(fill(missing, 10) .=== sort(fill(missing, 10)))
 
     # Unit tests for WithoutMissingVector
     a = [1,7,missing,4]
