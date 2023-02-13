@@ -76,6 +76,26 @@ let NT = NamedTuple{(:a,:b),Tuple{Int8,Int16}}, nt = (x=3,y=4)
     @test_throws MethodError convert(NT, nt)
 end
 
+@testset "convert NamedTuple" begin
+    conv1 = convert(NamedTuple{(:a,),Tuple{I}} where I, (;a=1))
+    @test conv1 === (a = 1,)
+
+    conv2 = convert(NamedTuple{(:a,),Tuple{Any}}, (;a=1))
+    @test conv2 === NamedTuple{(:a,), Tuple{Any}}((1,))
+
+    conv3 = convert(NamedTuple{(:a,),}, (;a=1))
+    @test conv3 === (a = 1,)
+
+    conv4 = convert(NamedTuple{(:a,),Tuple{I}} where I<:Unsigned, (;a=1))
+    @test conv4 === NamedTuple{(:a,), Tuple{Unsigned}}((1,))
+
+    conv5 = convert(NamedTuple, (;a=1))
+    @test conv1 === (a = 1,)
+
+    conv_res = @test_throws MethodError convert(NamedTuple{(:a,),Tuple{I}} where I<:AbstractString, (;a=1))
+    @test conv_res.value.f === convert && conv_res.value.args === (AbstractString, 1)
+end
+
 @test NamedTuple{(:a,:c)}((b=1,z=2,c=3,aa=4,a=5)) === (a=5, c=3)
 @test NamedTuple{(:a,)}(NamedTuple{(:b, :a), Tuple{Int, Union{Int,Nothing}}}((1, 2))) ===
     NamedTuple{(:a,), Tuple{Union{Int,Nothing}}}((2,))

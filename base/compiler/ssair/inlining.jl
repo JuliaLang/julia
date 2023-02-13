@@ -795,7 +795,19 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
 end
 
 function compileable_specialization(match::MethodMatch, effects::Effects,
-    et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
+        et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
+    if !compilesig_invokes
+        # If there are unknown typevars, this MethodInstance is illegal to
+        # :invoke, but we only check for compilesig usually, so check here to
+        # avoid generating bad code.
+        # TODO: We could also compute the correct type parameters in the runtime
+        # and let this go through, but that requires further changes, because
+        # currently the runtime assumes that a MethodInstance with the appropriate
+        # sparams is created.
+        if _any(t->isa(t, TypeVar), match.sparams)
+            return nothing
+        end
+    end
     mi = specialize_method(match; compilesig=compilesig_invokes)
     mi === nothing && return nothing
     add_inlining_backedge!(et, mi)
@@ -803,11 +815,9 @@ function compileable_specialization(match::MethodMatch, effects::Effects,
 end
 
 function compileable_specialization(linfo::MethodInstance, effects::Effects,
-    et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
-    mi = specialize_method(linfo.def::Method, linfo.specTypes, linfo.sparam_vals; compilesig=compilesig_invokes)
-    mi === nothing && return nothing
-    add_inlining_backedge!(et, mi)
-    return InvokeCase(mi, effects, info)
+        et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
+    return compileable_specialization(MethodMatch(linfo.specTypes,
+     linfo.sparam_vals, linfo.def::Method, false), effects, et, info; compilesig_invokes)
 end
 
 compileable_specialization(result::InferenceResult, args...; kwargs...) = (@nospecialize;
@@ -829,9 +839,8 @@ end
         end
         effects = decode_effects(code.ipo_purity_bits)
         return CachedResult(src, effects)
-    else # fallback pass for external AbstractInterpreter cache
-        return CachedResult(code, Effects())
     end
+    return CachedResult(nothing, Effects())
 end
 
 # the general resolver for usual and const-prop'ed calls
@@ -843,10 +852,13 @@ function resolve_todo(mi::MethodInstance, result::Union{MethodMatch,InferenceRes
     #XXX: update_valid_age!(min_valid[1], max_valid[1], sv)
     if isa(result, InferenceResult)
         src = result.src
-        if isa(src, ConstAPI)
-            # use constant calling convention
-            add_inlining_backedge!(et, mi)
-            return ConstantCase(quoted(src.val))
+        if is_foldable_nothrow(result.ipo_effects)
+            res = result.result
+            if isa(res, Const) && is_inlineable_constant(res.val)
+                # use constant calling convention
+                add_inlining_backedge!(et, mi)
+                return ConstantCase(quoted(res.val))
+            end
         end
         effects = result.ipo_effects
     else
@@ -866,16 +878,6 @@ function resolve_todo(mi::MethodInstance, result::Union{MethodMatch,InferenceRes
     end
 
     src = inlining_policy(state.interp, src, info, flag, mi, argtypes)
-
-    if isa(src, ConstAPI)
-        # duplicates the check above in case inlining_policy has a better idea.
-        # We still keep the check above to make sure we can inline to ConstAPI
-        # even if is_stmt_noinline. This doesn't currently happen in Base, but
-        # can happen with external AbstractInterpreter.
-        add_inlining_backedge!(et, mi)
-        return ConstantCase(quoted(src.val))
-    end
-
     src === nothing && return compileable_specialization(result, effects, et, info;
         compilesig_invokes=state.params.compilesig_invokes)
 
@@ -988,7 +990,7 @@ function handle_single_case!(todo::Vector{Pair{Int,Any}},
     if isa(case, ConstantCase)
         ir[SSAValue(idx)][:inst] = case.val
     elseif isa(case, InvokeCase)
-        is_total(case.effects) && inline_const_if_inlineable!(ir[SSAValue(idx)]) && return nothing
+        is_foldable_nothrow(case.effects) && inline_const_if_inlineable!(ir[SSAValue(idx)]) && return nothing
         isinvoke && rewrite_invoke_exprargs!(stmt)
         stmt.head = :invoke
         pushfirst!(stmt.args, case.invoke)
@@ -1335,14 +1337,13 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt8, sig:
     nunion === nothing && return nothing
     cases = InliningCase[]
     argtypes = sig.argtypes
-    local any_fully_covered = false
     local handled_all_cases::Bool = true
     local revisit_idx = nothing
     local only_method = nothing
     local meth::MethodLookupResult
     local all_result_count = 0
     local joint_effects::Effects = EFFECTS_TOTAL
-    local nothrow::Bool = true
+    local fully_covered::Bool = true
     for i = 1:nunion
         meth = getsplit(info, i)
         if meth.ambig
@@ -1364,12 +1365,12 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt8, sig:
                 only_method = false
             end
         end
+        local split_fully_covered::Bool = false
         for (j, match) in enumerate(meth)
             all_result_count += 1
             result = getresult(info, all_result_count)
             joint_effects = merge_effects(joint_effects, info_effects(result, match, state))
-            nothrow &= match.fully_covers
-            any_fully_covered |= match.fully_covers
+            split_fully_covered |= match.fully_covers
             if !validate_sparams(match.sparams)
                 if !match.fully_covers
                     handled_all_cases = false
@@ -1386,9 +1387,10 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt8, sig:
                     result, match, argtypes, info, flag, state; allow_abstract=true, allow_typevars=false)
             end
         end
+        fully_covered &= split_fully_covered
     end
 
-    joint_effects = Effects(joint_effects; nothrow)
+    joint_effects = Effects(joint_effects; nothrow=fully_covered)
 
     if handled_all_cases && revisit_idx !== nothing
         # we handled everything except one match with unmatched sparams,
@@ -1415,13 +1417,13 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt8, sig:
         end
         handle_any_const_result!(cases,
             result, match, argtypes, info, flag, state; allow_abstract=true, allow_typevars=true)
-        any_fully_covered = handled_all_cases = match.fully_covers
+        fully_covered = handled_all_cases = match.fully_covers
     elseif !handled_all_cases
         # if we've not seen all candidates, union split is valid only for dispatch tuples
         filter!(case::InliningCase->isdispatchtuple(case.sig), cases)
     end
 
-    return cases, (handled_all_cases & any_fully_covered), joint_effects
+    return cases, (handled_all_cases & fully_covered), joint_effects
 end
 
 function handle_call!(todo::Vector{Pair{Int,Any}},

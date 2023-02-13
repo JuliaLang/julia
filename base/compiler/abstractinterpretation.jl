@@ -1045,7 +1045,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
             return nothing
         end
         argtypes = has_conditional(𝕃ᵢ) ? ConditionalArgtypes(arginfo, sv) : SimpleArgtypes(arginfo.argtypes)
-        inf_result = InferenceResult(mi, argtypes)
+        inf_result = InferenceResult(mi, argtypes, typeinf_lattice(interp))
         if !any(inf_result.overridden_by_const)
             add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
             return nothing
@@ -1281,12 +1281,8 @@ function const_prop_methodinstance_heuristic(interp::AbstractInterpreter,
         # If so, there will be a good chance we might be able to const prop
         # all the way through and learn something new.
         code = get(code_cache(interp), mi, nothing)
-        if isdefined(code, :inferred)
-            if isa(code, CodeInstance)
-                inferred = @atomic :monotonic code.inferred
-            else
-                inferred = code.inferred
-            end
+        if isa(code, CodeInstance)
+            inferred = @atomic :monotonic code.inferred
             # TODO propagate a specific `CallInfo` that conveys information about this call
             if inlining_policy(interp, inferred, NoCallInfo(), IR_FLAG_NULL, mi, arginfo.argtypes) !== nothing
                 return true
@@ -2034,7 +2030,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             fargs = nothing
         end
         argtypes = Any[typeof(<:), argtypes[3], argtypes[2]]
-        return CallMeta(abstract_call_known(interp, <:, ArgInfo(fargs, argtypes), si, sv, max_methods).rt, EFFECTS_TOTAL, NoCallInfo())
+        return abstract_call_known(interp, <:, ArgInfo(fargs, argtypes), si, sv, max_methods)
     elseif la == 2 &&
            (a2 = argtypes[2]; isa(a2, Const)) && (svecval = a2.val; isa(svecval, SimpleVector)) &&
            istopfunction(f, :length)
@@ -2189,9 +2185,14 @@ function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::
     head = e.head
     if head === :static_parameter
         n = e.args[1]::Int
+        nothrow = false
         if 1 <= n <= length(sv.sptypes)
-            rt = sv.sptypes[n]
+            sp = sv.sptypes[n]
+            rt = sp.typ
+            nothrow = !sp.undef
         end
+        merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; nothrow))
+        return rt
     elseif head === :boundscheck
         if isa(sv, InferenceState)
             # If there is no particular `@inbounds` for this function, then we only taint `:noinbounds`,
@@ -2452,9 +2453,11 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         elseif isexpr(sym, :static_parameter)
             n = sym.args[1]::Int
             if 1 <= n <= length(sv.sptypes)
-                spty = sv.sptypes[n]
-                if isa(spty, Const)
+                sp = sv.sptypes[n]
+                if !sp.undef
                     t = Const(true)
+                elseif sp.typ === Bottom
+                    t = Const(false)
                 end
             end
         end
@@ -2893,6 +2896,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         empty!(frame.pclimitations)
                         @goto find_next_bb
                     end
+                    orig_condt = condt
                     if !(isa(condt, Const) || isa(condt, Conditional)) && isa(condx, SlotNumber)
                         # if this non-`Conditional` object is a slot, we form and propagate
                         # the conditional constraint on it
@@ -2924,6 +2928,14 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                             handle_control_backedge!(interp, frame, currpc, stmt.dest)
                             @goto branch
                         else
+                            if !⊑(𝕃ᵢ, orig_condt, Bool)
+                                merge_effects!(interp, frame, EFFECTS_THROWS)
+                                if !hasintersect(widenconst(orig_condt), Bool)
+                                    ssavaluetypes[currpc] = Bottom
+                                    @goto find_next_bb
+                                end
+                            end
+
                             # We continue with the true branch, but process the false
                             # branch here.
                             if isa(condt, Conditional)

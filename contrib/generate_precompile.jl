@@ -27,6 +27,7 @@ const fancyprint = (stdout isa Base.TTY) && Base.get_bool_env("CI", false) !== t
 ##
 
 CTRL_C = '\x03'
+CTRL_R = '\x12'
 UP_ARROW = "\e[A"
 DOWN_ARROW = "\e[B"
 
@@ -69,6 +70,7 @@ display([1 2; 3 4])
 @time 1+1
 ; pwd
 $CTRL_C
+$CTRL_R$CTRL_C
 ? reinterpret
 using Ra\t$CTRL_C
 \\alpha\t$CTRL_C
