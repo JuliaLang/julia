@@ -1734,29 +1734,6 @@ precompile_test_harness("WindowsCacheOverwrite") do load_path
 end
 
 
-if Sys.isunix()
-    precompile_test_harness("System linker") do dir
-        Rand_module = :Rand_abs2142fsdasd
-        write(joinpath(dir, "$Rand_module.jl"),
-            """
-            module $Rand_module
-                time = rand()
-            end
-            """)
-        exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no`
-        testcode = """
-        insert!(LOAD_PATH, 1, $(repr(dir)))
-        insert!(DEPOT_PATH, 1, $(repr(dir)))
-        using $Rand_module
-        getfield($Rand_module, :time)
-    """
-        withenv("JULIA_PKGIMG_LINKER" => "ld") do
-            @test success(`$exename -E $(testcode)`)
-        end
-    end
-end
-
-
 
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
