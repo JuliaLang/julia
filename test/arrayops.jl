@@ -2293,6 +2293,15 @@ end
         f2(a) = eachslice(a, dims=2)
         @test (@inferred f2(a)) == eachcol(a)
     end
+
+    @testset "eachslice bounds checking" begin
+        # https://github.com/JuliaLang/julia/pull/32310#issuecomment-1146911510
+        A = eachslice(rand(2,3), dims = 2, drop = false)
+        @test_throws BoundsError A[2, 1]
+        @test_throws BoundsError A[4]
+        @test_throws BoundsError A[2,3] = [4,5]
+        @test_throws BoundsError A[2,3] .= [4,5]
+    end
 end
 
 ###

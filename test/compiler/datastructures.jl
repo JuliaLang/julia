@@ -8,8 +8,8 @@ using Test
     sig = Tuple{typeof(*), Any, Any}
     result1 = Core.Compiler.findall(sig, table; limit=-1)
     result2 = Core.Compiler.findall(sig, table; limit=Core.Compiler.get_max_methods(*, @__MODULE__, interp))
-    @test result1 !== Core.Compiler.missing && !Core.Compiler.isempty(result1.matches)
-    @test result2 === Core.Compiler.missing
+    @test result1 !== nothing && !Core.Compiler.isempty(result1.matches)
+    @test result2 === nothing
 end
 
 @testset "BitSetBoundedMinPrioritySet" begin

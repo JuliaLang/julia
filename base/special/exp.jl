@@ -238,8 +238,10 @@ end
     r = muladd(N_float, LogBo256L(base, T), r)
     k = N >> 8
     jU, jL = table_unpack(N)
-    very_small = muladd(jU, expm1b_kernel(base, r), jL)
-    small_part =  muladd(jU,xlo,very_small) + jU
+    kern = expm1b_kernel(base, r)
+    very_small = muladd(kern, jU*xlo, jL)
+    hi, lo = Base.canonicalize2(1.0, kern)
+    small_part = fma(jU, hi, muladd(jU, (lo+xlo), very_small))
     if !(abs(x) <= SUBNORM_EXP(base, T))
         x >= MAX_EXP(base, T) && return Inf
         x <= MIN_EXP(base, T) && return 0.0

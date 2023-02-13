@@ -372,12 +372,9 @@ function showerror_nostdio(err, msg::AbstractString)
     ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, "\n")
 end
 
-stacktrace_expand_basepaths()::Bool =
-    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_EXPAND_BASEPATHS", "false")) === true
-stacktrace_contract_userdir()::Bool =
-    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_CONTRACT_HOMEDIR", "true")) === true
-stacktrace_linebreaks()::Bool =
-    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_LINEBREAKS", "false")) === true
+stacktrace_expand_basepaths()::Bool = Base.get_bool_env("JULIA_STACKTRACE_EXPAND_BASEPATHS", false) === true
+stacktrace_contract_userdir()::Bool = Base.get_bool_env("JULIA_STACKTRACE_CONTRACT_HOMEDIR", true) === true
+stacktrace_linebreaks()::Bool = Base.get_bool_env("JULIA_STACKTRACE_LINEBREAKS", false) === true
 
 function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=())
     is_arg_types = isa(ex.args, DataType)

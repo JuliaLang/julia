@@ -32,6 +32,10 @@ module IteratorsMD
     A `CartesianIndex` is sometimes produced by [`eachindex`](@ref), and
     always when iterating with an explicit [`CartesianIndices`](@ref).
 
+    An `I::CartesianIndex` is treated as a "scalar" (not a container)
+    for `broadcast`.   In order to iterate over the components of a
+    `CartesianIndex`, convert it to a tuple with `Tuple(I)`.
+
     # Examples
     ```jldoctest
     julia> A = reshape(Vector(1:16), (2, 2, 2, 2))
@@ -61,6 +65,10 @@ module IteratorsMD
     julia> A[CartesianIndex((1, 1, 2, 1))]
     5
     ```
+
+    !!! compat "Julia 1.10"
+        Using a `CartesianIndex` as a "scalar" for `broadcast` requires
+        Julia 1.10; in previous releases, use `Ref(I)`.
     """
     struct CartesianIndex{N} <: AbstractCartesianIndex{N}
         I::NTuple{N,Int}

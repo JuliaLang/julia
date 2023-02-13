@@ -88,7 +88,7 @@ There are various ways to run Julia code and provide options, similar to those a
 julia [switches] -- [programfile] [args...]
 ```
 
-The following is a complete list of command-line switches available when launching julia (a '*' marks the default value, if applicable):
+The following is a complete list of command-line switches available when launching julia (a '*' marks the default value, if applicable; settings marked '($)' may trigger package precompilation):
 
 |Switch                                 |Description|
 |:---                                   |:---|
@@ -102,6 +102,7 @@ The following is a complete list of command-line switches available when launchi
 |`--handle-signals={yes*\|no}`          |Enable or disable Julia's default signal handlers|
 |`--sysimage-native-code={yes*\|no}`    |Use native code from system image if available|
 |`--compiled-modules={yes*\|no}`        |Enable or disable incremental precompilation of modules|
+|`--pkgimages={yes*\|no}`               |Enable or disable usage of native code caching in the form of pkgimages|
 |`-e`, `--eval <expr>`                  |Evaluate `<expr>`|
 |`-E`, `--print <expr>`                 |Evaluate `<expr>` and display the result|
 |`-L`, `--load <file>`                  |Load `<file>` immediately on all processors|
@@ -117,15 +118,17 @@ The following is a complete list of command-line switches available when launchi
 |`--warn-overwrite={yes\|no*}`          |Enable or disable method overwrite warnings|
 |`--warn-scope={yes*\|no}`              |Enable or disable warning for ambiguous top-level scope|
 |`-C`, `--cpu-target <target>`          |Limit usage of CPU features up to `<target>`; set to `help` to see the available options|
-|`-O`, `--optimize={0,1,2*,3}`          |Set the optimization level (level is 3 if `-O` is used without a level)|
+|`-O`, `--optimize={0,1,2*,3}`          |Set the optimization level (level is 3 if `-O` is used without a level) ($)|
 |`--min-optlevel={0*,1,2,3}`            |Set the lower bound on per-module optimization|
-|`-g {0,1*,2}`                          |Set the level of debug info generation (level is 2 if `-g` is used without a level)|
+|`-g`, `--debug-info={0,1*,2}`          |Set the level of debug info generation (level is 2 if `-g` is used without a level) ($)|
 |`--inline={yes\|no}`                   |Control whether inlining is permitted, including overriding `@inline` declarations|
-|`--check-bounds={yes\|no\|auto*}`      |Emit bounds checks always, never, or respect `@inbounds` declarations|
+|`--check-bounds={yes\|no\|auto*}`      |Emit bounds checks always, never, or respect `@inbounds` declarations ($)|
 |`--math-mode={ieee,fast}`              |Disallow or enable unsafe floating point optimizations (overrides `@fastmath` declaration)|
 |`--code-coverage[={none*\|user\|all}]` |Count executions of source lines (omitting setting is equivalent to `user`)|
+|`--code-coverage=@<path>`              |Count executions but only in files that fall under the given file path/directory. The `@` prefix is required to select this option. A `@` with no path will track the current directory.|
 |`--code-coverage=tracefile.info`       |Append coverage information to the LCOV tracefile (filename supports format tokens).|
 |`--track-allocation[={none*\|user\|all}]` |Count bytes allocated by each source line (omitting setting is equivalent to "user")|
+|`--track-allocation=@<path>`           |Count bytes but only in files that fall under the given file path/directory. The `@` prefix is required to select this option. A `@` with no path will track the current directory.|
 |`--bug-report=KIND`                    |Launch a bug report session. It can be used to start a REPL, run a script, or evaluate expressions. It first tries to use BugReporting.jl installed in current environment and falls back to the latest compatible BugReporting.jl if not. For more information, see `--bug-report=help`.|
 |`--compile={yes*\|no\|all\|min}`       |Enable or disable JIT compiler, or request exhaustive or minimal compilation|
 |`--output-o <name>`                    |Generate an object file (including system image data)|
