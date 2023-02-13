@@ -70,6 +70,9 @@ end
     listen(path::AbstractString) -> PipeServer
 
 Create and listen on a named pipe / UNIX domain socket.
+
+!!! note
+    Path length on Unix is limited to somewhere between 92 and 108 bytes (cf. `man unix`).
 """
 function listen(path::AbstractString)
     sock = PipeServer()
@@ -93,5 +96,8 @@ end
     connect(path::AbstractString) -> PipeEndpoint
 
 Connect to the named pipe / UNIX domain socket at `path`.
+
+!!! note
+    Path length on Unix is limited to somewhere between 92 and 108 bytes (cf. `man unix`).
 """
 connect(path::AbstractString) = connect(PipeEndpoint(), path)

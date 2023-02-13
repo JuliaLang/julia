@@ -18,6 +18,7 @@ export
     AbstractMatrix,
     AbstractRange,
     AbstractSet,
+    AbstractSlices,
     AbstractUnitRange,
     AbstractVector,
     AbstractVecOrMat,
@@ -41,6 +42,7 @@ export
     ComplexF32,
     ComplexF16,
     ComposedFunction,
+    ColumnSlices,
     DenseMatrix,
     DenseVecOrMat,
     DenseVector,
@@ -57,6 +59,7 @@ export
     IOStream,
     LinRange,
     Irrational,
+    LazyString,
     Matrix,
     MergeSort,
     Missing,
@@ -79,8 +82,10 @@ export
     RoundNearestTiesUp,
     RoundToZero,
     RoundUp,
+    RowSlices,
     Set,
     Some,
+    Slices,
     StepRange,
     StepRangeLen,
     StridedArray,
@@ -121,6 +126,7 @@ export
     Cwstring,
 
 # Exceptions
+    CanonicalIndexError,
     CapturedException,
     CompositeException,
     DimensionMismatch,
@@ -346,6 +352,7 @@ export
     tan,
     tand,
     tanh,
+    tanpi,
     trailing_ones,
     trailing_zeros,
     trunc,
@@ -385,12 +392,14 @@ export
     eachindex,
     eachrow,
     eachslice,
+    extrema!,
     extrema,
     fill!,
     fill,
     first,
     hcat,
     hvcat,
+    hvncat,
     indexin,
     argmax,
     argmin,
@@ -437,6 +446,7 @@ export
     sortperm!,
     sortslices,
     dropdims,
+    stack,
     step,
     stride,
     strides,
@@ -494,6 +504,7 @@ export
 # collections
     all!,
     all,
+    allequal,
     allunique,
     any!,
     any,
@@ -503,6 +514,7 @@ export
     count,
     delete!,
     deleteat!,
+    keepat!,
     eltype,
     empty!,
     empty,
@@ -571,11 +583,14 @@ export
     bytes2hex,
     chomp,
     chop,
+    chopprefix,
+    chopsuffix,
     codepoint,
     codeunit,
     codeunits,
     digits,
     digits!,
+    eachsplit,
     escape_string,
     hex2bytes,
     hex2bytes!,
@@ -647,7 +662,6 @@ export
 
 # iteration
     iterate,
-
     enumerate,  # re-exported from Iterators
     zip,
     only,
@@ -699,9 +713,11 @@ export
 
 # missing values
     coalesce,
+    @coalesce,
     ismissing,
     missing,
     skipmissing,
+    @something,
     something,
     isnothing,
     nonmissingtype,
@@ -714,6 +730,7 @@ export
 # errors
     backtrace,
     catch_backtrace,
+    current_exceptions,
     error,
     rethrow,
     retry,
@@ -726,6 +743,9 @@ export
     convert,
     getproperty,
     setproperty!,
+    swapproperty!,
+    modifyproperty!,
+    replaceproperty!,
     fieldoffset,
     fieldname,
     fieldnames,
@@ -753,6 +773,7 @@ export
 # syntax
     esc,
     gensym,
+    @kwdef,
     macroexpand,
     @macroexpand1,
     @macroexpand,
@@ -771,9 +792,13 @@ export
     parentmodule,
     pathof,
     pkgdir,
+    pkgversion,
     names,
     which,
     @isdefined,
+    @invoke,
+    invokelatest,
+    @invokelatest,
 
 # loading source files
     __precompile__,
@@ -792,9 +817,11 @@ export
     atreplinit,
     exit,
     ntuple,
+    splat,
 
 # I/O and events
     close,
+    closewrite,
     countlines,
     eachline,
     readeach,
@@ -828,6 +855,7 @@ export
     readline,
     readlines,
     readuntil,
+    redirect_stdio,
     redirect_stderr,
     redirect_stdin,
     redirect_stdout,
@@ -864,6 +892,7 @@ export
     basename,
     dirname,
     expanduser,
+    contractuser,
     homedir,
     isabspath,
     isdirpath,
@@ -882,10 +911,12 @@ export
     chown,
     cp,
     ctime,
+    diskstat,
     download,
     filemode,
     filesize,
     gperm,
+    hardlink,
     isblockdev,
     ischardev,
     isdir,
@@ -911,6 +942,7 @@ export
     pwd,
     readlink,
     rm,
+    samefile,
     stat,
     symlink,
     tempdir,
@@ -929,6 +961,7 @@ export
     run,
     setenv,
     addenv,
+    setcpuaffinity,
     success,
     withenv,
 
@@ -969,6 +1002,7 @@ export
     @v_str,    # version number
     @raw_str,  # raw string with no interpolation/unescaping
     @NamedTuple,
+    @lazy_str, # lazy string
 
     # documentation
     @text_str,
@@ -980,10 +1014,12 @@ export
 
     # profiling
     @time,
+    @showtime,
     @timed,
     @timev,
     @elapsed,
     @allocated,
+    @allocations,
 
     # tasks
     @sync,
@@ -1009,6 +1045,9 @@ export
     @polly,
 
     @assert,
+    @atomic,
+    @atomicswap,
+    @atomicreplace,
     @__dot__,
     @enum,
     @label,

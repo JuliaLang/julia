@@ -1,34 +1,46 @@
-commit c71298423c26b2143dc6f6ce554ec910ed882f8a
-Author: Keno Fischer <keno@juliacomputing.com>
-Date:   Sat Feb 6 18:13:16 2021 -0500
+From 8c8c78e2db09c5dc66ad0188a088b1664483a13f Mon Sep 17 00:00:00 2001
+From: Keno Fischer <keno@juliacomputing.com>
+Date: Sun, 29 Aug 2021 11:07:54 -0700
+Subject: [PATCH] x86_64: Stop aliasing RSP and CFA
 
-    x86_64: Stop aliasing RSP and CFA
-    
-    RSP and CFA are different concepts. RSP refers to the physical
-    register, CFA is a virtual register that serves as the base
-    address for various other saved registers. It is true that
-    in many frames these are set to alias, however this is not
-    a requirement. For example, a function that performs a stack
-    switch would likely change the rsp in the middle of the function,
-    but would keep the CFA at the original RSP such that saved registers
-    may be appropriately recovered.
-    
-    We are seeing incorrect unwinds in the Julia runtime when running
-    julia under rr. This is because injects code (with correct CFI)
-    that performs just such a stack switch [1]. GDB manages to unwind
-    this correctly, but libunwind incorrectly sets the rsp to the CFA
-    address, causing a misunwind.
-    
-    Tested on x86_64, patches for other architectures are ported, but
-    not tested.
-    
-    [1] https://github.com/rr-debugger/rr/blob/469c22059a4a1798d33a8a224457faf22b2c178c/src/preload/syscall_hook.S#L454
+RSP and CFA are different concepts. RSP refers to the physical
+register, CFA is a virtual register that serves as the base
+address for various other saved registers. It is true that
+in many frames these are set to alias, however this is not
+a requirement. For example, a function that performs a stack
+switch would likely change the rsp in the middle of the function,
+but would keep the CFA at the original RSP such that saved registers
+may be appropriately recovered.
+
+We are seeing incorrect unwinds in the Julia runtime when running
+julia under rr. This is because injects code (with correct CFI)
+that performs just such a stack switch [1]. GDB manages to unwind
+this correctly, but libunwind incorrectly sets the rsp to the CFA
+address, causing a misunwind.
+
+Tested on x86_64, patches for other architectures are ported, but
+not tested.
+
+[1] https://github.com/rr-debugger/rr/blob/469c22059a4a1798d33a8a224457faf22b2c178c/src/preload/syscall_hook.S#L454
+---
+ include/dwarf.h                 |  3 +-
+ include/libunwind_i.h           |  4 ++
+ include/tdep-x86/dwarf-config.h |  2 -
+ include/tdep-x86/libunwind_i.h  | 73 ++++++++++++---------------------
+ src/dwarf/Gparser.c             | 15 +++++--
+ src/x86/Gos-freebsd.c           |  1 +
+ src/x86/Gregs.c                 |  2 +-
+ src/x86/Gstep.c                 |  4 +-
+ src/x86_64/Gos-freebsd.c        |  1 +
+ src/x86_64/Gregs.c              |  2 +-
+ src/x86_64/Gstep.c              |  2 +-
+ 11 files changed, 52 insertions(+), 57 deletions(-)
 
 diff --git a/include/dwarf.h b/include/dwarf.h
-index fab93c61..b845e2eb 100644
+index 175c419bb..23ff4c4f6 100644
 --- a/include/dwarf.h
 +++ b/include/dwarf.h
-@@ -227,6 +227,7 @@ typedef enum
+@@ -231,6 +231,7 @@ typedef enum
      DWARF_WHERE_REG,            /* register saved in another register */
      DWARF_WHERE_EXPR,           /* register saved */
      DWARF_WHERE_VAL_EXPR,       /* register has computed value */
@@ -36,7 +48,7 @@ index fab93c61..b845e2eb 100644
    }
  dwarf_where_t;
  
-@@ -309,7 +310,7 @@ typedef struct dwarf_cursor
+@@ -313,7 +314,7 @@ typedef struct dwarf_cursor
      void *as_arg;               /* argument to address-space callbacks */
      unw_addr_space_t as;        /* reference to per-address-space info */
  
@@ -46,10 +58,10 @@ index fab93c61..b845e2eb 100644
      unw_word_t args_size;       /* size of arguments */
      unw_word_t eh_args[UNW_TDEP_NUM_EH_REGS];
 diff --git a/include/libunwind_i.h b/include/libunwind_i.h
-index 36cf7a14..dcec1683 100644
+index fea5c2607..6c7dda9a8 100644
 --- a/include/libunwind_i.h
 +++ b/include/libunwind_i.h
-@@ -351,6 +351,10 @@ static inline void invalidate_edi (struct elf_dyn_info *edi)
+@@ -346,6 +346,10 @@ static inline void invalidate_edi (struct elf_dyn_info *edi)
  
  #include "tdep/libunwind_i.h"
  
@@ -61,7 +73,7 @@ index 36cf7a14..dcec1683 100644
  # define tdep_get_func_addr(as,addr,v)          (*(v) = addr, 0)
  #endif
 diff --git a/include/tdep-x86/dwarf-config.h b/include/tdep-x86/dwarf-config.h
-index f76f9c1c..11398e4e 100644
+index f76f9c1c4..11398e4e6 100644
 --- a/include/tdep-x86/dwarf-config.h
 +++ b/include/tdep-x86/dwarf-config.h
 @@ -43,9 +43,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
@@ -75,21 +87,19 @@ index f76f9c1c..11398e4e 100644
  dwarf_loc_t;
  
 diff --git a/include/tdep-x86/libunwind_i.h b/include/tdep-x86/libunwind_i.h
-index 5231189a..1b59fe34 100644
+index d4c5ccdb1..ad4edc2f5 100644
 --- a/include/tdep-x86/libunwind_i.h
 +++ b/include/tdep-x86/libunwind_i.h
-@@ -88,14 +88,28 @@ dwarf_get_uc(const struct dwarf_cursor *cursor)
+@@ -84,15 +84,26 @@ dwarf_get_uc(const struct dwarf_cursor *cursor)
+ }
  
  #define DWARF_GET_LOC(l)        ((l).val)
- 
--#ifdef UNW_LOCAL_ONLY
-+
-+#define DWARF_GET_LOC(l)        ((l).val)
 +# define DWARF_LOC_TYPE_MEM     (0 << 0)
 +# define DWARF_LOC_TYPE_FP      (1 << 0)
 +# define DWARF_LOC_TYPE_REG     (1 << 1)
 +# define DWARF_LOC_TYPE_VAL     (1 << 2)
-+
+ 
+-#ifdef UNW_LOCAL_ONLY
 +# define DWARF_IS_REG_LOC(l)    (((l).type & DWARF_LOC_TYPE_REG) != 0)
 +# define DWARF_IS_FP_LOC(l)     (((l).type & DWARF_LOC_TYPE_FP) != 0)
 +# define DWARF_IS_MEM_LOC(l)    ((l).type == DWARF_LOC_TYPE_MEM)
@@ -112,7 +122,7 @@ index 5231189a..1b59fe34 100644
  # define DWARF_FPREG_LOC(c,r)   (DWARF_LOC((unw_word_t)                      \
                                   tdep_uc_addr(dwarf_get_uc(c), (r)), 0))
  
-@@ -117,35 +131,8 @@ dwarf_putfp (struct dwarf_cursor *c, dwarf_loc_t loc, unw_fpreg_t val)
+@@ -114,35 +125,8 @@ dwarf_putfp (struct dwarf_cursor *c, dwarf_loc_t loc, unw_fpreg_t val)
    return 0;
  }
  
@@ -148,7 +158,7 @@ index 5231189a..1b59fe34 100644
  # define DWARF_FPREG_LOC(c,r)   DWARF_LOC((r), (DWARF_LOC_TYPE_REG      \
                                                  | DWARF_LOC_TYPE_FP))
  
-@@ -195,38 +182,33 @@ dwarf_putfp (struct dwarf_cursor *c, dwarf_loc_t loc, unw_fpreg_t val)
+@@ -192,38 +176,33 @@ dwarf_putfp (struct dwarf_cursor *c, dwarf_loc_t loc, unw_fpreg_t val)
                                     1, c->as_arg);
  }
  
@@ -195,7 +205,7 @@ index 5231189a..1b59fe34 100644
    if (DWARF_IS_REG_LOC (loc))
      return (*c->as->acc.access_reg) (c->as, DWARF_GET_LOC (loc), &val,
                                       1, c->as_arg);
-@@ -235,7 +217,9 @@ dwarf_put (struct dwarf_cursor *c, dwarf_loc_t loc, unw_word_t val)
+@@ -232,7 +211,9 @@ dwarf_put (struct dwarf_cursor *c, dwarf_loc_t loc, unw_word_t val)
                                       1, c->as_arg);
  }
  
@@ -207,18 +217,10 @@ index 5231189a..1b59fe34 100644
  #define tdep_getcontext_trace           unw_getcontext
  #define tdep_init_done                  UNW_OBJ(init_done)
 diff --git a/src/dwarf/Gparser.c b/src/dwarf/Gparser.c
-index 7d255aee..b1308d3c 100644
+index da170d4b3..70a62c505 100644
 --- a/src/dwarf/Gparser.c
 +++ b/src/dwarf/Gparser.c
-@@ -28,6 +28,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
- #include <stddef.h>
- #include <limits.h>
- 
-+
- #define alloc_reg_state()       (mempool_alloc (&dwarf_reg_state_pool))
- #define free_reg_state(rs)      (mempool_free (&dwarf_reg_state_pool, rs))
- 
-@@ -501,6 +502,9 @@ setup_fde (struct dwarf_cursor *c, dwarf_state_record_t *sr)
+@@ -508,6 +508,9 @@ setup_fde (struct dwarf_cursor *c, dwarf_state_record_t *sr)
    for (i = 0; i < DWARF_NUM_PRESERVED_REGS + 2; ++i)
      set_reg (sr, i, DWARF_WHERE_SAME, 0);
  
@@ -228,7 +230,7 @@ index 7d255aee..b1308d3c 100644
    struct dwarf_cie_info *dci = c->pi.unwind_info;
    sr->rs_current.ret_addr_column  = dci->ret_addr_column;
    unw_word_t addr = dci->cie_instr_start;
-@@ -785,14 +789,14 @@ apply_reg_state (struct dwarf_cursor *c, struct dwarf_reg_state *rs)
+@@ -792,14 +795,14 @@ apply_reg_state (struct dwarf_cursor *c, struct dwarf_reg_state *rs)
        /* As a special-case, if the stack-pointer is the CFA and the
           stack-pointer wasn't saved, popping the CFA implicitly pops
           the stack-pointer as well.  */
@@ -247,7 +249,7 @@ index 7d255aee..b1308d3c 100644
              return ret;
          }
        cfa += rs->reg.val[DWARF_CFA_OFF_COLUMN];
-@@ -826,6 +830,10 @@ apply_reg_state (struct dwarf_cursor *c, struct dwarf_reg_state *rs)
+@@ -836,6 +839,10 @@ apply_reg_state (struct dwarf_cursor *c, struct dwarf_reg_state *rs)
          case DWARF_WHERE_SAME:
            break;
  
@@ -259,7 +261,7 @@ index 7d255aee..b1308d3c 100644
            new_loc[i] = DWARF_MEM_LOC (c, cfa + rs->reg.val[i]);
            break;
 diff --git a/src/x86/Gos-freebsd.c b/src/x86/Gos-freebsd.c
-index 7dd01404..1b251d02 100644
+index 7dd014046..1b251d027 100644
 --- a/src/x86/Gos-freebsd.c
 +++ b/src/x86/Gos-freebsd.c
 @@ -138,6 +138,7 @@ x86_handle_signal_frame (unw_cursor_t *cursor)
@@ -271,7 +273,7 @@ index 7dd01404..1b251d02 100644
      c->dwarf.cfa += 4;
      c->dwarf.use_prev_instr = 1;
 diff --git a/src/x86/Gregs.c b/src/x86/Gregs.c
-index 4a959261..9446d6c6 100644
+index 4a9592617..9446d6c62 100644
 --- a/src/x86/Gregs.c
 +++ b/src/x86/Gregs.c
 @@ -53,7 +53,6 @@ tdep_access_reg (struct cursor *c, unw_regnum_t reg, unw_word_t *valp,
@@ -291,7 +293,7 @@ index 4a959261..9446d6c6 100644
      case UNW_X86_ESI: loc = c->dwarf.loc[ESI]; break;
      case UNW_X86_EDI: loc = c->dwarf.loc[EDI]; break;
 diff --git a/src/x86/Gstep.c b/src/x86/Gstep.c
-index 129b739a..061dcbaa 100644
+index 129b739a3..061dcbaaa 100644
 --- a/src/x86/Gstep.c
 +++ b/src/x86/Gstep.c
 @@ -47,7 +47,7 @@ unw_step (unw_cursor_t *cursor)
@@ -319,35 +321,8 @@ index 129b739a..061dcbaa 100644
            c->dwarf.loc[EIP] = eip_loc;
            c->dwarf.use_prev_instr = 1;
          }
-diff --git a/src/x86_64/Ginit.c b/src/x86_64/Ginit.c
-index b7e8e462..64b800af 100644
---- a/src/x86_64/Ginit.c
-+++ b/src/x86_64/Ginit.c
-@@ -49,8 +49,6 @@ static struct unw_addr_space local_addr_space;
- 
- unw_addr_space_t unw_local_addr_space = &local_addr_space;
- 
--HIDDEN unw_dyn_info_list_t _U_dyn_info_list;
--
- /* XXX fix me: there is currently no way to locate the dyn-info list
-        by a remote unwinder.  On ia64, this is done via a special
-        unwind-table entry.  Perhaps something similar can be done with
-@@ -66,7 +64,12 @@ static int
- get_dyn_info_list_addr (unw_addr_space_t as, unw_word_t *dyn_info_list_addr,
-                         void *arg)
- {
--  *dyn_info_list_addr = (unw_word_t) &_U_dyn_info_list;
-+#ifndef UNW_LOCAL_ONLY
-+# pragma weak _U_dyn_info_list_addr
-+  if (!_U_dyn_info_list_addr)
-+    return -UNW_ENOINFO;
-+#endif
-+  *dyn_info_list_addr = _U_dyn_info_list_addr ();
-   return 0;
- }
- 
 diff --git a/src/x86_64/Gos-freebsd.c b/src/x86_64/Gos-freebsd.c
-index 883025c8..8bb101ea 100644
+index 8f28d1d8c..0c5a17940 100644
 --- a/src/x86_64/Gos-freebsd.c
 +++ b/src/x86_64/Gos-freebsd.c
 @@ -133,6 +133,7 @@ x86_64_handle_signal_frame (unw_cursor_t *cursor)
@@ -359,7 +334,7 @@ index 883025c8..8bb101ea 100644
      ret = dwarf_get (&c->dwarf, c->dwarf.loc[RIP], &c->dwarf.ip);
      Debug (1, "Frame Chain [RIP=0x%Lx] = 0x%Lx\n",
 diff --git a/src/x86_64/Gregs.c b/src/x86_64/Gregs.c
-index baf8a24f..dff5bcbe 100644
+index baf8a24f0..dff5bcbe7 100644
 --- a/src/x86_64/Gregs.c
 +++ b/src/x86_64/Gregs.c
 @@ -79,7 +79,6 @@ tdep_access_reg (struct cursor *c, unw_regnum_t reg, unw_word_t *valp,
@@ -379,15 +354,15 @@ index baf8a24f..dff5bcbe 100644
      case UNW_X86_64_RSI: loc = c->dwarf.loc[RSI]; break;
      case UNW_X86_64_RDI: loc = c->dwarf.loc[RDI]; break;
 diff --git a/src/x86_64/Gstep.c b/src/x86_64/Gstep.c
-index 10498170..5425e3db 100644
+index 3c5c3830f..fdad298c7 100644
 --- a/src/x86_64/Gstep.c
 +++ b/src/x86_64/Gstep.c
-@@ -160,7 +160,7 @@ unw_step (unw_cursor_t *cursor)
-             {
-               unw_word_t rbp1 = 0;
-               rbp_loc = DWARF_LOC(rbp, 0);
--              rsp_loc = DWARF_NULL_LOC;
-+              rsp_loc = DWARF_VAL_LOC(c, rbp + 16);
-               rip_loc = DWARF_LOC (rbp + 8, 0);
-               ret = dwarf_get (&c->dwarf, rbp_loc, &rbp1);
-               Debug (1, "[RBP=0x%lx] = 0x%lx (cfa = 0x%lx) -> 0x%lx\n",
+@@ -223,7 +223,7 @@ unw_step (unw_cursor_t *cursor)
+                   Debug (2, "RIP fixup didn't work, falling back\n");
+                   unw_word_t rbp1 = 0;
+                   rbp_loc = DWARF_LOC(rbp, 0);
+-                  rsp_loc = DWARF_NULL_LOC;
++                  rsp_loc = DWARF_VAL_LOC(c, rbp + 16);
+                   rip_loc = DWARF_LOC (rbp + 8, 0);
+                   ret = dwarf_get (&c->dwarf, rbp_loc, &rbp1);
+                   Debug (1, "[RBP=0x%lx] = 0x%lx (cfa = 0x%lx) -> 0x%lx\n",

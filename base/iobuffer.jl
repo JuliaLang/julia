@@ -203,7 +203,7 @@ function read_sub(from::GenericIOBuffer, a::AbstractArray{T}, offs, nel) where T
         GC.@preserve a unsafe_read(from, pointer(a, offs), nb)
     else
         for i = offs:offs+nel-1
-            a[i] = read(to, T)
+            a[i] = read(from, T)
         end
     end
     return a
@@ -333,6 +333,12 @@ end
 end
 
 eof(io::GenericIOBuffer) = (io.ptr-1 == io.size)
+
+function closewrite(io::GenericIOBuffer)
+    io.writable = false
+    # OR throw(_UVError("closewrite", UV_ENOTSOCK))
+    nothing
+end
 
 @noinline function close(io::GenericIOBuffer{T}) where T
     io.readable = false

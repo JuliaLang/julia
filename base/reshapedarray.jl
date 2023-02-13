@@ -113,6 +113,7 @@ reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
 
 # Allow missing dimensions with Colon():
 reshape(parent::AbstractVector, ::Colon) = parent
+reshape(parent::AbstractVector, ::Tuple{Colon}) = parent
 reshape(parent::AbstractArray, dims::Int...) = reshape(parent, dims)
 reshape(parent::AbstractArray, dims::Union{Int,Colon}...) = reshape(parent, dims)
 reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = reshape(parent, _reshape_uncolon(parent, dims))
@@ -204,6 +205,7 @@ function __reshape(p::Tuple{AbstractArray,IndexLinear}, dims::Dims)
 end
 
 size(A::ReshapedArray) = A.dims
+length(A::ReshapedArray) = length(parent(A))
 similar(A::ReshapedArray, eltype::Type, dims::Dims) = similar(parent(A), eltype, dims)
 IndexStyle(::Type{<:ReshapedArrayLF}) = IndexLinear()
 parent(A::ReshapedArray) = A.parent
@@ -241,7 +243,7 @@ end
 
 @inline function _unsafe_getindex(A::ReshapedArray{T,N}, indices::Vararg{Int,N}) where {T,N}
     axp = axes(A.parent)
-    i = offset_if_vec(Base._sub2ind(size(A), indices...), axp)
+    i = offset_if_vec(_sub2ind(size(A), indices...), axp)
     I = ind2sub_rs(axp, A.mi, i)
     _unsafe_getindex_rs(parent(A), I)
 end
@@ -265,7 +267,7 @@ end
 
 @inline function _unsafe_setindex!(A::ReshapedArray{T,N}, val, indices::Vararg{Int,N}) where {T,N}
     axp = axes(A.parent)
-    i = offset_if_vec(Base._sub2ind(size(A), indices...), axp)
+    i = offset_if_vec(_sub2ind(size(A), indices...), axp)
     @inbounds parent(A)[ind2sub_rs(axes(A.parent), A.mi, i)...] = val
     val
 end
@@ -286,8 +288,58 @@ viewindexing(I::Tuple{Slice, ReshapedUnitRange, Vararg{ScalarIndex}}) = IndexLin
 viewindexing(I::Tuple{ReshapedRange, Vararg{ScalarIndex}}) = IndexLinear()
 compute_stride1(s, inds, I::Tuple{ReshapedRange, Vararg{Any}}) = s*step(I[1].parent)
 compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{ReshapedRange}) =
-    (@_inline_meta; first(I[1]) - first(axes1(I[1]))*stride1)
+    (@inline; first(I[1]) - first(axes1(I[1]))*stride1)
 substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedUnitRange, Vararg{Any}}) where N =
     (size_to_strides(strds[1], size(I[1])...)..., substrides(tail(strds), tail(I))...)
 unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {T,N,P} =
     unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
+
+
+_checkcontiguous(::Type{Bool}, A::AbstractArray) = false
+# `strides(A::DenseArray)` calls `size_to_strides` by default.
+# Thus it's OK to assume all `DenseArray`s are contiguously stored.
+_checkcontiguous(::Type{Bool}, A::DenseArray) = true
+_checkcontiguous(::Type{Bool}, A::ReshapedArray) = _checkcontiguous(Bool, parent(A))
+_checkcontiguous(::Type{Bool}, A::FastContiguousSubArray) = _checkcontiguous(Bool, parent(A))
+
+function strides(a::ReshapedArray)
+    _checkcontiguous(Bool, a) && return size_to_strides(1, size(a)...)
+    apsz::Dims = size(a.parent)
+    apst::Dims = strides(a.parent)
+    msz, mst, n = merge_adjacent_dim(apsz, apst) # Try to perform "lazy" reshape
+    n == ndims(a.parent) && return size_to_strides(mst, size(a)...) # Parent is stridevector like
+    return _reshaped_strides(size(a), 1, msz, mst, n, apsz, apst)
+end
+
+function _reshaped_strides(::Dims{0}, reshaped::Int, msz::Int, ::Int, ::Int, ::Dims, ::Dims)
+    reshaped == msz && return ()
+    throw(ArgumentError("Input is not strided."))
+end
+function _reshaped_strides(sz::Dims, reshaped::Int, msz::Int, mst::Int, n::Int, apsz::Dims, apst::Dims)
+    st = reshaped * mst
+    reshaped = reshaped * sz[1]
+    if length(sz) > 1 && reshaped == msz && sz[2] != 1
+        msz, mst, n = merge_adjacent_dim(apsz, apst, n + 1)
+        reshaped = 1
+    end
+    sts = _reshaped_strides(tail(sz), reshaped, msz, mst, n, apsz, apst)
+    return (st, sts...)
+end
+
+merge_adjacent_dim(::Dims{0}, ::Dims{0}) = 1, 1, 0
+merge_adjacent_dim(apsz::Dims{1}, apst::Dims{1}) = apsz[1], apst[1], 1
+function merge_adjacent_dim(apsz::Dims{N}, apst::Dims{N}, n::Int = 1) where {N}
+    sz, st = apsz[n], apst[n]
+    while n < N
+        szₙ, stₙ = apsz[n+1], apst[n+1]
+        if sz == 1
+            sz, st = szₙ, stₙ
+        elseif stₙ == st * sz || szₙ == 1
+            sz *= szₙ
+        else
+            break
+        end
+        n += 1
+    end
+    return sz, st, n
+end

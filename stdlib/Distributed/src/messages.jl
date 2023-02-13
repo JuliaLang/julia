@@ -126,23 +126,30 @@ function flush_gc_msgs(w::Worker)
     if !isdefined(w, :w_stream)
         return
     end
-    w.gcflag = false
-    new_array = Any[]
-    msgs = w.add_msgs
-    w.add_msgs = new_array
-    if !isempty(msgs)
-        remote_do(add_clients, w, msgs)
-    end
+    add_msgs = nothing
+    del_msgs = nothing
+    @lock w.msg_lock begin
+        if !w.gcflag # No work needed for this worker
+            return
+        end
+        @atomic w.gcflag = false
+        if !isempty(w.add_msgs)
+            add_msgs = w.add_msgs
+            w.add_msgs = Any[]
+        end
 
-    # del_msgs gets populated by finalizers, so be very careful here about ordering of allocations
-    # XXX: threading requires this to be atomic
-    new_array = Any[]
-    msgs = w.del_msgs
-    w.del_msgs = new_array
-    if !isempty(msgs)
-        #print("sending delete of $msgs\n")
-        remote_do(del_clients, w, msgs)
+        if !isempty(w.del_msgs)
+            del_msgs = w.del_msgs
+            w.del_msgs = Any[]
+        end
     end
+    if add_msgs !== nothing
+        remote_do(add_clients, w, add_msgs)
+    end
+    if del_msgs !== nothing
+        remote_do(del_clients, w, del_msgs)
+    end
+    return
 end
 
 # Boundary inserted between messages on the wire, used for recovering
@@ -187,7 +194,7 @@ end
 function flush_gc_msgs()
     try
         for w in (PGRP::ProcessGroup).workers
-            if isa(w,Worker) && w.gcflag && (w.state == W_CONNECTED)
+            if isa(w,Worker) && (w.state == W_CONNECTED) && w.gcflag
                 flush_gc_msgs(w)
             end
         end

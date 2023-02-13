@@ -259,4 +259,20 @@ end
 
 end
 
+@testset "exported names" begin
+    m = Module(:ExportedLoggingNames)
+    include_string(m, """
+        using Logging
+        function run()
+            BelowMinLevel === Logging.BelowMinLevel &&
+            Debug === Logging.Debug &&
+            Info === Logging.Info &&
+            Warn === Logging.Warn &&
+            Error === Logging.Error &&
+            AboveMaxLevel === Logging.AboveMaxLevel
+        end
+        """)
+    @test m.run()
+end
+
 end

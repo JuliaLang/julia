@@ -24,10 +24,10 @@ using LinearAlgebra: BlasInt
         vals, Z = LAPACK.syevr!('V', copy(Asym))
         @test Z*(Diagonal(vals)*Z') ≈ Asym
         @test all(vals .> 0.0)
-        @test LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] ≈ vals[vals .< 1.0]
-        @test LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] ≈ vals[4:5]
-        @test vals ≈ LAPACK.syev!('N','U',copy(Asym))
-        @test_throws DimensionMismatch LAPACK.sygvd!(1,'V','U',copy(Asym),Matrix{elty}(undef,6,6))
+        @test LAPACK.syevr!('N', 'V', 'U', copy(Asym), 0.0, 1.0, 4, 5, -1.0)[1] ≈ vals[vals .< 1.0]
+        @test LAPACK.syevr!('N', 'I', 'U', copy(Asym), 0.0, 1.0, 4, 5, -1.0)[1] ≈ vals[4:5]
+        @test vals ≈ LAPACK.syev!('N', 'U', copy(Asym))
+        @test_throws DimensionMismatch LAPACK.sygvd!(1, 'V', 'U', copy(Asym), zeros(elty, 6, 6))
     end
 end
 
@@ -196,7 +196,8 @@ end
 
 @testset "gebal/gebak" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        A = rand(elty,10,10) * Diagonal(exp10.(range(-10, stop=10, length=10)))
+        typescale = log10(eps(real(elty))) / 3 * 2
+        A = rand(elty,10,10) * Diagonal(exp10.(range(typescale, stop=-typescale, length=10)))
         B = copy(A)
         ilo, ihi, scale = LAPACK.gebal!('S',B)
         Bvs = eigvecs(B)
@@ -702,7 +703,10 @@ let A = [NaN NaN; NaN NaN]
     @test_throws ArgumentError eigen(A)
 end
 
-# # https://github.com/JuliaLang/julia/pull/39845
-@test LinearAlgebra.LAPACK.liblapack == "libblastrampoline"
+# Issue #42762 https://github.com/JuliaLang/julia/issues/42762
+# Tests geqrf! and gerqf! with null column dimensions
+a = zeros(2,0), zeros(0)
+@test LinearAlgebra.LAPACK.geqrf!(a...) === a
+@test LinearAlgebra.LAPACK.gerqf!(a...) === a
 
 end # module TestLAPACK

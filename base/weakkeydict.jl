@@ -12,6 +12,8 @@ referenced in a hash table.
 See [`Dict`](@ref) for further help.  Note, unlike [`Dict`](@ref),
 `WeakKeyDict` does not convert keys on insertion, as this would imply the key
 object was unreferenced anywhere before insertion.
+
+See also [`WeakRef`](@ref).
 """
 mutable struct WeakKeyDict{K,V} <: AbstractDict{K,V}
     ht::Dict{WeakRef,V}
@@ -130,7 +132,7 @@ end
 
 function getkey(wkh::WeakKeyDict{K}, kk, default) where K
     k = lock(wkh) do
-        k = getkey(wkh.ht, kk, nothing)
+        local k = getkey(wkh.ht, kk, nothing)
         k === nothing && return nothing
         return k.value
     end

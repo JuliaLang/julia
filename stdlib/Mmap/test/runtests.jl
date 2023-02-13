@@ -133,6 +133,7 @@ c = mmap(s, Vector{UInt8}, (UInt16(11),))
 finalize(c); c=nothing; GC.gc()
 @test_throws ArgumentError mmap(s, Vector{UInt8}, (Int16(-11),))
 @test_throws ArgumentError mmap(s, Vector{UInt8}, (typemax(UInt),))
+@test_throws ArgumentError mmap(s, Matrix{UInt8}, (typemax(Int) - Mmap.PAGESIZE - 1, 2)) # overflow
 close(s)
 s = open(file, "r+")
 @test isreadonly(s) == false

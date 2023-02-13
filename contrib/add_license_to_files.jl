@@ -15,6 +15,7 @@ const print_result = true  # prints files which where not processed.
 
 const rootdirs = [
     "../base",
+    "../cli",
     "../contrib",
     "../src",
     "../stdlib",
@@ -31,6 +32,7 @@ const excludedirs = [
 
 const skipfiles = [
     "../contrib/add_license_to_files.jl",
+    "../contrib/asan/check.jl",
     # files to check - already copyright
     # see: https://github.com/JuliaLang/julia/pull/11073#issuecomment-98099389
     "../base/special/trig.jl",
@@ -44,11 +46,10 @@ const skipfiles = [
     "../src/abi_x86.cpp",
     "../src/abi_x86_64.cpp",
     "../src/disasm.cpp",
-    "../src/getopt.c",
-    "../src/getopt.h",
     "../src/support/END.h",
     "../src/support/ENTRY.amd64.h",
     "../src/support/ENTRY.i387.h",
+    "../src/support/_setjmp.win32.S",
     "../src/support/MurmurHash3.c",
     "../src/support/MurmurHash3.h",
     "../src/support/asprintf.c",
@@ -58,6 +59,7 @@ const skipfiles = [
     "../src/support/tzfile.h",
     "../src/support/utf8.c",
     "../src/crc32c.c",
+    "../src/mach_excUser.c",
 ]
 
 const ext_prefix = Dict([
@@ -66,6 +68,7 @@ const ext_prefix = Dict([
     (".h", "// "),
     (".c", "// "),
     (".cpp", "// "),
+    (".S", "// "),
 ])
 
 const new_license = "This file is a part of Julia. License is MIT: https://julialang.org/license"
@@ -104,6 +107,7 @@ function getfilespaths!(filepaths::Vector, rootdir::AbstractString)
     abs_rootdir = abspath(rootdir)
     for name in readdir(abs_rootdir)
         path = joinpath(abs_rootdir, name)
+        islink(path) && continue
         if isdir(path)
             getfilespaths!(filepaths, path)
         else
@@ -118,6 +122,7 @@ function add_license_line!(unprocessed::Vector, src::AbstractString, new_license
 
     for name in readdir(src)
         path = normpath(joinpath(src, name))
+        islink(path) && continue
         if isdir(path)
             if path in abs_excludedirs
                 getfilespaths!(unprocessed, path)

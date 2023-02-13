@@ -64,8 +64,9 @@ line. A common pattern includes the following elements:
 
 ## Browser-based workflow
 
-It is also possible to interact with a Julia REPL in the browser via [IJulia](https://github.com/JuliaLang/IJulia.jl).
-See the package home for details.
+There are a few ways to interact with Julia in a browser:
+- Using Pluto notebooks through [Pluto.jl](https://github.com/fonsp/Pluto.jl)
+- Using Jupyter notebooks through [IJulia.jl](https://github.com/JuliaLang/IJulia.jl)
 
 ## Revise-based workflows
 
@@ -104,7 +105,7 @@ the following modifications:
 
      Navigate to your temporary directory and launch Julia, then do the following:
 
-     ```julia
+     ```julia-repl
      pkg> generate MyPkg            # type ] to enter pkg mode
      julia> push!(LOAD_PATH, pwd())   # hit backspace to exit pkg mode
      ```
@@ -123,7 +124,7 @@ the following modifications:
    Then navigate to the directory containing your test file (here
    assumed to be `"runtests.jl"`) and do the following:
 
-   ```julia
+   ```julia-repl
    julia> using MyPkg
 
    julia> include("runtests.jl")

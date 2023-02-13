@@ -26,6 +26,10 @@
 #include <sys/ptrace.h>
 #include <sys/mman.h>
 #include <dlfcn.h>
+#include <grp.h>
+
+// For `struct termios`
+#include <termios.h>
 #endif
 
 #ifndef _OS_WINDOWS_
@@ -47,27 +51,14 @@
 #include <xmmintrin.h>
 #endif
 
-#if defined _MSC_VER
-#include <io.h>
-#include <intrin.h>
-#endif
-
-#ifdef JL_MSAN_ENABLED
+#ifdef _COMPILER_MSAN_ENABLED_
 #include <sanitizer/msan_interface.h>
 #endif
 
 #include "julia_assert.h"
 
-#include <llvm-c/Core.h>
-
 #ifdef __cplusplus
 extern "C" {
-#endif
-
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
-JL_DLLEXPORT char *dirname(char *);
-#else
-#include <libgen.h>
 #endif
 
 JL_DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
@@ -230,6 +221,24 @@ JL_DLLEXPORT double jl_stat_ctime(char *statbuf)
     return (double)s->st_ctim.tv_sec + (double)s->st_ctim.tv_nsec * 1e-9;
 }
 
+JL_DLLEXPORT unsigned long jl_getuid(void)
+{
+#ifdef _OS_WINDOWS_
+    return -1;
+#else
+    return getuid();
+#endif
+}
+
+JL_DLLEXPORT unsigned long jl_geteuid(void)
+{
+#ifdef _OS_WINDOWS_
+    return -1;
+#else
+    return geteuid();
+#endif
+}
+
 // --- buffer manipulation ---
 
 JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s)
@@ -293,9 +302,7 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
             a = jl_take_buffer(&dest);
         }
         else {
-#ifdef STORE_ARRAY_LEN
             a->length = n;
-#endif
             a->nrows = n;
             ((char*)a->data)[n] = '\0';
         }
@@ -360,6 +367,15 @@ typedef DWORD (WINAPI *GAPC)(WORD);
 #endif
 #endif
 
+// Apple's M1 processor is a big.LITTLE style processor, with 4x "performance"
+// cores, and 4x "efficiency" cores.  Because Julia expects to be able to run
+// things like heavy linear algebra workloads on all cores, it's best for us
+// to only spawn as many threads as there are performance cores.  Once macOS
+// 12 is released, we'll be able to query the multiple "perf levels" of the
+// cores of a CPU (see this PR [0] to pytorch/cpuinfo for an example) but
+// until it's released, we will just recognize the M1 by its CPU family
+// identifier, then subtract how many efficiency cores we know it has.
+
 JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
 {
 #if defined(HW_AVAILCPU) && defined(HW_NCPU)
@@ -372,6 +388,28 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
         sysctl(nm, 2, &count, &len, NULL, 0);
         if (count < 1) { count = 1; }
     }
+
+#if defined(__APPLE__) && defined(_CPU_AARCH64_)
+//MacOS 12 added a way to query performance cores
+    char buf[7];
+    len = 7;
+    sysctlbyname("kern.osrelease", buf, &len, NULL, 0);
+    if (buf[0] > 1 && buf[1] > 0){
+        len = 4;
+        sysctlbyname("hw.perflevel0.physicalcpu", &count, &len, NULL, 0);
+    }
+    else {
+        int32_t family = 0;
+        len = 4;
+        sysctlbyname("hw.cpufamily", &family, &len, NULL, 0);
+        if (family >= 1 && count > 1) {
+            if (family == CPUFAMILY_ARM_FIRESTORM_ICESTORM) {
+                // We know the Apple M1 has 4 efficiency cores, so subtract them out.
+                count -= 4;
+            }
+        }
+    }
+#endif
     return count;
 #elif defined(_SC_NPROCESSORS_ONLN)
     long count = sysconf(_SC_NPROCESSORS_ONLN);
@@ -393,6 +431,29 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
 #warning "cpu core detection not defined for this platform"
     return 1;
 #endif
+}
+
+JL_DLLEXPORT int jl_effective_threads(void) JL_NOTSAFEPOINT
+{
+    int cpu = jl_cpu_threads();
+    int masksize = uv_cpumask_size();
+    if (masksize < 0 || jl_running_under_rr(0))
+        return cpu;
+    uv_thread_t tid = uv_thread_self();
+    char *cpumask = (char *)calloc(masksize, sizeof(char));
+    int err = uv_thread_getaffinity(&tid, cpumask, masksize);
+    if (err) {
+        free(cpumask);
+        jl_safe_printf("WARNING: failed to get thread affinity (%s %d)\n", uv_err_name(err),
+                       err);
+        return cpu;
+    }
+    int n = 0;
+    for (size_t i = 0; i < masksize; i++) {
+        n += cpumask[i];
+    }
+    free(cpumask);
+    return n < cpu ? n : cpu;
 }
 
 
@@ -424,7 +485,7 @@ JL_DLLEXPORT jl_value_t *jl_environ(int i)
 
 // -- child process status --
 
-#if defined _MSC_VER || defined _OS_WINDOWS_
+#if defined _OS_WINDOWS_
 /* Native Woe32 API.  */
 #include <process.h>
 #define waitpid(pid,statusp,options) _cwait (statusp, pid, WAIT_CHILD)
@@ -455,6 +516,14 @@ JL_STREAM *JL_STDERR = (JL_STREAM*)STDERR_FILENO;
 JL_DLLEXPORT JL_STREAM *jl_stdin_stream(void)  { return JL_STDIN; }
 JL_DLLEXPORT JL_STREAM *jl_stdout_stream(void) { return JL_STDOUT; }
 JL_DLLEXPORT JL_STREAM *jl_stderr_stream(void) { return JL_STDERR; }
+
+JL_DLLEXPORT int jl_termios_size(void) {
+#if defined(_OS_WINDOWS_)
+    return 0;
+#else
+    return sizeof(struct termios);
+#endif
+}
 
 // -- processor native alignment information --
 
@@ -569,7 +638,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 
     struct link_map *map;
     dlinfo(handle, RTLD_DI_LINKMAP, &map);
-#ifdef JL_MSAN_ENABLED
+#ifdef _COMPILER_MSAN_ENABLED_
     __msan_unpoison(&map,sizeof(struct link_map*));
     if (map) {
         __msan_unpoison(map, sizeof(struct link_map));
@@ -601,12 +670,11 @@ JL_DLLEXPORT int jl_dllist(jl_array_t *list)
     } while (cb < cbNeeded);
     for (i = 0; i < cbNeeded / sizeof(HMODULE); i++) {
         const char *path = jl_pathname_for_handle(hMods[i]);
-        // XXX: change to jl_arrayset if array storage allocation for Array{String,1} changes:
         if (path == NULL)
             continue;
         jl_array_grow_end((jl_array_t*)list, 1);
         jl_value_t *v = jl_cstr_to_string(path);
-        free(path);
+        free((char*)path);
         jl_array_ptr_set(list, jl_array_dim0(list) - 1, v);
     }
     free(hMods);
@@ -658,29 +726,38 @@ JL_DLLEXPORT size_t jl_maxrss(void)
 #endif
 }
 
-JL_DLLEXPORT int jl_threading_enabled(void)
+// Simple `rand()` like function, with global seed and added thread-safety
+// (but slow and insecure)
+static _Atomic(uint64_t) g_rngseed;
+JL_DLLEXPORT uint64_t jl_rand(void) JL_NOTSAFEPOINT
 {
-    return 1;
+    uint64_t max = UINT64_MAX;
+    uint64_t unbias = UINT64_MAX;
+    uint64_t rngseed0 = jl_atomic_load_relaxed(&g_rngseed);
+    uint64_t rngseed;
+    uint64_t rnd;
+    do {
+        rngseed = rngseed0;
+        rnd = cong(max, unbias, &rngseed);
+    } while (!jl_atomic_cmpswap_relaxed(&g_rngseed, &rngseed0, rngseed));
+    return rnd;
 }
 
-JL_DLLEXPORT jl_value_t *jl_get_libllvm(void) JL_NOTSAFEPOINT {
-#if defined(_OS_WINDOWS_)
-    HMODULE mod;
-    // FIXME: GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS on LLVMContextCreate,
-    //        but that just points to libjulia.dll
-    if (!GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, "LLVM", &mod))
-        return jl_nothing;
+JL_DLLEXPORT void jl_srand(uint64_t rngseed) JL_NOTSAFEPOINT
+{
+    jl_atomic_store_relaxed(&g_rngseed, rngseed);
+}
 
-    char path[MAX_PATH];
-    if (!GetModuleFileNameA(mod, path, sizeof(path)))
-        return jl_nothing;
-    return (jl_value_t*) jl_symbol(path);
-#else
-    Dl_info dli;
-    if (!dladdr(LLVMContextCreate, &dli))
-        return jl_nothing;
-    return (jl_value_t*) jl_symbol(dli.dli_fname);
-#endif
+void jl_init_rand(void) JL_NOTSAFEPOINT
+{
+    uint64_t rngseed;
+    if (uv_random(NULL, NULL, &rngseed, sizeof(rngseed), 0, NULL)) {
+        ios_puts("WARNING: Entropy pool not available to seed RNG; using ad-hoc entropy sources.\n", ios_stderr);
+        rngseed = uv_hrtime();
+        rngseed ^= int64hash(uv_os_getpid());
+    }
+    jl_srand(rngseed);
+    srand(rngseed);
 }
 
 #ifdef __cplusplus

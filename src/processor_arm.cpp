@@ -19,6 +19,9 @@
 #    undef USE_DYN_GETAUXVAL
 #    include <sys/auxv.h>
 #  endif
+#elif defined _CPU_AARCH64_ && defined _OS_DARWIN_
+#include <sys/sysctl.h>
+#include <string.h>
 #endif
 
 namespace ARM {
@@ -160,6 +163,8 @@ enum class CPU : uint32_t {
     apple_a11,
     apple_a12,
     apple_a13,
+    apple_a14,
+    apple_m1,
     apple_s4,
     apple_s5,
 
@@ -215,7 +220,7 @@ static constexpr FeatureDep deps[] = {
     {ccdp, ccpp},
     {sve, fullfp16},
     {fp16fml, fullfp16},
-    {altnzcv, fmi},
+    {altnzcv, flagm},
     {sve2, sve},
     {sve2_aes, sve2},
     {sve2_aes, aes},
@@ -237,9 +242,10 @@ constexpr auto armv8_2a = armv8_1a | get_feature_masks(v8_2a, ccpp);
 constexpr auto armv8_2a_crypto = armv8_2a | get_feature_masks(aes, sha2);
 constexpr auto armv8_3a = armv8_2a | get_feature_masks(v8_3a, jsconv, complxnum, rcpc);
 constexpr auto armv8_3a_crypto = armv8_3a | get_feature_masks(aes, sha2);
-constexpr auto armv8_4a = armv8_3a | get_feature_masks(v8_4a, dit, rcpc_immo, fmi);
+constexpr auto armv8_4a = armv8_3a | get_feature_masks(v8_4a, dit, rcpc_immo, flagm);
 constexpr auto armv8_4a_crypto = armv8_4a | get_feature_masks(aes, sha2);
 constexpr auto armv8_5a = armv8_4a | get_feature_masks(v8_5a, sb, ccdp, altnzcv, fptoint);
+constexpr auto armv8_5a_crypto = armv8_5a | get_feature_masks(aes, sha2);
 constexpr auto armv8_6a = armv8_5a | get_feature_masks(v8_6a, i8mm, bf16);
 
 // For ARM cores, the features required can be found in the technical reference manual
@@ -256,7 +262,7 @@ constexpr auto armv8_6a = armv8_5a | get_feature_masks(v8_6a, i8mm, bf16);
 //     .SM4: sm4
 //     .DP: dotprod
 //     .FHM: fp16fml
-//     .TS: fmi, altnzcz
+//     .TS: flagm, altnzcz
 //     .RNDR: rand
 
 // ID_AA64ISAR1_EL1
@@ -342,6 +348,10 @@ constexpr auto apple_a10 = armv8a_crc_crypto | get_feature_masks(rdm);
 constexpr auto apple_a11 = armv8_2a_crypto | get_feature_masks(fullfp16);
 constexpr auto apple_a12 = armv8_3a_crypto | get_feature_masks(fullfp16);
 constexpr auto apple_a13 = armv8_4a_crypto | get_feature_masks(fp16fml, fullfp16, sha3);
+constexpr auto apple_a14 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
+constexpr auto apple_m1 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
+// Features based on https://github.com/llvm/llvm-project/blob/82507f1798768280cf5d5aab95caaafbc7fe6f47/llvm/include/llvm/Support/AArch64TargetParser.def
+// and sysctl -a hw.optional
 constexpr auto apple_s4 = apple_a12;
 constexpr auto apple_s5 = apple_a12;
 
@@ -420,6 +430,8 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"apple-a11", CPU::apple_a11, CPU::generic, 100000, Feature::apple_a11},
     {"apple-a12", CPU::apple_a12, CPU::generic, 100000, Feature::apple_a12},
     {"apple-a13", CPU::apple_a13, CPU::generic, 100000, Feature::apple_a13},
+    {"apple-a14", CPU::apple_a14, CPU::apple_a13, 120000, Feature::apple_a14},
+    {"apple-m1", CPU::apple_m1, CPU::apple_a14, 130000, Feature::apple_m1},
     {"apple-s4", CPU::apple_s4, CPU::generic, 100000, Feature::apple_s4},
     {"apple-s5", CPU::apple_s5, CPU::generic, 100000, Feature::apple_s5},
     {"thunderx3t110", CPU::marvell_thunderx3t110, CPU::cavium_thunderx2t99, 110000,
@@ -662,12 +674,46 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"exynos-m2", CPU::samsung_exynos_m2, CPU::generic, UINT32_MAX, Feature::samsung_exynos_m2},
     {"exynos-m3", CPU::samsung_exynos_m3, CPU::generic, 0, Feature::samsung_exynos_m3},
     {"exynos-m4", CPU::samsung_exynos_m4, CPU::generic, 0, Feature::samsung_exynos_m4},
-    {"exynos-m5", CPU::samsung_exynos_m5, CPU::samsung_exynos_m4, 110000,
-     Feature::samsung_exynos_m5},
+    {"exynos-m5", CPU::samsung_exynos_m5, CPU::samsung_exynos_m4, 110000, Feature::samsung_exynos_m5},
     {"apple-a7", CPU::apple_a7, CPU::generic, 0, Feature::apple_a7},
 };
 #endif
 static constexpr size_t ncpu_names = sizeof(cpus) / sizeof(cpus[0]);
+
+static inline const CPUSpec<CPU,feature_sz> *find_cpu(uint32_t cpu)
+{
+    return ::find_cpu(cpu, cpus, ncpu_names);
+}
+
+static inline const CPUSpec<CPU,feature_sz> *find_cpu(llvm::StringRef name)
+{
+    return ::find_cpu(name, cpus, ncpu_names);
+}
+
+static inline const char *find_cpu_name(uint32_t cpu)
+{
+    return ::find_cpu_name(cpu, cpus, ncpu_names);
+}
+
+#if defined _CPU_AARCH64_ && defined _OS_DARWIN_
+
+static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
+{
+    char buffer[128];
+    size_t bufferlen = 128;
+    sysctlbyname("machdep.cpu.brand_string",&buffer,&bufferlen,NULL,0);
+
+    if(strcmp(buffer,"Apple M1") == 0)
+        return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
+    else if(strcmp(buffer,"Apple M1 Max") == 0)
+        return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
+    else if(strcmp(buffer,"Apple M1 Pro") == 0)
+        return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
+    else
+        return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
+}
+
+#else
 
 // auxval reader
 
@@ -974,7 +1020,7 @@ static CPU get_cpu_name(CPUID cpuid)
         default: return CPU::generic;
         }
     case 0x61: // 'a': Apple
-        // https://opensource.apple.com/source/xnu/xnu-6153.81.5/osfmk/arm/cpuid.h.auto.html
+        // https://opensource.apple.com/source/xnu/xnu-7195.141.2/osfmk/arm/cpuid.h.auto.html
         switch (cpuid.part) {
         case 0x0: // Swift
             return CPU::apple_swift;
@@ -1002,6 +1048,12 @@ static CPU get_cpu_name(CPUID cpuid)
         case 0x12: // Lightning
         case 0x13: // Thunder
             return CPU::apple_a13;
+        case 0x20: // Icestorm
+        case 0x21: // Firestorm
+            return CPU::apple_a14;
+        case 0x22: // Icestorm m1
+        case 0x23: // Firestorm m1
+            return CPU::apple_m1;
         default: return CPU::generic;
         }
     case 0x68: // 'h': Huaxintong Semiconductor
@@ -1018,6 +1070,9 @@ static CPU get_cpu_name(CPUID cpuid)
         return CPU::generic;
     }
 }
+
+
+
 
 namespace {
 
@@ -1060,21 +1115,6 @@ static arm_arch get_elf_arch(void)
 #  endif
     return {ver, profile};
 #endif
-}
-
-static inline const CPUSpec<CPU,feature_sz> *find_cpu(uint32_t cpu)
-{
-    return ::find_cpu(cpu, cpus, ncpu_names);
-}
-
-static inline const CPUSpec<CPU,feature_sz> *find_cpu(llvm::StringRef name)
-{
-    return ::find_cpu(name, cpus, ncpu_names);
-}
-
-static inline const char *find_cpu_name(uint32_t cpu)
-{
-    return ::find_cpu_name(cpu, cpus, ncpu_names);
 }
 
 static arm_arch feature_arch_version(const FeatureList<feature_sz> &feature)
@@ -1191,7 +1231,7 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
     features[1] = (uint32_t)jl_getauxval(AT_HWCAP2);
 #ifdef _CPU_AARCH64_
     if (test_nbit(features, 31)) // HWCAP_PACG
-        set_bit(features, Feature::pa, true);
+        set_bit(features, Feature::pauth, true);
 #endif
     auto cpuinfo = get_cpuinfo();
     auto arch = get_elf_arch();
@@ -1303,9 +1343,9 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
     }
     // Ignore feature bits that we are not interested in.
     mask_features(feature_masks, &features[0]);
-
     return std::make_pair(cpu, features);
 }
+#endif
 
 static inline const std::pair<uint32_t,FeatureList<feature_sz>> &get_host_cpu()
 {
@@ -1419,7 +1459,7 @@ static inline void enable_depends(FeatureList<n> &features)
     if (test_nbit(features, Feature::v8_4a)) {
         set_bit(features, Feature::dit, true);
         set_bit(features, Feature::rcpc_immo, true);
-        set_bit(features, Feature::fmi, true);
+        set_bit(features, Feature::flagm, true);
     }
     if (test_nbit(features, Feature::v8_5a)) {
         set_bit(features, Feature::sb, true);
@@ -1546,6 +1586,20 @@ static uint32_t sysimg_init_cb(const void *id)
     return match.best_idx;
 }
 
+static uint32_t pkgimg_init_cb(const void *id)
+{
+    TargetData<feature_sz> target = jit_targets.front();
+    auto pkgimg = deserialize_target_data<feature_sz>((const uint8_t*)id);
+    for (auto &t: pkgimg) {
+        if (auto nname = normalize_cpu_name(t.name)) {
+            t.name = nname;
+        }
+    }
+    auto match = match_sysimg_targets(pkgimg, target, max_vector_size);
+
+    return match.best_idx;
+}
+
 static void ensure_jit_target(bool imaging)
 {
     auto &cmdline = get_cmdline_targets();
@@ -1562,10 +1616,19 @@ static void ensure_jit_target(bool imaging)
         auto &t = jit_targets[i];
         if (t.en.flags & JL_TARGET_CLONE_ALL)
             continue;
+        auto &features0 = jit_targets[t.base].en.features;
+        // Always clone when code checks CPU features
+        t.en.flags |= JL_TARGET_CLONE_CPU;
+        static constexpr uint32_t clone_fp16[] = {Feature::fp16fml,Feature::fullfp16};
+        for (auto fe: clone_fp16) {
+            if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
+                t.en.flags |= JL_TARGET_CLONE_FLOAT16;
+                break;
+            }
+        }
         // The most useful one in general...
         t.en.flags |= JL_TARGET_CLONE_LOOP;
 #ifdef _CPU_ARM_
-        auto &features0 = jit_targets[t.base].en.features;
         static constexpr uint32_t clone_math[] = {Feature::vfp3, Feature::vfp4, Feature::neon};
         for (auto fe: clone_math) {
             if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
@@ -1739,11 +1802,25 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
     return jl_cstr_to_string(host_cpu_name().c_str());
 }
 
-jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl)
+jl_image_fptrs_t jl_init_processor_sysimg(void *hdl)
 {
     if (!jit_targets.empty())
         jl_error("JIT targets already initialized");
     return parse_sysimg(hdl, sysimg_init_cb);
+}
+
+jl_image_fptrs_t jl_init_processor_pkgimg(void *hdl)
+{
+    if (jit_targets.empty())
+        jl_error("JIT targets not initialized");
+    if (jit_targets.size() > 1)
+        jl_error("Expected only one JIT target");
+    return parse_sysimg(hdl, pkgimg_init_cb);
+}
+
+JL_DLLEXPORT void jl_check_pkgimage_clones(char *data)
+{
+    pkgimg_init_cb(data);
 }
 
 std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)
@@ -1801,20 +1878,20 @@ extern "C" int jl_test_cpu_feature(jl_cpu_feature_t feature)
 
 #ifdef _CPU_AARCH64_
 // FPCR FZ, bit [24]
-static constexpr uint32_t fpcr_fz_mask = 1 << 24;
+static constexpr uint64_t fpcr_fz_mask = 1 << 24;
 // FPCR FZ16, bit [19]
-static constexpr uint32_t fpcr_fz16_mask = 1 << 19;
+static constexpr uint64_t fpcr_fz16_mask = 1 << 19;
 // FPCR DN, bit [25]
-static constexpr uint32_t fpcr_dn_mask = 1 << 25;
+static constexpr uint64_t fpcr_dn_mask = 1 << 25;
 
-static inline uint32_t get_fpcr_aarch64(void)
+static inline uint64_t get_fpcr_aarch64(void)
 {
-    uint32_t fpcr;
+    uint64_t fpcr;
     asm volatile("mrs %0, fpcr" : "=r"(fpcr));
     return fpcr;
 }
 
-static inline void set_fpcr_aarch64(uint32_t fpcr)
+static inline void set_fpcr_aarch64(uint64_t fpcr)
 {
     asm volatile("msr fpcr, %0" :: "r"(fpcr));
 }
@@ -1826,8 +1903,8 @@ extern "C" JL_DLLEXPORT int32_t jl_get_zero_subnormals(void)
 
 extern "C" JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
 {
-    uint32_t fpcr = get_fpcr_aarch64();
-    static uint32_t mask = fpcr_fz_mask | (jl_test_cpu_feature(JL_AArch64_fullfp16) ? fpcr_fz16_mask : 0);
+    uint64_t fpcr = get_fpcr_aarch64();
+    static uint64_t mask = fpcr_fz_mask | (jl_test_cpu_feature(JL_AArch64_fullfp16) ? fpcr_fz16_mask : 0);
     fpcr = isZero ? (fpcr | mask) : (fpcr & ~mask);
     set_fpcr_aarch64(fpcr);
     return 0;
@@ -1840,7 +1917,7 @@ extern "C" JL_DLLEXPORT int32_t jl_get_default_nans(void)
 
 extern "C" JL_DLLEXPORT int32_t jl_set_default_nans(int8_t isDefault)
 {
-    uint32_t fpcr = get_fpcr_aarch64();
+    uint64_t fpcr = get_fpcr_aarch64();
     fpcr = isDefault ? (fpcr | fpcr_dn_mask) : (fpcr & ~fpcr_dn_mask);
     set_fpcr_aarch64(fpcr);
     return 0;

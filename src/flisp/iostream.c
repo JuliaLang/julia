@@ -164,20 +164,6 @@ value_t fl_ioputc(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     return fixnum(ios_pututf8(s, wc));
 }
 
-value_t fl_ioungetc(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
-{
-    argcount(fl_ctx, "io.ungetc", nargs, 2);
-    ios_t *s = toiostream(fl_ctx, args[0], "io.ungetc");
-    if (!iscprim(args[1]) || ((cprim_t*)ptr(args[1]))->type != fl_ctx->wchartype)
-        type_error(fl_ctx, "io.ungetc", "wchar", args[1]);
-    uint32_t wc = *(uint32_t*)cp_data((cprim_t*)ptr(args[1]));
-    if (wc >= 0x80) {
-        lerror(fl_ctx, fl_ctx->ArgError, "io_ungetc: unicode not yet supported");
-    }
-    s->u_colno -= utf8proc_charwidth(wc);
-    return fixnum(ios_ungetc((int)wc,s));
-}
-
 value_t fl_ioflush(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "io.flush", nargs, 1);
@@ -217,6 +203,15 @@ value_t fl_iolineno(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     return size_wrap(fl_ctx, s->lineno);
 }
 
+value_t fl_iosetlineno(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    argcount(fl_ctx, "io.set-lineno!", nargs, 2);
+    ios_t *s = toiostream(fl_ctx, args[0], "io.set-lineno!");
+    size_t new_lineno = tosize(fl_ctx, args[1], "io.set-lineno!");
+    s->lineno = new_lineno;
+    return args[1];
+}
+
 value_t fl_iocolno(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "input-port-column", nargs, 1);
@@ -230,6 +225,17 @@ value_t fl_ioseek(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     ios_t *s = toiostream(fl_ctx, args[0], "io.seek");
     size_t pos = tosize(fl_ctx, args[1], "io.seek");
     int64_t res = ios_seek(s, pos);
+    if (res < 0)
+        return fl_ctx->F;
+    return fl_ctx->T;
+}
+
+value_t fl_ioskip(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    argcount(fl_ctx, "io.skip", nargs, 2);
+    ios_t *s = toiostream(fl_ctx, args[0], "io.skip");
+    int64_t pos = (ssize_t)tosize(fl_ctx, args[1], "io.skip");
+    int64_t res = ios_skip(s, pos);
     if (res < 0)
         return fl_ctx->F;
     return fl_ctx->T;
@@ -428,9 +434,9 @@ static const builtinspec_t iostreamfunc_info[] = {
     { "io.close", fl_ioclose },
     { "io.eof?" , fl_ioeof },
     { "io.seek" , fl_ioseek },
+    { "io.skip" , fl_ioskip },
     { "io.pos",   fl_iopos },
     { "io.getc" , fl_iogetc },
-    { "io.ungetc", fl_ioungetc },
     { "io.putc" , fl_ioputc },
     { "io.peekc" , fl_iopeekc },
     { "io.discardbuffer", fl_iopurge },
@@ -442,6 +448,7 @@ static const builtinspec_t iostreamfunc_info[] = {
     { "io.tostring!", fl_iotostring },
     { "input-port-line", fl_iolineno },
     { "input-port-column", fl_iocolno },
+    { "io.set-lineno!", fl_iosetlineno },
 
     { NULL, NULL }
 };

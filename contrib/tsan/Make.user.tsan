@@ -1,0 +1,13 @@
+TOOLCHAIN=$(BUILDROOT)/../toolchain
+BINDIR=$(TOOLCHAIN)/usr/bin
+TOOLDIR=$(TOOLCHAIN)/usr/tools
+
+# use our new toolchain
+USECLANG=1
+override CC=$(TOOLDIR)/clang
+override CXX=$(TOOLDIR)/clang++
+
+USE_BINARYBUILDER_LLVM=1
+
+override SANITIZE=1
+override SANITIZE_THREAD=1
