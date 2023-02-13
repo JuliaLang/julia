@@ -1741,6 +1741,17 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
     canconst = true
     tparams = Any[]
     outervars = TypeVar[]
+
+    # first push the tailing vars from headtype into outervars
+    outer_start, ua = 0, headtype
+    while isa(ua, UnionAll)
+        if (outer_start += 1) > largs
+            push!(outervars, ua.var)
+        end
+        ua = ua.body
+    end
+    outer_start = outer_start - largs + 1
+
     varnamectr = 1
     ua = headtype
     for i = 1:largs
@@ -1759,9 +1770,16 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
             uncertain = true
             unw = unwrap_unionall(ai)
             isT = isType(unw)
-            if isT && isa(ai,UnionAll) && contains_is(outervars, ai.var)
-                ai = rename_unionall(ai)
-                unw = unwrap_unionall(ai)
+            if isT
+                tai = ai
+                while isa(tai, UnionAll)
+                    if contains_is(outervars, tai.var)
+                        ai = rename_unionall(ai)
+                        unw = unwrap_unionall(ai)
+                        break
+                    end
+                    tai = tai.body
+                end
             end
             ai_w = widenconst(ai)
             ub = ai_w isa Type && ai_w <: Type ? instanceof_tfunc(ai)[1] : Any
@@ -1822,7 +1840,7 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
         return Type{<:appl}
     end
     ans = Type{appl}
-    for i = length(outervars):-1:1
+    for i = length(outervars):-1:outer_start
         ans = UnionAll(outervars[i], ans)
     end
     return ans
