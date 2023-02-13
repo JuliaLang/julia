@@ -63,6 +63,23 @@ Finally:
 and `as` is used as a keyword to rename an identifier brought into scope by `import` or `using`.
 Creation of variables named `where`, `in`, `isa`, `outer` and `as` is allowed, though.
 
+Unlike `in`, `isa` and `outer`, `where` remains being an operator when used in special operations as stated above
+(regardless of the fact that it may have been used as a name of a variable in that same global namespace):
+```julia
+julia> begin
+
+       where = 10
+
+       function add(x::T, y::T) where T<:Integer
+           x + y
+       end
+
+       print(add(where, where))
+
+       end
+20
+```
+
 ```@docs
 module
 export
