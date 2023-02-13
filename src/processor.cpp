@@ -773,6 +773,7 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
             offsets[i] = gvars[i] - (const char *)res.gvars_base;
         }
         res.gvars_offsets = offsets;
+        res.ngvars = gvars.size();
     }
 
     if (!clones.empty()) {

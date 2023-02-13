@@ -159,6 +159,7 @@ typedef struct {
     uint64_t base;
     uintptr_t *gvars_base;
     const int32_t *gvars_offsets;
+    uint32_t ngvars;
     jl_image_fptrs_t fptrs;
 } jl_image_t;
 

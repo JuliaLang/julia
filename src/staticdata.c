@@ -1901,6 +1901,7 @@ static void jl_update_all_gvars(jl_serializer_state *s, jl_image_t *image, uint3
     reloc_t *gvars = (reloc_t*)&s->gvar_record->buf[0];
     int gvar_link_index = 0;
     int external_fns_link_index = 0;
+    assert(l == image->ngvars);
     for (i = 0; i < l; i++) {
         uintptr_t offset = gvars[i];
         uintptr_t v = 0;
