@@ -958,7 +958,7 @@ end
         end
     end
 end
-                        
+
 # This testset is at the end of the file because it is slow.
 @testset "searchsorted" begin
     numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
