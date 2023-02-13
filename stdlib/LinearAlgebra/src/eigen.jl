@@ -24,18 +24,7 @@ The error bounds are empty, if not opted in by `eigen( ; eerror=true, verror=tru
 
 # Examples
 ```jldoctest
-julia> F = eigen([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
-Eigen{Float64, Float64, Matrix{Float64}, Vector{Float64}}
-values:
-3-element Vector{Float64}:
-  1.0
-  3.0
- 18.0
-vectors:
-3×3 Matrix{Float64}:
- 1.0  0.0  0.0
- 0.0  1.0  0.0
- 0.0  0.0  1.0
+julia> F = eigen([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0]);
 
 julia> F.values
 3-element Vector{Float64}:
@@ -336,34 +325,38 @@ sine of the acute angles between the calculated and true vectors. For details se
 
 # Examples
 ```jldoctest
-julia> F = eigen([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
-Eigen{Float64, Float64, Matrix{Float64}, Vector{Float64}}
+julia> F = eigen([1.0 1.0+eps() 0.0; 1.0 1.0 0.0; 0.0 0.0 18.0], left=true, eerror=true, verror=true)
+Eigen{Float64, Float64, Matrix{Float64}, Vector{Float64}, Vector{Float64}}
 values:
 3-element Vector{Float64}:
-  1.0
-  3.0
+ -2.220446049250313e-16
+  2.0
  18.0
-vectors:
+right vectors:
 3×3 Matrix{Float64}:
- 1.0  0.0  0.0
- 0.0  1.0  0.0
- 0.0  0.0  1.0
-
-julia> F.values
+ -0.707107  0.707107  0.0
+  0.707107  0.707107  0.0
+  0.0       0.0       1.0
+left vectors:
+3×3 Matrix{Float64}:
+ -0.707107  0.707107  0.0
+  0.707107  0.707107  0.0
+  0.0       0.0       1.0
+value error bounds:
 3-element Vector{Float64}:
-  1.0
-  3.0
- 18.0
+ 1.998401444325282e-15
+ 1.998401444325282e-15
+ 1.9984014443252818e-15
+vector error bounds:
+3-element Vector{Float64}:
+ 9.992007221626409e-16
+ 9.992007221626409e-16
+ 1.249000902703301e-16
 
-julia> F.vectors
-3×3 Matrix{Float64}:
- 1.0  0.0  0.0
- 0.0  1.0  0.0
- 0.0  0.0  1.0
+julia> vals, vecs, vl, eerr, verr = F; # destructuring via iteration
 
-julia> vals, vecs = F; # destructuring via iteration
-
-julia> vals == F.values && vecs == F.vectors
+julia> vals == F.values && vecs === F.vectors &&
+       vl === F.vectorsl && eerr === F.eerrbd && verr === F.verrbd
 true
 ```
 """
