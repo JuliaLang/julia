@@ -70,7 +70,7 @@ end
 """
     startswith(io::IO, prefix::Union{AbstractString,Base.Chars})
 
-Check if an `IO` object starts with a prefix.
+Check if an `IO` object starts with a prefix.  See also [`peek`](@ref).
 """
 function Base.startswith(io::IO, prefix::Base.Chars)
     mark(io)
