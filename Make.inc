@@ -362,18 +362,6 @@ export PKG_CONFIG_LIBDIR = $(JULIAHOME)/usr/lib/pkgconfig
 # Figure out OS and architecture
 BUILD_OS := $(shell uname)
 
-# Set ISMSYS_MINGW64 to 0 or 1
-OSNAME := $(shell uname -o | tr '[:lower:]' '[:upper:]')
-ISMSYS_MINGW64 := 0
-ifneq (,$(findstring MSYS,$(OSNAME)))
-TRIPLET := $(shell $(CC) -dumpmachine)
-ifneq (,$(findstring w64,$(TRIPLET)))
-ifneq (,$(findstring mingw,$(TRIPLET)))
-override ISMSYS_MINGW64 := 1
-endif
-endif
-endif
-
 ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
 XC_HOST ?= $(shell uname -m)-w64-mingw32
 endif
@@ -627,6 +615,18 @@ JL_MAJOR_SHLIB_EXT := $(SOMAJOR).$(SHLIB_EXT)
 else
 JL_MAJOR_MINOR_SHLIB_EXT := $(SHLIB_EXT).$(SOMAJOR).$(SOMINOR)
 JL_MAJOR_SHLIB_EXT := $(SHLIB_EXT).$(SOMAJOR)
+endif
+endif
+
+# Set ISMSYS_MINGW64 to 0 or 1
+OSNAME := $(shell uname -o | tr '[:lower:]' '[:upper:]')
+ISMSYS_MINGW64 := 0
+ifneq (,$(findstring MSYS,$(OSNAME)))
+TRIPLET := $(shell $(CC) -dumpmachine)
+ifneq (,$(findstring w64,$(TRIPLET)))
+ifneq (,$(findstring mingw,$(TRIPLET)))
+ISMSYS_MINGW64 := 1
+endif
 endif
 endif
 
