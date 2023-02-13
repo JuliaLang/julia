@@ -137,7 +137,7 @@ See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
 
 Return a julia command similar to the one of the running process.
 Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-native-code`,
-`--compiled-modules`, `--inline`, `--check-bounds`, `--optimize`, `--min-optlevel`, `-g`,
+`--compiled-modules`, `--pkgimages`, `--inline`, `--check-bounds`, `--optimize`, `--min-optlevel`, `-g`,
 `--code-coverage`, `--track-allocation`, `--color`, `--startup-file`, and `--depwarn`
 command line arguments that are not at their default values.
 
@@ -151,6 +151,8 @@ Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notab
 
 !!! compat "Julia 1.9"
     The keyword argument `cpu_target` was added.
+
+    The flag `--pkgimages` was added in Julia 1.9.
 """
 function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Union{Nothing,String} = nothing)
     opts = JLOptions()
