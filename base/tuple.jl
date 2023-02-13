@@ -80,7 +80,7 @@ end
 function keys(t::Tuple, t2::Tuple...)
     @inline
     lent = length(t)
-    all(x->length(x) == lent, t2) || throw_eachindex_mismatch_indices((), t, t2...)
+    all(==(lent), t2) || throw_eachindex_mismatch_indices((), t, t2...)
     Base.OneTo(lent)
 end
 
