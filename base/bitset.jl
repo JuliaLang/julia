@@ -271,7 +271,7 @@ end
     end
 end
 
-@inline _is_convertible_Int(n) = typemin(n) <= n <= typemax(n)
+@inline _is_convertible_Int(n) = typemin(Int) <= n <= typemax(Int)
 @inline delete!(s::BitSet, n::Int) = _setint!(s, n, false)
 @inline delete!(s::BitSet, n::Integer) = _is_convertible_Int(n) ? delete!(s, Int(n)) : s
 
