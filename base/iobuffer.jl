@@ -138,8 +138,12 @@ PipeBuffer(data::Vector{UInt8}=UInt8[]; maxsize::Int = typemax(Int)) =
     GenericIOBuffer(data,true,true,false,true,maxsize)
 PipeBuffer(maxsize::Integer) = (x = PipeBuffer(StringVector(maxsize), maxsize = maxsize); x.size=0; x)
 
+_similar_data(b::GenericIOBuffer, len::Int) = similar(b.data, len)
+_similar_data(b::IOBuffer, len::Int) = StringVector(len)
+
 function copy(b::GenericIOBuffer)
-    ret = typeof(b)(b.reinit ? similar(b.data, 0) : b.writable ? copy(b.data) : b.data,
+    ret = typeof(b)(b.reinit ? _similar_data(b, 0) : b.writable ?
+                    copyto!(_similar_data(b, length(b.data)), b.data) : b.data,
                     b.readable, b.writable, b.seekable, b.append, b.maxsize)
     ret.size = b.size
     ret.ptr  = b.ptr
@@ -272,7 +276,7 @@ function truncate(io::GenericIOBuffer, n::Integer)
     n < 0 && throw(ArgumentError("truncate failed, n bytes must be ≥ 0, got $n"))
     n > io.maxsize && throw(ArgumentError("truncate failed, $(n) bytes is exceeds IOBuffer maxsize $(io.maxsize)"))
     if io.reinit
-        io.data = similar(io.data, n)
+        io.data = _similar_data(io, n)
     elseif n > length(io.data)
         resize!(io.data, n)
     end
@@ -329,7 +333,7 @@ end
     end
     n = min((nshort % Int) + (io.append ? io.size : io.ptr-1), io.maxsize)
     if io.reinit
-        io.data = similar(io.data, n)
+        io.data = _similar_data(io, n)
     else
         l = length(io.data)
         if n > l
@@ -401,13 +405,12 @@ function take!(io::IOBuffer)
             if io.reinit
                 data = StringVector(0)
             else
-                data = io.data
+                data = resize!(io.data, io.size)
                 io.reinit = true
             end
         else
-            data = copy(io.data)
+            data = copyto!(StringVector(io.size), 1, io.data, 1, io.size)
         end
-        resize!(data, io.size)
     else
         nbytes = bytesavailable(io)
         if io.writable
