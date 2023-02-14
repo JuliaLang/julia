@@ -946,7 +946,7 @@ function popfirst! end
     peek(stream[, T=UInt8])
 
 Read and return a value of type `T` from a stream without advancing the current position
-in the stream.
+in the stream.   See also [`startswith(stream, char_or_string)`](@ref).
 
 # Examples
 
