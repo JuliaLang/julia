@@ -182,7 +182,7 @@ end
             @test cbrt(x) ≈ cbrt(big(x))
             @test cos(x) ≈ cos(big(x))
             @test cosh(x) ≈ cosh(big(x))
-	    @test cospi(x) ≈ cospi(big(x))
+            @test cospi(x) ≈ cospi(big(x))
             @test exp(x) ≈ exp(big(x))
             @test exp10(x) ≈ exp10(big(x))
             @test exp2(x) ≈ exp2(big(x))
@@ -200,7 +200,7 @@ end
             @test sqrt(x) ≈ sqrt(big(x))
             @test tan(x) ≈ tan(big(x))
             @test tanh(x) ≈ tanh(big(x))
-	    @test tanpi(x) ≈ tanpi(big(x))
+            @test tanpi(x) ≈ tanpi(big(x))
             @test sec(x) ≈ sec(big(x))
             @test csc(x) ≈ csc(big(x))
             @test secd(x) ≈ secd(big(x))
@@ -503,22 +503,22 @@ end
             @test cospi(convert(T,-1.5))::fT ⩲ zero(fT)
             @test_throws DomainError cospi(convert(T,Inf))
         end
-	@testset "trig pi functions accuracy" for numerator in -20:1:20
-	    for func in (sinpi, cospi, tanpi,
-	                 x -> sincospi(x)[1],
-			 x -> sincospi(x)[2])
+        @testset "trig pi functions accuracy" for numerator in -20:1:20
+            for func in (sinpi, cospi, tanpi,
+                         x -> sincospi(x)[1],
+                         x -> sincospi(x)[2])
                 x = numerator // 20
-		# Check that rational function works
-		@test func(x) ≈ func(BigFloat(x))
-		# Use short value so that wider values will be exactly equal
-		shortx = Float16(x)
-		# Compare to BigFloat value
-		bigvalue = func(BigFloat(shortx))
-		for T in (Float16,Float32,Float64)
-		    @test func(T(shortx)) ≈ T(bigvalue)
+                # Check that rational function works
+                @test func(x) ≈ func(BigFloat(x))
+                # Use short value so that wider values will be exactly equal
+                shortx = Float16(x)
+                # Compare to BigFloat value
+                bigvalue = func(BigFloat(shortx))
+                for T in (Float16,Float32,Float64)
+                    @test func(T(shortx)) ≈ T(bigvalue)
                 end
             end
-	end
+        end
         @testset begin
             # If the machine supports fma (fused multiply add), we require exact equality.
             # Otherwise, we only require approximate equality.
@@ -621,7 +621,7 @@ end
             @test sinpi(complex(x, x)) ≈ ComplexF64(sinpi(complex(big(x), big(x))))
             @test cospi(complex(x, x)) ≈ ComplexF64(cospi(complex(big(x), big(x))))
         end
-	@test tanpi(x) ≈ Float64(tanpi(big(x)))
+        @test tanpi(x) ≈ Float64(tanpi(big(x)))
         @test sinc(x)  ≈ Float64(sinc(big(x)))
         @test cosc(x)  ≈ Float64(cosc(big(x)))
         @test sinc(complex(x, x))  ≈ ComplexF64(sinc(complex(big(x),  big(x))))

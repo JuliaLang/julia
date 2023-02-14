@@ -36,7 +36,7 @@ function sin(x::T) where T<:Union{Float32, Float64}
     end
     if !isfinite(x)
         isnan(x) && return x
-	sin_domain_error(x)
+        sin_domain_error(x)
     end
 
     n, y = rem_pio2_kernel(x)
@@ -111,13 +111,13 @@ function cos(x::T) where T<:Union{Float32, Float64}
     n, y = rem_pio2_kernel(x)
     n = n&3
     if n == 0
-	return cos_kernel(y)
+        return cos_kernel(y)
     elseif n == 1
-	return -sin_kernel(y)
+        return -sin_kernel(y)
     elseif n == 2
-	return -cos_kernel(y)
+        return -cos_kernel(y)
     else
-	return sin_kernel(y)
+        return sin_kernel(y)
     end
 end
 
@@ -734,10 +734,10 @@ end
     x⁴ = x²*x²
     r  = evalpoly(x², (2.5501640398773415 / scale^5, -0.5992645293202981 / scale^7,
                        0.08214588658006512 / scale^9, -7.370429884921779e-3 / scale^11,
-		       4.662827319453555e-4 / scale^13, -2.1717412523382308e-5 / scale^15))
+                       4.662827319453555e-4 / scale^13, -2.1717412523382308e-5 / scale^15))
     return muladd(3.141592653589793 / scale, x,
                   x*muladd(-5.16771278004997 / scale^3, x²,
-		           muladd(x⁴, r,  1.2245907532225998e-16 / scale)))
+                           muladd(x⁴, r,  1.2245907532225998e-16 / scale)))
 end
 @inline function sinpi_kernel(x::Float32, scale=1)
     Float32(sinpi_kernel_wide(x, scale))
@@ -746,7 +746,7 @@ end
     x = Float64(x)
     return x*evalpoly(x*x, (3.1415926535762266 / scale, -5.167712769188119 / scale^3,
                             2.5501626483206374 / scale^5, -0.5992021090314925 / scale^7,
-			    0.08100185277841528 / scale^9))
+                            0.08100185277841528 / scale^9))
 end
 
 @inline function sinpi_kernel(x::Float16, scale=1)
@@ -779,7 +779,7 @@ end
     x = Float64(x)
     return evalpoly(x*x, (1.0, -4.934802200541122 / scale^2, 4.058712123568637 / scale^4,
                           -1.3352624040152927 / scale^6, 0.23531426791507182 / scale^8,
-			  -0.02550710082498761 / scale^10))
+                          -0.02550710082498761 / scale^10))
 end
 @inline function cospi_kernel(x::Float16, scale=1)
     Float16(cospi_kernel_wide(x, scale))
@@ -788,7 +788,7 @@ end
     x = Float32(x)
     return evalpoly(x*x, (1.0f0, Float32(-4.934802200541122 / scale^2), Float32(4.058712123568637 / scale^4),
                           Float32(-1.3352624040152927 / scale^6), Float32(0.23531426791507182 / scale^8),
-			  Float32(-0.02550710082498761 / scale^10)))
+                          Float32(-0.02550710082498761 / scale^10)))
 end
 
 """
