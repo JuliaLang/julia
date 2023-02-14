@@ -241,33 +241,28 @@ end
                10 | 5  5  2  2  2  2  2  2  2  2
                11 | 7  7  2  2  2  2  2  2  2  2
 
-    Each character class row is encoding 10 states shift in 6 bits combined into a UInt64 such that
-    it contains the number of bit needed to shift the state it is transitioning to shifted into
-    the position of the current state.
+           Shifts | 0  4 10 14 18 24  8 20 12 26
 
-    Example: character class 1 is encoded as below
-                    Current State        |    9 |    8 |    7 |    6 |    5 |    4 |    3 |    2 |    1 |    0 |
-                    Next State           |    4 |    4 |    2 |    3 |    2 |    3 |    1 |    2 |    2 |    2 |
-                    Shift required       |  6*4 |  6*4 |  6*2 |  6*3 |  6*2 |  6*3 |  6*1 |  6*2 |  6*2 |  6*2 |
-                                         |   24 |   24 |   12 |   18 |   12 |   18 |    6 |   12 |   12 |   12 |
-    UInt64(0x061831231218c30c) =   0b0000|011000|011000|001100|010010|001100|010010|000110|001100|001100|001100
+    The shifts that represent each state were derived using teh SMT solver Z3, to ensure when encoded into
+    the rows the correct shift was a result.
 
-    Now if the current state was 5 the state::UInt64 would have the first 6 bit representing 5*6 = 30
-    so when the next character class is 1 the new state is obtained by the following operations:
-            The reduction operation:
-                state =  (   byte_dfa >>  state )            & UInt64(63)
-                        | Shift to get the next state shift  | Mask the first six bits so that the new state is represended by the shift
-            Would result in the state being 2 which is a shift of 12:
-                (byte_dfa    =  0b0000|011000|011000|001100|010010|001100|010010|000110|001100|001100|001100
-                >> 30    )   => 0b0000|000000|000000|000000|000000|000000|011000|011000|001100|010010|001100
-                & UInt64(63) => 0b0000|000000|000000|000000|000000|000000|000000|000000|000000|000000|001100
+    Each character class row is encoding 10 states with shifts as defined above. By shifting the bitsof a row by
+    the current state then masking the result with 0x11110 give the shift for the new state
+
+
 =#
 
+#State type used by UTF-8 DFA
+const _UTF8DFAState = UInt32
 # Fill the table with 256 UInt64 representing the DFA transitions for all bytes
 const _UTF8_DFA_TABLE = let # let block rather than function doesn't pollute base
     num_classes=12
     num_states=10
     bit_per_state = 6
+
+
+    # These shifts were derived using a SMT solver
+    state_shifts = [0, 4, 10, 14, 18, 24, 8, 20, 12, 26]
 
     character_classes = [   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -283,8 +278,8 @@ const _UTF8_DFA_TABLE = let # let block rather than function doesn't pollute bas
                             7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
                             8, 8, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
                             2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-                           10, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3,
-                           11, 6, 6, 6, 5, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8 ]
+                            10, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3,
+                            11, 6, 6, 6, 5, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8 ]
 
     # These are the rows discussed in comments above
     state_arrays = [[ 0  1  2  2  2  2  2  2  2  2],
@@ -300,30 +295,32 @@ const _UTF8_DFA_TABLE = let # let block rather than function doesn't pollute bas
                     [ 5  5  2  2  2  2  2  2  2  2],
                     [ 7  7  2  2  2  2  2  2  2  2]]
 
-    #This converts the state_arrays into the shift encoded UInt64
-    class_row = zeros(UInt64, num_classes)
+    #This converts the state_arrays into the shift encoded _UTF8DFAState
+    class_row = zeros(_UTF8DFAState, num_classes)
+
     for i = 1:num_classes
-        row = UInt64(0)
+        row = _UTF8DFAState(0)
         for j in 1:num_states
             #Calculate the shift required for the next state
-            to_shift = UInt8((state_arrays[i][j]) * bit_per_state)
+            to_shift = UInt8((state_shifts[state_arrays[i][j]+1]) )
             #Shift the next state into the position of the current state
-            row = row | (UInt64(to_shift) << ((j - 1) * bit_per_state))
+            row = row | (_UTF8DFAState(to_shift) << state_shifts[j])
         end
         class_row[i]=row
     end
+
     map(c->class_row[c+1],character_classes)
 end
 
 
-const _UTF8_DFA_ASCII = UInt64(0) #This state represents the start and end of any valid string
-const _UTF8_DFA_ACCEPT = UInt64(6) #This state represents the start and end of any valid string
-const _UTF8_DFA_INVALID = UInt64(12) # If the state machine is ever in this state just stop
+const _UTF8_DFA_ASCII = _UTF8DFAState(0) #This state represents the start and end of any valid string
+const _UTF8_DFA_ACCEPT = _UTF8DFAState(4) #This state represents the start and end of any valid string
+const _UTF8_DFA_INVALID = _UTF8DFAState(10) # If the state machine is ever in this state just stop
 
-# The dfa step is broken out so that it may be used in other functions
-@inline _utf_dfa_step(state::UInt64, byte::UInt8) = @inbounds (_UTF8_DFA_TABLE[byte+1] >> state) & UInt64(63)
+# The dfa step is broken out so that it may be used in other functions. The mask was calculated to work with state shifts above
+@inline _utf_dfa_step(state::_UTF8DFAState, byte::UInt8) = @inbounds (_UTF8_DFA_TABLE[byte+1] >> state) & _UTF8DFAState(0x0000001E)
 
-@inline function _isvalid_utf8_dfa(state::UInt64, bytes::AbstractVector{UInt8}, first::Int = 1, last::Int = length(bytes))
+@inline function _isvalid_utf8_dfa(state::_UTF8DFAState, bytes::AbstractVector{UInt8}, first::Int = 1, last::Int = length(bytes))
     for i = first:last
        @inbounds state = _utf_dfa_step(state, bytes[i])
     end
