@@ -429,19 +429,18 @@ macro getkw(syms...)
     Expr(:block, (:($(esc(:((kw, $sym) = $getter(v, o, kw))))) for (sym, getter) in zip(syms, getters))...)
 end
 
-for (sym, deps, exp, type) in [
-        (:lo, (), :(firstindex(v)), Integer),
-        (:hi, (), :(lastindex(v)),  Integer),
-        (:mn, (), :(throw(ArgumentError("mn is needed but has not been computed"))), :(eltype(v))),
-        (:mx, (), :(throw(ArgumentError("mx is needed but has not been computed"))), :(eltype(v))),
-        (:scratch, (), nothing, :(Union{Nothing, Vector})), # could have different eltype
-        (:allow_legacy_dispatch, (), true, Bool)]
+for (sym, exp, type) in [
+        (:lo, :(firstindex(v)), Integer),
+        (:hi, :(lastindex(v)),  Integer),
+        (:mn, :(throw(ArgumentError("mn is needed but has not been computed"))), :(eltype(v))),
+        (:mx, :(throw(ArgumentError("mx is needed but has not been computed"))), :(eltype(v))),
+        (:scratch, nothing, :(Union{Nothing, Vector})), # could have different eltype
+        (:allow_legacy_dispatch, true, Bool)]
     usym = Symbol(:_, sym)
     @eval function $usym(v, o, kw)
         # using missing instead of nothing because scratch could === nothing.
         res = get(kw, $(Expr(:quote, sym)), missing)
         res !== missing && return kw, res::$type
-        @getkw $(deps...)
         $sym = $exp
         (;kw..., $sym), $sym::$type
     end
@@ -786,7 +785,7 @@ function _sort!(v::AbstractVector, a::CheckSorted, o::Ordering, kw)
 
     # For most large arrays, a reverse-sorted check is essentially free (overhead < 1%)
     if hi-lo >= 500 && _issorted(v, lo, hi, ReverseOrdering(o))
-        # If reversing is valid, do so. This does violates stability.
+        # If reversing is valid, do so. This violates stability.
         reverse!(v, lo, hi)
         return scratch
     end

@@ -229,6 +229,7 @@ namespace jl_well_known {
     static const char *GC_BIG_ALLOC_NAME = XSTR(jl_gc_big_alloc);
     static const char *GC_POOL_ALLOC_NAME = XSTR(jl_gc_pool_alloc);
     static const char *GC_QUEUE_ROOT_NAME = XSTR(jl_gc_queue_root);
+    static const char *GC_ALLOC_TYPED_NAME = XSTR(jl_gc_alloc_typed);
 
     using jl_intrinsics::addGCAllocAttributes;
 
@@ -275,5 +276,23 @@ namespace jl_well_known {
                 GC_QUEUE_ROOT_NAME);
             func->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
             return func;
+        });
+
+    const WellKnownFunctionDescription GCAllocTyped(
+        GC_ALLOC_TYPED_NAME,
+        [](const JuliaPassContext &context) {
+            auto allocTypedFunc = Function::Create(
+                FunctionType::get(
+                    context.T_prjlvalue,
+                    { Type::getInt8PtrTy(context.getLLVMContext()),
+                        sizeof(size_t) == sizeof(uint32_t) ?
+                        Type::getInt32Ty(context.getLLVMContext()) :
+                        Type::getInt64Ty(context.getLLVMContext()),
+                        Type::getInt8PtrTy(context.getLLVMContext()) },
+                    false),
+                Function::ExternalLinkage,
+                GC_ALLOC_TYPED_NAME);
+            allocTypedFunc->addFnAttr(Attribute::getWithAllocSizeArgs(context.getLLVMContext(), 1, None));
+            return addGCAllocAttributes(allocTypedFunc, context.getLLVMContext());
         });
 }

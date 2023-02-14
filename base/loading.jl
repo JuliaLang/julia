@@ -1020,11 +1020,9 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
                 elapsed = round((time_ns() - t_before) / 1e6, digits = 1)
                 comp_time, recomp_time = cumulative_compile_time_ns() .- t_comp_before
                 print(lpad(elapsed, 9), " ms  ")
-                for extid in EXT_DORMITORY
-                    if extid.id == pkg
-                        print(extid.parentid.name, " → ")
-                        break
-                    end
+                parentid = get(EXT_PRIMED, pkg, nothing)
+                if parentid !== nothing
+                    print(parentid.name, " → ")
                 end
                 print(pkg.name)
                 if comp_time > 0
@@ -1104,18 +1102,18 @@ mutable struct ExtensionId
     ntriggers::Int # how many more packages must be defined until this is loaded
 end
 
-const EXT_DORMITORY = Dict{PkgId,Vector{ExtensionId}}()
+const EXT_PRIMED = Dict{PkgId, PkgId}() # Extension -> Parent
+const EXT_DORMITORY = Dict{PkgId,Vector{ExtensionId}}() # Trigger -> Extensions that can be triggered by it
 const EXT_DORMITORY_FAILED = ExtensionId[]
 
 function insert_extension_triggers(pkg::PkgId)
     pkg.uuid === nothing && return
-    extensions_added = Set{PkgId}()
     for env in load_path()
-        insert_extension_triggers!(extensions_added, env, pkg)
+        insert_extension_triggers(env, pkg)
     end
 end
 
-function insert_extension_triggers!(extensions_added::Set{PkgId}, env::String, pkg::PkgId)::Union{Nothing,Missing}
+function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missing}
     project_file = env_project_file(env)
     if project_file isa String
         manifest_file = project_file_manifest_path(project_file)
@@ -1133,7 +1131,7 @@ function insert_extension_triggers!(extensions_added::Set{PkgId}, env::String, p
                     extensions === nothing && return
                     weakdeps === nothing && return
                     if weakdeps isa Dict{String, Any}
-                        return _insert_extension_triggers!(extensions_added, pkg, extensions, weakdeps)
+                        return _insert_extension_triggers(pkg, extensions, weakdeps)
                     end
 
                     d_weakdeps = Dict{String, String}()
@@ -1148,7 +1146,7 @@ function insert_extension_triggers!(extensions_added::Set{PkgId}, env::String, p
                         d_weakdeps[dep_name] = uuid
                     end
                     @assert length(d_weakdeps) == length(weakdeps)
-                    return _insert_extension_triggers!(extensions_added, pkg, extensions, d_weakdeps)
+                    return _insert_extension_triggers(pkg, extensions, d_weakdeps)
                 end
             end
         end
@@ -1156,13 +1154,14 @@ function insert_extension_triggers!(extensions_added::Set{PkgId}, env::String, p
     return nothing
 end
 
-function _insert_extension_triggers!(extensions_added::Set{PkgId}, parent::PkgId, extensions::Dict{String, <:Any}, weakdeps::Dict{String, <:Any})
+function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, <:Any}, weakdeps::Dict{String, <:Any})
     for (ext::String, triggers::Union{String, Vector{String}}) in extensions
         triggers isa String && (triggers = [triggers])
         id = PkgId(uuid5(parent.uuid, ext), ext)
-        # Only add triggers for an extension from one env.
-        id in extensions_added && continue
-        push!(extensions_added, id)
+        if id in keys(EXT_PRIMED) || haskey(Base.loaded_modules, id)
+            continue  # extension is already primed or loaded, don't add it again
+        end
+        EXT_PRIMED[id] = parent
         gid = ExtensionId(id, parent, 1 + length(triggers))
         trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, parent)
         push!(trigger1, gid)
@@ -2075,7 +2074,8 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
                               --color=$(have_color === nothing ? "auto" : have_color ? "yes" : "no")
                               $trace
                               -`,
-                              "OPENBLAS_NUM_THREADS" => 1),
+                              "OPENBLAS_NUM_THREADS" => 1,
+                              "JULIA_NUM_THREADS" => 1),
                        stderr = internal_stderr, stdout = internal_stdout),
               "w", stdout)
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
@@ -2224,6 +2224,9 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                     rm(evicted_cachefile; force=true)
                     try
                         rm(ocachefile_from_cachefile(evicted_cachefile); force=true)
+                        @static if Sys.isapple()
+                            rm(ocachefile_from_cachefile(evicted_cachefile) * ".dSYM"; force=true, recursive=true)
+                        end
                     catch
                     end
                 end
@@ -2250,6 +2253,9 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                     # TODO: Risk for a race here if some other process grabs this name before us
                     cachefile = cachefile_from_ocachefile(ocachefile)
                     rename(tmppath_so, ocachefile::String; force=true)
+                end
+                @static if Sys.isapple()
+                    run(`$(Linking.dsymutil()) $ocachefile`, Base.DevNull(), Base.DevNull(), Base.DevNull())
                 end
             end
             # this is atomic according to POSIX (not Win32):
