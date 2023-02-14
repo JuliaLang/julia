@@ -427,6 +427,19 @@ function take!(io::IOBuffer)
     return data
 end
 
+"""
+    _unsafe_take!(io::IOBuffer)
+
+This simply returns the raw resized `io.data`, with no checks to be
+sure that `io` is readable etcetera, and leaves `io` in an inconsistent
+state.  This should only be used internally for performance-critical
+`String` routines that immediately discard `io` afterwards.
+
+It saves no allocations compared to `take!` (assuming a writable, seekable
+buffer), it just omits some checks.
+"""
+_unsafe_take!(io::IOBuffer) = resize!(io.data, io.size)
+
 function write(to::IO, from::GenericIOBuffer)
     if to === from
         from.ptr = from.size + 1
