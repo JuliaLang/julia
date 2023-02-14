@@ -262,5 +262,7 @@ libLLVM.v14.0.6+2.x86_64-w64-mingw32-cxx11-llvm_version+14.asserts.tar.gz/md5/2b
 libLLVM.v14.0.6+2.x86_64-w64-mingw32-cxx11-llvm_version+14.asserts.tar.gz/sha512/adfa1edc0a4138d977fde832aaa6549b5ee38a1c0bb3b59dd9c05740569bd108c2b2b2de4e81ac06d367c9f834662fa5238972affee8bc638309e4470cd980f1
 libLLVM.v14.0.6+2.x86_64-w64-mingw32-cxx11-llvm_version+14.tar.gz/md5/605ba226b4d0d82802590eadf31d50ce
 libLLVM.v14.0.6+2.x86_64-w64-mingw32-cxx11-llvm_version+14.tar.gz/sha512/992dd8cf723b986d506743f2ea345391752893b07fc0be35129afbeb4cd01d41f32c56a99b0f6a25b51787bee9a56c60ce66fce60123e8fd3fe0fa11ba051b3d
+llvm-julia-14.0.6-2.tar.gz/md5/1401091c768e6c4aef468bb3fb1fac83
+llvm-julia-14.0.6-2.tar.gz/sha512/42feedbfc5866ed1fde7e15810ba5224d46e61122d5fcbb4e4c4dfe72cb898e429bdfcdf6b0712fceefd8cc5b910857d7babfd73ce65e7f8a43cec42424a7c3d
 llvmunwind-12.0.1.tar.xz/md5/4ec327cee517fdb1f6a20e83748e2c7b
 llvmunwind-12.0.1.tar.xz/sha512/847b6ba03010a43f4fdbfdc49bf16d18fd18474d01584712e651b11191814bf7c1cf53475021d9ee447ed78413202b4ed97973d7bdd851d3e49f8d06f55a7af4

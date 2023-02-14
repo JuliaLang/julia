@@ -70,7 +70,7 @@ end
 @nospecialize
 
 """
-    Result
+    Test.Result
 
 All tests produce a result object. This object may or may not be
 stored, depending on whether the test is part of a test set.
@@ -78,7 +78,7 @@ stored, depending on whether the test is part of a test set.
 abstract type Result end
 
 """
-    Pass
+    Test.Pass <: Test.Result
 
 The test condition was true, i.e. the expression evaluated to true or
 the correct exception was thrown.
@@ -108,7 +108,7 @@ function Base.show(io::IO, t::Pass)
 end
 
 """
-    Fail
+    Test.Fail <: Test.Result
 
 The test condition was false, i.e. the expression evaluated to false or
 the correct exception was not thrown.
@@ -168,7 +168,7 @@ function Base.show(io::IO, t::Fail)
 end
 
 """
-    Error
+    Test.Error <: Test.Result
 
 The test condition couldn't be evaluated due to an exception, or
 it evaluated to something other than a [`Bool`](@ref).
@@ -249,7 +249,7 @@ function Base.show(io::IO, t::Error)
 end
 
 """
-    Broken
+    Test.Broken <: Test.Result
 
 The test condition is the expected (failed) result of a broken test,
 or was explicitly skipped with `@test_skip`.

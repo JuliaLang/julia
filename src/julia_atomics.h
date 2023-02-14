@@ -73,7 +73,18 @@ enum jl_memory_order {
  * are). We also need to access these atomic variables from the LLVM JIT code
  * which is very hard unless the layout of the object is fully specified.
  */
-#define jl_fence() atomic_thread_fence(memory_order_seq_cst)
+
+/**
+ * On modern Intel and AMD platforms `lock orq` on the SP is faster than
+ * `mfence`. GCC 11 did switch to this representation. See #48123
+ */
+#if defined(_CPU_X86_64_) && \
+	((defined(__GNUC__) && __GNUC__ < 11) || \
+	 (defined(__clang__)))
+    #define jl_fence() __asm__ volatile("lock orq $0 , (%rsp)")
+#else
+    #define jl_fence() atomic_thread_fence(memory_order_seq_cst)
+#endif
 #define jl_fence_release() atomic_thread_fence(memory_order_release)
 #define jl_signal_fence() atomic_signal_fence(memory_order_seq_cst)
 

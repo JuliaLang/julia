@@ -328,7 +328,7 @@ function should_insert_coverage(mod::Module, src::CodeInfo)
                 return true
             end
         end
-    elseif isa(linetable, Vector{LineInfo})
+    elseif isa(linetable, Vector{LineInfoNode})
         for line in linetable
             if is_file_tracked(line.file)
                 return true
