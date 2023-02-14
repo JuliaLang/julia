@@ -464,7 +464,7 @@ function readuntil(out::IOBuffer, s::IOStream, delim::UInt8; keep::Bool=false)
         ptr += n
         if d[ptr-1] == delim
             keep || (ptr -= 1)
-            break;
+            break
         end
         (eof(s) || len == out.maxsize) && break
         len = min(2len + 64, out.maxsize)
