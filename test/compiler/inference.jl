@@ -27,7 +27,6 @@ let comparison = Tuple{X, X} where X<:Tuple
     @test Core.Compiler.limit_type_size(sig, comparison, comparison, 100, 100) == Tuple{Tuple, Tuple}
     @test Core.Compiler.limit_type_size(sig, ref, comparison, 100, 100) == Tuple{Any, Any}
     @test Core.Compiler.limit_type_size(Tuple{sig}, Tuple{ref}, comparison, 100, 100) == Tuple{Tuple{Any, Any}}
-    @test Core.Compiler.limit_type_size(sig, ref, Tuple{comparison}, 100,  100) == Tuple{Tuple{X, X} where X<:Tuple, Tuple{X, X} where X<:Tuple}
     @test Core.Compiler.limit_type_size(ref, sig, Union{}, 100, 100) == ref
 end
 
@@ -49,6 +48,13 @@ end
 # obtain Vararg with 2 undefined fields
 let va = ccall(:jl_type_intersection_with_env, Any, (Any, Any), Tuple{Tuple}, Tuple{Tuple{Vararg{Any, N}}} where N)[2][1]
     @test Core.Compiler.__limit_type_size(Tuple, va, Core.svec(va, Union{}), 2, 2) === Tuple
+end
+
+mutable struct TS14009{T}; end
+let A = TS14009{TS14009{TS14009{TS14009{TS14009{T}}}}} where {T},
+    B = Base.rewrap_unionall(TS14009{Base.unwrap_unionall(A)}, A)
+
+    @test Core.Compiler.Compiler.limit_type_size(B, A, A, 2, 2) == TS14009
 end
 
 # issue #42835
@@ -81,7 +87,7 @@ end
 @test !Core.Compiler.type_more_complex(Type{1}, Type{2}, Core.svec(), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{Union{Float32,Float64}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
 @test !Core.Compiler.type_more_complex(Type{Union{Float32,Float64}}, Union{Float32,Float64}, Core.svec(Union{Float32,Float64}), 0, 1, 1)
-@test_broken Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Type{Union{Float32,Float64}}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
+@test  Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Type{Union{Float32,Float64}}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Any, Core.svec(Union{Float32,Float64}), 1, 1, 1)
 
 
@@ -563,16 +569,9 @@ Base.@pure function fpure(a=rand(); b=rand())
     # but would be too big to inline
     return a + b + rand()
 end
-gpure() = fpure()
-gpure(x::Irrational) = fpure(x)
+
 @test which(fpure, ()).pure
 @test which(fpure, (typeof(pi),)).pure
-@test !which(gpure, ()).pure
-@test !which(gpure, (typeof(pi),)).pure
-@test code_typed(gpure, ())[1][1].pure
-@test code_typed(gpure, (typeof(π),))[1][1].pure
-@test gpure() == gpure() == gpure()
-@test gpure(π) == gpure(π) == gpure(π)
 
 # Make sure @pure works for functions using the new syntax
 Base.@pure (fpure2(x::T) where T) = T
@@ -934,13 +933,6 @@ h20704(@nospecialize(x)) = g20704(x)
 Base.@pure c20704() = (f20704(1.0); 1)
 d20704() = c20704()
 @test_throws MethodError d20704()
-
-Base.@pure function a20704(x)
-    rand()
-    42
-end
-aa20704(x) = x(nothing)
-@test code_typed(aa20704, (typeof(a20704),))[1][1].pure
 
 #issue #21065, elision of _apply_iterate when splatted expression is not effect_free
 function f21065(x,y)
@@ -2732,14 +2724,26 @@ end |> only === Int
 # correct `apply_type` inference of `NamedTuple{(), <:Any}`
 @test (() -> NamedTuple{(), <:Any})() isa UnionAll
 
-# Don't pessimize apply_type to anything worse than Type and yield Bottom for invalid Unions
+# Don't pessimize apply_type to anything worse than Type (or TypeVar) and yield Bottom for invalid Unions
 @test only(Base.return_types(Core.apply_type, Tuple{Type{Union}})) == Type{Union{}}
-@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any})) == Type
+@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any})) == Union{Type,TypeVar}
 @test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any,Any})) == Type
 @test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Int})) == Union{}
 @test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any,Int})) == Union{}
 @test only(Base.return_types(Core.apply_type, Tuple{Any})) == Any
 @test only(Base.return_types(Core.apply_type, Tuple{Any,Any})) == Any
+
+# `apply_type_tfunc` accuracy for constrained type construction
+# https://github.com/JuliaLang/julia/issues/47089
+import Core: Const
+import Core.Compiler: apply_type_tfunc
+struct Issue47089{A,B} end
+let 𝕃 = Core.Compiler.fallback_lattice
+    A = Type{<:Integer}
+    @test apply_type_tfunc(𝕃, Const(Issue47089), A, A) <: (Type{Issue47089{A,B}} where {A<:Integer, B<:Integer})
+end
+@test only(Base.return_types(keys, (Dict{String},))) == Base.KeySet{String, T} where T<:(Dict{String})
+@test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{Int}},))) == Vector{T} where T<:(Array{Int})
 
 # PR 27351, make sure optimized type intersection for method invalidation handles typevars
 
@@ -3690,10 +3694,10 @@ Base.iterate(::Itr41839_3 , i) = i < 16 ? (i, i + 1) : nothing
 
 # issue #32699
 f32699(a) = (id = a[1],).id
-@test Base.return_types(f32699, (Vector{Union{Int,Missing}},)) == Any[Union{Int,Missing}]
+@test only(Base.return_types(f32699, (Vector{Union{Int,Missing}},))) == Union{Int,Missing}
 g32699(a) = Tuple{a}
-@test Base.return_types(g32699, (Type{<:Integer},))[1] == Type{<:Tuple{Any}}
-@test Base.return_types(g32699, (Type,))[1] == Type{<:Tuple}
+@test only(Base.return_types(g32699, (Type{<:Integer},))) <: Type{<:Tuple{Any}}
+@test only(Base.return_types(g32699, (Type,))) <: Type{<:Tuple}
 
 # Inference precision of union-split calls
 function f_apply_union_split(fs, x)
@@ -3940,23 +3944,49 @@ g38888() = S38888(Base.inferencebarrier(3), nothing)
 f_inf_error_bottom(x::Vector) = isempty(x) ? error(x[1]) : x
 @test only(Base.return_types(f_inf_error_bottom, Tuple{Vector{Any}})) == Vector{Any}
 
-# @constprop :aggressive
-@noinline g_nonaggressive(y, x) = Val{x}()
-@noinline Base.@constprop :aggressive g_aggressive(y, x) = Val{x}()
+# @constprop annotation
+@noinline f_constprop_simple(f, x) = (f(x); Val{x}())
+Base.@constprop :aggressive f_constprop_aggressive(f, x) = (f(x); Val{x}())
+Base.@constprop :aggressive @noinline f_constprop_aggressive_noinline(f, x) = (f(x); Val{x}())
+Base.@constprop :none f_constprop_none(f, x) = (f(x); Val{x}())
+Base.@constprop :none @inline f_constprop_none_inline(f, x) = (f(x); Val{x}())
 
-f_nonaggressive(x) = g_nonaggressive(x, 1)
-f_aggressive(x) = g_aggressive(x, 1)
+@test !Core.Compiler.is_aggressive_constprop(only(methods(f_constprop_simple)))
+@test !Core.Compiler.is_no_constprop(only(methods(f_constprop_simple)))
+@test Core.Compiler.is_aggressive_constprop(only(methods(f_constprop_aggressive)))
+@test !Core.Compiler.is_no_constprop(only(methods(f_constprop_aggressive)))
+@test Core.Compiler.is_aggressive_constprop(only(methods(f_constprop_aggressive_noinline)))
+@test !Core.Compiler.is_no_constprop(only(methods(f_constprop_aggressive_noinline)))
+@test !Core.Compiler.is_aggressive_constprop(only(methods(f_constprop_none)))
+@test Core.Compiler.is_no_constprop(only(methods(f_constprop_none)))
+@test !Core.Compiler.is_aggressive_constprop(only(methods(f_constprop_none_inline)))
+@test Core.Compiler.is_no_constprop(only(methods(f_constprop_none_inline)))
 
-# The first test just makes sure that improvements to the compiler don't
-# render the annotation effectless.
-@test Base.return_types(f_nonaggressive, Tuple{Int})[1] == Val
-@test Base.return_types(f_aggressive, Tuple{Int})[1] == Val{1}
+# make sure that improvements to the compiler don't render the annotation effectless.
+@test Base.return_types((Function,)) do f
+    f_constprop_simple(f, 1)
+end |> only == Val
+@test Base.return_types((Function,)) do f
+    f_constprop_aggressive(f, 1)
+end |> only == Val{1}
+@test Base.return_types((Function,)) do f
+    f_constprop_aggressive_noinline(f, 1)
+end |> only == Val{1}
+@test Base.return_types((Function,)) do f
+    f_constprop_none(f, 1)
+end |> only == Val
+@test Base.return_types((Function,)) do f
+    f_constprop_none_inline(f, 1)
+end |> only == Val
 
-# @constprop :none
-@noinline Base.@constprop :none g_noaggressive(flag::Bool) = flag ? 1 : 1.0
-ftrue_noaggressive() = g_noaggressive(true)
-@test only(Base.return_types(ftrue_noaggressive, Tuple{})) == Union{Int,Float64}
-
+# anonymous function support for `@constprop`
+@test Base.return_types((Function,)) do f
+    map((1,2,3)) do x
+        Base.@constprop :aggressive
+        f(x)
+        return Val{x}()
+    end
+end |> only == Tuple{Val{1},Val{2},Val{3}}
 
 function splat_lotta_unions()
     a = Union{Tuple{Int},Tuple{String,Vararg{Int}},Tuple{Int,Vararg{Int}}}[(2,)][1]
@@ -4467,13 +4497,24 @@ end
         end |> only === Union{}
 end
 
-# Test that max_methods works as expected
+# Test that a function-wise `@max_methods` works as expected
 Base.Experimental.@max_methods 1 function f_max_methods end
 f_max_methods(x::Int) = 1
 f_max_methods(x::Float64) = 2
 g_max_methods(x) = f_max_methods(x)
 @test only(Base.return_types(g_max_methods, Tuple{Int})) === Int
 @test only(Base.return_types(g_max_methods, Tuple{Any})) === Any
+
+# Test that a module-wise `@max_methods` works as expected
+module Test43370
+using Test
+Base.Experimental.@max_methods 1
+f_max_methods(x::Int) = 1
+f_max_methods(x::Float64) = 2
+g_max_methods(x) = f_max_methods(x)
+@test only(Base.return_types(g_max_methods, Tuple{Int})) === Int
+@test only(Base.return_types(g_max_methods, Tuple{Any})) === Any
+end
 
 # Make sure return_type_tfunc doesn't accidentally cause bad inference if used
 # at top level.
@@ -4703,4 +4744,20 @@ type_level_recurse_entry() = Val{type_level_recurse1(1)}()
 f_no_bail_effects_any(x::Any) = x
 f_no_bail_effects_any(x::NamedTuple{(:x,), Tuple{Any}}) = getfield(x, 1)
 g_no_bail_effects_any(x::Any) = f_no_bail_effects_any(x)
-@test Core.Compiler.is_total(Base.infer_effects(g_no_bail_effects_any, Tuple{Any}))
+@test Core.Compiler.is_foldable_nothrow(Base.infer_effects(g_no_bail_effects_any, Tuple{Any}))
+
+# issue #48374
+@test (() -> Union{<:Nothing})() == Nothing
+
+# :static_parameter accuracy
+unknown_sparam_throw(::Union{Nothing, Type{T}}) where T = @isdefined(T) ? T::Type : nothing
+unknown_sparam_nothrow1(x::Ref{T}) where T = @isdefined(T) ? T::Type : nothing
+unknown_sparam_nothrow2(x::Ref{Ref{T}}) where T = @isdefined(T) ? T::Type : nothing
+@test only(Base.return_types(unknown_sparam_throw, (Type{Int},))) == Type{Int}
+@test only(Base.return_types(unknown_sparam_throw, (Type{<:Integer},))) == Type{<:Integer}
+@test only(Base.return_types(unknown_sparam_throw, (Type,))) == Union{Nothing, Type}
+@test_broken only(Base.return_types(unknown_sparam_throw, (Nothing,))) === Nothing
+@test_broken only(Base.return_types(unknown_sparam_throw, (Union{Type{Int},Nothing},))) === Union{Nothing,Type{Int}}
+@test only(Base.return_types(unknown_sparam_throw, (Any,))) === Union{Nothing,Type}
+@test only(Base.return_types(unknown_sparam_nothrow1, (Ref,))) === Type
+@test only(Base.return_types(unknown_sparam_nothrow2, (Ref{Ref{T}} where T,))) === Type

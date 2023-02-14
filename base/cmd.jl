@@ -462,7 +462,7 @@ function cmd_gen(parsed)
         (ignorestatus, flags, env, dir) = (cmd.ignorestatus, cmd.flags, cmd.env, cmd.dir)
         append!(args, cmd.exec)
         for arg in tail(parsed)
-            append!(args, arg_gen(arg...)::Vector{String})
+            append!(args, Base.invokelatest(arg_gen, arg...)::Vector{String})
         end
         return Cmd(Cmd(args), ignorestatus, flags, env, dir)
     else

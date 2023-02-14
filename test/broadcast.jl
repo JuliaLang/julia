@@ -1124,6 +1124,11 @@ end
     @test count(A) == count(>=(0), pos)
 end
 
+@testset "issue #38432: make CartesianIndex a broadcast scalar" begin
+    @test CartesianIndex(1,2) .+ (CartesianIndex(3,4), CartesianIndex(5,6)) == (CartesianIndex(4, 6), CartesianIndex(6, 8))
+    @test CartesianIndex(1,2) .+ [CartesianIndex(3,4), CartesianIndex(5,6)] == [CartesianIndex(4, 6), CartesianIndex(6, 8)]
+end
+
 # test that `Broadcast` definition is defined as total and eligible for concrete evaluation
 import Base.Broadcast: BroadcastStyle, DefaultArrayStyle
 @test Base.infer_effects(BroadcastStyle, (DefaultArrayStyle{1},DefaultArrayStyle{2},)) |>

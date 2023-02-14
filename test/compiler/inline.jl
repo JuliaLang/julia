@@ -1896,3 +1896,42 @@ let src = code_typed1(make_issue47349(Val{4}()), (Any,))
         make_issue47349(Val(4))((x,nothing,Int))
     end |> only === Type{Int}
 end
+
+# Test that irinterp can make use of constant results even if they're big
+# Check that pure functions with non-inlineable results still get deleted
+struct BigSemi
+    x::NTuple{1024, Int}
+end
+@Base.assume_effects :total @noinline make_big_tuple(x::Int) = ntuple(x->x+1, 1024)::NTuple{1024, Int}
+BigSemi(y::Int, x::Int) = BigSemi(make_big_tuple(x))
+function elim_full_ir(y)
+    bs = BigSemi(y, 10)
+    return Val{bs.x[1]}()
+end
+
+@test fully_eliminated(elim_full_ir, Tuple{Int})
+
+# union splitting should account for uncovered call signature
+# https://github.com/JuliaLang/julia/issues/48397
+f48397(::Bool) = :ok
+f48397(::Tuple{String,String}) = :ok
+let src = code_typed1((Union{Bool,Tuple{String,Any}},)) do x
+        f48397(x)
+    end
+    @test any(iscall((src, f48397)), src.code)
+end
+g48397::Union{Bool,Tuple{String,Any}} = ("48397", 48397)
+let res = @test_throws MethodError let
+        Base.Experimental.@force_compile
+        f48397(g48397)
+    end
+    err = res.value
+    @test err.f === f48397 && err.args === (g48397,)
+end
+let res = @test_throws MethodError let
+        Base.Experimental.@force_compile
+        convert(Union{Bool,Tuple{String,String}}, g48397)
+    end
+    err = res.value
+    @test err.f === convert && err.args === (Union{Bool,Tuple{String,String}}, g48397)
+end

@@ -2330,7 +2330,7 @@ f35201(c) = h35201((;c...), k=true)
 f44343(;kw...) = NamedTuple(kw)
 @test f44343(u = (; :a => 1)) === (u = (; :a => 1),)
 
-@testset "issue #34544/35367" begin
+@testset "issue #34544/35367/35429" begin
     # Test these evals shouldn't segfault
     eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar1, Expr(:block)))))
     eval(Expr(:module, true, :bar2, Expr(:block)))
@@ -2338,6 +2338,11 @@ f44343(;kw...) = NamedTuple(kw)
     @test_throws ErrorException eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar4, Expr(:quote)))))
     @test_throws ErrorException eval(Expr(:module, true, :bar5, Expr(:foo)))
     @test_throws ErrorException eval(Expr(:module, true, :bar6, Expr(:quote)))
+
+    #35429
+    @test_throws ErrorException eval(Expr(:thunk, x->x+9))
+    @test_throws ErrorException eval(Expr(:thunk, Meta.parse("x=17")))
+    @test_throws ErrorException eval(Expr(:thunk, Meta.parse("17")))
 end
 
 # issue #35391

@@ -1125,7 +1125,7 @@ USE_BINARYBUILDER ?= 0
 endif
 
 # Auto-detect triplet once, create different versions that we use as defaults below for each BB install target
-FC_VERSION := $(shell $(FC) -dM -E - < /dev/null | grep __GNUC__ | cut -d' ' -f3)
+FC_VERSION := $(shell $(FC) -dM -E - < /dev/null 2>/dev/null | grep __GNUC__ | cut -d' ' -f3)
 ifeq ($(USEGCC)$(FC_VERSION),1)
 FC_OR_CC_VERSION := $(shell $(CC) -dumpfullversion -dumpversion 2>/dev/null | cut -d'.' -f1)
 # n.b. clang's __GNUC__ macro pretends to be gcc 4.2.1, so leave it as the empty string here if the compiler is not certain to be GCC
@@ -1465,7 +1465,7 @@ JULIA_SYSIMG_release := $(build_private_libdir)/sys.$(SHLIB_EXT)
 JULIA_SYSIMG := $(JULIA_SYSIMG_$(JULIA_BUILD_MODE))
 
 define dep_lib_path
-$$($(PYTHON) $(call python_cygpath,$(JULIAHOME)/contrib/relative_path.py) $(1) $(2))
+$(shell $(PYTHON) $(call python_cygpath,$(JULIAHOME)/contrib/relative_path.py) $(1) $(2))
 endef
 
 LIBJULIAINTERNAL_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/libjulia-internal.$(JL_MAJOR_SHLIB_EXT))
@@ -1512,6 +1512,19 @@ LIBGCC_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/$(L
 endif
 LIBGCC_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/$(LIBGCC_NAME))
 
+# We only bother to define this on Linux, as that's the only platform that does libstdc++ probing
+# On all other platforms, the LIBSTDCXX_*_DEPLIB variables will be empty.
+ifeq ($(OS),Linux)
+LIBSTDCXX_NAME := libstdc++.so.6
+ifeq ($(USE_SYSTEM_CSL),1)
+LIBSTDCXX_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_private_shlibdir)/$(LIBSTDCXX_NAME))
+else
+LIBSTDCXX_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/$(LIBSTDCXX_NAME))
+endif
+LIBSTDCXX_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/$(LIBSTDCXX_NAME))
+endif
+
+
 # USE_SYSTEM_LIBM and USE_SYSTEM_OPENLIBM causes it to get symlinked into build_private_shlibdir
 ifeq ($(USE_SYSTEM_LIBM),1)
 LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
@@ -1525,6 +1538,8 @@ LIBM_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/$(LIBMN
 # We list:
 #  * libgcc_s, because FreeBSD needs to load ours, not the system one.
 #  * libopenlibm, because Windows has an untrustworthy libm, and we want to use ours more than theirs
+#  * libstdc++, because while performing `libstdc++` probing we need to
+#    know the path to the bundled `libstdc++` library.
 #  * libjulia-internal, which must always come second-to-last.
 #  * libjulia-codegen, which must always come last
 #
@@ -1533,11 +1548,45 @@ LIBM_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/$(LIBMN
 #  * install time relative paths are not equal to build time relative paths (../lib vs. ../lib/julia)
 # That second point will no longer be true for most deps once they are placed within Artifacts directories.
 # Note that we prefix `libjulia-codegen` and `libjulia-internal` with `@` to signify to the loader that it
-# should not automatically dlopen() it in its loading loop.
-LOADER_BUILD_DEP_LIBS = $(LIBGCC_BUILD_DEPLIB):$(LIBM_BUILD_DEPLIB):@$(LIBJULIAINTERNAL_BUILD_DEPLIB):@$(LIBJULIACODEGEN_BUILD_DEPLIB):
-LOADER_DEBUG_BUILD_DEP_LIBS = $(LIBGCC_BUILD_DEPLIB):$(LIBM_BUILD_DEPLIB):@$(LIBJULIAINTERNAL_DEBUG_BUILD_DEPLIB):@$(LIBJULIACODEGEN_DEBUG_BUILD_DEPLIB):
-LOADER_INSTALL_DEP_LIBS = $(LIBGCC_INSTALL_DEPLIB):$(LIBM_INSTALL_DEPLIB):@$(LIBJULIAINTERNAL_INSTALL_DEPLIB):@$(LIBJULIACODEGEN_INSTALL_DEPLIB):
-LOADER_DEBUG_INSTALL_DEP_LIBS = $(LIBGCC_INSTALL_DEPLIB):$(LIBM_INSTALL_DEPLIB):@$(LIBJULIAINTERNAL_DEBUG_INSTALL_DEPLIB):@$(LIBJULIACODEGEN_DEBUG_INSTALL_DEPLIB):
+# should not automatically dlopen() it in its loading loop, it is "special" and should happen later.
+# We do the same for `libstdc++`, and explicitly place it _after_ `libgcc_s`, and `libm` since `libstdc++`
+# may depend on those libraries (e.g. when USE_SYSTEM_LIBM=1)
+
+# Helper function to join a list with colons, then place an extra at the end.
+define build_deplibs
+$(subst $(SPACE),:,$(strip $(1))):
+endef
+
+LOADER_BUILD_DEP_LIBS = $(call build_deplibs, \
+    $(LIBGCC_BUILD_DEPLIB) \
+    $(LIBM_BUILD_DEPLIB) \
+    @$(LIBSTDCXX_BUILD_DEPLIB) \
+    @$(LIBJULIAINTERNAL_BUILD_DEPLIB) \
+    @$(LIBJULIACODEGEN_BUILD_DEPLIB) \
+)
+
+LOADER_DEBUG_BUILD_DEP_LIBS = $(call build_deplibs, \
+   $(LIBGCC_BUILD_DEPLIB) \
+   $(LIBM_BUILD_DEPLIB) \
+   @$(LIBSTDCXX_BUILD_DEPLIB) \
+   @$(LIBJULIAINTERNAL_DEBUG_BUILD_DEPLIB) \
+   @$(LIBJULIACODEGEN_DEBUG_BUILD_DEPLIB) \
+)
+
+LOADER_INSTALL_DEP_LIBS = $(call build_deplibs, \
+    $(LIBGCC_INSTALL_DEPLIB) \
+    $(LIBM_INSTALL_DEPLIB) \
+    @$(LIBSTDCXX_INSTALL_DEPLIB) \
+    @$(LIBJULIAINTERNAL_INSTALL_DEPLIB) \
+    @$(LIBJULIACODEGEN_INSTALL_DEPLIB) \
+)
+LOADER_DEBUG_INSTALL_DEP_LIBS = $(call build_deplibs, \
+    $(LIBGCC_INSTALL_DEPLIB) \
+    $(LIBM_INSTALL_DEPLIB) \
+    @$(LIBSTDCXX_INSTALL_DEPLIB) \
+    @$(LIBJULIAINTERNAL_DEBUG_INSTALL_DEPLIB) \
+    @$(LIBJULIACODEGEN_DEBUG_INSTALL_DEPLIB) \
+)
 
 # Colors for make
 ifndef VERBOSE
