@@ -7,7 +7,7 @@ function strip_gensym(sym)
     if sym === :var"#self#" || sym === :var"#unused#"
         return empty_sym
     end
-    return Symbol(replace(String(sym), r"^(.*)#(.*#)?\d+$" => s"\1"))
+    return Symbol(replace(String(sym), r"^(.*)#(.*#)?\d+$"sa => s"\1"))
 end
 
 function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva::Bool) # -> (argname, argtype)
@@ -364,7 +364,7 @@ function url(m::Method)
     (m.file === :null || m.file === :string) && return ""
     file = string(m.file)
     line = m.line
-    line <= 0 || occursin(r"In\[[0-9]+\]", file) && return ""
+    line <= 0 || occursin(r"In\[[0-9]+\]"a, file) && return ""
     Sys.iswindows() && (file = replace(file, '\\' => '/'))
     libgit2_id = PkgId(UUID((0x76f85450_5226_5b5a,0x8eaa_529ad045b433)), "LibGit2")
     if inbase(M)

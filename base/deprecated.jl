@@ -48,7 +48,7 @@ arguments of type `Any`.
 
 To restrict deprecation to a specific signature, annotate the
 arguments of `old`. For example,
-```jldoctest; filter = r"@ .*"
+```jldoctest; filter = r"@ .*"a
 julia> new(x::Int) = x;
 
 julia> new(x::Float64) = 2x;
