@@ -9,7 +9,7 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     writable::Bool
     seekable::Bool # if not seekable, implementation is free to destroy (compact) past read data
     append::Bool # add data at end instead of at pointer
-    size::Int # end pointer (and write pointer if append == true)
+    size::Int # end pointer (and write pointer if append == true), < 0 if data needs re-alloc after take!
     maxsize::Int # fixed array size (typically pre-allocated)
     ptr::Int # read (and maybe write) pointer
     mark::Int # reset mark location for ptr (or <0 for no mark)
@@ -29,6 +29,35 @@ end
 
 # allocate Vector{UInt8}s for IOBuffer storage that can efficiently become Strings
 StringVector(n::Integer) = unsafe_wrap(Vector{UInt8}, _string_n(n))
+
+"""
+    ensure_initialized!(buffer::GenericIOBuffer)
+
+If needed, re-initialize/allocate the underlying `data` array of `buffer`,
+which may be needed after `take!(buffer)` is called.  This function
+is normally called automatically by functions that read/write
+the buffer, but you may need to call it manually if you are accessing
+`buffer.data` directly and `take!` may have been called.
+"""
+@inline function ensure_initialized!(buf::GenericIOBuffer)
+    if buf.size < 0
+        maxsize = (io.maxsize == typemax(Int) ? 0 : min(-buf.size - 1,io.maxsize))
+        buf.data = similar(buf.data, maxsize)
+        buf.size = 0
+        return true
+    end
+    return false
+end
+
+@inline function ensure_initialized!(buf::IOBuffer)
+    if buf.size < 0
+        maxsize = (io.maxsize == typemax(Int) ? 0 : min(-buf.size - 1,io.maxsize))
+        buf.data = StringVector(maxsize)
+        buf.size = 0
+        return true
+    end
+    return false
+end
 
 # IOBuffers behave like Files. They are typically readable and writable. They are seekable. (They can be appendable).
 
@@ -138,6 +167,7 @@ PipeBuffer(data::Vector{UInt8}=UInt8[]; maxsize::Int = typemax(Int)) =
 PipeBuffer(maxsize::Integer) = (x = PipeBuffer(StringVector(maxsize), maxsize = maxsize); x.size=0; x)
 
 function copy(b::GenericIOBuffer)
+    ensure_initialized!(b)
     ret = typeof(b)(b.writable ? copy(b.data) : b.data,
                     b.readable, b.writable, b.seekable, b.append, b.maxsize)
     ret.size = b.size
@@ -162,6 +192,7 @@ end
 
 function unsafe_read(from::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     from.readable || _throw_not_readable()
+    ensure_initialized!(from)
     avail = bytesavailable(from)
     adv = min(avail, nb)
     GC.@preserve from unsafe_copyto!(p, pointer(from.data, from.ptr), adv)
@@ -174,6 +205,7 @@ end
 
 function peek(from::GenericIOBuffer, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}})
     from.readable || _throw_not_readable()
+    ensure_initialized!(from)
     avail = bytesavailable(from)
     nb = sizeof(T)
     if nb > avail
@@ -195,6 +227,7 @@ end
 function read_sub(from::GenericIOBuffer, a::AbstractArray{T}, offs, nel) where T
     require_one_based_indexing(a)
     from.readable || _throw_not_readable()
+    ensure_initialized!(from)
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
@@ -211,6 +244,7 @@ end
 
 @inline function read(from::GenericIOBuffer, ::Type{UInt8})
     from.readable || _throw_not_readable()
+    ensure_initialized!(from)
     ptr = from.ptr
     size = from.size
     if ptr > size
@@ -223,6 +257,7 @@ end
 
 function peek(from::GenericIOBuffer, ::Type{UInt8})
     from.readable || _throw_not_readable()
+    ensure_initialized!(from)
     if from.ptr > from.size
         throw(EOFError())
     end
@@ -237,7 +272,7 @@ iswritable(io::GenericIOBuffer) = io.writable
 # TODO: GenericIOBuffer is not iterable, so doesn't really have a length.
 # This should maybe be sizeof() instead.
 #length(io::GenericIOBuffer) = (io.seekable ? io.size : bytesavailable(io))
-bytesavailable(io::GenericIOBuffer) = io.size - io.ptr + 1
+bytesavailable(io::GenericIOBuffer) = max(0, io.size - io.ptr + 1)
 position(io::GenericIOBuffer) = io.ptr-1
 
 function skip(io::GenericIOBuffer, n::Integer)
@@ -252,6 +287,7 @@ function seek(io::GenericIOBuffer, n::Integer)
         ismarked(io) || throw(ArgumentError("seek failed, IOBuffer is not seekable and is not marked"))
         n == io.mark || throw(ArgumentError("seek failed, IOBuffer is not seekable and n != mark"))
     end
+    ensure_initialized!(io)
     # TODO: REPL.jl relies on the fact that this does not throw (by seeking past the beginning or end
     #       of an GenericIOBuffer), so that would need to be fixed in order to throw an error here
     #(n < 0 || n > io.size) && throw(ArgumentError("Attempted to seek outside IOBuffer boundaries."))
@@ -261,6 +297,7 @@ function seek(io::GenericIOBuffer, n::Integer)
 end
 
 function seekend(io::GenericIOBuffer)
+    ensure_initialized!(io)
     io.ptr = io.size+1
     return io
 end
@@ -270,6 +307,7 @@ function truncate(io::GenericIOBuffer, n::Integer)
     io.seekable || throw(ArgumentError("truncate failed, IOBuffer is not seekable"))
     n < 0 && throw(ArgumentError("truncate failed, n bytes must be ≥ 0, got $n"))
     n > io.maxsize && throw(ArgumentError("truncate failed, $(n) bytes is exceeds IOBuffer maxsize $(io.maxsize)"))
+    ensure_initialized!(io)
     if n > length(io.data)
         resize!(io.data, n)
     end
@@ -284,6 +322,7 @@ function compact(io::GenericIOBuffer)
     io.writable || throw(ArgumentError("compact failed, IOBuffer is not writeable"))
     io.seekable && throw(ArgumentError("compact failed, IOBuffer is seekable"))
     local ptr::Int, bytes_to_move::Int
+    ensure_initialized!(io)
     if ismarked(io) && io.mark < io.ptr
         if io.mark == 0 return end
         ptr = io.mark
@@ -302,6 +341,7 @@ end
 @noinline function ensureroom_slowpath(io::GenericIOBuffer, nshort::UInt)
     io.writable || throw(ArgumentError("ensureroom failed, IOBuffer is not writeable"))
     if !io.seekable
+        ensure_initialized!(io)
         if !ismarked(io) && io.ptr > 1 && io.size <= io.ptr - 1
             io.ptr = 1
             io.size = 0
@@ -324,6 +364,7 @@ end
     if !io.writable || (!io.seekable && io.ptr > 1)
         ensureroom_slowpath(io, nshort)
     end
+    ensure_initialized!(io)
     n = min((nshort % Int) + (io.append ? io.size : io.ptr-1), io.maxsize)
     l = length(io.data)
     if n > l
@@ -374,6 +415,7 @@ julia> String(take!(io))
 """
 function take!(io::GenericIOBuffer)
     ismarked(io) && unmark(io)
+    ensure_initialized!(io)
     if io.seekable
         nbytes = io.size
         data = copyto!(StringVector(nbytes), 1, io.data, 1, nbytes)
@@ -389,28 +431,38 @@ function take!(io::GenericIOBuffer)
 end
 function take!(io::IOBuffer)
     ismarked(io) && unmark(io)
+    ensure_initialized!(io)
+    newsize = 0
     if io.seekable
         data = io.data
+        size = io.size
         if io.writable
-            maxsize = (io.maxsize == typemax(Int) ? 0 : min(length(io.data),io.maxsize))
-            io.data = StringVector(maxsize)
+            newsize = -1 - length(data) # mark as invalid for ensure_initialized!
         else
             data = copy(data)
         end
         resize!(data,io.size)
     else
         nbytes = bytesavailable(io)
-        a = StringVector(nbytes)
-        data = read!(io, a)
+        if io.writable
+            data = io.data
+            newsize = -1 - length(data) # mark as invalid for ensure_initialized!
+            _deletebeg!(data, io.ptr-1)
+            resize!(data, nbytes)
+        else
+            a = StringVector(nbytes)
+            data = read!(io, a)
+        end
     end
     if io.writable
         io.ptr = 1
-        io.size = 0
+        io.size = newsize
     end
     return data
 end
 
 function write(to::IO, from::GenericIOBuffer)
+    ensure_initialized!(from)
     if to === from
         from.ptr = from.size + 1
         return 0
@@ -456,6 +508,7 @@ end
 
 readbytes!(io::GenericIOBuffer, b::Array{UInt8}, nb=length(b)) = readbytes!(io, b, Int(nb))
 function readbytes!(io::GenericIOBuffer, b::Array{UInt8}, nb::Int)
+    ensure_initialized!(io)
     nr = min(nb, bytesavailable(io))
     if length(b) < nr
         resize!(b, nr)
@@ -468,12 +521,14 @@ readavailable(io::GenericIOBuffer) = read(io)
 read(io::GenericIOBuffer, nb::Integer) = read!(io,StringVector(min(nb, bytesavailable(io))))
 
 function occursin(delim::UInt8, buf::IOBuffer)
+    ensure_initialized!(buf)
     p = pointer(buf.data, buf.ptr)
     q = GC.@preserve buf ccall(:memchr,Ptr{UInt8},(Ptr{UInt8},Int32,Csize_t),p,delim,bytesavailable(buf))
     return q != C_NULL
 end
 
 function occursin(delim::UInt8, buf::GenericIOBuffer)
+    ensure_initialized!(buf)
     data = buf.data
     for i = buf.ptr:buf.size
         @inbounds b = data[i]
@@ -483,6 +538,7 @@ function occursin(delim::UInt8, buf::GenericIOBuffer)
 end
 
 function readuntil(io::GenericIOBuffer, delim::UInt8; keep::Bool=false)
+    ensure_initialized!(io)
     lb = 70
     A = StringVector(lb)
     nread = 0
@@ -514,6 +570,7 @@ end
 function _crc32c(io::IOBuffer, nb::Integer, crc::UInt32=0x00000000)
     nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0, got $nb"))
     io.readable || _throw_not_readable()
+    ensure_initialized!(io)
     n = min(nb, bytesavailable(io))
     n == 0 && return crc
     crc = GC.@preserve io unsafe_crc32c(pointer(io.data, io.ptr), n, crc)
