@@ -1288,12 +1288,28 @@ JuliaOJIT::JuliaOJIT()
         });
 #endif
 
+    std::string ErrorStr;
+
+    // Make sure that libjulia-internal is loaded and placed first in the
+    // DynamicLibrary order so that calls to runtime intrinsics are resolved
+    // to the correct library when multiple libjulia-*'s have been loaded
+    // (e.g. when we `ccall` into a PackageCompiler.jl-created shared library)
+    sys::DynamicLibrary libjulia_internal_dylib = sys::DynamicLibrary::addPermanentLibrary(
+      jl_libjulia_internal_handle, &ErrorStr);
+    if(!ErrorStr.empty())
+        report_fatal_error(llvm::Twine("FATAL: unable to dlopen libjulia-internal\n") + ErrorStr);
+
     // Make sure SectionMemoryManager::getSymbolAddressInProcess can resolve
     // symbols in the program as well. The nullptr argument to the function
     // tells DynamicLibrary to load the program, not a library.
-    std::string ErrorStr;
     if (sys::DynamicLibrary::LoadLibraryPermanently(nullptr, &ErrorStr))
         report_fatal_error(llvm::Twine("FATAL: unable to dlopen self\n") + ErrorStr);
+
+    GlobalJD.addGenerator(
+      std::make_unique<orc::DynamicLibrarySearchGenerator>(
+        libjulia_internal_dylib,
+        DL.getGlobalPrefix(),
+        orc::DynamicLibrarySearchGenerator::SymbolPredicate()));
 
     GlobalJD.addGenerator(
       cantFail(orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
