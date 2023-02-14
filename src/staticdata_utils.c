@@ -1075,7 +1075,7 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_a
             remove_code_instance_from_validation((jl_code_instance_t*)ci); // mark it as handled
         }
         else {
-            jl_code_instance_t *codeinst = caller->cache;
+            jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&caller->cache);
             while (codeinst) {
                 remove_code_instance_from_validation(codeinst); // should be left invalid
                 codeinst = jl_atomic_load_relaxed(&codeinst->next);
@@ -1124,7 +1124,7 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_a
             }
         }
         else {
-            jl_code_instance_t *codeinst = caller->cache;
+            jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&caller->cache);
             while (codeinst) {
                 if (remove_code_instance_from_validation(codeinst)) { // mark it as handled
                     assert(codeinst->min_world >= world && codeinst->inferred);

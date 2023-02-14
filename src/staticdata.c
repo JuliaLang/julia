@@ -2025,7 +2025,7 @@ static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, int orig
 static void strip_specializations_(jl_method_instance_t *mi)
 {
     assert(jl_is_method_instance(mi));
-    jl_code_instance_t *codeinst = mi->cache;
+    jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     while (codeinst) {
         jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
         if (inferred && inferred != jl_nothing) {
@@ -3058,13 +3058,13 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             }
             else if (ci->max_world) {
                 // It's valid, but it may not be connected
-                if (!ci->def->cache)
-                    ci->def->cache = ci;
+                if (!jl_atomic_load_relaxed(&ci->def->cache))
+                    jl_atomic_store_release(&ci->def->cache, ci);
             }
             else {
                 // Ensure this code instance is not connected
-                if (ci->def->cache == ci)
-                    ci->def->cache = NULL;
+                if (jl_atomic_load_relaxed(&ci->def->cache) == ci)
+                    jl_atomic_store_release(&ci->def->cache, NULL);
             }
         }
         else if (jl_is_globalref(obj)) {

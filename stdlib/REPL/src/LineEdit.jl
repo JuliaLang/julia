@@ -1357,19 +1357,22 @@ function edit_input(s, f = (filename, line, column) -> InteractiveUtils.edit(fil
         col += 1
     end
 
+    # Write current input to temp file, edit, read back
     write(filename, str)
     f(filename, line, col)
     str_mod = readchomp(filename)
     rm(filename)
-    if str != str_mod # something was changed, run the input
-        write(buf, str_mod)
-        commit_line(s)
-        :done
-    else # no change, the edit session probably unsuccessful
-        write(buf, str)
-        seek(buf, pos) # restore state from before edit
-        refresh_line(s)
+
+    # Write updated content
+    write(buf, str_mod)
+    if str == str_mod
+        # If input was not modified: reset cursor
+        seek(buf, pos)
+    else
+        # If input was modified: move cursor to end
+        move_input_end(s)
     end
+    refresh_line(s)
 end
 
 # return the identifier under the cursor, possibly with other words concatenated
