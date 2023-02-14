@@ -30,14 +30,14 @@ size(F::Union{AdjointFactorization,TransposeFactorization}, d::Integer) = d in (
 parent(F::Union{AdjointFactorization,TransposeFactorization}) = F.parent
 
 ```
-    adjoint(F::Factorization) -> AdjointFactorization
+    adjoint(F::Factorization)::AdjointFactorization
 
 Lazy adjoint (conjugate transposition) of the factorization `F`.
 ```
 adjoint(F::Factorization) = AdjointFactorization(F)
 ```
-    transpose(F::Factorization) -> TransposeFactorization
-    transpose(F::Factorization{<:Real}) -> AdjointFactorization
+    transpose(F::Factorization)::TransposeFactorization
+    transpose(F::Factorization{<:Real})::AdjointFactorization
 
 Lazy transpose of the factorization `F`. Generically, for `Factorization`s with real
 `eltype`, return an [`AdjointFactorization`](@ref).
