@@ -39,24 +39,21 @@ is normally called automatically by functions that read/write
 the buffer, but you may need to call it manually if you are accessing
 `buffer.data` directly and `take!` may have been called.
 """
-@inline function ensure_initialized!(buf::GenericIOBuffer)
-    if buf.size < 0
-        maxsize = (io.maxsize == typemax(Int) ? 0 : min(-buf.size - 1,io.maxsize))
-        buf.data = similar(buf.data, maxsize)
-        buf.size = 0
-        return true
-    end
-    return false
+@inline function ensure_initialized!(buf::GenericIOBuffer) =
+    buf.size < 0 && _re_initialize!(buf)
+    return nothing
 end
-
-@inline function ensure_initialized!(buf::IOBuffer)
-    if buf.size < 0
-        maxsize = (io.maxsize == typemax(Int) ? 0 : min(-buf.size - 1,io.maxsize))
-        buf.data = StringVector(maxsize)
-        buf.size = 0
-        return true
-    end
-    return false
+function _re_initialize!(buf::GenericIOBuffer)
+    maxsize = (io.maxsize == typemax(Int) ? 0 : min(-buf.size - 1,io.maxsize))
+    buf.data = similar(buf.data, maxsize)
+    buf.size = 0
+    return nothing
+end
+function _re_initialize!(buf::IOBuffer)
+    maxsize = (io.maxsize == typemax(Int) ? 0 : min(-buf.size - 1,io.maxsize))
+    buf.data = StringVector(maxsize)
+    buf.size = 0
+    return nothing
 end
 
 # IOBuffers behave like Files. They are typically readable and writable. They are seekable. (They can be appendable).
