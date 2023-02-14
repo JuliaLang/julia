@@ -28,6 +28,13 @@ function toks(str)
     ts
 end
 
+function onlytok(str)
+    ts = collect(tokenize(str))
+    (length(ts) == 2 && ts[2].kind == K"EndMarker") ||
+        error("Expected one token got $(length(ts)-1)")
+    return ts[1].kind
+end
+
 @testset "tokens" begin
     for s in ["a", IOBuffer("a")]
         l = tokenize(s)
@@ -191,24 +198,7 @@ end
 end
 
 
-function test_roundtrip(str, kind, val)
-    t = tok(str)
-    @test t.kind == kind
-    @test untokenize(t, str) == val
-end
-
 roundtrip(str) = join(untokenize.(collect(tokenize(str)), str))
-
-@testset "tokenizing juxtaposed numbers and dotted operators/identifiers" begin
-    test_roundtrip("1234 .+1",     K"Integer", "1234")
-    test_roundtrip("1234.0+1",     K"Float",   "1234.0")
-    test_roundtrip("1234.0 .+1",   K"Float",   "1234.0")
-    test_roundtrip("1234.f(a)",    K"Float",   "1234.")
-    test_roundtrip("1234 .f(a)",   K"Integer", "1234")
-    test_roundtrip("1234.0.f(a)",  K"ErrorInvalidNumericConstant",   "1234.0.")
-    test_roundtrip("1234.0 .f(a)", K"Float",   "1234.0")
-end
-
 
 @testset "lexing anon functions '->' " begin
     @test tok("a->b", 2).kind==K"->"
@@ -546,114 +536,172 @@ end
 end
 
 @testset "modifying function names (!) followed by operator" begin
-    @test tok("a!=b",  2).kind == K"!="
-    @test tok("a!!=b", 2).kind == K"!="
-    @test tok("!=b",   1).kind == K"!="
+    @test toks("a!=b") == ["a"=>K"Identifier", "!="=>K"!=", "b"=>K"Identifier"]
+    @test toks("a!!=b") == ["a!"=>K"Identifier", "!="=>K"!=", "b"=>K"Identifier"]
+    @test toks("!=b") == ["!="=>K"!=", "b"=>K"Identifier"]
 end
 
-@testset "lex integers" begin
-    @test kind(tok("1234"))            == K"Integer"
-    @test kind(tok("12_34"))           == K"Integer"
-    @test kind(tok("_1234"))           == K"Identifier"
-    @test kind(tok("1234_"))           == K"Integer"
-    @test kind(tok("1234_", 2))        == K"Identifier"
-    @test kind(tok("1234x"))           == K"Integer"
-    @test kind(tok("1234x", 2))        == K"Identifier"
+@testset "integer literals" begin
+    @test onlytok("1234")  == K"Integer"
+    @test onlytok("12_34") == K"Integer"
+
+    @test toks("1234_") == ["1234"=>K"Integer", "_"=>K"Identifier"]
+    @test toks("1234x") == ["1234"=>K"Integer", "x"=>K"Identifier"]
+
+    @test onlytok("_1234") == K"Identifier"
+
+    @test toks("1__2") == ["1"=>K"Integer", "__2"=>K"Identifier"]
+end
+
+@testset "hex integer literals" begin
+    @test onlytok("0x0167_032") == K"HexInt"
+    @test onlytok("0x2_0_2")    == K"HexInt"
+    # trailing junk
+    # https://github.com/JuliaLang/julia/issues/16356
+    @test onlytok("0xenomorph") == K"ErrorInvalidNumericConstant"
+    @test onlytok("0xaα")    == K"ErrorInvalidNumericConstant"
+    @test toks("0x ") == ["0x"=>K"ErrorInvalidNumericConstant", " "=>K"Whitespace"]
+    @test onlytok("0x") == K"ErrorInvalidNumericConstant"
+    @test onlytok("0xg") == K"ErrorInvalidNumericConstant"
+    @test onlytok("0x_") == K"ErrorInvalidNumericConstant"
+    @test toks("0x-") == ["0x"=>K"ErrorInvalidNumericConstant", "-"=>K"-"]
+end
+
+@testset "hexfloat literals" begin
+    @test onlytok("0x.1p1")    == K"Float"
+    @test onlytok("0x00p2")    == K"Float"
+    @test onlytok("0x00P2")    == K"Float"
+    @test onlytok("0x0.00p23") == K"Float"
+    @test onlytok("0x0.0ap23") == K"Float"
+    @test onlytok("0x0.0_0p2") == K"Float"
+    @test onlytok("0x0_0_0.0_0p2") == K"Float"
+    @test onlytok("0x0p+2")    == K"Float"
+    @test onlytok("0x0p-2")    == K"Float"
+    # errors
+    @test onlytok("0x") == K"ErrorInvalidNumericConstant"
+    @test onlytok("0x2__2") == K"ErrorInvalidNumericConstant"
+    @test onlytok("0x1p") == K"ErrorInvalidNumericConstant"
+    @test onlytok("0x.p0") == K"ErrorInvalidNumericConstant"
+    @test onlytok("0x.")   == K"ErrorHexFloatMustContainP"
+    @test onlytok("0x1.0") == K"ErrorHexFloatMustContainP"
+end
+
+@testset "binary literals" begin
+    @test onlytok("0b0101001_0100_0101")  == K"BinInt"
+
+    @test onlytok("0b") == K"ErrorInvalidNumericConstant"
+    @test toks("0b ") == ["0b"=>K"ErrorInvalidNumericConstant", " "=>K"Whitespace"]
+    @test onlytok("0b101__101") == K"ErrorInvalidNumericConstant"
+    @test onlytok("0b123") == K"ErrorInvalidNumericConstant"
+end
+
+@testset "octal literals" begin
+    @test onlytok("0o0167") == K"OctInt"
+    @test onlytok("0o01054001_0100_0101") == K"OctInt"
+
+    @test onlytok("0o") == K"ErrorInvalidNumericConstant"
+    @test onlytok("0o78p") == K"ErrorInvalidNumericConstant"
+    @test toks("0o ") == ["0o"=>K"ErrorInvalidNumericConstant", " "=>K"Whitespace"]
+end
+
+@testset "float literals" begin
+    @test onlytok("1.0") == K"Float"
+
+    @test onlytok("1.0e0")  == K"Float"
+    @test onlytok("1.0e-0") == K"Float"
+    @test onlytok("1.0E0")  == K"Float"
+    @test onlytok("1.0E-0") == K"Float"
+    @test onlytok("1.0f0")  == K"Float32"
+    @test onlytok("1.0f-0") == K"Float32"
+    @test onlytok("1.e0")  == K"Float"
+    @test onlytok("1.f0")  == K"Float32"
+
+    @test onlytok("0e0")    == K"Float"
+    @test onlytok("0e+0")   == K"Float"
+    @test onlytok("0E0")    == K"Float"
+    @test onlytok("201E+0") == K"Float"
+    @test onlytok("2f+0")   == K"Float32"
+    @test onlytok("2048f0") == K"Float32"
+
+    # underscores
+    @test onlytok("1_1.11")  == K"Float"
+    @test onlytok("11.1_1")  == K"Float"
+    @test onlytok("1_1.1_1") == K"Float"
+    @test onlytok("1.2_3")   == K"Float"
+    @test onlytok("3_2.5_2") == K"Float"
+    @test toks("_1.1_1") == ["_1"=>K"Identifier", ".1_1"=>K"Float"]
+
+    # juxtapositions with identifiers
+    @test toks("3e2_2") == ["3e2"=>K"Float", "_2"=>K"Identifier"]
+    @test toks("1e") == ["1"=>K"Integer", "e"=>K"Identifier"]
+
+    @test toks("1.:0") == ["1."=>K"Float", ":"=>K":", "0"=>K"Integer"]
+
+    # Floating point with \minus rather than -
+    @test onlytok("1.0e−0") == K"Float"
+    @test onlytok("1.0f−0") == K"Float32"
+    @test onlytok("0x0p−2") == K"Float"
+
+    # Errors
+    @test onlytok("1._")   == K"ErrorInvalidNumericConstant"
+    @test onlytok("1.1.")  == K"ErrorInvalidNumericConstant"
+    @test onlytok("1e+")   == K"ErrorInvalidNumericConstant"
+    @test onlytok("1.0e+") == K"ErrorInvalidNumericConstant"
+    @test onlytok("1.e1.") == K"ErrorInvalidNumericConstant"
+    @test onlytok("1e1.")  == K"ErrorInvalidNumericConstant"
+    @test toks("1.e")   == ["1."=>K"ErrorAmbiguousNumericDotMultiply", "e"=>K"Identifier"]
+    @test toks("3.2e2.2") == ["3.2e2."=>K"ErrorInvalidNumericConstant", "2"=>K"Integer"]
+    @test toks("3e2.2") == ["3e2."=>K"ErrorInvalidNumericConstant", "2"=>K"Integer"]
+    @test toks("1.2.f") == ["1.2."=>K"ErrorInvalidNumericConstant", "f"=>K"Identifier"]
 end
 
 @testset "numbers with trailing `.` " begin
-    @test tok("1.0").kind == K"Float"
-    @test tok("1.a").kind == K"Float"
-    @test tok("1.(").kind == K"Float"
-    @test tok("1.[").kind == K"Float"
-    @test tok("1.{").kind == K"Float"
-    @test tok("1.)").kind == K"Float"
-    @test tok("1.]").kind == K"Float"
-    @test tok("1.{").kind == K"Float"
-    @test tok("1.,").kind == K"Float"
-    @test tok("1.;").kind == K"Float"
-    @test tok("1.@").kind == K"Float"
-    @test tok("1.#").kind == K"Float"
-    @test tok("1.").kind == K"Float"
-    @test tok("1.\"text\" ").kind == K"Float"
+    @test toks("1.")  == ["1."=>K"Float"]
 
+    @test toks("1.)") == ["1."=>K"Float", ")"=>K")"]
+    @test toks("1.]") == ["1."=>K"Float", "]"=>K"]"]
+    @test toks("1.}") == ["1."=>K"Float", "}"=>K"}"]
+    @test toks("1.,") == ["1."=>K"Float", ","=>K","]
+    @test toks("1.;") == ["1."=>K"Float", ";"=>K";"]
+    @test toks("1.#") == ["1."=>K"Float", "#"=>K"Comment"]
+
+    # ellipses
     @test toks("1..")    == ["1"=>K"Integer",   ".."=>K".."]
+    @test toks("1...")   == ["1"=>K"Integer",  "..."=>K"..."]
     @test toks(".1..")   == [".1"=>K"Float",    ".."=>K".."]
     @test toks("0x01..") == ["0x01"=>K"HexInt", ".."=>K".."]
 
-    @test kind.(collect(tokenize("1f0./1"))) == [K"Float32", K"/", K"Integer", K"EndMarker"]
+    # Dotted operators and other dotted sufficies
+    @test toks("1234 .+1") == ["1234"=>K"Integer", " "=>K"Whitespace", ".+"=>K"+", "1"=>K"Integer"]
+    @test toks("1234.0+1") == ["1234.0"=>K"Float", "+"=>K"+", "1"=>K"Integer"]
+    @test toks("1234.0 .+1") == ["1234.0"=>K"Float", " "=>K"Whitespace", ".+"=>K"+", "1"=>K"Integer"]
+    @test toks("1234 .f(a)") == ["1234"=>K"Integer", " "=>K"Whitespace", "."=>K".",
+                                 "f"=>K"Identifier", "("=>K"(", "a"=>K"Identifier", ")"=>K")"]
+    @test toks("1234.0 .f(a)") == ["1234.0"=>K"Float", " "=>K"Whitespace", "."=>K".",
+                                   "f"=>K"Identifier", "("=>K"(", "a"=>K"Identifier", ")"=>K")"]
+    @test toks("1f0./1") == ["1f0"=>K"Float32", "./"=>K"/", "1"=>K"Integer"]
+
+    # Ambiguous dotted operators
+    @test toks("1.+") == ["1."=>K"ErrorAmbiguousNumericConstant", "+"=>K"+"]
+    @test toks("1.+ ") == ["1."=>K"ErrorAmbiguousNumericConstant", "+"=>K"+", " "=>K"Whitespace"]
+    @test toks("1.⤋")  == ["1."=>K"ErrorAmbiguousNumericConstant", "⤋"=>K"⤋"]
+    @test toks("1.?")  == ["1."=>K"ErrorAmbiguousNumericConstant", "?"=>K"?"]
+
+    # Ambiguous - literal vs multiply by juxtaposition
+    @test toks("1.x")  == ["1."=>K"ErrorAmbiguousNumericDotMultiply", "x"=>K"Identifier"]
+    @test toks("1.(")  == ["1."=>K"ErrorAmbiguousNumericDotMultiply", "("=>K"("]
+    @test toks("1.[")  == ["1."=>K"ErrorAmbiguousNumericDotMultiply", "["=>K"["]
+    @test toks("1.{")  == ["1."=>K"ErrorAmbiguousNumericDotMultiply", "{"=>K"{"]
+    @test toks("1.@")  == ["1."=>K"ErrorAmbiguousNumericDotMultiply", "@"=>K"@"]
+    @test toks("1.\"") == ["1."=>K"ErrorAmbiguousNumericDotMultiply", "\""=>K"\""]
 end
 
+@testset "julia 0.6 types" begin
+    @test onlytok("mutable")   == K"mutable"
+    @test onlytok("primitive") == K"primitive"
+    @test onlytok("struct")    == K"struct"
+    @test onlytok("where")     == K"where"
 
-
-@testset "lex octal" begin
-    @test tok("0o0167").kind == K"OctInt"
-end
-
-@testset "lex float/bin/hex/oct w underscores" begin
-    @test tok("1_1.11").kind           == K"Float"
-    @test tok("11.1_1").kind           == K"Float"
-    @test tok("1_1.1_1").kind           == K"Float"
-    @test tok("_1.1_1", 1).kind           == K"Identifier"
-    @test tok("_1.1_1", 2).kind           == K"Float"
-    @test tok("0x0167_032").kind           == K"HexInt"
-    @test tok("0b0101001_0100_0101").kind  == K"BinInt"
-    @test tok("0o01054001_0100_0101").kind == K"OctInt"
-    @test kind.(collect(tokenize("1.2."))) == [K"ErrorInvalidNumericConstant", K"EndMarker"]
-    @test tok("1__2").kind == K"Integer"
-    @test tok("1.2_3").kind == K"Float"
-    @test tok("1.2_3", 2).kind == K"EndMarker"
-    @test kind.(collect(tokenize("3e2_2"))) == [K"Float", K"Identifier", K"EndMarker"]
-    @test kind.(collect(tokenize("1__2"))) == [K"Integer", K"Identifier", K"EndMarker"]
-    @test kind.(collect(tokenize("0x2_0_2"))) == [K"HexInt", K"EndMarker"]
-    @test kind.(collect(tokenize("0x2__2"))) == [K"HexInt", K"Identifier", K"EndMarker"]
-    @test kind.(collect(tokenize("3_2.5_2"))) == [K"Float", K"EndMarker"]
-    @test kind.(collect(tokenize("3.2e2.2"))) == [K"ErrorInvalidNumericConstant", K"Integer", K"EndMarker"]
-    @test kind.(collect(tokenize("3e2.2"))) == [K"ErrorInvalidNumericConstant", K"Integer", K"EndMarker"]
-    @test kind.(collect(tokenize("0b101__101"))) == [K"BinInt", K"Identifier", K"EndMarker"]
-    @test tok("0x1p").kind == K"ErrorInvalidNumericConstant"
-end
-
-@testset "floating points" begin
-    @test tok("1.0e0").kind  == K"Float"
-    @test tok("1.0e-0").kind == K"Float"
-    @test tok("1.0E0").kind  == K"Float"
-    @test tok("1.0E-0").kind == K"Float"
-    @test tok("1.0f0").kind  == K"Float32"
-    @test tok("1.0f-0").kind == K"Float32"
-
-    @test tok("0e0").kind    == K"Float"
-    @test tok("0e+0").kind   == K"Float"
-    @test tok("0E0").kind    == K"Float"
-    @test tok("201E+0").kind == K"Float"
-    @test tok("2f+0").kind   == K"Float32"
-    @test tok("2048f0").kind == K"Float32"
-    @test tok("1.:0").kind == K"Float"
-    @test tok("0x00p2").kind == K"Float"
-    @test tok("0x00P2").kind == K"Float"
-    @test tok("0x0.00p23").kind == K"Float"
-    @test tok("0x0.0ap23").kind == K"Float"
-    @test tok("0x0.0_0p2").kind == K"Float"
-    @test tok("0x0_0_0.0_0p2").kind == K"Float"
-    @test tok("0x0p+2").kind == K"Float"
-    @test tok("0x0p-2").kind == K"Float"
-
-    # Floating point with \minus rather than -
-    @test tok("1.0e−0").kind == K"Float"
-    @test tok("1.0f−0").kind == K"Float32"
-    @test tok("0x0p−2").kind == K"Float"
-end
-
-@testset "1e1" begin
-    @test tok("1e", 1).kind == K"Integer"
-    @test tok("1e", 2).kind == K"Identifier"
-end
-
-@testset "jl06types" begin
-    @test tok("mutable").kind   == K"mutable"
-    @test tok("primitive").kind == K"primitive"
-    @test tok("struct").kind    == K"struct"
-    @test tok("where").kind     == K"where"
     @test tok("mutable struct s{T} where T",  1).kind == K"mutable"
     @test tok("mutable struct s{T} where T",  3).kind == K"struct"
     @test tok("mutable struct s{T} where T", 10).kind == K"where"
@@ -686,15 +734,6 @@ end
     skip(io, 1)
     @test length(collect(tokenize(io))) == 4
 end
-
-@testset "hex/bin/octal errors" begin
-    @test tok("0x").kind == K"ErrorInvalidNumericConstant"
-    @test tok("0b").kind == K"ErrorInvalidNumericConstant"
-    @test tok("0o").kind == K"ErrorInvalidNumericConstant"
-    @test tok("0x 2", 1).kind == K"ErrorInvalidNumericConstant"
-    @test tok("0x.1p1").kind == K"Float"
-end
-
 
 @testset "dotted and suffixed operators" begin
 ops = collect(values(Tokenize.UNICODE_OPS_REVERSE))
@@ -755,35 +794,12 @@ end
     @test tok("outer", 1).kind==K"outer"
 end
 
-function test_error(tok, kind)
-    @test is_error(tok.kind)
-    @test tok.kind == kind
-end
-
-@testset "token errors" begin
-    test_error(tok("1.2e2.3",1), K"ErrorInvalidNumericConstant")
-    test_error(tok("1.2.",1),    K"ErrorInvalidNumericConstant")
-    test_error(tok("1.2.f",1),   K"ErrorInvalidNumericConstant")
-    test_error(tok("0xv",1),     K"ErrorInvalidNumericConstant")
-    test_error(tok("0b3",1),     K"ErrorInvalidNumericConstant")
-    test_error(tok("0op",1),     K"ErrorInvalidNumericConstant")
-    test_error(tok("--",1),      K"ErrorInvalidOperator")
-
-    @test toks("1e+")   == ["1e+"=>K"ErrorInvalidNumericConstant"]
-    @test toks("1.0e+") == ["1.0e+"=>K"ErrorInvalidNumericConstant"]
-    @test toks("0x.")   == ["0x."=>K"ErrorInvalidNumericConstant"]
-
+@testset "invalid operator errors" begin
+    @test toks("--")      == ["--"=>K"ErrorInvalidOperator"]
     @test toks("1**2") == ["1"=>K"Integer", "**"=>K"Error**", "2"=>K"Integer"]
     @test toks("a<---b") == ["a"=>K"Identifier", "<---"=>K"ErrorInvalidOperator", "b"=>K"Identifier"]
     @test toks("a..+b") == ["a"=>K"Identifier", "..+"=>K"ErrorInvalidOperator", "b"=>K"Identifier"]
     @test toks("a..−b") == ["a"=>K"Identifier", "..−"=>K"ErrorInvalidOperator", "b"=>K"Identifier"]
-
-    @test toks("1.+2") == ["1."=>K"ErrorAmbiguousNumericConstant", "+"=>K"+", "2"=>K"Integer"]
-    @test toks("1.+ ") == ["1."=>K"ErrorAmbiguousNumericConstant", "+"=>K"+", " "=>K"Whitespace"]
-    @test toks("1.⤋")  == ["1."=>K"ErrorAmbiguousNumericConstant", "⤋"=>K"⤋"]
-    @test toks("1.?")  == ["1."=>K"ErrorAmbiguousNumericConstant", "?"=>K"?"]
-
-    @test toks("\x00") == ["\x00"=>K"ErrorUnknownCharacter"]
 end
 
 @testset "hat suffix" begin
@@ -922,6 +938,8 @@ end
 end
 
 @testset "invalid UTF-8 characters" begin
+    @test onlytok("\x00") == K"ErrorUnknownCharacter"
+
     bad_chars = [
         first("\xe2")              # malformed
         first("\xc0\x9b")          # overlong

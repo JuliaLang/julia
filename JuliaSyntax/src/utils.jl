@@ -121,3 +121,7 @@ function _fl_parse_string(text::AbstractString, filename::AbstractString,
     ex, offset+1
 end
 
+# Convenience functions to mirror `JuliaSyntax.parse(Expr, ...)` in simple cases.
+fl_parse(::Type{Expr}, args...; kws...) = fl_parse(args...; kws...)
+fl_parseall(::Type{Expr}, args...; kws...) = fl_parseall(args...; kws...)
+
