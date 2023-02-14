@@ -193,7 +193,6 @@ tests = [
         "sqrt(2)2"  =>  "(call sqrt 2)"
         "x' y"      =>  "(call-post x ')"
         "x 'y"      =>  "x"
-        "0xenomorph" => "0x0e"
     ],
     JuliaSyntax.parse_unary => [
         ":T"       => "(quote T)"
@@ -950,17 +949,6 @@ broken_tests = [
         "@!x"   => "(macrocall @! x)"
         "@..x"  => "(macrocall @.. x)"
         "@.x"   => "(macrocall @__dot__ x)"
-        # Invalid numeric literals, not juxtaposition
-        "0b12" => "(error \"0b12\")"
-        "0xex" => "(error \"0xex\")"
-        # Bad character literals
-        "'\\xff'"  => "(error '\\xff')"
-        "'\\x80'"  => "(error '\\x80')"
-        "'ab'"     => "(error 'ab')"
-    ]
-    JuliaSyntax.parse_juxtapose => [
-        # Want: "numeric constant \"10.\" cannot be implicitly multiplied because it ends with \".\""
-        "10.x" => "(error (call * 10.0 x))"
     ]
 ]
 

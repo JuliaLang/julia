@@ -614,6 +614,8 @@ function lex_less(l::Lexer)
         else
             if accept(l, '>')
                 return emit(l, K"<-->")
+            elseif accept(l, '-')
+                return emit_error(l, K"ErrorInvalidOperator")
             else
                 return emit(l, K"<--")
             end
@@ -772,33 +774,13 @@ function lex_digit(l::Lexer, kind)
             return emit_error(l, K"ErrorInvalidNumericConstant")
         elseif is_operator_start_char(ppc) && ppc !== ':'
             readchar(l)
-            return emit_error(l, K"ErrorAmbiguousNumericConstant")
-        elseif (!(isdigit(ppc) ||
-            iswhitespace(ppc) ||
-            is_identifier_start_char(ppc)
-            || ppc == '('
-            || ppc == ')'
-            || ppc == '['
-            || ppc == ']'
-            || ppc == '{'
-            || ppc == '}'
-            || ppc == ','
-            || ppc == ';'
-            || ppc == '@'
-            || ppc == '`'
-            || ppc == '"'
-            || ppc == ':'
-            || ppc == '?'
-            || ppc == '#'
-            || ppc == EOF_CHAR))
-            kind = K"Integer"
-
-            return emit(l, kind)
+            return emit_error(l, K"ErrorAmbiguousNumericConstant") # `1.+`
         end
         readchar(l)
 
         kind = K"Float"
-        accept_number(l, isdigit)
+        accept(l, '_') && return emit_error(l, K"ErrorInvalidNumericConstant") # `1._`
+        had_fraction_digs = accept_number(l, isdigit)
         pc, ppc = dpeekchar(l)
         if (pc == 'e' || pc == 'E' || pc == 'f') && (isdigit(ppc) || ppc == '+' || ppc == '-' || ppc == '−')
             kind = pc == 'f' ? K"Float32" : K"Float"
@@ -807,17 +789,20 @@ function lex_digit(l::Lexer, kind)
             if accept_batch(l, isdigit)
                 pc,ppc = dpeekchar(l)
                 if pc === '.' && !dotop2(ppc)
-                    accept(l, '.')
-                    return emit_error(l, K"ErrorInvalidNumericConstant")
+                    readchar(l)
+                    return emit_error(l, K"ErrorInvalidNumericConstant") # `1.e1.`
                 end
             else
-                return emit_error(l, K"ErrorInvalidNumericConstant")
+                return emit_error(l, K"ErrorInvalidNumericConstant") # `1.e`
             end
-        elseif pc == '.' && (is_identifier_start_char(ppc) || ppc == EOF_CHAR)
+        elseif pc == '.' && ppc != '.' && !is_operator_start_char(ppc)
             readchar(l)
-            return emit_error(l, K"ErrorInvalidNumericConstant")
+            return emit_error(l, K"ErrorInvalidNumericConstant") # `1.1.`
+        elseif !had_fraction_digs && (is_identifier_start_char(pc) ||
+                                      pc == '(' || pc == '[' || pc == '{' ||
+                                      pc == '@' || pc == '`' || pc == '"')
+            return emit_error(l, K"ErrorAmbiguousNumericDotMultiply") # `1.(` `1.x`
         end
-
     elseif (pc == 'e' || pc == 'E' || pc == 'f') && (isdigit(ppc) || ppc == '+' || ppc == '-' || ppc == '−')
         kind = pc == 'f' ? K"Float32" : K"Float"
         readchar(l)
@@ -826,44 +811,54 @@ function lex_digit(l::Lexer, kind)
             pc,ppc = dpeekchar(l)
             if pc === '.' && !dotop2(ppc)
                 accept(l, '.')
-                return emit_error(l, K"ErrorInvalidNumericConstant")
+                return emit_error(l, K"ErrorInvalidNumericConstant") # `1e1.`
             end
         else
-            return emit_error(l, K"ErrorInvalidNumericConstant")
+            return emit_error(l, K"ErrorInvalidNumericConstant") # `1e+`
         end
     elseif position(l) - startpos(l) == 1 && l.chars[1] == '0'
         kind == K"Integer"
+        is_bin_oct_hex_int = false
         if pc == 'x'
             kind = K"HexInt"
             isfloat = false
             readchar(l)
-            !(ishex(ppc) || ppc == '.') && return emit_error(l, K"ErrorInvalidNumericConstant")
-            accept_number(l, ishex)
+            had_digits = accept_number(l, ishex)
             pc,ppc = dpeekchar(l)
             if pc == '.' && ppc != '.'
                 readchar(l)
-                accept_number(l, ishex)
+                had_digits |= accept_number(l, ishex)
                 isfloat = true
             end
             if accept(l, "pP")
                 kind = K"Float"
                 accept(l, "+-−")
-                if !accept_number(l, isdigit)
-                    return emit_error(l, K"ErrorInvalidNumericConstant")
+                if !accept_number(l, isdigit) || !had_digits
+                    return emit_error(l, K"ErrorInvalidNumericConstant") # `0x1p` `0x.p0`
                 end
             elseif isfloat
+                return emit_error(l, K"ErrorHexFloatMustContainP") # `0x.` `0x1.0`
+            end
+            is_bin_oct_hex_int = !isfloat
+        elseif pc == 'b'
+            readchar(l)
+            had_digits = accept_number(l, isbinary)
+            kind = K"BinInt"
+            is_bin_oct_hex_int = true
+        elseif pc == 'o'
+            readchar(l)
+            had_digits = accept_number(l, isoctal)
+            kind = K"OctInt"
+            is_bin_oct_hex_int = true
+        end
+        if is_bin_oct_hex_int
+            pc = peekchar(l)
+            if !had_digits || isdigit(pc) || is_identifier_start_char(pc)
+                accept_batch(l, c->isdigit(c) || is_identifier_start_char(c))
+                # `0x` `0xg` `0x_` `0x-`
+                # `0b123` `0o78p` `0xenomorph` `0xaα`
                 return emit_error(l, K"ErrorInvalidNumericConstant")
             end
-        elseif pc == 'b'
-            !isbinary(ppc) && return emit_error(l, K"ErrorInvalidNumericConstant")
-            readchar(l)
-            accept_number(l, isbinary)
-            kind = K"BinInt"
-        elseif pc == 'o'
-            !isoctal(ppc) && return emit_error(l, K"ErrorInvalidNumericConstant")
-            readchar(l)
-            accept_number(l, isoctal)
-            kind = K"OctInt"
         end
     end
     return emit(l, kind)

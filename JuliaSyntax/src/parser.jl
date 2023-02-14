@@ -1103,9 +1103,6 @@ function is_juxtapose(ps, prev_k, t)
          !(is_block_form(prev_k)         ||
            is_syntactic_unary_op(prev_k) ||
            is_initial_reserved_word(ps, prev_k) )))  &&
-    # https://github.com/JuliaLang/julia/issues/16356
-    # 0xenomorph  ==>  0x0e
-    !(prev_k in KSet"BinInt HexInt OctInt" && (k == K"Identifier" || is_keyword(k))) &&
     (!is_operator(k) || is_radical_op(k))            &&
     !is_closing_token(ps, k)                         &&
     !is_initial_reserved_word(ps, k)
