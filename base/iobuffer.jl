@@ -516,15 +516,53 @@ function occursin(delim::UInt8, buf::GenericIOBuffer)
     return false
 end
 
-function readuntil(out::IO, io::GenericIOBuffer, buffer::AbstractVector{UInt8}, delim::UInt8)
+function readuntil(out::IO, io::GenericIOBuffer, delim::UInt8; keep::Bool=false)
     data = view(io.data, io.ptr:io.size)
     # note: findfirst + copyto! is much faster than a single loop
     #       except for nout ≲ 20.  A single loop is 2x faster for nout=5.
-    nout = something(findfirst(==(delim), data), length(data))
+    nout = nread = something(findfirst(==(delim), data), length(data))
+    if !keep && nout > 0 && data[nout] == delim
+        nout -= 1
+    end
     write(out, view(io.data, io.ptr:io.ptr+nout-1))
-    io.ptr += nout
+    io.ptr += nread
     return out
 end
+
+function readline(out::GenericIOBuffer, s::IO; keep::Bool=false)
+    readuntil(out, s, 0x0a, keep=true)
+    line = out.data
+    i = out.size
+    if keep || i == 0 || line[i] != 0x0a
+        return out
+    elseif i < 2 || line[i-1] != 0x0d
+        i -= 1
+    else
+        i -= 2
+    end
+    out.size = i
+    if !out.append
+        out.ptr = i+1
+    end
+    return out
+end
+
+function _readline(out::IO, io::GenericIOBuffer; keep::Bool=false)
+    data = view(io.data, io.ptr:io.size)
+    # note: findfirst + copyto! is much faster than a single loop
+    #       except for nout ≲ 20.  A single loop is 2x faster for nout=5.
+    nout = nread = something(findfirst(==(0x0a), data), length(data))
+    if !keep && nout > 0 && data[nout] == 0x0a
+        nout -= 1
+        nout > 0 && data[nout] == 0x0d && (nout -= 1)
+    end
+    write(out, view(io.data, io.ptr:io.ptr+nout-1))
+    io.ptr += nread
+    return out
+end
+readline(out::IO, io::GenericIOBuffer; keep::Bool=false) = _readline(out, io; keep)
+readline(out::GenericIOBuffer, io::GenericIOBuffer; keep::Bool=false) = _readline(out, io; keep)
+
 
 # copy-free crc32c of IOBuffer:
 function _crc32c(io::IOBuffer, nb::Integer, crc::UInt32=0x00000000)

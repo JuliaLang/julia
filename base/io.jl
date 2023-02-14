@@ -530,7 +530,7 @@ readuntil(filename::AbstractString, delim; kw...) = open(io->readuntil(io, delim
 
 """
     readline([out::IO], io::IO=stdin; keep::Bool=false)
-    readline(filename::AbstractString; keep::Bool=false)
+    readline([out::IO], filename::AbstractString; keep::Bool=false)
 
 Read a single line of text from the given I/O stream or file (defaults to `stdin`).
 When reading from a file, the text is assumed to be encoded in UTF-8. Lines in the
@@ -538,6 +538,10 @@ input end with `'\\n'` or `"\\r\\n"` or the end of an input stream. When `keep` 
 false (as it is by default), these trailing newline characters are removed from the
 line before it is returned. When `keep` is true, they are returned as part of the
 line.
+
+By default, returns a `String`. If the optional `out` argument is supplied, then
+the line is instead written to the `out` stream, returning `out`.
+(This can be used, for example, to read data into a pre-allocated [`IOBuffer`](@ref).)
 
 See also [`readuntil`](@ref) for reading until more general delimiters.
 
@@ -562,21 +566,30 @@ Logan
 "Logan"
 ```
 """
-function readline(filename::AbstractString; keep::Bool=false)
-    open(filename) do f
-        readline(f, keep=keep)
-    end
-end
+readline(filename::AbstractString; keep::Bool=false) =
+    open(io -> readline(io; keep), filename)
+readline(out::IO, filename::AbstractString; keep::Bool=false) =
+    open(io -> readline(out, io; keep), filename)
+readline(s::IO=stdin; keep::Bool=false) =
+    String(take!(readline(IOBuffer(StringVector(70),write=true), s; keep)))
 
-function readline(s::IO=stdin; keep::Bool=false)
-    line = readuntil(s, 0x0a, keep=true)::Vector{UInt8}
-    i = length(line)
-    if keep || i == 0 || line[i] != 0x0a
-        return String(line)
-    elseif i < 2 || line[i-1] != 0x0d
-        return String(resize!(line,i-1))
+# fallback to optimized methods for IOBuffer in iobuffer.jl
+function readline(out::IO, s::IO; keep::Bool=false)
+    if keep
+        return readuntil(out, s, 0x0a, keep=true)
     else
-        return String(resize!(line,i-2))
+        # more complicated to deal with CRLF logic
+        while !eof(s)
+            b = read(s, UInt8)
+            b == 0x0a && break
+            if b == 0x0d && !eof(s)
+                b = read(s, UInt8)
+                b == 0x0a && break
+                write(out, 0x0d)
+            end
+            write(out, b)
+        end
+        return out
     end
 end
 
