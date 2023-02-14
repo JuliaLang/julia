@@ -326,6 +326,8 @@ end
 
 isvalid(s::String, i::Int) = checkbounds(Bool, s, i) && thisind(s, i) == i
 
+isascii(s::String) = isascii(codeunits(s))
+
 """
     repeat(c::AbstractChar, r::Integer) -> String
 
