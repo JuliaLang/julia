@@ -70,7 +70,7 @@ end
 """
     GeneralizedEigen <: Factorization
 
-Matrix factorization type of the generalized eigenvalue/apply decomposition of
+Matrix factorization type of the generalized eigenvalue/spectral decomposition of
 `A` and `B`. This is the return type of [`eigen`](@ref), the corresponding
 matrix factorization function, when called with two matrix arguments.
 
