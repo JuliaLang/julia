@@ -1,7 +1,9 @@
 """
-    SourceFile(code [; filename=nothing])
+    SourceFile(code [; filename=nothing, first_line=1])
 
-A UTF-8 source code string with associated file name and indexing structures.
+A UTF-8 source code string with associated file name and line number.
+
+`SourceFile` stores the character positions of line starts to facilitate indexing.
 """
 struct SourceFile
     # We use `code::String` for now but it could be some other UTF-8 based
@@ -11,11 +13,12 @@ struct SourceFile
     # https://en.wikipedia.org/wiki/Rope_(data_structure)
     code::String
     filename::Union{Nothing,String}
+    first_line::Int
     # String index of start of every line
     line_starts::Vector{Int}
 end
 
-function SourceFile(code::AbstractString; filename=nothing)
+function SourceFile(code::AbstractString; filename=nothing, first_line=1)
     line_starts = Int[1]
     for i in eachindex(code)
         # The line is considered to start after the `\n`
@@ -25,31 +28,33 @@ function SourceFile(code::AbstractString; filename=nothing)
     if isempty(code) || last(code) != '\n'
         push!(line_starts, ncodeunits(code)+1)
     end
-    SourceFile(code, filename, line_starts)
+    SourceFile(code, filename, first_line, line_starts)
 end
 
-function SourceFile(; filename)
-    SourceFile(read(filename, String); filename=filename)
+function SourceFile(; filename, kwargs...)
+    SourceFile(read(filename, String); filename=filename, kwargs...)
 end
 
 # Get line number of the given byte within the code
-function source_line(source::SourceFile, byte_index)
-    line = searchsortedlast(source.line_starts, byte_index)
-    return (line < lastindex(source.line_starts)) ? line : line-1
+function source_line_index(source::SourceFile, byte_index)
+    lineidx = searchsortedlast(source.line_starts, byte_index)
+    return (lineidx < lastindex(source.line_starts)) ? lineidx : lineidx-1
 end
+_source_line(source::SourceFile, lineidx) = lineidx + source.first_line - 1
+source_line(source::SourceFile, byte_index) = _source_line(source, source_line_index(source, byte_index))
 
 """
 Get line number and character within the line at the given byte index.
 """
 function source_location(source::SourceFile, byte_index)
-    line = source_line(source, byte_index)
-    i = source.line_starts[line]
+    lineidx = source_line_index(source, byte_index)
+    i = source.line_starts[lineidx]
     column = 1
     while i < byte_index
         i = nextind(source.code, i)
         column += 1
     end
-    line, column
+    _source_line(source, lineidx), column
 end
 
 """
@@ -58,9 +63,9 @@ Get byte range of the source line at byte_index, buffered by
 """
 function source_line_range(source::SourceFile, byte_index;
                            context_lines_before=0, context_lines_after=0)
-    line = source_line(source, byte_index)
-    fbyte = source.line_starts[max(line-context_lines_before, 1)]
-    lbyte = source.line_starts[min(line+1+context_lines_after, end)] - 1
+    lineidx = source_line_index(source, byte_index)
+    fbyte = source.line_starts[max(lineidx-context_lines_before, 1)]
+    lbyte = source.line_starts[min(lineidx+1+context_lines_after, end)] - 1
     fbyte,lbyte
 end
 
