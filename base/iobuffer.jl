@@ -419,8 +419,7 @@ function take!(io::IOBuffer)
             _deletebeg!(data, io.ptr-1)
             resize!(data, nbytes)
         else
-            a = StringVector(nbytes)
-            data = read!(io, a)
+            data = read!(io, StringVector(nbytes))
         end
     end
     if io.writable
@@ -436,10 +435,10 @@ end
 This simply returns the raw resized `io.data`, with no checks to be
 sure that `io` is readable etcetera, and leaves `io` in an inconsistent
 state.  This should only be used internally for performance-critical
-`String` routines that immediately discard `io` afterwards.
+`String` routines that immediately discard `io` afterwards, and it
+*assumes* that `io` is writable and seekable.
 
-It saves no allocations compared to `take!` (assuming a writable, seekable
-buffer), it just omits some checks.
+It saves no allocations compared to `take!`, it just omits some checks.
 """
 _unsafe_take!(io::IOBuffer) = resize!(io.data, io.size)
 
