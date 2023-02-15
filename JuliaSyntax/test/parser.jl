@@ -306,6 +306,9 @@ tests = [
         "f(a).g(b)" => "(call (. (call f a) (quote g)) b)"
         "\$A.@x"    =>  "(macrocall (. (\$ A) (quote @x)))"
 
+        # non-errors in space sensitive contexts
+        "[f (x)]"    =>  "(hcat f x)"
+        "[f x]"      =>  "(hcat f x)"
         # space separated macro calls
         "@foo a b"     =>  "(macrocall @foo a b)"
         "@foo (x)"     =>  "(macrocall @foo x)"
@@ -313,9 +316,12 @@ tests = [
         "A.@foo a b"   =>  "(macrocall (. A (quote @foo)) a b)"
         "@A.foo a b"   =>  "(macrocall (. A (quote @foo)) a b)"
         "[@foo x]"     =>  "(vect (macrocall @foo x))"
+        "[@foo]"       =>  "(vect (macrocall @foo))"
         "@var\"#\" a"  =>  "(macrocall (var @#) a)"                => Expr(:macrocall, Symbol("@#"), LineNumberNode(1), :a)
         "A.@x y"       =>  "(macrocall (. A (quote @x)) y)"
         "A.@var\"#\" a"=>  "(macrocall (. A (quote (var @#))) a)"  => Expr(:macrocall, Expr(:., :A, QuoteNode(Symbol("@#"))), LineNumberNode(1), :a)
+        "@+x y"        =>  "(macrocall @+ x y)"
+        "A.@.x"        =>  "(macrocall (. A (quote @.)) x)"
         # Macro names
         "@! x"  => "(macrocall @! x)"
         "@.. x" => "(macrocall @.. x)"
@@ -329,9 +335,6 @@ tests = [
         "@doc x\n\ny"  =>  "(macrocall @doc x)"
         "@doc x\nend"  =>  "(macrocall @doc x)"
 
-        # non-errors in space sensitive contexts
-        "[f (x)]"    =>  "(hcat f x)"
-        "[f x]"      =>  "(hcat f x)"
         # calls with brackets
         "f(a,b)"  => "(call f a b)"
         "f(a=1; b=2)" => "(call f (= a 1) (parameters (= b 2)))" =>
@@ -941,26 +944,9 @@ parseall_test_specs = [
     end
 end
 
-# Known bugs / incompatibilities
-broken_tests = [
-    JuliaSyntax.parse_atom => [
-        """var""\"x""\""""  =>  "x"
-        # Operator-named macros without spaces
-        "@!x"   => "(macrocall @! x)"
-        "@..x"  => "(macrocall @.. x)"
-        "@.x"   => "(macrocall @__dot__ x)"
-    ]
-]
-
-@testset "Broken $production" for (production, test_specs) in broken_tests
-    @testset "$(repr(input))" for (input,output) in test_specs
-        if !(input isa AbstractString)
-            opts,input = input
-        else
-            opts = NamedTuple()
-        end
-        @test_broken parse_to_sexpr_str(production, input; opts...) == output
-    end
+@testset "Broken tests" begin
+    # Technically broken. But do we even want this behavior?
+    @test_broken parse_to_sexpr_str(JuliaSyntax.parse_eq, "var\"\"\"x\"\"\"") == "(var x)"
 end
 
 @testset "Trivia attachment" begin

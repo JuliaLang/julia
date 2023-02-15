@@ -1466,7 +1466,13 @@ function parse_identifier_or_interpolate(ps::ParseState)
 end
 
 # Parses a chain of sufficies at function call precedence, leftmost binding
-# tightest.
+# tightest. This handles
+#  * Bracketed calls like a() b[] c{}
+#  * Field access like a.b.c
+#    - Various dotted syntax like f.() and f.:x
+#  * Adjoint suffix like a'
+#  * String macros like a"str" b"""str""" c`str` d```str```
+#
 # f(a).g(b) ==> (call (. (call f a) (quote g)) b)
 #
 # flisp: parse-call-chain, parse-call-with-initial-ex
@@ -1487,15 +1493,23 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
         maybe_strmac_1 = false
         t = peek_token(ps)
         k = kind(t)
-        if is_macrocall && (preceding_whitespace(t) || is_closing_token(ps, k))
+        if !is_macrocall && ps.space_sensitive && preceding_whitespace(t) &&
+                k in KSet"( [ { \" \"\"\" ` ```"
+            # [f (x)]  ==>  (hcat f x)
+            # [f x]    ==>  (hcat f x)
+            break
+        elseif is_macrocall && (preceding_whitespace(t) || !(k in KSet"( [ { ' ."))
             # Macro calls with space-separated arguments
             # @foo a b    ==> (macrocall @foo a b)
             # @foo (x)    ==> (macrocall @foo x)
             # @foo (x,y)  ==> (macrocall @foo (tuple x y))
             # [@foo x]    ==> (vect (macrocall @foo x))
+            # [@foo]      ==> (vect (macrocall @foo))
             # @var"#" a   ==> (macrocall (var @#) a)
             # A.@x y      ==> (macrocall (. A (quote @x)) y)
             # A.@var"#" a ==> (macrocall (. A (quote (var @#))) a)
+            # @+x y       ==> (macrocall @+ x y)
+            # A.@.x       ==> (macrocall (. A (quote @.)) x)
             fix_macro_name_kind!(ps, macro_name_position)
             let ps = with_space_sensitive(ps)
                 # Space separated macro arguments
@@ -1522,11 +1536,6 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 end
                 emit(ps, mark, K"macrocall")
             end
-            break
-        elseif (ps.space_sensitive && preceding_whitespace(t) &&
-                k in KSet"( [ { \ Char \" \"\"\" ` ```")
-            # [f (x)]  ==>  (hcat f x)
-            # [f x]    ==>  (hcat f x)
             break
         elseif k == K"("
             # f(a,b)  ==>  (call f a b)
