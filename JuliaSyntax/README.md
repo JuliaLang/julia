@@ -63,10 +63,10 @@ line:col│ byte_range  │ tree                                   │ file_name
 ```
 
 Internally this has a full representation of all syntax trivia (whitespace and
-comments) as can be seen with the more raw "green tree" representation with
-`GreenNode`. Here ranges on the left are byte ranges, and `✔` flags nontrivia
-tokens. Note that the parentheses are trivia in the tree representation,
-despite being important for parsing.
+comments) as can be seen with the more raw ["green tree"](#raw-syntax-tree--green-tree)
+representation with `GreenNode`. Here ranges on the left are byte ranges, and
+`✔` flags nontrivia tokens. Note that the parentheses are trivia in the tree
+representation, despite being important for parsing.
 
 ```julia
 julia> text = "(x + y)*z"
@@ -211,7 +211,7 @@ For lossless parsing the output spans must cover the entire input text. Using
 * Parent spans are emitted after all their children.
 
 These properties make the output spans naturally isomorphic to a
-["green tree"](https://ericlippert.com/2012/06/08/red-green-trees/)
+["green tree"](#raw-syntax-tree--green-tree)
 in the terminology of C#'s Roslyn compiler.
 
 ### Tree construction
@@ -533,6 +533,8 @@ There's arguably a few downsides:
 
 # Differences from the flisp parser
 
+_See also the [§ Comparisons to other packages](#comparisons-to-other-packages) section._
+
 Practically the flisp parser is not quite a classic [recursive descent
 parser](https://en.wikipedia.org/wiki/Recursive_descent_parser), because it
 often looks back and modifies the output tree it has already produced. We've
@@ -767,6 +769,8 @@ parsing `key=val` pairs inside parentheses.
 
 ### Official Julia compiler
 
+_See also the [§ Differences from the flisp parser](#differences-from-the-flisp-parser) section._
+
 The official Julia compiler frontend lives in the Julia source tree. It's
 mostly contained in just a few files:
 * The parser in [src/julia-parser.scm](https://github.com/JuliaLang/julia/blob/9c4b75d7f63d01d12b67aaf7ce8bb4a078825b52/src/julia-parser.scm)
@@ -793,41 +797,42 @@ structures and FFI is complex and inefficient.
 ### JuliaParser.jl
 
 [JuliaParser.jl](https://github.com/JuliaLang/JuliaParser.jl)
-was a direct port of Julia's flisp reference parser but was abandoned around
-Julia 0.5 or so. However it doesn't support lossless parsing and doing so would
-amount to a full rewrite. Given the divergence with the flisp reference parser
-since Julia-0.5, it seemed better just to start with the reference parser
-instead.
+was a direct port of Julia's flisp reference parser, but was abandoned around
+Julia 0.5 or so. Furthermore, it doesn't support lossless parsing, and adding
+that feature would amount to a full rewrite. Given its divergence with the flisp
+reference parser since Julia-0.5, it seemed better just to start anew from the
+reference parser instead.
 
 ### Tokenize.jl
 
 [Tokenize.jl](https://github.com/JuliaLang/Tokenize.jl)
 is a fast lexer for Julia code. The code from Tokenize has been
 imported and used in JuliaSyntax, with some major modifications as discussed in
-the lexer implementation section.
+the [lexer implementation](#lexing) section.
 
 ### CSTParser.jl
 
 [CSTParser.jl](https://github.com/julia-vscode/CSTParser.jl)
 is a ([mostly?](https://github.com/domluna/JuliaFormatter.jl/issues/52#issuecomment-529945126))
-lossless parser with goals quite similar to JuliaParser and used extensively in
-the VSCode / LanguageServer / JuliaFormatter ecosystem. CSTParser is very useful
-but I do find the implementation hard to understand and I wanted to try a fresh
-approach with a focus on:
+lossless parser with goals quite similar to JuliaParser. It is used extensively
+in the VSCode / LanguageServer / JuliaFormatter ecosystem. CSTParser is very
+useful, but I do find the implementation hard to understand, and I wanted to try
+a fresh approach with a focus on:
 
-* "Production readyness": Good docs, tests, diagnostics and maximum similarity
+* "Production readiness": Good docs, tests, diagnostics and maximum similarity
   with the flisp parser, with the goal of getting the new parser into `Core`.
 * Learning from the latest ideas about composable parsing and data structures
   from outside Julia. In particular the implementation of `rust-analyzer` is
-  very clean, well documented, and a great source of inspiration.
+  very clean, well documented, and was a great source of inspiration.
 * Composability of tree data structures — I feel like the trees should be
-  layered somehow with a really lightweight green tree at the most basic level,
-  similar to Roslyn or rust-analyzer. In comparison CSTParser uses a more heavy
-  weight non-layered data structure. Alternatively or additionally, have a
-  common tree API with many concrete task-specific implementations.
+  layered somehow with a really lightweight [green tree](#raw-syntax-tree--green-tree)
+  at the most basic level, similar to Roslyn or rust-analyzer. In comparison,
+  CSTParser uses a more heavyweight non-layered data structure. Alternatively or
+  additionally, have a common tree API with many concrete task-specific
+  implementations.
 
 A big benefit of the JuliaSyntax parser is that it separates the parser code
-from the tree data structures entirely which should give a lot of flexibility
+from the tree data structures entirely, which should give a lot of flexibility
 in experimenting with various tree representations.
 
 I also want JuliaSyntax to tackle macro expansion and other lowering steps, and
@@ -840,12 +845,12 @@ Using a modern production-ready parser generator like `tree-sitter` is an
 interesting option and some progress has already been made in
 [tree-sitter-julia](https://github.com/tree-sitter/tree-sitter-julia).
 But I feel like the grammars for parser generators are only marginally more
-expressive than writing the parser by hand after accounting for the effort
+expressive than writing the parser by hand, after accounting for the effort
 spent on the weird edge cases of a real language and writing the parser's tests
 and "supporting code".
 
-On the other hand a hand-written parser is completely flexible and can be
-mutually understood with the reference implementation so I chose that approach
+On the other hand, a hand-written parser is completely flexible and can be
+mutually understood with the reference implementation, so I chose that approach
 for JuliaSyntax.
 
 # Resources
@@ -1020,7 +1025,8 @@ work flows:
 
 ### Raw syntax tree / Green tree
 
-Raw syntax tree (or "Green tree" in the terminology from Roslyn)
+Raw syntax tree (or ["Green tree"](https://ericlippert.com/2012/06/08/red-green-trees/)
+in the terminology from Roslyn)
 
 We want GreenNode to be
 * *structurally minimal* — For efficiency and generality
