@@ -94,6 +94,8 @@ export
     eigvecs,
     factorize,
     givens,
+    hermitianpart,
+    hermitianpart!,
     hessenberg,
     hessenberg!,
     isdiag,
