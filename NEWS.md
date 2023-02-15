@@ -10,7 +10,7 @@ Language changes
 
 Compiler/Runtime improvements
 -----------------------------
-
+* The `@pure` macro is now deprecated. Use `Base.@assume_effects :foldable` instead ([#48682]).
 
 Command-line option changes
 ---------------------------

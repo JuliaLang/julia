@@ -284,7 +284,6 @@ typedef struct _jl_code_info_t {
     // various boolean properties:
     uint8_t inferred;
     uint8_t propagate_inbounds;
-    uint8_t pure;
     uint8_t has_fcall;
     // uint8 settings
     uint8_t inlining; // 0 = default; 1 = @inline; 2 = @noinline
@@ -342,7 +341,6 @@ typedef struct _jl_method_t {
                             // of another method.
     // various boolean properties
     uint8_t isva;
-    uint8_t pure;
     uint8_t is_for_opaque_closure;
     // uint8 settings
     uint8_t constprop;     // 0x00 = use heuristic; 0x01 = aggressive; 0x02 = none
@@ -1843,7 +1841,6 @@ JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code);
 JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_array_t *data);
 JL_DLLEXPORT uint8_t jl_ir_flag_inferred(jl_array_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ir_flag_inlining(jl_array_t *data) JL_NOTSAFEPOINT;
-JL_DLLEXPORT uint8_t jl_ir_flag_pure(jl_array_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ir_flag_has_fcall(jl_array_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint16_t jl_ir_inlining_cost(jl_array_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT ssize_t jl_ir_nslots(jl_array_t *data) JL_NOTSAFEPOINT;

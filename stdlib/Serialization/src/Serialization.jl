@@ -79,7 +79,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 22 # do not make changes without bumping the version #!
+const ser_version = 23 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -1060,7 +1060,6 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         if template !== nothing
             # TODO: compress template
             meth.source = template::CodeInfo
-            meth.pure = template.pure
             if !@isdefined(slot_syms)
                 slot_syms = ccall(:jl_compress_argnames, Ref{String}, (Any,), meth.source.slotnames)
             end
@@ -1191,7 +1190,9 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
         end
     end
     ci.propagate_inbounds = deserialize(s)
-    ci.pure = deserialize(s)
+    if format_version(s) < 23
+        deserialize(s) # `pure` field has been removed
+    end
     if format_version(s) >= 20
         ci.has_fcall = deserialize(s)
     end

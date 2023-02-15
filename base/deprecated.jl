@@ -362,3 +362,31 @@ end
 end
 
 # END 1.9 deprecations
+
+# BEGIN 1.10 deprecations
+
+"""
+    @pure ex
+
+`@pure` gives the compiler a hint for the definition of a pure function,
+helping for type inference.
+
+!!! warning
+    This macro is intended for internal compiler use and may be subject to changes.
+
+!!! warning
+    In Julia 1.8 and higher, it is favorable to use [`@assume_effects`](@ref) instead of `@pure`.
+    This is because `@assume_effects` allows a finer grained control over Julia's purity
+    modeling and the effect system enables a wider range of optimizations.
+
+!!! note
+    In Julia 1.10 this is deprecated in favor of [`@assume_effects`](@ref).
+    Specifically, `@assume_effects :foldable` provides similar guarentees.
+"""
+macro pure(ex)
+    f, l = __source__.file, __source__.line
+    @warn "`Base.@pure ex` at $f:$l is deprecated, use `Base.@assume_effects :foldable ex` instead."
+    return esc(:(Base.@assume_effects :foldable $ex))
+end
+
+# END 1.10 deprecations

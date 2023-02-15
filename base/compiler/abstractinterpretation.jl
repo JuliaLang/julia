@@ -96,14 +96,10 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     all_effects = EFFECTS_TOTAL
     if !matches.nonoverlayed
         # currently we don't have a good way to execute the overlayed method definition,
-        # so we should give up pure/concrete eval when any of the matched methods is overlayed
+        # so we should give up concrete eval when any of the matched methods is overlayed
         f = nothing
         all_effects = Effects(all_effects; nonoverlayed=false)
     end
-
-    # try pure-evaluation
-    val = pure_eval_call(interp, f, applicable, arginfo)
-    val !== nothing && return CallMeta(val, all_effects, MethodResultPure(info)) # TODO: add some sort of edge(s)
 
     𝕃ₚ = ipo_lattice(interp)
     for i in 1:napplicable
@@ -786,40 +782,6 @@ struct MethodCallResult
                               effects::Effects)
         return new(rt, edgecycle, edgelimited, edge, effects)
     end
-end
-
-function pure_eval_eligible(interp::AbstractInterpreter,
-    @nospecialize(f), applicable::Vector{Any}, arginfo::ArgInfo)
-    # XXX we need to check that this pure function doesn't call any overlayed method
-    return f !== nothing &&
-           length(applicable) == 1 &&
-           is_method_pure(applicable[1]::MethodMatch) &&
-           is_all_const_arg(arginfo, #=start=#2)
-end
-
-function is_method_pure(method::Method, @nospecialize(sig), sparams::SimpleVector)
-    if isdefined(method, :generator)
-        method.generator.expand_early || return false
-        mi = specialize_method(method, sig, sparams)
-        isa(mi, MethodInstance) || return false
-        staged = get_staged(mi)
-        (staged isa CodeInfo && (staged::CodeInfo).pure) || return false
-        return true
-    end
-    return method.pure
-end
-is_method_pure(match::MethodMatch) = is_method_pure(match.method, match.spec_types, match.sparams)
-
-function pure_eval_call(interp::AbstractInterpreter,
-    @nospecialize(f), applicable::Vector{Any}, arginfo::ArgInfo)
-    pure_eval_eligible(interp, f, applicable, arginfo) || return nothing
-    args = collect_const_args(arginfo, #=start=#2)
-    value = try
-        Core._apply_pure(f, args)
-    catch
-        return nothing
-    end
-    return Const(value)
 end
 
 # - true: eligible for concrete evaluation

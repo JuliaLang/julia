@@ -198,10 +198,6 @@ function _is_internal(__module__)
     return false
 end
 
-# can be used in place of `@pure` (supposed to be used for bootstrapping)
-macro _pure_meta()
-    return _is_internal(__module__) && Expr(:meta, :pure)
-end
 # can be used in place of `@assume_effects :total` (supposed to be used for bootstrapping)
 macro _total_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,

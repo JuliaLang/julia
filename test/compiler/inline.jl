@@ -360,18 +360,6 @@ struct RealConstrained{T <: Real}; end
 @test !fully_eliminated(x->(RealConstrained{x}; nothing), Tuple{Int})
 @test !fully_eliminated(x->(RealConstrained{x}; nothing), Tuple{Type{Vector{T}} where T})
 
-# Check that pure functions with non-inlineable results still get deleted
-struct Big
-    x::NTuple{1024, Int}
-end
-Base.@pure Big() = Big(ntuple(identity, 1024))
-function pure_elim_full()
-    Big()
-    nothing
-end
-
-@test fully_eliminated(pure_elim_full, Tuple{})
-
 # Union splitting of convert
 f_convert_missing(x) = convert(Int64, x)
 let ci = code_typed(f_convert_missing, Tuple{Union{Int64, Missing}})[1][1],

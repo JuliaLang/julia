@@ -563,20 +563,6 @@ f18450() = ifelse(true, Tuple{Vararg{Int}}, Tuple{Vararg})
 # issue #18569
 @test !Core.Compiler.isconstType(Type{Tuple})
 
-# ensure pure attribute applies correctly to all signatures of fpure
-Base.@pure function fpure(a=rand(); b=rand())
-    # use the `rand` function since it is known to be `@inline`
-    # but would be too big to inline
-    return a + b + rand()
-end
-
-@test which(fpure, ()).pure
-@test which(fpure, (typeof(pi),)).pure
-
-# Make sure @pure works for functions using the new syntax
-Base.@pure (fpure2(x::T) where T) = T
-@test which(fpure2, (Int64,)).pure
-
 # issue #10880
 function cat10880(a, b)
     Tuple{a.parameters..., b.parameters...}
@@ -912,28 +898,6 @@ end
 f20267(x::T20267{T}, y::T) where (T) = f20267(Any[1][1], x.inds)
 @test Base.return_types(f20267, (Any, Any)) == Any[Union{}]
 
-# issue #20704
-f20704(::Int) = 1
-Base.@pure b20704(@nospecialize(x)) = f20704(x)
-@test b20704(42) === 1
-@test_throws MethodError b20704(42.0)
-
-bb20704() = b20704(Any[1.0][1])
-@test_throws MethodError bb20704()
-
-v20704() = Val{b20704(Any[1.0][1])}
-@test_throws MethodError v20704()
-@test Base.return_types(v20704, ()) == Any[Type{Val{1}}]
-
-Base.@pure g20704(::Int) = 1
-h20704(@nospecialize(x)) = g20704(x)
-@test g20704(1) === 1
-@test_throws MethodError h20704(1.2)
-
-Base.@pure c20704() = (f20704(1.0); 1)
-d20704() = c20704()
-@test_throws MethodError d20704()
-
 #issue #21065, elision of _apply_iterate when splatted expression is not effect_free
 function f21065(x,y)
     println("x=$x, y=$y")
@@ -1208,13 +1172,6 @@ end
 let typeargs = Tuple{Type{Int},Type{Int},Type{Int},Type{Int},Type{Int},Type{Int}}
     @test only(Base.return_types(promote_type, typeargs)) === Type{Int}
 end
-
-# demonstrate that inference must converge
-# while doing constant propagation
-Base.@pure plus1(x) = x + 1
-f21933(x::Val{T}) where {T} = f(Val(plus1(T)))
-code_typed(f21933, (Val{1},))
-Base.return_types(f21933, (Val{1},))
 
 function count_specializations(method::Method)
     specs = method.specializations
@@ -4712,8 +4669,8 @@ end |> only === Type{Float64}
 global it_count47688 = 0
 struct CountsIterate47688{N}; end
 function Base.iterate(::CountsIterate47688{N}, n=0) where N
-	global it_count47688 += 1
-	n <= N ? (n, n+1) : nothing
+    global it_count47688 += 1
+    n <= N ? (n, n+1) : nothing
 end
 foo47688() = tuple(CountsIterate47688{5}()...)
 bar47688() = foo47688()

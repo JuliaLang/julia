@@ -581,7 +581,7 @@ A unique'd container describing the shared metadata for a single method.
     Pointers to non-AST things that have been interpolated into the AST, required by
     compression of the AST, type-inference, or the generation of native code.
 
-  * `nargs`, `isva`, `called`, `isstaged`, `pure`
+  * `nargs`, `isva`, `called`, `is_for_opaque_closure`,
 
     Descriptive bit-fields for the source code of this Method.
 
@@ -758,11 +758,6 @@ Boolean properties:
 
     Whether this should propagate `@inbounds` when inlined for the purpose of eliding
     `@boundscheck` blocks.
-
-  * `pure`
-
-    Whether this is known to be a pure function of its arguments, without respect to the
-    state of the method caches or other mutable global state.
 
 
 `UInt8` settings:
