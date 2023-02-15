@@ -4761,3 +4761,60 @@ unknown_sparam_nothrow2(x::Ref{Ref{T}}) where T = @isdefined(T) ? T::Type : noth
 @test only(Base.return_types(unknown_sparam_throw, (Any,))) === Union{Nothing,Type}
 @test only(Base.return_types(unknown_sparam_nothrow1, (Ref,))) === Type
 @test only(Base.return_types(unknown_sparam_nothrow2, (Ref{Ref{T}} where T,))) === Type
+
+function fapplicable end
+gapplicable() = Val(applicable(fapplicable))
+gapplicable(x) = Val(applicable(fapplicable; x))
+@test only(Base.return_types(gapplicable, ())) === Val{false}
+@test only(Base.return_types(gapplicable, (Int,))) === Val{false}
+fapplicable() = 1
+@test only(Base.return_types(gapplicable, ())) === Val{true}
+@test only(Base.return_types(gapplicable, (Int,))) === Val{false}
+Base.delete_method(which(fapplicable, ()))
+@test only(Base.return_types(gapplicable, ())) === Val{false}
+@test only(Base.return_types(gapplicable, (Int,))) === Val{false}
+fapplicable(; x) = x
+@test only(Base.return_types(gapplicable, ())) === Val{true}
+@test only(Base.return_types(gapplicable, (Int,))) === Val{true}
+@test only(Base.return_types(()) do; applicable(); end) === Union{}
+@test only(Base.return_types((Any,)) do x; Val(applicable(x...)); end) == Val
+@test only(Base.return_types((Tuple{Vararg{Int}},)) do x; Val(applicable(+, 1, 2, x...)); end) == Val # could be improved to Val{true}
+@test only(Base.return_types((Tuple{Vararg{Int}},)) do x; Val(applicable(+, 1, 2, 3, x...)); end) === Val{true}
+@test only(Base.return_types((Int,)) do x; Val(applicable(+, 1, x)); end) === Val{true}
+@test only(Base.return_types((Union{Int32,Int64},)) do x; Val(applicable(+, 1, x)); end) === Val{true}
+@test only(Base.return_types((String,)) do x; Val(applicable(+, 1, x)); end) === Val{false}
+fapplicable(::Int, ::Integer) = 2
+fapplicable(::Integer, ::Int32) = 3
+@test only(Base.return_types((Int32,)) do x; Val(applicable(fapplicable, 1, x)); end) === Val{false}
+@test only(Base.return_types((Int64,)) do x; Val(applicable(fapplicable, 1, x)); end) === Val{true}
+@test only(Base.return_types((Tuple{Vararg{Int}},)) do x; Val(applicable(tuple, x...)); end) === Val{true}
+@test only(Base.return_types((Tuple{Vararg{Int}},)) do x; Val(applicable(sin, 1, x...)); end) == Val
+@test only(Base.return_types((Tuple{Vararg{Int}},)) do x; Val(applicable(sin, 1, 2, x...)); end) === Val{false}
+
+function fhasmethod end
+ghasmethod() = Val(hasmethod(fhasmethod, Tuple{}))
+@test only(Base.return_types(ghasmethod, ())) === Val{false}
+fhasmethod() = 1
+@test only(Base.return_types(ghasmethod, ())) === Val{true}
+Base.delete_method(which(fhasmethod, ()))
+@test only(Base.return_types(ghasmethod, ())) === Val{false}
+@test only(Base.return_types(()) do; Core._hasmethod(); end) === Any
+@test only(Base.return_types(()) do; Core._hasmethod(+, Tuple, 1); end) === Any
+@test only(Base.return_types(()) do; Core._hasmethod(+, 1); end) === Bool
+@test only(Base.return_types(()) do; Core._hasmethod(+, Tuple{1}); end) === Bool
+@test only(Base.return_types((Any,)) do x; Val(hasmethod(x...)); end) == Val
+@test only(Base.return_types(()) do; Val(hasmethod(+, Tuple{Int, Int})); end) === Val{true}
+@test only(Base.return_types(()) do; Val(hasmethod(+, Tuple{Int, Int, Vararg{Int}})); end) === Val{false}
+@test only(Base.return_types(()) do; Val(hasmethod(+, Tuple{Int, Int, Int, Vararg{Int}})); end) === Val{true}
+@test only(Base.return_types(()) do; Val(hasmethod(+, Tuple{Int, Int})); end) === Val{true}
+@test only(Base.return_types(()) do; Val(hasmethod(+, Tuple{Int, Union{Int32,Int64}})); end) === Val{true}
+@test only(Base.return_types(()) do; Val(hasmethod(+, Tuple{Int, Union{Int,String}})); end) === Val{false}
+@test only(Base.return_types(()) do; Val(hasmethod(+, Tuple{Int, Any})); end) === Val{false}
+@test only(Base.return_types() do; Val(hasmethod(+, Tuple{Int, String})); end) === Val{false}
+fhasmethod(::Int, ::Integer) = 2
+fhasmethod(::Integer, ::Int32) = 3
+@test only(Base.return_types(()) do; Val(hasmethod(fhasmethod, Tuple{Int, Int32})); end) === Val{false}
+@test only(Base.return_types(()) do; Val(hasmethod(fhasmethod, Tuple{Int, Int64})); end) === Val{true}
+@test only(Base.return_types(()) do; Val(hasmethod(tuple, Tuple{Vararg{Int}})); end) === Val{true}
+@test only(Base.return_types(()) do; Val(hasmethod(sin, Tuple{Int, Vararg{Int}})); end) == Val{false}
+@test only(Base.return_types(()) do; Val(hasmethod(sin, Tuple{Int, Int, Vararg{Int}})); end) === Val{false}

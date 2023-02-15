@@ -1889,7 +1889,7 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, 3))
     isexact || return CallMeta(Any, Effects(), NoCallInfo())
     unwrapped = unwrap_unionall(types)
-    if types === Bottom || types === Any || !(unwrapped isa DataType)
+    if types === Bottom || !(unwrapped isa DataType) || unwrapped.name !== Tuple.name
         return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
     end
     argtype = argtypes_to_type(argtype_tail(argtypes, 4))
@@ -1971,6 +1971,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return abstract_modifyfield!(interp, argtypes, si, sv)
         elseif f === Core.finalizer
             return abstract_finalizer(interp, argtypes, sv)
+        elseif f === applicable
+            return abstract_applicable(interp, argtypes, sv, max_methods)
         end
         rt = abstract_call_builtin(interp, f, arginfo, sv, max_methods)
         effects = builtin_effects(𝕃ᵢ, f, arginfo, rt)
@@ -2059,6 +2061,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             val = _pure_eval_call(f, arginfo)
             return CallMeta(val === nothing ? Type : val, EFFECTS_TOTAL, MethodResultPure())
         end
+    elseif f === Core._hasmethod
+        return _hasmethod_tfunc(interp, argtypes, sv)
     end
     atype = argtypes_to_type(argtypes)
     return abstract_call_gf_by_type(interp, f, arginfo, si, atype, sv, max_methods)
