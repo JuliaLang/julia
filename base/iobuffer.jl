@@ -20,7 +20,7 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     function GenericIOBuffer{T}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
                                 maxsize::Integer) where T<:AbstractVector{UInt8}
         require_one_based_indexing(data)
-        new(data,length(data),maxsize,1,-1,false,readable,writable,seekable,append)
+        new(data, length(data),maxsize,1,-1, false,readable,writable,seekable,append)
     end
 end
 const IOBuffer = GenericIOBuffer{Vector{UInt8}}
