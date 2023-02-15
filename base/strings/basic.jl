@@ -636,7 +636,6 @@ function isascii(cu::AbstractVector{CU}) where {CU <: Integer}
     chunk_threshold =  chunk_size + (chunk_size ÷ 2)
     l = length(cu)
     l < chunk_threshold && return _isascii(cu,1,l)
-    # return _isascii_chunks(chunk_size,cu,1,l)
     return _isascii_chunks(Val(chunk_size),cu,1,l)
 end
 
