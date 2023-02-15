@@ -437,16 +437,14 @@ include("loading.jl")
 # misc useful functions & macros
 include("timing.jl")
 include("util.jl")
-
+include("client.jl")
 include("asyncmap.jl")
 
 # deprecated functions
 include("deprecated.jl")
-
-# Some basic documentation
+#
+# Some additional basic documentation
 include("docs/basedocs.jl")
-
-include("client.jl")
 
 # Documentation -- should always be included last in sysimg.
 include("docs/Docs.jl")
