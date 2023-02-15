@@ -5,20 +5,20 @@
 # Stateful string
 mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     data::T # T should support: getindex, setindex!, length, copyto!, and resize!
+    size::Int # end pointer (and write pointer if append == true)
+    maxsize::Int # fixed array size (typically pre-allocated)
+    ptr::Int # read (and maybe write) pointer
+    mark::Int # reset mark location for ptr (or <0 for no mark)
     reinit::Bool # if true, data needs to be re-allocated (after take!)
     readable::Bool
     writable::Bool
     seekable::Bool # if not seekable, implementation is free to destroy (compact) past read data
     append::Bool # add data at end instead of at pointer
-    size::Int # end pointer (and write pointer if append == true)
-    maxsize::Int # fixed array size (typically pre-allocated)
-    ptr::Int # read (and maybe write) pointer
-    mark::Int # reset mark location for ptr (or <0 for no mark)
 
     function GenericIOBuffer{T}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
                                 maxsize::Integer) where T<:AbstractVector{UInt8}
         require_one_based_indexing(data)
-        new(data,false,readable,writable,seekable,append,length(data),maxsize,1,-1)
+        new(data,length(data),maxsize,1,-1,false,readable,writable,seekable,append)
     end
 end
 const IOBuffer = GenericIOBuffer{Vector{UInt8}}
