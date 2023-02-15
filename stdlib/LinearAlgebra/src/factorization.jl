@@ -11,12 +11,26 @@ matrix factorizations.
 """
 abstract type Factorization{T} end
 
+"""
+    AdjointFactorization
+
+Lazy wrapper type for the adjoint of the underlying `Factorization` object. Usually, the
+`AdjointFactorization` constructor should not be called directly, use
+[`adjoint(:: Factorization)`](@ref) instead.
+"""
 struct AdjointFactorization{T,S<:Factorization} <: Factorization{T}
     parent::S
 end
 AdjointFactorization(F::Factorization) =
     AdjointFactorization{Base.promote_op(adjoint,eltype(F)),typeof(F)}(F)
 
+"""
+    TransposeFactorization
+
+Lazy wrapper type for the transpose of the underlying `Factorization` object. Usually, the
+`TransposeFactorization` constructor should not be called directly, use
+[`transpose(:: Factorization)`](@ref) instead.
+"""
 struct TransposeFactorization{T,S<:Factorization} <: Factorization{T}
     parent::S
 end
@@ -29,19 +43,19 @@ size(F::TransposeFactorization) = reverse(size(parent(F)))
 size(F::Union{AdjointFactorization,TransposeFactorization}, d::Integer) = d in (1, 2) ? size(F)[d] : 1
 parent(F::Union{AdjointFactorization,TransposeFactorization}) = F.parent
 
-```
-    adjoint(F::Factorization)::AdjointFactorization
+"""
+    adjoint(F::Factorization)
 
-Lazy adjoint (conjugate transposition) of the factorization `F`.
-```
+Lazy adjoint of the factorization `F`. By default, returns an
+[`AdjointFactorization`](@ref) wrapper.
+"""
 adjoint(F::Factorization) = AdjointFactorization(F)
-```
-    transpose(F::Factorization)::TransposeFactorization
-    transpose(F::Factorization{<:Real})::AdjointFactorization
+"""
+    transpose(F::Factorization)
 
-Lazy transpose of the factorization `F`. Generically, for `Factorization`s with real
-`eltype`, return an [`AdjointFactorization`](@ref).
-```
+Lazy transpose of the factorization `F`. By default, returns a [`TransposeFactorization`](@ref),
+except for `Factorization`s with real `eltype`, in which case returns an [`AdjointFactorization`](@ref).
+"""
 transpose(F::Factorization) = TransposeFactorization(F)
 transpose(F::Factorization{<:Real}) = AdjointFactorization(F)
 adjoint(F::AdjointFactorization) = F.parent
