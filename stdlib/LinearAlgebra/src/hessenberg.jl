@@ -425,6 +425,10 @@ copy(F::Hessenberg{<:Any,<:SymTridiagonal}) = Hessenberg(copy(F.factors), copy(F
 size(F::Hessenberg, d::Integer) = size(F.H, d)
 size(F::Hessenberg) = size(F.H)
 
+transpose(F::Hessenberg{<:Real}) = F'
+transpose(::Hessenberg) =
+    throw(ArgumentError("transpose of Hessenberg decomposition is not supported, consider using adjoint"))
+
 # iteration for destructuring into components
 Base.iterate(S::Hessenberg) = (S.Q, Val(:H))
 Base.iterate(S::Hessenberg, ::Val{:H}) = (S.H, Val(:μ))
