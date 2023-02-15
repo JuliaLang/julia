@@ -276,12 +276,11 @@ to first compute the Hessenberg factorization `F` of `A` via the [`hessenberg`](
 Given `F`, Julia employs an efficient algorithm for `(F+μ*I) \ b` (equivalent to `(A+μ*I)x \ b`) and related
 operations like determinants.
 
-
 ## [Matrix factorizations](@id man-linalg-factorizations)
 
 [Matrix factorizations (a.k.a. matrix decompositions)](https://en.wikipedia.org/wiki/Matrix_decomposition)
 compute the factorization of a matrix into a product of matrices, and are one of the central concepts
-in linear algebra.
+in (numerical) linear algebra.
 
 The following table summarizes the types of matrix factorizations that have been implemented in
 Julia. Details of their associated methods can be found in the [Standard functions](@ref) section
@@ -305,6 +304,10 @@ of the Linear Algebra documentation.
 | `GeneralizedSVD`   | [Generalized SVD](https://en.wikipedia.org/wiki/Generalized_singular_value_decomposition#Higher_order_version) |
 | `Schur`            | [Schur decomposition](https://en.wikipedia.org/wiki/Schur_decomposition)                                       |
 | `GeneralizedSchur` | [Generalized Schur decomposition](https://en.wikipedia.org/wiki/Schur_decomposition#Generalized_Schur_decomposition) |
+
+Adjoints and transposes of [`Factorization`](@ref) objects are lazily wrapped in
+`AdjointFactorization` and `TransposeFactorization` objects, respectively. Generically,
+transpose of real `Factorization`s are wrapped as `AdjointFactorization`.
 
 ## Standard functions
 
@@ -460,9 +463,11 @@ LinearAlgebra.ishermitian
 Base.transpose
 LinearAlgebra.transpose!
 LinearAlgebra.Transpose
+LinearAlgebra.TransposeFactorization
 Base.adjoint
 LinearAlgebra.adjoint!
 LinearAlgebra.Adjoint
+LinearAlgebra.AdjointFactorization
 Base.copy(::Union{Transpose,Adjoint})
 LinearAlgebra.stride1
 LinearAlgebra.checksquare

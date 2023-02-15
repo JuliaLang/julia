@@ -135,8 +135,11 @@ AbstractArray(A::LQ) = AbstractMatrix(A)
 Matrix(A::LQ) = Array(AbstractArray(A))
 Array(A::LQ) = Matrix(A)
 
-adjoint(A::LQ) = Adjoint(A)
-Base.copy(F::Adjoint{T,<:LQ{T}}) where {T} =
+transpose(F::LQ{<:Real}) = F'
+transpose(::LQ) =
+    throw(ArgumentError("transpose of LQ decomposition is not supported, consider using adjoint"))
+
+Base.copy(F::AdjointFactorization{T,<:LQ{T}}) where {T} =
     QR{T,typeof(F.parent.factors),typeof(F.parent.τ)}(copy(adjoint(F.parent.factors)), copy(F.parent.τ))
 
 function getproperty(F::LQ, d::Symbol)
@@ -343,7 +346,7 @@ function ldiv!(A::LQ, B::AbstractVecOrMat)
     return lmul!(adjoint(A.Q), B)
 end
 
-function ldiv!(Fadj::Adjoint{<:Any,<:LQ}, B::AbstractVecOrMat)
+function ldiv!(Fadj::AdjointFactorization{<:Any,<:LQ}, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     m, n = size(Fadj)
     m >= n || throw(DimensionMismatch("solver does not support underdetermined systems (more columns than rows)"))
