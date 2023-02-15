@@ -153,7 +153,7 @@ let n = 10
         #getindex for HessenbergQ
         @test H.Q[1,1] ≈ Array(H.Q)[1,1]
         @test det(H.Q) ≈ det(Matrix(H.Q))
-        @test logabsdet(H.Q)[1] ≈ logabsdet(Matrix(H.Q))
+        @test logabsdet(H.Q)[1] ≈ logabsdet(Matrix(H.Q))[1]
 
         # REPL show
         hessstring = sprint((t, s) -> show(t, "text/plain", s), H)
