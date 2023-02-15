@@ -5,10 +5,12 @@
 # Stateful string
 mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     data::T # T should support: getindex, setindex!, length, copyto!, and resize!
+
     size::Int # end pointer (and write pointer if append == true)
     maxsize::Int # fixed array size (typically pre-allocated)
     ptr::Int # read (and maybe write) pointer
     mark::Int # reset mark location for ptr (or <0 for no mark)
+
     reinit::Bool # if true, data needs to be re-allocated (after take!)
     readable::Bool
     writable::Bool
