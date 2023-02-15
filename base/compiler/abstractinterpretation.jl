@@ -1974,6 +1974,14 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         end
         rt = abstract_call_builtin(interp, f, arginfo, sv, max_methods)
         effects = builtin_effects(𝕃ᵢ, f, arginfo, rt)
+        if f === getfield && (fargs !== nothing && isexpr(fargs[end], :boundscheck)) && !is_nothrow(effects) && isa(sv, InferenceState)
+            # As a special case, we delayed tainting `noinbounds` for getfield calls in case we can prove
+            # in-boundedness indepedently. Here we need to put that back in other cases.
+            # N.B.: This isn't about the effects of the call itself, but a delayed contribution of the :boundscheck
+            # statement, so we need to merge this directly into sv, rather than modifying thte effects.
+            merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; noinbounds=false,
+                consistent = (get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) != 0 ? ALWAYS_FALSE : ALWAYS_TRUE))
+        end
         return CallMeta(rt, effects, NoCallInfo())
     elseif isa(f, Core.OpaqueClosure)
         # calling an OpaqueClosure about which we have no information returns no information
@@ -2195,6 +2203,15 @@ function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::
         return rt
     elseif head === :boundscheck
         if isa(sv, InferenceState)
+            stmt = sv.src.code[sv.currpc]
+            if isexpr(stmt, :call)
+                f = abstract_eval_value(interp, stmt.args[1], vtypes, sv)
+                if f isa Const && f.val === getfield
+                    # boundscheck of `getfield` call is analyzed by tfunc potentially without
+                    # tainting :inbounds or :consistent when it's known to be nothrow
+                    @goto delay_effects_analysis
+                end
+            end
             # If there is no particular `@inbounds` for this function, then we only taint `:noinbounds`,
             # which will subsequently taint `:consistent`-cy if this function is called from another
             # function that uses `@inbounds`. However, if this `:boundscheck` is itself within an
@@ -2203,6 +2220,7 @@ function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::
             merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; noinbounds=false,
                 consistent = (get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) != 0 ? ALWAYS_FALSE : ALWAYS_TRUE))
         end
+        @label delay_effects_analysis
         rt = Bool
     elseif head === :inbounds
         @assert false && "Expected this to have been moved into flags"

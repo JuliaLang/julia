@@ -508,7 +508,9 @@ end
 Base.propertynames(F::QRPivoted, private::Bool=false) =
     (:R, :Q, :p, :P, (private ? fieldnames(typeof(F)) : ())...)
 
-adjoint(F::Union{QR,QRPivoted,QRCompactWY}) = Adjoint(F)
+transpose(F::Union{QR{<:Real},QRPivoted{<:Real},QRCompactWY{<:Real}}) = F'
+transpose(::Union{QR,QRPivoted,QRCompactWY}) =
+    throw(ArgumentError("transpose of QR decomposition is not supported, consider using adjoint"))
 
 size(F::Union{QR,QRCompactWY,QRPivoted}) = size(getfield(F, :factors))
 size(F::Union{QR,QRCompactWY,QRPivoted}, dim::Integer) = size(getfield(F, :factors), dim)
@@ -649,7 +651,7 @@ function _apply_permutation!(F::QRPivoted, B::AbstractVecOrMat)
 end
 _apply_permutation!(::Factorization, B::AbstractVecOrMat) = B
 
-function ldiv!(Fadj::Adjoint{<:Any,<:Union{QR,QRCompactWY,QRPivoted}}, B::AbstractVecOrMat)
+function ldiv!(Fadj::AdjointFactorization{<:Any,<:Union{QR,QRCompactWY,QRPivoted}}, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     m, n = size(Fadj)
 

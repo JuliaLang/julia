@@ -39,17 +39,19 @@ New library features
 Standard library changes
 ------------------------
 
+* `startswith` now supports seekable `IO` streams ([#43055])
+
 #### Package Manager
 
-- "Package Extensions": support for loading a piece of code based on other
+* "Package Extensions": support for loading a piece of code based on other
   packages being loaded in the Julia session.
   This has similar applications as the Requires.jl package but also
   supports precompilation and setting compatibility.
-- `Pkg.precompile` now accepts `timing` as a keyword argument which displays per package timing information for precompilation (e.g. `Pkg.precompile(timing=true)`)
+* `Pkg.precompile` now accepts `timing` as a keyword argument which displays per package timing information for precompilation (e.g. `Pkg.precompile(timing=true)`)
 
 #### LinearAlgebra
 
-- `AbstractQ` no longer subtypes to `AbstractMatrix`. Moreover, `adjoint(Q::AbstractQ)`
+* `AbstractQ` no longer subtypes to `AbstractMatrix`. Moreover, `adjoint(Q::AbstractQ)`
   no longer wraps `Q` in an `Adjoint` type, but instead in an `AdjointQ`, that itself
   subtypes `AbstractQ`. This change accounts for the fact that typically `AbstractQ`
   instances behave like function-based, matrix-backed linear operators, and hence don't
@@ -58,6 +60,12 @@ Standard library changes
   `AbstractQ` has a well-defined API that is described in detail in the
   [Julia documentation](https://docs.julialang.org/en/v1/stdlib/LinearAlgebra/#man-linalg-abstractq)
   ([#46196]).
+* Adjoints and transposes of `Factorization` objects are no longer wrapped in `Adjoint`
+  and `Transpose` wrappers, respectively. Instead, they are wrapped in
+  `AdjointFactorization` and `TranposeFactorization` types, which themselves subtype
+  `Factorization` ([#46874]).
+* New functions `hermitianpart` and `hermitianpart!` for extracting the Hermitian
+  (real symmetric) part of a matrix ([#31836]).
 
 #### Printf
 * Format specifiers now support dynamic width and precision, e.g. `%*s` and `%*.*g` ([#40105]).
