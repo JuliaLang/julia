@@ -177,6 +177,19 @@ macro isdefined(s::Symbol)
     return Expr(:escape, Expr(:isdefined, s))
 end
 
+"""
+    nameof(m::Module) -> Symbol
+
+Get the name of a `Module` as a [`Symbol`](@ref).
+
+# Examples
+```jldoctest
+julia> nameof(Base.Broadcast)
+:Broadcast
+```
+"""
+nameof(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
+
 function _is_internal(__module__)
     if ccall(:jl_base_relative_to, Any, (Any,), __module__)::Module === Core.Compiler ||
        nameof(__module__) === :Base
@@ -701,8 +714,9 @@ end
 
 # SimpleVector
 
-@eval getindex(v::SimpleVector, i::Int) = Core._svec_ref($(Expr(:boundscheck)), v, i)
+@eval getindex(v::SimpleVector, i::Int) = (@_foldable_meta; Core._svec_ref($(Expr(:boundscheck)), v, i))
 function length(v::SimpleVector)
+    @_total_meta
     t = @_gc_preserve_begin v
     len = unsafe_load(Ptr{Int}(pointer_from_objref(v)))
     @_gc_preserve_end t

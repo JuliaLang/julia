@@ -275,6 +275,30 @@ let mi = T26321{3,NTuple{3,Int}}((1,2,3)), mf = T26321{3,NTuple{3,Float64}}((1.0
     @test a isa Vector{<:T26321{3}}
 end
 
+@test Base.return_types() do
+    typejoin(Int, UInt)
+end  |> only == Type{typejoin(Int, UInt)}
+@test Base.return_types() do
+    typejoin(Int, UInt, Float64)
+end  |> only == Type{typejoin(Int, UInt, Float64)}
+
+let res = @test_throws TypeError let
+        Base.Experimental.@force_compile
+        typejoin(1, 2)
+        nothing
+    end
+    err = res.value
+    @test err.func === :<:
+end
+let res = @test_throws TypeError let
+        Base.Experimental.@force_compile
+        typejoin(1, 2, 3)
+        nothing
+    end
+    err = res.value
+    @test err.func === :<:
+end
+
 # promote_typejoin returns a Union only with Nothing/Missing combined with concrete types
 for T in (Nothing, Missing)
     @test Base.promote_typejoin(Int, Float64) === Real

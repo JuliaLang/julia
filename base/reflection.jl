@@ -3,19 +3,6 @@
 # name and module reflection
 
 """
-    nameof(m::Module) -> Symbol
-
-Get the name of a `Module` as a [`Symbol`](@ref).
-
-# Examples
-```jldoctest
-julia> nameof(Base.Broadcast)
-:Broadcast
-```
-"""
-nameof(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
-
-"""
     parentmodule(m::Module) -> Module
 
 Get a module's enclosing `Module`. `Main` is its own parent.
