@@ -277,6 +277,7 @@ function truncate(io::GenericIOBuffer, n::Integer)
     n > io.maxsize && throw(ArgumentError("truncate failed, $(n) bytes is exceeds IOBuffer maxsize $(io.maxsize)"))
     if io.reinit
         io.data = _similar_data(io, n)
+        io.reinit = false
     elseif n > length(io.data)
         resize!(io.data, n)
     end
@@ -334,6 +335,7 @@ end
     n = min((nshort % Int) + (io.append ? io.size : io.ptr-1), io.maxsize)
     if io.reinit
         io.data = _similar_data(io, n)
+        io.reinit = false
     else
         l = length(io.data)
         if n > l
