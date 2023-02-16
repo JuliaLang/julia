@@ -434,13 +434,12 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
     }
 }
 
-static jl_code_info_flags_t code_info_flags(uint8_t inferred, uint8_t propagate_inbounds, uint8_t pure,
+static jl_code_info_flags_t code_info_flags(uint8_t inferred, uint8_t propagate_inbounds,
                                             uint8_t has_fcall, uint8_t inlining, uint8_t constprop)
 {
     jl_code_info_flags_t flags;
     flags.bits.inferred = inferred;
     flags.bits.propagate_inbounds = propagate_inbounds;
-    flags.bits.pure = pure;
     flags.bits.has_fcall = has_fcall;
     flags.bits.inlining = inlining;
     flags.bits.constprop = constprop;
@@ -781,7 +780,7 @@ JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         1
     };
 
-    jl_code_info_flags_t flags = code_info_flags(code->inferred, code->propagate_inbounds, code->pure,
+    jl_code_info_flags_t flags = code_info_flags(code->inferred, code->propagate_inbounds,
                                                  code->has_fcall, code->inlining, code->constprop);
     write_uint8(s.s, flags.packed);
     write_uint8(s.s, code->purity.bits);
@@ -880,7 +879,6 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     code->constprop = flags.bits.constprop;
     code->inferred = flags.bits.inferred;
     code->propagate_inbounds = flags.bits.propagate_inbounds;
-    code->pure = flags.bits.pure;
     code->has_fcall = flags.bits.has_fcall;
     code->purity.bits = read_uint8(s.s);
     code->inlining_cost = read_uint16(s.s);
@@ -956,16 +954,6 @@ JL_DLLEXPORT uint8_t jl_ir_flag_inlining(jl_array_t *data)
     jl_code_info_flags_t flags;
     flags.packed = ((uint8_t*)data->data)[0];
     return flags.bits.inlining;
-}
-
-JL_DLLEXPORT uint8_t jl_ir_flag_pure(jl_array_t *data)
-{
-    if (jl_is_code_info(data))
-        return ((jl_code_info_t*)data)->pure;
-    assert(jl_typeis(data, jl_array_uint8_type));
-    jl_code_info_flags_t flags;
-    flags.packed = ((uint8_t*)data->data)[0];
-    return flags.bits.pure;
 }
 
 JL_DLLEXPORT uint8_t jl_ir_flag_has_fcall(jl_array_t *data)

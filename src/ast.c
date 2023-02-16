@@ -66,7 +66,6 @@ JL_DLLEXPORT jl_sym_t *jl_boundscheck_sym;
 JL_DLLEXPORT jl_sym_t *jl_inbounds_sym;
 JL_DLLEXPORT jl_sym_t *jl_copyast_sym;
 JL_DLLEXPORT jl_sym_t *jl_cfunction_sym;
-JL_DLLEXPORT jl_sym_t *jl_pure_sym;
 JL_DLLEXPORT jl_sym_t *jl_loopinfo_sym;
 JL_DLLEXPORT jl_sym_t *jl_meta_sym;
 JL_DLLEXPORT jl_sym_t *jl_inert_sym;
@@ -328,7 +327,6 @@ void jl_init_common_symbols(void)
     jl_newvar_sym = jl_symbol("newvar");
     jl_copyast_sym = jl_symbol("copyast");
     jl_loopinfo_sym = jl_symbol("loopinfo");
-    jl_pure_sym = jl_symbol("pure");
     jl_meta_sym = jl_symbol("meta");
     jl_list_sym = jl_symbol("list");
     jl_unused_sym = jl_symbol("#unused#");

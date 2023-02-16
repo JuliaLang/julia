@@ -598,7 +598,6 @@ STATIC_INLINE jl_value_t *undefref_check(jl_datatype_t *dt, jl_value_t *v) JL_NO
 typedef struct {
     uint8_t inferred:1;
     uint8_t propagate_inbounds:1;
-    uint8_t pure:1;
     uint8_t has_fcall:1;
     uint8_t inlining:2; // 0 = use heuristic; 1 = aggressive; 2 = none
     uint8_t constprop:2; // 0 = use heuristic; 1 = aggressive; 2 = none
@@ -1570,7 +1569,6 @@ extern JL_DLLEXPORT jl_sym_t *jl_boundscheck_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_inbounds_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_copyast_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_cfunction_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_pure_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_loopinfo_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_meta_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_inert_sym;

@@ -1010,7 +1010,6 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
                 tree.linetable = LineInfoNode[LineInfoNode(method.module, method.name, method.file, method.line, Int32(0))]
                 tree.inferred = true
                 tree.ssaflags = UInt8[0]
-                tree.pure = true
                 set_inlineable!(tree, true)
                 tree.parent = mi
                 tree.rettype = Core.Typeof(rettype_const)
