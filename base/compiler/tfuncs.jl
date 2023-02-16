@@ -185,7 +185,6 @@ add_tfunc(add_float, 2, 2, math_tfunc, 1)
 add_tfunc(sub_float, 2, 2, math_tfunc, 1)
 add_tfunc(mul_float, 2, 2, math_tfunc, 4)
 add_tfunc(div_float, 2, 2, math_tfunc, 20)
-add_tfunc(rem_float, 2, 2, math_tfunc, 20)
 add_tfunc(fma_float, 3, 3, math_tfunc, 5)
 add_tfunc(muladd_float, 3, 3, math_tfunc, 5)
 
@@ -195,7 +194,6 @@ add_tfunc(add_float_fast, 2, 2, math_tfunc, 1)
 add_tfunc(sub_float_fast, 2, 2, math_tfunc, 1)
 add_tfunc(mul_float_fast, 2, 2, math_tfunc, 2)
 add_tfunc(div_float_fast, 2, 2, math_tfunc, 10)
-add_tfunc(rem_float_fast, 2, 2, math_tfunc, 10)
 
 # bitwise operators
 # -----------------
@@ -2178,7 +2176,6 @@ const _INCONSISTENT_INTRINSICS = Any[
     Intrinsics.mul_float_fast,
     Intrinsics.ne_float_fast,
     Intrinsics.neg_float_fast,
-    Intrinsics.rem_float_fast,
     Intrinsics.sqrt_llvm_fast,
     Intrinsics.sub_float_fast
     # TODO needs to revive #31193 to mark this as inconsistent to be accurate
