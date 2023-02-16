@@ -630,13 +630,19 @@ end
     end
     return  _isascii(cu,last-chunk_size+1,last)
 end
+"""
+    isascii(cu::AbstractVector{CU}) where {CU <: Integer} -> Bool
 
+Test whether all values in the vector belongs to the ASCII character set.
+This function is intended to be used by other sting implimentations that need a fast ASCII check.
+"""
 function isascii(cu::AbstractVector{CU}) where {CU <: Integer}
     chunk_size = 1024
     chunk_threshold =  chunk_size + (chunk_size ÷ 2)
-    l = length(cu)
-    l < chunk_threshold && return _isascii(cu,1,l)
-    return _isascii_chunks(chunk_size,cu,1,l)
+    first = firstindex(cu);   last = lastindex(cu)
+    l = last - first + 1
+    l < chunk_threshold && return _isascii(cu,first,last)
+    return _isascii_chunks(chunk_size,cu,first,last)
 end
 
 ## string map, filter ##
