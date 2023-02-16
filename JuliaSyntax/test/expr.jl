@@ -261,4 +261,38 @@
         @test parse(Expr, "@.") == Expr(:macrocall, Symbol("@__dot__"), LineNumberNode(1))
         @test parse(Expr, "using A: @.") == Expr(:using, Expr(Symbol(":"), Expr(:., :A), Expr(:., Symbol("@__dot__"))))
     end
+
+    @testset "try" begin
+        @test parse(Expr, "try x catch e; y end") ==
+            Expr(:try,
+                 Expr(:block, LineNumberNode(1), :x),
+                 :e,
+                 Expr(:block, LineNumberNode(1), :y))
+        @test parse(Expr, "try x finally y end") ==
+            Expr(:try,
+                 Expr(:block, LineNumberNode(1), :x),
+                 false,
+                 false,
+                 Expr(:block, LineNumberNode(1), :y))
+        @test parse(Expr, "try x catch e; y finally z end") ==
+            Expr(:try,
+                 Expr(:block, LineNumberNode(1), :x),
+                 :e,
+                 Expr(:block, LineNumberNode(1), :y),
+                 Expr(:block, LineNumberNode(1), :z))
+        @test parse(Expr, "try x catch e; y else z end", version=v"1.8") ==
+            Expr(:try,
+                 Expr(:block, LineNumberNode(1), :x),
+                 :e,
+                 Expr(:block, LineNumberNode(1), :y),
+                 false,
+                 Expr(:block, LineNumberNode(1), :z))
+        @test parse(Expr, "try x catch e; y else z finally w end", version=v"1.8") ==
+            Expr(:try,
+                 Expr(:block, LineNumberNode(1), :x),
+                 :e,
+                 Expr(:block, LineNumberNode(1), :y),
+                 Expr(:block, LineNumberNode(1), :w),
+                 Expr(:block, LineNumberNode(1), :z))
+    end
 end

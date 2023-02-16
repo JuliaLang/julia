@@ -267,7 +267,7 @@ function reduce_test(tree::SyntaxNode)
 end
 
 function reduce_test(text::AbstractString)
-    tree, = parseall(SyntaxNode, text)
+    tree = parseall(SyntaxNode, text)
     reduce_test(tree)
 end
 
