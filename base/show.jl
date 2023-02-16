@@ -1372,7 +1372,7 @@ show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0, 0)
 #   eval(Meta.parse("Set{Int64}([2,3,1])")) # ==> An actual set
 # While this isn’t true of ALL show methods, it is of all ASTs.
 
-const ExprNode = Union{Expr, QuoteNode, Slot, LineNumberNode, SSAValue,
+const ExprNode = Union{Expr, QuoteNode, SlotNumber, TypedSlot, LineNumberNode, SSAValue,
                        GotoNode, GlobalRef, PhiNode, PhiCNode, UpsilonNode,
                        Core.Compiler.GotoIfNot, Core.Compiler.ReturnNode}
 # Operators have precedence levels from 1-N, and show_unquoted defaults to a
@@ -1723,7 +1723,7 @@ function show_globalref(io::IO, ex::GlobalRef; allow_macroname=false)
     nothing
 end
 
-function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
+function show_unquoted(io::IO, ex::Union{SlotNumber,TypedSlot}, ::Int, ::Int)
     typ = isa(ex, TypedSlot) ? ex.typ : Any
     slotid = ex.id
     slotnames = get(io, :SOURCE_SLOTNAMES, false)

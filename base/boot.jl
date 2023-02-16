@@ -521,17 +521,18 @@ Symbol(s::Symbol) = s
 
 # module providing the IR object model
 module IR
+
 export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
+    NewvarNode, SSAValue, SlotNumber, TypedSlot, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
-    Const, PartialStruct
+    Const, PartialStruct, InterConditional
 
 import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
+    NewvarNode, SSAValue, SlotNumber, TypedSlot, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
-    Const, PartialStruct
+    Const, PartialStruct, InterConditional
 
-end
+end # module IR
 
 # docsystem basics
 const unescape = Symbol("hygienic-scope")

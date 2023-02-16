@@ -3,7 +3,6 @@
 // Pointers that are exposed through the public libjulia
 #define JL_EXPORTED_DATA_POINTERS(XX) \
     XX(jl_abstractarray_type) \
-    XX(jl_abstractslot_type) \
     XX(jl_abstractstring_type) \
     XX(jl_an_empty_string) \
     XX(jl_an_empty_vec_any) \

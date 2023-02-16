@@ -28,7 +28,7 @@ function test_inlined_symbols(func, argtypes)
     ast = Expr(:block)
     ast.args = src.code
     walk(ast) do e
-        if isa(e, Core.Slot)
+        if isa(e, Core.SlotNumber)
             @test 1 <= e.id <= nl
         end
         if isa(e, Core.NewvarNode)

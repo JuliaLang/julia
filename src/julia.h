@@ -693,7 +693,6 @@ extern JL_DLLIMPORT jl_datatype_t *jl_typename_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_typename_t *jl_type_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_symbol_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_ssavalue_type JL_GLOBALLY_ROOTED;
-extern JL_DLLIMPORT jl_datatype_t *jl_abstractslot_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_slotnumber_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_typedslot_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_argument_type JL_GLOBALLY_ROOTED;
