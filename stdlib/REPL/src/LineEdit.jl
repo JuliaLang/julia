@@ -1282,7 +1282,7 @@ end
 # compute the number of spaces from b till the next non-space on the right
 # (which can also be "end of line" or "end of buffer")
 function leadingspaces(buf::IOBuffer, b::Int)
-    ls = something(findnext(_notspace, buf.data, b+1), 0)-1
+    @views ls = something(findnext(_notspace, buf.data[1:buf.size], b+1), 0)-1
     ls == -1 && (ls = buf.size)
     ls -= b
     return ls
@@ -2239,7 +2239,7 @@ end
 
 function move_line_end(buf::IOBuffer)
     eof(buf) && return
-    pos = findnext(isequal(UInt8('\n')), buf.data, position(buf)+1)
+    @views pos = findnext(isequal(UInt8('\n')), buf.data[1:buf.size], position(buf)+1)
     if pos === nothing
         move_input_end(buf)
         return
