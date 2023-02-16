@@ -415,7 +415,6 @@ eval(Core, quote
     LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int32, inlined_at::Int32) =
         $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))
     SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))
-    TypedSlot(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))
     PhiNode(edges::Array{Int32, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))
     PiNode(@nospecialize(val), @nospecialize(typ)) = $(Expr(:new, :PiNode, :val, :typ))
     PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))
@@ -523,12 +522,12 @@ Symbol(s::Symbol) = s
 module IR
 
 export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
-    NewvarNode, SSAValue, SlotNumber, TypedSlot, Argument,
+    NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
     Const, PartialStruct, InterConditional
 
 import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
-    NewvarNode, SSAValue, SlotNumber, TypedSlot, Argument,
+    NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
     Const, PartialStruct, InterConditional
 

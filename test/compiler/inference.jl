@@ -582,7 +582,6 @@ function is_typed_expr(e::Expr)
 end
 is_typed_expr(@nospecialize other) = false
 test_inferred_static(@nospecialize(other)) = true
-test_inferred_static(slot::TypedSlot) = @test isdispatchelem(slot.typ)
 function test_inferred_static(expr::Expr)
     for a in expr.args
         test_inferred_static(a)
@@ -639,17 +638,8 @@ for (codetype, all_ssa) in Any[
         (code_typed(h18679, ())[1], true),
         (code_typed(g19348, (typeof((1, 2.0)),))[1], true)]
     code = codetype[1]
-    local notconst(@nospecialize(other)) = true
-    notconst(slot::TypedSlot) = @test isa(slot.typ, Type)
-    function notconst(expr::Expr)
-        for a in expr.args
-            notconst(a)
-        end
-    end
     local i
-    for i = 1:length(code.code)
-        e = code.code[i]
-        notconst(e)
+    for i = 1:length(code.ssavaluetypes)
         typ = code.ssavaluetypes[i]
         typ isa Core.Compiler.MaybeUndef && (typ = typ.typ)
         @test isa(typ, Type) || isa(typ, Const) || isa(typ, Conditional) || typ
@@ -1947,7 +1937,7 @@ let opt25261 = code_typed(foo25261, Tuple{}, optimize=false)[1].first.code
     end
     foundslot = false
     for expr25261 in opt25261[i:end]
-        if expr25261 isa TypedSlot && expr25261.typ === Tuple{Int, Int}
+        if expr25261 isa Core.Compiler.TypedSlot && expr25261.typ === Tuple{Int, Int}
             # This should be the assignment to the SSAValue into the getfield
             # call - make sure it's a TypedSlot
             foundslot = true

@@ -184,7 +184,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         else
             return s->locals[jl_source_nslots(src) + id];
     }
-    if (jl_is_slot(e) || jl_is_argument(e)) {
+    if (jl_is_slotnumber(e) || jl_is_argument(e)) {
         ssize_t n = jl_slot_number(e);
         if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
             jl_error("access to invalid slot number");
@@ -230,7 +230,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     else if (head == jl_isdefined_sym) {
         jl_value_t *sym = args[0];
         int defined = 0;
-        if (jl_is_slot(sym) || jl_is_argument(sym)) {
+        if (jl_is_slotnumber(sym) || jl_is_argument(sym)) {
             ssize_t n = jl_slot_number(sym);
             if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
                 jl_error("access to invalid slot number");
@@ -472,7 +472,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             if (head == jl_assign_sym) {
                 jl_value_t *lhs = jl_exprarg(stmt, 0);
                 jl_value_t *rhs = eval_value(jl_exprarg(stmt, 1), s);
-                if (jl_is_slot(lhs)) {
+                if (jl_is_slotnumber(lhs)) {
                     ssize_t n = jl_slot_number(lhs);
                     assert(n <= jl_source_nslots(s->src) && n > 0);
                     s->locals[n - 1] = rhs;
@@ -608,7 +608,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
         }
         else if (jl_is_newvarnode(stmt)) {
             jl_value_t *var = jl_fieldref(stmt, 0);
-            assert(jl_is_slot(var));
+            assert(jl_is_slotnumber(var));
             ssize_t n = jl_slot_number(var);
             assert(n <= jl_source_nslots(s->src) && n > 0);
             s->locals[n - 1] = NULL;

@@ -39,7 +39,7 @@ const TAGS = Any[
     Float16, Float32, Float64, Char, DataType, Union, UnionAll, Core.TypeName, Tuple,
     Array, Expr, LineNumberNode, :__LabelNode__, GotoNode, QuoteNode, CodeInfo, TypeVar,
     Core.Box, Core.MethodInstance, Module, Task, String, SimpleVector, Method,
-    GlobalRef, SlotNumber, TypedSlot, NewvarNode, SSAValue,
+    GlobalRef, SlotNumber, Const, NewvarNode, SSAValue,
 
     # dummy entries for tags that don't correspond directly to types
     Symbol, # UNDEFREF_TAG
@@ -77,14 +77,13 @@ const TAGS = Any[
     (Int64(0):Int64(n_int_literals-1))...
 ]
 
-@assert length(TAGS) == 255
+const NTAGS = length(TAGS)
+@assert NTAGS == 255
 
 const ser_version = 23 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
-
-const NTAGS = length(TAGS)
 
 function sertag(@nospecialize(v))
     # NOTE: we use jl_value_ptr directly since we know at least one of the arguments
@@ -194,7 +193,7 @@ serialize(s::AbstractSerializer, ::Tuple{}) = writetag(s.io, EMPTYTUPLE_TAG)
 
 function serialize(s::AbstractSerializer, t::Tuple)
     l = length(t)
-    if l <= 255
+    if l <= NTAGS
         writetag(s.io, TUPLE_TAG)
         write(s.io, UInt8(l))
     else
@@ -224,7 +223,7 @@ function serialize(s::AbstractSerializer, x::Symbol)
     if len > 7
         serialize_cycle(s, x) && return
     end
-    if len <= 255
+    if len <= NTAGS
         writetag(s.io, SYMBOL_TAG)
         write(s.io, UInt8(len))
     else
@@ -295,7 +294,7 @@ function serialize(s::AbstractSerializer, ss::String)
         serialize_cycle(s, ss) && return
         writetag(s.io, SHARED_REF_TAG)
     end
-    if len <= 255
+    if len <= NTAGS
         writetag(s.io, STRING_TAG)
         write(s.io, UInt8(len))
     else
@@ -327,7 +326,7 @@ end
 function serialize(s::AbstractSerializer, ex::Expr)
     serialize_cycle(s, ex) && return
     l = length(ex.args)
-    if l <= 255
+    if l <= NTAGS
         writetag(s.io, EXPR_TAG)
         write(s.io, UInt8(l))
     else

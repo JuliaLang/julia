@@ -242,9 +242,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
     isa(stmt, ReturnNode) && return (true, false, true)
     isa(stmt, GotoNode) && return (true, false, true)
     isa(stmt, GotoIfNot) && return (true, false, ⊑(𝕃ₒ, argextype(stmt.cond, src), Bool))
-    if isa(stmt, SlotNumber) || isa(stmt, TypedSlot)
-        return (true, false, false) # they shouldn't occur in the IR at this point, but let's be defensive here
-    elseif isa(stmt, GlobalRef)
+    if isa(stmt, GlobalRef)
         nothrow = isdefined(stmt.mod, stmt.name)
         consistent = nothrow && isconst(stmt.mod, stmt.name)
         return (consistent, nothrow, nothrow)
@@ -338,6 +336,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             return (false, false, false)
         end
     end
+    isa(stmt, UnoptSlot) && error("unexpected IR elements")
     return (true, true, true)
 end
 
