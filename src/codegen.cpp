@@ -6,7 +6,7 @@
 #if defined(_CPU_X86_)
 #define JL_NEED_FLOATTEMP_VAR 1
 #endif
-#if defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_) || defined(_COMPILER_MSAN_ENABLED_)
+#if defined(_OS_LINUX_) || defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_) || defined(_COMPILER_MSAN_ENABLED_)
 #define JL_DISABLE_FPO
 #endif
 
@@ -353,6 +353,57 @@ struct jl_tbaacache_t {
         tbaa_arrayoffset = tbaa_make_child(mbuilder, "jtbaa_arrayoffset", tbaa_array_scalar).first;
         tbaa_const = tbaa_make_child(mbuilder, "jtbaa_const", nullptr, true).first;
         tbaa_arrayselbyte = tbaa_make_child(mbuilder, "jtbaa_arrayselbyte", tbaa_array_scalar).first;
+    }
+};
+
+struct jl_noaliascache_t {
+    // Each domain operates completely independently.
+    // "No aliasing" is inferred if it is implied by any domain.
+
+    // memory regions domain
+    struct jl_regions_t {
+        MDNode *gcframe;        // GC frame
+        MDNode *stack;          // Stack slot
+        MDNode *data;           // Any user data that `pointerset/ref` are allowed to alias
+        MDNode *type_metadata;  // Non-user-accessible type metadata incl. size, union selectors, etc.
+        MDNode *constant;       // Memory that is immutable by the time LLVM can see it
+
+        jl_regions_t(): gcframe(nullptr), stack(nullptr), data(nullptr), type_metadata(nullptr), constant(nullptr) {}
+
+        void initialize(llvm::LLVMContext &context) {
+            MDBuilder mbuilder(context);
+            MDNode *domain = mbuilder.createAliasScopeDomain("jnoalias");
+
+            this->gcframe = mbuilder.createAliasScope("jnoalias_gcframe", domain);
+            this->stack = mbuilder.createAliasScope("jnoalias_stack", domain);
+            this->data = mbuilder.createAliasScope("jnoalias_data", domain);
+            this->type_metadata = mbuilder.createAliasScope("jnoalias_typemd", domain);
+            this->constant = mbuilder.createAliasScope("jnoalias_const", domain);
+        }
+    } regions;
+
+    // `@aliasscope` domain
+    struct jl_aliasscope_t {
+        MDNode *current;
+
+        jl_aliasscope_t(): current(nullptr) {}
+
+        // No init required, this->current is only used to store the currently active aliasscope
+        void initialize(llvm::LLVMContext &context) {}
+    } aliasscope;
+
+    bool initialized;
+
+    jl_noaliascache_t(): regions(), aliasscope(), initialized(false) {}
+
+    void initialize(llvm::LLVMContext &context) {
+        if (initialized) {
+            assert(&regions.constant->getContext() == &context);
+            return;
+        }
+        initialized = true;
+        regions.initialize(context);
+        aliasscope.initialize(context);
     }
 };
 
@@ -1276,6 +1327,69 @@ static bool deserves_sret(jl_value_t *dt, Type *T)
     return (size_t)jl_datatype_size(dt) > sizeof(void*) && !T->isFloatingPointTy() && !T->isVectorTy();
 }
 
+// Alias Analysis Info (analogous to llvm::AAMDNodes)
+struct jl_aliasinfo_t {
+    MDNode *tbaa = nullptr;          // '!tbaa': Struct-path TBAA. TBAA graph forms a tree (indexed by offset).
+                                     //          Two pointers do not alias if they are not transitive parents
+                                     //          (effectively, subfields) of each other or equal.
+    MDNode *tbaa_struct = nullptr;   // '!tbaa.struct': Describes memory layout of struct.
+    MDNode *scope = nullptr;         // '!alias.scope': Generic "noalias" memory access sets.
+                                     //                 If alias.scope(inst_a) ⊆ noalias(inst_b) (in any "domain")
+                                     //                    => inst_a, inst_b do not alias.
+    MDNode *noalias = nullptr;       // '!noalias': See '!alias.scope' above.
+
+    enum class Region { unknown, gcframe, stack, data, constant, type_metadata }; // See jl_regions_t
+
+    explicit jl_aliasinfo_t() = default;
+    explicit jl_aliasinfo_t(jl_codectx_t &ctx, Region r, MDNode *tbaa);
+    explicit jl_aliasinfo_t(MDNode *tbaa, MDNode *tbaa_struct, MDNode *scope, MDNode *noalias)
+        : tbaa(tbaa), tbaa_struct(tbaa_struct), scope(scope), noalias(noalias) {}
+    jl_aliasinfo_t(const jl_aliasinfo_t &) = default;
+
+    // Add !tbaa, !tbaa.struct, !alias.scope, !noalias annotations to an instruction.
+    //
+    // Also adds `invariant.load` to load instructions in the constant !noalias scope.
+    Instruction *decorateInst(Instruction *inst) const {
+
+        if (this->tbaa)
+            inst->setMetadata(LLVMContext::MD_tbaa, this->tbaa);
+        if (this->tbaa_struct)
+            inst->setMetadata(LLVMContext::MD_tbaa_struct, this->tbaa_struct);
+        if (this->scope)
+            inst->setMetadata(LLVMContext::MD_alias_scope, this->scope);
+        if (this->noalias)
+            inst->setMetadata(LLVMContext::MD_noalias, this->noalias);
+
+        if (this->scope && isa<LoadInst>(inst)) {
+            // If this is in the read-only region, mark the load with "!invariant.load"
+            if (this->scope->getNumOperands() == 1) {
+                MDNode *operand = cast<MDNode>(this->scope->getOperand(0));
+                auto scope_name = cast<MDString>(operand->getOperand(0))->getString();
+                if (scope_name == "jnoalias_const")
+                    inst->setMetadata(LLVMContext::MD_invariant_load, MDNode::get(inst->getContext(), None));
+            }
+        }
+
+        return inst;
+    }
+
+    // Merge two sets of alias information.
+    jl_aliasinfo_t merge(const jl_aliasinfo_t &other) const {
+        jl_aliasinfo_t result;
+        result.tbaa = MDNode::getMostGenericTBAA(this->tbaa, other.tbaa);
+        result.tbaa_struct = nullptr;
+        result.scope = MDNode::getMostGenericAliasScope(this->scope, other.scope);
+        result.noalias = MDNode::intersect(this->noalias, other.noalias);
+        return result;
+    }
+
+    // Create alias information based on the provided TBAA metadata.
+    //
+    // This function only exists to help transition to using !noalias to encode
+    // memory region non-aliasing. It should be deleted once the TBAA metadata
+    // is improved to encode only memory layout and *not* memory regions.
+    static jl_aliasinfo_t fromTBAA(jl_codectx_t &ctx, MDNode *tbaa);
+};
 
 // metadata tracking for a llvm Value* during codegen
 struct jl_cgval_t {
@@ -1441,6 +1555,7 @@ public:
     jl_module_t *module = NULL;
     jl_typecache_t type_cache;
     jl_tbaacache_t tbaa_cache;
+    jl_noaliascache_t aliasscope_cache;
     jl_method_instance_t *linfo = NULL;
     jl_value_t *rettype = NULL;
     jl_code_info_t *source = NULL;
@@ -1452,7 +1567,6 @@ public:
     Value *spvals_ptr = NULL;
     Value *argArray = NULL;
     Value *argCount = NULL;
-    MDNode *aliasscope = NULL;
     std::string funcName;
     int vaSlot = -1;        // name of vararg argument
     int nReqArgs = 0;
@@ -1491,6 +1605,11 @@ public:
         return tbaa_cache;
     }
 
+    jl_noaliascache_t &noalias() {
+        aliasscope_cache.initialize(builder.getContext());
+        return aliasscope_cache;
+    }
+
     ~jl_codectx_t() {
         // Transfer local delayed calls to the global queue
         for (auto call_target : call_targets)
@@ -1500,6 +1619,77 @@ public:
 
 GlobalVariable *JuliaVariable::realize(jl_codectx_t &ctx) {
     return realize(jl_Module);
+}
+
+jl_aliasinfo_t::jl_aliasinfo_t(jl_codectx_t &ctx, Region r, MDNode *tbaa): tbaa(tbaa), tbaa_struct(nullptr) {
+    MDNode *alias_scope = nullptr;
+    jl_noaliascache_t::jl_regions_t regions = ctx.noalias().regions;
+    switch (r) {
+        case Region::unknown:
+            alias_scope = nullptr;
+            break;
+        case Region::gcframe:
+            alias_scope = regions.gcframe;
+            break;
+        case Region::stack:
+            alias_scope = regions.stack;
+            break;
+        case Region::data:
+            alias_scope = regions.data;
+            break;
+        case Region::constant:
+            alias_scope = regions.constant;
+            break;
+        case Region::type_metadata:
+            alias_scope = regions.type_metadata;
+            break;
+    }
+
+    MDNode *all_scopes[5] = { regions.gcframe, regions.stack, regions.data, regions.type_metadata, regions.constant };
+    if (alias_scope) {
+        // The matching region is added to !alias.scope
+        // All other regions are added to !noalias
+
+        int i = 0;
+        Metadata *scopes[1] = { alias_scope };
+        Metadata *noaliases[4];
+        for (auto const &scope: all_scopes) {
+            if (scope == alias_scope) continue;
+            noaliases[i++] = scope;
+        }
+
+        this->scope = MDNode::get(ctx.builder.getContext(), ArrayRef<Metadata*>(scopes));
+        this->noalias = MDNode::get(ctx.builder.getContext(), ArrayRef<Metadata*>(noaliases));
+    }
+}
+
+jl_aliasinfo_t jl_aliasinfo_t::fromTBAA(jl_codectx_t &ctx, MDNode *tbaa) {
+    auto cache = ctx.tbaa();
+
+    // Each top-level TBAA node has a corresponding !alias.scope scope
+    MDNode *tbaa_srcs[5] = { cache.tbaa_gcframe, cache.tbaa_stack, cache.tbaa_data, cache.tbaa_array, cache.tbaa_const };
+    Region regions[5] = { Region::gcframe, Region::stack, Region::data, Region::type_metadata, Region::constant };
+
+    if (tbaa != nullptr) {
+        MDNode *node = cast<MDNode>(tbaa->getOperand(1));
+        if (cast<MDString>(node->getOperand(0))->getString() != "jtbaa") {
+
+            // Climb up to node just before root
+            MDNode *parent_node = cast<MDNode>(node->getOperand(1));
+            while (cast<MDString>(parent_node->getOperand(0))->getString() != "jtbaa") {
+                node = parent_node;
+                parent_node = cast<MDNode>(node->getOperand(1));
+            }
+
+            // Find the matching node's index
+            for (int i = 0; i < 5; i++) {
+                if (cast<MDNode>(tbaa_srcs[i]->getOperand(1)) == node)
+                    return jl_aliasinfo_t(ctx, regions[i], tbaa);
+            }
+        }
+    }
+
+    return jl_aliasinfo_t(ctx, Region::unknown, tbaa);
 }
 
 static Type *julia_type_to_llvm(jl_codectx_t &ctx, jl_value_t *jt, bool *isboxed = NULL);
@@ -1525,7 +1715,6 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
 
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p);
 static GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G);
-Instruction *tbaa_decorate(MDNode *md, Instruction *inst);
 
 static GlobalVariable *prepare_global_in(Module *M, JuliaVariable *G)
 {
@@ -1594,20 +1783,21 @@ static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, Type *lty)
     return new AllocaInst(lty, ctx.topalloca->getModule()->getDataLayout().getAllocaAddrSpace(), "", /*InsertBefore=*/ctx.topalloca);
 }
 
-static void undef_derived_strct(IRBuilder<> &irbuilder, Value *ptr, jl_datatype_t *sty, MDNode *tbaa)
+static void undef_derived_strct(jl_codectx_t &ctx, Value *ptr, jl_datatype_t *sty, MDNode *tbaa)
 {
     assert(ptr->getType()->getPointerAddressSpace() != AddressSpace::Tracked);
     size_t first_offset = sty->layout->nfields ? jl_field_offset(sty, 0) : 0;
     if (first_offset != 0)
-        irbuilder.CreateMemSet(ptr, ConstantInt::get(getInt8Ty(irbuilder.getContext()), 0), first_offset, MaybeAlign(0));
+        ctx.builder.CreateMemSet(ptr, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0), first_offset, MaybeAlign(0));
     size_t i, np = sty->layout->npointers;
     if (np == 0)
         return;
-    auto T_prjlvalue = JuliaType::get_prjlvalue_ty(irbuilder.getContext());
-    ptr = irbuilder.CreateBitCast(ptr, T_prjlvalue->getPointerTo(ptr->getType()->getPointerAddressSpace()));
+    auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx.builder.getContext());
+    ptr = ctx.builder.CreateBitCast(ptr, T_prjlvalue->getPointerTo(ptr->getType()->getPointerAddressSpace()));
     for (i = 0; i < np; i++) {
-        Value *fld = irbuilder.CreateConstInBoundsGEP1_32(T_prjlvalue, ptr, jl_ptr_offset(sty, i));
-        tbaa_decorate(tbaa, irbuilder.CreateStore(Constant::getNullValue(T_prjlvalue), fld));
+        Value *fld = ctx.builder.CreateConstInBoundsGEP1_32(T_prjlvalue, ptr, jl_ptr_offset(sty, i));
+        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
+        ai.decorateInst(ctx.builder.CreateStore(Constant::getNullValue(T_prjlvalue), fld));
     }
 }
 
@@ -1777,6 +1967,11 @@ static inline jl_cgval_t update_julia_type(jl_codectx_t &ctx, const jl_cgval_t &
     Type *T = julia_type_to_llvm(ctx, typ);
     if (type_is_ghost(T))
         return ghostValue(ctx, typ);
+    else if (v.TIndex && v.V == NULL) {
+        // type mismatch (there weren't any non-ghost values in the union)
+        CreateTrap(ctx.builder);
+        return jl_cgval_t();
+    }
     return jl_cgval_t(v, typ, NULL);
 }
 
@@ -2598,7 +2793,8 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
                 return mark_julia_const(ctx, v);
             LoadInst *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*)));
             v->setOrdering(order);
-            tbaa_decorate(ctx.tbaa().tbaa_binding, v);
+            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_binding);
+            ai.decorateInst(v);
             jl_value_t *ty = jl_atomic_load_relaxed(&bnd->ty);
             return mark_julia_type(ctx, v, true, ty);
         }
@@ -2619,7 +2815,8 @@ static bool emit_globalset(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *sym, c
         if (ty && jl_subtype(rval_info.typ, ty)) { // TODO: use typeassert here instead
             StoreInst *v = ctx.builder.CreateAlignedStore(rval, julia_binding_pvalue(ctx, bp), Align(sizeof(void*)));
             v->setOrdering(Order);
-            tbaa_decorate(ctx.tbaa().tbaa_binding, v);
+            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_binding);
+            ai.decorateInst(v);
             emit_write_barrier(ctx, bp, rval);
             return true;
         }
@@ -2760,18 +2957,22 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
                         ctx.builder.CreateBitCast(varg2, getInt8PtrTy(ctx.builder.getContext())),
                         ConstantInt::get(getSizeTy(ctx.builder.getContext()), sz) },
                     ArrayRef<OperandBundleDef>(&OpBundle, nroots ? 1 : 0));
-            MDNode *tbaa = nullptr;
-            if (!arg1.tbaa) {
-                tbaa = arg2.tbaa;
+
+            if (arg1.tbaa || arg2.tbaa) {
+                jl_aliasinfo_t ai;
+                if (!arg1.tbaa) {
+                    ai = jl_aliasinfo_t::fromTBAA(ctx, arg2.tbaa);
+                }
+                else if (!arg2.tbaa) {
+                    ai = jl_aliasinfo_t::fromTBAA(ctx, arg1.tbaa);
+                }
+                else {
+                    jl_aliasinfo_t arg1_ai = jl_aliasinfo_t::fromTBAA(ctx, arg1.tbaa);
+                    jl_aliasinfo_t arg2_ai = jl_aliasinfo_t::fromTBAA(ctx, arg2.tbaa);
+                    ai = arg1_ai.merge(arg2_ai);
+                }
+                ai.decorateInst(answer);
             }
-            else if (!arg2.tbaa) {
-                tbaa = arg1.tbaa;
-            }
-            else {
-                tbaa = MDNode::getMostGenericTBAA(arg1.tbaa, arg2.tbaa);
-            }
-            if (tbaa)
-                tbaa_decorate(tbaa, answer);
             return ctx.builder.CreateICmpEQ(answer, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
         }
         else {
@@ -3254,7 +3455,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     *ret = emit_unionload(ctx, data, ptindex, ety, elsz, al, ctx.tbaa().tbaa_arraybuf, true, union_max, ctx.tbaa().tbaa_arrayselbyte);
                 }
                 else {
-                    MDNode *aliasscope = (f == jl_builtin_const_arrayref) ? ctx.aliasscope : nullptr;
+                    MDNode *aliasscope = (f == jl_builtin_const_arrayref) ? ctx.noalias().aliasscope.current : nullptr;
                     *ret = typed_load(ctx,
                             emit_arrayptr(ctx, ary, ary_ex),
                             idx, ety,
@@ -3321,7 +3522,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                                         emit_bitcast(ctx, decay_derived(ctx, aryv), ctx.types().T_pprjlvalue),
                                         jl_array_data_owner_offset(nd) / sizeof(jl_value_t*)),
                                     Align(sizeof(void*)));
-                            tbaa_decorate(ctx.tbaa().tbaa_const, maybe_mark_load_dereferenceable(own_ptr, false, (jl_value_t*)jl_array_any_type));
+                            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+                            ai.decorateInst(maybe_mark_load_dereferenceable(own_ptr, false, (jl_value_t*)jl_array_any_type));
                         }
                         else {
                             own_ptr = ctx.builder.CreateCall(
@@ -3358,7 +3560,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         ptindex = emit_bitcast(ctx, ptindex, getInt8PtrTy(ctx.builder.getContext()));
                         ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, offset);
                         ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, idx);
-                        tbaa_decorate(ctx.tbaa().tbaa_arrayselbyte, ctx.builder.CreateStore(tindex, ptindex));
+                        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_arrayselbyte);
+                        ai.decorateInst(ctx.builder.CreateStore(tindex, ptindex));
                         if (elsz > 0 && (!jl_is_datatype(val.typ) || jl_datatype_size(val.typ) > 0)) {
                             // copy data (if any)
                             emit_unionmove(ctx, data, ctx.tbaa().tbaa_arraybuf, val, nullptr);
@@ -3369,7 +3572,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                                     emit_arrayptr(ctx, ary, ary_ex, isboxed),
                                     idx, val, jl_cgval_t(), ety,
                                     isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf,
-                                    ctx.aliasscope,
+                                    ctx.noalias().aliasscope.current,
                                     data_owner,
                                     isboxed,
                                     isboxed ? AtomicOrdering::Release : AtomicOrdering::NotAtomic, // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
@@ -3456,7 +3659,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         idx = ctx.builder.CreateAdd(idx, ConstantInt::get(getSizeTy(ctx.builder.getContext()), ctx.nReqArgs));
                         Instruction *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, ctx.argArray, idx), Align(sizeof(void*)));
                         // if we know the result type of this load, we will mark that information here too
-                        tbaa_decorate(ctx.tbaa().tbaa_value, maybe_mark_load_dereferenceable(v, false, rt));
+                        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_value);
+                        ai.decorateInst(maybe_mark_load_dereferenceable(v, false, rt));
                         *ret = mark_julia_type(ctx, v, /*boxed*/ true, rt);
                         return true;
                     }
@@ -3619,7 +3823,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     emit_typecheck(ctx, argv[3], (jl_value_t*)jl_bool_type, "fieldtype");
                 emit_bounds_check(ctx, typ, (jl_value_t*)jl_datatype_type, idx, types_len, boundscheck);
                 Value *fieldtyp_p = ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, decay_derived(ctx, emit_bitcast(ctx, types_svec, ctx.types().T_pprjlvalue)), idx);
-                Value *fieldtyp = tbaa_decorate(ctx.tbaa().tbaa_const, ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, fieldtyp_p, Align(sizeof(void*))));
+                jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+                Value *fieldtyp = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, fieldtyp_p, Align(sizeof(void*))));
                 *ret = mark_julia_type(ctx, fieldtyp, true, (jl_value_t*)jl_type_type);
                 return true;
             }
@@ -3644,7 +3849,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             }
             // String and SimpleVector's length fields have the same layout
             auto ptr = emit_bitcast(ctx, boxed(ctx, obj), getSizePtrTy(ctx.builder.getContext()));
-            Value *len = tbaa_decorate(ctx.tbaa().tbaa_const, ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()), ptr, Align(sizeof(size_t))));
+            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+            Value *len = ai.decorateInst(ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()), ptr, Align(sizeof(size_t))));
             MDBuilder MDB(ctx.builder.getContext());
             if (sty == jl_simplevector_type) {
                 auto rng = MDB.createRange(
@@ -3775,7 +3981,8 @@ isdefined_unknown_idx:
                 Value *addr = ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_prjlvalue, ptr, offs);
                 // emit this using the same type as emit_getfield_knownidx
                 // so that LLVM may be able to load-load forward them and fold the result
-                fldv = tbaa_decorate(tbaa, ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, addr, Align(sizeof(size_t))));
+                jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
+                fldv = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, addr, Align(sizeof(size_t))));
                 cast<LoadInst>(fldv)->setOrdering(order <= jl_memory_order_notatomic ? AtomicOrdering::Unordered : get_llvm_atomic_order(order));
             }
             else {
@@ -4273,8 +4480,10 @@ static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name,
     if (isvol)
         v->setVolatile(true);
     v->setOrdering(AtomicOrdering::Unordered);
-    if (tbaa)
-        tbaa_decorate(tbaa, v);
+    if (tbaa) {
+        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
+        ai.decorateInst(v);
+    }
     undef_var_error_ifnot(ctx, ctx.builder.CreateIsNotNull(v), name);
     return mark_julia_type(ctx, v, true, jl_any_type);
 }
@@ -4292,7 +4501,8 @@ static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i)
             ctx.types().T_prjlvalue,
             ctx.spvals_ptr,
             i + sizeof(jl_svec_t) / sizeof(jl_value_t*));
-    Value *sp = tbaa_decorate(ctx.tbaa().tbaa_const, ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*))));
+    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+    Value *sp = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*))));
     Value *isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp, false),
             track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)jl_tvar_type)));
     jl_unionall_t *sparam = (jl_unionall_t*)ctx.linfo->def.method->sig;
@@ -4347,7 +4557,8 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym)
                 ctx.types().T_prjlvalue,
                 ctx.spvals_ptr,
                 i + sizeof(jl_svec_t) / sizeof(jl_value_t*));
-        Value *sp = tbaa_decorate(ctx.tbaa().tbaa_const, ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*))));
+        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+        Value *sp = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*))));
         isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp, false),
             track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)jl_tvar_type)));
     }
@@ -4370,7 +4581,8 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym)
             Value *bp = julia_binding_gv(ctx, bnd);
             bp = julia_binding_pvalue(ctx, bp);
             LoadInst *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*)));
-            tbaa_decorate(ctx.tbaa().tbaa_binding, v);
+            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_binding);
+            ai.decorateInst(v);
             v->setOrdering(AtomicOrdering::Unordered);
             isnull = ctx.builder.CreateICmpNE(v, Constant::getNullValue(ctx.types().T_prjlvalue));
         }
@@ -4411,7 +4623,7 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
             else {
                 const DataLayout &DL = jl_Module->getDataLayout();
                 uint64_t sz = DL.getTypeStoreSize(T);
-                emit_memcpy(ctx, ssaslot, ctx.tbaa().tbaa_stack, vi.value, sz, ssaslot->getAlign().value());
+                emit_memcpy(ctx, ssaslot, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), vi.value, sz, ssaslot->getAlign().value());
             }
             Value *tindex = NULL;
             if (vi.pTIndex)
@@ -4501,7 +4713,8 @@ static void emit_vi_assignment_unboxed(jl_codectx_t &ctx, jl_varinfo_t &vi, Valu
                     Type *dest_ty = store_ty->getPointerTo();
                     if (dest_ty != dest->getType())
                         dest = emit_bitcast(ctx, dest, dest_ty);
-                    tbaa_decorate(ctx.tbaa().tbaa_stack, ctx.builder.CreateStore(
+                    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+                    ai.decorateInst(ctx.builder.CreateStore(
                                       emit_unbox(ctx, store_ty, rval_info, rval_info.typ),
                                       dest,
                                       vi.isVolatile));
@@ -4517,7 +4730,7 @@ static void emit_vi_assignment_unboxed(jl_codectx_t &ctx, jl_varinfo_t &vi, Valu
                 // This check should probably mostly catch the relevant situations.
                 if (vi.value.V != rval_info.V) {
                     Value *copy_bytes = ConstantInt::get(getInt32Ty(ctx.builder.getContext()), jl_datatype_size(vi.value.typ));
-                    emit_memcpy(ctx, vi.value.V, ctx.tbaa().tbaa_stack, rval_info, copy_bytes,
+                    emit_memcpy(ctx, vi.value.V, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), rval_info, copy_bytes,
                                 julia_alignment(rval_info.typ), vi.isVolatile);
                 }
             }
@@ -5229,11 +5442,9 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
                 std::tie(F, specF) = get_oc_function(ctx, (jl_method_t*)source.constant, env_t, argt_typ, ub.constant);
                 if (F) {
                     jl_cgval_t jlcall_ptr = mark_julia_type(ctx, F, false, jl_voidpointer_type);
-                    jl_cgval_t world_age = mark_julia_type(ctx,
-                                      tbaa_decorate(ctx.tbaa().tbaa_gcframe,
-                                      ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()), get_last_age_field(ctx), Align(sizeof(size_t)))),
-                        false,
-                        jl_long_type);
+                    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+                    Instruction *I = ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()), get_last_age_field(ctx), Align(sizeof(size_t)));
+                    jl_cgval_t world_age = mark_julia_type(ctx, ai.decorateInst(I), false, jl_long_type);
                     jl_cgval_t fptr;
                     if (specF)
                         fptr = mark_julia_type(ctx, specF, false, jl_voidpointer_type);
@@ -5522,7 +5733,8 @@ static void emit_cfunc_invalidate(
             root1 = ctx.builder.CreateConstInBoundsGEP2_32(get_returnroots_type(ctx, return_roots), root1, 0, 0);
             ctx.builder.CreateStore(gf_ret, root1);
         }
-        emit_memcpy(ctx, &*gf_thunk->arg_begin(), nullptr, gf_ret, nullptr, jl_datatype_size(rettype), julia_alignment(rettype));
+        emit_memcpy(ctx, &*gf_thunk->arg_begin(), jl_aliasinfo_t::fromTBAA(ctx, nullptr), gf_ret,
+                    jl_aliasinfo_t::fromTBAA(ctx, nullptr), jl_datatype_size(rettype), julia_alignment(rettype));
         ctx.builder.CreateRetVoid();
         break;
     }
@@ -5692,7 +5904,8 @@ static Function* gen_cfun_wrapper(
     allocate_gc_frame(ctx, b0, true);
 
     Value *world_age_field = get_last_age_field(ctx);
-    Value *last_age = tbaa_decorate(ctx.tbaa().tbaa_gcframe,
+    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+    Value *last_age = ai.decorateInst(
             ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()), world_age_field, Align(sizeof(size_t))));
 
     Value *world_v = ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()),
@@ -6248,13 +6461,14 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
                                          literal_pointer_val(ctx, (jl_value_t*)output_type));
             Value *derived_strct = emit_bitcast(ctx, decay_derived(ctx, strct), getSizePtrTy(ctx.builder.getContext()));
             MDNode *tbaa = best_tbaa(ctx.tbaa(), output_type);
-            tbaa_decorate(tbaa, ctx.builder.CreateStore(F, derived_strct));
-            tbaa_decorate(tbaa, ctx.builder.CreateStore(
+            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
+            ai.decorateInst(ctx.builder.CreateStore(F, derived_strct));
+            ai.decorateInst(ctx.builder.CreateStore(
                 ctx.builder.CreatePtrToInt(literal_pointer_val(ctx, fexpr_rt.constant), getSizeTy(ctx.builder.getContext())),
                 ctx.builder.CreateConstInBoundsGEP1_32(getSizeTy(ctx.builder.getContext()), derived_strct, 1)));
-            tbaa_decorate(tbaa, ctx.builder.CreateStore(Constant::getNullValue(getSizeTy(ctx.builder.getContext())),
+            ai.decorateInst(ctx.builder.CreateStore(Constant::getNullValue(getSizeTy(ctx.builder.getContext())),
                     ctx.builder.CreateConstInBoundsGEP1_32(getSizeTy(ctx.builder.getContext()), derived_strct, 2)));
-            tbaa_decorate(tbaa, ctx.builder.CreateStore(Constant::getNullValue(getSizeTy(ctx.builder.getContext())),
+            ai.decorateInst(ctx.builder.CreateStore(Constant::getNullValue(getSizeTy(ctx.builder.getContext())),
                     ctx.builder.CreateConstInBoundsGEP1_32(getSizeTy(ctx.builder.getContext()), derived_strct, 3)));
             F = strct;
         }
@@ -6388,7 +6602,8 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
         }
         else {
             Value *argPtr = ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_prjlvalue, argArray, i - 1);
-            theArg = tbaa_decorate(ctx.tbaa().tbaa_const, maybe_mark_load_dereferenceable(
+            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+            theArg = ai.decorateInst(maybe_mark_load_dereferenceable(
                     ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, argPtr, Align(sizeof(void*))),
                     false,
                     ty));
@@ -7031,7 +7246,8 @@ static jl_llvm_functions_t
     Value *last_age = NULL;
     Value *world_age_field = get_last_age_field(ctx);
     if (toplevel || ctx.is_opaque_closure) {
-        last_age = tbaa_decorate(ctx.tbaa().tbaa_gcframe, ctx.builder.CreateAlignedLoad(
+        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+        last_age = ai.decorateInst(ctx.builder.CreateAlignedLoad(
             getSizeTy(ctx.builder.getContext()), world_age_field, Align(sizeof(size_t))));
     }
 
@@ -7272,7 +7488,8 @@ static jl_llvm_functions_t
                 }
                 else {
                     Value *argPtr = ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_prjlvalue, argArray, i - 1);
-                    Value *load = tbaa_decorate(ctx.tbaa().tbaa_const, maybe_mark_load_dereferenceable(
+                    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+                    Value *load = ai.decorateInst(maybe_mark_load_dereferenceable(
                             ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, argPtr, Align(sizeof(void*))),
                             false, vi.value.typ));
                     theArg = mark_julia_type(ctx, load, true, vi.value.typ);
@@ -7679,7 +7896,7 @@ static jl_llvm_functions_t
                 ctx.builder.SetCurrentDebugLocation(linetable.at(debuginfoloc).loc);
             coverageVisitStmt(debuginfoloc);
         }
-        ctx.aliasscope = aliasscopes[cursor];
+        ctx.noalias().aliasscope.current = aliasscopes[cursor];
         jl_value_t *stmt = jl_array_ptr_ref(stmts, cursor);
         jl_expr_t *expr = jl_is_expr(stmt) ? (jl_expr_t*)stmt : nullptr;
         if (jl_is_returnnode(stmt)) {
@@ -7759,8 +7976,8 @@ static jl_llvm_functions_t
                     }
                     if (returninfo.cc == jl_returninfo_t::SRet) {
                         assert(jl_is_concrete_type(jlrettype));
-                        emit_memcpy(ctx, sret, nullptr, retvalinfo, jl_datatype_size(jlrettype),
-                                    julia_alignment(jlrettype));
+                        emit_memcpy(ctx, sret, jl_aliasinfo_t::fromTBAA(ctx, nullptr), retvalinfo,
+                                    jl_datatype_size(jlrettype), julia_alignment(jlrettype));
                     }
                     else { // must be jl_returninfo_t::Union
                         emit_unionmove(ctx, sret, nullptr, retvalinfo, /*skip*/isboxed_union);
@@ -8662,7 +8879,7 @@ extern "C" JL_DLLEXPORT void jl_init_codegen_impl(void)
     init_jit_functions();
 }
 
-extern "C" JL_DLLEXPORT void jl_teardown_codegen_impl()
+extern "C" JL_DLLEXPORT void jl_teardown_codegen_impl() JL_NOTSAFEPOINT
 {
     // output LLVM timings and statistics
     reportAndResetTimings();
@@ -8743,11 +8960,15 @@ extern "C" JL_DLLEXPORT jl_value_t *jl_get_libllvm_impl(void) JL_NOTSAFEPOINT
     HMODULE mod;
     if (!GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCSTR)&llvm::DebugFlag, &mod))
         return jl_nothing;
-
-    char path[MAX_PATH];
-    if (!GetModuleFileNameA(mod, path, sizeof(path)))
+    wchar_t path16[MAX_PATH];
+    DWORD n16 = GetModuleFileNameW(mod, path16, MAX_PATH);
+    if (n16 <= 0)
         return jl_nothing;
-    return (jl_value_t*) jl_symbol(path);
+    path16[n16++] = 0;
+    char path8[MAX_PATH * 3];
+    if (!WideCharToMultiByte(CP_UTF8, 0, path16, n16, path8, MAX_PATH * 3, NULL, NULL))
+        return jl_nothing;
+    return (jl_value_t*) jl_symbol(path8);
 #else
     Dl_info dli;
     if (!dladdr((void*)LLVMContextCreate, &dli))

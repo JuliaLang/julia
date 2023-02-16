@@ -850,4 +850,9 @@ struct Pair{A, B}
     end
 end
 
+function _hasmethod(@nospecialize(tt)) # this function has a special tfunc
+    world = ccall(:jl_get_tls_world_age, UInt, ())
+    return Intrinsics.not_int(ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world) === nothing)
+end
+
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)

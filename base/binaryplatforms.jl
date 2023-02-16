@@ -873,7 +873,7 @@ function detect_libstdcxx_version(max_minor_version::Int=30)
     end
 
     # Brute-force our way through GLIBCXX_* symbols to discover which version we're linked against
-    hdl = Libdl.dlopen(first(libstdcxx_paths))
+    hdl = Libdl.dlopen(first(libstdcxx_paths))::Ptr{Cvoid}
     # Try all GLIBCXX versions down to GCC v4.8:
     # https://gcc.gnu.org/onlinedocs/libstdc++/manual/abi.html
     for minor_version in max_minor_version:-1:18

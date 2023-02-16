@@ -157,7 +157,7 @@ is_foldable(effects::Effects) =
     is_effect_free(effects) &&
     is_terminates(effects)
 
-is_total(effects::Effects) =
+is_foldable_nothrow(effects::Effects) =
     is_foldable(effects) &&
     is_nothrow(effects)
 

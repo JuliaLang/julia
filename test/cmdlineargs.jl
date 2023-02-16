@@ -60,6 +60,78 @@ let
     @test format_filename("%a%%b") == "a%b"
 end
 
+@testset "julia_cmd" begin
+    julia_basic = Base.julia_cmd()
+    opts = Base.JLOptions()
+    get_julia_cmd(arg) = strip(read(`$julia_basic $arg -e 'print(repr(Base.julia_cmd()))'`, String), ['`'])
+
+    for (arg, default) in (
+                            ("-C$(unsafe_string(opts.cpu_target))",  false),
+
+                            ("-J$(unsafe_string(opts.image_file))",  false),
+
+                            ("--depwarn=yes",   false),
+                            ("--depwarn=error", false),
+                            ("--depwarn=no",    true),
+
+                            ("--check-bounds=yes",  false),
+                            ("--check-bounds=no",   false),
+                            ("--check-bounds=auto", true),
+
+                            ("--inline=no",         false),
+                            ("--inline=yes",        true),
+
+                            ("-O0", false),
+                            ("-O1", false),
+                            ("-O2", true),
+                            ("-O3", false),
+
+                            ("--min-optlevel=0",    true),
+                            ("--min-optlevel=1",    false),
+                            ("--min-optlevel=2",    false),
+                            ("--min-optlevel=3",    false),
+
+                            ("-g0", false),
+                            ("-g1", false),
+                            ("-g2", false),
+
+                            ("--compile=no",    false),
+                            ("--compile=all",   false),
+                            ("--compile=min",   false),
+                            ("--compile=yes",   true),
+
+                            ("--code-coverage=@",    false),
+                            ("--code-coverage=user", false),
+                            ("--code-coverage=all",  false),
+                            ("--code-coverage=none", true),
+
+                            ("--track-allocation=@",    false),
+                            ("--track-allocation=user", false),
+                            ("--track-allocation=all",  false),
+                            ("--track-allocation=none", true),
+
+                            ("--color=yes", false),
+                            ("--color=no",  false),
+
+                            ("--startup-file=no",   false),
+                            ("--startup-file=yes",  true),
+
+                            # ("--sysimage-native-code=no",   false), # takes a lot longer (30s)
+                            ("--sysimage-native-code=yes",  true),
+
+                            ("--pkgimages=yes", true),
+                            ("--pkgimages=no",  false),
+                        )
+        @testset "$arg" begin
+            if default
+                @test !occursin(arg, get_julia_cmd(arg))
+            else
+                @test occursin(arg, get_julia_cmd(arg))
+            end
+        end
+    end
+end
+
 let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # tests for handling of ENV errors
     let v = writereadpipeline("println(\"REPL: \", @which(less), @isdefined(InteractiveUtils))",
@@ -625,6 +697,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         (false, "", "ERROR: option `--inline` is missing an argument")
     @test readchomperrors(`$exename --startup-file=no -e "@show ARGS" -now -- julia RUN.jl`) ==
         (false, "", "ERROR: unknown option `-n`")
+    @test readchomperrors(`$exename --interactive=yes`) ==
+        (false, "", "ERROR: option `-i/--interactive` does not accept an argument")
 
     # --compiled-modules={yes|no}
     @test readchomp(`$exename -E "Bool(Base.JLOptions().use_compiled_modules)"`) == "true"

@@ -582,7 +582,6 @@ end
     return true
 end
 add_tfunc(Core._typevar, 3, 3, typevar_tfunc, 100)
-add_tfunc(applicable, 1, INT_INF, @nospecs((𝕃::AbstractLattice, f, args...)->Bool), 100)
 
 @nospecs function arraysize_tfunc(𝕃::AbstractLattice, ary, dim)
     hasintersect(widenconst(ary), Array) || return Bottom
@@ -911,41 +910,47 @@ function try_compute_fieldidx(typ::DataType, @nospecialize(field))
     return field
 end
 
-function getfield_boundscheck(argtypes::Vector{Any}) # ::Union{Bool, Nothing}
-    if length(argtypes) == 2
-        return true
-    elseif length(argtypes) == 3
-        boundscheck = argtypes[3]
-        isvarargtype(boundscheck) && return nothing
-        if widenconst(boundscheck) === Symbol
-            return true
-        end
+function getfield_boundscheck((; fargs, argtypes)::ArgInfo) # Symbol
+    farg = nothing
+    if length(argtypes) == 3
+        return :on
     elseif length(argtypes) == 4
+        fargs !== nothing && (farg = fargs[4])
         boundscheck = argtypes[4]
+        isvarargtype(boundscheck) && return :unknown
+        if widenconst(boundscheck) === Symbol
+            return :on
+        end
+    elseif length(argtypes) == 5
+        fargs !== nothing && (farg = fargs[5])
+        boundscheck = argtypes[5]
     else
-        return nothing
+        return :unknown
     end
-    isvarargtype(boundscheck) && return nothing
-    widenconst(boundscheck) === Bool || return nothing
+    isvarargtype(boundscheck) && return :unknown
     boundscheck = widenconditional(boundscheck)
-    if isa(boundscheck, Const)
-        return boundscheck.val::Bool
-    else
-        return nothing
+    if widenconst(boundscheck) === Bool
+        if isa(boundscheck, Const)
+            return boundscheck.val::Bool ? :on : :off
+        elseif farg !== nothing && isexpr(farg, :boundscheck)
+            return :boundscheck
+        end
     end
+    return :unknown
 end
 
-function getfield_nothrow(argtypes::Vector{Any}, boundscheck::Union{Bool,Nothing}=getfield_boundscheck(argtypes))
-    boundscheck === nothing && return false
+function getfield_nothrow(arginfo::ArgInfo, boundscheck::Symbol=getfield_boundscheck(arginfo))
+    (;argtypes) = arginfo
+    boundscheck === :unknown && return false
     ordering = Const(:not_atomic)
-    if length(argtypes) == 3
-        isvarargtype(argtypes[3]) && return false
-        if widenconst(argtypes[3]) !== Bool
-            ordering = argtypes[3]
+    if length(argtypes) == 4
+        isvarargtype(argtypes[4]) && return false
+        if widenconst(argtypes[4]) !== Bool
+            ordering = argtypes[4]
         end
-    elseif length(argtypes) == 4
-        ordering = argtypes[4]
-    elseif length(argtypes) != 2
+    elseif length(argtypes) == 5
+        ordering = argtypes[5]
+    elseif length(argtypes) != 3
         return false
     end
     isvarargtype(ordering) && return false
@@ -955,7 +960,7 @@ function getfield_nothrow(argtypes::Vector{Any}, boundscheck::Union{Bool,Nothing
         if ordering !== :not_atomic # TODO: this is assuming not atomic
             return false
         end
-        return getfield_nothrow(argtypes[1], argtypes[2], !(boundscheck === false))
+        return getfield_nothrow(argtypes[2], argtypes[3], !(boundscheck === :off))
     else
         return false
     end
@@ -1037,7 +1042,9 @@ end
     end
     return getfield_tfunc(𝕃, s00, name)
 end
-@nospecs getfield_tfunc(𝕃::AbstractLattice, s00, name) = _getfield_tfunc(𝕃, s00, name, false)
+@nospecs function getfield_tfunc(𝕃::AbstractLattice, s00, name)
+    _getfield_tfunc(𝕃, s00, name, false)
+end
 
 function _getfield_fieldindex(s::DataType, name::Const)
     nv = name.val
@@ -1705,7 +1712,7 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
             end
         end
         if largs == 1 # Union{T} --> T
-            u1 = typeintersect(widenconst(args[1]), Type)
+            u1 = typeintersect(widenconst(args[1]), Union{Type,TypeVar})
             valid_as_lattice(u1) || return Bottom
             return u1
         end
@@ -1733,6 +1740,17 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
     canconst = true
     tparams = Any[]
     outervars = TypeVar[]
+
+    # first push the tailing vars from headtype into outervars
+    outer_start, ua = 0, headtype
+    while isa(ua, UnionAll)
+        if (outer_start += 1) > largs
+            push!(outervars, ua.var)
+        end
+        ua = ua.body
+    end
+    outer_start = outer_start - largs + 1
+
     varnamectr = 1
     ua = headtype
     for i = 1:largs
@@ -1749,14 +1767,19 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
             push!(tparams, ai.tv)
         else
             uncertain = true
-            # These blocks improve type info but make compilation a bit slower.
-            # XXX
-            #unw = unwrap_unionall(ai)
-            #isT = isType(unw)
-            #if isT && isa(ai,UnionAll) && contains_is(outervars, ai.var)
-            #    ai = rename_unionall(ai)
-            #    unw = unwrap_unionall(ai)
-            #end
+            unw = unwrap_unionall(ai)
+            isT = isType(unw)
+            if isT
+                tai = ai
+                while isa(tai, UnionAll)
+                    if contains_is(outervars, tai.var)
+                        ai = rename_unionall(ai)
+                        unw = unwrap_unionall(ai)
+                        break
+                    end
+                    tai = tai.body
+                end
+            end
             ai_w = widenconst(ai)
             ub = ai_w isa Type && ai_w <: Type ? instanceof_tfunc(ai)[1] : Any
             if istuple
@@ -1764,19 +1787,17 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
                 # then this could be a Vararg type.
                 if i == largs && ub === Any
                     push!(tparams, Vararg)
-                # XXX
-                #elseif isT
-                #    push!(tparams, rewrap_unionall(unw.parameters[1], ai))
+                elseif isT
+                    push!(tparams, rewrap_unionall(unw.parameters[1], ai))
                 else
                     push!(tparams, Any)
                 end
-            # XXX
-            #elseif isT
-            #    push!(tparams, unw.parameters[1])
-            #    while isa(ai, UnionAll)
-            #        push!(outervars, ai.var)
-            #        ai = ai.body
-            #    end
+            elseif isT
+                push!(tparams, unw.parameters[1])
+                while isa(ai, UnionAll)
+                    push!(outervars, ai.var)
+                    ai = ai.body
+                end
             else
                 # Is this the second parameter to a NamedTuple?
                 if isa(uw, DataType) && uw.name === _NAMEDTUPLE_NAME && isa(ua, UnionAll) && uw.parameters[2] === ua.var
@@ -1818,7 +1839,7 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
         return Type{<:appl}
     end
     ans = Type{appl}
-    for i = length(outervars):-1:1
+    for i = length(outervars):-1:outer_start
         ans = UnionAll(outervars[i], ans)
     end
     return ans
@@ -2021,7 +2042,7 @@ end
     elseif f === invoke
         return false
     elseif f === getfield
-        return getfield_nothrow(argtypes)
+        return getfield_nothrow(ArgInfo(nothing, Any[Const(f), argtypes...]))
     elseif f === setfield!
         if na == 3
             return setfield!_nothrow(𝕃, argtypes[1], argtypes[2], argtypes[3])
@@ -2085,7 +2106,7 @@ end
 end
 
 # known to be always effect-free (in particular nothrow)
-const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
+const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields, applicable]
 
 # known to be effect-free (but not necessarily nothrow)
 const _EFFECT_FREE_BUILTINS = [
@@ -2179,10 +2200,11 @@ function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
     return Effects(EFFECTS_TOTAL; consistent, nothrow)
 end
 
-function getfield_effects(argtypes::Vector{Any}, @nospecialize(rt))
+function getfield_effects(arginfo::ArgInfo, @nospecialize(rt))
+    (;argtypes) = arginfo
     # consistent if the argtype is immutable
-    isempty(argtypes) && return EFFECTS_THROWS
-    obj = argtypes[1]
+    length(argtypes) < 3 && return EFFECTS_THROWS
+    obj = argtypes[2]
     isvarargtype(obj) && return Effects(EFFECTS_THROWS; consistent=ALWAYS_FALSE)
     consistent = (is_immutable_argtype(obj) || is_mutation_free_argtype(obj)) ?
         ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
@@ -2191,20 +2213,26 @@ function getfield_effects(argtypes::Vector{Any}, @nospecialize(rt))
     # throws `UndefRefError` so doesn't need to taint it
     # NOTE `getfield_notundefined` conservatively checks if this field is never initialized
     # with undefined value so that we don't taint `:consistent`-cy too aggressively here
-    if !(length(argtypes) ≥ 2 && getfield_notundefined(obj, argtypes[2]))
+    if !(length(argtypes) ≥ 3 && getfield_notundefined(obj, argtypes[3]))
         consistent = ALWAYS_FALSE
     end
-    nothrow = getfield_nothrow(argtypes, true)
-    if !nothrow && getfield_boundscheck(argtypes) !== true
-        # If we cannot independently prove inboundsness, taint consistency.
-        # The inbounds-ness assertion requires dynamic reachability, while
-        # :consistent needs to be true for all input values.
-        # N.B. We do not taint for `--check-bounds=no` here that happens in
-        # InferenceState.
-        consistent = ALWAYS_FALSE
+    nothrow = getfield_nothrow(arginfo, :on)
+    if !nothrow
+        bcheck = getfield_boundscheck(arginfo)
+        if !(bcheck === :on || bcheck === :boundscheck)
+            # If we cannot independently prove inboundsness, taint consistency.
+            # The inbounds-ness assertion requires dynamic reachability, while
+            # :consistent needs to be true for all input values.
+            # However, as a special exception, we do allow literal `:boundscheck`.
+            # `:consistent`-cy will be tainted in any caller using `@inbounds` based
+            # on the `:noinbounds` effect.
+            # N.B. We do not taint for `--check-bounds=no` here. That is handled
+            # in concrete evaluation.
+            consistent = ALWAYS_FALSE
+        end
     end
     if hasintersect(widenconst(obj), Module)
-        inaccessiblememonly = getglobal_effects(argtypes, rt).inaccessiblememonly
+        inaccessiblememonly = getglobal_effects(argtypes[2:end], rt).inaccessiblememonly
     elseif is_mutation_free_argtype(obj)
         inaccessiblememonly = ALWAYS_TRUE
     else
@@ -2233,17 +2261,20 @@ function getglobal_effects(argtypes::Vector{Any}, @nospecialize(rt))
     return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly)
 end
 
-function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argtypes::Vector{Any}, @nospecialize(rt))
+function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), arginfo::ArgInfo, @nospecialize(rt))
     if isa(f, IntrinsicFunction)
-        return intrinsic_effects(f, argtypes)
+        return intrinsic_effects(f, arginfo.argtypes[2:end])
     end
 
     @assert !contains_is(_SPECIAL_BUILTINS, f)
 
+    if f === getfield
+        return getfield_effects(arginfo, rt)
+    end
+    argtypes = arginfo.argtypes[2:end]
+
     if f === isdefined
         return isdefined_effects(𝕃, argtypes)
-    elseif f === getfield
-        return getfield_effects(argtypes, rt)
     elseif f === getglobal
         return getglobal_effects(argtypes, rt)
     elseif f === Core.get_binding_type
@@ -2260,7 +2291,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         else
             effect_free = ALWAYS_FALSE
         end
-        nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && builtin_nothrow(𝕃, f, argtypes, rt))
+        nothrow = (isempty(argtypes) || !isvarargtype(argtypes[end])) && builtin_nothrow(𝕃, f, argtypes, rt)
         if contains_is(_INACCESSIBLEMEM_BUILTINS, f)
             inaccessiblememonly = ALWAYS_TRUE
         elseif contains_is(_ARGMEM_BUILTINS, f)
@@ -2442,7 +2473,7 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
 
     consistent = contains_is(_INCONSISTENT_INTRINSICS, f) ? ALWAYS_FALSE : ALWAYS_TRUE
     effect_free = !(f === Intrinsics.pointerset) ? ALWAYS_TRUE : ALWAYS_FALSE
-    nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && intrinsic_nothrow(f, argtypes))
+    nothrow = (isempty(argtypes) || !isvarargtype(argtypes[end])) && intrinsic_nothrow(f, argtypes)
 
     return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow)
 end
@@ -2506,6 +2537,93 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     end
     return CallMeta(Type, EFFECTS_THROWS, NoCallInfo())
 end
+
+# a simplified model of abstract_call_gf_by_type for applicable
+function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
+                             sv::InferenceState, max_methods::Int)
+    length(argtypes) < 2 && return CallMeta(Union{}, EFFECTS_UNKNOWN, NoCallInfo())
+    isvarargtype(argtypes[2]) && return CallMeta(Bool, EFFECTS_UNKNOWN, NoCallInfo())
+    argtypes = argtypes[2:end]
+    atype = argtypes_to_type(argtypes)
+    matches = find_matching_methods(argtypes, atype, method_table(interp),
+        InferenceParams(interp).max_union_splitting, max_methods)
+    if isa(matches, FailedMethodMatch)
+        rt = Bool # too many matches to analyze
+    else
+        (; valid_worlds, applicable) = matches
+        update_valid_age!(sv, valid_worlds)
+
+        # also need an edge to the method table in case something gets
+        # added that did not intersect with any existing method
+        if isa(matches, MethodMatches)
+            matches.fullmatch || add_mt_backedge!(sv, matches.mt, atype)
+        else
+            for (thisfullmatch, mt) in zip(matches.fullmatches, matches.mts)
+                thisfullmatch || add_mt_backedge!(sv, mt, atype)
+            end
+        end
+
+        napplicable = length(applicable)
+        if napplicable == 0
+            rt = Const(false) # never any matches
+        else
+            rt = Const(true) # has applicable matches
+            for i in 1:napplicable
+                match = applicable[i]::MethodMatch
+                edge = specialize_method(match)
+                add_backedge!(sv, edge)
+            end
+
+            if isa(matches, MethodMatches) ? (!matches.fullmatch || any_ambig(matches)) :
+                    (!all(matches.fullmatches) || any_ambig(matches))
+                # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
+                rt = Bool
+            end
+        end
+    end
+    return CallMeta(rt, EFFECTS_TOTAL, NoCallInfo())
+end
+add_tfunc(applicable, 1, INT_INF, @nospecs((𝕃::AbstractLattice, f, args...)->Bool), 40)
+
+# a simplified model of abstract_invoke for Core._hasmethod
+function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
+    if length(argtypes) == 3 && !isvarargtype(argtypes[3])
+        ft′ = argtype_by_index(argtypes, 2)
+        ft = widenconst(ft′)
+        ft === Bottom && return CallMeta(Bool, EFFECTS_THROWS, NoCallInfo())
+        typeidx = 3
+    elseif length(argtypes) == 2 && !isvarargtype(argtypes[2])
+        typeidx = 2
+    else
+        return CallMeta(Any, Effects(), NoCallInfo())
+    end
+    (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, typeidx))
+    isexact || return CallMeta(Bool, Effects(), NoCallInfo())
+    unwrapped = unwrap_unionall(types)
+    if types === Bottom || !(unwrapped isa DataType) || unwrapped.name !== Tuple.name
+        return CallMeta(Bool, EFFECTS_THROWS, NoCallInfo())
+    end
+    if typeidx == 3
+        isdispatchelem(ft) || return CallMeta(Bool, Effects(), NoCallInfo()) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
+        types = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
+    end
+    mt = ccall(:jl_method_table_for, Any, (Any,), types)
+    if !isa(mt, Core.MethodTable)
+        return CallMeta(Bool, EFFECTS_THROWS, NoCallInfo())
+    end
+    match, valid_worlds, overlayed = findsup(types, method_table(interp))
+    update_valid_age!(sv, valid_worlds)
+    if match === nothing
+        rt = Const(false)
+        add_mt_backedge!(sv, mt, types) # this should actually be an invoke-type backedge
+    else
+        rt = Const(true)
+        edge = specialize_method(match)
+        add_invoke_backedge!(sv, types, edge)
+    end
+    return CallMeta(rt, EFFECTS_TOTAL, NoCallInfo())
+end
+
 
 # N.B.: typename maps type equivalence classes to a single value
 function typename_static(@nospecialize(t))

@@ -70,6 +70,11 @@ real(H::UpperHessenberg{<:Real}) = H
 real(H::UpperHessenberg{<:Complex}) = UpperHessenberg(triu!(real(H.data),-1))
 imag(H::UpperHessenberg) = UpperHessenberg(triu!(imag(H.data),-1))
 
+function istriu(A::UpperHessenberg, k::Integer=0)
+    k <= -1 && return true
+    return _istriu(A, k)
+end
+
 function Matrix{T}(H::UpperHessenberg) where T
     m,n = size(H)
     return triu!(copyto!(Matrix{T}(undef, m, n), H.data), -1)
@@ -417,10 +422,12 @@ Hessenberg(F::Hessenberg, μ::Number) = Hessenberg(F.factors, F.τ, F.H, F.uplo;
 
 copy(F::Hessenberg{<:Any,<:UpperHessenberg}) = Hessenberg(copy(F.factors), copy(F.τ); μ=F.μ)
 copy(F::Hessenberg{<:Any,<:SymTridiagonal}) = Hessenberg(copy(F.factors), copy(F.τ), copy(F.H), F.uplo; μ=F.μ)
-size(F::Hessenberg, d) = size(F.H, d)
+size(F::Hessenberg, d::Integer) = size(F.H, d)
 size(F::Hessenberg) = size(F.H)
 
-adjoint(F::Hessenberg) = Adjoint(F)
+transpose(F::Hessenberg{<:Real}) = F'
+transpose(::Hessenberg) =
+    throw(ArgumentError("transpose of Hessenberg decomposition is not supported, consider using adjoint"))
 
 # iteration for destructuring into components
 Base.iterate(S::Hessenberg) = (S.Q, Val(:H))
@@ -682,8 +689,8 @@ function rdiv!(B::AbstractVecOrMat{<:Complex}, F::Hessenberg{<:Complex,<:Any,<:A
     return B .= Complex.(Br,Bi)
 end
 
-ldiv!(F::Adjoint{<:Any,<:Hessenberg}, B::AbstractVecOrMat) = rdiv!(B', F')'
-rdiv!(B::AbstractMatrix, F::Adjoint{<:Any,<:Hessenberg}) = ldiv!(F', B')'
+ldiv!(F::AdjointFactorization{<:Any,<:Hessenberg}, B::AbstractVecOrMat) = rdiv!(B', F')'
+rdiv!(B::AbstractMatrix, F::AdjointFactorization{<:Any,<:Hessenberg}) = ldiv!(F', B')'
 
 det(F::Hessenberg) = det(F.H; shift=F.μ)
 logabsdet(F::Hessenberg) = logabsdet(F.H; shift=F.μ)

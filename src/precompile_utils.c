@@ -132,6 +132,8 @@ static int compile_all_collect__(jl_typemap_entry_t *ml, void *env)
 {
     jl_array_t *allmeths = (jl_array_t*)env;
     jl_method_t *m = ml->func.method;
+    if (m->external_mt)
+        return 1;
     if (m->source) {
         // method has a non-generated definition; can be compiled generically
         jl_array_ptr_1d_push(allmeths, (jl_value_t*)m);
@@ -204,6 +206,8 @@ static int precompile_enq_specialization_(jl_method_instance_t *mi, void *closur
 static int precompile_enq_all_specializations__(jl_typemap_entry_t *def, void *closure)
 {
     jl_method_t *m = def->func.method;
+    if (m->external_mt)
+        return 1;
     if ((m->name == jl_symbol("__init__") || m->ccallable) && jl_is_dispatch_tupletype(m->sig)) {
         // ensure `__init__()` and @ccallables get strongly-hinted, specialized, and compiled
         jl_method_instance_t *mi = jl_specializations_get_linfo(m, m->sig, jl_emptysvec);

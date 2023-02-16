@@ -159,7 +159,7 @@ function Base.hash(F::QRCompactWY, h::UInt)
     return hash(F.factors, foldr(hash, _triuppers_qr(F.T); init=hash(QRCompactWY, h)))
 end
 function Base.:(==)(A::QRCompactWY, B::QRCompactWY)
-    return A.factors == B.factors && all(Splat(==), zip(_triuppers_qr.((A.T, B.T))...))
+    return A.factors == B.factors && all(splat(==), zip(_triuppers_qr.((A.T, B.T))...))
 end
 function Base.isequal(A::QRCompactWY, B::QRCompactWY)
     return isequal(A.factors, B.factors) && all(zip(_triuppers_qr.((A.T, B.T))...)) do (a, b)
@@ -514,7 +514,9 @@ end
 Base.propertynames(F::QRPivoted, private::Bool=false) =
     (:R, :Q, :p, :P, (private ? fieldnames(typeof(F)) : ())...)
 
-adjoint(F::Union{QR,QRPivoted,QRCompactWY}) = Adjoint(F)
+transpose(F::Union{QR{<:Real},QRPivoted{<:Real},QRCompactWY{<:Real}}) = F'
+transpose(::Union{QR,QRPivoted,QRCompactWY}) =
+    throw(ArgumentError("transpose of QR decomposition is not supported, consider using adjoint"))
 
 abstract type AbstractQ{T} <: AbstractMatrix{T} end
 
@@ -1002,7 +1004,7 @@ function _apply_permutation!(F::QRPivoted, B::AbstractVecOrMat)
 end
 _apply_permutation!(F::Factorization, B::AbstractVecOrMat) = B
 
-function ldiv!(Fadj::Adjoint{<:Any,<:Union{QR,QRCompactWY,QRPivoted}}, B::AbstractVecOrMat)
+function ldiv!(Fadj::AdjointFactorization{<:Any,<:Union{QR,QRCompactWY,QRPivoted}}, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     m, n = size(Fadj)
 

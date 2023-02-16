@@ -70,8 +70,6 @@ const char *jl_crtdll_name = CRTDLL_BASENAME ".dll";
 
 #define PATHBUF 4096
 
-#define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
-
 #ifdef _OS_WINDOWS_
 void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT
 {
@@ -160,12 +158,21 @@ JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOI
     if (!len) return NULL;
     WCHAR *wfilename = (WCHAR*)alloca(len * sizeof(WCHAR));
     if (!MultiByteToWideChar(CP_UTF8, 0, filename, -1, wfilename, len)) return NULL;
-    HANDLE lib = LoadLibraryExW(wfilename, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
-    if (lib)
-        needsSymRefreshModuleList = 1;
+    HANDLE lib;
+    if (flags & JL_RTLD_NOLOAD) {
+        lib = GetModuleHandleW(wfilename);
+    }
+    else {
+        lib = LoadLibraryExW(wfilename, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+        if (lib)
+            needsSymRefreshModuleList = 1;
+    }
     return lib;
 }
 #else
+
+#define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
+
 JL_DLLEXPORT JL_NO_SANITIZE void *jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOINT
 {
     /* The sanitizers break RUNPATH use in dlopen for annoying reasons that are
@@ -186,7 +193,7 @@ JL_DLLEXPORT JL_NO_SANITIZE void *jl_dlopen(const char *filename, unsigned flags
         dlclose(libdl_handle);
         assert(dlopen);
     }
-    // The real interceptors check the validty of the string here, but let's
+    // The real interceptors check the validity of the string here, but let's
     // just skip that for the time being.
 #endif
     void *hnd = dlopen(filename,
