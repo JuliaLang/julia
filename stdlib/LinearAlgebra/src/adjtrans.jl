@@ -1,8 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base: @propagate_inbounds
-import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, convert, similar
-
 ### basic definitions (types, aliases, constructors, abstractarray interface, sundry similar)
 
 # note that Adjoint and Transpose must be able to wrap not only vectors and matrices
@@ -12,7 +9,7 @@ import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, c
     Adjoint
 
 Lazy wrapper type for an adjoint view of the underlying linear algebra object,
-usually an `AbstractVector`/`AbstractMatrix`, but also some `Factorization`, for instance.
+usually an `AbstractVector`/`AbstractMatrix`.
 Usually, the `Adjoint` constructor should not be called directly, use [`adjoint`](@ref)
 instead. To materialize the view use [`copy`](@ref).
 
@@ -32,14 +29,14 @@ julia> Adjoint(A)
  9-2im  0+0im
 ```
 """
-struct Adjoint{T,S} <: AbstractMatrix{T}
+struct Adjoint{T,S<:AbstractVecOrMat} <: AbstractMatrix{T}
     parent::S
 end
 """
     Transpose
 
 Lazy wrapper type for a transpose view of the underlying linear algebra object,
-usually an `AbstractVector`/`AbstractMatrix`, but also some `Factorization`, for instance.
+usually an `AbstractVector`/`AbstractMatrix`.
 Usually, the `Transpose` constructor should not be called directly, use [`transpose`](@ref)
 instead. To materialize the view use [`copy`](@ref).
 
@@ -59,13 +56,13 @@ julia> Transpose(A)
  3  0
 ```
 """
-struct Transpose{T,S} <: AbstractMatrix{T}
+struct Transpose{T,S<:AbstractVecOrMat} <: AbstractMatrix{T}
     parent::S
 end
 
 # basic outer constructors
-Adjoint(A) = Adjoint{Base.promote_op(adjoint,eltype(A)),typeof(A)}(A)
-Transpose(A) = Transpose{Base.promote_op(transpose,eltype(A)),typeof(A)}(A)
+Adjoint(A::AbstractVecOrMat) = Adjoint{Base.promote_op(adjoint,eltype(A)),typeof(A)}(A)
+Transpose(A::AbstractVecOrMat) = Transpose{Base.promote_op(transpose,eltype(A)),typeof(A)}(A)
 
 Base.dataids(A::Union{Adjoint, Transpose}) = Base.dataids(A.parent)
 Base.unaliascopy(A::Union{Adjoint,Transpose}) = typeof(A)(Base.unaliascopy(A.parent))
