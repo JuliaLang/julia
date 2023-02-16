@@ -213,7 +213,7 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
         end
         # At this point args is
         # [try_block catch_var catch_block]
-        if finally_ !== false
+        if finally_ !== false || else_ !== false
             push!(args, finally_)
         end
         if else_ !== false
