@@ -621,14 +621,14 @@ isascii(c::AbstractChar) = UInt32(c) < 0x80
     return 0 ≤ r < 0x80
 end
 
-@inline _isascii(::Val{N},cu::AbstractVector{CU}, first) where {N,CU} = @inline _isascii(cu,first,first+N-1)
-
 #The chunking algorithm makes the last two chunks overlap inorder to keep the size fixed
-@inline function  _isascii_chunks(::Val{N},cu::AbstractVector{CU}, first,last) where {N,CU}
-    for n=first:N:last - N
-        _isascii(Val(N),cu,n) || return false
-   end
-   return  _isascii(Val(N),cu,last-N+1)
+@inline function  _isascii_chunks(chunk_size,cu::AbstractVector{CU}, first,last) where {N,CU}
+    n=first
+    while n <= last - chunk_size
+        _isascii(cu,n,n+chunk_size-1) || return false
+        n += chunk_size
+    end
+    return  _isascii(cu,last-chunk_size+1,last)
 end
 
 function isascii(cu::AbstractVector{CU}) where {CU <: Integer}
@@ -636,7 +636,7 @@ function isascii(cu::AbstractVector{CU}) where {CU <: Integer}
     chunk_threshold =  chunk_size + (chunk_size ÷ 2)
     l = length(cu)
     l < chunk_threshold && return _isascii(cu,1,l)
-    return _isascii_chunks(Val(chunk_size),cu,1,l)
+    return _isascii_chunks(chunk_size,cu,1,l)
 end
 
 ## string map, filter ##
