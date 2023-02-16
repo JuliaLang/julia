@@ -765,7 +765,7 @@ function edit_splice!(s::BufferLike, r::Region=region(s), ins::String = ""; rigi
     ret = splice!(buf.data, A+1:B, codeunits(String(ins))) # position(), etc, are 0-indexed
     buf.size = buf.size + sizeof(ins) - B + A
     adjust_pos && seek(buf, position(buf) + sizeof(ins))
-    return String(ret)
+    return String(copy(ret))
 end
 
 edit_splice!(s::MIState, ins::AbstractString) = edit_splice!(s, region(s), ins)
