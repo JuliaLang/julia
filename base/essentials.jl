@@ -367,13 +367,8 @@ function rename_unionall(@nospecialize(u))
     if !isa(u, UnionAll)
         return u
     end
-    body = rename_unionall(u.body)
-    if body === u.body
-        body = u
-    else
-        body = UnionAll(u.var, body)
-    end
     var = u.var::TypeVar
+    body = UnionAll(var, rename_unionall(u.body))
     nv = TypeVar(var.name, var.lb, var.ub)
     return UnionAll(nv, body{nv})
 end

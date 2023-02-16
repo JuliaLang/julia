@@ -2743,7 +2743,16 @@ let 𝕃 = Core.Compiler.fallback_lattice
     @test apply_type_tfunc(𝕃, Const(Issue47089), A, A) <: (Type{Issue47089{A,B}} where {A<:Integer, B<:Integer})
 end
 @test only(Base.return_types(keys, (Dict{String},))) == Base.KeySet{String, T} where T<:(Dict{String})
-@test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{Int}},))) == Vector{T} where T<:(Array{Int})
+@test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{Int}},))) == Vector{<:Array{Int}}
+@test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{<:Real}},))) == Vector{<:Array{<:Real}}
+
+let A = Tuple{A,B,C,D,E,F,G,H} where {A,B,C,D,E,F,G,H}
+    B = Core.Compiler.rename_unionall(A)
+    for i in 1:8
+        @test A.var != B.var && (i == 1 ? A == B : A != B)
+        A, B = A.body, B.body
+    end
+end
 
 # PR 27351, make sure optimized type intersection for method invalidation handles typevars
 
