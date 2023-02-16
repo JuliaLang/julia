@@ -1232,55 +1232,44 @@ JL_DLLEXPORT uint64_t jl_read_verify_header(ios_t *s, uint8_t *pkgimage, int64_t
     return checksum;
 }
 
-// Returns `depmodidxs` where `udeps[depmodidxs[i]]` corresponds to `build_ids[i]`
-static jl_array_t *image_to_depmodidx(jl_array_t *build_ids,  jl_array_t *udeps)
+// Returns `depmodidxs` where `j = depmodidxs[i]` corresponds to the blob `depmods[j]` in `write_mod_list`
+static jl_array_t *image_to_depmodidx(jl_array_t *depmods)
 {
-    if (!udeps || !build_ids)
+    if (!depmods)
         return NULL;
-    size_t j = 0, lbids = jl_array_len(build_ids), ldeps = jl_array_len(udeps);
-    uint64_t *bids = (uint64_t*)jl_array_data(build_ids);
+    assert(jl_array_len(depmods) < INT32_MAX && "too many dependencies to serialize");
+    size_t lbids = n_linkage_blobs();
+    size_t ldeps = jl_array_len(depmods);
     jl_array_t *depmodidxs = jl_alloc_array_1d(jl_array_int32_type, lbids);
     int32_t *dmidxs = (int32_t*)jl_array_data(depmodidxs);
-    for (size_t i = 0; i < lbids; i++) {
-        dmidxs[i] = -1;
-        uint64_t bid = bids[i];
-        j = 0;   // sad that this is of O(M*N)
-        while (j < ldeps) {
-            jl_value_t *deptuple = jl_array_ptr_ref(udeps, j);
-            jl_module_t *depmod = (jl_module_t*)jl_fieldref(deptuple, 0);  // evaluating module
-            jl_module_t *depmod_top = depmod;
-            while (depmod_top->parent != jl_main_module && depmod_top->parent != depmod_top)
-                depmod_top = depmod_top->parent;
-            if (depmod_top == jl_base_module) {
-                dmidxs[i] = 0;
-                break;
-            }
-            if (depmod_top->build_id.lo == bid) {
-                dmidxs[i] = j;
-                break;
-            }
+    memset(dmidxs, -1, lbids * sizeof(int32_t));
+    dmidxs[0] = 0; // the sysimg can also be found at idx 0, by construction
+    for (size_t i = 0, j = 0; i < ldeps; i++) {
+        jl_value_t *depmod = jl_array_ptr_ref(depmods, i);
+        size_t idx = external_blob_index(depmod);
+        if (idx < lbids) { // jl_object_in_image
             j++;
+            if (dmidxs[idx] == -1)
+                dmidxs[idx] = j;
         }
-        assert(dmidxs[i] >= 0);
     }
     return depmodidxs;
 }
 
-// Returns `imageidxs` where `imageidxs[i]` is the blob corresponding to `depmods[i]`
+// Returns `imageidxs` where `j = imageidxs[i]` is the blob corresponding to `depmods[j]`
 static jl_array_t *depmod_to_imageidx(jl_array_t *depmods)
 {
     if (!depmods)
         return NULL;
     size_t ldeps = jl_array_len(depmods);
-    jl_array_t *imageidxs = jl_alloc_array_1d(jl_array_int32_type, ldeps);
+    jl_array_t *imageidxs = jl_alloc_array_1d(jl_array_int32_type, ldeps + 1);
     int32_t *imgidxs = (int32_t*)jl_array_data(imageidxs);
+    imgidxs[0] = 0;
     for (size_t i = 0; i < ldeps; i++) {
-        imgidxs[i] = -1;
         jl_value_t *depmod = jl_array_ptr_ref(depmods, i);
-        assert(jl_is_module(depmod));
         size_t j = external_blob_index(depmod);
-        assert(j < 1<<31);
-        imgidxs[i] = (int32_t)j;
+        assert(j < INT32_MAX);
+        imgidxs[i + 1] = (int32_t)j;
     }
     return imageidxs;
 }

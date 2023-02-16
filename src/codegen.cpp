@@ -4251,7 +4251,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                     bool cache_valid = ctx.use_cache;
                     bool external = false;
                     if (ctx.external_linkage) {
-                       if (jl_object_in_image((jl_value_t*)codeinst)) {
+                       if (0 && jl_object_in_image((jl_value_t*)codeinst)) {
                            // Target is present in another pkgimage
                            cache_valid = true;
                            external = true;
@@ -5624,7 +5624,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
 
     bool cache_valid = params.cache;
     if (params.external_linkage) {
-        if (jl_object_in_image((jl_value_t*)codeinst)) {
+        if (0 && jl_object_in_image((jl_value_t*)codeinst)) {
             // Target is present in another pkgimage
             cache_valid = true;
         }
@@ -8536,7 +8536,7 @@ void jl_compile_workqueue(
         auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
         bool cache_valid = params.cache;
         if (params.external_linkage) {
-            cache_valid = jl_object_in_image((jl_value_t*)codeinst);
+            cache_valid = 0 && jl_object_in_image((jl_value_t*)codeinst);
         }
         // WARNING: isspecsig is protected by the codegen-lock. If that lock is removed, then the isspecsig load needs to be properly atomically sequenced with this.
         if (cache_valid && invoke != NULL) {
