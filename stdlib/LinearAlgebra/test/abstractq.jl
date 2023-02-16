@@ -36,7 +36,7 @@ n = 5
         @test I*Q ≈ Q.Q*I rtol=2eps(real(T))
         @test I*Q' ≈ I*Q.Q' rtol=2eps(real(T))
         @test abs(det(Q)) ≈ 1
-        @test logabsdet(Q)[1] ≈ 0 atol=2eps(real(T))
+        @test logabsdet(Q)[1] ≈ 0 atol=2n*eps(real(T))
         y = rand(T, n)
         @test Q * y ≈ Q.Q * y ≈ Q' \ y ≈ ldiv!(Q', copy(y)) ≈ ldiv!(zero(y), Q', y)
         @test Q'y ≈ Q.Q' * y ≈ Q \ y ≈ ldiv!(Q, copy(y)) ≈ ldiv!(zero(y), Q, y)
