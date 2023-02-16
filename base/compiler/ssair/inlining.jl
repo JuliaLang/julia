@@ -1693,14 +1693,6 @@ function linear_inline_eligible(ir::IRCode)
     return true
 end
 
-# Check for a number of functions known to be pure
-function ispuretopfunction(@nospecialize(f))
-    return istopfunction(f, :typejoin) ||
-        istopfunction(f, :isbits) ||
-        istopfunction(f, :isbitstype) ||
-        istopfunction(f, :promote_type)
-end
-
 function early_inline_special_case(
     ir::IRCode, stmt::Expr, @nospecialize(type), sig::Signature,
     state::InliningState)
@@ -1714,7 +1706,7 @@ function early_inline_special_case(
             if is_pure_intrinsic_infer(f) && intrinsic_nothrow(f, argtypes[2:end])
                 return SomeCase(quoted(val))
             end
-        elseif ispuretopfunction(f) || contains_is(_PURE_BUILTINS, f)
+        elseif contains_is(_PURE_BUILTINS, f)
             return SomeCase(quoted(val))
         elseif contains_is(_EFFECT_FREE_BUILTINS, f)
             if _builtin_nothrow(optimizer_lattice(state.interp), f, argtypes[2:end], type)
