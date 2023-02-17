@@ -2231,18 +2231,10 @@ void jl_init_types(void) JL_GC_DISABLED
                                        jl_svec1(jl_long_type),
                                        jl_emptysvec, 0, 0, 1);
 
-    jl_abstractslot_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Slot"), core, jl_any_type,
-                                               jl_emptysvec);
-
-    jl_slotnumber_type = jl_new_datatype(jl_symbol("SlotNumber"), core, jl_abstractslot_type, jl_emptysvec,
+    jl_slotnumber_type = jl_new_datatype(jl_symbol("SlotNumber"), core, jl_any_type, jl_emptysvec,
                                          jl_perm_symsvec(1, "id"),
                                          jl_svec1(jl_long_type),
                                          jl_emptysvec, 0, 0, 1);
-
-    jl_typedslot_type = jl_new_datatype(jl_symbol("TypedSlot"), core, jl_abstractslot_type, jl_emptysvec,
-                                        jl_perm_symsvec(2, "id", "typ"),
-                                        jl_svec(2, jl_long_type, jl_any_type),
-                                        jl_emptysvec, 0, 0, 2);
 
     jl_argument_type = jl_new_datatype(jl_symbol("Argument"), core, jl_any_type, jl_emptysvec,
                                        jl_perm_symsvec(1, "n"),

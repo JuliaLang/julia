@@ -8,7 +8,7 @@ module MiniCassette
     # fancy features, but sufficient to exercise this code path in the compiler.
 
     using Core.Compiler: method_instances, retrieve_code_info, CodeInfo,
-        MethodInstance, SSAValue, GotoNode, GotoIfNot, ReturnNode, Slot, SlotNumber, quoted,
+        MethodInstance, SSAValue, GotoNode, GotoIfNot, ReturnNode, SlotNumber, quoted,
         signature_type
     using Base: _methods_by_ftype
     using Base.Meta: isexpr
@@ -33,7 +33,7 @@ module MiniCassette
             return Expr(expr.head, map(transform, expr.args)...)
         elseif isa(expr, GotoNode)
             return GotoNode(map_ssa_value(SSAValue(expr.label)).id)
-        elseif isa(expr, Slot)
+        elseif isa(expr, SlotNumber)
             return map_slot_number(expr.id)
         elseif isa(expr, SSAValue)
             return map_ssa_value(expr)

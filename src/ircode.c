@@ -385,7 +385,7 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
         }
     }
     else if (as_literal || jl_is_uniontype(v) || jl_is_newvarnode(v) || jl_is_linenode(v) ||
-             jl_is_upsilonnode(v) || jl_is_pinode(v) || jl_is_slot(v) || jl_is_ssavalue(v) ||
+             jl_is_upsilonnode(v) || jl_is_pinode(v) || jl_is_slotnumber(v) || jl_is_ssavalue(v) ||
              (jl_isbits(jl_typeof(v)) && jl_datatype_size(jl_typeof(v)) <= 64)) {
         jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
         size_t tsz = jl_datatype_size(t);
@@ -1102,13 +1102,13 @@ void jl_init_serializer(void)
                      jl_densearray_type, jl_function_type, jl_typename_type,
                      jl_builtin_type, jl_task_type, jl_uniontype_type,
                      jl_array_any_type, jl_intrinsic_type,
-                     jl_abstractslot_type, jl_methtable_type, jl_typemap_level_type,
+                     jl_methtable_type, jl_typemap_level_type,
                      jl_voidpointer_type, jl_newvarnode_type, jl_abstractstring_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
                      jl_emptytuple_type, jl_array_uint8_type, jl_code_info_type,
                      jl_typeofbottom_type, jl_typeofbottom_type->super,
                      jl_namedtuple_type, jl_array_int32_type,
-                     jl_typedslot_type, jl_uint32_type, jl_uint64_type,
+                     jl_uint32_type, jl_uint64_type,
                      jl_type_type_mt, jl_nonfunction_mt,
                      jl_opaque_closure_type,
 

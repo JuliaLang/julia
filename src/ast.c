@@ -686,8 +686,8 @@ static value_t julia_to_scm_noalloc2(fl_context_t *fl_ctx, jl_value_t *v, int ch
     if (check_valid) {
         if (jl_is_ssavalue(v))
             lerror(fl_ctx, symbol(fl_ctx, "error"), "SSAValue objects should not occur in an AST");
-        if (jl_is_slot(v))
-            lerror(fl_ctx, symbol(fl_ctx, "error"), "Slot objects should not occur in an AST");
+        if (jl_is_slotnumber(v))
+            lerror(fl_ctx, symbol(fl_ctx, "error"), "SlotNumber objects should not occur in an AST");
     }
     value_t opaque = cvalue(fl_ctx, jl_ast_ctx(fl_ctx)->jvtype, sizeof(void*));
     *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = v;

@@ -696,7 +696,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
                 size_t j;
                 for (j = 1; j < nargs; j++) {
                     jl_value_t *aj = jl_exprarg(st, j);
-                    if (!jl_is_slot(aj) && !jl_is_argument(aj))
+                    if (!jl_is_slotnumber(aj) && !jl_is_argument(aj))
                         continue;
                     int sn = (int)jl_slot_number(aj) - 2;
                     if (sn < 0) // @nospecialize on self is valid but currently ignored
@@ -719,7 +719,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
                     m->nospecialize = 0;
                 for (j = 1; j < nargs; j++) {
                     jl_value_t *aj = jl_exprarg(st, j);
-                    if (!jl_is_slot(aj) && !jl_is_argument(aj))
+                    if (!jl_is_slotnumber(aj) && !jl_is_argument(aj))
                         continue;
                     int sn = (int)jl_slot_number(aj) - 2;
                     if (sn < 0) // @specialize on self is valid but currently ignored
