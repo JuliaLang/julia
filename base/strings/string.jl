@@ -165,6 +165,89 @@ end
 typemin(::Type{String}) = ""
 typemin(::String) = typemin(String)
 
+##
+#=
+ ┌─────────────────────────────────────────────────────┐
+ │  INCLUSIVE    ┌──────────────2──────────────┐       │
+ │    UTF-8      │                             │       │
+ │               ├────────3────────┐           │       │
+ │   IUTF-8      │                 │           │       │
+ │    ┌─0─┐      │     ┌─┐        ┌▼┐         ┌▼┐      │
+ │    │   │      ├─4──►│3├───1────►3├────1────►1├────┐ │
+ │   ┌▼───┴┐     │     └─┘        └─┘         └─┘    │ │
+ │   │  0  ├─────┘   Needs 3    Needs 2     Needs 1  │ │
+ │   └───▲─┘        ContBytes  ContBytes   ContBytes │ │
+ │       │                                           │ │
+ │       │           ContByte=Transition 1           │ │
+ │       └─────────────────────1─────────────────────┘ │
+ │  ┌─┐                                                │
+ │  │4│◄───All undefined transitions result in state 4 │
+ │  └─┘      State machine must be reset after state 4 │
+ └─────────────────────────────────────────────────────┘
+=#
+const _IUTF8State = UInt16
+const _IUTF8_SHIFT_MASK = _IUTF8State(0b1111)
+const _IUTF8_DFA_ACCEPT = _IUTF8State(0)
+const _IUTF8_DFA_INVALID = _IUTF8State(1)
+
+const _IUTF8_DFA_TABLE, _IUTF8_DFA_REVERSE_TABLE = begin
+
+    shifts = [0, 9, 5, 13, 1]
+
+    # Both of these state tables are only 4 states wide even thought there are 5 states
+    # because the machine must be reset once it is in state 4
+    forward_state_table  = [    [0,  4,  4,  4],
+                                [4,  0,  1,  2],
+                                [1,  4,  4,  4],
+                                [2,  4,  4,  4],
+                                [3,  4,  4,  4],
+                                [4,  4,  4,  4] ]
+
+    reverse_state_table  = [    [0,  4,  4,  4],
+                                [1,  2,  3,  4],
+                                [4,  0,  4,  4],
+                                [4,  0,  0,  4],
+                                [4,  0,  0,  0],
+                                [4,  4,  4,  4] ]
+
+
+    f(from,to) = _IUTF8State(shifts[to+1]) << shifts[from+1]
+    r(state_row) = |([f(n-1,state_row[n]) for n = 1:length(state_row)]...)
+    forward_class_rows = [r(forward_state_table[n]) for n = 1:length(forward_state_table)]
+    reverse_class_rows = [r(reverse_state_table[n]) for n = 1:length(reverse_state_table)]
+
+    byte_class = [  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    #  0x00:0x0F      00000000:00001111
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    #  0x10:0x1F      00010000:00011111
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    #  0x20:0x2F      00100000:00101111
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    #  0x30:0x3F      00110000:00111111
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    #  0x40:0x4F      01000000:01001111
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    #  0x50:0x5F      01010000:01011111
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    #  0x60:0x6F      01100000:01101111
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    #  0x70:0x7F      01110000:01111111
+                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,    #  0x80:0x8F      10000000:10001111
+                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,    #  0x90:0x9F      10010000:10011111
+                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,    #  0xA0:0xAF      10100000:10101111
+                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,    #  0xB0:0xBF      10110000:10111111
+                    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,    #  0xC0:0xCF      11000000:11001111
+                    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,    #  0xD0:0xDF      11010000:11011111
+                    3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,    #  0xE0:0xEF      11100000:11101111
+                    4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5  ]  #  0xF0:0xFF      11110000:11111111
+    forward_dfa_table = zeros(_IUTF8State,256)
+    reverse_dfa_table = zeros(_IUTF8State,256)
+    for n = 1:256
+        forward_dfa_table[n] = forward_class_rows[1+byte_class[n]]
+        reverse_dfa_table[n] = reverse_class_rows[1+byte_class[n]]
+    end
+    (forward_dfa_table, reverse_dfa_table)
+end
+##
+@inline _iutf8_dfa_step(state::_IUTF8State, byte::UInt8) = @inbounds (_IUTF8_DFA_TABLE[byte+1] >> state) & _IUTF8_SHIFT_MASK
+@inline _iutf8_dfa_isfinished(state::_IUTF8State) = state <= _IUTF8_DFA_INVALID
+
+@inline _iutf8_dfa_reverse_step(state::_IUTF8State, byte::UInt8) = @inbounds (_IUTF8_DFA_REVERSE_TABLE[byte+1] >> state) & _IUTF8_SHIFT_MASK
+@inline _iutf8_dfa_reverse_isfinished(state::_IUTF8State) = state <= _IUTF8_DFA_INVALID
+
+
 ## thisind, nextind ##
 
 @propagate_inbounds thisind(s::String, i::Int) = _thisind_str(s, i)
@@ -173,22 +256,15 @@ typemin(::String) = typemin(String)
 @inline function _thisind_str(s, i::Int)
     i == 0 && return 0
     n = ncodeunits(s)
-    i == n + 1 && return i
-    @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
-    @inbounds b = codeunit(s, i)
-    (b & 0xc0 == 0x80) & (i-1 > 0) || return i
-    (@noinline function _thisind_continued(s, i, n) # mark the rest of the function as a slow-path
-        local b
-        @inbounds b = codeunit(s, i-1)
-        between(b, 0b11000000, 0b11110111) && return i-1
-        (b & 0xc0 == 0x80) & (i-2 > 0) || return i
-        @inbounds b = codeunit(s, i-2)
-        between(b, 0b11100000, 0b11110111) && return i-2
-        (b & 0xc0 == 0x80) & (i-3 > 0) || return i
-        @inbounds b = codeunit(s, i-3)
-        between(b, 0b11110000, 0b11110111) && return i-3
-        return i
-    end)(s, i, n)
+    (i == n + 1)|( i == 1) && return i
+    @boundscheck Base.between(i, 1, n) || throw(BoundsError(s, i))
+    bytes = codeunits(s)
+    state = _IUTF8_DFA_ACCEPT
+    for j=0:3
+        state  = @inbounds _iutf8_dfa_reverse_step(state,bytes[i - j])
+        _iutf8_dfa_reverse_isfinished(state) | ((i - j) <= 1) && return ifelse(state > _IUTF8_DFA_ACCEPT, i, i - j)
+    end
+    return i
 end
 
 @propagate_inbounds nextind(s::String, i::Int) = _nextind_str(s, i)
@@ -197,33 +273,19 @@ end
 @inline function _nextind_str(s, i::Int)
     i == 0 && return 1
     n = ncodeunits(s)
-    @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
+    @boundscheck Base.between(i, 1, n) || throw(BoundsError(s, i))
     @inbounds l = codeunit(s, i)
-    between(l, 0x80, 0xf7) || return i+1
-    (@noinline function _nextind_continued(s, i, n, l) # mark the rest of the function as a slow-path
-        if l < 0xc0
-            # handle invalid codeunit index by scanning back to the start of this index
-            # (which may be the same as this index)
-            i′ = @inbounds thisind(s, i)
-            i′ >= i && return i+1
-            i = i′
-            @inbounds l = codeunit(s, i)
-            (l < 0x80) | (0xf8 ≤ l) && return i+1
-            @assert l >= 0xc0 "invalid codeunit"
-        end
-        # first continuation byte
-        (i += 1) > n && return i
-        @inbounds b = codeunit(s, i)
-        b & 0xc0 ≠ 0x80 && return i
-        ((i += 1) > n) | (l < 0xe0) && return i
-        # second continuation byte
-        @inbounds b = codeunit(s, i)
-        b & 0xc0 ≠ 0x80 && return i
-        ((i += 1) > n) | (l < 0xf0) && return i
-        # third continuation byte
-        @inbounds b = codeunit(s, i)
-        return ifelse(b & 0xc0 ≠ 0x80, i, i+1)
-    end)(s, i, n, l)
+    (l < 0x80) | (0xf8 ≤ l) && return i+1
+    if l < 0xc0
+        i′ = @inbounds _thisind_str(s, i)
+        return i′ < i ? @inbounds(_nextind_str(s, i′)) : i+1
+    end
+    state = _IUTF8_DFA_ACCEPT
+    for j=0:3
+        state  = _iutf8_dfa_step(state,codeunit(s, i + j))
+        (_iutf8_dfa_isfinished(state) | ((i + j) >= n)) && return ifelse(state == _IUTF8_DFA_INVALID,i+j,i + j + 1)
+    end
+    return i + 4
 end
 
 ## checking UTF-8 & ASCII validity ##
