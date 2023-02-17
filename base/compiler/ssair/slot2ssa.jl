@@ -1,5 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+struct TypedSlot
+    id::Int
+    typ
+    TypedSlot(id::Int, @nospecialize(typ)) = new(id, typ)
+end
+
 const UnoptSlot = Union{SlotNumber, TypedSlot}
 
 mutable struct SlotInfo
@@ -229,7 +235,7 @@ function typ_for_val(@nospecialize(x), ci::CodeInfo, sptypes::Vector{VarState}, 
     isa(x, Argument) && return slottypes[x.n]
     isa(x, NewSSAValue) && return DelayedTyp(x)
     isa(x, QuoteNode) && return Const(x.value)
-    isa(x, Union{Symbol, PiNode, PhiNode, SlotNumber, TypedSlot}) && error("unexpected val type")
+    isa(x, Union{Symbol, PiNode, PhiNode, UnoptSlot}) && error("unexpected val type")
     return Const(x)
 end
 

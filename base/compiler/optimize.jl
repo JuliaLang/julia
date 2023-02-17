@@ -242,13 +242,11 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
     isa(stmt, ReturnNode) && return (true, false, true)
     isa(stmt, GotoNode) && return (true, false, true)
     isa(stmt, GotoIfNot) && return (true, false, ⊑(𝕃ₒ, argextype(stmt.cond, src), Bool))
-    isa(stmt, Slot) && return (true, false, false) # Slots shouldn't occur in the IR at this point, but let's be defensive here
     if isa(stmt, GlobalRef)
         nothrow = isdefined(stmt.mod, stmt.name)
         consistent = nothrow && isconst(stmt.mod, stmt.name)
         return (consistent, nothrow, nothrow)
-    end
-    if isa(stmt, Expr)
+    elseif isa(stmt, Expr)
         (; head, args) = stmt
         if head === :static_parameter
             # if we aren't certain enough about the type, it might be an UndefVarError at runtime
@@ -338,6 +336,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             return (false, false, false)
         end
     end
+    isa(stmt, UnoptSlot) && error("unexpected IR elements")
     return (true, true, true)
 end
 

@@ -739,14 +739,18 @@ end |> Core.Compiler.is_foldable_nothrow
 
 # Test that dead `@inbounds` does not taint consistency
 # https://github.com/JuliaLang/julia/issues/48243
-@test Base.infer_effects() do
-    false && @inbounds (1,2,3)[1]
+@test Base.infer_effects(Tuple{Int64}) do i
+    false && @inbounds (1,2,3)[i]
     return 1
 end |> Core.Compiler.is_foldable_nothrow
 
 @test Base.infer_effects(Tuple{Int64}) do i
     @inbounds (1,2,3)[i]
 end |> !Core.Compiler.is_consistent
+
+@test Base.infer_effects(Tuple{Tuple{Int64}}) do x
+    @inbounds x[1]
+end |> Core.Compiler.is_foldable_nothrow
 
 # Test that :new of non-concrete, but otherwise known type
 # does not taint consistency.

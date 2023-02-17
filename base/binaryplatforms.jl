@@ -741,10 +741,10 @@ function Base.parse(::Type{Platform}, triplet::String; validate_strict::Bool = f
         end
         os_version = nothing
         if os == "macos"
-            os_version = extract_os_version("macos", r".*darwin([\d\.]+)")
+            os_version = extract_os_version("macos", r".*darwin([\d\.]+)"sa)
         end
         if os == "freebsd"
-            os_version = extract_os_version("freebsd", r".*freebsd([\d.]+)")
+            os_version = extract_os_version("freebsd", r".*freebsd([\d.]+)"sa)
         end
         tags["os_version"] = os_version
 
@@ -798,13 +798,13 @@ function parse_dl_name_version(path::String, os::String)
     local dlregex
     if os == "windows"
         # On Windows, libraries look like `libnettle-6.dll`
-        dlregex = r"^(.*?)(?:-((?:[\.\d]+)*))?\.dll$"
+        dlregex = r"^(.*?)(?:-((?:[\.\d]+)*))?\.dll$"sa
     elseif os == "macos"
         # On OSX, libraries look like `libnettle.6.3.dylib`
-        dlregex = r"^(.*?)((?:\.[\d]+)*)\.dylib$"
+        dlregex = r"^(.*?)((?:\.[\d]+)*)\.dylib$"sa
     else
         # On Linux and FreeBSD, libraries look like `libnettle.so.6.3.0`
-        dlregex = r"^(.*?)\.so((?:\.[\d]+)*)$"
+        dlregex = r"^(.*?)\.so((?:\.[\d]+)*)$"sa
     end
 
     m = match(dlregex, basename(path))
