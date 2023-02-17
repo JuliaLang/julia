@@ -516,7 +516,7 @@ function occursin(delim::UInt8, buf::GenericIOBuffer)
     return false
 end
 
-function readuntil(out::IO, io::GenericIOBuffer, delim::UInt8; keep::Bool=false)
+function copyuntil(out::IO, io::GenericIOBuffer, delim::UInt8; keep::Bool=false)
     data = view(io.data, io.ptr:io.size)
     # note: findfirst + copyto! is much faster than a single loop
     #       except for nout ≲ 20.  A single loop is 2x faster for nout=5.
@@ -529,8 +529,8 @@ function readuntil(out::IO, io::GenericIOBuffer, delim::UInt8; keep::Bool=false)
     return out
 end
 
-function readline(out::GenericIOBuffer, s::IO; keep::Bool=false)
-    readuntil(out, s, 0x0a, keep=true)
+function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false)
+    copyuntil(out, s, 0x0a, keep=true)
     line = out.data
     i = out.size
     if keep || i == 0 || line[i] != 0x0a
@@ -547,7 +547,7 @@ function readline(out::GenericIOBuffer, s::IO; keep::Bool=false)
     return out
 end
 
-function _readline(out::IO, io::GenericIOBuffer; keep::Bool=false)
+function _copyline(out::IO, io::GenericIOBuffer; keep::Bool=false)
     data = view(io.data, io.ptr:io.size)
     # note: findfirst + copyto! is much faster than a single loop
     #       except for nout ≲ 20.  A single loop is 2x faster for nout=5.
@@ -560,8 +560,8 @@ function _readline(out::IO, io::GenericIOBuffer; keep::Bool=false)
     io.ptr += nread
     return out
 end
-readline(out::IO, io::GenericIOBuffer; keep::Bool=false) = _readline(out, io; keep)
-readline(out::GenericIOBuffer, io::GenericIOBuffer; keep::Bool=false) = _readline(out, io; keep)
+copyline(out::IO, io::GenericIOBuffer; keep::Bool=false) = _copyline(out, io; keep)
+copyline(out::GenericIOBuffer, io::GenericIOBuffer; keep::Bool=false) = _copyline(out, io; keep)
 
 
 # copy-free crc32c of IOBuffer:

@@ -445,13 +445,13 @@ function readuntil_string(s::IOStream, delim::UInt8, keep::Bool)
 end
 readuntil(s::IOStream, delim::AbstractChar; keep::Bool=false) =
     delim ≤ '\x7f' ? readuntil_string(s, delim % UInt8, keep) :
-    String(take!(readuntil(IOBuffer(StringVector(70),write=true), s, delim; keep)))
+    String(take!(copyuntil(IOBuffer(StringVector(70),write=true), s, delim; keep)))
 
 function readline(s::IOStream; keep::Bool=false)
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, keep ? 0 : 2)
 end
 
-function readuntil(out::IOBuffer, s::IOStream, delim::UInt8; keep::Bool=false)
+function copyuntil(out::IOBuffer, s::IOStream, delim::UInt8; keep::Bool=false)
     d = out.data
     ptr = (out.append ? out.size+1 : out.ptr)
     isempty(d) && resize!(d, min(70, out.maxsize))
@@ -477,7 +477,7 @@ function readuntil(out::IOBuffer, s::IOStream, delim::UInt8; keep::Bool=false)
     return out
 end
 
-function readuntil(out::IOStream, s::IOStream, delim::UInt8; keep::Bool=false)
+function copyuntil(out::IOStream, s::IOStream, delim::UInt8; keep::Bool=false)
     @_lock_ios out @_lock_ios s ccall(:ios_copyuntil, Csize_t,
         (Ptr{Cvoid}, Ptr{Cvoid}, UInt8, Cint), out.ios, s.ios, delim, keep)
     return out
