@@ -6,7 +6,7 @@ using Base.Order
 
 using Base: copymutable, midpoint, require_one_based_indexing, uinttype,
     sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, top_set_bit,
-    IteratorSize, HasShape, IsInfinite
+    IteratorSize, HasShape, IsInfinite, tail
 
 import Base:
     sort,
@@ -1420,9 +1420,22 @@ function sort(v; kws...)
     size == IsInfinite() && throw(ArgumentError("infinite iterator $v cannot be sorted"))
     sort!(copymutable(v); kws...)
 end
+sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...) # for method disambiguation
 sort(::AbstractString; kws...) =
     throw(ArgumentError("sort(::AbstractString) is not supported"))
-sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...) # for method disambiguation
+sort(::Tuple; kws...) =
+    throw(ArgumentError("sort(::Tuple) is only supported for NTuples"))
+
+sort(x::NTuple; lt::Function=isless, by::Function=identity, rev::Union{Bool,Nothing}=nothing,
+    order::Ordering=Forward) = _sort(x, ord(lt,by,rev,order))
+_sort(x::Union{NTuple{0}, NTuple{1}}, o::Ordering) = x
+_sort(x::NTuple{N}, o::Ordering) where N =
+    merge(_sort(ntuple(i -> x[i], N>>1), o), _sort(ntuple(i -> x[i+N>>1], N - N>>1), o), o)
+merge(x::NTuple, y::NTuple{0}, o::Ordering) = x
+merge(x::NTuple{0}, y::NTuple, o::Ordering) = y
+merge(x::NTuple, y::NTuple, o::Ordering) =
+    (lt(o, y[1], x[1]) ? (y[1], merge(x, tail(y), o)...) : (x[1], merge(tail(x), y, o)...))
+
 
 ## partialsortperm: the permutation to sort the first k elements of an array ##
 

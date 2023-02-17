@@ -86,6 +86,20 @@ end
     end
 end
 
+function tuple_sort_test(x)
+    @test issorted(sort(x))
+    length(x) > 20 && return # size > 20 allocates
+    @test 0 == @allocated sort(x)
+end
+@testset "sort(::NTuple)" begin
+    @test sort((9,8,3,3,6,2,0,8)) == (0,2,3,3,6,8,8,9)
+    @test sort((9,8,3,3,6,2,0,8), by=x->x÷3) == (2,0,3,3,8,6,8,9)
+    for i in 1:40
+        tuple_sort_test(tuple(rand(i)...))
+    end
+    @test_throws ArgumentError sort((1,2,3.0))
+end
+
 @testset "partialsort" begin
     @test partialsort([3,6,30,1,9],3) == 6
     @test partialsort([3,6,30,1,9],3:4) == [6,9]
