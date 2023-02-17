@@ -46,19 +46,24 @@ mutable struct Regex <: AbstractPattern
 end
 
 function Regex(pattern::AbstractString, flags::AbstractString)
-    options = DEFAULT_COMPILER_OPTS
+    compile_options = DEFAULT_COMPILER_OPTS
+    match_options = DEFAULT_MATCH_OPTS
     for f in flags
         if f == 'a'
-            options &= ~PCRE.UCP
+            # instruct pcre2 to treat the strings as simple bytes (aka "ASCII"), not char encodings
+            compile_options &= ~PCRE.UCP  # user can re-enable with (*UCP)
+            compile_options &= ~PCRE.UTF # user can re-enable with (*UTF)
+            compile_options &= ~PCRE.MATCH_INVALID_UTF # this would force on UTF
+            match_options &= ~PCRE.NO_UTF_CHECK # if the user did force on UTF, we should check it for safety
         else
-            options |= f=='i' ? PCRE.CASELESS  :
-                       f=='m' ? PCRE.MULTILINE :
-                       f=='s' ? PCRE.DOTALL    :
-                       f=='x' ? PCRE.EXTENDED  :
-                       throw(ArgumentError("unknown regex flag: $f"))
+            compile_options |= f=='i' ? PCRE.CASELESS  :
+                               f=='m' ? PCRE.MULTILINE :
+                               f=='s' ? PCRE.DOTALL    :
+                               f=='x' ? PCRE.EXTENDED  :
+                               throw(ArgumentError("unknown regex flag: $f"))
         end
     end
-    Regex(pattern, options, DEFAULT_MATCH_OPTS)
+    Regex(pattern, compile_options, match_options)
 end
 Regex(pattern::AbstractString) = Regex(pattern, DEFAULT_COMPILER_OPTS, DEFAULT_MATCH_OPTS)
 
@@ -96,9 +101,15 @@ listed after the ending quote, to change its behaviour:
 - `s` allows the `.` modifier to match newlines.
 - `x` enables "comment mode": whitespace is enabled except when escaped with `\\`, and `#`
   is treated as starting a comment.
-- `a` disables `UCP` mode (enables ASCII mode). By default `\\B`, `\\b`, `\\D`, `\\d`, `\\S`,
-  `\\s`, `\\W`, `\\w`, etc. match based on Unicode character properties. With this option,
-  these sequences only match ASCII characters.
+- `a` enables ASCII mode (disables `UTF` and `UCP` modes). By default `\\B`, `\\b`, `\\D`,
+  `\\d`, `\\S`, `\\s`, `\\W`, `\\w`, etc. match based on Unicode character properties. With
+  this option, these sequences only match ASCII characters. This includes `\\u` also, which
+  will emit the specified character value directly as a single byte, and not attempt to
+  encode it into UTF-8. Importantly, this option allows matching against invalid UTF-8
+  strings, by treating both matcher and target as simple bytes (as if they were ISO/IEC
+  8859-1 / Latin-1 bytes) instead of as character encodings. In this case, this option is
+  often combined with `s`. This option can be further refined by starting the pattern with
+  (*UCP) or (*UTF).
 
 See [`Regex`](@ref) if interpolation is needed.
 
@@ -112,23 +123,38 @@ This regex has the first three flags enabled.
 macro r_str(pattern, flags...) Regex(pattern, flags...) end
 
 function show(io::IO, re::Regex)
-    imsxa = PCRE.CASELESS|PCRE.MULTILINE|PCRE.DOTALL|PCRE.EXTENDED|PCRE.UCP
+    imsx = PCRE.CASELESS|PCRE.MULTILINE|PCRE.DOTALL|PCRE.EXTENDED
+    ac = PCRE.UTF|PCRE.MATCH_INVALID_UTF|PCRE.UCP
+    am = PCRE.NO_UTF_CHECK
     opts = re.compile_options
-    if (opts & ~imsxa) == (DEFAULT_COMPILER_OPTS & ~imsxa)
+    mopts = re.match_options
+    default = ((opts & ~imsx) | ac) == DEFAULT_COMPILER_OPTS
+    if default
+       if (opts & ac) == ac
+           default = mopts == DEFAULT_MATCH_OPTS
+       elseif (opts & ac) == 0
+           default = mopts == (DEFAULT_MATCH_OPTS & ~am)
+       else
+           default = false
+       end
+   end
+    if default
         print(io, "r\"")
         escape_raw_string(io, re.pattern)
         print(io, "\"")
-        if (opts & PCRE.CASELESS ) != 0; print(io, 'i'); end
-        if (opts & PCRE.MULTILINE) != 0; print(io, 'm'); end
-        if (opts & PCRE.DOTALL   ) != 0; print(io, 's'); end
-        if (opts & PCRE.EXTENDED ) != 0; print(io, 'x'); end
-        if (opts & PCRE.UCP      ) == 0; print(io, 'a'); end
+        if (opts & PCRE.CASELESS ) != 0; print(io, "i"); end
+        if (opts & PCRE.MULTILINE) != 0; print(io, "m"); end
+        if (opts & PCRE.DOTALL   ) != 0; print(io, "s"); end
+        if (opts & PCRE.EXTENDED ) != 0; print(io, "x"); end
+        if (opts & ac            ) == 0; print(io, "a"); end
     else
         print(io, "Regex(")
         show(io, re.pattern)
-        print(io, ',')
+        print(io, ", ")
         show(io, opts)
-        print(io, ')')
+        print(io, ", ")
+        show(io, mopts)
+        print(io, ")")
     end
 end
 
