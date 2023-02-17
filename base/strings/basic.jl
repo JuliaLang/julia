@@ -633,8 +633,8 @@ end
 """
     isascii(cu::AbstractVector{CU}) where {CU <: Integer} -> Bool
 
-Test whether all values in the vector belongs to the ASCII character set.
-This function is intended to be used by other sting implimentations that need a fast ASCII check.
+Test whether all values in the vector belong to the ASCII character set (0x00 to 0x7f).
+This function is intended to be used by other string implementations that need a fast ASCII check.
 """
 function isascii(cu::AbstractVector{CU}) where {CU <: Integer}
     chunk_size = 1024
