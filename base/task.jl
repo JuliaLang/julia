@@ -78,13 +78,14 @@ struct TaskFailedException <: Exception
 end
 
 function showerror(io::IO, ex::TaskFailedException, bt = nothing; backtrace=true)
-    print(io, "TaskFailedException")
+    println(io, "TaskFailedException")
+    println(io, "Nested Task Exception:")
+    show_task_exception(io, ex.task)
     if bt !== nothing && backtrace
+        println(io, "\n\nAbove TaskFailedException was triggered at:")
         show_backtrace(io, bt)
     end
     println(io)
-    printstyled(io, "\n    nested task error: ", color=error_color())
-    show_task_exception(io, ex.task)
 end
 
 function show_task_exception(io::IO, t::Task; indent = true)
