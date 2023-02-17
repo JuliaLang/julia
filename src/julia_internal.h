@@ -313,9 +313,8 @@ extern tracer_cb jl_newmeth_tracer;
 void jl_call_tracer(tracer_cb callback, jl_value_t *tracee);
 void print_func_loc(JL_STREAM *s, jl_method_t *m);
 extern jl_array_t *_jl_debug_method_invalidation JL_GLOBALLY_ROOTED;
-extern arraylist_t jl_linkage_blobs;                        // external linkage: sysimg/pkgimages
-extern jl_array_t *jl_build_ids JL_GLOBALLY_ROOTED;         // external linkage: corresponding build_ids
-extern arraylist_t jl_image_relocs;                        // external linkage: sysimg/pkgimages
+JL_DLLEXPORT extern arraylist_t jl_linkage_blobs; // external linkage: sysimg/pkgimages
+JL_DLLEXPORT extern arraylist_t jl_image_relocs;  // external linkage: sysimg/pkgimages
 
 extern JL_DLLEXPORT size_t jl_page_size;
 extern jl_function_t *jl_typeinf_func JL_GLOBALLY_ROOTED;
@@ -951,10 +950,7 @@ static inline void jl_set_gc_and_wait(void)
 // Query if a Julia object is if a permalloc region (due to part of a sys- pkg-image)
 STATIC_INLINE size_t n_linkage_blobs(void) JL_NOTSAFEPOINT
 {
-    if (!jl_build_ids)
-        return 0;
-    assert(jl_is_array(jl_build_ids));
-    return jl_array_len(jl_build_ids);
+    return jl_image_relocs.len;
 }
 
 // TODO: Makes this a binary search
