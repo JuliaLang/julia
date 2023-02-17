@@ -1425,8 +1425,16 @@ sort(::AbstractString; kws...) =
 sort(::Tuple; kws...) =
     throw(ArgumentError("sort(::Tuple) is only supported for NTuples"))
 
-sort(x::NTuple; lt::Function=isless, by::Function=identity, rev::Union{Bool,Nothing}=nothing,
-    order::Ordering=Forward) = _sort(x, ord(lt,by,rev,order))
+function sort(x::NTuple{N}; lt::Function=isless, by::Function=identity,
+              rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) where N
+    o = ord(lt,by,rev,order)
+    if N > 20
+        v = sort!(copymutable(x), DEFAULT_STABLE, o)
+        tuple((v[i] for i in 1:N)...)
+    else
+        _sort(x, o)
+    end
+end
 _sort(x::Union{NTuple{0}, NTuple{1}}, o::Ordering) = x
 _sort(x::NTuple{N}, o::Ordering) where N =
     merge(_sort(ntuple(i -> x[i], N>>1), o), _sort(ntuple(i -> x[i+N>>1], N - N>>1), o), o)
