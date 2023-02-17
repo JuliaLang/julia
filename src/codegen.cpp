@@ -2333,7 +2333,7 @@ static void jl_init_function(Function *F)
     attr.addStackAlignmentAttr(16);
 #endif
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
-    attr.addAttribute(Attribute::UWTable); // force NeedsWinEH
+    attr.addUWTableAttr(llvm::UWTableKind::Default); // force NeedsWinEH
 #endif
 #ifdef JL_DISABLE_FPO
     attr.addAttribute("frame-pointer", "all");
