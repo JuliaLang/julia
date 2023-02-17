@@ -898,12 +898,12 @@ static const auto jl_alloc_obj_func = new JuliaFunction{
     [](LLVMContext &C) {
         auto FnAttrs = AttrBuilder(C);
         FnAttrs.addAllocSizeAttr(1, None); // returns %1 bytes
+#if JL_LLVM_VERSION >= 150000
+        FnAttrs.addAllocKindAttr(AllocFnKind::Alloc | AllocFnKind::Uninitialized | AllocFnKind::Aligned);
+#endif
         auto RetAttrs = AttrBuilder(C);
         RetAttrs.addAttribute(Attribute::NoAlias);
         RetAttrs.addAttribute(Attribute::NonNull);
-#if JL_LLVM_VERSION >= 150000
-        RetAttrs.addAllocKindAttr(AllocFnKind::Alloc | AllocFnKind::Uninitialized | AllocFnKind::Aligned);
-#endif
         return AttributeList::get(C,
             AttributeSet::get(C, FnAttrs),
             AttributeSet::get(C, RetAttrs),
