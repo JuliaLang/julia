@@ -2715,7 +2715,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
 
     // remove/replace/rewrap free occurrences of this var in the environment
     jl_varbinding_t *btemp = e->vars;
-    int wrap = 1;
+    jl_varbinding_t *wrap = NULL;
     while (btemp != NULL) {
         if (jl_has_typevar(btemp->lb, vb->var)) {
             if (vb->lb == (jl_value_t*)btemp->var) {
@@ -2736,14 +2736,11 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                      !jl_has_typevar(vb->ub, btemp->var) && jl_has_typevar(btemp->ub, vb->var)) {
                 // if our variable is T, and some outer variable has constraint S = Ref{T},
                 // move the `where T` outside `where S` instead of putting it here. issue #21243.
-                if (btemp->innervars == NULL)
-                    btemp->innervars = jl_alloc_array_1d(jl_array_any_type, 0);
                 if (newvar != vb->var) {
                     btemp->lb = jl_substitute_var(btemp->lb, vb->var, (jl_value_t*)newvar);
                     btemp->ub = jl_substitute_var(btemp->ub, vb->var, (jl_value_t*)newvar);
                 }
-                jl_array_ptr_1d_push(btemp->innervars, (jl_value_t*)newvar);
-                wrap = 0;
+                wrap = btemp;
                 btemp = btemp->prev;
                 continue;
             }
@@ -2776,6 +2773,15 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         btemp = btemp->prev;
     }
 
+    if (wrap) {
+        // We only assign the newvar with the outmost var.
+        // This make sure we never create a UnionAll with 2 identical vars.
+        if (wrap->innervars == NULL)
+            wrap->innervars = jl_alloc_array_1d(jl_array_any_type, 0);
+        jl_array_ptr_1d_push(wrap->innervars, (jl_value_t*)newvar);
+    }
+
+
     // if `v` still occurs, re-wrap body in `UnionAll v` or eliminate the UnionAll
     if (jl_has_typevar(res, vb->var)) {
         if (varval) {
@@ -2796,7 +2802,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
             if (newvar != vb->var)
                 res = jl_substitute_var(res, vb->var, (jl_value_t*)newvar);
             varval = (jl_value_t*)newvar;
-            if (wrap)
+            if (!wrap)
                 res = jl_type_unionall((jl_tvar_t*)newvar, res);
         }
     }
