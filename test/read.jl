@@ -308,6 +308,8 @@ for (name, f) in l
             @test String(take!(copyline(IOBuffer(), file))) == "foo bar"
             @test String(take!(copyline(IOBuffer(), file, keep=true))) == kept
 
+            cleanup()
+
             buf = IOBuffer()
             @test buf === copyline(buf, io(t))
             @test String(take!(buf)) == "foo bar"
@@ -319,6 +321,8 @@ for (name, f) in l
                 @test read(file, String) == (keep ? kept : "foo bar")
             end
 
+            cleanup()
+
             write(file, lineending)
             @test readline(IOBuffer(lineending)) == ""
             @test readline(IOBuffer(lineending), keep=true) == lineending
@@ -328,6 +332,8 @@ for (name, f) in l
             @test readline(file, keep=true) == lineending
             @test String(take!(copyline(IOBuffer(), file))) == ""
             @test String(take!(copyline(IOBuffer(), file, keep=true))) == lineending
+
+            cleanup()
         end
         rm(file)
 
