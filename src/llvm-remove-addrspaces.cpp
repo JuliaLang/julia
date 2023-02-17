@@ -51,7 +51,7 @@ public:
             else {
                 //Remove once opaque pointer transition is complete
                 DstTy = PointerType::get(
-                        remapType(Ty->getPointerElementType()),
+                        remapType(Ty->getNonOpaquePointerElementType()),
                         ASRemapper(Ty->getAddressSpace()));
             }
         }
@@ -161,7 +161,7 @@ public:
                     auto ptrty = cast<PointerType>(Src->getType()->getScalarType());
                     //Remove once opaque pointer transition is complete
                     if (!ptrty->isOpaque()) {
-                        Type *SrcTy = remapType(ptrty->getPointerElementType());
+                        Type *SrcTy = remapType(ptrty->getNonOpaquePointerElementType());
                         DstV = CE->getWithOperands(Ops, Ty, false, SrcTy);
                     }
                 }
