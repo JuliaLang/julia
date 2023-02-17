@@ -354,10 +354,14 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     // process the globals array, before jl_merge_module destroys them
     std::vector<std::string> gvars(params.globals.size());
     data->jl_value_to_llvm.resize(params.globals.size());
+    StringSet<> gvars_names;
+    DenseSet<GlobalValue *> gvars_set;
 
     size_t idx = 0;
     for (auto &global : params.globals) {
         gvars[idx] = global.second->getName().str();
+        assert(gvars_set.insert(global.second).second && "Duplicate gvar in params!");
+        assert(gvars_names.insert(gvars[idx]).second && "Duplicate gvar name in params!");
         data->jl_value_to_llvm[idx] = global.first;
         idx++;
     }
@@ -374,7 +378,10 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         GlobalVariable *F = extern_fn.second;
         size_t idx = gvars.size() - offset;
         assert(idx >= 0);
-        data->jl_external_to_llvm.at(idx) = this_code;
+        assert(idx < data->jl_external_to_llvm.size());
+        data->jl_external_to_llvm[idx] = this_code;
+        assert(gvars_set.insert(F).second && "Duplicate gvar in params!");
+        assert(gvars_names.insert(F->getName()).second && "Duplicate gvar name in params!");
         gvars.push_back(std::string(F->getName()));
     }
 
@@ -575,12 +582,18 @@ static void get_fvars_gvars(Module &M, DenseMap<GlobalValue *, unsigned> &fvars,
     auto gvars_init = cast<ConstantArray>(gvars_gv->getInitializer());
     for (unsigned i = 0; i < fvars_init->getNumOperands(); ++i) {
         auto gv = cast<GlobalValue>(fvars_init->getOperand(i)->stripPointerCasts());
+        assert(gv && gv->hasName() && "fvar must be a named global");
+        assert(!fvars.count(gv) && "Duplicate fvar");
         fvars[gv] = i;
     }
+    assert(fvars.size() == fvars_init->getNumOperands());
     for (unsigned i = 0; i < gvars_init->getNumOperands(); ++i) {
         auto gv = cast<GlobalValue>(gvars_init->getOperand(i)->stripPointerCasts());
+        assert(gv && gv->hasName() && "gvar must be a named global");
+        assert(!gvars.count(gv) && "Duplicate gvar");
         gvars[gv] = i;
     }
+    assert(gvars.size() == gvars_init->getNumOperands());
     fvars_gv->eraseFromParent();
     gvars_gv->eraseFromParent();
     fvars_idxs->eraseFromParent();
@@ -606,9 +619,11 @@ static size_t getFunctionWeight(const Function &F)
 }
 
 
-static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partitions, const Module &M) {
+static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partitions, const Module &M, size_t fvars_size, size_t gvars_size) {
     bool bad = false;
-#ifdef JL_DEBUG_BUILD
+#ifndef JL_NDEBUG
+    SmallVector<uint32_t> fvars(fvars_size);
+    SmallVector<uint32_t> gvars(gvars_size);
     StringMap<uint32_t> GVNames;
     for (uint32_t i = 0; i < partitions.size(); i++) {
         for (auto &name : partitions[i].globals) {
@@ -618,7 +633,21 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
             }
             GVNames[name.getKey()] = i;
         }
-        dbgs() << "partition: " << i << " fvars: " << partitions[i].fvars.size() << " gvars: " << partitions[i].gvars.size() << "\n";
+        for (auto &fvar : partitions[i].fvars) {
+            if (fvars[fvar.second] != 0) {
+                bad = true;
+                dbgs() << "Duplicate fvar " << fvar.first() << " in partitions " << i << " and " << fvars[fvar.second] - 1 << "\n";
+            }
+            fvars[fvar.second] = i+1;
+        }
+        for (auto &gvar : partitions[i].gvars) {
+            if (gvars[gvar.second] != 0) {
+                bad = true;
+                dbgs() << "Duplicate gvar " << gvar.first() << " in partitions " << i << " and " << gvars[gvar.second] - 1 << "\n";
+            }
+            gvars[gvar.second] = i+1;
+        }
+        // dbgs() << "partition: " << i << " fvars: " << partitions[i].fvars.size() << " gvars: " << partitions[i].gvars.size() << "\n";
     }
     for (auto &GV : M.globals()) {
         if (GV.isDeclaration()) {
@@ -635,6 +664,18 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
                 bad = true;
                 dbgs() << "Global " << GV << " has non-external linkage " << GV.getLinkage() << " but is in partition " << GVNames[GV.getName()] << "\n";
             }
+        }
+    }
+    for (uint32_t i = 0; i < fvars_size; i++) {
+        if (fvars[i] == 0) {
+            bad = true;
+            dbgs() << "fvar " << i << " not in any partition\n";
+        }
+    }
+    for (uint32_t i = 0; i < gvars_size; i++) {
+        if (gvars[i] == 0) {
+            bad = true;
+            dbgs() << "gvar " << i << " not in any partition\n";
         }
     }
 #endif
@@ -766,7 +807,7 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
         }
     }
 
-    bool verified = verify_partitioning(partitions, M);
+    bool verified = verify_partitioning(partitions, M, fvars.size(), gvars.size());
     assert(verified && "Partitioning failed to partition globals correctly");
     (void) verified;
 
