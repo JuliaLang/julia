@@ -433,6 +433,12 @@ find_extended_inds(::ScalarIndex, I...) = (@inline; find_extended_inds(I...))
 find_extended_inds(i1, I...) = (@inline; (i1, find_extended_inds(I...)...))
 find_extended_inds() = ()
 
+function iterate(V::FastContiguousSubArray,
+        state = (V.offset1+firstindex(V), V.offset1+lastindex(V)))
+    i, l = state
+    @inbounds i-1 < l ? (V.parent[i], (i+1, l)) : nothing
+end
+
 function unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) where {T,N,P}
     return unsafe_convert(Ptr{T}, V.parent) + _memory_offset(V.parent, map(first, V.indices)...)
 end
