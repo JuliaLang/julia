@@ -342,10 +342,9 @@ static Value *julia_pgv(jl_codectx_t &ctx, const char *prefix, jl_sym_t *name, j
         prev = parent;
         parent = parent->parent;
     }
-    size_t orig_end = finalname.size() + 1;
+    size_t orig_end = finalname.size();
     StringRef prefix_name(prefix);
     finalname.resize(orig_end + prefix_name.size());
-    finalname[orig_end - 1] = ':';
     std::reverse_copy(prefix_name.begin(), prefix_name.end(), finalname.begin() + orig_end);
     std::reverse(finalname.begin(), finalname.end());
     return julia_pgv(ctx, finalname.c_str(), addr);
