@@ -67,6 +67,10 @@ jobs:
             ${{ runner.os }}-
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
+      - uses: julia-actions/julia-processcoverage@latest
+      - uses: codecov/codecov-action@v3
+        with:
+          file: lcov.info
   test_sysimage:
     name: JuliaSyntax sysimage build - ${{ github.event_name }}
     runs-on: ubuntu-latest
