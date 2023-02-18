@@ -27,8 +27,8 @@
         @test parse(Expr, "[a ;; b]", version=v"1.7") == Expr(:ncat, 2, :a, :b)
 
         # filename
-        @test JuliaSyntax.parse(Expr, "begin\na\nend", filename="foo.jl") ==
-            Expr(:block, LineNumberNode(2, Symbol("foo.jl")), :a)
+        @test JuliaSyntax.parse(Expr, "begin\na\nend", filename="foo.jl", first_line=55) ==
+            Expr(:block, LineNumberNode(56, Symbol("foo.jl")), :a)
 
         # ignore_trivia
         @test parseatom(Expr, " x ", ignore_trivia=true) == :x
