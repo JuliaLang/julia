@@ -109,6 +109,9 @@ function Base.getindex(source::SourceFile, i::Int)
     source.code[i]
 end
 
+Base.firstindex(source::SourceFile) = firstindex(source.code)
+Base.lastindex(source::SourceFile) = lastindex(source.code)
+
 """
     sourcetext(source::SourceFile)
 
