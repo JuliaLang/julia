@@ -1440,6 +1440,7 @@ _sort(x::NTuple{N}, o::Ordering) where N =
     merge(_sort(ntuple(i -> x[i], N>>1), o), _sort(ntuple(i -> x[i+N>>1], N - N>>1), o), o)
 merge(x::NTuple, y::NTuple{0}, o::Ordering) = x
 merge(x::NTuple{0}, y::NTuple, o::Ordering) = y
+merge(x::NTuple{0}, y::NTuple{0}, o::Ordering) = x # Method ambiguity
 merge(x::NTuple, y::NTuple, o::Ordering) =
     (lt(o, y[1], x[1]) ? (y[1], merge(x, tail(y), o)...) : (x[1], merge(tail(x), y, o)...))
 
