@@ -98,7 +98,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    161
+#define NUM_TAGS    160
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -258,7 +258,6 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_builtin_nfields);
         INSERT_TAG(jl_builtin_tuple);
         INSERT_TAG(jl_builtin_svec);
-        INSERT_TAG(jl_builtin_sbuf);
         INSERT_TAG(jl_builtin_getfield);
         INSERT_TAG(jl_builtin_setfield);
         INSERT_TAG(jl_builtin_swapfield);
@@ -700,13 +699,6 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     else if (jl_is_svec(v)) {
         size_t i, l = jl_svec_len(v);
         jl_value_t **data = jl_svec_data(v);
-        for (i = 0; i < l; i++) {
-            jl_queue_for_serialization_(s, data[i], 1, immediate);
-        }
-    }
-    else if (jl_is_sbuf(v)) {
-        size_t i, l = jl_sbuf_len(v);
-        jl_value_t **data = jl_sbuf_data(v);
         for (i = 0; i < l; i++) {
             jl_queue_for_serialization_(s, data[i], 1, immediate);
         }
@@ -1235,11 +1227,9 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
         }
         else if (jl_is_sbuf(v)) {
             ios_write(s->s, (char*)v, sizeof(void*));
-            size_t ii, l = jl_sbuf_len(v);
-            assert(l > 0 || (jl_sbuf_t*)v == jl_emptysbuf);
-            for (ii = 0; ii < l; ii++) {
-                write_pointerfield(s, jl_sbufref(v, ii));
-            }
+            size_t len = jl_sbuf_len(v);
+            assert(len > 0 || (jl_sbuf_t*)v == jl_emptysbuf);
+            ios_write(s->const_data, (char*)jl_sbuf_data(v), len);
         }
         else if (jl_is_string(v)) {
             ios_write(s->s, (char*)v, sizeof(void*) + jl_string_len(v));

@@ -455,11 +455,8 @@
     XX(jl_svec_copy) \
     XX(jl_svec_fill) \
     XX(jl_svec_ref) \
-    XX(jl_sbuf) \
-    XX(jl_sbuf1) \
-    XX(jl_sbuf2) \
+    XX(jl_alloc_sbuf) \
     XX(jl_sbuf_copy) \
-    XX(jl_sbuf_fill) \
     XX(jl_sbuf_ref) \
     XX(jl_switch) \
     XX(jl_switchto) \

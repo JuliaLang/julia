@@ -1232,7 +1232,6 @@ static const auto &builtin_func_map() {
           { jl_f_throw_addr,              new JuliaFunction{XSTR(jl_f_throw), get_func_sig, get_func_attrs} },
           { jl_f_tuple_addr,              jltuple_func },
           { jl_f_svec_addr,               new JuliaFunction{XSTR(jl_f_svec), get_func_sig, get_func_attrs} },
-          { jl_f_sbuf_addr,               new JuliaFunction{XSTR(jl_f_sbuf), get_func_sig, get_func_attrs} },
           { jl_f_applicable_addr,         new JuliaFunction{XSTR(jl_f_applicable), get_func_sig, get_func_attrs} },
           { jl_f_invoke_addr,             new JuliaFunction{XSTR(jl_f_invoke), get_func_sig, get_func_attrs} },
           { jl_f_isdefined_addr,          new JuliaFunction{XSTR(jl_f_isdefined), get_func_sig, get_func_attrs} },

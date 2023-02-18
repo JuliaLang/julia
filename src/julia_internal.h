@@ -514,7 +514,6 @@ jl_value_t *jl_permbox16(jl_datatype_t *t, int16_t x);
 jl_value_t *jl_permbox32(jl_datatype_t *t, int32_t x);
 jl_value_t *jl_permbox64(jl_datatype_t *t, int64_t x);
 jl_svec_t *jl_perm_symsvec(size_t n, ...);
-jl_sbuf_t *jl_perm_symsbuf(size_t n, ...);
 
 // this sizeof(__VA_ARGS__) trick can't be computed until C11, but that only matters to Clang in some situations
 #if !defined(__clang_analyzer__) && !(defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_))
@@ -546,38 +545,6 @@ jl_sbuf_t *jl_perm_symsbuf(size_t n, ...);
 #endif
 #endif
 #endif
-
-// this sizeof(__VA_ARGS__) trick can't be computed until C11, but that only matters to Clang in some situations
-#if !defined(__clang_analyzer__) && !(defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_))
-#ifdef _COMPILER_GCC_
-#define jl_perm_symsbuf(n, ...) \
-    (jl_perm_symsbuf)(__extension__({                                         \
-            static_assert(                                                    \
-                n == sizeof((char *[]){ __VA_ARGS__ })/sizeof(char *),        \
-                "Number of passed arguments does not match expected number"); \
-            n;                                                                \
-        }), __VA_ARGS__)
-#ifdef jl_sbuf
-#undef jl_sbuf
-#define jl_sbuf(n, ...) \
-    (ijl_sbuf)(__extension__({                                                \
-            static_assert(                                                    \
-                n == sizeof((void *[]){ __VA_ARGS__ })/sizeof(void *),        \
-                "Number of passed arguments does not match expected number"); \
-            n;                                                                \
-        }), __VA_ARGS__)
-#else
-#define jl_sbuf(n, ...) \
-    (jl_sbuf)(__extension__({                                                 \
-            static_assert(                                                    \
-                n == sizeof((void *[]){ __VA_ARGS__ })/sizeof(void *),        \
-                "Number of passed arguments does not match expected number"); \
-            n;                                                                \
-        }), __VA_ARGS__)
-#endif
-#endif
-#endif
-
 
 jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz);
 JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz);

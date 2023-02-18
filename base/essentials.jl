@@ -700,17 +700,17 @@ macro goto(name::Symbol)
 end
 
 # SimpleBuffer
-
+SimpleBuffer(n::Int) = ccall(:jl_alloc_sbuf, Any, (UInt,), n)
 @eval getindex(b::SimpleBuffer, i::Int) = Core._sbuf_ref($(Expr(:boundscheck)), b, i)
 length(b::SimpleBuffer) = ccall(:jl_sbuf_len, Int, (Any,), b)
 firstindex(b::SimpleBuffer) = 1
 lastindex(b::SimpleBuffer) = length(b)
 iterate(b::SimpleBuffer, i=1) = (length(b) < i ? nothing : (b[i], i + 1))
-eltype(::Type{SimpleBuffer}) = Any
+eltype(::Type{SimpleBuffer}) = UInt8
 keys(b::SimpleBuffer) = OneTo(length(b))
 isempty(b::SimpleBuffer) = (length(b) == 0)
 axes(b::SimpleBuffer) = (OneTo(length(b)),)
-axes(b::SimpleBuffer, d::Integer) = d <= 1 ? axes(b)[d] : OneTo(1)
+axes(b::SimpleBuffer, d::Integer) = d <= 1 ? OneTo(length(b)) : OneTo(1)
 
 function ==(v1::SimpleBuffer, v2::SimpleBuffer)
     length(v1)==length(v2) || return false
@@ -720,7 +720,7 @@ function ==(v1::SimpleBuffer, v2::SimpleBuffer)
     return true
 end
 
-map(f, v::SimpleBuffer) = Any[ f(v[i]) for i = 1:length(v) ]
+# map(f, v::SimpleBuffer) = Any[ f(v[i]) for i = 1:length(v) ]
 
 
 # SimpleVector

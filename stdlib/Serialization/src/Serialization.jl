@@ -217,12 +217,10 @@ function serialize(s::AbstractSerializer, v::SimpleVector)
     end
 end
 
-function serialize(s::AbstractSerializer, v::SimpleBuffer)
+function serialize(s::AbstractSerializer, sb::SimpleBuffer)
     writetag(s.io, SIMPLEBUFFER_TAG)
-    write(s.io, Int32(length(v)))
-    for x in v
-        serialize(s, x)
-    end
+    write(s.io, Int32(length(sb)))
+    write(s,io, sb)
 end
 
 function serialize(s::AbstractSerializer, x::Symbol)
@@ -991,9 +989,9 @@ function deserialize_svec(s::AbstractSerializer)
 end
 
 function deserialize_sbuf(s::AbstractSerializer)
-    n = read(s.io, Int32)
-    # FIXME
-    sbuf(Any[ deserialize(s) for i=1:n ]...)
+    sb = SimpleBuffer(Int(read(s.io, Int32)))
+    read!(s, sb)
+    return sb
 end
 
 function deserialize_module(s::AbstractSerializer)

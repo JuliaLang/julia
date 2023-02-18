@@ -2042,8 +2042,8 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_emptysvec = (jl_svec_t*)jl_gc_permobj(sizeof(void*), jl_simplevector_type);
     jl_svec_set_len_unsafe(jl_emptysvec, 0);
 
-    // jl_emptysbuf = (jl_sbuf_t*)jl_gc_permobj(sizeof(void*), jl_simplebuffer_type);
-    // jl_sbuf_set_len_unsafe(jl_emptysbuf, 0);
+    jl_emptysbuf = (jl_sbuf_t*)jl_gc_permobj(sizeof(void*), jl_simplebuffer_type);
+    jl_sbuf_set_len_unsafe(jl_emptysbuf, 0);
 
     jl_any_type = (jl_datatype_t*)jl_new_abstracttype((jl_value_t*)jl_symbol("Any"), core, NULL, jl_emptysvec);
     jl_any_type->super = jl_any_type;
@@ -2821,7 +2821,7 @@ void jl_init_types(void) JL_GC_DISABLED
     // override ismutationfree for builtin types that are mutable for identity
     jl_string_type->ismutationfree = jl_string_type->isidentityfree = 1;
     jl_symbol_type->ismutationfree = jl_symbol_type->isidentityfree = 1;
-    jl_simplebuffer_type->ismutationfree = jl_simplebuffer_type->isidentityfree = 1;
+    // jl_simplebuffer_type->ismutationfree = jl_simplebuffer_type->isidentityfree = 1;
     jl_simplevector_type->ismutationfree = jl_simplevector_type->isidentityfree = 1;
     jl_datatype_type->ismutationfree = 1;
 
@@ -2831,6 +2831,7 @@ void jl_init_types(void) JL_GC_DISABLED
 
     // Array's mutable data is hidden, so we need to override it
     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_array_type))->ismutationfree = 0;
+    jl_simplebuffer_type->ismutationfree = 0;
 
     // override the preferred layout for a couple types
     jl_lineinfonode_type->name->mayinlinealloc = 0; // FIXME: assumed to be a pointer by codegen

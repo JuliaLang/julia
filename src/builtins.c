@@ -81,7 +81,7 @@ static int NOINLINE compare_sbuf(jl_sbuf_t *a, jl_sbuf_t *b) JL_NOTSAFEPOINT
     if (l != jl_sbuf_len(b))
         return 0;
     for (i = 0; i < l; i++) {
-        if (!jl_egal(jl_sbufref(a, i), jl_sbufref(b, i)))
+        if (((uint8_t*)(jl_sbuf_data(a)))[i] != ((uint8_t*)(jl_sbuf_data(b)))[i])
             return 0;
     }
     return 1;
@@ -305,19 +305,6 @@ static uintptr_t NOINLINE hash_svec(jl_svec_t *v) JL_NOTSAFEPOINT
     return h;
 }
 
-static uintptr_t NOINLINE hash_sbuf(jl_sbuf_t *v) JL_NOTSAFEPOINT
-{
-    uintptr_t h = 0;
-    size_t i, l = jl_sbuf_len(v);
-    for (i = 0; i < l; i++) {
-        jl_value_t *x = jl_sbufref(v, i);
-        uintptr_t u = (x == NULL) ? 0 : jl_object_id(x);
-        h = bitmix(h, u);
-    }
-    return h;
-}
-
-
 static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOTSAFEPOINT;
 
 typedef struct _varidx {
@@ -429,8 +416,6 @@ static uintptr_t NOINLINE jl_object_id__cold(jl_datatype_t *dt, jl_value_t *v) J
 {
     if (dt == jl_simplevector_type)
         return hash_svec((jl_svec_t*)v);
-    if (dt == jl_simplebuffer_type)
-        return hash_sbuf((jl_sbuf_t*)v);
     if (dt == jl_datatype_type) {
         jl_datatype_t *dtv = (jl_datatype_t*)v;
         uintptr_t h = ~dtv->name->hash;
@@ -528,7 +513,7 @@ JL_CALLABLE(jl_f_sizeof)
     if (jl_is_svec(x))
         return jl_box_long((1+jl_svec_len(x))*sizeof(void*));
     if (jl_is_sbuf(x))
-        return jl_box_long((1+jl_sbuf_len(x))*sizeof(void*));
+        return jl_box_long(jl_sbuf_len(x) + sizeof(void*));
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
     assert(jl_is_datatype(dt));
     assert(!dt->name->abstract);
@@ -618,20 +603,6 @@ static jl_value_t *do_apply(jl_value_t **args, uint32_t nargs, jl_value_t *itera
                 JL_GC_PUSH1(&t);
                 for (size_t i = 0; i < n; i++) {
                     jl_svecset(t, i, jl_arrayref((jl_array_t*)args[1], i));
-                }
-                JL_GC_POP();
-                return (jl_value_t*)t;
-            }
-        }
-        else if (f == jl_builtin_sbuf) {
-            if (jl_is_svec(args[1]))
-                return args[1];
-            if (jl_is_array(args[1])) {
-                size_t n = jl_array_len(args[1]);
-                jl_sbuf_t *t = jl_alloc_sbuf(n);
-                JL_GC_PUSH1(&t);
-                for (size_t i = 0; i < n; i++) {
-                    jl_sbufset(t, i, jl_arrayref((jl_array_t*)args[1], i));
                 }
                 JL_GC_POP();
                 return (jl_value_t*)t;
@@ -895,18 +866,6 @@ JL_CALLABLE(jl_f_svec)
     jl_svec_t *t = jl_alloc_svec_uninit(nargs);
     for (i = 0; i < nargs; i++) {
         jl_svecset(t, i, args[i]);
-    }
-    return (jl_value_t*)t;
-}
-
-JL_CALLABLE(jl_f_sbuf)
-{
-    size_t i;
-    if (nargs == 0)
-        return (jl_value_t*)jl_emptysbuf;
-    jl_sbuf_t *t = jl_alloc_sbuf_uninit(nargs);
-    for (i = 0; i < nargs; i++) {
-        jl_sbufset(t, i, args[i]);
     }
     return (jl_value_t*)t;
 }
@@ -2063,7 +2022,6 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin__apply_iterate = add_builtin_func("_apply_iterate", jl_f__apply_iterate);
     jl_builtin__expr = add_builtin_func("_expr", jl_f__expr);
     jl_builtin_svec = add_builtin_func("svec", jl_f_svec);
-    jl_builtin_sbuf = add_builtin_func("sbuf", jl_f_sbuf);
     add_builtin_func("_apply_pure", jl_f__apply_pure);
     add_builtin_func("_call_latest", jl_f__call_latest);
     add_builtin_func("_call_in_world", jl_f__call_in_world);

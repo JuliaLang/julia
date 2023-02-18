@@ -157,7 +157,6 @@ typedef struct {
 typedef struct {
     JL_DATA_TYPE
     size_t length;
-    // pointer size aligned
     // jl_value_t *data[];
 } jl_sbuf_t;
 
@@ -1013,35 +1012,6 @@ STATIC_INLINE jl_value_t *jl_svecset(
     return (jl_value_t*)x;
 }
 #endif
-#ifdef __clang_gcanalyzer__
-STATIC_INLINE jl_value_t *jl_sbufref(void *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
-STATIC_INLINE jl_value_t *jl_sbufset(
-    void *t JL_ROOTING_ARGUMENT JL_PROPAGATES_ROOT,
-    size_t i, void *x JL_ROOTED_ARGUMENT) JL_NOTSAFEPOINT;
-#else
-STATIC_INLINE jl_value_t *jl_sbufref(void *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
-{
-    assert(jl_typeis(t,jl_simplevector_type));
-    assert(i < jl_sbuf_len(t));
-    // while sbuf is supposedly immutable, in practice we sometimes publish it first
-    // and set the values lazily
-    return jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)jl_svec_data(t) + i);
-}
-STATIC_INLINE jl_value_t *jl_sbufset(
-    void *t JL_ROOTING_ARGUMENT JL_PROPAGATES_ROOT,
-    size_t i, void *x JL_ROOTED_ARGUMENT) JL_NOTSAFEPOINT
-{
-    assert(jl_typeis(t,jl_simplevector_type));
-    assert(i < jl_sbuf_len(t));
-    // while sbuf is supposedly immutable, in practice we sometimes publish it
-    // first and set the values lazily. Those users occasionally might need to
-    // instead use jl_atomic_store_release here.
-    jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)jl_sbuf_data(t) + i, (jl_value_t*)x);
-    jl_gc_wb(t, x);
-    return (jl_value_t*)x;
-}
-#endif
-
 
 #define jl_array_len(a)   (((jl_array_t*)(a))->length)
 #define jl_array_data(a)  ((void*)((jl_array_t*)(a))->data)
@@ -1534,9 +1504,6 @@ JL_DLLEXPORT jl_svec_t *jl_alloc_svec(size_t n);
 JL_DLLEXPORT jl_svec_t *jl_alloc_svec_uninit(size_t n);
 JL_DLLEXPORT jl_svec_t *jl_svec_copy(jl_svec_t *a);
 JL_DLLEXPORT jl_svec_t *jl_svec_fill(size_t n, jl_value_t *x);
-JL_DLLEXPORT jl_sbuf_t *jl_sbuf(size_t n, ...) JL_MAYBE_UNROOTED;
-JL_DLLEXPORT jl_sbuf_t *jl_sbuf1(void *a);
-JL_DLLEXPORT jl_sbuf_t *jl_sbuf2(void *a, void *b);
 JL_DLLEXPORT jl_sbuf_t *jl_alloc_sbuf(size_t n);
 JL_DLLEXPORT jl_sbuf_t *jl_alloc_sbuf_uninit(size_t n);
 JL_DLLEXPORT jl_sbuf_t *jl_sbuf_copy(jl_sbuf_t *a);

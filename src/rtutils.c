@@ -552,14 +552,14 @@ static size_t jl_show_svec(JL_STREAM *out, jl_svec_t *t, const char *head, const
     n += jl_printf(out, "%s", cls);
     return n;
 }
-static size_t jl_show_sbuf(JL_STREAM *out, jl_sbuf_t *t, const char *head, const char *opn, const char *cls) JL_NOTSAFEPOINT
+static size_t jl_show_sbuf(JL_STREAM *out, jl_sbuf_t *sb, const char *head, const char *opn, const char *cls) JL_NOTSAFEPOINT
 {
-    size_t i, n=0, len = jl_sbuf_len(t);
+    size_t i, n=0, len = jl_sbuf_len(sb);
     n += jl_printf(out, "%s", head);
     n += jl_printf(out, "%s", opn);
     for (i = 0; i < len; i++) {
-        jl_value_t *v = jl_sbufref(t,i);
-        n += jl_static_show(out, v);
+        uint8_t v = ((uint8_t*)(jl_sbuf_data(sb)))[i];
+        n += jl_printf(out, "0x%02" PRIx8, v);
         if (i != len-1)
             n += jl_printf(out, ", ");
     }
