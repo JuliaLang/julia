@@ -1,6 +1,7 @@
 # JuliaSyntax
 
 [![Build Status](https://github.com/c42f/JuliaSyntax.jl/workflows/CI/badge.svg)](https://github.com/c42f/JuliaSyntax.jl/actions)
+[![codecov.io](http://codecov.io/github/JuliaLang/JuliaSyntax.jl/coverage.svg?branch=main)](http://codecov.io/github/JuliaLang/JuliaSyntax.jl?branch=main)
 
 A Julia frontend, written in Julia.
 
@@ -483,7 +484,7 @@ The same goes for command strings which are always wrapped in `K"cmdstring"`
 regardless of whether they have multiple pieces (due to triple-quoted
 dedenting) or otherwise.
 
-### No desugaring of the closure in do blocks 
+### No desugaring of the closure in do blocks
 
 The reference parser represents `do` syntax with a closure for the second
 argument. That is,
