@@ -93,7 +93,7 @@ overlay_match(::Any) = nothing
     overlay_match(x)
 end |> only === Union{Nothing,Missing}
 
-# partial pure/concrete evaluation
+# partial concrete evaluation
 @test Base.return_types(; interp=MTOverlayInterp()) do
     isbitstype(Int) ? nothing : missing
 end |> only === Nothing
@@ -110,7 +110,7 @@ end
     issue41694(3) == 6 ? nothing : missing
 end |> only === Nothing
 
-# disable partial pure/concrete evaluation when tainted by any overlayed call
+# disable partial concrete evaluation when tainted by any overlayed call
 Base.@assume_effects :total totalcall(f, args...) = f(args...)
 @test Base.return_types(; interp=MTOverlayInterp()) do
     if totalcall(strangesin, 1.0) == cos(1.0)

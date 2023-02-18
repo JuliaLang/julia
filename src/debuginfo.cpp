@@ -39,10 +39,12 @@ using namespace llvm;
 #include <set>
 #include <mutex>
 #include "julia_assert.h"
+#include "debug-registry.h"
 
+static JITDebugInfoRegistry DebugRegistry;
 
 static JITDebugInfoRegistry &getJITDebugRegistry() JL_NOTSAFEPOINT {
-    return jl_ExecutionEngine->getDebugInfoRegistry();
+    return DebugRegistry;
 }
 
 struct debug_link_info {

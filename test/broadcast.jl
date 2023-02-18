@@ -903,13 +903,13 @@ end
     ys = 1:2:20
     bc = Broadcast.instantiate(Broadcast.broadcasted(*, xs, ys))
     @test IndexStyle(bc) == IndexLinear()
-    @test sum(bc) == mapreduce(Base.Splat(*), +, zip(xs, ys))
+    @test sum(bc) == mapreduce(Base.splat(*), +, zip(xs, ys))
 
     xs2 = reshape(xs, 1, :)
     ys2 = reshape(ys, 1, :)
     bc = Broadcast.instantiate(Broadcast.broadcasted(*, xs2, ys2))
     @test IndexStyle(bc) == IndexCartesian()
-    @test sum(bc) == mapreduce(Base.Splat(*), +, zip(xs, ys))
+    @test sum(bc) == mapreduce(Base.splat(*), +, zip(xs, ys))
 
     xs = 1:5:3*5
     ys = 1:4:3*4
@@ -1122,6 +1122,11 @@ end
     A[pos .< 0] .= false
     @test all(>=(0), pos[A])
     @test count(A) == count(>=(0), pos)
+end
+
+@testset "issue #38432: make CartesianIndex a broadcast scalar" begin
+    @test CartesianIndex(1,2) .+ (CartesianIndex(3,4), CartesianIndex(5,6)) == (CartesianIndex(4, 6), CartesianIndex(6, 8))
+    @test CartesianIndex(1,2) .+ [CartesianIndex(3,4), CartesianIndex(5,6)] == [CartesianIndex(4, 6), CartesianIndex(6, 8)]
 end
 
 # test that `Broadcast` definition is defined as total and eligible for concrete evaluation

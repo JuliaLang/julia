@@ -482,8 +482,11 @@ function find_throw_blocks(code::Vector{Any}, handler_at::Vector{Int})
 end
 
 # using a function to ensure we can infer this
-@inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id :
-    isa(s, Argument) ? (s::Argument).n : (s::TypedSlot).id
+@inline function slot_id(s)
+    isa(s, SlotNumber) && return s.id
+    isa(s, Argument) && return s.n
+    return (s::TypedSlot).id
+end
 
 ###########
 # options #

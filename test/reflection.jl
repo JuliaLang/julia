@@ -1007,8 +1007,8 @@ ambig_effects_test(a, b) = 1
     @test Base.infer_effects(ambig_effects_test, (Int,Int)) |> !Core.Compiler.is_nothrow # ambiguity error
     @test Base.infer_effects(ambig_effects_test, (Int,Any)) |> !Core.Compiler.is_nothrow # ambiguity error
     # builtins
-    @test Base.infer_effects(typeof, (Any,)) |> Core.Compiler.is_total
-    @test Base.infer_effects(===, (Any,Any)) |> Core.Compiler.is_total
+    @test Base.infer_effects(typeof, (Any,)) |> Core.Compiler.is_foldable_nothrow
+    @test Base.infer_effects(===, (Any,Any)) |> Core.Compiler.is_foldable_nothrow
     @test (Base.infer_effects(setfield!, ()); true) # `builtin_effects` shouldn't throw on empty `argtypes`
     @test (Base.infer_effects(Core.Intrinsics.arraylen, ()); true) # `intrinsic_effects` shouldn't throw on empty `argtypes`
 end

@@ -3,19 +3,6 @@
 # name and module reflection
 
 """
-    nameof(m::Module) -> Symbol
-
-Get the name of a `Module` as a [`Symbol`](@ref).
-
-# Examples
-```jldoctest
-julia> nameof(Base.Broadcast)
-:Broadcast
-```
-"""
-nameof(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
-
-"""
     parentmodule(m::Module) -> Module
 
 Get a module's enclosing `Module`. `Main` is its own parent.
@@ -307,8 +294,6 @@ function isfieldatomic(@nospecialize(t::Type), s::Int)
     s -= 1
     return unsafe_load(Ptr{UInt32}(atomicfields), 1 + s÷32) & (1 << (s%32)) != 0
 end
-
-
 
 """
     @locals()
@@ -634,13 +619,14 @@ is reachable from this type (either in the type itself) or through any fields.
 Note that the type itself need not be immutable. For example, an empty mutable
 type is `ismutabletype`, but also `ismutationfree`.
 """
-function ismutationfree(@nospecialize(t::Type))
+function ismutationfree(@nospecialize(t))
     t = unwrap_unionall(t)
     if isa(t, DataType)
         return datatype_ismutationfree(t)
     elseif isa(t, Union)
         return ismutationfree(t.a) && ismutationfree(t.b)
     end
+    # TypeVar, etc.
     return false
 end
 
@@ -652,13 +638,15 @@ datatype_isidentityfree(dt::DataType) = (@_total_meta; (dt.flags & 0x0200) == 0x
 Determine whether type `T` is identity free in the sense that this type or any
 reachable through its fields has non-content-based identity.
 """
-function isidentityfree(@nospecialize(t::Type))
+function isidentityfree(@nospecialize(t))
     t = unwrap_unionall(t)
     if isa(t, DataType)
         return datatype_isidentityfree(t)
     elseif isa(t, Union)
         return isidentityfree(t.a) && isidentityfree(t.b)
     end
+    # TypeVar, etc.
+    return false
 end
 
 iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
@@ -838,6 +826,25 @@ function argument_datatype(@nospecialize t)
     return ccall(:jl_argument_datatype, Any, (Any,), t)::Union{Nothing,DataType}
 end
 
+function datatype_fieldcount(t::DataType)
+    if t.name === _NAMEDTUPLE_NAME
+        names, types = t.parameters[1], t.parameters[2]
+        if names isa Tuple
+            return length(names)
+        end
+        if types isa DataType && types <: Tuple
+            return fieldcount(types)
+        end
+        return nothing
+    elseif isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
+        return nothing
+    end
+    if isdefined(t, :types)
+        return length(t.types)
+    end
+    return length(t.name.names)
+end
+
 """
     fieldcount(t::Type)
 
@@ -857,25 +864,11 @@ function fieldcount(@nospecialize t)
     if !(t isa DataType)
         throw(TypeError(:fieldcount, DataType, t))
     end
-    if t.name === _NAMEDTUPLE_NAME
-        names, types = t.parameters[1], t.parameters[2]
-        if names isa Tuple
-            return length(names)
-        end
-        if types isa DataType && types <: Tuple
-            return fieldcount(types)
-        end
-        abstr = true
-    else
-        abstr = isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
-    end
-    if abstr
+    fcount = datatype_fieldcount(t)
+    if fcount === nothing
         throw(ArgumentError("type does not have a definite number of fields"))
     end
-    if isdefined(t, :types)
-        return length(t.types)
-    end
-    return length(t.name.names)
+    return fcount
 end
 
 """
@@ -1488,9 +1481,10 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         types = to_tuple_type(types)
-        argtypes = Any[types.parameters...]
-        rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
-        return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f, argtypes, rt)
+        argtypes = Any[Core.Compiler.Const(f), types.parameters...]
+        rt = Core.Compiler.builtin_tfunction(interp, f, argtypes[2:end], nothing)
+        return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f,
+            Core.Compiler.ArgInfo(nothing, argtypes), rt)
     end
     tt = signature_type(f, types)
     result = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
@@ -1541,7 +1535,8 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
         else
             empty!(cst)
             resize!(cst, length(code.code))
-            maxcost = Core.Compiler.statement_costs!(cst, code.code, code, Any[match.sparams...], false, params)
+            sptypes = Core.Compiler.VarState[Core.Compiler.VarState(sp, false) for sp in match.sparams]
+            maxcost = Core.Compiler.statement_costs!(cst, code.code, code, sptypes, false, params)
             nd = ndigits(maxcost)
             irshow_config = IRShow.IRShowConfig() do io, linestart, idx
                 print(io, idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1), " ")
@@ -1701,20 +1696,30 @@ julia> hasmethod(g, Tuple{}, (:a, :b, :c, :d))  # g accepts arbitrary kwargs
 true
 ```
 """
-function hasmethod(@nospecialize(f), @nospecialize(t); world::UInt=get_world_counter())
-    t = signature_type(f, t)
-    return ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), t, nothing, world) !== nothing
+function hasmethod(@nospecialize(f), @nospecialize(t))
+    return Core._hasmethod(f, t isa Type ? t : to_tuple_type(t))
 end
 
-function hasmethod(@nospecialize(f), @nospecialize(t), kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_counter())
-    # TODO: this appears to be doing the wrong queries
-    hasmethod(f, t, world=world) || return false
-    isempty(kwnames) && return true
-    m = which(f, t)
-    kws = kwarg_decl(m)
+function Core.kwcall(kwargs, ::typeof(hasmethod), @nospecialize(f), @nospecialize(t))
+    world = kwargs.world::UInt # make sure this is the only local, to avoid confusing kwarg_decl()
+    return ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), signature_type(f, t), nothing, world) !== nothing
+end
+
+function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_counter())
+    @nospecialize
+    isempty(kwnames) && return hasmethod(f, t; world)
+    t = to_tuple_type(t)
+    ft = Core.Typeof(f)
+    u = unwrap_unionall(t)::DataType
+    tt = rewrap_unionall(Tuple{typeof(Core.kwcall), typeof(pairs((;))), ft, u.parameters...}, t)
+    match = ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world)
+    match === nothing && return false
+    kws = ccall(:jl_uncompress_argnames, Array{Symbol,1}, (Any,), (match::Method).slot_syms)
+    isempty(kws) && return true # some kwfuncs simply forward everything directly
     for kw in kws
         endswith(String(kw), "...") && return true
     end
+    kwnames = Symbol[kwnames[i] for i in 1:length(kwnames)]
     return issubset(kwnames, kws)
 end
 
@@ -1852,7 +1857,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
                 m = match.method
                 m === minmax && continue
                 if !morespecific(minmax.sig, m.sig)
-                    if match.full_covers || !morespecific(m.sig, minmax.sig)
+                    if match.fully_covers || !morespecific(m.sig, minmax.sig)
                         return true
                     end
                 end

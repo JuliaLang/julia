@@ -1083,7 +1083,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
         end
         src = @atomic :monotonic code.inferred
     else
-        src = code
+        src = nothing
     end
 
     src = inlining_policy(inlining.interp, src, info, IR_FLAG_NULL, mi, Any[])
@@ -1708,8 +1708,8 @@ function type_lift_pass!(ir::IRCode)
             # a phi node (or an UpsilonNode() argument to a PhiC node), so lift
             # all these nodes that have maybe undef values
             val = stmt.args[(stmt.head === :isdefined) ? 1 : 2]
-            if stmt.head === :isdefined && (val isa Slot || val isa GlobalRef ||
-                    isexpr(val, :static_parameter) || val isa Argument || val isa Symbol)
+            if stmt.head === :isdefined && (val isa GlobalRef || isexpr(val, :static_parameter) ||
+                                            val isa Argument || val isa Symbol)
                 # this is a legal node, so assume it was not introduced by
                 # slot2ssa (at worst, we might leave in a runtime check that
                 # shouldn't have been there)

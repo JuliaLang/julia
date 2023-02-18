@@ -113,6 +113,7 @@ has_offset_axes(A::AbstractVector) = Int(firstindex(A))::Int != 1 # improve perf
 # note: this could call `any` directly if the compiler can infer it
 has_offset_axes(As...) = _any_tuple(has_offset_axes, false, As...)
 has_offset_axes(::Colon) = false
+has_offset_axes(::Array) = false
 
 """
     require_one_based_indexing(A::AbstractArray)
@@ -936,7 +937,7 @@ end
 
 ## from general iterable to any array
 
-# This is `@Experimental.max_methods 1 function copyto! end`, which is not
+# This is `Experimental.@max_methods 1 function copyto! end`, which is not
 # defined at this point in bootstrap.
 typeof(function copyto! end).name.max_methods = UInt8(1)
 

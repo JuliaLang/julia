@@ -324,12 +324,19 @@ function unswitchtupleunion(u::Union)
     Tuple{Any[ Union{Any[(t::DataType).parameters[i] for t in ts]...} for i in 1:n ]...}
 end
 
-function unwraptv(@nospecialize t)
+function unwraptv_ub(@nospecialize t)
     while isa(t, TypeVar)
         t = t.ub
     end
     return t
 end
+function unwraptv_lb(@nospecialize t)
+    while isa(t, TypeVar)
+        t = t.lb
+    end
+    return t
+end
+const unwraptv = unwraptv_ub
 
 # this query is specially written for `adjust_effects` and returns true if a value of this type
 # never involves inconsistency of mutable objects that are allocated somewhere within a call graph
