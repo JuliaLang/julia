@@ -214,9 +214,9 @@ function Base.push!(node::SyntaxNode, child::SyntaxNode)
     push!(args, child)
 end
 
-function build_tree(::Type{SyntaxNode}, stream::ParseStream; filename=nothing, kws...)
+function build_tree(::Type{SyntaxNode}, stream::ParseStream; filename=nothing, first_line=1, kws...)
     green_tree = build_tree(GreenNode, stream; kws...)
-    source = SourceFile(sourcetext(stream), filename=filename)
+    source = SourceFile(sourcetext(stream), filename=filename, first_line=first_line)
     SyntaxNode(source, green_tree, first_byte(stream))
 end
 

@@ -9,8 +9,8 @@ struct ParseError <: Exception
     diagnostics::Vector{Diagnostic}
 end
 
-function ParseError(stream::ParseStream; filename=nothing)
-    source = SourceFile(sourcetext(stream), filename=filename)
+function ParseError(stream::ParseStream; kws...)
+    source = SourceFile(sourcetext(stream); kws...)
     ParseError(source, stream.diagnostics)
 end
 
@@ -72,7 +72,7 @@ function parse!(::Type{TreeType}, io::IO;
 end
 
 function _parse(rule::Symbol, need_eof::Bool, ::Type{T}, text, index=1; version=VERSION,
-                ignore_trivia=true, filename=nothing, ignore_errors=false,
+                ignore_trivia=true, filename=nothing, first_line=1, ignore_errors=false,
                 ignore_warnings=ignore_errors) where {T}
     stream = ParseStream(text, index; version=version)
     if ignore_trivia && rule != :toplevel
@@ -88,14 +88,14 @@ function _parse(rule::Symbol, need_eof::Bool, ::Type{T}, text, index=1; version=
     end
     if (!ignore_errors && any_error(stream.diagnostics)) ||
           (!ignore_warnings && !isempty(stream.diagnostics))
-        throw(ParseError(stream, filename=filename))
+        throw(ParseError(stream, filename=filename, first_line=first_line))
     end
     # TODO: Figure out a more satisfying solution to the wrap_toplevel_as_kind
     # mess that we've got here.
     # * It's kind of required for GreenNode, as GreenNode only records spans,
     #   not absolute positions.
     # * Dropping it would be ok for SyntaxNode and Expr...
-    tree = build_tree(T, stream; wrap_toplevel_as_kind=K"toplevel", filename=filename)
+    tree = build_tree(T, stream; wrap_toplevel_as_kind=K"toplevel", filename=filename, first_line=first_line)
     tree, last_byte(stream) + 1
 end
 
