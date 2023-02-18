@@ -1428,7 +1428,7 @@ sort(::Tuple; kws...) =
 function sort(x::NTuple{N}; lt::Function=isless, by::Function=identity,
               rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) where N
     o = ord(lt,by,rev,order)
-    if N > 20
+    if N > 9
         v = sort!(copymutable(x), DEFAULT_STABLE, o)
         tuple((v[i] for i in 1:N)...)
     else
@@ -1436,8 +1436,10 @@ function sort(x::NTuple{N}; lt::Function=isless, by::Function=identity,
     end
 end
 _sort(x::Union{NTuple{0}, NTuple{1}}, o::Ordering) = x
-_sort(x::NTuple{N}, o::Ordering) where N =
-    merge(_sort(ntuple(i -> x[i], N>>1), o), _sort(ntuple(i -> x[i+N>>1], N - N>>1), o), o)
+function _sort(x::NTuple, o::Ordering)
+    a, b = Base.IteratorsMD.split(x, Val(length(x)>>1))
+    merge(_sort(a, o), _sort(b, o), o)
+end
 merge(x::NTuple, y::NTuple{0}, o::Ordering) = x
 merge(x::NTuple{0}, y::NTuple, o::Ordering) = y
 merge(x::NTuple{0}, y::NTuple{0}, o::Ordering) = x # Method ambiguity
