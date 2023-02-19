@@ -13,7 +13,7 @@ See also: [`AbstractSet`](@ref), [`BitSet`](@ref), [`Dict`](@ref),
 [`push!`](@ref), [`empty!`](@ref), [`union!`](@ref), [`in`](@ref), [`isequal`](@ref)
 
 # Examples
-```jldoctest filter = r"^\\S.+"
+```jldoctest; filter = r"^  '.'"ma
 julia> s = Set("aaBca")
 Set{Char} with 3 elements:
   'a'
@@ -23,9 +23,9 @@ Set{Char} with 3 elements:
 julia> push!(s, 'b')
 Set{Char} with 4 elements:
   'a'
-  'c'
   'b'
   'B'
+  'c'
 
 julia> s = Set([NaN, 0.0, 1.0, 2.0]);
 

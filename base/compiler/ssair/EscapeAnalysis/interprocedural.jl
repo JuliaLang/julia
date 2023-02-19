@@ -14,6 +14,7 @@ struct EACallInfo
 end
 
 function resolve_call(ir::IRCode, stmt::Expr, @nospecialize(info::CallInfo))
+    # TODO: if effect free, return true
     sig = call_sig(ir, stmt)
     if sig === nothing
         return missing

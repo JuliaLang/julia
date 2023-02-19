@@ -15,7 +15,7 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     length, log, map, ndims, one, oneunit, parent, permutedims, power_by_squaring,
     print_matrix, promote_rule, real, round, sec, sech, setindex!, show, similar, sin,
     sincos, sinh, size, sqrt, strides, stride, tan, tanh, transpose, trunc, typed_hcat,
-    vec, zero
+    vec, view, zero
 using Base: IndexLinear, promote_eltype, promote_op, promote_typeof,
     @propagate_inbounds, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
     splat
@@ -431,8 +431,6 @@ include("tridiag.jl")
 include("triangular.jl")
 
 include("factorization.jl")
-include("qr.jl")
-include("lq.jl")
 include("eigen.jl")
 include("svd.jl")
 include("symmetric.jl")
@@ -443,7 +441,10 @@ include("diagonal.jl")
 include("symmetriceigen.jl")
 include("bidiag.jl")
 include("uniformscaling.jl")
+include("qr.jl")
+include("lq.jl")
 include("hessenberg.jl")
+include("abstractq.jl")
 include("givens.jl")
 include("special.jl")
 include("bitarray.jl")

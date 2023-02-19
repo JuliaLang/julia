@@ -1231,3 +1231,45 @@ JL_DLLEXPORT uint64_t jl_read_verify_header(ios_t *s, uint8_t *pkgimage, int64_t
     }
     return checksum;
 }
+
+// Returns `depmodidxs` where `j = depmodidxs[i]` corresponds to the blob `depmods[j]` in `write_mod_list`
+static jl_array_t *image_to_depmodidx(jl_array_t *depmods)
+{
+    if (!depmods)
+        return NULL;
+    assert(jl_array_len(depmods) < INT32_MAX && "too many dependencies to serialize");
+    size_t lbids = n_linkage_blobs();
+    size_t ldeps = jl_array_len(depmods);
+    jl_array_t *depmodidxs = jl_alloc_array_1d(jl_array_int32_type, lbids);
+    int32_t *dmidxs = (int32_t*)jl_array_data(depmodidxs);
+    memset(dmidxs, -1, lbids * sizeof(int32_t));
+    dmidxs[0] = 0; // the sysimg can also be found at idx 0, by construction
+    for (size_t i = 0, j = 0; i < ldeps; i++) {
+        jl_value_t *depmod = jl_array_ptr_ref(depmods, i);
+        size_t idx = external_blob_index(depmod);
+        if (idx < lbids) { // jl_object_in_image
+            j++;
+            if (dmidxs[idx] == -1)
+                dmidxs[idx] = j;
+        }
+    }
+    return depmodidxs;
+}
+
+// Returns `imageidxs` where `j = imageidxs[i]` is the blob corresponding to `depmods[j]`
+static jl_array_t *depmod_to_imageidx(jl_array_t *depmods)
+{
+    if (!depmods)
+        return NULL;
+    size_t ldeps = jl_array_len(depmods);
+    jl_array_t *imageidxs = jl_alloc_array_1d(jl_array_int32_type, ldeps + 1);
+    int32_t *imgidxs = (int32_t*)jl_array_data(imageidxs);
+    imgidxs[0] = 0;
+    for (size_t i = 0; i < ldeps; i++) {
+        jl_value_t *depmod = jl_array_ptr_ref(depmods, i);
+        size_t j = external_blob_index(depmod);
+        assert(j < INT32_MAX);
+        imgidxs[i + 1] = (int32_t)j;
+    }
+    return imageidxs;
+}

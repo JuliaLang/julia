@@ -98,7 +98,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    159
+#define NUM_TAGS    157
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -118,7 +118,6 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_slotnumber_type);
         INSERT_TAG(jl_simplevector_type);
         INSERT_TAG(jl_array_type);
-        INSERT_TAG(jl_typedslot_type);
         INSERT_TAG(jl_expr_type);
         INSERT_TAG(jl_binding_type);
         INSERT_TAG(jl_globalref_type);
@@ -165,7 +164,6 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_abstractstring_type);
         INSERT_TAG(jl_array_any_type);
         INSERT_TAG(jl_intrinsic_type);
-        INSERT_TAG(jl_abstractslot_type);
         INSERT_TAG(jl_methtable_type);
         INSERT_TAG(jl_typemap_level_type);
         INSERT_TAG(jl_typemap_entry_type);
@@ -304,12 +302,11 @@ static arraylist_t layout_table;     // cache of `position(s)` for each `id` in 
 static arraylist_t object_worklist;  // used to mimic recursion by jl_serialize_reachable
 
 // Permanent list of void* (begin, end+1) pairs of system/package images we've loaded previously
-// togther with their module build_ids (used for external linkage)
-// jl_linkage_blobs.items[2i:2i+1] correspond to jl_build_ids[i]   (0-offset indexing)
+// together with their module build_ids (used for external linkage)
+// jl_linkage_blobs.items[2i:2i+1] correspond to build_ids[i]   (0-offset indexing)
 // TODO: Keep this sorted so that we can use binary-search
 arraylist_t jl_linkage_blobs;
 arraylist_t jl_image_relocs;
-jl_array_t *jl_build_ids JL_GLOBALLY_ROOTED = NULL;
 
 // hash of definitions for predefined function pointers
 static htable_t fptr_to_id;
@@ -357,9 +354,11 @@ typedef struct {
     arraylist_t fixup_types;    // a list of locations of types requiring (re)caching
     arraylist_t fixup_objs;     // a list of locations of objects requiring (re)caching
     arraylist_t ccallable_list; // @ccallable entry points to install
+    // mapping from a buildid_idx to a depmods_idx
+    jl_array_t *buildid_depmods_idxs;
     // record of build_ids for all external linkages, in order of serialization for the current sysimg/pkgimg
     // conceptually, the base pointer for the jth externally-linked item is determined from
-    //     i = findfirst(==(link_ids[j]), jl_build_ids)
+    //     i = findfirst(==(link_ids[j]), build_ids)
     //     blob_base = jl_linkage_blobs.items[2i]                     # 0-offset indexing
     // We need separate lists since they are intermingled at creation but split when written.
     jl_array_t *link_ids_relocs;
@@ -378,6 +377,16 @@ static jl_value_t *jl_bigint_type = NULL;
 static int gmp_limb_size = 0;
 static jl_sym_t *jl_docmeta_sym = NULL;
 
+#ifdef _P64
+#define RELOC_TAG_OFFSET 61
+#define DEPS_IDX_OFFSET 40    // only on 64-bit can we encode the dependency-index as part of the tagged reloc
+#else
+// this supports up to 8 RefTags, 512MB of pointer data, and 4/2 (64/32-bit) GB of constant data.
+#define RELOC_TAG_OFFSET 29
+#define DEPS_IDX_OFFSET RELOC_TAG_OFFSET
+#endif
+
+
 // Tags of category `t` are located at offsets `t << RELOC_TAG_OFFSET`
 // Consequently there is room for 2^RELOC_TAG_OFFSET pointers, etc
 enum RefTags {
@@ -385,9 +394,9 @@ enum RefTags {
     ConstDataRef,       // constant data (e.g., layouts)
     TagRef,             // items serialized via their tags
     SymbolRef,          // symbols
-    FunctionRef,        // generic functions
-    BuiltinFunctionRef, // builtin functions
-    ExternalLinkage     // items defined externally (used when serializing packages)
+    FunctionRef,        // functions
+    SysimageLinkage,    // reference to the sysimage (from pkgimage)
+    ExternalLinkage     // reference to some other pkgimage
 };
 
 // calling conventions for internal entry points.
@@ -402,13 +411,9 @@ typedef enum {
     JL_API_MAX
 } jl_callingconv_t;
 
+// Sub-divisions of some RefTags
+const uintptr_t BuiltinFunctionTag = ((uintptr_t)1 << (RELOC_TAG_OFFSET - 1));
 
-#ifdef _P64
-#define RELOC_TAG_OFFSET 61
-#else
-// this supports up to 8 RefTags, 512MB of pointer data, and 4/2 (64/32-bit) GB of constant data.
-#define RELOC_TAG_OFFSET 29
-#endif
 
 #if RELOC_TAG_OFFSET <= 32
 typedef uint32_t reloc_t;
@@ -864,20 +869,22 @@ static void write_pointer(ios_t *s) JL_NOTSAFEPOINT
 static uintptr_t add_external_linkage(jl_serializer_state *s, jl_value_t *v, jl_array_t *link_ids) {
     size_t i = external_blob_index(v);
     if (i < n_linkage_blobs()) {
-        assert(link_ids && jl_is_array(link_ids));
-        assert(jl_build_ids && jl_is_array(jl_build_ids));
-        uint64_t *build_id_data = (uint64_t*)jl_array_data(jl_build_ids);
         // We found the sysimg/pkg that this item links against
-        // Store the image key in `link_ids`
-        jl_array_grow_end(link_ids, 1);
-        uint64_t *link_id_data  = (uint64_t*)jl_array_data(link_ids);
-        link_id_data[jl_array_len(link_ids)-1] = build_id_data[i];
         // Compute the relocation code
         size_t offset = (uintptr_t)v - (uintptr_t)jl_linkage_blobs.items[2*i];
         offset /= sizeof(void*);
-        assert(offset < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "offset to external image too large");
-        // jl_printf(JL_STDOUT, "External link %ld against blob %d with key %ld at position 0x%lx with offset 0x%lx to \n", jl_array_len(link_ids), i, build_id_data[i>>1], ios_pos(s->s), offset);
-        // jl_(v);
+        assert(offset < ((uintptr_t)1 << DEPS_IDX_OFFSET) && "offset to external image too large");
+        assert(n_linkage_blobs() == jl_array_len(s->buildid_depmods_idxs));
+        size_t depsidx = ((uint32_t*)jl_array_data(s->buildid_depmods_idxs))[i]; // map from build_id_idx -> deps_idx
+        assert(depsidx < INT32_MAX);
+        if (depsidx < ((uintptr_t)1 << (RELOC_TAG_OFFSET - DEPS_IDX_OFFSET)) && offset < ((uintptr_t)1 << DEPS_IDX_OFFSET))
+            // if it fits in a SysimageLinkage type, use that representation
+            return ((uintptr_t)SysimageLinkage << RELOC_TAG_OFFSET) + ((uintptr_t)depsidx << DEPS_IDX_OFFSET) + offset;
+        // otherwise, we store the image key in `link_ids`
+        assert(link_ids && jl_is_array(link_ids));
+        jl_array_grow_end(link_ids, 1);
+        uint32_t *link_id_data  = (uint32_t*)jl_array_data(link_ids);  // wait until after the `grow`
+        link_id_data[jl_array_len(link_ids) - 1] = depsidx;
         return ((uintptr_t)ExternalLinkage << RELOC_TAG_OFFSET) + offset;
     }
     return 0;
@@ -1399,12 +1406,13 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 }
                 newm->invoke = NULL; // relocation offset
                 if (fptr_id != JL_API_NULL) {
+                    assert(fptr_id < BuiltinFunctionTag && "too many functions to serialize");
                     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_code_instance_t, invoke))); // relocation location
                     arraylist_push(&s->relocs_list, (void*)(((uintptr_t)FunctionRef << RELOC_TAG_OFFSET) + fptr_id)); // relocation target
                 }
                 if (builtin_id >= 2) {
                     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_code_instance_t, specptr.fptr))); // relocation location
-                    arraylist_push(&s->relocs_list, (void*)(((uintptr_t)BuiltinFunctionRef << RELOC_TAG_OFFSET) + builtin_id - 2)); // relocation target
+                    arraylist_push(&s->relocs_list, (void*)(((uintptr_t)FunctionRef << RELOC_TAG_OFFSET) + BuiltinFunctionTag + builtin_id - 2)); // relocation target
                 }
             }
             else if (jl_is_datatype(v)) {
@@ -1528,11 +1536,16 @@ static uintptr_t get_reloc_for_item(uintptr_t reloc_item, size_t reloc_offset)
         case TagRef:
             assert(offset < 2 * NBOX_C + 258 && "corrupt relocation item id");
             break;
-        case BuiltinFunctionRef:
-            assert(offset < sizeof(id_to_fptrs) / sizeof(*id_to_fptrs) && "unknown function pointer id");
-            break;
         case FunctionRef:
-            assert(offset < JL_API_MAX && "unknown function pointer id");
+            if (offset & BuiltinFunctionTag) {
+                offset &= ~BuiltinFunctionTag;
+                assert(offset < sizeof(id_to_fptrs) / sizeof(*id_to_fptrs) && "unknown function pointer id");
+            }
+            else {
+                assert(offset < JL_API_MAX && "unknown function pointer id");
+            }
+            break;
+        case SysimageLinkage:
             break;
         case ExternalLinkage:
             break;
@@ -1576,10 +1589,12 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
         // offset -= 256;
         assert(0 && "corrupt relocation item id");
         jl_unreachable(); // terminate control flow if assertion is disabled.
-    case BuiltinFunctionRef:
-        assert(offset < sizeof(id_to_fptrs) / sizeof(*id_to_fptrs) && "unknown function pointer ID");
-        return (uintptr_t)id_to_fptrs[offset];
     case FunctionRef:
+        if (offset & BuiltinFunctionTag) {
+            offset &= ~BuiltinFunctionTag;
+            assert(offset < sizeof(id_to_fptrs) / sizeof(*id_to_fptrs) && "unknown function pointer ID");
+            return (uintptr_t)id_to_fptrs[offset];
+        }
         switch ((jl_callingconv_t)offset) {
         case JL_API_BOXED:
             if (s->image->fptrs.base)
@@ -1600,24 +1615,29 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
         //default:
             assert("corrupt relocation item id");
         }
-    case ExternalLinkage:
-        assert(link_ids);
-        assert(link_index);
-        assert(jl_build_ids);
-        uint64_t *link_id_data  = (uint64_t*)jl_array_data(link_ids);
-        uint64_t *build_id_data = (uint64_t*)jl_array_data(jl_build_ids);
-        assert(0 <= *link_index && *link_index < jl_array_len(link_ids));
-        uint64_t build_id = link_id_data[*link_index];
-        *link_index += 1;
-        size_t i = 0, nids = jl_array_len(jl_build_ids);
-        while (i < nids) {
-            if (build_id == build_id_data[i])
-                break;
-            i++;
-        }
-        assert(i < nids);
+    case SysimageLinkage: {
+#ifdef _P64
+        size_t depsidx = offset >> DEPS_IDX_OFFSET;
+        offset &= ((size_t)1 << DEPS_IDX_OFFSET) - 1;
+#else
+        size_t depsidx = 0;
+#endif
+        assert(depsidx < jl_array_len(s->buildid_depmods_idxs));
+        size_t i = ((uint32_t*)jl_array_data(s->buildid_depmods_idxs))[depsidx];
         assert(2*i < jl_linkage_blobs.len);
         return (uintptr_t)jl_linkage_blobs.items[2*i] + offset*sizeof(void*);
+    }
+    case ExternalLinkage: {
+        assert(link_ids);
+        assert(link_index);
+        assert(0 <= *link_index && *link_index < jl_array_len(link_ids));
+        uint32_t depsidx = ((uint32_t*)jl_array_data(link_ids))[*link_index];
+        *link_index += 1;
+        assert(depsidx < jl_array_len(s->buildid_depmods_idxs));
+        size_t i = ((uint32_t*)jl_array_data(s->buildid_depmods_idxs))[depsidx];
+        assert(2*i < jl_linkage_blobs.len);
+        return (uintptr_t)jl_linkage_blobs.items[2*i] + offset*sizeof(void*);
+    }
     }
     abort();
 }
@@ -1801,7 +1821,7 @@ static jl_value_t *jl_delayed_reloc(jl_serializer_state *s, uintptr_t offset) JL
     size_t size = s->s->size;
     int link_index = 0;
     jl_value_t *ret = (jl_value_t*)get_item_for_reloc(s, base, size, offset, s->link_ids_relocs, &link_index);
-    assert(link_index < jl_array_len(s->link_ids_relocs));
+    assert(!s->link_ids_relocs || link_index < jl_array_len(s->link_ids_relocs));
     return ret;
 }
 
@@ -1896,7 +1916,8 @@ static void jl_update_all_gvars(jl_serializer_state *s, jl_image_t *image, uint3
         uintptr_t v = 0;
         if (i < external_fns_begin) {
             v = get_item_for_reloc(s, base, size, offset, s->link_ids_gvars, &gvar_link_index);
-        } else {
+        }
+        else {
             v = get_item_for_reloc(s, base, size, offset, s->link_ids_external_fnvars, &external_fns_link_index);
         }
         uintptr_t *gv = sysimg_gvars(image->gvars_base, image->gvars_offsets, i);
@@ -2218,7 +2239,7 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
 }
 
 // In addition to the system image (where `worklist = NULL`), this can also save incremental images with external linkage
-static void jl_save_system_image_to_stream(ios_t *f,
+static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                                            jl_array_t *worklist, jl_array_t *extext_methods,
                                            jl_array_t *new_specializations, jl_array_t *method_roots_list,
                                            jl_array_t *ext_targets, jl_array_t *edges) JL_GC_DISABLED
@@ -2266,10 +2287,11 @@ static void jl_save_system_image_to_stream(ios_t *f,
     arraylist_new(&s.fixup_types, 0);
     arraylist_new(&s.fixup_objs, 0);
     arraylist_new(&s.ccallable_list, 0);
-    s.link_ids_relocs = jl_alloc_array_1d(jl_array_uint64_type, 0);
-    s.link_ids_gctags = jl_alloc_array_1d(jl_array_uint64_type, 0);
-    s.link_ids_gvars = jl_alloc_array_1d(jl_array_uint64_type, 0);
-    s.link_ids_external_fnvars = jl_alloc_array_1d(jl_array_uint64_type, 0);
+    s.buildid_depmods_idxs = image_to_depmodidx(mod_array);
+    s.link_ids_relocs = jl_alloc_array_1d(jl_array_int32_type, 0);
+    s.link_ids_gctags = jl_alloc_array_1d(jl_array_int32_type, 0);
+    s.link_ids_gvars = jl_alloc_array_1d(jl_array_int32_type, 0);
+    s.link_ids_external_fnvars = jl_alloc_array_1d(jl_array_int32_type, 0);
     htable_new(&s.callers_with_edges, 0);
     jl_value_t **const*const tags = get_tags(); // worklist == NULL ? get_tags() : NULL;
 
@@ -2459,22 +2481,16 @@ static void jl_save_system_image_to_stream(ios_t *f,
             jl_write_value(&s, edges);
         }
         write_uint32(f, jl_array_len(s.link_ids_gctags));
-        ios_write(f, (char*)jl_array_data(s.link_ids_gctags), jl_array_len(s.link_ids_gctags)*sizeof(uint64_t));
+        ios_write(f, (char*)jl_array_data(s.link_ids_gctags), jl_array_len(s.link_ids_gctags) * sizeof(uint32_t));
         write_uint32(f, jl_array_len(s.link_ids_relocs));
-        ios_write(f, (char*)jl_array_data(s.link_ids_relocs), jl_array_len(s.link_ids_relocs)*sizeof(uint64_t));
+        ios_write(f, (char*)jl_array_data(s.link_ids_relocs), jl_array_len(s.link_ids_relocs) * sizeof(uint32_t));
         write_uint32(f, jl_array_len(s.link_ids_gvars));
-        ios_write(f, (char*)jl_array_data(s.link_ids_gvars), jl_array_len(s.link_ids_gvars)*sizeof(uint64_t));
+        ios_write(f, (char*)jl_array_data(s.link_ids_gvars), jl_array_len(s.link_ids_gvars) * sizeof(uint32_t));
         write_uint32(f, jl_array_len(s.link_ids_external_fnvars));
-        ios_write(f, (char*)jl_array_data(s.link_ids_external_fnvars), jl_array_len(s.link_ids_external_fnvars)*sizeof(uint64_t));
+        ios_write(f, (char*)jl_array_data(s.link_ids_external_fnvars), jl_array_len(s.link_ids_external_fnvars) * sizeof(uint32_t));
         write_uint32(f, external_fns_begin);
         jl_write_arraylist(s.s, &s.ccallable_list);
     }
-    // Write the build_id key
-    uint64_t buildid = 0;
-    if (worklist)
-        buildid = jl_worklist_key(worklist);
-    write_uint32(f, buildid >> 32);
-    write_uint32(f, buildid & (((uint64_t)1 << 32) - 1));
 
     assert(object_worklist.len == 0);
     arraylist_free(&object_worklist);
@@ -2592,7 +2608,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     }
     if (_native_data != NULL)
         native_functions = *_native_data;
-    jl_save_system_image_to_stream(ff, worklist, extext_methods, new_specializations, method_roots_list, ext_targets, edges);
+    jl_save_system_image_to_stream(ff, mod_array, worklist, extext_methods, new_specializations, method_roots_list, ext_targets, edges);
     if (_native_data != NULL)
         native_functions = NULL;
     // make sure we don't run any Julia code concurrently before this point
@@ -2765,25 +2781,26 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         offset_ext_targets = jl_read_offset(&s);
         offset_edges = jl_read_offset(&s);
     }
+    s.buildid_depmods_idxs = depmod_to_imageidx(depmods);
     size_t nlinks_gctags = read_uint32(f);
     if (nlinks_gctags > 0) {
-        s.link_ids_gctags = jl_alloc_array_1d(jl_array_uint64_type, nlinks_gctags);
-        ios_read(f, (char*)jl_array_data(s.link_ids_gctags), nlinks_gctags * sizeof(uint64_t));
+        s.link_ids_gctags = jl_alloc_array_1d(jl_array_int32_type, nlinks_gctags);
+        ios_read(f, (char*)jl_array_data(s.link_ids_gctags), nlinks_gctags * sizeof(uint32_t));
     }
     size_t nlinks_relocs = read_uint32(f);
     if (nlinks_relocs > 0) {
-        s.link_ids_relocs = jl_alloc_array_1d(jl_array_uint64_type, nlinks_relocs);
-        ios_read(f, (char*)jl_array_data(s.link_ids_relocs), nlinks_relocs * sizeof(uint64_t));
+        s.link_ids_relocs = jl_alloc_array_1d(jl_array_int32_type, nlinks_relocs);
+        ios_read(f, (char*)jl_array_data(s.link_ids_relocs), nlinks_relocs * sizeof(uint32_t));
     }
     size_t nlinks_gvars = read_uint32(f);
     if (nlinks_gvars > 0) {
-        s.link_ids_gvars = jl_alloc_array_1d(jl_array_uint64_type, nlinks_gvars);
-        ios_read(f, (char*)jl_array_data(s.link_ids_gvars), nlinks_gvars * sizeof(uint64_t));
+        s.link_ids_gvars = jl_alloc_array_1d(jl_array_int32_type, nlinks_gvars);
+        ios_read(f, (char*)jl_array_data(s.link_ids_gvars), nlinks_gvars * sizeof(uint32_t));
     }
     size_t nlinks_external_fnvars = read_uint32(f);
     if (nlinks_external_fnvars > 0) {
-        s.link_ids_external_fnvars = jl_alloc_array_1d(jl_array_uint64_type, nlinks_external_fnvars);
-        ios_read(f, (char*)jl_array_data(s.link_ids_external_fnvars), nlinks_external_fnvars * sizeof(uint64_t));
+        s.link_ids_external_fnvars = jl_alloc_array_1d(jl_array_int32_type, nlinks_external_fnvars);
+        ios_read(f, (char*)jl_array_data(s.link_ids_external_fnvars), nlinks_external_fnvars * sizeof(uint32_t));
     }
     uint32_t external_fns_begin = read_uint32(f);
     jl_read_arraylist(s.s, ccallable_list ? ccallable_list : &s.ccallable_list);
@@ -3170,12 +3187,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     arraylist_push(&jl_image_relocs, (void*)relocs_base);
 
     // jl_printf(JL_STDOUT, "%ld blobs to link against\n", jl_linkage_blobs.len >> 1);
-    uint64_t buildid = (((uint64_t)read_uint32(f)) << 32) | read_uint32(f);
-    if (!jl_build_ids)
-        jl_build_ids = jl_alloc_array_1d(jl_array_uint64_type, 0);
-    jl_array_grow_end(jl_build_ids, 1);
-    uint64_t *build_id_data = (uint64_t*)jl_array_data(jl_build_ids);
-    build_id_data[jl_array_len(jl_build_ids)-1] = buildid;
     jl_gc_enable(en);
 }
 
