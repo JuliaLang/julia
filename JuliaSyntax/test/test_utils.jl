@@ -99,6 +99,10 @@ function triple_string_roughly_equal(fl_str, str)
     return true
 end
 
+function exprs_equal_no_linenum(fl_ex, ex)
+    remove_all_linenums!(deepcopy(ex)) == remove_all_linenums!(deepcopy(fl_ex))
+end
+
 # Compare Expr from reference parser expression to JuliaSyntax parser, ignoring
 # differences due to bugs in the reference parser.
 function exprs_roughly_equal(fl_ex, ex)
@@ -143,6 +147,15 @@ function exprs_roughly_equal(fl_ex, ex)
     if (h == :global || h == :local) && length(args) == 1 && Meta.isexpr(args[1], :tuple)
         # Allow invalid syntax like `global (x, y)`
         args = args[1].args
+    elseif h == :function && Meta.isexpr(fl_args[1], :block)
+        blockargs = filter(x->!(x isa LineNumberNode), fl_args[1].args)
+        ps = blockargs[2:end]
+        for i = 1:length(ps)
+            if Meta.isexpr(ps[i], :(=))
+                ps[i] = Expr(:kw, ps[i].args...)
+            end
+        end
+        fl_args[1] = Expr(:tuple, Expr(:parameters, ps...), blockargs[1])
     end
     if length(fl_args) != length(args)
         return false
@@ -163,7 +176,8 @@ function exprs_roughly_equal(fl_ex, ex)
     return true
 end
 
-function parsers_agree_on_file(filename; show_diff=false)
+function parsers_agree_on_file(filename; exprs_equal=exprs_equal_no_linenum,
+                               show_diff=false)
     text = try
         read(filename, String)
     catch
@@ -185,9 +199,7 @@ function parsers_agree_on_file(filename; show_diff=false)
         if show_diff && ex != fl_ex
             show_expr_text_diff(stdout, show, ex, fl_ex)
         end
-        return !JuliaSyntax.any_error(stream) &&
-            JuliaSyntax.remove_linenums!(ex) ==
-            JuliaSyntax.remove_linenums!(fl_ex)
+        return !JuliaSyntax.any_error(stream) && exprs_equal(fl_ex, ex)
         # Could alternatively use
         # exprs_roughly_equal(fl_ex, ex)
     catch exc
@@ -218,27 +230,29 @@ end
 
 # Check whether a given SyntaxNode converts to the same Expr as the flisp
 # parser produces from the source text of the node.
-function equals_flisp_parse(tree)
+function equals_flisp_parse(exprs_equal, tree)
     node_text = sourcetext(tree)
     # Reparse with JuliaSyntax. This is a crude way to ensure we're not missing
     # some context from the parent node.
-    ex = parseall(Expr, node_text)
-    fl_ex = fl_parseall(node_text)
-    if Meta.isexpr(fl_ex, :error)
-        return true  # Something went wrong in reduction; ignore these cases 😬
+    fl_ex = fl_parseall(node_text, filename="none")
+    if Meta.isexpr(fl_ex, :error) || (Meta.isexpr(fl_ex, :toplevel) &&
+                                      length(fl_ex.args) >= 1 &&
+                                      Meta.isexpr(fl_ex.args[end], :error))
+        return true # Something went wrong in reduction; ignore these cases 😬
     end
-    remove_all_linenums!(ex) == remove_all_linenums!(fl_ex)
+    ex = parseall(Expr, node_text, filename="none", ignore_errors=true)
+    exprs_equal(fl_ex, ex)
 end
 
 """
-    reduce_test(text::AbstractString)
-    reduce_test(tree::SyntaxNode)
+    reduce_test(text::AbstractString; exprs_equal=exprs_equal_no_linenum)
+    reduce_test(tree::SyntaxNode; exprs_equal=exprs_equal_no_linenum)
 
 Select minimal subtrees of `text` or `tree` which are inconsistent between
 flisp and JuliaSyntax parsers.
 """
-function reduce_test(failing_subtrees, tree)
-    if equals_flisp_parse(tree)
+function reduce_test(failing_subtrees, tree; exprs_equal=exprs_equal_no_linenum)
+    if equals_flisp_parse(exprs_equal, tree)
         return false
     end
     if !haschildren(tree)
@@ -251,7 +265,7 @@ function reduce_test(failing_subtrees, tree)
             if is_trivia(child) || !haschildren(child)
                 continue
             end
-            had_failing_subtrees |= reduce_test(failing_subtrees, child)
+            had_failing_subtrees |= reduce_test(failing_subtrees, child; exprs_equal=exprs_equal)
         end
     end
     if !had_failing_subtrees
@@ -260,15 +274,15 @@ function reduce_test(failing_subtrees, tree)
     return true
 end
 
-function reduce_test(tree::SyntaxNode)
+function reduce_test(tree::SyntaxNode; kws...)
     subtrees = Vector{typeof(tree)}()
-    reduce_test(subtrees, tree)
+    reduce_test(subtrees, tree; kws...)
     subtrees
 end
 
-function reduce_test(text::AbstractString)
+function reduce_test(text::AbstractString; kws...)
     tree = parseall(SyntaxNode, text)
-    reduce_test(tree)
+    reduce_test(tree; kws...)
 end
 
 
