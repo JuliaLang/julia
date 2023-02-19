@@ -286,10 +286,10 @@ end
 """
 Print the code, highlighting the part covered by `node` at tree `path`.
 """
-function highlight(code::String, node, path::Int...; color=(40,40,70))
+function highlight(io::IO, code::String, node, path::Int...; color=(40,40,70))
     node, p, span = child_position_span(node, path...)
     q = p + span
-    print(stdout, code[1:p-1])
-    _printstyled(stdout, code[p:q-1]; bgcolor=color)
-    print(stdout, code[q:end])
+    print(io, code[1:p-1])
+    _printstyled(io, code[p:q-1]; bgcolor=color)
+    print(io, code[q:end])
 end
