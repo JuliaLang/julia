@@ -714,7 +714,7 @@ function binomial(n::BigInt, k::Integer)
     κ = n - k
     κ < 0 && return BigInt(0)
     κ <= typemax(Culong) && return binomial(n, Culong(κ))
-    throw(OverflowError("Computation will exceed memory"))
+    throw(OverflowError("Computation would exceed memory"))
 end
 binomial(n::BigInt, k::Culong) = MPZ.bin_ui(n, k)
 
