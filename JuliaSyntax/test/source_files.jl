@@ -26,7 +26,9 @@
         @test source_location(SourceFile(; filename=path), 1) == (1,1)
         @test source_location(SourceFile(; filename=path, first_line=7), 1) == (7,1)
     end
+end
 
+@testset "SourceFile position indexing" begin
     @test SourceFile("a\nb\n")[1:2] == "a\n"
     @test SourceFile("a\nb\n")[3:end] == "b\n"
     if Base.VERSION >= v"1.4"
@@ -36,4 +38,14 @@
 
     # unicode
     @test SourceFile("αβ")[1:2] == "α"
+    @test SourceFile("αβ")[3] == 'β'
+end
+
+@testset "SourceFile printing and text extraction" begin
+    srcf = SourceFile("module Foo\nend")
+    @test sprint(show, MIME("text/plain"), srcf) == """
+    ## SourceFile ##
+    module Foo
+    end"""
+    @test sourcetext(srcf) == "module Foo\nend"
 end
