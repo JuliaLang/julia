@@ -851,9 +851,11 @@ function _hypot(x::NTuple{N,T}) where {N,T<:IEEEFloat}
     # note: any() was causing this to not inline for N=3 but mapreduce() was not
     mapreduce(==(infT), |, x) && return infT # return Inf even if an argument is NaN
     maxabs = reinterpret(T, maximum(z -> reinterpret(Signed, z), x)) # for abs(::IEEEFloat) values, a ::BitInteger cast does not change the result
-    iszero(maxabs) && return maxabs
+    maxabs > zero(T) || return maxabs # catch NaN before the @fastmath below, but also shortcut 0 since we can (remove if no more @fastmath below)
     scale,invscale = scaleinv(maxabs)
-    return scale * sqrt(sum(y -> abs2(y * invscale), x))
+     # @fastmath(+) to allow reassociation (see #48129)
+    add_fast(x, y) = Core.Intrinsics.add_float_fast(x, y) # @fastmath is not available during bootstrap
+    return scale * sqrt(mapreduce(y -> abs2(y * invscale), add_fast, x))
 end
 
 atan(y::Real, x::Real) = atan(promote(float(y),float(x))...)
