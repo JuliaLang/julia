@@ -27,6 +27,13 @@
     @test sprint(JuliaSyntax.highlight, tt, t, 1, 3) == "a*\e[48;2;40;40;70mb\e[0;0m + c"
     @test sprint(JuliaSyntax.highlight, tt, t.raw, 5) == "a*b + \e[48;2;40;40;70mc\e[0;0m"
 
+    # Pass-through field access
+    node = child(t, 1, 1)
+    @test node.val === :a
+    # The specific error text has evolved over Julia versions. Check that it involves `SyntaxData` and immutability
+    e = try node.val = :q catch e e end
+    @test occursin("immutable", e.msg) && occursin("SyntaxData", e.msg)
+
     node = parse(SyntaxNode, "f()")
     push!(node, parse(SyntaxNode, "x"))
     @test length(children(node)) == 2
