@@ -122,7 +122,7 @@
                                (string (deparse (cadr e)) (car e) (deparse (caddr e)))))
            ((comparison) (string.join (map deparse (cdr e)) " "))
            ((macrocall) (string (cadr e) " " (deparse-arglist (cddr e) " ")))
-           ((kw)        (string (deparse (cadr e)) " = " (deparse (caddr e))))
+           ((kw renamedkw)     (string (deparse (cadr e)) " = " (deparse (caddr e))))
            ((where)     (string (deparse (cadr e)) " where "
                                 (if (length= e 3)
                                     (deparse (caddr e))
@@ -338,7 +338,7 @@
             (if (nospecialize-meta? v #t)
                 (arg-name (caddr v))
                 (bad-formal-argument v)))
-           ((kw)
+           ((kw renamedkw)
             (arg-name (cadr v)))
            (else (bad-formal-argument v))))))
 
@@ -359,7 +359,7 @@
             (if (nospecialize-meta? v #t)
                 (arg-type (caddr v))
                 (bad-formal-argument v)))
-           ((kw)
+           ((kw renamedkw)
             (arg-type (cadr v)))
            (else (bad-formal-argument v))))))
 
@@ -517,7 +517,7 @@
   (and (pair? e) (is-prec-assignment? (car e))))
 
 (define (kwarg? e)
-  (and (pair? e) (eq? (car e) 'kw)))
+  (and (pair? e) (memq (car e) '(kw renamedkw))))
 
 (define (nospecialize-meta? e (one #f))
   (and (if one (length= e 3) (length> e 2))

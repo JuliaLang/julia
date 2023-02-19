@@ -4602,3 +4602,21 @@ end
     @test_throws UndefVarError macroexpand(@__MODULE__, :(@undefined_macro(x)))
     @test_throws UndefVarError macroexpand!(@__MODULE__, :(@undefined_macro(x)))
 end
+
+macro prop_destruct_macroexpand1()
+    :((; foo_prop_destruct1) = (foo_prop_destruct1 = 7,))
+end
+macro prop_destruct_macroexpand2()
+    :(let (; foo_prop_destruct2) = (foo_prop_destruct2 = 8,)
+        foo_prop_destruct2
+    end)
+end
+
+@testset "macro expansion of property destructuring" begin
+    m = @__MODULE__
+    @test @prop_destruct_macroexpand1() == (foo_prop_destruct1 = 7,)
+    @test m.foo_prop_destruct1 == 7
+
+    @test @prop_destruct_macroexpand2() == 8
+    @test !isdefined(m, :foo_prop_destruct2)
+end

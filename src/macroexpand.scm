@@ -438,10 +438,10 @@
            ((parameters)
             (cons 'parameters
                   (map (lambda (x)
-                         ;; `x` by itself after ; means `x=x`
+                         ;; outside of function definitions, `x` by itself after ; means `x=x`
                          (let* ((ux (unescape x))
-                                (x (if (and (not inarg) (symbol? ux))
-                                       `(kw ,ux ,x)
+                                (x (if (symbol? ux)
+                                       `(,(if inarg 'renamedkw 'kw) ,ux ,x)
                                        x)))
                            (resolve-expansion-vars- x env m lno parent-scope #f)))
                        (cdr e))))
@@ -456,7 +456,7 @@
                                    (resolve-expansion-vars-with-new-env x env m lno parent-scope inarg))
                                  (cddr e))))
 
-           ((kw)
+           ((kw renamedkw)
             (cond
              ((not (length> e 2)) e)
              ((and (pair? (cadr e))
@@ -464,7 +464,7 @@
               (let* ((type-decl (cadr e)) ;; [argname]::type
                      (argname   (and (length> type-decl 2) (cadr type-decl)))
                      (type      (if argname (caddr type-decl) (cadr type-decl))))
-                `(kw (|::|
+                `(,(car e) (|::|
                       ,@(if argname
                             (list (if inarg
                                       (resolve-expansion-vars- argname env m lno parent-scope inarg)
@@ -474,7 +474,7 @@
                       ,(resolve-expansion-vars- type env m lno parent-scope inarg))
                      ,(resolve-expansion-vars-with-new-env (caddr e) env m lno parent-scope inarg))))
              (else
-              `(kw ,(if inarg
+              `(,(car e) ,(if inarg
                         (resolve-expansion-vars- (cadr e) env m lno parent-scope inarg)
                         (unescape (cadr e)))
                    ,(resolve-expansion-vars-with-new-env (caddr e) env m lno parent-scope inarg)))))

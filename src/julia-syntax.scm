@@ -17,7 +17,7 @@
   (if (any vararg? (butlast l))
       (error "invalid \"...\" on non-final argument"))
   (map (lambda (a)
-         (cond ((and (pair? a) (eq? (car a) 'kw))
+         (cond ((kwarg? a)
                 `(kw ,(fill-missing-argname (cadr a) unused) ,(caddr a)))
                ((and (pair? a) (eq? (car a) '...))
                 `(... ,(fill-missing-argname (cadr a) unused)))
@@ -127,7 +127,7 @@
                 (cddr ex)))
         ;; TODO: this probably should not be allowed since keyword args aren't
         ;; positional, but in this context we have just used their positions anyway
-        ((eq? (car ex) 'kw)
+        ((kwarg? ex)
          (list 'kw (cadr ex) (replace-beginend (caddr ex) a n tuples last)))
         (else
          (cons (car ex)
@@ -1801,8 +1801,8 @@
           (cond ((effect-free? x)  x)
                 ((or (eq? (car x) '...) (eq? (car x) '&))
                  `(,(car x) ,(arg-to-temp (cadr x))))
-                ((eq? (car x) 'kw)
-                 `(,(car x) ,(cadr x) ,(arg-to-temp (caddr x))))
+                ((kwarg? x)
+                 `(kw ,(cadr x) ,(arg-to-temp (caddr x))))
                 (else
                  (let ((g (make-ssavalue)))
                    (begin (set! a (cons `(= ,g ,x) a))
@@ -2402,6 +2402,17 @@
          (gensy))
         (else (make-ssavalue))))
 
+(define (extract-dest-prop field lhs)
+  (cond ((symbol? field) (list field field))
+        ((and (pair? field) (eq? (car field) '|::|))
+         (extract-dest-prop (cadr field) lhs))
+        ((globalref? field)
+         (list field (caddr field)))
+        ((and (pair? field) (eq? (car field) 'renamedkw))
+         (cdr field))
+        (else
+         (error (string "invalid assignment location \"" (deparse `(tuple ,lhs)) "\"")))))
+
 (define (expand-property-destruct lhs x (wrap identity))
   (if (not (length= lhs 1))
       (error (string "invalid assignment location \"" (deparse `(tuple ,lhs)) "\"")))
@@ -2412,12 +2423,8 @@
        ,@ini
        ,@(map
            (lambda (field)
-             (let ((prop (cond ((symbol? field) field)
-                               ((and (pair? field) (eq? (car field) '|::|) (symbol? (cadr field)))
-                                (cadr field))
-                               (else
-                                (error (string "invalid assignment location \"" (deparse `(tuple ,lhs)) "\""))))))
-               (expand-forms (wrap `(= ,field (call (top getproperty) ,xx (quote ,prop)))))))
+             (let ((dest-prop (extract-dest-prop field lhs)))
+               (expand-forms (wrap `(= ,(car dest-prop) (call (top getproperty) ,xx (quote ,(cadr dest-prop))))))))
            lhss)
        (unnecessary ,xx))))
 
