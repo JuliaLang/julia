@@ -1667,6 +1667,25 @@ JL_CALLABLE(jl_f__sbuf_ref)
     }
     return jl_sbuf_ref(s, idx-1);
 }
+JL_CALLABLE(jl_f__sbuf_set)
+{
+    JL_NARGS(_sbuf_set, 4, 4);
+    jl_value_t *b = args[0];
+    jl_sbuf_t *s = (jl_sbuf_t*)args[1];
+    jl_value_t *v = (jl_value_t*)args[2];
+    jl_value_t *i = (jl_value_t*)args[3];
+    JL_TYPECHK(_sbuf_set, bool, b);
+    JL_TYPECHK(_sbuf_set, simplebuffer, (jl_value_t*)s);
+    JL_TYPECHK(_sbuf_set, long, i);
+    size_t len = jl_sbuf_len(s);
+    uint8_t val = jl_unbox_uint8(v);
+    ssize_t idx = jl_unbox_long(i);
+    if (idx < 1 || idx > len) {
+        jl_bounds_error_int((jl_value_t*)s, idx);
+    }
+    jl_sbuf_set(s, val, idx-1);
+    return v;
+}
 
 static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
 {
@@ -2039,6 +2058,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("_compute_sparams", jl_f__compute_sparams);
     add_builtin_func("_svec_ref", jl_f__svec_ref);
     add_builtin_func("_sbuf_ref", jl_f__sbuf_ref);
+    add_builtin_func("_sbuf_set", jl_f__sbuf_set);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);

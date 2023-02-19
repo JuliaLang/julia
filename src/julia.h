@@ -152,7 +152,7 @@ typedef struct {
     // jl_value_t *data[];
 } jl_svec_t;
 
-// A SimpleBuffer is a semi-immutable pointer array
+// A SimpleBuffer is a fixed size array if `length` number of bits.
 // Data is stored at the end of this variable-length struct.
 typedef struct {
     JL_DATA_TYPE
@@ -981,7 +981,6 @@ JL_DLLEXPORT void jl_gc_safepoint(void);
 #define jl_svec_data(t) ((jl_value_t**)((char*)(t) + sizeof(jl_svec_t)))
 
 #define jl_sbuf_len(t)              (((jl_sbuf_t*)(t))->length)
-#define jl_sbuf_set_len_unsafe(t,n) (((jl_sbuf_t*)(t))->length=(n))
 #define jl_sbuf_data(t) ((jl_value_t**)((char*)(t) + sizeof(jl_sbuf_t)))
 
 #ifdef __clang_gcanalyzer__

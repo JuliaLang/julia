@@ -702,6 +702,7 @@ end
 # SimpleBuffer
 SimpleBuffer(n::Int) = ccall(:jl_alloc_sbuf, Any, (UInt,), n)
 @eval getindex(b::SimpleBuffer, i::Int) = Core._sbuf_ref($(Expr(:boundscheck)), b, i)
+@eval setindex!(b::SimpleBuffer, v, i::Int) = Core._sbuf_set($(Expr(:boundscheck)), b, convert(UInt8, v), i)
 length(b::SimpleBuffer) = ccall(:jl_sbuf_len, Int, (Any,), b)
 firstindex(b::SimpleBuffer) = 1
 lastindex(b::SimpleBuffer) = length(b)
@@ -787,7 +788,10 @@ function isassigned(v::SimpleVector, i::Int)
     @boundscheck 1 <= i <= length(v) || return false
     return true
 end
-
+function isassigned(sb::SimpleBuffer, i::Int)
+    @boundscheck 1 <= i <= length(sb) || return false
+    return true
+end
 
 """
     Colon()

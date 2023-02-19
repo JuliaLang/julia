@@ -1280,7 +1280,7 @@ function show(io::IO, tinf::Core.Compiler.Timings.Timing)
     print(io, "Core.Compiler.Timings.Timing(", tinf.mi_info, ") with ", length(tinf.children), " children")
 end
 
-function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl,
+function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector,SimpleBuffer}, op, delim, cl,
                           delim_one, i1=first(LinearIndices(itr)), l=last(LinearIndices(itr)))
     print(io, op)
     if !show_circular(io, itr)
@@ -1345,6 +1345,9 @@ end
 
 show(io::IO, t::Tuple) = show_delim_array(io, t, '(', ',', ')', true)
 show(io::IO, v::SimpleVector) = show_delim_array(io, v, "svec(", ',', ')', false)
+function show(io::IO, sb::SimpleBuffer)
+    show_delim_array(io, sb, "SimpleBuffer([", ',', "])", false)
+end
 
 show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0, 0)
 

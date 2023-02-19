@@ -1495,7 +1495,8 @@ JL_DLLEXPORT size_t (jl_svec_len)(jl_svec_t *t) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_svec_ref(jl_svec_t *t JL_PROPAGATES_ROOT, ssize_t i);
 
 JL_DLLEXPORT size_t (jl_sbuf_len)(jl_sbuf_t *t) JL_NOTSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_sbuf_ref(jl_sbuf_t *t JL_PROPAGATES_ROOT, ssize_t i);
+jl_value_t *jl_sbuf_ref(jl_sbuf_t *t JL_PROPAGATES_ROOT, ssize_t i);
+void jl_sbuf_set(jl_sbuf_t *sb JL_PROPAGATES_ROOT, uint8_t v, ssize_t i);
 
 JL_DLLEXPORT unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *field_type);
 

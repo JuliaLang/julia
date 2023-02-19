@@ -20,9 +20,11 @@ JL_DLLEXPORT jl_sbuf_t *jl_alloc_sbuf(size_t n)
 {
     if (n == 0) return jl_emptysbuf;
     jl_task_t *ct = jl_current_task;
-    jl_sbuf_t *sb = (jl_sbuf_t*)jl_gc_alloc(ct->ptls, sizeof(void*) + n, jl_simplebuffer_type);
-    jl_sbuf_set_len_unsafe(sb, n);
-    return sb;
+    void *sb = jl_gc_alloc(ct->ptls, sizeof(void*) + n, jl_simplebuffer_type);
+    *(size_t*)(sb) = n;
+    // jl_sbuf_t *sb = (jl_sbuf_t*)jl_gc_alloc(ct->ptls, sizeof(void*) + n, jl_simplebuffer_type);
+    // jl_sbuf_set_len_unsafe(sb, n);
+    return (jl_sbuf_t*)(sb);
 }
 
 JL_DLLEXPORT jl_sbuf_t *jl_sbuf_copy(jl_sbuf_t *a)
@@ -38,7 +40,12 @@ JL_DLLEXPORT size_t (jl_sbuf_len)(jl_sbuf_t *t) JL_NOTSAFEPOINT
     return jl_sbuf_len(t);
 }
 
-JL_DLLEXPORT jl_value_t *jl_sbuf_ref(jl_sbuf_t *sb JL_PROPAGATES_ROOT, ssize_t i)
+jl_value_t *jl_sbuf_ref(jl_sbuf_t *sb JL_PROPAGATES_ROOT, ssize_t i)
 {
     return jl_box_uint8(((uint8_t*)(jl_sbuf_data(sb)))[i]);
+}
+
+void jl_sbuf_set(jl_sbuf_t *sb JL_PROPAGATES_ROOT, uint8_t v, ssize_t i)
+{
+    ((uint8_t*)(jl_sbuf_data(sb)))[i] = v;
 }
