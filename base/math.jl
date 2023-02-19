@@ -1091,6 +1091,11 @@ Inf, NaN, and zero inputs also result in finite nonzero outputs.
 These values are useful to scale computations to prevent overflow and underflow
 without round-off errors or division.
 
+UNSTABLE DETAIL: For `x isa IEEEFLoat`, `scale` is chosen to be the
+`prevpow(2,abs(x))` when possible, but is never less than floatmin(x) or greater
+than inv(floatmin(x)). `Inf` and `NaN` resolve to `inv(floatmin(x))`. This
+behavior is subject to change.
+
 # Examples
 ```jldoctest
 julia> $(@__MODULE__).scaleinv(7.5)
