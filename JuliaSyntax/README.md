@@ -53,14 +53,14 @@ the `call` has the infix `-i` flag):
 julia> using JuliaSyntax: JuliaSyntax, SyntaxNode, GreenNode
 
 julia> JuliaSyntax.parse(SyntaxNode, "(x + y)*z", filename="foo.jl")
-line:col│ byte_range  │ tree                                   │ file_name
-   1:1  │     1:9     │[call-i]                                │foo.jl
-   1:2  │     2:6     │  [call-i]
-   1:2  │     2:2     │    x
-   1:4  │     4:4     │    +
-   1:6  │     6:6     │    y
-   1:8  │     8:8     │  *
-   1:9  │     9:9     │  z
+line:col│ tree                                   │ file_name
+   1:1  │[call-i]                                │foo.jl
+   1:2  │  [call-i]
+   1:2  │    x
+   1:4  │    +
+   1:6  │    y
+   1:8  │  *
+   1:9  │  z
 ```
 
 Internally this has a full representation of all syntax trivia (whitespace and
