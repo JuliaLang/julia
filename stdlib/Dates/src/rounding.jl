@@ -6,6 +6,7 @@ const DATETIMEEPOCH = value(DateTime(0))
 
 # According to ISO 8601, the first day of the first week of year 0000 is 0000-01-03
 const WEEKEPOCH = value(Date(0, 1, 3))
+
 const ConvertiblePeriod = Union{TimePeriod, Week, Day}
 const TimeTypeOrPeriod = Union{TimeType, ConvertiblePeriod}
 
@@ -61,7 +62,6 @@ function Base.floor(p::Quarter, dt::Date)
     return floor(dt, Month(p))
 end
 
-
 function Base.floor(p::Week, dt::Date)
     value(p) < 1 && throw(DomainError(p))
     days = value(dt) - WEEKEPOCH
@@ -75,16 +75,16 @@ function Base.floor(p::Day, dt::Date)
     return epochdays2date(days - mod(days, value(p)))
 end
 
-Base.floor(p::DatePeriod, dt::DateTime) = DateTime(Base.floor(Date(dt), p))
+Base.floor(p::DatePeriod, dt::DateTime) = DateTime(Base.floor(p, Date(dt)))
 
-function Base.floor(dt::DateTime, p::TimePeriod)
+function Base.floor(p::TimePeriod, dt::DateTime)
     value(p) < 1 && throw(DomainError(p))
     milliseconds = datetime2epochms(dt)
     return epochms2datetime(milliseconds - mod(milliseconds, value(Millisecond(p))))
 end
 
 """
-    Base.floor(x::ConvertiblePeriod, precision::T) where T <: ConvertiblePeriod
+    floor(precision::T, x::Period) where T <: Union{TimePeriod, Week, Day} -> T
 
 Round `x` down to the nearest multiple of `precision`. If `x` and `precision` are different
 subtypes of `Period`, the return value will have the same type as `precision`.
@@ -96,10 +96,8 @@ shortcut for `floor(Dates.Hour(1), x)`.
 julia> floor(Week, Day(16))
 2 weeks
 
-!!! warning
-    Argument order of this floor method differs from the standard rounding argument order. 
-    julia> floor(Minute(44), Minute(15))
-    30 minutes
+julia> floor(Minute(15), Minute(44))
+30 minutes
 
 julia> floor(Day, Hour(36))
 1 day
@@ -108,7 +106,7 @@ julia> floor(Day, Hour(36))
 Rounding to a `precision` of `Month`s or `Year`s is not supported, as these `Period`s are of
 inconsistent length.
 """
-function Base.floor(x::ConvertiblePeriod, precision::T) where T <: ConvertiblePeriod
+function Base.floor(precision::T, x::ConvertiblePeriod) where T <: ConvertiblePeriod
     value(precision) < 1 && throw(DomainError(precision))
     _x, _precision = promote(x, precision)
     return T(_x - mod(_x, _precision))
@@ -136,7 +134,7 @@ julia> floor(Day, DateTime(2016, 8, 6, 12, 0, 0))
 Base.floor(::Dates.Period, ::Dates.TimeType)
 
 """
-    ceil(dt::TimeType, p::Period) -> TimeType
+    ceil(p::Period, dt::TimeType) -> TimeType
 
 Return the nearest `Date` or `DateTime` greater than or equal to `dt` at resolution `p`.
 
@@ -160,7 +158,7 @@ function Base.ceil(p::Period, dt::TimeType)
 end
 
 """
-    Base.ceil(x::ConvertiblePeriod, precision::ConvertiblePeriod)
+    ceil(precision::T, x::Period) where T <: Union{TimePeriod, Week, Day} -> T
 
 Round `x` up to the nearest multiple of `precision`. If `x` and `precision` are different
 subtypes of `Period`, the return value will have the same type as `precision`.
@@ -172,10 +170,8 @@ shortcut for `ceil(Dates.Hour(1), x)`.
 julia> ceil(Week, Day(16))
 3 weeks
 
-!!! warning
-    argument order of this ceil method differs from the standard rounding argument order. 
-    julia> ceil(Minute(44), Minute(15))
-    45 minutes
+julia> ceil(Minute(15), Minute(44))
+45 minutes
 
 julia> ceil(Day, Hour(36))
 2 days
@@ -184,7 +180,7 @@ julia> ceil(Day, Hour(36))
 Rounding to a `precision` of `Month`s or `Year`s is not supported, as these `Period`s are of
 inconsistent length.
 """
-function Base.ceil(x::ConvertiblePeriod, precision::ConvertiblePeriod)
+function Base.ceil(precision::ConvertiblePeriod, x::ConvertiblePeriod)
     f = floor(precision, x)
     return (x == f) ? f : f + precision
 end
@@ -254,10 +250,8 @@ shortcut for `round(Dates.Hour(1), x)`.
 julia> round(Week, Day(16))
 2 weeks
 
-!!! warning
-    argument order of this round method differs from the standard rounding argument order. 
-    julia> round(Minute(44), Minute(15))
-    45 minutes
+julia> round(Minute(44), Minute(15))
+0 minutes
 
 julia> round(Day, Hour(36))
 2 days
@@ -269,7 +263,7 @@ Valid rounding modes for `round(::Period, ::T, ::RoundingMode)` are `RoundNeares
 Rounding to a `precision` of `Month`s or `Year`s is not supported, as these `Period`s are of
 inconsistent length.
 """
-function Base.round(x::ConvertiblePeriod, precision::ConvertiblePeriod, r::RoundingMode{:NearestTiesUp})
+function Base.round(precision::ConvertiblePeriod, x::ConvertiblePeriod, r::RoundingMode{:NearestTiesUp})
     f, c = floorceil(precision, x)
     _x, _f, _c = promote(x, f, c)
     return (_x - _f) < (_c - _x) ? f : c
@@ -287,6 +281,7 @@ Base.round(p::Period, ::TimeTypeOrPeriod, ::RoundingMode) = throw(DomainError(p)
 Base.round(p::Period, x::TimeTypeOrPeriod) = Base.round(p, x, RoundNearestTiesUp)
 
 # Make rounding functions callable using Period types in addition to values.
+
 Base.floor(::Type{P}, x::TimeTypeOrPeriod) where P <: Period = Base.floor(oneunit(P), x)
 Base.ceil(::Type{P}, x::TimeTypeOrPeriod)  where P <: Period = Base.ceil(oneunit(P), x)
 Base.floor(x::TimeTypeOrPeriod, ::Type{Date}, ::Type{P}) where P <: Period = Base.floor(oneunit(P), Date(x))
