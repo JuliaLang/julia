@@ -61,8 +61,6 @@ DECLARE_BUILTIN(setglobal);
 DECLARE_BUILTIN(finalizer);
 DECLARE_BUILTIN(_compute_sparams);
 DECLARE_BUILTIN(_svec_ref);
-DECLARE_BUILTIN(_sbuf_ref);
-DECLARE_BUILTIN(_sbuf_set);
 
 JL_CALLABLE(jl_f__structtype);
 JL_CALLABLE(jl_f__abstracttype);

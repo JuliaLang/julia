@@ -179,16 +179,18 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
         }
     }
     else if (jl_is_sbuf(v)) {
-        size_t l = jl_sbuf_len(v);
-        if (l <= 255) {
-            write_uint8(s->s, TAG_SBUF);
-            write_uint8(s->s, (uint8_t)l);
-        }
-        else {
-            write_uint8(s->s, TAG_LONG_SBUF);
-            write_int32(s->s, l);
-        }
-        ios_write(s->s, (const char*)jl_sbuf_data(v), l);
+        jl_sbuf_t *sb = (jl_sbuf_t*)(v);
+        jl_value_t *eltype = jl_sbuf_eltype((jl_value_t*)sb);
+        size_t elsize = jl_sbuf_elsize((jl_value_t*)sb);
+        size_t len = jl_svec_len(sb);
+        write_uint8(s->s, TAG_SBUF);
+        jl_encode_value(s, eltype);
+        write_int8(s->s, (int8_t)elsize);
+        write_int32(s->s, (int32_t)len);
+        size_t tot = elsize * len;
+        if (jl_is_uniontype(eltype))
+            tot += len;
+        ios_write(s->s, (const char*)jl_sbuf_data(v), tot);
     }
     else if (jl_is_globalref(v)) {
         if (jl_globalref_mod(v) == s->method->module) {
@@ -480,15 +482,17 @@ static jl_value_t *jl_decode_value_svec(jl_ircode_state *s, uint8_t tag) JL_GC_D
 
 static jl_value_t *jl_decode_value_sbuf(jl_ircode_state *s, uint8_t tag) JL_GC_DISABLED
 {
-    size_t len;
-    if (tag == TAG_SBUF)
-        len = read_uint8(s->s);
-    else
-        len = read_int32(s->s);
-    jl_sbuf_t *sb = jl_alloc_sbuf(len);
-    ios_readall(s->s, (char*)jl_sbuf_data(sb), len);
+    jl_value_t *eltype = jl_decode_value(s);
+    size_t elsize = (size_t)read_int8(s->s);
+    size_t len = (size_t)read_int32(s->s);
+    jl_sbuf_t *sb = jl_new_sbuf(eltype, len);
+    size_t tot = len * elsize;
+    if (jl_is_uniontype(eltype))
+        tot += len;
+    ios_readall(s->s, (char*)jl_sbuf_data(sb), tot);
     return (jl_value_t*)sb;
 }
+
 
 static jl_value_t *jl_decode_value_array(jl_ircode_state *s, uint8_t tag) JL_GC_DISABLED
 {

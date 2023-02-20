@@ -153,13 +153,23 @@ function (ss::SummarySize)(obj::Array)
     return size
 end
 
+# FIXME SimpleBuffer GC
 function (ss::SummarySize)(obj::SimpleBuffer)
+    haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
     key = pointer_from_objref(obj)
-    haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
-    size::Int = Core.sizeof(obj)
-    if !isempty(obj)
-        push!(ss.frontier_x, obj)
-        push!(ss.frontier_i, 1)
+    size::Int = sizeof(Int)
+    if !haskey(ss.seen, key)
+        dsize = Core.sizeof(obj)
+        T = eltype(obj)
+        if isbitsunion(T)
+            # add 1 union selector byte for each element
+            dsize += length(obj)
+        end
+        size += dsize
+        if !isempty(obj) &&
+            push!(ss.frontier_x, obj)
+            push!(ss.frontier_i, 1)
+        end
     end
     return size
 end

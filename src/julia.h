@@ -713,7 +713,8 @@ extern JL_DLLIMPORT jl_datatype_t *jl_partial_opaque_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_interconditional_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_method_match_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_simplevector_type JL_GLOBALLY_ROOTED;
-extern JL_DLLIMPORT jl_datatype_t *jl_simplebuffer_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_unionall_t *jl_simplebuffer_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_typename_t *jl_simplebuffer_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_typename_t *jl_tuple_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_typename_t *jl_vecelement_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_anytuple_type JL_GLOBALLY_ROOTED;
@@ -812,7 +813,6 @@ extern JL_DLLIMPORT jl_datatype_t *jl_typemap_level_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_typemap_entry_type JL_GLOBALLY_ROOTED;
 
 extern JL_DLLIMPORT jl_svec_t *jl_emptysvec JL_GLOBALLY_ROOTED;
-extern JL_DLLIMPORT jl_sbuf_t *jl_emptysbuf JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_emptytuple JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_true JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_false JL_GLOBALLY_ROOTED;
@@ -1234,8 +1234,6 @@ static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEP
 #define jl_is_namedtuple(v)  (((jl_datatype_t*)jl_typeof(v))->name == jl_namedtuple_typename)
 #define jl_is_svec(v)        jl_typeis(v,jl_simplevector_type)
 #define jl_is_simplevector(v) jl_is_svec(v)
-#define jl_is_sbuf(v)        jl_typeis(v,jl_simplebuffer_type)
-#define jl_is_simplebuffer(v) jl_is_sbuf(v)
 #define jl_is_datatype(v)    jl_typeis(v,jl_datatype_type)
 #define jl_is_mutable(t)     (((jl_datatype_t*)t)->name->mutabl)
 #define jl_is_mutable_datatype(t) (jl_is_datatype(t) && (((jl_datatype_t*)t)->name->mutabl))
@@ -1338,6 +1336,21 @@ STATIC_INLINE int jl_is_array(void *v) JL_NOTSAFEPOINT
     return jl_is_array_type(t);
 }
 
+STATIC_INLINE int jl_is_sbuf_type(void *t) JL_NOTSAFEPOINT
+{
+    return (jl_is_datatype(t) && ((jl_datatype_t*)(t))->name == jl_simplebuffer_typename);
+}
+
+STATIC_INLINE int jl_is_sbuf(void *v) JL_NOTSAFEPOINT
+{
+    jl_value_t *t = jl_typeof(v);
+    return jl_is_sbuf_type(t);
+}
+
+STATIC_INLINE void *jl_sbuf_eltype(jl_value_t *sb)
+{
+    return jl_tparam0(jl_typeof(sb));
+}
 
 STATIC_INLINE int jl_is_opaque_closure_type(void *t) JL_NOTSAFEPOINT
 {
@@ -1503,8 +1516,6 @@ JL_DLLEXPORT jl_svec_t *jl_alloc_svec(size_t n);
 JL_DLLEXPORT jl_svec_t *jl_alloc_svec_uninit(size_t n);
 JL_DLLEXPORT jl_svec_t *jl_svec_copy(jl_svec_t *a);
 JL_DLLEXPORT jl_svec_t *jl_svec_fill(size_t n, jl_value_t *x);
-JL_DLLEXPORT jl_sbuf_t *jl_alloc_sbuf(size_t n);
-JL_DLLEXPORT jl_sbuf_t *jl_alloc_sbuf_uninit(size_t n);
 JL_DLLEXPORT jl_sbuf_t *jl_sbuf_copy(jl_sbuf_t *a);
 JL_DLLEXPORT jl_sbuf_t *jl_sbuf_fill(size_t n, jl_value_t *x);
 JL_DLLEXPORT jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *v);
@@ -1574,6 +1585,18 @@ JL_DLLEXPORT int jl_get_size(jl_value_t *val, size_t *pnt);
 #define jl_ulong_type    jl_uint32_type
 #endif
 
+STATIC_INLINE size_t jl_sbuf_elsize(jl_value_t *sb)
+{
+    return (size_t)jl_unbox_long(jl_tparam1(jl_typeof(sb)));
+}
+STATIC_INLINE size_t jl_sbuf_nbytes(jl_value_t *sb)
+{
+    size_t len = jl_sbuf_len(sb);
+    size_t tot = jl_sbuf_elsize(sb) * len;
+    if (jl_is_uniontype(jl_sbuf_eltype(sb)))
+        tot += len;
+    return tot;
+}
 // structs
 JL_DLLEXPORT int         jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err);
 JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i);

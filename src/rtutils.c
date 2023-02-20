@@ -558,8 +558,8 @@ static size_t jl_show_sbuf(JL_STREAM *out, jl_sbuf_t *sb, const char *head, cons
     n += jl_printf(out, "%s", head);
     n += jl_printf(out, "%s", opn);
     for (i = 0; i < len; i++) {
-        uint8_t v = ((uint8_t*)(jl_sbuf_data(sb)))[i];
-        n += jl_printf(out, "0x%02" PRIx8, v);
+        jl_value_t *v = jl_unsafe_sbuf_ref(sb, i);
+        n += jl_static_show(out, v);
         if (i != len-1)
             n += jl_printf(out, ", ");
     }
@@ -775,8 +775,8 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if (vt == jl_simplevector_type) {
         n += jl_show_svec(out, (jl_svec_t*)v, "svec", "(", ")");
     }
-    else if (vt == jl_simplebuffer_type) {
-        n += jl_show_sbuf(out, (jl_sbuf_t*)v, "sbuf", "(", ")");
+    else if (vt->name == jl_simplebuffer_typename) {
+        n += jl_show_sbuf(out, (jl_sbuf_t*)v, "SimpleBuffer", "([", "])");
     }
     else if (v == (jl_value_t*)jl_unionall_type) {
         // avoid printing `typeof(Type)` for `UnionAll`.

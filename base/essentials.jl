@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Core: CodeInfo, SimpleVector, SimpleBuffer, donotdelete, compilerbarrier, arrayref
+import Core: CodeInfo, SimpleVector, donotdelete, compilerbarrier, arrayref
 
 const Callable = Union{Function,Type}
 
@@ -700,19 +700,35 @@ macro goto(name::Symbol)
 end
 
 # SimpleBuffer
-SimpleBuffer(n::Int) = ccall(:jl_alloc_sbuf, Any, (UInt,), n)
-@eval getindex(b::SimpleBuffer, i::Int) = Core._sbuf_ref($(Expr(:boundscheck)), b, i)
-@eval setindex!(b::SimpleBuffer, v, i::Int) = Core._sbuf_set($(Expr(:boundscheck)), b, convert(UInt8, v), i)
-length(b::SimpleBuffer) = ccall(:jl_sbuf_len, Int, (Any,), b)
-firstindex(b::SimpleBuffer) = 1
-lastindex(b::SimpleBuffer) = length(b)
-iterate(b::SimpleBuffer, i=1) = (length(b) < i ? nothing : (b[i], i + 1))
-eltype(::Type{SimpleBuffer}) = UInt8
-keys(b::SimpleBuffer) = OneTo(length(b))
-isempty(b::SimpleBuffer) = (length(b) == 0)
-axes(b::SimpleBuffer) = (OneTo(length(b)),)
-axes(b::SimpleBuffer, d::Integer) = d <= 1 ? OneTo(length(b)) : OneTo(1)
-
+function SimpleBuffer{T}(::UndefInitializer, n::Int) where {T}
+    ccall(:jl_new_sbuf, Any, (Any, UInt), T, n)
+end
+function getindex(sb::SimpleBuffer{T}, i::Int) where {T}
+    @boundscheck (1 <= i <= length(sb)) || throw(BoundsError(sb, i))
+    unsafe_getindex(sb, i)
+end
+function unsafe_getindex(sb::SimpleBuffer{T}, i::Int) where {T}
+    ccall(:jl_unsafe_sbuf_ref, Any, (Any, UInt), sb, i - 1)
+end
+function setindex!(sb::SimpleBuffer{T}, val, i::Int) where {T}
+    @boundscheck (1 <= i <= length(sb)) || throw(BoundsError(sb, i))
+    unsafe_setindex!(sb, val, i)
+end
+function unsafe_setindex!(sb::SimpleBuffer{T}, val, i::Int) where {T}
+    ccall(:jl_unsafe_sbuf_set, Any, (Any, Any, UInt), sb, convert(T, val), i - 1)
+end
+eltype(::Type{<:SimpleBuffer{T}}) where {T} = T
+elsize(@nospecialize T::Type{<:SimpleBuffer}) = aligned_sizeof(eltype(T))
+length(sb::SimpleBuffer) = ccall(:jl_sbuf_len, Int, (Any,), sb)
+firstindex(sb::SimpleBuffer) = 1
+lastindex(sb::SimpleBuffer) = length(sb)
+keys(sb::SimpleBuffer) = OneTo(length(sb))
+axes(sb::SimpleBuffer) = (OneTo(length(sb)),)
+axes(sb::SimpleBuffer, d::Integer) = d <= 1 ? OneTo(length(sb)) : OneTo(1)
+function iterate(sb::SimpleBuffer, i::Int=1)
+    (length(sb) < i ? nothing : (unsafe_getindex(sb, i), i + 1))
+end
+isempty(sb::SimpleBuffer) = (length(sb) == 0)
 function ==(v1::SimpleBuffer, v2::SimpleBuffer)
     length(v1)==length(v2) || return false
     for i = 1:length(v1)
@@ -720,8 +736,6 @@ function ==(v1::SimpleBuffer, v2::SimpleBuffer)
     end
     return true
 end
-
-# map(f, v::SimpleBuffer) = Any[ f(v[i]) for i = 1:length(v) ]
 
 
 # SimpleVector

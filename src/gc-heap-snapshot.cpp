@@ -205,7 +205,7 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
         name = "SimpleVector";
         self_size = sizeof(jl_svec_t) + sizeof(void*) * jl_svec_len(a);
     }
-    else if (jl_is_simplebuffer(a)) {
+    else if (jl_is_sbuf_type(a)) {
         node_type = "jl_sbuf_t";
         name = "SimpleBuffer";
         self_size = sizeof(jl_sbuf_t) + sizeof(void*) * jl_sbuf_len(a);

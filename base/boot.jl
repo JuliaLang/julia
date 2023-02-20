@@ -174,7 +174,7 @@ export
     AbstractArray, DenseArray, NamedTuple, Pair,
     # special objects
     Function, Method,
-    Module, Symbol, Task, Array, UndefInitializer, undef, WeakRef, VecElement,
+    Module, Symbol, Task, Array, SimpleBuffer, UndefInitializer, undef, WeakRef, VecElement,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
     AbstractFloat, Float16, Float32, Float64,

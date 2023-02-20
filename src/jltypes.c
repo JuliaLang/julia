@@ -2036,14 +2036,10 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_typename_type = jl_new_uninitialized_datatype();
     jl_symbol_type = jl_new_uninitialized_datatype();
     jl_simplevector_type = jl_new_uninitialized_datatype();
-    jl_simplebuffer_type = jl_new_uninitialized_datatype();
     jl_methtable_type = jl_new_uninitialized_datatype();
 
     jl_emptysvec = (jl_svec_t*)jl_gc_permobj(sizeof(void*), jl_simplevector_type);
     jl_svec_set_len_unsafe(jl_emptysvec, 0);
-
-    jl_emptysbuf = (jl_sbuf_t*)jl_gc_permobj(sizeof(void*), jl_simplebuffer_type);
-    jl_emptysbuf->length = 0;
 
     jl_any_type = (jl_datatype_t*)jl_new_abstracttype((jl_value_t*)jl_symbol("Any"), core, NULL, jl_emptysvec);
     jl_any_type->super = jl_any_type;
@@ -2152,16 +2148,6 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_simplevector_type->name->names = jl_emptysvec;
     jl_simplevector_type->types = jl_emptysvec;
     jl_precompute_memoized_dt(jl_simplevector_type, 1);
-
-    jl_simplebuffer_type->name = jl_new_typename_in(jl_symbol("SimpleBuffer"), core, 0, 1);
-    jl_simplebuffer_type->name->wrapper = (jl_value_t*)jl_simplebuffer_type;
-    jl_simplebuffer_type->name->mt = jl_nonfunction_mt;
-    jl_simplebuffer_type->super = jl_any_type;
-    jl_simplebuffer_type->parameters = jl_emptysvec;
-    jl_simplebuffer_type->name->n_uninitialized = 0;
-    jl_simplebuffer_type->name->names = jl_emptysvec;
-    jl_simplebuffer_type->types = jl_emptysvec;
-    jl_precompute_memoized_dt(jl_simplebuffer_type, 1);
 
     // now they can be used to create the remaining base kinds and types
     jl_nothing_type = jl_new_datatype(jl_symbol("Nothing"), core, jl_any_type, jl_emptysvec,
@@ -2340,6 +2326,13 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_abstractarray_type = (jl_unionall_t*)
         jl_new_abstracttype((jl_value_t*)jl_symbol("AbstractArray"), core,
                             jl_any_type, tv)->name->wrapper;
+
+    tv = jl_svec2(tvar("T"), tvar("AA"));
+    jl_simplebuffer_type = (jl_unionall_t*)
+        jl_new_datatype(jl_symbol("SimpleBuffer"), core, jl_any_type, tv,
+        jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 1, 0)->name->wrapper;
+    jl_simplebuffer_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_simplebuffer_type))->name;
+    jl_compute_field_offsets((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_simplebuffer_type));
 
     tv = jl_svec2(tvar("T"), tvar("N"));
     jl_densearray_type = (jl_unionall_t*)
@@ -2816,7 +2809,6 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_compute_field_offsets(jl_unionall_type);
     jl_compute_field_offsets(jl_simplevector_type);
     jl_compute_field_offsets(jl_symbol_type);
-    jl_compute_field_offsets(jl_simplebuffer_type);
 
     // override ismutationfree for builtin types that are mutable for identity
     jl_string_type->ismutationfree = jl_string_type->isidentityfree = 1;
@@ -2831,7 +2823,7 @@ void jl_init_types(void) JL_GC_DISABLED
 
     // Array's mutable data is hidden, so we need to override it
     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_array_type))->ismutationfree = 0;
-    jl_simplebuffer_type->ismutationfree = 0;
+    ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_simplebuffer_type))->ismutationfree = 0;
 
     // override the preferred layout for a couple types
     jl_lineinfonode_type->name->mayinlinealloc = 0; // FIXME: assumed to be a pointer by codegen

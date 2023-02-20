@@ -98,7 +98,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    160
+#define NUM_TAGS    159
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -229,7 +229,6 @@ jl_value_t **const*const get_tags(void) {
 
         // other special values
         INSERT_TAG(jl_emptysvec);
-        INSERT_TAG(jl_emptysbuf);
         INSERT_TAG(jl_emptytuple);
         INSERT_TAG(jl_false);
         INSERT_TAG(jl_true);
@@ -342,7 +341,6 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f_get_binding_type,
     &jl_f_set_binding_type, &jl_f_opaque_closure_call, &jl_f_donotdelete, &jl_f_compilerbarrier,
     &jl_f_getglobal, &jl_f_setglobal, &jl_f_finalizer, &jl_f__compute_sparams, &jl_f__svec_ref,
-    &jl_f__sbuf_ref, &jl_f__sbuf_set,
     NULL };
 
 typedef struct {
@@ -1228,7 +1226,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
         else if (jl_is_sbuf(v)) {
             ios_write(s->s, (char*)v, sizeof(void*));
             size_t len = jl_sbuf_len(v);
-            assert(len > 0 || (jl_sbuf_t*)v == jl_emptysbuf);
+            assert(len > 0 || len == 0);
             ios_write(s->const_data, (char*)jl_sbuf_data(v), len);
         }
         else if (jl_is_string(v)) {

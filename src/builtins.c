@@ -75,17 +75,6 @@ static int NOINLINE compare_svec(jl_svec_t *a, jl_svec_t *b) JL_NOTSAFEPOINT
     }
     return 1;
 }
-static int NOINLINE compare_sbuf(jl_sbuf_t *a, jl_sbuf_t *b) JL_NOTSAFEPOINT
-{
-    size_t i, l = jl_sbuf_len(a);
-    if (l != jl_sbuf_len(b))
-        return 0;
-    for (i = 0; i < l; i++) {
-        if (((uint8_t*)(jl_sbuf_data(a)))[i] != ((uint8_t*)(jl_sbuf_data(b)))[i])
-            return 0;
-    }
-    return 1;
-}
 
 // See comment above for an explanation of NOINLINE.
 static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_datatype_t *dt) JL_NOTSAFEPOINT
@@ -237,8 +226,6 @@ int jl_egal__special(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b 
 {
     if (dt == jl_simplevector_type)
         return compare_svec((jl_svec_t*)a, (jl_svec_t*)b);
-    if (dt == jl_simplebuffer_type)
-        return compare_sbuf((jl_sbuf_t*)a, (jl_sbuf_t*)b);
     if (dt == jl_datatype_type) {
         jl_datatype_t *dta = (jl_datatype_t*)a;
         jl_datatype_t *dtb = (jl_datatype_t*)b;
@@ -513,7 +500,7 @@ JL_CALLABLE(jl_f_sizeof)
     if (jl_is_svec(x))
         return jl_box_long((1+jl_svec_len(x))*sizeof(void*));
     if (jl_is_sbuf(x))
-        return jl_box_long(jl_sbuf_len(x) + sizeof(void*));
+        return jl_box_long(jl_sbuf_len(x) + jl_sbuf_elsize(x));
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
     assert(jl_is_datatype(dt));
     assert(!dt->name->abstract);
@@ -1651,42 +1638,6 @@ JL_CALLABLE(jl_f__svec_ref)
     return jl_svec_ref(s, idx-1);
 }
 
-JL_CALLABLE(jl_f__sbuf_ref)
-{
-    JL_NARGS(_sbuf_ref, 3, 3);
-    jl_value_t *b = args[0];
-    jl_sbuf_t *s = (jl_sbuf_t*)args[1];
-    jl_value_t *i = (jl_value_t*)args[2];
-    JL_TYPECHK(_sbuf_ref, bool, b);
-    JL_TYPECHK(_sbuf_ref, simplebuffer, (jl_value_t*)s);
-    JL_TYPECHK(_sbuf_ref, long, i);
-    size_t len = jl_sbuf_len(s);
-    ssize_t idx = jl_unbox_long(i);
-    if (idx < 1 || idx > len) {
-        jl_bounds_error_int((jl_value_t*)s, idx);
-    }
-    return jl_sbuf_ref(s, idx-1);
-}
-JL_CALLABLE(jl_f__sbuf_set)
-{
-    JL_NARGS(_sbuf_set, 4, 4);
-    jl_value_t *b = args[0];
-    jl_sbuf_t *s = (jl_sbuf_t*)args[1];
-    jl_value_t *v = (jl_value_t*)args[2];
-    jl_value_t *i = (jl_value_t*)args[3];
-    JL_TYPECHK(_sbuf_set, bool, b);
-    JL_TYPECHK(_sbuf_set, simplebuffer, (jl_value_t*)s);
-    JL_TYPECHK(_sbuf_set, long, i);
-    size_t len = jl_sbuf_len(s);
-    uint8_t val = jl_unbox_uint8(v);
-    ssize_t idx = jl_unbox_long(i);
-    if (idx < 1 || idx > len) {
-        jl_bounds_error_int((jl_value_t*)s, idx);
-    }
-    jl_sbuf_set(s, val, idx-1);
-    return v;
-}
-
 static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
 {
     size_t nf = jl_svec_len(ft);
@@ -2057,8 +2008,6 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("finalizer", jl_f_finalizer);
     add_builtin_func("_compute_sparams", jl_f__compute_sparams);
     add_builtin_func("_svec_ref", jl_f__svec_ref);
-    add_builtin_func("_sbuf_ref", jl_f__sbuf_ref);
-    add_builtin_func("_sbuf_set", jl_f__sbuf_set);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
