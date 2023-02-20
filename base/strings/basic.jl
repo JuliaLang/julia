@@ -622,7 +622,7 @@ isascii(c::AbstractChar) = UInt32(c) < 0x80
 end
 
 #The chunking algorithm makes the last two chunks overlap inorder to keep the size fixed
-@inline function  _isascii_chunks(chunk_size,cu::AbstractVector{CU}, first,last) where {N}
+@inline function  _isascii_chunks(chunk_size,cu::AbstractVector{CU}, first,last) where {CU}
     n=first
     while n <= last - chunk_size
         _isascii(cu,n,n+chunk_size-1) || return false
