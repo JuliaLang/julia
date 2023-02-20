@@ -17,7 +17,7 @@ include("diagnostics.jl")
 include("parse_stream.jl")
 include("parser.jl")
 include("parser_api.jl")
-include("value_parsing.jl")
+include("literal_parsing.jl")
 
 # Tree data structures
 include("green_tree.jl")
