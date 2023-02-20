@@ -982,6 +982,8 @@ JL_DLLEXPORT void jl_gc_safepoint(void);
 
 #define jl_sbuf_len(t)              (((jl_sbuf_t*)(t))->length)
 #define jl_sbuf_data(t) ((jl_value_t**)((char*)(t) + sizeof(jl_sbuf_t)))
+#define jl_sbuf_eltype(x) (jl_tparam0(jl_typeof((jl_sbuf_t*)(x))))
+#define jl_sbuf_elsize(x) ((size_t)jl_unbox_long(jl_tparam1(jl_typeof((jl_sbuf_t*)(x)))))
 
 #ifdef __clang_gcanalyzer__
 STATIC_INLINE jl_value_t *jl_svecref(void *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
@@ -1347,11 +1349,6 @@ STATIC_INLINE int jl_is_sbuf(void *v) JL_NOTSAFEPOINT
     return jl_is_sbuf_type(t);
 }
 
-STATIC_INLINE void *jl_sbuf_eltype(jl_value_t *sb)
-{
-    return jl_tparam0(jl_typeof(sb));
-}
-
 STATIC_INLINE int jl_is_opaque_closure_type(void *t) JL_NOTSAFEPOINT
 {
     return (jl_is_datatype(t) &&
@@ -1585,10 +1582,6 @@ JL_DLLEXPORT int jl_get_size(jl_value_t *val, size_t *pnt);
 #define jl_ulong_type    jl_uint32_type
 #endif
 
-STATIC_INLINE size_t jl_sbuf_elsize(jl_value_t *sb)
-{
-    return (size_t)jl_unbox_long(jl_tparam1(jl_typeof(sb)));
-}
 STATIC_INLINE size_t jl_sbuf_nbytes(jl_value_t *sb)
 {
     size_t len = jl_sbuf_len(sb);

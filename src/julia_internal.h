@@ -1498,8 +1498,6 @@ JL_DLLEXPORT size_t (jl_sbuf_len)(jl_sbuf_t *t) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_unsafe_sbuf_ref(jl_sbuf_t *sb, size_t i);
 JL_DLLEXPORT void jl_unsafe_sbuf_set(jl_sbuf_t *sb JL_ROOTING_ARGUMENT, jl_value_t *rhs JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, size_t i);
 JL_DLLEXPORT jl_sbuf_t *jl_new_sbuf(jl_value_t *btype, size_t len);
-STATIC_INLINE void *jl_sbuf_eltype(jl_value_t *sb);
-STATIC_INLINE size_t jl_sbuf_elsize(jl_value_t *sb);
 STATIC_INLINE size_t jl_sbuf_nbytes(jl_value_t *sb);
 
 JL_DLLEXPORT unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *field_type);

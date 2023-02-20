@@ -703,6 +703,17 @@ end
 function SimpleBuffer{T}(::UndefInitializer, n::Int) where {T}
     ccall(:jl_new_sbuf, Any, (Any, UInt), T, n)
 end
+SimpleBuffer(a::AbstractArray{T}) where {T} = SimpleBuffer{T}(a)
+function SimpleBuffer{T}(a::AbstractArray) where {T}
+    n = length(a)
+    sb = SimpleBuffer{T}(undef, n)
+    i = 1
+    for a_i in a
+        sb[i] = a_i
+        i += 1
+    end
+    return sb
+end
 function getindex(sb::SimpleBuffer{T}, i::Int) where {T}
     @boundscheck (1 <= i <= length(sb)) || throw(BoundsError(sb, i))
     unsafe_getindex(sb, i)

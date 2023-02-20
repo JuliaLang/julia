@@ -7,15 +7,6 @@
 #include "julia_internal.h"
 #include "julia_assert.h"
 
-// STATIC_INLINE uint8_t jl_sbuf_uint8_ref(void *sb, size_t i) JL_NOTSAFEPOINT
-// {
-//     return ((uint8_t*)(jl_sbuf_data(sb)))[i];
-// }
-// STATIC_INLINE void jl_sbuf_uint8_set(void *a, size_t i, uint8_t x) JL_NOTSAFEPOINT
-// {
-//     ((uint8_t*)(jl_array_data(a)))[i] = x;
-// }
-
 JL_DLLEXPORT jl_sbuf_t *jl_sbuf_copy(jl_sbuf_t *a)
 {
     jl_sbuf_t *c = jl_new_sbuf((jl_value_t*)jl_sbuf_eltype((jl_value_t*)a), jl_sbuf_len((jl_value_t*)a));
@@ -71,12 +62,14 @@ JL_DLLEXPORT jl_sbuf_t *jl_new_sbuf(jl_value_t *eltype, size_t len)
     else if (isunboxed && elsz >= 4)
         tsz = LLT_ALIGN(tsz, JL_SMALL_BYTE_ALIGNMENT);
     tsz += tot;
-    jl_value_t *btype = jl_apply_type2((jl_value_t*)jl_simplebuffer_type, eltype, jl_box_long((ssize_t)elsz));
+    jl_value_t *tparams[2];
+    tparams[0] = eltype;
+    tparams[1] = jl_box_long((ssize_t)elsz);
+    jl_value_t *btype = jl_apply_type((jl_value_t*)jl_simplebuffer_type, tparams, 2);
     // TODO allocate data and set first 8 bits to length before initializing type
     jl_sbuf_t *sb = (jl_sbuf_t*)jl_gc_alloc(ct->ptls, tot, btype);
     sb->length = len;
     return sb;
-
 }
 
 JL_DLLEXPORT jl_value_t *jl_unsafe_sbuf_ref(jl_sbuf_t *sb, size_t i)

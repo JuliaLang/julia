@@ -2291,7 +2291,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
         else if (vt->name == jl_simplebuffer_typename) {
             size_t l = jl_sbuf_len(new_obj);
             jl_value_t **data = jl_sbuf_data(new_obj);
-            size_t dtsz = jl_sbuf_nbytes((jl_sbuf_t*)new_obj) + sizeof(jl_sbuf_t);
+            size_t dtsz = jl_sbuf_nbytes(new_obj) + sizeof(jl_sbuf_t);
             if (update_meta)
                 gc_setmark(ptls, o, bits, dtsz);
             else if (foreign_alloc)
