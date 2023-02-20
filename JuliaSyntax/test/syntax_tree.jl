@@ -40,3 +40,27 @@
     node[2] = parse(SyntaxNode, "y")
     @test sourcetext(child(node, 2)) == "y"
 end
+
+@testset "SyntaxNode pretty printing" begin
+    t = parse(SyntaxNode, "f(a*b,\n  c)", filename="foo.jl")
+    @test sprint(show, MIME("text/plain"), t) == """
+    line:col│ tree                                   │ file_name
+       1:1  │[call]                                  │foo.jl
+       1:1  │  f
+       1:3  │  [call-i]
+       1:3  │    a
+       1:4  │    *
+       1:5  │    b
+       2:3  │  c
+    """
+    @test sprint(io->show(io, MIME("text/plain"), t, show_byte_offsets=true)) == """
+    line:col│ byte_range  │ tree                                   │ file_name
+       1:1  │     1:11    │[call]                                  │foo.jl
+       1:1  │     1:1     │  f
+       1:3  │     3:5     │  [call-i]
+       1:3  │     3:3     │    a
+       1:4  │     4:4     │    *
+       1:5  │     5:5     │    b
+       2:3  │    10:10    │  c
+    """
+end
