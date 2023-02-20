@@ -339,23 +339,6 @@ macro noinline(x)
     return annotate_meta_def_or_block(x, :noinline)
 end
 
-"""
-    @pure ex
-
-`@pure` gives the compiler a hint for the definition of a pure function,
-helping for type inference.
-
-!!! warning
-    This macro is intended for internal compiler use and may be subject to changes.
-
-!!! warning
-    In Julia 1.8 and higher, it is favorable to use [`@assume_effects`](@ref) instead of `@pure`.
-    This is because `@assume_effects` allows a finer grained control over Julia's purity
-    modeling and the effect system enables a wider range of optimizations.
-"""
-macro pure(ex)
-    esc(isa(ex, Expr) ? pushmeta!(ex, :pure) : ex)
-end
 
 """
     @constprop setting [ex]
@@ -703,16 +686,6 @@ the following other `setting`s:
 Effect names may be prefixed by `!` to indicate that the effect should be removed
 from an earlier meta effect. For example, `:total !:nothrow` indicates that while
 the call is generally total, it may however throw.
-
----
-## Comparison to `@pure`
-
-`@assume_effects :foldable` is similar to [`@pure`](@ref) with the primary
-distinction that the `:consistent`-cy requirement applies world-age wise rather
-than globally as described above. However, in particular, a method annotated
-`@pure` should always be at least `:foldable`.
-Another advantage is that effects introduced by `@assume_effects` are propagated to
-callers interprocedurally while a purity defined by `@pure` is not.
 """
 macro assume_effects(args...)
     lastex = args[end]

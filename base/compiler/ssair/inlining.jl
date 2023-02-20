@@ -795,7 +795,19 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
 end
 
 function compileable_specialization(match::MethodMatch, effects::Effects,
-    et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
+        et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
+    if !compilesig_invokes
+        # If there are unknown typevars, this MethodInstance is illegal to
+        # :invoke, but we only check for compilesig usually, so check here to
+        # avoid generating bad code.
+        # TODO: We could also compute the correct type parameters in the runtime
+        # and let this go through, but that requires further changes, because
+        # currently the runtime assumes that a MethodInstance with the appropriate
+        # sparams is created.
+        if _any(t->isa(t, TypeVar), match.sparams)
+            return nothing
+        end
+    end
     mi = specialize_method(match; compilesig=compilesig_invokes)
     mi === nothing && return nothing
     add_inlining_backedge!(et, mi)
@@ -803,11 +815,9 @@ function compileable_specialization(match::MethodMatch, effects::Effects,
 end
 
 function compileable_specialization(linfo::MethodInstance, effects::Effects,
-    et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
-    mi = specialize_method(linfo.def::Method, linfo.specTypes, linfo.sparam_vals; compilesig=compilesig_invokes)
-    mi === nothing && return nothing
-    add_inlining_backedge!(et, mi)
-    return InvokeCase(mi, effects, info)
+        et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
+    return compileable_specialization(MethodMatch(linfo.specTypes,
+     linfo.sparam_vals, linfo.def::Method, false), effects, et, info; compilesig_invokes)
 end
 
 compileable_specialization(result::InferenceResult, args...; kwargs...) = (@nospecialize;
@@ -829,9 +839,8 @@ end
         end
         effects = decode_effects(code.ipo_purity_bits)
         return CachedResult(src, effects)
-    else # fallback pass for external AbstractInterpreter cache
-        return CachedResult(code, Effects())
     end
+    return CachedResult(nothing, Effects())
 end
 
 # the general resolver for usual and const-prop'ed calls
@@ -843,10 +852,13 @@ function resolve_todo(mi::MethodInstance, result::Union{MethodMatch,InferenceRes
     #XXX: update_valid_age!(min_valid[1], max_valid[1], sv)
     if isa(result, InferenceResult)
         src = result.src
-        if isa(src, ConstAPI)
-            # use constant calling convention
-            add_inlining_backedge!(et, mi)
-            return ConstantCase(quoted(src.val))
+        if is_foldable_nothrow(result.ipo_effects)
+            res = result.result
+            if isa(res, Const) && is_inlineable_constant(res.val)
+                # use constant calling convention
+                add_inlining_backedge!(et, mi)
+                return ConstantCase(quoted(res.val))
+            end
         end
         effects = result.ipo_effects
     else
@@ -866,16 +878,6 @@ function resolve_todo(mi::MethodInstance, result::Union{MethodMatch,InferenceRes
     end
 
     src = inlining_policy(state.interp, src, info, flag, mi, argtypes)
-
-    if isa(src, ConstAPI)
-        # duplicates the check above in case inlining_policy has a better idea.
-        # We still keep the check above to make sure we can inline to ConstAPI
-        # even if is_stmt_noinline. This doesn't currently happen in Base, but
-        # can happen with external AbstractInterpreter.
-        add_inlining_backedge!(et, mi)
-        return ConstantCase(quoted(src.val))
-    end
-
     src === nothing && return compileable_specialization(result, effects, et, info;
         compilesig_invokes=state.params.compilesig_invokes)
 
@@ -988,7 +990,7 @@ function handle_single_case!(todo::Vector{Pair{Int,Any}},
     if isa(case, ConstantCase)
         ir[SSAValue(idx)][:inst] = case.val
     elseif isa(case, InvokeCase)
-        is_total(case.effects) && inline_const_if_inlineable!(ir[SSAValue(idx)]) && return nothing
+        is_foldable_nothrow(case.effects) && inline_const_if_inlineable!(ir[SSAValue(idx)]) && return nothing
         isinvoke && rewrite_invoke_exprargs!(stmt)
         stmt.head = :invoke
         pushfirst!(stmt.args, case.invoke)
@@ -1692,14 +1694,6 @@ function linear_inline_eligible(ir::IRCode)
     return true
 end
 
-# Check for a number of functions known to be pure
-function ispuretopfunction(@nospecialize(f))
-    return istopfunction(f, :typejoin) ||
-        istopfunction(f, :isbits) ||
-        istopfunction(f, :isbitstype) ||
-        istopfunction(f, :promote_type)
-end
-
 function early_inline_special_case(
     ir::IRCode, stmt::Expr, @nospecialize(type), sig::Signature,
     state::InliningState)
@@ -1713,7 +1707,7 @@ function early_inline_special_case(
             if is_pure_intrinsic_infer(f) && intrinsic_nothrow(f, argtypes[2:end])
                 return SomeCase(quoted(val))
             end
-        elseif ispuretopfunction(f) || contains_is(_PURE_BUILTINS, f)
+        elseif contains_is(_PURE_BUILTINS, f)
             return SomeCase(quoted(val))
         elseif contains_is(_EFFECT_FREE_BUILTINS, f)
             if _builtin_nothrow(optimizer_lattice(state.interp), f, argtypes[2:end], type)

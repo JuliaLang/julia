@@ -258,6 +258,16 @@ in the test set reporting. The test will not run but gives a `Broken` `Result`.
 Test.@test_skip
 ```
 
+## Test result types
+
+```@docs
+Test.Result
+Test.Pass
+Test.Fail
+Test.Error
+Test.Broken
+```
+
 ## Creating Custom `AbstractTestSet` Types
 
 Packages can create their own `AbstractTestSet` subtypes by implementing the `record` and `finish`

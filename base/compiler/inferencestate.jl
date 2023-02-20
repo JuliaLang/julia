@@ -1,13 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# The type of a variable load is either a value or an UndefVarError
-# (only used in abstractinterpret, doesn't appear in optimize)
-struct VarState
-    typ
-    undef::Bool
-    VarState(@nospecialize(typ), undef::Bool) = new(typ, undef)
-end
-
 """
     const VarTable = Vector{VarState}
 
@@ -91,7 +83,7 @@ mutable struct InferenceState
     linfo::MethodInstance
     world::UInt
     mod::Module
-    sptypes::Vector{Any}
+    sptypes::Vector{VarState}
     slottypes::Vector{Any}
     src::CodeInfo
     cfg::CFG
@@ -129,6 +121,7 @@ mutable struct InferenceState
     # Set by default for toplevel frame.
     restrict_abstract_call_sites::Bool
     cached::Bool # TODO move this to InferenceResult?
+    insert_coverage::Bool
 
     # The interpreter that created this inference state. Not looked at by
     # NativeInterpreter. But other interpreters may use this to detect cycles
@@ -136,7 +129,7 @@ mutable struct InferenceState
 
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState(result::InferenceResult, src::CodeInfo, cache::Symbol,
-        interp::AbstractInterpreter)
+                            interp::AbstractInterpreter)
         linfo = result.linfo
         world = get_world_counter(interp)
         def = linfo.def
@@ -179,6 +172,11 @@ mutable struct InferenceState
         bestguess = Bottom
         ipo_effects = EFFECTS_TOTAL
 
+        insert_coverage = should_insert_coverage(mod, src)
+        if insert_coverage
+            ipo_effects = Effects(ipo_effects; effect_free = ALWAYS_FALSE)
+        end
+
         params = InferenceParams(interp)
         restrict_abstract_call_sites = isa(linfo.def, Module)
         @assert cache === :no || cache === :local || cache === :global
@@ -189,7 +187,7 @@ mutable struct InferenceState
             currbb, currpc, ip, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
             pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent, inferred,
             result, valid_worlds, bestguess, ipo_effects,
-            params, restrict_abstract_call_sites, cached,
+            params, restrict_abstract_call_sites, cached, insert_coverage,
             interp)
 
         # some more setups
@@ -317,6 +315,29 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
     return handler_at
 end
 
+# check if coverage mode is enabled
+function should_insert_coverage(mod::Module, src::CodeInfo)
+    coverage_enabled(mod) && return true
+    JLOptions().code_coverage == 3 || return false
+    # path-specific coverage mode: if any line falls in a tracked file enable coverage for all
+    linetable = src.linetable
+    if isa(linetable, Vector{Any})
+        for line in linetable
+            line = line::LineInfoNode
+            if is_file_tracked(line.file)
+                return true
+            end
+        end
+    elseif isa(linetable, Vector{LineInfoNode})
+        for line in linetable
+            if is_file_tracked(line.file)
+                return true
+            end
+        end
+    end
+    return false
+end
+
 """
     Iterate through all callers of the given InferenceState in the abstract
     interpretation stack (including the given InferenceState itself), vising
@@ -410,25 +431,7 @@ function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool, typ
     return false
 end
 
-"""
-    MaybeUndefSP(typ)
-    is_maybeundefsp(typ) -> Bool
-    unwrap_maybeundefsp(typ) -> Any
-
-A special wrapper that represents a static parameter that could be undefined at runtime.
-This does not participate in the native type system nor the inference lattice,
-and it thus should be always unwrapped when performing any type or lattice operations on it.
-"""
-struct MaybeUndefSP
-    typ
-    MaybeUndefSP(@nospecialize typ) = new(typ)
-end
-is_maybeundefsp(@nospecialize typ) = isa(typ, MaybeUndefSP)
-unwrap_maybeundefsp(@nospecialize typ) = isa(typ, MaybeUndefSP) ? typ.typ : typ
-is_maybeundefsp(sptypes::Vector{Any}, idx::Int) = is_maybeundefsp(sptypes[idx])
-unwrap_maybeundefsp(sptypes::Vector{Any}, idx::Int) = unwrap_maybeundefsp(sptypes[idx])
-
-const EMPTY_SPTYPES = Any[]
+const EMPTY_SPTYPES = VarState[]
 
 function sptypes_from_meth_instance(linfo::MethodInstance)
     def = linfo.def
@@ -437,28 +440,26 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
     if isempty(linfo.sparam_vals)
         isa(sig, UnionAll) || return EMPTY_SPTYPES
         # linfo is unspecialized
-        sp = Any[]
+        spvals = Any[]
         sig′ = sig
         while isa(sig′, UnionAll)
-            push!(sp, sig′.var)
+            push!(spvals, sig′.var)
             sig′ = sig′.body
         end
     else
-        sp = collect(Any, linfo.sparam_vals)
+        spvals = linfo.sparam_vals
     end
-    for i = 1:length(sp)
-        v = sp[i]
+    nvals = length(spvals)
+    sptypes = Vector{VarState}(undef, nvals)
+    for i = 1:nvals
+        v = spvals[i]
         if v isa TypeVar
-            maybe_undef = !constrains_param(v, linfo.specTypes, #=covariant=#true)
             temp = sig
             for j = 1:i-1
                 temp = temp.body
             end
             vᵢ = (temp::UnionAll).var
-            while temp isa UnionAll
-                temp = temp.body
-            end
-            sigtypes = (temp::DataType).parameters
+            sigtypes = (unwrap_unionall(temp)::DataType).parameters
             for j = 1:length(sigtypes)
                 sⱼ = sigtypes[j]
                 if isType(sⱼ) && sⱼ.parameters[1] === vᵢ
@@ -468,36 +469,32 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
                     @goto ty_computed
                 end
             end
-            ub = v.ub
-            while ub isa TypeVar
-                ub = ub.ub
-            end
+            ub = unwraptv_ub(v)
             if has_free_typevars(ub)
                 ub = Any
             end
-            lb = v.lb
-            while lb isa TypeVar
-                lb = lb.lb
-            end
+            lb = unwraptv_lb(v)
             if has_free_typevars(lb)
                 lb = Bottom
             end
-            if Any <: ub && lb <: Bottom
+            if Any === ub && lb === Bottom
                 ty = Any
             else
                 tv = TypeVar(v.name, lb, ub)
                 ty = UnionAll(tv, Type{tv})
             end
             @label ty_computed
-            maybe_undef && (ty = MaybeUndefSP(ty))
+            undef = !constrains_param(v, linfo.specTypes, #=covariant=#true)
         elseif isvarargtype(v)
             ty = Int
+            undef = false
         else
             ty = Const(v)
+            undef = false
         end
-        sp[i] = ty
+        sptypes[i] = VarState(ty, undef)
     end
-    return sp
+    return sptypes
 end
 
 _topmod(sv::InferenceState) = _topmod(sv.mod)

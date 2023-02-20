@@ -28,7 +28,7 @@ function test_inlined_symbols(func, argtypes)
     ast = Expr(:block)
     ast.args = src.code
     walk(ast) do e
-        if isa(e, Core.Slot)
+        if isa(e, Core.SlotNumber)
             @test 1 <= e.id <= nl
         end
         if isa(e, Core.NewvarNode)
@@ -359,18 +359,6 @@ f_apply_type_typeof(x) = (Ref{typeof(x)}; nothing)
 struct RealConstrained{T <: Real}; end
 @test !fully_eliminated(x->(RealConstrained{x}; nothing), Tuple{Int})
 @test !fully_eliminated(x->(RealConstrained{x}; nothing), Tuple{Type{Vector{T}} where T})
-
-# Check that pure functions with non-inlineable results still get deleted
-struct Big
-    x::NTuple{1024, Int}
-end
-Base.@pure Big() = Big(ntuple(identity, 1024))
-function pure_elim_full()
-    Big()
-    nothing
-end
-
-@test fully_eliminated(pure_elim_full, Tuple{})
 
 # Union splitting of convert
 f_convert_missing(x) = convert(Int64, x)

@@ -274,7 +274,6 @@
     XX(jl_ios_fd) \
     XX(jl_ios_get_nbyte_int) \
     XX(jl_ir_flag_inferred) \
-    XX(jl_ir_flag_pure) \
     XX(jl_ir_flag_has_fcall) \
     XX(jl_ir_flag_inlining) \
     XX(jl_ir_inlining_cost) \

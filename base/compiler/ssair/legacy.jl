@@ -2,7 +2,7 @@
 
 """
     inflate_ir!(ci::CodeInfo, linfo::MethodInstance) -> ir::IRCode
-    inflate_ir!(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any}) -> ir::IRCode
+    inflate_ir!(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any}) -> ir::IRCode
 
 Inflates `ci::CodeInfo`-IR to `ir::IRCode`-format.
 This should be used with caution as it is a in-place transformation where the fields of
@@ -17,7 +17,7 @@ function inflate_ir!(ci::CodeInfo, linfo::MethodInstance)
     end
     return inflate_ir!(ci, sptypes, argtypes)
 end
-function inflate_ir!(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
+function inflate_ir!(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any})
     code = ci.code
     cfg = compute_basic_blocks(code)
     for i = 1:length(code)
@@ -51,15 +51,19 @@ end
 
 """
     inflate_ir(ci::CodeInfo, linfo::MethodInstance) -> ir::IRCode
-    inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any}) -> ir::IRCode
+    inflate_ir(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any}) -> ir::IRCode
     inflate_ir(ci::CodeInfo) -> ir::IRCode
 
 Non-destructive version of `inflate_ir!`.
 Mainly used for testing or interactive use.
 """
 inflate_ir(ci::CodeInfo, linfo::MethodInstance) = inflate_ir!(copy(ci), linfo)
-inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any}) = inflate_ir!(copy(ci), sptypes, argtypes)
-inflate_ir(ci::CodeInfo) = inflate_ir(ci, Any[], Any[ ci.slottypes === nothing ? Any : (ci.slottypes::Vector{Any})[i] for i = 1:length(ci.slotflags) ])
+inflate_ir(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any}) = inflate_ir!(copy(ci), sptypes, argtypes)
+function inflate_ir(ci::CodeInfo)
+    slottypes = ci.slottypes
+    argtypes = Any[ slottypes === nothing ? Any : slottypes[i] for i = 1:length(ci.slotflags) ]
+    return inflate_ir(ci, VarState[], argtypes)
+end
 
 function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
     @assert isempty(ir.new_nodes)

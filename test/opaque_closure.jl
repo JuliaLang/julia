@@ -247,7 +247,7 @@ let ci = code_typed(+, (Int, Int))[1][1]
     @test OpaqueClosure(ir; nargs=2, isva=false)(40, 2) == 42
     @test OpaqueClosure(ci)(40, 2) == 42
 
-    ir = Core.Compiler.inflate_ir(ci, Any[], Any[Tuple{}, Int, Int])
+    ir = Core.Compiler.inflate_ir(ci)
     @test OpaqueClosure(ir; nargs=2, isva=false)(40, 2) == 42
     @test isa(OpaqueClosure(ir; nargs=2, isva=false), Core.OpaqueClosure{Tuple{Int, Int}, Int})
     @test_throws TypeError OpaqueClosure(ir; nargs=2, isva=false)(40.0, 2)
@@ -264,7 +264,7 @@ let ci = code_typed((x, y...)->(x, y), (Int, Int))[1][1]
         @test_throws MethodError oc(1,2,3)
     end
 
-    ir = Core.Compiler.inflate_ir(ci, Any[], Any[Tuple{}, Int, Tuple{Int}])
+    ir = Core.Compiler.inflate_ir(ci)
     let oc = OpaqueClosure(ir; nargs=2, isva=true)
         @test oc(40, 2) === (40, (2,))
         @test_throws MethodError oc(1,2,3)

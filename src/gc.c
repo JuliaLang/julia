@@ -1988,6 +1988,7 @@ STATIC_INLINE void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_va
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_value_t *new_obj;
     size_t elsize = ((jl_array_t *)ary8_parent)->elsize / sizeof(jl_value_t *);
+    assert(elsize > 0);
     // Decide whether need to chunk ary8
     size_t nrefs = (ary8_end - ary8_begin) / elsize;
     if (nrefs > MAX_REFS_AT_ONCE) {
@@ -2019,6 +2020,7 @@ STATIC_INLINE void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl_
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_value_t *new_obj;
     size_t elsize = ((jl_array_t *)ary16_parent)->elsize / sizeof(jl_value_t *);
+    assert(elsize > 0);
     // Decide whether need to chunk ary16
     size_t nrefs = (ary16_end - ary16_begin) / elsize;
     if (nrefs > MAX_REFS_AT_ONCE) {
@@ -2687,7 +2689,6 @@ static void gc_mark_roots(jl_gc_markqueue_t *mq)
     }
     gc_try_claim_and_push(mq, jl_all_methods, NULL);
     gc_try_claim_and_push(mq, _jl_debug_method_invalidation, NULL);
-    gc_try_claim_and_push(mq, jl_build_ids, NULL);
     // constants
     gc_try_claim_and_push(mq, jl_emptytuple_type, NULL);
     gc_try_claim_and_push(mq, cmpswap_names, NULL);
@@ -3271,14 +3272,9 @@ void jl_gc_init(void)
     uint64_t constrained_mem = uv_get_constrained_memory();
     if (constrained_mem > 0 && constrained_mem < total_mem)
         total_mem = constrained_mem;
+    max_total_memory = total_mem / 10 * 6;
 #endif
 
-    // We allocate with abandon until we get close to the free memory on the machine.
-    uint64_t free_mem = uv_get_available_memory();
-    uint64_t high_water_mark = free_mem / 10 * 7;  // 70% high water mark
-
-    if (high_water_mark < max_total_memory)
-       max_total_memory = high_water_mark;
     t_start = jl_hrtime();
 }
 

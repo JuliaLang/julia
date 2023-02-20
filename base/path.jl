@@ -20,22 +20,22 @@ export
 
 if Sys.isunix()
     const path_separator    = "/"
-    const path_separator_re = r"/+"
-    const path_directory_re = r"(?:^|/)\.{0,2}$"
-    const path_dir_splitter = r"^(.*?)(/+)([^/]*)$"
-    const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
+    const path_separator_re = r"/+"sa
+    const path_directory_re = r"(?:^|/)\.{0,2}$"sa
+    const path_dir_splitter = r"^(.*?)(/+)([^/]*)$"sa
+    const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"sa
 
     splitdrive(path::String) = ("",path)
 elseif Sys.iswindows()
     const path_separator    = "\\"
-    const path_separator_re = r"[/\\]+"
-    const path_absolute_re  = r"^(?:[A-Za-z]+:)?[/\\]"
-    const path_directory_re = r"(?:^|[/\\])\.{0,2}$"
-    const path_dir_splitter = r"^(.*?)([/\\]+)([^/\\]*)$"
-    const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"
+    const path_separator_re = r"[/\\]+"sa
+    const path_absolute_re  = r"^(?:[A-Za-z]+:)?[/\\]"sa
+    const path_directory_re = r"(?:^|[/\\])\.{0,2}$"sa
+    const path_dir_splitter = r"^(.*?)([/\\]+)([^/\\]*)$"sa
+    const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"sa
 
     function splitdrive(path::String)
-        m = match(r"^([^\\]+:|\\\\[^\\]+\\[^\\]+|\\\\\?\\UNC\\[^\\]+\\[^\\]+|\\\\\?\\[^\\]+:|)(.*)$"s, path)::AbstractMatch
+        m = match(r"^([^\\]+:|\\\\[^\\]+\\[^\\]+|\\\\\?\\UNC\\[^\\]+\\[^\\]+|\\\\\?\\[^\\]+:|)(.*)$"sa, path)::AbstractMatch
         String(something(m.captures[1])), String(something(m.captures[2]))
     end
 else

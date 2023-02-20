@@ -1145,7 +1145,7 @@ static int subtype_tuple_tail(jl_datatype_t *xd, jl_datatype_t *yd, int8_t R, jl
              (yi == lastx && !vx && vy && jl_is_concrete_type(xi)))) {
             // fast path for repeated elements
         }
-        else if (e->Runions.depth == 0 && e->Lunions.depth == 0 && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) {
+        else if (e->Runions.depth == 0 && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) {
             // fast path for separable sub-formulas
             if (!jl_subtype(xi, yi))
                 return 0;
@@ -1254,7 +1254,9 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
             // of unions and vars: if matching `typevar <: union`, first try to match the whole
             // union against the variable before trying to take it apart to see if there are any
             // variables lurking inside.
-            ui = pick_union_decision(e, 1);
+            // note: for forall var, there's no need to split y if it has no free typevars.
+            jl_varbinding_t *xx = lookup(e, (jl_tvar_t *)x);
+            ui = ((xx && xx->right) || jl_has_free_typevars(y)) && pick_union_decision(e, 1);
         }
         if (ui == 1)
             y = pick_union_element(y, e, 1);
@@ -2713,7 +2715,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
 
     // remove/replace/rewrap free occurrences of this var in the environment
     jl_varbinding_t *btemp = e->vars;
-    int wrap = 1;
+    jl_varbinding_t *wrap = NULL;
     while (btemp != NULL) {
         if (jl_has_typevar(btemp->lb, vb->var)) {
             if (vb->lb == (jl_value_t*)btemp->var) {
@@ -2734,14 +2736,11 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                      !jl_has_typevar(vb->ub, btemp->var) && jl_has_typevar(btemp->ub, vb->var)) {
                 // if our variable is T, and some outer variable has constraint S = Ref{T},
                 // move the `where T` outside `where S` instead of putting it here. issue #21243.
-                if (btemp->innervars == NULL)
-                    btemp->innervars = jl_alloc_array_1d(jl_array_any_type, 0);
                 if (newvar != vb->var) {
                     btemp->lb = jl_substitute_var(btemp->lb, vb->var, (jl_value_t*)newvar);
                     btemp->ub = jl_substitute_var(btemp->ub, vb->var, (jl_value_t*)newvar);
                 }
-                jl_array_ptr_1d_push(btemp->innervars, (jl_value_t*)newvar);
-                wrap = 0;
+                wrap = btemp;
                 btemp = btemp->prev;
                 continue;
             }
@@ -2774,6 +2773,15 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         btemp = btemp->prev;
     }
 
+    if (wrap) {
+        // We only assign the newvar with the outmost var.
+        // This make sure we never create a UnionAll with 2 identical vars.
+        if (wrap->innervars == NULL)
+            wrap->innervars = jl_alloc_array_1d(jl_array_any_type, 0);
+        jl_array_ptr_1d_push(wrap->innervars, (jl_value_t*)newvar);
+    }
+
+
     // if `v` still occurs, re-wrap body in `UnionAll v` or eliminate the UnionAll
     if (jl_has_typevar(res, vb->var)) {
         if (varval) {
@@ -2794,7 +2802,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
             if (newvar != vb->var)
                 res = jl_substitute_var(res, vb->var, (jl_value_t*)newvar);
             varval = (jl_value_t*)newvar;
-            if (wrap)
+            if (!wrap)
                 res = jl_type_unionall((jl_tvar_t*)newvar, res);
         }
     }

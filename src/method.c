@@ -313,9 +313,7 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
             jl_array_t *meta = ((jl_expr_t*)st)->args;
             for (k = 0; k < na; k++) {
                 jl_value_t *ma = jl_array_ptr_ref(meta, k);
-                if (ma == (jl_value_t*)jl_pure_sym)
-                    li->pure = 1;
-                else if (ma == (jl_value_t*)jl_inline_sym)
+                if (ma == (jl_value_t*)jl_inline_sym)
                     li->inlining = 1;
                 else if (ma == (jl_value_t*)jl_noinline_sym)
                     li->inlining = 2;
@@ -475,7 +473,6 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->max_world = ~(size_t)0;
     src->inferred = 0;
     src->propagate_inbounds = 0;
-    src->pure = 0;
     src->has_fcall = 0;
     src->edges = jl_nothing;
     src->constprop = 0;
@@ -679,7 +676,6 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
         }
     }
     m->called = called;
-    m->pure = src->pure;
     m->constprop = src->constprop;
     m->purity.bits = src->purity.bits;
     jl_add_function_name_to_lineinfo(src, (jl_value_t*)m->name);
@@ -701,7 +697,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
                 size_t j;
                 for (j = 1; j < nargs; j++) {
                     jl_value_t *aj = jl_exprarg(st, j);
-                    if (!jl_is_slot(aj) && !jl_is_argument(aj))
+                    if (!jl_is_slotnumber(aj) && !jl_is_argument(aj))
                         continue;
                     int sn = (int)jl_slot_number(aj) - 2;
                     if (sn < 0) // @nospecialize on self is valid but currently ignored
@@ -724,7 +720,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
                     m->nospecialize = 0;
                 for (j = 1; j < nargs; j++) {
                     jl_value_t *aj = jl_exprarg(st, j);
-                    if (!jl_is_slot(aj) && !jl_is_argument(aj))
+                    if (!jl_is_slotnumber(aj) && !jl_is_argument(aj))
                         continue;
                     int sn = (int)jl_slot_number(aj) - 2;
                     if (sn < 0) // @specialize on self is valid but currently ignored
