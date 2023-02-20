@@ -53,7 +53,7 @@ include("diagnostics.jl")
 include("parser_api.jl")
 include("expr.jl")
 @testset "Parsing literals from strings" begin
-    include("value_parsing.jl")
+    include("literal_parsing.jl")
 end
 include("source_files.jl")
 
