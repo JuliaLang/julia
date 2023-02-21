@@ -902,5 +902,5 @@ end
         @test lines[4] == "bar"
     end
 #heap-size-hint
-@test readchomp(`$exename --heap-size-hint=500M -e "println(Sys.heap_size())"`) == "524288000"
+@test readchomp(`$(Base.julia_cmd()) --startup-file=no --heap-size-hint=500M -e "println(Sys.heap_size())"`) == "524288000"
 end
