@@ -1104,3 +1104,7 @@ end
 
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
+
+@testset "Upgradable stdlibs" begin
+    @test success(`$(Base.julia_cmd()) --startup-file=no -e 'using DelimitedFiles'`)
+end
