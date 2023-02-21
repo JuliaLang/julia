@@ -610,6 +610,8 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         for (int i = 0; i < jl_array_len(func->code); ++i) {
             jl_value_t *stmt = jl_array_ptr_ref(func->code, i);
             if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == jl_new_opaque_closure_sym) {
+                if (jl_options.incremental && jl_generating_output())
+                    jl_error("Impossible to correctly handle OpaqueClosure inside @generated returned during precompile process.");
                 jl_value_t *uninferred = jl_copy_ast((jl_value_t*)func);
                 jl_value_t *old = NULL;
                 if (jl_atomic_cmpswap(&linfo->uninferred, &old, uninferred)) {
