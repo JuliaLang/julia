@@ -342,9 +342,6 @@ end
 @test_parseerror("if\nfalse\nend", "missing condition in \"if\" at none:1")
 @test_parseerror("if false\nelseif\nend", "missing condition in \"elseif\" at none:2")
 
-# issue #15828
-@test Meta.lower(Main, Meta.parse("x...")) == Expr(:error, "\"...\" expression outside call")
-
 # issue #15830
 @test Meta.lower(Main, Meta.parse("foo(y = (global x)) = y")) == Expr(:error, "misplaced \"global\" declaration")
 
@@ -3464,4 +3461,17 @@ end
     @test @_macroexpand(global (; x, $(esc(:y))) = a) == :(global (; x, y) = $(GlobalRef(m, :a)))
     @test @_macroexpand(global (; x::S, $(esc(:y))::$(esc(:T))) = a) ==
         :(global (; x::$(GlobalRef(m, :S)), y::T) = $(GlobalRef(m, :a)))
+end
+
+
+
+# Issue #48738
+macro splatter()
+    :((1,2)...)
+end
+@testset "splatting outside call" begin
+    @test @eval((1, 2)...) == (1, 2)
+    tup = @splatter()
+    @test tup == (1, 2)
+    @test +(@splatter) == 3
 end

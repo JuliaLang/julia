@@ -2363,6 +2363,16 @@
             (cons (car e)
                   (map expand-forms (cdr e)))))))
 
+(define (expand-tuple e)
+  (cond ((and (length> e 1) (pair? (cadr e)) (eq? (caadr e) 'parameters))
+         (if (length= e 2)
+             (expand-forms (lower-named-tuple (cdr (cadr e))))
+             (error "unexpected semicolon in tuple")))
+        ((any assignment? (cdr e))
+         (expand-forms (lower-named-tuple (cdr e))))
+        (else
+         (expand-forms `(call (core tuple) ,@(cdr e))))))
+
 ;; table mapping expression head to a function expanding that form
 (define expand-table
   (table
@@ -2676,16 +2686,7 @@
             `(call ,f ,(car argl) ,af ,@(cdr argl))
             `(call ,f ,af ,@argl)))))
 
-   'tuple
-   (lambda (e)
-     (cond ((and (length> e 1) (pair? (cadr e)) (eq? (caadr e) 'parameters))
-            (if (length= e 2)
-                (expand-forms (lower-named-tuple (cdr (cadr e))))
-                (error "unexpected semicolon in tuple")))
-           ((any assignment? (cdr e))
-            (expand-forms (lower-named-tuple (cdr e))))
-           (else
-            (expand-forms `(call (core tuple) ,@(cdr e))))))
+   'tuple expand-tuple
 
    'braces    (lambda (e) (error "{ } vector syntax is discontinued"))
    'bracescat (lambda (e) (error "{ } matrix syntax is discontinued"))
@@ -2766,8 +2767,9 @@
    '.>>>=   lower-update-op
 
    '|...|
-   (lambda (e) (error "\"...\" expression outside call"))
-
+   (lambda (e)
+	 (expand-tuple (cadr e)))
+   
    '$
    (lambda (e) (error "\"$\" expression outside quote"))
 
