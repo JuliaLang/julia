@@ -2769,7 +2769,7 @@
    '|...|
    (lambda (e)
 	 (expand-tuple (cadr e)))
-   
+
    '$
    (lambda (e) (error "\"$\" expression outside quote"))
 

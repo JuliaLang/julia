@@ -3464,7 +3464,6 @@ end
 end
 
 
-
 # Issue #48738
 macro splatter()
     :((1,2)...)
