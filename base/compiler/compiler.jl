@@ -101,6 +101,8 @@ add_with_overflow(x::Bool, y::Bool) = (x+y, false)
 
 include("strings/lazy.jl")
 
+include("buffers.jl")
+
 # core array operations
 include("indices.jl")
 include("array.jl")

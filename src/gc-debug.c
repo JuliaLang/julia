@@ -1257,6 +1257,13 @@ int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
         start = (char*)jl_svec_data(obj);
         len = jl_svec_len(obj);
     }
+    else if (vt->name == jl_simplebuffer_typename) {
+        jl_sbuf_t *sb = (jl_sbuf_t*)obj;
+        start = (char*)jl_sbuf_data(sb);
+        len = jl_sbuf_len(sb);
+        elsize = jl_sbuf_elsize(sb);
+
+    }
     else if (vt->name == jl_array_typename) {
         jl_array_t *a = (jl_array_t*)obj;
         start = (char*)a->data;

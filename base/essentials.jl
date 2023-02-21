@@ -703,55 +703,6 @@ macro goto(name::Symbol)
     return esc(Expr(:symbolicgoto, name))
 end
 
-# SimpleBuffer
-function SimpleBuffer{T}(::UndefInitializer, n::Int) where {T}
-    ccall(:jl_new_sbuf, Any, (Any, UInt), T, n)
-end
-SimpleBuffer(a::AbstractArray{T}) where {T} = SimpleBuffer{T}(a)
-function SimpleBuffer{T}(a::AbstractArray) where {T}
-    n = length(a)
-    sb = SimpleBuffer{T}(undef, n)
-    i = 1
-    for a_i in a
-        sb[i] = a_i
-        i += 1
-    end
-    return sb
-end
-function getindex(sb::SimpleBuffer{T}, i::Int) where {T}
-    @boundscheck (1 <= i <= length(sb)) || throw(BoundsError(sb, i))
-    unsafe_getindex(sb, i)
-end
-function unsafe_getindex(sb::SimpleBuffer{T}, i::Int) where {T}
-    ccall(:jl_unsafe_sbuf_ref, Any, (Any, UInt), sb, i - 1)
-end
-function setindex!(sb::SimpleBuffer{T}, val, i::Int) where {T}
-    @boundscheck (1 <= i <= length(sb)) || throw(BoundsError(sb, i))
-    unsafe_setindex!(sb, val, i)
-end
-function unsafe_setindex!(sb::SimpleBuffer{T}, val, i::Int) where {T}
-    ccall(:jl_unsafe_sbuf_set, Any, (Any, Any, UInt), sb, convert(T, val), i - 1)
-end
-eltype(::Type{<:SimpleBuffer{T}}) where {T} = T
-elsize(@nospecialize T::Type{<:SimpleBuffer}) = aligned_sizeof(eltype(T))
-length(sb::SimpleBuffer) = ccall(:jl_sbuf_len, Int, (Any,), sb)
-firstindex(sb::SimpleBuffer) = 1
-lastindex(sb::SimpleBuffer) = length(sb)
-keys(sb::SimpleBuffer) = OneTo(length(sb))
-axes(sb::SimpleBuffer) = (OneTo(length(sb)),)
-axes(sb::SimpleBuffer, d::Integer) = d <= 1 ? OneTo(length(sb)) : OneTo(1)
-function iterate(sb::SimpleBuffer, i::Int=1)
-    (length(sb) < i ? nothing : (unsafe_getindex(sb, i), i + 1))
-end
-isempty(sb::SimpleBuffer) = (length(sb) == 0)
-function ==(v1::SimpleBuffer, v2::SimpleBuffer)
-    length(v1)==length(v2) || return false
-    for i = 1:length(v1)
-        v1[i] == v2[i] || return false
-    end
-    return true
-end
-
 
 # SimpleVector
 

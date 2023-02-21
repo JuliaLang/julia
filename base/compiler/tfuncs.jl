@@ -1901,6 +1901,73 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
     return anyinfo ? PartialStruct(typ, argtypes) : typ
 end
 
+@nospecs function sbufref_tfunc(𝕃::AbstractLattice, boundscheck, buf, idx)
+    hasintersect(widenconst(boundscheck), Bool) || return false
+    hasintersect(widenconst(buf), SimpleBuffer) || return false
+    hasintersect(widenconst(idx), Int) || return false
+    return buffer_elmtype(buf)
+end
+add_tfunc(Core.sbufref, 3, INT_INF, sbufref_tfunc, 20)
+
+@nospecs function sbufset_tfunc(𝕃::AbstractLattice, boundscheck, buf, item, idx)
+    hasintersect(widenconst(boundscheck), Bool) || return Bottom
+    hasintersect(widenconst(buf), SimpleBuffer) || return Bottom
+    hasintersect(widenconst(idx), Int) || return Bottom
+    hasintersect(widenconst(item), buffer_elmtype(buf)) || return Bottom
+    return buf
+end
+add_tfunc(Core.sbufset, 4, INT_INF, sbufset_tfunc, 20)
+
+add_tfunc(Core.sbuflen, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Int), 4)
+
+function buffer_elmtype(@nospecialize buf)
+    b = widenconst(buf)
+    if !has_free_typevars(b) && b <: SimpleBuffer
+        b0 = b
+        if isa(b, UnionAll)
+            b = unwrap_unionall(b0)
+        end
+        if isa(b, DataType)
+            T = b.parameters[1]
+            valid_as_lattice(T) || return Bottom
+            return rewrap_unionall(T, b0)
+        end
+    end
+    return Any
+end
+
+function buffer_builtin_common_nothrow(argtypes::Vector{Any}, idxpos::Int)
+    length(argtypes) >= 4 || return false
+    boundscheck = argtypes[1]
+    buftype = argtypes[2]
+    (boundscheck ⊑ Bool && buftype ⊑ Array) || return false
+    argtypes[idxpos] ⊑ Int || return false
+    # If we could potentially throw undef ref errors, bail out now.
+    buftype = widenconst(buftype)
+    buffer_type_undefable(buftype) && return false
+    # If we have @inbounds (first argument is false), we're allowed to assume
+    # we don't throw bounds errors.
+    if isa(boundscheck, Const)
+        !(boundscheck.val::Bool) && return true
+    end
+    # Else we can't really say anything here
+    # TODO: In the future we may be able to track the shapes of arrays though
+    # inference.
+    return false
+end
+
+# whether getindex for the elements can potentially throw UndefRef
+function buffer_type_undefable(@nospecialize(buftype))
+    if isa(buftype, Union)
+        return buffer_type_undefable(buftype.a) || _type_undefable(buftype.b)
+    elseif isa(buftype, UnionAll)
+        return true
+    else
+        elmtype = (buftype::DataType).parameters[1]
+        return !(elmtype isa Type && (isbitstype(elmtype) || isbitsunion(elmtype)))
+    end
+end
+
 @nospecs function arrayref_tfunc(𝕃::AbstractLattice, boundscheck, ary, idxs...)
     return _arrayref_tfunc(𝕃, boundscheck, ary, idxs)
 end
@@ -2022,6 +2089,12 @@ end
         return arrayset_typecheck(argtypes[2], argtypes[3])
     elseif f === arrayref || f === const_arrayref
         return array_builtin_common_nothrow(argtypes, 3)
+    elseif f === Core.sbufset
+        buffer_builtin_common_nothrow(argtypes, 4) || return false
+        # Additionally check element type compatibility
+        return arrayset_typecheck(argtypes[2], argtypes[3])
+    elseif f === Core.sbufref
+        return buffer_builtin_common_nothrow(argtypes, 3)
     elseif f === Core._expr
         length(argtypes) >= 1 || return false
         return argtypes[1] ⊑ Symbol
@@ -2034,6 +2107,8 @@ end
     if f === arraysize
         na == 2 || return false
         return arraysize_nothrow(argtypes[1], argtypes[2])
+    elseif f === Core.sbuflen
+        (na == 1 && argtypes[1] ⊑ SimpleBuffer) || return false
     elseif f === Core._typevar
         na == 3 || return false
         return typevar_nothrow(𝕃, argtypes[1], argtypes[2], argtypes[3])
@@ -2109,9 +2184,9 @@ const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields, applicable]
 # known to be effect-free (but not necessarily nothrow)
 const _EFFECT_FREE_BUILTINS = [
     fieldtype, apply_type, isa, UnionAll,
-    getfield, arrayref, const_arrayref, isdefined, Core.sizeof,
+    getfield, arrayref, const_arrayref, Core.sbufref, isdefined, Core.sizeof,
     Core.ifelse, Core._typevar, (<:),
-    typeassert, throw, arraysize, getglobal, compilerbarrier
+    typeassert, throw, arraysize, Core.sbuflen, getglobal, compilerbarrier
 ]
 
 const _CONSISTENT_BUILTINS = Any[
@@ -2132,12 +2207,12 @@ const _CONSISTENT_BUILTINS = Any[
     setfield!
 ]
 
-# TODO: SimpleBuffer builtins
 const _INACCESSIBLEMEM_BUILTINS = Any[
     (<:),
     (===),
     apply_type,
     arraysize,
+    Core.sbuflen,
     Core.ifelse,
     Core.sizeof,
     svec,
@@ -2156,6 +2231,8 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
 const _ARGMEM_BUILTINS = Any[
     arrayref,
     arrayset,
+    Core.sbufref,
+    Core.sbufset,
     modifyfield!,
     replacefield!,
     setfield!,
@@ -2282,7 +2359,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argin
     else
         consistent = contains_is(_CONSISTENT_BUILTINS, f) ? ALWAYS_TRUE :
             (f === Core._typevar) ? CONSISTENT_IF_NOTRETURNED : ALWAYS_FALSE
-        if f === setfield! || f === arrayset
+        if f === setfield! || f === arrayset || f === Core.sbufset
             effect_free = EFFECT_FREE_IF_INACCESSIBLEMEMONLY
         elseif contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)
             effect_free = ALWAYS_TRUE
@@ -2730,15 +2807,42 @@ function foreigncall_effects(@specialize(abstract_eval), e::Expr)
     name = args[1]
     isa(name, QuoteNode) && (name = name.value)
     isa(name, Symbol) || return EFFECTS_UNKNOWN
-    ndims = alloc_array_ndims(name)
-    if ndims !== nothing
-        if ndims ≠ 0
-            return alloc_array_effects(abstract_eval, args, ndims)
-        else
-            return new_array_effects(abstract_eval, args)
+    if name === :jl_new_sbuf
+        return new_buffer_effects(abstract_eval, args)
+    else
+        ndims = alloc_array_ndims(name)
+        if ndims !== nothing
+            if ndims ≠ 0
+                return alloc_array_effects(abstract_eval, args, ndims)
+            else
+                return new_array_effects(abstract_eval, args)
+            end
         end
+        return EFFECTS_UNKNOWN
     end
-    return EFFECTS_UNKNOWN
+end
+
+function new_buffer_effects(@specialize(abstract_eval), args::Vector{Any})
+    nothrow = new_buffer_nothrow(abstract_eval, args)
+    return Effects(EFFECTS_TOTAL; consistent=CONSISTENT_IF_NOTRETURNED, nothrow)
+end
+function new_buffer_nothrow(@specialize(abstract_eval), args::Vector{Any})
+    length(args) ≥ 1 + FOREIGNCALL_ARG_START || return false
+    buftype = instanceof_tfunc(abstract_eval(args[FOREIGNCALL_ARG_START]))[1]
+    dims = Csize_t[]
+    dim = abstract_eval(args[1 + FOREIGNCALL_ARG_START])
+    isa(dim, Const) || return false
+    dimval = dim.val
+    isa(dimval, Int) || return false
+    push!(dims, reinterpret(Csize_t, dimval))
+    isa(buftype, DataType) || return false
+    eltype = buftype.parameters[1]
+    iskindtype(typeof(eltype)) || return false
+    elsz = aligned_sizeof(eltype)
+    return ccall(:jl_array_validate_dims, Cint,
+        (Ptr{Csize_t}, Ptr{Csize_t}, UInt32, Ptr{Csize_t}, Csize_t),
+        #=nel=#RefValue{Csize_t}(), #=tot=#RefValue{Csize_t}(), 1, dims, elsz) == 0
+
 end
 
 function alloc_array_ndims(name::Symbol)

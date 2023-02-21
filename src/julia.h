@@ -1334,15 +1334,15 @@ STATIC_INLINE int jl_is_array(void *v) JL_NOTSAFEPOINT
     return jl_is_array_type(t);
 }
 
-STATIC_INLINE int jl_is_sbuf_type(void *t) JL_NOTSAFEPOINT
+STATIC_INLINE int jl_is_simplebuffer_type(void *t) JL_NOTSAFEPOINT
 {
     return (jl_is_datatype(t) && ((jl_datatype_t*)(t))->name == jl_simplebuffer_typename);
 }
 
-STATIC_INLINE int jl_is_sbuf(void *v) JL_NOTSAFEPOINT
+STATIC_INLINE int jl_is_simplebuffer(void *v) JL_NOTSAFEPOINT
 {
     jl_value_t *t = jl_typeof(v);
-    return jl_is_sbuf_type(t);
+    return jl_is_simplebuffer_type(t);
 }
 
 STATIC_INLINE int jl_is_opaque_closure_type(void *t) JL_NOTSAFEPOINT
@@ -1511,6 +1511,8 @@ JL_DLLEXPORT jl_svec_t *jl_svec_copy(jl_svec_t *a);
 JL_DLLEXPORT jl_svec_t *jl_svec_fill(size_t n, jl_value_t *x);
 JL_DLLEXPORT jl_sbuf_t *jl_sbuf_copy(jl_sbuf_t *a);
 JL_DLLEXPORT jl_sbuf_t *jl_sbuf_fill(size_t n, jl_value_t *x);
+JL_DLLEXPORT jl_value_t *jl_sbufref(jl_sbuf_t *a, size_t i);  // 0-indexed
+JL_DLLEXPORT void jl_sbufset(jl_sbuf_t *sb JL_ROOTING_ARGUMENT, jl_value_t *v JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, size_t i);  // 0-indexed
 JL_DLLEXPORT jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *v);
 JL_DLLEXPORT jl_sym_t *jl_symbol(const char *str) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_symbol_lookup(const char *str) JL_NOTSAFEPOINT;

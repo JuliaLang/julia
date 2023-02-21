@@ -178,7 +178,7 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
             jl_encode_value(s, jl_svecref(v, i));
         }
     }
-    else if (jl_is_sbuf(v)) {
+    else if (jl_is_simplebuffer(v)) {
         jl_sbuf_t *sb = (jl_sbuf_t*)(v);
         jl_value_t *eltype = jl_sbuf_eltype((jl_value_t*)sb);
         size_t elsize = jl_sbuf_elsize((jl_value_t*)sb);

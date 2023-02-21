@@ -558,7 +558,7 @@ static size_t jl_show_sbuf(JL_STREAM *out, jl_sbuf_t *sb, const char *head, cons
     n += jl_printf(out, "%s", head);
     n += jl_printf(out, "%s", opn);
     for (i = 0; i < len; i++) {
-        jl_value_t *v = jl_unsafe_sbuf_ref(sb, i);
+        jl_value_t *v = jl_sbufref(sb, i);
         n += jl_static_show(out, v);
         if (i != len-1)
             n += jl_printf(out, ", ");

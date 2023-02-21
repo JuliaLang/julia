@@ -456,8 +456,8 @@
     XX(jl_svec_ref) \
     XX(jl_new_sbuf) \
     XX(jl_sbuf_copy) \
-    XX(jl_unsafe_sbuf_ref) \
-    XX(jl_unsafe_sbuf_set) \
+    XX(jl_sbufref) \
+    XX(jl_sbufset) \
     XX(jl_switch) \
     XX(jl_switchto) \
     XX(jl_symbol) \

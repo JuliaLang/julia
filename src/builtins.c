@@ -499,8 +499,8 @@ JL_CALLABLE(jl_f_sizeof)
         return jl_box_long(strlen(jl_symbol_name((jl_sym_t*)x)));
     if (jl_is_svec(x))
         return jl_box_long((1+jl_svec_len(x))*sizeof(void*));
-    if (jl_is_sbuf(x))
-        return jl_box_long(jl_sbuf_len(x) + jl_sbuf_elsize(x));
+    if (jl_is_simplebuffer(x))
+        return jl_box_long(jl_sbuf_len(x) * jl_sbuf_elsize(x));
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
     assert(jl_is_datatype(dt));
     assert(!dt->name->abstract);
@@ -1497,6 +1497,43 @@ JL_CALLABLE(jl_f_arrayset)
     return args[1];
 }
 
+// buffers ---------------------------------------------------------------------
+JL_CALLABLE(jl_f_sbuflen)
+{
+    JL_NARGS(sbuflen, 1, 1);
+    JL_TYPECHK(sbuflen, simplebuffer, args[0]);
+    return jl_box_long(jl_sbuf_len(args[0]));
+}
+
+JL_CALLABLE(jl_f_sbufref)
+{
+    JL_NARGS(sbufref, 3, 3);
+    JL_TYPECHK(sbufref, bool, args[0]);
+    JL_TYPECHK(sbufref, simplebuffer, args[1]);
+    jl_sbuf_t *sb = (jl_sbuf_t*)args[1];
+    size_t len = jl_sbuf_len(sb);
+    size_t idx = (size_t)jl_unbox_long((jl_value_t*)args[2]);
+    if (idx < 1 || idx > len) {
+        jl_bounds_error_int((jl_value_t*)sb, idx);
+    }
+    return jl_sbufref(sb, idx - 1);
+}
+
+JL_CALLABLE(jl_f_sbufset)
+{
+    JL_NARGS(sbufset, 4, 4);
+    JL_TYPECHK(sbufset, bool, args[0]);
+    JL_TYPECHK(sbufset, simplebuffer, args[1]);
+    jl_sbuf_t *sb = (jl_sbuf_t*)args[1];
+    size_t len = jl_sbuf_len(sb);
+    size_t idx = (size_t)jl_unbox_long((jl_value_t*)args[2]);
+    if (idx < 1 || idx > len) {
+        jl_bounds_error_int((jl_value_t*)sb, idx);
+    }
+    jl_sbufset(sb, args[2], idx - 1);
+    return args[1];
+}
+
 // type definition ------------------------------------------------------------
 
 JL_CALLABLE(jl_f__structtype)
@@ -1982,6 +2019,11 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin_const_arrayref = add_builtin_func("const_arrayref", jl_f_arrayref);
     jl_builtin_arrayset = add_builtin_func("arrayset", jl_f_arrayset);
     jl_builtin_arraysize = add_builtin_func("arraysize", jl_f_arraysize);
+
+    // buffer primitives
+    jl_builtin_sbufref = add_builtin_func("sbufref", jl_f_sbufref);
+    jl_builtin_sbufset = add_builtin_func("sbufset", jl_f_sbufset);
+    jl_builtin_sbuflen = add_builtin_func("sbuflen", jl_f_sbuflen);
 
     // method table utils
     jl_builtin_applicable = add_builtin_func("applicable", jl_f_applicable);

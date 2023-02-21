@@ -7,6 +7,8 @@
 #include "julia_internal.h"
 #include "julia_assert.h"
 
+#define MAXINTVAL (((size_t)-1)>>1)
+
 JL_DLLEXPORT jl_sbuf_t *jl_sbuf_copy(jl_sbuf_t *a)
 {
     jl_sbuf_t *c = jl_new_sbuf((jl_value_t*)jl_sbuf_eltype((jl_value_t*)a), jl_sbuf_len((jl_value_t*)a));
@@ -72,7 +74,7 @@ JL_DLLEXPORT jl_sbuf_t *jl_new_sbuf(jl_value_t *eltype, size_t len)
     return sb;
 }
 
-JL_DLLEXPORT jl_value_t *jl_unsafe_sbuf_ref(jl_sbuf_t *sb, size_t i)
+JL_DLLEXPORT jl_value_t *jl_sbufref(jl_sbuf_t *sb, size_t i)
 {
     size_t len = jl_sbuf_len(sb);
     jl_value_t *eltype = (jl_value_t*)jl_sbuf_eltype((jl_value_t*)sb);
@@ -95,7 +97,7 @@ JL_DLLEXPORT jl_value_t *jl_unsafe_sbuf_ref(jl_sbuf_t *sb, size_t i)
     return val_i;
 }
 
-JL_DLLEXPORT void jl_unsafe_sbuf_set(jl_sbuf_t *sb JL_ROOTING_ARGUMENT, jl_value_t *rhs JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, size_t i)
+JL_DLLEXPORT void jl_sbufset(jl_sbuf_t *sb JL_ROOTING_ARGUMENT, jl_value_t *rhs JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, size_t i)
 {
     size_t len = jl_sbuf_len(sb);
     jl_value_t *eltype = (jl_value_t*)jl_sbuf_eltype((jl_value_t*)sb);
