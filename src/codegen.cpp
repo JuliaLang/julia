@@ -6,7 +6,7 @@
 #if defined(_CPU_X86_)
 #define JL_NEED_FLOATTEMP_VAR 1
 #endif
-#if defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_) || defined(_COMPILER_MSAN_ENABLED_)
+#if defined(_OS_LINUX_) || defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_) || defined(_COMPILER_MSAN_ENABLED_)
 #define JL_DISABLE_FPO
 #endif
 
@@ -2500,7 +2500,7 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
             return jl_get_global(ctx.module, sym);
         return NULL;
     }
-    if (jl_is_slot(ex) || jl_is_argument(ex))
+    if (jl_is_slotnumber(ex) || jl_is_argument(ex))
         return NULL;
     if (jl_is_ssavalue(ex)) {
         ssize_t idx = ((jl_ssavalue_t*)ex)->id - 1;
@@ -2594,7 +2594,7 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
 
 static bool slot_eq(jl_value_t *e, int sl)
 {
-    return (jl_is_slot(e) || jl_is_argument(e)) && jl_slot_number(e)-1 == sl;
+    return (jl_is_slotnumber(e) || jl_is_argument(e)) && jl_slot_number(e)-1 == sl;
 }
 
 // --- code gen for intrinsic functions ---
@@ -2637,7 +2637,7 @@ static std::set<int> assigned_in_try(jl_array_t *stmts, int s, long l)
         if (jl_is_expr(st)) {
             if (((jl_expr_t*)st)->head == jl_assign_sym) {
                 jl_value_t *ar = jl_exprarg(st, 0);
-                if (jl_is_slot(ar)) {
+                if (jl_is_slotnumber(ar)) {
                     av.insert(jl_slot_number(ar)-1);
                 }
             }
@@ -2740,7 +2740,7 @@ static void general_use_analysis(jl_codectx_t &ctx, jl_value_t *expr, callback &
 static void simple_use_analysis(jl_codectx_t &ctx, jl_value_t *expr)
 {
     auto scan_slot_arg = [&](jl_value_t *expr) {
-        if (jl_is_slot(expr) || jl_is_argument(expr)) {
+        if (jl_is_slotnumber(expr) || jl_is_argument(expr)) {
             int i = jl_slot_number(expr) - 1;
             ctx.slots[i].used = true;
             return true;
@@ -4251,7 +4251,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                     bool cache_valid = ctx.use_cache;
                     bool external = false;
                     if (ctx.external_linkage) {
-                       if (jl_object_in_image((jl_value_t*)codeinst)) {
+                       if (0 && jl_object_in_image((jl_value_t*)codeinst)) {
                            // Target is present in another pkgimage
                            cache_valid = true;
                            external = true;
@@ -4520,7 +4520,7 @@ static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i)
 static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym)
 {
     Value *isnull = NULL;
-    if (jl_is_slot(sym) || jl_is_argument(sym)) {
+    if (jl_is_slotnumber(sym) || jl_is_argument(sym)) {
         size_t sl = jl_slot_number(sym) - 1;
         jl_varinfo_t &vi = ctx.slots[sl];
         if (!vi.usedUndef)
@@ -4600,8 +4600,8 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym)
     return mark_julia_type(ctx, isnull, false, jl_bool_type);
 }
 
-static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *varname, jl_value_t *better_typ=NULL) {
-    jl_value_t *typ = better_typ ? better_typ : vi.value.typ;
+static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *varname) {
+    jl_value_t *typ = vi.value.typ;
     jl_cgval_t v;
     Value *isnull = NULL;
     if (vi.boxroot == NULL || vi.pTIndex != NULL) {
@@ -4678,14 +4678,7 @@ static jl_cgval_t emit_local(jl_codectx_t &ctx, jl_value_t *slotload)
     size_t sl = jl_slot_number(slotload) - 1;
     jl_varinfo_t &vi = ctx.slots[sl];
     jl_sym_t *sym = slot_symbol(ctx, sl);
-    jl_value_t *typ = NULL;
-    if (jl_typeis(slotload, jl_typedslot_type)) {
-        // use the better type from inference for this load
-        typ = jl_typedslot_get_type(slotload);
-        if (jl_is_typevar(typ))
-            typ = ((jl_tvar_t*)typ)->ub;
-    }
-    return emit_varinfo(ctx, vi, sym, typ);
+    return emit_varinfo(ctx, vi, sym);
 }
 
 static void emit_vi_assignment_unboxed(jl_codectx_t &ctx, jl_varinfo_t &vi, Value *isboxed, jl_cgval_t rval_info)
@@ -4932,7 +4925,7 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r, ssi
     assert(!jl_is_ssavalue(l));
     jl_cgval_t rval_info = emit_expr(ctx, r, ssaval);
 
-    if (jl_is_slot(l)) {
+    if (jl_is_slotnumber(l)) {
         int sl = jl_slot_number(l) - 1;
         // it's a local variable
         jl_varinfo_t &vi = ctx.slots[sl];
@@ -5038,7 +5031,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
 {
     if (jl_is_ssavalue(expr) && ssaval_result == -1)
         return; // value not used, no point in attempting codegen for it
-    if (jl_is_slot(expr) && ssaval_result == -1) {
+    if (jl_is_slotnumber(expr) && ssaval_result == -1) {
         size_t sl = jl_slot_number(expr) - 1;
         jl_varinfo_t &vi = ctx.slots[sl];
         if (vi.usedUndef)
@@ -5050,7 +5043,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
     }
     if (jl_is_newvarnode(expr)) {
         jl_value_t *var = jl_fieldref(expr, 0);
-        assert(jl_is_slot(var));
+        assert(jl_is_slotnumber(var));
         jl_varinfo_t &vi = ctx.slots[jl_slot_number(var)-1];
         if (vi.usedUndef) {
             // create a new uninitialized variable
@@ -5172,7 +5165,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         jl_sym_t *sym = (jl_sym_t*)expr;
         return emit_globalref(ctx, ctx.module, sym, AtomicOrdering::Unordered);
     }
-    if (jl_is_slot(expr) || jl_is_argument(expr)) {
+    if (jl_is_slotnumber(expr) || jl_is_argument(expr)) {
         return emit_local(ctx, expr);
     }
     if (jl_is_ssavalue(expr)) {
@@ -5289,7 +5282,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
     else if (head == jl_method_sym) {
         if (nargs == 1) {
             jl_value_t *mn = args[0];
-            assert(jl_is_symbol(mn) || jl_is_slot(mn));
+            assert(jl_is_symbol(mn) || jl_is_slotnumber(mn));
 
             Value *bp = NULL, *name;
             jl_binding_t *bnd = NULL;
@@ -5317,7 +5310,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
                 bp = julia_binding_gv(ctx, bnd);
                 bp = julia_binding_pvalue(ctx, bp);
             }
-            else if (jl_is_slot(mn) || jl_is_argument(mn)) {
+            else if (jl_is_slotnumber(mn) || jl_is_argument(mn)) {
                 // XXX: eval_methoddef does not have this code branch
                 int sl = jl_slot_number(mn)-1;
                 jl_varinfo_t &vi = ctx.slots[sl];
@@ -5627,7 +5620,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
 
     bool cache_valid = params.cache;
     if (params.external_linkage) {
-        if (jl_object_in_image((jl_value_t*)codeinst)) {
+        if (0 && jl_object_in_image((jl_value_t*)codeinst)) {
             // Target is present in another pkgimage
             cache_valid = true;
         }
@@ -8545,7 +8538,7 @@ void jl_compile_workqueue(
         auto invoke = jl_atomic_load_acquire(&codeinst->invoke);
         bool cache_valid = params.cache;
         if (params.external_linkage) {
-            cache_valid = jl_object_in_image((jl_value_t*)codeinst);
+            cache_valid = 0 && jl_object_in_image((jl_value_t*)codeinst);
         }
         // WARNING: isspecsig is protected by the codegen-lock. If that lock is removed, then the isspecsig load needs to be properly atomically sequenced with this.
         if (cache_valid && invoke != NULL) {
@@ -8976,11 +8969,15 @@ extern "C" JL_DLLEXPORT jl_value_t *jl_get_libllvm_impl(void) JL_NOTSAFEPOINT
     HMODULE mod;
     if (!GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCSTR)&llvm::DebugFlag, &mod))
         return jl_nothing;
-
-    char path[MAX_PATH];
-    if (!GetModuleFileNameA(mod, path, sizeof(path)))
+    wchar_t path16[MAX_PATH];
+    DWORD n16 = GetModuleFileNameW(mod, path16, MAX_PATH);
+    if (n16 <= 0)
         return jl_nothing;
-    return (jl_value_t*) jl_symbol(path);
+    path16[n16++] = 0;
+    char path8[MAX_PATH * 3];
+    if (!WideCharToMultiByte(CP_UTF8, 0, path16, n16, path8, MAX_PATH * 3, NULL, NULL))
+        return jl_nothing;
+    return (jl_value_t*) jl_symbol(path8);
 #else
     Dl_info dli;
     if (!dladdr((void*)LLVMContextCreate, &dli))

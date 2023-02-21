@@ -177,6 +177,19 @@ macro isdefined(s::Symbol)
     return Expr(:escape, Expr(:isdefined, s))
 end
 
+"""
+    nameof(m::Module) -> Symbol
+
+Get the name of a `Module` as a [`Symbol`](@ref).
+
+# Examples
+```jldoctest
+julia> nameof(Base.Broadcast)
+:Broadcast
+```
+"""
+nameof(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
+
 function _is_internal(__module__)
     if ccall(:jl_base_relative_to, Any, (Any,), __module__)::Module === Core.Compiler ||
        nameof(__module__) === :Base
@@ -185,10 +198,6 @@ function _is_internal(__module__)
     return false
 end
 
-# can be used in place of `@pure` (supposed to be used for bootstrapping)
-macro _pure_meta()
-    return _is_internal(__module__) && Expr(:meta, :pure)
-end
 # can be used in place of `@assume_effects :total` (supposed to be used for bootstrapping)
 macro _total_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
@@ -367,13 +376,8 @@ function rename_unionall(@nospecialize(u))
     if !isa(u, UnionAll)
         return u
     end
-    body = rename_unionall(u.body)
-    if body === u.body
-        body = u
-    else
-        body = UnionAll(u.var, body)
-    end
     var = u.var::TypeVar
+    body = UnionAll(var, rename_unionall(u.body))
     nv = TypeVar(var.name, var.lb, var.ub)
     return UnionAll(nv, body{nv})
 end
@@ -701,8 +705,9 @@ end
 
 # SimpleVector
 
-@eval getindex(v::SimpleVector, i::Int) = Core._svec_ref($(Expr(:boundscheck)), v, i)
+@eval getindex(v::SimpleVector, i::Int) = (@_foldable_meta; Core._svec_ref($(Expr(:boundscheck)), v, i))
 function length(v::SimpleVector)
+    @_total_meta
     t = @_gc_preserve_begin v
     len = unsafe_load(Ptr{Int}(pointer_from_objref(v)))
     @_gc_preserve_end t
@@ -946,7 +951,7 @@ function popfirst! end
     peek(stream[, T=UInt8])
 
 Read and return a value of type `T` from a stream without advancing the current position
-in the stream.
+in the stream.   See also [`startswith(stream, char_or_string)`](@ref).
 
 # Examples
 

@@ -48,33 +48,46 @@ function gcd(a::T, b::T) where T<:Integer
 end
 
 function gcd(a::T, b::T) where T<:BitInteger
-    a == 0 && return checked_abs(b)
-    b == 0 && return checked_abs(a)
-    r = _gcd(a, b)
-    signbit(r) && __throw_gcd_overflow(a, b)
-    return r
+    a == 0 && return Base.checked_abs(b)
+    b == 0 && return Base.checked_abs(a)
+    if a isa Signed && a == typemin(T)
+        if a == b
+            Base.__throw_gcd_overflow(a, b)
+        else
+            a, b = b, a
+        end
+    end
+    return _gcd(a, b)
 end
 @noinline __throw_gcd_overflow(a, b) =
     throw(OverflowError(LazyString("gcd(", a, ", ", b, ") overflows")))
 
+function absdiff(x::T,y::T) where {T<:Unsigned}
+    d = max(x,y) - min(x,y)
+    d, d
+end
+function absdiff(x::T,y::T) where {T<:Signed}
+    d = x - y
+    abs(d), d
+end
 # binary GCD (aka Stein's) algorithm
 # about 1.7x (2.1x) faster for random Int64s (Int128s)
 # Unfortunately, we need to manually annotate this as `@assume_effects :terminates_locally` to work around #41694.
 # Since this is used in the Rational constructor, constant folding is something we do care about here.
-@assume_effects :terminates_locally function _gcd(a::T, b::T) where T<:BitInteger
-    za = trailing_zeros(a)
-    zb = trailing_zeros(b)
+@assume_effects :terminates_locally function _gcd(ain::T, bin::T) where T<:BitInteger
+    zb = trailing_zeros(bin)
+    za = trailing_zeros(ain)
+    a = abs(ain)
+    b = abs(bin >> zb)
     k = min(za, zb)
-    u = unsigned(abs(a >> za))
-    v = unsigned(abs(b >> zb))
-    while u != v
-        if u > v
-            u, v = v, u
-        end
-        v -= u
-        v >>= trailing_zeros(v)
+    while a != 0
+        a >>= za
+        absd, diff = absdiff(a, b)
+        za = trailing_zeros(diff)
+        b = min(a, b)
+        a = absd
     end
-    r = u << k
+    r = b << k
     return r % T
 end
 

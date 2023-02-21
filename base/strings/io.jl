@@ -113,7 +113,7 @@ function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
     else
         f(s, args...)
     end
-    String(resize!(s.data, s.size))
+    String(_unsafe_take!(s))
 end
 
 function _str_sizehint(x)
@@ -147,7 +147,7 @@ function print_to_string(xs...)
     for x in xs
         print(s, x)
     end
-    String(resize!(s.data, s.size))
+    String(_unsafe_take!(s))
 end
 
 function string_with_env(env, xs...)
@@ -164,7 +164,7 @@ function string_with_env(env, xs...)
     for x in xs
         print(env_io, x)
     end
-    String(resize!(s.data, s.size))
+    String(_unsafe_take!(s))
 end
 
 """
