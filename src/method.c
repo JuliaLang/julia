@@ -100,14 +100,16 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                     jl_error("opaque_closure_method: invalid syntax");
                 }
                 jl_value_t *name = jl_exprarg(e, 0);
-                jl_value_t *nargs = jl_exprarg(e, 1);
+                jl_value_t *oc_nargs = jl_exprarg(e, 1);
                 int isva = jl_exprarg(e, 2) == jl_true;
                 jl_value_t *functionloc = jl_exprarg(e, 3);
                 jl_value_t *ci = jl_exprarg(e, 4);
                 if (!jl_is_code_info(ci)) {
                     jl_error("opaque_closure_method: lambda should be a CodeInfo");
+                } else if (!jl_is_long(oc_nargs)) {
+                    jl_type_error("opaque_closure_method", (jl_value_t*)jl_long_type, oc_nargs);
                 }
-                jl_method_t *m = jl_make_opaque_closure_method(module, name, jl_unbox_long(nargs), functionloc, (jl_code_info_t*)ci, isva);
+                jl_method_t *m = jl_make_opaque_closure_method(module, name, jl_unbox_long(oc_nargs), functionloc, (jl_code_info_t*)ci, isva);
                 return (jl_value_t*)m;
             }
             if (e->head == jl_cfunction_sym) {
