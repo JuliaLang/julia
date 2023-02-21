@@ -433,10 +433,28 @@ find_extended_inds(::ScalarIndex, I...) = (@inline; find_extended_inds(I...))
 find_extended_inds(i1, I...) = (@inline; (i1, find_extended_inds(I...)...))
 find_extended_inds() = ()
 
-function iterate(V::FastContiguousSubArray,
-        state = (V.offset1+firstindex(V), V.offset1+lastindex(V)))
+function isvalid_index(p, i, l)
+    if firstindex(p) == 1
+        (i-1)%UInt < l%UInt <= lastindex(p)%UInt
+    else
+        firstindex(p) <= i <= l <= lastindex(p)
+    end
+end
+
+function Base.iterate(v::Base.FastContiguousSubArray,
+        state = v.offset1 .+ (firstindex(v), lastindex(v)))
+    p = parent(v)
     i, l = state
-    @inbounds i-1 < l ? (V.parent[i], (i+1, l)) : nothing
+    isvalid_index(p, i, l) ? (@inbounds p[i], (i+1, l)) : nothing
+end
+
+stride1(v::SubArray{T,N,P}) where {T,N,P} = P <: StridedArray ? stride(v, 1) : v.stride1
+
+function Base.iterate(v::Base.FastSubArray,
+        state = v.offset1 .+ stride1(v) .* (firstindex(v), lastindex(v)))
+    p = parent(v)
+    i, l = state
+    isvalid_index(p, i, l) ? (@inbounds p[i], (i+stride1(v), l)) : nothing
 end
 
 function unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) where {T,N,P}
