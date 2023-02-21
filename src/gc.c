@@ -3254,7 +3254,7 @@ void jl_gc_init(void)
     uint64_t ngigs = total_mem / 10e9;
     if (ngigs < 128)
     {
-        double percent = ngigs * 0.00703125 + 0.6; // 60% at 0 gigs and 90% at 128 to
+        double percent = ngigs * 0.00234375 + 0.6; // 60% at 0 gigs and 90% at 128 to
                                                    //not overcommit too much on memory contrained devices
         max_total_memory = total_mem * percent;
     }
