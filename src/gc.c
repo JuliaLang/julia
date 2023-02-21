@@ -3275,6 +3275,11 @@ JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem)
     }
 }
 
+JL_DLLEXPORT uint64_t jl_gc_get_max_memory()
+{
+    return max_total_memory;
+}
+
 // callback for passing OOM errors from gmp
 JL_DLLEXPORT void jl_throw_out_of_memory_error(void)
 {

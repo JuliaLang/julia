@@ -289,6 +289,13 @@ function total_memory()
 end
 
 """
+    Sys.heap_size()
+
+Get the maximum size of the heap in bytes.
+"""
+heap_size() = ccall(:jl_gc_get_max_memory, UInt64, ())
+
+"""
     Sys.get_process_title()
 
 Get the process title. On some systems, will always return an empty string.
