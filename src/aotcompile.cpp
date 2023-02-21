@@ -271,7 +271,7 @@ void replaceUsesWithLoad(Function &F, function_ref<GlobalVariable *(Instruction 
 // `_imaging_mode` controls if raw pointers can be embedded (e.g. the code will be loaded into the same session).
 // `_external_linkage` create linkages between pkgimages.
 extern "C" JL_DLLEXPORT
-void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode, int _external_linkage)
+void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode, int _external_linkage, size_t _world)
 {
     ++CreateNativeCalls;
     CreateNativeMax.updateMax(jl_array_len(methods));
@@ -307,7 +307,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     params.params = cgparams;
     params.imaging = imaging;
     params.external_linkage = _external_linkage;
-    size_t compile_for[] = { jl_typeinf_world, jl_atomic_load_acquire(&jl_world_counter) };
+    size_t compile_for[] = { jl_typeinf_world, _world };
     for (int worlds = 0; worlds < 2; worlds++) {
         params.world = compile_for[worlds];
         if (!params.world)
