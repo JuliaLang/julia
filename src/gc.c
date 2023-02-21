@@ -3228,8 +3228,6 @@ void jl_init_thread_heap(jl_ptls_t ptls)
 // System-wide initializations
 void jl_gc_init(void)
 {
-    if (jl_options.heap_size_hint)
-        jl_gc_set_max_memory(jl_options.heap_size_hint);
 
     JL_MUTEX_INIT(&heapsnapshot_lock);
     JL_MUTEX_INIT(&finalizers_lock);
@@ -3253,8 +3251,18 @@ void jl_gc_init(void)
     uint64_t constrained_mem = uv_get_constrained_memory();
     if (constrained_mem > 0 && constrained_mem < total_mem)
         total_mem = constrained_mem;
-    max_total_memory = total_mem / 10 * 6;
+    uint64_t ngigs = total_mem / 10e9;
+    if (ngigs < 128)
+    {
+        double percent = ngigs * 0.00703125 + 0.6; // 60% at 0 gigs and 90% at 128 to
+                                                   //not overcommit too much on memory contrained devices
+        max_total_memory = total_mem * percent;
+    }
+    else
+        max_total_memory = total_mem / 10 * 9;
 #endif
+    if (jl_options.heap_size_hint)
+        jl_gc_set_max_memory(jl_options.heap_size_hint);
 
     t_start = jl_hrtime();
 }
