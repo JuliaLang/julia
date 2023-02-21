@@ -193,7 +193,7 @@ typedef struct _jl_codegen_params_t {
     std::map<std::tuple<jl_code_instance_t*,bool>, GlobalVariable*> external_fns;
     std::map<jl_datatype_t*, DIType*> ditypes;
     std::map<jl_datatype_t*, Type*> llvmtypes;
-    DenseMap<Constant*, GlobalVariable*> mergedConstants;
+    DenseMap<Constant*, WeakVH /* GlobalVariable* */> mergedConstants;
     // Map from symbol name (in a certain library) to its GV in sysimg and the
     // DL handle address in the current session.
     StringMap<std::pair<GlobalVariable*,SymMapGV>> libMapGV;

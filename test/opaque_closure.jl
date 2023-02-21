@@ -270,3 +270,28 @@ let ci = code_typed((x, y...)->(x, y), (Int, Int))[1][1]
         @test_throws MethodError oc(1,2,3)
     end
 end
+
+# Regression test for emission of string constants from opaque closures.
+# This test is very specific to the structure of codegen. In particular,
+# what this test is trying to force is that the inner `g` opaque closure
+# gets merged into the module for `f`, overwriting the `typeassert`
+# string constant, but because `f` has its own typeassert after the
+# definition of `g`, it gets remembered and a use-after-free is forced
+# during the emission of `oc_string_const`.
+using Base.Experimental: @opaque
+@noinline function oc_string_const(x)
+   x::Int
+end
+function oc_string_const2(x)
+    f = @opaque x->begin
+        @inline
+        g = @opaque y->begin
+            y::Int
+        end
+        @noinline g(Base.inferencebarrier(x))
+        x::Int
+    end
+    @noinline f(Base.inferencebarrier(x))
+    oc_string_const(x)
+end
+@test_throws TypeError oc_string_const2(1.0)

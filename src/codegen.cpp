@@ -1750,9 +1750,10 @@ static inline GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G)
 
 static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_context, Constant *val, StringRef name, Module &M)
 {
-    GlobalVariable *&gv = emission_context.mergedConstants[val];
+    WeakVH &vh = emission_context.mergedConstants[val];
     StringRef localname;
     std::string ssno;
+    GlobalVariable *gv = cast_or_null<GlobalVariable>((Value*)vh);
     if (gv == nullptr) {
         raw_string_ostream(ssno) << name << emission_context.mergedConstants.size();
         localname = StringRef(ssno);
@@ -1771,6 +1772,7 @@ static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_con
                 val,
                 localname);
         gv->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+        vh = gv;
     }
     assert(localname == gv->getName());
     assert(val == gv->getInitializer());
