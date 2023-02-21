@@ -3275,7 +3275,7 @@ JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem)
     }
 }
 
-JL_DLLEXPORT uint64_t jl_gc_get_max_memory()
+JL_DLLEXPORT uint64_t jl_gc_get_max_memory(void)
 {
     return max_total_memory;
 }
