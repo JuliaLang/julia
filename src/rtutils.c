@@ -786,7 +786,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if (vt->name == jl_mutablebuffer_typename) {
         n += jl_show_buffer(out, (jl_buffer_t*)v, "MutableBuffer", "([", "])");
     }
-    else if (vt->name == jl_mutablebuffer_typename) {
+    else if (vt->name == jl_immutablebuffer_typename) {
         n += jl_show_buffer(out, (jl_buffer_t*)v, "ImmutableBuffer", "([", "])");
     }
     else if (v == (jl_value_t*)jl_unionall_type) {

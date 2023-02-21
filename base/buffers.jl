@@ -9,28 +9,34 @@ end
 MutableBuffer(a::AbstractArray{T}) where {T} = MutableBuffer{T}(a)
 function MutableBuffer{T}(a::AbstractArray) where {T}
     n = length(a)
-    sb = MutableBuffer{T}(undef, n)
+    b = MutableBuffer{T}(undef, n)
     i = 1
     for a_i in a
-        @inbounds sb[i] = a_i
+        @inbounds b[i] = a_i
         i += 1
     end
-    return sb
-end
+    return b
 end
 
-@eval getindex(sb::MutableBuffer{T}, i::Int) where {T} = Core.bufref($(Expr(:boundscheck)), sb, i)
-@eval setindex!(sb::MutableBuffer{T}, x, i::Int) where {T} = Core.bufset($(Expr(:boundscheck)), sb, convert(T, x)::T, i)
+MutableBuffer(b::ImmutableBuffer) = Core.bufthaw(b)
+
+ImmutableBuffer(b::MutableBuffer) = Core.buffreeze(b)
+
+end
+
+@eval getindex(b::MutableBuffer{T}, i::Int) where {T} = Core.bufref($(Expr(:boundscheck)), b, i)
+@eval getindex(b::ImmutableBuffer{T}, i::Int) where {T} = Core.bufref($(Expr(:boundscheck)), b, i)
+@eval setindex!(b::MutableBuffer{T}, x, i::Int) where {T} = Core.bufset($(Expr(:boundscheck)), b, convert(T, x)::T, i)
 eltype(::Type{<:BufferType{T}}) where {T} = T
 elsize(@nospecialize T::Type{<:BufferType}) = aligned_sizeof(eltype(T))
-length(sb::BufferType) = Core.buflen(sb)
-firstindex(sb::BufferType) = 1
-lastindex(sb::BufferType) = length(sb)
-keys(sb::BufferType) = OneTo(length(sb))
-axes(sb::BufferType) = (OneTo(length(sb)),)
-axes(sb::BufferType, d::Integer) = d <= 1 ? OneTo(length(sb)) : OneTo(1)
+length(b::BufferType) = Core.buflen(b)
+firstindex(b::BufferType) = 1
+lastindex(b::BufferType) = length(b)
+keys(b::BufferType) = OneTo(length(b))
+axes(b::BufferType) = (OneTo(length(b)),)
+axes(b::BufferType, d::Integer) = d <= 1 ? OneTo(length(b)) : OneTo(1)
 iterate(v::BufferType, i=1) = (length(v) < i ? nothing : (v[i], i + 1))
-isempty(sb::BufferType) = (length(sb) == 0)
+isempty(b::BufferType) = (length(b) == 0)
 function ==(v1::BufferType, v2::BufferType)
     length(v1)==length(v2) || return false
     for i in 1:length(v1)
@@ -38,3 +44,5 @@ function ==(v1::BufferType, v2::BufferType)
     end
     return true
 end
+
+unsafe_freeze!(b::MutableBuffer) = Core.mutating_buffreeze(b)

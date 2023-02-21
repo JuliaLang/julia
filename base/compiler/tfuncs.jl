@@ -1921,6 +1921,29 @@ add_tfunc(Core.bufset, 4, INT_INF, bufset_tfunc, 20)
 
 add_tfunc(Core.buflen, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Int), 4)
 
+# the ImmutableBuffer operations might involve copies and so their computation costs can be high,
+# nevertheless we assign smaller inlining costs to them here, since the escape analysis
+# at this moment isn't able to propagate array escapes interprocedurally
+# and it will fail to optimize most cases without inlining
+buffreeze_tfunc(@nospecialize b) = immutable_buffer_tfunc(MutableBuffer, ImmutableBuffer, b)
+add_tfunc(Core.buffreeze, 1, 1, buffreeze_tfunc, 20)
+
+mutating_buffreeze_tfunc(@nospecialize b) = immutable_buffer_tfunc(MutableBuffer, ImmutableBuffer, b)
+add_tfunc(Core.mutating_buffreeze, 1, 1, mutating_buffreeze_tfunc, 10)
+
+bufthaw_tfunc(@nospecialize b) = immutable_buffer_tfunc(ImmutableBuffer, MutableBuffer, b)
+add_tfunc(Core.bufthaw, 1, 1, bufthaw_tfunc, 20)
+function immutable_buffer_tfunc(@nospecialize(bt), @nospecialize(rt), @nospecialize(b))
+    b = widenconst(a)
+    hasintersect(b, bt) || return Bottom
+    if b <: bt
+        unw = unwrap_unionall(b)
+        if isa(unw, DataType)
+            return rewrap_unionall(rt{unw.parameters[1], unw.parameters[2]}, b)
+        end
+    end
+    return rt
+end
 function buffer_elmtype(@nospecialize buf)
     b = widenconst(buf)
     if !has_free_typevars(b) && (b <: MutableBuffer || b <: ImmutableBuffer)
@@ -2390,8 +2413,22 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
     𝕃ᵢ = typeinf_lattice(interp)
     if f === tuple
         return tuple_tfunc(𝕃ᵢ, argtypes)
-    end
-    if isa(f, IntrinsicFunction)
+    elseif f === Core.buffreeze || f === Core.bufthaw
+       if length(argtypes) != 1
+            isva && return Any
+            return Bottom
+        end
+        a = widenconst(argtypes[1])
+        at = (f === Core.buffreeze ? MutableBuffer : ImmutableBuffer)
+        rt = (f === Core.buffreeze ? ImmutableBuffer : MutableBuffer)
+        if a <: at
+            unw = unwrap_unionall(a)
+            if isa(unw, DataType)
+                return rewrap_unionall(rt{unw.parameters[1], unw.parameters[2]}, a)
+            end
+        end
+        return rt
+    elseif isa(f, IntrinsicFunction)
         if is_pure_intrinsic_infer(f) && all(@nospecialize(a) -> isa(a, Const), argtypes)
             argvals = anymap(@nospecialize(a) -> (a::Const).val, argtypes)
             try

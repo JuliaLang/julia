@@ -64,8 +64,8 @@ extern "C" {
 #define TAG_ARGUMENT           56
 #define TAG_RELOC_METHODROOT   57
 #define TAG_BINDING            58
-#define TAG_SBUF               59
-#define TAG_LONG_SBUF          60
+#define TAG_MBUF               59
+#define TAG_IBUF               60
 
 #define LAST_TAG 60
 

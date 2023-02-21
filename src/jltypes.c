@@ -2336,7 +2336,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_compute_field_offsets((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_mutablebuffer_type));
 
     jl_immutablebuffer_type = (jl_unionall_t*)
-        jl_new_datatype(jl_symbol("MutableBuffer"), core,
+        jl_new_datatype(jl_symbol("ImmutableBuffer"), core,
         (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_densearray_type, jl_svec_data(suptv), 2),
         tv,
         jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 1, 0)->name->wrapper;

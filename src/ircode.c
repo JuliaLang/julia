@@ -178,12 +178,15 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
             jl_encode_value(s, jl_svecref(v, i));
         }
     }
-    else if (jl_is_mutablebuffer(v)) {
+    else if (jl_is_buffer(v)) {
         jl_buffer_t *sb = (jl_buffer_t*)(v);
         jl_value_t *eltype = jl_buffer_eltype((jl_value_t*)sb);
         size_t elsize = jl_buffer_elsize((jl_value_t*)sb);
         size_t len = jl_buffer_len(sb);
-        write_uint8(s->s, TAG_SBUF);
+        if (jl_is_mutablebuffer(v))
+            write_uint8(s->s, TAG_MBUF);
+        else
+            write_uint8(s->s, TAG_IBUF);
         jl_encode_value(s, eltype);
         write_int8(s->s, (int8_t)elsize);
         write_int32(s->s, (int32_t)len);
@@ -479,19 +482,33 @@ static jl_value_t *jl_decode_value_svec(jl_ircode_state *s, uint8_t tag) JL_GC_D
     return (jl_value_t*)sv;
 }
 
-static jl_value_t *jl_decode_value_sbuf(jl_ircode_state *s, uint8_t tag) JL_GC_DISABLED
+static jl_value_t *jl_decode_value_mbuf(jl_ircode_state *s, uint8_t tag) JL_GC_DISABLED
 {
     jl_value_t *eltype = jl_decode_value(s);
     size_t elsize = (size_t)read_int8(s->s);
     size_t len = (size_t)read_int32(s->s);
-    jl_buffer_t *sb = jl_new_buffer(eltype, len);
+    jl_buffer_t *b = jl_new_buffer(eltype, len);
     size_t tot = len * elsize;
     if (jl_is_uniontype(eltype))
         tot += len;
-    ios_readall(s->s, (char*)jl_buffer_data(sb), tot);
-    return (jl_value_t*)sb;
+    ios_readall(s->s, (char*)jl_buffer_data(b), tot);
+    return (jl_value_t*)b;
 }
-
+static jl_value_t *jl_decode_value_ibuf(jl_ircode_state *s, uint8_t tag) JL_GC_DISABLED
+{
+    jl_value_t *eltype = jl_decode_value(s);
+    size_t elsize = (size_t)read_int8(s->s);
+    size_t len = (size_t)read_int32(s->s);
+    jl_buffer_t *b = jl_new_buffer(eltype, len);
+    size_t tot = len * elsize;
+    if (jl_is_uniontype(eltype))
+        tot += len;
+    ios_readall(s->s, (char*)jl_buffer_data(b), tot);
+    jl_datatype_t *it = (jl_datatype_t *)jl_apply_type2((jl_value_t*)jl_immutablebuffer_type,
+        jl_tparam0(jl_typeof(b)), jl_tparam1(jl_typeof(b)));
+    jl_set_typeof(b, it);
+    return (jl_value_t*)b;
+}
 
 static jl_value_t *jl_decode_value_array(jl_ircode_state *s, uint8_t tag) JL_GC_DISABLED
 {
@@ -689,8 +706,10 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
         return lookup_root(s->method, 0, read_uint32(s->s));
     case TAG_SVEC: JL_FALLTHROUGH; case TAG_LONG_SVEC:
         return jl_decode_value_svec(s, tag);
-    case TAG_SBUF: JL_FALLTHROUGH; case TAG_LONG_SBUF:
-        return jl_decode_value_sbuf(s, tag);
+    case TAG_MBUF:
+        return jl_decode_value_mbuf(s, tag);
+    case TAG_IBUF:
+        return jl_decode_value_ibuf(s, tag);
     case TAG_COMMONSYM:
         return jl_deser_symbol(read_uint8(s->s));
     case TAG_SSAVALUE:
@@ -1157,7 +1176,8 @@ void jl_init_serializer(void)
     deser_tag[TAG_DATATYPE] = (jl_value_t*)jl_datatype_type;
     deser_tag[TAG_SLOTNUMBER] = (jl_value_t*)jl_slotnumber_type;
     deser_tag[TAG_SVEC] = (jl_value_t*)jl_simplevector_type;
-    deser_tag[TAG_SBUF] = (jl_value_t*)jl_mutablebuffer_type;
+    deser_tag[TAG_MBUF] = (jl_value_t*)jl_mutablebuffer_type;
+    deser_tag[TAG_IBUF] = (jl_value_t*)jl_immutablebuffer_type;
     deser_tag[TAG_ARRAY] = (jl_value_t*)jl_array_type;
     deser_tag[TAG_EXPR] = (jl_value_t*)jl_expr_type;
     deser_tag[TAG_PHINODE] = (jl_value_t*)jl_phinode_type;
