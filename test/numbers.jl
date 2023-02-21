@@ -2494,7 +2494,7 @@ Base.abs(x::TestNumber) = TestNumber(abs(x.inner))
     testmi(map(UInt32, 0:1000), map(UInt32, 1:100))
     testmi(typemax(UInt32)-UInt32(1000):typemax(UInt32), map(UInt32, 1:100))
     # test broadcasting works.
-    @test div.(3, Base.multiplicativeinverse(3)) == 1 
+    @test div.(3, Base.multiplicativeinverse(3)) == 1
 end
 @testset "ndims/indices/size/length" begin
     @test ndims(1) == 0
