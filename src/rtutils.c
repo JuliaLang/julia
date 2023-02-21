@@ -354,6 +354,11 @@ JL_DLLEXPORT void *(jl_symbol_name)(jl_sym_t *s)
     return jl_symbol_name(s);
 }
 
+JL_DLLEXPORT void *jl_buffer_ptr(jl_buffer_t *b)
+{
+    return (void*)jl_buffer_data(b);
+}
+
 // WARNING: THIS FUNCTION IS NEVER CALLED BUT INLINE BY CCALL
 JL_DLLEXPORT void *jl_array_ptr(jl_array_t *a)
 {
@@ -552,13 +557,13 @@ static size_t jl_show_svec(JL_STREAM *out, jl_svec_t *t, const char *head, const
     n += jl_printf(out, "%s", cls);
     return n;
 }
-static size_t jl_show_sbuf(JL_STREAM *out, jl_sbuf_t *sb, const char *head, const char *opn, const char *cls) JL_NOTSAFEPOINT
+static size_t jl_show_buffer(JL_STREAM *out, jl_buffer_t *sb, const char *head, const char *opn, const char *cls) JL_NOTSAFEPOINT
 {
-    size_t i, n=0, len = jl_sbuf_len(sb);
+    size_t i, n=0, len = jl_buffer_len(sb);
     n += jl_printf(out, "%s", head);
     n += jl_printf(out, "%s", opn);
     for (i = 0; i < len; i++) {
-        jl_value_t *v = jl_sbufref(sb, i);
+        jl_value_t *v = jl_bufref(sb, i);
         n += jl_static_show(out, v);
         if (i != len-1)
             n += jl_printf(out, ", ");
@@ -733,8 +738,11 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if (v == (jl_value_t*)jl_simplevector_type) {
         n += jl_printf(out, "Core.SimpleVector");
     }
-    else if (v == (jl_value_t*)jl_simplebuffer_type) {
-        n += jl_printf(out, "Core.SimpleBuffer");
+    else if (v == (jl_value_t*)jl_mutablebuffer_type) {
+        n += jl_printf(out, "Core.MutableBuffer");
+    }
+    else if (v == (jl_value_t*)jl_immutablebuffer_type) {
+        n += jl_printf(out, "Core.ImmutableBuffer");
     }
     else if (v == (jl_value_t*)jl_typename_type) {
         n += jl_printf(out, "Core.TypeName");
@@ -775,8 +783,11 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if (vt == jl_simplevector_type) {
         n += jl_show_svec(out, (jl_svec_t*)v, "svec", "(", ")");
     }
-    else if (vt->name == jl_simplebuffer_typename) {
-        n += jl_show_sbuf(out, (jl_sbuf_t*)v, "SimpleBuffer", "([", "])");
+    else if (vt->name == jl_mutablebuffer_typename) {
+        n += jl_show_buffer(out, (jl_buffer_t*)v, "MutableBuffer", "([", "])");
+    }
+    else if (vt->name == jl_mutablebuffer_typename) {
+        n += jl_show_buffer(out, (jl_buffer_t*)v, "ImmutableBuffer", "([", "])");
     }
     else if (v == (jl_value_t*)jl_unionall_type) {
         // avoid printing `typeof(Type)` for `UnionAll`.

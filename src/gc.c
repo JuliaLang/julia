@@ -911,8 +911,8 @@ void jl_gc_force_mark_old(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT
         size_t l = jl_svec_len(v);
         dtsz = l * sizeof(void*) + sizeof(jl_svec_t);
     }
-    else if (dt->name == jl_simplebuffer_typename) {
-        dtsz = jl_sbuf_nbytes(v);
+    else if (dt->name == jl_mutablebuffer_typename || dt->name == jl_immutablebuffer_typename) {
+        dtsz = jl_buffer_nbytes(v);
     }
     else if (dt->name == jl_array_typename) {
         jl_array_t *a = (jl_array_t*)v;
@@ -2289,11 +2289,11 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             uintptr_t nptr = (l << 2) | (bits & GC_OLD);
             gc_mark_objarray(ptls, objary_parent, objary_begin, objary_end, step, nptr);
         }
-        // FIXME SimpleBuffer GC
-        else if (vt->name == jl_simplebuffer_typename) {
-            size_t l = jl_sbuf_len(new_obj);
-            jl_value_t **data = jl_sbuf_data(new_obj);
-            size_t dtsz = jl_sbuf_nbytes(new_obj) + sizeof(jl_sbuf_t);
+        // FIXME MutableBuffer GC
+        else if (vt->name == jl_mutablebuffer_typename || vt->name == jl_immutablebuffer_typename) {
+            size_t l = jl_buffer_len(new_obj);
+            jl_value_t **data = jl_buffer_data(new_obj);
+            size_t dtsz = jl_buffer_nbytes(new_obj) + sizeof(jl_buffer_t);
             if (update_meta)
                 gc_setmark(ptls, o, bits, dtsz);
             else if (foreign_alloc)

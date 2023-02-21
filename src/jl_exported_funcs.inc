@@ -454,10 +454,11 @@
     XX(jl_svec_copy) \
     XX(jl_svec_fill) \
     XX(jl_svec_ref) \
-    XX(jl_new_sbuf) \
-    XX(jl_sbuf_copy) \
-    XX(jl_sbufref) \
-    XX(jl_sbufset) \
+    XX(jl_new_buffer) \
+    XX(jl_buffer_copy) \
+    XX(jl_bufref) \
+    XX(jl_bufset) \
+    XX(jl_buffer_ptr) \
     XX(jl_switch) \
     XX(jl_switchto) \
     XX(jl_symbol) \

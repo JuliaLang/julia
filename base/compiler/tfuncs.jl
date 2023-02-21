@@ -1901,28 +1901,29 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
     return anyinfo ? PartialStruct(typ, argtypes) : typ
 end
 
-@nospecs function sbufref_tfunc(𝕃::AbstractLattice, boundscheck, buf, idx)
+@nospecs function bufref_tfunc(𝕃::AbstractLattice, boundscheck, buf, idx)
     hasintersect(widenconst(boundscheck), Bool) || return false
-    hasintersect(widenconst(buf), SimpleBuffer) || return false
+    wbuf = widenconst(buf)
+    (hasintersect(wbuf, MutableBuffer) || hasintersect(wbuf, ImmutableBuffer)) || return false
     hasintersect(widenconst(idx), Int) || return false
     return buffer_elmtype(buf)
 end
-add_tfunc(Core.sbufref, 3, INT_INF, sbufref_tfunc, 20)
+add_tfunc(Core.bufref, 3, INT_INF, bufref_tfunc, 20)
 
-@nospecs function sbufset_tfunc(𝕃::AbstractLattice, boundscheck, buf, item, idx)
+@nospecs function bufset_tfunc(𝕃::AbstractLattice, boundscheck, buf, item, idx)
     hasintersect(widenconst(boundscheck), Bool) || return Bottom
-    hasintersect(widenconst(buf), SimpleBuffer) || return Bottom
+    hasintersect(widenconst(buf), MutableBuffer) || return Bottom
     hasintersect(widenconst(idx), Int) || return Bottom
     hasintersect(widenconst(item), buffer_elmtype(buf)) || return Bottom
     return buf
 end
-add_tfunc(Core.sbufset, 4, INT_INF, sbufset_tfunc, 20)
+add_tfunc(Core.bufset, 4, INT_INF, bufset_tfunc, 20)
 
-add_tfunc(Core.sbuflen, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Int), 4)
+add_tfunc(Core.buflen, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Int), 4)
 
 function buffer_elmtype(@nospecialize buf)
     b = widenconst(buf)
-    if !has_free_typevars(b) && b <: SimpleBuffer
+    if !has_free_typevars(b) && (b <: MutableBuffer || b <: ImmutableBuffer)
         b0 = b
         if isa(b, UnionAll)
             b = unwrap_unionall(b0)
@@ -2089,11 +2090,11 @@ end
         return arrayset_typecheck(argtypes[2], argtypes[3])
     elseif f === arrayref || f === const_arrayref
         return array_builtin_common_nothrow(argtypes, 3)
-    elseif f === Core.sbufset
+    elseif f === Core.bufset
         buffer_builtin_common_nothrow(argtypes, 4) || return false
         # Additionally check element type compatibility
         return arrayset_typecheck(argtypes[2], argtypes[3])
-    elseif f === Core.sbufref
+    elseif f === Core.bufref
         return buffer_builtin_common_nothrow(argtypes, 3)
     elseif f === Core._expr
         length(argtypes) >= 1 || return false
@@ -2107,8 +2108,8 @@ end
     if f === arraysize
         na == 2 || return false
         return arraysize_nothrow(argtypes[1], argtypes[2])
-    elseif f === Core.sbuflen
-        (na == 1 && argtypes[1] ⊑ SimpleBuffer) || return false
+    elseif f === Core.buflen
+        (na == 1 && (argtypes[1] ⊑ MutableBuffer || argtypes[1] ⊑ ImmutableBuffer)) || return false
     elseif f === Core._typevar
         na == 3 || return false
         return typevar_nothrow(𝕃, argtypes[1], argtypes[2], argtypes[3])
@@ -2184,9 +2185,9 @@ const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields, applicable]
 # known to be effect-free (but not necessarily nothrow)
 const _EFFECT_FREE_BUILTINS = [
     fieldtype, apply_type, isa, UnionAll,
-    getfield, arrayref, const_arrayref, Core.sbufref, isdefined, Core.sizeof,
+    getfield, arrayref, const_arrayref, Core.bufref, isdefined, Core.sizeof,
     Core.ifelse, Core._typevar, (<:),
-    typeassert, throw, arraysize, Core.sbuflen, getglobal, compilerbarrier
+    typeassert, throw, arraysize, Core.buflen, getglobal, compilerbarrier
 ]
 
 const _CONSISTENT_BUILTINS = Any[
@@ -2212,7 +2213,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     (===),
     apply_type,
     arraysize,
-    Core.sbuflen,
+    Core.buflen,
     Core.ifelse,
     Core.sizeof,
     svec,
@@ -2231,8 +2232,8 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
 const _ARGMEM_BUILTINS = Any[
     arrayref,
     arrayset,
-    Core.sbufref,
-    Core.sbufset,
+    Core.bufref,
+    Core.bufset,
     modifyfield!,
     replacefield!,
     setfield!,
@@ -2359,7 +2360,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argin
     else
         consistent = contains_is(_CONSISTENT_BUILTINS, f) ? ALWAYS_TRUE :
             (f === Core._typevar) ? CONSISTENT_IF_NOTRETURNED : ALWAYS_FALSE
-        if f === setfield! || f === arrayset || f === Core.sbufset
+        if f === setfield! || f === arrayset || f === Core.bufset
             effect_free = EFFECT_FREE_IF_INACCESSIBLEMEMONLY
         elseif contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)
             effect_free = ALWAYS_TRUE
@@ -2807,7 +2808,7 @@ function foreigncall_effects(@specialize(abstract_eval), e::Expr)
     name = args[1]
     isa(name, QuoteNode) && (name = name.value)
     isa(name, Symbol) || return EFFECTS_UNKNOWN
-    if name === :jl_new_sbuf
+    if name === :jl_new_buffer
         return new_buffer_effects(abstract_eval, args)
     else
         ndims = alloc_array_ndims(name)

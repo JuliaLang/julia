@@ -499,8 +499,8 @@ JL_CALLABLE(jl_f_sizeof)
         return jl_box_long(strlen(jl_symbol_name((jl_sym_t*)x)));
     if (jl_is_svec(x))
         return jl_box_long((1+jl_svec_len(x))*sizeof(void*));
-    if (jl_is_simplebuffer(x))
-        return jl_box_long(jl_sbuf_len(x) * jl_sbuf_elsize(x));
+    if (jl_is_buffer(x))
+        return jl_box_long(jl_buffer_len(x) * jl_buffer_elsize(x));
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
     assert(jl_is_datatype(dt));
     assert(!dt->name->abstract);
@@ -1498,42 +1498,93 @@ JL_CALLABLE(jl_f_arrayset)
 }
 
 // buffers ---------------------------------------------------------------------
-JL_CALLABLE(jl_f_sbuflen)
+JL_CALLABLE(jl_f_buflen)
 {
-    JL_NARGS(sbuflen, 1, 1);
-    JL_TYPECHK(sbuflen, simplebuffer, args[0]);
-    return jl_box_long(jl_sbuf_len(args[0]));
+    JL_NARGS(buflen, 1, 1);
+    if (!jl_is_buffer(args[0])) {
+        jl_type_error("bufref", (jl_value_t*)jl_mutablebuffer_type, args[0]);
+    }
+    return jl_box_long(jl_buffer_len(args[0]));
 }
 
-JL_CALLABLE(jl_f_sbufref)
+JL_CALLABLE(jl_f_bufref)
 {
-    JL_NARGS(sbufref, 3, 3);
-    JL_TYPECHK(sbufref, bool, args[0]);
-    JL_TYPECHK(sbufref, simplebuffer, args[1]);
-    jl_sbuf_t *sb = (jl_sbuf_t*)args[1];
-    size_t len = jl_sbuf_len(sb);
+    JL_NARGS(bufref, 3, 3);
+    JL_TYPECHK(bufref, bool, args[0]);
+    if (!jl_is_buffer(args[1])) {
+        jl_type_error("bufref", (jl_value_t*)jl_mutablebuffer_type, args[1]);
+    }
+    jl_buffer_t *sb = (jl_buffer_t*)args[1];
+    size_t len = jl_buffer_len(sb);
     size_t idx = (size_t)jl_unbox_long((jl_value_t*)args[2]);
     if (idx < 1 || idx > len) {
         jl_bounds_error_int((jl_value_t*)sb, idx);
     }
-    return jl_sbufref(sb, idx - 1);
+    return jl_bufref(sb, idx - 1);
 }
 
-JL_CALLABLE(jl_f_sbufset)
+JL_CALLABLE(jl_f_bufset)
 {
-    JL_NARGS(sbufset, 4, 4);
-    JL_TYPECHK(sbufset, bool, args[0]);
-    JL_TYPECHK(sbufset, simplebuffer, args[1]);
-    jl_sbuf_t *sb = (jl_sbuf_t*)args[1];
-    size_t len = jl_sbuf_len(sb);
+    JL_NARGS(bufset, 4, 4);
+    JL_TYPECHK(bufset, bool, args[0]);
+    JL_TYPECHK(bufset, mutablebuffer, args[1]);
+    jl_buffer_t *sb = (jl_buffer_t*)args[1];
+    size_t len = jl_buffer_len(sb);
     size_t idx = (size_t)jl_unbox_long((jl_value_t*)args[2]);
     if (idx < 1 || idx > len) {
         jl_bounds_error_int((jl_value_t*)sb, idx);
     }
-    jl_sbufset(sb, args[2], idx - 1);
+    jl_bufset(sb, args[2], idx - 1);
     return args[1];
 }
 
+JL_CALLABLE(jl_f_buffreeze)
+{
+    JL_NARGS(bufferfreeze, 1, 1);
+    JL_TYPECHK(bufferfreeze, mutablebuffer, args[0]);
+    jl_buffer_t *b = (jl_buffer_t*)args[0];
+    jl_datatype_t *it = (jl_datatype_t *)jl_apply_type2((jl_value_t*)jl_immutablebuffer_type,
+        jl_tparam0(jl_typeof(b)), jl_tparam1(jl_typeof(b)));
+    JL_GC_PUSH1(&it);
+    // The idea is to elide this copy if the compiler or runtime can prove that
+    // doing so is safe to do.
+    jl_buffer_t *nb = jl_buffer_copy(b);
+    jl_set_typeof(nb, it);
+    JL_GC_POP();
+    return (jl_value_t*)nb;
+}
+
+JL_CALLABLE(jl_f_mutating_buffreeze)
+{
+    // N.B.: These error checks pretend to be arrayfreeze since this is a drop
+    // in replacement and we don't want to change the visible error type in the
+    // optimizer
+    JL_NARGS(buffreeze, 1, 1);
+    JL_TYPECHK(buffreeze, array, args[0]);
+    jl_buffer_t *b = (jl_buffer_t*)args[0];
+    jl_datatype_t *it = (jl_datatype_t *)jl_apply_type2((jl_value_t*)jl_immutablebuffer_type,
+        jl_tparam0(jl_typeof(b)), jl_tparam1(jl_typeof(b)));
+    jl_set_typeof(b, it);
+    return (jl_value_t*)b;
+}
+
+JL_CALLABLE(jl_f_bufthaw)
+{
+    JL_NARGS(bufthaw, 1, 1);
+    if (((jl_datatype_t*)jl_typeof(args[0]))->name != jl_immutablebuffer_typename) {
+        jl_type_error("bufthaw", (jl_value_t*)jl_immutablebuffer_type, args[0]);
+    }
+    jl_buffer_t *b = (jl_buffer_t*)args[0];
+    jl_datatype_t *it = (jl_datatype_t *)jl_apply_type2((jl_value_t*)jl_mutablebuffer_type,
+        jl_tparam0(jl_typeof(b)), jl_tparam1(jl_typeof(b)));
+    JL_GC_PUSH1(&it);
+    // The idea is to elide this copy if the compiler or runtime can prove that
+    // doing so is safe to do.
+    jl_buffer_t *nb = jl_buffer_copy(b);
+    jl_set_typeof(nb, it);
+    JL_GC_POP();
+    return (jl_value_t*)nb;
+}
 // type definition ------------------------------------------------------------
 
 JL_CALLABLE(jl_f__structtype)
@@ -2021,9 +2072,12 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin_arraysize = add_builtin_func("arraysize", jl_f_arraysize);
 
     // buffer primitives
-    jl_builtin_sbufref = add_builtin_func("sbufref", jl_f_sbufref);
-    jl_builtin_sbufset = add_builtin_func("sbufset", jl_f_sbufset);
-    jl_builtin_sbuflen = add_builtin_func("sbuflen", jl_f_sbuflen);
+    jl_builtin_bufref = add_builtin_func("bufref", jl_f_bufref);
+    jl_builtin_bufset = add_builtin_func("bufset", jl_f_bufset);
+    jl_builtin_buflen = add_builtin_func("buflen", jl_f_buflen);
+    jl_builtin_buffreeze = add_builtin_func("buffreeze", jl_f_buffreeze);
+    jl_builtin_mutating_buffreeze = add_builtin_func("mutating_buffreeze", jl_f_mutating_buffreeze);
+    jl_builtin_bufthaw = add_builtin_func("bufthaw", jl_f_bufthaw);
 
     // method table utils
     jl_builtin_applicable = add_builtin_func("applicable", jl_f_applicable);
@@ -2065,7 +2119,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("Tuple", (jl_value_t*)jl_anytuple_type);
     add_builtin("TypeofVararg", (jl_value_t*)jl_vararg_type);
     add_builtin("SimpleVector", (jl_value_t*)jl_simplevector_type);
-    add_builtin("SimpleBuffer", (jl_value_t*)jl_simplebuffer_type);
+    add_builtin("MutableBuffer", (jl_value_t*)jl_mutablebuffer_type);
+    add_builtin("ImmutableBuffer", (jl_value_t*)jl_immutablebuffer_type);
 
     add_builtin("Module", (jl_value_t*)jl_module_type);
     add_builtin("MethodTable", (jl_value_t*)jl_methtable_type);

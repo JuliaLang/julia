@@ -178,11 +178,11 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
             jl_encode_value(s, jl_svecref(v, i));
         }
     }
-    else if (jl_is_simplebuffer(v)) {
-        jl_sbuf_t *sb = (jl_sbuf_t*)(v);
-        jl_value_t *eltype = jl_sbuf_eltype((jl_value_t*)sb);
-        size_t elsize = jl_sbuf_elsize((jl_value_t*)sb);
-        size_t len = jl_svec_len(sb);
+    else if (jl_is_mutablebuffer(v)) {
+        jl_buffer_t *sb = (jl_buffer_t*)(v);
+        jl_value_t *eltype = jl_buffer_eltype((jl_value_t*)sb);
+        size_t elsize = jl_buffer_elsize((jl_value_t*)sb);
+        size_t len = jl_buffer_len(sb);
         write_uint8(s->s, TAG_SBUF);
         jl_encode_value(s, eltype);
         write_int8(s->s, (int8_t)elsize);
@@ -190,7 +190,7 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
         size_t tot = elsize * len;
         if (jl_is_uniontype(eltype))
             tot += len;
-        ios_write(s->s, (const char*)jl_sbuf_data(v), tot);
+        ios_write(s->s, (const char*)jl_buffer_data(v), tot);
     }
     else if (jl_is_globalref(v)) {
         if (jl_globalref_mod(v) == s->method->module) {
@@ -484,11 +484,11 @@ static jl_value_t *jl_decode_value_sbuf(jl_ircode_state *s, uint8_t tag) JL_GC_D
     jl_value_t *eltype = jl_decode_value(s);
     size_t elsize = (size_t)read_int8(s->s);
     size_t len = (size_t)read_int32(s->s);
-    jl_sbuf_t *sb = jl_new_sbuf(eltype, len);
+    jl_buffer_t *sb = jl_new_buffer(eltype, len);
     size_t tot = len * elsize;
     if (jl_is_uniontype(eltype))
         tot += len;
-    ios_readall(s->s, (char*)jl_sbuf_data(sb), tot);
+    ios_readall(s->s, (char*)jl_buffer_data(sb), tot);
     return (jl_value_t*)sb;
 }
 
@@ -1157,7 +1157,7 @@ void jl_init_serializer(void)
     deser_tag[TAG_DATATYPE] = (jl_value_t*)jl_datatype_type;
     deser_tag[TAG_SLOTNUMBER] = (jl_value_t*)jl_slotnumber_type;
     deser_tag[TAG_SVEC] = (jl_value_t*)jl_simplevector_type;
-    deser_tag[TAG_SBUF] = (jl_value_t*)jl_simplebuffer_type;
+    deser_tag[TAG_SBUF] = (jl_value_t*)jl_mutablebuffer_type;
     deser_tag[TAG_ARRAY] = (jl_value_t*)jl_array_type;
     deser_tag[TAG_EXPR] = (jl_value_t*)jl_expr_type;
     deser_tag[TAG_PHINODE] = (jl_value_t*)jl_phinode_type;

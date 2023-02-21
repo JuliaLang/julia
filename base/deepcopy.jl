@@ -41,7 +41,7 @@ function deepcopy_internal(x::SimpleVector, stackdict::IdDict)
     return y
 end
 
-function deepcopy_internal(x::SimpleBuffer, stackdict::IdDict)
+function deepcopy_internal(x::MutableBuffer, stackdict::IdDict)
     if haskey(stackdict, x)
         return stackdict[x]
     end

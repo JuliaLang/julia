@@ -205,10 +205,15 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
         name = "SimpleVector";
         self_size = sizeof(jl_svec_t) + sizeof(void*) * jl_svec_len(a);
     }
-    else if (jl_is_simplebuffer_type(a)) {
-        node_type = "jl_sbuf_t";
-        name = "SimpleBuffer";
-        self_size = sizeof(jl_sbuf_t) + sizeof(void*) * jl_sbuf_len(a);
+    else if (jl_is_mutablebuffer_type(a)) {
+        node_type = "jl_buffer_t";
+        name = "MutableBuffer";
+        self_size = sizeof(jl_buffer_t) + sizeof(void*) * jl_buffer_len(a);
+    }
+    else if (jl_is_immutablebuffer_type(a)) {
+        node_type = "jl_buffer_t";
+        name = "ImmutableBuffer";
+        self_size = sizeof(jl_buffer_t) + sizeof(void*) * jl_buffer_len(a);
     }
     else if (jl_is_module(a)) {
         node_type = "jl_module_t";

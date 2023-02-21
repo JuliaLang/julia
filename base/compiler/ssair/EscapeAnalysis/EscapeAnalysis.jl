@@ -17,8 +17,9 @@ import ._TOP_MOD: ==, getindex, setindex!
 # usings
 import Core:
     MethodInstance, Const, Argument, SSAValue, PiNode, PhiNode, UpsilonNode, PhiCNode,
-    ReturnNode, GotoNode, GotoIfNot, SimpleVector, SimpleBuffer, MethodMatch, CodeInstance,
-    sizeof, ifelse, arrayset, arrayref, arraysize, sbufset, sbufref, sbuflen
+    ReturnNode, GotoNode, GotoIfNot, SimpleVector, ImmutableBuffer, MutableBuffer,
+    MethodMatch, CodeInstance,
+    sizeof, ifelse, arrayset, arrayref, arraysize, bufset, bufref, buflen
 import ._TOP_MOD:     # Base definitions
     @__MODULE__, @eval, @assert, @specialize, @nospecialize, @inbounds, @inline, @noinline,
     @label, @goto, !, !==, !=, ≠, +, -, *, ≤, <, ≥, >, &, |, <<, error, missing, copy,
@@ -804,7 +805,7 @@ function compute_frameinfo(ir::IRCode, call_resolved::Bool)
             name = args[1]
             nn = normalize(name)
             isa(nn, Symbol) || @goto next_stmt
-            if nn === :jl_new_sbuf
+            if nn === :jl_new_buffer
                 ndims = 1
             else
                 ndims = alloc_array_ndims(nn)
@@ -1614,24 +1615,26 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
     end
 end
 
-function escape_builtin!(::typeof(sbuflen), astate::AnalysisState, pc::Int, args::Vector{Any})
+function escape_builtin!(::typeof(buflen), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) == 2 || return false
     ir = astate.ir
     buf = args[2]
-    if !(argextype(buf, ir) ⊑ SimpleBuffer)
+    atype = argextype(buf, ir)
+    if !(atype ⊑ MutableBuffer || atype ⊑ ImmutableBuffer)
         add_escape_change!(astate, buf, ThrownEscape(pc))
     end
     # NOTE we may still see "arraysize: dimension out of range", but it doesn't capture anything
     return true
 end
 
-function escape_builtin!(::typeof(sbufref), astate::AnalysisState, pc::Int, args::Vector{Any})
+function escape_builtin!(::typeof(bufref), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) ≥ 4 || return false
-    # check potential thrown escapes from this sbufref call
+    # check potential thrown escapes from this bufref call
     boundscheckty = argextype(args[2], astate.ir)
     bufty = argextype(args[3], astate.ir)
     idxty = argextype(args[4], astate.ir)
-    if !(boundscheckty ⊑ Bool && bufty ⊑ SimpleBuffer && idxty ⊑ Int)
+    if !(boundscheckty ⊑ Bool &&
+         (bufty ⊑ MutableBuffer || bufty ⊑ ImmutableBuffer) && idxty ⊑ Int)
         add_thrown_escapes!(astate, pc, args, 2)
     end
     buf = args[3]
@@ -1639,7 +1642,7 @@ function escape_builtin!(::typeof(sbufref), astate::AnalysisState, pc::Int, args
     inbounds || add_escape_change!(astate, buf, ThrownEscape(pc))
     # we don't track precise index information about this array and thus don't know what values
     # can be referenced here: directly propagate the escape information imposed on the return
-    # value of this `sbufref` call to the buffer itself as the most conservative propagation
+    # value of this `bufref` call to the buffer itself as the most conservative propagation
     # but also with updated index information
     estate = astate.estate
     if isa(buf, SSAValue) || isa(buf, Argument)
@@ -1686,7 +1689,7 @@ function escape_builtin!(::typeof(sbufref), astate::AnalysisState, pc::Int, args
     return true
 end
 
-function escape_builtin!(::typeof(sbufset), astate::AnalysisState, pc::Int, args::Vector{Any})
+function escape_builtin!(::typeof(bufset), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) ≥ 5 || return false
     # check potential escapes from this arrayset call
     # NOTE here we essentially only need to account for TypeError, assuming that
@@ -1695,7 +1698,9 @@ function escape_builtin!(::typeof(sbufset), astate::AnalysisState, pc::Int, args
     bufty = argextype(args[3], astate.ir)
     valty = argextype(args[4], astate.ir)
     idxty = argextype(args[5], astate.ir)
-    if !(boundscheckty ⊑ Bool && bufty ⊑ SimpleBuffer && idxty ⊑ Int && arrayset_typecheck(bufty, valty))
+    if !(boundscheckty ⊑ Bool &&
+         (bufty ⊑ MutableBuffer || bufty ⊑ ImmutableBuffer) &&
+         idxty ⊑ Int && arrayset_typecheck(bufty, valty))
         add_thrown_escapes!(astate, pc, args, 2)
     end
     buf = args[3]

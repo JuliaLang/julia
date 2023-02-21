@@ -98,7 +98,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    163
+#define NUM_TAGS    168
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -117,8 +117,10 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_datatype_type);
         INSERT_TAG(jl_slotnumber_type);
         INSERT_TAG(jl_simplevector_type);
-        INSERT_TAG(jl_simplebuffer_type);
-        INSERT_TAG(jl_simplebuffer_typename);
+        INSERT_TAG(jl_mutablebuffer_type);
+        INSERT_TAG(jl_mutablebuffer_typename);
+        INSERT_TAG(jl_immutablebuffer_type);
+        INSERT_TAG(jl_immutablebuffer_typename);
         INSERT_TAG(jl_array_type);
         INSERT_TAG(jl_expr_type);
         INSERT_TAG(jl_binding_type);
@@ -277,9 +279,12 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_builtin_compilerbarrier);
         INSERT_TAG(jl_builtin_getglobal);
         INSERT_TAG(jl_builtin_setglobal);
-        INSERT_TAG(jl_builtin_sbufref);
-        INSERT_TAG(jl_builtin_sbufset);
-        INSERT_TAG(jl_builtin_sbuflen);
+        INSERT_TAG(jl_builtin_bufref);
+        INSERT_TAG(jl_builtin_bufset);
+        INSERT_TAG(jl_builtin_buflen);
+        INSERT_TAG(jl_builtin_buffreeze);
+        INSERT_TAG(jl_builtin_mutating_buffreeze);
+        INSERT_TAG(jl_builtin_bufthaw);
         // n.b. must update NUM_TAGS when you add something here
 #undef INSERT_TAG
         assert(i == NUM_TAGS - 1);
@@ -343,7 +348,8 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f_get_binding_type,
     &jl_f_set_binding_type, &jl_f_opaque_closure_call, &jl_f_donotdelete, &jl_f_compilerbarrier,
     &jl_f_getglobal, &jl_f_setglobal, &jl_f_finalizer, &jl_f__compute_sparams, &jl_f__svec_ref,
-    &jl_f_sbufref, &jl_f_sbufset, &jl_f_sbuflen,
+    &jl_f_bufref, &jl_f_bufset, &jl_f_buflen, &jl_f_buffreeze, &jl_f_mutating_buffreeze,
+    &jl_f_bufthaw,
     NULL };
 
 typedef struct {
@@ -1236,11 +1242,11 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 write_pointerfield(s, jl_svecref(v, ii));
             }
         }
-        else if (jl_is_simplebuffer(v)) {
+        else if (jl_is_mutablebuffer(v)) {
             ios_write(s->s, (char*)v, sizeof(void*));
-            size_t len = jl_sbuf_len(v);
+            size_t len = jl_buffer_len(v);
             assert(len > 0 || len == 0);
-            ios_write(s->const_data, (char*)jl_sbuf_data(v), len);
+            ios_write(s->const_data, (char*)jl_buffer_data(v), len);
         }
         else if (jl_is_string(v)) {
             ios_write(s->s, (char*)v, sizeof(void*) + jl_string_len(v));

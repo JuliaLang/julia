@@ -49,7 +49,7 @@ function summarysize(obj;
             if isassigned(x, i)
                 val = x[i]
             end
-        elseif isa(x, SimpleBuffer)
+        elseif isa(x, MutableBuffer)
             nf = length(x)
             if isassigned(x, i)
                 val = x[i]
@@ -153,8 +153,8 @@ function (ss::SummarySize)(obj::Array)
     return size
 end
 
-# FIXME SimpleBuffer GC
-function (ss::SummarySize)(obj::SimpleBuffer)
+# FIXME BufferType GC
+function (ss::SummarySize)(obj::BufferType)
     haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
     key = pointer_from_objref(obj)
     size::Int = sizeof(Int)

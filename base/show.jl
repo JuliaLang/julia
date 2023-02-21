@@ -1280,8 +1280,8 @@ function show(io::IO, tinf::Core.Compiler.Timings.Timing)
     print(io, "Core.Compiler.Timings.Timing(", tinf.mi_info, ") with ", length(tinf.children), " children")
 end
 
-function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector,SimpleBuffer}, op, delim, cl,
-                          delim_one, i1=first(LinearIndices(itr)), l=last(LinearIndices(itr)))
+function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector,BufferType}, op,
+     delim, cl, delim_one, i1=first(LinearIndices(itr)), l=last(LinearIndices(itr)))
     print(io, op)
     if !show_circular(io, itr)
         recur_io = IOContext(io, :SHOWN_SET => itr)
@@ -1345,8 +1345,8 @@ end
 
 show(io::IO, t::Tuple) = show_delim_array(io, t, '(', ',', ')', true)
 show(io::IO, v::SimpleVector) = show_delim_array(io, v, "svec(", ',', ')', false)
-function show(io::IO, sb::SimpleBuffer)
-    show_delim_array(io, sb, "SimpleBuffer([", ',', "])", false)
+function show(io::IO, b::BufferType)
+    show_delim_array(io, b, "$(nameof(typeof(b)))([", ',', "])", false)
 end
 
 show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0, 0)
@@ -2672,12 +2672,13 @@ function dump(io::IOContext, x::SimpleVector, n::Int, indent)
     end
     nothing
 end
-function dump(io::IOContext, x::SimpleBuffer, n::Int, indent)
+function dump(io::IOContext, x::BufferType, n::Int, indent)
+    tname = nameof(typeof(x))
     if isempty(x)
-        print(io, "empty SimpleBuffer")
+        print(io, "empty $(tname)")
         return
     end
-    print(io, "SimpleBuffer")
+    print(io, tname)
     if n > 0
         for i = 1:length(x)
             println(io)
