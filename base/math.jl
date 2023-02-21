@@ -845,7 +845,8 @@ function _hypot(x::NTuple{N,<:Number}) where {N}
     end
 end
 
-function _hypot(x::NTuple{N,T}) where {N,T<:IEEEFloat}
+function _hypot(x::NTuple{N,<:IEEEFloat}) where {N}
+    T = eltype(x)
     infT = convert(T, Inf)
     x = abs.(x) # doesn't change result but enables computational shortcuts
     # note: any() was causing this to not inline for N=3 but mapreduce() was not
