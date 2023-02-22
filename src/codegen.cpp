@@ -4305,7 +4305,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                                 protoname = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, codeinst);
                                 if (ctx.external_linkage) {
                                     // TODO: Add !specsig support to aotcompile.cpp
-                                    if (specsig && protoname.starts_with("jlsys")) {
+                                    if (specsig && protoname.startswith("jsys")) {
                                         external = true;
                                         need_to_emit = false;
                                     }
