@@ -433,34 +433,6 @@ find_extended_inds(::ScalarIndex, I...) = (@inline; find_extended_inds(I...))
 find_extended_inds(i1, I...) = (@inline; (i1, find_extended_inds(I...)...))
 find_extended_inds() = ()
 
-function is_valid_ind(p, i, l, stride1)
-    fi = firstindex(p)
-    li = lastindex(p)
-    if stride1 < 0
-        fi <= l <= i <= li
-    elseif fi != 1
-        fi <= i <= l <= li
-    else
-        (i-1) % UInt < l % UInt <= li % UInt
-    end
-end
-
-function iterate(v::FastContiguousSubArray,
-        state = v.offset1 .+ (firstindex(v), lastindex(v)))
-    p = parent(v)
-    i, l = state
-    is_valid_ind(p, i, l, 1) ? (@inbounds p[i], (i+1, l)) : nothing
-end
-
-stride1(v::SubArray{T,N,P}) where {T,N,P} = P <: StridedArray ? stride(v, 1) : v.stride1
-
-function iterate(v::FastSubArray,
-        state = v.offset1 .+ stride1(v) .* (firstindex(v), lastindex(v)))
-    p = parent(v)
-    i, l = state
-    is_valid_ind(p, i, l, stride1(v)) ? (@inbounds p[i], (i+stride1(v), l)) : nothing
-end
-
 function unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) where {T,N,P}
     return unsafe_convert(Ptr{T}, V.parent) + _memory_offset(V.parent, map(first, V.indices)...)
 end
