@@ -262,18 +262,31 @@ static jl_callptr_t _jl_compile_codeinst(
             addr = (jl_callptr_t)getAddressForFunction(decls.functionObject);
             isspecsig = true;
         }
-        if (jl_atomic_load_relaxed(&this_code->invoke) == NULL) {
-            // once set, don't change invoke-ptr, as that leads to race conditions
-            // with the (not) simultaneous updates to invoke and specptr
-            if (!decls.specFunctionObject.empty()) {
-                jl_atomic_store_release(&this_code->specptr.fptr, (void*)getAddressForFunction(decls.specFunctionObject));
-                this_code->isspecsig = isspecsig;
+        if (!decls.specFunctionObject.empty()) {
+            void *prev_specptr = NULL;
+            auto spec = (void*)getAddressForFunction(decls.specFunctionObject);
+            if (jl_atomic_cmpswap_acqrel(&this_code->specptr.fptr, &prev_specptr, spec)) {
+                // only set specsig and invoke if we were the first to set specptr
+                jl_atomic_store_relaxed(&this_code->specsigflags, (uint8_t) isspecsig);
+                // we might overwrite invokeptr here; that's ok, anybody who relied on the identity of invokeptr
+                // either assumes that specptr was null, doesn't care about specptr,
+                // or will wait until specsigflags has 0b10 set before reloading invoke
+                jl_atomic_store_release(&this_code->invoke, addr);
+                jl_atomic_store_release(&this_code->specsigflags, (uint8_t) (0b10 | isspecsig));
+            } else {
+                //someone else beat us, don't commit any results
+                while (!(jl_atomic_load_acquire(&this_code->specsigflags) & 0b10)) {
+                    jl_cpu_pause();
+                }
+                addr = jl_atomic_load_relaxed(&this_code->invoke);
             }
-            jl_atomic_store_release(&this_code->invoke, addr);
-        }
-        else if (jl_atomic_load_relaxed(&this_code->invoke) == jl_fptr_const_return_addr && !decls.specFunctionObject.empty()) {
-            // hack to export this pointer value to jl_dump_method_disasm
-            jl_atomic_store_release(&this_code->specptr.fptr, (void*)getAddressForFunction(decls.specFunctionObject));
+        } else {
+            jl_callptr_t prev_invoke = NULL;
+            if (!jl_atomic_cmpswap_acqrel(&this_code->invoke, &prev_invoke, addr)) {
+                addr = prev_invoke;
+                //TODO do we want to potentially promote invoke anyways? (e.g. invoke is jl_interpret_call or some other
+                //known lesser function)
+            }
         }
         if (this_code == codeinst)
             fptr = addr;
@@ -497,10 +510,9 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         assert(src && jl_is_code_info(src));
         ++UnspecFPtrCount;
         _jl_compile_codeinst(unspec, src, unspec->min_world, *jl_ExecutionEngine->getContext());
-        if (jl_atomic_load_relaxed(&unspec->invoke) == NULL) {
-            // if we hit a codegen bug (or ran into a broken generated function or llvmcall), fall back to the interpreter as a last resort
-            jl_atomic_store_release(&unspec->invoke, jl_fptr_interpret_call_addr);
-        }
+        jl_callptr_t null = nullptr;
+        // if we hit a codegen bug (or ran into a broken generated function or llvmcall), fall back to the interpreter as a last resort
+        jl_atomic_cmpswap(&unspec->invoke, &null, jl_fptr_interpret_call_addr);
         JL_GC_POP();
     }
     JL_UNLOCK(&jl_codegen_lock); // Might GC
@@ -519,7 +531,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
     // printing via disassembly
     jl_code_instance_t *codeinst = jl_generate_fptr(mi, world);
     if (codeinst) {
-        uintptr_t fptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->invoke);
+        uintptr_t fptr = (uintptr_t)jl_atomic_load_acquire(&codeinst->invoke);
         if (getwrapper)
             return jl_dump_fptr_asm(fptr, raw_mc, asm_variant, debuginfo, binary);
         uintptr_t specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
@@ -547,7 +559,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
                     if (src && (jl_value_t*)src != jl_nothing)
                         src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
                 }
-                fptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->invoke);
+                fptr = (uintptr_t)jl_atomic_load_acquire(&codeinst->invoke);
                 specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                 if (src && jl_is_code_info(src)) {
                     if (fptr == (uintptr_t)jl_fptr_const_return_addr && specfptr == 0) {
