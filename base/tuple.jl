@@ -570,9 +570,8 @@ end
 # TODO: remove this when the compiler can optimize the generic version better
 # See #48724 and #48753
 _pack_tuple((a,b)) = widen((a)) << 8sizeof(b) - typemin(b) + b
-for T in unique((BitIntegerSmall_types..., Int, UInt))
-    @eval isless(a::NTuple{2, $T}, b::NTuple{2, $T}) = isless(_pack_tuple(a), _pack_tuple(b))
-end
+isless(a::NTuple{2, T}, b::NTuple{2, T}) where T <: Union{Base.BitIntegerSmall, Int, UInt} =
+    isless(_pack_tuple(a), _pack_tuple(b))
 
 ## functions ##
 
