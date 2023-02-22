@@ -4280,17 +4280,17 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                     std::string name;
                     StringRef protoname;
                     bool need_to_emit = true;
-                    bool cache_valid = ctx.use_cache;
+                    bool cache_valid = ctx.use_cache || ctx.external_linkage;
                     bool external = false;
-                    if (ctx.external_linkage) {
-                       if (specsig && jl_object_in_image((jl_value_t*)codeinst)) {
-                           // TODO: add !specsig support to aotcompile.cpp
-                           // Target is present in another pkgimage
-                           cache_valid = true;
-                           external = true;
-                       }
+
+                    // Check if we already queued this up
+                    auto it = ctx.call_targets.find(codeinst);
+                    if (need_to_emit && it != ctx.call_targets.end()) {
+                        protoname = std::get<2>(it->second)->getName();
+                        need_to_emit = cache_valid = false;
                     }
 
+                    // Check if it is already compiled (either JIT or externally)
                     if (cache_valid) {
                         // optimization: emit the correct name immediately, if we know it
                         // TODO: use `emitted` map here too to try to consolidate names?
@@ -4303,19 +4303,22 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                             invoke = jl_atomic_load_relaxed(&codeinst->invoke);
                             if (specsig ? jl_atomic_load_relaxed(&codeinst->specsigflags) & 0b1 : invoke == jl_fptr_args_addr) {
                                 protoname = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, codeinst);
-                                need_to_emit = false;
+                                if (ctx.external_linkage) {
+                                    // TODO: Add !specsig support to aotcompile.cpp
+                                    if (specsig && protoname.starts_with("jlsys")) {
+                                        external = true;
+                                        need_to_emit = false;
+                                    }
+                                }
+                                else { // ctx.use_cache
+                                    need_to_emit = false;
+                                }
                             }
                         }
-                    }
-                    auto it = ctx.call_targets.find(codeinst);
-                    if (need_to_emit && it != ctx.call_targets.end()) {
-                        protoname = std::get<2>(it->second)->getName();
-                        need_to_emit = external = false;
                     }
                     if (need_to_emit) {
                         raw_string_ostream(name) << (specsig ? "j_" : "j1_") << name_from_method_instance(mi) << "_" << jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1);
                         protoname = StringRef(name);
-                        cache_valid = external = false;
                     }
                     jl_returninfo_t::CallingConv cc = jl_returninfo_t::CallingConv::Boxed;
                     unsigned return_roots = 0;
@@ -5644,15 +5647,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     Function *theFunc;
     Value *theFarg;
     auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
-
     bool cache_valid = params.cache;
-    // TODO: Add support for jlinvoke to aotcompile.cpp
-    if (0 && params.external_linkage) {
-        if (jl_object_in_image((jl_value_t*)codeinst)) {
-            // Target is present in another pkgimage
-            cache_valid = true;
-        }
-    }
 
     if (cache_valid && invoke != NULL) {
         StringRef theFptrName = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)invoke, codeinst);
@@ -8565,10 +8560,6 @@ void jl_compile_workqueue(
         bool preal_specsig = false;
         auto invoke = jl_atomic_load_acquire(&codeinst->invoke);
         bool cache_valid = params.cache;
-        // If we added it to the work-queue and we compile for external_linkage, the cache is not valid
-        if (params.external_linkage) {
-            cache_valid = 0;
-        }
         // WARNING: isspecsig is protected by the codegen-lock. If that lock is removed, then the isspecsig load needs to be properly atomically sequenced with this.
         if (cache_valid && invoke != NULL) {
             auto fptr = jl_atomic_load_relaxed(&codeinst->specptr.fptr);
