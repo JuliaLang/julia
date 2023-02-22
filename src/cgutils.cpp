@@ -337,7 +337,7 @@ static Value *julia_pgv(jl_codectx_t &ctx, const char *prefix, jl_sym_t *name, j
         size_t orig_end = finalname.size() + 1;
         StringRef parent_name(jl_symbol_name(parent->name));
         finalname.resize(orig_end + parent_name.size());
-        finalname[orig_end - 1];
+        finalname[orig_end - 1] = '.';
         std::reverse_copy(parent_name.begin(), parent_name.end(), finalname.begin() + orig_end);
         prev = parent;
         parent = parent->parent;
