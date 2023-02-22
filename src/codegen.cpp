@@ -4236,7 +4236,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
             jl_value_t *ci = ctx.params->lookup(mi, ctx.world, ctx.world); // TODO: need to use the right pair world here
             jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
             if (ci != jl_nothing) {
-                auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+                auto invoke = jl_atomic_load_acquire(&codeinst->invoke);
                  // check if we know how to handle this specptr
                 if (invoke == jl_fptr_const_return_addr) {
                     result = mark_julia_const(ctx, codeinst->rettype_const);
@@ -4262,10 +4262,13 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                         // optimization: emit the correct name immediately, if we know it
                         // TODO: use `emitted` map here too to try to consolidate names?
                         // WARNING: isspecsig is protected by the codegen-lock. If that lock is removed, then the isspecsig load needs to be properly atomically sequenced with this.
-                        auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
                         auto fptr = jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                         if (fptr) {
-                            if (specsig ? codeinst->isspecsig : invoke == jl_fptr_args_addr) {
+                            while (!(jl_atomic_load_acquire(&codeinst->specsigflags) & 0b10)) {
+                                jl_cpu_pause();
+                            }
+                            invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+                            if (specsig ? jl_atomic_load_relaxed(&codeinst->specsigflags) & 0b1 : invoke == jl_fptr_args_addr) {
                                 protoname = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, codeinst);
                                 need_to_emit = false;
                             }
@@ -5783,9 +5786,15 @@ static Function* gen_cfun_wrapper(
     if (lam && params.cache) {
         // TODO: this isn't ideal to be unconditionally calling type inference (and compile) from here
         codeinst = jl_compile_method_internal(lam, world);
-        auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+        auto invoke = jl_atomic_load_acquire(&codeinst->invoke);
         auto fptr = jl_atomic_load_relaxed(&codeinst->specptr.fptr);
         assert(invoke);
+        if (fptr) {
+            while (!(jl_atomic_load_acquire(&codeinst->specsigflags) & 0b10)) {
+                jl_cpu_pause();
+            }
+            invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+        }
         // WARNING: this invoke load is protected by the codegen-lock. If that lock is removed, then the isspecsig load needs to be properly atomically sequenced with this.
         if (invoke == jl_fptr_args_addr) {
             callptr = fptr;
@@ -5796,7 +5805,7 @@ static Function* gen_cfun_wrapper(
             callptr = (void*)codeinst->rettype_const;
             calltype = 2;
         }
-        else if (codeinst->isspecsig) {
+        else if (jl_atomic_load_relaxed(&codeinst->specsigflags) & 0b1) {
             callptr = fptr;
             calltype = 3;
         }
@@ -8526,7 +8535,7 @@ void jl_compile_workqueue(
             "invalid world for code-instance");
         StringRef preal_decl = "";
         bool preal_specsig = false;
-        auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+        auto invoke = jl_atomic_load_acquire(&codeinst->invoke);
         bool cache_valid = params.cache;
         if (params.external_linkage) {
             cache_valid = 0 && jl_object_in_image((jl_value_t*)codeinst);
@@ -8534,10 +8543,17 @@ void jl_compile_workqueue(
         // WARNING: isspecsig is protected by the codegen-lock. If that lock is removed, then the isspecsig load needs to be properly atomically sequenced with this.
         if (cache_valid && invoke != NULL) {
             auto fptr = jl_atomic_load_relaxed(&codeinst->specptr.fptr);
+            if (fptr) {
+                while (!(jl_atomic_load_acquire(&codeinst->specsigflags) & 0b10)) {
+                    jl_cpu_pause();
+                }
+                // in case we are racing with another thread that is emitting this function
+                invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+            }
             if (invoke == jl_fptr_args_addr) {
                 preal_decl = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, codeinst);
             }
-            else if (codeinst->isspecsig) {
+            else if (jl_atomic_load_relaxed(&codeinst->specsigflags) & 0b1) {
                 preal_decl = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, codeinst);
                 preal_specsig = true;
             }

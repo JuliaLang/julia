@@ -1376,7 +1376,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 }
 
                 newm->invoke = NULL;
-                newm->isspecsig = 0;
+                newm->specsigflags = 0;
                 newm->specptr.fptr = NULL;
                 int8_t fptr_id = JL_API_NULL;
                 int8_t builtin_id = 0;
@@ -1889,7 +1889,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
             void *fptr = (void*)(base + offset);
             if (specfunc) {
                 codeinst->specptr.fptr = fptr;
-                codeinst->isspecsig = 1; // TODO: set only if confirmed to be true
+                codeinst->specsigflags = 0b11; // TODO: set only if confirmed to be true
             }
             else {
                 codeinst->invoke = (jl_callptr_t)fptr;
@@ -1962,7 +1962,7 @@ static void jl_root_new_gvars(jl_serializer_state *s, jl_image_t *image, uint32_
                 v = (uintptr_t)jl_as_global_root((jl_value_t*)v);
         } else {
             jl_code_instance_t *codeinst = (jl_code_instance_t*) v;
-            assert(codeinst && codeinst->isspecsig);
+            assert(codeinst && (codeinst->specsigflags & 0b01));
             v = (uintptr_t)codeinst->specptr.fptr;
         }
         *gv = v;

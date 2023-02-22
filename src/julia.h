@@ -424,8 +424,7 @@ typedef struct _jl_code_instance_t {
     jl_value_t *argescapes; // escape information of call arguments
 
     // compilation state cache
-    // WARNING: isspecsig is protected by the codegen-lock. If that lock is removed, then the isspecsig load needs to be properly atomically sequenced with the invoke pointers.
-    uint8_t isspecsig; // if specptr is a specialized function signature for specTypes->rettype
+    _Atomic(uint8_t) specsigflags; // & 0b1 == specptr is a specialized function signature for specTypes->rettype, &0b10 == invokeptr matches specptr
     _Atomic(uint8_t) precompile;  // if set, this will be added to the output system image
     uint8_t relocatability;  // nonzero if all roots are built into sysimg or tagged by module key
     _Atomic(jl_callptr_t) invoke; // jlcall entry point

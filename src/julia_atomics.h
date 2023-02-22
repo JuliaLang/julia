@@ -160,6 +160,11 @@ bool jl_atomic_cmpswap_explicit(std::atomic<T> *ptr, T *expected, S val, std::me
 {
      return std::atomic_compare_exchange_strong_explicit<T>(ptr, expected, val, order, order);
 }
+template<class T, class S>
+bool jl_atomic_cmpswap_acqrel(std::atomic<T> *ptr, T *expected, S val)
+{
+     return std::atomic_compare_exchange_strong_explicit<T>(ptr, expected, val, memory_order_acq_rel, memory_order_acquire);
+}
 #define jl_atomic_cmpswap_relaxed(ptr, expected, val) jl_atomic_cmpswap_explicit(ptr, expected, val, memory_order_relaxed)
 template<class T, class S>
 T jl_atomic_exchange(std::atomic<T> *ptr, S desired)
@@ -191,6 +196,8 @@ extern "C" {
     atomic_compare_exchange_strong(obj, expected, desired)
 #  define jl_atomic_cmpswap_relaxed(obj, expected, desired) \
     atomic_compare_exchange_strong_explicit(obj, expected, desired, memory_order_relaxed, memory_order_relaxed)
+#define jl_atomic_cmpswap_acqrel(obj, expected, desired) \
+    atomic_compare_exchange_strong_explicit(obj, expected, desired, memory_order_acq_rel, memory_order_acquire)
 // TODO: Maybe add jl_atomic_cmpswap_weak for spin lock
 #  define jl_atomic_exchange(obj, desired)       \
     atomic_exchange(obj, desired)
@@ -251,6 +258,7 @@ extern "C" {
 #define jl_atomic_exchange_relaxed jl_atomic_exchange
 
 #undef jl_atomic_cmpswap
+#undef jl_atomic_cmpswap_acqrel
 #undef jl_atomic_cmpswap_relaxed
 #define jl_atomic_cmpswap(obj, expected, desired) \
     (__extension__({ \
@@ -264,6 +272,7 @@ extern "C" {
                 *x__analyzer__ = temp__analyzer__; \
             eq__analyzer__; \
         }))
+#define jl_atomic_cmpswap_acqrel jl_atomic_cmpswap
 #define jl_atomic_cmpswap_relaxed jl_atomic_cmpswap
 
 #undef jl_atomic_store
