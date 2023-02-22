@@ -590,28 +590,25 @@ println(@nospecialize a...) = println(stdout, a...)
 
 struct GeneratedFunctionStub
     gen
-    argnames::Array{Any,1}
-    spnames::Union{Nothing, Array{Any,1}}
-    line::Int
-    file::Symbol
-    expand_early::Bool
+    argnames::SimpleVector
+    spnames::SimpleVector
 end
 
-# invoke and wrap the results of @generated
-function (g::GeneratedFunctionStub)(@nospecialize args...)
+# invoke and wrap the results of @generated expression
+function (g::GeneratedFunctionStub)(world::UInt, source::LineNumberNode, @nospecialize args...)
+    # args is (spvals..., argtypes...)
     body = g.gen(args...)
-    if body isa CodeInfo
-        return body
-    end
-    lam = Expr(:lambda, g.argnames,
-               Expr(Symbol("scope-block"),
+    file = source.file
+    file isa Symbol || (file = :none)
+    lam = Expr(:lambda, Expr(:argnames, g.argnames...).args,
+               Expr(:var"scope-block",
                     Expr(:block,
-                         LineNumberNode(g.line, g.file),
-                         Expr(:meta, :push_loc, g.file, Symbol("@generated body")),
+                         source,
+                         Expr(:meta, :push_loc, file, :var"@generated body"),
                          Expr(:return, body),
                          Expr(:meta, :pop_loc))))
     spnames = g.spnames
-    if spnames === nothing
+    if spnames === svec()
         return lam
     else
         return Expr(Symbol("with-static-parameters"), lam, spnames...)
