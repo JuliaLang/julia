@@ -565,6 +565,15 @@ function isless(t1::Any32, t2::Any32)
     return n1 < n2
 end
 
+# Performance optimization to pack pairs of integers into a single integer
+# for comparison. This is useful for sorting tuples of integers.
+# TODO: remove this when the compiler can optimize the generic version better
+# See #48724 and #48753
+for T in unique((BitIntegerSmall_types..., Int, UInt))
+    @eval isless((a1,a2)::NTuple{2, $T}, (b1,b2)::NTuple{2, $T}) =
+        isless(widen(a1) << 8sizeof($T) + a2, widen(b1) << 8sizeof($T) + b2)
+end
+
 ## functions ##
 
 isempty(x::Tuple{}) = true
