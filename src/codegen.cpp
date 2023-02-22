@@ -4305,10 +4305,8 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                                 protoname = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, codeinst);
                                 if (ctx.external_linkage) {
                                     // TODO: Add !specsig support to aotcompile.cpp
-                                    // FIXME: Need to guard against CI being allocated in image,
-                                    // but not filled in. If `fptr` non-null due to JIT compilation
-                                    // of this image, we will during loading find an empty CI.
-                                    if (specsig && jl_object_in_image((jl_value_t*)codeinst)) {
+                                    // Check that the codeinst is containing native code
+                                    if (specsig && jl_atomic_load_relaxed(&codeinst->specsigflags) & 0b100) {
                                         external = true;
                                         need_to_emit = false;
                                     }

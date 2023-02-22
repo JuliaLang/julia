@@ -1077,7 +1077,7 @@ static void record_external_fns(jl_serializer_state *s, arraylist_t *external_fn
 #ifndef JL_NDEBUG
     for (size_t i = 0; i < external_fns->len; i++) {
         jl_code_instance_t *ci = (jl_code_instance_t*)external_fns->items[i];
-        assert(jl_object_in_image((jl_value_t*)ci));
+        assert(jl_atomic_load_relaxed(&ci->specsigflags) & 0b100);
     }
 #endif
 }
@@ -1889,7 +1889,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
             void *fptr = (void*)(base + offset);
             if (specfunc) {
                 codeinst->specptr.fptr = fptr;
-                codeinst->specsigflags = 0b11; // TODO: set only if confirmed to be true
+                codeinst->specsigflags = 0b111; // TODO: set only if confirmed to be true
             }
             else {
                 codeinst->invoke = (jl_callptr_t)fptr;
@@ -1913,7 +1913,7 @@ static uint32_t write_gvars(jl_serializer_state *s, arraylist_t *globals, arrayl
     }
     for (size_t i = 0; i < external_fns->len; i++) {
         jl_code_instance_t *ci = (jl_code_instance_t*)external_fns->items[i];
-        assert(ci && ci->isspecsig);
+        assert(ci && (jl_atomic_load_relaxed(&ci->specsigflags) & 0b001));
         uintptr_t item = backref_id(s, (void*)ci, s->link_ids_external_fnvars);
         uintptr_t reloc = get_reloc_for_item(item, 0);
         write_reloc_t(s->gvar_record, reloc);
