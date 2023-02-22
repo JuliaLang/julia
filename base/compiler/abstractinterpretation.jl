@@ -2727,6 +2727,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         empty!(frame.pclimitations)
                         @goto find_next_bb
                     end
+                    orig_condt = condt
                     if !(isa(condt, Const) || isa(condt, Conditional)) && isa(condx, SlotNumber)
                         # if this non-`Conditional` object is a slot, we form and propagate
                         # the conditional constraint on it
@@ -2758,6 +2759,14 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                             handle_control_backedge!(interp, frame, currpc, stmt.dest)
                             @goto branch
                         else
+                            if !⊑(𝕃ᵢ, orig_condt, Bool)
+                                merge_effects!(interp, frame, EFFECTS_THROWS)
+                                if !hasintersect(widenconst(orig_condt), Bool)
+                                    ssavaluetypes[currpc] = Bottom
+                                    @goto find_next_bb
+                                end
+                            end
+
                             # We continue with the true branch, but process the false
                             # branch here.
                             if isa(condt, Conditional)
