@@ -679,6 +679,12 @@ Semicolons are used as statement separators and mark the beginning of keyword ar
 kw";"
 
 """
+    ?
+The question mark delimits the ternary conditional operator (used like: conditional ? if_true : if_false)
+"""
+kw"?"
+
+"""
     Expr(head::Symbol, args...)
 
 A type representing compound expressions in parsed julia code (ASTs).
