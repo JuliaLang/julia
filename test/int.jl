@@ -475,3 +475,8 @@ end
         Type{ Int8}, Type{ Int16}, Type{ Int32}, Type{ Int64}, Type{ Int128},
         Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt64}, Type{UInt128}}
 end
+
+@testset "mod" begin
+    @test mod(Int128(8),Int128(3)) == Int128(2)
+
+end
