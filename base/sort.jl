@@ -1342,7 +1342,8 @@ specific algorithm to use via the `alg` keyword (see [Sorting Algorithms](@ref) 
 available algorithms). The `by` keyword lets you provide a function that will be applied to
 each element before comparison; the `lt` keyword allows providing a custom "less than"
 function (note that for every `x` and `y`, only one of `lt(x,y)` and `lt(y,x)` can return
-`true`); use `rev=true` to reverse the sorting order. These options are independent and can
+`true`); use `rev=true` to reverse the sorting order. `rev=true` preserves forward stability:
+Elements that compare equal are not reversed. These options are independent and can
 be used together in all possible combinations: if both `by` and `lt` are specified, the `lt`
 function is applied to the result of the `by` function; `rev=true` reverses whatever
 ordering specified via the `by` and `lt` keywords.
