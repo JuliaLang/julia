@@ -569,9 +569,9 @@ end
 # for comparison. This is useful for sorting tuples of integers.
 # TODO: remove this when the compiler can optimize the generic version better
 # See #48724 and #48753
+_pack_tuple((a,b)) = widen((a)) << 8sizeof(b) - typemin(b) + b
 for T in unique((BitIntegerSmall_types..., Int, UInt))
-    @eval isless((a1,a2)::NTuple{2, $T}, (b1,b2)::NTuple{2, $T}) =
-        isless(widen(a1) << 8sizeof($T) + a2, widen(b1) << 8sizeof($T) + b2)
+    @eval isless(a::NTuple{2, $T}, b::NTuple{2, $T}) = isless(_pack_tuple(a), _pack_tuple(b))
 end
 
 ## functions ##

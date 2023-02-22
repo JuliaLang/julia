@@ -394,6 +394,8 @@ end
     @test !isless((1,2), (-1,2))
     @test !isless((1,2), (-1,-2))
     @test !isless((-1,-2), (-1,-2))
+
+    @test isless((typemin(Int), typemin(Int)), (0,0))
 end
 
 @testset "functions" begin
