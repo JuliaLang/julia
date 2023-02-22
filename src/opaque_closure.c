@@ -75,18 +75,23 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
     oc->source = source;
     oc->captures = captures;
     oc->specptr = NULL;
-    if (!ci || jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_interpret_call) {
+    if (!ci) {
         oc->invoke = (jl_fptr_args_t)jl_interpret_opaque_closure;
-    }
-    else if (jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_args) {
-        oc->invoke = jl_atomic_load_relaxed(&ci->specptr.fptr1);
-    }
-    else if (jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return) {
-        oc->invoke = (jl_fptr_args_t)jl_fptr_const_opaque_closure;
-        oc->captures = ci->rettype_const;
-    }
-    else {
-        oc->invoke = (jl_fptr_args_t)jl_atomic_load_relaxed(&ci->invoke);
+    } else {
+        jl_callptr_t invoke = jl_atomic_load_acquire(&ci->invoke);
+        if (invoke == jl_fptr_interpret_call) {
+            oc->invoke = (jl_fptr_args_t)jl_interpret_opaque_closure;
+        }
+        else if (invoke == jl_fptr_args) {
+            oc->invoke = jl_atomic_load_relaxed(&ci->specptr.fptr1);
+        }
+        else if (invoke == jl_fptr_const_return) {
+            oc->invoke = (jl_fptr_args_t)jl_fptr_const_opaque_closure;
+            oc->captures = ci->rettype_const;
+        }
+        else {
+            oc->invoke = (jl_fptr_args_t) invoke;
+        }
     }
     oc->world = world;
     return oc;

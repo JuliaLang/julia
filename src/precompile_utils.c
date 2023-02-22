@@ -255,7 +255,8 @@ static void *jl_precompile_(jl_array_t *m, int external_linkage)
             jl_array_ptr_1d_push(m2, item);
         }
     }
-    void *native_code = jl_create_native(m2, NULL, NULL, 0, 1, external_linkage);
+    void *native_code = jl_create_native(m2, NULL, NULL, 0, 1, external_linkage,
+                                         jl_atomic_load_acquire(&jl_world_counter));
     JL_GC_POP();
     return native_code;
 }
