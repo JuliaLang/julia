@@ -382,8 +382,13 @@
                                          `((meta generated
                                                  (new (core GeneratedFunctionStub)
                                                       ,gname
-                                                      (call (core svec) ,@(map quotify anames))
-                                                      (call (core svec) ,@(map quotify names)))))))
+                                                      ,(cons 'list anames)
+                                                      ,(if (null? sparams)
+                                                           'nothing
+                                                           (cons 'list (map car sparams)))
+                                                      ,(cadr loc)
+                                                      (inert ,(caddr loc))
+                                                      (false))))))
                              (list gf))
                            '()))
             (types (llist-types argl))
