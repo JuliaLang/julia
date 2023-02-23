@@ -152,9 +152,9 @@ haschildren(node::TreeNode) = node.children !== nothing
 children(node::TreeNode) = (c = node.children; return c === nothing ? () : c)
 
 
-head(node::SyntaxNode) = head(node.raw)
+head(node::AbstractSyntaxNode) = head(node.raw)
 
-span(node::SyntaxNode) = span(node.raw)
+span(node::AbstractSyntaxNode) = span(node.raw)
 
 first_byte(node::AbstractSyntaxNode) = node.position
 last_byte(node::AbstractSyntaxNode)  = node.position + span(node) - 1
@@ -168,6 +168,9 @@ function sourcetext(node::AbstractSyntaxNode)
     val_range = (node.position-1) .+ (1:span(node))
     view(node.source, val_range)
 end
+
+source_line(node::AbstractSyntaxNode) = source_line(node.source, node.position)
+source_location(node::AbstractSyntaxNode) = source_location(node.source, node.position)
 
 function interpolate_literal(node::SyntaxNode, val)
     @assert kind(node) == K"$"
