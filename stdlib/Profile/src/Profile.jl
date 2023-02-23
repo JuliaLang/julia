@@ -38,7 +38,7 @@ function profile_printing_listener()
         while true
             wait(PROFILE_PRINT_COND[])
             peek_report[]()
-            if get(ENV, "JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", nothing) === "1"
+            if Base.get_bool_env("JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", false) === true
                 println(stderr, "Saving heap snapshot...")
                 fname = take_heap_snapshot()
                 println(stderr, "Heap snapshot saved to `$(fname)`")
@@ -156,7 +156,9 @@ function __init__()
     # used, if not manually initialized before that.
     @static if !Sys.iswindows()
         # triggering a profile via signals is not implemented on windows
-        PROFILE_PRINT_COND[] = Base.AsyncCondition()
+        cond = Base.AsyncCondition()
+        Base.uv_unref(cond.handle)
+        PROFILE_PRINT_COND[] = cond
         ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), PROFILE_PRINT_COND[].handle)
         errormonitor(Threads.@spawn(profile_printing_listener()))
     end

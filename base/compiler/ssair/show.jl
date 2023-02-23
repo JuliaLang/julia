@@ -796,7 +796,7 @@ function inline_linfo_printer(code::IRCode)
     end
 end
 
-_strip_color(s::String) = replace(s, r"\e\[\d+m" => "")
+_strip_color(s::String) = replace(s, r"\e\[\d+m"a => "")
 
 function statementidx_lineinfo_printer(f, code::IRCode)
     printer = f(code.linetable)
