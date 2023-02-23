@@ -11,6 +11,8 @@
     @test sourcetext(child(t, 3))    == "c"
 
     @test JuliaSyntax.first_byte(child(t, 2)) == findfirst(==('+'), tt)
+    @test JuliaSyntax.source_line(child(t, 3)) == 1
+    @test source_location(child(t, 3)) == (1, 7)
 
     # Child indexing
     @test t[1]    === child(t, 1)
