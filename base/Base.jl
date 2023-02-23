@@ -439,6 +439,7 @@ include("timing.jl")
 include("util.jl")
 include("client.jl")
 include("asyncmap.jl")
+include("features.jl")
 
 # deprecated functions
 include("deprecated.jl")

@@ -1386,3 +1386,15 @@ end
     @test (@allocations "a") == 0
     @test (@allocations "a" * "b") == 1
 end
+
+@testset "features" begin
+    @test Base.has_feature("features")
+    f() = Base.has_feature("features")
+    code = sprint(code_warntype, f, Tuple{})
+    @test occursin("(\"features\")::Core.Const(true)", code)
+
+    @test !Base.has_feature("nonexisting_feature")
+    g() = Base.has_feature("nonexisting_feature")
+    code = sprint(code_warntype, g, Tuple{})
+    @test occursin("(\"nonexisting_feature\")::Core.Const(false)", code)
+end
