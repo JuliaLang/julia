@@ -409,7 +409,7 @@ static std::pair<char *, bool> jl_demangle(const char *name) JL_NOTSAFEPOINT
         strncmp(name, "japi3_", 6) &&
         strncmp(name, "julia_", 6) &&
         strncmp(name, "jsys1_", 6) &&
-        strncmp(name, "jsys0_", 6))
+        strncmp(name, "jlsys_", 6))
         goto done;
     if (*start == '\0')
         goto done;

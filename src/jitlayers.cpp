@@ -1470,7 +1470,7 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
             stream_fname << "jsys3_";
         }
         else {
-            stream_fname << "jsys0_";
+            stream_fname << "jlsys_";
         }
         const char* unadorned_name = jl_symbol_name(codeinst->def->def.method->name);
         stream_fname << unadorned_name << "_" << RLST_inc++;
