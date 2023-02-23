@@ -1,7 +1,7 @@
 name = "JuliaSyntax"
 uuid = "70703baa-626e-46a2-a12c-08ffd08c73b4"
 authors = ["Chris Foster <chris42f@gmail.com> and contributors"]
-version = "0.3.0"
+version = "0.3.1"
 
 [compat]
 julia = "1.0"
@@ -9,8 +9,7 @@ julia = "1.0"
 [deps]
 
 [extras]
-Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "Printf"]
+test = ["Test"]
