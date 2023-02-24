@@ -5,9 +5,6 @@
 </a>
 </div>
 
-
-
-
 <table>
     <!-- Docs -->
     <tr>
