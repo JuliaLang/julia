@@ -1,8 +1,6 @@
 # -*- mode: makefile -*-
 # vi:syntax=make
 
-$(error "this commit is unbuildable")
-
 ## Note:
 ##   It is generally preferable to change these options, for
 ##   your local machine, in a file named `Make.user` in the toplevel
