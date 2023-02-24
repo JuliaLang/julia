@@ -487,7 +487,7 @@ static jl_value_t *jl_decode_value_mbuf(jl_ircode_state *s, uint8_t tag) JL_GC_D
     jl_value_t *eltype = jl_decode_value(s);
     size_t elsize = (size_t)read_int8(s->s);
     size_t len = (size_t)read_int32(s->s);
-    jl_buffer_t *b = jl_new_buffer(eltype, len);
+    jl_buffer_t *b = jl_new_buffer(jl_apply_type1((jl_value_t*)jl_mutablebuffer_type, eltype), len);
     size_t tot = len * elsize;
     if (jl_is_uniontype(eltype))
         tot += len;
@@ -499,13 +499,12 @@ static jl_value_t *jl_decode_value_ibuf(jl_ircode_state *s, uint8_t tag) JL_GC_D
     jl_value_t *eltype = jl_decode_value(s);
     size_t elsize = (size_t)read_int8(s->s);
     size_t len = (size_t)read_int32(s->s);
-    jl_buffer_t *b = jl_new_buffer(eltype, len);
+    jl_buffer_t *b = jl_new_buffer(jl_apply_type1((jl_value_t*)jl_mutablebuffer_type, eltype), len);
     size_t tot = len * elsize;
     if (jl_is_uniontype(eltype))
         tot += len;
     ios_readall(s->s, (char*)jl_buffer_data(b), tot);
-    jl_datatype_t *it = (jl_datatype_t *)jl_apply_type2((jl_value_t*)jl_immutablebuffer_type,
-        jl_tparam0(jl_typeof(b)), jl_tparam1(jl_typeof(b)));
+    jl_datatype_t *it = (jl_datatype_t *)jl_apply_type1((jl_value_t*)jl_immutablebuffer_type, eltype);
     jl_set_typeof(b, it);
     return (jl_value_t*)b;
 }

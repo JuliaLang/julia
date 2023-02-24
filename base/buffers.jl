@@ -1,10 +1,10 @@
 
-const BufferType{T, AA} = Union{ImmutableBuffer{T, AA}, MutableBuffer{T, AA}}
+const BufferType{T} = Union{ImmutableBuffer{T}, MutableBuffer{T}}
 
 # MutableBuffer
 if nameof(@__MODULE__) === :Base  # avoid method overwrite
 function MutableBuffer{T}(::UndefInitializer, n::Int) where {T}
-    ccall(:jl_new_buffer, Any, (Any, UInt), T, n)
+    ccall(:jl_new_buffer, Any, (Any, UInt), MutableBuffer{T}, n)
 end
 MutableBuffer(a::AbstractArray{T}) where {T} = MutableBuffer{T}(a)
 function MutableBuffer{T}(a::AbstractArray) where {T}

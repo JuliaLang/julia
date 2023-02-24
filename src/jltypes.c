@@ -2326,7 +2326,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             tv)->name->wrapper;
 
     jl_svec_t *suptv = jl_svec2(tvar("T"), jl_box_long(1));
-    tv = jl_svec2(tvar("T"), tvar("AA"));
+    tv = jl_svec1(tvar("T"));
     jl_mutablebuffer_type = (jl_unionall_t*)
         jl_new_datatype(jl_symbol("MutableBuffer"), core,
         (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_densearray_type, jl_svec_data(suptv), 2),

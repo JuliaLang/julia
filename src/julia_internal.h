@@ -1491,6 +1491,7 @@ JL_DLLEXPORT jl_value_t *jl_svec_ref(jl_svec_t *t JL_PROPAGATES_ROOT, ssize_t i)
 JL_DLLEXPORT size_t (jl_buffer_len)(jl_buffer_t *t) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_buffer_t *jl_new_buffer(jl_value_t *btype, size_t len);
 STATIC_INLINE size_t jl_buffer_nbytes(jl_value_t *sb);
+void jl_gc_track_malloced_buffer(jl_ptls_t ptls, jl_buffer_t *b) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *field_type);
 

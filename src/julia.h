@@ -980,7 +980,7 @@ JL_DLLEXPORT void jl_gc_safepoint(void);
 #define jl_buffer_len(t)              (((jl_buffer_t*)(t))->length)
 #define jl_buffer_data(t) ((jl_value_t**)((char*)(t) + sizeof(jl_buffer_t)))
 #define jl_buffer_eltype(x) (jl_tparam0(jl_typeof((jl_buffer_t*)(x))))
-#define jl_buffer_elsize(x) ((size_t)jl_unbox_long(jl_tparam1(jl_typeof((jl_buffer_t*)(x)))))
+#define jl_is_aligned_buffer(x) (1)
 
 #ifdef __clang_gcanalyzer__
 STATIC_INLINE jl_value_t *jl_svecref(void *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
@@ -1601,14 +1601,6 @@ JL_DLLEXPORT int jl_get_size(jl_value_t *val, size_t *pnt);
 #define jl_ulong_type    jl_uint32_type
 #endif
 
-STATIC_INLINE size_t jl_buffer_nbytes(jl_value_t *sb)
-{
-    size_t len = jl_buffer_len(sb);
-    size_t tot = jl_buffer_elsize(sb) * len;
-    if (jl_is_uniontype(jl_buffer_eltype(sb)))
-        tot += len;
-    return tot;
-}
 // structs
 JL_DLLEXPORT int         jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err);
 JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i);
@@ -2022,6 +2014,27 @@ JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e, jl_task_t *ct);
 JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 #define jl_current_task (container_of(jl_get_pgcstack(), jl_task_t, gcstack))
+
+STATIC_INLINE size_t jl_buffer_elsize(void *b)
+{
+    jl_value_t *ety = jl_buffer_eltype(b);
+    size_t elsz = 0, al = 0;
+    int union_max = jl_islayout_inline(ety, &elsz, &al);
+    if (union_max == 0)
+        elsz = sizeof(void*);
+    else
+        elsz = LLT_ALIGN(elsz, al);
+    return elsz;
+}
+
+STATIC_INLINE size_t jl_buffer_nbytes(jl_value_t *b)
+{
+    size_t len = jl_buffer_len(b);
+    size_t tot = jl_buffer_elsize(b) * len;
+    if (jl_is_uniontype(jl_buffer_eltype(b)))
+        tot += len;
+    return tot;
+}
 
 #include "julia_locks.h"   // requires jl_task_t definition
 

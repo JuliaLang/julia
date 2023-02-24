@@ -135,6 +135,11 @@ typedef struct _mallocarray_t {
     jl_array_t *a;
     struct _mallocarray_t *next;
 } mallocarray_t;
+typedef struct _mallocbuffer_t {
+    jl_buffer_t *b;
+    struct _mallocbuffer_t *next;
+} mallocbuffer_t;
+
 
 // pool page metadata
 typedef struct {

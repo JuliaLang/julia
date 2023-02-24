@@ -1132,6 +1132,66 @@ void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a) JL_NOTSAFEPOINT
     ptls->heap.mallocarrays = ma;
 }
 
+static int jl_is_malloc_buffer(void *v)
+{
+    return (jl_buffer_nbytes((jl_value_t*)v) <= ARRAY_INLINE_NBYTES);
+}
+
+
+void jl_gc_track_malloced_buffer(jl_ptls_t ptls, jl_buffer_t *b) JL_NOTSAFEPOINT
+{
+    // This is **NOT** a GC safe point.
+    mallocbuffer_t *ma;
+    if (ptls->heap.mbfreelist == NULL) {
+        ma = (mallocbuffer_t*)malloc(sizeof(mallocbuffer_t));
+    }
+    else {
+        ma = ptls->heap.mbfreelist;
+        ptls->heap.mbfreelist = ma->next;
+    }
+    ma->b = b;
+    ma->next = ptls->heap.mallocbuffers;
+    ptls->heap.mallocbuffers = ma;
+}
+
+static void jl_gc_free_buffer(jl_buffer_t *b) JL_NOTSAFEPOINT
+{
+    if (jl_is_malloc_buffer(b)) {
+        char *d = (char*)jl_buffer_data(b);
+        if (jl_is_aligned_buffer(b))
+            jl_free_aligned(d);
+        else
+            free(d);
+        gc_num.freed += jl_buffer_nbytes((jl_value_t*)b);
+    }
+}
+static void sweep_malloced_buffers(void) JL_NOTSAFEPOINT
+{
+    gc_time_mallocd_array_start();
+    for (int t_i = 0;t_i < jl_n_threads;t_i++) {
+        jl_ptls_t ptls2 = jl_all_tls_states[t_i];
+        mallocbuffer_t *ma = ptls2->heap.mallocbuffers;
+        mallocbuffer_t **pma = &ptls2->heap.mallocbuffers;
+        while (ma != NULL) {
+            mallocbuffer_t *nxt = ma->next;
+            int bits = jl_astaggedvalue(ma->b)->bits.gc;
+            if (gc_marked(bits)) {
+                pma = &ma->next;
+            }
+            else {
+                *pma = nxt;
+                assert(jl_is_malloc_buffer(ma->b));
+                jl_gc_free_buffer(ma->b);
+                ma->next = ptls2->heap.mbfreelist;
+                ptls2->heap.mbfreelist = ma;
+            }
+            gc_time_count_mallocd_array(bits);
+            ma = nxt;
+        }
+    }
+    gc_time_mallocd_array_end();
+}
+
 void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_current_task->ptls;
