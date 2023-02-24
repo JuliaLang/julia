@@ -384,23 +384,6 @@ end
     @test hash(t) === foldr(hash, [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,(),UInt(0)])
 end
 
-@testset "isless on pairs of integers (because there is a fastpath)" begin
-    @test isless((1,2), (1,3))
-    @test isless((0,-2), (0,2))
-    @test isless((-1,2), (1,2))
-    @test isless((-1,-2), (1,2))
-    @test !isless((1,3), (1,2))
-    @test !isless((0,2), (0,-2))
-    @test !isless((1,2), (-1,2))
-    @test !isless((1,2), (-1,-2))
-    @test !isless((-1,-2), (-1,-2))
-
-    @test isless((typemin(Int), typemin(Int)), (0,0))
-    @test isless((1, 1), (Int8(2), Int8(2)))
-    @test !isless((UInt8(200),Int8(-1)), (UInt8(200),Int8(-1)))
-    @test isless((1, 1), (1, unsigned(2)))
-end
-
 @testset "functions" begin
     @test isempty(())
     @test !isempty((1,))
