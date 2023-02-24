@@ -152,14 +152,14 @@ function __init__()
 end
 
 struct CorruptType end
-struct BufferType end
+struct Buffer end
 struct UnknownType end
 
 function load_type(ptr::Ptr{Type})
     if UInt(ptr) < UInt(4096)
         return CorruptType
     elseif UInt(ptr) == JL_BUFF_TAG
-        return BufferType
+        return Buffer
     elseif UInt(ptr) == JL_GC_UNKNOWN_TYPE_TAG
         return UnknownType
     end

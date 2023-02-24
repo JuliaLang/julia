@@ -152,7 +152,7 @@ typedef struct {
     // jl_value_t *data[];
 } jl_svec_t;
 
-// A MutableBuffer is a fixed size array if `length` number of bits.
+// A Buffer is a fixed size array if `length` number of bits.
 // Data is stored at the end of this variable-length struct.
 typedef struct {
     JL_DATA_TYPE
@@ -708,10 +708,8 @@ extern JL_DLLIMPORT jl_datatype_t *jl_partial_opaque_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_interconditional_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_method_match_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_simplevector_type JL_GLOBALLY_ROOTED;
-extern JL_DLLIMPORT jl_unionall_t *jl_mutablebuffer_type JL_GLOBALLY_ROOTED;
-extern JL_DLLIMPORT jl_typename_t *jl_mutablebuffer_typename JL_GLOBALLY_ROOTED;
-extern JL_DLLIMPORT jl_unionall_t *jl_immutablebuffer_type JL_GLOBALLY_ROOTED;
-extern JL_DLLIMPORT jl_typename_t *jl_immutablebuffer_typename JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_unionall_t *jl_buffer_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_typename_t *jl_buffer_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_typename_t *jl_tuple_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_typename_t *jl_vecelement_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_anytuple_type JL_GLOBALLY_ROOTED;
@@ -1335,31 +1333,11 @@ STATIC_INLINE int jl_is_array(void *v) JL_NOTSAFEPOINT
     return jl_is_array_type(t);
 }
 
-STATIC_INLINE int jl_is_mutablebuffer_type(void *t) JL_NOTSAFEPOINT
-{
-    return (jl_is_datatype(t) && ((jl_datatype_t*)(t))->name == jl_mutablebuffer_typename);
-}
-
-STATIC_INLINE int jl_is_mutablebuffer(void *v) JL_NOTSAFEPOINT
-{
-    jl_value_t *t = jl_typeof(v);
-    return jl_is_mutablebuffer_type(t);
-}
-STATIC_INLINE int jl_is_immutablebuffer_type(void *t) JL_NOTSAFEPOINT
-{
-    return (jl_is_datatype(t) && ((jl_datatype_t*)(t))->name == jl_immutablebuffer_typename);
-}
-STATIC_INLINE int jl_is_immutablebuffer(void *v) JL_NOTSAFEPOINT
-{
-    jl_value_t *t = jl_typeof(v);
-    return jl_is_immutablebuffer_type(t);
-}
 STATIC_INLINE int jl_is_buffer_type(void *t) JL_NOTSAFEPOINT
 {
-    return (jl_is_datatype(t) &&
-        (((jl_datatype_t*)(t))->name == jl_immutablebuffer_typename ||
-         ((jl_datatype_t*)(t))->name == jl_mutablebuffer_typename));
+    return (jl_is_datatype(t) && ((jl_datatype_t*)(t))->name == jl_buffer_typename);
 }
+
 STATIC_INLINE int jl_is_buffer(void *v) JL_NOTSAFEPOINT
 {
     jl_value_t *t = jl_typeof(v);

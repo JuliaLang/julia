@@ -739,7 +739,7 @@ function perform_lifting!(compact::IncrementalCompact,
     return stmt_val # N.B. should never happen
 end
 
-# FIXME: MutableBuffer
+# FIXME: Buffer
 function lift_svec_ref!(compact::IncrementalCompact, idx::Int, stmt::Expr)
     length(stmt.args) != 4 && return
 

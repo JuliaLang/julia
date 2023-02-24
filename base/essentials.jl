@@ -769,8 +769,8 @@ function isassigned(v::SimpleVector, i::Int)
     @boundscheck 1 <= i <= length(v) || return false
     return true
 end
-function isassigned(sb::Union{MutableBuffer, ImmutableBuffer}, i::Int)
-    @boundscheck 1 <= i <= length(sb) || return false
+function isassigned(b::Buffer, i::Int)
+    @boundscheck 1 <= i <= length(b) || return false
     return true
 end
 

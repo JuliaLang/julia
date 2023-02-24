@@ -2327,22 +2327,13 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_svec_t *suptv = jl_svec2(tvar("T"), jl_box_long(1));
     tv = jl_svec1(tvar("T"));
-    jl_mutablebuffer_type = (jl_unionall_t*)
-        jl_new_datatype(jl_symbol("MutableBuffer"), core,
+    jl_buffer_type = (jl_unionall_t*)
+        jl_new_datatype(jl_symbol("Buffer"), core,
         (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_densearray_type, jl_svec_data(suptv), 2),
         tv,
         jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 1, 0)->name->wrapper;
-    jl_mutablebuffer_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_mutablebuffer_type))->name;
-    jl_compute_field_offsets((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_mutablebuffer_type));
-
-    jl_immutablebuffer_type = (jl_unionall_t*)
-        jl_new_datatype(jl_symbol("ImmutableBuffer"), core,
-        (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_densearray_type, jl_svec_data(suptv), 2),
-        tv,
-        jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 1, 0)->name->wrapper;
-    jl_immutablebuffer_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_immutablebuffer_type))->name;
-    jl_compute_field_offsets((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_immutablebuffer_type));
-
+    jl_buffer_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_buffer_type))->name;
+    jl_compute_field_offsets((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_buffer_type));
 
     tv = jl_svec2(tvar("T"), tvar("N"));
     jl_array_type = (jl_unionall_t*)
@@ -2813,7 +2804,7 @@ void jl_init_types(void) JL_GC_DISABLED
     // override ismutationfree for builtin types that are mutable for identity
     jl_string_type->ismutationfree = jl_string_type->isidentityfree = 1;
     jl_symbol_type->ismutationfree = jl_symbol_type->isidentityfree = 1;
-    // jl_mutablebuffer_type->ismutationfree = jl_mutablebuffer_type->isidentityfree = 1;
+    // jl_buffer_type->ismutationfree = jl_buffer_type->isidentityfree = 1;
     jl_simplevector_type->ismutationfree = jl_simplevector_type->isidentityfree = 1;
     jl_datatype_type->ismutationfree = 1;
 
@@ -2823,11 +2814,10 @@ void jl_init_types(void) JL_GC_DISABLED
 
     // Array's mutable data is hidden, so we need to override it
     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_array_type))->ismutationfree = 0;
-    ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_mutablebuffer_type))->ismutationfree = 0;
+    ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_buffer_type))->ismutationfree = 0;
 
     // override the preferred layout for a couple types
     jl_lineinfonode_type->name->mayinlinealloc = 0; // FIXME: assumed to be a pointer by codegen
-    jl_immutablebuffer_typename->mayinlinealloc = 0;
 }
 
 #ifdef __cplusplus

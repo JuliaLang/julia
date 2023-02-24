@@ -1904,7 +1904,7 @@ end
 @nospecs function bufref_tfunc(𝕃::AbstractLattice, boundscheck, buf, idx)
     hasintersect(widenconst(boundscheck), Bool) || return false
     wbuf = widenconst(buf)
-    (hasintersect(wbuf, MutableBuffer) || hasintersect(wbuf, ImmutableBuffer)) || return false
+    hasintersect(wbuf, Buffer) || return false
     hasintersect(widenconst(idx), Int) || return false
     return buffer_elmtype(buf)
 end
@@ -1912,7 +1912,7 @@ add_tfunc(Core.bufref, 3, INT_INF, bufref_tfunc, 20)
 
 @nospecs function bufset_tfunc(𝕃::AbstractLattice, boundscheck, buf, item, idx)
     hasintersect(widenconst(boundscheck), Bool) || return Bottom
-    hasintersect(widenconst(buf), MutableBuffer) || return Bottom
+    hasintersect(widenconst(buf), Buffer) || return Bottom
     hasintersect(widenconst(idx), Int) || return Bottom
     hasintersect(widenconst(item), buffer_elmtype(buf)) || return Bottom
     return buf
@@ -1921,32 +1921,9 @@ add_tfunc(Core.bufset, 4, INT_INF, bufset_tfunc, 20)
 
 add_tfunc(Core.buflen, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Int), 4)
 
-# the ImmutableBuffer operations might involve copies and so their computation costs can be high,
-# nevertheless we assign smaller inlining costs to them here, since the escape analysis
-# at this moment isn't able to propagate array escapes interprocedurally
-# and it will fail to optimize most cases without inlining
-buffreeze_tfunc(@nospecialize b) = immutable_buffer_tfunc(MutableBuffer, ImmutableBuffer, b)
-add_tfunc(Core.buffreeze, 1, 1, buffreeze_tfunc, 20)
-
-mutating_buffreeze_tfunc(@nospecialize b) = immutable_buffer_tfunc(MutableBuffer, ImmutableBuffer, b)
-add_tfunc(Core.mutating_buffreeze, 1, 1, mutating_buffreeze_tfunc, 10)
-
-bufthaw_tfunc(@nospecialize b) = immutable_buffer_tfunc(ImmutableBuffer, MutableBuffer, b)
-add_tfunc(Core.bufthaw, 1, 1, bufthaw_tfunc, 20)
-function immutable_buffer_tfunc(@nospecialize(bt), @nospecialize(rt), @nospecialize(b))
-    b = widenconst(a)
-    hasintersect(b, bt) || return Bottom
-    if b <: bt
-        unw = unwrap_unionall(b)
-        if isa(unw, DataType)
-            return rewrap_unionall(rt{unw.parameters[1], unw.parameters[2]}, b)
-        end
-    end
-    return rt
-end
 function buffer_elmtype(@nospecialize buf)
     b = widenconst(buf)
-    if !has_free_typevars(b) && (b <: MutableBuffer || b <: ImmutableBuffer)
+    if !has_free_typevars(b) && b <: Buffer
         b0 = b
         if isa(b, UnionAll)
             b = unwrap_unionall(b0)
@@ -2132,7 +2109,7 @@ end
         na == 2 || return false
         return arraysize_nothrow(argtypes[1], argtypes[2])
     elseif f === Core.buflen
-        (na == 1 && (argtypes[1] ⊑ MutableBuffer || argtypes[1] ⊑ ImmutableBuffer)) || return false
+        (na == 1 && (argtypes[1] ⊑ Buffer)) || return false
     elseif f === Core._typevar
         na == 3 || return false
         return typevar_nothrow(𝕃, argtypes[1], argtypes[2], argtypes[3])
@@ -2413,21 +2390,6 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
     𝕃ᵢ = typeinf_lattice(interp)
     if f === tuple
         return tuple_tfunc(𝕃ᵢ, argtypes)
-    elseif f === Core.buffreeze || f === Core.bufthaw
-       if length(argtypes) != 1
-            isva && return Any
-            return Bottom
-        end
-        a = widenconst(argtypes[1])
-        at = (f === Core.buffreeze ? MutableBuffer : ImmutableBuffer)
-        rt = (f === Core.buffreeze ? ImmutableBuffer : MutableBuffer)
-        if a <: at
-            unw = unwrap_unionall(a)
-            if isa(unw, DataType)
-                return rewrap_unionall(rt{unw.parameters[1], unw.parameters[2]}, a)
-            end
-        end
-        return rt
     elseif isa(f, IntrinsicFunction)
         if is_pure_intrinsic_infer(f) && all(@nospecialize(a) -> isa(a, Const), argtypes)
             argvals = anymap(@nospecialize(a) -> (a::Const).val, argtypes)

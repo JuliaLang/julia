@@ -1006,7 +1006,7 @@ end
 
 rewrite_invoke_exprargs!(expr::Expr) = (expr.args = invoke_rewrite(expr.args); expr)
 
-# DECISION: MutableBuffer?
+# DECISION: Buffer?
 function is_valid_type_for_apply_rewrite(@nospecialize(typ), params::OptimizationParams)
     if isa(typ, Const) && (v = typ.val; isa(v, SimpleVector))
         length(v) > params.max_tuple_splat && return false

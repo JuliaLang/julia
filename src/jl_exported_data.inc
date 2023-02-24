@@ -93,10 +93,8 @@
     XX(jl_returnnode_type) \
     XX(jl_signed_type) \
     XX(jl_simplevector_type) \
-    XX(jl_mutablebuffer_type) \
-    XX(jl_mutablebuffer_typename) \
-    XX(jl_immutablebuffer_type) \
-    XX(jl_immutablebuffer_typename) \
+    XX(jl_buffer_type) \
+    XX(jl_buffer_typename) \
     XX(jl_slotnumber_type) \
     XX(jl_ssavalue_type) \
     XX(jl_stackovf_exception) \

@@ -17,7 +17,7 @@ import ._TOP_MOD: ==, getindex, setindex!
 # usings
 import Core:
     MethodInstance, Const, Argument, SSAValue, PiNode, PhiNode, UpsilonNode, PhiCNode,
-    ReturnNode, GotoNode, GotoIfNot, SimpleVector, ImmutableBuffer, MutableBuffer,
+    ReturnNode, GotoNode, GotoIfNot, SimpleVector, Buffer,
     MethodMatch, CodeInstance,
     sizeof, ifelse, arrayset, arrayref, arraysize, bufset, bufref, buflen
 import ._TOP_MOD:     # Base definitions
@@ -1620,7 +1620,7 @@ function escape_builtin!(::typeof(buflen), astate::AnalysisState, pc::Int, args:
     ir = astate.ir
     buf = args[2]
     atype = argextype(buf, ir)
-    if !(atype ⊑ MutableBuffer || atype ⊑ ImmutableBuffer)
+    if !(atype ⊑ Buffer)
         add_escape_change!(astate, buf, ThrownEscape(pc))
     end
     # NOTE we may still see "arraysize: dimension out of range", but it doesn't capture anything
@@ -1634,7 +1634,7 @@ function escape_builtin!(::typeof(bufref), astate::AnalysisState, pc::Int, args:
     bufty = argextype(args[3], astate.ir)
     idxty = argextype(args[4], astate.ir)
     if !(boundscheckty ⊑ Bool &&
-         (bufty ⊑ MutableBuffer || bufty ⊑ ImmutableBuffer) && idxty ⊑ Int)
+         (bufty ⊑ Buffer) && idxty ⊑ Int)
         add_thrown_escapes!(astate, pc, args, 2)
     end
     buf = args[3]
@@ -1699,7 +1699,7 @@ function escape_builtin!(::typeof(bufset), astate::AnalysisState, pc::Int, args:
     valty = argextype(args[4], astate.ir)
     idxty = argextype(args[5], astate.ir)
     if !(boundscheckty ⊑ Bool &&
-         (bufty ⊑ MutableBuffer || bufty ⊑ ImmutableBuffer) &&
+         (bufty ⊑ Buffer) &&
          idxty ⊑ Int && arrayset_typecheck(bufty, valty))
         add_thrown_escapes!(astate, pc, args, 2)
     end

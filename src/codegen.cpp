@@ -1255,9 +1255,6 @@ static const auto &builtin_func_map() {
           { jl_f_bufref_addr,             new JuliaFunction{XSTR(jl_f_bufref), get_func_sig, get_func_attrs} },
           { jl_f_bufset_addr,             new JuliaFunction{XSTR(jl_f_bufset), get_func_sig, get_func_attrs} },
           { jl_f_buflen_addr,             new JuliaFunction{XSTR(jl_f_buflen), get_func_sig, get_func_attrs} },
-          { jl_f_buffreeze_addr,          new JuliaFunction{XSTR(jl_f_buffreeze), get_func_sig, get_func_attrs} },
-          { jl_f_mutating_buffreeze_addr, new JuliaFunction{XSTR(jl_f_mutating_buffreeze), get_func_sig, get_func_attrs} },
-          { jl_f_bufthaw_addr,            new JuliaFunction{XSTR(jl_f_bufthaw), get_func_sig, get_func_attrs} },
         };
     return builtins;
 }

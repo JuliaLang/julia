@@ -65,8 +65,7 @@ cconvert(::Type{Ptr{Int8}}, s::AbstractString) = String(s)
 unsafe_convert(::Type{Ptr{T}}, a::Array{T}) where {T} = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
 unsafe_convert(::Type{Ptr{S}}, a::AbstractArray{T}) where {S,T} = convert(Ptr{S}, unsafe_convert(Ptr{T}, a))
 unsafe_convert(::Type{Ptr{T}}, a::AbstractArray{T}) where {T} = error("conversion to pointer not defined for $(typeof(a))")
-unsafe_convert(::Type{Ptr{T}}, a::Core.MutableBuffer{T}) where {T} = ccall(:jl_buffer_ptr, Ptr{T}, (Any,), a)
-unsafe_convert(::Type{Ptr{T}}, a::Core.ImmutableBuffer{T}) where {T} = ccall(:jl_buffer_ptr, Ptr{T}, (Any,), a)
+unsafe_convert(::Type{Ptr{T}}, a::Core.Buffer{T}) where {T} = ccall(:jl_buffer_ptr, Ptr{T}, (Any,), a)
 
 # unsafe pointer to array conversions
 """
