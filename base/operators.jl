@@ -182,9 +182,8 @@ isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x
 # for comparison. This is useful for sorting tuples of integers.
 # TODO: remove this when the compiler can optimize the generic version better
 # See #48724 and #48753
-_pack_tuple((a,b)) = widen(a) << 8sizeof(b) - typemin(b) + b
-isless(a::NTuple{2, T}, b::NTuple{2, T}) where T <: Union{BitIntegerSmall, Int, UInt} =
-    isless(_pack_tuple(a), _pack_tuple(b))
+isless(a::Tuple{BitInteger, BitInteger}, b::Tuple{BitInteger, BitInteger}) =
+    isless(a[1], b[1]) | (isequal(a[1], b[1]) & isless(a[2], b[2]))
 
 """
     isgreater(x, y)
