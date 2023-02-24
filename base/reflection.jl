@@ -1566,6 +1566,7 @@ function _which(@nospecialize(tt::Type);
     method_table::Union{Nothing,Core.MethodTable,Core.Compiler.MethodTableView}=nothing,
     world::UInt=get_world_counter(),
     raise::Bool=true)
+    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     if method_table === nothing
         table = Core.Compiler.InternalMethodTable(world)
     elseif method_table isa Core.MethodTable
