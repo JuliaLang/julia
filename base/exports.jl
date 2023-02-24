@@ -911,7 +911,6 @@ export
     cp,
     ctime,
     diskstat,
-    download,
     filemode,
     filesize,
     gperm,
