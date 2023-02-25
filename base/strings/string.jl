@@ -188,11 +188,12 @@ typemin(::String) = typemin(String)
 const _IUTF8State = UInt16
 const _IUTF8_SHIFT_MASK = _IUTF8State(0b1111)
 const _IUTF8_DFA_ACCEPT = _IUTF8State(0)
-const _IUTF8_DFA_INVALID = _IUTF8State(1)
+const _IUTF8_DFA_INVALID = _IUTF8State(4)
 
 const _IUTF8_DFA_TABLE, _IUTF8_DFA_REVERSE_TABLE = begin
-
-    shifts = [0, 9, 5, 13, 1]
+    # It should be noted that eventhought thwe invalid state is state 4 the shift is 1
+    # which is the second lowest state shift.
+    shifts = [0, 13, 6, 10, 4]
 
     # Both of these state tables are only 4 states wide even thought there are 5 states
     # because the machine must be reset once it is in state 4
@@ -205,9 +206,9 @@ const _IUTF8_DFA_TABLE, _IUTF8_DFA_REVERSE_TABLE = begin
 
     reverse_state_table  = [    [0,  4,  4,  4],
                                 [1,  2,  3,  4],
-                                [4,  0,  4,  4],
-                                [4,  0,  0,  4],
-                                [4,  0,  0,  0],
+                                [0,  0,  4,  4],
+                                [0,  0,  0,  4],
+                                [0,  0,  0,  0],
                                 [4,  4,  4,  4] ]
 
 
@@ -261,10 +262,12 @@ end
     bytes = codeunits(s)
     state = _IUTF8_DFA_ACCEPT
     for j=0:3
-        state  = @inbounds _iutf8_dfa_reverse_step(state,bytes[i - j])
-        _iutf8_dfa_reverse_isfinished(state) | ((i - j) <= 1) && return ifelse(state > _IUTF8_DFA_ACCEPT, i, i - j)
+        k = i - j
+        state  = @inbounds _iutf8_dfa_reverse_step(state,bytes[k])
+        state == _IUTF8_DFA_ACCEPT  && return k
+        (state == _IUTF8_DFA_INVALID) | (k <= 1) && return i
     end
-    return i
+    return i # Should never get here
 end
 
 @propagate_inbounds nextind(s::String, i::Int) = _nextind_str(s, i)
@@ -274,18 +277,22 @@ end
     i == 0 && return 1
     n = ncodeunits(s)
     @boundscheck Base.between(i, 1, n) || throw(BoundsError(s, i))
-    @inbounds l = codeunit(s, i)
+    bytes = codeunits(s)
+    @inbounds l = bytes[i]
     (l < 0x80) | (0xf8 ≤ l) && return i+1
     if l < 0xc0
-        i′ = @inbounds _thisind_str(s, i)
-        return i′ < i ? @inbounds(_nextind_str(s, i′)) : i+1
+        i′ = @inbounds thisind(s, i)
+        i′ >= i  && return i+1
+        i = i′
     end
     state = _IUTF8_DFA_ACCEPT
     for j=0:3
-        state  = _iutf8_dfa_step(state,codeunit(s, i + j))
-        (_iutf8_dfa_isfinished(state) | ((i + j) >= n)) && return ifelse(state == _IUTF8_DFA_INVALID,i+j,i + j + 1)
+        k = i + j
+        state  = @inbounds _iutf8_dfa_step(state,bytes[k])
+        (state == _IUTF8_DFA_INVALID) && return k #The screening aboce makes sure this is never returned when k == i
+        (state == _IUTF8_DFA_ACCEPT) | (k >= n) && return k + 1
     end
-    return i + 4
+    return i + 4 # Should never get here
 end
 
 ## checking UTF-8 & ASCII validity ##
