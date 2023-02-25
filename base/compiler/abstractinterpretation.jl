@@ -30,8 +30,8 @@ function get_max_methods(@nospecialize(f), mod::Module, interp::AbstractInterpre
     return get_max_methods(mod, interp)
 end
 
-function should_infer_this_call(sv::InferenceState)
-    if sv.params.unoptimize_throw_blocks
+function should_infer_this_call(interp::AbstractInterpreter, sv::InferenceState)
+    if InferenceParams(interp).unoptimize_throw_blocks
         # Disable inference of calls in throw blocks, since we're unlikely to
         # need their types. There is one exception however: If up until now, the
         # function has not seen any side effects, we would like to make sure there
@@ -52,7 +52,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
                                   sv::InferenceState, max_methods::Int)
     ⊑ₚ = ⊑(ipo_lattice(interp))
-    if !should_infer_this_call(sv)
+    if !should_infer_this_call(interp, sv)
         add_remark!(interp, sv, "Skipped call in throw block")
         nonoverlayed = false
         if isoverlayed(method_table(interp)) && is_nonoverlayed(sv.ipo_effects)
@@ -569,7 +569,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
                 break
             end
             topmost === nothing || continue
-            if edge_matches_sv(interp, infstate, method, sig, sparams, hardlimit, sv)
+            if edge_matches_sv(infstate, method, sig, sparams, hardlimit, sv)
                 topmost = infstate
                 edgecycle = true
             end
@@ -677,13 +677,12 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
     return MethodCallResult(rt, edgecycle, edgelimited, edge, effects)
 end
 
-function edge_matches_sv(interp::AbstractInterpreter, frame::InferenceState, method::Method, @nospecialize(sig), sparams::SimpleVector, hardlimit::Bool, sv::InferenceState)
+function edge_matches_sv(frame::InferenceState, method::Method, @nospecialize(sig), sparams::SimpleVector, hardlimit::Bool, sv::InferenceState)
     # The `method_for_inference_heuristics` will expand the given method's generator if
     # necessary in order to retrieve this field from the generated `CodeInfo`, if it exists.
     # The other `CodeInfo`s we inspect will already have this field inflated, so we just
     # access it directly instead (to avoid regeneration).
-    world = get_world_counter(interp)
-    callee_method2 = method_for_inference_heuristics(method, sig, sparams, world) # Union{Method, Nothing}
+    callee_method2 = method_for_inference_heuristics(method, sig, sparams) # Union{Method, Nothing}
 
     inf_method2 = frame.src.method_for_inference_limit_heuristics # limit only if user token match
     inf_method2 isa Method || (inf_method2 = nothing)
@@ -720,11 +719,11 @@ function edge_matches_sv(interp::AbstractInterpreter, frame::InferenceState, met
 end
 
 # This function is used for computing alternate limit heuristics
-function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector, world::UInt)
-    if isdefined(method, :generator) && !(method.generator isa Core.GeneratedFunctionStub) && may_invoke_generator(method, sig, sparams)
+function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector)
+    if isdefined(method, :generator) && method.generator.expand_early && may_invoke_generator(method, sig, sparams)
         method_instance = specialize_method(method, sig, sparams)
         if isa(method_instance, MethodInstance)
-            cinfo = get_staged(method_instance, world)
+            cinfo = get_staged(method_instance)
             if isa(cinfo, CodeInfo)
                 method2 = cinfo.method_for_inference_limit_heuristics
                 if method2 isa Method
@@ -2405,13 +2404,13 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         elseif isa(sym, Symbol)
             if isdefined(sv.mod, sym)
                 t = Const(true)
-            elseif sv.params.assume_bindings_static
+            elseif InferenceParams(interp).assume_bindings_static
                 t = Const(false)
             end
         elseif isa(sym, GlobalRef)
             if isdefined(sym.mod, sym.name)
                 t = Const(true)
-            elseif sv.params.assume_bindings_static
+            elseif InferenceParams(interp).assume_bindings_static
                 t = Const(false)
             end
         elseif isexpr(sym, :static_parameter)
@@ -2552,7 +2551,7 @@ function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, fram
         end
     elseif isdefined_globalref(g)
         nothrow = true
-    elseif isa(frame, InferenceState) && frame.params.assume_bindings_static
+    elseif InferenceParams(interp).assume_bindings_static
         consistent = inaccessiblememonly = ALWAYS_TRUE
         rt = Union{}
     end

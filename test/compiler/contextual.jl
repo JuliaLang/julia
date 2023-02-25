@@ -7,7 +7,7 @@ module MiniCassette
     # A minimal demonstration of the cassette mechanism. Doesn't support all the
     # fancy features, but sufficient to exercise this code path in the compiler.
 
-    using Core.Compiler: retrieve_code_info, CodeInfo,
+    using Core.Compiler: method_instances, retrieve_code_info, CodeInfo,
         MethodInstance, SSAValue, GotoNode, GotoIfNot, ReturnNode, SlotNumber, quoted,
         signature_type
     using Base: _methods_by_ftype
@@ -69,28 +69,24 @@ module MiniCassette
         end
     end
 
-    function overdub_generator(world::UInt, source, self, c, f, args)
-        @nospecialize
+    function overdub_generator(self, c, f, args)
         if !Base.issingletontype(f)
-            # (c, f, args..) -> f(args...)
-            code_info = :(return f(args...))
-            return Core.GeneratedFunctionStub(identity, Core.svec(:overdub, :c, :f, :args), Core.svec())(world, source, code_info)
+            return :(return f(args...))
         end
 
         tt = Tuple{f, args...}
-        match = Base._which(tt; world)
+        match = Base._which(tt; world=typemax(UInt))
         mi = Core.Compiler.specialize_method(match)
         # Unsupported in this mini-cassette
         @assert !mi.def.isva
-        code_info = retrieve_code_info(mi, world)
+        code_info = retrieve_code_info(mi)
         @assert isa(code_info, CodeInfo)
         code_info = copy(code_info)
-        @assert code_info.edges === nothing
-        code_info.edges = MethodInstance[mi]
+        if isdefined(code_info, :edges)
+            code_info.edges = MethodInstance[mi]
+        end
         transform!(code_info, length(args), match.sparams)
-        # TODO: this is mandatory: code_info.min_world = max(code_info.min_world, min_world[])
-        # TODO: this is mandatory: code_info.max_world = min(code_info.max_world, max_world[])
-        return code_info
+        code_info
     end
 
     @inline function overdub(c::Ctx, f::Union{Core.Builtin, Core.IntrinsicFunction}, args...)
@@ -99,7 +95,16 @@ module MiniCassette
 
     @eval function overdub(c::Ctx, f, args...)
         $(Expr(:meta, :generated_only))
-        $(Expr(:meta, :generated, overdub_generator))
+        $(Expr(:meta,
+                :generated,
+                Expr(:new,
+                    Core.GeneratedFunctionStub,
+                    :overdub_generator,
+                    Any[:overdub, :ctx, :f, :args],
+                    Any[],
+                    @__LINE__,
+                    QuoteNode(Symbol(@__FILE__)),
+                    true)))
     end
 end
 

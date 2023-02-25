@@ -183,8 +183,7 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::Optimiz
     return OptimizationState(linfo, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, nothing, false)
 end
 function OptimizationState(linfo::MethodInstance, params::OptimizationParams, interp::AbstractInterpreter)
-    world = get_world_counter(interp)
-    src = retrieve_code_info(linfo, world)
+    src = retrieve_code_info(linfo)
     src === nothing && return nothing
     return OptimizationState(linfo, src, params, interp)
 end
