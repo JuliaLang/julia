@@ -2905,7 +2905,7 @@ static Value *emit_array_nd_index(
 static Value *emit_bufferlen(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
 {
     Value *t = boxed(ctx, tinfo);
-    MDNode *tbaa = ctx.tbaa().tbaa_arraylen;
+    MDNode *tbaa = ctx.tbaa().tbaa_bufferlen;
     Value *addr = ctx.builder.CreateStructGEP(ctx.types().T_jlbuffer,
             emit_bitcast(ctx, decay_derived(ctx, t), ctx.types().T_pjlbuffer), 0);
     LoadInst *len = ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()), addr, Align(sizeof(size_t)));
