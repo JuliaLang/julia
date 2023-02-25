@@ -276,7 +276,7 @@ end
 @inline function _nextind_str(s, i::Int)
     i == 0 && return 1
     n = ncodeunits(s)
-    @boundscheck Base.between(i, 1, n) || throw(BoundsError(s, i))
+    @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
     bytes = codeunits(s)
     @inbounds l = bytes[i]
     (l < 0x80) | (0xf8 ≤ l) && return i+1
@@ -289,7 +289,7 @@ end
     for j=0:3
         k = i + j
         state  = @inbounds _iutf8_dfa_step(state,bytes[k])
-        (state == _IUTF8_DFA_INVALID) && return k #The screening aboce makes sure this is never returned when k == i
+        (state == _IUTF8_DFA_INVALID) && return k #The screening above makes sure this is never returned when k == i
         (state == _IUTF8_DFA_ACCEPT) | (k >= n) && return k + 1
     end
     return i + 4 # Should never get here
@@ -528,36 +528,24 @@ function iterate_continued(s, i::Int, u::UInt32)
 end
 
 @propagate_inbounds function getindex(s::String, i::Int)
-    b = codeunit(s, i)
-    u = UInt32(b) << 24
-    between(b, 0x80, 0xf7) || return reinterpret(Char, u)
-    return getindex_continued(s, i, u)
-end
-
-# duck-type s so that external UTF-8 string packages like StringViews can hook in
-function getindex_continued(s, i::Int, u::UInt32)
-    if u < 0xc0000000
-        # called from `getindex` which checks bounds
-        @inbounds isvalid(s, i) && @goto ret
-        string_index_err(s, i)
-    end
+    bytes = codeunits(s)
     n = ncodeunits(s)
+    @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
+    @inbounds b = bytes[i]
 
-    (i += 1) > n && @goto ret
-    @inbounds b = codeunit(s, i) # cont byte 1
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b) << 16
-
-    ((i += 1) > n) | (u < 0xe0000000) && @goto ret
-    @inbounds b = codeunit(s, i) # cont byte 2
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b) << 8
-
-    ((i += 1) > n) | (u < 0xf0000000) && @goto ret
-    @inbounds b = codeunit(s, i) # cont byte 3
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b)
-@label ret
+    shift = 32
+    u = UInt32(b) << (shift -= 8)
+    state = _iutf8_dfa_step(_IUTF8_DFA_ACCEPT,b)
+    state == _IUTF8_DFA_INVALID && @goto ret
+    for j = 1:3
+        k = i + j
+       @inbounds b = bytes[k]
+        state = _iutf8_dfa_step(state,b)
+        state == _IUTF8_DFA_INVALID && break
+        u |= UInt32(b) << (shift -= 8)
+        (state == _IUTF8_DFA_ACCEPT) | (k == n) && break
+    end
+    @label ret
     return reinterpret(Char, u)
 end
 
