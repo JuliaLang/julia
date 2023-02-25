@@ -7,6 +7,7 @@
 #include "julia_internal.h"
 #include "julia_assert.h"
 
+#define JL_BUFFER_IMPL_NUL 1
 #define MAXINTVAL (((size_t)-1)>>1)
 
 JL_DLLEXPORT jl_buffer_t *jl_buffer_copy(jl_buffer_t *a)
@@ -50,19 +51,21 @@ JL_DLLEXPORT jl_buffer_t *jl_new_buffer(jl_value_t *btype, size_t len)
     }
     // align data area
     int tsz = sizeof(jl_buffer_t);
+    void *data;
     if (tot <= ARRAY_INLINE_NBYTES) {
         // align data area
         if (tot >= ARRAY_CACHE_ALIGN_THRESHOLD)
             tsz = LLT_ALIGN(tsz, JL_CACHE_BYTE_ALIGNMENT);
         else if (isunboxed && elsz >= 4)
             tsz = LLT_ALIGN(tsz, JL_SMALL_BYTE_ALIGNMENT);
-            tsz += tot;
-        // TODO allocate data and set first 8 bits to length before initializing type
+        size_t doffs = tsz;
+        tsz += tot;
         b = (jl_buffer_t*)jl_gc_alloc(ct->ptls, tot, btype);
         b->length = len;
+        data = (char*)b + doffs;
     }
     else {
-        void *data = jl_gc_managed_malloc(tot);
+        data = jl_gc_managed_malloc(tot);
         // Allocate the Array **after** allocating the data
         // to make sure the array is still young
         b = (jl_buffer_t*)jl_gc_alloc(ct->ptls, tsz + sizeof(void*), btype);
@@ -71,6 +74,8 @@ JL_DLLEXPORT jl_buffer_t *jl_new_buffer(jl_value_t *btype, size_t len)
         // No allocation or safepoint allowed after this
         jl_gc_track_malloced_buffer(ct->ptls, b);
     }
+    if (JL_BUFFER_IMPL_NUL && elsz == 1)
+         ((char*)data)[tot - 1] = '\0';
     return b;
 }
 
