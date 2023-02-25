@@ -470,9 +470,10 @@ end
 
 const NTuple{N,T} = Tuple{Vararg{T,N}}
 
-## primitive Array constructors
 struct UndefInitializer end
 const undef = UndefInitializer()
+
+## primitive Array constructors
 # type and dimensionality specified, accepting dims as series of Ints
 Array{T,1}(::UndefInitializer, m::Int) where {T} =
     ccall(:jl_alloc_array_1d, Array{T,1}, (Any, Int), Array{T,1}, m)

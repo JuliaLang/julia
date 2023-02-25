@@ -500,7 +500,7 @@ JL_CALLABLE(jl_f_sizeof)
     if (jl_is_svec(x))
         return jl_box_long((1+jl_svec_len(x))*sizeof(void*));
     if (jl_is_buffer(x))
-        return jl_box_long(jl_buffer_len(x) * jl_buffer_elsize(x));
+        return jl_box_long(jl_bufferlen(x) * jl_buffer_elsize(x));
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
     assert(jl_is_datatype(dt));
     assert(!dt->name->abstract);
@@ -1504,7 +1504,7 @@ JL_CALLABLE(jl_f_buflen)
     if (!jl_is_buffer(args[0])) {
         jl_type_error("bufref", (jl_value_t*)jl_buffer_type, args[0]);
     }
-    return jl_box_long(jl_buffer_len(args[0]));
+    return jl_box_long(jl_bufferlen(args[0]));
 }
 
 JL_CALLABLE(jl_f_bufref)
@@ -1515,7 +1515,7 @@ JL_CALLABLE(jl_f_bufref)
         jl_type_error("bufref", (jl_value_t*)jl_buffer_type, args[1]);
     }
     jl_buffer_t *sb = (jl_buffer_t*)args[1];
-    size_t len = jl_buffer_len(sb);
+    size_t len = jl_bufferlen(sb);
     size_t idx = (size_t)jl_unbox_long((jl_value_t*)args[2]);
     if (idx < 1 || idx > len) {
         jl_bounds_error_int((jl_value_t*)sb, idx);
@@ -1529,7 +1529,7 @@ JL_CALLABLE(jl_f_bufset)
     JL_TYPECHK(bufset, bool, args[0]);
     JL_TYPECHK(bufset, buffer, args[1]);
     jl_buffer_t *sb = (jl_buffer_t*)args[1];
-    size_t len = jl_buffer_len(sb);
+    size_t len = jl_bufferlen(sb);
     size_t idx = (size_t)jl_unbox_long((jl_value_t*)args[2]);
     if (idx < 1 || idx > len) {
         jl_bounds_error_int((jl_value_t*)sb, idx);

@@ -1259,7 +1259,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
         }
         else if (jl_is_buffer(v)) {
             ios_write(s->s, (char*)v, sizeof(void*));
-            size_t len = jl_buffer_len(v);
+            size_t len = jl_bufferlen(v);
             assert(len > 0 || len == 0);
             ios_write(s->const_data, (char*)jl_buffer_data(v), len);
         }

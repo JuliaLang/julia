@@ -232,6 +232,8 @@ struct jl_typecache_t {
     Type *T_pprjlvalue;
     StructType *T_jlarray;
     Type *T_pjlarray;
+    StructType *T_jlbuffer;
+    Type *T_pjlbuffer;
     FunctionType *T_jlfunc;
     FunctionType *T_jlfuncparams;
 
@@ -244,7 +246,8 @@ struct jl_typecache_t {
     jl_typecache_t() :
         T_jlvalue(nullptr), T_pjlvalue(nullptr), T_prjlvalue(nullptr),
         T_ppjlvalue(nullptr), T_pprjlvalue(nullptr), T_jlarray(nullptr),
-        T_pjlarray(nullptr), T_jlfunc(nullptr), T_jlfuncparams(nullptr),
+        T_pjlarray(nullptr), T_jlbuffer(nullptr), T_pjlbuffer(nullptr),
+        T_jlfunc(nullptr), T_jlfuncparams(nullptr),
         T_sigatomic(nullptr), T_ppint8(nullptr), initialized(false) {}
 
     void initialize(LLVMContext &context) {
@@ -275,6 +278,10 @@ struct jl_typecache_t {
                     "Size of jl_array_flags_t is not the same as int16_t");
         T_jlarray = StructType::get(context, makeArrayRef(vaelts));
         T_pjlarray = PointerType::get(T_jlarray, 0);
+
+        Type *vbelts[] = {getSizeTy(context)};
+        T_jlbuffer = StructType::get(context, makeArrayRef(vbelts));
+        T_pjlbuffer = PointerType::get(T_jlbuffer, 0);
     }
 };
 
@@ -301,6 +308,10 @@ struct jl_tbaacache_t {
     MDNode *tbaa_arrayflags;     // The flags in a jl_array_t
     MDNode *tbaa_arrayoffset;     // The offset in a jl_array_t
     MDNode *tbaa_arrayselbyte;   // a selector byte in a isbits Union jl_array_t
+    MDNode *tbaa_buffer;      // jl_buffer_t
+    MDNode *tbaa_bufferptr;       // The pointer inside a jl_buffer_t
+    MDNode *tbaa_bufferlen;       // The len in a jl_buffer_t
+    MDNode *tbaa_bufferselbyte;   // a selector byte in a isbits Union jl_array_t
     MDNode *tbaa_const;      // Memory that is immutable by the time LLVM can see it
     bool initialized;
 
@@ -310,7 +321,9 @@ struct jl_tbaacache_t {
                     tbaa_immut(nullptr), tbaa_ptrarraybuf(nullptr), tbaa_arraybuf(nullptr),
                     tbaa_array(nullptr), tbaa_arrayptr(nullptr), tbaa_arraysize(nullptr),
                     tbaa_arraylen(nullptr), tbaa_arrayflags(nullptr), tbaa_arrayoffset(nullptr),
-                    tbaa_arrayselbyte(nullptr), tbaa_const(nullptr), initialized(false) {}
+                    tbaa_arrayselbyte(nullptr), tbaa_buffer(nullptr), tbaa_bufferptr(nullptr),
+                    tbaa_bufferlen(nullptr), tbaa_bufferselbyte(nullptr), tbaa_const(nullptr),
+                    initialized(false) {}
 
     auto tbaa_make_child(MDBuilder &mbuilder, const char *name, MDNode *parent = nullptr, bool isConstant = false) {
         MDNode *scalar = mbuilder.createTBAAScalarTypeNode(name, parent ? parent : tbaa_root);
@@ -351,8 +364,12 @@ struct jl_tbaacache_t {
         tbaa_arraylen = tbaa_make_child(mbuilder, "jtbaa_arraylen", tbaa_array_scalar).first;
         tbaa_arrayflags = tbaa_make_child(mbuilder, "jtbaa_arrayflags", tbaa_array_scalar).first;
         tbaa_arrayoffset = tbaa_make_child(mbuilder, "jtbaa_arrayoffset", tbaa_array_scalar).first;
-        tbaa_const = tbaa_make_child(mbuilder, "jtbaa_const", nullptr, true).first;
         tbaa_arrayselbyte = tbaa_make_child(mbuilder, "jtbaa_arrayselbyte", tbaa_array_scalar).first;
+        MDNode *tbaa_buffer_scalar;
+        std::tie(tbaa_buffer, tbaa_buffer_scalar) = tbaa_make_child(mbuilder, "jtbaa_buffer");
+        tbaa_bufferptr = tbaa_make_child(mbuilder, "jtbaa_bufferptr", tbaa_buffer_scalar).first;
+        tbaa_bufferlen = tbaa_make_child(mbuilder, "jtbaa_bufferlen", tbaa_buffer_scalar).first;
+        tbaa_const = tbaa_make_child(mbuilder, "jtbaa_const", nullptr, true).first;
     }
 };
 

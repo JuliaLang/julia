@@ -1260,7 +1260,7 @@ int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
     else if (vt->name == jl_buffer_typename) {
         jl_buffer_t *sb = (jl_buffer_t*)obj;
         start = (char*)jl_buffer_data(sb);
-        len = jl_buffer_len(sb);
+        len = jl_bufferlen(sb);
         elsize = jl_buffer_elsize(sb);
     }
     else if (vt->name == jl_array_typename) {
