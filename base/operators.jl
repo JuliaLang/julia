@@ -178,8 +178,8 @@ isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x
 isless(x::Real,          y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 
-# Performance optimization to pack pairs of integers into a single integer
-# for comparison. This is useful for sorting tuples of integers.
+# Performance optimization to reduce branching
+# This is useful for sorting tuples of integers
 # TODO: remove this when the compiler can optimize the generic version better
 # See #48724 and #48753
 isless(a::Tuple{BitInteger, BitInteger}, b::Tuple{BitInteger, BitInteger}) =
