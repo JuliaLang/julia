@@ -162,8 +162,8 @@ function link_image_cmd(path, out)
     `$(ld()) $V $SHARED -o $out $WHOLE_ARCHIVE $path $NO_WHOLE_ARCHIVE $LIBDIR $PRIVATE_LIBDIR $SHLIBDIR $LIBS`
 end
 
-function link_image(path, out, internal_stderr::IO = stderr, internal_stdout::IO = stdout)
-    run(link_image_cmd(path, out), Base.DevNull(), stderr, stdout)
+function link_image(path, out, internal_stderr::IO=stderr, internal_stdout::IO=stdout)
+    run(link_image_cmd(path, out), Base.DevNull(), internal_stderr, internal_stdout)
 end
 
 end # module Linking
