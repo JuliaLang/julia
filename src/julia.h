@@ -2009,9 +2009,20 @@ STATIC_INLINE size_t jl_buffer_elsize(void *b)
 
 STATIC_INLINE size_t jl_buffer_nbytes(jl_value_t *b)
 {
+    jl_value_t *ety = jl_buffer_eltype(b);
+
+    size_t elsz = 0, al = 0;
+    int union_max = jl_islayout_inline(ety, &elsz, &al);
+    int isunion = jl_is_uniontype(ety);
+    if (union_max == 0)
+        elsz = sizeof(void*);
+    else
+        elsz = LLT_ALIGN(elsz, al);
     size_t len = jl_bufferlen(b);
     size_t tot = jl_buffer_elsize(b) * len;
-    if (jl_is_uniontype(jl_buffer_eltype(b)))
+    if (elsz == 1 && union_max && isunion)
+        tot++;
+    if (isunion)
         tot += len;
     return tot;
 }

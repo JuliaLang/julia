@@ -279,7 +279,7 @@ struct jl_typecache_t {
         T_jlarray = StructType::get(context, makeArrayRef(vaelts));
         T_pjlarray = PointerType::get(T_jlarray, 0);
 
-        Type *vbelts[] = {getSizeTy(context)};
+        Type *vbelts[] = {getSizeTy(context), PointerType::get(getInt8Ty(context), AddressSpace::Loaded)};
         T_jlbuffer = StructType::get(context, makeArrayRef(vbelts));
         T_pjlbuffer = PointerType::get(T_jlbuffer, 0);
     }

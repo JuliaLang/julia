@@ -912,7 +912,44 @@ void jl_gc_force_mark_old(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT
         dtsz = l * sizeof(void*) + sizeof(jl_svec_t);
     }
     else if (dt->name == jl_buffer_typename) {
-        dtsz = jl_buffer_nbytes(v);
+        jl_buffer_t *b = (jl_buffer_t *)v;
+        size_t elsz = 0, al = 0;
+        jl_value_t *eltype = jl_tparam0(jl_typeof(b));
+        size_t len = jl_bufferlen(b);
+        int isunboxed = jl_islayout_inline(eltype, &elsz, &al);
+        int isunion = jl_is_uniontype(eltype);
+        // int hasptr = isunboxed && (jl_is_datatype(eltype) && ((jl_datatype_t*)eltype)->layout->npointers > 0);
+        if (!isunboxed) {
+            elsz = sizeof(void*);
+            al = elsz;
+        }
+        else {
+            elsz = LLT_ALIGN(elsz, al);
+        }
+        size_t tot = len * elsz;
+        if (isunboxed) {
+            // extra byte for all julia allocated byte arrays
+            if (elsz == 1 && !isunion)
+                tot++;
+            // an extra byte for each isbits union array element, stored after len * elsize
+            if (isunion)
+                tot += len;
+        }
+        // align data area
+        int tsz = sizeof(jl_buffer_t);
+        if (tot <= ARRAY_INLINE_NBYTES) {
+            // align data area
+            if (tot >= ARRAY_CACHE_ALIGN_THRESHOLD)
+                tsz = LLT_ALIGN(tsz, JL_CACHE_BYTE_ALIGNMENT);
+            else if (isunboxed && elsz >= 4)
+                tsz = LLT_ALIGN(tsz, JL_SMALL_BYTE_ALIGNMENT);
+            tsz += tot;
+        }
+        else {
+            tsz += sizeof(void*);
+        }
+        if (tsz > GC_MAX_SZCLASS)
+            dtsz = GC_MAX_SZCLASS + 1;
     }
     else if (dt->name == jl_array_typename) {
         jl_array_t *a = (jl_array_t*)v;
@@ -1134,7 +1171,7 @@ void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a) JL_NOTSAFEPOINT
 
 static int jl_is_malloc_buffer(void *v)
 {
-    return (jl_buffer_nbytes((jl_value_t*)v) <= ARRAY_INLINE_NBYTES);
+    return (jl_buffer_nbytes((jl_value_t*)v) > ARRAY_INLINE_NBYTES);
 }
 
 
@@ -2385,7 +2422,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     tot += len;
             }
             int hasptr = isunboxed && (jl_is_datatype(eltype) &&((jl_datatype_t*)eltype)->layout->npointers > 0);
-            int is_malloced_buffer = tot <= ARRAY_INLINE_NBYTES;
+            int is_malloced_buffer = tot > ARRAY_INLINE_NBYTES;
             // align data area
             int tsz = sizeof(jl_buffer_t);
             if (!is_malloced_buffer) {
@@ -2415,28 +2452,28 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             void *data = jl_buffer_data(b);
             if (is_malloced_buffer) {
                 if (update_meta || foreign_alloc) {
-                    objprofile_count(jl_malloc_tag, bits == GC_OLD_MARKED, tsz);
-                    gc_heap_snapshot_record_hidden_edge(new_obj, data, tsz, pooled);
+                    objprofile_count(jl_malloc_tag, bits == GC_OLD_MARKED, tot);
+                    gc_heap_snapshot_record_hidden_edge(new_obj, data, tot, pooled);
                     if (bits == GC_OLD_MARKED)
-                        ptls->gc_cache.perm_scanned_bytes += tsz;
+                        ptls->gc_cache.perm_scanned_bytes += tot;
                     else
-                        ptls->gc_cache.scanned_bytes += tsz;
+                        ptls->gc_cache.scanned_bytes += tot;
                 }
             }
             else if (jl_buffer_needs_marking(b)) {
                 if (update_meta || foreign_alloc) {
-                    objprofile_count(jl_malloc_tag, bits == GC_OLD_MARKED, tsz);
-                    gc_heap_snapshot_record_hidden_edge(new_obj, data, tsz, pooled);
+                    objprofile_count(jl_malloc_tag, bits == GC_OLD_MARKED, tot);
+                    gc_heap_snapshot_record_hidden_edge(new_obj, data, tot, pooled);
                     if (bits == GC_OLD_MARKED)
-                        ptls->gc_cache.perm_scanned_bytes += tsz;
+                        ptls->gc_cache.perm_scanned_bytes += tot;
                     else
-                        ptls->gc_cache.scanned_bytes += tsz;
+                        ptls->gc_cache.scanned_bytes += tot;
                 }
             }
             else {
                 // FIXME Buffer: is supposed to just account for the size of the structure itself (not the array indexable data)
                 void *data_ptr = (char*)b + sizeof(jl_buffer_t);
-                gc_heap_snapshot_record_hidden_edge(new_obj, data_ptr, tsz, 2);
+                gc_heap_snapshot_record_hidden_edge(new_obj, data_ptr, tot, 2);
             }
             if (len == 0)
                 return;
