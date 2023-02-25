@@ -67,8 +67,7 @@ JL_DLLEXPORT jl_buffer_t *jl_new_buffer(jl_value_t *btype, size_t len)
         // to make sure the array is still young
         b = (jl_buffer_t*)jl_gc_alloc(ct->ptls, tsz + sizeof(void*), btype);
         b->length = len;
-        void *dataptr = jl_buffer_data(b);
-        dataptr = data;
+        *(void**)jl_buffer_data(b) = &data;
         // No allocation or safepoint allowed after this
         jl_gc_track_malloced_buffer(ct->ptls, b);
     }
@@ -102,7 +101,7 @@ JL_DLLEXPORT jl_value_t *jl_bufref(jl_buffer_t *b, size_t i)
 
     }
     else {
-        jl_value_t *elt = jl_atomic_load_relaxed(((_Atomic(jl_value_t*)*)data) + i);
+        jl_value_t *elt = jl_atomic_load_relaxed(((_Atomic(jl_value_t*)*)(void**)data) + i);
         if (elt == NULL)
             jl_throw(jl_undefref_exception);
         return elt;
@@ -119,7 +118,7 @@ JL_DLLEXPORT void jl_bufset(jl_buffer_t *b JL_ROOTING_ARGUMENT, jl_value_t *rhs 
     int isboxed = (union_max == 0);
     char *data = (char*)(b) + sizeof(jl_buffer_t);
     if (isboxed) {
-        jl_atomic_store_release(((_Atomic(jl_value_t*)*)data) + i, rhs);
+        jl_atomic_store_release(((_Atomic(jl_value_t*)*)(void**)data) + i, rhs);
         jl_gc_wb(b, rhs);
     }
     else {
