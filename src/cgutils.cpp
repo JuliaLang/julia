@@ -325,7 +325,7 @@ static Value *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
 static Value *julia_pgv(jl_codectx_t &ctx, const char *prefix, jl_sym_t *name, jl_module_t *mod, void *addr)
 {
     // emit a GlobalVariable for a jl_value_t, using the prefix, name, and module to
-    // to create a readable name of the form prefix:ModA.ModB.name#
+    // to create a readable name of the form prefixModA.ModB.name#
     // reverse-of-reverse algorithm
     std::string finalname;
     StringRef name_str(jl_symbol_name(name));
