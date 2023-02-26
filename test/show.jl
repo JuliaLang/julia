@@ -263,10 +263,10 @@ for ex in [Expr(:call, :f, Expr(:(=), :x, 1)),
     @test eval(Meta.parse(repr(ex))) == ex
 end
 
-@test repr(Expr(:using, :Foo)) == ":(\$(Expr(:using, :Foo)))"
-@test repr(Expr(:using, Expr(:(.), ))) == ":(\$(Expr(:using, :(\$(Expr(:.))))))"
-@test repr(Expr(:import, :Foo)) == ":(\$(Expr(:import, :Foo)))"
-@test repr(Expr(:import, Expr(:(.), ))) == ":(\$(Expr(:import, :(\$(Expr(:.))))))"
+@test repr(Expr(:using, :Foo)) == "Expr(:using, :Foo)"
+@test repr(Expr(:using, Expr(:(.), ))) == "Expr(:using, Expr(:.))"
+@test repr(Expr(:import, :Foo)) == "Expr(:import, :Foo)"
+@test repr(Expr(:import, Expr(:(.), ))) == "Expr(:import, Expr(:.))"
 
 
 @test repr(Expr(:using, Expr(:(.), :A))) == ":(using A)"
@@ -1028,19 +1028,19 @@ end"""
 @test_repr ":(Expr(:exotic_head, Expr(:call, :+, 1, \$y)))"
 @test_repr ":(:(Expr(:exotic_head, Expr(:call, :+, 1, \$\$y))))"
 @test repr(Expr(:exotic_head, Expr(:call, :+, 1, :(Expr(:$, :y))))) ==
-    ":(\$(Expr(:exotic_head, :(1 + Expr(:\$, :y)))))"
+    "Expr(:exotic_head, :(1 + Expr(:\$, :y)))"
 @test repr(Expr(:block, Expr(:(=), :y, 2),
                         Expr(:quote, Expr(:exotic_head,
                                           Expr(:call, :+, 1, Expr(:$, :y)))))) ==
 """
 quote
     y = 2
-    \$(Expr(:quote, :(\$(Expr(:exotic_head, :(1 + \$(Expr(:\$, :y))))))))
+    \$(Expr(:quote, Expr(:exotic_head, :(1 + \$(Expr(:\$, :y))))))
 end"""
 @test repr(eval(Expr(:block, Expr(:(=), :y, 2),
                         Expr(:quote, Expr(:exotic_head,
                                           Expr(:call, :+, 1, Expr(:$, :y))))))) ==
-    ":(\$(Expr(:exotic_head, :(1 + 2))))"
+    "Expr(:exotic_head, :(1 + 2))"
 
 # nested quotes and blocks
 @test_repr "Expr(:quote, Expr(:block, :a, :b))"
@@ -1068,10 +1068,10 @@ end"""
 @test_repr "QuoteNode(\$\$x)"
 @test_repr ":(QuoteNode(\$x))"
 @test_repr ":(:(QuoteNode(\$\$x)))"
-@test repr(QuoteNode(Expr(:$, :x))) == ":(\$(QuoteNode(:(\$(Expr(:\$, :x))))))"
-@test repr(QuoteNode(Expr(:quote, Expr(:$, :x)))) == ":(\$(QuoteNode(:(\$(Expr(:quote, :(\$(Expr(:\$, :x)))))))))"
-@test repr(Expr(:quote, QuoteNode(Expr(:$, :x)))) == ":(\$(Expr(:quote, :(\$(QuoteNode(:(\$(Expr(:\$, :x)))))))))"
-@test repr(Expr(:quote, Expr(:quote, Expr(:foo)))) == ":(\$(Expr(:quote, :(\$(Expr(:quote, :(\$(Expr(:foo)))))))))"
+@test repr(QuoteNode(Expr(:$, :x))) == "QuoteNode(Expr(:\$, :x))"
+@test repr(QuoteNode(Expr(:quote, Expr(:$, :x)))) == "QuoteNode(Expr(:quote, Expr(:\$, :x)))"
+@test repr(Expr(:quote, QuoteNode(Expr(:$, :x)))) == "Expr(:quote, QuoteNode(Expr(:\$, :x)))"
+@test repr(Expr(:quote, Expr(:quote, Expr(:foo)))) == "Expr(:quote, Expr(:quote, Expr(:foo)))"
 
 # unquoting
 @test_repr "\$y"
@@ -1332,10 +1332,10 @@ test_repr("a.:(=)")
 test_repr("a.:(:)")
 test_repr("(:).a")
 @test eval(eval(Meta.parse(repr(:`ls x y`)))) == `ls x y`
-@test repr(Expr(:., :a, :b, :c)) == ":(\$(Expr(:., :a, :b, :c)))"
-@test repr(Expr(:., :a, :b)) == ":(\$(Expr(:., :a, :b)))"
-@test repr(Expr(:., :a)) == ":(\$(Expr(:., :a)))"
-@test repr(Expr(:.)) == ":(\$(Expr(:.)))"
+@test repr(Expr(:., :a, :b, :c)) == "Expr(:., :a, :b, :c)"
+@test repr(Expr(:., :a, :b)) == "Expr(:., :a, :b)"
+@test repr(Expr(:., :a)) == "Expr(:., :a)"
+@test repr(Expr(:.)) == "Expr(:.)"
 @test repr(GlobalRef(Main, :a)) == ":(Main.a)"
 @test repr(GlobalRef(Main, :in)) == ":(Main.in)"
 @test repr(GlobalRef(Main, :+)) == ":(Main.:+)"
@@ -2317,6 +2317,8 @@ end
     @test sprint(show, :?) == ":?"
     @test sprint(show, :(var"?" + var"::" + var"'")) == ":(var\"?\" + var\"::\" + var\"'\")"
 end
+
+@test sprint(show, Expr(:foo)) == "Expr(:foo)"
 
 @testset "printing of function types" begin
     s = sprint(show, MIME("text/plain"), typeof(sin))
