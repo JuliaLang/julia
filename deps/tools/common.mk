@@ -27,8 +27,12 @@ endif
 ifneq ($(VERBOSE), 0)
 CMAKE_COMMON += -DCMAKE_VERBOSE_MAKEFILE=ON
 endif
+ifeq ($(BUILD_OS),WINNT)
+CMAKE_COMMON += -DCMAKE_C_COMPILER="$$(cygpath -m $$(which $(CC_BASE)))"
+else
 # The call to which here is to work around https://cmake.org/Bug/view.php?id=14366
 CMAKE_COMMON += -DCMAKE_C_COMPILER="$$(which $(CC_BASE))"
+endif
 ifneq ($(strip $(CMAKE_CC_ARG)),)
 CMAKE_COMMON += -DCMAKE_C_COMPILER_ARG1="$(CMAKE_CC_ARG) $(SANITIZE_OPTS)"
 endif
