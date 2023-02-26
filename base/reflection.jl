@@ -651,7 +651,7 @@ end
 
 iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
 isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
-has_free_typevars(@nospecialize(t)) = ccall(:jl_has_free_typevars, Cint, (Any,), t) != 0
+has_free_typevars(@nospecialize t) = ccall(:jl_has_free_typevars, Cint, (Any,), t) != 0
 
 # equivalent to isa(v, Type) && isdispatchtuple(Tuple{v}) || v === Union{}
 # and is thus perhaps most similar to the old (pre-1.0) `isleaftype` query
@@ -1955,11 +1955,20 @@ See also: [`propertynames`](@ref), [`hasfield`](@ref).
 hasproperty(x, s::Symbol) = s in propertynames(x)
 
 """
+    TypeofValid(t)
+
+Behaves like `Core.Typeof`, except that a type with a free typevar does not get
+turned into `Type` and is thus valid in a signature without further UnionAll
+rewrapping.
+"""
+TypeofValid(@nospecialize(x)) = x isa Type && x isa Type{x} ? Type{x} : typeof(x)
+
+"""
     @invoke f(arg::T, ...; kwargs...)
 
 Provides a convenient way to call [`invoke`](@ref) by expanding
 `@invoke f(arg1::T1, arg2::T2; kwargs...)` to `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)`.
-When an argument's type annotation is omitted, it's replaced with `Core.Typeof` that argument.
+When an argument's type annotation is omitted, it's replaced with `Base.TypeofValid` that argument.
 To invoke a method where an argument is untyped or explicitly typed as `Any`, annotate the
 argument with `::Any`.
 
@@ -1973,7 +1982,7 @@ It also supports the following syntax:
 
 ```jldoctest
 julia> @macroexpand @invoke f(x::T, y)
-:(Core.invoke(f, Tuple{T, Core.Typeof(y)}, x, y))
+:(Core.invoke(f, Tuple{T, Base.TypeofValid(y)}, x, y))
 
 julia> @invoke 420::Integer % Unsigned
 0x00000000000001a4
@@ -2014,7 +2023,7 @@ macro invoke(ex)
             push!(types.args, arg.args[2])
         else
             push!(out.args, arg)
-            push!(types.args, Expr(:call, GlobalRef(Core, :Typeof), arg))
+            push!(types.args, Expr(:call, GlobalRef(Base, :TypeofValid), arg))
         end
     end
     return esc(out)

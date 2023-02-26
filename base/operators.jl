@@ -906,9 +906,6 @@ julia> [0 1; 2 3] .|> (x -> x^2) |> sum
 """
 |>(x, f) = f(x)
 
-_stable_typeof(x) = typeof(x)
-_stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
-
 """
     f = Returns(value)
 
@@ -935,7 +932,7 @@ julia> f.value
 struct Returns{V} <: Function
     value::V
     Returns{V}(value) where {V} = new{V}(value)
-    Returns(value) = new{_stable_typeof(value)}(value)
+    Returns(value) = new{TypeofValid(value)}(value)
 end
 
 (obj::Returns)(@nospecialize(args...); @nospecialize(kw...)) = obj.value
@@ -1025,7 +1022,7 @@ struct ComposedFunction{O,I} <: Function
     outer::O
     inner::I
     ComposedFunction{O, I}(outer, inner) where {O, I} = new{O, I}(outer, inner)
-    ComposedFunction(outer, inner) = new{Core.Typeof(outer),Core.Typeof(inner)}(outer, inner)
+    ComposedFunction(outer, inner) = new{TypeofValid(outer),TypeofValid(inner)}(outer, inner)
 end
 
 (c::ComposedFunction)(x...; kw...) = call_composed(unwrap_composed(c), x, kw)
@@ -1101,8 +1098,7 @@ struct Fix1{F,T} <: Function
     f::F
     x::T
 
-    Fix1(f::F, x) where {F} = new{F,_stable_typeof(x)}(f, x)
-    Fix1(f::Type{F}, x) where {F} = new{Type{F},_stable_typeof(x)}(f, x)
+    Fix1(f, x) = new{TypeofValid(f),TypeofValid(x)}(f, x)
 end
 
 (f::Fix1)(y) = f.f(f.x, y)
@@ -1118,8 +1114,7 @@ struct Fix2{F,T} <: Function
     f::F
     x::T
 
-    Fix2(f::F, x) where {F} = new{F,_stable_typeof(x)}(f, x)
-    Fix2(f::Type{F}, x) where {F} = new{Type{F},_stable_typeof(x)}(f, x)
+    Fix2(f, x) = new{TypeofValid(f),TypeofValid(x)}(f, x)
 end
 
 (f::Fix2)(y) = f.f(y, f.x)
@@ -1256,7 +1251,7 @@ See also [`splat`](@ref).
 """
 struct Splat{F} <: Function
     f::F
-    Splat(f) = new{Core.Typeof(f)}(f)
+    Splat(f) = new{TypeofValid(f)}(f)
 end
 (s::Splat)(args) = s.f(args...)
 print(io::IO, s::Splat) = print(io, "splat(", s.f, ')')

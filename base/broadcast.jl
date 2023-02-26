@@ -175,8 +175,8 @@ end
 Broadcasted(f::F, args::Args, axes=nothing) where {F, Args<:Tuple} =
     Broadcasted{typeof(combine_styles(args...))}(f, args, axes)
 function Broadcasted{Style}(f::F, args::Args, axes=nothing) where {Style, F, Args<:Tuple}
-    # using Core.Typeof rather than F preserves inferrability when f is a type
-    Broadcasted{Style, typeof(axes), Core.Typeof(f), Args}(f, args, axes)
+    # using TypeofValid rather than F preserves inferrability when f is a type
+    Broadcasted{Style, typeof(axes), Base.TypeofValid(f), Args}(f, args, axes)
 end
 
 struct AndAnd end
