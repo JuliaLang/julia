@@ -93,6 +93,23 @@ end
 
 @test isless('a','b')
 
+@testset "isless on pairs of integers (because there is a fastpath)" begin
+    @test isless((1,2), (1,3))
+    @test isless((0,-2), (0,2))
+    @test isless((-1,2), (1,2))
+    @test isless((-1,-2), (1,2))
+    @test !isless((1,3), (1,2))
+    @test !isless((0,2), (0,-2))
+    @test !isless((1,2), (-1,2))
+    @test !isless((1,2), (-1,-2))
+    @test !isless((-1,-2), (-1,-2))
+
+    @test isless((typemin(Int), typemin(Int)), (0,0))
+    @test isless((1, 1), (Int8(2), Int8(2)))
+    @test !isless((UInt8(200),Int8(-1)), (UInt8(200),Int8(-1)))
+    @test isless((1, 1), (1, unsigned(2)))
+end
+
 @testset "isgreater" begin
     # isgreater should be compatible with min.
     min1(a, b) = Base.isgreater(a, b) ? b : a
