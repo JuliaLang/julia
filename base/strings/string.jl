@@ -527,25 +527,35 @@ function iterate_continued(s, i::Int, u::UInt32)
     return reinterpret(Char, u), i
 end
 
-@propagate_inbounds function getindex(s::String, i::Int)
-    bytes = codeunits(s)
-    n = ncodeunits(s)
-    @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
-    @inbounds b = bytes[i]
+@propagate_inbounds function getindex4(s::String, i::Int)
+    b = codeunit(s,i)
+    u = UInt32(b) << 24
+    #Check for ascii or end of string
+    (b >= 0x80) || return reinterpret(Char, u) #return here is faster than @got ret
+    return getindex_continued(s,i,b)
+end
 
-    shift = 32
-    u = UInt32(b) << (shift -= 8)
-    state = _iutf8_dfa_step(_IUTF8_DFA_ACCEPT,b)
-    state == _IUTF8_DFA_INVALID && @goto ret
+function getindex_continued(s::String, i::Int, b::UInt8)
+    u = UInt32(b) << 24 #Recaculating u is faster than passing is as a argument
+    n = ncodeunits(s)
+    (i == n ) && @goto ret
+    shift = 24
+    state = _iutf8_dfa_step(_IUTF8_DFA_ACCEPT, b)
+    if (state == _IUTF8_DFA_INVALID)
+        #Checks whether i not at the beginning of a character which is an error
+        # or a single invalid byte which returns
+        @inbounds isvalid(s,i) && @goto ret
+        Base.string_index_err(s, i)
+    end
     for j = 1:3
         k = i + j
-       @inbounds b = bytes[k]
+       @inbounds b = codeunit(s,k)
         state = _iutf8_dfa_step(state,b)
-        state == _IUTF8_DFA_INVALID && break
+        state == _IUTF8_DFA_INVALID && break #If the state machine goes to invalid return value from before byte was processed
         u |= UInt32(b) << (shift -= 8)
-        (state == _IUTF8_DFA_ACCEPT) | (k == n) && break
+        ((state == _IUTF8_DFA_ACCEPT) | (k == n)) && break
     end
-    @label ret
+@label ret
     return reinterpret(Char, u)
 end
 
