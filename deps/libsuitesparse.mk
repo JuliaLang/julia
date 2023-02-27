@@ -1,40 +1,27 @@
 ## LIBSUITESPARSE ##
 include $(SRCDIR)/libsuitesparse.version
 
-ifeq ($(USE_BLAS64), 1)
-UMFPACK_CONFIG := -DLONGBLAS='long long'
-CHOLMOD_CONFIG := -DLONGBLAS='long long'
-SPQR_CONFIG := -DLONGBLAS='long long'
-UMFPACK_CONFIG += -DSUN64
-CHOLMOD_CONFIG += -DSUN64
-SPQR_CONFIG += -DSUN64
-endif
-
-# Disable linking to libmetis
-CHOLMOD_CONFIG += -DNPARTITION
-
 ifneq ($(USE_BINARYBUILDER_LIBSUITESPARSE), 1)
 
 LIBSUITESPARSE_PROJECTS := AMD BTF CAMD CCOLAMD COLAMD CHOLMOD LDL KLU UMFPACK RBio SPQR
 LIBSUITESPARSE_LIBS := $(addsuffix .*$(SHLIB_EXT)*,suitesparseconfig amd btf camd ccolamd colamd cholmod klu ldl umfpack rbio spqr)
 
-SUITESPARSE_LIB := $(LDFLAGS) -L"$(abspath $(BUILDDIR))/SuiteSparse-$(LIBSUITESPARSE_VER)/lib"
-ifeq ($(OS), Darwin)
-SUITESPARSE_LIB += $(RPATH_ESCAPED_ORIGIN)
-endif
-LIBSUITESPARSE_MFLAGS := CC="$(CC) $(SANITIZE_OPTS)" CXX="$(CXX) $(SANITIZE_OPTS)" F77="$(FC)" \
-	  AR="$(AR)" RANLIB="$(RANLIB)" \
-	  BLAS="-L$(build_shlibdir) -lblastrampoline" \
-	  LAPACK="-L$(build_shlibdir) -lblastrampoline" \
-	  LDFLAGS="$(SUITESPARSE_LIB) $(SANITIZE_LDFLAGS)" CFOPENMP="" CUDA=no CUDA_PATH="" \
-	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" \
-	  CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)" \
-	  SPQR_CONFIG="$(SPQR_CONFIG)"
-ifeq ($(OS),WINNT)
-LIBSUITESPARSE_MFLAGS += UNAME=Windows
-else
-LIBSUITESPARSE_MFLAGS += UNAME=$(OS)
-endif
+LIBSUITESPARSE_CMAKE_FLAGS := $(CMAKE_COMMON) \
+	  -DCMAKE_BUILD_TYPE=Release \
+	  -DENABLE_CUDA=NO \
+	  -DNFORTRAN=YES \
+	  -DNOPENMP=YES \
+	  -DNPARTITION=YES \
+	  -DBLAS_FOUND=1 \
+	  -DBLAS_LIBRARIES="$(build_shlibdir)/libblastrampoline.$(SHLIB_EXT)" \
+	  -DBLAS_LINKER_FLAGS="blastrampoline" \
+	  -DBLAS_UNDERSCORE=ON \
+	  -DBLA_VENDOR="blastrampoline" \
+	  -DBLAS64_SUFFIX="_64" \
+	  -DALLOW_64BIT_BLAS=ON \
+	  -DLAPACK_FOUND=1 \
+	  -DLAPACK_LIBRARIES="$(build_shlibdir)/libblastrampoline.$(SHLIB_EXT)" \
+	  -DLAPACK_LINKER_FLAGS="blastrampoline"
 
 $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER).tar.gz: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ https://github.com/DrTimothyAldenDavis/SuiteSparse/archive/v$(LIBSUITESPARSE_VER).tar.gz
@@ -48,19 +35,16 @@ $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-extracted: $(SRCCACHE)/Suit
 checksum-libsuitesparse: $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER).tar.gz
 	$(JLCHECKSUM) $<
 
-$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/SuiteSparse-shlib.patch-applied: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-extracted
-	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/SuiteSparse-shlib.patch
-	echo 1 > $@
-$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/SuiteSparse-shlib.patch-applied
-
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: | $(build_prefix)/manifest/blastrampoline
 
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-extracted
-	$(MAKE) -C $(dir $<)SuiteSparse_config library config $(LIBSUITESPARSE_MFLAGS)
-	$(INSTALL_NAME_CMD)libsuitesparseconfig.$(SHLIB_EXT) $(dir $<)lib/libsuitesparseconfig.$(SHLIB_EXT)
-	for PROJ in $(LIBSUITESPARSE_PROJECTS); do \
-		$(MAKE) -C $(dir $<)$${PROJ} library $(LIBSUITESPARSE_MFLAGS) || exit 1; \
-		$(INSTALL_NAME_CMD)lib`echo $${PROJ} | tr A-Z a-z`.$(SHLIB_EXT) $(dir $<)lib/lib`echo $${PROJ} | tr A-Z a-z`.$(SHLIB_EXT) || exit 1; \
+	cd $(dir $<); \
+	for PROJ in SuiteSparse_config $(LIBSUITESPARSE_PROJECTS); do \
+		cd $${PROJ}/build || exit 1; \
+		$(CMAKE) .. $(LIBSUITESPARSE_CMAKE_FLAGS) || exit 1; \
+		make || exit 1; \
+		make install || exit 1; \
+		cd ../..; \
 	done
 	echo 1 > $@
 
@@ -78,11 +62,6 @@ $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-checked: $(BUILDDIR)/SuiteSp
 UNINSTALL_suitesparse := $(LIBSUITESPARSE_VER) manual_suitesparse $(LIBSUITESPARSE_LIBS)
 
 $(build_prefix)/manifest/libsuitesparse: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled | $(build_prefix)/manifest $(build_shlibdir)
-	for lib in $(LIBSUITESPARSE_LIBS); do \
-		cp -a $(dir $<)lib/lib$${lib} $(build_shlibdir) || exit 1; \
-	done
-	#cp -a $(dir $<)lib/* $(build_shlibdir)
-	#cp -a $(dir $<)include/* $(build_includedir)
 	echo $(UNINSTALL_libsuitesparse) > $@
 
 clean-libsuitesparse: uninstall-libsuitesparse
