@@ -36,6 +36,14 @@
     e = try node.val = :q catch e e end
     @test occursin("immutable", e.msg) && occursin("SyntaxData", e.msg)
 
+    # copy
+    t = parse(SyntaxNode, "a*b + c")
+    ct = copy(t)
+    ct.data = nothing
+    @test ct.data === nothing && t.data !== nothing
+    @test child(ct, 1).parent === ct
+    @test child(ct, 1) !== child(t, 1)
+
     node = parse(SyntaxNode, "f()")
     push!(node, parse(SyntaxNode, "x"))
     @test length(children(node)) == 2

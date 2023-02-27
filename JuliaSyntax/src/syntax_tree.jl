@@ -244,6 +244,21 @@ function Base.push!(node::SN, child::SN) where SN<:AbstractSyntaxNode
     push!(args, child)
 end
 
+function Base.copy(node::TreeNode)
+    # copy the container but not the data (ie, deep copy the tree, shallow copy the data). copy(::Expr) is similar
+    # copy "un-parents" the top-level `node` that you're copying
+    newnode = typeof(node)(nothing, haschildren(node) ? typeof(node)[] : nothing, copy(node.data))
+    for child in children(node)
+        newchild = copy(child)
+        newchild.parent = newnode
+        push!(newnode, newchild)
+    end
+    return newnode
+end
+
+# shallow-copy the data
+Base.copy(data::SyntaxData) = SyntaxData(data.source, data.raw, data.position, data.val)
+
 function build_tree(::Type{SyntaxNode}, stream::ParseStream; filename=nothing, first_line=1, kws...)
     green_tree = build_tree(GreenNode, stream; kws...)
     source = SourceFile(sourcetext(stream), filename=filename, first_line=first_line)
