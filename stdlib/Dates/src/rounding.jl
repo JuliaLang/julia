@@ -250,8 +250,8 @@ shortcut for `round(Dates.Hour(1), x)`.
 julia> round(Week, Day(16))
 2 weeks
 
-julia> round(Minute(44), Minute(15))
-0 minutes
+julia> round(Minute(15), Minute(44))
+45 minutes
 
 julia> round(Day, Hour(36))
 2 days

@@ -1,10 +1,58 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module RoundingTestsDep
+module RoundingTestsDeprecated
 
 using Test
 using Dates
 
+
+@testset "Basic rounding" begin
+    dt = Dates.Date(2016, 2, 28)    # Sunday
+    @test floor(dt, Dates.Year) == Dates.Date(2016)
+    @test floor(dt, Dates.Year(5)) == Dates.Date(2015)
+    @test floor(dt, Dates.Year(10)) == Dates.Date(2010)
+    @test floor(dt, Dates.Quarter) == Dates.Date(2016, 1)
+    @test floor(dt, Dates.Quarter(6)) == Dates.Date(2016, 1)
+    @test floor(dt, Dates.Month) == Dates.Date(2016, 2)
+    @test floor(dt, Dates.Month(6)) == Dates.Date(2016, 1)
+    @test floor(dt, Dates.Week) == Dates.toprev(dt, Dates.Monday)
+    @test ceil(dt, Dates.Year) == Dates.Date(2017)
+    @test ceil(dt, Dates.Year(5)) == Dates.Date(2020)
+    @test ceil(dt, Dates.Quarter) == Dates.Date(2016, 4)
+    @test ceil(dt, Dates.Quarter(6)) == Dates.Date(2017, 7)
+    @test ceil(dt, Dates.Month) == Dates.Date(2016, 3)
+    @test ceil(dt, Dates.Month(6)) == Dates.Date(2016, 7)
+    @test ceil(dt, Dates.Week) == Dates.tonext(dt, Dates.Monday)
+    @test round(dt, Dates.Year) == Dates.Date(2016)
+    @test round(dt, Dates.Month) == Dates.Date(2016, 3)
+    @test round(dt, Dates.Week) == Dates.Date(2016, 2, 29)
+
+    dt = Dates.DateTime(2016, 2, 28, 15, 10, 50, 500)
+    @test floor(dt, Dates.Day) == Dates.DateTime(2016, 2, 28)
+    @test floor(dt, Dates.Hour) == Dates.DateTime(2016, 2, 28, 15)
+    @test floor(dt, Dates.Hour(2)) == Dates.DateTime(2016, 2, 28, 14)
+    @test floor(dt, Dates.Hour(12)) == Dates.DateTime(2016, 2, 28, 12)
+    @test floor(dt, Dates.Minute) == Dates.DateTime(2016, 2, 28, 15, 10)
+    @test floor(dt, Dates.Minute(15)) == Dates.DateTime(2016, 2, 28, 15, 0)
+    @test floor(dt, Dates.Second) == Dates.DateTime(2016, 2, 28, 15, 10, 50)
+    @test floor(dt, Dates.Second(30)) == Dates.DateTime(2016, 2, 28, 15, 10, 30)
+    @test ceil(dt, Dates.Day) == Dates.DateTime(2016, 2, 29)
+    @test ceil(dt, Dates.Hour) == Dates.DateTime(2016, 2, 28, 16)
+    @test ceil(dt, Dates.Hour(2)) == Dates.DateTime(2016, 2, 28, 16)
+    @test ceil(dt, Dates.Hour(12)) == Dates.DateTime(2016, 2, 29, 0)
+    @test ceil(dt, Dates.Minute) == Dates.DateTime(2016, 2, 28, 15, 11)
+    @test ceil(dt, Dates.Minute(15)) == Dates.DateTime(2016, 2, 28, 15, 15)
+    @test ceil(dt, Dates.Second) == Dates.DateTime(2016, 2, 28, 15, 10, 51)
+    @test ceil(dt, Dates.Second(30)) == Dates.DateTime(2016, 2, 28, 15, 11, 0)
+    @test round(dt, Dates.Day) == Dates.DateTime(2016, 2, 29)
+    @test round(dt, Dates.Hour) == Dates.DateTime(2016, 2, 28, 15)
+    @test round(dt, Dates.Hour(2)) == Dates.DateTime(2016, 2, 28, 16)
+    @test round(dt, Dates.Hour(12)) == Dates.DateTime(2016, 2, 28, 12)
+    @test round(dt, Dates.Minute) == Dates.DateTime(2016, 2, 28, 15, 11)
+    @test round(dt, Dates.Minute(15)) == Dates.DateTime(2016, 2, 28, 15, 15)
+    @test round(dt, Dates.Second) == Dates.DateTime(2016, 2, 28, 15, 10, 51)
+    @test round(dt, Dates.Second(30)) == Dates.DateTime(2016, 2, 28, 15, 11, 0)
+end
 @testset "Rounding for dates at the rounding epoch (year 0000)" begin
     dt = Dates.DateTime(0)
     @test floor(dt, Dates.Year) == dt
