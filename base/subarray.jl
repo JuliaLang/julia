@@ -461,3 +461,14 @@ function _indices_sub(i1::AbstractArray, I...)
 end
 
 has_offset_axes(S::SubArray) = has_offset_axes(S.indices...)
+
+# faster implementation of mapreduce for "reversed" FastSubArray with stride1 == -1
+function mapreduce(f, op, a::FastSubArray; dims::T=:, init=_InitialValue()) where T
+    if T == Colon && a.stride1 == -1
+        fi, li = a.offset1 .- (firstindex(a), lastindex(a))
+        b = view(parent(a), li:fi)
+        invoke(mapreduce, Tuple{Any,Any,AbstractArray}, f, op, b; dims, init)
+    else
+        invoke(mapreduce, Tuple{Any,Any,AbstractArray}, f, op, a; dims, init)
+    end
+end
