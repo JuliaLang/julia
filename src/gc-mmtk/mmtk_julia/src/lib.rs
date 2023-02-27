@@ -135,14 +135,14 @@ pub struct Julia_Upcalls {
         closure: &mut dyn EdgeVisitor<JuliaVMEdge>,
         process_edge: ProcessEdgeFn,
     ),
-    pub get_stackbase: extern "C" fn(tid: u16) -> u64,
+    pub get_stackbase: extern "C" fn(tid: u16) -> usize,
     pub calculate_roots: extern "C" fn(tls: OpaquePointer),
     pub run_finalizer_function:
         extern "C" fn(obj: ObjectReference, function: Address, is_ptr: bool),
-    pub get_jl_last_err: extern "C" fn() -> u64,
-    pub set_jl_last_err: extern "C" fn(errno: u64),
-    pub get_lo_size: extern "C" fn(object: ObjectReference) -> u64,
-    pub get_so_size: extern "C" fn(object: ObjectReference) -> u64,
+    pub get_jl_last_err: extern "C" fn() -> u32,
+    pub set_jl_last_err: extern "C" fn(errno: u32),
+    pub get_lo_size: extern "C" fn(object: ObjectReference) -> usize,
+    pub get_so_size: extern "C" fn(object: ObjectReference) -> usize,
     pub get_object_start_ref: extern "C" fn(object: ObjectReference) -> Address,
     pub wait_for_the_world: extern "C" fn(),
     pub set_gc_initial_state: extern "C" fn(tls: OpaquePointer) -> i8,
@@ -153,7 +153,7 @@ pub struct Julia_Upcalls {
     pub mark_julia_object_as_scanned: extern "C" fn(obj: Address),
     pub julia_object_has_been_scanned: extern "C" fn(obj: Address) -> u8,
     pub mmtk_sweep_malloced_array: extern "C" fn(),
-    pub wait_in_a_safepoint: extern "C" fn() -> i8,
+    pub wait_in_a_safepoint: extern "C" fn(),
     pub exit_from_safepoint: extern "C" fn(old_state: i8),
 }
 
