@@ -726,6 +726,42 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     end
 end
 
+let exename = `$(Base.julia_cmd(; cpu_target="native;native")) --startup-file=no --color=no`
+    # --pkgimages with multiple cpu targets
+    @testset let v = readchomperrors(`$exename --pkgimages=no`)
+        @test !v[1]
+        @test isempty(v[2])
+        @test v[3] == "ERROR: More than one command line CPU targets specified without a `--output-` flag specified"
+    end
+
+    @test readchomp(`$exename --pkgimages=yes -e '
+        println("cpu_target = $(unsafe_string(Base.JLOptions().cpu_target)) and use_pkgimages = $(Base.JLOptions().use_pkgimages)")'`) ==
+        "cpu_target = native;native and use_pkgimages = 1"
+end
+
+# Object file with multiple cpu targets
+@testset "Object file for multiple microarchitectures" begin
+    julia_path = joinpath(Sys.BINDIR, Base.julia_exename())
+    outputo_file = tempname()
+    write(outputo_file, "1")
+    object_file = tempname() * ".o"
+
+    # This is to test that even with `pkgimages=no`, we can create object file
+    # with multiple cpu-targets
+    # The cmd is checked for `--object-o` as soon as it is run. So, to avoid long
+    # testing times, intentionally don't pass `--sysimage`; when we reach the
+    # corresponding error, we know that `check_cmdline` has already passed
+    let v = readchomperrors(`$julia_path
+        --cpu-target='native;native'
+        --output-o=$object_file $outputo_file
+        --pkgimages=no`)
+
+        @test v[1] == false
+        @test v[2] == ""
+        @test !contains(v[3], "More than one command line CPU targets specified")
+        @test v[3] == "ERROR: File \"boot.jl\" not found"
+    end
+end
 
 # Find the path of libjulia (or libjulia-debug, as the case may be)
 # to use as a dummy shlib to open
