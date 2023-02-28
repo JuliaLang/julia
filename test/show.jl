@@ -2123,6 +2123,9 @@ end
     @test_repr "Union{Bool, Nothing}[1, 0, nothing]"
 end
 
+# issue #26847
+@test_repr "Union{Missing, Float32}[1.0]"
+
 # issue #30505
 @test repr(Union{Tuple{Char}, Tuple{Char, Char}}[('a','b')]) == "Union{Tuple{Char}, Tuple{Char, Char}}[('a', 'b')]"
 
