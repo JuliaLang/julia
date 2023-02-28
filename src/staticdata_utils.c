@@ -636,6 +636,10 @@ static int64_t write_header(ios_t *s, uint8_t pkgimage)
     const char *branch = jl_git_branch(), *commit = jl_git_commit();
     ios_write(s, branch, strlen(branch)+1);
     ios_write(s, commit, strlen(commit)+1);
+    write_uint64(s, jl_base_module->build_id.hi);
+    write_uint64(s, jl_base_module->build_id.lo);
+    write_uint64(s, jl_base_module->uuid.hi);
+    write_uint64(s, jl_base_module->uuid.lo);
     write_uint8(s, pkgimage);
     int64_t checksumpos = ios_pos(s);
     write_uint64(s, 0); // eventually will hold checksum for the content portion of this (build_id.hi)
@@ -1170,6 +1174,10 @@ static int readstr_verify(ios_t *s, const char *str, int include_null)
     return 1;
 }
 
+static int read_uuid_verify(ios_t *s, uint64_t hi, uint64_t lo) {
+    return read_uint64(s) == hi && read_uint64(s) == lo;
+}
+
 JL_DLLEXPORT uint64_t jl_read_verify_header(ios_t *s, uint8_t *pkgimage, int64_t *dataendpos, int64_t *datastartpos)
 {
     uint16_t bom;
@@ -1182,7 +1190,9 @@ JL_DLLEXPORT uint64_t jl_read_verify_header(ios_t *s, uint8_t *pkgimage, int64_t
         readstr_verify(s, JL_BUILD_ARCH, 1) &&
         readstr_verify(s, JULIA_VERSION_STRING, 1) &&
         readstr_verify(s, jl_git_branch(), 1) &&
-        readstr_verify(s, jl_git_commit(), 1))
+        readstr_verify(s, jl_git_commit(), 1) &&
+        read_uuid_verify(s, jl_base_module->build_id.hi, jl_base_module->build_id.lo) &&
+        read_uuid_verify(s, jl_base_module->uuid.hi, jl_base_module->uuid.lo))
     {
         *pkgimage = read_uint8(s);
         checksum = read_uint64(s);
