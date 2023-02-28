@@ -212,10 +212,10 @@ const _IUTF8_DFA_TABLE, _IUTF8_DFA_REVERSE_TABLE = begin
                                 [4,  4,  4,  4] ]
 
 
-    f(from,to) = _IUTF8State(shifts[to+1]) << shifts[from+1]
-    r(state_row) = |([f(n-1,state_row[n]) for n = 1:length(state_row)]...)
-    forward_class_rows = [r(forward_state_table[n]) for n = 1:length(forward_state_table)]
-    reverse_class_rows = [r(reverse_state_table[n]) for n = 1:length(reverse_state_table)]
+    f(from, to) = _IUTF8State(shifts[to + 1]) << shifts[from + 1]
+    r(state_row) = |([f(n - 1, state_row[n]) for n in 1:length(state_row)]...)
+    forward_class_rows = [r(forward_state_table[n]) for n in 1:length(forward_state_table)]
+    reverse_class_rows = [r(reverse_state_table[n]) for n in 1:length(reverse_state_table)]
 
     byte_class = [  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    #  0x00:0x0F      00000000:00001111
                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    #  0x10:0x1F      00010000:00011111
@@ -233,19 +233,23 @@ const _IUTF8_DFA_TABLE, _IUTF8_DFA_REVERSE_TABLE = begin
                     2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,    #  0xD0:0xDF      11010000:11011111
                     3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,    #  0xE0:0xEF      11100000:11101111
                     4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5  ]  #  0xF0:0xFF      11110000:11111111
-    forward_dfa_table = zeros(_IUTF8State,256)
-    reverse_dfa_table = zeros(_IUTF8State,256)
-    for n = 1:256
-        forward_dfa_table[n] = forward_class_rows[1+byte_class[n]]
-        reverse_dfa_table[n] = reverse_class_rows[1+byte_class[n]]
+    forward_dfa_table = zeros(_IUTF8State, 256)
+    reverse_dfa_table = zeros(_IUTF8State, 256)
+    for n in 1:256
+        forward_dfa_table[n] = forward_class_rows[1 + byte_class[n]]
+        reverse_dfa_table[n] = reverse_class_rows[1 + byte_class[n]]
     end
     (forward_dfa_table, reverse_dfa_table)
 end
 ##
-@inline _iutf8_dfa_step(state::_IUTF8State, byte::UInt8) = @inbounds (_IUTF8_DFA_TABLE[byte+1] >> state) & _IUTF8_SHIFT_MASK
+@inline function _iutf8_dfa_step(state::_IUTF8State, byte::UInt8)
+    @inbounds (_IUTF8_DFA_TABLE[byte + 1] >> state) & _IUTF8_SHIFT_MASK
+end
 @inline _iutf8_dfa_isfinished(state::_IUTF8State) = state <= _IUTF8_DFA_INVALID
 
-@inline _iutf8_dfa_reverse_step(state::_IUTF8State, byte::UInt8) = @inbounds (_IUTF8_DFA_REVERSE_TABLE[byte+1] >> state) & _IUTF8_SHIFT_MASK
+@inline function _iutf8_dfa_reverse_step(state::_IUTF8State, byte::UInt8)
+    @inbounds (_IUTF8_DFA_REVERSE_TABLE[byte + 1] >> state) & _IUTF8_SHIFT_MASK
+end
 @inline _iutf8_dfa_reverse_isfinished(state::_IUTF8State) = state <= _IUTF8_DFA_INVALID
 
 
@@ -257,14 +261,14 @@ end
 @inline function _thisind_str(s, i::Int)
     i == 0 && return 0
     n = ncodeunits(s)
-    (i == n + 1)|( i == 1) && return i
+    (i == n + 1) | (i == 1) && return i
     @boundscheck Base.between(i, 1, n) || throw(BoundsError(s, i))
     bytes = codeunits(s)
     state = _IUTF8_DFA_ACCEPT
-    for j=0:3
+    for j in 0:3
         k = i - j
-        state  = @inbounds _iutf8_dfa_reverse_step(state,bytes[k])
-        state == _IUTF8_DFA_ACCEPT  && return k
+        state = @inbounds _iutf8_dfa_reverse_step(state, bytes[k])
+        state == _IUTF8_DFA_ACCEPT && return k
         (state == _IUTF8_DFA_INVALID) | (k <= 1) && return i
     end
     return i # Should never get here
@@ -279,16 +283,16 @@ end
     @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
     bytes = codeunits(s)
     @inbounds l = bytes[i]
-    (l < 0x80) | (0xf8 ≤ l) && return i+1
+    (l < 0x80) | (0xf8 ≤ l) && return i + 1
     if l < 0xc0
         i′ = @inbounds thisind(s, i)
-        i′ >= i  && return i+1
+        i′ >= i && return i + 1
         i = i′
     end
     state = _IUTF8_DFA_ACCEPT
-    for j=0:3
+    for j in 0:3
         k = i + j
-        state  = @inbounds _iutf8_dfa_step(state,bytes[k])
+        state = @inbounds _iutf8_dfa_step(state, bytes[k])
         (state == _IUTF8_DFA_INVALID) && return k #The screening above makes sure this is never returned when k == i
         (state == _IUTF8_DFA_ACCEPT) | (k >= n) && return k + 1
     end
@@ -500,62 +504,62 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
     (i % UInt) - 1 < ncodeunits(s) || return nothing
     b = @inbounds codeunit(s, i)
     u = UInt32(b) << 24
-    between(b, 0x80, 0xf7) || return reinterpret(Char, u), i+1
-    return @noinline iterate_continued(s, i, u)
+    (b < 0x80) && return reinterpret(Char, u), i + 1
+    return iterate_continued(s, i, b, u)
 end
 
-# duck-type s so that external UTF-8 string packages like StringViews can hook in
-function iterate_continued(s, i::Int, u::UInt32)
-    u < 0xc0000000 && (i += 1; @goto ret)
+function iterate_continued(s::String, i::Int, b::UInt8, u::UInt32)
     n = ncodeunits(s)
-    # first continuation byte
-    (i += 1) > n && @goto ret
-    @inbounds b = codeunit(s, i)
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b) << 16
-    # second continuation byte
-    ((i += 1) > n) | (u < 0xe0000000) && @goto ret
-    @inbounds b = codeunit(s, i)
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b) << 8
-    # third continuation byte
-    ((i += 1) > n) | (u < 0xf0000000) && @goto ret
-    @inbounds b = codeunit(s, i)
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b); i += 1
-@label ret
-    return reinterpret(Char, u), i
+    state = _IUTF8_DFA_ACCEPT
+    state = _iutf8_dfa_step(state, b)
+    k = i
+    state <= _IUTF8_DFA_INVALID && @goto ret_kp1
+    shift = 24
+    for j in 1:3
+        k = i + j
+        @inbounds b = codeunit(s, k)
+        state = _iutf8_dfa_step(state, b)
+        state == _IUTF8_DFA_INVALID && @goto ret
+        u |= UInt32(b) << (shift -= 8)
+        (state == _IUTF8_DFA_ACCEPT) && @goto ret_kp1
+        (i >= n) && @goto ret_kp1
+    end
+    @label ret_kp1
+    k += 1
+    @label ret
+    return reinterpret(Char, u), k
 end
+##
 
-@propagate_inbounds function getindex4(s::String, i::Int)
-    b = codeunit(s,i)
+@propagate_inbounds function getindex(s::String, i::Int)
+    b = codeunit(s, i)
     u = UInt32(b) << 24
     #Check for ascii or end of string
     (b >= 0x80) || return reinterpret(Char, u) #return here is faster than @got ret
-    return getindex_continued(s,i,b)
+    return getindex_continued(s, i, b)
 end
 
 function getindex_continued(s::String, i::Int, b::UInt8)
     u = UInt32(b) << 24 #Recaculating u is faster than passing is as a argument
     n = ncodeunits(s)
-    (i == n ) && @goto ret
+    (i == n) && @goto ret
     shift = 24
     state = _iutf8_dfa_step(_IUTF8_DFA_ACCEPT, b)
     if (state == _IUTF8_DFA_INVALID)
         #Checks whether i not at the beginning of a character which is an error
         # or a single invalid byte which returns
-        @inbounds isvalid(s,i) && @goto ret
+        @inbounds isvalid(s, i) && @goto ret
         Base.string_index_err(s, i)
     end
-    for j = 1:3
+    for j in 1:3
         k = i + j
-       @inbounds b = codeunit(s,k)
-        state = _iutf8_dfa_step(state,b)
+        @inbounds b = codeunit(s, k)
+        state = _iutf8_dfa_step(state, b)
         state == _IUTF8_DFA_INVALID && break #If the state machine goes to invalid return value from before byte was processed
         u |= UInt32(b) << (shift -= 8)
         ((state == _IUTF8_DFA_ACCEPT) | (k == n)) && break
     end
-@label ret
+    @label ret
     return reinterpret(Char, u)
 end
 
