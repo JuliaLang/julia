@@ -673,8 +673,11 @@ SANITIZE_OPTS :=
 SANITIZE_LDFLAGS :=
 ifeq ($(SANITIZE_MEMORY),1)
 SANITIZE_OPTS += -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
-SANITIZE_LDFLAGS += $(SANITIZE_OPTS) -Wl,--warn-unresolved-symbols
-endif
+SANITIZE_LDFLAGS += $(SANITIZE_OPTS)
+ifneq ($(findstring $(OS),Linux FreeBSD),)
+SANITIZE_LDFLAGS += -Wl,--warn-unresolved-symbols
+endif # OS Linux or FreeBSD
+endif # SANITIZE_MEMORY=1
 ifeq ($(SANITIZE_ADDRESS),1)
 SANITIZE_OPTS += -fsanitize=address
 SANITIZE_LDFLAGS += -fsanitize=address
