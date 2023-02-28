@@ -449,6 +449,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     mi->callbacks = NULL;
     jl_atomic_store_relaxed(&mi->cache, NULL);
     mi->inInference = 0;
+    mi->cache_with_orig = 0;
     jl_atomic_store_relaxed(&mi->precompiled, 0);
     return mi;
 }
