@@ -12,9 +12,6 @@ end
     nothing
 end
 
-# Test that arraysize has proper effect modeling
-@test fully_eliminated(M->(size(M, 2); nothing), (Matrix{Float64},))
-
 # Test that effect modeling for return_type doesn't incorrectly pick
 # up the effects of the function being analyzed
 f_throws() = error()
@@ -454,21 +451,6 @@ let effects = Base.infer_effects(f_setfield_nothrow, ())
     @test Core.Compiler.is_nothrow(effects)
 end
 
-# nothrow for arrayset
-@test Base.infer_effects((Vector{Int},Int,Int)) do a, v, i
-    Base.arrayset(true, a, v, i)
-end |> !Core.Compiler.is_nothrow
-@test Base.infer_effects((Vector{Int},Int,Int)) do a, v, i
-    a[i] = v # may throw
-end |> !Core.Compiler.is_nothrow
-# when bounds checking is turned off, it should be safe
-@test Base.infer_effects((Vector{Int},Int,Int)) do a, v, i
-    Base.arrayset(false, a, v, i)
-end |> Core.Compiler.is_nothrow
-@test Base.infer_effects((Vector{Number},Number,Int)) do a, v, i
-    Base.arrayset(false, a, v, i)
-end |> Core.Compiler.is_nothrow
-
 # even if 2-arg `getfield` may throw, it should be still `:consistent`
 @test Core.Compiler.is_consistent(Base.infer_effects(getfield, (NTuple{5, Float64}, Int)))
 
@@ -700,12 +682,14 @@ end
 end
 @test !Core.Compiler.is_removable_if_unused(Base.infer_effects(unremovable_if_unused3!))
 
-@testset "effects analysis on array ops" begin
+# array ops
+# =========
 
-@testset "effects analysis on array construction" begin
+# allocation
+# ----------
 
+# low-level constructor
 @noinline construct_array(@nospecialize(T), args...) = Array{T}(undef, args...)
-
 # should eliminate safe but dead allocations
 let good_dims = @static Int === Int64 ? (1:10) : (1:8)
     Ns = @static Int === Int64 ? (1:10) : (1:8)
@@ -720,7 +704,6 @@ let good_dims = @static Int === Int64 ? (1:10) : (1:8)
         end
     end
 end
-
 # should analyze throwness correctly
 let bad_dims = [-1, typemax(Int)]
     for dim in bad_dims, N in 1:10
@@ -736,9 +719,132 @@ let bad_dims = [-1, typemax(Int)]
     end
 end
 
-end # @testset "effects analysis on array construction" begin
+# high-level interfaces
+# getindex
+for safesig = Any[
+        (Type{Int},)
+        (Type{Int}, Int)
+        (Type{Int}, Int, Int)
+        (Type{Number},)
+        (Type{Number}, Number)
+        (Type{Number}, Int)
+        (Type{Any},)
+        (Type{Any}, Any,)
+        (Type{Any}, Any, Any)
+    ]
+    let effects = Base.infer_effects(getindex, safesig)
+        @test Core.Compiler.is_consistent_if_notreturned(effects)
+        @test Core.Compiler.is_removable_if_unused(effects)
+    end
+end
+for unsafesig = Any[
+        (Type{Int}, String)
+        (Type{Int}, Any)
+        (Type{Number}, AbstractString)
+        (Type{Number}, Any)
+    ]
+    let effects = Base.infer_effects(getindex, unsafesig)
+        @test !Core.Compiler.is_nothrow(effects)
+    end
+end
+# vect
+for safesig = Any[
+        ()
+        (Int,)
+        (Int, Int)
+    ]
+    let effects = Base.infer_effects(Base.vect, safesig)
+        @test Core.Compiler.is_consistent_if_notreturned(effects)
+        @test Core.Compiler.is_removable_if_unused(effects)
+    end
+end
 
-end # @testset "effects analysis on array ops" begin
+# arrayref
+# --------
+
+let effects = Base.infer_effects(Base.arrayref, (Vector{Any},Int))
+    @test Core.Compiler.is_consistent_if_inaccessiblememonly(effects)
+    @test Core.Compiler.is_effect_free(effects)
+    @test !Core.Compiler.is_nothrow(effects)
+    @test Core.Compiler.is_terminates(effects)
+end
+
+# arrayset
+# --------
+
+let effects = Base.infer_effects(Base.arrayset, (Vector{Any},Any,Int))
+    @test Core.Compiler.is_consistent_if_inaccessiblememonly(effects)
+    @test Core.Compiler.is_effect_free_if_inaccessiblememonly(effects)
+    @test !Core.Compiler.is_nothrow(effects)
+    @test Core.Compiler.is_terminates(effects)
+end
+# nothrow for arrayset
+@test Base.infer_effects((Vector{Int},Int,Int)) do a, v, i
+    Base.arrayset(true, a, v, i)
+end |> !Core.Compiler.is_nothrow
+@test Base.infer_effects((Vector{Int},Int,Int)) do a, v, i
+    a[i] = v # may throw
+end |> !Core.Compiler.is_nothrow
+# when bounds checking is turned off, it should be safe
+@test Base.infer_effects((Vector{Int},Int,Int)) do a, v, i
+    Base.arrayset(false, a, v, i)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Vector{Number},Number,Int)) do a, v, i
+    Base.arrayset(false, a, v, i)
+end |> Core.Compiler.is_nothrow
+
+# arraysize
+# ---------
+
+let effects = Base.infer_effects(Base.arraysize, (Array,Int))
+    @test Core.Compiler.is_consistent_if_inaccessiblememonly(effects)
+    @test Core.Compiler.is_effect_free(effects)
+    @test !Core.Compiler.is_nothrow(effects)
+    @test Core.Compiler.is_terminates(effects)
+end
+# Test that arraysize has proper effect modeling
+@test fully_eliminated(M->(size(M, 2); nothing), (Matrix{Float64},))
+
+# arraylen
+# --------
+
+let effects = Base.infer_effects(Base.arraylen, (Vector{Any},))
+    @test Core.Compiler.is_consistent_if_inaccessiblememonly(effects)
+    @test Core.Compiler.is_effect_free(effects)
+    @test Core.Compiler.is_nothrow(effects)
+    @test Core.Compiler.is_terminates(effects)
+end
+
+# resize
+# ------
+
+for op = Any[
+        Base._growbeg!,
+        Base._growend!,
+        Base._deletebeg!,
+        Base._deleteend!,
+    ]
+    let effects = Base.infer_effects(op, (Vector, Int))
+        @test Core.Compiler.is_effect_free_if_inaccessiblememonly(effects)
+        @test Core.Compiler.is_terminates(effects)
+        @test !Core.Compiler.is_nothrow(effects)
+    end
+end
+
+# end to end
+# ----------
+
+function simple_vec_ops(T, op!, op, xs...)
+    a = T[]
+    op!(a, xs...)
+    return op(a)
+end
+for T = Any[Int,Any], op! = Any[push!,pushfirst!], op = Any[length,size],
+    xs = Any[(Int,), (Int,Int,)]
+    let effects = Base.infer_effects(simple_vec_ops, (Type{T},typeof(op!),typeof(op),xs...))
+        @test Core.Compiler.is_foldable(effects)
+    end
+end
 
 # Test that builtin_effects handles vararg correctly
 @test !Core.Compiler.is_nothrow(Core.Compiler.builtin_effects(Core.Compiler.fallback_lattice, Core.isdefined,
