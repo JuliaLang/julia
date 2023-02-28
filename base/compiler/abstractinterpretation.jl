@@ -30,8 +30,8 @@ function get_max_methods(@nospecialize(f), mod::Module, interp::AbstractInterpre
     return get_max_methods(mod, interp)
 end
 
-function should_infer_this_call(sv::InferenceState)
-    if sv.params.unoptimize_throw_blocks
+function should_infer_this_call(interp::AbstractInterpreter, sv::InferenceState)
+    if InferenceParams(interp).unoptimize_throw_blocks
         # Disable inference of calls in throw blocks, since we're unlikely to
         # need their types. There is one exception however: If up until now, the
         # function has not seen any side effects, we would like to make sure there
@@ -52,7 +52,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
                                   sv::InferenceState, max_methods::Int)
     ⊑ₚ = ⊑(ipo_lattice(interp))
-    if !should_infer_this_call(sv)
+    if !should_infer_this_call(interp, sv)
         add_remark!(interp, sv, "Skipped call in throw block")
         nonoverlayed = false
         if isoverlayed(method_table(interp)) && is_nonoverlayed(sv.ipo_effects)
@@ -2404,13 +2404,13 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         elseif isa(sym, Symbol)
             if isdefined(sv.mod, sym)
                 t = Const(true)
-            elseif sv.params.assume_bindings_static
+            elseif InferenceParams(interp).assume_bindings_static
                 t = Const(false)
             end
         elseif isa(sym, GlobalRef)
             if isdefined(sym.mod, sym.name)
                 t = Const(true)
-            elseif sv.params.assume_bindings_static
+            elseif InferenceParams(interp).assume_bindings_static
                 t = Const(false)
             end
         elseif isexpr(sym, :static_parameter)
@@ -2551,7 +2551,7 @@ function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, fram
         end
     elseif isdefined_globalref(g)
         nothrow = true
-    elseif isa(frame, InferenceState) && frame.params.assume_bindings_static
+    elseif InferenceParams(interp).assume_bindings_static
         consistent = inaccessiblememonly = ALWAYS_TRUE
         rt = Union{}
     end

@@ -325,29 +325,29 @@ static Value *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
 static Value *julia_pgv(jl_codectx_t &ctx, const char *prefix, jl_sym_t *name, jl_module_t *mod, void *addr)
 {
     // emit a GlobalVariable for a jl_value_t, using the prefix, name, and module to
-    // to create a readable name of the form prefixModA.ModB.name
-    size_t len = strlen(jl_symbol_name(name)) + strlen(prefix) + 1;
+    // to create a readable name of the form prefixModA.ModB.name#
+    // reverse-of-reverse algorithm
+    std::string finalname;
+    StringRef name_str(jl_symbol_name(name));
+    finalname.resize(name_str.size() + 1);
+    finalname[0] = '#';
+    std::reverse_copy(name_str.begin(), name_str.end(), finalname.begin() + 1);
     jl_module_t *parent = mod, *prev = NULL;
-    while (parent != NULL && parent != prev) {
-        len += strlen(jl_symbol_name(parent->name))+1;
+    while (parent && parent != prev) {
+        size_t orig_end = finalname.size() + 1;
+        StringRef parent_name(jl_symbol_name(parent->name));
+        finalname.resize(orig_end + parent_name.size());
+        finalname[orig_end - 1] = '.';
+        std::reverse_copy(parent_name.begin(), parent_name.end(), finalname.begin() + orig_end);
         prev = parent;
         parent = parent->parent;
     }
-    char *fullname = (char*)alloca(len);
-    strcpy(fullname, prefix);
-    len -= strlen(jl_symbol_name(name)) + 1;
-    strcpy(fullname + len, jl_symbol_name(name));
-    parent = mod;
-    prev = NULL;
-    while (parent != NULL && parent != prev) {
-        size_t part = strlen(jl_symbol_name(parent->name)) + 1;
-        strcpy(fullname + len - part, jl_symbol_name(parent->name));
-        fullname[len - 1] = '.';
-        len -= part;
-        prev = parent;
-        parent = parent->parent;
-    }
-    return julia_pgv(ctx, fullname, addr);
+    size_t orig_end = finalname.size();
+    StringRef prefix_name(prefix);
+    finalname.resize(orig_end + prefix_name.size());
+    std::reverse_copy(prefix_name.begin(), prefix_name.end(), finalname.begin() + orig_end);
+    std::reverse(finalname.begin(), finalname.end());
+    return julia_pgv(ctx, finalname.c_str(), addr);
 }
 
 static JuliaVariable *julia_const_gv(jl_value_t *val);
