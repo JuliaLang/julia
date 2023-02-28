@@ -2,4 +2,4 @@
 MBEDTLS_JLL_NAME := MbedTLS
 
 ## source build
-MBEDTLS_VER := 2.28.0
+MBEDTLS_VER := 2.28.2
