@@ -45,12 +45,11 @@ clean-patchelf:
 
 distclean-patchelf:
 	rm -rf $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2 \
-		$(SRCCACHE)/patchelf-$(PATCHELF_VER) \
 		$(BUILDDIR)/patchelf-$(PATCHELF_VER)
 
 
 get-patchelf: $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2
-extract-patchelf: $(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-extracted
+extract-patchelf: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/source-extracted
 configure-patchelf: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured
 compile-patchelf: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-compiled
 check-patchelf: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-checked
