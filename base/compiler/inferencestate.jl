@@ -221,14 +221,23 @@ is_effect_overridden(override::EffectsOverride, effect::Symbol) = getfield(overr
 
 add_remark!(::AbstractInterpreter, sv::Union{InferenceState, IRCode}, remark) = return
 
-function bail_out_toplevel_call(::AbstractInterpreter, @nospecialize(callsig), sv::Union{InferenceState, IRCode})
-    return isa(sv, InferenceState) && sv.restrict_abstract_call_sites && !isdispatchtuple(callsig)
+struct InferenceLoopState
+    sig
+    rt
+    effects::Effects
+    function InferenceLoopState(@nospecialize(sig), @nospecialize(rt), effects::Effects)
+        new(sig, rt, effects)
+    end
 end
-function bail_out_call(::AbstractInterpreter, @nospecialize(rt), sv::Union{InferenceState, IRCode})
-    return rt === Any
+
+function bail_out_toplevel_call(::AbstractInterpreter, state::InferenceLoopState, sv::Union{InferenceState, IRCode})
+    return isa(sv, InferenceState) && sv.restrict_abstract_call_sites && !isdispatchtuple(state.sig)
 end
-function bail_out_apply(::AbstractInterpreter, @nospecialize(rt), sv::Union{InferenceState, IRCode})
-    return rt === Any
+function bail_out_call(::AbstractInterpreter, state::InferenceLoopState, sv::Union{InferenceState, IRCode})
+    return state.rt === Any
+end
+function bail_out_apply(::AbstractInterpreter, state::InferenceLoopState, sv::Union{InferenceState, IRCode})
+    return state.rt === Any
 end
 
 was_reached(sv::InferenceState, pc::Int) = sv.ssavaluetypes[pc] !== NOT_FOUND
