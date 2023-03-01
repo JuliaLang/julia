@@ -62,9 +62,19 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 
+define LIBSSH2_INSTALL
+
+ifeq ($$(BUILD_OS),WINNT)
+	mkdir -p $2/$$(build_shlibdir) $2/$$(build_libdir)
+	cp $1/src/libssh2.$$(SHLIB_EXT) $2/$$(build_shlibdir)/libssh2.$$(SHLIB_EXT)
+	cp $1/src/liblibssh2.dll.a $2/$$(build_libdir)/
+else
+	$(call MAKE_INSTALL,$1,$2,$3)
+endif
+endef
 $(eval $(call staged-install, \
 	libssh2,$(LIBSSH2_SRC_DIR), \
-	MAKE_INSTALL,,, \
+	LIBSSH2_INSTALL,,, \
 	$$(INSTALL_NAME_CMD)libssh2.$$(SHLIB_EXT) $$(build_shlibdir)/libssh2.$$(SHLIB_EXT)))
 
 clean-libssh2:
