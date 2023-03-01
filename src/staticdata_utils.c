@@ -519,7 +519,7 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets, jl_arra
                         sig = callee;
                     int ambig = 0;
                     matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing,
-                            -1, 0, world, &min_valid, &max_valid, &ambig);
+                            INT32_MAX, 0, world, &min_valid, &max_valid, &ambig);
                     if (matches == jl_nothing) {
                         callee_ids = NULL; // invalid
                         break;
@@ -867,7 +867,7 @@ static jl_array_t *jl_verify_edges(jl_array_t *targets)
             int ambig = 0;
             // TODO: possibly need to included ambiguities too (for the optimizer correctness)?
             matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing,
-                    -1, 0, world, &min_valid, &max_valid, &ambig);
+                    jl_array_len(expected), 0, world, &min_valid, &max_valid, &ambig);
             if (matches == jl_nothing) {
                 valid = 0;
             }

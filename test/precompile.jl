@@ -936,7 +936,7 @@ precompile_test_harness("code caching") do dir
     j = findfirst(==(tagbad), invalidations)
     @test invalidations[j-1] == "insert_backedges_callee"
     @test isa(invalidations[j-2], Type)
-    @test isa(invalidations[j+1], Vector{Any}) # [nbits(::UInt8)]
+    @test invalidations[j+1] === nothing || isa(invalidations[j+1], Vector{Any}) # [nbits(::UInt8)]
 
     m = only(methods(MB.map_nbits))
     @test !hasvalid(m.specializations[1], world+1) # insert_backedges invalidations also trigger their backedges
