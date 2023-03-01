@@ -3308,7 +3308,7 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_
 }
 
 // TODO?: refactor to make it easier to create the "package inspector"
-static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *image, jl_array_t *depmods, int complete)
+static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *image, jl_array_t *depmods, int completeinfo)
 {
     uint64_t checksum = 0;
     int64_t dataendpos = 0;
@@ -3354,19 +3354,22 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             // reinit ccallables
             jl_reinit_ccallable(&ccallable_list, base, NULL);
             arraylist_free(&ccallable_list);
-            if (complete) {
-                cachesizes_sv = jl_alloc_svec_uninit(7);
-                jl_svec_data(cachesizes_sv)[0] = jl_box_long(cachesizes.sysdata);
-                jl_svec_data(cachesizes_sv)[1] = jl_box_long(cachesizes.isbitsdata);
-                jl_svec_data(cachesizes_sv)[2] = jl_box_long(cachesizes.symboldata);
-                jl_svec_data(cachesizes_sv)[3] = jl_box_long(cachesizes.tagslist);
-                jl_svec_data(cachesizes_sv)[4] = jl_box_long(cachesizes.reloclist);
-                jl_svec_data(cachesizes_sv)[5] = jl_box_long(cachesizes.gvarlist);
-                jl_svec_data(cachesizes_sv)[6] = jl_box_long(cachesizes.fptrlist);
+
+            if (completeinfo) {
+                cachesizes_sv = jl_alloc_svec(7);
+                jl_svecset(cachesizes_sv, 0, jl_box_long(cachesizes.sysdata));
+                jl_svecset(cachesizes_sv, 1, jl_box_long(cachesizes.isbitsdata));
+                jl_svecset(cachesizes_sv, 2, jl_box_long(cachesizes.symboldata));
+                jl_svecset(cachesizes_sv, 3, jl_box_long(cachesizes.tagslist));
+                jl_svecset(cachesizes_sv, 4, jl_box_long(cachesizes.reloclist));
+                jl_svecset(cachesizes_sv, 5, jl_box_long(cachesizes.gvarlist));
+                jl_svecset(cachesizes_sv, 6, jl_box_long(cachesizes.fptrlist));
                 restored = (jl_value_t*)jl_svec(8, restored, init_order, extext_methods, new_specializations, method_roots_list,
                                                    ext_targets, edges, cachesizes_sv);
-            } else
+            }
+            else {
                 restored = (jl_value_t*)jl_svec(2, restored, init_order);
+            }
         }
     }
 
@@ -3379,16 +3382,16 @@ static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image, uin
     jl_restore_system_image_from_stream_(f, image, NULL, checksum | ((uint64_t)0xfdfcfbfa << 32), NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
-JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, jl_image_t *image, size_t sz, jl_array_t *depmods, int complete)
+JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, jl_image_t *image, size_t sz, jl_array_t *depmods, int completeinfo)
 {
     ios_t f;
     ios_static_buffer(&f, (char*)buf, sz);
-    jl_value_t *ret = jl_restore_package_image_from_stream(&f, image, depmods, complete);
+    jl_value_t *ret = jl_restore_package_image_from_stream(&f, image, depmods, completeinfo);
     ios_close(&f);
     return ret;
 }
 
-JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods, int complete)
+JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods, int completeinfo)
 {
     ios_t f;
     if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {
@@ -3396,7 +3399,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *d
             "Cache file \"%s\" not found.\n", fname);
     }
     jl_image_t pkgimage = {};
-    jl_value_t *ret = jl_restore_package_image_from_stream(&f, &pkgimage, depmods, complete);
+    jl_value_t *ret = jl_restore_package_image_from_stream(&f, &pkgimage, depmods, completeinfo);
     ios_close(&f);
     return ret;
 }
@@ -3446,7 +3449,7 @@ JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len)
     JL_SIGATOMIC_END();
 }
 
-JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, jl_array_t *depmods, int complete)
+JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, jl_array_t *depmods, int completeinfo)
 {
     void *pkgimg_handle = jl_dlopen(fname, JL_RTLD_LAZY);
     if (!pkgimg_handle) {
@@ -3498,7 +3501,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
         }
     #endif
 
-    jl_value_t* mod = jl_restore_incremental_from_buf(pkgimg_data, &pkgimage, *plen, depmods, complete);
+    jl_value_t* mod = jl_restore_incremental_from_buf(pkgimg_data, &pkgimage, *plen, depmods, completeinfo);
 
     return mod;
 }
