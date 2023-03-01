@@ -1343,7 +1343,7 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
     if isa(tti, Union)
         utis = uniontypes(tti)
         if any(@nospecialize(t) -> !isa(t, DataType) || !(t <: Tuple) || !isknownlength(t), utis)
-            return AbstractIterationResult(Any[Vararg{Any}], nothing, EFFECTS_UNKNOWN′)
+            return AbstractIterationResult(Any[Vararg{Any}], nothing, Effects())
         end
         ltp = length((utis[1]::DataType).parameters)
         for t in utis
@@ -1378,7 +1378,7 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
     elseif tti0 === SimpleVector
         return AbstractIterationResult(Any[Vararg{Any}], nothing)
     elseif tti0 === Any
-        return AbstractIterationResult(Any[Vararg{Any}], nothing, EFFECTS_UNKNOWN′)
+        return AbstractIterationResult(Any[Vararg{Any}], nothing, Effects())
     elseif tti0 <: Array
         return AbstractIterationResult(Any[Vararg{eltype(tti0)}], nothing)
     else
@@ -1391,7 +1391,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     if isa(itft, Const)
         iteratef = itft.val
     else
-        return AbstractIterationResult(Any[Vararg{Any}], nothing, EFFECTS_UNKNOWN′)
+        return AbstractIterationResult(Any[Vararg{Any}], nothing, Effects())
     end
     @assert !isvarargtype(itertype)
     call = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[itft, itertype]), StmtInfo(true), sv)
@@ -1453,7 +1453,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
                 # ... but cannot terminate
                 if !may_have_terminated
                     #  ... and cannot have terminated prior to this loop
-                    return AbstractIterationResult(Any[Bottom], AbstractIterationInfo(calls, false), EFFECTS_UNKNOWN′)
+                    return AbstractIterationResult(Any[Bottom], AbstractIterationInfo(calls, false), Effects())
                 else
                     # iterator may have terminated prior to this loop, but not during it
                     valtype = Bottom

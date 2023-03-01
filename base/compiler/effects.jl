@@ -98,12 +98,12 @@ const EFFECT_FREE_IF_INACCESSIBLEMEMONLY = 0x01 << 1
 # :inaccessiblememonly bits
 const INACCESSIBLEMEM_OR_ARGMEMONLY = 0x01 << 1
 
-const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  true,  true,  true,  ALWAYS_TRUE,  true, true)
-const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  false, true,  true,  ALWAYS_TRUE,  true, true)
-const EFFECTS_UNKNOWN  = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, true, true)  # unknown mostly, but it's not overlayed at least (e.g. it's not a call)
-const EFFECTS_UNKNOWN′ = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, false, true) # unknown really
+const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  true,  true,  true,  ALWAYS_TRUE,  true,  true)
+const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  false, true,  true,  ALWAYS_TRUE,  true,  true)
+const EFFECTS_UNKNOWN  = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, true,  false)  # unknown mostly, but it's not overlayed at least (e.g. it's not a call)
+const _EFFECTS_UNKNOWN = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, false, false) # unknown really
 
-function Effects(e::Effects = EFFECTS_UNKNOWN′;
+function Effects(e::Effects = _EFFECTS_UNKNOWN;
     consistent::UInt8 = e.consistent,
     effect_free::UInt8 = e.effect_free,
     nothrow::Bool = e.nothrow,
