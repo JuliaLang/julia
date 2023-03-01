@@ -1601,7 +1601,12 @@ For more details regarding code loading, see the manual sections on [modules](@r
 """
 function require(into::Module, mod::Symbol)
     @lock require_lock begin
-    LOADING_CACHE[] = LoadingCache()
+    reset_loading_cache = true
+    if LOADING_CACHE[] !== nothing
+        reset_loading_cache = false
+    else
+        LOADING_CACHE[] = LoadingCache()
+    end
     try
         uuidkey_env = identify_package_env(into, String(mod))
         # Core.println("require($(PkgId(into)), $mod) -> $uuidkey_env")
@@ -1639,7 +1644,7 @@ function require(into::Module, mod::Symbol)
         end
         return _require_prelocked(uuidkey, env)
     finally
-        LOADING_CACHE[] = nothing
+        reset_loading_cache && (LOADING_CACHE[] = nothing)
     end
     end
 end
@@ -2019,6 +2024,8 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
     append!(empty!(Base.LOAD_PATH), load_path)
     ENV["JULIA_LOAD_PATH"] = join(load_path, Sys.iswindows() ? ';' : ':')
     set_active_project(nothing)
+    empty!(Base.EXT_DORMITORY) # If we have a custom sysimage with `EXT_DORMITORY` prepopulated
+    Base.LOADING_CACHE[] = Base.LoadingCache() # cache env lookups in precompile process
     Base._track_dependencies[] = true
     get!(Base.PkgOrigin, Base.pkgorigins, pkg).path = input
     append!(empty!(Base._concrete_dependencies), concrete_deps)
@@ -2090,7 +2097,6 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
               "w", stdout)
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     write(io.in, """
-        empty!(Base.EXT_DORMITORY) # If we have a custom sysimage with `EXT_DORMITORY` prepopulated
         Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $deps, $(repr(source_path(nothing))))
         """)
