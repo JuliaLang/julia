@@ -432,9 +432,7 @@ function _show_nonempty(io::IO, @nospecialize(X::AbstractMatrix), prefix::String
             cdots = true
         end
     end
-    drop_brackets || print(io, prefix)
-    need_parens && print(io, "(")
-    drop_brackets || print(io, "[")
+    drop_brackets || print(io, prefix, "[")
     for rr in (rr1, rr2)
         for i in rr
             for cr in (cr1, cr2)
@@ -515,7 +513,6 @@ end
 function show_vector(io::IO, v, opn='[', cls=']')
     prefix, implicit, need_parens = typeinfo_prefix(io, v)
     print(io, prefix)
-    need_parens && print(io, '(')
     # directly or indirectly, the context now knows about eltype(v)
     if !implicit
         io = IOContext(io, :typeinfo => eltype(v))
@@ -583,7 +580,18 @@ function typeinfo_prefix(io::IO, X)
     else
         # Types hard-coded here are those which are created by default for a given syntax
         if X isa AbstractArray && !(X isa Array)
-            sprint(print, typeof(X); context=io), false, true
+            prefix = IOContext(IOBuffer(), io)
+            alias = make_typealias(typeof(X))
+            if alias !== nothing
+                show_typealias(prefix, alias[1], typeof(X), alias[2], TypeVar[])
+            else
+                print(prefix, typeof(X).name.name)
+            end
+            print(prefix, "(")
+            if alias === nothing && eltype(typeof(X).name.wrapper) !== eltype_X && !typeinfo_implicit(eltype_X)
+                print(prefix, eltype(X))
+            end
+            String(take!(prefix.io)), false, true
         elseif eltype_X == eltype_ctx
             "", false, false
         elseif !isempty(X) && typeinfo_implicit(eltype_X)
