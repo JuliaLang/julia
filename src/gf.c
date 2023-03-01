@@ -1195,6 +1195,8 @@ static jl_method_instance_t *cache_method(
     }
     // TODO: maybe assert(jl_isa_compileable_sig(compilationsig, sparams, definition));
     newmeth = jl_specializations_get_linfo(definition, (jl_value_t*)compilationsig, sparams);
+    if (newmeth->cache_with_orig)
+        cache_with_orig = 1;
 
     jl_tupletype_t *cachett = tt;
     jl_svec_t* guardsigs = jl_emptysvec;
@@ -1260,6 +1262,10 @@ static jl_method_instance_t *cache_method(
             min_valid = min_valid2;
             max_valid = max_valid2;
             cachett = compilationsig;
+        }
+        else {
+            // do not revisit this decision
+            newmeth->cache_with_orig = 1;
         }
     }
 
