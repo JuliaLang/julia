@@ -1,0 +1,39 @@
+From 4e78372de1cda6f5dfaaa25b6cea0abf73b57eb1 Mon Sep 17 00:00:00 2001
+From: stahta01 <stahta01@users.noreply.github.com>
+Date: Tue, 28 Feb 2023 16:06:29 -0500
+Subject: Cygwin build fix (#108)
+
+* Cygwin build fix
+
+Use hard links on windows
+
+* Add use of maintarget=$(word 1,$(TARGET_LIBRARIES))
+---
+ src/Makefile | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/src/Makefile b/src/Makefile
+index 9e702df..ea3e0d3 100644
+--- a/src/Makefile
++++ b/src/Makefile
+@@ -1,8 +1,18 @@
+ LBT_ROOT := $(dir $(abspath $(dir $(lastword $(MAKEFILE_LIST)))))
+ include $(LBT_ROOT)/src/Make.inc
+ 
++ifeq ($(OS),WINNT)
++# On Windows only build the library with the major soversion, all other copies
++# are useless and error prone.
++TARGET_LIBRARIES = $(builddir)/$(LIB_MAJOR_VERSION)
++else
++TARGET_LIBRARIES = $(builddir)/$(LIB_MAJOR_VERSION) $(builddir)/$(LIB_FULL_VERSION) $(builddir)/libblastrampoline.$(SHLIB_EXT)
++endif
++
++maintarget=$(word 1,$(TARGET_LIBRARIES))
++
+ # Default target
+-all: $(builddir)/libblastrampoline.$(SHLIB_EXT)
++all: $(maintarget)
+ 
+ # Objects we'll build
+ MAIN_OBJS := libblastrampoline.o dl_utils.o config.o \
+-- 
