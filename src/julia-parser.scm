@@ -921,7 +921,7 @@
                    ;; here we have "x -y"
                    (ts:put-back! s t spc)
                    ex)
-                  ((memq t chain-ops)
+                  ((or (eq? t '*) (eq? t '++)) #;(memq t chain-ops)
                    (loop (list* 'call t ex
                                 (parse-chain s down t))))
                   (else

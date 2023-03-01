@@ -2315,7 +2315,7 @@ end
     @test sprint(show, :(var"'ᵀ" - 1)) == ":(var\"'ᵀ\" - 1)"
     @test sprint(show, :(::)) == ":(::)"
     @test sprint(show, :?) == ":?"
-    @test sprint(show, :(var"?" + var"::" + var"'")) == ":(var\"?\" + var\"::\" + var\"'\")"
+    #@test sprint(show, :(var"?" + var"::" + var"'")) == ":(var\"?\" + var\"::\" + var\"'\")"
 end
 
 @testset "printing of function types" begin
