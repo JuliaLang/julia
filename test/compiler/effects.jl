@@ -487,13 +487,26 @@ end |> Core.Compiler.is_consistent
 end |> Core.Compiler.is_effect_free
 
 # `getfield_effects` handles access to union object nicely
-@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Some{String}, Core.Const(:value)]), String))
-@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Some{Symbol}, Core.Const(:value)]), Symbol))
-@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Union{Some{Symbol},Some{String}}, Core.Const(:value)]), Union{Symbol,String}))
+let 𝕃 = Core.Compiler.fallback_lattice
+    @test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(𝕃, Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Some{String}, Core.Const(:value)]), String))
+    @test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(𝕃, Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Some{Symbol}, Core.Const(:value)]), Symbol))
+    @test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(𝕃, Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Union{Some{Symbol},Some{String}}, Core.Const(:value)]), Union{Symbol,String}))
+end
 @test Base.infer_effects((Bool,)) do c
     obj = c ? Some{String}("foo") : Some{Symbol}(:bar)
     return getfield(obj, :value)
 end |> Core.Compiler.is_consistent
+
+# getfield is nothrow when bounds checking is turned off
+@test Base.infer_effects((Tuple{Int,Int},Int)) do t, i
+    getfield(t, i, false)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Tuple{Int,Int},Symbol)) do t, i
+    getfield(t, i, false)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Tuple{Int,Int},String)) do t, i
+    getfield(t, i, false) # invalid name type
+end |> !Core.Compiler.is_nothrow
 
 @test Core.Compiler.is_consistent(Base.infer_effects(setindex!, (Base.RefValue{Int}, Int)))
 
