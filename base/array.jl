@@ -1051,6 +1051,8 @@ function setindex(x::AbstractArray, v, i...)
     return y
 end
 function setindex(t::Tuple, v, inds::AbstractUnitRange{<:Integer})
+    @boundscheck checkindex(Bool, eachindex(t), inds) || throw(BoundsError(t, inds))
+    @boundscheck setindex_shape_check(v, length(inds))
     start = first(inds)
     stop = last(inds)
     offset = start - firstindex(v)
@@ -1062,11 +1064,6 @@ function setindex(t::Tuple, v, inds::AbstractUnitRange{<:Integer})
         end
     end
 end
-function setindex(t::Tuple, v, inds::AbstractVector{<:Integer})
-    @_propagate_inbounds_meta
-    (setindex!(Any[t...], v, inds)...,)
-end
-
 
 # efficiently grow an array
 

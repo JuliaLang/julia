@@ -434,3 +434,10 @@ function _accumulate1!(op, B, v1, A::AbstractVector, dim::Integer)
     end
     return B
 end
+
+function setindex(t::Tuple, v, inds::AbstractVector{<:Integer})
+    Base.@_propagate_inbounds_meta
+    foldl(ntuple(identity, length(inds)); init=t) do acc, i
+        Base.setindex(acc, v[i], inds[i])
+    end
+end

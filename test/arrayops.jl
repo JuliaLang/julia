@@ -3178,6 +3178,9 @@ end
         @test iszero(x)
         @test all(isone, y2)
     end
+
+    @test_throws DimensionMismatch Base.setindex((1, 2, 3), [10, 11], 3:3)
+    @test_throws BoundsError Base.setindex((1, 2, 3), [10, 11], 3:4)
 end
 
 @testset "insert" begin
