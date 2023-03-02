@@ -462,13 +462,20 @@ end
 
 has_offset_axes(S::SubArray) = has_offset_axes(S.indices...)
 
-# faster implementation of mapreduce for "reversed" FastSubArray with stride1 == -1
-function mapreduce(f, op, a::FastSubArray; dims::T=:, init=_InitialValue()) where T
-    if T == Colon && a.stride1 == -1
+# faster implementation of folding operations for "reversed" FastSubArray with stride1 == -1
+
+function mapfold_fastsubarray(f::F, op::OP, init::I, a::FastSubArray, mapfold_fw::FW, mapfold_bw::BW) where {F,OP,I,FW,BW}
+    if a.stride1 == -1
         fi, li = a.offset1 .- (firstindex(a), lastindex(a))
         b = view(parent(a), li:fi)
-        invoke(mapreduce, Tuple{Any,Any,AbstractArray}, f, op, b; dims, init)
+        @invoke mapfold_bw(f::F, FlipArgs(op)::FlipArgs{OP}, init::I, b::AbstractArray)
     else
-        invoke(mapreduce, Tuple{Any,Any,AbstractArray}, f, op, a; dims, init)
+        @invoke mapfold_fw(f::F, op::OP, init::I, a::AbstractArray)
     end
 end
+
+mapfoldl_impl(f::F, op::OP, init, a::FastSubArray) where {F,OP} =
+    mapfold_fastsubarray(f, op, init, a, mapfoldl_impl, mapfoldr_impl)
+
+mapfoldr_impl(f::F, op::OP, init, a::FastSubArray) where {F,OP} =
+    mapfold_fastsubarray(f, op, init, a, mapfoldr_impl, mapfoldl_impl)

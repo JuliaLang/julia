@@ -359,17 +359,31 @@ mapreduce(f, op, A::AbstractArrayOrBroadcasted; dims=:, init=_InitialValue()) =
 mapreduce(f, op, A::AbstractArrayOrBroadcasted...; kw...) =
     reduce(op, map(f, A...); kw...)
 
-_mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon) =
-    mapfoldl_impl(f, op, nt, A)
+function _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon)
+    if nt isa _InitialValue
+        _mapreduce(f, op, IndexStyle(A), A)
+    else
+        mapfoldl_impl(f, op, nt, A)
+    end
+end
 
-_mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon) =
-    _mapreduce(f, op, IndexStyle(A), A)
+function _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, dims)
+    if nt isa _InitialValue
+        mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
+    else
+        mapreducedim!(f, op, reducedim_initarray(A, dims, nt), A)
+    end
+end
 
-_mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, dims) =
-    mapreducedim!(f, op, reducedim_initarray(A, dims, nt), A)
-
-_mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims) =
-    mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
+function _mapreduce_dim(f::F, op::OP, nt::NT, a::FastSubArray, dims::Colon) where {F,OP,NT}
+    if a.stride1 == -1
+        fi, li = a.offset1 .- (firstindex(a), lastindex(a))
+        b = view(parent(a), li:fi)
+        @invoke _mapreduce_dim(f::F, FlipArgs(op)::FlipArgs{OP}, nt::NT, b::AbstractArray, dims::Colon)
+    else
+        @invoke _mapreduce_dim(f::F, op::OP, nt::NT, a::AbstractArray, dims::Colon)
+    end
+end
 
 """
     reduce(f, A::AbstractArray; dims=:, [init])

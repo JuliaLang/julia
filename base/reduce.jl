@@ -204,6 +204,21 @@ function mapfoldr_impl(f, op, nt, itr)
     return foldl_impl(op′, nt, _reverse_iter(itr′))
 end
 
+function mapfoldr_impl(f, op, s, a::AbstractArray{T}) where T
+# to avoid ambiguity with other methods we use a single method
+# both for given initial value s and for s == _InitialValue()
+    li = lastindex(a)
+    if s isa _InitialValue
+        isempty(a) && return mapreduce_empty(f, op, T)
+        s = f(a[li])
+        li -= 1
+    end
+    for i in li:-1:firstindex(a)
+        s = op(f(a[i]), s)
+    end
+    return s
+end
+
 _reverse_iter(itr) = Iterators.reverse(itr)
 _reverse_iter(itr::Union{Tuple,NamedTuple}) = length(itr) <= 32 ? reverse(itr) : Iterators.reverse(itr) #33235
 
