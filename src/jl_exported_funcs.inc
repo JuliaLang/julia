@@ -175,6 +175,7 @@
     XX(jl_gc_get_max_memory) \
     XX(jl_gc_internal_obj_base_ptr) \
     XX(jl_gc_is_enabled) \
+    XX(jl_gc_is_in_finalizer) \
     XX(jl_gc_live_bytes) \
     XX(jl_gc_managed_malloc) \
     XX(jl_gc_managed_realloc) \
