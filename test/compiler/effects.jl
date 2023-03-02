@@ -455,9 +455,19 @@ let effects = Base.infer_effects(f_setfield_nothrow, ())
 end
 
 # nothrow for arrayset
-@test Base.infer_effects((Vector{Int},Int)) do a, i
-    a[i] = 0 # may throw
+@test Base.infer_effects((Vector{Int},Int,Int)) do a, v, i
+    Base.arrayset(true, a, v, i)
 end |> !Core.Compiler.is_nothrow
+@test Base.infer_effects((Vector{Int},Int,Int)) do a, v, i
+    a[i] = v # may throw
+end |> !Core.Compiler.is_nothrow
+# when bounds checking is turned off, it should be safe
+@test Base.infer_effects((Vector{Int},Int,Int)) do a, v, i
+    Base.arrayset(false, a, v, i)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Vector{Number},Number,Int)) do a, v, i
+    Base.arrayset(false, a, v, i)
+end |> Core.Compiler.is_nothrow
 
 # even if 2-arg `getfield` may throw, it should be still `:consistent`
 @test Core.Compiler.is_consistent(Base.infer_effects(getfield, (NTuple{5, Float64}, Int)))
