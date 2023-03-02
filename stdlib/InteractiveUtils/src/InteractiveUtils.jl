@@ -21,7 +21,7 @@ include("macros.jl")
 include("clipboard.jl")
 
 """
-    varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, recursive::Bool = false, sortby::Symbol = :name, minsize::Int = 0)
+    varinfo(m::Module=Main, pattern::Regex=r""; all=false, imported=false, recursive=false, sortby::Symbol=:name, minsize::Int=0)
 
 Return a markdown table giving information about exported global variables in a module, optionally restricted
 to those matching `pattern`.
@@ -34,7 +34,7 @@ The memory consumption estimate is an approximate lower bound on the size of the
 - `sortby` : the column to sort results by. Options are `:name` (default), `:size`, and `:summary`.
 - `minsize` : only includes objects with size at least `minsize` bytes. Defaults to `0`.
 """
-function varinfo(m::Module=Base.active_module(), pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name, recursive::Bool = false, minsize::Int=0)
+function varinfo(m::Module=Base.active_module(), pattern::Regex=r""; all::Bool = false, imported::Bool = false, recursive::Bool = false, sortby::Symbol = :name, minsize::Int=0)
     sortby in (:name, :size, :summary) || throw(ArgumentError("Unrecognized `sortby` value `:$sortby`. Possible options are `:name`, `:size`, and `:summary`"))
     rows = Vector{Any}[]
     workqueue = [(m, ""),]
