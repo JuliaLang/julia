@@ -1108,6 +1108,11 @@ true
 ```
 """
 function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
+    Storage(A) \ B
+end
+
+function (\)(ta::DenseStorage, B::AbstractVecOrMat)
+    A = ta.data
     require_one_based_indexing(A, B)
     m, n = size(A)
     if m == n

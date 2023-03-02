@@ -415,6 +415,30 @@ See also: `copymutable_oftype`.
 """
 copy_similar(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A, T, size(A)), A)
 
+"""
+    AbstractStorageTrait
+
+Supertype for all matrix traits.
+The concrete subtypes shall always contain a field named `data` keeping the
+attributed object.
+"""
+abstract type AbstractStorageTrait{T} end
+"""
+    DenseStorage
+
+Concrete type for all types of matrix related traits.
+"""
+struct DenseStorage{T} <: AbstractStorageTrait{T}
+    data::T
+    DenseStorage(x::T) where T = new{T}(x)
+end
+
+"""
+    Storage(a::T) -> AbstractStorageTrait
+
+Create a trait type object related to `a`.
+"""
+Storage(a::T) where T = storage_trait(T)(a)
 
 include("adjtrans.jl")
 include("transpose.jl")
@@ -452,6 +476,18 @@ include("ldlt.jl")
 include("schur.jl")
 include("structuredbroadcast.jl")
 include("deprecated.jl")
+
+const WrapperArrayTypes{T,MT} = Union{
+    SubArray{T,N,MT} where N,
+    Adjoint{T,MT},
+    Transpose{T,MT},
+    AbstractTriangular{T,MT},
+    UpperHessenberg{T,MT},
+    Symmetric{T,MT},
+    Hermitian{T,MT},
+}
+storage_trait(::Type{<:AbstractArray}) = DenseStorage
+storage_trait(::Type{<:WrapperArrayTypes{T,MT}}) where {T,MT} = storage_trait(MT)
 
 const ⋅ = dot
 const × = cross

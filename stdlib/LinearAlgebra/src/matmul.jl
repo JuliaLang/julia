@@ -137,9 +137,17 @@ julia> [1 1; 0 1] * [1 0; 1 1]
 ```
 """
 function (*)(A::AbstractMatrix, B::AbstractMatrix)
+    (*)(Storage(A), Storage(B))
+end
+
+# implementation for the general case (getindex should be fast operation)
+function (*)(ta::DenseStorage, tb::DenseStorage)
+    A = ta.data
+    B = tb.data
     TS = promote_op(matprod, eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A, 1), size(B, 2))), A, B)
 end
+
 # optimization for dispatching to BLAS, e.g. *(::Matrix{Float32}, ::Matrix{Float64})
 # but avoiding the case *(::Matrix{<:BlasComplex}, ::Matrix{<:BlasReal})
 # which is better handled by reinterpreting rather than promotion
