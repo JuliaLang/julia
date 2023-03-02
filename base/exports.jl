@@ -453,7 +453,6 @@ export
     sum!,
     sum,
     to_indices,
-    unsafe_freeze!,
     vcat,
     vec,
     view,
