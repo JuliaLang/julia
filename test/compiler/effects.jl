@@ -789,3 +789,6 @@ unknown_sparam_nothrow2(x::Ref{Ref{T}}) where T = (T; nothing)
 @test !Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Any,)))
 @test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_nothrow1, (Ref,)))
 @test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_nothrow2, (Ref{Ref{T}} where T,)))
+
+# https://github.com/JuliaLang/julia/issues/48856
+@test Base.ismutationfree{Vector{Any}} == false
