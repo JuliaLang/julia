@@ -488,6 +488,11 @@ JL_DLLEXPORT void jl_gc_enable_finalizers(jl_task_t *ct, int on)
     }
 }
 
+JL_DLLEXPORT int8_t jl_gc_is_in_finalizer(void)
+{
+    return jl_current_task->ptls->in_finalizer;
+}
+
 static void schedule_all_finalizers(arraylist_t *flist) JL_NOTSAFEPOINT
 {
     void **items = flist->items;
