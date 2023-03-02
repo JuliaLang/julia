@@ -1999,14 +1999,16 @@ function array_type_undefable(@nospecialize(arytype))
     end
 end
 
-function array_builtin_common_nothrow(argtypes::Vector{Any}, first_idx_idx::Int)
+function array_builtin_common_nothrow(argtypes::Vector{Any}, first_idx_idx::Int, isarrayref::Bool)
     length(argtypes) >= 4 || return false
     boundscheck = argtypes[1]
     arytype = argtypes[2]
     array_builtin_common_typecheck(boundscheck, arytype, argtypes, first_idx_idx) || return false
-    # If we could potentially throw undef ref errors, bail out now.
-    arytype = widenconst(arytype)
-    array_type_undefable(arytype) && return false
+    if isarrayref
+        # If we could potentially throw undef ref errors, bail out now.
+        arytype = widenconst(arytype)
+        array_type_undefable(arytype) && return false
+    end
     # If we have @inbounds (first argument is false), we're allowed to assume
     # we don't throw bounds errors.
     if isa(boundscheck, Const)
@@ -2042,11 +2044,11 @@ end
 @nospecs function _builtin_nothrow(𝕃::AbstractLattice, f, argtypes::Vector{Any}, rt)
     ⊑ = Core.Compiler.:⊑(𝕃)
     if f === arrayset
-        array_builtin_common_nothrow(argtypes, 4) || return false
+        array_builtin_common_nothrow(argtypes, 4, #=isarrayref=#false) || return false
         # Additionally check element type compatibility
         return arrayset_typecheck(argtypes[2], argtypes[3])
     elseif f === arrayref || f === const_arrayref
-        return array_builtin_common_nothrow(argtypes, 3)
+        return array_builtin_common_nothrow(argtypes, 3, #=isarrayref=#true)
     elseif f === Core._expr
         length(argtypes) >= 1 || return false
         return argtypes[1] ⊑ Symbol
