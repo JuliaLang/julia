@@ -19,10 +19,12 @@ macro newinterp(name)
         struct $name <: CC.AbstractInterpreter
             interp::CC.NativeInterpreter
             cache::$cachename
+            meta # additional information
             $name(world = Base.get_world_counter();
                 interp = CC.NativeInterpreter(world),
-                cache = $cachename(IdDict{MethodInstance,CodeInstance}())
-                ) = new(interp, cache)
+                cache = $cachename(IdDict{MethodInstance,CodeInstance}(),
+                meta = nothing
+                ) = new(interp, cache, meta)
         end
         CC.InferenceParams(interp::$name) = CC.InferenceParams(interp.interp)
         CC.OptimizationParams(interp::$name) = CC.OptimizationParams(interp.interp)
