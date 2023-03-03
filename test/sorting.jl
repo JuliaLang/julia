@@ -557,7 +557,10 @@ end
     @test_throws UndefKeywordError(:dims) sort(collect(gen))
     @test_throws UndefKeywordError(:dims) sort!(collect(gen))
 
-    @test_throws ArgumentError sort("string")
+    @test sort("string") == "ginrst"
+    @test sort("string", rev=true) == "tsrnig"
+    @test_broken sort("🏳️‍⚧️") == "🏳️‍⚧️"
+
     @test_throws ArgumentError("1 cannot be sorted") sort(1)
 end
 

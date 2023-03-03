@@ -1421,8 +1421,7 @@ function sort(v; kws...)
     sort!(copymutable(v); kws...)
 end
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...) # for method disambiguation
-sort(::AbstractString; kws...) =
-    throw(ArgumentError("sort(::AbstractString) is not supported"))
+sort(v::AbstractString; kws...) = String(sort!(copymutable(v); kws...))
 sort(::Tuple; kws...) =
     throw(ArgumentError("sort(::Tuple) is only supported for NTuples"))
 
