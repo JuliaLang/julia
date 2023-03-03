@@ -1386,6 +1386,8 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     else
                         arraylist_push(&s->fixup_objs, (void*)reloc_offset);
                     newm->primary_world = ~(size_t)0;
+                } else {
+                    newm->nroots_sysimg = m->roots ? jl_array_len(m->roots) : 0;
                 }
                 if (m->ccallable)
                     arraylist_push(&s->ccallable_list, (void*)reloc_offset);
@@ -2206,28 +2208,6 @@ static void jl_strip_all_codeinfos(void)
     jl_foreach_reachable_mtable(strip_all_codeinfos_, NULL);
 }
 
-// Method roots created during sysimg construction are exempted from
-// triggering non-relocatability of compressed CodeInfos.
-// Set the number of such roots in each method when the sysimg is
-// serialized.
-// TODO: move this to `jl_write_values`
-static int set_nroots_sysimg__(jl_typemap_entry_t *def, void *_env)
-{
-    jl_method_t *m = def->func.method;
-    m->nroots_sysimg = m->roots ? jl_array_len(m->roots) : 0;
-    return 1;
-}
-
-static int set_nroots_sysimg_(jl_methtable_t *mt, void *_env)
-{
-    return jl_typemap_visitor(mt->defs, set_nroots_sysimg__, NULL);
-}
-
-static void jl_set_nroots_sysimg(void)
-{
-    jl_foreach_reachable_mtable(set_nroots_sysimg_, NULL);
-}
-
 // --- entry points ---
 
 jl_array_t *jl_global_roots_table;
@@ -2330,8 +2310,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     // strip metadata and IR when requested
     if (jl_options.strip_metadata || jl_options.strip_ir)
         jl_strip_all_codeinfos();
-    if (worklist == NULL)
-        jl_set_nroots_sysimg();
 
     int en = jl_gc_enable(0);
     nsym_tag = 0;
