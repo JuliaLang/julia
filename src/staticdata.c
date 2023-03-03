@@ -608,10 +608,10 @@ static uintptr_t jl_fptr_id(void *fptr)
 
 // `jl_queue_for_serialization` adds items to `serialization_order`
 #define jl_queue_for_serialization(s, v) jl_queue_for_serialization_((s), (jl_value_t*)(v), 1, 0)
-static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate);
+static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate) JL_GC_DISABLED;
 
 
-static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_t *m)
+static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_t *m) JL_GC_DISABLED
 {
     jl_queue_for_serialization(s, m->name);
     jl_queue_for_serialization(s, m->parent);
@@ -648,7 +648,7 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
 // you want to handle uniquing of `Dict{String,Float64}` before you tackle `Vector{Dict{String,Float64}}`.
 // Uniquing is done in `serialization_order`, so the very first mention of such an object must
 // be the "source" rather than merely a cross-reference.
-static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate)
+static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate) JL_GC_DISABLED
 {
     jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
     jl_queue_for_serialization_(s, (jl_value_t*)t, 1, immediate);
@@ -672,23 +672,34 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         immediate = 0; // do not handle remaining fields immediately (just field types remains)
     }
     if (s->incremental && jl_is_method_instance(v)) {
+        jl_method_instance_t *mi = (jl_method_instance_t*)v;
+        jl_value_t *def = mi->def.value;
         if (needs_uniquing(v)) {
             // we only need 3 specific fields of this (the rest are not used)
-            jl_method_instance_t *mi = (jl_method_instance_t*)v;
             jl_queue_for_serialization(s, mi->def.value);
             jl_queue_for_serialization(s, mi->specTypes);
             jl_queue_for_serialization(s, (jl_value_t*)mi->sparam_vals);
             recursive = 0;
             goto done_fields;
         }
-        else if (needs_recaching(v)) {
+        else if (jl_is_method(def) && jl_object_in_image(def)) {
             // we only need 3 specific fields of this (the rest are restored afterward, if valid)
-            jl_method_instance_t *mi = (jl_method_instance_t*)v;
+            // in particular, cache is repopulated by jl_mi_cache_insert for all foreign function,
+            // so must not be present here
             record_field_change((jl_value_t**)&mi->uninferred, NULL);
             record_field_change((jl_value_t**)&mi->backedges, NULL);
             record_field_change((jl_value_t**)&mi->callbacks, NULL);
             record_field_change((jl_value_t**)&mi->cache, NULL);
         }
+        else {
+            assert(!needs_recaching(v));
+        }
+        // n.b. opaque closures cannot be inspected and relied upon like a
+        // normal method since they can get improperly introduced by generated
+        // functions, so if they appeared at all, we will probably serialize
+        // them wrong and segfault. The jl_code_for_staged function should
+        // prevent this from happening, so we do not need to detect that user
+        // error now.
     }
     if (jl_is_typename(v)) {
         jl_typename_t *tn = (jl_typename_t*)v;
@@ -700,6 +711,15 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             assert(!jl_object_in_image((jl_value_t*)tn->wrapper));
         }
     }
+    if (s->incremental && jl_is_code_instance(v)) {
+        jl_code_instance_t *ci = (jl_code_instance_t*)v;
+        // make sure we don't serialize other reachable cache entries of foreign methods
+        if (jl_object_in_image((jl_value_t*)ci->def->def.value)) {
+            // TODO: if (ci in ci->defs->cache)
+            record_field_change((jl_value_t**)&ci->next, NULL);
+        }
+    }
+
 
     if (immediate) // must be things that can be recursively handled, and valid as type parameters
         assert(jl_is_immutable(t) || jl_is_typevar(v) || jl_is_symbol(v) || jl_is_svec(v));
@@ -775,7 +795,7 @@ done_fields: ;
     *bp = (void*)((char*)HT_NOTFOUND + 1 + idx);
 }
 
-static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate)
+static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate) JL_GC_DISABLED
 {
     if (!jl_needs_serialization(s, v))
         return;
@@ -818,7 +838,7 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
 // Do a pre-order traversal of the to-serialize worklist, in the identical order
 // to the calls to jl_queue_for_serialization would occur in a purely recursive
 // implementation, but without potentially running out of stack.
-static void jl_serialize_reachable(jl_serializer_state *s)
+static void jl_serialize_reachable(jl_serializer_state *s) JL_GC_DISABLED
 {
     size_t i, prevlen = 0;
     while (object_worklist.len) {
@@ -2877,9 +2897,10 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         *method_roots_list = (jl_array_t*)jl_delayed_reloc(&s, offset_method_roots_list);
         *ext_targets = (jl_array_t*)jl_delayed_reloc(&s, offset_ext_targets);
         *edges = (jl_array_t*)jl_delayed_reloc(&s, offset_edges);
+        if (!*new_specializations)
+            *new_specializations = jl_alloc_vec_any(0);
     }
     s.s = NULL;
-
 
     // step 3: apply relocations
     assert(!ios_eof(f));
@@ -3142,19 +3163,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             jl_code_instance_t *ci = (jl_code_instance_t*)obj;
             assert(s.incremental);
             ci->min_world = world;
-            if (ci->max_world == 1) { // sentinel value: has edges to external callables
-                ptrhash_put(&new_code_instance_validate, ci, (void*)(~(uintptr_t)HT_NOTFOUND));   // "HT_FOUND"
-            }
-            else if (ci->max_world) {
-                // It's valid, but it may not be connected
-                if (!ci->def->cache)
-                    ci->def->cache = ci;
-            }
-            else {
-                // Ensure this code instance is not connected
-                if (ci->def->cache == ci)
-                    ci->def->cache = NULL;
-            }
+            if (ci->max_world != 0)
+                jl_array_ptr_1d_push(*new_specializations, (jl_value_t*)ci);
         }
         else if (jl_is_globalref(obj)) {
             continue; // wait until all the module binding tables have been initialized
@@ -3330,7 +3340,6 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
         else {
             ios_close(f);
             ios_static_buffer(f, sysimg, len);
-            htable_new(&new_code_instance_validate, 0);
             pkgcachesizes cachesizes;
             jl_restore_system_image_from_stream_(f, image, depmods, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges, &base, &ccallable_list, &cachesizes);
             JL_SIGATOMIC_END();
@@ -3342,12 +3351,9 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
             // Handle edges
             jl_insert_backedges((jl_array_t*)edges, (jl_array_t*)ext_targets, (jl_array_t*)new_specializations); // restore external backedges (needs to be last)
-            // check new CodeInstances and validate any that lack external backedges
-            validate_new_code_instances();
             // reinit ccallables
             jl_reinit_ccallable(&ccallable_list, base, NULL);
             arraylist_free(&ccallable_list);
-            htable_free(&new_code_instance_validate);
             if (complete) {
                 cachesizes_sv = jl_alloc_svec_uninit(7);
                 jl_svec_data(cachesizes_sv)[0] = jl_box_long(cachesizes.sysdata);
