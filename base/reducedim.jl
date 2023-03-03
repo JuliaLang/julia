@@ -375,16 +375,6 @@ function _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, dims)
     end
 end
 
-function _mapreduce_dim(f::F, op::OP, nt::NT, a::FastSubArray, dims::Colon) where {F,OP,NT}
-    if a.stride1 == -1
-        fi, li = a.offset1 .- (firstindex(a), lastindex(a))
-        b = view(parent(a), li:fi)
-        @invoke _mapreduce_dim(f::F, FlipArgs(op)::FlipArgs{OP}, nt::NT, b::AbstractArray, dims::Colon)
-    else
-        @invoke _mapreduce_dim(f::F, op::OP, nt::NT, a::AbstractArray, dims::Colon)
-    end
-end
-
 """
     reduce(f, A::AbstractArray; dims=:, [init])
 

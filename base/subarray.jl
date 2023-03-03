@@ -464,18 +464,35 @@ has_offset_axes(S::SubArray) = has_offset_axes(S.indices...)
 
 # faster implementation of folding operations for "reversed" FastSubArray with stride1 == -1
 
-function mapfold_fastsubarray(f::F, op::OP, init::I, a::FastSubArray, mapfold_fw::FW, mapfold_bw::BW) where {F,OP,I,FW,BW}
+function reverse_fastsubarray_1(a)
+# here we assume a.stride1 == -1
+    fi, li = a.offset1 .- (firstindex(a), lastindex(a))
+    view(parent(a), li:fi)
+end
+
+function mapfoldl_impl(f::F, op::OP, init::I, a::FastSubArray) where {F,OP,I}
     if a.stride1 == -1
-        fi, li = a.offset1 .- (firstindex(a), lastindex(a))
-        b = view(parent(a), li:fi)
-        @invoke mapfold_bw(f::F, FlipArgs(op)::FlipArgs{OP}, init::I, b::AbstractArray)
+        b = reverse_fastsubarray_1(a)
+        @invoke mapfoldr_impl(f::F, FlipArgs(op)::FlipArgs{OP}, init::I, b::AbstractArray)
     else
-        @invoke mapfold_fw(f::F, op::OP, init::I, a::AbstractArray)
+        @invoke mapfoldl_impl(f::F, op::OP, init::I, a::AbstractArray)
     end
 end
 
-mapfoldl_impl(f::F, op::OP, init, a::FastSubArray) where {F,OP} =
-    mapfold_fastsubarray(f, op, init, a, mapfoldl_impl, mapfoldr_impl)
+function mapfoldr_impl(f::F, op::OP, init::I, a::FastSubArray) where {F,OP,I}
+    if a.stride1 == -1
+        b = reverse_fastsubarray_1(a)
+        @invoke mapfoldl_impl(f::F, FlipArgs(op)::FlipArgs{OP}, init::I, b::AbstractArray)
+    else
+        @invoke mapfoldr_impl(f::F, op::OP, init::I, a::AbstractArray)
+    end
+end
 
-mapfoldr_impl(f::F, op::OP, init, a::FastSubArray) where {F,OP} =
-    mapfold_fastsubarray(f, op, init, a, mapfoldr_impl, mapfoldl_impl)
+function _mapreduce_dim(f::F, op::OP, nt::NT, a::FastSubArray, dims::Colon) where {F,OP,NT}
+    if a.stride1 == -1
+        b = reverse_fastsubarray_1(a)
+        @invoke _mapreduce_dim(f::F, FlipArgs(op)::FlipArgs{OP}, nt::NT, b::AbstractArray, dims::Colon)
+    else
+        @invoke _mapreduce_dim(f::F, op::OP, nt::NT, a::AbstractArray, dims::Colon)
+    end
+end
