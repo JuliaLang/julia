@@ -230,6 +230,8 @@ static jl_array_t *queue_external_cis(jl_array_t *list)
     for (i = n0; i-- > 0; ) {
         jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(list, i);
         assert(jl_is_code_instance(ci));
+        if (!ci->relocatability)
+            continue;
         jl_method_instance_t *mi = ci->def;
         jl_method_t *m = mi->def.method;
         if (ci->inferred && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
