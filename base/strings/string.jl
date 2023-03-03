@@ -167,23 +167,43 @@ typemin(::String) = typemin(String)
 
 ##
 #=
- ┌─────────────────────────────────────────────────────┐
- │  INCLUSIVE    ┌──────────────2──────────────┐       │
- │    UTF-8      │                             │       │
- │               ├────────3────────┐           │       │
- │   IUTF-8      │                 │           │       │
- │    ┌─0─┐      │     ┌─┐        ┌▼┐         ┌▼┐      │
- │    │   │      ├─4──►│3├───1────►3├────1────►1├────┐ │
- │   ┌▼───┴┐     │     └─┘        └─┘         └─┘    │ │
- │   │  0  ├─────┘   Needs 3    Needs 2     Needs 1  │ │
- │   └───▲─┘        ContBytes  ContBytes   ContBytes │ │
- │       │                                           │ │
- │       │           ContByte=Transition 1           │ │
- │       └─────────────────────1─────────────────────┘ │
- │  ┌─┐                                                │
- │  │4│◄───All undefined transitions result in state 4 │
- │  └─┘      State machine must be reset after state 4 │
- └─────────────────────────────────────────────────────┘
+  ┌─────────────────────────────────────────────────────┐
+  │                 Forward Mode State Diagram          │
+  │  INCLUSIVE    ┌──────────────2──────────────┐       │
+  │    UTF-8      │                             │       │
+  │               ├────────3────────┐           │       │
+  │   IUTF-8      │                 │           │       │
+  │    ┌─0─┐      │     ┌─┐        ┌▼┐         ┌▼┐      │
+  │    │   │      ├─4──►│3├───1────►2├────1────►1├────┐ │
+  │   ┌▼───┴┐     │     └─┘        └─┘         └─┘    │ │
+  │   │  0  ├─────┘   Needs 3    Needs 2     Needs 1  │ │
+  │   └───▲─┘        ContBytes  ContBytes   ContBytes │ │
+  │       │                                           │ │
+  │       │           ContByte=Transition 1           │ │
+  │       └─────────────────────1─────────────────────┘ │
+  │  ┌─┐                                                │
+  │  │4│◄───All undefined transitions result in state 4 │
+  │  └─┘      State machine must be reset after state 4 │
+  └─────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────┐
+  │                 Reverse Mode State Diagram          │
+  │  INCLUSIVE    ┌──◄───────────2:4────────────┐       │
+  │    UTF-8      │                             │       │
+  │   IUTF-8      ├──◄─────3:4──────┐           │       │
+  │               │                 │           │       │
+  │  ┌─0,2:4─┐    │     ┌─┐        ┌┴┐         ┌┴┐      │
+  │  │       │    ├─4───┤3│◄──1────┤2│◄───1────┤1│◄───┐ │
+  │ ┌▼───────┴┐   │     └─┘        └─┘         └─┘    │ │
+  │ │    0    │◄──┘   Needs 3    Needs 2     Needs 1  │ │
+  │ └─────┬───┘      ContBytes  ContBytes   ContBytes │ │
+  │       │                                           │ │
+  │       │           ContByte=Transition 1           │ │
+  │       └─────────────────────1─────────────────────┘ │
+  │  ┌─┐                                                │
+  │  │4│◄───All undefined transitions result in state 4 │
+  │  └─┘      State machine must be reset after state 4 │
+  └─────────────────────────────────────────────────────┘
 =#
 const _IUTF8State = UInt16
 const _IUTF8_SHIFT_MASK = _IUTF8State(0b1111)
@@ -191,11 +211,11 @@ const _IUTF8_DFA_ACCEPT = _IUTF8State(0)
 const _IUTF8_DFA_INVALID = _IUTF8State(4)
 
 const _IUTF8_DFA_TABLE, _IUTF8_DFA_REVERSE_TABLE = begin
-    # It should be noted that eventhought thwe invalid state is state 4 the shift is 1
+    # It should be noted that even though the invalid state is state 4 the shift is 1
     # which is the second lowest state shift.
     shifts = [0, 13, 6, 10, 4]
 
-    # Both of these state tables are only 4 states wide even thought there are 5 states
+    # Both of these state tables are only 4 states wide even though there are 5 states
     # because the machine must be reset once it is in state 4
     forward_state_table  = [    [0,  4,  4,  4],
                                 [4,  0,  1,  2],
@@ -245,13 +265,10 @@ end
 @inline function _iutf8_dfa_step(state::_IUTF8State, byte::UInt8)
     @inbounds (_IUTF8_DFA_TABLE[byte + 1] >> state) & _IUTF8_SHIFT_MASK
 end
-@inline _iutf8_dfa_isfinished(state::_IUTF8State) = state <= _IUTF8_DFA_INVALID
 
 @inline function _iutf8_dfa_reverse_step(state::_IUTF8State, byte::UInt8)
     @inbounds (_IUTF8_DFA_REVERSE_TABLE[byte + 1] >> state) & _IUTF8_SHIFT_MASK
 end
-@inline _iutf8_dfa_reverse_isfinished(state::_IUTF8State) = state <= _IUTF8_DFA_INVALID
-
 
 ## thisind, nextind ##
 
@@ -268,7 +285,7 @@ end
     for j in 0:3
         k = i - j
         state = @inbounds _iutf8_dfa_reverse_step(state, bytes[k])
-        state == _IUTF8_DFA_ACCEPT && return k
+        (state == _IUTF8_DFA_ACCEPT) && return k
         (state == _IUTF8_DFA_INVALID) | (k <= 1) && return i
     end
     return i # Should never get here
@@ -286,7 +303,7 @@ end
     (l < 0x80) | (0xf8 ≤ l) && return i + 1
     if l < 0xc0
         i′ = @inbounds thisind(s, i)
-        i′ >= i && return i + 1
+        (i′ >= i) && return i + 1
         i = i′
     end
     state = _IUTF8_DFA_ACCEPT
@@ -555,7 +572,8 @@ function getindex_continued(s::String, i::Int, b::UInt8)
         k = i + j
         @inbounds b = codeunit(s, k)
         state = _iutf8_dfa_step(state, b)
-        state == _IUTF8_DFA_INVALID && break #If the state machine goes to invalid return value from before byte was processed
+        #If the state machine goes to invalid return value from before byte was processed
+        state == _IUTF8_DFA_INVALID && break
         u |= UInt32(b) << (shift -= 8)
         ((state == _IUTF8_DFA_ACCEPT) | (k == n)) && break
     end
@@ -595,29 +613,94 @@ end
     @inbounds length_continued(s, i, j, c)
 end
 
-@assume_effects :terminates_locally @inline @propagate_inbounds function length_continued(s::String, i::Int, n::Int, c::Int)
-    i < n || return c
-    b = codeunit(s, i)
-    while true
-        while true
-            (i += 1) ≤ n || return c
-            0xc0 ≤ b ≤ 0xf7 && break
-            b = codeunit(s, i)
-        end
-        l = b
-        b = codeunit(s, i) # cont byte 1
-        c -= (x = b & 0xc0 == 0x80)
-        x & (l ≥ 0xe0) || continue
-
-        (i += 1) ≤ n || return c
-        b = codeunit(s, i) # cont byte 2
-        c -= (x = b & 0xc0 == 0x80)
-        x & (l ≥ 0xf0) || continue
-
-        (i += 1) ≤ n || return c
-        b = codeunit(s, i) # cont byte 3
-        c -= (b & 0xc0 == 0x80)
+const _STRING_LENGTH_CHUNKING_SIZE = 256
+@inline function _isascii(code_units::AbstractVector{CU}, first, last) where {CU}
+    r = zero(CU)
+    for n in first:last
+        @inbounds r |= code_units[n]
     end
+    return 0 ≤ r < 0x80
+end
+
+function _length_nonascii_decrement(
+    cu::AbstractVector{UInt8}, first::Int, last::Int, c::Int, state=_IUTF8_DFA_ACCEPT
+)
+    state = ifelse(state == _IUTF8_DFA_INVALID, _IUTF8_DFA_ACCEPT, state)
+    i = ifelse(state == _IUTF8_DFA_ACCEPT, first - 1, first)
+    #@inbounds b = codeunit(s, first)
+    @inbounds b = cu[first]
+    @inbounds while true
+        #This logic enables the first state to be >_IUTF8_DFA_INVALID so that a chunk
+        # can continue from a previous chunk
+        (state == _IUTF8_DFA_ACCEPT) && (i += 1)
+        #Logic was taken out of the n=1:3 loop below so we must correct the count here
+        (state == _IUTF8_DFA_INVALID) && (c += 1)
+        if state <= _IUTF8_DFA_INVALID
+            #Loop through all the one byte characters
+            while true
+                #b = codeunit(s, i)
+                b = cu[i]
+                ((i += 1) <= last) || break
+                0xc0 ≤ b ≤ 0xf7 && break
+            end
+            state = _iutf8_dfa_step(_IUTF8_DFA_ACCEPT, b)
+            (i <= last) || return (c, state)
+        end
+
+        #This should get unrolled
+        for n in 1:3
+            #b = codeunit(s, i)
+            b = cu[i]
+            state = _iutf8_dfa_step(state, b)
+            c -= 1
+            state <= _IUTF8_DFA_INVALID && break
+            ((i += 1) <= last) || return (c, state)
+        end
+    end
+    return (c, state)
+end
+
+function _length_continued_nonascii(
+    cu::AbstractVector{UInt8}, first::Int, last::Int, c::Int
+)
+    chunk_size = _STRING_LENGTH_CHUNKING_SIZE
+
+    start = first
+    stop = min(last, first + chunk_size - 1)
+    state = _IUTF8_DFA_ACCEPT
+    while start <= last
+        #First we process a non ascii chunk because we assume the barrier
+        # function sent it here for a reason
+        (c, state) = _length_nonascii_decrement(cu, start, stop, c, state)
+        start = start + chunk_size
+        stop = min(last, stop + chunk_size)
+
+        while state <= _IUTF8_DFA_INVALID
+            _isascii(cu, start, stop) || break
+            (start = start + chunk_size) <= last || break
+            stop = min(last, stop + chunk_size)
+        end
+    end
+    return c
+end
+
+@inline function length_continued(s::String, first::Int, last::Int, c::Int)
+    cu = codeunits(s)
+    chunk_size = _STRING_LENGTH_CHUNKING_SIZE
+    first < last || return c
+    n = last - first + 1
+    prologue_bytes = rem(n, chunk_size)
+    start = first
+    #Prologue to get to chunks to be exact
+    _isascii(cu, start, start + prologue_bytes - 1) ||
+        return _length_continued_nonascii(cu, start, last, c)
+    start += prologue_bytes
+    start == last && return c
+    for start in start:chunk_size:last
+        _isascii(cu, start, start + chunk_size - 1) ||
+            return _length_continued_nonascii(cu, start, last, c)
+    end
+    return c
 end
 
 ## overload methods for efficiency ##
