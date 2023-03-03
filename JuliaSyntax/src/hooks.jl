@@ -233,28 +233,6 @@ function _core_parser_hook(code, filename, lineno, offset, options)
     end
 end
 
-# Call the flisp parser
-function _fl_parse_hook(code, filename, lineno, offset, options)
-    @static if VERSION >= v"1.8.0-DEV.1370" # https://github.com/JuliaLang/julia/pull/43876
-        return Core.Compiler.fl_parse(code, filename, lineno, offset, options)
-    elseif VERSION >= v"1.6"
-        return Core.Compiler.fl_parse(code, filename, offset, options)
-    else
-        if options === :all
-            ex = Base.parse_input_line(String(code), filename=filename, depwarn=false)
-            if !Meta.isexpr(ex, :toplevel)
-                ex = Expr(:toplevel, ex)
-            end
-            return ex, sizeof(code)
-        elseif options === :statement || options == :atom
-            ex, pos = Meta.parse(code, offset+1, greedy=options==:statement, raise=false)
-            return ex, pos-1
-        else
-            error("Unknown parse options $options")
-        end
-    end
-end
-
 # Hack:
 # Meta.parse() attempts to construct a ParseError from a string if it receives
 # `Expr(:error)`. Add an override to the ParseError constructor to prevent this.
@@ -292,3 +270,79 @@ function enable_in_core!(enable=true; freeze_world_age = true,
     _set_core_parse_hook(enable ? core_parser_hook : _default_parser)
     nothing
 end
+
+
+#-------------------------------------------------------------------------------
+# Tools to call the reference flisp parser
+#
+# Call the flisp parser
+function _fl_parse_hook(code, filename, lineno, offset, options)
+    @static if VERSION >= v"1.8.0-DEV.1370" # https://github.com/JuliaLang/julia/pull/43876
+        return Core.Compiler.fl_parse(code, filename, lineno, offset, options)
+    elseif VERSION >= v"1.6"
+        return Core.Compiler.fl_parse(code, filename, offset, options)
+    else
+        if options === :all
+            ex = Base.parse_input_line(String(code), filename=filename, depwarn=false)
+            if !Meta.isexpr(ex, :toplevel)
+                ex = Expr(:toplevel, ex)
+            end
+            return ex, sizeof(code)
+        elseif options === :statement || options == :atom
+            ex, pos = Meta.parse(code, offset+1, greedy=options==:statement, raise=false)
+            return ex, pos-1
+        else
+            error("Unknown parse options $options")
+        end
+    end
+end
+
+#------------------------------------------------
+# Copy of the Meta.parse() API, but ensuring that we call the flisp parser
+# rather than using Meta.parse() which may be using the JuliaSyntax parser.
+
+"""
+Like Meta.parse() but always call the flisp reference parser.
+"""
+function fl_parse(str::AbstractString; raise::Bool=true, depwarn::Bool=true)
+    ex, pos = fl_parse(str, 1, greedy=true, raise=raise, depwarn=depwarn)
+    if isa(ex,Expr) && ex.head === :error
+        return ex
+    end
+    if pos <= ncodeunits(str)
+        raise && throw(Meta.ParseError("extra token after end of expression"))
+        return Expr(:error, "extra token after end of expression")
+    end
+    return ex
+end
+
+function fl_parse(str::AbstractString, pos::Integer; greedy::Bool=true, raise::Bool=true,
+                  depwarn::Bool=true)
+    ex, pos = _fl_parse_string(str, "none", 1, pos, greedy ? :statement : :atom)
+    if raise && isa(ex,Expr) && ex.head === :error
+        throw(Meta.ParseError(ex.args[1]))
+    end
+    return ex, pos
+end
+
+"""
+Like Meta.parseall() but always call the flisp reference parser.
+"""
+function fl_parseall(text::AbstractString; filename="none", lineno=1)
+    ex,_ = _fl_parse_string(text, String(filename), lineno, 1, :all)
+    return ex
+end
+
+function _fl_parse_string(text::AbstractString, filename::AbstractString,
+                          lineno::Integer, index::Integer, options)
+    if index < 1 || index > ncodeunits(text) + 1
+        throw(BoundsError(text, index))
+    end
+    ex, offset::Int = _fl_parse_hook(text, filename, lineno, index-1, options)
+    ex, offset+1
+end
+
+# Convenience functions to mirror `JuliaSyntax.parse(Expr, ...)` in simple cases.
+fl_parse(::Type{Expr}, args...; kws...) = fl_parse(args...; kws...)
+fl_parseall(::Type{Expr}, args...; kws...) = fl_parseall(args...; kws...)
+
