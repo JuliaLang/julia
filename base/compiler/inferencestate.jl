@@ -220,7 +220,7 @@ add_remark!(::AbstractInterpreter, sv::Union{InferenceState, IRCode}, remark) = 
 struct InferenceLoopState
     sig
     rt
-    effects::Effects
+    effects::Effects # not used by `NativeInterpreter`, but maybe by external `AbstractInterpreter`
     function InferenceLoopState(@nospecialize(sig), @nospecialize(rt), effects::Effects)
         new(sig, rt, effects)
     end
@@ -230,7 +230,7 @@ function bail_out_toplevel_call(::AbstractInterpreter, state::InferenceLoopState
     return isa(sv, InferenceState) && sv.restrict_abstract_call_sites && !isdispatchtuple(state.sig)
 end
 function bail_out_call(::AbstractInterpreter, state::InferenceLoopState, sv::Union{InferenceState, IRCode})
-    return state.rt === Any && !is_foldable(state.effects)
+    return state.rt === Any
 end
 function bail_out_apply(::AbstractInterpreter, state::InferenceLoopState, sv::Union{InferenceState, IRCode})
     return state.rt === Any
