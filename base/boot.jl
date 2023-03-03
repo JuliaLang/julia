@@ -414,25 +414,12 @@ eval(Core, quote
     end
     LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int32, inlined_at::Int32) =
         $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))
-    GlobalRef(m::Module, s::Symbol, binding::Ptr{Nothing}) = $(Expr(:new, :GlobalRef, :m, :s, :binding))
     SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))
-    TypedSlot(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))
     PhiNode(edges::Array{Int32, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))
     PiNode(@nospecialize(val), @nospecialize(typ)) = $(Expr(:new, :PiNode, :val, :typ))
     PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))
     UpsilonNode(@nospecialize(val)) = $(Expr(:new, :UpsilonNode, :val))
     UpsilonNode() = $(Expr(:new, :UpsilonNode))
-    function CodeInstance(
-        mi::MethodInstance, @nospecialize(rettype), @nospecialize(inferred_const),
-        @nospecialize(inferred), const_flags::Int32, min_world::UInt, max_world::UInt,
-        ipo_effects::UInt32, effects::UInt32, @nospecialize(argescapes#=::Union{Nothing,Vector{ArgEscapeInfo}}=#),
-        relocatability::UInt8)
-        return ccall(:jl_new_codeinst, Ref{CodeInstance},
-            (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8),
-            mi, rettype, inferred_const, inferred, const_flags, min_world, max_world,
-            ipo_effects, effects, argescapes,
-            relocatability)
-    end
     Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))
     # NOTE the main constructor is defined within `Core.Compiler`
     _PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))
@@ -441,6 +428,18 @@ eval(Core, quote
     MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) = $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))
 end)
 
+function CodeInstance(
+    mi::MethodInstance, @nospecialize(rettype), @nospecialize(inferred_const),
+    @nospecialize(inferred), const_flags::Int32, min_world::UInt, max_world::UInt,
+    ipo_effects::UInt32, effects::UInt32, @nospecialize(argescapes#=::Union{Nothing,Vector{ArgEscapeInfo}}=#),
+    relocatability::UInt8)
+    return ccall(:jl_new_codeinst, Ref{CodeInstance},
+        (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8),
+        mi, rettype, inferred_const, inferred, const_flags, min_world, max_world,
+        ipo_effects, effects, argescapes,
+        relocatability)
+end
+GlobalRef(m::Module, s::Symbol) = ccall(:jl_module_globalref, Ref{GlobalRef}, (Any, Any), m, s)
 Module(name::Symbol=:anonymous, std_imports::Bool=true, default_names::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool, Bool), name, std_imports, default_names)
 
 function _Task(@nospecialize(f), reserved_stack::Int, completion_future)
@@ -503,32 +502,36 @@ Array{T}(A::AbstractArray{S,N}) where {T,N,S} = Array{T,N}(A)
 AbstractArray{T}(A::AbstractArray{S,N}) where {T,S,N} = AbstractArray{T,N}(A)
 
 # primitive Symbol constructors
+
+## Helper for proper GC rooting without unsafe_convert
+eval(Core, quote
+    _Symbol(ptr::Ptr{UInt8}, sz::Int, root::Any) = $(Expr(:foreigncall, QuoteNode(:jl_symbol_n),
+        Ref{Symbol}, svec(Ptr{UInt8}, Int), 0, QuoteNode(:ccall), :ptr, :sz, :root))
+end)
+
 function Symbol(s::String)
     @_foldable_meta
-    return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
-                 ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s),
-                 sizeof(s))
+    return _Symbol(ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s), sizeof(s), s)
 end
 function Symbol(a::Array{UInt8,1})
-    return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
-                 ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),
-                 Intrinsics.arraylen(a))
+    return _Symbol(ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a), Intrinsics.arraylen(a), a)
 end
 Symbol(s::Symbol) = s
 
 # module providing the IR object model
 module IR
+
 export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
+    NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
-    Const, PartialStruct
+    Const, PartialStruct, InterConditional
 
 import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
+    NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
-    Const, PartialStruct
+    Const, PartialStruct, InterConditional
 
-end
+end # module IR
 
 # docsystem basics
 const unescape = Symbol("hygienic-scope")
@@ -815,8 +818,6 @@ Unsigned(x::Union{Float16, Float32, Float64, Bool}) = UInt(x)
 Integer(x::Integer) = x
 Integer(x::Union{Float16, Float32, Float64}) = Int(x)
 
-GlobalRef(m::Module, s::Symbol) = GlobalRef(m, s, bitcast(Ptr{Nothing}, 0))
-
 # Binding for the julia parser, called as
 #
 #    Core._parse(text, filename, lineno, offset, options)
@@ -847,6 +848,11 @@ struct Pair{A, B}
         @inline
         return new(a::A, b::B)
     end
+end
+
+function _hasmethod(@nospecialize(tt)) # this function has a special tfunc
+    world = ccall(:jl_get_tls_world_age, UInt, ())
+    return Intrinsics.not_int(ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world) === nothing)
 end
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)

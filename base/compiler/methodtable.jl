@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-abstract type MethodTableView; end
-
 struct MethodLookupResult
     # Really Vector{Core.MethodMatch}, but it's easier to represent this as
     # and work with Vector{Any} on the C side.
@@ -56,7 +54,7 @@ end
 Overlays another method table view with an additional local fast path cache that
 can respond to repeated, identical queries faster than the original method table.
 """
-struct CachedMethodTable{T} <: MethodTableView
+struct CachedMethodTable{T<:MethodTableView} <: MethodTableView
     cache::IdDict{MethodMatchKey, Union{Nothing,MethodMatchResult}}
     table::T
 end

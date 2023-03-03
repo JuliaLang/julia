@@ -47,7 +47,7 @@ function __init__()
        !haskey(ENV, "OMP_NUM_THREADS")
         # We set this to `1` here, and then LinearAlgebra will update
         # to the true value in its `__init__()` function.
-        ENV["OPENBLAS_NUM_THREADS"] = "1"
+        ENV["OPENBLAS_DEFAULT_NUM_THREADS"] = "1"
     end
 
     global libopenblas_handle = dlopen(libopenblas)

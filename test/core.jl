@@ -15,15 +15,31 @@ include("testenv.jl")
 for (T, c) in (
         (Core.CodeInfo, []),
         (Core.CodeInstance, [:def, :rettype, :rettype_const, :ipo_purity_bits, :argescapes]),
-        (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :pure, :is_for_opaque_closure, :constprop=#]),
-        (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals]=#]),
+        (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :is_for_opaque_closure, :constprop=#]),
+        (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals=#]),
         (Core.MethodTable, [:module]),
         (Core.TypeMapEntry, [:sig, :simplesig, :guardsigs, :min_world, :max_world, :func, :isleafsig, :issimplesig, :va]),
         (Core.TypeMapLevel, []),
         (Core.TypeName, [:name, :module, :names, :atomicfields, :constfields, :wrapper, :mt, :hash, :n_uninitialized, :flags]),
         (DataType, [:name, :super, :parameters, :instance, :hash]),
+        (TypeVar, [:name, :ub, :lb]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if isconst(T, i))) == Set(c)
+end
+#
+# sanity tests that our built-in types are marked correctly for atomic fields
+for (T, c) in (
+        (Core.CodeInfo, []),
+        (Core.CodeInstance, [:next, :inferred, :purity_bits, :invoke, :specptr, :precompile]),
+        (Core.Method, []),
+        (Core.MethodInstance, [:uninferred, :cache, :precompiled]),
+        (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
+        (Core.TypeMapEntry, [:next]),
+        (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
+        (Core.TypeName, [:cache, :linearcache]),
+        (DataType, [:types, :layout]),
+    )
+    @test Set((fieldname(T, i) for i in 1:fieldcount(T) if Base.isfieldatomic(T, i))) == Set(c)
 end
 
 @test_throws(ErrorException("setfield!: const field .name of type DataType cannot be changed"),
@@ -41,14 +57,14 @@ mutable struct ABCDconst
     c
     const d::Union{Int,Nothing}
 end
-@test_throws(ErrorException("invalid redefinition of constant ABCDconst"),
+@test_throws(ErrorException("invalid redefinition of constant $(nameof(curmod)).ABCDconst"),
     mutable struct ABCDconst
         const a
         const b::Int
         c
         d::Union{Int,Nothing}
     end)
-@test_throws(ErrorException("invalid redefinition of constant ABCDconst"),
+@test_throws(ErrorException("invalid redefinition of constant $(nameof(curmod)).ABCDconst"),
     mutable struct ABCDconst
         a
         b::Int
@@ -257,6 +273,30 @@ let mi = T26321{3,NTuple{3,Int}}((1,2,3)), mf = T26321{3,NTuple{3,Float64}}((1.0
     @test a[2] === mf
     @test eltype(a) == J
     @test a isa Vector{<:T26321{3}}
+end
+
+@test Base.return_types() do
+    typejoin(Int, UInt)
+end  |> only == Type{typejoin(Int, UInt)}
+@test Base.return_types() do
+    typejoin(Int, UInt, Float64)
+end  |> only == Type{typejoin(Int, UInt, Float64)}
+
+let res = @test_throws TypeError let
+        Base.Experimental.@force_compile
+        typejoin(1, 2)
+        nothing
+    end
+    err = res.value
+    @test err.func === :<:
+end
+let res = @test_throws TypeError let
+        Base.Experimental.@force_compile
+        typejoin(1, 2, 3)
+        nothing
+    end
+    err = res.value
+    @test err.func === :<:
 end
 
 # promote_typejoin returns a Union only with Nothing/Missing combined with concrete types
@@ -764,11 +804,15 @@ let
     @test isassigned(a,1) && !isassigned(a,2)
     a = Vector{Float64}(undef,1)
     @test isassigned(a,1)
+    @test isassigned(a,1,1)
     @test isassigned(a)
     @test !isassigned(a,2)
     a = Array{Float64}(undef, 2, 2, 2)
     @test isassigned(a,1)
-    @test isassigned(a)
+    @test isassigned(a,8)
+    @test isassigned(a,2,2,2)
+    @test isassigned(a,2,2,2,1)
+    @test !isassigned(a)
     @test !isassigned(a,9)
     a = Array{Float64}(undef, 1)
     @test isassigned(a,1)
@@ -776,8 +820,15 @@ let
     @test !isassigned(a,2)
     a = Array{Float64}(undef, 2, 2, 2, 2)
     @test isassigned(a,1)
-    @test isassigned(a)
+    @test isassigned(a,2,2,2,2)
+    @test isassigned(a,2,2,2,2,1)
+    @test isassigned(a,16)
+    @test !isassigned(a)
     @test !isassigned(a,17)
+    @test !isassigned(a,3,1,1,1)
+    @test !isassigned(a,1,3,1,1)
+    @test !isassigned(a,1,1,3,1)
+    @test !isassigned(a,1,1,1,3)
 end
 
 # isassigned, issue #11167
@@ -5936,7 +5987,7 @@ module GlobalDef18933
         global sincos
         nothing
     end
-    @test which(Main, :sincos) === Base.Math
+    @test which(@__MODULE__, :sincos) === Base.Math
     @test @isdefined sincos
     @test sincos === Base.sincos
 end
@@ -7508,7 +7559,7 @@ end
 struct X36104; x::Int; end
 @test fieldtypes(X36104) == (Int,)
 primitive type P36104 8 end
-@test_throws ErrorException("invalid redefinition of constant P36104") @eval(primitive type P36104 16 end)
+@test_throws ErrorException("invalid redefinition of constant $(nameof(curmod)).P36104") @eval(primitive type P36104 16 end)
 
 # Malformed invoke
 f_bad_invoke(x::Int) = invoke(x, (Any,), x)
@@ -7820,6 +7871,17 @@ import .Foo45350: x45350
 f45350() = (global x45350 = 2)
 @test_throws ErrorException f45350()
 
+@testset "Error behavior of unsafe_convert for RefValue" begin
+    b = Base.RefValue{Int}()
+    @test Base.unsafe_convert(Ptr{Int}, b) !== C_NULL
+    b = Base.RefValue{Base.RefValue{Int}}()
+    # throws because we hit `b.x`
+    @test_throws Core.UndefRefError Base.unsafe_convert(Ptr{Base.RefValue{Int}}, b)
+    # throws because we hit `b.x`
+    b = Base.RefValue{Integer}()
+    @test_throws Core.UndefRefError Base.unsafe_convert(Ptr{Integer}, b)
+end
+
 # #46503 - redefine `invoke`d methods
 foo46503(@nospecialize(a), b::Union{Vector{Any}, Float64, Nothing}) = rand()
 foo46503(a::Int, b::Nothing) = @invoke foo46503(a::Any, b)
@@ -7854,15 +7916,15 @@ end
 @test methods(SpecializeModuleTest.f)[1].nospecialize & 0b11 == 0b10
 
 let # https://github.com/JuliaLang/julia/issues/46918
-    # jl_binding_type shouldn't be unstable
+    # jl_get_binding_type shouldn't be unstable
     code = quote
-        res1 = ccall(:jl_binding_type, Any, (Any, Any), Main, :stderr)
+        res1 = ccall(:jl_get_binding_type, Any, (Any, Any), Main, :stderr)
 
         stderr
 
-        res2 = ccall(:jl_binding_type, Any, (Any, Any), Main, :stderr)
+        res2 = ccall(:jl_get_binding_type, Any, (Any, Any), Main, :stderr)
 
-        res3 = ccall(:jl_binding_type, Any, (Any, Any), Main, :stderr)
+        res3 = ccall(:jl_get_binding_type, Any, (Any, Any), Main, :stderr)
 
         print(stdout, res1, " ", res2, " ", res3)
     end |> x->join(x.args, ';')
@@ -7886,3 +7948,28 @@ struct ModTparamTestStruct{M}; end
 end
 @test ModTparamTestStruct{@__MODULE__}() == 2
 @test ModTparamTestStruct{ModTparamTest}() == 1
+
+# issue #47476
+f47476(::Union{Int, NTuple{N,Int}}...) where {N} = N
+# force it to populate the MethodInstance specializations cache
+# with the correct sparams
+code_typed(f47476, (Vararg{Union{Int, NTuple{2,Int}}},));
+code_typed(f47476, (Int, Vararg{Union{Int, NTuple{2,Int}}},));
+code_typed(f47476, (Int, Int, Vararg{Union{Int, NTuple{2,Int}}},))
+code_typed(f47476, (Int, Int, Int, Vararg{Union{Int, NTuple{2,Int}}},))
+code_typed(f47476, (Int, Int, Int, Int, Vararg{Union{Int, NTuple{2,Int}}},))
+@test f47476(1, 2, 3, 4, 5, 6, (7, 8)) === 2
+@test_throws UndefVarError(:N) f47476(1, 2, 3, 4, 5, 6, 7)
+
+vect47476(::Type{T}) where {T} = T
+@test vect47476(Type{Type{Type{Int32}}}) === Type{Type{Type{Int32}}}
+@test vect47476(Type{Type{Type{Int64}}}) === Type{Type{Type{Int64}}}
+
+g47476(::Union{Nothing,Int,Val{T}}...) where {T} = T
+@test_throws UndefVarError(:T) g47476(nothing, 1, nothing, 2, nothing, 3, nothing, 4, nothing, 5)
+@test g47476(nothing, 1, nothing, 2, nothing, 3, nothing, 4, nothing, 5, Val(6)) === 6
+let spec = only(methods(g47476)).specializations
+    @test !isempty(spec)
+    @test any(mi -> mi !== nothing && Base.isvatuple(mi.specTypes), spec)
+    @test all(mi -> mi === nothing || !Base.has_free_typevars(mi.specTypes), spec)
+end

@@ -230,7 +230,7 @@ function cstr(s)
     if Base.containsnul(s)
         throw(ArgumentError("strings containing NUL cannot be passed to spawned processes"))
     end
-    return String(s)
+    return String(s)::String
 end
 
 # convert various env representations into an array of "key=val" strings
@@ -462,7 +462,7 @@ function cmd_gen(parsed)
         (ignorestatus, flags, env, dir) = (cmd.ignorestatus, cmd.flags, cmd.env, cmd.dir)
         append!(args, cmd.exec)
         for arg in tail(parsed)
-            append!(args, arg_gen(arg...)::Vector{String})
+            append!(args, Base.invokelatest(arg_gen, arg...)::Vector{String})
         end
         return Cmd(Cmd(args), ignorestatus, flags, env, dir)
     else

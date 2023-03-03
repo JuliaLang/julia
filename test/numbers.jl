@@ -2493,6 +2493,8 @@ Base.abs(x::TestNumber) = TestNumber(abs(x.inner))
     @test_throws ArgumentError Base.multiplicativeinverse(0)
     testmi(map(UInt32, 0:1000), map(UInt32, 1:100))
     testmi(typemax(UInt32)-UInt32(1000):typemax(UInt32), map(UInt32, 1:100))
+    # test broadcasting works.
+    @test div.(3, Base.multiplicativeinverse(3)) == 1
 end
 @testset "ndims/indices/size/length" begin
     @test ndims(1) == 0
@@ -2676,6 +2678,24 @@ end
     @test rem2pi(T(-8), RoundNearest) ≈ -8+2pi
     @test rem2pi(T(-8), RoundDown)    ≈ -8+4pi
     @test rem2pi(T(-8), RoundUp)      ≈ -8+2pi
+    # to hit n is even and n % 4 == 2 condition
+    @test rem2pi(T(3), RoundToZero)  == 3
+    @test rem2pi(T(3), RoundNearest) == 3
+    @test rem2pi(T(3), RoundDown)    == 3
+    @test rem2pi(T(3), RoundUp)      ≈ 3 - 2π
+    @test rem2pi(T(-3), RoundToZero)  == -3
+    @test rem2pi(T(-3), RoundNearest) == -3
+    @test rem2pi(T(-3), RoundDown)    ≈ -3 + 2π
+    @test rem2pi(T(-3), RoundUp)      == -3
+    # to hit even n condition and n % 4 != 2 condition
+    @test rem2pi(T(13), RoundToZero)  ≈ 13-4π
+    @test rem2pi(T(13), RoundNearest) ≈ 13-4π
+    @test rem2pi(T(13), RoundDown)    ≈ 13-4π
+    @test rem2pi(T(13), RoundUp)      ≈ 13-6π
+    @test rem2pi(T(-13), RoundToZero)  ≈ -13+4π
+    @test rem2pi(T(-13), RoundNearest) ≈ -13+4π
+    @test rem2pi(T(-13), RoundDown)    ≈ -13+6π
+    @test rem2pi(T(-13), RoundUp)      ≈ -13+4π
 end
 
 @testset "PR #36420 $T" for T in (Float16, Float32, Float64)
@@ -2928,4 +2948,127 @@ end
         @test true == ceil(Bool, 0.6)
         @test false == ceil(Bool, -0.7)
     end
+end
+
+@testset "modf" begin
+    @testset "remd" begin
+        denorm_min = nextfloat(0.0)
+        minfloat = floatmin(Float64)
+        maxfloat = floatmax(Float64)
+        values = [3.0,denorm_min,-denorm_min, minfloat,
+                 -minfloat, maxfloat, -maxfloat]
+         #  rem (0, y) == 0 for y != 0.
+        for val in values
+            @test isequal(rem(0.0, val), 0.0)
+        end
+        #  rem (-0, y) == -0 for y != 0.
+        for val in values
+            @test isequal(rem(-0.0, val), -0.0)
+        end
+        #  rem (+Inf, y) == NaN
+        values2 = [3.0,-1.1,0.0,-0.0,denorm_min,minfloat,
+                   maxfloat,Inf,-Inf]
+        for val in values2
+            @test isequal(rem(Inf, val), NaN)
+        end
+        #  rem (-Inf, y) == NaN
+        for val in values2
+            @test isequal(rem(-Inf, val), NaN)
+        end
+        #  rem (x, +0) == NaN
+        values3 = values2[begin:end-2]
+        for val in values3
+            @test isequal(rem(val, 0.0), NaN)
+        end
+        #  rem (x, -0) == NaN
+        for val in values3
+            @test isequal(rem(val, -0.0), NaN)
+        end
+        #  rem (x, +Inf) == x for x not infinite.
+        @test isequal(rem(0.0, Inf), 0.0)
+        @test isequal(rem(-0.0, Inf), -0.0)
+        @test isequal(rem(denorm_min, Inf), denorm_min)
+        @test isequal(rem(minfloat, Inf), minfloat)
+        @test isequal(rem(maxfloat, Inf), maxfloat)
+        @test isequal(rem(3.0, Inf), 3.0)
+        #  rem (x, -Inf) == x for x not infinite.
+        @test isequal(rem(0.0, -Inf), 0.0)
+        @test isequal(rem(-0.0, -Inf), -0.0)
+        @test isequal(rem(denorm_min, -Inf), denorm_min)
+        @test isequal(rem(minfloat, -Inf), minfloat)
+        @test isequal(rem(maxfloat, -Inf), maxfloat)
+        @test isequal(rem(3.0, -Inf), 3.0)
+        #NaN tests
+        @test isequal(rem(0.0, NaN), NaN)
+        @test isequal(rem(1.0, NaN), NaN)
+        @test isequal(rem(Inf, NaN), NaN)
+        @test isequal(rem(NaN, 0.0), NaN)
+        @test isequal(rem(NaN, 1.0), NaN)
+        @test isequal(rem(NaN, Inf), NaN)
+        @test isequal(rem(NaN, NaN), NaN)
+        #Sign tests
+        @test isequal(rem(6.5, 2.25), 2.0)
+        @test isequal(rem(-6.5, 2.25), -2.0)
+        @test isequal(rem(6.5, -2.25), 2.0)
+        @test isequal(rem(-6.5, -2.25), -2.0)
+        values4 = [maxfloat,-maxfloat,minfloat,-minfloat,
+                  denorm_min, -denorm_min]
+        for val in values4
+            @test isequal(rem(maxfloat,val), 0.0)
+        end
+        for val in values4
+            @test isequal(rem(-maxfloat,val), -0.0)
+        end
+        @test isequal(rem(minfloat, maxfloat), minfloat)
+        @test isequal(rem(minfloat, -maxfloat), minfloat)
+        values5 = values4[begin+2:end]
+        for val in values5
+            @test isequal(rem(minfloat,val), 0.0)
+        end
+        @test isequal(rem(-minfloat, maxfloat), -minfloat)
+        @test isequal(rem(-minfloat, -maxfloat), -minfloat)
+        for val in values5
+            @test isequal(rem(-minfloat,val), -0.0)
+        end
+        values6 = values4[begin:end-2]
+        for val in values6
+            @test isequal(rem(denorm_min,val), denorm_min)
+        end
+        @test isequal(rem(denorm_min, denorm_min), 0.0)
+        @test isequal(rem(denorm_min, -denorm_min), 0.0)
+        for val in values6
+            @test isequal(rem(-denorm_min,val), -denorm_min)
+        end
+        @test isequal(rem(-denorm_min, denorm_min), -0.0)
+        @test isequal(rem(-denorm_min, -denorm_min), -0.0)
+        #Max value tests
+        values7 = [0x3p-1074,-0x3p-1074,0x3p-1073,-0x3p-1073]
+        for val in values7
+            @test isequal(rem(0x1p1023,val),  0x1p-1073)
+        end
+        @test isequal(rem(0x1p1023, 0x3p-1022), 0x1p-1021)
+        @test isequal(rem(0x1p1023, -0x3p-1022), 0x1p-1021)
+        for val in values7
+            @test isequal(rem(-0x1p1023,val),  -0x1p-1073)
+        end
+        @test isequal(rem(-0x1p1023, 0x3p-1022), -0x1p-1021)
+        @test isequal(rem(-0x1p1023, -0x3p-1022), -0x1p-1021)
+
+    end
+
+    @testset "remf" begin
+        @test isequal(rem(Float32(0x1p127), Float32(0x3p-149)), Float32(0x1p-149))
+        @test isequal(rem(Float32(0x1p127), -Float32(0x3p-149)), Float32(0x1p-149))
+        @test isequal(rem(Float32(0x1p127), Float32(0x3p-148)), Float32(0x1p-147))
+        @test isequal(rem(Float32(0x1p127), -Float32(0x3p-148)), Float32(0x1p-147))
+        @test isequal(rem(Float32(0x1p127), Float32(0x3p-126)), Float32(0x1p-125))
+        @test isequal(rem(Float32(0x1p127), -Float32(0x3p-126)), Float32(0x1p-125))
+        @test isequal(rem(-Float32(0x1p127), Float32(0x3p-149)), -Float32(0x1p-149))
+        @test isequal(rem(-Float32(0x1p127), -Float32(0x3p-149)), -Float32(0x1p-149))
+        @test isequal(rem(-Float32(0x1p127), Float32(0x3p-148)), -Float32(0x1p-147))
+        @test isequal(rem(-Float32(0x1p127), -Float32(0x3p-148)), -Float32(0x1p-147))
+        @test isequal(rem(-Float32(0x1p127), Float32(0x3p-126)), -Float32(0x1p-125))
+        @test isequal(rem(-Float32(0x1p127), -Float32(0x3p-126)), -Float32(0x1p-125))
+    end
+
 end

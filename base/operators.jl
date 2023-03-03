@@ -178,6 +178,13 @@ isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x
 isless(x::Real,          y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 
+# Performance optimization to reduce branching
+# This is useful for sorting tuples of integers
+# TODO: remove this when the compiler can optimize the generic version better
+# See #48724 and #48753
+isless(a::Tuple{BitInteger, BitInteger}, b::Tuple{BitInteger, BitInteger}) =
+    isless(a[1], b[1]) | (isequal(a[1], b[1]) & isless(a[2], b[2]))
+
 """
     isgreater(x, y)
 
@@ -568,7 +575,7 @@ function afoldl(op, a, bs...)
     end
     return y
 end
-typeof(afoldl).name.mt.max_args = 34
+setfield!(typeof(afoldl).name.mt, :max_args, 34, :monotonic)
 
 for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
     @eval begin
@@ -641,10 +648,9 @@ See also [`>>`](@ref), [`>>>`](@ref), [`exp2`](@ref), [`ldexp`](@ref).
 """
 function <<(x::Integer, c::Integer)
     @inline
-    0 <= c <= typemax(UInt) && return x << (c % UInt)
-    -c <= typemax(UInt) && return x >> (-c % UInt)
-    (x >= 0 || c >= 0) && return zero(x) << UInt(0)  # for type stability
-    return oftype(x, -1) << UInt(0)
+    typemin(Int) <= c <= typemax(Int) && return x << (c % Int)
+    (x >= 0 || c >= 0) && return zero(x) << 0  # for type stability
+    oftype(x, -1)
 end
 function <<(x::Integer, c::Unsigned)
     @inline
@@ -653,6 +659,7 @@ function <<(x::Integer, c::Unsigned)
     end
     c <= typemax(UInt) ? x << (c % UInt) : zero(x) << UInt(0)
 end
+<<(x::Integer, c::Int) = c >= 0 ? x << unsigned(c) : x >> unsigned(-c)
 
 """
     >>(x, n)
@@ -689,11 +696,11 @@ function >>(x::Integer, c::Integer)
     if c isa UInt
         throw(MethodError(>>, (x, c)))
     end
-    0 <= c <= typemax(UInt) && return x >> (c % UInt)
-    -c <= typemax(UInt) && return x << (-c % UInt)
+    typemin(Int) <= c <= typemax(Int) && return x >> (c % Int)
     (x >= 0 || c < 0) && return zero(x) >> 0
     oftype(x, -1)
 end
+>>(x::Integer, c::Int) = c >= 0 ? x >> unsigned(c) : x << unsigned(-c)
 
 """
     >>>(x, n)
@@ -724,9 +731,7 @@ See also [`>>`](@ref), [`<<`](@ref).
 """
 function >>>(x::Integer, c::Integer)
     @inline
-    0 <= c <= typemax(UInt) && return x >>> (c % UInt)
-    -c <= typemax(UInt) && return x << (-c % UInt)
-    zero(x) >>> 0
+    typemin(Int) <= c <= typemax(Int) ? x >>> (c % Int) : zero(x) >>> 0
 end
 function >>>(x::Integer, c::Unsigned)
     @inline
@@ -735,6 +740,7 @@ function >>>(x::Integer, c::Unsigned)
     end
     c <= typemax(UInt) ? x >>> (c % UInt) : zero(x) >>> 0
 end
+>>>(x::Integer, c::Int) = c >= 0 ? x >>> unsigned(c) : x << unsigned(-c)
 
 # operator alias
 
@@ -998,7 +1004,7 @@ Represents the composition of two callable objects `outer::Outer` and `inner::In
 ```julia
 ComposedFunction(outer, inner)(args...; kw...) === outer(inner(args...; kw...))
 ```
-The preferred way to construct instance of `ComposedFunction` is to use the composition operator [`∘`](@ref):
+The preferred way to construct an instance of `ComposedFunction` is to use the composition operator [`∘`](@ref):
 ```jldoctest
 julia> sin ∘ cos === ComposedFunction(sin, cos)
 true
@@ -1213,41 +1219,54 @@ used to implement specialized methods.
 <(x) = Fix2(<, x)
 
 """
-    Splat(f)
+    splat(f)
 
 Equivalent to
 ```julia
     my_splat(f) = args->f(args...)
 ```
 i.e. given a function returns a new function that takes one argument and splats
-its argument into the original function. This is useful as an adaptor to pass
-a multi-argument function in a context that expects a single argument, but
-passes a tuple as that single argument. Additionally has pretty printing.
-
-!!! compat "Julia 1.9"
-    This function was introduced in Julia 1.9, replacing `Base.splat(f)`.
+it into the original function. This is useful as an adaptor to pass a
+multi-argument function in a context that expects a single argument, but passes
+a tuple as that single argument.
 
 # Example usage:
 ```jldoctest
-julia> map(Base.Splat(+), zip(1:3,4:6))
+julia> map(splat(+), zip(1:3,4:6))
 3-element Vector{Int64}:
  5
  7
  9
 
-julia> my_add = Base.Splat(+)
-Splat(+)
+julia> my_add = splat(+)
+splat(+)
 
 julia> my_add((1,2,3))
 6
 ```
+"""
+splat(f) = Splat(f)
+
+"""
+    Base.Splat{F} <: Function
+
+Represents a splatted function. That is
+```julia
+Base.Splat(f)(args) === f(args...)
+```
+The preferred way to construct an instance of `Base.Splat` is to use the [`splat`](@ref) function.
+
+!!! compat "Julia 1.9"
+    Splat requires at least Julia 1.9. In earlier versions `splat` returns an anonymous function instead.
+
+See also [`splat`](@ref).
 """
 struct Splat{F} <: Function
     f::F
     Splat(f) = new{Core.Typeof(f)}(f)
 end
 (s::Splat)(args) = s.f(args...)
-print(io::IO, s::Splat) = print(io, "Splat(", s.f, ')')
+print(io::IO, s::Splat) = print(io, "splat(", s.f, ')')
 show(io::IO, s::Splat) = print(io, s)
 
 ## in and related operators
@@ -1310,7 +1329,7 @@ a function equivalent to `y -> item in y`.
 
 Determine whether an item is in the given collection, in the sense that it is
 [`==`](@ref) to one of the values generated by iterating over the collection.
-Returns a `Bool` value, except if `item` is [`missing`](@ref) or `collection`
+Return a `Bool` value, except if `item` is [`missing`](@ref) or `collection`
 contains `missing` but not `item`, in which case `missing` is returned
 ([three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 matching the behavior of [`any`](@ref) and [`==`](@ref)).

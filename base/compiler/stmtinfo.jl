@@ -114,6 +114,7 @@ Each (abstract) call to `iterate`, corresponds to one entry in `ainfo.each::Vect
 """
 struct AbstractIterationInfo
     each::Vector{CallMeta}
+    complete::Bool
 end
 
 const MaybeAbstractIterationInfo = Union{Nothing, AbstractIterationInfo}

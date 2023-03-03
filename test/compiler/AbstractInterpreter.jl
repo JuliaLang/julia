@@ -51,6 +51,14 @@ import Base.Experimental: @MethodTable, @overlay
 @MethodTable(OverlayedMT)
 CC.method_table(interp::MTOverlayInterp) = CC.OverlayMethodTable(CC.get_world_counter(interp), OverlayedMT)
 
+function CC.add_remark!(interp::MTOverlayInterp, ::CC.InferenceState, remark)
+    if interp.meta !== nothing
+        # Core.println(remark)
+        push!(interp.meta, remark)
+    end
+    return nothing
+end
+
 strangesin(x) = sin(x)
 @overlay OverlayedMT strangesin(x::Float64) = iszero(x) ? nothing : cos(x)
 
@@ -69,6 +77,21 @@ end |> !Core.Compiler.is_nonoverlayed
 @test Base.infer_effects((Any,); interp=MTOverlayInterp()) do x
     @invoke strangesin(x::Float64)
 end |> !Core.Compiler.is_nonoverlayed
+
+# account for overlay possibility in unanalyzed matching method
+callstrange(::Nothing) = Core.compilerbarrier(:type, nothing) # trigger inference bail out
+callstrange(::Float64) = strangesin(x)
+callstrange_entry(x) = callstrange(x) # needs to be defined here because of world age
+let interp = MTOverlayInterp(; meta=Set{Any}())
+    matches = Core.Compiler.findall(Tuple{typeof(callstrange),Any}, Core.Compiler.method_table(interp)).matches
+    @test Core.Compiler.length(matches) == 2
+    if Core.Compiler.getindex(matches, 1).method == which(callstrange, (Nothing,))
+        @test Base.infer_effects(callstrange_entry, (Any,); interp) |> !Core.Compiler.is_nonoverlayed
+        @test "Call inference reached maximally imprecise information. Bailing on." in interp.meta
+    else
+        @warn "`nonoverlayed` test for inference bailing out is skipped since the method match sort order is changed."
+    end
+end
 
 # but it should never apply for the native compilation
 @test Base.infer_effects((Float64,)) do x
@@ -93,7 +116,7 @@ overlay_match(::Any) = nothing
     overlay_match(x)
 end |> only === Union{Nothing,Missing}
 
-# partial pure/concrete evaluation
+# partial concrete evaluation
 @test Base.return_types(; interp=MTOverlayInterp()) do
     isbitstype(Int) ? nothing : missing
 end |> only === Nothing
@@ -110,7 +133,7 @@ end
     issue41694(3) == 6 ? nothing : missing
 end |> only === Nothing
 
-# disable partial pure/concrete evaluation when tainted by any overlayed call
+# disable partial concrete evaluation when tainted by any overlayed call
 Base.@assume_effects :total totalcall(f, args...) = f(args...)
 @test Base.return_types(; interp=MTOverlayInterp()) do
     if totalcall(strangesin, 1.0) == cos(1.0)
@@ -127,24 +150,21 @@ using Core: SlotNumber, Argument
 using Core.Compiler: slot_id, tmerge_fast_path
 import .CC:
     AbstractLattice, BaseInferenceLattice, IPOResultLattice, InferenceLattice, OptimizerLattice,
-    widen, is_valid_lattice, typeinf_lattice, ipo_lattice, optimizer_lattice,
-    widenconst, tmeet, tmerge, ⊑, abstract_eval_special_value, widenreturn,
-    widenlattice
+    widenlattice, is_valid_lattice_norec, typeinf_lattice, ipo_lattice, optimizer_lattice,
+    widenconst, tmeet, tmerge, ⊑, abstract_eval_special_value, widenreturn
 
 @newinterp TaintInterpreter
 struct TaintLattice{PL<:AbstractLattice} <: CC.AbstractLattice
     parent::PL
 end
 CC.widenlattice(𝕃::TaintLattice) = 𝕃.parent
-CC.is_valid_lattice(𝕃::TaintLattice, @nospecialize(elm)) =
-    is_valid_lattice(widenlattice(𝕃), elem) || isa(elm, Taint)
+CC.is_valid_lattice_norec(::TaintLattice, @nospecialize(elm)) = isa(elm, Taint)
 
 struct InterTaintLattice{PL<:AbstractLattice} <: CC.AbstractLattice
     parent::PL
 end
 CC.widenlattice(𝕃::InterTaintLattice) = 𝕃.parent
-CC.is_valid_lattice(𝕃::InterTaintLattice, @nospecialize(elm)) =
-    is_valid_lattice(widenlattice(𝕃), elem) || isa(elm, InterTaint)
+CC.is_valid_lattice_norec(::InterTaintLattice, @nospecialize(elm)) = isa(elm, InterTaint)
 
 const AnyTaintLattice{L} = Union{TaintLattice{L},InterTaintLattice{L}}
 

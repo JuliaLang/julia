@@ -19,7 +19,7 @@ call_result_unused(si::StmtInfo) = !si.used
 
 function get_max_methods(mod::Module, interp::AbstractInterpreter)
     max_methods = ccall(:jl_get_module_max_methods, Cint, (Any,), mod) % Int
-    max_methods < 0 ? InferenceParams(interp).MAX_METHODS : max_methods
+    max_methods < 0 ? InferenceParams(interp).max_methods : max_methods
 end
 
 function get_max_methods(@nospecialize(f), mod::Module, interp::AbstractInterpreter)
@@ -30,10 +30,8 @@ function get_max_methods(@nospecialize(f), mod::Module, interp::AbstractInterpre
     return get_max_methods(mod, interp)
 end
 
-const empty_bitset = BitSet()
-
-function should_infer_this_call(sv::InferenceState)
-    if sv.params.unoptimize_throw_blocks
+function should_infer_this_call(interp::AbstractInterpreter, sv::InferenceState)
+    if InferenceParams(interp).unoptimize_throw_blocks
         # Disable inference of calls in throw blocks, since we're unlikely to
         # need their types. There is one exception however: If up until now, the
         # function has not seen any side effects, we would like to make sure there
@@ -54,7 +52,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
                                   sv::InferenceState, max_methods::Int)
     ⊑ₚ = ⊑(ipo_lattice(interp))
-    if !should_infer_this_call(sv)
+    if !should_infer_this_call(interp, sv)
         add_remark!(interp, sv, "Skipped call in throw block")
         nonoverlayed = false
         if isoverlayed(method_table(interp)) && is_nonoverlayed(sv.ipo_effects)
@@ -62,7 +60,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             # no overlayed calls, try an additional effort now to check if this call
             # isn't overlayed rather than just handling it conservatively
             matches = find_matching_methods(arginfo.argtypes, atype, method_table(interp),
-                InferenceParams(interp).MAX_UNION_SPLITTING, max_methods)
+                InferenceParams(interp).max_union_splitting, max_methods)
             if !isa(matches, FailedMethodMatch)
                 nonoverlayed = matches.nonoverlayed
             end
@@ -78,7 +76,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
 
     argtypes = arginfo.argtypes
     matches = find_matching_methods(argtypes, atype, method_table(interp),
-        InferenceParams(interp).MAX_UNION_SPLITTING, max_methods)
+        InferenceParams(interp).max_union_splitting, max_methods)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
         return CallMeta(Any, Effects(), NoCallInfo())
@@ -98,31 +96,26 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     all_effects = EFFECTS_TOTAL
     if !matches.nonoverlayed
         # currently we don't have a good way to execute the overlayed method definition,
-        # so we should give up pure/concrete eval when any of the matched methods is overlayed
+        # so we should give up concrete eval when any of the matched methods is overlayed
         f = nothing
         all_effects = Effects(all_effects; nonoverlayed=false)
     end
-
-    # try pure-evaluation
-    val = pure_eval_call(interp, f, applicable, arginfo)
-    val !== nothing && return CallMeta(val, all_effects, MethodResultPure(info)) # TODO: add some sort of edge(s)
 
     𝕃ₚ = ipo_lattice(interp)
     for i in 1:napplicable
         match = applicable[i]::MethodMatch
         method = match.method
         sig = match.spec_types
-        if bail_out_toplevel_call(interp, sig, sv)
+        if bail_out_toplevel_call(interp, InferenceLoopState(sig, rettype, all_effects), sv)
             # only infer concrete call sites in top-level expressions
             add_remark!(interp, sv, "Refusing to infer non-concrete call site in top-level expression")
-            rettype = Any
             break
         end
         this_rt = Bottom
         splitunions = false
         # TODO: this used to trigger a bug in inference recursion detection, and is unmaintained now
         # sigtuple = unwrap_unionall(sig)::DataType
-        # splitunions = 1 < unionsplitcost(sigtuple.parameters) * napplicable <= InferenceParams(interp).MAX_UNION_SPLITTING
+        # splitunions = 1 < unionsplitcost(sigtuple.parameters) * napplicable <= InferenceParams(interp).max_union_splitting
         if splitunions
             splitsigs = switchtupleunion(sig)
             for sig_n in splitsigs
@@ -137,6 +130,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     if const_call_result.rt ⊑ₚ rt
                         rt = const_call_result.rt
                         (; effects, const_result, edge) = const_call_result
+                    else
+                        add_remark!(interp, sv, "[constprop] Discarded because the result was wider than inference")
                     end
                 end
                 all_effects = merge_effects(all_effects, effects)
@@ -171,6 +166,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     this_conditional = this_const_conditional
                     this_rt = this_const_rt
                     (; effects, const_result, edge) = const_call_result
+                else
+                    add_remark!(interp, sv, "[constprop] Discarded because the result was wider than inference")
                 end
             end
             all_effects = merge_effects(all_effects, effects)
@@ -192,7 +189,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 conditionals[2][i] = tmerge(conditionals[2][i], cnd.elsetype)
             end
         end
-        if bail_out_call(interp, rettype, sv)
+        if bail_out_call(interp, InferenceLoopState(sig, rettype, all_effects), sv)
+            add_remark!(interp, sv, "Call inference reached maximally imprecise information. Bailing on.")
             break
         end
     end
@@ -202,10 +200,10 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         info = ConstCallInfo(info, const_results)
     end
 
-    if seen != napplicable
-        # there may be unanalyzed effects within unseen dispatch candidate,
-        # but we can still ignore nonoverlayed effect here since we already accounted for it
-        all_effects = merge_effects(all_effects, EFFECTS_UNKNOWN)
+    if seen ≠ napplicable
+        # there is unanalyzed candidate, widen type and effects to the top
+        rettype = Any
+        all_effects = Effects()
     elseif isa(matches, MethodMatches) ? (!matches.fullmatch || any_ambig(matches)) :
             (!all(matches.fullmatches) || any_ambig(matches))
         # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
@@ -221,7 +219,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         method = match.method
         sig = match.spec_types
         mi = specialize_method(match; preexisting=true)
-        if mi !== nothing && !const_prop_methodinstance_heuristic(interp, match, mi, arginfo, sv)
+        if mi !== nothing && !const_prop_methodinstance_heuristic(interp, mi, arginfo, sv)
             csig = get_compileable_sig(method, sig, match.sparams)
             if csig !== nothing && csig !== sig
                 abstract_call_method(interp, method, csig, match.sparams, multiple_matches, StmtInfo(false), sv)
@@ -276,9 +274,9 @@ end
 any_ambig(m::UnionSplitMethodMatches) = any(any_ambig, m.info.matches)
 
 function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), method_table::MethodTableView,
-                               union_split::Int, max_methods::Int)
+                               max_union_splitting::Int, max_methods::Int)
     # NOTE this is valid as far as any "constant" lattice element doesn't represent `Union` type
-    if 1 < unionsplitcost(argtypes) <= union_split
+    if 1 < unionsplitcost(argtypes) <= max_union_splitting
         split_argtypes = switchtupleunion(argtypes)
         infos = MethodMatchInfo[]
         applicable = Any[]
@@ -537,6 +535,7 @@ end
 
 const RECURSION_UNUSED_MSG = "Bounded recursion detected with unused result. Annotated return type may be wider than true result."
 const RECURSION_MSG = "Bounded recursion detected. Call was widened to force convergence."
+const RECURSION_MSG_HARDLIMIT = "Bounded recursion detected under hardlimit. Call was widened to force convergence."
 
 function abstract_call_method(interp::AbstractInterpreter, method::Method, @nospecialize(sig), sparams::SimpleVector, hardlimit::Bool, si::StmtInfo, sv::InferenceState)
     if method.name === :depwarn && isdefined(Main, :Base) && method.module === Main.Base
@@ -575,6 +574,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
             end
         end
     end
+    washardlimit = hardlimit
 
     if topmost !== nothing
         sigtuple = unwrap_unionall(sig)::DataType
@@ -599,7 +599,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
         end
 
         # see if the type is actually too big (relative to the caller), and limit it if required
-        newsig = limit_type_size(sig, comparison, hardlimit ? comparison : sv.linfo.specTypes, InferenceParams(interp).TUPLE_COMPLEXITY_LIMIT_DEPTH, spec_len)
+        newsig = limit_type_size(sig, comparison, hardlimit ? comparison : sv.linfo.specTypes, InferenceParams(interp).tuple_complexity_limit_depth, spec_len)
 
         if newsig !== sig
             # continue inference, but note that we've limited parameter complexity
@@ -613,7 +613,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
                 # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
                 return MethodCallResult(Any, true, true, nothing, Effects())
             end
-            add_remark!(interp, sv, RECURSION_MSG)
+            add_remark!(interp, sv, washardlimit ? RECURSION_MSG_HARDLIMIT : RECURSION_MSG)
             topmost = topmost::InferenceState
             parentframe = topmost.parent
             poison_callstack(sv, parentframe === nothing ? topmost : parentframe)
@@ -641,7 +641,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
         #     while !(newsig in seen)
         #         push!(seen, newsig)
         #         lsig = length((unwrap_unionall(sig)::DataType).parameters)
-        #         newsig = limit_type_size(newsig, sig, sv.linfo.specTypes, InferenceParams(interp).TUPLE_COMPLEXITY_LIMIT_DEPTH, lsig)
+        #         newsig = limit_type_size(newsig, sig, sv.linfo.specTypes, InferenceParams(interp).tuple_complexity_limit_depth, lsig)
         #         recomputed = ccall(:jl_type_intersection_with_env, Any, (Any, Any), newsig, method.sig)::SimpleVector
         #         newsig = recomputed[2]
         #     end
@@ -783,58 +783,29 @@ struct MethodCallResult
     end
 end
 
-function pure_eval_eligible(interp::AbstractInterpreter,
-    @nospecialize(f), applicable::Vector{Any}, arginfo::ArgInfo)
-    # XXX we need to check that this pure function doesn't call any overlayed method
-    return f !== nothing &&
-           length(applicable) == 1 &&
-           is_method_pure(applicable[1]::MethodMatch) &&
-           is_all_const_arg(arginfo, #=start=#2)
-end
-
-function is_method_pure(method::Method, @nospecialize(sig), sparams::SimpleVector)
-    if isdefined(method, :generator)
-        method.generator.expand_early || return false
-        mi = specialize_method(method, sig, sparams)
-        isa(mi, MethodInstance) || return false
-        staged = get_staged(mi)
-        (staged isa CodeInfo && (staged::CodeInfo).pure) || return false
-        return true
-    end
-    return method.pure
-end
-is_method_pure(match::MethodMatch) = is_method_pure(match.method, match.spec_types, match.sparams)
-
-function pure_eval_call(interp::AbstractInterpreter,
-    @nospecialize(f), applicable::Vector{Any}, arginfo::ArgInfo)
-    pure_eval_eligible(interp, f, applicable, arginfo) || return nothing
-    return _pure_eval_call(f, arginfo)
-end
-function _pure_eval_call(@nospecialize(f), arginfo::ArgInfo)
-    args = collect_const_args(arginfo, #=start=#2)
-    value = try
-        Core._apply_pure(f, args)
-    catch
-        return nothing
-    end
-    return Const(value)
-end
-
 # - true: eligible for concrete evaluation
 # - false: eligible for semi-concrete evaluation
 # - nothing: not eligible for either of it
 function concrete_eval_eligible(interp::AbstractInterpreter,
-    @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo)
+    @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, sv::InferenceState)
     # disable all concrete-evaluation if this function call is tainted by some overlayed
     # method since currently there is no direct way to execute overlayed methods
+    if inbounds_option() === :off
+        # Disable concrete evaluation in `--check-bounds=no` mode, since we cannot be sure
+        # that inferred effects are accurate.
+        return nothing
+    elseif !result.effects.noinbounds && stmt_taints_inbounds_consistency(sv)
+        # If the current statement is @inbounds or we propagate inbounds, the call's consistency
+        # is tainted and not consteval eligible.
+        add_remark!(interp, sv, "[constprop] Concrete evel disabled for inbounds")
+        return nothing
+    end
     isoverlayed(method_table(interp)) && !is_nonoverlayed(result.effects) && return nothing
-    if f !== nothing && result.edge !== nothing && is_foldable(result.effects)
-        if is_all_const_arg(arginfo, #=start=#2)
+    if result.edge !== nothing && is_foldable(result.effects)
+        if f !== nothing && is_all_const_arg(arginfo, #=start=#2)
             return true
         else
-            # TODO: `is_nothrow` is not an actual requirement here, this is just a hack
-            # to avoid entering semi concrete eval while it doesn't properly override effects
-            return is_nothrow(result.effects) ? false : nothing
+            return false
         end
     end
     return nothing
@@ -867,7 +838,7 @@ end
 function concrete_eval_call(interp::AbstractInterpreter,
     @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, si::StmtInfo,
     sv::InferenceState, invokecall::Union{Nothing,InvokeCall}=nothing)
-    eligible = concrete_eval_eligible(interp, f, result, arginfo)
+    eligible = concrete_eval_eligible(interp, f, result, arginfo, sv)
     eligible === nothing && return false
     if eligible
         args = collect_const_args(arginfo, #=start=#2)
@@ -917,24 +888,26 @@ struct ConstCallResults
         new(rt, const_result, effects, edge)
 end
 
+# TODO MustAlias forwarding
+
 struct ConditionalArgtypes <: ForwardableArgtypes
     arginfo::ArgInfo
     sv::InferenceState
 end
 
 """
-    matching_cache_argtypes(linfo::MethodInstance, argtypes::ConditionalArgtypes)
+    matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance, argtypes::ConditionalArgtypes)
 
 The implementation is able to forward `Conditional` of `argtypes`,
 as well as the other general extended lattice inforamtion.
 """
-function matching_cache_argtypes(linfo::MethodInstance, argtypes::ConditionalArgtypes)
+function matching_cache_argtypes(𝕃::AbstractLattice, linfo::MethodInstance, argtypes::ConditionalArgtypes)
     (; arginfo, sv) = argtypes
     (; fargs, argtypes) = arginfo
     given_argtypes = Vector{Any}(undef, length(argtypes))
     def = linfo.def::Method
     nargs = Int(def.nargs)
-    cache_argtypes, overridden_by_const = matching_cache_argtypes(linfo)
+    cache_argtypes, overridden_by_const = matching_cache_argtypes(𝕃, linfo)
     local condargs = nothing
     for i in 1:length(argtypes)
         argtype = argtypes[i]
@@ -965,7 +938,7 @@ function matching_cache_argtypes(linfo::MethodInstance, argtypes::ConditionalArg
     end
     if condargs !== nothing
         given_argtypes = let condargs=condargs
-            va_process_argtypes(given_argtypes, linfo) do isva_given_argtypes::Vector{Any}, last::Int
+            va_process_argtypes(𝕃, given_argtypes, linfo) do isva_given_argtypes::Vector{Any}, last::Int
                 # invalidate `Conditional` imposed on varargs
                 for (slotid, i) in condargs
                     if slotid ≥ last && (1 ≤ i ≤ length(isva_given_argtypes)) # `Conditional` is already widened to vararg-tuple otherwise
@@ -975,9 +948,9 @@ function matching_cache_argtypes(linfo::MethodInstance, argtypes::ConditionalArg
             end
         end
     else
-        given_argtypes = va_process_argtypes(given_argtypes, linfo)
+        given_argtypes = va_process_argtypes(𝕃, given_argtypes, linfo)
     end
-    return pick_const_args!(cache_argtypes, overridden_by_const, given_argtypes)
+    return pick_const_args!(𝕃, cache_argtypes, overridden_by_const, given_argtypes)
 end
 
 function abstract_call_method_with_const_args(interp::AbstractInterpreter,
@@ -1004,10 +977,11 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
             ir = codeinst_to_ir(interp, code)
             if isa(ir, IRCode)
                 irsv = IRInterpretationState(interp, ir, mi, sv.world, arginfo.argtypes)
-                rt = ir_abstract_constant_propagation(interp, irsv)
+                rt, nothrow = ir_abstract_constant_propagation(interp, irsv)
                 @assert !(rt isa Conditional || rt isa MustAlias) "invalid lattice element returned from IR interpretation"
                 if !isa(rt, Type) || typeintersect(rt, Bool) === Union{}
-                    return ConstCallResults(rt, SemiConcreteResult(mi, ir, result.effects), result.effects, mi)
+                    new_effects = Effects(result.effects; nothrow=nothrow)
+                    return ConstCallResults(rt, SemiConcreteResult(mi, ir, new_effects), new_effects, mi)
                 end
             end
         end
@@ -1029,7 +1003,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
             return nothing
         end
         argtypes = has_conditional(𝕃ᵢ) ? ConditionalArgtypes(arginfo, sv) : SimpleArgtypes(arginfo.argtypes)
-        inf_result = InferenceResult(mi, argtypes)
+        inf_result = InferenceResult(mi, argtypes, typeinf_lattice(interp))
         if !any(inf_result.overridden_by_const)
             add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
             return nothing
@@ -1069,7 +1043,7 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter,
         add_remark!(interp, sv, "[constprop] Disabled by argument and rettype heuristics")
         return nothing
     end
-    all_overridden = is_all_overridden(arginfo, sv)
+    all_overridden = is_all_overridden(interp, arginfo, sv)
     if !force && !const_prop_function_heuristic(interp, f, arginfo, nargs, all_overridden,
             is_nothrow(sv.ipo_effects), sv)
         add_remark!(interp, sv, "[constprop] Disabled by function heuristic")
@@ -1082,7 +1056,7 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter,
         return nothing
     end
     mi = mi::MethodInstance
-    if !force && !const_prop_methodinstance_heuristic(interp, match, mi, arginfo, sv)
+    if !force && !const_prop_methodinstance_heuristic(interp, mi, arginfo, sv)
         add_remark!(interp, sv, "[constprop] Disabled by method instance heuristic")
         return nothing
     end
@@ -1128,32 +1102,19 @@ end
 
 # determines heuristically whether if constant propagation can be worthwhile
 # by checking if any of given `argtypes` is "interesting" enough to be propagated
-function const_prop_argument_heuristic(interp::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, sv::InferenceState)
+function const_prop_argument_heuristic(interp::AbstractInterpreter, arginfo::ArgInfo, sv::InferenceState)
+    𝕃ᵢ = typeinf_lattice(interp)
+    argtypes = arginfo.argtypes
     for i in 1:length(argtypes)
         a = argtypes[i]
-        if isa(a, Conditional) && fargs !== nothing
-            is_const_prop_profitable_conditional(a, fargs, sv) && return true
+        if has_conditional(𝕃ᵢ) && isa(a, Conditional) && arginfo.fargs !== nothing
+            is_const_prop_profitable_conditional(a, arginfo.fargs, sv) && return true
         else
             a = widenslotwrapper(a)
-            has_nontrivial_const_info(typeinf_lattice(interp), a) && is_const_prop_profitable_arg(a) && return true
+            has_nontrivial_extended_info(𝕃ᵢ, a) && is_const_prop_profitable_arg(𝕃ᵢ, a) && return true
         end
     end
     return false
-end
-
-function is_const_prop_profitable_arg(@nospecialize(arg))
-    # have new information from argtypes that wasn't available from the signature
-    if isa(arg, PartialStruct)
-        for b in arg.fields
-            isconstType(b) && return true
-            is_const_prop_profitable_arg(b) && return true
-        end
-    end
-    isa(arg, PartialOpaque) && return true
-    isa(arg, Const) || return true
-    val = arg.val
-    # don't consider mutable values useful constants
-    return isa(val, Symbol) || isa(val, Type) || !ismutable(val)
 end
 
 function is_const_prop_profitable_conditional(cnd::Conditional, fargs::Vector{Any}, sv::InferenceState)
@@ -1162,7 +1123,7 @@ function is_const_prop_profitable_conditional(cnd::Conditional, fargs::Vector{An
         return true
     end
     # as a minor optimization, we just check the result is a constant or not,
-    # since both `has_nontrivial_const_info`/`is_const_prop_profitable_arg` return `true`
+    # since both `has_nontrivial_extended_info`/`is_const_prop_profitable_arg` return `true`
     # for `Const(::Bool)`
     return isa(widenconditional(cnd), Const)
 end
@@ -1179,14 +1140,14 @@ function find_constrained_arg(cnd::Conditional, fargs::Vector{Any}, sv::Inferenc
 end
 
 # checks if all argtypes has additional information other than what `Type` can provide
-function is_all_overridden((; fargs, argtypes)::ArgInfo, sv::InferenceState)
+function is_all_overridden(interp::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, sv::InferenceState)
+    𝕃ᵢ = typeinf_lattice(interp)
     for i in 1:length(argtypes)
         a = argtypes[i]
-        if isa(a, Conditional) && fargs !== nothing
+        if has_conditional(𝕃ᵢ) && isa(a, Conditional) && fargs !== nothing
             is_const_prop_profitable_conditional(a, fargs, sv) || return false
         else
-            a = widenslotwrapper(a)
-            is_forwardable_argtype(a) || return false
+            is_forwardable_argtype(𝕃ᵢ, widenslotwrapper(a)) || return false
         end
     end
     return true
@@ -1199,11 +1160,11 @@ function force_const_prop(interp::AbstractInterpreter, @nospecialize(f), method:
            istopfunction(f, :setproperty!)
 end
 
-function const_prop_function_heuristic(
-    interp::AbstractInterpreter, @nospecialize(f), (; argtypes)::ArgInfo,
+function const_prop_function_heuristic(interp::AbstractInterpreter, @nospecialize(f), arginfo::ArgInfo,
     nargs::Int, all_overridden::Bool, still_nothrow::Bool, _::InferenceState)
-    ⊑ᵢ = ⊑(typeinf_lattice(interp))
+    argtypes = arginfo.argtypes
     if nargs > 1
+        𝕃ᵢ = typeinf_lattice(interp)
         if istopfunction(f, :getindex) || istopfunction(f, :setindex!)
             arrty = argtypes[2]
             # don't propagate constant index into indexing of non-constant array
@@ -1213,12 +1174,12 @@ function const_prop_function_heuristic(
                 if !still_nothrow || ismutabletype(arrty)
                     return false
                 end
-            elseif arrty ⊑ᵢ Array
+            elseif ⊑(𝕃ᵢ, arrty, Array)
                 return false
             end
         elseif istopfunction(f, :iterate)
             itrty = argtypes[2]
-            if itrty ⊑ᵢ Array
+            if ⊑(𝕃ᵢ, itrty, Array)
                 return false
             end
         end
@@ -1247,8 +1208,8 @@ end
 # where we would spend a lot of time, but are probably unlikely to get an improved
 # result anyway.
 function const_prop_methodinstance_heuristic(interp::AbstractInterpreter,
-    match::MethodMatch, mi::MethodInstance, arginfo::ArgInfo, sv::InferenceState)
-    method = match.method
+    mi::MethodInstance, arginfo::ArgInfo, sv::InferenceState)
+    method = mi.def::Method
     if method.is_for_opaque_closure
         # Not inlining an opaque closure can be very expensive, so be generous
         # with the const-prop-ability. It is quite possible that we can't infer
@@ -1256,34 +1217,33 @@ function const_prop_methodinstance_heuristic(interp::AbstractInterpreter,
         # isn't particularly helpful here.
         return true
     end
-    # Peek at the inferred result for the function to determine if the optimizer
-    # was able to cut it down to something simple (inlineable in particular).
-    # If so, there's a good chance we might be able to const prop all the way
-    # through and learn something new.
-    if isdefined(method, :source) && is_inlineable(method.source)
+    # now check if the source of this method instance is inlineable, since the extended type
+    # information we have here would be discarded if it is not inlined into a callee context
+    # (modulo the inferred return type that can be potentially refined)
+    if is_declared_inline(method)
+        # this method is declared as `@inline` and will be inlined
         return true
+    end
+    flag = get_curr_ssaflag(sv)
+    if is_stmt_inline(flag)
+        # force constant propagation for a call that is going to be inlined
+        # since the inliner will try to find this constant result
+        # if these constant arguments arrive there
+        return true
+    elseif is_stmt_noinline(flag)
+        # this call won't be inlined, thus this constant-prop' will most likely be unfruitful
+        return false
     else
-        flag = get_curr_ssaflag(sv)
-        if is_stmt_inline(flag)
-            # force constant propagation for a call that is going to be inlined
-            # since the inliner will try to find this constant result
-            # if these constant arguments arrive there
-            return true
-        elseif is_stmt_noinline(flag)
-            # this call won't be inlined, thus this constant-prop' will most likely be unfruitful
-            return false
-        else
-            code = get(code_cache(interp), mi, nothing)
-            if isdefined(code, :inferred)
-                if isa(code, CodeInstance)
-                    inferred = @atomic :monotonic code.inferred
-                else
-                    inferred = code.inferred
-                end
-                # TODO propagate a specific `CallInfo` that conveys information about this call
-                if inlining_policy(interp, inferred, NoCallInfo(), IR_FLAG_NULL, mi, arginfo.argtypes) !== nothing
-                    return true
-                end
+        # Peek at the inferred result for the method to determine if the optimizer
+        # was able to cut it down to something simple (inlineable in particular).
+        # If so, there will be a good chance we might be able to const prop
+        # all the way through and learn something new.
+        code = get(code_cache(interp), mi, nothing)
+        if isa(code, CodeInstance)
+            inferred = @atomic :monotonic code.inferred
+            # TODO propagate a specific `CallInfo` that conveys information about this call
+            if inlining_policy(interp, inferred, NoCallInfo(), IR_FLAG_NULL, mi, arginfo.argtypes) !== nothing
+                return true
             end
         end
     end
@@ -1342,6 +1302,14 @@ function ssa_def_slot(@nospecialize(arg), sv::InferenceState)
     return arg
 end
 
+struct AbstractIterationResult
+    cti::Vector{Any}
+    info::MaybeAbstractIterationInfo
+    ai_effects::Effects
+end
+AbstractIterationResult(cti::Vector{Any}, info::MaybeAbstractIterationInfo) =
+    AbstractIterationResult(cti, info, EFFECTS_TOTAL)
+
 # `typ` is the inferred type for expression `arg`.
 # if the expression constructs a container (e.g. `svec(x,y,z)`),
 # refine its type to an array of element types.
@@ -1352,14 +1320,14 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
     if isa(typ, PartialStruct)
         widet = typ.typ
         if isa(widet, DataType) && widet.name === Tuple.name
-            return typ.fields, nothing
+            return AbstractIterationResult(typ.fields, nothing)
         end
     end
 
     if isa(typ, Const)
         val = typ.val
         if isa(val, SimpleVector) || isa(val, Tuple)
-            return Any[ Const(val[i]) for i in 1:length(val) ], nothing # avoid making a tuple Generator here!
+            return AbstractIterationResult(Any[ Const(val[i]) for i in 1:length(val) ], nothing) # avoid making a tuple Generator here!
         end
     end
 
@@ -1374,12 +1342,12 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
     if isa(tti, Union)
         utis = uniontypes(tti)
         if any(@nospecialize(t) -> !isa(t, DataType) || !(t <: Tuple) || !isknownlength(t), utis)
-            return Any[Vararg{Any}], nothing
+            return AbstractIterationResult(Any[Vararg{Any}], nothing, Effects())
         end
         ltp = length((utis[1]::DataType).parameters)
         for t in utis
             if length((t::DataType).parameters) != ltp
-                return Any[Vararg{Any}], nothing
+                return AbstractIterationResult(Any[Vararg{Any}], nothing)
             end
         end
         result = Any[ Union{} for _ in 1:ltp ]
@@ -1390,12 +1358,12 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
                 result[j] = tmerge(result[j], rewrap_unionall(tps[j], tti0))
             end
         end
-        return result, nothing
+        return AbstractIterationResult(result, nothing)
     elseif tti0 <: Tuple
         if isa(tti0, DataType)
-            return Any[ p for p in tti0.parameters ], nothing
+            return AbstractIterationResult(Any[ p for p in tti0.parameters ], nothing)
         elseif !isa(tti, DataType)
-            return Any[Vararg{Any}], nothing
+            return AbstractIterationResult(Any[Vararg{Any}], nothing)
         else
             len = length(tti.parameters)
             last = tti.parameters[len]
@@ -1404,12 +1372,14 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
             if va
                 elts[len] = Vararg{elts[len]}
             end
-            return elts, nothing
+            return AbstractIterationResult(elts, nothing)
         end
-    elseif tti0 === SimpleVector || tti0 === Any
-        return Any[Vararg{Any}], nothing
+    elseif tti0 === SimpleVector
+        return AbstractIterationResult(Any[Vararg{Any}], nothing)
+    elseif tti0 === Any
+        return AbstractIterationResult(Any[Vararg{Any}], nothing, Effects())
     elseif tti0 <: Array
-        return Any[Vararg{eltype(tti0)}], nothing
+        return AbstractIterationResult(Any[Vararg{eltype(tti0)}], nothing)
     else
         return abstract_iteration(interp, itft, typ, sv)
     end
@@ -1420,7 +1390,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     if isa(itft, Const)
         iteratef = itft.val
     else
-        return Any[Vararg{Any}], nothing
+        return AbstractIterationResult(Any[Vararg{Any}], nothing, Effects())
     end
     @assert !isvarargtype(itertype)
     call = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[itft, itertype]), StmtInfo(true), sv)
@@ -1430,31 +1400,32 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     # WARNING: Changes to the iteration protocol must be reflected here,
     # this is not just an optimization.
     # TODO: this doesn't realize that Array, SimpleVector, Tuple, and NamedTuple do not use the iterate protocol
-    stateordonet === Bottom && return Any[Bottom], AbstractIterationInfo(CallMeta[CallMeta(Bottom, call.effects, info)])
+    stateordonet === Bottom && return AbstractIterationResult(Any[Bottom], AbstractIterationInfo(CallMeta[CallMeta(Bottom, call.effects, info)], true))
     valtype = statetype = Bottom
     ret = Any[]
     calls = CallMeta[call]
     stateordonet_widened = widenconst(stateordonet)
+    𝕃ᵢ = typeinf_lattice(interp)
 
-    # Try to unroll the iteration up to MAX_TUPLE_SPLAT, which covers any finite
+    # Try to unroll the iteration up to max_tuple_splat, which covers any finite
     # length iterators, or interesting prefix
     while true
         if stateordonet_widened === Nothing
-            return ret, AbstractIterationInfo(calls)
+            return AbstractIterationResult(ret, AbstractIterationInfo(calls, true))
         end
-        if Nothing <: stateordonet_widened || length(ret) >= InferenceParams(interp).MAX_TUPLE_SPLAT
+        if Nothing <: stateordonet_widened || length(ret) >= InferenceParams(interp).max_tuple_splat
             break
         end
         if !isa(stateordonet_widened, DataType) || !(stateordonet_widened <: Tuple) || isvatuple(stateordonet_widened) || length(stateordonet_widened.parameters) != 2
             break
         end
-        nstatetype = getfield_tfunc(typeinf_lattice(interp), stateordonet, Const(2))
+        nstatetype = getfield_tfunc(𝕃ᵢ, stateordonet, Const(2))
         # If there's no new information in this statetype, don't bother continuing,
         # the iterator won't be finite.
-        if ⊑(typeinf_lattice(interp), nstatetype, statetype)
-            return Any[Bottom], nothing
+        if ⊑(𝕃ᵢ, nstatetype, statetype)
+            return AbstractIterationResult(Any[Bottom], AbstractIterationInfo(calls, false), EFFECTS_THROWS)
         end
-        valtype = getfield_tfunc(typeinf_lattice(interp), stateordonet, Const(1))
+        valtype = getfield_tfunc(𝕃ᵢ, stateordonet, Const(1))
         push!(ret, valtype)
         statetype = nstatetype
         call = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertype, statetype]), StmtInfo(true), sv)
@@ -1466,8 +1437,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     # the precise (potentially const) state type
     # statetype and valtype are reinitialized in the first iteration below from the
     # (widened) stateordonet, which has not yet been fully analyzed in the loop above
-    statetype = Bottom
-    valtype = Bottom
+    valtype = statetype = Bottom
     may_have_terminated = Nothing <: stateordonet_widened
     while valtype !== Any
         nounion = typeintersect(stateordonet_widened, Tuple{Any,Any})
@@ -1482,7 +1452,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
                 # ... but cannot terminate
                 if !may_have_terminated
                     #  ... and cannot have terminated prior to this loop
-                    return Any[Bottom], nothing
+                    return AbstractIterationResult(Any[Bottom], AbstractIterationInfo(calls, false), Effects())
                 else
                     # iterator may have terminated prior to this loop, but not during it
                     valtype = Bottom
@@ -1492,13 +1462,15 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
         end
         valtype = tmerge(valtype, nounion.parameters[1])
         statetype = tmerge(statetype, nounion.parameters[2])
-        stateordonet = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertype, statetype]), StmtInfo(true), sv).rt
+        call = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertype, statetype]), StmtInfo(true), sv)
+        push!(calls, call)
+        stateordonet = call.rt
         stateordonet_widened = widenconst(stateordonet)
     end
     if valtype !== Union{}
         push!(ret, Vararg{valtype})
     end
-    return ret, nothing
+    return AbstractIterationResult(ret, AbstractIterationInfo(calls, false))
 end
 
 # do apply(af, fargs...), where af is a function value
@@ -1520,7 +1492,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
     end
     res = Union{}
     nargs = length(aargtypes)
-    splitunions = 1 < unionsplitcost(aargtypes) <= InferenceParams(interp).MAX_APPLY_UNION_ENUM
+    splitunions = 1 < unionsplitcost(aargtypes) <= InferenceParams(interp).max_apply_union_enum
     ctypes = [Any[aft]]
     infos = Vector{MaybeAbstractIterationInfo}[MaybeAbstractIterationInfo[]]
     effects = EFFECTS_TOTAL
@@ -1529,13 +1501,9 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
         infos′ = Vector{MaybeAbstractIterationInfo}[]
         for ti in (splitunions ? uniontypes(aargtypes[i]) : Any[aargtypes[i]])
             if !isvarargtype(ti)
-                cti_info = precise_container_type(interp, itft, ti, sv)
-                cti = cti_info[1]::Vector{Any}
-                info = cti_info[2]::MaybeAbstractIterationInfo
+                (;cti, info, ai_effects) = precise_container_type(interp, itft, ti, sv)
             else
-                cti_info = precise_container_type(interp, itft, unwrapva(ti), sv)
-                cti = cti_info[1]::Vector{Any}
-                info = cti_info[2]::MaybeAbstractIterationInfo
+                (;cti, info, ai_effects) = precise_container_type(interp, itft, unwrapva(ti), sv)
                 # We can't represent a repeating sequence of the same types,
                 # so tmerge everything together to get one type that represents
                 # everything.
@@ -1547,6 +1515,12 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
                     argt = tmerge(argt, cti[i])
                 end
                 cti = Any[Vararg{argt}]
+            end
+            effects = merge_effects(effects, ai_effects)
+            if info !== nothing
+                for call in info.each
+                    effects = merge_effects(effects, call.effects)
+                end
             end
             if any(@nospecialize(t) -> t === Bottom, cti)
                 continue
@@ -1570,7 +1544,9 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
     end
     retinfos = ApplyCallInfo[]
     retinfo = UnionSplitApplyCallInfo(retinfos)
-    for i = 1:length(ctypes)
+    napplicable = length(ctypes)
+    seen = 0
+    for i = 1:napplicable
         ct = ctypes[i]
         arginfo = infos[i]
         lct = length(ct)
@@ -1584,16 +1560,20 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
             end
         end
         call = abstract_call(interp, ArgInfo(nothing, ct), si, sv, max_methods)
+        seen += 1
         push!(retinfos, ApplyCallInfo(call.info, arginfo))
         res = tmerge(res, call.rt)
         effects = merge_effects(effects, call.effects)
-        if bail_out_apply(interp, res, sv)
-            if i != length(ctypes)
-                # No point carrying forward the info, we're not gonna inline it anyway
-                retinfo = NoCallInfo()
-            end
+        if bail_out_apply(interp, InferenceLoopState(ct, res, effects), sv)
+            add_remark!(interp, sv, "_apply_iterate inference reached maximally imprecise information. Bailing on.")
             break
         end
+    end
+    if seen ≠ napplicable
+        # there is unanalyzed candidate, widen type and effects to the top
+        res = Any
+        effects = Effects()
+        retinfo = NoCallInfo() # NOTE this is necessary to prevent the inlining processing
     end
     # TODO: Add a special info type to capture all the iteration info.
     # For now, only propagate info if we don't also union-split the iteration
@@ -1728,14 +1708,14 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
             a = ssa_def_slot(fargs[2], sv)
             a2 = argtypes[2]
             if isa(a, SlotNumber)
-                cndt = isa_condition(a2, argtypes[3], InferenceParams(interp).MAX_UNION_SPLITTING, rt)
+                cndt = isa_condition(a2, argtypes[3], InferenceParams(interp).max_union_splitting, rt)
                 if cndt !== nothing
                     return Conditional(a, cndt.thentype, cndt.elsetype)
                 end
             end
             if isa(a2, MustAlias)
                 if !isa(rt, Const) # skip refinement when the field is known precisely (just optimization)
-                    cndt = isa_condition(a2, argtypes[3], InferenceParams(interp).MAX_UNION_SPLITTING)
+                    cndt = isa_condition(a2, argtypes[3], InferenceParams(interp).max_union_splitting)
                     if cndt !== nothing
                         return form_mustalias_conditional(a2, cndt.thentype, cndt.elsetype)
                     end
@@ -1749,18 +1729,18 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
             # if doing a comparison to a singleton, consider returning a `Conditional` instead
             if isa(aty, Const)
                 if isa(b, SlotNumber)
-                    cndt = egal_condition(aty, bty, InferenceParams(interp).MAX_UNION_SPLITTING, rt)
+                    cndt = egal_condition(aty, bty, InferenceParams(interp).max_union_splitting, rt)
                     return Conditional(b, cndt.thentype, cndt.elsetype)
                 elseif isa(bty, MustAlias) && !isa(rt, Const) # skip refinement when the field is known precisely (just optimization)
-                    cndt = egal_condition(aty, bty.fldtyp, InferenceParams(interp).MAX_UNION_SPLITTING)
+                    cndt = egal_condition(aty, bty.fldtyp, InferenceParams(interp).max_union_splitting)
                     return form_mustalias_conditional(bty, cndt.thentype, cndt.elsetype)
                 end
             elseif isa(bty, Const)
                 if isa(a, SlotNumber)
-                    cndt = egal_condition(bty, aty, InferenceParams(interp).MAX_UNION_SPLITTING, rt)
+                    cndt = egal_condition(bty, aty, InferenceParams(interp).max_union_splitting, rt)
                     return Conditional(a, cndt.thentype, cndt.elsetype)
                 elseif isa(aty, MustAlias) && !isa(rt, Const) # skip refinement when the field is known precisely (just optimization)
-                    cndt = egal_condition(bty, aty.fldtyp, InferenceParams(interp).MAX_UNION_SPLITTING)
+                    cndt = egal_condition(bty, aty.fldtyp, InferenceParams(interp).max_union_splitting)
                     return form_mustalias_conditional(aty, cndt.thentype, cndt.elsetype)
                 end
             end
@@ -1810,7 +1790,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                 thentype = Bottom
                 elsetype = Bottom
                 for ty in uniontypes(uty)
-                    cnd = isdefined_tfunc(ty, fld)
+                    cnd = isdefined_tfunc(𝕃ᵢ, ty, fld)
                     if isa(cnd, Const)
                         if cnd.val::Bool
                             thentype = tmerge(thentype, ty)
@@ -1830,38 +1810,40 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
     return rt
 end
 
-function abstract_call_unionall(argtypes::Vector{Any})
+function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{Any})
     if length(argtypes) == 3
         canconst = true
+        a2 = argtypes[2]
         a3 = argtypes[3]
+        ⊑ᵢ = ⊑(typeinf_lattice(interp))
+        nothrow = a2 ⊑ᵢ TypeVar && (a3 ⊑ᵢ Type || a3 ⊑ᵢ TypeVar)
         if isa(a3, Const)
             body = a3.val
         elseif isType(a3)
             body = a3.parameters[1]
             canconst = false
         else
-            return Any
+            return CallMeta(Any, Effects(EFFECTS_TOTAL; nothrow), NoCallInfo())
         end
-        if !isa(body, Type) && !isa(body, TypeVar)
-            return Any
+        if !(isa(body, Type) || isa(body, TypeVar))
+            return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
         end
         if has_free_typevars(body)
-            a2 = argtypes[2]
             if isa(a2, Const)
                 tv = a2.val
             elseif isa(a2, PartialTypeVar)
                 tv = a2.tv
                 canconst = false
             else
-                return Any
+                return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
             end
-            !isa(tv, TypeVar) && return Any
+            isa(tv, TypeVar) || return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
             body = UnionAll(tv, body)
         end
         ret = canconst ? Const(body) : Type{body}
-        return ret
+        return CallMeta(ret, Effects(EFFECTS_TOTAL; nothrow), NoCallInfo())
     end
-    return Any
+    return CallMeta(Any, EFFECTS_UNKNOWN, NoCallInfo())
 end
 
 function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, si::StmtInfo, sv::InferenceState)
@@ -1871,7 +1853,7 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, 3))
     isexact || return CallMeta(Any, Effects(), NoCallInfo())
     unwrapped = unwrap_unionall(types)
-    if types === Bottom || types === Any || !(unwrapped isa DataType)
+    if types === Bottom || !(unwrapped isa DataType) || unwrapped.name !== Tuple.name
         return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
     end
     argtype = argtypes_to_type(argtype_tail(argtypes, 4))
@@ -1953,9 +1935,19 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return abstract_modifyfield!(interp, argtypes, si, sv)
         elseif f === Core.finalizer
             return abstract_finalizer(interp, argtypes, sv)
+        elseif f === applicable
+            return abstract_applicable(interp, argtypes, sv, max_methods)
         end
         rt = abstract_call_builtin(interp, f, arginfo, sv, max_methods)
-        effects = builtin_effects(𝕃ᵢ, f, argtypes[2:end], rt)
+        effects = builtin_effects(𝕃ᵢ, f, arginfo, rt)
+        if f === getfield && (fargs !== nothing && isexpr(fargs[end], :boundscheck)) && !is_nothrow(effects) && isa(sv, InferenceState)
+            # As a special case, we delayed tainting `noinbounds` for getfield calls in case we can prove
+            # in-boundedness indepedently. Here we need to put that back in other cases.
+            # N.B.: This isn't about the effects of the call itself, but a delayed contribution of the :boundscheck
+            # statement, so we need to merge this directly into sv, rather than modifying thte effects.
+            merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; noinbounds=false,
+                consistent = (get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) != 0 ? ALWAYS_FALSE : ALWAYS_TRUE))
+        end
         return CallMeta(rt, effects, NoCallInfo())
     elseif isa(f, Core.OpaqueClosure)
         # calling an OpaqueClosure about which we have no information returns no information
@@ -1973,9 +1965,12 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         elseif la == 3
             ub_var = argtypes[3]
         end
-        return CallMeta(typevar_tfunc(n, lb_var, ub_var), EFFECTS_UNKNOWN, NoCallInfo())
+        pT = typevar_tfunc(𝕃ᵢ, n, lb_var, ub_var)
+        effects = builtin_effects(𝕃ᵢ, Core._typevar, ArgInfo(nothing,
+            Any[Const(Core._typevar), n, lb_var, ub_var]), pT)
+        return CallMeta(pT, effects, NoCallInfo())
     elseif f === UnionAll
-        return CallMeta(abstract_call_unionall(argtypes), EFFECTS_UNKNOWN, NoCallInfo())
+        return abstract_call_unionall(interp, argtypes)
     elseif f === Tuple && la == 2
         aty = argtypes[2]
         ty = isvarargtype(aty) ? unwrapva(aty) : widenconst(aty)
@@ -2009,27 +2004,11 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             fargs = nothing
         end
         argtypes = Any[typeof(<:), argtypes[3], argtypes[2]]
-        return CallMeta(abstract_call_known(interp, <:, ArgInfo(fargs, argtypes), si, sv, max_methods).rt, EFFECTS_TOTAL, NoCallInfo())
-    elseif la == 2 &&
-           (a2 = argtypes[2]; isa(a2, Const)) && (svecval = a2.val; isa(svecval, SimpleVector)) &&
-           istopfunction(f, :length)
-        # mark length(::SimpleVector) as @pure
-        return CallMeta(Const(length(svecval)), EFFECTS_TOTAL, MethodResultPure())
-    elseif la == 3 &&
-           (a2 = argtypes[2]; isa(a2, Const)) && (svecval = a2.val; isa(svecval, SimpleVector)) &&
-           (a3 = argtypes[3]; isa(a3, Const)) && (idx = a3.val; isa(idx, Int)) &&
-           istopfunction(f, :getindex)
-        # mark getindex(::SimpleVector, i::Int) as @pure
-        if 1 <= idx <= length(svecval) && isassigned(svecval, idx)
-            return CallMeta(Const(getindex(svecval, idx)), EFFECTS_TOTAL, MethodResultPure())
-        end
+        return abstract_call_known(interp, <:, ArgInfo(fargs, argtypes), si, sv, max_methods)
     elseif la == 2 && istopfunction(f, :typename)
         return CallMeta(typename_static(argtypes[2]), EFFECTS_TOTAL, MethodResultPure())
-    elseif la == 3 && istopfunction(f, :typejoin)
-        if is_all_const_arg(arginfo, #=start=#2)
-            val = _pure_eval_call(f, arginfo)
-            return CallMeta(val === nothing ? Type : val, EFFECTS_TOTAL, MethodResultPure())
-        end
+    elseif f === Core._hasmethod
+        return _hasmethod_tfunc(interp, argtypes, sv)
     end
     atype = argtypes_to_type(argtypes)
     return abstract_call_gf_by_type(interp, f, arginfo, si, atype, sv, max_methods)
@@ -2159,22 +2138,46 @@ function abstract_eval_cfunction(interp::AbstractInterpreter, e::Expr, vtypes::V
     nothing
 end
 
-function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, sv::Union{InferenceState, IRCode})
+function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable, Nothing}, sv::Union{InferenceState, IRCode})
+    rt = Any
     head = e.head
     if head === :static_parameter
         n = e.args[1]::Int
-        t = Any
+        nothrow = false
         if 1 <= n <= length(sv.sptypes)
-            t = sv.sptypes[n]
+            sp = sv.sptypes[n]
+            rt = sp.typ
+            nothrow = !sp.undef
         end
-        return t
+        merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; nothrow))
+        return rt
     elseif head === :boundscheck
-        return Bool
+        if isa(sv, InferenceState)
+            stmt = sv.src.code[sv.currpc]
+            if isexpr(stmt, :call)
+                f = abstract_eval_value(interp, stmt.args[1], vtypes, sv)
+                if f isa Const && f.val === getfield
+                    # boundscheck of `getfield` call is analyzed by tfunc potentially without
+                    # tainting :inbounds or :consistent when it's known to be nothrow
+                    @goto delay_effects_analysis
+                end
+            end
+            # If there is no particular `@inbounds` for this function, then we only taint `:noinbounds`,
+            # which will subsequently taint `:consistent`-cy if this function is called from another
+            # function that uses `@inbounds`. However, if this `:boundscheck` is itself within an
+            # `@inbounds` region, its value depends on `--check-bounds`, so we need to taint
+            # `:consistent`-cy here also.
+            merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; noinbounds=false,
+                consistent = (get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) != 0 ? ALWAYS_FALSE : ALWAYS_TRUE))
+        end
+        @label delay_effects_analysis
+        rt = Bool
+    elseif head === :inbounds
+        @assert false && "Expected this to have been moved into flags"
     elseif head === :the_exception
         merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE))
-        return Any
     end
-    return Any
+    return rt
 end
 
 function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::Union{VarTable, Nothing}, sv::Union{InferenceState, IRCode})
@@ -2204,7 +2207,7 @@ end
 
 function abstract_eval_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::Union{VarTable, Nothing}, sv::Union{InferenceState, IRCode})
     if isa(e, Expr)
-        return abstract_eval_value_expr(interp, e, sv)
+        return abstract_eval_value_expr(interp, e, vtypes, sv)
     else
         typ = abstract_eval_special_value(interp, e, vtypes, sv)
         return collect_limitations!(typ, sv)
@@ -2234,7 +2237,8 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
                                       sv::Union{InferenceState, IRCode}, mi::Union{MethodInstance, Nothing})::RTEffects
     effects = EFFECTS_UNKNOWN
     ehead = e.head
-    ⊑ᵢ = ⊑(typeinf_lattice(interp))
+    𝕃ᵢ = typeinf_lattice(interp)
+    ⊑ᵢ = ⊑(𝕃ᵢ)
     if ehead === :call
         ea = e.args
         argtypes = collect_argtypes(interp, ea, vtypes, sv)
@@ -2245,41 +2249,28 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
             arginfo = ArgInfo(ea, argtypes)
             si = StmtInfo(isa(sv, IRCode) ? true : !call_result_unused(sv, sv.currpc))
             (; rt, effects, info) = abstract_call(interp, arginfo, si, sv)
-            merge_effects!(interp, sv, effects)
             if isa(sv, InferenceState)
                 sv.stmt_info[sv.currpc] = info
+                # mark this call statement as DCE-elgible
+                # TODO better to do this in a single pass based on the `info` object at the end of abstractinterpret?
+                if is_removable_if_unused(effects)
+                    add_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE)
+                else
+                    sub_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE)
+                end
             end
         end
         t = rt
     elseif ehead === :new
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
-        nothrow = true
-        if isconcretedispatch(t)
-            ismutable = ismutabletype(t)
-            fcount = fieldcount(t)
+        ut = unwrap_unionall(t)
+        consistent = ALWAYS_FALSE
+        nothrow = false
+        if isa(ut, DataType) && !isabstracttype(ut)
+            ismutable = ismutabletype(ut)
+            fcount = datatype_fieldcount(ut)
             nargs = length(e.args) - 1
-            @assert fcount ≥ nargs "malformed :new expression" # syntactically enforced by the front-end
-            ats = Vector{Any}(undef, nargs)
-            local anyrefine = false
-            local allconst = true
-            for i = 1:nargs
-                at = widenslotwrapper(abstract_eval_value(interp, e.args[i+1], vtypes, sv))
-                ft = fieldtype(t, i)
-                nothrow && (nothrow = at ⊑ᵢ ft)
-                at = tmeet(typeinf_lattice(interp), at, ft)
-                at === Bottom && @goto always_throw
-                if ismutable && !isconst(t, i)
-                    ats[i] = ft # can't constrain this field (as it may be modified later)
-                    continue
-                end
-                allconst &= isa(at, Const)
-                if !anyrefine
-                    anyrefine = has_nontrivial_const_info(typeinf_lattice(interp), at) || # constant information
-                                ⋤(typeinf_lattice(interp), at, ft) # just a type-level information, but more precise than the declared type
-                end
-                ats[i] = at
-            end
-            if fcount > nargs && any(i::Int -> !is_undefref_fieldtype(fieldtype(t, i)), (nargs+1):fcount)
+            if fcount === nothing || (fcount > nargs && any(i::Int -> !is_undefref_fieldtype(fieldtype(t, i)), (nargs+1):fcount))
                 # allocation with undefined field leads to undefined behavior and should taint `:consistent`-cy
                 consistent = ALWAYS_FALSE
             elseif ismutable
@@ -2289,27 +2280,49 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
             else
                 consistent = ALWAYS_TRUE
             end
-            # For now, don't allow:
-            # - Const/PartialStruct of mutables (but still allow PartialStruct of mutables
-            #   with `const` fields if anything refined)
-            # - partially initialized Const/PartialStruct
-            if fcount == nargs
-                if consistent === ALWAYS_TRUE && allconst
-                    argvals = Vector{Any}(undef, nargs)
-                    for j in 1:nargs
-                        argvals[j] = (ats[j]::Const).val
+            if isconcretedispatch(t)
+                nothrow = true
+                @assert fcount !== nothing && fcount ≥ nargs "malformed :new expression" # syntactically enforced by the front-end
+                ats = Vector{Any}(undef, nargs)
+                local anyrefine = false
+                local allconst = true
+                for i = 1:nargs
+                    at = widenslotwrapper(abstract_eval_value(interp, e.args[i+1], vtypes, sv))
+                    ft = fieldtype(t, i)
+                    nothrow && (nothrow = at ⊑ᵢ ft)
+                    at = tmeet(𝕃ᵢ, at, ft)
+                    at === Bottom && @goto always_throw
+                    if ismutable && !isconst(t, i)
+                        ats[i] = ft # can't constrain this field (as it may be modified later)
+                        continue
                     end
-                    t = Const(ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), t, argvals, nargs))
-                elseif anyrefine
-                    t = PartialStruct(t, ats)
+                    allconst &= isa(at, Const)
+                    if !anyrefine
+                        anyrefine = has_nontrivial_extended_info(𝕃ᵢ, at) || # extended lattice information
+                                    ⋤(𝕃ᵢ, at, ft) # just a type-level information, but more precise than the declared type
+                    end
+                    ats[i] = at
                 end
+                # For now, don't allow:
+                # - Const/PartialStruct of mutables (but still allow PartialStruct of mutables
+                #   with `const` fields if anything refined)
+                # - partially initialized Const/PartialStruct
+                if fcount == nargs
+                    if consistent === ALWAYS_TRUE && allconst
+                        argvals = Vector{Any}(undef, nargs)
+                        for j in 1:nargs
+                            argvals[j] = (ats[j]::Const).val
+                        end
+                        t = Const(ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), t, argvals, nargs))
+                    elseif anyrefine
+                        t = PartialStruct(t, ats)
+                    end
+                end
+            else
+                t = refine_partial_type(t)
             end
-        else
-            consistent = ALWAYS_FALSE
-            nothrow = false
         end
         effects = Effects(EFFECTS_TOTAL; consistent, nothrow)
-        merge_effects!(interp, sv, effects)
     elseif ehead === :splatnew
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
         nothrow = false # TODO: More precision
@@ -2325,10 +2338,11 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
                 nothrow = isexact
                 t = PartialStruct(t, at.fields::Vector{Any})
             end
+        else
+            t = refine_partial_type(t)
         end
         consistent = !ismutabletype(t) ? ALWAYS_TRUE : CONSISTENT_IF_NOTRETURNED
         effects = Effects(EFFECTS_TOTAL; consistent, nothrow)
-        merge_effects!(interp, sv, effects)
     elseif ehead === :new_opaque_closure
         t = Union{}
         effects = Effects() # TODO
@@ -2340,7 +2354,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
                 t = Bottom
             else
                 mi′ = isa(sv, InferenceState) ? sv.linfo : mi
-                t = _opaque_closure_tfunc(argtypes[1], argtypes[2], argtypes[3],
+                t = _opaque_closure_tfunc(𝕃ᵢ, argtypes[1], argtypes[2], argtypes[3],
                     argtypes[4], argtypes[5:end], mi′)
                 if isa(t, PartialOpaque) && isa(sv, InferenceState) && !call_result_unused(sv, sv.currpc)
                     # Infer this now so that the specialization is available to
@@ -2356,20 +2370,24 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
     elseif ehead === :foreigncall
         (;rt, effects) = abstract_eval_foreigncall(interp, e, vtypes, sv, mi)
         t = rt
-        merge_effects!(interp, sv, effects)
+        if isa(sv, InferenceState)
+            # mark this call statement as DCE-elgible
+            if is_removable_if_unused(effects)
+                add_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE)
+            else
+                sub_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE)
+            end
+        end
     elseif ehead === :cfunction
         effects = EFFECTS_UNKNOWN
-        merge_effects!(interp, sv, effects)
         t = e.args[1]
         isa(t, Type) || (t = Any)
         abstract_eval_cfunction(interp, e, vtypes, sv)
     elseif ehead === :method
         t = (length(e.args) == 1) ? Any : Nothing
         effects = EFFECTS_UNKNOWN
-        merge_effects!(interp, sv, effects)
     elseif ehead === :copyast
         effects = EFFECTS_UNKNOWN
-        merge_effects!(interp, sv, effects)
         t = abstract_eval_value(interp, e.args[1], vtypes, sv)
         if t isa Const && t.val isa Expr
             # `copyast` makes copies of Exprs
@@ -2380,6 +2398,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
     elseif ehead === :isdefined
         sym = e.args[1]
         t = Bool
+        effects = EFFECTS_TOTAL
         if isa(sym, SlotNumber)
             vtyp = vtypes[slot_id(sym)]
             if vtyp.typ === Bottom
@@ -2390,21 +2409,23 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         elseif isa(sym, Symbol)
             if isdefined(sv.mod, sym)
                 t = Const(true)
-            elseif sv.params.assume_bindings_static
+            elseif InferenceParams(interp).assume_bindings_static
                 t = Const(false)
             end
         elseif isa(sym, GlobalRef)
             if isdefined(sym.mod, sym.name)
                 t = Const(true)
-            elseif sv.params.assume_bindings_static
+            elseif InferenceParams(interp).assume_bindings_static
                 t = Const(false)
             end
         elseif isexpr(sym, :static_parameter)
             n = sym.args[1]::Int
             if 1 <= n <= length(sv.sptypes)
-                spty = sv.sptypes[n]
-                if isa(spty, Const)
+                sp = sv.sptypes[n]
+                if !sp.undef
                     t = Const(true)
+                elseif sp.typ === Bottom
+                    t = Const(false)
                 end
             end
         end
@@ -2412,11 +2433,24 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         @label always_throw
         t = Bottom
         effects = EFFECTS_THROWS
-        merge_effects!(interp, sv, effects)
     else
-        t = abstract_eval_value_expr(interp, e, sv)
+        t = abstract_eval_value_expr(interp, e, vtypes, sv)
+        effects = EFFECTS_TOTAL
     end
     return RTEffects(t, effects)
+end
+
+# refine the result of instantiation of partially-known type `t` if some invariant can be assumed
+function refine_partial_type(@nospecialize t)
+    t′ = unwrap_unionall(t)
+    if isa(t′, DataType) && t′.name === _NAMEDTUPLE_NAME && length(t′.parameters) == 2 &&
+        (t′.parameters[1] === () || t′.parameters[2] === Tuple{})
+        # if the first/second parameter of `NamedTuple` is known to be empty,
+        # the second/first argument should also be empty tuple type,
+        # so refine it here
+        return Const(NamedTuple())
+    end
+    return t
 end
 
 function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable, Nothing}, sv::Union{InferenceState, IRCode}, mi::Union{MethodInstance, Nothing}=nothing)
@@ -2456,6 +2490,11 @@ function abstract_eval_phi(interp::AbstractInterpreter, phi::PhiNode, vtypes::Un
     return rt
 end
 
+function stmt_taints_inbounds_consistency(sv::InferenceState)
+    sv.src.propagate_inbounds && return true
+    return (get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) != 0
+end
+
 function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
     if !isa(e, Expr)
         if isa(e, PhiNode)
@@ -2464,6 +2503,17 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         return abstract_eval_special_value(interp, e, vtypes, sv)
     end
     (;rt, effects) = abstract_eval_statement_expr(interp, e, vtypes, sv, nothing)
+    if !effects.noinbounds
+        if !sv.src.propagate_inbounds
+            # The callee read our inbounds flag, but unless we propagate inbounds,
+            # we ourselves don't read our parent's inbounds.
+            effects = Effects(effects; noinbounds=true)
+        end
+        if (get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) != 0
+            effects = Effects(effects; consistent=ALWAYS_FALSE)
+        end
+    end
+    merge_effects!(interp, sv, effects)
     e = e::Expr
     @assert !isa(rt, TypeVar) "unhandled TypeVar"
     rt = maybe_singleton_const(rt)
@@ -2479,16 +2529,14 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
 end
 
 function isdefined_globalref(g::GlobalRef)
-    g.binding != C_NULL && return ccall(:jl_binding_boundp, Cint, (Ptr{Cvoid},), g.binding) != 0
-    return isdefined(g.mod, g.name)
+    return ccall(:jl_globalref_boundp, Cint, (Any,), g) != 0
 end
 
 function abstract_eval_globalref(g::GlobalRef)
     if isdefined_globalref(g) && isconst(g)
-        g.binding != C_NULL && return Const(ccall(:jl_binding_value, Any, (Ptr{Cvoid},), g.binding))
-        return Const(getglobal(g.mod, g.name))
+        return Const(ccall(:jl_get_globalref_value, Any, (Any,), g))
     end
-    ty = ccall(:jl_binding_type, Any, (Any, Any), g.mod, g.name)
+    ty = ccall(:jl_get_binding_type, Any, (Any, Any), g.mod, g.name)
     ty === nothing && return Any
     return ty
 end
@@ -2508,7 +2556,7 @@ function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, fram
         end
     elseif isdefined_globalref(g)
         nothrow = true
-    elseif isa(frame, InferenceState) && frame.params.assume_bindings_static
+    elseif InferenceParams(interp).assume_bindings_static
         consistent = inaccessiblememonly = ALWAYS_TRUE
         rt = Union{}
     end
@@ -2546,18 +2594,6 @@ struct BestguessInfo{Interp<:AbstractInterpreter}
     end
 end
 
-"""
-    widenreturn(@nospecialize(rt), info::BestguessInfo) -> new_bestguess
-
-Appropriately converts inferred type of a return value `rt` to such a type
-that we know we can store in the cache and is valid and good inter-procedurally,
-E.g. if `rt isa Conditional` then `rt` should be converted to `InterConditional`
-or the other cachable lattice element.
-
-External lattice `𝕃ₑ::ExternalLattice` may overload:
-- `widenreturn(𝕃ₑ::ExternalLattice, @nospecialize(rt), info::BestguessInfo)`
-- `widenreturn_noslotwrapper(𝕃ₑ::ExternalLattice, @nospecialize(rt), info::BestguessInfo)`
-"""
 function widenreturn(@nospecialize(rt), info::BestguessInfo)
     return widenreturn(typeinf_lattice(info.interp), rt, info)
 end
@@ -2671,7 +2707,7 @@ function widenreturn_partials(𝕃ᵢ::PartialsLattice, @nospecialize(rt), info:
             a = isvarargtype(a) ? a : widenreturn_noslotwrapper(𝕃, a, info)
             if !anyrefine
                 # TODO: consider adding && const_prop_profitable(a) here?
-                anyrefine = has_const_info(a) ||
+                anyrefine = has_extended_info(a) ||
                             ⊏(𝕃, a, fieldtype(rt.typ, i))
             end
             fields[i] = a
@@ -2787,7 +2823,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     @assert !frame.inferred
     frame.dont_work_on_me = true # mark that this function is currently on the stack
     W = frame.ip
-    nargs = narguments(frame)
+    nargs = narguments(frame, #=include_va=#false)
     slottypes = frame.slottypes
     ssavaluetypes = frame.ssavaluetypes
     bbs = frame.cfg.blocks
@@ -2828,6 +2864,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         empty!(frame.pclimitations)
                         @goto find_next_bb
                     end
+                    orig_condt = condt
                     if !(isa(condt, Const) || isa(condt, Conditional)) && isa(condx, SlotNumber)
                         # if this non-`Conditional` object is a slot, we form and propagate
                         # the conditional constraint on it
@@ -2859,6 +2896,14 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                             handle_control_backedge!(interp, frame, currpc, stmt.dest)
                             @goto branch
                         else
+                            if !⊑(𝕃ᵢ, orig_condt, Bool)
+                                merge_effects!(interp, frame, EFFECTS_THROWS)
+                                if !hasintersect(widenconst(orig_condt), Bool)
+                                    ssavaluetypes[currpc] = Bottom
+                                    @goto find_next_bb
+                                end
+                            end
+
                             # We continue with the true branch, but process the false
                             # branch here.
                             if isa(condt, Conditional)

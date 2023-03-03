@@ -447,7 +447,7 @@ function read(cmd::AbstractCmd)
     procs = open(cmd, "r", devnull)
     bytes = read(procs.out)
     success(procs) || pipeline_error(procs)
-    return bytes
+    return bytes::Vector{UInt8}
 end
 
 """

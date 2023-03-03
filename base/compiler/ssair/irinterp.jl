@@ -66,7 +66,17 @@ function kill_def_use!(tpdum::TwoPhaseDefUseMap, def::Int, use::Int)
     if !tpdum.complete
         tpdum.ssa_uses[def] -= 1
     else
-        @assert false && "TODO"
+        range = tpdum.ssa_uses[def]:(def == length(tpdum.ssa_uses) ? length(tpdum.data) : (tpdum.ssa_uses[def + 1] - 1))
+        # TODO: Sorted
+        useidx = findfirst(idx->tpdum.data[idx] == use, range)
+        @assert useidx !== nothing
+        idx = range[useidx]
+        while idx < lastindex(range)
+            ndata = tpdum.data[idx+1]
+            ndata == 0 && break
+            tpdum.data[idx] = ndata
+        end
+        tpdum.data[idx + 1] = 0
     end
 end
 kill_def_use!(tpdum::TwoPhaseDefUseMap, def::SSAValue, use::Int) =
@@ -94,11 +104,11 @@ struct IRInterpretationState
     lazydomtree::LazyDomtree
     function IRInterpretationState(interp::AbstractInterpreter,
         ir::IRCode, mi::MethodInstance, world::UInt, argtypes::Vector{Any})
-        argtypes = va_process_argtypes(argtypes, mi)
+        argtypes = va_process_argtypes(optimizer_lattice(interp), argtypes, mi)
         for i = 1:length(argtypes)
             argtypes[i] = widenslotwrapper(argtypes[i])
         end
-        argtypes_refined = Bool[!⊑(typeinf_lattice(interp), ir.argtypes[i], argtypes[i]) for i = 1:length(argtypes)]
+        argtypes_refined = Bool[!⊑(optimizer_lattice(interp), ir.argtypes[i], argtypes[i]) for i = 1:length(argtypes)]
         empty!(ir.argtypes)
         append!(ir.argtypes, argtypes)
         tpdum = TwoPhaseDefUseMap(length(ir.stmts))
@@ -109,7 +119,7 @@ struct IRInterpretationState
 end
 
 function codeinst_to_ir(interp::AbstractInterpreter, code::CodeInstance)
-    src = code.inferred
+    src = @atomic :monotonic code.inferred
     mi = code.def
     if isa(src, Vector{UInt8})
         src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, C_NULL, src)::CodeInfo
@@ -134,9 +144,11 @@ function concrete_eval_invoke(interp::AbstractInterpreter,
     inst::Expr, mi::MethodInstance, irsv::IRInterpretationState)
     mi_cache = WorldView(code_cache(interp), irsv.world)
     code = get(mi_cache, mi, nothing)
-    code === nothing && return nothing
+    if code === nothing
+        return Pair{Any, Bool}(nothing, false)
+    end
     argtypes = collect_argtypes(interp, inst.args[2:end], nothing, irsv.ir)
-    argtypes === nothing && return Union{}
+    argtypes === nothing && return Pair{Any, Bool}(Union{}, false)
     effects = decode_effects(code.ipo_purity_bits)
     if is_foldable(effects) && is_all_const_arg(argtypes, #=start=#1)
         args = collect_const_args(argtypes, #=start=#1)
@@ -144,11 +156,9 @@ function concrete_eval_invoke(interp::AbstractInterpreter,
         value = try
             Core._call_in_world_total(world, args...)
         catch
-            return Union{}
+            return Pair{Any, Bool}(Union{}, false)
         end
-        if is_inlineable_constant(value)
-            return Const(value)
-        end
+        return Pair{Any, Bool}(Const(value), true)
     else
         ir′ = codeinst_to_ir(interp, code)
         if ir′ !== nothing
@@ -156,16 +166,24 @@ function concrete_eval_invoke(interp::AbstractInterpreter,
             return _ir_abstract_constant_propagation(interp, irsv′)
         end
     end
-    return nothing
+    return Pair{Any, Bool}(nothing, is_nothrow(effects))
 end
 
 function abstract_eval_phi_stmt(interp::AbstractInterpreter, phi::PhiNode, ::Int, irsv::IRInterpretationState)
     return abstract_eval_phi(interp, phi, nothing, irsv.ir)
 end
 
+function propagate_control_effects!(interp::AbstractInterpreter, idx::Int, stmt::GotoIfNot,
+        irsv::IRInterpretationState, reprocess::Union{Nothing, BitSet, BitSetBoundedMinPrioritySet})
+    # Nothing to do for most abstract interpreters, but if the abstract
+    # interpreter has control-dependent lattice effects, it can override
+    # this method.
+    return false
+end
+
 function reprocess_instruction!(interp::AbstractInterpreter,
     idx::Int, bb::Union{Int, Nothing}, @nospecialize(inst), @nospecialize(typ),
-    irsv::IRInterpretationState)
+    irsv::IRInterpretationState, reprocess::Union{Nothing, BitSet, BitSetBoundedMinPrioritySet})
     ir = irsv.ir
     if isa(inst, GotoIfNot)
         cond = inst.cond
@@ -173,6 +191,12 @@ function reprocess_instruction!(interp::AbstractInterpreter,
         if condval isa Bool
             function update_phi!(from::Int, to::Int)
                 if length(ir.cfg.blocks[to].preds) == 0
+                    # Kill the entire block
+                    for idx in ir.cfg.blocks[to].stmts
+                        ir.stmts[idx][:inst] = nothing
+                        ir.stmts[idx][:type] = Union{}
+                        ir.stmts[idx][:flag] = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+                    end
                     return
                 end
                 for idx in ir.cfg.blocks[to].stmts
@@ -195,6 +219,7 @@ function reprocess_instruction!(interp::AbstractInterpreter,
             if bb === nothing
                 bb = block_for_inst(ir, idx)
             end
+            ir.stmts[idx][:flag] |= IR_FLAG_NOTHROW
             if condval
                 ir.stmts[idx][:inst] = nothing
                 ir.stmts[idx][:type] = Any
@@ -205,26 +230,31 @@ function reprocess_instruction!(interp::AbstractInterpreter,
             end
             return true
         end
-        return false
+        return propagate_control_effects!(interp, idx, inst, irsv, reprocess)
     end
 
     rt = nothing
     if isa(inst, Expr)
         head = inst.head
-        if head === :call || head === :foreigncall || head === :new
+        if head === :call || head === :foreigncall || head === :new || head === :splatnew
             (; rt, effects) = abstract_eval_statement_expr(interp, inst, nothing, ir, irsv.mi)
             # All other effects already guaranteed effect free by construction
             if is_nothrow(effects)
+                ir.stmts[idx][:flag] |= IR_FLAG_NOTHROW
                 if isa(rt, Const) && is_inlineable_constant(rt.val)
                     ir.stmts[idx][:inst] = quoted(rt.val)
-                else
-                    ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE
                 end
             end
         elseif head === :invoke
             mi′ = inst.args[1]::MethodInstance
             if mi′ !== irsv.mi # prevent infinite loop
-                rt = concrete_eval_invoke(interp, inst, mi′, irsv)
+                rt, nothrow = concrete_eval_invoke(interp, inst, mi′, irsv)
+                if nothrow
+                    ir.stmts[idx][:flag] |= IR_FLAG_NOTHROW
+                    if isa(rt, Const) && is_inlineable_constant(rt.val)
+                        ir.stmts[idx][:inst] = quoted(rt.val)
+                    end
+                end
             end
         elseif head === :throw_undef_if_not || # TODO: Terminate interpretation early if known false?
                head === :gc_preserve_begin ||
@@ -240,12 +270,16 @@ function reprocess_instruction!(interp::AbstractInterpreter,
         # Handled at the very end
         return false
     elseif isa(inst, PiNode)
-        rt = tmeet(typeinf_lattice(interp), argextype(inst.val, ir), inst.typ)
+        rt = tmeet(optimizer_lattice(interp), argextype(inst.val, ir), widenconst(inst.typ))
+    elseif inst === nothing
+        return false
+    elseif isa(inst, GlobalRef)
+        # GlobalRef is not refinable
     else
         ccall(:jl_, Cvoid, (Any,), inst)
         error()
     end
-    if rt !== nothing && !⊑(typeinf_lattice(interp), typ, rt)
+    if rt !== nothing && !⊑(optimizer_lattice(interp), typ, rt)
         ir.stmts[idx][:type] = rt
         return true
     end
@@ -262,11 +296,11 @@ function process_terminator!(ir::IRCode, idx::Int, bb::Int,
         end
         return false
     elseif isa(inst, GotoNode)
-        backedge = inst.label < bb
+        backedge = inst.label <= bb
         !backedge && push!(ip, inst.label)
         return backedge
     elseif isa(inst, GotoIfNot)
-        backedge = inst.dest < bb
+        backedge = inst.dest <= bb
         !backedge && push!(ip, inst.dest)
         push!(ip, bb + 1)
         return backedge
@@ -282,8 +316,9 @@ function process_terminator!(ir::IRCode, idx::Int, bb::Int,
     end
 end
 
+default_reprocess(interp::AbstractInterpreter, irsv::IRInterpretationState) = nothing
 function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState;
-    extra_reprocess::Union{Nothing,BitSet} = nothing)
+    extra_reprocess::Union{Nothing,BitSet} = default_reprocess(interp, irsv))
     (; ir, tpdum, ssa_refined) = irsv
 
     bbs = ir.cfg.blocks
@@ -301,7 +336,13 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
         for idx = stmts
             inst = ir.stmts[idx][:inst]
             typ = ir.stmts[idx][:type]
-            any_refined = extra_reprocess === nothing ? false : (idx in extra_reprocess)
+            any_refined = false
+            if extra_reprocess !== nothing
+                if idx in extra_reprocess
+                    pop!(extra_reprocess, idx)
+                    any_refined = true
+                end
+            end
             for ur in userefs(inst)
                 val = ur[]
                 if isa(val, Argument)
@@ -316,11 +357,13 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
                 delete!(ssa_refined, idx)
             end
             if any_refined && reprocess_instruction!(interp,
-                idx, bb, inst, typ, irsv)
+                idx, bb, inst, typ, irsv, extra_reprocess)
                 push!(ssa_refined, idx)
             end
-            if idx == lstmt && process_terminator!(ir, idx, bb, all_rets, ip)
-                @goto residual_scan
+            if idx == lstmt
+                if process_terminator!(ir, idx, bb, all_rets, ip)
+                    @goto residual_scan
+                end
             end
             if typ === Bottom && !isa(inst, PhiNode)
                 break
@@ -332,6 +375,9 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
     # Slow path
     begin @label residual_scan
         stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))
+        if extra_reprocess !== nothing
+            append!(stmt_ip, extra_reprocess)
+        end
 
         # Slow Path Phase 1.A: Complete use scanning
         while !isempty(ip)
@@ -384,7 +430,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
             inst = ir.stmts[idx][:inst]
             typ = ir.stmts[idx][:type]
             if reprocess_instruction!(interp,
-                idx, nothing, inst, typ, irsv)
+                idx, nothing, inst, typ, irsv, stmt_ip)
                 append!(stmt_ip, tpdum[idx])
             end
         end
@@ -400,16 +446,24 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
             end
             inst = ir.stmts[idx][:inst]::ReturnNode
             rt = argextype(inst.val, ir)
-            ultimate_rt = tmerge(typeinf_lattice(interp), ultimate_rt, rt)
+            ultimate_rt = tmerge(optimizer_lattice(interp), ultimate_rt, rt)
         end
     end
 
-    return maybe_singleton_const(ultimate_rt)
+    nothrow = true
+    for i = 1:length(ir.stmts)
+        if (ir.stmts[i][:flag] & IR_FLAG_NOTHROW) == 0
+            nothrow = false
+            break
+        end
+    end
+
+    return Pair{Any, Bool}(maybe_singleton_const(ultimate_rt), nothrow)
 end
 
 function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState)
     if __measure_typeinf__[]
-        inf_frame = Timings.InferenceFrameInfo(irsv.mi, irsv.world, Any[], Any[], length(irsv.ir.argtypes))
+        inf_frame = Timings.InferenceFrameInfo(irsv.mi, irsv.world, VarState[], Any[], length(irsv.ir.argtypes))
         Timings.enter_new_timer(inf_frame)
         v = _ir_abstract_constant_propagation(interp, irsv)
         append!(inf_frame.slottypes, irsv.ir.argtypes)

@@ -66,7 +66,6 @@ JL_DLLEXPORT jl_sym_t *jl_boundscheck_sym;
 JL_DLLEXPORT jl_sym_t *jl_inbounds_sym;
 JL_DLLEXPORT jl_sym_t *jl_copyast_sym;
 JL_DLLEXPORT jl_sym_t *jl_cfunction_sym;
-JL_DLLEXPORT jl_sym_t *jl_pure_sym;
 JL_DLLEXPORT jl_sym_t *jl_loopinfo_sym;
 JL_DLLEXPORT jl_sym_t *jl_meta_sym;
 JL_DLLEXPORT jl_sym_t *jl_inert_sym;
@@ -156,8 +155,8 @@ static value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint
     (void)tosymbol(fl_ctx, args[0], "defined-julia-global");
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
     jl_sym_t *var = jl_symbol(symbol_name(fl_ctx, args[0]));
-    jl_binding_t *b = jl_get_module_binding(ctx->module, var);
-    return (b != NULL && b->owner == ctx->module) ? fl_ctx->T : fl_ctx->F;
+    jl_binding_t *b = jl_get_module_binding(ctx->module, var, 0);
+    return (b != NULL && jl_atomic_load_relaxed(&b->owner) == b) ? fl_ctx->T : fl_ctx->F;
 }
 
 static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_NOTSAFEPOINT
@@ -328,7 +327,6 @@ void jl_init_common_symbols(void)
     jl_newvar_sym = jl_symbol("newvar");
     jl_copyast_sym = jl_symbol("copyast");
     jl_loopinfo_sym = jl_symbol("loopinfo");
-    jl_pure_sym = jl_symbol("pure");
     jl_meta_sym = jl_symbol("meta");
     jl_list_sym = jl_symbol("list");
     jl_unused_sym = jl_symbol("#unused#");
@@ -688,8 +686,8 @@ static value_t julia_to_scm_noalloc2(fl_context_t *fl_ctx, jl_value_t *v, int ch
     if (check_valid) {
         if (jl_is_ssavalue(v))
             lerror(fl_ctx, symbol(fl_ctx, "error"), "SSAValue objects should not occur in an AST");
-        if (jl_is_slot(v))
-            lerror(fl_ctx, symbol(fl_ctx, "error"), "Slot objects should not occur in an AST");
+        if (jl_is_slotnumber(v))
+            lerror(fl_ctx, symbol(fl_ctx, "error"), "SlotNumber objects should not occur in an AST");
     }
     value_t opaque = cvalue(fl_ctx, jl_ast_ctx(fl_ctx)->jvtype, sizeof(void*));
     *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = v;
