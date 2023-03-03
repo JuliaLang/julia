@@ -2244,6 +2244,7 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
     }
 
     if (edges) {
+        size_t world = jl_atomic_load_acquire(&jl_world_counter);
         jl_collect_missing_backedges(jl_type_type_mt);
         jl_collect_missing_backedges(jl_nonfunction_mt);
         // jl_collect_extext_methods_from_mod and jl_collect_missing_backedges also accumulate data in callers_with_edges.
@@ -2253,7 +2254,7 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
         *method_roots_list = jl_alloc_vec_any(0);
         // Collect the new method roots
         jl_collect_new_roots(*method_roots_list, *new_specializations, worklist_key);
-        jl_collect_edges(*edges, *ext_targets, *new_specializations);
+        jl_collect_edges(*edges, *ext_targets, *new_specializations, world);
     }
     assert(edges_map == NULL); // jl_collect_edges clears this when done
 
@@ -3271,7 +3272,8 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             // Add roots to methods
             jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
             // Handle edges
-            jl_insert_backedges((jl_array_t*)edges, (jl_array_t*)ext_targets, (jl_array_t*)new_specializations); // restore external backedges (needs to be last)
+            size_t world = jl_atomic_load_acquire(&jl_world_counter);
+            jl_insert_backedges((jl_array_t*)edges, (jl_array_t*)ext_targets, (jl_array_t*)new_specializations, world); // restore external backedges (needs to be last)
             // reinit ccallables
             jl_reinit_ccallable(&ccallable_list, base, NULL);
             arraylist_free(&ccallable_list);
@@ -3298,10 +3300,9 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
     return restored;
 }
 
-static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image)
+static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image, uint32_t checksum)
 {
-    uint64_t checksum = 0; // TODO: make this real
-    jl_restore_system_image_from_stream_(f, image, NULL, checksum, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+    jl_restore_system_image_from_stream_(f, image, NULL, checksum | ((uint64_t)0xfdfcfbfa << 32), NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
 JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, jl_image_t *image, size_t sz, jl_array_t *depmods, int completeinfo)
@@ -3352,8 +3353,9 @@ JL_DLLEXPORT void jl_restore_system_image(const char *fname)
         if (ios_readall(&f, sysimg, len) != len)
             jl_errorf("Error reading system image file.");
         ios_close(&f);
+        uint32_t checksum = jl_crc32c(0, sysimg, len);
         ios_static_buffer(&f, sysimg, len);
-        jl_restore_system_image_from_stream(&f, &sysimage);
+        jl_restore_system_image_from_stream(&f, &sysimage, checksum);
         ios_close(&f);
         JL_SIGATOMIC_END();
     }
@@ -3364,7 +3366,8 @@ JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len)
     ios_t f;
     JL_SIGATOMIC_BEGIN();
     ios_static_buffer(&f, (char*)buf, len);
-    jl_restore_system_image_from_stream(&f, &sysimage);
+    uint32_t checksum = jl_crc32c(0, buf, len);
+    jl_restore_system_image_from_stream(&f, &sysimage, checksum);
     ios_close(&f);
     JL_SIGATOMIC_END();
 }

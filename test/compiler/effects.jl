@@ -603,6 +603,21 @@ global inconsistent_condition_ref = Ref{Bool}(false)
     end
 end |> !Core.Compiler.is_consistent
 
+# should handle va-method properly
+callgetfield1(xs...) = getfield(getfield(xs, 1), 1)
+@test !Core.Compiler.is_inaccessiblememonly(Base.infer_effects(callgetfield1, (Base.RefValue{Symbol},)))
+const GLOBAL_XS = Ref(:julia)
+global_getfield() = callgetfield1(GLOBAL_XS)
+@test let
+    Base.Experimental.@force_compile
+    global_getfield()
+end === :julia
+GLOBAL_XS[] = :julia2
+@test let
+    Base.Experimental.@force_compile
+    global_getfield()
+end === :julia2
+
 # the `:inaccessiblememonly` helper effect allows us to prove `:effect_free`-ness of frames
 # including `setfield!` modifying local mutable object
 
@@ -789,3 +804,6 @@ unknown_sparam_nothrow2(x::Ref{Ref{T}}) where T = (T; nothing)
 @test !Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Any,)))
 @test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_nothrow1, (Ref,)))
 @test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_nothrow2, (Ref{Ref{T}} where T,)))
+
+# https://github.com/JuliaLang/julia/issues/48856
+@test Base.ismutationfree(Vector{Any}) == false

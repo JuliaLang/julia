@@ -101,7 +101,7 @@ See code comments for each components for more implementation details.
     (see comments in `MultiVersioning::runOnModule` for how this is done),
     the pass also generates metadata so that the runtime can load and initialize the
     system image correctly.
-    A detail description of the metadata is available in `src/processor.h`.
+    A detailed description of the metadata is available in `src/processor.h`.
 
 2. System image loading
 
