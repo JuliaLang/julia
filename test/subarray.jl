@@ -772,3 +772,22 @@ end
     @test view(m, 1:2, 3, 1, 1) == m[1:2, 3]
     @test parent(view(m, 1:2, 3, 1, 1)) === m
 end
+
+@testset "mapfoldl, mapfoldr and mapreduce for FastSubArray" begin
+    v = rand(Int, 10)
+    i = rand(Int)
+    @test mapfoldl(abs, -, @view(v[:])) == mapfoldl(abs, -, v)
+    @test mapfoldr(abs, -, @view(v[:])) == mapfoldr(abs, -, v)
+    @test mapfoldl(abs, -, @view(v[end:-1:begin])) == mapfoldl(abs, -, reverse(v))
+    @test mapfoldr(abs, -, @view(v[end:-1:begin])) == mapfoldr(abs, -, reverse(v))
+    @test mapfoldl(abs, -, @view(v[:]); init = i) == mapfoldl(abs, -, v; init = i)
+    @test mapfoldr(abs, -, @view(v[:]); init = i) == mapfoldr(abs, -, v; init = i)
+    @test mapfoldl(abs, -, @view(v[end:-1:begin]); init = i) == mapfoldl(abs, -, reverse(v); init = i)
+    @test mapfoldr(abs, -, @view(v[end:-1:begin]); init = i) == mapfoldr(abs, -, reverse(v); init = i)
+
+    v = rand('a':'z', 10)
+    @test mapreduce(uppercase, *, @view(v[:])) == mapreduce(uppercase, *, v)
+    @test mapreduce(uppercase, *, @view(v[end:-1:begin])) == mapreduce(uppercase, *, reverse(v))
+    @test mapreduce(uppercase, *, @view(v[:]); init = "") == mapreduce(uppercase, *, v; init = "")
+    @test mapreduce(uppercase, *, @view(v[end:-1:begin]); init = "") == mapreduce(uppercase, *, reverse(v); init = "")
+end
