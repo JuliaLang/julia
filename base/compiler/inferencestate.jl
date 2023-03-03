@@ -607,9 +607,11 @@ get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]
 add_curr_ssaflag!(sv::InferenceState, flag::UInt8) = sv.src.ssaflags[sv.currpc] |= flag
 sub_curr_ssaflag!(sv::InferenceState, flag::UInt8) = sv.src.ssaflags[sv.currpc] &= ~flag
 
-function narguments(sv::InferenceState)
+function narguments(sv::InferenceState, include_va::Bool=true)
     def = sv.linfo.def
-    isva = isa(def, Method) && def.isva
-    nargs = length(sv.result.argtypes) - isva
+    nargs = length(sv.result.argtypes)
+    if !include_va
+        nargs -= isa(def, Method) && def.isva
+    end
     return nargs
 end
