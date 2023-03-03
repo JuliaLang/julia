@@ -1011,10 +1011,10 @@ end
                 begin
                     push!(empty!(DEPOT_PATH), '$(repr(depot_path))')
                     using HasExtensions
-                    # Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly got an extension")
+                    Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly got an extension")
                     HasExtensions.ext_loaded && error("ext_loaded set")
                     using HasDepWithExtensions
-                    # Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
+                    Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
                     HasExtensions.ext_loaded || error("ext_loaded not set")
                     HasExtensions.ext_folder_loaded && error("ext_folder_loaded set")
                     HasDepWithExtensions.do_something() || error("do_something errored")
@@ -1032,11 +1032,28 @@ end
             @test success(cmd)
         end
 
-        # 48351
         sep = Sys.iswindows() ? ';' : ':'
+
+        # 48351
         cmd = gen_extension_cmd(``)
         cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([mktempdir(), proj], sep))
         cmd = pipeline(cmd; stdout, stderr)
+        @test success(cmd)
+
+        # Only load env from where package is loaded
+        envs = [joinpath(@__DIR__, "project", "Extensions", "EnvWithHasExtensionsv2"), joinpath(@__DIR__, "project", "Extensions", "EnvWithHasExtensions")]
+        cmd = addenv(```$(Base.julia_cmd()) --startup-file=no -e '
+        begin
+
+
+            push!(empty!(DEPOT_PATH), '$(repr(depot_path))')
+            using HasExtensions
+            using ExtDep
+            Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly loaded ext from other env")
+            Base.get_extension(HasExtensions, :Extension2) === nothing && error("did not load ext from active env")
+        end
+        '
+        ```, "JULIA_LOAD_PATH" => join(envs, sep))
         @test success(cmd)
     finally
         try
@@ -1134,4 +1151,8 @@ append!(Base.DEPOT_PATH, original_depot_path)
     @lock Base.require_lock Base.end_loading(pkid4, "loaded_pkgid4")        # end
     wait(t2)
     wait(t1)
+end
+
+@testset "Upgradable stdlibs" begin
+    @test success(`$(Base.julia_cmd()) --startup-file=no -e 'using DelimitedFiles'`)
 end

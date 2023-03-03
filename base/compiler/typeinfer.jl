@@ -444,7 +444,7 @@ function adjust_effects(sv::InferenceState)
         # always throwing an error counts or never returning both count as consistent
         ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
     end
-    if is_inaccessiblemem_or_argmemonly(ipo_effects) && all(1:narguments(sv)) do i::Int
+    if is_inaccessiblemem_or_argmemonly(ipo_effects) && all(1:narguments(sv, #=include_va=#true)) do i::Int
             return is_mutation_free_argtype(sv.slottypes[i])
         end
         ipo_effects = Effects(ipo_effects; inaccessiblememonly=ALWAYS_TRUE)
@@ -626,7 +626,7 @@ function record_bestguess!(sv::InferenceState)
     return nothing
 end
 
-function annotate_slot_load!(undefs::Vector{Bool}, idx::Int, sv::InferenceState, @nospecialize x)
+function annotate_slot_load!(interp::AbstractInterpreter, undefs::Vector{Bool}, idx::Int, sv::InferenceState, @nospecialize x)
     if isa(x, SlotNumber)
         id = slot_id(x)
         pc = find_dominating_assignment(id, idx, sv)
@@ -641,7 +641,7 @@ function annotate_slot_load!(undefs::Vector{Bool}, idx::Int, sv::InferenceState,
             @assert typ !== NOT_FOUND "active slot in unreached region"
         end
         # add type annotations where needed
-        if !⊑(typeinf_lattice(sv.interp), sv.slottypes[id], typ)
+        if !⊑(typeinf_lattice(interp), sv.slottypes[id], typ)
             return TypedSlot(id, typ)
         end
         return x
@@ -655,13 +655,13 @@ function annotate_slot_load!(undefs::Vector{Bool}, idx::Int, sv::InferenceState,
             i0 = 2
         end
         for i = i0:length(x.args)
-            x.args[i] = annotate_slot_load!(undefs, idx, sv, x.args[i])
+            x.args[i] = annotate_slot_load!(interp, undefs, idx, sv, x.args[i])
         end
         return x
     elseif isa(x, ReturnNode) && isdefined(x, :val)
-        return ReturnNode(annotate_slot_load!(undefs, idx, sv, x.val))
+        return ReturnNode(annotate_slot_load!(interp, undefs, idx, sv, x.val))
     elseif isa(x, GotoIfNot)
-        return GotoIfNot(annotate_slot_load!(undefs, idx, sv, x.cond), x.dest)
+        return GotoIfNot(annotate_slot_load!(interp, undefs, idx, sv, x.cond), x.dest)
     end
     return x
 end
@@ -734,7 +734,7 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
                     end
                 end
             end
-            body[i] = annotate_slot_load!(undefs, i, sv, expr) # 1&2
+            body[i] = annotate_slot_load!(interp, undefs, i, sv, expr) # 1&2
             ssavaluetypes[i] = widenslotwrapper(ssavaluetypes[i]) # 4
         else # i.e. any runtime execution will never reach this statement
             any_unreachable = true
