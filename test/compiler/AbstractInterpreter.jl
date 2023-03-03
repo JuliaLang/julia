@@ -22,7 +22,7 @@ macro newinterp(name)
             meta # additional information
             $name(world = Base.get_world_counter();
                 interp = CC.NativeInterpreter(world),
-                cache = $cachename(IdDict{MethodInstance,CodeInstance}(),
+                cache = $cachename(IdDict{MethodInstance,CodeInstance}()),
                 meta = nothing
                 ) = new(interp, cache, meta)
         end
