@@ -121,7 +121,11 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_category_t cat)
             (wc >= 0x309B && wc <= 0x309C) || // katakana-hiragana sound marks
 
             // bold-digits and double-struck digits
-            (wc >= 0x1D7CE && wc <= 0x1D7E1)); // 𝟎 through 𝟗 (inclusive), 𝟘 through 𝟡 (inclusive)
+            (wc >= 0x1D7CE && wc <= 0x1D7E1) || // 𝟎 through 𝟗 (inclusive), 𝟘 through 𝟡 (inclusive)
+
+            // mathematical brackets
+            (wc >= 0x27e6 && wc <= 0x27ef) || // ⟦, ⟧, ⟨, ⟩, ⟪, ⟫, ⟬, ⟭, ⟮, ⟯
+            (wc >= 0x2983 && wc <= 0x298a)); // ⦃, ⦄, ⦅, ⦆, ⦇, ⦈, ⦉, ⦊
 }
 
 JL_DLLEXPORT int jl_id_start_char(uint32_t wc)
@@ -188,8 +192,6 @@ static int never_id_char(uint32_t wc)
 
           wc == '`' ||
 
-          // mathematical brackets
-          (wc >= 0x27e6 && wc <= 0x27ef) ||
           // angle, corner, and lenticular brackets
           (wc >= 0x3008 && wc <= 0x3011) ||
           // tortoise shell, square, and more lenticular brackets

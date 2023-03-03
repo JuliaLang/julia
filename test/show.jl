@@ -494,15 +494,18 @@ end
 @test sprint(show, Symbol("'")) == "Symbol(\"'\")"
 @test_repr "var\"'\" = 5"
 
-# isidentifier
-@test Meta.isidentifier("x")
-@test Meta.isidentifier("x1")
-@test !Meta.isidentifier("x.1")
-@test !Meta.isidentifier("1x")
-@test Meta.isidentifier(Symbol("x"))
-@test Meta.isidentifier(Symbol("x1"))
-@test !Meta.isidentifier(Symbol("x.1"))
-@test !Meta.isidentifier(Symbol("1x"))
+@testset "isidentifier" begin
+    @test Meta.isidentifier("x")
+    @test Meta.isidentifier("x1")
+    @test !Meta.isidentifier("x.1")
+    @test !Meta.isidentifier("1x")
+    @test Meta.isidentifier(Symbol("x"))
+    @test Meta.isidentifier(Symbol("x1"))
+    @test !Meta.isidentifier(Symbol("x.1"))
+    @test !Meta.isidentifier(Symbol("1x"))
+    @test Meta.isidentifier("⟦x⟧")
+    @test Meta.isidentifier("⦃x⦄")
+end
 
 # issue #32408: Printing of names which are invalid identifiers
 # Invalid identifiers which need `var` quoting:
