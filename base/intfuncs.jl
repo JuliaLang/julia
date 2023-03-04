@@ -1148,3 +1148,43 @@ function binomial(x::Number, k::Integer)
     # and instead divide each term by i, to avoid spurious overflow.
     return prod(i -> (x-(i-1))/i, OneTo(k), init=oneunit(x)/one(k))
 end
+
+
+"""
+    binomialp(n::Integer, p::Real)
+
+The binomial probability mass function (PMF)
+```math
+Pr(X = k) = \\binom{n}{k}p^k(1-p)^{n-k}
+```
+for all k in 0,1,...,n.
+It returns a named tuple with field `events` for `0:n`, and field `probabilities` for the corresponding values of the PMF.
+                                                                                                                
+# External links
+* [Binomial Prob. Mass. Function](https://en.wikipedia.org/wiki/Binomial_distribution#Probability_mass_function) on Wikipedia.
+"""
+function binomialp(n::TI, p::TR) where {TI <: Integer, TR <: Real}
+    o = one(TR)
+    z = zero(TR)
+    if (n<0) 
+        error("binomp(n, p) accepts only non-negative `n`.")
+    end
+    if (p<z || p>o) 
+        error("binomp(n, p) is defined only for 0 <= p <= 1, as `p` is a probability.")
+    end
+    p_past = zeros(TR, n + 1)
+    p_next = zeros(TR, n + 1)
+    p_past[1] = o
+    @inbounds for r = 1:n
+        @inbounds for i = 1:r
+            p_next[i] += p_past[i]*(o-p)
+            p_next[i+1] += p_past[i]*p
+            p_past[i] = p_next[i]
+            p_next[i] = z
+        end
+        p_past[r+1] = p_next[r+1]
+        p_next[r+1] = z
+    end
+    (events = 0:n, probabilities = p_past)
+end
+                                                                                                                                                                                                                             
