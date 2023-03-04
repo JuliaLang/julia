@@ -99,7 +99,7 @@ Diagonal(A::AbstractMatrix) = Diagonal(diag(A))
 Diagonal{T}(A::AbstractMatrix) where T = Diagonal{T}(diag(A))
 function convert(::Type{T}, A::AbstractMatrix) where T<:Diagonal 
     checksquare(A)
-    isdiag(A) ? Diagonal(A) : throw(InexactError(:convert, T, A))
+    isdiag(A) ? T(A) : throw(InexactError(:convert, T, A))
 end
 
 Diagonal(D::Diagonal) = D
