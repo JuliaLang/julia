@@ -104,7 +104,8 @@ _parse_docs = """
           version=VERSION,
           ignore_trivia=true,
           filename=nothing,
-          ignore_warnings=false)
+          ignore_errors=false,
+          ignore_warnings=ignore_errors)
 
     # Or, with the same arguments
     parseall(...)
@@ -131,7 +132,8 @@ tree, if applicable. This will also annotate errors and warnings with the
 source file name.
 
 A `ParseError` will be thrown if any errors or warnings occurred during
-parsing. To avoid exceptions due to warnings, use `ignore_warnings=true`.
+parsing. To avoid exceptions due to warnings, use `ignore_warnings=true`. To
+also avoid exceptions due to errors, use `ignore_errors=true`.
 """
 
 parse(::Type{T}, text::AbstractString; kws...) where {T} = _parse(:statement, true, T, text; kws...)[1]
