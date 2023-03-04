@@ -1166,11 +1166,11 @@ It returns a named tuple with field `events` for `0:n`, and field `probabilities
 function binomialp(n::TI, p::TR) where {TI <: Integer, TR <: Real}
     o = one(TR)
     z = zero(TR)
-    if (n<0) 
-        error("binomp(n, p) accepts only non-negative `n`.")
+    if (n<0)
+        error("binomialp(n, p) accepts only non-negative `n`.")
     end
-    if (p<z || p>o) 
-        error("binomp(n, p) is defined only for 0 <= p <= 1, as `p` is a probability.")
+    if (p<z || p>o)
+        error("binomialp(n, p) is defined only for 0 <= p <= 1, as `p` is a probability.")
     end
     p_past = zeros(TR, n + 1)
     p_next = zeros(TR, n + 1)
@@ -1187,4 +1187,3 @@ function binomialp(n::TI, p::TR) where {TI <: Integer, TR <: Real}
     end
     (events = 0:n, probabilities = p_past)
 end
-                                                                                                                                                                                                                             
