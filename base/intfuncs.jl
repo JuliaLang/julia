@@ -1149,7 +1149,6 @@ function binomial(x::Number, k::Integer)
     return prod(i -> (x-(i-1))/i, OneTo(k), init=oneunit(x)/one(k))
 end
 
-
 """
     binomialp(n::Integer, p::Real)
 
@@ -1159,7 +1158,7 @@ Pr(X = k) = \\binom{n}{k}p^k(1-p)^{n-k}
 ```
 for all k in 0,1,...,n.
 It returns a named tuple with field `events` for `0:n`, and field `probabilities` for the corresponding values of the PMF.
-                                                                                                                
+
 # External links
 * [Binomial Prob. Mass. Function](https://en.wikipedia.org/wiki/Binomial_distribution#Probability_mass_function) on Wikipedia.
 """
