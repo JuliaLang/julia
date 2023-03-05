@@ -524,7 +524,7 @@ private:
 #ifndef JL_USE_JITLINK
     const std::shared_ptr<RTDyldMemoryManager> MemMgr;
 #else
-    std::atomic<size_t> total_size;
+    std::atomic<size_t> total_size{0};
     const std::unique_ptr<jitlink::JITLinkMemoryManager> MemMgr;
 #endif
     ObjLayerT ObjectLayer;
