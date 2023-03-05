@@ -57,8 +57,7 @@ function weeksinyear(dt::DateTime)
 end
 
 """
-Return current ISO year as defined in
-https://en.wikipedia.org/wiki/ISO_week_date
+Return the ISO year that contains `dt` (see https://en.wikipedia.org/wiki/ISO_week_date).
 """
 function isoyear(dt::DateTime)
     thisyear = Year(dt)
