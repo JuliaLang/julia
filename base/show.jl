@@ -1140,8 +1140,8 @@ function show(io::IO, tn::Core.TypeName)
     print(io, ")")
 end
 
-nonnothing_nonmissing_typeinfo(io::IO) = nonmissingtype(nonnothingtype(get(io, :typeinfo, Any)))
-show(io::IO, b::Bool) = print(io, nonnothing_nonmissing_typeinfo(io) === Bool ? (b ? "1" : "0") : (b ? "true" : "false"))
+number_typeinfo(io::IO) = typeintersect(Number, get(io, :typeinfo, Any))
+show(io::IO, b::Bool) = print(io, number_typeinfo(io) === Bool ? (b ? "1" : "0") : (b ? "true" : "false"))
 show(io::IO, ::Nothing) = print(io, "nothing")
 show(io::IO, n::Signed) = (write(io, string(n)); nothing)
 show(io::IO, n::Unsigned) = print(io, "0x", string(n, pad = sizeof(n)<<1, base = 16))
