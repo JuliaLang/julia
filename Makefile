@@ -277,6 +277,7 @@ endif
 	-$(INSTALL_M) $(build_libdir)/libgcc_s.a $(DESTDIR)$(libdir)/
 	-$(INSTALL_M) $(build_libdir)/libgcc.a $(DESTDIR)$(libdir)/
 	-$(INSTALL_M) $(build_libdir)/libmsvcrt.a $(DESTDIR)$(libdir)/
+	-$(INSTALL_M) $(build_libdir)/libmsvcr120.a $(DESTDIR)$(libdir)/
 else
 
 # Copy over .dSYM directories directly for Darwin
