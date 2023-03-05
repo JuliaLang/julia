@@ -137,6 +137,7 @@ Standard library changes
   the keybinding Alt-m ([#33872]).
 * An "IPython mode" which mimics the behaviour of the prompts and storing the evaluated result in `Out` can be
   activated with `REPL.ipython_mode!()`. See the manual for how to enable this at startup ([#46474]).
+* Tab completion displays available keyword arguments ([#43536])
 
 #### SuiteSparse
 
