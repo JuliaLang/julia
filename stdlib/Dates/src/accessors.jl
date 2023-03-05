@@ -75,10 +75,10 @@ function isoyear(dt::DateTime)
 end
 
 """
-Return current ISO week date as defined in
-https://en.wikipedia.org/wiki/ISO_week_date
+Return the ISO week date that corresponds to `dt` (see
+https://en.wikipedia.org/wiki/ISO_week_date).
 
-The return type is a tuple of `Year`, `Week` and `Integer` (from 1 to 7)
+The return type is a tuple of `Year`, `Week` and `Integer` (from 1 to 7).
 """
 isoweekdate(dt::DateTime) = (isoyear(dt), week(dt), dayofweek(dt))
 
