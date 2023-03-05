@@ -345,8 +345,12 @@ reduce_empty(::typeof(+), ::Type{Bool}) = zero(Int)
 reduce_empty(::typeof(*), ::Type{Union{}}) = _empty_reduce_error(*, Union{})
 reduce_empty(::typeof(*), ::Type{T}) where {T} = one(T)
 reduce_empty(::typeof(*), ::Type{<:AbstractChar}) = ""
-reduce_empty(::typeof(&), ::Type{Bool}) = true
-reduce_empty(::typeof(|), ::Type{Bool}) = false
+
+reduce_empty(::typeof(&), ::Type{T}) where T<:Integer = -1 % T
+reduce_empty(::Union{typeof(|),typeof(xor)}, ::Type{T}) where T<:Integer = zero(T)
+
+reduce_empty(::typeof(min), ::Type{T}) where T = typemax(T)
+reduce_empty(::typeof(max), ::Type{T}) where T = typemin(T)
 
 reduce_empty(::typeof(add_sum), ::Type{Union{}}) = _empty_reduce_error(add_sum, Union{})
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T} = reduce_empty(+, T)
@@ -871,6 +875,9 @@ function _extrema_rf(x::NTuple{2,T}, y::NTuple{2,T}) where {T<:IEEEFloat}
     z2 = ifelse(anynan, x1-y1, ifelse(signbit(x2-y2), y2, x2))
     z1, z2
 end
+
+mapreduce_empty(f::ExtremaMap, ::typeof(_extrema_rf), T) =
+    (mapreduce_empty(f.f, min, T), mapreduce_empty(f.f, max, T))
 
 ## findmax, findmin, argmax & argmin
 

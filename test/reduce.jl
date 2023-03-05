@@ -248,9 +248,9 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 
 # maximum & minimum & extrema
 
-@test_throws "reducing over an empty" maximum(Int[])
-@test_throws "reducing over an empty" minimum(Int[])
-@test_throws "reducing over an empty" extrema(Int[])
+@test_throws MethodError maximum(Vector{Int}[])
+@test_throws MethodError minimum(String[])
+@test_throws MethodError extrema(String[])
 
 @test maximum(Int[]; init=-1) == -1
 @test minimum(Int[]; init=-1) == -1
@@ -626,8 +626,6 @@ test18695(r) = sum( t^2 for t in r )
 
 # test neutral element not picked incorrectly for &, |
 @test @inferred(foldl(&, Int[1])) === 1
-@test_throws ["reducing over an empty",
-              "consider supplying `init`"] foldl(&, Int[])
 
 # prod on Chars
 @test prod(Char[]) == ""
@@ -704,4 +702,18 @@ end
 let a = NamedTuple(Symbol(:x,i) => i for i in 1:33),
     b = (a...,)
     @test fold_alloc(a) == fold_alloc(b) == 0
+end
+
+@testset "reduce over empty Integer lists with &" begin
+    for T in (Bool, Int8, UInt16, Int32, UInt64, Int128, BigInt)
+        x = reduce(&, T[])
+        @test x isa T && x == ~zero(T)
+    end
+end
+
+@testset "extrema of empty Real lists" begin
+    for T in (Bool, Int8, UInt16, Int32, UInt64, Int128, Float16, Float32, Float64, BigFloat)
+        x = extrema(T[])
+        @test x isa Tuple{T,T} && x == (typemax(T), typemin(T))
+    end
 end
