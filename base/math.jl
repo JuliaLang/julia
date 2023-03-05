@@ -720,7 +720,7 @@ sqrt(x)
 
 Return the fourth root of `x` by applying `sqrt` twice successively.
 """
-fourthroot(x::Union{Float32,Float64}) = sqrt(sqrt(x))
+fourthroot(x::Number) = sqrt(sqrt(x))
 
 """
     hypot(x, y)
