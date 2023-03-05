@@ -44,8 +44,7 @@ function week(days)
 end
 
 """
-Year defined as ISO year. The equivalent is
-`week(lastdayofyear(dt) - Day(3))`  as 28 december is always in the last week
+Return the number of ISO weeks in the given year (see https://en.wikipedia.org/wiki/ISO_week_date).
 """
 function weeksinyear(dt::DateTime)
     firstday = firstdayofyear(dt)
