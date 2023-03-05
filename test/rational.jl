@@ -255,6 +255,8 @@ end
     @test sprint(show, rational2) == "-1//2"
     @test sprint(show, -2//2) == "-1//1"
     @test sprint(show, [-2//2,]) == "Rational{Int64}[-1]"
+    @test sprint(show, MIME"text/plain"(), Union{Int, Rational{Int}}[7 3//6; 6//3 2]) ==
+        "2×2 Matrix{Union{Rational{Int64}, Int64}}:\n  7    1//2\n 2//1   2"
     let
         io1 = IOBuffer()
         write(io1, rational1)
