@@ -344,7 +344,11 @@ macro spawn(args...)
         let $(letargs...)
             local task = Task($thunk)
             task.sticky = false
-            ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), task, $tpid)
+            local tpid_actual = $tpid
+            if _nthreads_in_pool(tpid_actual) == 0
+                tpid_actual = Int8(0)
+            end
+            ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), task, tpid_actual)
             if $(Expr(:islocal, var))
                 put!($var, task)
             end
