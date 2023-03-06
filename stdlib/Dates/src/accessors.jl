@@ -53,6 +53,7 @@ julia> weeksinyear(Year(2022))
 
 julia> weeksinyear(Year(2020))
 53
+```
 """
 function weeksinyear(y::Year)
     firstday = firstdayofyear(Date(y))
@@ -74,6 +75,7 @@ Year(2021)
 
 julia> isoyear(Date(2021, 12, 31))
 Year(2021)
+```
 """
 function isoyear(dt::DateTime)
     thisyear = Year(dt)
