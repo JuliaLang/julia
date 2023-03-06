@@ -614,14 +614,6 @@ end
 end
 
 const _STRING_LENGTH_CHUNKING_SIZE = 256
-@inline function _isascii(code_units::AbstractVector{CU}, first, last) where {CU}
-    r = zero(CU)
-    for n in first:last
-        @inbounds r |= code_units[n]
-    end
-    return 0 ≤ r < 0x80
-end
-
 function _length_nonascii_decrement(
     cu::AbstractVector{UInt8}, first::Int, last::Int, c::Int, state=_IUTF8_DFA_ACCEPT
 )
@@ -638,7 +630,6 @@ function _length_nonascii_decrement(
         if state <= _IUTF8_DFA_INVALID
             #Loop through all the one byte characters
             while true
-                #b = codeunit(s, i)
                 b = cu[i]
                 ((i += 1) <= last) || break
                 0xc0 ≤ b ≤ 0xf7 && break
@@ -649,7 +640,6 @@ function _length_nonascii_decrement(
 
         #This should get unrolled
         for n in 1:3
-            #b = codeunit(s, i)
             b = cu[i]
             state = _iutf8_dfa_step(state, b)
             c -= 1
