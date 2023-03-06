@@ -16,7 +16,8 @@ export
     splitdir,
     splitdrive,
     splitext,
-    splitpath
+    splitpath,
+    username
 
 if Sys.isunix()
     const path_separator    = "/"
@@ -593,4 +594,23 @@ relpath(path::AbstractString, startpath::AbstractString) =
 
 for f in (:isdirpath, :splitdir, :splitdrive, :splitext, :normpath, :abspath)
     @eval $f(path::AbstractString) = $f(String(path))
+end
+
+"""
+    username() -> String
+
+    Return the “login name” of the user.
+    This function checks the environment variables LOGNAME, USER, LNAME and USERNAME, in order, and
+    returns the value of the first one which is set to a non-empty string.
+    If none are set, the login name from the password database is returned
+"""
+
+function username()
+    for varname in ("LOGNAME", "USER", "LNAME",  "USERNAME")
+        username = get(ENV, varname, "")
+        !isempty(username) && return username
+    end
+
+    uv_passwd = Libc.getpwuid(Libc.getuid(), true)
+    return uv_passwd.username
 end

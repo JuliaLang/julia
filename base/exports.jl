@@ -904,6 +904,7 @@ export
     splitdrive,
     splitext,
     splitpath,
+    username,
 
 # filesystem operations
     cd,
