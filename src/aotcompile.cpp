@@ -600,7 +600,7 @@ static void get_fvars_gvars(Module &M, DenseMap<GlobalValue *, unsigned> &fvars,
 // Weight computation
 // It is important for multithreaded image building to be able to split work up
 // among the threads equally. The weight calculated here is an estimation of
-// how expensive a particular function is going to be to compile. 
+// how expensive a particular function is going to be to compile.
 
 struct FunctionInfo {
     size_t weight;
@@ -1193,7 +1193,7 @@ static void construct_vars(Module &M, Partition &partition) {
 }
 
 // Materialization will leave many unused declarations, which multiversioning would otherwise clone.
-// This function removes them to avoid unnecessary cloning of declarations. 
+// This function removes them to avoid unnecessary cloning of declarations.
 static void dropUnusedDeclarations(Module &M) {
     SmallVector<GlobalValue *> unused;
     for (auto &G : M.global_values()) {
@@ -1211,7 +1211,7 @@ static void dropUnusedDeclarations(Module &M) {
 }
 
 // Entrypoint to optionally-multithreaded image compilation. This handles global coordination of the threading,
-// as well as partitioning, serialization, and deserialization. 
+// as well as partitioning, serialization, and deserialization.
 static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &outputs, ArrayRef<StringRef> names,
                 std::vector<NewArchiveMember> &unopt, std::vector<NewArchiveMember> &opt,
                 std::vector<NewArchiveMember> &obj, std::vector<NewArchiveMember> &asm_,

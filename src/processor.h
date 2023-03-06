@@ -106,11 +106,10 @@ typedef struct {
 
 // Per-shard data for image shards. Each image contains header->nshards of these.
 typedef struct {
-    
+
     // This is the base function pointer
     // (all other function pointers are stored as offsets to this address)
     const char *fvar_base;
-    
     // The array of function pointer offsets (`int32_t`) from the base pointer.
     // This includes all julia functions in sysimg as well as all other functions that are cloned.
     // The default function pointer is used if the function is cloned.
@@ -125,7 +124,7 @@ typedef struct {
     // staticdata.c relies on the same order of functions in the global function array being
     // the same as what it saw when serializing the global function array. However, partitioning
     // into multiple shards will cause functions to be reordered. This array is used to map
-    // back to the original function array for loading. 
+    // back to the original function array for loading.
     const uint32_t *fvar_idxs;
     // This is the base data pointer
     // (all other data pointers in this shard are stored as offsets to this address)
@@ -136,7 +135,6 @@ typedef struct {
     // This is the mapping of shard global variable index -> global global variable index
     // Similar to fvar_idxs, but for gvars
     const uint32_t *gvar_idxs;
-
     // location and index of relocation slots.
     // Stored as pairs of function indices and `int32_t` offsets from `jl_sysimg_gvars_base`.
     // The first element is an `uint32_t` giving the number of relocations.
