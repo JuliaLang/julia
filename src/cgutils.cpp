@@ -37,6 +37,7 @@ STATISTIC(EmittedArrayElsize, "Number of array elsize calls emitted");
 STATISTIC(EmittedArrayOffset, "Number of array offset calls emitted");
 STATISTIC(EmittedArrayNdIndex, "Number of array nd index calls emitted");
 STATISTIC(EmittedBufferptr, "Number of array data pointer loads emitted");
+STATISTIC(EmittedBufferIndex, "Number of buffer index calls emitted");
 STATISTIC(EmittedBoxes, "Number of box operations emitted");
 STATISTIC(EmittedCPointerChecks, "Number of C pointer checks emitted");
 STATISTIC(EmittedAllocObjs, "Number of object allocations emitted");
@@ -2903,6 +2904,29 @@ static Value *emit_array_nd_index(
 }
 
 // --- buffer ---
+static bool buffertype_constelsize(jl_datatype_t *ty, size_t *elsz)
+{
+    assert(jl_is_buffer_type(ty));
+    jl_value_t *ety = jl_tparam0(ty);
+    if (jl_has_free_typevars(ety))
+        return false;
+    // `jl_islayout_inline` requires `*elsz` and `al` to be initialized.
+    size_t al = 0;
+    *elsz = 0;
+    int union_max = jl_islayout_inline(ety, elsz, &al);
+    bool isboxed = (union_max == 0);
+    if (isboxed) {
+        *elsz = sizeof(void*);
+    }
+    else if (jl_is_primitivetype(ety)) {
+        // Primitive types should use the array element size, but
+        // this can be different from the type's size
+        *elsz = LLT_ALIGN(*elsz, al);
+    }
+    return true;
+}
+
+
 static Value *emit_bufferlen(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
 {
     Value *t = boxed(ctx, tinfo);
@@ -2960,6 +2984,33 @@ static Value *emit_bufferptr(jl_codectx_t &ctx, const jl_cgval_t &tinfo, jl_valu
     return emit_bufferptr(ctx, tinfo, isboxed);
 }
 
+static Value *emit_buffer_index(
+        jl_codectx_t &ctx, const jl_cgval_t &binfo, jl_value_t *ex,
+        const jl_cgval_t &idx, jl_value_t *inbounds)
+{
+    ++EmittedBufferIndex;
+    Value *i = emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), idx, (jl_value_t*)jl_long_type);
+    i = ctx.builder.CreateSub(i, ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1));
+
+#if CHECK_BOUNDS==1
+    bool bc = bounds_check_enabled(ctx, inbounds);
+    BasicBlock *failBB = NULL, *endBB = NULL;
+    if (bc) {
+        failBB = BasicBlock::Create(ctx.builder.getContext(), "oob");
+        endBB = BasicBlock::Create(ctx.builder.getContext(), "idxend");
+        Value *len = emit_bufferlen(ctx, binfo);
+        ctx.builder.CreateCondBr(ctx.builder.CreateICmpULT(i, len), endBB, failBB);
+        ctx.f->getBasicBlockList().push_back(failBB);
+        ctx.builder.SetInsertPoint(failBB);
+        ctx.builder.CreateCall(prepare_call(jlvboundserror_func), { binfo.V, len, i});
+        ctx.builder.CreateUnreachable();
+        ctx.f->getBasicBlockList().push_back(endBB);
+        ctx.builder.SetInsertPoint(endBB);
+    }
+#endif
+
+    return i;
+}
 
 
 // --- boxing ---
