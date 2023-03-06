@@ -66,15 +66,25 @@ Returns the number of threadpools currently configured.
 nthreadpools() = Int(unsafe_load(cglobal(:jl_n_threadpools, Cint)))
 
 """
-    Threads.threadpoolsize()
+    Threads.threadpoolsize(pool::Symbol = :default) -> Int
 
-Get the number of threads available to the Julia default worker-thread pool.
+Get the number of threads available to the default thread pool (or to the
+specified thread pool).
 
 See also: `BLAS.get_num_threads` and `BLAS.set_num_threads` in the
 [`LinearAlgebra`](@ref man-linalg) standard library, and `nprocs()` in the
 [`Distributed`](@ref man-distributed) standard library.
 """
-threadpoolsize() = Threads._nthreads_in_pool(Int8(0))
+function threadpoolsize(pool::Symbol = :default)
+    if pool === :default
+        tpid = Int8(0)
+    elseif pool === :interactive
+        tpid = Int8(1)
+    else
+        error("invalid threadpool specified")
+    end
+    return _nthreads_in_pool(tpid)
+end
 
 function threading_run(fun, static)
     ccall(:jl_enter_threaded_region, Cvoid, ())
