@@ -267,7 +267,7 @@ function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=fals
                 elseif stmt.head === :foreigncall
                     isforeigncall = true
                 elseif stmt.head === :isdefined && length(stmt.args) == 1 &&
-                        (stmt.args[1] isa GlobalRef || (stmt.args[1] isa Expr && stmt.args[1].head === :static_parameter))
+                        (stmt.args[1] isa GlobalRef || isexpr(stmt.args[1], :static_parameter))
                     # a GlobalRef or static_parameter isdefined check does not evaluate its argument
                     continue
                 elseif stmt.head === :call

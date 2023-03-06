@@ -221,14 +221,23 @@ is_effect_overridden(override::EffectsOverride, effect::Symbol) = getfield(overr
 
 add_remark!(::AbstractInterpreter, sv::Union{InferenceState, IRCode}, remark) = return
 
-function bail_out_toplevel_call(::AbstractInterpreter, @nospecialize(callsig), sv::Union{InferenceState, IRCode})
-    return isa(sv, InferenceState) && sv.restrict_abstract_call_sites && !isdispatchtuple(callsig)
+struct InferenceLoopState
+    sig
+    rt
+    effects::Effects
+    function InferenceLoopState(@nospecialize(sig), @nospecialize(rt), effects::Effects)
+        new(sig, rt, effects)
+    end
 end
-function bail_out_call(::AbstractInterpreter, @nospecialize(rt), sv::Union{InferenceState, IRCode})
-    return rt === Any
+
+function bail_out_toplevel_call(::AbstractInterpreter, state::InferenceLoopState, sv::Union{InferenceState, IRCode})
+    return isa(sv, InferenceState) && sv.restrict_abstract_call_sites && !isdispatchtuple(state.sig)
 end
-function bail_out_apply(::AbstractInterpreter, @nospecialize(rt), sv::Union{InferenceState, IRCode})
-    return rt === Any
+function bail_out_call(::AbstractInterpreter, state::InferenceLoopState, sv::Union{InferenceState, IRCode})
+    return state.rt === Any
+end
+function bail_out_apply(::AbstractInterpreter, state::InferenceLoopState, sv::Union{InferenceState, IRCode})
+    return state.rt === Any
 end
 
 was_reached(sv::InferenceState, pc::Int) = sv.ssavaluetypes[pc] !== NOT_FOUND
@@ -348,15 +357,100 @@ function InferenceState(result::InferenceResult, cache::Symbol, interp::Abstract
     return InferenceState(result, src, cache, interp)
 end
 
+"""
+    constrains_param(var::TypeVar, sig, covariant::Bool, type_constrains::Bool)
+
+Check if `var` will be constrained to have a definite value
+in any concrete leaftype subtype of `sig`.
+
+It is used as a helper to determine whether type intersection is guaranteed to be able to
+find a value for a particular type parameter.
+A necessary condition for type intersection to not assign a parameter is that it only
+appears in a `Union[All]` and during subtyping some other union component (that does not
+constrain the type parameter) is selected.
+
+The `type_constrains` flag determines whether Type{T} is considered to be constraining
+`T`. This is not true in general, because of the existence of types with free type
+parameters, however, some callers would like to ignore this corner case.
+"""
+function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool, type_constrains::Bool=false)
+    typ === var && return true
+    while typ isa UnionAll
+        covariant && constrains_param(var, typ.var.ub, covariant, type_constrains) && return true
+        # typ.var.lb doesn't constrain var
+        typ = typ.body
+    end
+    if typ isa Union
+        # for unions, verify that both options would constrain var
+        ba = constrains_param(var, typ.a, covariant, type_constrains)
+        bb = constrains_param(var, typ.b, covariant, type_constrains)
+        (ba && bb) && return true
+    elseif typ isa DataType
+        # return true if any param constrains var
+        fc = length(typ.parameters)
+        if fc > 0
+            if typ.name === Tuple.name
+                # vararg tuple needs special handling
+                for i in 1:(fc - 1)
+                    p = typ.parameters[i]
+                    constrains_param(var, p, covariant, type_constrains) && return true
+                end
+                lastp = typ.parameters[fc]
+                vararg = unwrap_unionall(lastp)
+                if vararg isa Core.TypeofVararg && isdefined(vararg, :N)
+                    constrains_param(var, vararg.N, covariant, type_constrains) && return true
+                    # T = vararg.parameters[1] doesn't constrain var
+                else
+                    constrains_param(var, lastp, covariant, type_constrains) && return true
+                end
+            else
+                if typ.name === typename(Type) && typ.parameters[1] === var && var.ub === Any
+                    # Types with free type parameters are <: Type cause the typevar
+                    # to be unconstrained because Type{T} with free typevars is illegal
+                    return type_constrains
+                end
+                for i in 1:fc
+                    p = typ.parameters[i]
+                    constrains_param(var, p, false, type_constrains) && return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+"""
+    MaybeUndefSP(typ)
+    is_maybeundefsp(typ) -> Bool
+    unwrap_maybeundefsp(typ) -> Any
+
+A special wrapper that represents a static parameter that could be undefined at runtime.
+This does not participate in the native type system nor the inference lattice,
+and it thus should be always unwrapped when performing any type or lattice operations on it.
+"""
+struct MaybeUndefSP
+    typ
+    MaybeUndefSP(@nospecialize typ) = new(typ)
+end
+is_maybeundefsp(@nospecialize typ) = isa(typ, MaybeUndefSP)
+unwrap_maybeundefsp(@nospecialize typ) = isa(typ, MaybeUndefSP) ? typ.typ : typ
+is_maybeundefsp(sptypes::Vector{Any}, idx::Int) = is_maybeundefsp(sptypes[idx])
+unwrap_maybeundefsp(sptypes::Vector{Any}, idx::Int) = unwrap_maybeundefsp(sptypes[idx])
+
+const EMPTY_SPTYPES = Any[]
+
 function sptypes_from_meth_instance(linfo::MethodInstance)
-    toplevel = !isa(linfo.def, Method)
-    if !toplevel && isempty(linfo.sparam_vals) && isa(linfo.def.sig, UnionAll)
+    def = linfo.def
+    isa(def, Method) || return EMPTY_SPTYPES # toplevel
+    sig = def.sig
+    if isempty(linfo.sparam_vals)
+        isa(sig, UnionAll) || return EMPTY_SPTYPES
         # linfo is unspecialized
         sp = Any[]
-        sig = linfo.def.sig
-        while isa(sig, UnionAll)
-            push!(sp, sig.var)
-            sig = sig.body
+        sig′ = sig
+        while isa(sig′, UnionAll)
+            push!(sp, sig′.var)
+            sig′ = sig′.body
         end
     else
         sp = collect(Any, linfo.sparam_vals)
@@ -365,9 +459,7 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
         v = sp[i]
         if v isa TypeVar
             fromArg = 0
-            # if this parameter came from arg::Type{T}, then `arg` is more precise than
-            # Type{T} where lb<:T<:ub
-            sig = linfo.def.sig
+            maybe_undef = !constrains_param(v, linfo.specTypes, #=covariant=#true)
             temp = sig
             for j = 1:i-1
                 temp = temp.body
@@ -408,6 +500,8 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
                     ty = UnionAll(tv, Type{tv})
                 end
             end
+            @label ty_computed
+            maybe_undef && (ty = MaybeUndefSP(ty))
         elseif isvarargtype(v)
             ty = Int
         else
@@ -429,14 +523,14 @@ end
 
 update_valid_age!(edge::InferenceState, sv::InferenceState) = update_valid_age!(sv, edge.valid_worlds)
 
-function record_ssa_assign!(ssa_id::Int, @nospecialize(new), frame::InferenceState)
+function record_ssa_assign!(𝕃ᵢ::AbstractLattice, ssa_id::Int, @nospecialize(new), frame::InferenceState)
     ssavaluetypes = frame.ssavaluetypes
     old = ssavaluetypes[ssa_id]
-    if old === NOT_FOUND || !(new ⊑ old)
+    if old === NOT_FOUND || !⊑(𝕃ᵢ, new, old)
         # typically, we expect that old ⊑ new (that output information only
         # gets less precise with worse input information), but to actually
         # guarantee convergence we need to use tmerge here to ensure that is true
-        ssavaluetypes[ssa_id] = old === NOT_FOUND ? new : tmerge(old, new)
+        ssavaluetypes[ssa_id] = old === NOT_FOUND ? new : tmerge(𝕃ᵢ, old, new)
         W = frame.ip
         for r in frame.ssavalue_uses[ssa_id]
             if was_reached(frame, r)
@@ -519,9 +613,11 @@ end
 
 get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]
 
-function narguments(sv::InferenceState)
+function narguments(sv::InferenceState, include_va::Bool=true)
     def = sv.linfo.def
-    isva = isa(def, Method) && def.isva
-    nargs = length(sv.result.argtypes) - isva
+    nargs = length(sv.result.argtypes)
+    if !include_va
+        nargs -= isa(def, Method) && def.isva
+    end
     return nargs
 end

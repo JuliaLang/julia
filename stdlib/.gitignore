@@ -1,4 +1,6 @@
 /srccache
+/DelimitedFiles-*
+/DelimitedFiles
 /Pkg-*
 /Pkg
 /Statistics-*

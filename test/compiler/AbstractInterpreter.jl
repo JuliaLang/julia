@@ -19,10 +19,12 @@ macro newinterp(name)
         struct $name <: CC.AbstractInterpreter
             interp::CC.NativeInterpreter
             cache::$cachename
+            meta # additional information
             $name(world = Base.get_world_counter();
                 interp = CC.NativeInterpreter(world),
-                cache = $cachename(IdDict{MethodInstance,CodeInstance}())
-                ) = new(interp, cache)
+                cache = $cachename(IdDict{MethodInstance,CodeInstance}()),
+                meta = nothing
+                ) = new(interp, cache, meta)
         end
         CC.InferenceParams(interp::$name) = CC.InferenceParams(interp.interp)
         CC.OptimizationParams(interp::$name) = CC.OptimizationParams(interp.interp)
@@ -45,6 +47,14 @@ import Base.Experimental: @MethodTable, @overlay
 @MethodTable(OverlayedMT)
 CC.method_table(interp::MTOverlayInterp) = CC.OverlayMethodTable(CC.get_world_counter(interp), OverlayedMT)
 
+function CC.add_remark!(interp::MTOverlayInterp, ::CC.InferenceState, remark)
+    if interp.meta !== nothing
+        # Core.println(remark)
+        push!(interp.meta, remark)
+    end
+    return nothing
+end
+
 strangesin(x) = sin(x)
 @overlay OverlayedMT strangesin(x::Float64) = iszero(x) ? nothing : cos(x)
 
@@ -63,6 +73,21 @@ end |> !Core.Compiler.is_nonoverlayed
 @test Base.infer_effects((Any,); interp=MTOverlayInterp()) do x
     @invoke strangesin(x::Float64)
 end |> !Core.Compiler.is_nonoverlayed
+
+# account for overlay possibility in unanalyzed matching method
+callstrange(::Nothing) = Core.compilerbarrier(:type, nothing) # trigger inference bail out
+callstrange(::Float64) = strangesin(x)
+callstrange_entry(x) = callstrange(x) # needs to be defined here because of world age
+let interp = MTOverlayInterp(; meta=Set{Any}())
+    matches = Core.Compiler.findall(Tuple{typeof(callstrange),Any}, Core.Compiler.method_table(interp)).matches
+    @test Core.Compiler.length(matches) == 2
+    if Core.Compiler.getindex(matches, 1).method == which(callstrange, (Nothing,))
+        @test Base.infer_effects(callstrange_entry, (Any,); interp) |> !Core.Compiler.is_nonoverlayed
+        @test "Call inference reached maximally imprecise information. Bailing on." in interp.meta
+    else
+        @warn "`nonoverlayed` test for inference bailing out is skipped since the method match sort order is changed."
+    end
+end
 
 # but it should never apply for the native compilation
 @test Base.infer_effects((Float64,)) do x

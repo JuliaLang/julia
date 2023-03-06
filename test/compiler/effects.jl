@@ -569,6 +569,21 @@ global inconsistent_condition_ref = Ref{Bool}(false)
     end
 end |> !Core.Compiler.is_consistent
 
+# should handle va-method properly
+callgetfield1(xs...) = getfield(getfield(xs, 1), 1)
+@test !Core.Compiler.is_inaccessiblememonly(Base.infer_effects(callgetfield1, (Base.RefValue{Symbol},)))
+const GLOBAL_XS = Ref(:julia)
+global_getfield() = callgetfield1(GLOBAL_XS)
+@test let
+    Base.Experimental.@force_compile
+    global_getfield()
+end === :julia
+GLOBAL_XS[] = :julia2
+@test let
+    Base.Experimental.@force_compile
+    global_getfield()
+end === :julia2
+
 # the `:inaccessiblememonly` helper effect allows us to prove `:effect_free`-ness of frames
 # including `setfield!` modifying local mutable object
 
@@ -683,11 +698,22 @@ end
 
 # Test that dead `@inbounds` does not taint consistency
 # https://github.com/JuliaLang/julia/issues/48243
-@test Base.infer_effects() do
-    false && @inbounds (1,2,3)[1]
+@test Base.infer_effects(Tuple{Int64}) do i
+    false && @inbounds (1,2,3)[i]
     return 1
 end |> Core.Compiler.is_total
 
 @test Base.infer_effects(Tuple{Int64}) do i
     @inbounds (1,2,3)[i]
 end |> !Core.Compiler.is_consistent
+
+@test Base.infer_effects(Tuple{Tuple{Int64}}) do x
+    @inbounds x[1]
+end |> Core.Compiler.is_total
+
+# GotoIfNot should properly mark itself as throwing when given a non-Bool
+# https://github.com/JuliaLang/julia/pull/48583
+gotoifnot_throw_check_48583(x) = x ? x : 0
+@test !Core.Compiler.is_nothrow(Base.infer_effects(gotoifnot_throw_check_48583, (Missing,)))
+@test !Core.Compiler.is_nothrow(Base.infer_effects(gotoifnot_throw_check_48583, (Any,)))
+@test Core.Compiler.is_nothrow(Base.infer_effects(gotoifnot_throw_check_48583, (Bool,)))

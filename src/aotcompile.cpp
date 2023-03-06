@@ -271,7 +271,7 @@ void replaceUsesWithLoad(Function &F, function_ref<GlobalVariable *(Instruction 
 // `_imaging_mode` controls if raw pointers can be embedded (e.g. the code will be loaded into the same session).
 // `_external_linkage` create linkages between pkgimages.
 extern "C" JL_DLLEXPORT
-void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode, int _external_linkage)
+void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode, int _external_linkage, size_t _world)
 {
     ++CreateNativeCalls;
     CreateNativeMax.updateMax(jl_array_len(methods));
@@ -307,7 +307,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     params.params = cgparams;
     params.imaging = imaging;
     params.external_linkage = _external_linkage;
-    size_t compile_for[] = { jl_typeinf_world, jl_atomic_load_acquire(&jl_world_counter) };
+    size_t compile_for[] = { jl_typeinf_world, _world };
     for (int worlds = 0; worlds < 2; worlds++) {
         params.world = compile_for[worlds];
         if (!params.world)
@@ -369,34 +369,16 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     size_t offset = gvars.size();
     data->jl_external_to_llvm.resize(params.external_fns.size());
 
-    auto tbaa_const = tbaa_make_child_with_context(*ctxt.getContext(), "jtbaa_const", nullptr, true).first;
     for (auto &extern_fn : params.external_fns) {
         jl_code_instance_t *this_code = std::get<0>(extern_fn.first);
         bool specsig = std::get<1>(extern_fn.first);
         assert(specsig && "Error external_fns doesn't handle non-specsig yet");
-        (void)specsig;
-        Function *F = extern_fn.second;
-        Module *M = F->getParent();
-
-        Type *T_funcp = F->getFunctionType()->getPointerTo();
-        // Can't create a GC with type FunctionType. Alias also doesn't work
-        GlobalVariable *GV = new GlobalVariable(*M, T_funcp, false,
-                                                GlobalVariable::ExternalLinkage,
-                                                Constant::getNullValue(T_funcp),
-                                                F->getName());
-
-
-        // Need to insert load instruction, thus we can't use replace all uses with
-        replaceUsesWithLoad(*F, [GV](Instruction &) { return GV; }, tbaa_const);
-
-        assert(F->getNumUses() == 0); // declaration counts as use
-        GV->takeName(F);
-        F->eraseFromParent();
-
+        (void) specsig;
+        GlobalVariable *F = extern_fn.second;
         size_t idx = gvars.size() - offset;
         assert(idx >= 0);
         data->jl_external_to_llvm.at(idx) = this_code;
-        gvars.push_back(std::string(GV->getName()));
+        gvars.push_back(std::string(F->getName()));
     }
 
     // clones the contents of the module `m` to the shadow_output collector

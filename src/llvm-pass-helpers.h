@@ -152,6 +152,9 @@ namespace jl_well_known {
 
     // `jl_gc_queue_binding`: queues a binding for GC.
     extern const WellKnownFunctionDescription GCQueueBinding;
+
+    // `jl_gc_alloc_typed`: allocates bytes.
+    extern const WellKnownFunctionDescription GCAllocTyped;
 }
 
 #endif

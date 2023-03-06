@@ -3022,8 +3022,6 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
     }
     if (_jl_debug_method_invalidation != NULL)
         gc_mark_queue_obj(gc_cache, sp, _jl_debug_method_invalidation);
-    if (jl_build_ids != NULL)
-        gc_mark_queue_obj(gc_cache, sp, jl_build_ids);
 
     // constants
     gc_mark_queue_obj(gc_cache, sp, jl_emptytuple_type);
@@ -3682,14 +3680,15 @@ void jl_gc_init(void)
     uint64_t constrained_mem = uv_get_constrained_memory();
     if (constrained_mem > 0 && constrained_mem < total_mem)
         total_mem = constrained_mem;
+    double percent;
+    if (total_mem < 128e9)
+        percent = total_mem * 2.34375e-12 + 0.6; // 60% at 0 gigs and 90% at 128 to not
+    else                                         // overcommit too much on memory contrained devices
+        percent = 0.9;
+    max_total_memory = total_mem * percent;
 #endif
-
-    // We allocate with abandon until we get close to the free memory on the machine.
-    uint64_t free_mem = uv_get_available_memory();
-    uint64_t high_water_mark = free_mem / 10 * 7;  // 70% high water mark
-
-    if (high_water_mark < max_total_memory)
-       max_total_memory = high_water_mark;
+    if (jl_options.heap_size_hint)
+        jl_gc_set_max_memory(jl_options.heap_size_hint);
 
     jl_gc_mark_sp_t sp = {NULL, NULL, NULL, NULL};
     gc_mark_loop(NULL, sp);
@@ -3701,6 +3700,11 @@ void jl_gc_set_max_memory(uint64_t max_mem) {
         && max_mem < (uint64_t)1 << (sizeof(memsize_t) * 8 - 1)) {
         max_total_memory = max_mem;
     }
+}
+
+JL_DLLEXPORT uint64_t jl_gc_get_max_memory(void)
+{
+    return max_total_memory;
 }
 
 // callback for passing OOM errors from gmp
