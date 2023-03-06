@@ -106,10 +106,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         match = applicable[i]::MethodMatch
         method = match.method
         sig = match.spec_types
-        if bail_out_toplevel_call(interp, sig, sv)
+        if bail_out_toplevel_call(interp, InferenceLoopState(sig, rettype, all_effects), sv)
             # only infer concrete call sites in top-level expressions
             add_remark!(interp, sv, "Refusing to infer non-concrete call site in top-level expression")
-            rettype = Any
             break
         end
         this_rt = Bottom
@@ -190,8 +189,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 conditionals[2][i] = tmerge(conditionals[2][i], cnd.elsetype)
             end
         end
-        if bail_out_call(interp, rettype, sv, effects)
-            add_remark!(interp, sv, "One of the matched returned maximally imprecise information. Bailing on call.")
+        if bail_out_call(interp, InferenceLoopState(sig, rettype, all_effects), sv)
+            add_remark!(interp, sv, "Call inference reached maximally imprecise information. Bailing on.")
             break
         end
     end
@@ -201,10 +200,10 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         info = ConstCallInfo(info, const_results)
     end
 
-    if seen != napplicable
-        # there may be unanalyzed effects within unseen dispatch candidate,
-        # but we can still ignore nonoverlayed effect here since we already accounted for it
-        all_effects = merge_effects(all_effects, EFFECTS_UNKNOWN)
+    if seen ≠ napplicable
+        # there is unanalyzed candidate, widen type and effects to the top
+        rettype = Any
+        all_effects = Effects()
     elseif isa(matches, MethodMatches) ? (!matches.fullmatch || any_ambig(matches)) :
             (!all(matches.fullmatches) || any_ambig(matches))
         # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
@@ -1343,7 +1342,7 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
     if isa(tti, Union)
         utis = uniontypes(tti)
         if any(@nospecialize(t) -> !isa(t, DataType) || !(t <: Tuple) || !isknownlength(t), utis)
-            return AbstractIterationResult(Any[Vararg{Any}], nothing, EFFECTS_UNKNOWN′)
+            return AbstractIterationResult(Any[Vararg{Any}], nothing, Effects())
         end
         ltp = length((utis[1]::DataType).parameters)
         for t in utis
@@ -1378,7 +1377,7 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
     elseif tti0 === SimpleVector
         return AbstractIterationResult(Any[Vararg{Any}], nothing)
     elseif tti0 === Any
-        return AbstractIterationResult(Any[Vararg{Any}], nothing, EFFECTS_UNKNOWN′)
+        return AbstractIterationResult(Any[Vararg{Any}], nothing, Effects())
     elseif tti0 <: Array
         return AbstractIterationResult(Any[Vararg{eltype(tti0)}], nothing)
     else
@@ -1391,7 +1390,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     if isa(itft, Const)
         iteratef = itft.val
     else
-        return AbstractIterationResult(Any[Vararg{Any}], nothing, EFFECTS_UNKNOWN′)
+        return AbstractIterationResult(Any[Vararg{Any}], nothing, Effects())
     end
     @assert !isvarargtype(itertype)
     call = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[itft, itertype]), StmtInfo(true), sv)
@@ -1453,7 +1452,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
                 # ... but cannot terminate
                 if !may_have_terminated
                     #  ... and cannot have terminated prior to this loop
-                    return AbstractIterationResult(Any[Bottom], AbstractIterationInfo(calls, false), EFFECTS_UNKNOWN′)
+                    return AbstractIterationResult(Any[Bottom], AbstractIterationInfo(calls, false), Effects())
                 else
                     # iterator may have terminated prior to this loop, but not during it
                     valtype = Bottom
@@ -1545,7 +1544,9 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
     end
     retinfos = ApplyCallInfo[]
     retinfo = UnionSplitApplyCallInfo(retinfos)
-    for i = 1:length(ctypes)
+    napplicable = length(ctypes)
+    seen = 0
+    for i = 1:napplicable
         ct = ctypes[i]
         arginfo = infos[i]
         lct = length(ct)
@@ -1559,16 +1560,20 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
             end
         end
         call = abstract_call(interp, ArgInfo(nothing, ct), si, sv, max_methods)
+        seen += 1
         push!(retinfos, ApplyCallInfo(call.info, arginfo))
         res = tmerge(res, call.rt)
         effects = merge_effects(effects, call.effects)
-        if bail_out_apply(interp, res, sv)
-            if i != length(ctypes)
-                # No point carrying forward the info, we're not gonna inline it anyway
-                retinfo = NoCallInfo()
-            end
+        if bail_out_apply(interp, InferenceLoopState(ct, res, effects), sv)
+            add_remark!(interp, sv, "_apply_iterate inference reached maximally imprecise information. Bailing on.")
             break
         end
+    end
+    if seen ≠ napplicable
+        # there is unanalyzed candidate, widen type and effects to the top
+        res = Any
+        effects = Effects()
+        retinfo = NoCallInfo() # NOTE this is necessary to prevent the inlining processing
     end
     # TODO: Add a special info type to capture all the iteration info.
     # For now, only propagate info if we don't also union-split the iteration
@@ -2818,7 +2823,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     @assert !frame.inferred
     frame.dont_work_on_me = true # mark that this function is currently on the stack
     W = frame.ip
-    nargs = narguments(frame)
+    nargs = narguments(frame, #=include_va=#false)
     slottypes = frame.slottypes
     ssavaluetypes = frame.ssavaluetypes
     bbs = frame.cfg.blocks

@@ -68,7 +68,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->name = name;
     tn->module = module;
     tn->wrapper = NULL;
-    jl_atomic_store_release(&tn->Typeofwrapper, NULL);
+    jl_atomic_store_relaxed(&tn->Typeofwrapper, NULL);
     jl_atomic_store_relaxed(&tn->cache, jl_emptysvec);
     jl_atomic_store_relaxed(&tn->linearcache, jl_emptysvec);
     tn->names = NULL;

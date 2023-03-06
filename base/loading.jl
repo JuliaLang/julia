@@ -2494,7 +2494,7 @@ end
 
 # Test to see if this UUID is mentioned in this `Project.toml`; either as
 # the top-level UUID (e.g. that of the project itself), as a dependency,
-# or as an extra for Preferences.
+# or as an extra/weakdep for Preferences.
 function get_uuid_name(project::Dict{String, Any}, uuid::UUID)
     uuid_p = get(project, "uuid", nothing)::Union{Nothing, String}
     name = get(project, "name", nothing)::Union{Nothing, String}
@@ -2509,7 +2509,7 @@ function get_uuid_name(project::Dict{String, Any}, uuid::UUID)
             end
         end
     end
-    for subkey in ("deps", "extras")
+    for subkey in ("deps", "extras", "weakdeps")
         subsection = get(project, subkey, nothing)::Union{Nothing, Dict{String, Any}}
         if subsection !== nothing
             for (k, v) in subsection

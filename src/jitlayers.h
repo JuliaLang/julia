@@ -190,7 +190,7 @@ typedef struct _jl_codegen_params_t {
     // outputs
     std::vector<std::pair<jl_code_instance_t*, jl_codegen_call_target_t>> workqueue;
     std::map<void*, GlobalVariable*> globals;
-    std::map<std::tuple<jl_code_instance_t*,bool>, Function*> external_fns;
+    std::map<std::tuple<jl_code_instance_t*,bool>, GlobalVariable*> external_fns;
     std::map<jl_datatype_t*, DIType*> ditypes;
     std::map<jl_datatype_t*, Type*> llvmtypes;
     DenseMap<Constant*, GlobalVariable*> mergedConstants;
@@ -524,7 +524,7 @@ private:
 #ifndef JL_USE_JITLINK
     const std::shared_ptr<RTDyldMemoryManager> MemMgr;
 #else
-    std::atomic<size_t> total_size;
+    std::atomic<size_t> total_size{0};
     const std::unique_ptr<jitlink::JITLinkMemoryManager> MemMgr;
 #endif
     ObjLayerT ObjectLayer;

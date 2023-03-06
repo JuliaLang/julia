@@ -217,14 +217,23 @@ is_effect_overridden(override::EffectsOverride, effect::Symbol) = getfield(overr
 
 add_remark!(::AbstractInterpreter, sv::Union{InferenceState, IRCode}, remark) = return
 
-function bail_out_toplevel_call(::AbstractInterpreter, @nospecialize(callsig), sv::Union{InferenceState, IRCode})
-    return isa(sv, InferenceState) && sv.restrict_abstract_call_sites && !isdispatchtuple(callsig)
+struct InferenceLoopState
+    sig
+    rt
+    effects::Effects
+    function InferenceLoopState(@nospecialize(sig), @nospecialize(rt), effects::Effects)
+        new(sig, rt, effects)
+    end
 end
-function bail_out_call(::AbstractInterpreter, @nospecialize(rt), sv::Union{InferenceState, IRCode}, effects::Effects)
-    return rt === Any && !is_foldable(effects)
+
+function bail_out_toplevel_call(::AbstractInterpreter, state::InferenceLoopState, sv::Union{InferenceState, IRCode})
+    return isa(sv, InferenceState) && sv.restrict_abstract_call_sites && !isdispatchtuple(state.sig)
 end
-function bail_out_apply(::AbstractInterpreter, @nospecialize(rt), sv::Union{InferenceState, IRCode})
-    return rt === Any
+function bail_out_call(::AbstractInterpreter, state::InferenceLoopState, sv::Union{InferenceState, IRCode})
+    return state.rt === Any && !is_foldable(state.effects)
+end
+function bail_out_apply(::AbstractInterpreter, state::InferenceLoopState, sv::Union{InferenceState, IRCode})
+    return state.rt === Any
 end
 
 was_reached(sv::InferenceState, pc::Int) = sv.ssavaluetypes[pc] !== NOT_FOUND
@@ -598,9 +607,11 @@ get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]
 add_curr_ssaflag!(sv::InferenceState, flag::UInt8) = sv.src.ssaflags[sv.currpc] |= flag
 sub_curr_ssaflag!(sv::InferenceState, flag::UInt8) = sv.src.ssaflags[sv.currpc] &= ~flag
 
-function narguments(sv::InferenceState)
+function narguments(sv::InferenceState, include_va::Bool=true)
     def = sv.linfo.def
-    isva = isa(def, Method) && def.isva
-    nargs = length(sv.result.argtypes) - isva
+    nargs = length(sv.result.argtypes)
+    if !include_va
+        nargs -= isa(def, Method) && def.isva
+    end
     return nargs
 end

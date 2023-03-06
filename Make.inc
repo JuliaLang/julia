@@ -674,7 +674,10 @@ SANITIZE_LDFLAGS :=
 ifeq ($(SANITIZE_MEMORY),1)
 SANITIZE_OPTS += -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
 SANITIZE_LDFLAGS += $(SANITIZE_OPTS)
-endif
+ifneq ($(findstring $(OS),Linux FreeBSD),)
+SANITIZE_LDFLAGS += -Wl,--warn-unresolved-symbols
+endif # OS Linux or FreeBSD
+endif # SANITIZE_MEMORY=1
 ifeq ($(SANITIZE_ADDRESS),1)
 SANITIZE_OPTS += -fsanitize=address
 SANITIZE_LDFLAGS += -fsanitize=address
@@ -1018,6 +1021,10 @@ PATCHELF := patchelf
 else
 PATCHELF := $(build_depsbindir)/patchelf
 endif
+# In the standard build system we want to patch files with `--set-rpath`, but downstream
+# packagers like Spack may want to use `--add-rpath` instead, leave them the possibility to
+# choose the command.
+PATCHELF_SET_RPATH_ARG := --set-rpath
 
 ifeq ($(USE_SYSTEM_LIBWHICH), 1)
 LIBWHICH := libwhich
