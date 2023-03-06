@@ -46,9 +46,9 @@ end
 """
 Return the number of ISO weeks in the given year (see https://en.wikipedia.org/wiki/ISO_week_date).
 """
-function weeksinyear(dt::DateTime)
-    firstday = firstdayofyear(dt)
-    lastday = lastdayofyear(dt)
+function weeksinyear(y::Year)
+    firstday = firstdayofyear(Date(y))
+    lastday = lastdayofyear(Date(y))
 
     if dayofweek(firstday) == 4 || dayofweek(lastday) == 4
         return 53
