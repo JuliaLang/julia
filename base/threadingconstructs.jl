@@ -32,16 +32,7 @@ See also `BLAS.get_num_threads` and `BLAS.set_num_threads` in the [`LinearAlgebr
 man-linalg) standard library, and `nprocs()` in the [`Distributed`](@ref man-distributed)
 standard library and [`Threads.maxthreadid()`](@ref).
 """
-function nthreads(pool::Symbol)
-    if pool === :default
-        tpid = Int8(0)
-    elseif pool === :interactive
-        tpid = Int8(1)
-    else
-        error("invalid threadpool specified")
-    end
-    return _nthreads_in_pool(tpid)
-end
+nthreads(pool::Symbol) = threadpoolsize(pool)
 
 function _nthreads_in_pool(tpid::Int8)
     p = unsafe_load(cglobal(:jl_n_threads_per_pool, Ptr{Cint}))
