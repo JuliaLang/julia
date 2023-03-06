@@ -1365,7 +1365,7 @@ end
     PT = Const(Pair)
     return instanceof_tfunc(apply_type_tfunc(𝕃, PT, T, T))[1]
 end
-function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo, sv::InferenceState)
+function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo, sv::AbsIntState)
     nargs = length(argtypes)
     if !isempty(argtypes) && isvarargtype(argtypes[nargs])
         nargs - 1 <= 6 || return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
@@ -1973,7 +1973,7 @@ function array_elmtype(@nospecialize ary)
     return Any
 end
 
-@nospecs function _opaque_closure_tfunc(𝕃::AbstractLattice, arg, lb, ub, source, env::Vector{Any}, linfo::MethodInstance)
+@nospecs function opaque_closure_tfunc(𝕃::AbstractLattice, arg, lb, ub, source, env::Vector{Any}, linfo::MethodInstance)
     argt, argt_exact = instanceof_tfunc(arg)
     lbt, lb_exact = instanceof_tfunc(lb)
     if !lb_exact
@@ -2363,7 +2363,7 @@ function builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f), argtypes::Vect
 end
 
 function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any},
-                           sv::Union{InferenceState,IRCode,Nothing})
+                           sv::Union{AbsIntState, Nothing})
     𝕃ᵢ = typeinf_lattice(interp)
     if f === tuple
         return tuple_tfunc(𝕃ᵢ, argtypes)
@@ -2544,7 +2544,7 @@ end
 # TODO: this function is a very buggy and poor model of the return_type function
 # since abstract_call_gf_by_type is a very inaccurate model of _method and of typeinf_type,
 # while this assumes that it is an absolutely precise and accurate and exact model of both
-function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo, sv::Union{InferenceState, IRCode})
+function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo, sv::AbsIntState)
     if length(argtypes) == 3
         tt = widenslotwrapper(argtypes[3])
         if isa(tt, Const) || (isType(tt) && !has_free_typevars(tt))
@@ -2603,7 +2603,7 @@ end
 
 # a simplified model of abstract_call_gf_by_type for applicable
 function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
-                             sv::InferenceState, max_methods::Int)
+                             sv::AbsIntState, max_methods::Int)
     length(argtypes) < 2 && return CallMeta(Union{}, EFFECTS_UNKNOWN, NoCallInfo())
     isvarargtype(argtypes[2]) && return CallMeta(Bool, EFFECTS_UNKNOWN, NoCallInfo())
     argtypes = argtypes[2:end]
@@ -2649,7 +2649,7 @@ end
 add_tfunc(applicable, 1, INT_INF, @nospecs((𝕃::AbstractLattice, f, args...)->Bool), 40)
 
 # a simplified model of abstract_invoke for Core._hasmethod
-function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
+function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::AbsIntState)
     if length(argtypes) == 3 && !isvarargtype(argtypes[3])
         ft′ = argtype_by_index(argtypes, 2)
         ft = widenconst(ft′)

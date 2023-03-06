@@ -86,7 +86,7 @@ function va_process_argtypes(@nospecialize(va_handler!), 𝕃::AbstractLattice, 
     nargs = Int(def.nargs)
     if isva || isvarargtype(given_argtypes[end])
         isva_given_argtypes = Vector{Any}(undef, nargs)
-        for i = 1:(nargs - isva)
+        for i = 1:(nargs-isva)
             isva_given_argtypes[i] = argtype_by_index(given_argtypes, i)
         end
         if isva
@@ -110,10 +110,8 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
     isva = !toplevel && method.isva
     linfo_argtypes = Any[(unwrap_unionall(specTypes)::DataType).parameters...]
     nargs::Int = toplevel ? 0 : method.nargs
-    if !withfirst
-        # For opaque closure, the closure environment is processed elsewhere
-        nargs -= 1
-    end
+    # For opaque closure, the closure environment is processed elsewhere
+    withfirst || (nargs -= 1)
     cache_argtypes = Vector{Any}(undef, nargs)
     # First, if we're dealing with a varargs method, then we set the last element of `args`
     # to the appropriate `Tuple` type or `PartialStruct` instance.
