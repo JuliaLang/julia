@@ -49,6 +49,7 @@ private:
     FunctionType *FT_pgcstack_getter{nullptr};
     PointerType *T_pgcstack_getter{nullptr};
     PointerType *T_pppjlvalue{nullptr};
+    Type *T_size{nullptr};
     GlobalVariable *pgcstack_func_slot{nullptr};
     GlobalVariable *pgcstack_key_slot{nullptr};
     GlobalVariable *pgcstack_offset{nullptr};
@@ -125,7 +126,7 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
         assert(0 && "Cannot emit thread pointer for this architecture.");
 #endif
         if (!offset)
-            offset = ConstantInt::getSigned(getSizeTy(insertBefore->getContext()), jl_tls_offset);
+            offset = ConstantInt::getSigned(T_size, jl_tls_offset);
         auto tp = InlineAsm::get(FunctionType::get(Type::getInt8PtrTy(insertBefore->getContext()), false), asm_str, "=r", false);
         tls = CallInst::Create(tp, "thread_ptr", insertBefore);
         tls = GetElementPtrInst::Create(Type::getInt8Ty(insertBefore->getContext()), tls, {offset}, "ppgcstack_i8", insertBefore);
@@ -216,7 +217,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
             //     pgcstack = tp + offset; // fast
             // else
             //     pgcstack = getter();    // slow
-            auto offset = new LoadInst(getSizeTy(pgcstack->getContext()), pgcstack_offset, "", false, pgcstack);
+            auto offset = new LoadInst(T_size, pgcstack_offset, "", false, pgcstack);
             offset->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
             offset->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), None));
             auto cmp = new ICmpInst(pgcstack, CmpInst::ICMP_NE, offset,
@@ -253,7 +254,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
         getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
         getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), None));
 #if defined(_OS_DARWIN_)
-        auto key = new LoadInst(getSizeTy(pgcstack->getContext()), pgcstack_key_slot, "", false, pgcstack);
+        auto key = new LoadInst(T_size, pgcstack_key_slot, "", false, pgcstack);
         key->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
         key->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), None));
         auto new_pgcstack = CallInst::Create(FT_pgcstack_getter, getter, {key}, "", pgcstack);
@@ -275,11 +276,11 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
         jl_get_pgcstack_func *f;
         jl_pgcstack_key_t k;
         jl_pgcstack_getkey(&f, &k);
-        Constant *val = ConstantInt::get(getSizeTy(pgcstack->getContext()), (uintptr_t)f);
+        Constant *val = ConstantInt::get(T_size, (uintptr_t)f);
         val = ConstantExpr::getIntToPtr(val, T_pgcstack_getter);
 #if defined(_OS_DARWIN_)
         assert(sizeof(k) == sizeof(uintptr_t));
-        Constant *key = ConstantInt::get(getSizeTy(pgcstack->getContext()), (uintptr_t)k);
+        Constant *key = ConstantInt::get(T_size, (uintptr_t)k);
         auto new_pgcstack = CallInst::Create(FT_pgcstack_getter, val, {key}, "", pgcstack);
         new_pgcstack->takeName(pgcstack);
         pgcstack->replaceAllUsesWith(new_pgcstack);
@@ -303,18 +304,19 @@ bool LowerPTLS::run(bool *CFGModified)
         if (need_init) {
             tbaa_const = tbaa_make_child_with_context(M->getContext(), "jtbaa_const", nullptr, true).first;
             tbaa_gcframe = tbaa_make_child_with_context(M->getContext(), "jtbaa_gcframe").first;
+            T_size = M->getDataLayout().getIntPtrType(M->getContext());
 
             FT_pgcstack_getter = pgcstack_getter->getFunctionType();
 #if defined(_OS_DARWIN_)
             assert(sizeof(jl_pgcstack_key_t) == sizeof(uintptr_t));
-            FT_pgcstack_getter = FunctionType::get(FT_pgcstack_getter->getReturnType(), {getSizeTy(M->getContext())}, false);
+            FT_pgcstack_getter = FunctionType::get(FT_pgcstack_getter->getReturnType(), {T_size}, false);
 #endif
             T_pgcstack_getter = FT_pgcstack_getter->getPointerTo();
             T_pppjlvalue = cast<PointerType>(FT_pgcstack_getter->getReturnType());
             if (imaging_mode) {
                 pgcstack_func_slot = create_aliased_global(T_pgcstack_getter, "jl_pgcstack_func_slot");
-                pgcstack_key_slot = create_aliased_global(getSizeTy(M->getContext()), "jl_pgcstack_key_slot"); // >= sizeof(jl_pgcstack_key_t)
-                pgcstack_offset = create_aliased_global(getSizeTy(M->getContext()), "jl_tls_offset");
+                pgcstack_key_slot = create_aliased_global(T_size, "jl_pgcstack_key_slot"); // >= sizeof(jl_pgcstack_key_t)
+                pgcstack_offset = create_aliased_global(T_size, "jl_tls_offset");
             }
             need_init = false;
         }
