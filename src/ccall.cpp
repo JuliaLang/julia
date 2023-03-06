@@ -1100,9 +1100,10 @@ std::string generate_func_sig(const char *fname)
 #else
             AttrBuilder retattrs;
 #endif
-#if !defined(_OS_WINDOWS_) // llvm used to use the old mingw ABI, skipping this marking works around that difference
-            retattrs.addStructRetAttr(lrt);
-#endif
+            if (!ctx->TargetTriple.isOSWindows()) {
+                // llvm used to use the old mingw ABI, skipping this marking works around that difference
+                retattrs.addStructRetAttr(lrt);
+            }
             retattrs.addAttribute(Attribute::NoAlias);
             paramattrs.push_back(AttributeSet::get(LLVMCtx, retattrs));
             fargt_sig.push_back(PointerType::get(lrt, 0));

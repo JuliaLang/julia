@@ -199,12 +199,11 @@ typedef struct _jl_codegen_params_t {
     // Map from symbol name (in a certain library) to its GV in sysimg and the
     // DL handle address in the current session.
     StringMap<std::pair<GlobalVariable*,SymMapGV>> libMapGV;
-#ifdef _OS_WINDOWS_
+    SymMapGV symMapDefault;
+    // These symMaps are Windows-only
     SymMapGV symMapExe;
     SymMapGV symMapDll;
     SymMapGV symMapDlli;
-#endif
-    SymMapGV symMapDefault;
     // Map from distinct callee's to its GOT entry.
     // In principle the attribute, function type and calling convention
     // don't need to be part of the key but it seems impossible to forward
