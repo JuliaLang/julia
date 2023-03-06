@@ -57,7 +57,7 @@ GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M)
 static bool runtime_sym_gvs(jl_codectx_t &ctx, const char *f_lib, const char *f_name,
                             GlobalVariable *&lib, GlobalVariable *&sym)
 {
-    auto M = &ctx.emission_context.shared_module(*jl_Module);
+    auto M = &ctx.emission_context.shared_module();
     bool runtime_lib = false;
     GlobalVariable *libptrgv;
     jl_codegen_params_t::SymMapGV *symMap;
@@ -236,7 +236,7 @@ static GlobalVariable *emit_plt_thunk(
         bool runtime_lib)
 {
     ++PLTThunks;
-    auto M = &ctx.emission_context.shared_module(*jl_Module);
+    auto M = &ctx.emission_context.shared_module();
     PointerType *funcptype = PointerType::get(functype, 0);
     libptrgv = prepare_global_in(M, libptrgv);
     llvmgv = prepare_global_in(M, llvmgv);
@@ -279,14 +279,13 @@ static GlobalVariable *emit_plt_thunk(
     else {
         // musttail support is very bad on ARM, PPC, PPC64 (as of LLVM 3.9)
         // Known failures includes vararg (not needed here) and sret.
-
-#if (defined(_CPU_X86_) || defined(_CPU_X86_64_) || (defined(_CPU_AARCH64_) && !defined(_OS_DARWIN_)))
-        // Ref https://bugs.llvm.org/show_bug.cgi?id=47058
-        // LLVM, as of 10.0.1 emits wrong/worse code when musttail is set
-        // Apple silicon macs give an LLVM ERROR if musttail is set here #44107.
-        if (!attrs.hasAttrSomewhere(Attribute::ByVal))
-            ret->setTailCallKind(CallInst::TCK_MustTail);
-#endif
+        if (ctx.emission_context.TargetTriple.isX86() || (ctx.emission_context.TargetTriple.isAArch64() && !ctx.emission_context.TargetTriple.isOSDarwin())) {
+            // Ref https://bugs.llvm.org/show_bug.cgi?id=47058
+            // LLVM, as of 10.0.1 emits wrong/worse code when musttail is set
+            // Apple silicon macs give an LLVM ERROR if musttail is set here #44107.
+            if (!attrs.hasAttrSomewhere(Attribute::ByVal))
+                ret->setTailCallKind(CallInst::TCK_MustTail);
+        }
         if (functype->getReturnType() == getVoidTy(irbuilder.getContext())) {
             irbuilder.CreateRetVoid();
         }
@@ -1512,22 +1511,28 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(lrt == getVoidTy(ctx.builder.getContext()));
         assert(!isVa && !llvmcall && nccallargs == 0);
 #ifdef __MIC__
-        // TODO
-#elif defined(_CPU_X86_64_) || defined(_CPU_X86_)  /* !__MIC__ */
-        auto pauseinst = InlineAsm::get(FunctionType::get(getVoidTy(ctx.builder.getContext()), false), "pause",
-                                               "~{memory}", true);
-        ctx.builder.CreateCall(pauseinst);
-        JL_GC_POP();
-        return ghostValue(ctx, jl_nothing_type);
-#elif defined(_CPU_AARCH64_) || (defined(_CPU_ARM_) && __ARM_ARCH >= 7)
-        auto wfeinst = InlineAsm::get(FunctionType::get(getVoidTy(ctx.builder.getContext()), false), "wfe",
-                                             "~{memory}", true);
-        ctx.builder.CreateCall(wfeinst);
-        JL_GC_POP();
-        return ghostValue(ctx, jl_nothing_type);
+    //TODO
 #else
-        JL_GC_POP();
-        return ghostValue(ctx, jl_nothing_type);
+        if (ctx.emission_context.TargetTriple.isX86()) {
+            auto pauseinst = InlineAsm::get(FunctionType::get(getVoidTy(ctx.builder.getContext()), false), "pause",
+                                                "~{memory}", true);
+            ctx.builder.CreateCall(pauseinst);
+            JL_GC_POP();
+            return ghostValue(ctx, jl_nothing_type);
+        } else if (ctx.emission_context.TargetTriple.isAArch64()
+                    || (ctx.emission_context.TargetTriple.isARM()
+                        && ctx.emission_context.TargetTriple.getSubArch() != Triple::SubArchType::NoSubArch
+                        // ARMv7 and above is < armv6
+                        && ctx.emission_context.TargetTriple.getSubArch() < Triple::SubArchType::ARMSubArch_v6)) {
+            auto wfeinst = InlineAsm::get(FunctionType::get(getVoidTy(ctx.builder.getContext()), false), "wfe",
+                                                "~{memory}", true);
+            ctx.builder.CreateCall(wfeinst);
+            JL_GC_POP();
+            return ghostValue(ctx, jl_nothing_type);
+        } else {
+            JL_GC_POP();
+            return ghostValue(ctx, jl_nothing_type);
+        }
 #endif
     }
     else if (is_libjulia_func(jl_cpu_wake)) {
@@ -1538,13 +1543,18 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 #if JL_CPU_WAKE_NOOP == 1
         JL_GC_POP();
         return ghostValue(ctx, jl_nothing_type);
-#elif defined(_CPU_AARCH64_) || (defined(_CPU_ARM_) && __ARM_ARCH >= 7)
-        auto sevinst = InlineAsm::get(FunctionType::get(getVoidTy(ctx.builder.getContext()), false), "sev",
-                                             "~{memory}", true);
-        ctx.builder.CreateCall(sevinst);
-        JL_GC_POP();
-        return ghostValue(ctx, jl_nothing_type);
 #endif
+        if (ctx.emission_context.TargetTriple.isAArch64()
+            || (ctx.emission_context.TargetTriple.isARM()
+                && ctx.emission_context.TargetTriple.getSubArch() != Triple::SubArchType::NoSubArch
+                // ARMv7 and above is < armv6
+                && ctx.emission_context.TargetTriple.getSubArch() < Triple::SubArchType::ARMSubArch_v6)) {
+            auto sevinst = InlineAsm::get(FunctionType::get(getVoidTy(ctx.builder.getContext()), false), "sev",
+                                                "~{memory}", true);
+            ctx.builder.CreateCall(sevinst);
+            JL_GC_POP();
+            return ghostValue(ctx, jl_nothing_type);
+        }
     }
     else if (is_libjulia_func(jl_gc_safepoint)) {
         ++CCALL_STAT(jl_gc_safepoint);
