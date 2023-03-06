@@ -339,3 +339,19 @@ end
     end
     @test isabspath(withenv(homedir, var => nothing))
 end
+
+@testset "username" begin
+    # Read from env variables
+    envvars = ("LOGNAME", "USER", "LNAME",  "USERNAME")
+    for varname in envvars
+        local uname = "testuser"
+        unset_envdict = Dict(k => "" for k in envvars if k != varname)
+        @test withenv(varname => uname, unset_envdict...) do
+            username()
+        end == uname
+    end
+
+    # Read using Libc
+    @test !isempty(username())
+    @test typeof(username()) == String
+end
