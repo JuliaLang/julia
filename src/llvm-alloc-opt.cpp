@@ -975,7 +975,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 assert(slot.offset == offset);
                 auto T_pjlvalue = JuliaType::get_pjlvalue_ty(builder.getContext());
                 if (!isa<PointerType>(store_ty)) {
-                    store_val = builder.CreateBitCast(store_val, getSizeTy(builder.getContext()));
+                    store_val = builder.CreateBitCast(store_val, pass.DL->getIntPtrType(builder.getContext(), T_pjlvalue->getAddressSpace()));
                     store_val = builder.CreateIntToPtr(store_val, T_pjlvalue);
                     store_ty = T_pjlvalue;
                 }
@@ -1038,7 +1038,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                                 else {
                                     uint64_t intval;
                                     memset(&intval, val, 8);
-                                    Constant *val = ConstantInt::get(getSizeTy(builder.getContext()), intval);
+                                    Constant *val = ConstantInt::get(pass.DL->getIntPtrType(builder.getContext(), pass.T_prjlvalue->getAddressSpace()), intval);
                                     val = ConstantExpr::getIntToPtr(val, JuliaType::get_pjlvalue_ty(builder.getContext()));
                                     ptr = ConstantExpr::getAddrSpaceCast(val, pass.T_prjlvalue);
                                 }

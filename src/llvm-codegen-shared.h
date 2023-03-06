@@ -22,6 +22,8 @@ enum AddressSpace {
     LastSpecial = Loaded,
 };
 
+// Do not use (only for migration purposes)
+// Prefer DataLayout::getIntPtrType with addrspace argument to support cross-compilation
 static inline auto getSizeTy(llvm::LLVMContext &ctxt) {
     //return M.getDataLayout().getIntPtrType(M.getContext());
     if (sizeof(size_t) > sizeof(uint32_t)) {
