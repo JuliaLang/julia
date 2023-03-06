@@ -659,8 +659,8 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         return jl_cgval_t();
     }
 
-    Value *idx = emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), i, (jl_value_t*)jl_long_type);
-    Value *im1 = ctx.builder.CreateSub(idx, ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1));
+    Value *idx = emit_unbox(ctx, ctx.types().T_size, i, (jl_value_t*)jl_long_type);
+    Value *im1 = ctx.builder.CreateSub(idx, ConstantInt::get(ctx.types().T_size, 1));
 
     if (ety == (jl_value_t*)jl_any_type) {
         Value *thePtr = emit_unbox(ctx, ctx.types().T_pprjlvalue, e, e.typ);
@@ -674,7 +674,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         uint64_t size = jl_datatype_size(ety);
         Value *strct = emit_allocobj(ctx, size,
                                      literal_pointer_val(ctx, ety));
-        im1 = ctx.builder.CreateMul(im1, ConstantInt::get(getSizeTy(ctx.builder.getContext()),
+        im1 = ctx.builder.CreateMul(im1, ConstantInt::get(ctx.types().T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
         Value *thePtr = emit_unbox(ctx, getInt8PtrTy(ctx.builder.getContext()), e, e.typ);
         thePtr = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), emit_bitcast(ctx, thePtr, getInt8PtrTy(ctx.builder.getContext())), im1);
@@ -729,23 +729,23 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
     }
     emit_typecheck(ctx, x, ety, "pointerset");
 
-    Value *idx = emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), i, (jl_value_t*)jl_long_type);
-    Value *im1 = ctx.builder.CreateSub(idx, ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1));
+    Value *idx = emit_unbox(ctx, ctx.types().T_size, i, (jl_value_t*)jl_long_type);
+    Value *im1 = ctx.builder.CreateSub(idx, ConstantInt::get(ctx.types().T_size, 1));
 
     Value *thePtr;
     if (ety == (jl_value_t*)jl_any_type) {
         // unsafe_store to Ptr{Any} is allowed to implicitly drop GC roots.
         thePtr = emit_unbox(ctx, getSizePtrTy(ctx.builder.getContext()), e, e.typ);
         Instruction *store = ctx.builder.CreateAlignedStore(
-          ctx.builder.CreatePtrToInt(emit_pointer_from_objref(ctx, boxed(ctx, x)), getSizeTy(ctx.builder.getContext())),
-            ctx.builder.CreateInBoundsGEP(getSizeTy(ctx.builder.getContext()), thePtr, im1), Align(align_nb));
+          ctx.builder.CreatePtrToInt(emit_pointer_from_objref(ctx, boxed(ctx, x)), ctx.types().T_size),
+            ctx.builder.CreateInBoundsGEP(ctx.types().T_size, thePtr, im1), Align(align_nb));
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_data);
         ai.decorateInst(store);
     }
     else if (!jl_isbits(ety)) {
         thePtr = emit_unbox(ctx, getInt8PtrTy(ctx.builder.getContext()), e, e.typ);
         uint64_t size = jl_datatype_size(ety);
-        im1 = ctx.builder.CreateMul(im1, ConstantInt::get(getSizeTy(ctx.builder.getContext()),
+        im1 = ctx.builder.CreateMul(im1, ConstantInt::get(ctx.types().T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
         emit_memcpy(ctx, ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), thePtr, im1), jl_aliasinfo_t::fromTBAA(ctx, nullptr), x, size, align_nb);
     }
