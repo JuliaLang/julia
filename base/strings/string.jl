@@ -210,7 +210,7 @@ const _IUTF8_SHIFT_MASK = _IUTF8State(0b1111)
 const _IUTF8_DFA_ACCEPT = _IUTF8State(0)
 const _IUTF8_DFA_INVALID = _IUTF8State(4)
 
-const _IUTF8_DFA_TABLE, _IUTF8_DFA_REVERSE_TABLE = begin
+const _IUTF8_DFA_TABLE, _IUTF8_DFA_REVERSE_TABLE = let
     # It should be noted that even though the invalid state is state 4 the shift is 1
     # which is the second lowest state shift.
     shifts = [0, 13, 6, 10, 4]
@@ -539,7 +539,7 @@ function iterate_continued(s::String, i::Int, b::UInt8, u::UInt32)
         state == _IUTF8_DFA_INVALID && @goto ret
         u |= UInt32(b) << (shift -= 8)
         (state == _IUTF8_DFA_ACCEPT) && @goto ret_kp1
-        (i >= n) && @goto ret_kp1
+        (k >= n) && @goto ret_kp1
     end
     @label ret_kp1
     k += 1
@@ -658,6 +658,7 @@ function _length_continued_nonascii(
     start = first
     stop = min(last, first + chunk_size - 1)
     state = _IUTF8_DFA_ACCEPT
+
     while start <= last
         #First we process a non ascii chunk because we assume the barrier
         # function sent it here for a reason
@@ -675,12 +676,15 @@ function _length_continued_nonascii(
 end
 
 @inline function length_continued(s::String, first::Int, last::Int, c::Int)
-    cu = codeunits(s)
     chunk_size = _STRING_LENGTH_CHUNKING_SIZE
+
+    cu = codeunits(s)
     first < last || return c
+
+    start = first
     n = last - first + 1
     prologue_bytes = rem(n, chunk_size)
-    start = first
+
     #Prologue to get to chunks to be exact
     _isascii(cu, start, start + prologue_bytes - 1) ||
         return _length_continued_nonascii(cu, start, last, c)
