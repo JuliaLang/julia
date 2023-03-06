@@ -551,13 +551,13 @@ end
 @propagate_inbounds function getindex(s::String, i::Int)
     b = codeunit(s, i)
     u = UInt32(b) << 24
-    #Check for ascii or end of string
-    (b >= 0x80) || return reinterpret(Char, u) #return here is faster than @got ret
-    return getindex_continued(s, i, b)
+    #Check u rather than b here because it force compiler to calculate u now
+    (u >= 0x80000000) || return reinterpret(Char, u)
+    return getindex_continued(s, i, u)
 end
 
-function getindex_continued(s::String, i::Int, b::UInt8)
-    u = UInt32(b) << 24 #Recaculating u is faster than passing is as a argument
+function getindex_continued(s::String, i::Int, u::UInt32)
+    @inbounds b = codeunit(s,i) #It is faster to refetch b than recalculate u
     n = ncodeunits(s)
     (i == n) && @goto ret
     shift = 24
