@@ -601,7 +601,6 @@ static const auto jlRTLD_DEFAULT_var = new JuliaVariable{
     true,
     [](LLVMContext &C) { return static_cast<llvm::Type*>(getInt8PtrTy(C)); },
 };
-#ifdef _OS_WINDOWS_
 static const auto jlexe_var = new JuliaVariable{
     XSTR(jl_exe_handle),
     true,
@@ -617,7 +616,6 @@ static const auto jldlli_var = new JuliaVariable{
     true,
     [](LLVMContext &C) { return static_cast<llvm::Type*>(getInt8PtrTy(C)); },
 };
-#endif //_OS_WINDOWS_
 
 static const auto jlstack_chk_guard_var = new JuliaVariable{
     XSTR(__stack_chk_guard),
@@ -7047,10 +7045,10 @@ static jl_llvm_functions_t
     else
         funcName << "japi1_";
     const char* unadorned_name = ctx.name;
-#if defined(_OS_LINUX_)
-    if (unadorned_name[0] == '@')
-        unadorned_name++;
-#endif
+    if (ctx.emission_context.TargetTriple.isOSLinux()) {
+        if (unadorned_name[0] == '@')
+            unadorned_name++;
+    }
     funcName << unadorned_name << "_" << jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1);
     declarations.specFunctionObject = funcName.str();
 
