@@ -600,24 +600,72 @@ static void get_fvars_gvars(Module &M, DenseMap<GlobalValue *, unsigned> &fvars,
     gvars_idxs->eraseFromParent();
 }
 
-static size_t getFunctionWeight(const Function &F)
+struct FunctionInfo {
+    size_t weight;
+    size_t bbs;
+    size_t insts;
+    size_t clones;
+};
+
+static FunctionInfo getFunctionWeight(const Function &F)
 {
-    size_t weight = 1;
+    FunctionInfo info;
+    info.weight = 1;
+    info.bbs = F.size();
+    info.insts = 0;
+    info.clones = 1;
     for (const BasicBlock &BB : F) {
-        weight += BB.size();
+        info.insts += BB.size();
     }
-    // more basic blocks = more complex than just sum of insts,
-    // add some weight to it
-    weight += F.size();
     if (F.hasFnAttribute("julia.mv.clones")) {
         auto val = F.getFnAttribute("julia.mv.clones").getValueAsString();
         // base16, so must be at most 4 * length bits long
         // popcount gives number of clones
-        weight *= APInt(val.size() * 4, val, 16).countPopulation() + 1;
+        info.clones = APInt(val.size() * 4, val, 16).countPopulation() + 1;
     }
-    return weight;
+    info.weight += info.insts;
+    // more basic blocks = more complex than just sum of insts,
+    // add some weight to it
+    info.weight += info.bbs;
+    info.weight *= info.clones;
+    return info;
 }
 
+struct ModuleInfo {
+    size_t globals;
+    size_t funcs;
+    size_t bbs;
+    size_t insts;
+    size_t clones;
+    size_t weight;
+};
+
+ModuleInfo compute_module_info(Module &M) {
+    ModuleInfo info;
+    info.globals = 0;
+    info.funcs = 0;
+    info.bbs = 0;
+    info.insts = 0;
+    info.clones = 0;
+    info.weight = 0;
+    for (auto &G : M.global_values()) {
+        if (G.isDeclaration()) {
+            continue;
+        }
+        info.globals++;
+        if (auto F = dyn_cast<Function>(&G)) {
+            info.funcs++;
+            auto func_info = getFunctionWeight(*F);
+            info.bbs += func_info.bbs;
+            info.insts += func_info.insts;
+            info.clones += func_info.clones;
+            info.weight += func_info.weight;
+        } else {
+            info.weight += 1;
+        }
+    }
+    return info;
+}
 
 static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partitions, const Module &M, size_t fvars_size, size_t gvars_size) {
     bool bad = false;
@@ -647,7 +695,6 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
             }
             gvars[gvar.second] = i+1;
         }
-        // dbgs() << "partition: " << i << " fvars: " << partitions[i].fvars.size() << " gvars: " << partitions[i].gvars.size() << "\n";
     }
     for (auto &GV : M.globals()) {
         if (GV.isDeclaration()) {
@@ -736,7 +783,7 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
         if (G.isDeclaration())
             continue;
         if (isa<Function>(G)) {
-            partitioner.make(&G, getFunctionWeight(cast<Function>(G)));
+            partitioner.make(&G, getFunctionWeight(cast<Function>(G)).weight);
         } else {
             partitioner.make(&G, 1);
         }
@@ -1141,7 +1188,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
                 std::vector<NewArchiveMember> &unopt, std::vector<NewArchiveMember> &opt,
                 std::vector<NewArchiveMember> &obj, std::vector<NewArchiveMember> &asm_,
                 bool unopt_out, bool opt_out, bool obj_out, bool asm_out,
-                unsigned threads) {
+                unsigned threads, ModuleInfo module_info) {
     unsigned outcount = unopt_out + opt_out + obj_out + asm_out;
     assert(outcount);
     outputs.resize(outputs.size() + outcount * threads);
@@ -1235,8 +1282,6 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
             auto M = cantFail(getLazyBitcodeModule(MemoryBufferRef(StringRef(serialized.data(), serialized.size()), "Optimized"), ctx), "Error loading module");
             timers[i].deserialize.stopTimer();
 
-            // dbgs() << "Starting shard " << i << " with weight=" << partitions[i].weight << "\n";
-
             timers[i].materialize.startTimer();
             materializePreserved(*M, partitions[i]);
             timers[i].materialize.stopTimer();
@@ -1271,54 +1316,37 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
         for (auto &t : timers) {
             t.print(dbgs(), true);
         }
+        dbgs() << "Partition weights: [";
+        bool comma = false;
+        for (auto &p : partitions) {
+            if (comma)
+                dbgs() << ", ";
+            else
+                comma = true;
+            dbgs() << p.weight;
+        }
+        dbgs() << "]\n";
     }
 }
 
-unsigned compute_image_thread_count(Module &M) {
+static unsigned compute_image_thread_count(const ModuleInfo &info) {
     // 32-bit systems are very memory-constrained
 #ifdef _P32
-    // dbgs() << "Threads: 1\n";
+    LLVM_DEBUG(dbgs() << "32-bit systems are restricted to a single thread\n");
     return 1;
 #endif
-    size_t weight = 0;
-    size_t globals = 0;
-    for (auto &GV : M.global_values()) {
-        if (GV.isDeclaration())
-            continue;
-        globals++;
-        if (isa<Function>(GV)) {
-            weight += getFunctionWeight(cast<Function>(GV));
-        } else {
-            weight += 1;
-        }
-    }
-    // dbgs() << "Module weight: " << weight << "\n";
-    if (weight < 1000) {
-        // dbgs() << "Low module complexity bailout\n";
-        // dbgs() << "Threads: 1\n";
+    // This is not overridable because empty modules do occasionally appear, but they'll be very small and thus exit early to
+    // known easy behavior. Plus they really don't warrant multiple threads
+    if (info.weight < 1000) {
+        LLVM_DEBUG(dbgs() << "Small module, using a single thread\n");
         return 1;
     }
 
-    unsigned threads = std::max(llvm::hardware_concurrency().compute_thread_count() / 2, 1u);
+    unsigned threads = std::max(jl_cpu_threads() / 2, 1);
 
-    // memory limit check
-    // many threads use a lot of memory, so limit on constrained memory systems
-    size_t available = uv_get_available_memory();
-    // crude estimate, available / (weight * fudge factor) = max threads
-    size_t fudge = 10;
-    unsigned max_threads = std::max(available / (weight * fudge), (size_t)1);
-    // dbgs() << "Available memory: " << available << " bytes\n";
-    // dbgs() << "Max threads: " << max_threads << "\n";
-    // dbgs() << "Temporarily disabling memory limiting threads\n";
-    //TODO reenable
-    // if (max_threads < threads) {
-    //     dbgs() << "Memory limiting threads to " << max_threads << "\n";
-    //     threads = max_threads;
-    // }
-
-    max_threads = globals / 100;
+    auto max_threads = info.globals / 100;
     if (max_threads < threads) {
-        // dbgs() << "Low global count limiting threads to " << max_threads << " (" << globals << "globals)\n";
+        LLVM_DEBUG(dbgs() << "Low global count limiting threads to " << max_threads << " (" << info.globals << "globals)\n");
         threads = max_threads;
     }
 
@@ -1331,7 +1359,7 @@ unsigned compute_image_thread_count(Module &M) {
         if (*endptr || !requested) {
             jl_safe_printf("WARNING: invalid value '%s' for JULIA_IMAGE_THREADS\n", env_threads);
         } else {
-            // dbgs() << "Overriding threads to " << requested << " due to JULIA_IMAGE_THREADS\n";
+            LLVM_DEBUG(dbgs() << "Overriding threads to " << requested << " due to JULIA_IMAGE_THREADS\n");
             threads = requested;
             env_threads_set = true;
         }
@@ -1345,15 +1373,13 @@ unsigned compute_image_thread_count(Module &M) {
             if (*endptr || !requested) {
                 jl_safe_printf("WARNING: invalid value '%s' for JULIA_CPU_THREADS\n", fallbackenv);
             } else if (requested < threads) {
-                // dbgs() << "Overriding threads to " << requested << " due to JULIA_CPU_THREADS\n";
+                LLVM_DEBUG(dbgs() << "Overriding threads to " << requested << " due to JULIA_CPU_THREADS\n");
                 threads = requested;
             }
         }
     }
 
     threads = std::max(threads, 1u);
-
-    // dbgs() << "Threads: " << threads << "\n";
 
     return threads;
 }
@@ -1369,7 +1395,7 @@ void jl_dump_native_impl(void *native_code,
     JL_TIMING(NATIVE_DUMP);
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
     if (!bc_fname && !unopt_bc_fname && !obj_fname && !asm_fname) {
-        // dbgs() << "No output requested, skipping native code dump?\n";
+        LLVM_DEBUG(dbgs() << "No output requested, skipping native code dump?\n");
         delete data;
         return;
     }
@@ -1433,6 +1459,17 @@ void jl_dump_native_impl(void *native_code,
     unsigned nfvars = 0;
     unsigned ngvars = 0;
 
+    ModuleInfo module_info = compute_module_info(*dataM);
+    LLVM_DEBUG(dbgs()
+        << "Dumping module with stats:\n"
+        << "    globals: " << module_info.globals << "\n"
+        << "    functions: " << module_info.funcs << "\n"
+        << "    basic blocks: " << module_info.bbs << "\n"
+        << "    instructions: " << module_info.insts << "\n"
+        << "    clones: " << module_info.clones << "\n"
+        << "    weight: " << module_info.weight << "\n"
+    );
+
     // add metadata information
     if (imaging_mode) {
         multiversioning_preannotate(*dataM);
@@ -1446,7 +1483,8 @@ void jl_dump_native_impl(void *native_code,
                 }
             }
         }
-        threads = compute_image_thread_count(*dataM);
+        threads = compute_image_thread_count(module_info);
+        LLVM_DEBUG(dbgs() << "Using " << threads << " to emit aot image\n");
         nfvars = data->jl_sysimg_fvars.size();
         ngvars = data->jl_sysimg_gvars.size();
         emit_offset_table(*dataM, data->jl_sysimg_gvars, "jl_gvars", T_psize);
@@ -1484,7 +1522,7 @@ void jl_dump_native_impl(void *native_code,
             M, *SourceTM, outputs, names,
             unopt_bc_Archive, bc_Archive, obj_Archive, asm_Archive,
             !!unopt_bc_fname, !!bc_fname, !!obj_fname, !!asm_fname,
-            threads
+            threads, module_info
     ); };
 
     std::array<StringRef, 4> text_names = {
