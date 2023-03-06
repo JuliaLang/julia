@@ -505,6 +505,7 @@ static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionT
 
 void multiversioning_preannotate(Module &M);
 
+// See src/processor.h for documentation about this table. Corresponds to jl_image_shard_t.
 static GlobalVariable *emit_shard_table(Module &M, Type *T_size, Type *T_psize, unsigned threads) {
     SmallVector<Constant *, 0> tables(sizeof(jl_image_shard_t) / sizeof(void *) * threads);
     for (unsigned i = 0; i < threads; i++) {
@@ -533,6 +534,7 @@ static GlobalVariable *emit_shard_table(Module &M, Type *T_size, Type *T_psize, 
     return tables_gv;
 }
 
+// See src/processor.h for documentation about this table. Corresponds to jl_image_ptls_t.
 static GlobalVariable *emit_ptls_table(Module &M, Type *T_size, Type *T_psize) {
     std::array<Constant *, 3> ptls_table{
         new GlobalVariable(M, T_size, false, GlobalValue::ExternalLinkage, Constant::getNullValue(T_size), "jl_pgcstack_func_slot"),
@@ -548,6 +550,7 @@ static GlobalVariable *emit_ptls_table(Module &M, Type *T_size, Type *T_psize) {
     return ptls_table_gv;
 }
 
+// See src/processor.h for documentation about this table. Corresponds to jl_image_header_t.
 static GlobalVariable *emit_image_header(Module &M, unsigned threads, unsigned nfvars, unsigned ngvars) {
     constexpr uint32_t version = 1;
     std::array<uint32_t, 4> header{
@@ -562,13 +565,7 @@ static GlobalVariable *emit_image_header(Module &M, unsigned threads, unsigned n
     return header_gv;
 }
 
-struct Partition {
-    StringSet<> globals;
-    StringMap<unsigned> fvars;
-    StringMap<unsigned> gvars;
-    size_t weight;
-};
-
+// Grab fvars and gvars data from the module
 static void get_fvars_gvars(Module &M, DenseMap<GlobalValue *, unsigned> &fvars, DenseMap<GlobalValue *, unsigned> &gvars) {
     auto fvars_gv = M.getGlobalVariable("jl_fvars");
     auto gvars_gv = M.getGlobalVariable("jl_gvars");
@@ -599,6 +596,11 @@ static void get_fvars_gvars(Module &M, DenseMap<GlobalValue *, unsigned> &fvars,
     fvars_idxs->eraseFromParent();
     gvars_idxs->eraseFromParent();
 }
+
+// Weight computation
+// It is important for multithreaded image building to be able to split work up
+// among the threads equally. The weight calculated here is an estimation of
+// how expensive a particular function is going to be to compile. 
 
 struct FunctionInfo {
     size_t weight;
@@ -667,6 +669,13 @@ ModuleInfo compute_module_info(Module &M) {
     return info;
 }
 
+struct Partition {
+    StringSet<> globals;
+    StringMap<unsigned> fvars;
+    StringMap<unsigned> gvars;
+    size_t weight;
+};
+
 static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partitions, const Module &M, size_t fvars_size, size_t gvars_size) {
     bool bad = false;
 #ifndef JL_NDEBUG
@@ -729,7 +738,7 @@ static inline bool verify_partitioning(const SmallVectorImpl<Partition> &partiti
     return !bad;
 }
 
-// Chop a module up as equally as possible into threads partitions
+// Chop a module up as equally as possible by weight into threads partitions
 static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
     //Start by stripping fvars and gvars, which helpfully removes their uses as well
     DenseMap<GlobalValue *, unsigned> fvars, gvars;
@@ -926,6 +935,7 @@ struct ShardTimers {
     }
 };
 
+// Perform the actual optimization and emission of the output files
 static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *outputs, ArrayRef<StringRef> names,
                     NewArchiveMember *unopt, NewArchiveMember *opt, NewArchiveMember *obj, NewArchiveMember *asm_,
                     ShardTimers &timers, unsigned shardidx) {
@@ -1048,6 +1058,7 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
     }
 }
 
+// serialize module to bitcode
 static auto serializeModule(const Module &M) {
     assert(!verifyModule(M, &errs()) && "Serializing invalid module!");
     SmallVector<char, 0> ClonedModuleBuffer;
@@ -1058,6 +1069,12 @@ static auto serializeModule(const Module &M) {
     return ClonedModuleBuffer;
 }
 
+// Modules are deserialized lazily by LLVM, to avoid deserializing
+// unnecessary functions. We take advantage of this by serializing
+// the entire module once, then deleting the bodies of functions
+// that are not in this partition. Once unnecesary functions are
+// deleted, we then materialize the entire module to make use-lists
+// consistent.
 static void materializePreserved(Module &M, Partition &partition) {
     DenseSet<GlobalValue *> Preserve;
     for (auto &GV : M.global_values()) {
@@ -1083,6 +1100,12 @@ static void materializePreserved(Module &M, Partition &partition) {
             }
         }
     }
+    // Global aliases are a pain to deal with. It is illegal to have an alias to a declaration,
+    // so we need to replace them with either a function or a global variable declaration. However,
+    // we can't just delete the alias, because that would break the users of the alias. Therefore,
+    // we do a dance where we point each global alias to a dummy function or global variable,
+    // then materialize the module to access use-lists, then replace all the uses, and finally commit
+    // to deleting the old alias.
     SmallVector<std::pair<GlobalAlias *, GlobalValue *>> DeletedAliases;
     for (auto &GA : M.aliases()) {
         if (!GA.isDeclaration()) {
@@ -1116,6 +1139,7 @@ static void materializePreserved(Module &M, Partition &partition) {
     }
 }
 
+// Reconstruct jl_fvars, jl_gvars, jl_fvars_idxs, and jl_gvars_idxs from the partition
 static void construct_vars(Module &M, Partition &partition) {
     std::vector<std::pair<uint32_t, GlobalValue *>> fvar_pairs;
     fvar_pairs.reserve(partition.fvars.size());
@@ -1168,6 +1192,8 @@ static void construct_vars(Module &M, Partition &partition) {
     gidxs_var->setVisibility(GlobalValue::HiddenVisibility);
 }
 
+// Materialization will leave many unused declarations, which multiversioning would otherwise clone.
+// This function removes them to avoid unnecessary cloning of declarations. 
 static void dropUnusedDeclarations(Module &M) {
     SmallVector<GlobalValue *> unused;
     for (auto &G : M.global_values()) {
@@ -1184,6 +1210,8 @@ static void dropUnusedDeclarations(Module &M) {
         G->eraseFromParent();
 }
 
+// Entrypoint to optionally-multithreaded image compilation. This handles global coordination of the threading,
+// as well as partitioning, serialization, and deserialization. 
 static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &outputs, ArrayRef<StringRef> names,
                 std::vector<NewArchiveMember> &unopt, std::vector<NewArchiveMember> &opt,
                 std::vector<NewArchiveMember> &obj, std::vector<NewArchiveMember> &asm_,
@@ -1198,6 +1226,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
     asm_.resize(asm_.size() + asm_out * threads);
     auto name = names[2];
     name.consume_back(".o");
+    // Timers for timing purposes
     TimerGroup timer_group("add_output", ("Time to optimize and emit LLVM module " + name).str());
     SmallVector<ShardTimers, 1> timers(threads);
     for (unsigned i = 0; i < threads; ++i) {
@@ -1232,6 +1261,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
                 errs() << "WARNING: Invalid value for JULIA_IMAGE_TIMINGS: " << env << "\n";
         }
     }
+    // Single-threaded case
     if (threads == 1) {
         output_timer.startTimer();
         add_output_impl(M, TM, outputs.data() + outputs.size() - outcount, names,
@@ -1255,6 +1285,8 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
 
     partition_timer.startTimer();
     uint64_t counter = 0;
+    // Partitioning requires all globals to have names.
+    // We use a prefix to avoid name conflicts with user code.
     for (auto &G : M.global_values()) {
         if (!G.isDeclaration() && !G.hasName()) {
             G.setName("jl_ext_" + Twine(counter++));
@@ -1262,6 +1294,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
     }
     auto partitions = partitionModule(M, threads);
     partition_timer.stopTimer();
+
     serialize_timer.startTimer();
     auto serialized = serializeModule(M);
     serialize_timer.stopTimer();
@@ -1274,10 +1307,12 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
     auto objstart = obj_out ? obj.data() + obj.size() - threads : nullptr;
     auto asmstart = asm_out ? asm_.data() + asm_.size() - threads : nullptr;
 
+    // Start all of the worker threads
     std::vector<std::thread> workers(threads);
     for (unsigned i = 0; i < threads; i++) {
         workers[i] = std::thread([&, i](){
             LLVMContext ctx;
+            // Lazily deserialize the entire module
             timers[i].deserialize.startTimer();
             auto M = cantFail(getLazyBitcodeModule(MemoryBufferRef(StringRef(serialized.data(), serialized.size()), "Optimized"), ctx), "Error loading module");
             timers[i].deserialize.stopTimer();
@@ -1304,6 +1339,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
         });
     }
 
+    // Wait for all of the worker threads to finish
     for (auto &w : workers)
         w.join();
 

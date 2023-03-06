@@ -3,6 +3,8 @@
 // Function multi-versioning
 // LLVM pass to clone function for different archs
 
+//see src/processor.h for documentation of the relevant globals inserted here
+
 #include "llvm-version.h"
 #include "passes.h"
 
