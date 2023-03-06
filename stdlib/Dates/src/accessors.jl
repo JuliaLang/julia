@@ -45,6 +45,14 @@ end
 
 """
 Return the number of ISO weeks in the given year (see https://en.wikipedia.org/wiki/ISO_week_date).
+
+# Examples
+```jldoctest
+julia> weeksinyear(Year(2022))
+52
+
+julia> weeksinyear(Year(2020))
+53
 """
 function weeksinyear(y::Year)
     firstday = firstdayofyear(Date(y))
@@ -58,6 +66,14 @@ end
 
 """
 Return the ISO year that contains `dt` (see https://en.wikipedia.org/wiki/ISO_week_date).
+
+# Examples
+```jldoctest
+julia> isoyear(Date(2022, 1, 1))
+Year(2021)
+
+julia> isoyear(Date(2021, 12, 31))
+Year(2021)
 """
 function isoyear(dt::DateTime)
     thisyear = Year(dt)
@@ -73,14 +89,25 @@ function isoyear(dt::DateTime)
         return thisyear
     end
 end
+isoyear(dt::Date) = isoyear(DateTime(dt))
 
 """
 Return the ISO week date that corresponds to `dt` (see
 https://en.wikipedia.org/wiki/ISO_week_date).
 
 The return type is a tuple of `Year`, `Week` and `Integer` (from 1 to 7).
+
+# Examples
+```jldoctest
+julia> isoweekdate(Date(2023, 03, 06))
+(2023, 10, 1)
+
+julia> isoweekdate(Date(2023, 01, 01))
+(2022, 52, 7)
+```
 """
-isoweekdate(dt::DateTime) = (isoyear(dt), week(dt), dayofweek(dt))
+isoweekdate(dt::DateTime) = (isoyear(dt).value, week(dt), dayofweek(dt))
+isoweekdate(dt::Date) = isoweekdate(DateTime(dt))
 
 function quarter(days)
     m = month(days)
