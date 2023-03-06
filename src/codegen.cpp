@@ -3,9 +3,6 @@
 #undef DEBUG
 #include "llvm-version.h"
 #include "platform.h"
-#if defined(_CPU_X86_)
-#define JL_NEED_FLOATTEMP_VAR 1
-#endif
 
 #ifndef __STDC_LIMIT_MACROS
 #define __STDC_LIMIT_MACROS
@@ -86,6 +83,9 @@
 using namespace llvm;
 
 static bool jl_fpo_disabled(const Triple &TT) {
+#ifdef JL_DISABLE_FPO
+    return true;
+#endif
 #ifdef _COMPILER_MSAN_ENABLED_
     // MSAN doesn't support FPO
     return true;
@@ -94,6 +94,13 @@ static bool jl_fpo_disabled(const Triple &TT) {
         return true;
     }
     return false;
+}
+
+static bool jl_floattemp_var_needed(const Triple &TT) {
+#ifdef JL_NEED_FLOATTEMP_VAR
+    return true;
+#endif
+    return TT.getArch() == Triple::x86;
 }
 
 //Drag some useful type functions into our namespace
@@ -2920,7 +2927,7 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
         return ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1);
 
     if (at->isIntegerTy() || at->isPointerTy() || at->isFloatingPointTy()) {
-        Type *at_int = INTT(at);
+        Type *at_int = INTT(at, ctx.emission_context.DL);
         Value *varg1 = emit_unbox(ctx, at_int, arg1, arg1.typ);
         Value *varg2 = emit_unbox(ctx, at_int, arg2, arg2.typ);
         return ctx.builder.CreateICmpEQ(varg1, varg2);

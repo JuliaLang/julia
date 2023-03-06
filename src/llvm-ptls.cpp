@@ -70,25 +70,17 @@ void LowerPTLS::set_pgcstack_attrs(CallInst *pgcstack) const
 Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefore) const
 {
     Value *tls;
-#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
-    if (insertBefore->getFunction()->callsFunctionThatReturnsTwice()) {
+    if (TargetTriple.isX86() && insertBefore->getFunction()->callsFunctionThatReturnsTwice()) {
         // Workaround LLVM bug by hiding the offset computation
         // (and therefore the optimization opportunity) from LLVM.
         // Ref https://github.com/JuliaLang/julia/issues/17288
-        static const std::string const_asm_str = [&] () {
-            std::string stm;
-#  if defined(_CPU_X86_64_)
-            raw_string_ostream(stm) << "movq %fs:0, $0;\naddq $$" << jl_tls_offset << ", $0";
-#  else
-            raw_string_ostream(stm) << "movl %gs:0, $0;\naddl $$" << jl_tls_offset << ", $0";
-#  endif
-            return stm;
-        }();
-#  if defined(_CPU_X86_64_)
-        const char *dyn_asm_str = "movq %fs:0, $0;\naddq $1, $0";
-#  else
-        const char *dyn_asm_str = "movl %gs:0, $0;\naddl $1, $0";
-#  endif
+        std::string const_asm_str;
+        raw_string_ostream(const_asm_str) << (TargetTriple.getArch() == Triple::x86_64 ?
+            "movq %fs:0, $0;\naddq $$" : "movl %gs:0, $0;\naddl $$")
+            << jl_tls_offset << ", $0";
+        const char *dyn_asm_str = TargetTriple.getArch() == Triple::x86_64 ?
+            "movq %fs:0, $0;\naddq $1, $0" :
+            "movl %gs:0, $0;\naddl $1, $0";
 
         // The add instruction clobbers flags
         if (offset) {
@@ -104,28 +96,25 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
                                      false);
             tls = CallInst::Create(tp, "pgcstack_i8", insertBefore);
         }
-    }
-    else
-#endif
-    {
+    } else {
         // AArch64/ARM doesn't seem to have this issue.
         // (Possibly because there are many more registers and the offset is
         // positive and small)
         // It's also harder to emit the offset in a generic way on ARM/AArch64
         // (need to generate one or two `add` with shift) so let llvm emit
         // the add for now.
-#if defined(_CPU_AARCH64_)
-        const char *asm_str = "mrs $0, tpidr_el0";
-#elif defined(__ARM_ARCH) && __ARM_ARCH >= 7
-        const char *asm_str = "mrc p15, 0, $0, c13, c0, 3";
-#elif defined(_CPU_X86_64_)
-        const char *asm_str = "movq %fs:0, $0";
-#elif defined(_CPU_X86_)
-        const char *asm_str = "movl %gs:0, $0";
-#else
-        const char *asm_str = nullptr;
-        assert(0 && "Cannot emit thread pointer for this architecture.");
-#endif
+        const char *asm_str;
+        if (TargetTriple.isAArch64()) {
+            asm_str = "mrs $0, tpidr_el0";
+        } else if (TargetTriple.isARM()) {
+            asm_str = "mrc p15, 0, $0, c13, c0, 3";
+        } else if (TargetTriple.getArch() == Triple::x86_64) {
+            asm_str = "movq %fs:0, $0";
+        } else if (TargetTriple.getArch() == Triple::x86) {
+            asm_str = "movl %gs:0, $0";
+        } else {
+            llvm_unreachable("Cannot emit thread pointer for this architecture.");
+        }
         if (!offset)
             offset = ConstantInt::getSigned(T_size, jl_tls_offset);
         auto tp = InlineAsm::get(FunctionType::get(Type::getInt8PtrTy(insertBefore->getContext()), false), asm_str, "=r", false);
