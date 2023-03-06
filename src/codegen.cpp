@@ -233,6 +233,7 @@ extern void _chkstk(void);
 
 // types
 struct jl_typecache_t {
+    Type *T_size;
     Type *T_jlvalue;
     Type *T_pjlvalue;
     Type *T_prjlvalue;
@@ -255,13 +256,14 @@ struct jl_typecache_t {
         T_pjlarray(nullptr), T_jlfunc(nullptr), T_jlfuncparams(nullptr),
         T_sigatomic(nullptr), T_ppint8(nullptr), initialized(false) {}
 
-    void initialize(LLVMContext &context) {
+    void initialize(LLVMContext &context, const DataLayout &DL) {
         if (initialized) {
             return;
         }
         initialized = true;
         T_ppint8 = PointerType::get(getInt8PtrTy(context), 0);
         T_sigatomic = Type::getIntNTy(context, sizeof(sig_atomic_t) * 8);
+        T_size = DL.getIntPtrType(context);
         T_jlvalue = JuliaType::get_jlvalue_ty(context);
         T_pjlvalue = PointerType::get(T_jlvalue, 0);
         T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
@@ -274,7 +276,7 @@ struct jl_typecache_t {
         assert(T_jlfuncparams != NULL);
 
         Type *vaelts[] = {PointerType::get(getInt8Ty(context), AddressSpace::Loaded)
-                        , getSizeTy(context)
+                        , T_size
                         , getInt16Ty(context)
                         , getInt16Ty(context)
                         , getInt32Ty(context)
@@ -1604,7 +1606,7 @@ public:
         params(params.params) { }
 
     jl_typecache_t &types() {
-        type_cache.initialize(builder.getContext());
+        type_cache.initialize(builder.getContext(), emission_context.DL);
         return type_cache;
     }
 
@@ -1811,7 +1813,7 @@ static void undef_derived_strct(jl_codectx_t &ctx, Value *ptr, jl_datatype_t *st
 
 static Value *emit_inttoptr(jl_codectx_t &ctx, Value *v, Type *ty)
 {
-    // Almost all of our inttoptr are generated due to representing `Ptr` with `getSizeTy(ctx.builder.getContext())`
+    // Almost all of our inttoptr are generated due to representing `Ptr` with `ctx.types().T_size`
     // in LLVM and most of these integers are generated from `ptrtoint` in the first place.
     if (auto I = dyn_cast<PtrToIntInst>(v)) {
         auto ptr = I->getOperand(0);
@@ -2426,7 +2428,7 @@ JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(StringRef filename, int line);
 static void visitLine(jl_codectx_t &ctx, uint64_t *ptr, Value *addend, const char *name)
 {
     Value *pv = ConstantExpr::getIntToPtr(
-        ConstantInt::get(getSizeTy(ctx.builder.getContext()), (uintptr_t)ptr),
+        ConstantInt::get(ctx.types().T_size, (uintptr_t)ptr),
         getInt64PtrTy(ctx.builder.getContext()));
     Value *v = ctx.builder.CreateLoad(getInt64Ty(ctx.builder.getContext()), pv, true, name);
     v = ctx.builder.CreateAdd(v, addend);
@@ -2964,7 +2966,7 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
             auto answer = ctx.builder.CreateCall(prepare_call(memcmp_func), {
                         ctx.builder.CreateBitCast(varg1, getInt8PtrTy(ctx.builder.getContext())),
                         ctx.builder.CreateBitCast(varg2, getInt8PtrTy(ctx.builder.getContext())),
-                        ConstantInt::get(getSizeTy(ctx.builder.getContext()), sz) },
+                        ConstantInt::get(ctx.types().T_size, sz) },
                     ArrayRef<OperandBundleDef>(&OpBundle, nroots ? 1 : 0));
 
             if (arg1.tbaa || arg2.tbaa) {
@@ -3335,7 +3337,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 #ifdef _P64
                 nva = ctx.builder.CreateTrunc(nva, getInt32Ty(ctx.builder.getContext()));
 #endif
-                Value *theArgs = ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, ctx.argArray, ConstantInt::get(getSizeTy(ctx.builder.getContext()), ctx.nReqArgs));
+                Value *theArgs = ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, ctx.argArray, ConstantInt::get(ctx.types().T_size, ctx.nReqArgs));
                 Value *r = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { theF, theArgs, nva });
                 *ret = mark_julia_type(ctx, r, true, jl_any_type);
                 return true;
@@ -3377,22 +3379,22 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         return true;
                     }
                     else if (idx_const > ndims) {
-                        *ret = mark_julia_type(ctx, ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1), false, jl_long_type);
+                        *ret = mark_julia_type(ctx, ConstantInt::get(ctx.types().T_size, 1), false, jl_long_type);
                         return true;
                     }
                 }
                 else {
-                    Value *idx_dyn = emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), idx, (jl_value_t*)jl_long_type);
-                    error_unless(ctx, ctx.builder.CreateICmpSGT(idx_dyn, Constant::getNullValue(getSizeTy(ctx.builder.getContext()))),
+                    Value *idx_dyn = emit_unbox(ctx, ctx.types().T_size, idx, (jl_value_t*)jl_long_type);
+                    error_unless(ctx, ctx.builder.CreateICmpSGT(idx_dyn, Constant::getNullValue(ctx.types().T_size)),
                                  "arraysize: dimension out of range");
                     BasicBlock *outBB = BasicBlock::Create(ctx.builder.getContext(), "outofrange", ctx.f);
                     BasicBlock *inBB = BasicBlock::Create(ctx.builder.getContext(), "inrange");
                     BasicBlock *ansBB = BasicBlock::Create(ctx.builder.getContext(), "arraysize");
                     ctx.builder.CreateCondBr(ctx.builder.CreateICmpSLE(idx_dyn,
-                                ConstantInt::get(getSizeTy(ctx.builder.getContext()), ndims)),
+                                ConstantInt::get(ctx.types().T_size, ndims)),
                             inBB, outBB);
                     ctx.builder.SetInsertPoint(outBB);
-                    Value *v_one = ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1);
+                    Value *v_one = ConstantInt::get(ctx.types().T_size, 1);
                     ctx.builder.CreateBr(ansBB);
                     ctx.f->getBasicBlockList().push_back(inBB);
                     ctx.builder.SetInsertPoint(inBB);
@@ -3401,7 +3403,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     inBB = ctx.builder.GetInsertBlock(); // could have changed
                     ctx.f->getBasicBlockList().push_back(ansBB);
                     ctx.builder.SetInsertPoint(ansBB);
-                    PHINode *result = ctx.builder.CreatePHI(getSizeTy(ctx.builder.getContext()), 2);
+                    PHINode *result = ctx.builder.CreatePHI(ctx.types().T_size, 2);
                     result->addIncoming(v_one, outBB);
                     result->addIncoming(v_sz, inBB);
                     *ret = mark_julia_type(ctx, result, false, jl_long_type);
@@ -3452,7 +3454,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         // isbits union selector bytes are stored after a->maxsize
                         Value *ndims = (nd == -1 ? emit_arrayndims(ctx, ary) : ConstantInt::get(getInt16Ty(ctx.builder.getContext()), nd));
                         Value *is_vector = ctx.builder.CreateICmpEQ(ndims, ConstantInt::get(getInt16Ty(ctx.builder.getContext()), 1));
-                        Value *selidx_v = ctx.builder.CreateSub(emit_vectormaxsize(ctx, ary), ctx.builder.CreateZExt(offset, getSizeTy(ctx.builder.getContext())));
+                        Value *selidx_v = ctx.builder.CreateSub(emit_vectormaxsize(ctx, ary), ctx.builder.CreateZExt(offset, ctx.types().T_size));
                         Value *selidx_m = emit_arraylen(ctx, ary);
                         Value *selidx = ctx.builder.CreateSelect(is_vector, selidx_v, selidx_m);
                         ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
@@ -3560,7 +3562,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         else {
                             Value *ndims = (nd == -1 ? emit_arrayndims(ctx, ary) : ConstantInt::get(getInt16Ty(ctx.builder.getContext()), nd));
                             Value *is_vector = ctx.builder.CreateICmpEQ(ndims, ConstantInt::get(getInt16Ty(ctx.builder.getContext()), 1));
-                            Value *selidx_v = ctx.builder.CreateSub(emit_vectormaxsize(ctx, ary), ctx.builder.CreateZExt(offset, getSizeTy(ctx.builder.getContext())));
+                            Value *selidx_v = ctx.builder.CreateSub(emit_vectormaxsize(ctx, ary), ctx.builder.CreateZExt(offset, ctx.types().T_size));
                             Value *selidx_m = emit_arraylen(ctx, ary);
                             Value *selidx = ctx.builder.CreateSelect(is_vector, selidx_v, selidx_m);
                             ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
@@ -3661,11 +3663,11 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     if (load->getPointerOperand() == ctx.slots[ctx.vaSlot].boxroot && ctx.argArray) {
                         Value *valen = emit_n_varargs(ctx);
                         jl_cgval_t va_ary( // fake instantiation of a cgval, in order to call emit_bounds_check (it only checks the `.V` field)
-                                ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, ctx.argArray, ConstantInt::get(getSizeTy(ctx.builder.getContext()), ctx.nReqArgs)),
+                                ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, ctx.argArray, ConstantInt::get(ctx.types().T_size, ctx.nReqArgs)),
                                 NULL, NULL);
-                        Value *idx = emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), fld, (jl_value_t*)jl_long_type);
+                        Value *idx = emit_unbox(ctx, ctx.types().T_size, fld, (jl_value_t*)jl_long_type);
                         idx = emit_bounds_check(ctx, va_ary, NULL, idx, valen, boundscheck);
-                        idx = ctx.builder.CreateAdd(idx, ConstantInt::get(getSizeTy(ctx.builder.getContext()), ctx.nReqArgs));
+                        idx = ctx.builder.CreateAdd(idx, ConstantInt::get(ctx.types().T_size, ctx.nReqArgs));
                         Instruction *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, ctx.argArray, idx), Align(sizeof(void*)));
                         // if we know the result type of this load, we will mark that information here too
                         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_value);
@@ -3690,13 +3692,13 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     }
                     else {
                         // unknown index
-                        Value *vidx = emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), fld, (jl_value_t*)jl_long_type);
+                        Value *vidx = emit_unbox(ctx, ctx.types().T_size, fld, (jl_value_t*)jl_long_type);
                         if (emit_getfield_unknownidx(ctx, ret, obj, vidx, utt, boundscheck, order)) {
                             return true;
                         }
                     }
                 }
-                Value *vidx = emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), fld, (jl_value_t*)jl_long_type);
+                Value *vidx = emit_unbox(ctx, ctx.types().T_size, fld, (jl_value_t*)jl_long_type);
                 if (jl_is_tuple_type(utt) && is_tupletype_homogeneous(utt->parameters, true)) {
                     // For tuples, we can emit code even if we don't know the exact
                     // type (e.g. because we don't know the length). This is possible
@@ -3715,7 +3717,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         // This is not necessary for correctness, but allows to omit
                         // the extra code for getting the length of the tuple
                         if (!bounds_check_enabled(ctx, boundscheck)) {
-                            vidx = ctx.builder.CreateSub(vidx, ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1));
+                            vidx = ctx.builder.CreateSub(vidx, ConstantInt::get(ctx.types().T_size, 1));
                         } else {
                             vidx = emit_bounds_check(ctx, obj, (jl_value_t*)obj.typ, vidx,
                                 emit_datatype_nfields(ctx, emit_typeof_boxed(ctx, obj)),
@@ -3731,7 +3733,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 }
 
                 // Unknown object, but field known to be integer
-                vidx = ctx.builder.CreateSub(vidx, ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1));
+                vidx = ctx.builder.CreateSub(vidx, ConstantInt::get(ctx.types().T_size, 1));
                 Value *fld_val = ctx.builder.CreateCall(prepare_call(jlgetnthfieldchecked_func), { boxed(ctx, obj), vidx });
                 *ret = mark_julia_type(ctx, fld_val, true, jl_any_type);
                 return true;
@@ -3809,7 +3811,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         Value *sz;
         if (nf != -1)
-            sz = ConstantInt::get(getSizeTy(ctx.builder.getContext()), nf);
+            sz = ConstantInt::get(ctx.types().T_size, nf);
         else
             sz = emit_datatype_nfields(ctx, emit_typeof_boxed(ctx, obj));
         *ret = mark_julia_type(ctx, sz, false, jl_long_type);
@@ -3826,7 +3828,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 Value *tyv = boxed(ctx, typ);
                 Value *types_svec = emit_datatype_types(ctx, tyv);
                 Value *types_len = emit_datatype_nfields(ctx, tyv);
-                Value *idx = emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), fld, (jl_value_t*)jl_long_type);
+                Value *idx = emit_unbox(ctx, ctx.types().T_size, fld, (jl_value_t*)jl_long_type);
                 jl_value_t *boundscheck = (nargs == 3 ? argv[3].constant : jl_true);
                 if (nargs == 3)
                     emit_typecheck(ctx, argv[3], (jl_value_t*)jl_bool_type, "fieldtype");
@@ -3853,23 +3855,23 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 else {
                     sz = (1 + jl_svec_len(obj.constant)) * sizeof(void*);
                 }
-                *ret = mark_julia_type(ctx, ConstantInt::get(getSizeTy(ctx.builder.getContext()), sz), false, jl_long_type);
+                *ret = mark_julia_type(ctx, ConstantInt::get(ctx.types().T_size, sz), false, jl_long_type);
                 return true;
             }
             // String and SimpleVector's length fields have the same layout
             auto ptr = emit_bitcast(ctx, boxed(ctx, obj), getSizePtrTy(ctx.builder.getContext()));
             jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
-            Value *len = ai.decorateInst(ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()), ptr, Align(sizeof(size_t))));
+            Value *len = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_size, ptr, Align(sizeof(size_t))));
             MDBuilder MDB(ctx.builder.getContext());
             if (sty == jl_simplevector_type) {
                 auto rng = MDB.createRange(
-                    Constant::getNullValue(getSizeTy(ctx.builder.getContext())), ConstantInt::get(getSizeTy(ctx.builder.getContext()), INTPTR_MAX / sizeof(void*) - 1));
+                    Constant::getNullValue(ctx.types().T_size), ConstantInt::get(ctx.types().T_size, INTPTR_MAX / sizeof(void*) - 1));
                 cast<LoadInst>(len)->setMetadata(LLVMContext::MD_range, rng);
-                len = ctx.builder.CreateMul(len, ConstantInt::get(getSizeTy(ctx.builder.getContext()), sizeof(void*)));
-                len = ctx.builder.CreateAdd(len, ConstantInt::get(getSizeTy(ctx.builder.getContext()), sizeof(void*)));
+                len = ctx.builder.CreateMul(len, ConstantInt::get(ctx.types().T_size, sizeof(void*)));
+                len = ctx.builder.CreateAdd(len, ConstantInt::get(ctx.types().T_size, sizeof(void*)));
             }
             else {
-                auto rng = MDB.createRange(Constant::getNullValue(getSizeTy(ctx.builder.getContext())), ConstantInt::get(getSizeTy(ctx.builder.getContext()), INTPTR_MAX));
+                auto rng = MDB.createRange(Constant::getNullValue(ctx.types().T_size), ConstantInt::get(ctx.types().T_size, INTPTR_MAX));
                 cast<LoadInst>(len)->setMetadata(LLVMContext::MD_range, rng);
             }
             *ret = mark_julia_type(ctx, len, false, jl_long_type);
@@ -3880,10 +3882,10 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             Value *elsize;
             size_t elsz;
             if (arraytype_constelsize(sty, &elsz)) {
-                elsize = ConstantInt::get(getSizeTy(ctx.builder.getContext()), elsz);
+                elsize = ConstantInt::get(ctx.types().T_size, elsz);
             }
             else {
-                elsize = ctx.builder.CreateZExt(emit_arrayelsize(ctx, obj), getSizeTy(ctx.builder.getContext()));
+                elsize = ctx.builder.CreateZExt(emit_arrayelsize(ctx, obj), ctx.types().T_size);
             }
             *ret = mark_julia_type(ctx, ctx.builder.CreateMul(len, elsize), false, jl_long_type);
             return true;
@@ -3933,8 +3935,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 isdefined_unknown_idx:
             if (nargs == 3 || fld.typ != (jl_value_t*)jl_long_type)
                 return false;
-            Value *vidx = emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), fld, (jl_value_t*)jl_long_type);
-            vidx = ctx.builder.CreateSub(vidx, ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1));
+            Value *vidx = emit_unbox(ctx, ctx.types().T_size, fld, (jl_value_t*)jl_long_type);
+            vidx = ctx.builder.CreateSub(vidx, ConstantInt::get(ctx.types().T_size, 1));
             Value *isd = ctx.builder.CreateCall(prepare_call(jlfieldisdefinedchecked_func), { boxed(ctx, obj), vidx });
             isd = ctx.builder.CreateTrunc(isd, getInt8Ty(ctx.builder.getContext()));
             *ret = mark_julia_type(ctx, isd, false, jl_bool_type);
@@ -5116,7 +5118,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
     }
     else if (head == jl_pop_exception_sym) {
         jl_cgval_t excstack_state = emit_expr(ctx, jl_exprarg(expr, 0));
-        assert(excstack_state.V && excstack_state.V->getType() == getSizeTy(ctx.builder.getContext()));
+        assert(excstack_state.V && excstack_state.V->getType() == ctx.types().T_size);
         ctx.builder.CreateCall(prepare_call(jl_restore_excstack_func), excstack_state.V);
         return;
     }
@@ -5479,13 +5481,13 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
                 if (F) {
                     jl_cgval_t jlcall_ptr = mark_julia_type(ctx, F, false, jl_voidpointer_type);
                     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-                    Instruction *I = ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()), get_last_age_field(ctx), Align(sizeof(size_t)));
+                    Instruction *I = ctx.builder.CreateAlignedLoad(ctx.types().T_size, get_last_age_field(ctx), Align(sizeof(size_t)));
                     jl_cgval_t world_age = mark_julia_type(ctx, ai.decorateInst(I), false, jl_long_type);
                     jl_cgval_t fptr;
                     if (specF)
                         fptr = mark_julia_type(ctx, specF, false, jl_voidpointer_type);
                     else
-                        fptr = mark_julia_type(ctx, (llvm::Value*)Constant::getNullValue(getSizeTy(ctx.builder.getContext())), false, jl_voidpointer_type);
+                        fptr = mark_julia_type(ctx, (llvm::Value*)Constant::getNullValue(ctx.types().T_size), false, jl_voidpointer_type);
 
                     // TODO: Inline the env at the end of the opaque closure and generate a descriptor for GC
                     jl_cgval_t env = emit_new_struct(ctx, (jl_value_t*)env_t, nargs-4, &argv.data()[4]);
@@ -5634,9 +5636,9 @@ static Value *get_last_age_field(jl_codectx_t &ctx)
 {
     Value *ct = get_current_task(ctx);
     return ctx.builder.CreateInBoundsGEP(
-            getSizeTy(ctx.builder.getContext()),
+            ctx.types().T_size,
             ctx.builder.CreateBitCast(ct, getSizePtrTy(ctx.builder.getContext())),
-            ConstantInt::get(getSizeTy(ctx.builder.getContext()), offsetof(jl_task_t, world_age) / sizeof(size_t)),
+            ConstantInt::get(ctx.types().T_size, offsetof(jl_task_t, world_age) / sizeof(size_t)),
             "world_age");
 }
 
@@ -5941,18 +5943,18 @@ static Function* gen_cfun_wrapper(
     Value *world_age_field = get_last_age_field(ctx);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
     Value *last_age = ai.decorateInst(
-            ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()), world_age_field, Align(sizeof(size_t))));
+            ctx.builder.CreateAlignedLoad(ctx.types().T_size, world_age_field, Align(sizeof(size_t))));
 
-    Value *world_v = ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()),
+    Value *world_v = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
         prepare_global_in(jl_Module, jlgetworld_global), Align(sizeof(size_t)));
     cast<LoadInst>(world_v)->setOrdering(AtomicOrdering::Acquire);
 
     Value *age_ok = NULL;
     if (calltype) {
         LoadInst *lam_max = ctx.builder.CreateAlignedLoad(
-                getSizeTy(ctx.builder.getContext()),
+                ctx.types().T_size,
                 ctx.builder.CreateConstInBoundsGEP1_32(
-                    getSizeTy(ctx.builder.getContext()),
+                    ctx.types().T_size,
                     emit_bitcast(ctx, literal_pointer_val(ctx, (jl_value_t*)codeinst), getSizePtrTy(ctx.builder.getContext())),
                     offsetof(jl_code_instance_t, max_world) / sizeof(size_t)),
                 Align(sizeof(size_t)));
@@ -6472,7 +6474,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
             }
             fill = (jl_svec_t*)jl_ensure_rooted(ctx, (jl_value_t*)fill);
         }
-        Type *T_htable = ArrayType::get(getSizeTy(ctx.builder.getContext()), sizeof(htable_t) / sizeof(void*));
+        Type *T_htable = ArrayType::get(ctx.types().T_size, sizeof(htable_t) / sizeof(void*));
         Value *cache = new GlobalVariable(*jl_Module, T_htable, false,
                                GlobalVariable::PrivateLinkage,
                                ConstantAggregateZero::get(T_htable));
@@ -6488,7 +6490,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
         outboxed = true;
     }
     else {
-        F = ctx.builder.CreatePtrToInt(F, getSizeTy(ctx.builder.getContext()));
+        F = ctx.builder.CreatePtrToInt(F, ctx.types().T_size);
         outboxed = (output_type != (jl_value_t*)jl_voidpointer_type);
         if (outboxed) {
             assert(jl_datatype_size(output_type) == sizeof(void*) * 4);
@@ -6499,12 +6501,12 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
             jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
             ai.decorateInst(ctx.builder.CreateStore(F, derived_strct));
             ai.decorateInst(ctx.builder.CreateStore(
-                ctx.builder.CreatePtrToInt(literal_pointer_val(ctx, fexpr_rt.constant), getSizeTy(ctx.builder.getContext())),
-                ctx.builder.CreateConstInBoundsGEP1_32(getSizeTy(ctx.builder.getContext()), derived_strct, 1)));
-            ai.decorateInst(ctx.builder.CreateStore(Constant::getNullValue(getSizeTy(ctx.builder.getContext())),
-                    ctx.builder.CreateConstInBoundsGEP1_32(getSizeTy(ctx.builder.getContext()), derived_strct, 2)));
-            ai.decorateInst(ctx.builder.CreateStore(Constant::getNullValue(getSizeTy(ctx.builder.getContext())),
-                    ctx.builder.CreateConstInBoundsGEP1_32(getSizeTy(ctx.builder.getContext()), derived_strct, 3)));
+                ctx.builder.CreatePtrToInt(literal_pointer_val(ctx, fexpr_rt.constant), ctx.types().T_size),
+                ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_size, derived_strct, 1)));
+            ai.decorateInst(ctx.builder.CreateStore(Constant::getNullValue(ctx.types().T_size),
+                    ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_size, derived_strct, 2)));
+            ai.decorateInst(ctx.builder.CreateStore(Constant::getNullValue(ctx.types().T_size),
+                    ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_size, derived_strct, 3)));
             F = strct;
         }
     }
@@ -7283,7 +7285,7 @@ static jl_llvm_functions_t
     if (toplevel || ctx.is_opaque_closure) {
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
         last_age = ai.decorateInst(ctx.builder.CreateAlignedLoad(
-            getSizeTy(ctx.builder.getContext()), world_age_field, Align(sizeof(size_t))));
+            ctx.types().T_size, world_age_field, Align(sizeof(size_t))));
     }
 
     // step 7. allocate local variables slots
@@ -7549,7 +7551,7 @@ static jl_llvm_functions_t
                 Value *argaddr = emit_bitcast(ctx, data_pointer(ctx, theArg), getInt8PtrTy(ctx.builder.getContext()));
                 Value *worldaddr = ctx.builder.CreateInBoundsGEP(
                         getInt8Ty(ctx.builder.getContext()), argaddr,
-                        ConstantInt::get(getSizeTy(ctx.builder.getContext()), offsetof(jl_opaque_closure_t, world)));
+                        ConstantInt::get(ctx.types().T_size, offsetof(jl_opaque_closure_t, world)));
 
                 jl_cgval_t closure_world = typed_load(ctx, worldaddr, NULL, (jl_value_t*)jl_long_type,
                     theArg.tbaa, nullptr, false, AtomicOrdering::NotAtomic, false, sizeof(size_t));
@@ -7558,7 +7560,7 @@ static jl_llvm_functions_t
                 // Load closure env
                 Value *envaddr = ctx.builder.CreateInBoundsGEP(
                         getInt8Ty(ctx.builder.getContext()), argaddr,
-                        ConstantInt::get(getSizeTy(ctx.builder.getContext()), offsetof(jl_opaque_closure_t, captures)));
+                        ConstantInt::get(ctx.types().T_size, offsetof(jl_opaque_closure_t, captures)));
 
                 jl_cgval_t closure_env = typed_load(ctx, envaddr, NULL, (jl_value_t*)jl_any_type,
                     theArg.tbaa, nullptr, true, AtomicOrdering::NotAtomic, false, sizeof(void*));
@@ -7627,7 +7629,7 @@ static jl_llvm_functions_t
                 ctx.builder.CreateCall(F,
                         { Constant::getNullValue(ctx.types().T_prjlvalue),
                           ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, argArray,
-                                  ConstantInt::get(getSizeTy(ctx.builder.getContext()), nreq - 1)),
+                                  ConstantInt::get(ctx.types().T_size, nreq - 1)),
                           ctx.builder.CreateSub(argCount,
                                   ConstantInt::get(getInt32Ty(ctx.builder.getContext()), nreq - 1)) });
             restTuple->setAttributes(F->getAttributes());
@@ -8096,7 +8098,7 @@ static jl_llvm_functions_t
         else {
             if (!jl_is_method(ctx.linfo->def.method) && !ctx.is_opaque_closure) {
                 // TODO: inference is invalid if this has any effect (which it often does)
-                LoadInst *world = ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()),
+                LoadInst *world = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
                     prepare_global_in(jl_Module, jlgetworld_global), Align(sizeof(size_t)));
                 world->setOrdering(AtomicOrdering::Acquire);
                 ctx.builder.CreateAlignedStore(world, world_age_field, Align(sizeof(size_t)));
