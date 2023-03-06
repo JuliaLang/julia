@@ -154,13 +154,13 @@ static Type *FLOATT(Type *t)
 }
 
 // convert an llvm type to same-size int type
-static Type *INTT(Type *t)
+static Type *INTT(Type *t, const DataLayout &DL)
 {
     auto &ctxt = t->getContext();
     if (t->isIntegerTy())
         return t;
     if (t->isPointerTy())
-        return getSizeTy(ctxt);
+        return DL.getIntPtrType(t);
     if (t == getDoubleTy(ctxt))
         return getInt64Ty(ctxt);
     if (t == getFloatTy(ctxt))
@@ -343,22 +343,19 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
         unboxed = emit_bitcast(ctx, unboxed, to);
     }
     else if (!ty->isIntOrPtrTy() && !ty->isFloatingPointTy()) {
-#ifndef JL_NDEBUG
-        const DataLayout &DL = jl_Module->getDataLayout();
-#endif
         assert(DL.getTypeSizeInBits(ty) == DL.getTypeSizeInBits(to));
         AllocaInst *cast = ctx.builder.CreateAlloca(ty);
         ctx.builder.CreateStore(unboxed, cast);
         unboxed = ctx.builder.CreateLoad(to, ctx.builder.CreateBitCast(cast, to->getPointerTo()));
     }
     else if (frompointer) {
-        Type *INTT_to = INTT(to);
+        Type *INTT_to = INTT(to, DL);
         unboxed = ctx.builder.CreatePtrToInt(unboxed, INTT_to);
         if (INTT_to != to)
             unboxed = ctx.builder.CreateBitCast(unboxed, to);
     }
     else if (topointer) {
-        Type *INTT_to = INTT(to);
+        Type *INTT_to = INTT(to, DL);
         if (to != INTT_to)
             unboxed = ctx.builder.CreateBitCast(unboxed, INTT_to);
         unboxed = emit_inttoptr(ctx, unboxed, to);
@@ -584,6 +581,8 @@ static jl_cgval_t generic_cast(
         intrinsic f, Instruction::CastOps Op,
         const jl_cgval_t *argv, bool toint, bool fromint)
 {
+    auto &TT = ctx.emission_context.TargetTriple;
+    auto &DL = ctx.emission_context.DL;
     const jl_cgval_t &targ = argv[0];
     const jl_cgval_t &v = argv[1];
     jl_datatype_t *jlto = staticeval_bitstype(targ);
@@ -593,11 +592,11 @@ static jl_cgval_t generic_cast(
     Type *to = bitstype_to_llvm((jl_value_t*)jlto, ctx.builder.getContext(), true);
     Type *vt = bitstype_to_llvm(v.typ, ctx.builder.getContext(), true);
     if (toint)
-        to = INTT(to);
+        to = INTT(to, DL);
     else
         to = FLOATT(to);
     if (fromint)
-        vt = INTT(vt);
+        vt = INTT(vt, DL);
     else
         vt = FLOATT(vt);
     if (!to || !vt)
@@ -606,17 +605,17 @@ static jl_cgval_t generic_cast(
     if (!CastInst::castIsValid(Op, from, to))
         return emit_runtime_call(ctx, f, argv, 2);
     if (Op == Instruction::FPExt) {
-#ifdef JL_NEED_FLOATTEMP_VAR
-        // Target platform might carry extra precision.
-        // Force rounding to single precision first. The reason is that it's
-        // fine to keep working in extended precision as long as it's
-        // understood that everything is implicitly rounded to 23 bits,
-        // but if we start looking at more bits we need to actually do the
-        // rounding first instead of carrying around incorrect low bits.
-        Value *jlfloattemp_var = emit_static_alloca(ctx, from->getType());
-        ctx.builder.CreateStore(from, jlfloattemp_var);
-        from  = ctx.builder.CreateLoad(from->getType(), jlfloattemp_var, /*force this to load from the stack*/true);
-#endif
+        if (jl_floattemp_var_needed(TT)) {
+            // Target platform might carry extra precision.
+            // Force rounding to single precision first. The reason is that it's
+            // fine to keep working in extended precision as long as it's
+            // understood that everything is implicitly rounded to 23 bits,
+            // but if we start looking at more bits we need to actually do the
+            // rounding first instead of carrying around incorrect low bits.
+            Value *jlfloattemp_var = emit_static_alloca(ctx, from->getType());
+            ctx.builder.CreateStore(from, jlfloattemp_var);
+            from  = ctx.builder.CreateLoad(from->getType(), jlfloattemp_var, /*force this to load from the stack*/true);
+        }
     }
     Value *ans = ctx.builder.CreateCast(Op, from, to);
     if (f == fptosi || f == fptoui)
@@ -1126,6 +1125,7 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
 
 static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **args, size_t nargs)
 {
+    auto &DL = ctx.emission_context.DL;
     assert(f < num_intrinsics);
     if (f == cglobal && nargs == 1)
         f = cglobal_auto;
@@ -1231,7 +1231,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         const jl_cgval_t &x = argv[0];
         if (!jl_is_primitivetype(x.typ))
             return emit_runtime_call(ctx, f, argv, nargs);
-        Type *xt = INTT(bitstype_to_llvm(x.typ, ctx.builder.getContext(), true));
+        Type *xt = INTT(bitstype_to_llvm(x.typ, ctx.builder.getContext(), true), DL);
         Value *from = emit_unbox(ctx, xt, x, x.typ);
         Value *ans = ctx.builder.CreateNot(from);
         return mark_julia_type(ctx, ans, false, x.typ);
@@ -1270,7 +1270,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         if (float_func()[f])
             xtyp = FLOATT(xtyp);
         else
-            xtyp = INTT(xtyp);
+            xtyp = INTT(xtyp, DL);
         if (!xtyp)
             return emit_runtime_call(ctx, f, argv, nargs);
         ////Bool are required to be in the range [0,1]
@@ -1289,7 +1289,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         if (f == shl_int || f == lshr_int || f == ashr_int) {
             if (!jl_is_primitivetype(argv[1].typ))
                 return emit_runtime_call(ctx, f, argv, nargs);
-            argt[1] = INTT(bitstype_to_llvm(argv[1].typ, ctx.builder.getContext(), true));
+            argt[1] = INTT(bitstype_to_llvm(argv[1].typ, ctx.builder.getContext(), true), DL);
         }
         else {
             for (size_t i = 1; i < nargs; ++i) {
@@ -1465,7 +1465,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
 
     case fpiseq: {
         *newtyp = jl_bool_type;
-        Type *it = INTT(t);
+        Type *it = INTT(t, ctx.emission_context.DL);
         Value *xi = ctx.builder.CreateBitCast(x, it);
         Value *yi = ctx.builder.CreateBitCast(y, it);
         return ctx.builder.CreateOr(ctx.builder.CreateAnd(ctx.builder.CreateFCmpUNO(x, x),
