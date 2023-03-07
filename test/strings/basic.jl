@@ -164,6 +164,12 @@ end
     @test endswith(y)(y)
     @test endswith(z, z)
     @test endswith(z)(z)
+    #40616 startswith for IO objects
+    let s = "JuliaLang", io = IOBuffer(s)
+        for prefix in ("Julia", "July", s^2, "Ju", 'J', 'x', ('j','J'))
+            @test startswith(io, prefix) == startswith(s, prefix)
+        end
+    end
 end
 
 @testset "SubStrings and Views" begin
@@ -418,7 +424,7 @@ end
     end
     @test nextind("fóobar", 0, 3) == 4
 
-    @test Symbol(gstr) == Symbol("12")
+    @test Symbol(gstr) === Symbol("12")
 
     @test sizeof(gstr) == 2
     @test ncodeunits(gstr) == 2
@@ -435,6 +441,9 @@ end
         @test all(x -> x == "12", svec)
         @test svec isa Vector{AbstractString}
     end
+    # test startswith and endswith for AbstractString
+    @test endswith(GenericString("abcd"), GenericString("cd"))
+    @test startswith(GenericString("abcd"), GenericString("ab"))
 end
 
 @testset "issue #10307" begin
@@ -680,6 +689,7 @@ end
 Base.iterate(x::CharStr) = iterate(x.chars)
 Base.iterate(x::CharStr, i::Int) = iterate(x.chars, i)
 Base.lastindex(x::CharStr) = lastindex(x.chars)
+Base.length(x::CharStr) = length(x.chars)
 @testset "cmp without UTF-8 indexing" begin
     # Simple case, with just ANSI Latin 1 characters
     @test "áB" != CharStr("áá") # returns false with bug
@@ -721,6 +731,11 @@ end
 @testset "issue #12495: check that logical indexing attempt raises ArgumentError" begin
     @test_throws ArgumentError "abc"[[true, false, true]]
     @test_throws ArgumentError "abc"[BitArray([true, false, true])]
+end
+
+@testset "issue #46039 enhance StringIndexError display" begin
+    @test sprint(showerror, StringIndexError("αn", 2)) == "StringIndexError: invalid index [2], valid nearby indices [1]=>'α', [3]=>'n'"
+    @test sprint(showerror, StringIndexError("α\n", 2)) == "StringIndexError: invalid index [2], valid nearby indices [1]=>'α', [3]=>'\\n'"
 end
 
 @testset "concatenation" begin
@@ -854,7 +869,7 @@ end
                     p = prevind(s, p)
                     @test prevind(s, x, j) == p
                 end
-                if n ≤ ncodeunits(s)
+                if n ≤ ncodeunits(s)
                     n = nextind(s, n)
                     @test nextind(s, x, j) == n
                 end
@@ -926,6 +941,21 @@ end
         @test_throws StringIndexError prevind(s, 6, 0)
         @test_throws StringIndexError prevind(s, 7, 0)
         @test prevind(s, 8, 0) == 8
+    end
+end
+
+@testset "Conversion to Type{Union{String, SubString{String}}}" begin
+    str = "abc"
+    substr = SubString(str)
+    for T in [String, SubString{String}]
+        conv_str = convert(T, str)
+        conv_substr = convert(T, substr)
+
+        if T == String
+            @test conv_str === conv_substr === str
+        elseif T == SubString{String}
+            @test conv_str === conv_substr === substr
+        end
     end
 end
 
@@ -1039,7 +1069,7 @@ let s = "∀x∃y", u = codeunits(s)
     @test u[1] == 0xe2
     @test u[2] == 0x88
     @test u[8] == 0x79
-    @test_throws ErrorException (u[1] = 0x00)
+    @test_throws Base.CanonicalIndexError (u[1] = 0x00)
     @test collect(u) == b"∀x∃y"
     @test Base.elsize(u) == Base.elsize(typeof(u)) == 1
 end
@@ -1093,4 +1123,72 @@ end
     @test sprint(summary, "foα") == "4-codeunit String"
     @test sprint(summary, SubString("foα", 2)) == "3-codeunit SubString{String}"
     @test sprint(summary, "") == "empty String"
+end
+
+@testset "isascii" begin
+    N = 1
+    @test isascii("S"^N) == true
+    @test isascii("S"^(N - 1)) == true
+    @test isascii("S"^(N + 1)) == true
+
+    @test isascii("λ" * ("S"^(N))) == false
+    @test isascii(("S"^(N)) * "λ") == false
+
+    for p = 1:16
+        N = 2^p
+        @test isascii("S"^N) == true
+        @test isascii("S"^(N - 1)) == true
+        @test isascii("S"^(N + 1)) == true
+
+        @test isascii("λ" * ("S"^(N))) == false
+        @test isascii(("S"^(N)) * "λ") == false
+        @test isascii("λ"*("S"^(N - 1))) == false
+        @test isascii(("S"^(N - 1)) * "λ") == false
+        if N > 4
+            @test isascii("λ" * ("S"^(N - 3))) == false
+            @test isascii(("S"^(N - 3)) * "λ") == false
+        end
+    end
+end
+
+@testset "Plug holes in test coverage" begin
+    @test_throws MethodError checkbounds(Bool, "abc", [1.0, 2.0])
+
+    apple_uint8 = Vector{UInt8}("Apple")
+    @test apple_uint8 == [0x41, 0x70, 0x70, 0x6c, 0x65]
+
+    Base.String(::tstStringType) = "Test"
+    abstract_apple = tstStringType(apple_uint8)
+    @test hash(abstract_apple, UInt(1)) == hash("Test", UInt(1))
+
+    @test length("abc", 1, 3) == length("abc", UInt(1), UInt(3))
+
+    @test isascii(GenericString("abc"))
+
+    code_units = Base.CodeUnits("abc")
+    @test Base.IndexStyle(Base.CodeUnits) == IndexLinear()
+    @test Base.elsize(code_units) == sizeof(UInt8)
+    @test Base.unsafe_convert(Ptr{Int8}, code_units) == Base.unsafe_convert(Ptr{Int8}, code_units.s)
+end
+
+@testset "LazyString" begin
+    @test repr(lazy"$(1+2) is 3") == "\"3 is 3\""
+    let d = Dict(lazy"$(1+2) is 3" => 3)
+        @test d["3 is 3"] == 3
+    end
+    l = lazy"1+2"
+    @test isequal( l, lazy"1+2" )
+    @test ncodeunits(l) == ncodeunits("1+2")
+    @test codeunit(l) == UInt8
+    @test codeunit(l,2) == 0x2b
+    @test isvalid(l, 1)
+    @test Base.infer_effects((Any,)) do a
+        throw(lazy"a is $a")
+    end |> Core.Compiler.is_foldable
+    @test Base.infer_effects((Int,)) do a
+        if a < 0
+            throw(DomainError(a, lazy"$a isn't positive"))
+        end
+        return a
+    end |> Core.Compiler.is_foldable
 end

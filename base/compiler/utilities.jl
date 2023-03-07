@@ -19,6 +19,8 @@ function _any(@nospecialize(f), a)
     end
     return false
 end
+any(@nospecialize(f), itr) = _any(f, itr)
+any(itr) = _any(identity, itr)
 
 function _all(@nospecialize(f), a)
     for x in a
@@ -26,6 +28,8 @@ function _all(@nospecialize(f), a)
     end
     return true
 end
+all(@nospecialize(f), itr) = _all(f, itr)
+all(itr) = _all(identity, itr)
 
 function contains_is(itr, @nospecialize(x))
     for y in itr
@@ -48,7 +52,7 @@ function istopfunction(@nospecialize(f), name::Symbol)
     tn = typeof(f).name
     if tn.mt.name === name
         top = _topmod(tn.module)
-        return isdefined(top, name) && isconst(top, name) && f === getfield(top, name)
+        return isdefined(top, name) && isconst(top, name) && f === getglobal(top, name)
     end
     return false
 end
@@ -60,6 +64,7 @@ end
 # Meta expression head, these generally can't be deleted even when they are
 # in a dead branch but can be ignored when analyzing uses/liveness.
 is_meta_expr_head(head::Symbol) = head === :boundscheck || head === :meta || head === :loopinfo
+is_meta_expr(@nospecialize x) = isa(x, Expr) && is_meta_expr_head(x.head)
 
 sym_isless(a::Symbol, b::Symbol) = ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b) < 0
 
@@ -71,6 +76,12 @@ end
 function quoted(@nospecialize(x))
     return is_self_quoting(x) ? x : QuoteNode(x)
 end
+
+############
+# inlining #
+############
+
+const MAX_INLINE_CONST_SIZE = 256
 
 function count_const_size(@nospecialize(x), count_self::Bool = true)
     (x isa Type || x isa Symbol) && return 0
@@ -100,9 +111,8 @@ end
 # MethodInstance/CodeInfo #
 ###########################
 
-function invoke_api(li::CodeInstance)
-    return ccall(:jl_invoke_api, Cint, (Any,), li)
-end
+invoke_api(li::CodeInstance) = ccall(:jl_invoke_api, Cint, (Any,), li)
+use_const_api(li::CodeInstance) = invoke_api(li) == 2
 
 function get_staged(mi::MethodInstance)
     may_invoke_generator(mi) || return nothing
@@ -124,7 +134,10 @@ function retrieve_code_info(linfo::MethodInstance)
     end
     if c === nothing && isdefined(m, :source)
         src = m.source
-        if isa(src, Array{UInt8,1})
+        if src === nothing
+            # can happen in images built with --strip-ir
+            return nothing
+        elseif isa(src, Array{UInt8,1})
             c = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, src)
         else
             c = copy(src::CodeInfo)
@@ -139,14 +152,14 @@ end
 
 function get_compileable_sig(method::Method, @nospecialize(atype), sparams::SimpleVector)
     isa(atype, DataType) || return nothing
-    mt = ccall(:jl_method_table_for, Any, (Any,), atype)
+    mt = ccall(:jl_method_get_table, Any, (Any,), method)
     mt === nothing && return nothing
     return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any),
         mt, atype, sparams, method)
 end
 
-isa_compileable_sig(@nospecialize(atype), method::Method) =
-    !iszero(ccall(:jl_isa_compileable_sig, Int32, (Any, Any), atype, method))
+isa_compileable_sig(@nospecialize(atype), sparams::SimpleVector, method::Method) =
+    !iszero(ccall(:jl_isa_compileable_sig, Int32, (Any, Any, Any), atype, sparams, method))
 
 # eliminate UnionAll vars that might be degenerate due to having identical bounds,
 # or a concrete upper bound and appearing covariantly.
@@ -169,6 +182,8 @@ function subst_trivial_bounds(@nospecialize(atype))
     return UnionAll(v, subst_trivial_bounds(atype.body))
 end
 
+has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Cint, (Any, Any), t, v) != 0
+
 # If removing trivial vars from atype results in an equivalent type, use that
 # instead. Otherwise we can get a case like issue #38888, where a signature like
 #   f(x::S) where S<:Int
@@ -180,7 +195,7 @@ function normalize_typevars(method::Method, @nospecialize(atype), sparams::Simpl
         sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), at2, method.sig)::SimpleVector
         sparams = sp_[2]::SimpleVector
     end
-    return atype, sparams
+    return Pair{Any,SimpleVector}(atype, sparams)
 end
 
 # get a handle to the unique specialization object representing a particular instantiation of a call
@@ -191,7 +206,12 @@ function specialize_method(method::Method, @nospecialize(atype), sparams::Simple
     if compilesig
         new_atype = get_compileable_sig(method, atype, sparams)
         new_atype === nothing && return nothing
-        atype = new_atype
+        if atype !== new_atype
+            sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), new_atype, method.sig)::SimpleVector
+            if sparams === sp_[2]::SimpleVector
+                atype = new_atype
+            end
+        end
     end
     if preexisting
         # check cached specializations
@@ -205,78 +225,160 @@ function specialize_method(match::MethodMatch; kwargs...)
     return specialize_method(match.method, match.spec_types, match.sparams; kwargs...)
 end
 
-# This function is used for computing alternate limit heuristics
-function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector)
-    if isdefined(method, :generator) && method.generator.expand_early && may_invoke_generator(method, sig, sparams)
-        method_instance = specialize_method(method, sig, sparams)
-        if isa(method_instance, MethodInstance)
-            cinfo = get_staged(method_instance)
-            if isa(cinfo, CodeInfo)
-                method2 = cinfo.method_for_inference_limit_heuristics
-                if method2 isa Method
-                    return method2
-                end
-            end
-        end
-    end
-    return nothing
+"""
+    is_declared_inline(method::Method) -> Bool
+
+Check if `method` is declared as `@inline`.
+"""
+is_declared_inline(method::Method) = _is_declared_inline(method, true)
+
+"""
+    is_declared_noinline(method::Method) -> Bool
+
+Check if `method` is declared as `@noinline`.
+"""
+is_declared_noinline(method::Method) = _is_declared_inline(method, false)
+
+function _is_declared_inline(method::Method, inline::Bool)
+    isdefined(method, :source) || return false
+    src = method.source
+    isa(src, MaybeCompressed) || return false
+    return (inline ? is_declared_inline : is_declared_noinline)(src)
+end
+
+"""
+    is_aggressive_constprop(method::Union{Method,CodeInfo}) -> Bool
+
+Check if `method` is declared as `Base.@constprop :aggressive`.
+"""
+is_aggressive_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x01
+
+"""
+    is_no_constprop(method::Union{Method,CodeInfo}) -> Bool
+
+Check if `method` is declared as `Base.@constprop :none`.
+"""
+is_no_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x02
+
+#############
+# backedges #
+#############
+
+"""
+    BackedgeIterator(backedges::Vector{Any})
+
+Return an iterator over a list of backedges. Iteration returns `(sig, caller)` elements,
+which will be one of the following:
+
+- `BackedgePair(nothing, caller::MethodInstance)`: a call made by ordinary inferable dispatch
+- `BackedgePair(invokesig, caller::MethodInstance)`: a call made by `invoke(f, invokesig, args...)`
+- `BackedgePair(specsig, mt::MethodTable)`: an abstract call
+
+# Examples
+
+```julia
+julia> callme(x) = x+1
+callme (generic function with 1 method)
+
+julia> callyou(x) = callme(x)
+callyou (generic function with 1 method)
+
+julia> callyou(2.0)
+3.0
+
+julia> mi = first(which(callme, (Any,)).specializations)
+MethodInstance for callme(::Float64)
+
+julia> @eval Core.Compiler for (; sig, caller) in BackedgeIterator(Main.mi.backedges)
+           println(sig)
+           println(caller)
+       end
+nothing
+callyou(Float64) from callyou(Any)
+```
+"""
+struct BackedgeIterator
+    backedges::Vector{Any}
+end
+
+const empty_backedge_iter = BackedgeIterator(Any[])
+
+struct BackedgePair
+    sig # ::Union{Nothing,Type}
+    caller::Union{MethodInstance,Core.MethodTable}
+    BackedgePair(@nospecialize(sig), caller::Union{MethodInstance,Core.MethodTable}) = new(sig, caller)
+end
+
+function iterate(iter::BackedgeIterator, i::Int=1)
+    backedges = iter.backedges
+    i > length(backedges) && return nothing
+    item = backedges[i]
+    isa(item, MethodInstance) && return BackedgePair(nothing, item), i+1           # regular dispatch
+    isa(item, Core.MethodTable) && return BackedgePair(backedges[i+1], item), i+2  # abstract dispatch
+    return BackedgePair(item, backedges[i+1]::MethodInstance), i+2                 # `invoke` calls
 end
 
 #########
 # types #
 #########
 
-argextype(@nospecialize(x), state) = argextype(x, state.src, state.sptypes, state.slottypes)
-
-const EMPTY_SLOTTYPES = Any[]
-
-function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vector{Any} = EMPTY_SLOTTYPES)
-    if isa(x, Expr)
-        if x.head === :static_parameter
-            return sptypes[x.args[1]::Int]
-        elseif x.head === :boundscheck
-            return Bool
-        elseif x.head === :copyast
-            return argextype(x.args[1], src, sptypes, slottypes)
-        end
-        @assert false "argextype only works on argument-position values"
-    elseif isa(x, SlotNumber)
-        return slottypes[(x::SlotNumber).id]
-    elseif isa(x, TypedSlot)
-        return (x::TypedSlot).typ
-    elseif isa(x, SSAValue)
-        return abstract_eval_ssavalue(x::SSAValue, src)
-    elseif isa(x, Argument)
-        return isa(src, IncrementalCompact) ? src.ir.argtypes[x.n] :
-            isa(src, IRCode) ? src.argtypes[x.n] :
-            slottypes[x.n]
-    elseif isa(x, QuoteNode)
-        return Const((x::QuoteNode).value)
-    elseif isa(x, GlobalRef)
-        return abstract_eval_global(x.mod, (x::GlobalRef).name)
-    elseif isa(x, PhiNode)
-        return Any
-    elseif isa(x, PiNode)
-        return x.typ
-    else
-        return Const(x)
-    end
-end
-
 function singleton_type(@nospecialize(ft))
+    ft = widenslotwrapper(ft)
     if isa(ft, Const)
         return ft.val
     elseif isconstType(ft)
         return ft.parameters[1]
-    elseif ft isa DataType && isdefined(ft, :instance)
+    elseif issingletontype(ft)
         return ft.instance
     end
     return nothing
 end
 
+function maybe_singleton_const(@nospecialize(t))
+    if isa(t, DataType)
+        if issingletontype(t)
+            return Const(t.instance)
+        elseif isconstType(t)
+            return Const(t.parameters[1])
+        end
+    end
+    return t
+end
+
 ###################
 # SSAValues/Slots #
 ###################
+
+function ssamap(f, @nospecialize(stmt))
+    urs = userefs(stmt)
+    for op in urs
+        val = op[]
+        if isa(val, SSAValue)
+            op[] = f(val)
+        end
+    end
+    return urs[]
+end
+
+function foreachssa(@specialize(f), @nospecialize(stmt))
+    urs = userefs(stmt)
+    for op in urs
+        val = op[]
+        if isa(val, SSAValue)
+            f(val)
+        end
+    end
+end
+
+function foreach_anyssa(@specialize(f), @nospecialize(stmt))
+    urs = userefs(stmt)
+    for op in urs
+        val = op[]
+        if isa(val, AnySSAValue)
+            f(val)
+        end
+    end
+end
 
 function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
     uses = BitSet[ BitSet() for i = 1:nvals ]
@@ -325,7 +427,7 @@ function is_throw_call(e::Expr)
     if e.head === :call
         f = e.args[1]
         if isa(f, GlobalRef)
-            ff = abstract_eval_global(f.mod, f.name)
+            ff = abstract_eval_globalref(f)
             if isa(ff, Const) && ff.val === Core.throw
                 return true
             end
@@ -380,8 +482,11 @@ function find_throw_blocks(code::Vector{Any}, handler_at::Vector{Int})
 end
 
 # using a function to ensure we can infer this
-@inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id :
-    isa(s, Argument) ? (s::Argument).n : (s::TypedSlot).id
+@inline function slot_id(s)
+    isa(s, SlotNumber) && return s.id
+    isa(s, Argument) && return s.n
+    return (s::TypedSlot).id
+end
 
 ###########
 # options #
@@ -393,12 +498,12 @@ inlining_enabled() = (JLOptions().can_inline == 1)
 function coverage_enabled(m::Module)
     ccall(:jl_generating_output, Cint, ()) == 0 || return false # don't alter caches
     cov = JLOptions().code_coverage
-    if cov == 1
+    if cov == 1 # user
         m = moduleroot(m)
         m === Core && return false
         isdefined(Main, :Base) && m === Main.Base && return false
         return true
-    elseif cov == 2
+    elseif cov == 2 # all
         return true
     end
     return false

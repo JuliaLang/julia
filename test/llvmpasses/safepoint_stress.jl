@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# RUN: julia --startup-file=no %s | opt -load libjulia-internal%shlibext -LateLowerGCFrame -FinalLowerGC -S - | FileCheck %s
+# RUN: julia --startup-file=no %s | opt -enable-new-pm=0 -load libjulia-codegen%shlibext -LateLowerGCFrame -FinalLowerGC -S - | FileCheck %s
+# RUN: julia --startup-file=no %s | opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LateLowerGCFrame),FinalLowerGC' -S - | FileCheck %s
+
 
 println("""
 declare {} addrspace(10)* @alloc()

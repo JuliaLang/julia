@@ -42,7 +42,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     # creation of symlink to directory that does not yet exist
     new_dir = joinpath(subdir, "new_dir")
     foo_file = joinpath(subdir, "new_dir", "foo")
-    nedlink = joinpath(subdir, "non_existant_dirlink")
+    nedlink = joinpath(subdir, "nonexistent_dirlink")
     symlink("new_dir", nedlink; dir_target=true)
     try
         readdir(nedlink)
@@ -106,15 +106,23 @@ using Random
 end
 
 @testset "tempname with parent" begin
-    withenv("TMPDIR" => nothing) do
-        t = tempname()
-        @test dirname(t) == tempdir()
-        mktempdir() do d
+    t = tempname()
+    @test dirname(t) == tempdir()
+    mktempdir() do d
+        t = tempname(d)
+        @test dirname(t) == d
+    end
+    @test_throws ArgumentError tempname(randstring())
+
+    # 38873: check that `TMPDIR` being set does not
+    # override the parent argument to `tempname`.
+    mktempdir() do d
+        withenv("TMPDIR"=>tempdir()) do
             t = tempname(d)
             @test dirname(t) == d
         end
-        @test_throws ArgumentError tempname(randstring())
     end
+    @test_throws ArgumentError tempname(randstring())
 end
 
 child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $code`)))
@@ -185,7 +193,7 @@ end
             t = i % 2 == 0 ? mktempfile() : mktempdir()
             push!(temps, t)
             @test ispath(t)
-            @test length(TEMP_CLEANUP) == i 
+            @test length(TEMP_CLEANUP) == i
             @test TEMP_CLEANUP_MAX[] == n
             # delete 1/3 of the temp paths
             i % 3 == 0 && rm(t, recursive=true, force=true)
@@ -596,7 +604,8 @@ close(s)
         false
     catch e
         isa(e, SystemError) || rethrow()
-        @test sprint(showerror, e) == "SystemError: opening file \"this file is not expected to exist\": No such file or directory"
+        @test e.errnum == 2
+        @test startswith(sprint(showerror, e), "SystemError: opening file \"this file is not expected to exist\"")
         true
     end
 end
@@ -762,13 +771,13 @@ end
 mktempdir() do tmpdir
     # rename file
     file = joinpath(tmpdir, "afile.txt")
-    files_stat = stat(file)
     close(open(file, "w")) # like touch, but lets the operating system update
+    files_stat = stat(file)
     # the timestamp for greater precision on some platforms (windows)
 
     newfile = joinpath(tmpdir, "bfile.txt")
     mv(file, newfile)
-    newfile_stat = stat(file)
+    newfile_stat = stat(newfile)
 
     @test !ispath(file)
     @test isfile(newfile)
@@ -1444,7 +1453,7 @@ rm(dir)
 ####################
 mktempdir() do dir
     name1 = joinpath(dir, "apples")
-    name2 = joinpath(dir, "bannanas")
+    name2 = joinpath(dir, "bananas")
     @test !ispath(name1)
     @test touch(name1) == name1
     @test isfile(name1)
@@ -1511,11 +1520,11 @@ if !Sys.iswindows()
             chmod(joinpath(d, "empty_outer", "empty_inner"), 0o333)
 
             # Test that an empty directory, even when we can't read its contents, is deletable
-            rm(joinpath(d, "empty_outer"); recursive=true, force=true)
+            rm(joinpath(d, "empty_outer"); recursive=true)
             @test !isdir(joinpath(d, "empty_outer"))
 
             # But a non-empty directory is not
-            @test_throws Base.IOError rm(joinpath(d, "nonempty"); recursive=true, force=true)
+            @test_throws Base.IOError rm(joinpath(d, "nonempty"); recursive=true)
             chmod(joinpath(d, "nonempty"), 0o777)
             rm(joinpath(d, "nonempty"); recursive=true, force=true)
             @test !isdir(joinpath(d, "nonempty"))
@@ -1642,7 +1651,7 @@ end
 
 if Sys.iswindows()
 @testset "mkdir/rm permissions" begin
-    # test delete permission in system folders (i.e. impliclty test chmod permissions)
+    # test delete permission in system folders (i.e. implicitly test chmod permissions)
     # issue #38433
     @test withenv("TMP" => "C:\\") do
         mktempdir() do dir end

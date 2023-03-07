@@ -230,6 +230,9 @@ Matches the [`git_remote_callbacks`](https://libgit2.org/libgit2/#HEAD/type/git_
     push_update_reference::Ptr{Cvoid}  = C_NULL
     push_negotiation::Ptr{Cvoid}       = C_NULL
     transport::Ptr{Cvoid}              = C_NULL
+    @static if LibGit2.VERSION >= v"1.2.0"
+        remote_ready::Ptr{Cvoid}       = C_NULL
+    end
     payload::Any                       = nothing
     @static if LibGit2.VERSION >= v"0.99.0"
         resolve_url::Ptr{Cvoid}        = C_NULL
@@ -342,6 +345,9 @@ The fields represent:
     download_tags::Cint                = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
     @static if LibGit2.VERSION >= v"0.25.0"
         proxy_opts::ProxyOptions       = ProxyOptions()
+    end
+    @static if LibGit2.VERSION >= v"1.4.0"
+        follow_redirects::Cuint        = Cuint(0)
     end
     @static if LibGit2.VERSION >= v"0.24.0"
         custom_headers::StrArrayStruct = StrArrayStruct()
@@ -673,6 +679,9 @@ The fields represent:
     callbacks::RemoteCallbacks         = RemoteCallbacks()
     @static if LibGit2.VERSION >= v"0.25.0"
         proxy_opts::ProxyOptions       = ProxyOptions()
+    end
+    @static if LibGit2.VERSION >= v"1.4.0"
+        follow_redirects::Cuint        = Cuint(0)
     end
     @static if LibGit2.VERSION >= v"0.24.0"
         custom_headers::StrArrayStruct = StrArrayStruct()
@@ -1380,7 +1389,8 @@ CredentialPayload(p::CredentialPayload) = p
 function Base.shred!(p::CredentialPayload)
     # Note: Avoid shredding the `explicit` or `cache` fields as these are just references
     # and it is not our responsibility to shred them.
-    p.credential !== nothing && Base.shred!(p.credential)
+    credential = p.credential
+    credential !== nothing && Base.shred!(credential)
     p.credential = nothing
 end
 
@@ -1421,8 +1431,9 @@ function approve(p::CredentialPayload; shred::Bool=true)
 
     # Each `approve` call needs to avoid shredding the passed in credential as we need
     # the credential information intact for subsequent approve calls.
-    if p.cache !== nothing
-        approve(p.cache, cred, p.url)
+    cache = p.cache
+    if cache !== nothing
+        approve(cache, cred, p.url)
         shred = false  # Avoid wiping `cred` as this would also wipe the cached copy
     end
     if p.allow_git_helpers
@@ -1451,8 +1462,9 @@ function reject(p::CredentialPayload; shred::Bool=true)
 
     # Note: each `reject` call needs to avoid shredding the passed in credential as we need
     # the credential information intact for subsequent reject calls.
-    if p.cache !== nothing
-        reject(p.cache, cred, p.url)
+    cache = p.cache
+    if cache !== nothing
+        reject(cache, cred, p.url)
     end
     if p.allow_git_helpers
         reject(p.config, cred, p.url)

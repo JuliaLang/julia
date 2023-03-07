@@ -21,15 +21,15 @@ The following are Julia's primitive numeric types:
 | Type              | Signed? | Number of bits | Smallest value | Largest value |
 |:----------------- |:------- |:-------------- |:-------------- |:------------- |
 | [`Int8`](@ref)    | ✓       | 8              | -2^7           | 2^7 - 1       |
-| [`UInt8`](@ref)   |         | 8              | 0              | 2^8 - 1       |
+| [`UInt8`](@ref)   |         | 8              | 0              | 2^8 - 1       |
 | [`Int16`](@ref)   | ✓       | 16             | -2^15          | 2^15 - 1      |
-| [`UInt16`](@ref)  |         | 16             | 0              | 2^16 - 1      |
+| [`UInt16`](@ref)  |         | 16             | 0              | 2^16 - 1      |
 | [`Int32`](@ref)   | ✓       | 32             | -2^31          | 2^31 - 1      |
-| [`UInt32`](@ref)  |         | 32             | 0              | 2^32 - 1      |
+| [`UInt32`](@ref)  |         | 32             | 0              | 2^32 - 1      |
 | [`Int64`](@ref)   | ✓       | 64             | -2^63          | 2^63 - 1      |
-| [`UInt64`](@ref)  |         | 64             | 0              | 2^64 - 1      |
+| [`UInt64`](@ref)  |         | 64             | 0              | 2^64 - 1      |
 | [`Int128`](@ref)  | ✓       | 128            | -2^127         | 2^127 - 1     |
-| [`UInt128`](@ref) |         | 128            | 0              | 2^128 - 1     |
+| [`UInt128`](@ref) |         | 128            | 0              | 2^128 - 1     |
 | [`Bool`](@ref)    | N/A     | 8              | `false` (0)    | `true` (1)    |
 
   * **Floating-point types:**
@@ -185,7 +185,9 @@ determining storage size of a literal. So `0x01` is a `UInt8` while `0x0001` is 
 
 That allows the user to control the size.
 
-Values which cannot be stored in `UInt128` cannot be written as such literals.
+Unsigned literals (starting with `0x`) that encode integers too large to be represented as
+`UInt128` values will construct `BigInt` values instead. This is not an unsigned type but
+it is the only built-in type big enough to represent such large integer values.
 
 Binary, octal, and hexadecimal literals may be signed by a `-` immediately preceding the
 unsigned literal. They produce an unsigned integer of the same size as the unsigned literal

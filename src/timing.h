@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 void jl_init_timing(void);
-void jl_destroy_timing(void);
+void jl_destroy_timing(void) JL_NOTSAFEPOINT;
 #ifdef __cplusplus
 }
 #endif
@@ -87,7 +87,7 @@ struct _jl_timing_block_t { // typedef in julia.h
 #endif
 };
 
-STATIC_INLINE void _jl_timing_block_stop(jl_timing_block_t *block, uint64_t t) {
+STATIC_INLINE void _jl_timing_block_stop(jl_timing_block_t *block, uint64_t t) JL_NOTSAFEPOINT {
 #ifdef JL_DEBUG_BUILD
     assert(block->running);
     block->running = 0;
@@ -95,7 +95,7 @@ STATIC_INLINE void _jl_timing_block_stop(jl_timing_block_t *block, uint64_t t) {
     block->total += t - block->t0;
 }
 
-STATIC_INLINE void _jl_timing_block_start(jl_timing_block_t *block, uint64_t t) {
+STATIC_INLINE void _jl_timing_block_start(jl_timing_block_t *block, uint64_t t) JL_NOTSAFEPOINT {
 #ifdef JL_DEBUG_BUILD
     assert(!block->running);
     block->running = 1;
@@ -103,7 +103,7 @@ STATIC_INLINE void _jl_timing_block_start(jl_timing_block_t *block, uint64_t t) 
     block->t0 = t;
 }
 
-STATIC_INLINE uint64_t _jl_timing_block_init(jl_timing_block_t *block, int owner) {
+STATIC_INLINE uint64_t _jl_timing_block_init(jl_timing_block_t *block, int owner) JL_NOTSAFEPOINT {
     uint64_t t = cycleclock();
     block->owner = owner;
     block->total = 0;
@@ -114,7 +114,7 @@ STATIC_INLINE uint64_t _jl_timing_block_init(jl_timing_block_t *block, int owner
     return t;
 }
 
-STATIC_INLINE void _jl_timing_block_ctor(jl_timing_block_t *block, int owner) {
+STATIC_INLINE void _jl_timing_block_ctor(jl_timing_block_t *block, int owner) JL_NOTSAFEPOINT {
     uint64_t t = _jl_timing_block_init(block, owner);
     jl_task_t *ct = jl_current_task;
     jl_timing_block_t **prevp = &ct->ptls->timing_stack;
@@ -124,7 +124,7 @@ STATIC_INLINE void _jl_timing_block_ctor(jl_timing_block_t *block, int owner) {
     *prevp = block;
 }
 
-STATIC_INLINE void _jl_timing_block_destroy(jl_timing_block_t *block) {
+STATIC_INLINE void _jl_timing_block_destroy(jl_timing_block_t *block) JL_NOTSAFEPOINT {
     uint64_t t = cycleclock();
     jl_task_t *ct = jl_current_task;
     _jl_timing_block_stop(block, t);
@@ -139,10 +139,10 @@ STATIC_INLINE void _jl_timing_block_destroy(jl_timing_block_t *block) {
 #ifdef __cplusplus
 struct jl_timing_block_cpp_t {
     jl_timing_block_t block;
-    jl_timing_block_cpp_t(int owner) {
+    jl_timing_block_cpp_t(int owner) JL_NOTSAFEPOINT {
         _jl_timing_block_ctor(&block, owner);
     }
-    ~jl_timing_block_cpp_t() {
+    ~jl_timing_block_cpp_t() JL_NOTSAFEPOINT {
         _jl_timing_block_destroy(&block);
     }
     jl_timing_block_cpp_t(const jl_timing_block_cpp_t&) = delete;

@@ -8,6 +8,12 @@ tuple-like collection of values, where each entry has a unique name, represented
 [`Symbol`](@ref). Like `Tuple`s, `NamedTuple`s are immutable; neither the names nor the values
 can be modified in place after construction.
 
+A named tuple can be created as a tuple literal with keys, e.g. `(a=1, b=2)`,
+or as a tuple literal with semicolon after the opening parenthesis, e.g. `(;
+a=1, b=2)` (this form also accepts programmatically generated names as
+described below), or using a `NamedTuple` type as constructor, e.g.
+`NamedTuple{(:a, :b)}((1,2))`.
+
 Accessing the value associated with a name in a named tuple can be done using field
 access syntax, e.g. `x.a`, or using [`getindex`](@ref), e.g. `x[:a]` or `x[(:a, :b)]`.
 A tuple of the names can be obtained using [`keys`](@ref), and a tuple of the values
@@ -51,16 +57,34 @@ julia> collect(pairs(x))
 ```
 
 In a similar fashion as to how one can define keyword arguments programmatically,
-a named tuple can be created by giving a pair `name::Symbol => value` or splatting
-an iterator yielding such pairs after a semicolon inside a tuple literal:
+a named tuple can be created by giving pairs `name::Symbol => value` after a
+semicolon inside a tuple literal. This and the `name=value` syntax can be mixed:
 
 ```jldoctest
-julia> (; :a => 1)
-(a = 1,)
+julia> (; :a => 1, :b => 2, c=3)
+(a = 1, b = 2, c = 3)
+```
+
+The name-value pairs can also be provided by splatting a named tuple or any
+iterator that yields two-value collections holding each a symbol as first
+value:
 
 julia> keys = (:a, :b, :c); values = (1, 2, 3);
 
-julia> (; zip(keys, values)...)
+julia> NamedTuple{keys}(values)
+(a = 1, b = 2, c = 3)
+
+julia> (; (keys .=> values)...)
+(a = 1, b = 2, c = 3)
+
+julia> nt1 = (a=1, b=2);
+
+julia> nt2 = (c=3, d=4);
+
+julia> (; nt1..., nt2..., b=20) # the final b overwrites the value from nt1
+(a = 1, b = 20, c = 3, d = 4)
+
+julia> (; zip(keys, values)...) # zip yields tuples such as (:a, 1)
 (a = 1, b = 2, c = 3)
 ```
 
@@ -96,14 +120,30 @@ if nameof(@__MODULE__) === :Base
     $(Expr(:splatnew, :(NamedTuple{names,T}), :(T(args))))
 end
 
+function NamedTuple{names, T}(nt::NamedTuple) where {names, T <: Tuple}
+    if @generated
+        Expr(:new, :(NamedTuple{names, T}),
+             Any[ :(convert(fieldtype(T, $n), getfield(nt, $(QuoteNode(names[n]))))) for n in 1:length(names) ]...)
+    else
+        NamedTuple{names, T}(map(Fix1(getfield, nt), names))
+    end
+end
+
+# Like NamedTuple{names, T} as a constructor, but omits the additional
+# `convert` call, when the types are known to match the fields
+@eval function _new_NamedTuple(T::Type{NamedTuple{NTN, NTT}} where {NTN, NTT}, args::Tuple)
+    $(Expr(:splatnew, :T, :args))
+end
+
 function NamedTuple{names}(nt::NamedTuple) where {names}
     if @generated
         idx = Int[ fieldindex(nt, names[n]) for n in 1:length(names) ]
         types = Tuple{(fieldtype(nt, idx[n]) for n in 1:length(idx))...}
         Expr(:new, :(NamedTuple{names, $types}), Any[ :(getfield(nt, $(idx[n]))) for n in 1:length(idx) ]...)
     else
-        types = Tuple{(fieldtype(typeof(nt), names[n]) for n in 1:length(names))...}
-        NamedTuple{names, types}(Tuple(getfield(nt, n) for n in 1:length(names)))
+        length_names = length(names::Tuple)
+        types = Tuple{(fieldtype(typeof(nt), names[n]) for n in 1:length_names)...}
+        _new_NamedTuple(NamedTuple{names, types}, map(Fix1(getfield, nt), names))
     end
 end
 
@@ -125,6 +165,7 @@ firstindex(t::NamedTuple) = 1
 lastindex(t::NamedTuple) = nfields(t)
 getindex(t::NamedTuple, i::Int) = getfield(t, i)
 getindex(t::NamedTuple, i::Symbol) = getfield(t, i)
+getindex(t::NamedTuple, ::Colon) = t
 @inline getindex(t::NamedTuple, idxs::Tuple{Vararg{Symbol}}) = NamedTuple{idxs}(t)
 @inline getindex(t::NamedTuple, idxs::AbstractVector{Symbol}) = NamedTuple{Tuple(idxs)}(t)
 indexed_iterate(t::NamedTuple, i::Int, state=1) = (getfield(t, i), i+1)
@@ -135,11 +176,20 @@ empty(::NamedTuple) = NamedTuple()
 prevind(@nospecialize(t::NamedTuple), i::Integer) = Int(i)-1
 nextind(@nospecialize(t::NamedTuple), i::Integer) = Int(i)+1
 
-convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names,T}) where {names,T<:Tuple} = nt
-convert(::Type{NamedTuple{names}}, nt::NamedTuple{names}) where {names} = nt
+convert(::Type{NT}, nt::NT) where {names, NT<:NamedTuple{names}} = nt
+convert(::Type{NT}, nt::NT) where {names, T<:Tuple, NT<:NamedTuple{names,T}} = nt
 
-function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {names,T<:Tuple}
-    NamedTuple{names,T}(T(nt))
+function convert(::Type{NT}, nt::NamedTuple{names}) where {names, T<:Tuple, NT<:NamedTuple{names,T}}
+    if !@isdefined T
+        # converting abstract NT to an abstract Tuple type, to a concrete NT1, is not straightforward, so this could just be an error, but we define it anyways
+        # _tuple_error(NT, nt)
+        T1 = Tuple{ntuple(i -> fieldtype(NT, i), Val(length(names)))...}
+        NT1 = NamedTuple{names, T1}
+    else
+        T1 = T
+        NT1 = NT
+    end
+    return NT1(T1(nt))::NT1::NT
 end
 
 if nameof(@__MODULE__) === :Base
@@ -184,6 +234,12 @@ eltype(::Type{T}) where T<:NamedTuple = nteltype(T)
 nteltype(::Type) = Any
 nteltype(::Type{NamedTuple{names,T}} where names) where {T} = eltype(T)
 
+keytype(@nospecialize nt::NamedTuple) = keytype(typeof(nt))
+keytype(@nospecialize T::Type{<:NamedTuple}) = Symbol
+
+valtype(@nospecialize nt::NamedTuple) = valtype(typeof(nt))
+valtype(@nospecialize T::Type{<:NamedTuple}) = eltype(T)
+
 ==(a::NamedTuple{n}, b::NamedTuple{n}) where {n} = Tuple(a) == Tuple(b)
 ==(a::NamedTuple, b::NamedTuple) = false
 
@@ -209,7 +265,7 @@ function map(f, nt::NamedTuple{names}, nts::NamedTuple...) where names
     NamedTuple{names}(map(f, map(Tuple, (nt, nts...))...))
 end
 
-@pure function merge_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+@assume_effects :total function merge_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
     @nospecialize an bn
     names = Symbol[an...]
     for n in bn
@@ -220,10 +276,23 @@ end
     (names...,)
 end
 
-@pure function merge_types(names::Tuple{Vararg{Symbol}}, a::Type{<:NamedTuple}, b::Type{<:NamedTuple})
+@assume_effects :total function merge_types(names::Tuple{Vararg{Symbol}}, a::Type{<:NamedTuple}, b::Type{<:NamedTuple})
     @nospecialize names a b
     bn = _nt_names(b)
     return Tuple{Any[ fieldtype(sym_in(names[n], bn) ? b : a, names[n]) for n in 1:length(names) ]...}
+end
+
+@assume_effects :foldable function merge_fallback(@nospecialize(a::NamedTuple), @nospecialize(b::NamedTuple),
+        @nospecialize(an::Tuple{Vararg{Symbol}}), @nospecialize(bn::Tuple{Vararg{Symbol}}))
+    names = merge_names(an, bn)
+    types = merge_types(names, typeof(a), typeof(b))
+    n = length(names)
+    A = Vector{Any}(undef, n)
+    for i=1:n
+        n = names[i]
+        A[i] = getfield(sym_in(n, bn) ? b : a, n)
+    end
+    _new_NamedTuple(NamedTuple{names, types}, (A...,))
 end
 
 """
@@ -256,11 +325,9 @@ function merge(a::NamedTuple{an}, b::NamedTuple{bn}) where {an, bn}
         names = merge_names(an, bn)
         types = merge_types(names, a, b)
         vals = Any[ :(getfield($(sym_in(names[n], bn) ? :b : :a), $(QuoteNode(names[n])))) for n in 1:length(names) ]
-        :( NamedTuple{$names,$types}(($(vals...),)) )
+        :( _new_NamedTuple(NamedTuple{$names,$types}, ($(vals...),)) )
     else
-        names = merge_names(an, bn)
-        types = merge_types(names, typeof(a), typeof(b))
-        NamedTuple{names,types}(map(n->getfield(sym_in(n, bn) ? b : a, n), names))
+        merge_fallback(a, b, an, bn)
     end
 end
 
@@ -304,15 +371,16 @@ function merge(a::NamedTuple, itr)
     merge(a, NamedTuple{(names...,)}((vals...,)))
 end
 
-keys(nt::NamedTuple{names}) where {names} = names
+keys(nt::NamedTuple{names}) where {names} = names::Tuple{Vararg{Symbol}}
 values(nt::NamedTuple) = Tuple(nt)
 haskey(nt::NamedTuple, key::Union{Integer, Symbol}) = isdefined(nt, key)
-get(nt::NamedTuple, key::Union{Integer, Symbol}, default) = haskey(nt, key) ? getfield(nt, key) : default
-get(f::Callable, nt::NamedTuple, key::Union{Integer, Symbol}) = haskey(nt, key) ? getfield(nt, key) : f()
-tail(t::NamedTuple{names}) where names = NamedTuple{tail(names)}(t)
-front(t::NamedTuple{names}) where names = NamedTuple{front(names)}(t)
+get(nt::NamedTuple, key::Union{Integer, Symbol}, default) = isdefined(nt, key) ? getfield(nt, key) : default
+get(f::Callable, nt::NamedTuple, key::Union{Integer, Symbol}) = isdefined(nt, key) ? getfield(nt, key) : f()
+tail(t::NamedTuple{names}) where names = NamedTuple{tail(names::Tuple)}(t)
+front(t::NamedTuple{names}) where names = NamedTuple{front(names::Tuple)}(t)
+reverse(nt::NamedTuple) = NamedTuple{reverse(keys(nt))}(reverse(values(nt)))
 
-@pure function diff_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+@assume_effects :total function diff_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
     @nospecialize an bn
     names = Symbol[]
     for n in an
@@ -323,8 +391,25 @@ front(t::NamedTuple{names}) where names = NamedTuple{front(names)}(t)
     (names...,)
 end
 
+@assume_effects :foldable function diff_types(@nospecialize(a::NamedTuple), @nospecialize(names::Tuple{Vararg{Symbol}}))
+    return Tuple{Any[ fieldtype(typeof(a), names[n]) for n in 1:length(names) ]...}
+end
+
+@assume_effects :foldable function diff_fallback(@nospecialize(a::NamedTuple), @nospecialize(an::Tuple{Vararg{Symbol}}), @nospecialize(bn::Tuple{Vararg{Symbol}}))
+    names = diff_names(an, bn)
+    isempty(names) && return (;)
+    types = diff_types(a, names)
+    n = length(names)
+    A = Vector{Any}(undef, n)
+    for i=1:n
+        n = names[i]
+        A[i] = getfield(a, n)
+    end
+    _new_NamedTuple(NamedTuple{names, types}, (A...,))
+end
+
 """
-    structdiff(a::NamedTuple{an}, b::Union{NamedTuple{bn},Type{NamedTuple{bn}}}) where {an,bn}
+    structdiff(a::NamedTuple, b::Union{NamedTuple,Type{NamedTuple}})
 
 Construct a copy of named tuple `a`, except with fields that exist in `b` removed.
 `b` can be a named tuple, or a type of the form `NamedTuple{field_names}`.
@@ -332,14 +417,13 @@ Construct a copy of named tuple `a`, except with fields that exist in `b` remove
 function structdiff(a::NamedTuple{an}, b::Union{NamedTuple{bn}, Type{NamedTuple{bn}}}) where {an, bn}
     if @generated
         names = diff_names(an, bn)
+        isempty(names) && return (;) # just a fast pass
         idx = Int[ fieldindex(a, names[n]) for n in 1:length(names) ]
         types = Tuple{Any[ fieldtype(a, idx[n]) for n in 1:length(idx) ]...}
         vals = Any[ :(getfield(a, $(idx[n]))) for n in 1:length(idx) ]
-        :( NamedTuple{$names,$types}(($(vals...),)) )
+        return :( _new_NamedTuple(NamedTuple{$names,$types}, ($(vals...),)) )
     else
-        names = diff_names(an, bn)
-        types = Tuple{Any[ fieldtype(typeof(a), names[n]) for n in 1:length(names) ]...}
-        NamedTuple{names,types}(map(n->getfield(a, n), names))
+        return diff_fallback(a, an, bn)
     end
 end
 
@@ -422,4 +506,10 @@ macro NamedTuple(ex)
     vars = [QuoteNode(e isa Symbol ? e : e.args[1]) for e in decls]
     types = [esc(e isa Symbol ? :Any : e.args[2]) for e in decls]
     return :(NamedTuple{($(vars...),), Tuple{$(types...)}})
+end
+
+@constprop :aggressive function split_rest(t::NamedTuple{names}, n::Int, st...) where {names}
+    _check_length_split_rest(length(t), n)
+    names_front, names_last_n = split_rest(names, n, st...)
+    return NamedTuple{names_front}(t), NamedTuple{names_last_n}(t)
 end

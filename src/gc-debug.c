@@ -90,7 +90,7 @@ void add_lostval_parent(jl_value_t *parent)
    At this point you should be able to run under gdb and use a hw watch to look for writes
    at the exact addr of the slot (use something like watch *slot_addr if *slot_addr == val).
  - If it went well you are now stopped at the exact point the problem is happening.
-   Backtraces in JIT'd code wont work for me (but I'm not sure they should) so in that
+   Backtraces in JIT'd code won't work for me (but I'm not sure they should) so in that
    case you can try to jl_throw(something) from gdb.
  */
 // this does not yet detect missing writes from marked to marked_noesc
@@ -99,7 +99,7 @@ static arraylist_t bits_save[4];
 
 static void gc_clear_mark_page(jl_gc_pagemeta_t *pg, int bits)
 {
-    jl_ptls_t ptls2 = jl_all_tls_states[pg->thread_n];
+    jl_ptls_t ptls2 = gc_all_tls_states[pg->thread_n];
     jl_gc_pool_t *pool = &ptls2->heap.norm_pools[pg->pool_n];
     jl_taggedvalue_t *pv = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
     char *lim = (char*)pv + GC_PAGE_SZ - GC_PAGE_OFFSET - pool->osize;
@@ -164,8 +164,8 @@ static void clear_mark(int bits)
         }
     }
     bigval_t *v;
-    for (int i = 0;i < jl_n_threads;i++) {
-        v = jl_all_tls_states[i]->heap.big_objects;
+    for (int i = 0; i < gc_n_threads; i++) {
+        v = gc_all_tls_states[i]->heap.big_objects;
         while (v != NULL) {
             void *gcv = &v->header;
             if (!gc_verifying)
@@ -198,21 +198,23 @@ static void restore(void)
 
 static void gc_verify_track(jl_ptls_t ptls)
 {
-    jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
     do {
-        jl_gc_mark_sp_t sp;
-        gc_mark_sp_init(gc_cache, &sp);
+        jl_gc_markqueue_t mq;
+        mq.current = mq.start = ptls->mark_queue.start;
+        mq.end = ptls->mark_queue.end;
+        mq.current_chunk = mq.chunk_start = ptls->mark_queue.chunk_start;
+        mq.chunk_end = ptls->mark_queue.chunk_end;
         arraylist_push(&lostval_parents_done, lostval);
         jl_safe_printf("Now looking for %p =======\n", lostval);
         clear_mark(GC_CLEAN);
-        gc_mark_queue_all_roots(ptls, &sp);
-        gc_mark_queue_finlist(gc_cache, &sp, &to_finalize, 0);
-        for (int i = 0;i < jl_n_threads;i++) {
-            jl_ptls_t ptls2 = jl_all_tls_states[i];
-            gc_mark_queue_finlist(gc_cache, &sp, &ptls2->finalizers, 0);
+        gc_mark_queue_all_roots(ptls, &mq);
+        gc_mark_finlist(&mq, &to_finalize, 0);
+        for (int i = 0; i < gc_n_threads;i++) {
+            jl_ptls_t ptls2 = gc_all_tls_states[i];
+            gc_mark_finlist(&mq, &ptls2->finalizers, 0);
         }
-        gc_mark_queue_finlist(gc_cache, &sp, &finalizer_list_marked, 0);
-        gc_mark_loop(ptls, sp);
+        gc_mark_finlist(&mq, &finalizer_list_marked, 0);
+        gc_mark_loop_(ptls, &mq);
         if (lostval_parents.len == 0) {
             jl_safe_printf("Could not find the missing link. We missed a toplevel root. This is odd.\n");
             break;
@@ -246,22 +248,24 @@ static void gc_verify_track(jl_ptls_t ptls)
 
 void gc_verify(jl_ptls_t ptls)
 {
-    jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
-    jl_gc_mark_sp_t sp;
-    gc_mark_sp_init(gc_cache, &sp);
+    jl_gc_markqueue_t mq;
+    mq.current = mq.start = ptls->mark_queue.start;
+    mq.end = ptls->mark_queue.end;
+    mq.current_chunk = mq.chunk_start = ptls->mark_queue.chunk_start;
+    mq.chunk_end = ptls->mark_queue.chunk_end;
     lostval = NULL;
     lostval_parents.len = 0;
     lostval_parents_done.len = 0;
     clear_mark(GC_CLEAN);
     gc_verifying = 1;
-    gc_mark_queue_all_roots(ptls, &sp);
-    gc_mark_queue_finlist(gc_cache, &sp, &to_finalize, 0);
-    for (int i = 0;i < jl_n_threads;i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[i];
-        gc_mark_queue_finlist(gc_cache, &sp, &ptls2->finalizers, 0);
+    gc_mark_queue_all_roots(ptls, &mq);
+    gc_mark_finlist(&mq, &to_finalize, 0);
+    for (int i = 0; i < gc_n_threads;i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        gc_mark_finlist(&mq, &ptls2->finalizers, 0);
     }
-    gc_mark_queue_finlist(gc_cache, &sp, &finalizer_list_marked, 0);
-    gc_mark_loop(ptls, sp);
+    gc_mark_finlist(&mq, &finalizer_list_marked, 0);
+    gc_mark_loop_(ptls, &mq);
     int clean_len = bits_save[GC_CLEAN].len;
     for(int i = 0; i < clean_len + bits_save[GC_OLD].len; i++) {
         jl_taggedvalue_t *v = (jl_taggedvalue_t*)bits_save[i >= clean_len ? GC_OLD : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
@@ -297,7 +301,7 @@ static void gc_verify_tags_page(jl_gc_pagemeta_t *pg)
     // for all pages in use
     int p_n = pg->pool_n;
     int t_n = pg->thread_n;
-    jl_ptls_t ptls2 = jl_all_tls_states[t_n];
+    jl_ptls_t ptls2 = gc_all_tls_states[t_n];
     jl_gc_pool_t *p = &ptls2->heap.norm_pools[p_n];
     int osize = pg->osize;
     char *data = pg->data;
@@ -401,8 +405,8 @@ static void gc_verify_tags_pagetable(void)
 void gc_verify_tags(void)
 {
     // verify the freelist chains look valid
-    for (int t_i = 0; t_i < jl_n_threads; t_i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[t_i];
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
         for (int i = 0; i < JL_GC_N_POOLS; i++) {
             // for all pools, iterate its freelist
             jl_gc_pool_t *p = &ptls2->heap.norm_pools[i];
@@ -467,10 +471,9 @@ static void gc_debug_alloc_init(jl_alloc_num_t *num, const char *name)
         return;
     if (*env == 'r') {
         env++;
-        srand((unsigned)uv_hrtime());
-        for (int i = 0;i < 3;i++) {
+        for (int i = 0; i < 3; i++) {
             while (num->random[i] == 0) {
-                num->random[i] = rand();
+                num->random[i] = jl_rand();
             }
         }
     }
@@ -501,7 +504,7 @@ int jl_gc_debug_check_other(void)
     return gc_debug_alloc_check(&jl_gc_debug_env.other);
 }
 
-void jl_gc_debug_print_status(void)
+void jl_gc_debug_print_status(void) JL_NOTSAFEPOINT
 {
     uint64_t pool_count = jl_gc_debug_env.pool.num;
     uint64_t other_count = jl_gc_debug_env.other.num;
@@ -510,7 +513,7 @@ void jl_gc_debug_print_status(void)
                    pool_count + other_count, pool_count, other_count, gc_num.pause);
 }
 
-void jl_gc_debug_critical_error(void)
+void jl_gc_debug_critical_error(void) JL_NOTSAFEPOINT
 {
     jl_gc_debug_print_status();
     if (!jl_gc_debug_env.wait_for_debugger)
@@ -536,7 +539,7 @@ void gc_scrub_record_task(jl_task_t *t)
     arraylist_push(&jl_gc_debug_tasks, t);
 }
 
-static void gc_scrub_range(char *low, char *high)
+JL_NO_ASAN static void gc_scrub_range(char *low, char *high)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_jmp_buf *old_buf = jl_get_safe_restore();
@@ -578,7 +581,7 @@ static void gc_scrub_task(jl_task_t *ta)
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_ptls_t ptls2 = NULL;
     if (tid != -1)
-        ptls2 = jl_all_tls_states[tid];
+        ptls2 = gc_all_tls_states[tid];
 
     char *low;
     char *high;
@@ -947,8 +950,8 @@ void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
 {
     int64_t last_remset_len = 0;
     int64_t remset_nptr = 0;
-    for (int t_i = 0;t_i < jl_n_threads;t_i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[t_i];
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
         last_remset_len += ptls2->heap.last_remset->len;
         remset_nptr = ptls2->heap.remset_nptr;
     }
@@ -977,6 +980,29 @@ void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
                    jl_ns2ms(gc_postmark_end - gc_premark_end),
                    sweep_full ? "full" : "quick", -gc_num.allocd / 1024);
 }
+
+void gc_time_summary(int sweep_full, uint64_t start, uint64_t end,
+                     uint64_t freed, uint64_t live, uint64_t interval,
+                     uint64_t pause, uint64_t ttsp, uint64_t mark,
+                     uint64_t sweep)
+{
+    if (sweep_full > 0)
+        jl_safe_printf("TS: %" PRIu64 " Major collection: estimate freed = %" PRIu64
+                       " live = %" PRIu64 "m new interval = %" PRIu64
+                       "m time = %" PRIu64 "ms ttsp = %" PRIu64 "us mark time = %"
+                       PRIu64 "ms sweep time = %" PRIu64 "ms \n",
+                       end, freed, live/1024/1024,
+                       interval/1024/1024, pause/1000000, ttsp,
+                       mark/1000000,sweep/1000000);
+    else
+        jl_safe_printf("TS: %" PRIu64 " Minor collection: estimate freed = %" PRIu64
+                       " live = %" PRIu64 "m new interval = %" PRIu64 "m pause time = %"
+                       PRIu64 "ms ttsp = %" PRIu64 "us mark time = %" PRIu64
+                       "ms sweep time = %" PRIu64 "ms \n",
+                       end, freed, live/1024/1024,
+                       interval/1024/1024, pause/1000000, ttsp,
+                       mark/1000000,sweep/1000000);
+}
 #endif
 
 void jl_gc_debug_init(void)
@@ -1001,7 +1027,7 @@ void jl_gc_debug_init(void)
 #endif
 
 #ifdef OBJPROFILE
-    for (int g = 0;g < 3;g++) {
+    for (int g = 0; g < 3; g++) {
         htable_new(&obj_counts[g], 0);
         htable_new(&obj_sizes[g], 0);
     }
@@ -1063,8 +1089,8 @@ void gc_stats_all_pool(void)
 {
     size_t nb=0, w, tw=0, no=0, tp=0, nold=0, noldbytes=0, np, nol;
     for (int i = 0; i < JL_GC_N_POOLS; i++) {
-        for (int t_i = 0; t_i < jl_n_threads; t_i++) {
-            jl_ptls_t ptls2 = jl_all_tls_states[t_i];
+        for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+            jl_ptls_t ptls2 = gc_all_tls_states[t_i];
             size_t b = pool_stats(&ptls2->heap.norm_pools[i], &w, &np, &nol);
             nb += b;
             no += (b / ptls2->heap.norm_pools[i].osize);
@@ -1088,8 +1114,8 @@ void gc_stats_all_pool(void)
 void gc_stats_big_obj(void)
 {
     size_t nused=0, nbytes=0, nused_old=0, nbytes_old=0;
-    for (int t_i = 0; t_i < jl_n_threads; t_i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[t_i];
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
         bigval_t *v = ptls2->heap.big_objects;
         while (v != NULL) {
             if (gc_marked(v->bits.gc)) {
@@ -1197,7 +1223,7 @@ void gc_count_pool(void)
     empty_pages = 0;
     gc_count_pool_pagetable();
     jl_safe_printf("****** Pool stat: ******\n");
-    for (int i = 0;i < 4;i++)
+    for (int i = 0; i < 4; i++)
         jl_safe_printf("bits(%d): %"  PRId64 "\n", i, poolobj_sizes[i]);
     // empty_pages is inaccurate after the sweep since young objects are
     // also GC_CLEAN
@@ -1205,20 +1231,17 @@ void gc_count_pool(void)
     jl_safe_printf("************************\n");
 }
 
-int gc_slot_to_fieldidx(void *obj, void *slot)
+int gc_slot_to_fieldidx(void *obj, void *slot, jl_datatype_t *vt) JL_NOTSAFEPOINT
 {
-    jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(obj);
     int nf = (int)jl_datatype_nfields(vt);
-    for (int i = 0; i < nf; i++) {
-        void *fieldaddr = (char*)obj + jl_field_offset(vt, i);
-        if (fieldaddr >= slot) {
-            return i;
-        }
+    for (int i = 1; i < nf; i++) {
+        if (slot < (void*)((char*)obj + jl_field_offset(vt, i)))
+            return i - 1;
     }
-    return -1;
+    return nf - 1;
 }
 
-int gc_slot_to_arrayidx(void *obj, void *_slot)
+int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
 {
     char *slot = (char*)_slot;
     jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(obj);
@@ -1236,8 +1259,6 @@ int gc_slot_to_arrayidx(void *obj, void *_slot)
     }
     else if (vt->name == jl_array_typename) {
         jl_array_t *a = (jl_array_t*)obj;
-        if (!a->flags.ptrarray)
-            return -1;
         start = (char*)a->data;
         len = jl_array_len(a);
         elsize = a->elsize;
@@ -1247,9 +1268,9 @@ int gc_slot_to_arrayidx(void *obj, void *_slot)
     return (slot - start) / elsize;
 }
 
-// Print a backtrace from the bottom (start) of the mark stack up to `sp`
-// `pc_offset` will be added to `sp` for convenience in the debugger.
-NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_offset)
+// Print a backtrace from the `mq->start` of the mark queue up to `mq->current`
+// `offset` will be added to `mq->current` for convenience in the debugger.
+NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_markqueue_t *mq, int offset)
 {
     jl_jmp_buf *old_buf = jl_get_safe_restore();
     jl_jmp_buf buf;
@@ -1259,125 +1280,33 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_off
         jl_set_safe_restore(old_buf);
         return;
     }
-    void **top = sp.pc + pc_offset;
-    jl_gc_mark_data_t *data_top = sp.data;
-    sp.data = ptls->gc_cache.data_stack;
-    sp.pc = ptls->gc_cache.pc_stack;
-    int isroot = 1;
-    while (sp.pc < top) {
-        void *pc = *sp.pc;
-        const char *prefix = isroot ? "r--" : " `-";
-        isroot = 0;
-        if (pc == gc_mark_label_addrs[GC_MARK_L_marked_obj]) {
-            gc_mark_marked_obj_t *data = gc_repush_markdata(&sp, gc_mark_marked_obj_t);
-            if ((jl_gc_mark_data_t *)data > data_top) {
-                jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
-                break;
-            }
-            jl_safe_printf("%p: Root object: %p :: %p (bits: %d)\n        of type ",
-                           (void*)data, (void*)data->obj, (void*)data->tag, (int)data->bits);
-            jl_((void*)data->tag);
-            isroot = 1;
-        }
-        else if (pc == gc_mark_label_addrs[GC_MARK_L_scan_only]) {
-            gc_mark_marked_obj_t *data = gc_repush_markdata(&sp, gc_mark_marked_obj_t);
-            if ((jl_gc_mark_data_t *)data > data_top) {
-                jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
-                break;
-            }
-            jl_safe_printf("%p: Queued root: %p :: %p (bits: %d)\n        of type ",
-                           (void*)data, (void*)data->obj, (void*)data->tag, (int)data->bits);
-            jl_((void*)data->tag);
-            isroot = 1;
-        }
-        else if (pc == gc_mark_label_addrs[GC_MARK_L_finlist]) {
-            gc_mark_finlist_t *data = gc_repush_markdata(&sp, gc_mark_finlist_t);
-            if ((jl_gc_mark_data_t *)data > data_top) {
-                jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
-                break;
-            }
-            jl_safe_printf("%p: Finalizer list from %p to %p\n",
-                           (void*)data, (void*)data->begin, (void*)data->end);
-            isroot = 1;
-        }
-        else if (pc == gc_mark_label_addrs[GC_MARK_L_objarray]) {
-            gc_mark_objarray_t *data = gc_repush_markdata(&sp, gc_mark_objarray_t);
-            if ((jl_gc_mark_data_t *)data > data_top) {
-                jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
-                break;
-            }
-            jl_safe_printf("%p:  %s Array in object %p :: %p -- [%p, %p)\n        of type ",
-                           (void*)data, prefix, (void*)data->parent, ((void**)data->parent)[-1],
-                           (void*)data->begin, (void*)data->end);
-            jl_(jl_typeof(data->parent));
-        }
-        else if (pc == gc_mark_label_addrs[GC_MARK_L_obj8]) {
-            gc_mark_obj8_t *data = gc_repush_markdata(&sp, gc_mark_obj8_t);
-            if ((jl_gc_mark_data_t *)data > data_top) {
-                jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
-                break;
-            }
-            jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(data->parent);
-            uint8_t *desc = (uint8_t*)jl_dt_layout_ptrs(vt->layout);
-            jl_safe_printf("%p:  %s Object (8bit) %p :: %p -- [%d, %d)\n        of type ",
-                           (void*)data, prefix, (void*)data->parent, ((void**)data->parent)[-1],
-                           (int)(data->begin - desc), (int)(data->end - desc));
-            jl_(jl_typeof(data->parent));
-        }
-        else if (pc == gc_mark_label_addrs[GC_MARK_L_obj16]) {
-            gc_mark_obj16_t *data = gc_repush_markdata(&sp, gc_mark_obj16_t);
-            if ((jl_gc_mark_data_t *)data > data_top) {
-                jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
-                break;
-            }
-            jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(data->parent);
-            uint16_t *desc = (uint16_t*)jl_dt_layout_ptrs(vt->layout);
-            jl_safe_printf("%p:  %s Object (16bit) %p :: %p -- [%d, %d)\n        of type ",
-                           (void*)data, prefix, (void*)data->parent, ((void**)data->parent)[-1],
-                           (int)(data->begin - desc), (int)(data->end - desc));
-            jl_(jl_typeof(data->parent));
-        }
-        else if (pc == gc_mark_label_addrs[GC_MARK_L_obj32]) {
-            gc_mark_obj32_t *data = gc_repush_markdata(&sp, gc_mark_obj32_t);
-            if ((jl_gc_mark_data_t *)data > data_top) {
-                jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
-                break;
-            }
-            jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(data->parent);
-            uint32_t *desc = (uint32_t*)jl_dt_layout_ptrs(vt->layout);
-            jl_safe_printf("%p:  %s Object (32bit) %p :: %p -- [%d, %d)\n        of type ",
-                           (void*)data, prefix, (void*)data->parent, ((void**)data->parent)[-1],
-                           (int)(data->begin - desc), (int)(data->end - desc));
-            jl_(jl_typeof(data->parent));
-        }
-        else if (pc == gc_mark_label_addrs[GC_MARK_L_stack]) {
-            gc_mark_stackframe_t *data = gc_repush_markdata(&sp, gc_mark_stackframe_t);
-            if ((jl_gc_mark_data_t *)data > data_top) {
-                jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
-                break;
-            }
-            jl_safe_printf("%p:  %s Stack frame %p -- %d of %d (%s)\n",
-                           (void*)data, prefix, (void*)data->s, (int)data->i,
-                           (int)data->nroots >> 1,
-                           (data->nroots & 1) ? "indirect" : "direct");
-        }
-        else if (pc == gc_mark_label_addrs[GC_MARK_L_module_binding]) {
-            // module_binding
-            gc_mark_binding_t *data = gc_repush_markdata(&sp, gc_mark_binding_t);
-            if ((jl_gc_mark_data_t *)data > data_top) {
-                jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
-                break;
-            }
-            jl_safe_printf("%p:  %s Module (bindings) %p (bits %d) -- [%p, %p)\n",
-                           (void*)data, prefix, (void*)data->parent, (int)data->bits,
-                           (void*)data->begin, (void*)data->end);
-        }
-        else {
-            jl_safe_printf("Unknown pc %p --- ABORTING !!!\n", pc);
-            break;
-        }
+    jl_value_t **start = mq->start;
+    jl_value_t **end = mq->current + offset;
+    for (; start < end; start++) {
+        jl_value_t *obj = *start;
+        jl_taggedvalue_t *o = jl_astaggedvalue(obj);
+        jl_safe_printf("Queued object: %p :: (tag: %zu) (bits: %zu)\n", obj,
+                       (uintptr_t)o->header, ((uintptr_t)o->header & 3));
+        jl_((void*)(jl_datatype_t *)(o->header & ~(uintptr_t)0xf));
     }
     jl_set_safe_restore(old_buf);
+}
+
+static int gc_logging_enabled = 0;
+
+JL_DLLEXPORT void jl_enable_gc_logging(int enable) {
+    gc_logging_enabled = enable;
+}
+
+void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect) JL_NOTSAFEPOINT {
+    if (!gc_logging_enabled) {
+        return;
+    }
+    jl_safe_printf("GC: pause %.2fms. collected %fMB. %s %s\n",
+        pause/1e6, freed/1e6,
+        full ? "full" : "incr",
+        recollect ? "recollect" : ""
+    );
 }
 
 #ifdef __cplusplus

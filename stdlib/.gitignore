@@ -1,4 +1,6 @@
 /srccache
+/DelimitedFiles-*
+/DelimitedFiles
 /Pkg-*
 /Pkg
 /Statistics-*
@@ -15,6 +17,8 @@
 /NetworkOptions
 /SuiteSparse-*
 /SuiteSparse
+/SparseArrays-*
+/SparseArrays
 /SHA-*
 /SHA
 /*_jll/StdlibArtifacts.toml

@@ -21,6 +21,8 @@ to execute and does not block (e.g. perform I/O).
 In general, [`ReentrantLock`](@ref) should be used instead.
 
 Each [`lock`](@ref) must be matched with an [`unlock`](@ref).
+If [`!islocked(lck::SpinLock)`](@ref islocked) holds, [`trylock(lck)`](@ref trylock)
+succeeds unless there are other tasks attempting to hold the lock "at the same time."
 
 Test-and-test-and-set spin locks are quickest up to about 30ish
 contending threads. If you have more contention than that, different
@@ -69,5 +71,5 @@ function unlock(l::SpinLock)
 end
 
 function islocked(l::SpinLock)
-    return l.owned != 0
+    return (@atomic :monotonic l.owned) != 0
 end

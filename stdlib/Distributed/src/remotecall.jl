@@ -321,7 +321,7 @@ function process_worker(rr)
     w = worker_from_id(rr.where)::Worker
     msg = (remoteref_id(rr), myid())
 
-    # Needs to aquire a lock on the del_msg queue
+    # Needs to acquire a lock on the del_msg queue
     T = Threads.@spawn begin
         publish_del_msg!($w, $msg)
     end
@@ -370,8 +370,7 @@ function serialize(s::ClusterSerializer, f::Future)
         p = worker_id_from_socket(s.io)
         (p !== f.where) && send_add_client(f, p)
     end
-    fc = Future((f.where, f.whence, f.id, v_cache)) # copy to be used for serialization (contains a reset lock)
-    invoke(serialize, Tuple{ClusterSerializer, Any}, s, fc)
+    invoke(serialize, Tuple{ClusterSerializer, Any}, s, f)
 end
 
 function serialize(s::ClusterSerializer, rr::RemoteChannel)
@@ -486,7 +485,7 @@ julia> remotecall_fetch(sqrt, 2, 4)
 julia> remotecall_fetch(sqrt, 2, -4)
 ERROR: On worker 2:
 DomainError with -4.0:
-sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+sqrt was called with a negative real argument but will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 ...
 ```
 """
@@ -631,7 +630,15 @@ function fetch(r::Future)
         # why? local put! performs caching and putting into channel under r.lock
 
         # for local put! use the cached value, for call_on_owner cases just take the v_local as it was just cached in r.v
-        v_cache = status ? v_local : v_old
+
+        # remote calls getting the value from `call_on_owner` used to return the value directly without wrapping it in `Some(x)`
+        # so we're doing the same thing here
+        if status
+            send_del_client(r)
+            return v_local
+        else # this `v_cache` is returned at the end of the function
+            v_cache = v_old
+        end
     end
 
     send_del_client(r)
@@ -771,3 +778,23 @@ function getindex(r::RemoteChannel, args...)
     end
     return remotecall_fetch(getindex, r.where, r, args...)
 end
+
+function iterate(c::RemoteChannel, state=nothing)
+    if isopen(c) || isready(c)
+        try
+            return (take!(c), nothing)
+        catch e
+            if isa(e, InvalidStateException) ||
+                (isa(e, RemoteException) &&
+                isa(e.captured.ex, InvalidStateException) &&
+                e.captured.ex.state === :closed)
+                return nothing
+            end
+            rethrow()
+        end
+    else
+        return nothing
+    end
+end
+
+IteratorSize(::Type{<:RemoteChannel}) = SizeUnknown()

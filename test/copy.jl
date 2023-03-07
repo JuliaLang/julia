@@ -58,11 +58,18 @@ end
         @test B == A
     end
     let A = reshape(1:6, 3, 2), B = zeros(8,8)
-        RA = CartesianIndices(axes(A))
-        copyto!(B, CartesianIndices((5:7,2:3)), A, RA)
-        @test B[5:7,2:3] == A
-        B[5:7,2:3] .= 0
-        @test all(x->x==0, B)
+        RBs = Any[(5:7,2:3), (3:2:7,1:2:3), (6:-1:4,2:-1:1)]
+        RAs = Any[axes(A), reverse.(axes(A))]
+        for RB in RBs, RA in RAs
+            copyto!(B, CartesianIndices(RB), A, CartesianIndices(RA))
+            @test B[RB...] == A[RA...]
+            B[RB...] .= 0
+            @test all(iszero, B)
+        end
+    end
+    let A = [reshape(1:6, 3, 2);;]
+        copyto!(A, CartesianIndices((2:3,2)), A, CartesianIndices((2,2)))
+        @test A[2:3,:] == [1 4;2 5]
     end
 end
 
@@ -237,4 +244,27 @@ end
 
 @testset "deepcopy_internal arrays" begin
     @test (@inferred Base.deepcopy_internal(zeros(), IdDict())) == zeros()
+end
+
+@testset "`copyto!`'s unaliasing" begin
+    a = view([1:3;], :)
+    @test copyto!(a, 2, a, 1, 2) == [1;1:2;]
+    a = [1:3;]
+    @test copyto!(a, 2:3, 1:1, a, 1:2, 1:1) == [1;1:2;]
+end
+
+@testset "`deepcopy` a `GenericCondition`" begin
+    a = Base.GenericCondition(ReentrantLock())
+    @test !islocked(a.lock)
+    lock(a.lock)
+    @test islocked(a.lock)
+    b = deepcopy(a)
+    @test typeof(a) === typeof(b)
+    @test a != b
+    @test a !== b
+    @test typeof(a.lock) === typeof(b.lock)
+    @test a.lock != b.lock
+    @test a.lock !== b.lock
+    @test islocked(a.lock)
+    @test !islocked(b.lock)
 end

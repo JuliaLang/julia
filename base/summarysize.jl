@@ -77,7 +77,7 @@ end
 (ss::SummarySize)(@nospecialize obj) = _summarysize(ss, obj)
 # define the general case separately to make sure it is not specialized for every type
 @noinline function _summarysize(ss::SummarySize, @nospecialize obj)
-    isdefined(typeof(obj), :instance) && return 0
+    issingletontype(typeof(obj)) && return 0
     # NOTE: this attempts to discover multiple copies of the same immutable value,
     # and so is somewhat approximate.
     key = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), obj)
@@ -170,7 +170,7 @@ function (ss::SummarySize)(obj::Module)
                 if isa(value, UnionAll)
                     value = unwrap_unionall(value)
                 end
-                if isa(value, DataType) && value.name.module === obj && value.name.name === binding
+                if isa(value, DataType) && parentmodule(value) === obj && nameof(value) === binding
                     # charge a TypeName to its module (but not to the type)
                     size += ss(value.name)::Int
                 end
@@ -192,3 +192,5 @@ function (ss::SummarySize)(obj::Task)
     # TODO: add stack size, and possibly traverse stack roots
     return size
 end
+
+(ss::SummarySize)(obj::BigInt) = _summarysize(ss, obj) + obj.alloc*sizeof(Base.GMP.Limb)

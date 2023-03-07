@@ -249,14 +249,16 @@ types exist in lowered form:
     While almost every part of a surface AST is represented by an `Expr`, the IR uses only a
     limited number of `Expr`s, mostly for calls and some top-level-only forms.
 
-  * `Slot`
+  * `SlotNumber`
 
-    Identifies arguments and local variables by consecutive numbering. `Slot` is an abstract type
-    with subtypes `SlotNumber` and `TypedSlot`. Both types have an integer-valued `id` field giving
-    the slot index. Most slots have the same type at all uses, and so are represented with `SlotNumber`.
-    The types of these slots are found in the `slottypes` field of their `CodeInfo` object.
-    Slots that require per-use type annotations are represented with `TypedSlot`, which has a `typ`
-    field.
+    Identifies arguments and local variables by consecutive numbering. It has an
+    integer-valued `id` field giving the slot index.
+    The types of these slots can be found in the `slottypes` field of their `CodeInfo` object.
+    When a slot has different types at different uses and thus requires per-use type annotations,
+    they are converted to temporary `Core.Compiler.TypedSlot` object. This object has an
+    additional `typ` field as well as the `id` field. Note that `Core.Compiler.TypedSlot`
+    only appears in an unoptimized lowered form that is scheduled for optimization,
+    and it never appears elsewhere.
 
   * `Argument`
 
@@ -322,7 +324,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
   * `=`
 
-    Assignment. In the IR, the first argument is always a Slot or a GlobalRef.
+    Assignment. In the IR, the first argument is always a `SlotNumber` or a `GlobalRef`.
 
   * `method`
 
@@ -425,7 +427,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `splatnew`
 
     Similar to `new`, except field values are passed as a single tuple. Works similarly to
-    `Base.splat(new)` if `new` were a first-class function, hence the name.
+    `splat(new)` if `new` were a first-class function, hence the name.
 
   * `isdefined`
 
@@ -581,7 +583,7 @@ A unique'd container describing the shared metadata for a single method.
     Pointers to non-AST things that have been interpolated into the AST, required by
     compression of the AST, type-inference, or the generation of native code.
 
-  * `nargs`, `isva`, `called`, `isstaged`, `pure`
+  * `nargs`, `isva`, `called`, `is_for_opaque_closure`,
 
     Descriptive bit-fields for the source code of this Method.
 
@@ -699,11 +701,13 @@ A (usually temporary) container for holding lowered source code.
 
     Statement-level flags for each expression in the function. Many of these are reserved, but not yet implemented:
 
-    * 0 = inbounds
-    * 1,2 = <reserved> inlinehint,always-inline,noinline
-    * 3 = <reserved> strict-ieee (strictfp)
-    * 4-6 = <unused>
-    * 7 = <reserved> has out-of-band info
+    * 0x01 << 0 = statement is marked as `@inbounds`
+    * 0x01 << 1 = statement is marked as `@inline`
+    * 0x01 << 2 = statement is marked as `@noinline`
+    * 0x01 << 3 = statement is within a block that leads to `throw` call
+    * 0x01 << 4 = statement may be removed if its result is unused, in particular it is thus be both pure and effect free
+    * 0x01 << 5-6 = <unused>
+    * 0x01 << 7 = <reserved> has out-of-band info
 
   * `linetable`
 
@@ -733,6 +737,10 @@ Optional Fields:
 
     The `MethodInstance` that "owns" this object (if applicable).
 
+  * `edges`
+
+    Forward edges to method instances that must be invalidated.
+
   * `min_world`/`max_world`
 
     The range of world ages for which this code was valid at the time when it had been inferred.
@@ -753,7 +761,22 @@ Boolean properties:
     Whether this should propagate `@inbounds` when inlined for the purpose of eliding
     `@boundscheck` blocks.
 
-  * `pure`
 
-    Whether this is known to be a pure function of its arguments, without respect to the
-    state of the method caches or other mutable global state.
+`UInt8` settings:
+
+  * `constprop`
+
+    * 0 = use heuristic
+    * 1 = aggressive
+    * 2 = none
+
+  * `purity`
+    Constructed from 5 bit flags:
+
+    * 0x01 << 0 = this method is guaranteed to return or terminate consistently (`:consistent`)
+    * 0x01 << 1 = this method is free from externally semantically visible side effects (`:effect_free`)
+    * 0x01 << 2 = this method is guaranteed to not throw an exception (`:nothrow`)
+    * 0x01 << 3 = this method is guaranteed to terminate (`:terminates_globally`)
+    * 0x01 << 4 = the syntactic control flow within this method is guaranteed to terminate (`:terminates_locally`)
+
+    See the documentation of `Base.@assume_effects` for more details.

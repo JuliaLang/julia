@@ -67,6 +67,25 @@ function startswith(a::Union{String, SubString{String}},
     end
 end
 
+"""
+    startswith(io::IO, prefix::Union{AbstractString,Base.Chars})
+
+Check if an `IO` object starts with a prefix.  See also [`peek`](@ref).
+"""
+function Base.startswith(io::IO, prefix::Base.Chars)
+    mark(io)
+    c = read(io, Char)
+    reset(io)
+    return c in prefix
+end
+function Base.startswith(io::IO, prefix::Union{String,SubString{String}})
+    mark(io)
+    s = read(io, ncodeunits(prefix))
+    reset(io)
+    return s == codeunits(prefix)
+end
+Base.startswith(io::IO, prefix::AbstractString) = startswith(io, String(prefix))
+
 function endswith(a::Union{String, SubString{String}},
                   b::Union{String, SubString{String}})
     cub = ncodeunits(b)
@@ -123,12 +142,10 @@ used to implement specialized methods.
 
 # Examples
 ```jldoctest
-julia> endswith_julia = endswith("Julia");
-
-julia> endswith_julia("Julia")
+julia> endswith("Julia")("Ends with Julia")
 true
 
-julia> endswith_julia("JuliaLang")
+julia> endswith("Julia")("JuliaLang")
 false
 ```
 """
@@ -148,12 +165,10 @@ used to implement specialized methods.
 
 # Examples
 ```jldoctest
-julia> startswith_julia = startswith("Julia");
-
-julia> startswith_julia("Julia")
+julia> startswith("Julia")("JuliaLang")
 true
 
-julia> startswith_julia("NotJulia")
+julia> startswith("Julia")("Ends with Julia")
 false
 ```
 """
@@ -479,8 +494,8 @@ function rpad(
 end
 
 """
-    eachsplit(str::AbstractString, dlm; limit::Integer=0)
-    eachsplit(str::AbstractString; limit::Integer=0)
+    eachsplit(str::AbstractString, dlm; limit::Integer=0, keepempty::Bool=true)
+    eachsplit(str::AbstractString; limit::Integer=0, keepempty::Bool=false)
 
 Split `str` on occurrences of the delimiter(s) `dlm` and return an iterator over the
 substrings.  `dlm` can be any of the formats allowed by [`findnext`](@ref)'s first argument
@@ -489,8 +504,10 @@ of characters.
 
 If `dlm` is omitted, it defaults to [`isspace`](@ref).
 
-The iterator will return a maximum of `limit` results if the keyword argument is supplied.
-The default of `limit=0` implies no maximum.
+The optional keyword arguments are:
+ - `limit`: the maximum size of the result. `limit=0` implies no maximum (default)
+ - `keepempty`: whether empty fields should be kept in the result. Default is `false` without
+   a `dlm` argument, `true` with a `dlm` argument.
 
 See also [`split`](@ref).
 
@@ -502,8 +519,11 @@ See also [`split`](@ref).
 julia> a = "Ma.rch"
 "Ma.rch"
 
-julia> collect(eachsplit(a, "."))
-2-element Vector{SubString}:
+julia> b = eachsplit(a, ".")
+Base.SplitIterator{String, String}("Ma.rch", ".", 0, true)
+
+julia> collect(b)
+2-element Vector{SubString{String}}:
  "Ma"
  "rch"
 ```
@@ -519,7 +539,8 @@ struct SplitIterator{S<:AbstractString,F}
     keepempty::Bool
 end
 
-eltype(::Type{<:SplitIterator}) = SubString
+eltype(::Type{<:SplitIterator{T}}) where T = SubString{T}
+eltype(::Type{<:SplitIterator{<:SubString{T}}}) where T = SubString{T}
 
 IteratorSize(::Type{<:SplitIterator}) = SizeUnknown()
 
@@ -531,7 +552,7 @@ function iterate(iter::SplitIterator, (i, k, n)=(firstindex(iter.str), firstinde
     r = findnext(iter.splitter, iter.str, k)::Union{Nothing,Int,UnitRange{Int}}
     while r !== nothing && n != iter.limit - 1 && first(r) <= ncodeunits(iter.str)
         j, k = first(r), nextind(iter.str, last(r))::Int
-        k_ = k <= j ? nextind(iter.str, j) : k
+        k_ = k <= j ? nextind(iter.str, j)::Int : k
         if i < k
             substr = @inbounds SubString(iter.str, i, prevind(iter.str, j)::Int)
             (iter.keepempty || i < j) && return (substr, (k, k_, n + 1))
@@ -542,6 +563,15 @@ function iterate(iter::SplitIterator, (i, k, n)=(firstindex(iter.str), firstinde
     end
     iter.keepempty || i <= ncodeunits(iter.str) || return nothing
     @inbounds SubString(iter.str, i), (ncodeunits(iter.str) + 2, k, n + 1)
+end
+
+# Specialization for partition(s,n) to return a SubString
+eltype(::Type{PartitionIterator{T}}) where {T<:AbstractString} = SubString{T}
+
+function iterate(itr::PartitionIterator{<:AbstractString}, state = firstindex(itr.c))
+    state > ncodeunits(itr.c) && return nothing
+    r = min(nextind(itr.c, state, itr.n - 1), lastindex(itr.c))
+    return SubString(itr.c, state, r), nextind(itr.c, r)
 end
 
 eachsplit(str::T, splitter; limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString} =
@@ -574,7 +604,7 @@ The optional keyword arguments are:
  - `keepempty`: whether empty fields should be kept in the result. Default is `false` without
    a `dlm` argument, `true` with a `dlm` argument.
 
-See also [`rsplit`](@ref).
+See also [`rsplit`](@ref), [`eachsplit`](@ref).
 
 # Examples
 ```jldoctest
@@ -589,8 +619,7 @@ julia> split(a, ".")
 """
 function split(str::T, splitter;
                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
-    itr = eachsplit(str, splitter; limit, keepempty)
-    collect(T <: SubString ? T : SubString{T}, itr)
+    collect(eachsplit(str, splitter; limit, keepempty))
 end
 
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
@@ -820,7 +849,7 @@ julia> hex2bytes(a)
 """
 function hex2bytes end
 
-hex2bytes(s) = hex2bytes!(Vector{UInt8}(undef, length(s) >> 1), s)
+hex2bytes(s) = hex2bytes!(Vector{UInt8}(undef, length(s)::Int >> 1), s)
 
 # special case - valid bytes are checked in the generic implementation
 function hex2bytes!(dest::AbstractArray{UInt8}, s::String)

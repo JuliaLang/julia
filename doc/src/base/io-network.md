@@ -29,7 +29,7 @@ Base.seekend
 Base.skip
 Base.mark
 Base.unmark
-Base.reset
+Base.reset(::IO)
 Base.ismarked
 Base.eof
 Base.isreadonly

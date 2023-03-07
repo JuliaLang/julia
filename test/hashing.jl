@@ -201,9 +201,9 @@ let a = QuoteNode(1), b = QuoteNode(1.0)
     @test (hash(a)==hash(b)) == (a==b)
 end
 
-let a = Expr(:block, Core.TypedSlot(1, Any)),
-    b = Expr(:block, Core.TypedSlot(1, Any)),
-    c = Expr(:block, Core.TypedSlot(3, Any))
+let a = Expr(:block, Core.SlotNumber(1)),
+    b = Expr(:block, Core.SlotNumber(1)),
+    c = Expr(:block, Core.SlotNumber(3))
     @test a == b && hash(a) == hash(b)
     @test a != c && hash(a) != hash(c)
     @test b != c && hash(b) != hash(c)
@@ -282,5 +282,13 @@ end
         for a in vals, b in vals
             @test isequal(a, b) == (Base.hash_32_32(a) == Base.hash_32_32(b))
         end
+    end
+end
+
+if Sys.WORD_SIZE >= 64
+    @testset "very large string" begin
+        N = 2^31+1
+        s = String('\0'^N);
+        objectid(s)
     end
 end

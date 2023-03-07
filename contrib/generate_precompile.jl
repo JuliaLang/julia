@@ -1,5 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+if Threads.maxthreadid() != 1
+    @warn "Running this file with multiple Julia threads may lead to a build error" Base.maxthreadid()
+end
+
 if Base.isempty(Base.ARGS) || Base.ARGS[1] !== "0"
 Sys.__init_build()
 # Prevent this from being put into the Main namespace
@@ -7,11 +11,23 @@ Sys.__init_build()
 if !isdefined(Base, :uv_eventloop)
     Base.reinit_stdio()
 end
-Base.include(@__MODULE__, joinpath(Sys.BINDIR::String, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
+Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
 import .FakePTYs: open_fake_pty
 using Base.Meta
 
+## Debugging options
+# Disable parallel precompiles generation by setting `false`
+const PARALLEL_PRECOMPILATION = true
+
+# View the code sent to the repl by setting this to `stdout`
+const debug_output = devnull # or stdout
+
+# Disable fancy printing
+const fancyprint = (stdout isa Base.TTY) && Base.get_bool_env("CI", false) !== true
+##
+
 CTRL_C = '\x03'
+CTRL_R = '\x12'
 UP_ARROW = "\e[A"
 DOWN_ARROW = "\e[B"
 
@@ -36,6 +52,8 @@ precompile(Tuple{typeof(Base.display_error), Base.ExceptionStack})
 precompile(Tuple{Core.kwftype(typeof(Type)), NamedTuple{(:sizehint,), Tuple{Int}}, Type{IOBuffer}})
 precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, String, Module))
 precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, Symbol, Module))
+precompile(Base.CoreLogging.env_override_minlevel, (Symbol, Module))
+precompile(Base.StackTraces.lookup, (Ptr{Nothing},))
 """
 
 for T in (Float16, Float32, Float64), IO in (IOBuffer, IOContext{IOBuffer}, Base.TTY, IOContext{Base.TTY})
@@ -52,6 +70,7 @@ display([1 2; 3 4])
 @time 1+1
 ; pwd
 $CTRL_C
+$CTRL_R$CTRL_C
 ? reinterpret
 using Ra\t$CTRL_C
 \\alpha\t$CTRL_C
@@ -100,7 +119,7 @@ precompile_script = """
 # end
 """
 
-julia_exepath() = joinpath(Sys.BINDIR::String, Base.julia_exename())
+julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
 
 have_repl =  haskey(Base.loaded_modules,
                     Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
@@ -146,7 +165,7 @@ if Artifacts !== nothing
     artifacts = Artifacts.load_artifacts_toml(artifacts_toml)
     platforms = [Artifacts.unpack_platform(e, "HelloWorldC", artifacts_toml) for e in artifacts["HelloWorldC"]]
     best_platform = select_platform(Dict(p => triplet(p) for p in platforms))
-    dlopen("libjulia$(ccall(:jl_is_debugbuild, Cint, ()) != 0 ? "-debug" : "")", RTLD_LAZY | RTLD_DEEPBIND)
+    dlopen("libjulia$(Base.isdebugbuild() ? "-debug" : "")", RTLD_LAZY | RTLD_DEEPBIND)
     """
 end
 
@@ -157,7 +176,7 @@ Pkg = get(Base.loaded_modules,
 
 if Pkg !== nothing
     # TODO: Split Pkg precompile script into REPL and script part
-    repl_script *= Pkg.precompile_script
+    repl_script = Pkg.precompile_script * repl_script # do larger workloads first for better parallelization
 end
 
 FileWatching = get(Base.loaded_modules,
@@ -206,7 +225,6 @@ if Test !== nothing
     precompile(Tuple{typeof(Test.match_logs), Function, Tuple{String, Regex}})
     precompile(Tuple{typeof(Base.CoreLogging.shouldlog), Test.TestLogger, Base.CoreLogging.LogLevel, Module, Symbol, Symbol})
     precompile(Tuple{typeof(Base.CoreLogging.handle_message), Test.TestLogger, Base.CoreLogging.LogLevel, String, Module, Symbol, Symbol, String, Int})
-    precompile(Tuple{typeof(Core.kwfunc(Base.CoreLogging.handle_message)), typeof((exception=nothing,)), typeof(Base.CoreLogging.handle_message), Test.TestLogger, Base.CoreLogging.LogLevel, String, Module, Symbol, Symbol, String, Int})
     precompile(Tuple{typeof(Test.detect_ambiguities), Any})
     precompile(Tuple{typeof(Test.collect_test_logs), Function})
     precompile(Tuple{typeof(Test.do_broken_test), Test.ExecutionResult, Any})
@@ -219,6 +237,7 @@ Profile = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile"),
           nothing)
 if Profile !== nothing
+    repl_script = Profile.precompile_script * repl_script # do larger workloads first for better parallelization
     hardcoded_precompile_statements *= """
     precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Int, UInt})
     precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Int, UnitRange{UInt}})
@@ -228,21 +247,83 @@ if Profile !== nothing
     """
 end
 
-function generate_precompile_statements()
+const JULIA_PROMPT = "julia> "
+const PKG_PROMPT = "pkg> "
+const SHELL_PROMPT = "shell> "
+const HELP_PROMPT = "help?> "
+
+# Printing the current state
+let
+    global print_state
+    print_lk = ReentrantLock()
+    status = Dict{String, String}(
+        "step1" => "W",
+        "step2" => "W",
+        "repl" => "0/0",
+        "step3" => "W",
+        "clock" => "◐",
+    )
+    function print_status(key::String)
+        txt = status[key]
+        if startswith(txt, "W") # Waiting
+            printstyled("? ", color=Base.warn_color()); print(txt[2:end])
+        elseif startswith(txt, "R") # Running
+            print(status["clock"], " ", txt[2:end])
+        elseif startswith(txt, "F") # Finished
+            printstyled("✓ ", color=:green); print(txt[2:end])
+        else
+            print(txt)
+        end
+    end
+    function print_state(args::Pair{String,String}...)
+        lock(print_lk) do
+            isempty(args) || push!(status, args...)
+            print("\r└ Collect (Basic: ")
+            print_status("step1")
+            print(", REPL ", status["repl"], ": ")
+            print_status("step2")
+            print(") => Execute ")
+            print_status("step3")
+        end
+    end
+end
+
+ansi_enablecursor = "\e[?25h"
+ansi_disablecursor = "\e[?25l"
+
+generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printed
     start_time = time_ns()
-    debug_output = devnull # or stdout
     sysimg = Base.unsafe_string(Base.JLOptions().image_file)
 
     # Extract the precompile statements from the precompile file
-    statements = Set{String}()
+    statements_step1 = Channel{String}(Inf)
+    statements_step2 = Channel{String}(Inf)
 
     # From hardcoded statements
     for statement in split(hardcoded_precompile_statements::String, '\n')
-        push!(statements, statement)
+        push!(statements_step1, statement)
+    end
+
+    println("Collecting and executing precompile statements")
+    fancyprint && print(ansi_disablecursor)
+    print_state()
+    clock = @async begin
+        t = Timer(0; interval=1/10)
+        anim_chars = ["◐","◓","◑","◒"]
+        current = 1
+        if fancyprint
+            while isopen(statements_step2) || !isempty(statements_step2)
+                print_state("clock" => anim_chars[current])
+                wait(t)
+                current = current == 4 ? 1 : current + 1
+            end
+        end
+        close(t)
     end
 
     # Collect statements from running the script
-    mktempdir() do prec_path
+    step1 = @async mktempdir() do prec_path
+        print_state("step1" => "R")
         # Also precompile a package here
         pkgname = "__PackagePrecompilationStatementModule"
         mkpath(joinpath(prec_path, pkgname, "src"))
@@ -252,8 +333,8 @@ function generate_precompile_statements()
               module $pkgname
               end
               """)
-        tmp_prec = tempname()
-        tmp_proc = tempname()
+        tmp_prec = tempname(prec_path)
+        tmp_proc = tempname(prec_path)
         s = """
             pushfirst!(DEPOT_PATH, $(repr(prec_path)));
             Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp_prec));
@@ -261,16 +342,24 @@ function generate_precompile_statements()
             $precompile_script
             """
         run(`$(julia_exepath()) -O0 --sysimage $sysimg --trace-compile=$tmp_proc --startup-file=no -Cnative -e $s`)
+        n_step1 = 0
         for f in (tmp_prec, tmp_proc)
+            isfile(f) || continue
             for statement in split(read(f, String), '\n')
-                occursin("Main.", statement) && continue
-                push!(statements, statement)
+                push!(statements_step1, statement)
+                n_step1 += 1
             end
         end
+        close(statements_step1)
+        print_state("step1" => "F$n_step1")
+        return :ok
     end
+    !PARALLEL_PRECOMPILATION && wait(step1)
 
-    mktemp() do precompile_file, precompile_file_h
+    step2 = @async mktemp() do precompile_file, precompile_file_h
+        print_state("step2" => "R")
         # Collect statements from running a REPL process and replaying our REPL script
+        touch(precompile_file)
         pts, ptm = open_fake_pty()
         blackhole = Sys.isunix() ? "/dev/null" : "nul"
         if have_repl
@@ -286,9 +375,7 @@ function generate_precompile_statements()
                     "JULIA_PKG_PRECOMPILE_AUTO" => "0",
                     "TERM" => "") do
             run(```$(julia_exepath()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
-                   --cpu-target=native --startup-file=no --color=yes
-                   -e 'import REPL; REPL.Terminals.is_precompiling[] = true'
-                   -i $cmdargs```,
+                   --cpu-target=native --startup-file=no -i $cmdargs```,
                    pts, pts, pts; wait=false)
         end
         Base.close_stdio(pts)
@@ -309,43 +396,71 @@ function generate_precompile_statements()
             close(output_copy)
             close(ptm)
         end
-        # wait for the definitive prompt before start writing to the TTY
-        readuntil(output_copy, "julia>")
-        sleep(0.1)
-        readavailable(output_copy)
-        # Input our script
-        if have_repl
-            precompile_lines = split(repl_script::String, '\n'; keepempty=false)
-            curr = 0
-            for l in precompile_lines
-                sleep(0.1)
-                curr += 1
-                print("\rGenerating REPL precompile statements... $curr/$(length(precompile_lines))")
-                # consume any other output
-                bytesavailable(output_copy) > 0 && readavailable(output_copy)
-                # push our input
-                write(debug_output, "\n#### inputting statement: ####\n$(repr(l))\n####\n")
-                write(ptm, l, "\n")
-                readuntil(output_copy, "\n")
-                # wait for the next prompt-like to appear
-                # NOTE: this is rather inaccurate because the Pkg REPL mode is a special flower
-                readuntil(output_copy, "\n")
-                readuntil(output_copy, "> ")
+        repl_inputter = @async begin
+            # wait for the definitive prompt before start writing to the TTY
+            readuntil(output_copy, JULIA_PROMPT)
+            sleep(0.1)
+            readavailable(output_copy)
+            # Input our script
+            if have_repl
+                precompile_lines = split(repl_script::String, '\n'; keepempty=false)
+                curr = 0
+                for l in precompile_lines
+                    sleep(0.1)
+                    curr += 1
+                    print_state("repl" => "$curr/$(length(precompile_lines))")
+                    # consume any other output
+                    bytesavailable(output_copy) > 0 && readavailable(output_copy)
+                    # push our input
+                    write(debug_output, "\n#### inputting statement: ####\n$(repr(l))\n####\n")
+                    write(ptm, l, "\n")
+                    readuntil(output_copy, "\n")
+                    # wait for the next prompt-like to appear
+                    readuntil(output_copy, "\n")
+                    strbuf = ""
+                    while !eof(output_copy)
+                        strbuf *= String(readavailable(output_copy))
+                        occursin(JULIA_PROMPT, strbuf) && break
+                        occursin(PKG_PROMPT, strbuf) && break
+                        occursin(SHELL_PROMPT, strbuf) && break
+                        occursin(HELP_PROMPT, strbuf) && break
+                        sleep(0.1)
+                    end
+                end
             end
-            println()
+            write(ptm, "exit()\n")
+            wait(tee)
+            success(p) || Base.pipeline_error(p)
+            close(ptm)
+            write(debug_output, "\n#### FINISHED ####\n")
         end
-        write(ptm, "exit()\n")
-        wait(tee)
-        success(p) || Base.pipeline_error(p)
-        close(ptm)
-        write(debug_output, "\n#### FINISHED ####\n")
 
-        for statement in split(read(precompile_file, String), '\n')
-            # Main should be completely clean
-            occursin("Main.", statement) && continue
-            push!(statements, statement)
+        n_step2 = 0
+        precompile_copy = Base.BufferStream()
+        buffer_reader = @async for statement in eachline(precompile_copy)
+            print_state("step2" => "R$n_step2")
+            push!(statements_step2, statement)
+            n_step2 += 1
         end
+
+        open(precompile_file, "r") do io
+            while true
+                # We need to allways call eof(io) for bytesavailable(io) to work
+                eof(io) && istaskdone(repl_inputter) && eof(io) && break
+                if bytesavailable(io) == 0
+                    sleep(0.1)
+                    continue
+                end
+                write(precompile_copy, readavailable(io))
+            end
+        end
+        close(precompile_copy)
+        wait(buffer_reader)
+        close(statements_step2)
+        print_state("step2" => "F$n_step2")
+        return :ok
     end
+    !PARALLEL_PRECOMPILATION && wait(step2)
 
     # Create a staging area where all the loaded packages are available
     PrecompileStagingArea = Module()
@@ -355,9 +470,14 @@ function generate_precompile_statements()
         end
     end
 
-    # Execute the collected precompile statements
     n_succeeded = 0
-    include_time = @elapsed for statement in sort!(collect(statements))
+    # Make statements unique
+    statements = Set{String}()
+    # Execute the precompile statements
+    for sts in [statements_step1, statements_step2], statement in sts
+        # Main should be completely clean
+        occursin("Main.", statement) && continue
+        Base.in!(statement, statements) && continue
         # println(statement)
         # XXX: skip some that are broken. these are caused by issue #39902
         occursin("Tuple{Artifacts.var\"#@artifact_str\", LineNumberNode, Module, Any, Any}", statement) && continue
@@ -371,7 +491,12 @@ function generate_precompile_statements()
         occursin(", Core.Compiler.AbstractInterpreter, ", statement) && continue
         try
             ps = Meta.parse(statement)
-            isexpr(ps, :call) || continue
+            if !isexpr(ps, :call)
+                # these are typically comments
+                @debug "skipping statement because it does not parse as an expression" statement
+                delete!(statements, statement)
+                continue
+            end
             popfirst!(ps.args) # precompile(...)
             ps.head = :tuple
             l = ps.args[end]
@@ -385,33 +510,34 @@ function generate_precompile_statements()
             end
             # println(ps)
             ps = Core.eval(PrecompileStagingArea, ps)
-            # XXX: precompile doesn't currently handle overloaded nospecialize arguments very well.
-            # Skipping them avoids the warning.
-            ms = length(ps) == 1 ? Base._methods_by_ftype(ps[1], 1, Base.get_world_counter()) : Base.methods(ps...)
-            ms isa Vector || continue
             precompile(ps...)
             n_succeeded += 1
-            print("\rExecuting precompile statements... $n_succeeded/$(length(statements))")
+            failed = length(statements) - n_succeeded
+            yield() # Make clock spinning
+            print_state("step3" => string("R$n_succeeded", failed > 0 ? " ($failed failed)" : ""))
         catch ex
             # See #28808
             @warn "Failed to precompile expression" form=statement exception=ex _module=nothing _file=nothing _line=0
         end
     end
+    wait(clock) # Stop asynchronous printing
+    failed = length(statements) - n_succeeded
+    print_state("step3" => string("F$n_succeeded", failed > 0 ? " ($failed failed)" : ""))
     println()
     if have_repl
         # Seems like a reasonable number right now, adjust as needed
         # comment out if debugging script
-        n_succeeded > 1200 || @warn "Only $n_succeeded precompile statements"
+        n_succeeded > 1500 || @warn "Only $n_succeeded precompile statements"
     end
 
-    tot_time = time_ns() - start_time
-    include_time *= 1e9
-    gen_time = tot_time - include_time
-    println("Precompilation complete. Summary:")
-    print("Total ─────── "); Base.time_print(tot_time); println()
-    print("Generation ── "); Base.time_print(gen_time);     print(" "); show(IOContext(stdout, :compact=>true), gen_time / tot_time * 100); println("%")
-    print("Execution ─── "); Base.time_print(include_time); print(" "); show(IOContext(stdout, :compact=>true), include_time / tot_time * 100); println("%")
+    fetch(step1) == :ok || throw("Step 1 of collecting precompiles failed.")
+    fetch(step2) == :ok || throw("Step 2 of collecting precompiles failed.")
 
+    tot_time = time_ns() - start_time
+    println("Precompilation complete. Summary:")
+    print("Total ─────── "); Base.time_print(tot_time);     println()
+finally
+    fancyprint && print(ansi_enablecursor)
     return
 end
 
@@ -419,6 +545,7 @@ generate_precompile_statements()
 
 # As a last step in system image generation,
 # remove some references to build time environment for a more reproducible build.
+Base.Filesystem.temp_cleanup_purge(force=true)
 @eval Base PROGRAM_FILE = ""
 @eval Sys begin
     BINDIR = ""
@@ -428,4 +555,13 @@ empty!(Base.ARGS)
 empty!(Core.ARGS)
 
 end # @eval
+end # if
+
+println("Outputting sysimage file...")
+let pre_output_time = time_ns()
+    # Print report after sysimage has been saved so all time spent can be captured
+    Base.postoutput() do
+        output_time = time_ns() - pre_output_time
+        print("Output ────── "); Base.time_print(output_time); println()
+    end
 end

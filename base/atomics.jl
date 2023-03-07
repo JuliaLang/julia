@@ -20,7 +20,7 @@ export
 # - LLVM doesn't currently support atomics on floats for ppc64
 #   C++20 is adding limited support for atomics on float, but as of
 #   now Clang does not support that yet.
-if Sys.ARCH == :i686 || startswith(string(Sys.ARCH), "arm") ||
+if Sys.ARCH === :i686 || startswith(string(Sys.ARCH), "arm") ||
    Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
     const inttypes = (Int8, Int16, Int32, Int64,
                       UInt8, UInt16, UInt32, UInt64)
