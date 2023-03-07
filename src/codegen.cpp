@@ -1542,7 +1542,7 @@ public:
     jl_codegen_params_t &emission_context;
     llvm::MapVector<jl_code_instance_t*, jl_codegen_call_target_t> call_targets;
     std::map<void*, GlobalVariable*> &global_targets;
-    std::map<std::tuple<jl_code_instance_t*, bool>, Function*> &external_calls;
+    std::map<std::tuple<jl_code_instance_t*, bool>, GlobalVariable*> &external_calls;
     Function *f = NULL;
     // local var info. globals are not in here.
     std::vector<jl_varinfo_t> slots;
@@ -1704,7 +1704,7 @@ static Value *get_current_task(jl_codectx_t &ctx);
 static Value *get_current_ptls(jl_codectx_t &ctx);
 static Value *get_last_age_field(jl_codectx_t &ctx);
 static void CreateTrap(IRBuilder<> &irbuilder, bool create_new_block = true);
-static CallInst *emit_jlcall(jl_codectx_t &ctx, Function *theFptr, Value *theF,
+static CallInst *emit_jlcall(jl_codectx_t &ctx, FunctionCallee theFptr, Value *theF,
                              const jl_cgval_t *args, size_t nargs, JuliaFunction *trampoline);
 static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction *theFptr, Value *theF,
                              const jl_cgval_t *args, size_t nargs, JuliaFunction *trampoline);
@@ -4039,14 +4039,14 @@ isdefined_unknown_idx:
 }
 
 // Returns ctx.types().T_prjlvalue
-static CallInst *emit_jlcall(jl_codectx_t &ctx, Function *theFptr, Value *theF,
+static CallInst *emit_jlcall(jl_codectx_t &ctx, FunctionCallee theFptr, Value *theF,
                              const jl_cgval_t *argv, size_t nargs, JuliaFunction *trampoline)
 {
     ++EmittedJLCalls;
     Function *TheTrampoline = prepare_call(trampoline);
     // emit arguments
     SmallVector<Value*, 4> theArgs;
-    theArgs.push_back(theFptr);
+    theArgs.push_back(theFptr.getCallee());
     if (theF)
         theArgs.push_back(theF);
     for (size_t i = 0; i < nargs; i++) {
@@ -4067,7 +4067,7 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction *theFptr, Value *t
 }
 
 
-static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_t *mi, jl_value_t *jlretty, StringRef specFunctionObject,
+static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_t *mi, jl_value_t *jlretty, StringRef specFunctionObject, jl_code_instance_t *fromexternal,
                                           const jl_cgval_t *argv, size_t nargs, jl_returninfo_t::CallingConv *cc, unsigned *return_roots, jl_value_t *inferred_retty)
 {
     ++EmittedSpecfunCalls;
@@ -4143,7 +4143,22 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
         idx++;
     }
     assert(idx == nfargs);
-    CallInst *call = ctx.builder.CreateCall(returninfo.decl, ArrayRef<Value*>(&argvals[0], nfargs));
+    Value *callee = returninfo.decl;
+    if (fromexternal) {
+        std::string namep("p");
+        namep += returninfo.decl->getName();
+        GlobalVariable *GV = cast_or_null<GlobalVariable>(jl_Module->getNamedValue(namep));
+        if (GV == nullptr) {
+            GV = new GlobalVariable(*jl_Module, callee->getType(), false,
+                                    GlobalVariable::ExternalLinkage,
+                                    Constant::getNullValue(callee->getType()),
+                                    namep);
+            ctx.external_calls[std::make_tuple(fromexternal, true)] = GV;
+        }
+        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+        callee = ai.decorateInst(ctx.builder.CreateAlignedLoad(callee->getType(), GV, Align(sizeof(void*))));
+    }
+    CallInst *call = ctx.builder.CreateCall(cft, callee, ArrayRef<Value*>(&argvals[0], nfargs));
     call->setAttributes(returninfo.decl->getAttributes());
 
     jl_cgval_t retval;
@@ -4182,13 +4197,30 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
     return update_julia_type(ctx, retval, inferred_retty);
 }
 
-static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_value_t *jlretty, StringRef specFunctionObject,
+static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_value_t *jlretty, StringRef specFunctionObject, jl_code_instance_t *fromexternal,
                                           const jl_cgval_t *argv, size_t nargs, jl_value_t *inferred_retty)
 {
-    auto theFptr = cast<Function>(
-        jl_Module->getOrInsertFunction(specFunctionObject, ctx.types().T_jlfunc).getCallee());
-    addRetAttr(theFptr, Attribute::NonNull);
-    Value *ret = emit_jlcall(ctx, theFptr, nullptr, argv, nargs, julia_call);
+    Value *theFptr;
+    if (fromexternal) {
+        std::string namep("p");
+        namep += specFunctionObject;
+        GlobalVariable *GV = cast_or_null<GlobalVariable>(jl_Module->getNamedValue(namep));
+        Type *pfunc = ctx.types().T_jlfunc->getPointerTo();
+        if (GV == nullptr) {
+            GV = new GlobalVariable(*jl_Module, pfunc, false,
+                                    GlobalVariable::ExternalLinkage,
+                                    Constant::getNullValue(pfunc),
+                                    namep);
+            ctx.external_calls[std::make_tuple(fromexternal, false)] = GV;
+        }
+        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+        theFptr = ai.decorateInst(ctx.builder.CreateAlignedLoad(pfunc, GV, Align(sizeof(void*))));
+    }
+    else {
+        theFptr = jl_Module->getOrInsertFunction(specFunctionObject, ctx.types().T_jlfunc).getCallee();
+        addRetAttr(cast<Function>(theFptr), Attribute::NonNull);
+    }
+    Value *ret = emit_jlcall(ctx, FunctionCallee(ctx.types().T_jlfunc, theFptr), nullptr, argv, nargs, julia_call);
     return update_julia_type(ctx, mark_julia_type(ctx, ret, true, jlretty), inferred_retty);
 }
 
@@ -4223,12 +4255,12 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
             FunctionType *ft = ctx.f->getFunctionType();
             StringRef protoname = ctx.f->getName();
             if (ft == ctx.types().T_jlfunc) {
-                result = emit_call_specfun_boxed(ctx, ctx.rettype, protoname, argv, nargs, rt);
+                result = emit_call_specfun_boxed(ctx, ctx.rettype, protoname, nullptr, argv, nargs, rt);
                 handled = true;
             }
             else if (ft != ctx.types().T_jlfuncparams) {
                 unsigned return_roots = 0;
-                result = emit_call_specfun_other(ctx, mi, ctx.rettype, protoname, argv, nargs, &cc, &return_roots, rt);
+                result = emit_call_specfun_other(ctx, mi, ctx.rettype, protoname, nullptr, argv, nargs, &cc, &return_roots, rt);
                 handled = true;
             }
         }
@@ -4236,7 +4268,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
             jl_value_t *ci = ctx.params->lookup(mi, ctx.world, ctx.world); // TODO: need to use the right pair world here
             jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
             if (ci != jl_nothing) {
-                auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+                auto invoke = jl_atomic_load_acquire(&codeinst->invoke);
                  // check if we know how to handle this specptr
                 if (invoke == jl_fptr_const_return_addr) {
                     result = mark_julia_const(ctx, codeinst->rettype_const);
@@ -4248,33 +4280,42 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                     std::string name;
                     StringRef protoname;
                     bool need_to_emit = true;
-                    bool cache_valid = ctx.use_cache;
+                    bool cache_valid = ctx.use_cache || ctx.external_linkage;
                     bool external = false;
-                    if (ctx.external_linkage) {
-                       if (0 && jl_object_in_image((jl_value_t*)codeinst)) {
-                           // Target is present in another pkgimage
-                           cache_valid = true;
-                           external = true;
-                       }
+
+                    // Check if we already queued this up
+                    auto it = ctx.call_targets.find(codeinst);
+                    if (need_to_emit && it != ctx.call_targets.end()) {
+                        protoname = std::get<2>(it->second)->getName();
+                        need_to_emit = cache_valid = false;
                     }
 
+                    // Check if it is already compiled (either JIT or externally)
                     if (cache_valid) {
                         // optimization: emit the correct name immediately, if we know it
                         // TODO: use `emitted` map here too to try to consolidate names?
                         // WARNING: isspecsig is protected by the codegen-lock. If that lock is removed, then the isspecsig load needs to be properly atomically sequenced with this.
-                        auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
                         auto fptr = jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                         if (fptr) {
-                            if (specsig ? codeinst->isspecsig : invoke == jl_fptr_args_addr) {
+                            while (!(jl_atomic_load_acquire(&codeinst->specsigflags) & 0b10)) {
+                                jl_cpu_pause();
+                            }
+                            invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+                            if (specsig ? jl_atomic_load_relaxed(&codeinst->specsigflags) & 0b1 : invoke == jl_fptr_args_addr) {
                                 protoname = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, codeinst);
-                                need_to_emit = false;
+                                if (ctx.external_linkage) {
+                                    // TODO: Add !specsig support to aotcompile.cpp
+                                    // Check that the codeinst is containing native code
+                                    if (specsig && jl_atomic_load_relaxed(&codeinst->specsigflags) & 0b100) {
+                                        external = true;
+                                        need_to_emit = false;
+                                    }
+                                }
+                                else { // ctx.use_cache
+                                    need_to_emit = false;
+                                }
                             }
                         }
-                    }
-                    auto it = ctx.call_targets.find(codeinst);
-                    if (need_to_emit && it != ctx.call_targets.end()) {
-                        protoname = std::get<2>(it->second)->getName();
-                        need_to_emit = false;
                     }
                     if (need_to_emit) {
                         raw_string_ostream(name) << (specsig ? "j_" : "j1_") << name_from_method_instance(mi) << "_" << jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1);
@@ -4283,16 +4324,9 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                     jl_returninfo_t::CallingConv cc = jl_returninfo_t::CallingConv::Boxed;
                     unsigned return_roots = 0;
                     if (specsig)
-                        result = emit_call_specfun_other(ctx, mi, codeinst->rettype, protoname, argv, nargs, &cc, &return_roots, rt);
+                        result = emit_call_specfun_other(ctx, mi, codeinst->rettype, protoname, external ? codeinst : nullptr, argv, nargs, &cc, &return_roots, rt);
                     else
-                        result = emit_call_specfun_boxed(ctx, codeinst->rettype, protoname, argv, nargs, rt);
-                    if (external) {
-                        assert(!need_to_emit);
-                        auto calledF = jl_Module->getFunction(protoname);
-                        assert(calledF);
-                        // TODO: Check if already present?
-                        ctx.external_calls[std::make_tuple(codeinst, specsig)] = calledF;
-                    }
+                        result = emit_call_specfun_boxed(ctx, codeinst->rettype, protoname, external ? codeinst : nullptr, argv, nargs, rt);
                     handled = true;
                     if (need_to_emit) {
                         Function *trampoline_decl = cast<Function>(jl_Module->getNamedValue(protoname));
@@ -5614,14 +5648,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     Function *theFunc;
     Value *theFarg;
     auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
-
     bool cache_valid = params.cache;
-    if (params.external_linkage) {
-        if (0 && jl_object_in_image((jl_value_t*)codeinst)) {
-            // Target is present in another pkgimage
-            cache_valid = true;
-        }
-    }
 
     if (cache_valid && invoke != NULL) {
         StringRef theFptrName = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)invoke, codeinst);
@@ -5783,9 +5810,15 @@ static Function* gen_cfun_wrapper(
     if (lam && params.cache) {
         // TODO: this isn't ideal to be unconditionally calling type inference (and compile) from here
         codeinst = jl_compile_method_internal(lam, world);
-        auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+        auto invoke = jl_atomic_load_acquire(&codeinst->invoke);
         auto fptr = jl_atomic_load_relaxed(&codeinst->specptr.fptr);
         assert(invoke);
+        if (fptr) {
+            while (!(jl_atomic_load_acquire(&codeinst->specsigflags) & 0b10)) {
+                jl_cpu_pause();
+            }
+            invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+        }
         // WARNING: this invoke load is protected by the codegen-lock. If that lock is removed, then the isspecsig load needs to be properly atomically sequenced with this.
         if (invoke == jl_fptr_args_addr) {
             callptr = fptr;
@@ -5796,7 +5829,7 @@ static Function* gen_cfun_wrapper(
             callptr = (void*)codeinst->rettype_const;
             calltype = 2;
         }
-        else if (codeinst->isspecsig) {
+        else if (jl_atomic_load_relaxed(&codeinst->specsigflags) & 0b1) {
             callptr = fptr;
             calltype = 3;
         }
@@ -8526,18 +8559,22 @@ void jl_compile_workqueue(
             "invalid world for code-instance");
         StringRef preal_decl = "";
         bool preal_specsig = false;
-        auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+        auto invoke = jl_atomic_load_acquire(&codeinst->invoke);
         bool cache_valid = params.cache;
-        if (params.external_linkage) {
-            cache_valid = 0 && jl_object_in_image((jl_value_t*)codeinst);
-        }
         // WARNING: isspecsig is protected by the codegen-lock. If that lock is removed, then the isspecsig load needs to be properly atomically sequenced with this.
         if (cache_valid && invoke != NULL) {
             auto fptr = jl_atomic_load_relaxed(&codeinst->specptr.fptr);
+            if (fptr) {
+                while (!(jl_atomic_load_acquire(&codeinst->specsigflags) & 0b10)) {
+                    jl_cpu_pause();
+                }
+                // in case we are racing with another thread that is emitting this function
+                invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+            }
             if (invoke == jl_fptr_args_addr) {
                 preal_decl = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, codeinst);
             }
-            else if (codeinst->isspecsig) {
+            else if (jl_atomic_load_relaxed(&codeinst->specsigflags) & 0b1) {
                 preal_decl = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, codeinst);
                 preal_specsig = true;
             }

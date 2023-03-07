@@ -99,14 +99,16 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                     jl_error("opaque_closure_method: invalid syntax");
                 }
                 jl_value_t *name = jl_exprarg(e, 0);
-                jl_value_t *nargs = jl_exprarg(e, 1);
+                jl_value_t *oc_nargs = jl_exprarg(e, 1);
                 int isva = jl_exprarg(e, 2) == jl_true;
                 jl_value_t *functionloc = jl_exprarg(e, 3);
                 jl_value_t *ci = jl_exprarg(e, 4);
                 if (!jl_is_code_info(ci)) {
                     jl_error("opaque_closure_method: lambda should be a CodeInfo");
+                } else if (!jl_is_long(oc_nargs)) {
+                    jl_type_error("opaque_closure_method", (jl_value_t*)jl_long_type, oc_nargs);
                 }
-                jl_method_t *m = jl_make_opaque_closure_method(module, name, jl_unbox_long(nargs), functionloc, (jl_code_info_t*)ci, isva);
+                jl_method_t *m = jl_make_opaque_closure_method(module, name, jl_unbox_long(oc_nargs), functionloc, (jl_code_info_t*)ci, isva);
                 return (jl_value_t*)m;
             }
             if (e->head == jl_cfunction_sym) {
@@ -447,6 +449,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     mi->callbacks = NULL;
     jl_atomic_store_relaxed(&mi->cache, NULL);
     mi->inInference = 0;
+    mi->cache_with_orig = 0;
     jl_atomic_store_relaxed(&mi->precompiled, 0);
     return mi;
 }
@@ -608,6 +611,8 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         for (int i = 0; i < jl_array_len(func->code); ++i) {
             jl_value_t *stmt = jl_array_ptr_ref(func->code, i);
             if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == jl_new_opaque_closure_sym) {
+                if (jl_options.incremental && jl_generating_output())
+                    jl_error("Impossible to correctly handle OpaqueClosure inside @generated returned during precompile process.");
                 jl_value_t *uninferred = jl_copy_ast((jl_value_t*)func);
                 jl_value_t *old = NULL;
                 if (jl_atomic_cmpswap(&linfo->uninferred, &old, uninferred)) {

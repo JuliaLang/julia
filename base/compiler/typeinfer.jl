@@ -255,8 +255,6 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     for caller in frames
         caller.valid_worlds = valid_worlds
         finish(caller, interp)
-        # finalize and record the linfo result
-        caller.inferred = true
     end
     # collect results for the new expanded frame
     results = Tuple{InferenceResult, Vector{Any}, Bool}[
@@ -291,7 +289,7 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult,
                       @nospecialize(inferred_result), valid_worlds::WorldRange)
     local const_flags::Int32
     result_type = result.result
-    @assert !(result_type isa LimitedAccuracy)
+    @assert !(result_type === nothing || result_type isa LimitedAccuracy)
 
     if isa(result_type, Const) && is_foldable_nothrow(result.ipo_effects) && is_inlineable_constant(result_type.val)
         # use constant calling convention
@@ -444,7 +442,7 @@ function adjust_effects(sv::InferenceState)
         # always throwing an error counts or never returning both count as consistent
         ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
     end
-    if is_inaccessiblemem_or_argmemonly(ipo_effects) && all(1:narguments(sv)) do i::Int
+    if is_inaccessiblemem_or_argmemonly(ipo_effects) && all(1:narguments(sv, #=include_va=#true)) do i::Int
             return is_mutation_free_argtype(sv.slottypes[i])
         end
         ipo_effects = Effects(ipo_effects; inaccessiblememonly=ALWAYS_TRUE)
@@ -626,7 +624,7 @@ function record_bestguess!(sv::InferenceState)
     return nothing
 end
 
-function annotate_slot_load!(undefs::Vector{Bool}, idx::Int, sv::InferenceState, @nospecialize x)
+function annotate_slot_load!(interp::AbstractInterpreter, undefs::Vector{Bool}, idx::Int, sv::InferenceState, @nospecialize x)
     if isa(x, SlotNumber)
         id = slot_id(x)
         pc = find_dominating_assignment(id, idx, sv)
@@ -641,7 +639,7 @@ function annotate_slot_load!(undefs::Vector{Bool}, idx::Int, sv::InferenceState,
             @assert typ !== NOT_FOUND "active slot in unreached region"
         end
         # add type annotations where needed
-        if !⊑(typeinf_lattice(sv.interp), sv.slottypes[id], typ)
+        if !⊑(typeinf_lattice(interp), sv.slottypes[id], typ)
             return TypedSlot(id, typ)
         end
         return x
@@ -655,13 +653,13 @@ function annotate_slot_load!(undefs::Vector{Bool}, idx::Int, sv::InferenceState,
             i0 = 2
         end
         for i = i0:length(x.args)
-            x.args[i] = annotate_slot_load!(undefs, idx, sv, x.args[i])
+            x.args[i] = annotate_slot_load!(interp, undefs, idx, sv, x.args[i])
         end
         return x
     elseif isa(x, ReturnNode) && isdefined(x, :val)
-        return ReturnNode(annotate_slot_load!(undefs, idx, sv, x.val))
+        return ReturnNode(annotate_slot_load!(interp, undefs, idx, sv, x.val))
     elseif isa(x, GotoIfNot)
-        return GotoIfNot(annotate_slot_load!(undefs, idx, sv, x.cond), x.dest)
+        return GotoIfNot(annotate_slot_load!(interp, undefs, idx, sv, x.cond), x.dest)
     end
     return x
 end
@@ -734,7 +732,7 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
                     end
                 end
             end
-            body[i] = annotate_slot_load!(undefs, i, sv, expr) # 1&2
+            body[i] = annotate_slot_load!(interp, undefs, i, sv, expr) # 1&2
             ssavaluetypes[i] = widenslotwrapper(ssavaluetypes[i]) # 4
         else # i.e. any runtime execution will never reach this statement
             any_unreachable = true
@@ -919,7 +917,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         end
         typeinf(interp, frame)
         update_valid_age!(frame, caller)
-        edge = frame.inferred ? mi : nothing
+        edge = is_inferred(frame) ? mi : nothing
         return EdgeCallResult(frame.bestguess, edge, Effects(frame)) # effects are adjusted already within `finish`
     elseif frame === true
         # unresolvable cycle
@@ -937,7 +935,7 @@ end
 function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, run_optimizer::Bool)
     frame = typeinf_frame(interp, method, atype, sparams, run_optimizer)
     frame === nothing && return nothing, Any
-    frame.inferred || return nothing, Any
+    is_inferred(frame) || return nothing, Any
     code = frame.src
     rt = widenconst(ignorelimited(frame.result.result))
     return code, rt
@@ -1065,7 +1063,7 @@ function typeinf_type(interp::AbstractInterpreter, method::Method, @nospecialize
     result = InferenceResult(mi, typeinf_lattice(interp))
     typeinf(interp, result, :global)
     ccall(:jl_typeinf_timing_end, Cvoid, ())
-    result.result isa InferenceState && return nothing
+    is_inferred(result) || return nothing
     return widenconst(ignorelimited(result.result))
 end
 
@@ -1084,7 +1082,7 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, linfo::MethodInstance
                 result = InferenceResult(linfo, typeinf_lattice(interp))
                 frame = InferenceState(result, src, #=cache=#:global, interp)
                 typeinf(interp, frame)
-                @assert frame.inferred # TODO: deal with this better
+                @assert is_inferred(frame) # TODO: deal with this better
                 src = frame.src
             end
             ccall(:jl_typeinf_timing_end, Cvoid, ())

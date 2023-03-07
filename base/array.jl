@@ -177,11 +177,11 @@ function _unsetindex!(A::Array{T}, i::Int) where {T}
     t = @_gc_preserve_begin A
     p = Ptr{Ptr{Cvoid}}(pointer(A, i))
     if !allocatedinline(T)
-        unsafe_store!(p, C_NULL)
+        Intrinsics.atomic_pointerset(p, C_NULL, :monotonic)
     elseif T isa DataType
         if !datatype_pointerfree(T)
-            for j = 1:(Core.sizeof(T) ÷ Core.sizeof(Ptr{Cvoid}))
-                unsafe_store!(p, C_NULL, j)
+            for j = 1:Core.sizeof(Ptr{Cvoid}):Core.sizeof(T)
+                Intrinsics.atomic_pointerset(p + j - 1, C_NULL, :monotonic)
             end
         end
     end
