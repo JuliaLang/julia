@@ -83,8 +83,8 @@ end
 @deprecate ceil(dt::TimeType, p::Period) ceil(p, dt)
 @deprecate ceil(x::ConvertiblePeriod, precision::ConvertiblePeriod) ceil(precision, x)
 
-@deprecate(Base.round(dt::TimeType,  p::Period, r::RoundingMode{:NearestTiesUp}) round(p, dt, r))
-@deprecate(Base.round(x::TimeType, p::Period) round(p, x))
+@deprecate round(dt::TimeType,  p::Period, r::RoundingMode{:NearestTiesUp}) round(p, dt, r))
+@deprecate round(x::TimeType, p::Period) round(p, x))
 
 @deprecate floor(x::TimeTypeOrPeriod, p::Type{P}) where P <: Period floor(p, x)
 @deprecate ceil(x::TimeTypeOrPeriod, p::Type{P}) where P <: Period ceil(p, x)
