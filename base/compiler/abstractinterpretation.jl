@@ -1018,9 +1018,9 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
             add_remark!(interp, sv, "[constprop] Fresh constant inference hit a cycle")
             return nothing
         end
-        @assert !isa(inf_result.result, InferenceState)
+        @assert inf_result.result !== nothing
     else
-        if isa(inf_result.result, InferenceState)
+        if inf_result.result === nothing
             add_remark!(interp, sv, "[constprop] Found cached constant inference in a cycle")
             return nothing
         end
@@ -2820,7 +2820,7 @@ end
 
 # make as much progress on `frame` as possible (without handling cycles)
 function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
-    @assert !frame.inferred
+    @assert !is_inferred(frame)
     frame.dont_work_on_me = true # mark that this function is currently on the stack
     W = frame.ip
     nargs = narguments(frame, #=include_va=#false)

@@ -255,8 +255,6 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     for caller in frames
         caller.valid_worlds = valid_worlds
         finish(caller, interp)
-        # finalize and record the linfo result
-        caller.inferred = true
     end
     # collect results for the new expanded frame
     results = Tuple{InferenceResult, Vector{Any}, Bool}[
@@ -291,7 +289,7 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult,
                       @nospecialize(inferred_result), valid_worlds::WorldRange)
     local const_flags::Int32
     result_type = result.result
-    @assert !(result_type isa LimitedAccuracy)
+    @assert !(result_type === nothing || result_type isa LimitedAccuracy)
 
     if isa(result_type, Const) && is_foldable_nothrow(result.ipo_effects) && is_inlineable_constant(result_type.val)
         # use constant calling convention
@@ -919,7 +917,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         end
         typeinf(interp, frame)
         update_valid_age!(frame, caller)
-        edge = frame.inferred ? mi : nothing
+        edge = is_inferred(frame) ? mi : nothing
         return EdgeCallResult(frame.bestguess, edge, Effects(frame)) # effects are adjusted already within `finish`
     elseif frame === true
         # unresolvable cycle
@@ -937,7 +935,7 @@ end
 function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, run_optimizer::Bool)
     frame = typeinf_frame(interp, method, atype, sparams, run_optimizer)
     frame === nothing && return nothing, Any
-    frame.inferred || return nothing, Any
+    is_inferred(frame) || return nothing, Any
     code = frame.src
     rt = widenconst(ignorelimited(frame.result.result))
     return code, rt
@@ -1065,7 +1063,7 @@ function typeinf_type(interp::AbstractInterpreter, method::Method, @nospecialize
     result = InferenceResult(mi, typeinf_lattice(interp))
     typeinf(interp, result, :global)
     ccall(:jl_typeinf_timing_end, Cvoid, ())
-    result.result isa InferenceState && return nothing
+    is_inferred(result) || return nothing
     return widenconst(ignorelimited(result.result))
 end
 
@@ -1084,7 +1082,7 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, linfo::MethodInstance
                 result = InferenceResult(linfo, typeinf_lattice(interp))
                 frame = InferenceState(result, src, #=cache=#:global, interp)
                 typeinf(interp, frame)
-                @assert frame.inferred # TODO: deal with this better
+                @assert is_inferred(frame) # TODO: deal with this better
                 src = frame.src
             end
             ccall(:jl_typeinf_timing_end, Cvoid, ())
