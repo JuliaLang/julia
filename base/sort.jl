@@ -1927,6 +1927,7 @@ julia> map(x->issorted(x[k]), (s1, s2))
 
 julia> s1[k] == s2[k]
 true
+```
 """
 struct PartialQuickSort{T <: Union{Integer,OrdinalRange}} <: Algorithm
     k::T
