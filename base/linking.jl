@@ -64,7 +64,7 @@ end
 
 function __init_dsymutil_path()
     #Same as with lld but for dsymutil
-    for bundled_dsymutil_path in (joinpath(Sys.BINDIR, Base.LIBEXECDIR, dsymutil_exe),
+    for bundled_dsymutil_path in (joinpath(Sys.BINDIR, Base.PRIVATE_LIBEXECDIR, dsymutil_exe),
                              joinpath(Sys.BINDIR, "..", "tools", dsymutil_exe),
                              joinpath(Sys.BINDIR, dsymutil_exe))
         if isfile(bundled_dsymutil_path)
