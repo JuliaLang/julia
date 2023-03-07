@@ -424,7 +424,7 @@ Dict{String, Int64} with 4 entries:
 get!(collection, key, default)
 
 """
-    get!(f::Function, collection, key)
+    get!(f::Union{Function, Type}, collection, key)
 
 Return the value stored for the given key, or if no mapping for the key is present, store
 `key => f()`, and return `f()`.
@@ -450,7 +450,7 @@ Dict{Int64, Int64} with 1 entry:
   2 => 4
 ```
 """
-get!(f::Function, collection, key)
+get!(f::Callable, collection, key)
 
 function get!(default::Callable, h::Dict{K,V}, key0) where V where K
     key = convert(K, key0)
@@ -513,7 +513,7 @@ function get(h::Dict{K,V}, key, default) where V where K
 end
 
 """
-    get(f::Function, collection, key)
+    get(f::Union{Function, Type}, collection, key)
 
 Return the value stored for the given key, or if no mapping for the key is present, return
 `f()`.  Use [`get!`](@ref) to also store the default value in the dictionary.
@@ -527,7 +527,7 @@ get(dict, key) do
 end
 ```
 """
-get(::Function, collection, key)
+get(::Callable, collection, key)
 
 function get(default::Callable, h::Dict{K,V}, key) where V where K
     index = ht_keyindex(h, key)

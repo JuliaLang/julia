@@ -1,0 +1,55 @@
+From d9dc015cfc78fc32f555995a89d6957ef0184ea2 Mon Sep 17 00:00:00 2001
+From: Martin Kroeker <martin@ruby.chemie.uni-freiburg.de>
+Date: Mon, 8 Aug 2022 14:52:10 +0200
+Subject: [PATCH 1/2] Use blasint for INTERFACE64 compatibility
+
+---
+ test/compare_sgemm_sbgemm.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/test/compare_sgemm_sbgemm.c b/test/compare_sgemm_sbgemm.c
+index a2c358cfa7..d4b5914506 100644
+--- a/test/compare_sgemm_sbgemm.c
++++ b/test/compare_sgemm_sbgemm.c
+@@ -76,9 +76,9 @@ float16to32 (bfloat16_bits f16)
+ int
+ main (int argc, char *argv[])
+ {
+-  int m, n, k;
++  blasint m, n, k;
+   int i, j, l;
+-  int x;
++  blasint x;
+   int ret = 0;
+   int loop = 100;
+   char transA = 'N', transB = 'N';
+
+From 3d338b57de1837f1e2264a1262a9ee9203f31c6c Mon Sep 17 00:00:00 2001
+From: Martin Kroeker <martin@ruby.chemie.uni-freiburg.de>
+Date: Mon, 8 Aug 2022 17:09:45 +0200
+Subject: [PATCH 2/2] remove spurious loops
+
+---
+ test/compare_sgemm_sbgemm.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/test/compare_sgemm_sbgemm.c b/test/compare_sgemm_sbgemm.c
+index d4b5914506..276fecae9d 100644
+--- a/test/compare_sgemm_sbgemm.c
++++ b/test/compare_sgemm_sbgemm.c
+@@ -112,7 +112,6 @@ main (int argc, char *argv[])
+ 	      &m, BB, &k, &beta, CC, &m);
+       for (i = 0; i < n; i++)
+ 	for (j = 0; j < m; j++)
+-	  for (l = 0; l < k; l++)
+ 	    if (fabs (CC[i * m + j] - C[i * m + j]) > 1.0)
+ 	      ret++;
+       if (transA == 'N' && transB == 'N')
+@@ -126,7 +125,6 @@ main (int argc, char *argv[])
+ 		}
+ 	  for (i = 0; i < n; i++)
+ 	    for (j = 0; j < m; j++)
+-	      for (l = 0; l < k; l++)
+ 		if (CC[i * m + j] != DD[i * m + j])
+ 		  ret++;
+ 	}

@@ -699,7 +699,7 @@ end
 
 @testset "code_llvm on opaque_closure" begin
     let ci = code_typed(+, (Int, Int))[1][1]
-        ir = Core.Compiler.inflate_ir(ci, Any[], Any[Tuple{}, Int, Int])
+        ir = Core.Compiler.inflate_ir(ci)
         oc = Core.OpaqueClosure(ir)
         @test (code_llvm(devnull, oc, Tuple{Int, Int}); true)
         let io = IOBuffer()

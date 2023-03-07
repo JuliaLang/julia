@@ -1164,7 +1164,7 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
-help_result(line, mod::Module=Base) = mod.eval(REPL._helpmode(IOBuffer(), line))
+help_result(line, mod::Module=Base) = Core.eval(mod, REPL._helpmode(IOBuffer(), line))
 
 # Docs.helpmode tests: we test whether the correct expressions are being generated here,
 # rather than complete integration with Julia's REPL mode system.
@@ -1203,7 +1203,9 @@ end
 @test occursin("broadcast", sprint(show, help_result(".<=")))
 
 # Issue 39427
-@test occursin("does not exist", sprint(show, help_result(":=")))
+@test occursin("does not exist.", sprint(show, help_result(":=")))
+global some_undef_global
+@test occursin("exists,", sprint(show, help_result("some_undef_global", @__MODULE__)))
 
 # Issue #40563
 @test occursin("does not exist", sprint(show, help_result("..")))
@@ -1481,7 +1483,7 @@ fake_repl() do stdin_write, stdout_read, repl
     end
     # initialize `err` to `nothing`
     t = @async (readline(stdout_read); readuntil(stdout_read, "\e[0m\n"))
-    write(stdin_write, "global err = nothing\n")
+    write(stdin_write, "setglobal!(Base.MainInclude, :err, nothing)\n")
     wait(t)
     readuntil(stdout_read, "julia> ", keep=true)
     # generate top-level error

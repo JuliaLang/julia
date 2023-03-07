@@ -563,27 +563,6 @@ f18450() = ifelse(true, Tuple{Vararg{Int}}, Tuple{Vararg})
 # issue #18569
 @test !Core.Compiler.isconstType(Type{Tuple})
 
-# ensure pure attribute applies correctly to all signatures of fpure
-Base.@pure function fpure(a=rand(); b=rand())
-    # use the `rand` function since it is known to be `@inline`
-    # but would be too big to inline
-    return a + b + rand()
-end
-gpure() = fpure()
-gpure(x::Irrational) = fpure(x)
-@test which(fpure, ()).pure
-@test which(fpure, (typeof(pi),)).pure
-@test !which(gpure, ()).pure
-@test !which(gpure, (typeof(pi),)).pure
-@test code_typed(gpure, ())[1][1].pure
-@test code_typed(gpure, (typeof(π),))[1][1].pure
-@test gpure() == gpure() == gpure()
-@test gpure(π) == gpure(π) == gpure(π)
-
-# Make sure @pure works for functions using the new syntax
-Base.@pure (fpure2(x::T) where T) = T
-@test which(fpure2, (Int64,)).pure
-
 # issue #10880
 function cat10880(a, b)
     Tuple{a.parameters..., b.parameters...}
@@ -603,7 +582,6 @@ function is_typed_expr(e::Expr)
 end
 is_typed_expr(@nospecialize other) = false
 test_inferred_static(@nospecialize(other)) = true
-test_inferred_static(slot::TypedSlot) = @test isdispatchelem(slot.typ)
 function test_inferred_static(expr::Expr)
     for a in expr.args
         test_inferred_static(a)
@@ -660,17 +638,8 @@ for (codetype, all_ssa) in Any[
         (code_typed(h18679, ())[1], true),
         (code_typed(g19348, (typeof((1, 2.0)),))[1], true)]
     code = codetype[1]
-    local notconst(@nospecialize(other)) = true
-    notconst(slot::TypedSlot) = @test isa(slot.typ, Type)
-    function notconst(expr::Expr)
-        for a in expr.args
-            notconst(a)
-        end
-    end
     local i
-    for i = 1:length(code.code)
-        e = code.code[i]
-        notconst(e)
+    for i = 1:length(code.ssavaluetypes)
         typ = code.ssavaluetypes[i]
         typ isa Core.Compiler.MaybeUndef && (typ = typ.typ)
         @test isa(typ, Type) || isa(typ, Const) || isa(typ, Conditional) || typ
@@ -918,35 +887,6 @@ end
 # infinite type growth via lower bounds (formed by intersection)
 f20267(x::T20267{T}, y::T) where (T) = f20267(Any[1][1], x.inds)
 @test Base.return_types(f20267, (Any, Any)) == Any[Union{}]
-
-# issue #20704
-f20704(::Int) = 1
-Base.@pure b20704(@nospecialize(x)) = f20704(x)
-@test b20704(42) === 1
-@test_throws MethodError b20704(42.0)
-
-bb20704() = b20704(Any[1.0][1])
-@test_throws MethodError bb20704()
-
-v20704() = Val{b20704(Any[1.0][1])}
-@test_throws MethodError v20704()
-@test Base.return_types(v20704, ()) == Any[Type{Val{1}}]
-
-Base.@pure g20704(::Int) = 1
-h20704(@nospecialize(x)) = g20704(x)
-@test g20704(1) === 1
-@test_throws MethodError h20704(1.2)
-
-Base.@pure c20704() = (f20704(1.0); 1)
-d20704() = c20704()
-@test_throws MethodError d20704()
-
-Base.@pure function a20704(x)
-    rand()
-    42
-end
-aa20704(x) = x(nothing)
-@test code_typed(aa20704, (typeof(a20704),))[1][1].pure
 
 #issue #21065, elision of _apply_iterate when splatted expression is not effect_free
 function f21065(x,y)
@@ -1222,13 +1162,6 @@ end
 let typeargs = Tuple{Type{Int},Type{Int},Type{Int},Type{Int},Type{Int},Type{Int}}
     @test only(Base.return_types(promote_type, typeargs)) === Type{Int}
 end
-
-# demonstrate that inference must converge
-# while doing constant propagation
-Base.@pure plus1(x) = x + 1
-f21933(x::Val{T}) where {T} = f(Val(plus1(T)))
-code_typed(f21933, (Val{1},))
-Base.return_types(f21933, (Val{1},))
 
 function count_specializations(method::Method)
     specs = method.specializations
@@ -2004,7 +1937,7 @@ let opt25261 = code_typed(foo25261, Tuple{}, optimize=false)[1].first.code
     end
     foundslot = false
     for expr25261 in opt25261[i:end]
-        if expr25261 isa TypedSlot && expr25261.typ === Tuple{Int, Int}
+        if expr25261 isa Core.Compiler.TypedSlot && expr25261.typ === Tuple{Int, Int}
             # This should be the assignment to the SSAValue into the getfield
             # call - make sure it's a TypedSlot
             foundslot = true
@@ -2757,6 +2690,16 @@ let 𝕃 = Core.Compiler.fallback_lattice
     @test apply_type_tfunc(𝕃, Const(Issue47089), A, A) <: (Type{Issue47089{A,B}} where {A<:Integer, B<:Integer})
 end
 @test only(Base.return_types(keys, (Dict{String},))) == Base.KeySet{String, T} where T<:(Dict{String})
+@test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{Int}},))) == Vector{<:Array{Int}}
+@test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{<:Real}},))) == Vector{<:Array{<:Real}}
+
+let A = Tuple{A,B,C,D,E,F,G,H} where {A,B,C,D,E,F,G,H}
+    B = Core.Compiler.rename_unionall(A)
+    for i in 1:8
+        @test A.var != B.var && (i == 1 ? A == B : A != B)
+        A, B = A.body, B.body
+    end
+end
 
 # PR 27351, make sure optimized type intersection for method invalidation handles typevars
 
@@ -3957,23 +3900,49 @@ g38888() = S38888(Base.inferencebarrier(3), nothing)
 f_inf_error_bottom(x::Vector) = isempty(x) ? error(x[1]) : x
 @test only(Base.return_types(f_inf_error_bottom, Tuple{Vector{Any}})) == Vector{Any}
 
-# @constprop :aggressive
-@noinline g_nonaggressive(y, x) = Val{x}()
-@noinline Base.@constprop :aggressive g_aggressive(y, x) = Val{x}()
+# @constprop annotation
+@noinline f_constprop_simple(f, x) = (f(x); Val{x}())
+Base.@constprop :aggressive f_constprop_aggressive(f, x) = (f(x); Val{x}())
+Base.@constprop :aggressive @noinline f_constprop_aggressive_noinline(f, x) = (f(x); Val{x}())
+Base.@constprop :none f_constprop_none(f, x) = (f(x); Val{x}())
+Base.@constprop :none @inline f_constprop_none_inline(f, x) = (f(x); Val{x}())
 
-f_nonaggressive(x) = g_nonaggressive(x, 1)
-f_aggressive(x) = g_aggressive(x, 1)
+@test !Core.Compiler.is_aggressive_constprop(only(methods(f_constprop_simple)))
+@test !Core.Compiler.is_no_constprop(only(methods(f_constprop_simple)))
+@test Core.Compiler.is_aggressive_constprop(only(methods(f_constprop_aggressive)))
+@test !Core.Compiler.is_no_constprop(only(methods(f_constprop_aggressive)))
+@test Core.Compiler.is_aggressive_constprop(only(methods(f_constprop_aggressive_noinline)))
+@test !Core.Compiler.is_no_constprop(only(methods(f_constprop_aggressive_noinline)))
+@test !Core.Compiler.is_aggressive_constprop(only(methods(f_constprop_none)))
+@test Core.Compiler.is_no_constprop(only(methods(f_constprop_none)))
+@test !Core.Compiler.is_aggressive_constprop(only(methods(f_constprop_none_inline)))
+@test Core.Compiler.is_no_constprop(only(methods(f_constprop_none_inline)))
 
-# The first test just makes sure that improvements to the compiler don't
-# render the annotation effectless.
-@test Base.return_types(f_nonaggressive, Tuple{Int})[1] == Val
-@test Base.return_types(f_aggressive, Tuple{Int})[1] == Val{1}
+# make sure that improvements to the compiler don't render the annotation effectless.
+@test Base.return_types((Function,)) do f
+    f_constprop_simple(f, 1)
+end |> only == Val
+@test Base.return_types((Function,)) do f
+    f_constprop_aggressive(f, 1)
+end |> only == Val{1}
+@test Base.return_types((Function,)) do f
+    f_constprop_aggressive_noinline(f, 1)
+end |> only == Val{1}
+@test Base.return_types((Function,)) do f
+    f_constprop_none(f, 1)
+end |> only == Val
+@test Base.return_types((Function,)) do f
+    f_constprop_none_inline(f, 1)
+end |> only == Val
 
-# @constprop :none
-@noinline Base.@constprop :none g_noaggressive(flag::Bool) = flag ? 1 : 1.0
-ftrue_noaggressive() = g_noaggressive(true)
-@test only(Base.return_types(ftrue_noaggressive, Tuple{})) == Union{Int,Float64}
-
+# anonymous function support for `@constprop`
+@test Base.return_types((Function,)) do f
+    map((1,2,3)) do x
+        Base.@constprop :aggressive
+        f(x)
+        return Val{x}()
+    end
+end |> only == Tuple{Val{1},Val{2},Val{3}}
 
 function splat_lotta_unions()
     a = Union{Tuple{Int},Tuple{String,Vararg{Int}},Tuple{Int,Vararg{Int}}}[(2,)][1]
@@ -4690,8 +4659,8 @@ end |> only === Type{Float64}
 global it_count47688 = 0
 struct CountsIterate47688{N}; end
 function Base.iterate(::CountsIterate47688{N}, n=0) where N
-	global it_count47688 += 1
-	n <= N ? (n, n+1) : nothing
+    global it_count47688 += 1
+    n <= N ? (n, n+1) : nothing
 end
 foo47688() = tuple(CountsIterate47688{5}()...)
 bar47688() = foo47688()
@@ -4731,7 +4700,77 @@ type_level_recurse_entry() = Val{type_level_recurse1(1)}()
 f_no_bail_effects_any(x::Any) = x
 f_no_bail_effects_any(x::NamedTuple{(:x,), Tuple{Any}}) = getfield(x, 1)
 g_no_bail_effects_any(x::Any) = f_no_bail_effects_any(x)
-@test Core.Compiler.is_total(Base.infer_effects(g_no_bail_effects_any, Tuple{Any}))
+@test Core.Compiler.is_foldable_nothrow(Base.infer_effects(g_no_bail_effects_any, Tuple{Any}))
 
 # issue #48374
 @test (() -> Union{<:Nothing})() == Nothing
+
+# :static_parameter accuracy
+unknown_sparam_throw(::Union{Nothing, Type{T}}) where T = @isdefined(T) ? T::Type : nothing
+unknown_sparam_nothrow1(x::Ref{T}) where T = @isdefined(T) ? T::Type : nothing
+unknown_sparam_nothrow2(x::Ref{Ref{T}}) where T = @isdefined(T) ? T::Type : nothing
+@test only(Base.return_types(unknown_sparam_throw, (Type{Int},))) == Type{Int}
+@test only(Base.return_types(unknown_sparam_throw, (Type{<:Integer},))) == Type{<:Integer}
+@test only(Base.return_types(unknown_sparam_throw, (Type,))) == Union{Nothing, Type}
+@test_broken only(Base.return_types(unknown_sparam_throw, (Nothing,))) === Nothing
+@test_broken only(Base.return_types(unknown_sparam_throw, (Union{Type{Int},Nothing},))) === Union{Nothing,Type{Int}}
+@test only(Base.return_types(unknown_sparam_throw, (Any,))) === Union{Nothing,Type}
+@test only(Base.return_types(unknown_sparam_nothrow1, (Ref,))) === Type
+@test only(Base.return_types(unknown_sparam_nothrow2, (Ref{Ref{T}} where T,))) === Type
+
+function fapplicable end
+gapplicable() = Val(applicable(fapplicable))
+gapplicable(x) = Val(applicable(fapplicable; x))
+@test only(Base.return_types(gapplicable, ())) === Val{false}
+@test only(Base.return_types(gapplicable, (Int,))) === Val{false}
+fapplicable() = 1
+@test only(Base.return_types(gapplicable, ())) === Val{true}
+@test only(Base.return_types(gapplicable, (Int,))) === Val{false}
+Base.delete_method(which(fapplicable, ()))
+@test only(Base.return_types(gapplicable, ())) === Val{false}
+@test only(Base.return_types(gapplicable, (Int,))) === Val{false}
+fapplicable(; x) = x
+@test only(Base.return_types(gapplicable, ())) === Val{true}
+@test only(Base.return_types(gapplicable, (Int,))) === Val{true}
+@test only(Base.return_types(()) do; applicable(); end) === Union{}
+@test only(Base.return_types((Any,)) do x; Val(applicable(x...)); end) == Val
+@test only(Base.return_types((Tuple{Vararg{Int}},)) do x; Val(applicable(+, 1, 2, x...)); end) == Val # could be improved to Val{true}
+@test only(Base.return_types((Tuple{Vararg{Int}},)) do x; Val(applicable(+, 1, 2, 3, x...)); end) === Val{true}
+@test only(Base.return_types((Int,)) do x; Val(applicable(+, 1, x)); end) === Val{true}
+@test only(Base.return_types((Union{Int32,Int64},)) do x; Val(applicable(+, 1, x)); end) === Val{true}
+@test only(Base.return_types((String,)) do x; Val(applicable(+, 1, x)); end) === Val{false}
+fapplicable(::Int, ::Integer) = 2
+fapplicable(::Integer, ::Int32) = 3
+@test only(Base.return_types((Int32,)) do x; Val(applicable(fapplicable, 1, x)); end) === Val{false}
+@test only(Base.return_types((Int64,)) do x; Val(applicable(fapplicable, 1, x)); end) === Val{true}
+@test only(Base.return_types((Tuple{Vararg{Int}},)) do x; Val(applicable(tuple, x...)); end) === Val{true}
+@test only(Base.return_types((Tuple{Vararg{Int}},)) do x; Val(applicable(sin, 1, x...)); end) == Val
+@test only(Base.return_types((Tuple{Vararg{Int}},)) do x; Val(applicable(sin, 1, 2, x...)); end) === Val{false}
+
+function fhasmethod end
+ghasmethod() = Val(hasmethod(fhasmethod, Tuple{}))
+@test only(Base.return_types(ghasmethod, ())) === Val{false}
+fhasmethod() = 1
+@test only(Base.return_types(ghasmethod, ())) === Val{true}
+Base.delete_method(which(fhasmethod, ()))
+@test only(Base.return_types(ghasmethod, ())) === Val{false}
+@test only(Base.return_types(()) do; Core._hasmethod(); end) === Any
+@test only(Base.return_types(()) do; Core._hasmethod(+, Tuple, 1); end) === Any
+@test only(Base.return_types(()) do; Core._hasmethod(+, 1); end) === Bool
+@test only(Base.return_types(()) do; Core._hasmethod(+, Tuple{1}); end) === Bool
+@test only(Base.return_types((Any,)) do x; Val(hasmethod(x...)); end) == Val
+@test only(Base.return_types(()) do; Val(hasmethod(+, Tuple{Int, Int})); end) === Val{true}
+@test only(Base.return_types(()) do; Val(hasmethod(+, Tuple{Int, Int, Vararg{Int}})); end) === Val{false}
+@test only(Base.return_types(()) do; Val(hasmethod(+, Tuple{Int, Int, Int, Vararg{Int}})); end) === Val{true}
+@test only(Base.return_types(()) do; Val(hasmethod(+, Tuple{Int, Int})); end) === Val{true}
+@test only(Base.return_types(()) do; Val(hasmethod(+, Tuple{Int, Union{Int32,Int64}})); end) === Val{true}
+@test only(Base.return_types(()) do; Val(hasmethod(+, Tuple{Int, Union{Int,String}})); end) === Val{false}
+@test only(Base.return_types(()) do; Val(hasmethod(+, Tuple{Int, Any})); end) === Val{false}
+@test only(Base.return_types() do; Val(hasmethod(+, Tuple{Int, String})); end) === Val{false}
+fhasmethod(::Int, ::Integer) = 2
+fhasmethod(::Integer, ::Int32) = 3
+@test only(Base.return_types(()) do; Val(hasmethod(fhasmethod, Tuple{Int, Int32})); end) === Val{false}
+@test only(Base.return_types(()) do; Val(hasmethod(fhasmethod, Tuple{Int, Int64})); end) === Val{true}
+@test only(Base.return_types(()) do; Val(hasmethod(tuple, Tuple{Vararg{Int}})); end) === Val{true}
+@test only(Base.return_types(()) do; Val(hasmethod(sin, Tuple{Int, Vararg{Int}})); end) == Val{false}
+@test only(Base.return_types(()) do; Val(hasmethod(sin, Tuple{Int, Int, Vararg{Int}})); end) === Val{false}

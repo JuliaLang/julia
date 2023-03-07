@@ -281,15 +281,11 @@ end
 rmul!(A::AbstractMatrix, D::Diagonal) = @inline mul!(A, A, D)
 lmul!(D::Diagonal, B::AbstractVecOrMat) = @inline mul!(B, D, B)
 
-function *(A::AdjOrTransAbsMat, D::Diagonal)
+function (*)(A::AdjOrTransAbsMat, D::Diagonal)
     Ac = copy_similar(A, promote_op(*, eltype(A), eltype(D.diag)))
     rmul!(Ac, D)
 end
-
-*(D::Diagonal, adjQ::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
-    rmul!(Array{promote_type(eltype(D), eltype(adjQ))}(D), adjQ)
-
-function *(D::Diagonal, A::AdjOrTransAbsMat)
+function (*)(D::Diagonal, A::AdjOrTransAbsMat)
     Ac = copy_similar(A, promote_op(*, eltype(A), eltype(D.diag)))
     lmul!(D, Ac)
 end

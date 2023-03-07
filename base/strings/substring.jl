@@ -92,6 +92,8 @@ function getindex(s::SubString, i::Integer)
     @inbounds return getindex(s.string, s.offset + i)
 end
 
+isascii(ss::SubString{String}) = isascii(codeunits(ss))
+
 function isvalid(s::SubString, i::Integer)
     ib = true
     @boundscheck ib = checkbounds(Bool, s, i)

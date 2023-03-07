@@ -415,7 +415,6 @@ eval(Core, quote
     LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int32, inlined_at::Int32) =
         $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))
     SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))
-    TypedSlot(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))
     PhiNode(edges::Array{Int32, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))
     PiNode(@nospecialize(val), @nospecialize(typ)) = $(Expr(:new, :PiNode, :val, :typ))
     PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))
@@ -521,17 +520,18 @@ Symbol(s::Symbol) = s
 
 # module providing the IR object model
 module IR
+
 export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
+    NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
-    Const, PartialStruct
+    Const, PartialStruct, InterConditional
 
 import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
+    NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
-    Const, PartialStruct
+    Const, PartialStruct, InterConditional
 
-end
+end # module IR
 
 # docsystem basics
 const unescape = Symbol("hygienic-scope")
@@ -848,6 +848,11 @@ struct Pair{A, B}
         @inline
         return new(a::A, b::B)
     end
+end
+
+function _hasmethod(@nospecialize(tt)) # this function has a special tfunc
+    world = ccall(:jl_get_tls_world_age, UInt, ())
+    return Intrinsics.not_int(ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world) === nothing)
 end
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)

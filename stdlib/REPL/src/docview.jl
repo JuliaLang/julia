@@ -255,7 +255,11 @@ function summarize(binding::Binding, sig)
     else
         println(io, "No documentation found.\n")
         quot = any(isspace, sprint(print, binding)) ? "'" : ""
-        println(io, "Binding ", quot, "`", binding, "`", quot, " does not exist.")
+        if Base.isbindingresolved(binding.mod, binding.var)
+            println(io, "Binding ", quot, "`", binding, "`", quot, " exists, but has not been assigned a value.")
+        else
+            println(io, "Binding ", quot, "`", binding, "`", quot, " does not exist.")
+        end
     end
     md = Markdown.parse(seekstart(io))
     # Save metadata in the generated markdown.
@@ -475,7 +479,8 @@ function repl(io::IO, s::Symbol; brief::Bool=true, mod::Module=Main)
     quote
         repl_latex($io, $str)
         repl_search($io, $str, $mod)
-        $(if !isdefined(mod, s) && !haskey(keywords, s) && !Base.isoperator(s)
+        $(if !isdefined(mod, s) && !Base.isbindingresolved(mod, s) && !haskey(keywords, s) && !Base.isoperator(s)
+               # n.b. we call isdefined for the side-effect of resolving the binding, if possible
                :(repl_corrections($io, $str, $mod))
           end)
         $(_repl(s, brief))

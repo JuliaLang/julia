@@ -32,21 +32,36 @@ struct StmtInfo
     used::Bool
 end
 
+"""
+    v::VarState
+
+A special wrapper that represents a local variable of a method being analyzed.
+This does not participate in the native type system nor the inference lattice, and it thus
+should be always unwrapped to `v.typ` when performing any type or lattice operations on it.
+`v.undef` represents undefined-ness of this static parameter. If `true`, it means that the
+variable _may_ be undefined at runtime, otherwise it is guaranteed to be defined.
+If `v.typ === Bottom` it means that the variable is strictly undefined.
+"""
+struct VarState
+    typ
+    undef::Bool
+    VarState(@nospecialize(typ), undef::Bool) = new(typ, undef)
+end
+
 abstract type ForwardableArgtypes end
 
 """
-    InferenceResult(linfo::MethodInstance)
-    InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes)
+    InferenceResult(linfo::MethodInstance, [argtypes::ForwardableArgtypes, 𝕃::AbstractLattice])
 
 A type that represents the result of running type inference on a chunk of code.
 
 See also [`matching_cache_argtypes`](@ref).
 """
 mutable struct InferenceResult
-    linfo::MethodInstance
-    argtypes::Vector{Any}
-    overridden_by_const::BitVector
-    result                   # ::Type, or InferenceState if WIP
+    const linfo::MethodInstance
+    const argtypes::Vector{Any}
+    const overridden_by_const::BitVector
+    result                   # extended lattice element if inferred, nothing otherwise
     src                      # ::Union{CodeInfo, IRCode, OptimizationState} if inferred copy is available, nothing otherwise
     valid_worlds::WorldRange # if inference and optimization is finished
     ipo_effects::Effects     # if inference is finished
@@ -54,16 +69,14 @@ mutable struct InferenceResult
     argescapes               # ::ArgEscapeCache if optimized, nothing otherwise
     must_be_codeinf::Bool    # if this must come out as CodeInfo or leaving it as IRCode is ok
     function InferenceResult(linfo::MethodInstance, cache_argtypes::Vector{Any}, overridden_by_const::BitVector)
-        return new(linfo, cache_argtypes, overridden_by_const, Any, nothing,
+        return new(linfo, cache_argtypes, overridden_by_const, nothing, nothing,
             WorldRange(), Effects(), Effects(), nothing, true)
     end
 end
-function InferenceResult(linfo::MethodInstance; lattice::AbstractLattice=fallback_lattice)
-    return InferenceResult(linfo, matching_cache_argtypes(lattice, linfo)...)
-end
-function InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes; lattice::AbstractLattice=fallback_lattice)
-    return InferenceResult(linfo, matching_cache_argtypes(lattice, linfo, argtypes)...)
-end
+InferenceResult(linfo::MethodInstance, 𝕃::AbstractLattice=fallback_lattice) =
+    InferenceResult(linfo, matching_cache_argtypes(𝕃, linfo)...)
+InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes, 𝕃::AbstractLattice=fallback_lattice) =
+    InferenceResult(linfo, matching_cache_argtypes(𝕃, linfo, argtypes)...)
 
 """
     inf_params::InferenceParams

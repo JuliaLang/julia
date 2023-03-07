@@ -140,24 +140,9 @@ GlobalVariable *LowerPTLS::create_aliased_global(Type *T, StringRef name) const
     // the address is visible externally but LLVM can still assume that the
     // address of this variable doesn't need dynamic relocation
     // (can be accessed with a single PC-rel load).
-    auto GV = new GlobalVariable(*M, T, false, GlobalVariable::InternalLinkage,
-                                 Constant::getNullValue(T), name + ".real");
-    add_comdat(GlobalAlias::create(T, 0, GlobalVariable::ExternalLinkage,
-                                   name, GV, M));
+    auto GV = new GlobalVariable(*M, T, false, GlobalVariable::ExternalLinkage,
+                                 nullptr, name);
     return GV;
-}
-
-template<typename T>
-inline T *LowerPTLS::add_comdat(T *G) const
-{
-#if defined(_OS_WINDOWS_)
-    // add __declspec(dllexport) to everything marked for export
-    if (G->getLinkage() == GlobalValue::ExternalLinkage)
-        G->setDLLStorageClass(GlobalValue::DLLExportStorageClass);
-    else
-        G->setDLLStorageClass(GlobalValue::DefaultStorageClass);
-#endif
-    return G;
 }
 
 void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, bool or_new, bool *CFGModified)

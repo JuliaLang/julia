@@ -99,14 +99,16 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                     jl_error("opaque_closure_method: invalid syntax");
                 }
                 jl_value_t *name = jl_exprarg(e, 0);
-                jl_value_t *nargs = jl_exprarg(e, 1);
+                jl_value_t *oc_nargs = jl_exprarg(e, 1);
                 int isva = jl_exprarg(e, 2) == jl_true;
                 jl_value_t *functionloc = jl_exprarg(e, 3);
                 jl_value_t *ci = jl_exprarg(e, 4);
                 if (!jl_is_code_info(ci)) {
                     jl_error("opaque_closure_method: lambda should be a CodeInfo");
+                } else if (!jl_is_long(oc_nargs)) {
+                    jl_type_error("opaque_closure_method", (jl_value_t*)jl_long_type, oc_nargs);
                 }
-                jl_method_t *m = jl_make_opaque_closure_method(module, name, jl_unbox_long(nargs), functionloc, (jl_code_info_t*)ci, isva);
+                jl_method_t *m = jl_make_opaque_closure_method(module, name, jl_unbox_long(oc_nargs), functionloc, (jl_code_info_t*)ci, isva);
                 return (jl_value_t*)m;
             }
             if (e->head == jl_cfunction_sym) {
@@ -312,9 +314,7 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
             jl_array_t *meta = ((jl_expr_t*)st)->args;
             for (k = 0; k < na; k++) {
                 jl_value_t *ma = jl_array_ptr_ref(meta, k);
-                if (ma == (jl_value_t*)jl_pure_sym)
-                    li->pure = 1;
-                else if (ma == (jl_value_t*)jl_inline_sym)
+                if (ma == (jl_value_t*)jl_inline_sym)
                     li->inlining = 1;
                 else if (ma == (jl_value_t*)jl_noinline_sym)
                     li->inlining = 2;
@@ -449,6 +449,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     mi->callbacks = NULL;
     jl_atomic_store_relaxed(&mi->cache, NULL);
     mi->inInference = 0;
+    mi->cache_with_orig = 0;
     jl_atomic_store_relaxed(&mi->precompiled, 0);
     return mi;
 }
@@ -474,7 +475,6 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->max_world = ~(size_t)0;
     src->inferred = 0;
     src->propagate_inbounds = 0;
-    src->pure = 0;
     src->has_fcall = 0;
     src->edges = jl_nothing;
     src->constprop = 0;
@@ -611,6 +611,8 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         for (int i = 0; i < jl_array_len(func->code); ++i) {
             jl_value_t *stmt = jl_array_ptr_ref(func->code, i);
             if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == jl_new_opaque_closure_sym) {
+                if (jl_options.incremental && jl_generating_output())
+                    jl_error("Impossible to correctly handle OpaqueClosure inside @generated returned during precompile process.");
                 jl_value_t *uninferred = jl_copy_ast((jl_value_t*)func);
                 jl_value_t *old = NULL;
                 if (jl_atomic_cmpswap(&linfo->uninferred, &old, uninferred)) {
@@ -678,7 +680,6 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
         }
     }
     m->called = called;
-    m->pure = src->pure;
     m->constprop = src->constprop;
     m->purity.bits = src->purity.bits;
     jl_add_function_name_to_lineinfo(src, (jl_value_t*)m->name);
@@ -700,7 +701,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
                 size_t j;
                 for (j = 1; j < nargs; j++) {
                     jl_value_t *aj = jl_exprarg(st, j);
-                    if (!jl_is_slot(aj) && !jl_is_argument(aj))
+                    if (!jl_is_slotnumber(aj) && !jl_is_argument(aj))
                         continue;
                     int sn = (int)jl_slot_number(aj) - 2;
                     if (sn < 0) // @nospecialize on self is valid but currently ignored
@@ -723,7 +724,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
                     m->nospecialize = 0;
                 for (j = 1; j < nargs; j++) {
                     jl_value_t *aj = jl_exprarg(st, j);
-                    if (!jl_is_slot(aj) && !jl_is_argument(aj))
+                    if (!jl_is_slotnumber(aj) && !jl_is_argument(aj))
                         continue;
                     int sn = (int)jl_slot_number(aj) - 2;
                     if (sn < 0) // @specialize on self is valid but currently ignored
