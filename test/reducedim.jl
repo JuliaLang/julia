@@ -182,9 +182,8 @@ end
     A = Matrix{Int}(undef, 0,1)
     @test sum(A) === 0
     @test prod(A) === 1
-    @test_throws ["reducing over an empty",
-                  "consider supplying `init`"] minimum(A)
-    @test_throws "consider supplying `init`" maximum(A)
+    @test minimum(A) === typemax(Int)
+    @test maximum(A) === typemin(Int)
 
     @test isequal(sum(A, dims=1), zeros(Int, 1, 1))
     @test isequal(sum(A, dims=2), zeros(Int, 0, 1))
