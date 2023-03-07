@@ -419,9 +419,8 @@ promote_to_arrays(n,k, ::Type{T}, A, B, Cs...) where {T} =
     (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B), promote_to_arrays(n,k+2, T, Cs...)...)
 promote_to_array_type(A::Tuple{Vararg{Union{AbstractVecOrMat,UniformScaling,Number}}}) = Matrix
 
-_us2number(A::AbstractArray) = A
+_us2number(A) = A
 _us2number(J::UniformScaling) = J.λ
-_us2number(x::Number) = x
 
 for (f, _f, dim, name) in ((:hcat, :_hcat, 1, "rows"), (:vcat, :_vcat, 2, "cols"))
     @eval begin
