@@ -73,7 +73,7 @@ Library changes
 Standard library changes
 ------------------------
 
-* integral entries in containers of `Rational`s will not print their denominator ([#45396])
+* printing integral `Rational`s will try to avoid printing denominators ([#45396])
 
 #### Package Manager
 
