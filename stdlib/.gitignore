@@ -1,12 +1,12 @@
 /srccache
+/DelimitedFiles-*
+/DelimitedFiles
 /Pkg-*
 /Pkg
 /Statistics-*
 /Statistics
 /LibCURL-*
 /LibCURL
-/DelimitedFiles-*
-/DelimitedFiles
 /Downloads-*
 /Downloads
 /ArgTools-*

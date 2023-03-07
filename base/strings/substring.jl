@@ -55,13 +55,13 @@ SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, lastindex(s)::
 @propagate_inbounds maybeview(s::AbstractString, args...) = getindex(s, args...)
 
 convert(::Type{SubString{S}}, s::AbstractString) where {S<:AbstractString} =
-    SubString(convert(S, s))
+    SubString(convert(S, s))::SubString{S}
 convert(::Type{T}, s::T) where {T<:SubString} = s
 
 # Regex match allows only Union{String, SubString{String}} so define conversion to this type
 convert(::Type{Union{String, SubString{String}}}, s::String) = s
 convert(::Type{Union{String, SubString{String}}}, s::SubString{String}) = s
-convert(::Type{Union{String, SubString{String}}}, s::AbstractString) = convert(String, s)
+convert(::Type{Union{String, SubString{String}}}, s::AbstractString) = convert(String, s)::String
 
 function String(s::SubString{String})
     parent = s.string
@@ -91,6 +91,8 @@ function getindex(s::SubString, i::Integer)
     @boundscheck checkbounds(s, i)
     @inbounds return getindex(s.string, s.offset + i)
 end
+
+isascii(ss::SubString{String}) = isascii(codeunits(ss))
 
 function isvalid(s::SubString, i::Integer)
     ib = true

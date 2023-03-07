@@ -91,10 +91,9 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
         if (!jl_is_symbol(fname)) {
             jl_error("method: invalid declaration");
         }
-        jl_value_t *bp_owner = (jl_value_t*)modu;
         jl_binding_t *b = jl_get_binding_for_method_def(modu, fname);
         _Atomic(jl_value_t*) *bp = &b->value;
-        jl_value_t *gf = jl_generic_function_def(b->name, b->owner, bp, bp_owner, b);
+        jl_value_t *gf = jl_generic_function_def(fname, modu, bp, b);
         return gf;
     }
 
@@ -151,6 +150,14 @@ jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e)
     return v;
 }
 
+jl_value_t *jl_eval_globalref(jl_globalref_t *g)
+{
+    jl_value_t *v = jl_get_globalref_value(g);
+    if (v == NULL)
+        jl_undefined_var_error(g->name);
+    return v;
+}
+
 static int jl_source_nslots(jl_code_info_t *src) JL_NOTSAFEPOINT
 {
     return jl_array_len(src->slotflags);
@@ -177,7 +184,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         else
             return s->locals[jl_source_nslots(src) + id];
     }
-    if (jl_is_slot(e) || jl_is_argument(e)) {
+    if (jl_is_slotnumber(e) || jl_is_argument(e)) {
         ssize_t n = jl_slot_number(e);
         if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
             jl_error("access to invalid slot number");
@@ -190,7 +197,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         return jl_quotenode_value(e);
     }
     if (jl_is_globalref(e)) {
-        return jl_eval_global_var(jl_globalref_mod(e), jl_globalref_name(e));
+        return jl_eval_globalref((jl_globalref_t*)e);
     }
     if (jl_is_symbol(e)) {  // bare symbols appear in toplevel exprs not wrapped in `thunk`
         return jl_eval_global_var(s->module, (jl_sym_t*)e);
@@ -223,7 +230,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     else if (head == jl_isdefined_sym) {
         jl_value_t *sym = args[0];
         int defined = 0;
-        if (jl_is_slot(sym) || jl_is_argument(sym)) {
+        if (jl_is_slotnumber(sym) || jl_is_argument(sym)) {
             ssize_t n = jl_slot_number(sym);
             if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
                 jl_error("access to invalid slot number");
@@ -289,7 +296,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             argv[i] = eval_value(args[i], s);
         JL_NARGSV(new_opaque_closure, 4);
         jl_value_t *ret = (jl_value_t*)jl_new_opaque_closure((jl_tupletype_t*)argv[0], argv[1], argv[2],
-            argv[3], argv+4, nargs-4);
+            argv[3], argv+4, nargs-4, 1);
         JL_GC_POP();
         return ret;
     }
@@ -465,7 +472,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             if (head == jl_assign_sym) {
                 jl_value_t *lhs = jl_exprarg(stmt, 0);
                 jl_value_t *rhs = eval_value(jl_exprarg(stmt, 1), s);
-                if (jl_is_slot(lhs)) {
+                if (jl_is_slotnumber(lhs)) {
                     ssize_t n = jl_slot_number(lhs);
                     assert(n <= jl_source_nslots(s->src) && n > 0);
                     s->locals[n - 1] = rhs;
@@ -483,8 +490,8 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                         sym = (jl_sym_t*)lhs;
                     }
                     JL_GC_PUSH1(&rhs);
-                    jl_binding_t *b = jl_get_binding_wr_or_error(modu, sym);
-                    jl_checked_assignment(b, rhs);
+                    jl_binding_t *b = jl_get_binding_wr(modu, sym);
+                    jl_checked_assignment(b, modu, sym, rhs);
                     JL_GC_POP();
                 }
             }
@@ -542,6 +549,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 // leave happens during normal control flow, but we must
                 // longjmp to pop the eval_body call for each enter.
                 s->continue_at = next_ip;
+                asan_unpoison_task_stack(ct, &eh->eh_ctx);
                 jl_longjmp(eh->eh_ctx, 1);
             }
             else if (head == jl_pop_exception_sym) {
@@ -600,7 +608,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
         }
         else if (jl_is_newvarnode(stmt)) {
             jl_value_t *var = jl_fieldref(stmt, 0);
-            assert(jl_is_slot(var));
+            assert(jl_is_slotnumber(var));
             ssize_t n = jl_slot_number(var);
             assert(n <= jl_source_nslots(s->src) && n > 0);
             s->locals[n - 1] = NULL;
@@ -620,7 +628,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
 
 jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi)
 {
-    jl_code_info_t *src = (jl_code_info_t*)mi->uninferred;
+    jl_code_info_t *src = (jl_code_info_t*)jl_atomic_load_relaxed(&mi->uninferred);
     if (jl_is_method(mi->def.value)) {
         if (!src || (jl_value_t*)src == jl_nothing) {
             if (mi->def.method->source) {
@@ -634,7 +642,7 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi)
         if (src && (jl_value_t*)src != jl_nothing) {
             JL_GC_PUSH1(&src);
             src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
-            mi->uninferred = (jl_value_t*)src;
+            jl_atomic_store_release(&mi->uninferred, (jl_value_t*)src);
             jl_gc_wb(mi, src);
             JL_GC_POP();
         }

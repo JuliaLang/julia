@@ -17,10 +17,12 @@ function Base.showerror(io::IO, exc::StringIndexError)
     if firstindex(s) <= exc.index <= ncodeunits(s)
         iprev = thisind(s, exc.index)
         inext = nextind(s, iprev)
+        escprev = escape_string(s[iprev:iprev])
         if inext <= ncodeunits(s)
-            print(io, ", valid nearby indices [$iprev]=>'$(s[iprev])', [$inext]=>'$(s[inext])'")
+            escnext = escape_string(s[inext:inext])
+            print(io, ", valid nearby indices [$iprev]=>'$escprev', [$inext]=>'$escnext'")
         else
-            print(io, ", valid nearby index [$iprev]=>'$(s[iprev])'")
+            print(io, ", valid nearby index [$iprev]=>'$escprev'")
         end
     end
 end
@@ -324,12 +326,7 @@ end
 
 isvalid(s::String, i::Int) = checkbounds(Bool, s, i) && thisind(s, i) == i
 
-function isascii(s::String)
-    @inbounds for i = 1:ncodeunits(s)
-        codeunit(s, i) >= 0x80 && return false
-    end
-    return true
-end
+isascii(s::String) = isascii(codeunits(s))
 
 """
     repeat(c::AbstractChar, r::Integer) -> String

@@ -53,11 +53,11 @@ setproperty!(x::Tuple, f::Int, v, order::Symbol) = setfield!(x, f, v, order) # t
 getproperty(x, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
 setproperty!(x, f::Symbol, v, order::Symbol) = (@inline; setfield!(x, f, convert(fieldtype(typeof(x), f), v), order))
 
-swapproperty!(x, f::Symbol, v, order::Symbol=:notatomic) =
+swapproperty!(x, f::Symbol, v, order::Symbol=:not_atomic) =
     (@inline; Core.swapfield!(x, f, convert(fieldtype(typeof(x), f), v), order))
-modifyproperty!(x, f::Symbol, op, v, order::Symbol=:notatomic) =
+modifyproperty!(x, f::Symbol, op, v, order::Symbol=:not_atomic) =
     (@inline; Core.modifyfield!(x, f, op, v, order))
-replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:notatomic, fail_order::Symbol=success_order) =
+replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order) =
     (@inline; Core.replacefield!(x, f, expected, convert(fieldtype(typeof(x), f), desired), success_order, fail_order))
 
 convert(::Type{Any}, Core.@nospecialize x) = x
@@ -87,7 +87,7 @@ if false
 end
 
 """
-    time_ns()
+    time_ns() -> UInt64
 
 Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
 """
@@ -103,13 +103,33 @@ include("generator.jl")
 include("reflection.jl")
 include("options.jl")
 
+# define invoke(f, T, args...; kwargs...), without kwargs wrapping
+# to forward to invoke
+function Core.kwcall(kwargs, ::typeof(invoke), f, T, args...)
+    @inline
+    # prepend kwargs and f to the invoked from the user
+    T = rewrap_unionall(Tuple{Core.Typeof(kwargs), Core.Typeof(f), (unwrap_unionall(T)::DataType).parameters...}, T)
+    return invoke(Core.kwcall, T, kwargs, f, args...)
+end
+# invoke does not have its own call cache, but kwcall for invoke does
+setfield!(typeof(invoke).name.mt, :max_args, 3, :monotonic) # invoke, f, T, args...
+
+# define applicable(f, T, args...; kwargs...), without kwargs wrapping
+# to forward to applicable
+function Core.kwcall(kwargs, ::typeof(applicable), @nospecialize(args...))
+    @inline
+    return applicable(Core.kwcall, kwargs, args...)
+end
+function Core._hasmethod(@nospecialize(f), @nospecialize(t)) # this function has a special tfunc (TODO: make this a Builtin instead like applicable)
+    tt = rewrap_unionall(Tuple{Core.Typeof(f), (unwrap_unionall(t)::DataType).parameters...}, t)
+    return Core._hasmethod(tt)
+end
+
+
 # core operations & types
 include("promotion.jl")
 include("tuple.jl")
 include("expr.jl")
-Pair{A, B}(@nospecialize(a), @nospecialize(b)) where {A, B} = (@inline; Pair{A, B}(convert(A, a)::A, convert(B, b)::B))
-#Pair{Any, B}(@nospecialize(a::Any), b) where {B} = (@inline; Pair{Any, B}(a, Base.convert(B, b)::B))
-#Pair{A, Any}(a, @nospecialize(b::Any)) where {A} = (@inline; Pair{A, Any}(Base.convert(A, a)::A, b))
 include("pair.jl")
 include("traits.jl")
 include("range.jl")
@@ -124,8 +144,21 @@ include("operators.jl")
 include("pointer.jl")
 include("refvalue.jl")
 include("refpointer.jl")
+
+# now replace the Pair constructor (relevant for NamedTuples) with one that calls our Base.convert
+delete_method(which(Pair{Any,Any}, (Any, Any)))
+@eval function (P::Type{Pair{A, B}})(@nospecialize(a), @nospecialize(b)) where {A, B}
+    @inline
+    return $(Expr(:new, :P, :(convert(A, a)), :(convert(B, b))))
+end
+
+# The REPL stdlib hooks into Base using this Ref
+const REPL_MODULE_REF = Ref{Module}()
+
 include("checked.jl")
 using .Checked
+function cld end
+function fld end
 
 # Lazy strings
 include("strings/lazy.jl")
@@ -147,6 +180,7 @@ include("idset.jl")
 include("iterators.jl")
 using .Iterators: zip, enumerate, only
 using .Iterators: Flatten, Filter, product  # for generators
+using .Iterators: Stateful    # compat (was formerly used in reinterpretarray.jl)
 
 include("namedtuple.jl")
 
@@ -163,10 +197,6 @@ function strcat(x::String, y::String)
 end
 include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
 include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
-
-# These used to be in build_h.jl and are retained for backwards compatibility
-const libblas_name = "libblastrampoline"
-const liblapack_name = "libblastrampoline"
 
 # numeric operations
 include("hashing.jl")
@@ -267,6 +297,11 @@ include("version.jl")
 include("sysinfo.jl")
 include("libc.jl")
 using .Libc: getpid, gethostname, time
+
+# These used to be in build_h.jl and are retained for backwards compatibility.
+# NOTE: keep in sync with `libblastrampoline_jll.libblastrampoline`.
+const libblas_name = "libblastrampoline" * (Sys.iswindows() ? "-5" : "")
+const liblapack_name = libblas_name
 
 # Logging
 include("logging.jl")
@@ -396,21 +431,20 @@ include("threadcall.jl")
 include("uuid.jl")
 include("pkgid.jl")
 include("toml_parser.jl")
+include("linking.jl")
 include("loading.jl")
 
 # misc useful functions & macros
 include("timing.jl")
 include("util.jl")
-
+include("client.jl")
 include("asyncmap.jl")
 
 # deprecated functions
 include("deprecated.jl")
-
-# Some basic documentation
+#
+# Some additional basic documentation
 include("docs/basedocs.jl")
-
-include("client.jl")
 
 # Documentation -- should always be included last in sysimg.
 include("docs/Docs.jl")
@@ -423,6 +457,11 @@ end
 for m in methods(include)
     delete_method(m)
 end
+
+# This method is here only to be overwritten during the test suite to test
+# various sysimg related invalidation scenarios.
+a_method_to_overwrite_in_test() = inferencebarrier(1)
+
 # These functions are duplicated in client.jl/include(::String) for
 # nicer stacktraces. Modifications here have to be backported there
 include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)

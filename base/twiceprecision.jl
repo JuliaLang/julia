@@ -141,6 +141,7 @@ julia> hi, lo = Base.div12(x, y)
 
 julia> Float64(hi) + Float64(lo)
 1.0134170444063066
+```
 """
 function div12(x::T, y::T) where {T<:AbstractFloat}
     # We lose precision if any intermediate calculation results in a subnormal.
@@ -164,7 +165,7 @@ div12(x, y) = div12(promote(x, y)...)
 A number with twice the precision of `T`, e.g., quad-precision if `T =
 Float64`.
 
-!!! warn
+!!! warning
     `TwicePrecision` is an internal type used to increase the
     precision of floating-point ranges, and not intended for external use.
     If you encounter them in real code, the most likely explanation is
@@ -254,7 +255,7 @@ nbitslen(::Type{T}, len, offset) where {T<:IEEEFloat} =
     min(cld(precision(T), 2), nbitslen(len, offset))
 # The +1 here is for safety, because the precision of the significand
 # is 1 bit higher than the number that are explicitly stored.
-nbitslen(len, offset) = len < 2 ? 0 : ceil(Int, log2(max(offset-1, len-offset))) + 1
+nbitslen(len, offset) = len < 2 ? 0 : top_set_bit(max(offset-1, len-offset) - 1) + 1
 
 eltype(::Type{TwicePrecision{T}}) where {T} = T
 
@@ -268,10 +269,10 @@ TwicePrecision{T}(x::Number) where {T} = TwicePrecision{T}(T(x), zero(T))
 
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision{T}) where {T} = x
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision) where {T} =
-    TwicePrecision{T}(convert(T, x.hi), convert(T, x.lo))
+    TwicePrecision{T}(convert(T, x.hi), convert(T, x.lo))::TwicePrecision{T}
 
-convert(::Type{T}, x::TwicePrecision) where {T<:Number} = T(x)
-convert(::Type{TwicePrecision{T}}, x::Number) where {T} = TwicePrecision{T}(x)
+convert(::Type{T}, x::TwicePrecision) where {T<:Number} = T(x)::T
+convert(::Type{TwicePrecision{T}}, x::Number) where {T} = TwicePrecision{T}(x)::TwicePrecision{T}
 
 float(x::TwicePrecision{<:AbstractFloat}) = x
 float(x::TwicePrecision) = TwicePrecision(float(x.hi), float(x.lo))
@@ -310,7 +311,7 @@ function *(x::TwicePrecision, v::Number)
 end
 function *(x::TwicePrecision{<:IEEEFloat}, v::Integer)
     v == 0 && return TwicePrecision(x.hi*v, x.lo*v)
-    nb = ceil(Int, log2(abs(v)))
+    nb = top_set_bit(abs(v)-1)
     u = truncbits(x.hi, nb)
     TwicePrecision(canonicalize2(u*v, ((x.hi-u) + x.lo)*v)...)
 end
@@ -390,22 +391,6 @@ function floatrange(::Type{T}, start_n::Integer, step_n::Integer, len::Integer, 
     ref_n = start_n+(imin-1)*step_n  # this shouldn't overflow, so don't check
     nb = nbitslen(T, len, imin)
     steprangelen_hp(T, (ref_n, den), (step_n, den), nb, len, imin)
-end
-
-function floatrange(a::AbstractFloat, st::AbstractFloat, len::Real, divisor::AbstractFloat)
-    len = len + 0 # promote with Int
-    T = promote_type(typeof(a), typeof(st), typeof(divisor))
-    m = maxintfloat(T, Int)
-    if abs(a) <= m && abs(st) <= m && abs(divisor) <= m
-        ia, ist, idivisor = round(Int, a), round(Int, st), round(Int, divisor)
-        if ia == a && ist == st && idivisor == divisor
-            # We can return the high-precision range
-            return floatrange(T, ia, ist, len, idivisor)
-        end
-    end
-    # Fallback (misses the opportunity to set offset different from 1,
-    # but otherwise this is still high-precision)
-    steprangelen_hp(T, (a,divisor), (st,divisor), nbitslen(T, len, 1), len, oneunit(len))
 end
 
 function (:)(start::T, step::T, stop::T) where T<:IEEEFloat

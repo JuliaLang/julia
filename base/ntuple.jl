@@ -33,17 +33,17 @@ end
 
 function _ntuple(f::F, n) where F
     @noinline
-    (n >= 0) || throw(ArgumentError(string("tuple length should be ≥ 0, got ", n)))
+    (n >= 0) || throw(ArgumentError(LazyString("tuple length should be ≥ 0, got ", n)))
     ([f(i) for i = 1:n]...,)
 end
 
 function ntupleany(f, n)
     @noinline
-    (n >= 0) || throw(ArgumentError(string("tuple length should be ≥ 0, got ", n)))
+    (n >= 0) || throw(ArgumentError(LazyString("tuple length should be ≥ 0, got ", n)))
     (Any[f(i) for i = 1:n]...,)
 end
 
-# inferrable ntuple (enough for bootstrapping)
+# inferable ntuple (enough for bootstrapping)
 ntuple(f, ::Val{0}) = ()
 ntuple(f, ::Val{1}) = (@inline; (f(1),))
 ntuple(f, ::Val{2}) = (@inline; (f(1), f(2)))
@@ -68,12 +68,9 @@ julia> ntuple(i -> 2*i, Val(4))
 """
 @inline function ntuple(f::F, ::Val{N}) where {F,N}
     N::Int
-    (N >= 0) || throw(ArgumentError(string("tuple length should be ≥ 0, got ", N)))
+    (N >= 0) || throw(ArgumentError(LazyString("tuple length should be ≥ 0, got ", N)))
     if @generated
-        quote
-            @nexprs $N i -> t_i = f(i)
-            @ncall $N tuple t
-        end
+        :(@ntuple $N i -> f(i))
     else
         Tuple(f(i) for i = 1:N)
     end
@@ -82,7 +79,7 @@ end
 @inline function fill_to_length(t::Tuple, val, ::Val{_N}) where {_N}
     M = length(t)
     N = _N::Int
-    M > N && throw(ArgumentError("input tuple of length $M, requested $N"))
+    M > N && throw(ArgumentError(LazyString("input tuple of length ", M, ", requested ", N)))
     if @generated
         quote
             (t..., $(fill(:val, (_N::Int) - length(t.parameters))...))

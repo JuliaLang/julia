@@ -5,7 +5,7 @@ OPENBLAS_GIT_URL := https://github.com/xianyi/OpenBLAS.git
 OPENBLAS_TAR_URL = https://api.github.com/repos/xianyi/OpenBLAS/tarball/$1
 $(eval $(call git-external,openblas,OPENBLAS,,,$(BUILDDIR)))
 
-OPENBLAS_BUILD_OPTS := CC="$(CC)" FC="$(FC)" LD="$(LD)" RANLIB="$(RANLIB)" TARGET=$(OPENBLAS_TARGET_ARCH) BINARY=$(BINARY)
+OPENBLAS_BUILD_OPTS := CC="$(CC) $(SANITIZE_OPTS)" FC="$(FC) $(SANITIZE_OPTS)" LD="$(LD) $(SANITIZE_LDFLAGS)" RANLIB="$(RANLIB)" BINARY=$(BINARY)
 
 # Thread support
 ifeq ($(OPENBLAS_USE_THREAD), 1)
@@ -21,15 +21,20 @@ endif
 OPENBLAS_BUILD_OPTS += NO_AFFINITY=1
 
 # Build for all architectures - required for distribution
+ifeq ($(SANITIZE_MEMORY),1)
+OPENBLAS_BUILD_OPTS += TARGET=GENERIC
+else
+OPENBLAS_BUILD_OPTS += TARGET=$(OPENBLAS_TARGET_ARCH)
 ifeq ($(OPENBLAS_DYNAMIC_ARCH), 1)
 OPENBLAS_BUILD_OPTS += DYNAMIC_ARCH=1
+endif
 endif
 
 # 64-bit BLAS interface
 ifeq ($(USE_BLAS64), 1)
 OPENBLAS_BUILD_OPTS += INTERFACE64=1 SYMBOLSUFFIX="$(OPENBLAS_SYMBOLSUFFIX)" LIBPREFIX="libopenblas$(OPENBLAS_LIBNAMESUFFIX)"
 ifeq ($(OS), Darwin)
-OPENBLAS_BUILD_OPTS += OBJCONV=$(abspath $(build_bindir)/objconv)
+OPENBLAS_BUILD_OPTS += OBJCONV=$(abspath $(build_depsbindir)/objconv)
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: | $(build_prefix)/manifest/objconv
 endif
 endif
@@ -95,7 +100,12 @@ $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/neoverse-generic-kernels.patch-applied: $(BUILDD
 		patch -p1 -f < $(SRCDIR)/patches/neoverse-generic-kernels.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/neoverse-generic-kernels.patch-applied
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-power-test.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/neoverse-generic-kernels.patch-applied
+	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/openblas-power-test.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-power-test.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured

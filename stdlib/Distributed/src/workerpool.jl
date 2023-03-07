@@ -73,7 +73,7 @@ wp_local_length(pool::AbstractWorkerPool) = length(pool.workers)
 wp_local_isready(pool::AbstractWorkerPool) = isready(pool.channel)
 
 function wp_local_put!(pool::AbstractWorkerPool, w::Int)
-    # In case of default_worker_pool, the master is implictly considered a worker, i.e.,
+    # In case of default_worker_pool, the master is implicitly considered a worker, i.e.,
     # it is not present in pool.workers.
     # Confirm the that the worker is part of a pool before making it available.
     w in pool.workers && put!(pool.channel, w)

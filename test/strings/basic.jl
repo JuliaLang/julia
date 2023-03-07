@@ -164,6 +164,12 @@ end
     @test endswith(y)(y)
     @test endswith(z, z)
     @test endswith(z)(z)
+    #40616 startswith for IO objects
+    let s = "JuliaLang", io = IOBuffer(s)
+        for prefix in ("Julia", "July", s^2, "Ju", 'J', 'x', ('j','J'))
+            @test startswith(io, prefix) == startswith(s, prefix)
+        end
+    end
 end
 
 @testset "SubStrings and Views" begin
@@ -418,7 +424,7 @@ end
     end
     @test nextind("fóobar", 0, 3) == 4
 
-    @test Symbol(gstr) == Symbol("12")
+    @test Symbol(gstr) === Symbol("12")
 
     @test sizeof(gstr) == 2
     @test ncodeunits(gstr) == 2
@@ -683,6 +689,7 @@ end
 Base.iterate(x::CharStr) = iterate(x.chars)
 Base.iterate(x::CharStr, i::Int) = iterate(x.chars, i)
 Base.lastindex(x::CharStr) = lastindex(x.chars)
+Base.length(x::CharStr) = length(x.chars)
 @testset "cmp without UTF-8 indexing" begin
     # Simple case, with just ANSI Latin 1 characters
     @test "áB" != CharStr("áá") # returns false with bug
@@ -724,6 +731,11 @@ end
 @testset "issue #12495: check that logical indexing attempt raises ArgumentError" begin
     @test_throws ArgumentError "abc"[[true, false, true]]
     @test_throws ArgumentError "abc"[BitArray([true, false, true])]
+end
+
+@testset "issue #46039 enhance StringIndexError display" begin
+    @test sprint(showerror, StringIndexError("αn", 2)) == "StringIndexError: invalid index [2], valid nearby indices [1]=>'α', [3]=>'n'"
+    @test sprint(showerror, StringIndexError("α\n", 2)) == "StringIndexError: invalid index [2], valid nearby indices [1]=>'α', [3]=>'\\n'"
 end
 
 @testset "concatenation" begin
@@ -932,6 +944,21 @@ end
     end
 end
 
+@testset "Conversion to Type{Union{String, SubString{String}}}" begin
+    str = "abc"
+    substr = SubString(str)
+    for T in [String, SubString{String}]
+        conv_str = convert(T, str)
+        conv_substr = convert(T, substr)
+
+        if T == String
+            @test conv_str === conv_substr === str
+        elseif T == SubString{String}
+            @test conv_str === conv_substr === substr
+        end
+    end
+end
+
 @test unsafe_wrap(Vector{UInt8},"\xcc\xdd\xee\xff\x80") == [0xcc,0xdd,0xee,0xff,0x80]
 
 @test iterate("a", 1)[2] == 2
@@ -1098,6 +1125,32 @@ end
     @test sprint(summary, "") == "empty String"
 end
 
+@testset "isascii" begin
+    N = 1
+    @test isascii("S"^N) == true
+    @test isascii("S"^(N - 1)) == true
+    @test isascii("S"^(N + 1)) == true
+
+    @test isascii("λ" * ("S"^(N))) == false
+    @test isascii(("S"^(N)) * "λ") == false
+
+    for p = 1:16
+        N = 2^p
+        @test isascii("S"^N) == true
+        @test isascii("S"^(N - 1)) == true
+        @test isascii("S"^(N + 1)) == true
+
+        @test isascii("λ" * ("S"^(N))) == false
+        @test isascii(("S"^(N)) * "λ") == false
+        @test isascii("λ"*("S"^(N - 1))) == false
+        @test isascii(("S"^(N - 1)) * "λ") == false
+        if N > 4
+            @test isascii("λ" * ("S"^(N - 3))) == false
+            @test isascii(("S"^(N - 3)) * "λ") == false
+        end
+    end
+end
+
 @testset "Plug holes in test coverage" begin
     @test_throws MethodError checkbounds(Bool, "abc", [1.0, 2.0])
 
@@ -1129,4 +1182,13 @@ end
     @test codeunit(l) == UInt8
     @test codeunit(l,2) == 0x2b
     @test isvalid(l, 1)
+    @test Base.infer_effects((Any,)) do a
+        throw(lazy"a is $a")
+    end |> Core.Compiler.is_foldable
+    @test Base.infer_effects((Int,)) do a
+        if a < 0
+            throw(DomainError(a, lazy"$a isn't positive"))
+        end
+        return a
+    end |> Core.Compiler.is_foldable
 end

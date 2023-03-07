@@ -27,6 +27,9 @@
 #include <sys/mman.h>
 #include <dlfcn.h>
 #include <grp.h>
+
+// For `struct termios`
+#include <termios.h>
 #endif
 
 #ifndef _OS_WINDOWS_
@@ -513,6 +516,14 @@ JL_STREAM *JL_STDERR = (JL_STREAM*)STDERR_FILENO;
 JL_DLLEXPORT JL_STREAM *jl_stdin_stream(void)  { return JL_STDIN; }
 JL_DLLEXPORT JL_STREAM *jl_stdout_stream(void) { return JL_STDOUT; }
 JL_DLLEXPORT JL_STREAM *jl_stderr_stream(void) { return JL_STDERR; }
+
+JL_DLLEXPORT int jl_termios_size(void) {
+#if defined(_OS_WINDOWS_)
+    return 0;
+#else
+    return sizeof(struct termios);
+#endif
+}
 
 // -- processor native alignment information --
 

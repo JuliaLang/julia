@@ -367,7 +367,7 @@ tril(M::AbstractMatrix) = tril!(copy(M))
 """
     triu(M, k::Integer)
 
-Returns the upper triangle of `M` starting from the `k`th superdiagonal.
+Return the upper triangle of `M` starting from the `k`th superdiagonal.
 
 # Examples
 ```jldoctest
@@ -398,7 +398,7 @@ triu(M::AbstractMatrix,k::Integer) = triu!(copy(M),k)
 """
     tril(M, k::Integer)
 
-Returns the lower triangle of `M` starting from the `k`th superdiagonal.
+Return the lower triangle of `M` starting from the `k`th superdiagonal.
 
 # Examples
 ```jldoctest
@@ -461,7 +461,7 @@ norm_sqr(x::Union{T,Complex{T},Rational{T}}) where {T<:Integer} = abs2(float(x))
 
 function generic_norm2(x)
     maxabs = normInf(x)
-    (iszero(maxabs) || isinf(maxabs)) && return maxabs
+    (ismissing(maxabs) || iszero(maxabs) || isinf(maxabs)) && return maxabs
     (v, s) = iterate(x)::Tuple
     T = typeof(maxabs)
     if isfinite(length(x)*maxabs*maxabs) && !iszero(maxabs*maxabs) # Scaling not necessary
@@ -472,6 +472,7 @@ function generic_norm2(x)
             (v, s) = y
             sum += norm_sqr(v)
         end
+        ismissing(sum) && return missing
         return convert(T, sqrt(sum))
     else
         sum = abs2(norm(v)/maxabs)
@@ -481,6 +482,7 @@ function generic_norm2(x)
             (v, s) = y
             sum += (norm(v)/maxabs)^2
         end
+        ismissing(sum) && return missing
         return convert(T, maxabs*sqrt(sum))
     end
 end
@@ -491,7 +493,7 @@ function generic_normp(x, p)
     (v, s) = iterate(x)::Tuple
     if p > 1 || p < -1 # might need to rescale to avoid overflow
         maxabs = p > 1 ? normInf(x) : normMinusInf(x)
-        (iszero(maxabs) || isinf(maxabs)) && return maxabs
+        (ismissing(maxabs) || iszero(maxabs) || isinf(maxabs)) && return maxabs
         T = typeof(maxabs)
     else
         T = typeof(float(norm(v)))
@@ -503,15 +505,18 @@ function generic_normp(x, p)
             y = iterate(x, s)
             y === nothing && break
             (v, s) = y
+            ismissing(v) && return missing
             sum += norm(v)^spp
         end
         return convert(T, sum^inv(spp))
     else # rescaling
         sum = (norm(v)/maxabs)^spp
+        ismissing(sum) && return missing
         while true
             y = iterate(x, s)
             y === nothing && break
             (v, s) = y
+            ismissing(v) && return missing
             sum += (norm(v)/maxabs)^spp
         end
         return convert(T, maxabs*sum^inv(spp))
@@ -942,12 +947,21 @@ dot(x::AbstractVector, transA::Transpose{<:Real}, y::AbstractVector) = adjoint(d
     rank(A::AbstractMatrix; atol::Real=0, rtol::Real=atol>0 ? 0 : n*ϵ)
     rank(A::AbstractMatrix, rtol::Real)
 
-Compute the rank of a matrix by counting how many singular
-values of `A` have magnitude greater than `max(atol, rtol*σ₁)` where `σ₁` is
-`A`'s largest singular value. `atol` and `rtol` are the absolute and relative
+Compute the numerical rank of a matrix by counting how many outputs of
+`svdvals(A)` are greater than `max(atol, rtol*σ₁)` where `σ₁` is `A`'s largest
+calculated singular value. `atol` and `rtol` are the absolute and relative
 tolerances, respectively. The default relative tolerance is `n*ϵ`, where `n`
 is the size of the smallest dimension of `A`, and `ϵ` is the [`eps`](@ref) of
 the element type of `A`.
+
+!!! note
+    Numerical rank can be a sensitive and imprecise characterization of
+    ill-conditioned matrices with singular values that are close to the threshold
+    tolerance `max(atol, rtol*σ₁)`. In such cases, slight perturbations to the
+    singular-value computation or to the matrix can change the result of `rank`
+    by pushing one or more singular values across the threshold. These variations
+    can even occur due to changes in floating-point errors between different Julia
+    versions, architectures, compilers, or operating systems.
 
 !!! compat "Julia 1.1"
     The `atol` and `rtol` keyword arguments requires at least Julia 1.1.
@@ -976,9 +990,9 @@ function rank(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A)...)
     isempty(A) && return 0 # 0-dimensional case
     s = svdvals(A)
     tol = max(atol, rtol*s[1])
-    count(x -> x > tol, s)
+    count(>(tol), s)
 end
-rank(x::Number) = iszero(x) ? 0 : 1
+rank(x::Union{Number,AbstractVector}) = iszero(x) ? 0 : 1
 
 """
     tr(M)
@@ -1373,7 +1387,9 @@ isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) = istriu(A, kl) && istril(
 """
     isdiag(A) -> Bool
 
-Test whether a matrix is diagonal.
+Test whether a matrix is diagonal in the sense that `iszero(A[i,j])` is true unless `i == j`.
+Note that it is not necessary for `A` to be square;
+if you would also like to check that, you need to check that `size(A, 1) == size(A, 2)`.
 
 # Examples
 ```jldoctest
@@ -1392,6 +1408,22 @@ julia> b = [im 0; 0 -im]
 
 julia> isdiag(b)
 true
+
+julia> c = [1 0 0; 0 2 0]
+2×3 Matrix{Int64}:
+ 1  0  0
+ 0  2  0
+
+julia> isdiag(c)
+true
+
+julia> d = [1 0 0; 0 2 3]
+2×3 Matrix{Int64}:
+ 1  0  0
+ 0  2  3
+
+julia> isdiag(d)
+false
 ```
 """
 isdiag(A::AbstractMatrix) = isbanded(A, 0, 0)
@@ -1401,9 +1433,7 @@ isdiag(x::Number) = true
     axpy!(α, x::AbstractArray, y::AbstractArray)
 
 Overwrite `y` with `x * α + y` and return `y`.
-If `x` and `y` have the same axes, it's equivalent with `y .+= x .* a`
-
-See also [`BLAS.axpy!`](@ref)
+If `x` and `y` have the same axes, it's equivalent with `y .+= x .* a`.
 
 # Examples
 ```jldoctest
@@ -1423,10 +1453,11 @@ function axpy!(α, x::AbstractArray, y::AbstractArray)
     if n != length(y)
         throw(DimensionMismatch("x has length $n, but y has length $(length(y))"))
     end
+    iszero(α) && return y
     for (IY, IX) in zip(eachindex(y), eachindex(x))
         @inbounds y[IY] += x[IX]*α
     end
-    y
+    return y
 end
 
 function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractArray, ry::AbstractArray{<:Integer})
@@ -1437,19 +1468,18 @@ function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractAr
     elseif !checkindex(Bool, eachindex(IndexLinear(), y), ry)
         throw(BoundsError(y, ry))
     end
+    iszero(α) && return y
     for (IY, IX) in zip(eachindex(ry), eachindex(rx))
         @inbounds y[ry[IY]] += x[rx[IX]]*α
     end
-    y
+    return y
 end
 
 """
     axpby!(α, x::AbstractArray, β, y::AbstractArray)
 
 Overwrite `y` with `x * α + y * β` and return `y`.
-If `x` and `y` have the same axes, it's equivalent with `y .= x .* a .+ y .* β`
-
-See also [`BLAS.axpby!`](@ref)
+If `x` and `y` have the same axes, it's equivalent with `y .= x .* a .+ y .* β`.
 
 # Examples
 ```jldoctest
@@ -1468,6 +1498,7 @@ function axpby!(α, x::AbstractArray, β, y::AbstractArray)
     if length(x) != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
     end
+    iszero(α) && isone(β) && return y
     for (IX, IY) in zip(eachindex(x), eachindex(y))
         @inbounds y[IY] = x[IX]*α + y[IY]*β
     end
@@ -1483,7 +1514,7 @@ function axpy!(α::Number,
     y::StridedVecLike{T}, ry::AbstractRange{<:Integer},
 ) where {T<:BlasFloat}
     if Base.has_offset_axes(rx, ry)
-        return Base.@invoke axpy!(α,
+        return @invoke axpy!(α,
             x::AbstractArray, rx::AbstractArray{<:Integer},
             y::AbstractArray, ry::AbstractArray{<:Integer},
         )
@@ -1753,10 +1784,11 @@ function isapprox(x::AbstractArray, y::AbstractArray;
     nans::Bool=false, norm::Function=norm)
     d = norm(x - y)
     if isfinite(d)
-        return d <= max(atol, rtol*max(norm(x), norm(y)))
+        return iszero(rtol) ? d <= atol : d <= max(atol, rtol*max(norm(x), norm(y)))
     else
         # Fall back to a component-wise approximate comparison
-        return all(ab -> isapprox(ab[1], ab[2]; rtol=rtol, atol=atol, nans=nans), zip(x, y))
+        # (mapreduce instead of all for greater generality [#44893])
+        return mapreduce((a, b) -> isapprox(a, b; rtol=rtol, atol=atol, nans=nans), &, x, y)
     end
 end
 

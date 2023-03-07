@@ -26,7 +26,7 @@
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
 
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 #include "julia.h"
 
 #define DEBUG_TYPE "verify_gc_invariants"
@@ -118,7 +118,7 @@ void GCInvariantVerifier::visitLoadInst(LoadInst &LI) {
     if (Ty->isPointerTy()) {
         unsigned AS = cast<PointerType>(Ty)->getAddressSpace();
         Check(AS != AddressSpace::CalleeRooted,
-              "Illegal store of callee rooted value", &LI);
+              "Illegal load of callee rooted value", &LI);
     }
 }
 
@@ -160,12 +160,15 @@ void GCInvariantVerifier::visitGetElementPtrInst(GetElementPtrInst &GEP) {
 }
 
 void GCInvariantVerifier::visitCallInst(CallInst &CI) {
-    CallingConv::ID CC = CI.getCallingConv();
-    if (CC == JLCALL_F_CC || CC == JLCALL_F2_CC) {
+    Function *Callee = CI.getCalledFunction();
+    if (Callee && (Callee->getName() == "julia.call" ||
+                   Callee->getName() == "julia.call2")) {
+        bool First = true;
         for (Value *Arg : CI.args()) {
             Type *Ty = Arg->getType();
-            Check(Ty->isPointerTy() && cast<PointerType>(Ty)->getAddressSpace() == AddressSpace::Tracked,
+            Check(Ty->isPointerTy() && cast<PointerType>(Ty)->getAddressSpace() == (First ? 0 : AddressSpace::Tracked),
                 "Invalid derived pointer in jlcall", &CI);
+            First = false;
         }
     }
 }

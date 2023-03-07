@@ -5,7 +5,7 @@ $(eval $(call git-external,utf8proc,UTF8PROC,,,$(BUILDDIR)))
 
 UTF8PROC_OBJ_LIB    := $(build_libdir)/libutf8proc.a
 UTF8PROC_OBJ_HEADER := $(build_includedir)/utf8proc.h
-UTF8PROC_CFLAGS     := -O2
+UTF8PROC_CFLAGS     := -O2 $(SANITIZE_OPTS)
 UTF8PROC_MFLAGS     := CC="$(CC)" CFLAGS="$(CFLAGS) $(UTF8PROC_CFLAGS)" PICFLAG="$(fPIC)" AR="$(AR)"
 UTF8PROC_BUILDDIR   := $(BUILDDIR)/$(UTF8PROC_SRC_DIR)
 

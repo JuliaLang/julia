@@ -125,7 +125,7 @@ end
 
 function union!(s::BitSet, r::AbstractUnitRange{<:Integer})
     isempty(r) && return s
-    a, b = _check_bitset_bounds(first(r)), _check_bitset_bounds(last(r))
+    a, b = Int(first(r)), Int(last(r))
     cidxa = _div64(a)
     cidxb = _div64(b)
     if s.offset == NO_OFFSET
@@ -137,20 +137,10 @@ function union!(s::BitSet, r::AbstractUnitRange{<:Integer})
 
     # grow s.bits as necessary
     if diffb >= len
-        _growend!(s.bits, diffb - len + 1)
-        # we set only some values to CHK0, those which will not be
-        # fully overwritten (i.e. only or'ed with `|`)
-        s.bits[end] = CHK0 # end == diffb + 1
-        if diffa >= len
-            s.bits[diffa + 1] = CHK0
-        end
+        _growend0!(s.bits, diffb - len + 1)
     end
     if diffa < 0
-        _growbeg!(s.bits, -diffa)
-        s.bits[1] = CHK0
-        if diffb < 0
-            s.bits[diffb - diffa + 1] = CHK0
-        end
+        _growbeg0!(s.bits, -diffa)
         s.offset = cidxa # s.offset += diffa
         diffb -= diffa
         diffa = 0
@@ -257,20 +247,7 @@ function _matched_map!(f, a1::Bits, b1::Int, a2::Bits, b2::Int,
     b1 # the new offset
 end
 
-
-@noinline _throw_bitset_bounds_err() =
-    throw(ArgumentError("elements of BitSet must be between typemin(Int) and typemax(Int)"))
-
-@inline _is_convertible_Int(n) = typemin(Int) <= n <= typemax(Int)
-
-@inline _check_bitset_bounds(n) =
-    _is_convertible_Int(n) ? Int(n) : _throw_bitset_bounds_err()
-
-@inline _check_bitset_bounds(n::Int) = n
-
-@noinline _throw_keyerror(n) = throw(KeyError(n))
-
-@inline push!(s::BitSet, n::Integer) = _setint!(s, _check_bitset_bounds(n), true)
+@inline push!(s::BitSet, n::Integer) = _setint!(s, Int(n), true)
 
 push!(s::BitSet, ns::Integer...) = (for n in ns; push!(s, n); end; s)
 
@@ -281,7 +258,7 @@ push!(s::BitSet, ns::Integer...) = (for n in ns; push!(s, n); end; s)
         delete!(s, n)
         n
     else
-        _throw_keyerror(n)
+        throw(KeyError(n))
     end
 end
 
@@ -294,6 +271,7 @@ end
     end
 end
 
+@inline _is_convertible_Int(n) = typemin(Int) <= n <= typemax(Int)
 @inline delete!(s::BitSet, n::Int) = _setint!(s, n, false)
 @inline delete!(s::BitSet, n::Integer) = _is_convertible_Int(n) ? delete!(s, Int(n)) : s
 
@@ -326,8 +304,15 @@ function symdiff!(s::BitSet, ns)
     return s
 end
 
+function symdiff!(s::BitSet, ns::AbstractSet)
+    for x in ns
+        int_symdiff!(s, x)
+    end
+    return s
+end
+
 function int_symdiff!(s::BitSet, n::Integer)
-    n0 = _check_bitset_bounds(n)
+    n0 = Int(n)
     val = !(n0 in s)
     _setint!(s, n0, val)
     s

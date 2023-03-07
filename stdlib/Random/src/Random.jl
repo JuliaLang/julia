@@ -215,7 +215,7 @@ end
 # TODO: make constraining constructors to enforce that those
 # types are <: Sampler{T}
 
-##### Adapter to generate a randome value in [0, n]
+##### Adapter to generate a random value in [0, n]
 
 struct LessThan{T<:Integer,S} <: Sampler{T}
     sup::T
@@ -256,7 +256,7 @@ rand(rng::AbstractRNG, ::UniformT{T}) where {T} = rand(rng, T)
 rand(rng::AbstractRNG, X)                                           = rand(rng, Sampler(rng, X, Val(1)))
 # this is needed to disambiguate
 rand(rng::AbstractRNG, X::Dims)                                     = rand(rng, Sampler(rng, X, Val(1)))
-rand(rng::AbstractRNG=default_rng(), ::Type{X}=Float64) where {X} = rand(rng, Sampler(rng, X, Val(1)))::X
+rand(rng::AbstractRNG=default_rng(), ::Type{X}=Float64) where {X}   = rand(rng, Sampler(rng, X, Val(1)))::X
 
 rand(X)                   = rand(default_rng(), X)
 rand(::Type{X}) where {X} = rand(default_rng(), X)
@@ -402,33 +402,33 @@ shared task-local generator.
 julia> Random.seed!(1234);
 
 julia> x1 = rand(2)
-2-element Array{Float64,1}:
- 0.590845
- 0.766797
+2-element Vector{Float64}:
+ 0.32597672886359486
+ 0.5490511363155669
 
 julia> Random.seed!(1234);
 
 julia> x2 = rand(2)
-2-element Array{Float64,1}:
- 0.590845
- 0.766797
+2-element Vector{Float64}:
+ 0.32597672886359486
+ 0.5490511363155669
 
 julia> x1 == x2
 true
 
-julia> rng = MersenneTwister(1234); rand(rng, 2) == x1
+julia> rng = Xoshiro(1234); rand(rng, 2) == x1
 true
 
-julia> MersenneTwister(1) == Random.seed!(rng, 1)
+julia> Xoshiro(1) == Random.seed!(rng, 1)
 true
 
 julia> rand(Random.seed!(rng), Bool) # not reproducible
 true
 
-julia> rand(Random.seed!(rng), Bool)
+julia> rand(Random.seed!(rng), Bool) # not reproducible either
 false
 
-julia> rand(MersenneTwister(), Bool) # not reproducible either
+julia> rand(Xoshiro(), Bool) # not reproducible either
 true
 ```
 """
