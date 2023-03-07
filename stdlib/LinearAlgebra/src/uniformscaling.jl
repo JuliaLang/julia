@@ -419,8 +419,8 @@ promote_to_arrays(n,k, ::Type{T}, A, B, Cs...) where {T} =
     (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B), promote_to_arrays(n,k+2, T, Cs...)...)
 promote_to_array_type(A::Tuple{Vararg{Union{AbstractVecOrMat,UniformScaling,Number}}}) = Matrix
 
-szfun(::UniformScaling, _) = -1
-szfun(A, dim) = (require_one_based_indexing(A); return size(A, dim))
+_catsize(::UniformScaling, _) = -1
+_catsize(A, dim) = (require_one_based_indexing(A); return size(A, dim))
 
 for (f, _f, dim, name) in ((:hcat, :_hcat, 1, "rows"), (:vcat, :_vcat, 2, "cols"))
     @eval begin
@@ -428,7 +428,7 @@ for (f, _f, dim, name) in ((:hcat, :_hcat, 1, "rows"), (:vcat, :_vcat, 2, "cols"
         @inline $f(A::Union{AbstractVecOrMat,UniformScaling,Number}...) = $_f(A...)
         function $_f(A::Union{AbstractVecOrMat,UniformScaling,Number}...; array_type = promote_to_array_type(A))
             n = -1
-            sizes = map(a -> szfun(a, $dim), A)
+            sizes = map(a -> _catsize(a, $dim), A)
             for na in sizes
                 if na != -1
                     n >= 0 && n != na &&
@@ -452,10 +452,10 @@ function _hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScali
     n = fill(-1, length(A))
     needcols = false # whether we also need to infer some sizes from the column count
     j = 0
+    sizes = map(a -> _catsize(a, 1), A)
     for i = 1:nr # infer UniformScaling sizes from row counts, if possible:
         ni = -1 # number of rows in this block-row, -1 indicates unknown
-        sizes = map(a -> szfun(a, 1), A[j+1:j+rows[i]])
-        for na in sizes
+        for na in sizes[j+1:j+rows[i]]
             if na != -1
                 ni >= 0 && ni != na &&
                     throw(DimensionMismatch("mismatch in number of rows"))
