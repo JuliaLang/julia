@@ -71,10 +71,10 @@ Return the ISO year that contains `dt` (see https://en.wikipedia.org/wiki/ISO_we
 # Examples
 ```jldoctest
 julia> isoyear(Date(2022, 1, 1))
-Year(2021)
+2021 years
 
 julia> isoyear(Date(2021, 12, 31))
-Year(2021)
+2021 years
 ```
 """
 function isoyear(dt::DateTime)
