@@ -69,6 +69,23 @@ end
 @deprecate argerror(msg::String) ArgumentError(msg) false
 @deprecate argerror() nothing false
 
+@deprecate floor(dt::Date, p::Year) floor(p, dt)
+@deprecate floor(dt::Date, p::Month) floor(p, dt)
+@deprecate floor(dt::Date, p::Quarter) floor(p, dt)
+@deprecate floor(dt::Date, p::Week) floor(p, dt)
+@deprecate floor(dt::Date, p::Day) floor(p, dt)
+
+@deprecate floor(dt::DateTime, p::DatePeriod) floor(p, dt)
+@deprecate floor(dt::DateTime, p::TimePeriod) floor(p, dt)
+
+@deprecate floor(x::ConvertiblePeriod, precision::T)  where T <: ConvertiblePerio floor(precision, x)
+
+@deprecate ceil(dt::TimeType, p::Period) ceil(p, dt)
+@deprecate ceil(x::ConvertiblePeriod, precision::ConvertiblePeriod) ceil(precision, x)
+
+@deprecate(Base.round(dt::TimeType,  p::Period, r::RoundingMode{:NearestTiesUp}) round(p, dt, r))
+@deprecate(Base.round(x::TimeType, p::Period) round(p, x))
+
 @deprecate floor(x::TimeTypeOrPeriod, p::Type{P}) where P <: Period floor(p, x)
 @deprecate ceil(x::TimeTypeOrPeriod, p::Type{P}) where P <: Period ceil(p, x)
 @deprecate floor(::Type{Date}, x::TimeTypeOrPeriod, ::Type{P}) where P <: Period floor(oneunit(P), Date(x))
