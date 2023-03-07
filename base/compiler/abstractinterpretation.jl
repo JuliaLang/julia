@@ -44,7 +44,7 @@ function should_infer_this_call(interp::AbstractInterpreter, sv::InferenceState)
 end
 
 function should_infer_for_effects(sv::InferenceState)
-    effects = Effects(sv)
+    effects = sv.ipo_effects
     return is_terminates(effects) && is_effect_free(effects)
 end
 
@@ -255,7 +255,7 @@ struct MethodMatches
     applicable::Vector{Any}
     info::MethodMatchInfo
     valid_worlds::WorldRange
-    mt::Core.MethodTable
+    mt::MethodTable
     fullmatch::Bool
     nonoverlayed::Bool
 end
@@ -267,7 +267,7 @@ struct UnionSplitMethodMatches
     applicable_argtypes::Vector{Vector{Any}}
     info::UnionSplitInfo
     valid_worlds::WorldRange
-    mts::Vector{Core.MethodTable}
+    mts::Vector{MethodTable}
     fullmatches::Vector{Bool}
     nonoverlayed::Bool
 end
@@ -282,7 +282,7 @@ function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), meth
         applicable = Any[]
         applicable_argtypes = Vector{Any}[] # arrays like `argtypes`, including constants, for each match
         valid_worlds = WorldRange()
-        mts = Core.MethodTable[]
+        mts = MethodTable[]
         fullmatches = Bool[]
         nonoverlayed = true
         for i in 1:length(split_argtypes)
@@ -290,7 +290,7 @@ function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), meth
             sig_n = argtypes_to_type(arg_n)
             mt = ccall(:jl_method_table_for, Any, (Any,), sig_n)
             mt === nothing && return FailedMethodMatch("Could not identify method table for call")
-            mt = mt::Core.MethodTable
+            mt = mt::MethodTable
             result = findall(sig_n, method_table; limit = max_methods)
             if result === nothing
                 return FailedMethodMatch("For one of the union split cases, too many methods matched")
@@ -329,7 +329,7 @@ function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), meth
         if mt === nothing
             return FailedMethodMatch("Could not identify method table for call")
         end
-        mt = mt::Core.MethodTable
+        mt = mt::MethodTable
         result = findall(atype, method_table; limit = max_methods)
         if result === nothing
             # this means too many methods matched
@@ -3081,7 +3081,7 @@ function typeinf_nocycle(interp::AbstractInterpreter, frame::InferenceState)
                 typeinf_local(interp, caller)
                 no_active_ips_in_callers = false
             end
-            caller.valid_worlds = intersect(caller.valid_worlds, frame.valid_worlds)
+            update_valid_age!(caller, frame.valid_worlds)
         end
     end
     return true
