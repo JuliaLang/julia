@@ -5284,7 +5284,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         jl_cgval_t res = emit_call(ctx, ex, expr_t, is_promotable);
         // some intrinsics (e.g. typeassert) can return a wider type
         // than what's actually possible
-        if (is_promotable && res.promotion_point) {
+        if (is_promotable && res.promotion_point && res.promotion_ssa == -1) {
             res.promotion_ssa = ssaidx_0based;
         }
         res = update_julia_type(ctx, res, expr_t);
