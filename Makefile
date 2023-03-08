@@ -337,8 +337,8 @@ endif
 	# Install `lld` into private_libexecdir
 	$(INSTALL_M) $(build_depsbindir)/lld$(EXE) $(DESTDIR)$(private_libexecdir)/
 
-	# Install `dsymutil` into libexec/
-	$(INSTALL_M) $(build_depsbindir)/dsymutil$(EXE) $(DESTDIR)$(libexecdir)/
+	# Install `dsymutil` into private_libexecdir/
+	$(INSTALL_M) $(build_depsbindir)/dsymutil$(EXE) $(DESTDIR)$(private_libexecdir)/
 
 	# Copy public headers
 	cp -R -L $(build_includedir)/julia/* $(DESTDIR)$(includedir)/julia
