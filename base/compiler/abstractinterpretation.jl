@@ -502,22 +502,24 @@ function conditional_argtype(@nospecialize(rt), @nospecialize(sig), argtypes::Ve
     end
 end
 
-function add_call_backedges!(interp::AbstractInterpreter,
-    @nospecialize(rettype), all_effects::Effects,
+function add_call_backedges!(interp::AbstractInterpreter, @nospecialize(rettype), all_effects::Effects,
     edges::Vector{MethodInstance}, matches::Union{MethodMatches,UnionSplitMethodMatches}, @nospecialize(atype),
     sv::InferenceState)
-    # we don't need to add backedges when:
-    # - a new method couldn't refine (widen) this type and
-    # - the effects are known to not provide any useful IPO information
+    # don't bother to add backedges when both type and effects information are already
+    # maximized to the top since a new method couldn't refine or widen them anyway
     if rettype === Any
+        # ignore the `:nonoverlayed` property if `interp` doesn't use overlayed method table
+        # since it will never be tainted anyway
         if !isoverlayed(method_table(interp))
-            # we can ignore the `nonoverlayed` property if `interp` doesn't use
-            # overlayed method table at all since it will never be tainted anyway
             all_effects = Effects(all_effects; nonoverlayed=false)
         end
-        if all_effects === Effects()
-            return
+        if (# ignore the `:noinbounds` property if `:consistent`-cy is tainted already
+            sv.ipo_effects.consistent === ALWAYS_FALSE || all_effects.consistent === ALWAYS_FALSE ||
+            # or this `:noinbounds` doesn't taint it
+            !stmt_taints_inbounds_consistency(sv))
+            all_effects = Effects(all_effects; noinbounds=false)
         end
+        all_effects === Effects() && return nothing
     end
     for edge in edges
         add_backedge!(sv, edge)
@@ -531,6 +533,7 @@ function add_call_backedges!(interp::AbstractInterpreter,
             thisfullmatch || add_mt_backedge!(sv, mt, atype)
         end
     end
+    return nothing
 end
 
 const RECURSION_UNUSED_MSG = "Bounded recursion detected with unused result. Annotated return type may be wider than true result."
@@ -2475,7 +2478,8 @@ function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, vtypes:
             override.terminates_globally ? true        : effects.terminates,
             override.notaskstate         ? true        : effects.notaskstate,
             override.inaccessiblememonly ? ALWAYS_TRUE : effects.inaccessiblememonly,
-            effects.nonoverlayed)
+            effects.nonoverlayed,
+            effects.noinbounds)
     end
     return RTEffects(t, effects)
 end
