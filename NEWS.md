@@ -141,7 +141,7 @@ Standard library changes
   the keybinding Alt-m ([#33872]).
 * An "IPython mode" which mimics the behaviour of the prompts and storing the evaluated result in `Out` can be
   activated with `REPL.ipython_mode!()`. See the manual for how to enable this at startup ([#46474]).
-* Tab completion displays available keyword arguments ([#43536])
+* Tab completion displays available keyword arguments ([#43536]).
 
 #### SuiteSparse
 
@@ -214,6 +214,7 @@ Tooling Improvements
 [#42902]: https://github.com/JuliaLang/julia/issues/42902
 [#43270]: https://github.com/JuliaLang/julia/issues/43270
 [#43334]: https://github.com/JuliaLang/julia/issues/43334
+[#43536]: https://github.com/JuliaLang/julia/issues/43536
 [#44137]: https://github.com/JuliaLang/julia/issues/44137
 [#44231]: https://github.com/JuliaLang/julia/issues/44231
 [#44266]: https://github.com/JuliaLang/julia/issues/44266
