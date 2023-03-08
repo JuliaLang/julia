@@ -141,9 +141,9 @@ function invalidate_cache!(replaced, max_world, depth = 0)
 end
 
 function CC.optimize(interp::EscapeAnalyzer,
-    opt::OptimizationState, params::OptimizationParams, caller::InferenceResult)
+    opt::OptimizationState, caller::InferenceResult)
     ir = run_passes_with_ea(interp, opt.src, opt, caller)
-    return CC.finish(interp, opt, params, ir, caller)
+    return CC.finish(interp, opt, ir, caller)
 end
 
 function CC.cache_result!(interp::EscapeAnalyzer, caller::InferenceResult)
