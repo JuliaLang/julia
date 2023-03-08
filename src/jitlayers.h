@@ -93,7 +93,7 @@ struct OptimizationOptions {
 // for middle-end IR optimizations. However, we have not qualified the new
 // pass manager on our optimization pipeline yet, so this remains an optional
 // define
-#define JL_USE_NEW_PM
+// #define JL_USE_NEW_PM
 
 struct NewPM {
     std::unique_ptr<TargetMachine> TM;
