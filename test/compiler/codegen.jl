@@ -821,3 +821,7 @@ function F48394(a, b, i)
 end
 @test F48394(X48394(nothing,true), Y48394(nothing, missing), true)
 @test occursin("llvm.trap", get_llvm(F48394, Tuple{X48394, Y48394, Bool}))
+
+# issue 48917, hoisting load to above the parent
+f48917(x, w) = (y = (a=1, b=x); z = (; a=(a=(1, w), b=(3, y))))
+@test f48917(1,2) == (a = (a = (1, 2), b = (3, (a = 1, b = 1))),)

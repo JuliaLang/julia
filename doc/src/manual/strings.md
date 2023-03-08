@@ -535,7 +535,9 @@ Constructing strings using concatenation can become a bit cumbersome, however. T
 verbose calls to [`string`](@ref) or repeated multiplications, Julia allows interpolation into string literals
 using `$`, as in Perl:
 
-```jldoctest stringconcat
+```jldoctest
+julia> greet = "Hello"; whom = "world";
+
 julia> "$greet, $whom.\n"
 "Hello, world.\n"
 ```
