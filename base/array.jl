@@ -1930,6 +1930,9 @@ function hcat(V::Vector{T}...) where T
     end
     return [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end
+hcat(A::Union{Number,Vector,Matrix}...) = cat(A...; dims=Val(2)) # more special than LinAlg/special.jl
+hcat(A::VecOrMat{T}...) where {T} = typed_hcat(T, A...) # more special than LinAlg/special.jl
+hcat(A::Vector...) = cat(A...; dims=Val(2)) # more special than SparseArrays's vcat
 
 function vcat(arrays::Vector{T}...) where T
     n = 0
@@ -1946,6 +1949,13 @@ function vcat(arrays::Vector{T}...) where T
     end
     return arr
 end
+vcat(A::Vector...) = cat(A...; dims=Val(1)) # more special than SparseArrays's vcat
+vcat(A::Union{Number,Vector,Matrix}...) = cat(A...; dims=Val(1)) # more special than LinAlg/special.jl
+vcat(A::VecOrMat{T}...) where {T} = typed_vcat(T, A...) # more special than LinAlg/special.jl
+
+# disambiguation with LinAlg/special.jl
+hvcat(rows::Tuple{Vararg{Int}}, xs::Union{Number,Vector,Matrix}...) = typed_hvcat(promote_eltypeof(xs...), rows, xs...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::VecOrMat{T}...) where {T} = typed_hvcat(T, rows, xs...)
 
 _cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(Returns(1), n-1)..., length(x)))
 
