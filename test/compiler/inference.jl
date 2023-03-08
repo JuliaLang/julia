@@ -1590,7 +1590,7 @@ gg13183(x::X...) where {X} = (_false13183 ? gg13183(x, x) : 0)
 let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     world = UInt(23) # some small-numbered world that should be valid
     interp = Core.Compiler.NativeInterpreter()
-    opt = Core.Compiler.OptimizationState(linfo, Core.Compiler.OptimizationParams(interp), interp)
+    opt = Core.Compiler.OptimizationState(linfo, interp)
     # make sure the state of the properties look reasonable
     @test opt.src !== linfo.def.source
     @test length(opt.src.slotflags) == linfo.def.nargs <= length(opt.src.slotnames)
@@ -4125,16 +4125,14 @@ function f_convert_me_to_ir(b, x)
     return a
 end
 
-let
-    # Test the presence of PhiNodes in lowered IR by taking the above function,
+let # Test the presence of PhiNodes in lowered IR by taking the above function,
     # running it through SSA conversion and then putting it into an opaque
     # closure.
     mi = Core.Compiler.specialize_method(first(methods(f_convert_me_to_ir)),
         Tuple{Bool, Float64}, Core.svec())
     ci = Base.uncompressed_ast(mi.def)
     ci.ssavaluetypes = Any[Any for i = 1:ci.ssavaluetypes]
-    sv = Core.Compiler.OptimizationState(mi, Core.Compiler.OptimizationParams(),
-        Core.Compiler.NativeInterpreter())
+    sv = Core.Compiler.OptimizationState(mi, Core.Compiler.NativeInterpreter())
     ir = Core.Compiler.convert_to_ircode(ci, sv)
     ir = Core.Compiler.slot2reg(ir, ci, sv)
     ir = Core.Compiler.compact!(ir)
