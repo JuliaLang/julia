@@ -642,8 +642,7 @@ static jl_value_t *inst_varargp_in_env(jl_value_t *decl, jl_svec_t *sparams)
                 int T_has_tv = T && jl_has_typevar(T, v);
                 int N_has_tv = N && jl_has_typevar(N, v); // n.b. JL_VARARG_UNBOUND check means this should be false
                 assert(!N_has_tv || N == (jl_value_t*)v);
-                if (T_has_tv)
-                    vm = jl_type_unionall(v, T);
+                vm = T_has_tv ? jl_type_unionall(v, T) : T;
                 if (N_has_tv)
                     N = NULL;
                 vm = (jl_value_t*)jl_wrap_vararg(vm, N); // this cannot throw for these inputs
