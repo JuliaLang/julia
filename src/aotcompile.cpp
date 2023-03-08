@@ -1457,8 +1457,8 @@ void jl_dump_native_impl(void *native_code,
     // We don't want to use MCJIT's target machine because
     // it uses the large code model and we may potentially
     // want less optimizations there.
-    Triple TheTriple = Triple(jl_ExecutionEngine->getTargetTriple());
     // make sure to emit the native object format, even if FORCE_ELF was set in codegen
+    Triple TheTriple(data->M.getModuleUnlocked()->getTargetTriple());
     if (TheTriple.isOSWindows()) {
         TheTriple.setObjectFormat(Triple::COFF);
     } else if (TheTriple.isOSDarwin()) {
