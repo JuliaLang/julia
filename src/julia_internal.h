@@ -969,13 +969,7 @@ STATIC_INLINE size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT {
     return i;
 }
 
-STATIC_INLINE uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT {
-    size_t blob = external_blob_index(v);
-    if (blob == n_linkage_blobs()) {
-        return 0;
-    }
-    return 1;
-}
+uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
 
 typedef struct {
     LLVMOrcThreadSafeModuleRef TSM;

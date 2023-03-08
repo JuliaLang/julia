@@ -2662,6 +2662,8 @@ JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
 // }
 #endif
 
+extern void rebuild_image_blob_tree(void);
+
 static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl_array_t *depmods, uint64_t checksum,
                                 /* outputs */    jl_array_t **restored,         jl_array_t **init_order,
                                                  jl_array_t **extext_methods,
@@ -3155,6 +3157,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     arraylist_push(&jl_linkage_blobs, (void*)image_base);
     arraylist_push(&jl_linkage_blobs, (void*)(image_base + sizeof_sysimg + sizeof(uintptr_t)));
     arraylist_push(&jl_image_relocs, (void*)relocs_base);
+    rebuild_image_blob_tree();
 
     // jl_printf(JL_STDOUT, "%ld blobs to link against\n", jl_linkage_blobs.len >> 1);
     jl_gc_enable(en);
