@@ -173,6 +173,10 @@ pagetable_t memory_map;
 // List of marked big objects.  Not per-thread.  Accessed only by master thread.
 bigval_t *big_objects_marked = NULL;
 
+// Eytzinger tree of images. Used for very fast jl_object_in_image queries during gc
+arraylist_t eytzinger_image_tree;
+arraylist_t eytzinger_idxs;
+
 // -- Finalization --
 // `ptls->finalizers` and `finalizer_list_marked` might have tagged pointers.
 // If an object pointer has the lowest bit set, the next pointer is an unboxed c function pointer.
@@ -182,6 +186,104 @@ bigval_t *big_objects_marked = NULL;
 arraylist_t finalizer_list_marked;
 arraylist_t to_finalize;
 JL_DLLEXPORT _Atomic(int) jl_gc_have_pending_finalizers = 0;
+
+int ptr_cmp(const void *l, const void *r) {
+    uintptr_t left = *(const uintptr_t*)l;
+    uintptr_t right = *(const uintptr_t*)r;
+    // jl_safe_printf("cmp %p %p\n", (void*)left, (void*)right);
+    return (left > right) - (left < right);
+}
+
+// Taken and modified from https://algorithmica.org/en/eytzinger
+int eytzinger(uintptr_t *src, uintptr_t *dest, size_t i, size_t k, size_t n) {
+    // jl_safe_printf("eytzinger %lu %lu %lu\n", i, k, n);
+    if (k <= n) {
+        i = eytzinger(src, dest, i, 2 * k, n);
+        // jl_safe_printf("set %lu dest to %lu src\n", k-1, i);
+        dest[k-1] = src[i];
+        i++;
+        i = eytzinger(src, dest, i, 2 * k + 1, n);
+    }
+    return i;
+}
+
+void rebuild_eytzinger_tree(void) {
+    // since we never unload packages, we can avoid rebuilding unless jl_linkage_blobs
+    // changes size.
+    if (eytzinger_image_tree.len == jl_linkage_blobs.len) {
+        return;
+    }
+    size_t orig = eytzinger_image_tree.len;
+    size_t inc = jl_linkage_blobs.len - orig;
+    assert(eytzinger_idxs.len == eytzinger_image_tree.len);
+    assert(eytzinger_idxs.max == eytzinger_image_tree.max);
+    // jl_safe_printf("inc %lu\n", inc);
+    arraylist_grow(&eytzinger_idxs, inc);
+    arraylist_grow(&eytzinger_image_tree, inc);
+    for (size_t i = 0; i < jl_linkage_blobs.len; i++) {
+        assert((uintptr_t) jl_linkage_blobs.items[i] % 4 == 0 && "Linkage blob not 4-byte aligned!");
+        // We abuse the pointer here a little so that a couple of properties are true:
+        // 1. a start and an end are never the same value. This simplifies the binary search.
+        // 2. ends are always after starts. This also simplifies the binary search.
+        // We assume that there exist no 0-size blobs, but that's a safe assumption
+        // since it means nothing could be there anyways
+        eytzinger_idxs.items[i] = (void*)((uintptr_t) (jl_linkage_blobs.items[i]) + 3 - (i & 1));
+    }
+    // for (size_t i = 0; i < eytzinger_idxs.len; i++) {
+    //     jl_safe_printf("idxs[%lu] = %p\n", i, eytzinger_idxs.items[i]);
+    // }
+    qsort(eytzinger_idxs.items, eytzinger_idxs.len, sizeof(void*), ptr_cmp);
+    // jl_safe_printf("sorted\n");
+    // for (size_t i = 0; i < eytzinger_idxs.len; i++) {
+    //     jl_safe_printf("idxs[%lu] = %p\n", i, eytzinger_idxs.items[i]);
+    // }
+    eytzinger((uintptr_t*)eytzinger_idxs.items, (uintptr_t*)eytzinger_image_tree.items, 0, 1, eytzinger_idxs.len);
+    // for (size_t i = 0; i < eytzinger_idxs.len; i++) {
+    //     jl_safe_printf("eyt[%lu] = %p\n", i, eytzinger_image_tree.items[i]);
+    // }
+    // for (size_t i = 0; i < eytzinger_idxs.len; i++) {
+    //     jl_safe_printf("idxs[%lu] = %p\n", i, eytzinger_idxs.items[i]);
+    // }
+    // for (size_t i = 0; i < jl_linkage_blobs.len; i++) {
+    //     jl_safe_printf("blobs[%lu] = %p\n", i, jl_linkage_blobs.items[i]);
+    // }
+}
+
+int eyt_obj_in_img(jl_value_t *obj) {
+    size_t n = eytzinger_image_tree.len;
+    if (n == 0) {
+        return 0;
+    }
+    assert(eytzinger_image_tree.len % 2 == 0 && "Eytzinger tree not even length!");
+    uintptr_t cmp = (uintptr_t) obj;
+    assert(cmp % 4 == 0 && "Object not 4-byte aligned!");
+    uintptr_t *tree = (uintptr_t*)eytzinger_image_tree.items;
+    size_t k = 1;
+    // note that k preserves the history of how we got to the current node
+    while (k <= n) {
+        int greater = (cmp > tree[k - 1]);
+        // jl_safe_printf("cmp %p tree[%lu] %p greater %d\n", (void*)cmp, k-1, (void*)tree[k-1], greater);
+        k <<= 1;
+        k |= greater;
+    }
+    // Free to assume k is nonzero, since we start with k = 1
+    // This shift does a fast revert of the path until we get
+    // to a node that evaluated less than cmp.
+    k >>= (__builtin_ctzll(k) + 1);
+    if (k == 0) {
+        assert(!jl_object_in_image(obj) && "Eytzinger tree returned wrong result!");
+        return 0;
+    }
+    // jl_safe_printf("final k %lu\n", k);
+    assert(k <= n && "Eytzinger tree index out of bounds!");
+    // jl_safe_printf("cmp %p tree[%lu] %p\n", (void*)cmp, k-1, (void*)tree[k-1]);
+    assert(tree[k - 1] < cmp && "Failed to find lower bound for object!");
+    // Now we use a tiny trick: tree[k - 1] & 1 is whether or not tree[k - 1] is a start or an end
+    // of a blob. If it's a start, then the object is in the image, otherwise it's not.
+    int in_image = (uintptr_t) eytzinger_image_tree.items[k - 1] & 1;
+    assert(in_image == jl_object_in_image(obj) && "Eytzinger tree returned wrong result!");
+    return in_image;
+}
 
 NOINLINE uintptr_t gc_get_stack_ptr(void)
 {
@@ -2270,7 +2372,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
         uint8_t bits = (gc_old(o->header) && !mark_reset_age) ? GC_OLD_MARKED : GC_MARKED;
         int update_meta = __likely(!meta_updated && !gc_verifying);
         int foreign_alloc = 0;
-        if (update_meta && jl_object_in_image(new_obj)) {
+        if (update_meta && eyt_obj_in_img(new_obj)) {
             foreign_alloc = 1;
             update_meta = 0;
         }
@@ -2826,6 +2928,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     int64_t last_perm_scanned_bytes = perm_scanned_bytes;
     JL_PROBE_GC_MARK_BEGIN();
     uint64_t start_mark_time = jl_hrtime();
+    // 0. Rebuild eytzinger tree for fast object_in_image queries
+    rebuild_eytzinger_tree();
 
     // 1. fix GC bits of objects in the remset.
     assert(gc_n_threads);
@@ -3245,6 +3349,8 @@ void jl_gc_init(void)
 
     arraylist_new(&finalizer_list_marked, 0);
     arraylist_new(&to_finalize, 0);
+    arraylist_new(&eytzinger_image_tree, 0);
+    arraylist_new(&eytzinger_idxs, 0);
 
     gc_num.interval = default_collect_interval;
     last_long_collect_interval = default_collect_interval;
