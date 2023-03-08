@@ -7974,5 +7974,5 @@ let spec = only(methods(g47476)).specializations
     @test all(mi -> mi === nothing || !Base.has_free_typevars(mi.specTypes), spec)
 end
 
-f48950(::Union{c,Nothing}...) where {c,d} = 1
-@test f48950(1, 1) == 1
+f48950(::Union{Int,d}, ::Union{c,Nothing}...) where {c,d} = 1
+@test f48950(1, 1, 1) == 1
