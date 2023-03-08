@@ -717,3 +717,11 @@ end
         @test x isa Tuple{T,T} && x == (typemax(T), typemin(T))
     end
 end
+
+@testset "reducing over empty tuples and vectors of type Union{}" begin
+    for f in (+, *, &, |, xor, min, max, Base.add_sum, Base.mul_prod)
+        s = "reducing with $f over an empty collection of element type Union{} is not allowed"
+        @test_throws s reduce(f, ())
+        @test_throws s reduce(f, Union{}[])
+    end
+end

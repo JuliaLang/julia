@@ -346,10 +346,15 @@ reduce_empty(::typeof(*), ::Type{Union{}}) = _empty_reduce_error(*, Union{})
 reduce_empty(::typeof(*), ::Type{T}) where {T} = one(T)
 reduce_empty(::typeof(*), ::Type{<:AbstractChar}) = ""
 
+reduce_empty(::typeof(&), ::Type{Union{}}) = _empty_reduce_error(&, Union{})
 reduce_empty(::typeof(&), ::Type{T}) where T<:Integer = -1 % T
+reduce_empty(::typeof(|), ::Type{Union{}}) = _empty_reduce_error(|, Union{})
+reduce_empty(::typeof(xor), ::Type{Union{}}) = _empty_reduce_error(xor, Union{})
 reduce_empty(::Union{typeof(|),typeof(xor)}, ::Type{T}) where T<:Integer = zero(T)
 
+reduce_empty(::typeof(min), ::Type{Union{}}) = _empty_reduce_error(min, Union{})
 reduce_empty(::typeof(min), ::Type{T}) where T = typemax(T)
+reduce_empty(::typeof(max), ::Type{Union{}}) = _empty_reduce_error(max, Union{})
 reduce_empty(::typeof(max), ::Type{T}) where T = typemin(T)
 
 reduce_empty(::typeof(add_sum), ::Type{Union{}}) = _empty_reduce_error(add_sum, Union{})
@@ -464,7 +469,7 @@ initial value `init` must be a neutral element for `op` that will be returned fo
 collections. It is unspecified whether `init` is used for non-empty collections.
 
 For empty collections, providing `init` will be necessary, except for some special cases
-(e.g. when `op` is one of `+`, `*`, `max`, `min`, `&`, `|`) when Julia can determine the
+(e.g. when `op` is one of `+`, `*`, `max`, `min`, `&`, `|`, `xor`) when Julia can determine the
 neutral element of `op`.
 
 Reductions for certain commonly-used operators may have special implementations, and
@@ -743,7 +748,9 @@ Return the largest element in a collection.
 The value returned for empty `itr` can be specified by `init`. It must be
 a neutral element for `max` (i.e. which is less than or equal to any
 other element) as it is unspecified whether `init` is used
-for non-empty collections.
+for non-empty collections. If `init` is not given for an empty collection
+with element type `T`, then `maximum` returns `typemin(T)`, which must
+therefore be defined.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
@@ -756,12 +763,14 @@ julia> maximum(-20.5:10)
 julia> maximum([1,2,3])
 3
 
-julia> maximum(())
-ERROR: MethodError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
-Stacktrace:
+julia> maximum([])
+ERROR: MethodError: no method matching typemin(::Type{Any})
 [...]
 
-julia> maximum((); init=-Inf)
+julia> maximum([]; init=-Inf)
+-Inf
+
+julia> maximum(Float64[])
 -Inf
 ```
 """
@@ -775,7 +784,9 @@ Return the smallest element in a collection.
 The value returned for empty `itr` can be specified by `init`. It must be
 a neutral element for `min` (i.e. which is greater than or equal to any
 other element) as it is unspecified whether `init` is used
-for non-empty collections.
+for non-empty collections. If `init` is not given for an empty collection
+with element type `T`, then `minimum` returns `typemax(T)`, which must
+therefore be defined.
 
 !!! compat "Julia 1.6"
     Keyword argument `init` requires Julia 1.6 or later.
@@ -789,11 +800,13 @@ julia> minimum([1,2,3])
 1
 
 julia> minimum([])
-ERROR: MethodError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
-Stacktrace:
+ERROR: MethodError: no method matching typemax(::Type{Any})
 [...]
 
 julia> minimum([]; init=Inf)
+Inf
+
+julia> minimum(Float64[])
 Inf
 ```
 """
