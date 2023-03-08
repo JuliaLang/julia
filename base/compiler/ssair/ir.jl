@@ -936,7 +936,7 @@ end
 
 function setindex!(compact::IncrementalCompact, @nospecialize(v), idx::SSAValue)
     @assert idx.id < compact.result_idx
-    (compact.result[idx.id][:inst] === v) && return
+    (compact.result[idx.id][:inst] === v) && return compact
     # Kill count for current uses
     kill_current_uses!(compact, compact.result[idx.id][:inst])
     compact.result[idx.id][:inst] = v
@@ -949,7 +949,7 @@ function setindex!(compact::IncrementalCompact, @nospecialize(v), idx::OldSSAVal
     id = idx.id
     if id < compact.idx
         new_idx = compact.ssa_rename[id]
-        (compact.result[new_idx][:inst] === v) && return
+        (compact.result[new_idx][:inst] === v) && return compact
         kill_current_uses!(compact, compact.result[new_idx][:inst])
         compact.result[new_idx][:inst] = v
         count_added_node!(compact, v) && push!(compact.late_fixup, new_idx)
