@@ -271,8 +271,8 @@ Return an iterator over a list of backedges. Iteration returns `(sig, caller)` e
 which will be one of the following:
 
 - `BackedgePair(nothing, caller::MethodInstance)`: a call made by ordinary inferable dispatch
-- `BackedgePair(invokesig, caller::MethodInstance)`: a call made by `invoke(f, invokesig, args...)`
-- `BackedgePair(specsig, mt::MethodTable)`: an abstract call
+- `BackedgePair(invokesig::Type, caller::MethodInstance)`: a call made by `invoke(f, invokesig, args...)`
+- `BackedgePair(specsig::Type, mt::MethodTable)`: an abstract call
 
 # Examples
 
@@ -305,17 +305,17 @@ const empty_backedge_iter = BackedgeIterator(Any[])
 
 struct BackedgePair
     sig # ::Union{Nothing,Type}
-    caller::Union{MethodInstance,Core.MethodTable}
-    BackedgePair(@nospecialize(sig), caller::Union{MethodInstance,Core.MethodTable}) = new(sig, caller)
+    caller::Union{MethodInstance,MethodTable}
+    BackedgePair(@nospecialize(sig), caller::Union{MethodInstance,MethodTable}) = new(sig, caller)
 end
 
 function iterate(iter::BackedgeIterator, i::Int=1)
     backedges = iter.backedges
     i > length(backedges) && return nothing
     item = backedges[i]
-    isa(item, MethodInstance) && return BackedgePair(nothing, item), i+1           # regular dispatch
-    isa(item, Core.MethodTable) && return BackedgePair(backedges[i+1], item), i+2  # abstract dispatch
-    return BackedgePair(item, backedges[i+1]::MethodInstance), i+2                 # `invoke` calls
+    isa(item, MethodInstance) && return BackedgePair(nothing, item), i+1      # regular dispatch
+    isa(item, MethodTable) && return BackedgePair(backedges[i+1], item), i+2  # abstract dispatch
+    return BackedgePair(item, backedges[i+1]::MethodInstance), i+2            # `invoke` calls
 end
 
 #########
@@ -482,8 +482,11 @@ function find_throw_blocks(code::Vector{Any}, handler_at::Vector{Int})
 end
 
 # using a function to ensure we can infer this
-@inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id :
-    isa(s, Argument) ? (s::Argument).n : (s::TypedSlot).id
+@inline function slot_id(s)
+    isa(s, SlotNumber) && return s.id
+    isa(s, Argument) && return s.n
+    return (s::TypedSlot).id
+end
 
 ###########
 # options #

@@ -176,11 +176,20 @@ empty(::NamedTuple) = NamedTuple()
 prevind(@nospecialize(t::NamedTuple), i::Integer) = Int(i)-1
 nextind(@nospecialize(t::NamedTuple), i::Integer) = Int(i)+1
 
-convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names,T}) where {names,T<:Tuple} = nt
-convert(::Type{NamedTuple{names}}, nt::NamedTuple{names}) where {names} = nt
+convert(::Type{NT}, nt::NT) where {names, NT<:NamedTuple{names}} = nt
+convert(::Type{NT}, nt::NT) where {names, T<:Tuple, NT<:NamedTuple{names,T}} = nt
 
-function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {names,T<:Tuple}
-    NamedTuple{names,T}(T(nt))::NamedTuple{names,T}
+function convert(::Type{NT}, nt::NamedTuple{names}) where {names, T<:Tuple, NT<:NamedTuple{names,T}}
+    if !@isdefined T
+        # converting abstract NT to an abstract Tuple type, to a concrete NT1, is not straightforward, so this could just be an error, but we define it anyways
+        # _tuple_error(NT, nt)
+        T1 = Tuple{ntuple(i -> fieldtype(NT, i), Val(length(names)))...}
+        NT1 = NamedTuple{names, T1}
+    else
+        T1 = T
+        NT1 = NT
+    end
+    return NT1(T1(nt))::NT1::NT
 end
 
 if nameof(@__MODULE__) === :Base
@@ -362,7 +371,7 @@ function merge(a::NamedTuple, itr)
     merge(a, NamedTuple{(names...,)}((vals...,)))
 end
 
-keys(nt::NamedTuple{names}) where {names} = names
+keys(nt::NamedTuple{names}) where {names} = names::Tuple{Vararg{Symbol}}
 values(nt::NamedTuple) = Tuple(nt)
 haskey(nt::NamedTuple, key::Union{Integer, Symbol}) = isdefined(nt, key)
 get(nt::NamedTuple, key::Union{Integer, Symbol}, default) = isdefined(nt, key) ? getfield(nt, key) : default

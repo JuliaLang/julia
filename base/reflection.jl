@@ -3,19 +3,6 @@
 # name and module reflection
 
 """
-    nameof(m::Module) -> Symbol
-
-Get the name of a `Module` as a [`Symbol`](@ref).
-
-# Examples
-```jldoctest
-julia> nameof(Base.Broadcast)
-:Broadcast
-```
-"""
-nameof(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
-
-"""
     parentmodule(m::Module) -> Module
 
 Get a module's enclosing `Module`. `Main` is its own parent.
@@ -307,8 +294,6 @@ function isfieldatomic(@nospecialize(t::Type), s::Int)
     s -= 1
     return unsafe_load(Ptr{UInt32}(atomicfields), 1 + s÷32) & (1 << (s%32)) != 0
 end
-
-
 
 """
     @locals()
@@ -634,13 +619,14 @@ is reachable from this type (either in the type itself) or through any fields.
 Note that the type itself need not be immutable. For example, an empty mutable
 type is `ismutabletype`, but also `ismutationfree`.
 """
-function ismutationfree(@nospecialize(t::Type))
+function ismutationfree(@nospecialize(t))
     t = unwrap_unionall(t)
     if isa(t, DataType)
         return datatype_ismutationfree(t)
     elseif isa(t, Union)
         return ismutationfree(t.a) && ismutationfree(t.b)
     end
+    # TypeVar, etc.
     return false
 end
 
@@ -652,7 +638,7 @@ datatype_isidentityfree(dt::DataType) = (@_total_meta; (dt.flags & 0x0200) == 0x
 Determine whether type `T` is identity free in the sense that this type or any
 reachable through its fields has non-content-based identity.
 """
-function isidentityfree(@nospecialize(t::Type))
+function isidentityfree(@nospecialize(t))
     t = unwrap_unionall(t)
     if isa(t, DataType)
         return datatype_isidentityfree(t)
@@ -1084,29 +1070,31 @@ function visit(f, mt::Core.MethodTable)
     nothing
 end
 function visit(f, mc::Core.TypeMapLevel)
-    if mc.targ !== nothing
-        e = mc.targ::Vector{Any}
+    function avisit(f, e::Array{Any,1})
         for i in 2:2:length(e)
-            isassigned(e, i) && visit(f, e[i])
+            isassigned(e, i) || continue
+            ei = e[i]
+            if ei isa Vector{Any}
+                for j in 2:2:length(ei)
+                    isassigned(ei, j) || continue
+                    visit(f, ei[j])
+                end
+            else
+                visit(f, ei)
+            end
         end
+    end
+    if mc.targ !== nothing
+        avisit(f, mc.targ::Vector{Any})
     end
     if mc.arg1 !== nothing
-        e = mc.arg1::Vector{Any}
-        for i in 2:2:length(e)
-            isassigned(e, i) && visit(f, e[i])
-        end
+        avisit(f, mc.arg1::Vector{Any})
     end
     if mc.tname !== nothing
-        e = mc.tname::Vector{Any}
-        for i in 2:2:length(e)
-            isassigned(e, i) && visit(f, e[i])
-        end
+        avisit(f, mc.tname::Vector{Any})
     end
     if mc.name1 !== nothing
-        e = mc.name1::Vector{Any}
-        for i in 2:2:length(e)
-            isassigned(e, i) && visit(f, e[i])
-        end
+        avisit(f, mc.name1::Vector{Any})
     end
     mc.list !== nothing && visit(f, mc.list)
     mc.any !== nothing && visit(f, mc.any)
@@ -1549,7 +1537,8 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
         else
             empty!(cst)
             resize!(cst, length(code.code))
-            maxcost = Core.Compiler.statement_costs!(cst, code.code, code, Any[match.sparams...], false, params)
+            sptypes = Core.Compiler.VarState[Core.Compiler.VarState(sp, false) for sp in match.sparams]
+            maxcost = Core.Compiler.statement_costs!(cst, code.code, code, sptypes, false, params)
             nd = ndigits(maxcost)
             irshow_config = IRShow.IRShowConfig() do io, linestart, idx
                 print(io, idx > 0 ? lpad(cst[idx], nd+1) : " "^(nd+1), " ")
@@ -1709,20 +1698,30 @@ julia> hasmethod(g, Tuple{}, (:a, :b, :c, :d))  # g accepts arbitrary kwargs
 true
 ```
 """
-function hasmethod(@nospecialize(f), @nospecialize(t); world::UInt=get_world_counter())
-    t = signature_type(f, t)
-    return ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), t, nothing, world) !== nothing
+function hasmethod(@nospecialize(f), @nospecialize(t))
+    return Core._hasmethod(f, t isa Type ? t : to_tuple_type(t))
 end
 
-function hasmethod(@nospecialize(f), @nospecialize(t), kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_counter())
-    # TODO: this appears to be doing the wrong queries
-    hasmethod(f, t, world=world) || return false
-    isempty(kwnames) && return true
-    m = which(f, t)
-    kws = kwarg_decl(m)
+function Core.kwcall(kwargs, ::typeof(hasmethod), @nospecialize(f), @nospecialize(t))
+    world = kwargs.world::UInt # make sure this is the only local, to avoid confusing kwarg_decl()
+    return ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), signature_type(f, t), nothing, world) !== nothing
+end
+
+function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_counter())
+    @nospecialize
+    isempty(kwnames) && return hasmethod(f, t; world)
+    t = to_tuple_type(t)
+    ft = Core.Typeof(f)
+    u = unwrap_unionall(t)::DataType
+    tt = rewrap_unionall(Tuple{typeof(Core.kwcall), typeof(pairs((;))), ft, u.parameters...}, t)
+    match = ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world)
+    match === nothing && return false
+    kws = ccall(:jl_uncompress_argnames, Array{Symbol,1}, (Any,), (match::Method).slot_syms)
+    isempty(kws) && return true # some kwfuncs simply forward everything directly
     for kw in kws
         endswith(String(kw), "...") && return true
     end
+    kwnames = Symbol[kwnames[i] for i in 1:length(kwnames)]
     return issubset(kwnames, kws)
 end
 

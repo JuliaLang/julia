@@ -17,6 +17,12 @@
 
 #include "julia_assert.h"
 
+#ifndef _OS_WINDOWS_
+#include <dlfcn.h>
+#endif
+
+#include <iostream>
+
 // CPU target string is a list of strings separated by `;` each string starts with a CPU
 // or architecture name and followed by an optional list of features separated by `,`.
 // A "generic" or empty CPU name means the basic required feature set of the target ISA
@@ -621,111 +627,188 @@ static inline std::vector<TargetData<n>> &get_cmdline_targets(F &&feature_cb)
 // Load sysimg, use the `callback` for dispatch and perform all relocations
 // for the selected target.
 template<typename F>
-static inline jl_image_fptrs_t parse_sysimg(void *hdl, F &&callback)
+static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
 {
-    jl_image_fptrs_t res = {nullptr, 0, nullptr, 0, nullptr, nullptr};
+    jl_image_t res{};
 
-    // .data base
-    char *data_base;
-    if (!jl_dlsym(hdl, "jl_sysimg_gvars_base", (void**)&data_base, 0)) {
-        data_base = NULL;
-    }
-    // .text base
-    char *text_base;
-    if (!jl_dlsym(hdl, "jl_sysimg_fvars_base", (void**)&text_base, 0)) {
-        text_base = NULL;
-    }
-    res.base = text_base;
+    const jl_image_pointers_t *pointers;
+    jl_dlsym(hdl, "jl_image_pointers", (void**)&pointers, 1);
 
-    int32_t *offsets;
-    jl_dlsym(hdl, "jl_sysimg_fvars_offsets", (void**)&offsets, 1);
-    uint32_t nfunc = offsets[0];
-    res.offsets = offsets + 1;
-
-    void *ids;
-    jl_dlsym(hdl, "jl_dispatch_target_ids", &ids, 1);
+    const void *ids = pointers->target_data;
     uint32_t target_idx = callback(ids);
 
-    int32_t *reloc_slots;
-    jl_dlsym(hdl, "jl_dispatch_reloc_slots", (void **)&reloc_slots, 1);
-    const uint32_t nreloc = reloc_slots[0];
-    reloc_slots += 1;
-    uint32_t *clone_idxs;
-    int32_t *clone_offsets;
-    jl_dlsym(hdl, "jl_dispatch_fvars_idxs", (void**)&clone_idxs, 1);
-    jl_dlsym(hdl, "jl_dispatch_fvars_offsets", (void**)&clone_offsets, 1);
-    uint32_t tag_len = clone_idxs[0];
-    clone_idxs += 1;
-
-    assert(tag_len & jl_sysimg_tag_mask);
-    std::vector<const int32_t*> base_offsets = {res.offsets};
-    // Find target
-    for (uint32_t i = 0;i < target_idx;i++) {
-        uint32_t len = jl_sysimg_val_mask & tag_len;
-        if (jl_sysimg_tag_mask & tag_len) {
-            if (i != 0)
-                clone_offsets += nfunc;
-            clone_idxs += len + 1;
-        }
-        else {
-            clone_offsets += len;
-            clone_idxs += len + 2;
-        }
-        tag_len = clone_idxs[-1];
-        base_offsets.push_back(tag_len & jl_sysimg_tag_mask ? clone_offsets : nullptr);
+    if (pointers->header->version != 1) {
+        jl_error("Image file is not compatible with this version of Julia");
     }
 
-    bool clone_all = (tag_len & jl_sysimg_tag_mask) != 0;
-    // Fill in return value
-    if (clone_all) {
-        // clone_all
-        if (target_idx != 0) {
-            res.offsets = clone_offsets;
+    std::vector<const char *> fvars(pointers->header->nfvars);
+    std::vector<const char *> gvars(pointers->header->ngvars);
+
+    std::vector<std::pair<uint32_t, const char *>> clones;
+
+    for (unsigned i = 0; i < pointers->header->nshards; i++) {
+        auto shard = pointers->shards[i];
+
+        // .data base
+        char *data_base = (char *)shard.gvar_base;
+
+        // .text base
+        const char *text_base = shard.fvar_base;
+
+        const int32_t *offsets = shard.fvar_offsets;
+        uint32_t nfunc = offsets[0];
+        assert(nfunc <= pointers->header->nfvars);
+        offsets++;
+        const int32_t *reloc_slots = shard.clone_slots;
+        const uint32_t nreloc = reloc_slots[0];
+        reloc_slots += 1;
+        const uint32_t *clone_idxs = shard.clone_idxs;
+        const int32_t *clone_offsets = shard.clone_offsets;
+        uint32_t tag_len = clone_idxs[0];
+        clone_idxs += 1;
+
+        assert(tag_len & jl_sysimg_tag_mask);
+        std::vector<const int32_t*> base_offsets = {offsets};
+        // Find target
+        for (uint32_t i = 0;i < target_idx;i++) {
+            uint32_t len = jl_sysimg_val_mask & tag_len;
+            if (jl_sysimg_tag_mask & tag_len) {
+                if (i != 0)
+                    clone_offsets += nfunc;
+                clone_idxs += len + 1;
+            }
+            else {
+                clone_offsets += len;
+                clone_idxs += len + 2;
+            }
+            tag_len = clone_idxs[-1];
+            base_offsets.push_back(tag_len & jl_sysimg_tag_mask ? clone_offsets : nullptr);
         }
+
+        bool clone_all = (tag_len & jl_sysimg_tag_mask) != 0;
+        // Fill in return value
+        if (clone_all) {
+            // clone_all
+            if (target_idx != 0) {
+                offsets = clone_offsets;
+            }
+        }
+        else {
+            uint32_t base_idx = clone_idxs[0];
+            assert(base_idx < target_idx);
+            if (target_idx != 0) {
+                offsets = base_offsets[base_idx];
+                assert(offsets);
+            }
+            clone_idxs++;
+            unsigned start = clones.size();
+            clones.resize(start + tag_len);
+            auto idxs = shard.fvar_idxs;
+            for (unsigned i = 0; i < tag_len; i++) {
+                clones[start + i] = {(clone_idxs[i] & ~jl_sysimg_val_mask) | idxs[clone_idxs[i] & jl_sysimg_val_mask], clone_offsets[i] + text_base};
+            }
+        }
+        // Do relocation
+        uint32_t reloc_i = 0;
+        uint32_t len = jl_sysimg_val_mask & tag_len;
+        for (uint32_t i = 0; i < len; i++) {
+            uint32_t idx = clone_idxs[i];
+            int32_t offset;
+            if (clone_all) {
+                offset = offsets[idx];
+            }
+            else if (idx & jl_sysimg_tag_mask) {
+                idx = idx & jl_sysimg_val_mask;
+                offset = clone_offsets[i];
+            }
+            else {
+                continue;
+            }
+            bool found = false;
+            for (; reloc_i < nreloc; reloc_i++) {
+                auto reloc_idx = ((const uint32_t*)reloc_slots)[reloc_i * 2];
+                if (reloc_idx == idx) {
+                    found = true;
+                    auto slot = (const void**)(data_base + reloc_slots[reloc_i * 2 + 1]);
+                    assert(slot);
+                    *slot = offset + text_base;
+                }
+                else if (reloc_idx > idx) {
+                    break;
+                }
+            }
+            assert(found && "Cannot find GOT entry for cloned function.");
+            (void)found;
+        }
+
+        auto fidxs = shard.fvar_idxs;
+        for (uint32_t i = 0; i < nfunc; i++) {
+            fvars[fidxs[i]] = text_base + offsets[i];
+        }
+
+        auto gidxs = shard.gvar_idxs;
+        unsigned ngvars = shard.gvar_offsets[0];
+        assert(ngvars <= pointers->header->ngvars);
+        for (uint32_t i = 0; i < ngvars; i++) {
+            gvars[gidxs[i]] = data_base + shard.gvar_offsets[i+1];
+        }
+    }
+
+    if (!fvars.empty()) {
+        auto offsets = (int32_t *) malloc(sizeof(int32_t) * fvars.size());
+        res.fptrs.base = fvars[0];
+        for (size_t i = 0; i < fvars.size(); i++) {
+            assert(fvars[i] && "Missing function pointer!");
+            offsets[i] = fvars[i] - res.fptrs.base;
+        }
+        res.fptrs.offsets = offsets;
+        res.fptrs.noffsets = fvars.size();
+    }
+
+    if (!gvars.empty()) {
+        auto offsets = (int32_t *) malloc(sizeof(int32_t) * gvars.size());
+        res.gvars_base = (uintptr_t *)gvars[0];
+        for (size_t i = 0; i < gvars.size(); i++) {
+            assert(gvars[i] && "Missing global variable pointer!");
+            offsets[i] = gvars[i] - (const char *)res.gvars_base;
+        }
+        res.gvars_offsets = offsets;
+        res.ngvars = gvars.size();
+    }
+
+    if (!clones.empty()) {
+        assert(!fvars.empty());
+        std::sort(clones.begin(), clones.end());
+        auto clone_offsets = (int32_t *) malloc(sizeof(int32_t) * clones.size());
+        auto clone_idxs = (uint32_t *) malloc(sizeof(uint32_t) * clones.size());
+        for (size_t i = 0; i < clones.size(); i++) {
+            clone_idxs[i] = clones[i].first;
+            clone_offsets[i] = clones[i].second - res.fptrs.base;
+        }
+        res.fptrs.clone_idxs = clone_idxs;
+        res.fptrs.clone_offsets = clone_offsets;
+        res.fptrs.nclones = clones.size();
+    }
+
+#ifdef _OS_WINDOWS_
+    res.base = (intptr_t)hdl;
+#else
+    Dl_info dlinfo;
+    if (dladdr((void*)pointers, &dlinfo) != 0) {
+        res.base = (intptr_t)dlinfo.dli_fbase;
     }
     else {
-        uint32_t base_idx = clone_idxs[0];
-        assert(base_idx < target_idx);
-        if (target_idx != 0) {
-            res.offsets = base_offsets[base_idx];
-            assert(res.offsets);
-        }
-        clone_idxs++;
-        res.nclones = tag_len;
-        res.clone_offsets = clone_offsets;
-        res.clone_idxs = clone_idxs;
+        res.base = 0;
     }
-    // Do relocation
-    uint32_t reloc_i = 0;
-    uint32_t len = jl_sysimg_val_mask & tag_len;
-    for (uint32_t i = 0; i < len; i++) {
-        uint32_t idx = clone_idxs[i];
-        int32_t offset;
-        if (clone_all) {
-            offset = res.offsets[idx];
-        }
-        else if (idx & jl_sysimg_tag_mask) {
-            idx = idx & jl_sysimg_val_mask;
-            offset = clone_offsets[i];
-        }
-        else {
-            continue;
-        }
-        bool found = false;
-        for (; reloc_i < nreloc; reloc_i++) {
-            auto reloc_idx = ((const uint32_t*)reloc_slots)[reloc_i * 2];
-            if (reloc_idx == idx) {
-                found = true;
-                auto slot = (const void**)(data_base + reloc_slots[reloc_i * 2 + 1]);
-                assert(slot);
-                *slot = offset + res.base;
-            }
-            else if (reloc_idx > idx) {
-                break;
-            }
-        }
-        assert(found && "Cannot find GOT entry for cloned function.");
-        (void)found;
+#endif
+
+    {
+        void *pgcstack_func_slot = pointers->ptls->pgcstack_func_slot;
+        void *pgcstack_key_slot = pointers->ptls->pgcstack_key_slot;
+        jl_pgcstack_getkey((jl_get_pgcstack_func**)pgcstack_func_slot, (jl_pgcstack_key_t*)pgcstack_key_slot);
+
+        size_t *tls_offset_idx = pointers->ptls->tls_offset;
+        *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
     }
 
     return res;

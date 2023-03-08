@@ -70,6 +70,11 @@ real(H::UpperHessenberg{<:Real}) = H
 real(H::UpperHessenberg{<:Complex}) = UpperHessenberg(triu!(real(H.data),-1))
 imag(H::UpperHessenberg) = UpperHessenberg(triu!(imag(H.data),-1))
 
+function istriu(A::UpperHessenberg, k::Integer=0)
+    k <= -1 && return true
+    return _istriu(A, k)
+end
+
 function Matrix{T}(H::UpperHessenberg) where T
     m,n = size(H)
     return triu!(copyto!(Matrix{T}(undef, m, n), H.data), -1)
@@ -160,29 +165,6 @@ function \(U::UnitUpperTriangular, H::UpperHessenberg)
     HH = copy_similar(H, T)
     ldiv!(U, HH)
     UpperHessenberg(HH)
-end
-
-function *(H::UpperHessenberg, B::Bidiagonal)
-    TS = promote_op(matprod, eltype(H), eltype(B))
-    A = mul!(similar(H, TS, size(H)), H, B)
-    return B.uplo == 'U' ? UpperHessenberg(A) : A
-end
-function *(B::Bidiagonal, H::UpperHessenberg)
-    TS = promote_op(matprod, eltype(B), eltype(H))
-    A = mul!(similar(H, TS, size(H)), B, H)
-    return B.uplo == 'U' ? UpperHessenberg(A) : A
-end
-
-function /(H::UpperHessenberg, B::Bidiagonal)
-    T = typeof(oneunit(eltype(H))/oneunit(eltype(B)))
-    A = _rdiv!(similar(H, T, size(H)), H, B)
-    return B.uplo == 'U' ? UpperHessenberg(A) : A
-end
-
-function \(B::Bidiagonal, H::UpperHessenberg)
-    T = typeof(oneunit(eltype(B))\oneunit(eltype(H)))
-    A = ldiv!(similar(H, T, size(H)), B, H)
-    return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 
 # Solving (H+µI)x = b: we can do this in O(m²) time and O(m) memory
@@ -417,10 +399,12 @@ Hessenberg(F::Hessenberg, μ::Number) = Hessenberg(F.factors, F.τ, F.H, F.uplo;
 
 copy(F::Hessenberg{<:Any,<:UpperHessenberg}) = Hessenberg(copy(F.factors), copy(F.τ); μ=F.μ)
 copy(F::Hessenberg{<:Any,<:SymTridiagonal}) = Hessenberg(copy(F.factors), copy(F.τ), copy(F.H), F.uplo; μ=F.μ)
-size(F::Hessenberg, d) = size(F.H, d)
+size(F::Hessenberg, d::Integer) = size(F.H, d)
 size(F::Hessenberg) = size(F.H)
 
-adjoint(F::Hessenberg) = Adjoint(F)
+transpose(F::Hessenberg{<:Real}) = F'
+transpose(::Hessenberg) =
+    throw(ArgumentError("transpose of Hessenberg decomposition is not supported, consider using adjoint"))
 
 # iteration for destructuring into components
 Base.iterate(S::Hessenberg) = (S.Q, Val(:H))
@@ -475,10 +459,7 @@ julia> A = [4. 9. 7.; 4. 4. 1.; 4. 3. 2.]
 julia> F = hessenberg(A)
 Hessenberg{Float64, UpperHessenberg{Float64, Matrix{Float64}}, Matrix{Float64}, Vector{Float64}, Bool}
 Q factor:
-3×3 LinearAlgebra.HessenbergQ{Float64, Matrix{Float64}, Vector{Float64}, false}:
- 1.0   0.0        0.0
- 0.0  -0.707107  -0.707107
- 0.0  -0.707107   0.707107
+3×3 LinearAlgebra.HessenbergQ{Float64, Matrix{Float64}, Vector{Float64}, false}
 H factor:
 3×3 UpperHessenberg{Float64, Matrix{Float64}}:
   4.0      -11.3137       -1.41421
@@ -511,43 +492,14 @@ function show(io::IO, mime::MIME"text/plain", F::Hessenberg)
     show(io, mime, F.H)
 end
 
-"""
-    HessenbergQ <: AbstractQ
-
-Given a [`Hessenberg`](@ref) factorization object `F`, `F.Q` returns
-a `HessenbergQ` object, which is an implicit representation of the unitary
-matrix `Q` in the Hessenberg factorization `QHQ'` represented by `F`.
-This `F.Q` object can be efficiently multiplied by matrices or vectors,
-and can be converted to an ordinary matrix type with `Matrix(F.Q)`.
-"""
-struct HessenbergQ{T,S<:AbstractMatrix,W<:AbstractVector,sym} <: AbstractQ{T}
-    uplo::Char
-    factors::S
-    τ::W
-    function HessenbergQ{T,S,W,sym}(uplo::AbstractChar, factors, τ) where {T,S<:AbstractMatrix,W<:AbstractVector,sym}
-        new(uplo, factors, τ)
-    end
-end
-HessenbergQ(F::Hessenberg{<:Any,<:UpperHessenberg,S,W}) where {S,W} = HessenbergQ{eltype(F.factors),S,W,false}(F.uplo, F.factors, F.τ)
-HessenbergQ(F::Hessenberg{<:Any,<:SymTridiagonal,S,W}) where {S,W} = HessenbergQ{eltype(F.factors),S,W,true}(F.uplo, F.factors, F.τ)
-
 function getproperty(F::Hessenberg, d::Symbol)
     d === :Q && return HessenbergQ(F)
     return getfield(F, d)
 end
 
-size(Q::HessenbergQ, dim::Integer) = size(getfield(Q, :factors), dim == 2 ? 1 : dim)
-size(Q::HessenbergQ) = size(Q, 1), size(Q, 2)
-
 Base.propertynames(F::Hessenberg, private::Bool=false) =
     (:Q, :H, :μ, (private ? (:τ, :factors, :uplo) : ())...)
 
-# HessenbergQ from LAPACK/BLAS (as opposed to Julia libraries like GenericLinearAlgebra)
-const BlasHessenbergQ{T,sym} = HessenbergQ{T,<:StridedMatrix{T},<:StridedVector{T},sym} where {T<:BlasFloat,sym}
-
-## reconstruct the original matrix
-Matrix{T}(Q::BlasHessenbergQ{<:Any,false}) where {T} = convert(Matrix{T}, LAPACK.orghr!(1, size(Q.factors, 1), copy(Q.factors), Q.τ))
-Matrix{T}(Q::BlasHessenbergQ{<:Any,true}) where {T} = convert(Matrix{T}, LAPACK.orgtr!(Q.uplo, copy(Q.factors), Q.τ))
 AbstractArray(F::Hessenberg) = AbstractMatrix(F)
 Matrix(F::Hessenberg) = Array(AbstractArray(F))
 Array(F::Hessenberg) = Matrix(F)
@@ -566,31 +518,6 @@ function AbstractMatrix(F::Hessenberg)
         return A + μ*I # allocate another matrix, e.g. if A is real and μ is complex
     end
 end
-
-# adjoint(Q::HessenbergQ{<:Real})
-
-lmul!(Q::BlasHessenbergQ{T,false}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
-    LAPACK.ormhr!('L', 'N', 1, size(Q.factors, 1), Q.factors, Q.τ, X)
-rmul!(X::StridedVecOrMat{T}, Q::BlasHessenbergQ{T,false}) where {T<:BlasFloat} =
-    LAPACK.ormhr!('R', 'N', 1, size(Q.factors, 1), Q.factors, Q.τ, X)
-lmul!(adjQ::Adjoint{<:Any,<:BlasHessenbergQ{T,false}}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
-    (Q = adjQ.parent; LAPACK.ormhr!('L', ifelse(T<:Real, 'T', 'C'), 1, size(Q.factors, 1), Q.factors, Q.τ, X))
-rmul!(X::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:BlasHessenbergQ{T,false}}) where {T<:BlasFloat} =
-    (Q = adjQ.parent; LAPACK.ormhr!('R', ifelse(T<:Real, 'T', 'C'), 1, size(Q.factors, 1), Q.factors, Q.τ, X))
-
-lmul!(Q::BlasHessenbergQ{T,true}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
-    LAPACK.ormtr!('L', Q.uplo, 'N', Q.factors, Q.τ, X)
-rmul!(X::StridedVecOrMat{T}, Q::BlasHessenbergQ{T,true}) where {T<:BlasFloat} =
-    LAPACK.ormtr!('R', Q.uplo, 'N', Q.factors, Q.τ, X)
-lmul!(adjQ::Adjoint{<:Any,<:BlasHessenbergQ{T,true}}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
-    (Q = adjQ.parent; LAPACK.ormtr!('L', Q.uplo, ifelse(T<:Real, 'T', 'C'), Q.factors, Q.τ, X))
-rmul!(X::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:BlasHessenbergQ{T,true}}) where {T<:BlasFloat} =
-    (Q = adjQ.parent; LAPACK.ormtr!('R', Q.uplo, ifelse(T<:Real, 'T', 'C'), Q.factors, Q.τ, X))
-
-lmul!(Q::HessenbergQ{T}, X::Adjoint{T,<:StridedVecOrMat{T}}) where {T} = rmul!(X', Q')'
-rmul!(X::Adjoint{T,<:StridedVecOrMat{T}}, Q::HessenbergQ{T}) where {T} = lmul!(Q', X')'
-lmul!(adjQ::Adjoint{<:Any,<:HessenbergQ{T}}, X::Adjoint{T,<:StridedVecOrMat{T}}) where {T}  = rmul!(X', adjQ')'
-rmul!(X::Adjoint{T,<:StridedVecOrMat{T}}, adjQ::Adjoint{<:Any,<:HessenbergQ{T}}) where {T} = lmul!(adjQ', X')'
 
 # multiply x by the entries of M in the upper-k triangle, which contains
 # the entries of the upper-Hessenberg matrix H for k=-1
@@ -682,8 +609,8 @@ function rdiv!(B::AbstractVecOrMat{<:Complex}, F::Hessenberg{<:Complex,<:Any,<:A
     return B .= Complex.(Br,Bi)
 end
 
-ldiv!(F::Adjoint{<:Any,<:Hessenberg}, B::AbstractVecOrMat) = rdiv!(B', F')'
-rdiv!(B::AbstractMatrix, F::Adjoint{<:Any,<:Hessenberg}) = ldiv!(F', B')'
+ldiv!(F::AdjointFactorization{<:Any,<:Hessenberg}, B::AbstractVecOrMat) = rdiv!(B', F')'
+rdiv!(B::AbstractMatrix, F::AdjointFactorization{<:Any,<:Hessenberg}) = ldiv!(F', B')'
 
 det(F::Hessenberg) = det(F.H; shift=F.μ)
 logabsdet(F::Hessenberg) = logabsdet(F.H; shift=F.μ)

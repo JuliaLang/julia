@@ -1867,6 +1867,10 @@ end
     @test replstr((; var"#var#"=1)) == """(var"#var#" = 1,)"""
     @test replstr((; var"a"=1, b=2)) == "(a = 1, b = 2)"
     @test replstr((; a=1, b=2)) == "(a = 1, b = 2)"
+
+    # issue 48828, typeinfo missing for arrays with >2 dimensions
+    @test showstr(Float16[1.0 3.0; 2.0 4.0;;; 5.0 7.0; 6.0 8.0]) ==
+                 "Float16[1.0 3.0; 2.0 4.0;;; 5.0 7.0; 6.0 8.0]"
 end
 
 @testset "#14684: `display` should print associative types in full" begin

@@ -1,0 +1,9 @@
+name = "HasExtensions"
+uuid = "4d3288b3-3afc-4bb6-85f3-489fffe514c8"
+version = "0.2.0"
+
+[weakdeps]
+ExtDep = "fa069be4-f60b-4d4c-8b95-f8008775090c"
+
+[extensions]
+Extension2 = "ExtDep"

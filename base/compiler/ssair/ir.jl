@@ -334,13 +334,13 @@ end
 struct IRCode
     stmts::InstructionStream
     argtypes::Vector{Any}
-    sptypes::Vector{Any}
+    sptypes::Vector{VarState}
     linetable::Vector{LineInfoNode}
     cfg::CFG
     new_nodes::NewNodeStream
     meta::Vector{Expr}
 
-    function IRCode(stmts::InstructionStream, cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Expr}, sptypes::Vector{Any})
+    function IRCode(stmts::InstructionStream, cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Expr}, sptypes::Vector{VarState})
         return new(stmts, argtypes, sptypes, linetable, cfg, NewNodeStream(), meta)
     end
     function IRCode(ir::IRCode, stmts::InstructionStream, cfg::CFG, new_nodes::NewNodeStream)
@@ -358,7 +358,7 @@ for debugging and unit testing of IRCode APIs. The compiler itself should genera
 from the frontend or one of the caches.
 """
 function IRCode()
-    ir = IRCode(InstructionStream(1), CFG([BasicBlock(1:1, Int[], Int[])], Int[1]), LineInfoNode[], Any[], Expr[], Any[])
+    ir = IRCode(InstructionStream(1), CFG([BasicBlock(1:1, Int[], Int[])], Int[1]), LineInfoNode[], Any[], Expr[], VarState[])
     ir[SSAValue(1)][:inst] = ReturnNode(nothing)
     ir[SSAValue(1)][:type] = Nothing
     ir[SSAValue(1)][:flag] = 0x00
@@ -936,7 +936,7 @@ end
 
 function setindex!(compact::IncrementalCompact, @nospecialize(v), idx::SSAValue)
     @assert idx.id < compact.result_idx
-    (compact.result[idx.id][:inst] === v) && return
+    (compact.result[idx.id][:inst] === v) && return compact
     # Kill count for current uses
     kill_current_uses!(compact, compact.result[idx.id][:inst])
     compact.result[idx.id][:inst] = v
@@ -949,7 +949,7 @@ function setindex!(compact::IncrementalCompact, @nospecialize(v), idx::OldSSAVal
     id = idx.id
     if id < compact.idx
         new_idx = compact.ssa_rename[id]
-        (compact.result[new_idx][:inst] === v) && return
+        (compact.result[new_idx][:inst] === v) && return compact
         kill_current_uses!(compact, compact.result[new_idx][:inst])
         compact.result[new_idx][:inst] = v
         count_added_node!(compact, v) && push!(compact.late_fixup, new_idx)
@@ -1189,6 +1189,12 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
                 compact.result[stmt][:inst] = nothing
             end
             compact.result[last(stmts)][:inst] = ReturnNode()
+        else
+            # Tell compaction to not schedule this block. A value of -2 here
+            # indicates that the block is not to be scheduled, but there should
+            # still be an (unreachable) BB inserted into the final IR to avoid
+            # disturbing the BB numbering.
+            compact.bb_rename_succ[to] = -2
         end
     else
         # Remove this edge from all phi nodes in `to` block
@@ -1531,7 +1537,7 @@ function iterate_compact(compact::IncrementalCompact)
         resize!(compact, old_result_idx)
     end
     bb = compact.ir.cfg.blocks[active_bb]
-    if compact.cfg_transforms_enabled && active_bb > 1 && active_bb <= length(compact.bb_rename_succ) && compact.bb_rename_succ[active_bb] == -1
+    if compact.cfg_transforms_enabled && active_bb > 1 && active_bb <= length(compact.bb_rename_succ) && compact.bb_rename_succ[active_bb] <= -1
         # Dead block, so kill the entire block.
         compact.idx = last(bb.stmts)
         # Pop any remaining insertion nodes

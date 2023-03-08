@@ -116,7 +116,7 @@ check-whitespace:
 ifneq ($(NO_GIT), 1)
 	@# Append the directory containing the julia we just built to the end of `PATH`,
 	@# to give us the best chance of being able to run this check.
-	@PATH="$(PATH):$(dir $(JULIA_EXECUTABLE))" $(JULIAHOME)/contrib/check-whitespace.jl
+	@PATH="$(PATH):$(dir $(JULIA_EXECUTABLE))" julia $(call cygpath_w,$(JULIAHOME)/contrib/check-whitespace.jl)
 else
 	$(warn "Skipping whitespace check because git is unavailable")
 endif
@@ -284,13 +284,18 @@ ifneq ($(DARWIN_FRAMEWORK),1)
 ifeq ($(OS),Darwin)
 ifeq ($(JULIA_BUILD_MODE),release)
 	-cp -a $(build_libdir)/libjulia.*.dSYM $(DESTDIR)$(libdir)
+	-cp -a $(build_libdir)/libjulia-internal.*.dSYM $(DESTDIR)$(private_libdir)
+	-cp -a $(build_libdir)/libjulia-codegen.*.dSYM $(DESTDIR)$(private_libdir)
 	-cp -a $(build_private_libdir)/sys.dylib.dSYM $(DESTDIR)$(private_libdir)
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	-cp -a $(build_libdir)/libjulia-debug.*.dSYM $(DESTDIR)$(libdir)
+	-cp -a $(build_libdir)/libjulia-internal-debug.*.dSYM $(DESTDIR)$(private_libdir)
+	-cp -a $(build_libdir)/libjulia-codegen-debug.*.dSYM $(DESTDIR)$(private_libdir)
 	-cp -a $(build_private_libdir)/sys-debug.dylib.dSYM $(DESTDIR)$(private_libdir)
 endif
 endif
 
+# Copy over shared library file for libjulia.*
 	for suffix in $(JL_TARGETS) ; do \
 		for lib in $(build_libdir)/lib$${suffix}.*$(SHLIB_EXT)*; do \
 			if [ "$${lib##*.}" != "dSYM" ]; then \
@@ -299,7 +304,7 @@ endif
 		done \
 	done
 else
-	# libjulia in Darwin framework has special location and name
+# libjulia in Darwin framework has special location and name
 ifeq ($(JULIA_BUILD_MODE),release)
 	$(INSTALL_M) $(build_libdir)/libjulia.$(SOMAJOR).$(SOMINOR).dylib $(DESTDIR)$(prefix)/$(framework_dylib)
 	@$(DSYMUTIL) -o $(DESTDIR)$(prefix)/$(framework_resources)/$(FRAMEWORK_NAME).dSYM $(DESTDIR)$(prefix)/$(framework_dylib)
@@ -331,6 +336,9 @@ endif
 
 	# Install `lld` into libexec/
 	$(INSTALL_M) $(build_depsbindir)/lld$(EXE) $(DESTDIR)$(libexecdir)/
+
+	# Install `dsymutil` into libexec/
+	$(INSTALL_M) $(build_depsbindir)/dsymutil$(EXE) $(DESTDIR)$(libexecdir)/
 
 	# Copy public headers
 	cp -R -L $(build_includedir)/julia/* $(DESTDIR)$(includedir)/julia
@@ -380,7 +388,7 @@ ifneq ($(DARWIN_FRAMEWORK),1)
 endif
 else ifneq (,$(findstring $(OS),Linux FreeBSD))
 	for j in $(JL_TARGETS) ; do \
-		$(PATCHELF) --set-rpath '$$ORIGIN/$(private_libdir_rel):$$ORIGIN/$(libdir_rel)' $(DESTDIR)$(bindir)/$$j; \
+		$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN/$(private_libdir_rel):$$ORIGIN/$(libdir_rel)' $(DESTDIR)$(bindir)/$$j; \
 	done
 endif
 
@@ -412,24 +420,18 @@ endif
 endif
 else ifneq (,$(findstring $(OS),Linux FreeBSD))
 ifeq ($(JULIA_BUILD_MODE),release)
-	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-internal.$(SHLIB_EXT)
-	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-codegen.$(SHLIB_EXT)
+	$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-internal.$(SHLIB_EXT)
+	$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-codegen.$(SHLIB_EXT)
 else ifeq ($(JULIA_BUILD_MODE),debug)
-	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-internal-debug.$(SHLIB_EXT)
-	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-codegen-debug.$(SHLIB_EXT)
+	$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-internal-debug.$(SHLIB_EXT)
+	$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-codegen-debug.$(SHLIB_EXT)
 endif
 endif
 
 	# Fix rpaths for dependencies. This should be fixed in BinaryBuilder later.
 ifeq ($(OS), Linux)
-	-$(PATCHELF) --set-rpath '$$ORIGIN' $(DESTDIR)$(private_shlibdir)/libLLVM.$(SHLIB_EXT)
+	-$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN' $(DESTDIR)$(private_shlibdir)/libLLVM.$(SHLIB_EXT)
 endif
-
-	# Replace libstdc++ path, which is also moving from `lib` to `../lib/julia`.
-ifeq ($(OS),Linux)
-	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT),\*libstdc++\.so\.6$$,*$(call dep_lib_path,$(shlibdir),$(private_shlibdir)/libstdc++.so.6))
-endif
-
 
 ifneq ($(LOADER_BUILD_DEP_LIBS),$(LOADER_INSTALL_DEP_LIBS))
 	# Next, overwrite relative path to libjulia-internal in our loader if $$(LOADER_BUILD_DEP_LIBS) != $$(LOADER_INSTALL_DEP_LIBS)
@@ -458,7 +460,7 @@ ifeq ($(OS),FreeBSD)
 	# don't set libgfortran's RPATH, it won't be able to find its friends on systems
 	# that don't have the exact GCC port installed used for the build.
 	for lib in $(DESTDIR)$(private_libdir)/libgfortran*$(SHLIB_EXT)*; do \
-		$(PATCHELF) --set-rpath '$$ORIGIN' $$lib; \
+		$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN' $$lib; \
 	done
 endif
 

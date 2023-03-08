@@ -2204,6 +2204,7 @@ void jl_init_types(void) JL_GC_DISABLED
     ((jl_datatype_t*)jl_type_type)->cached_by_hash = 0;
     jl_type_typename->wrapper = jl_new_struct(jl_unionall_type, tttvar, (jl_value_t*)jl_type_type);
     jl_type_type = (jl_unionall_t*)jl_type_typename->wrapper;
+    ((jl_datatype_t*)jl_type_type->body)->ismutationfree = 1;
 
     jl_typeofbottom_type->super = jl_wrap_Type(jl_bottom_type);
 
@@ -2230,18 +2231,10 @@ void jl_init_types(void) JL_GC_DISABLED
                                        jl_svec1(jl_long_type),
                                        jl_emptysvec, 0, 0, 1);
 
-    jl_abstractslot_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Slot"), core, jl_any_type,
-                                               jl_emptysvec);
-
-    jl_slotnumber_type = jl_new_datatype(jl_symbol("SlotNumber"), core, jl_abstractslot_type, jl_emptysvec,
+    jl_slotnumber_type = jl_new_datatype(jl_symbol("SlotNumber"), core, jl_any_type, jl_emptysvec,
                                          jl_perm_symsvec(1, "id"),
                                          jl_svec1(jl_long_type),
                                          jl_emptysvec, 0, 0, 1);
-
-    jl_typedslot_type = jl_new_datatype(jl_symbol("TypedSlot"), core, jl_abstractslot_type, jl_emptysvec,
-                                        jl_perm_symsvec(2, "id", "typ"),
-                                        jl_svec(2, jl_long_type, jl_any_type),
-                                        jl_emptysvec, 0, 0, 2);
 
     jl_argument_type = jl_new_datatype(jl_symbol("Argument"), core, jl_any_type, jl_emptysvec,
                                        jl_perm_symsvec(1, "n"),
@@ -2432,7 +2425,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_code_info_type =
         jl_new_datatype(jl_symbol("CodeInfo"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(22,
+                        jl_perm_symsvec(21,
                             "code",
                             "codelocs",
                             "ssavaluetypes",
@@ -2449,13 +2442,12 @@ void jl_init_types(void) JL_GC_DISABLED
                             "max_world",
                             "inferred",
                             "propagate_inbounds",
-                            "pure",
                             "has_fcall",
                             "inlining",
                             "constprop",
                             "purity",
                             "inlining_cost"),
-                        jl_svec(22,
+                        jl_svec(21,
                             jl_array_any_type,
                             jl_array_int32_type,
                             jl_any_type,
@@ -2473,7 +2465,6 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type,
-                            jl_bool_type,
                             jl_uint8_type,
                             jl_uint8_type,
                             jl_uint8_type,
@@ -2484,7 +2475,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(29,
+                        jl_perm_symsvec(28,
                             "name",
                             "module",
                             "file",
@@ -2510,11 +2501,10 @@ void jl_init_types(void) JL_GC_DISABLED
                             "nospecialize",
                             "nkw",
                             "isva",
-                            "pure",
                             "is_for_opaque_closure",
                             "constprop",
                             "purity"),
-                        jl_svec(29,
+                        jl_svec(28,
                             jl_symbol_type,
                             jl_module_type,
                             jl_symbol_type,
@@ -2541,7 +2531,6 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_int32_type,
                             jl_bool_type,
                             jl_bool_type,
-                            jl_bool_type,
                             jl_uint8_type,
                             jl_uint8_type),
                         jl_emptysvec,
@@ -2552,7 +2541,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_method_instance_type =
         jl_new_datatype(jl_symbol("MethodInstance"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(9,
+                        jl_perm_symsvec(10,
                             "def",
                             "specTypes",
                             "sparam_vals",
@@ -2561,8 +2550,9 @@ void jl_init_types(void) JL_GC_DISABLED
                             "callbacks",
                             "cache",
                             "inInference",
+                            "cache_with_orig",
                             "precompiled"),
-                        jl_svec(9,
+                        jl_svec(10,
                             jl_new_struct(jl_uniontype_type, jl_method_type, jl_module_type),
                             jl_any_type,
                             jl_simplevector_type,
@@ -2571,12 +2561,13 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type,
                             jl_any_type,
                             jl_bool_type,
+                            jl_bool_type,
                             jl_bool_type),
                         jl_emptysvec,
                         0, 1, 3);
     // These fields should be constant, but Serialization wants to mutate them in initialization
     //const static uint32_t method_instance_constfields[1] = { 0x00000007 }; // (1<<0)|(1<<1)|(1<<2);
-    const static uint32_t method_instance_atomicfields[1] = { 0x00000148 }; // (1<<3)|(1<<6)|(1<<8);
+    const static uint32_t method_instance_atomicfields[1] = { 0x00000248 }; // (1<<3)|(1<<6)|(1<<9);
     //Fields 4 and 5 must be protected by method->write_lock, and thus all operations on jl_method_instance_t are threadsafe. TODO: except inInference
     //jl_method_instance_type->name->constfields = method_instance_constfields;
     jl_method_instance_type->name->atomicfields = method_instance_atomicfields;
@@ -2807,7 +2798,6 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_symbol_type->ismutationfree = jl_symbol_type->isidentityfree = 1;
     jl_simplevector_type->ismutationfree = jl_simplevector_type->isidentityfree = 1;
     jl_datatype_type->ismutationfree = 1;
-    ((jl_datatype_t*)jl_type_type->body)->ismutationfree = 1;
 
     // Technically not ismutationfree, but there's a separate system to deal
     // with mutations for global state.
@@ -2815,6 +2805,7 @@ void jl_init_types(void) JL_GC_DISABLED
 
     // Array's mutable data is hidden, so we need to override it
     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_array_type))->ismutationfree = 0;
+    ((jl_datatype_t*)jl_array_any_type)->ismutationfree = 0;
 
     // override the preferred layout for a couple types
     jl_lineinfonode_type->name->mayinlinealloc = 0; // FIXME: assumed to be a pointer by codegen

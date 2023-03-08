@@ -3,7 +3,7 @@ include $(SRCDIR)/mbedtls.version
 
 ifneq ($(USE_BINARYBUILDER_MBEDTLS), 1)
 MBEDTLS_SRC = mbedtls-$(MBEDTLS_VER)
-MBEDTLS_URL = https://github.com/ARMmbed/mbedtls/archive/v$(MBEDTLS_VER).tar.gz
+MBEDTLS_URL = https://github.com/Mbed-TLS/mbedtls/archive/v$(MBEDTLS_VER).tar.gz
 
 MBEDTLS_OPTS := $(CMAKE_COMMON) -DUSE_SHARED_MBEDTLS_LIBRARY=ON \
     -DUSE_STATIC_MBEDTLS_LIBRARY=OFF -DENABLE_PROGRAMS=OFF -DCMAKE_BUILD_TYPE=Release

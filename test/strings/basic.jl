@@ -164,6 +164,12 @@ end
     @test endswith(y)(y)
     @test endswith(z, z)
     @test endswith(z)(z)
+    #40616 startswith for IO objects
+    let s = "JuliaLang", io = IOBuffer(s)
+        for prefix in ("Julia", "July", s^2, "Ju", 'J', 'x', ('j','J'))
+            @test startswith(io, prefix) == startswith(s, prefix)
+        end
+    end
 end
 
 @testset "SubStrings and Views" begin
@@ -938,6 +944,21 @@ end
     end
 end
 
+@testset "Conversion to Type{Union{String, SubString{String}}}" begin
+    str = "abc"
+    substr = SubString(str)
+    for T in [String, SubString{String}]
+        conv_str = convert(T, str)
+        conv_substr = convert(T, substr)
+
+        if T == String
+            @test conv_str === conv_substr === str
+        elseif T == SubString{String}
+            @test conv_str === conv_substr === substr
+        end
+    end
+end
+
 @test unsafe_wrap(Vector{UInt8},"\xcc\xdd\xee\xff\x80") == [0xcc,0xdd,0xee,0xff,0x80]
 
 @test iterate("a", 1)[2] == 2
@@ -1102,6 +1123,32 @@ end
     @test sprint(summary, "foα") == "4-codeunit String"
     @test sprint(summary, SubString("foα", 2)) == "3-codeunit SubString{String}"
     @test sprint(summary, "") == "empty String"
+end
+
+@testset "isascii" begin
+    N = 1
+    @test isascii("S"^N) == true
+    @test isascii("S"^(N - 1)) == true
+    @test isascii("S"^(N + 1)) == true
+
+    @test isascii("λ" * ("S"^(N))) == false
+    @test isascii(("S"^(N)) * "λ") == false
+
+    for p = 1:16
+        N = 2^p
+        @test isascii("S"^N) == true
+        @test isascii("S"^(N - 1)) == true
+        @test isascii("S"^(N + 1)) == true
+
+        @test isascii("λ" * ("S"^(N))) == false
+        @test isascii(("S"^(N)) * "λ") == false
+        @test isascii("λ"*("S"^(N - 1))) == false
+        @test isascii(("S"^(N - 1)) * "λ") == false
+        if N > 4
+            @test isascii("λ" * ("S"^(N - 3))) == false
+            @test isascii(("S"^(N - 3)) * "λ") == false
+        end
+    end
 end
 
 @testset "Plug holes in test coverage" begin

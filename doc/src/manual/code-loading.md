@@ -351,10 +351,14 @@ Since the primary environment is typically the environment of a project you're w
 
 ### [Package Extensions](@id man-extensions)
 
-A package "extension" is a module that is automatically loaded when a specified set of other packages (its "extension dependencies") are loaded in the current Julia session. The extension dependencies of an extension are a subset of those packages listed under the `[weakdeps]` section of a Project file. Extensions are defined under the `[extensions]` section in the project file:
+A package "extension" is a module that is automatically loaded when a specified set of other packages (its "extension dependencies") are loaded in the current Julia session. Extensions are defined under the `[extensions]` section in the project file. The extension dependencies of an extension are a subset of those packages listed under the `[weakdeps]` section of the project file. Those packages can have compat entries like other packages.
 
 ```toml
 name = "MyPackage"
+
+[compat]
+ExtDep = "1.0"
+OtherExtDep = "1.0"
 
 [weakdeps]
 ExtDep = "c9a23..." # uuid

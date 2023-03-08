@@ -193,7 +193,7 @@ Small functions typically do not need the `@inline` annotation,
 as the compiler does it automatically. By using `@inline` on bigger functions,
 an extra nudge can be given to the compiler to inline it.
 
-`@inline` can be applied immediately before the definition or in its function body.
+`@inline` can be applied immediately before a function definition or within a function body.
 
 ```julia
 # annotate long-form definition
@@ -271,7 +271,7 @@ Small functions are typically inlined automatically.
 By using `@noinline` on small functions, auto-inlining can be
 prevented.
 
-`@noinline` can be applied immediately before the definition or in its function body.
+`@noinline` can be applied immediately before a function definition or within a function body.
 
 ```julia
 # annotate long-form definition
@@ -339,51 +339,68 @@ macro noinline(x)
     return annotate_meta_def_or_block(x, :noinline)
 end
 
-"""
-    @pure ex
-
-`@pure` gives the compiler a hint for the definition of a pure function,
-helping for type inference.
-
-!!! warning
-    This macro is intended for internal compiler use and may be subject to changes.
-
-!!! warning
-    In Julia 1.8 and higher, it is favorable to use [`@assume_effects`](@ref) instead of `@pure`.
-    This is because `@assume_effects` allows a finer grained control over Julia's purity
-    modeling and the effect system enables a wider range of optimizations.
-"""
-macro pure(ex)
-    esc(isa(ex, Expr) ? pushmeta!(ex, :pure) : ex)
-end
 
 """
-    @constprop setting ex
+    @constprop setting [ex]
 
-`@constprop` controls the mode of interprocedural constant propagation for the
-annotated function. Two `setting`s are supported:
+Control the mode of interprocedural constant propagation for the annotated function.
 
-- `@constprop :aggressive ex`: apply constant propagation aggressively.
+Two `setting`s are supported:
+
+- `@constprop :aggressive [ex]`: apply constant propagation aggressively.
   For a method where the return type depends on the value of the arguments,
   this can yield improved inference results at the cost of additional compile time.
-- `@constprop :none ex`: disable constant propagation. This can reduce compile
+- `@constprop :none [ex]`: disable constant propagation. This can reduce compile
   times for functions that Julia might otherwise deem worthy of constant-propagation.
   Common cases are for functions with `Bool`- or `Symbol`-valued arguments or keyword arguments.
+
+`@constprop` can be applied immediately before a function definition or within a function body.
+
+```julia
+# annotate long-form definition
+@constprop :aggressive function longdef(x)
+  ...
+end
+
+# annotate short-form definition
+@constprop :aggressive shortdef(x) = ...
+
+# annotate anonymous function that a `do` block creates
+f() do
+    @constprop :aggressive
+    ...
+end
+```
+
+!!! compat "Julia 1.10"
+  The usage within a function body requires at least Julia 1.10.
 """
 macro constprop(setting, ex)
-    if isa(setting, QuoteNode)
-        setting = setting.value
+    sym = constprop_setting(setting)
+    isa(ex, Expr) && return esc(pushmeta!(ex, sym))
+    throw(ArgumentError(LazyString("Bad expression `", ex, "` in `@constprop settings ex`")))
+end
+macro constprop(setting)
+    sym = constprop_setting(setting)
+    return Expr(:meta, sym)
+end
+
+function constprop_setting(@nospecialize setting)
+    isa(setting, QuoteNode) && (setting = setting.value)
+    if setting === :aggressive
+        return :aggressive_constprop
+    elseif setting === :none
+        return :no_constprop
     end
-    setting === :aggressive && return esc(isa(ex, Expr) ? pushmeta!(ex, :aggressive_constprop) : ex)
-    setting === :none && return esc(isa(ex, Expr) ? pushmeta!(ex, :no_constprop) : ex)
-    throw(ArgumentError("@constprop $setting not supported"))
+    throw(ArgumentError(LazyString("@constprop "), setting, "not supported"))
 end
 
 """
-    @assume_effects setting... ex
+    @assume_effects setting... [ex]
 
-`@assume_effects` overrides the compiler's effect modeling for the given method.
-`ex` must be a method definition or `@ccall` expression.
+Override the compiler's effect modeling for the given method or foreign call.
+`@assume_effects` can be applied immediately before a function definition or within a function body.
+It can also be applied immediately before a `@ccall` expression.
 
 !!! compat "Julia 1.8"
     Using `Base.@assume_effects` requires Julia version 1.8.
@@ -410,9 +427,30 @@ julia> code_typed() do
 1 ─     return 479001600
 ) => Int64
 
+julia> code_typed() do
+           map((2,3,4)) do x
+               # this :terminates_locally allows this anonymous function to be constant-folded
+               Base.@assume_effects :terminates_locally
+               res = 1
+               1 < x < 20 || error("bad pow")
+               while x > 1
+                   res *= x
+                   x -= 1
+               end
+               return res
+           end
+       end
+1-element Vector{Any}:
+ CodeInfo(
+1 ─     return (2, 6, 24)
+) => Tuple{Int64, Int64, Int64}
+
 julia> Base.@assume_effects :total !:nothrow @ccall jl_type_intersection(Vector{Int}::Any, Vector{<:Integer}::Any)::Any
 Vector{Int64} (alias for Array{Int64, 1})
 ```
+
+!!! compat "Julia 1.10"
+  The usage within a function body requires at least Julia 1.10.
 
 !!! warning
     Improper use of this macro causes undefined behavior (including crashes,
@@ -648,21 +686,23 @@ the following other `setting`s:
 Effect names may be prefixed by `!` to indicate that the effect should be removed
 from an earlier meta effect. For example, `:total !:nothrow` indicates that while
 the call is generally total, it may however throw.
-
----
-## Comparison to `@pure`
-
-`@assume_effects :foldable` is similar to [`@pure`](@ref) with the primary
-distinction that the `:consistent`-cy requirement applies world-age wise rather
-than globally as described above. However, in particular, a method annotated
-`@pure` should always be at least `:foldable`.
-Another advantage is that effects introduced by `@assume_effects` are propagated to
-callers interprocedurally while a purity defined by `@pure` is not.
 """
 macro assume_effects(args...)
+    lastex = args[end]
+    inner = unwrap_macrocalls(lastex)
+    if is_function_def(inner)
+        ex = lastex
+        idx = length(args)-1
+    elseif isexpr(lastex, :macrocall) && lastex.args[1] === Symbol("@ccall")
+        ex = lastex
+        idx = length(args)-1
+    else # anonymous function case
+        ex = nothing
+        idx = length(args)
+    end
     (consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly) =
         (false, false, false, false, false, false, false, false)
-    for org_setting in args[1:end-1]
+    for org_setting in args[1:idx]
         (setting, val) = compute_assumed_setting(org_setting)
         if setting === :consistent
             consistent = val
@@ -688,16 +728,19 @@ macro assume_effects(args...)
             throw(ArgumentError("@assume_effects $org_setting not supported"))
         end
     end
-    ex = args[end]
-    isa(ex, Expr) || throw(ArgumentError("Bad expression `$ex` in `@assume_effects [settings] ex`"))
-    if ex.head === :macrocall && ex.args[1] === Symbol("@ccall")
+    if is_function_def(inner)
+        return esc(pushmeta!(ex, :purity,
+            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly))
+    elseif isexpr(ex, :macrocall) && ex.args[1] === Symbol("@ccall")
         ex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
         insert!(ex.args, 3, Core.Compiler.encode_effects_override(Core.Compiler.EffectsOverride(
             consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly,
         )))
         return esc(ex)
+    else # anonymous function case
+        return Expr(:meta, Expr(:purity,
+            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly))
     end
-    return esc(pushmeta!(ex, :purity, consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly))
 end
 
 function compute_assumed_setting(@nospecialize(setting), val::Bool=true)

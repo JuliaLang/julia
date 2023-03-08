@@ -63,14 +63,14 @@ fi
 date_string=$git_time
 case $(uname) in
   Darwin | FreeBSD)
-    date_string="$(/bin/date -jr $git_time -u '+%Y-%m-%d %H:%M %Z')"
+    date_string="$(date -jr $git_time -u '+%Y-%m-%d %H:%M %Z')"
     ;;
   MINGW*)
     git_time=$(git log -1 --pretty=format:%ci)
-    date_string="$(/bin/date --date="$git_time" -u '+%Y-%m-%d %H:%M %Z')"
+    date_string="$(date --date="$git_time" -u '+%Y-%m-%d %H:%M %Z')"
     ;;
   *)
-    date_string="$(/bin/date --date="@$git_time" -u '+%Y-%m-%d %H:%M %Z')"
+    date_string="$(date --date="@$git_time" -u '+%Y-%m-%d %H:%M %Z')"
     ;;
 esac
 if [ $(git describe --tags --exact-match 2> /dev/null) ]; then

@@ -113,6 +113,7 @@ has_offset_axes(A::AbstractVector) = Int(firstindex(A))::Int != 1 # improve perf
 # note: this could call `any` directly if the compiler can infer it
 has_offset_axes(As...) = _any_tuple(has_offset_axes, false, As...)
 has_offset_axes(::Colon) = false
+has_offset_axes(::Array) = false
 
 """
     require_one_based_indexing(A::AbstractArray)
@@ -766,6 +767,8 @@ false
 checkindex(::Type{Bool}, inds::AbstractUnitRange, i) =
     throw(ArgumentError("unable to check bounds for indices of type $(typeof(i))"))
 checkindex(::Type{Bool}, inds::AbstractUnitRange, i::Real) = (first(inds) <= i) & (i <= last(inds))
+checkindex(::Type{Bool}, inds::IdentityUnitRange, i::Real) = checkindex(Bool, inds.indices, i)
+checkindex(::Type{Bool}, inds::OneTo{T}, i::T) where {T<:BitInteger} = unsigned(i - one(i)) < unsigned(last(inds))
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Colon) = true
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Slice) = true
 function checkindex(::Type{Bool}, inds::AbstractUnitRange, r::AbstractRange)
