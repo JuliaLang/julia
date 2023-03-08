@@ -691,7 +691,7 @@ function edge_matches_sv(frame::InferenceState, method::Method, @nospecialize(si
     if callee_method2 !== inf_method2
         return false
     end
-    if !hardlimit
+    if !hardlimit || InferenceParams(sv.interp).ignore_recursion_hardlimit
         # if this is a soft limit,
         # also inspect the parent of this edge,
         # to see if they are the same Method as sv
