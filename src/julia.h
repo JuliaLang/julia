@@ -639,10 +639,10 @@ typedef struct _jl_typemap_level_t {
     // next split may be on Type{T} as LeafTypes then TypeName's parents up to Any
     // next split may be on LeafType
     // next split may be on TypeName
-    _Atomic(jl_array_t*) arg1; // contains LeafType
-    _Atomic(jl_array_t*) targ; // contains Type{LeafType}
-    _Atomic(jl_array_t*) name1; // contains non-abstract TypeName, for parents up to (excluding) Any
-    _Atomic(jl_array_t*) tname; // contains a dict of Type{TypeName}, for parents up to Any
+    _Atomic(jl_array_t*) arg1; // contains LeafType (in a map of non-abstract TypeName)
+    _Atomic(jl_array_t*) targ; // contains Type{LeafType} (in a map of non-abstract TypeName)
+    _Atomic(jl_array_t*) name1; // a map for a map for TypeName, for parents up to (excluding) Any
+    _Atomic(jl_array_t*) tname; // a map for Type{TypeName}, for parents up to (including) Any
     // next a linear list of things too complicated at this level for analysis (no more levels)
     _Atomic(jl_typemap_entry_t*) linear;
     // finally, start a new level if the type at offs is Any
