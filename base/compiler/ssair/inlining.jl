@@ -852,7 +852,8 @@ function resolve_todo(mi::MethodInstance, result::Union{MethodMatch,InferenceRes
     #XXX: update_valid_age!(min_valid[1], max_valid[1], sv)
     if isa(result, InferenceResult)
         src = result.src
-        if is_foldable_nothrow(result.ipo_effects)
+        effects = result.ipo_effects
+        if is_foldable_nothrow(effects)
             res = result.result
             if isa(res, Const) && is_inlineable_constant(res.val)
                 # use constant calling convention
@@ -860,7 +861,6 @@ function resolve_todo(mi::MethodInstance, result::Union{MethodMatch,InferenceRes
                 return ConstantCase(quoted(res.val))
             end
         end
-        effects = result.ipo_effects
     else
         cached_result = get_cached_result(state, mi)
         if cached_result isa ConstantCase

@@ -2605,7 +2605,7 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
         types = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
     end
     mt = ccall(:jl_method_table_for, Any, (Any,), types)
-    if !isa(mt, Core.MethodTable)
+    if !isa(mt, MethodTable)
         return CallMeta(Bool, EFFECTS_THROWS, NoCallInfo())
     end
     match, valid_worlds, overlayed = findsup(types, method_table(interp))
