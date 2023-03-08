@@ -141,6 +141,7 @@ struct InferenceParams
     aggressive_constant_propagation::Bool
     unoptimize_throw_blocks::Bool
     assume_bindings_static::Bool
+    ignore_recursion_hardlimit::Bool
 
     function InferenceParams(
         max_methods::Int,
@@ -151,7 +152,8 @@ struct InferenceParams
         ipo_constant_propagation::Bool,
         aggressive_constant_propagation::Bool,
         unoptimize_throw_blocks::Bool,
-        assume_bindings_static::Bool)
+        assume_bindings_static::Bool,
+        ignore_recursion_hardlimit::Bool)
         return new(
             max_methods,
             max_union_splitting,
@@ -161,7 +163,8 @@ struct InferenceParams
             ipo_constant_propagation,
             aggressive_constant_propagation,
             unoptimize_throw_blocks,
-            assume_bindings_static)
+            assume_bindings_static,
+            ignore_recursion_hardlimit)
     end
 end
 function InferenceParams(
@@ -174,7 +177,8 @@ function InferenceParams(
         #=ipo_constant_propagation::Bool=# true,
         #=aggressive_constant_propagation::Bool=# false,
         #=unoptimize_throw_blocks::Bool=# true,
-        #=assume_bindings_static::Bool=# false);
+        #=assume_bindings_static::Bool=# false,
+        #=ignore_recursion_hardlimit::Bool=# false);
     max_methods::Int = params.max_methods,
     max_union_splitting::Int = params.max_union_splitting,
     max_apply_union_enum::Int = params.max_apply_union_enum,
@@ -183,7 +187,8 @@ function InferenceParams(
     ipo_constant_propagation::Bool = params.ipo_constant_propagation,
     aggressive_constant_propagation::Bool = params.aggressive_constant_propagation,
     unoptimize_throw_blocks::Bool = params.unoptimize_throw_blocks,
-    assume_bindings_static::Bool = params.assume_bindings_static)
+    assume_bindings_static::Bool = params.assume_bindings_static,
+    ignore_recursion_hardlimit::Bool = params.ignore_recursion_hardlimit)
     return InferenceParams(
         max_methods,
         max_union_splitting,
@@ -193,7 +198,8 @@ function InferenceParams(
         ipo_constant_propagation,
         aggressive_constant_propagation,
         unoptimize_throw_blocks,
-        assume_bindings_static)
+        assume_bindings_static,
+        ignore_recursion_hardlimit)
 end
 
 """
