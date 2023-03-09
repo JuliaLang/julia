@@ -630,17 +630,6 @@ static jl_value_t *simple_meet(jl_value_t *a, jl_value_t *b, int overesi)
     return overesi ? b : jl_bottom_type;
 }
 
-static jl_unionall_t *rename_unionall(jl_unionall_t *u)
-{
-    jl_tvar_t *v = jl_new_typevar(u->var->name, u->var->lb, u->var->ub);
-    jl_value_t *t = NULL;
-    JL_GC_PUSH2(&v, &t);
-    t = jl_instantiate_unionall(u, (jl_value_t*)v);
-    t = jl_new_struct(jl_unionall_type, v, t);
-    JL_GC_POP();
-    return (jl_unionall_t*)t;
-}
-
 // main subtyping algorithm
 
 static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param);
@@ -935,7 +924,7 @@ static jl_unionall_t *unalias_unionall(jl_unionall_t *u, jl_stenv_t *e)
             // outer var can only refer to inner var if bounds changed
             (btemp->lb != btemp->var->lb && jl_has_typevar(btemp->lb, u->var)) ||
             (btemp->ub != btemp->var->ub && jl_has_typevar(btemp->ub, u->var))) {
-            u = rename_unionall(u);
+            u = jl_rename_unionall(u);
             break;
         }
         btemp = btemp->prev;
@@ -2945,7 +2934,7 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
         }
         if (btemp->var == u->var || btemp->lb == (jl_value_t*)u->var ||
             btemp->ub == (jl_value_t*)u->var) {
-            u = rename_unionall(u);
+            u = jl_rename_unionall(u);
             break;
         }
         btemp = btemp->prev;
