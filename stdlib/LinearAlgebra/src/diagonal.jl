@@ -96,6 +96,11 @@ julia> diag(A, 2)
 ```
 """
 Diagonal(A::AbstractMatrix) = Diagonal(diag(A))
+Diagonal{T}(A::AbstractMatrix) where T = Diagonal{T}(diag(A))
+function convert(::Type{T}, A::AbstractMatrix) where T<:Diagonal
+    checksquare(A)
+    isdiag(A) ? T(A) : throw(InexactError(:convert, T, A))
+end
 
 Diagonal(D::Diagonal) = D
 Diagonal{T}(D::Diagonal{T}) where {T} = D
