@@ -42,6 +42,7 @@ Standard library changes
 ------------------------
 
 * `startswith` now supports seekable `IO` streams ([#43055])
+* printing integral `Rational`s will skip the denominator in `Rational`-typed IO context (e.g. in `Arrays`) ([#45396])
 
 #### Package Manager
 
