@@ -265,9 +265,11 @@ $(eval $(call symlink_system_library,LIBSUITESPARSE,libamd))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libcamd))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libccolamd))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libcholmod))
+$(eval $(call symlink_system_library,LIBSUITESPARSE,libcholmod_cuda))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libcolamd))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libumfpack))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libspqr))
+$(eval $(call symlink_system_library,LIBSUITESPARSE,libspqr_cuda))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libsuitesparseconfig))
 # EXCLUDED LIBRARIES (installed/used, but not vendored for use with dlopen):
 # libunwind
