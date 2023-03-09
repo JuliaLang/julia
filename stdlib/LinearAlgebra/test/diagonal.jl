@@ -48,7 +48,7 @@ Random.seed!(1)
         @test Diagonal(DI) === DI
         @test isa(Diagonal{elty}(DI), Diagonal{elty})
         # issue #26178
-        @test_throws MethodError convert(Diagonal,[1,2,3,4])
+        @test_throws MethodError convert(Diagonal, [1,2,3,4])
         @test_throws DimensionMismatch convert(Diagonal, [1 2 3 4])
         @test_throws InexactError convert(Diagonal, ones(2,2))
     end
