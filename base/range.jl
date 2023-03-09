@@ -264,7 +264,6 @@ RangeStepStyle(::Type{<:AbstractRange{<:Integer}}) = RangeStepRegular()
 
 convert(::Type{T}, r::AbstractRange) where {T<:AbstractRange} = r isa T ? r : T(r)::T
 AbstractRange{T}(r::AbstractRange) where T = T(first(r)):T(step(r)):T(last(r))
-AbstractRange{T}(r::AbstractUnitRange) where {T<:Integer} = AbstractUnitRange{T}(r)
 
 ## ordinal ranges
 
@@ -288,6 +287,8 @@ Supertype for ranges with a step size of [`oneunit(T)`](@ref) with elements of t
 [`UnitRange`](@ref) and other types are subtypes of this.
 """
 abstract type AbstractUnitRange{T} <: OrdinalRange{T,T} end
+            
+AbstractRange{T}(r::AbstractUnitRange) where {T<:Integer} = AbstractUnitRange{T}(r)
 
 """
     StepRange{T, S} <: OrdinalRange{T, S}
