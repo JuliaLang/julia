@@ -17,6 +17,9 @@ void jl_destroy_timing(void) JL_NOTSAFEPOINT;
 #else
 
 #include "julia_assert.h"
+#ifdef USE_TRACY
+#include "tracy/TracyC.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -78,6 +81,9 @@ extern uint64_t jl_timing_data[(int)JL_TIMING_LAST];
 extern const char *jl_timing_names[(int)JL_TIMING_LAST];
 
 struct _jl_timing_block_t { // typedef in julia.h
+#ifdef USE_TRACY
+    TracyCZoneCtx *tracy_ctx;
+#endif
     jl_timing_block_t *prev;
     uint64_t total;
     uint64_t t0;
@@ -125,6 +131,9 @@ STATIC_INLINE void _jl_timing_block_ctor(jl_timing_block_t *block, int owner) JL
 }
 
 STATIC_INLINE void _jl_timing_block_destroy(jl_timing_block_t *block) JL_NOTSAFEPOINT {
+#ifdef USE_TRACY
+    TracyCZoneEnd(*(block->tracy_ctx));
+#endif
     uint64_t t = cycleclock();
     jl_task_t *ct = jl_current_task;
     _jl_timing_block_stop(block, t);
@@ -150,12 +159,27 @@ struct jl_timing_block_cpp_t {
     jl_timing_block_cpp_t& operator=(const jl_timing_block_cpp_t &) = delete;
     jl_timing_block_cpp_t& operator=(const jl_timing_block_cpp_t &&) = delete;
 };
+#ifdef USE_TRACY
+#define JL_TIMING(owner) jl_timing_block_cpp_t __timing_block(JL_TIMING_ ## owner); \
+    TracyCZoneN(__tracy_ctx, #owner, strcmp(#owner, "ROOT")); \
+    __timing_block.block.tracy_ctx = &__tracy_ctx;
+#else
 #define JL_TIMING(owner) jl_timing_block_cpp_t __timing_block(JL_TIMING_ ## owner)
+#endif
+#else
+#ifdef USE_TRACY
+#define JL_TIMING(owner) \
+    __attribute__((cleanup(_jl_timing_block_destroy))) \
+    jl_timing_block_t __timing_block; \
+    _jl_timing_block_ctor(&__timing_block, JL_TIMING_ ## owner); \
+    TracyCZoneN(__tracy_ctx, #owner, 1); \
+    __timing_block.tracy_ctx = &__tracy_ctx;
 #else
 #define JL_TIMING(owner) \
     __attribute__((cleanup(_jl_timing_block_destroy))) \
     jl_timing_block_t __timing_block; \
     _jl_timing_block_ctor(&__timing_block, JL_TIMING_ ## owner)
+#endif
 #endif
 
 #endif

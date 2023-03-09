@@ -3243,6 +3243,21 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
         jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
         return;
     }
+#ifdef USE_TRACY
+    static uint8_t first_time = 1;
+    if (first_time) {
+        first_time = 0;
+        TracyCFiberEnter("Main");
+    }
+    TracyCFiberLeave;
+    TracyCFiberEnter("GC");
+    {
+        int64_t tb;
+        jl_gc_get_total_bytes(&tb);
+        TracyCPlot("Heap size", ((double)tb) / (1024.0 * 1024.0));
+    }
+#endif
+{
     JL_TIMING(GC);
     int last_errno = errno;
 #ifdef _OS_WINDOWS_
@@ -3306,6 +3321,16 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     SetLastError(last_error);
 #endif
     errno = last_errno;
+}
+#ifdef USE_TRACY
+    {
+        int64_t tb;
+        jl_gc_get_total_bytes(&tb);
+        TracyCPlot("Heap size", ((double)tb) / (1024.0 * 1024.0));
+    }
+    TracyCFiberLeave;
+    TracyCFiberEnter("Main");
+#endif
 }
 
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
