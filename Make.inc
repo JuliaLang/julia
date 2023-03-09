@@ -89,6 +89,9 @@ WITH_GC_DEBUG_ENV := 0
 # Enable DTrace support
 WITH_DTRACE := 0
 
+# Enable Tracy support
+WITH_TRACY := 0
+
 # Prevent picking up $ARCH from the environment variables
 ARCH:=
 
@@ -719,7 +722,12 @@ ifeq ($(WITH_DTRACE), 1)
 JCXXFLAGS += -DUSE_DTRACE
 JCFLAGS += -DUSE_DTRACE
 DTRACE := dtrace
-else
+endif
+
+ifeq ($(WITH_TRACY), 1)
+JCXXFLAGS += -DUSE_TRACY -DTRACY_ENABLE
+JCFLAGS += -DUSE_TRACY -DTRACY_ENABLE
+LIBTRACYCLIENT:=-lTracyClient
 endif
 
 # ===========================================================================
@@ -1173,7 +1181,7 @@ CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.31|GLIBCXX_3\.5\.|GLIBCXX_4\.
 # Note: we explicitly _do not_ define `CSL` here, since it requires some more
 # advanced techniques to decide whether it should be installed from a BB source
 # or not.  See `deps/csl.mk` for more detail.
-BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP LLD
+BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP LLD LIBTRACYCLIENT
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
