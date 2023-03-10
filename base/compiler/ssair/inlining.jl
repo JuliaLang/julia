@@ -1476,7 +1476,7 @@ function semiconcrete_result_item(result::SemiConcreteResult,
         return compileable_specialization(mi, result.effects, et, info;
             compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
     else
-        return InliningTodo(mi, result.ir, result.effects)
+        return InliningTodo(mi, retrieve_ir_for_inlining(mi, result.ir), result.effects)
     end
 end
 
