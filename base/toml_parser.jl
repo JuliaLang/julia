@@ -119,8 +119,8 @@ function startup(l::Parser)
     end
 end
 
-Parser(; dicttype::TOMLDictType=TOMLDict) where {TOMLDictType <: AbstractTOMLDictType} = Parser(""; root=dicttype())
-Parser(io::IO; dicttype::TOMLDictType=TOMLDict) where {TOMLDictType <: AbstractTOMLDictType} = Parser(read(io, String); root=dicttype())
+Parser(; dicttype=TOMLDict) = Parser(""; root=dicttype())
+Parser(io::IO; dicttype=TOMLDict) = Parser(read(io, String); root=dicttype())
 
 function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothing, root::TOMLDictType=TOMLDict()) where {TOMLDictType <: AbstractTOMLDictType}
     # Change the TOMLDictType associate with p
