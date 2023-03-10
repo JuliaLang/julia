@@ -34,7 +34,7 @@ const Parser = Internals.Parser
 """
     TOMLDict
 
-Default dictionary type for TOML files. Note that in most cases one does not need to specify a different dictionary type, ohwever [`TOML.parsefile`](@ref), and [`TOML.parse`](@ref) allow you to specify your own custom dictionary type, as long as it is `<: AbstractDict{String, Any}`
+Default dictionary type for TOML files. Note that in most cases one does not need to specify a different dictionary type, however [`TOML.parsefile`](@ref), and [`TOML.parse`](@ref) allow you to specify your own custom dictionary type, as long as it is `<: AbstractDict{String, Any}`
 """
 const TOMLDict = Internals.TOMLDict
 

@@ -35,7 +35,7 @@ none:1:16 error: failed to parse value
 [...]
 ```
 
-If you want your TOML data to be parsed into a non-standard dictionary, such as an [OrderedDict](https://juliacollections.github.io/OrderedCollections.jl/latest/ordered_containers.html) from [OrderedCollections](https://juliapackages.com/p/orderedcollections), you can specify any dictionary type, as long as it is `<: AbstractDict{String, Any}`, i.e. as long as the keys are of type `String`, and the values are of type `Any`:
+If you want your TOML data to be parsed into a non-standard dictionary, such as an [OrderedDict](https://juliacollections.github.io/OrderedCollections.jl/latest/ordered_containers.html) from [OrderedCollections](https://juliapackages.com/p/orderedcollections), you can specify any dictionary type via the `dicttype` keyword argument, as long as it is `<: AbstractDict{String, Any}`, i.e. as long as the keys are of type `String`, and the values are of type `Any`:
 
 ```jldoctest
 julia> using TOML
