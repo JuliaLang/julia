@@ -1919,7 +1919,7 @@ add_tfunc(Core.bufref, 3, INT_INF, bufref_tfunc, 20)
 end
 add_tfunc(Core.bufset, 4, INT_INF, bufset_tfunc, 20)
 
-add_tfunc(Core.buflen, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Int), 4)
+add_tfunc(Core.Intrinsics.bufferlen, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Int), 4)
 
 function buffer_elmtype(@nospecialize buf)
     b = widenconst(buf)
@@ -2108,7 +2108,7 @@ end
     if f === arraysize
         na == 2 || return false
         return arraysize_nothrow(argtypes[1], argtypes[2])
-    elseif f === Core.buflen
+    elseif f === Core.bufferlen
         (na == 1 && (argtypes[1] ⊑ Buffer)) || return false
     elseif f === Core._typevar
         na == 3 || return false
@@ -2187,7 +2187,7 @@ const _EFFECT_FREE_BUILTINS = [
     fieldtype, apply_type, isa, UnionAll,
     getfield, arrayref, const_arrayref, Core.bufref, isdefined, Core.sizeof,
     Core.ifelse, Core._typevar, (<:),
-    typeassert, throw, arraysize, Core.buflen, getglobal, compilerbarrier
+    typeassert, throw, arraysize, Core.bufferlen, getglobal, compilerbarrier
 ]
 
 const _CONSISTENT_BUILTINS = Any[
@@ -2213,7 +2213,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     (===),
     apply_type,
     arraysize,
-    Core.buflen,
+    Core.bufferlen,
     Core.ifelse,
     Core.sizeof,
     svec,
@@ -2243,6 +2243,7 @@ const _ARGMEM_BUILTINS = Any[
 const _INCONSISTENT_INTRINSICS = Any[
     Intrinsics.pointerref,      # this one is volatile
     Intrinsics.arraylen,        # this one is volatile
+    Intrinsics.bufferlen,
     Intrinsics.have_fma,        # this one depends on the runtime environment
     Intrinsics.cglobal,         # cglobal lookup answer changes at runtime
     # ... and list fastmath intrinsics:
@@ -2490,6 +2491,9 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Vector{Any})
     if f === Intrinsics.arraylen
         return argtypes[1] ⊑ Array
     end
+    if f === Intrinsics.bufferlen
+        return argtypes[1] ⊑ Buffer
+    end
     if f === Intrinsics.bitcast
         ty, isexact, isconcrete = instanceof_tfunc(argtypes[1])
         xty = widenconst(argtypes[2])
@@ -2528,6 +2532,7 @@ function is_pure_intrinsic_infer(f::IntrinsicFunction)
              f === Intrinsics.pointerset || # this one is never effect-free
              f === Intrinsics.llvmcall ||   # this one is never effect-free
              f === Intrinsics.arraylen ||   # this one is volatile
+             f === Intrinsics.bufferlen ||
              f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
              f === Intrinsics.have_fma ||  # this one depends on the runtime environment
              f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime

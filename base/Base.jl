@@ -163,6 +163,8 @@ function fld end
 # Lazy strings
 include("strings/lazy.jl")
 
+include("buffers.jl")
+
 # array structures
 include("indices.jl")
 include("array.jl")

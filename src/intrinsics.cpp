@@ -16,6 +16,7 @@ STATISTIC(EmittedUnboxes, "Number of unboxes emitted");
 STATISTIC(EmittedRuntimeCalls, "Number of runtime intrinsic calls emitted");
 STATISTIC(EmittedIntrinsics, "Number of intrinsic calls emitted");
 STATISTIC(Emitted_arraylen, "Number of arraylen calls emitted");
+STATISTIC(Emitted_bufferlen, "Number of bufferlen calls emitted");
 STATISTIC(Emitted_pointerref, "Number of pointerref calls emitted");
 STATISTIC(Emitted_pointerset, "Number of pointerset calls emitted");
 STATISTIC(Emitted_atomic_fence, "Number of atomic_fence calls emitted");
@@ -1162,8 +1163,15 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
             return emit_runtime_call(ctx, f, argv, nargs);
         return mark_julia_type(ctx, emit_arraylen(ctx, x), false, jl_long_type);
     }
-    case bufferlen:
-        return mark_julia_type(ctx, emit_bufferlen(ctx, argv[0]), false, jl_long_type);
+    case bufferlen: {
+        ++Emitted_bufferlen;
+        assert(nargs == 1);
+        const jl_cgval_t &x = argv[0];
+        jl_value_t *typ = jl_unwrap_unionall(x.typ);
+        if (!jl_is_datatype(typ) || ((jl_datatype_t*)typ)->name != jl_buffer_typename)
+            return emit_runtime_call(ctx, f, argv, nargs);
+        return mark_julia_type(ctx, emit_bufferlen(ctx, x), false, jl_long_type);
+    }
     case pointerref:
         ++Emitted_pointerref;
         assert(nargs == 3);

@@ -100,6 +100,7 @@ add_with_overflow(x::T, y::T) where {T<:UnsignedInt} = checked_uadd_int(x, y)
 add_with_overflow(x::Bool, y::Bool) = (x+y, false)
 
 include("strings/lazy.jl")
+include("buffers.jl")
 
 # core array operations
 include("indices.jl")

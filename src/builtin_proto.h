@@ -35,7 +35,7 @@ DECLARE_BUILTIN(replacefield);
 DECLARE_BUILTIN(const_arrayref);
 DECLARE_BUILTIN(bufref);
 DECLARE_BUILTIN(bufset);
-DECLARE_BUILTIN(buflen);
+DECLARE_BUILTIN(bufferlen);
 DECLARE_BUILTIN(_expr);
 DECLARE_BUILTIN(fieldtype);
 DECLARE_BUILTIN(getfield);

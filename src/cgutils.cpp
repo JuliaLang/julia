@@ -38,6 +38,7 @@ STATISTIC(EmittedArrayOffset, "Number of array offset calls emitted");
 STATISTIC(EmittedArrayNdIndex, "Number of array nd index calls emitted");
 STATISTIC(EmittedBufferptr, "Number of array data pointer loads emitted");
 STATISTIC(EmittedBufferIndex, "Number of buffer index calls emitted");
+STATISTIC(EmittedBufferlen, "Number of buffer length calls emitted");
 STATISTIC(EmittedBoxes, "Number of box operations emitted");
 STATISTIC(EmittedCPointerChecks, "Number of C pointer checks emitted");
 STATISTIC(EmittedAllocObjs, "Number of object allocations emitted");
@@ -2854,8 +2855,8 @@ static Value *emit_array_nd_index(
         // the last one which we therefore have to do here.
         if (nidxs == 1) {
             // Linear indexing: Check against the entire linear span of the array
-            Value *alen = emit_arraylen(ctx, ainfo);
-            ctx.builder.CreateCondBr(ctx.builder.CreateICmpULT(i, alen), endBB, failBB);
+            Value *blen = emit_arraylen(ctx, ainfo);
+            ctx.builder.CreateCondBr(ctx.builder.CreateICmpULT(i, blen), endBB, failBB);
         } else if (nidxs >= (size_t)nd){
             // No dimensions were omitted; just check the last remaining index
             assert(nd >= 0);
@@ -2926,15 +2927,30 @@ static bool buffertype_constelsize(jl_datatype_t *ty, size_t *elsz)
     return true;
 }
 
+static intptr_t buffertype_maxsize(jl_value_t *ty)
+{
+    if (!jl_is_buffer_type(ty))
+        return INTPTR_MAX;
+    size_t elsz;
+    if (buffertype_constelsize((jl_datatype_t*)ty, &elsz) || elsz == 0)
+        return INTPTR_MAX;
+    return INTPTR_MAX / elsz;
+}
 
 static Value *emit_bufferlen(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
 {
-    Value *t = boxed(ctx, tinfo);
+    ++EmittedBufferlen;
     MDNode *tbaa = ctx.tbaa().tbaa_bufferlen;
+    Value *t = boxed(ctx, tinfo);
     Value *addr = ctx.builder.CreateStructGEP(ctx.types().T_jlbuffer,
             emit_bitcast(ctx, decay_derived(ctx, t), ctx.types().T_pjlbuffer), 0);
     LoadInst *len = ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()), addr, Align(sizeof(size_t)));
-    return tbaa_decorate(tbaa, len);
+    len->setOrdering(AtomicOrdering::NotAtomic);
+    MDBuilder MDB(ctx.builder.getContext());
+    auto rng = MDB.createRange(Constant::getNullValue(getSizeTy(ctx.builder.getContext())), ConstantInt::get(getSizeTy(ctx.builder.getContext()), buffertype_maxsize(tinfo.typ)));
+    len->setMetadata(LLVMContext::MD_range, rng);
+    jl_aliasinfo_t bi = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
+    return bi.decorateInst(len);
 }
 
 static Value *emit_bufferptr_internal(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *t, unsigned AS, bool isboxed)
@@ -2942,6 +2958,7 @@ static Value *emit_bufferptr_internal(jl_codectx_t &ctx, const jl_cgval_t &tinfo
     ++EmittedBufferptr;
     Value *addr = ctx.builder.CreateStructGEP(ctx.types().T_jlbuffer,
                                               emit_bitcast(ctx, t, ctx.types().T_pjlbuffer), 1);
+    // ptindex = emit_bitcast(ctx, ptindex, getInt8PtrTy(ctx.builder.getContext()));
     // Normally allocated array of 0 dimension always have a inline pointer.
     // However, we can't rely on that here since arrays can also be constructed from C pointers.
     PointerType *PT = cast<PointerType>(addr->getType());
@@ -2951,9 +2968,9 @@ static Value *emit_bufferptr_internal(jl_codectx_t &ctx, const jl_cgval_t &tinfo
     if (isboxed) {
         LoadT = PointerType::get(ctx.types().T_prjlvalue, AS);
     }
-    else if (AS != PPT->getAddressSpace()) {
-        LoadT = PointerType::getWithSamePointeeType(PPT, AS);
-    }
+    // else if (AS != PPT->getAddressSpace()) {
+    //     LoadT = PointerType::getWithSamePointeeType(PPT, AS);
+    // }
     if (LoadT != PPT) {
         const auto Ty = PointerType::get(LoadT, PT->getAddressSpace());
         addr = ctx.builder.CreateBitCast(addr, Ty);

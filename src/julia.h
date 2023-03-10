@@ -979,7 +979,7 @@ JL_DLLEXPORT void jl_gc_safepoint(void);
 #define jl_svec_set_len_unsafe(t,n) (((jl_svec_t*)(t))->length=(n))
 #define jl_svec_data(t) ((jl_value_t**)((char*)(t) + sizeof(jl_svec_t)))
 
-#define jl_bufferlen(t)     (((jl_buffer_t*)(t))->length)
+#define jl_buffer_len(t)     (((jl_buffer_t*)(t))->length)
 #define jl_buffer_data(t)   ((char*)(t) + sizeof(jl_buffer_t))
 #define jl_buffer_eltype(x) (jl_tparam0(jl_typeof((jl_buffer_t*)(x))))
 // TODO: change this when we have a variant of jl_buffer_t that is resizable
@@ -2022,7 +2022,7 @@ STATIC_INLINE size_t jl_buffer_nbytes(jl_value_t *b)
         elsz = sizeof(void*);
     else
         elsz = LLT_ALIGN(elsz, al);
-    size_t len = jl_bufferlen(b);
+    size_t len = jl_buffer_len(b);
     size_t tot = jl_buffer_elsize(b) * len;
     if (elsz == 1 && union_max && isunion)
         tot++;

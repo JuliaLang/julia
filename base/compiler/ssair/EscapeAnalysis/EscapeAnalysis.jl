@@ -19,7 +19,7 @@ import Core:
     MethodInstance, Const, Argument, SSAValue, PiNode, PhiNode, UpsilonNode, PhiCNode,
     ReturnNode, GotoNode, GotoIfNot, SimpleVector, Buffer,
     MethodMatch, CodeInstance,
-    sizeof, ifelse, arrayset, arrayref, arraysize, bufset, bufref, buflen
+    sizeof, ifelse, arrayset, arrayref, arraysize, bufset, bufref, bufferlen
 import ._TOP_MOD:     # Base definitions
     @__MODULE__, @eval, @assert, @specialize, @nospecialize, @inbounds, @inline, @noinline,
     @label, @goto, !, !==, !=, ≠, +, -, *, ≤, <, ≥, >, &, |, <<, error, missing, copy,
@@ -1615,7 +1615,7 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
     end
 end
 
-function escape_builtin!(::typeof(buflen), astate::AnalysisState, pc::Int, args::Vector{Any})
+function escape_builtin!(::typeof(bufferlen), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) == 2 || return false
     ir = astate.ir
     buf = args[2]

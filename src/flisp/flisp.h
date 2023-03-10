@@ -506,7 +506,7 @@ struct _fl_context_t {
     value_t jl_char_sym;
     // persistent buffer (avoid repeated malloc/free)
     // for julia_extensions.c: normalize
-    size_t jlbuflen;
+    size_t jlbufferlen;
     void *jlbuf;
 };
 

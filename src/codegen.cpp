@@ -1271,7 +1271,7 @@ static const auto &builtin_func_map() {
           { jl_f__svec_ref_addr,          new JuliaFunction{XSTR(jl_f__svec_ref), get_func_sig, get_func_attrs} },
           { jl_f_bufref_addr,             new JuliaFunction{XSTR(jl_f_bufref), get_func_sig, get_func_attrs} },
           { jl_f_bufset_addr,             new JuliaFunction{XSTR(jl_f_bufset), get_func_sig, get_func_attrs} },
-          { jl_f_buflen_addr,             new JuliaFunction{XSTR(jl_f_buflen), get_func_sig, get_func_attrs} },
+          { jl_f_bufferlen_addr,             new JuliaFunction{XSTR(jl_f_bufferlen), get_func_sig, get_func_attrs} },
         };
     return builtins;
 }
@@ -3376,6 +3376,13 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     //     const jl_cgval_t &buf = argv[2];
     //     const jl_cgval_t &idx = argv[3];
     //     bool indices_ok = true;
+    //     // Value *len = emit_bufferlen(ctx, buf);
+    //     // Value *is_vector = ctx.builder.CreateICmpEQ(ndims, ConstantInt::get(getInt16Ty(ctx.builder.getContext()), 1));
+    //     // Value *selidx_v = ctx.builder.CreateSub(emit_vectormaxsize(ctx, buf), ctx.builder.CreateZExt(offset, getSizeTy(ctx.builder.getContext())));
+    //     //         Value *selidx_m = emit_bufferlen(ctx, buf);
+    //     //         Value *selidx = ctx.builder.CreateSelect(is_vector, selidx_v, selidx_m);
+    //     //         ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
+
     //     if (idx.typ != (jl_value_t*)jl_long_type) {
     //         indices_ok = false;
     //     }
@@ -3464,7 +3471,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     //                 if (isboxed || (jl_is_datatype(ety) && ((jl_datatype_t*)ety)->layout->npointers > 0)) { // if elements are just bits, don't need a write barrier
     //                     Value *bufv = boxed(ctx, buf);
     //                     Value *flags = emit_arrayflags(ctx, buf);
-    //                     // TODO jl_buffer_t doesn't stor flags and it whether the data
+    //                     // TODO jl_buffer_t doesn't store flags and whether the data
     //                     // portion is stored inline or a pointer to a buffer is
     //                     // figured out if nbytes <: ARRAY_INLINE_NBYTES
     //                     flags = ctx.builder.CreateAnd(flags, 3);  // the owner of the data is ary itself except if ary->how == 3

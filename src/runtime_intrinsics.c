@@ -1463,6 +1463,12 @@ JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a)
     return jl_box_long(jl_array_len((jl_array_t*)a));
 }
 
+JL_DLLEXPORT jl_value_t *jl_bufferlen(jl_value_t *b)
+{
+    JL_TYPECHK(bufferlen, buffer, b);
+    return jl_box_long(jl_buffer_len((jl_buffer_t*)b));
+}
+
 JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *typ)
 {
     JL_TYPECHK(have_fma, datatype, typ);

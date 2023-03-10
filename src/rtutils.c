@@ -559,7 +559,7 @@ static size_t jl_show_svec(JL_STREAM *out, jl_svec_t *t, const char *head, const
 }
 static size_t jl_show_buffer(JL_STREAM *out, jl_buffer_t *sb, const char *head, const char *opn, const char *cls) JL_NOTSAFEPOINT
 {
-    size_t i, n=0, len = jl_bufferlen(sb);
+    size_t i, n=0, len = jl_buffer_len(sb);
     n += jl_printf(out, "%s", head);
     n += jl_printf(out, "%s", opn);
     for (i = 0; i < len; i++) {

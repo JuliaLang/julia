@@ -306,9 +306,9 @@ static char *normalize(fl_context_t *fl_ctx, char *s)
                                        jl_charmap_map, NULL);
     if (result < 0) goto error;
     newlen = result * sizeof(int32_t) + 1;
-    if (newlen > fl_ctx->jlbuflen) {
-        fl_ctx->jlbuflen = newlen * 2;
-        fl_ctx->jlbuf = realloc(fl_ctx->jlbuf, fl_ctx->jlbuflen);
+    if (newlen > fl_ctx->jlbufferlen) {
+        fl_ctx->jlbufferlen = newlen * 2;
+        fl_ctx->jlbuf = realloc(fl_ctx->jlbuf, fl_ctx->jlbufferlen);
         if (!fl_ctx->jlbuf) lerror(fl_ctx, fl_ctx->OutOfMemoryError, "error allocating UTF8 buffer");
     }
     result = utf8proc_decompose_custom((uint8_t*)s,0, (int32_t*)fl_ctx->jlbuf,result, (utf8proc_option_t)options,

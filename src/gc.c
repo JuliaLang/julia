@@ -915,7 +915,7 @@ void jl_gc_force_mark_old(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT
         jl_buffer_t *b = (jl_buffer_t *)v;
         size_t elsz = 0, al = 0;
         jl_value_t *eltype = jl_tparam0(jl_typeof(b));
-        size_t len = jl_bufferlen(b);
+        size_t len = jl_buffer_len(b);
         int isunboxed = jl_islayout_inline(eltype, &elsz, &al);
         int isunion = jl_is_uniontype(eltype);
         // int hasptr = isunboxed && (jl_is_datatype(eltype) && ((jl_datatype_t*)eltype)->layout->npointers > 0);
@@ -2401,7 +2401,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             jl_buffer_t *b = (jl_buffer_t *)new_obj;
             size_t elsz = 0, al = 0;
             jl_value_t *eltype = jl_tparam0(jl_typeof(b));
-            size_t len = jl_bufferlen(b);
+            size_t len = jl_buffer_len(b);
             int isunboxed = jl_islayout_inline(eltype, &elsz, &al);
             int isunion = jl_is_uniontype(eltype);
             // int hasptr = isunboxed && (jl_is_datatype(eltype) && ((jl_datatype_t*)eltype)->layout->npointers > 0);

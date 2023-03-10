@@ -12,14 +12,9 @@
 
 JL_DLLEXPORT jl_buffer_t *jl_buffer_copy(jl_buffer_t *a)
 {
-    jl_buffer_t *c = jl_new_buffer(jl_typeof(a), jl_bufferlen((jl_value_t*)a));
+    jl_buffer_t *c = jl_new_buffer(jl_typeof(a), jl_buffer_len((jl_value_t*)a));
     memcpy((void**)jl_buffer_data(c), (void**)jl_buffer_data(a), jl_buffer_nbytes((jl_value_t*)a));
     return c;
-}
-
-JL_DLLEXPORT size_t (jl_bufferlen)(jl_buffer_t *t) JL_NOTSAFEPOINT
-{
-    return jl_bufferlen(t);
 }
 
 JL_DLLEXPORT jl_buffer_t *jl_new_buffer(jl_value_t *btype, size_t len)
@@ -81,7 +76,7 @@ JL_DLLEXPORT jl_buffer_t *jl_new_buffer(jl_value_t *btype, size_t len)
 
 JL_DLLEXPORT jl_value_t *jl_bufref(jl_buffer_t *b, size_t i)
 {
-    size_t len = jl_bufferlen(b);
+    size_t len = jl_buffer_len(b);
     assert(i < len);
     size_t elsz = 0, al = 0;
     jl_value_t *ety = jl_tparam0(jl_typeof(b));
@@ -115,7 +110,7 @@ JL_DLLEXPORT jl_value_t *jl_bufref(jl_buffer_t *b, size_t i)
 
 JL_DLLEXPORT void jl_bufset(jl_buffer_t *b JL_ROOTING_ARGUMENT, jl_value_t *rhs JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, size_t i)
 {
-    size_t len = jl_bufferlen(b);
+    size_t len = jl_buffer_len(b);
     assert(i < len);
     size_t elsz = 0, al = 0;
     jl_value_t *ety = jl_tparam0(jl_typeof(b));

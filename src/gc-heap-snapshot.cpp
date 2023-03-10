@@ -208,7 +208,7 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
     else if (jl_is_buffer_type(a)) {
         node_type = "jl_buffer_t";
         name = "Buffer";
-        self_size = sizeof(jl_buffer_t) + sizeof(void*) * jl_bufferlen(a);
+        self_size = sizeof(jl_buffer_t) + sizeof(void*) * jl_buffer_len(a);
     }
     else if (jl_is_module(a)) {
         node_type = "jl_module_t";

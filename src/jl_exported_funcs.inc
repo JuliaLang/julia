@@ -23,6 +23,7 @@
     XX(jl_argument_datatype) \
     XX(jl_argument_method_table) \
     XX(jl_arraylen) \
+    XX(jl_bufferlen) \
     XX(jl_arrayref) \
     XX(jl_arrayset) \
     XX(jl_arrayunset) \
