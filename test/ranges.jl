@@ -1182,7 +1182,7 @@ end
     @test convert(LinRange{Float64}, 0.0:0.1:0.3) === LinRange{Float64}(0.0, 0.3, 4)
     @test convert(LinRange, 0.0:0.1:0.3) === LinRange{Float64}(0.0, 0.3, 4)
     @test convert(LinRange, 0:3) === LinRange{Int}(0, 3, 4)
-    
+
     @test convert(AbstractRange{Int8},0:5) === Int8(0):Int8(5)
     @test convert(AbstractRange{Float64},0:5) === 0.:1.:5.
 
