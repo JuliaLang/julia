@@ -139,7 +139,7 @@ function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothin
     p.column = 0
     p.line = 1
     p.marker = 0
-    p.root = root 
+    p.root = root
     p.active_table = p.root
     empty!(p.dotted_keys)
     empty!(p.chunks)
@@ -1066,7 +1066,7 @@ function try_return_time(p::Parser{DictType}, h, m, s, ms) where {DictType <: Ab
     end
 end
 
-function _parse_local_time(l::Parser{DictType}, skip_hour=false)::Err{NTuple{4, Int64}} where {DictType <: AbstractDictType} 
+function _parse_local_time(l::Parser{DictType}, skip_hour=false)::Err{NTuple{4, Int64}} where {DictType <: AbstractDictType}
     # Hour has potentially been already parsed in
     # `parse_number_or_date_start` already
     if skip_hour
