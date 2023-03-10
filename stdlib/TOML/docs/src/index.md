@@ -35,6 +35,23 @@ none:1:16 error: failed to parse value
 [...]
 ```
 
+If you want your TOML data to be parsed into a non-standard dictionary, such as an [OrderedDict](https://juliacollections.github.io/OrderedCollections.jl/latest/ordered_containers.html) from [OrderedCollections](https://juliapackages.com/p/orderedcollections), you can specify any dictionary type, as long as it is `<: AbstractDict{String, Any}`, i.e. as long as the keys are of type `String`, and the values are of type `Any`:
+
+```jldoctest
+julia> using TOML
+julia> using OrderedCollections
+
+julia> data = """
+           [database]
+           server = "192.168.1.1"
+           ports = [ 8001, 8001, 8002 ]
+       """;
+
+julia> TOML.parse(data; dicttype=OrderedDict{String, Any})
+OrderedDict{String, Any} with 1 entry:
+  "database" => OrderedDict{String, Any}("server"=>"192.168.1.1", "ports"=>[8001, 8001…
+```
+
 There are other versions of the parse functions ([`TOML.tryparse`](@ref)
 and [`TOML.tryparsefile`]) that instead of throwing exceptions on parser error
 returns a [`TOML.ParserError`](@ref) with information:
@@ -55,7 +72,6 @@ julia> err.line
 julia> err.column
 16
 ```
-
 
 ## Exporting data to TOML file
 
