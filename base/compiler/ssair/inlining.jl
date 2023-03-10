@@ -596,7 +596,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
             case = case::ConstantCase
             val = case.val
         end
-        if !isempty(compact.result_bbs[bb].preds)
+        if !isempty(compact.cfg_transform.result_bbs[bb].preds)
             push!(pn.edges, bb)
             push!(pn.values, val)
             insert_node_here!(compact,
@@ -648,8 +648,7 @@ function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inboun
         boundscheck = :propagate
     end
 
-    let compact = IncrementalCompact(ir, false)
-        compact.result_bbs = state.new_cfg_blocks
+    let compact = IncrementalCompact(ir, CFGTransformState!(state.new_cfg_blocks, false))
         # This needs to be a minimum and is more of a size hint
         nn = 0
         for (_, item) in todo
@@ -670,7 +669,7 @@ function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inboun
                     argexprs = copy(stmt.args)
                 end
                 refinish = false
-                if compact.result_idx == first(compact.result_bbs[compact.active_result_bb].stmts)
+                if compact.result_idx == first(compact.cfg_transform.result_bbs[compact.active_result_bb].stmts)
                     compact.active_result_bb -= 1
                     refinish = true
                 end
