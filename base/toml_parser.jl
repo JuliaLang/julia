@@ -27,13 +27,14 @@ DateTime(y, m, d, h, mi, s, ms) =
 
 const EOF_CHAR = typemax(Char)
 
+const AbstractDictType = AbstractDict{String, Any}
 const TOMLDict  = Dict{String, Any}
 
 ##########
 # Parser #
 ##########
 
-mutable struct Parser
+mutable struct Parser{DictType<:AbstractDictType}
     str::String
     # 1 character look ahead
     current_char::Char
@@ -51,7 +52,7 @@ mutable struct Parser
     marker::Int
 
     # The current table that `key = value` entries are inserted into
-    active_table::TOMLDict
+    active_table::DictType
 
     # As we parse dotted keys we store each part of the key in this cache
     # A future improvement would be to also store the spans of the keys
@@ -65,17 +66,17 @@ mutable struct Parser
 
     # We need to keep track of those tables / arrays that are defined
     # inline since we are not allowed to add keys to those
-    inline_tables::IdSet{TOMLDict}
+    inline_tables::IdSet{DictType}
     static_arrays::IdSet{Any}
 
     # [a.b.c.d] doesn't "define" the table [a]
     # so keys can later be added to [a], therefore
     # we need to keep track of what tables are
     # actually defined
-    defined_tables::IdSet{TOMLDict}
+    defined_tables::IdSet{DictType}
 
     # The table we will finally return to the user
-    root::TOMLDict
+    root::DictType
 
     # Filled in in case we are parsing a file to improve error messages
     filepath::Union{String, Nothing}
@@ -86,8 +87,7 @@ end
 
 const DATES_PKGID = Base.PkgId(Base.UUID("ade2ca70-3891-5945-98fb-dc099432e06a"), "Dates")
 
-function Parser(str::String; filepath=nothing)
-    root = TOMLDict()
+function Parser(str::String; filepath=nothing, root::DictType=TOMLDict()) where {DictType <: AbstractDictType}
     l = Parser(
             str,                  # str
             EOF_CHAR,             # current_char
@@ -99,7 +99,7 @@ function Parser(str::String; filepath=nothing)
             root,                 # active_table
             String[],             # dotted_keys
             UnitRange{Int}[],     # chunks
-            IdSet{TOMLDict}(),    # inline_tables
+            IdSet{DictType}(),    # inline_tables
             IdSet{Any}(),         # static_arrays
             IdSet{TOMLDict}(),    # defined_tables
             root,
@@ -119,10 +119,19 @@ function startup(l::Parser)
     end
 end
 
-Parser() = Parser("")
-Parser(io::IO) = Parser(read(io, String))
+Parser(; dicttype=TOMLDict) = Parser(""; root=dicttype())
+Parser(io::IO; dicttype=TOMLDict) = Parser(read(io, String); root=dicttype())
 
-function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothing)
+function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothing, root::DictType=TOMLDict()) where {DictType <: AbstractDictType}
+    # Change the DictType associate with p
+    new_p = Parser(; dicttype=DictType)
+    for field in fieldnames(Parser)
+        if !(field in [:root, :active_table, :inline_tables, :defined_tables])
+            setfield!(new_p, field, getfield(p, field))
+        end
+    end
+    p = new_p
+
     p.str = str
     p.current_char = EOF_CHAR
     p.pos = firstindex(str)
@@ -130,7 +139,7 @@ function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothin
     p.column = 0
     p.line = 1
     p.marker = 0
-    p.root = TOMLDict()
+    p.root = root 
     p.active_table = p.root
     empty!(p.dotted_keys)
     empty!(p.chunks)
@@ -255,7 +264,7 @@ for err in instances(ErrorType)
     @assert haskey(err_message, err) "$err does not have an error message"
 end
 
-mutable struct ParserError <: Exception
+mutable struct ParserError{DictType <: AbstractDictType} <: Exception
     type::ErrorType
 
     # Arbitrary data to store at the
@@ -269,10 +278,10 @@ mutable struct ParserError <: Exception
     line      ::Union{Int,      Nothing}
     column    ::Union{Int,      Nothing}
     pos       ::Union{Int,      Nothing} # position of parser when
-    table     ::Union{TOMLDict, Nothing} # result parsed until error
+    table     ::Union{DictType, Nothing} # result parsed until error
 end
-ParserError(type, data) = ParserError(type, data, nothing, nothing, nothing, nothing, nothing, nothing)
-ParserError(type) = ParserError(type, nothing)
+    ParserError{DictType}(type, data) where {DictType <: AbstractDictType} = ParserError{DictType}(type, data, nothing, nothing, nothing, nothing, nothing, nothing)
+ParserError{DictType}(type) where {DictType <: AbstractDictType} = ParserError{DictType}(type, nothing)
 # Defining these below can be useful when debugging code that erroneously returns a
 # ParserError because you get a stacktrace to where the ParserError was created
 #ParserError(type) = error(type)
@@ -440,13 +449,13 @@ take_substring(l::Parser) = SubString(l.str, l.marker:(l.prevpos-1))
 
 # Driver, keeps parsing toplevel until we either get
 # a `ParserError` or eof.
-function parse(l::Parser)::TOMLDict
+function parse(l::Parser{DictType})::DictType where {DictType <: AbstractDictType}
     v = tryparse(l)
     v isa ParserError && throw(v)
     return v
 end
 
-function tryparse(l::Parser)::Err{TOMLDict}
+function tryparse(l::Parser{DictType})::Err{TOMLDict} where {DictType <: AbstractDictType}
     while true
         skip_ws_nl(l)
         peek(l) == EOF_CHAR && break
@@ -466,14 +475,14 @@ end
 
 # Top level can be either a table key, an array of table statement
 # or a key/value entry.
-function parse_toplevel(l::Parser)::Err{Nothing}
+function parse_toplevel(l::Parser{DictType})::Err{Nothing} where {DictType <: AbstractDictType}
     if accept(l, '[')
         l.active_table = l.root
         @try parse_table(l)
         skip_ws_comment(l)
         if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == '#' || peek(l) == EOF_CHAR)
             eat_char(l)
-            return ParserError(ErrExpectedNewLineKeyValue)
+        return ParserError{DictType}(ErrExpectedNewLineKeyValue)
         end
     else
         @try parse_entry(l, l.active_table)
@@ -481,12 +490,12 @@ function parse_toplevel(l::Parser)::Err{Nothing}
         # SPEC: "There must be a newline (or EOF) after a key/value pair."
         if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == '#' || peek(l) == EOF_CHAR)
             c = eat_char(l)
-            return ParserError(ErrExpectedNewLineKeyValue)
+        return ParserError{DictType}(ErrExpectedNewLineKeyValue)
         end
     end
 end
 
-function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, check=true)::Err{TOMLDict}
+function recurse_dict!(l::Parser{DictType}, d::DictType, dotted_keys::AbstractVector{String}, check=true)::Err{DictType} where {DictType <: AbstractDictType}
     for i in 1:length(dotted_keys)
         d = d::TOMLDict
         key = dotted_keys[i]
@@ -496,52 +505,52 @@ function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, 
         end
         check && @try check_allowed_add_key(l, d, i == length(dotted_keys))
     end
-    return d::TOMLDict
+    return d::DictType
 end
 
-function check_allowed_add_key(l::Parser, d, check_defined=true)::Err{Nothing}
-    if !(d isa Dict)
-        return ParserError(ErrKeyAlreadyHasValue)
-    elseif d isa Dict && d in l.inline_tables
-        return ParserError(ErrAddKeyToInlineTable)
+function check_allowed_add_key(l::Parser{DictType}, d, check_defined=true)::Err{Nothing} where {DictType <: AbstractDictType}
+    if !(d isa AbstractDict)
+        return ParserError{DictType}(ErrKeyAlreadyHasValue)
+    elseif d isa AbstractDict && d in l.inline_tables
+        return ParserError{DictType}(ErrAddKeyToInlineTable)
     elseif check_defined && d in l.defined_tables
-        return ParserError(ErrDuplicatedKey)
+        return ParserError{DictType}(ErrDuplicatedKey)
     end
     return nothing
 end
 
 # Can only enter here from toplevel
-function parse_table(l)
+function parse_table(l::Parser{DictType}) where {DictType <: AbstractDictType}
     if accept(l, '[')
         return parse_array_table(l)
     end
     table_key = @try parse_key(l)
     skip_ws(l)
     if !accept(l, ']')
-        return ParserError(ErrExpectedEndOfTable)
+        return ParserError{DictType}(ErrExpectedEndOfTable)
     end
     l.active_table = @try recurse_dict!(l, l.root, table_key)
     push!(l.defined_tables, l.active_table)
     return
 end
 
-function parse_array_table(l)::Union{Nothing, ParserError}
+function parse_array_table(l::Parser{DictType})::Union{Nothing, ParserError{DictType}} where {DictType <: AbstractDictType}
     table_key = @try parse_key(l)
     skip_ws(l)
     if !(accept(l, ']') && accept(l, ']'))
-        return ParserError(ErrExpectedEndArrayOfTable)
+        return ParserError{DictType}(ErrExpectedEndArrayOfTable)
     end
     d = @try recurse_dict!(l, l.root, @view(table_key[1:end-1]), false)
     k = table_key[end]
     old = get!(() -> [], d, k)
     if old isa Vector
         if old in l.static_arrays
-            return ParserError(ErrAddArrayToStaticArray)
+            return ParserError{DictType}(ErrAddArrayToStaticArray)
         end
     else
-        return ParserError(ErrArrayTreatedAsDictionary)
+        return ParserError{DictType}(ErrArrayTreatedAsDictionary)
     end
-    d_new = TOMLDict()
+    d_new = DictType()
     push!(old, d_new)
     push!(l.defined_tables, d_new)
     l.active_table = d_new
@@ -549,11 +558,11 @@ function parse_array_table(l)::Union{Nothing, ParserError}
     return
 end
 
-function parse_entry(l::Parser, d)::Union{Nothing, ParserError}
+function parse_entry(l::Parser{DictType}, d)::Union{Nothing, ParserError{DictType}} where {DictType <: AbstractDictType}
     key = @try parse_key(l)
     skip_ws(l)
     if !accept(l, '=')
-        return ParserError(ErrExpectedEqualAfterKey)
+        return ParserError{DictType}(ErrExpectedEqualAfterKey)
     end
     if length(key) > 1
         d = @try recurse_dict!(l, d, @view(key[1:end-1]))
@@ -568,8 +577,8 @@ function parse_entry(l::Parser, d)::Union{Nothing, ParserError}
     skip_ws(l)
     value = @try parse_value(l)
     # Not allowed to overwrite a value with an inline dict
-    if value isa Dict && haskey(d, last_key_part)
-        return ParserError(ErrInlineTableRedefine)
+    if value isa AbstractDict && haskey(d, last_key_part)
+        return ParserError{DictType}(ErrInlineTableRedefine)
     end
     # TODO: Performance, hashing `last_key_part` again here
     d[last_key_part] = value
@@ -598,11 +607,11 @@ function parse_key(l::Parser)
 end
 
 # Recursively add dotted keys to `l.dotted_key`
-function _parse_key(l::Parser)
+function _parse_key(l::Parser{DictType}) where {DictType <: AbstractDictType}
     skip_ws(l)
     # SPEC: "A bare key must be non-empty,"
     if isempty(l.dotted_keys) && accept(l, '=')
-        return ParserError(ErrEmptyBareKey)
+        return ParserError{DictType}(ErrEmptyBareKey)
     end
     keyval = if accept(l, '"')
         @try parse_string_start(l, false)
@@ -613,12 +622,12 @@ function _parse_key(l::Parser)
         if accept_batch(l, isvalid_barekey_char)
             if !(peek(l) == '.' || peek(l) == ' ' || peek(l) == ']' || peek(l) == '=')
                 c = eat_char(l)
-                return ParserError(ErrInvalidBareKeyCharacter, c)
+                return ParserError{DictType}(ErrInvalidBareKeyCharacter, c)
             end
             String(take_substring(l))
         else
             c = eat_char(l)
-            return ParserError(ErrInvalidBareKeyCharacter, c)
+            return ParserError{DictType}(ErrInvalidBareKeyCharacter, c)
         end
     end
     new_key = keyval
@@ -637,7 +646,7 @@ end
 # Values #
 ##########
 
-function parse_value(l::Parser)
+function parse_value(l::Parser{DictType}) where {DictType <: AbstractDictType}
     val = if accept(l, '[')
         parse_array(l)
     elseif accept(l, '{')
@@ -654,7 +663,7 @@ function parse_value(l::Parser)
         parse_number_or_date_start(l)
     end
     if val === nothing
-        return ParserError(ErrGenericValueError)
+        return ParserError{DictType}(ErrGenericValueError)
     end
     return val
 end
@@ -691,7 +700,7 @@ function push!!(v::Vector, el)
     end
 end
 
-function parse_array(l::Parser)::Err{Vector}
+function parse_array(l::Parser{DictType})::Err{Vector} where {DictType <: AbstractDictType}
     skip_ws_nl(l)
     array = Vector{Union{}}()
     empty_array = accept(l, ']')
@@ -705,7 +714,7 @@ function parse_array(l::Parser)::Err{Vector}
         skip_ws_nl(l)
         accept(l, ']') && break
         if !comma
-            return ParserError(ErrExpectedCommaBetweenItemsArray)
+            return ParserError{DictType}(ErrExpectedCommaBetweenItemsArray)
         end
     end
     push!(l.static_arrays, array)
@@ -717,8 +726,8 @@ end
 # Inline table #
 ################
 
-function parse_inline_table(l::Parser)::Err{TOMLDict}
-    dict = TOMLDict()
+function parse_inline_table(l::Parser{DictType})::Err{DictType} where {DictType <: AbstractDictType}
+    dict = DictType()
     push!(l.inline_tables, dict)
     skip_ws(l)
     accept(l, '}') && return dict
@@ -730,10 +739,10 @@ function parse_inline_table(l::Parser)::Err{TOMLDict}
         if accept(l, ',')
             skip_ws(l)
             if accept(l, '}')
-                return ParserError(ErrTrailingCommaInlineTable)
+                return ParserError{DictType}(ErrTrailingCommaInlineTable)
             end
         else
-            return ParserError(ErrExpectedCommaBetweenItemsInlineTable)
+            return ParserError{DictType}(ErrExpectedCommaBetweenItemsInlineTable)
         end
     end
 end
@@ -760,7 +769,7 @@ isvalid_binary(c::Char) = '0' <= c <= '1'
 const ValidSigs = Union{typeof.([isvalid_hex, isvalid_oct, isvalid_binary, isdigit])...}
 # This function eats things accepted by `f` but also allows eating `_` in between
 # digits. Returns if it ate at lest one character and if it ate an underscore
-function accept_batch_underscore(l::Parser, f::ValidSigs, fail_if_underscore=true)::Err{Tuple{Bool, Bool}}
+function accept_batch_underscore(l::Parser{DictType}, f::ValidSigs, fail_if_underscore=true)::Err{Tuple{Bool, Bool}} where {DictType <: AbstractDictType}
     contains_underscore = false
     at_least_one = false
     last_underscore = false
@@ -769,7 +778,7 @@ function accept_batch_underscore(l::Parser, f::ValidSigs, fail_if_underscore=tru
         if c == '_'
             contains_underscore = true
             if fail_if_underscore
-                return ParserError(ErrUnderscoreNotSurroundedByDigits)
+                return ParserError{DictType}(ErrUnderscoreNotSurroundedByDigits)
             end
             eat_char(l)
             fail_if_underscore = true
@@ -782,7 +791,7 @@ function accept_batch_underscore(l::Parser, f::ValidSigs, fail_if_underscore=tru
                 eat_char(l)
             else
                 if last_underscore
-                    return ParserError(ErrTrailingUnderscoreNumber)
+                    return ParserError{DictType}(ErrTrailingUnderscoreNumber)
                 end
                 return at_least_one, contains_underscore
             end
@@ -791,7 +800,7 @@ function accept_batch_underscore(l::Parser, f::ValidSigs, fail_if_underscore=tru
     end
 end
 
-function parse_number_or_date_start(l::Parser)
+function parse_number_or_date_start(l::Parser{DictType}) where {DictType <: AbstractDictType}
     integer = true
     read_dot = false
 
@@ -811,7 +820,7 @@ function parse_number_or_date_start(l::Parser)
     end
 
     if accept(l, '.')
-        return ParserError(ErrLeadingDot)
+        return ParserError{DictType}(ErrLeadingDot)
     end
 
     # Zero is allowed to follow by a end value char, a base x, o, b or a dot
@@ -821,15 +830,15 @@ function parse_number_or_date_start(l::Parser)
         if ok_end_value(peek(l))
             return Int64(0)
         elseif accept(l, 'x')
-            parsed_sign && return ParserError(ErrSignInNonBase10Number)
+            parsed_sign && return ParserError{DictType}(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_hex)
             ate && return parse_hex(l, contains_underscore)
         elseif accept(l, 'o')
-            parsed_sign && return ParserError(ErrSignInNonBase10Number)
+            parsed_sign && return ParserError{DictType}(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_oct)
             ate && return parse_oct(l, contains_underscore)
         elseif accept(l, 'b')
-            parsed_sign && return ParserError(ErrSignInNonBase10Number)
+            parsed_sign && return ParserError{DictType}(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_binary)
             ate && return parse_bin(l, contains_underscore)
         elseif accept(l, isdigit)
@@ -841,9 +850,9 @@ function parse_number_or_date_start(l::Parser)
     read_digit = accept(l, isdigit)
     if !readed_zero && !read_digit
         if peek(l) == EOF_CHAR
-            return ParserError(ErrUnexpectedEofExpectedValue)
+            return ParserError{DictType}(ErrUnexpectedEofExpectedValue)
         else
-            return ParserError(ErrUnexpectedStartOfValue)
+            return ParserError{DictType}(ErrUnexpectedStartOfValue)
         end
     end
     ate, contains_underscore = @try accept_batch_underscore(l, isdigit, readed_zero)
@@ -867,7 +876,7 @@ function parse_number_or_date_start(l::Parser)
     ate_dot = accept(l, '.')
     ate, contains_underscore = @try accept_batch_underscore(l, isdigit, true)
     if ate_dot && !ate
-        return ParserError(ErrNoTrailingDigitAfterDot)
+        return ParserError{DictType}(ErrNoTrailingDigitAfterDot)
     end
     read_underscore |= contains_underscore
     if accept(l, x -> x == 'e' || x == 'E')
@@ -879,7 +888,7 @@ function parse_number_or_date_start(l::Parser)
     end
     if !ok_end_value(peek(l))
         eat_char(l)
-        return ParserError(ErrGenericValueError)
+        return ParserError{DictType}(ErrGenericValueError)
     end
     return parse_float(l, read_underscore)
 end
@@ -892,10 +901,10 @@ function take_string_or_substring(l, contains_underscore)::SubString
     return contains_underscore ? SubString(filter(!=('_'), subs)) : subs
 end
 
-function parse_float(l::Parser, contains_underscore)::Err{Float64}
+    function parse_float(l::Parser{DictType}, contains_underscore)::Err{Float64} where {DictType <: AbstractDictType}
     s = take_string_or_substring(l, contains_underscore)
     v = Base.tryparse(Float64, s)
-    v === nothing && return(ParserError(ErrGenericValueError))
+    v === nothing && return(ParserError{DictType}(ErrGenericValueError))
     return v
 end
 
@@ -904,7 +913,7 @@ for (name, T1, T2, n1, n2) in (("int", Int64,  Int128,  17,  33),
                                ("oct", UInt64, UInt128, 24,  45),
                                ("bin", UInt64, UInt128, 66, 130),
                                )
-    @eval function $(Symbol("parse_", name))(l::Parser, contains_underscore, base=nothing)::Err{Union{$(T1), $(T2), BigInt}}
+    @eval function $(Symbol("parse_", name))(l::Parser{DictType}, contains_underscore, base=nothing)::Err{Union{$(T1), $(T2), BigInt}} where {DictType <: AbstractDictType}
         s = take_string_or_substring(l, contains_underscore)
         len = length(s)
         v = try
@@ -916,7 +925,7 @@ for (name, T1, T2, n1, n2) in (("int", Int64,  Int128,  17,  33),
                 Base.parse(BigInt, s; base)
             end
         catch e
-            e isa Base.OverflowError && return(ParserError(ErrOverflowError))
+            e isa Base.OverflowError && return(ParserError{DictType}(ErrOverflowError))
             error("internal parser error: did not correctly discredit $(repr(s)) as an int")
         end
         return v
@@ -956,26 +965,26 @@ ok_end_value(c::Char) = iswhitespace(c) || c == '#' || c == EOF_CHAR || c == ']'
    date-time       = full-date "T" full-time
 =#
 
-accept_two(l, f::F) where {F} = accept_n(l, 2, f) || return(ParserError(ErrParsingDateTime))
-function parse_datetime(l)
+accept_two(l::Parser{DictType}, f::F) where {DictType <: AbstractDictType, F} = accept_n(l, 2, f) || return(ParserError{DictType}(ErrParsingDateTime))
+function parse_datetime(l::Parser{DictType}) where {DictType <: AbstractDictType}
     # Year has already been eaten when we reach here
     year = @try parse_int(l, false)
-    year in 0:9999 || return ParserError(ErrParsingDateTime)
+    year in 0:9999 || return ParserError{DictType}(ErrParsingDateTime)
 
     # Month
-    accept(l, '-') || return ParserError(ErrParsingDateTime)
+    accept(l, '-') || return ParserError{DictType}(ErrParsingDateTime)
     set_marker!(l)
     @try accept_two(l, isdigit)
     month = @try parse_int(l, false)
-    month in 1:12 || return ParserError(ErrParsingDateTime)
-    accept(l, '-') || return ParserError(ErrParsingDateTime)
+    month in 1:12 || return ParserError{DictType}(ErrParsingDateTime)
+    accept(l, '-') || return ParserError{DictType}(ErrParsingDateTime)
 
     # Day
     set_marker!(l)
     @try accept_two(l, isdigit)
     day = @try parse_int(l, false)
     # Verify the real range in the constructor below
-    day in 1:31 || return ParserError(ErrParsingDateTime)
+    day in 1:31 || return ParserError{DictType}(ErrParsingDateTime)
 
     # We might have a local date now
     read_space = false
@@ -989,7 +998,7 @@ function parse_datetime(l)
         end
     end
     if !read_space
-        accept(l, 'T') || accept(l, 't') || return ParserError(ErrParsingDateTime)
+        accept(l, 'T') || accept(l, 't') || return ParserError{DictType}(ErrParsingDateTime)
     end
 
     h, m, s, ms = @try _parse_local_time(l)
@@ -997,12 +1006,12 @@ function parse_datetime(l)
     # Julia doesn't support offset times
     if !accept(l, 'Z')
         if accept(l, '+') || accept(l, '-')
-            return ParserError(ErrOffsetDateNotSupported)
+            return ParserError{DictType}(ErrOffsetDateNotSupported)
         end
     end
 
     if !ok_end_value(peek(l))
-        return ParserError(ErrParsingDateTime)
+        return ParserError{DictType}(ErrParsingDateTime)
     end
 
     # The DateTime parser verifies things like leap year for us
@@ -1015,49 +1024,49 @@ function try_return_datetime(p, year, month, day, h, m, s, ms)
         try
             return Dates.DateTime(year, month, day, h, m, s, ms)
         catch
-            return ParserError(ErrParsingDateTime)
+            return ParserError{DictType}(ErrParsingDateTime)
         end
     else
         return DateTime(year, month, day, h, m, s, ms)
     end
 end
 
-function try_return_date(p, year, month, day)
+function try_return_date(p::Parser{DictType}, year, month, day) where {DictType <: AbstractDictType}
     Dates = p.Dates
     if Dates !== nothing
         try
             return Dates.Date(year, month, day)
         catch
-            return ParserError(ErrParsingDateTime)
+            return ParserError{DictType}(ErrParsingDateTime)
         end
     else
         return Date(year, month, day)
     end
 end
 
-function parse_local_time(l::Parser)
+function parse_local_time(l::Parser{DictType}) where {DictType <: AbstractDictType}
     h = @try parse_int(l, false)
-    h in 0:23 || return ParserError(ErrParsingDateTime)
+    h in 0:23 || return ParserError{DictType}(ErrParsingDateTime)
     _, m, s, ms = @try _parse_local_time(l, true)
     # TODO: Could potentially parse greater accuracy for the
     # fractional seconds here.
     return try_return_time(l, h, m, s, ms)
 end
 
-function try_return_time(p, h, m, s, ms)
+function try_return_time(p::Parser{DictType}, h, m, s, ms) where {DictType <: AbstractDictType}
     Dates = p.Dates
     if Dates !== nothing
         try
             return Dates.Time(h, m, s, ms)
         catch
-            return ParserError(ErrParsingDateTime)
+            return ParserError{DictType}(ErrParsingDateTime)
         end
     else
         return Time(h, m, s, ms)
     end
 end
 
-function _parse_local_time(l::Parser, skip_hour=false)::Err{NTuple{4, Int64}}
+function _parse_local_time(l::Parser{DictType}, skip_hour=false)::Err{NTuple{4, Int64}} where {DictType <: AbstractDictType} 
     # Hour has potentially been already parsed in
     # `parse_number_or_date_start` already
     if skip_hour
@@ -1066,24 +1075,24 @@ function _parse_local_time(l::Parser, skip_hour=false)::Err{NTuple{4, Int64}}
         set_marker!(l)
         @try accept_two(l, isdigit)
         hour = parse_int(l, false)
-        hour in 0:23 || return ParserError(ErrParsingDateTime)
+        hour in 0:23 || return ParserError{DictType}(ErrParsingDateTime)
     end
 
-    accept(l, ':') || return ParserError(ErrParsingDateTime)
+    accept(l, ':') || return ParserError{DictType}(ErrParsingDateTime)
 
     # minute
     set_marker!(l)
     @try accept_two(l, isdigit)
     minute = parse_int(l, false)
-    minute in 0:59 || return ParserError(ErrParsingDateTime)
+    minute in 0:59 || return ParserError{DictType}(ErrParsingDateTime)
 
-    accept(l, ':') || return ParserError(ErrParsingDateTime)
+    accept(l, ':') || return ParserError{DictType}(ErrParsingDateTime)
 
     # second
     set_marker!(l)
     @try accept_two(l, isdigit)
     second = parse_int(l, false)
-    second in 0:59 || return ParserError(ErrParsingDateTime)
+    second in 0:59 || return ParserError{DictType}(ErrParsingDateTime)
 
     # optional fractional second
     fractional_second = Int64(0)
@@ -1094,7 +1103,7 @@ function _parse_local_time(l::Parser, skip_hour=false)::Err{NTuple{4, Int64}}
             found_fractional_digit |= accept(l, isdigit)
         end
         if !found_fractional_digit
-            return ParserError(ErrParsingDateTime)
+            return ParserError{DictType}(ErrParsingDateTime)
         end
         # DateTime in base only manages 3 significant digits in fractional
         # second
@@ -1130,14 +1139,14 @@ end
 @inline stop_candidates_multiline_quoted(x)  = x != '\'' &&  x != '\\'
 @inline stop_candidates_singleline_quoted(x) = x != '\'' &&  x != '\\' && x != '\n'
 
-function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{String}
+function parse_string_continue(l::Parser{DictType}, multiline::Bool, quoted::Bool)::Err{String} where {DictType <: AbstractDictType}
     start_chunk = l.prevpos
     q = quoted ? '\'' : '"'
     contains_backslash = false
     offset = multiline ? 3 : 1
     while true
         if peek(l) == EOF_CHAR
-            return ParserError(ErrUnexpectedEndString)
+            return ParserError{DictType}(ErrUnexpectedEndString)
         end
         if quoted
             accept_batch(l, multiline ? stop_candidates_multiline_quoted : stop_candidates_singleline_quoted)
@@ -1145,7 +1154,7 @@ function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{St
             accept_batch(l, multiline ? stop_candidates_multiline : stop_candidates_singleline)
         end
         if !multiline && peek(l) == '\n'
-            return ParserError(ErrNewLineInString)
+            return ParserError{DictType}(ErrNewLineInString)
         end
         next_slash = peek(l) == '\\'
         if !next_slash
@@ -1168,7 +1177,7 @@ function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{St
                     n = c == 'u' ? 4 : 6
                     set_marker!(l)
                     if !accept_n(l, n, isvalid_hex)
-                        return ParserError(ErrInvalidUnicodeScalar)
+                        return ParserError{DictType}(ErrInvalidUnicodeScalar)
                     end
                     codepoint = parse_int(l, false, 16)::Int64
                     #=
@@ -1179,10 +1188,10 @@ function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{St
                     integers 0 to D7FF16 and E00016 to 10FFFF16 inclusive.
                     =#
                     if !(codepoint <= 0xD7FF || 0xE000 <= codepoint <= 0x10FFFF)
-                        return ParserError(ErrInvalidUnicodeScalar)
+                        return ParserError{DictType}(ErrInvalidUnicodeScalar)
                     end
                 elseif c != 'b' && c != 't' && c != 'n' && c != 'f' && c != 'r' && c != '"' && c!= '\\'
-                    return ParserError(ErrInvalidEscapeCharacter)
+                    return ParserError{DictType}(ErrInvalidEscapeCharacter)
                 end
                 contains_backslash = true
             end

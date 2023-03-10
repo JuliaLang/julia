@@ -4,7 +4,7 @@ module TOML
 
 module Internals
     # The parser is defined in Base
-    using Base.TOML: Parser, parse, tryparse, ParserError, isvalid_barekey_char, reinit!
+    using Base.TOML: TOMLDict, Parser, parse, tryparse, ParserError, isvalid_barekey_char, reinit!
     # Put the error instances in this module
     for errtype in instances(Base.TOML.ErrorType)
         @eval using Base.TOML: $(Symbol(errtype))
@@ -32,64 +32,72 @@ performance if a larger number of small files are parsed.
 const Parser = Internals.Parser
 
 """
-    parsefile(f::AbstractString)
-    parsefile(p::Parser, f::AbstractString)
+    TOMLDict
 
-Parse file `f` and return the resulting table (dictionary). Throw a
+Default dictionary type for TOML files. Note that in most cases one does not need to specify a different dictionary type, ohwever [`TOML.parsefile`](@ref), and [`TOML.parse`](@ref) allow you to specify your own custom dictionary type, as long as it is `<: AbstractDict{String, Any}`
+"""
+const TOMLDict = Internals.TOMLDict
+
+"""
+    parsefile(f::AbstractString; dicttype)
+    parsefile(p::Parser, f::AbstractString; dicttype)
+
+Parse file `f` and return the resulting table (dictionary, or `dictype <: AbstractDict{String, Any}`). Throw a
 [`ParserError`](@ref) upon failure.
 
 See also [`TOML.tryparsefile`](@ref).
 """
-parsefile(f::AbstractString) =
-    Internals.parse(Parser(readstring(f); filepath=abspath(f)))
-parsefile(p::Parser, f::AbstractString) =
-    Internals.parse(Internals.reinit!(p, readstring(f); filepath=abspath(f)))
+parsefile(f::AbstractString; dicttype=TOMLDict) =
+    Internals.parse(Parser(readstring(f); filepath=abspath(f), root=dicttype()))
+parsefile(p::Parser, f::AbstractString; dicttype=TOMLDict) =
+    Internals.parse(Internals.reinit!(p, readstring(f); filepath=abspath(f), root=dicttype()))
+
 
 """
-    tryparsefile(f::AbstractString)
-    tryparsefile(p::Parser, f::AbstractString)
+    tryparsefile(f::AbstractString; dicttype)
+    tryparsefile(p::Parser, f::AbstractString; dicttype)
 
-Parse file `f` and return the resulting table (dictionary). Return a
+Parse file `f` and return the resulting table (dictionary, or `dicttype <: AbstractDict{String, Any}`). Return a
 [`ParserError`](@ref) upon failure.
 
 See also [`TOML.parsefile`](@ref).
 """
-tryparsefile(f::AbstractString) =
-    Internals.tryparse(Parser(readstring(f); filepath=abspath(f)))
-tryparsefile(p::Parser, f::AbstractString) =
-    Internals.tryparse(Internals.reinit!(p, readstring(f); filepath=abspath(f)))
+tryparsefile(f::AbstractString; dicttype=TOMLDict) =
+    Internals.tryparse(Parser(readstring(f); filepath=abspath(f), root=dicttype()))
+tryparsefile(p::Parser, f::AbstractString; ditctype=TOMLDict) =
+    Internals.tryparse(Internals.reinit!(p, readstring(f); filepath=abspath(f), root=dicttype()))
 
 """
-    parse(x::Union{AbstractString, IO})
-    parse(p::Parser, x::Union{AbstractString, IO})
+    parse(x::Union{AbstractString, IO}; dicttype)
+    parse(p::Parser, x::Union{AbstractString, IO}; dicttype)
 
-Parse the string  or stream `x`, and return the resulting table (dictionary).
+Parse the string  or stream `x`, and return the resulting table (dictionary, or `dicttype <: AbstractDict{String, Any}`).
 Throw a [`ParserError`](@ref) upon failure.
 
 See also [`TOML.tryparse`](@ref).
 """
-parse(str::AbstractString) =
-    Internals.parse(Parser(String(str)))
-parse(p::Parser, str::AbstractString) =
-    Internals.parse(Internals.reinit!(p, String(str)))
-parse(io::IO) = parse(read(io, String))
-parse(p::Parser, io::IO) = parse(p, read(io, String))
+parse(str::AbstractString; dicttype=TOMLDict) =
+    Internals.parse(Parser(String(str); root=dicttype()))
+parse(p::Parser, str::AbstractString; dicttype=TOMLDict) =
+    Internals.parse(Internals.reinit!(p, String(str); root=dicttype()))
+parse(io::IO; dicttype=TOMLDict) = parse(read(io, String); dicttype=dicttype)
+parse(p::Parser, io::IO; dicttype=TOMLDict) = parse(p, read(io, String); dicttype=dicttype)
 
 """
-    tryparse(x::Union{AbstractString, IO})
-    tryparse(p::Parser, x::Union{AbstractString, IO})
+    tryparse(x::Union{AbstractString, IO}; dicttype)
+    tryparse(p::Parser, x::Union{AbstractString, IO}; dicttype)
 
-Parse the string or stream `x`, and return the resulting table (dictionary).
+Parse the string or stream `x`, and return the resulting table (dictionary, or `dicttype <: AbstractDict{String, Any}`).
 Return a [`ParserError`](@ref) upon failure.
 
 See also [`TOML.parse`](@ref).
 """
-tryparse(str::AbstractString) =
-    Internals.tryparse(Parser(String(str)))
-tryparse(p::Parser, str::AbstractString) =
-    Internals.tryparse(Internals.reinit!(p, String(str)))
-tryparse(io::IO) = tryparse(read(io, String))
-tryparse(p::Parser, io::IO) = tryparse(p, read(io, String))
+tryparse(str::AbstractString; dicttype=TOMLDict) =
+    Internals.tryparse(Parser(String(str); root=dicttype()))
+tryparse(p::Parser, str::AbstractString; dicttype=TOMLDict) =
+    Internals.tryparse(Internals.reinit!(p, String(str); root=dicttype()))
+tryparse(io::IO; dicttype=TOMLDict) = tryparse(read(io, String); dicttype=dicttype)
+tryparse(p::Parser, io::IO; dicttype=TOMLDict) = tryparse(p, read(io, String); dicttype=dicttype)
 
 """
     ParserError
