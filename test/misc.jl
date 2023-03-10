@@ -1386,3 +1386,18 @@ end
     @test (@allocations "a") == 0
     @test (@allocations "a" * "b") == 1
 end
+
+@testset "in_finalizer" begin
+    @test !GC.in_finalizer()
+
+    in_fin = Ref{Any}()
+    wait(@async begin
+        r = Ref(1)
+        finalizer(r) do _
+            in_fin[] = GC.in_finalizer()
+        end
+        nothing
+    end)
+    GC.gc(true); yield()
+    @test in_fin[]
+end
