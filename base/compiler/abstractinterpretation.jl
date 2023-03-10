@@ -204,7 +204,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     if seen ≠ napplicable
         # there is unanalyzed candidate, widen type and effects to the top
         rettype = Any
-        all_effects = Effects()
+        # there may be unanalyzed effects within unseen dispatch candidate,
+        # but we can still ignore nonoverlayed effect here since we already accounted for it
+        all_effects = merge_effects(all_effects, EFFECTS_UNKNOWN)
     elseif isa(matches, MethodMatches) ? (!matches.fullmatch || any_ambig(matches)) :
             (!all(matches.fullmatches) || any_ambig(matches))
         # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
