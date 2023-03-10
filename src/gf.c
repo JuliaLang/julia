@@ -1610,31 +1610,32 @@ JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, 
     JL_LOCK(&callee->def.method->writelock);
     if (invokesig == jl_nothing)
         invokesig = NULL;      // julia uses `nothing` but C uses NULL (#undef)
+    int found = 0;
+    // TODO: use jl_cache_type_(invokesig) like cache_method does to save memory
     if (!callee->backedges) {
         // lazy-init the backedges array
         callee->backedges = jl_alloc_vec_any(0);
         jl_gc_wb(callee, callee->backedges);
-        push_edge(callee->backedges, invokesig, caller);
     }
     else {
         size_t i = 0, l = jl_array_len(callee->backedges);
-        int found = 0;
-        jl_value_t *invokeTypes;
-        jl_method_instance_t *mi;
-        while (i < l) {
-            i = get_next_edge(callee->backedges, i, &invokeTypes, &mi);
-            // TODO: it would be better to canonicalize (how?) the Tuple-type so
-            // that we don't have to call `jl_egal`
-            if (mi == caller && ((invokesig == NULL && invokeTypes == NULL) ||
-                                 (invokesig && invokeTypes && jl_egal(invokesig, invokeTypes)))) {
+        for (i = 0; i < l; i++) {
+            // optimized version of while (i < l) i = get_next_edge(callee->backedges, i, &invokeTypes, &mi);
+            jl_value_t *mi = jl_array_ptr_ref(callee->backedges, i);
+            if (mi != (jl_value_t*)caller)
+                continue;
+            jl_value_t *invokeTypes = i > 0 ? jl_array_ptr_ref(callee->backedges, i - 1) : NULL;
+            if (invokeTypes && jl_is_method_instance(invokeTypes))
+                invokeTypes = NULL;
+            if ((invokesig == NULL && invokeTypes == NULL) ||
+                (invokesig && invokeTypes && jl_types_equal(invokesig, invokeTypes))) {
                 found = 1;
                 break;
             }
         }
-        if (!found) {
-            push_edge(callee->backedges, invokesig, caller);
-        }
     }
+    if (!found)
+        push_edge(callee->backedges, invokesig, caller);
     JL_UNLOCK(&callee->def.method->writelock);
 }
 
@@ -1650,6 +1651,7 @@ JL_DLLEXPORT void jl_method_table_add_backedge(jl_methtable_t *mt, jl_value_t *t
         jl_array_ptr_set(mt->backedges, 1, caller);
     }
     else {
+        // TODO: use jl_cache_type_(tt) like cache_method does, instead of a linear scan
         size_t i, l = jl_array_len(mt->backedges);
         for (i = 1; i < l; i += 2) {
             if (jl_types_equal(jl_array_ptr_ref(mt->backedges, i - 1), typ)) {
