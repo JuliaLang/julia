@@ -344,6 +344,7 @@ include("math.jl")
 using .Math
 const (√)=sqrt
 const (∛)=cbrt
+const (∜)=fourthroot
 
 # now switch to a simple, race-y TLS, relative include for the rest of Base
 delete_method(which(include, (Module, String)))

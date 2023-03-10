@@ -353,6 +353,17 @@ static char *libstdcxxprobe(void)
 void *libjulia_internal = NULL;
 void *libjulia_codegen = NULL;
 __attribute__((constructor)) void jl_load_libjulia_internal(void) {
+#if defined(_OS_LINUX_)
+    // Julia uses `sigwait()` to handle signals, and all threads are required
+    // to mask the corresponding handlers so that the signals can be waited on.
+    // Here, we setup that masking early, so that it is inherited by any threads
+    // spawned (e.g. by constructors) when loading deps of libjulia-internal.
+
+    sigset_t all_signals, prev_mask;
+    sigfillset(&all_signals);
+    pthread_sigmask(SIG_BLOCK, &all_signals, &prev_mask);
+#endif
+
     // Only initialize this once
     if (libjulia_internal != NULL) {
         return;
@@ -521,6 +532,13 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     // jl_options must be initialized very early, in case an embedder sets some
     // values there before calling jl_init
     ((void (*)(void))jl_init_options_addr)();
+
+#if defined(_OS_LINUX_)
+    // Restore the original signal mask. `jl_init()` will later setup blocking
+    // for the specific set of signals we `sigwait()` on, and any threads spawned
+    // during loading above will still retain their inherited signal mask.
+    pthread_sigmask(SIG_SETMASK, &prev_mask, NULL);
+#endif
 }
 
 // Load libjulia and run the REPL with the given arguments (in UTF-8 format)

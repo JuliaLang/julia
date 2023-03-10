@@ -107,7 +107,6 @@ mutable struct InferenceState
     callers_in_cycle::Vector{InferenceState}
     dont_work_on_me::Bool
     parent::Union{Nothing, InferenceState}
-    inferred::Bool # TODO move this to InferenceResult?
 
     #= results =#
     result::InferenceResult # remember where to put the result
@@ -165,7 +164,6 @@ mutable struct InferenceState
         callers_in_cycle = Vector{InferenceState}()
         dont_work_on_me = false
         parent = nothing
-        inferred = false
 
         valid_worlds = WorldRange(src.min_world, src.max_world == typemax(UInt) ? get_world_counter() : src.max_world)
         bestguess = Bottom
@@ -180,24 +178,22 @@ mutable struct InferenceState
         @assert cache === :no || cache === :local || cache === :global
         cached = cache === :global
 
-        frame = new(
+        # some more setups
+        InferenceParams(interp).unoptimize_throw_blocks && mark_throw_blocks!(src, handler_at)
+        cache !== :no && push!(get_inference_cache(interp), result)
+
+        return new(
             linfo, world, mod, sptypes, slottypes, src, cfg,
             currbb, currpc, ip, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
-            pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent, inferred,
+            pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent,
             result, valid_worlds, bestguess, ipo_effects,
             restrict_abstract_call_sites, cached, insert_coverage,
             interp)
-
-        # some more setups
-        InferenceParams(interp).unoptimize_throw_blocks && mark_throw_blocks!(src, handler_at)
-        result.result = frame
-        cache !== :no && push!(get_inference_cache(interp), result)
-
-        return frame
     end
 end
 
-Effects(state::InferenceState) = state.ipo_effects
+is_inferred(sv::InferenceState) = is_inferred(sv.result)
+is_inferred(result::InferenceResult) = result.result !== nothing
 
 function merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::Effects)
     caller.ipo_effects = merge_effects(caller.ipo_effects, effects)
@@ -507,13 +503,11 @@ end
 _topmod(sv::InferenceState) = _topmod(sv.mod)
 
 # work towards converging the valid age range for sv
-function update_valid_age!(sv::InferenceState, worlds::WorldRange)
-    sv.valid_worlds = intersect(worlds, sv.valid_worlds)
-    @assert(sv.world in sv.valid_worlds, "invalid age range update")
-    nothing
+function update_valid_age!(sv::InferenceState, valid_worlds::WorldRange)
+    valid_worlds = sv.valid_worlds = intersect(valid_worlds, sv.valid_worlds)
+    @assert(sv.world in valid_worlds, "invalid age range update")
+    return valid_worlds
 end
-
-update_valid_age!(edge::InferenceState, sv::InferenceState) = update_valid_age!(sv, edge.valid_worlds)
 
 function record_ssa_assign!(𝕃ᵢ::AbstractLattice, ssa_id::Int, @nospecialize(new), frame::InferenceState)
     ssavaluetypes = frame.ssavaluetypes
@@ -540,7 +534,7 @@ function record_ssa_assign!(𝕃ᵢ::AbstractLattice, ssa_id::Int, @nospecialize
 end
 
 function add_cycle_backedge!(caller::InferenceState, frame::InferenceState, currpc::Int)
-    update_valid_age!(frame, caller)
+    update_valid_age!(caller, frame.valid_worlds)
     backedge = (caller, currpc)
     contains_is(frame.cycle_backedges, backedge) || push!(frame.cycle_backedges, backedge)
     add_backedge!(caller, frame.linfo)
@@ -548,24 +542,24 @@ function add_cycle_backedge!(caller::InferenceState, frame::InferenceState, curr
 end
 
 # temporarily accumulate our edges to later add as backedges in the callee
-function add_backedge!(caller::InferenceState, li::MethodInstance)
+function add_backedge!(caller::InferenceState, mi::MethodInstance)
     edges = get_stmt_edges!(caller)
     if edges !== nothing
-        push!(edges, li)
+        push!(edges, mi)
     end
     return nothing
 end
 
-function add_invoke_backedge!(caller::InferenceState, @nospecialize(invokesig::Type), li::MethodInstance)
+function add_invoke_backedge!(caller::InferenceState, @nospecialize(invokesig::Type), mi::MethodInstance)
     edges = get_stmt_edges!(caller)
     if edges !== nothing
-        push!(edges, invokesig, li)
+        push!(edges, invokesig, mi)
     end
     return nothing
 end
 
 # used to temporarily accumulate our no method errors to later add as backedges in the callee method table
-function add_mt_backedge!(caller::InferenceState, mt::Core.MethodTable, @nospecialize(typ))
+function add_mt_backedge!(caller::InferenceState, mt::MethodTable, @nospecialize(typ))
     edges = get_stmt_edges!(caller)
     if edges !== nothing
         push!(edges, mt, typ)

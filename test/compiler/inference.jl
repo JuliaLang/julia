@@ -1590,7 +1590,7 @@ gg13183(x::X...) where {X} = (_false13183 ? gg13183(x, x) : 0)
 let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     world = UInt(23) # some small-numbered world that should be valid
     interp = Core.Compiler.NativeInterpreter()
-    opt = Core.Compiler.OptimizationState(linfo, Core.Compiler.OptimizationParams(interp), interp)
+    opt = Core.Compiler.OptimizationState(linfo, interp)
     # make sure the state of the properties look reasonable
     @test opt.src !== linfo.def.source
     @test length(opt.src.slotflags) == linfo.def.nargs <= length(opt.src.slotnames)
@@ -2152,45 +2152,6 @@ end
 # =========================
 # `MustAlias` propagates constraints imposed on aliased fields
 
-import Core: MethodInstance, CodeInstance
-const CC = Core.Compiler
-import .CC: WorldRange, WorldView
-
-"""
-    @newinterp NewInterpreter
-
-Defines new `NewInterpreter <: AbstractInterpreter` whose cache is separated
-from the native code cache, satisfying the minimum interface requirements.
-"""
-macro newinterp(name)
-    cachename = Symbol(string(name, "Cache"))
-    name = esc(name)
-    quote
-        struct $cachename
-            dict::IdDict{MethodInstance,CodeInstance}
-        end
-        struct $name <: CC.AbstractInterpreter
-            interp::CC.NativeInterpreter
-            cache::$cachename
-            meta # additional information
-            $name(world = Base.get_world_counter();
-                interp = CC.NativeInterpreter(world),
-                cache = $cachename(IdDict{MethodInstance,CodeInstance}()),
-                meta = nothing,
-                ) = new(interp, cache, meta)
-        end
-        CC.InferenceParams(interp::$name) = CC.InferenceParams(interp.interp)
-        CC.OptimizationParams(interp::$name) = CC.OptimizationParams(interp.interp)
-        CC.get_world_counter(interp::$name) = CC.get_world_counter(interp.interp)
-        CC.get_inference_cache(interp::$name) = CC.get_inference_cache(interp.interp)
-        CC.code_cache(interp::$name) = WorldView(interp.cache, WorldRange(CC.get_world_counter(interp)))
-        CC.get(wvc::WorldView{<:$cachename}, mi::MethodInstance, default) = get(wvc.cache.dict, mi, default)
-        CC.getindex(wvc::WorldView{<:$cachename}, mi::MethodInstance) = getindex(wvc.cache.dict, mi)
-        CC.haskey(wvc::WorldView{<:$cachename}, mi::MethodInstance) = haskey(wvc.cache.dict, mi)
-        CC.setindex!(wvc::WorldView{<:$cachename}, ci::CodeInstance, mi::MethodInstance) = setindex!(wvc.cache.dict, ci, mi)
-    end
-end
-
 struct AliasableField{T}
     f::T
 end
@@ -2203,18 +2164,20 @@ mutable struct AliasableConstField{S,T}
     f2::T
 end
 
+import Core.Compiler:
+    InferenceLattice, OptimizerLattice, MustAliasesLattice, InterMustAliasesLattice,
+    BaseInferenceLattice, IPOResultLattice, typeinf_lattice, ipo_lattice, optimizer_lattice
+
+include("newinterp.jl")
+@newinterp MustAliasInterpreter
+let CC = Core.Compiler
+    CC.typeinf_lattice(::MustAliasInterpreter) = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance))
+    CC.ipo_lattice(::MustAliasInterpreter) = InferenceLattice(InterMustAliasesLattice(IPOResultLattice.instance))
+    CC.optimizer_lattice(::MustAliasInterpreter) = OptimizerLattice()
+end
+
 # lattice
 # -------
-
-import Core.Compiler:
-    AbstractLattice, ConstsLattice, PartialsLattice, InferenceLattice, OptimizerLattice,
-    MustAliasesLattice, InterMustAliasesLattice, BaseInferenceLattice, IPOResultLattice,
-    typeinf_lattice, ipo_lattice, optimizer_lattice
-
-@newinterp MustAliasInterpreter
-CC.typeinf_lattice(::MustAliasInterpreter) = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance))
-CC.ipo_lattice(::MustAliasInterpreter) = InferenceLattice(InterMustAliasesLattice(IPOResultLattice.instance))
-CC.optimizer_lattice(::MustAliasInterpreter) = OptimizerLattice()
 
 import Core.Compiler: MustAlias, Const, PartialStruct, ⊑, tmerge
 let 𝕃ᵢ = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance))
@@ -4125,16 +4088,14 @@ function f_convert_me_to_ir(b, x)
     return a
 end
 
-let
-    # Test the presence of PhiNodes in lowered IR by taking the above function,
+let # Test the presence of PhiNodes in lowered IR by taking the above function,
     # running it through SSA conversion and then putting it into an opaque
     # closure.
     mi = Core.Compiler.specialize_method(first(methods(f_convert_me_to_ir)),
         Tuple{Bool, Float64}, Core.svec())
     ci = Base.uncompressed_ast(mi.def)
     ci.ssavaluetypes = Any[Any for i = 1:ci.ssavaluetypes]
-    sv = Core.Compiler.OptimizationState(mi, Core.Compiler.OptimizationParams(),
-        Core.Compiler.NativeInterpreter())
+    sv = Core.Compiler.OptimizationState(mi, Core.Compiler.NativeInterpreter())
     ir = Core.Compiler.convert_to_ircode(ci, sv)
     ir = Core.Compiler.slot2reg(ir, ci, sv)
     ir = Core.Compiler.compact!(ir)
