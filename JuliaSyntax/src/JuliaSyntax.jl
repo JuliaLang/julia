@@ -26,5 +26,5 @@ include("expr.jl")
 
 # Hooks to integrate the parser with Base
 include("hooks.jl")
-
+include("precompile.jl")
 end
