@@ -269,6 +269,9 @@ end
         @test read(io2, typeof(rational2)) == rational2
     end
 end
+@testset "abs overflow for Rational" begin
+    @test_throws OverflowError abs(typemin(Int) // 1)
+end
 @testset "parse" begin
     # Non-negative Int in which parsing is expected to work
     @test parse(Rational{Int}, string(10)) == 10 // 1

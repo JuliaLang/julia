@@ -119,7 +119,7 @@ let cfg = CFG(BasicBlock[
     insts = Compiler.InstructionStream([], [], Any[], Int32[], UInt8[])
     ir = Compiler.IRCode(insts, cfg, Core.LineInfoNode[], Any[], Expr[], Compiler.VarState[])
     compact = Compiler.IncrementalCompact(ir, true)
-    @test length(compact.result_bbs) == 4 && 0 in compact.result_bbs[3].preds
+    @test length(compact.cfg_transform.result_bbs) == 4 && 0 in compact.cfg_transform.result_bbs[3].preds
 end
 
 # Issue #32579 - Optimizer bug involving type constraints
