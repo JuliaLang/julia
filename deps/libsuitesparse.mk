@@ -8,10 +8,11 @@ LIBSUITESPARSE_LIBS := $(addsuffix .*$(SHLIB_EXT)*,suitesparseconfig amd btf cam
 
 LIBSUITESPARSE_CMAKE_FLAGS := $(CMAKE_COMMON) \
 	  -DCMAKE_BUILD_TYPE=Release \
-	  -DENABLE_CUDA=NO \
-	  -DNFORTRAN=YES \
-	  -DNOPENMP=YES \
-	  -DNPARTITION=YES \
+	  -DENABLE_CUDA=0 \
+	  -DNFORTRAN=1 \
+	  -DNOPENMP=1 \
+	  -DNPARTITION=0 \
+	  -DNSTATIC=1 \
 	  -DBLAS_FOUND=1 \
 	  -DBLAS_LIBRARIES="$(build_shlibdir)/libblastrampoline.$(SHLIB_EXT)" \
 	  -DBLAS_LINKER_FLAGS="blastrampoline" \
