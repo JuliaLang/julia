@@ -234,7 +234,8 @@ julia> promote(1 + 2im, 3//4)
 
 Floating-point values are promoted to the largest of the floating-point argument types. Integer
 values are promoted to the larger of either the native machine word size or the largest integer
-argument type. Mixtures of integers and floating-point values are promoted to a floating-point
+argument type. If the types are the same size and differ in signedness, the unsigned type is 
+chosen. Mixtures of integers and floating-point values are promoted to a floating-point
 type big enough to hold all the values. Integers mixed with rationals are promoted to rationals.
 Rationals mixed with floats are promoted to floats. Complex values mixed with real values are
 promoted to the appropriate kind of complex value.
