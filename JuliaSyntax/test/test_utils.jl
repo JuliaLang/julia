@@ -245,14 +245,7 @@ function equals_flisp_parse(exprs_equal, tree)
     exprs_equal(fl_ex, ex)
 end
 
-"""
-    reduce_test(text::AbstractString; exprs_equal=exprs_equal_no_linenum)
-    reduce_test(tree::SyntaxNode; exprs_equal=exprs_equal_no_linenum)
-
-Select minimal subtrees of `text` or `tree` which are inconsistent between
-flisp and JuliaSyntax parsers.
-"""
-function reduce_test(failing_subtrees, tree; exprs_equal=exprs_equal_no_linenum)
+function _reduce_test(failing_subtrees, tree; exprs_equal=exprs_equal_no_linenum)
     if equals_flisp_parse(exprs_equal, tree)
         return false
     end
@@ -266,7 +259,7 @@ function reduce_test(failing_subtrees, tree; exprs_equal=exprs_equal_no_linenum)
             if is_trivia(child) || !haschildren(child)
                 continue
             end
-            had_failing_subtrees |= reduce_test(failing_subtrees, child; exprs_equal=exprs_equal)
+            had_failing_subtrees |= _reduce_test(failing_subtrees, child; exprs_equal=exprs_equal)
         end
     end
     if !had_failing_subtrees
@@ -275,9 +268,16 @@ function reduce_test(failing_subtrees, tree; exprs_equal=exprs_equal_no_linenum)
     return true
 end
 
+"""
+    reduce_test(text::AbstractString; exprs_equal=exprs_equal_no_linenum)
+    reduce_test(tree::SyntaxNode; exprs_equal=exprs_equal_no_linenum)
+
+Select minimal subtrees of `text` or `tree` which are inconsistent between
+flisp and JuliaSyntax parsers.
+"""
 function reduce_test(tree::SyntaxNode; kws...)
     subtrees = Vector{typeof(tree)}()
-    reduce_test(subtrees, tree; kws...)
+    _reduce_test(subtrees, tree; kws...)
     subtrees
 end
 
