@@ -49,3 +49,115 @@ end
     end"""
     @test sourcetext(srcf) == "module Foo\nend"
 end
+
+
+@testset "highlight()" begin
+    src = JuliaSyntax.SourceFile("""
+        abcd
+        αβγδ
+        +-*/""")
+
+    @test sprint(highlight, src, 1:4) == "abcd\n└──┘\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 2:4) == "abcd\n#└─┘\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 3:4) == "abcd\n# └┘\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 4:4) == "abcd\n#  ╙\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 4:3) == "abcd\n#  └\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 5:5) == "abcd\n#   └\nαβγδ\n+-*/"
+
+    # multi-byte chars
+    @test sprint(highlight, src, 8:13) == """
+        abcd
+        αβγδ
+        #└─┘
+        +-*/"""
+
+    # Multi-line ranges
+    @test sprint(highlight, src, 1:7) == """
+        ┌───
+        abcd
+        αβγδ
+        ┘
+        +-*/"""
+    @test sprint(highlight, src, 2:7) == """
+        #┌──
+        abcd
+        αβγδ
+        ┘
+        +-*/"""
+    @test sprint(highlight, src, 2:9) == """
+        #┌──
+        abcd
+        αβγδ
+        #┘
+        +-*/"""
+    @test sprint(highlight, src, 4:9) == """
+        #  ┌
+        abcd
+        αβγδ
+        #┘
+        +-*/"""
+    @test sprint(highlight, src, 5:9) == """
+        #   ┌
+        abcd
+        αβγδ
+        #┘
+        +-*/"""
+    @test sprint(highlight, src, 1:18) == """
+        ┌───
+        abcd
+        αβγδ
+        +-*/
+        #──┘"""
+
+    # context lines
+    @test sprint(io->highlight(io, src, 8:13;
+                               context_lines_before=0,
+                               context_lines_after=0)) == """
+        αβγδ
+        #└─┘"""
+    @test sprint(io->highlight(io, src, 8:13; context_lines_after=0)) == """
+        abcd
+        αβγδ
+        #└─┘"""
+    @test sprint(io->highlight(io, src, 8:13; context_lines_before=0)) == """
+        αβγδ
+        #└─┘
+        +-*/"""
+    @test sprint(io->highlight(io, src, 1:18; context_lines_inner=0)) == """
+        ┌───
+        abcd
+        ⋮
+        +-*/
+        #──┘"""
+
+    # annotations
+    @test sprint(io->highlight(io, src, 8:13; note="hello")) == """
+        abcd
+        αβγδ
+        #└─┘ ── hello
+        +-*/"""
+    @test sprint(io->highlight(io, src, 1:13; note="hello")) == """
+        ┌───
+        abcd
+        αβγδ
+        #──┘ ── hello
+        +-*/"""
+    @test sprint(io->highlight(io, src, 8:13;
+                               note=(io,indent,w)->print(io, "\n$indent$('!'^w) hello"))) == """
+        abcd
+        αβγδ
+        #└─┘
+        #!!! hello
+        +-*/"""
+
+    # colored output
+    @test sprint(io->highlight(io, src, 8:13; context_lines_after=0, note="hello", notecolor=:light_red),
+                 context=:color=>true) ==
+        "abcd\nα\e[48;2;120;70;70mβγδ\e[0;0m\n\e[90m#└─┘ ── \e[0;0m\e[91mhello\e[0;0m"
+    @test sprint(io->highlight(io, src, 1:13; context_lines_after=0, note="hello", notecolor=(255,0,0)),
+                 context=:color=>true) ==
+        "\e[90m┌───\e[0;0m\n\e[48;2;120;70;70mabcd\e[0;0m\n\e[48;2;120;70;70mαβγδ\e[0;0m\n\e[90m#──┘ ── \e[0;0m\e[38;2;255;0;0mhello\e[0;0m"
+    @test sprint(io->highlight(io, src, 1:18, context_lines_inner=0),
+                 context=:color=>true) ==
+        "\e[90m┌───\e[0;0m\n\e[48;2;120;70;70mabcd\e[0;0m\n\e[48;2;120;70;70m\e[0;0m⋮\n\e[48;2;120;70;70m+-*/\e[0;0m\n\e[90m#──┘\e[0;0m"
+end

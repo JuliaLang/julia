@@ -98,3 +98,29 @@
         @test parseshow("1f1000", ignore_errors=true) == "(ErrorNumericOverflow)"
     end
 end
+
+@testset "ParseError printing" begin
+    try
+        JuliaSyntax.parse(JuliaSyntax.SyntaxNode, "a -- b -- c", filename="somefile.jl")
+        @assert false "error should be thrown"
+    catch exc
+        @test exc isa JuliaSyntax.ParseError
+        @test sprint(showerror, exc) == """
+            ParseError:
+            # Error @ somefile.jl:1:3
+            a -- b -- c
+            # └┘ ── invalid operator
+            # Error @ somefile.jl:1:8
+            a -- b -- c
+            #      └┘ ── invalid operator"""
+        file_url = JuliaSyntax._file_url("somefile.jl")
+        @test sprint(showerror, exc, context=:color=>true) == """
+            ParseError:
+            \e[90m# Error @ \e[0;0m\e]8;;$file_url#1:3\e\\\e[90msomefile.jl:1:3\e[0;0m\e]8;;\e\\
+            a \e[48;2;120;70;70m--\e[0;0m b -- c
+            \e[90m# └┘ ── \e[0;0m\e[91minvalid operator\e[0;0m
+            \e[90m# Error @ \e[0;0m\e]8;;$file_url#1:8\e\\\e[90msomefile.jl:1:8\e[0;0m\e]8;;\e\\
+            a -- b \e[48;2;120;70;70m--\e[0;0m c
+            \e[90m#      └┘ ── \e[0;0m\e[91minvalid operator\e[0;0m"""
+    end
+end

@@ -165,8 +165,11 @@ last_byte(node::AbstractSyntaxNode)  = node.position + span(node) - 1
 Get the full source text of a node.
 """
 function sourcetext(node::AbstractSyntaxNode)
-    val_range = (node.position-1) .+ (1:span(node))
-    view(node.source, val_range)
+    view(node.source, range(node))
+end
+
+function Base.range(node::AbstractSyntaxNode)
+    (node.position-1) .+ (1:span(node))
 end
 
 source_line(node::AbstractSyntaxNode) = source_line(node.source, node.position)
@@ -328,13 +331,12 @@ function child_position_span(node::SyntaxNode, path::Int...)
     n, n.position, span(n)
 end
 
-"""
-Print the code, highlighting the part covered by `node` at tree `path`.
-"""
-function highlight(io::IO, code::String, node, path::Int...; color=(40,40,70))
-    node, p, span = child_position_span(node, path...)
-    q = p + span
-    print(io, code[1:p-1])
-    _printstyled(io, code[p:q-1]; bgcolor=color)
-    print(io, code[q:end])
+function highlight(io::IO, node::SyntaxNode; kws...)
+    highlight(io, node.source, range(node); kws...)
+end
+
+function highlight(io::IO, source::SourceFile, node::GreenNode, path::Int...; kws...)
+    _, p, span = child_position_span(node, path...)
+    q = p + span - 1
+    highlight(io, source, p:q; kws...)
 end

@@ -295,8 +295,8 @@ function Base.show(io::IO, mime::MIME"text/plain", stream::ParseStream)
     println(io, "ParseStream at position $(_next_byte(stream))")
 end
 
-function show_diagnostics(io::IO, stream::ParseStream, code)
-    show_diagnostics(io, stream.diagnostics, code)
+function show_diagnostics(io::IO, stream::ParseStream)
+    show_diagnostics(io, stream.diagnostics, sourcetext(stream))
 end
 
 # We manage a pool of stream positions as parser working space
@@ -841,7 +841,7 @@ end
 
 function emit_diagnostic(stream::ParseStream, mark::ParseStreamPosition; kws...)
     emit_diagnostic(stream, token_first_byte(stream, mark.token_index),
-                     _next_byte(stream) - 1; kws...)
+                    _next_byte(stream) - 1; kws...)
 end
 
 function emit_diagnostic(stream::ParseStream, mark::ParseStreamPosition,
@@ -923,6 +923,7 @@ function validate_tokens(stream::ParseStream)
                                   t.orig_kind, t.next_byte)
         end
     end
+    sort!(stream.diagnostics, by=first_byte)
 end
 
 # Tree construction from the list of text ranges held by ParseStream

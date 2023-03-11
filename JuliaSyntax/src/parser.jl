@@ -2230,6 +2230,7 @@ function parse_try(ps)
     out_kind = K"try"
     mark = position(ps)
     bump(ps, TRIVIA_FLAG)
+    diagnostic_mark = position(ps)
     parse_block(ps)
     has_catch = false
     has_else = false
@@ -2282,12 +2283,16 @@ function parse_try(ps)
         emit_diagnostic(ps, m, position(ps),
                         warning="`catch` after `finally` will execute out of order")
     end
-    if !has_catch && !has_finally
+    missing_recovery = !has_catch && !has_finally
+    if missing_recovery
         # try x end  ==>  (try (block x) false false false false (error-t))
-        bump_invisible(ps, K"error", TRIVIA_FLAG, error="try without catch or finally")
+        bump_invisible(ps, K"error", TRIVIA_FLAG)
     end
     bump_closing_token(ps, K"end")
     emit(ps, mark, out_kind, flags)
+    if missing_recovery
+        emit_diagnostic(ps, diagnostic_mark, error="try without catch or finally")
+    end
 end
 
 function parse_catch(ps::ParseState)
