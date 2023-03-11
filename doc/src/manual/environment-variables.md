@@ -295,8 +295,33 @@ available to Julia.  If `$JULIA_NUM_THREADS` is not positive or is not set, or
 if the number of CPU threads cannot be determined through system calls, then the
 number of threads is set to `1`.
 
-If `$JULIA_NUM_THREADS` is set to `auto`, then the number of threads will be set
-to the number of CPU threads.
+The environment variable `JULIA_NUM_THREADS` can also be used :
+```bash
+export JULIA_NUM_THREADS=3,1
+```
+This starts julia with 3 threads in `:default` threadloop and 1 in its `:interactive` threadpool and can be seen by the example below:
+
+```julia-repl
+julia> using Base.Threads
+
+julia> nthreadpools()
+2
+
+julia> threadpool()
+:default
+
+julia> nthreads(:default)
+3
+
+julia> nthreads(:interactive)
+1
+
+julia> nthreads()
+3
+```
+!!! note
+    both the numbers in the `JULIA_NUM_THREADS` can be replaced by `auto` for
+    which Julia choses a resonable default.
 
 !!! note
     `JULIA_NUM_THREADS` must be defined before starting julia; defining it in
