@@ -52,28 +52,76 @@ end
 #-------------------------------------------------------------------------------
 # Text printing/display utils
 
+const _fg_color_codes = Dict(
+    :black         => 30,
+    :red           => 31,
+    :green         => 32,
+    :yellow        => 33,
+    :blue          => 34,
+    :magenta       => 35,
+    :cyan          => 36,
+    :white         => 37,
+    :light_black   => 90, # gray
+    :light_red     => 91,
+    :light_green   => 92,
+    :light_yellow  => 93,
+    :light_blue    => 94,
+    :light_magenta => 95,
+    :light_cyan    => 96,
+    :light_white   => 97,
+)
+
 """
-    Like printstyled, but allows providing RGB colors for true color terminals
+    _printstyled(io::IO, text;
+                 fgcolor=nothing, bgcolor=nothing, href=nothing)
+
+Like Base.printstyled, but allows providing RGB colors for true color
+terminals, both foreground and background colors, and hyperlinks. Colors may be
+given as one of the standard color names as in `Base.printstyled`, an integer
+for 256 color terms, or an (r,g,b) triple with `0 <= r <= 255` etc for true
+color terminals.
+
+* `fgcolor` - set foreground color
+* `bgcolor` - set background color
+* `href`    - set hyperlink reference
 """
-function _printstyled(io::IO, text; fgcolor=nothing, bgcolor=nothing)
+function _printstyled(io::IO, text; fgcolor=nothing, bgcolor=nothing, href=nothing)
+    if (isnothing(fgcolor) && isnothing(bgcolor) && isnothing(href)) || !get(io, :color, false)
+        print(io, text)
+        return
+    end
     colcode = ""
     if !isnothing(fgcolor)
-        if length(fgcolor) != 3 || !all(0 .<= fgcolor .< 256)
+        if fgcolor isa Symbol && haskey(_fg_color_codes, fgcolor)
+            colcode *= "\e[$(_fg_color_codes[fgcolor])m"
+        elseif fgcolor isa Integer && 0 <= fgcolor <= 255
+            colcode *= "\e[38;5;$(fgcolor)m"
+        elseif fgcolor isa Tuple && length(fgcolor) == 3 && all(0 .<= fgcolor .<= 255)
+            colcode *= "\e[38;2;$(fgcolor[1]);$(fgcolor[2]);$(fgcolor[3])m"
+        else
             error("Invalid ansi color $fgcolor")
         end
-        colcode *= "\e[38;2;$(fgcolor[1]);$(fgcolor[2]);$(fgcolor[3])m"
     end
     if !isnothing(bgcolor)
-        if length(bgcolor) != 3 || !all(0 .<= bgcolor .< 256)
+        if bgcolor isa Symbol && haskey(_fg_color_codes, bgcolor)
+            colcode *= "\e[$(10 + _fg_color_codes[bgcolor])m"
+        elseif bgcolor isa Integer && 0 <= bgcolor <= 255
+            colcode *= "\e[48;5;$(bgcolor)m"
+        elseif bgcolor isa Tuple && length(bgcolor) == 3 && all(0 .<= bgcolor .<= 255)
+            colcode *= "\e[48;2;$(bgcolor[1]);$(bgcolor[2]);$(bgcolor[3])m"
+        else
             error("Invalid ansi color $bgcolor")
         end
-        colcode *= "\e[48;2;$(bgcolor[1]);$(bgcolor[2]);$(bgcolor[3])m"
     end
     colreset = "\e[0;0m"
     first = true
     for linepart in split(text, '\n')
         first || print(io, '\n')
-        print(io, colcode, linepart, colreset)
+        line = string(colcode, linepart, colreset)
+        if !isnothing(href)
+            line = "\e]8;;$href\e\\$line\e]8;;\e\\"
+        end
+        print(io, line)
         first = false
     end
 end

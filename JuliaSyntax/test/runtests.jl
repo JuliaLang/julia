@@ -42,6 +42,8 @@ include("test_utils.jl")
                                Expr(:tuple, Expr(:parameters, :b), :a))
 end
 
+include("utils.jl")
+
 @testset "Tokenize" begin
     include("tokenize.jl")
 end

@@ -40,6 +40,18 @@ end
 first_byte(d::Diagnostic) = d.first_byte
 last_byte(d::Diagnostic)  = d.last_byte
 is_error(d::Diagnostic)   = d.level == :error
+Base.range(d::Diagnostic) = first_byte(d):last_byte(d)
+
+# Make relative path into a file URL
+function _file_url(filename)
+    @static if Sys.iswindows()
+        # TODO: Test this with windows terminal
+        path = replace(abspath(filename), '\\'=>'/')
+    else
+        path = abspath(filename)
+    end
+    "file://$(path)"
+end
 
 function show_diagnostic(io::IO, diagnostic::Diagnostic, source::SourceFile)
     color,prefix = diagnostic.level == :error   ? (:light_red, "Error")      :
@@ -49,76 +61,34 @@ function show_diagnostic(io::IO, diagnostic::Diagnostic, source::SourceFile)
     line, col = source_location(source, first_byte(diagnostic))
     linecol = "$line:$col"
     filename = source.filename
+    file_href = nothing
     if !isnothing(filename)
         locstr = "$filename:$linecol"
-        if get(io, :color, false)
-            # Also add hyperlinks in color terminals
-            url = "file://$(abspath(filename))#$linecol"
-            locstr = "\e]8;;$url\e\\$locstr\e]8;;\e\\"
+        if !startswith(filename, "REPL[")
+            file_href = _file_url(filename)*"#$linecol"
         end
     else
         locstr = "line $linecol"
     end
-    print(io, prefix, ": ")
-    printstyled(io, diagnostic.message, color=color)
-    printstyled(io, "\n", "@ $locstr", color=:light_black)
+    _printstyled(io, "# $prefix @ ", fgcolor=:light_black)
+    _printstyled(io, "$locstr", fgcolor=:light_black, href=file_href)
     print(io, "\n")
-
-    p = first_byte(diagnostic)
-    q = last_byte(diagnostic)
-    text = sourcetext(source)
-    if q < p || (p == q && source[p] == '\n')
-        # An empty or invisible range!  We expand it symmetrically to make it
-        # visible.
-        p = max(firstindex(text), prevind(text, p))
-        q = min(lastindex(text), nextind(text, q))
-    end
-
-    # p and q mark the start and end of the diagnostic range. For context,
-    # buffer these out to the surrouding lines.
-    a,b = source_line_range(source, p, context_lines_before=2, context_lines_after=1)
-    c,d = source_line_range(source, q, context_lines_before=1, context_lines_after=2)
-
-    hicol = (100,40,40)
-
-    # TODO: show line numbers on left
-
-    print(io, source[a:prevind(text, p)])
-    # There's two situations, either
-    if b >= c
-        # The diagnostic range is compact and we show the whole thing
-        # a...............
-        # .....p...q......
-        # ...............b
-        _printstyled(io, source[p:q]; bgcolor=hicol)
-    else
-        # Or large and we trucate the code to show only the region around the
-        # start and end of the error.
-        # a...............
-        # .....p..........
-        # ...............b
-        # (snip)
-        # c...............
-        # .....q..........
-        # ...............d
-        _printstyled(io, source[p:b]; bgcolor=hicol)
-        println(io, "…")
-        _printstyled(io, source[c:q]; bgcolor=hicol)
-    end
-    print(io, source[nextind(text,q):d])
-    println(io)
+    highlight(io, source, range(diagnostic),
+              note=diagnostic.message, notecolor=color,
+              context_lines_before=1, context_lines_after=0)
 end
 
 function show_diagnostics(io::IO, diagnostics::AbstractVector{Diagnostic}, source::SourceFile)
+    first = true
     for d in diagnostics
+        first || println(io)
+        first = false
         show_diagnostic(io, d, source)
     end
 end
 
 function show_diagnostics(io::IO, diagnostics::AbstractVector{Diagnostic}, text::AbstractString)
-    if !isempty(diagnostics)
-        show_diagnostics(io, diagnostics, SourceFile(text))
-    end
+    show_diagnostics(io, diagnostics, SourceFile(text))
 end
 
 function emit_diagnostic(diagnostics::AbstractVector{Diagnostic},

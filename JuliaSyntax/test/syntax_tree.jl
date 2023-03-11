@@ -26,8 +26,8 @@
     # These tests are deliberately quite relaxed to avoid being too specific about display style
     @test occursin("line:col", str)
     @test occursin("call-i", str)
-    @test sprint(JuliaSyntax.highlight, tt, t, 1, 3) == "a*\e[48;2;40;40;70mb\e[0;0m + c"
-    @test sprint(JuliaSyntax.highlight, tt, t.raw, 5) == "a*b + \e[48;2;40;40;70mc\e[0;0m"
+    @test sprint(highlight, child(t, 1, 3)) == "a*b + c\n# ╙"
+    @test sprint(highlight, t.source, t.raw, 1, 3) == "a*b + c\n# ╙"
 
     # Pass-through field access
     node = child(t, 1, 1)

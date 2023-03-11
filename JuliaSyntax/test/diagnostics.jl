@@ -56,3 +56,15 @@ end
         Diagnostic(12, 13, :error, "invalid escape sequence")
     ]
 end
+
+@testset "diagnostic printing" begin
+    stream = JuliaSyntax.ParseStream("a -- b -- c")
+    JuliaSyntax.parse!(stream)
+    @test sprint(JuliaSyntax.show_diagnostics, stream) == """
+        # Error @ line 1:3
+        a -- b -- c
+        # └┘ ── invalid operator
+        # Error @ line 1:8
+        a -- b -- c
+        #      └┘ ── invalid operator"""
+end
