@@ -726,6 +726,31 @@ Base.delete_method(m)
 @test faz4(1) == 1
 @test faz4(1.0) == 1
 
+# Deletion & invoke (issue #48802)
+function f48802!(log, x::Integer)
+    log[] = "default"
+    return x + 1
+end
+function addmethod_48802()
+    @eval function f48802!(log, x::Int)
+        ret = invoke(f48802!, Tuple{Any, Integer}, log, x)
+        log[] = "specialized"
+        return ret
+    end
+end
+log = Ref{String}()
+@test f48802!(log, 1) == 2
+@test log[] == "default"
+addmethod_48802()
+@test f48802!(log, 1) == 2
+@test log[] == "specialized"
+Base.delete_method(which(f48802!, Tuple{Any, Int}))
+@test f48802!(log, 1) == 2
+@test log[] == "default"
+addmethod_48802()
+@test f48802!(log, 1) == 2
+@test log[] == "specialized"
+
 # Methods with keyword arguments
 fookw(x; direction=:up) = direction
 fookw(y::Int) = 2
