@@ -3372,72 +3372,66 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         return true;
     }
 
-    // else if (f == jl_builtin_bufref && nargs == 3) {
-    //     const jl_cgval_t &buf = argv[2];
-    //     const jl_cgval_t &idx = argv[3];
-    //     bool indices_ok = true;
-    //     // Value *len = emit_bufferlen(ctx, buf);
-    //     // Value *is_vector = ctx.builder.CreateICmpEQ(ndims, ConstantInt::get(getInt16Ty(ctx.builder.getContext()), 1));
-    //     // Value *selidx_v = ctx.builder.CreateSub(emit_vectormaxsize(ctx, buf), ctx.builder.CreateZExt(offset, getSizeTy(ctx.builder.getContext())));
-    //     //         Value *selidx_m = emit_bufferlen(ctx, buf);
-    //     //         Value *selidx = ctx.builder.CreateSelect(is_vector, selidx_v, selidx_m);
-    //     //         ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
+    else if (f == jl_builtin_bufref && nargs == 3) {
+        const jl_cgval_t &buf = argv[2];
+        const jl_cgval_t &idx = argv[3];
+        bool indices_ok = true;
 
-    //     if (idx.typ != (jl_value_t*)jl_long_type) {
-    //         indices_ok = false;
-    //     }
-    //     jl_value_t *buf_dt = jl_unwrap_unionall(buf.typ);
-    //     if (jl_is_buffer_type(buf_dt) && indices_ok) {
-    //         jl_value_t *ety = jl_tparam0(buf_dt);
-    //         if (!jl_has_free_typevars(ety)) {
-    //             jl_value_t *buf_ex = jl_exprarg(ex, 2);
-    //             size_t elsz = 0, al = 0;
-    //             int union_max = jl_islayout_inline(ety, &elsz, &al);
-    //             bool isboxed = (union_max == 0);
-    //             if (isboxed)
-    //                 ety = (jl_value_t*)jl_any_type;
-    //             jl_value_t *boundscheck = argv[1].constant;
-    //             emit_typecheck(ctx, argv[1], (jl_value_t*)jl_bool_type, "bufref");
-    //             Value *i = emit_buffer_index(ctx, buf, buf_ex, idx, boundscheck);
-    //             if (!isboxed && jl_is_datatype(ety) && jl_datatype_size(ety) == 0) {
-    //                 assert(((jl_datatype_t*)ety)->instance != NULL);
-    //                 *ret = ghostValue(ctx, ety);
-    //             }
-    //             else if (!isboxed && jl_is_uniontype(ety)) {
-    //                 Value *data = emit_bufferptr(ctx, buf, buf_ex);
-    //                 Value *ptindex;
-    //                 if (elsz == 0) {
-    //                     ptindex = data;
-    //                 }
-    //                 else {
-    //                     Type *AT = ArrayType::get(IntegerType::get(ctx.builder.getContext(), 8 * al), (elsz + al - 1) / al);
-    //                     data = emit_bitcast(ctx, data, AT->getPointerTo());
-    //                     // isbits union selector bytes are stored after a->maxsize
-    //                     Value *selidx = ctx.builder.CreateSub(emit_vectormaxsize(ctx, buf),
-    //                          ctx.builder.CreateZExt(ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0),
-    //                           getSizeTy(ctx.builder.getContext())));
-    //                     ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
-    //                     data = ctx.builder.CreateInBoundsGEP(AT, data, i);
-    //                 }
-    //                 ptindex = emit_bitcast(ctx, ptindex, getInt8PtrTy(ctx.builder.getContext()));
-    //                 ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
-    //                 ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, i);
-    //                 *ret = emit_unionload(ctx, data, ptindex, ety, elsz, al, ctx.tbaa().tbaa_arraybuf, true, union_max, ctx.tbaa().tbaa_bufferselbyte);
-    //             }
-    //             else {
-    //                 MDNode *aliasscope = nullptr;
-    //                 *ret = typed_load(ctx,
-    //                         emit_bufferptr(ctx, buf, buf_ex),
-    //                         i, ety,
-    //                         isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf,
-    //                         aliasscope,
-    //                         isboxed,
-    //                         AtomicOrdering::NotAtomic);
-    //             }
-    //             return true;
-    //         }
-    //     }
-    // }
+        if (idx.typ != (jl_value_t*)jl_long_type) {
+            indices_ok = false;
+        }
+        jl_value_t *buf_dt = jl_unwrap_unionall(buf.typ);
+        if (jl_is_buffer_type(buf_dt) && indices_ok) {
+            jl_value_t *ety = jl_tparam0(buf_dt);
+            if (!jl_has_free_typevars(ety)) {
+                jl_value_t *buf_ex = jl_exprarg(ex, 2);
+                size_t elsz = 0, al = 0;
+                int union_max = jl_islayout_inline(ety, &elsz, &al);
+                bool isboxed = (union_max == 0);
+                if (isboxed)
+                    ety = (jl_value_t*)jl_any_type;
+                jl_value_t *boundscheck = argv[1].constant;
+                emit_typecheck(ctx, argv[1], (jl_value_t*)jl_bool_type, "bufref");
+                Value *i = emit_buffer_index(ctx, buf, buf_ex, idx, boundscheck);
+                if (!isboxed && jl_is_datatype(ety) && jl_datatype_size(ety) == 0) {
+                    assert(((jl_datatype_t*)ety)->instance != NULL);
+                    *ret = ghostValue(ctx, ety);
+                }
+                else if (!isboxed && jl_is_uniontype(ety)) {
+                    Value *data = emit_bufferptr(ctx, buf, buf_ex);
+                    Value *ptindex;
+                    if (elsz == 0) {
+                        ptindex = data;
+                    }
+                    else {
+                        Type *AT = ArrayType::get(IntegerType::get(ctx.builder.getContext(), 8 * al), (elsz + al - 1) / al);
+                        data = emit_bitcast(ctx, data, AT->getPointerTo());
+                        // isbits union selector bytes are stored after a->maxsize
+                        Value *selidx = ctx.builder.CreateSub(emit_vectormaxsize(ctx, buf),
+                             ctx.builder.CreateZExt(ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0),
+                              getSizeTy(ctx.builder.getContext())));
+                        ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
+                        data = ctx.builder.CreateInBoundsGEP(AT, data, i);
+                    }
+                    ptindex = emit_bitcast(ctx, ptindex, getInt8PtrTy(ctx.builder.getContext()));
+                    ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
+                    ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, i);
+                    *ret = emit_unionload(ctx, data, ptindex, ety, elsz, al, ctx.tbaa().tbaa_arraybuf, true, union_max, ctx.tbaa().tbaa_bufferselbyte);
+                }
+                else {
+                    MDNode *aliasscope = nullptr;
+                    *ret = typed_load(ctx,
+                            emit_bufferptr(ctx, buf, buf_ex),
+                            i, ety,
+                            isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf,
+                            aliasscope,
+                            isboxed,
+                            AtomicOrdering::NotAtomic);
+                }
+                return true;
+            }
+        }
+    }
 
     // else if (f == jl_builtin_bufset && nargs == 4) {
     //     const jl_cgval_t &buf = argv[2];

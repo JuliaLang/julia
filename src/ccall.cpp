@@ -16,6 +16,7 @@ STATISTIC(EmittedLLVMCalls, "Number of llvmcall intrinsics emitted");
 #define CCALL_STAT(name) _CCALL_STAT(name)
 #define TRANSFORMED_CCALL_STAT(name) STATISTIC(_CCALL_STAT(name), "Number of " #name " ccalls intercepted")
 TRANSFORMED_CCALL_STAT(jl_array_ptr);
+TRANSFORMED_CCALL_STAT(jl_buffer_ptr);
 TRANSFORMED_CCALL_STAT(jl_value_ptr);
 TRANSFORMED_CCALL_STAT(jl_cpu_pause);
 TRANSFORMED_CCALL_STAT(jl_cpu_wake);
@@ -1473,6 +1474,15 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         const jl_cgval_t &ary = argv[0];
         JL_GC_POP();
         return mark_or_box_ccall_result(ctx, ctx.builder.CreatePtrToInt(emit_unsafe_arrayptr(ctx, ary), lrt),
+                                        retboxed, rt, unionall, static_rt);
+    }
+    else if (is_libjulia_func(jl_buffer_ptr)) {
+        ++CCALL_STAT(jl_buffer_ptr);
+        assert(lrt == getSizeTy(ctx.builder.getContext()));
+        assert(!isVa && !llvmcall && nccallargs == 1);
+        const jl_cgval_t &buf = argv[0];
+        JL_GC_POP();
+        return mark_or_box_ccall_result(ctx, ctx.builder.CreatePtrToInt(emit_unsafe_bufferptr(ctx, buf), lrt),
                                         retboxed, rt, unionall, static_rt);
     }
     else if (is_libjulia_func(jl_value_ptr)) {

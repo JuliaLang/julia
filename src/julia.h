@@ -152,6 +152,13 @@ typedef struct {
     // jl_value_t *data[];
 } jl_svec_t;
 
+typedef struct {
+    uint16_t elsize;
+    uint16_t align;
+    uint16_t isunion;
+    uint16_t union_max;
+} jl_eltype_flags_t;
+
 // A Buffer is a fixed size array if `length` number of bits.
 // Data is stored at the end of this variable-length struct.
 typedef struct {
@@ -1518,6 +1525,8 @@ JL_DLLEXPORT jl_buffer_t *jl_buffer_copy(jl_buffer_t *a);
 JL_DLLEXPORT jl_buffer_t *jl_buffer_fill(size_t n, jl_value_t *x);
 JL_DLLEXPORT jl_value_t *jl_bufref(jl_buffer_t *a, size_t i);  // 0-indexed
 JL_DLLEXPORT void jl_bufset(jl_buffer_t *sb JL_ROOTING_ARGUMENT, jl_value_t *v JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, size_t i);  // 0-indexed
+JL_DLLEXPORT int jl_buffer_isassigned(jl_buffer_t *b, size_t i);  // 0-indexed
+JL_DLLEXPORT void *jl_buffer_ptr(jl_buffer_t *b);
 JL_DLLEXPORT jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *v);
 JL_DLLEXPORT jl_sym_t *jl_symbol(const char *str) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_symbol_lookup(const char *str) JL_NOTSAFEPOINT;
@@ -1999,16 +2008,28 @@ JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e, jl_task_t *ct);
 JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 #define jl_current_task (container_of(jl_get_pgcstack(), jl_task_t, gcstack))
 
+STATIC_INLINE jl_eltype_flags_t jl_eltype_flags(void *eltype)
+{
+    jl_value_t *ety = (jl_value_t*)eltype;
+    size_t elsize = 0, align = 0;
+    int union_max = jl_islayout_inline(ety, &elsize, &align);
+    if (union_max == 0)
+        elsize = sizeof(void*);
+    else
+        elsize = LLT_ALIGN(elsize, align);
+
+    jl_eltype_flags_t flags = {
+        (uint16_t)elsize,
+        (uint16_t)align,
+        (uint16_t)jl_is_uniontype(ety),
+        (uint16_t)union_max
+    };
+    return flags;
+}
+
 STATIC_INLINE size_t jl_buffer_elsize(void *b)
 {
-    jl_value_t *ety = jl_buffer_eltype(b);
-    size_t elsz = 0, al = 0;
-    int union_max = jl_islayout_inline(ety, &elsz, &al);
-    if (union_max == 0)
-        elsz = sizeof(void*);
-    else
-        elsz = LLT_ALIGN(elsz, al);
-    return elsz;
+    return jl_eltype_flags(jl_buffer_eltype(b)).elsize;
 }
 
 STATIC_INLINE size_t jl_buffer_nbytes(jl_value_t *b)

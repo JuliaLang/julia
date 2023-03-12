@@ -114,6 +114,7 @@ has_offset_axes(A::AbstractVector) = Int(firstindex(A))::Int != 1 # improve perf
 has_offset_axes(As...) = _any_tuple(has_offset_axes, false, As...)
 has_offset_axes(::Colon) = false
 has_offset_axes(::Array) = false
+has_offset_axes(::Buffer) = false
 
 """
     require_one_based_indexing(A::AbstractArray)
@@ -1497,6 +1498,7 @@ much more common case where aliasing does not occur. By default,
 `Base.unaliascopy(A)`.
 """
 unaliascopy(A::Array) = copy(A)
+unaliascopy(A::Buffer) = copy(A)
 unaliascopy(A::AbstractArray)::typeof(A) = (@noinline; _unaliascopy(A, copy(A)))
 _unaliascopy(A::T, C::T) where {T} = C
 _unaliascopy(A, C) = throw(ArgumentError("""
@@ -1540,6 +1542,7 @@ their component parts.  A typical definition for an array that wraps a parent is
 """
 dataids(A::AbstractArray) = (UInt(objectid(A)),)
 dataids(A::Array) = (UInt(pointer(A)),)
+dataids(A::Buffer) = (UInt(pointer(A)),)
 dataids(::AbstractRange) = ()
 dataids(x) = ()
 

@@ -14,12 +14,16 @@ if !isdefined(Main, :Base)
         end
         return b
     end
+    function isassigned(b::Buffer, i::Int)
+        @inline
+        @boundscheck 1 <= i <= length(b) || return false
+        ccall(:jl_buffer_isassigned, Cint, (Any, UInt), b, i) == 1
+    end
 end
 
 @eval getindex(b::Buffer{T}, i::Int) where {T} = Core.bufref($(Expr(:boundscheck)), b, i)
 @eval setindex!(b::Buffer{T}, x, i::Int) where {T} =
     Core.bufset($(Expr(:boundscheck)), b, convert(T, x)::T, i)
-eltype(::Type{<:Buffer{T}}) where {T} = T
 elsize(@nospecialize T::Type{<:Buffer}) = aligned_sizeof(eltype(T))
 length(b::Buffer) = Core.Intrinsics.bufferlen(b)
 firstindex(b::Buffer) = 1
@@ -36,3 +40,5 @@ function ==(v1::Buffer, v2::Buffer)
     end
     return true
 end
+
+sizeof(b::Buffer) = Core.sizeof(b)

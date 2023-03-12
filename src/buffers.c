@@ -19,27 +19,17 @@ JL_DLLEXPORT jl_buffer_t *jl_buffer_copy(jl_buffer_t *a)
 
 JL_DLLEXPORT jl_buffer_t *jl_new_buffer(jl_value_t *btype, size_t len)
 {
-    size_t elsz = 0, al = 0;
     jl_value_t *eltype = jl_tparam0(btype);
+    jl_eltype_flags_t flags = jl_eltype_flags(eltype);
     jl_buffer_t *b;
-    int isunboxed = jl_islayout_inline(eltype, &elsz, &al);
-    int isunion = jl_is_uniontype(eltype);
-    // int hasptr = isunboxed && (jl_is_datatype(eltype) && ((jl_datatype_t*)eltype)->layout->npointers > 0);
-    if (!isunboxed) {
-        elsz = sizeof(void*);
-        al = elsz;
-    }
-    else {
-        elsz = LLT_ALIGN(elsz, al);
-    }
     jl_task_t *ct = jl_current_task;
-    size_t tot = len * elsz;
-    if (isunboxed) {
-        if (elsz == 1 && !isunion) {
+    size_t tot = len * flags.elsize;
+    if (flags.union_max == 0) {
+        if (flags.elsize == 1 && flags.isunion) {
             // extra byte for all julia allocated byte arrays
             tot++;
         }
-        if (isunion) {
+        if (flags.isunion) {
             // an extra byte for each isbits union array element, stored after len * elsize
             tot += len;
         }
@@ -51,13 +41,13 @@ JL_DLLEXPORT jl_buffer_t *jl_new_buffer(jl_value_t *btype, size_t len)
         // align data area
         if (tot >= ARRAY_CACHE_ALIGN_THRESHOLD)
             tsz = LLT_ALIGN(tsz, JL_CACHE_BYTE_ALIGNMENT);
-        else if (isunboxed && elsz >= 4)
+        else if (flags.union_max != 0 && flags.elsize >= 4)
             tsz = LLT_ALIGN(tsz, JL_SMALL_BYTE_ALIGNMENT);
         size_t doffs = tsz;
         tsz += tot;
         b = (jl_buffer_t*)jl_gc_alloc(ct->ptls, tot, btype);
         b->length = len;
-        data = (char*)b + doffs;
+        data = jl_buffer_data(b) + doffs;
     }
     else {
         data = jl_gc_managed_malloc(tot);
@@ -69,7 +59,7 @@ JL_DLLEXPORT jl_buffer_t *jl_new_buffer(jl_value_t *btype, size_t len)
         // No allocation or safepoint allowed after this
         jl_gc_track_malloced_buffer(ct->ptls, b);
     }
-    if (JL_BUFFER_IMPL_NUL && elsz == 1)
+    if (JL_BUFFER_IMPL_NUL && flags.elsize == 1)
          ((char*)data)[tot - 1] = '\0';
     return b;
 }
@@ -82,7 +72,7 @@ JL_DLLEXPORT jl_value_t *jl_bufref(jl_buffer_t *b, size_t i)
     jl_value_t *ety = jl_tparam0(jl_typeof(b));
     int union_max = jl_islayout_inline(ety, &elsz, &al);
     int isboxed = (union_max == 0);
-    char *data = (char*)(b) + sizeof(jl_buffer_t);
+    char *data = (char*)(jl_buffer_data(b));
     if (!isboxed && jl_is_datatype(ety) && jl_datatype_size(ety) == 0) {
         return ((jl_datatype_t*)ety)->instance;
     }
@@ -105,8 +95,7 @@ JL_DLLEXPORT jl_value_t *jl_bufref(jl_buffer_t *b, size_t i)
         if (elt == NULL)
             jl_throw(jl_undefref_exception);
         return elt;
-    }
-}
+    } }
 
 JL_DLLEXPORT void jl_bufset(jl_buffer_t *b JL_ROOTING_ARGUMENT, jl_value_t *rhs JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, size_t i)
 {
@@ -116,7 +105,7 @@ JL_DLLEXPORT void jl_bufset(jl_buffer_t *b JL_ROOTING_ARGUMENT, jl_value_t *rhs 
     jl_value_t *ety = jl_tparam0(jl_typeof(b));
     int union_max = jl_islayout_inline(ety, &elsz, &al);
     int isboxed = (union_max == 0);
-    char *data = (char*)(b) + sizeof(jl_buffer_t);
+    char *data = (char*)(jl_buffer_data(b));
     if (isboxed) {
         jl_atomic_store_release(((_Atomic(jl_value_t*)*)(void**)data) + i, rhs);
         jl_gc_wb(b, rhs);
@@ -144,4 +133,22 @@ JL_DLLEXPORT void jl_bufset(jl_buffer_t *b JL_ROOTING_ARGUMENT, jl_value_t *rhs 
         default: memcpy((data + (i * elsz)), rhs, elsz);
         }
     }
+}
+
+JL_DLLEXPORT int jl_buffer_isassigned(jl_buffer_t *b, size_t i)
+{
+    size_t elsz = 0, al = 0;
+    jl_value_t *eltype = jl_tparam0(jl_typeof(b));
+    int isunboxed = jl_islayout_inline(eltype, &elsz, &al);
+    int hasptr = isunboxed && (jl_is_datatype(eltype) && ((jl_datatype_t*)eltype)->layout->npointers > 0);
+    if (!isunboxed) {
+        return jl_atomic_load_relaxed(((_Atomic(jl_value_t*)*)jl_array_data(b)) + i) != NULL;
+    }
+    else if (hasptr) {
+        jl_datatype_t *elty = (jl_datatype_t*)eltype;
+         assert(elty->layout->first_ptr >= 0);
+         jl_value_t **elem = (jl_value_t**)(jl_buffer_data(b) + i * elsz);
+         return elem[elty->layout->first_ptr] != NULL;
+    }
+    return 1;
 }

@@ -1941,7 +1941,7 @@ function buffer_builtin_common_nothrow(argtypes::Vector{Any}, idxpos::Int)
     length(argtypes) >= 4 || return false
     boundscheck = argtypes[1]
     buftype = argtypes[2]
-    (boundscheck ⊑ Bool && buftype ⊑ Array) || return false
+    (boundscheck ⊑ Bool && buftype ⊑ Buffer) || return false
     argtypes[idxpos] ⊑ Int || return false
     # If we could potentially throw undef ref errors, bail out now.
     buftype = widenconst(buftype)
@@ -2193,6 +2193,7 @@ const _EFFECT_FREE_BUILTINS = [
 const _CONSISTENT_BUILTINS = Any[
     tuple, # Tuple is immutable, thus tuples of egal arguments are egal
     svec,  # SimpleVector is immutable, thus svecs of egal arguments are egal
+    Intrinsics.bufferlen, # Buffer is mutable but it's length is fixed
     ===,
     typeof,
     nfields,
@@ -2243,7 +2244,6 @@ const _ARGMEM_BUILTINS = Any[
 const _INCONSISTENT_INTRINSICS = Any[
     Intrinsics.pointerref,      # this one is volatile
     Intrinsics.arraylen,        # this one is volatile
-    Intrinsics.bufferlen,
     Intrinsics.have_fma,        # this one depends on the runtime environment
     Intrinsics.cglobal,         # cglobal lookup answer changes at runtime
     # ... and list fastmath intrinsics:
