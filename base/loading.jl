@@ -1639,9 +1639,7 @@ function require(into::Module, mod::Symbol)
         if _track_dependencies[]
             push!(_require_dependencies, (into, binpack(uuidkey), 0.0))
         end
-        mod = _require_prelocked(uuidkey, env)
-        into === Main && run_extension_callbacks()
-        return mod
+        return _require_prelocked(uuidkey, env)
     finally
         LOADING_CACHE[] = nothing
     end
@@ -1668,6 +1666,10 @@ function _require_prelocked(uuidkey::PkgId, env=nothing)
         end
     else
         newm = root_module(uuidkey)
+    end
+    # Load extensions when not precompiling and not in a nested package load
+    if JLOptions().incremental == 0 && isempty(package_locks)
+        run_extension_callbacks()
     end
     return newm
 end
