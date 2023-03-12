@@ -185,6 +185,9 @@ jl_value_t *newobj(jl_value_t *type, size_t nfields);
 And at the lowest level, memory is getting allocated by a call to the garbage collector (in `gc.c`),
 then tagged with its type:
 
+!!! note "Out of date Warning"
+    The documentation and usage of `jl_gc_allocobj` may be out of date
+     
 ```c
 jl_value_t *jl_gc_allocobj(size_t nbytes);
 void jl_set_typeof(jl_value_t *v, jl_datatype_t *type);
