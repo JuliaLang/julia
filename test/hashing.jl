@@ -60,6 +60,9 @@ end
 @test hash(nextfloat(2.0^63)) == hash(UInt64(nextfloat(2.0^63)))
 @test hash(prevfloat(2.0^64)) == hash(UInt64(prevfloat(2.0^64)))
 
+# issue #48744
+@test hash(typemin(Int)//1) === hash(big(typemin(Int)//1))
+
 # issue #9264
 @test hash(1//6,zero(UInt)) == invoke(hash, Tuple{Real, UInt}, 1//6, zero(UInt))
 @test hash(1//6) == hash(big(1)//big(6))
