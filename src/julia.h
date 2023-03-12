@@ -155,9 +155,8 @@ typedef struct {
 typedef struct {
     uint16_t elsize;
     uint16_t align;
-    uint16_t isunion;
     uint16_t union_max;
-} jl_eltype_flags_t;
+} jl_element_type_layout_t;
 
 // A Buffer is a fixed size array if `length` number of bits.
 // Data is stored at the end of this variable-length struct.
@@ -2008,7 +2007,7 @@ JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e, jl_task_t *ct);
 JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 #define jl_current_task (container_of(jl_get_pgcstack(), jl_task_t, gcstack))
 
-STATIC_INLINE jl_eltype_flags_t jl_eltype_flags(void *eltype)
+STATIC_INLINE jl_element_type_layout_t jl_element_type_layout(void *eltype)
 {
     jl_value_t *ety = (jl_value_t*)eltype;
     size_t elsize = 0, align = 0;
@@ -2018,18 +2017,17 @@ STATIC_INLINE jl_eltype_flags_t jl_eltype_flags(void *eltype)
     else
         elsize = LLT_ALIGN(elsize, align);
 
-    jl_eltype_flags_t flags = {
+    jl_element_type_layout_t lyt = {
         (uint16_t)elsize,
         (uint16_t)align,
-        (uint16_t)jl_is_uniontype(ety),
         (uint16_t)union_max
     };
-    return flags;
+    return lyt;
 }
 
 STATIC_INLINE size_t jl_buffer_elsize(void *b)
 {
-    return jl_eltype_flags(jl_buffer_eltype(b)).elsize;
+    return jl_element_type_layout(jl_buffer_eltype(b)).elsize;
 }
 
 STATIC_INLINE size_t jl_buffer_nbytes(jl_value_t *b)

@@ -1,5 +1,4 @@
 
-
 if !isdefined(Main, :Base)
     Buffer{T}(::UndefInitializer, len::Int) where {T} =
         ccall(:jl_new_buffer, Buffer{T}, (Any, Int), Buffer{T}, len)

@@ -3019,6 +3019,9 @@ static Value *emit_buffer_index(
         ctx.builder.CreateCondBr(ctx.builder.CreateICmpULT(i, len), endBB, failBB);
         ctx.f->getBasicBlockList().push_back(failBB);
         ctx.builder.SetInsertPoint(failBB);
+        // FIXME Buffer use correct error function
+        // ctx.builder.CreateCall(prepare_call(jlboundserrorv_func),
+        //     { mark_callee_rooted(ctx, a), tmp, ConstantInt::get(getSizeTy(ctx.builder.getContext()), nidxs) });
         ctx.builder.CreateCall(prepare_call(jlvboundserror_func), { binfo.V, len, i});
         ctx.builder.CreateUnreachable();
         ctx.f->getBasicBlockList().push_back(endBB);

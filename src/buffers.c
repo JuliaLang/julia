@@ -20,16 +20,16 @@ JL_DLLEXPORT jl_buffer_t *jl_buffer_copy(jl_buffer_t *a)
 JL_DLLEXPORT jl_buffer_t *jl_new_buffer(jl_value_t *btype, size_t len)
 {
     jl_value_t *eltype = jl_tparam0(btype);
-    jl_eltype_flags_t flags = jl_eltype_flags(eltype);
+    jl_element_type_layout_t flags = jl_element_type_layout(eltype);
     jl_buffer_t *b;
     jl_task_t *ct = jl_current_task;
     size_t tot = len * flags.elsize;
     if (flags.union_max == 0) {
-        if (flags.elsize == 1 && flags.isunion) {
+        if (flags.elsize == 1 && flags.union_max > 1) {
             // extra byte for all julia allocated byte arrays
             tot++;
         }
-        if (flags.isunion) {
+        if (flags.union_max > 1) {
             // an extra byte for each isbits union array element, stored after len * elsize
             tot += len;
         }
@@ -59,8 +59,15 @@ JL_DLLEXPORT jl_buffer_t *jl_new_buffer(jl_value_t *btype, size_t len)
         // No allocation or safepoint allowed after this
         jl_gc_track_malloced_buffer(ct->ptls, b);
     }
+    // zero initialize data that may otherwise error on load
+    if (flags.union_max < 2 || // union or pointer type
+        ((jl_is_datatype(eltype) && ((jl_datatype_t*)eltype)->layout->npointers > 0)) ||
+        (jl_is_datatype(eltype) && ((jl_datatype_t*)eltype)->zeroinit))
+        memset(data, 0, tot);
+
     if (JL_BUFFER_IMPL_NUL && flags.elsize == 1)
          ((char*)data)[tot - 1] = '\0';
+
     return b;
 }
 

@@ -3407,7 +3407,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         Type *AT = ArrayType::get(IntegerType::get(ctx.builder.getContext(), 8 * al), (elsz + al - 1) / al);
                         data = emit_bitcast(ctx, data, AT->getPointerTo());
                         // isbits union selector bytes are stored after a->maxsize
-                        Value *selidx = ctx.builder.CreateSub(emit_vectormaxsize(ctx, buf),
+                        Value *selidx = ctx.builder.CreateSub(emit_bufferlen(ctx, buf),
                              ctx.builder.CreateZExt(ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0),
                               getSizeTy(ctx.builder.getContext())));
                         ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
