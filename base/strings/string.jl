@@ -676,24 +676,21 @@ function _length_continued_nonascii(
 end
 
 @inline function length_continued(s::String, first::Int, last::Int, c::Int)
-    chunk_size = _STRING_LENGTH_CHUNKING_SIZE
-
     cu = codeunits(s)
+    chunk_size = _STRING_LENGTH_CHUNKING_SIZE
     first < last || return c
 
+    epilog_bytes = rem(last - first + 1, chunk_size)
     start = first
-    n = last - first + 1
-    prologue_bytes = rem(n, chunk_size)
 
-    #Prologue to get to chunks to be exact
-    _isascii(cu, start, start + prologue_bytes - 1) ||
-        return _length_continued_nonascii(cu, start, last, c)
-    start += prologue_bytes
+    chunk_last = last - epilog_bytes
     start == last && return c
-    for start in start:chunk_size:last
+    for start in start:chunk_size:chunk_last
         _isascii(cu, start, start + chunk_size - 1) ||
             return _length_continued_nonascii(cu, start, last, c)
     end
+    ((chunk_last + 1 <= last) && _isascii(cu, chunk_last + 1, last)) ||
+        return _length_continued_nonascii(cu, chunk_last + 1, last, c)
     return c
 end
 
