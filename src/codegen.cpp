@@ -998,7 +998,7 @@ static const auto jlapplytype_func = new JuliaFunction{
 static const auto jl_object_id__func = new JuliaFunction{
     XSTR(jl_object_id_),
     [](LLVMContext &C) { return FunctionType::get(getSizeTy(C),
-            {JuliaType::get_prjlvalue_ty(C), PointerType::get(getInt8Ty(C), AddressSpace::Derived)}, false); },
+            {JuliaType::get_prjlvalue_ty(C), PointerType::get(getInt8Ty(C), AddressSpace::Derived), getInt8PtrTy(C)}, false); },
     nullptr,
 };
 static const auto setjmp_func = new JuliaFunction{

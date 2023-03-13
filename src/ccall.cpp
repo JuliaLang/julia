@@ -1861,7 +1861,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                 val.isghost ? ConstantPointerNull::get(T_pint8_derived) :
                     ctx.builder.CreateBitCast(
                         decay_derived(ctx, data_pointer(ctx, val)),
-                        T_pint8_derived)
+                        T_pint8_derived),
+                    ConstantPointerNull::get(getInt8PtrTy(ctx.builder.getContext()))
             };
             Value *ret = ctx.builder.CreateCall(prepare_call(jl_object_id__func), makeArrayRef(args));
             JL_GC_POP();

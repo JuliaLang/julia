@@ -30,6 +30,7 @@
 extern "C" {
 #endif
 
+
 // egal and object_id ---------------------------------------------------------
 
 static int bits_equal(const void *a, const void *b, int sz) JL_NOTSAFEPOINT
@@ -279,26 +280,28 @@ static uintptr_t bits_hash(const void *b, size_t sz) JL_NOTSAFEPOINT
     }
 }
 
-static uintptr_t NOINLINE hash_svec(jl_svec_t *v) JL_NOTSAFEPOINT
+static uintptr_t jl_object_id_temp(jl_value_t *v, htable_t *object_table) JL_NOTSAFEPOINT;
+
+static uintptr_t NOINLINE hash_svec(jl_svec_t *v, htable_t *object_table) JL_NOTSAFEPOINT
 {
     uintptr_t h = 0;
     size_t i, l = jl_svec_len(v);
     for (i = 0; i < l; i++) {
         jl_value_t *x = jl_svecref(v, i);
-        uintptr_t u = (x == NULL) ? 0 : jl_object_id(x);
+        uintptr_t u = (x == NULL) ? 0 : jl_object_id_temp(x, object_table);
         h = bitmix(h, u);
     }
     return h;
 }
 
-static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOTSAFEPOINT;
+static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h, htable_t *object_table) JL_NOTSAFEPOINT;
 
 typedef struct _varidx {
     jl_tvar_t *var;
     struct _varidx *prev;
 } jl_varidx_t;
 
-static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOINT
+static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env, htable_t *object_table) JL_NOTSAFEPOINT
 {
     if (v == NULL)
         return 0;
@@ -315,17 +318,17 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
         return inthash((uintptr_t)v);
     }
     if (tv == jl_uniontype_type) {
-        return bitmix(bitmix(jl_object_id((jl_value_t*)tv),
-                             type_object_id_(((jl_uniontype_t*)v)->a, env)),
-                      type_object_id_(((jl_uniontype_t*)v)->b, env));
+        return bitmix(bitmix(jl_object_id_temp((jl_value_t*)tv, object_table),
+                             type_object_id_(((jl_uniontype_t*)v)->a, env, object_table)),
+                      type_object_id_(((jl_uniontype_t*)v)->b, env, object_table));
     }
     if (tv == jl_unionall_type) {
         jl_unionall_t *u = (jl_unionall_t*)v;
         uintptr_t h = u->var->name->hash;
-        h = bitmix(h, type_object_id_(u->var->lb, env));
-        h = bitmix(h, type_object_id_(u->var->ub, env));
+        h = bitmix(h, type_object_id_(u->var->lb, env, object_table));
+        h = bitmix(h, type_object_id_(u->var->ub, env, object_table));
         jl_varidx_t e = { u->var, env };
-        return bitmix(h, type_object_id_(u->body, &e));
+        return bitmix(h, type_object_id_(u->body, &e, object_table));
     }
     if (tv == jl_datatype_type) {
         jl_datatype_t *dtv = (jl_datatype_t*)v;
@@ -334,7 +337,7 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
         uintptr_t h = ~dtv->name->hash;
         size_t i, l = jl_nparams(v);
         for (i = 0; i < l; i++) {
-            h = bitmix(h, type_object_id_(jl_tparam(v, i), env));
+            h = bitmix(h, type_object_id_(jl_tparam(v, i), env, object_table));
         }
         return h;
     }
@@ -342,16 +345,16 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
         jl_vararg_t *vm = (jl_vararg_t*)v;
         jl_value_t *t = vm->T ? vm->T : (jl_value_t*)jl_any_type;
         jl_value_t *n = vm->N ? vm->N : jl_nothing;
-        return bitmix(type_object_id_(t, env),
-            type_object_id_(n, env));
+        return bitmix(type_object_id_(t, env, object_table),
+            type_object_id_(n, env, object_table));
     }
     if (tv == jl_symbol_type)
         return ((jl_sym_t*)v)->hash;
     assert(!tv->name->mutabl);
-    return immut_id_(tv, v, tv->hash);
+    return immut_id_(tv, v, tv->hash, object_table);
 }
 
-static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOTSAFEPOINT
+static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h, htable_t *object_table) JL_NOTSAFEPOINT
 {
     size_t sz = jl_datatype_size(dt);
     if (sz == 0)
@@ -366,14 +369,15 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
         return bits_hash(v, sz) ^ h;
     }
     if (dt == jl_unionall_type)
-        return type_object_id_(v, NULL);
+        return type_object_id_(v, NULL, object_table);
     for (f = 0; f < nf; f++) {
         size_t offs = jl_field_offset(dt, f);
         char *vo = (char*)v + offs;
         uintptr_t u;
         if (jl_field_isptr(dt, f)) {
             jl_value_t *f = *(jl_value_t**)vo;
-            u = (f == NULL) ? 0 : jl_object_id(f);
+            // u = (f == NULL) ? 0 : jl_object_id(f);
+            u = (f == NULL) ? 0 : jl_object_id_temp(f, object_table);
         }
         else {
             jl_datatype_t *fieldtype = (jl_datatype_t*)jl_field_type_concrete(dt, f);
@@ -390,7 +394,7 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
                 u = 0;
             }
             else {
-                u = immut_id_(fieldtype, (jl_value_t*)vo, 0);
+                u = immut_id_(fieldtype, (jl_value_t*)vo, 0, object_table);
             }
         }
         h = bitmix(h, u);
@@ -398,14 +402,14 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
     return h;
 }
 
-static uintptr_t NOINLINE jl_object_id__cold(jl_datatype_t *dt, jl_value_t *v) JL_NOTSAFEPOINT
+static uintptr_t NOINLINE jl_object_id__cold(jl_datatype_t *dt, jl_value_t *v, htable_t *object_table) JL_NOTSAFEPOINT
 {
     if (dt == jl_simplevector_type)
-        return hash_svec((jl_svec_t*)v);
+        return hash_svec((jl_svec_t*)v, object_table);
     if (dt == jl_datatype_type) {
         jl_datatype_t *dtv = (jl_datatype_t*)v;
         uintptr_t h = ~dtv->name->hash;
-        return bitmix(h, hash_svec(dtv->parameters));
+        return bitmix(h, hash_svec(dtv->parameters, object_table));
     }
     if (dt == jl_string_type) {
 #ifdef _P64
@@ -420,13 +424,19 @@ static uintptr_t NOINLINE jl_object_id__cold(jl_datatype_t *dt, jl_value_t *v) J
     }
     if (dt->name->mutabl)
         return inthash((uintptr_t)v);
-    return immut_id_(dt, v, dt->hash);
+    return immut_id_(dt, v, dt->hash, object_table);
 }
 
-JL_DLLEXPORT inline uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPOINT
+JL_DLLEXPORT inline uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v, htable_t *object_table) JL_NOTSAFEPOINT
 {
+    if(v != NULL && object_table != NULL) {
+        uintptr_t *hashp = (uintptr_t*)ptrhash_bp(object_table, v);
+        if(*hashp != (uintptr_t)HT_NOTFOUND) 
+            return *hashp;
+    }
+    
     jl_datatype_t *dt = (jl_datatype_t*)tv;
-    if (dt == jl_symbol_type)
+    if (dt == jl_symbol_type) 
         return ((jl_sym_t*)v)->hash;
     if (dt == jl_typename_type)
         return ((jl_typename_t*)v)->hash;
@@ -435,13 +445,28 @@ JL_DLLEXPORT inline uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NO
         if (dtv->isconcretetype)
             return dtv->hash;
     }
-    return jl_object_id__cold(dt, v);
+
+    uintptr_t val = jl_object_id__cold(dt, v, object_table);
+    if(v != NULL && object_table != NULL)
+        ptrhash_put(object_table, v, (void*)val);
+    
+    return val;
 }
 
 
 JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT
 {
-    return jl_object_id_(jl_typeof(v), v);
+    // Object table for objects with complex structures.
+    htable_t object_table;
+    htable_new(&object_table, 0);
+    uintptr_t hash_val = jl_object_id_temp(v, &object_table);
+    htable_free(&object_table);
+    return hash_val;
+}
+
+static uintptr_t jl_object_id_temp(jl_value_t *v, htable_t *object_table) JL_NOTSAFEPOINT
+{
+    return jl_object_id_(jl_typeof(v), v, object_table);
 }
 
 // eq hash table --------------------------------------------------------------
