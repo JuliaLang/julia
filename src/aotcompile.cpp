@@ -957,8 +957,9 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
         AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
         ModulePassManager MPM;
         MPM.addPass(BitcodeWriterPass(OS));
-        *unopt = NewArchiveMember(MemoryBufferRef(*outputs, names[0]));
-        outputs++;
+        outputs[1] = (names[0] + "#" + std::to_string(shardidx) + "_unopt.bc").str();
+        *unopt = NewArchiveMember(MemoryBufferRef(*outputs, outputs[1]));
+        outputs += 2;
         timers.unopt.stopTimer();
     }
     if (!opt && !obj && !asm_) {
@@ -1022,8 +1023,9 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
         AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
         ModulePassManager MPM;
         MPM.addPass(BitcodeWriterPass(OS));
-        *opt = NewArchiveMember(MemoryBufferRef(*outputs, names[1]));
-        outputs++;
+        outputs[1] = (names[1] + "#" + std::to_string(shardidx) + "_opt.bc").str();
+        *opt = NewArchiveMember(MemoryBufferRef(*outputs, outputs[1]));
+        outputs += 2;
         timers.opt.stopTimer();
     }
 
@@ -1037,8 +1039,9 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
             jl_safe_printf("ERROR: target does not support generation of object files\n");
         emitter.run(M);
         *outputs = { Buffer.data(), Buffer.size() };
-        *obj = NewArchiveMember(MemoryBufferRef(*outputs, names[2]));
-        outputs++;
+        outputs[1] = (names[2] + "#" + std::to_string(shardidx) + ".o").str();
+        *obj = NewArchiveMember(MemoryBufferRef(*outputs, outputs[1]));
+        outputs += 2;
         timers.obj.stopTimer();
     }
 
@@ -1052,8 +1055,9 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
             jl_safe_printf("ERROR: target does not support generation of assembly files\n");
         emitter.run(M);
         *outputs = { Buffer.data(), Buffer.size() };
-        *asm_ = NewArchiveMember(MemoryBufferRef(*outputs, names[3]));
-        outputs++;
+        outputs[1] = (names[3] + "#" + std::to_string(shardidx) + ".s").str();
+        *asm_ = NewArchiveMember(MemoryBufferRef(*outputs, outputs[1]));
+        outputs += 2;
         timers.asm_.stopTimer();
     }
 }
@@ -1219,7 +1223,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
                 unsigned threads, ModuleInfo module_info) {
     unsigned outcount = unopt_out + opt_out + obj_out + asm_out;
     assert(outcount);
-    outputs.resize(outputs.size() + outcount * threads);
+    outputs.resize(outputs.size() + outcount * threads * 2);
     unopt.resize(unopt.size() + unopt_out * threads);
     opt.resize(opt.size() + opt_out * threads);
     obj.resize(obj.size() + obj_out * threads);
@@ -1264,7 +1268,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
     // Single-threaded case
     if (threads == 1) {
         output_timer.startTimer();
-        add_output_impl(M, TM, outputs.data() + outputs.size() - outcount, names,
+        add_output_impl(M, TM, outputs.data() + outputs.size() - outcount * 2, names,
                         unopt_out ? unopt.data() + unopt.size() - 1 : nullptr,
                         opt_out ? opt.data() + opt.size() - 1 : nullptr,
                         obj_out ? obj.data() + obj.size() - 1 : nullptr,
@@ -1301,7 +1305,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
 
     output_timer.startTimer();
 
-    auto outstart = outputs.data() + outputs.size() - outcount * threads;
+    auto outstart = outputs.data() + outputs.size() - outcount * threads * 2;
     auto unoptstart = unopt_out ? unopt.data() + unopt.size() - threads : nullptr;
     auto optstart = opt_out ? opt.data() + opt.size() - threads : nullptr;
     auto objstart = obj_out ? obj.data() + obj.size() - threads : nullptr;
@@ -1330,7 +1334,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
             dropUnusedDeclarations(*M);
             timers[i].deletion.stopTimer();
 
-            add_output_impl(*M, TM, outstart + i * outcount, names,
+            add_output_impl(*M, TM, outstart + i * outcount * 2, names,
                             unoptstart ? unoptstart + i : nullptr,
                             optstart ? optstart + i : nullptr,
                             objstart ? objstart + i : nullptr,
