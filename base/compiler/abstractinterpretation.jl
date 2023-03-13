@@ -571,7 +571,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
                 break
             end
             topmost === nothing || continue
-            if edge_matches_sv(infstate, method, sig, sparams, hardlimit, sv)
+            if edges_match_sv(infstate, method, sig, sparams, hardlimit, sv)
                 topmost = infstate
                 edgecycle = true
             end
@@ -679,7 +679,15 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
     return MethodCallResult(rt, edgecycle, edgelimited, edge, effects)
 end
 
-function edge_matches_sv(frame::InferenceState, method::Method, @nospecialize(sig), sparams::SimpleVector, hardlimit::Bool, sv::InferenceState)
+function matches_sv(parent::InferenceState, sv::InferenceState)
+    sv_method2 = sv.src.method_for_inference_limit_heuristics # limit only if user token match
+    sv_method2 isa Method || (sv_method2 = nothing)
+    parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
+    parent_method2 isa Method || (parent_method2 = nothing)
+    return parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
+end
+
+function edges_match_sv(frame::InferenceState, method::Method, @nospecialize(sig), sparams::SimpleVector, hardlimit::Bool, sv::InferenceState)
     # The `method_for_inference_heuristics` will expand the given method's generator if
     # necessary in order to retrieve this field from the generated `CodeInfo`, if it exists.
     # The other `CodeInfo`s we inspect will already have this field inflated, so we just
@@ -698,15 +706,27 @@ function edge_matches_sv(frame::InferenceState, method::Method, @nospecialize(si
         # in which case we'll need to ensure it is convergent
         # otherwise, we don't
 
-        # check in the cycle list first
-        # all items in here are mutual parents of all others
-        if !any(p::InferenceState->matches_sv(p, sv), frame.callers_in_cycle)
-            let parent = frame.parent
-                parent !== nothing || return false
-                parent = parent::InferenceState
-                (parent.cached || parent.parent !== nothing) || return false
-                matches_sv(parent, sv) || return false
+        # Check if all the edges between `sv` and `frame` match. If not,
+        # we declare a cycle. Note that this in theory allows exponential
+        # recursion, but not unbounded recursion.
+        sv_parent = sv
+        frame_parent = frame.parent
+
+        while true
+            if frame_parent === nothing
+                # Reached the entry - not considered a cycle
+                return false
             end
+            if sv_parent === frame || sv_parent.callers_in_cycle === frame.callers_in_cycle
+                # We've reached the parents and all the frames were the
+                # same so far - declare a cycle.
+                break
+            end
+            if !matches_sv(frame_parent, sv_parent) && !any(x->matches_sv(x, frame_parent), sv_parent.callers_in_cycle)
+                return false
+            end
+            sv_parent = sv_parent.parent
+            frame_parent = frame_parent.parent
         end
 
         # If the method defines a recursion relation, give it a chance
@@ -735,14 +755,6 @@ function method_for_inference_heuristics(method::Method, @nospecialize(sig), spa
         end
     end
     return nothing
-end
-
-function matches_sv(parent::InferenceState, sv::InferenceState)
-    sv_method2 = sv.src.method_for_inference_limit_heuristics # limit only if user token match
-    sv_method2 isa Method || (sv_method2 = nothing)
-    parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
-    parent_method2 isa Method || (parent_method2 = nothing)
-    return parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
 end
 
 function is_edge_recursed(edge::MethodInstance, sv::InferenceState)
