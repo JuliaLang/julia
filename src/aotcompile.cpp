@@ -939,7 +939,6 @@ struct ShardTimers {
 static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *outputs, StringRef name,
                     NewArchiveMember *unopt, NewArchiveMember *opt, NewArchiveMember *obj, NewArchiveMember *asm_,
                     ShardTimers &timers, unsigned shardidx) {
-    assert(names.size() == 4);
     auto TM = std::unique_ptr<TargetMachine>(
         SourceTM.getTarget().createTargetMachine(
             SourceTM.getTargetTriple().str(),
