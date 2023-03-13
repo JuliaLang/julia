@@ -169,10 +169,10 @@ typemin(::String) = typemin(String)
 #=
   ┌─────────────────────────────────────────────────────┐
   │                 Forward Mode State Diagram          │
-  │  INCLUSIVE    ┌──────────────2──────────────┐       │
+  │  GENERALIZED  ┌──────────────2──────────────┐       │
   │    UTF-8      │                             │       │
   │               ├────────3────────┐           │       │
-  │   IUTF-8      │                 │           │       │
+  │   GUTF-8      │                 │           │       │
   │    ┌─0─┐      │     ┌─┐        ┌▼┐         ┌▼┐      │
   │    │   │      ├─4──►│3├───1────►2├────1────►1├────┐ │
   │   ┌▼───┴┐     │     └─┘        └─┘         └─┘    │ │
@@ -188,9 +188,9 @@ typemin(::String) = typemin(String)
 
   ┌─────────────────────────────────────────────────────┐
   │                 Reverse Mode State Diagram          │
-  │  INCLUSIVE    ┌──◄───────────2:4────────────┐       │
+  │  GENERALIZED  ┌──◄───────────2:4────────────┐       │
   │    UTF-8      │                             │       │
-  │   IUTF-8      ├──◄─────3:4──────┐           │       │
+  │   GUTF-8      ├──◄─────3:4──────┐           │       │
   │               │                 │           │       │
   │  ┌─0,2:4─┐    │     ┌─┐        ┌┴┐         ┌┴┐      │
   │  │       │    ├─4───┤3│◄──1────┤2│◄───1────┤1│◄───┐ │
@@ -205,12 +205,12 @@ typemin(::String) = typemin(String)
   │  └─┘      State machine must be reset after state 4 │
   └─────────────────────────────────────────────────────┘
 =#
-const _IUTF8State = UInt16
-const _IUTF8_SHIFT_MASK = _IUTF8State(0b1111)
-const _IUTF8_DFA_ACCEPT = _IUTF8State(0)
-const _IUTF8_DFA_INVALID = _IUTF8State(4)
+const _GUTF8State = UInt16
+const _GUTF8_SHIFT_MASK = _GUTF8State(0b1111)
+const _GUTF8_DFA_ACCEPT = _GUTF8State(0)
+const _GUTF8_DFA_INVALID = _GUTF8State(4)
 
-const _IUTF8_DFA_TABLE, _IUTF8_DFA_REVERSE_TABLE = let
+const _GUTF8_DFA_TABLE, _GUTF8_DFA_REVERSE_TABLE = let
     # It should be noted that even though the invalid state is state 4 the shift is 1
     # which is the second lowest state shift.
     shifts = [0, 13, 6, 10, 4]
@@ -232,7 +232,7 @@ const _IUTF8_DFA_TABLE, _IUTF8_DFA_REVERSE_TABLE = let
                                 [4,  4,  4,  4] ]
 
 
-    f(from, to) = _IUTF8State(shifts[to + 1]) << shifts[from + 1]
+    f(from, to) = _GUTF8State(shifts[to + 1]) << shifts[from + 1]
     r(state_row) = |([f(n - 1, state_row[n]) for n in 1:length(state_row)]...)
     forward_class_rows = [r(forward_state_table[n]) for n in 1:length(forward_state_table)]
     reverse_class_rows = [r(reverse_state_table[n]) for n in 1:length(reverse_state_table)]
@@ -253,8 +253,8 @@ const _IUTF8_DFA_TABLE, _IUTF8_DFA_REVERSE_TABLE = let
                     2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,    #  0xD0:0xDF      11010000:11011111
                     3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,    #  0xE0:0xEF      11100000:11101111
                     4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5  ]  #  0xF0:0xFF      11110000:11111111
-    forward_dfa_table = zeros(_IUTF8State, 256)
-    reverse_dfa_table = zeros(_IUTF8State, 256)
+    forward_dfa_table = zeros(_GUTF8State, 256)
+    reverse_dfa_table = zeros(_GUTF8State, 256)
     for n in 1:256
         forward_dfa_table[n] = forward_class_rows[1 + byte_class[n]]
         reverse_dfa_table[n] = reverse_class_rows[1 + byte_class[n]]
@@ -262,12 +262,12 @@ const _IUTF8_DFA_TABLE, _IUTF8_DFA_REVERSE_TABLE = let
     (forward_dfa_table, reverse_dfa_table)
 end
 ##
-@inline function _iutf8_dfa_step(state::_IUTF8State, byte::UInt8)
-    @inbounds (_IUTF8_DFA_TABLE[byte + 1] >> state) & _IUTF8_SHIFT_MASK
+@inline function _gutf8_dfa_step(state::_GUTF8State, byte::UInt8)
+    @inbounds (_GUTF8_DFA_TABLE[byte + 1] >> state) & _GUTF8_SHIFT_MASK
 end
 
-@inline function _iutf8_dfa_reverse_step(state::_IUTF8State, byte::UInt8)
-    @inbounds (_IUTF8_DFA_REVERSE_TABLE[byte + 1] >> state) & _IUTF8_SHIFT_MASK
+@inline function _gutf8_dfa_reverse_step(state::_GUTF8State, byte::UInt8)
+    @inbounds (_GUTF8_DFA_REVERSE_TABLE[byte + 1] >> state) & _GUTF8_SHIFT_MASK
 end
 
 ## thisind, nextind ##
@@ -281,12 +281,12 @@ end
     (i == n + 1) | (i == 1) && return i
     @boundscheck Base.between(i, 1, n) || throw(BoundsError(s, i))
     bytes = codeunits(s)
-    state = _IUTF8_DFA_ACCEPT
+    state = _GUTF8_DFA_ACCEPT
     for j in 0:3
         k = i - j
-        state = @inbounds _iutf8_dfa_reverse_step(state, bytes[k])
-        (state == _IUTF8_DFA_ACCEPT) && return k
-        (state == _IUTF8_DFA_INVALID) | (k <= 1) && return i
+        state = @inbounds _gutf8_dfa_reverse_step(state, bytes[k])
+        (state == _GUTF8_DFA_ACCEPT) && return k
+        (state == _GUTF8_DFA_INVALID) | (k <= 1) && return i
     end
     return i # Should never get here
 end
@@ -306,12 +306,12 @@ end
         (i′ >= i) && return i + 1
         i = i′
     end
-    state = _IUTF8_DFA_ACCEPT
+    state = _GUTF8_DFA_ACCEPT
     for j in 0:3
         k = i + j
-        state = @inbounds _iutf8_dfa_step(state, bytes[k])
-        (state == _IUTF8_DFA_INVALID) && return k #The screening above makes sure this is never returned when k == i
-        (state == _IUTF8_DFA_ACCEPT) | (k >= n) && return k + 1
+        state = @inbounds _gutf8_dfa_step(state, bytes[k])
+        (state == _GUTF8_DFA_INVALID) && return k #The screening above makes sure this is never returned when k == i
+        (state == _GUTF8_DFA_ACCEPT) | (k >= n) && return k + 1
     end
     return i + 4 # Should never get here
 end
@@ -527,18 +527,18 @@ end
 
 function iterate_continued(s::String, i::Int, b::UInt8, u::UInt32)
     n = ncodeunits(s)
-    state = _IUTF8_DFA_ACCEPT
-    state = _iutf8_dfa_step(state, b)
+    state = _GUTF8_DFA_ACCEPT
+    state = _gutf8_dfa_step(state, b)
     k = i
-    state <= _IUTF8_DFA_INVALID && @goto ret_kp1
+    state <= _GUTF8_DFA_INVALID && @goto ret_kp1
     shift = 24
     for j in 1:3
         k = i + j
         @inbounds b = codeunit(s, k)
-        state = _iutf8_dfa_step(state, b)
-        state == _IUTF8_DFA_INVALID && @goto ret
+        state = _gutf8_dfa_step(state, b)
+        state == _GUTF8_DFA_INVALID && @goto ret
         u |= UInt32(b) << (shift -= 8)
-        (state == _IUTF8_DFA_ACCEPT) && @goto ret_kp1
+        (state == _GUTF8_DFA_ACCEPT) && @goto ret_kp1
         (k >= n) && @goto ret_kp1
     end
     @label ret_kp1
@@ -552,7 +552,7 @@ end
     b = codeunit(s, i)
     u = UInt32(b) << 24
     #Check u rather than b here because it force compiler to calculate u now
-    (u >= 0x80000000) || return reinterpret(Char, u)
+    (b >= 0x80) || return reinterpret(Char, u)
     return getindex_continued(s, i, u)
 end
 
@@ -561,9 +561,9 @@ function getindex_continued(s::String, i::Int, u::UInt32)
     n = ncodeunits(s)
     (i == n) && @goto ret
     shift = 24
-    state = _iutf8_dfa_step(_IUTF8_DFA_ACCEPT, b)
-    if (state == _IUTF8_DFA_INVALID)
-        #Checks whether i not at the beginning of a character which is an error
+    state = _gutf8_dfa_step(_GUTF8_DFA_ACCEPT, b)
+    if (state == _GUTF8_DFA_INVALID)
+        #Checks whether i is not at the beginning of a character which is an error
         # or a single invalid byte which returns
         @inbounds isvalid(s, i) && @goto ret
         Base.string_index_err(s, i)
@@ -571,11 +571,11 @@ function getindex_continued(s::String, i::Int, u::UInt32)
     for j in 1:3
         k = i + j
         @inbounds b = codeunit(s, k)
-        state = _iutf8_dfa_step(state, b)
+        state = _gutf8_dfa_step(state, b)
         #If the state machine goes to invalid return value from before byte was processed
-        state == _IUTF8_DFA_INVALID && break
+        state == _GUTF8_DFA_INVALID && break
         u |= UInt32(b) << (shift -= 8)
-        ((state == _IUTF8_DFA_ACCEPT) | (k == n)) && break
+        ((state == _GUTF8_DFA_ACCEPT) | (k == n)) && break
     end
     @label ret
     return reinterpret(Char, u)
@@ -614,36 +614,41 @@ end
 end
 
 const _STRING_LENGTH_CHUNKING_SIZE = 256
+
+# The current implimentation of this function favors ascii heavy text more than multibyte,
+#  currently it uses a fast loop to scan for non ascii characters then when it encounters a
+#  multibyte character it process only a single multbyte character before going back to look
+#  for non-ascii characters.  A more balanced algorithm would likely want to process multibyte
+#  characters in blocks of 64 bytes
 function _length_nonascii_decrement(
-    cu::AbstractVector{UInt8}, first::Int, last::Int, c::Int, state=_IUTF8_DFA_ACCEPT
+    cu::AbstractVector{UInt8}, first::Int, last::Int, c::Int, state=_GUTF8_DFA_ACCEPT
 )
-    state = ifelse(state == _IUTF8_DFA_INVALID, _IUTF8_DFA_ACCEPT, state)
-    i = ifelse(state == _IUTF8_DFA_ACCEPT, first - 1, first)
+    state = ifelse(state == _GUTF8_DFA_INVALID, _GUTF8_DFA_ACCEPT, state)
+    i = ifelse(state == _GUTF8_DFA_ACCEPT, first - 1, first)
     #@inbounds b = codeunit(s, first)
     @inbounds b = cu[first]
     @inbounds while true
-        #This logic enables the first state to be >_IUTF8_DFA_INVALID so that a chunk
+        #This logic enables the first state to be >_GUTF8_DFA_INVALID so that a chunk
         # can continue from a previous chunk
-        (state == _IUTF8_DFA_ACCEPT) && (i += 1)
+        (state == _GUTF8_DFA_ACCEPT) && (i += 1)
         #Logic was taken out of the n=1:3 loop below so we must correct the count here
-        (state == _IUTF8_DFA_INVALID) && (c += 1)
-        if state <= _IUTF8_DFA_INVALID
+        (state == _GUTF8_DFA_INVALID) && (c += 1)
+        if state <= _GUTF8_DFA_INVALID
             #Loop through all the one byte characters
             while true
                 b = cu[i]
                 ((i += 1) <= last) || break
                 0xc0 ≤ b ≤ 0xf7 && break
             end
-            state = _iutf8_dfa_step(_IUTF8_DFA_ACCEPT, b)
+            state = _gutf8_dfa_step(_GUTF8_DFA_ACCEPT, b)
             (i <= last) || return (c, state)
         end
 
         #This should get unrolled
         for n in 1:3
-            b = cu[i]
-            state = _iutf8_dfa_step(state, b)
+            state = _gutf8_dfa_step(state, cu[i])
             c -= 1
-            state <= _IUTF8_DFA_INVALID && break
+            state <= _GUTF8_DFA_INVALID && break
             ((i += 1) <= last) || return (c, state)
         end
     end
@@ -657,7 +662,7 @@ function _length_continued_nonascii(
 
     start = first
     stop = min(last, first + chunk_size - 1)
-    state = _IUTF8_DFA_ACCEPT
+    state = _GUTF8_DFA_ACCEPT
 
     while start <= last
         #First we process a non ascii chunk because we assume the barrier
@@ -666,7 +671,7 @@ function _length_continued_nonascii(
         start = start + chunk_size
         stop = min(last, stop + chunk_size)
 
-        while state <= _IUTF8_DFA_INVALID
+        while state <= _GUTF8_DFA_INVALID
             _isascii(cu, start, stop) || break
             (start = start + chunk_size) <= last || break
             stop = min(last, stop + chunk_size)
