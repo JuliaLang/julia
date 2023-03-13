@@ -936,7 +936,7 @@ struct ShardTimers {
 };
 
 // Perform the actual optimization and emission of the output files
-static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *outputs, ArrayRef<StringRef> names,
+static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *outputs, StringRef name,
                     NewArchiveMember *unopt, NewArchiveMember *opt, NewArchiveMember *obj, NewArchiveMember *asm_,
                     ShardTimers &timers, unsigned shardidx) {
     assert(names.size() == 4);
@@ -957,7 +957,7 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
         AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
         ModulePassManager MPM;
         MPM.addPass(BitcodeWriterPass(OS));
-        outputs[1] = (names[0] + "#" + std::to_string(shardidx) + "_unopt.bc").str();
+        outputs[1] = (name + "#" + std::to_string(shardidx) + "_unopt.bc").str();
         *unopt = NewArchiveMember(MemoryBufferRef(*outputs, outputs[1]));
         outputs += 2;
         timers.unopt.stopTimer();
@@ -1023,7 +1023,7 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
         AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
         ModulePassManager MPM;
         MPM.addPass(BitcodeWriterPass(OS));
-        outputs[1] = (names[1] + "#" + std::to_string(shardidx) + "_opt.bc").str();
+        outputs[1] = (name + "#" + std::to_string(shardidx) + "_opt.bc").str();
         *opt = NewArchiveMember(MemoryBufferRef(*outputs, outputs[1]));
         outputs += 2;
         timers.opt.stopTimer();
@@ -1039,7 +1039,7 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
             jl_safe_printf("ERROR: target does not support generation of object files\n");
         emitter.run(M);
         *outputs = { Buffer.data(), Buffer.size() };
-        outputs[1] = (names[2] + "#" + std::to_string(shardidx) + ".o").str();
+        outputs[1] = (name + "#" + std::to_string(shardidx) + ".o").str();
         *obj = NewArchiveMember(MemoryBufferRef(*outputs, outputs[1]));
         outputs += 2;
         timers.obj.stopTimer();
@@ -1055,7 +1055,7 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
             jl_safe_printf("ERROR: target does not support generation of assembly files\n");
         emitter.run(M);
         *outputs = { Buffer.data(), Buffer.size() };
-        outputs[1] = (names[3] + "#" + std::to_string(shardidx) + ".s").str();
+        outputs[1] = (name + "#" + std::to_string(shardidx) + ".s").str();
         *asm_ = NewArchiveMember(MemoryBufferRef(*outputs, outputs[1]));
         outputs += 2;
         timers.asm_.stopTimer();
@@ -1216,7 +1216,7 @@ static void dropUnusedDeclarations(Module &M) {
 
 // Entrypoint to optionally-multithreaded image compilation. This handles global coordination of the threading,
 // as well as partitioning, serialization, and deserialization.
-static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &outputs, ArrayRef<StringRef> names,
+static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &outputs, StringRef name,
                 std::vector<NewArchiveMember> &unopt, std::vector<NewArchiveMember> &opt,
                 std::vector<NewArchiveMember> &obj, std::vector<NewArchiveMember> &asm_,
                 bool unopt_out, bool opt_out, bool obj_out, bool asm_out,
@@ -1228,8 +1228,6 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
     opt.resize(opt.size() + opt_out * threads);
     obj.resize(obj.size() + obj_out * threads);
     asm_.resize(asm_.size() + asm_out * threads);
-    auto name = names[2];
-    name.consume_back(".o");
     // Timers for timing purposes
     TimerGroup timer_group("add_output", ("Time to optimize and emit LLVM module " + name).str());
     SmallVector<ShardTimers, 1> timers(threads);
@@ -1268,7 +1266,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
     // Single-threaded case
     if (threads == 1) {
         output_timer.startTimer();
-        add_output_impl(M, TM, outputs.data() + outputs.size() - outcount * 2, names,
+        add_output_impl(M, TM, outputs.data() + outputs.size() - outcount * 2, name,
                         unopt_out ? unopt.data() + unopt.size() - 1 : nullptr,
                         opt_out ? opt.data() + opt.size() - 1 : nullptr,
                         obj_out ? obj.data() + obj.size() - 1 : nullptr,
@@ -1334,7 +1332,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
             dropUnusedDeclarations(*M);
             timers[i].deletion.stopTimer();
 
-            add_output_impl(*M, TM, outstart + i * outcount * 2, names,
+            add_output_impl(*M, TM, outstart + i * outcount * 2, name,
                             unoptstart ? unoptstart + i : nullptr,
                             optstart ? optstart + i : nullptr,
                             objstart ? objstart + i : nullptr,
@@ -1558,21 +1556,14 @@ void jl_dump_native_impl(void *native_code,
                                      "jl_RTLD_DEFAULT_handle_pointer"), TheTriple);
     }
 
-    auto compile = [&](Module &M, ArrayRef<StringRef> names, unsigned threads) { add_output(
-            M, *SourceTM, outputs, names,
+    auto compile = [&](Module &M, StringRef name, unsigned threads) { add_output(
+            M, *SourceTM, outputs, name,
             unopt_bc_Archive, bc_Archive, obj_Archive, asm_Archive,
             !!unopt_bc_fname, !!bc_fname, !!obj_fname, !!asm_fname,
             threads, module_info
     ); };
 
-    std::array<StringRef, 4> text_names = {
-        "text_unopt.bc",
-        "text_opt.bc",
-        "text.o",
-        "text.s"
-    };
-
-    compile(*dataM, text_names, threads);
+    compile(*dataM, "text", threads);
 
     auto sysimageM = std::make_unique<Module>("sysimage", Context);
     sysimageM->setTargetTriple(dataM->getTargetTriple());
@@ -1650,13 +1641,7 @@ void jl_dump_native_impl(void *native_code,
         }
     }
 
-    std::array<StringRef, 4> data_names = {
-        "data_unopt.bc",
-        "data_opt.bc",
-        "data.o",
-        "data.s"
-    };
-    compile(*sysimageM, data_names, 1);
+    compile(*sysimageM, "data", 1);
 
     object::Archive::Kind Kind = getDefaultForHost(TheTriple);
     if (unopt_bc_fname)
