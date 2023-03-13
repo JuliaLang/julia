@@ -1937,6 +1937,20 @@ function buffer_elmtype(@nospecialize buf)
     return Any
 end
 
+@nospecs function buffer_builtin_common_typecheck(boundscheck, buftype, idxty)
+    (boundscheck ⊑ Bool && buftype ⊑ Buffer && idxty ⊑ Int)
+end
+@nospecs function bufferset_typecheck(buftype, elmtype)
+    # Check that we can determine the element type
+    buftype = widenconst(buftype)
+    isa(buftype, DataType) || return false
+    elmtype_expected = buftype.parameters[1]
+    isa(elmtype_expected, Type) || return false
+    # Check that the element type is compatible with the element we're assigning
+    elmtype ⊑ elmtype_expected || return false
+    return true
+end
+
 function buffer_builtin_common_nothrow(argtypes::Vector{Any}, idxpos::Int)
     length(argtypes) >= 4 || return false
     boundscheck = argtypes[1]

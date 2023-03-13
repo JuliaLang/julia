@@ -13,6 +13,12 @@ if !isdefined(Main, :Base)
         end
         return b
     end
+
+    function isassigned(b::Buffer, i::Int)
+        @inline
+        @boundscheck 1 <= i <= length(b) || return false
+        ccall(:jl_buffer_isassigned, Cint, (Any, UInt), b, i) == 1
+    end
 end
 
 
@@ -49,9 +55,3 @@ function ==(v1::Buffer, v2::Buffer)
 end
 
 sizeof(b::Buffer) = Core.sizeof(b)
-
-function isassigned(b::Buffer, i::Int)
-    @inline
-    @boundscheck 1 <= i <= length(b) || return false
-    ccall(:jl_buffer_isassigned, Cint, (Any, UInt), b, i) == 1
-end
