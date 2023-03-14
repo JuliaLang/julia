@@ -274,6 +274,7 @@ void rebuild_image_blob_tree(void) {
         // jl_safe_printf("val: %p, cmp: %p, eytzinger_image_tree.items[eyt_idx]: %p\n", (void*)val, (void*)cmp, eyt_idx == eytzinger_image_tree.len ? NULL : eytzinger_image_tree.items[eyt_idx]);
         assert(((i % 2 == 1) || eytzinger_image_tree.items[eyt_idx] == (void*)eyt_val) && "Eytzinger tree failed to find object!");
         assert(((i % 2 == 0) || eytzinger_image_tree.items[eyt_idx] == (void*)eyt_val || cmp == gc_img_max + 1) && "Eytzinger tree failed to find object!");
+        (void) eyt_val;
         if (i & 1) {
             eytzinger_idxs.items[eyt_idx] = (void*)n_linkage_blobs();
         } else {
