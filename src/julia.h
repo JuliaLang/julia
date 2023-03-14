@@ -1945,7 +1945,6 @@ typedef struct _jl_task_t {
     jl_ucontext_t ctx;
     void *stkbuf; // malloc'd memory (either copybuf or stack)
     size_t bufsz; // actual sizeof stkbuf
-    uint64_t inference_start_time; // time when inference started
     uint16_t reentrant_inference; // How many times we've reentered inference
     uint16_t reentrant_timing; // How many times we've reentered timing
     unsigned int copy_stack:31; // sizeof stack for copybuf
