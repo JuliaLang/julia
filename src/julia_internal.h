@@ -1254,11 +1254,11 @@ JL_DLLEXPORT uint64_t jl_rand(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_srand(uint64_t) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_init_rand(void);
 
+JL_DLLEXPORT extern void *jl_exe_handle;
+JL_DLLEXPORT extern void *jl_libjulia_handle;
 JL_DLLEXPORT extern void *jl_libjulia_internal_handle;
 JL_DLLEXPORT extern void *jl_RTLD_DEFAULT_handle;
 #if defined(_OS_WINDOWS_)
-JL_DLLEXPORT extern void *jl_exe_handle;
-JL_DLLEXPORT extern void *jl_libjulia_handle;
 JL_DLLEXPORT extern const char *jl_crtdll_basename;
 extern void *jl_ntdll_handle;
 extern void *jl_kernel32_handle;
@@ -1268,6 +1268,7 @@ void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT;
 #endif
 
 JL_DLLEXPORT void *jl_get_library_(const char *f_lib, int throw_err);
+void *jl_find_dynamic_library_by_addr(void *symbol);
 #define jl_get_library(f_lib) jl_get_library_(f_lib, 1)
 JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *hnd);
 JL_DLLEXPORT void *jl_lazy_load_and_lookup(jl_value_t *lib_val, const char *f_name);
@@ -1277,11 +1278,11 @@ JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(
     jl_unionall_t *env, jl_value_t **vals);
 
 
-// Windows only
+// Special filenames used to refer to internal julia libraries
 #define JL_EXE_LIBNAME                  ((const char*)1)
 #define JL_LIBJULIA_DL_LIBNAME          ((const char*)2)
 #define JL_LIBJULIA_INTERNAL_DL_LIBNAME ((const char*)3)
-JL_DLLEXPORT const char *jl_dlfind_win32(const char *name);
+JL_DLLEXPORT const char *jl_dlfind(const char *name);
 
 // libuv wrappers:
 JL_DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path);
