@@ -954,20 +954,7 @@ STATIC_INLINE size_t n_linkage_blobs(void) JL_NOTSAFEPOINT
     return jl_image_relocs.len;
 }
 
-// TODO: Makes this a binary search
-STATIC_INLINE size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT {
-    size_t i, nblobs = n_linkage_blobs();
-    assert(jl_linkage_blobs.len == 2*nblobs);
-    for (i = 0; i < nblobs; i++) {
-        uintptr_t left = (uintptr_t)jl_linkage_blobs.items[2*i];
-        uintptr_t right = (uintptr_t)jl_linkage_blobs.items[2*i + 1];
-        if (left < (uintptr_t)v && (uintptr_t)v <= right) {
-            // the last object may be a singleton (v is shifted by a type tag, so we use exclusive bounds here)
-            break;
-        }
-    }
-    return i;
-}
+size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
 
 uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
 
