@@ -124,13 +124,13 @@ end
 _memcmp(a::Union{Ptr{UInt8},AbstractString}, b::Union{Ptr{UInt8},AbstractString}, len) =
     ccall(:memcmp, Cint, (Ptr{UInt8}, Ptr{UInt8}, Csize_t), a, b, len % Csize_t) % Int
 
-function cmp(a::String, b::String)
+@assume_effects :foldable :removable function cmp(a::String, b::String)
     al, bl = sizeof(a), sizeof(b)
     c = _memcmp(a, b, min(al,bl))
     return c < 0 ? -1 : c > 0 ? +1 : cmp(al,bl)
 end
 
-function ==(a::String, b::String)
+@assume_effects :foldable :removable function ==(a::String, b::String)
     pointer_from_objref(a) == pointer_from_objref(b) && return true
     al = sizeof(a)
     return al == sizeof(b) && 0 == _memcmp(a, b, al)
@@ -284,7 +284,7 @@ getindex(s::String, r::AbstractUnitRange{<:Integer}) = s[Int(first(r)):Int(last(
     return ss
 end
 
-length(s::String) = length_continued(s, 1, ncodeunits(s), ncodeunits(s))
+@assume_effects :foldable :removable length(s::String) = length_continued(s, 1, ncodeunits(s), ncodeunits(s))
 
 @inline function length(s::String, i::Int, j::Int)
     @boundscheck begin

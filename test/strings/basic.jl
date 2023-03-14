@@ -1201,7 +1201,9 @@ end
                    (*, (Char, String)),
                    (^, (String, Int)),
                    (^, (SubString{String}, Int)),
-                   (^, (Char, Int))]
+                   (^, (Char, Int)),
+                   (==, (String, String)),
+                   (length, (String,)),]
         e = Base.infer_effects(f, Ts)
         @test Core.Compiler.is_foldable(e)
         @test Core.Compiler.is_removable_if_unused(e)
