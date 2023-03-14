@@ -260,7 +260,6 @@ const _UTF8_DFA_TABLE = let # let block rather than function doesn't pollute bas
     num_states=10
     bit_per_state = 6
 
-
     # These shifts were derived using a SMT solver
     state_shifts = [0, 4, 10, 14, 18, 24, 8, 20, 12, 26]
 
@@ -327,10 +326,20 @@ const _UTF8_DFA_INVALID = _UTF8DFAState(10) # If the state machine is ever in th
     return (state)
 end
 
-# This is a shift based utf-8 DFA that works on string that are a contiguous block
-@inline _isvalid_utf8(bytes::AbstractVector{UInt8}) = _isvalid_utf8_dfa(_UTF8_DFA_ASCII, bytes) <= _UTF8_DFA_ACCEPT # <= covers _UTF8_DFA_ASCII as well
-
-@inline _isvalid_utf8(s::AbstractString) = _isvalid_utf8(codeunits(s))
+@inline function _find_nonascii_chunk(cu::AbstractVector{UInt8}, first::Int, last::Int)
+    chunk_size = 256
+    epilog_bytes = rem(last - first + 1, chunk_size)
+    start = first
+    chunk_last = last - epilog_bytes
+    start > last && return nothing
+    for start = start:chunk_size:chunk_last
+        _isascii(cu, start, start + chunk_size - 1) || return start
+    end
+    start = chunk_last + 1
+    ((start <= last) && _isascii(cu, start, last)) || return start
+    return nothing
+end
+##
 
 # Classifcations of string
     # 0: neither valid ASCII nor UTF-8
@@ -339,15 +348,39 @@ end
  byte_string_classify(s::AbstractString) = byte_string_classify(codeunits(s))
 
 
-function byte_string_classify(bytes::Vector{UInt8})
-    state = _isvalid_utf8_dfa(_UTF8_DFA_ASCII, bytes)
-    state ==  _UTF8_DFA_ASCII && return 1
-    state ==  _UTF8_DFA_ACCEPT && return 2
-    return 0
+function byte_string_classify(bytes::AbstractVector{UInt8})
+    n = length(bytes)
+    start = _find_nonascii_chunk(bytes,1,n)
+    isnothing(start) && return 1
+
+    return _byte_string_classify_nonascii(bytes,start,n)
 end
 
-isvalid(::Type{String}, bytes::AbstractVector{UInt8}) = @inline _isvalid_utf8(bytes)
-isvalid(::Type{String}, s::AbstractString) = @inline _isvalid_utf8(codeunits(s))
+function _byte_string_classify_nonascii(bytes::AbstractVector{UInt8}, first::Int, last::Int)
+    chunk_size = 256
+
+    start = first
+    stop = min(last,first + chunk_size - 1)
+    state = _UTF8_DFA_ACCEPT
+    while start <= last
+        # Process non ascii chunk
+        state = _isvalid_utf8_dfa(state,bytes,start,stop)
+        state == _UTF8_DFA_INVALID && return 0
+
+        start = start + chunk_size
+        stop = min(last,stop + chunk_size)
+        # try to process ascii chunks
+        while state == _UTF8_DFA_ACCEPT
+            _isascii(bytes,start,stop) || break
+            (start = start + chunk_size) <= last || break
+            stop = min(last,stop + chunk_size)
+        end
+    end
+    return ifelse(state == _UTF8_DFA_ACCEPT,2,0)
+end
+
+isvalid(::Type{String}, bytes::AbstractVector{UInt8}) = (@inline byte_string_classify(bytes)) ≠ 0
+isvalid(::Type{String}, s::AbstractString) =  (@inline byte_string_classify(s)) ≠ 0
 
 @inline isvalid(s::AbstractString) = @inline isvalid(String, codeunits(s))
 
