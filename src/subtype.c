@@ -306,11 +306,8 @@ static int obviously_unequal(jl_value_t *a, jl_value_t *b)
             if (ad->name != bd->name)
                 return 1;
             int istuple = (ad->name == jl_tuple_typename);
-            if ((jl_is_concrete_type(a) || jl_is_concrete_type(b)) &&
-                jl_type_equality_is_identity(a, b)) {
-                if (!istuple && ad->name != jl_type_typename) // HACK: can't properly normalize Tuple{Float64} == Tuple{<:Float64} like types or Type{T} types
-                    return 1;
-            }
+            if (jl_type_equality_is_identity(a, b))
+                return 1;
             size_t i, np;
             if (istuple) {
                 size_t na = jl_nparams(ad), nb = jl_nparams(bd);
@@ -395,10 +392,7 @@ static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
         return 0;
     if (specificity && a == (jl_value_t*)jl_typeofbottom_type)
         return 0;
-    if (jl_is_concrete_type(a) && jl_is_concrete_type(b) &&
-        jl_type_equality_is_identity(a, b) &&
-        (((jl_datatype_t*)a)->name != jl_tuple_typename ||
-         ((jl_datatype_t*)b)->name != jl_tuple_typename))
+    if (jl_is_concrete_type(a) && jl_is_concrete_type(b) && jl_type_equality_is_identity(a, b))
         return 1;
     if (jl_is_unionall(a)) a = jl_unwrap_unionall(a);
     if (jl_is_unionall(b)) b = jl_unwrap_unionall(b);
@@ -1756,7 +1750,7 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
     if (jl_is_datatype(y)) {
         int istuple = (((jl_datatype_t*)y)->name == jl_tuple_typename);
         int iscov = istuple;
-        // TODO: this would be a nice fast-path to have, unfortuanately,
+        // TODO: this would be a nice fast-path to have, unfortunately,
         //       datatype allocation fails to correctly hash-cons them
         //       and the subtyping tests include tests for this case
         //if (!iscov && ((jl_datatype_t*)y)->isconcretetype && !jl_is_type_type(x)) {
@@ -2243,7 +2237,7 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
             return 0;
         }
     }
-    if (jl_is_concrete_type(t) && jl_type_equality_is_identity(jl_typeof(x), t))
+    if (jl_is_concrete_type(t))
         return 0;
     return jl_subtype(jl_typeof(x), t);
 }
@@ -3725,6 +3719,7 @@ static jl_value_t *switch_union_tuple(jl_value_t *a, jl_value_t *b)
 
 // `a` might have a non-empty intersection with some concrete type b even if !(a<:b) and !(b<:a)
 // For example a=`Tuple{Type{<:Vector}}` and b=`Tuple{DataType}`
+// TODO: this query is partly available memoized as jl_type_equality_is_identity
 static int might_intersect_concrete(jl_value_t *a)
 {
     if (jl_is_unionall(a))
@@ -3774,9 +3769,9 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
         *ans = a; sz = szb;
         if (issubty) *issubty = 1;
     }
-    else if (lta && ltb) {
-        goto bot;
-    }
+    // else if (lta && ltb) { // !jl_type_equality_is_identity known in this case because obviously_disjoint returned false
+    //     goto bot;
+    // }
     else if (jl_subtype(b, a)) {
         *ans = b;
     }
