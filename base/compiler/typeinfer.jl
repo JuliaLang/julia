@@ -988,49 +988,45 @@ end
 # compute (and cache) an inferred AST and return type
 function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
     method = mi.def::Method
-    for i = 1:2 # test-and-lock-and-test
-        if i == 2
-            start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
-        end
-        code = get(code_cache(interp), mi, nothing)
-        if code isa CodeInstance
-            # see if this code already exists in the cache
-            inf = @atomic :monotonic code.inferred
-            if use_const_api(code)
-                i == 2 && ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
-                tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
-                rettype_const = code.rettype_const
-                tree.code = Any[ ReturnNode(quoted(rettype_const)) ]
-                nargs = Int(method.nargs)
-                tree.slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), method.slot_syms)
-                tree.slotflags = fill(IR_FLAG_NULL, nargs)
-                tree.ssavaluetypes = 1
-                tree.codelocs = Int32[1]
-                tree.linetable = LineInfoNode[LineInfoNode(method.module, method.name, method.file, method.line, Int32(0))]
-                tree.inferred = true
-                tree.ssaflags = UInt8[0]
-                set_inlineable!(tree, true)
-                tree.parent = mi
-                tree.rettype = Core.Typeof(rettype_const)
-                tree.min_world = code.min_world
-                tree.max_world = code.max_world
-                return tree
-            elseif isa(inf, CodeInfo)
-                i == 2 && ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
-                if !(inf.min_world == code.min_world &&
-                     inf.max_world == code.max_world &&
-                     inf.rettype === code.rettype)
-                    inf = copy(inf)
-                    inf.min_world = code.min_world
-                    inf.max_world = code.max_world
-                    inf.rettype = code.rettype
-                end
-                return inf
-            elseif isa(inf, Vector{UInt8})
-                i == 2 && ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
-                inf = _uncompressed_ir(code, inf)
-                return inf
+    start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
+    code = get(code_cache(interp), mi, nothing)
+    if code isa CodeInstance
+        # see if this code already exists in the cache
+        inf = @atomic :monotonic code.inferred
+        if use_const_api(code)
+            ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
+            tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
+            rettype_const = code.rettype_const
+            tree.code = Any[ ReturnNode(quoted(rettype_const)) ]
+            nargs = Int(method.nargs)
+            tree.slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), method.slot_syms)
+            tree.slotflags = fill(IR_FLAG_NULL, nargs)
+            tree.ssavaluetypes = 1
+            tree.codelocs = Int32[1]
+            tree.linetable = LineInfoNode[LineInfoNode(method.module, method.name, method.file, method.line, Int32(0))]
+            tree.inferred = true
+            tree.ssaflags = UInt8[0]
+            set_inlineable!(tree, true)
+            tree.parent = mi
+            tree.rettype = Core.Typeof(rettype_const)
+            tree.min_world = code.min_world
+            tree.max_world = code.max_world
+            return tree
+        elseif isa(inf, CodeInfo)
+            ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
+            if !(inf.min_world == code.min_world &&
+                    inf.max_world == code.max_world &&
+                    inf.rettype === code.rettype)
+                inf = copy(inf)
+                inf.min_world = code.min_world
+                inf.max_world = code.max_world
+                inf.rettype = code.rettype
             end
+            return inf
+        elseif isa(inf, Vector{UInt8})
+            ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
+            inf = _uncompressed_ir(code, inf)
+            return inf
         end
     end
     if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_sysimg()
@@ -1052,16 +1048,12 @@ function typeinf_type(interp::AbstractInterpreter, method::Method, @nospecialize
         return Union{} # don't ask: it does weird and unnecessary things, if it occurs during bootstrap
     end
     mi = specialize_method(method, atype, sparams)::MethodInstance
-    for i = 1:2 # test-and-lock-and-test
-        if i == 2
-            start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
-        end
-        code = get(code_cache(interp), mi, nothing)
-        if code isa CodeInstance
-            # see if this rettype already exists in the cache
-            i == 2 && ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
-            return code.rettype
-        end
+    start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
+    code = get(code_cache(interp), mi, nothing)
+    if code isa CodeInstance
+        # see if this rettype already exists in the cache
+        ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
+        return code.rettype
     end
     result = InferenceResult(mi, typeinf_lattice(interp))
     typeinf(interp, result, :global)
