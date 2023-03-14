@@ -1208,4 +1208,3 @@ end
     end
     @test_throws ArgumentError Symbol("a\0a")
 end
-    
