@@ -48,7 +48,7 @@ to a numeric value representing a
 [Unicode code point](https://en.wikipedia.org/wiki/Code_point).  (Julia packages may define
 other subtypes of `AbstractChar`, e.g. to optimize operations for other
 [text encodings](https://en.wikipedia.org/wiki/Character_encoding).) Here is how `Char` values are
-input and shown:
+input and shown (note that character literals are delimited with single quotes, not double quotes):
 
 ```jldoctest
 julia> c = 'x'
@@ -156,7 +156,7 @@ julia> 'A' + 1
 
 ## String Basics
 
-String literals are delimited by double quotes or triple double quotes:
+String literals are delimited by double quotes or triple double quotes (not single quotes):
 
 ```jldoctest helloworldstring
 julia> str = "Hello, world.\n"
