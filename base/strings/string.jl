@@ -341,6 +341,10 @@ julia> repeat('A', 3)
 ```
 """
 repeat(c::AbstractChar, r::Integer) = repeat(Char(c), r) # fallback
+#don't assume effects for general integers since they may be all sorts of screwed up.
+@assume_effects :foldable :removable function repeat(c::Char, r::BitInteger)
+    @invoke repeat(c, r::Integer)
+end
 function repeat(c::Char, r::Integer)
     r == 0 && return ""
     r < 0 && throw(ArgumentError("can't repeat a character $r times"))

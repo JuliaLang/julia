@@ -187,7 +187,7 @@ end
 string(a::String)            = String(a)
 string(a::SubString{String}) = String(a)
 
-function Symbol(s::SubString{String})
+@assume_effects :foldable function Symbol(s::SubString{String})
     return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int), s, sizeof(s))
 end
 
@@ -221,7 +221,7 @@ end
     return n
 end
 
-function string(a::Union{Char, String, SubString{String}, Symbol}...)
+@assume_effects :foldable :removable function string(a::Union{Char, String, SubString{String}, Symbol}...)
     n = 0
     for v in a
         # 4 types is too many for automatic Union-splitting, so we split manually
@@ -248,6 +248,11 @@ function string(a::Union{Char, String, SubString{String}, Symbol}...)
         end
     end
     return out
+end
+
+#don't assume effects for general integers since they may be all sorts of screwed up.
+@assume_effects :foldable :removable function repeat(s::Union{String, SubString{String}}, r::BitInteger)
+    @invoke repeat(s, r::Integer)
 end
 
 function repeat(s::Union{String, SubString{String}}, r::Integer)

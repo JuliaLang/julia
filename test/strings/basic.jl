@@ -1192,3 +1192,20 @@ end
         return a
     end |> Core.Compiler.is_foldable
 end
+
+@testset "String Effects" begin
+    for (f, Ts) in [(*, (String, String)),
+                   (*, (Char, String)),
+                   (*, (Char, SubString{String})),
+                   (*, (Char, String)),
+                   (*, (Char, String)),
+                   (^, (String, Int)),
+                   (^, (SubString{String}, Int)),
+                   (^, (Char, Int))]
+        e = Base.infer_effects(f, Ts)
+        @test Core.Compiler.is_foldable(e)
+        @test Core.Compiler.is_removable_if_unused(e)
+    end
+    @test_throws ArgumentError Symbol("a\0a")
+end
+    
