@@ -280,12 +280,12 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
     if (jl_typeinf_func == NULL)
         return NULL;
     jl_task_t *ct = jl_current_task;
-    if (ct->reentrant_inference == (uint16_t)-1) {
+    if (ct->reentrant_timing & 0b1000) {
         // We must avoid attempting to re-enter inference here
         assert(0 && "attempted to enter inference while writing out image");
         abort();
     }
-    if (ct->reentrant_inference > 2)
+    if (ct->reentrant_timing >= 0b110)
         return NULL;
 
     jl_code_info_t *src = NULL;
@@ -312,7 +312,14 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
     size_t last_age = ct->world_age;
     ct->world_age = jl_typeinf_world;
     mi->inInference = 1;
-    ct->reentrant_inference++;
+    // first bit is for reentrant timing,
+    // so adding 1 to the bit above performs
+    // inference reentrancy counter addition.
+    // Note that this is only safe because
+    // the counter varies from 0-3; if we
+    // increase that limit, we'll need to
+    // allocate another bit for the counter.
+    ct->reentrant_timing += 0b10;
     JL_TRY {
         src = (jl_code_info_t*)jl_apply(fargs, 3);
     }
@@ -333,7 +340,7 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
         src = NULL;
     }
     ct->world_age = last_age;
-    ct->reentrant_inference--;
+    ct->reentrant_timing -= 0b10;
     mi->inInference = 0;
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
@@ -3693,9 +3700,9 @@ int jl_has_concrete_subtype(jl_value_t *typ)
 JL_DLLEXPORT uint64_t jl_typeinf_timing_begin(void)
 {
     jl_task_t *ct = jl_current_task;
-    if (ct->reentrant_timing)
+    if (ct->reentrant_timing & 1)
         return 0;
-    ct->reentrant_timing = 1;
+    ct->reentrant_timing |= 1;
     return jl_hrtime();
 }
 
@@ -3704,7 +3711,7 @@ JL_DLLEXPORT void jl_typeinf_timing_end(uint64_t start)
     if (!start)
         return;
     jl_task_t *ct = jl_current_task;
-    ct->reentrant_timing = 0;
+    ct->reentrant_timing ^= 1;
     if (jl_atomic_load_relaxed(&jl_measure_compile_time_enabled)) {
         uint64_t inftime = jl_hrtime() - start;
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, inftime);

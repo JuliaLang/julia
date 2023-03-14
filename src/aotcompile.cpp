@@ -282,9 +282,9 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
     auto ct = jl_current_task;
-    bool timed = !ct->reentrant_timing;
+    bool timed = (ct->reentrant_timing & 1) == 0;
     if (timed)
-        ct->reentrant_timing = 1;
+        ct->reentrant_timing |= 1;
     orc::ThreadSafeContext ctx;
     orc::ThreadSafeModule backing;
     if (!llvmmod) {
@@ -473,7 +473,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
             auto end = jl_hrtime();
             jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, end - compiler_start_time);
         }
-        ct->reentrant_timing = 0;
+        ct->reentrant_timing ^= 1;
     }
     if (ctx.getContext()) {
         jl_ExecutionEngine->releaseContext(std::move(ctx));
