@@ -1161,6 +1161,9 @@ end
     @test_throws DimensionMismatch *(Diagonal(ones(n)), Diagonal(1:n), Diagonal(ones(n+1)))
     @test_throws DimensionMismatch *(Diagonal(ones(n)), Diagonal(1:n+1), Diagonal(ones(n+1)))
     @test_throws DimensionMismatch *(Diagonal(ones(n+1)), Diagonal(1:n), Diagonal(ones(n)))
+
+    # currently falls back to two-term *
+    @test *(Diagonal(ones(n)), Diagonal(1:n), Diagonal(ones(n)), Diagonal(1:n)) isa Diagonal
 end
 
 end # module TestDiagonal
