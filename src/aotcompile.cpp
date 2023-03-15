@@ -473,7 +473,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
             auto end = jl_hrtime();
             jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, end - compiler_start_time);
         }
-        ct->reentrant_timing ^= 1;
+        ct->reentrant_timing &= ~1ull;
     }
     if (ctx.getContext()) {
         jl_ExecutionEngine->releaseContext(std::move(ctx));

@@ -364,7 +364,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
             auto end = jl_hrtime();
             jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, end - compiler_start_time);
         }
-        ct->reentrant_timing ^= 1;
+        ct->reentrant_timing &= ~1ull;
     }
     if (ctx.getContext()) {
         jl_ExecutionEngine->releaseContext(std::move(ctx));
@@ -483,7 +483,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
             }
             jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, t_comp);
         }
-        ct->reentrant_timing ^= 1;
+        ct->reentrant_timing &= ~1ull;
     }
     JL_GC_POP();
     return codeinst;
@@ -536,7 +536,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
             auto end = jl_hrtime();
             jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, end - compiler_start_time);
         }
-        ct->reentrant_timing ^= 1;
+        ct->reentrant_timing &= ~1ull;
     }
 }
 
@@ -595,7 +595,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
                     auto end = jl_hrtime();
                     jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, end - compiler_start_time);
                 }
-                ct->reentrant_timing ^= 1;
+                ct->reentrant_timing &= ~1ull;
             }
         }
         if (specfptr != 0)
