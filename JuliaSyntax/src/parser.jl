@@ -477,7 +477,7 @@ end
 #
 # a;b;c   ==>  (toplevel a b c)
 # a;;;b;; ==>  (toplevel a b)
-# "x" a ; "y" b ==>  (toplevel (macrocall core_@doc "x" a) (macrocall core_@doc "y" b))
+# "x" a ; "y" b ==>  (toplevel (doc (string "x") a) (doc (string "y") b))
 #
 # flisp: parse-stmts
 function parse_stmts(ps::ParseState)
@@ -500,12 +500,10 @@ function parse_stmts(ps::ParseState)
 end
 
 # Parse docstrings attached by a space or single newline
-# "doc" foo  ==>  (macrocall core_@doc "doc" foo)
 #
 # flisp: parse-docstring
 function parse_docstring(ps::ParseState, down=parse_eq)
     mark = position(ps)
-    atdoc_mark = bump_invisible(ps, K"TOMBSTONE")
     down(ps)
     if peek_behind(ps).kind == K"string"
         is_doc = true
@@ -521,19 +519,18 @@ function parse_docstring(ps::ParseState, down=parse_eq)
                 is_doc = false
             else
                 # Allow a single newline
-                # "doc" \n foo ==> (macrocall core_@doc (string "doc") foo)
+                # "doc" \n foo ==> (doc (string "doc") foo)
                 bump(ps, TRIVIA_FLAG) # NewlineWs
             end
         else
-            # "doc" foo    ==> (macrocall core_@doc (string "doc") foo)
-            # "doc $x" foo ==> (macrocall core_@doc (string "doc " x) foo)
+            # "doc" foo    ==> (doc (string "doc") foo)
+            # "doc $x" foo ==> (doc (string "doc " x) foo)
             # Allow docstrings with embedded trailing whitespace trivia
-            # """\n doc\n """ foo ==> (macrocall core_@doc (string-s "doc\n") foo)
+            # """\n doc\n """ foo ==> (doc (string-s "doc\n") foo)
         end
         if is_doc
-            reset_node!(ps, atdoc_mark, kind=K"core_@doc")
             down(ps)
-            emit(ps, mark, K"macrocall")
+            emit(ps, mark, K"doc")
         end
     end
 end
@@ -2003,7 +2000,7 @@ function parse_resword(ps::ParseState)
             parse_unary_prefix(ps)
         end
         # module A \n a \n b \n end  ==>  (module true A (block a b))
-        # module A \n "x"\na \n end  ==>  (module true A (block (core_@doc (string "x") a)))
+        # module A \n "x"\na \n end  ==>  (module true A (block (doc (string "x") a)))
         parse_block(ps, parse_docstring)
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"module")

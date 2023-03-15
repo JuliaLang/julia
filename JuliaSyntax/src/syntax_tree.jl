@@ -117,8 +117,6 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             Symbol("@$(normalize_identifier(val_str))_str")
         elseif k == K"CmdMacroName"
             Symbol("@$(normalize_identifier(val_str))_cmd")
-        elseif k == K"core_@doc"
-            Symbol("core_@doc")
         elseif k == K"core_@cmd"
             Symbol("core_@cmd")
         elseif is_syntax_kind(raw)
