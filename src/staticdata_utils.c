@@ -369,12 +369,18 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure)
     }
     if (edges_map == NULL)
         return 1;
-    jl_svec_t *specializations = m->specializations;
-    size_t i, l = jl_svec_len(specializations);
-    for (i = 0; i < l; i++) {
-        jl_method_instance_t *callee = (jl_method_instance_t*)jl_svecref(specializations, i);
-        if ((jl_value_t*)callee != jl_nothing)
-            collect_backedges(callee, !s);
+    jl_value_t *specializations = jl_atomic_load_relaxed(&m->specializations);
+    if (!jl_is_svec(specializations)) {
+        jl_method_instance_t *callee = (jl_method_instance_t*)specializations;
+        collect_backedges(callee, !s);
+    }
+    else {
+        size_t i, l = jl_svec_len(specializations);
+        for (i = 0; i < l; i++) {
+            jl_method_instance_t *callee = (jl_method_instance_t*)jl_svecref(specializations, i);
+            if ((jl_value_t*)callee != jl_nothing)
+                collect_backedges(callee, !s);
+        }
     }
     return 1;
 }

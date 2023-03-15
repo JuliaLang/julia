@@ -791,7 +791,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     jl_task_t *ct = jl_current_task;
     jl_method_t *m =
         (jl_method_t*)jl_gc_alloc(ct->ptls, sizeof(jl_method_t), jl_method_type);
-    jl_atomic_store_relaxed(&m->specializations, jl_emptysvec);
+    jl_atomic_store_relaxed(&m->specializations, (jl_value_t*)jl_emptysvec);
     jl_atomic_store_relaxed(&m->speckeyset, (jl_array_t*)jl_an_empty_vec_any);
     m->sig = NULL;
     m->slot_syms = NULL;
