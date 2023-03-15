@@ -300,7 +300,10 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     // compile all methods for the current world and type-inference world
 
     JL_LOCK(&jl_codegen_lock);
-    jl_codegen_params_t params(ctxt);
+    auto target_info = clone.withModuleDo([&](Module &M) {
+        return std::make_pair(M.getDataLayout(), Triple(M.getTargetTriple()));
+    });
+    jl_codegen_params_t params(ctxt, std::move(target_info.first), std::move(target_info.second));
     params.params = cgparams;
     params.imaging = imaging;
     params.external_linkage = _external_linkage;
@@ -433,15 +436,16 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     CreateNativeGlobals += gvars.size();
 
     //Safe b/c context is locked by params
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
-    // setting the function personality enables stack unwinding and catching exceptions
-    // so make sure everything has something set
-    Type *T_int32 = Type::getInt32Ty(clone.getModuleUnlocked()->getContext());
-    Function *juliapersonality_func =
-       Function::Create(FunctionType::get(T_int32, true),
-           Function::ExternalLinkage, "__julia_personality", clone.getModuleUnlocked());
-    juliapersonality_func->setDLLStorageClass(GlobalValue::DLLImportStorageClass);
-#endif
+    auto TT = Triple(clone.getModuleUnlocked()->getTargetTriple());
+    Function *juliapersonality_func = nullptr;
+    if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
+        // setting the function personality enables stack unwinding and catching exceptions
+        // so make sure everything has something set
+        Type *T_int32 = Type::getInt32Ty(clone.getModuleUnlocked()->getContext());
+        juliapersonality_func = Function::Create(FunctionType::get(T_int32, true),
+            Function::ExternalLinkage, "__julia_personality", clone.getModuleUnlocked());
+        juliapersonality_func->setDLLStorageClass(GlobalValue::DLLImportStorageClass);
+    }
 
     // move everything inside, now that we've merged everything
     // (before adding the exported headers)
@@ -452,11 +456,11 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                 G.setLinkage(GlobalValue::ExternalLinkage);
                 G.setVisibility(GlobalValue::HiddenVisibility);
                 makeSafeName(G);
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
-                // Add unwind exception personalities to functions to handle async exceptions
-                if (Function *F = dyn_cast<Function>(&G))
-                    F->setPersonalityFn(juliapersonality_func);
-#endif
+                if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
+                    // Add unwind exception personalities to functions to handle async exceptions
+                    if (Function *F = dyn_cast<Function>(&G))
+                        F->setPersonalityFn(juliapersonality_func);
+                }
             }
         }
     }
@@ -1453,32 +1457,31 @@ void jl_dump_native_impl(void *native_code,
     // We don't want to use MCJIT's target machine because
     // it uses the large code model and we may potentially
     // want less optimizations there.
-    Triple TheTriple = Triple(jl_ExecutionEngine->getTargetTriple());
     // make sure to emit the native object format, even if FORCE_ELF was set in codegen
-#if defined(_OS_WINDOWS_)
-    TheTriple.setObjectFormat(Triple::COFF);
-#elif defined(_OS_DARWIN_)
-    TheTriple.setObjectFormat(Triple::MachO);
-    TheTriple.setOS(llvm::Triple::MacOSX);
-#endif
+    Triple TheTriple(data->M.getModuleUnlocked()->getTargetTriple());
+    if (TheTriple.isOSWindows()) {
+        TheTriple.setObjectFormat(Triple::COFF);
+    } else if (TheTriple.isOSDarwin()) {
+        TheTriple.setObjectFormat(Triple::MachO);
+        TheTriple.setOS(llvm::Triple::MacOSX);
+    }
+    Optional<Reloc::Model> RelocModel;
+    if (TheTriple.isOSLinux() || TheTriple.isOSFreeBSD()) {
+        RelocModel = Reloc::PIC_;
+    }
+    CodeModel::Model CMModel = CodeModel::Small;
+    if (TheTriple.isPPC()) {
+        // On PPC the small model is limited to 16bit offsets
+        CMModel = CodeModel::Medium;
+    }
     std::unique_ptr<TargetMachine> SourceTM(
         jl_ExecutionEngine->getTarget().createTargetMachine(
             TheTriple.getTriple(),
             jl_ExecutionEngine->getTargetCPU(),
             jl_ExecutionEngine->getTargetFeatureString(),
             jl_ExecutionEngine->getTargetOptions(),
-#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
-            Reloc::PIC_,
-#else
-            Optional<Reloc::Model>(),
-#endif
-#if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
-            // On PPC the small model is limited to 16bit offsets
-            CodeModel::Medium,
-#else
-            // Use small model so that we can use signed 32bits offset in the function and GV tables
-            CodeModel::Small,
-#endif
+            RelocModel,
+            CMModel,
             CodeGenOpt::Aggressive // -O3 TODO: respect command -O0 flag?
             ));
 
@@ -2032,7 +2035,10 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
         if (measure_compile_time_enabled)
             compiler_start_time = jl_hrtime();
         JL_LOCK(&jl_codegen_lock);
-        jl_codegen_params_t output(*ctx);
+        auto target_info = m.withModuleDo([&](Module &M) {
+            return std::make_pair(M.getDataLayout(), Triple(M.getTargetTriple()));
+        });
+        jl_codegen_params_t output(*ctx, std::move(target_info.first), std::move(target_info.second));
         output.world = world;
         output.params = &params;
         auto decls = jl_emit_code(m, mi, src, jlrettype, output);
