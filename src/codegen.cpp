@@ -8459,11 +8459,11 @@ jl_llvm_functions_t jl_emit_code(
     JL_CATCH {
         // Something failed! This is very, very bad.
         // Try to pretend that it isn't and attempt to recover.
-        const char *mname = m.getModuleUnlocked()->getModuleIdentifier().data();
+        std::string mname = m.getModuleUnlocked()->getModuleIdentifier();
         m = orc::ThreadSafeModule();
         decls.functionObject = "";
         decls.specFunctionObject = "";
-        jl_printf((JL_STREAM*)STDERR_FILENO, "Internal error: encountered unexpected error during compilation of %s:\n", mname);
+        jl_printf((JL_STREAM*)STDERR_FILENO, "Internal error: encountered unexpected error during compilation of %s:\n", mname.c_str());
         jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
         jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
         jlbacktrace(); // written to STDERR_FILENO
