@@ -763,7 +763,7 @@ function parse_comparison(ps::ParseState, subtype_comparison=false)
     mark = position(ps)
     if subtype_comparison && is_reserved_word(peek(ps))
         # Recovery
-        # struct try end  ==>  (struct false (error (try)) (block))
+        # struct try end  ==>  (struct (error (try)) (block))
         name = untokenize(peek(ps))
         bump(ps)
         emit(ps, mark, K"error", error="Invalid type name `$name`")
@@ -1764,8 +1764,8 @@ function parse_struct_field(ps::ParseState)
     parse_eq(ps)
     if const_field
         # Const fields https://github.com/JuliaLang/julia/pull/43305
-        #v1.8: struct A const a end  ==>  (struct false A (block (const x)))
-        #v1.7: struct A const a end  ==>  (struct false A (block (error (const x))))
+        #v1.8: struct A const a end  ==>  (struct A (block (const x)))
+        #v1.7: struct A const a end  ==>  (struct A (block (error (const x))))
         emit(ps, mark, K"const")
         min_supported_version(v"1.8", ps, mark, "`const` struct field")
     end
@@ -1929,24 +1929,23 @@ function parse_resword(ps::ParseState)
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"abstract")
     elseif word in KSet"struct mutable"
-        # struct A <: B \n a::X \n end  ==>  (struct false (<: A B) (block (::-i a X)))
-        # struct A \n a \n b \n end  ==>  (struct false A (block a b))
-        #v1.7: struct A const a end  ==>  (struct false A (block (error (const a))))
-        #v1.8: struct A const a end  ==>  (struct false A (block (const a)))
-        if word == K"mutable"
-            # mutable struct A end  ==>  (struct true A (block))
+        # struct A <: B \n a::X \n end  ==>  (struct (<: A B) (block (::-i a X)))
+        # struct A \n a \n b \n end  ==>  (struct A (block a b))
+        #v1.7: struct A const a end  ==>  (struct A (block (error (const a))))
+        #v1.8: struct A const a end  ==>  (struct A (block (const a)))
+        is_mut = word == K"mutable"
+        if is_mut
+            # mutable struct A end  ==>  (struct-mut A (block))
             bump(ps, TRIVIA_FLAG)
-            bump_invisible(ps, K"true")
         else
-            # struct A end  ==>  (struct false A (block))
-            bump_invisible(ps, K"false")
+            # struct A end  ==>  (struct A (block))
         end
         @check peek(ps) == K"struct"
         bump(ps, TRIVIA_FLAG)
         parse_subtype_spec(ps)
         parse_block(ps, parse_struct_field)
         bump_closing_token(ps, K"end")
-        emit(ps, mark, K"struct")
+        emit(ps, mark, K"struct", is_mut ? MUTABLE_FLAG : EMPTY_FLAGS)
     elseif word == K"primitive"
         # primitive type A 32 end             ==> (primitive A 32)
         # primitive type A 32 ; end           ==> (primitive A 32)
@@ -1986,22 +1985,22 @@ function parse_resword(ps::ParseState)
                     error="unexpected token after $(untokenize(word))")
         end
     elseif word in KSet"module baremodule"
-        # module A end  ==> (module true A (block))
-        # baremodule A end ==> (module false A (block))
+        # module A end  ==> (module A (block))
+        # baremodule A end ==> (module-bare A (block))
         bump(ps, TRIVIA_FLAG)
-        bump_invisible(ps, (word == K"module") ? K"true" : K"false")
         if is_reserved_word(peek(ps))
-            # module do \n end  ==>  (module true (error do) (block))
+            # module do \n end  ==>  (module (error do) (block))
             bump(ps, error="Invalid module name")
         else
-            # module $A end  ==>  (module true ($ A) (block))
+            # module $A end  ==>  (module ($ A) (block))
             parse_unary_prefix(ps)
         end
-        # module A \n a \n b \n end  ==>  (module true A (block a b))
-        # module A \n "x"\na \n end  ==>  (module true A (block (doc (string "x") a)))
+        # module A \n a \n b \n end  ==>  (module A (block a b))
+        # module A \n "x"\na \n end  ==>  (module A (block (doc (string "x") a)))
         parse_block(ps, parse_docstring)
         bump_closing_token(ps, K"end")
-        emit(ps, mark, K"module")
+        emit(ps, mark, K"module",
+             word == K"baremodule" ? BARE_MODULE_FLAG : EMPTY_FLAGS)
     elseif word == K"export"
         # export a         ==>  (export a)
         # export @a        ==>  (export @a)
