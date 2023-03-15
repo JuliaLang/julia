@@ -475,8 +475,8 @@ tests = [
         "struct A end"    =>  "(struct false A (block))"  => Expr(:struct, false, :A, Expr(:block))
         "struct try end"  =>  "(struct false (error (try)) (block))"
         # return
-        "return\nx"   =>  "(return nothing)"
-        "return)"     =>  "(return nothing)"
+        "return\nx"   =>  "(return)"
+        "return)"     =>  "(return)"
         "return x"    =>  "(return x)"
         "return x,y"  =>  "(return (tuple x y))"
         # break/continue

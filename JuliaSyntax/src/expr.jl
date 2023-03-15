@@ -303,6 +303,8 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
             args[1] = Expr(headsym, args[1].args...)
             headsym = :const
         end
+    elseif headsym == :return && isempty(args)
+        push!(args, nothing)
     end
     return Expr(headsym, args...)
 end
