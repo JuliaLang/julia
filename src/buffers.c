@@ -32,25 +32,21 @@ size_t jl_buffer_nbytes(jl_buffer_t *b) JL_NOTSAFEPOINT
 }
 
 // compute offset necessary to align data (if it can be aligned)
-STATIC_INLINE size_t _buffer_data_offset(jl_eltype_layout_t lyt, size_t data_size)
-{
-    size_t doffs = sizeof(jl_buffer_t);
-    if (data_size <= ARRAY_INLINE_NBYTES) {
-        // align data area
-        if (data_size >= ARRAY_CACHE_ALIGN_THRESHOLD)
-            doffs = LLT_ALIGN(doffs, JL_CACHE_BYTE_ALIGNMENT);
-        else if (!lyt.isboxed && lyt.elsize >= 4)
-            doffs = LLT_ALIGN(doffs, JL_SMALL_BYTE_ALIGNMENT);
-    }
-    return doffs;
-}
-
 size_t jl_buffer_object_size(jl_buffer_t *b) JL_NOTSAFEPOINT
 {
     jl_eltype_layout_t lyt = jl_eltype_layout(jl_buffer_eltype(b));
     size_t len = jl_buffer_len(b);
     size_t data_size = jl_nbytes_eltype_data(lyt, len);
-    return _buffer_data_offset(lyt, data_size) + data_size;
+    size_t obj_size = sizeof(jl_buffer_t);
+    if (data_size <= ARRAY_INLINE_NBYTES) {
+        // align data area
+        if (data_size >= ARRAY_CACHE_ALIGN_THRESHOLD)
+            obj_size = LLT_ALIGN(obj_size, JL_CACHE_BYTE_ALIGNMENT);
+        else if (!lyt.isboxed && lyt.elsize >= 4)
+            obj_size = LLT_ALIGN(obj_size, JL_SMALL_BYTE_ALIGNMENT);
+        obj_size += data_size;
+    }
+    return obj_size;
 }
 
 // JL_DLLEXPORT char *jl_buffer_typetagdata(jl_buffer_t *b) JL_NOTSAFEPOINT
@@ -68,10 +64,16 @@ JL_DLLEXPORT jl_buffer_t *jl_new_buffer(jl_value_t *btype, size_t len)
     jl_task_t *ct = jl_current_task;
     size_t data_size = jl_nbytes_eltype_data(lyt, len);
     // size of raw data and object fields
-    size_t doffs = _buffer_data_offset(lyt, data_size);
-    size_t obj_size = data_size + doffs;
+    size_t obj_size = sizeof(jl_buffer_t);
     void *data;
     if (data_size <= ARRAY_INLINE_NBYTES) {
+        // align data area
+        if (data_size >= ARRAY_CACHE_ALIGN_THRESHOLD)
+            obj_size = LLT_ALIGN(obj_size, JL_CACHE_BYTE_ALIGNMENT);
+        else if (!lyt.isboxed && lyt.elsize >= 4)
+            obj_size = LLT_ALIGN(obj_size, JL_SMALL_BYTE_ALIGNMENT);
+        size_t doffs = obj_size;
+        obj_size = data_size + doffs;
         b = (jl_buffer_t*)jl_gc_alloc(ct->ptls, obj_size, btype);
         data = (char*)b + doffs;
     }
