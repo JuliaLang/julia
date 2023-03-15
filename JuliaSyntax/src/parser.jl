@@ -1281,11 +1281,13 @@ function parse_unary(ps::ParseState)
                     tb1 = ps.stream.tokens[op_pos.token_index-1]
                     ps.stream.tokens[op_pos.token_index-1] =
                         SyntaxToken(SyntaxHead(K"TOMBSTONE", EMPTY_FLAGS),
-                                    K"TOMBSTONE", tb1.next_byte-1)
+                                    K"TOMBSTONE", tb1.preceding_whitespace,
+                                    tb1.next_byte-1)
                     tb0 = ps.stream.tokens[op_pos.token_index]
                     ps.stream.tokens[op_pos.token_index] =
                         SyntaxToken(SyntaxHead(kind(tb0), flags(tb0)),
-                                    tb0.orig_kind, tb0.next_byte)
+                                    tb0.orig_kind, tb0.preceding_whitespace,
+                                    tb0.next_byte)
                 end
                 emit(ps, mark, K"call")
             end
@@ -1295,8 +1297,8 @@ function parse_unary(ps::ParseState)
             # Unary function calls with brackets as grouping, not an arglist
             # .+(a)    ==>  (dotcall-pre (. +) a)
             if opts.is_block
-                # +(a;b)   ==>  (call-pre + (block a b))
-                emit(ps, mark_before_paren, K"block")
+                # +(a;b)   ==>  (call-pre + (block-p a b))
+                emit(ps, mark_before_paren, K"block", PARENS_FLAG)
             end
             # Not a prefix operator call but a block; `=` is not `kw`
             # +(a=1)  ==>  (call-pre + (= a 1))
@@ -1499,7 +1501,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # Macro calls with space-separated arguments
             # @foo a b    ==> (macrocall @foo a b)
             # @foo (x)    ==> (macrocall @foo x)
-            # @foo (x,y)  ==> (macrocall @foo (tuple x y))
+            # @foo (x,y)  ==> (macrocall @foo (tuple-p x y))
             # [@foo x]    ==> (vect (macrocall @foo x))
             # [@foo]      ==> (vect (macrocall @foo))
             # @var"#" a   ==> (macrocall (var @#) a)
@@ -1543,14 +1545,16 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             bump_disallowed_space(ps)
             bump(ps, TRIVIA_FLAG)
             parse_call_arglist(ps, K")")
-            emit(ps, mark, is_macrocall ? K"macrocall" : K"call")
+            emit(ps, mark, is_macrocall ? K"macrocall" : K"call",
+                 is_macrocall ? PARENS_FLAG : EMPTY_FLAGS)
             if peek(ps) == K"do"
-                # f(x) do y body end  ==>  (do (call :f :x) (tuple :y) (block :body))
+                # f(x) do y body end  ==>  (do (call f x) (tuple y) (block body))
                 parse_do(ps, mark)
             end
             if is_macrocall
-                # A.@x(y)    ==>  (macrocall (. A (quote @x)) y)
-                # A.@x(y).z  ==>  (. (macrocall (. A (quote @x)) y) (quote z))
+                # @x(a, b)   ==>  (macrocall-p @x a b)
+                # A.@x(y)    ==>  (macrocall-p (. A (quote @x)) y)
+                # A.@x(y).z  ==>  (. (macrocall-p (. A (quote @x)) y) (quote z))
                 fix_macro_name_kind!(ps, macro_name_position)
                 is_macrocall = false
                 macro_atname_range = nothing
@@ -1713,9 +1717,9 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # x""    ==> (macrocall @x_str (string-r ""))
             # x``    ==> (macrocall @x_cmd (cmdstring-r ""))
             # Triple quoted procesing for custom strings
-            # r"""\nx"""          ==> (macrocall @r_str (string-sr "x"))
-            # r"""\n x\n y"""     ==> (macrocall @r_str (string-sr "x\n" "y"))
-            # r"""\n x\\n y"""    ==> (macrocall @r_str (string-sr "x\\\n" "y"))
+            # r"""\nx"""          ==> (macrocall @r_str (string-s-r "x"))
+            # r"""\n x\n y"""     ==> (macrocall @r_str (string-s-r "x\n" "y"))
+            # r"""\n x\\n y"""    ==> (macrocall @r_str (string-s-r "x\\\n" "y"))
             #
             # Use a special token kind for string and cmd macro names so the
             # names can be expanded later as necessary.
@@ -2136,17 +2140,17 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
             is_anon_func = opts.is_anon_func
             parsed_call = opts.parsed_call
             if is_anon_func
-                # function (x) body end ==>  (function (tuple x) (block body))
-                # function (x::f()) end ==>  (function (tuple (::-i x (call f))) (block))
-                # function (x,y) end    ==>  (function (tuple x y) (block))
-                # function (x=1) end    ==>  (function (tuple (= x 1)) (block))
-                # function (;x=1) end   ==>  (function (tuple (parameters (= x 1))) (block))
-                emit(ps, mark, K"tuple")
+                # function (x) body end ==>  (function (tuple-p x) (block body))
+                # function (x::f()) end ==>  (function (tuple-p (::-i x (call f))) (block))
+                # function (x,y) end    ==>  (function (tuple-p x y) (block))
+                # function (x=1) end    ==>  (function (tuple-p (= x 1)) (block))
+                # function (;x=1) end   ==>  (function (tuple-p (parameters (= x 1))) (block))
+                emit(ps, mark, K"tuple", PARENS_FLAG)
             elseif is_empty_tuple
                 # Weird case which is consistent with parse_paren but will be
                 # rejected in lowering
-                # function ()(x) end  ==> (function (call (tuple) x) (block))
-                emit(ps, mark, K"tuple")
+                # function ()(x) end  ==> (function (call (tuple-p) x) (block))
+                emit(ps, mark, K"tuple", PARENS_FLAG)
             else
                 # function (A).f() end  ==> (function (call (. A (quote f))) (block))
                 # function (:)() end    ==> (function (call :) (block))
@@ -2606,7 +2610,7 @@ end
 # i ∈ rhs   ==>  (= i rhs)
 #
 # i = 1:10       ==>  (= i (call : 1 10))
-# (i,j) in iter  ==>  (= (tuple i j) iter)
+# (i,j) in iter  ==>  (= (tuple-p i j) iter)
 #
 # flisp: parse-iteration-spec
 function parse_iteration_spec(ps::ParseState)
@@ -2621,7 +2625,7 @@ function parse_iteration_spec(ps::ParseState)
             # outer <| x = rhs   ==>  (= (call-i outer <| x) rhs)
         else
             # outer i = rhs      ==>  (= (outer i) rhs)
-            # outer (x,y) = rhs  ==>  (= (outer (tuple x y)) rhs)
+            # outer (x,y) = rhs  ==>  (= (outer (tuple-p x y)) rhs)
             reset_node!(ps, position(ps), kind=K"outer", flags=TRIVIA_FLAG)
             parse_pipe_lt(ps)
             emit(ps, mark, K"outer")
@@ -3020,9 +3024,9 @@ function parse_paren(ps::ParseState, check_identifiers=true)
     after_paren_mark = position(ps)
     k = peek(ps)
     if k == K")"
-        # ()  ==>  (tuple)
+        # ()  ==>  (tuple-p)
         bump(ps, TRIVIA_FLAG)
-        emit(ps, mark, K"tuple")
+        emit(ps, mark, K"tuple", PARENS_FLAG)
     elseif is_syntactic_operator(k)
         # allow :(=) etc in unchecked contexts, eg quotes
         # :(=)  ==>  (quote =)
@@ -3050,28 +3054,28 @@ function parse_paren(ps::ParseState, check_identifiers=true)
         end
         if opts.is_tuple
             # Tuple syntax with commas
-            # (x,)        ==>  (tuple x)
-            # (x,y)       ==>  (tuple x y)
-            # (x=1, y=2)  ==>  (tuple (= x 1) (= y 2))
+            # (x,)        ==>  (tuple-p x)
+            # (x,y)       ==>  (tuple-p x y)
+            # (x=1, y=2)  ==>  (tuple-p (= x 1) (= y 2))
             #
             # Named tuple with initial semicolon
-            # (;)         ==>  (tuple (parameters))
-            # (; a=1)     ==>  (tuple (parameters (= a 1)))
+            # (;)         ==>  (tuple-p (parameters))
+            # (; a=1)     ==>  (tuple-p (parameters (= a 1)))
             #
             # Extra credit: nested parameters and frankentuples
-            # (x...;)         ==> (tuple (... x) (parameters))
-            # (x...; y)       ==> (tuple (... x) (parameters y))
-            # (; a=1; b=2)    ==> (tuple (parameters (= a 1)) (parameters (= b 2)))
-            # (a; b; c,d)     ==> (tuple a (parameters b) (parameters c d))
-            # (a=1, b=2; c=3) ==> (tuple (= a 1) (= b 2) (parameters (= c 3)))
-            emit(ps, mark, K"tuple")
+            # (x...;)         ==> (tuple-p (... x) (parameters))
+            # (x...; y)       ==> (tuple-p (... x) (parameters y))
+            # (; a=1; b=2)    ==> (tuple-p (parameters (= a 1)) (parameters (= b 2)))
+            # (a; b; c,d)     ==> (tuple-p a (parameters b) (parameters c d))
+            # (a=1, b=2; c=3) ==> (tuple-p (= a 1) (= b 2) (parameters (= c 3)))
+            emit(ps, mark, K"tuple", PARENS_FLAG)
         elseif opts.is_block
             # Blocks
-            # (;;)        ==>  (block)
-            # (a=1;)      ==>  (block (= a 1))
-            # (a;b;;c)    ==>  (block a b c)
-            # (a=1; b=2)  ==>  (block (= a 1) (= b 2))
-            emit(ps, mark, K"block")
+            # (;;)        ==>  (block-p)
+            # (a=1;)      ==>  (block-p (= a 1))
+            # (a;b;;c)    ==>  (block-p a b c)
+            # (a=1; b=2)  ==>  (block-p (= a 1) (= b 2))
+            emit(ps, mark, K"block", PARENS_FLAG)
         else
             # Parentheses used for grouping
             # (a * b)     ==>  (call-i * a b)
@@ -3095,7 +3099,7 @@ end
 # syntax so the parse tree is pretty strange in these cases!  Some macros
 # probably use it though.  Example:
 #
-# (a,b=1; c,d=2; e,f=3)  ==>  (tuple a (= b 1) (parameters c (= d 2)) (parameters e (= f 3)))
+# (a,b=1; c,d=2; e,f=3)  ==>  (tuple-p a (= b 1) (parameters c (= d 2)) (parameters e (= f 3)))
 #
 # flisp: parts of parse-paren- and parse-arglist
 function parse_brackets(after_parse::Function,
@@ -3246,7 +3250,7 @@ function parse_string(ps::ParseState, raw::Bool)
                     # Triple-quoted dedenting:
                     # Various newlines (\n \r \r\n) and whitespace (' ' \t)
                     # """\n x\n y"""      ==> (string-s "x\n" "y")
-                    # ```\n x\n y```      ==> (macrocall :(Core.var"@cmd") (cmdstring-sr "x\n" "y"))
+                    # ```\n x\n y```      ==> (macrocall :(Core.var"@cmd") (cmdstring-s-r "x\n" "y"))
                     # """\r x\r y"""      ==> (string-s "x\n" "y")
                     # """\r\n x\r\n y"""  ==> (string-s "x\n" "y")
                     # Spaces or tabs or mixtures acceptable
@@ -3544,7 +3548,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
     elseif leading_kind in KSet"` ```"
         # ``          ==>  (macrocall core_@cmd (cmdstring-r ""))
         # `cmd`       ==>  (macrocall core_@cmd (cmdstring-r "cmd"))
-        # ```cmd```   ==>  (macrocall core_@cmd (cmdstring-sr "cmd"))
+        # ```cmd```   ==>  (macrocall core_@cmd (cmdstring-s-r "cmd"))
         bump_invisible(ps, K"core_@cmd")
         parse_string(ps, true)
         emit(ps, mark, K"macrocall")

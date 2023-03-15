@@ -146,6 +146,9 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
                     _to_expr(n, eq_to_kw=eq_to_kw,
                              map_kw_in_params=in_vcbr)
             end
+            if nodekind == K"block" && has_flags(node, PARENS_FLAG)
+                popfirst!(args)
+            end
         end
     end
 
