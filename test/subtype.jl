@@ -2458,3 +2458,6 @@ let S = Tuple{Type{S48695{T, 2, T48695{B, 2, C}}} where {T<:(Union{Missing, A} w
     @test allunique(vars_in_unionall(V))
     @test typeintersect(V, T) != Union{}
 end
+
+#issue 48961
+@test !<:(Type{Union{Missing, Int}}, Type{Union{Missing, Nothing, Int}})
