@@ -1154,7 +1154,7 @@ end
     copyto!(D, I)
     @test all(isone, diag(D))
 end
-                                                        
+
 @testset "diagonal triple multiplication (#49005)" begin
     n = 10
     @test *(Diagonal(ones(n)), Diagonal(1:n), Diagonal(ones(n))) isa Diagonal
