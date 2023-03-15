@@ -295,4 +295,11 @@
                  Expr(:block, LineNumberNode(1), :w),
                  Expr(:block, LineNumberNode(1), :z))
     end
+
+    @testset "Core.@doc" begin
+        @test parse(Expr, "\"x\" f") ==
+            Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), LineNumberNode(1), "x", :f)
+        @test parse(Expr, "\n\"x\" f") ==
+            Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), LineNumberNode(2), "x", :f)
+    end
 end

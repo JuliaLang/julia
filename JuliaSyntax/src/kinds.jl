@@ -864,7 +864,6 @@ const _kind_names =
             "MacroName"
             "StringMacroName"
             "CmdMacroName"
-            "core_@doc"
             "core_@cmd"
             "core_@int128_str"
             "core_@uint128_str"

@@ -44,8 +44,6 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
                       val isa UInt128 ? Symbol("@uint128_str") :
                       Symbol("@big_str")
             return Expr(:macrocall, GlobalRef(Core, macname), nothing, str)
-        elseif kind(node) == K"core_@doc"
-            return GlobalRef(Core, Symbol("@doc"))
         elseif kind(node) == K"core_@cmd"
             return GlobalRef(Core, Symbol("@cmd"))
         elseif kind(node) == K"MacroName" && val === Symbol("@.")
@@ -156,6 +154,9 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
     if headsym === :macrocall
         reorder_parameters!(args, 2)
         insert!(args, 2, loc)
+    elseif headsym === :doc
+        return Expr(:macrocall, GlobalRef(Core, Symbol("@doc")),
+                    loc, args...)
     elseif headsym in (:dotcall, :call)
         # Julia's standard `Expr` ASTs have children stored in a canonical
         # order which is often not always source order. We permute the children

@@ -59,7 +59,7 @@ tests = [
         "a;b;c"   => "(toplevel a b c)"
         "a;;;b;;" => "(toplevel a b)"
         """ "x" a ; "y" b """ =>
-            """(toplevel (macrocall core_@doc (string "x") a) (macrocall core_@doc (string "y") b))"""
+            """(toplevel (doc (string "x") a) (doc (string "y") b))"""
         "x y"  =>  "x (error-t y)"
     ],
     JuliaSyntax.parse_eq => [
@@ -487,7 +487,7 @@ tests = [
         "module do \n end"  =>  "(module true (error (do)) (block))"
         "module \$A end"    =>  "(module true (\$ A) (block))"
         "module A \n a \n b \n end"  =>  "(module true A (block a b))"
-        """module A \n "x"\na\n end""" => """(module true A (block (macrocall core_@doc (string "x") a)))"""
+        """module A \n "x"\na\n end""" => """(module true A (block (doc (string "x") a)))"""
         # export
         "export a"   =>  "(export a)"  => Expr(:export, :a)
         "export @a"  =>  "(export @a)" => Expr(:export, Symbol("@a"))
@@ -912,11 +912,11 @@ tests = [
         """ "notdoc" ]        """ => "(string \"notdoc\")"
         """ "notdoc" \n]      """ => "(string \"notdoc\")"
         """ "notdoc" \n\n foo """ => "(string \"notdoc\")"
-        """ "doc" \n foo      """ => """(macrocall core_@doc (string "doc") foo)"""
-        """ "doc" foo         """ => """(macrocall core_@doc (string "doc") foo)"""
-        """ "doc \$x" foo     """ => """(macrocall core_@doc (string "doc " x) foo)"""
+        """ "doc" \n foo      """ => """(doc (string "doc") foo)"""
+        """ "doc" foo         """ => """(doc (string "doc") foo)"""
+        """ "doc \$x" foo     """ => """(doc (string "doc " x) foo)"""
         # Allow docstrings with embedded trailing whitespace trivia
-        "\"\"\"\n doc\n \"\"\" foo"  => """(macrocall core_@doc (string-s "doc\\n") foo)"""
+        "\"\"\"\n doc\n \"\"\" foo"  => """(doc (string-s "doc\\n") foo)"""
     ],
 ]
 
