@@ -302,4 +302,9 @@
         @test parse(Expr, "\n\"x\" f") ==
             Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), LineNumberNode(2), "x", :f)
     end
+
+    @testset "return" begin
+        @test parse(Expr, "return x") == Expr(:return, :x)
+        @test parse(Expr, "return")  == Expr(:return, nothing)
+    end
 end

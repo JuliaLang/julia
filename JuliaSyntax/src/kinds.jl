@@ -83,7 +83,6 @@ const _kind_names =
         "CmdString"
         "true"
         "false"
-        "nothing"  # A literal `nothing`
     "END_LITERAL"
 
     "BEGIN_DELIMITERS"
