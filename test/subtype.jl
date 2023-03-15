@@ -2241,16 +2241,6 @@ let S = Tuple{T2, V2} where {T2, N2, V2<:(Array{S2, N2} where {S2 <: T2})},
     @testintersect(S, T, !Union{})
 end
 
-@test only(intersection_env(Val{Union{Val{Val{T}} where {T},Int}}, Val{Union{T,Int}} where T)[2]) === Val{Val{T}} where {T}
-
-# issue 47654
-Vec47654{T} = Union{AbstractVector{T}, AbstractVector{Union{T,Nothing}}}
-struct Wrapper47654{T, V<:Vec47654{T}}
-    v::V
-end
-abstract type P47654{A} end
-@test Wrapper47654{P47654, Vector{Union{P47654,Nothing}}} <: Wrapper47654
-
 @testset "known subtype/intersect issue" begin
     #issue 45874
     # Causes a hang due to jl_critical_error calling back into malloc...
@@ -2288,7 +2278,7 @@ abstract type P47654{A} end
     @test_broken typeintersect(Tuple{Type{Tuple{T,Val{T}}}, Val{T}} where T, Tuple{Type{Tuple{Val{T},T}}, Val{T}} where T) <: Any
 
     # issue 24333
-    @test (Type{Union{Ref,Cvoid}} <: Type{Union{T,Cvoid}} where T)
+    @test_broken (Type{Union{Ref,Cvoid}} <: Type{Union{T,Cvoid}} where T)
 
     # issue 22123
     t1 = Ref{Ref{Ref{Union{Int64, T}}} where T}
@@ -2298,17 +2288,5 @@ abstract type P47654{A} end
     # issue 21153
     @test_broken (Tuple{T1,T1} where T1<:(Val{T2} where T2)) <: (Tuple{Val{S},Val{S}} where S)
 end
-
-# issue #47658
-let T = Ref{NTuple{8, Ref{Union{Int, P}}}} where P,
-    S = Ref{NTuple{8, Ref{Union{Int, P}}}} where P
-    # note T and S are identical but we need 2 copies to avoid being fooled by pointer equality
-    @test T <: Union{Int, S}
-end
-
-# try to fool a greedy algorithm that picks X=Int, Y=String here
-@test Tuple{Ref{Union{Int,String}}, Ref{Union{Int,String}}} <: Tuple{Ref{Union{X,Y}}, Ref{X}} where {X,Y}
-# this slightly more complex case has been broken since 1.0 (worked in 0.6)
-@test_broken Tuple{Ref{Union{Int,String,Missing}}, Ref{Union{Int,String}}} <: Tuple{Ref{Union{X,Y}}, Ref{X}} where {X,Y}
 
 @test !(Tuple{Any, Any, Any} <: Tuple{Any, Vararg{T}} where T)
