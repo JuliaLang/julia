@@ -179,15 +179,15 @@ tests = [
         "x >> y >> z" => "(call-i (call-i x >> y) >> z)"
     ],
     JuliaSyntax.parse_juxtapose => [
-        "2x"         => "(call-i 2 * x)"
-        "2x"         => "(call-i 2 * x)"
-        "2(x)"       => "(call-i 2 * x)"
-        "(2)(3)x"    => "(call-i 2 * 3 x)"
-        "(x-1)y"     => "(call-i (call-i x - 1) * y)"
-        "x'y"        => "(call-i (call-post x ') * y)"
+        "2x"         => "(juxtapose 2 x)"
+        "2x"         => "(juxtapose 2 x)"
+        "2(x)"       => "(juxtapose 2 x)"
+        "(2)(3)x"    => "(juxtapose 2 3 x)"
+        "(x-1)y"     => "(juxtapose (call-i x - 1) y)"
+        "x'y"        => "(juxtapose (call-post x ') y)"
         # errors
-        "\"a\"\"b\"" => "(call-i (string \"a\") * (error-t) (string \"b\"))"
-        "\"a\"x"     => "(call-i (string \"a\") * (error-t) x)"
+        "\"a\"\"b\"" => "(juxtapose (string \"a\") (error-t) (string \"b\"))"
+        "\"a\"x"     => "(juxtapose (string \"a\") (error-t) x)"
         # Not juxtaposition - parse_juxtapose will consume only the first token.
         "x.3"       =>  "x"
         "sqrt(2)2"  =>  "(call sqrt 2)"

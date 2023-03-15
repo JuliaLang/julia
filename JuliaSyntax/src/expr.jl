@@ -305,6 +305,9 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
         end
     elseif headsym == :return && isempty(args)
         push!(args, nothing)
+    elseif headsym == :juxtapose
+        headsym = :call
+        pushfirst!(args, :*)
     end
     return Expr(headsym, args...)
 end

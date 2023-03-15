@@ -1105,13 +1105,13 @@ function is_juxtapose(ps, prev_k, t)
     !is_initial_reserved_word(ps, k)
 end
 
-# Juxtoposition. Ugh!
+# Juxtoposition. Ugh! But so useful for units and Field identities like `im`
 #
-# 2x       ==>  (call-i 2 * x)
-# 2(x)     ==>  (call-i 2 * x)
-# (2)(3)x  ==>  (call-i 2 * 3 x)
-# (x-1)y   ==>  (call-i (call-i x - 1) * y)
-# x'y      ==>  (call-i (call-post x ') * y)
+# 2x       ==>  (juxtapose 2 x)
+# 2(x)     ==>  (juxtapose 2 x)
+# (2)(3)x  ==>  (juxtapose 2 3 x)
+# (x-1)y   ==>  (juxtapose (call-i x - 1) y)
+# x'y      ==>  (juxtapose (call-post x ') y)
 #
 # flisp: parse-juxtapose
 function parse_juxtapose(ps::ParseState)
@@ -1124,15 +1124,12 @@ function parse_juxtapose(ps::ParseState)
         if !is_juxtapose(ps, prev_kind, t)
             break
         end
-        if n_terms == 1
-            bump_invisible(ps, K"*")
-        end
         if prev_kind == K"string" || is_string_delim(t)
             # issue #20575
             #
-            # "a""b"  ==>  (call-i (string "a") * (error-t) (string "b"))
-            # "a"x    ==>  (call-i (string "a") * (error-t) x)
-            # "$y"x   ==>  (call-i (string (string y)) * (error-t) x)
+            # "a""b"  ==>  (juxtapose (string "a") (error-t) (string "b"))
+            # "a"x    ==>  (juxtapose (string "a") (error-t) x)
+            # "$y"x   ==>  (juxtapose (string (string y)) (error-t) x)
             bump_invisible(ps, K"error", TRIVIA_FLAG,
                            error="cannot juxtapose string literal")
         end
@@ -1144,7 +1141,7 @@ function parse_juxtapose(ps::ParseState)
         n_terms += 1
     end
     if n_terms > 1
-        emit(ps, mark, K"call", INFIX_FLAG)
+        emit(ps, mark, K"juxtapose")
     end
 end
 

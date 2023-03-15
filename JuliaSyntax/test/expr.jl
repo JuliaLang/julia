@@ -296,6 +296,11 @@
                  Expr(:block, LineNumberNode(1), :z))
     end
 
+    @testset "juxtapose" begin
+        @test parse(Expr, "2x") == Expr(:call, :*, 2, :x)
+        @test parse(Expr, "(2)(3)x") == Expr(:call, :*, 2, 3, :x)
+    end
+
     @testset "Core.@doc" begin
         @test parse(Expr, "\"x\" f") ==
             Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), LineNumberNode(1), "x", :f)
