@@ -285,7 +285,8 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
         assert(0 && "attempted to enter inference while writing out image");
         abort();
     }
-    if (ct->reentrant_timing >= 0b110)
+    // In case we use higher bits later, mask them out
+    if ((ct->reentrant_timing & 0b1111) >= 0b110)
         return NULL;
 
     jl_code_info_t *src = NULL;
