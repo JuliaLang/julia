@@ -186,7 +186,7 @@ And at the lowest level, memory is getting allocated by a call to the garbage co
 then tagged with its type:
 
 !!! note "Out of date Warning"
-    The documentation and usage of `jl_gc_allocobj` may be out of date
+    The documentation and usage for the function `jl_gc_allocobj` may be out of date
      
 ```c
 jl_value_t *jl_gc_allocobj(size_t nbytes);
