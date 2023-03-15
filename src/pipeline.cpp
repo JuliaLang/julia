@@ -173,11 +173,13 @@ namespace {
         // }
     }
 
-    void addVerificationPasses(ModulePassManager &MPM, bool llvm_only) JL_NOTSAFEPOINT {
+#ifdef JL_DEBUG_BUILD
+    static inline void addVerificationPasses(ModulePassManager &MPM, bool llvm_only) JL_NOTSAFEPOINT {
         if (!llvm_only)
             MPM.addPass(llvm::createModuleToFunctionPassAdaptor(GCInvariantVerifierPass()));
         MPM.addPass(VerifierPass());
     }
+#endif
 
     auto basicSimplifyCFGOptions() JL_NOTSAFEPOINT {
         return SimplifyCFGOptions()
