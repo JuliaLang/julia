@@ -25,12 +25,7 @@ const TRIPLE_STRING_FLAG = RawFlags(1<<5)
 # Set when a string or identifier needs "raw string" unescaping
 const RAW_STRING_FLAG = RawFlags(1<<6)
 
-# TODO?
-# const ERROR_FLAG = RawFlags(1<<7)
-
-# Token-only flag
-# Record whether a token had preceding whitespace
-const PRECEDING_WHITESPACE_FLAG = RawFlags(1<<7)
+const PARENS_FLAG = RawFlags(1<<7)
 
 # Flags holding the dimension of an nrow or other UInt8 not held in the source
 const NUMERIC_FLAGS = RawFlags(RawFlags(0xff)<<8)
@@ -77,21 +72,18 @@ function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
     if is_dotted(head)
         str = "."*str
     end
-    # Ignore some flags:
-    # DOTOP_FLAG is represented above with . prefix
-    # PRECEDING_WHITESPACE_FLAG relates to the environment of this token
-    suffix_flags = remove_flags(flags(head), DOTOP_FLAG, PRECEDING_WHITESPACE_FLAG)
-    if include_flag_suff && suffix_flags != EMPTY_FLAGS
-        str = str*"-"
-        is_trivia(head)  && (str = str*"t")
-        is_infix_op_call(head)   && (str = str*"i")
-        is_prefix_op_call(head)  && (str = str*"pre")
-        is_postfix_op_call(head) && (str = str*"post")
-        has_flags(head, TRIPLE_STRING_FLAG) && (str = str*"s")
-        has_flags(head, RAW_STRING_FLAG) && (str = str*"r")
-        is_suffixed(head) && (str = str*"S")
+    if include_flag_suff
+        # Ignore DOTOP_FLAG - it's represented above with . prefix
+        is_trivia(head)  && (str = str*"-t")
+        is_infix_op_call(head)   && (str = str*"-i")
+        is_prefix_op_call(head)  && (str = str*"-pre")
+        is_postfix_op_call(head) && (str = str*"-post")
+        has_flags(head, TRIPLE_STRING_FLAG) && (str = str*"-s")
+        has_flags(head, RAW_STRING_FLAG) && (str = str*"-r")
+        has_flags(head, PARENS_FLAG) && (str = str*"-p")
+        is_suffixed(head) && (str = str*"-S")
         n = numeric_flags(head)
-        n != 0 && (str = str*string(n))
+        n != 0 && (str = str*"-"*string(n))
     end
     str
 end
@@ -116,7 +108,6 @@ is_postfix_op_call(x) = call_type_flags(x) == POSTFIX_OP_FLAG
 is_dotted(x) = has_flags(x, DOTOP_FLAG)
 is_suffixed(x) = has_flags(x, SUFFIXED_FLAG)
 is_decorated(x) = is_dotted(x) || is_suffixed(x)
-preceding_whitespace(x) = has_flags(x, PRECEDING_WHITESPACE_FLAG)
 numeric_flags(x) = numeric_flags(flags(x))
 
 #-------------------------------------------------------------------------------
@@ -131,11 +122,8 @@ token to be used for recording the first byte of the first real token.
 struct SyntaxToken
     head::SyntaxHead
     orig_kind::Kind
+    preceding_whitespace::Bool
     next_byte::UInt32
-end
-
-function SyntaxToken(head::SyntaxHead, next_byte::Integer)
-    SyntaxToken(head, kind(head), next_byte)
 end
 
 function Base.show(io::IO, tok::SyntaxToken)
@@ -143,6 +131,8 @@ function Base.show(io::IO, tok::SyntaxToken)
 end
 
 head(tok::SyntaxToken) = tok.head
+flags(tok::SyntaxToken) = remove_flags(flags(tok.head), NUMERIC_FLAGS)
+preceding_whitespace(tok::SyntaxToken) = tok.preceding_whitespace
 
 
 #-------------------------------------------------------------------------------
@@ -240,7 +230,7 @@ mutable struct ParseStream
         ver = (version.major, version.minor)
         # Initial sentinel token containing the first byte of the first real token.
         sentinel = SyntaxToken(SyntaxHead(K"TOMBSTONE", EMPTY_FLAGS),
-                               K"TOMBSTONE", next_byte)
+                               K"TOMBSTONE", false, next_byte)
         new(text_buf,
             text_root,
             lexer,
@@ -353,10 +343,10 @@ function _buffer_lookahead_tokens(lexer, lookahead)
         was_whitespace = k in (K"Whitespace", K"Comment", K"NewlineWs")
         had_whitespace |= was_whitespace
         f = EMPTY_FLAGS
-        had_whitespace && (f |= PRECEDING_WHITESPACE_FLAG)
         raw.dotop      && (f |= DOTOP_FLAG)
         raw.suffix     && (f |= SUFFIXED_FLAG)
-        push!(lookahead, SyntaxToken(SyntaxHead(k, f), raw.endbyte + 2))
+        push!(lookahead, SyntaxToken(SyntaxHead(k, f), k,
+                                     had_whitespace, raw.endbyte + 2))
         token_count += 1
         if k == K"EndMarker"
             break
@@ -471,7 +461,7 @@ function peek_token(stream::ParseStream, n::Integer=1;
     if !skip_whitespace
         i = stream.lookahead_index
     end
-    return @inbounds head(stream.lookahead[i])
+    return @inbounds stream.lookahead[i]
 end
 
 
@@ -613,12 +603,13 @@ function _bump_until_n(stream::ParseStream, n::Integer, flags, remap_kind=K"None
         if k == K"EndMarker"
             break
         end
-        f = flags | remove_flags((@__MODULE__).flags(tok), PRECEDING_WHITESPACE_FLAG)
+        f = flags | (@__MODULE__).flags(tok)
         is_trivia = k ∈ (K"Whitespace", K"Comment", K"NewlineWs")
         is_trivia && (f |= TRIVIA_FLAG)
         outk = (is_trivia || remap_kind == K"None") ? k : remap_kind
         h = SyntaxHead(outk, f)
-        push!(stream.tokens, SyntaxToken(h, kind(tok), tok.next_byte))
+        push!(stream.tokens,
+              SyntaxToken(h, kind(tok), tok.preceding_whitespace, tok.next_byte))
     end
     stream.lookahead_index = n + 1
     # Defuse the time bomb
@@ -675,7 +666,7 @@ function bump_invisible(stream::ParseStream, kind, flags=EMPTY_FLAGS;
                         error=nothing)
     b = _next_byte(stream)
     h = SyntaxHead(kind, flags)
-    push!(stream.tokens, SyntaxToken(h, b))
+    push!(stream.tokens, SyntaxToken(h, (@__MODULE__).kind(h), false, b))
     if !isnothing(error)
         emit_diagnostic(stream, b, b-1, error=error)
     end
@@ -693,7 +684,8 @@ whitespace if necessary with bump_trivia.
 function bump_glue(stream::ParseStream, kind, flags, num_tokens)
     i = stream.lookahead_index
     h = SyntaxHead(kind, flags)
-    push!(stream.tokens, SyntaxToken(h, stream.lookahead[i+1].next_byte))
+    push!(stream.tokens, SyntaxToken(h, kind, false,
+                                     stream.lookahead[i+1].next_byte))
     stream.lookahead_index += num_tokens
     stream.peek_count = 0
     return position(stream)
@@ -724,7 +716,7 @@ function bump_split(stream::ParseStream, split_spec...)
     for (i, (nbyte, k, f)) in enumerate(split_spec)
         h = SyntaxHead(k, f)
         b = (i == length(split_spec)) ? tok.next_byte : b + nbyte
-        push!(stream.tokens, SyntaxToken(h, kind(tok), b))
+        push!(stream.tokens, SyntaxToken(h, kind(tok), false, b))
     end
     stream.peek_count = 0
     return position(stream)
@@ -747,12 +739,14 @@ function reset_node!(stream::ParseStream, pos::ParseStreamPosition;
                      kind=nothing, flags=nothing)
     if token_is_last(stream, pos)
         t = stream.tokens[pos.token_index]
-        stream.tokens[pos.token_index] = SyntaxToken(_reset_node_head(t, kind, flags),
-                                                     t.orig_kind, t.next_byte)
+        stream.tokens[pos.token_index] =
+            SyntaxToken(_reset_node_head(t, kind, flags),
+                        t.orig_kind, t.preceding_whitespace, t.next_byte)
     else
         r = stream.ranges[pos.range_index]
-        stream.ranges[pos.range_index] = TaggedRange(_reset_node_head(r, kind, flags),
-                                                     r.first_token, r.last_token)
+        stream.ranges[pos.range_index] =
+            TaggedRange(_reset_node_head(r, kind, flags),
+                        r.first_token, r.last_token)
     end
 end
 
@@ -770,11 +764,13 @@ function steal_token_bytes!(stream::ParseStream, pos::ParseStreamPosition, numby
     t2 = stream.tokens[i+1]
 
     t1_next_byte = t1.next_byte + numbytes
-    stream.tokens[i] = SyntaxToken(t1.head, t1.orig_kind, t1_next_byte)
+    stream.tokens[i] = SyntaxToken(t1.head, t1.orig_kind,
+                                   t1.preceding_whitespace, t1_next_byte)
 
     t2_is_empty = t1_next_byte == t2.next_byte
     head2 = t2_is_empty ? SyntaxHead(K"TOMBSTONE", EMPTY_FLAGS) : t2.head
-    stream.tokens[i+1] = SyntaxToken(head2, t2.orig_kind, t2.next_byte)
+    stream.tokens[i+1] = SyntaxToken(head2, t2.orig_kind,
+                                     t2.preceding_whitespace, t2.next_byte)
     return t2_is_empty
 end
 
@@ -920,7 +916,8 @@ function validate_tokens(stream::ParseStream)
         end
         if error_kind != K"None"
             toks[i] = SyntaxToken(SyntaxHead(error_kind, EMPTY_FLAGS),
-                                  t.orig_kind, t.next_byte)
+                                  t.orig_kind, t.preceding_whitespace,
+                                  t.next_byte)
         end
     end
     sort!(stream.diagnostics, by=first_byte)
@@ -1052,6 +1049,7 @@ function Base.empty!(stream::ParseStream)
     empty!(stream.tokens)
     # Restore sentinel token
     push!(stream.tokens, SyntaxToken(SyntaxHead(K"TOMBSTONE",EMPTY_FLAGS),
-                                     K"TOMBSTONE", t.next_byte))
+                                     K"TOMBSTONE", t.preceding_whitespace,
+                                     t.next_byte))
     empty!(stream.ranges)
 end

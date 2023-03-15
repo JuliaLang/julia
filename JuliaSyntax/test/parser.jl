@@ -239,7 +239,7 @@ tests = [
         "<:(a,)"  =>  "(<: a)"
         # Unary function calls with brackets as grouping, not an arglist
         ".+(a)"   =>  "(dotcall-pre + a)"
-        "+(a;b)"  =>  "(call-pre + (block a b))"
+        "+(a;b)"  =>  "(call-pre + (block-p a b))"
         "+(a=1)"  =>  "(call-pre + (= a 1))"  => Expr(:call, :+, Expr(:(=), :a, 1))
         # Unary operators have lower precedence than ^
         "+(a)^2"  =>  "(call-pre + (call-i a ^ 2))"
@@ -312,7 +312,7 @@ tests = [
         # space separated macro calls
         "@foo a b"     =>  "(macrocall @foo a b)"
         "@foo (x)"     =>  "(macrocall @foo x)"
-        "@foo (x,y)"   =>  "(macrocall @foo (tuple x y))"
+        "@foo (x,y)"   =>  "(macrocall @foo (tuple-p x y))"
         "A.@foo a b"   =>  "(macrocall (. A (quote @foo)) a b)"
         "@A.foo a b"   =>  "(macrocall (. A (quote @foo)) a b)"
         "[@foo x]"     =>  "(vect (macrocall @foo x))"
@@ -343,8 +343,9 @@ tests = [
             Expr(:call, :f, Expr(:parameters, Expr(:parameters, :c), :b), :a)
         "(a=1)()" =>  "(call (= a 1))" => Expr(:call, Expr(:(=), :a, 1))
         "f (a)" => "(call f (error-t) a)"
-        "A.@x(y)"    =>  "(macrocall (. A (quote @x)) y)"
-        "A.@x(y).z"  =>  "(. (macrocall (. A (quote @x)) y) (quote z))"
+        "@x(a, b)"   =>  "(macrocall-p @x a b)"
+        "A.@x(y)"    =>  "(macrocall-p (. A (quote @x)) y)"
+        "A.@x(y).z"  =>  "(. (macrocall-p (. A (quote @x)) y) (quote z))"
         # do
         "f() do\nend"         =>  "(do (call f) (tuple) (block))"
         "f() do ; body end"   =>  "(do (call f) (tuple) (block body))"
@@ -416,9 +417,9 @@ tests = [
         "in\"str\""  => """(macrocall @in_str (string-r "str"))"""
         "outer\"str\"" => """(macrocall @outer_str (string-r "str"))"""
         # Triple quoted procesing for custom strings
-        "r\"\"\"\nx\"\"\""        => raw"""(macrocall @r_str (string-sr "x"))"""
-        "r\"\"\"\n x\n y\"\"\""   => raw"""(macrocall @r_str (string-sr "x\n" "y"))"""
-        "r\"\"\"\n x\\\n y\"\"\"" => raw"""(macrocall @r_str (string-sr "x\\\n" "y"))"""
+        "r\"\"\"\nx\"\"\""        => raw"""(macrocall @r_str (string-s-r "x"))"""
+        "r\"\"\"\n x\n y\"\"\""   => raw"""(macrocall @r_str (string-s-r "x\n" "y"))"""
+        "r\"\"\"\n x\\\n y\"\"\"" => raw"""(macrocall @r_str (string-s-r "x\\\n" "y"))"""
         # Macro sufficies can include keywords and numbers
         "x\"s\"y"    => """(macrocall @x_str (string-r "s") "y")"""
         "x\"s\"end"  => """(macrocall @x_str (string-r "s") "end")"""
@@ -540,11 +541,11 @@ tests = [
         "macro (type)(ex) end" =>  "(macro (call type ex) (block))"
         "macro \$f()    end"   =>  "(macro (call (\$ f)) (block))"
         "macro (\$f)()  end"   =>  "(macro (call (\$ f)) (block))"
-        "function (x) body end"=>  "(function (tuple x) (block body))"
-        "function (x,y) end"   =>  "(function (tuple x y) (block))"
-        "function (x=1) end"   =>  "(function (tuple (= x 1)) (block))"
-        "function (;x=1) end"  =>  "(function (tuple (parameters (= x 1))) (block))"
-        "function ()(x) end"   =>  "(function (call (tuple) x) (block))"
+        "function (x) body end"=>  "(function (tuple-p x) (block body))"
+        "function (x,y) end"   =>  "(function (tuple-p x y) (block))"
+        "function (x=1) end"   =>  "(function (tuple-p (= x 1)) (block))"
+        "function (;x=1) end"  =>  "(function (tuple-p (parameters (= x 1))) (block))"
+        "function ()(x) end"   =>  "(function (call (tuple-p) x) (block))"
         "function (A).f() end" =>  "(function (call (. A (quote f))) (block))"
         "function (:)() end"   =>  "(function (call :) (block))"
         "function (x::T)() end"=>  "(function (call (::-i x T)) (block))"
@@ -652,34 +653,34 @@ tests = [
         "i in rhs"       =>  "(= i rhs)"
         "i ∈ rhs"        =>  "(= i rhs)"
         "i = 1:10"       =>  "(= i (call-i 1 : 10))"
-        "(i,j) in iter"  =>  "(= (tuple i j) iter)"
+        "(i,j) in iter"  =>  "(= (tuple-p i j) iter)"
         "outer = rhs"       =>  "(= outer rhs)"
         "outer <| x = rhs"  =>  "(= (call-i outer <| x) rhs)"
         "outer i = rhs"     =>  "(= (outer i) rhs)"
-        "outer (x,y) = rhs" =>  "(= (outer (tuple x y)) rhs)"
+        "outer (x,y) = rhs" =>  "(= (outer (tuple-p x y)) rhs)"
     ],
     JuliaSyntax.parse_paren => [
         # Tuple syntax with commas
-        "()"          =>  "(tuple)"
-        "(x,)"        =>  "(tuple x)"
-        "(x,y)"       =>  "(tuple x y)"
-        "(x=1, y=2)"  =>  "(tuple (= x 1) (= y 2))"
+        "()"          =>  "(tuple-p)"
+        "(x,)"        =>  "(tuple-p x)"
+        "(x,y)"       =>  "(tuple-p x y)"
+        "(x=1, y=2)"  =>  "(tuple-p (= x 1) (= y 2))"
         # Named tuples with initial semicolon
-        "(;)"         =>  "(tuple (parameters))"         =>  Expr(:tuple, Expr(:parameters))
-        "(; a=1)"     =>  "(tuple (parameters (= a 1)))" =>  Expr(:tuple, Expr(:parameters, Expr(:kw, :a, 1)))
+        "(;)"         =>  "(tuple-p (parameters))"         =>  Expr(:tuple, Expr(:parameters))
+        "(; a=1)"     =>  "(tuple-p (parameters (= a 1)))" =>  Expr(:tuple, Expr(:parameters, Expr(:kw, :a, 1)))
         # Extra credit: nested parameters and frankentuples
-        "(x...; y)"       => "(tuple (... x) (parameters y))"
-        "(x...;)"         => "(tuple (... x) (parameters))"
-        "(; a=1; b=2)"    => "(tuple (parameters (= a 1)) (parameters (= b 2)))" =>
+        "(x...; y)"       => "(tuple-p (... x) (parameters y))"
+        "(x...;)"         => "(tuple-p (... x) (parameters))"
+        "(; a=1; b=2)"    => "(tuple-p (parameters (= a 1)) (parameters (= b 2)))" =>
             Expr(:tuple, Expr(:parameters, Expr(:parameters, Expr(:kw, :b, 2)), Expr(:kw, :a, 1)))
-        "(a; b; c,d)"     => "(tuple a (parameters b) (parameters c d))" =>
+        "(a; b; c,d)"     => "(tuple-p a (parameters b) (parameters c d))" =>
             Expr(:tuple, Expr(:parameters, Expr(:parameters, :c, :d), :b), :a)
-        "(a=1, b=2; c=3)" => "(tuple (= a 1) (= b 2) (parameters (= c 3)))"
+        "(a=1, b=2; c=3)" => "(tuple-p (= a 1) (= b 2) (parameters (= c 3)))"
         # Block syntax
-        "(;;)"        =>  "(block)"
-        "(a=1;)"      =>  "(block (= a 1))"
-        "(a;b;;c)"    =>  "(block a b c)"
-        "(a=1; b=2)"  =>  "(block (= a 1) (= b 2))"
+        "(;;)"        =>  "(block-p)"
+        "(a=1;)"      =>  "(block-p (= a 1))"
+        "(a;b;;c)"    =>  "(block-p a b c)"
+        "(a=1; b=2)"  =>  "(block-p (= a 1) (= b 2))"
         # Parentheses used for grouping
         "(a * b)"     =>  "(call-i a * b)"
         "(a=1)"       =>  "(= a 1)"
@@ -786,7 +787,7 @@ tests = [
         # cmd strings
         "``"         =>  "(macrocall core_@cmd (cmdstring-r \"\"))"
         "`cmd`"      =>  "(macrocall core_@cmd (cmdstring-r \"cmd\"))"
-        "```cmd```"  =>  "(macrocall core_@cmd (cmdstring-sr \"cmd\"))"
+        "```cmd```"  =>  "(macrocall core_@cmd (cmdstring-s-r \"cmd\"))"
         # literals
         "42"   => "42"
         "1.0e-1000"   => "0.0"
@@ -853,7 +854,7 @@ tests = [
         # Triple-quoted dedenting:
         "\"\"\"\nx\"\"\""   =>  raw"""(string-s "x")"""
         "\"\"\"\n\nx\"\"\"" =>  raw"""(string-s "\n" "x")"""
-        "```\n x\n y```"    =>  raw"""(macrocall core_@cmd (cmdstring-sr "x\n" "y"))"""
+        "```\n x\n y```"    =>  raw"""(macrocall core_@cmd (cmdstring-s-r "x\n" "y"))"""
         # Various newlines (\n \r \r\n) and whitespace (' ' \t)
         "\"\"\"\n x\n y\"\"\""  =>  raw"""(string-s "x\n" "y")"""
         "\"\"\"\r x\r y\"\"\""  =>  raw"""(string-s "x\n" "y")"""
