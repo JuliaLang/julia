@@ -163,7 +163,7 @@ typedef struct {
 typedef struct {
     JL_DATA_TYPE
     size_t length;
-    // jl_value_t *data[];
+    void *data;
 } jl_buffer_t;
 
 typedef struct {
@@ -985,9 +985,9 @@ JL_DLLEXPORT void jl_gc_safepoint(void);
 #define jl_svec_set_len_unsafe(t,n) (((jl_svec_t*)(t))->length=(n))
 #define jl_svec_data(t) ((jl_value_t**)((char*)(t) + sizeof(jl_svec_t)))
 
-#define jl_buffer_len(t)     (((jl_buffer_t*)(t))->length)
-#define jl_buffer_data(t)   ((char*)(t) + sizeof(jl_buffer_t))
-#define jl_buffer_eltype(x) (jl_tparam0(jl_typeof((jl_buffer_t*)(x))))
+#define jl_buffer_len(b)    (((jl_buffer_t*)(b))->length)
+#define jl_buffer_data(b)   ((void*)((jl_buffer_t*)(b))->data)
+#define jl_buffer_eltype(b) (jl_tparam0(jl_typeof((jl_buffer_t*)(b))))
 // TODO: change this when we have a variant of jl_buffer_t that is resizable
 #define jl_buffer_needs_marking(x) (0)
 #define jl_is_aligned_buffer(x) (1)

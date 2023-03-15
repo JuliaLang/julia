@@ -13,14 +13,7 @@ if !isdefined(Main, :Base)
         end
         return b
     end
-
-    function isassigned(b::Buffer, i::Int)
-        @inline
-        @boundscheck 1 <= i <= length(b) || return false
-        ccall(:jl_buffer_isassigned, Cint, (Any, UInt), b, i) == 1
-    end
 end
-
 
 eltype(::Type{<:Buffer{T}}) where {T} = T
 
@@ -45,6 +38,16 @@ isempty(b::Buffer) = (length(b) == 0)
 @eval setindex!(b::Buffer{T}, x, i::Int) where {T} =
     Core.bufset($(Expr(:boundscheck)), b, convert(T, x)::T, i)
 
+function isassigned(b::Buffer, i::Int, ii::Int...)
+    @inline
+    @boundscheck all(isone, ii) || return false
+    return isassigned(b, i)
+end
+function isassigned(b::Buffer, i::Int)
+    @inline
+    @boundscheck 1 <= i <= length(b) || return false
+    ccall(:jl_buffer_isassigned, Cint, (Any, UInt), b, i) == 1
+end
 
 function ==(v1::Buffer, v2::Buffer)
     length(v1)==length(v2) || return false

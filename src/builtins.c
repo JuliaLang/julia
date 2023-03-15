@@ -1528,13 +1528,13 @@ JL_CALLABLE(jl_f_bufset)
     JL_NARGS(bufset, 4, 4);
     JL_TYPECHK(bufset, bool, args[0]);
     JL_TYPECHK(bufset, buffer, args[1]);
-    jl_buffer_t *sb = (jl_buffer_t*)args[1];
-    size_t len = jl_buffer_len(sb);
+    jl_buffer_t *b = (jl_buffer_t*)args[1];
+    size_t len = jl_buffer_len(b);
     size_t idx = (size_t)jl_unbox_long((jl_value_t*)args[3]);
     if (idx < 1 || idx > len) {
-        jl_bounds_error_int((jl_value_t*)sb, idx);
+        jl_bounds_error_int((jl_value_t*)b, idx);
     }
-    jl_bufset(sb, args[2], idx - 1);
+    jl_bufset(b, args[2], idx - 1);
     return args[1];
 }
 
