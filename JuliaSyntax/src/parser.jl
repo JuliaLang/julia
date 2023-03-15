@@ -763,7 +763,7 @@ function parse_comparison(ps::ParseState, subtype_comparison=false)
     mark = position(ps)
     if subtype_comparison && is_reserved_word(peek(ps))
         # Recovery
-        # struct try end  ==>  (struct false (error (try)) (block))
+        # struct try end  ==>  (struct (error (try)) (block))
         name = untokenize(peek(ps))
         bump(ps)
         emit(ps, mark, K"error", error="Invalid type name `$name`")
@@ -1105,13 +1105,13 @@ function is_juxtapose(ps, prev_k, t)
     !is_initial_reserved_word(ps, k)
 end
 
-# Juxtoposition. Ugh!
+# Juxtoposition. Ugh! But so useful for units and Field identities like `im`
 #
-# 2x       ==>  (call-i 2 * x)
-# 2(x)     ==>  (call-i 2 * x)
-# (2)(3)x  ==>  (call-i 2 * 3 x)
-# (x-1)y   ==>  (call-i (call-i x - 1) * y)
-# x'y      ==>  (call-i (call-post x ') * y)
+# 2x       ==>  (juxtapose 2 x)
+# 2(x)     ==>  (juxtapose 2 x)
+# (2)(3)x  ==>  (juxtapose 2 3 x)
+# (x-1)y   ==>  (juxtapose (call-i x - 1) y)
+# x'y      ==>  (juxtapose (call-post x ') y)
 #
 # flisp: parse-juxtapose
 function parse_juxtapose(ps::ParseState)
@@ -1124,15 +1124,12 @@ function parse_juxtapose(ps::ParseState)
         if !is_juxtapose(ps, prev_kind, t)
             break
         end
-        if n_terms == 1
-            bump_invisible(ps, K"*")
-        end
         if prev_kind == K"string" || is_string_delim(t)
             # issue #20575
             #
-            # "a""b"  ==>  (call-i (string "a") * (error-t) (string "b"))
-            # "a"x    ==>  (call-i (string "a") * (error-t) x)
-            # "$y"x   ==>  (call-i (string (string y)) * (error-t) x)
+            # "a""b"  ==>  (juxtapose (string "a") (error-t) (string "b"))
+            # "a"x    ==>  (juxtapose (string "a") (error-t) x)
+            # "$y"x   ==>  (juxtapose (string (string y)) (error-t) x)
             bump_invisible(ps, K"error", TRIVIA_FLAG,
                            error="cannot juxtapose string literal")
         end
@@ -1144,7 +1141,7 @@ function parse_juxtapose(ps::ParseState)
         n_terms += 1
     end
     if n_terms > 1
-        emit(ps, mark, K"call", INFIX_FLAG)
+        emit(ps, mark, K"juxtapose")
     end
 end
 
@@ -1767,8 +1764,8 @@ function parse_struct_field(ps::ParseState)
     parse_eq(ps)
     if const_field
         # Const fields https://github.com/JuliaLang/julia/pull/43305
-        #v1.8: struct A const a end  ==>  (struct false A (block (const x)))
-        #v1.7: struct A const a end  ==>  (struct false A (block (error (const x))))
+        #v1.8: struct A const a end  ==>  (struct A (block (const x)))
+        #v1.7: struct A const a end  ==>  (struct A (block (error (const x))))
         emit(ps, mark, K"const")
         min_supported_version(v"1.8", ps, mark, "`const` struct field")
     end
@@ -1823,23 +1820,21 @@ function parse_resword(ps::ParseState)
         emit(ps, mark, K"for")
     elseif word == K"let"
         bump(ps, TRIVIA_FLAG)
-        if peek(ps) ∉ KSet"NewlineWs ;"
-            # let x=1\n end   ==>  (let (block (= x 1)) (block))
-            # let x=1 ; end   ==>  (let (block (= x 1)) (block))
-            m = position(ps)
-            n_subexprs = parse_comma_separated(ps, parse_eq_star)
-            kb = peek_behind(ps).kind
+        m = position(ps)
+        if peek(ps) in KSet"NewlineWs ;"
+            # let end           ==>  (let (block) (block))
+            # let ; end         ==>  (let (block) (block))
+            # let ; body end    ==>  (let (block) (block body))
+        else
+            # let x=1\n end     ==>  (let (block (= x 1)) (block))
+            # let x=1 ; end     ==>  (let (block (= x 1)) (block))
             # let x::1 ; end    ==>  (let (block (::-i x 1)) (block))
             # let x ; end       ==>  (let (block x) (block))
             # let x=1,y=2 ; end ==>  (let (block (= x 1) (= y 2) (block)))
             # let x+=1 ; end    ==>  (let (block (+= x 1)) (block))
-            emit(ps, m, K"block")
-        else
-            # let end           ==>  (let (block) (block))
-            # let ; end         ==>  (let (block) (block))
-            # let ; body end    ==>  (let (block) (block body))
-            bump_invisible(ps, K"block")
+            parse_comma_separated(ps, parse_eq_star)
         end
+        emit(ps, m, K"block")
         k = peek(ps)
         if k in KSet"NewlineWs ;"
             bump(ps, TRIVIA_FLAG)
@@ -1934,24 +1929,23 @@ function parse_resword(ps::ParseState)
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"abstract")
     elseif word in KSet"struct mutable"
-        # struct A <: B \n a::X \n end  ==>  (struct false (<: A B) (block (::-i a X)))
-        # struct A \n a \n b \n end  ==>  (struct false A (block a b))
-        #v1.7: struct A const a end  ==>  (struct false A (block (error (const a))))
-        #v1.8: struct A const a end  ==>  (struct false A (block (const a)))
-        if word == K"mutable"
-            # mutable struct A end  ==>  (struct true A (block))
+        # struct A <: B \n a::X \n end  ==>  (struct (<: A B) (block (::-i a X)))
+        # struct A \n a \n b \n end  ==>  (struct A (block a b))
+        #v1.7: struct A const a end  ==>  (struct A (block (error (const a))))
+        #v1.8: struct A const a end  ==>  (struct A (block (const a)))
+        is_mut = word == K"mutable"
+        if is_mut
+            # mutable struct A end  ==>  (struct-mut A (block))
             bump(ps, TRIVIA_FLAG)
-            bump_invisible(ps, K"true")
         else
-            # struct A end  ==>  (struct false A (block))
-            bump_invisible(ps, K"false")
+            # struct A end  ==>  (struct A (block))
         end
         @check peek(ps) == K"struct"
         bump(ps, TRIVIA_FLAG)
         parse_subtype_spec(ps)
         parse_block(ps, parse_struct_field)
         bump_closing_token(ps, K"end")
-        emit(ps, mark, K"struct")
+        emit(ps, mark, K"struct", is_mut ? MUTABLE_FLAG : EMPTY_FLAGS)
     elseif word == K"primitive"
         # primitive type A 32 end             ==> (primitive A 32)
         # primitive type A 32 ; end           ==> (primitive A 32)
@@ -1973,9 +1967,8 @@ function parse_resword(ps::ParseState)
         bump(ps, TRIVIA_FLAG)
         k = peek(ps)
         if k == K"NewlineWs" || is_closing_token(ps, k)
-            # return\nx   ==>  (return nothing)
-            # return)     ==>  (return nothing)
-            bump_invisible(ps, K"nothing")
+            # return\nx   ==>  (return)
+            # return)     ==>  (return)
         else
             # return x    ==>  (return x)
             # return x,y  ==>  (return (tuple x y))
@@ -1992,22 +1985,22 @@ function parse_resword(ps::ParseState)
                     error="unexpected token after $(untokenize(word))")
         end
     elseif word in KSet"module baremodule"
-        # module A end  ==> (module true A (block))
-        # baremodule A end ==> (module false A (block))
+        # module A end  ==> (module A (block))
+        # baremodule A end ==> (module-bare A (block))
         bump(ps, TRIVIA_FLAG)
-        bump_invisible(ps, (word == K"module") ? K"true" : K"false")
         if is_reserved_word(peek(ps))
-            # module do \n end  ==>  (module true (error do) (block))
+            # module do \n end  ==>  (module (error do) (block))
             bump(ps, error="Invalid module name")
         else
-            # module $A end  ==>  (module true ($ A) (block))
+            # module $A end  ==>  (module ($ A) (block))
             parse_unary_prefix(ps)
         end
-        # module A \n a \n b \n end  ==>  (module true A (block a b))
-        # module A \n "x"\na \n end  ==>  (module true A (block (doc (string "x") a)))
+        # module A \n a \n b \n end  ==>  (module A (block a b))
+        # module A \n "x"\na \n end  ==>  (module A (block (doc (string "x") a)))
         parse_block(ps, parse_docstring)
         bump_closing_token(ps, K"end")
-        emit(ps, mark, K"module")
+        emit(ps, mark, K"module",
+             word == K"baremodule" ? BARE_MODULE_FLAG : EMPTY_FLAGS)
     elseif word == K"export"
         # export a         ==>  (export a)
         # export @a        ==>  (export @a)

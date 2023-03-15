@@ -5,27 +5,38 @@
 # TODO: Use `primitive type SyntaxFlags 16 end` rather than an alias?
 const RawFlags = UInt16
 const EMPTY_FLAGS = RawFlags(0)
-# Applied to tokens which are syntax trivia after parsing
+
+# Set for tokens or ranges which are syntax trivia after parsing
 const TRIVIA_FLAG = RawFlags(1<<0)
 
-# Record whether operators are dotted
+# Token flags - may be set for operator kinded tokens
+# Operator is dotted
 const DOTOP_FLAG = RawFlags(1<<1)
-# Record whether operator has a suffix
-const SUFFIXED_FLAG        = RawFlags(1<<2)
+# Operator has a suffix
+const SUFFIXED_FLAG = RawFlags(1<<2)
 
+# Set for K"call", K"dotcall" or any syntactic operator heads
 # Distinguish various syntaxes which are mapped to K"call"
 const PREFIX_CALL_FLAG = RawFlags(0<<3)
 const INFIX_FLAG       = RawFlags(1<<3)
 const PREFIX_OP_FLAG   = RawFlags(2<<3)
 const POSTFIX_OP_FLAG  = RawFlags(3<<3)
 
-# The next two bits could overlap with the previous two if necessary
-# Set when kind == K"String" was triple-delimited as with """ or ```
+# The following flags are quite head-specific and may overlap
+
+# Set when K"string" or K"cmdstring" was triple-delimited as with """ or ```
 const TRIPLE_STRING_FLAG = RawFlags(1<<5)
-# Set when a string or identifier needs "raw string" unescaping
+# Set when a K"string", K"cmdstring" or K"Identifier" needs raw string unescaping
 const RAW_STRING_FLAG = RawFlags(1<<6)
 
-const PARENS_FLAG = RawFlags(1<<7)
+# Set for K"tuple", K"block" or K"macrocall" which are delimited by parentheses
+const PARENS_FLAG = RawFlags(1<<5)
+
+# Set for K"struct" when mutable
+const MUTABLE_FLAG = RawFlags(1<<5)
+
+# Set for K"module" when it's not bare (`module`, not `baremodule`)
+const BARE_MODULE_FLAG = RawFlags(1<<5)
 
 # Flags holding the dimension of an nrow or other UInt8 not held in the source
 const NUMERIC_FLAGS = RawFlags(RawFlags(0xff)<<8)
@@ -78,10 +89,18 @@ function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
         is_infix_op_call(head)   && (str = str*"-i")
         is_prefix_op_call(head)  && (str = str*"-pre")
         is_postfix_op_call(head) && (str = str*"-post")
-        has_flags(head, TRIPLE_STRING_FLAG) && (str = str*"-s")
-        has_flags(head, RAW_STRING_FLAG) && (str = str*"-r")
-        has_flags(head, PARENS_FLAG) && (str = str*"-p")
-        is_suffixed(head) && (str = str*"-S")
+
+        if kind(head) in KSet"string cmdstring Identifier"
+            has_flags(head, TRIPLE_STRING_FLAG) && (str = str*"-s")
+            has_flags(head, RAW_STRING_FLAG) && (str = str*"-r")
+        elseif kind(head) in KSet"tuple block macrocall"
+            has_flags(head, PARENS_FLAG) && (str = str*"-p")
+        elseif kind(head) == K"struct"
+            has_flags(head, MUTABLE_FLAG) && (str = str*"-mut")
+        elseif kind(head) == K"module"
+            has_flags(head, BARE_MODULE_FLAG) && (str = str*"-bare")
+        end
+        is_suffixed(head) && (str = str*"-suf")
         n = numeric_flags(head)
         n != 0 && (str = str*"-"*string(n))
     end

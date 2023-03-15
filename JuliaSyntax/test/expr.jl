@@ -296,10 +296,34 @@
                  Expr(:block, LineNumberNode(1), :z))
     end
 
+    @testset "juxtapose" begin
+        @test parse(Expr, "2x") == Expr(:call, :*, 2, :x)
+        @test parse(Expr, "(2)(3)x") == Expr(:call, :*, 2, 3, :x)
+    end
+
     @testset "Core.@doc" begin
         @test parse(Expr, "\"x\" f") ==
             Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), LineNumberNode(1), "x", :f)
         @test parse(Expr, "\n\"x\" f") ==
             Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), LineNumberNode(2), "x", :f)
+    end
+
+    @testset "return" begin
+        @test parse(Expr, "return x") == Expr(:return, :x)
+        @test parse(Expr, "return")  == Expr(:return, nothing)
+    end
+
+    @testset "struct" begin
+        @test parse(Expr, "struct A end") ==
+            Expr(:struct, false, :A, Expr(:block, LineNumberNode(1)))
+        @test parse(Expr, "mutable struct A end") ==
+            Expr(:struct, true, :A, Expr(:block, LineNumberNode(1)))
+    end
+
+    @testset "module" begin
+        @test parse(Expr, "module A end") ==
+            Expr(:module, true,  :A, Expr(:block, LineNumberNode(1), LineNumberNode(1)))
+        @test parse(Expr, "baremodule A end") ==
+            Expr(:module, false, :A, Expr(:block, LineNumberNode(1), LineNumberNode(1)))
     end
 end

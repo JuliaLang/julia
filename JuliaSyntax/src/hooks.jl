@@ -62,7 +62,7 @@ function _incomplete_tag(n::SyntaxNode)
     elseif kp in KSet"for while function if"
         return i == 1 ? :other : :block
     elseif kp in KSet"module struct"
-        return i == 2 ? :other : :block
+        return i == 1 ? :other : :block
     elseif kp == K"do"
         return i < 3  ? :other : :block
     else

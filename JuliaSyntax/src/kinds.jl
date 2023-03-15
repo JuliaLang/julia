@@ -83,7 +83,6 @@ const _kind_names =
         "CmdString"
         "true"
         "false"
-        "nothing"  # A literal `nothing`
     "END_LITERAL"
 
     "BEGIN_DELIMITERS"
@@ -880,6 +879,7 @@ const _kind_names =
         "comparison"
         "curly"
         "inert"          # QuoteNode; not quasiquote
+        "juxtapose"      # Numeric juxtaposition like 2x
         "string"         # A string interior node (possibly containing interpolations)
         "cmdstring"      # A cmd string node (containing delimiters plus string)
         "char"           # A char string node (containing delims + char data)
