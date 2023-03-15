@@ -46,7 +46,7 @@ end
 function isassigned(b::Buffer, i::Int)
     @inline
     @boundscheck 1 <= i <= length(b) || return false
-    ccall(:jl_buffer_isassigned, Cint, (Any, UInt), b, i) == 1
+    ccall(:jl_buffer_isassigned, Cint, (Any, UInt), b, i - 1) == 1
 end
 
 function ==(v1::Buffer, v2::Buffer)

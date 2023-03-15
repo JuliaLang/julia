@@ -156,7 +156,7 @@ typedef struct {
 // available at compile time through only the element type.
 typedef struct {
     uint16_t elsize;
-    uint8_t align;
+    uint8_t alignment;
     uint8_t isboxed;
     uint8_t hasptr;
     uint8_t ntags;
@@ -989,7 +989,7 @@ JL_DLLEXPORT void jl_gc_safepoint(void);
 #define jl_svec_data(t) ((jl_value_t**)((char*)(t) + sizeof(jl_svec_t)))
 
 #define jl_buffer_len(b)    (((jl_buffer_t*)(b))->length)
-#define jl_buffer_data(b)   (((jl_buffer_t*)(b))->data)
+#define jl_buffer_data(b)    ((void*)((jl_buffer_t*)(b))->data)
 #define jl_buffer_eltype(b) (jl_tparam0(jl_typeof((jl_buffer_t*)(b))))
 // TODO: change this when we have a variant of jl_buffer_t that is resizable
 #define jl_buffer_needs_marking(x) (0)

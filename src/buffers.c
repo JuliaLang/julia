@@ -49,13 +49,6 @@ size_t jl_buffer_object_size(jl_buffer_t *b) JL_NOTSAFEPOINT
     return obj_size;
 }
 
-// JL_DLLEXPORT char *jl_buffer_typetagdata(jl_buffer_t *b) JL_NOTSAFEPOINT
-// {
-//     jl_eltype_layout_t lyt = jl_eltype_layout(jl_buffer_eltype(b));
-//     assert(lyt.ntags > 1); // is bits union
-//     return ((char*)jl_buffer_data(b)) + (jl_buffer_len(b) * lyt.elsize);
-// }
-
 JL_DLLEXPORT jl_buffer_t *jl_new_buffer(jl_value_t *btype, size_t len)
 {
     jl_value_t *eltype = jl_tparam0(btype);
@@ -87,7 +80,7 @@ JL_DLLEXPORT jl_buffer_t *jl_new_buffer(jl_value_t *btype, size_t len)
     }
 
     // zero initialize data that may otherwise error on load
-    if (lyt.isboxed ||  lyt.ntags > 1 || lyt.hasptr || (jl_is_datatype(eltype) && ((jl_datatype_t*)eltype)->zeroinit)) {
+    if (lyt.isboxed || lyt.ntags > 1 || lyt.hasptr || (jl_is_datatype(eltype) && ((jl_datatype_t*)eltype)->zeroinit)) {
         memset(data, 0, data_size);
     }
 
@@ -123,7 +116,7 @@ JL_DLLEXPORT jl_value_t *jl_bufref(jl_buffer_t *b, size_t i)
         return r;
     }
     else {
-        jl_value_t *elt = jl_atomic_load_relaxed(((_Atomic(jl_value_t*)*)data) + i);
+        jl_value_t *elt = jl_atomic_load_relaxed(((_Atomic(jl_value_t*)*)b->data) + i);
         if (elt == NULL)
             jl_throw(jl_undefref_exception);
         return elt;
@@ -176,7 +169,7 @@ JL_DLLEXPORT int jl_buffer_isassigned(jl_buffer_t *b, size_t i)
     else if ((jl_is_datatype(eltype) && ((jl_datatype_t*)eltype)->layout->npointers > 0)) {
         jl_datatype_t *elty = (jl_datatype_t*)eltype;
          assert(elty->layout->first_ptr >= 0);
-         jl_value_t **elem = (jl_value_t**)((char*)jl_buffer_data(b) + i * lyt.elsize);
+         jl_value_t **elem = (jl_value_t**)((char*)b->data + i * lyt.elsize);
          return elem[elty->layout->first_ptr] != NULL;
     }
     return 1;
@@ -188,4 +181,3 @@ JL_DLLEXPORT jl_buffer_t *jl_buffer_copy(jl_buffer_t *a)
     memcpy((void**)jl_buffer_data(c), (void**)jl_buffer_data(a), jl_buffer_nbytes((jl_buffer_t*)a));
     return c;
 }
-
