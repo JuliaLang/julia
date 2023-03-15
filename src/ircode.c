@@ -179,10 +179,10 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
         }
     }
     else if (jl_is_buffer(v)) {
-        jl_buffer_t *sb = (jl_buffer_t*)(v);
-        jl_value_t *eltype = jl_buffer_eltype((jl_value_t*)sb);
-        size_t elsize = jl_buffer_elsize((jl_value_t*)sb);
-        size_t len = jl_buffer_len(sb);
+        jl_buffer_t *b = (jl_buffer_t*)(v);
+        jl_value_t *eltype = jl_buffer_eltype((jl_value_t*)b);
+        size_t elsize = jl_eltype_layout(eltype).elsize;
+        size_t len = jl_buffer_len(b);
         write_uint8(s->s, TAG_BUF);
         jl_encode_value(s, eltype);
         write_int8(s->s, (int8_t)elsize);

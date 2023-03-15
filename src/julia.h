@@ -152,18 +152,21 @@ typedef struct {
     // jl_value_t *data[];
 } jl_svec_t;
 
+// Layout of elements stored in array types. Necessary information should all be
+// available at compile time through only the element type.
 typedef struct {
     uint16_t elsize;
-    uint16_t align;
-    uint16_t union_max;
-} jl_element_type_layout_t;
+    uint8_t align;
+    uint8_t isboxed;
+    uint8_t hasptr;
+    uint8_t ntags;
+} jl_eltype_layout_t;
 
-// A Buffer is a fixed size array if `length` number of bits.
-// Data is stored at the end of this variable-length struct.
+// C struct for Julia's Buffer{T} type.
 typedef struct {
     JL_DATA_TYPE
-    size_t length;
-    void *data;
+    size_t length; // number of elements stored in data
+    void *data; // pointer to raw data
 } jl_buffer_t;
 
 typedef struct {
@@ -986,7 +989,7 @@ JL_DLLEXPORT void jl_gc_safepoint(void);
 #define jl_svec_data(t) ((jl_value_t**)((char*)(t) + sizeof(jl_svec_t)))
 
 #define jl_buffer_len(b)    (((jl_buffer_t*)(b))->length)
-#define jl_buffer_data(b)   ((void*)((jl_buffer_t*)(b))->data)
+#define jl_buffer_data(b)   (((jl_buffer_t*)(b))->data)
 #define jl_buffer_eltype(b) (jl_tparam0(jl_typeof((jl_buffer_t*)(b))))
 // TODO: change this when we have a variant of jl_buffer_t that is resizable
 #define jl_buffer_needs_marking(x) (0)
@@ -1520,12 +1523,6 @@ JL_DLLEXPORT jl_svec_t *jl_alloc_svec(size_t n);
 JL_DLLEXPORT jl_svec_t *jl_alloc_svec_uninit(size_t n);
 JL_DLLEXPORT jl_svec_t *jl_svec_copy(jl_svec_t *a);
 JL_DLLEXPORT jl_svec_t *jl_svec_fill(size_t n, jl_value_t *x);
-JL_DLLEXPORT jl_buffer_t *jl_buffer_copy(jl_buffer_t *a);
-JL_DLLEXPORT jl_buffer_t *jl_buffer_fill(size_t n, jl_value_t *x);
-JL_DLLEXPORT jl_value_t *jl_bufref(jl_buffer_t *a, size_t i);  // 0-indexed
-JL_DLLEXPORT void jl_bufset(jl_buffer_t *sb JL_ROOTING_ARGUMENT, jl_value_t *v JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, size_t i);  // 0-indexed
-JL_DLLEXPORT int jl_buffer_isassigned(jl_buffer_t *b, size_t i);  // 0-indexed
-JL_DLLEXPORT void *jl_buffer_ptr(jl_buffer_t *b);
 JL_DLLEXPORT jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *v);
 JL_DLLEXPORT jl_sym_t *jl_symbol(const char *str) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_symbol_lookup(const char *str) JL_NOTSAFEPOINT;
@@ -1606,6 +1603,45 @@ JL_DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, const char *fld);
 JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a);
 int jl_uniontype_size(jl_value_t *ty, size_t *sz);
 JL_DLLEXPORT int jl_islayout_inline(jl_value_t *eltype, size_t *fsz, size_t *al);
+
+// buffers
+JL_DLLEXPORT jl_buffer_t *jl_buffer_copy(jl_buffer_t *a);
+JL_DLLEXPORT jl_buffer_t *jl_buffer_fill(size_t n, jl_value_t *x);
+JL_DLLEXPORT jl_value_t *jl_bufref(jl_buffer_t *a, size_t i);  // 0-indexed
+JL_DLLEXPORT void jl_bufset(jl_buffer_t *sb JL_ROOTING_ARGUMENT, jl_value_t *v JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, size_t i);  // 0-indexed
+JL_DLLEXPORT int jl_buffer_isassigned(jl_buffer_t *b, size_t i);  // 0-indexed
+JL_DLLEXPORT void *jl_buffer_ptr(jl_buffer_t *b);
+STATIC_INLINE jl_eltype_layout_t jl_eltype_layout(void *eltype)
+{
+    jl_value_t *ety = (jl_value_t*)eltype;
+    size_t elsize = 0, alignment = 0;
+    unsigned count_bit_types = jl_islayout_inline(ety, &elsize, &alignment);
+    uint8_t isboxed;
+    uint8_t ntags;
+    if (count_bit_types > 0) {
+        isboxed = 0;
+        ntags = count_bit_types;
+    }
+    else {
+        isboxed = 1;
+        ntags = 1;
+    }
+    if (isboxed)
+        elsize = sizeof(void*);
+    else
+        elsize = LLT_ALIGN(elsize, alignment);
+
+    uint8_t hasptr = !isboxed && (jl_is_datatype(eltype) && ((jl_datatype_t*)eltype)->layout->npointers > 0);
+    jl_eltype_layout_t lyt = {
+        (uint16_t)elsize,
+        (uint8_t)alignment,
+        isboxed,
+        hasptr,
+        ntags
+    };
+    return lyt;
+}
+
 
 // arrays
 JL_DLLEXPORT jl_array_t *jl_new_array(jl_value_t *atype, jl_value_t *dims);
@@ -2006,49 +2042,6 @@ JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e, jl_task_t *ct);
 JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 #define jl_current_task (container_of(jl_get_pgcstack(), jl_task_t, gcstack))
-
-STATIC_INLINE jl_element_type_layout_t jl_element_type_layout(void *eltype)
-{
-    jl_value_t *ety = (jl_value_t*)eltype;
-    size_t elsize = 0, align = 0;
-    int union_max = jl_islayout_inline(ety, &elsize, &align);
-    if (union_max == 0)
-        elsize = sizeof(void*);
-    else
-        elsize = LLT_ALIGN(elsize, align);
-
-    jl_element_type_layout_t lyt = {
-        (uint16_t)elsize,
-        (uint16_t)align,
-        (uint16_t)union_max
-    };
-    return lyt;
-}
-
-STATIC_INLINE size_t jl_buffer_elsize(void *b)
-{
-    return jl_element_type_layout(jl_buffer_eltype(b)).elsize;
-}
-
-STATIC_INLINE size_t jl_buffer_nbytes(jl_value_t *b)
-{
-    jl_value_t *ety = jl_buffer_eltype(b);
-
-    size_t elsz = 0, al = 0;
-    int union_max = jl_islayout_inline(ety, &elsz, &al);
-    int isunion = jl_is_uniontype(ety);
-    if (union_max == 0)
-        elsz = sizeof(void*);
-    else
-        elsz = LLT_ALIGN(elsz, al);
-    size_t len = jl_buffer_len(b);
-    size_t tot = jl_buffer_elsize(b) * len;
-    if (elsz == 1 && union_max && isunion)
-        tot++;
-    if (isunion)
-        tot += len;
-    return tot;
-}
 
 #include "julia_locks.h"   // requires jl_task_t definition
 

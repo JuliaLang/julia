@@ -3372,176 +3372,177 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         return true;
     }
 
-    else if (f == jl_builtin_bufref && nargs == 3) {
-        const jl_cgval_t &buf = argv[2];
-        const jl_cgval_t &idx = argv[3];
-        bool indices_ok = true;
+    // else if (f == jl_builtin_bufref && nargs == 3) {
+    //     const jl_cgval_t &buf = argv[2];
+    //     const jl_cgval_t &idx = argv[3];
+    //     bool indices_ok = true;
 
-        if (idx.typ != (jl_value_t*)jl_long_type) {
-            indices_ok = false;
-        }
-        jl_value_t *buf_dt = jl_unwrap_unionall(buf.typ);
-        if (jl_is_buffer_type(buf_dt) && indices_ok) {
-            jl_value_t *ety = jl_tparam0(buf_dt);
-            if (!jl_has_free_typevars(ety)) {
-                jl_value_t *buf_ex = jl_exprarg(ex, 2);
-                size_t elsz = 0, al = 0;
-                int union_max = jl_islayout_inline(ety, &elsz, &al);
-                bool isboxed = (union_max == 0);
-                if (isboxed)
-                    ety = (jl_value_t*)jl_any_type;
-                jl_value_t *boundscheck = argv[1].constant;
-                emit_typecheck(ctx, argv[1], (jl_value_t*)jl_bool_type, "bufref");
-                Value *i = emit_buffer_index(ctx, buf, buf_ex, idx, boundscheck);
-                if (!isboxed && jl_is_datatype(ety) && jl_datatype_size(ety) == 0) {
-                    assert(((jl_datatype_t*)ety)->instance != NULL);
-                    *ret = ghostValue(ctx, ety);
-                }
-                else if (!isboxed && jl_is_uniontype(ety)) {
-                    Value *data = emit_bufferptr(ctx, buf, buf_ex);
-                    Value *ptindex;
-                    if (elsz == 0) {
-                        ptindex = data;
-                    }
-                    else {
-                        Type *AT = ArrayType::get(IntegerType::get(ctx.builder.getContext(), 8 * al), (elsz + al - 1) / al);
-                        data = emit_bitcast(ctx, data, AT->getPointerTo());
-                        // isbits union selector bytes are stored after a->maxsize
-                        Value *selidx = emit_bufferlen(ctx, buf);
-                        ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
-                        data = ctx.builder.CreateInBoundsGEP(AT, data, i);
-                    }
-                    ptindex = emit_bitcast(ctx, ptindex, getInt8PtrTy(ctx.builder.getContext()));
-                    ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
-                    ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, i);
-                    *ret = emit_unionload(ctx, data, ptindex, ety, elsz, al, ctx.tbaa().tbaa_arraybuf, true, union_max, ctx.tbaa().tbaa_arrayselbyte);
-                }
-                else {
-                    MDNode *aliasscope = nullptr;
-                    *ret = typed_load(ctx,
-                            emit_bufferptr(ctx, buf, buf_ex),
-                            i, ety,
-                            isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf,
-                            aliasscope,
-                            isboxed,
-                            AtomicOrdering::NotAtomic);
-                }
-                return true;
-            }
-        }
-    }
+    //     if (idx.typ != (jl_value_t*)jl_long_type) {
+    //         indices_ok = false;
+    //     }
+    //     jl_value_t *buf_dt = jl_unwrap_unionall(buf.typ);
+    //     if (jl_is_buffer_type(buf_dt) && indices_ok) {
+    //         jl_value_t *ety = jl_tparam0(buf_dt);
+    //         if (!jl_has_free_typevars(ety)) {
+    //             jl_value_t *buf_ex = jl_exprarg(ex, 2);
+    //             size_t elsz = 0, al = 0;
+    //             int union_max = jl_islayout_inline(ety, &elsz, &al);
+    //             bool isboxed = (union_max == 0);
+    //             if (isboxed)
+    //                 ety = (jl_value_t*)jl_any_type;
+    //             jl_value_t *boundscheck = argv[1].constant;
+    //             emit_typecheck(ctx, argv[1], (jl_value_t*)jl_bool_type, "bufref");
+    //             Value *i = emit_buffer_index(ctx, buf, buf_ex, idx, boundscheck);
+    //             if (!isboxed && jl_is_datatype(ety) && jl_datatype_size(ety) == 0) {
+    //                 assert(((jl_datatype_t*)ety)->instance != NULL);
+    //                 *ret = ghostValue(ctx, ety);
+    //             }
+    //             else if (!isboxed && jl_is_uniontype(ety)) {
+    //                 Value *data = emit_bufferptr(ctx, buf, buf_ex);
+    //                 Value *ptindex;
+    //                 if (elsz == 0) {
+    //                     ptindex = data;
+    //                 }
+    //                 else {
+    //                     Type *AT = ArrayType::get(IntegerType::get(ctx.builder.getContext(), 8 * al), (elsz + al - 1) / al);
+    //                     data = emit_bitcast(ctx, data, AT->getPointerTo());
+    //                     // isbits union selector bytes are stored after a->maxsize
+    //                     Value *selidx = emit_bufferlen(ctx, buf);
+    //                     ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
+    //                     data = ctx.builder.CreateInBoundsGEP(AT, data, i);
+    //                 }
+    //                 ptindex = emit_bitcast(ctx, ptindex, getInt8PtrTy(ctx.builder.getContext()));
+    //                 ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
+    //                 ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, i);
+    //                 *ret = emit_unionload(ctx, data, ptindex, ety, elsz, al, ctx.tbaa().tbaa_arraybuf, true, union_max, ctx.tbaa().tbaa_arrayselbyte);
+    //             }
+    //             else {
+    //                 MDNode *aliasscope = nullptr;
+    //                 *ret = typed_load(ctx,
+    //                         emit_bufferptr(ctx, buf, buf_ex),
+    //                         i, ety,
+    //                         isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf,
+    //                         aliasscope,
+    //                         isboxed,
+    //                         AtomicOrdering::NotAtomic);
+    //             }
+    //             return true;
+    //         }
+    //     }
+    // }
 
-    else if (f == jl_builtin_bufset && nargs == 4) {
-        const jl_cgval_t &buf = argv[2];
-        jl_cgval_t val = argv[3];
-        const jl_cgval_t &idx = argv[4];
-        bool indices_ok = true;
-        if (idx.typ != (jl_value_t*)jl_long_type) {
-            indices_ok = false;
-        }
-        Value *len = emit_bufferlen(ctx, buf);
-        jl_value_t *buf_dt = jl_unwrap_unionall(buf.typ);
-        if (jl_is_buffer_type(buf_dt) && indices_ok) {
-            jl_value_t *ety = jl_tparam0(buf_dt);
-            if (!jl_has_free_typevars(ety)) {
-                emit_typecheck(ctx, val, ety, "bufset");
-                val = update_julia_type(ctx, val, ety);
-                if (val.typ == jl_bottom_type)
-                    return true;
-                size_t elsz = 0, al = 0;
-                int union_max = jl_islayout_inline(ety, &elsz, &al);
-                bool isboxed = (union_max == 0);
-                if (isboxed)
-                    ety = (jl_value_t*)jl_any_type;
-                jl_value_t *buf_ex = jl_exprarg(ex, 2);
-                jl_value_t *boundscheck = argv[1].constant;
-                emit_typecheck(ctx, argv[1], (jl_value_t*)jl_bool_type, "bufset");
-                Value *i = emit_buffer_index(ctx, buf, buf_ex, idx, boundscheck);
-                if (!isboxed && jl_is_datatype(ety) && jl_datatype_size(ety) == 0) {
-                    // no-op
-                }
-                else {
-                    PHINode *data_owner = NULL; // owner object against which the write barrier must check
-                    if (isboxed || (jl_is_datatype(ety) && ((jl_datatype_t*)ety)->layout->npointers > 0)) { // if elements are just bits, don't need a write barrier
-                        Value *bufv = boxed(ctx, buf);
-                        // TODO Buffer: jl_buffer_type always owns the array data so there
-                        // currently are no flags indicating ownership of the buffer.
-                        // However, we should probably have an alternate jl_dynamic_buffer_type
-                        // variant in "jltypes.c" or jl_dynamic_buffer_t to "julia.h" to addthis
-                        // sort of capability.
-                        Value *flags = ConstantInt::get(getInt16Ty(ctx.builder.getContext()), 0);
-                        Value *is_owned = ctx.builder.CreateICmpEQ(flags, ConstantInt::get(getInt16Ty(ctx.builder.getContext()), 3));
-                        BasicBlock *curBB = ctx.builder.GetInsertBlock();
-                        BasicBlock *ownedBB = BasicBlock::Create(ctx.builder.getContext(), "array_owned", ctx.f);
-                        BasicBlock *mergeBB = BasicBlock::Create(ctx.builder.getContext(), "merge_own", ctx.f);
-                        ctx.builder.CreateCondBr(is_owned, ownedBB, mergeBB);
-                        ctx.builder.SetInsertPoint(ownedBB);
-                        // load owner pointer
-                        Instruction *own_ptr;
-                        // TODO Buffer: ensure this loads correctly
-                        own_ptr = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue,
-                                ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_prjlvalue,
-                                    emit_bitcast(ctx, decay_derived(ctx, bufv), ctx.types().T_pprjlvalue), 0), Align(sizeof(void*)));
-                        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
-                        ai.decorateInst(maybe_mark_load_dereferenceable(own_ptr, false, (jl_value_t*)jl_array_any_type));
-                        ctx.builder.CreateBr(mergeBB);
-                        ctx.builder.SetInsertPoint(mergeBB);
-                        data_owner = ctx.builder.CreatePHI(ctx.types().T_prjlvalue, 2);
-                        data_owner->addIncoming(bufv, curBB);
-                        data_owner->addIncoming(own_ptr, ownedBB);
-                    }
-                    if (!isboxed && jl_is_uniontype(ety)) {
-                        Type *AT = ArrayType::get(IntegerType::get(ctx.builder.getContext(), 8 * al), (elsz + al - 1) / al);
-                        Value *data = emit_bitcast(ctx, emit_arrayptr(ctx, buf, buf_ex), AT->getPointerTo());
-                        // compute tindex from val
-                        jl_cgval_t rhs_union = convert_julia_type(ctx, val, ety);
-                        Value *tindex = compute_tindex_unboxed(ctx, rhs_union, ety);
-                        tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1));
-                        Value *ptindex;
-                        if (elsz == 0) {
-                            ptindex = data;
-                        }
-                        else {
-                            // isbits union selector bytes are stored after a->maxsize
-                            ptindex = ctx.builder.CreateInBoundsGEP(AT, data, len);
-                            data = ctx.builder.CreateInBoundsGEP(AT, data, i);
-                        }
-                        ptindex = emit_bitcast(ctx, ptindex, getInt8PtrTy(ctx.builder.getContext()));
-                        ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
-                        ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, i);
-                        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_arrayselbyte);
-                        ai.decorateInst(ctx.builder.CreateStore(tindex, ptindex));
-                        if (elsz > 0 && (!jl_is_datatype(val.typ) || jl_datatype_size(val.typ) > 0)) {
-                            // copy data (if any)
-                            emit_unionmove(ctx, data, ctx.tbaa().tbaa_arraybuf, val, nullptr);
-                        }
-                    }
-                    else {
-                        typed_store(ctx,
-                                    emit_bufferptr(ctx, buf, buf_ex, isboxed),
-                                    i, val, jl_cgval_t(), ety,
-                                    isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf,
-                                    ctx.noalias().aliasscope.current,
-                                    data_owner,
-                                    isboxed,
-                                    isboxed ? AtomicOrdering::Release : AtomicOrdering::NotAtomic, // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
-                                    /*FailOrder*/AtomicOrdering::NotAtomic, // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
-                                    0,
-                                    false,
-                                    true,
-                                    false,
-                                    false,
-                                    false,
-                                    false,
-                                    nullptr,
-                                    "");
-                    }
-                }
-                *ret = buf;
-                return true;
-            }
-        }
-    }
+    // else if (f == jl_builtin_bufset && nargs == 4) {
+    //     const jl_cgval_t &buf = argv[2];
+    //     jl_cgval_t val = argv[3];
+    //     const jl_cgval_t &idx = argv[4];
+    //     bool indices_ok = true;
+    //     if (idx.typ != (jl_value_t*)jl_long_type) {
+    //         indices_ok = false;
+    //     }
+    //     Value *len = emit_bufferlen(ctx, buf);
+    //     jl_value_t *buf_dt = jl_unwrap_unionall(buf.typ);
+    //     if (jl_is_buffer_type(buf_dt) && indices_ok) {
+    //         jl_value_t *ety = jl_tparam0(buf_dt);
+    //         if (!jl_has_free_typevars(ety)) {
+    //             emit_typecheck(ctx, val, ety, "bufset");
+    //             val = update_julia_type(ctx, val, ety);
+    //             if (val.typ == jl_bottom_type)
+    //                 return true;
+    //             size_t elsz = 0, al = 0;
+    //             int union_max = jl_islayout_inline(ety, &elsz, &al);
+    //             bool isboxed = (union_max == 0);
+    //             if (isboxed)
+    //                 ety = (jl_value_t*)jl_any_type;
+    //             jl_value_t *buf_ex = jl_exprarg(ex, 2);
+    //             jl_value_t *boundscheck = argv[1].constant;
+    //             emit_typecheck(ctx, argv[1], (jl_value_t*)jl_bool_type, "bufset");
+    //             Value *i = emit_buffer_index(ctx, buf, buf_ex, idx, boundscheck);
+    //             if (!isboxed && jl_is_datatype(ety) && jl_datatype_size(ety) == 0) {
+    //                 // no-op
+    //             }
+    //             else {
+    //                 PHINode *data_owner = NULL; // owner object against which the write barrier must check
+    //                 if (isboxed || (jl_is_datatype(ety) && ((jl_datatype_t*)ety)->layout->npointers > 0)) { // if elements are just bits, don't need a write barrier
+    //                     Value *bufv = boxed(ctx, buf);
+    //                     // TODO Buffer: jl_buffer_type always owns the array data so there
+    //                     // currently are no flags indicating ownership of the buffer.
+    //                     // However, we should probably have an alternate jl_dynamic_buffer_type
+    //                     // variant in "jltypes.c" or jl_dynamic_buffer_t to "julia.h" to addthis
+    //                     // sort of capability.
+    //                     Value *flags = ConstantInt::get(getInt16Ty(ctx.builder.getContext()), 0);
+    //                     Value *is_owned = ctx.builder.CreateICmpEQ(flags, ConstantInt::get(getInt16Ty(ctx.builder.getContext()), 3));
+    //                     BasicBlock *curBB = ctx.builder.GetInsertBlock();
+    //                     BasicBlock *ownedBB = BasicBlock::Create(ctx.builder.getContext(), "array_owned", ctx.f);
+    //                     BasicBlock *mergeBB = BasicBlock::Create(ctx.builder.getContext(), "merge_own", ctx.f);
+    //                     ctx.builder.CreateCondBr(is_owned, ownedBB, mergeBB);
+    //                     ctx.builder.SetInsertPoint(ownedBB);
+    //                     // load owner pointer
+    //                     Instruction *own_ptr;
+    //                     // TODO Buffer: ensure this loads correctly
+    //                     own_ptr = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue,
+    //                             ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_prjlvalue,
+    //                                 emit_bitcast(ctx, decay_derived(ctx, bufv), ctx.types().T_pprjlvalue), 0), Align(sizeof(void*)));
+    //                     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+    //                     ai.decorateInst(maybe_mark_load_dereferenceable(own_ptr, false, (jl_value_t*)jl_array_any_type));
+    //                     ctx.builder.CreateBr(mergeBB);
+    //                     ctx.builder.SetInsertPoint(mergeBB);
+    //                     data_owner = ctx.builder.CreatePHI(ctx.types().T_prjlvalue, 2);
+    //                     data_owner->addIncoming(bufv, curBB);
+    //                     data_owner->addIncoming(own_ptr, ownedBB);
+    //                 }
+    //                 if (!isboxed && jl_is_uniontype(ety)) {
+    //                     Type *AT = ArrayType::get(IntegerType::get(ctx.builder.getContext(), 8 * al), (elsz + al - 1) / al);
+    //                     Value *data = emit_bitcast(ctx, emit_arrayptr(ctx, buf, buf_ex), AT->getPointerTo());
+    //                     // compute tindex from val
+    //                     jl_cgval_t rhs_union = convert_julia_type(ctx, val, ety);
+    //                     Value *tindex = compute_tindex_unboxed(ctx, rhs_union, ety);
+    //                     tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1));
+    //                     Value *ptindex;
+    //                     if (elsz == 0) {
+    //                         ptindex = data;
+    //                     }
+    //                     else {
+    //                         // isbits union selector bytes are stored after a->maxsize
+    //                         ptindex = ctx.builder.CreateInBoundsGEP(AT, data, len);
+    //                         data = ctx.builder.CreateInBoundsGEP(AT, data, i);
+    //                     }
+    //                     ptindex = emit_bitcast(ctx, ptindex, getInt8PtrTy(ctx.builder.getContext()));
+    //                     ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
+    //                     ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, i);
+    //                     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_arrayselbyte);
+    //                     ai.decorateInst(ctx.builder.CreateStore(tindex, ptindex));
+    //                     if (elsz > 0 && (!jl_is_datatype(val.typ) || jl_datatype_size(val.typ) > 0)) {
+    //                         // copy data (if any)
+    //                         emit_unionmove(ctx, data, ctx.tbaa().tbaa_arraybuf, val, nullptr);
+    //                     }
+    //                 }
+    //                 else {
+    //                     typed_store(ctx,
+    //                                 emit_bufferptr(ctx, buf, buf_ex, isboxed),
+    //                                 i, val, jl_cgval_t(), ety,
+    //                                 isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf,
+    //                                 ctx.noalias().aliasscope.current,
+    //                                 data_owner,
+    //                                 isboxed,
+    //                                 isboxed ? AtomicOrdering::Release : AtomicOrdering::NotAtomic, // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
+    //                                 /*FailOrder*/AtomicOrdering::NotAtomic, // TODO: we should do this for anything with CountTrackedPointers(elty).count > 0
+    //                                 0,
+    //                                 false,
+    //                                 true,
+    //                                 false,
+    //                                 false,
+    //                                 false,
+    //                                 false,
+    //                                 nullptr,
+    //                                 "");
+    //                 }
+    //             }
+    //             *ret = buf;
+    //             return true;
+    //         }
+    //     }
+    // }
+
     else if (f == jl_builtin_arraysize && nargs == 2) {
         const jl_cgval_t &ary = argv[1];
         const jl_cgval_t &idx = argv[2];

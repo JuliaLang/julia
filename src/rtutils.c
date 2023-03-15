@@ -356,7 +356,7 @@ JL_DLLEXPORT void *(jl_symbol_name)(jl_sym_t *s)
 
 JL_DLLEXPORT void *jl_buffer_ptr(jl_buffer_t *b)
 {
-    return (void*)jl_buffer_data(b);
+    return b->data;
 }
 
 // WARNING: THIS FUNCTION IS NEVER CALLED BUT INLINE BY CCALL

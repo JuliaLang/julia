@@ -1777,21 +1777,19 @@ function buffer_index(astate::AnalysisState, @nospecialize(buf), @nospecialize(a
     return argval
 end
 
-
 # TODO Buffer: escape analysis for jl_buffer_copy
 # is_buffer_copy(name::Symbol) = name === :jl_buffer_copy
 # # FIXME this implementation is very conservative, improve the accuracy and solve broken test cases
 # function escape_buffer_copy!(astate::AnalysisState, pc::Int, args::Vector{Any})
 #     length(args) ≥ 6 || return add_fallback_changes!(astate, pc, args)
-#     ary = args[6]
-#     aryt = argextype(ary, astate.ir)
-#     aryt ⊑ Array || return add_fallback_changes!(astate, pc, args)
-#     if isa(ary, SSAValue) || isa(ary, Argument)
-#         newary = SSAValue(pc)
-#         aryinfo = astate.estate[ary]
-#         newaryinfo = astate.estate[newary]
-#         add_escape_change!(astate, newary, aryinfo)
-#         add_escape_change!(astate, ary, newaryinfo)
+#     buf = args[6]
+#     argextype(buf, astate.ir) ⊑ Buffer || return add_fallback_changes!(astate, pc, args)
+#     if isa(buf, SSAValue) || isa(buf, Argument)
+#         newbuf = SSAValue(pc)
+#         bufinfo = astate.estate[buf]
+#         newaryinfo = astate.estate[newbuf]
+#         add_escape_change!(astate, newbuf, bufinfo)
+#         add_escape_change!(astate, buf, newaryinfo)
 #     end
 #     add_liveness_changes!(astate, pc, args, 6)
 # end

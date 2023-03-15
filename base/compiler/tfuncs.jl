@@ -1901,10 +1901,10 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
     return anyinfo ? PartialStruct(typ, argtypes) : typ
 end
 
+# Buffer
 @nospecs function bufref_tfunc(𝕃::AbstractLattice, boundscheck, buf, idx)
     hasintersect(widenconst(boundscheck), Bool) || return false
-    wbuf = widenconst(buf)
-    hasintersect(wbuf, Buffer) || return false
+    hasintersect(widenconst(buf), Buffer) || return false
     hasintersect(widenconst(idx), Int) || return false
     return buffer_elmtype(buf)
 end
@@ -1983,6 +1983,7 @@ function buffer_type_undefable(@nospecialize(buftype))
     end
 end
 
+# Array tfuncs
 @nospecs function arrayref_tfunc(𝕃::AbstractLattice, boundscheck, ary, idxs...)
     return _arrayref_tfunc(𝕃, boundscheck, ary, idxs)
 end

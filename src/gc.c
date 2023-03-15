@@ -917,43 +917,7 @@ void jl_gc_force_mark_old(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT
         dtsz = l * sizeof(void*) + sizeof(jl_svec_t);
     }
     else if (dt->name == jl_buffer_typename) {
-        jl_buffer_t *b = (jl_buffer_t *)v;
-        size_t elsz = 0, al = 0;
-        jl_value_t *eltype = jl_tparam0(jl_typeof(b));
-        size_t len = jl_buffer_len(b);
-        int isunboxed = jl_islayout_inline(eltype, &elsz, &al);
-        int isunion = jl_is_uniontype(eltype);
-        // int hasptr = isunboxed && (jl_is_datatype(eltype) && ((jl_datatype_t*)eltype)->layout->npointers > 0);
-        if (!isunboxed) {
-            elsz = sizeof(void*);
-            al = elsz;
-        }
-        else {
-            elsz = LLT_ALIGN(elsz, al);
-        }
-        size_t tot = len * elsz;
-        if (isunboxed) {
-            // extra byte for all julia allocated byte arrays
-            if (elsz == 1 && !isunion)
-                tot++;
-            // an extra byte for each isbits union array element, stored after len * elsize
-            if (isunion)
-                tot += len;
-        }
-        // align data area
-        int tsz = sizeof(jl_buffer_t);
-        if (tot <= ARRAY_INLINE_NBYTES) {
-            // align data area
-            if (tot >= ARRAY_CACHE_ALIGN_THRESHOLD)
-                tsz = LLT_ALIGN(tsz, JL_CACHE_BYTE_ALIGNMENT);
-            else if (isunboxed && elsz >= 4)
-                tsz = LLT_ALIGN(tsz, JL_SMALL_BYTE_ALIGNMENT);
-            tsz += tot;
-        }
-        else {
-            tsz += sizeof(void*);
-        }
-        if (tsz > GC_MAX_SZCLASS)
+        if (jl_buffer_object_size((jl_buffer_t*)v) < GC_MAX_SZCLASS)
             dtsz = GC_MAX_SZCLASS + 1;
     }
     else if (dt->name == jl_array_typename) {
@@ -1174,12 +1138,6 @@ void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a) JL_NOTSAFEPOINT
     ptls->heap.mallocarrays = ma;
 }
 
-static int jl_is_malloc_buffer(void *v)
-{
-    return (jl_buffer_nbytes((jl_value_t*)v) > ARRAY_INLINE_NBYTES);
-}
-
-
 void jl_gc_track_malloced_buffer(jl_ptls_t ptls, jl_buffer_t *b) JL_NOTSAFEPOINT
 {
     // This is **NOT** a GC safe point.
@@ -1196,15 +1154,18 @@ void jl_gc_track_malloced_buffer(jl_ptls_t ptls, jl_buffer_t *b) JL_NOTSAFEPOINT
     ptls->heap.mallocbuffers = ma;
 }
 
+
 static void jl_gc_free_buffer(jl_buffer_t *b) JL_NOTSAFEPOINT
 {
-    if (jl_is_malloc_buffer(b)) {
+    size_t nb = jl_buffer_nbytes((jl_buffer_t*)b);
+    if (nb > ARRAY_INLINE_NBYTES) {
         char *d = (char*)jl_buffer_data(b);
         if (jl_is_aligned_buffer(b))
             jl_free_aligned(d);
         else
             free(d);
-        gc_num.freed += jl_buffer_nbytes((jl_value_t*)b);
+        gc_num.freed += nb;
+        gc_num.freecall++;
     }
 }
 static void sweep_malloced_buffers(void) JL_NOTSAFEPOINT
@@ -1222,7 +1183,7 @@ static void sweep_malloced_buffers(void) JL_NOTSAFEPOINT
             }
             else {
                 *pma = nxt;
-                assert(jl_is_malloc_buffer(ma->b));
+                assert((jl_buffer_nbytes((jl_buffer_t*)v) > ARRAY_INLINE_NBYTES));
                 jl_gc_free_buffer(ma->b);
                 ma->next = ptls2->heap.mbfreelist;
                 ptls2->heap.mbfreelist = ma;
@@ -2171,7 +2132,7 @@ STATIC_INLINE void gc_mark_chunk(jl_ptls_t ptls, jl_gc_markqueue_t *mq, jl_gc_ch
             if (jl_is_array(ary8_parent))
                 elsz = ((jl_array_t*)ary8_parent)->elsize;
             else
-                elsz = jl_buffer_elsize(ary8_parent);
+                elsz = jl_eltype_layout(jl_buffer_eltype(ary8_parent)).elsize;
             gc_mark_array8(ptls, ary8_parent, ary8_begin, ary8_end, elem_begin, elem_end,
                            nptr, elsz);
             break;
@@ -2187,7 +2148,7 @@ STATIC_INLINE void gc_mark_chunk(jl_ptls_t ptls, jl_gc_markqueue_t *mq, jl_gc_ch
             if (jl_is_array(ary16_parent))
                 elsz = ((jl_array_t*)ary16_parent)->elsize;
             else
-                elsz = jl_buffer_elsize(ary16_parent);
+                elsz = jl_eltype_layout(jl_buffer_eltype(ary16_parent)).elsize;
             gc_mark_array16(ptls, ary16_parent, ary16_begin, ary16_end, elem_begin, elem_end,
                             nptr, elsz);
             break;

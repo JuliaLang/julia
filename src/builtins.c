@@ -500,7 +500,7 @@ JL_CALLABLE(jl_f_sizeof)
     if (jl_is_svec(x))
         return jl_box_long((1+jl_svec_len(x))*sizeof(void*));
     if (jl_is_buffer(x))
-        return jl_box_long(jl_buffer_len(x) * jl_buffer_elsize(x));
+        return jl_box_long((jl_buffer_len(x) * jl_eltype_layout(jl_buffer_eltype(x)).elsize));
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
     assert(jl_is_datatype(dt));
     assert(!dt->name->abstract);

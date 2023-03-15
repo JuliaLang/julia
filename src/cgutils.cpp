@@ -2953,36 +2953,68 @@ static Value *emit_bufferlen(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
     return bi.decorateInst(len);
 }
 
+// static Value *emit_bufferptr_internal(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *t, unsigned AS, bool isboxed)
+// {
+//     ++EmittedBufferptr;
+//     Value *ptr = emit_bitcast(ctx, t, getInt8PtrTy(ctx.builder.getContext()));
+//     ptr = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptr,
+//         ConstantInt::get(getSizeTy(ctx.builder.getContext()), sizeof(size_t)));
+
+//     // PointerType *PT = cast<PointerType>(ptr->getType());
+//     // PointerType *PPT = cast<PointerType>(PointerType::get(getInt8Ty(ctx.builder.getContext()), AddressSpace::Loaded));
+//     // PointerType *LoadT = PPT;
+//     // if (isboxed) {
+//     //     LoadT = PointerType::get(ctx.types().T_prjlvalue, AS);
+//     // }
+//     // else if (AS != PPT->getAddressSpace()) {
+//     //     LoadT = PointerType::getWithSamePointeeType(PPT, AS);
+//     // }
+//     // if (LoadT != PPT) {
+//     //     const auto Ty = PointerType::get(LoadT, PT->getAddressSpace());
+//     //     ptr = ctx.builder.CreateBitCast(ptr, Ty);
+//     // }
+
+//     // LoadInst *load = ctx.builder.CreateAlignedLoad(LoadT, ptr, Align(sizeof(char *)));
+//     // load->setOrdering(AtomicOrdering::NotAtomic);
+//     // load->setMetadata(LLVMContext::MD_nonnull, MDNode::get(ctx.builder.getContext(), None));
+//     // jl_aliasinfo_t aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+//     // aliasinfo.decorateInst(load);
+//     // return load;
+//     return ptr;
+
+// }
 static Value *emit_bufferptr_internal(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *t, unsigned AS, bool isboxed)
 {
     ++EmittedBufferptr;
-    Value *ptr = emit_bitcast(ctx, t, getInt8PtrTy(ctx.builder.getContext()));
-    ptr = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptr,
-        ConstantInt::get(getSizeTy(ctx.builder.getContext()), sizeof(size_t)));
+    Value *addr = ctx.builder.CreateStructGEP(ctx.types().T_jlbuffer,
+                                              emit_bitcast(ctx, t, ctx.types().T_pjlbuffer), 1);
+    // Normally allocated array of 0 dimension always have a inline pointer.
+    // However, we can't rely on that here since arrays can also be constructed from C pointers.
+    PointerType *PT = cast<PointerType>(addr->getType());
+    PointerType *PPT = cast<PointerType>(ctx.types().T_jlbuffer->getElementType(1));
+    PointerType *LoadT = PPT;
 
-    // PointerType *PT = cast<PointerType>(ptr->getType());
-    // PointerType *PPT = cast<PointerType>(PointerType::get(getInt8Ty(ctx.builder.getContext()), AddressSpace::Loaded));
-    // PointerType *LoadT = PPT;
-    // if (isboxed) {
-    //     LoadT = PointerType::get(ctx.types().T_prjlvalue, AS);
-    // }
-    // else if (AS != PPT->getAddressSpace()) {
-    //     LoadT = PointerType::getWithSamePointeeType(PPT, AS);
-    // }
-    // if (LoadT != PPT) {
-    //     const auto Ty = PointerType::get(LoadT, PT->getAddressSpace());
-    //     ptr = ctx.builder.CreateBitCast(ptr, Ty);
-    // }
+    if (isboxed) {
+        LoadT = PointerType::get(ctx.types().T_prjlvalue, AS);
+    }
+    else if (AS != PPT->getAddressSpace()) {
+        LoadT = PointerType::getWithSamePointeeType(PPT, AS);
+    }
+    if (LoadT != PPT) {
+        const auto Ty = PointerType::get(LoadT, PT->getAddressSpace());
+        addr = ctx.builder.CreateBitCast(addr, Ty);
+    }
 
-    // LoadInst *load = ctx.builder.CreateAlignedLoad(LoadT, ptr, Align(sizeof(char *)));
-    // load->setOrdering(AtomicOrdering::NotAtomic);
-    // load->setMetadata(LLVMContext::MD_nonnull, MDNode::get(ctx.builder.getContext(), None));
-    // jl_aliasinfo_t aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
-    // aliasinfo.decorateInst(load);
-    // return load;
-    return ptr;
+    LoadInst *LI = ctx.builder.CreateAlignedLoad(LoadT, addr, Align(sizeof(char *)));
+    LI->setOrdering(AtomicOrdering::NotAtomic);
+    LI->setMetadata(LLVMContext::MD_nonnull, MDNode::get(ctx.builder.getContext(), None));
+    jl_aliasinfo_t aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, arraytype_constshape(tinfo.typ) ? ctx.tbaa().tbaa_const : ctx.tbaa().tbaa_arrayptr);
+    aliasinfo.decorateInst(LI);
 
+    return LI;
 }
+
+
 static Value *emit_bufferptr(jl_codectx_t &ctx, const jl_cgval_t &tinfo, bool isboxed = false)
 {
     Value *t = boxed(ctx, tinfo);
