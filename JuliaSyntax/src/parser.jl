@@ -1823,23 +1823,21 @@ function parse_resword(ps::ParseState)
         emit(ps, mark, K"for")
     elseif word == K"let"
         bump(ps, TRIVIA_FLAG)
-        if peek(ps) ∉ KSet"NewlineWs ;"
-            # let x=1\n end   ==>  (let (block (= x 1)) (block))
-            # let x=1 ; end   ==>  (let (block (= x 1)) (block))
-            m = position(ps)
-            n_subexprs = parse_comma_separated(ps, parse_eq_star)
-            kb = peek_behind(ps).kind
+        m = position(ps)
+        if peek(ps) in KSet"NewlineWs ;"
+            # let end           ==>  (let (block) (block))
+            # let ; end         ==>  (let (block) (block))
+            # let ; body end    ==>  (let (block) (block body))
+        else
+            # let x=1\n end     ==>  (let (block (= x 1)) (block))
+            # let x=1 ; end     ==>  (let (block (= x 1)) (block))
             # let x::1 ; end    ==>  (let (block (::-i x 1)) (block))
             # let x ; end       ==>  (let (block x) (block))
             # let x=1,y=2 ; end ==>  (let (block (= x 1) (= y 2) (block)))
             # let x+=1 ; end    ==>  (let (block (+= x 1)) (block))
-            emit(ps, m, K"block")
-        else
-            # let end           ==>  (let (block) (block))
-            # let ; end         ==>  (let (block) (block))
-            # let ; body end    ==>  (let (block) (block body))
-            bump_invisible(ps, K"block")
+            parse_comma_separated(ps, parse_eq_star)
         end
+        emit(ps, m, K"block")
         k = peek(ps)
         if k in KSet"NewlineWs ;"
             bump(ps, TRIVIA_FLAG)
