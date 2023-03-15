@@ -1566,6 +1566,12 @@ void jl_dump_native_impl(void *native_code,
                                      "jl_RTLD_DEFAULT_handle_pointer"), TheTriple);
     }
 
+    // Reserve space for the output files and names
+    // DO NOT DELETE, this is necessary to ensure memorybuffers
+    // have a stable backing store for both their object files and
+    // their names
+    outputs.reserve(threads * (!!unopt_bc_fname + !!bc_fname + !!obj_fname + !!asm_fname) * 2 + 2);
+
     auto compile = [&](Module &M, StringRef name, unsigned threads) { add_output(
             M, *SourceTM, outputs, name,
             unopt_bc_Archive, bc_Archive, obj_Archive, asm_Archive,
