@@ -179,15 +179,15 @@ tests = [
         "x >> y >> z" => "(call-i (call-i x >> y) >> z)"
     ],
     JuliaSyntax.parse_juxtapose => [
-        "2x"         => "(call-i 2 * x)"
-        "2x"         => "(call-i 2 * x)"
-        "2(x)"       => "(call-i 2 * x)"
-        "(2)(3)x"    => "(call-i 2 * 3 x)"
-        "(x-1)y"     => "(call-i (call-i x - 1) * y)"
-        "x'y"        => "(call-i (call-post x ') * y)"
+        "2x"         => "(juxtapose 2 x)"
+        "2x"         => "(juxtapose 2 x)"
+        "2(x)"       => "(juxtapose 2 x)"
+        "(2)(3)x"    => "(juxtapose 2 3 x)"
+        "(x-1)y"     => "(juxtapose (call-i x - 1) y)"
+        "x'y"        => "(juxtapose (call-post x ') y)"
         # errors
-        "\"a\"\"b\"" => "(call-i (string \"a\") * (error-t) (string \"b\"))"
-        "\"a\"x"     => "(call-i (string \"a\") * (error-t) x)"
+        "\"a\"\"b\"" => "(juxtapose (string \"a\") (error-t) (string \"b\"))"
+        "\"a\"x"     => "(juxtapose (string \"a\") (error-t) x)"
         # Not juxtaposition - parse_juxtapose will consume only the first token.
         "x.3"       =>  "x"
         "sqrt(2)2"  =>  "(call sqrt 2)"
@@ -467,28 +467,28 @@ tests = [
         "primitive type A \$N end"  =>  "(primitive A (\$ N))"
         "primitive type A <: B \n 8 \n end"  =>  "(primitive (<: A B) 8)"
         # struct
-        "struct A <: B \n a::X \n end" =>  "(struct false (<: A B) (block (::-i a X)))" => Expr(:struct, false, Expr(:<:, :A, :B), Expr(:block, Expr(:(::), :a, :X)))
-        "struct A \n a \n b \n end"    =>  "(struct false A (block a b))"             => Expr(:struct, false, :A, Expr(:block, :a, :b))
-        "mutable struct A end"         =>  "(struct true A (block))"
-        ((v=v"1.8",), "struct A const a end") => "(struct false A (block (const a)))" => Expr(:struct, false, :A, Expr(:block, Expr(:const, :a)))
-        ((v=v"1.7",), "struct A const a end") => "(struct false A (block (error (const a))))"
-        "struct A end"    =>  "(struct false A (block))"  => Expr(:struct, false, :A, Expr(:block))
-        "struct try end"  =>  "(struct false (error (try)) (block))"
+        "struct A <: B \n a::X \n end" =>  "(struct (<: A B) (block (::-i a X)))" => Expr(:struct, false, Expr(:<:, :A, :B), Expr(:block, Expr(:(::), :a, :X)))
+        "struct A \n a \n b \n end"    =>  "(struct A (block a b))"             => Expr(:struct, false, :A, Expr(:block, :a, :b))
+        "mutable struct A end"         =>  "(struct-mut A (block))"
+        ((v=v"1.8",), "struct A const a end") => "(struct A (block (const a)))" => Expr(:struct, false, :A, Expr(:block, Expr(:const, :a)))
+        ((v=v"1.7",), "struct A const a end") => "(struct A (block (error (const a))))"
+        "struct A end"    =>  "(struct A (block))"  => Expr(:struct, false, :A, Expr(:block))
+        "struct try end"  =>  "(struct (error (try)) (block))"
         # return
-        "return\nx"   =>  "(return nothing)"
-        "return)"     =>  "(return nothing)"
+        "return\nx"   =>  "(return)"
+        "return)"     =>  "(return)"
         "return x"    =>  "(return x)"
         "return x,y"  =>  "(return (tuple x y))"
         # break/continue
         "break"    => "(break)"
         "continue" => "(continue)"
         # module/baremodule
-        "module A end"      =>  "(module true A (block))"
-        "baremodule A end"  =>  "(module false A (block))"
-        "module do \n end"  =>  "(module true (error (do)) (block))"
-        "module \$A end"    =>  "(module true (\$ A) (block))"
-        "module A \n a \n b \n end"  =>  "(module true A (block a b))"
-        """module A \n "x"\na\n end""" => """(module true A (block (doc (string "x") a)))"""
+        "module A end"      =>  "(module A (block))"
+        "baremodule A end"  =>  "(module-bare A (block))"
+        "module do \n end"  =>  "(module (error (do)) (block))"
+        "module \$A end"    =>  "(module (\$ A) (block))"
+        "module A \n a \n b \n end"  =>  "(module A (block a b))"
+        """module A \n "x"\na\n end""" => """(module A (block (doc (string "x") a)))"""
         # export
         "export a"   =>  "(export a)"  => Expr(:export, :a)
         "export @a"  =>  "(export @a)" => Expr(:export, Symbol("@a"))
