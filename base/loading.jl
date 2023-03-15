@@ -1205,8 +1205,9 @@ end
 
 function run_extension_callbacks()
     assert_havelock(require_lock)
-    for pkgid in copy(keys(EXT_DORMITORY))
-        haskey(Base.loaded_modules, pkgid) || continue
+    loaded_triggers = collect(intersect(keys(Base.loaded_modules), keys(Base.EXT_DORMITORY)))
+    sort!(loaded_triggers; by=x->x.uuid)
+    for pkgid in loaded_triggers
         # take ownership of extids that depend on this pkgid
         extids = pop!(EXT_DORMITORY, pkgid, nothing)
         extids === nothing && continue
