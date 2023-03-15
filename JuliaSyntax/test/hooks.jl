@@ -38,7 +38,6 @@
 
     @testset "Expr(:incomplete)" begin
         JuliaSyntax.enable_in_core!()
-
         @test Meta.isexpr(Meta.parse("[x"), :incomplete)
 
         for (str, tag) in [

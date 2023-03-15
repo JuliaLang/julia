@@ -312,4 +312,18 @@
         @test parse(Expr, "return x") == Expr(:return, :x)
         @test parse(Expr, "return")  == Expr(:return, nothing)
     end
+
+    @testset "struct" begin
+        @test parse(Expr, "struct A end") ==
+            Expr(:struct, false, :A, Expr(:block, LineNumberNode(1)))
+        @test parse(Expr, "mutable struct A end") ==
+            Expr(:struct, true, :A, Expr(:block, LineNumberNode(1)))
+    end
+
+    @testset "module" begin
+        @test parse(Expr, "module A end") ==
+            Expr(:module, true,  :A, Expr(:block, LineNumberNode(1), LineNumberNode(1)))
+        @test parse(Expr, "baremodule A end") ==
+            Expr(:module, false, :A, Expr(:block, LineNumberNode(1), LineNumberNode(1)))
+    end
 end

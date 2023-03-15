@@ -278,6 +278,7 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
             pushfirst!(args[2].args, loc)
         end
     elseif headsym === :module
+        pushfirst!(args, !has_flags(node, BARE_MODULE_FLAG))
         pushfirst!(args[3].args, loc)
     elseif headsym == :inert || (headsym == :quote && length(args) == 1 &&
                  !(a1 = only(args); a1 isa Expr || a1 isa QuoteNode ||
@@ -303,11 +304,13 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
             args[1] = Expr(headsym, args[1].args...)
             headsym = :const
         end
-    elseif headsym == :return && isempty(args)
+    elseif headsym === :return && isempty(args)
         push!(args, nothing)
-    elseif headsym == :juxtapose
+    elseif headsym === :juxtapose
         headsym = :call
         pushfirst!(args, :*)
+    elseif headsym === :struct
+        pushfirst!(args, has_flags(node, MUTABLE_FLAG))
     end
     return Expr(headsym, args...)
 end
