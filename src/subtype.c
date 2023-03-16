@@ -1569,6 +1569,10 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
 {
     int16_t oldRmore = e->Runions.more;
     int sub;
+    int kindx = !jl_has_free_typevars(x);
+    int kindy = !jl_has_free_typevars(y);
+    if (kindx && kindy)
+        return jl_subtype(x, y);
     if (may_contain_union_decision(y, e, NULL) && pick_union_decision(e, 1) == 0) {
         jl_saved_unionstate_t oldRunions; push_unionstate(&oldRunions, &e->Runions);
         e->Lunions.used = e->Runions.used = 0;
@@ -1581,6 +1585,8 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
         // Once limit_slow == 1, also skip it if
         // 1) `forall_exists_subtype` return false
         // 2) the left `Union` looks big
+        if (limit_slow == -1)
+            limit_slow = kindx || kindy;
         if (noRmore || (limit_slow && (count > 3  || !sub)))
             e->Runions.more = oldRmore;
     }
@@ -1630,8 +1636,7 @@ static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 
     jl_saved_unionstate_t oldLunions; push_unionstate(&oldLunions, &e->Lunions);
 
-    int limit_slow = !jl_has_free_typevars(x) || !jl_has_free_typevars(y);
-    int sub = local_forall_exists_subtype(x, y, e, 2, limit_slow);
+    int sub = local_forall_exists_subtype(x, y, e, 2, -1);
     if (sub) {
         flip_offset(e);
         sub = local_forall_exists_subtype(y, x, e, 0, 0);
