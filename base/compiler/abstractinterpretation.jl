@@ -979,8 +979,9 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
         if code !== nothing
             ir = codeinst_to_ir(interp, code)
             if isa(ir, IRCode)
-                irsv = IRInterpretationState(interp, ir, mi, sv.world, arginfo.argtypes)
-                rt, nothrow = ir_abstract_constant_propagation(interp, irsv)
+                irinterp = switch_to_irinterp(interp)
+                irsv = IRInterpretationState(irinterp, ir, mi, sv.world, arginfo.argtypes)
+                rt, nothrow = ir_abstract_constant_propagation(irinterp, irsv)
                 @assert !(rt isa Conditional || rt isa MustAlias) "invalid lattice element returned from IR interpretation"
                 if !isa(rt, Type) || typeintersect(rt, Bool) === Union{}
                     new_effects = Effects(result.effects; nothrow=nothrow)

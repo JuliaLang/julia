@@ -312,51 +312,64 @@ function OptimizationParams(
 end
 
 """
-    NativeInterpreter
+    NativeInterpreter <: AbstractInterpreter
 
 This represents Julia's native type inference algorithm and the Julia-LLVM codegen backend.
-It contains many parameters used by the compilation pipeline.
 """
 struct NativeInterpreter <: AbstractInterpreter
-    # Cache of inference results for this particular interpreter
-    cache::Vector{InferenceResult}
     # The world age we're working inside of
     world::UInt
+
     # method table to lookup for during inference on this world age
     method_table::CachedMethodTable{InternalMethodTable}
+
+    # Cache of inference results for this particular interpreter
+    inf_cache::Vector{InferenceResult}
 
     # Parameters for inference and optimization
     inf_params::InferenceParams
     opt_params::OptimizationParams
 
-    function NativeInterpreter(world::UInt = get_world_counter();
-                               inf_params = InferenceParams(),
-                               opt_params = OptimizationParams(),
-                               )
-        cache = Vector{InferenceResult}() # Initially empty cache
+    # a boolean flag to indicate if this interpreter is performing semi concrete interpretation
+    irinterp::Bool
+end
 
-        # Sometimes the caller is lazy and passes typemax(UInt).
-        # we cap it to the current world age
-        if world == typemax(UInt)
-            world = get_world_counter()
-        end
-
-        method_table = CachedMethodTable(InternalMethodTable(world))
-
-        # If they didn't pass typemax(UInt) but passed something more subtly
-        # incorrect, fail out loudly.
-        @assert world <= get_world_counter()
-
-        return new(cache, world, method_table, inf_params, opt_params)
+function NativeInterpreter(world::UInt = get_world_counter();
+                           inf_params::InferenceParams = InferenceParams(),
+                           opt_params::OptimizationParams = OptimizationParams())
+    # Sometimes the caller is lazy and passes typemax(UInt).
+    # we cap it to the current world age
+    if world == typemax(UInt)
+        world = get_world_counter()
     end
+
+    # If they didn't pass typemax(UInt) but passed something more subtly
+    # incorrect, fail out loudly.
+    @assert world <= get_world_counter()
+
+    method_table = CachedMethodTable(InternalMethodTable(world))
+
+    inf_cache = Vector{InferenceResult}() # Initially empty cache
+
+    return NativeInterpreter(world, method_table, inf_cache, inf_params, opt_params, #=irinterp=#false)
+end
+
+function NativeInterpreter(interp::NativeInterpreter;
+                           world::UInt = interp.world,
+                           method_table::CachedMethodTable{InternalMethodTable} = interp.method_table,
+                           inf_cache::Vector{InferenceResult} = interp.inf_cache,
+                           inf_params::InferenceParams = interp.inf_params,
+                           opt_params::OptimizationParams = interp.opt_params,
+                           irinterp::Bool = interp.irinterp)
+    return NativeInterpreter(world, method_table, inf_cache, inf_params, opt_params, irinterp)
 end
 
 # Quickly and easily satisfy the AbstractInterpreter API contract
-InferenceParams(ni::NativeInterpreter) = ni.inf_params
-OptimizationParams(ni::NativeInterpreter) = ni.opt_params
-get_world_counter(ni::NativeInterpreter) = ni.world
-get_inference_cache(ni::NativeInterpreter) = ni.cache
-code_cache(ni::NativeInterpreter) = WorldView(GLOBAL_CI_CACHE, get_world_counter(ni))
+InferenceParams(interp::NativeInterpreter) = interp.inf_params
+OptimizationParams(interp::NativeInterpreter) = interp.opt_params
+get_world_counter(interp::NativeInterpreter) = interp.world
+get_inference_cache(interp::NativeInterpreter) = interp.inf_cache
+code_cache(interp::NativeInterpreter) = WorldView(GLOBAL_CI_CACHE, get_world_counter(interp))
 
 """
     already_inferred_quick_test(::AbstractInterpreter, ::MethodInstance)
@@ -441,6 +454,20 @@ infer_compilation_signature(::NativeInterpreter) = true
 typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.instance)
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
 optimizer_lattice(::AbstractInterpreter) = OptimizerLattice(SimpleInferenceLattice.instance)
+
+typeinf_lattice(interp::NativeInterpreter) = interp.irinterp ? optimizer_lattice(interp) : InferenceLattice(BaseInferenceLattice.instance)
+ipo_lattice(interp::NativeInterpreter) = interp.irinterp ? optimizer_lattice(interp) : InferenceLattice(IPOResultLattice.instance)
+optimizer_lattice(interp::NativeInterpreter) = OptimizerLattice(SimpleInferenceLattice.instance)
+
+"""
+    switch_to_irinterp(interp::AbstractInterpreter) -> irinterp::AbstractInterpreter
+
+Optionally convert `interp` to new `irinterp::AbstractInterpreter` to perform semi-concrete
+interpretation. `NativeInterpreter` uses this interface to switch its lattice to
+`optimizer_lattice` during semi-concrete interpretation on `IRCode`.
+"""
+switch_to_irinterp(interp::AbstractInterpreter) = interp
+switch_to_irinterp(interp::NativeInterpreter) = NativeInterpreter(interp; irinterp=true)
 
 abstract type CallInfo end
 
