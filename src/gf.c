@@ -207,6 +207,9 @@ JL_DLLEXPORT jl_value_t *jl_specializations_lookup(jl_method_t *m, jl_value_t *t
 
 JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_value_t *type, size_t world)
 {
+    // TODO: this is sort of an odd lookup strategy (and the only user of
+    // jl_typemap_assoc_by_type with subtype=0), while normally jl_gf_invoke_lookup would be
+    // expected to be used instead
     struct jl_typemap_assoc search = {type, world, NULL, 0, ~(size_t)0};
     jl_typemap_entry_t *sf = jl_typemap_assoc_by_type(jl_atomic_load_relaxed(&mt->defs), &search, /*offs*/0, /*subtype*/0);
     if (!sf)
@@ -1379,7 +1382,9 @@ struct matches_env {
     struct typemap_intersection_env match;
     jl_typemap_entry_t *newentry;
     jl_value_t *shadowed;
+    jl_typemap_entry_t *replaced;
 };
+
 static int get_intersect_visitor(jl_typemap_entry_t *oldentry, struct typemap_intersection_env *closure0)
 {
     struct matches_env *closure = container_of(closure0, struct matches_env, match);
@@ -1390,13 +1395,17 @@ static int get_intersect_visitor(jl_typemap_entry_t *oldentry, struct typemap_in
         // also be careful not to try to scan something from the current dump-reload though
         return 1;
     jl_method_t *oldmethod = oldentry->func.method;
+    if (closure->match.issubty // e.g. jl_subtype(closure->newentry.sig, oldentry->sig)
+        && jl_subtype(oldmethod->sig, (jl_value_t*)closure->newentry->sig)) { // e.g. jl_type_equal(closure->newentry->sig, oldentry->sig)
+        closure->replaced = oldentry;
+    }
     if (closure->shadowed == NULL)
         closure->shadowed = (jl_value_t*)jl_alloc_vec_any(0);
     jl_array_ptr_1d_push((jl_array_t*)closure->shadowed, (jl_value_t*)oldmethod);
     return 1;
 }
 
-static jl_value_t *get_intersect_matches(jl_typemap_t *defs, jl_typemap_entry_t *newentry)
+static jl_value_t *get_intersect_matches(jl_typemap_t *defs, jl_typemap_entry_t *newentry, jl_typemap_entry_t **replaced)
 {
     jl_tupletype_t *type = newentry->sig;
     jl_tupletype_t *ttypes = (jl_tupletype_t*)jl_unwrap_unionall((jl_value_t*)type);
@@ -1411,9 +1420,12 @@ static jl_value_t *get_intersect_matches(jl_typemap_t *defs, jl_typemap_entry_t 
     }
     struct matches_env env = {{get_intersect_visitor, (jl_value_t*)type, va,
             /* .ti = */ NULL, /* .env = */ jl_emptysvec, /* .issubty = */ 0},
-        /* .newentry = */ newentry, /* .shadowed */ NULL};
+        /* .newentry = */ newentry, /* .shadowed */ NULL, /* .replaced */ NULL};
     JL_GC_PUSH3(&env.match.env, &env.match.ti, &env.shadowed);
     jl_typemap_intersection_visitor(defs, 0, &env.match);
+    env.match.env = NULL;
+    env.match.ti = NULL;
+    *replaced = env.replaced;
     JL_GC_POP();
     return env.shadowed;
 }
@@ -1735,8 +1747,9 @@ static jl_typemap_entry_t *do_typemap_search(jl_methtable_t *mt JL_PROPAGATES_RO
 }
 #endif
 
-static void jl_method_table_invalidate(jl_methtable_t *mt, jl_typemap_entry_t *methodentry, jl_method_t *method, size_t max_world)
+static void jl_method_table_invalidate(jl_methtable_t *mt, jl_typemap_entry_t *methodentry, size_t max_world)
 {
+    jl_method_t *method = methodentry->func.method;
     assert(!method->is_for_opaque_closure);
     method->deleted_world = methodentry->max_world = max_world;
     // drop this method from mt->cache
@@ -1760,16 +1773,18 @@ static void jl_method_table_invalidate(jl_methtable_t *mt, jl_typemap_entry_t *m
     }
     // Invalidate the backedges
     int invalidated = 0;
-    jl_svec_t *specializations = jl_atomic_load_relaxed(&methodentry->func.method->specializations);
+    jl_svec_t *specializations = jl_atomic_load_relaxed(&method->specializations);
     l = jl_svec_len(specializations);
     for (i = 0; i < l; i++) {
         jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(specializations, i);
         if ((jl_value_t*)mi != jl_nothing) {
             invalidated = 1;
-            invalidate_external(mi, methodentry->max_world);
-            invalidate_backedges(&do_nothing_with_codeinst, mi, methodentry->max_world, "jl_method_table_disable");
+            invalidate_external(mi, max_world);
+            invalidate_backedges(&do_nothing_with_codeinst, mi, max_world, "jl_method_table_disable");
         }
     }
+    // XXX: this might have resolved an ambiguity, for which we have not tracked the edge here,
+    // and thus now introduce a mistake into inference
     if (invalidated && _jl_debug_method_invalidation) {
         jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)method);
         jl_value_t *loctag = jl_cstr_to_string("jl_method_table_disable");
@@ -1788,7 +1803,7 @@ JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *metho
     JL_LOCK(&mt->writelock);
     // Narrow the world age on the method to make it uncallable
     size_t world = jl_atomic_fetch_add(&jl_world_counter, 1);
-    jl_method_table_invalidate(mt, methodentry, method, world);
+    jl_method_table_invalidate(mt, methodentry, world);
     JL_UNLOCK(&mt->writelock);
 }
 
@@ -1866,22 +1881,21 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     jl_typemap_entry_t *newentry = NULL;
     JL_GC_PUSH7(&oldvalue, &oldmi, &newentry, &loctag, &isect, &isect2, &isect3);
     JL_LOCK(&mt->writelock);
-    // first find if we have an existing entry to delete
-    struct jl_typemap_assoc search = {(jl_value_t*)type, method->primary_world, NULL, 0, ~(size_t)0};
-    jl_typemap_entry_t *oldentry = jl_typemap_assoc_by_type(jl_atomic_load_relaxed(&mt->defs), &search, /*offs*/0, /*subtype*/0);
-    // then add our new entry
+    // add our new entry
     newentry = jl_typemap_alloc((jl_tupletype_t*)type, simpletype, jl_emptysvec,
             (jl_value_t*)method, method->primary_world, method->deleted_world);
     jl_typemap_insert(&mt->defs, (jl_value_t*)mt, newentry, 0);
-    if (oldentry) {
-        jl_method_t *m = oldentry->func.method;
-        method_overwrite(newentry, m);
-        jl_method_table_invalidate(mt, oldentry, m, max_world);
+    jl_typemap_entry_t *replaced = NULL;
+    // then check what entries we replaced
+    oldvalue = get_intersect_matches(jl_atomic_load_relaxed(&mt->defs), newentry, &replaced);
+    int invalidated = 0;
+    if (replaced) {
+        oldvalue = (jl_value_t*)replaced;
+        invalidated = 1;
+        method_overwrite(newentry, replaced->func.method);
+        jl_method_table_invalidate(mt, replaced, max_world);
     }
     else {
-        oldvalue = get_intersect_matches(jl_atomic_load_relaxed(&mt->defs), newentry);
-
-        int invalidated = 0;
         jl_method_t *const *d;
         size_t j, n;
         if (oldvalue == NULL) {
@@ -2033,13 +2047,13 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                 }
             }
         }
-        if (invalidated && _jl_debug_method_invalidation) {
-            jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)method);
-            loctag = jl_cstr_to_string("jl_method_table_insert");
-            jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
-        }
-        update_max_args(mt, type);
     }
+    if (invalidated && _jl_debug_method_invalidation) {
+        jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)method);
+        loctag = jl_cstr_to_string("jl_method_table_insert");
+        jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
+    }
+    update_max_args(mt, type);
     JL_UNLOCK(&mt->writelock);
     JL_GC_POP();
 }
