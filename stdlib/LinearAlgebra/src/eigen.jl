@@ -15,7 +15,8 @@ Iterating the decomposition produces the components `F.values` and `F.vectors`.
 
 The `Eigen` type additionally supports a number of methods that preserve the
 eigenvalue decomposition structure, such as matrix functions (`^`, `inv`,
-`exp`, etc.) or adjoints.
+`exp`, etc.) or adjoints. The resulting objects share the underlying `vectors`,
+and therefore this field should not be modified.
 
 # Examples
 ```jldoctest
@@ -658,10 +659,10 @@ Array(F::Eigen) = Matrix(F)
 # Operations on Eigen
 # Only operations that can be efficiently implemented or conserve the eigen type are implemented
 adjoint(E::Eigen) = Eigen(adjoint.(E.values),
-                          copy(adjoint(E.are_vectors_unitary ? (E.vectors') : inv(E.vectors))),
+                          adjoint(E.are_vectors_unitary ? (E.vectors') : inv(E.vectors)),
                           E.are_vectors_unitary)
 transpose(E::Eigen) = Eigen(transpose.(E.values),
-                            copy(transpose(E.are_vectors_unitary ? (E.vectors') : inv(E.vectors))),
+                            transpose(E.are_vectors_unitary ? (E.vectors') : inv(E.vectors)),
                             E.are_vectors_unitary && (eltype(E) <: Real))
 
 det(A::Eigen) = prod(A.values)
@@ -671,10 +672,9 @@ tr(E::Eigen) = sum(E.values)
 *(x::Adjoint{<:Any, <:AbstractVector}, E::Eigen) = E.are_vectors_unitary ?
                                                    ((x*(E.vectors)) * Diagonal(E.values)) * (E.vectors') :
                                                    ((x*(E.vectors)) * Diagonal(E.values)) / E.vectors
-mul!(x, E::Eigen, y::AbstractVector) = copyto!(x, E*y)
 
-inv(E::Eigen) = Eigen(map(inv, E.values), copy(E.vectors), E.are_vectors_unitary)
+inv(E::Eigen) = Eigen(map(inv, E.values), E.vectors, E.are_vectors_unitary)
 for f in _matrix_functions
-    @eval Base.$f(E::Eigen) = Eigen(map($f, E.values), copy(E.vectors), E.are_vectors_unitary)
+    @eval Base.$f(E::Eigen) = Eigen(map($f, E.values), E.vectors, E.are_vectors_unitary)
 end
-^(E::Eigen, x) = Eigen(map(λ -> λ^x, E.values), copy(E.vectors), E.are_vectors_unitary)
+^(E::Eigen, x) = Eigen(map(λ -> λ^x, E.values), E.vectors, E.are_vectors_unitary)
