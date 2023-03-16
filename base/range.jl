@@ -264,6 +264,8 @@ RangeStepStyle(::Type{<:AbstractRange{<:Integer}}) = RangeStepRegular()
 
 convert(::Type{T}, r::AbstractRange) where {T<:AbstractRange} = r isa T ? r : T(r)::T
 AbstractRange{T}(r::AbstractRange) where T = T(first(r)):T(step(r)):T(last(r))
+AbstractVector{T}(r::AbstractRange) where T = AbstractRange{T}(r)
+AbstractArray{T}(r::AbstractRange) where T = AbstractRange{T}(r)
 
 ## ordinal ranges
 
