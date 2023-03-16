@@ -103,7 +103,7 @@ Return the total amount (in bytes) allocated by the just-in-time compiler
 for e.g. native code and data.
 """
 function jit_total_bytes()
-    return Int(ccall(:jl_jit_total_bytes, Csize_t, ()))
+    return ccall(:jl_jit_total_bytes, Csize_t, ())
 end
 
 # print elapsed time, return expression value

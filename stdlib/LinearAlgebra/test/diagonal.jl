@@ -43,11 +43,14 @@ Random.seed!(1)
         end
         @test eltype(Diagonal{elty}([1,2,3,4])) == elty
         @test isa(Diagonal{elty,Vector{elty}}(GenericArray([1,2,3,4])), Diagonal{elty,Vector{elty}})
+        @test isa(Diagonal{elty}(rand(Int,n,n)), Diagonal{elty,Vector{elty}})
         DI = Diagonal([1,2,3,4])
         @test Diagonal(DI) === DI
         @test isa(Diagonal{elty}(DI), Diagonal{elty})
         # issue #26178
-        @test_throws MethodError convert(Diagonal, [1, 2, 3, 4])
+        @test_throws MethodError convert(Diagonal, [1,2,3,4])
+        @test_throws DimensionMismatch convert(Diagonal, [1 2 3 4])
+        @test_throws InexactError convert(Diagonal, ones(2,2))
     end
 
     @testset "Basic properties" begin
@@ -1150,6 +1153,17 @@ end
     D = Diagonal(fill(2, 2))
     copyto!(D, I)
     @test all(isone, diag(D))
+end
+
+@testset "diagonal triple multiplication (#49005)" begin
+    n = 10
+    @test *(Diagonal(ones(n)), Diagonal(1:n), Diagonal(ones(n))) isa Diagonal
+    @test_throws DimensionMismatch (*(Diagonal(ones(n)), Diagonal(1:n), Diagonal(ones(n+1))))
+    @test_throws DimensionMismatch (*(Diagonal(ones(n)), Diagonal(1:n+1), Diagonal(ones(n+1))))
+    @test_throws DimensionMismatch (*(Diagonal(ones(n+1)), Diagonal(1:n), Diagonal(ones(n))))
+
+    # currently falls back to two-term *
+    @test *(Diagonal(ones(n)), Diagonal(1:n), Diagonal(ones(n)), Diagonal(1:n)) isa Diagonal
 end
 
 end # module TestDiagonal

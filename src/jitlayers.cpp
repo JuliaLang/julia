@@ -194,13 +194,13 @@ static jl_callptr_t _jl_compile_codeinst(
 
     jl_callptr_t fptr = NULL;
     // emit the code in LLVM IR form
-    jl_codegen_params_t params(std::move(context)); // Locks the context
+    jl_codegen_params_t params(std::move(context), jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple()); // Locks the context
     params.cache = true;
     params.world = world;
     jl_workqueue_t emitted;
     {
         orc::ThreadSafeModule result_m =
-            jl_create_ts_module(name_from_method_instance(codeinst->def), params.tsctx, params.imaging);
+            jl_create_ts_module(name_from_method_instance(codeinst->def), params.tsctx, params.imaging, params.DL, params.TargetTriple);
         jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, src, params);
         if (result_m)
             emitted[codeinst] = {std::move(result_m), std::move(decls)};
@@ -334,7 +334,10 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
         into = &backing;
     }
     JL_LOCK(&jl_codegen_lock);
-    jl_codegen_params_t params(into->getContext());
+    auto target_info = into->withModuleDo([&](Module &M) {
+        return std::make_pair(M.getDataLayout(), Triple(M.getTargetTriple()));
+    });
+    jl_codegen_params_t params(into->getContext(), std::move(target_info.first), std::move(target_info.second));
     if (pparams == NULL)
         pparams = &params;
     assert(pparams->tsctx.getContext() == into->getContext().getContext());
@@ -955,18 +958,26 @@ void registerRTDyldJITObject(const object::ObjectFile &Object,
 namespace {
     static std::unique_ptr<TargetMachine> createTargetMachine() JL_NOTSAFEPOINT {
         TargetOptions options = TargetOptions();
-#if defined(_OS_WINDOWS_)
+
+        Triple TheTriple(sys::getProcessTriple());
         // use ELF because RuntimeDyld COFF i686 support didn't exist
         // use ELF because RuntimeDyld COFF X86_64 doesn't seem to work (fails to generate function pointers)?
-#define FORCE_ELF
+        bool force_elf = TheTriple.isOSWindows();
+#ifdef FORCE_ELF
+        force_elf = true;
 #endif
+        if (force_elf) {
+            TheTriple.setObjectFormat(Triple::ELF);
+        }
         //options.PrintMachineCode = true; //Print machine code produced during JIT compiling
-#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_) && JL_LLVM_VERSION < 130000
-        // tell Win32 to assume the stack is always 16-byte aligned,
-        // and to ensure that it is 16-byte aligned for out-going calls,
-        // to ensure compatibility with GCC codes
-        // In LLVM 13 and onwards this has turned into a module option
-        options.StackAlignmentOverride = 16;
+#if JL_LLVM_VERSION < 130000
+        if (TheTriple.isOSWindows() && TheTriple.getArch() == Triple::x86) {
+            // tell Win32 to assume the stack is always 16-byte aligned,
+            // and to ensure that it is 16-byte aligned for out-going calls,
+            // to ensure compatibility with GCC codes
+            // In LLVM 13 and onwards this has turned into a module option
+            options.StackAlignmentOverride = 16;
+        }
 #endif
 #if defined(JL_DEBUG_BUILD) && JL_LLVM_VERSION < 130000
         // LLVM defaults to tls stack guard, which causes issues with Julia's tls implementation
@@ -975,11 +986,6 @@ namespace {
 #if defined(MSAN_EMUTLS_WORKAROUND)
         options.EmulatedTLS = true;
         options.ExplicitEmulatedTLS = true;
-#endif
-
-        Triple TheTriple(sys::getProcessTriple());
-#if defined(FORCE_ELF)
-        TheTriple.setObjectFormat(Triple::ELF);
 #endif
         uint32_t target_flags = 0;
         auto target = jl_get_llvm_target(imaging_default(), target_flags);
@@ -1033,11 +1039,11 @@ namespace {
                 );
         assert(TM && "Failed to select target machine -"
                      " Is the LLVM backend for this CPU enabled?");
-        #if (!defined(_CPU_ARM_) && !defined(_CPU_PPC64_))
-        // FastISel seems to be buggy for ARM. Ref #13321
-        if (jl_options.opt_level < 2)
-            TM->setFastISel(true);
-        #endif
+        if (!TheTriple.isARM() && !TheTriple.isPPC64()) {
+            // FastISel seems to be buggy for ARM. Ref #13321
+            if (jl_options.opt_level < 2)
+                TM->setFastISel(true);
+        }
         return std::unique_ptr<TargetMachine>(TM);
     }
 } // namespace
@@ -1317,14 +1323,10 @@ JuliaOJIT::JuliaOJIT()
 
     // Resolve non-lock free atomic functions in the libatomic1 library.
     // This is the library that provides support for c11/c++11 atomic operations.
-    const char *const libatomic =
-#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
-        "libatomic.so.1";
-#elif defined(_OS_WINDOWS_)
-        "libatomic-1.dll";
-#else
-        NULL;
-#endif
+    auto TT = getTargetTriple();
+    const char *const libatomic = TT.isOSLinux() || TT.isOSFreeBSD() ?
+        "libatomic.so.1" : TT.isOSWindows() ?
+        "libatomic-1.dll" : nullptr;
     if (libatomic) {
         static void *atomic_hdl = jl_load_dynamic_library(libatomic, JL_RTLD_LOCAL, 0);
         if (atomic_hdl != NULL) {
@@ -1741,11 +1743,12 @@ TargetIRAnalysis JuliaOJIT::getTargetIRAnalysis() const {
 }
 
 static void jl_decorate_module(Module &M) {
-#if defined(_CPU_X86_64_) && defined(_OS_WINDOWS_)
-    // Add special values used by debuginfo to build the UnwindData table registration for Win64
-    // This used to be GV, but with https://reviews.llvm.org/D100944 we no longer can emit GV into `.text`
-    // TODO: The data is set in debuginfo.cpp but it should be okay to actually emit it here.
-    M.appendModuleInlineAsm("\
+    auto TT = Triple(M.getTargetTriple());
+    if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
+        // Add special values used by debuginfo to build the UnwindData table registration for Win64
+        // This used to be GV, but with https://reviews.llvm.org/D100944 we no longer can emit GV into `.text`
+        // TODO: The data is set in debuginfo.cpp but it should be okay to actually emit it here.
+        M.appendModuleInlineAsm("\
     .section .text                  \n\
     .type   __UnwindData,@object    \n\
     .p2align        2, 0x90         \n\
@@ -1758,7 +1761,7 @@ static void jl_decorate_module(Module &M) {
     __catchjmp:                     \n\
         .zero   12                  \n\
         .size   __catchjmp, 12");
-#endif
+    }
 }
 
 // Implements Tarjan's SCC (strongly connected components) algorithm, simplified to remove the count variable

@@ -143,10 +143,6 @@ function (*)(A::AbstractMatrix, Q::AbstractQ)
 end
 (*)(u::AdjointAbsVec, Q::AbstractQ) = (Q'u')'
 
-# AbstractQ * Triangular
-lmul!(Q::AbstractQ, B::AbstractTriangular) = lmul!(Q, full!(B))
-rmul!(A::AbstractTriangular, Q::AbstractQ) = rmul!(full!(A), Q)
-
 ### Q*Q (including adjoints)
 *(Q::AbstractQ, P::AbstractQ) = Q * (P*I)
 
@@ -279,7 +275,6 @@ function lmul!(A::QRPackedQ, B::AbstractVecOrMat)
     end
     B
 end
-lmul!(Q::QRPackedQ, B::AbstractTriangular) = lmul!(Q, full!(B)) # disambiguation
 
 ### QcB
 lmul!(adjQ::AdjointQ{<:Any,<:QRCompactWYQ{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:BlasReal} =
@@ -316,7 +311,6 @@ function lmul!(adjA::AdjointQ{<:Any,<:QRPackedQ}, B::AbstractVecOrMat)
     end
     B
 end
-lmul!(Q::AdjointQ{<:Any,<:QRPackedQ}, B::AbstractTriangular) = lmul!(Q, full!(B)) # disambiguation
 
 ### AQ
 rmul!(A::StridedVecOrMat{T}, B::QRCompactWYQ{T,<:StridedMatrix}) where {T<:BlasFloat} =
@@ -348,7 +342,6 @@ function rmul!(A::AbstractMatrix, Q::QRPackedQ)
     end
     A
 end
-rmul!(A::AbstractTriangular, Q::QRPackedQ) = rmul!(full!(A), Q) # disambiguation
 
 ### AQc
 rmul!(A::StridedVecOrMat{T}, adjQ::AdjointQ{<:Any,<:QRCompactWYQ{T}}) where {T<:BlasReal} =
@@ -385,7 +378,6 @@ function rmul!(A::AbstractMatrix, adjQ::AdjointQ{<:Any,<:QRPackedQ})
     end
     A
 end
-rmul!(A::AbstractTriangular, Q::AdjointQ{<:Any,<:QRPackedQ}) = rmul!(full!(A), Q) # disambiguation
 
 det(Q::QRPackedQ) = _det_tau(Q.τ)
 det(Q::QRCompactWYQ) =

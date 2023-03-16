@@ -315,13 +315,6 @@ void *native_functions;   // opaque jl_native_code_desc_t blob used for fetching
 // table of struct field addresses to rewrite during saving
 static htable_t field_replace;
 
-typedef struct {
-    uint64_t base;
-    uintptr_t *gvars_base;
-    int32_t *gvars_offsets;
-    jl_image_fptrs_t fptrs;
-} jl_image_t;
-
 // array of definitions for the predefined function pointers
 // (reverse of fptr_to_id)
 // This is a manually constructed dual of the fvars array, which would be produced by codegen for Julia code, for C.
@@ -446,7 +439,7 @@ typedef struct {
 static void *jl_sysimg_handle = NULL;
 static jl_image_t sysimage;
 
-static inline uintptr_t *sysimg_gvars(uintptr_t *base, int32_t *offsets, size_t idx)
+static inline uintptr_t *sysimg_gvars(uintptr_t *base, const int32_t *offsets, size_t idx)
 {
     return base + offsets[idx] / sizeof(base[0]);
 }
@@ -461,32 +454,7 @@ static void jl_load_sysimg_so(void)
     int imaging_mode = jl_generating_output() && !jl_options.incremental;
     // in --build mode only use sysimg data, not precompiled native code
     if (!imaging_mode && jl_options.use_sysimage_native_code==JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES) {
-        jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_base", (void **)&sysimage.gvars_base, 1);
-        jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_offsets", (void **)&sysimage.gvars_offsets, 1);
-        sysimage.gvars_offsets += 1;
         assert(sysimage.fptrs.base);
-
-        void *pgcstack_func_slot;
-        jl_dlsym(jl_sysimg_handle, "jl_pgcstack_func_slot", &pgcstack_func_slot, 1);
-        void *pgcstack_key_slot;
-        jl_dlsym(jl_sysimg_handle, "jl_pgcstack_key_slot", &pgcstack_key_slot, 1);
-        jl_pgcstack_getkey((jl_get_pgcstack_func**)pgcstack_func_slot, (jl_pgcstack_key_t*)pgcstack_key_slot);
-
-        size_t *tls_offset_idx;
-        jl_dlsym(jl_sysimg_handle, "jl_tls_offset", (void **)&tls_offset_idx, 1);
-        *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
-
-#ifdef _OS_WINDOWS_
-        sysimage.base = (intptr_t)jl_sysimg_handle;
-#else
-        Dl_info dlinfo;
-        if (dladdr((void*)sysimage.gvars_base, &dlinfo) != 0) {
-            sysimage.base = (intptr_t)dlinfo.dli_fbase;
-        }
-        else {
-            sysimage.base = 0;
-        }
-#endif
     }
     else {
         memset(&sysimage.fptrs, 0, sizeof(sysimage.fptrs));
@@ -1935,6 +1903,7 @@ static void jl_update_all_gvars(jl_serializer_state *s, jl_image_t *image, uint3
     reloc_t *gvars = (reloc_t*)&s->gvar_record->buf[0];
     int gvar_link_index = 0;
     int external_fns_link_index = 0;
+    assert(l == image->ngvars);
     for (i = 0; i < l; i++) {
         uintptr_t offset = gvars[i];
         uintptr_t v = 0;
@@ -2671,7 +2640,7 @@ JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
     jl_sysimg_handle = handle;
-    sysimage.fptrs = jl_init_processor_sysimg(handle);
+    sysimage = jl_init_processor_sysimg(handle);
 }
 
 #ifndef JL_NDEBUG
@@ -3369,38 +3338,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
     size_t *plen;
     jl_dlsym(pkgimg_handle, "jl_system_image_size", (void **)&plen, 1);
 
-    jl_image_t pkgimage;
-    pkgimage.fptrs = jl_init_processor_pkgimg(pkgimg_handle);
-    if (!jl_dlsym(pkgimg_handle, "jl_sysimg_gvars_base", (void **)&pkgimage.gvars_base, 0)) {
-        pkgimage.gvars_base = NULL;
-    }
-
-    jl_dlsym(pkgimg_handle, "jl_sysimg_gvars_offsets", (void **)&pkgimage.gvars_offsets, 1);
-    pkgimage.gvars_offsets += 1;
-
-    void *pgcstack_func_slot;
-    jl_dlsym(pkgimg_handle, "jl_pgcstack_func_slot", &pgcstack_func_slot, 0);
-    if (pgcstack_func_slot) { // Empty package images might miss these
-        void *pgcstack_key_slot;
-        jl_dlsym(pkgimg_handle, "jl_pgcstack_key_slot", &pgcstack_key_slot, 1);
-        jl_pgcstack_getkey((jl_get_pgcstack_func**)pgcstack_func_slot, (jl_pgcstack_key_t*)pgcstack_key_slot);
-
-        size_t *tls_offset_idx;
-        jl_dlsym(pkgimg_handle, "jl_tls_offset", (void **)&tls_offset_idx, 1);
-        *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
-    }
-
-    #ifdef _OS_WINDOWS_
-        pkgimage.base = (intptr_t)pkgimg_handle;
-    #else
-        Dl_info dlinfo;
-        if (dladdr((void*)pkgimage.gvars_base, &dlinfo) != 0) {
-            pkgimage.base = (intptr_t)dlinfo.dli_fbase;
-        }
-        else {
-            pkgimage.base = 0;
-        }
-    #endif
+    jl_image_t pkgimage = jl_init_processor_pkgimg(pkgimg_handle);
 
     jl_value_t* mod = jl_restore_incremental_from_buf(pkgimg_data, &pkgimage, *plen, depmods, completeinfo);
 

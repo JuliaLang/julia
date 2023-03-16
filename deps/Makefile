@@ -24,9 +24,9 @@ BUILDDIR := $(BUILDDIR)$(MAYBE_HOST)
 #
 # autoconf configure-driven scripts: pcre unwind gmp mpfr patchelf libuv curl
 # custom Makefile rules: openlibm dsfmt libsuitesparse lapack blastrampoline openblas utf8proc objconv libwhich
-# CMake libs: llvm llvmunwind libgit2 libssh2 mbedtls
+# CMake libs: llvm llvmunwind libgit2 libssh2 mbedtls libtracyclient
 #
-# downloadable via git: llvm-svn, libuv, libopenlibm, utf8proc, libgit2, libssh2
+# downloadable via git: llvm-svn, libuv, libopenlibm, utf8proc, libgit2, libssh2, libtracyclient
 #
 # to debug 'define' rules, replace eval at the usage site with info or error
 
@@ -48,6 +48,10 @@ endif
 
 ifeq ($(USE_SYSTEM_LIBUV), 0)
 DEP_LIBS += libuv
+endif
+
+ifeq ($(WITH_TRACY), 1)
+DEP_LIBS += libtracyclient
 endif
 
 ifeq ($(DISABLE_LIBUNWIND), 0)
@@ -174,7 +178,7 @@ DEP_LIBS_STAGED := $(DEP_LIBS)
 DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
 	objconv mbedtls libssh2 nghttp2 curl libgit2 libwhich zlib p7zip csl \
-	libsuitesparse lld
+	libsuitesparse lld libtracyclient
 DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
 
 ifneq ($(USE_BINARYBUILDER_OPENBLAS),0)
@@ -231,5 +235,6 @@ include $(SRCDIR)/curl.mk
 include $(SRCDIR)/libgit2.mk
 include $(SRCDIR)/libwhich.mk
 include $(SRCDIR)/p7zip.mk
+include $(SRCDIR)/libtracyclient.mk
 
 include $(SRCDIR)/tools/uninstallers.mk

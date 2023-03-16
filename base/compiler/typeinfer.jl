@@ -255,8 +255,6 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     for caller in frames
         caller.valid_worlds = valid_worlds
         finish(caller, interp)
-        # finalize and record the linfo result
-        caller.inferred = true
     end
     # collect results for the new expanded frame
     results = Tuple{InferenceResult, Vector{Any}, Bool}[
@@ -268,7 +266,7 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     for (caller, _, _) in results
         opt = caller.src
         if opt isa OptimizationState{typeof(interp)} # implies `may_optimize(interp) === true`
-            analyzed = optimize(interp, opt, OptimizationParams(interp), caller)
+            analyzed = optimize(interp, opt, caller)
             caller.valid_worlds = (opt.inlining.et::EdgeTracker).valid_worlds[]
         end
     end
@@ -291,7 +289,7 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult,
                       @nospecialize(inferred_result), valid_worlds::WorldRange)
     local const_flags::Int32
     result_type = result.result
-    @assert !(result_type isa LimitedAccuracy)
+    @assert !(result_type === nothing || result_type isa LimitedAccuracy)
 
     if isa(result_type, Const) && is_foldable_nothrow(result.ipo_effects) && is_inlineable_constant(result_type.val)
         # use constant calling convention
@@ -433,7 +431,7 @@ function cycle_fix_limited(@nospecialize(typ), sv::InferenceState)
 end
 
 function adjust_effects(sv::InferenceState)
-    ipo_effects = Effects(sv)
+    ipo_effects = sv.ipo_effects
 
     # refine :consistent-cy effect using the return type information
     # TODO this adjustment tries to compromise imprecise :consistent-cy information,
@@ -553,7 +551,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         doopt = (me.cached || me.parent !== nothing)
         recompute_cfg = type_annotate!(interp, me, doopt)
         if doopt && may_optimize(interp)
-            me.result.src = OptimizationState(me, OptimizationParams(interp), interp, recompute_cfg)
+            me.result.src = OptimizationState(me, interp, recompute_cfg)
         else
             me.result.src = me.src::CodeInfo # stash a convenience copy of the code (e.g. for reflection)
         end
@@ -579,7 +577,7 @@ function store_backedges(frame::MethodInstance, edges::Vector{Any})
         if isa(caller, MethodInstance)
             ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), caller, sig, frame)
         else
-            typeassert(caller, Core.MethodTable)
+            typeassert(caller, MethodTable)
             ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), caller, sig, frame)
         end
     end
@@ -794,8 +792,8 @@ function merge_call_chain!(interp::AbstractInterpreter, parent::InferenceState, 
     end
 end
 
-function is_same_frame(interp::AbstractInterpreter, linfo::MethodInstance, frame::InferenceState)
-    return linfo === frame.linfo
+function is_same_frame(interp::AbstractInterpreter, mi::MethodInstance, frame::InferenceState)
+    return mi === frame.linfo
 end
 
 function poison_callstack(infstate::InferenceState, topmost::InferenceState)
@@ -803,19 +801,19 @@ function poison_callstack(infstate::InferenceState, topmost::InferenceState)
     nothing
 end
 
-# Walk through `linfo`'s upstream call chain, starting at `parent`. If a parent
-# frame matching `linfo` is encountered, then there is a cycle in the call graph
-# (i.e. `linfo` is a descendant callee of itself). Upon encountering this cycle,
+# Walk through `mi`'s upstream call chain, starting at `parent`. If a parent
+# frame matching `mi` is encountered, then there is a cycle in the call graph
+# (i.e. `mi` is a descendant callee of itself). Upon encountering this cycle,
 # we "resolve" it by merging the call chain, which entails unioning each intermediary
 # frame's `callers_in_cycle` field and adding the appropriate backedges. Finally,
-# we return `linfo`'s pre-existing frame. If no cycles are found, `nothing` is
+# we return `mi`'s pre-existing frame. If no cycles are found, `nothing` is
 # returned instead.
-function resolve_call_cycle!(interp::AbstractInterpreter, linfo::MethodInstance, parent::InferenceState)
+function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, parent::InferenceState)
     frame = parent
     uncached = false
     while isa(frame, InferenceState)
         uncached |= !frame.cached # ensure we never add an uncached frame to a cycle
-        if is_same_frame(interp, linfo, frame)
+        if is_same_frame(interp, mi, frame)
             if uncached
                 # our attempt to speculate into a constant call lead to an undesired self-cycle
                 # that cannot be converged: poison our call-stack (up to the discovered duplicate frame)
@@ -827,7 +825,7 @@ function resolve_call_cycle!(interp::AbstractInterpreter, linfo::MethodInstance,
             return frame
         end
         for caller in frame.callers_in_cycle
-            if is_same_frame(interp, linfo, caller)
+            if is_same_frame(interp, mi, caller)
                 if uncached
                     poison_callstack(parent, frame)
                     return true
@@ -918,16 +916,16 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             frame.parent = caller
         end
         typeinf(interp, frame)
-        update_valid_age!(frame, caller)
-        edge = frame.inferred ? mi : nothing
-        return EdgeCallResult(frame.bestguess, edge, Effects(frame)) # effects are adjusted already within `finish`
+        update_valid_age!(caller, frame.valid_worlds)
+        edge = is_inferred(frame) ? mi : nothing
+        return EdgeCallResult(frame.bestguess, edge, frame.ipo_effects) # effects are adjusted already within `finish`
     elseif frame === true
         # unresolvable cycle
         return EdgeCallResult(Any, nothing, Effects())
     end
     # return the current knowledge about this cycle
     frame = frame::InferenceState
-    update_valid_age!(frame, caller)
+    update_valid_age!(caller, frame.valid_worlds)
     return EdgeCallResult(frame.bestguess, nothing, adjust_effects(frame))
 end
 
@@ -937,7 +935,7 @@ end
 function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, run_optimizer::Bool)
     frame = typeinf_frame(interp, method, atype, sparams, run_optimizer)
     frame === nothing && return nothing, Any
-    frame.inferred || return nothing, Any
+    is_inferred(frame) || return nothing, Any
     code = frame.src
     rt = widenconst(ignorelimited(frame.result.result))
     return code, rt
@@ -968,8 +966,7 @@ function typeinf_ircode(
         return nothing, Any
     end
     (; result) = frame
-    opt_params = OptimizationParams(interp)
-    opt = OptimizationState(frame, opt_params, interp)
+    opt = OptimizationState(frame, interp)
     ir = run_passes(opt.src, opt, result, optimize_until)
     rt = widenconst(ignorelimited(result.result))
     ccall(:jl_typeinf_timing_end, Cvoid, ())
@@ -1065,7 +1062,7 @@ function typeinf_type(interp::AbstractInterpreter, method::Method, @nospecialize
     result = InferenceResult(mi, typeinf_lattice(interp))
     typeinf(interp, result, :global)
     ccall(:jl_typeinf_timing_end, Cvoid, ())
-    result.result isa InferenceState && return nothing
+    is_inferred(result) || return nothing
     return widenconst(ignorelimited(result.result))
 end
 
@@ -1084,7 +1081,7 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, linfo::MethodInstance
                 result = InferenceResult(linfo, typeinf_lattice(interp))
                 frame = InferenceState(result, src, #=cache=#:global, interp)
                 typeinf(interp, frame)
-                @assert frame.inferred # TODO: deal with this better
+                @assert is_inferred(frame) # TODO: deal with this better
                 src = frame.src
             end
             ccall(:jl_typeinf_timing_end, Cvoid, ())

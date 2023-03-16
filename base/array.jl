@@ -177,11 +177,11 @@ function _unsetindex!(A::Array{T}, i::Int) where {T}
     t = @_gc_preserve_begin A
     p = Ptr{Ptr{Cvoid}}(pointer(A, i))
     if !allocatedinline(T)
-        unsafe_store!(p, C_NULL)
+        Intrinsics.atomic_pointerset(p, C_NULL, :monotonic)
     elseif T isa DataType
         if !datatype_pointerfree(T)
-            for j = 1:(Core.sizeof(T) ÷ Core.sizeof(Ptr{Cvoid}))
-                unsafe_store!(p, C_NULL, j)
+            for j = 1:Core.sizeof(Ptr{Cvoid}):Core.sizeof(T)
+                Intrinsics.atomic_pointerset(p + j - 1, C_NULL, :monotonic)
             end
         end
     end
@@ -1916,7 +1916,7 @@ function reverse!(v::AbstractVector, start::Integer, stop::Integer=lastindex(v))
     return v
 end
 
-# concatenations of homogeneous combinations of vectors, horizontal and vertical
+# concatenations of (in)homogeneous combinations of vectors, horizontal and vertical
 
 vcat() = Vector{Any}()
 hcat() = Vector{Any}()
@@ -1930,6 +1930,7 @@ function hcat(V::Vector{T}...) where T
     end
     return [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end
+hcat(A::Vector...) = cat(A...; dims=Val(2)) # more special than SparseArrays's hcat
 
 function vcat(arrays::Vector{T}...) where T
     n = 0
@@ -1946,6 +1947,19 @@ function vcat(arrays::Vector{T}...) where T
     end
     return arr
 end
+vcat(A::Vector...) = cat(A...; dims=Val(1)) # more special than SparseArrays's vcat
+
+# disambiguation with LinAlg/special.jl
+# Union{Number,Vector,Matrix} is for LinearAlgebra._DenseConcatGroup
+# VecOrMat{T} is for LinearAlgebra._TypedDenseConcatGroup
+hcat(A::Union{Number,Vector,Matrix}...) = cat(A...; dims=Val(2))
+hcat(A::VecOrMat{T}...) where {T} = typed_hcat(T, A...)
+vcat(A::Union{Number,Vector,Matrix}...) = cat(A...; dims=Val(1))
+vcat(A::VecOrMat{T}...) where {T} = typed_vcat(T, A...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::Union{Number,Vector,Matrix}...) =
+    typed_hvcat(promote_eltypeof(xs...), rows, xs...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::VecOrMat{T}...) where {T} =
+    typed_hvcat(T, rows, xs...)
 
 _cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(Returns(1), n-1)..., length(x)))
 
@@ -2338,7 +2352,11 @@ julia> findall(x -> x >= 0, d)
 
 ```
 """
-findall(testf::Function, A) = collect(first(p) for p in pairs(A) if testf(last(p)))
+function findall(testf::Function, A)
+    T = eltype(keys(A))
+    gen = (first(p) for p in pairs(A) if testf(last(p)))
+    isconcretetype(T) ? collect(T, gen) : collect(gen)
+end
 
 # Broadcasting is much faster for small testf, and computing
 # integer indices from logical index using findall has a negligible cost

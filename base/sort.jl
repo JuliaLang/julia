@@ -533,6 +533,7 @@ Base.@propagate_inbounds function Base.setindex!(v::WithoutMissingVector, x, i)
     v
 end
 Base.size(v::WithoutMissingVector) = size(v.data)
+Base.axes(v::WithoutMissingVector) = axes(v.data)
 
 """
     send_to_end!(f::Function, v::AbstractVector; [lo, hi])
@@ -1926,6 +1927,7 @@ julia> map(x->issorted(x[k]), (s1, s2))
 
 julia> s1[k] == s2[k]
 true
+```
 """
 struct PartialQuickSort{T <: Union{Integer,OrdinalRange}} <: Algorithm
     k::T

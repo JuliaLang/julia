@@ -1203,7 +1203,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
     # Check #3
     dominates(domtree, finalizer_bb, bb_insert_block) || return nothing
 
-    if !inlining.params.assume_fatal_throw
+    if !OptimizationParams(inlining.interp).assume_fatal_throw
         # Collect all reachable blocks between the finalizer registration and the
         # insertion point
         blocks = finalizer_bb == bb_insert_block ? Int[finalizer_bb] :
@@ -2185,14 +2185,10 @@ function cfg_simplify!(ir::IRCode)
         end
     end
 
-    compact = IncrementalCompact(ir, true)
     # Run instruction compaction to produce the result,
     # but we're messing with the CFG
     # so we don't want compaction to do so independently
-    compact.fold_constant_branches = false
-    compact.bb_rename_succ = bb_rename_succ
-    compact.bb_rename_pred = bb_rename_pred
-    compact.result_bbs = cresult_bbs
+    compact = IncrementalCompact(ir, CFGTransformState(true, false, cresult_bbs, bb_rename_pred, bb_rename_succ))
     result_idx = 1
     for (idx, orig_bb) in enumerate(result_bbs)
         ms = orig_bb

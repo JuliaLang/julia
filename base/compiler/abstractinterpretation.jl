@@ -44,7 +44,7 @@ function should_infer_this_call(interp::AbstractInterpreter, sv::InferenceState)
 end
 
 function should_infer_for_effects(sv::InferenceState)
-    effects = Effects(sv)
+    effects = sv.ipo_effects
     return is_terminates(effects) && is_effect_free(effects)
 end
 
@@ -255,7 +255,7 @@ struct MethodMatches
     applicable::Vector{Any}
     info::MethodMatchInfo
     valid_worlds::WorldRange
-    mt::Core.MethodTable
+    mt::MethodTable
     fullmatch::Bool
     nonoverlayed::Bool
 end
@@ -267,7 +267,7 @@ struct UnionSplitMethodMatches
     applicable_argtypes::Vector{Vector{Any}}
     info::UnionSplitInfo
     valid_worlds::WorldRange
-    mts::Vector{Core.MethodTable}
+    mts::Vector{MethodTable}
     fullmatches::Vector{Bool}
     nonoverlayed::Bool
 end
@@ -282,7 +282,7 @@ function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), meth
         applicable = Any[]
         applicable_argtypes = Vector{Any}[] # arrays like `argtypes`, including constants, for each match
         valid_worlds = WorldRange()
-        mts = Core.MethodTable[]
+        mts = MethodTable[]
         fullmatches = Bool[]
         nonoverlayed = true
         for i in 1:length(split_argtypes)
@@ -290,7 +290,7 @@ function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), meth
             sig_n = argtypes_to_type(arg_n)
             mt = ccall(:jl_method_table_for, Any, (Any,), sig_n)
             mt === nothing && return FailedMethodMatch("Could not identify method table for call")
-            mt = mt::Core.MethodTable
+            mt = mt::MethodTable
             result = findall(sig_n, method_table; limit = max_methods)
             if result === nothing
                 return FailedMethodMatch("For one of the union split cases, too many methods matched")
@@ -329,7 +329,7 @@ function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), meth
         if mt === nothing
             return FailedMethodMatch("Could not identify method table for call")
         end
-        mt = mt::Core.MethodTable
+        mt = mt::MethodTable
         result = findall(atype, method_table; limit = max_methods)
         if result === nothing
             # this means too many methods matched
@@ -502,22 +502,24 @@ function conditional_argtype(@nospecialize(rt), @nospecialize(sig), argtypes::Ve
     end
 end
 
-function add_call_backedges!(interp::AbstractInterpreter,
-    @nospecialize(rettype), all_effects::Effects,
+function add_call_backedges!(interp::AbstractInterpreter, @nospecialize(rettype), all_effects::Effects,
     edges::Vector{MethodInstance}, matches::Union{MethodMatches,UnionSplitMethodMatches}, @nospecialize(atype),
     sv::InferenceState)
-    # we don't need to add backedges when:
-    # - a new method couldn't refine (widen) this type and
-    # - the effects are known to not provide any useful IPO information
+    # don't bother to add backedges when both type and effects information are already
+    # maximized to the top since a new method couldn't refine or widen them anyway
     if rettype === Any
+        # ignore the `:nonoverlayed` property if `interp` doesn't use overlayed method table
+        # since it will never be tainted anyway
         if !isoverlayed(method_table(interp))
-            # we can ignore the `nonoverlayed` property if `interp` doesn't use
-            # overlayed method table at all since it will never be tainted anyway
             all_effects = Effects(all_effects; nonoverlayed=false)
         end
-        if all_effects === Effects()
-            return
+        if (# ignore the `:noinbounds` property if `:consistent`-cy is tainted already
+            sv.ipo_effects.consistent === ALWAYS_FALSE || all_effects.consistent === ALWAYS_FALSE ||
+            # or this `:noinbounds` doesn't taint it
+            !stmt_taints_inbounds_consistency(sv))
+            all_effects = Effects(all_effects; noinbounds=false)
         end
+        all_effects === Effects() && return nothing
     end
     for edge in edges
         add_backedge!(sv, edge)
@@ -531,6 +533,7 @@ function add_call_backedges!(interp::AbstractInterpreter,
             thisfullmatch || add_mt_backedge!(sv, mt, atype)
         end
     end
+    return nothing
 end
 
 const RECURSION_UNUSED_MSG = "Bounded recursion detected with unused result. Annotated return type may be wider than true result."
@@ -688,7 +691,7 @@ function edge_matches_sv(frame::InferenceState, method::Method, @nospecialize(si
     if callee_method2 !== inf_method2
         return false
     end
-    if !hardlimit
+    if !hardlimit || InferenceParams(sv.interp).ignore_recursion_hardlimit
         # if this is a soft limit,
         # also inspect the parent of this edge,
         # to see if they are the same Method as sv
@@ -1018,9 +1021,9 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
             add_remark!(interp, sv, "[constprop] Fresh constant inference hit a cycle")
             return nothing
         end
-        @assert !isa(inf_result.result, InferenceState)
+        @assert inf_result.result !== nothing
     else
-        if isa(inf_result.result, InferenceState)
+        if inf_result.result === nothing
             add_remark!(interp, sv, "[constprop] Found cached constant inference in a cycle")
             return nothing
         end
@@ -2475,7 +2478,8 @@ function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, vtypes:
             override.terminates_globally ? true        : effects.terminates,
             override.notaskstate         ? true        : effects.notaskstate,
             override.inaccessiblememonly ? ALWAYS_TRUE : effects.inaccessiblememonly,
-            effects.nonoverlayed)
+            effects.nonoverlayed,
+            effects.noinbounds)
     end
     return RTEffects(t, effects)
 end
@@ -2820,7 +2824,7 @@ end
 
 # make as much progress on `frame` as possible (without handling cycles)
 function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
-    @assert !frame.inferred
+    @assert !is_inferred(frame)
     frame.dont_work_on_me = true # mark that this function is currently on the stack
     W = frame.ip
     nargs = narguments(frame, #=include_va=#false)
@@ -3081,7 +3085,7 @@ function typeinf_nocycle(interp::AbstractInterpreter, frame::InferenceState)
                 typeinf_local(interp, caller)
                 no_active_ips_in_callers = false
             end
-            caller.valid_worlds = intersect(caller.valid_worlds, frame.valid_worlds)
+            update_valid_age!(caller, frame.valid_worlds)
         end
     end
     return true

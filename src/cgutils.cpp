@@ -521,7 +521,7 @@ static Value *maybe_bitcast(jl_codectx_t &ctx, Value *V, Type *to) {
 static Value *julia_binding_pvalue(jl_codectx_t &ctx, Value *bv)
 {
     bv = emit_bitcast(ctx, bv, ctx.types().T_pprjlvalue);
-    Value *offset = ConstantInt::get(getSizeTy(ctx.builder.getContext()), offsetof(jl_binding_t, value) / sizeof(size_t));
+    Value *offset = ConstantInt::get(ctx.types().T_size, offsetof(jl_binding_t, value) / sizeof(size_t));
     return ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, bv, offset);
 }
 
@@ -1085,7 +1085,7 @@ static Value *emit_typeof_boxed(jl_codectx_t &ctx, const jl_cgval_t &p, bool may
 static Value *emit_datatype_types(jl_codectx_t &ctx, Value *dt)
 {
     Value *Ptr = emit_bitcast(ctx, decay_derived(ctx, dt), ctx.types().T_ppjlvalue);
-    Value *Idx = ConstantInt::get(getSizeTy(ctx.builder.getContext()), offsetof(jl_datatype_t, types) / sizeof(void*));
+    Value *Idx = ConstantInt::get(ctx.types().T_size, offsetof(jl_datatype_t, types) / sizeof(void*));
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
     return ai.decorateInst(ctx.builder.CreateAlignedLoad(
                 ctx.types().T_pjlvalue, ctx.builder.CreateInBoundsGEP(ctx.types().T_pjlvalue, Ptr, Idx), Align(sizeof(void*))));
@@ -1095,17 +1095,17 @@ static Value *emit_datatype_nfields(jl_codectx_t &ctx, Value *dt)
 {
     Value *type_svec = emit_bitcast(ctx, emit_datatype_types(ctx, dt), getSizePtrTy(ctx.builder.getContext()));
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
-    return ai.decorateInst(ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()), type_svec, Align(sizeof(void*))));
+    return ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_size, type_svec, Align(sizeof(void*))));
 }
 
 static Value *emit_datatype_size(jl_codectx_t &ctx, Value *dt)
 {
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
     Value *Ptr = emit_bitcast(ctx, decay_derived(ctx, dt), getInt32PtrTy(ctx.builder.getContext())->getPointerTo());
-    Value *Idx = ConstantInt::get(getSizeTy(ctx.builder.getContext()), offsetof(jl_datatype_t, layout) / sizeof(int32_t*));
+    Value *Idx = ConstantInt::get(ctx.types().T_size, offsetof(jl_datatype_t, layout) / sizeof(int32_t*));
     Ptr = ctx.builder.CreateInBoundsGEP(getInt32PtrTy(ctx.builder.getContext()), Ptr, Idx);
     Ptr = ai.decorateInst(ctx.builder.CreateAlignedLoad(getInt32PtrTy(ctx.builder.getContext()), Ptr, Align(sizeof(int32_t*))));
-    Idx = ConstantInt::get(getSizeTy(ctx.builder.getContext()), offsetof(jl_datatype_layout_t, size) / sizeof(int32_t));
+    Idx = ConstantInt::get(ctx.types().T_size, offsetof(jl_datatype_layout_t, size) / sizeof(int32_t));
     Ptr = ctx.builder.CreateInBoundsGEP(getInt32Ty(ctx.builder.getContext()), Ptr, Idx);
     return ai.decorateInst(ctx.builder.CreateAlignedLoad(getInt32Ty(ctx.builder.getContext()), Ptr, Align(sizeof(int32_t))));
 }
@@ -1163,10 +1163,10 @@ static Value *emit_datatype_mutabl(jl_codectx_t &ctx, Value *dt)
 {
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
     Value *Ptr = emit_bitcast(ctx, decay_derived(ctx, dt), ctx.types().T_ppint8);
-    Value *Idx = ConstantInt::get(getSizeTy(ctx.builder.getContext()), offsetof(jl_datatype_t, name));
+    Value *Idx = ConstantInt::get(ctx.types().T_size, offsetof(jl_datatype_t, name));
     Value *Nam = ai.decorateInst(
             ctx.builder.CreateAlignedLoad(getInt8PtrTy(ctx.builder.getContext()), ctx.builder.CreateInBoundsGEP(getInt8PtrTy(ctx.builder.getContext()), Ptr, Idx), Align(sizeof(int8_t*))));
-    Value *Idx2 = ConstantInt::get(getSizeTy(ctx.builder.getContext()), offsetof(jl_typename_t, n_uninitialized) + sizeof(((jl_typename_t*)nullptr)->n_uninitialized));
+    Value *Idx2 = ConstantInt::get(ctx.types().T_size, offsetof(jl_typename_t, n_uninitialized) + sizeof(((jl_typename_t*)nullptr)->n_uninitialized));
     Value *mutabl = ai.decorateInst(
             ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()), ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), Nam, Idx2), Align(1)));
     mutabl = ctx.builder.CreateLShr(mutabl, 1);
@@ -1191,7 +1191,7 @@ static Value *emit_datatype_name(jl_codectx_t &ctx, Value *dt)
     Value *vptr = ctx.builder.CreateInBoundsGEP(
             ctx.types().T_pjlvalue,
             emit_bitcast(ctx, maybe_decay_tracked(ctx, dt), ctx.types().T_ppjlvalue),
-            ConstantInt::get(getSizeTy(ctx.builder.getContext()), n));
+            ConstantInt::get(ctx.types().T_size, n));
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
     return ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue, vptr, Align(sizeof(void*))));
 }
@@ -1627,7 +1627,7 @@ static bool bounds_check_enabled(jl_codectx_t &ctx, jl_value_t *inbounds) {
 
 static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_value_t *ty, Value *i, Value *len, jl_value_t *boundscheck)
 {
-    Value *im1 = ctx.builder.CreateSub(i, ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1));
+    Value *im1 = ctx.builder.CreateSub(i, ConstantInt::get(ctx.types().T_size, 1));
 #if CHECK_BOUNDS==1
     if (bounds_check_enabled(ctx, boundscheck)) {
         ++EmittedBoundschecks;
@@ -2220,7 +2220,7 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
     size_t nfields = jl_datatype_nfields(stt);
     bool maybe_null = (unsigned)stt->name->n_uninitialized != 0;
     auto idx0 = [&]() {
-        return emit_bounds_check(ctx, strct, (jl_value_t*)stt, idx, ConstantInt::get(getSizeTy(ctx.builder.getContext()), nfields), inbounds);
+        return emit_bounds_check(ctx, strct, (jl_value_t*)stt, idx, ConstantInt::get(ctx.types().T_size, nfields), inbounds);
     };
     if (nfields == 0) {
         (void)idx0();
@@ -2344,7 +2344,7 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
             return true;
         }
         else if (strct.isboxed) {
-            idx = ctx.builder.CreateSub(idx, ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1));
+            idx = ctx.builder.CreateSub(idx, ConstantInt::get(ctx.types().T_size, 1));
             Value *fld = ctx.builder.CreateCall(prepare_call(jlgetnthfieldchecked_func), { boxed(ctx, strct), idx });
             *ret = mark_julia_type(ctx, fld, true, jl_any_type);
             return true;
@@ -2422,7 +2422,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
                 addr = ctx.builder.CreateInBoundsGEP(
                         getInt8Ty(ctx.builder.getContext()),
                         emit_bitcast(ctx, staddr, getInt8PtrTy(ctx.builder.getContext())),
-                        ConstantInt::get(getSizeTy(ctx.builder.getContext()), byte_offset));
+                        ConstantInt::get(ctx.types().T_size, byte_offset));
             }
             else {
                 addr = staddr;
@@ -2621,7 +2621,7 @@ static Value *emit_arraysize(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *
     MDNode *tbaa = ctx.tbaa().tbaa_arraysize;
     if (arraytype_constdim(tinfo.typ, &ndim)) {
         if (ndim == 0)
-            return ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1);
+            return ConstantInt::get(ctx.types().T_size, 1);
         if (ndim == 1) {
             if (auto d = dyn_cast<ConstantInt>(dim)) {
                 if (d->getZExtValue() == 1) {
@@ -2632,7 +2632,7 @@ static Value *emit_arraysize(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *
         if (ndim > 1) {
             if (tinfo.constant && isa<ConstantInt>(dim)) {
                 auto n = cast<ConstantInt>(dim)->getZExtValue() - 1;
-                return ConstantInt::get(getSizeTy(ctx.builder.getContext()), jl_array_dim(tinfo.constant, n));
+                return ConstantInt::get(ctx.types().T_size, jl_array_dim(tinfo.constant, n));
             }
             tbaa = ctx.tbaa().tbaa_const;
         }
@@ -2643,9 +2643,9 @@ static Value *emit_arraysize(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *
     auto load = emit_nthptr_recast(ctx,
             t,
             ctx.builder.CreateAdd(dim, ConstantInt::get(dim->getType(), o)),
-            tbaa, getSizeTy(ctx.builder.getContext()));
+            tbaa, ctx.types().T_size);
     MDBuilder MDB(ctx.builder.getContext());
-    auto rng = MDB.createRange(Constant::getNullValue(getSizeTy(ctx.builder.getContext())), ConstantInt::get(getSizeTy(ctx.builder.getContext()), arraytype_maxsize(tinfo.typ)));
+    auto rng = MDB.createRange(Constant::getNullValue(ctx.types().T_size), ConstantInt::get(ctx.types().T_size, arraytype_maxsize(tinfo.typ)));
     load->setMetadata(LLVMContext::MD_range, rng);
     return load;
 }
@@ -2667,10 +2667,10 @@ static Value *emit_arraylen_prim(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
     MDNode *tbaa = ctx.tbaa().tbaa_arraylen;
     if (arraytype_constdim(ty, &ndim)) {
         if (ndim == 0)
-            return ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1);
+            return ConstantInt::get(ctx.types().T_size, 1);
         if (ndim != 1) {
             if (tinfo.constant)
-                return ConstantInt::get(getSizeTy(ctx.builder.getContext()), jl_array_len(tinfo.constant));
+                return ConstantInt::get(ctx.types().T_size, jl_array_len(tinfo.constant));
             tbaa = ctx.tbaa().tbaa_const;
         }
     }
@@ -2679,10 +2679,10 @@ static Value *emit_arraylen_prim(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
     Value *addr = ctx.builder.CreateStructGEP(ctx.types().T_jlarray,
             emit_bitcast(ctx, decay_derived(ctx, t), ctx.types().T_pjlarray),
             1); //index (not offset) of length field in ctx.types().T_pjlarray
-    LoadInst *len = ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()), addr, Align(sizeof(size_t)));
+    LoadInst *len = ctx.builder.CreateAlignedLoad(ctx.types().T_size, addr, Align(sizeof(size_t)));
     len->setOrdering(AtomicOrdering::NotAtomic);
     MDBuilder MDB(ctx.builder.getContext());
-    auto rng = MDB.createRange(Constant::getNullValue(getSizeTy(ctx.builder.getContext())), ConstantInt::get(getSizeTy(ctx.builder.getContext()), arraytype_maxsize(tinfo.typ)));
+    auto rng = MDB.createRange(Constant::getNullValue(ctx.types().T_size), ConstantInt::get(ctx.types().T_size, arraytype_maxsize(tinfo.typ)));
     len->setMetadata(LLVMContext::MD_range, rng);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
     return ai.decorateInst(len);
@@ -2803,7 +2803,7 @@ static Value *emit_arrayoffset(jl_codectx_t &ctx, const jl_cgval_t &tinfo, int n
 static Value *emit_arraysize_for_unsafe_dim(jl_codectx_t &ctx,
         const jl_cgval_t &tinfo, jl_value_t *ex, size_t dim, size_t nd)
 {
-    return dim > nd ? ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1) : emit_arraysize(ctx, tinfo, ex, dim);
+    return dim > nd ? ConstantInt::get(ctx.types().T_size, 1) : emit_arraysize(ctx, tinfo, ex, dim);
 }
 
 // `nd == -1` means the dimension is unknown.
@@ -2813,8 +2813,8 @@ static Value *emit_array_nd_index(
 {
     ++EmittedArrayNdIndex;
     Value *a = boxed(ctx, ainfo);
-    Value *i = Constant::getNullValue(getSizeTy(ctx.builder.getContext()));
-    Value *stride = ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1);
+    Value *i = Constant::getNullValue(ctx.types().T_size);
+    Value *stride = ConstantInt::get(ctx.types().T_size, 1);
 #if CHECK_BOUNDS==1
     bool bc = bounds_check_enabled(ctx, inbounds);
     BasicBlock *failBB = NULL, *endBB = NULL;
@@ -2825,11 +2825,11 @@ static Value *emit_array_nd_index(
 #endif
     Value **idxs = (Value**)alloca(sizeof(Value*) * nidxs);
     for (size_t k = 0; k < nidxs; k++) {
-        idxs[k] = emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), argv[k], (jl_value_t*)jl_long_type); // type asserted by caller
+        idxs[k] = emit_unbox(ctx, ctx.types().T_size, argv[k], (jl_value_t*)jl_long_type); // type asserted by caller
     }
     Value *ii = NULL;
     for (size_t k = 0; k < nidxs; k++) {
-        ii = ctx.builder.CreateSub(idxs[k], ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1));
+        ii = ctx.builder.CreateSub(idxs[k], ConstantInt::get(ctx.types().T_size, 1));
         i = ctx.builder.CreateAdd(i, ctx.builder.CreateMul(ii, stride));
         if (k < nidxs - 1) {
             assert(nd >= 0);
@@ -2874,23 +2874,23 @@ static Value *emit_array_nd_index(
             for (size_t k = nidxs+1; k < (size_t)nd; k++) {
                 BasicBlock *dimsokBB = BasicBlock::Create(ctx.builder.getContext(), "dimsok");
                 Value *dim = emit_arraysize_for_unsafe_dim(ctx, ainfo, ex, k, nd);
-                ctx.builder.CreateCondBr(ctx.builder.CreateICmpEQ(dim, ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1)), dimsokBB, failBB);
+                ctx.builder.CreateCondBr(ctx.builder.CreateICmpEQ(dim, ConstantInt::get(ctx.types().T_size, 1)), dimsokBB, failBB);
                 ctx.f->getBasicBlockList().push_back(dimsokBB);
                 ctx.builder.SetInsertPoint(dimsokBB);
             }
             Value *dim = emit_arraysize_for_unsafe_dim(ctx, ainfo, ex, nd, nd);
-            ctx.builder.CreateCondBr(ctx.builder.CreateICmpEQ(dim, ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1)), endBB, failBB);
+            ctx.builder.CreateCondBr(ctx.builder.CreateICmpEQ(dim, ConstantInt::get(ctx.types().T_size, 1)), endBB, failBB);
         }
 
         ctx.f->getBasicBlockList().push_back(failBB);
         ctx.builder.SetInsertPoint(failBB);
         // CreateAlloca is OK here since we are on an error branch
-        Value *tmp = ctx.builder.CreateAlloca(getSizeTy(ctx.builder.getContext()), ConstantInt::get(getSizeTy(ctx.builder.getContext()), nidxs));
+        Value *tmp = ctx.builder.CreateAlloca(ctx.types().T_size, ConstantInt::get(ctx.types().T_size, nidxs));
         for (size_t k = 0; k < nidxs; k++) {
-            ctx.builder.CreateAlignedStore(idxs[k], ctx.builder.CreateInBoundsGEP(getSizeTy(ctx.builder.getContext()), tmp, ConstantInt::get(getSizeTy(ctx.builder.getContext()), k)), Align(sizeof(size_t)));
+            ctx.builder.CreateAlignedStore(idxs[k], ctx.builder.CreateInBoundsGEP(ctx.types().T_size, tmp, ConstantInt::get(ctx.types().T_size, k)), Align(sizeof(size_t)));
         }
         ctx.builder.CreateCall(prepare_call(jlboundserrorv_func),
-            { mark_callee_rooted(ctx, a), tmp, ConstantInt::get(getSizeTy(ctx.builder.getContext()), nidxs) });
+            { mark_callee_rooted(ctx, a), tmp, ConstantInt::get(ctx.types().T_size, nidxs) });
         ctx.builder.CreateUnreachable();
 
         ctx.f->getBasicBlockList().push_back(endBB);
@@ -3484,7 +3484,7 @@ static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt)
     ++EmittedAllocObjs;
     Value *current_task = get_current_task(ctx);
     Function *F = prepare_call(jl_alloc_obj_func);
-    auto call = ctx.builder.CreateCall(F, {current_task, ConstantInt::get(getSizeTy(ctx.builder.getContext()), static_size), maybe_decay_untracked(ctx, jt)});
+    auto call = ctx.builder.CreateCall(F, {current_task, ConstantInt::get(ctx.types().T_size, static_size), maybe_decay_untracked(ctx, jt)});
     call->setAttributes(F->getAttributes());
     if (static_size > 0)
     {
@@ -3571,7 +3571,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
         addr = ctx.builder.CreateInBoundsGEP(
                 getInt8Ty(ctx.builder.getContext()),
                 emit_bitcast(ctx, addr, getInt8PtrTy(ctx.builder.getContext())),
-                ConstantInt::get(getSizeTy(ctx.builder.getContext()), byte_offset)); // TODO: use emit_struct_gep
+                ConstantInt::get(ctx.types().T_size, byte_offset)); // TODO: use emit_struct_gep
     }
     jl_value_t *jfty = jl_field_type(sty, idx0);
     if (!jl_field_isptr(sty, idx0) && jl_is_uniontype(jfty)) {
@@ -3585,7 +3585,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
             return jl_cgval_t();
         Value *ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()),
                 emit_bitcast(ctx, addr, getInt8PtrTy(ctx.builder.getContext())),
-                ConstantInt::get(getSizeTy(ctx.builder.getContext()), fsz));
+                ConstantInt::get(ctx.types().T_size, fsz));
         if (needlock)
             emit_lockstate_value(ctx, strct, true);
         BasicBlock *ModifyBB = NULL;
@@ -3885,7 +3885,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 ai.decorateInst(ctx.builder.CreateAlignedStore(
                         ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0),
                         ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), emit_bitcast(ctx, strct, getInt8PtrTy(ctx.builder.getContext())),
-                                ConstantInt::get(getSizeTy(ctx.builder.getContext()), jl_field_offset(sty, i) + jl_field_size(sty, i) - 1)),
+                                ConstantInt::get(ctx.types().T_size, jl_field_offset(sty, i) + jl_field_size(sty, i) - 1)),
                         Align(1)));
             }
         }
