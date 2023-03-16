@@ -1296,6 +1296,16 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
             // to other left-side variables, so using || here is safe.
             return subtype(xub, y, e, param) || subtype(x, ylb, e, param);
         }
+        if (jl_is_unionall(y)) {
+            jl_varbinding_t *xb = lookup(e, (jl_tvar_t*)x);
+            if (xb == NULL ? !e->ignore_free : !xb->right) {
+                // We'd better unwrap `y::UnionAll` eagerly if `x` isa ∀-var.
+                // This makes sure the following cases work correct:
+                // 1) `∀T <: Union{∃S, SomeType{P}} where {P}`: `S == Any` ==> `S >: T`
+                // 2) `∀T <: Union{∀T, SomeType{P}} where {P}`:
+                return subtype_unionall(x, (jl_unionall_t*)y, e, 1, param);
+            }
+        }
         return var_lt((jl_tvar_t*)x, y, e, param);
     }
     if (jl_is_typevar(y))
