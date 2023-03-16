@@ -153,7 +153,6 @@ function (ss::SummarySize)(obj::Array)
     return size
 end
 
-# FIXME Buffer GC
 function (ss::SummarySize)(obj::Buffer)
     haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
     key = pointer_from_objref(obj)
@@ -166,7 +165,7 @@ function (ss::SummarySize)(obj::Buffer)
             dsize += length(obj)
         end
         size += dsize
-        if !isempty(obj) &&
+        if !isempty(obj) && T !== Symbol && (!Base.allocatedinline(T) || (T isa DataType && !Base.datatype_pointerfree(T)))
             push!(ss.frontier_x, obj)
             push!(ss.frontier_i, 1)
         end

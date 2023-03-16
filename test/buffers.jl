@@ -20,3 +20,8 @@ end
     @test x[3] === UInt8(3)
     @test x[4] === UInt16(4)
 end
+
+@test Base.summarysize(Buffer{Union{Nothing,Missing}}(undef, 16)) <
+    Base.summarysize(Buffer{Union{Nothing,Missing}}(undef, 32))
+@test Base.summarysize(Buffer{Nothing}(undef, 16)) ==
+    Base.summarysize(Buffer{Nothing}(undef, 32))
