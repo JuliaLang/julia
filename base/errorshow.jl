@@ -921,7 +921,7 @@ Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
 # (probably attempting concatenation)
 function string_concatenation_hint_handler(io, ex, arg_types, kwargs)
     @nospecialize
-    if (ex.f == +) && all(i -> i <: AbstractString, arg_types)
+    if (ex.f === +) && all(i -> i <: AbstractString, arg_types)
         print(io, "\nString concatenation is performed with ")
         printstyled(io, "*", color=:cyan)
         print(io, " (See also: https://docs.julialang.org/en/v1/manual/strings/#man-concatenation).")
