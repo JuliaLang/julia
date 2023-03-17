@@ -148,3 +148,53 @@ parse(::Type{T}, text::AbstractString, index::Integer; kws...) where {T} = _pars
 parseall(::Type{T}, text::AbstractString, index::Integer; kws...) where {T} = _parse(:toplevel, false, T, text, index; kws...)
 parseatom(::Type{T}, text::AbstractString, index::Integer; kws...) where {T} = _parse(:atom, false, T, text, index; kws...)
 
+#-------------------------------------------------------------------------------
+# Tokens interface
+"""
+Token type resulting from calling `tokenize(text)`
+
+Use
+* `kind(tok)` to get the token kind
+* `untokenize(tok, text)` to retreive the text
+* Predicates like `is_error(tok)` to query token categories and flags
+"""
+struct Token
+    head::SyntaxHead
+    range::UnitRange{UInt32}
+end
+
+Token() = Token(SyntaxHead(K"None", EMPTY_FLAGS), 0:0)
+
+head(t::Token) = t.head
+
+"""
+    tokenize(text)
+
+Returns the tokenized UTF-8 encoded `text` as a vector of `Token`s. The
+text for the token can be retreived by using `untokenize()`. The full text can be
+reconstructed with, for example, `join(untokenize.(tokenize(text), text))`.
+
+This interface works on UTF-8 encoded string or buffer data only.
+"""
+function tokenize(text)
+    ps = ParseStream(text)
+    parse!(ps, rule=:toplevel)
+    ts = ps.tokens
+    output_tokens = Token[]
+    for i = 2:length(ts)
+        if kind(ts[i]) == K"TOMBSTONE"
+            continue
+        end
+        r = ts[i-1].next_byte:ts[i].next_byte-1
+        push!(output_tokens, Token(head(ts[i]), r))
+    end
+    output_tokens
+end
+
+function untokenize(token::Token, text::AbstractString)
+    text[first(token.range):thisind(text, last(token.range))]
+end
+
+function untokenize(token::Token, text::Vector{UInt8})
+    text[token.range]
+end

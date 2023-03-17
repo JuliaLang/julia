@@ -27,7 +27,9 @@ using .JuliaSyntax:
     child,
     fl_parseall,
     fl_parse,
-    highlight
+    highlight,
+    tokenize,
+    untokenize
 
 if VERSION < v"1.6"
     # Compat stuff which might not be in Base for older versions

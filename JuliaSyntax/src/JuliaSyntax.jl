@@ -7,7 +7,6 @@ include("kinds.jl")
 
 # Lexing uses a significantly modified version of Tokenize.jl
 include("tokenize.jl")
-using .Tokenize: Token
 
 # Source and diagnostics
 include("source_files.jl")

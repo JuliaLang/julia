@@ -1,4 +1,5 @@
 using JuliaSyntax
+using JuliaSyntax: tokenize
 
 # Parser fuzz testing tools.
 
@@ -881,36 +882,6 @@ const cutdown_tokens = [
 
     "√"
 ]
-
-#-------------------------------------------------------------------------------
-
-# Rough tokenization interface.
-# TODO: We should have something like this in parser_api.jl
-
-struct Token2
-    head::JuliaSyntax.SyntaxHead
-    range::UnitRange{UInt32}
-end
-
-function tokenize(text::String)
-    ps = JuliaSyntax.ParseStream(text)
-    JuliaSyntax.parse!(ps, rule=:toplevel)
-    ts = ps.tokens
-    output_tokens = Token2[]
-    for i = 2:length(ts)
-        if JuliaSyntax.kind(ts[i]) == JuliaSyntax.K"TOMBSTONE"
-            continue
-        end
-        r = ts[i-1].next_byte:thisind(text, ts[i].next_byte-1)
-        push!(output_tokens, Token2(JuliaSyntax.head(ts[i]), r))
-    end
-    output_tokens
-end
-
-function split_tokens(text::String)
-    [@view text[t.range] for t in tokenize(text)]
-end
-
 
 #-------------------------------------------------------------------------------
 
