@@ -58,3 +58,7 @@ function ==(v1::Buffer, v2::Buffer)
 end
 
 sizeof(b::Buffer) = Core.sizeof(b)
+
+function promote_rule(a::Type{Buffer{T}}, b::Type{Buffer{S}}) where {T, S}
+    el_same(promote_type(T, S), a, b)
+end

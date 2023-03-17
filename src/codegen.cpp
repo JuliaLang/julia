@@ -3480,7 +3480,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                                 ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_prjlvalue,
                                     emit_bitcast(ctx, decay_derived(ctx, bufv), ctx.types().T_pprjlvalue), 0), Align(sizeof(void*)));
                         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
-                        ai.decorateInst(maybe_mark_load_dereferenceable(own_ptr, false, (jl_value_t*)jl_array_any_type));
+                        ai.decorateInst(maybe_mark_load_dereferenceable(own_ptr, false, (jl_value_t*)jl_buffer_any_type));
                         ctx.builder.CreateBr(mergeBB);
                         ctx.builder.SetInsertPoint(mergeBB);
                         data_owner = ctx.builder.CreatePHI(ctx.types().T_prjlvalue, 2);

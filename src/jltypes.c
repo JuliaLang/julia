@@ -2335,6 +2335,7 @@ void jl_init_types(void) JL_GC_DISABLED
         jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 1, 0)->name->wrapper;
     jl_buffer_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_buffer_type))->name;
     jl_compute_field_offsets((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_buffer_type));
+    jl_buffer_any_type = jl_apply_type1((jl_value_t*)jl_buffer_type, (jl_value_t*)jl_any_type);
 
     tv = jl_svec2(tvar("T"), tvar("N"));
     jl_array_type = (jl_unionall_t*)
@@ -2820,6 +2821,7 @@ void jl_init_types(void) JL_GC_DISABLED
     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_array_type))->ismutationfree = 0;
     ((jl_datatype_t*)jl_array_any_type)->ismutationfree = 0;
     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_buffer_type))->ismutationfree = 0;
+    ((jl_datatype_t*)jl_buffer_any_type)->ismutationfree = 0;
 
     // override the preferred layout for a couple types
     jl_lineinfonode_type->name->mayinlinealloc = 0; // FIXME: assumed to be a pointer by codegen
