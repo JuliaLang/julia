@@ -49,10 +49,9 @@ size_t jl_buffer_object_size(jl_buffer_t *b) JL_NOTSAFEPOINT
     return obj_size;
 }
 
-JL_DLLEXPORT jl_buffer_t *jl_new_buffer(jl_value_t *btype, size_t len)
+static jl_buffer_t *_new_buffer(jl_value_t *btype, size_t len,
+    jl_eltype_layout_t lyt, int8_t zeroinit)
 {
-    jl_value_t *eltype = jl_tparam0(btype);
-    jl_eltype_layout_t lyt = jl_eltype_layout(eltype);
     jl_buffer_t *b;
     jl_task_t *ct = jl_current_task;
     size_t data_size = jl_nbytes_eltype_data(lyt, len);
@@ -80,9 +79,8 @@ JL_DLLEXPORT jl_buffer_t *jl_new_buffer(jl_value_t *btype, size_t len)
     }
 
     // zero initialize data that may otherwise error on load
-    if (lyt.isboxed || lyt.ntags > 1 || lyt.hasptr || (jl_is_datatype(eltype) && ((jl_datatype_t*)eltype)->zeroinit)) {
+    if (zeroinit)
         memset(data, 0, data_size);
-    }
 
     b->length = len;
     b->data = data;
@@ -90,6 +88,14 @@ JL_DLLEXPORT jl_buffer_t *jl_new_buffer(jl_value_t *btype, size_t len)
     if (JL_BUFFER_IMPL_NUL && lyt.elsize == 1)
          ((char*)data)[data_size - 1] = '\0';
     return b;
+}
+
+JL_DLLEXPORT jl_buffer_t *jl_new_buffer(jl_value_t *btype, size_t len)
+{
+    jl_value_t *eltype = jl_tparam0(btype);
+    jl_eltype_layout_t lyt = jl_eltype_layout(eltype);
+    int8_t zi = (lyt.isboxed || lyt.ntags > 1 || lyt.hasptr || (jl_is_datatype(eltype) && ((jl_datatype_t*)eltype)->zeroinit));
+    return _new_buffer(btype, len, lyt, zi);
 }
 
 JL_DLLEXPORT jl_value_t *jl_bufref(jl_buffer_t *b, size_t i)
@@ -175,9 +181,19 @@ JL_DLLEXPORT int jl_buffer_isassigned(jl_buffer_t *b, size_t i)
     return 1;
 }
 
-JL_DLLEXPORT jl_buffer_t *jl_buffer_copy(jl_buffer_t *a)
+JL_DLLEXPORT jl_buffer_t *jl_buffer_copy(jl_buffer_t *old_buf)
 {
-    jl_buffer_t *c = jl_new_buffer(jl_typeof(a), jl_buffer_len((jl_value_t*)a));
-    memcpy((void**)jl_buffer_data(c), (void**)jl_buffer_data(a), jl_buffer_nbytes((jl_buffer_t*)a));
-    return c;
+    jl_value_t *btype = jl_typeof(old_buf);
+    jl_value_t *eltype = jl_tparam0(btype);
+    jl_eltype_layout_t lyt = jl_eltype_layout(eltype);
+    size_t len = jl_buffer_len(old_buf);
+    jl_buffer_t *new_buf = _new_buffer(btype, len, lyt, 0);
+    void *old_data = old_buf->data;
+    void *new_data = new_buf->data;
+    size_t data_len = len * lyt.elsize;
+    memcpy(new_data, old_data, data_len);
+    // ensure isbits union arrays copy their selector bytes correctly
+    if (lyt.ntags > 1)
+        memcpy(((char*)new_data) + len, ((char*)old_data) + len, len);
+    return new_buf;
 }

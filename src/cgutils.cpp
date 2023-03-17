@@ -2978,12 +2978,12 @@ static Value *emit_bufferptr_internal(jl_codectx_t &ctx, const jl_cgval_t &tinfo
     LoadInst *LI = ctx.builder.CreateAlignedLoad(LoadT, addr, Align(sizeof(char *)));
     LI->setOrdering(AtomicOrdering::NotAtomic);
     LI->setMetadata(LLVMContext::MD_nonnull, MDNode::get(ctx.builder.getContext(), None));
-    jl_aliasinfo_t aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, arraytype_constshape(tinfo.typ) ? ctx.tbaa().tbaa_const : ctx.tbaa().tbaa_bufferptr);
+    // TODO Buffer: is it accurate to say aliasinfo should be const since we always
+    // know the shape of the Buffer
+    jl_aliasinfo_t aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
     aliasinfo.decorateInst(LI);
-
     return LI;
 }
-
 
 static Value *emit_bufferptr(jl_codectx_t &ctx, const jl_cgval_t &tinfo, bool isboxed = false)
 {
