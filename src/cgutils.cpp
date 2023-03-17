@@ -36,7 +36,7 @@ STATISTIC(EmittedArrayNDims, "Number of array ndims calls emitted");
 STATISTIC(EmittedArrayElsize, "Number of array elsize calls emitted");
 STATISTIC(EmittedArrayOffset, "Number of array offset calls emitted");
 STATISTIC(EmittedArrayNdIndex, "Number of array nd index calls emitted");
-STATISTIC(EmittedBufferptr, "Number of array data pointer loads emitted");
+STATISTIC(EmittedBufferptr, "Number of buffer data pointer loads emitted");
 STATISTIC(EmittedBufferIndex, "Number of buffer index calls emitted");
 STATISTIC(EmittedBufferlen, "Number of buffer length calls emitted");
 STATISTIC(EmittedBoxes, "Number of box operations emitted");
@@ -403,6 +403,9 @@ static size_t dereferenceable_size(jl_value_t *jt)
         // Array has at least this much data
         return sizeof(jl_array_t);
     }
+    else if (jl_is_buffer_type(jt)) {
+        return sizeof(jl_buffer_t);
+    }
     else if (jl_is_datatype(jt) && jl_struct_try_layout((jl_datatype_t*)jt)) {
         return jl_datatype_size(jt);
     }
@@ -412,7 +415,8 @@ static size_t dereferenceable_size(jl_value_t *jt)
 // Return the min required / expected alignment of jltype (on the stack or heap)
 static unsigned julia_alignment(jl_value_t *jt)
 {
-    if (jl_is_array_type(jt)) {
+    // TODO BUffer: is it safe to assume will also always have this alignment?
+    if (jl_is_array_type(jt) || jl_is_buffer_type(jt)) {
         // Array always has this alignment
         return JL_SMALL_BYTE_ALIGNMENT;
     }
