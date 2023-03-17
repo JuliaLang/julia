@@ -578,19 +578,20 @@ elements that are not
 
 function _sort!(v::AbstractVector, a::MissingOptimization, o::Ordering, kw)
     @getkw lo hi
-    if nonmissingtype(eltype(v)) != eltype(v) && o isa DirectOrdering
+    if o isa DirectOrdering && eltype(v) >: Missing && nonmissingtype(eltype(v)) != eltype(v)
         lo, hi = send_to_end!(ismissing, v, o; lo, hi)
         _sort!(WithoutMissingVector(v, unsafe=true), a.next, o, (;kw..., lo, hi))
-    elseif eltype(v) <: Integer && o isa Perm && o.order isa DirectOrdering &&
-                nonmissingtype(eltype(o.data)) != eltype(o.data) &&
+    elseif o isa Perm && o.order isa DirectOrdering && eltype(v) <: Integer &&
+                eltype(o.data) >: Missing && nonmissingtype(eltype(o.data)) != eltype(o.data) &&
                 all(i === j for (i,j) in zip(v, eachindex(o.data)))
         # TODO make this branch known at compile time
         # This uses a custom function because we need to ensure stability of both sides and
         # we can assume v is equal to eachindex(o.data) which allows a copying partition
         # without allocations.
         lo_i, hi_i = lo, hi
-        for (i,x) in zip(eachindex(o.data), o.data)
-            if ismissing(x) == (o.order == Reverse) # should i go at the beginning?
+        for i in eachindex(o.data) # equal to copy(v)
+            x = o.data[i]
+            if ismissing(x) == (o.order == Reverse) # should x go at the beginning/end?
                 v[lo_i] = i
                 lo_i += 1
             else
