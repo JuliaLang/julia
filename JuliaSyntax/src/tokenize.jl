@@ -12,7 +12,7 @@ include("tokenize_utils.jl")
 #-------------------------------------------------------------------------------
 # Tokens
 
-struct Token
+struct RawToken
     kind::Kind
     # Offsets into a string or buffer
     startbyte::Int # The byte where the token start in the buffer
@@ -20,24 +20,24 @@ struct Token
     dotop::Bool
     suffix::Bool
 end
-function Token(kind::Kind, startbyte::Int, endbyte::Int)
-    Token(kind, startbyte, endbyte, false, false)
+function RawToken(kind::Kind, startbyte::Int, endbyte::Int)
+    RawToken(kind, startbyte, endbyte, false, false)
 end
-Token() = Token(K"error", 0, 0, false, false)
+RawToken() = RawToken(K"error", 0, 0, false, false)
 
-const EMPTY_TOKEN = Token()
+const EMPTY_TOKEN = RawToken()
 
-kind(t::Token) = t.kind
+kind(t::RawToken) = t.kind
 
-startbyte(t::Token) = t.startbyte
-endbyte(t::Token) = t.endbyte
+startbyte(t::RawToken) = t.startbyte
+endbyte(t::RawToken) = t.endbyte
 
 
-function untokenize(t::Token, str::String)
+function untokenize(t::RawToken, str::String)
     String(codeunits(str)[1 .+ (t.startbyte:t.endbyte)])
 end
 
-function Base.show(io::IO, t::Token)
+function Base.show(io::IO, t::RawToken)
     print(io, rpad(string(startbyte(t), "-", endbyte(t)), 11, " "))
     print(io, rpad(kind(t), 15, " "))
 end
@@ -108,18 +108,17 @@ end
 Lexer(str::AbstractString) = Lexer(IOBuffer(str))
 
 """
-    tokenize(x, T = Token)
+    tokenize(x)
 
 Returns an `Iterable` containing the tokenized input. Can be reverted by e.g.
-`join(untokenize.(tokenize(x)))`. Setting `T` chooses the type of token
-produced by the lexer (`Token` or `Token`).
+`join(untokenize.(tokenize(x)))`.
 """
 tokenize(x) = Lexer(x)
 
 # Iterator interface
 Base.IteratorSize(::Type{<:Lexer}) = Base.SizeUnknown()
 Base.IteratorEltype(::Type{<:Lexer}) = Base.HasEltype()
-Base.eltype(::Type{<:Lexer}) = Token
+Base.eltype(::Type{<:Lexer}) = RawToken
 
 
 function Base.iterate(l::Lexer)
@@ -142,7 +141,7 @@ end
 """
     startpos(l::Lexer)
 
-Return the latest `Token`'s starting position.
+Return the latest `RawToken`'s starting position.
 """
 startpos(l::Lexer) = l.token_startpos
 
@@ -193,7 +192,7 @@ Base.seek(l::Lexer, pos) = seek(l.io, pos)
 """
     start_token!(l::Lexer)
 
-Updates the lexer's state such that the next  `Token` will start at the current
+Updates the lexer's state such that the next  `RawToken` will start at the current
 position.
 """
 function start_token!(l::Lexer)
@@ -251,7 +250,7 @@ end
 """
     emit(l::Lexer, kind::Kind)
 
-Returns a `Token` of kind `kind` with contents `str` and starts a new `Token`.
+Returns a `RawToken` of kind `kind` with contents `str` and starts a new `RawToken`.
 """
 function emit(l::Lexer, kind::Kind, maybe_op=true)
     suffix = false
@@ -262,7 +261,7 @@ function emit(l::Lexer, kind::Kind, maybe_op=true)
         end
     end
 
-    tok = Token(kind, startpos(l), position(l) - 1, l.dotop, suffix)
+    tok = RawToken(kind, startpos(l), position(l) - 1, l.dotop, suffix)
 
     l.dotop = false
     l.last_token = kind
@@ -272,7 +271,7 @@ end
 """
     emit_error(l::Lexer, err::Kind)
 
-Returns an `K"error"` token with error `err` and starts a new `Token`.
+Returns an `K"error"` token with error `err` and starts a new `RawToken`.
 """
 function emit_error(l::Lexer, err::Kind)
     @assert is_error(err)
@@ -283,7 +282,7 @@ end
 """
     next_token(l::Lexer)
 
-Returns the next `Token`.
+Returns the next `RawToken`.
 """
 function next_token(l::Lexer, start = true)
     start && start_token!(l)

@@ -15,7 +15,7 @@ using JuliaSyntax.Tokenize:
     Tokenize,
     tokenize,
     untokenize,
-    Token
+    RawToken
 
 tok(str, i = 1) = collect(tokenize(str))[i]
 
@@ -321,7 +321,7 @@ end
     @test String(take!(io)) == "1-5        String         "
 end
 
-~(tok::Token, t::Tuple) = tok.kind == t[1] && untokenize(tok, t[3]) == t[2]
+~(tok::RawToken, t::Tuple) = tok.kind == t[1] && untokenize(tok, t[3]) == t[2]
 
 @testset "raw strings" begin
     str = raw""" str"x $ \ y" """

@@ -124,3 +124,44 @@ end
             \e[90m#      └┘ ── \e[0;0m\e[91minvalid operator\e[0;0m"""
     end
 end
+
+tokensplit(str) = [kind(tok) => untokenize(tok, str) for tok in tokenize(str)]
+
+@testset "tokenize() API" begin
+    # tokenize() is eager
+    @test tokenize("aba") isa Vector{JuliaSyntax.Token}
+
+    # . is a separate token from + in `.+`
+    @test tokensplit("a .+ β") == [
+        K"Identifier" => "a",
+        K"Whitespace" => " ",
+        K"." => ".",
+        K"+" => "+",
+        K"Whitespace" => " ",
+        K"Identifier" => "β",
+    ]
+
+    # Contextual keywords become identifiers where necessary
+    @test tokensplit("outer = 1") == [
+        K"Identifier" => "outer",
+        K"Whitespace" => " ",
+        K"=" => "=",
+        K"Whitespace" => " ",
+        K"Integer" => "1",
+    ]
+
+    # A predicate based on flags()
+    @test JuliaSyntax.is_suffixed(tokenize("+₁")[1])
+
+    # Buffer interface
+    @test tokenize(Vector{UInt8}("a + b")) == tokenize("a + b")
+
+    buf = Vector{UInt8}("a-β")
+    @test untokenize.(tokenize(buf), Ref(buf,)) == [
+        Vector{UInt8}("a"),
+        Vector{UInt8}("-"),
+        Vector{UInt8}("β")
+    ]
+
+    @test kind(JuliaSyntax.Token()) == K"None"
+end
