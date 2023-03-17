@@ -362,7 +362,10 @@ See also [`copy!`](@ref Base.copy!), [`copyto!`](@ref), [`deepcopy`](@ref).
 """
 copy
 
-copy(a::T) where {T<:Array} = ccall(:jl_array_copy, Ref{T}, (Any,), a)
+function copy(a::T) where {T<:Array}
+    @assume_effects :nothrow :effect_free :terminates_globally
+    ccall(:jl_array_copy, Ref{T}, (Any,), a)
+end
 
 ## Constructors ##
 
@@ -422,6 +425,7 @@ end
 getindex(::Type{Any}) = Vector{Any}()
 
 function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
+    @assume_effects :consistent :nothrow :terminates_globally
     ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), a, convert(eltype(a), x), length(a))
     return a
 end
@@ -1009,21 +1013,33 @@ end
 
 # efficiently grow an array
 
-_growbeg!(a::Vector, delta::Integer) =
+function _growbeg!(a::Vector, delta::Integer)
+    @assume_effects :terminates_globally
     ccall(:jl_array_grow_beg, Cvoid, (Any, UInt), a, delta)
-_growend!(a::Vector, delta::Integer) =
+end
+function _growend!(a::Vector, delta::Integer)
+    @assume_effects :terminates_globally
     ccall(:jl_array_grow_end, Cvoid, (Any, UInt), a, delta)
-_growat!(a::Vector, i::Integer, delta::Integer) =
+end
+function _growat!(a::Vector, i::Integer, delta::Integer)
+    @assume_effects :terminates_globally
     ccall(:jl_array_grow_at, Cvoid, (Any, Int, UInt), a, i - 1, delta)
+end
 
 # efficiently delete part of an array
 
-_deletebeg!(a::Vector, delta::Integer) =
+function _deletebeg!(a::Vector, delta::Integer)
+    @assume_effects :terminates_globally
     ccall(:jl_array_del_beg, Cvoid, (Any, UInt), a, delta)
-_deleteend!(a::Vector, delta::Integer) =
+end
+function _deleteend!(a::Vector, delta::Integer)
+    @assume_effects :terminates_globally
     ccall(:jl_array_del_end, Cvoid, (Any, UInt), a, delta)
-_deleteat!(a::Vector, i::Integer, delta::Integer) =
+end
+function _deleteat!(a::Vector, i::Integer, delta::Integer)
+    @assume_effects :terminates_globally
     ccall(:jl_array_del_at, Cvoid, (Any, Int, UInt), a, i - 1, delta)
+end
 
 ## Dequeue functionality ##
 

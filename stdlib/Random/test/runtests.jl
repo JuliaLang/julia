@@ -1018,3 +1018,8 @@ guardseed() do
         @test f42752(true) === val
     end
 end
+
+f_xoshiro_nouse() = (Xoshiro(UInt64(0)); nothing)
+let src = @code_typed f_xoshiro_nouse()
+    @test length(src.code) == 1
+end

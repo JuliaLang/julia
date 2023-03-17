@@ -290,11 +290,13 @@ function make_seed()
     end
 end
 
-function make_seed(n::Integer)
+@Base.assume_effects :nothrow _push_nothrow!(a, i) = push!(a, i)
+
+@Base.assume_effects :effect_free function make_seed(n::Integer)
     n < 0 && throw(DomainError(n, "`n` must be non-negative."))
     seed = UInt32[]
     while true
-        push!(seed, n & 0xffffffff)
+        _push_nothrow!(seed, n & 0xffffffff)
         n >>= 32
         if n == 0
             return seed
