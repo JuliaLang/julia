@@ -59,7 +59,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             # as we may want to concrete-evaluate this frame in cases when there are
             # no overlayed calls, try an additional effort now to check if this call
             # isn't overlayed rather than just handling it conservatively
-            matches = find_matching_methods(ipo_lattice(interp), arginfo.argtypes, atype, method_table(interp),
+            matches = find_matching_methods(typeinf_lattice(interp), arginfo.argtypes, atype, method_table(interp),
                 InferenceParams(interp).max_union_splitting, max_methods)
             if !isa(matches, FailedMethodMatch)
                 nonoverlayed = matches.nonoverlayed
@@ -75,7 +75,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     end
 
     argtypes = arginfo.argtypes
-    matches = find_matching_methods(ipo_lattice(interp), argtypes, atype, method_table(interp),
+    matches = find_matching_methods(typeinf_lattice(interp), argtypes, atype, method_table(interp),
         InferenceParams(interp).max_union_splitting, max_methods)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
