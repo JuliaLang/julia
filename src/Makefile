@@ -353,7 +353,7 @@ $(BUILDDIR)/julia_version.h: $(JULIAHOME)/VERSION
 	@echo "#ifndef JL_VERSION_H" >> $@.$(JULIA_BUILD_MODE).tmp
 	@echo "#define JL_VERSION_H" >> $@.$(JULIA_BUILD_MODE).tmp
 	@echo "#define JULIA_VERSION_STRING" \"$(JULIA_VERSION)\" >> $@.$(JULIA_BUILD_MODE).tmp
-	@echo $(JULIA_VERSION) | awk 'BEGIN {FS="[.,-]"} \
+	@echo $(JULIA_VERSION) | awk 'BEGIN {FS="[.,+-]"} \
 	{print "#define JULIA_VERSION_MAJOR " $$1 "\n" \
 	"#define JULIA_VERSION_MINOR " $$2 "\n" \
 	"#define JULIA_VERSION_PATCH " $$3 ; \
