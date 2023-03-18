@@ -9,6 +9,18 @@
 
 #define JL_BUFFER_IMPL_NUL 1
 
+// at this size and bigger, allocate resized array data with malloc directly
+// instead of managing them separately as gc objects
+#define MALLOC_THRESH 1048576
+
+static inline void memmove_safe(int hasptr, char *dst, const char *src, size_t nb) JL_NOTSAFEPOINT
+{
+    if (hasptr)
+        memmove_refs((void**)dst, (void**)src, nb / sizeof(void*));
+    else
+        memmove(dst, src, nb);
+}
+
 // The only time data may not be aligned is if it's a foreign pointer or if
 // it's a String. Buffer doesn't Buffer doesn't support these
 // right now but this method lets us build code around the situation where it
@@ -48,11 +60,8 @@ size_t jl_buffer_nbytes(jl_buffer_t *b) JL_NOTSAFEPOINT
 }
 
 // compute offset necessary to align data (if it can be aligned)
-size_t jl_buffer_object_size(jl_buffer_t *b) JL_NOTSAFEPOINT
+STATIC_INLINE size_t _buffer_object_size(jl_eltype_layout_t lyt, size_t data_size)
 {
-    jl_eltype_layout_t lyt = jl_eltype_layout(jl_buffer_eltype(b));
-    size_t len = jl_buffer_len(b);
-    size_t data_size = jl_nbytes_eltype_data(lyt, len);
     size_t obj_size = sizeof(jl_buffer_t);
     if (data_size <= ARRAY_INLINE_NBYTES) {
         // align data area
@@ -65,25 +74,27 @@ size_t jl_buffer_object_size(jl_buffer_t *b) JL_NOTSAFEPOINT
     return obj_size;
 }
 
+// compute offset necessary to align data (if it can be aligned)
+size_t jl_buffer_object_size(jl_buffer_t *b) JL_NOTSAFEPOINT
+{
+    jl_eltype_layout_t lyt = jl_eltype_layout(jl_buffer_eltype(b));
+    size_t len = jl_buffer_len(b);
+    size_t data_size = jl_nbytes_eltype_data(lyt, len);
+    return _buffer_object_size(lyt, data_size);
+}
+
 static jl_buffer_t *_new_buffer(jl_value_t *btype, size_t len,
     jl_eltype_layout_t lyt, int8_t zeroinit)
 {
     jl_buffer_t *b;
     jl_task_t *ct = jl_current_task;
     size_t data_size = jl_nbytes_eltype_data(lyt, len);
+    size_t obj_size = _buffer_object_size(lyt, data_size);
     // size of raw data and object fields
-    size_t obj_size = sizeof(jl_buffer_t);
     void *data;
     if (data_size <= ARRAY_INLINE_NBYTES) {
-        // align data area
-        if (data_size >= ARRAY_CACHE_ALIGN_THRESHOLD)
-            obj_size = LLT_ALIGN(obj_size, JL_CACHE_BYTE_ALIGNMENT);
-        else if (!lyt.isboxed && lyt.elsize >= 4)
-            obj_size = LLT_ALIGN(obj_size, JL_SMALL_BYTE_ALIGNMENT);
-        size_t doffs = obj_size;
-        obj_size = data_size + doffs;
         b = (jl_buffer_t*)jl_gc_alloc(ct->ptls, obj_size, btype);
-        data = (char*)b + doffs;
+        data = (char*)b + sizeof(jl_buffer_t);
     }
     else {
         data = jl_gc_managed_malloc(data_size);
@@ -213,3 +224,102 @@ JL_DLLEXPORT jl_buffer_t *jl_buffer_copy(jl_buffer_t *old_buf)
         memcpy(((char*)new_data) + len, ((char*)old_data) + len, len);
     return new_buf;
 }
+
+// Resize the buffer to a max size of `newlen`
+// The buffer can either be newly allocated or realloc'd, the return
+// value is 1 if a new buffer is allocated and 0 if it is realloc'd.
+// the caller needs to take care of moving the data from the old buffer
+// to the new one if necessary.
+// When this function returns, the `->data` pointer always points to
+// the **beginning** of the new buffer.
+static int NOINLINE resize_buffer(jl_buffer_t *buf, jl_eltype_layout_t lyt, size_t newlen)
+{
+    assert(jl_is_dynamic_buffer(buf) || "not a resizeable buffer");
+    jl_task_t *ct = jl_current_task;
+    size_t oldlen = jl_buffer_len(buf);
+    size_t old_nbytes = jl_nbytes_eltype_data(lyt, oldlen);
+    size_t new_nbytes = jl_nbytes_eltype_data(lyt, newlen);
+    int newbuf = 0;
+    if (old_nbytes > ARRAY_INLINE_NBYTES) {
+        // already malloc'd - use realloc
+        char *olddata = (char*)buf->data;
+        buf->data = jl_gc_managed_realloc(olddata, new_nbytes, old_nbytes,
+                                        jl_is_aligned_buffer(buf), (jl_value_t*)buf);
+    }
+    else {
+        newbuf = 1;
+        if (new_nbytes >= MALLOC_THRESH) {
+            buf->data = jl_gc_managed_malloc(new_nbytes);
+            jl_gc_track_malloced_buffer(ct->ptls, buf);
+        }
+        else {
+            buf->data = jl_gc_alloc_buf(ct->ptls, new_nbytes);
+            // FIXME how to mark jl_buffer_t as unmarked
+            // when we can't d (jl_array_t*)buf->flags.how = 1;
+            jl_gc_wb_buf(buf, buf->data, new_nbytes);
+        }
+    }
+    if (JL_BUFFER_IMPL_NUL && lyt.elsize == 1)
+        memset((char*)buf->data + old_nbytes - 1, 0, new_nbytes - old_nbytes + 1);
+    (void)oldlen;
+    assert(oldlen == jl_buffer_len(buf) &&
+           "Race condition detected: recursive resizing on the same array.");
+    buf->length = newlen;
+    return newbuf;
+}
+
+STATIC_INLINE void jl_buffer_grow_at_end(jl_buffer_t *buf, size_t idx,
+                                        size_t inc, size_t n)
+{
+    size_t oldlen = jl_buffer_len(buf);
+    size_t newlen = oldlen + inc;
+    jl_value_t *eltype = jl_tparam0(jl_typeof(buf));
+    jl_eltype_layout_t lyt = jl_eltype_layout(eltype);
+    char *data = (char*)buf->data;
+    char *typetagdata;
+    char *newtypetagdata;
+    size_t old_nbytes = oldlen * lyt.elsize;
+    if (lyt.ntags > 1)
+        typetagdata = data + old_nbytes;
+    int has_gap = n > idx;
+    size_t nb1 = idx * lyt.elsize;
+    size_t nbinc = inc * lyt.elsize;
+    int newbuf = resize_buffer(buf, lyt, newlen);
+    char *newdata = (char*)buf->data;
+    if (lyt.ntags > 1)
+        newtypetagdata = newdata + (newlen * lyt.elsize);
+    if (newbuf) {
+        memcpy(newdata, data, nb1);
+        if (lyt.ntags > 1) {
+            memcpy(newtypetagdata, typetagdata, idx);
+            if (has_gap) memcpy(newtypetagdata + idx + inc, typetagdata + idx, n - idx);
+            memset(newtypetagdata + idx, 0, inc);
+        }
+        if (has_gap)
+            memcpy(newdata + nb1 + nbinc, data + nb1, n * lyt.elsize - nb1);
+    }
+    else {
+        if (lyt.ntags > 1) {
+            typetagdata = newdata + old_nbytes;
+            if (has_gap)
+                memmove(newtypetagdata + idx + inc, typetagdata + idx, n - idx);
+            memmove(newtypetagdata, typetagdata, idx);
+            memset(newtypetagdata + idx, 0, inc);
+        }
+        if (has_gap)
+            memmove_safe(lyt.hasptr, newdata + nb1 + nbinc, newdata + nb1, n * lyt.elsize - nb1);
+    }
+    buf->data = data = newdata;
+    buf->length = newlen;
+    if (lyt.isboxed || lyt.ntags > 1 || lyt.hasptr ||
+        (jl_is_datatype(eltype) && ((jl_datatype_t*)eltype)->zeroinit)) {
+        memset(data + idx * lyt.elsize, 0, inc * lyt.elsize);
+    }
+}
+
+JL_DLLEXPORT void jl_buffer_grow_end(jl_buffer_t *buf, size_t inc)
+{
+    size_t len = jl_buffer_len(buf);
+    jl_buffer_grow_at_end(buf, len, inc, len);
+}
+

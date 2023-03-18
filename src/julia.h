@@ -1346,6 +1346,12 @@ STATIC_INLINE int jl_is_array(void *v) JL_NOTSAFEPOINT
     return jl_is_array_type(t);
 }
 
+STATIC_INLINE int jl_is_dynamic_buffer(void *v) JL_NOTSAFEPOINT
+{
+    jl_value_t *t = jl_typeof(v);
+    return (((jl_datatype_t*)(t))->name != jl_buffer_typename);
+}
+
 STATIC_INLINE int jl_is_buffer_type(void *t) JL_NOTSAFEPOINT
 {
     return (jl_is_datatype(t) && ((jl_datatype_t*)(t))->name == jl_buffer_typename);
