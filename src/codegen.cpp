@@ -386,7 +386,7 @@ struct jl_tbaacache_t {
         std::tie(tbaa_buffer, tbaa_buffer_scalar) = tbaa_make_child(mbuilder, "jtbaa_buffer");
         tbaa_bufferptr = tbaa_make_child(mbuilder, "jtbaa_bufferptr", tbaa_buffer_scalar).first;
         tbaa_bufferlen = tbaa_make_child(mbuilder, "jtbaa_bufferlen", tbaa_buffer_scalar).first;
-        tbaa_bufferselbyte = tbaa_make_child(mbuilder, "jtbaa_bufferselbyte", tbaa_array_scalar).first;
+        tbaa_bufferselbyte = tbaa_make_child(mbuilder, "jtbaa_bufferselbyte", tbaa_buffer_scalar).first;
         tbaa_const = tbaa_make_child(mbuilder, "jtbaa_const", nullptr, true).first;
     }
 };

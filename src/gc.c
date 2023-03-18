@@ -1141,23 +1141,23 @@ void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a) JL_NOTSAFEPOINT
 void jl_gc_track_malloced_buffer(jl_ptls_t ptls, jl_buffer_t *b) JL_NOTSAFEPOINT
 {
     // This is **NOT** a GC safe point.
-    mallocbuffer_t *ma;
+    mallocbuffer_t *mb;
     if (ptls->heap.mbfreelist == NULL) {
-        ma = (mallocbuffer_t*)malloc(sizeof(mallocbuffer_t));
+        mb = (mallocbuffer_t*)malloc(sizeof(mallocbuffer_t));
     }
     else {
-        ma = ptls->heap.mbfreelist;
-        ptls->heap.mbfreelist = ma->next;
+        mb = ptls->heap.mbfreelist;
+        ptls->heap.mbfreelist = mb->next;
     }
-    ma->b = b;
-    ma->next = ptls->heap.mallocbuffers;
-    ptls->heap.mallocbuffers = ma;
+    mb->b = b;
+    mb->next = ptls->heap.mallocbuffers;
+    ptls->heap.mallocbuffers = mb;
 }
 
 
 static void jl_gc_free_buffer(jl_buffer_t *b) JL_NOTSAFEPOINT
 {
-    size_t nb = jl_buffer_nbytes((jl_buffer_t*)b);
+    size_t nb = jl_buffer_nbytes(b);
     if (nb > ARRAY_INLINE_NBYTES) {
         char *d = (char*)jl_buffer_data(b);
         if (jl_is_aligned_buffer(b))
@@ -2362,32 +2362,21 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             uintptr_t nptr = (l << 2) | (bits & GC_OLD);
             gc_mark_objarray(ptls, objary_parent, objary_begin, objary_end, step, nptr);
         }
-        // FIXME Buffer GC
+        // FIXME Buffer GC 
         else if (vt->name == jl_buffer_typename) {
             jl_buffer_t *b = (jl_buffer_t *)new_obj;
-            size_t elsz = 0, al = 0;
             jl_value_t *eltype = jl_tparam0(jl_typeof(b));
+            jl_eltype_layout_t lyt = jl_eltype_layout(eltype);
             size_t len = jl_buffer_len(b);
-            int isunboxed = jl_islayout_inline(eltype, &elsz, &al);
-            int isunion = jl_is_uniontype(eltype);
-            // int hasptr = isunboxed && (jl_is_datatype(eltype) && ((jl_datatype_t*)eltype)->layout->npointers > 0);
-            if (!isunboxed) {
-                elsz = sizeof(void*);
-                al = elsz;
-            }
-            else {
-                elsz = LLT_ALIGN(elsz, al);
-            }
-            size_t tot = len * elsz;
-            if (isunboxed) {
+            size_t tot = len * lyt.elsize;
+            if (!lyt.isboxed) {
                 // extra byte for all julia allocated byte arrays
-                if (elsz == 1 && !isunion)
+                if (lyt.elsize == 1 && lyt.ntags < 2)
                     tot++;
                 // an extra byte for each isbits union array element, stored after len * elsize
-                if (isunion)
+                if (lyt.ntags > 1)
                     tot += len;
             }
-            int hasptr = isunboxed && (jl_is_datatype(eltype) &&((jl_datatype_t*)eltype)->layout->npointers > 0);
             int is_malloced_buffer = tot > ARRAY_INLINE_NBYTES;
             // align data area
             int tsz = sizeof(jl_buffer_t);
@@ -2395,7 +2384,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 // align data area
                 if (tot >= ARRAY_CACHE_ALIGN_THRESHOLD)
                     tsz = LLT_ALIGN(tsz, JL_CACHE_BYTE_ALIGNMENT);
-                else if (isunboxed && elsz >= 4)
+                else if (!lyt.isboxed && lyt.elsize >= 4)
                     tsz = LLT_ALIGN(tsz, JL_SMALL_BYTE_ALIGNMENT);
                 tsz += tot;
             }
@@ -2426,7 +2415,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                         ptls->gc_cache.scanned_bytes += tot;
                 }
             }
-            else if (jl_buffer_needs_marking(b)) {
+            else if (jl_is_unmarked_buffer(b)) {
                 if (update_meta || foreign_alloc) {
                     objprofile_count(jl_malloc_tag, bits == GC_OLD_MARKED, tot);
                     gc_heap_snapshot_record_hidden_edge(new_obj, data, tot, pooled);
@@ -2437,13 +2426,14 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 }
             }
             else {
-                // FIXME Buffer: is supposed to just account for the size of the structure itself (not the array indexable data)
+                // FIXME Buffer: is this supposed to just account for the size of
+                // the structure itself (not the array indexable data) ?
                 void *data_ptr = (char*)b + sizeof(jl_buffer_t);
                 gc_heap_snapshot_record_hidden_edge(new_obj, data_ptr, tot, 2);
             }
             if (len == 0)
                 return;
-            if (!isunboxed) {
+            if (lyt.isboxed) {
                 if ((jl_datatype_t *)jl_tparam0(vt) == jl_symbol_type)
                     return;
                 jl_value_t *objary_parent = new_obj;
@@ -2453,11 +2443,11 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 uintptr_t nptr = (len << 2) | (bits & GC_OLD);
                 gc_mark_objarray(ptls, objary_parent, objary_begin, objary_end, step, nptr);
             }
-            else if (hasptr) {
+            else if (lyt.hasptr) {
                 jl_datatype_t *et = (jl_datatype_t *)jl_tparam0(vt);
                 const jl_datatype_layout_t *layout = et->layout;
                 unsigned npointers = layout->npointers;
-                unsigned elsize = elsz / sizeof(jl_value_t *);
+                unsigned elsize = lyt.elsize / sizeof(jl_value_t *);
                 jl_value_t *objary_parent = new_obj;
                 jl_value_t **objary_begin = (jl_value_t **)data;
                 jl_value_t **objary_end = objary_begin + len * elsize;

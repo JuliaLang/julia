@@ -9,6 +9,22 @@
 
 #define JL_BUFFER_IMPL_NUL 1
 
+// The only time data may not be aligned is if it's a foreign pointer or if
+// it's a String. Buffer doesn't Buffer doesn't support these
+// right now but this method lets us build code around the situation where it
+// might in the future.
+int jl_is_aligned_buffer(jl_buffer_t *buf)
+{
+    return ((jl_datatype_t*)(jl_typeof(buf)))->name == jl_buffer_typename;
+}
+
+// FIXME Buffer: 
+// julia-allocated buffer that needs to be marked
+int jl_is_unmarked_buffer(jl_buffer_t *buf) JL_NOTSAFEPOINT
+{
+    return ((jl_datatype_t*)(jl_typeof(buf)))->name != jl_buffer_typename;
+}
+
 // given the element type layout (jl_eltype_layout) and number of elements stored,
 // provides the number of bytes necessary for storage.
 STATIC_INLINE size_t jl_nbytes_eltype_data(jl_eltype_layout_t lyt, size_t len)

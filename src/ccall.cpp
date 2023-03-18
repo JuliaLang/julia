@@ -1781,7 +1781,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         const jl_cgval_t &bufv = argv[0];
         const jl_cgval_t &idxv = argv[1];
         jl_datatype_t *bufdt = (jl_datatype_t*)jl_unwrap_unionall(bufv.typ);
-        if (jl_is_array_type(bufdt)) {
+        if (jl_is_buffer_type(bufdt)) {
             jl_value_t *ety = jl_tparam0(bufdt);
             jl_eltype_layout_t lyt = jl_eltype_layout(ety);
             if (!lyt.isboxed && !lyt.hasptr) {

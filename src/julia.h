@@ -155,11 +155,11 @@ typedef struct {
 // Layout of elements stored in array types. Necessary information should all be
 // available at compile time through only the element type.
 typedef struct {
-    uint16_t elsize;
-    uint8_t alignment;
-    uint8_t isboxed;
-    uint8_t hasptr;
-    uint8_t ntags;
+    uint16_t elsize; // number of bytes allocated for each element
+    uint8_t alignment; // alignment size
+    uint8_t isboxed;  // elements are pointers to boxed types
+    uint8_t hasptr;  // data has embedded pointers
+    uint8_t ntags;  // number of type tags necessary. ntags > 1 == isunion
 } jl_eltype_layout_t;
 
 // C struct for Julia's Buffer{T} type.
@@ -992,9 +992,6 @@ JL_DLLEXPORT void jl_gc_safepoint(void);
 #define jl_buffer_len(b)    (((jl_buffer_t*)(b))->length)
 #define jl_buffer_data(b)    ((void*)((jl_buffer_t*)(b))->data)
 #define jl_buffer_eltype(b) (jl_tparam0(jl_typeof((jl_buffer_t*)(b))))
-// TODO: change this when we have a variant of jl_buffer_t that is resizable
-#define jl_buffer_needs_marking(x) (0)
-#define jl_is_aligned_buffer(x) (1)
 
 #ifdef __clang_gcanalyzer__
 STATIC_INLINE jl_value_t *jl_svecref(void *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
