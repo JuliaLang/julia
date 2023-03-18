@@ -10,6 +10,12 @@
 #endif
 // threading ------------------------------------------------------------------
 
+#if defined(USE_ITTAPI)
+#define INTEL_ITTNOTIFY_API_PRIVATE
+#include "ittapi/ittnotify.h"
+#undef INTEL_ITTNOTIFY_API_PRIVATE
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -100,6 +106,9 @@ typedef struct {
 #endif
 #if defined(_COMPILER_ASAN_ENABLED_)
     void *asan_fake_stack;
+#endif
+#if defined(USE_ITTAPI)
+    __itt_caller itt_state;
 #endif
 } jl_ucontext_t;
 

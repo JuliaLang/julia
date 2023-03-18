@@ -134,6 +134,12 @@ static inline void sanitizer_finish_switch_fiber(jl_task_t *last, jl_task_t *cur
 #define STATIC_OR_JS static
 #endif
 
+#if defined(USE_ITTAPI)
+__itt_domain *domain;
+__itt_string_handle *root_task;
+__itt_string_handle *other_task;
+#endif
+
 static char *jl_alloc_fiber(_jl_ucontext_t *t, size_t *ssize, jl_task_t *owner) JL_NOTSAFEPOINT;
 STATIC_OR_JS void jl_set_fiber(jl_ucontext_t *t);
 STATIC_OR_JS void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t);
@@ -307,6 +313,9 @@ void JL_NORETURN jl_finish_task(jl_task_t *t)
     ct->ptls->in_finalizer = 0;
     ct->ptls->in_pure_callback = 0;
     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+#if defined(USE_ITTAPI)
+    __itt_task_end(domain);
+#endif
     // let the runtime know this task is dead and find a new task to run
     jl_function_t *done = jl_atomic_load_relaxed(&task_done_hook_func);
     if (done == NULL) {
@@ -555,7 +564,14 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
             if (killed) {
                 sanitizer_start_switch_fiber_killed(ptls, t);
                 tsan_switch_to_ctx(&t->ctx);
+#if defined(USE_ITTAPI)
+                __itt_stack_callee_leave(lastt->ctx.itt_state);
+                __itt_stack_callee_enter(t->ctx.itt_state);
+#endif
                 tsan_destroy_ctx(ptls, &lastt->ctx);
+#if defined(USE_ITTAPI)
+                __itt_stack_caller_destroy(lastt->ctx.itt_state);
+#endif
                 jl_set_fiber(&t->ctx); // (doesn't return)
                 abort(); // unreachable
             }
@@ -565,6 +581,10 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
                     // Resume at the jl_setjmp earlier in this function,
                     // don't do a full task swap
                     tsan_switch_to_ctx(&t->ctx);
+#if defined(USE_ITTAPI)
+                __itt_stack_callee_leave(lastt->ctx.itt_state);
+                __itt_stack_callee_enter(t->ctx.itt_state);
+#endif
                     jl_set_fiber(&t->ctx); // (doesn't return)
                 }
                 else {
@@ -583,9 +603,16 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
         }
         if (t->copy_stack && always_copy_stacks) {
             tsan_switch_to_ctx(&t->ctx);
+#if defined(USE_ITTAPI)
+                __itt_stack_callee_leave(lastt->ctx.itt_state);
+                __itt_stack_callee_enter(t->ctx.itt_state);
+#endif
             if (killed) {
                 sanitizer_start_switch_fiber_killed(ptls, t);
                 tsan_destroy_ctx(ptls, &lastt->ctx);
+#if defined(USE_ITTAPI)
+                __itt_stack_caller_destroy(lastt->ctx.itt_state);
+#endif
             } else {
                 sanitizer_start_switch_fiber(ptls, lastt, t);
             }
@@ -602,7 +629,14 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
             if (killed) {
                 sanitizer_start_switch_fiber_killed(ptls, t);
                 tsan_switch_to_ctx(&t->ctx);
+#if defined(USE_ITTAPI)
+                __itt_stack_callee_leave(lastt->ctx.itt_state);
+                __itt_stack_callee_enter(t->ctx.itt_state);
+#endif
                 tsan_destroy_ctx(ptls, &lastt->ctx);
+#if defined(USE_ITTAPI)
+                __itt_stack_caller_destroy(lastt->ctx.itt_state);
+#endif
                 jl_start_fiber_set(&t->ctx); // (doesn't return)
                 abort();
             }
@@ -610,6 +644,10 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
             if (lastt->copy_stack) {
                 // Resume at the jl_setjmp earlier in this function
                 tsan_switch_to_ctx(&t->ctx);
+#if defined(USE_ITTAPI)
+                __itt_stack_callee_leave(lastt->ctx.itt_state);
+                __itt_stack_callee_enter(t->ctx.itt_state);
+#endif
                 jl_start_fiber_set(&t->ctx); // (doesn't return)
                 abort();
             }
@@ -1129,6 +1167,14 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
 #ifdef _COMPILER_ASAN_ENABLED_
     t->ctx.asan_fake_stack = NULL;
 #endif
+#ifdef USE_ITTAPI
+    t->ctx.itt_state = __itt_stack_caller_create();
+
+    t->itt_id = __itt_id_make(t, 0);
+    __itt_id_create(domain, t->itt_id);
+    // TODO: If we can get the fptr we could use that instead
+    __itt_task_begin(domain, t->itt_id, ct->itt_id, other_task);
+#endif
     return t;
 }
 
@@ -1199,6 +1245,11 @@ void jl_init_tasks(void) JL_GC_DISABLED
         jl_safe_printf("Julia built without COPY_STACKS support");
         exit(1);
     }
+#endif
+#if defined(USE_ITTAPI)
+    domain = __itt_domain_create("julia");
+    root_task = __itt_string_handle_create("root");
+    other_task = __itt_string_handle_create("task");
 #endif
 }
 
@@ -1310,11 +1361,19 @@ static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     assert(lastt);
     tsan_switch_to_ctx(t);
+#if defined(USE_ITTAPI)
+    __itt_stack_callee_leave(lastt->ctx.itt_state);
+    __itt_stack_callee_enter(t->ctx.itt_state);
+#endif
     swapcontext(&lastt->ctx, &t->ctx);
 }
 static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     tsan_switch_to_ctx(t);
+#if defined(USE_ITTAPI)
+    __itt_stack_callee_leave(lastt->ctx.itt_state);
+    __itt_stack_callee_enter(t->ctx.itt_state);
+#endif
     swapcontext(&lastt->ctx, &t->ctx);
 }
 static void jl_set_fiber(jl_ucontext_t *t)
@@ -1369,6 +1428,10 @@ static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     if (jl_setjmp(lastt->ctx.uc_mcontext, 0))
         return;
+#if defined(USE_ITTAPI)
+    __itt_stack_callee_leave(lastt->itt_state);
+    __itt_stack_callee_enter(t->itt_state);
+#endif
     tsan_switch_to_ctx(t);
     jl_set_fiber(t); // doesn't return
 }
@@ -1456,6 +1519,10 @@ JL_NO_ASAN static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *
 #else
     if (jl_setjmp(lastt->ctx.uc_mcontext, 0))
         return;
+#endif
+#if defined(USE_ITTAPI)
+    __itt_stack_callee_leave(lastt->itt_state);
+    __itt_stack_callee_enter(t->itt_state);
 #endif
     tsan_switch_to_ctx(t);
     jl_start_fiber_set(t); // doesn't return
@@ -1609,6 +1676,10 @@ static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *t)
     if (lastt && jl_setjmp(lastt->ctx.uc_mcontext, 0))
         return;
     tsan_switch_to_ctx(t);
+#if defined(USE_ITTAPI)
+    __itt_stack_callee_leave(lastt->ctx.itt_state);
+    __itt_stack_callee_enter(t->ctx.itt_state);
+#endif
     jl_start_fiber_set(t);
 }
 static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
@@ -1616,6 +1687,10 @@ static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
     if (jl_setjmp(lastt->ctx.uc_mcontext, 0))
         return;
     tsan_switch_to_ctx(t);
+#if defined(USE_ITTAPI)
+    __itt_stack_callee_leave(lastt->ctx.itt_state);
+    __itt_stack_callee_enter(t->ctx.itt_state);
+#endif
     jl_start_fiber_set(t); // doesn't return
 }
 static void jl_set_fiber(jl_ucontext_t *t)
@@ -1715,6 +1790,9 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
 #ifdef _COMPILER_ASAN_ENABLED_
     ct->ctx.asan_fake_stack = NULL;
 #endif
+#ifdef USE_ITTAPI
+    ct->ctx.itt_state = __itt_stack_caller_create();
+#endif
 
     jl_timing_block_enter_task(ct, ptls, NULL);
 
@@ -1745,6 +1823,11 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_thread_signal_handler(ptls);
 
+#if defined(USE_ITTAPI)
+    ct->itt_id = __itt_id_make(ct, 0);
+    __itt_id_create(domain, ct->itt_id);
+    __itt_task_begin(domain, ct->itt_id, __itt_null, root_task);
+#endif
     return ct;
 }
 
