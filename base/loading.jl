@@ -1767,8 +1767,12 @@ function _require(pkg::PkgId, env=nothing)
         if JLOptions().use_compiled_modules != 0
             if (0 == ccall(:jl_generating_output, Cint, ())) || (JLOptions().incremental != 0)
                 # spawn off a new incremental pre-compile task for recursive `require` calls
-                cachefile = compilecache(pkg, path)
-                if isa(cachefile, Exception)
+                cachefile = maybe_cachefile_lock(pkg, path) do
+                    compilecache(pkg, path)
+                end
+                if isnothing(cachefile) # maybe_cachefile_lock returns nothing if it had to wait for another process
+                    @goto load_from_cache # the new cachefile will have the newest mtime so will come first in the search
+                elseif isa(cachefile, Exception)
                     if precompilableerror(cachefile)
                         verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
                         @logmsg verbosity "Skipping precompilation since __precompile__(false). Importing $pkg."
@@ -2667,6 +2671,32 @@ function show(io::IO, cf::CacheFlags)
     print(io, ", check_bounds = ", cf.check_bounds)
     print(io, ", inline = ", cf.inline)
     print(io, ", opt_level = ", cf.opt_level)
+end
+
+# Set by FileWatching.__init__()
+const mkpidlock_hook = Ref{Function}()
+const trymkpidlock_hook = Ref{Function}()
+const parse_pidfile_hook = Ref{Function}()
+
+# allows processes to wait if another process is precompiling a given source already
+function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String)
+    if isassigned(mkpidlock_hook) && isassigned(trymkpidlock_hook)
+        pidfile = string(srcpath, ".pidlock")
+        if trymkpidlock_hook[](f, pidfile) == false
+            pid, hostname, age = parse_pidfile(pidfile)
+            if isempty(hostname) || hostname == gethostname()
+                @info "Waiting for another process (pid: $pid) to precompile $pkg"
+            else
+                @info "Waiting for another machine (hostname: $hostname) to precompile $pkg"
+            end
+            mkpidlock_hook[](pidfile) do
+                return nothing # returning nothing indicates a process waited for another
+            end
+        end
+    else
+        # for packages loaded before FileWatching.__init__()
+        f()
+    end
 end
 
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
