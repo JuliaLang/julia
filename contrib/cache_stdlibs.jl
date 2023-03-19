@@ -23,13 +23,14 @@ stdlibs = [
     # 3-depth packages
     :LibGit2_jll,
 
+    # 4-depth packages
+    :SparseArrays,
+
     # 7-depth packages
     :LLD_jll,
-    :SuiteSparse_jll,
 
     # 9-depth packages
     :Statistics,
-    :SuiteSparse,
 ]
 
 depot = abspath(Sys.BINDIR, "..", "share", "julia")
