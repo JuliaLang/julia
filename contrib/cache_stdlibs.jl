@@ -28,9 +28,11 @@ stdlibs = [
 
     # 7-depth packages
     :LLD_jll,
+    :SuiteSparse,
 
     # 9-depth packages
     :Statistics,
+    :SuiteSparse_jll,
 ]
 
 depot = abspath(Sys.BINDIR, "..", "share", "julia")
