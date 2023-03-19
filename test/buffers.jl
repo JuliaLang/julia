@@ -9,7 +9,6 @@
     @test x == x
 end
 
-
 @testset "Buffer with tagged unions" begin
     x = Buffer{Union{UInt8, UInt16}}(undef, 4);
     x[1] = UInt8(1)

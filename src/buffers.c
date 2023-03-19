@@ -9,7 +9,7 @@
 
 #define JL_BUFFER_IMPL_NUL 1
 
-// at this size and bigger, allocate resized array data with malloc directly
+// at this size and bigger, allocate resized buffer data with malloc directly
 // instead of managing them separately as gc objects
 #define MALLOC_THRESH 1048576
 
@@ -46,7 +46,7 @@ STATIC_INLINE size_t jl_nbytes_eltype_data(jl_eltype_layout_t lyt, size_t len)
         if (lyt.ntags > 1)
             data_size += len;  // an extra byte for each isbits union lement
         else if (lyt.elsize == 1)
-            data_size++;  // extra byte for all julia allocated byte arrays
+            data_size++;  // extra byte for all julia allocated byte buffers
     }
     return data_size;
 }
@@ -219,13 +219,22 @@ JL_DLLEXPORT jl_buffer_t *jl_buffer_copy(jl_buffer_t *old_buf)
     void *new_data = new_buf->data;
     size_t data_len = len * lyt.elsize;
     memcpy(new_data, old_data, data_len);
-    // ensure isbits union arrays copy their selector bytes correctly
+    // ensure isbits union buffers copy their selector bytes correctly
     if (lyt.ntags > 1)
         memcpy(((char*)new_data) + len, ((char*)old_data) + len, len);
     return new_buf;
 }
 
-// Resize the buffer to a max size of `newlen`
+// Resizing methods for `jl_buffer_t` are different from `jl_array_t` in a number of ways.
+//
+// - If the type variant associated with `buf` enforces a fixed length, these will erorr.
+// - currently, `buf` is always assumed to be the owner of `buf->data`.
+// - `jl_buffer_t` has no offset into its data and there is no attempt to overallocate
+//   and prevent the need for repeated resizing, so if you request a resize you get
+// - all changes in allocation happen at the end of `jl_buffer_t`
+
+
+// Resize the buffer to `newlen`
 // The buffer can either be newly allocated or realloc'd, the return
 // value is 1 if a new buffer is allocated and 0 if it is realloc'd.
 // the caller needs to take care of moving the data from the old buffer
@@ -234,7 +243,6 @@ JL_DLLEXPORT jl_buffer_t *jl_buffer_copy(jl_buffer_t *old_buf)
 // the **beginning** of the new buffer.
 static int NOINLINE resize_buffer(jl_buffer_t *buf, jl_eltype_layout_t lyt, size_t newlen)
 {
-    assert(jl_is_dynamic_buffer(buf) || "not a resizeable buffer");
     jl_task_t *ct = jl_current_task;
     size_t oldlen = jl_buffer_len(buf);
     size_t old_nbytes = jl_nbytes_eltype_data(lyt, oldlen);
@@ -254,8 +262,8 @@ static int NOINLINE resize_buffer(jl_buffer_t *buf, jl_eltype_layout_t lyt, size
         }
         else {
             buf->data = jl_gc_alloc_buf(ct->ptls, new_nbytes);
-            // FIXME how to mark jl_buffer_t as unmarked
-            // when we can't d (jl_array_t*)buf->flags.how = 1;
+            // FIXME how to mark jl_buffer_t as unmarked when we can't d (jl_array_t*)buf->flags.how = 1;
+            // Could we do `uinptr_t(data) | 0x1` to mark this as a new umarked data buffer?
             jl_gc_wb_buf(buf, buf->data, new_nbytes);
         }
     }
@@ -263,7 +271,7 @@ static int NOINLINE resize_buffer(jl_buffer_t *buf, jl_eltype_layout_t lyt, size
         memset((char*)buf->data + old_nbytes - 1, 0, new_nbytes - old_nbytes + 1);
     (void)oldlen;
     assert(oldlen == jl_buffer_len(buf) &&
-           "Race condition detected: recursive resizing on the same array.");
+           "Race condition detected: recursive resizing on the same buffer.");
     buf->length = newlen;
     return newbuf;
 }
@@ -271,6 +279,8 @@ static int NOINLINE resize_buffer(jl_buffer_t *buf, jl_eltype_layout_t lyt, size
 STATIC_INLINE void jl_buffer_grow_at_end(jl_buffer_t *buf, size_t idx,
                                         size_t inc, size_t n)
 {
+    if (__unlikely(jl_is_resizeable_buffer(buf)))
+        jl_error("attempt to grow buffer of a fixed length");
     size_t oldlen = jl_buffer_len(buf);
     size_t newlen = oldlen + inc;
     jl_value_t *eltype = jl_tparam0(jl_typeof(buf));
@@ -323,3 +333,38 @@ JL_DLLEXPORT void jl_buffer_grow_end(jl_buffer_t *buf, size_t inc)
     jl_buffer_grow_at_end(buf, len, inc, len);
 }
 
+STATIC_INLINE void jl_buffer_del_at_end(jl_buffer_t *buf, size_t idx, size_t dec, size_t n)
+{
+    if (__unlikely(jl_is_resizeable_buffer(buf)))
+        jl_error("attempt to delete buffer of a fixed length");
+    // no error checking
+    // assume inbounds, assume unshared
+    char *data = (char*)buf->data;
+    size_t len = jl_buffer_len(buf);
+    jl_value_t *eltype = jl_tparam0(jl_typeof(buf));
+    jl_eltype_layout_t lyt = jl_eltype_layout(eltype);
+    size_t last = idx + dec;
+    if (n > last) {
+        memmove_safe(lyt.hasptr, data + (idx * lyt.elsize),
+             data + last * lyt.elsize, (n - last) * lyt.elsize);
+        if (lyt.ntags > 1) {
+            char *typetagdata = data + (len * lyt.elsize);
+            memmove(typetagdata + idx, typetagdata + last, n - last);
+        }
+    }
+    n -= dec;
+    if (lyt.elsize == 1 && lyt.ntags < 2)
+        data[n] = 0;
+    buf->length = n;
+}
+
+JL_DLLEXPORT void jl_buffer_del_at(jl_buffer_t *buf, size_t idx, size_t n)
+{
+    size_t len = jl_buffer_len(buf);
+    size_t last = idx + n;
+    if (__unlikely(idx < 0))
+        jl_bounds_error_int((jl_value_t*)buf, idx + 1);
+    if (__unlikely(last > len))
+        jl_bounds_error_int((jl_value_t*)buf, last);
+    jl_buffer_del_at_end(buf, idx, n, len);
+}
