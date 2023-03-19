@@ -334,7 +334,7 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
         // bools may be stored internally as int8
         unboxed = ctx.builder.CreateTrunc(unboxed, to);
     }
-    else if (ty->isVoidTy() || DL.getTypeSizeInBits(ty) != DL.getTypeSizeInBits(to)) {
+    else if (ty->isVoidTy() || (DL.getTypeSizeInBits(ty) != DL.getTypeSizeInBits(to) && !(to->isIntOrPtrTy() && ty->isIntOrPtrTy()))) {
         // this can happen in dead code
         //emit_unreachable(ctx);
         return UndefValue::get(to);
