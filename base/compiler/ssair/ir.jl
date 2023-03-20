@@ -1349,7 +1349,9 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
     elseif isa(stmt, PhiNode)
         if cfg_transforms_enabled
             # Rename phi node edges
-            map!(i -> bb_rename_pred[i], stmt.edges, stmt.edges)
+            let bb_rename_pred=bb_rename_pred
+                map!(i::Int32 -> bb_rename_pred[i], stmt.edges, stmt.edges)
+            end
 
             # Remove edges and values associated with dead blocks. Entries in
             # `values` can be undefined when the phi node refers to something

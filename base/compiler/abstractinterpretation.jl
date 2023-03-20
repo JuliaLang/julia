@@ -59,7 +59,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             # as we may want to concrete-evaluate this frame in cases when there are
             # no overlayed calls, try an additional effort now to check if this call
             # isn't overlayed rather than just handling it conservatively
-            matches = find_matching_methods(arginfo.argtypes, atype, method_table(interp),
+            matches = find_matching_methods(typeinf_lattice(interp), arginfo.argtypes, atype, method_table(interp),
                 InferenceParams(interp).max_union_splitting, max_methods)
             if !isa(matches, FailedMethodMatch)
                 nonoverlayed = matches.nonoverlayed
@@ -75,7 +75,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     end
 
     argtypes = arginfo.argtypes
-    matches = find_matching_methods(argtypes, atype, method_table(interp),
+    matches = find_matching_methods(typeinf_lattice(interp), argtypes, atype, method_table(interp),
         InferenceParams(interp).max_union_splitting, max_methods)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
@@ -273,11 +273,12 @@ struct UnionSplitMethodMatches
 end
 any_ambig(m::UnionSplitMethodMatches) = any(any_ambig, m.info.matches)
 
-function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), method_table::MethodTableView,
+function find_matching_methods(𝕃::AbstractLattice,
+                               argtypes::Vector{Any}, @nospecialize(atype), method_table::MethodTableView,
                                max_union_splitting::Int, max_methods::Int)
     # NOTE this is valid as far as any "constant" lattice element doesn't represent `Union` type
-    if 1 < unionsplitcost(argtypes) <= max_union_splitting
-        split_argtypes = switchtupleunion(argtypes)
+    if 1 < unionsplitcost(𝕃, argtypes) <= max_union_splitting
+        split_argtypes = switchtupleunion(𝕃, argtypes)
         infos = MethodMatchInfo[]
         applicable = Any[]
         applicable_argtypes = Vector{Any}[] # arrays like `argtypes`, including constants, for each match
@@ -979,8 +980,9 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
         if code !== nothing
             ir = codeinst_to_ir(interp, code)
             if isa(ir, IRCode)
-                irsv = IRInterpretationState(interp, ir, mi, sv.world, arginfo.argtypes)
-                rt, nothrow = ir_abstract_constant_propagation(interp, irsv)
+                irinterp = switch_to_irinterp(interp)
+                irsv = IRInterpretationState(irinterp, ir, mi, sv.world, arginfo.argtypes)
+                rt, nothrow = ir_abstract_constant_propagation(irinterp, irsv)
                 @assert !(rt isa Conditional || rt isa MustAlias) "invalid lattice element returned from IR interpretation"
                 if !isa(rt, Type) || typeintersect(rt, Bool) === Union{}
                     new_effects = Effects(result.effects; nothrow=nothrow)
@@ -1495,7 +1497,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
     end
     res = Union{}
     nargs = length(aargtypes)
-    splitunions = 1 < unionsplitcost(aargtypes) <= InferenceParams(interp).max_apply_union_enum
+    splitunions = 1 < unionsplitcost(typeinf_lattice(interp), aargtypes) <= InferenceParams(interp).max_apply_union_enum
     ctypes = [Any[aft]]
     infos = Vector{MaybeAbstractIterationInfo}[MaybeAbstractIterationInfo[]]
     effects = EFFECTS_TOTAL
