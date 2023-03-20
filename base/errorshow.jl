@@ -416,17 +416,17 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
             end
             sig0 = sig0::DataType
             s1 = sig0.parameters[1]
-            sig = sig0.parameters[2:end]
-            print(iob, "  ")
-            if !isa(func, rewrap_unionall(s1, method.sig))
-                # function itself doesn't match
+            if sig0 === Tuple || !isa(func, rewrap_unionall(s1, method.sig))
+                # function itself doesn't match or is a builtin
                 continue
             else
+                print(iob, "  ")
                 show_signature_function(iob, s1)
             end
             print(iob, "(")
             t_i = copy(arg_types_param)
             right_matches = 0
+            sig = sig0.parameters[2:end]
             for i = 1 : min(length(t_i), length(sig))
                 i > 1 && print(iob, ", ")
                 # If isvarargtype then it checks whether the rest of the input arguments matches
