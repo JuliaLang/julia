@@ -582,26 +582,25 @@ function first_child_position(stream::ParseStream, pos::ParseStreamPosition)
 end
 
 function peek_behind(stream::ParseStream; skip_trivia::Bool=true)
-    pos = position(stream)
-    if !skip_trivia || !token_is_last(stream, pos)
-        return peek_behind(stream, pos)
+    token_index = lastindex(stream.tokens)
+    range_index = lastindex(stream.ranges)
+    while range_index >= firstindex(stream.ranges) &&
+            kind(stream.ranges[range_index]) == K"parens"
+        range_index -= 1
+    end
+    last_token_in_nonterminal = range_index == 0 ? 0 :
+                                stream.ranges[range_index].last_token
+    while token_index > last_token_in_nonterminal
+        t = stream.tokens[token_index]
+        if kind(t) != K"TOMBSTONE" && (!skip_trivia || !is_trivia(t))
+            break
+        end
+        token_index -= 1
+    end
+    if token_index > 0
+        return peek_behind(stream, ParseStreamPosition(token_index, range_index))
     else
-        token_index = lastindex(stream.tokens)
-        range_index = lastindex(stream.ranges)
-        last_token_in_nonterminal = isempty(stream.ranges) ? 0 :
-                                    stream.ranges[range_index].last_token
-        while token_index > last_token_in_nonterminal
-            t = stream.tokens[token_index]
-            if !is_trivia(t) && kind(t) != K"TOMBSTONE"
-                break
-            end
-            token_index -= 1
-        end
-        if token_index > 0
-            return peek_behind(stream, ParseStreamPosition(token_index, range_index))
-        else
-            internal_error("Can't peek behind at start of stream")
-        end
+        internal_error("Can't peek behind at start of stream")
     end
 end
 
