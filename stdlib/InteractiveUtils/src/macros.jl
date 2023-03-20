@@ -2,7 +2,7 @@
 
 # macro wrappers for various reflection functions
 
-import Base: typesof, insert!, replace_ref_begin_end!
+import Base: typesof, insert!, replace_ref_begin_end!, infer_effects
 
 separate_kwargs(args...; kwargs...) = (args, values(kwargs))
 
@@ -212,7 +212,7 @@ macro which(ex0::Symbol)
     return :(which($__module__, $ex0))
 end
 
-for fname in [:code_warntype, :code_llvm, :code_native]
+for fname in [:code_warntype, :code_llvm, :code_native, :infer_effects]
     @eval begin
         macro ($fname)(ex0...)
             gen_call_with_extracted_types_and_kwargs(__module__, $(Expr(:quote, fname)), ex0)
