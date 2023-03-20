@@ -2282,7 +2282,7 @@ struct Z38497{T>:Int} <: Y38497{T} end
 @test only(intersection_env(Union{S, Matrix{Int}} where S<:Matrix, Matrix)[2]) isa TypeVar
 T46784{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}}, M, Union{AbstractMatrix{B}, AbstractMatrix{<:Vector{<:B}}}}
 @testintersect(T46784{T,S} where {T,S}, T46784, !Union{})
-@test_broken T46784 <: T46784{T,S} where {T,S}
+@test T46784 <: T46784{T,S} where {T,S}
 
 #issue 36185
 let S = Tuple{Type{T},Array{Union{T,Missing},N}} where {T,N},
@@ -2376,12 +2376,10 @@ abstract type P47654{A} end
 
 @testset "known subtype/intersect issue" begin
     #issue 45874
-    # Causes a hang due to jl_critical_error calling back into malloc...
-    # let S = Pair{Val{P}, AbstractVector{<:Union{P,<:AbstractMatrix{P}}}} where P,
-    #     T = Pair{Val{R}, AbstractVector{<:Union{P,<:AbstractMatrix{P}}}} where {P,R}
-    #     @test_broken S <: T
-    #     @test_broken typeintersect(S,T) === S
-    # end
+    let S = Pair{Val{P}, AbstractVector{<:Union{P,<:AbstractMatrix{P}}}} where P,
+        T = Pair{Val{R}, AbstractVector{<:Union{P,<:AbstractMatrix{P}}}} where {P,R}
+        @test S <: T
+    end
 
     #issue 41561
     @test_broken typeintersect(Tuple{Vector{VT}, Vector{VT}} where {N1, VT<:AbstractVector{N1}},
@@ -2458,3 +2456,6 @@ let S = Tuple{Type{S48695{T, 2, T48695{B, 2, C}}} where {T<:(Union{Missing, A} w
     @test allunique(vars_in_unionall(V))
     @test typeintersect(V, T) != Union{}
 end
+
+#issue 48961
+@test !<:(Type{Union{Missing, Int}}, Type{Union{Missing, Nothing, Int}})

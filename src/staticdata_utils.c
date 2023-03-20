@@ -869,8 +869,10 @@ static jl_array_t *jl_verify_edges(jl_array_t *targets, size_t minworld)
             assert(jl_is_array(expected));
             int ambig = 0;
             // TODO: possibly need to included ambiguities too (for the optimizer correctness)?
+            // len + 1 is to allow us to log causes of invalidation (SnoopCompile's @snoopr)
             matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing,
-                    jl_array_len(expected), 0, minworld, &min_valid, &max_valid, &ambig);
+                    _jl_debug_method_invalidation ? INT32_MAX : jl_array_len(expected),
+                    0, minworld, &min_valid, &max_valid, &ambig);
             if (matches == jl_nothing) {
                 max_valid = 0;
             }

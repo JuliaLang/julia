@@ -59,7 +59,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             # as we may want to concrete-evaluate this frame in cases when there are
             # no overlayed calls, try an additional effort now to check if this call
             # isn't overlayed rather than just handling it conservatively
-            matches = find_matching_methods(arginfo.argtypes, atype, method_table(interp),
+            matches = find_matching_methods(typeinf_lattice(interp), arginfo.argtypes, atype, method_table(interp),
                 InferenceParams(interp).max_union_splitting, max_methods)
             if !isa(matches, FailedMethodMatch)
                 nonoverlayed = matches.nonoverlayed
@@ -75,7 +75,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     end
 
     argtypes = arginfo.argtypes
-    matches = find_matching_methods(argtypes, atype, method_table(interp),
+    matches = find_matching_methods(typeinf_lattice(interp), argtypes, atype, method_table(interp),
         InferenceParams(interp).max_union_splitting, max_methods)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
@@ -273,11 +273,12 @@ struct UnionSplitMethodMatches
 end
 any_ambig(m::UnionSplitMethodMatches) = any(any_ambig, m.info.matches)
 
-function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), method_table::MethodTableView,
+function find_matching_methods(𝕃::AbstractLattice,
+                               argtypes::Vector{Any}, @nospecialize(atype), method_table::MethodTableView,
                                max_union_splitting::Int, max_methods::Int)
     # NOTE this is valid as far as any "constant" lattice element doesn't represent `Union` type
-    if 1 < unionsplitcost(argtypes) <= max_union_splitting
-        split_argtypes = switchtupleunion(argtypes)
+    if 1 < unionsplitcost(𝕃, argtypes) <= max_union_splitting
+        split_argtypes = switchtupleunion(𝕃, argtypes)
         infos = MethodMatchInfo[]
         applicable = Any[]
         applicable_argtypes = Vector{Any}[] # arrays like `argtypes`, including constants, for each match
@@ -502,22 +503,24 @@ function conditional_argtype(@nospecialize(rt), @nospecialize(sig), argtypes::Ve
     end
 end
 
-function add_call_backedges!(interp::AbstractInterpreter,
-    @nospecialize(rettype), all_effects::Effects,
+function add_call_backedges!(interp::AbstractInterpreter, @nospecialize(rettype), all_effects::Effects,
     edges::Vector{MethodInstance}, matches::Union{MethodMatches,UnionSplitMethodMatches}, @nospecialize(atype),
     sv::InferenceState)
-    # we don't need to add backedges when:
-    # - a new method couldn't refine (widen) this type and
-    # - the effects are known to not provide any useful IPO information
+    # don't bother to add backedges when both type and effects information are already
+    # maximized to the top since a new method couldn't refine or widen them anyway
     if rettype === Any
+        # ignore the `:nonoverlayed` property if `interp` doesn't use overlayed method table
+        # since it will never be tainted anyway
         if !isoverlayed(method_table(interp))
-            # we can ignore the `nonoverlayed` property if `interp` doesn't use
-            # overlayed method table at all since it will never be tainted anyway
             all_effects = Effects(all_effects; nonoverlayed=false)
         end
-        if all_effects === Effects()
-            return
+        if (# ignore the `:noinbounds` property if `:consistent`-cy is tainted already
+            sv.ipo_effects.consistent === ALWAYS_FALSE || all_effects.consistent === ALWAYS_FALSE ||
+            # or this `:noinbounds` doesn't taint it
+            !stmt_taints_inbounds_consistency(sv))
+            all_effects = Effects(all_effects; noinbounds=false)
         end
+        all_effects === Effects() && return nothing
     end
     for edge in edges
         add_backedge!(sv, edge)
@@ -531,6 +534,7 @@ function add_call_backedges!(interp::AbstractInterpreter,
             thisfullmatch || add_mt_backedge!(sv, mt, atype)
         end
     end
+    return nothing
 end
 
 const RECURSION_UNUSED_MSG = "Bounded recursion detected with unused result. Annotated return type may be wider than true result."
@@ -688,7 +692,7 @@ function edge_matches_sv(frame::InferenceState, method::Method, @nospecialize(si
     if callee_method2 !== inf_method2
         return false
     end
-    if !hardlimit
+    if !hardlimit || InferenceParams(sv.interp).ignore_recursion_hardlimit
         # if this is a soft limit,
         # also inspect the parent of this edge,
         # to see if they are the same Method as sv
@@ -976,8 +980,9 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
         if code !== nothing
             ir = codeinst_to_ir(interp, code)
             if isa(ir, IRCode)
-                irsv = IRInterpretationState(interp, ir, mi, sv.world, arginfo.argtypes)
-                rt, nothrow = ir_abstract_constant_propagation(interp, irsv)
+                irinterp = switch_to_irinterp(interp)
+                irsv = IRInterpretationState(irinterp, ir, mi, sv.world, arginfo.argtypes)
+                rt, nothrow = ir_abstract_constant_propagation(irinterp, irsv)
                 @assert !(rt isa Conditional || rt isa MustAlias) "invalid lattice element returned from IR interpretation"
                 if !isa(rt, Type) || typeintersect(rt, Bool) === Union{}
                     new_effects = Effects(result.effects; nothrow=nothrow)
@@ -1492,7 +1497,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
     end
     res = Union{}
     nargs = length(aargtypes)
-    splitunions = 1 < unionsplitcost(aargtypes) <= InferenceParams(interp).max_apply_union_enum
+    splitunions = 1 < unionsplitcost(typeinf_lattice(interp), aargtypes) <= InferenceParams(interp).max_apply_union_enum
     ctypes = [Any[aft]]
     infos = Vector{MaybeAbstractIterationInfo}[MaybeAbstractIterationInfo[]]
     effects = EFFECTS_TOTAL
@@ -2475,7 +2480,8 @@ function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, vtypes:
             override.terminates_globally ? true        : effects.terminates,
             override.notaskstate         ? true        : effects.notaskstate,
             override.inaccessiblememonly ? ALWAYS_TRUE : effects.inaccessiblememonly,
-            effects.nonoverlayed)
+            effects.nonoverlayed,
+            effects.noinbounds)
     end
     return RTEffects(t, effects)
 end

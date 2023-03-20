@@ -300,7 +300,10 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     // compile all methods for the current world and type-inference world
 
     JL_LOCK(&jl_codegen_lock);
-    jl_codegen_params_t params(ctxt);
+    auto target_info = clone.withModuleDo([&](Module &M) {
+        return std::make_pair(M.getDataLayout(), Triple(M.getTargetTriple()));
+    });
+    jl_codegen_params_t params(ctxt, std::move(target_info.first), std::move(target_info.second));
     params.params = cgparams;
     params.imaging = imaging;
     params.external_linkage = _external_linkage;
@@ -433,15 +436,16 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     CreateNativeGlobals += gvars.size();
 
     //Safe b/c context is locked by params
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
-    // setting the function personality enables stack unwinding and catching exceptions
-    // so make sure everything has something set
-    Type *T_int32 = Type::getInt32Ty(clone.getModuleUnlocked()->getContext());
-    Function *juliapersonality_func =
-       Function::Create(FunctionType::get(T_int32, true),
-           Function::ExternalLinkage, "__julia_personality", clone.getModuleUnlocked());
-    juliapersonality_func->setDLLStorageClass(GlobalValue::DLLImportStorageClass);
-#endif
+    auto TT = Triple(clone.getModuleUnlocked()->getTargetTriple());
+    Function *juliapersonality_func = nullptr;
+    if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
+        // setting the function personality enables stack unwinding and catching exceptions
+        // so make sure everything has something set
+        Type *T_int32 = Type::getInt32Ty(clone.getModuleUnlocked()->getContext());
+        juliapersonality_func = Function::Create(FunctionType::get(T_int32, true),
+            Function::ExternalLinkage, "__julia_personality", clone.getModuleUnlocked());
+        juliapersonality_func->setDLLStorageClass(GlobalValue::DLLImportStorageClass);
+    }
 
     // move everything inside, now that we've merged everything
     // (before adding the exported headers)
@@ -452,11 +456,11 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                 G.setLinkage(GlobalValue::ExternalLinkage);
                 G.setVisibility(GlobalValue::HiddenVisibility);
                 makeSafeName(G);
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
-                // Add unwind exception personalities to functions to handle async exceptions
-                if (Function *F = dyn_cast<Function>(&G))
-                    F->setPersonalityFn(juliapersonality_func);
-#endif
+                if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
+                    // Add unwind exception personalities to functions to handle async exceptions
+                    if (Function *F = dyn_cast<Function>(&G))
+                        F->setPersonalityFn(juliapersonality_func);
+                }
             }
         }
     }
@@ -936,10 +940,9 @@ struct ShardTimers {
 };
 
 // Perform the actual optimization and emission of the output files
-static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *outputs, ArrayRef<StringRef> names,
+static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *outputs, StringRef *names,
                     NewArchiveMember *unopt, NewArchiveMember *opt, NewArchiveMember *obj, NewArchiveMember *asm_,
                     ShardTimers &timers, unsigned shardidx) {
-    assert(names.size() == 4);
     auto TM = std::unique_ptr<TargetMachine>(
         SourceTM.getTarget().createTargetMachine(
             SourceTM.getTargetTriple().str(),
@@ -957,8 +960,7 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
         AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
         ModulePassManager MPM;
         MPM.addPass(BitcodeWriterPass(OS));
-        *unopt = NewArchiveMember(MemoryBufferRef(*outputs, names[0]));
-        outputs++;
+        *unopt = NewArchiveMember(MemoryBufferRef(*outputs++, *names++));
         timers.unopt.stopTimer();
     }
     if (!opt && !obj && !asm_) {
@@ -1022,8 +1024,7 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
         AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
         ModulePassManager MPM;
         MPM.addPass(BitcodeWriterPass(OS));
-        *opt = NewArchiveMember(MemoryBufferRef(*outputs, names[1]));
-        outputs++;
+        *opt = NewArchiveMember(MemoryBufferRef(*outputs++, *names++));
         timers.opt.stopTimer();
     }
 
@@ -1037,8 +1038,7 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
             jl_safe_printf("ERROR: target does not support generation of object files\n");
         emitter.run(M);
         *outputs = { Buffer.data(), Buffer.size() };
-        *obj = NewArchiveMember(MemoryBufferRef(*outputs, names[2]));
-        outputs++;
+        *obj = NewArchiveMember(MemoryBufferRef(*outputs++, *names++));
         timers.obj.stopTimer();
     }
 
@@ -1052,8 +1052,7 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
             jl_safe_printf("ERROR: target does not support generation of assembly files\n");
         emitter.run(M);
         *outputs = { Buffer.data(), Buffer.size() };
-        *asm_ = NewArchiveMember(MemoryBufferRef(*outputs, names[3]));
-        outputs++;
+        *asm_ = NewArchiveMember(MemoryBufferRef(*outputs++, *names++));
         timers.asm_.stopTimer();
     }
 }
@@ -1212,20 +1211,18 @@ static void dropUnusedDeclarations(Module &M) {
 
 // Entrypoint to optionally-multithreaded image compilation. This handles global coordination of the threading,
 // as well as partitioning, serialization, and deserialization.
-static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &outputs, ArrayRef<StringRef> names,
+static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &outputs, StringRef name,
                 std::vector<NewArchiveMember> &unopt, std::vector<NewArchiveMember> &opt,
                 std::vector<NewArchiveMember> &obj, std::vector<NewArchiveMember> &asm_,
                 bool unopt_out, bool opt_out, bool obj_out, bool asm_out,
                 unsigned threads, ModuleInfo module_info) {
     unsigned outcount = unopt_out + opt_out + obj_out + asm_out;
     assert(outcount);
-    outputs.resize(outputs.size() + outcount * threads);
+    outputs.resize(outputs.size() + outcount * threads * 2);
     unopt.resize(unopt.size() + unopt_out * threads);
     opt.resize(opt.size() + opt_out * threads);
     obj.resize(obj.size() + obj_out * threads);
     asm_.resize(asm_.size() + asm_out * threads);
-    auto name = names[2];
-    name.consume_back(".o");
     // Timers for timing purposes
     TimerGroup timer_group("add_output", ("Time to optimize and emit LLVM module " + name).str());
     SmallVector<ShardTimers, 1> timers(threads);
@@ -1261,10 +1258,25 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
                 errs() << "WARNING: Invalid value for JULIA_IMAGE_TIMINGS: " << env << "\n";
         }
     }
+    for (unsigned i = 0; i < threads; ++i) {
+        auto start = &outputs[outputs.size() - outcount * threads * 2 + i];
+        auto istr = std::to_string(i);
+        if (unopt_out)
+            *start++ = (name + "_unopt#" + istr + ".bc").str();
+        if (opt_out)
+            *start++ = (name + "_opt#" + istr + ".bc").str();
+        if (obj_out)
+            *start++ = (name + "#" + istr + ".o").str();
+        if (asm_out)
+            *start++ = (name + "#" + istr + ".s").str();
+    }
     // Single-threaded case
     if (threads == 1) {
         output_timer.startTimer();
-        add_output_impl(M, TM, outputs.data() + outputs.size() - outcount, names,
+        SmallVector<StringRef, 4> names;
+        for (unsigned i = 0; i < outcount; ++i)
+            names.push_back(outputs[i]);
+        add_output_impl(M, TM, outputs.data() + outputs.size() - outcount, names.data(),
                         unopt_out ? unopt.data() + unopt.size() - 1 : nullptr,
                         opt_out ? opt.data() + opt.size() - 1 : nullptr,
                         obj_out ? obj.data() + obj.size() - 1 : nullptr,
@@ -1330,7 +1342,11 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
             dropUnusedDeclarations(*M);
             timers[i].deletion.stopTimer();
 
-            add_output_impl(*M, TM, outstart + i * outcount, names,
+            SmallVector<StringRef, 4> names(outcount);
+            for (unsigned j = 0; j < outcount; ++j)
+                names[j] = outputs[i * outcount + j];
+
+            add_output_impl(*M, TM, outstart + i * outcount, names.data(),
                             unoptstart ? unoptstart + i : nullptr,
                             optstart ? optstart + i : nullptr,
                             objstart ? objstart + i : nullptr,
@@ -1441,32 +1457,31 @@ void jl_dump_native_impl(void *native_code,
     // We don't want to use MCJIT's target machine because
     // it uses the large code model and we may potentially
     // want less optimizations there.
-    Triple TheTriple = Triple(jl_ExecutionEngine->getTargetTriple());
     // make sure to emit the native object format, even if FORCE_ELF was set in codegen
-#if defined(_OS_WINDOWS_)
-    TheTriple.setObjectFormat(Triple::COFF);
-#elif defined(_OS_DARWIN_)
-    TheTriple.setObjectFormat(Triple::MachO);
-    TheTriple.setOS(llvm::Triple::MacOSX);
-#endif
+    Triple TheTriple(data->M.getModuleUnlocked()->getTargetTriple());
+    if (TheTriple.isOSWindows()) {
+        TheTriple.setObjectFormat(Triple::COFF);
+    } else if (TheTriple.isOSDarwin()) {
+        TheTriple.setObjectFormat(Triple::MachO);
+        TheTriple.setOS(llvm::Triple::MacOSX);
+    }
+    Optional<Reloc::Model> RelocModel;
+    if (TheTriple.isOSLinux() || TheTriple.isOSFreeBSD()) {
+        RelocModel = Reloc::PIC_;
+    }
+    CodeModel::Model CMModel = CodeModel::Small;
+    if (TheTriple.isPPC()) {
+        // On PPC the small model is limited to 16bit offsets
+        CMModel = CodeModel::Medium;
+    }
     std::unique_ptr<TargetMachine> SourceTM(
         jl_ExecutionEngine->getTarget().createTargetMachine(
             TheTriple.getTriple(),
             jl_ExecutionEngine->getTargetCPU(),
             jl_ExecutionEngine->getTargetFeatureString(),
             jl_ExecutionEngine->getTargetOptions(),
-#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
-            Reloc::PIC_,
-#else
-            Optional<Reloc::Model>(),
-#endif
-#if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
-            // On PPC the small model is limited to 16bit offsets
-            CodeModel::Medium,
-#else
-            // Use small model so that we can use signed 32bits offset in the function and GV tables
-            CodeModel::Small,
-#endif
+            RelocModel,
+            CMModel,
             CodeGenOpt::Aggressive // -O3 TODO: respect command -O0 flag?
             ));
 
@@ -1554,21 +1569,20 @@ void jl_dump_native_impl(void *native_code,
                                      "jl_RTLD_DEFAULT_handle_pointer"), TheTriple);
     }
 
-    auto compile = [&](Module &M, ArrayRef<StringRef> names, unsigned threads) { add_output(
-            M, *SourceTM, outputs, names,
+    // Reserve space for the output files and names
+    // DO NOT DELETE, this is necessary to ensure memorybuffers
+    // have a stable backing store for both their object files and
+    // their names
+    outputs.reserve(threads * (!!unopt_bc_fname + !!bc_fname + !!obj_fname + !!asm_fname) * 2 + 2);
+
+    auto compile = [&](Module &M, StringRef name, unsigned threads) { add_output(
+            M, *SourceTM, outputs, name,
             unopt_bc_Archive, bc_Archive, obj_Archive, asm_Archive,
             !!unopt_bc_fname, !!bc_fname, !!obj_fname, !!asm_fname,
             threads, module_info
     ); };
 
-    std::array<StringRef, 4> text_names = {
-        "text_unopt.bc",
-        "text_opt.bc",
-        "text.o",
-        "text.s"
-    };
-
-    compile(*dataM, text_names, threads);
+    compile(*dataM, "text", threads);
 
     auto sysimageM = std::make_unique<Module>("sysimage", Context);
     sysimageM->setTargetTriple(dataM->getTargetTriple());
@@ -1646,13 +1660,7 @@ void jl_dump_native_impl(void *native_code,
         }
     }
 
-    std::array<StringRef, 4> data_names = {
-        "data_unopt.bc",
-        "data_opt.bc",
-        "data.o",
-        "data.s"
-    };
-    compile(*sysimageM, data_names, 1);
+    compile(*sysimageM, "data", 1);
 
     object::Archive::Kind Kind = getDefaultForHost(TheTriple);
     if (unopt_bc_fname)
@@ -2027,7 +2035,10 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
         if (measure_compile_time_enabled)
             compiler_start_time = jl_hrtime();
         JL_LOCK(&jl_codegen_lock);
-        jl_codegen_params_t output(*ctx);
+        auto target_info = m.withModuleDo([&](Module &M) {
+            return std::make_pair(M.getDataLayout(), Triple(M.getTargetTriple()));
+        });
+        jl_codegen_params_t output(*ctx, std::move(target_info.first), std::move(target_info.second));
         output.world = world;
         output.params = &params;
         auto decls = jl_emit_code(m, mi, src, jlrettype, output);

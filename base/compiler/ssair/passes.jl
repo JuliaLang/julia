@@ -2185,14 +2185,10 @@ function cfg_simplify!(ir::IRCode)
         end
     end
 
-    compact = IncrementalCompact(ir, true)
     # Run instruction compaction to produce the result,
     # but we're messing with the CFG
     # so we don't want compaction to do so independently
-    compact.fold_constant_branches = false
-    compact.bb_rename_succ = bb_rename_succ
-    compact.bb_rename_pred = bb_rename_pred
-    compact.result_bbs = cresult_bbs
+    compact = IncrementalCompact(ir, CFGTransformState(true, false, cresult_bbs, bb_rename_pred, bb_rename_succ))
     result_idx = 1
     for (idx, orig_bb) in enumerate(result_bbs)
         ms = orig_bb

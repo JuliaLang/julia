@@ -419,10 +419,14 @@ promote_to_arrays(n,k, ::Type{T}, A, B, Cs...) where {T} =
     (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B), promote_to_arrays(n,k+2, T, Cs...)...)
 promote_to_array_type(A::Tuple{Vararg{Union{AbstractVecOrMat,UniformScaling,Number}}}) = Matrix
 
+_us2number(A) = A
+_us2number(J::UniformScaling) = J.λ
+
 for (f, _f, dim, name) in ((:hcat, :_hcat, 1, "rows"), (:vcat, :_vcat, 2, "cols"))
     @eval begin
         @inline $f(A::Union{AbstractVecOrMat,UniformScaling}...) = $_f(A...)
-        @inline $f(A::Union{AbstractVecOrMat,UniformScaling,Number}...) = $_f(A...)
+        # if there's a Number present, J::UniformScaling must be 1x1-dimensional
+        @inline $f(A::Union{AbstractVecOrMat,UniformScaling,Number}...) = $f(map(_us2number, A)...)
         function $_f(A::Union{AbstractVecOrMat,UniformScaling,Number}...; array_type = promote_to_array_type(A))
             n = -1
             for a in A
