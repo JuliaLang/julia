@@ -3,11 +3,7 @@
         @test parse(Expr, " x ") == :x
         @test JuliaSyntax.remove_linenums!(parseall(Expr, " x ")) == Expr(:toplevel, :x)
         @test parseatom(Expr, " x ") == :x
-        # TODO: Fix this situation with trivia here; the brackets are trivia, but
-        # must be parsed to discover the atom inside. But in GreenTree we only
-        # place trivia as siblings of the leaf node with identifier `x`, not as
-        # children.
-        @test_broken parseatom(Expr, "(x)") == :x
+        @test parseatom(Expr, "(x)") == :x
 
         # SubString
         @test parse(Expr, SubString("x+y")) == :(x+y)

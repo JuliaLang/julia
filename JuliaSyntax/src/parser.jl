@@ -315,8 +315,8 @@ function was_eventually_call(ps::ParseState)
         b = peek_behind(stream, p)
         if b.kind == K"call"
             return true
-        elseif b.kind == K"where" || (b.kind == K"::" &&
-                                      has_flags(b.flags, INFIX_FLAG))
+        elseif b.kind == K"where" || b.kind == K"parens" ||
+                (b.kind == K"::" && has_flags(b.flags, INFIX_FLAG))
             p = first_child_position(ps, p)
         else
             return false
@@ -885,7 +885,7 @@ function parse_range(ps::ParseState)
             if had_newline
                 # Error message for people coming from python
                 # 1:\n2   ==> (call-i 1 : (error))
-                # (1:\n2) ==> (call-i 1 : 2)
+                # (1:\n2) ==> (parens (call-i 1 : 2))
                 emit_diagnostic(ps, whitespace=true,
                                 error="line break after `:` in range expression")
                 bump_invisible(ps, K"error")
@@ -1021,7 +1021,7 @@ function parse_unary_subtype(ps::ParseState)
         elseif k2 in KSet"{ ("
             # parse <:{T}(x::T) or <:(x::T) like other unary operators
             # <:{T}(x::T)  ==>  (call (curly <: T) (:: x T))
-            # <:(x::T)     ==>  (<:-pre (:: x T))
+            # <:(x::T)     ==>  (<:-pre (parens (:: x T)))
             parse_where(ps, parse_juxtapose)
         else
             # <: x          ==>  (<:-pre x)
@@ -1108,9 +1108,9 @@ end
 # Juxtoposition. Ugh! But so useful for units and Field identities like `im`
 #
 # 2x       ==>  (juxtapose 2 x)
-# 2(x)     ==>  (juxtapose 2 x)
-# (2)(3)x  ==>  (juxtapose 2 3 x)
-# (x-1)y   ==>  (juxtapose (call-i x - 1) y)
+# 2(x)     ==>  (juxtapose 2 (parens x))
+# (2)(3)x  ==>  (juxtapose (parens 2) (parens 3) x)
+# (x-1)y   ==>  (juxtapose (parens (call-i x - 1)) y)
 # x'y      ==>  (juxtapose (call-post x ') y)
 #
 # flisp: parse-juxtapose
@@ -1239,9 +1239,9 @@ function parse_unary(ps::ParseState)
 
         mark_before_paren = position(ps)
         bump(ps, TRIVIA_FLAG) # (
-        initial_semi = peek(ps) == K";"
+        _is_paren_call = peek(ps, skip_newlines=true) in KSet"; )"
         opts = parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
-            is_paren_call = had_commas || had_splat || initial_semi
+            is_paren_call = had_commas || had_splat || _is_paren_call
             return (needs_parameters=is_paren_call,
                     is_paren_call=is_paren_call,
                     is_block=!is_paren_call && num_semis > 0)
@@ -1263,6 +1263,7 @@ function parse_unary(ps::ParseState)
             # +(a...)   ==>  (call + (... a))
             # +(a;b,c)  ==>  (call + a (parameters b c))
             # +(;a)     ==>  (call + (parameters a))
+            # +()       ==>  (call +)
             # Prefix calls have higher precedence than ^
             # +(a,b)^2  ==>  (call-i (call + a b) ^ 2)
             # +(a,b)(x)^2  ==>  (call-i (call (call + a b) x) ^ 2)
@@ -1292,21 +1293,23 @@ function parse_unary(ps::ParseState)
             parse_factor_with_initial_ex(ps, mark)
         else
             # Unary function calls with brackets as grouping, not an arglist
-            # .+(a)    ==>  (dotcall-pre (. +) a)
+            # .+(a)    ==>  (dotcall-pre (. +) (parens a))
             if opts.is_block
                 # +(a;b)   ==>  (call-pre + (block-p a b))
                 emit(ps, mark_before_paren, K"block", PARENS_FLAG)
+            else
+                emit(ps, mark_before_paren, K"parens")
             end
             # Not a prefix operator call but a block; `=` is not `kw`
-            # +(a=1)  ==>  (call-pre + (= a 1))
+            # +(a=1)  ==>  (call-pre + (parens (= a 1)))
             # Unary operators have lower precedence than ^
-            # +(a)^2  ==>  (call-pre + (call-i a ^ 2))
-            # .+(a)^2  ==>  (dotcall-pre + (call-i a ^ 2))
-            # +(a)(x,y)^2  ==>  (call-pre + (call-i (call a x y) ^ 2))
+            # +(a)^2  ==>  (call-pre + (call-i (parens a) ^ 2))
+            # .+(a)^2  ==>  (dotcall-pre + (call-i (parens a) ^ 2))
+            # +(a)(x,y)^2  ==>  (call-pre + (call-i (call (parens a) x y) ^ 2))
             parse_call_chain(ps, mark_before_paren)
             parse_factor_with_initial_ex(ps, mark_before_paren)
             if is_type_operator(op_t)
-                # <:(a)  ==>  (<:-pre a)
+                # <:(a)  ==>  (<:-pre (parens a))
                 emit(ps, mark, op_k, PREFIX_OP_FLAG)
                 reset_node!(ps, op_pos, flags=TRIVIA_FLAG)
             else
@@ -1451,7 +1454,7 @@ function parse_identifier_or_interpolate(ps::ParseState)
     mark = position(ps)
     parse_unary_prefix(ps)
     b = peek_behind(ps)
-    # export (x::T) ==> (export (error (::-i x T)))
+    # export (x::T) ==> (export (error (parens (::-i x T))))
     # export outer  ==> (export outer)
     # export ($f)   ==> (export ($ f))
     ok = (b.is_leaf  && (b.kind == K"Identifier" || is_operator(b.kind))) ||
@@ -1491,13 +1494,13 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
         k = kind(t)
         if !is_macrocall && ps.space_sensitive && preceding_whitespace(t) &&
                 k in KSet"( [ { \" \"\"\" ` ```"
-            # [f (x)]  ==>  (hcat f x)
+            # [f (x)]  ==>  (hcat f (parens x))
             # [f x]    ==>  (hcat f x)
             break
         elseif is_macrocall && (preceding_whitespace(t) || !(k in KSet"( [ { ' ."))
             # Macro calls with space-separated arguments
             # @foo a b    ==> (macrocall @foo a b)
-            # @foo (x)    ==> (macrocall @foo x)
+            # @foo (x)    ==> (macrocall @foo (parens x))
             # @foo (x,y)  ==> (macrocall @foo (tuple-p x y))
             # [@foo x]    ==> (vect (macrocall @foo x))
             # [@foo]      ==> (vect (macrocall @foo))
@@ -1537,8 +1540,8 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # f(a,b)  ==>  (call f a b)
             # f(a=1; b=2) ==> (call f (= a 1) (parameters (= b 2)))
             # f(a; b; c)  ==> (call f a (parameters b) (parameters c))
-            # (a=1)()  ==>  (call (= a 1))
-            # f (a)  ==>  (call f (error-t) a b)
+            # (a=1)()  ==>  (call (parens (= a 1)))
+            # f (a)    ==>  (call f (error-t) a)
             bump_disallowed_space(ps)
             bump(ps, TRIVIA_FLAG)
             parse_call_arglist(ps, K")")
@@ -1580,7 +1583,8 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             else
                 # a[i]    ==>  (ref a i)
                 # a[i,j]  ==>  (ref a i j)
-                # (a=1)[] ==>  (ref (= a 1))
+                # (a=1)[] ==>  (ref (parens (= a 1)))
+                # a[end]  ==>  (ref a end)
                 # T[x   y]  ==>  (typed_hcat T x y)
                 # T[x ; y]  ==>  (typed_vcat T x y)
                 # T[a b; c d]  ==>  (typed_vcat T (row a b) (row c d))
@@ -1905,7 +1909,7 @@ function parse_resword(ps::ParseState)
         else
             # Function/macro definition with no methods
             # function f end       ==> (function f)
-            # (function f \n end)  ==> (function f)
+            # (function f \n end)  ==> (parens (function f))
             # function f \n\n end  ==> (function f)
             # function $f end      ==> (function ($ f))
             # macro f end          ==> (macro f)
@@ -2007,7 +2011,7 @@ function parse_resword(ps::ParseState)
         # export a, \n @b  ==>  (export a @b)
         # export +, ==     ==>  (export + ==)
         # export \n a      ==>  (export a)
-        # export \$a, \$(a*b) ==> (export (\$ a) (\$ (call-i a * b)))
+        # export \$a, \$(a*b) ==> (export (\$ a) (\$ (parens (call-i a * b))))
         bump(ps, TRIVIA_FLAG)
         parse_comma_separated(ps, parse_atsym)
         emit(ps, mark, K"export")
@@ -2105,10 +2109,10 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
             emit(ps, mark, K"error", error="Invalid macro name")
         else
             # macro f()     end  ==>  (macro (call f) (block))
-            # macro (:)(ex) end  ==>  (macro (call : ex) (block))
-            # macro (type)(ex) end  ==>  (macro (call type ex) (block))
+            # macro (:)(ex) end  ==>  (macro (call (parens :) ex) (block))
+            # macro (type)(ex) end  ==>  (macro (call (parens type) ex) (block))
             # macro $f()    end  ==>  (macro (call ($ f)) (block))
-            # macro ($f)()  end  ==>  (macro (call ($ f)) (block))
+            # macro ($f)()  end  ==>  (macro (call (parens ($ f))) (block))
         end
     else
         if peek(ps) == K"("
@@ -2145,10 +2149,11 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
                 # function ()(x) end  ==> (function (call (tuple-p) x) (block))
                 emit(ps, mark, K"tuple", PARENS_FLAG)
             else
-                # function (A).f() end  ==> (function (call (. A (quote f))) (block))
-                # function (:)() end    ==> (function (call :) (block))
-                # function (x::T)() end ==> (function (call (::-i x T)) (block))
-                # function (::T)() end  ==> (function (call (::-pre T)) (block))
+                # function (A).f() end  ==> (function (call (. (parens A) (quote f))) (block))
+                # function (:)() end    ==> (function (call (parens :)) (block))
+                # function (x::T)() end ==> (function (call (parens (::-i x T))) (block))
+                # function (::T)() end  ==> (function (call (parens (::-pre T))) (block))
+                emit(ps, mark, K"parens", PARENS_FLAG)
             end
         else
             parse_unary_prefix(ps)
@@ -2163,8 +2168,7 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
                 # function type() end  ==>  (function (call type) (block))
                 # function \n f() end  ==>  (function (call f) (block))
                 # function $f() end    ==>  (function (call ($ f)) (block))
-                # function (:)() end  ==>  (function (call :) (block))
-                # function (::Type{T})(x) end ==> (function (call (::-pre (curly Type T)) x) (block))
+                # function (::Type{T})(x) end ==> (function (call (parens (::-pre (curly Type T))) x) (block))
             end
         end
     end
@@ -2205,8 +2209,8 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
     # function (f() where T) end         ==> (function (where (call f) T) (block))
     # function (f()) where T end         ==> (function (where (call f) T) (block))
     # function (f() where T) where U end ==> (function (where (where (call f) T) U) (block))
-    # function (f()::S) end              ==> (function (::-i (call f) S) (block))
-    # function ((f()::S) where T) end    ==> (function (where (::-i (call f) S) T) (block))
+    # function (f()::S) end              ==> (function (parens (::-i (call f) S)) (block))
+    # function ((f()::S) where T) end    ==> (function (where (parens (::-i (call f) S)) T) (block))
     #
     # TODO: Warn for use of parens? The precedence of `::` and
     # `where` don't work inside parens so this is a bit of a syntax
@@ -2401,7 +2405,7 @@ function parse_atsym(ps::ParseState)
     else
         # export a  ==>  (export a)
         # export \n a  ==>  (export a)
-        # export $a, $(a*b)  ==>  (export ($ a) ($ (call * a b)))
+        # export $a, $(a*b)  ==>  (export ($ a) (parens ($ (call * a b))))
         parse_identifier_or_interpolate(ps)
     end
 end
@@ -2706,7 +2710,7 @@ end
 function parse_generator(ps::ParseState, mark, flatten=false)
     t = peek_token(ps)
     if !preceding_whitespace(t)
-        # [(x)for x in xs]  ==>  (comprehension (generator x (error) (= x xs)))
+        # [(x)for x in xs]  ==>  (comprehension (generator (parens x) (error) (= x xs)))
         bump_invisible(ps, K"error", TRIVIA_FLAG,
                        error="Expected space before `for` in generator")
     end
@@ -2715,21 +2719,21 @@ function parse_generator(ps::ParseState, mark, flatten=false)
     filter_mark = position(ps)
     parse_comma_separated(ps, parse_iteration_spec)
     if peek(ps) == K"if"
-        # (a for x in xs if cond) ==> (generator a (filter (= x xs) cond))
+        # (a for x in xs if cond) ==> (parens (generator a (filter (= x xs) cond)))
         bump(ps, TRIVIA_FLAG)
         parse_cond(ps)
         emit(ps, filter_mark, K"filter")
     end
     t = peek_token(ps)
     if kind(t) == K"for"
-        # (xy for x in xs for y in ys)  ==> (flatten xy (= x xs) (= y ys))
-        # (xy for x in xs for y in ys for z in zs)  ==> (flatten xy (= x xs) (= y ys) (= z zs))
+        # (xy for x in xs for y in ys)  ==> (parens (flatten xy (= x xs) (= y ys)))
+        # (xy for x in xs for y in ys for z in zs)  ==> (parens (flatten xy (= x xs) (= y ys) (= z zs)))
         parse_generator(ps, mark, true)
         if !flatten
             emit(ps, mark, K"flatten")
         end
     elseif !flatten
-        # (x for a in as)  ==>  (generator x (= a as))
+        # (x for a in as)  ==>  (parens (generator x (= a as)))
         emit(ps, mark, K"generator")
     end
 end
@@ -3071,10 +3075,11 @@ function parse_paren(ps::ParseState, check_identifiers=true)
             emit(ps, mark, K"block", PARENS_FLAG)
         else
             # Parentheses used for grouping
-            # (a * b)     ==>  (call-i * a b)
-            # (a=1)       ==>  (= a 1)
-            # (x)         ==>  x
-            # (a...)      ==>  (... a)
+            # (a * b)     ==>  (parens (call-i * a b))
+            # (a=1)       ==>  (parens (= a 1))
+            # (x)         ==>  (parens x)
+            # (a...)      ==>  (parens (... a))
+            emit(ps, mark, K"parens")
         end
     end
 end
@@ -3144,8 +3149,8 @@ function parse_brackets(after_parse::Function,
                 continue
             elseif k == K"for"
                 # Generator syntax
-                # (x for a in as)       ==>  (generator x (= a as))
-                # (x \n\n for a in as)  ==>  (generator x (= a as))
+                # (x for a in as)       ==>  (parens (generator x (= a as)))
+                # (x \n\n for a in as)  ==>  (parens (generator x (= a as)))
                 parse_generator(ps, mark)
             else
                 # Error - recovery done when consuming closing_kind
@@ -3203,8 +3208,8 @@ function parse_string(ps::ParseState, raw::Bool)
             bump(ps, TRIVIA_FLAG)
             k = peek(ps)
             if k == K"("
-                # "a $(x + y) b"  ==>  (string "a " (call-i x + y) " b")
-                # "hi$("ho")"     ==>  (string "hi" (string "ho"))
+                # "a $(x + y) b"  ==>  (string "a " (parens (call-i x + y)) " b")
+                # "hi$("ho")"     ==>  (string "hi" (parens (string "ho")))
                 parse_atom(ps)
             elseif k == K"var"
                 # var identifiers disabled in strings
@@ -3346,7 +3351,7 @@ function parse_string(ps::ParseState, raw::Bool)
     end
     # String interpolations
     # "$x$y$z"  ==> (string x y z)
-    # "$(x)"    ==> (string x)
+    # "$(x)"    ==> (string (parens x))
     # "$x"      ==> (string x)
     # """$x"""  ==> (string-s x)
     #
@@ -3440,7 +3445,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
             # Being inside quote makes keywords into identifiers at the
             # first level of nesting
             # :end ==> (quote end)
-            # :(end) ==> (quote (error (end)))
+            # :(end) ==> (quote (parens (error-t)))
             # Being inside quote makes end non-special again (issue #27690)
             # a[:(end)]  ==>  (ref a (quote (error-t end)))
             parse_atom(ParseState(ps, end_symbol=false), false)

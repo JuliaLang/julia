@@ -197,6 +197,9 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
         end
     elseif headsym === :where
         reorder_parameters!(args, 2)
+    elseif headsym == :parens
+        # parens are used for grouping and don't appear in the Expr AST
+        return only(args)
     elseif headsym in (:try, :try_finally_catch)
         # Try children in source order:
         #   try_block catch_var catch_block else_block finally_block

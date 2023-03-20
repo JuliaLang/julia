@@ -181,9 +181,9 @@ tests = [
     JuliaSyntax.parse_juxtapose => [
         "2x"         => "(juxtapose 2 x)"
         "2x"         => "(juxtapose 2 x)"
-        "2(x)"       => "(juxtapose 2 x)"
-        "(2)(3)x"    => "(juxtapose 2 3 x)"
-        "(x-1)y"     => "(juxtapose (call-i x - 1) y)"
+        "2(x)"       => "(juxtapose 2 (parens x))"
+        "(2)(3)x"    => "(juxtapose (parens 2) (parens 3) x)"
+        "(x-1)y"     => "(juxtapose (parens (call-i x - 1)) y)"
         "x'y"        => "(juxtapose (call-post x ') y)"
         # errors
         "\"a\"\"b\"" => "(juxtapose (string \"a\") (error-t) (string \"b\"))"
@@ -226,11 +226,14 @@ tests = [
         # Prefix function calls for operators which are both binary and unary
         "+(a,b)"   =>  "(call + a b)"
         ".+(a,)"   =>  "(call .+ a)"
-        "(.+)(a)"  =>  "(call (. +) a)"
+        "(.+)(a)"  =>  "(call (parens (. +)) a)"
         "+(a=1,)"  =>  "(call + (= a 1))" => Expr(:call, :+, Expr(:kw, :a, 1))
         "+(a...)"  =>  "(call + (... a))"
         "+(a;b,c)" =>  "(call + a (parameters b c))"
         "+(;a)"    =>  "(call + (parameters a))"
+        "+()"      =>  "(call +)"
+        "+(\n;a)"  =>  "(call + (parameters a))"
+        "+(\n)"    =>  "(call +)"
         # Whitespace not allowed before prefix function call bracket
         "+ (a,b)"  =>  "(call + (error) a b)"
         # Prefix calls have higher precedence than ^
@@ -238,14 +241,14 @@ tests = [
         "+(a,b)(x)^2"  =>  "(call-i (call (call + a b) x) ^ 2)"
         "<:(a,)"  =>  "(<: a)"
         # Unary function calls with brackets as grouping, not an arglist
-        ".+(a)"   =>  "(dotcall-pre + a)"
+        ".+(a)"   =>  "(dotcall-pre + (parens a))"
         "+(a;b)"  =>  "(call-pre + (block-p a b))"
-        "+(a=1)"  =>  "(call-pre + (= a 1))"  => Expr(:call, :+, Expr(:(=), :a, 1))
+        "+(a=1)"  =>  "(call-pre + (parens (= a 1)))"  => Expr(:call, :+, Expr(:(=), :a, 1))
         # Unary operators have lower precedence than ^
-        "+(a)^2"  =>  "(call-pre + (call-i a ^ 2))"
-        ".+(a)^2" =>  "(dotcall-pre + (call-i a ^ 2))"
-        "+(a)(x,y)^2"  =>  "(call-pre + (call-i (call a x y) ^ 2))"
-        "<:(a)"   =>  "(<:-pre a)"
+        "+(a)^2"  =>  "(call-pre + (call-i (parens a) ^ 2))"
+        ".+(a)^2" =>  "(dotcall-pre + (call-i (parens a) ^ 2))"
+        "+(a)(x,y)^2"  =>  "(call-pre + (call-i (call (parens a) x y) ^ 2))"
+        "<:(a)"   =>  "(<:-pre (parens a))"
         # Normal unary calls
         "+x" => "(call-pre + x)"
         "√x" => "(call-pre √ x)"
@@ -276,7 +279,7 @@ tests = [
         "<: \n"   =>  "<:"
         "<: ="    =>  "<:"
         "<:{T}(x::T)"   =>  "(call (curly <: T) (::-i x T))"
-        "<:(x::T)"      =>  "(<:-pre (::-i x T))"
+        "<:(x::T)"      =>  "(<:-pre (parens (::-i x T)))"
         "<: x"          =>  "(<:-pre x)"
         "<: <: x"       =>  "(<:-pre (<:-pre x))"
         "<: A where B"  =>  "(<:-pre (where A B))"
@@ -307,11 +310,11 @@ tests = [
         "\$A.@x"    =>  "(macrocall (. (\$ A) (quote @x)))"
 
         # non-errors in space sensitive contexts
-        "[f (x)]"    =>  "(hcat f x)"
+        "[f (x)]"    =>  "(hcat f (parens x))"
         "[f x]"      =>  "(hcat f x)"
         # space separated macro calls
         "@foo a b"     =>  "(macrocall @foo a b)"
-        "@foo (x)"     =>  "(macrocall @foo x)"
+        "@foo (x)"     =>  "(macrocall @foo (parens x))"
         "@foo (x,y)"   =>  "(macrocall @foo (tuple-p x y))"
         "A.@foo a b"   =>  "(macrocall (. A (quote @foo)) a b)"
         "@A.foo a b"   =>  "(macrocall (. A (quote @foo)) a b)"
@@ -341,7 +344,7 @@ tests = [
             Expr(:call, :f, Expr(:parameters, Expr(:kw, :b, 2)), Expr(:kw, :a, 1))
         "f(a; b; c)" => "(call f a (parameters b) (parameters c))" =>
             Expr(:call, :f, Expr(:parameters, Expr(:parameters, :c), :b), :a)
-        "(a=1)()" =>  "(call (= a 1))" => Expr(:call, Expr(:(=), :a, 1))
+        "(a=1)()" =>  "(call (parens (= a 1)))" => Expr(:call, Expr(:(=), :a, 1))
         "f (a)" => "(call f (error-t) a)"
         "@x(a, b)"   =>  "(macrocall-p @x a b)"
         "A.@x(y)"    =>  "(macrocall-p (. A (quote @x)) y)"
@@ -367,7 +370,10 @@ tests = [
         "a[i]"  =>  "(ref a i)"
         "a [i]"  =>  "(ref a (error-t) i)"
         "a[i,j]"  =>  "(ref a i j)"
-        "(a=1)[]" =>  "(ref (= a 1))" => Expr(:ref, Expr(:(=), :a, 1))
+        "(a=1)[]" =>  "(ref (parens (= a 1)))" => Expr(:ref, Expr(:(=), :a, 1))
+        "a[end]"  =>  "(ref a end)"
+        "a[begin]"  =>  "(ref a begin)"
+        "a[:(end)]" => "(typed_hcat a (quote (parens (error-t))) (error-t))"
         "T[x   y]"  =>  "(typed_hcat T x y)"
         "T[x ; y]"  =>  "(typed_vcat T x y)"
         "T[a b; c d]"  =>  "(typed_vcat T (row a b) (row c d))"
@@ -382,13 +388,13 @@ tests = [
         "f.(a,b)"   =>  "(dotcall f a b)"
         "f.(a=1; b=2)" => "(dotcall f (= a 1) (parameters (= b 2)))" =>
             Expr(:., :f, Expr(:tuple, Expr(:parameters, Expr(:kw, :b, 2)), Expr(:kw, :a, 1)))
-        "(a=1).()" =>  "(dotcall (= a 1))" => Expr(:., Expr(:(=), :a, 1), Expr(:tuple))
+        "(a=1).()" =>  "(dotcall (parens (= a 1)))" => Expr(:., Expr(:(=), :a, 1), Expr(:tuple))
         "f. (x)"    =>  "(dotcall f (error-t) x)"
         # Other dotted syntax
         "A.:+"      =>  "(. A (quote +))"
         "A.: +"     =>  "(. A (quote (error-t) +))"
         "f.\$x"     =>  "(. f (inert (\$ x)))"
-        "f.\$(x+y)" =>  "(. f (inert (\$ (call-i x + y))))"
+        "f.\$(x+y)" =>  "(. f (inert (\$ (parens (call-i x + y)))))"
         "A.\$B.@x"  =>  "(macrocall (. (. A (inert (\$ B))) (quote @x)))"
         "@A.\$x a"  =>  "(macrocall (. A (inert (error x))) a)"
         "A.@x"      =>  "(macrocall (. A (quote @x)))"
@@ -496,10 +502,10 @@ tests = [
         "export a, \n @b"  =>  "(export a @b)"     => Expr(:export, :a, Symbol("@b"))
         "export +, =="     =>  "(export + ==)"     => Expr(:export, :+, :(==))
         "export \n a"      =>  "(export a)"        => Expr(:export, :a)
-        "export \$a, \$(a*b)"  =>  "(export (\$ a) (\$ (call-i a * b)))"  => Expr(:export, Expr(:$, :a), Expr(:$, Expr(:call, :*, :a, :b)))
-        "export (x::T)"  =>  "(export (error (::-i x T)))"
+        "export \$a, \$(a*b)"  =>  "(export (\$ a) (\$ (parens (call-i a * b))))"  => Expr(:export, Expr(:$, :a), Expr(:$, Expr(:call, :*, :a, :b)))
+        "export (x::T)"  =>  "(export (error (parens (::-i x T))))"
         "export outer"  =>  "(export outer)"   =>  Expr(:export, :outer)
-        "export (\$f)"  =>  "(export (\$ f))"  =>  Expr(:export, Expr(:$, :f))
+        "export (\$f)"  =>  "(export (parens (\$ f)))"  =>  Expr(:export, Expr(:$, :f))
     ],
     JuliaSyntax.parse_if_elseif => [
         "if a xx elseif b yy else zz end" => "(if a (block xx) (elseif b (block yy) (block zz)))"
@@ -537,28 +543,27 @@ tests = [
         # Macros and functions
         "macro while(ex) end"  =>  "(macro (call (error while) ex) (block))"
         "macro f()     end"    =>  "(macro (call f) (block))"
-        "macro (:)(ex) end"    =>  "(macro (call : ex) (block))"
-        "macro (type)(ex) end" =>  "(macro (call type ex) (block))"
+        "macro (:)(ex) end"    =>  "(macro (call (parens :) ex) (block))"
+        "macro (type)(ex) end" =>  "(macro (call (parens type) ex) (block))"
         "macro \$f()    end"   =>  "(macro (call (\$ f)) (block))"
-        "macro (\$f)()  end"   =>  "(macro (call (\$ f)) (block))"
+        "macro (\$f)()  end"   =>  "(macro (call (parens (\$ f))) (block))"
         "function (x) body end"=>  "(function (tuple-p x) (block body))"
         "function (x,y) end"   =>  "(function (tuple-p x y) (block))"
         "function (x=1) end"   =>  "(function (tuple-p (= x 1)) (block))"
         "function (;x=1) end"  =>  "(function (tuple-p (parameters (= x 1))) (block))"
         "function ()(x) end"   =>  "(function (call (tuple-p) x) (block))"
-        "function (A).f() end" =>  "(function (call (. A (quote f))) (block))"
-        "function (:)() end"   =>  "(function (call :) (block))"
-        "function (x::T)() end"=>  "(function (call (::-i x T)) (block))"
-        "function (::g(x))() end" => "(function (call (::-pre (call g x))) (block))"
-        "function (f::T{g(i)})() end" => "(function (call (::-i f (curly T (call g i)))) (block))"
-        "function (::T)() end" =>  "(function (call (::-pre T)) (block))"
+        "function (A).f() end" =>  "(function (call (. (parens A) (quote f))) (block))"
+        "function (:)() end"   =>  "(function (call (parens :)) (block))"
+        "function (x::T)() end"=>  "(function (call (parens (::-i x T))) (block))"
+        "function (::g(x))() end" => "(function (call (parens (::-pre (call g x)))) (block))"
+        "function (f::T{g(i)})() end" => "(function (call (parens (::-i f (curly T (call g i))))) (block))"
+        "function (::T)() end" =>  "(function (call (parens (::-pre T))) (block))"
         "function begin() end" =>  "(function (call (error begin)) (block))"
         "function f() end"     =>  "(function (call f) (block))"
         "function type() end"  =>  "(function (call type) (block))"
         "function \n f() end"  =>  "(function (call f) (block))"
         "function \$f() end"   =>  "(function (call (\$ f)) (block))"
-        "function (:)() end"   =>  "(function (call :) (block))"
-        "function (::Type{T})(x) end"  =>  "(function (call (::-pre (curly Type T)) x) (block))"
+        "function (::Type{T})(x) end"  =>  "(function (call (parens (::-pre (curly Type T))) x) (block))"
         # Function/macro definition with no methods
         "function f end"      =>  "(function f)"
         "function f \n\n end" =>  "(function f)"
@@ -576,11 +581,11 @@ tests = [
         "function f()::S where T end" => "(function (where (::-i (call f) S) T) (block))"
         # Ugly cases for compat where extra parentheses existed and we've
         # already parsed at least the call part of the signature
-        "function (f() where T) end" => "(function (where (call f) T) (block))" => Expr(:function, Expr(:where, Expr(:call, :f), :T), Expr(:block))
-        "function (f()) where T end" => "(function (where (call f) T) (block))"
-        "function (f() where T) where U end" => "(function (where (where (call f) T) U) (block))"
-        "function (f()::S) end"=>  "(function (::-i (call f) S) (block))"         => Expr(:function, Expr(:(::), Expr(:call, :f), :S), Expr(:block))
-        "function ((f()::S) where T) end" => "(function (where (::-i (call f) S) T) (block))"
+        "function (f() where T) end" => "(function (parens (where (call f) T)) (block))" => Expr(:function, Expr(:where, Expr(:call, :f), :T), Expr(:block))
+        "function (f()) where T end" => "(function (where (parens (call f)) T) (block))"
+        "function (f() where T) where U end" => "(function (where (parens (where (call f) T)) U) (block))"
+        "function (f()::S) end"=>  "(function (parens (::-i (call f) S)) (block))"         => Expr(:function, Expr(:(::), Expr(:call, :f), :S), Expr(:block))
+        "function ((f()::S) where T) end" => "(function (parens (where (parens (::-i (call f) S)) T)) (block))"
         # body
         "function f() \n a \n b end"  =>  "(function (call f) (block a b))"
         "function f() end"       =>  "(function (call f) (block))"
@@ -682,16 +687,16 @@ tests = [
         "(a;b;;c)"    =>  "(block-p a b c)"
         "(a=1; b=2)"  =>  "(block-p (= a 1) (= b 2))"
         # Parentheses used for grouping
-        "(a * b)"     =>  "(call-i a * b)"
-        "(a=1)"       =>  "(= a 1)"
-        "(x)"         =>  "x"
-        "(a...)"      =>  "(... a)"
+        "(a * b)"     =>  "(parens (call-i a * b))"
+        "(a=1)"       =>  "(parens (= a 1))"
+        "(x)"         =>  "(parens x)"
+        "(a...)"      =>  "(parens (... a))"
         # Generators
-        "(x for a in as)"       =>  "(generator x (= a as))"
-        "(x \n\n for a in as)"  =>  "(generator x (= a as))"
+        "(x for a in as)"       =>  "(parens (generator x (= a as)))"
+        "(x \n\n for a in as)"  =>  "(parens (generator x (= a as)))"
         # Range parsing in parens
-        "(1:\n2)" => "(call-i 1 : 2)"
-        "(1:2)" => "(call-i 1 : 2)"
+        "(1:\n2)" => "(parens (call-i 1 : 2))"
+        "(1:2)" => "(parens (call-i 1 : 2))"
     ],
     JuliaSyntax.parse_atom => [
         # char literal
@@ -741,7 +746,7 @@ tests = [
         ":.="  =>  "(quote .=)"
         # Special symbols quoted
         ":end" => "(quote end)"
-        ":(end)" => "(quote (error-t))"
+        ":(end)" => "(quote (parens (error-t)))"
         ":<:"  => "(quote <:)"
         # unexpect =
         "="    => "(error =)"
@@ -759,11 +764,11 @@ tests = [
         # parse_generator
         "[x for a = as for b = bs if cond1 for c = cs if cond2]"  =>  "(comprehension (flatten x (= a as) (filter (= b bs) cond1) (filter (= c cs) cond2)))"
         "[x for a = as if begin cond2 end]"  =>  "(comprehension (generator x (filter (= a as) (block cond2))))"
-        "[(x)for x in xs]"  =>  "(comprehension (generator x (error-t) (= x xs)))"
-        "(a for x in xs if cond)"  =>  "(generator a (filter (= x xs) cond))"
-        "(xy for x in xs for y in ys)"  =>  "(flatten xy (= x xs) (= y ys))"
-        "(xy for x in xs for y in ys for z in zs)"  =>  "(flatten xy (= x xs) (= y ys) (= z zs))"
-        "(x for a in as)"  =>  "(generator x (= a as))"
+        "[(x)for x in xs]"  =>  "(comprehension (generator (parens x) (error-t) (= x xs)))"
+        "(a for x in xs if cond)"  =>  "(parens (generator a (filter (= x xs) cond)))"
+        "(xy for x in xs for y in ys)"  =>  "(parens (flatten xy (= x xs) (= y ys)))"
+        "(xy for x in xs for y in ys for z in zs)"  =>  "(parens (flatten xy (= x xs) (= y ys) (= z zs)))"
+        "(x for a in as)"  =>  "(parens (generator x (= a as)))"
         # parse_vect
         "[x, y]"        =>  "(vect x y)"
         "[x, y]"        =>  "(vect x y)"
@@ -776,7 +781,7 @@ tests = [
         # parse_paren
         ":(=)"  =>  "(quote =)"
         ":(::)"  =>  "(quote ::)"
-        "(function f \n end)" => "(function f)"
+        "(function f \n end)" => "(parens (function f))"
         # braces
         "{x y}"      =>  "(bracescat (row x y))"
         ((v=v"1.7",), "{x ;;; y}") =>  "(bracescat (nrow-3 x y))"
@@ -845,8 +850,8 @@ tests = [
         ((v=v"1.7",), "[;;]")  =>  "(ncat-2 (error))"
         # parse_string
         "\"\"\"\n\$x\n a\"\"\"" => "(string-s x \"\\n\" \" a\")"
-        "\"a \$(x + y) b\""  =>  "(string \"a \" (call-i x + y) \" b\")"
-        "\"hi\$(\"ho\")\""   =>  "(string \"hi\" (string \"ho\"))"
+        "\"a \$(x + y) b\""  =>  "(string \"a \" (parens (call-i x + y)) \" b\")"
+        "\"hi\$(\"ho\")\""   =>  "(string \"hi\" (parens (string \"ho\")))"
         "\"a \$foo b\""  =>  "(string \"a \" foo \" b\")"
         "\"\$var\""      =>  "(string var)"
         "\"\$outer\""    =>  "(string outer)"
@@ -888,7 +893,7 @@ tests = [
         "\"str"  =>  "(string \"str\" (error-t))"
         # String interpolations
         "\"\$x\$y\$z\""  =>  "(string x y z)"
-        "\"\$(x)\""  =>  "(string x)"
+        "\"\$(x)\""  =>  "(string (parens x))"
         "\"\$x\""  =>  "(string x)"
         # Strings with embedded whitespace trivia
         "\"a\\\nb\""     =>  raw"""(string "a" "b")"""
@@ -931,11 +936,11 @@ end
 
 parseall_test_specs = [
     # whitespace before keywords in space-insensitive mode
-    "(y::\nif x z end)" => "(toplevel (::-i y (if x (block z))))"
+    "(y::\nif x z end)" => "(toplevel (parens (::-i y (if x (block z)))))"
 
     # The following may not be ideal error recovery! But at least the parser
     # shouldn't crash
-    "@(x y)" => "(toplevel (macrocall x (error-t @y)))"
+    "@(x y)" => "(toplevel (macrocall (error x (error-t y))))"
     "|(&\nfunction" => "(toplevel (call | (& (function (error (error)) (block (error)) (error-t))) (error-t)))"
 ]
 
