@@ -534,7 +534,7 @@ dependencies = [
 [[package]]
 name = "mmtk"
 version = "0.17.0"
-source = "git+https://github.com/mmtk/mmtk-core.git?rev=08fd8ab0cfaa240a6e9a401afaec963ec0de8be5#08fd8ab0cfaa240a6e9a401afaec963ec0de8be5"
+source = "git+https://github.com/mmtk/mmtk-core.git?rev=b2968e3903a5730f2ce33654d75dd2e53b26d8b2#b2968e3903a5730f2ce33654d75dd2e53b26d8b2"
 dependencies = [
  "atomic 0.5.1",
  "atomic-traits",
@@ -554,6 +554,7 @@ dependencies = [
  "num_cpus",
  "regex",
  "spin",
+ "static_assertions",
  "strum",
  "strum_macros",
  "sys-info",
@@ -577,7 +578,7 @@ dependencies = [
 [[package]]
 name = "mmtk-macros"
 version = "0.17.0"
-source = "git+https://github.com/mmtk/mmtk-core.git?rev=08fd8ab0cfaa240a6e9a401afaec963ec0de8be5#08fd8ab0cfaa240a6e9a401afaec963ec0de8be5"
+source = "git+https://github.com/mmtk/mmtk-core.git?rev=b2968e3903a5730f2ce33654d75dd2e53b26d8b2#b2968e3903a5730f2ce33654d75dd2e53b26d8b2"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
@@ -797,6 +798,12 @@ checksum = "7dccf47db1b41fa1573ed27ccf5e08e3ca771cb994f776668c5ebda893b248fc"
 dependencies = [
  "lock_api",
 ]
+
+[[package]]
+name = "static_assertions"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "strum"
