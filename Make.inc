@@ -178,7 +178,7 @@ endif
 JULIA_VERSION := $(shell cat $(JULIAHOME)/VERSION)
 JULIA_MAJOR_VERSION := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'.' -f 1)
 JULIA_MINOR_VERSION := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'.' -f 2)
-JULIA_PATCH_VERSION := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'.' -f 3)
+JULIA_PATCH_VERSION := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'+' -f 1 | cut -d'.' -f 3)
 
 # libjulia's SONAME will follow the format libjulia.so.$(SOMAJOR). Before v1.0.0,
 # SOMAJOR will be a two-decimal value, e.g. libjulia.so.0.5, whereas at and beyond
