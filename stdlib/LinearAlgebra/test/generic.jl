@@ -274,13 +274,15 @@ end
         # Vector/matrix of scalars
         for sz in ((2,), (2, 3))
             A = rand(elt, sz...)
-            @test norm(t(A)) ≈ norm(A) # `isapprox` because summation order can cause floating point differences
+            Aᵀ = t(A)
+            @test norm(Aᵀ) == norm(Matrix(Aᵀ))
         end
 
         # Vector/matrix of vectors/matrices
         for sz_outer in ((2,), (2, 3)), sz_inner in ((3,), (1, 2))
             A = [rand(elt, sz_inner...) for _ in CartesianIndices(sz_outer)]
-            @test norm(t(A)) ≈ norm(A)
+            Aᵀ = t(A)
+            @test norm(Aᵀ) == norm(Matrix(Matrix.(Aᵀ)))
         end
     end
 end
