@@ -1134,6 +1134,7 @@ function iterate(specs::MethodSpecializations, i::Int)
     item === nothing && return nothing
     return (item, i)
 end
+length(specs::MethodSpecializations) = count(Returns(true), specs)
 
 function length(mt::Core.MethodTable)
     n = 0

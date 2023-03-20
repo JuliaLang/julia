@@ -1039,3 +1039,10 @@ ambig_effects_test(a, b) = 1
 end
 
 @test Base._methods_by_ftype(Tuple{}, -1, Base.get_world_counter()) == Any[]
+
+@testset "specializations" begin
+    f(x) = 1
+    f(1)
+    f("hello")
+    @test length(Base.specializations(only(methods(f)))) == 2
+end
