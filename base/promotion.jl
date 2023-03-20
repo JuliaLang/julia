@@ -172,7 +172,12 @@ function promote_typejoin(@nospecialize(a), @nospecialize(b))
     c = typejoin(_promote_typesubtract(a), _promote_typesubtract(b))
     return Union{a, b, c}::Type
 end
-_promote_typesubtract(@nospecialize(a)) = typesplit(a, Union{Nothing, Missing})
+_promote_typesubtract(@nospecialize(a)) =
+    a === Any ? a :
+    a >: Union{Nothing, Missing} ? typesplit(a, Union{Nothing, Missing}) :
+    a >: Nothing ? typesplit(a, Nothing) :
+    a >: Missing ? typesplit(a, Missing) :
+    a
 
 function promote_typejoin_union(::Type{T}) where T
     if T === Union{}

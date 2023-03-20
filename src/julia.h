@@ -548,7 +548,7 @@ typedef struct _jl_datatype_t {
     uint16_t isbitstype:1; // relevant query for C-api and type-parameters
     uint16_t zeroinit:1; // if one or more fields requires zero-initialization
     uint16_t has_concrete_subtype:1; // If clear, no value will have this datatype
-    uint16_t cached_by_hash:1; // stored in hash-based set cache (instead of linear cache)
+    uint16_t maybe_subtype_of_cache:1; // Computational bit for has_concrete_supertype. See description in jltypes.c.
     uint16_t isprimitivetype:1; // whether this is declared with 'primitive type' keyword (sized, no fields, and immutable)
     uint16_t ismutationfree:1; // whether any mutable memory is reachable through this type (in the type or via fields)
     uint16_t isidentityfree:1; // whether this type or any object reachable through its fields has non-content-based identity
@@ -1414,7 +1414,6 @@ STATIC_INLINE int jl_egal_(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value
 #define jl_egal(a, b) jl_egal_((a), (b))
 
 // type predicates and basic operations
-JL_DLLEXPORT int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_has_free_typevars(jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_has_typevar(jl_value_t *t, jl_tvar_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_has_typevar_from_unionall(jl_value_t *t, jl_unionall_t *ua);
