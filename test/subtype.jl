@@ -2388,11 +2388,6 @@ abstract type P47654{A} end
     @test Tuple{Set{Ref{Int}}, Set{Ref{Int}}} <: Tuple{Set{KV}, Set{K}} where {K,KV<:Union{K,Ref{K}}}
     @test Tuple{Set{Val{Int}}, Set{Val{Int}}} <: Tuple{Set{KV}, Set{K}} where {K,KV<:Union{K,Val{K}}}
 
-    #issue 39099
-    A = Tuple{Tuple{Int, Int, Vararg{Int, N}}, Tuple{Int, Vararg{Int, N}}, Tuple{Vararg{Int, N}}} where N
-    B = Tuple{NTuple{N, Int}, NTuple{N, Int}, NTuple{N, Int}} where N
-    @test_broken !(A <: B)
-
     #issue 35698
     @test_broken typeintersect(Type{Tuple{Array{T,1} where T}}, UnionAll) != Union{}
 
@@ -2405,7 +2400,7 @@ abstract type P47654{A} end
     # issue 22123
     t1 = Ref{Ref{Ref{Union{Int64, T}}} where T}
     t2 = Ref{Ref{Ref{Union{T, S}}} where T} where S
-    @test_broken t1 <: t2
+    @test t1 <: t2
 
     # issue 21153
     @test_broken (Tuple{T1,T1} where T1<:(Val{T2} where T2)) <: (Tuple{Val{S},Val{S}} where S)
@@ -2459,3 +2454,38 @@ end
 
 #issue 48961
 @test !<:(Type{Union{Missing, Int}}, Type{Union{Missing, Nothing, Int}})
+
+@testset "Type with Diagonal Vararg length" begin
+    A1 = Tuple{Tuple{Int,Int,Vararg{Int,N}},Tuple{Int,Vararg{Int,N}},Tuple{Vararg{Int,N}}} where N
+    A2 = Tuple{Tuple{Int,Vararg{Int,N}},Tuple{Int,Vararg{Int,N}},Tuple{Int,Vararg{Int,N}}} where N
+    B1 = NTuple{3,NTuple{N}} where N
+    B2 = NTuple{3,NTuple{N}} where {M,N<:M}
+    B3 = NTuple{3,NTuple{N}} where {M,M<:N<:M}
+    @test !(A1 <: B1) && !(A1 <: B2)
+    @test_broken !(A1 <: B3)
+    @test !(A1 >: B1) && !(A1 >: B2) && !(A1 >: B3)
+    @testintersect(A1, B1, Union{})
+    @testintersect(A1, B2, Union{})
+    @test_broken typeintersect(A1, B3) == Union{} # failed due to wrong subtyping result
+    @testintersect(Tuple{Any,A1}, Tuple{Int,B3}, Union{}) # make sure the core intersect is correct
+
+    @test issub_strict(A2, B1) && issub_strict(A2, B2) && issub_strict(A2, B3)
+
+    A = Val{S} where {N,S<:Union{Tuple{Tuple{Int},Tuple{Int}},
+                                 Tuple{Tuple{Int,Int},Tuple{Int,Int}}}}
+    @test A <: Val{<:NTuple{2,NTuple{N}} where N}
+    # S could be `Union{...,...}` and we don't support Union{1,2}
+    @test !(A <: Val{S} where {N,S<:NTuple{2,NTuple{N}}})
+    S = Tuple{Val{N},Vararg{Int,N}} where {N}
+    T = Tuple{Val{N},Int,Vararg{Int,N}} where {N}
+    @test !(S <: T)
+    @test !(S >: T)
+    @test typeintersect(S, T) == Union{}
+    S = Tuple{NTuple{N,Int},Val{N}} where {N}
+    T = Tuple{Tuple{Int,Vararg{Int,N}},Val{N}} where {N}
+    @test !(S <: T)
+    @test !(S >: T)
+    @test typeintersect(S, T) == Union{}
+end
+
+@test (Tuple{Int,Vararg{Int,N}} where {N}) <: (NTuple{N,Integer} where {M,M<:N<:M})
