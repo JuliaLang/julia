@@ -222,6 +222,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test expanded == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@foo", "HOME" => homedir()))
     end
 
+    tmp = readchomp(`$exename --project='temp' -e '@assert isdir(dirname(Base.active_project())); println(Base.active_project());'`)
+    # Temp project should be deleted
+    @test !isdir(tmp)
+
     # --quiet, --banner
     let t(q,b) = "Base.JLOptions().quiet == $q && Base.JLOptions().banner == $b"
         @test success(`$exename                 -e $(t(0, -1))`)

@@ -235,6 +235,13 @@ function init_active_project()
     project = (JLOptions().project != C_NULL ?
         unsafe_string(Base.JLOptions().project) :
         get(ENV, "JULIA_PROJECT", nothing))
+    if project == "temp"
+        if isdir("temp")
+            @warn "Using a temporary directory for initial project environment, use an absolute path or \
+                   `./temp` to use the `temp` directory in the current directory"
+        end
+        project = mktempdir()
+    end
     set_active_project(
         project === nothing ? nothing :
         project == "" ? nothing :
