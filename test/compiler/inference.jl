@@ -2647,10 +2647,14 @@ end |> only === Int
 # https://github.com/JuliaLang/julia/issues/47089
 import Core: Const
 import Core.Compiler: apply_type_tfunc
-struct Issue47089{A,B} end
+struct Issue47089{A<:Number,B<:Number} end
 let 𝕃 = Core.Compiler.fallback_lattice
     A = Type{<:Integer}
     @test apply_type_tfunc(𝕃, Const(Issue47089), A, A) <: (Type{Issue47089{A,B}} where {A<:Integer, B<:Integer})
+    @test apply_type_tfunc(𝕃, Const(Issue47089), Const(Int), Const(Int), Const(Int)) === Union{}
+    @test apply_type_tfunc(𝕃, Const(Issue47089), Const(String)) === Union{}
+    @test apply_type_tfunc(𝕃, Const(Issue47089), Const(AbstractString)) === Union{}
+    @test apply_type_tfunc(𝕃, Const(Issue47089), Type{Ptr}, Type{Ptr{T}} where T) === Base.rewrap_unionall(Type{Issue47089.body.body}, Issue47089)
 end
 @test only(Base.return_types(keys, (Dict{String},))) == Base.KeySet{String, T} where T<:(Dict{String})
 @test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{Int}},))) == Vector{<:Array{Int}}
