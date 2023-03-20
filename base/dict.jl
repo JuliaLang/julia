@@ -351,8 +351,8 @@ ht_keyindex2!(h::Dict, key) = ht_keyindex2_shorthash!(h, key)[1]
 
     sz = length(h.keys)
     # Rehash now if necessary
-    if h.ndel >= ((3*sz)>>2) || h.count*3 > sz*2
-        # > 3/4 deleted or > 2/3 full
+    if (h.count + h.ndel)*3 > sz*2
+        # > 2/3 full (including tombstones)
         rehash!(h, h.count > 64000 ? h.count*2 : h.count*4)
     end
     nothing
