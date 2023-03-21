@@ -939,3 +939,11 @@ end
     bt = g(1)
     @test !contains(sprint(Base.show_backtrace, bt), "#unused#")
 end
+
+# issue #49002
+let buf = IOBuffer()
+    Base.show_method_candidates(buf, Base.MethodError(typeof, (17,)), pairs((foo = :bar,)))
+    @test isempty(take!(buf))
+    Base.show_method_candidates(buf, Base.MethodError(isa, ()), pairs((a = 5,)))
+    @test isempty(take!(buf))
+end
