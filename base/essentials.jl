@@ -2,6 +2,8 @@
 
 import Core: CodeInfo, SimpleVector, donotdelete, compilerbarrier, arrayref
 
+const BufferType{T} = Union{Buffer{T}, DynamicBuffer{T}}
+
 const Callable = Union{Function,Type}
 
 const Bottom = Union{}

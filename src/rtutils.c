@@ -783,8 +783,8 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if (vt->name == jl_buffer_typename) {
         n += jl_show_buffer(out, (jl_buffer_t*)v, "Buffer", "([", "])");
     }
-    else if (vt->name == jl_buffer_typename) {
-        n += jl_show_buffer(out, (jl_buffer_t*)v, "Buffer", "([", "])");
+    else if (vt->name == jl_dynbuffer_typename) {
+        n += jl_show_buffer(out, (jl_buffer_t*)v, "DynamicBuffer", "([", "])");
     }
     else if (v == (jl_value_t*)jl_unionall_type) {
         // avoid printing `typeof(Type)` for `UnionAll`.

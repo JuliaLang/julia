@@ -3398,7 +3398,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             indices_ok = false;
         }
         jl_value_t *buf_dt = jl_unwrap_unionall(buf.typ);
-        if (jl_is_buffer_type(buf_dt) && indices_ok) {
+        if (jl_is_buffer_kind_type(buf_dt) && indices_ok) {
             jl_value_t *ety = jl_tparam0(buf_dt);
             if (!jl_has_free_typevars(ety)) {
                 jl_value_t *buf_ex = jl_exprarg(ex, 2);
@@ -3456,7 +3456,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         Value *len = emit_bufferlen(ctx, buf);
         jl_value_t *buf_dt = jl_unwrap_unionall(buf.typ);
-        if (jl_is_buffer_type(buf_dt) && indices_ok) {
+        if ((jl_is_buffer_type(buf_dt) || jl_is_dynbuffer_type(buf_dt)) && indices_ok) {
             jl_value_t *ety = jl_tparam0(buf_dt);
             if (!jl_has_free_typevars(ety)) {
                 emit_typecheck(ctx, val, ety, "bufset");

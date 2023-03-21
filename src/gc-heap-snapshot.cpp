@@ -210,6 +210,11 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
         name = "Buffer";
         self_size = sizeof(jl_buffer_t) + sizeof(void*) * jl_buffer_len(a);
     }
+    else if (jl_is_dynbuffer_type(a)) {
+        node_type = "jl_buffer_t";
+        name = "DynamicBuffer";
+        self_size = sizeof(jl_buffer_t) + sizeof(void*) * jl_buffer_len(a);
+    }
     else if (jl_is_module(a)) {
         node_type = "jl_module_t";
         name = jl_symbol_name_(((_jl_module_t*)a)->name);

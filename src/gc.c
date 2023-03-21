@@ -916,7 +916,7 @@ void jl_gc_force_mark_old(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT
         size_t l = jl_svec_len(v);
         dtsz = l * sizeof(void*) + sizeof(jl_svec_t);
     }
-    else if (dt->name == jl_buffer_typename) {
+    else if (dt->name == jl_buffer_typename || dt->name == jl_dynbuffer_typename) {
         if (jl_buffer_object_size((jl_buffer_t*)v) < GC_MAX_SZCLASS)
             dtsz = GC_MAX_SZCLASS + 1;
     }
@@ -2363,7 +2363,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             gc_mark_objarray(ptls, objary_parent, objary_begin, objary_end, step, nptr);
         }
         // FIXME Buffer GC 
-        else if (vt->name == jl_buffer_typename) {
+        else if (vt->name == jl_buffer_typename || vt->name == jl_dynbuffer_typename) {
             jl_buffer_t *b = (jl_buffer_t *)new_obj;
             jl_value_t *eltype = jl_tparam0(jl_typeof(b));
             jl_eltype_layout_t lyt = jl_eltype_layout(eltype);

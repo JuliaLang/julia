@@ -41,13 +41,24 @@ function deepcopy_internal(x::SimpleVector, stackdict::IdDict)
     return y
 end
 
-function deepcopy_internal(x::Buffer, stackdict::IdDict)
+function deepcopy_internal(x::BufferType, stackdict::IdDict)
     if haskey(stackdict, x)
-        return stackdict[x]
+        return stackdict[x]::typeof(x)
+    elseif isbitstype(T)
+        return (stackdict[x]=copy(x))
     end
-    y = Core.sbuf(Any[deepcopy_internal(x[i], stackdict) for i = 1:length(x)]...)
-    stackdict[x] = y
-    return y
+    dest = similar(x)
+    stackdict[x] = dest
+    for i = 1:length(x)
+        if ccall(:jl_buffer_isassigned, Cint, (Any, Csize_t), x, i-1) != 0
+            xi = ccall(:jl_bufref, Any, (Any, Csize_t), x, i-1)
+            if !isbits(xi)
+                xi = deepcopy_internal(xi, stackdict)::typeof(xi)
+            end
+            ccall(:jl_bufset, Cvoid, (Any, Any, Csize_t), dest, xi, i-1)
+        end
+    end
+    return dest
 end
 
 function deepcopy_internal(x::String, stackdict::IdDict)

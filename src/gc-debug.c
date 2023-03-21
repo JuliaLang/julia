@@ -1257,7 +1257,7 @@ int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
         start = (char*)jl_svec_data(obj);
         len = jl_svec_len(obj);
     }
-    else if (vt->name == jl_buffer_typename) {
+    else if (vt->name == jl_buffer_typename || vt->name == jl_dynbuffer_typename) {
         jl_buffer_t *b = (jl_buffer_t*)obj;
         start = (char*)jl_buffer_data(b);
         len = jl_buffer_len(b);

@@ -89,7 +89,7 @@ end
 # while reducing to plain next() for arbitrary iterables.
 indexed_iterate(t::Tuple, i::Int, state=1) = (@inline; (getfield(t, i), i+1))
 indexed_iterate(a::Array, i::Int, state=1) = (@inline; (a[i], i+1))
-indexed_iterate(b::Buffer, i::Int, state=1) = (@inline; (b[i], i+1))
+indexed_iterate(b::BufferType, i::Int, state=1) = (@inline; (b[i], i+1))
 function indexed_iterate(I, i)
     x = iterate(I)
     x === nothing && throw(BoundsError(I, i))

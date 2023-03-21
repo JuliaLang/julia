@@ -403,7 +403,7 @@ static size_t dereferenceable_size(jl_value_t *jt)
         // Array has at least this much data
         return sizeof(jl_array_t);
     }
-    else if (jl_is_buffer_type(jt)) {
+    else if (jl_is_buffer_kind_type(jt)) {
         return sizeof(jl_buffer_t);
     }
     else if (jl_is_datatype(jt) && jl_struct_try_layout((jl_datatype_t*)jt)) {
@@ -416,7 +416,7 @@ static size_t dereferenceable_size(jl_value_t *jt)
 static unsigned julia_alignment(jl_value_t *jt)
 {
     // TODO BUffer: is it safe to assume will also always have this alignment?
-    if (jl_is_array_type(jt) || jl_is_buffer_type(jt)) {
+    if (jl_is_array_type(jt) || jl_is_buffer_kind_type(jt)) {
         // Array always has this alignment
         return JL_SMALL_BYTE_ALIGNMENT;
     }
@@ -2911,7 +2911,7 @@ static Value *emit_array_nd_index(
 // --- buffer ---
 static bool buffertype_constelsize(jl_datatype_t *ty, size_t *elsz)
 {
-    assert(jl_is_buffer_type(ty));
+    assert(jl_is_buffer_kind_type(ty));
     jl_value_t *ety = jl_tparam0(ty);
     if (jl_has_free_typevars(ety))
         return false;
@@ -2933,7 +2933,7 @@ static bool buffertype_constelsize(jl_datatype_t *ty, size_t *elsz)
 
 static intptr_t buffertype_maxsize(jl_value_t *ty)
 {
-    if (!jl_is_buffer_type(ty))
+    if (!jl_is_buffer_kind_type(ty))
         return INTPTR_MAX;
     size_t elsz;
     if (buffertype_constelsize((jl_datatype_t*)ty, &elsz) || elsz == 0)

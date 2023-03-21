@@ -2335,6 +2335,18 @@ void jl_init_types(void) JL_GC_DISABLED
         jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 1, 0)->name->wrapper;
     jl_buffer_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_buffer_type))->name;
     jl_compute_field_offsets((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_buffer_type));
+
+    elvar = tvar("T");
+    suptv = jl_svec2(elvar, jl_box_long(1));
+    tv = jl_svec1(elvar);
+    jl_dynbuffer_type = (jl_unionall_t*)
+        jl_new_datatype(jl_symbol("DynamicBuffer"), core,
+        (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_densearray_type, jl_svec_data(suptv), 2),
+        tv,
+        jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 1, 0)->name->wrapper;
+    jl_dynbuffer_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_dynbuffer_type))->name;
+    jl_compute_field_offsets((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_dynbuffer_type));
+
     jl_buffer_any_type = jl_apply_type1((jl_value_t*)jl_buffer_type, (jl_value_t*)jl_any_type);
 
     tv = jl_svec2(tvar("T"), tvar("N"));
@@ -2822,6 +2834,7 @@ void jl_init_types(void) JL_GC_DISABLED
     ((jl_datatype_t*)jl_array_any_type)->ismutationfree = 0;
     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_buffer_type))->ismutationfree = 0;
     ((jl_datatype_t*)jl_buffer_any_type)->ismutationfree = 0;
+    ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_dynbuffer_type))->ismutationfree = 0;
 
     // override the preferred layout for a couple types
     jl_lineinfonode_type->name->mayinlinealloc = 0; // FIXME: assumed to be a pointer by codegen

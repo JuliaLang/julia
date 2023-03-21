@@ -98,7 +98,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    164
+#define NUM_TAGS    166
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -119,6 +119,8 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_simplevector_type);
         INSERT_TAG(jl_buffer_type);
         INSERT_TAG(jl_buffer_typename);
+        INSERT_TAG(jl_dynbuffer_type);
+        INSERT_TAG(jl_dynbuffer_typename);
         INSERT_TAG(jl_array_type);
         INSERT_TAG(jl_expr_type);
         INSERT_TAG(jl_binding_type);
@@ -1226,7 +1228,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 write_pointerfield(s, jl_svecref(v, ii));
             }
         }
-        else if (jl_is_buffer(v)) {
+        else if (jl_is_buffer_kind(v)) {
             ios_write(s->s, (char*)v, sizeof(void*));
             size_t len = jl_buffer_len(v);
             assert(len > 0 || len == 0);

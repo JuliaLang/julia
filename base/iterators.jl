@@ -278,7 +278,7 @@ pairs(::IndexLinear,    A::AbstractArray) = Pairs(A, LinearIndices(A))
 pairs(tuple::Tuple) = Pairs{Int}(tuple, keys(tuple))
 pairs(nt::NamedTuple) = Pairs{Symbol}(nt, keys(nt))
 pairs(v::Core.SimpleVector) = Pairs(v, LinearIndices(v))
-pairs(b::Buffer) = Pairs(b, LinearIndices(v))
+pairs(b::Union{Buffer, DynamicBuffer}) = Pairs(b, LinearIndices(v))
 pairs(A::AbstractVector) = pairs(IndexLinear(), A)
 # pairs(v::Pairs) = v # listed for reference, but already defined from being an AbstractDict
 

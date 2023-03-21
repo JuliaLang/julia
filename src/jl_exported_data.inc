@@ -94,8 +94,10 @@
     XX(jl_signed_type) \
     XX(jl_simplevector_type) \
     XX(jl_buffer_type) \
-    XX(jl_buffer_any_type) \
     XX(jl_buffer_typename) \
+    XX(jl_buffer_any_type) \
+    XX(jl_dynbuffer_type) \
+    XX(jl_dynbuffer_typename) \
     XX(jl_slotnumber_type) \
     XX(jl_ssavalue_type) \
     XX(jl_stackovf_exception) \

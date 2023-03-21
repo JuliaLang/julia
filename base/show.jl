@@ -1280,7 +1280,7 @@ function show(io::IO, tinf::Core.Compiler.Timings.Timing)
     print(io, "Core.Compiler.Timings.Timing(", tinf.mi_info, ") with ", length(tinf.children), " children")
 end
 
-function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector,Buffer}, op,
+function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector,BufferType}, op,
      delim, cl, delim_one, i1=first(LinearIndices(itr)), l=last(LinearIndices(itr)))
     print(io, op)
     if !show_circular(io, itr)
@@ -1345,7 +1345,7 @@ end
 
 show(io::IO, t::Tuple) = show_delim_array(io, t, '(', ',', ')', true)
 show(io::IO, v::SimpleVector) = show_delim_array(io, v, "svec(", ',', ')', false)
-function show(io::IO, b::Buffer)
+function show(io::IO, b::BufferType)
     show_delim_array(io, b, "$(nameof(typeof(b)))([", ',', "])", false)
 end
 
@@ -2672,7 +2672,7 @@ function dump(io::IOContext, x::SimpleVector, n::Int, indent)
     end
     nothing
 end
-function dump(io::IOContext, x::Buffer, n::Int, indent)
+function dump(io::IOContext, x::BufferType, n::Int, indent)
     tname = nameof(typeof(x))
     if isempty(x)
         print(io, "empty $(tname)")

@@ -1904,7 +1904,8 @@ end
 # Buffer
 @nospecs function bufref_tfunc(𝕃::AbstractLattice, boundscheck, buf, idx)
     hasintersect(widenconst(boundscheck), Bool) || return false
-    hasintersect(widenconst(buf), Buffer) || return false
+    widebuf = widenconst(buf)
+    (hasintersect(widebuf, Buffer) || hasintersect(widebuf, DynamicBuffer)) || return false
     hasintersect(widenconst(idx), Int) || return false
     return buffer_elmtype(buf)
 end
@@ -1912,7 +1913,8 @@ add_tfunc(Core.bufref, 3, INT_INF, bufref_tfunc, 20)
 
 @nospecs function bufset_tfunc(𝕃::AbstractLattice, boundscheck, buf, item, idx)
     hasintersect(widenconst(boundscheck), Bool) || return Bottom
-    hasintersect(widenconst(buf), Buffer) || return Bottom
+    widebuf = widenconst(buf)
+    (hasintersect(widebuf, Buffer) || hasintersect(widebuf, DynamicBuffer)) || return Bottom
     hasintersect(widenconst(idx), Int) || return Bottom
     hasintersect(widenconst(item), buffer_elmtype(buf)) || return Bottom
     return buf
@@ -1923,7 +1925,7 @@ add_tfunc(Core.Intrinsics.bufferlen, 1, 1, @nospecs((𝕃::AbstractLattice, x)->
 
 function buffer_elmtype(@nospecialize buf)
     b = widenconst(buf)
-    if !has_free_typevars(b) && b <: Buffer
+    if !has_free_typevars(b) && (b <: Buffer || b <: DynamicBuffer)
         b0 = b
         if isa(b, UnionAll)
             b = unwrap_unionall(b0)
@@ -1938,7 +1940,7 @@ function buffer_elmtype(@nospecialize buf)
 end
 
 @nospecs function buffer_builtin_common_typecheck(boundscheck, buftype, idxty)
-    (boundscheck ⊑ Bool && buftype ⊑ Buffer && idxty ⊑ Int)
+    (boundscheck ⊑ Bool && (buftype ⊑ Buffer || buftype ⊑ DynamicBuffer) && idxty ⊑ Int)
 end
 @nospecs function bufferset_typecheck(buftype, elmtype)
     # Check that we can determine the element type
@@ -1955,7 +1957,7 @@ function buffer_builtin_common_nothrow(argtypes::Vector{Any}, idxpos::Int)
     length(argtypes) >= 4 || return false
     boundscheck = argtypes[1]
     buftype = argtypes[2]
-    (boundscheck ⊑ Bool && buftype ⊑ Buffer) || return false
+    (boundscheck ⊑ Bool && (buftype ⊑ Buffer || buftype ⊑ DynamicBuffer)) || return false
     argtypes[idxpos] ⊑ Int || return false
     # If we could potentially throw undef ref errors, bail out now.
     buftype = widenconst(buftype)
@@ -2124,7 +2126,7 @@ end
         na == 2 || return false
         return arraysize_nothrow(argtypes[1], argtypes[2])
     elseif f === Core.bufferlen
-        (na == 1 && (argtypes[1] ⊑ Buffer)) || return false
+        (na == 1 && ((argtypes[1] ⊑ Buffer) || (argtypes[1] ⊑ DynamicBuffer))) || return false
     elseif f === Core._typevar
         na == 3 || return false
         return typevar_nothrow(𝕃, argtypes[1], argtypes[2], argtypes[3])
@@ -2208,7 +2210,6 @@ const _EFFECT_FREE_BUILTINS = [
 const _CONSISTENT_BUILTINS = Any[
     tuple, # Tuple is immutable, thus tuples of egal arguments are egal
     svec,  # SimpleVector is immutable, thus svecs of egal arguments are egal
-    Intrinsics.bufferlen, # Buffer is mutable but it's length is fixed
     ===,
     typeof,
     nfields,
@@ -2259,6 +2260,7 @@ const _ARGMEM_BUILTINS = Any[
 const _INCONSISTENT_INTRINSICS = Any[
     Intrinsics.pointerref,      # this one is volatile
     Intrinsics.arraylen,        # this one is volatile
+    #Intrinsics.bufferlen,       # Buffer is mutable but it's length is fixed, but DynamicBuffer does not have fixed length.
     Intrinsics.have_fma,        # this one depends on the runtime environment
     Intrinsics.cglobal,         # cglobal lookup answer changes at runtime
     # ... and list fastmath intrinsics:
@@ -2367,6 +2369,10 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argin
 
     if f === isdefined
         return isdefined_effects(𝕃, argtypes)
+    elseif f === bufferlen
+        length(argtypes) == 1 || return EFFECTS_THROWS
+        consistent = isa(argtypes[1], DynamicBuffer) ? ALWAYS_FALSE : ALWAYS_TRUE
+        return Effects(EFFECTS_TOTAL; consistent)
     elseif f === getglobal
         return getglobal_effects(argtypes, rt)
     elseif f === Core.get_binding_type
@@ -2507,7 +2513,7 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Vector{Any})
         return argtypes[1] ⊑ Array
     end
     if f === Intrinsics.bufferlen
-        return argtypes[1] ⊑ Buffer
+        return (argtypes[1] ⊑ Buffer || argtypes[1] ⊑ DynamicBuffer)
     end
     if f === Intrinsics.bitcast
         ty, isexact, isconcrete = instanceof_tfunc(argtypes[1])

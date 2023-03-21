@@ -9,7 +9,7 @@ module Serialization
 
 import Base: GMP, Bottom, unsafe_convert, uncompressed_ast
 import Core: svec, SimpleVector
-import Core: Buffer
+import Core: Buffer, DynamicBuffer
 using Base: unaliascopy, unwrap_unionall, require_one_based_indexing, ntupleany
 using Core.IR
 
@@ -110,6 +110,7 @@ const EMPTYTUPLE_TAG = sertag(())
 const TUPLE_TAG = sertag(Tuple)
 const SIMPLEVECTOR_TAG = sertag(SimpleVector)
 const BUFFER_TAG = sertag(Buffer)
+const DYNBUFFER_TAG = sertag(DynamicBuffer)
 const SYMBOL_TAG = sertag(Symbol)
 const INT8_TAG = sertag(Int8)
 const ARRAY_TAG = findfirst(==(Array), TAGS)%Int32
@@ -216,8 +217,8 @@ function serialize(s::AbstractSerializer, v::SimpleVector)
     end
 end
 
-function serialize(s::AbstractSerializer, b::Buffer)
-    writetag(s.io, BUFFER_TAG)
+function serialize(s::AbstractSerializer, b::Union{Buffer, DynamicBuffer})
+    writetag(s.io, isa(b, Buffer) ? BUFFER_TAG : DYNBUFFER_TAG)
     write(s.io, Int32(length(b)))
     write(s,io, b)
 end
@@ -909,7 +910,9 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
     elseif b == SIMPLEVECTOR_TAG
         return deserialize_svec(s)
     elseif b == BUFFER_TAG
-        return deserialize_sbuf(s)
+        return deserialize_buffer(s)
+    elseif b == DYNBUFFER_TAG
+        return deserialize_dynamic_buffer(s)
     elseif b == GLOBALREF_TAG
         return GlobalRef(deserialize(s)::Module, deserialize(s)::Symbol)
     elseif b == FULL_GLOBALREF_TAG
@@ -987,7 +990,13 @@ function deserialize_svec(s::AbstractSerializer)
     svec(Any[ deserialize(s) for i=1:n ]...)
 end
 
-function deserialize_sbuf(s::AbstractSerializer)
+function deserialize_dynamic_buffer(s::AbstractSerializer)
+    b = DynamicBuffer(Int(read(s.io, Int32)))
+    read!(s, b)
+    return b
+end
+
+function deserialize_buffer(s::AbstractSerializer)
     b = Buffer(Int(read(s.io, Int32)))
     read!(s, b)
     return b

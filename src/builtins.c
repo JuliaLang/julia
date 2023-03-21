@@ -499,7 +499,7 @@ JL_CALLABLE(jl_f_sizeof)
         return jl_box_long(strlen(jl_symbol_name((jl_sym_t*)x)));
     if (jl_is_svec(x))
         return jl_box_long((1+jl_svec_len(x))*sizeof(void*));
-    if (jl_is_buffer(x))
+    if (jl_is_buffer_kind(x))
         return jl_box_long((jl_buffer_len(x) * jl_eltype_layout(jl_buffer_eltype(x)).elsize));
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
     assert(jl_is_datatype(dt));
@@ -1501,7 +1501,7 @@ JL_CALLABLE(jl_f_arrayset)
 JL_CALLABLE(jl_f_bufferlen)
 {
     JL_NARGS(bufferlen, 1, 1);
-    if (!jl_is_buffer(args[0])) {
+    if (!jl_is_buffer_kind(args[0])) {
         jl_type_error("bufref", (jl_value_t*)jl_buffer_type, args[0]);
     }
     return jl_box_long(jl_buffer_len(args[0]));
@@ -1511,7 +1511,7 @@ JL_CALLABLE(jl_f_bufref)
 {
     JL_NARGS(bufref, 3, 3);
     JL_TYPECHK(bufref, bool, args[0]);
-    if (!jl_is_buffer(args[1])) {
+    if (!jl_is_buffer_kind(args[1])) {
         jl_type_error("bufref", (jl_value_t*)jl_buffer_type, args[1]);
     }
     jl_buffer_t *sb = (jl_buffer_t*)args[1];
@@ -2070,6 +2070,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("TypeofVararg", (jl_value_t*)jl_vararg_type);
     add_builtin("SimpleVector", (jl_value_t*)jl_simplevector_type);
     add_builtin("Buffer", (jl_value_t*)jl_buffer_type);
+    add_builtin("DynamicBuffer", (jl_value_t*)jl_dynbuffer_type);
 
     add_builtin("Module", (jl_value_t*)jl_module_type);
     add_builtin("MethodTable", (jl_value_t*)jl_methtable_type);

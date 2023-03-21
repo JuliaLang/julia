@@ -722,6 +722,8 @@ extern JL_DLLIMPORT jl_datatype_t *jl_method_match_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_simplevector_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_unionall_t *jl_buffer_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_typename_t *jl_buffer_typename JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_unionall_t *jl_dynbuffer_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_typename_t *jl_dynbuffer_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_typename_t *jl_tuple_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_typename_t *jl_vecelement_typename JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_anytuple_type JL_GLOBALLY_ROOTED;
@@ -1346,10 +1348,18 @@ STATIC_INLINE int jl_is_array(void *v) JL_NOTSAFEPOINT
     return jl_is_array_type(t);
 }
 
-STATIC_INLINE int jl_is_resizeable_buffer(void *v) JL_NOTSAFEPOINT
+STATIC_INLINE int jl_is_buffer_kind_type(void *t) JL_NOTSAFEPOINT
+{
+    return (jl_is_datatype(t) && (
+        ((jl_datatype_t*)(t))->name == jl_buffer_typename ||
+        ((jl_datatype_t*)(t))->name == jl_dynbuffer_typename
+    ));
+}
+
+STATIC_INLINE int jl_is_buffer_kind(void *v) JL_NOTSAFEPOINT
 {
     jl_value_t *t = jl_typeof(v);
-    return (((jl_datatype_t*)(t))->name != jl_buffer_typename);
+    return jl_is_buffer_kind_type(t);
 }
 
 STATIC_INLINE int jl_is_buffer_type(void *t) JL_NOTSAFEPOINT
@@ -1361,6 +1371,17 @@ STATIC_INLINE int jl_is_buffer(void *v) JL_NOTSAFEPOINT
 {
     jl_value_t *t = jl_typeof(v);
     return jl_is_buffer_type(t);
+}
+
+STATIC_INLINE int jl_is_dynbuffer_type(void *t) JL_NOTSAFEPOINT
+{
+    return (jl_is_datatype(t) && ((jl_datatype_t*)(t))->name == jl_dynbuffer_typename);
+}
+
+STATIC_INLINE int jl_is_dynbuffer(void *v) JL_NOTSAFEPOINT
+{
+    jl_value_t *t = jl_typeof(v);
+    return jl_is_dynbuffer_type(t);
 }
 
 STATIC_INLINE int jl_is_opaque_closure_type(void *t) JL_NOTSAFEPOINT

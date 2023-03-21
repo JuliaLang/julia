@@ -279,7 +279,7 @@ static int NOINLINE resize_buffer(jl_buffer_t *buf, jl_eltype_layout_t lyt, size
 STATIC_INLINE void jl_buffer_grow_at_end(jl_buffer_t *buf, size_t idx,
                                         size_t inc, size_t n)
 {
-    if (__unlikely(jl_is_resizeable_buffer(buf)))
+    if (__unlikely(!jl_is_dynbuffer(buf)))
         jl_error("attempt to grow buffer of a fixed length");
     size_t oldlen = jl_buffer_len(buf);
     size_t newlen = oldlen + inc;
@@ -335,7 +335,7 @@ JL_DLLEXPORT void jl_buffer_grow_end(jl_buffer_t *buf, size_t inc)
 
 STATIC_INLINE void jl_buffer_del_at_end(jl_buffer_t *buf, size_t idx, size_t dec, size_t n)
 {
-    if (__unlikely(jl_is_resizeable_buffer(buf)))
+    if (__unlikely(!jl_is_dynbuffer(buf)))
         jl_error("attempt to delete buffer of a fixed length");
     // no error checking
     // assume inbounds, assume unshared
@@ -367,4 +367,14 @@ JL_DLLEXPORT void jl_buffer_del_at(jl_buffer_t *buf, size_t idx, size_t n)
     if (__unlikely(last > len))
         jl_bounds_error_int((jl_value_t*)buf, last);
     jl_buffer_del_at_end(buf, idx, n, len);
+}
+
+JL_DLLEXPORT void jl_buffer_del_end(jl_buffer_t *buf, size_t n)
+{
+    size_t len = jl_buffer_len(buf);
+    if (__unlikely(len < n))
+        jl_bounds_error_int((jl_value_t*)buf, 0);
+    if (n == 0)
+        return;
+    jl_buffer_del_at_end(buf, len - n, n, len);
 }
