@@ -1165,7 +1165,8 @@ end
 
 function count_specializations(method::Method)
     specs = method.specializations
-    n = count(i -> isassigned(specs, i), 1:length(specs))
+    specs isa Core.MethodInstance && return 1
+    n = count(!isnothing, specs::Core.SimpleVector)
     return n
 end
 
@@ -1180,7 +1181,7 @@ copy_dims_pair(out) = ()
 copy_dims_pair(out, dim::Int, tail...) =  copy_dims_pair(out => dim, tail...)
 copy_dims_pair(out, dim::Colon, tail...) = copy_dims_pair(out => dim, tail...)
 @test Base.return_types(copy_dims_pair, (Tuple{}, Vararg{Union{Int,Colon}})) == Any[Tuple{}, Tuple{}, Tuple{}]
-@test all(m -> 5 < count_specializations(m) < 15, methods(copy_dims_pair)) # currently about 7
+@test all(m -> 3 < count_specializations(m) < 15, methods(copy_dims_pair)) # currently about 5
 
 # splatting an ::Any should still allow inference to use types of parameters preceding it
 f22364(::Int, ::Any...) = 0

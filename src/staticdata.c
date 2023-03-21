@@ -1945,6 +1945,7 @@ static void jl_root_new_gvars(jl_serializer_state *s, jl_image_t *image, uint32_
 static void jl_compile_extern(jl_method_t *m, void *sysimg_handle) JL_GC_DISABLED
 {
     // install ccallable entry point in JIT
+    assert(m); // makes clang-sa happy
     jl_svec_t *sv = m->ccallable;
     int success = jl_compile_extern_c(NULL, NULL, sysimg_handle, jl_svecref(sv, 0), jl_svecref(sv, 1));
     if (!success)
@@ -2091,12 +2092,17 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
             jl_gc_wb(m, m->source);
         }
     }
-    jl_svec_t *specializations = m->specializations;
-    size_t i, l = jl_svec_len(specializations);
-    for (i = 0; i < l; i++) {
-        jl_value_t *mi = jl_svecref(specializations, i);
-        if (mi != jl_nothing)
-            strip_specializations_((jl_method_instance_t*)mi);
+    jl_value_t *specializations = m->specializations;
+    if (!jl_is_svec(specializations)) {
+        strip_specializations_((jl_method_instance_t*)specializations);
+    }
+    else {
+        size_t i, l = jl_svec_len(specializations);
+        for (i = 0; i < l; i++) {
+            jl_value_t *mi = jl_svecref(specializations, i);
+            if (mi != jl_nothing)
+                strip_specializations_((jl_method_instance_t*)mi);
+        }
     }
     if (m->unspecialized)
         strip_specializations_(m->unspecialized);
