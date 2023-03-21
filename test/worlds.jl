@@ -234,8 +234,7 @@ function method_instance(f, types=Base.default_tt(f))
     inst = nothing
     tt = Base.signature_type(f, types)
     specs = m.specializations
-    if isa(specs, Nothing)
-    elseif isa(specs, Core.SimpleVector)
+    if isa(specs, Core.SimpleVector)
         for i = 1:length(specs)
             mi = specs[i]
             if mi isa Core.MethodInstance
@@ -246,10 +245,9 @@ function method_instance(f, types=Base.default_tt(f))
             end
         end
     else
-        Base.visit(specs) do mi
-            if mi.specTypes === tt
-                inst = mi
-            end
+        mi = specs::Core.MethodInstance
+        if mi.specTypes === tt
+            inst = mi
         end
     end
     return inst

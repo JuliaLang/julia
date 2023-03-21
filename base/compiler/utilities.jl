@@ -286,7 +286,7 @@ callyou (generic function with 1 method)
 julia> callyou(2.0)
 3.0
 
-julia> mi = first(which(callme, (Any,)).specializations)
+julia> mi = which(callme, (Any,)).specializations
 MethodInstance for callme(::Float64)
 
 julia> @eval Core.Compiler for (; sig, caller) in BackedgeIterator(Main.mi.backedges)

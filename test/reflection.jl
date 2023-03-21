@@ -532,7 +532,7 @@ let
     ft = typeof(f18888)
 
     code_typed(f18888, Tuple{}; optimize=false)
-    @test !isempty(m.specializations) # uncached, but creates the specializations entry
+    @test m.specializations !== Core.svec() # uncached, but creates the specializations entry
     mi = Core.Compiler.specialize_method(m, Tuple{ft}, Core.svec())
     interp = Core.Compiler.NativeInterpreter(world)
     @test !Core.Compiler.haskey(Core.Compiler.code_cache(interp), mi)

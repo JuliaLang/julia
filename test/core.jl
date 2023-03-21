@@ -7968,7 +7968,7 @@ vect47476(::Type{T}) where {T} = T
 g47476(::Union{Nothing,Int,Val{T}}...) where {T} = T
 @test_throws UndefVarError(:T) g47476(nothing, 1, nothing, 2, nothing, 3, nothing, 4, nothing, 5)
 @test g47476(nothing, 1, nothing, 2, nothing, 3, nothing, 4, nothing, 5, Val(6)) === 6
-let spec = only(methods(g47476)).specializations
+let spec = only(methods(g47476)).specializations::Core.SimpleVector
     @test !isempty(spec)
     @test any(mi -> mi !== nothing && Base.isvatuple(mi.specTypes), spec)
     @test all(mi -> mi === nothing || !Base.has_free_typevars(mi.specTypes), spec)

@@ -616,8 +616,7 @@ let
         f42078(a)
     end
     let # make sure to discard the inferred source
-        specs = collect(only(methods(f42078)).specializations)
-        mi = specs[findfirst(!isnothing, specs)]::Core.MethodInstance
+        mi = only(methods(f42078)).specializations::Core.MethodInstance
         codeinf = getcache(mi)::Core.CodeInstance
         @atomic codeinf.inferred = nothing
     end

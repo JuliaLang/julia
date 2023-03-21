@@ -2597,7 +2597,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_ulong_type,
                             jl_ulong_type,
                             jl_type_type,
-                            jl_simplevector_type,
+                            jl_any_type, // union(jl_simplevector_type, jl_method_instance_type),
                             jl_array_type,
                             jl_string_type,
                             jl_any_type,
