@@ -113,10 +113,6 @@ function Base.position(ps::ParseState, args...)
     position(ps.stream, args...)
 end
 
-function next_position(ps::ParseState, args...)
-    next_position(ps.stream, args...)
-end
-
 function emit(ps::ParseState, args...; kws...)
     emit(ps.stream, args...; kws...)
 end
@@ -1230,11 +1226,10 @@ function parse_unary(ps::ParseState)
         space_before_paren = preceding_whitespace(t2)
         if space_before_paren
             # Setup possible whitespace error between operator and (
-            ws_node_mark = position(ps)
-            ws_mark = next_position(ps)
+            ws_mark = position(ps)
             bump_trivia(ps)
-            ws_error_pos = emit(ps, ws_node_mark, K"TOMBSTONE")
-            ws_mark_end = next_position(ps)
+            ws_error_pos = emit(ps, ws_mark, K"TOMBSTONE")
+            ws_mark_end = position(ps)
         end
 
         mark_before_paren = position(ps)
@@ -1617,7 +1612,8 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             k = peek(ps)
             if k == K"("
                 if is_macrocall
-                    bump_invisible(ps, K"error")
+                    # @M.(x)  ==> (macrocall (dotcall @M (error-t) x))
+                    bump_invisible(ps, K"error", TRIVIA_FLAG)
                     emit_diagnostic(ps, mark,
                                     error="dot call syntax not supported for macros")
                 end
@@ -1662,7 +1658,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 end
                 parse_macro_name(ps)
                 macro_name_position = position(ps)
-                macro_atname_range = (m, next_position(ps))
+                macro_atname_range = (m, position(ps))
                 emit(ps, m, K"quote")
                 emit(ps, mark, K".")
             elseif k == K"'"
@@ -1857,7 +1853,6 @@ function parse_resword(ps::ParseState)
     elseif word in KSet"global local"
         # global x   ==>  (global x)
         # local x    ==>  (local x)
-        # global x,y ==>  (global x y)
         bump(ps, TRIVIA_FLAG)
         const_mark = nothing
         if peek(ps) == K"const"
@@ -2080,16 +2075,17 @@ function parse_global_local_const_vars(ps)
     mark = position(ps)
     n_commas = parse_comma(ps, false)
     t = peek_token(ps)
-    assign_prec = is_prec_assignment(t)
-    if n_commas >= 1 && assign_prec
-        # const x,y = 1,2  ==>  (const (= (tuple x y) (tuple 1 2)))
-        emit(ps, mark, K"tuple")
-    end
-    if assign_prec
+    if is_prec_assignment(t)
+        if n_commas >= 1
+            # const x,y = 1,2  ==>  (const (= (tuple x y) (tuple 1 2)))
+            emit(ps, mark, K"tuple")
+        end
         # const x = 1   ==>  (const (= x 1))
         # global x ~ 1  ==>  (global (call-i x ~ 1))
         # global x += 1 ==>  (global (+= x 1))
         parse_assignment_with_initial_ex(ps, mark, parse_comma)
+    else
+        # global x,y   ==>  (global x y)
     end
     return kind(t) == K"=" && !is_dotted(t)
 end
@@ -2106,7 +2102,7 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
         kb = peek_behind(ps).orig_kind
         if is_initial_reserved_word(ps, kb)
             # macro while(ex) end  ==> (macro (call (error while) ex) (block))
-            emit(ps, mark, K"error", error="Invalid macro name")
+            emit(ps, mark, K"error", error="invalid macro name")
         else
             # macro f()     end  ==>  (macro (call f) (block))
             # macro (:)(ex) end  ==>  (macro (call (parens :) ex) (block))
@@ -2228,7 +2224,6 @@ function parse_try(ps)
     out_kind = K"try"
     mark = position(ps)
     bump(ps, TRIVIA_FLAG)
-    diagnostic_mark = position(ps)
     parse_block(ps)
     has_catch = false
     has_else = false
@@ -2278,8 +2273,8 @@ function parse_try(ps)
         out_kind = K"try_finally_catch"
         m = position(ps)
         parse_catch(ps)
-        emit_diagnostic(ps, m, position(ps),
-                        warning="`catch` after `finally` will execute out of order")
+        emit_diagnostic(ps, m,
+            warning="`catch` after `finally` will execute out of order")
     end
     missing_recovery = !has_catch && !has_finally
     if missing_recovery
@@ -2289,7 +2284,7 @@ function parse_try(ps)
     bump_closing_token(ps, K"end")
     emit(ps, mark, out_kind, flags)
     if missing_recovery
-        emit_diagnostic(ps, diagnostic_mark, error="try without catch or finally")
+        emit_diagnostic(ps, mark, error="try without catch or finally")
     end
 end
 
@@ -2359,11 +2354,9 @@ function fix_macro_name_kind!(ps::ParseState, macro_name_position, name_kind=not
     if isnothing(name_kind)
         name_kind = (k == K"Identifier") ? K"MacroName" : K"error"
         if name_kind == K"error"
-            # Hack to handle bad but unusual syntax like `@A.$x a`
-            ri = macro_name_position.range_index
-            startpos = ParseStreamPosition(ps.stream.ranges[ri].first_token, ri)
-            # This isn't quite accurate
-            emit_diagnostic(ps, startpos, macro_name_position, error="Invalid macro name")
+            # TODO: This isn't quite accurate
+            emit_diagnostic(ps, macro_name_position, macro_name_position,
+                            error="invalid macro name")
         end
     end
     reset_node!(ps, macro_name_position, kind=name_kind)
@@ -2383,10 +2376,11 @@ function parse_macro_name(ps::ParseState)
     k = peek(ps)
     parse_atom(ps, false)
     if k == K"("
-        emit_diagnostic(ps, mark, warning="parenthesizing macro names is unnecessary")
+        emit_diagnostic(ps, mark,
+            warning="parenthesizing macro names is unnecessary")
     elseif !(peek_behind(ps).kind in KSet"Identifier var")
         # @[x] y z  ==>  (macrocall (error (vect x)) y z)
-        emit(ps, mark, K"error", error="Invalid macro name")
+        emit(ps, mark, K"error", error="invalid macro name")
     end
 end
 
