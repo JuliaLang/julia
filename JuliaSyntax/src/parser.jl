@@ -2335,18 +2335,10 @@ function fix_macro_name_kind!(ps::ParseState, macro_name_position, name_kind=not
     if k == K"var"
         macro_name_position = first_child_position(ps, macro_name_position)
         k = peek_behind(ps, macro_name_position).kind
-    elseif k == K")"
-        # @(A) x =>  (macrocall @A x)
-        # TODO: Clean this up when K"parens" is implemented
-        while true
-            macro_name_position = ParseStreamPosition(macro_name_position.token_index-1,
-                                                      macro_name_position.range_index-1)
-            b = peek_behind(ps, macro_name_position)
-            k = b.kind
-            if !has_flags(b.flags, TRIVIA_FLAG)
-                break
-            end
-        end
+    elseif k == K"parens"
+        # @(A) x  ==>  (macrocall (parens @A) x)
+        macro_name_position = first_child_position(ps, macro_name_position)
+        k = peek_behind(ps, macro_name_position).kind
     elseif k == K"error"
         # Error already reported in parse_macro_name
         return
@@ -2373,12 +2365,12 @@ function parse_macro_name(ps::ParseState)
     # @var"#" x   ==>  (macrocall (var #) @$ x)
     bump_disallowed_space(ps)
     mark = position(ps)
-    k = peek(ps)
     parse_atom(ps, false)
-    if k == K"("
+    kb = peek_behind(ps, position(ps)).kind
+    if kb == K"parens"
         emit_diagnostic(ps, mark,
             warning="parenthesizing macro names is unnecessary")
-    elseif !(peek_behind(ps).kind in KSet"Identifier var")
+    elseif !(kb in KSet"Identifier var")
         # @[x] y z  ==>  (macrocall (error (vect x)) y z)
         emit(ps, mark, K"error", error="invalid macro name")
     end
