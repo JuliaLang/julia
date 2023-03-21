@@ -2562,8 +2562,8 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     // Make sure we don't run any Julia code concurrently after this point
     // since it will invalidate our serialization preparations
     jl_gc_enable_finalizers(ct, 0);
-    assert(ct->reentrant_inference == 0);
-    ct->reentrant_inference = (uint16_t)-1;
+    assert((ct->reentrant_timing & 0b1110) == 0);
+    ct->reentrant_timing |= 0b1000;
     if (worklist) {
         jl_prepare_serialization_data(mod_array, newly_inferred, jl_worklist_key(worklist),
                                       &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
@@ -2584,7 +2584,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     // make sure we don't run any Julia code concurrently before this point
     // Re-enable running julia code for postoutput hooks, atexit, etc.
     jl_gc_enable_finalizers(ct, 1);
-    ct->reentrant_inference = 0;
+    ct->reentrant_timing &= ~0b1000u;
     jl_precompile_toplevel_module = NULL;
 
     if (worklist) {

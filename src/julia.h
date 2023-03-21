@@ -1919,10 +1919,14 @@ typedef struct _jl_task_t {
     jl_value_t *result;
     jl_value_t *logstate;
     jl_function_t *start;
+    // 4 byte padding on 32-bit systems
+    // uint32_t padding0;
     uint64_t rngState[4];
     _Atomic(uint8_t) _state;
     uint8_t sticky; // record whether this Task can be migrated to a new thread
     _Atomic(uint8_t) _isexception; // set if `result` is an exception to throw or that we exited with
+    // 1 byte padding
+    // uint8_t padding1;
     // multiqueue priority
     uint16_t priority;
 
@@ -1931,6 +1935,14 @@ typedef struct _jl_task_t {
     _Atomic(int16_t) tid;
     // threadpool id
     int8_t threadpoolid;
+    // Reentrancy bits
+    // Bit 0: 1 if we are currently running inference/codegen
+    // Bit 1-2: 0-3 counter of how many times we've reentered inference
+    // Bit 3: 1 if we are writing the image and inference is illegal
+    uint8_t reentrant_timing;
+    // 2 bytes of padding on 32-bit, 6 bytes on 64-bit
+    // uint16_t padding2_32;
+    // uint48_t padding2_64;
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
     size_t world_age;
@@ -1944,9 +1956,6 @@ typedef struct _jl_task_t {
     jl_ucontext_t ctx;
     void *stkbuf; // malloc'd memory (either copybuf or stack)
     size_t bufsz; // actual sizeof stkbuf
-    uint64_t inference_start_time; // time when inference started
-    uint16_t reentrant_inference; // How many times we've reentered inference
-    uint16_t reentrant_timing; // How many times we've reentered timing
     unsigned int copy_stack:31; // sizeof stack for copybuf
     unsigned int started:1;
 } jl_task_t;
