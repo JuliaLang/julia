@@ -32,6 +32,7 @@ end
 
 function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
                   eq_to_kw=false, map_kw_in_params=false)
+    nodekind = kind(node)
     if !haschildren(node)
         val = node.val
         if val isa Union{Int128,UInt128,BigInt}
@@ -44,15 +45,21 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
                       val isa UInt128 ? Symbol("@uint128_str") :
                       Symbol("@big_str")
             return Expr(:macrocall, GlobalRef(Core, macname), nothing, str)
-        elseif kind(node) == K"core_@cmd"
+        elseif nodekind == K"core_@cmd"
             return GlobalRef(Core, Symbol("@cmd"))
-        elseif kind(node) == K"MacroName" && val === Symbol("@.")
+        elseif nodekind == K"MacroName" && val === Symbol("@.")
             return Symbol("@__dot__")
+        elseif is_error(nodekind)
+            # TODO: Get non-token error messages in here as well, somehow?
+            # There's an awkward mismatch between the out-of-tree
+            # `Vector{Diagnostic}` vs Expr(:error) being part of the tree.
+            return Expr(:error,
+                "$(_token_error_descriptions[nodekind]): `$(sourcetext(node))`"
+            )
         else
             return val
         end
     end
-    nodekind = kind(node)
     node_args = children(node)
     if nodekind == K"var"
         @check length(node_args) == 1
