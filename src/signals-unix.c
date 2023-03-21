@@ -27,9 +27,7 @@
 #ifdef __APPLE__ // Darwin's mach ports allow signal-free thread management
 #define HAVE_MACH
 #define HAVE_KEVENT
-#elif defined(__FreeBSD__) // generic bsd
-#define HAVE_ITIMER
-#else // generic linux
+#else // generic Linux or BSD
 #define HAVE_TIMER
 #endif
 
@@ -597,37 +595,6 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
     }
 }
 
-#elif defined(HAVE_ITIMER)
-// BSD-style timers
-#include <string.h>
-#include <sys/time.h>
-struct itimerval timerprof;
-
-JL_DLLEXPORT int jl_profile_start_timer(void)
-{
-    timerprof.it_interval.tv_sec = 0;
-    timerprof.it_interval.tv_usec = 0;
-    timerprof.it_value.tv_sec = nsecprof / GIGA;
-    timerprof.it_value.tv_usec = ((nsecprof % GIGA) + 999) / 1000;
-    // Because SIGUSR1 is multipurpose, set `running` before so that we know that the first SIGUSR1 came from the timer
-    running = 1;
-    if (setitimer(ITIMER_PROF, &timerprof, NULL) == -1) {
-        running = 0;
-        return -3;
-    }
-    return 0;
-}
-
-JL_DLLEXPORT void jl_profile_stop_timer(void)
-{
-    if (running) {
-        memset(&timerprof, 0, sizeof(timerprof));
-        setitimer(ITIMER_PROF, &timerprof, NULL);
-        last_timer_delete_time = jl_hrtime();
-        running = 0;
-    }
-}
-
 #else
 
 #error no profile tools available
@@ -686,8 +653,6 @@ const static int sigwait_sigs[] = {
 #endif
 #if defined(HAVE_TIMER)
     SIGUSR1,
-#elif defined(HAVE_ITIMER)
-    SIGPROF,
 #endif
     0
 };
@@ -805,8 +770,6 @@ static void *signal_listener(void *arg)
 	            info.si_value.sival_ptr == &timerprof))
             profile = 0;
 #endif
-#elif defined(HAVE_ITIMER)
-        profile = (sig == SIGPROF);
 #endif
 #endif
 
@@ -954,8 +917,6 @@ static void *signal_listener(void *arg)
             jl_check_profile_autostop();
 #if defined(HAVE_TIMER)
             timer_settime(timerprof, 0, &itsprof, NULL);
-#elif defined(HAVE_ITIMER)
-            setitimer(ITIMER_PROF, &timerprof, NULL);
 #endif
         }
 #endif
@@ -1089,11 +1050,6 @@ void jl_install_default_signal_handlers(void)
     }
     // need to ensure the following signals are not SIG_IGN, even though they will be blocked
     act_die.sa_flags = SA_SIGINFO | SA_RESTART | SA_RESETHAND;
-#if defined(HAVE_ITIMER)
-    if (sigaction(SIGPROF, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-#endif
 #ifdef SIGINFO
     if (sigaction(SIGINFO, &act_die, NULL) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
