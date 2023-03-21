@@ -46,9 +46,11 @@ Take the number of seconds since unix epoch `1970-01-01T00:00:00` and convert to
 corresponding `DateTime`.
 """
 function unix2datetime(x)
-    rata = UNIXEPOCH + round(Int64, Int64(1000) * x)
+    # Rounding should match `now` below
+    rata = UNIXEPOCH + trunc(Int64, Int64(1000) * x)
     return DateTime(UTM(rata))
 end
+
 """
     datetime2unix(dt::DateTime) -> Float64
 
