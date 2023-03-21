@@ -2884,16 +2884,15 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
             e->vars->limited = 1;
     }
     else if (res != jl_bottom_type) {
-        if (vb.concrete || vb.occurs_inv>1 || vb.intvalued > 1 || u->var->lb != jl_bottom_type || (vb.occurs_inv && vb.occurs_cov)) {
-            restore_env(e, NULL, &se);
-            vb.occurs = vb.occurs_cov = vb.occurs_inv = 0;
+        if (vb.concrete || vb.occurs_inv>1 || (vb.occurs_inv && vb.occurs_cov))
             vb.constraintkind = vb.concrete ? 1 : 2;
-            res = intersect_unionall_(t, u, e, R, param, &vb);
-        }
-        else if (vb.occurs_cov && !var_occurs_invariant(u->body, u->var, 0)) {
-            restore_env(e, save, &se);
-            vb.occurs = vb.occurs_cov = vb.occurs_inv = 0;
+        else if (u->var->lb != jl_bottom_type)
+            vb.constraintkind = 2;
+        else if (vb.occurs_cov && !var_occurs_invariant(u->body, u->var, 0))
             vb.constraintkind = 1;
+        if (vb.constraintkind) {
+            restore_env(e, vb.constraintkind == 1 ? save : NULL, &se);
+            vb.occurs = vb.occurs_cov = vb.occurs_inv = 0;
             res = intersect_unionall_(t, u, e, R, param, &vb);
         }
     }
