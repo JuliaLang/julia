@@ -890,14 +890,14 @@ function validate_tokens(stream::ParseStream)
                 # jl_strtod_c can return "underflow" even for valid cases such
                 # as `5e-324` where the source is an exact representation of
                 # `x`. So only warn when underflowing to zero.
-                underflow0 = code == :underflow && x == 0
+                underflow0 = code === :underflow && x == 0
             else
                 x, code = parse_float_literal(Float32, text, fbyte, nbyte)
-                underflow0 = code == :underflow && x == 0
+                underflow0 = code === :underflow && x == 0
             end
-            if code == :ok
+            if code === :ok
                 # pass
-            elseif code == :overflow
+            elseif code === :overflow
                 emit_diagnostic(stream, fbyte, lbyte,
                                 error="overflow in floating point literal")
                 error_kind = K"ErrorNumericOverflow"

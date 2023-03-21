@@ -60,11 +60,11 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         elseif k == K"Float"
             v, code = parse_float_literal(Float64, source.code, position,
                                           position+span(raw))
-            (code == :ok || code == :underflow) ? v : ErrorVal()
+            (code === :ok || code === :underflow) ? v : ErrorVal()
         elseif k == K"Float32"
             v, code = parse_float_literal(Float32, source.code, position,
                                           position+span(raw))
-            (code == :ok || code == :underflow) ? v : ErrorVal()
+            (code === :ok || code === :underflow) ? v : ErrorVal()
         elseif k in KSet"BinInt OctInt HexInt"
             parse_uint_literal(val_str, k)
         elseif k == K"true"
