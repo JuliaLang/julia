@@ -1259,7 +1259,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
         }
     }
     for (unsigned i = 0; i < threads; ++i) {
-        auto start = &outputs[outputs.size() - outcount * threads * 2 + i];
+        auto start = &outputs[outputs.size() - outcount * threads * 2 + i * outcount];
         auto istr = std::to_string(i);
         if (unopt_out)
             *start++ = (name + "_unopt#" + istr + ".bc").str();
@@ -1274,7 +1274,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
     if (threads == 1) {
         output_timer.startTimer();
         SmallVector<StringRef, 4> names;
-        for (unsigned i = 0; i < outcount; ++i)
+        for (unsigned i = outputs.size() - outcount * 2; i < outputs.size() - outcount; ++i)
             names.push_back(outputs[i]);
         add_output_impl(M, TM, outputs.data() + outputs.size() - outcount, names.data(),
                         unopt_out ? unopt.data() + unopt.size() - 1 : nullptr,
