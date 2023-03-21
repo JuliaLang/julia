@@ -321,6 +321,7 @@ tests = [
         "[@foo x]"     =>  "(vect (macrocall @foo x))"
         "[@foo]"       =>  "(vect (macrocall @foo))"
         "@var\"#\" a"  =>  "(macrocall (var @#) a)"                => Expr(:macrocall, Symbol("@#"), LineNumberNode(1), :a)
+        "@(A) x"       =>  "(macrocall (parens @A) x)"
         "A.@x y"       =>  "(macrocall (. A (quote @x)) y)"
         "A.@var\"#\" a"=>  "(macrocall (. A (quote (var @#))) a)"  => Expr(:macrocall, Expr(:., :A, QuoteNode(Symbol("@#"))), LineNumberNode(1), :a)
         "@+x y"        =>  "(macrocall @+ x y)"
