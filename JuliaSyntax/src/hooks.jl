@@ -288,7 +288,7 @@ function _fl_parse_hook(code, filename, lineno, offset, options)
                 ex = Expr(:toplevel, ex)
             end
             return ex, sizeof(code)
-        elseif options === :statement || options == :atom
+        elseif options === :statement || options === :atom
             ex, pos = Meta.parse(code, offset+1, greedy=options==:statement, raise=false)
             return ex, pos-1
         else
