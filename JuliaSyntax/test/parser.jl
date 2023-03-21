@@ -385,6 +385,7 @@ tests = [
         "A.B.@x"    =>  "(macrocall (. (. A (quote B)) (quote @x)))"
         "@A.B.x"    =>  "(macrocall (. (. A (quote B)) (quote @x)))"
         "A.@B.x"    =>  "(macrocall (. (. A (quote B)) (error-t) (quote @x)))"
+        "@M.(x)"    =>  "(macrocall (dotcall @M (error-t) x))"
         "f.(a,b)"   =>  "(dotcall f a b)"
         "f.(a=1; b=2)" => "(dotcall f (= a 1) (parameters (= b 2)))" =>
             Expr(:., :f, Expr(:tuple, Expr(:parameters, Expr(:kw, :b, 2)), Expr(:kw, :a, 1)))

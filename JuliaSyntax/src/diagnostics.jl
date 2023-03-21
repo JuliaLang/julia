@@ -92,8 +92,8 @@ function show_diagnostics(io::IO, diagnostics::AbstractVector{Diagnostic}, text:
 end
 
 function emit_diagnostic(diagnostics::AbstractVector{Diagnostic},
-                         fbyte::Integer, lbyte::Integer; kws...)
-    push!(diagnostics, Diagnostic(fbyte, lbyte; kws...))
+                         byterange::AbstractUnitRange; kws...)
+    push!(diagnostics, Diagnostic(first(byterange), last(byterange); kws...))
 end
 
 function any_error(diagnostics::AbstractVector{Diagnostic})

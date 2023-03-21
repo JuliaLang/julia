@@ -261,7 +261,7 @@ function unescape_julia_string(io::IO, str::AbstractString,
                 u = m == 4 ? 'u' : 'U'
                 msg = (m == 2) ? "invalid hex escape sequence" :
                                  "invalid unicode escape sequence"
-                emit_diagnostic(diagnostics, escstart, i, error=msg)
+                emit_diagnostic(diagnostics, escstart:i, error=msg)
                 had_error = true
             else
                 if m == 2 # \x escape sequence
@@ -279,7 +279,7 @@ function unescape_julia_string(io::IO, str::AbstractString,
                 i += 1
             end
             if n > 255
-                emit_diagnostic(diagnostics, escstart, i,
+                emit_diagnostic(diagnostics, escstart:i,
                                 error="invalid octal escape sequence")
                 had_error = true
             else
@@ -303,7 +303,7 @@ function unescape_julia_string(io::IO, str::AbstractString,
                 c == '`' ? '`' :
                 nothing
             if isnothing(u)
-                emit_diagnostic(diagnostics, escstart, i,
+                emit_diagnostic(diagnostics, escstart:i,
                                 error="invalid escape sequence")
                 had_error = true
             else
