@@ -1494,6 +1494,7 @@ end
 
 function handle_concrete_result!(cases::Vector{InliningCase}, result::ConcreteResult, @nospecialize(info::CallInfo), state::InliningState)
     case = concrete_result_item(result, info, state)
+    case === nothing && return false
     push!(cases, InliningCase(result.mi.specTypes, case))
     return true
 end
@@ -1505,10 +1506,8 @@ function concrete_result_item(result::ConcreteResult, @nospecialize(info::CallIn
     invokesig::Union{Nothing,Vector{Any}}=nothing)
     if !may_inline_concrete_result(result)
         et = InliningEdgeTracker(state.et, invokesig)
-        case = compileable_specialization(result.mi, result.effects, et, info;
+        return compileable_specialization(result.mi, result.effects, et, info;
             compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
-        @assert case !== nothing "concrete evaluation should never happen for uncompileable callsite"
-        return case
     end
     @assert result.effects === EFFECTS_TOTAL
     return ConstantCase(quoted(result.result))

@@ -1921,3 +1921,22 @@ let res = @test_throws MethodError let
     err = res.value
     @test err.f === convert && err.args === (Union{Bool,Tuple{String,String}}, g48397)
 end
+
+# https://github.com/JuliaLang/julia/issues/49050
+abstract type Issue49050AbsTop{T,N} end
+abstract type Issue49050Abs1{T, N} <: Issue49050AbsTop{T,N} end
+abstract type Issue49050Abs2{T} <: Issue49050Abs1{T,3} end
+struct Issue49050Concrete{T} <: Issue49050Abs2{T}
+    x::T
+end
+issue49074(::Type{Issue49050AbsTop{T,N}}) where {T,N} = Issue49050AbsTop{T,N}
+Base.@assume_effects :foldable issue49074(::Type{C}) where {C<:Issue49050AbsTop} = issue49074(supertype(C))
+let src = code_typed1() do
+        issue49074(Issue49050Concrete)
+    end
+    @test any(isinvoke(:issue49074), src.code)
+end
+let result = @test_throws MethodError issue49074(Issue49050Concrete)
+    @test result.value.f === issue49074
+    @test result.value.args === (Any,)
+end
