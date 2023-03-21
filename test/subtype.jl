@@ -1804,8 +1804,14 @@ end
 #end
 
 # issue #32386
-@test typeintersect(Type{S} where S<:(Vector{Pair{_A,N} where N} where _A),
-                    Type{Vector{T}} where T) == Type{Vector{Pair{_A,N} where N}} where _A
+@testintersect(Type{S} where S<:(Vector{Pair{_A,N} where N} where _A),
+               Type{Vector{T}} where T,
+               Type{Vector{Pair{_A,N} where N}} where _A)
+
+# pr #49049
+@testintersect(Tuple{Type{Pair{T, A} where {T, A<:Array{T}}}, Int, Any},
+               Tuple{Type{F}, Any, Int} where {F<:(Pair{T, A} where {T, A<:Array{T}})},
+               Tuple{Type{Pair{T, A} where {T, A<:(Array{T})}}, Int, Int})
 
 # issue #32488
 struct S32488{S <: Tuple, T, N, L}
@@ -2431,11 +2437,9 @@ abstract type MyAbstract47877{C}; end
 struct MyType47877{A,B} <: MyAbstract47877{A} end
 let A = Tuple{Type{T}, T} where T,
     B = Tuple{Type{MyType47877{W, V} where V<:Union{Base.BitInteger, MyAbstract47877{W}}}, MyAbstract47877{<:Base.BitInteger}} where W
-    C = Tuple{Type{MyType47877{W, V} where V<:Union{MyAbstract47877{W1}, Base.BitInteger}}, MyType47877{W, V} where V<:Union{MyAbstract47877{W1}, Base.BitInteger}} where {W<:Base.BitInteger, W1<:Base.BitInteger}
-    # ensure that merge_env for innervars does not blow up (the large Unions ensure this will take excessive memory if it does)
-    @test typeintersect(A, B) == C # suboptimal, but acceptable
     C = Tuple{Type{MyType47877{W, V} where V<:Union{MyAbstract47877{W}, Base.BitInteger}}, MyType47877{W, V} where V<:Union{MyAbstract47877{W}, Base.BitInteger}} where W<:Base.BitInteger
-    @test typeintersect(B, A) == C
+    # ensure that merge_env for innervars does not blow up (the large Unions ensure this will take excessive memory if it does)
+    @testintersect(A, B, C)
 end
 
 let a = (isodd(i) ? Pair{Char, String} : Pair{String, String} for i in 1:2000)
