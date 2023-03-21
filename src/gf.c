@@ -3712,7 +3712,7 @@ JL_DLLEXPORT void jl_typeinf_timing_end(uint64_t start)
     if (!start)
         return;
     jl_task_t *ct = jl_current_task;
-    ct->reentrant_timing ^= 1;
+    ct->reentrant_timing &= ~1u;
     if (jl_atomic_load_relaxed(&jl_measure_compile_time_enabled)) {
         uint64_t inftime = jl_hrtime() - start;
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, inftime);
