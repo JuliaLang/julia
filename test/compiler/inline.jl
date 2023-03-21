@@ -1936,4 +1936,7 @@ let src = code_typed1() do
     end
     @test any(isinvoke(:issue49074), src.code)
 end
-@test_throws MethodError issue49074(Issue49050Concrete)
+let result = @test_throws MethodError issue49074(Issue49050Concrete)
+    @test result.value.f === issue49074
+    @test result.value.args === (Any,)
+end
