@@ -269,6 +269,24 @@ end
     @test norm(x, 3) ≈ cbrt(5^3  +sqrt(5)^3)
 end
 
+@testset "norm of transpose/adjoint equals norm of parent #32739" begin
+    for t in (transpose, adjoint), elt in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat})
+        # Vector/matrix of scalars
+        for sz in ((2,), (2, 3))
+            A = rand(elt, sz...)
+            Aᵀ = t(A)
+            @test norm(Aᵀ) ≈ norm(Matrix(Aᵀ))
+        end
+
+        # Vector/matrix of vectors/matrices
+        for sz_outer in ((2,), (2, 3)), sz_inner in ((3,), (1, 2))
+            A = [rand(elt, sz_inner...) for _ in CartesianIndices(sz_outer)]
+            Aᵀ = t(A)
+            @test norm(Aᵀ) ≈ norm(Matrix(Matrix.(Aᵀ)))
+        end
+    end
+end
+
 @testset "rotate! and reflect!" begin
     x = rand(ComplexF64, 10)
     y = rand(ComplexF64, 10)
