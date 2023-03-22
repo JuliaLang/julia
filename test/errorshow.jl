@@ -969,4 +969,23 @@ bt_str = sprint(Base.show_backtrace, bt)
 @test occursin("g_collapse_pos(x::Float64, y::Float64, z::Float64)", bt_str)
 @test !occursin("g_collapse_pos(x::Float64)", bt_str)
 
+g_collapse_kw(x; y=2.0) = error()
+bt = try
+    g_collapse_kw(1.0)
+catch
+    catch_backtrace()
 end
+bt_str = sprint(Base.show_backtrace, bt)
+@test occursin("g_collapse_kw(x::Float64; y::Float64)", bt_str)
+@test !occursin("g_collapse_kw(x::Float64)", bt_str)
+
+g_collapse_pos_kw(x, y=1.0; z=2.0) = error()
+bt = try
+    g_collapse_pos_kw(1.0)
+catch
+    catch_backtrace()
+end
+bt_str = sprint(Base.show_backtrace, bt)
+@test occursin("g_collapse_pos_kw(x::Float64, y::Float64; z::Float64)", bt_str)
+@test !occursin("g_collapse_pos_kw(x::Float64, y::Float64)", bt_str)
+@test !occursin("g_collapse_pos_kw(x::Float64)", bt_str)
