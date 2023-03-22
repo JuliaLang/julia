@@ -1444,21 +1444,6 @@ function parse_unary_prefix(ps::ParseState)
     end
 end
 
-# Parse a symbol or interpolation syntax
-function parse_identifier_or_interpolate(ps::ParseState)
-    mark = position(ps)
-    parse_unary_prefix(ps)
-    b = peek_behind(ps)
-    # export (x::T) ==> (export (error (parens (::-i x T))))
-    # export outer  ==> (export outer)
-    # export ($f)   ==> (export ($ f))
-    ok = (b.is_leaf  && (b.kind == K"Identifier" || is_operator(b.kind))) ||
-         (!b.is_leaf && b.kind in KSet"$ var")
-    if !ok
-        emit(ps, mark, K"error", error="Expected identifier")
-    end
-end
-
 # Parses a chain of sufficies at function call precedence, leftmost binding
 # tightest. This handles
 #  * Bracketed calls like a() b[] c{}
@@ -2008,7 +1993,7 @@ function parse_resword(ps::ParseState)
         # export \n a      ==>  (export a)
         # export \$a, \$(a*b) ==> (export (\$ a) (\$ (parens (call-i a * b))))
         bump(ps, TRIVIA_FLAG)
-        parse_comma_separated(ps, parse_atsym)
+        parse_comma_separated(ps, x->parse_atsym(x, false))
         emit(ps, mark, K"export")
     elseif word in KSet"import using"
         parse_imports(ps)
@@ -2098,7 +2083,7 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
     mark = position(ps)
     if !is_function
         # Parse macro name
-        parse_identifier_or_interpolate(ps)
+        parse_unary_prefix(ps)
         kb = peek_behind(ps).orig_kind
         if is_initial_reserved_word(ps, kb)
             # macro while(ex) end  ==> (macro (call (error while) ex) (block))
@@ -2111,7 +2096,9 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
             # macro ($f)()  end  ==>  (macro (call (parens ($ f))) (block))
         end
     else
-        if peek(ps) == K"("
+        if peek(ps) != K"("
+            parse_unary_prefix(ps)
+        else
             # When an initial parenthesis is present, we might either have
             # * the function name in parens, followed by (args...)
             # * an anonymous function argument list in parens
@@ -2151,14 +2138,12 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
                 # function (::T)() end  ==> (function (call (parens (::-pre T))) (block))
                 emit(ps, mark, K"parens", PARENS_FLAG)
             end
-        else
-            parse_unary_prefix(ps)
         end
         if !is_anon_func
             kb = peek_behind(ps).orig_kind
             if is_reserved_word(kb)
                 # function begin() end  ==>  (function (call (error begin)) (block))
-                emit(ps, mark, K"error", error="Invalid function name")
+                emit(ps, mark, K"error", error="invalid function name")
             else
                 # function f() end     ==>  (function (call f) (block))
                 # function type() end  ==>  (function (call type) (block))
@@ -2379,7 +2364,7 @@ end
 # Parse an identifier, interpolation or @-prefixed symbol
 #
 # flisp: parse-atsym
-function parse_atsym(ps::ParseState)
+function parse_atsym(ps::ParseState, allow_quotes=true)
     bump_trivia(ps)
     if peek(ps) == K"@"
         # export @a       ==>  (export @a)
@@ -2392,7 +2377,30 @@ function parse_atsym(ps::ParseState)
         # export a  ==>  (export a)
         # export \n a  ==>  (export a)
         # export $a, $(a*b)  ==>  (export ($ a) (parens ($ (call * a b))))
-        parse_identifier_or_interpolate(ps)
+        # export (x::T) ==> (export (error (parens (::-i x T))))
+        # export outer  ==> (export outer)
+        # export ($f)   ==> (export ($ f))
+        mark = position(ps)
+        if allow_quotes && peek(ps) == K":"
+            # import A.:+  ==>  (import (. A (quote +)))
+            emit_diagnostic(ps, warning="quoting with `:` is not required here")
+        end
+        parse_unary_prefix(ps)
+        pos = position(ps)
+        while peek_behind(ps, pos).kind == K"parens"
+            # import A.(:+)  ==>  (import (. A (parens (quote +))))
+            pos = first_child_position(ps, pos)
+            emit_diagnostic(ps, mark, warning="parentheses are not required here")
+        end
+        if allow_quotes && peek_behind(ps, pos).kind == K"quote"
+            pos = first_child_position(ps, pos)
+        end
+        b = peek_behind(ps, pos)
+        ok = (b.is_leaf  && (b.kind == K"Identifier" || is_operator(b.kind))) ||
+             (!b.is_leaf && b.kind in KSet"$ var")
+        if !ok
+            emit(ps, mark, K"error", error="expected identifier")
+        end
     end
 end
 
@@ -2524,12 +2532,6 @@ function parse_import_path(ps::ParseState)
             # import A.B.C  ==>  (import (. A B C))
             bump_disallowed_space(ps)
             bump(ps, TRIVIA_FLAG)
-            if peek(ps) == K":"
-                # import A.:+  ==>  (import (. A +))
-                bump_disallowed_space(ps)
-                emit_diagnostic(ps, warning="quoting with `:` in import is unnecessary")
-                bump(ps, TRIVIA_FLAG)
-            end
             parse_atsym(ps)
         elseif is_dotted(t)
             # Resolve tokenization ambiguity: In imports, dots are part of the

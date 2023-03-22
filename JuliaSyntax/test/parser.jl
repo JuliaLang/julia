@@ -649,7 +649,8 @@ tests = [
         "import \$A.@x"  =>  "(import (. (\$ A) @x))"
         "import A.B"  =>  "(import (. A B))"
         "import A.B.C"  =>  "(import (. A B C))"
-        "import A.:+"  =>  "(import (. A +))"
+        "import A.:+"  =>  "(import (. A (quote +)))"
+        "import A.(:+)"=>  "(import (. A (parens (quote +))))"
         "import A.=="  =>  "(import (. A ==))"
         "import A.⋆.f" =>  "(import (. A ⋆ f))"
         "import A..."  =>  "(import (. A ..))"
@@ -942,7 +943,7 @@ parseall_test_specs = [
 
     # The following may not be ideal error recovery! But at least the parser
     # shouldn't crash
-    "@(x y)" => "(toplevel (macrocall (error x (error-t y))))"
+    "@(x y)" => "(toplevel (macrocall (parens @x (error-t y))))"
     "|(&\nfunction" => "(toplevel (call | (& (function (error (error)) (block (error)) (error-t))) (error-t)))"
 ]
 
