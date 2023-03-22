@@ -682,6 +682,7 @@ end
 # inference of `fieldtype`
 mutable struct UndefField__
     x::Union{}
+    UndefField__() = new()
 end
 f_infer_undef_field() = fieldtype(UndefField__, :x)
 @test Base.return_types(f_infer_undef_field, ()) == Any[Type{Union{}}]
@@ -1020,7 +1021,7 @@ end
 g21771(T) = T
 f21771(::Val{U}) where {U} = Tuple{g21771(U)}
 @test @inferred(f21771(Val{Int}())) === Tuple{Int}
-@test @inferred(f21771(Val{Union{}}())) === Tuple{Union{}}
+@test_throws ErrorException @inferred(f21771(Val{Union{}}()))
 @test @inferred(f21771(Val{Integer}())) === Tuple{Integer}
 
 # PR #28284, check that constants propagate through calls to new
@@ -4394,18 +4395,18 @@ end
 
     init = Base.ImmutableDict{Number,Number}()
     a = Const(init)
-    b = Core.PartialStruct(typeof(init), Any[Const(init), Any, ComplexF64])
+    b = Core.Compiler.PartialStruct(typeof(init), Any[Const(init), Any, ComplexF64])
     c = Core.Compiler.tmerge(a, b)
     @test ⊑(a, c) && ⊑(b, c)
     @test c === typeof(init)
 
-    a = Core.PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
+    a = Core.Compiler.PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
     c = Core.Compiler.tmerge(a, b)
     @test ⊑(a, c) && ⊑(b, c)
     @test c.fields[2] === Any # or Number
     @test c.fields[3] === ComplexF64
 
-    b = Core.PartialStruct(typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
+    b = Core.Compiler.PartialStruct(typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
     c = Core.Compiler.tmerge(a, b)
     @test ⊑(a, c)
     @test ⊑(b, c)
@@ -4447,12 +4448,23 @@ end
     Core.Compiler.return_type(+, NTuple{2, Rational})
 end == Rational
 
-# vararg-tuple comparison within `PartialStruct`
+# vararg-tuple comparison within `Compiler.PartialStruct`
 # https://github.com/JuliaLang/julia/issues/44965
 let 𝕃ᵢ = Core.Compiler.fallback_lattice
-    t = Core.Compiler.tuple_tfunc(𝕃ᵢ, Any[Core.Const(42), Vararg{Any}])
+    t = Core.Compiler.tuple_tfunc(𝕃ᵢ, Any[Const(42), Vararg{Any}])
     @test Core.Compiler.issimplertype(𝕃ᵢ, t, t)
+
+    t = Core.Compiler.tuple_tfunc(𝕃ᵢ, Any[Const(42), Vararg{Union{}}])
+    @test t === Const((42,))
+    t = Core.Compiler.tuple_tfunc(𝕃ᵢ, Any[Const(42), Int, Vararg{Union{}}])
+    @test t.typ === Tuple{Int, Int}
+    @test t.fields == Any[Const(42), Int]
 end
+
+foo_empty_vararg(i...) = i[2]
+bar_empty_vararg(i) = foo_empty_vararg(10, 20, 30, i...)
+@test bar_empty_vararg(Union{}[]) === 20
+
 
 # check the inference convergence with an empty vartable:
 # the inference state for the toplevel chunk below will have an empty vartable,
