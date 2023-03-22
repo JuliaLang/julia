@@ -36,7 +36,13 @@ end
 	@test diagnostic("import A .==") ==
         Diagnostic(9, 9, :warning, "space between dots in import path")
 	@test diagnostic("import A.:+") ==
-        Diagnostic(10, 10, :warning, "quoting with `:` in import is unnecessary")
+        Diagnostic(10, 10, :warning, "quoting with `:` is not required here")
+    @test diagnostic("import A.(:+)") ==
+        Diagnostic(10, 13, :warning, "parentheses are not required here")
+    @test diagnostic("export (x)") ==
+        Diagnostic(8, 10, :warning, "parentheses are not required here")
+    @test diagnostic("export :x") == 
+        Diagnostic(8, 9, :error, "expected identifier")
 end
 
 @testset "diagnostics for literal parsing" begin
