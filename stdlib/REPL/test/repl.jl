@@ -1648,10 +1648,9 @@ fake_repl() do stdin_write, stdout_read, repl
     @test contains(s, "Out[11]: -1:1")
 
     # Test for https://github.com/JuliaLang/julia/issues/49041
-    s = sendrepl2("using Pkg; pkg\"st\"\n", "In [14]")
+    s = sendrepl2("using Test; @test true", "In [14]")
     @test !contains(s, "ERROR")
-    @test !contains(s, "Out[13]:")
-    @test contains(s, "Status")
+    @test contains(s, "Test Passed")
 
     write(stdin_write, '\x04')
     Base.wait(repltask)
