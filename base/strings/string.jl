@@ -121,7 +121,7 @@ end
 
 ## comparison ##
 
-@assume_effects :total function _memcmp(a::AbstractString, b::AbstractString)
+@assume_effects :total function _memcmp(a::String, b::String)
     len = min(sizeof(a), sizeof(b))
     ccall(:memcmp, Cint, (Ptr{UInt8}, Ptr{UInt8}, Csize_t), a, b, len % Csize_t) % Int
 end
@@ -331,6 +331,13 @@ isvalid(s::String, i::Int) = checkbounds(Bool, s, i) && thisind(s, i) == i
 
 isascii(s::String) = isascii(codeunits(s))
 
+# don't assume effects for general integers since we cannot know their implementation
+@assume_effects :foldable function repeat(c::Char, r::BitInteger)
+    @invoke repeat(c, r::Integer)
+end
+function repeat(c::AbstractChar, r::BitInteger)
+    repeat(c, Int(r))
+end
 """
     repeat(c::AbstractChar, r::Integer) -> String
 
@@ -343,13 +350,6 @@ julia> repeat('A', 3)
 "AAA"
 ```
 """
-# don't assume effects for general integers since we cannot know their implementation
-@assume_effects :foldable function repeat(c::Char, r::BitInteger)
-    @invoke repeat(c, r::Integer)
-end
-function repeat(c::AbstractChar, r::BitInteger)
-    repeat(c, Int(r))
-end
 function repeat(c::AbstractChar, r::Integer)
     c = Char(c)
     r == 0 && return ""
