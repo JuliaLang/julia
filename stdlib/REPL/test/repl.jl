@@ -1647,6 +1647,12 @@ fake_repl() do stdin_write, stdout_read, repl
     s = sendrepl2("x_47878 = range(-1; stop = 1)\n", "-1:1")
     @test contains(s, "Out[11]: -1:1")
 
+    # Test for https://github.com/JuliaLang/julia/issues/49041
+    s = sendrepl2("using Pkg; pkg\"st\"\n", "In [14]")
+    @test !contains(s, "ERROR")
+    @test !contains(s, "Out[13]:")
+    @test contains(s, "Status")
+
     write(stdin_write, '\x04')
     Base.wait(repltask)
 end
