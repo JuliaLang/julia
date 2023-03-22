@@ -3001,6 +3001,8 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
                            e->invdepth, NULL, e->vars };
     JL_GC_PUSH4(&res, &vb.lb, &vb.ub, &vb.innervars);
     save_env(e, &se, 1);
+    if (is_leaf_typevar(u->var) && !var_occurs_invariant(u->body, u->var, 0))
+        vb.constraintkind = 1;
     res = intersect_unionall_(t, u, e, R, param, &vb);
     if (vb.limited) {
         // if the environment got too big, avoid tree recursion and propagate the flag
@@ -3008,13 +3010,19 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
             e->vars->limited = 1;
     }
     else if (res != jl_bottom_type) {
+        int constraint1 = vb.constraintkind;
         if (vb.concrete || vb.occurs_inv>1 || (vb.occurs_inv && vb.occurs_cov))
             vb.constraintkind = vb.concrete ? 1 : 2;
         else if (u->var->lb != jl_bottom_type)
             vb.constraintkind = 2;
         else if (vb.occurs_cov && !var_occurs_invariant(u->body, u->var, 0))
             vb.constraintkind = 1;
-        if (vb.constraintkind) {
+        int reintersection = constraint1 != vb.constraintkind || vb.concrete;
+        if (reintersection) {
+            if (constraint1 == 1) {
+                vb.lb = vb.var->lb;
+                vb.ub = vb.var->ub;
+            }
             restore_env(e, &se, vb.constraintkind == 1 ? 1 : 0);
             vb.occurs = vb.occurs_cov = vb.occurs_inv = 0;
             res = intersect_unionall_(t, u, e, R, param, &vb);
