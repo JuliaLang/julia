@@ -544,7 +544,10 @@ function temp_cleanup_purge(; force::Bool=false)
             end
             !ispath(path) && delete!(TEMP_CLEANUP, path)
         catch ex
-            @warn "temp cleanup" _group=:file exception=(ex, catch_backtrace())
+            @warn """
+                Failed to clean up temporary path $(repr(path))
+                $ex
+                """ _group=:file
         end
     end
 end
