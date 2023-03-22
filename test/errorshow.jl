@@ -947,3 +947,14 @@ let buf = IOBuffer()
     Base.show_method_candidates(buf, Base.MethodError(isa, ()), pairs((a = 5,)))
     @test isempty(take!(buf))
 end
+
+@testset "stacktrace filter case 1" begin
+    f(g, a; kw...) = error();
+    @inline f(a; kw...) = f(identity, a; kw...);
+    bt = try
+        f(1)
+    catch
+        catch_backtrace()
+    end
+    @test !occursin("#f#", sprint(Base.show_backtrace, bt))
+end

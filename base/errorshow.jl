@@ -823,6 +823,42 @@ function _simplify_include_frames(trace)
     return trace[kept_frames]
 end
 
+# Collapse frames that have the same location (in some cases)
+function _collapse_repeated_frames(trace)
+    kept_frames = trues(length(trace))
+    last_frame = nothing
+    for i in 1:length(trace)
+        frame::StackFrame, _ = trace[i]
+        if last_frame !== nothing
+            if frame.file == last_frame.file && frame.line == last_frame.line
+                #=
+                Handles this case:
+
+                f(g, a; kw...) = error();
+                @inline f(a; kw...) = f(identity, a; kw...);
+                f(1)
+
+                which otherwise ends up as:
+
+                [4] #f#4 <-- useless
+                @ ./REPL[2]:1 [inlined]
+                [5] f(a::Int64)
+                @ Main ./REPL[2]:1
+                =#
+                if startswith(sprint(show, last_frame), "#")
+                   kept_frames[i-1] = false
+                end
+
+                # TODO: Detect more cases that can be collapsed
+            end
+            last_frame = frame
+        end
+        last_frame = frame
+    end
+    return trace[kept_frames]
+end
+
+
 function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     n = 0
     last_frame = StackTraces.UNKNOWN
@@ -875,7 +911,9 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     if n > 0
         push!(ret, (last_frame, n))
     end
-    return _simplify_include_frames(ret)
+    trace = _simplify_include_frames(ret)
+    trace = _collapse_repeated_frames(trace)
+    return trace
 end
 
 function show_exception_stack(io::IO, stack)
