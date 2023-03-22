@@ -31,7 +31,7 @@ Logging.with_logger(TerminalLogger()) do
                 mismatch_count += 1
                 reduced_chunks = sprint(context=:color=>true) do io
                     for c in reduce_test(text)
-                        JuliaSyntax.highlight(io, c.source, range(c), context_inner_lines=5)
+                        JuliaSyntax.highlight(io, c.source, range(c), context_lines_inner=5)
                         println(io, "\n")
                     end
                 end
