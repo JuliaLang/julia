@@ -121,7 +121,7 @@ end
 
 ## comparison ##
 
-@assume_effects :total function _memcmp(a::Union{Ptr{UInt8},AbstractString}, b::Union{Ptr{UInt8},AbstractString})
+@assume_effects :total function _memcmp(a::AbstractString, b::AbstractString)
     len = min(sizeof(a), sizeof(b))
     ccall(:memcmp, Cint, (Ptr{UInt8}, Ptr{UInt8}, Csize_t), a, b, len % Csize_t) % Int
 end
