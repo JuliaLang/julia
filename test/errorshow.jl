@@ -934,6 +934,12 @@ let err_str
     @test occursin("String concatenation is performed with *", err_str)
 end
 
+@testset "unused argument names" begin
+    g(::Int) = backtrace()
+    bt = g(1)
+    @test !contains(sprint(Base.show_backtrace, bt), "#unused#")
+end
+
 # issue #49002
 let buf = IOBuffer()
     Base.show_method_candidates(buf, Base.MethodError(typeof, (17,)), pairs((foo = :bar,)))
