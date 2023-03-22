@@ -224,6 +224,7 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         if isa(def, Method)
             sig = linfo.specTypes
             argnames = Base.method_argnames(def)
+            argnames = replace(argnames, :var"#unused#" => :var"")
             if def.nkw > 0
                 # rearrange call kw_impl(kw_args..., func, pos_args...) to func(pos_args...)
                 kwarg_types = Any[ fieldtype(sig, i) for i = 2:(1+def.nkw) ]
