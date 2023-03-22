@@ -1,12 +1,42 @@
-function diagnostic(str; allow_multiple=false)
+function diagnostic(str; only_first=false, allow_multiple=false)
     stream = ParseStream(str)
     parse!(stream)
     if allow_multiple
         stream.diagnostics
     else
-        @test length(stream.diagnostics) == 1
-        only(stream.diagnostics)
+        if !only_first
+            @test length(stream.diagnostics) == 1
+        end
+        return stream.diagnostics[1]
     end
+end
+
+@testset "parser errors" begin
+	@test diagnostic("+ #==# (a,b)") ==
+        Diagnostic(2, 7, :error, "whitespace not allowed between prefix function call and argument list")
+	@test diagnostic("A.@B.x", only_first=true) ==
+        Diagnostic(3, 4, :error, "`@` must appear on first or last macro name component")
+	@test diagnostic("@M.(x)") ==
+        Diagnostic(1, 3, :error, "dot call syntax not supported for macros")
+
+	@test diagnostic("try x end") ==
+        Diagnostic(1, 9, :error, "try without catch or finally")
+    # TODO: better range
+	@test diagnostic("@A.\$x a") ==
+        Diagnostic(6, 5, :error, "invalid macro name")
+end
+
+@testset "parser warnings" begin
+	@test diagnostic("@(A)", only_first=true) ==
+        Diagnostic(2, 4, :warning, "parenthesizing macro names is unnecessary")
+	@test diagnostic("try finally catch a ; b end") ==
+        Diagnostic(13, 23, :warning, "`catch` after `finally` will execute out of order")
+	@test diagnostic("import .  .A") ==
+        Diagnostic(9, 10, :warning, "space between dots in import path")
+	@test diagnostic("import A .==") ==
+        Diagnostic(9, 9, :warning, "space between dots in import path")
+	@test diagnostic("import A.:+") ==
+        Diagnostic(10, 10, :warning, "quoting with `:` in import is unnecessary")
 end
 
 @testset "diagnostics for literal parsing" begin

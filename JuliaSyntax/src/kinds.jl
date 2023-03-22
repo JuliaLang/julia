@@ -1133,6 +1133,10 @@ function is_radical_op(x)
     kind(x) in (K"√", K"∛", K"∜")
 end
 
+"""
+Return true if `x` has whitespace or comment kind
+"""
 function is_whitespace(x)
-    kind(x) in (K"Whitespace", K"NewlineWs")
+    k = kind(x)
+    return k == K"Whitespace" || k == K"NewlineWs" || k == K"Comment"
 end

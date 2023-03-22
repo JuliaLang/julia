@@ -39,7 +39,7 @@ end
 
 first_byte(d::Diagnostic) = d.first_byte
 last_byte(d::Diagnostic)  = d.last_byte
-is_error(d::Diagnostic)   = d.level == :error
+is_error(d::Diagnostic)   = d.level === :error
 Base.range(d::Diagnostic) = first_byte(d):last_byte(d)
 
 # Make relative path into a file URL
@@ -54,9 +54,9 @@ function _file_url(filename)
 end
 
 function show_diagnostic(io::IO, diagnostic::Diagnostic, source::SourceFile)
-    color,prefix = diagnostic.level == :error   ? (:light_red, "Error")      :
-                   diagnostic.level == :warning ? (:light_yellow, "Warning") :
-                   diagnostic.level == :note    ? (:light_blue, "Note")      :
+    color,prefix = diagnostic.level === :error   ? (:light_red, "Error")      :
+                   diagnostic.level === :warning ? (:light_yellow, "Warning") :
+                   diagnostic.level === :note    ? (:light_blue, "Note")      :
                    (:normal, "Info")
     line, col = source_location(source, first_byte(diagnostic))
     linecol = "$line:$col"
@@ -92,8 +92,8 @@ function show_diagnostics(io::IO, diagnostics::AbstractVector{Diagnostic}, text:
 end
 
 function emit_diagnostic(diagnostics::AbstractVector{Diagnostic},
-                         fbyte::Integer, lbyte::Integer; kws...)
-    push!(diagnostics, Diagnostic(fbyte, lbyte; kws...))
+                         byterange::AbstractUnitRange; kws...)
+    push!(diagnostics, Diagnostic(first(byterange), last(byterange); kws...))
 end
 
 function any_error(diagnostics::AbstractVector{Diagnostic})

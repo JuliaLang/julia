@@ -359,7 +359,7 @@ function _buffer_lookahead_tokens(lexer, lookahead)
     while true
         raw = Tokenize.next_token(lexer)
         k = kind(raw)
-        was_whitespace = k in (K"Whitespace", K"Comment", K"NewlineWs")
+        was_whitespace = is_whitespace(k)
         had_whitespace |= was_whitespace
         f = EMPTY_FLAGS
         raw.dotop      && (f |= DOTOP_FLAG)
@@ -622,7 +622,7 @@ function _bump_until_n(stream::ParseStream, n::Integer, flags, remap_kind=K"None
             break
         end
         f = flags | (@__MODULE__).flags(tok)
-        is_trivia = k ∈ (K"Whitespace", K"Comment", K"NewlineWs")
+        is_trivia = is_whitespace(k)
         is_trivia && (f |= TRIVIA_FLAG)
         outk = (is_trivia || remap_kind == K"None") ? k : remap_kind
         h = SyntaxHead(outk, f)
@@ -686,7 +686,7 @@ function bump_invisible(stream::ParseStream, kind, flags=EMPTY_FLAGS;
     h = SyntaxHead(kind, flags)
     push!(stream.tokens, SyntaxToken(h, (@__MODULE__).kind(h), false, b))
     if !isnothing(error)
-        emit_diagnostic(stream, b, b-1, error=error)
+        emit_diagnostic(stream, b:b-1, error=error)
     end
     stream.peek_count = 0
     return position(stream)
@@ -797,12 +797,6 @@ function Base.position(stream::ParseStream)
     ParseStreamPosition(lastindex(stream.tokens), lastindex(stream.ranges))
 end
 
-# Get position of next item to be emitted into the output stream
-# TODO: Figure out how to remove this? It's only used with emit_diagnostic
-function next_position(stream::ParseStream)
-    ParseStreamPosition(lastindex(stream.tokens)+1, lastindex(stream.ranges)+1)
-end
-
 """
     emit(stream, mark, kind, flags = EMPTY_FLAGS; error=nothing)
 
@@ -819,14 +813,14 @@ function emit(stream::ParseStream, mark::ParseStreamPosition, kind::Kind,
         # nested.
         fbyte = token_first_byte(stream, first_token)
         lbyte = token_last_byte(stream, lastindex(stream.tokens))
-        emit_diagnostic(stream, fbyte, lbyte, error=error)
+        emit_diagnostic(stream, fbyte:lbyte, error=error)
     end
     push!(stream.ranges, range)
     return position(stream)
 end
 
-function emit_diagnostic(stream::ParseStream, fbyte::Integer, lbyte::Integer; kws...)
-    emit_diagnostic(stream.diagnostics, fbyte, lbyte; kws...)
+function emit_diagnostic(stream::ParseStream, byterange::AbstractUnitRange; kws...)
+    emit_diagnostic(stream.diagnostics, byterange; kws...)
     return nothing
 end
 
@@ -849,20 +843,30 @@ function emit_diagnostic(stream::ParseStream; whitespace=false, kws...)
     end
     fbyte = lookahead_token_first_byte(stream, begin_tok_i)
     lbyte = lookahead_token_last_byte(stream, end_tok_i)
-    emit_diagnostic(stream, fbyte, lbyte; kws...)
+    emit_diagnostic(stream, fbyte:lbyte; kws...)
     return nothing
 end
 
-function emit_diagnostic(stream::ParseStream, mark::ParseStreamPosition; kws...)
-    emit_diagnostic(stream, token_first_byte(stream, mark.token_index),
-                    _next_byte(stream) - 1; kws...)
+function emit_diagnostic(stream::ParseStream, mark::ParseStreamPosition; trim_whitespace=true, kws...)
+    i = mark.token_index
+    j = lastindex(stream.tokens)
+    if trim_whitespace
+        while i < j && is_whitespace(stream.tokens[j])
+            j -= 1
+        end
+        while i+1 < j && is_whitespace(stream.tokens[i+1])
+            i += 1
+        end
+    end
+    byterange = stream.tokens[i].next_byte:stream.tokens[j].next_byte-1
+    emit_diagnostic(stream, byterange; kws...)
 end
 
 function emit_diagnostic(stream::ParseStream, mark::ParseStreamPosition,
                          end_mark::ParseStreamPosition; kws...)
-    fbyte = token_first_byte(stream, mark.token_index)
-    lbyte = token_first_byte(stream, end_mark.token_index) - 1
-    emit_diagnostic(stream, fbyte, lbyte; kws...)
+    fbyte = stream.tokens[mark.token_index].next_byte
+    lbyte = stream.tokens[end_mark.token_index].next_byte-1
+    emit_diagnostic(stream, fbyte:lbyte; kws...)
 end
 
 #-------------------------------------------------------------------------------
@@ -890,19 +894,19 @@ function validate_tokens(stream::ParseStream)
                 # jl_strtod_c can return "underflow" even for valid cases such
                 # as `5e-324` where the source is an exact representation of
                 # `x`. So only warn when underflowing to zero.
-                underflow0 = code == :underflow && x == 0
+                underflow0 = code === :underflow && x == 0
             else
                 x, code = parse_float_literal(Float32, text, fbyte, nbyte)
-                underflow0 = code == :underflow && x == 0
+                underflow0 = code === :underflow && x == 0
             end
-            if code == :ok
+            if code === :ok
                 # pass
-            elseif code == :overflow
-                emit_diagnostic(stream, fbyte, lbyte,
+            elseif code === :overflow
+                emit_diagnostic(stream, fbyte:lbyte,
                                 error="overflow in floating point literal")
                 error_kind = K"ErrorNumericOverflow"
             elseif underflow0
-                emit_diagnostic(stream, fbyte, lbyte,
+                emit_diagnostic(stream, fbyte:lbyte,
                                 warning="underflow to zero in floating point literal")
             end
         elseif k == K"Char"
@@ -917,7 +921,7 @@ function validate_tokens(stream::ParseStream)
                 read(charbuf, Char)
                 if !eof(charbuf)
                     error_kind = K"ErrorOverLongCharacter"
-                    emit_diagnostic(stream, fbyte, lbyte,
+                    emit_diagnostic(stream, fbyte:lbyte,
                                     error="character literal contains multiple characters")
                 end
             end
@@ -929,7 +933,7 @@ function validate_tokens(stream::ParseStream)
             end
         elseif is_error(k) && k != K"error"
             # Emit messages for non-generic token errors
-            emit_diagnostic(stream, fbyte, lbyte,
+            emit_diagnostic(stream, fbyte:lbyte,
                             error=_token_error_descriptions[k])
         end
         if error_kind != K"None"

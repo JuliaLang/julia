@@ -76,7 +76,7 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
         headsym = !isnothing(headstr) ? Symbol(headstr) :
             error("Can't untokenize head of kind $(nodekind)")
     end
-    if headsym == :string || headsym == :cmdstring
+    if headsym === :string || headsym === :cmdstring
         # Julia string literals may be interspersed with trivia in two situations:
         # 1. Triple quoted string indentation is trivia
         # 2. An \ before newline removes the newline and any following indentation
@@ -100,7 +100,7 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
                 end
             else
                 e = _to_expr(node_args[i])
-                if e isa String && headsym == :string
+                if e isa String && headsym === :string
                     # Wrap interpolated literal strings in (string) so we can
                     # distinguish them from the surrounding text (issue #38501)
                     # Ie, "$("str")"  vs  "str"
@@ -124,22 +124,22 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
     end
 
     # Convert children
-    insert_linenums = (headsym == :block || headsym == :toplevel) && need_linenodes
+    insert_linenums = (headsym === :block || headsym === :toplevel) && need_linenodes
     args = Vector{Any}(undef, length(node_args)*(insert_linenums ? 2 : 1))
-    if headsym == :for && length(node_args) == 2
+    if headsym === :for && length(node_args) == 2
         # No line numbers in for loop iteration spec
         args[1] = _to_expr(node_args[1], iteration_spec=true, need_linenodes=false)
         args[2] = _to_expr(node_args[2])
-    elseif headsym == :let && length(node_args) == 2
+    elseif headsym === :let && length(node_args) == 2
         # No line numbers in let statement binding list
         args[1] = _to_expr(node_args[1], need_linenodes=false)
         args[2] = _to_expr(node_args[2])
     else
         eq_to_kw_in_call =
-            ((headsym == :call || headsym == :dotcall) && is_prefix_call(node)) ||
-            headsym == :ref
-        eq_to_kw_all = headsym == :parameters && !map_kw_in_params
-        in_vcbr = headsym == :vect || headsym == :curly || headsym == :braces || headsym == :ref
+            ((headsym === :call || headsym === :dotcall) && is_prefix_call(node)) ||
+            headsym === :ref
+        eq_to_kw_all = headsym === :parameters && !map_kw_in_params
+        in_vcbr = headsym === :vect || headsym === :curly || headsym === :braces || headsym === :ref
         if insert_linenums && isempty(node_args)
             push!(args, source_location(LineNumberNode, node.source, node.position))
         else
@@ -150,8 +150,7 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
                 end
                 eq_to_kw = eq_to_kw_in_call && i > 1 || eq_to_kw_all
                 args[insert_linenums ? 2*i : i] =
-                    _to_expr(n, eq_to_kw=eq_to_kw,
-                             map_kw_in_params=in_vcbr)
+                    _to_expr(n, eq_to_kw=eq_to_kw, map_kw_in_params=in_vcbr)
             end
             if nodekind == K"block" && has_flags(node, PARENS_FLAG)
                 popfirst!(args)
@@ -204,7 +203,7 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
         end
     elseif headsym === :where
         reorder_parameters!(args, 2)
-    elseif headsym == :parens
+    elseif headsym === :parens
         # parens are used for grouping and don't appear in the Expr AST
         return only(args)
     elseif headsym in (:try, :try_finally_catch)
@@ -252,7 +251,7 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
         pushfirst!(args, numeric_flags(flags(node)))
     elseif headsym === :typed_ncat
         insert!(args, 2, numeric_flags(flags(node)))
-    # elseif headsym == :string && length(args) == 1 && version <= (1,5)
+    # elseif headsym === :string && length(args) == 1 && version <= (1,5)
     #   Strip string from interpolations in 1.5 and lower to preserve
     #   "hi$("ho")" ==>  (string "hi" "ho")
     elseif headsym === :(=) && !is_decorated(node)
@@ -260,7 +259,7 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
             # Add block for short form function locations
             args[2] = Expr(:block, loc, args[2])
         end
-    elseif headsym == :elseif
+    elseif headsym === :elseif
         # Block for conditional's source location
         args[1] = Expr(:block, loc, args[1])
     elseif headsym === :(->)
@@ -290,7 +289,7 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
     elseif headsym === :module
         pushfirst!(args, !has_flags(node, BARE_MODULE_FLAG))
         pushfirst!(args[3].args, loc)
-    elseif headsym == :inert || (headsym == :quote && length(args) == 1 &&
+    elseif headsym === :inert || (headsym === :quote && length(args) == 1 &&
                  !(a1 = only(args); a1 isa Expr || a1 isa QuoteNode ||
                    a1 isa Bool  # <- compat hack, Julia 1.4+
                   ))
