@@ -15,7 +15,8 @@ Iterating the decomposition produces the components `F.values` and `F.vectors`.
 
 The `Eigen` type additionally supports a number of methods that preserve the
 eigenvalue decomposition structure, such as matrix functions (`^`, `inv`,
-`exp`, etc.) or adjoints. The resulting objects share the underlying `vectors`,
+`exp`, etc.) or adjoints. After these operations, the eigenvalues are not
+necessarily ordered. The resulting objects share the underlying `vectors`,
 and therefore this field should not be modified.
 
 # Examples
