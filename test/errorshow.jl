@@ -958,3 +958,15 @@ end
     end
     @test !occursin("#f#", sprint(Base.show_backtrace, bt))
 end
+
+g_collapse_pos(x, y=1.0, z=2.0) = error()
+bt = try
+    g_collapse_pos(1.0)
+catch
+    catch_backtrace()
+end
+bt_str = sprint(Base.show_backtrace, bt)
+@test occursin("g_collapse_pos(x::Float64, y::Float64, z::Float64)", bt_str)
+@test !occursin("g_collapse_pos(x::Float64)", bt_str)
+
+end
