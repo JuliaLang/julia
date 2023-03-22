@@ -321,6 +321,7 @@ tests = [
         "[@foo x]"     =>  "(vect (macrocall @foo x))"
         "[@foo]"       =>  "(vect (macrocall @foo))"
         "@var\"#\" a"  =>  "(macrocall (var @#) a)"                => Expr(:macrocall, Symbol("@#"), LineNumberNode(1), :a)
+        "@(A) x"       =>  "(macrocall (parens @A) x)"
         "A.@x y"       =>  "(macrocall (. A (quote @x)) y)"
         "A.@var\"#\" a"=>  "(macrocall (. A (quote (var @#))) a)"  => Expr(:macrocall, Expr(:., :A, QuoteNode(Symbol("@#"))), LineNumberNode(1), :a)
         "@+x y"        =>  "(macrocall @+ x y)"
@@ -648,7 +649,8 @@ tests = [
         "import \$A.@x"  =>  "(import (. (\$ A) @x))"
         "import A.B"  =>  "(import (. A B))"
         "import A.B.C"  =>  "(import (. A B C))"
-        "import A.:+"  =>  "(import (. A +))"
+        "import A.:+"  =>  "(import (. A (quote +)))"
+        "import A.(:+)"=>  "(import (. A (parens (quote +))))"
         "import A.=="  =>  "(import (. A ==))"
         "import A.⋆.f" =>  "(import (. A ⋆ f))"
         "import A..."  =>  "(import (. A ..))"
@@ -941,7 +943,7 @@ parseall_test_specs = [
 
     # The following may not be ideal error recovery! But at least the parser
     # shouldn't crash
-    "@(x y)" => "(toplevel (macrocall (error x (error-t y))))"
+    "@(x y)" => "(toplevel (macrocall (parens @x (error-t y))))"
     "|(&\nfunction" => "(toplevel (call | (& (function (error (error)) (block (error)) (error-t))) (error-t)))"
 ]
 
