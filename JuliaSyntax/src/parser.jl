@@ -2387,13 +2387,22 @@ function parse_atsym(ps::ParseState, allow_quotes=true)
         end
         parse_unary_prefix(ps)
         pos = position(ps)
-        while peek_behind(ps, pos).kind == K"parens"
+        warn_parens = false
+        if peek_behind(ps, pos).kind == K"parens"
             # import A.(:+)  ==>  (import (. A (parens (quote +))))
             pos = first_child_position(ps, pos)
-            emit_diagnostic(ps, mark, warning="parentheses are not required here")
+            warn_parens = true
         end
         if allow_quotes && peek_behind(ps, pos).kind == K"quote"
             pos = first_child_position(ps, pos)
+            if peek_behind(ps, pos).kind == K"parens"
+                # import A.:(+)  ==>  (import (. A (quote (parens +))))
+                pos = first_child_position(ps, pos)
+                warn_parens = true
+            end
+        end
+        if warn_parens
+            emit_diagnostic(ps, mark, warning="parentheses are not required here")
         end
         b = peek_behind(ps, pos)
         ok = (b.is_leaf  && (b.kind == K"Identifier" || is_operator(b.kind))) ||
