@@ -1736,20 +1736,32 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
     elseif has_conditional(𝕃ᵢ, sv) && (rt === Bool || (isa(rt, Const) && isa(rt.val, Bool))) && isa(fargs, Vector{Any})
         # perform very limited back-propagation of type information for `is` and `isa`
         if f === isa
+            # try splitting value argument, based on types
             a = ssa_def_slot(fargs[2], sv)
             a2 = argtypes[2]
+            a3 = argtypes[3]
             if isa(a, SlotNumber)
-                cndt = isa_condition(a2, argtypes[3], InferenceParams(interp).max_union_splitting, rt)
+                cndt = isa_condition(a2, a3, InferenceParams(interp).max_union_splitting, rt)
                 if cndt !== nothing
                     return Conditional(a, cndt.thentype, cndt.elsetype)
                 end
             end
             if isa(a2, MustAlias)
                 if !isa(rt, Const) # skip refinement when the field is known precisely (just optimization)
-                    cndt = isa_condition(a2, argtypes[3], InferenceParams(interp).max_union_splitting)
+                    cndt = isa_condition(a2, a3, InferenceParams(interp).max_union_splitting)
                     if cndt !== nothing
                         return form_mustalias_conditional(a2, cndt.thentype, cndt.elsetype)
                     end
+                end
+            end
+            # try splitting type argument, based on value
+            if isdispatchelem(widenconst(a2)) && a3 isa Union && !has_free_typevars(a3) && !isa(rt, Const)
+                b = ssa_def_slot(fargs[3], sv)
+                if isa(b, SlotNumber)
+                    # !(x isa T) implies !(Type{a2} <: T)
+                    # TODO: complete splitting, based on which portions of the Union a3 for which isa_tfunc returns Const(true) or Const(false) instead of Bool
+                    elsetype = typesubtract(a3, Type{widenconst(a2)}, InferenceParams(interp).max_union_splitting)
+                    return Conditional(b, a3, elsetype)
                 end
             end
         elseif f === (===)
