@@ -359,15 +359,19 @@ ht_keyindex2!(h::Dict, key) = ht_keyindex2_shorthash!(h, key)[1]
 end
 
 function setindex!(h::Dict{K,V}, v0, key0) where V where K
-    key = convert(K, key0)
-    if !(isequal(key, key0)::Bool)
-        throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
+    if key0 isa K
+        key = key0
+    else
+        key = convert(K, key0)::K
+        if !(isequal(key, key0)::Bool)
+            throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
+        end
     end
     setindex!(h, v0, key)
 end
 
 function setindex!(h::Dict{K,V}, v0, key::K) where V where K
-    v = convert(V, v0)
+    v = v0 isa V ? v0 : convert(V, v0)::V
     index, sh = ht_keyindex2_shorthash!(h, key)
 
     if index > 0
@@ -453,9 +457,13 @@ Dict{Int64, Int64} with 1 entry:
 get!(f::Callable, collection, key)
 
 function get!(default::Callable, h::Dict{K,V}, key0) where V where K
-    key = convert(K, key0)
-    if !isequal(key, key0)
-        throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
+    if key0 isa K
+        key = key0
+    else
+        key = convert(K, key0)::K
+        if !isequal(key, key0)
+            throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
+        end
     end
     return get!(default, h, key)
 end
@@ -466,7 +474,10 @@ function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
     index > 0 && return h.vals[index]
 
     age0 = h.age
-    v = convert(V, default())
+    v = default()
+    if !isa(v, V)
+        v = convert(V, v)::V
+    end
     if h.age != age0
         index, sh = ht_keyindex2_shorthash!(h, key)
     end
@@ -756,10 +767,17 @@ function mergewith!(combine, d1::Dict{K, V}, d2::AbstractDict) where {K, V}
         if i > 0
             d1.vals[i] = combine(d1.vals[i], v)
         else
-            if !isequal(k, convert(K, k))
-                throw(ArgumentError("$(limitrepr(k)) is not a valid key for type $K"))
+            if !(k isa K)
+                k1 = convert(K, k)::K
+                if !isequal(k, k1)
+                    throw(ArgumentError("$(limitrepr(k)) is not a valid key for type $K"))
+                end
+                k = k1
             end
-            @inbounds _setindex!(d1, convert(V, v), k, -i, sh)
+            if !isa(v, V)
+                v = convert(V, v)::V
+            end
+            @inbounds _setindex!(d1, v, k, -i, sh)
         end
     end
     return d1
