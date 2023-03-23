@@ -334,9 +334,6 @@ isascii(s::String) = isascii(codeunits(s))
 @assume_effects :foldable function repeat(c::Char, r::BitInteger)
     @invoke repeat(c, r::Integer)
 end
-function repeat(c::AbstractChar, r::BitInteger)
-    repeat(c, Int(r))
-end
 """
     repeat(c::AbstractChar, r::Integer) -> String
 
