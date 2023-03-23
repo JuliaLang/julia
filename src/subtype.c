@@ -3385,6 +3385,21 @@ static int subtype_by_bounds(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_NOT
     return compareto_var(x, (jl_tvar_t*)y, e, -1) || compareto_var(y, (jl_tvar_t*)x, e, 1);
 }
 
+static int has_typevar_via_env(jl_value_t *x, jl_tvar_t *t, jl_stenv_t *e)
+{
+    jl_varbinding_t *temp = e->vars;
+    while (temp != NULL) {
+        if (temp->var == t)
+            break;
+        if (temp->lb == temp->ub &&
+            temp->lb == (jl_value_t *)t &&
+            temp->offset == 0 && jl_has_typevar(x, temp->var))
+            return 1;
+        temp = temp->prev;
+    }
+    return jl_has_typevar(x, t);
+}
+
 // `param` means we are currently looking at a parameter of a type constructor
 // (as opposed to being outside any type constructor, or comparing variable bounds).
 // this is used to record the positions where type variables occur for the
@@ -3512,8 +3527,8 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                 if (R) flip_offset(e);
                 if (!ccheck)
                     return jl_bottom_type;
-                if ((jl_has_typevar(xub, (jl_tvar_t*)y) || jl_has_typevar(xub, (jl_tvar_t*)x)) &&
-                    (jl_has_typevar(yub, (jl_tvar_t*)x) || jl_has_typevar(yub, (jl_tvar_t*)y))) {
+                if ((has_typevar_via_env(xub, (jl_tvar_t*)y, e) || has_typevar_via_env(xub, (jl_tvar_t*)x, e)) &&
+                    (has_typevar_via_env(yub, (jl_tvar_t*)x, e) || has_typevar_via_env(yub, (jl_tvar_t*)y, e))) {
                     // TODO: This doesn't make much sense.
                     // circular constraint. the result will be Bottom, but in the meantime
                     // we need to avoid computing intersect(xub, yub) since it won't terminate.

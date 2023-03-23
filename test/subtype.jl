@@ -1903,10 +1903,9 @@ end
                Tuple{AlmostLU{T, X} where X<:Matrix{T}, Vector{T}} where T<:Union{Float32, Float64})
 
 # issue #22787
-#this test is currently broken, as is the simplified case just below it
-#@testintersect(Tuple{Type{Q}, Q, Ref{Q}} where Q<:Ref,
-#               Tuple{Type{S}, Union{Ref{S}, Ref{R}}, R} where R where S,
-#               !Union{})
+@testintersect(Tuple{Type{Q}, Q, Ref{Q}} where Q<:Ref,
+              Tuple{Type{S}, Union{Ref{S}, Ref{R}}, R} where R where S,
+              !Union{})
 
 t = typeintersect(Tuple{Type{T}, T, Ref{T}} where T,
                   Tuple{Type{S}, Ref{S}, S} where S)
