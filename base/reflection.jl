@@ -1119,10 +1119,10 @@ specializations(m::Method) = MethodSpecializations(isdefined(m, :specializations
 function iterate(specs::MethodSpecializations)
     s = specs.specializations
     s === nothing && return nothing
-    isa(s, Core.MethodInstance) && return (s, false)
+    isa(s, Core.MethodInstance) && return (s, nothing)
     return iterate(specs, 0)
 end
-iterate(specs::MethodSpecializations, ::Bool) = nothing
+iterate(specs::MethodSpecializations, ::Nothing) = nothing
 function iterate(specs::MethodSpecializations, i::Int)
     s = specs.specializations
     n = length(s)
