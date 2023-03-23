@@ -2,6 +2,9 @@
 
 #include <stdlib.h>
 #include <string.h>
+#ifdef _OS_WINDOWS_
+#include <malloc.h>
+#endif
 #include <stdarg.h>
 #include "julia.h"
 #include "julia_internal.h"
@@ -35,8 +38,7 @@ int jl_is_aligned_buffer(jl_buffer_t *buf)
     return ((jl_datatype_t*)(jl_typeof(buf)))->name == jl_buffer_typename;
 }
 
-// FIXME Buffer: 
-// julia-allocated buffer that needs to be marked
+// FIXME Buffer: julia-allocated buffer that needs to be marked
 int jl_is_unmarked_buffer(jl_buffer_t *buf) JL_NOTSAFEPOINT
 {
     return ((jl_datatype_t*)(jl_typeof(buf)))->name != jl_buffer_typename;
@@ -451,4 +453,3 @@ JL_DLLEXPORT void jl_buffer_ptr_copy(jl_buffer_t *dest, void **dest_p,
 #ifdef __cplusplus
 }
 #endif
-
