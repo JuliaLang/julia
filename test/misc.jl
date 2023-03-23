@@ -1385,7 +1385,7 @@ end
     # sanity check `@allocations` returns what we expect in some very simple cases
     @test (@allocations "a") == 0
     @test (@allocations "a" * "b") == 0 # constant propagation
-    @test (@allocations "a" * inferencebarrier("b")) == 1
+    @test (@allocations "a" * Base.inferencebarrier("b")) == 1
 end
 
 @testset "in_finalizer" begin
