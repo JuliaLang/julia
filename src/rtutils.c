@@ -1294,7 +1294,11 @@ JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_N
     for (i = 1; i < tl; i++) {
         jl_value_t *tp = jl_tparam(type, i);
         if (i != tl - 1) {
-            n += jl_static_show_x(s, tp, depth);
+            if (jl_is_datatype(tp)) {
+                n += jl_printf(s, "%s", jl_symbol_name(((jl_datatype_t*)tp)->name->name));
+            } else {
+                n += jl_static_show_x(s, tp, depth);
+            }
             n += jl_printf(s, ", ");
         }
         else {
@@ -1302,7 +1306,11 @@ JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_N
                 tp = jl_unwrap_vararg(tp);
                 if (jl_is_unionall(tp))
                     n += jl_printf(s, "(");
-                n += jl_static_show_x(s, tp, depth);
+                if (jl_is_datatype(tp)) {
+                    n += jl_printf(s, "%s", jl_symbol_name(((jl_datatype_t*)tp)->name->name));
+                } else {
+                    n += jl_static_show_x(s, tp, depth);
+                }
                 if (jl_is_unionall(tp))
                     n += jl_printf(s, ")");
                 n += jl_printf(s, "...");

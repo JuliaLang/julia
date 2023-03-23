@@ -311,6 +311,11 @@ NOINLINE uintptr_t gc_get_stack_ptr(void)
 
 void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
 {
+    JL_TIMING(GC, Stop);
+#ifdef USE_TRACY
+    TracyCZoneCtx ctx = *(JL_TIMING_CURRENT_BLOCK->tracy_ctx);
+    TracyCZoneColor(ctx, 0x696969);
+#endif
     assert(gc_n_threads);
     if (gc_n_threads > 1)
         jl_wake_libuv();
@@ -2941,79 +2946,86 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 {
     combine_thread_gc_counts(&gc_num);
 
+#ifdef USE_TRACY
+    TracyCPlot("Heap size", live_bytes + gc_num.allocd);
+#endif
+
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
 
     uint64_t gc_start_time = jl_hrtime();
     int64_t last_perm_scanned_bytes = perm_scanned_bytes;
-    JL_PROBE_GC_MARK_BEGIN();
     uint64_t start_mark_time = jl_hrtime();
+    JL_PROBE_GC_MARK_BEGIN();
+    {
+        JL_TIMING(GC, Mark);
 
-    // 1. fix GC bits of objects in the remset.
-    assert(gc_n_threads);
-    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
-        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
-        if (ptls2 != NULL)
-            gc_premark(ptls2);
-    }
-
-    assert(gc_n_threads);
-    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
-        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
-        if (ptls2 != NULL) {
-            // 2.1. mark every thread local root
-            gc_queue_thread_local(mq, ptls2);
-            // 2.2. mark any managed objects in the backtrace buffer
-            // TODO: treat these as roots for gc_heap_snapshot_record
-            gc_queue_bt_buf(mq, ptls2);
-            // 2.3. mark every object in the `last_remsets` and `rem_binding`
-            gc_queue_remset(ptls, ptls2);
+        // 1. fix GC bits of objects in the remset.
+        assert(gc_n_threads);
+        for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+            jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+            if (ptls2 != NULL)
+                gc_premark(ptls2);
         }
-    }
 
-    // 3. walk roots
-    gc_mark_roots(mq);
-    if (gc_cblist_root_scanner) {
-        gc_invoke_callbacks(jl_gc_cb_root_scanner_t,
-            gc_cblist_root_scanner, (collection));
-    }
-    gc_mark_loop(ptls);
+        assert(gc_n_threads);
+        for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+            jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+            if (ptls2 != NULL) {
+                // 2.1. mark every thread local root
+                gc_queue_thread_local(mq, ptls2);
+                // 2.2. mark any managed objects in the backtrace buffer
+                // TODO: treat these as roots for gc_heap_snapshot_record
+                gc_queue_bt_buf(mq, ptls2);
+                // 2.3. mark every object in the `last_remsets` and `rem_binding`
+                gc_queue_remset(ptls, ptls2);
+            }
+        }
 
-    // 4. check for objects to finalize
-    clear_weak_refs();
-    // Record the length of the marked list since we need to
-    // mark the object moved to the marked list from the
-    // `finalizer_list` by `sweep_finalizer_list`
-    size_t orig_marked_len = finalizer_list_marked.len;
-    assert(gc_n_threads);
-    for (int i = 0; i < gc_n_threads; i++) {
-        jl_ptls_t ptls2 = gc_all_tls_states[i];
-        if (ptls2 != NULL)
-            sweep_finalizer_list(&ptls2->finalizers);
+        // 3. walk roots
+        gc_mark_roots(mq);
+        if (gc_cblist_root_scanner) {
+            gc_invoke_callbacks(jl_gc_cb_root_scanner_t,
+                gc_cblist_root_scanner, (collection));
+        }
+        gc_mark_loop(ptls);
+
+        // 4. check for objects to finalize
+        clear_weak_refs();
+        // Record the length of the marked list since we need to
+        // mark the object moved to the marked list from the
+        // `finalizer_list` by `sweep_finalizer_list`
+        size_t orig_marked_len = finalizer_list_marked.len;
+        assert(gc_n_threads);
+        for (int i = 0; i < gc_n_threads; i++) {
+            jl_ptls_t ptls2 = gc_all_tls_states[i];
+            if (ptls2 != NULL)
+                sweep_finalizer_list(&ptls2->finalizers);
+        }
+        if (prev_sweep_full) {
+            sweep_finalizer_list(&finalizer_list_marked);
+            orig_marked_len = 0;
+        }
+        assert(gc_n_threads);
+        for (int i = 0; i < gc_n_threads; i++) {
+            jl_ptls_t ptls2 = gc_all_tls_states[i];
+            if (ptls2 != NULL)
+                gc_mark_finlist(mq, &ptls2->finalizers, 0);
+        }
+        gc_mark_finlist(mq, &finalizer_list_marked, orig_marked_len);
+        // "Flush" the mark stack before flipping the reset_age bit
+        // so that the objects are not incorrectly reset.
+        gc_mark_loop(ptls);
+        // Conservative marking relies on age to tell allocated objects
+        // and freelist entries apart.
+        mark_reset_age = !jl_gc_conservative_gc_support_enabled();
+        // Reset the age and old bit for any unmarked objects referenced by the
+        // `to_finalize` list. These objects are only reachable from this list
+        // and should not be referenced by any old objects so this won't break
+        // the GC invariant.
+        gc_mark_finlist(mq, &to_finalize, 0);
+        gc_mark_loop(ptls);
+        mark_reset_age = 0;
     }
-    if (prev_sweep_full) {
-        sweep_finalizer_list(&finalizer_list_marked);
-        orig_marked_len = 0;
-    }
-    assert(gc_n_threads);
-    for (int i = 0; i < gc_n_threads; i++) {
-        jl_ptls_t ptls2 = gc_all_tls_states[i];
-        if (ptls2 != NULL)
-            gc_mark_finlist(mq, &ptls2->finalizers, 0);
-    }
-    gc_mark_finlist(mq, &finalizer_list_marked, orig_marked_len);
-    // "Flush" the mark stack before flipping the reset_age bit
-    // so that the objects are not incorrectly reset.
-    gc_mark_loop(ptls);
-    // Conservative marking relies on age to tell allocated objects
-    // and freelist entries apart.
-    mark_reset_age = !jl_gc_conservative_gc_support_enabled();
-    // Reset the age and old bit for any unmarked objects referenced by the
-    // `to_finalize` list. These objects are only reachable from this list
-    // and should not be referenced by any old objects so this won't break
-    // the GC invariant.
-    gc_mark_finlist(mq, &to_finalize, 0);
-    gc_mark_loop(ptls);
-    mark_reset_age = 0;
 
     gc_num.since_sweep += gc_num.allocd;
     JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes);
@@ -3081,7 +3093,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         }
     }
 
-
     // If the live data outgrows the suggested max_total_memory
     // we keep going with minimum intervals and full gcs until
     // we either free some space or get an OOM error.
@@ -3106,15 +3117,24 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     // 6. start sweeping
     uint64_t start_sweep_time = jl_hrtime();
     JL_PROBE_GC_SWEEP_BEGIN(sweep_full);
-    sweep_weak_refs();
-    sweep_stack_pools();
-    gc_sweep_foreign_objs();
-    gc_sweep_other(ptls, sweep_full);
-    gc_scrub();
-    gc_verify_tags();
-    gc_sweep_pool(sweep_full);
-    if (sweep_full)
-        gc_sweep_perm_alloc();
+    {
+        JL_TIMING(GC, Sweep);
+#ifdef USE_TRACY
+        if (sweep_full) {
+            TracyCZoneCtx ctx = *(JL_TIMING_CURRENT_BLOCK->tracy_ctx);
+            TracyCZoneColor(ctx, 0xFFA500);
+        }
+#endif
+        sweep_weak_refs();
+        sweep_stack_pools();
+        gc_sweep_foreign_objs();
+        gc_sweep_other(ptls, sweep_full);
+        gc_scrub();
+        gc_verify_tags();
+        gc_sweep_pool(sweep_full);
+        if (sweep_full)
+            gc_sweep_perm_alloc();
+    }
     JL_PROBE_GC_SWEEP_END();
 
     uint64_t gc_end_time = jl_hrtime();
@@ -3243,22 +3263,10 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
         jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
         return;
     }
-#ifdef USE_TRACY
-    static uint8_t first_time = 1;
-    if (first_time) {
-        first_time = 0;
-        TracyCFiberEnter("Main");
-    }
-    TracyCFiberLeave;
-    TracyCFiberEnter("GC");
-    {
-        int64_t tb;
-        jl_gc_get_total_bytes(&tb);
-        TracyCPlot("Heap size", ((double)tb) / (1024.0 * 1024.0));
-    }
-#endif
-{
-    JL_TIMING(GC);
+
+    JL_TIMING_SUSPEND(GC, ct);
+    JL_TIMING(GC, GC);
+
     int last_errno = errno;
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
@@ -3311,6 +3319,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     // Doing this on all threads is racy (it's impossible to check
     // or wait for finalizers on other threads without dead lock).
     if (!ptls->finalizers_inhibited && ptls->locks.len == 0) {
+        JL_TIMING(GC, Finalizers);
         run_finalizers(ct);
     }
     JL_PROBE_GC_FINALIZER();
@@ -3321,15 +3330,9 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     SetLastError(last_error);
 #endif
     errno = last_errno;
-}
+
 #ifdef USE_TRACY
-    {
-        int64_t tb;
-        jl_gc_get_total_bytes(&tb);
-        TracyCPlot("Heap size", ((double)tb) / (1024.0 * 1024.0));
-    }
-    TracyCFiberLeave;
-    TracyCFiberEnter("Main");
+    TracyCPlot("Heap size", jl_gc_live_bytes());
 #endif
 }
 
@@ -3432,6 +3435,9 @@ void jl_gc_init(void)
     if (jl_options.heap_size_hint)
         jl_gc_set_max_memory(jl_options.heap_size_hint);
 
+#ifdef USE_TRACY
+    TracyCPlotConfig("Heap size", TracyPlotFormatMemory, /* rectilinear */ 0, /* fill */ 1, /* color */ 0);
+#endif
     t_start = jl_hrtime();
 }
 
