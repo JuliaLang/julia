@@ -487,7 +487,17 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
                 ty = UnionAll(tv, Type{tv})
             end
             @label ty_computed
-            undef = !constrains_param(v, linfo.specTypes, #=covariant=#true)
+            undef = !(let sig=sig
+                # if the specialized signature `linfo.specTypes` doesn't contain any free
+                # type variables, we can use it for a more accurate analysis of whether `v`
+                # is constrained or not, otherwise we should use `def.sig` which always
+                # doesn't contain any free type variables
+                if !has_free_typevars(linfo.specTypes)
+                    sig = linfo.specTypes
+                end
+                @assert !has_free_typevars(sig)
+                constrains_param(v, sig, #=covariant=#true)
+            end)
         elseif isvarargtype(v)
             ty = Int
             undef = false
