@@ -2369,10 +2369,9 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argin
 
     if f === isdefined
         return isdefined_effects(𝕃, argtypes)
-    elseif f === bufferlen
+    elseif f === Core.bufferlen
         length(argtypes) == 1 || return EFFECTS_THROWS
-        # FIXME Buffer: this shouldn't be safe for DynamicBuffer
-        consistent = argtypes[1] <: DynamicBuffer ? ALWAYS_FALSE : ALWAYS_TRUE
+        consistent = (unwrap_unionall(widenconst(argtypes[end])) <: DynamicBuffer) ? ALWAYS_FALSE : ALWAYS_TRUE
         return Effects(EFFECTS_TOTAL; consistent)
     elseif f === getglobal
         return getglobal_effects(argtypes, rt)
