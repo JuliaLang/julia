@@ -818,12 +818,13 @@
          (field-convert (lambda (fld fty val)
                           (if (equal? fty '(core Any))
                               val
-                              `(call (top convert)
-                                     ,(if (and (not selftype?) (equal? type-params params) (memq fty params) (memq fty sparams))
-                                          fty ; the field type is a simple parameter, the usage here is of a
-                                              ; local variable (currently just handles sparam) for the bijection of params to type-params
-                                          `(call (core fieldtype) ,tn ,(+ fld 1)))
-                                     ,val)))))
+                              (convert-for-type-decl val
+                                                     ; for ty, usually use the fieldtype, not the fty expression
+                                                     (if (and (not selftype?) (equal? type-params params) (memq fty params) (memq fty sparams))
+                                                      fty ; the field type is a simple parameter, the usage here is of a
+                                                          ; local variable (currently just handles sparam) for the bijection of params to type-params
+                                                      `(call (core fieldtype) ,tn ,(+ fld 1)))
+                                                      #f)))))
     (cond ((> (num-non-varargs args) (length field-names))
            `(call (core throw) (call (top ArgumentError)
                                      ,(string "new: too many arguments (expected " (length field-names) ")"))))
@@ -3498,18 +3499,17 @@ f(x) = yt(x)
                     (cons (car x)
                           (map do-replace (cdr x))))))))))
 
-(define (convert-for-type-decl rhs t)
+(define (convert-for-type-decl rhs t assert)
   (if (equal? t '(core Any))
       rhs
-      (let* ((temp (if (or (atom? t) (ssavalue? t) (quoted? t))
+      (let* ((left (if (or (atom? t) (ssavalue? t) (quoted? t))
                        #f
                        (make-ssavalue)))
-             (ty   (or temp t))
-             (ex   `(call (core typeassert)
-                          (call (top convert) ,ty ,rhs)
-                          ,ty)))
-        (if temp
-            `(block (= ,temp ,(renumber-assigned-ssavalues t)) ,ex)
+             (ty   (or left t))
+             (ex   `(call (top convert) ,ty ,rhs))
+             (ex   (if assert `(call (core typeassert) ,ex ,ty) ex)))
+        (if left
+            `(block (= ,left ,(renumber-assigned-ssavalues t)) ,ex)
             ex))))
 
 (define (capt-var-access var fname opaq)
@@ -3525,7 +3525,7 @@ f(x) = yt(x)
          (ref   (binding-to-globalref var))
          (ty   `(call (core get_binding_type) ,(cadr ref) (inert ,(caddr ref))))
          (rhs  (if (get globals ref #t) ;; no type declaration for constants
-                   (convert-for-type-decl rhs1 ty)
+                   (convert-for-type-decl rhs1 ty #t)
                    rhs1))
          (ex   `(= ,var ,rhs)))
     (if (eq? rhs1 rhs0)
@@ -3557,9 +3557,7 @@ f(x) = yt(x)
                                 (equal? rhs0 '(the_exception)))
                             rhs0
                             (make-ssavalue)))
-                  (rhs  (if (equal? vt '(core Any))
-                            rhs1
-                            (convert-for-type-decl rhs1 (cl-convert vt fname lam #f #f #f interp opaq))))
+                  (rhs  (convert-for-type-decl rhs1 (cl-convert vt fname lam #f #f #f interp opaq) #t))
                   (ex (cond (closed `(call (core setfield!)
                                            ,(if interp
                                                 `($ ,var)
@@ -4315,7 +4313,7 @@ f(x) = yt(x)
               x)))
       (define (actually-return x)
         (let* ((x (if rett
-                      (compile (convert-for-type-decl (emit- x) rett) '() #t #f)
+                      (compile (convert-for-type-decl (emit- x) rett #t) '() #t #f)
                       x))
                (x (emit- x)))
           (let ((pexc (pop-exc-expr catch-token-stack '())))
