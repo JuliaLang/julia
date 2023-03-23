@@ -948,16 +948,14 @@ let buf = IOBuffer()
     @test isempty(take!(buf))
 end
 
-@testset "stacktrace filter case 1" begin
-    f(g, a; kw...) = error();
-    @inline f(a; kw...) = f(identity, a; kw...);
-    bt = try
-        f(1)
-    catch
-        catch_backtrace()
-    end
-    @test !occursin("#f#", sprint(Base.show_backtrace, bt))
+f_internal_wrap(g, a; kw...) = error();
+@inline f_internal_wrap(a; kw...) = f_internal_wrap(identity, a; kw...);
+bt = try
+    f_internal_wrap(1)
+catch
+    catch_backtrace()
 end
+@test !occursin("#f_internal_wrap#", sprint(Base.show_backtrace, bt))
 
 g_collapse_pos(x, y=1.0, z=2.0) = error()
 bt = try
