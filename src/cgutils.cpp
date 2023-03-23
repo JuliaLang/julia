@@ -902,9 +902,8 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
     // If the types are small and simple, use load and store directly.
     // Going through memcpy can cause LLVM (e.g. SROA) to create bitcasts between float and int
     // that interferes with other optimizations.
-#ifndef JL_LLVM_OPAQUE_POINTERS
     // TODO: Restore this for opaque pointers? Needs extra type information from the caller.
-    if (sz <= 64) {
+    if (ctx.builder.getContext().supportsTypedPointers() && sz <= 64) {
         // The size limit is arbitrary but since we mainly care about floating points and
         // machine size vectors this should be enough.
         const DataLayout &DL = jl_Module->getDataLayout();
@@ -942,7 +941,6 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
             return;
         }
     }
-#endif
     ++EmittedMemcpys;
 
     // the memcpy intrinsic does not allow to specify different alias tags
