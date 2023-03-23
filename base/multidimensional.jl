@@ -509,8 +509,23 @@ module IteratorsMD
     end
 
     # reversed CartesianIndices iteration
-
-    Base.reverse(iter::CartesianIndices) = CartesianIndices(reverse.(iter.indices))
+    @inline function Base._reverse(iter::CartesianIndices, ::Colon)
+        CartesianIndices(reverse.(iter.indices))
+    end
+    Base.@constprop :aggressive function Base._reverse(iter::CartesianIndices, dim::Integer)
+        1 <= dim <= ndims(iter) || throw(ArgumentError(Base.LazyString("invalid dimension ", dim, " in reverse")))
+        indices = iter.indices
+        return CartesianIndices(Base.setindex(indices, reverse(indices[dim]), dim))
+    end
+    Base.@constprop :aggressive function Base._reverse(iter::CartesianIndices, dims::Tuple{Vararg{Integer}})
+        indices = iter.indices
+        dimrev = ntuple(in(dims), Val(length(indices)))
+        length(dims) == sum(dimrev) || throw(ArgumentError(Base.LazyString("invalid dimensions ", dims, " in reverse")))
+        indices′ = foldl(dims; init = indices) do i, dim
+            Base.setindex(i, reverse(i[dim]), dim)
+        end
+        return CartesianIndices(indices′)
+    end
 
     @inline function iterate(r::Reverse{<:CartesianIndices})
         iterfirst = last(r.itr)
