@@ -63,6 +63,7 @@ function Core.OpaqueClosure(ir::IRCode, env...;
     if (isva && nargs > length(ir.argtypes)) || (!isva && nargs != length(ir.argtypes)-1)
         throw(ArgumentError("invalid argument count"))
     end
+    ir = Core.Compiler.copy(ir)
     src = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
     src.slotflags = UInt8[]
     src.slotnames = fill(:none, nargs+1)
