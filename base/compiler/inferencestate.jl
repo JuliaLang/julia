@@ -459,7 +459,18 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
         v = sp[i]
         if v isa TypeVar
             fromArg = 0
-            maybe_undef = !constrains_param(v, linfo.specTypes, #=covariant=#true)
+            maybe_undef = !(let sig=sig
+                # if the specialized signature `linfo.specTypes` doesn't contain any free
+                # type variables, we can use it for a more accurate analysis of whether `v`
+                # is constrained or not, otherwise we should use `def.sig` which always
+                # doesn't contain any free type variables
+                if !has_free_typevars(linfo.specTypes)
+                    sig = linfo.specTypes
+                else
+                    @assert !has_free_typevars(sig)
+                end
+                constrains_param(v, sig, #=covariant=#true)
+            end)
             temp = sig
             for j = 1:i-1
                 temp = temp.body
