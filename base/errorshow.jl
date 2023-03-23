@@ -863,9 +863,8 @@ function _collapse_repeated_frames(trace)
                 frame.linfo.def isa Method && last_frame.linfo.def isa Method
                 m, last_m = frame.linfo.def::Method, last_frame.linfo.def::Method
                 params, last_params = Base.unwrap_unionall(m.sig).parameters, Base.unwrap_unionall(last_m.sig).parameters
-
                 if last_m.nkw != 0
-                    pos_sig_params = Base.rewrap_unionall(Tuple{last_params[(last_m.nkw+2):end]...}, last_m.sig).parameters
+                    pos_sig_params = last_params[(last_m.nkw+2):end]
                     issame = true
                     if pos_sig_params == params
                         kept_frames[i] = false
