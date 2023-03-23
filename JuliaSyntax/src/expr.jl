@@ -138,7 +138,8 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
         eq_to_kw_in_call =
             ((headsym === :call || headsym === :dotcall) && is_prefix_call(node)) ||
             headsym === :ref
-        eq_to_kw_all = headsym === :parameters && !map_kw_in_params
+        eq_to_kw_all = (headsym === :parameters && !map_kw_in_params) ||
+                       (headsym === :parens && eq_to_kw)
         in_vcbr = headsym === :vect || headsym === :curly || headsym === :braces || headsym === :ref
         if insert_linenums && isempty(node_args)
             push!(args, source_location(LineNumberNode, node.source, node.position))
@@ -205,7 +206,15 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
         reorder_parameters!(args, 2)
     elseif headsym === :parens
         # parens are used for grouping and don't appear in the Expr AST
-        return only(args)
+        if length(args) == 1
+            return args[1]
+        else
+            # This case should only occur when there's an error inside the
+            # parens, and we've passed ignore_errors=true to the parser.
+            # Wrap in a block to preserve both the value and the error.
+            @check all(Meta.isexpr(args[j], :error) for j in 2:length(args))
+            return Expr(:block, args...)
+        end
     elseif headsym in (:try, :try_finally_catch)
         # Try children in source order:
         #   try_block catch_var catch_block else_block finally_block
@@ -329,9 +338,10 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
             imports = args
         end
         for imp in imports
-            for i = 1:length(imp.args)
-                if imp.args[i] isa QuoteNode
-                    imp.args[i] = imp.args[i].value
+            imp_path = Meta.isexpr(imp, :as) ? imp.args[1].args : imp.args
+            for i = 1:length(imp_path)
+                if imp_path[i] isa QuoteNode
+                    imp_path[i] = imp_path[i].value
                 end
             end
         end

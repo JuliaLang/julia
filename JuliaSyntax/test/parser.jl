@@ -651,6 +651,7 @@ tests = [
         "import A.B.C"  =>  "(import (. A B C))"
         "import A.:+"  =>  "(import (. A (quote +)))"
         "import A.(:+)"=>  "(import (. A (parens (quote +))))"
+        "import A.:(+)" => "(import (. A (quote (parens +))))"
         "import A.=="  =>  "(import (. A ==))"
         "import A.⋆.f" =>  "(import (. A ⋆ f))"
         "import A..."  =>  "(import (. A ..))"

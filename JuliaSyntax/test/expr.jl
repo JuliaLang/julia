@@ -230,6 +230,15 @@
         # dotted = is not :kw
         @test parse(Expr, "f(a .= 1)") ==
             Expr(:call, :f, Expr(:.=, :a, 1))
+
+        # = inside parens in calls and tuples
+        # (TODO: we should warn for these cases.)
+        @test parse(Expr, "f(((a = 1)))") ==
+            Expr(:call, :f, Expr(:kw, :a, 1))
+        @test parse(Expr, "(((a = 1)),)") ==
+            Expr(:tuple, Expr(:(=), :a, 1))
+        @test parse(Expr, "(;((a = 1)),)") ==
+            Expr(:tuple, Expr(:parameters, Expr(:kw, :a, 1)))
     end
 
     @testset "dotcall" begin
@@ -334,10 +343,21 @@
         @test parseall(Expr, "a b", ignore_errors=true) ==
             Expr(:toplevel, LineNumberNode(1), :a,
                  LineNumberNode(1), Expr(:error, :b))
+        @test parse(Expr, "(x", ignore_errors=true) ==
+            Expr(:block, :x, Expr(:error))
     end
 
     @testset "import" begin
         @test parse(Expr, "import A.(:b).:c: x.:z", ignore_warnings=true) ==
             Expr(:import, Expr(Symbol(":"), Expr(:., :A, :b, :c), Expr(:., :x, :z)))
+        # Stupid parens and quotes in import paths
+        @test parse(Expr, "import A.:+", ignore_warnings=true) ==
+            Expr(:import, Expr(:., :A, :+))
+        @test parse(Expr, "import A.(:+)", ignore_warnings=true) ==
+            Expr(:import, Expr(:., :A, :+))
+        @test parse(Expr, "import A.:(+)", ignore_warnings=true) ==
+            Expr(:import, Expr(:., :A, :+))
+        @test parse(Expr, "import A.:(+) as y", ignore_warnings=true, version=v"1.6") ==
+            Expr(:import, Expr(:as, Expr(:., :A, :+), :y))
     end
 end
