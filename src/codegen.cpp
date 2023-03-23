@@ -1201,11 +1201,7 @@ static const auto julia_call = new JuliaFunction{
     [](LLVMContext &C) {
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
         return FunctionType::get(T_prjlvalue,
-#ifdef JL_LLVM_OPAQUE_POINTERS
-            {PointerType::get(C, 0),
-#else
             {get_func_sig(C)->getPointerTo(),
-#endif
              T_prjlvalue}, // %f
             true); }, // %args
     get_attrs_basic,
@@ -1218,11 +1214,7 @@ static const auto julia_call2 = new JuliaFunction{
     [](LLVMContext &C) {
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
         return FunctionType::get(T_prjlvalue,
-#ifdef JL_LLVM_OPAQUE_POINTERS
-            {PointerType::get(C, 0),
-#else
             {get_func2_sig(C)->getPointerTo(),
-#endif
              T_prjlvalue, // %arg1
              T_prjlvalue}, // %f
             true); }, // %args
