@@ -900,16 +900,16 @@ Reduce test case via combination of bisection and random deletion.
 This is suited to randomly generated strings, but it's surprisingly effective
 for code-like strings as well.
 """
-function rand_reduce(str)
+function rand_reduce(str, parse_failure=parser_throws_exception)
     while true
         if length(str) <= 1
             return str
         end
         m1 = thisind(str, length(str)÷2)
         m2 = nextind(str, m1)
-        if parser_throws_exception(str[1:m1])
+        if parse_failure(str[1:m1])
             str = str[1:m1]
-        elseif parser_throws_exception(str[m2:end])
+        elseif parse_failure(str[m2:end])
             str = str[m2:end]
         else
             chunklen = clamp(length(str)÷10, 1, 10)
@@ -917,7 +917,7 @@ function rand_reduce(str)
             for i = 1:100
                 m = thisind(str, rand(1:length(str)-chunklen))
                 s = str[1:m]*str[nextind(str, m+chunklen):end]
-                if parser_throws_exception(s)
+                if parse_failure(s)
                     str = s
                     reduced = true
                     break
