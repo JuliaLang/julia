@@ -326,19 +326,17 @@ const _UTF8_DFA_INVALID = _UTF8DFAState(10) # If the state machine is ever in th
     return (state)
 end
 
-@inline function _find_nonascii_chunk(cu::AbstractVector{UInt8}, first::Int, last::Int)
-    chunk_size = 256
-    epilog_bytes = rem(last - first + 1, chunk_size)
-    start = first
-    chunk_last = last - epilog_bytes
-    start > last && return nothing
-    for start = start:chunk_size:chunk_last
-        _isascii(cu, start, start + chunk_size - 1) || return start
+@inline function  _find_nonascii_chunk(chunk_size,cu::AbstractVector{CU}, first,last) where {CU}
+    n=first
+    while n <= last - chunk_size
+        _isascii(cu,n,n+chunk_size-1) || return n
+        n += chunk_size
     end
-    start = chunk_last + 1
-    ((start <= last) && _isascii(cu, start, last)) || return start
+    n= last-chunk_size+1
+    _isascii(cu,n,last) || return n
     return nothing
 end
+
 ##
 
 # Classifcations of string
@@ -349,10 +347,16 @@ end
 
 
 function byte_string_classify(bytes::AbstractVector{UInt8})
+    chunk_size = 1024
+    chunk_threshold =  chunk_size + (chunk_size ÷ 2)
     n = length(bytes)
-    start = _find_nonascii_chunk(bytes,1,n)
-    isnothing(start) && return 1
-
+    if n > chunk_threshold
+        start = _find_nonascii_chunk(chunk_size,bytes,1,n)
+        isnothing(start) && return 1
+    else
+        _isascii(bytes,1,n) && return 1
+        start = 1
+    end
     return _byte_string_classify_nonascii(bytes,start,n)
 end
 
@@ -363,18 +367,18 @@ function _byte_string_classify_nonascii(bytes::AbstractVector{UInt8}, first::Int
     stop = min(last,first + chunk_size - 1)
     state = _UTF8_DFA_ACCEPT
     while start <= last
-        # Process non ascii chunk
-        state = _isvalid_utf8_dfa(state,bytes,start,stop)
-        state == _UTF8_DFA_INVALID && return 0
-
-        start = start + chunk_size
-        stop = min(last,stop + chunk_size)
         # try to process ascii chunks
         while state == _UTF8_DFA_ACCEPT
             _isascii(bytes,start,stop) || break
             (start = start + chunk_size) <= last || break
             stop = min(last,stop + chunk_size)
         end
+        # Process non ascii chunk
+        state = _isvalid_utf8_dfa(state,bytes,start,stop)
+        state == _UTF8_DFA_INVALID && return 0
+
+        start = start + chunk_size
+        stop = min(last,stop + chunk_size)
     end
     return ifelse(state == _UTF8_DFA_ACCEPT,2,0)
 end
