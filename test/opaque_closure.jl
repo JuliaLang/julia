@@ -256,8 +256,7 @@ let src = first(only(code_typed(+, (Int, Int))))
     @test oc(40, 2) == 42
     @test isa(oc, OpaqueClosure{Tuple{Int,Int}, Int})
     @test_throws TypeError oc("40", 2)
-    ir = Core.Compiler.inflate_ir(src)
-    @test OpaqueClosure(ir)(40, 2) == 42
+    @test OpaqueClosure(ir)(40, 2) == 42 # OpaqueClosure constructor should be non-destructive
 end
 
 # variadic arguments
