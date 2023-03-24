@@ -2007,7 +2007,7 @@ end
 @test Meta.parse("import Base.Foo.:(==).bar") == :(import Base.Foo.==.bar)
 
 # issue #33135
-function f33135(x::T) where {C1, T}
+@test_warn "declares type variable C1 but does not use it" @eval function f33135(x::T) where {C1, T}
     let C1 = 1, C2 = 2
         C1
     end
