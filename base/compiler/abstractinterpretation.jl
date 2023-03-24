@@ -2060,7 +2060,7 @@ function most_general_argtypes(closure::PartialOpaque)
     if !isa(argt, DataType) || argt.name !== typename(Tuple)
         argt = Tuple
     end
-    return most_general_argtypes(closure.source, argt, false)
+    return most_general_argtypes(closure.source, argt, #=withfirst=#false)
 end
 
 # call where the function is any lattice element
