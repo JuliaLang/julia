@@ -2218,6 +2218,12 @@ end
 # Example from pr#39098
 @testintersect(NTuple, Tuple{Any,Vararg}, Tuple{T, Vararg{T}} where {T})
 
+let S = Val{T} where T<:Tuple{Tuple{Any, Vararg{Any}}}
+    T = Val{Tuple{Tuple{Vararg{Any, N}}}} where {N}
+    @testintersect(S, T, !Union{})
+    @test_broken typeintersect(S, T) != Val{Tuple{Tuple{Any, Vararg{Any}}}}
+end
+
 let A = Pair{NTuple{N, Int}, Val{N}} where N,
     Bs = (Pair{<:Tuple{Int, Vararg{Int}}, <:Val},
           Pair{Tuple{Int, Vararg{Int,N1}}, Val{N2}} where {N1,N2})
