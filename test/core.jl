@@ -5267,10 +5267,10 @@ end
 GC.enable(true)
 
 # issue #18710
-bad_tvars() where {T} = 1
+@test_warn "declares type variable T but does not use it" @eval bad_tvars() where {T} = 1
 @test isa(which(bad_tvars, ()), Method)
 @test bad_tvars() === 1
-bad_tvars2() where {T} = T
+@test_warn "declares type variable T but does not use it" @eval bad_tvars2() where {T} = T
 @test_throws UndefVarError(:T) bad_tvars2()
 missing_tvar(::T...) where {T} = T
 @test_throws UndefVarError(:T) missing_tvar()
