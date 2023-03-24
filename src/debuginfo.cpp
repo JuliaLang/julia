@@ -41,10 +41,10 @@ using namespace llvm;
 #include "julia_assert.h"
 #include "debug-registry.h"
 
-static JITDebugInfoRegistry DebugRegistry;
+static JITDebugInfoRegistry *DebugRegistry = new JITDebugInfoRegistry;
 
 static JITDebugInfoRegistry &getJITDebugRegistry() JL_NOTSAFEPOINT {
-    return DebugRegistry;
+    return *DebugRegistry;
 }
 
 struct debug_link_info {
