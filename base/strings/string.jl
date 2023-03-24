@@ -113,7 +113,8 @@ pointer(s::String, i::Integer) = pointer(s) + Int(i)::Int - 1
 ncodeunits(s::String) = Core.sizeof(s)
 codeunit(s::String) = UInt8
 
-@assume_effects :foldable @inline function codeunit(s::String, i::Integer)
+function codeunit(s::String, i::Integer) = codeunit(s, Int(i)
+@assume_effects :foldable @inline function codeunit(s::String, i::Int)
     @boundscheck checkbounds(s, i)
     b = GC.@preserve s unsafe_load(pointer(s, i))
     return b
