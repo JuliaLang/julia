@@ -756,8 +756,18 @@
 
 (define (default-inner-ctors name field-names field-types params bounds locs)
   (let* ((field-names (safe-field-names field-names field-types))
-         (any-ctor
+         (all-ctor (if (null? params)
+          ;; definition with exact types for all arguments
+          `(function (call ,name
+                          ,@(map make-decl field-names field-types))
+                    (block
+                     ,@locs
+                     (new (outerref ,name) ,@field-names)))
+          #f))
+         (any-ctor (if (or (not all-ctor) (any (lambda (t) (not (equal? t '(core Any))))
+                                 field-types))
           ;; definition with Any for all arguments
+          ;; only if any field type is not Any, checked at runtime
           `(function (call (|::| |#ctor-self#|
                             ,(with-wheres
                               `(curly (core Type) ,(if (pair? params)
@@ -767,23 +777,18 @@
                            ,@field-names)
                      (block
                       ,@locs
-                      (call new ,@field-names)))))
-    (if (and (null? params) (any (lambda (t) (not (equal? t '(core Any))))
-                                 field-types))
-        (list
-         ;; definition with field types for all arguments
-         ;; only if any field type is not Any, checked at runtime
-         `(if ,(foldl (lambda (t u)
-                        `(&& ,u (call (core ===) (core Any) ,t)))
-                      `(call (core ===) (core Any) ,(car field-types))
-                      (cdr field-types))
-            (block)
-            (function (call ,name
-                            ,@(map make-decl field-names field-types))
-                      (block
-                       ,@locs
-                       (new (outerref ,name) ,@field-names))))
-         any-ctor)
+                      (call new ,@field-names))) ; this will add convert calls later
+          #f)))
+    (if all-ctor
+        (if any-ctor
+            (list all-ctor
+                  `(if ,(foldl (lambda (t u)
+                           `(&& ,u (call (core ===) (core Any) ,t)))
+                         `(call (core ===) (core Any) ,(car field-types))
+                         (cdr field-types))
+                       '(block)
+                       ,any-ctor))
+            (list all-ctor))
         (list any-ctor))))
 
 (define (default-outer-ctor name field-names field-types params bounds locs)
