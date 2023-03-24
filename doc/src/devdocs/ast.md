@@ -685,10 +685,10 @@ A (usually temporary) container for holding lowered source code.
 
     A `UInt8` array of slot properties, represented as bit flags:
 
-      * 2  - assigned (only false if there are *no* assignment statements with this var on the left)
-      * 8  - const (currently unused for local variables)
-      * 16 - statically assigned once
-      * 32 - might be used before assigned. This flag is only valid after type inference.
+      * 0x02 - assigned (only false if there are *no* assignment statements with this var on the left)
+      * 0x08 - used (if there is any read or write of the slot)
+      * 0x10 - statically assigned once
+      * 0x20 - might be used before assigned. This flag is only valid after type inference.
 
   * `ssavaluetypes`
 

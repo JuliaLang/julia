@@ -518,21 +518,21 @@ void jl_add_function_name_to_lineinfo(jl_code_info_t *ci, jl_value_t *name)
 }
 
 // invoke (compiling if necessary) the jlcall function pointer for a method template
-STATIC_INLINE jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator, jl_svec_t *sparam_vals,
-                                         jl_value_t **args, uint32_t nargs)
+static jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator,
+        size_t world, jl_svec_t *sparam_vals, jl_value_t **args, uint32_t nargs)
 {
     size_t n_sparams = jl_svec_len(sparam_vals);
     jl_value_t **gargs;
-    size_t totargs = 1 + n_sparams + nargs + def->isva;
+    size_t totargs = 2 + n_sparams + def->nargs;
     JL_GC_PUSHARGS(gargs, totargs);
-    gargs[0] = generator;
-    memcpy(&gargs[1], jl_svec_data(sparam_vals), n_sparams * sizeof(void*));
-    memcpy(&gargs[1 + n_sparams], args, nargs * sizeof(void*));
-    if (def->isva) {
-        gargs[totargs-1] = jl_f_tuple(NULL, &gargs[1 + n_sparams + def->nargs - 1], nargs - (def->nargs - 1));
-        gargs[1 + n_sparams + def->nargs - 1] = gargs[totargs - 1];
-    }
-    jl_value_t *code = jl_apply(gargs, 1 + n_sparams + def->nargs);
+    gargs[0] = jl_box_ulong(world);
+    gargs[1] = jl_box_long(def->line);
+    gargs[1] = jl_new_struct(jl_linenumbernode_type, gargs[1], def->file);
+    memcpy(&gargs[2], jl_svec_data(sparam_vals), n_sparams * sizeof(void*));
+    memcpy(&gargs[2 + n_sparams], args, (def->nargs - def->isva) * sizeof(void*));
+    if (def->isva)
+        gargs[totargs - 1] = jl_f_tuple(NULL, &args[def->nargs - 1], nargs - def->nargs + 1);
+    jl_value_t *code = jl_apply_generic(generator, gargs, totargs);
     JL_GC_POP();
     return code;
 }
@@ -556,7 +556,7 @@ JL_DLLEXPORT jl_code_info_t *jl_expand_and_resolve(jl_value_t *ex, jl_module_t *
 
 // Return a newly allocated CodeInfo for the function signature
 // effectively described by the tuple (specTypes, env, Method) inside linfo
-JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
+JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, size_t world)
 {
     jl_value_t *uninferred = jl_atomic_load_relaxed(&linfo->uninferred);
     if (uninferred) {
@@ -580,13 +580,13 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 
     JL_TRY {
         ct->ptls->in_pure_callback = 1;
-        // and the right world
         ct->world_age = def->primary_world;
 
         // invoke code generator
         jl_tupletype_t *ttdt = (jl_tupletype_t*)jl_unwrap_unionall(tt);
-        ex = jl_call_staged(def, generator, linfo->sparam_vals, jl_svec_data(ttdt->parameters), jl_nparams(ttdt));
+        ex = jl_call_staged(def, generator, world, linfo->sparam_vals, jl_svec_data(ttdt->parameters), jl_nparams(ttdt));
 
+        // do some post-processing
         if (jl_is_code_info(ex)) {
             func = (jl_code_info_t*)ex;
             jl_array_t *stmts = (jl_array_t*)func->code;
@@ -603,7 +603,6 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
                 jl_error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure, a comprehension or a generator.");
             }
         }
-
         jl_add_function_name_to_lineinfo(func, (jl_value_t*)def->name);
 
         // If this generated function has an opaque closure, cache it for
@@ -743,20 +742,12 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
                 st = jl_nothing;
             }
             else if (nargs == 2 && jl_exprarg(st, 0) == (jl_value_t*)jl_generated_sym) {
-                m->generator = NULL;
+                if (m->generator != NULL)
+                    jl_error("duplicate @generated function body");
                 jl_value_t *gexpr = jl_exprarg(st, 1);
-                if (jl_expr_nargs(gexpr) == 7) {
-                    // expects (new (core GeneratedFunctionStub) funcname argnames sp line file expandearly)
-                    jl_value_t *funcname = jl_exprarg(gexpr, 1);
-                    assert(jl_is_symbol(funcname));
-                    if (jl_get_global(m->module, (jl_sym_t*)funcname) != NULL) {
-                        m->generator = jl_toplevel_eval(m->module, gexpr);
-                        jl_gc_wb(m, m->generator);
-                    }
-                }
-                if (m->generator == NULL) {
-                    jl_error("invalid @generated function; try placing it in global scope");
-                }
+                // the frontend would put (new (core GeneratedFunctionStub) funcname argnames sp) here, for example
+                m->generator = jl_toplevel_eval(m->module, gexpr);
+                jl_gc_wb(m, m->generator);
                 st = jl_nothing;
             }
             else if (nargs == 1 && jl_exprarg(st, 0) == (jl_value_t*)jl_generated_only_sym) {
