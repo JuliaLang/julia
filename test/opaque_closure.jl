@@ -256,7 +256,14 @@ let src = first(only(code_typed(+, (Int, Int))))
     @test oc(40, 2) == 42
     @test isa(oc, OpaqueClosure{Tuple{Int,Int}, Int})
     @test_throws TypeError oc("40", 2)
-    @test OpaqueClosure(ir)(40, 2) == 42 # OpaqueClosure constructor should be non-destructive
+    @test OpaqueClosure(ir)(40, 2) == 42 # the `OpaqueClosure(::IRCode)` constructor should be non-destructive
+end
+let ir = first(only(Base.code_ircode(sin, (Int,))))
+    @test OpaqueClosure(ir)(42) == sin(42)
+    @test OpaqueClosure(ir)(42) == sin(42) # the `OpaqueClosure(::IRCode)` constructor should be non-destructive
+    ir = first(only(Base.code_ircode(sin, (Float64,))))
+    @test OpaqueClosure(ir)(42.) == sin(42.)
+    @test OpaqueClosure(ir)(42.) == sin(42.) # the `OpaqueClosure(::IRCode)` constructor should be non-destructive
 end
 
 # variadic arguments
