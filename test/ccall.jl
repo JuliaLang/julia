@@ -1516,6 +1516,9 @@ end
 @test_throws(ErrorException("ccall return type struct fields cannot contain a reference"),
              @eval ccall(:fn, typeof(Ref("")), ()))
 
+@test_throws(TypeError, @eval ccall(nothing, Cvoid, ()))
+@test_throws(TypeError, @eval ccall(49142, Cvoid, ()))
+
 # test for malformed syntax errors
 @test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (), x)))
 @test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,), x, y)))
@@ -1910,6 +1913,9 @@ end
     function cglobal33413_literal_notype()
         return cglobal(:sin)
     end
+    function cglobal49142_nothing()
+        return cglobal(nothing)
+    end
     @test unsafe_load(cglobal33413_ptrvar()) == 1
     @test unsafe_load(cglobal33413_ptrinline()) == 1
     @test unsafe_load(cglobal33413_tupleliteral()) == 1
@@ -1918,6 +1924,7 @@ end
     @test unsafe_load(convert(Ptr{Cint}, cglobal33413_tupleliteral_notype())) == 1
     @test cglobal33413_literal() != C_NULL
     @test cglobal33413_literal_notype() != C_NULL
+    @test_throws TypeError cglobal49142_nothing()
 end
 
 @testset "ccall_effects" begin
