@@ -402,6 +402,26 @@ true
 """
 function match end
 
+"""
+    match(f, re::Regex, s::AbstractString)
+
+Search for the first match of the regular expression `re` in `s` and return the result of
+calling `f(m)`, where `m` is a [`RegexMatch`](@ref) object containing the match, or nothing if
+the match failed. The matching substring can be retrieved by accessing `m.match` and the
+captured sequences can be retrieved by accessing `m.captures`.
+
+# Examples
+```jldoctest
+julia> match(m -> m.captures[1], r"a(.)a", "cabac")
+"b"
+```
+"""
+function match(f, re::Regex, s::AbstractString)
+    m = match(re, s)
+    m === nothing && return nothing
+    return f(m)
+end
+
 function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer,
                add_opts::UInt32=UInt32(0))
     compile(re)
