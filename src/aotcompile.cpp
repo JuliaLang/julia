@@ -2023,7 +2023,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
             if (src)
                 jlrettype = src->rettype;
             else if (jl_is_method(mi->def.method)) {
-                src = mi->def.method->generator ? jl_code_for_staged(mi) : (jl_code_info_t*)mi->def.method->source;
+                src = mi->def.method->generator ? jl_code_for_staged(mi, world) : (jl_code_info_t*)mi->def.method->source;
                 if (src && !jl_is_code_info(src) && jl_is_method(mi->def.method))
                     src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
             }
