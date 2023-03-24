@@ -66,7 +66,7 @@ function Core.OpaqueClosure(ir::IRCode, @nospecialize env...;
     rt = compute_ir_rettype(ir)
     src = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
     src.slotnames = fill(:none, nargs+1)
-    src.slotflags = UInt8[zero(UInt8) for _ in 1:length(ir.argtypes)]
+    src.slotflags = fill(zero(UInt8), length(ir.argtypes))
     src.slottypes = copy(ir.argtypes)
     src.rettype = rt
     src = Core.Compiler.ir_to_codeinf!(src, ir)
