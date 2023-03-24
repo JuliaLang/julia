@@ -125,7 +125,7 @@ $(eval $(call sysimg_builder,LibCURL,LibCURL_jll MozillaCACerts_jll))
 $(eval $(call sysimg_builder,Downloads,ArgTools FileWatching LibCURL NetworkOptions))
 
 # 6-depth packages
-$(eval $(call sysimg_builder,Pkg,Dates LibGit2 Libdl Logging Printf Random SHA UUIDs)) # Markdown REPL
+$(eval $(call pkgimg_builder,Pkg,Dates LibGit2 Libdl Logging Printf Random SHA UUIDs)) # Markdown REPL
 
 # 7-depth packages
 $(eval $(call pkgimg_builder,LazyArtifacts,Artifacts Pkg))
