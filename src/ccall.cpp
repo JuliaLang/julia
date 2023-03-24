@@ -698,6 +698,17 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
 
     interpret_symbol_arg(ctx, sym, args[1], /*ccall=*/false, false);
 
+    if (sym.f_name == NULL && sym.fptr == NULL && sym.jl_ptr == NULL && sym.gcroot != NULL) {
+        const char *errmsg = invalid_symbol_err_msg(/*ccall=*/false);
+        jl_cgval_t arg1 = emit_expr(ctx, args[1]);
+        emit_type_error(ctx, arg1, literal_pointer_val(ctx, (jl_value_t *)jl_pointer_type), errmsg);
+        ctx.builder.CreateUnreachable();
+        BasicBlock *cont = BasicBlock::Create(ctx.builder.getContext(), "after_type_error", ctx.f);
+        ctx.builder.SetInsertPoint(cont);
+        JL_GC_POP();
+        return jl_cgval_t();
+    }
+
     if (sym.jl_ptr != NULL) {
         res = ctx.builder.CreateBitCast(sym.jl_ptr, lrt);
     }
