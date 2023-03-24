@@ -1069,7 +1069,9 @@ constrain_length:
         }
 
         if (ylv) {
-            if (ylv->depth0 != e->invdepth || ylv->occurs_inv)
+            if (ylv->depth0 != e->invdepth ||
+                ylv->lb != jl_bottom_type ||
+                ylv->ub != (jl_value_t *)jl_any_type)
                 return 0;
             ylv->intvalued = 1;
         }
@@ -2531,6 +2533,7 @@ static int check_unsat_bound(jl_value_t *t, jl_tvar_t *v, jl_stenv_t *e) JL_NOTS
     return 0;
 }
 
+//TODO: This doesn't work for nested `Tuple`.
 static int has_free_vararg_length(jl_value_t *a, jl_stenv_t *e) {
     if (jl_is_unionall(a))
         a = jl_unwrap_unionall(a);
