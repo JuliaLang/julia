@@ -1813,6 +1813,10 @@ end
                Tuple{Type{F}, Any, Int} where {F<:(Pair{T, A} where {T, A<:Array{T}})},
                Tuple{Type{Pair{T, A} where {T, A<:(Array{T})}}, Int, Int})
 
+@testintersect(Type{Ref{Union{Int, Tuple{S,S} where S<:T}}} where T,
+              Type{F} where F<:(Base.RefValue{Union{Int, Tuple{S,S} where S<:T}} where T),
+              Union{})
+
 # issue #32488
 struct S32488{S <: Tuple, T, N, L}
     data::NTuple{L,T}
