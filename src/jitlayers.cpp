@@ -2,6 +2,7 @@
 
 #include "llvm-version.h"
 #include "platform.h"
+#include <sstream>
 
 #include "llvm/IR/Mangler.h"
 #include <llvm/ADT/StringMap.h>
@@ -47,18 +48,24 @@ using namespace llvm;
 
 void jl_init_jit(void) { }
 
+// Lock guarding the streams below
+jl_mutex_t llvm_opt_profiling_lock;
 // Snooping on which functions are being compiled, and how long it takes
 JL_STREAM *dump_compiles_stream = NULL;
 extern "C" JL_DLLEXPORT
 void jl_dump_compiles_impl(void *s)
 {
+    JL_LOCK(&llvm_opt_profiling_lock);
     dump_compiles_stream = (JL_STREAM*)s;
+    JL_UNLOCK(&llvm_opt_profiling_lock);
 }
 JL_STREAM *dump_llvm_opt_stream = NULL;
 extern "C" JL_DLLEXPORT
 void jl_dump_llvm_opt_impl(void *s)
 {
+    JL_LOCK(&llvm_opt_profiling_lock);
     dump_llvm_opt_stream = (JL_STREAM*)s;
+    JL_UNLOCK(&llvm_opt_profiling_lock);
 }
 
 static void jl_add_to_ee(std::unique_ptr<Module> m);
@@ -101,8 +108,10 @@ static jl_callptr_t _jl_compile_codeinst(
     // caller must hold codegen_lock
     // and have disabled finalizers
     uint64_t start_time = 0;
+    JL_LOCK(&llvm_opt_profiling_lock);
     if (dump_compiles_stream != NULL)
         start_time = jl_hrtime();
+    JL_UNLOCK(&llvm_opt_profiling_lock);
 
     assert(jl_is_code_instance(codeinst));
     assert(codeinst->min_world <= world && (codeinst->max_world >= world || codeinst->max_world == 0) &&
@@ -184,18 +193,22 @@ static jl_callptr_t _jl_compile_codeinst(
     }
 
     uint64_t end_time = 0;
+    JL_LOCK(&llvm_opt_profiling_lock);
     if (dump_compiles_stream != NULL)
         end_time = jl_hrtime();
+    JL_UNLOCK(&llvm_opt_profiling_lock);
 
     // If logging of the compilation stream is enabled,
     // then dump the method-instance specialization type to the stream
     jl_method_instance_t *mi = codeinst->def;
     if (jl_is_method(mi->def.method)) {
+        JL_LOCK(&llvm_opt_profiling_lock);
         if (dump_compiles_stream != NULL) {
             jl_printf(dump_compiles_stream, "%" PRIu64 "\t\"", end_time - start_time);
             jl_static_show(dump_compiles_stream, mi->specTypes);
             jl_printf(dump_compiles_stream, "\"\n");
         }
+        JL_UNLOCK(&llvm_opt_profiling_lock);
     }
     return fptr;
 }
@@ -477,25 +490,31 @@ static auto countBasicBlocks(const Function &F)
 CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
 {
     uint64_t start_time = 0;
+    std::stringstream before_stats_ss;
+    bool should_dump_opt_stats = false;
+    JL_LOCK(&llvm_opt_profiling_lock);
     if (dump_llvm_opt_stream != NULL) {
+        // Ensures that we don't _just_ write the second part of the YAML object
+        should_dump_opt_stats = true;
         // Print LLVM function statistics _before_ optimization
         // Print all the information about this invocation as a YAML object
-        jl_printf(dump_llvm_opt_stream, "- \n");
+        before_stats_ss << "- \n";
         // We print the name and some statistics for each function in the module, both
         // before optimization and again afterwards.
-        jl_printf(dump_llvm_opt_stream, "  before: \n");
+        before_stats_ss << "  before: \n";
         for (auto &F : M.functions()) {
             if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
                 continue;
             }
             // Each function is printed as a YAML object with several attributes
-            jl_printf(dump_llvm_opt_stream, "    \"%s\":\n", F.getName().str().c_str());
-            jl_printf(dump_llvm_opt_stream, "        instructions: %u\n", F.getInstructionCount());
-            jl_printf(dump_llvm_opt_stream, "        basicblocks: %lu\n", countBasicBlocks(F));
+            before_stats_ss << "    \"" << F.getName().str().c_str() << "\":\n";
+            before_stats_ss << "        instructions: " << F.getInstructionCount() << "\n";
+            before_stats_ss << "        basicblocks: " << countBasicBlocks(F) << "\n";
         }
 
         start_time = jl_hrtime();
     }
+    JL_UNLOCK(&llvm_opt_profiling_lock);
 
     JL_TIMING(LLVM_OPT);
 
@@ -544,7 +563,9 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
     }
 
     uint64_t end_time = 0;
-    if (dump_llvm_opt_stream != NULL) {
+    JL_LOCK(&llvm_opt_profiling_lock);
+    if (dump_llvm_opt_stream != NULL && should_dump_opt_stats) {
+        jl_printf(dump_llvm_opt_stream, "%s", before_stats_ss.str().c_str());
         end_time = jl_hrtime();
         jl_printf(dump_llvm_opt_stream, "  time_ns: %" PRIu64 "\n", end_time - start_time);
         jl_printf(dump_llvm_opt_stream, "  optlevel: %d\n", optlevel);
@@ -560,6 +581,7 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
             jl_printf(dump_llvm_opt_stream, "        basicblocks: %lu\n", countBasicBlocks(F));
         }
     }
+    JL_UNLOCK(&llvm_opt_profiling_lock);
 
     return CompilerResultT(std::move(ObjBuffer));
 }

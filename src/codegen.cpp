@@ -173,11 +173,15 @@ typedef Instruction TerminatorInst;
 #include "processor.h"
 #include "julia_assert.h"
 
+// Lock guarding access to the stream below.
+jl_mutex_t llvm_codegen_profiling_lock;
 JL_STREAM *dump_emitted_mi_name_stream = NULL;
 extern "C" JL_DLLEXPORT
 void jl_dump_emitted_mi_name_impl(void *s)
 {
+    JL_LOCK(&llvm_codegen_profiling_lock);
     dump_emitted_mi_name_stream = (JL_STREAM*)s;
+    JL_UNLOCK(&llvm_codegen_profiling_lock);
 }
 
 extern "C" {
@@ -7720,6 +7724,7 @@ jl_compile_result_t jl_emit_code(
         "functions compiled with custom codegen params must not be cached");
     JL_TRY {
         std::tie(m, decls) = emit_function(li, src, jlrettype, params, jl_LLVMContext);
+        JL_LOCK(&llvm_codegen_profiling_lock);
         if (dump_emitted_mi_name_stream != NULL) {
             jl_printf(dump_emitted_mi_name_stream, "%s\t", decls.specFunctionObject.c_str());
             // NOTE: We print the Type Tuple without surrounding quotes, because the quotes
@@ -7730,6 +7735,7 @@ jl_compile_result_t jl_emit_code(
             jl_static_show(dump_emitted_mi_name_stream, li->specTypes);
             jl_printf(dump_emitted_mi_name_stream, "\n");
         }
+        JL_UNLOCK(&llvm_codegen_profiling_lock);
     }
     JL_CATCH {
         // Something failed! This is very, very bad.
