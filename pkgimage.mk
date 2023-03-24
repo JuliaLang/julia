@@ -117,7 +117,7 @@ $(eval $(call sysimg_builder,Downloads,ArgTools FileWatching LibCURL NetworkOpti
 $(eval $(call sysimg_builder,Pkg,Dates LibGit2 Libdl Logging Printf Random SHA UUIDs)) # Markdown REPL
 
 # 7-depth packages
-$(eval $(call sysimg_builder,LazyArtifacts,Artifacts Pkg))
+$(eval $(call pkgimg_builder,LazyArtifacts,Artifacts Pkg))
 
 $(eval $(call pkgimg_builder,SparseArrays,Libdl LinearAlgebra Random Serialization))
 # SuiteSparse_jll

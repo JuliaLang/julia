@@ -396,7 +396,7 @@ precompile_test_harness(false) do dir
                  end for s in
                 [:ArgTools, :Artifacts, :Base64, :CompilerSupportLibraries_jll, :CRC32c, :Dates,
                  :Distributed, :Downloads, :FileWatching, :Future, :InteractiveUtils, :libblastrampoline_jll,
-                 :LazyArtifacts, :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
+                 :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
                  :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :OpenBLAS_jll, :Pkg, :Printf,
                  :p7zip_jll, :REPL, :Random, :SHA, :Serialization, :SharedArrays, :Sockets,
                  :TOML, :Tar, :Test, :UUIDs, :Unicode,

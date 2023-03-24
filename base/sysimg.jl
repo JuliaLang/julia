@@ -76,9 +76,6 @@ let
 
         # 6-depth packages
         :Pkg,
-
-        # 7-depth packages
-        :LazyArtifacts,
     ]
     # PackageCompiler can filter out stdlibs so it can be empty
     maxlen = maximum(textwidth.(string.(stdlibs)); init=0)
