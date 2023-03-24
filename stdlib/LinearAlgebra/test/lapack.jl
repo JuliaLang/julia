@@ -180,7 +180,7 @@ end
     end
 end
 
-@testset "geevx, ggev errors" begin
+@testset "geevx, ggev, ggev3 errors" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         B = rand(elty,10,10)
@@ -191,6 +191,9 @@ end
         @test_throws ArgumentError LAPACK.ggev!('N','B',A,B)
         @test_throws ArgumentError LAPACK.ggev!('B','N',A,B)
         @test_throws DimensionMismatch LAPACK.ggev!('N','N',A,zeros(elty,12,12))
+        @test_throws ArgumentError LAPACK.ggev3!('N','B',A,B)
+        @test_throws ArgumentError LAPACK.ggev3!('B','N',A,B)
+        @test_throws DimensionMismatch LAPACK.ggev3!('N','N',A,zeros(elty,12,12))
     end
 end
 
@@ -590,11 +593,12 @@ end
     end
 end
 
-@testset "gees, gges error throwing" begin
+@testset "gees, gges, gges3 error throwing" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         B = rand(elty,11,11)
         @test_throws DimensionMismatch LAPACK.gges!('V','V',A,B)
+        @test_throws DimensionMismatch LAPACK.gges3!('V','V',A,B)
     end
 end
 
