@@ -2402,8 +2402,16 @@ static jl_value_t *bound_var_below(jl_tvar_t *tv, jl_varbinding_t *bb, jl_stenv_
             return bb->lb;
         return jl_box_long(blb - offset);
     }
-    if (offset > 0)
-        return NULL;
+    if (offset > 0) {
+        if (bb->innervars == NULL)
+            bb->innervars = jl_alloc_array_1d(jl_array_any_type, 0);
+        jl_value_t *ntv = NULL;
+        JL_GC_PUSH1(&ntv);
+        ntv = (jl_value_t *)jl_new_typevar(tv->name, jl_bottom_type, (jl_value_t *)jl_any_type);
+        jl_array_ptr_1d_push(bb->innervars, ntv);
+        JL_GC_POP();
+        return ntv;
+    }
     return (jl_value_t*)tv;
 }
 
@@ -2533,26 +2541,6 @@ static int check_unsat_bound(jl_value_t *t, jl_tvar_t *v, jl_stenv_t *e) JL_NOTS
     return 0;
 }
 
-//TODO: This doesn't work for nested `Tuple`.
-static int has_free_vararg_length(jl_value_t *a, jl_stenv_t *e) {
-    if (jl_is_unionall(a))
-        a = jl_unwrap_unionall(a);
-    if (jl_is_datatype(a) && jl_is_tuple_type((jl_datatype_t *)a)) {
-        size_t lx = jl_nparams((jl_datatype_t *)a);
-        if (lx > 0) {
-            jl_value_t *la = jl_tparam((jl_datatype_t *)a, lx-1);
-            if (jl_is_vararg(la)) {
-                jl_value_t *len = jl_unwrap_vararg_num((jl_vararg_t *)la);
-                // return 1 if we meet a vararg with Null length
-                if (!len) return 1;
-                // or a typevar not in the current env.
-                if (jl_is_typevar(len))
-                    return lookup(e, (jl_tvar_t *)len) == NULL;
-            }
-        }
-    }
-    return 0;
-}
 
 static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int8_t R, int param)
 {
@@ -2596,11 +2584,6 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
                 JL_GC_POP();
                 return jl_bottom_type;
             }
-            if (jl_is_uniontype(ub) && !jl_is_uniontype(a)) {
-                bb->ub = ub;
-                bb->lb = jl_bottom_type;
-                ub = (jl_value_t*)b;
-            }
         }
         if (ub != (jl_value_t*)b) {
             if (jl_has_free_typevars(ub)) {
@@ -2610,12 +2593,11 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
                 }
             }
             bb->ub = ub;
-            // We get a imprecise Tuple here. Don't change `lb` and return the typevar directly.
-            if (has_free_vararg_length(ub, e) && !has_free_vararg_length(a, e)) {
-                JL_GC_POP();
-                return (jl_value_t*)b;
-            }
-            bb->lb = ub;
+            if ((jl_is_uniontype(ub) && !jl_is_uniontype(a)) ||
+                (jl_is_unionall(ub) && !jl_is_unionall(a)))
+                ub = (jl_value_t*)b;
+            else
+                bb->lb = ub;
         }
         JL_GC_POP();
         return ub;
