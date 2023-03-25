@@ -1498,7 +1498,7 @@ JL_CALLABLE(jl_f_arrayset)
 
 JL_CALLABLE(jl_f__structtype)
 {
-    JL_NARGS(_structtype, 7, 7);
+    JL_NARGS(_structtype, 8, 8);
     JL_TYPECHK(_structtype, module, args[0]);
     JL_TYPECHK(_structtype, symbol, args[1]);
     JL_TYPECHK(_structtype, simplevector, args[2]);
@@ -1506,12 +1506,15 @@ JL_CALLABLE(jl_f__structtype)
     JL_TYPECHK(_structtype, simplevector, args[4]);
     JL_TYPECHK(_structtype, bool, args[5]);
     JL_TYPECHK(_structtype, long, args[6]);
+    JL_TYPECHK(_structtype, bool, args[7]);
     jl_value_t *fieldnames = args[3];
     jl_value_t *fieldattrs = args[4];
     jl_datatype_t *dt = NULL;
     dt = jl_new_datatype((jl_sym_t*)args[1], (jl_module_t*)args[0], NULL, (jl_svec_t*)args[2],
                          (jl_svec_t*)fieldnames, NULL, (jl_svec_t*)fieldattrs,
                          0, args[5]==jl_true ? 1 : 0, jl_unbox_long(args[6]));
+    if (args[7] == jl_true)
+        dt->name->quietparams = 1;
     return dt->name->wrapper;
 }
 
