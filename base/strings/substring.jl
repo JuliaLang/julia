@@ -227,7 +227,7 @@ end
 # nothrow needed here because for v in a can't prove the indexing is inbounds.
 @assume_effects :foldable :nothrow string(a::Union{Char, String, Symbol}...) = _string(a...)
 
-string(a::SubString{String}...) = _string(a...)
+string(a::Union{Char, String, SubString{String}, Symbol}...) = _string(a...)
 
 function _string(a::Union{Char, String, SubString{String}, Symbol}...)
     n = 0
