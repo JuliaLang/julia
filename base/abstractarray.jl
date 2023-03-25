@@ -831,7 +831,7 @@ similar(a::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, AbstractOneTo}, 
 # leaving this method in ensures that Base owns the more specific method
 similar(a::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) where {T} = similar(a, T, to_shape(dims))
 # similar creates an Array by default
-similar(a::AbstractArray, ::Type{T}, dims::DimsInteger{N}) where {T,N}    = Array{T,N}(undef, dims)
+similar(a::AbstractArray, ::Type{T}, dims::Dims{N}) where {T,N}    = Array{T,N}(undef, dims)
 
 to_shape(::Tuple{}) = ()
 to_shape(dims::Dims) = dims
