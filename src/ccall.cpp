@@ -516,7 +516,7 @@ static void typeassert_input(jl_codectx_t &ctx, const jl_cgval_t &jvinfo, jl_val
                 ctx.builder.CreateCondBr(istype, passBB, failBB);
 
                 ctx.builder.SetInsertPoint(failBB);
-                emit_type_error(ctx, mark_julia_type(ctx, vx, true, jl_any_type), boxed(ctx, jlto_runtime), msg);
+                just_emit_type_error(ctx, mark_julia_type(ctx, vx, true, jl_any_type), boxed(ctx, jlto_runtime), msg);
                 ctx.builder.CreateUnreachable();
                 ctx.builder.SetInsertPoint(passBB);
             }
@@ -702,9 +702,6 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
         const char *errmsg = invalid_symbol_err_msg(/*ccall=*/false);
         jl_cgval_t arg1 = emit_expr(ctx, args[1]);
         emit_type_error(ctx, arg1, literal_pointer_val(ctx, (jl_value_t *)jl_pointer_type), errmsg);
-        ctx.builder.CreateUnreachable();
-        BasicBlock *cont = BasicBlock::Create(ctx.builder.getContext(), "after_type_error", ctx.f);
-        ctx.builder.SetInsertPoint(cont);
         JL_GC_POP();
         return jl_cgval_t();
     }
@@ -1368,9 +1365,6 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             const char *errmsg = invalid_symbol_err_msg(/*ccall=*/true);
             jl_cgval_t arg1 = emit_expr(ctx, args[1]);
             emit_type_error(ctx, arg1, literal_pointer_val(ctx, (jl_value_t *)jl_pointer_type), errmsg);
-            ctx.builder.CreateUnreachable();
-            BasicBlock *cont = BasicBlock::Create(ctx.builder.getContext(), "after_type_error", ctx.f);
-            ctx.builder.SetInsertPoint(cont);
         } else {
             emit_error(ctx, "ccall: null function pointer");
         }
