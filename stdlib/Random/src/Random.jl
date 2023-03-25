@@ -280,6 +280,7 @@ rand(r::AbstractRNG, dims::Integer...) = rand(r, Float64, Dims(dims))
 rand(                dims::Integer...) = rand(Float64, Dims(dims))
 
 rand(r::AbstractRNG, X, dims::Dims)  = rand!(r, Array{gentype(X)}(undef, dims), X)
+rand(r::AbstractRNG, X::AbstractArray, dims::Dims)  = rand!(r, similar(X, Random.gentype(X), dims), X)
 rand(                X, dims::Dims)  = rand(default_rng(), X, dims)
 
 rand(r::AbstractRNG, X, d::Integer, dims::Integer...) = rand(r, X, Dims((d, dims...)))
