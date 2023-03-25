@@ -1804,8 +1804,18 @@ end
 #end
 
 # issue #32386
-@test typeintersect(Type{S} where S<:(Vector{Pair{_A,N} where N} where _A),
-                    Type{Vector{T}} where T) == Type{Vector{Pair{_A,N} where N}} where _A
+@testintersect(Type{S} where S<:(Vector{Pair{_A,N} where N} where _A),
+               Type{Vector{T}} where T,
+               Type{Vector{Pair{_A,N} where N}} where _A)
+
+# pr #49049
+@testintersect(Tuple{Type{Pair{T, A} where {T, A<:Array{T}}}, Int, Any},
+               Tuple{Type{F}, Any, Int} where {F<:(Pair{T, A} where {T, A<:Array{T}})},
+               Tuple{Type{Pair{T, A} where {T, A<:(Array{T})}}, Int, Int})
+
+@testintersect(Type{Ref{Union{Int, Tuple{S,S} where S<:T}}} where T,
+              Type{F} where F<:(Base.RefValue{Union{Int, Tuple{S,S} where S<:T}} where T),
+              Union{})
 
 # issue #32488
 struct S32488{S <: Tuple, T, N, L}
@@ -2282,7 +2292,7 @@ struct Z38497{T>:Int} <: Y38497{T} end
 @test only(intersection_env(Union{S, Matrix{Int}} where S<:Matrix, Matrix)[2]) isa TypeVar
 T46784{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}}, M, Union{AbstractMatrix{B}, AbstractMatrix{<:Vector{<:B}}}}
 @testintersect(T46784{T,S} where {T,S}, T46784, !Union{})
-@test_broken T46784 <: T46784{T,S} where {T,S}
+@test T46784 <: T46784{T,S} where {T,S}
 
 #issue 36185
 let S = Tuple{Type{T},Array{Union{T,Missing},N}} where {T,N},
@@ -2376,12 +2386,10 @@ abstract type P47654{A} end
 
 @testset "known subtype/intersect issue" begin
     #issue 45874
-    # Causes a hang due to jl_critical_error calling back into malloc...
-    # let S = Pair{Val{P}, AbstractVector{<:Union{P,<:AbstractMatrix{P}}}} where P,
-    #     T = Pair{Val{R}, AbstractVector{<:Union{P,<:AbstractMatrix{P}}}} where {P,R}
-    #     @test_broken S <: T
-    #     @test_broken typeintersect(S,T) === S
-    # end
+    let S = Pair{Val{P}, AbstractVector{<:Union{P,<:AbstractMatrix{P}}}} where P,
+        T = Pair{Val{R}, AbstractVector{<:Union{P,<:AbstractMatrix{P}}}} where {P,R}
+        @test S <: T
+    end
 
     #issue 41561
     @test_broken typeintersect(Tuple{Vector{VT}, Vector{VT}} where {N1, VT<:AbstractVector{N1}},
@@ -2433,11 +2441,9 @@ abstract type MyAbstract47877{C}; end
 struct MyType47877{A,B} <: MyAbstract47877{A} end
 let A = Tuple{Type{T}, T} where T,
     B = Tuple{Type{MyType47877{W, V} where V<:Union{Base.BitInteger, MyAbstract47877{W}}}, MyAbstract47877{<:Base.BitInteger}} where W
-    C = Tuple{Type{MyType47877{W, V} where V<:Union{MyAbstract47877{W1}, Base.BitInteger}}, MyType47877{W, V} where V<:Union{MyAbstract47877{W1}, Base.BitInteger}} where {W<:Base.BitInteger, W1<:Base.BitInteger}
-    # ensure that merge_env for innervars does not blow up (the large Unions ensure this will take excessive memory if it does)
-    @test typeintersect(A, B) == C # suboptimal, but acceptable
     C = Tuple{Type{MyType47877{W, V} where V<:Union{MyAbstract47877{W}, Base.BitInteger}}, MyType47877{W, V} where V<:Union{MyAbstract47877{W}, Base.BitInteger}} where W<:Base.BitInteger
-    @test typeintersect(B, A) == C
+    # ensure that merge_env for innervars does not blow up (the large Unions ensure this will take excessive memory if it does)
+    @testintersect(A, B, C)
 end
 
 let a = (isodd(i) ? Pair{Char, String} : Pair{String, String} for i in 1:2000)
@@ -2458,3 +2464,6 @@ let S = Tuple{Type{S48695{T, 2, T48695{B, 2, C}}} where {T<:(Union{Missing, A} w
     @test allunique(vars_in_unionall(V))
     @test typeintersect(V, T) != Union{}
 end
+
+#issue 48961
+@test !<:(Type{Union{Missing, Int}}, Type{Union{Missing, Nothing, Int}})

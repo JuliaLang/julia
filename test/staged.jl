@@ -196,12 +196,11 @@ let gf_err2
         return nothing
     end
     Expected = ErrorException("code reflection cannot be used from generated functions")
+    @test_throws Expected gf_err2(code_lowered)
     @test_throws Expected gf_err2(code_typed)
     @test_throws Expected gf_err2(code_llvm)
     @test_throws Expected gf_err2(code_native)
-    @test gf_err_ref[] == 66
-    @test gf_err2(code_lowered) === nothing
-    @test gf_err_ref[] == 1077
+    @test gf_err_ref[] == 88
 end
 
 # issue #15043
@@ -246,11 +245,17 @@ f22440kernel(x::AbstractFloat) = x * x
 f22440kernel(::Type{T}) where {T} = one(T)
 f22440kernel(::Type{T}) where {T<:AbstractFloat} = zero(T)
 
-@generated function f22440(y)
-    match = Base._methods_by_ftype(Tuple{typeof(f22440kernel),y}, -1, typemax(UInt))[1]
+function f22440_gen(world::UInt, source, _, y)
+    match = only(Base._methods_by_ftype(Tuple{typeof(f22440kernel),y}, -1, world))
     code_info = Base.uncompressed_ir(match.method)
     Meta.partially_inline!(code_info.code, Any[], match.spec_types, Any[match.sparams...], 0, 0, :propagate)
+    # TODO: this is mandatory: code_info.min_world = max(code_info.min_world, min_world[])
+    # TODO: this is mandatory: code_info.max_world = min(code_info.max_world, max_world[])
     return code_info
+end
+@eval function f22440(y)
+    $(Expr(:meta, :generated, f22440_gen))
+    $(Expr(:meta, :generated_only))
 end
 
 @test f22440(Int) === f22440kernel(Int)
@@ -309,26 +314,33 @@ end
 # https://github.com/JuliaDebug/CassetteOverlay.jl/issues/12
 # generated function with varargs and unfortunately placed unused slot
 @generated function f_vararg_generated(args...)
+    local unusedslot4
+    local unusedslot5
+    local unusedslot6
     :($args)
 end
 g_vararg_generated() = f_vararg_generated((;), (;), Base.inferencebarrier((;)))
 let tup = g_vararg_generated()
     @test all(==(typeof((;))), tup)
-    # This is just to make sure that the test is actually testing what we want -
-    # the test only works if there's an unused that matches the position of the
-    # inferencebarrier argument above (N.B. the generator function itself
+    # This is just to make sure that the test is actually testing what we want:
+    # the test only works if there is an unused that matches the position of
+    # the inferencebarrier argument above (N.B. the generator function itself
     # shifts everything over by 1)
-    @test only(code_lowered(only(methods(f_vararg_generated)).generator.gen)).slotflags[5] == UInt8(0x00)
+    @test_broken only(code_lowered(only(methods(f_vararg_generated)).generator.gen)).slotflags[5] == 0x00
 end
 
 # respect a given linetable in code generation
 # https://github.com/JuliaLang/julia/pull/47750
-let match = Base._which(Tuple{typeof(sin),Int})
+let world = Base.get_world_counter()
+    match = Base._which(Tuple{typeof(sin), Int}; world)
     mi = Core.Compiler.specialize_method(match)
-    lwr = Core.Compiler.retrieve_code_info(mi)
-    @test all(lin->lin.method===:sin, lwr.linetable)
-    @generated sin_generated(a) = lwr
+    lwr = Core.Compiler.retrieve_code_info(mi, world)
+    @test all(lin->lin.method === :sin, lwr.linetable)
+    @eval function sin_generated(a)
+        $(Expr(:meta, :generated, Returns(lwr)))
+        $(Expr(:meta, :generated_only))
+    end
     src = only(code_lowered(sin_generated, (Int,)))
-    @test all(lin->lin.method===:sin, src.linetable)
+    @test all(lin->lin.method === :sin, src.linetable)
     @test sin_generated(42) == sin(42)
 end

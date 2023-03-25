@@ -182,6 +182,8 @@ typedef std::tuple<jl_returninfo_t::CallingConv, unsigned, llvm::Function*, bool
 typedef struct _jl_codegen_params_t {
     orc::ThreadSafeContext tsctx;
     orc::ThreadSafeContext::Lock tsctx_lock;
+    DataLayout DL;
+    Triple TargetTriple;
 
     inline LLVMContext &getContext() {
         return *tsctx.getContext();
@@ -197,12 +199,11 @@ typedef struct _jl_codegen_params_t {
     // Map from symbol name (in a certain library) to its GV in sysimg and the
     // DL handle address in the current session.
     StringMap<std::pair<GlobalVariable*,SymMapGV>> libMapGV;
-#ifdef _OS_WINDOWS_
+    SymMapGV symMapDefault;
+    // These symMaps are Windows-only
     SymMapGV symMapExe;
     SymMapGV symMapDll;
     SymMapGV symMapDlli;
-#endif
-    SymMapGV symMapDefault;
     // Map from distinct callee's to its GOT entry.
     // In principle the attribute, function type and calling convention
     // don't need to be part of the key but it seems impossible to forward
@@ -213,14 +214,16 @@ typedef struct _jl_codegen_params_t {
         std::tuple<GlobalVariable*, FunctionType*, CallingConv::ID>,
         GlobalVariable*>> allPltMap;
     std::unique_ptr<Module> _shared_module;
-    inline Module &shared_module(Module &from);
+    inline Module &shared_module();
     // inputs
     size_t world = 0;
     const jl_cgparams_t *params = &jl_default_cgparams;
     bool cache = false;
     bool external_linkage = false;
     bool imaging;
-    _jl_codegen_params_t(orc::ThreadSafeContext ctx) : tsctx(std::move(ctx)), tsctx_lock(tsctx.getLock()), imaging(imaging_default()) {}
+    _jl_codegen_params_t(orc::ThreadSafeContext ctx, DataLayout DL, Triple triple)
+        : tsctx(std::move(ctx)), tsctx_lock(tsctx.getLock()),
+            DL(std::move(DL)), TargetTriple(std::move(triple)), imaging(imaging_default()) {}
 } jl_codegen_params_t;
 
 jl_llvm_functions_t jl_emit_code(
@@ -539,14 +542,9 @@ inline orc::ThreadSafeModule jl_create_ts_module(StringRef name, orc::ThreadSafe
     return orc::ThreadSafeModule(jl_create_llvm_module(name, *ctx.getContext(), imaging_mode, DL, triple), ctx);
 }
 
-Module &jl_codegen_params_t::shared_module(Module &from) JL_NOTSAFEPOINT {
+Module &jl_codegen_params_t::shared_module() JL_NOTSAFEPOINT {
     if (!_shared_module) {
-        _shared_module = jl_create_llvm_module("globals", getContext(), imaging, from.getDataLayout(), Triple(from.getTargetTriple()));
-        assert(&from.getContext() == tsctx.getContext() && "Module context differs from codegen_params context!");
-    } else {
-        assert(&from.getContext() == &getContext() && "Module context differs from shared module context!");
-        assert(from.getDataLayout() == _shared_module->getDataLayout() && "Module data layout differs from shared module data layout!");
-        assert(from.getTargetTriple() == _shared_module->getTargetTriple() && "Module target triple differs from shared module target triple!");
+        _shared_module = jl_create_llvm_module("globals", getContext(), imaging, DL, TargetTriple);
     }
     return *_shared_module;
 }

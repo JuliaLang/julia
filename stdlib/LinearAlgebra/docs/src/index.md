@@ -797,6 +797,7 @@ LinearAlgebra.LAPACK.ggsvd!
 LinearAlgebra.LAPACK.ggsvd3!
 LinearAlgebra.LAPACK.geevx!
 LinearAlgebra.LAPACK.ggev!
+LinearAlgebra.LAPACK.ggev3!
 LinearAlgebra.LAPACK.gtsv!
 LinearAlgebra.LAPACK.gttrf!
 LinearAlgebra.LAPACK.gttrs!
@@ -845,6 +846,7 @@ LinearAlgebra.LAPACK.gehrd!
 LinearAlgebra.LAPACK.orghr!
 LinearAlgebra.LAPACK.gees!
 LinearAlgebra.LAPACK.gges!
+LinearAlgebra.LAPACK.gges3!
 LinearAlgebra.LAPACK.trexc!
 LinearAlgebra.LAPACK.trsen!
 LinearAlgebra.LAPACK.tgsen!

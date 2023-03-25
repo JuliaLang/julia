@@ -366,7 +366,8 @@ end
 
 function InferenceState(result::InferenceResult, cache::Symbol, interp::AbstractInterpreter)
     # prepare an InferenceState object for inferring lambda
-    src = retrieve_code_info(result.linfo)
+    world = get_world_counter(interp)
+    src = retrieve_code_info(result.linfo, world)
     src === nothing && return nothing
     validate_code_in_debug_mode(result.linfo, src, "lowered")
     return InferenceState(result, src, cache, interp)
@@ -487,7 +488,17 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
                 ty = UnionAll(tv, Type{tv})
             end
             @label ty_computed
-            undef = !constrains_param(v, linfo.specTypes, #=covariant=#true)
+            undef = !(let sig=sig
+                # if the specialized signature `linfo.specTypes` doesn't contain any free
+                # type variables, we can use it for a more accurate analysis of whether `v`
+                # is constrained or not, otherwise we should use `def.sig` which always
+                # doesn't contain any free type variables
+                if !has_free_typevars(linfo.specTypes)
+                    sig = linfo.specTypes
+                end
+                @assert !has_free_typevars(sig)
+                constrains_param(v, sig, #=covariant=#true)
+            end)
         elseif isvarargtype(v)
             ty = Int
             undef = false

@@ -1628,6 +1628,7 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
     (headtype === Union) && return true
     isa(rt, Const) && return true
     u = headtype
+    # TODO: implement optimization for isvarargtype(u) and istuple occurences (which are valid but are not UnionAll)
     for i = 2:length(argtypes)
         isa(u, UnionAll) || return false
         ai = widenconditional(argtypes[i])
@@ -1747,6 +1748,9 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
         end
         ua = ua.body
     end
+    if largs > outer_start && isa(headtype, UnionAll) # e.g. !isvarargtype(ua) && !istuple
+        return Bottom # too many arguments
+    end
     outer_start = outer_start - largs + 1
 
     varnamectr = 1
@@ -1815,19 +1819,40 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
                 push!(outervars, v)
             end
         end
-        if isa(ua, UnionAll)
+        if ua isa UnionAll
             ua = ua.body
-        else
-            ua = nothing
+            #otherwise, sometimes ua isa Vararg (Core.TypeofVararg) or Tuple (DataType)
         end
     end
     local appl
     try
         appl = apply_type(headtype, tparams...)
     catch ex
-        # type instantiation might fail if one of the type parameters
-        # doesn't match, which could happen if a type estimate is too coarse
-        return isvarargtype(headtype) ? TypeofVararg : Type{<:headtype}
+        # type instantiation might fail if one of the type parameters doesn't
+        # match, which could happen only if a type estimate is too coarse
+        # and might guess a concrete value while the actual type for it is Bottom
+        if !uncertain
+            return Union{}
+        end
+        canconst = false
+        uncertain = true
+        empty!(outervars)
+        outer_start = 1
+        # FIXME: if these vars are substituted with TypeVar here, the result
+        # might be wider than the input, so should we use the `.name.wrapper`
+        # object here instead, to replace all of these outervars with
+        # unconstrained ones? Note that this code is nearly unreachable though,
+        # and possibly should simply return Union{} here also, since
+        # `apply_type` is already quite conservative about detecting and
+        # throwing errors.
+        appl = headtype
+        if isa(appl, UnionAll)
+            for _ = 1:largs
+                appl = appl::UnionAll
+                push!(outervars, appl.var)
+                appl = appl.body
+            end
+        end
     end
     !uncertain && canconst && return Const(appl)
     if isvarargtype(appl)
@@ -2542,7 +2567,7 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
     isvarargtype(argtypes[2]) && return CallMeta(Bool, EFFECTS_UNKNOWN, NoCallInfo())
     argtypes = argtypes[2:end]
     atype = argtypes_to_type(argtypes)
-    matches = find_matching_methods(argtypes, atype, method_table(interp),
+    matches = find_matching_methods(typeinf_lattice(interp), argtypes, atype, method_table(interp),
         InferenceParams(interp).max_union_splitting, max_methods)
     if isa(matches, FailedMethodMatch)
         rt = Bool # too many matches to analyze

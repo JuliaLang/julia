@@ -267,7 +267,7 @@ end
 """
     unsafe_copyto!(dest::Array, do, src::Array, so, N)
 
-Copy `N` elements from a source array to a destination, starting at offset `so` in the
+Copy `N` elements from a source array to a destination, starting at the linear index `so` in the
 source and `do` in the destination (1-indexed).
 
 The `unsafe` prefix on this function indicates that no validation is performed to ensure
@@ -307,8 +307,8 @@ unsafe_copyto!(dest::Array, doffs, src::Array, soffs, n) =
 """
     copyto!(dest, do, src, so, N)
 
-Copy `N` elements from collection `src` starting at offset `so`, to array `dest` starting at
-offset `do`. Return `dest`.
+Copy `N` elements from collection `src` starting at the linear index `so`, to array `dest` starting at
+the index `do`. Return `dest`.
 """
 function copyto!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer)
     return _copyto_impl!(dest, doffs, src, soffs, n)

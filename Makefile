@@ -29,7 +29,7 @@ all: debug release
 DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_includedir) $(build_includedir)/julia $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_datarootdir)/julia/stdlib $(build_man1dir))
 ifneq ($(BUILDROOT),$(JULIAHOME))
 BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src src/flisp src/support src/clangsa cli doc deps stdlib test test/clangsa test/embedding test/gcext test/llvmpasses)
-BUILDDIRMAKE := $(addsuffix /Makefile,$(BUILDDIRS)) $(BUILDROOT)/sysimage.mk
+BUILDDIRMAKE := $(addsuffix /Makefile,$(BUILDDIRS)) $(BUILDROOT)/sysimage.mk $(BUILDROOT)/pkgimage.mk
 DIRS += $(BUILDDIRS)
 $(BUILDDIRMAKE): | $(BUILDDIRS)
 	@# add Makefiles to the build directories for convenience (pointing back to the source location of each)
@@ -104,7 +104,10 @@ julia-sysimg-release julia-sysimg-debug : julia-sysimg-% : julia-sysimg-ji julia
 
 julia-debug julia-release : julia-% : julia-sysimg-% julia-src-% julia-symlink julia-libccalltest julia-libllvmcalltest julia-base-cache
 
-debug release : % : julia-%
+stdlibs-cache-release stdlibs-cache-debug : stdlibs-cache-% : julia-%
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f pkgimage.mk all-$*
+
+debug release : % : julia-% stdlibs-cache-%
 
 docs: julia-sysimg-$(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/doc JULIA_EXECUTABLE='$(call spawn,$(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))) --startup-file=no'
@@ -348,11 +351,6 @@ ifeq ($(JULIA_BUILD_MODE),release)
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 endif
-
-	# Cache stdlibs
-	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no $(JULIAHOME)/contrib/cache_stdlibs.jl)
-	# CI uses `--check-bounds=yes` which impacts the cache flags
-	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes $(JULIAHOME)/contrib/cache_stdlibs.jl)
 
 	# Copy in all .jl sources as well
 	mkdir -p $(DESTDIR)$(datarootdir)/julia/base $(DESTDIR)$(datarootdir)/julia/test

@@ -805,7 +805,7 @@ opnorm(v::AdjointAbsVec, q::Real) = q == Inf ? norm(conj(v.parent), 1) : norm(co
 opnorm(v::AdjointAbsVec) = norm(conj(v.parent))
 opnorm(v::TransposeAbsVec) = norm(v.parent)
 
-norm(v::Union{TransposeAbsVec,AdjointAbsVec}, p::Real) = norm(v.parent, p)
+norm(v::AdjOrTrans, p::Real) = norm(v.parent, p)
 
 """
     dot(x, y)

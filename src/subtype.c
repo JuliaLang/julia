@@ -75,11 +75,7 @@ typedef struct jl_varbinding_t {
     // 1 - var.ub = ub; return var
     // 2 - either (var.ub = ub; return var), or return ub
     int8_t constraintkind;
-    // intvalued: must be integer-valued; i.e. occurs as N in Vararg{_,N}
-    // 0: No restriction
-    // 1: must be unbounded/ or fixed to a `Int`/typevar
-    // 2: we have some imprecise vararg length intersection that can be improved if this var is const valued.
-    int8_t intvalued;
+    int8_t intvalued; // intvalued: must be integer-valued; i.e. occurs as N in Vararg{_,N}
     int8_t limited;
     int16_t depth0;         // # of invariant constructors nested around the UnionAll type for this var
     // when this variable's integer value is compared to that of another,
@@ -101,8 +97,7 @@ typedef struct jl_stenv_t {
     jl_value_t **envout;      // for passing caller the computed bounds of right-side variables
     int envsz;                // length of envout
     int envidx;               // current index in envout
-    int invdepth;             // # of invariant constructors we're nested in on the left
-    int Rinvdepth;            // # of invariant constructors we're nested in on the right
+    int invdepth;             // current number of invariant constructors we're nested in
     int ignore_free;          // treat free vars as black boxes; used during intersection
     int intersection;         // true iff subtype is being called from intersection
     int emptiness_only;       // true iff intersection only needs to test for emptiness
@@ -306,11 +301,8 @@ static int obviously_unequal(jl_value_t *a, jl_value_t *b)
             if (ad->name != bd->name)
                 return 1;
             int istuple = (ad->name == jl_tuple_typename);
-            if ((jl_is_concrete_type(a) || jl_is_concrete_type(b)) &&
-                jl_type_equality_is_identity(a, b)) {
-                if (!istuple && ad->name != jl_type_typename) // HACK: can't properly normalize Tuple{Float64} == Tuple{<:Float64} like types or Type{T} types
-                    return 1;
-            }
+            if (jl_type_equality_is_identity(a, b))
+                return 1;
             size_t i, np;
             if (istuple) {
                 size_t na = jl_nparams(ad), nb = jl_nparams(bd);
@@ -395,10 +387,7 @@ static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
         return 0;
     if (specificity && a == (jl_value_t*)jl_typeofbottom_type)
         return 0;
-    if (jl_is_concrete_type(a) && jl_is_concrete_type(b) &&
-        jl_type_equality_is_identity(a, b) &&
-        (((jl_datatype_t*)a)->name != jl_tuple_typename ||
-         ((jl_datatype_t*)b)->name != jl_tuple_typename))
+    if (jl_is_concrete_type(a) && jl_is_concrete_type(b) && jl_type_equality_is_identity(a, b))
         return 1;
     if (jl_is_unionall(a)) a = jl_unwrap_unionall(a);
     if (jl_is_unionall(b)) b = jl_unwrap_unionall(b);
@@ -664,7 +653,7 @@ static void record_var_occurrence(jl_varbinding_t *vb, jl_stenv_t *e, int param)
         vb->occurs = 1;
     if (vb != NULL && param) {
         // saturate counters at 2; we don't need values bigger than that
-        if (param == 2 && (vb->right ? e->Rinvdepth : e->invdepth) > vb->depth0) {
+        if (param == 2 && e->invdepth > vb->depth0) {
             if (vb->occurs_inv < 2)
                 vb->occurs_inv++;
         }
@@ -686,7 +675,7 @@ static int var_outside(jl_stenv_t *e, jl_tvar_t *x, jl_tvar_t *y)
     return 0;
 }
 
-static jl_value_t *intersect_aside(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int R, int d);
+static jl_value_t *intersect_aside(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int depth);
 
 static int reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e);
 
@@ -706,7 +695,7 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
     // for this to work we need to compute issub(left,right) before issub(right,left),
     // since otherwise the issub(a, bb.ub) check in var_gt becomes vacuous.
     if (e->intersection) {
-        jl_value_t *ub = intersect_aside(bb->ub, a, e, 0, bb->depth0);
+        jl_value_t *ub = intersect_aside(a, bb->ub, e, bb->depth0);
         JL_GC_PUSH1(&ub);
         if (ub != (jl_value_t*)b && (!jl_is_typevar(ub) || !reachable_var(ub, b, e)))
             bb->ub = ub;
@@ -855,7 +844,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
 {
     u = unalias_unionall(u, e);
     jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0,
-                           R ? e->Rinvdepth : e->invdepth, 0, NULL, e->vars };
+                           e->invdepth, 0, NULL, e->vars };
     JL_GC_PUSH4(&u, &vb.lb, &vb.ub, &vb.innervars);
     e->vars = &vb;
     int ans;
@@ -955,10 +944,8 @@ static int check_vararg_length(jl_value_t *v, ssize_t n, jl_stenv_t *e)
         jl_value_t *nn = jl_box_long(n);
         JL_GC_PUSH1(&nn);
         e->invdepth++;
-        e->Rinvdepth++;
         int ans = subtype(nn, N, e, 2) && subtype(N, nn, e, 0);
         e->invdepth--;
-        e->Rinvdepth--;
         JL_GC_POP();
         if (!ans)
             return 0;
@@ -1055,16 +1042,13 @@ constrain_length:
         // set lb to Any. Since `intvalued` is set, we'll interpret that
         // appropriately.
         e->invdepth++;
-        e->Rinvdepth++;
         int ans = subtype((jl_value_t*)jl_any_type, yp1, e, 2);
         e->invdepth--;
-        e->Rinvdepth--;
         return ans;
     }
 
     // Vararg{T,N} <: Vararg{T2,N2}; equate N and N2
     e->invdepth++;
-    e->Rinvdepth++;
     JL_GC_PUSH2(&xp1, &yp1);
     if (xp1 && jl_is_long(xp1) && vx != 1)
         xp1 = jl_box_long(jl_unbox_long(xp1) - vx + 1);
@@ -1073,7 +1057,6 @@ constrain_length:
     int ans = forall_exists_equal(xp1, yp1, e);
     JL_GC_POP();
     e->invdepth--;
-    e->Rinvdepth--;
     return ans;
 }
 
@@ -1296,6 +1279,16 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
             // to other left-side variables, so using || here is safe.
             return subtype(xub, y, e, param) || subtype(x, ylb, e, param);
         }
+        if (jl_is_unionall(y)) {
+            jl_varbinding_t *xb = lookup(e, (jl_tvar_t*)x);
+            if (xb == NULL ? !e->ignore_free : !xb->right) {
+                // We'd better unwrap `y::UnionAll` eagerly if `x` isa ∀-var.
+                // This makes sure the following cases work correct:
+                // 1) `∀T <: Union{∃S, SomeType{P}} where {P}`: `S == Any` ==> `S >: T`
+                // 2) `∀T <: Union{∀T, SomeType{P}} where {P}`:
+                return subtype_unionall(x, (jl_unionall_t*)y, e, 1, param);
+            }
+        }
         return var_lt((jl_tvar_t*)x, y, e, param);
     }
     if (jl_is_typevar(y))
@@ -1350,10 +1343,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
             // The answer is true iff `T` has full bounds (as in `Type`), but this needs to
             // be checked at the same depth where `Type{T}` occurs --- the depth of the LHS
             // doesn't matter because it (e.g. `DataType`) doesn't actually contain the variable.
-            int saved = e->invdepth;
-            e->invdepth = e->Rinvdepth;
             int issub = subtype((jl_value_t*)jl_type_type, y, e, param);
-            e->invdepth = saved;
             return issub;
         }
         while (xd != jl_any_type && xd->name != yd->name) {
@@ -1369,7 +1359,6 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
         size_t i, np = jl_nparams(xd);
         int ans = 1;
         e->invdepth++;
-        e->Rinvdepth++;
         for (i=0; i < np; i++) {
             jl_value_t *xi = jl_tparam(xd, i), *yi = jl_tparam(yd, i);
             if (!(xi == yi || forall_exists_equal(xi, yi, e))) {
@@ -1377,7 +1366,6 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
             }
         }
         e->invdepth--;
-        e->Rinvdepth--;
         return ans;
     }
     if (jl_is_type(y))
@@ -1569,7 +1557,7 @@ static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
     if (envsz)
         memset(env, 0, envsz*sizeof(void*));
     e->envidx = 0;
-    e->invdepth = e->Rinvdepth = 0;
+    e->invdepth = 0;
     e->ignore_free = 0;
     e->intersection = 0;
     e->emptiness_only = 0;
@@ -1756,7 +1744,7 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
     if (jl_is_datatype(y)) {
         int istuple = (((jl_datatype_t*)y)->name == jl_tuple_typename);
         int iscov = istuple;
-        // TODO: this would be a nice fast-path to have, unfortuanately,
+        // TODO: this would be a nice fast-path to have, unfortunately,
         //       datatype allocation fails to correctly hash-cons them
         //       and the subtyping tests include tests for this case
         //if (!iscov && ((jl_datatype_t*)y)->isconcretetype && !jl_is_type_type(x)) {
@@ -2024,29 +2012,18 @@ JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, 
     return subtype;
 }
 
-static int subtype_in_env_(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int invdepth, int Rinvdepth)
+static int subtype_in_env(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
     jl_stenv_t e2;
     init_stenv(&e2, NULL, 0);
     e2.vars = e->vars;
     e2.intersection = e->intersection;
     e2.ignore_free = e->ignore_free;
-    e2.invdepth = invdepth;
-    e2.Rinvdepth = Rinvdepth;
+    e2.invdepth = e->invdepth;
     e2.envsz = e->envsz;
     e2.envout = e->envout;
     e2.envidx = e->envidx;
     return forall_exists_subtype(x, y, &e2, 0);
-}
-
-static int subtype_in_env(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
-{
-    return subtype_in_env_(x, y, e, e->invdepth, e->Rinvdepth);
-}
-
-static int subtype_bounds_in_env(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int R, int d)
-{
-    return subtype_in_env_(x, y, e, R ? e->invdepth : d, R ? d : e->Rinvdepth);
 }
 
 JL_DLLEXPORT int jl_subtype(jl_value_t *x, jl_value_t *y)
@@ -2243,7 +2220,7 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
             return 0;
         }
     }
-    if (jl_is_concrete_type(t) && jl_type_equality_is_identity(jl_typeof(x), t))
+    if (jl_is_concrete_type(t))
         return 0;
     return jl_subtype(jl_typeof(x), t);
 }
@@ -2255,7 +2232,7 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
 static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e);
 
 // intersect in nested union environment, similar to subtype_ccheck
-static jl_value_t *intersect_aside(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int R, int d)
+static jl_value_t *intersect_aside(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int depth)
 {
     // band-aid for #30335
     if (x == (jl_value_t*)jl_any_type && !jl_is_typevar(y))
@@ -2263,19 +2240,15 @@ static jl_value_t *intersect_aside(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, 
     if (y == (jl_value_t*)jl_any_type && !jl_is_typevar(x))
         return x;
     // band-aid for #46736
-    if (jl_egal(x, y))
+    if (obviously_egal(x, y))
         return x;
 
     jl_saved_unionstate_t oldRunions; push_unionstate(&oldRunions, &e->Runions);
-    int savedepth = e->invdepth, Rsavedepth = e->Rinvdepth;
-    // TODO: this doesn't quite make sense
-    e->invdepth = e->Rinvdepth = d;
-
+    int savedepth = e->invdepth;
+    e->invdepth = depth;
     jl_value_t *res = intersect_all(x, y, e);
-
-    pop_unionstate(&e->Runions, &oldRunions);
     e->invdepth = savedepth;
-    e->Rinvdepth = Rsavedepth;
+    pop_unionstate(&e->Runions, &oldRunions);
     return res;
 }
 
@@ -2335,7 +2308,9 @@ static jl_value_t *bound_var_below(jl_tvar_t *tv, jl_varbinding_t *bb, jl_stenv_
         return (jl_value_t*)tv;
     if (bb->depth0 != e->invdepth)
         return jl_bottom_type;
+    e->invdepth++;
     record_var_occurrence(bb, e, 2);
+    e->invdepth--;
     if (jl_is_long(bb->lb)) {
         ssize_t blb = jl_unbox_long(bb->lb);
         if ((blb < bb->offset) || (blb < 0))
@@ -2345,10 +2320,8 @@ static jl_value_t *bound_var_below(jl_tvar_t *tv, jl_varbinding_t *bb, jl_stenv_
             return bb->lb;
         return jl_box_long(blb - bb->offset);
     }
-    if (bb->offset > 0) {
-        bb->intvalued = 2;
+    if (bb->offset > 0)
         return NULL;
-    }
     return (jl_value_t*)tv;
 }
 
@@ -2376,14 +2349,14 @@ static int try_subtype_by_bounds(jl_value_t *a, jl_value_t *b, jl_stenv_t *e)
     return 0;
 }
 
-static int try_subtype_in_env(jl_value_t *a, jl_value_t *b, jl_stenv_t *e, int R, int d)
+static int try_subtype_in_env(jl_value_t *a, jl_value_t *b, jl_stenv_t *e)
 {
     if (a == jl_bottom_type || b == (jl_value_t *)jl_any_type || try_subtype_by_bounds(a, b, e))
         return 1;
     jl_value_t *root=NULL; jl_savedenv_t se;
     JL_GC_PUSH1(&root);
     save_env(e, &root, &se);
-    int ret = subtype_bounds_in_env(a, b, e, R, d);
+    int ret = subtype_in_env(a, b, e);
     restore_env(e, root, &se);
     free_env(&se);
     JL_GC_POP();
@@ -2405,7 +2378,7 @@ static void set_bound(jl_value_t **bound, jl_value_t *val, jl_tvar_t *v, jl_sten
 }
 
 // subtype, treating all vars as existential
-static int subtype_in_env_existential(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int R, int d)
+static int subtype_in_env_existential(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
     jl_varbinding_t *v = e->vars;
     int len = 0;
@@ -2424,7 +2397,7 @@ static int subtype_in_env_existential(jl_value_t *x, jl_value_t *y, jl_stenv_t *
         v->right = 1;
         v = v->prev;
     }
-    int issub = subtype_bounds_in_env(x, y, e, R, d);
+    int issub = subtype_in_env(x, y, e);
     n = 0; v = e->vars;
     while (n < len) {
         assert(v != NULL);
@@ -2502,25 +2475,23 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
 {
     jl_varbinding_t *bb = lookup(e, b);
     if (bb == NULL)
-        return R ? intersect_aside(a, b->ub, e, 1, 0) : intersect_aside(b->ub, a, e, 0, 0);
+        return R ? intersect_aside(a, b->ub, e, 0) : intersect_aside(b->ub, a, e, 0);
     if (reachable_var(bb->lb, b, e) || reachable_var(bb->ub, b, e))
         return a;
-    if (bb->lb == bb->ub && jl_is_typevar(bb->lb)) {
-        return intersect(a, bb->lb, e, param);
-    }
+    if (bb->lb == bb->ub && jl_is_typevar(bb->lb))
+        return R ? intersect(a, bb->lb, e, param) : intersect(bb->lb, a, e, param);
     if (!jl_is_type(a) && !jl_is_typevar(a))
         return set_var_to_const(bb, a, NULL);
-    int d = bb->depth0;
     jl_value_t *root=NULL; jl_savedenv_t se;
     if (param == 2) {
         jl_value_t *ub = NULL;
         JL_GC_PUSH2(&ub, &root);
         if (!jl_has_free_typevars(a)) {
             save_env(e, &root, &se);
-            int issub = subtype_in_env_existential(bb->lb, a, e, 0, d);
+            int issub = subtype_in_env_existential(bb->lb, a, e);
             restore_env(e, root, &se);
             if (issub) {
-                issub = subtype_in_env_existential(a, bb->ub, e, 1, d);
+                issub = subtype_in_env_existential(a, bb->ub, e);
                 restore_env(e, root, &se);
             }
             free_env(&se);
@@ -2532,10 +2503,10 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         }
         else {
             e->triangular++;
-            ub = R ? intersect_aside(a, bb->ub, e, 1, d) : intersect_aside(bb->ub, a, e, 0, d);
+            ub = R ? intersect_aside(a, bb->ub, e, bb->depth0) : intersect_aside(bb->ub, a, e, bb->depth0);
             e->triangular--;
             save_env(e, &root, &se);
-            int issub = subtype_in_env_existential(bb->lb, ub, e, 0, d);
+            int issub = subtype_in_env_existential(bb->lb, ub, e);
             restore_env(e, root, &se);
             free_env(&se);
             if (!issub) {
@@ -2566,7 +2537,7 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         JL_GC_POP();
         return ub;
     }
-    jl_value_t *ub = R ? intersect_aside(a, bb->ub, e, 1, d) : intersect_aside(bb->ub, a, e, 0, d);
+    jl_value_t *ub = R ? intersect_aside(a, bb->ub, e, bb->depth0) : intersect_aside(bb->ub, a, e, bb->depth0);
     if (ub == jl_bottom_type)
         return jl_bottom_type;
     if (bb->constraintkind == 1 || e->triangular) {
@@ -2577,7 +2548,7 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     }
     else if (bb->constraintkind == 0) {
         JL_GC_PUSH1(&ub);
-        if (!jl_is_typevar(a) && try_subtype_in_env(bb->ub, a, e, 0, d)) {
+        if (!jl_is_typevar(a) && try_subtype_in_env(bb->ub, a, e)) {
             JL_GC_POP();
             return (jl_value_t*)b;
         }
@@ -2704,10 +2675,6 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
             return jl_bottom_type;
         }
     }
-
-    // vb is still unbounded.
-    if (vb->intvalued == 2 && !(varval && jl_is_long(varval)))
-        vb->intvalued = 1;
 
     // TODO: this can prevent us from matching typevar identities later
     if (!varval && (vb->lb != vb->var->lb || vb->ub != vb->var->ub))
@@ -2907,7 +2874,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
     jl_value_t *res=NULL, *save=NULL;
     jl_savedenv_t se;
     jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0,
-                           R ? e->Rinvdepth : e->invdepth, 0, NULL, e->vars };
+                           e->invdepth, 0, NULL, e->vars };
     JL_GC_PUSH5(&res, &vb.lb, &vb.ub, &save, &vb.innervars);
     save_env(e, &save, &se);
     res = intersect_unionall_(t, u, e, R, param, &vb);
@@ -2917,16 +2884,15 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
             e->vars->limited = 1;
     }
     else if (res != jl_bottom_type) {
-        if (vb.concrete || vb.occurs_inv>1 || vb.intvalued > 1 || u->var->lb != jl_bottom_type || (vb.occurs_inv && vb.occurs_cov)) {
-            restore_env(e, NULL, &se);
-            vb.occurs = vb.occurs_cov = vb.occurs_inv = 0;
+        if (vb.concrete || vb.occurs_inv>1 || (vb.occurs_inv && vb.occurs_cov))
             vb.constraintkind = vb.concrete ? 1 : 2;
-            res = intersect_unionall_(t, u, e, R, param, &vb);
-        }
-        else if (vb.occurs_cov && !var_occurs_invariant(u->body, u->var, 0)) {
-            restore_env(e, save, &se);
-            vb.occurs = vb.occurs_cov = vb.occurs_inv = 0;
+        else if (u->var->lb != jl_bottom_type)
+            vb.constraintkind = 2;
+        else if (vb.occurs_cov && !var_occurs_invariant(u->body, u->var, 0))
             vb.constraintkind = 1;
+        if (vb.constraintkind) {
+            restore_env(e, vb.constraintkind == 1 ? save : NULL, &se);
+            vb.occurs = vb.occurs_cov = vb.occurs_inv = 0;
             res = intersect_unionall_(t, u, e, R, param, &vb);
         }
     }
@@ -2934,6 +2900,8 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
     JL_GC_POP();
     return res;
 }
+
+static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t *e);
 
 // check n = (length of vararg type v)
 static int intersect_vararg_length(jl_value_t *v, ssize_t n, jl_stenv_t *e, int8_t R)
@@ -2943,15 +2911,14 @@ static int intersect_vararg_length(jl_value_t *v, ssize_t n, jl_stenv_t *e, int8
     if (N && jl_is_typevar(N)) {
         jl_value_t *len = jl_box_long(n);
         JL_GC_PUSH1(&len);
-        jl_value_t *il = R ? intersect(len, N, e, 2) : intersect(N, len, e, 2);
+        jl_value_t *il = R ? intersect_invariant(len, N, e) : intersect_invariant(N, len, e);
         JL_GC_POP();
-        if (il == jl_bottom_type)
+        if (il == NULL || il == jl_bottom_type)
             return 0;
     }
     return 1;
 }
 
-static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t *e);
 static jl_value_t *intersect_varargs(jl_vararg_t *vmx, jl_vararg_t *vmy, ssize_t offset, jl_stenv_t *e, int param)
 {
     // Vararg: covariant in first parameter, invariant in second
@@ -2974,7 +2941,7 @@ static jl_value_t *intersect_varargs(jl_vararg_t *vmx, jl_vararg_t *vmy, ssize_t
     if (xp2 && jl_is_typevar(xp2)) {
         xb = lookup(e, (jl_tvar_t*)xp2);
         if (xb) {
-            if (xb->intvalued == 0) xb->intvalued = 1;
+            xb->intvalued = 1;
             xb->offset = offset;
         }
         if (!yp2)
@@ -2983,7 +2950,7 @@ static jl_value_t *intersect_varargs(jl_vararg_t *vmx, jl_vararg_t *vmy, ssize_t
     if (yp2 && jl_is_typevar(yp2)) {
         yb = lookup(e, (jl_tvar_t*)yp2);
         if (yb) {
-            if (yb->intvalued == 0) yb->intvalued = 1;
+            yb->intvalued = 1;
             yb->offset = -offset;
         }
         if (!xp2)
@@ -3118,10 +3085,8 @@ static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t 
         return (jl_subtype(x,y) && jl_subtype(y,x)) ? y : NULL;
     }
     e->invdepth++;
-    e->Rinvdepth++;
     jl_value_t *ii = intersect(x, y, e, 2);
     e->invdepth--;
-    e->Rinvdepth--;
     // Skip the following subtype check if `ii` was returned from `set_vat_to_const`.
     // As `var_gt`/`var_lt` might not handle `Vararg` length offset correctly.
     // TODO: fix this on subtype side and remove this branch.
@@ -3144,11 +3109,11 @@ static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     jl_savedenv_t se;
     JL_GC_PUSH2(&ii, &root);
     save_env(e, &root, &se);
-    if (!subtype_in_env_existential(x, y, e, 0, e->invdepth))
+    if (!subtype_in_env_existential(x, y, e))
         ii = NULL;
     else {
         restore_env(e, root, &se);
-        if (!subtype_in_env_existential(y, x, e, 0, e->invdepth))
+        if (!subtype_in_env_existential(y, x, e))
             ii = NULL;
     }
     restore_env(e, root, &se);
@@ -3310,7 +3275,8 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                 }
                 jl_value_t *ub=NULL, *lb=NULL;
                 JL_GC_PUSH2(&lb, &ub);
-                ub = intersect_aside(xub, yub, e, 0, xx ? xx->depth0 : 0);
+                int d = xx ? xx->depth0 : yy ? yy->depth0 : 0;
+                ub = R ? intersect_aside(yub, xub, e, d) : intersect_aside(xub, yub, e, d);
                 if (reachable_var(xlb, (jl_tvar_t*)y, e))
                     lb = ylb;
                 else
@@ -3329,10 +3295,8 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                 }
                 JL_GC_POP();
                 // Here we always return the shorter `Vararg`'s length.
-                if ((xx && xx->offset < 0) || (yy && yy->offset > 0)) {
-                    if (yy) yy->intvalued = 2;
+                if ((xx && xx->offset < 0) || (yy && yy->offset > 0))
                     return x;
-                }
                 return y;
             }
             record_var_occurrence(xx, e, param);
@@ -3725,6 +3689,7 @@ static jl_value_t *switch_union_tuple(jl_value_t *a, jl_value_t *b)
 
 // `a` might have a non-empty intersection with some concrete type b even if !(a<:b) and !(b<:a)
 // For example a=`Tuple{Type{<:Vector}}` and b=`Tuple{DataType}`
+// TODO: this query is partly available memoized as jl_type_equality_is_identity
 static int might_intersect_concrete(jl_value_t *a)
 {
     if (jl_is_unionall(a))
@@ -3774,9 +3739,9 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
         *ans = a; sz = szb;
         if (issubty) *issubty = 1;
     }
-    else if (lta && ltb) {
-        goto bot;
-    }
+    // else if (lta && ltb) { // !jl_type_equality_is_identity known in this case because obviously_disjoint returned false
+    //     goto bot;
+    // }
     else if (jl_subtype(b, a)) {
         *ans = b;
     }
