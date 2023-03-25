@@ -1160,10 +1160,10 @@ static void jl_gc_free_buffer(jl_buffer_t *b) JL_NOTSAFEPOINT
     size_t nb = jl_buffer_nbytes(b);
     if (nb > ARRAY_INLINE_NBYTES) {
         char *d = (char*)jl_buffer_data(b);
-        if (jl_is_aligned_buffer(b))
-            jl_free_aligned(d);
-        else
+        if (jl_buffer_isshared(b))
             free(d);
+        else
+            jl_free_aligned(d);
         gc_num.freed += nb;
         gc_num.freecall++;
     }
@@ -2415,7 +2415,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                         ptls->gc_cache.scanned_bytes += tot;
                 }
             }
-            else if (jl_is_unmarked_buffer(b)) {
+            else if (jl_buffer_isunmarked(b)) {
                 if (update_meta || foreign_alloc) {
                     objprofile_count(jl_malloc_tag, bits == GC_OLD_MARKED, tot);
                     gc_heap_snapshot_record_hidden_edge(new_obj, data, tot, pooled);

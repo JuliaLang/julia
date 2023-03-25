@@ -1495,8 +1495,6 @@ size_t jl_buffer_nbytes(jl_buffer_t *b) JL_NOTSAFEPOINT;
 size_t jl_buffer_object_size(jl_buffer_t *b) JL_NOTSAFEPOINT;
 void jl_gc_track_malloced_buffer(jl_ptls_t ptls, jl_buffer_t *b) JL_NOTSAFEPOINT;
 STATIC_INLINE jl_eltype_layout_t jl_eltype_layout(void *eltype);
-int jl_is_aligned_buffer(jl_buffer_t *buf);
-int jl_is_unmarked_buffer(jl_buffer_t *buf) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *field_type);
 

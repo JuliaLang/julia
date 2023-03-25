@@ -991,9 +991,13 @@ JL_DLLEXPORT void jl_gc_safepoint(void);
 #define jl_svec_set_len_unsafe(t,n) (((jl_svec_t*)(t))->length=(n))
 #define jl_svec_data(t) ((jl_value_t**)((char*)(t) + sizeof(jl_svec_t)))
 
-#define jl_buffer_len(b)    (((jl_buffer_t*)(b))->length)
-#define jl_buffer_data(b)    ((void*)((jl_buffer_t*)(b))->data)
-#define jl_buffer_eltype(b) (jl_tparam0(jl_typeof((jl_buffer_t*)(b))))
+#define jl_buffer_len(b)        (((jl_buffer_t*)(b))->length)
+#define jl_buffer_data(b)       ((void*)((jl_buffer_t*)(b))->data)
+#define jl_buffer_eltype(b)     (jl_tparam0(jl_typeof((jl_buffer_t*)(b))))
+// is b->data's owner not `b`
+#define jl_buffer_isshared(b)   ((uintptr_t)((jl_buffer_t*)(b)->data) & 1)
+// is b->data newly allocated and unmarked by the GC
+#define jl_buffer_isunmarked(b) ((uintptr_t)((jl_buffer_t*)(b)->data) & 2)
 
 #ifdef __clang_gcanalyzer__
 STATIC_INLINE jl_value_t *jl_svecref(void *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;

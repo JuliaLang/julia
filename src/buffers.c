@@ -33,16 +33,10 @@ static inline void memmove_safe(int hasptr, char *dst, const char *src, size_t n
 // it's a String. Buffer doesn't Buffer doesn't support these
 // right now but this method lets us build code around the situation where it
 // might in the future.
-int jl_is_aligned_buffer(jl_buffer_t *buf)
-{
-    return ((jl_datatype_t*)(jl_typeof(buf)))->name == jl_buffer_typename;
-}
-
-// FIXME Buffer: julia-allocated buffer that needs to be marked
-int jl_is_unmarked_buffer(jl_buffer_t *buf) JL_NOTSAFEPOINT
-{
-    return ((jl_datatype_t*)(jl_typeof(buf)))->name != jl_buffer_typename;
-}
+// int jl_is_aligned_buffer(jl_buffer_t *buf)
+// {
+//     return ((jl_datatype_t*)(jl_typeof(buf)))->name == jl_buffer_typename;
+// }
 
 // given the element type layout (jl_eltype_layout) and number of elements stored,
 // provides the number of bytes necessary for storage.
@@ -259,7 +253,7 @@ static int NOINLINE resize_buffer(jl_buffer_t *buf, jl_eltype_layout_t lyt, size
         // already malloc'd - use realloc
         char *olddata = (char*)buf->data;
         buf->data = jl_gc_managed_realloc(olddata, new_nbytes, old_nbytes,
-                                        jl_is_aligned_buffer(buf), (jl_value_t*)buf);
+                                        !jl_buffer_isshared(buf), (jl_value_t*)buf);
     }
     else {
         newbuf = 1;
@@ -268,9 +262,8 @@ static int NOINLINE resize_buffer(jl_buffer_t *buf, jl_eltype_layout_t lyt, size
             jl_gc_track_malloced_buffer(ct->ptls, buf);
         }
         else {
-            buf->data = jl_gc_alloc_buf(ct->ptls, new_nbytes);
-            // FIXME how to mark jl_buffer_t as unmarked when we can't d (jl_array_t*)buf->flags.how = 1;
-            // Could we do `uinptr_t(data) | 0x1` to mark this as a new umarked data buffer?
+            // mark second to last bit as unmarked
+            buf->data = (void*)((uintptr_t)(jl_gc_alloc_buf(ct->ptls, new_nbytes)) | 2);
             jl_gc_wb_buf(buf, buf->data, new_nbytes);
         }
     }
@@ -281,6 +274,36 @@ static int NOINLINE resize_buffer(jl_buffer_t *buf, jl_eltype_layout_t lyt, size
            "Race condition detected: recursive resizing on the same buffer.");
     buf->length = newlen;
     return newbuf;
+}
+
+// own_buffer != 0 iff GC should call free() on this pointer eventually
+JL_DLLEXPORT jl_buffer_t *jl_ptr_to_buffer(jl_value_t *btype, void *data, size_t len, int isowner)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_buffer_t *buf;
+    jl_value_t *eltype = jl_tparam0(btype);
+    jl_eltype_layout_t lyt = jl_eltype_layout(eltype);
+
+    if (!lyt.isboxed && jl_is_uniontype(eltype))
+        jl_exceptionf(jl_argumenterror_type,
+                      "unsafe_wrap: unspecified layout for union element type");
+    if (((uintptr_t)data) & ((lyt.alignment > JL_HEAP_ALIGNMENT ? JL_HEAP_ALIGNMENT : lyt.alignment) - 1))
+        jl_exceptionf(jl_argumenterror_type,
+                      "unsafe_wrap: pointer %p is not properly aligned to %u bytes", data, lyt.alignment);
+
+    int ndimwords = jl_array_ndimwords(1);
+    int tsz = sizeof(jl_buffer_t);
+    buf = (jl_buffer_t*)jl_gc_alloc(ct->ptls, tsz, btype);
+    buf->length = len;
+    if (isowner) {
+        buf->data = data;
+        jl_gc_track_malloced_buffer(ct->ptls, buf);
+        jl_gc_count_allocd((len * lyt.elsize) + (lyt.elsize == 1 ? 1 : 0));
+    }
+    else {
+        buf->data = (void*)((uintptr_t)(data) | 1);
+    }
+    return buf;
 }
 
 STATIC_INLINE void jl_buffer_grow_at_end(jl_buffer_t *buf, size_t idx,
@@ -437,12 +460,12 @@ JL_DLLEXPORT void jl_buffer_ptr_copy(jl_buffer_t *dest, void **dest_p,
         if (jl_astaggedvalue(src)->bits.gc != GC_OLD_MARKED) {
             ssize_t done;
             if (dest_p < src_p || dest_p > src_p + n) {
-                done = jl_buffer_ptr_copy_forward(dest, src_p, dest_p, n);
+                done = jl_buffer_ptr_copy_forward((jl_value_t*)dest, src_p, dest_p, n);
                 dest_p += done;
                 src_p += done;
             }
             else {
-                done = jl_buffer_ptr_copy_backward(dest, src_p, dest_p, n);
+                done = jl_buffer_ptr_copy_backward((jl_value_t*)dest, src_p, dest_p, n);
             }
             n -= done;
         }
