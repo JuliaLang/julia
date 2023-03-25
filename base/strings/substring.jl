@@ -225,13 +225,9 @@ end
 end
 
 # nothrow needed here because for v in a can't prove the indexing is inbounds.
-@assume_effects :foldable :nothrow function string(a::Union{Char, String, Symbol}...)
-    _string(a...)
-end
+@assume_effects :foldable :nothrow string(a::Union{Char, String, Symbol}...) = _string(a...)
 
-function string(a::Union{Char, String, SubString{String}, Symbol}...)
-    _string(a...)
-end
+string(a::Union{Char, String, SubString{String}, Symbol}...) = _string(a...)
 
 function _string(a::Union{Char, String, SubString{String}, Symbol}...)
     n = 0
@@ -264,9 +260,7 @@ end
 
 # don't assume effects for general integers since we cannot know their implementation
 # not nothrow because r<0 throws
-@assume_effects :foldable function repeat(s::String, r::BitInteger)
-    @invoke repeat(s, r::Integer)
-end
+@assume_effects :foldable repeat(s::String, r::BitInteger) = @invoke repeat(s::String, r::Integer)
 
 function repeat(s::Union{String, SubString{String}}, r::Integer)
     r < 0 && throw(ArgumentError("can't repeat a string $r times"))
