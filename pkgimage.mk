@@ -5,10 +5,13 @@ include $(JULIAHOME)/Make.inc
 
 VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
 
-JULIA_DEPOT_PATH := $(build_prefix)/share/julia
+export JULIA_DEPOT_PATH := $(build_prefix)/share/julia
 
 $(JULIA_DEPOT_PATH):
 	mkdir -p $@
+
+print-depot-path:
+	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no -e '@show Base.DEPOT_PATH')
 
 STDLIBS := ArgTools Artifacts Base64 CRC32c FileWatching Libdl NetworkOptions SHA Serialization \
 		   GMP_jll LLVMLibUnwind_jll LibUV_jll LibUnwind_jll MbedTLS_jll OpenLibm_jll PCRE2_jll \
