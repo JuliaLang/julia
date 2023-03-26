@@ -1060,11 +1060,12 @@ end
 function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
     parameters = x.parameters::SimpleVector
     istuple = x.name === Tuple.name
+    isnamedtuple = x.name === typename(NamedTuple)
     n = length(parameters)
 
     # Print tuple types with homogeneous tails longer than max_n compactly using `NTuple` or `Vararg`
-    max_n = 3
     if istuple
+        max_n = 3
         taillen = 1
         for i in (n-1):-1:1
             if parameters[i] === parameters[n]
@@ -1090,10 +1091,31 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
             end
             print(io, "}")
         end
-    else
-        show_type_name(io, x.name)
-        show_typeparams(io, parameters, (unwrap_unionall(x.name.wrapper)::DataType).parameters, wheres)
+        return
+    elseif isnamedtuple
+        syms, types = parameters
+        first = true
+        if syms isa Tuple && types isa DataType
+            print(io, "@NamedTuple{")
+            for i in 1:length(syms)
+                if !first
+                    print(io, ", ")
+                end
+                print(io, syms[i])
+                typ = types.parameters[i]
+                if typ !== Any
+                    print(io, "::")
+                    show(io, typ)
+                end
+                first = false
+            end
+            print(io, "}")
+            return
+        end
     end
+
+    show_type_name(io, x.name)
+    show_typeparams(io, parameters, (unwrap_unionall(x.name.wrapper)::DataType).parameters, wheres)
 end
 
 function show_supertypes(io::IO, typ::DataType)
