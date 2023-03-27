@@ -797,3 +797,31 @@ f48085(@nospecialize x...) = length(x)
 
 # Make sure that the bounds check is elided in tuple iteration
 @test !occursin("call void @", get_llvm(iterate, Tuple{NTuple{4, Float64}, Int}))
+
+# issue #34459
+function f34459(args...)
+    Base.pointerset(args[1], 1, 1, 1)
+    return
+end
+@test !occursin("jl_f_tuple", get_llvm(f34459, Tuple{Ptr{Int}, Type{Int}}, true, false, false))
+
+# issue #48394: incorrectly-inferred getproperty shouldn't introduce invalid cgval_t
+#               when dealing with unions of ghost values
+struct X48394
+    x::Nothing
+    y::Bool
+end
+struct Y48394
+    x::Nothing
+    z::Missing
+end
+function F48394(a, b, i)
+    c = i ? a : b
+    c.y
+end
+@test F48394(X48394(nothing,true), Y48394(nothing, missing), true)
+@test occursin("llvm.trap", get_llvm(F48394, Tuple{X48394, Y48394, Bool}))
+
+# issue 48917, hoisting load to above the parent
+f48917(x, w) = (y = (a=1, b=x); z = (; a=(a=(1, w), b=(3, y))))
+@test f48917(1,2) == (a = (a = (1, 2), b = (3, (a = 1, b = 1))),)

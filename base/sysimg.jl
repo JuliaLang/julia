@@ -5,6 +5,7 @@ Core.include(Main, "Base.jl")
 using .Base
 
 # Set up Main module
+using Base.MainInclude # ans, err, and sometimes Out
 import Base.MainInclude: eval, include
 
 # Ensure this file is also tracked
@@ -59,7 +60,6 @@ let
         :InteractiveUtils,
         :LibGit2,
         :Profile,
-        :SparseArrays,
         :UUIDs,
 
         # 3-depth packages

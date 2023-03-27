@@ -24,6 +24,11 @@ let n = 10
         A = Areal
         H = UpperHessenberg(A)
         AH = triu(A,-1)
+        for k in -2:2
+            @test istril(H, k) == istril(AH, k)
+            @test istriu(H, k) == istriu(AH, k)
+            @test (k <= -1 ? istriu(H, k) : !istriu(H, k))
+        end
         @test UpperHessenberg(H) === H
         @test parent(H) === A
         @test Matrix(H) == Array(H) == H == AH
@@ -144,9 +149,11 @@ let n = 10
         @test_throws ErrorException H.Z
         @test convert(Array, H) ≈ A
         @test (H.Q * H.H) * H.Q' ≈ A ≈ (Matrix(H.Q) * Matrix(H.H)) * Matrix(H.Q)'
-        @test (H.Q' *A) * H.Q ≈ H.H
+        @test (H.Q' * A) * H.Q ≈ H.H
         #getindex for HessenbergQ
         @test H.Q[1,1] ≈ Array(H.Q)[1,1]
+        @test det(H.Q) ≈ det(Matrix(H.Q))
+        @test logabsdet(H.Q)[1] ≈ logabsdet(Matrix(H.Q))[1] atol=2n*eps(float(real(eltya)))
 
         # REPL show
         hessstring = sprint((t, s) -> show(t, "text/plain", s), H)

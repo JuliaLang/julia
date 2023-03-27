@@ -445,7 +445,7 @@ function default_group_code(file)
         QuoteNode(default_group(file))  # precompute if we can
     else
         ref = Ref{Symbol}()  # memoized run-time execution
-        :(isassigned($ref) ? $ref[] : $ref[] = default_group(something($file, "")))
+        :(isassigned($ref) ? $ref[] : $ref[] = default_group(something($file, ""))::Symbol)
     end
 end
 

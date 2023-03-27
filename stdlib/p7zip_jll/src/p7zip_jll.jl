@@ -69,8 +69,8 @@ end
 
 function init_p7zip_path()
     # Prefer our own bundled p7zip, but if we don't have one, pick it up off of the PATH
-    # If this is an in-tree build, `7z` will live in `bin`.  Otherwise, it'll be in `libexec`
-    for bundled_p7zip_path in (joinpath(Sys.BINDIR, Base.LIBEXECDIR, p7zip_exe),
+    # If this is an in-tree build, `7z` will live in `bindir`.  Otherwise, it'll be in `private_libexecdir`
+    for bundled_p7zip_path in (joinpath(Sys.BINDIR, Base.PRIVATE_LIBEXECDIR, p7zip_exe),
                                joinpath(Sys.BINDIR, p7zip_exe))
         if isfile(bundled_p7zip_path)
             global p7zip_path = abspath(bundled_p7zip_path)

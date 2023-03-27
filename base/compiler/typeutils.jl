@@ -165,7 +165,7 @@ function typesubtract(@nospecialize(a), @nospecialize(b), max_union_splitting::I
         if ub isa DataType
             if a.name === ub.name === Tuple.name &&
                     length(a.parameters) == length(ub.parameters)
-                if 1 < unionsplitcost(a.parameters) <= max_union_splitting
+                if 1 < unionsplitcost(JLTypeLattice(), a.parameters) <= max_union_splitting
                     ta = switchtupleunion(a)
                     return typesubtract(Union{ta...}, b, 0)
                 elseif b isa DataType
@@ -227,12 +227,11 @@ end
 # or outside of the Tuple/Union nesting, though somewhat more expensive to be
 # outside than inside because the representation is larger (because and it
 # informs the callee whether any splitting is possible).
-function unionsplitcost(argtypes::Union{SimpleVector,Vector{Any}})
+function unionsplitcost(𝕃::AbstractLattice, argtypes::Union{SimpleVector,Vector{Any}})
     nu = 1
     max = 2
     for ti in argtypes
-        # TODO remove this to implement callsite refinement of MustAlias
-        if isa(ti, MustAlias) && isa(widenconst(ti), Union)
+        if has_extended_unionsplit(𝕃) && !isvarargtype(ti)
             ti = widenconst(ti)
         end
         if isa(ti, Union)
@@ -252,12 +251,12 @@ end
 # and `Union{return...} == ty`
 function switchtupleunion(@nospecialize(ty))
     tparams = (unwrap_unionall(ty)::DataType).parameters
-    return _switchtupleunion(Any[tparams...], length(tparams), [], ty)
+    return _switchtupleunion(JLTypeLattice(), Any[tparams...], length(tparams), [], ty)
 end
 
-switchtupleunion(argtypes::Vector{Any}) = _switchtupleunion(argtypes, length(argtypes), [], nothing)
+switchtupleunion(𝕃::AbstractLattice, argtypes::Vector{Any}) = _switchtupleunion(𝕃, argtypes, length(argtypes), [], nothing)
 
-function _switchtupleunion(t::Vector{Any}, i::Int, tunion::Vector{Any}, @nospecialize(origt))
+function _switchtupleunion(𝕃::AbstractLattice, t::Vector{Any}, i::Int, tunion::Vector{Any}, @nospecialize(origt))
     if i == 0
         if origt === nothing
             push!(tunion, copy(t))
@@ -268,17 +267,20 @@ function _switchtupleunion(t::Vector{Any}, i::Int, tunion::Vector{Any}, @nospeci
     else
         origti = ti = t[i]
         # TODO remove this to implement callsite refinement of MustAlias
-        if isa(ti, MustAlias) && isa(widenconst(ti), Union)
-            ti = widenconst(ti)
-        end
         if isa(ti, Union)
-            for ty in uniontypes(ti::Union)
+            for ty in uniontypes(ti)
                 t[i] = ty
-                _switchtupleunion(t, i - 1, tunion, origt)
+                _switchtupleunion(𝕃, t, i - 1, tunion, origt)
+            end
+            t[i] = origti
+        elseif has_extended_unionsplit(𝕃) && !isa(ti, Const) && !isvarargtype(ti) && isa(widenconst(ti), Union)
+            for ty in uniontypes(ti)
+                t[i] = ty
+                _switchtupleunion(𝕃, t, i - 1, tunion, origt)
             end
             t[i] = origti
         else
-            _switchtupleunion(t, i - 1, tunion, origt)
+            _switchtupleunion(𝕃, t, i - 1, tunion, origt)
         end
     end
     return tunion
@@ -324,12 +326,19 @@ function unswitchtupleunion(u::Union)
     Tuple{Any[ Union{Any[(t::DataType).parameters[i] for t in ts]...} for i in 1:n ]...}
 end
 
-function unwraptv(@nospecialize t)
+function unwraptv_ub(@nospecialize t)
     while isa(t, TypeVar)
         t = t.ub
     end
     return t
 end
+function unwraptv_lb(@nospecialize t)
+    while isa(t, TypeVar)
+        t = t.lb
+    end
+    return t
+end
+const unwraptv = unwraptv_ub
 
 # this query is specially written for `adjust_effects` and returns true if a value of this type
 # never involves inconsistency of mutable objects that are allocated somewhere within a call graph

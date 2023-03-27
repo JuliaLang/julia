@@ -14,7 +14,7 @@ unsigned(::Type{Int64}) = UInt64
 unsigned(::Type{Int128}) = UInt128
 unsigned(::Type{T}) where {T<:Unsigned} = T
 
-abstract type  MultiplicativeInverse{T} end
+abstract type  MultiplicativeInverse{T} <: Number end
 
 # Computes integer division by a constant using multiply, add, and bitshift.
 

@@ -796,7 +796,7 @@ function inline_linfo_printer(code::IRCode)
     end
 end
 
-_strip_color(s::String) = replace(s, r"\e\[\d+m" => "")
+_strip_color(s::String) = replace(s, r"\e\[\d+m"a => "")
 
 function statementidx_lineinfo_printer(f, code::IRCode)
     printer = f(code.linetable)
@@ -902,7 +902,7 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
 
     # while compacting, the end of the active result bb will not have been determined
     # (this is done post-hoc by `finish_current_bb!`), so determine it here from scratch.
-    result_bbs = copy(compact.result_bbs)
+    result_bbs = copy(compact.cfg_transform.result_bbs)
     if compact.active_result_bb <= length(result_bbs)
         # count the total number of nodes we'll add to this block
         input_bb_idx = block_for_inst(compact.ir.cfg, compact.idx)

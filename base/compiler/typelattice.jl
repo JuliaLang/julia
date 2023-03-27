@@ -120,6 +120,8 @@ end
 MustAlias(var::SlotNumber, @nospecialize(vartyp), fldidx::Int, @nospecialize(fldtyp)) =
     MustAlias(slot_id(var), vartyp, fldidx, fldtyp)
 
+_uniontypes(x::MustAlias, ts) = _uniontypes(widenconst(x), ts)
+
 """
     alias::InterMustAlias
 
@@ -415,7 +417,7 @@ function ⊑(lattice::InferenceLattice, @nospecialize(a), @nospecialize(b))
 
     # a and b's unlimited types are equal.
     isa(a, LimitedAccuracy) || return false # b is limited, so ε smaller
-    return a.causes ⊆ b.causes
+    return b.causes ⊆ a.causes
 end
 
 function ⊑(lattice::OptimizerLattice, @nospecialize(a), @nospecialize(b))

@@ -59,6 +59,11 @@
     @test repr(r"\\\"") == raw"r\"\\\\\\\"\""
     @test repr(s"\\\"\\") == raw"s\"\\\\\\\"\\\\\""
 
+    @test repr(r""a) == "r\"\"a"
+    @test repr(r""imsxa) == "r\"\"imsxa"
+    @test repr(Regex("", Base.DEFAULT_COMPILER_OPTS, UInt32(0))) == """Regex("", $(repr(Base.DEFAULT_COMPILER_OPTS)), $(repr(UInt32(0))))"""
+    @test repr(Regex("", UInt32(0), Base.DEFAULT_MATCH_OPTS)) == """Regex("", $(repr(UInt32(0))), $(repr(Base.DEFAULT_MATCH_OPTS)))"""
+
     # findall
     @test findall(r"\w+", "foo bar") == [1:3, 5:7]
     @test findall(r"\w+", "foo bar", overlap=true) == [1:3, 2:3, 3:3, 5:7, 6:7, 7:7]
@@ -122,18 +127,24 @@
 
     # Backcapture reference in substitution string
     @test replace("abcde", r"(..)(?P<byname>d)" => s"\g<byname>xy\\\1") == "adxy\\bce"
-    @test_throws ErrorException replace("a", r"(?P<x>)" => s"\g<y>")
+    @test_throws(ErrorException("Bad replacement string: Group y not found in regex r\"(?P<x>)\""),
+        replace("a", r"(?P<x>)" => s"\g<y>"))
     # test replace with invalid substitution group pattern
-    @test_throws ErrorException replace("s", r"(?<g1>.)" => s"\gg1>")
+    @test_throws(ErrorException("Bad replacement string: \\gg1>"),
+        replace("s", r"(?<g1>.)" => s"\gg1>"))
     # test replace with 2-digit substitution group
     @test replace(("0" ^ 9) * "1", Regex(("(0)" ^ 9) * "(1)") => s"10th group: \10") == "10th group: 1"
 
     # Proper unicode handling
     @test  match(r"∀∀", "∀x∀∀∀").match == "∀∀"
 
-    # 'a' flag to disable UCP
+    # 'a' flag to disable UCP and UTF
     @test match(r"\w+", "Düsseldorf").match == "Düsseldorf"
     @test match(r"\w+"a, "Düsseldorf").match == "D"
+    @test match(r".+"a, "Düsseldorf").match == "Düsseldorf"
+    @test match(r".+"a, "Dü\xefsseldorf").match == "Dü\xefsseldorf"
+    @test_throws(ErrorException("PCRE.exec error: $(Base.PCRE.err_message(Base.PCRE.ERROR_UTF8_ERR6))"),
+        match(r"(*UTF).+"a, "Dü\xefsseldorf"))
 
     # Regex behaves like a scalar in broadcasting
     @test occursin.(r"Hello", ["Hello", "World"]) == [true, false]
@@ -211,8 +222,7 @@
     end
 
     # Test that PCRE throws the correct kind of error
-    # TODO: Uncomment this once the corresponding change has propagated to CI
-    #@test_throws ErrorException Base.PCRE.info(C_NULL, Base.PCRE.INFO_NAMECOUNT, UInt32)
+    @test_throws ErrorException("PCRE error: NULL regex object") Base.PCRE.info(C_NULL, Base.PCRE.INFO_NAMECOUNT, UInt32)
 
     # test that we can get the error message of negative error codes
     @test Base.PCRE.err_message(Base.PCRE.ERROR_NOMEMORY) isa String

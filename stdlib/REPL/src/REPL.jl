@@ -14,6 +14,7 @@ Run Evaluate Print Loop (REPL)
 module REPL
 
 Base.Experimental.@optlevel 1
+Base.Experimental.@max_methods 1
 
 using Base.Meta, Sockets
 import InteractiveUtils
@@ -69,10 +70,6 @@ include("TerminalMenus/TerminalMenus.jl")
 include("docview.jl")
 
 @nospecialize # use only declared type signatures
-
-function __init__()
-    Base.REPL_MODULE_REF[] = REPL
-end
 
 answer_color(::AbstractREPL) = ""
 
@@ -151,7 +148,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
                 end
                 value = Core.eval(mod, ast)
                 backend.in_eval = false
-                setglobal!(mod, :ans, value)
+                setglobal!(Base.MainInclude, :ans, value)
                 put!(backend.response_channel, Pair{Any, Bool}(value, false))
             end
             break
@@ -293,7 +290,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
             Base.sigatomic_end()
             if iserr
                 val = Base.scrub_repl_backtrace(val)
-                Base.istrivialerror(val) || setglobal!(Main, :err, val)
+                Base.istrivialerror(val) || setglobal!(Base.MainInclude, :err, val)
                 Base.invokelatest(Base.display_error, errio, val)
             else
                 if val !== nothing && show_value
@@ -316,7 +313,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 println(errio, "SYSTEM (REPL): showing an error caused an error")
                 try
                     excs = Base.scrub_repl_backtrace(current_exceptions())
-                    setglobal!(Main, :err, excs)
+                    setglobal!(Base.MainInclude, :err, excs)
                     Base.invokelatest(Base.display_error, errio, excs)
                 catch e
                     # at this point, only print the name of the type as a Symbol to
@@ -388,6 +385,7 @@ end
 mutable struct BasicREPL <: AbstractREPL
     terminal::TextTerminal
     waserror::Bool
+    frontend_task::Task
     BasicREPL(t) = new(t, false)
 end
 
@@ -395,6 +393,7 @@ outstream(r::BasicREPL) = r.terminal
 hascolor(r::BasicREPL) = hascolor(r.terminal)
 
 function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
+    repl.frontend_task = current_task()
     d = REPLDisplay(repl)
     dopushdisplay = !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
@@ -461,6 +460,7 @@ mutable struct LineEditREPL <: AbstractREPL
     last_shown_line_infos::Vector{Tuple{String,Int}}
     interface::ModalInterface
     backendref::REPLBackendRef
+    frontend_task::Task
     function LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors)
         opts = Options()
         opts.hascolor = hascolor
@@ -1280,6 +1280,7 @@ function setup_interface(
 end
 
 function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
+    repl.frontend_task = current_task()
     d = REPLDisplay(repl)
     dopushdisplay = repl.specialdisplay === nothing && !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
@@ -1305,6 +1306,7 @@ mutable struct StreamREPL <: AbstractREPL
     input_color::String
     answer_color::String
     waserror::Bool
+    frontend_task::Task
     StreamREPL(stream,pc,ic,ac) = new(stream,pc,ic,ac,false)
 end
 StreamREPL(stream::IO) = StreamREPL(stream, Base.text_colors[:green], Base.input_color(), Base.answer_color())
@@ -1363,6 +1365,7 @@ ends_with_semicolon(code::Union{String,SubString{String}}) =
     contains(_rm_strings_and_comments(code), r";\s*$")
 
 function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
+    repl.frontend_task = current_task()
     have_color = hascolor(repl)
     Base.banner(repl.stream)
     d = REPLDisplay(repl)
@@ -1413,8 +1416,10 @@ end
 
 function capture_result(n::Ref{Int}, @nospecialize(x))
     n = n[]
-    mod = REPL.active_module()
+    mod = Base.MainInclude
     if !isdefined(mod, :Out)
+        @eval mod global Out
+        @eval mod export Out
         setglobal!(mod, :Out, Dict{Int, Any}())
     end
     if x !== getglobal(mod, :Out) && x !== nothing # remove this?
@@ -1457,6 +1462,17 @@ function ipython_mode!(repl::LineEditREPL=Base.active_repl, backend=nothing)
     push!(__current_ast_transforms(backend), @nospecialize(ast) -> out_transform(ast, n))
     return
 end
+
+"""
+    Out[n]
+
+A variable referring to all previously computed values, automatically imported to the interactive prompt.
+Only defined and exists while using [IPython mode](@ref IPython-mode).
+
+See also [`ans`](@ref).
+"""
+Base.MainInclude.Out
+
 end
 
 import .IPython.ipython_mode!

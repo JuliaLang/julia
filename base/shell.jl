@@ -292,9 +292,9 @@ function shell_escape_csh(io::IO, args::AbstractString...)
         first = false
         i = 1
         while true
-            for (r,e) = (r"^[A-Za-z0-9/\._-]+\z" => "",
-                         r"^[^']*\z" => "'", r"^[^\$\`\"]*\z" => "\"",
-                         r"^[^']+"  => "'", r"^[^\$\`\"]+"  => "\"")
+            for (r,e) = (r"^[A-Za-z0-9/\._-]+\z"sa => "",
+                         r"^[^']*\z"sa => "'", r"^[^\$\`\"]*\z"sa => "\"",
+                         r"^[^']+"sa  => "'", r"^[^\$\`\"]+"sa  => "\"")
                 if ((m = match(r, SubString(arg, i))) !== nothing)
                     write(io, e)
                     write(io, replace(m.match, '\n' => "\\\n"))
@@ -391,7 +391,7 @@ julia> Base.shell_escape_wincmd("a^\\"^o\\"^u\\"")
 """
 function shell_escape_wincmd(io::IO, s::AbstractString)
     # https://stackoverflow.com/a/4095133/1990689
-    occursin(r"[\r\n\0]", s) &&
+    occursin(r"[\r\n\0]"sa, s) &&
         throw(ArgumentError("control character unsupported by CMD.EXE"))
     i = 1
     len = ncodeunits(s)
@@ -446,7 +446,7 @@ function escape_microsoft_c_args(io::IO, args::AbstractString...)
         else
             write(io, ' ')  # separator
         end
-        if isempty(arg) || occursin(r"[ \t\"]", arg)
+        if isempty(arg) || occursin(r"[ \t\"]"sa, arg)
             # Julia raw strings happen to use the same escaping convention
             # as the argv[] parser in Microsoft's C runtime library.
             write(io, '"')

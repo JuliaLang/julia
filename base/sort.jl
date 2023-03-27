@@ -295,6 +295,8 @@ according to the order specified by the `by`, `lt` and `rev` keywords, assuming 
 is already sorted in that order. Return an empty range located at the insertion point
 if `a` does not contain values equal to `x`.
 
+See [`sort!`](@ref) for an explanation of the keyword arguments `by`, `lt` and `rev`.
+
 See also: [`insorted`](@ref), [`searchsortedfirst`](@ref), [`sort`](@ref), [`findall`](@ref).
 
 # Examples
@@ -313,6 +315,9 @@ julia> searchsorted([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
 
 julia> searchsorted([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 1:0
+
+julia> searchsorted([1=>"one", 2=>"two", 2=>"two", 4=>"four"], 2=>"two", by=first) # compare the keys of the pairs
+2:3
 ```
 """ searchsorted
 
@@ -324,6 +329,8 @@ specified order. Return `lastindex(a) + 1` if `x` is greater than all values in 
 `a` is assumed to be sorted.
 
 `insert!`ing `x` at this index will maintain sorted order.
+
+See [`sort!`](@ref) for an explanation of the keyword arguments `by`, `lt` and `rev`.
 
 See also: [`searchsortedlast`](@ref), [`searchsorted`](@ref), [`findfirst`](@ref).
 
@@ -343,6 +350,9 @@ julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
 
 julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 1
+
+julia> searchsortedfirst([1=>"one", 2=>"two", 4=>"four"], 3=>"three", by=first) # Compare the keys of the pairs
+3
 ```
 """ searchsortedfirst
 
@@ -352,6 +362,8 @@ julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 Return the index of the last value in `a` less than or equal to `x`, according to the
 specified order. Return `firstindex(a) - 1` if `x` is less than all values in `a`. `a` is
 assumed to be sorted.
+
+See [`sort!`](@ref) for an explanation of the keyword arguments `by`, `lt` and `rev`.
 
 # Examples
 ```jldoctest
@@ -369,6 +381,9 @@ julia> searchsortedlast([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
 
 julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 0
+
+julia> searchsortedlast([1=>"one", 2=>"two", 4=>"four"], 3=>"three", by=first) # compare the keys of the pairs
+2
 ```
 """ searchsortedlast
 
@@ -414,19 +429,18 @@ macro getkw(syms...)
     Expr(:block, (:($(esc(:((kw, $sym) = $getter(v, o, kw))))) for (sym, getter) in zip(syms, getters))...)
 end
 
-for (sym, deps, exp, type) in [
-        (:lo, (), :(firstindex(v)), Integer),
-        (:hi, (), :(lastindex(v)),  Integer),
-        (:mn, (), :(throw(ArgumentError("mn is needed but has not been computed"))), :(eltype(v))),
-        (:mx, (), :(throw(ArgumentError("mx is needed but has not been computed"))), :(eltype(v))),
-        (:scratch, (), nothing, :(Union{Nothing, Vector})), # could have different eltype
-        (:allow_legacy_dispatch, (), true, Bool)]
+for (sym, exp, type) in [
+        (:lo, :(firstindex(v)), Integer),
+        (:hi, :(lastindex(v)),  Integer),
+        (:mn, :(throw(ArgumentError("mn is needed but has not been computed"))), :(eltype(v))),
+        (:mx, :(throw(ArgumentError("mx is needed but has not been computed"))), :(eltype(v))),
+        (:scratch, nothing, :(Union{Nothing, Vector})), # could have different eltype
+        (:allow_legacy_dispatch, true, Bool)]
     usym = Symbol(:_, sym)
     @eval function $usym(v, o, kw)
         # using missing instead of nothing because scratch could === nothing.
         res = get(kw, $(Expr(:quote, sym)), missing)
         res !== missing && return kw, res::$type
-        @getkw $(deps...)
         $sym = $exp
         (;kw..., $sym), $sym::$type
     end
@@ -519,12 +533,13 @@ Base.@propagate_inbounds function Base.setindex!(v::WithoutMissingVector, x, i)
     v
 end
 Base.size(v::WithoutMissingVector) = size(v.data)
+Base.axes(v::WithoutMissingVector) = axes(v.data)
 
 """
     send_to_end!(f::Function, v::AbstractVector; [lo, hi])
 
 Send every element of `v` for which `f` returns `true` to the end of the vector and return
-the index of the last element which for which `f` returns `false`.
+the index of the last element for which `f` returns `false`.
 
 `send_to_end!(f, v, lo, hi)` is equivalent to `send_to_end!(f, view(v, lo:hi))+lo-1`
 
@@ -563,19 +578,20 @@ elements that are not
 
 function _sort!(v::AbstractVector, a::MissingOptimization, o::Ordering, kw)
     @getkw lo hi
-    if nonmissingtype(eltype(v)) != eltype(v) && o isa DirectOrdering
+    if o isa DirectOrdering && eltype(v) >: Missing && nonmissingtype(eltype(v)) != eltype(v)
         lo, hi = send_to_end!(ismissing, v, o; lo, hi)
         _sort!(WithoutMissingVector(v, unsafe=true), a.next, o, (;kw..., lo, hi))
-    elseif eltype(v) <: Integer && o isa Perm && o.order isa DirectOrdering &&
-                nonmissingtype(eltype(o.data)) != eltype(o.data) &&
+    elseif o isa Perm && o.order isa DirectOrdering && eltype(v) <: Integer &&
+                eltype(o.data) >: Missing && nonmissingtype(eltype(o.data)) != eltype(o.data) &&
                 all(i === j for (i,j) in zip(v, eachindex(o.data)))
         # TODO make this branch known at compile time
         # This uses a custom function because we need to ensure stability of both sides and
         # we can assume v is equal to eachindex(o.data) which allows a copying partition
         # without allocations.
         lo_i, hi_i = lo, hi
-        for (i,x) in zip(eachindex(o.data), o.data)
-            if ismissing(x) == (o.order == Reverse) # should i go at the beginning?
+        for i in eachindex(o.data) # equal to copy(v)
+            x = o.data[i]
+            if ismissing(x) == (o.order == Reverse) # should x go at the beginning/end?
                 v[lo_i] = i
                 lo_i += 1
             else
@@ -771,7 +787,7 @@ function _sort!(v::AbstractVector, a::CheckSorted, o::Ordering, kw)
 
     # For most large arrays, a reverse-sorted check is essentially free (overhead < 1%)
     if hi-lo >= 500 && _issorted(v, lo, hi, ReverseOrdering(o))
-        # If reversing is valid, do so. This does violates stability.
+        # If reversing is valid, do so. This violates stability.
         reverse!(v, lo, hi)
         return scratch
     end
@@ -1124,7 +1140,7 @@ function radix_sort_pass!(t, lo, hi, offset, counts, v, shift, chunk_size)
             counts[i] += 1            # increment that bucket's count
         end
 
-        counts[1] = lo                # set target index for the first bucket
+        counts[1] = lo + offset       # set target index for the first bucket
         cumsum!(counts, counts)       # set target indices for subsequent buckets
         # counts[1:mask+1] now stores indices where the first member of each bucket
         # belongs, not the number of elements in each bucket. We will put the first element
@@ -1135,7 +1151,7 @@ function radix_sort_pass!(t, lo, hi, offset, counts, v, shift, chunk_size)
             x = v[k]                  # lookup the element
             i = (x >> shift)&mask + 1 # compute its bucket's index for this pass
             j = counts[i]             # lookup the target index
-            t[j + offset] = x         # put the element where it belongs
+            t[j] = x                  # put the element where it belongs
             counts[i] = j + 1         # increment the target index for the next
         end                           #  ↳ element in this bucket
     end
@@ -1242,7 +1258,7 @@ Otherwise, we dispatch to [`InsertionSort`](@ref) for inputs with `length <= 40`
 perform a presorted check ([`CheckSorted`](@ref)).
 
 We check for short inputs before performing the presorted check to avoid the overhead of the
-check for small inputs. Because the alternate dispatch is to [`InseritonSort`](@ref) which
+check for small inputs. Because the alternate dispatch is to [`InsertionSort`](@ref) which
 has efficient `O(n)` runtime on presorted inputs, the check is not necessary for small
 inputs.
 
@@ -1328,7 +1344,8 @@ specific algorithm to use via the `alg` keyword (see [Sorting Algorithms](@ref) 
 available algorithms). The `by` keyword lets you provide a function that will be applied to
 each element before comparison; the `lt` keyword allows providing a custom "less than"
 function (note that for every `x` and `y`, only one of `lt(x,y)` and `lt(y,x)` can return
-`true`); use `rev=true` to reverse the sorting order. These options are independent and can
+`true`); use `rev=true` to reverse the sorting order. `rev=true` preserves forward stability:
+Elements that compare equal are not reversed. These options are independent and can
 be used together in all possible combinations: if both `by` and `lt` are specified, the `lt`
 function is applied to the result of the `by` function; `rev=true` reverses whatever
 ordering specified via the `by` and `lt` keywords.
@@ -1891,6 +1908,27 @@ Characteristics:
     ignores case).
   * *in-place* in memory.
   * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
+
+  Note that `PartialQuickSort(k)` does not necessarily sort the whole array. For example,
+
+```jldoctest
+julia> x = rand(100);
+
+julia> k = 50:100;
+
+julia> s1 = sort(x; alg=QuickSort);
+
+julia> s2 = sort(x; alg=PartialQuickSort(k));
+
+julia> map(issorted, (s1, s2))
+(true, false)
+
+julia> map(x->issorted(x[k]), (s1, s2))
+(true, true)
+
+julia> s1[k] == s2[k]
+true
+```
 """
 struct PartialQuickSort{T <: Union{Integer,OrdinalRange}} <: Algorithm
     k::T
@@ -1927,6 +1965,8 @@ Characteristics:
     case).
   * *not in-place* in memory.
   * *divide-and-conquer* sort strategy.
+  * *good performance* for large collections but typically not quite as
+    fast as [`QuickSort`](@ref).
 """
 const MergeSort     = MergeSortAlg()
 
