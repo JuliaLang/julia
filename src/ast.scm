@@ -329,8 +329,8 @@
         (else
          (case (car v)
            ((...)
-	    (arg-name (cadr v)) ;; to check for errors
-	    (decl-var (cadr v)))
+	        (arg-name (cadr v)) ;; to check for errors
+	        (decl-var (cadr v)))
            ((|::|)
             (if (not (symbol? (cadr v)))
                 (bad-formal-argument (cadr v)))
