@@ -75,6 +75,10 @@ end
         Diagnostic(6, 9, :error, "invalid octal escape sequence")
     @test diagnostic("x = '\\k'") ==
         Diagnostic(6, 7, :error, "invalid escape sequence")
+    @test diagnostic("'\\", allow_multiple=true) == [
+        Diagnostic(2, 2, :error, "invalid escape sequence"),
+        Diagnostic(3, 2, :error, "unterminated character literal")
+    ]
 
     # String
     @test diagnostic("x = \"abc\\xq\"") ==

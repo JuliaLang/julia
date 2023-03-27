@@ -243,6 +243,9 @@ function unescape_julia_string(io::IO, str::AbstractString,
         escstart = i
         i += 1
         if i >= endind
+            emit_diagnostic(diagnostics, escstart:endind-1,
+                            error="invalid escape sequence")
+            had_error = true
             break
         end
         c = str[i]
