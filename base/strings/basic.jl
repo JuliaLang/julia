@@ -621,6 +621,29 @@ isascii(c::AbstractChar) = UInt32(c) < 0x80
     return 0 ≤ r < 0x80
 end
 
+@inline function _isascii(bytes::AbstractVector{UInt8},first,last)
+    n = last-first+1
+    nqword, epilog_bytes = divrem(n,8)
+    qwords = @inline reinterpret(UInt64,@inbounds view(bytes,first:(last-epilog_bytes)))
+    rqword = zero(UInt64)
+    i = 1
+    for i=1:nqword
+        @inbounds rqword |= qwords[i]
+    end
+    iszero(rqword & UInt64(0x8080808080808080)) || return false
+    epilog_bytes == 0 && return true
+
+    i = last-epilog_bytes
+    r = UInt8(0)
+
+    # This loop should get unwound
+    for j = 1:7
+        @inbounds r |= bytes[i += 1]
+        (j < epilog_bytes) || break
+    end
+    return r < 0x80
+end
+
 #The chunking algorithm makes the last two chunks overlap inorder to keep the size fixed
 @inline function  _isascii_chunks(chunk_size,cu::AbstractVector{CU}, first,last) where {CU}
     n=first
