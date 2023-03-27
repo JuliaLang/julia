@@ -89,6 +89,9 @@ WITH_GC_DEBUG_ENV := 0
 # Enable DTrace support
 WITH_DTRACE := 0
 
+# Enable ITTAPI integration
+WITH_ITTAPI := 0
+
 # Prevent picking up $ARCH from the environment variables
 ARCH:=
 
@@ -736,7 +739,12 @@ ifeq ($(WITH_DTRACE), 1)
 JCXXFLAGS += -DUSE_DTRACE
 JCFLAGS += -DUSE_DTRACE
 DTRACE := dtrace
-else
+endif
+
+ifeq ($(WITH_ITTAPI), 1)
+JCXXFLAGS += -DUSE_ITTAPI
+JCFLAGS += -DUSE_ITTAPI
+LIBITTAPI:=-littnotify
 endif
 
 # ===========================================================================
