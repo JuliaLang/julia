@@ -902,9 +902,8 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
     // If the types are small and simple, use load and store directly.
     // Going through memcpy can cause LLVM (e.g. SROA) to create bitcasts between float and int
     // that interferes with other optimizations.
-#ifndef JL_LLVM_OPAQUE_POINTERS
     // TODO: Restore this for opaque pointers? Needs extra type information from the caller.
-    if (sz <= 64) {
+    if (ctx.builder.getContext().supportsTypedPointers() && sz <= 64) {
         // The size limit is arbitrary but since we mainly care about floating points and
         // machine size vectors this should be enough.
         const DataLayout &DL = jl_Module->getDataLayout();
@@ -942,7 +941,6 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
             return;
         }
     }
-#endif
     ++EmittedMemcpys;
 
     // the memcpy intrinsic does not allow to specify different alias tags
@@ -3292,13 +3290,11 @@ static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsig
             IntrinsicInst *call = cast<IntrinsicInst>(User);
             call->setCalledFunction(mangleIntrinsic(call));
         }
-#ifndef JL_LLVM_OPAQUE_POINTERS
         else if (isa<BitCastInst>(User)) {
             BitCastInst *Inst = cast<BitCastInst>(User);
             Inst->mutateType(PointerType::getWithSamePointeeType(cast<PointerType>(Inst->getType()), ToAS));
             recursively_adjust_ptr_type(Inst, FromAS, ToAS);
         }
-#endif
     }
 }
 
@@ -3342,9 +3338,7 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
                 box = emit_allocobj(ctx, jl_datatype_size(jt), literal_pointer_val(ctx, (jl_value_t*)jt));
                 Value *decayed = decay_derived(ctx, box);
                 AllocaInst *originalAlloca = cast<AllocaInst>(vinfo.V);
-#ifndef JL_LLVM_OPAQUE_POINTERS
-                decayed = maybe_bitcast(ctx, decayed, PointerType::get(originalAlloca->getType()->getPointerElementType(), AddressSpace::Derived));
-#endif
+                decayed = maybe_bitcast(ctx, decayed, PointerType::getWithSamePointeeType(originalAlloca->getType(), AddressSpace::Derived));
                 // Warning: Very illegal IR here temporarily
                 originalAlloca->mutateType(decayed->getType());
                 recursively_adjust_ptr_type(originalAlloca, 0, AddressSpace::Derived);
@@ -3735,11 +3729,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     // avoid unboxing the argument explicitly
                     // and use memcpy instead
                     Instruction *inst;
-#ifndef JL_LLVM_OPAQUE_POINTERS
                     dest = inst = cast<Instruction>(ctx.builder.CreateConstInBoundsGEP2_32(lt, strct, 0, llvm_idx));
-#else
-                    dest = inst = cast<Instruction>(ctx.builder.CreateConstInBoundsGEP1_32(getInt8Ty(ctx.builder.getContext()), strct, offs));
-#endif
                     // Our promotion point needs to come before
                     //  A) All of our arguments' promotion points
                     //  B) Any instructions we insert at any of our arguments' promotion points
