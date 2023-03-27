@@ -183,17 +183,18 @@ function highlight(io::IO, source::SourceFile, range::UnitRange;
                             context_lines_before=context_lines_before,
                             context_lines_after=context_lines_inner)
     a,b = source_line_range(source, p)
-    c,d = source_line_range(source, q)
-    z,w = source_line_range(source, q;
+    q1 = max(q, p) # Ignore q for empty ranges
+    c,d = source_line_range(source, q1)
+    z,w = source_line_range(source, q1;
                             context_lines_before=context_lines_inner,
                             context_lines_after=context_lines_after)
 
     p_line = source_line(source, p)
-    q_line   = source_line(source, q)
+    q_line = source_line(source, q)
 
     marker_line_color = :light_black
 
-    if p_line == q_line
+    if p_line >= q_line
         # x-----------------
         # a---p-------q----b
         # #   └───────┘ ── note

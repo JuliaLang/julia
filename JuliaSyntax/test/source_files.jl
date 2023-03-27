@@ -57,11 +57,22 @@ end
         αβγδ
         +-*/""")
 
+    # Empty ranges
+    @test sprint(highlight, src, 1:0) == "abcd\n└\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 2:1) == "abcd\n#└\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 3:2) == "abcd\n# └\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 4:3) == "abcd\n#  └\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 5:4) == "abcd\n#   └\nαβγδ\n+-*/"
+    @test sprint(highlight, src, 6:5) == "abcd\nαβγδ\n└\n+-*/"
+    @test sprint(highlight, src, 19:18) == "abcd\nαβγδ\n+-*/\n#   └"
+    @test sprint(io->highlight(io, src, 1:0, context_lines_after=0, note="hi")) ==
+        "abcd\n└ ── hi"
+
+    # Single line ranges
     @test sprint(highlight, src, 1:4) == "abcd\n└──┘\nαβγδ\n+-*/"
     @test sprint(highlight, src, 2:4) == "abcd\n#└─┘\nαβγδ\n+-*/"
     @test sprint(highlight, src, 3:4) == "abcd\n# └┘\nαβγδ\n+-*/"
     @test sprint(highlight, src, 4:4) == "abcd\n#  ╙\nαβγδ\n+-*/"
-    @test sprint(highlight, src, 4:3) == "abcd\n#  └\nαβγδ\n+-*/"
     @test sprint(highlight, src, 5:5) == "abcd\n#   └\nαβγδ\n+-*/"
 
     # multi-byte chars
