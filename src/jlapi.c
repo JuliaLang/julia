@@ -15,6 +15,10 @@
 #include "julia_assert.h"
 #include "julia_internal.h"
 
+#ifdef USE_TRACY
+#include "tracy/TracyC.h"
+#endif
+
 #ifdef __cplusplus
 #include <cfenv>
 extern "C" {
@@ -680,6 +684,11 @@ static void rr_detach_teleport(void) {
 
 JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
 {
+#ifdef USE_TRACY
+    if (getenv("WAIT_FOR_TRACY"))
+        while (!TracyCIsConnected) ; // Wait for connection
+#endif
+
     // no-op on Windows, note that the caller must have already converted
     // from `wchar_t` to `UTF-8` already if we're running on Windows.
     uv_setup_args(argc, argv);
