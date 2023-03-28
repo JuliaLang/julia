@@ -626,7 +626,6 @@ end
     nqword, epilog_bytes = divrem(n,8)
     qwords = @inline reinterpret(UInt64,@inbounds view(bytes,first:(last-epilog_bytes)))
     rqword = zero(UInt64)
-    i = 1
     for i=1:nqword
         @inbounds rqword |= qwords[i]
     end
