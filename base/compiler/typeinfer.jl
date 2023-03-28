@@ -779,13 +779,9 @@ function merge_call_chain!(interp::AbstractInterpreter, parent::InferenceState, 
     # then add all backedges of parent <- parent.parent
     # and merge all of the callers into ancestor.callers_in_cycle
     # and ensure that walking the parent list will get the same result (DAG) from everywhere
-    # Also taint the termination effect, because we can no longer guarantee the absence
-    # of recursion.
-    merge_effects!(interp, parent, Effects(EFFECTS_TOTAL; terminates=false))
     while true
         add_cycle_backedge!(parent, child, parent.currpc)
         union_caller_cycle!(ancestor, child)
-        merge_effects!(interp, child, Effects(EFFECTS_TOTAL; terminates=false))
         child = parent
         child === ancestor && break
         parent = child.parent::InferenceState
