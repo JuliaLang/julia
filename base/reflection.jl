@@ -1124,7 +1124,7 @@ function iterate(specs::MethodSpecializations)
 end
 iterate(specs::MethodSpecializations, ::Nothing) = nothing
 function iterate(specs::MethodSpecializations, i::Int)
-    s = specs.specializations
+    s = specs.specializations::Core.SimpleVector
     n = length(s)
     i >= n && return nothing
     item = nothing
