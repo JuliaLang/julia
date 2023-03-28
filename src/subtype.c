@@ -1470,9 +1470,22 @@ static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         (is_definite_length_tuple_type(x) && is_indefinite_length_tuple_type(y)))
         return 0;
 
+    if (jl_is_datatype(x) && jl_is_datatype(y)) {
+        // Fastpath for nested constructor. Skip the unneeded `>:` check.
+        // Note: since there is no changes to the environment or union stack implied by `x` or `y`, this will simply forward to calling
+        // `forall_exists_equal(xi, yi, e)` on each parameter `(xi, yi)` of `(x, y)`,
+        // which means this subtype call will give the same result for `subtype(x, y)` and `subtype(y, x)`.
+        jl_datatype_t *xd = (jl_datatype_t*)x, *yd = (jl_datatype_t*)y;
+        if (xd->name != yd->name)
+            return 0;
+        if (xd->name != jl_tuple_typename)
+            return subtype(x, y, e, 2);
+    }
+
     if ((jl_is_uniontype(x) && jl_is_uniontype(y))) {
         // For 2 unions, first try a more efficient greedy algorithm that compares the unions
         // componentwise. If failed, `exists_subtype` would memorize that this branch should be skipped.
+        // Note: this is valid because the normal path checks `>:` locally.
         if (pick_union_decision(e, 1) == 0) {
             return forall_exists_equal(((jl_uniontype_t *)x)->a, ((jl_uniontype_t *)y)->a, e) &&
                    forall_exists_equal(((jl_uniontype_t *)x)->b, ((jl_uniontype_t *)y)->b, e);
