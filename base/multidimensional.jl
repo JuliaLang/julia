@@ -523,7 +523,7 @@ module IteratorsMD
     Base.@constprop :aggressive function Base._reverse(iter::CartesianIndices, dims::Tuple{Vararg{Integer}})
         indices = iter.indices
         # use `sum` to force const fold
-        dimrev = ntuple(i -> sum(==(i), dims) == 1, Val(length(indices)))
+        dimrev = ntuple(i -> sum(==(i), dims; init = 0) == 1, Val(length(indices)))
         length(dims) == sum(dimrev) || throw(ArgumentError(Base.LazyString("invalid dimensions ", dims, " in reverse")))
         length(dims) == length(indices) && return Base._reverse(iter, :)
         indices′ = map((i, f) -> f ? reverse(i) : i, indices, dimrev)

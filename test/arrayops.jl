@@ -1735,6 +1735,7 @@ end
     f2(x) = reverse(x; dims=(1, 3))
     @test @inferred(f1(A)) === CartesianIndices((2:-1:1, 3, 5:-1:1))
     @test @inferred(f2(A)) === CartesianIndices((2:-1:1, 3, 1:1:5))
+    @test @inferred(reverse(A; dims=())) === A
 end
 
 # issue 4228
