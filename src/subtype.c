@@ -1472,7 +1472,9 @@ static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 
     if (jl_is_datatype(x) && jl_is_datatype(y)) {
         // Fastpath for nested constructor. Skip the unneeded `>:` check.
-        // Note: this is valid because the normal path checks `>:` locally.
+        // Note: since there is no changes to the environment or union stack implied by `x` or `y`, this will simply forward to calling
+        // `forall_exists_equal(xi, yi, e)` on each parameter `(xi, yi)` of `(x, y)`,
+        // which means this subtype call will give the same result for `subtype(x, y)` and `subtype(y, x)`.
         jl_datatype_t *xd = (jl_datatype_t*)x, *yd = (jl_datatype_t*)y;
         if (xd->name != yd->name)
             return 0;
