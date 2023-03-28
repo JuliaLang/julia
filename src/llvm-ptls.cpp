@@ -37,18 +37,20 @@ namespace {
 
 struct LowerPTLS {
     LowerPTLS(Module &M, bool imaging_mode=false)
-        : imaging_mode(imaging_mode), M(&M)
+        : imaging_mode(imaging_mode), M(&M), TargetTriple(M.getTargetTriple())
     {}
 
     bool run(bool *CFGModified);
 private:
     const bool imaging_mode;
     Module *M;
+    Triple TargetTriple;
     MDNode *tbaa_const{nullptr};
     MDNode *tbaa_gcframe{nullptr};
     FunctionType *FT_pgcstack_getter{nullptr};
     PointerType *T_pgcstack_getter{nullptr};
     PointerType *T_pppjlvalue{nullptr};
+    Type *T_size{nullptr};
     GlobalVariable *pgcstack_func_slot{nullptr};
     GlobalVariable *pgcstack_key_slot{nullptr};
     GlobalVariable *pgcstack_offset{nullptr};
@@ -68,25 +70,17 @@ void LowerPTLS::set_pgcstack_attrs(CallInst *pgcstack) const
 Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefore) const
 {
     Value *tls;
-#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
-    if (insertBefore->getFunction()->callsFunctionThatReturnsTwice()) {
+    if (TargetTriple.isX86() && insertBefore->getFunction()->callsFunctionThatReturnsTwice()) {
         // Workaround LLVM bug by hiding the offset computation
         // (and therefore the optimization opportunity) from LLVM.
         // Ref https://github.com/JuliaLang/julia/issues/17288
-        static const std::string const_asm_str = [&] () {
-            std::string stm;
-#  if defined(_CPU_X86_64_)
-            raw_string_ostream(stm) << "movq %fs:0, $0;\naddq $$" << jl_tls_offset << ", $0";
-#  else
-            raw_string_ostream(stm) << "movl %gs:0, $0;\naddl $$" << jl_tls_offset << ", $0";
-#  endif
-            return stm;
-        }();
-#  if defined(_CPU_X86_64_)
-        const char *dyn_asm_str = "movq %fs:0, $0;\naddq $1, $0";
-#  else
-        const char *dyn_asm_str = "movl %gs:0, $0;\naddl $1, $0";
-#  endif
+        std::string const_asm_str;
+        raw_string_ostream(const_asm_str) << (TargetTriple.getArch() == Triple::x86_64 ?
+            "movq %fs:0, $0;\naddq $$" : "movl %gs:0, $0;\naddl $$")
+            << jl_tls_offset << ", $0";
+        const char *dyn_asm_str = TargetTriple.getArch() == Triple::x86_64 ?
+            "movq %fs:0, $0;\naddq $1, $0" :
+            "movl %gs:0, $0;\naddl $1, $0";
 
         // The add instruction clobbers flags
         if (offset) {
@@ -102,30 +96,27 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
                                      false);
             tls = CallInst::Create(tp, "pgcstack_i8", insertBefore);
         }
-    }
-    else
-#endif
-    {
+    } else {
         // AArch64/ARM doesn't seem to have this issue.
         // (Possibly because there are many more registers and the offset is
         // positive and small)
         // It's also harder to emit the offset in a generic way on ARM/AArch64
         // (need to generate one or two `add` with shift) so let llvm emit
         // the add for now.
-#if defined(_CPU_AARCH64_)
-        const char *asm_str = "mrs $0, tpidr_el0";
-#elif defined(__ARM_ARCH) && __ARM_ARCH >= 7
-        const char *asm_str = "mrc p15, 0, $0, c13, c0, 3";
-#elif defined(_CPU_X86_64_)
-        const char *asm_str = "movq %fs:0, $0";
-#elif defined(_CPU_X86_)
-        const char *asm_str = "movl %gs:0, $0";
-#else
-        const char *asm_str = nullptr;
-        assert(0 && "Cannot emit thread pointer for this architecture.");
-#endif
+        const char *asm_str;
+        if (TargetTriple.isAArch64()) {
+            asm_str = "mrs $0, tpidr_el0";
+        } else if (TargetTriple.isARM()) {
+            asm_str = "mrc p15, 0, $0, c13, c0, 3";
+        } else if (TargetTriple.getArch() == Triple::x86_64) {
+            asm_str = "movq %fs:0, $0";
+        } else if (TargetTriple.getArch() == Triple::x86) {
+            asm_str = "movl %gs:0, $0";
+        } else {
+            llvm_unreachable("Cannot emit thread pointer for this architecture.");
+        }
         if (!offset)
-            offset = ConstantInt::getSigned(getSizeTy(insertBefore->getContext()), jl_tls_offset);
+            offset = ConstantInt::getSigned(T_size, jl_tls_offset);
         auto tp = InlineAsm::get(FunctionType::get(Type::getInt8PtrTy(insertBefore->getContext()), false), asm_str, "=r", false);
         tls = CallInst::Create(tp, "thread_ptr", insertBefore);
         tls = GetElementPtrInst::Create(Type::getInt8Ty(insertBefore->getContext()), tls, {offset}, "ppgcstack_i8", insertBefore);
@@ -216,7 +207,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
             //     pgcstack = tp + offset; // fast
             // else
             //     pgcstack = getter();    // slow
-            auto offset = new LoadInst(getSizeTy(pgcstack->getContext()), pgcstack_offset, "", false, pgcstack);
+            auto offset = new LoadInst(T_size, pgcstack_offset, "", false, pgcstack);
             offset->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
             offset->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), None));
             auto cmp = new ICmpInst(pgcstack, CmpInst::ICMP_NE, offset,
@@ -252,18 +243,18 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
         auto getter = new LoadInst(T_pgcstack_getter, pgcstack_func_slot, "", false, pgcstack);
         getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
         getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), None));
-#if defined(_OS_DARWIN_)
-        auto key = new LoadInst(getSizeTy(pgcstack->getContext()), pgcstack_key_slot, "", false, pgcstack);
-        key->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
-        key->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), None));
-        auto new_pgcstack = CallInst::Create(FT_pgcstack_getter, getter, {key}, "", pgcstack);
-        new_pgcstack->takeName(pgcstack);
-        pgcstack->replaceAllUsesWith(new_pgcstack);
-        pgcstack->eraseFromParent();
-        pgcstack = new_pgcstack;
-#else
-        pgcstack->setCalledFunction(pgcstack->getFunctionType(), getter);
-#endif
+        if (TargetTriple.isOSDarwin()) {
+            auto key = new LoadInst(T_size, pgcstack_key_slot, "", false, pgcstack);
+            key->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
+            key->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), None));
+            auto new_pgcstack = CallInst::Create(FT_pgcstack_getter, getter, {key}, "", pgcstack);
+            new_pgcstack->takeName(pgcstack);
+            pgcstack->replaceAllUsesWith(new_pgcstack);
+            pgcstack->eraseFromParent();
+            pgcstack = new_pgcstack;
+        } else {
+            pgcstack->setCalledFunction(pgcstack->getFunctionType(), getter);
+        }
         set_pgcstack_attrs(pgcstack);
     }
     else if (jl_tls_offset != -1) {
@@ -275,19 +266,19 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
         jl_get_pgcstack_func *f;
         jl_pgcstack_key_t k;
         jl_pgcstack_getkey(&f, &k);
-        Constant *val = ConstantInt::get(getSizeTy(pgcstack->getContext()), (uintptr_t)f);
+        Constant *val = ConstantInt::get(T_size, (uintptr_t)f);
         val = ConstantExpr::getIntToPtr(val, T_pgcstack_getter);
-#if defined(_OS_DARWIN_)
-        assert(sizeof(k) == sizeof(uintptr_t));
-        Constant *key = ConstantInt::get(getSizeTy(pgcstack->getContext()), (uintptr_t)k);
-        auto new_pgcstack = CallInst::Create(FT_pgcstack_getter, val, {key}, "", pgcstack);
-        new_pgcstack->takeName(pgcstack);
-        pgcstack->replaceAllUsesWith(new_pgcstack);
-        pgcstack->eraseFromParent();
-        pgcstack = new_pgcstack;
-#else
-        pgcstack->setCalledFunction(pgcstack->getFunctionType(), val);
-#endif
+        if (TargetTriple.isOSDarwin()) {
+            assert(sizeof(k) == sizeof(uintptr_t));
+            Constant *key = ConstantInt::get(T_size, (uintptr_t)k);
+            auto new_pgcstack = CallInst::Create(FT_pgcstack_getter, val, {key}, "", pgcstack);
+            new_pgcstack->takeName(pgcstack);
+            pgcstack->replaceAllUsesWith(new_pgcstack);
+            pgcstack->eraseFromParent();
+            pgcstack = new_pgcstack;
+        } else {
+            pgcstack->setCalledFunction(pgcstack->getFunctionType(), val);
+        }
         set_pgcstack_attrs(pgcstack);
     }
 }
@@ -303,18 +294,19 @@ bool LowerPTLS::run(bool *CFGModified)
         if (need_init) {
             tbaa_const = tbaa_make_child_with_context(M->getContext(), "jtbaa_const", nullptr, true).first;
             tbaa_gcframe = tbaa_make_child_with_context(M->getContext(), "jtbaa_gcframe").first;
+            T_size = M->getDataLayout().getIntPtrType(M->getContext());
 
             FT_pgcstack_getter = pgcstack_getter->getFunctionType();
-#if defined(_OS_DARWIN_)
-            assert(sizeof(jl_pgcstack_key_t) == sizeof(uintptr_t));
-            FT_pgcstack_getter = FunctionType::get(FT_pgcstack_getter->getReturnType(), {getSizeTy(M->getContext())}, false);
-#endif
+            if (TargetTriple.isOSDarwin()) {
+                assert(sizeof(jl_pgcstack_key_t) == sizeof(uintptr_t));
+                FT_pgcstack_getter = FunctionType::get(FT_pgcstack_getter->getReturnType(), {T_size}, false);
+            }
             T_pgcstack_getter = FT_pgcstack_getter->getPointerTo();
             T_pppjlvalue = cast<PointerType>(FT_pgcstack_getter->getReturnType());
             if (imaging_mode) {
                 pgcstack_func_slot = create_aliased_global(T_pgcstack_getter, "jl_pgcstack_func_slot");
-                pgcstack_key_slot = create_aliased_global(getSizeTy(M->getContext()), "jl_pgcstack_key_slot"); // >= sizeof(jl_pgcstack_key_t)
-                pgcstack_offset = create_aliased_global(getSizeTy(M->getContext()), "jl_tls_offset");
+                pgcstack_key_slot = create_aliased_global(T_size, "jl_pgcstack_key_slot"); // >= sizeof(jl_pgcstack_key_t)
+                pgcstack_offset = create_aliased_global(T_size, "jl_tls_offset");
             }
             need_init = false;
         }

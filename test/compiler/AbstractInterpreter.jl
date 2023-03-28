@@ -107,6 +107,17 @@ Base.@assume_effects :total totalcall(f, args...) = f(args...)
     end
 end |> only === Nothing
 
+# GPUCompiler needs accurate inference through kwfunc with the overlay of `Core.throw_inexacterror`
+# https://github.com/JuliaLang/julia/issues/48097
+@newinterp Issue48097Interp
+@MethodTable Issue48097MT
+CC.method_table(interp::Issue48097Interp) = CC.OverlayMethodTable(CC.get_world_counter(interp), Issue48097MT)
+@overlay Issue48097MT @noinline Core.throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = return
+issue48097(; kwargs...) = return 42
+@test fully_eliminated(; interp=Issue48097Interp(), retval=42) do
+    issue48097(; a=1f0, b=1.0)
+end
+
 # AbstractLattice
 # ===============
 

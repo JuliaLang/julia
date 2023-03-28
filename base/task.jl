@@ -323,7 +323,7 @@ function _wait2(t::Task, waiter::Task)
             unlock(t.donenotify)
             # since _wait2 is similar to schedule, we should observe the sticky
             # bit, even if we aren't calling `schedule` due to this early-return
-            if waiter.sticky && Threads.threadid(waiter) == 0
+            if waiter.sticky && Threads.threadid(waiter) == 0 && !GC.in_finalizer()
                 # Issue #41324
                 # t.sticky && tid == 0 is a task that needs to be co-scheduled with
                 # the parent task. If the parent (current_task) is not sticky we must
@@ -771,7 +771,7 @@ function enq_work(t::Task)
     # Sticky tasks go into their thread's work queue.
     if t.sticky
         tid = Threads.threadid(t)
-        if tid == 0
+        if tid == 0 && !GC.in_finalizer()
             # The task is not yet stuck to a thread. Stick it to the current
             # thread and do the same to the parent task (the current task) so
             # that the tasks are correctly co-scheduled (issue #41324).

@@ -81,7 +81,7 @@ namespace {
  * If the module doesn't have declarations for the jl_enter_handler and setjmp
  * functions, insert them.
  */
-static void ensure_enter_function(Module &M)
+static void ensure_enter_function(Module &M, const Triple &TT)
 {
     auto T_int8  = Type::getInt8Ty(M.getContext());
     auto T_pint8 = PointerType::get(T_int8, 0);
@@ -96,9 +96,9 @@ static void ensure_enter_function(Module &M)
     if (!M.getNamedValue(jl_setjmp_name)) {
         std::vector<Type*> args2(0);
         args2.push_back(T_pint8);
-#ifndef _OS_WINDOWS_
-        args2.push_back(T_int32);
-#endif
+        if (!TT.isOSWindows()) {
+            args2.push_back(T_int32);
+        }
         Function::Create(FunctionType::get(T_int32, args2, false),
                          Function::ExternalLinkage, jl_setjmp_name, &M)
             ->addFnAttr(Attribute::ReturnsTwice);
@@ -107,10 +107,11 @@ static void ensure_enter_function(Module &M)
 
 static bool lowerExcHandlers(Function &F) {
     Module &M = *F.getParent();
+    Triple TT(M.getTargetTriple());
     Function *except_enter_func = M.getFunction("julia.except_enter");
     if (!except_enter_func)
         return false; // No EH frames in this module
-    ensure_enter_function(M);
+    ensure_enter_function(M, TT);
     Function *leave_func = M.getFunction(XSTR(jl_pop_handler));
     Function *jlenter_func = M.getFunction(XSTR(jl_enter_handler));
     Function *setjmp_func = M.getFunction(jl_setjmp_name);
@@ -197,14 +198,15 @@ static bool lowerExcHandlers(Function &F) {
             buff
         };
         CallInst::Create(lifetime_start, lifetime_args, "", new_enter);
-#ifndef _OS_WINDOWS_
-        // For LLVM 3.3 compatibility
-        Value *args[] = {buff,
-                         ConstantInt::get(Type::getInt32Ty(F.getContext()), 0)};
-        auto sj = CallInst::Create(setjmp_func, args, "", enter);
-#else
-        auto sj = CallInst::Create(setjmp_func, buff, "", enter);
-#endif
+        CallInst *sj;
+        if (!TT.isOSWindows()) {
+            // For LLVM 3.3 compatibility
+            Value *args[] = {buff,
+                            ConstantInt::get(Type::getInt32Ty(F.getContext()), 0)};
+            sj = CallInst::Create(setjmp_func, args, "", enter);
+        } else {
+            sj = CallInst::Create(setjmp_func, buff, "", enter);
+        }
         // We need to mark this on the call site as well. See issue #6757
         sj->setCanReturnTwice();
         if (auto dbg = enter->getMetadata(LLVMContext::MD_dbg)) {

@@ -532,7 +532,7 @@ let
     ft = typeof(f18888)
 
     code_typed(f18888, Tuple{}; optimize=false)
-    @test !isempty(m.specializations) # uncached, but creates the specializations entry
+    @test m.specializations !== Core.svec() # uncached, but creates the specializations entry
     mi = Core.Compiler.specialize_method(m, Tuple{ft}, Core.svec())
     interp = Core.Compiler.NativeInterpreter(world)
     @test !Core.Compiler.haskey(Core.Compiler.code_cache(interp), mi)
@@ -648,7 +648,7 @@ let
     world = Core.Compiler.get_world_counter()
     match = Base._methods_by_ftype(T22979, -1, world)[1]
     instance = Core.Compiler.specialize_method(match)
-    cinfo_generated = Core.Compiler.get_staged(instance)
+    cinfo_generated = Core.Compiler.get_staged(instance, world)
     @test_throws ErrorException Base.uncompressed_ir(match.method)
 
     test_similar_codeinfo(code_lowered(f22979, typeof(x22979))[1], cinfo_generated)
@@ -725,6 +725,31 @@ Base.delete_method(m)
 @test foo4(1.0) == 1
 @test faz4(1) == 1
 @test faz4(1.0) == 1
+
+# Deletion & invoke (issue #48802)
+function f48802!(log, x::Integer)
+    log[] = "default"
+    return x + 1
+end
+function addmethod_48802()
+    @eval function f48802!(log, x::Int)
+        ret = invoke(f48802!, Tuple{Any, Integer}, log, x)
+        log[] = "specialized"
+        return ret
+    end
+end
+log = Ref{String}()
+@test f48802!(log, 1) == 2
+@test log[] == "default"
+addmethod_48802()
+@test f48802!(log, 1) == 2
+@test log[] == "specialized"
+Base.delete_method(which(f48802!, Tuple{Any, Int}))
+@test f48802!(log, 1) == 2
+@test log[] == "default"
+addmethod_48802()
+@test f48802!(log, 1) == 2
+@test log[] == "specialized"
 
 # Methods with keyword arguments
 fookw(x; direction=:up) = direction

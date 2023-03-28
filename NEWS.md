@@ -69,6 +69,8 @@ Standard library changes
   `Factorization` ([#46874]).
 * New functions `hermitianpart` and `hermitianpart!` for extracting the Hermitian
   (real symmetric) part of a matrix ([#31836]).
+* The `norm` of the adjoint or transpose of an `AbstractMatrix` now returns the norm of the
+  parent matrix by default, matching the current behaviour for `AbstractVector`s ([#49020]).
 
 #### Printf
 * Format specifiers now support dynamic width and precision, e.g. `%*s` and `%*.*g` ([#40105]).

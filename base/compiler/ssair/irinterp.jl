@@ -238,12 +238,9 @@ function reprocess_instruction!(interp::AbstractInterpreter,
         head = inst.head
         if head === :call || head === :foreigncall || head === :new || head === :splatnew
             (; rt, effects) = abstract_eval_statement_expr(interp, inst, nothing, ir, irsv.mi)
-            # All other effects already guaranteed effect free by construction
-            if is_nothrow(effects)
-                ir.stmts[idx][:flag] |= IR_FLAG_NOTHROW
-                if isa(rt, Const) && is_inlineable_constant(rt.val)
-                    ir.stmts[idx][:inst] = quoted(rt.val)
-                end
+            ir.stmts[idx][:flag] |= flags_for_effects(effects)
+            if is_foldable(effects) && isa(rt, Const) && is_inlineable_constant(rt.val)
+                ir.stmts[idx][:inst] = quoted(rt.val)
             end
         elseif head === :invoke
             mi′ = inst.args[1]::MethodInstance

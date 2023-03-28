@@ -120,6 +120,8 @@ end
 MustAlias(var::SlotNumber, @nospecialize(vartyp), fldidx::Int, @nospecialize(fldtyp)) =
     MustAlias(slot_id(var), vartyp, fldidx, fldtyp)
 
+_uniontypes(x::MustAlias, ts) = _uniontypes(widenconst(x), ts)
+
 """
     alias::InterMustAlias
 

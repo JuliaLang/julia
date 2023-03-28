@@ -3132,6 +3132,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     if (duration > gc_num.max_time_to_safepoint)
         gc_num.max_time_to_safepoint = duration;
     gc_num.time_to_safepoint = duration;
+    gc_num.total_time_to_safepoint += duration;
 
     gc_invoke_callbacks(jl_gc_cb_pre_gc_t,
         gc_cblist_pre_gc, (collection));

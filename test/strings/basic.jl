@@ -1192,3 +1192,42 @@ end
         return a
     end |> Core.Compiler.is_foldable
 end
+
+@testset "String Effects" begin
+    for (f, Ts) in [(*, (String, String)),
+                   (*, (Char, String)),
+                   (*, (Char, Char)),
+                   (string, (Symbol, String, Char)),
+                   (==, (String, String)),
+                   (cmp, (String, String)),
+                   (==, (Symbol, Symbol)),
+                   (cmp, (Symbol, Symbol)),
+                   (String, (Symbol,)),
+                   (length, (String,)),
+                   (hash, (String,UInt)),
+                   (hash, (Char,UInt)),]
+        e = Base.infer_effects(f, Ts)
+        @test Core.Compiler.is_foldable(e) || (f, Ts)
+        @test Core.Compiler.is_removable_if_unused(e) || (f, Ts)
+    end
+    for (f, Ts) in [(^, (String, Int)),
+                   (^, (Char, Int)),
+                   (codeunit, (String, Int)),
+                   ]
+        e = Base.infer_effects(f, Ts)
+        @test Core.Compiler.is_foldable(e) || (f, Ts)
+        @test !Core.Compiler.is_removable_if_unused(e) || (f, Ts)
+    end
+    # Substrings don't have any nice effects because the compiler can
+    # invent fake indices leading to out of bounds
+    for (f, Ts) in [(^, (SubString{String}, Int)),
+                   (string, (String, SubString{String})),
+                   (string, (Symbol, SubString{String})),
+                   (hash, (SubString{String},UInt)),
+                   ]
+        e = Base.infer_effects(f, Ts)
+        @test !Core.Compiler.is_foldable(e) || (f, Ts)
+        @test !Core.Compiler.is_removable_if_unused(e) || (f, Ts)
+    end
+    @test_throws ArgumentError Symbol("a\0a")
+end

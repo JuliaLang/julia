@@ -369,12 +369,18 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure)
     }
     if (edges_map == NULL)
         return 1;
-    jl_svec_t *specializations = m->specializations;
-    size_t i, l = jl_svec_len(specializations);
-    for (i = 0; i < l; i++) {
-        jl_method_instance_t *callee = (jl_method_instance_t*)jl_svecref(specializations, i);
-        if ((jl_value_t*)callee != jl_nothing)
-            collect_backedges(callee, !s);
+    jl_value_t *specializations = jl_atomic_load_relaxed(&m->specializations);
+    if (!jl_is_svec(specializations)) {
+        jl_method_instance_t *callee = (jl_method_instance_t*)specializations;
+        collect_backedges(callee, !s);
+    }
+    else {
+        size_t i, l = jl_svec_len(specializations);
+        for (i = 0; i < l; i++) {
+            jl_method_instance_t *callee = (jl_method_instance_t*)jl_svecref(specializations, i);
+            if ((jl_value_t*)callee != jl_nothing)
+                collect_backedges(callee, !s);
+        }
     }
     return 1;
 }
@@ -869,8 +875,10 @@ static jl_array_t *jl_verify_edges(jl_array_t *targets, size_t minworld)
             assert(jl_is_array(expected));
             int ambig = 0;
             // TODO: possibly need to included ambiguities too (for the optimizer correctness)?
+            // len + 1 is to allow us to log causes of invalidation (SnoopCompile's @snoopr)
             matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing,
-                    jl_array_len(expected), 0, minworld, &min_valid, &max_valid, &ambig);
+                    _jl_debug_method_invalidation ? INT32_MAX : jl_array_len(expected),
+                    0, minworld, &min_valid, &max_valid, &ambig);
             if (matches == jl_nothing) {
                 max_valid = 0;
             }

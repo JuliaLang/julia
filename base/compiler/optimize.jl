@@ -181,20 +181,24 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::Abstrac
     return OptimizationState(linfo, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, nothing, false)
 end
 function OptimizationState(linfo::MethodInstance, interp::AbstractInterpreter)
-    src = retrieve_code_info(linfo)
+    world = get_world_counter(interp)
+    src = retrieve_code_info(linfo, world)
     src === nothing && return nothing
     return OptimizationState(linfo, src, interp)
 end
 
 function ir_to_codeinf!(opt::OptimizationState)
     (; linfo, src) = opt
-    optdef = linfo.def
-    replace_code_newstyle!(src, opt.ir::IRCode, isa(optdef, Method) ? Int(optdef.nargs) : 0)
+    src = ir_to_codeinf!(src, opt.ir::IRCode)
     opt.ir = nothing
+    validate_code_in_debug_mode(linfo, src, "optimized")
+    return src
+end
+
+function ir_to_codeinf!(src::CodeInfo, ir::IRCode)
+    replace_code_newstyle!(src, ir)
     widen_all_consts!(src)
     src.inferred = true
-    # finish updating the result struct
-    validate_code_in_debug_mode(linfo, src, "optimized")
     return src
 end
 
@@ -612,7 +616,11 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     if cfg === nothing
         cfg = compute_basic_blocks(code)
     end
-    return IRCode(stmts, cfg, linetable, sv.slottypes, meta, sv.sptypes)
+    # NOTE this `argtypes` contains types of slots yet: it will be modified to contain the
+    # types of call arguments only once `slot2reg` converts this `IRCode` to the SSA form
+    # and eliminates slots (see below)
+    argtypes = sv.slottypes
+    return IRCode(stmts, cfg, linetable, argtypes, meta, sv.sptypes)
 end
 
 function process_meta!(meta::Vector{Expr}, @nospecialize stmt)
@@ -631,6 +639,9 @@ function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.inst)
     𝕃ₒ = optimizer_lattice(sv.inlining.interp)
     @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, sv.slottypes, 𝕃ₒ) # consumes `ir`
+    # NOTE now we have converted `ir` to the SSA form and eliminated slots
+    # let's resize `argtypes` now and remove unnecessary types for the eliminated slots
+    resize!(ir.argtypes, nargs)
     return ir
 end
 
