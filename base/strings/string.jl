@@ -680,7 +680,7 @@ function _length_continued_nonascii(
     return c
 end
 
-@inline function length_continued(s::String, first::Int, last::Int, c::Int)
+@assume_effects :terminates_locally @inline @propagate_inbounds @inline function length_continued(s::String, first::Int, last::Int, c::Int)
     cu = codeunits(s)
     chunk_size = _STRING_LENGTH_CHUNKING_SIZE
     first < last || return c
