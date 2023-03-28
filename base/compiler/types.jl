@@ -122,7 +122,7 @@ Parameters that control abstract interpretation-based type inference operation.
   information available. [`Base.@constprop :aggressive`](@ref Base.@constprop) can have a
   more fine-grained control on this configuration with per-method annotation basis.
 ---
-- `inf_params.unoptimize_throw_blocks::Bool = true`\\
+- `inf_params.unoptimize_throw_blocks::Bool = false`\\
   If `true`, skips inferring calls that are in a block that is known to `throw`.
   It may improve the compiler latency without sacrificing the runtime performance
   in common situations.
@@ -179,7 +179,7 @@ function InferenceParams(
         #=tuple_complexity_limit_depth::Int=# 3,
         #=ipo_constant_propagation::Bool=# true,
         #=aggressive_constant_propagation::Bool=# false,
-        #=unoptimize_throw_blocks::Bool=# true,
+        #=unoptimize_throw_blocks::Bool=# false,
         #=assume_bindings_static::Bool=# false,
         #=ignore_recursion_hardlimit::Bool=# false);
     max_methods::Int = params.max_methods,
