@@ -844,7 +844,7 @@ julia> readdir("base", join=true)
  ⋮
  "base/version_git.sh"
  "base/views.jl"
- "base/weakkeydict.jl"```
+ "base/weakkeydict.jl"
 
 julia> readdir(abspath("base"), join=true)
 145-element Array{String,1}:
