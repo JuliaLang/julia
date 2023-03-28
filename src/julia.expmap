@@ -38,6 +38,9 @@
     LLVMExtra*;
     repl_entrypoint;
 
+    /* Make visible so that linker will merge duplicate definitions across DSO boundaries */
+    _ZN4llvm3Any6TypeId*;
+
     /* freebsd */
     environ;
     __progname;
