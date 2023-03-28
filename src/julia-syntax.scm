@@ -788,7 +788,7 @@
                  (map (lambda (b) (cons 'var-bounds b)) bounds))
                (block
                 ,@locs
-                (call (curly ,name ,@params) ,@field-names)))))
+                (new (curly ,name ,@params) ,@field-names)))))
 
 (define (num-non-varargs args)
   (count (lambda (a) (not (vararg? a))) args))
