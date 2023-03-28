@@ -1932,6 +1932,8 @@ end
     @test cglobal33413_literal_notype() != C_NULL
     @test_throws(TypeError, cglobal49142_nothing())
     @test_throws(TypeError, cglobal45187fn())
+    @test_throws(TypeError, @eval cglobal(nothing))
+    @test_throws(TypeError, @eval cglobal((:fn, fn45187)))
 end
 
 @testset "ccall_effects" begin
