@@ -177,8 +177,8 @@ bigval_t *big_objects_marked = NULL;
 // See https://algorithmica.org/en/eytzinger
 static arraylist_t eytzinger_image_tree;
 static arraylist_t eytzinger_idxs;
-static uintptr_t gc_img_min = (uintptr_t) 0ull;
-static uintptr_t gc_img_max = (uintptr_t) ~0ull;
+static uintptr_t gc_img_min;
+static uintptr_t gc_img_max;
 
 // -- Finalization --
 // `ptls->finalizers` and `finalizer_list_marked` might have tagged pointers.
@@ -190,7 +190,8 @@ arraylist_t finalizer_list_marked;
 arraylist_t to_finalize;
 JL_DLLEXPORT _Atomic(int) jl_gc_have_pending_finalizers = 0;
 
-static int ptr_cmp(const void *l, const void *r) {
+static int ptr_cmp(const void *l, const void *r)
+{
     uintptr_t left = *(const uintptr_t*)l;
     uintptr_t right = *(const uintptr_t*)r;
     // jl_safe_printf("cmp %p %p\n", (void*)left, (void*)right);
@@ -198,7 +199,8 @@ static int ptr_cmp(const void *l, const void *r) {
 }
 
 // Build an eytzinger tree from a sorted array
-static int eytzinger(uintptr_t *src, uintptr_t *dest, size_t i, size_t k, size_t n) {
+static int eytzinger(uintptr_t *src, uintptr_t *dest, size_t i, size_t k, size_t n)
+{
     if (k <= n) {
         i = eytzinger(src, dest, i, 2 * k, n);
         dest[k-1] = src[i];
@@ -208,16 +210,15 @@ static int eytzinger(uintptr_t *src, uintptr_t *dest, size_t i, size_t k, size_t
     return i;
 }
 
-static size_t eyt_obj_idx(jl_value_t *obj) JL_NOTSAFEPOINT {
-    size_t n = eytzinger_image_tree.len;
-    if (n == 0) {
-        return eytzinger_image_tree.len;
-    }
-    assert(eytzinger_image_tree.len % 2 == 0 && "Eytzinger tree not even length!");
+static size_t eyt_obj_idx(jl_value_t *obj) JL_NOTSAFEPOINT
+{
+    size_t n = eytzinger_image_tree.len - 1;
+    if (n == 0)
+        return n;
+    assert(n % 2 == 0 && "Eytzinger tree not even length!");
     uintptr_t cmp = (uintptr_t) obj;
-    if (cmp < gc_img_min || cmp > gc_img_max) {
-        return eytzinger_image_tree.len;
-    }
+    if (cmp <= gc_img_min || cmp > gc_img_max)
+        return n;
     uintptr_t *tree = (uintptr_t*)eytzinger_image_tree.items;
     size_t k = 1;
     // note that k preserves the history of how we got to the current node
@@ -227,6 +228,7 @@ static size_t eyt_obj_idx(jl_value_t *obj) JL_NOTSAFEPOINT {
         k |= greater;
     }
     // Free to assume k is nonzero, since we start with k = 1
+    // and cmp > gc_img_min
     // This shift does a fast revert of the path until we get
     // to a node that evaluated less than cmp.
     k >>= (__builtin_ctzll(k) + 1);
@@ -237,13 +239,15 @@ static size_t eyt_obj_idx(jl_value_t *obj) JL_NOTSAFEPOINT {
 }
 
 //used in staticdata.c after we add an image
-void rebuild_image_blob_tree(void) {
-    size_t orig = eytzinger_image_tree.len;
-    size_t inc = jl_linkage_blobs.len - orig;
+void rebuild_image_blob_tree(void)
+{
+    size_t inc = 1 + jl_linkage_blobs.len - eytzinger_image_tree.len;
     assert(eytzinger_idxs.len == eytzinger_image_tree.len);
     assert(eytzinger_idxs.max == eytzinger_image_tree.max);
     arraylist_grow(&eytzinger_idxs, inc);
     arraylist_grow(&eytzinger_image_tree, inc);
+    eytzinger_idxs.items[eytzinger_idxs.len - 1] = (void*)jl_linkage_blobs.len;
+    eytzinger_image_tree.items[eytzinger_image_tree.len - 1] = (void*)1; // outside image
     for (size_t i = 0; i < jl_linkage_blobs.len; i++) {
         assert((uintptr_t) jl_linkage_blobs.items[i] % 4 == 0 && "Linkage blob not 4-byte aligned!");
         // We abuse the pointer here a little so that a couple of properties are true:
@@ -252,61 +256,49 @@ void rebuild_image_blob_tree(void) {
         // We assume that there exist no 0-size blobs, but that's a safe assumption
         // since it means nothing could be there anyways
         uintptr_t val = (uintptr_t) jl_linkage_blobs.items[i];
-        eytzinger_idxs.items[i] = (void*)(val + 3 - (i & 1));
+        eytzinger_idxs.items[i] = (void*)(val + (i & 1));
     }
-    qsort(eytzinger_idxs.items, eytzinger_idxs.len, sizeof(void*), ptr_cmp);
-    // for (size_t i = orig; i < eytzinger_idxs.len; i++) {
-    //     jl_safe_printf("idxs[%lu] = %p\n", i, eytzinger_idxs.items[i]);
-    // }
+    qsort(eytzinger_idxs.items, eytzinger_idxs.len - 1, sizeof(void*), ptr_cmp);
     gc_img_min = (uintptr_t) eytzinger_idxs.items[0];
-    gc_img_max = (uintptr_t) eytzinger_idxs.items[eytzinger_idxs.len - 1];
-    eytzinger((uintptr_t*)eytzinger_idxs.items, (uintptr_t*)eytzinger_image_tree.items, 0, 1, eytzinger_idxs.len);
+    gc_img_max = (uintptr_t) eytzinger_idxs.items[eytzinger_idxs.len - 2] + 1;
+    eytzinger((uintptr_t*)eytzinger_idxs.items, (uintptr_t*)eytzinger_image_tree.items, 0, 1, eytzinger_idxs.len - 1);
     // Reuse the scratch memory to store the indices
     // Still O(nlogn) because binary search
     for (size_t i = 0; i < jl_linkage_blobs.len; i ++) {
         uintptr_t val = (uintptr_t) jl_linkage_blobs.items[i];
-        // This is exactly equal to start + 4/end + 3
-        uintptr_t cmp = val + 4 - (i & 1);
         // This is the same computation as in the prior for loop
-        uintptr_t eyt_val = val + 3 - (i & 1);
-        size_t eyt_idx = eyt_obj_idx((jl_value_t*)cmp);
-        // jl_safe_printf("eyt_idx: %lu, eytzinger_image_tree.len: %lu\n", eyt_idx, eytzinger_image_tree.len);
-        // jl_safe_printf("val: %p, cmp: %p, eytzinger_image_tree.items[eyt_idx]: %p\n", (void*)val, (void*)cmp, eyt_idx == eytzinger_image_tree.len ? NULL : eytzinger_image_tree.items[eyt_idx]);
-        assert(((i % 2 == 1) || eytzinger_image_tree.items[eyt_idx] == (void*)eyt_val) && "Eytzinger tree failed to find object!");
-        assert(((i % 2 == 0) || eytzinger_image_tree.items[eyt_idx] == (void*)eyt_val || cmp == gc_img_max + 1) && "Eytzinger tree failed to find object!");
-        (void) eyt_val;
-        if (i & 1) {
+        uintptr_t eyt_val = val + (i & 1);
+        size_t eyt_idx = eyt_obj_idx((jl_value_t*)(eyt_val + 1)); assert(eyt_idx < eytzinger_idxs.len - 1);
+        assert(eytzinger_image_tree.items[eyt_idx] == (void*)eyt_val && "Eytzinger tree failed to find object!");
+        if (i & 1)
             eytzinger_idxs.items[eyt_idx] = (void*)n_linkage_blobs();
-        } else {
+        else
             eytzinger_idxs.items[eyt_idx] = (void*)(i / 2);
-        }
     }
 }
 
-static int eyt_obj_in_img(jl_value_t *obj) JL_NOTSAFEPOINT {
+static int eyt_obj_in_img(jl_value_t *obj) JL_NOTSAFEPOINT
+{
     assert((uintptr_t) obj % 4 == 0 && "Object not 4-byte aligned!");
     int idx = eyt_obj_idx(obj);
-    if (idx == eytzinger_image_tree.len) {
-        return 0;
-    }
-    // Now we use a tiny trick: tree[idx] & 1 is whether or not tree[idx] is a start or an end
-    // of a blob. If it's a start, then the object is in the image, otherwise it's not.
-    int in_image = (uintptr_t) eytzinger_image_tree.items[idx] & 1;
+    // Now we use a tiny trick: tree[idx] & 1 is whether or not tree[idx] is a
+    // start (0) or an end (1) of a blob. If it's a start, then the object is
+    // in the image, otherwise it is not.
+    int in_image = ((uintptr_t)eytzinger_image_tree.items[idx] & 1) == 0;
     return in_image;
 }
 
-size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT {
+size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT
+{
     assert((uintptr_t) v % 4 == 0 && "Object not 4-byte aligned!");
     int eyt_idx = eyt_obj_idx(v);
-    if (eyt_idx == eytzinger_image_tree.len) {
-        return n_linkage_blobs();
-    }
     // We fill the invalid slots with the length, so we can just return that
     size_t idx = (size_t) eytzinger_idxs.items[eyt_idx];
     return idx;
 }
 
-uint8_t jl_object_in_image(jl_value_t *obj) JL_NOTSAFEPOINT {
+uint8_t jl_object_in_image(jl_value_t *obj) JL_NOTSAFEPOINT
+{
     return eyt_obj_in_img(obj);
 }
 
@@ -3375,6 +3367,8 @@ void jl_gc_init(void)
     arraylist_new(&to_finalize, 0);
     arraylist_new(&eytzinger_image_tree, 0);
     arraylist_new(&eytzinger_idxs, 0);
+    arraylist_push(&eytzinger_idxs, (void*)0);
+    arraylist_push(&eytzinger_image_tree, (void*)1); // outside image
 
     gc_num.interval = default_collect_interval;
     last_long_collect_interval = default_collect_interval;
