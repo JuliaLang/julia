@@ -69,6 +69,7 @@ The name-value pairs can also be provided by splatting a named tuple or any
 iterator that yields two-value collections holding each a symbol as first
 value:
 
+```jldoctest
 julia> keys = (:a, :b, :c); values = (1, 2, 3);
 
 julia> NamedTuple{keys}(values)
