@@ -1714,10 +1714,10 @@ end
 
 @testset "reverse cartesian indices dim" begin
     A = CartesianIndices((2, 3, 5:-1:1))
-    @test reverse(A, dim=1) === CartesianIndices((2:-1:1, 3, 5:-1:1))
-    @test reverse(A, dim=3) === CartesianIndices((2, 3, 1:1:5))
-    @test_throws ArgumentError reverse(A, dim=0)
-    @test_throws ArgumentError reverse(A, dim=4)
+    @test reverse(A, dims=1) === CartesianIndices((2:-1:1, 3, 5:-1:1))
+    @test reverse(A, dims=3) === CartesianIndices((2, 3, 1:1:5))
+    @test_throws ArgumentError reverse(A, dims=0)
+    @test_throws ArgumentError reverse(A, dims=4)
 end
 
 @testset "reverse cartesian indices multiple dims" begin
