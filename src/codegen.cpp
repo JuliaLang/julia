@@ -10,7 +10,7 @@
 #if defined(_CPU_X86_)
 #define JL_NEED_FLOATTEMP_VAR 1
 #endif
-#if defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
+#if defined(_OS_LINUX_) || defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
 #define JL_DISABLE_FPO
 #endif
 
