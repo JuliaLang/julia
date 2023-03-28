@@ -1004,13 +1004,13 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
             tree.ssavaluetypes = 1
             tree.codelocs = Int32[1]
             tree.linetable = LineInfoNode[LineInfoNode(method.module, method.name, method.file, method.line, Int32(0))]
-            tree.inferred = true
             tree.ssaflags = UInt8[0]
             set_inlineable!(tree, true)
             tree.parent = mi
             tree.rettype = Core.Typeof(rettype_const)
             tree.min_world = code.min_world
             tree.max_world = code.max_world
+            tree.inferred = true
             return tree
         elseif isa(inf, CodeInfo)
             ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
@@ -1030,7 +1030,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
         end
     end
     if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_sysimg()
-        return retrieve_code_info(mi)
+        return retrieve_code_info(mi, get_world_counter(interp))
     end
     lock_mi_inference(interp, mi)
     result = InferenceResult(mi, typeinf_lattice(interp))

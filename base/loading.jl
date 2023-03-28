@@ -1196,8 +1196,9 @@ function run_extension_callbacks(extid::ExtensionId)
         true
     catch
         # Try to continue loading if loading an extension errors
+        errs = current_exceptions()
         @error "Error during loading of extension $(extid.id.name) of $(extid.parentid.name), \
-                use `Base.retry_load_extensions()` to retry."
+                use `Base.retry_load_extensions()` to retry." exception=errs
         false
     end
     return succeeded
@@ -1217,7 +1218,7 @@ function run_extension_callbacks()
                 # below the one of the parent. This will cause a load failure when the
                 # pkg ext tries to load the triggers. Therefore, check this first
                 # before loading the pkg ext.
-                pkgenv = Base.identify_package_env(extid.id, pkgid.name)
+                pkgenv = identify_package_env(extid.id, pkgid.name)
                 ext_not_allowed_load = false
                 if pkgenv === nothing
                     ext_not_allowed_load = true
@@ -2244,7 +2245,8 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                         @static if Sys.isapple()
                             rm(ocachefile_from_cachefile(evicted_cachefile) * ".dSYM"; force=true, recursive=true)
                         end
-                    catch
+                    catch e
+                        e isa IOError || rethrow()
                     end
                 end
             end

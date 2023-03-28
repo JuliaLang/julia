@@ -27,6 +27,9 @@ extern "C" {
 JL_DLLEXPORT _Atomic(size_t) jl_world_counter = 1; // uses atomic acquire/release
 JL_DLLEXPORT size_t jl_get_world_counter(void) JL_NOTSAFEPOINT
 {
+    jl_task_t *ct = jl_current_task;
+    if (ct->ptls->in_pure_callback)
+        return ~(size_t)0;
     return jl_atomic_load_acquire(&jl_world_counter);
 }
 
@@ -2392,7 +2395,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
     // if that didn't work and compilation is off, try running in the interpreter
     if (compile_option == JL_OPTIONS_COMPILE_OFF ||
         compile_option == JL_OPTIONS_COMPILE_MIN) {
-        jl_code_info_t *src = jl_code_for_interpreter(mi);
+        jl_code_info_t *src = jl_code_for_interpreter(mi, world);
         if (!jl_code_requires_compiler(src, 0)) {
             jl_code_instance_t *codeinst = jl_new_codeinst(mi,
                 (jl_value_t*)jl_any_type, NULL, NULL,
@@ -3235,6 +3238,8 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                               int intersections, size_t world, int cache_result,
                               size_t *min_valid, size_t *max_valid, int *ambig)
 {
+    if (world > jl_atomic_load_acquire(&jl_world_counter))
+        return jl_nothing; // the future is not enumerable
     int has_ambiguity = 0;
     jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)type);
     assert(jl_is_datatype(unw));

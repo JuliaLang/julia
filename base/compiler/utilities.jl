@@ -114,23 +114,23 @@ end
 invoke_api(li::CodeInstance) = ccall(:jl_invoke_api, Cint, (Any,), li)
 use_const_api(li::CodeInstance) = invoke_api(li) == 2
 
-function get_staged(mi::MethodInstance)
+function get_staged(mi::MethodInstance, world::UInt)
     may_invoke_generator(mi) || return nothing
     try
         # user code might throw errors – ignore them
-        ci = ccall(:jl_code_for_staged, Any, (Any,), mi)::CodeInfo
+        ci = ccall(:jl_code_for_staged, Any, (Any, UInt), mi, world)::CodeInfo
         return ci
     catch
         return nothing
     end
 end
 
-function retrieve_code_info(linfo::MethodInstance)
+function retrieve_code_info(linfo::MethodInstance, world::UInt)
     m = linfo.def::Method
     c = nothing
     if isdefined(m, :generator)
         # user code might throw errors – ignore them
-        c = get_staged(linfo)
+        c = get_staged(linfo, world)
     end
     if c === nothing && isdefined(m, :source)
         src = m.source

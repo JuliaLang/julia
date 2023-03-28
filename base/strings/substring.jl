@@ -110,15 +110,12 @@ thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)
 nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
 
 function ==(a::Union{String, SubString{String}}, b::Union{String, SubString{String}})
-    s = sizeof(a)
-    s == sizeof(b) && 0 == _memcmp(a, b, s)
+    sizeof(a) == sizeof(b) && _memcmp(a, b) == 0
 end
 
 function cmp(a::SubString{String}, b::SubString{String})
-    na = sizeof(a)
-    nb = sizeof(b)
-    c = _memcmp(a, b, min(na, nb))
-    return c < 0 ? -1 : c > 0 ? +1 : cmp(na, nb)
+    c = _memcmp(a, b)
+    return c < 0 ? -1 : c > 0 ? +1 : cmp(sizeof(a), sizeof(b))
 end
 
 # don't make unnecessary copies when passing substrings to C functions
@@ -209,19 +206,30 @@ end
     return n
 end
 
-@inline function __unsafe_string!(out, s::Union{String, SubString{String}}, offs::Integer)
+@assume_effects :nothrow @inline function __unsafe_string!(out, s::String, offs::Integer)
     n = sizeof(s)
     GC.@preserve s out unsafe_copyto!(pointer(out, offs), pointer(s), n)
     return n
 end
 
-@inline function __unsafe_string!(out, s::Symbol, offs::Integer)
+@inline function __unsafe_string!(out, s::SubString{String}, offs::Integer)
+    n = sizeof(s)
+    GC.@preserve s out unsafe_copyto!(pointer(out, offs), pointer(s), n)
+    return n
+end
+
+@assume_effects :nothrow @inline function __unsafe_string!(out, s::Symbol, offs::Integer)
     n = sizeof(s)
     GC.@preserve s out unsafe_copyto!(pointer(out, offs), unsafe_convert(Ptr{UInt8},s), n)
     return n
 end
 
-function string(a::Union{Char, String, SubString{String}, Symbol}...)
+# nothrow needed here because for v in a can't prove the indexing is inbounds.
+@assume_effects :foldable :nothrow string(a::Union{Char, String, Symbol}...) = _string(a...)
+
+string(a::Union{Char, String, SubString{String}, Symbol}...) = _string(a...)
+
+function _string(a::Union{Char, String, SubString{String}, Symbol}...)
     n = 0
     for v in a
         # 4 types is too many for automatic Union-splitting, so we split manually
@@ -249,6 +257,10 @@ function string(a::Union{Char, String, SubString{String}, Symbol}...)
     end
     return out
 end
+
+# don't assume effects for general integers since we cannot know their implementation
+# not nothrow because r<0 throws
+@assume_effects :foldable repeat(s::String, r::BitInteger) = @invoke repeat(s::String, r::Integer)
 
 function repeat(s::Union{String, SubString{String}}, r::Integer)
     r < 0 && throw(ArgumentError("can't repeat a string $r times"))

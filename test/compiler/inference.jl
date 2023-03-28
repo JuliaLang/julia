@@ -1788,9 +1788,17 @@ bar_22708(x) = f_22708(x)
 
 @test bar_22708(1) == "x"
 
+struct EarlyGeneratedFunctionStub
+    stub::Core.GeneratedFunctionStub
+end
+(stub::EarlyGeneratedFunctionStub)(args...) = (@nospecialize; stub.stub(args...))
+
 # mechanism for spoofing work-limiting heuristics and early generator expansion (#24852)
-function _generated_stub(gen::Symbol, args::Vector{Any}, params::Vector{Any}, line, file, expand_early)
-    stub = Expr(:new, Core.GeneratedFunctionStub, gen, args, params, line, file, expand_early)
+function _generated_stub(gen::Symbol, args::Core.SimpleVector, params::Core.SimpleVector, expand_early::Bool)
+    stub = Expr(:new, Core.GeneratedFunctionStub, gen, args, params)
+    if expand_early
+        stub = Expr(:new, EarlyGeneratedFunctionStub, stub)
+    end
     return Expr(:meta, :generated, stub)
 end
 
@@ -1799,10 +1807,21 @@ f24852_kernel2(x, y::Tuple) = f24852_kernel1(x, (y,))
 f24852_kernel3(x, y::Tuple) = f24852_kernel2(x, (y,))
 f24852_kernel(x, y::Number) = f24852_kernel3(x, (y,))
 
-function f24852_kernel_cinfo(fsig::Type)
-    world = typemax(UInt) # FIXME
-    match = Base._methods_by_ftype(fsig, -1, world)[1]
-    isdefined(match.method, :source) || return (nothing, :(f(x, y)))
+function f24852_kernel_cinfo(world::UInt, source, fsig::Type)
+    matches = Base._methods_by_ftype(fsig, -1, world)
+    if matches === nothing || length(matches) != 1
+        match = nothing
+    else
+        match = matches[1]
+        if !isdefined(match.method, :source)
+            match = nothing
+        end
+    end
+    if match === nothing
+        code_info = :(f(x, y))
+        code_info = Core.GeneratedFunctionStub(identity, Core.svec(:self, :f, :x, :y), Core.svec(:X, :Y))(world, source, code_info)
+        return (nothing, code_info)
+    end
     code_info = Base.uncompressed_ir(match.method)
     Meta.partially_inline!(code_info.code, Any[], match.spec_types, Any[match.sparams...], 1, 0, :propagate)
     if startswith(String(match.method.name), "f24852")
@@ -1817,21 +1836,23 @@ function f24852_kernel_cinfo(fsig::Type)
     end
     pushfirst!(code_info.slotnames, Symbol("#self#"))
     pushfirst!(code_info.slotflags, 0x00)
+    # TODO: this is mandatory: code_info.min_world = max(code_info.min_world, min_world[])
+    # TODO: this is mandatory: code_info.max_world = min(code_info.max_world, max_world[])
     return match.method, code_info
 end
 
-function f24852_gen_cinfo_uninflated(X, Y, _, f, x, y)
-    _, code_info = f24852_kernel_cinfo(Tuple{f, x, y})
+function f24852_gen_cinfo_uninflated(world::UInt, source, X, Y, _, f, x, y)
+    _, code_info = f24852_kernel_cinfo(world, source, Tuple{f, x, y})
     return code_info
 end
 
-function f24852_gen_cinfo_inflated(X, Y, _, f, x, y)
-    method, code_info = f24852_kernel_cinfo(Tuple{f, x, y})
+function f24852_gen_cinfo_inflated(world::UInt, source, X, Y, _, f, x, y)
+    method, code_info = f24852_kernel_cinfo(world, source, Tuple{f, x, y})
     code_info.method_for_inference_limit_heuristics = method
     return code_info
 end
 
-function f24852_gen_expr(X, Y, _, f, x, y) # deparse f(x::X, y::Y) where {X, Y}
+function f24852_gen_expr(X, Y, _, f, x, y) # deparse of f(x::X, y::Y) where {X, Y}
     if f === typeof(f24852_kernel)
         f2 = :f24852_kernel3
     elseif f === typeof(f24852_kernel3)
@@ -1848,20 +1869,8 @@ end
 
 @eval begin
     function f24852_late_expr(f, x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_expr, Any[:self, :f, :x, :y],
-                          Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), false))
-        $(Expr(:meta, :generated_only))
-        #= no body =#
-    end
-    function f24852_late_inflated(f, x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_cinfo_inflated, Any[:self, :f, :x, :y],
-                          Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), false))
-        $(Expr(:meta, :generated_only))
-        #= no body =#
-    end
-    function f24852_late_uninflated(f, x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_cinfo_uninflated, Any[:self, :f, :x, :y],
-                          Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), false))
+        $(_generated_stub(:f24852_gen_expr, Core.svec(:self, :f, :x, :y),
+                          Core.svec(:X, :Y), false))
         $(Expr(:meta, :generated_only))
         #= no body =#
     end
@@ -1869,20 +1878,18 @@ end
 
 @eval begin
     function f24852_early_expr(f, x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_expr, Any[:self, :f, :x, :y],
-                          Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), true))
+        $(_generated_stub(:f24852_gen_expr, Core.svec(:self, :f, :x, :y),
+                          Core.svec(:X, :Y), true))
         $(Expr(:meta, :generated_only))
         #= no body =#
     end
     function f24852_early_inflated(f, x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_cinfo_inflated, Any[:self, :f, :x, :y],
-                          Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), true))
+        $(Expr(:meta, :generated, f24852_gen_cinfo_inflated))
         $(Expr(:meta, :generated_only))
         #= no body =#
     end
     function f24852_early_uninflated(f, x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_cinfo_uninflated, Any[:self, :f, :x, :y],
-                          Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), true))
+        $(Expr(:meta, :generated, f24852_gen_cinfo_uninflated))
         $(Expr(:meta, :generated_only))
         #= no body =#
     end
@@ -1893,10 +1900,6 @@ result = f24852_kernel(x, y)
 
 @test result === f24852_late_expr(f24852_kernel, x, y)
 @test Base.return_types(f24852_late_expr, typeof((f24852_kernel, x, y))) == Any[Any]
-@test result === f24852_late_uninflated(f24852_kernel, x, y)
-@test Base.return_types(f24852_late_uninflated, typeof((f24852_kernel, x, y))) == Any[Any]
-@test result === f24852_late_uninflated(f24852_kernel, x, y)
-@test Base.return_types(f24852_late_uninflated, typeof((f24852_kernel, x, y))) == Any[Any]
 
 @test result === f24852_early_expr(f24852_kernel, x, y)
 @test Base.return_types(f24852_early_expr, typeof((f24852_kernel, x, y))) == Any[Any]
@@ -1904,7 +1907,6 @@ result = f24852_kernel(x, y)
 @test Base.return_types(f24852_early_uninflated, typeof((f24852_kernel, x, y))) == Any[Any]
 @test result === @inferred f24852_early_inflated(f24852_kernel, x, y)
 @test Base.return_types(f24852_early_inflated, typeof((f24852_kernel, x, y))) == Any[Float64]
-
 # TODO: test that `expand_early = true` + inflated `method_for_inference_limit_heuristics`
 # can be used to tighten up some inference result.
 
@@ -4099,18 +4101,18 @@ let # Test the presence of PhiNodes in lowered IR by taking the above function,
     mi = Core.Compiler.specialize_method(first(methods(f_convert_me_to_ir)),
         Tuple{Bool, Float64}, Core.svec())
     ci = Base.uncompressed_ast(mi.def)
+    ci.slottypes = Any[ Any for i = 1:length(ci.slotflags) ]
     ci.ssavaluetypes = Any[Any for i = 1:ci.ssavaluetypes]
     sv = Core.Compiler.OptimizationState(mi, Core.Compiler.NativeInterpreter())
     ir = Core.Compiler.convert_to_ircode(ci, sv)
     ir = Core.Compiler.slot2reg(ir, ci, sv)
     ir = Core.Compiler.compact!(ir)
-    Core.Compiler.replace_code_newstyle!(ci, ir, 4)
-    ci.ssavaluetypes = length(ci.code)
+    Core.Compiler.replace_code_newstyle!(ci, ir)
+    ci.ssavaluetypes = length(ci.ssavaluetypes)
     @test any(x->isa(x, Core.PhiNode), ci.code)
     oc = @eval b->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any,
         Expr(:opaque_closure_method, nothing, 2, false, LineNumberNode(0, nothing), ci)))(b, 1.0)
     @test Base.return_types(oc, Tuple{Bool}) == Any[Float64]
-
     oc = @eval ()->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any,
         Expr(:opaque_closure_method, nothing, 2, false, LineNumberNode(0, nothing), ci)))(true, 1.0)
     @test Base.return_types(oc, Tuple{}) == Any[Float64]
@@ -4683,6 +4685,26 @@ unknown_sparam_nothrow2(x::Ref{Ref{T}}) where T = @isdefined(T) ? T::Type : noth
 @test only(Base.return_types(unknown_sparam_throw, (Any,))) === Union{Nothing,Type}
 @test only(Base.return_types(unknown_sparam_nothrow1, (Ref,))) === Type
 @test only(Base.return_types(unknown_sparam_nothrow2, (Ref{Ref{T}} where T,))) === Type
+
+struct Issue49027{Ty<:Number}
+    x::Ty
+end
+function issue49027(::Type{<:Issue49027{Ty}}) where Ty
+    if @isdefined Ty # should be false when `Ty` is given as a free type var.
+        return Ty::DataType
+    end
+    return nothing
+end
+@test only(Base.return_types(issue49027, (Type{Issue49027{TypeVar(:Ty)}},))) >: Nothing
+@test isnothing(issue49027(Issue49027{TypeVar(:Ty)}))
+function issue49027_integer(::Type{<:Issue49027{Ty}}) where Ty<:Integer
+    if @isdefined Ty # should be false when `Ty` is given as a free type var.
+        return Ty::DataType
+    end
+    nothing
+end
+@test only(Base.return_types(issue49027_integer, (Type{Issue49027{TypeVar(:Ty,Int)}},))) >: Nothing
+@test isnothing(issue49027_integer(Issue49027{TypeVar(:Ty,Int)}))
 
 function fapplicable end
 gapplicable() = Val(applicable(fapplicable))

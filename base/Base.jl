@@ -479,7 +479,7 @@ in_sysimage(pkgid::PkgId) = pkgid in _sysimage_modules
 for match = _methods(+, (Int, Int), -1, get_world_counter())
     m = match.method
     delete!(push!(Set{Method}(), m), m)
-    copy(Core.Compiler.retrieve_code_info(Core.Compiler.specialize_method(match)))
+    copy(Core.Compiler.retrieve_code_info(Core.Compiler.specialize_method(match), typemax(UInt)))
 
     empty!(Set())
     push!(push!(Set{Union{GlobalRef,Symbol}}(), :two), GlobalRef(Base, :two))

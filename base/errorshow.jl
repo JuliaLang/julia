@@ -823,6 +823,72 @@ function _simplify_include_frames(trace)
     return trace[kept_frames]
 end
 
+# Collapse frames that have the same location (in some cases)
+function _collapse_repeated_frames(trace)
+    kept_frames = trues(length(trace))
+    last_frame = nothing
+    for i in 1:length(trace)
+        frame::StackFrame, _ = trace[i]
+        if last_frame !== nothing && frame.file == last_frame.file && frame.line == last_frame.line
+            #=
+            Handles this case:
+
+            f(g, a; kw...) = error();
+            @inline f(a; kw...) = f(identity, a; kw...);
+            f(1)
+
+            which otherwise ends up as:
+
+            [4] #f#4 <-- useless
+            @ ./REPL[2]:1 [inlined]
+            [5] f(a::Int64)
+            @ Main ./REPL[2]:1
+            =#
+            if startswith(sprint(show, last_frame), "#")
+                kept_frames[i-1] = false
+            end
+
+            #= Handles this case
+            g(x, y=1, z=2) = error();
+            g(1)
+
+            which otherwise ends up as:
+
+            [2] g(x::Int64, y::Int64, z::Int64)
+            @ Main ./REPL[1]:1
+            [3] g(x::Int64) <-- useless
+            @ Main ./REPL[1]:1
+            =#
+            if frame.linfo isa MethodInstance && last_frame.linfo isa MethodInstance &&
+                frame.linfo.def isa Method && last_frame.linfo.def isa Method
+                m, last_m = frame.linfo.def::Method, last_frame.linfo.def::Method
+                params, last_params = Base.unwrap_unionall(m.sig).parameters, Base.unwrap_unionall(last_m.sig).parameters
+                if last_m.nkw != 0
+                    pos_sig_params = last_params[(last_m.nkw+2):end]
+                    issame = true
+                    if pos_sig_params == params
+                        kept_frames[i] = false
+                    end
+                end
+                if length(last_params) > length(params)
+                    issame = true
+                    for i = 1:length(params)
+                        issame &= params[i] == last_params[i]
+                    end
+                    if issame
+                        kept_frames[i] = false
+                    end
+                end
+            end
+
+            # TODO: Detect more cases that can be collapsed
+        end
+        last_frame = frame
+    end
+    return trace[kept_frames]
+end
+
+
 function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     n = 0
     last_frame = StackTraces.UNKNOWN
@@ -875,7 +941,9 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     if n > 0
         push!(ret, (last_frame, n))
     end
-    return _simplify_include_frames(ret)
+    trace = _simplify_include_frames(ret)
+    trace = _collapse_repeated_frames(trace)
+    return trace
 end
 
 function show_exception_stack(io::IO, stack)
