@@ -12,7 +12,6 @@ struct GC_Num
     freecall        ::Int64
     total_time      ::Int64
     total_allocd    ::Int64 # GC internal
-    since_sweep     ::Int64 # GC internal
     collect         ::Csize_t # GC internal
     pause           ::Cint
     full_sweep      ::Cint

@@ -3014,7 +3014,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_mark_loop(ptls);
     mark_reset_age = 0;
 
-    gc_num.since_sweep += gc_num.allocd;
     JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes);
     gc_settime_premark_end();
     gc_time_mark_pause(gc_start_time, scanned_bytes, perm_scanned_bytes);
@@ -3022,14 +3021,14 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     uint64_t mark_time = end_mark_time - start_mark_time;
     gc_num.mark_time = mark_time;
     gc_num.total_mark_time += mark_time;
-    int64_t actual_allocd = gc_num.since_sweep;
+    int64_t allocd = gc_num.allocd;
     gc_settime_postmark_end();
     // marking is over
 
     // Flush everything in mark cache
     gc_sync_all_caches_nolock(ptls);
 
-    int64_t live_sz_ub = live_bytes + actual_allocd;
+    int64_t live_sz_ub = live_bytes + allocd;
     int64_t live_sz_est = scanned_bytes + perm_scanned_bytes;
     int64_t estimate_freed = live_sz_ub - live_sz_est;
 
@@ -3039,11 +3038,11 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_stats_big_obj();
     objprofile_printall();
     objprofile_reset();
-    gc_num.total_allocd += gc_num.since_sweep;
+    gc_num.total_allocd += gc_num.allocd;
     if (!prev_sweep_full)
         promoted_bytes += perm_scanned_bytes - last_perm_scanned_bytes;
     // 5. next collection decision
-    int not_freed_enough = (collection == JL_GC_AUTO) && estimate_freed < (7*(actual_allocd/10));
+    int not_freed_enough = (collection == JL_GC_AUTO) && estimate_freed < (7*(allocd/10));
     int nptr = 0;
     assert(gc_n_threads);
     for (int i = 0; i < gc_n_threads; i++) {
@@ -3153,7 +3152,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     _report_gc_finished(pause, gc_num.freed, sweep_full, recollect);
 
     gc_final_pause_end(gc_start_time, gc_end_time);
-    gc_time_sweep_pause(gc_end_time, actual_allocd, live_bytes,
+    gc_time_sweep_pause(gc_end_time, allocd, live_bytes,
                         estimate_freed, sweep_full);
     gc_num.full_sweep += sweep_full;
     uint64_t max_memory = last_live_bytes + gc_num.allocd;
@@ -3161,9 +3160,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         gc_num.max_memory = max_memory;
     }
 
-    gc_num.allocd = 0;
     last_live_bytes = live_bytes;
-    live_bytes += -gc_num.freed + gc_num.since_sweep;
+    live_bytes += -gc_num.freed + gc_num.allocd;
 
     if (collection == JL_GC_AUTO) {
         // If the current interval is larger than half the live data decrease the interval
@@ -3192,7 +3190,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     prev_sweep_full = sweep_full;
     gc_num.pause += !recollect;
     gc_num.total_time += pause;
-    gc_num.since_sweep = 0;
+    gc_num.allocd = 0;
     gc_num.freed = 0;
     if (pause > gc_num.max_pause) {
         gc_num.max_pause = pause;

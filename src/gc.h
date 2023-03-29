@@ -68,7 +68,6 @@ typedef struct {
     uint64_t    freecall;
     uint64_t    total_time;
     uint64_t    total_allocd;
-    uint64_t    since_sweep;
     size_t      interval;
     int         pause;
     int         full_sweep;
