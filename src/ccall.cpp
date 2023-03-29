@@ -516,7 +516,7 @@ static void typeassert_input(jl_codectx_t &ctx, const jl_cgval_t &jvinfo, jl_val
                 ctx.builder.CreateCondBr(istype, passBB, failBB);
 
                 ctx.builder.SetInsertPoint(failBB);
-                emit_type_error(ctx, mark_julia_type(ctx, vx, true, jl_any_type), boxed(ctx, jlto_runtime), msg);
+                just_emit_type_error(ctx, mark_julia_type(ctx, vx, true, jl_any_type), boxed(ctx, jlto_runtime), msg);
                 ctx.builder.CreateUnreachable();
                 ctx.builder.SetInsertPoint(passBB);
             }
@@ -568,8 +568,15 @@ typedef struct {
     jl_value_t *gcroot;
 } native_sym_arg_t;
 
+static inline const char *invalid_symbol_err_msg(bool ccall)
+{
+    return ccall ?
+        "ccall: first argument not a pointer or valid constant expression" :
+        "cglobal: first argument not a pointer or valid constant expression";
+}
+
 // --- parse :sym or (:sym, :lib) argument into address info ---
-static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_value_t *arg, const char *fname, bool llvmcall)
+static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_value_t *arg, bool ccall, bool llvmcall)
 {
     Value *&jl_ptr = out.jl_ptr;
     void (*&fptr)(void) = out.fptr;
@@ -599,9 +606,7 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
         jl_cgval_t arg1 = emit_expr(ctx, arg);
         jl_value_t *ptr_ty = arg1.typ;
         if (!jl_is_cpointer_type(ptr_ty)) {
-            const char *errmsg = !strcmp(fname, "ccall") ?
-                "ccall: first argument not a pointer or valid constant expression" :
-                "cglobal: first argument not a pointer or valid constant expression";
+            const char *errmsg = invalid_symbol_err_msg(ccall);
             emit_cpointercheck(ctx, arg1, errmsg);
         }
         arg1 = update_julia_type(ctx, arg1, (jl_value_t*)jl_voidpointer_type);
@@ -647,8 +652,6 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
                 f_name = jl_symbol_name((jl_sym_t*)t0);
             else if (jl_is_string(t0))
                 f_name = jl_string_data(t0);
-            else
-                JL_TYPECHKS(fname, symbol, t0);
 
             jl_value_t *t1 = jl_fieldref(ptr, 1);
             if (jl_is_symbol(t1))
@@ -656,10 +659,7 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
             else if (jl_is_string(t1))
                 f_lib = jl_string_data(t1);
             else
-                JL_TYPECHKS(fname, symbol, t1);
-        }
-        else {
-            JL_TYPECHKS(fname, pointer, ptr);
+                f_name = NULL;
         }
     }
 }
@@ -696,7 +696,15 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     Type *lrt = ctx.types().T_size;
     assert(lrt == julia_type_to_llvm(ctx, rt));
 
-    interpret_symbol_arg(ctx, sym, args[1], "cglobal", false);
+    interpret_symbol_arg(ctx, sym, args[1], /*ccall=*/false, false);
+
+    if (sym.f_name == NULL && sym.fptr == NULL && sym.jl_ptr == NULL && sym.gcroot != NULL) {
+        const char *errmsg = invalid_symbol_err_msg(/*ccall=*/false);
+        jl_cgval_t arg1 = emit_expr(ctx, args[1]);
+        emit_type_error(ctx, arg1, literal_pointer_val(ctx, (jl_value_t *)jl_pointer_type), errmsg);
+        JL_GC_POP();
+        return jl_cgval_t();
+    }
 
     if (sym.jl_ptr != NULL) {
         res = ctx.builder.CreateBitCast(sym.jl_ptr, lrt);
@@ -1346,14 +1354,20 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     bool llvmcall = false;
     std::tie(cc, llvmcall) = convert_cconv(cc_sym);
 
-    interpret_symbol_arg(ctx, symarg, args[1], "ccall", llvmcall);
+    interpret_symbol_arg(ctx, symarg, args[1], /*ccall=*/true, llvmcall);
     Value *&jl_ptr = symarg.jl_ptr;
     void (*&fptr)(void) = symarg.fptr;
     const char *&f_name = symarg.f_name;
     const char *&f_lib = symarg.f_lib;
 
     if (f_name == NULL && fptr == NULL && jl_ptr == NULL) {
-        emit_error(ctx, "ccall: null function pointer");
+        if (symarg.gcroot != NULL) { // static_eval(ctx, args[1]) could not be interpreted to a function pointer
+            const char *errmsg = invalid_symbol_err_msg(/*ccall=*/true);
+            jl_cgval_t arg1 = emit_expr(ctx, args[1]);
+            emit_type_error(ctx, arg1, literal_pointer_val(ctx, (jl_value_t *)jl_pointer_type), errmsg);
+        } else {
+            emit_error(ctx, "ccall: null function pointer");
+        }
         JL_GC_POP();
         return jl_cgval_t();
     }
