@@ -3040,7 +3040,7 @@ static jl_value_t *static_constant_instance(const llvm::DataLayout &DL, Constant
     return obj;
 }
 
-static Value *call_with_attrs(jl_codectx_t &ctx, JuliaFunction *intr, Value *v)
+static Value *call_with_attrs(jl_codectx_t &ctx, JuliaFunction<> *intr, Value *v)
 {
     Function *F = prepare_call(intr);
     CallInst *Call = ctx.builder.CreateCall(F, v);

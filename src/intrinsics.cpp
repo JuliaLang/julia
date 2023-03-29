@@ -45,10 +45,10 @@ FunctionType *get_intr_args5(LLVMContext &C) { return FunctionType::get(JuliaTyp
 
 const auto &runtime_func() {
     static struct runtime_funcs_t {
-        std::array<JuliaFunction *, num_intrinsics> runtime_func;
+        std::array<JuliaFunction<> *, num_intrinsics> runtime_func;
         runtime_funcs_t() :
         runtime_func{
-#define ADD_I(name, nargs) new JuliaFunction{XSTR(jl_##name), get_intr_args##nargs, nullptr},
+#define ADD_I(name, nargs) new JuliaFunction<>{XSTR(jl_##name), get_intr_args##nargs, nullptr},
 #define ADD_HIDDEN ADD_I
 #define ALIAS(alias, base) nullptr,
     INTRINSICS
