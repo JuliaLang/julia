@@ -2007,7 +2007,7 @@ end
 @test Meta.parse("import Base.Foo.:(==).bar") == :(import Base.Foo.==.bar)
 
 # issue #33135
-function f33135(x::T) where {C1, T}
+@test_warn "declares type variable C1 but does not use it" @eval function f33135(x::T) where {C1, T}
     let C1 = 1, C2 = 2
         C1
     end
@@ -3053,9 +3053,6 @@ end
 end
 
 # issue 25678
-@generated f25678(x::T) where {T} = code_lowered(sin, Tuple{x})[]
-@test f25678(pi/6) === sin(pi/6)
-
 @generated g25678(x) = return :x
 @test g25678(7) === 7
 

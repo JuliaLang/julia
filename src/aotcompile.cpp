@@ -282,7 +282,9 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
     auto ct = jl_current_task;
-    ct->reentrant_timing++;
+    bool timed = (ct->reentrant_timing & 1) == 0;
+    if (timed)
+        ct->reentrant_timing |= 1;
     orc::ThreadSafeContext ctx;
     orc::ThreadSafeModule backing;
     if (!llvmmod) {
@@ -466,9 +468,12 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     }
 
     data->M = std::move(clone);
-    if (!ct->reentrant_timing-- && measure_compile_time_enabled) {
-        auto end = jl_hrtime();
-        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, end - compiler_start_time);
+    if (timed) {
+        if (measure_compile_time_enabled) {
+            auto end = jl_hrtime();
+            jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, end - compiler_start_time);
+        }
+        ct->reentrant_timing &= ~1ull;
     }
     if (ctx.getContext()) {
         jl_ExecutionEngine->releaseContext(std::move(ctx));
@@ -940,7 +945,7 @@ struct ShardTimers {
 };
 
 // Perform the actual optimization and emission of the output files
-static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *outputs, StringRef *names,
+static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *outputs, const std::string *names,
                     NewArchiveMember *unopt, NewArchiveMember *opt, NewArchiveMember *obj, NewArchiveMember *asm_,
                     ShardTimers &timers, unsigned shardidx) {
     auto TM = std::unique_ptr<TargetMachine>(
@@ -960,6 +965,7 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
         AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
         ModulePassManager MPM;
         MPM.addPass(BitcodeWriterPass(OS));
+        MPM.run(M, AM.MAM);
         *unopt = NewArchiveMember(MemoryBufferRef(*outputs++, *names++));
         timers.unopt.stopTimer();
     }
@@ -1024,6 +1030,7 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
         AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
         ModulePassManager MPM;
         MPM.addPass(BitcodeWriterPass(OS));
+        MPM.run(M, AM.MAM);
         *opt = NewArchiveMember(MemoryBufferRef(*outputs++, *names++));
         timers.opt.stopTimer();
     }
@@ -1219,6 +1226,8 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
     unsigned outcount = unopt_out + opt_out + obj_out + asm_out;
     assert(outcount);
     outputs.resize(outputs.size() + outcount * threads * 2);
+    auto names_start = outputs.data() + outputs.size() - outcount * threads * 2;
+    auto outputs_start = names_start + outcount * threads;
     unopt.resize(unopt.size() + unopt_out * threads);
     opt.resize(opt.size() + opt_out * threads);
     obj.resize(obj.size() + obj_out * threads);
@@ -1259,7 +1268,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
         }
     }
     for (unsigned i = 0; i < threads; ++i) {
-        auto start = &outputs[outputs.size() - outcount * threads * 2 + i];
+        auto start = names_start + i * outcount;
         auto istr = std::to_string(i);
         if (unopt_out)
             *start++ = (name + "_unopt#" + istr + ".bc").str();
@@ -1273,10 +1282,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
     // Single-threaded case
     if (threads == 1) {
         output_timer.startTimer();
-        SmallVector<StringRef, 4> names;
-        for (unsigned i = 0; i < outcount; ++i)
-            names.push_back(outputs[i]);
-        add_output_impl(M, TM, outputs.data() + outputs.size() - outcount, names.data(),
+        add_output_impl(M, TM, outputs_start, names_start,
                         unopt_out ? unopt.data() + unopt.size() - 1 : nullptr,
                         opt_out ? opt.data() + opt.size() - 1 : nullptr,
                         obj_out ? obj.data() + obj.size() - 1 : nullptr,
@@ -1313,7 +1319,6 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
 
     output_timer.startTimer();
 
-    auto outstart = outputs.data() + outputs.size() - outcount * threads;
     auto unoptstart = unopt_out ? unopt.data() + unopt.size() - threads : nullptr;
     auto optstart = opt_out ? opt.data() + opt.size() - threads : nullptr;
     auto objstart = obj_out ? obj.data() + obj.size() - threads : nullptr;
@@ -1342,11 +1347,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
             dropUnusedDeclarations(*M);
             timers[i].deletion.stopTimer();
 
-            SmallVector<StringRef, 4> names(outcount);
-            for (unsigned j = 0; j < outcount; ++j)
-                names[j] = outputs[i * outcount + j];
-
-            add_output_impl(*M, TM, outstart + i * outcount, names.data(),
+            add_output_impl(*M, TM, outputs_start + i * outcount, names_start + i * outcount,
                             unoptstart ? unoptstart + i : nullptr,
                             optstart ? optstart + i : nullptr,
                             objstart ? objstart + i : nullptr,
@@ -1573,7 +1574,7 @@ void jl_dump_native_impl(void *native_code,
     // DO NOT DELETE, this is necessary to ensure memorybuffers
     // have a stable backing store for both their object files and
     // their names
-    outputs.reserve(threads * (!!unopt_bc_fname + !!bc_fname + !!obj_fname + !!asm_fname) * 2 + 2);
+    outputs.reserve((threads + 1) * (!!unopt_bc_fname + !!bc_fname + !!obj_fname + !!asm_fname) * 2);
 
     auto compile = [&](Module &M, StringRef name, unsigned threads) { add_output(
             M, *SourceTM, outputs, name,
@@ -2018,7 +2019,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
             if (src)
                 jlrettype = src->rettype;
             else if (jl_is_method(mi->def.method)) {
-                src = mi->def.method->generator ? jl_code_for_staged(mi) : (jl_code_info_t*)mi->def.method->source;
+                src = mi->def.method->generator ? jl_code_for_staged(mi, world) : (jl_code_info_t*)mi->def.method->source;
                 if (src && !jl_is_code_info(src) && jl_is_method(mi->def.method))
                     src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
             }

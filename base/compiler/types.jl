@@ -69,6 +69,9 @@ mutable struct InferenceResult
     argescapes               # ::ArgEscapeCache if optimized, nothing otherwise
     must_be_codeinf::Bool    # if this must come out as CodeInfo or leaving it as IRCode is ok
     function InferenceResult(linfo::MethodInstance, cache_argtypes::Vector{Any}, overridden_by_const::BitVector)
+        # def = linfo.def
+        # nargs = def isa Method ? Int(def.nargs) : 0
+        # @assert length(cache_argtypes) == nargs
         return new(linfo, cache_argtypes, overridden_by_const, nothing, nothing,
             WorldRange(), Effects(), Effects(), nothing, true)
     end
@@ -338,7 +341,7 @@ function NativeInterpreter(world::UInt = get_world_counter();
                            inf_params::InferenceParams = InferenceParams(),
                            opt_params::OptimizationParams = OptimizationParams())
     # Sometimes the caller is lazy and passes typemax(UInt).
-    # we cap it to the current world age
+    # we cap it to the current world age for correctness
     if world == typemax(UInt)
         world = get_world_counter()
     end

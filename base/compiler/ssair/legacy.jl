@@ -10,11 +10,7 @@ the original `ci::CodeInfo` are modified.
 """
 function inflate_ir!(ci::CodeInfo, linfo::MethodInstance)
     sptypes = sptypes_from_meth_instance(linfo)
-    if ci.inferred
-        argtypes, _ = matching_cache_argtypes(fallback_lattice, linfo)
-    else
-        argtypes = Any[ Any for i = 1:length(ci.slotflags) ]
-    end
+    argtypes, _ = matching_cache_argtypes(fallback_lattice, linfo)
     return inflate_ir!(ci, sptypes, argtypes)
 end
 function inflate_ir!(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any})
@@ -60,15 +56,21 @@ Mainly used for testing or interactive use.
 inflate_ir(ci::CodeInfo, linfo::MethodInstance) = inflate_ir!(copy(ci), linfo)
 inflate_ir(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any}) = inflate_ir!(copy(ci), sptypes, argtypes)
 function inflate_ir(ci::CodeInfo)
-    slottypes = ci.slottypes
-    argtypes = Any[ slottypes === nothing ? Any : slottypes[i] for i = 1:length(ci.slotflags) ]
+    parent = ci.parent
+    isa(parent, MethodInstance) && return inflate_ir(ci, parent)
+    # XXX the length of `ci.slotflags` may be different from the actual number of call
+    # arguments, but we really don't know that information in this case
+    argtypes = Any[ Any for i = 1:length(ci.slotflags) ]
     return inflate_ir(ci, VarState[], argtypes)
 end
 
-function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
+function replace_code_newstyle!(ci::CodeInfo, ir::IRCode)
     @assert isempty(ir.new_nodes)
     # All but the first `nargs` slots will now be unused
+    nargs = length(ir.argtypes)
+    resize!(ci.slotnames, nargs)
     resize!(ci.slotflags, nargs)
+    resize!(ci.slottypes, nargs)
     stmts = ir.stmts
     code = ci.code = stmts.inst
     ssavaluetypes = ci.ssavaluetypes = stmts.type
