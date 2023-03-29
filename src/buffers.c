@@ -291,7 +291,6 @@ JL_DLLEXPORT jl_buffer_t *jl_ptr_to_buffer(jl_value_t *btype, void *data, size_t
         jl_exceptionf(jl_argumenterror_type,
                       "unsafe_wrap: pointer %p is not properly aligned to %u bytes", data, lyt.alignment);
 
-    int ndimwords = jl_array_ndimwords(1);
     int tsz = sizeof(jl_buffer_t);
     buf = (jl_buffer_t*)jl_gc_alloc(ct->ptls, tsz, btype);
     buf->length = len;
@@ -306,7 +305,7 @@ JL_DLLEXPORT jl_buffer_t *jl_ptr_to_buffer(jl_value_t *btype, void *data, size_t
     return buf;
 }
 
-STATIC_INLINE void jl_buffer_grow_at_end(jl_buffer_t *buf, size_t idx,
+JL_DLLEXPORT void jl_buffer_grow_at_end(jl_buffer_t *buf, size_t idx,
                                         size_t inc, size_t n)
 {
     if (__unlikely(!jl_is_dynbuffer(buf)))
@@ -357,13 +356,7 @@ STATIC_INLINE void jl_buffer_grow_at_end(jl_buffer_t *buf, size_t idx,
     }
 }
 
-JL_DLLEXPORT void jl_buffer_grow_end(jl_buffer_t *buf, size_t inc)
-{
-    size_t len = jl_buffer_len(buf);
-    jl_buffer_grow_at_end(buf, len, inc, len);
-}
-
-STATIC_INLINE void jl_buffer_del_at_end(jl_buffer_t *buf, size_t idx, size_t dec, size_t n)
+JL_DLLEXPORT void jl_buffer_del_at_end(jl_buffer_t *buf, size_t idx, size_t dec, size_t n)
 {
     if (__unlikely(!jl_is_dynbuffer(buf)))
         jl_error("attempt to delete buffer of a fixed length");
@@ -386,27 +379,6 @@ STATIC_INLINE void jl_buffer_del_at_end(jl_buffer_t *buf, size_t idx, size_t dec
     if (lyt.elsize == 1 && lyt.ntags < 2)
         data[n] = 0;
     buf->length = n;
-}
-
-JL_DLLEXPORT void jl_buffer_del_at(jl_buffer_t *buf, size_t idx, size_t n)
-{
-    size_t len = jl_buffer_len(buf);
-    size_t last = idx + n;
-    if (__unlikely(idx < 0))
-        jl_bounds_error_int((jl_value_t*)buf, idx + 1);
-    if (__unlikely(last > len))
-        jl_bounds_error_int((jl_value_t*)buf, last);
-    jl_buffer_del_at_end(buf, idx, n, len);
-}
-
-JL_DLLEXPORT void jl_buffer_del_end(jl_buffer_t *buf, size_t n)
-{
-    size_t len = jl_buffer_len(buf);
-    if (__unlikely(len < n))
-        jl_bounds_error_int((jl_value_t*)buf, 0);
-    if (n == 0)
-        return;
-    jl_buffer_del_at_end(buf, len - n, n, len);
 }
 
 // Copy element by element until we hit a young object, at which point

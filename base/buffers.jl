@@ -48,7 +48,6 @@ if !isdefined(Main, :Base)
         end
         return b
     end
-
 end
 
 eltype(::Type{<:BufferType{T}}) where {T} = T
@@ -146,6 +145,16 @@ function setindex!(b::BufferType{T}, vals::Buffer{T}, ::Colon) where {T}
     return b
 end
 
+fill!(b::BufferType{T}, x) where {T} = _fill!(b, convert(T, x))
+function _fill!(b::BufferType{T}, x::T) where {T}
+    for i in eachindex(b)
+        @inbounds b[i] = x
+    end
+    return b
+end
+
+collect(b::BufferType) = copy(b)
+
 function isassigned(b::BufferType, i::Int, ii::Int...)
     @inline
     @boundscheck all(isone, ii) || return false
@@ -215,16 +224,23 @@ function similar(b::DynamicBuffer, T::Type=eltype(b), dims::Tuple{Int}=(length(b
     DynamicBuffer{T}(undef, getfield(dims, 1))
 end
 
-function unsafe_grow_end!(b::DynamicBuffer, delta::Integer)
-    ccall(:jl_buffer_grow_end, Cvoid, (Any, UInt), b, delta)
-end
-function unsafe_grow_at!(b::DynamicBuffer, i::Integer, delta::Integer)
-    ccall(:jl_buffer_grow_at, Cvoid, (Any, UInt, UInt), b, i - 1, delta)
+# TODO memset
+
+# resizing methods
+function resize!(b::DynamicBuffer, sz::Integer)
+    len = length(b)
+    if len > sz
+        unsafe_delete_at!(b, len, len - sz, len)
+    elseif len < sz
+        unsafe_grow_at!(b, len, len + sz, len)
+    end
+    return b
 end
 
-function unsafe_delete_end!(b::DynamicBuffer, delta::Integer)
-    ccall(:jl_buffer_del_end, Cvoid, (Any, UInt), b, delta)
+function unsafe_grow_at!(b::DynamicBuffer, i::Integer, delta::Integer, len::Integer=length(b))
+    ccall(:jl_buffer_grow_at_end, Cvoid, (Any, UInt, UInt, UInt), b, i - 1, delta, len)
 end
-function unsafe_delete_at!(b::DynamicBuffer, i::Integer, delta::Integer)
-    ccall(:jl_buffer_del_at, Cvoid, (Any, UInt, UInt), b, i - 1, delta)
+
+function unsafe_delete_at!(b::DynamicBuffer, i::Integer, delta::Integer, len::Integer=length(b))
+    ccall(:jl_buffer_del_at_end, Cvoid, (Any, UInt, UInt, UInt), b, i - 1, delta, len)
 end
