@@ -2792,7 +2792,7 @@ mark: {
         jl_datatype_t *vt = (jl_datatype_t*)tag;
         int foreign_alloc = 0;
         int update_meta = __likely(!meta_updated && !gc_verifying);
-        if (update_meta && eyt_obj_in_img(new_obj)) {
+        if (update_meta && o->bits.in_image) {
             foreign_alloc = 1;
             update_meta = 0;
         }
