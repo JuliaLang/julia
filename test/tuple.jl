@@ -212,7 +212,7 @@ end
 end
 
 
-@testset "element type" begin
+@testset "elelement/value/key types" begin
     @test eltype((1,2,3)) === Int
     @test eltype((1.0,2.0,3.0)) <: AbstractFloat
     @test eltype((true, false)) === Bool
@@ -227,6 +227,11 @@ end
         typejoin(Int, Float64, Bool)
     @test eltype(Tuple{Int, Missing}) === Union{Missing, Int}
     @test eltype(Tuple{Int, Nothing}) === Union{Nothing, Int}
+
+    @test valtype((1,2,3)) === eltype((1,2,3))
+    @test valtype(Tuple{Int, Missing}) === eltype(Tuple{Int, Missing})
+    @test keytype((1,2,3)) === Int
+    @test keytype(Tuple{Int, Missing}) === Int
 end
 
 @testset "map with Nothing and Missing" begin
