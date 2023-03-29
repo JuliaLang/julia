@@ -268,7 +268,6 @@ end
 @test repr(Expr(:import, :Foo)) == ":(\$(Expr(:import, :Foo)))"
 @test repr(Expr(:import, Expr(:(.), ))) == ":(\$(Expr(:import, :(\$(Expr(:.))))))"
 
-
 @test repr(Expr(:using, Expr(:(.), :A))) == ":(using A)"
 @test repr(Expr(:using, Expr(:(.), :A),
                         Expr(:(.), :B))) == ":(using A, B)"
@@ -285,6 +284,10 @@ end
                          Expr(:(.), :D))) == ":(import A, B.C, D)"
 @test repr(Expr(:import, Expr(:(.), :A, :B),
                          Expr(:(.), :C, :D))) == ":(import A.B, C.D)"
+
+# https://github.com/JuliaLang/julia/issues/49168
+@test repr(:(using A: (..))) == ":(using A: (..))"
+@test repr(:(using A: (..) as twodots)) == ":(using A: (..) as twodots)"
 
 # range syntax
 @test_repr "1:2"
