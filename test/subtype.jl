@@ -1043,11 +1043,7 @@ function test_intersection()
                    Type{Tuple{Int,T}} where T<:Integer)
     @testintersect(Type{<:Tuple{Any,Vararg{Any}}},
                    Type{Tuple{Vararg{Int,N}}} where N,
-                   !Union{})
-
-    @test typeintersect(Type{<:Tuple{Any,Vararg{Any}}}, Type{Tuple{Vararg{Int,N}}} where N) != Type{Tuple{Int,Vararg{Int}}}
-    @test_broken typeintersect(Type{<:Tuple{Any,Vararg{Any}}}, Type{Tuple{Vararg{Int,N}}} where N) == Type{Tuple{Int,Vararg{Int,N}}} where N
-    @test_broken typeintersect(Type{<:Tuple{Any,Vararg{Any}}}, Type{Tuple{Vararg{Int,N}}} where N) != Type{<:Tuple{Int,Vararg{Int}}}
+                   Type{Tuple{Int,Vararg{Int,N}}} where N)
 
     @testintersect(Type{<:Array},
                    Type{AbstractArray{T}} where T,
@@ -2206,17 +2202,19 @@ let A = Pair{NTuple{N, Int}, NTuple{N, Int}} where N,
     Bs = (Pair{<:Tuple{Int, Vararg{Int}}, <:Tuple{Int, Int, Vararg{Int}}},
           Pair{Tuple{Int, Vararg{Int,N1}}, Tuple{Int, Int, Vararg{Int,N2}}} where {N1,N2},
           Pair{<:Tuple{Int, Vararg{Int,N}} where {N}, <:Tuple{Int, Int, Vararg{Int,N}} where {N}})
-    Cerr = Pair{Tuple{Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
-    for B in Bs
-        C = typeintersect(A, B)
-        @test C == typeintersect(B, A) != Union{}
-        @test C != Cerr
-        @test_broken C != B
+    Cs = (Bs[2], Bs[2], Bs[3])
+    for (B, C) in zip(Bs, Cs)
+        # TODO: The ideal result is Pair{Tuple{Int, Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
+        @testintersect(A, B, C)
     end
 end
 
 # Example from pr#39098
 @testintersect(NTuple, Tuple{Any,Vararg}, Tuple{T, Vararg{T}} where {T})
+
+@testintersect(Val{T} where T<:Tuple{Tuple{Any, Vararg{Any}}},
+               Val{Tuple{Tuple{Vararg{Any, N}}}} where {N},
+               Val{Tuple{Tuple{Any, Vararg{Any, N}}}} where {N})
 
 let A = Pair{NTuple{N, Int}, Val{N}} where N,
     Bs = (Pair{<:Tuple{Int, Vararg{Int}}, <:Val},
