@@ -7149,47 +7149,26 @@ static jl_llvm_functions_t
     ctx.f = f;
 
     // Step 4b. determine debug info signature and other type info for locals
-    DIBuilder dbuilder(*M);
+    DICompileUnit::DebugEmissionKind emissionKind = (DICompileUnit::DebugEmissionKind) ctx.params->debug_info_kind;
+    DICompileUnit::DebugNameTableKind tableKind;
+    if (JL_FEAT_TEST(ctx, gnu_pubnames))
+        tableKind = DICompileUnit::DebugNameTableKind::GNU;
+    else
+        tableKind = DICompileUnit::DebugNameTableKind::None;
+    DIBuilder dbuilder(*M, true, ctx.debug_enabled ? getOrCreateJuliaCU(*M, emissionKind, tableKind) : NULL);
     DIFile *topfile = NULL;
     DISubprogram *SP = NULL;
     DebugLoc noDbg, topdebugloc;
     if (ctx.debug_enabled) {
-        DICompileUnit::DebugEmissionKind emissionKind = (DICompileUnit::DebugEmissionKind) ctx.params->debug_info_kind;
-        DICompileUnit::DebugNameTableKind tableKind;
-
-        if (JL_FEAT_TEST(ctx, gnu_pubnames)) {
-            tableKind = DICompileUnit::DebugNameTableKind::GNU;
-        }
-        else {
-            tableKind = DICompileUnit::DebugNameTableKind::None;
-        }
         topfile = dbuilder.createFile(ctx.file, ".");
-        DICompileUnit *CU =
-            dbuilder.createCompileUnit(llvm::dwarf::DW_LANG_Julia
-                                       ,topfile      // File
-                                       ,"julia"      // Producer
-                                       ,true         // isOptimized
-                                       ,""           // Flags
-                                       ,0            // RuntimeVersion
-                                       ,""           // SplitName
-                                       ,emissionKind // Kind
-                                       ,0            // DWOId
-                                       ,true         // SplitDebugInlining
-                                       ,false        // DebugInfoForProfiling
-                                       ,tableKind    // NameTableKind
-                                       );
-
         DISubroutineType *subrty;
-        if (jl_options.debug_level <= 1) {
+        if (jl_options.debug_level <= 1)
             subrty = debuginfo.jl_di_func_null_sig;
-        }
-        else if (!specsig) {
+        else if (!specsig)
             subrty = debuginfo.jl_di_func_sig;
-        }
-        else {
+        else
             subrty = get_specsig_di(ctx, debuginfo, jlrettype, lam->specTypes, dbuilder);
-        }
-        SP = dbuilder.createFunction(CU
+        SP = dbuilder.createFunction(nullptr
                                      ,dbgFuncName      // Name
                                      ,f->getName()     // LinkageName
                                      ,topfile          // File

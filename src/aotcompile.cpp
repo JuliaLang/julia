@@ -1341,6 +1341,11 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
             timers[i].construct.startTimer();
             construct_vars(*M, partitions[i]);
             M->setModuleFlag(Module::Error, "julia.mv.suffix", MDString::get(M->getContext(), "_" + std::to_string(i)));
+            // The DICompileUnit file is not used for anything, but ld64 requires it be a unique string per object file
+            // or it may skip emitting debug info for that file. Here set it to ./julia#N
+            DIFile *topfile = DIFile::get(M->getContext(), "julia#" + std::to_string(i), ".");
+            for (DICompileUnit *CU : M->debug_compile_units())
+                CU->replaceOperandWith(0, topfile);
             timers[i].construct.stopTimer();
 
             timers[i].deletion.startTimer();
