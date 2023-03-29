@@ -4089,7 +4089,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
     size_t nfargs = cft->getNumParams();
     SmallVector<Value *> argvals(nfargs);
     unsigned idx = 0;
-    AllocaInst *result;
+    AllocaInst *result = nullptr;
     switch (returninfo.cc) {
     case jl_returninfo_t::Boxed:
     case jl_returninfo_t::Register:
@@ -4166,7 +4166,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
         callee = ai.decorateInst(ctx.builder.CreateAlignedLoad(callee->getType(), GV, Align(sizeof(void*))));
     }
-    CallInst *call = ctx.builder.CreateCall(cft, callee, ArrayRef<Value*>(&argvals[0], nfargs));
+    CallInst *call = ctx.builder.CreateCall(cft, callee, argvals);
     call->setAttributes(returninfo.decl->getAttributes());
 
     jl_cgval_t retval;
@@ -4178,6 +4178,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
             retval = mark_julia_type(ctx, call, false, jlretty);
             break;
         case jl_returninfo_t::SRet:
+            assert(result);
             retval = mark_julia_slot(result, jlretty, NULL, ctx.tbaa().tbaa_stack);
             break;
         case jl_returninfo_t::Union: {
@@ -5415,7 +5416,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
                 jl_is_datatype(jl_tparam0(ty)) &&
                 jl_is_concrete_type(jl_tparam0(ty))) {
             assert(nargs <= jl_datatype_nfields(jl_tparam0(ty)) + 1);
-            jl_cgval_t res = emit_new_struct(ctx, jl_tparam0(ty), nargs - 1, &argv[1], is_promotable);
+            jl_cgval_t res = emit_new_struct(ctx, jl_tparam0(ty), nargs - 1, argv.data() + 1, is_promotable);
             if (is_promotable && res.promotion_point && res.promotion_ssa==-1)
                 res.promotion_ssa = ssaidx_0based;
             return res;
@@ -6651,7 +6652,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
         args[idx] = theArg;
         idx++;
     }
-    CallInst *call = ctx.builder.CreateCall(f.decl, ArrayRef<Value*>(&args[0], nfargs));
+    CallInst *call = ctx.builder.CreateCall(f.decl, args);
     call->setAttributes(f.decl->getAttributes());
 
     jl_cgval_t retval;
