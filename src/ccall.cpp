@@ -839,7 +839,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
      * type. Otherwise we pass a pointer to a jl_value_t.
      */
     std::vector<llvm::Type*> argtypes;
-    Value **argvals = (Value**)alloca(nargt * sizeof(Value*));
+    SmallVector<Value *, 8> argvals(nargt);
     for (size_t i = 0; i < nargt; ++i) {
         jl_value_t *tti = jl_svecref(tt,i);
         bool toboxed;
@@ -986,7 +986,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     Function *decl = Function::Create(decl_typ, def->getLinkage(), def->getAddressSpace(),
                                       def->getName(), jl_Module);
     decl->setAttributes(def->getAttributes());
-    CallInst *inst = ctx.builder.CreateCall(decl, ArrayRef<Value *>(&argvals[0], nargt));
+    CallInst *inst = ctx.builder.CreateCall(decl, argvals);
 
     // save the module to be linked later.
     // we cannot do this right now, because linking mutates the destination module,
@@ -1399,7 +1399,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 #define is_libjulia_func(name) _is_libjulia_func((uintptr_t)&(name), StringRef(XSTR(name)))
 
     // emit arguments
-    jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nccallargs);
+    SmallVector<jl_cgval_t, 4> argv(nccallargs);
     for (size_t i = 0; i < nccallargs; i++) {
         // Julia (expression) value of current parameter
         jl_value_t *argi = ccallarg(i);
@@ -1897,7 +1897,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     jl_cgval_t retval = sig.emit_a_ccall(
             ctx,
             symarg,
-            argv,
+            argv.data(),
             gc_uses,
             static_rt);
     JL_GC_POP();
@@ -1919,7 +1919,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
 
     FunctionType *functype = this->functype(ctx.builder.getContext());
 
-    Value **argvals = (Value**) alloca((nccallargs + sret) * sizeof(Value*));
+    SmallVector<Value *, 8> argvals(nccallargs + sret);
     for (size_t ai = 0; ai < nccallargs; ai++) {
         // Current C function parameter
         jl_cgval_t &arg = argv[ai];
@@ -2099,7 +2099,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     OperandBundleDef OpBundle("jl_roots", gc_uses);
     // the actual call
     CallInst *ret = ctx.builder.CreateCall(functype, llvmf,
-            ArrayRef<Value*>(&argvals[0], nccallargs + sret),
+            argvals,
             ArrayRef<OperandBundleDef>(&OpBundle, gc_uses.empty() ? 0 : 1));
     ((CallInst*)ret)->setAttributes(attributes);
 
