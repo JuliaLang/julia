@@ -1823,6 +1823,13 @@ end
     @test_broken IRUtils.fully_eliminated(_has_offset_axes, Base.typesof(a, a, b, b))
 end
 
+@testset "aliasing of slices" begin
+    x = [1 2; 3 4]
+    @test Base.mightalias(x, eachrow(x))
+    @test Base.mightalias(eachrow(x), x)
+    @test Base.mightalias(eachcol(x), eachrow(x))
+end
+                                                                                                                
 # type stable [x;;] (https://github.com/JuliaLang/julia/issues/45952)
 f45952(x) = [x;;]
 @inferred f45952(1.0)
