@@ -490,14 +490,14 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
 
     char *f_lib = NULL;
     if (jl_is_tuple(v) && jl_nfields(v) > 1) {
-        jl_value_t *t1 = jl_fieldref_noalloc(v, 1);
-        v = jl_fieldref(v, 0);
+        jl_value_t *t1 = jl_fieldref(v, 1);
         if (jl_is_symbol(t1))
             f_lib = jl_symbol_name((jl_sym_t*)t1);
         else if (jl_is_string(t1))
             f_lib = jl_string_data(t1);
         else
             JL_TYPECHK(cglobal, symbol, t1)
+        v = jl_fieldref(v, 0);
     }
 
     char *f_name = NULL;
