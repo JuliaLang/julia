@@ -1516,6 +1516,9 @@ By default, this simply checks if either of the arrays reference the same memory
 regions, as identified by their [`Base.dataids`](@ref).
 """
 mightalias(A::AbstractArray, B::AbstractArray) = !isbits(A) && !isbits(B) && !_isdisjoint(dataids(A), dataids(B))
+mightalias(A::AbstractArray, B::AbstractSlices) = mightalias(A, parent(B))
+mightalias(A::AbstractSlices, B::AbstractArray) = mightalias(parent(A), parent(B))
+mightalias(A::AbstractSlices, B::AbstractSlices) = mightalias(parent(A), parent(B))
 mightalias(x, y) = false
 
 _isdisjoint(as::Tuple{}, bs::Tuple{}) = true
