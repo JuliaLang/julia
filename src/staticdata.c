@@ -2366,6 +2366,10 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         jl_write_relocations(&s);
     }
 
+    // This ensures that we can use the low bit of addresses for
+    // identifying end pointers in gc's eytzinger search.
+    write_padding(&sysimg, 4 - (sysimg.size % 4));
+
     if (sysimg.size > ((uintptr_t)1 << RELOC_TAG_OFFSET)) {
         jl_printf(
             JL_STDERR,
@@ -2657,6 +2661,8 @@ JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
 //     return jl_subtype((jl_value_t*)a, (jl_value_t*)b) && jl_subtype((jl_value_t*)b, (jl_value_t*)a);
 // }
 #endif
+
+extern void rebuild_image_blob_tree(void);
 
 static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl_array_t *depmods, uint64_t checksum,
                                 /* outputs */    jl_array_t **restored,         jl_array_t **init_order,
@@ -3151,6 +3157,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     arraylist_push(&jl_linkage_blobs, (void*)image_base);
     arraylist_push(&jl_linkage_blobs, (void*)(image_base + sizeof_sysimg + sizeof(uintptr_t)));
     arraylist_push(&jl_image_relocs, (void*)relocs_base);
+    rebuild_image_blob_tree();
 
     // jl_printf(JL_STDOUT, "%ld blobs to link against\n", jl_linkage_blobs.len >> 1);
     jl_gc_enable(en);
