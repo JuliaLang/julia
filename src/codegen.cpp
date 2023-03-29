@@ -481,14 +481,15 @@ struct JuliaVariable {
 public:
     StringLiteral name;
     bool isconst;
-    Type *(*_type)(LLVMContext &C);
+    Type *(*_type)(Type *T_size);
 
     JuliaVariable(const JuliaVariable&) = delete;
     JuliaVariable(const JuliaVariable&&) = delete;
     GlobalVariable *realize(Module *m) {
         if (GlobalValue *V = m->getNamedValue(name))
             return cast<GlobalVariable>(V);
-        return new GlobalVariable(*m, _type(m->getContext()),
+        auto T_size = m->getDataLayout().getIntPtrType(m->getContext());
+        return new GlobalVariable(*m, _type(T_size),
                 isconst, GlobalVariable::ExternalLinkage,
                 NULL, name);
     }
@@ -606,46 +607,46 @@ static AttributeList get_attrs_zext(LLVMContext &C)
 static const auto jlRTLD_DEFAULT_var = new JuliaVariable{
     XSTR(jl_RTLD_DEFAULT_handle),
     true,
-    [](LLVMContext &C) { return static_cast<llvm::Type*>(getInt8PtrTy(C)); },
+    [](Type *T_size) -> Type * { return getInt8PtrTy(T_size->getContext()); },
 };
 static const auto jlexe_var = new JuliaVariable{
     XSTR(jl_exe_handle),
     true,
-    [](LLVMContext &C) { return static_cast<llvm::Type*>(getInt8PtrTy(C)); },
+    [](Type *T_size) -> Type * { return getInt8PtrTy(T_size->getContext()); },
 };
 static const auto jldll_var = new JuliaVariable{
     XSTR(jl_libjulia_handle),
     true,
-    [](LLVMContext &C) { return static_cast<llvm::Type*>(getInt8PtrTy(C)); },
+    [](Type *T_size) -> Type * { return getInt8PtrTy(T_size->getContext()); },
 };
 static const auto jldlli_var = new JuliaVariable{
     XSTR(jl_libjulia_internal_handle),
     true,
-    [](LLVMContext &C) { return static_cast<llvm::Type*>(getInt8PtrTy(C)); },
+    [](Type *T_size) -> Type * { return getInt8PtrTy(T_size->getContext()); },
 };
 
 static const auto jlstack_chk_guard_var = new JuliaVariable{
     XSTR(__stack_chk_guard),
     true,
-    get_pjlvalue,
+    [](Type *T_size) -> Type * { return get_pjlvalue(T_size->getContext()); },
 };
 
 static const auto jlgetworld_global = new JuliaVariable{
     XSTR(jl_world_counter),
     false,
-    [](LLVMContext &C) { return (Type*)getSizeTy(C); },
+    [](Type *T_size) -> Type * { return T_size; },
 };
 
 static const auto jlboxed_int8_cache = new JuliaVariable{
     XSTR(jl_boxed_int8_cache),
     true,
-    [](LLVMContext &C) { return (Type*)ArrayType::get(get_pjlvalue(C), 256); },
+    [](Type *T_size) -> Type * { return ArrayType::get(get_pjlvalue(T_size->getContext()), 256); },
 };
 
 static const auto jlboxed_uint8_cache = new JuliaVariable{
     XSTR(jl_boxed_uint8_cache),
     true,
-    [](LLVMContext &C) { return (Type*)ArrayType::get(get_pjlvalue(C), 256); },
+    [](Type *T_size) -> Type * { return ArrayType::get(get_pjlvalue(T_size->getContext()), 256); },
 };
 
 static const auto jlpgcstack_func = new JuliaFunction{
@@ -8667,12 +8668,15 @@ static void init_jit_functions(void)
     add_named_global(jldll_var, &jl_libjulia_handle);
     add_named_global(jldlli_var, &jl_libjulia_internal_handle);
 #endif
-    global_jlvalue_to_llvm(new JuliaVariable{"jl_true", true, get_pjlvalue}, &jl_true);
-    global_jlvalue_to_llvm(new JuliaVariable{"jl_false", true, get_pjlvalue}, &jl_false);
-    global_jlvalue_to_llvm(new JuliaVariable{"jl_emptysvec", true, get_pjlvalue}, (jl_value_t**)&jl_emptysvec);
-    global_jlvalue_to_llvm(new JuliaVariable{"jl_emptytuple", true, get_pjlvalue}, &jl_emptytuple);
-    global_jlvalue_to_llvm(new JuliaVariable{"jl_diverror_exception", true, get_pjlvalue}, &jl_diverror_exception);
-    global_jlvalue_to_llvm(new JuliaVariable{"jl_undefref_exception", true, get_pjlvalue}, &jl_undefref_exception);
+    auto size2pjlvalue = [](Type *T_size) -> Type * {
+        return get_pjlvalue(T_size->getContext());
+    };
+    global_jlvalue_to_llvm(new JuliaVariable{"jl_true", true, size2pjlvalue}, &jl_true);
+    global_jlvalue_to_llvm(new JuliaVariable{"jl_false", true, size2pjlvalue}, &jl_false);
+    global_jlvalue_to_llvm(new JuliaVariable{"jl_emptysvec", true, size2pjlvalue}, (jl_value_t**)&jl_emptysvec);
+    global_jlvalue_to_llvm(new JuliaVariable{"jl_emptytuple", true, size2pjlvalue}, &jl_emptytuple);
+    global_jlvalue_to_llvm(new JuliaVariable{"jl_diverror_exception", true, size2pjlvalue}, &jl_diverror_exception);
+    global_jlvalue_to_llvm(new JuliaVariable{"jl_undefref_exception", true, size2pjlvalue}, &jl_undefref_exception);
     add_named_global(jlgetworld_global, &jl_world_counter);
     add_named_global("__stack_chk_fail", &__stack_chk_fail);
     add_named_global(jlpgcstack_func, (void*)NULL);
