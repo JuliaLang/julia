@@ -2739,8 +2739,9 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_pointer_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_pointer_type))->name;
 
     // LLVMPtr{T, AS} where {T, AS}
-    tv = jl_svec2(tvar("T"), tvar("AS"));
-    jl_svec_t *tv_base = jl_svec1(tvar("T"));
+    jl_tvar_t *elvar = tvar("T");
+    tv = jl_svec2(elvar, tvar("AS"));
+    jl_svec_t *tv_base = jl_svec1(elvar);
     jl_llvmpointer_type = (jl_unionall_t*)
         jl_new_primitivetype((jl_value_t*)jl_symbol("LLVMPtr"), core,
                              (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_ref_type, jl_svec_data(tv_base), 1), tv,
