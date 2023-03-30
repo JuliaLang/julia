@@ -1828,6 +1828,8 @@ end
     @test Base.mightalias(x, eachrow(x))
     @test Base.mightalias(eachrow(x), x)
     @test Base.mightalias(eachcol(x), eachrow(x))
+    x .+= sum.(eachrow(x))
+    @test x == [4 5; 10 11]
 end
                                                                                                                 
 # type stable [x;;] (https://github.com/JuliaLang/julia/issues/45952)
