@@ -703,7 +703,7 @@ end
 end
 @propagate_inbounds function _iterate(t::Dict{K,V}, i) where {K,V}
     # overflow check not needed on i+1 because a dict that large would more than fill memory
-    return (Pair{K,V}(t.keys[i],t.vals[i]), i+1)
+    return i == 0 ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i+1)
 end
 @propagate_inbounds iterate(t::Dict, i) = _iterate(t, skip_deleted(t, i))
 
