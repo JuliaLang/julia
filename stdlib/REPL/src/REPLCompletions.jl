@@ -217,15 +217,16 @@ function complete_symbol(sym::String, @nospecialize(ffunc), context_module::Modu
 
         # Also, try abstract-interpreting propertynames
         thunk = context_module.eval(:(() -> propertynames($(ex))))
-        code_info, rett = Core.Compiler.typeinf_code(
-            Core.Compiler.NativeInterpreter(),
+        inf_params = Core.Compiler.InferenceParams(; assume_bindings_static=true)
+        frame = Core.Compiler.typeinf_frame(
+            Core.Compiler.NativeInterpreter(;inf_params),
             first(methods(thunk)),
             Tuple{typeof(thunk)},
             Core.svec(),
             true,
         )
-        if rett <: Tuple && hasproperty(rett, :parameters) && all(rett.parameters .<: Symbol)
-            for field in code_info.code[end].val
+        if frame !== nothing && Core.Compiler.is_inferred(frame) && isa(frame.result.result, Core.Compiler.Const)
+            for field in frame.result.result.val
                 s = string(field)
                 if startswith(s, name)
                     push!(suggestions, FieldCompletion(t, field))
