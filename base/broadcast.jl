@@ -621,7 +621,7 @@ end
 
 Base.@propagate_inbounds function Base.getindex(bc::Broadcasted, I::Union{Integer,CartesianIndex})
     @boundscheck checkbounds(bc, I)
-    @inbounds _broadcast_getindex(bc, I)
+    _broadcast_getindex(bc, I)
 end
 Base.@propagate_inbounds Base.getindex(
     bc::Broadcasted,
