@@ -255,6 +255,10 @@ struct jl_typecache_t {
         T_ppjlvalue(nullptr), T_pprjlvalue(nullptr), T_jlarray(nullptr),
         T_pjlarray(nullptr), T_jlfunc(nullptr), T_jlfuncparams(nullptr),
         T_sigatomic(nullptr), T_ppint8(nullptr), initialized(false) {}
+    
+    uint64_t sizeof_T_size() const {
+        return cast<IntegerType>(T_size)->getBitWidth() / CHAR_BIT;
+    }
 
     void initialize(LLVMContext &context, const DataLayout &DL) {
         if (initialized) {
@@ -5644,7 +5648,7 @@ static Value *get_last_age_field(jl_codectx_t &ctx)
     return ctx.builder.CreateInBoundsGEP(
             ctx.types().T_size,
             ctx.builder.CreateBitCast(ct, ctx.types().T_size->getPointerTo()),
-            ConstantInt::get(ctx.types().T_size, offsetof(jl_task_t, world_age) / sizeof(size_t)),
+            ConstantInt::get(ctx.types().T_size, offsetof(jl_task_t, world_age) / ctx.types().sizeof_T_size()),
             "world_age");
 }
 
@@ -5962,7 +5966,7 @@ static Function* gen_cfun_wrapper(
                 ctx.builder.CreateConstInBoundsGEP1_32(
                     ctx.types().T_size,
                     emit_bitcast(ctx, literal_pointer_val(ctx, (jl_value_t*)codeinst), ctx.types().T_size->getPointerTo()),
-                    offsetof(jl_code_instance_t, max_world) / sizeof(size_t)),
+                    offsetof(jl_code_instance_t, max_world) / ctx.types().sizeof_T_size()),
                 Align(sizeof(size_t)));
         age_ok = ctx.builder.CreateICmpUGE(lam_max, world_v);
     }

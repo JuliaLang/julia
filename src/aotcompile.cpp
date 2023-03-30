@@ -1501,11 +1501,7 @@ void jl_dump_native_impl(void *native_code,
     dataM->setTargetTriple(SourceTM->getTargetTriple().str());
     dataM->setDataLayout(jl_create_datalayout(*SourceTM));
 
-    Type *T_size;
-    if (sizeof(size_t) == 8)
-        T_size = Type::getInt64Ty(Context);
-    else
-        T_size = Type::getInt32Ty(Context);
+    Type *T_size = dataM->getDataLayout().getIntPtrType(Context);
     Type *T_psize = T_size->getPointerTo();
 
     bool imaging_mode = imaging_default() || jl_options.outputo;
