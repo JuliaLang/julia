@@ -393,6 +393,12 @@ static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
         return 1;
     if (jl_is_unionall(a)) a = jl_unwrap_unionall(a);
     if (jl_is_unionall(b)) b = jl_unwrap_unionall(b);
+    if (jl_is_uniontype(a))
+        return obviously_disjoint(((jl_uniontype_t *)a)->a, b, specificity) &&
+               obviously_disjoint(((jl_uniontype_t *)a)->b, b, specificity);
+    if (jl_is_uniontype(b))
+        return obviously_disjoint(a, ((jl_uniontype_t *)b)->a, specificity) &&
+               obviously_disjoint(a, ((jl_uniontype_t *)b)->b, specificity);
     if (jl_is_datatype(a) && jl_is_datatype(b)) {
         jl_datatype_t *ad = (jl_datatype_t*)a, *bd = (jl_datatype_t*)b;
         if (ad->name != bd->name) {

@@ -2474,3 +2474,7 @@ let a = [TypeVar(:V, Union{}, Function) for i in 1:32]
     T = foldr((v, d) -> UnionAll(v, d), b; init = foldl((i, j) -> F49127{i, j}, b))
     @test S <: T
 end
+
+# requires assertions enabled (to test union-split in `obviously_disjoint`)
+@test !<:(Tuple{Type{Int}, Int}, Tuple{Type{Union{Int, T}}, T} where T<:Union{Int8,Int16})
+@test <:(Tuple{Type{Int}, Int}, Tuple{Type{Union{Int, T}}, T} where T<:Union{Int8,Int})
