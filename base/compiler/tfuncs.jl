@@ -185,7 +185,6 @@ add_tfunc(add_float, 2, 2, math_tfunc, 1)
 add_tfunc(sub_float, 2, 2, math_tfunc, 1)
 add_tfunc(mul_float, 2, 2, math_tfunc, 4)
 add_tfunc(div_float, 2, 2, math_tfunc, 20)
-add_tfunc(rem_float, 2, 2, math_tfunc, 20)
 add_tfunc(fma_float, 3, 3, math_tfunc, 5)
 add_tfunc(muladd_float, 3, 3, math_tfunc, 5)
 
@@ -195,7 +194,6 @@ add_tfunc(add_float_fast, 2, 2, math_tfunc, 1)
 add_tfunc(sub_float_fast, 2, 2, math_tfunc, 1)
 add_tfunc(mul_float_fast, 2, 2, math_tfunc, 2)
 add_tfunc(div_float_fast, 2, 2, math_tfunc, 10)
-add_tfunc(rem_float_fast, 2, 2, math_tfunc, 10)
 
 # bitwise operators
 # -----------------
@@ -582,7 +580,6 @@ end
     return true
 end
 add_tfunc(Core._typevar, 3, 3, typevar_tfunc, 100)
-add_tfunc(applicable, 1, INT_INF, @nospecs((𝕃::AbstractLattice, f, args...)->Bool), 100)
 
 @nospecs function arraysize_tfunc(𝕃::AbstractLattice, ary, dim)
     hasintersect(widenconst(ary), Array) || return Bottom
@@ -1631,6 +1628,7 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
     (headtype === Union) && return true
     isa(rt, Const) && return true
     u = headtype
+    # TODO: implement optimization for isvarargtype(u) and istuple occurences (which are valid but are not UnionAll)
     for i = 2:length(argtypes)
         isa(u, UnionAll) || return false
         ai = widenconditional(argtypes[i])
@@ -1741,6 +1739,20 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
     canconst = true
     tparams = Any[]
     outervars = TypeVar[]
+
+    # first push the tailing vars from headtype into outervars
+    outer_start, ua = 0, headtype
+    while isa(ua, UnionAll)
+        if (outer_start += 1) > largs
+            push!(outervars, ua.var)
+        end
+        ua = ua.body
+    end
+    if largs > outer_start && isa(headtype, UnionAll) # e.g. !isvarargtype(ua) && !istuple
+        return Bottom # too many arguments
+    end
+    outer_start = outer_start - largs + 1
+
     varnamectr = 1
     ua = headtype
     for i = 1:largs
@@ -1757,14 +1769,19 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
             push!(tparams, ai.tv)
         else
             uncertain = true
-            # These blocks improve type info but make compilation a bit slower.
-            # XXX
-            #unw = unwrap_unionall(ai)
-            #isT = isType(unw)
-            #if isT && isa(ai,UnionAll) && contains_is(outervars, ai.var)
-            #    ai = rename_unionall(ai)
-            #    unw = unwrap_unionall(ai)
-            #end
+            unw = unwrap_unionall(ai)
+            isT = isType(unw)
+            if isT
+                tai = ai
+                while isa(tai, UnionAll)
+                    if contains_is(outervars, tai.var)
+                        ai = rename_unionall(ai)
+                        unw = unwrap_unionall(ai)
+                        break
+                    end
+                    tai = tai.body
+                end
+            end
             ai_w = widenconst(ai)
             ub = ai_w isa Type && ai_w <: Type ? instanceof_tfunc(ai)[1] : Any
             if istuple
@@ -1772,19 +1789,17 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
                 # then this could be a Vararg type.
                 if i == largs && ub === Any
                     push!(tparams, Vararg)
-                # XXX
-                #elseif isT
-                #    push!(tparams, rewrap_unionall(unw.parameters[1], ai))
+                elseif isT
+                    push!(tparams, rewrap_unionall(unw.parameters[1], ai))
                 else
                     push!(tparams, Any)
                 end
-            # XXX
-            #elseif isT
-            #    push!(tparams, unw.parameters[1])
-            #    while isa(ai, UnionAll)
-            #        push!(outervars, ai.var)
-            #        ai = ai.body
-            #    end
+            elseif isT
+                push!(tparams, unw.parameters[1])
+                while isa(ai, UnionAll)
+                    push!(outervars, ai.var)
+                    ai = ai.body
+                end
             else
                 # Is this the second parameter to a NamedTuple?
                 if isa(uw, DataType) && uw.name === _NAMEDTUPLE_NAME && isa(ua, UnionAll) && uw.parameters[2] === ua.var
@@ -1804,19 +1819,40 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
                 push!(outervars, v)
             end
         end
-        if isa(ua, UnionAll)
+        if ua isa UnionAll
             ua = ua.body
-        else
-            ua = nothing
+            #otherwise, sometimes ua isa Vararg (Core.TypeofVararg) or Tuple (DataType)
         end
     end
     local appl
     try
         appl = apply_type(headtype, tparams...)
     catch ex
-        # type instantiation might fail if one of the type parameters
-        # doesn't match, which could happen if a type estimate is too coarse
-        return isvarargtype(headtype) ? TypeofVararg : Type{<:headtype}
+        # type instantiation might fail if one of the type parameters doesn't
+        # match, which could happen only if a type estimate is too coarse
+        # and might guess a concrete value while the actual type for it is Bottom
+        if !uncertain
+            return Union{}
+        end
+        canconst = false
+        uncertain = true
+        empty!(outervars)
+        outer_start = 1
+        # FIXME: if these vars are substituted with TypeVar here, the result
+        # might be wider than the input, so should we use the `.name.wrapper`
+        # object here instead, to replace all of these outervars with
+        # unconstrained ones? Note that this code is nearly unreachable though,
+        # and possibly should simply return Union{} here also, since
+        # `apply_type` is already quite conservative about detecting and
+        # throwing errors.
+        appl = headtype
+        if isa(appl, UnionAll)
+            for _ = 1:largs
+                appl = appl::UnionAll
+                push!(outervars, appl.var)
+                appl = appl.body
+            end
+        end
     end
     !uncertain && canconst && return Const(appl)
     if isvarargtype(appl)
@@ -1826,7 +1862,7 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
         return Type{<:appl}
     end
     ans = Type{appl}
-    for i = length(outervars):-1:1
+    for i = length(outervars):-1:outer_start
         ans = UnionAll(outervars[i], ans)
     end
     return ans
@@ -2093,7 +2129,7 @@ end
 end
 
 # known to be always effect-free (in particular nothrow)
-const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
+const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields, applicable]
 
 # known to be effect-free (but not necessarily nothrow)
 const _EFFECT_FREE_BUILTINS = [
@@ -2165,7 +2201,6 @@ const _INCONSISTENT_INTRINSICS = Any[
     Intrinsics.mul_float_fast,
     Intrinsics.ne_float_fast,
     Intrinsics.neg_float_fast,
-    Intrinsics.rem_float_fast,
     Intrinsics.sqrt_llvm_fast,
     Intrinsics.sub_float_fast
     # TODO needs to revive #31193 to mark this as inconsistent to be accurate
@@ -2278,7 +2313,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argin
         else
             effect_free = ALWAYS_FALSE
         end
-        nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && builtin_nothrow(𝕃, f, argtypes, rt))
+        nothrow = (isempty(argtypes) || !isvarargtype(argtypes[end])) && builtin_nothrow(𝕃, f, argtypes, rt)
         if contains_is(_INACCESSIBLEMEM_BUILTINS, f)
             inaccessiblememonly = ALWAYS_TRUE
         elseif contains_is(_ARGMEM_BUILTINS, f)
@@ -2460,7 +2495,7 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
 
     consistent = contains_is(_INCONSISTENT_INTRINSICS, f) ? ALWAYS_FALSE : ALWAYS_TRUE
     effect_free = !(f === Intrinsics.pointerset) ? ALWAYS_TRUE : ALWAYS_FALSE
-    nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && intrinsic_nothrow(f, argtypes))
+    nothrow = (isempty(argtypes) || !isvarargtype(argtypes[end])) && intrinsic_nothrow(f, argtypes)
 
     return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow)
 end
@@ -2524,6 +2559,93 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     end
     return CallMeta(Type, EFFECTS_THROWS, NoCallInfo())
 end
+
+# a simplified model of abstract_call_gf_by_type for applicable
+function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
+                             sv::InferenceState, max_methods::Int)
+    length(argtypes) < 2 && return CallMeta(Union{}, EFFECTS_UNKNOWN, NoCallInfo())
+    isvarargtype(argtypes[2]) && return CallMeta(Bool, EFFECTS_UNKNOWN, NoCallInfo())
+    argtypes = argtypes[2:end]
+    atype = argtypes_to_type(argtypes)
+    matches = find_matching_methods(typeinf_lattice(interp), argtypes, atype, method_table(interp),
+        InferenceParams(interp).max_union_splitting, max_methods)
+    if isa(matches, FailedMethodMatch)
+        rt = Bool # too many matches to analyze
+    else
+        (; valid_worlds, applicable) = matches
+        update_valid_age!(sv, valid_worlds)
+
+        # also need an edge to the method table in case something gets
+        # added that did not intersect with any existing method
+        if isa(matches, MethodMatches)
+            matches.fullmatch || add_mt_backedge!(sv, matches.mt, atype)
+        else
+            for (thisfullmatch, mt) in zip(matches.fullmatches, matches.mts)
+                thisfullmatch || add_mt_backedge!(sv, mt, atype)
+            end
+        end
+
+        napplicable = length(applicable)
+        if napplicable == 0
+            rt = Const(false) # never any matches
+        else
+            rt = Const(true) # has applicable matches
+            for i in 1:napplicable
+                match = applicable[i]::MethodMatch
+                edge = specialize_method(match)
+                add_backedge!(sv, edge)
+            end
+
+            if isa(matches, MethodMatches) ? (!matches.fullmatch || any_ambig(matches)) :
+                    (!all(matches.fullmatches) || any_ambig(matches))
+                # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
+                rt = Bool
+            end
+        end
+    end
+    return CallMeta(rt, EFFECTS_TOTAL, NoCallInfo())
+end
+add_tfunc(applicable, 1, INT_INF, @nospecs((𝕃::AbstractLattice, f, args...)->Bool), 40)
+
+# a simplified model of abstract_invoke for Core._hasmethod
+function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
+    if length(argtypes) == 3 && !isvarargtype(argtypes[3])
+        ft′ = argtype_by_index(argtypes, 2)
+        ft = widenconst(ft′)
+        ft === Bottom && return CallMeta(Bool, EFFECTS_THROWS, NoCallInfo())
+        typeidx = 3
+    elseif length(argtypes) == 2 && !isvarargtype(argtypes[2])
+        typeidx = 2
+    else
+        return CallMeta(Any, Effects(), NoCallInfo())
+    end
+    (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, typeidx))
+    isexact || return CallMeta(Bool, Effects(), NoCallInfo())
+    unwrapped = unwrap_unionall(types)
+    if types === Bottom || !(unwrapped isa DataType) || unwrapped.name !== Tuple.name
+        return CallMeta(Bool, EFFECTS_THROWS, NoCallInfo())
+    end
+    if typeidx == 3
+        isdispatchelem(ft) || return CallMeta(Bool, Effects(), NoCallInfo()) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
+        types = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
+    end
+    mt = ccall(:jl_method_table_for, Any, (Any,), types)
+    if !isa(mt, MethodTable)
+        return CallMeta(Bool, EFFECTS_THROWS, NoCallInfo())
+    end
+    match, valid_worlds, overlayed = findsup(types, method_table(interp))
+    update_valid_age!(sv, valid_worlds)
+    if match === nothing
+        rt = Const(false)
+        add_mt_backedge!(sv, mt, types) # this should actually be an invoke-type backedge
+    else
+        rt = Const(true)
+        edge = specialize_method(match)
+        add_invoke_backedge!(sv, types, edge)
+    end
+    return CallMeta(rt, EFFECTS_TOTAL, NoCallInfo())
+end
+
 
 # N.B.: typename maps type equivalence classes to a single value
 function typename_static(@nospecialize(t))

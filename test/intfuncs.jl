@@ -273,6 +273,8 @@ end
 
     @test powermod(2, big(3), 5) == 3
     @test powermod(2, big(3), -5) == -2
+    @inferred  powermod(2, -2, -5)
+    @inferred  powermod(big(2), -2, UInt(5))
 end
 
 @testset "nextpow/prevpow" begin

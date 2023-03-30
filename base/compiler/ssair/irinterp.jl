@@ -119,7 +119,7 @@ struct IRInterpretationState
 end
 
 function codeinst_to_ir(interp::AbstractInterpreter, code::CodeInstance)
-    src = code.inferred
+    src = @atomic :monotonic code.inferred
     mi = code.def
     if isa(src, Vector{UInt8})
         src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, C_NULL, src)::CodeInfo
@@ -144,7 +144,9 @@ function concrete_eval_invoke(interp::AbstractInterpreter,
     inst::Expr, mi::MethodInstance, irsv::IRInterpretationState)
     mi_cache = WorldView(code_cache(interp), irsv.world)
     code = get(mi_cache, mi, nothing)
-    code === nothing && return Pair{Any, Bool}(nothing, false)
+    if code === nothing
+        return Pair{Any, Bool}(nothing, false)
+    end
     argtypes = collect_argtypes(interp, inst.args[2:end], nothing, irsv.ir)
     argtypes === nothing && return Pair{Any, Bool}(Union{}, false)
     effects = decode_effects(code.ipo_purity_bits)
@@ -236,12 +238,9 @@ function reprocess_instruction!(interp::AbstractInterpreter,
         head = inst.head
         if head === :call || head === :foreigncall || head === :new || head === :splatnew
             (; rt, effects) = abstract_eval_statement_expr(interp, inst, nothing, ir, irsv.mi)
-            # All other effects already guaranteed effect free by construction
-            if is_nothrow(effects)
-                ir.stmts[idx][:flag] |= IR_FLAG_NOTHROW
-                if isa(rt, Const) && is_inlineable_constant(rt.val)
-                    ir.stmts[idx][:inst] = quoted(rt.val)
-                end
+            ir.stmts[idx][:flag] |= flags_for_effects(effects)
+            if is_foldable(effects) && isa(rt, Const) && is_inlineable_constant(rt.val)
+                ir.stmts[idx][:inst] = quoted(rt.val)
             end
         elseif head === :invoke
             mi′ = inst.args[1]::MethodInstance
@@ -461,7 +460,7 @@ end
 
 function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState)
     if __measure_typeinf__[]
-        inf_frame = Timings.InferenceFrameInfo(irsv.mi, irsv.world, Any[], Any[], length(irsv.ir.argtypes))
+        inf_frame = Timings.InferenceFrameInfo(irsv.mi, irsv.world, VarState[], Any[], length(irsv.ir.argtypes))
         Timings.enter_new_timer(inf_frame)
         v = _ir_abstract_constant_propagation(interp, irsv)
         append!(inf_frame.slottypes, irsv.ir.argtypes)

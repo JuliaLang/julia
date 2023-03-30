@@ -1,8 +1,8 @@
 import Core: CodeInfo, ReturnNode, MethodInstance
-import Core.Compiler: IRCode, IncrementalCompact, argextype, singleton_type
+import Core.Compiler: IRCode, IncrementalCompact, VarState, argextype, singleton_type
 import Base.Meta: isexpr
 
-argextype(@nospecialize args...) = argextype(args..., Any[])
+argextype(@nospecialize args...) = argextype(args..., VarState[])
 code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::CodeInfo
 get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
 

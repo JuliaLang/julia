@@ -13,7 +13,7 @@ See also: [`AbstractSet`](@ref), [`BitSet`](@ref), [`Dict`](@ref),
 [`push!`](@ref), [`empty!`](@ref), [`union!`](@ref), [`in`](@ref), [`isequal`](@ref)
 
 # Examples
-```jldoctest filter = r"^\\S.+"
+```jldoctest; filter = r"^  '.'"ma
 julia> s = Set("aaBca")
 Set{Char} with 3 elements:
   'a'
@@ -23,9 +23,9 @@ Set{Char} with 3 elements:
 julia> push!(s, 'b')
 Set{Char} with 4 elements:
   'a'
-  'c'
   'b'
   'B'
+  'c'
 
 julia> s = Set([NaN, 0.0, 1.0, 2.0]);
 
@@ -617,7 +617,7 @@ function replace_pairs!(res, A, count::Int, old_new::Tuple{Vararg{Pair}})
 end
 
 """
-    replace!(new::Function, A; [count::Integer])
+    replace!(new::Union{Function, Type}, A; [count::Integer])
 
 Replace each element `x` in collection `A` by `new(x)`.
 If `count` is specified, then replace at most `count` values in total
@@ -710,7 +710,7 @@ subtract_singletontype(::Type{T}, x::Pair{K}, y::Pair...) where {T, K} =
     subtract_singletontype(subtract_singletontype(T, y...), x)
 
 """
-    replace(new::Function, A; [count::Integer])
+    replace(new::Union{Function, Type}, A; [count::Integer])
 
 Return a copy of `A` where each value `x` in `A` is replaced by `new(x)`.
 If `count` is specified, then replace at most `count` values in total

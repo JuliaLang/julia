@@ -19,9 +19,9 @@ Number
 """
 typejoin() = Bottom
 typejoin(@nospecialize(t)) = t
-typejoin(@nospecialize(t), ts...) = (@_total_meta; typejoin(t, typejoin(ts...)))
+typejoin(@nospecialize(t), ts...) = (@_foldable_meta; typejoin(t, typejoin(ts...)))
 function typejoin(@nospecialize(a), @nospecialize(b))
-    @_total_meta
+    @_foldable_meta
     if isa(a, TypeVar)
         return typejoin(a.ub, b)
     elseif isa(b, TypeVar)
@@ -172,7 +172,12 @@ function promote_typejoin(@nospecialize(a), @nospecialize(b))
     c = typejoin(_promote_typesubtract(a), _promote_typesubtract(b))
     return Union{a, b, c}::Type
 end
-_promote_typesubtract(@nospecialize(a)) = typesplit(a, Union{Nothing, Missing})
+_promote_typesubtract(@nospecialize(a)) =
+    a === Any ? a :
+    a >: Union{Nothing, Missing} ? typesplit(a, Union{Nothing, Missing}) :
+    a >: Nothing ? typesplit(a, Nothing) :
+    a >: Missing ? typesplit(a, Missing) :
+    a
 
 function promote_typejoin_union(::Type{T}) where T
     if T === Union{}

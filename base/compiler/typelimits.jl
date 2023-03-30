@@ -35,6 +35,12 @@ end
 # try to find `type` somewhere in `comparison` type
 # at a minimum nesting depth of `mindepth`
 function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
+    if has_free_typevars(t) || has_free_typevars(c)
+        # Don't allow finding types with free typevars. These strongly depend
+        # on identity and we do not make any effort to make sure this returns
+        # sensible results in that case.
+        return false
+    end
     if t === c
         return mindepth <= 1
     end
@@ -87,10 +93,7 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
         return t # fast path: unparameterized are always simple
     else
         ut = unwrap_unionall(t)
-        if isa(ut, DataType) && isa(c, Type) && c !== Union{} && c <: t
-            # TODO: need to check that the UnionAll bounds on t are limited enough too
-            return t # t is already wider than the comparison in the type lattice
-        elseif is_derived_type_from_any(ut, sources, depth)
+        if is_derived_type_from_any(ut, sources, depth)
             return t # t isn't something new
         end
     end
@@ -208,9 +211,6 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         return false # Bottom is as simple as they come
     elseif isa(t, DataType) && isempty(t.parameters)
         return false # fastpath: unparameterized types are always finite
-    elseif tupledepth > 0 && isa(unwrap_unionall(t), DataType) && isa(c, Type) && c !== Union{} && c <: t
-        # TODO: need to check that the UnionAll bounds on t are limited enough too
-        return false # t is already wider than the comparison in the type lattice
     elseif tupledepth > 0 && is_derived_type_from_any(unwrap_unionall(t), sources, depth)
         return false # t isn't something new
     end
@@ -227,7 +227,7 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
     end
     # rules for various comparison types
     if isa(c, TypeVar)
-        tupledepth = 1 # allow replacing a TypeVar with a concrete value (since we know the UnionAll must be in covariant position)
+        tupledepth = 1
         if isa(t, TypeVar)
             return !(t.lb === Union{} || t.lb === c.lb) || # simplify lb towards Union{}
                    type_more_complex(t.ub, c.ub, sources, depth + 1, tupledepth, 0)

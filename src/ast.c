@@ -66,7 +66,6 @@ JL_DLLEXPORT jl_sym_t *jl_boundscheck_sym;
 JL_DLLEXPORT jl_sym_t *jl_inbounds_sym;
 JL_DLLEXPORT jl_sym_t *jl_copyast_sym;
 JL_DLLEXPORT jl_sym_t *jl_cfunction_sym;
-JL_DLLEXPORT jl_sym_t *jl_pure_sym;
 JL_DLLEXPORT jl_sym_t *jl_loopinfo_sym;
 JL_DLLEXPORT jl_sym_t *jl_meta_sym;
 JL_DLLEXPORT jl_sym_t *jl_inert_sym;
@@ -328,7 +327,6 @@ void jl_init_common_symbols(void)
     jl_newvar_sym = jl_symbol("newvar");
     jl_copyast_sym = jl_symbol("copyast");
     jl_loopinfo_sym = jl_symbol("loopinfo");
-    jl_pure_sym = jl_symbol("pure");
     jl_meta_sym = jl_symbol("meta");
     jl_list_sym = jl_symbol("list");
     jl_unused_sym = jl_symbol("#unused#");
@@ -688,8 +686,8 @@ static value_t julia_to_scm_noalloc2(fl_context_t *fl_ctx, jl_value_t *v, int ch
     if (check_valid) {
         if (jl_is_ssavalue(v))
             lerror(fl_ctx, symbol(fl_ctx, "error"), "SSAValue objects should not occur in an AST");
-        if (jl_is_slot(v))
-            lerror(fl_ctx, symbol(fl_ctx, "error"), "Slot objects should not occur in an AST");
+        if (jl_is_slotnumber(v))
+            lerror(fl_ctx, symbol(fl_ctx, "error"), "SlotNumber objects should not occur in an AST");
     }
     value_t opaque = cvalue(fl_ctx, jl_ast_ctx(fl_ctx)->jvtype, sizeof(void*));
     *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = v;
@@ -1026,10 +1024,10 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
     jl_value_t *result;
     JL_TRY {
         margs[0] = jl_toplevel_eval(*ctx, margs[0]);
-        jl_method_instance_t *mfunc = jl_method_lookup(margs, nargs, world);
+        jl_method_instance_t *mfunc = jl_method_lookup(margs, nargs, ct->world_age);
         JL_GC_PROMISE_ROOTED(mfunc);
         if (mfunc == NULL) {
-            jl_method_error(margs[0], &margs[1], nargs, world);
+            jl_method_error(margs[0], &margs[1], nargs, ct->world_age);
             // unreachable
         }
         *ctx = mfunc->def.method->module;

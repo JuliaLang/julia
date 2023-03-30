@@ -112,14 +112,14 @@ get_llvm_target_str(const TargetData<1> &data)
 
 using namespace Fallback;
 
-jl_image_fptrs_t jl_init_processor_sysimg(void *hdl)
+jl_image_t jl_init_processor_sysimg(void *hdl)
 {
     if (!jit_targets.empty())
         jl_error("JIT targets already initialized");
     return parse_sysimg(hdl, sysimg_init_cb);
 }
 
-jl_image_fptrs_t jl_init_processor_pkgimg(void *hdl)
+jl_image_t jl_init_processor_pkgimg(void *hdl)
 {
     if (jit_targets.empty())
         jl_error("JIT targets not initialized");
