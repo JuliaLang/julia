@@ -1,12 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# TODO (#48913) remove this overload to enable interprocedural call inference from irinterp
-function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
-    arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
-    sv::IRInterpretationState, max_methods::Int)
-    return CallMeta(Any, Effects(), NoCallInfo())
-end
-
 function collect_limitations!(@nospecialize(typ), ::IRInterpretationState)
     @assert !isa(typ, LimitedAccuracy) "irinterp is unable to handle heavy recursion"
     return typ
