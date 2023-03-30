@@ -665,10 +665,8 @@ precompile_test_harness("code caching") do dir
     # size(::Vector) has an inferred specialization for Vector{X}
     msize = which(size, (Vector{<:Any},))
     hasspec = false
-    msizespecs = msize.specializations::Core.SimpleVector
-    for i = 1:length(msizespecs)
-        mi = msizespecs[i]
-        if isa(mi, Core.MethodInstance) && mi.specTypes == Tuple{typeof(size),Vector{Cacheb8321416e8a3e2f1.X}}
+    for mi in Base.specializations(msize)
+        if mi.specTypes == Tuple{typeof(size),Vector{Cacheb8321416e8a3e2f1.X}}
             if isdefined(mi, :cache) && isa(mi.cache, Core.CodeInstance) && mi.cache.max_world == typemax(UInt) && mi.cache.inferred !== nothing
                 hasspec = true
                 break
@@ -786,9 +784,7 @@ precompile_test_harness("code caching") do dir
     MB = getfield(@__MODULE__, RootB)
     M = getfield(MA, RootModule)
     m = which(M.f, (Any,))
-    mspecs = m.specializations
-    mspecs isa Core.SimpleVector || (mspecs = Core.svec(mspecs))
-    for mi in mspecs
+    for mi in Base.specializations(m)
         mi === nothing && continue
         mi = mi::Core.MethodInstance
         if mi.specTypes.parameters[2] === Int8
@@ -925,8 +921,7 @@ precompile_test_harness("code caching") do dir
     # Reporting test (ensure SnoopCompile works)
     @test all(i -> isassigned(invalidations, i), eachindex(invalidations))
     m = only(methods(MB.call_nbits))
-    for mi in m.specializations::Core.SimpleVector
-        mi === nothing && continue
+    for mi in Base.specializations(m)
         hv = hasvalid(mi, world)
         @test mi.specTypes.parameters[end] === Integer ? !hv : hv
     end
@@ -1088,13 +1083,13 @@ precompile_test_harness("invoke") do dir
     end
 
     m = get_method_for_type(M.h, Real)
-    @test m.specializations === Core.svec()
+    @test isempty(Base.specializations(m))
     m = get_method_for_type(M.hnc, Real)
-    @test m.specializations === Core.svec()
+    @test isempty(Base.specializations(m))
     m = only(methods(M.callq))
-    @test m.specializations === Core.svec() || nvalid(m.specializations::Core.MethodInstance) == 0
+    @test isempty(Base.specializations(m)) || nvalid(m.specializations::Core.MethodInstance) == 0
     m = only(methods(M.callqnc))
-    @test m.specializations === Core.svec() || nvalid(m.specializations::Core.MethodInstance) == 0
+    @test isempty(Base.specializations(m)) || nvalid(m.specializations::Core.MethodInstance) == 0
     m = only(methods(M.callqi))
     @test (m.specializations::Core.MethodInstance).specTypes == Tuple{typeof(M.callqi), Int}
     m = only(methods(M.callqnci))
@@ -1112,7 +1107,7 @@ precompile_test_harness("invoke") do dir
     m_any, m_int = sort(collect(methods(invokeme)); by=m->(m.file,m.line))
     @test precompile(invokeme, (Int,), m_any)
     @test (m_any.specializations::Core.MethodInstance).specTypes === Tuple{typeof(invokeme), Int}
-    @test m_int.specializations === Core.svec()
+    @test isempty(Base.specializations(m_int))
 end
 
 # test --compiled-modules=no command line option
@@ -1581,7 +1576,7 @@ precompile_test_harness("issue #46296") do load_path
         """
         module CodeInstancePrecompile
 
-        mi = first(methods(identity)).specializations[1]
+        mi = first(Base.specializations(first(methods(identity))))
         ci = Core.CodeInstance(mi, Any, nothing, nothing, zero(Int32), typemin(UInt),
                                typemax(UInt), zero(UInt32), zero(UInt32), nothing, 0x00)
 
