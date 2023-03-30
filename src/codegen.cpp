@@ -267,7 +267,8 @@ struct jl_typecache_t {
         T_sigatomic = Type::getIntNTy(context, sizeof(sig_atomic_t) * 8);
         T_size = DL.getIntPtrType(context);
         sizeof_ptr = DL.getPointerSize();
-        alignof_ptr = DL.getABITypeAlign(T_size);
+        // use pointer abi alignment for intptr_t
+        alignof_ptr = DL.getPointerABIAlignment(0);
         T_jlvalue = JuliaType::get_jlvalue_ty(context);
         T_pjlvalue = PointerType::get(T_jlvalue, 0);
         T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);

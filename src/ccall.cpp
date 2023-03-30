@@ -1870,7 +1870,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             const int hash_offset = offsetof(jl_sym_t, hash);
             Value *ph1 = emit_bitcast(ctx, decay_derived(ctx, boxed(ctx, val)), ctx.types().T_size->getPointerTo());
             Value *ph2 = ctx.builder.CreateInBoundsGEP(ctx.types().T_size, ph1, ConstantInt::get(ctx.types().T_size, hash_offset / ctx.types().sizeof_ptr));
-            LoadInst *hashval = ctx.builder.CreateAlignedLoad(ctx.types().T_size, ph2, Align(sizeof(size_t)));
+            LoadInst *hashval = ctx.builder.CreateAlignedLoad(ctx.types().T_size, ph2, ctx.types().alignof_ptr);
             jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
             ai.decorateInst(hashval);
             return mark_or_box_ccall_result(ctx, hashval, retboxed, rt, unionall, static_rt);
