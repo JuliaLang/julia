@@ -1842,10 +1842,16 @@ function show_import_path(io::IO, ex, quote_level)
         end
     elseif ex.head === :(.)
         for i = 1:length(ex.args)
-            if ex.args[i] === :(.)
+            sym = ex.args[i]::Symbol
+            if sym === :(.)
                 print(io, '.')
             else
-                show_sym(io, ex.args[i]::Symbol, allow_macroname=(i==length(ex.args)))
+                if sym === :(..)
+                    # special case for https://github.com/JuliaLang/julia/issues/49168
+                    print(io, "(..)")
+                else
+                    show_sym(io, sym, allow_macroname=(i==length(ex.args)))
+                end
                 i < length(ex.args) && print(io, '.')
             end
         end
