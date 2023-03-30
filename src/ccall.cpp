@@ -1700,7 +1700,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         }
         else {
             auto ptr = emit_bitcast(ctx, boxed(ctx, svecv), ctx.types().T_size->getPointerTo());
-            len = ctx.builder.CreateAlignedLoad(ctx.types().T_size, ptr, Align(sizeof(size_t)));
+            len = ctx.builder.CreateAlignedLoad(ctx.types().T_size, ptr, ctx.types().alignof_ptr);
             // Only mark with TBAA if we are sure about the type.
             // This could otherwise be in a dead branch
             if (svecv.typ == (jl_value_t*)jl_simplevector_type) {
@@ -1869,7 +1869,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             JL_GC_POP();
             const int hash_offset = offsetof(jl_sym_t, hash);
             Value *ph1 = emit_bitcast(ctx, decay_derived(ctx, boxed(ctx, val)), ctx.types().T_size->getPointerTo());
-            Value *ph2 = ctx.builder.CreateInBoundsGEP(ctx.types().T_size, ph1, ConstantInt::get(ctx.types().T_size, hash_offset / ctx.types().sizeof_T_size()));
+            Value *ph2 = ctx.builder.CreateInBoundsGEP(ctx.types().T_size, ph1, ConstantInt::get(ctx.types().T_size, hash_offset / ctx.types().sizeof_ptr));
             LoadInst *hashval = ctx.builder.CreateAlignedLoad(ctx.types().T_size, ph2, Align(sizeof(size_t)));
             jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
             ai.decorateInst(hashval);

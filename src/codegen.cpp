@@ -247,6 +247,8 @@ struct jl_typecache_t {
     IntegerType *T_sigatomic;
 
     Type *T_ppint8;
+    unsigned sizeof_ptr;
+    Align alignof_ptr;
 
     bool initialized;
 
@@ -255,10 +257,6 @@ struct jl_typecache_t {
         T_ppjlvalue(nullptr), T_pprjlvalue(nullptr), T_jlarray(nullptr),
         T_pjlarray(nullptr), T_jlfunc(nullptr), T_jlfuncparams(nullptr),
         T_sigatomic(nullptr), T_ppint8(nullptr), initialized(false) {}
-    
-    uint64_t sizeof_T_size() const {
-        return cast<IntegerType>(T_size)->getBitWidth() / CHAR_BIT;
-    }
 
     void initialize(LLVMContext &context, const DataLayout &DL) {
         if (initialized) {
@@ -268,6 +266,8 @@ struct jl_typecache_t {
         T_ppint8 = PointerType::get(getInt8PtrTy(context), 0);
         T_sigatomic = Type::getIntNTy(context, sizeof(sig_atomic_t) * 8);
         T_size = DL.getIntPtrType(context);
+        sizeof_ptr = DL.getPointerSize();
+        alignof_ptr = DL.getABITypeAlign(T_size);
         T_jlvalue = JuliaType::get_jlvalue_ty(context);
         T_pjlvalue = PointerType::get(T_jlvalue, 0);
         T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
@@ -3871,7 +3871,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             // String and SimpleVector's length fields have the same layout
             auto ptr = emit_bitcast(ctx, boxed(ctx, obj), ctx.types().T_size->getPointerTo());
             jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
-            Value *len = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_size, ptr, Align(sizeof(size_t))));
+            Value *len = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_size, ptr, ctx.types().alignof_ptr));
             MDBuilder MDB(ctx.builder.getContext());
             if (sty == jl_simplevector_type) {
                 auto rng = MDB.createRange(
@@ -4003,7 +4003,7 @@ isdefined_unknown_idx:
                 // emit this using the same type as emit_getfield_knownidx
                 // so that LLVM may be able to load-load forward them and fold the result
                 jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
-                fldv = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, addr, Align(sizeof(size_t))));
+                fldv = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, addr, ctx.types().alignof_ptr));
                 cast<LoadInst>(fldv)->setOrdering(order <= jl_memory_order_notatomic ? AtomicOrdering::Unordered : get_llvm_atomic_order(order));
             }
             else {
@@ -5491,7 +5491,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
                 if (F) {
                     jl_cgval_t jlcall_ptr = mark_julia_type(ctx, F, false, jl_voidpointer_type);
                     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-                    Instruction *I = ctx.builder.CreateAlignedLoad(ctx.types().T_size, get_last_age_field(ctx), Align(sizeof(size_t)));
+                    Instruction *I = ctx.builder.CreateAlignedLoad(ctx.types().T_size, get_last_age_field(ctx), ctx.types().alignof_ptr);
                     jl_cgval_t world_age = mark_julia_type(ctx, ai.decorateInst(I), false, jl_long_type);
                     jl_cgval_t fptr;
                     if (specF)
@@ -5648,7 +5648,7 @@ static Value *get_last_age_field(jl_codectx_t &ctx)
     return ctx.builder.CreateInBoundsGEP(
             ctx.types().T_size,
             ctx.builder.CreateBitCast(ct, ctx.types().T_size->getPointerTo()),
-            ConstantInt::get(ctx.types().T_size, offsetof(jl_task_t, world_age) / ctx.types().sizeof_T_size()),
+            ConstantInt::get(ctx.types().T_size, offsetof(jl_task_t, world_age) / ctx.types().sizeof_ptr),
             "world_age");
 }
 
@@ -5953,10 +5953,10 @@ static Function* gen_cfun_wrapper(
     Value *world_age_field = get_last_age_field(ctx);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
     Value *last_age = ai.decorateInst(
-            ctx.builder.CreateAlignedLoad(ctx.types().T_size, world_age_field, Align(sizeof(size_t))));
+            ctx.builder.CreateAlignedLoad(ctx.types().T_size, world_age_field, ctx.types().alignof_ptr));
 
     Value *world_v = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
-        prepare_global_in(jl_Module, jlgetworld_global), Align(sizeof(size_t)));
+        prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr);
     cast<LoadInst>(world_v)->setOrdering(AtomicOrdering::Acquire);
 
     Value *age_ok = NULL;
@@ -5966,8 +5966,8 @@ static Function* gen_cfun_wrapper(
                 ctx.builder.CreateConstInBoundsGEP1_32(
                     ctx.types().T_size,
                     emit_bitcast(ctx, literal_pointer_val(ctx, (jl_value_t*)codeinst), ctx.types().T_size->getPointerTo()),
-                    offsetof(jl_code_instance_t, max_world) / ctx.types().sizeof_T_size()),
-                Align(sizeof(size_t)));
+                    offsetof(jl_code_instance_t, max_world) / ctx.types().sizeof_ptr),
+                ctx.types().alignof_ptr);
         age_ok = ctx.builder.CreateICmpUGE(lam_max, world_v);
     }
     ctx.builder.CreateStore(world_v, world_age_field);
@@ -7274,7 +7274,7 @@ static jl_llvm_functions_t
     if (toplevel || ctx.is_opaque_closure) {
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
         last_age = ai.decorateInst(ctx.builder.CreateAlignedLoad(
-            ctx.types().T_size, world_age_field, Align(sizeof(size_t))));
+            ctx.types().T_size, world_age_field, ctx.types().alignof_ptr));
     }
 
     // step 7. allocate local variables slots
@@ -7543,8 +7543,8 @@ static jl_llvm_functions_t
                         ConstantInt::get(ctx.types().T_size, offsetof(jl_opaque_closure_t, world)));
 
                 jl_cgval_t closure_world = typed_load(ctx, worldaddr, NULL, (jl_value_t*)jl_long_type,
-                    theArg.tbaa, nullptr, false, AtomicOrdering::NotAtomic, false, sizeof(size_t));
-                emit_unbox_store(ctx, closure_world, world_age_field, ctx.tbaa().tbaa_gcframe, sizeof(size_t));
+                    theArg.tbaa, nullptr, false, AtomicOrdering::NotAtomic, false, ctx.types().alignof_ptr.value());
+                emit_unbox_store(ctx, closure_world, world_age_field, ctx.tbaa().tbaa_gcframe, ctx.types().alignof_ptr.value());
 
                 // Load closure env
                 Value *envaddr = ctx.builder.CreateInBoundsGEP(
@@ -8088,9 +8088,9 @@ static jl_llvm_functions_t
             if (!jl_is_method(ctx.linfo->def.method) && !ctx.is_opaque_closure) {
                 // TODO: inference is invalid if this has any effect (which it often does)
                 LoadInst *world = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
-                    prepare_global_in(jl_Module, jlgetworld_global), Align(sizeof(size_t)));
+                    prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr);
                 world->setOrdering(AtomicOrdering::Acquire);
-                ctx.builder.CreateAlignedStore(world, world_age_field, Align(sizeof(size_t)));
+                ctx.builder.CreateAlignedStore(world, world_age_field, ctx.types().alignof_ptr);
             }
             emit_stmtpos(ctx, stmt, cursor);
             mallocVisitStmt(debuginfoloc, nullptr);

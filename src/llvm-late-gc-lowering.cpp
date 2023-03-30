@@ -2218,7 +2218,8 @@ Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Type *T_size,
 Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *V)
 {
     auto addr = EmitTagPtr(builder, T_size, T_size, V);
-    LoadInst *load = builder.CreateAlignedLoad(T_size, addr, Align(sizeof(size_t)));
+    auto &M = *builder.GetInsertBlock()->getModule();
+    LoadInst *load = builder.CreateAlignedLoad(T_size, addr, M.getDataLayout().getABITypeAlign(T_size));
     load->setOrdering(AtomicOrdering::Unordered);
     load->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
     MDBuilder MDB(load->getContext());
@@ -2396,8 +2397,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     }
                 }
                 // Set the tag.
+                auto &M = *builder.GetInsertBlock()->getModule();
                 StoreInst *store = builder.CreateAlignedStore(
-                    tag, EmitTagPtr(builder, tag_type, T_size, newI), Align(sizeof(size_t)));
+                    tag, EmitTagPtr(builder, tag_type, T_size, newI), M.getDataLayout().getABITypeAlign(T_size));
                 store->setOrdering(AtomicOrdering::Unordered);
                 store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
 

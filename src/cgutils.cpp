@@ -554,7 +554,7 @@ static Value *maybe_bitcast(jl_codectx_t &ctx, Value *V, Type *to) {
 static Value *julia_binding_pvalue(jl_codectx_t &ctx, Value *bv)
 {
     bv = emit_bitcast(ctx, bv, ctx.types().T_pprjlvalue);
-    Value *offset = ConstantInt::get(ctx.types().T_size, offsetof(jl_binding_t, value) / ctx.types().sizeof_T_size());
+    Value *offset = ConstantInt::get(ctx.types().T_size, offsetof(jl_binding_t, value) / ctx.types().sizeof_ptr);
     return ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, bv, offset);
 }
 
@@ -2715,7 +2715,7 @@ static Value *emit_arraylen_prim(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
     Value *addr = ctx.builder.CreateStructGEP(ctx.types().T_jlarray,
             emit_bitcast(ctx, decay_derived(ctx, t), ctx.types().T_pjlarray),
             1); //index (not offset) of length field in ctx.types().T_pjlarray
-    LoadInst *len = ctx.builder.CreateAlignedLoad(ctx.types().T_size, addr, Align(sizeof(size_t)));
+    LoadInst *len = ctx.builder.CreateAlignedLoad(ctx.types().T_size, addr, ctx.types().alignof_ptr);
     len->setOrdering(AtomicOrdering::NotAtomic);
     MDBuilder MDB(ctx.builder.getContext());
     auto rng = MDB.createRange(Constant::getNullValue(ctx.types().T_size), ConstantInt::get(ctx.types().T_size, arraytype_maxsize(tinfo.typ)));
@@ -2923,7 +2923,7 @@ static Value *emit_array_nd_index(
         // CreateAlloca is OK here since we are on an error branch
         Value *tmp = ctx.builder.CreateAlloca(ctx.types().T_size, ConstantInt::get(ctx.types().T_size, nidxs));
         for (size_t k = 0; k < nidxs; k++) {
-            ctx.builder.CreateAlignedStore(idxs[k], ctx.builder.CreateInBoundsGEP(ctx.types().T_size, tmp, ConstantInt::get(ctx.types().T_size, k)), Align(sizeof(size_t)));
+            ctx.builder.CreateAlignedStore(idxs[k], ctx.builder.CreateInBoundsGEP(ctx.types().T_size, tmp, ConstantInt::get(ctx.types().T_size, k)), ctx.types().alignof_ptr);
         }
         ctx.builder.CreateCall(prepare_call(jlboundserrorv_func),
             { mark_callee_rooted(ctx, a), tmp, ConstantInt::get(ctx.types().T_size, nidxs) });
