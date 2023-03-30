@@ -145,6 +145,7 @@ function complete_symbol(sym::String, @nospecialize(ffunc), context_module::Modu
     lookup_module = true
     t = Union{}
     val = nothing
+    ex = :()
     if something(findlast(in(non_identifier_chars), sym), 0) < something(findlast(isequal('.'), sym), 0)
         # Find module
         lookup_name, name = rsplit(sym, ".", limit=2)
@@ -213,8 +214,26 @@ function complete_symbol(sym::String, @nospecialize(ffunc), context_module::Modu
                 end
             end
         end
+
+        # Also, try abstract-interpreting propertynames
+        thunk = context_module.eval(:(() -> propertynames($(ex))))
+        code_info, rett = Core.Compiler.typeinf_code(
+            Core.Compiler.NativeInterpreter(),
+            first(methods(thunk)),
+            Tuple{typeof(thunk)},
+            Core.svec(),
+            true,
+        )
+        if rett <: Tuple && hasproperty(rett, :parameters) && all(rett.parameters .<: Symbol)
+            for field in code_info.code[end].val
+                s = string(field)
+                if startswith(s, name)
+                    push!(suggestions, FieldCompletion(t, field))
+                end
+            end
+        end
     end
-    suggestions
+    return suggestions
 end
 
 const sorted_keywords = [
