@@ -156,13 +156,6 @@ auto getFloatPtrTy(LLVMContext &ctxt) {
 auto getDoublePtrTy(LLVMContext &ctxt) {
     return Type::getDoublePtrTy(ctxt);
 }
-auto getSizePtrTy(LLVMContext &ctxt) {
-    if (sizeof(size_t) > sizeof(uint32_t)) {
-        return getInt64PtrTy(ctxt);
-    } else {
-        return getInt32PtrTy(ctxt);
-    }
-}
 
 typedef Instruction TerminatorInst;
 
@@ -733,7 +726,7 @@ static const auto jlundefvarerror_func = new JuliaFunction<>{
 static const auto jlboundserrorv_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_bounds_error_ints),
     [](LLVMContext &C, Type *T_size) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted), getSizePtrTy(C), T_size}, false); },
+            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted), T_size->getPointerTo(), T_size}, false); },
     get_attrs_noreturn,
 };
 static const auto jlboundserror_func = new JuliaFunction<TypeFnContextAndSizeT>{
@@ -3872,7 +3865,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 return true;
             }
             // String and SimpleVector's length fields have the same layout
-            auto ptr = emit_bitcast(ctx, boxed(ctx, obj), getSizePtrTy(ctx.builder.getContext()));
+            auto ptr = emit_bitcast(ctx, boxed(ctx, obj), ctx.types().T_size->getPointerTo());
             jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
             Value *len = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_size, ptr, Align(sizeof(size_t))));
             MDBuilder MDB(ctx.builder.getContext());
@@ -5650,7 +5643,7 @@ static Value *get_last_age_field(jl_codectx_t &ctx)
     Value *ct = get_current_task(ctx);
     return ctx.builder.CreateInBoundsGEP(
             ctx.types().T_size,
-            ctx.builder.CreateBitCast(ct, getSizePtrTy(ctx.builder.getContext())),
+            ctx.builder.CreateBitCast(ct, ctx.types().T_size->getPointerTo()),
             ConstantInt::get(ctx.types().T_size, offsetof(jl_task_t, world_age) / sizeof(size_t)),
             "world_age");
 }
@@ -5968,7 +5961,7 @@ static Function* gen_cfun_wrapper(
                 ctx.types().T_size,
                 ctx.builder.CreateConstInBoundsGEP1_32(
                     ctx.types().T_size,
-                    emit_bitcast(ctx, literal_pointer_val(ctx, (jl_value_t*)codeinst), getSizePtrTy(ctx.builder.getContext())),
+                    emit_bitcast(ctx, literal_pointer_val(ctx, (jl_value_t*)codeinst), ctx.types().T_size->getPointerTo()),
                     offsetof(jl_code_instance_t, max_world) / sizeof(size_t)),
                 Align(sizeof(size_t)));
         age_ok = ctx.builder.CreateICmpUGE(lam_max, world_v);
@@ -6509,7 +6502,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
             assert(jl_datatype_size(output_type) == sizeof(void*) * 4);
             Value *strct = emit_allocobj(ctx, jl_datatype_size(output_type),
                                          literal_pointer_val(ctx, (jl_value_t*)output_type));
-            Value *derived_strct = emit_bitcast(ctx, decay_derived(ctx, strct), getSizePtrTy(ctx.builder.getContext()));
+            Value *derived_strct = emit_bitcast(ctx, decay_derived(ctx, strct), ctx.types().T_size->getPointerTo());
             MDNode *tbaa = best_tbaa(ctx.tbaa(), output_type);
             jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
             ai.decorateInst(ctx.builder.CreateStore(F, derived_strct));
