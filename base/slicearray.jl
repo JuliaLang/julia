@@ -44,6 +44,9 @@ function Slices(A::P, slicemap::SM, ax::AX) where {P,SM,AX}
     Slices{P,SM,AX,S,N}(A, slicemap, ax)
 end
 
+unaliascopy(A::Slices{P,SM,AX,S,N}) where {P,SM,AX,S,N} =
+    Slices{P,SM,AX,S,N}(unaliascopy(A.parent), A.slicemap, A.axes)
+
 _slice_check_dims(N) = nothing
 function _slice_check_dims(N, dim, dims...)
     1 <= dim <= N || throw(DimensionMismatch("Invalid dimension $dim"))
