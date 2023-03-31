@@ -1577,7 +1577,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(!isVa && !llvmcall && nccallargs == 0);
         JL_GC_POP();
         ctx.builder.CreateCall(prepare_call(gcroot_flush_func));
-        emit_gc_safepoint(ctx.builder, get_current_ptls(ctx), ctx.tbaa().tbaa_const);
+        emit_gc_safepoint(ctx.builder, ctx.types().T_size, get_current_ptls(ctx), ctx.tbaa().tbaa_const);
         return ghostValue(ctx, jl_nothing_type);
     }
     else if (is_libjulia_func("jl_get_ptls_states")) {
@@ -1682,7 +1682,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         ctx.builder.CreateLoad(
                 ctx.types().T_size,
                 ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_size,
-                    get_current_signal_page_from_ptls(ctx.builder, get_current_ptls(ctx), ctx.tbaa().tbaa_const), -1),
+                    get_current_signal_page_from_ptls(ctx.builder, ctx.types().T_size, get_current_ptls(ctx), ctx.tbaa().tbaa_const), -1),
                 true);
         ctx.builder.CreateBr(contBB);
         ctx.f->getBasicBlockList().push_back(contBB);
@@ -1699,8 +1699,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             len = ConstantInt::get(ctx.types().T_size, jl_svec_len(svecv.constant));
         }
         else {
-            auto ptr = emit_bitcast(ctx, boxed(ctx, svecv), getSizePtrTy(ctx.builder.getContext()));
-            len = ctx.builder.CreateAlignedLoad(ctx.types().T_size, ptr, Align(sizeof(size_t)));
+            auto ptr = emit_bitcast(ctx, boxed(ctx, svecv), ctx.types().T_size->getPointerTo());
+            len = ctx.builder.CreateAlignedLoad(ctx.types().T_size, ptr, ctx.types().alignof_ptr);
             // Only mark with TBAA if we are sure about the type.
             // This could otherwise be in a dead branch
             if (svecv.typ == (jl_value_t*)jl_simplevector_type) {
@@ -1868,9 +1868,9 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         if (val.typ == (jl_value_t*)jl_symbol_type) {
             JL_GC_POP();
             const int hash_offset = offsetof(jl_sym_t, hash);
-            Value *ph1 = emit_bitcast(ctx, decay_derived(ctx, boxed(ctx, val)), getSizePtrTy(ctx.builder.getContext()));
-            Value *ph2 = ctx.builder.CreateInBoundsGEP(ctx.types().T_size, ph1, ConstantInt::get(ctx.types().T_size, hash_offset / sizeof(size_t)));
-            LoadInst *hashval = ctx.builder.CreateAlignedLoad(ctx.types().T_size, ph2, Align(sizeof(size_t)));
+            Value *ph1 = emit_bitcast(ctx, decay_derived(ctx, boxed(ctx, val)), ctx.types().T_size->getPointerTo());
+            Value *ph2 = ctx.builder.CreateInBoundsGEP(ctx.types().T_size, ph1, ConstantInt::get(ctx.types().T_size, hash_offset / ctx.types().sizeof_ptr));
+            LoadInst *hashval = ctx.builder.CreateAlignedLoad(ctx.types().T_size, ph2, ctx.types().alignof_ptr);
             jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
             ai.decorateInst(hashval);
             return mark_or_box_ccall_result(ctx, hashval, retboxed, rt, unionall, static_rt);

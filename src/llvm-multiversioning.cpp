@@ -48,8 +48,6 @@ using namespace llvm;
 
 extern Optional<bool> always_have_fma(Function&, const Triple &TT);
 
-void replaceUsesWithLoad(Function &F, function_ref<GlobalVariable *(Instruction &I)> should_replace, MDNode *tbaa_const);
-
 namespace {
 constexpr uint32_t clone_mask =
     JL_TARGET_CLONE_LOOP | JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH | JL_TARGET_CLONE_CPU | JL_TARGET_CLONE_FLOAT16;
@@ -385,6 +383,7 @@ private:
     std::vector<Function*> fvars;
     std::vector<Constant*> gvars;
     Module &M;
+    Type *T_size;
     Triple TT;
 
     // Map from original function to one based index in `fvars`
@@ -441,6 +440,7 @@ CloneCtx::CloneCtx(Module &M, bool allow_bad_fvars)
       fvars(consume_gv<Function>(M, "jl_fvars", allow_bad_fvars)),
       gvars(consume_gv<Constant>(M, "jl_gvars", false)),
       M(M),
+      T_size(M.getDataLayout().getIntPtrType(M.getContext())),
       TT(M.getTargetTriple()),
       allow_bad_fvars(allow_bad_fvars)
 {
@@ -723,9 +723,9 @@ void CloneCtx::fix_gv_uses()
             assert(info.use->getOperandNo() == 0);
             assert(!val->isConstant());
             auto fid = get_func_id(orig_f);
-            auto addr = ConstantExpr::getPtrToInt(val, getSizeTy(val->getContext()));
+            auto addr = ConstantExpr::getPtrToInt(val, T_size);
             if (info.offset)
-                addr = ConstantExpr::getAdd(addr, ConstantInt::get(getSizeTy(val->getContext()), info.offset));
+                addr = ConstantExpr::getAdd(addr, ConstantInt::get(T_size, info.offset));
             gv_relocs.emplace_back(addr, fid);
             val->setInitializer(rewrite_gv_init(stack));
         }
@@ -763,7 +763,7 @@ std::pair<uint32_t,GlobalVariable*> CloneCtx::get_reloc_slot(Function *F) const
 }
 
 template<typename Stack>
-static Value *rewrite_inst_use(const Stack& stack, Value *replace, Instruction *insert_before)
+static Value *rewrite_inst_use(const Stack& stack, Type *T_size, Value *replace, Instruction *insert_before)
 {
     SmallVector<Constant*, 8> args;
     uint32_t nlevel = stack.size();
@@ -800,7 +800,7 @@ static Value *rewrite_inst_use(const Stack& stack, Value *replace, Instruction *
         }
         else if (isa<ConstantVector>(val)) {
             replace = InsertElementInst::Create(ConstantVector::get(args), replace,
-                                                ConstantInt::get(getSizeTy(insert_before->getContext()), idx), "",
+                                                ConstantInt::get(T_size, idx), "",
                                                 insert_before);
         }
         else {
@@ -810,6 +810,31 @@ static Value *rewrite_inst_use(const Stack& stack, Value *replace, Instruction *
         }
     }
     return replace;
+}
+
+template<typename I2GV>
+static void replaceUsesWithLoad(Function &F, Type *T_size, I2GV should_replace, MDNode *tbaa_const) {
+    bool changed;
+    do {
+        changed = false;
+        for (auto uses = ConstantUses<Instruction>(&F, *F.getParent()); !uses.done(); uses.next()) {
+            auto info = uses.get_info();
+            auto use_i = info.val;
+            GlobalVariable *slot = should_replace(*use_i);
+            if (!slot)
+                continue;
+            Instruction *insert_before = use_i;
+            if (auto phi = dyn_cast<PHINode>(use_i))
+                insert_before = phi->getIncomingBlock(*info.use)->getTerminator();
+            Instruction *ptr = new LoadInst(F.getType(), slot, "", false, insert_before);
+            ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
+            ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(ptr->getContext(), None));
+            use_i->setOperand(info.use->getOperandNo(),
+                                rewrite_inst_use(uses.get_stack(), T_size, ptr,
+                                                insert_before));
+            changed = true;
+        }
+    } while (changed);
 }
 
 void CloneCtx::fix_inst_uses()
@@ -822,7 +847,7 @@ void CloneCtx::fix_inst_uses()
                 continue;
             auto F = grp.base_func(orig_f);
             auto grpidx = std::to_string(grp.idx);
-            replaceUsesWithLoad(*F, [&](Instruction &I) -> GlobalVariable * {
+            replaceUsesWithLoad(*F, T_size, [&](Instruction &I) -> GlobalVariable * {
                 uint32_t id;
                 GlobalVariable *slot;
                 auto use_f = I.getFunction();
@@ -841,19 +866,18 @@ void CloneCtx::finalize_orig_features() {
     }
 }
 
-static Constant *get_ptrdiff32(Constant *ptr, Constant *base)
+static Constant *get_ptrdiff32(Type *T_size, Constant *ptr, Constant *base)
 {
     if (ptr->getType()->isPointerTy())
-        ptr = ConstantExpr::getPtrToInt(ptr, getSizeTy(ptr->getContext()));
+        ptr = ConstantExpr::getPtrToInt(ptr, T_size);
     auto ptrdiff = ConstantExpr::getSub(ptr, base);
     return sizeof(void*) == 8 ? ConstantExpr::getTrunc(ptrdiff, Type::getInt32Ty(ptr->getContext())) : ptrdiff;
 }
 
 template<typename T>
-static Constant *emit_offset_table(Module &M, const std::vector<T*> &vars, StringRef name, StringRef suffix)
+static Constant *emit_offset_table(Module &M, Type *T_size, const std::vector<T*> &vars, StringRef name, StringRef suffix)
 {
     auto T_int32 = Type::getInt32Ty(M.getContext());
-    auto T_size = getSizeTy(M.getContext());
     uint32_t nvars = vars.size();
     Constant *base = nullptr;
     if (nvars > 0) {
@@ -873,7 +897,7 @@ static Constant *emit_offset_table(Module &M, const std::vector<T*> &vars, Strin
     if (nvars > 0) {
         offsets[1] = ConstantInt::get(T_int32, 0);
         for (uint32_t i = 1; i < nvars; i++)
-            offsets[i + 1] = get_ptrdiff32(vars[i], vbase);
+            offsets[i + 1] = get_ptrdiff32(T_size, vars[i], vbase);
     }
     ArrayType *vars_type = ArrayType::get(T_int32, nvars + 1);
     auto gv = new GlobalVariable(M, vars_type, true,
@@ -898,8 +922,8 @@ void CloneCtx::emit_metadata()
     }
 
     // Store back the information about exported functions.
-    auto fbase = emit_offset_table(M, fvars, "jl_fvar", suffix);
-    auto gbase = emit_offset_table(M, gvars, "jl_gvar", suffix);
+    auto fbase = emit_offset_table(M, T_size, fvars, "jl_fvar", suffix);
+    auto gbase = emit_offset_table(M, T_size, gvars, "jl_gvar", suffix);
 
     M.getGlobalVariable("jl_fvar_idxs")->setName("jl_fvar_idxs" + suffix);
     M.getGlobalVariable("jl_gvar_idxs")->setName("jl_gvar_idxs" + suffix);
@@ -927,13 +951,13 @@ void CloneCtx::emit_metadata()
                  gv_reloc_idx++) {
                 shared_relocs.insert(id);
                 values.push_back(id_v);
-                values.push_back(get_ptrdiff32(gv_relocs[gv_reloc_idx].first, gbase));
+                values.push_back(get_ptrdiff32(T_size, gv_relocs[gv_reloc_idx].first, gbase));
             }
             auto it = const_relocs.find(id);
             if (it != const_relocs.end()) {
                 shared_relocs.insert(id);
                 values.push_back(id_v);
-                values.push_back(get_ptrdiff32(it->second, gbase));
+                values.push_back(get_ptrdiff32(T_size, it->second, gbase));
             }
         }
         values[0] = ConstantInt::get(T_int32, values.size() / 2);
@@ -963,7 +987,7 @@ void CloneCtx::emit_metadata()
                         idxs.push_back(j);
                     }
                     if (i != 0) {
-                        offsets.push_back(get_ptrdiff32(grp->base_func(fvars[j]), fbase));
+                        offsets.push_back(get_ptrdiff32(T_size, grp->base_func(fvars[j]), fbase));
                     }
                 }
             }
@@ -977,12 +1001,12 @@ void CloneCtx::emit_metadata()
                         count++;
                         idxs.push_back(jl_sysimg_tag_mask | j);
                         auto f = map_get(*tgt->vmap, base_f, base_f);
-                        offsets.push_back(get_ptrdiff32(cast<Function>(f), fbase));
+                        offsets.push_back(get_ptrdiff32(T_size, cast<Function>(f), fbase));
                     }
                     else if (auto f = map_get(*tgt->vmap, base_f)) {
                         count++;
                         idxs.push_back(j);
-                        offsets.push_back(get_ptrdiff32(cast<Function>(f), fbase));
+                        offsets.push_back(get_ptrdiff32(T_size, cast<Function>(f), fbase));
                     }
                 }
             }
@@ -1104,30 +1128,6 @@ void multiversioning_preannotate(Module &M)
 {
     annotate_module_clones(M);
     M.addModuleFlag(Module::ModFlagBehavior::Error, "julia.mv.enable", 1);
-}
-
-void replaceUsesWithLoad(Function &F, function_ref<GlobalVariable *(Instruction &I)> should_replace, MDNode *tbaa_const) {
-    bool changed;
-    do {
-        changed = false;
-        for (auto uses = ConstantUses<Instruction>(&F, *F.getParent()); !uses.done(); uses.next()) {
-            auto info = uses.get_info();
-            auto use_i = info.val;
-            GlobalVariable *slot = should_replace(*use_i);
-            if (!slot)
-                continue;
-            Instruction *insert_before = use_i;
-            if (auto phi = dyn_cast<PHINode>(use_i))
-                insert_before = phi->getIncomingBlock(*info.use)->getTerminator();
-            Instruction *ptr = new LoadInst(F.getType(), slot, "", false, insert_before);
-            ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
-            ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(ptr->getContext(), None));
-            use_i->setOperand(info.use->getOperandNo(),
-                                rewrite_inst_use(uses.get_stack(), ptr,
-                                                insert_before));
-            changed = true;
-        }
-    } while (changed);
 }
 
 PreservedAnalyses MultiVersioning::run(Module &M, ModuleAnalysisManager &AM)
