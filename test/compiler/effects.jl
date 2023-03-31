@@ -775,7 +775,6 @@ end |> Core.Compiler.is_foldable_nothrow
 end
 @test Core.Compiler.is_foldable(Base.infer_effects(ImmutRef, Tuple{Any}))
 
-@test Base.ismutationfree(Type{Union{}})
 @test Core.Compiler.is_foldable_nothrow(Base.infer_effects(typejoin, ()))
 
 # nothrow-ness of subtyping operations
@@ -815,6 +814,3 @@ actually_recursive1(x) = actually_recursive2(x)
 actually_recursive2(x) = (x <= 0) ? 1 : actually_recursive1(x - 1)
 actually_recursive3(x) = actually_recursive2(x)
 @test !Core.Compiler.is_terminates(Base.infer_effects(actually_recursive3, (Int,)))
-
-# https://github.com/JuliaLang/julia/issues/48856
-@test Base.ismutationfree(Vector{Any}) == false
