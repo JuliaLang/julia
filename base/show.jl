@@ -2664,13 +2664,18 @@ function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
 end
 
 function show(io::IO, inferred::Core.Compiler.InferenceResult)
-    tt = inferred.linfo.specTypes.parameters[2:end]
+    mi = inferred.linfo
+    tt = mi.specTypes.parameters[2:end]
     tts = join(["::$(t)" for t in tt], ", ")
     rettype = inferred.result
     if isa(rettype, Core.Compiler.InferenceState)
         rettype = rettype.bestguess
     end
-    print(io, "$(inferred.linfo.def.name)($(tts)) => $(rettype)")
+    if isa(mi.def, Method)
+        print(io, mi.def.name, "(", tts, " => ", rettype, ")")
+    else
+        print(io, "Toplevel MethodInstance thunk from ", mi.def, " => ", rettype)
+    end
 end
 
 function show(io::IO, ::Core.Compiler.NativeInterpreter)
