@@ -3023,18 +3023,17 @@ function parse_paren(ps::ParseState, check_identifiers=true)
         emit(ps, mark, K"tuple", PARENS_FLAG)
     elseif is_syntactic_operator(k)
         # allow :(=) etc in unchecked contexts, eg quotes
-        # :(=)  ==>  (quote =)
-        if check_identifiers && !is_valid_identifier(k)
-            bump(ps, error="invalid identifier")
-        else
-            bump(ps)
-        end
+        # :(=)  ==>  (quote (parens =))
+        parse_atom(ps, check_identifiers)
         bump_closing_token(ps, K")")
-    elseif !check_identifiers && k == K"::" && peek(ps, 2, skip_newlines=true) == K")"
+        emit(ps, mark, K"parens")
+    elseif !check_identifiers && k == K"::" &&
+            peek(ps, 2, skip_newlines=true) == K")"
         # allow :(::) as a special case
-        # :(::)   ==>  (quote ::)
+        # :(::)  ==>  (quote (parens ::))
         bump(ps)
         bump(ps, TRIVIA_FLAG, skip_newlines=true)
+        emit(ps, mark, K"parens")
     else
         # Deal with all other cases of tuple or block syntax via the generic
         # parse_brackets
@@ -3393,7 +3392,11 @@ function parse_atom(ps::ParseState, check_identifiers=true)
     mark = position(ps)
     leading_kind = peek(ps)
     # todo: Reorder to put most likely tokens first?
-    if leading_kind == K"'"
+    if is_error(leading_kind)
+        # Errors for bad tokens are emitted in validate_tokens() rather than
+        # here.
+        bump(ps)
+    elseif leading_kind == K"'"
         # char literal
         bump(ps, TRIVIA_FLAG)
         k = peek(ps)
@@ -3436,19 +3439,16 @@ function parse_atom(ps::ParseState, check_identifiers=true)
             # :\nfoo  ==>  (quote (error-t) foo)
             bump_trivia(ps, TRIVIA_FLAG, skip_newlines=true,
                         error="whitespace not allowed after `:` used for quoting")
-            # Heuristic recovery
-            bump(ps)
-        else
-            # Being inside quote makes keywords into identifiers at the
-            # first level of nesting
-            # :end ==> (quote end)
-            # :(end) ==> (quote (parens (error-t)))
-            # Being inside quote makes end non-special again (issue #27690)
-            # a[:(end)]  ==>  (ref a (quote (error-t end)))
-            parse_atom(ParseState(ps, end_symbol=false), false)
         end
+        # Being inside quote makes keywords into identifiers at the
+        # first level of nesting
+        # :end ==> (quote end)
+        # :(end) ==> (quote (parens (error-t)))
+        # Being inside quote makes end non-special again (issue #27690)
+        # a[:(end)]  ==>  (ref a (quote (error-t end)))
+        parse_atom(ParseState(ps, end_symbol=false), false)
         emit(ps, mark, K"quote")
-    elseif leading_kind == K"=" && is_plain_equals(peek_token(ps))
+    elseif check_identifiers && leading_kind == K"=" && is_plain_equals(peek_token(ps))
         # =   ==> (error =)
         bump(ps, error="unexpected `=`")
     elseif leading_kind == K"Identifier"
@@ -3456,7 +3456,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         # x₁  ==>  x₁
         bump(ps)
     elseif is_operator(leading_kind)
-        if check_identifiers && is_syntactic_operator(leading_kind)
+        if check_identifiers && !is_valid_identifier(leading_kind)
             # +=   ==>  (error +=)
             # .+=  ==>  (error .+=)
             bump(ps, error="invalid identifier")
@@ -3558,10 +3558,6 @@ function parse_atom(ps::ParseState, check_identifiers=true)
               "premature end of input" :
               "unexpected closing token"
         bump_invisible(ps, K"error", error=msg)
-    elseif is_error(leading_kind)
-        # Errors for bad tokens are emitted in validate_tokens() rather than
-        # here.
-        bump(ps)
     else
         bump(ps, error="invalid syntax atom")
     end
