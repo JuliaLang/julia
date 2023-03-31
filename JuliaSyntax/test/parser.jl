@@ -783,8 +783,9 @@ tests = [
         "[x=1, y=2]"    =>  "(vect (= x 1) (= y 2))"
         "[x=1, ; y=2]"  =>  "(vect (= x 1) (parameters (= y 2)))"
         # parse_paren
-        ":(=)"  =>  "(quote =)"
-        ":(::)"  =>  "(quote ::)"
+        ":(=)"  =>  "(quote (parens =))"
+        ":(::)"  =>  "(quote (parens ::))"
+        ":(::\n)" => "(quote (parens ::))"
         "(function f \n end)" => "(parens (function f))"
         # braces
         "{x y}"      =>  "(bracescat (row x y))"
