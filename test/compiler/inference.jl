@@ -4293,3 +4293,39 @@ unknown_sparam_nothrow2(x::Ref{Ref{T}}) where T = @isdefined(T) ? T::Type : noth
 @test only(Base.return_types(unknown_sparam_throw, (Any,))) === Union{Nothing,Type}
 @test only(Base.return_types(unknown_sparam_nothrow1, (Ref,))) === Type
 @test only(Base.return_types(unknown_sparam_nothrow2, (Ref{Ref{T}} where T,))) === Type
+
+struct Issue49027{Ty<:Number}
+    x::Ty
+end
+function issue49027(::Type{<:Issue49027{Ty}}) where Ty
+    if @isdefined Ty # should be false when `Ty` is given as a free type var.
+        return Ty::DataType
+    end
+    return nothing
+end
+@test only(Base.return_types(issue49027, (Type{Issue49027{TypeVar(:Ty)}},))) >: Nothing
+@test isnothing(issue49027(Issue49027{TypeVar(:Ty)}))
+function issue49027_integer(::Type{<:Issue49027{Ty}}) where Ty<:Integer
+    if @isdefined Ty # should be false when `Ty` is given as a free type var.
+        return Ty::DataType
+    end
+    nothing
+end
+@test only(Base.return_types(issue49027_integer, (Type{Issue49027{TypeVar(:Ty,Int)}},))) >: Nothing
+@test isnothing(issue49027_integer(Issue49027{TypeVar(:Ty,Int)}))
+
+# Issue #47688: Abstract iteration should take into account `iterate` effects
+global it_count47688 = 0
+struct CountsIterate47688{N}; end
+function Base.iterate(::CountsIterate47688{N}, n=0) where N
+	global it_count47688 += 1
+	n <= N ? (n, n+1) : nothing
+end
+foo47688() = tuple(CountsIterate47688{5}()...)
+bar47688() = foo47688()
+@test only(Base.return_types(bar47688)) == NTuple{6, Int}
+@test it_count47688 == 0
+@test isa(bar47688(), NTuple{6, Int})
+@test it_count47688 == 7
+@test isa(foo47688(), NTuple{6, Int})
+@test it_count47688 == 14

@@ -89,6 +89,9 @@ WITH_GC_DEBUG_ENV := 0
 # Enable DTrace support
 WITH_DTRACE := 0
 
+# Enable ITTAPI integration
+WITH_ITTAPI := 0
+
 # Prevent picking up $ARCH from the environment variables
 ARCH:=
 
@@ -303,6 +306,9 @@ private_libdir := $(libdir)/julia
 endif
 build_private_libdir := $(build_libdir)/julia
 
+private_libexecdir := $(libexecdir)/julia
+build_private_libexecdir := $(build_libexecdir)/julia
+
 # A helper functions for dealing with lazily-evaluated, expensive operations..  Spinning
 # up a python process to, for exaxmple, parse a TOML file is expensive, and we must wait
 # until the TOML files are on-disk before we can parse them.  This means that we cannot
@@ -327,7 +333,7 @@ define cache_rel_path
 $(1)_rel_eval = $(call rel_path,$(2),$($(1)))
 $(1)_rel = $$(call hit_cache,$(1)_rel_eval)
 endef
-$(foreach D,libdir private_libdir datarootdir libexecdir docdir sysconfdir includedir,$(eval $(call cache_rel_path,$(D),$(bindir))))
+$(foreach D,libdir private_libdir datarootdir libexecdir private_libexecdir docdir sysconfdir includedir,$(eval $(call cache_rel_path,$(D),$(bindir))))
 $(foreach D,build_libdir build_private_libdir,$(eval $(call cache_rel_path,$(D),$(build_bindir))))
 
 # Save a special one: reverse_private_libdir_rel: usually just `../`, but good to be general:
@@ -733,7 +739,12 @@ ifeq ($(WITH_DTRACE), 1)
 JCXXFLAGS += -DUSE_DTRACE
 JCFLAGS += -DUSE_DTRACE
 DTRACE := dtrace
-else
+endif
+
+ifeq ($(WITH_ITTAPI), 1)
+JCXXFLAGS += -DUSE_ITTAPI
+JCFLAGS += -DUSE_ITTAPI
+LIBITTAPI:=-littnotify
 endif
 
 # ===========================================================================

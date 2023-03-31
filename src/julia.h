@@ -91,6 +91,7 @@ typedef struct _jl_value_t jl_value_t;
 
 struct _jl_taggedvalue_bits {
     uintptr_t gc:2;
+    uintptr_t in_image:1;
 };
 
 JL_EXTENSION struct _jl_taggedvalue_t {

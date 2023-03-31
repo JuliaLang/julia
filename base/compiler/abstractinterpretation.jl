@@ -204,7 +204,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     if seen ≠ napplicable
         # there is unanalyzed candidate, widen type and effects to the top
         rettype = Any
-        all_effects = Effects()
+        # there may be unanalyzed effects within unseen dispatch candidate,
+        # but we can still ignore nonoverlayed effect here since we already accounted for it
+        all_effects = merge_effects(all_effects, EFFECTS_UNKNOWN)
     elseif isa(matches, MethodMatches) ? (!matches.fullmatch || any_ambig(matches)) :
             (!all(matches.fullmatches) || any_ambig(matches))
         # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
@@ -1304,6 +1306,14 @@ function ssa_def_slot(@nospecialize(arg), sv::InferenceState)
     return arg
 end
 
+struct AbstractIterationResult
+    cti::Vector{Any}
+    info::MaybeAbstractIterationInfo
+    ai_effects::Effects
+end
+AbstractIterationResult(cti::Vector{Any}, info::MaybeAbstractIterationInfo) =
+    AbstractIterationResult(cti, info, EFFECTS_TOTAL)
+
 # `typ` is the inferred type for expression `arg`.
 # if the expression constructs a container (e.g. `svec(x,y,z)`),
 # refine its type to an array of element types.
@@ -1311,14 +1321,17 @@ end
 # returns an array of types
 function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft), @nospecialize(typ),
                                 sv::Union{InferenceState, IRCode})
-    if isa(typ, PartialStruct) && typ.typ.name === Tuple.name
-        return typ.fields, nothing
+    if isa(typ, PartialStruct)
+        widet = typ.typ
+        if isa(widet, DataType) && widet.name === Tuple.name
+            return AbstractIterationResult(typ.fields, nothing)
+        end
     end
 
     if isa(typ, Const)
         val = typ.val
         if isa(val, SimpleVector) || isa(val, Tuple)
-            return Any[ Const(val[i]) for i in 1:length(val) ], nothing # avoid making a tuple Generator here!
+            return AbstractIterationResult(Any[ Const(val[i]) for i in 1:length(val) ], nothing) # avoid making a tuple Generator here!
         end
     end
 
@@ -1333,12 +1346,12 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
     if isa(tti, Union)
         utis = uniontypes(tti)
         if any(@nospecialize(t) -> !isa(t, DataType) || !(t <: Tuple) || !isknownlength(t), utis)
-            return Any[Vararg{Any}], nothing
+            return AbstractIterationResult(Any[Vararg{Any}], nothing, EFFECTS_UNKNOWN′)
         end
         ltp = length((utis[1]::DataType).parameters)
         for t in utis
             if length((t::DataType).parameters) != ltp
-                return Any[Vararg{Any}], nothing
+                return AbstractIterationResult(Any[Vararg{Any}], nothing)
             end
         end
         result = Any[ Union{} for _ in 1:ltp ]
@@ -1349,12 +1362,12 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
                 result[j] = tmerge(result[j], rewrap_unionall(tps[j], tti0))
             end
         end
-        return result, nothing
+        return AbstractIterationResult(result, nothing)
     elseif tti0 <: Tuple
         if isa(tti0, DataType)
-            return Any[ p for p in tti0.parameters ], nothing
+            return AbstractIterationResult(Any[ p for p in tti0.parameters ], nothing)
         elseif !isa(tti, DataType)
-            return Any[Vararg{Any}], nothing
+            return AbstractIterationResult(Any[Vararg{Any}], nothing)
         else
             len = length(tti.parameters)
             last = tti.parameters[len]
@@ -1363,12 +1376,14 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
             if va
                 elts[len] = Vararg{elts[len]}
             end
-            return elts, nothing
+            return AbstractIterationResult(elts, nothing)
         end
-    elseif tti0 === SimpleVector || tti0 === Any
-        return Any[Vararg{Any}], nothing
+    elseif tti0 === SimpleVector
+        return AbstractIterationResult(Any[Vararg{Any}], nothing)
+    elseif tti0 === Any
+        return AbstractIterationResult(Any[Vararg{Any}], nothing, EFFECTS_UNKNOWN′)
     elseif tti0 <: Array
-        return Any[Vararg{eltype(tti0)}], nothing
+        return AbstractIterationResult(Any[Vararg{eltype(tti0)}], nothing)
     else
         return abstract_iteration(interp, itft, typ, sv)
     end
@@ -1379,7 +1394,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     if isa(itft, Const)
         iteratef = itft.val
     else
-        return Any[Vararg{Any}], nothing
+        return AbstractIterationResult(Any[Vararg{Any}], nothing, EFFECTS_UNKNOWN′)
     end
     @assert !isvarargtype(itertype)
     call = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[itft, itertype]), StmtInfo(true), sv)
@@ -1389,7 +1404,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     # WARNING: Changes to the iteration protocol must be reflected here,
     # this is not just an optimization.
     # TODO: this doesn't realize that Array, SimpleVector, Tuple, and NamedTuple do not use the iterate protocol
-    stateordonet === Bottom && return Any[Bottom], AbstractIterationInfo(CallMeta[CallMeta(Bottom, call.effects, info)])
+    stateordonet === Bottom && return AbstractIterationResult(Any[Bottom], AbstractIterationInfo(CallMeta[CallMeta(Bottom, call.effects, info)], true))
     valtype = statetype = Bottom
     ret = Any[]
     calls = CallMeta[call]
@@ -1399,7 +1414,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     # length iterators, or interesting prefix
     while true
         if stateordonet_widened === Nothing
-            return ret, AbstractIterationInfo(calls)
+            return AbstractIterationResult(ret, AbstractIterationInfo(calls, true))
         end
         if Nothing <: stateordonet_widened || length(ret) >= InferenceParams(interp).MAX_TUPLE_SPLAT
             break
@@ -1411,7 +1426,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
         # If there's no new information in this statetype, don't bother continuing,
         # the iterator won't be finite.
         if ⊑(typeinf_lattice(interp), nstatetype, statetype)
-            return Any[Bottom], nothing
+            return AbstractIterationResult(Any[Bottom], AbstractIterationInfo(calls, false), EFFECTS_THROWS)
         end
         valtype = getfield_tfunc(typeinf_lattice(interp), stateordonet, Const(1))
         push!(ret, valtype)
@@ -1441,7 +1456,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
                 # ... but cannot terminate
                 if !may_have_terminated
                     #  ... and cannot have terminated prior to this loop
-                    return Any[Bottom], nothing
+                    return AbstractIterationResult(Any[Bottom], AbstractIterationInfo(calls, false), EFFECTS_UNKNOWN′)
                 else
                     # iterator may have terminated prior to this loop, but not during it
                     valtype = Bottom
@@ -1451,13 +1466,15 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
         end
         valtype = tmerge(valtype, nounion.parameters[1])
         statetype = tmerge(statetype, nounion.parameters[2])
-        stateordonet = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertype, statetype]), StmtInfo(true), sv).rt
+        call = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertype, statetype]), StmtInfo(true), sv)
+        push!(calls, call)
+        stateordonet = call.rt
         stateordonet_widened = widenconst(stateordonet)
     end
     if valtype !== Union{}
         push!(ret, Vararg{valtype})
     end
-    return ret, nothing
+    return AbstractIterationResult(ret, AbstractIterationInfo(calls, false))
 end
 
 # do apply(af, fargs...), where af is a function value
@@ -1488,13 +1505,9 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
         infos′ = Vector{MaybeAbstractIterationInfo}[]
         for ti in (splitunions ? uniontypes(aargtypes[i]) : Any[aargtypes[i]])
             if !isvarargtype(ti)
-                cti_info = precise_container_type(interp, itft, ti, sv)
-                cti = cti_info[1]::Vector{Any}
-                info = cti_info[2]::MaybeAbstractIterationInfo
+                (;cti, info, ai_effects) = precise_container_type(interp, itft, ti, sv)
             else
-                cti_info = precise_container_type(interp, itft, unwrapva(ti), sv)
-                cti = cti_info[1]::Vector{Any}
-                info = cti_info[2]::MaybeAbstractIterationInfo
+                (;cti, info, ai_effects) = precise_container_type(interp, itft, unwrapva(ti), sv)
                 # We can't represent a repeating sequence of the same types,
                 # so tmerge everything together to get one type that represents
                 # everything.
@@ -1506,6 +1519,12 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
                     argt = tmerge(argt, cti[i])
                 end
                 cti = Any[Vararg{argt}]
+            end
+            effects = merge_effects(effects, ai_effects)
+            if info !== nothing
+                for call in info.each
+                    effects = merge_effects(effects, call.effects)
+                end
             end
             if any(@nospecialize(t) -> t === Bottom, cti)
                 continue
