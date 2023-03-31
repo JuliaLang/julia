@@ -978,7 +978,7 @@ end
         @test *(a, b, c, 99.9) ≈ (a * b) * (c * 99.9)
     end
 end
-                                                                                                            
+
 @testset "Issue #46865: mul!() with non-const alpha, beta" begin
     f!(C,A,B,alphas,betas) = mul!(C, A, B, alphas[1], betas[1])
     alphas = [1.0]
