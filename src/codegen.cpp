@@ -156,13 +156,6 @@ auto getFloatPtrTy(LLVMContext &ctxt) {
 auto getDoublePtrTy(LLVMContext &ctxt) {
     return Type::getDoublePtrTy(ctxt);
 }
-auto getSizePtrTy(LLVMContext &ctxt) {
-    if (sizeof(size_t) > sizeof(uint32_t)) {
-        return getInt64PtrTy(ctxt);
-    } else {
-        return getInt32PtrTy(ctxt);
-    }
-}
 
 typedef Instruction TerminatorInst;
 
@@ -254,6 +247,8 @@ struct jl_typecache_t {
     IntegerType *T_sigatomic;
 
     Type *T_ppint8;
+    unsigned sizeof_ptr;
+    Align alignof_ptr;
 
     bool initialized;
 
@@ -271,6 +266,9 @@ struct jl_typecache_t {
         T_ppint8 = PointerType::get(getInt8PtrTy(context), 0);
         T_sigatomic = Type::getIntNTy(context, sizeof(sig_atomic_t) * 8);
         T_size = DL.getIntPtrType(context);
+        sizeof_ptr = DL.getPointerSize();
+        // use pointer abi alignment for intptr_t
+        alignof_ptr = DL.getPointerABIAlignment(0);
         T_jlvalue = JuliaType::get_jlvalue_ty(context);
         T_pjlvalue = PointerType::get(T_jlvalue, 0);
         T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
@@ -481,14 +479,15 @@ struct JuliaVariable {
 public:
     StringLiteral name;
     bool isconst;
-    Type *(*_type)(LLVMContext &C);
+    Type *(*_type)(Type *T_size);
 
     JuliaVariable(const JuliaVariable&) = delete;
     JuliaVariable(const JuliaVariable&&) = delete;
     GlobalVariable *realize(Module *m) {
         if (GlobalValue *V = m->getNamedValue(name))
             return cast<GlobalVariable>(V);
-        return new GlobalVariable(*m, _type(m->getContext()),
+        auto T_size = m->getDataLayout().getIntPtrType(m->getContext());
+        return new GlobalVariable(*m, _type(T_size),
                 isconst, GlobalVariable::ExternalLinkage,
                 NULL, name);
     }
@@ -499,10 +498,31 @@ static inline void add_named_global(JuliaVariable *name, void *addr)
     add_named_global(name->name, addr);
 }
 
+
+typedef FunctionType *(*TypeFnContextOnly)(LLVMContext &C);
+typedef FunctionType *(*TypeFnContextAndSizeT)(LLVMContext &C, Type *T_size);
+typedef FunctionType *(*TypeFnContextAndTriple)(LLVMContext &C, const Triple &triple);
+
+FunctionType *invoke_type(TypeFnContextOnly f, Module &M)
+{
+    return f(M.getContext());
+}
+
+FunctionType *invoke_type(TypeFnContextAndSizeT f, Module &M)
+{
+    return f(M.getContext(), M.getDataLayout().getIntPtrType(M.getContext()));
+}
+
+FunctionType *invoke_type(TypeFnContextAndTriple f, Module &M)
+{
+    return f(M.getContext(), Triple(M.getTargetTriple()));
+}
+
+template<typename TypeFn_t = TypeFnContextOnly>
 struct JuliaFunction {
 public:
     llvm::StringLiteral name;
-    llvm::FunctionType *(*_type)(llvm::LLVMContext &C);
+    TypeFn_t _type;
     llvm::AttributeList (*_attrs)(llvm::LLVMContext &C);
 
     JuliaFunction(const JuliaFunction&) = delete;
@@ -510,7 +530,7 @@ public:
     llvm::Function *realize(llvm::Module *m) {
         if (llvm::GlobalValue *V = m->getNamedValue(name))
             return llvm::cast<llvm::Function>(V);
-        llvm::Function *F = llvm::Function::Create(_type(m->getContext()),
+        llvm::Function *F = llvm::Function::Create(invoke_type(_type, *m),
                          llvm::Function::ExternalLinkage,
                          name, m);
         if (_attrs)
@@ -519,8 +539,8 @@ public:
     }
 };
 
-template<typename T>
-static inline void add_named_global(JuliaFunction *name, T *addr)
+template<typename T, typename TypeFn_t>
+static inline void add_named_global(JuliaFunction<TypeFn_t> *name, T *addr)
 {
     // cast through integer to avoid c++ pedantic warning about casting between
     // data and code pointers
@@ -606,55 +626,55 @@ static AttributeList get_attrs_zext(LLVMContext &C)
 static const auto jlRTLD_DEFAULT_var = new JuliaVariable{
     XSTR(jl_RTLD_DEFAULT_handle),
     true,
-    [](LLVMContext &C) { return static_cast<llvm::Type*>(getInt8PtrTy(C)); },
+    [](Type *T_size) -> Type * { return getInt8PtrTy(T_size->getContext()); },
 };
 static const auto jlexe_var = new JuliaVariable{
     XSTR(jl_exe_handle),
     true,
-    [](LLVMContext &C) { return static_cast<llvm::Type*>(getInt8PtrTy(C)); },
+    [](Type *T_size) -> Type * { return getInt8PtrTy(T_size->getContext()); },
 };
 static const auto jldll_var = new JuliaVariable{
     XSTR(jl_libjulia_handle),
     true,
-    [](LLVMContext &C) { return static_cast<llvm::Type*>(getInt8PtrTy(C)); },
+    [](Type *T_size) -> Type * { return getInt8PtrTy(T_size->getContext()); },
 };
 static const auto jldlli_var = new JuliaVariable{
     XSTR(jl_libjulia_internal_handle),
     true,
-    [](LLVMContext &C) { return static_cast<llvm::Type*>(getInt8PtrTy(C)); },
+    [](Type *T_size) -> Type * { return getInt8PtrTy(T_size->getContext()); },
 };
 
 static const auto jlstack_chk_guard_var = new JuliaVariable{
     XSTR(__stack_chk_guard),
     true,
-    get_pjlvalue,
+    [](Type *T_size) -> Type * { return get_pjlvalue(T_size->getContext()); },
 };
 
 static const auto jlgetworld_global = new JuliaVariable{
     XSTR(jl_world_counter),
     false,
-    [](LLVMContext &C) { return (Type*)getSizeTy(C); },
+    [](Type *T_size) -> Type * { return T_size; },
 };
 
 static const auto jlboxed_int8_cache = new JuliaVariable{
     XSTR(jl_boxed_int8_cache),
     true,
-    [](LLVMContext &C) { return (Type*)ArrayType::get(get_pjlvalue(C), 256); },
+    [](Type *T_size) -> Type * { return ArrayType::get(get_pjlvalue(T_size->getContext()), 256); },
 };
 
 static const auto jlboxed_uint8_cache = new JuliaVariable{
     XSTR(jl_boxed_uint8_cache),
     true,
-    [](LLVMContext &C) { return (Type*)ArrayType::get(get_pjlvalue(C), 256); },
+    [](Type *T_size) -> Type * { return ArrayType::get(get_pjlvalue(T_size->getContext()), 256); },
 };
 
-static const auto jlpgcstack_func = new JuliaFunction{
+static const auto jlpgcstack_func = new JuliaFunction<>{
     "julia.get_pgcstack",
     [](LLVMContext &C) { return FunctionType::get(PointerType::get(JuliaType::get_ppjlvalue_ty(C), 0), false); },
     nullptr,
 };
 
-static const auto jladoptthread_func = new JuliaFunction{
+static const auto jladoptthread_func = new JuliaFunction<>{
     "julia.get_pgcstack_or_new",
     jlpgcstack_func->_type,
     jlpgcstack_func->_attrs,
@@ -664,12 +684,12 @@ static const auto jladoptthread_func = new JuliaFunction{
 // important functions
 // Symbols are not gc-tracked, but we'll treat them as callee rooted anyway,
 // because they may come from a gc-rooted location
-static const auto jlnew_func = new JuliaFunction{
+static const auto jlnew_func = new JuliaFunction<>{
     XSTR(jl_new_structv),
     get_func_sig,
     get_func_attrs,
 };
-static const auto jlsplatnew_func = new JuliaFunction{
+static const auto jlsplatnew_func = new JuliaFunction<>{
     XSTR(jl_new_structt),
     [](LLVMContext &C) {
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
@@ -678,62 +698,62 @@ static const auto jlsplatnew_func = new JuliaFunction{
     },
     get_attrs_basic,
 };
-static const auto jlthrow_func = new JuliaFunction{
+static const auto jlthrow_func = new JuliaFunction<>{
     XSTR(jl_throw),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
             {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
     get_attrs_noreturn,
 };
-static const auto jlerror_func = new JuliaFunction{
+static const auto jlerror_func = new JuliaFunction<>{
     XSTR(jl_error),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
             {getInt8PtrTy(C)}, false); },
     get_attrs_noreturn,
 };
-static const auto jlatomicerror_func = new JuliaFunction{
+static const auto jlatomicerror_func = new JuliaFunction<>{
     XSTR(jl_atomic_error),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
             {getInt8PtrTy(C)}, false); },
     get_attrs_noreturn,
 };
-static const auto jltypeerror_func = new JuliaFunction{
+static const auto jltypeerror_func = new JuliaFunction<>{
     XSTR(jl_type_error),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
             {getInt8PtrTy(C), JuliaType::get_prjlvalue_ty(C), PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
     get_attrs_noreturn,
 };
-static const auto jlundefvarerror_func = new JuliaFunction{
+static const auto jlundefvarerror_func = new JuliaFunction<>{
     XSTR(jl_undefined_var_error),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
             {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
     get_attrs_noreturn,
 };
-static const auto jlboundserrorv_func = new JuliaFunction{
+static const auto jlboundserrorv_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_bounds_error_ints),
-    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted), getSizePtrTy(C), getSizeTy(C)}, false); },
+    [](LLVMContext &C, Type *T_size) { return FunctionType::get(getVoidTy(C),
+            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted), T_size->getPointerTo(), T_size}, false); },
     get_attrs_noreturn,
 };
-static const auto jlboundserror_func = new JuliaFunction{
+static const auto jlboundserror_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_bounds_error_int),
-    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted), getSizeTy(C)}, false); },
+    [](LLVMContext &C, Type *T_size) { return FunctionType::get(getVoidTy(C),
+            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted), T_size}, false); },
     get_attrs_noreturn,
 };
-static const auto jlvboundserror_func = new JuliaFunction{
+static const auto jlvboundserror_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_bounds_error_tuple_int),
-    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {JuliaType::get_pprjlvalue_ty(C), getSizeTy(C), getSizeTy(C)}, false); },
+    [](LLVMContext &C, Type *T_size) { return FunctionType::get(getVoidTy(C),
+            {JuliaType::get_pprjlvalue_ty(C), T_size, T_size}, false); },
     get_attrs_noreturn,
 };
-static const auto jluboundserror_func = new JuliaFunction{
+static const auto jluboundserror_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_bounds_error_unboxed_int),
-    [](LLVMContext &C) {
+    [](LLVMContext &C, Type *T_size) {
         return FunctionType::get(getVoidTy(C),
-            {PointerType::get(getInt8Ty(C), AddressSpace::Derived), JuliaType::get_pjlvalue_ty(C), getSizeTy(C)}, false); },
+            {PointerType::get(getInt8Ty(C), AddressSpace::Derived), JuliaType::get_pjlvalue_ty(C), T_size}, false); },
     get_attrs_noreturn,
 };
-static const auto jlcheckassign_func = new JuliaFunction{
+static const auto jlcheckassign_func = new JuliaFunction<>{
     XSTR(jl_checked_assignment),
     [](LLVMContext &C) {
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
@@ -741,7 +761,7 @@ static const auto jlcheckassign_func = new JuliaFunction{
             {T_pjlvalue, T_pjlvalue, T_pjlvalue, PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
     nullptr,
 };
-static const auto jldeclareconst_func = new JuliaFunction{
+static const auto jldeclareconst_func = new JuliaFunction<>{
     XSTR(jl_declare_constant),
     [](LLVMContext &C) {
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
@@ -749,7 +769,7 @@ static const auto jldeclareconst_func = new JuliaFunction{
             {T_pjlvalue, T_pjlvalue, T_pjlvalue}, false); },
     nullptr,
 };
-static const auto jlgetbindingorerror_func = new JuliaFunction{
+static const auto jlgetbindingorerror_func = new JuliaFunction<>{
     XSTR(jl_get_binding_or_error),
     [](LLVMContext &C) {
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
@@ -758,7 +778,7 @@ static const auto jlgetbindingorerror_func = new JuliaFunction{
     },
     nullptr,
 };
-static const auto jlgetbindingwrorerror_func = new JuliaFunction{
+static const auto jlgetbindingwrorerror_func = new JuliaFunction<>{
     XSTR(jl_get_binding_wr),
     [](LLVMContext &C) {
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
@@ -767,7 +787,7 @@ static const auto jlgetbindingwrorerror_func = new JuliaFunction{
     },
     nullptr,
 };
-static const auto jlboundp_func = new JuliaFunction{
+static const auto jlboundp_func = new JuliaFunction<>{
     XSTR(jl_boundp),
     [](LLVMContext &C) {
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
@@ -776,7 +796,7 @@ static const auto jlboundp_func = new JuliaFunction{
     },
     nullptr,
 };
-static const auto jltopeval_func = new JuliaFunction{
+static const auto jltopeval_func = new JuliaFunction<>{
     XSTR(jl_toplevel_eval),
     [](LLVMContext &C) {
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
@@ -788,7 +808,7 @@ static const auto jltopeval_func = new JuliaFunction{
             Attributes(C, {Attribute::NonNull}),
             None); },
 };
-static const auto jlcopyast_func = new JuliaFunction{
+static const auto jlcopyast_func = new JuliaFunction<>{
     XSTR(jl_copy_ast),
     [](LLVMContext &C) {
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
@@ -800,21 +820,12 @@ static const auto jlcopyast_func = new JuliaFunction{
             Attributes(C, {Attribute::NonNull}),
             None); },
 };
-//static const auto jlnsvec_func = new JuliaFunction{
-//    XSTR(jl_svec),
-//    [](LLVMContext &C) { return FunctionType::get(T_prjlvalue,
-//                {getSizeTy(C)}, true); },
-//    [](LLVMContext &C) { return AttributeList::get(C,
-//            AttributeSet(),
-//            Attributes(C, {Attribute::NonNull}),
-//            None); },
-//};
-static const auto jlapplygeneric_func = new JuliaFunction{
+static const auto jlapplygeneric_func = new JuliaFunction<>{
     XSTR(jl_apply_generic),
     get_func_sig,
     get_func_attrs,
 };
-static const auto jlinvoke_func = new JuliaFunction{
+static const auto jlinvoke_func = new JuliaFunction<>{
     XSTR(jl_invoke),
     get_func2_sig,
     [](LLVMContext &C) { return AttributeList::get(C,
@@ -823,7 +834,7 @@ static const auto jlinvoke_func = new JuliaFunction{
             {AttributeSet(),
              Attributes(C, {Attribute::ReadOnly, Attribute::NoCapture})}); },
 };
-static const auto jlmethod_func = new JuliaFunction{
+static const auto jlmethod_func = new JuliaFunction<>{
     XSTR(jl_method_def),
     [](LLVMContext &C) {
         auto T_jlvalue = JuliaType::get_jlvalue_ty(C);
@@ -834,7 +845,7 @@ static const auto jlmethod_func = new JuliaFunction{
     },
     nullptr,
 };
-static const auto jlgenericfunction_func = new JuliaFunction{
+static const auto jlgenericfunction_func = new JuliaFunction<>{
     XSTR(jl_generic_function_def),
     [](LLVMContext &C) {
         auto T_jlvalue = JuliaType::get_jlvalue_ty(C);
@@ -845,7 +856,7 @@ static const auto jlgenericfunction_func = new JuliaFunction{
     },
     nullptr,
 };
-static const auto jllockvalue_func = new JuliaFunction{
+static const auto jllockvalue_func = new JuliaFunction<>{
     XSTR(jl_lock_value),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
             {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
@@ -854,7 +865,7 @@ static const auto jllockvalue_func = new JuliaFunction{
             AttributeSet(),
             {Attributes(C, {Attribute::NoCapture})}); },
 };
-static const auto jlunlockvalue_func = new JuliaFunction{
+static const auto jlunlockvalue_func = new JuliaFunction<>{
     XSTR(jl_unlock_value),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
             {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
@@ -863,35 +874,35 @@ static const auto jlunlockvalue_func = new JuliaFunction{
             AttributeSet(),
             {Attributes(C, {Attribute::NoCapture})}); },
 };
-static const auto jlenter_func = new JuliaFunction{
+static const auto jlenter_func = new JuliaFunction<>{
     XSTR(jl_enter_handler),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
             {getInt8PtrTy(C)}, false); },
     nullptr,
 };
-static const auto jl_current_exception_func = new JuliaFunction{
+static const auto jl_current_exception_func = new JuliaFunction<>{
     XSTR(jl_current_exception),
     [](LLVMContext &C) { return FunctionType::get(JuliaType::get_prjlvalue_ty(C), false); },
     nullptr,
 };
-static const auto jlleave_func = new JuliaFunction{
+static const auto jlleave_func = new JuliaFunction<>{
     XSTR(jl_pop_handler),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
             {getInt32Ty(C)}, false); },
     nullptr,
 };
-static const auto jl_restore_excstack_func = new JuliaFunction{
+static const auto jl_restore_excstack_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_restore_excstack),
-    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {getSizeTy(C)}, false); },
+    [](LLVMContext &C, Type *T_size) { return FunctionType::get(getVoidTy(C),
+            {T_size}, false); },
     nullptr,
 };
-static const auto jl_excstack_state_func = new JuliaFunction{
+static const auto jl_excstack_state_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_excstack_state),
-    [](LLVMContext &C) { return FunctionType::get(getSizeTy(C), false); },
+    [](LLVMContext &C, Type *T_size) { return FunctionType::get(T_size, false); },
     nullptr,
 };
-static const auto jlegalx_func = new JuliaFunction{
+static const auto jlegalx_func = new JuliaFunction<>{
     XSTR(jl_egal__unboxed),
     [](LLVMContext &C) {
         Type *T = PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::Derived);
@@ -901,14 +912,14 @@ static const auto jlegalx_func = new JuliaFunction{
             AttributeSet(),
             None); },
 };
-static const auto jl_alloc_obj_func = new JuliaFunction{
+static const auto jl_alloc_obj_func = new JuliaFunction<TypeFnContextAndSizeT>{
     "julia.gc_alloc_obj",
-    [](LLVMContext &C) {
+    [](LLVMContext &C, Type *T_size) {
         auto T_jlvalue = JuliaType::get_jlvalue_ty(C);
         auto T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
         auto T_ppjlvalue = PointerType::get(PointerType::get(T_jlvalue, 0), 0);
         return FunctionType::get(T_prjlvalue,
-                {T_ppjlvalue, getSizeTy(C), T_prjlvalue}, false);
+                {T_ppjlvalue, T_size, T_prjlvalue}, false);
     },
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet::get(C, makeArrayRef({Attribute::getWithAllocSizeArgs(C, 1, None)})), // returns %1 bytes
@@ -920,7 +931,7 @@ static const auto jl_alloc_obj_func = new JuliaFunction{
             }),
             None); },
 };
-static const auto jl_newbits_func = new JuliaFunction{
+static const auto jl_newbits_func = new JuliaFunction<>{
     XSTR(jl_new_bits),
     [](LLVMContext &C) {
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
@@ -935,7 +946,7 @@ static const auto jl_newbits_func = new JuliaFunction{
 // `julia.typeof` does read memory, but it is effectively readnone before we lower
 // the allocation function. This is OK as long as we lower `julia.typeof` no later than
 // `julia.gc_alloc_obj`.
-static const auto jl_typeof_func = new JuliaFunction{
+static const auto jl_typeof_func = new JuliaFunction<>{
     "julia.typeof",
     [](LLVMContext &C) {
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
@@ -947,7 +958,7 @@ static const auto jl_typeof_func = new JuliaFunction{
             Attributes(C, {Attribute::NonNull}),
             None); },
 };
-static const auto jl_loopinfo_marker_func = new JuliaFunction{
+static const auto jl_loopinfo_marker_func = new JuliaFunction<>{
     "julia.loopinfo_marker",
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C), false); },
     [](LLVMContext &C) { return AttributeList::get(C,
@@ -955,7 +966,7 @@ static const auto jl_loopinfo_marker_func = new JuliaFunction{
             AttributeSet(),
             None); },
 };
-static const auto jl_write_barrier_func = new JuliaFunction{
+static const auto jl_write_barrier_func = new JuliaFunction<>{
     "julia.write_barrier",
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
             {JuliaType::get_prjlvalue_ty(C)}, true); },
@@ -964,7 +975,8 @@ static const auto jl_write_barrier_func = new JuliaFunction{
             AttributeSet(),
             {Attributes(C, {Attribute::ReadOnly})}); },
 };
-static const auto jlisa_func = new JuliaFunction{
+
+static const auto jlisa_func = new JuliaFunction<>{
     XSTR(jl_isa),
     [](LLVMContext &C) {
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
@@ -974,7 +986,7 @@ static const auto jlisa_func = new JuliaFunction{
     nullptr,
 };
 
-static const auto jlsubtype_func = new JuliaFunction{
+static const auto jlsubtype_func = new JuliaFunction<>{
     XSTR(jl_subtype),
     [](LLVMContext &C) {
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
@@ -983,7 +995,7 @@ static const auto jlsubtype_func = new JuliaFunction{
     },
     nullptr,
 };
-static const auto jlapplytype_func = new JuliaFunction{
+static const auto jlapplytype_func = new JuliaFunction<>{
     XSTR(jl_instantiate_type_in_env),
     [](LLVMContext &C) {
         auto T_jlvalue = JuliaType::get_jlvalue_ty(C);
@@ -1001,48 +1013,49 @@ static const auto jlapplytype_func = new JuliaFunction{
             None);
     },
 };
-static const auto jl_object_id__func = new JuliaFunction{
+static const auto jl_object_id__func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_object_id_),
-    [](LLVMContext &C) { return FunctionType::get(getSizeTy(C),
+    [](LLVMContext &C, Type *T_size) { return FunctionType::get(T_size,
             {JuliaType::get_prjlvalue_ty(C), PointerType::get(getInt8Ty(C), AddressSpace::Derived)}, false); },
     nullptr,
 };
-static const auto setjmp_func = new JuliaFunction{
+static const auto setjmp_func = new JuliaFunction<TypeFnContextAndTriple>{
     jl_setjmp_name,
-    [](LLVMContext &C) { return FunctionType::get(getInt32Ty(C),
-            {getInt8PtrTy(C),
-#ifndef _OS_WINDOWS_
-            getInt32Ty(C),
-#endif
-            }, false); },
+    [](LLVMContext &C, const Triple &T) {
+        if (T.isOSWindows())
+            return FunctionType::get(getInt32Ty(C),
+                {getInt8PtrTy(C)}, false);
+        return FunctionType::get(getInt32Ty(C),
+            {getInt8PtrTy(C), getInt32Ty(C)}, false);
+    },
     [](LLVMContext &C) { return AttributeList::get(C,
             Attributes(C, {Attribute::ReturnsTwice}),
             AttributeSet(),
             None); },
 };
-static const auto memcmp_func = new JuliaFunction{
+static const auto memcmp_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(memcmp),
-    [](LLVMContext &C) { return FunctionType::get(getInt32Ty(C),
-            {getInt8PtrTy(C), getInt8PtrTy(C), getSizeTy(C)}, false); },
+    [](LLVMContext &C, Type *T_size) { return FunctionType::get(getInt32Ty(C),
+            {getInt8PtrTy(C), getInt8PtrTy(C), T_size}, false); },
     [](LLVMContext &C) { return AttributeList::get(C,
             Attributes(C, {Attribute::ReadOnly, Attribute::NoUnwind, Attribute::ArgMemOnly}),
             AttributeSet(),
             None); },
     // TODO: inferLibFuncAttributes(*memcmp_func, TLI);
 };
-static const auto jldlsym_func = new JuliaFunction{
+static const auto jldlsym_func = new JuliaFunction<>{
     XSTR(jl_load_and_lookup),
     [](LLVMContext &C) { return FunctionType::get(JuliaType::get_pvoidfunc_ty(C),
             {getInt8PtrTy(C), getInt8PtrTy(C), PointerType::get(getInt8PtrTy(C), 0)}, false); },
     nullptr,
 };
-static const auto jllazydlsym_func = new JuliaFunction{
+static const auto jllazydlsym_func = new JuliaFunction<>{
     XSTR(jl_lazy_load_and_lookup),
     [](LLVMContext &C) { return FunctionType::get(JuliaType::get_pvoidfunc_ty(C),
             {JuliaType::get_prjlvalue_ty(C), getInt8PtrTy(C)}, false); },
     nullptr,
 };
-static const auto jltypeassert_func = new JuliaFunction{
+static const auto jltypeassert_func = new JuliaFunction<>{
     XSTR(jl_typeassert),
     [](LLVMContext &C) {
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
@@ -1051,31 +1064,31 @@ static const auto jltypeassert_func = new JuliaFunction{
     },
     nullptr,
 };
-static const auto jlgetnthfieldchecked_func = new JuliaFunction{
+static const auto jlgetnthfieldchecked_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_get_nth_field_checked),
-    [](LLVMContext &C) {
+    [](LLVMContext &C, Type *T_size) {
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
         return FunctionType::get(T_prjlvalue,
-            {T_prjlvalue, getSizeTy(C)}, false);
+            {T_prjlvalue, T_size}, false);
     },
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet(),
             Attributes(C, {Attribute::NonNull}),
             None); },
 };
-static const auto jlfieldisdefinedchecked_func = new JuliaFunction{
+static const auto jlfieldisdefinedchecked_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_field_isdefined_checked),
-    [](LLVMContext &C) {
+    [](LLVMContext &C, Type *T_size) {
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
         return FunctionType::get(getInt32Ty(C),
-            {T_prjlvalue, getSizeTy(C)}, false);
+            {T_prjlvalue, T_size}, false);
     },
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet(),
             Attributes(C, {}),
             None); },
 };
-static const auto jlgetcfunctiontrampoline_func = new JuliaFunction{
+static const auto jlgetcfunctiontrampoline_func = new JuliaFunction<>{
     XSTR(jl_get_cfunction_trampoline),
     [](LLVMContext &C) {
         auto T_jlvalue = JuliaType::get_jlvalue_ty(C);
@@ -1099,18 +1112,18 @@ static const auto jlgetcfunctiontrampoline_func = new JuliaFunction{
             Attributes(C, {Attribute::NonNull}),
             None); },
 };
-static const auto diff_gc_total_bytes_func = new JuliaFunction{
+static const auto diff_gc_total_bytes_func = new JuliaFunction<>{
     XSTR(jl_gc_diff_total_bytes),
     [](LLVMContext &C) { return FunctionType::get(getInt64Ty(C), false); },
     nullptr,
 };
-static const auto sync_gc_total_bytes_func = new JuliaFunction{
+static const auto sync_gc_total_bytes_func = new JuliaFunction<>{
     XSTR(jl_gc_sync_total_bytes),
     [](LLVMContext &C) { return FunctionType::get(getInt64Ty(C),
             {getInt64Ty(C)}, false); },
     nullptr,
 };
-static const auto jlarray_data_owner_func = new JuliaFunction{
+static const auto jlarray_data_owner_func = new JuliaFunction<>{
     XSTR(jl_array_data_owner),
     [](LLVMContext &C) {
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
@@ -1123,7 +1136,7 @@ static const auto jlarray_data_owner_func = new JuliaFunction{
             None); },
 };
 #define BOX_FUNC(ct,at,attrs)                                                    \
-static const auto box_##ct##_func = new JuliaFunction{                           \
+static const auto box_##ct##_func = new JuliaFunction<>{                           \
     XSTR(jl_box_##ct),                                                           \
     [](LLVMContext &C) { return FunctionType::get(JuliaType::get_prjlvalue_ty(C),\
             {at}, false); },                                                     \
@@ -1138,27 +1151,36 @@ BOX_FUNC(uint64, getInt64Ty(C), get_attrs_zext);
 BOX_FUNC(char, getCharTy(C), get_attrs_zext);
 BOX_FUNC(float32, getFloatTy(C), get_attrs_basic);
 BOX_FUNC(float64, getDoubleTy(C), get_attrs_basic);
-BOX_FUNC(ssavalue, getSizeTy(C), get_attrs_basic);
 #undef BOX_FUNC
+
+static const auto box_ssavalue_func = new JuliaFunction<TypeFnContextAndSizeT>{
+    XSTR(jl_box_ssavalue),
+    [](LLVMContext &C, Type *T_size) {
+        auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
+        return FunctionType::get(T_prjlvalue,
+            {T_size}, false);
+    },
+    get_attrs_basic,
+};
 
 
 // placeholder functions
-static const auto gcroot_flush_func = new JuliaFunction{
+static const auto gcroot_flush_func = new JuliaFunction<>{
     "julia.gcroot_flush",
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C), false); },
     nullptr,
 };
-static const auto gc_preserve_begin_func = new JuliaFunction{
+static const auto gc_preserve_begin_func = new JuliaFunction<>{
     "llvm.julia.gc_preserve_begin",
     [](LLVMContext &C) { return FunctionType::get(Type::getTokenTy(C), true); },
     nullptr,
 };
-static const auto gc_preserve_end_func = new JuliaFunction {
+static const auto gc_preserve_end_func = new JuliaFunction<> {
     "llvm.julia.gc_preserve_end",
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C), {Type::getTokenTy(C)}, false); },
     nullptr,
 };
-static const auto except_enter_func = new JuliaFunction{
+static const auto except_enter_func = new JuliaFunction<>{
     "julia.except_enter",
     [](LLVMContext &C) { return FunctionType::get(getInt32Ty(C), false); },
     [](LLVMContext &C) { return AttributeList::get(C,
@@ -1166,7 +1188,7 @@ static const auto except_enter_func = new JuliaFunction{
             AttributeSet(),
             None); },
 };
-static const auto pointer_from_objref_func = new JuliaFunction{
+static const auto pointer_from_objref_func = new JuliaFunction<>{
     "julia.pointer_from_objref",
     [](LLVMContext &C) { return FunctionType::get(JuliaType::get_pjlvalue_ty(C),
             {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::Derived)}, false); },
@@ -1187,7 +1209,7 @@ static const auto pointer_from_objref_func = new JuliaFunction{
 // with all the spelled out args appropriately moved into the argument stack buffer.
 // By representing it this way rather than allocating the stack buffer earlier, we
 // allow LLVM to make more aggressive optimizations on the call arguments.
-static const auto julia_call = new JuliaFunction{
+static const auto julia_call = new JuliaFunction<>{
     "julia.call",
     [](LLVMContext &C) {
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
@@ -1200,7 +1222,7 @@ static const auto julia_call = new JuliaFunction{
 
 // julia.call2 is like julia.call, except that %arg1 gets passed as a register
 // argument at the end of the argument list.
-static const auto julia_call2 = new JuliaFunction{
+static const auto julia_call2 = new JuliaFunction<>{
     "julia.call2",
     [](LLVMContext &C) {
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
@@ -1212,49 +1234,49 @@ static const auto julia_call2 = new JuliaFunction{
     get_attrs_basic,
 };
 
-static const auto jltuple_func = new JuliaFunction{XSTR(jl_f_tuple), get_func_sig, get_func_attrs};
+static const auto jltuple_func = new JuliaFunction<>{XSTR(jl_f_tuple), get_func_sig, get_func_attrs};
 static const auto &builtin_func_map() {
-    static std::map<jl_fptr_args_t, JuliaFunction*> builtins = {
-          { jl_f_is_addr,                 new JuliaFunction{XSTR(jl_f_is), get_func_sig, get_func_attrs} },
-          { jl_f_typeof_addr,             new JuliaFunction{XSTR(jl_f_typeof), get_func_sig, get_func_attrs} },
-          { jl_f_sizeof_addr,             new JuliaFunction{XSTR(jl_f_sizeof), get_func_sig, get_func_attrs} },
-          { jl_f_issubtype_addr,          new JuliaFunction{XSTR(jl_f_issubtype), get_func_sig, get_func_attrs} },
-          { jl_f_isa_addr,                new JuliaFunction{XSTR(jl_f_isa), get_func_sig, get_func_attrs} },
-          { jl_f_typeassert_addr,         new JuliaFunction{XSTR(jl_f_typeassert), get_func_sig, get_func_attrs} },
-          { jl_f_ifelse_addr,             new JuliaFunction{XSTR(jl_f_ifelse), get_func_sig, get_func_attrs} },
-          { jl_f__apply_iterate_addr,     new JuliaFunction{XSTR(jl_f__apply_iterate), get_func_sig, get_func_attrs} },
-          { jl_f__apply_pure_addr,        new JuliaFunction{XSTR(jl_f__apply_pure), get_func_sig, get_func_attrs} },
-          { jl_f__call_latest_addr,       new JuliaFunction{XSTR(jl_f__call_latest), get_func_sig, get_func_attrs} },
-          { jl_f__call_in_world_addr,     new JuliaFunction{XSTR(jl_f__call_in_world), get_func_sig, get_func_attrs} },
-          { jl_f__call_in_world_total_addr, new JuliaFunction{XSTR(jl_f__call_in_world_total), get_func_sig, get_func_attrs} },
-          { jl_f_throw_addr,              new JuliaFunction{XSTR(jl_f_throw), get_func_sig, get_func_attrs} },
+    static std::map<jl_fptr_args_t, JuliaFunction<>*> builtins = {
+          { jl_f_is_addr,                 new JuliaFunction<>{XSTR(jl_f_is), get_func_sig, get_func_attrs} },
+          { jl_f_typeof_addr,             new JuliaFunction<>{XSTR(jl_f_typeof), get_func_sig, get_func_attrs} },
+          { jl_f_sizeof_addr,             new JuliaFunction<>{XSTR(jl_f_sizeof), get_func_sig, get_func_attrs} },
+          { jl_f_issubtype_addr,          new JuliaFunction<>{XSTR(jl_f_issubtype), get_func_sig, get_func_attrs} },
+          { jl_f_isa_addr,                new JuliaFunction<>{XSTR(jl_f_isa), get_func_sig, get_func_attrs} },
+          { jl_f_typeassert_addr,         new JuliaFunction<>{XSTR(jl_f_typeassert), get_func_sig, get_func_attrs} },
+          { jl_f_ifelse_addr,             new JuliaFunction<>{XSTR(jl_f_ifelse), get_func_sig, get_func_attrs} },
+          { jl_f__apply_iterate_addr,     new JuliaFunction<>{XSTR(jl_f__apply_iterate), get_func_sig, get_func_attrs} },
+          { jl_f__apply_pure_addr,        new JuliaFunction<>{XSTR(jl_f__apply_pure), get_func_sig, get_func_attrs} },
+          { jl_f__call_latest_addr,       new JuliaFunction<>{XSTR(jl_f__call_latest), get_func_sig, get_func_attrs} },
+          { jl_f__call_in_world_addr,     new JuliaFunction<>{XSTR(jl_f__call_in_world), get_func_sig, get_func_attrs} },
+          { jl_f__call_in_world_total_addr, new JuliaFunction<>{XSTR(jl_f__call_in_world_total), get_func_sig, get_func_attrs} },
+          { jl_f_throw_addr,              new JuliaFunction<>{XSTR(jl_f_throw), get_func_sig, get_func_attrs} },
           { jl_f_tuple_addr,              jltuple_func },
-          { jl_f_svec_addr,               new JuliaFunction{XSTR(jl_f_svec), get_func_sig, get_func_attrs} },
-          { jl_f_applicable_addr,         new JuliaFunction{XSTR(jl_f_applicable), get_func_sig, get_func_attrs} },
-          { jl_f_invoke_addr,             new JuliaFunction{XSTR(jl_f_invoke), get_func_sig, get_func_attrs} },
-          { jl_f_isdefined_addr,          new JuliaFunction{XSTR(jl_f_isdefined), get_func_sig, get_func_attrs} },
-          { jl_f_getfield_addr,           new JuliaFunction{XSTR(jl_f_getfield), get_func_sig, get_func_attrs} },
-          { jl_f_setfield_addr,           new JuliaFunction{XSTR(jl_f_setfield), get_func_sig, get_func_attrs} },
-          { jl_f_swapfield_addr,          new JuliaFunction{XSTR(jl_f_swapfield), get_func_sig, get_func_attrs} },
-          { jl_f_modifyfield_addr,        new JuliaFunction{XSTR(jl_f_modifyfield), get_func_sig, get_func_attrs} },
-          { jl_f_fieldtype_addr,          new JuliaFunction{XSTR(jl_f_fieldtype), get_func_sig, get_func_attrs} },
-          { jl_f_nfields_addr,            new JuliaFunction{XSTR(jl_f_nfields), get_func_sig, get_func_attrs} },
-          { jl_f__expr_addr,              new JuliaFunction{XSTR(jl_f__expr), get_func_sig, get_func_attrs} },
-          { jl_f__typevar_addr,           new JuliaFunction{XSTR(jl_f__typevar), get_func_sig, get_func_attrs} },
-          { jl_f_arrayref_addr,           new JuliaFunction{XSTR(jl_f_arrayref), get_func_sig, get_func_attrs} },
-          { jl_f_const_arrayref_addr,     new JuliaFunction{XSTR(jl_f_const_arrayref), get_func_sig, get_func_attrs} },
-          { jl_f_arrayset_addr,           new JuliaFunction{XSTR(jl_f_arrayset), get_func_sig, get_func_attrs} },
-          { jl_f_arraysize_addr,          new JuliaFunction{XSTR(jl_f_arraysize), get_func_sig, get_func_attrs} },
-          { jl_f_apply_type_addr,         new JuliaFunction{XSTR(jl_f_apply_type), get_func_sig, get_func_attrs} },
-          { jl_f_donotdelete_addr,        new JuliaFunction{XSTR(jl_f_donotdelete), get_donotdelete_sig, get_donotdelete_func_attrs} },
-          { jl_f_compilerbarrier_addr,    new JuliaFunction{XSTR(jl_f_compilerbarrier), get_func_sig, get_func_attrs} },
-          { jl_f_finalizer_addr,          new JuliaFunction{XSTR(jl_f_finalizer), get_func_sig, get_func_attrs} },
-          { jl_f__svec_ref_addr,          new JuliaFunction{XSTR(jl_f__svec_ref), get_func_sig, get_func_attrs} }
+          { jl_f_svec_addr,               new JuliaFunction<>{XSTR(jl_f_svec), get_func_sig, get_func_attrs} },
+          { jl_f_applicable_addr,         new JuliaFunction<>{XSTR(jl_f_applicable), get_func_sig, get_func_attrs} },
+          { jl_f_invoke_addr,             new JuliaFunction<>{XSTR(jl_f_invoke), get_func_sig, get_func_attrs} },
+          { jl_f_isdefined_addr,          new JuliaFunction<>{XSTR(jl_f_isdefined), get_func_sig, get_func_attrs} },
+          { jl_f_getfield_addr,           new JuliaFunction<>{XSTR(jl_f_getfield), get_func_sig, get_func_attrs} },
+          { jl_f_setfield_addr,           new JuliaFunction<>{XSTR(jl_f_setfield), get_func_sig, get_func_attrs} },
+          { jl_f_swapfield_addr,          new JuliaFunction<>{XSTR(jl_f_swapfield), get_func_sig, get_func_attrs} },
+          { jl_f_modifyfield_addr,        new JuliaFunction<>{XSTR(jl_f_modifyfield), get_func_sig, get_func_attrs} },
+          { jl_f_fieldtype_addr,          new JuliaFunction<>{XSTR(jl_f_fieldtype), get_func_sig, get_func_attrs} },
+          { jl_f_nfields_addr,            new JuliaFunction<>{XSTR(jl_f_nfields), get_func_sig, get_func_attrs} },
+          { jl_f__expr_addr,              new JuliaFunction<>{XSTR(jl_f__expr), get_func_sig, get_func_attrs} },
+          { jl_f__typevar_addr,           new JuliaFunction<>{XSTR(jl_f__typevar), get_func_sig, get_func_attrs} },
+          { jl_f_arrayref_addr,           new JuliaFunction<>{XSTR(jl_f_arrayref), get_func_sig, get_func_attrs} },
+          { jl_f_const_arrayref_addr,     new JuliaFunction<>{XSTR(jl_f_const_arrayref), get_func_sig, get_func_attrs} },
+          { jl_f_arrayset_addr,           new JuliaFunction<>{XSTR(jl_f_arrayset), get_func_sig, get_func_attrs} },
+          { jl_f_arraysize_addr,          new JuliaFunction<>{XSTR(jl_f_arraysize), get_func_sig, get_func_attrs} },
+          { jl_f_apply_type_addr,         new JuliaFunction<>{XSTR(jl_f_apply_type), get_func_sig, get_func_attrs} },
+          { jl_f_donotdelete_addr,        new JuliaFunction<>{XSTR(jl_f_donotdelete), get_donotdelete_sig, get_donotdelete_func_attrs} },
+          { jl_f_compilerbarrier_addr,    new JuliaFunction<>{XSTR(jl_f_compilerbarrier), get_func_sig, get_func_attrs} },
+          { jl_f_finalizer_addr,          new JuliaFunction<>{XSTR(jl_f_finalizer), get_func_sig, get_func_attrs} },
+          { jl_f__svec_ref_addr,          new JuliaFunction<>{XSTR(jl_f__svec_ref), get_func_sig, get_func_attrs} }
         };
     return builtins;
 }
 
-static const auto jl_new_opaque_closure_jlcall_func = new JuliaFunction{XSTR(jl_new_opaque_closure_jlcall), get_func_sig, get_func_attrs};
+static const auto jl_new_opaque_closure_jlcall_func = new JuliaFunction<>{XSTR(jl_new_opaque_closure_jlcall), get_func_sig, get_func_attrs};
 
 static _Atomic(int) globalUniqueGeneratedNames{1};
 
@@ -1703,9 +1725,9 @@ static Value *get_current_ptls(jl_codectx_t &ctx);
 static Value *get_last_age_field(jl_codectx_t &ctx);
 static void CreateTrap(IRBuilder<> &irbuilder, bool create_new_block = true);
 static CallInst *emit_jlcall(jl_codectx_t &ctx, FunctionCallee theFptr, Value *theF,
-                             const jl_cgval_t *args, size_t nargs, JuliaFunction *trampoline);
-static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction *theFptr, Value *theF,
-                             const jl_cgval_t *args, size_t nargs, JuliaFunction *trampoline);
+                             const jl_cgval_t *args, size_t nargs, JuliaFunction<> *trampoline);
+static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction<> *theFptr, Value *theF,
+                             const jl_cgval_t *args, size_t nargs, JuliaFunction<> *trampoline);
 static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2,
                         Value *nullcheck1 = nullptr, Value *nullcheck2 = nullptr);
 static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t nargs, const jl_cgval_t *argv, bool is_promotable=false);
@@ -1719,7 +1741,8 @@ static GlobalVariable *prepare_global_in(Module *M, JuliaVariable *G)
     return G->realize(M);
 }
 
-static Function *prepare_call_in(Module *M, JuliaFunction *G)
+template<typename TypeFn_t>
+static Function *prepare_call_in(Module *M, JuliaFunction<TypeFn_t> *G)
 {
     return G->realize(M);
 }
@@ -3847,9 +3870,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 return true;
             }
             // String and SimpleVector's length fields have the same layout
-            auto ptr = emit_bitcast(ctx, boxed(ctx, obj), getSizePtrTy(ctx.builder.getContext()));
+            auto ptr = emit_bitcast(ctx, boxed(ctx, obj), ctx.types().T_size->getPointerTo());
             jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
-            Value *len = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_size, ptr, Align(sizeof(size_t))));
+            Value *len = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_size, ptr, ctx.types().alignof_ptr));
             MDBuilder MDB(ctx.builder.getContext());
             if (sty == jl_simplevector_type) {
                 auto rng = MDB.createRange(
@@ -3981,7 +4004,7 @@ isdefined_unknown_idx:
                 // emit this using the same type as emit_getfield_knownidx
                 // so that LLVM may be able to load-load forward them and fold the result
                 jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
-                fldv = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, addr, Align(sizeof(size_t))));
+                fldv = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, addr, ctx.types().alignof_ptr));
                 cast<LoadInst>(fldv)->setOrdering(order <= jl_memory_order_notatomic ? AtomicOrdering::Unordered : get_llvm_atomic_order(order));
             }
             else {
@@ -4039,7 +4062,7 @@ isdefined_unknown_idx:
 
 // Returns ctx.types().T_prjlvalue
 static CallInst *emit_jlcall(jl_codectx_t &ctx, FunctionCallee theFptr, Value *theF,
-                             const jl_cgval_t *argv, size_t nargs, JuliaFunction *trampoline)
+                             const jl_cgval_t *argv, size_t nargs, JuliaFunction<> *trampoline)
 {
     ++EmittedJLCalls;
     Function *TheTrampoline = prepare_call(trampoline);
@@ -4059,8 +4082,8 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, FunctionCallee theFptr, Value *t
 }
 
 // Returns ctx.types().T_prjlvalue
-static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction *theFptr, Value *theF,
-                             const jl_cgval_t *argv, size_t nargs, JuliaFunction *trampoline)
+static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction<> *theFptr, Value *theF,
+                             const jl_cgval_t *argv, size_t nargs, JuliaFunction<> *trampoline)
 {
     return emit_jlcall(ctx, prepare_call(theFptr), theF, argv, nargs, trampoline);
 }
@@ -5469,7 +5492,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
                 if (F) {
                     jl_cgval_t jlcall_ptr = mark_julia_type(ctx, F, false, jl_voidpointer_type);
                     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-                    Instruction *I = ctx.builder.CreateAlignedLoad(ctx.types().T_size, get_last_age_field(ctx), Align(sizeof(size_t)));
+                    Instruction *I = ctx.builder.CreateAlignedLoad(ctx.types().T_size, get_last_age_field(ctx), ctx.types().alignof_ptr);
                     jl_cgval_t world_age = mark_julia_type(ctx, ai.decorateInst(I), false, jl_long_type);
                     jl_cgval_t fptr;
                     if (specF)
@@ -5610,13 +5633,13 @@ static void allocate_gc_frame(jl_codectx_t &ctx, BasicBlock *b0, bool or_new=fal
 
 static Value *get_current_task(jl_codectx_t &ctx)
 {
-    return get_current_task_from_pgcstack(ctx.builder, ctx.pgcstack);
+    return get_current_task_from_pgcstack(ctx.builder, ctx.types().T_size, ctx.pgcstack);
 }
 
 // Get PTLS through current task.
 static Value *get_current_ptls(jl_codectx_t &ctx)
 {
-    return get_current_ptls_from_task(ctx.builder, get_current_task(ctx), ctx.tbaa().tbaa_gcframe);
+    return get_current_ptls_from_task(ctx.builder, ctx.types().T_size, get_current_task(ctx), ctx.tbaa().tbaa_gcframe);
 }
 
 // Get the address of the world age of the current task
@@ -5625,8 +5648,8 @@ static Value *get_last_age_field(jl_codectx_t &ctx)
     Value *ct = get_current_task(ctx);
     return ctx.builder.CreateInBoundsGEP(
             ctx.types().T_size,
-            ctx.builder.CreateBitCast(ct, getSizePtrTy(ctx.builder.getContext())),
-            ConstantInt::get(ctx.types().T_size, offsetof(jl_task_t, world_age) / sizeof(size_t)),
+            ctx.builder.CreateBitCast(ct, ctx.types().T_size->getPointerTo()),
+            ConstantInt::get(ctx.types().T_size, offsetof(jl_task_t, world_age) / ctx.types().sizeof_ptr),
             "world_age");
 }
 
@@ -5931,10 +5954,10 @@ static Function* gen_cfun_wrapper(
     Value *world_age_field = get_last_age_field(ctx);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
     Value *last_age = ai.decorateInst(
-            ctx.builder.CreateAlignedLoad(ctx.types().T_size, world_age_field, Align(sizeof(size_t))));
+            ctx.builder.CreateAlignedLoad(ctx.types().T_size, world_age_field, ctx.types().alignof_ptr));
 
     Value *world_v = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
-        prepare_global_in(jl_Module, jlgetworld_global), Align(sizeof(size_t)));
+        prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr);
     cast<LoadInst>(world_v)->setOrdering(AtomicOrdering::Acquire);
 
     Value *age_ok = NULL;
@@ -5943,9 +5966,9 @@ static Function* gen_cfun_wrapper(
                 ctx.types().T_size,
                 ctx.builder.CreateConstInBoundsGEP1_32(
                     ctx.types().T_size,
-                    emit_bitcast(ctx, literal_pointer_val(ctx, (jl_value_t*)codeinst), getSizePtrTy(ctx.builder.getContext())),
-                    offsetof(jl_code_instance_t, max_world) / sizeof(size_t)),
-                Align(sizeof(size_t)));
+                    emit_bitcast(ctx, literal_pointer_val(ctx, (jl_value_t*)codeinst), ctx.types().T_size->getPointerTo()),
+                    offsetof(jl_code_instance_t, max_world) / ctx.types().sizeof_ptr),
+                ctx.types().alignof_ptr);
         age_ok = ctx.builder.CreateICmpUGE(lam_max, world_v);
     }
     ctx.builder.CreateStore(world_v, world_age_field);
@@ -6484,7 +6507,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
             assert(jl_datatype_size(output_type) == sizeof(void*) * 4);
             Value *strct = emit_allocobj(ctx, jl_datatype_size(output_type),
                                          literal_pointer_val(ctx, (jl_value_t*)output_type));
-            Value *derived_strct = emit_bitcast(ctx, decay_derived(ctx, strct), getSizePtrTy(ctx.builder.getContext()));
+            Value *derived_strct = emit_bitcast(ctx, decay_derived(ctx, strct), ctx.types().T_size->getPointerTo());
             MDNode *tbaa = best_tbaa(ctx.tbaa(), output_type);
             jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
             ai.decorateInst(ctx.builder.CreateStore(F, derived_strct));
@@ -7252,7 +7275,7 @@ static jl_llvm_functions_t
     if (toplevel || ctx.is_opaque_closure) {
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
         last_age = ai.decorateInst(ctx.builder.CreateAlignedLoad(
-            ctx.types().T_size, world_age_field, Align(sizeof(size_t))));
+            ctx.types().T_size, world_age_field, ctx.types().alignof_ptr));
     }
 
     // step 7. allocate local variables slots
@@ -7521,8 +7544,8 @@ static jl_llvm_functions_t
                         ConstantInt::get(ctx.types().T_size, offsetof(jl_opaque_closure_t, world)));
 
                 jl_cgval_t closure_world = typed_load(ctx, worldaddr, NULL, (jl_value_t*)jl_long_type,
-                    theArg.tbaa, nullptr, false, AtomicOrdering::NotAtomic, false, sizeof(size_t));
-                emit_unbox_store(ctx, closure_world, world_age_field, ctx.tbaa().tbaa_gcframe, sizeof(size_t));
+                    theArg.tbaa, nullptr, false, AtomicOrdering::NotAtomic, false, ctx.types().alignof_ptr.value());
+                emit_unbox_store(ctx, closure_world, world_age_field, ctx.tbaa().tbaa_gcframe, ctx.types().alignof_ptr.value());
 
                 // Load closure env
                 Value *envaddr = ctx.builder.CreateInBoundsGEP(
@@ -7738,7 +7761,7 @@ static jl_llvm_functions_t
 
     // step 11a. Emit the entry safepoint
     if (JL_FEAT_TEST(ctx, safepoint_on_entry))
-        emit_gc_safepoint(ctx.builder, get_current_ptls(ctx), ctx.tbaa().tbaa_const);
+        emit_gc_safepoint(ctx.builder, ctx.types().T_size, get_current_ptls(ctx), ctx.tbaa().tbaa_const);
 
     // step 11b. Do codegen in control flow order
     std::vector<int> workstack;
@@ -8066,9 +8089,9 @@ static jl_llvm_functions_t
             if (!jl_is_method(ctx.linfo->def.method) && !ctx.is_opaque_closure) {
                 // TODO: inference is invalid if this has any effect (which it often does)
                 LoadInst *world = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
-                    prepare_global_in(jl_Module, jlgetworld_global), Align(sizeof(size_t)));
+                    prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr);
                 world->setOrdering(AtomicOrdering::Acquire);
-                ctx.builder.CreateAlignedStore(world, world_age_field, Align(sizeof(size_t)));
+                ctx.builder.CreateAlignedStore(world, world_age_field, ctx.types().alignof_ptr);
             }
             emit_stmtpos(ctx, stmt, cursor);
             mallocVisitStmt(debuginfoloc, nullptr);
@@ -8667,12 +8690,15 @@ static void init_jit_functions(void)
     add_named_global(jldll_var, &jl_libjulia_handle);
     add_named_global(jldlli_var, &jl_libjulia_internal_handle);
 #endif
-    global_jlvalue_to_llvm(new JuliaVariable{"jl_true", true, get_pjlvalue}, &jl_true);
-    global_jlvalue_to_llvm(new JuliaVariable{"jl_false", true, get_pjlvalue}, &jl_false);
-    global_jlvalue_to_llvm(new JuliaVariable{"jl_emptysvec", true, get_pjlvalue}, (jl_value_t**)&jl_emptysvec);
-    global_jlvalue_to_llvm(new JuliaVariable{"jl_emptytuple", true, get_pjlvalue}, &jl_emptytuple);
-    global_jlvalue_to_llvm(new JuliaVariable{"jl_diverror_exception", true, get_pjlvalue}, &jl_diverror_exception);
-    global_jlvalue_to_llvm(new JuliaVariable{"jl_undefref_exception", true, get_pjlvalue}, &jl_undefref_exception);
+    auto size2pjlvalue = [](Type *T_size) -> Type * {
+        return get_pjlvalue(T_size->getContext());
+    };
+    global_jlvalue_to_llvm(new JuliaVariable{"jl_true", true, size2pjlvalue}, &jl_true);
+    global_jlvalue_to_llvm(new JuliaVariable{"jl_false", true, size2pjlvalue}, &jl_false);
+    global_jlvalue_to_llvm(new JuliaVariable{"jl_emptysvec", true, size2pjlvalue}, (jl_value_t**)&jl_emptysvec);
+    global_jlvalue_to_llvm(new JuliaVariable{"jl_emptytuple", true, size2pjlvalue}, &jl_emptytuple);
+    global_jlvalue_to_llvm(new JuliaVariable{"jl_diverror_exception", true, size2pjlvalue}, &jl_diverror_exception);
+    global_jlvalue_to_llvm(new JuliaVariable{"jl_undefref_exception", true, size2pjlvalue}, &jl_undefref_exception);
     add_named_global(jlgetworld_global, &jl_world_counter);
     add_named_global("__stack_chk_fail", &__stack_chk_fail);
     add_named_global(jlpgcstack_func, (void*)NULL);

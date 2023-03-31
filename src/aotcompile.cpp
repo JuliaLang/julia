@@ -258,8 +258,6 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
     *ci_out = codeinst;
 }
 
-void replaceUsesWithLoad(Function &F, function_ref<GlobalVariable *(Instruction &I)> should_replace, MDNode *tbaa_const);
-
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup, and can
 // also be used be extern consumers like GPUCompiler.jl to obtain a module containing
@@ -1503,11 +1501,7 @@ void jl_dump_native_impl(void *native_code,
     dataM->setTargetTriple(SourceTM->getTargetTriple().str());
     dataM->setDataLayout(jl_create_datalayout(*SourceTM));
 
-    Type *T_size;
-    if (sizeof(size_t) == 8)
-        T_size = Type::getInt64Ty(Context);
-    else
-        T_size = Type::getInt32Ty(Context);
+    Type *T_size = dataM->getDataLayout().getIntPtrType(Context);
     Type *T_psize = T_size->getPointerTo();
 
     bool imaging_mode = imaging_default() || jl_options.outputo;
