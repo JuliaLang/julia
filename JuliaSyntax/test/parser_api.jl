@@ -81,7 +81,7 @@
         parseshow(s;kws...) = sprint(show, MIME("text/x.sexpression"), parse(SyntaxNode, s; kws...))
         @test_throws JuliaSyntax.ParseError parseshow("try finally catch ex end")
         @test parseshow("try finally catch ex end", ignore_warnings=true) ==
-            "(try_finally_catch (block) false false false (block) ex (block))"
+            "(try (block) (finally (block)) (catch ex (block)))"
         # ignore_errors
         @test_throws JuliaSyntax.ParseError parseshow("[a; b, c]")
         @test_throws JuliaSyntax.ParseError parseshow("[a; b, c]", ignore_warnings=true)

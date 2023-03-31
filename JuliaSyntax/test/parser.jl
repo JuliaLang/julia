@@ -596,24 +596,23 @@ tests = [
     ],
     JuliaSyntax.parse_try => [
         "try \n x \n catch e \n y \n finally \n z end" =>
-            "(try (block x) e (block y) false (block z))"
+            "(try (block x) (catch e (block y)) (finally (block z)))"
         ((v=v"1.8",), "try \n x \n catch e \n y \n else z finally \n w end") =>
-            "(try (block x) e (block y) (block z) (block w))"
-        "try x catch end"       =>  "(try (block x) false (block) false false)"
-        "try x catch ; y end"   =>  "(try (block x) false (block y) false false)"
-        "try x catch \n y end"  =>  "(try (block x) false (block y) false false)"
-        "try x catch e y end"   =>  "(try (block x) e (block y) false false)"
-        "try x catch \$e y end" =>  "(try (block x) (\$ e) (block y) false false)"
-        "try x catch e+3 y end" =>  "(try (block x) (error (call-i e + 3)) (block y) false false)"
-        "try x finally y end"   =>  "(try (block x) false false false (block y))"
+            "(try (block x) (catch e (block y)) (else (block z)) (finally (block w)))"
+        "try x catch end"       =>  "(try (block x) (catch false (block)))"
+        "try x catch ; y end"   =>  "(try (block x) (catch false (block y)))"
+        "try x catch \n y end"  =>  "(try (block x) (catch false (block y)))"
+        "try x catch e y end"   =>  "(try (block x) (catch e (block y)))"
+        "try x catch \$e y end" =>  "(try (block x) (catch (\$ e) (block y)))"
+        "try x catch e+3 y end" =>  "(try (block x) (catch (error (call-i e + 3)) (block y)))"
+        "try x finally y end"   =>  "(try (block x) (finally (block y)))"
         # v1.8 only
-        ((v=v"1.8",), "try catch ; else end") => "(try (block) false (block) (block) false)"
-        ((v=v"1.8",), "try else x finally y end") => "(try (block) false false (error (block x)) (block y))"
-        ((v=v"1.7",), "try catch ; else end")  =>  "(try (block) false (block) (error (block)) false)"
+        ((v=v"1.8",), "try catch ; else end") => "(try (block) (catch false (block)) (else (block)))"
+        ((v=v"1.8",), "try else x finally y end") => "(try (block) (else (error (block x))) (finally (block y)))"
+        ((v=v"1.7",), "try catch ; else end")  =>  "(try (block) (catch false (block)) (else (error (block))))"
         # finally before catch :-(
-        "try x finally y catch e z end"  =>  "(try_finally_catch (block x) false false false (block y) e (block z))" =>
-            Expr(:try, Expr(:block, :x), :e, Expr(:block, :z), Expr(:block, :y))
-        "try x end" => "(try (block x) false false false false (error-t))"
+        "try x finally y catch e z end"  =>  "(try (block x) (finally (block y)) (catch e (block z)))"
+        "try x end" => "(try (block x) (error-t))"
     ],
     JuliaSyntax.parse_imports => [
         "import A as B: x"  => "(import (: (error (as (. A) B)) (. x)))"

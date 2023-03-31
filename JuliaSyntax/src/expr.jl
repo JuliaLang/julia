@@ -53,9 +53,9 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
             # TODO: Get non-token error messages in here as well, somehow?
             # There's an awkward mismatch between the out-of-tree
             # `Vector{Diagnostic}` vs Expr(:error) being part of the tree.
-            return Expr(:error,
-                "$(_token_error_descriptions[nodekind]): `$(sourcetext(node))`"
-            )
+            return nodekind == K"error" ?
+                Expr(:error) :
+                Expr(:error, "$(_token_error_descriptions[nodekind]): `$(sourcetext(node))`")
         else
             return val
         end
@@ -215,33 +215,38 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
             @check all(Meta.isexpr(args[j], :error) for j in 2:length(args))
             return Expr(:block, args...)
         end
-    elseif headsym in (:try, :try_finally_catch)
+    elseif headsym === :try
         # Try children in source order:
         #   try_block catch_var catch_block else_block finally_block
         # Expr ordering:
         #   try_block catch_var catch_block [finally_block] [else_block]
-        catch_ = nothing
-        if headsym === :try_finally_catch
-            catch_ = pop!(args)
-            catch_var = pop!(args)
+        try_ = args[1]
+        catch_var = false
+        catch_ = false
+        else_ = false
+        finally_ = false
+        for i in 2:length(args)
+            a = args[i]
+            if Meta.isexpr(a, :catch)
+                catch_var = a.args[1]
+                catch_ = a.args[2]
+            elseif Meta.isexpr(a, :else)
+                else_ = only(a.args)
+            elseif Meta.isexpr(a, :finally)
+                finally_ = only(a.args)
+            elseif Meta.isexpr(a, :error)
+                finally_ = Expr(:block, a) # Unclear where to put this but here will do?
+            else
+                @check false "Illegal $a subclause in `try`"
+            end
         end
-        finally_ = pop!(args)
-        else_ = pop!(args)
-        if headsym === :try_finally_catch
-            pop!(args)
-            pop!(args)
-            push!(args, catch_var)
-            push!(args, catch_)
-        end
-        # At this point args is
-        # [try_block catch_var catch_block]
+        args = Any[try_, catch_var, catch_]
         if finally_ !== false || else_ !== false
             push!(args, finally_)
+            if else_ !== false
+                push!(args, else_)
+            end
         end
-        if else_ !== false
-            push!(args, else_)
-        end
-        headsym = :try
     elseif headsym === :filter
         pushfirst!(args, last(args))
         pop!(args)

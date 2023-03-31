@@ -303,6 +303,19 @@
                  Expr(:block, LineNumberNode(1), :y),
                  Expr(:block, LineNumberNode(1), :w),
                  Expr(:block, LineNumberNode(1), :z))
+        # finally before catch
+        @test parse(Expr, "try x finally y catch e z end", ignore_warnings=true) ==
+            Expr(:try,
+                 Expr(:block, LineNumberNode(1), :x),
+                 :e,
+                 Expr(:block, LineNumberNode(1), :z),
+                 Expr(:block, LineNumberNode(1), :y))
+        # empty recovery
+        @test parse(Expr, "try x end", ignore_errors=true) ==
+            Expr(:try,
+                 Expr(:block, LineNumberNode(1), :x),
+                 false, false,
+                 Expr(:block, Expr(:error)))
     end
 
     @testset "juxtapose" begin
