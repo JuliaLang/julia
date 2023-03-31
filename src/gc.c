@@ -3485,12 +3485,14 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 
     // update heuristics only if this GC was automatically triggered
     if (collection == JL_GC_AUTO) {
-        if (not_freed_enough) {
-            gc_num.interval = gc_num.interval * 2;
-        }
         if (large_frontier) {
             sweep_full = 1;
+            gc_num.interval = last_long_collect_interval;
         }
+        if (not_freed_enough || large_frontier) {
+            gc_num.interval = gc_num.interval * 2;
+        }
+
         size_t maxmem = 0;
 #ifdef _P64
         // on a big memory machine, increase max_collect_interval to totalmem / nthreads / 2
@@ -3523,6 +3525,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         // on the first collection after sweep_full, and the current scan
         perm_scanned_bytes = 0;
         promoted_bytes = 0;
+        last_long_collect_interval = gc_num.interval;
     }
     scanned_bytes = 0;
     // 5. start sweeping
@@ -3597,21 +3600,34 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     live_bytes += -gc_num.freed + gc_num.since_sweep;
 
     if (collection == JL_GC_AUTO) {
-      // If the current interval is larger than half the live data decrease the interval
-      int64_t half = live_bytes/2;
-      if (gc_num.interval > half) gc_num.interval = half;
-      // But never go below default
-      if (gc_num.interval < default_collect_interval) gc_num.interval = default_collect_interval;
+        //If we aren't freeing enough or are seeing lots and lots of pointers let it increase faster
+        if(!not_freed_enough || large_frontier) {
+            int64_t tot = 2 * (live_bytes + gc_num.since_sweep) / 3;
+            if (gc_num.interval > tot) {
+                gc_num.interval = tot;
+                last_long_collect_interval = tot;
+            }
+        // If the current interval is larger than half the live data decrease the interval
+        } else {
+            int64_t half = (live_bytes / 2);
+            if (gc_num.interval > half)
+                gc_num.interval = half;
+        }
+
+        // But never go below default
+        if (gc_num.interval < default_collect_interval) gc_num.interval = default_collect_interval;
     }
 
     if (gc_num.interval + live_bytes > max_total_memory) {
         if (live_bytes < max_total_memory) {
             gc_num.interval = max_total_memory - live_bytes;
-        } else {
+            last_long_collect_interval = max_total_memory - live_bytes;
+        }
+        else {
             // We can't stay under our goal so let's go back to
             // the minimum interval and hope things get better
             gc_num.interval = default_collect_interval;
-       }
+        }
     }
 
     gc_time_summary(sweep_full, t_start, gc_end_time, gc_num.freed,
