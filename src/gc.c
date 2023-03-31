@@ -501,9 +501,9 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NO
     ct->sticky = sticky;
 }
 
-static uint64_t finalizer_rngState[4];
+static uint64_t finalizer_rngState[JL_RNG_SIZE];
 
-void jl_rng_split(uint64_t to[4], uint64_t from[4]) JL_NOTSAFEPOINT;
+void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_gc_init_finalizer_rng_state(void)
 {
@@ -532,7 +532,7 @@ static void run_finalizers(jl_task_t *ct)
     jl_atomic_store_relaxed(&jl_gc_have_pending_finalizers, 0);
     arraylist_new(&to_finalize, 0);
 
-    uint64_t save_rngState[4];
+    uint64_t save_rngState[JL_RNG_SIZE];
     memcpy(&save_rngState[0], &ct->rngState[0], sizeof(save_rngState));
     jl_rng_split(ct->rngState, finalizer_rngState);
 
