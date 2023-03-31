@@ -1046,3 +1046,12 @@ end
     f("hello")
     @test length(Base.specializations(only(methods(f)))) == 2
 end
+
+# https://github.com/JuliaLang/julia/issues/48856
+@test Base.ismutationfree(Vector{Any}) == false
+@test Base.ismutationfree(Vector{Symbol}) == false
+@test Base.ismutationfree(Vector{UInt8}) == false
+@test Base.ismutationfree(Vector{Int32}) == false
+@test Base.ismutationfree(Vector{UInt64}) == false
+
+@test Base.ismutationfree(Type{Union{}})
