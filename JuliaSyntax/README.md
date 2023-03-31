@@ -1205,3 +1205,22 @@ indentation from the syntax tree?  Source formatting involves a big pile of
 heuristics to get something which "looks nice"... and ML systems have become
 very good at heuristics. Also, we've got huge piles of training data — just
 choose some high quality, tastefully hand-formatted libraries.
+
+# Getting involved
+
+For people who want to help improve Julia's error messages by contributing to
+JuliaSyntax, I'd suggest looking through the issue list at
+https://github.com/JuliaLang/JuliaSyntax.jl/issues and choosing a small issue
+or two to work on to familiarize yourself with the code. Anything marked with
+the labels `intro issue` or `bug` might be a good place to start.
+
+Also watching the 2022 JuliaCon talk and reading this document is probably good
+for an overview.
+
+As of March 2023, we've got really good positional tracking within the source,
+but JuliaSyntax really needs a better system for parser recovery before the
+errors are really nice. This requires some research. For example, you could
+read up on how rust-analyzer does recovery, or rslint - both these are
+event-based recursive decent parsers with similar structure to JuliaSyntax
+(though in Rust). I also want to investigate whether we can do data-driven
+parser recovery using an ML technique. But again, this is a research project.
