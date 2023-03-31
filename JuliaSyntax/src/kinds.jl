@@ -907,8 +907,6 @@ const _kind_names =
         "flatten"
         "comprehension"
         "typed_comprehension"
-        # Special kind for compatibility with the ever-ugly try-finally-catch ordering
-        "try_finally_catch"
     "END_SYNTAX_KINDS"
 ]
 

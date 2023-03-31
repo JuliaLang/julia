@@ -2201,61 +2201,51 @@ end
 
 # Parse a try block
 #
-# try \n x \n catch e \n y \n finally \n z end  ==>  (try (block x) e (block y) false (block z))
-#v1.8: try \n x \n catch e \n y \n else z finally \n w end  ==>  (try (block x) e (block y) (block z) (block w))
+# try \n x \n catch e \n y \n finally \n z end  ==>  (try (block x) (catch e (block y)) (finally (block z)))
+#v1.8: try \n x \n catch e \n y \n else z finally \n w end  ==>  (try (block x) (catch e (block y)) (else (block z)) (finally (block w)))
 #
 # flisp: embedded in parse_resword
 function parse_try(ps)
-    out_kind = K"try"
     mark = position(ps)
     bump(ps, TRIVIA_FLAG)
     parse_block(ps)
     has_catch = false
-    has_else = false
     has_finally = false
-    bump_trivia(ps)
-    flags = EMPTY_FLAGS
     bump_trivia(ps)
     if peek(ps) == K"catch"
         has_catch = true
         parse_catch(ps)
-    else
-        bump_invisible(ps, K"false")
-        bump_invisible(ps, K"false")
     end
     bump_trivia(ps)
     if peek(ps) == K"else"
         # catch-else syntax: https://github.com/JuliaLang/julia/pull/42211
         #
-        #v1.8: try catch ; else end ==> (try (block) false (block) (block) false)
-        has_else = true
+        #v1.8: try catch ; else end ==> (try (block) (catch false (block)) (else (block)))
         else_mark = position(ps)
         bump(ps, TRIVIA_FLAG)
         parse_block(ps)
         if !has_catch
-            #v1.8: try else x finally y end ==> (try (block) false false (error (block x)) (block y))
+            #v1.8: try else x finally y end ==> (try (block) (else (error (block x))) (finally (block y)))
             emit(ps, else_mark, K"error", error="Expected `catch` before `else`")
         end
-        #v1.7: try catch ; else end ==> (try (block) false (block) (error (block)) false)
+        #v1.7: try catch ; else end ==> (try (block) (catch false (block)) (else (error (block))))
         min_supported_version(v"1.8", ps, else_mark, "`else` after `catch`")
-    else
-        bump_invisible(ps, K"false")
+        emit(ps, else_mark, K"else")
     end
     bump_trivia(ps)
     if peek(ps) == K"finally"
-        # try x finally y end  ==>  (try (block x) false false false (block y))
+        finally_mark = position(ps)
+        # try x finally y end  ==>  (try (block x) (finally (block y)))
         has_finally = true
         bump(ps, TRIVIA_FLAG)
         parse_block(ps)
-    else
-        bump_invisible(ps, K"false")
+        emit(ps, finally_mark, K"finally")
     end
     # Wart: the flisp parser allows finally before catch, the *opposite* order
     # in which these blocks execute.
     bump_trivia(ps)
     if !has_catch && peek(ps) == K"catch"
-        # try x finally y catch e z end  ==>  (try_finally_catch (block x) false false false (block y) e (block z))
-        out_kind = K"try_finally_catch"
+        # try x finally y catch e z end  ==>  (try (block x) (finally (block y)) (catch e (block z)))
         m = position(ps)
         parse_catch(ps)
         emit_diagnostic(ps, m,
@@ -2263,35 +2253,37 @@ function parse_try(ps)
     end
     missing_recovery = !has_catch && !has_finally
     if missing_recovery
-        # try x end  ==>  (try (block x) false false false false (error-t))
+        # try x end  ==>  (try (block x) (error-t))
         bump_invisible(ps, K"error", TRIVIA_FLAG)
     end
     bump_closing_token(ps, K"end")
-    emit(ps, mark, out_kind, flags)
+    emit(ps, mark, K"try")
     if missing_recovery
         emit_diagnostic(ps, mark, error="try without catch or finally")
     end
 end
 
 function parse_catch(ps::ParseState)
+    mark = position(ps)
     bump(ps, TRIVIA_FLAG)
     k = peek(ps)
     if k in KSet"NewlineWs ;" || is_closing_token(ps, k)
-        # try x catch end      ==>  (try (block x) false (block) false false)
-        # try x catch ; y end  ==>  (try (block x) false (block y) false false)
-        # try x catch \n y end ==>  (try (block x) false (block y) false false)
+        # try x catch end      ==>  (try (block x) (catch false (block)))
+        # try x catch ; y end  ==>  (try (block x) (catch false (block y)))
+        # try x catch \n y end ==>  (try (block x) (catch false (block y)))
         bump_invisible(ps, K"false")
     else
-        # try x catch e y end   ==>  (try (block x) e (block y) false false)
-        # try x catch $e y end  ==>  (try (block x) ($ e) (block y) false false)
-        mark = position(ps)
+        # try x catch e y end   ==>  (try (block x) (catch e (block y)))
+        # try x catch $e y end  ==>  (try (block x) (catch ($ e) (block y)))
+        m = position(ps)
         parse_eq_star(ps)
         if !(peek_behind(ps).kind in KSet"Identifier $")
-            # try x catch e+3 y end  ==>  (try (block x) (error (call-i e + 3)) (block y) false false)
-            emit(ps, mark, K"error", error="a variable name is expected after `catch`")
+            # try x catch e+3 y end  ==>  (try (block x) (catch (error (call-i e + 3)) (block y)))
+            emit(ps, m, K"error", error="a variable name is expected after `catch`")
         end
     end
     parse_block(ps)
+    emit(ps, mark, K"catch")
 end
 
 # flisp: parse-do
