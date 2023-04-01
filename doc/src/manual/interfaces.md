@@ -442,6 +442,8 @@ V = view(A, [1,2,4], :)   # is not strided, as the spacing between rows is not f
 | `Base.BroadcastStyle(::Style1, ::Style2) = Style12()` | Precedence rules for mixing styles |
 | `Base.axes(x)` | Declaration of the indices of `x`, as per [`axes(x)`](@ref). |
 | `Base.broadcastable(x)` | Convert `x` to an object that has `axes` and supports indexing |
+| `Base.dataids(x::AbstractArray)` | Return a tuple of `UInt`s that represent the mutable data segments of an array `x`. |
+| `Base.unaliascopy(x::AbstractArray)` | Make a preventative copy of an array `x` in an operation where `x` `Base.mightalias` against another array. |
 | **Bypassing default machinery** | |
 | `Base.copy(bc::Broadcasted{DestStyle})` | Custom implementation of `broadcast` |
 | `Base.copyto!(dest, bc::Broadcasted{DestStyle})` | Custom implementation of `broadcast!`, specializing on `DestStyle` |
