@@ -222,6 +222,11 @@ function show_spec_linfo(io::IO, frame::StackFrame)
     elseif linfo isa MethodInstance
         def = linfo.def
         if isa(def, Method)
+            if get(io, :limit, false)::Bool
+                if !haskey(io, :displaysize)
+                    io = IOContext(io, :displaysize => displaysize(io))
+                end
+            end
             sig = linfo.specTypes
             argnames = Base.method_argnames(def)
             argnames = replace(argnames, :var"#unused#" => :var"")
