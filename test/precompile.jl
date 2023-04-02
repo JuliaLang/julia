@@ -662,12 +662,13 @@ precompile_test_harness("code caching") do dir
         @test all(i -> root_provenance(m, i) == Mid, 1:length(m.roots))
     end
     # Check that we can cache external CodeInstances:
-    # size(::Vector) has an inferred specialization for Vector{X}
-    msize = which(size, (Vector{<:Any},))
+    # length(::Vector) has an inferred specialization for `Vector{X}`
+    msize = which(length, (Vector{<:Any},))
     hasspec = false
     for mi in Base.specializations(msize)
-        if mi.specTypes == Tuple{typeof(size),Vector{Cacheb8321416e8a3e2f1.X}}
-            if isdefined(mi, :cache) && isa(mi.cache, Core.CodeInstance) && mi.cache.max_world == typemax(UInt) && mi.cache.inferred !== nothing
+        if mi.specTypes == Tuple{typeof(length),Vector{Cacheb8321416e8a3e2f1.X}}
+            if (isdefined(mi, :cache) && isa(mi.cache, Core.CodeInstance) &&
+                mi.cache.max_world == typemax(UInt) && mi.cache.inferred !== nothing)
                 hasspec = true
                 break
             end
