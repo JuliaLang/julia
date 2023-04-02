@@ -1264,8 +1264,6 @@ function const_prop_methodinstance_heuristic(interp::AbstractInterpreter,
     elseif is_stmt_noinline(flag)
         # this call won't be inlined, thus this constant-prop' will most likely be unfruitful
         return false
-    elseif any_const_prop_profitable_args(effects, arginfo.argtypes)
-        return true
     end
     # Peek at the inferred result for the method to determine if the optimizer
     # was able to cut it down to something simple (inlineable in particular).
@@ -1275,8 +1273,9 @@ function const_prop_methodinstance_heuristic(interp::AbstractInterpreter,
     if isa(code, CodeInstance)
         inferred = @atomic :monotonic code.inferred
         rt = code.rettype
+        boost = any_const_prop_profitable_args(effects, arginfo.argtypes)
         # TODO propagate a specific `CallInfo` that conveys information about this call
-        iinfo = InliningInfo(rt, mi, arginfo.argtypes, NoCallInfo(), IR_FLAG_NULL)
+        iinfo = InliningInfo(rt, mi, arginfo.argtypes, NoCallInfo(), IR_FLAG_NULL, boost)
         if inlining_policy(interp, inferred, iinfo) !== nothing
             return true
         end

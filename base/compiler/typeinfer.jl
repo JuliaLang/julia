@@ -354,12 +354,14 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult,
                         relocatability, precompile)
 end
 
-function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo)
+function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo,
+                                 ipo_effects::Effects)
     def = mi.def
     isa(def, Method) || return ci
     if may_discard_trees(interp)
         cache_the_tree = ci.inferred && (
             is_inlineable(interp, ci, InlineabilityInfo(ci.rettype, mi)) ||
+            ipo_effects.const_prop_profitable_args !== NO_PROFITABLE_ARGS || # TODO remove me?
             isa_compileable_sig(mi))
     else
         cache_the_tree = true
@@ -389,7 +391,7 @@ function transform_result_for_cache(interp::AbstractInterpreter,
     if inferred_result isa CodeInfo
         inferred_result.min_world = first(valid_worlds)
         inferred_result.max_world = last(valid_worlds)
-        inferred_result = maybe_compress_codeinfo(interp, linfo, inferred_result)
+        inferred_result = maybe_compress_codeinfo(interp, linfo, inferred_result, result.effects)
     end
     # The global cache can only handle objects that codegen understands
     if !isa(inferred_result, MaybeCompressed)
