@@ -937,7 +937,7 @@ function getfield_boundscheck((; fargs, argtypes)::ArgInfo) # Symbol
     return :unknown
 end
 
-function getfield_nothrow(arginfo::ArgInfo, boundscheck::Symbol=getfield_boundscheck(arginfo))
+function getfield_nothrow(𝕃::AbstractLattice, arginfo::ArgInfo, boundscheck::Symbol=getfield_boundscheck(arginfo))
     (;argtypes) = arginfo
     boundscheck === :unknown && return false
     ordering = Const(:not_atomic)
@@ -958,16 +958,18 @@ function getfield_nothrow(arginfo::ArgInfo, boundscheck::Symbol=getfield_boundsc
         if ordering !== :not_atomic # TODO: this is assuming not atomic
             return false
         end
-        return getfield_nothrow(argtypes[2], argtypes[3], !(boundscheck === :off))
+        return getfield_nothrow(𝕃, argtypes[2], argtypes[3], !(boundscheck === :off))
     else
         return false
     end
 end
-@nospecs function getfield_nothrow(s00, name, boundscheck::Bool)
+@nospecs function getfield_nothrow(𝕃::AbstractLattice, s00, name, boundscheck::Bool)
     # If we don't have boundscheck off and don't know the field, don't even bother
     if boundscheck
         isa(name, Const) || return false
     end
+
+    ⊑ = Core.Compiler.:⊑(𝕃)
 
     # If we have s00 being a const, we can potentially refine our type-based analysis above
     if isa(s00, Const) || isconstType(s00)
@@ -984,31 +986,32 @@ end
             end
             return isdefined(sv, nval)
         end
-        if !boundscheck && !isa(sv, Module)
-            # If bounds checking is disabled and all fields are assigned,
-            # we may assume that we don't throw
-            for i = 1:fieldcount(typeof(sv))
-                isdefined(sv, i) || return false
-            end
-            return true
+        boundscheck && return false
+        # If bounds checking is disabled and all fields are assigned,
+        # we may assume that we don't throw
+        isa(sv, Module) && return false
+        name ⊑ Int || name ⊑ Symbol || return false
+        for i = 1:fieldcount(typeof(sv))
+            isdefined(sv, i) || return false
         end
-        return false
+        return true
     end
 
     s0 = widenconst(s00)
     s = unwrap_unionall(s0)
     if isa(s, Union)
-        return getfield_nothrow(rewrap_unionall(s.a, s00), name, boundscheck) &&
-               getfield_nothrow(rewrap_unionall(s.b, s00), name, boundscheck)
+        return getfield_nothrow(𝕃, rewrap_unionall(s.a, s00), name, boundscheck) &&
+               getfield_nothrow(𝕃, rewrap_unionall(s.b, s00), name, boundscheck)
     elseif isType(s) && isTypeDataType(s.parameters[1])
         s = s0 = DataType
     end
     if isa(s, DataType)
         # Can't say anything about abstract types
         isabstracttype(s) && return false
-        # If all fields are always initialized, and bounds check is disabled, we can assume
-        # we don't throw
+        # If all fields are always initialized, and bounds check is disabled,
+        # we can assume we don't throw
         if !boundscheck && s.name.n_uninitialized == 0
+            name ⊑ Int || name ⊑ Symbol || return false
             return true
         end
         # Else we need to know what the field is
@@ -1999,18 +2002,20 @@ function array_type_undefable(@nospecialize(arytype))
     end
 end
 
-function array_builtin_common_nothrow(argtypes::Vector{Any}, first_idx_idx::Int)
+function array_builtin_common_nothrow(argtypes::Vector{Any}, first_idx_idx::Int, isarrayref::Bool)
     length(argtypes) >= 4 || return false
     boundscheck = argtypes[1]
     arytype = argtypes[2]
     array_builtin_common_typecheck(boundscheck, arytype, argtypes, first_idx_idx) || return false
-    # If we could potentially throw undef ref errors, bail out now.
-    arytype = widenconst(arytype)
-    array_type_undefable(arytype) && return false
+    if isarrayref
+        # If we could potentially throw undef ref errors, bail out now.
+        arytype = widenconst(arytype)
+        array_type_undefable(arytype) && return false
+    end
     # If we have @inbounds (first argument is false), we're allowed to assume
     # we don't throw bounds errors.
     if isa(boundscheck, Const)
-        !(boundscheck.val::Bool) && return true
+        boundscheck.val::Bool || return true
     end
     # Else we can't really say anything here
     # TODO: In the future we may be able to track the shapes of arrays though
@@ -2042,11 +2047,11 @@ end
 @nospecs function _builtin_nothrow(𝕃::AbstractLattice, f, argtypes::Vector{Any}, rt)
     ⊑ = Core.Compiler.:⊑(𝕃)
     if f === arrayset
-        array_builtin_common_nothrow(argtypes, 4) || return false
+        array_builtin_common_nothrow(argtypes, 4, #=isarrayref=#false) || return false
         # Additionally check element type compatibility
         return arrayset_typecheck(argtypes[2], argtypes[3])
     elseif f === arrayref || f === const_arrayref
-        return array_builtin_common_nothrow(argtypes, 3)
+        return array_builtin_common_nothrow(argtypes, 3, #=isarrayref=#true)
     elseif f === Core._expr
         length(argtypes) >= 1 || return false
         return argtypes[1] ⊑ Symbol
@@ -2065,7 +2070,7 @@ end
     elseif f === invoke
         return false
     elseif f === getfield
-        return getfield_nothrow(ArgInfo(nothing, Any[Const(f), argtypes...]))
+        return getfield_nothrow(𝕃, ArgInfo(nothing, Any[Const(f), argtypes...]))
     elseif f === setfield!
         if na == 3
             return setfield!_nothrow(𝕃, argtypes[1], argtypes[2], argtypes[3])
@@ -2222,7 +2227,7 @@ function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
     return Effects(EFFECTS_TOTAL; consistent, nothrow)
 end
 
-function getfield_effects(arginfo::ArgInfo, @nospecialize(rt))
+function getfield_effects(𝕃::AbstractLattice, arginfo::ArgInfo, @nospecialize(rt))
     (;argtypes) = arginfo
     # consistent if the argtype is immutable
     length(argtypes) < 3 && return EFFECTS_THROWS
@@ -2238,9 +2243,9 @@ function getfield_effects(arginfo::ArgInfo, @nospecialize(rt))
     if !(length(argtypes) ≥ 3 && getfield_notundefined(obj, argtypes[3]))
         consistent = ALWAYS_FALSE
     end
-    nothrow = getfield_nothrow(arginfo, :on)
+    bcheck = getfield_boundscheck(arginfo)
+    nothrow = getfield_nothrow(𝕃, arginfo, bcheck)
     if !nothrow
-        bcheck = getfield_boundscheck(arginfo)
         if !(bcheck === :on || bcheck === :boundscheck)
             # If we cannot independently prove inboundsness, taint consistency.
             # The inbounds-ness assertion requires dynamic reachability, while
@@ -2291,7 +2296,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argin
     @assert !contains_is(_SPECIAL_BUILTINS, f)
 
     if f === getfield
-        return getfield_effects(arginfo, rt)
+        return getfield_effects(𝕃, arginfo, rt)
     end
     argtypes = arginfo.argtypes[2:end]
 
