@@ -2023,7 +2023,7 @@ end
 function abstract_call_opaque_closure(interp::AbstractInterpreter,
     closure::PartialOpaque, arginfo::ArgInfo, si::StmtInfo, sv::InferenceState, check::Bool=true)
     sig = argtypes_to_type(arginfo.argtypes)
-    result = abstract_call_method(interp, closure.source, sig, Core.svec(), false, si, sv)
+    result = abstract_call_method(interp, closure.source::Method, sig, Core.svec(), false, si, sv)
     (; rt, edge, effects) = result
     tt = closure.typ
     sigT = (unwrap_unionall(tt)::DataType).parameters[1]
@@ -2276,7 +2276,9 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
             ismutable = ismutabletype(ut)
             fcount = datatype_fieldcount(ut)
             nargs = length(e.args) - 1
-            if fcount === nothing || (fcount > nargs && any(i::Int -> !is_undefref_fieldtype(fieldtype(t, i)), (nargs+1):fcount))
+            if (fcount === nothing || (fcount > nargs && (let t = t
+                    any(i::Int -> !is_undefref_fieldtype(fieldtype(t, i)), (nargs+1):fcount)
+                end)))
                 # allocation with undefined field leads to undefined behavior and should taint `:consistent`-cy
                 consistent = ALWAYS_FALSE
             elseif ismutable
@@ -2335,12 +2337,16 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         if length(e.args) == 2 && isconcretedispatch(t) && !ismutabletype(t)
             at = abstract_eval_value(interp, e.args[2], vtypes, sv)
             n = fieldcount(t)
-            if isa(at, Const) && isa(at.val, Tuple) && n == length(at.val::Tuple) &&
-                let t = t, at = at; all(i::Int->getfield(at.val::Tuple, i) isa fieldtype(t, i), 1:n); end
+            if (isa(at, Const) && isa(at.val, Tuple) && n == length(at.val::Tuple) &&
+                (let t = t, at = at
+                    all(i::Int->getfield(at.val::Tuple, i) isa fieldtype(t, i), 1:n)
+                end))
                 nothrow = isexact
                 t = Const(ccall(:jl_new_structt, Any, (Any, Any), t, at.val))
-            elseif isa(at, PartialStruct) && at ⊑ᵢ Tuple && n == length(at.fields::Vector{Any}) &&
-                let t = t, at = at; all(i::Int->(at.fields::Vector{Any})[i] ⊑ᵢ fieldtype(t, i), 1:n); end
+            elseif (isa(at, PartialStruct) && at ⊑ᵢ Tuple && n == length(at.fields::Vector{Any}) &&
+                    (let t = t, at = at, ⊑ᵢ = ⊑ᵢ
+                        all(i::Int->(at.fields::Vector{Any})[i] ⊑ᵢ fieldtype(t, i), 1:n)
+                    end))
                 nothrow = isexact
                 t = PartialStruct(t, at.fields::Vector{Any})
             end

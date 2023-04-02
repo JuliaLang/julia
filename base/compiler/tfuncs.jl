@@ -1793,12 +1793,12 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
                 if i == largs && ub === Any
                     push!(tparams, Vararg)
                 elseif isT
-                    push!(tparams, rewrap_unionall(unw.parameters[1], ai))
+                    push!(tparams, rewrap_unionall((unw::DataType).parameters[1], ai))
                 else
                     push!(tparams, Any)
                 end
             elseif isT
-                push!(tparams, unw.parameters[1])
+                push!(tparams, (unw::DataType).parameters[1])
                 while isa(ai, UnionAll)
                     push!(outervars, ai.var)
                     ai = ai.body
@@ -2633,7 +2633,7 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
             rt = Const(true) # has applicable matches
             for i in 1:napplicable
                 match = applicable[i]::MethodMatch
-                edge = specialize_method(match)
+                edge = specialize_method(match)::MethodInstance
                 add_backedge!(sv, edge)
             end
 
@@ -2681,7 +2681,7 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
         add_mt_backedge!(sv, mt, types) # this should actually be an invoke-type backedge
     else
         rt = Const(true)
-        edge = specialize_method(match)
+        edge = specialize_method(match)::MethodInstance
         add_invoke_backedge!(sv, types, edge)
     end
     return CallMeta(rt, EFFECTS_TOTAL, NoCallInfo())
