@@ -1758,6 +1758,9 @@ function set_pkgorigin_version_path(pkg::PkgId, path::Union{String,Nothing})
     nothing
 end
 
+# A hook to allow code load to use Pkg.precompile
+const PKG_PRECOMPILE_HOOK = Ref{Function}()
+
 # Returns `nothing` or the new(ish) module
 function _require(pkg::PkgId, env=nothing)
     assert_havelock(require_lock)
@@ -1777,8 +1780,11 @@ function _require(pkg::PkgId, env=nothing)
         end
         set_pkgorigin_version_path(pkg, path)
 
+        pkg_precompile_attempted = false # being safe to avoid getting stuck in a Pkg.precompile loop
+
         # attempt to load the module file via the precompile cache locations
         if JLOptions().use_compiled_modules != 0
+            @label load_from_cache
             m = _require_search_from_serialized(pkg, path, UInt128(0))
             if m isa Module
                 return m
@@ -1800,6 +1806,16 @@ function _require(pkg::PkgId, env=nothing)
 
         if JLOptions().use_compiled_modules != 0
             if (0 == ccall(:jl_generating_output, Cint, ())) || (JLOptions().incremental != 0)
+                if !pkg_precompile_attempted && isassigned(PKG_PRECOMPILE_HOOK)
+                    pkg_precompile_attempted = true
+                    unlock(require_lock)
+                    try
+                        PKG_PRECOMPILE_HOOK[](pkg.name, _from_loading = true)
+                    finally
+                        lock(require_lock)
+                    end
+                    @goto load_from_cache
+                end
                 # spawn off a new incremental pre-compile task for recursive `require` calls
                 cachefile = compilecache(pkg, path)
                 if isa(cachefile, Exception)
