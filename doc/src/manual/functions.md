@@ -1160,45 +1160,7 @@ julia> 1:5 .|> [x->x^2, inv, x->2*x, -, isodd]
 ```
 
 !!! warning
-    Broadcast loop fusion is a relatively unique language feature that can enable concise and idiomatic code to express highly performant operations. However, there are some potentially surprising behaviors that one should be prepared for; these may arise when broadcasting complex expressions, broadcasting over multiple axes simultaneously, or broadcasting in-place assignment.
-
-For example, given some matrix `x = rand(100, 100, 100)` with three axes, say a normalization is desired where each 2-d slice along the third axis has unit sum. We can compute these sums in a few ways. Here are two: the first is more idiomatic, but in isolation it is equivalent to the second
-```
-julia> @btime sum(x; dims=(1,2));
-  163.708 μs (6 allocations: 1.03 KiB)
-
-julia> @btime sum.(eachslice(x; dims=3, drop=false));
-  164.250 μs (1 allocation: 896 bytes)
-```
-These expressions are nearly identically performant and it stands to verify that they return the same value. However, when we use these values to normalize the slices, there is a performance difference of several orders of magnitude.
-```
-julia> @btime x ./ sum(x; dims=(1,2));
-  340.958 μs (8 allocations: 7.63 MiB)
-
-julia> @btime x ./ sum.(eachslice(x; dims=3, drop=false));
-  1.661 s (2 allocations: 7.63 MiB)
-```
-This happens because the fusion in the second expression causes the sum to be recomputed for each element in the slice leading to an asymptotic (and empirical) slowdown. To avoid this, the expression can be forcibly "unfused" by wrapping components in an `identity` call or by using temporary variables like so
-```
-julia> @btime x ./ identity(sum.(eachslice(x; dims=3, drop=false)));
-  359.459 μs (3 allocations: 7.63 MiB)
-
-julia> @btime let denom = identity(sum.(eachslice(x; dims=3, drop=false)))
-            x ./ denom
-        end
-  394.791 μs (3 allocations: 7.63 MiB)
-```
-
-Another pertinent example comes from broadcasted assignment when transforming a mutable object. Using the example from above, say we want to do the slice normalization in-place and write something like the following
-```
-julia> x .= x ./ sum.(eachslice(x; dims=3, drop=false));
-
-julia> any(sum.(eachslice(x; dims=3, drop=false)) .== 1)
-false
-```
-Unfortunately, not a single slice got correctly normalized. What happened? The `.=` broadcasted assignment was fused with the sum expression, which, as aforementioned will be recomputed on each iteration over elements of the slice; since the values in the slice will be mutating during the broadcast, each recomputation of the sum will return a new value.
-
-As a rule of thumb, when the number of dimensions is two or fewer and mutable objects do not appear on both sides of a broadcasted assignment expression, these gotchas are unlikely to arise, and developers can write concise and efficient code with confidence. But it is always important to understand the mechanisms behind the magic of features like loop fusion so that surprising behaviors can be identified and avoided.
+    It is always important to understand the mechanisms behind the magic of unique language features like fused broadcast loops. There are some occasional pitfalls which are important to avoid. For an example on when *not* to fuse broadcasted operations, see the note in [Performance Tips](@ref man-performance-unfuse). For a discussion on mutating broadcasts and anti-aliasing see [Views, Slices, and Aliasing](@ref yet-to-be-written).
 
 ## Further Reading
 
