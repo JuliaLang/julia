@@ -1160,7 +1160,7 @@ julia> 1:5 .|> [x->x^2, inv, x->2*x, -, isodd]
 ```
 
 !!! warning
-    It is always important to understand the mechanisms behind the magic of unique language features like fused broadcast loops. There are some occasional pitfalls which are important to avoid. For an example on when *not* to fuse broadcasted operations, see the note in [Performance Tips](@ref man-performance-unfuse). For a discussion on mutating broadcasts and anti-aliasing see [Views, Slices, and Aliasing](@ref yet-to-be-written).
+    It is always important to understand the mechanisms behind the magic of unique language features like fused broadcast loops. There are some occasional pitfalls which are important to avoid. For an example on when *not* to fuse broadcasted operations, see the note in [Performance Tips](@ref man-performance-unfuse). Users should also remember that due to the in-place mutation behavior of the `.=` operator, extra care should be taken to ensure correct and intended semantics when an object appears in both arguments of the operator like `x .= foo.(x)` or similar expressions.
 
 ## Further Reading
 
