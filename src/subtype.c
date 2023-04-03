@@ -3583,6 +3583,10 @@ static void final_merge_env(jl_value_t **merged, jl_savedenv_t *me, jl_value_t *
                 jl_svecset(*merged, n+2, b2);
         }
         me->buf[n] |= se->buf[n];
+        if (se->buf[n+1] > me->buf[n+1])
+            me->buf[n+1] = se->buf[n+1];
+        if (se->buf[n+2] > me->buf[n+2])
+            me->buf[n+2] = se->buf[n+2];
     }
     JL_GC_POP();
 }
