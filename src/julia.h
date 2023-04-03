@@ -91,6 +91,7 @@ typedef struct _jl_value_t jl_value_t;
 
 struct _jl_taggedvalue_bits {
     uintptr_t gc:2;
+    uintptr_t in_image:1;
 };
 
 JL_EXTENSION struct _jl_taggedvalue_t {
@@ -1910,6 +1911,8 @@ typedef struct _jl_handler_t {
     size_t world_age;
 } jl_handler_t;
 
+#define JL_RNG_SIZE 5 // xoshiro 4 + splitmix 1
+
 typedef struct _jl_task_t {
     JL_DATA_TYPE
     jl_value_t *next; // invasive linked list for scheduler
@@ -1921,7 +1924,7 @@ typedef struct _jl_task_t {
     jl_function_t *start;
     // 4 byte padding on 32-bit systems
     // uint32_t padding0;
-    uint64_t rngState[4];
+    uint64_t rngState[JL_RNG_SIZE];
     _Atomic(uint8_t) _state;
     uint8_t sticky; // record whether this Task can be migrated to a new thread
     _Atomic(uint8_t) _isexception; // set if `result` is an exception to throw or that we exited with
