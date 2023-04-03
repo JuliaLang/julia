@@ -1083,7 +1083,7 @@ define a separate function for each vectorized operation.
 
 ## [Fewer dots: Unfuse certain intermediate broadcasts](@id man-performance-unfuse)
 
-The dot loop fusion mentioned above enables concise and idiomatic code to express highly performant operations. However, it is important to remember that the fused operation will be computed at every iteration of the broadcast. This means that in some situations, particularly in the presence of composed or multidimensional broadcasts, an expression with dot calls maybe be computing a function more times than intended. As an example, say we want to build a random matrix whose rows have unit Euclidean norm with the following:
+The dot loop fusion mentioned above enables concise and idiomatic code to express highly performant operations. However, it is important to remember that the fused operation will be computed at every iteration of the broadcast. This means that in some situations, particularly in the presence of composed or multidimensional broadcasts, an expression with dot calls maybe be computing a function more times than intended. As an example, say we want to build a random matrix whose rows have Euclidean norm one. We might write something like the following:
 ```
 julia> x = rand(1000, 1000);
 
@@ -1092,7 +1092,7 @@ julia> d = sum(abs2, x; dims=2);
 julia> @time x ./= sqrt.(d);
   0.002049 seconds (4 allocations: 96 bytes)
 ```
-However, this expression will actually recompute `sqrt(d[i])` for *every* element in the row `x[i, :]`, meaning that many more square roots are computed than necessary. To improve this performance, we can forcibly "unfuse" the loop by allocating the result of the broadcasted operation in advance. Some ways to do that are to use temporary variables, wrap components of a dot expression in `identity`, or use an allocating but equivalent function
+This will work, however this expression will actually recompute `sqrt(d[i])` for *every* element in the row `x[i, :]`, meaning that many more square roots are computed than necessary. To improve this performance we can forcibly "unfuse" the loop by allocating the result of the broadcasted operation in advance. Some potential approaches are to use temporary variables, wrap components of a dot expression in `identity`, or use an allocating but equivalent function
 ```
 julia> @time let s = sqrt.(d); x ./= s end;
   0.000809 seconds (5 allocations: 8.031 KiB)
