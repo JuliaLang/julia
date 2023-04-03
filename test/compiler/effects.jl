@@ -892,7 +892,7 @@ end |> Core.Compiler.is_foldable
     getfield(w, s)
 end |> Core.Compiler.is_foldable
 
-# Flow-sensitive consistenct for _typevar
+# Flow-sensitive consistent for _typevar
 @test Base.infer_effects() do
     return WrapperOneField == (WrapperOneField{T} where T)
 end |> Core.Compiler.is_foldable_nothrow
@@ -999,6 +999,22 @@ isassigned_effects(s) = isassigned(Ref(s))
 @test Core.Compiler.is_consistent(Base.infer_effects(isassigned_effects, (Symbol,)))
 @test fully_eliminated(; retval=true) do
     isassigned_effects(:foo)
+end
+
+# inference on throw block should be disabled only when the effects are already known to be
+# concrete-eval ineligible:
+function optimize_throw_block_for_effects(x)
+    a = [x]
+    if x < 0
+        throw(ArgumentError(lazy"negative number given: $x"))
+    end
+    return a
+end
+let effects = Base.infer_effects(optimize_throw_block_for_effects, (Int,))
+    @test Core.Compiler.is_consistent_if_notreturned(effects)
+    @test Core.Compiler.is_effect_free(effects)
+    @test !Core.Compiler.is_nothrow(effects)
+    @test Core.Compiler.is_terminates(effects)
 end
 
 # :isdefined effects

@@ -874,8 +874,14 @@ function should_infer_this_call(interp::AbstractInterpreter, sv::InferenceState)
     return true
 end
 function should_infer_for_effects(sv::InferenceState)
+    def = sv.linfo.def
+    def isa Method || return false # toplevel frame will not be [semi-]concrete-evaluated
     effects = sv.ipo_effects
-    return is_terminates(effects) && is_effect_free(effects)
+    override = decode_effects_override(def.purity)
+    effects.consistent === ALWAYS_FALSE && !is_effect_overridden(override, :consistent) && return false
+    effects.effect_free === ALWAYS_FALSE && !is_effect_overridden(override, :effect_free) && return false
+    !effects.terminates && !is_effect_overridden(override, :terminates_globally) && return false
+    return true
 end
 should_infer_this_call(::AbstractInterpreter, ::IRInterpretationState) = true
 
