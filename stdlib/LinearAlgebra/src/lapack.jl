@@ -5376,7 +5376,7 @@ for (syev, syevr, sygvd, elty, relty) in
             end
             lda = max(1,stride(A,2))
             m = Ref{BlasInt}()
-            w = similar(A, $relty, n)
+            W = similar(A, $relty, n)
             if jobz == 'N'
                 ldz = 1
                 Z = similar(A, $elty, ldz, 0)
@@ -5404,7 +5404,7 @@ for (syev, syevr, sygvd, elty, relty) in
                       jobz, range, uplo, n,
                       A, lda, vl, vu,
                       il, iu, abstol, m,
-                      w, Z, ldz, isuppz,
+                      W, Z, ldz, isuppz,
                       work, lwork, rwork, lrwork,
                       iwork, liwork, info,
                       1, 1, 1)
@@ -5418,10 +5418,55 @@ for (syev, syevr, sygvd, elty, relty) in
                     resize!(iwork, liwork)
                 end
             end
-            w[1:m[]], Z[:,1:(jobz == 'V' ? m[] : 0)]
+            W[1:m[]], Z[:,1:(jobz == 'V' ? m[] : 0)]
         end
         syevr!(jobz::AbstractChar, A::AbstractMatrix{$elty}) =
             syevr!(jobz, 'A', 'U', A, 0.0, 0.0, 0, 0, -1.0)
+
+        #       SUBROUTINE ZHEEVD( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, RWORK,
+        #      $                   LRWORK, IWORK, LIWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOBZ, UPLO
+        #       INTEGER            INFO, LDA, LIWORK, LRWORK, LWORK, N
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IWORK( * )
+        #       DOUBLE PRECISION   RWORK( * )
+        #       COMPLEX*16         A( LDA, * ), WORK( * )
+        function syevd!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
+            chkstride1(A)
+            chkuplofinite(A, uplo)
+            n = checksquare(A)
+            lda = max(1, stride(A,2))
+            m = Ref{BlasInt}()
+            W = similar(A, $relty, n)
+            work   = Vector{$elty}(undef, 1)
+            lwork  = BlasInt(-1)
+            rwork  = Vector{$relty}(undef, 1)
+            lrwork = BlasInt(-1)
+            iwork  = Vector{BlasInt}(undef, 1)
+            liwork = BlasInt(-1)
+            info   = Ref{BlasInt}()
+            for i = 1:2  # first call returns lwork as work[1], lrwork as rwork[1] and liwork as iwork[1]
+                ccall((@blasfunc($syevd), liblapack), Cvoid,
+                    (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
+                    Ptr{$relty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$relty}, Ref{BlasInt},
+                    Ptr{BlasInt}, Ref{BlasInt}, Ptr{BlasInt}, Clong, Clong),
+                    jobz, uplo, n, A, stride(A,2),
+                    W, work, lwork, rwork, lrwork,
+                    iwork, liwork, info, 1, 1)
+                chklapackerror(info[])
+                if i == 1
+                    lwork = BlasInt(real(work[1]))
+                    resize!(work, lwork)
+                    lrwork = BlasInt(rwork[1])
+                    resize!(rwork, lrwork)
+                    liwork = iwork[1]
+                    resize!(iwork, liwork)
+                end
+            end
+            jobz == 'V' ? (W, A) : W
+        end
 
         #       SUBROUTINE ZHEGVD( ITYPE, JOBZ, UPLO, N, A, LDA, B, LDB, W, WORK,
         #      $                   LWORK, RWORK, LRWORK, IWORK, LIWORK, INFO )
