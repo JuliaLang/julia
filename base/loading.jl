@@ -1510,11 +1510,11 @@ end
 """
     include_dependency(path::AbstractString)
 
-In a module, declare that the file specified by `path` (relative or absolute) is a
-dependency for precompilation; that is, the module will need to be recompiled if this file
-changes.
+In a module, declare that the file, directory, or symbolic link specified by `path`
+(relative or absolute) is a dependency for precompilation; that is, the module will need
+to be recompiled if the modification time of `path` changes.
 
-This is only needed if your module depends on a file that is not used via [`include`](@ref). It has
+This is only needed if your module depends on a path that is not used via [`include`](@ref). It has
 no effect outside of compilation.
 """
 function include_dependency(path::AbstractString)
@@ -2790,7 +2790,7 @@ end
             end
             for chi in includes
                 f, ftime_req = chi.filename, chi.mtime
-                if !isfile(f)
+                if !ispath(f)
                     _f = fixup_stdlib_path(f)
                     if isfile(_f) && startswith(_f, Sys.STDLIB)
                         # mtime is changed by extraction
