@@ -564,7 +564,7 @@ end |> !Core.Compiler.is_inaccessiblememonly
 end |> !Core.Compiler.is_inaccessiblememonly
 
 # the `:inaccessiblememonly` helper effect allows us to prove `:consistent`-cy of frames
-# including `getfield` accessing to local mutable object
+# including `getfield` / `isdefined` accessing to local mutable object
 
 mutable struct SafeRef{T}
     x::T
@@ -593,13 +593,11 @@ const consistent_global = Some(:foo)
 @test Base.infer_effects() do
     consistent_global.value
 end |> Core.Compiler.is_consistent
-
 const inconsistent_global = SafeRef(:foo)
 @test Base.infer_effects() do
     inconsistent_global[]
 end |> !Core.Compiler.is_consistent
-
-global inconsistent_condition_ref = Ref{Bool}(false)
+const inconsistent_condition_ref = Ref{Bool}(false)
 @test Base.infer_effects() do
     if inconsistent_condition_ref[]
         return 0
@@ -918,7 +916,6 @@ gotoifnot_throw_check_48583(x) = x ? x : 0
 @test !Core.Compiler.is_nothrow(Base.infer_effects(gotoifnot_throw_check_48583, (Any,)))
 @test Core.Compiler.is_nothrow(Base.infer_effects(gotoifnot_throw_check_48583, (Bool,)))
 
-
 # unknown :static_parameter should taint :nothrow
 # https://github.com/JuliaLang/julia/issues/46771
 unknown_sparam_throw(::Union{Nothing, Type{T}}) where T = (T; nothing)
@@ -943,3 +940,45 @@ actually_recursive1(x) = actually_recursive2(x)
 actually_recursive2(x) = (x <= 0) ? 1 : actually_recursive1(x - 1)
 actually_recursive3(x) = actually_recursive2(x)
 @test !Core.Compiler.is_terminates(Base.infer_effects(actually_recursive3, (Int,)))
+
+# `isdefined` effects
+struct MaybeSome{T}
+    value::T
+    MaybeSome(x::T) where T = new{T}(x)
+    MaybeSome{T}(x::T) where T = new{T}(x)
+    MaybeSome{T}() where T = new{T}()
+end
+const undefined_ref = Ref{String}()
+const defined_ref = Ref{String}("julia")
+const undefined_some = MaybeSome{String}()
+const defined_some = MaybeSome{String}("julia")
+let effects = Base.infer_effects() do
+        isdefined(undefined_ref, :x)
+    end
+    @test !Core.Compiler.is_consistent(effects)
+    @test Core.Compiler.is_nothrow(effects)
+end
+let effects = Base.infer_effects() do
+        isdefined(defined_ref, :x)
+    end
+    @test Core.Compiler.is_consistent(effects)
+    @test Core.Compiler.is_nothrow(effects)
+end
+let effects = Base.infer_effects() do
+        isdefined(undefined_some, :value)
+    end
+    @test Core.Compiler.is_consistent(effects)
+    @test Core.Compiler.is_nothrow(effects)
+end
+let effects = Base.infer_effects() do
+        isdefined(defined_some, :value)
+    end
+    @test Core.Compiler.is_consistent(effects)
+    @test Core.Compiler.is_nothrow(effects)
+end
+# high-level interface test
+isassigned_effects(s) = isassigned(Ref(s))
+@test Core.Compiler.is_consistent(Base.infer_effects(isassigned_effects, (Symbol,)))
+@test fully_eliminated(; retval=true) do
+    isassigned_effects(:foo)
+end

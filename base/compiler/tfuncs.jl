@@ -345,8 +345,17 @@ end
 end
 add_tfunc(===, 2, 2, egal_tfunc, 1)
 
+function isdefined_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any})
+    if length(argtypes) ≠ 2
+        # TODO prove nothrow when ordering is specified
+        return false
+    end
+    return isdefined_nothrow(𝕃, argtypes[1], argtypes[2])
+end
 @nospecs function isdefined_nothrow(𝕃::AbstractLattice, x, name)
     ⊑ = Core.Compiler.:⊑(𝕃)
+    isvarargtype(x) && return false
+    isvarargtype(name) && return false
     if hasintersect(widenconst(x), Module)
         return name ⊑ Symbol
     else
@@ -951,17 +960,13 @@ function getfield_nothrow(𝕃::AbstractLattice, arginfo::ArgInfo, boundscheck::
     elseif length(argtypes) != 3
         return false
     end
-    isvarargtype(ordering) && return false
-    widenconst(ordering) === Symbol || return false
-    if isa(ordering, Const)
-        ordering = ordering.val::Symbol
-        if ordering !== :not_atomic # TODO: this is assuming not atomic
-            return false
-        end
-        return getfield_nothrow(𝕃, argtypes[2], argtypes[3], !(boundscheck === :off))
-    else
+    isa(ordering, Const) || return false
+    ordering = ordering.val
+    isa(ordering, Symbol) || return false
+    if ordering !== :not_atomic # TODO: this is assuming not atomic
         return false
     end
+    return getfield_nothrow(𝕃, argtypes[2], argtypes[3], !(boundscheck === :off))
 end
 @nospecs function getfield_nothrow(𝕃::AbstractLattice, s00, name, boundscheck::Bool)
     # If we don't have boundscheck off and don't know the field, don't even bother
@@ -2092,8 +2097,7 @@ end
     elseif f === UnionAll
         return na == 2 && (argtypes[1] ⊑ TypeVar && argtypes[2] ⊑ Type)
     elseif f === isdefined
-        na == 2 || return false
-        return isdefined_nothrow(𝕃, argtypes[1], argtypes[2])
+        return isdefined_nothrow(𝕃, argtypes)
     elseif f === Core.sizeof
         na == 1 || return false
         return sizeof_nothrow(argtypes[1])
@@ -2239,11 +2243,36 @@ const _SPECIAL_BUILTINS = Any[
 function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
     # consistent if the first arg is immutable
     na = length(argtypes)
-    na == 0 && return EFFECTS_THROWS
-    obj = argtypes[1]
-    consistent = is_immutable_argtype(unwrapva(obj)) ? ALWAYS_TRUE : ALWAYS_FALSE
-    nothrow = !isvarargtype(argtypes[end]) && na == 2 && isdefined_nothrow(𝕃, obj, argtypes[2])
-    return Effects(EFFECTS_TOTAL; consistent, nothrow)
+    2 ≤ na ≤ 3 || return EFFECTS_THROWS
+    obj, sym = argtypes
+    wobj = unwrapva(obj)
+    consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
+    if is_immutable_argtype(wobj)
+        consistent = ALWAYS_TRUE
+    else
+        # Bindings/fields are not allowed to transition from defined to undefined, so even
+        # if the object is not immutable, we can prove `:consistent`-cy if it is defined:
+        if isa(wobj, Const) && isa(sym, Const)
+            objval = wobj.val
+            symval = sym.val
+            if isa(objval, Module)
+                if isa(symval, Symbol) && isdefined(objval, symval)
+                    consistent = ALWAYS_TRUE
+                end
+            elseif (isa(symval, Symbol) || isa(symval, Int)) && isdefined(objval, symval)
+                consistent = ALWAYS_TRUE
+            end
+        end
+    end
+    nothrow = isdefined_nothrow(𝕃, argtypes)
+    if hasintersect(widenconst(wobj), Module)
+        inaccessiblememonly = ALWAYS_FALSE
+    elseif is_mutation_free_argtype(wobj)
+        inaccessiblememonly = ALWAYS_TRUE
+    else
+        inaccessiblememonly = INACCESSIBLEMEM_OR_ARGMEMONLY
+    end
+    return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly)
 end
 
 function getfield_effects(𝕃::AbstractLattice, arginfo::ArgInfo, @nospecialize(rt))
