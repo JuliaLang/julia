@@ -346,9 +346,7 @@ end
 add_tfunc(===, 2, 2, egal_tfunc, 1)
 
 function isdefined_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any})
-    if length(argtypes) == 2
-        ordering = Const(:not_atomic)
-    else
+    if length(argtypes) ≠ 2
         # TODO prove nothrow when ordering is specified
         return false
     end
