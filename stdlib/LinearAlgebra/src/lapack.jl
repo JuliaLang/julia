@@ -2023,9 +2023,9 @@ the orthogonal/unitary matrix `Q` is computed. If `jobu`, `jobv`, or `jobq` is
 ggsvd3!
 
 ## Expert driver and generalized eigenvalue problem
-for (geevx, ggev, elty) in
-    ((:dgeevx_,:dggev_,:Float64),
-     (:sgeevx_,:sggev_,:Float32))
+for (geevx, ggev, ggev3, elty) in
+    ((:dgeevx_,:dggev_,:dggev3_,:Float64),
+     (:sgeevx_,:sggev_,:sggev3_,:Float32))
     @eval begin
         #     SUBROUTINE DGEEVX( BALANC, JOBVL, JOBVR, SENSE, N, A, LDA, WR, WI,
         #                          VL, LDVL, VR, LDVR, ILO, IHI, SCALE, ABNRM,
@@ -2093,7 +2093,7 @@ for (geevx, ggev, elty) in
                        Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                        Ref{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
-                       Ref{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
+                       Ref{BlasInt}, Ptr{BlasInt}, Ref{BlasInt},
                        Clong, Clong, Clong, Clong),
                        balanc, jobvl, jobvr, sense,
                        n, A, lda, wr,
@@ -2160,7 +2160,71 @@ for (geevx, ggev, elty) in
                      Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                      Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
                      Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                     Ptr{BlasInt}, Clong, Clong),
+                     Ref{BlasInt}, Clong, Clong),
+                    jobvl, jobvr, n, A,
+                    lda, B, ldb, alphar,
+                    alphai, beta, vl, ldvl,
+                    vr, ldvr, work, lwork,
+                    info, 1, 1)
+                chklapackerror(info[])
+                if i == 1
+                    lwork = BlasInt(work[1])
+                    resize!(work, lwork)
+                end
+            end
+            alphar, alphai, beta, vl, vr
+        end
+
+        #       SUBROUTINE DGGEV3( JOBVL, JOBVR, N, A, LDA, B, LDB, ALPHAR, ALPHAI,
+        #      $                   BETA, VL, LDVL, VR, LDVR, WORK, LWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOBVL, JOBVR
+        #       INTEGER            INFO, LDA, LDB, LDVL, LDVR, LWORK, N
+        # *     ..
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   A( LDA, * ), ALPHAI( * ), ALPHAR( * ),
+        #      $                   B( LDB, * ), BETA( * ), VL( LDVL, * ),
+        #      $                   VR( LDVR, * ), WORK( * )
+        function ggev3!(jobvl::AbstractChar, jobvr::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+            require_one_based_indexing(A, B)
+            chkstride1(A,B)
+            n, m = checksquare(A,B)
+            if n != m
+                throw(DimensionMismatch("A has dimensions $(size(A)), and B has dimensions $(size(B)), but A and B must have the same size"))
+            end
+            lda = max(1, stride(A, 2))
+            ldb = max(1, stride(B, 2))
+            alphar = similar(A, $elty, n)
+            alphai = similar(A, $elty, n)
+            beta = similar(A, $elty, n)
+            ldvl = 0
+            if jobvl == 'V'
+                ldvl = n
+            elseif jobvl == 'N'
+                ldvl = 1
+            else
+                throw(ArgumentError("jobvl must be 'V' or 'N', but $jobvl was passed"))
+            end
+            vl = similar(A, $elty, ldvl, n)
+            ldvr = 0
+            if jobvr == 'V'
+                ldvr = n
+            elseif jobvr == 'N'
+                ldvr = 1
+            else
+                throw(ArgumentError("jobvr must be 'V' or 'N', but $jobvr was passed"))
+            end
+            vr = similar(A, $elty, ldvr, n)
+            work = Vector{$elty}(undef, 1)
+            lwork = BlasInt(-1)
+            info = Ref{BlasInt}()
+            for i = 1:2  # first call returns lwork as work[1]
+                ccall((@blasfunc($ggev3), libblastrampoline), Cvoid,
+                    (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty},
+                     Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
+                     Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
+                     Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
+                     Ref{BlasInt}, Clong, Clong),
                     jobvl, jobvr, n, A,
                     lda, B, ldb, alphar,
                     alphai, beta, vl, ldvl,
@@ -2177,9 +2241,9 @@ for (geevx, ggev, elty) in
     end
 end
 
-for (geevx, ggev, elty, relty) in
-    ((:zgeevx_,:zggev_,:ComplexF64,:Float64),
-     (:cgeevx_,:cggev_,:ComplexF32,:Float32))
+for (geevx, ggev, ggev3, elty, relty) in
+    ((:zgeevx_,:zggev_,:zggev3_,:ComplexF64,:Float64),
+     (:cgeevx_,:cggev_,:cggev3_,:ComplexF32,:Float32))
     @eval begin
         #     SUBROUTINE ZGEEVX( BALANC, JOBVL, JOBVR, SENSE, N, A, LDA, W, VL,
         #                          LDVL, VR, LDVR, ILO, IHI, SCALE, ABNRM, RCONDE,
@@ -2241,7 +2305,7 @@ for (geevx, ggev, elty, relty) in
                        Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                        Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$relty},
                        Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{$relty}, Ptr{BlasInt}, Clong, Clong, Clong, Clong),
+                       Ptr{$relty}, Ref{BlasInt}, Clong, Clong, Clong, Clong),
                        balanc, jobvl, jobvr, sense,
                        n, A, lda, w,
                        VL, max(1,ldvl), VR, max(1,ldvr),
@@ -2307,7 +2371,72 @@ for (geevx, ggev, elty, relty) in
                      Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                      Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                      Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$relty},
-                     Ptr{BlasInt}, Clong, Clong),
+                     Ref{BlasInt}, Clong, Clong),
+                    jobvl, jobvr, n, A,
+                    lda, B, ldb, alpha,
+                    beta, vl, ldvl, vr,
+                    ldvr, work, lwork, rwork,
+                    info, 1, 1)
+                chklapackerror(info[])
+                if i == 1
+                    lwork = BlasInt(work[1])
+                    resize!(work, lwork)
+                end
+            end
+            alpha, beta, vl, vr
+        end
+
+        # SUBROUTINE ZGGEV3( JOBVL, JOBVR, N, A, LDA, B, LDB, ALPHA, BETA,
+        #      $                  VL, LDVL, VR, LDVR, WORK, LWORK, RWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOBVL, JOBVR
+        #       INTEGER            INFO, LDA, LDB, LDVL, LDVR, LWORK, N
+        # *     ..
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   RWORK( * )
+        #       COMPLEX*16         A( LDA, * ), ALPHA( * ), B( LDB, * ),
+        #      $                   BETA( * ), VL( LDVL, * ), VR( LDVR, * ),
+        #      $                   WORK( * )
+        function ggev3!(jobvl::AbstractChar, jobvr::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+            require_one_based_indexing(A, B)
+            chkstride1(A, B)
+            n, m = checksquare(A, B)
+            if n != m
+                throw(DimensionMismatch("A has dimensions $(size(A)), and B has dimensions $(size(B)), but A and B must have the same size"))
+            end
+            lda = max(1, stride(A, 2))
+            ldb = max(1, stride(B, 2))
+            alpha = similar(A, $elty, n)
+            beta = similar(A, $elty, n)
+            ldvl = 0
+            if jobvl == 'V'
+                ldvl = n
+            elseif jobvl == 'N'
+                ldvl = 1
+            else
+                throw(ArgumentError("jobvl must be 'V' or 'N', but $jobvl was passed"))
+            end
+            vl = similar(A, $elty, ldvl, n)
+            ldvr = 0
+            if jobvr == 'V'
+                ldvr = n
+            elseif jobvr == 'N'
+                ldvr = 1
+            else
+                throw(ArgumentError("jobvr must be 'V' or 'N', but $jobvr was passed"))
+            end
+            vr = similar(A, $elty, ldvr, n)
+            work = Vector{$elty}(undef, 1)
+            lwork = BlasInt(-1)
+            rwork = Vector{$relty}(undef, 8n)
+            info = Ref{BlasInt}()
+            for i = 1:2  # first call returns lwork as work[1]
+                ccall((@blasfunc($ggev3), libblastrampoline), Cvoid,
+                    (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty},
+                     Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
+                     Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
+                     Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$relty},
+                     Ref{BlasInt}, Clong, Clong),
                     jobvl, jobvr, n, A,
                     lda, B, ldb, alpha,
                     beta, vl, ldvl, vr,
@@ -2352,6 +2481,17 @@ eigenvectors aren't computed. If `jobvl = V` or `jobvr = V`, the
 corresponding eigenvectors are computed.
 """
 ggev!(jobvl::AbstractChar, jobvr::AbstractChar, A::AbstractMatrix, B::AbstractMatrix)
+
+"""
+    ggev3!(jobvl, jobvr, A, B) -> (alpha, beta, vl, vr)
+
+Finds the generalized eigendecomposition of `A` and `B` using a blocked
+algorithm. If `jobvl = N`, the left eigenvectors aren't computed. If
+`jobvr = N`, the right eigenvectors aren't computed. If `jobvl = V` or
+`jobvr = V`, the corresponding eigenvectors are computed.  This function
+requires LAPACK 3.6.0.
+"""
+ggev3!(jobvl::AbstractChar, jobvr::AbstractChar, A::AbstractMatrix, B::AbstractMatrix)
 
 # One step incremental condition estimation of max/min singular values
 for (laic1, elty) in
@@ -5993,9 +6133,9 @@ for (ormtr, elty) in
     end
 end
 
-for (gees, gges, elty) in
-    ((:dgees_,:dgges_,:Float64),
-     (:sgees_,:sgges_,:Float32))
+for (gees, gges, gges3, elty) in
+    ((:dgees_,:dgges_,:dgges3_,:Float64),
+     (:sgees_,:sgges_,:sgges3_,:Float32))
     @eval begin
         #     .. Scalar Arguments ..
         #     CHARACTER          JOBVS, SORT
@@ -6022,7 +6162,7 @@ for (gees, gges, elty) in
                     (Ref{UInt8}, Ref{UInt8}, Ptr{Cvoid}, Ref{BlasInt},
                         Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
-                        Ref{BlasInt}, Ptr{Cvoid}, Ptr{BlasInt}, Clong, Clong),
+                        Ref{BlasInt}, Ptr{Cvoid}, Ref{BlasInt}, Clong, Clong),
                     jobvs, 'N', C_NULL, n,
                         A, max(1, stride(A, 2)), sdim, wr,
                         wi, vs, ldvs, work,
@@ -6069,7 +6209,56 @@ for (gees, gges, elty) in
                         Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ptr{$elty},
                         Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                         Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{Cvoid},
-                        Ptr{BlasInt}, Clong, Clong, Clong),
+                        Ref{BlasInt}, Clong, Clong, Clong),
+                    jobvsl, jobvsr, 'N', C_NULL,
+                    n, A, max(1,stride(A, 2)), B,
+                    max(1,stride(B, 2)), sdim, alphar, alphai,
+                    beta, vsl, ldvsl, vsr,
+                    ldvsr, work, lwork, C_NULL,
+                    info, 1, 1, 1)
+                chklapackerror(info[])
+                if i == 1
+                    lwork = BlasInt(real(work[1]))
+                    resize!(work, lwork)
+                end
+            end
+            A, B, complex.(alphar, alphai), beta, vsl[1:(jobvsl == 'V' ? n : 0),:], vsr[1:(jobvsr == 'V' ? n : 0),:]
+        end
+
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOBVSL, JOBVSR, SORT
+        #       INTEGER            INFO, LDA, LDB, LDVSL, LDVSR, LWORK, N, SDIM
+        # *     ..
+        # *     .. Array Arguments ..
+        #       LOGICAL            BWORK( * )
+        #       DOUBLE PRECISION   A( LDA, * ), ALPHAI( * ), ALPHAR( * ),
+        #      $                   B( LDB, * ), BETA( * ), VSL( LDVSL, * ),
+        #      $                   VSR( LDVSR, * ), WORK( * )
+        function gges3!(jobvsl::AbstractChar, jobvsr::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+            chkstride1(A, B)
+            n, m = checksquare(A, B)
+            if n != m
+                throw(DimensionMismatch("dimensions of A, ($n,$n), and B, ($m,$m), must match"))
+            end
+            sdim = BlasInt(0)
+            alphar = similar(A, $elty, n)
+            alphai = similar(A, $elty, n)
+            beta = similar(A, $elty, n)
+            ldvsl = jobvsl == 'V' ? max(1, n) : 1
+            vsl = similar(A, $elty, ldvsl, n)
+            ldvsr = jobvsr == 'V' ? max(1, n) : 1
+            vsr = similar(A, $elty, ldvsr, n)
+            work = Vector{$elty}(undef, 1)
+            lwork = BlasInt(-1)
+            info = Ref{BlasInt}()
+            for i = 1:2  # first call returns lwork as work[1]
+                ccall((@blasfunc($gges3), libblastrampoline), Cvoid,
+                    (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ptr{Cvoid},
+                        Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
+                        Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ptr{$elty},
+                        Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
+                        Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{Cvoid},
+                        Ref{BlasInt}, Clong, Clong, Clong),
                     jobvsl, jobvsr, 'N', C_NULL,
                     n, A, max(1,stride(A, 2)), B,
                     max(1,stride(B, 2)), sdim, alphar, alphai,
@@ -6087,9 +6276,9 @@ for (gees, gges, elty) in
     end
 end
 
-for (gees, gges, elty, relty) in
-    ((:zgees_,:zgges_,:ComplexF64,:Float64),
-     (:cgees_,:cgges_,:ComplexF32,:Float32))
+for (gees, gges, gges3, elty, relty) in
+    ((:zgees_,:zgges_,:zgges3_,:ComplexF64,:Float64),
+     (:cgees_,:cgges_,:cgges3_,:ComplexF32,:Float32))
     @eval begin
         # *     .. Scalar Arguments ..
         #       CHARACTER          JOBVS, SORT
@@ -6117,7 +6306,7 @@ for (gees, gges, elty, relty) in
                     (Ref{UInt8}, Ref{UInt8}, Ptr{Cvoid}, Ref{BlasInt},
                         Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
                         Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                        Ptr{$relty}, Ptr{Cvoid}, Ptr{BlasInt}, Clong, Clong),
+                        Ptr{$relty}, Ptr{Cvoid}, Ref{BlasInt}, Clong, Clong),
                     jobvs, sort, C_NULL, n,
                         A, max(1, stride(A, 2)), sdim, w,
                         vs, ldvs, work, lwork,
@@ -6165,7 +6354,57 @@ for (gees, gges, elty, relty) in
                         Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ptr{$elty},
                         Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                         Ptr{$elty}, Ref{BlasInt}, Ptr{$relty}, Ptr{Cvoid},
-                        Ptr{BlasInt}, Clong, Clong, Clong),
+                        Ref{BlasInt}, Clong, Clong, Clong),
+                    jobvsl, jobvsr, 'N', C_NULL,
+                    n, A, max(1, stride(A, 2)), B,
+                    max(1, stride(B, 2)), sdim, alpha, beta,
+                    vsl, ldvsl, vsr, ldvsr,
+                    work, lwork, rwork, C_NULL,
+                    info, 1, 1, 1)
+                chklapackerror(info[])
+                if i == 1
+                    lwork = BlasInt(real(work[1]))
+                    resize!(work, lwork)
+                end
+            end
+            A, B, alpha, beta, vsl[1:(jobvsl == 'V' ? n : 0),:], vsr[1:(jobvsr == 'V' ? n : 0),:]
+        end
+
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOBVSL, JOBVSR, SORT
+        #       INTEGER            INFO, LDA, LDB, LDVSL, LDVSR, LWORK, N, SDIM
+        # *     ..
+        # *     .. Array Arguments ..
+        #       LOGICAL            BWORK( * )
+        #       DOUBLE PRECISION   RWORK( * )
+        #       COMPLEX*16         A( LDA, * ), ALPHA( * ), B( LDB, * ),
+        #      $                   BETA( * ), VSL( LDVSL, * ), VSR( LDVSR, * ),
+        #      $                   WORK( * )
+        function gges3!(jobvsl::AbstractChar, jobvsr::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+            chkstride1(A, B)
+            n, m = checksquare(A, B)
+            if n != m
+                throw(DimensionMismatch("dimensions of A, ($n,$n), and B, ($m,$m), must match"))
+            end
+            sdim = BlasInt(0)
+            alpha = similar(A, $elty, n)
+            beta = similar(A, $elty, n)
+            ldvsl = jobvsl == 'V' ? max(1, n) : 1
+            vsl = similar(A, $elty, ldvsl, n)
+            ldvsr = jobvsr == 'V' ? max(1, n) : 1
+            vsr = similar(A, $elty, ldvsr, n)
+            work = Vector{$elty}(undef, 1)
+            lwork = BlasInt(-1)
+            rwork = Vector{$relty}(undef, 8n)
+            info = Ref{BlasInt}()
+            for i = 1:2  # first call returns lwork as work[1]
+                ccall((@blasfunc($gges3), libblastrampoline), Cvoid,
+                    (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ptr{Cvoid},
+                        Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
+                        Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ptr{$elty},
+                        Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
+                        Ptr{$elty}, Ref{BlasInt}, Ptr{$relty}, Ptr{Cvoid},
+                        Ref{BlasInt}, Clong, Clong, Clong),
                     jobvsl, jobvsr, 'N', C_NULL,
                     n, A, max(1, stride(A, 2)), B,
                     max(1, stride(B, 2)), sdim, alpha, beta,
@@ -6206,6 +6445,18 @@ The generalized eigenvalues are returned in `alpha` and `beta`. The left Schur
 vectors are returned in `vsl` and the right Schur vectors are returned in `vsr`.
 """
 gges!(jobvsl::AbstractChar, jobvsr::AbstractChar, A::AbstractMatrix, B::AbstractMatrix)
+
+"""
+    gges3!(jobvsl, jobvsr, A, B) -> (A, B, alpha, beta, vsl, vsr)
+
+Computes the generalized eigenvalues, generalized Schur form, left Schur
+vectors (`jobsvl = V`), or right Schur vectors (`jobvsr = V`) of `A` and
+`B` using a blocked algorithm. This function requires LAPACK 3.6.0.
+
+The generalized eigenvalues are returned in `alpha` and `beta`. The left Schur
+vectors are returned in `vsl` and the right Schur vectors are returned in `vsr`.
+"""
+gges3!(jobvsl::AbstractChar, jobvsr::AbstractChar, A::AbstractMatrix, B::AbstractMatrix)
 
 for (trexc, trsen, tgsen, elty) in
     ((:dtrexc_, :dtrsen_, :dtgsen_, :Float64),

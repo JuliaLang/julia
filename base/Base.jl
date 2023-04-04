@@ -342,6 +342,7 @@ include("math.jl")
 using .Math
 const (√)=sqrt
 const (∛)=cbrt
+const (∜)=fourthroot
 
 # now switch to a simple, race-y TLS, relative include for the rest of Base
 delete_method(which(include, (Module, String)))
@@ -478,7 +479,7 @@ in_sysimage(pkgid::PkgId) = pkgid in _sysimage_modules
 for match = _methods(+, (Int, Int), -1, get_world_counter())
     m = match.method
     delete!(push!(Set{Method}(), m), m)
-    copy(Core.Compiler.retrieve_code_info(Core.Compiler.specialize_method(match)))
+    copy(Core.Compiler.retrieve_code_info(Core.Compiler.specialize_method(match), typemax(UInt)))
 
     empty!(Set())
     push!(push!(Set{Union{GlobalRef,Symbol}}(), :two), GlobalRef(Base, :two))
@@ -528,6 +529,31 @@ for match = _methods(+, (Int, Int), -1, get_world_counter())
 end
 
 if is_primary_base_module
+
+# Profiling helper
+# triggers printing the report and (optionally) saving a heap snapshot after a SIGINFO/SIGUSR1 profile request
+# Needs to be in Base because Profile is no longer loaded on boot
+const PROFILE_PRINT_COND = Ref{Base.AsyncCondition}()
+function profile_printing_listener()
+    profile = nothing
+    try
+        while true
+            wait(PROFILE_PRINT_COND[])
+            profile = @something(profile, require(Base, :Profile))
+            invokelatest(profile.peek_report[])
+            if Base.get_bool_env("JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", false) === true
+                println(stderr, "Saving heap snapshot...")
+                fname = invokelatest(profile.take_heap_snapshot)
+                println(stderr, "Heap snapshot saved to `$(fname)`")
+            end
+        end
+    catch ex
+        if !isa(ex, InterruptException)
+            @error "Profile printing listener crashed" exception=ex,catch_backtrace()
+        end
+    end
+end
+
 function __init__()
     # Base library init
     reinit_stdio()
@@ -539,6 +565,15 @@ function __init__()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
     if haskey(ENV, "JULIA_MAX_NUM_PRECOMPILE_FILES")
         MAX_NUM_PRECOMPILE_FILES[] = parse(Int, ENV["JULIA_MAX_NUM_PRECOMPILE_FILES"])
+    end
+    # Profiling helper
+    @static if !Sys.iswindows()
+        # triggering a profile via signals is not implemented on windows
+        cond = Base.AsyncCondition()
+        Base.uv_unref(cond.handle)
+        PROFILE_PRINT_COND[] = cond
+        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), PROFILE_PRINT_COND[].handle)
+        errormonitor(Threads.@spawn(profile_printing_listener()))
     end
     nothing
 end

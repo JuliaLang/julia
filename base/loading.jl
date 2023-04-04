@@ -258,7 +258,7 @@ struct LoadingCache
     require_parsed::Set{String}
     identified_where::Dict{Tuple{PkgId, String}, Union{Nothing, Tuple{PkgId, Union{Nothing, String}}}}
     identified::Dict{String, Union{Nothing, Tuple{PkgId, Union{Nothing, String}}}}
-    located::Dict{Tuple{PkgId, Union{String, Nothing}}, Union{String, Nothing}}
+    located::Dict{Tuple{PkgId, Union{String, Nothing}}, Union{Tuple{Union{String, Nothing}, Union{String, Nothing}}, Nothing}}
 end
 const LOADING_CACHE = Ref{Union{LoadingCache, Nothing}}(nothing)
 LoadingCache() = LoadingCache(load_path(), Dict(), Dict(), Dict(), Set(), Dict(), Dict(), Dict())
@@ -390,30 +390,17 @@ identify_package(where::Module, name::String) = _nothing_or_first(identify_packa
 identify_package(where::PkgId, name::String)  = _nothing_or_first(identify_package_env(where, name))
 identify_package(name::String)                = _nothing_or_first(identify_package_env(name))
 
-
-"""
-    Base.locate_package(pkg::PkgId)::Union{String, Nothing}
-
-The path to the entry-point file for the package corresponding to the identifier
-`pkg`, or `nothing` if not found. See also [`identify_package`](@ref).
-
-```julia-repl
-julia> pkg = Base.identify_package("Pkg")
-Pkg [44cfe95a-1eb2-52ea-b672-e2afdf69b78f]
-
-julia> Base.locate_package(pkg)
-"/path/to/julia/stdlib/v$(VERSION.major).$(VERSION.minor)/Pkg/src/Pkg.jl"
-```
-"""
-function locate_package(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)::Union{Nothing,String}
+function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
     cache = LOADING_CACHE[]
     if cache !== nothing
-        path = get(cache.located, (pkg, stopenv), nothing)
-        path === nothing || return path
+        pathenv = get(cache.located, (pkg, stopenv), nothing)
+        pathenv === nothing || return pathenv
     end
     path = nothing
+    env′ = nothing
     if pkg.uuid === nothing
         for env in load_path()
+            env′ = env
             # look for the toplevel pkg `pkg.name` in this entry
             found = project_deps_get(env, pkg.name)
             if found !== nothing
@@ -430,6 +417,7 @@ function locate_package(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)::Un
         end
     else
         for env in load_path()
+            env′ = env
             path = manifest_uuid_path(env, pkg)
             # missing is used as a sentinel to stop looking further down in envs
             if path === missing
@@ -452,9 +440,27 @@ function locate_package(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)::Un
     end
     @label done
     if cache !== nothing
-        cache.located[(pkg, stopenv)] = path
+        cache.located[(pkg, stopenv)] = path, env′
     end
-    return path
+    return path, env′
+end
+
+"""
+    Base.locate_package(pkg::PkgId)::Union{String, Nothing}
+
+The path to the entry-point file for the package corresponding to the identifier
+`pkg`, or `nothing` if not found. See also [`identify_package`](@ref).
+
+```julia-repl
+julia> pkg = Base.identify_package("Pkg")
+Pkg [44cfe95a-1eb2-52ea-b672-e2afdf69b78f]
+
+julia> Base.locate_package(pkg)
+"/path/to/julia/stdlib/v$(VERSION.major).$(VERSION.minor)/Pkg/src/Pkg.jl"
+```
+"""
+function locate_package(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)::Union{Nothing,String}
+    _nothing_or_first(locate_package_env(pkg, stopenv))
 end
 
 """
@@ -1074,7 +1080,6 @@ function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
 end
 
 function run_package_callbacks(modkey::PkgId)
-    run_extension_callbacks(modkey)
     assert_havelock(require_lock)
     unlock(require_lock)
     try
@@ -1108,9 +1113,13 @@ const EXT_DORMITORY_FAILED = ExtensionId[]
 
 function insert_extension_triggers(pkg::PkgId)
     pkg.uuid === nothing && return
-    for env in load_path()
-        insert_extension_triggers(env, pkg)
+    path_env_loc = locate_package_env(pkg)
+    path_env_loc === nothing && return
+    path, env_loc = path_env_loc
+    if path === nothing || env_loc === nothing
+        return
     end
+    insert_extension_triggers(env_loc, pkg)
 end
 
 function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missing}
@@ -1187,60 +1196,65 @@ function run_extension_callbacks(extid::ExtensionId)
         true
     catch
         # Try to continue loading if loading an extension errors
+        errs = current_exceptions()
         @error "Error during loading of extension $(extid.id.name) of $(extid.parentid.name), \
-                use `Base.retry_load_extensions()` to retry."
+                use `Base.retry_load_extensions()` to retry." exception=errs
         false
     end
     return succeeded
 end
 
-function run_extension_callbacks(pkgid::PkgId)
+function run_extension_callbacks()
     assert_havelock(require_lock)
-    # take ownership of extids that depend on this pkgid
-    extids = pop!(EXT_DORMITORY, pkgid, nothing)
-    extids === nothing && return
-    for extid in extids
-        if extid.ntriggers > 0
-            # It is possible that pkgid was loaded in an environment
-            # below the one of the parent. This will cause a load failure when the
-            # pkg ext tries to load the triggers. Therefore, check this first
-            # before loading the pkg ext.
-            pkgenv = Base.identify_package_env(extid.id, pkgid.name)
-            ext_not_allowed_load = false
-            if pkgenv === nothing
-                ext_not_allowed_load = true
-            else
-                pkg, env = pkgenv
-                path = Base.locate_package(pkg, env)
-                if path === nothing
+    loaded_triggers = collect(intersect(keys(Base.loaded_modules), keys(Base.EXT_DORMITORY)))
+    sort!(loaded_triggers; by=x->x.uuid)
+    for pkgid in loaded_triggers
+        # take ownership of extids that depend on this pkgid
+        extids = pop!(EXT_DORMITORY, pkgid, nothing)
+        extids === nothing && continue
+        for extid in extids
+            if extid.ntriggers > 0
+                # It is possible that pkgid was loaded in an environment
+                # below the one of the parent. This will cause a load failure when the
+                # pkg ext tries to load the triggers. Therefore, check this first
+                # before loading the pkg ext.
+                pkgenv = identify_package_env(extid.id, pkgid.name)
+                ext_not_allowed_load = false
+                if pkgenv === nothing
                     ext_not_allowed_load = true
+                else
+                    pkg, env = pkgenv
+                    path = Base.locate_package(pkg, env)
+                    if path === nothing
+                        ext_not_allowed_load = true
+                    end
+                end
+                if ext_not_allowed_load
+                    @debug "Extension $(extid.id.name) of $(extid.parentid.name) will not be loaded \
+                            since $(pkgid.name) loaded in environment lower in load path"
+                    # indicate extid is expected to fail
+                    extid.ntriggers *= -1
+                else
+                    # indicate pkgid is loaded
+                    extid.ntriggers -= 1
                 end
             end
-            if ext_not_allowed_load
-                @debug "Extension $(extid.id.name) of $(extid.parentid.name) will not be loaded \
-                        since $(pkgid.name) loaded in environment lower in load path"
-                # indicate extid is expected to fail
-                extid.ntriggers *= -1
-            else
+            if extid.ntriggers < 0
                 # indicate pkgid is loaded
-                extid.ntriggers -= 1
+                extid.ntriggers += 1
+                succeeded = false
+            else
+                succeeded = true
+            end
+            if extid.ntriggers == 0
+                # actually load extid, now that all dependencies are met,
+                # and record the result
+                succeeded = succeeded && run_extension_callbacks(extid)
+                succeeded || push!(EXT_DORMITORY_FAILED, extid)
             end
         end
-        if extid.ntriggers < 0
-            # indicate pkgid is loaded
-            extid.ntriggers += 1
-            succeeded = false
-        else
-            succeeded = true
-        end
-        if extid.ntriggers == 0
-            # actually load extid, now that all dependencies are met,
-            # and record the result
-            succeeded = succeeded && run_extension_callbacks(extid)
-            succeeded || push!(EXT_DORMITORY_FAILED, extid)
-        end
     end
-    nothing
+    return
 end
 
 """
@@ -1654,6 +1668,10 @@ function _require_prelocked(uuidkey::PkgId, env=nothing)
         end
     else
         newm = root_module(uuidkey)
+    end
+    # Load extensions when not precompiling and not in a nested package load
+    if JLOptions().incremental == 0 && isempty(package_locks)
+        run_extension_callbacks()
     end
     return newm
 end
@@ -2227,7 +2245,8 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                         @static if Sys.isapple()
                             rm(ocachefile_from_cachefile(evicted_cachefile) * ".dSYM"; force=true, recursive=true)
                         end
-                    catch
+                    catch e
+                        e isa IOError || rethrow()
                     end
                 end
             end
@@ -2484,7 +2503,7 @@ end
 
 # Test to see if this UUID is mentioned in this `Project.toml`; either as
 # the top-level UUID (e.g. that of the project itself), as a dependency,
-# or as an extra for Preferences.
+# or as an extra/weakdep for Preferences.
 function get_uuid_name(project::Dict{String, Any}, uuid::UUID)
     uuid_p = get(project, "uuid", nothing)::Union{Nothing, String}
     name = get(project, "name", nothing)::Union{Nothing, String}
@@ -2499,7 +2518,7 @@ function get_uuid_name(project::Dict{String, Any}, uuid::UUID)
             end
         end
     end
-    for subkey in ("deps", "extras")
+    for subkey in ("deps", "extras", "weakdeps")
         subsection = get(project, subkey, nothing)::Union{Nothing, Dict{String, Any}}
         if subsection !== nothing
             for (k, v) in subsection

@@ -233,20 +233,6 @@ if Test !== nothing
     """
 end
 
-Profile = get(Base.loaded_modules,
-          Base.PkgId(Base.UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile"),
-          nothing)
-if Profile !== nothing
-    repl_script = Profile.precompile_script * repl_script # do larger workloads first for better parallelization
-    hardcoded_precompile_statements *= """
-    precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Int, UInt})
-    precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Int, UnitRange{UInt}})
-    precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, UnitRange{Int}, UInt})
-    precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, UnitRange{Int}, UnitRange{UInt}})
-    precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Vector{Int}, Vector{UInt}})
-    """
-end
-
 const JULIA_PROMPT = "julia> "
 const PKG_PROMPT = "pkg> "
 const SHELL_PROMPT = "shell> "
@@ -479,16 +465,6 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
         occursin("Main.", statement) && continue
         Base.in!(statement, statements) && continue
         # println(statement)
-        # XXX: skip some that are broken. these are caused by issue #39902
-        occursin("Tuple{Artifacts.var\"#@artifact_str\", LineNumberNode, Module, Any, Any}", statement) && continue
-        occursin("Tuple{Base.Cartesian.var\"#@ncall\", LineNumberNode, Module, Int64, Any, Vararg{Any}}", statement) && continue
-        occursin("Tuple{Base.Cartesian.var\"#@ncall\", LineNumberNode, Module, Int32, Any, Vararg{Any}}", statement) && continue
-        occursin("Tuple{Base.Cartesian.var\"#@nloops\", LineNumberNode, Module, Any, Any, Any, Vararg{Any}}", statement) && continue
-        occursin("Tuple{Core.var\"#@doc\", LineNumberNode, Module, Vararg{Any}}", statement) && continue
-        # XXX: this is strange, as this isn't the correct representation of this
-        occursin("typeof(Core.IntrinsicFunction)", statement) && continue
-        # XXX: this is strange, as this method should not be getting compiled
-        occursin(", Core.Compiler.AbstractInterpreter, ", statement) && continue
         try
             ps = Meta.parse(statement)
             if !isexpr(ps, :call)
@@ -499,15 +475,6 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             end
             popfirst!(ps.args) # precompile(...)
             ps.head = :tuple
-            l = ps.args[end]
-            if (isexpr(l, :tuple) || isexpr(l, :curly)) && length(l.args) > 0 # Tuple{...} or (...)
-                # XXX: precompile doesn't currently handle overloaded Vararg arguments very well.
-                # Replacing N with a large number works around it.
-                l = l.args[end]
-                if isexpr(l, :curly) && length(l.args) == 2 && l.args[1] === :Vararg # Vararg{T}
-                    push!(l.args, 100) # form Vararg{T, 100} instead
-                end
-            end
             # println(ps)
             ps = Core.eval(PrecompileStagingArea, ps)
             precompile(ps...)

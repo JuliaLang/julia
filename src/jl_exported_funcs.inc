@@ -172,8 +172,10 @@
     XX(jl_gc_external_obj_hdr_size) \
     XX(jl_gc_find_taggedvalue_pool) \
     XX(jl_gc_get_total_bytes) \
+    XX(jl_gc_get_max_memory) \
     XX(jl_gc_internal_obj_base_ptr) \
     XX(jl_gc_is_enabled) \
+    XX(jl_gc_is_in_finalizer) \
     XX(jl_gc_live_bytes) \
     XX(jl_gc_managed_malloc) \
     XX(jl_gc_managed_realloc) \
@@ -485,7 +487,6 @@
     XX(jl_typename_str) \
     XX(jl_typeof_str) \
     XX(jl_types_equal) \
-    XX(jl_type_equality_is_identity) \
     XX(jl_type_error) \
     XX(jl_type_error_rt) \
     XX(jl_type_intersection) \

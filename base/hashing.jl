@@ -110,7 +110,7 @@ end
 const memhash = UInt === UInt64 ? :memhash_seed : :memhash32_seed
 const memhash_seed = UInt === UInt64 ? 0x71e729fd56419c81 : 0x56419c81
 
-function hash(s::String, h::UInt)
+@assume_effects :total function hash(s::String, h::UInt)
     h += memhash_seed
     ccall(memhash, UInt, (Ptr{UInt8}, Csize_t, UInt32), s, sizeof(s), h % UInt32) + h
 end

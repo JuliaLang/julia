@@ -19,11 +19,11 @@ libLLVM_handle = C_NULL
 libLLVM_path = ""
 
 if Sys.iswindows()
-    const libLLVM = "libLLVM-14jl.dll"
+    const libLLVM = "$(Base.libllvm_name).dll"
 elseif Sys.isapple()
     const libLLVM = "@rpath/libLLVM.dylib"
 else
-    const libLLVM = "libLLVM-14jl.so"
+    const libLLVM = "$(Base.libllvm_name).so"
 end
 
 function __init__()

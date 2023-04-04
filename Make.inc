@@ -89,6 +89,12 @@ WITH_GC_DEBUG_ENV := 0
 # Enable DTrace support
 WITH_DTRACE := 0
 
+# Enable ITTAPI integration
+WITH_ITTAPI := 0
+
+# Enable Tracy support
+WITH_TRACY := 0
+
 # Prevent picking up $ARCH from the environment variables
 ARCH:=
 
@@ -175,7 +181,7 @@ endif
 JULIA_VERSION := $(shell cat $(JULIAHOME)/VERSION)
 JULIA_MAJOR_VERSION := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'.' -f 1)
 JULIA_MINOR_VERSION := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'.' -f 2)
-JULIA_PATCH_VERSION := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'.' -f 3)
+JULIA_PATCH_VERSION := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'+' -f 1 | cut -d'.' -f 3)
 
 # libjulia's SONAME will follow the format libjulia.so.$(SOMAJOR). Before v1.0.0,
 # SOMAJOR will be a two-decimal value, e.g. libjulia.so.0.5, whereas at and beyond
@@ -286,6 +292,9 @@ private_libdir := $(libdir)/julia
 endif
 build_private_libdir := $(build_libdir)/julia
 
+private_libexecdir := $(libexecdir)/julia
+build_private_libexecdir := $(build_libexecdir)/julia
+
 # A helper functions for dealing with lazily-evaluated, expensive operations..  Spinning
 # up a python process to, for exaxmple, parse a TOML file is expensive, and we must wait
 # until the TOML files are on-disk before we can parse them.  This means that we cannot
@@ -310,7 +319,7 @@ define cache_rel_path
 $(1)_rel_eval = $(call rel_path,$(2),$($(1)))
 $(1)_rel = $$(call hit_cache,$(1)_rel_eval)
 endef
-$(foreach D,libdir private_libdir datarootdir libexecdir docdir sysconfdir includedir,$(eval $(call cache_rel_path,$(D),$(bindir))))
+$(foreach D,libdir private_libdir datarootdir libexecdir private_libexecdir docdir sysconfdir includedir,$(eval $(call cache_rel_path,$(D),$(bindir))))
 $(foreach D,build_libdir build_private_libdir,$(eval $(call cache_rel_path,$(D),$(build_bindir))))
 
 # Save a special one: reverse_private_libdir_rel: usually just `../`, but good to be general:
@@ -446,7 +455,11 @@ endif
 
 # Compiler specific stuff
 
-CC_VERSION_STRING = $(shell $(CC) --version)
+CC := $(CROSS_COMPILE)$(CC) # attempt to add cross-compiler prefix, if the user
+                            # is not overriding the default, to form target-triple-cc (which
+                            # may not exist), and use that to decide what compiler the user
+                            # is using for the target build (or default to gcc)
+CC_VERSION_STRING = $(shell $(CC) --version 2>/dev/null)
 ifneq (,$(findstring clang,$(CC_VERSION_STRING)))
 USECLANG := 1
 USEGCC := 0
@@ -674,7 +687,10 @@ SANITIZE_LDFLAGS :=
 ifeq ($(SANITIZE_MEMORY),1)
 SANITIZE_OPTS += -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
 SANITIZE_LDFLAGS += $(SANITIZE_OPTS)
-endif
+ifneq ($(findstring $(OS),Linux FreeBSD),)
+SANITIZE_LDFLAGS += -Wl,--warn-unresolved-symbols
+endif # OS Linux or FreeBSD
+endif # SANITIZE_MEMORY=1
 ifeq ($(SANITIZE_ADDRESS),1)
 SANITIZE_OPTS += -fsanitize=address
 SANITIZE_LDFLAGS += -fsanitize=address
@@ -713,7 +729,18 @@ ifeq ($(WITH_DTRACE), 1)
 JCXXFLAGS += -DUSE_DTRACE
 JCFLAGS += -DUSE_DTRACE
 DTRACE := dtrace
-else
+endif
+
+ifeq ($(WITH_ITTAPI), 1)
+JCXXFLAGS += -DUSE_ITTAPI
+JCFLAGS += -DUSE_ITTAPI
+LIBITTAPI:=-littnotify
+endif
+
+ifeq ($(WITH_TRACY), 1)
+JCXXFLAGS += -DUSE_TRACY -DTRACY_ENABLE
+JCFLAGS += -DUSE_TRACY -DTRACY_ENABLE
+LIBTRACYCLIENT:=-lTracyClient
 endif
 
 # ===========================================================================
@@ -831,7 +858,6 @@ endif
 # If we are running on powerpc64le or ppc64le, set certain options automatically
 ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 JCFLAGS += -fsigned-char
-OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=POWER8
 BINARY:=64
 # GCC doesn't do -march= on ppc64le
@@ -1019,6 +1045,10 @@ PATCHELF := patchelf
 else
 PATCHELF := $(build_depsbindir)/patchelf
 endif
+# In the standard build system we want to patch files with `--set-rpath`, but downstream
+# packagers like Spack may want to use `--add-rpath` instead, leave them the possibility to
+# choose the command.
+PATCHELF_SET_RPATH_ARG := --set-rpath
 
 ifeq ($(USE_SYSTEM_LIBWHICH), 1)
 LIBWHICH := libwhich
@@ -1164,7 +1194,7 @@ CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.31|GLIBCXX_3\.5\.|GLIBCXX_4\.
 # Note: we explicitly _do not_ define `CSL` here, since it requires some more
 # advanced techniques to decide whether it should be installed from a BB source
 # or not.  See `deps/csl.mk` for more detail.
-BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP LLD
+BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP LLD LIBTRACYCLIENT
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)

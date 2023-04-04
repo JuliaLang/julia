@@ -22,10 +22,9 @@ msig = Tuple{typeof(f22938),Int,Int,Int,Int}
 world = Base.get_world_counter()
 match = only(Base._methods_by_ftype(msig, -1, world))
 mi = Core.Compiler.specialize_method(match)
-c0 = Core.Compiler.retrieve_code_info(mi)
+c0 = Core.Compiler.retrieve_code_info(mi, world)
 
-@test isempty(Core.Compiler.validate_code(mi))
-@test isempty(Core.Compiler.validate_code(c0))
+@test isempty(Core.Compiler.validate_code(mi, c0))
 
 @testset "INVALID_EXPR_HEAD" begin
     c = copy(c0)
@@ -116,7 +115,7 @@ end
 @testset "SIGNATURE_NARGS_MISMATCH" begin
     old_sig = mi.def.sig
     mi.def.sig = Tuple{1,2}
-    errors = Core.Compiler.validate_code(mi)
+    errors = Core.Compiler.validate_code(mi, nothing)
     mi.def.sig = old_sig
     @test length(errors) == 1
     @test errors[1].kind === Core.Compiler.SIGNATURE_NARGS_MISMATCH
@@ -132,7 +131,7 @@ end
 
 @testset "SLOTNAMES_NARGS_MISMATCH" begin
     mi.def.nargs += 20
-    errors = Core.Compiler.validate_code(mi)
+    errors = Core.Compiler.validate_code(mi, c0)
     mi.def.nargs -= 20
     @test length(errors) == 2
     @test count(e.kind === Core.Compiler.SLOTNAMES_NARGS_MISMATCH for e in errors) == 1

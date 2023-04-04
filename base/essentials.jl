@@ -220,6 +220,39 @@ macro _foldable_meta()
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#true))
 end
+# can be used in place of `@assume_effects :nothrow` (supposed to be used for bootstrapping)
+macro _nothrow_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#false,
+        #=:effect_free=#false,
+        #=:nothrow=#true,
+        #=:terminates_globally=#false,
+        #=:terminates_locally=#false,
+        #=:notaskstate=#false,
+        #=:inaccessiblememonly=#false))
+end
+# can be used in place of `@assume_effects :terminates_locally` (supposed to be used for bootstrapping)
+macro _terminates_locally_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#false,
+        #=:effect_free=#false,
+        #=:nothrow=#false,
+        #=:terminates_globally=#false,
+        #=:terminates_locally=#true,
+        #=:notaskstate=#false,
+        #=:inaccessiblememonly=#false))
+end
+# can be used in place of `@assume_effects :effect_free :terminates_locally` (supposed to be used for bootstrapping)
+macro _effect_free_terminates_locally_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#false,
+        #=:effect_free=#true,
+        #=:nothrow=#false,
+        #=:terminates_globally=#false,
+        #=:terminates_locally=#true,
+        #=:notaskstate=#false,
+        #=:inaccessiblememonly=#false))
+end
 
 # another version of inlining that propagates an inbounds context
 macro _propagate_inbounds_meta()

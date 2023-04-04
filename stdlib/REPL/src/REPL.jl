@@ -3,13 +3,14 @@
 """
 Run Evaluate Print Loop (REPL)
 
-    Example minimal code
-    ```
-    import REPL
-    term = REPL.Terminals.TTYTerminal("dumb", stdin, stdout, stderr)
-    repl = REPL.LineEditREPL(term, true)
-    REPL.run_repl(repl)
-    ```
+Example minimal code
+
+```julia
+import REPL
+term = REPL.Terminals.TTYTerminal("dumb", stdin, stdout, stderr)
+repl = REPL.LineEditREPL(term, true)
+REPL.run_repl(repl)
+```
 """
 module REPL
 
@@ -1406,12 +1407,24 @@ function repl_eval_counter(hp)
 end
 
 function out_transform(@nospecialize(x), n::Ref{Int})
-    return quote
+    return Expr(:toplevel, get_usings!([], x)..., quote
         let __temp_val_a72df459 = $x
             $capture_result($n, __temp_val_a72df459)
             __temp_val_a72df459
         end
+    end)
+end
+
+function get_usings!(usings, ex)
+    # get all `using` and `import` statements which are at the top level
+    for (i, arg) in enumerate(ex.args)
+        if Base.isexpr(arg, :toplevel)
+            get_usings!(usings, arg)
+        elseif Base.isexpr(arg, [:using, :import])
+            push!(usings, popat!(ex.args, i))
+        end
     end
+    return usings
 end
 
 function capture_result(n::Ref{Int}, @nospecialize(x))

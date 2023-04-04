@@ -173,6 +173,13 @@ pagetable_t memory_map;
 // List of marked big objects.  Not per-thread.  Accessed only by master thread.
 bigval_t *big_objects_marked = NULL;
 
+// Eytzinger tree of images. Used for very fast jl_object_in_image queries during gc
+// See https://algorithmica.org/en/eytzinger
+static arraylist_t eytzinger_image_tree;
+static arraylist_t eytzinger_idxs;
+static uintptr_t gc_img_min;
+static uintptr_t gc_img_max;
+
 // -- Finalization --
 // `ptls->finalizers` and `finalizer_list_marked` might have tagged pointers.
 // If an object pointer has the lowest bit set, the next pointer is an unboxed c function pointer.
@@ -182,6 +189,118 @@ bigval_t *big_objects_marked = NULL;
 arraylist_t finalizer_list_marked;
 arraylist_t to_finalize;
 JL_DLLEXPORT _Atomic(int) jl_gc_have_pending_finalizers = 0;
+
+static int ptr_cmp(const void *l, const void *r)
+{
+    uintptr_t left = *(const uintptr_t*)l;
+    uintptr_t right = *(const uintptr_t*)r;
+    // jl_safe_printf("cmp %p %p\n", (void*)left, (void*)right);
+    return (left > right) - (left < right);
+}
+
+// Build an eytzinger tree from a sorted array
+static int eytzinger(uintptr_t *src, uintptr_t *dest, size_t i, size_t k, size_t n)
+{
+    if (k <= n) {
+        i = eytzinger(src, dest, i, 2 * k, n);
+        dest[k-1] = src[i];
+        i++;
+        i = eytzinger(src, dest, i, 2 * k + 1, n);
+    }
+    return i;
+}
+
+static size_t eyt_obj_idx(jl_value_t *obj) JL_NOTSAFEPOINT
+{
+    size_t n = eytzinger_image_tree.len - 1;
+    if (n == 0)
+        return n;
+    assert(n % 2 == 0 && "Eytzinger tree not even length!");
+    uintptr_t cmp = (uintptr_t) obj;
+    if (cmp <= gc_img_min || cmp > gc_img_max)
+        return n;
+    uintptr_t *tree = (uintptr_t*)eytzinger_image_tree.items;
+    size_t k = 1;
+    // note that k preserves the history of how we got to the current node
+    while (k <= n) {
+        int greater = (cmp > tree[k - 1]);
+        k <<= 1;
+        k |= greater;
+    }
+    // Free to assume k is nonzero, since we start with k = 1
+    // and cmp > gc_img_min
+    // This shift does a fast revert of the path until we get
+    // to a node that evaluated less than cmp.
+    k >>= (__builtin_ctzll(k) + 1);
+    assert(k != 0);
+    assert(k <= n && "Eytzinger tree index out of bounds!");
+    assert(tree[k - 1] < cmp && "Failed to find lower bound for object!");
+    return k - 1;
+}
+
+//used in staticdata.c after we add an image
+void rebuild_image_blob_tree(void)
+{
+    size_t inc = 1 + jl_linkage_blobs.len - eytzinger_image_tree.len;
+    assert(eytzinger_idxs.len == eytzinger_image_tree.len);
+    assert(eytzinger_idxs.max == eytzinger_image_tree.max);
+    arraylist_grow(&eytzinger_idxs, inc);
+    arraylist_grow(&eytzinger_image_tree, inc);
+    eytzinger_idxs.items[eytzinger_idxs.len - 1] = (void*)jl_linkage_blobs.len;
+    eytzinger_image_tree.items[eytzinger_image_tree.len - 1] = (void*)1; // outside image
+    for (size_t i = 0; i < jl_linkage_blobs.len; i++) {
+        assert((uintptr_t) jl_linkage_blobs.items[i] % 4 == 0 && "Linkage blob not 4-byte aligned!");
+        // We abuse the pointer here a little so that a couple of properties are true:
+        // 1. a start and an end are never the same value. This simplifies the binary search.
+        // 2. ends are always after starts. This also simplifies the binary search.
+        // We assume that there exist no 0-size blobs, but that's a safe assumption
+        // since it means nothing could be there anyways
+        uintptr_t val = (uintptr_t) jl_linkage_blobs.items[i];
+        eytzinger_idxs.items[i] = (void*)(val + (i & 1));
+    }
+    qsort(eytzinger_idxs.items, eytzinger_idxs.len - 1, sizeof(void*), ptr_cmp);
+    gc_img_min = (uintptr_t) eytzinger_idxs.items[0];
+    gc_img_max = (uintptr_t) eytzinger_idxs.items[eytzinger_idxs.len - 2] + 1;
+    eytzinger((uintptr_t*)eytzinger_idxs.items, (uintptr_t*)eytzinger_image_tree.items, 0, 1, eytzinger_idxs.len - 1);
+    // Reuse the scratch memory to store the indices
+    // Still O(nlogn) because binary search
+    for (size_t i = 0; i < jl_linkage_blobs.len; i ++) {
+        uintptr_t val = (uintptr_t) jl_linkage_blobs.items[i];
+        // This is the same computation as in the prior for loop
+        uintptr_t eyt_val = val + (i & 1);
+        size_t eyt_idx = eyt_obj_idx((jl_value_t*)(eyt_val + 1)); assert(eyt_idx < eytzinger_idxs.len - 1);
+        assert(eytzinger_image_tree.items[eyt_idx] == (void*)eyt_val && "Eytzinger tree failed to find object!");
+        if (i & 1)
+            eytzinger_idxs.items[eyt_idx] = (void*)n_linkage_blobs();
+        else
+            eytzinger_idxs.items[eyt_idx] = (void*)(i / 2);
+    }
+}
+
+static int eyt_obj_in_img(jl_value_t *obj) JL_NOTSAFEPOINT
+{
+    assert((uintptr_t) obj % 4 == 0 && "Object not 4-byte aligned!");
+    int idx = eyt_obj_idx(obj);
+    // Now we use a tiny trick: tree[idx] & 1 is whether or not tree[idx] is a
+    // start (0) or an end (1) of a blob. If it's a start, then the object is
+    // in the image, otherwise it is not.
+    int in_image = ((uintptr_t)eytzinger_image_tree.items[idx] & 1) == 0;
+    return in_image;
+}
+
+size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    assert((uintptr_t) v % 4 == 0 && "Object not 4-byte aligned!");
+    int eyt_idx = eyt_obj_idx(v);
+    // We fill the invalid slots with the length, so we can just return that
+    size_t idx = (size_t) eytzinger_idxs.items[eyt_idx];
+    return idx;
+}
+
+uint8_t jl_object_in_image(jl_value_t *obj) JL_NOTSAFEPOINT
+{
+    return eyt_obj_in_img(obj);
+}
 
 NOINLINE uintptr_t gc_get_stack_ptr(void)
 {
@@ -382,9 +501,9 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NO
     ct->sticky = sticky;
 }
 
-static uint64_t finalizer_rngState[4];
+static uint64_t finalizer_rngState[JL_RNG_SIZE];
 
-void jl_rng_split(uint64_t to[4], uint64_t from[4]) JL_NOTSAFEPOINT;
+void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_gc_init_finalizer_rng_state(void)
 {
@@ -413,7 +532,7 @@ static void run_finalizers(jl_task_t *ct)
     jl_atomic_store_relaxed(&jl_gc_have_pending_finalizers, 0);
     arraylist_new(&to_finalize, 0);
 
-    uint64_t save_rngState[4];
+    uint64_t save_rngState[JL_RNG_SIZE];
     memcpy(&save_rngState[0], &ct->rngState[0], sizeof(save_rngState));
     jl_rng_split(ct->rngState, finalizer_rngState);
 
@@ -486,6 +605,11 @@ JL_DLLEXPORT void jl_gc_enable_finalizers(jl_task_t *ct, int on)
     if (jl_atomic_load_relaxed(&jl_gc_have_pending_finalizers)) {
         jl_gc_run_pending_finalizers(ct);
     }
+}
+
+JL_DLLEXPORT int8_t jl_gc_is_in_finalizer(void)
+{
+    return jl_current_task->ptls->in_finalizer;
 }
 
 static void schedule_all_finalizers(arraylist_t *flist) JL_NOTSAFEPOINT
@@ -1946,6 +2070,7 @@ STATIC_INLINE jl_value_t *gc_mark_obj32(jl_ptls_t ptls, char *obj32_parent, uint
             gc_heap_snapshot_record_object_edge((jl_value_t*)obj32_parent, slot);
         }
     }
+    gc_mark_push_remset(ptls, (jl_value_t *)obj32_parent, nptr);
     return new_obj;
 }
 
@@ -2265,7 +2390,8 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
         uint8_t bits = (gc_old(o->header) && !mark_reset_age) ? GC_OLD_MARKED : GC_MARKED;
         int update_meta = __likely(!meta_updated && !gc_verifying);
         int foreign_alloc = 0;
-        if (update_meta && jl_object_in_image(new_obj)) {
+        // directly point at eyt_obj_in_img to encourage inlining
+        if (update_meta && o->bits.in_image) {
             foreign_alloc = 1;
             update_meta = 0;
         }
@@ -2934,12 +3060,14 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 
     // update heuristics only if this GC was automatically triggered
     if (collection == JL_GC_AUTO) {
-        if (not_freed_enough) {
-            gc_num.interval = gc_num.interval * 2;
-        }
         if (large_frontier) {
             sweep_full = 1;
+            gc_num.interval = last_long_collect_interval;
         }
+        if (not_freed_enough || large_frontier) {
+            gc_num.interval = gc_num.interval * 2;
+        }
+
         size_t maxmem = 0;
 #ifdef _P64
         // on a big memory machine, increase max_collect_interval to totalmem / nthreads / 2
@@ -2972,6 +3100,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         // on the first collection after sweep_full, and the current scan
         perm_scanned_bytes = 0;
         promoted_bytes = 0;
+        last_long_collect_interval = gc_num.interval;
     }
     scanned_bytes = 0;
     // 6. start sweeping
@@ -3041,9 +3170,20 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     live_bytes += -gc_num.freed + gc_num.since_sweep;
 
     if (collection == JL_GC_AUTO) {
+        //If we aren't freeing enough or are seeing lots and lots of pointers let it increase faster
+        if(!not_freed_enough || large_frontier) {
+            int64_t tot = 2 * (live_bytes + gc_num.since_sweep) / 3;
+            if (gc_num.interval > tot) {
+                gc_num.interval = tot;
+                last_long_collect_interval = tot;
+            }
         // If the current interval is larger than half the live data decrease the interval
-        int64_t half = live_bytes/2;
-        if (gc_num.interval > half) gc_num.interval = half;
+        } else {
+            int64_t half = (live_bytes / 2);
+            if (gc_num.interval > half)
+                gc_num.interval = half;
+        }
+
         // But never go below default
         if (gc_num.interval < default_collect_interval) gc_num.interval = default_collect_interval;
     }
@@ -3051,12 +3191,13 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     if (gc_num.interval + live_bytes > max_total_memory) {
         if (live_bytes < max_total_memory) {
             gc_num.interval = max_total_memory - live_bytes;
+            last_long_collect_interval = max_total_memory - live_bytes;
         }
         else {
             // We can't stay under our goal so let's go back to
             // the minimum interval and hope things get better
             gc_num.interval = default_collect_interval;
-       }
+        }
     }
 
     gc_time_summary(sweep_full, t_start, gc_end_time, gc_num.freed,
@@ -3127,6 +3268,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     if (duration > gc_num.max_time_to_safepoint)
         gc_num.max_time_to_safepoint = duration;
     gc_num.time_to_safepoint = duration;
+    gc_num.total_time_to_safepoint += duration;
 
     gc_invoke_callbacks(jl_gc_cb_pre_gc_t,
         gc_cblist_pre_gc, (collection));
@@ -3228,8 +3370,6 @@ void jl_init_thread_heap(jl_ptls_t ptls)
 // System-wide initializations
 void jl_gc_init(void)
 {
-    if (jl_options.heap_size_hint)
-        jl_gc_set_max_memory(jl_options.heap_size_hint);
 
     JL_MUTEX_INIT(&heapsnapshot_lock);
     JL_MUTEX_INIT(&finalizers_lock);
@@ -3241,6 +3381,10 @@ void jl_gc_init(void)
 
     arraylist_new(&finalizer_list_marked, 0);
     arraylist_new(&to_finalize, 0);
+    arraylist_new(&eytzinger_image_tree, 0);
+    arraylist_new(&eytzinger_idxs, 0);
+    arraylist_push(&eytzinger_idxs, (void*)0);
+    arraylist_push(&eytzinger_image_tree, (void*)1); // outside image
 
     gc_num.interval = default_collect_interval;
     last_long_collect_interval = default_collect_interval;
@@ -3253,8 +3397,15 @@ void jl_gc_init(void)
     uint64_t constrained_mem = uv_get_constrained_memory();
     if (constrained_mem > 0 && constrained_mem < total_mem)
         total_mem = constrained_mem;
-    max_total_memory = total_mem / 10 * 6;
+    double percent;
+    if (total_mem < 128e9)
+        percent = total_mem * 2.34375e-12 + 0.6; // 60% at 0 gigs and 90% at 128 to not
+    else                                         // overcommit too much on memory contrained devices
+        percent = 0.9;
+    max_total_memory = total_mem * percent;
 #endif
+    if (jl_options.heap_size_hint)
+        jl_gc_set_max_memory(jl_options.heap_size_hint);
 
     t_start = jl_hrtime();
 }
@@ -3265,6 +3416,11 @@ JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem)
         && max_mem < (uint64_t)1 << (sizeof(memsize_t) * 8 - 1)) {
         max_total_memory = max_mem;
     }
+}
+
+JL_DLLEXPORT uint64_t jl_gc_get_max_memory(void)
+{
+    return max_total_memory;
 }
 
 // callback for passing OOM errors from gmp

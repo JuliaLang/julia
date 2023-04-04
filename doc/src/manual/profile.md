@@ -59,7 +59,7 @@ julia> @profile myfunc()
 
 To see the profiling results, there are several graphical browsers.
 One "family" of visualizers is based on [FlameGraphs.jl](https://github.com/timholy/FlameGraphs.jl), with each family member providing a different user interface:
-- [Juno](https://junolab.org/) is a full IDE with built-in support for profile visualization
+- [VS Code](https://www.julia-vscode.org/) is a full IDE with built-in support for profile visualization
 - [ProfileView.jl](https://github.com/timholy/ProfileView.jl) is a stand-alone visualizer based on GTK
 - [ProfileVega.jl](https://github.com/davidanthoff/ProfileVega.jl) uses VegaLight and integrates well with Jupyter notebooks
 - [StatProfilerHTML.jl](https://github.com/tkluck/StatProfilerHTML.jl) produces HTML and presents some additional summaries, and also integrates well with Jupyter notebooks
