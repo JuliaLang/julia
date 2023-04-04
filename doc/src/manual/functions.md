@@ -1161,30 +1161,6 @@ julia> 1:5 .|> [x->x^2, inv, x->2*x, -, isodd]
 
 All functions in the fused broadcast are always called for every element of the result. Thus `X .+ σ .* randn.()` will add a mask of independent and identically sampled random values to each element of the array `X`, but `X .+ σ .* randn()` will add the *same* random sample to each element. In cases where the fused computation is constant along one or more axes of the broadcast iteration, it may be possible to leverage a space-time tradeoff and allocate intermediate values to reduce the number of computations. See more at [performance tips](@ref man-performance-unfuse).
 
-!!! warning 
-    At this time Julia provides no anti-aliasing guarantees for broadcasted mutating functions.
-
-As a consequence of the fact that the fused expression is computed for every element of the result, when the expression contains mutating functions or functions with other side effects, users should be very careful to understand the order of iterations over the broadcast to ensure correct and intended semantics. This can be used powerfully: say we want to compute the number of North-East lattice paths from the point `(1, 1)` to each point in the square up to `(n, n)`. We can define the recursion as a dynamic program very concisely and with nearly optimal performance.
-```
-function num_paths!(M, I)
-    if any(Tuple(I) .== 1)
-        M[I] = 1
-    else
-        M[I] = M[I - CartesianIndex(0, 1)] + M[I - CartesianIndex(1, 0)]
-    end
-end
-
-M = zeros(Int, n, n)
-num_paths!.(Ref(M), CartesianIndices(M))
-# M is now filled with the correct number of paths to each point
-```
-
-However by the same token, expressions like the following
-```
-normalize_rows!(X) = (X ./= sum.(eachrow(X))) # do not do this!
-```
-
-Will not in fact normalize rows to have unit sum as might be expected upon first reading the code due to the sum being recomputed (after mutation) for each row entry.
 ## Further Reading
 
 We should mention here that this is far from a complete picture of defining functions. Julia has
