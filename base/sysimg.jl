@@ -60,7 +60,6 @@ let
         :Future,
         :InteractiveUtils,
         :LibGit2,
-        :Profile,
         :UUIDs,
 
         # 3-depth packages
