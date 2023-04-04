@@ -154,66 +154,6 @@ static void statestack_set(jl_unionstate_t *st, int i, int val) JL_NOTSAFEPOINT
         memcpy(&(dst)->stack, (saved)->stack, ((saved)->used+7)/8);     \
     } while (0);
 
-typedef struct {
-    int8_t *buf;
-    int rdepth;
-    int8_t _space[24];
-} jl_savedenv_t;
-
-static void save_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se)
-{
-    jl_varbinding_t *v = e->vars;
-    int len=0;
-    while (v != NULL) {
-        len++;
-        v = v->prev;
-    }
-    if (root)
-        *root = (jl_value_t*)jl_alloc_svec(len * 3);
-    se->buf = (int8_t*)(len > 8 ? malloc_s(len * 3) : &se->_space);
-#ifdef __clang_gcanalyzer__
-    memset(se->buf, 0, len * 3);
-#endif
-    int i=0, j=0; v = e->vars;
-    while (v != NULL) {
-        if (root) {
-            jl_svecset(*root, i++, v->lb);
-            jl_svecset(*root, i++, v->ub);
-            jl_svecset(*root, i++, (jl_value_t*)v->innervars);
-        }
-        se->buf[j++] = v->occurs;
-        se->buf[j++] = v->occurs_inv;
-        se->buf[j++] = v->occurs_cov;
-        v = v->prev;
-    }
-    se->rdepth = e->Runions.depth;
-}
-
-static void free_env(jl_savedenv_t *se) JL_NOTSAFEPOINT
-{
-    if (se->buf != se->_space)
-        free(se->buf);
-    se->buf = NULL;
-}
-
-static void restore_env(jl_stenv_t *e, jl_value_t *root, jl_savedenv_t *se) JL_NOTSAFEPOINT
-{
-    jl_varbinding_t *v = e->vars;
-    int i = 0, j = 0;
-    while (v != NULL) {
-        if (root) v->lb = jl_svecref(root, i++);
-        if (root) v->ub = jl_svecref(root, i++);
-        if (root) v->innervars = (jl_array_t*)jl_svecref(root, i++);
-        v->occurs = se->buf[j++];
-        v->occurs_inv = se->buf[j++];
-        v->occurs_cov = se->buf[j++];
-        v = v->prev;
-    }
-    e->Runions.depth = se->rdepth;
-    if (e->envout && e->envidx < e->envsz)
-        memset(&e->envout[e->envidx], 0, (e->envsz - e->envidx)*sizeof(void*));
-}
-
 static int current_env_length(jl_stenv_t *e)
 {
     jl_varbinding_t *v = e->vars;
@@ -223,6 +163,130 @@ static int current_env_length(jl_stenv_t *e)
         v = v->prev;
     }
     return len;
+}
+
+typedef struct {
+    int8_t *buf;
+    int rdepth;
+    int8_t _space[24]; // == 8 * 3
+    jl_gcframe_t gcframe;
+    jl_value_t *roots[24];
+} jl_savedenv_t;
+
+static void re_save_env(jl_stenv_t *e, jl_savedenv_t *se, int root)
+{
+    jl_value_t **roots = NULL;
+    int nroots = 0;
+    if (root) {
+        if (se->gcframe.nroots == JL_GC_ENCODE_PUSHARGS(1)) {
+            jl_svec_t *sv = (jl_svec_t*)se->roots[0];
+            assert(jl_is_svec(sv));
+            roots = jl_svec_data(sv);
+            nroots = jl_svec_len(sv);
+        }
+        else {
+            roots = se->roots;
+            nroots = se->gcframe.nroots >> 2;
+        }
+    }
+    jl_varbinding_t *v = e->vars;
+    int i = 0, j = 0;
+    while (v != NULL) {
+        if (root) {
+            roots[i++] = v->lb;
+            roots[i++] = v->ub;
+            roots[i++] = (jl_value_t*)v->innervars;
+        }
+        se->buf[j++] = v->occurs;
+        se->buf[j++] = v->occurs_inv;
+        se->buf[j++] = v->occurs_cov;
+        v = v->prev;
+    }
+    assert(i == nroots); (void)nroots;
+    se->rdepth = e->Runions.depth;
+}
+
+static void alloc_env(jl_stenv_t *e, jl_savedenv_t *se, int root)
+{
+    jl_task_t *ct = jl_current_task;
+    int len = current_env_length(e);
+    se->gcframe.nroots = 0;
+    se->gcframe.prev = NULL;
+    se->roots[0] = NULL;
+    if (len > 8) {
+        if (root) {
+            se->gcframe.nroots = JL_GC_ENCODE_PUSHARGS(1);
+            se->gcframe.prev = ct->gcstack;
+            ct->gcstack = &se->gcframe;
+            jl_svec_t *sv = jl_alloc_svec(len * 3);
+            se->roots[0] = (jl_value_t*)sv;
+        }
+    }
+    else {
+        if (root && len) {
+            for (int i = 0; i < len * 3; i++)
+                se->roots[i] = NULL;
+            se->gcframe.nroots = JL_GC_ENCODE_PUSHARGS(len * 3);
+            se->gcframe.prev = ct->gcstack;
+            ct->gcstack = &se->gcframe;
+        }
+    }
+    se->buf = (len > 8 ? (int8_t*)malloc_s(len * 3) : se->_space);
+#ifdef __clang_gcanalyzer__
+    memset(se->buf, 0, len * 3);
+#endif
+}
+
+static void save_env(jl_stenv_t *e, jl_savedenv_t *se, int root)
+{
+    alloc_env(e, se, root);
+    re_save_env(e, se, root);
+}
+
+static void free_env(jl_savedenv_t *se) JL_NOTSAFEPOINT
+{
+    if (se->gcframe.nroots) {
+        assert(jl_current_task->gcstack == &se->gcframe);
+        JL_GC_POP();
+    }
+    if (se->buf != se->_space)
+        free(se->buf);
+    se->buf = NULL;
+}
+
+static void restore_env(jl_stenv_t *e, jl_savedenv_t *se, int root) JL_NOTSAFEPOINT
+{
+    jl_value_t **roots = NULL;
+    int nroots = 0;
+    if (root) {
+        if (se->gcframe.nroots == JL_GC_ENCODE_PUSHARGS(1)) {
+            jl_svec_t *sv = (jl_svec_t*)se->roots[0];
+            assert(jl_is_svec(sv));
+            roots = jl_svec_data(sv);
+            nroots = jl_svec_len(sv);
+        }
+        else {
+            roots = se->roots;
+            nroots = se->gcframe.nroots >> 2;
+        }
+    }
+    jl_varbinding_t *v = e->vars;
+    int i = 0, j = 0;
+    while (v != NULL) {
+        if (root) {
+            v->lb = roots[i++];
+            v->ub = roots[i++];
+            v->innervars = (jl_array_t*)roots[i++];
+        }
+        v->occurs = se->buf[j++];
+        v->occurs_inv = se->buf[j++];
+        v->occurs_cov = se->buf[j++];
+        v = v->prev;
+    }
+    assert(i == nroots); (void)nroots;
+    e->Runions.depth = se->rdepth;
+    if (e->envout && e->envidx < e->envsz)
+        memset(&e->envout[e->envidx], 0, (e->envsz - e->envidx)*sizeof(void*));
 }
 
 static void clean_occurs(jl_stenv_t *e)
@@ -1577,7 +1641,7 @@ static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     return sub;
 }
 
-static int exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_value_t *saved, jl_savedenv_t *se, int param)
+static int exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_savedenv_t *se, int param)
 {
     e->Runions.used = 0;
     while (1) {
@@ -1591,11 +1655,11 @@ static int exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_value_
             // We preserve `envout` here as `subtype_unionall` needs previous assigned env values.
             int oldidx = e->envidx;
             e->envidx = e->envsz;
-            restore_env(e, saved, se);
+            restore_env(e, se, 1);
             e->envidx = oldidx;
         }
         else {
-            restore_env(e, saved, se);
+            restore_env(e, se, 1);
             return 0;
         }
     }
@@ -1608,26 +1672,23 @@ static int _forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, i
     //   ∃₁
     assert(e->Runions.depth == 0);
     assert(e->Lunions.depth == 0);
-    jl_value_t *saved=NULL; jl_savedenv_t se;
-    JL_GC_PUSH1(&saved);
-    save_env(e, &saved, &se);
+    jl_savedenv_t se;
+    save_env(e, &se, 1);
 
     e->Lunions.used = 0;
     int sub;
     if (count) *count = 0;
     if (noRmore) *noRmore = 1;
     while (1) {
-        sub = exists_subtype(x, y, e, saved, &se, param);
+        sub = exists_subtype(x, y, e, &se, param);
         if (count) *count = (*count < 4) ? *count + 1 : 4;
         if (noRmore) *noRmore = *noRmore && e->Runions.more == 0;
         if (!sub || !next_union_state(e, 0))
             break;
-        free_env(&se);
-        save_env(e, &saved, &se);
+        re_save_env(e, &se, 1);
     }
 
     free_env(&se);
-    JL_GC_POP();
     return sub;
 }
 
@@ -2449,13 +2510,11 @@ static int try_subtype_in_env(jl_value_t *a, jl_value_t *b, jl_stenv_t *e)
 {
     if (a == jl_bottom_type || b == (jl_value_t *)jl_any_type || try_subtype_by_bounds(a, b, e))
         return 1;
-    jl_value_t *root=NULL; jl_savedenv_t se;
-    JL_GC_PUSH1(&root);
-    save_env(e, &root, &se);
+    jl_savedenv_t se;
+    save_env(e, &se, 1);
     int ret = subtype_in_env(a, b, e);
-    restore_env(e, root, &se);
+    restore_env(e, &se, 1);
     free_env(&se);
-    JL_GC_POP();
     return ret;
 }
 
@@ -2559,17 +2618,17 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         return R ? intersect(a, bb->lb, e, param) : intersect(bb->lb, a, e, param);
     if (!jl_is_type(a) && !jl_is_typevar(a))
         return set_var_to_const(bb, a, e, R);
-    jl_value_t *root=NULL; jl_savedenv_t se;
+    jl_savedenv_t se;
     if (param == 2) {
         jl_value_t *ub = NULL;
-        JL_GC_PUSH2(&ub, &root);
+        JL_GC_PUSH1(&ub);
         if (!jl_has_free_typevars(a)) {
-            save_env(e, &root, &se);
+            save_env(e, &se, 1);
             int issub = subtype_in_env_existential(bb->lb, a, e);
-            restore_env(e, root, &se);
+            restore_env(e, &se, 1);
             if (issub) {
                 issub = subtype_in_env_existential(a, bb->ub, e);
-                restore_env(e, root, &se);
+                restore_env(e, &se, 1);
             }
             free_env(&se);
             if (!issub) {
@@ -2582,9 +2641,9 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
             e->triangular++;
             ub = R ? intersect_aside(a, bb->ub, e, bb->depth0) : intersect_aside(bb->ub, a, e, bb->depth0);
             e->triangular--;
-            save_env(e, &root, &se);
+            save_env(e, &se, 1);
             int issub = subtype_in_env_existential(bb->lb, ub, e);
-            restore_env(e, root, &se);
+            restore_env(e, &se, 1);
             free_env(&se);
             if (!issub) {
                 JL_GC_POP();
@@ -2942,12 +3001,12 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
 
 static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, int param)
 {
-    jl_value_t *res=NULL, *save=NULL;
+    jl_value_t *res = NULL;
     jl_savedenv_t se;
     jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0,
                            e->invdepth, NULL, e->vars };
-    JL_GC_PUSH5(&res, &vb.lb, &vb.ub, &save, &vb.innervars);
-    save_env(e, &save, &se);
+    JL_GC_PUSH4(&res, &vb.lb, &vb.ub, &vb.innervars);
+    save_env(e, &se, 1);
     res = intersect_unionall_(t, u, e, R, param, &vb);
     if (vb.limited) {
         // if the environment got too big, avoid tree recursion and propagate the flag
@@ -2962,7 +3021,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
         else if (vb.occurs_cov && !var_occurs_invariant(u->body, u->var, 0))
             vb.constraintkind = 1;
         if (vb.constraintkind) {
-            restore_env(e, vb.constraintkind == 1 ? save : NULL, &se);
+            restore_env(e, &se, vb.constraintkind == 1 ? 1 : 0);
             vb.occurs = vb.occurs_cov = vb.occurs_inv = 0;
             res = intersect_unionall_(t, u, e, R, param, &vb);
         }
@@ -3169,20 +3228,19 @@ static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t 
         flip_vars(e); flip_offset(e);
         return jl_bottom_type;
     }
-    jl_value_t *root=NULL;
     jl_savedenv_t se;
-    JL_GC_PUSH2(&ii, &root);
-    save_env(e, &root, &se);
+    JL_GC_PUSH1(&ii);
+    save_env(e, &se, 1);
     if (!subtype_in_env_existential(x, y, e))
         ii = NULL;
     else {
-        restore_env(e, root, &se);
+        restore_env(e, &se, 1);
         flip_offset(e);
         if (!subtype_in_env_existential(y, x, e))
             ii = NULL;
         flip_offset(e);
     }
-    restore_env(e, root, &se);
+    restore_env(e, &se, 1);
     free_env(&se);
     JL_GC_POP();
     return ii;
@@ -3434,9 +3492,9 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
     if (jl_is_unionall(x)) {
         if (jl_is_unionall(y)) {
             jl_value_t *a=NULL, *b=jl_bottom_type, *res=NULL;
-            JL_GC_PUSH2(&a,&b);
+            JL_GC_PUSH2(&a, &b);
             jl_savedenv_t se;
-            save_env(e, NULL, &se);
+            save_env(e, &se, 0);
             a = intersect_unionall(y, (jl_unionall_t*)x, e, 0, param);
             if (jl_is_unionall(a)) {
                 jl_unionall_t *ua = (jl_unionall_t*)a;
@@ -3444,7 +3502,7 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                     jl_unionall_t *ub = (jl_unionall_t*)ua->body;
                     if (jl_has_typevar(ub->var->ub, ua->var) ||
                         jl_has_typevar(ub->var->lb, ua->var)) {
-                        restore_env(e, NULL, &se); // restore counts
+                        restore_env(e, &se, 0); // restore counts
                         b = intersect_unionall(x, (jl_unionall_t*)y, e, 1, param);
                     }
                 }
@@ -3517,35 +3575,54 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
     return jl_bottom_type;
 }
 
-static int merge_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se, int count)
+static int merge_env(jl_stenv_t *e, jl_savedenv_t *se, int count)
 {
-    if (count == 0) {
-        int len = current_env_length(e);
-        *root = (jl_value_t*)jl_alloc_svec(len * 3);
-        se->buf = (int8_t*)(len > 8 ? malloc_s(len * 3) : &se->_space);
-        memset(se->buf, 0, len * 3);
+    if (count == 0)
+        alloc_env(e, se, 1);
+    jl_value_t **roots = NULL;
+    int nroots = 0;
+    if (se->gcframe.nroots == JL_GC_ENCODE_PUSHARGS(1)) {
+        jl_svec_t *sv = (jl_svec_t*)se->roots[0];
+        assert(jl_is_svec(sv));
+        roots = jl_svec_data(sv);
+        nroots = jl_svec_len(sv);
+    }
+    else {
+        roots = se->roots;
+        nroots = se->gcframe.nroots >> 2;
     }
     int n = 0;
     jl_varbinding_t *v = e->vars;
-    jl_value_t *b1 = NULL, *b2 = NULL;
-    JL_GC_PUSH2(&b1, &b2); // clang-sagc does not understand that *root is rooted already
     v = e->vars;
     while (v != NULL) {
+        if (count == 0) {
+            // need to initialize this
+            se->buf[n] = 0;
+            se->buf[n+1] = 0;
+            se->buf[n+2] = 0;
+        }
         if (v->occurs) {
             // only merge lb/ub/innervars if this var occurs.
-            b1 = jl_svecref(*root, n);
+            jl_value_t *b1, *b2;
+            b1 = roots[n];
+            JL_GC_PROMISE_ROOTED(b1); // clang-sagc doesn't know this came from our GC frame
             b2 = v->lb;
-            jl_svecset(*root, n, b1 ? simple_meet(b1, b2, 0) : b2);
-            b1 = jl_svecref(*root, n+1);
+            JL_GC_PROMISE_ROOTED(b2); // clang-sagc doesn't know the fields of this are stack GC roots
+            roots[n] = b1 ? simple_meet(b1, b2, 0) : b2;
+            b1 = roots[n+1];
+            JL_GC_PROMISE_ROOTED(b1); // clang-sagc doesn't know this came from our GC frame
             b2 = v->ub;
-            jl_svecset(*root, n+1, b1 ? simple_join(b1, b2) : b2);
-            b1 = jl_svecref(*root, n+2);
+            JL_GC_PROMISE_ROOTED(b2); // clang-sagc doesn't know the fields of this are stack GC roots
+            roots[n+1] = b1 ? simple_join(b1, b2) : b2;
+            b1 = roots[n+2];
+            JL_GC_PROMISE_ROOTED(b1); // clang-sagc doesn't know this came from our GC frame
             b2 = (jl_value_t*)v->innervars;
+            JL_GC_PROMISE_ROOTED(b2); // clang-sagc doesn't know the fields of this are stack GC roots
             if (b2 && b1 != b2) {
                 if (b1)
                     jl_array_ptr_1d_append((jl_array_t*)b1, (jl_array_t*)b2);
                 else
-                    jl_svecset(*root, n+2, b2);
+                    roots[n+2] = b2;
             }
             // record the meeted vars.
             se->buf[n] = 1;
@@ -3558,33 +3635,52 @@ static int merge_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se, int co
         n = n + 3;
         v = v->prev;
     }
-    JL_GC_POP();
+    assert(n == nroots); (void)nroots;
     return count + 1;
 }
 
 // merge untouched vars' info.
-static void final_merge_env(jl_value_t **merged, jl_savedenv_t *me, jl_value_t **saved, jl_savedenv_t *se)
+static void final_merge_env(jl_stenv_t *e, jl_savedenv_t *me, jl_savedenv_t *se)
 {
-    int l = jl_svec_len(*merged);
-    assert(l == jl_svec_len(*saved) && l%3 == 0);
-    jl_value_t *b1 = NULL, *b2 = NULL;
-    JL_GC_PUSH2(&b1, &b2);
-    for (int n = 0; n < l; n = n + 3) {
-        if (jl_svecref(*merged, n) == NULL)
-            jl_svecset(*merged, n, jl_svecref(*saved, n));
-        if (jl_svecref(*merged, n+1) == NULL)
-            jl_svecset(*merged, n+1, jl_svecref(*saved, n+1));
-        b1 = jl_svecref(*merged, n+2);
-        b2 = jl_svecref(*saved , n+2);
+    jl_value_t **merged = NULL;
+    jl_value_t **saved = NULL;
+    int nroots = 0;
+    assert(se->gcframe.nroots == me->gcframe.nroots);
+    if (se->gcframe.nroots == JL_GC_ENCODE_PUSHARGS(1)) {
+        jl_svec_t *sv = (jl_svec_t*)se->roots[0];
+        assert(jl_is_svec(sv));
+        saved = jl_svec_data(sv);
+        nroots = jl_svec_len(sv);
+        sv = (jl_svec_t*)me->roots[0];
+        assert(jl_is_svec(sv));
+        merged = jl_svec_data(sv);
+        assert(nroots == jl_svec_len(sv));
+    }
+    else {
+        saved = se->roots;
+        merged = me->roots;
+        nroots = se->gcframe.nroots >> 2;
+    }
+    assert(nroots == current_env_length(e) * 3);
+    assert(nroots % 3 == 0);
+    for (int n = 0; n < nroots; n = n + 3) {
+        if (merged[n] == NULL)
+            merged[n] = saved[n];
+        if (merged[n+1] == NULL)
+            merged[n+1] = saved[n+1];
+        jl_value_t *b1, *b2;
+        b1 = merged[n+2];
+        JL_GC_PROMISE_ROOTED(b1); // clang-sagc doesn't know this came from our GC frame
+        b2 = saved[n+2];
+        JL_GC_PROMISE_ROOTED(b2); // clang-sagc doesn't know this came from our GC frame
         if (b2 && b1 != b2) {
             if (b1)
                 jl_array_ptr_1d_append((jl_array_t*)b1, (jl_array_t*)b2);
             else
-                jl_svecset(*merged, n+2, b2);
+                merged[n+2] = b2;
         }
         me->buf[n] |= se->buf[n];
     }
-    JL_GC_POP();
 }
 
 static void expand_local_env(jl_stenv_t *e, jl_value_t *res)
@@ -3616,19 +3712,17 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     e->Runions.more = 0;
     e->Runions.used = 0;
     jl_value_t **is;
-    JL_GC_PUSHARGS(is, 4);
-    jl_value_t **saved = &is[2];
-    jl_value_t **merged = &is[3];
+    JL_GC_PUSHARGS(is, 2);
     jl_savedenv_t se, me;
-    save_env(e, saved, &se);
+    save_env(e, &se, 1);
     int niter = 0, total_iter = 0;
     clean_occurs(e);
     is[0] = intersect(x, y, e, 0); // root
     if (is[0] != jl_bottom_type) {
         expand_local_env(e, is[0]);
-        niter = merge_env(e, merged, &me, niter);
+        niter = merge_env(e, &me, niter);
     }
-    restore_env(e, *saved, &se);
+    restore_env(e, &se, 1);
     while (next_union_state(e, 1)) {
         if (e->emptiness_only && is[0] != jl_bottom_type)
             break;
@@ -3639,9 +3733,9 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         is[1] = intersect(x, y, e, 0);
         if (is[1] != jl_bottom_type) {
             expand_local_env(e, is[1]);
-            niter = merge_env(e, merged, &me, niter);
+            niter = merge_env(e, &me, niter);
         }
-        restore_env(e, *saved, &se);
+        restore_env(e, &se, 1);
         if (is[0] == jl_bottom_type)
             is[0] = is[1];
         else if (is[1] != jl_bottom_type) {
@@ -3655,8 +3749,8 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         }
     }
     if (niter) {
-        final_merge_env(merged, &me, saved, &se);
-        restore_env(e, *merged, &me);
+        final_merge_env(e, &me, &se);
+        restore_env(e, &me, 1);
         free_env(&me);
     }
     free_env(&se);
