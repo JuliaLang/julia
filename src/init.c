@@ -754,7 +754,9 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     jl_init_uv();
     init_stdio();
     restore_fp_env();
-    restore_signals();
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
+        restore_signals();
+
     jl_init_intrinsic_properties();
 
     jl_prep_sanitizers();
