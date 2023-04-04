@@ -282,9 +282,10 @@ const ≠ = !=
 
 Determine whether `x` and `y` are identical, in the sense that no program could distinguish
 them. First the types of `x` and `y` are compared. If those are identical, mutable objects
-are compared by address in memory and immutable objects (such as numbers) are compared by
-contents at the bit level. This function is sometimes called "egal".
-It always returns a `Bool` value.
+are compared by address in memory, primitive objects (such as numbers) are compared by
+contents at the bit level, and immutable objects (such as tuples) are compared
+field-by-field using `===`. This function is sometimes called "egal". It always returns
+a `Bool` value.
 
 # Examples
 ```jldoctest
