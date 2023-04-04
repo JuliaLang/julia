@@ -1668,7 +1668,7 @@ function _require_prelocked(uuidkey::PkgId, env=nothing)
     else
         newm = root_module(uuidkey)
     end
-    # Load extensions when not precompiling and not in a nested package load
+    # Load extensions when not in a nested package load
     if isempty(package_locks)
         run_extension_callbacks()
     end
