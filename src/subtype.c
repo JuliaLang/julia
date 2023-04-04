@@ -2910,18 +2910,10 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
             // of the type walk that now may have incomplete bounds: finish those now too
             jl_varbinding_t *btemp = e->vars;
             while (btemp != NULL) {
-                //if (btemp->depth0 == vb->depth0 && (jl_has_typevar(btemp->lb, var) || jl_has_typevar(btemp->ub, var))) {
-                //    if (!jl_has_typevar(vb->lb, var) && !jl_has_typevar(vb->ub, var)) {
-                //        if (btemp->innervars == NULL)
-                //            btemp->innervars = jl_alloc_array_1d(jl_array_any_type, 0);
-                //        jl_array_ptr_1d_push(btemp->innervars, (jl_value_t*)var);
-                //    }
-                //}
-                if (btemp->depth0 == vb->depth0) {
-                    if (jl_has_typevar(btemp->lb, var))
-                        btemp->lb = jl_type_unionall((jl_tvar_t*)var, btemp->lb);
-                    if (jl_has_typevar(btemp->ub, var))
-                        btemp->ub = jl_type_unionall((jl_tvar_t*)var, btemp->ub);
+                if (btemp->depth0 == vb->depth0 && (jl_has_typevar(btemp->lb, var) || jl_has_typevar(btemp->ub, var))) {
+                    if (btemp->innervars == NULL)
+                        btemp->innervars = jl_alloc_array_1d(jl_array_any_type, 0);
+                    jl_array_ptr_1d_push(btemp->innervars, (jl_value_t*)var);
                 }
                 btemp = btemp->prev;
             }
@@ -3387,15 +3379,17 @@ static int subtype_by_bounds(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_NOT
 
 static int has_typevar_via_env(jl_value_t *x, jl_tvar_t *t, jl_stenv_t *e)
 {
-    jl_varbinding_t *temp = e->vars;
-    while (temp != NULL) {
-        if (temp->var == t)
-            break;
-        if (temp->lb == temp->ub &&
-            temp->lb == (jl_value_t *)t &&
-            temp->offset == 0 && jl_has_typevar(x, temp->var))
-            return 1;
-        temp = temp->prev;
+    if (e->Loffset == 0) {
+        jl_varbinding_t *temp = e->vars;
+        while (temp != NULL) {
+            if (temp->var == t)
+                break;
+            if (temp->lb == temp->ub &&
+                temp->lb == (jl_value_t *)t &&
+                jl_has_typevar(x, temp->var))
+                return 1;
+            temp = temp->prev;
+        }
     }
     return jl_has_typevar(x, t);
 }

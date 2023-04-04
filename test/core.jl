@@ -21,7 +21,7 @@ for (T, c) in (
         (Core.TypeMapEntry, [:sig, :simplesig, :guardsigs, :min_world, :max_world, :func, :isleafsig, :issimplesig, :va]),
         (Core.TypeMapLevel, []),
         (Core.TypeName, [:name, :module, :names, :atomicfields, :constfields, :wrapper, :mt, :hash, :n_uninitialized, :flags]),
-        (DataType, [:name, :super, :parameters, :instance, :hash]),
+        (DataType, [:name, :super, :parameters, :freevars, :instance, :hash]),
         (TypeVar, [:name, :ub, :lb]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if isconst(T, i))) == Set(c)
@@ -5877,11 +5877,11 @@ function f_unused_undefined_sp(::T...) where T
 end
 @test_throws UndefVarError(:T) f_unused_undefined_sp()
 
-# note: the constant `5` here should be > DataType.ninitialized.
+# note: the constant `6` here should be > DataType.ninitialized.
 # This tests that there's no crash due to accessing Type.body.layout.
-let f(n) = isdefined(typeof(n), 5)
+let f(n) = isdefined(typeof(n), 7)
     @test f(0) === false
-    @test isdefined(Int, 5) === false
+    @test isdefined(Int, 7) === false
 end
 
 # @isdefined in a loop

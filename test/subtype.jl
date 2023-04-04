@@ -1997,27 +1997,14 @@ let A = Tuple{Type{<:Union{Number, T}}, Ref{T}} where T,
 end
 
 # issue #39698
-let T = Type{T} where T<:(AbstractArray{I}) where I<:(Base.IteratorsMD.CartesianIndex),
-    S = Type{S} where S<:(Base.IteratorsMD.CartesianIndices{A, B} where B<:Tuple{Vararg{Any, A}} where A)
-    I = typeintersect(T, S)
-    # This intersection returns B<:Tuple{Vararg{Any,N}}, while intersection with T
-    # should have added a constraint for it to be B<:Tuple{Vararg{OrdinalRange{Int64,Int64},N}}
-    @test_broken I <: T
-    @test I <: S
-    I2 = typeintersect(S, T)
-    @test_broken I2 <: T
-    @test I2 <: S
-    @test I == I2
-    @test !Base.has_free_typevars(I)
-    @test !Base.has_free_typevars(I2)
-end
+@testintersect(Type{T} where T<:(AbstractArray{I}) where I<:(Base.IteratorsMD.CartesianIndex),
+    Type{S} where S<:(Base.IteratorsMD.CartesianIndices{A, B} where B<:Tuple{Vararg{Any, A}} where A),
+    Type{S} where {N, S<:(Base.IteratorsMD.CartesianIndices{N, B} where B<:Tuple{Vararg{Any, N}})})
 
 # issue #39948
-let A = Tuple{Array{Pair{T, JT} where JT<:Ref{T}, 1} where T, Vector},
-    I = typeintersect(A, Tuple{Vararg{Vector{T}}} where T)
-    @test I <: A
-    @test !Base.has_free_typevars(I)
-end
+@testintersect(Tuple{Array{Pair{T, JT} where JT<:Ref{T}, 1} where T, Vector},
+    Tuple{Vararg{Vector{T}}} where T,
+    Tuple{Array{Pair{T, JT} where JT<:Ref{T}, 1}, Array{Pair{T, JT} where JT<:Ref{T}, 1}} where T)
 
 # issue #8915
 struct D8915{T<:Union{Float32,Float64}}
@@ -2242,13 +2229,10 @@ end
                Val{Tuple{Tuple{Any, Vararg{Any, N}}}} where {N})
 
 let A = Pair{NTuple{N, Int}, Val{N}} where N,
-    Bs = (Pair{<:Tuple{Int, Vararg{Int}}, <:Val},
-          Pair{Tuple{Int, Vararg{Int,N1}}, Val{N2}} where {N1,N2})
-    Cerr = Pair{Tuple{Int, Vararg{Int,N}}, Val{N}} where N
-    for B in Bs
-        @testintersect(A, B, !Cerr)
-        @testintersect(A, B, !Union{})
-    end
+    C = Pair{Tuple{Int, Vararg{Int,N1}}, Val{N2}} where {N1,N2},
+    B = Pair{<:Tuple{Int, Vararg{Int}}, <:Val}
+    @testintersect A B C
+    @testintersect A C C
 end
 
 # issue #43064
