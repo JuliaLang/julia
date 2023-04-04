@@ -398,7 +398,7 @@ precompile_test_harness(false) do dir
                  :Distributed, :Downloads, :FileWatching, :Future, :InteractiveUtils, :libblastrampoline_jll,
                  :LazyArtifacts, :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
                  :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :OpenBLAS_jll, :Pkg, :Printf,
-                 :Profile, :p7zip_jll, :REPL, :Random, :SHA, :Serialization, :SharedArrays, :Sockets,
+                 :p7zip_jll, :REPL, :Random, :SHA, :Serialization, :SharedArrays, :Sockets,
                  :TOML, :Tar, :Test, :UUIDs, :Unicode,
                  :nghttp2_jll]
             ),
