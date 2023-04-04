@@ -1669,7 +1669,7 @@ function _require_prelocked(uuidkey::PkgId, env=nothing)
         newm = root_module(uuidkey)
     end
     # Load extensions when not precompiling and not in a nested package load
-    if JLOptions().incremental == 0 && isempty(package_locks)
+    if isempty(package_locks)
         run_extension_callbacks()
     end
     return newm
