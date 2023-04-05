@@ -64,7 +64,6 @@ let
 
         # 3-depth packages
         :REPL,
-        :SharedArrays,
         :TOML,
         :Test,
 
