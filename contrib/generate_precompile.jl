@@ -129,28 +129,6 @@ if have_repl
     """
 end
 
-Distributed = get(Base.loaded_modules,
-          Base.PkgId(Base.UUID("8ba89e20-285c-5b6f-9357-94700520ee1b"), "Distributed"),
-          nothing)
-if Distributed !== nothing
-    hardcoded_precompile_statements *= """
-    precompile(Tuple{typeof(Distributed.remotecall),Function,Int,Module,Vararg{Any, 100}})
-    precompile(Tuple{typeof(Distributed.procs)})
-    precompile(Tuple{typeof(Distributed.finalize_ref), Distributed.Future})
-    """
-# This is disabled because it doesn't give much benefit
-# and the code in Distributed is poorly typed causing many invalidations
-#=
-    precompile_script *= """
-    using Distributed
-    addprocs(2)
-    pmap(x->iseven(x) ? 1 : 0, 1:4)
-    @distributed (+) for i = 1:100 Int(rand(Bool)) end
-    """
-=#
-end
-
-
 Artifacts = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("56f22d72-fd6d-98f1-02f0-08ddc0907c33"), "Artifacts"),
           nothing)
