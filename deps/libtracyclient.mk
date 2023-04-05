@@ -36,7 +36,12 @@ $(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-no-crash-handler.patch-applied: $(LIBT
 		patch -p1 -f < $(SRCDIR)/patches/libTracyClient-no-crash-handler.patch
 	echo 1 > $@
 
-$(LIBTRACYCLIENT_BUILDDIR)/build-configured: $(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-no-crash-handler.patch-applied
+$(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-config-plots.patch-applied: $(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-no-crash-handler.patch-applied
+	cd $(LIBTRACYCLIENT_BUILDDIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/libTracyClient-config-plots.patch
+	echo 1 > $@
+
+$(LIBTRACYCLIENT_BUILDDIR)/build-configured: $(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-config-plots.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 		$(CMAKE) . $(CMAKE_GENERATOR_COMMAND) $(CMAKE_COMMON) $(LIBTRACYCLIENT_CMAKE) \
