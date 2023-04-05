@@ -65,7 +65,6 @@ let
         # 3-depth packages
         :REPL,
         :TOML,
-        :Test,
 
         # 4-depth packages
         :LibCURL,
