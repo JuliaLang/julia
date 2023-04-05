@@ -2087,7 +2087,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                         }
                         jl_array_ptr_1d_push(oldmi, (jl_value_t*)mi);
                         invalidate_external(mi, max_world);
-                        if (_jl_debug_method_invalidation) {
+                        if (_jl_debug_method_invalidation && invalidated) {
                             jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)mi);
                             loctag = jl_cstr_to_string("jl_method_table_insert");
                             jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
