@@ -1089,15 +1089,14 @@ end
     for (P, D, C, I, O) in Iterators.product(0:1, 0:2, 0:2, 0:1, 0:3)
         julia = joinpath(Sys.BINDIR, Base.julia_exename())
         script = """
-        using Test
         let
             cf = Base.CacheFlags()
             opts = Base.JLOptions()
-            @test cf.use_pkgimages == opts.use_pkgimages == $P
-            @test cf.debug_level == opts.debug_level == $D
-            @test cf.check_bounds == opts.check_bounds == $C
-            @test cf.inline == opts.can_inline == $I
-            @test cf.opt_level == opts.opt_level == $O
+            cf.use_pkgimages == opts.use_pkgimages == $P || error("use_pkgimages")
+            cf.debug_level == opts.debug_level == $D || error("debug_level")
+            cf.check_bounds == opts.check_bounds == $C || error("check_bounds")
+            cf.inline == opts.can_inline == $I || error("inline")
+            cf.opt_level == opts.opt_level == $O || error("opt_level")
         end
         """
         cmd = `$julia $(pkgimage(P)) $(opt_level(O)) $(debug_level(D)) $(check_bounds(C)) $(inline(I)) -e $script`
