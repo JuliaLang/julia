@@ -596,8 +596,6 @@ end
     end
 end
 
-mul!(C::StridedMatrix{T}, A::HermOrSym{T,<:StridedMatrix}, B::HermOrSym{T,<:StridedMatrix{T}},
-     α::Number, β::Number) where {T<:BlasFloat} = mul!(C, A, B.data, α, β)
 *(A::HermOrSym, B::HermOrSym) = A * copyto!(similar(parent(B)), B)
 
 function dot(x::AbstractVector, A::RealHermSymComplexHerm, y::AbstractVector)
