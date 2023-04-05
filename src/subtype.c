@@ -2870,8 +2870,8 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         if (wrap->innervars == NULL)
             wrap->innervars = jl_alloc_array_1d(jl_array_any_type, 0);
         jl_array_ptr_1d_push(wrap->innervars, (jl_value_t*)newvar);
+        // TODO: should we move all the innervars here too?
     }
-
 
     // if `v` still occurs, re-wrap body in `UnionAll v` or eliminate the UnionAll
     if (jl_has_typevar(res, vb->var)) {
@@ -2898,24 +2898,26 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         }
     }
 
-    if (res != jl_bottom_type && vb->innervars != NULL) {
-        int i;
-        for (i = 0; i < jl_array_len(vb->innervars); i++) {
+    if (vb->innervars != NULL) {
+        for (size_t i = 0; i < jl_array_len(vb->innervars); i++) {
             jl_tvar_t *var = (jl_tvar_t*)jl_array_ptr_ref(vb->innervars, i);
-            if (jl_has_typevar(res, var))
-                res = jl_type_unionall((jl_tvar_t*)var, res);
-            // TODO: full dominator analysis for when handling innervars
             // the `btemp->prev` walk is only giving a sort of post-order guarantee (since we are
             // iterating 2 trees at once), so once we set `wrap`, there might remain other branches
-            // of the type walk that now may have incomplete bounds: finish those now too
-            jl_varbinding_t *btemp = e->vars;
-            while (btemp != NULL) {
+            // of the type walk that now still may have incomplete bounds: finish those now too
+            jl_varbinding_t *wrap = NULL;
+            for (jl_varbinding_t *btemp = e->vars; btemp != NULL; btemp = btemp->prev) {
                 if (btemp->depth0 == vb->depth0 && (jl_has_typevar(btemp->lb, var) || jl_has_typevar(btemp->ub, var))) {
-                    if (btemp->innervars == NULL)
-                        btemp->innervars = jl_alloc_array_1d(jl_array_any_type, 0);
-                    jl_array_ptr_1d_push(btemp->innervars, (jl_value_t*)var);
+                    wrap = btemp;
                 }
-                btemp = btemp->prev;
+            }
+            if (wrap) {
+                if (wrap->innervars == NULL)
+                    wrap->innervars = jl_alloc_array_1d(jl_array_any_type, 0);
+                jl_array_ptr_1d_push(wrap->innervars, (jl_value_t*)var);
+            }
+            else if (res != jl_bottom_type) {
+                if (jl_has_typevar(res, var))
+                    res = jl_type_unionall((jl_tvar_t*)var, res);
             }
         }
     }
