@@ -1401,7 +1401,7 @@ static NOINLINE jl_taggedvalue_t *add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_gc_pagemeta_t *pg = jl_gc_alloc_page();
     pg->osize = p->osize;
-    pg->ages = (uint32_t*)malloc_s(GC_PAGE_SZ / 8 / p->osize + 1);
+    pg->ages = (uint32_t*)malloc_s(LLT_ALIGN(GC_PAGE_SZ / 8 / p->osize + 1, sizeof(uint32_t)));
     pg->thread_n = ptls->tid;
     jl_taggedvalue_t *fl = reset_page(ptls, p, pg, NULL);
     p->newpages = fl;
@@ -1555,6 +1555,12 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
         uint32_t msk = 1; // mask for the age bit in the current age byte
         uint32_t age = *ages;
         while ((char*)v <= lim) {
+            if (!msk) {
+                msk = 1;
+                *ages = age;
+                ages++;
+                age = *ages;
+            }
             int bits = v->bits.gc;
             if (!gc_marked(bits)) {
                 *pfl = v;
@@ -1585,12 +1591,6 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
             }
             v = (jl_taggedvalue_t*)((char*)v + osize);
             msk <<= 1;
-            if (!msk) {
-                msk = 1;
-                *ages = age;
-                ages++;
-                age = *ages;
-            }
         }
         *ages = age;
         assert(!freedall);
