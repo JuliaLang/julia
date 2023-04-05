@@ -492,7 +492,7 @@ end
 LogState(logger) = LogState(LogLevel(_invoked_min_enabled_level(logger)), logger)
 
 function current_logstate()
-    logstate = current_task().logstate
+    logstate = get(task_local_storage(), :logstate, nothing)
     return (logstate !== nothing ? logstate : _global_logstate)::LogState
 end
 
@@ -505,15 +505,28 @@ end
     return nothing
 end
 
+function logstate_task_hook(code::UInt8, to)
+    if code == 0
+        to::Task
+        @assert to.storage === nothing
+        to.storage = IdDict{Any,Any}()
+        to.storage[:logstate] = get(task_local_storage(), :logstate, nothing)
+        attach_task_hook!(to, logstate_task_hook_ptr)
+    end
+    return
+end
+const logstate_task_hook_ptr = @cfunction(logstate_task_hook, Nothing, (UInt8, Any))
+
 function with_logstate(f::Function, logstate)
     @nospecialize
-    t = current_task()
-    old = t.logstate
+    tls = task_local_storage()
+    old = get(tls, :logstate, nothing)
+    tls[:logstate] = logstate
+    attach_task_hook!(to, logstate_task_hook_ptr)
     try
-        t.logstate = logstate
         f()
     finally
-        t.logstate = old
+        tls[:logstate] = old
     end
 end
 

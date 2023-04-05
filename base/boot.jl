@@ -163,7 +163,6 @@
 #    result::Any
 #    exception::Any
 #    backtrace::Any
-#    logstate::Any
 #    code::Any
 #end
 

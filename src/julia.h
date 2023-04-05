@@ -1920,10 +1920,7 @@ typedef struct _jl_task_t {
     jl_value_t *tls;
     jl_value_t *donenotify;
     jl_value_t *result;
-    jl_value_t *logstate;
     jl_function_t *start;
-    // 4 byte padding on 32-bit systems
-    // uint32_t padding0;
     uint64_t rngState[JL_RNG_SIZE];
     jl_value_t *hooks;
     _Atomic(uint8_t) _state;
