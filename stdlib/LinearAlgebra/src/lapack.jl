@@ -5313,9 +5313,9 @@ for (syev, syevr, sygvd, elty) in
     end
 end
 # Hermitian eigensolvers
-for (syev, syevr, sygvd, elty, relty) in
-    ((:zheev_,:zheevr_,:zhegvd_,:ComplexF64,:Float64),
-     (:cheev_,:cheevr_,:chegvd_,:ComplexF32,:Float32))
+for (syev, syevr, syevd, sygvd, elty, relty) in
+    ((:zheev_,:zheevr_,:zheevd,:zhegvd_,:ComplexF64,:Float64),
+     (:cheev_,:cheevr_,:cheevd,:chegvd_,:ComplexF32,:Float32))
     @eval begin
         # SUBROUTINE ZHEEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, RWORK, INFO )
         # *     .. Scalar Arguments ..
