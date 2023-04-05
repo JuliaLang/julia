@@ -582,6 +582,10 @@ for Tri in (:UpperTriangular, :LowerTriangular)
     for tri_input in (Tri, UTri)
         @eval @inline mul!(C::$Tri, A::$tri_input, D::Diagonal) = mul!(C, A, D, true, false)
         @eval @inline mul!(C::$Tri, D::Diagonal, A::$tri_input) = mul!(C, D, A, true, false)
+        @eval @inline mul!(C::StridedMatrix{T}, D::Diagonal, A::$tri_input) where {T<:BlasFloat} =
+            copyto!(C, mul!($Tri(C), D, A, true, false))
+        @eval @inline mul!(C::StridedMatrix{T}, A::$tri_input, D::Diagonal) where {T<:BlasFloat} =
+            copyto!(C, mul!($Tri(C), A, D, true, false))
     end
     # 5-arg mul!
     @eval @inline mul!(C::$Tri, D::Diagonal, A::$Tri, α::Number, β::Number) = $Tri(mul!(C.data, D, A.data, α, β))
