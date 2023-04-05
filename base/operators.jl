@@ -284,8 +284,11 @@ Determine whether `x` and `y` are identical, in the sense that no program could 
 them. First the types of `x` and `y` are compared. If those are identical, mutable objects
 are compared by address in memory, primitive objects (such as integers) are compared by
 contents at the bit level, and immutable objects (such as tuples and non-mutable
-structs) are compared field-by-field using `===`. It is specialized for some types, such
-as String, that should be treated as the same when the contents are the same.
+structs) are compared field-by-field using `===`. Although this operator is built-in and
+cannot be specialized in Julia programs, it is specialized by the implementation
+for some types, such as String, that should be treated as the same when the contents are
+the same.
+
 This function is sometimes called "egal".  It always returns a `Bool` value.
 
 # Examples
