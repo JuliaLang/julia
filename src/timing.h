@@ -41,6 +41,7 @@ int jl_timing_set_enable(const char *subsystem, uint8_t enabled);
 #define jl_timing_show_filename(f, b)
 #define jl_timing_show_method_instance(mi, b)
 #define jl_timing_show_func_sig(tt, b)
+#define jl_timing_printf(s, f, ...)
 #define jl_timing_block_enter_task(ct, ptls, blk)
 #define jl_timing_block_exit_task(ct, ptls) ((jl_timing_block_t *)NULL)
 #define jl_pop_timing_block(blk)
