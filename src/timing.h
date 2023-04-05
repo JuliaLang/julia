@@ -28,6 +28,10 @@ int jl_timing_set_enable(const char *subsystem, uint8_t enabled);
 #define HAVE_TIMING_SUPPORT
 #endif
 
+#if defined( USE_TRACY ) || defined( USE_TIMING_COUNTS )
+#define ENABLE_TIMINGS
+#endif
+
 #if !defined( ENABLE_TIMINGS ) || !defined( HAVE_TIMING_SUPPORT )
 
 #define JL_TIMING(subsystem, event)
@@ -118,9 +122,7 @@ enum jl_timing_owners {
  * Timing Backend: Aggregated timing counts (implemented in timing.c)
  **/
 
-#define USE_COUNTS
-
-#ifdef USE_COUNTS
+#ifdef USE_TIMING_COUNTS
 #define _COUNTS_CTX_MEMBER jl_timing_counts_t counts_ctx;
 #define _COUNTS_CTOR(block, owner) _jl_timing_counts_ctor(block, owner)
 #define _COUNTS_DESTROY(block) _jl_timing_counts_destroy(block)
@@ -204,7 +206,7 @@ struct _jl_timing_block_t { // typedef in julia.h
 };
 
 STATIC_INLINE void _jl_timing_block_ctor(jl_timing_block_t *block, int owner) JL_NOTSAFEPOINT {
-    uint64_t t = cycleclock();
+    uint64_t t = cycleclock(); (void)t;
     _COUNTS_CTOR(&block->counts_ctx, owner);
     _COUNTS_START(&block->counts_ctx, t);
 
@@ -218,7 +220,7 @@ STATIC_INLINE void _jl_timing_block_ctor(jl_timing_block_t *block, int owner) JL
 }
 
 STATIC_INLINE void _jl_timing_block_destroy(jl_timing_block_t *block) JL_NOTSAFEPOINT {
-    uint64_t t = cycleclock();
+    uint64_t t = cycleclock(); (void)t;
 
     _COUNTS_STOP(&block->counts_ctx, t);
     _COUNTS_DESTROY(&block->counts_ctx);
