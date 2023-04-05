@@ -103,7 +103,7 @@ $(eval $(call sysimg_builder,UUIDs,Random SHA))
  # LibGit2_jll
 $(eval $(call pkgimg_builder,LibCURL_jll,LibSSH2_jll nghttp2_jll MbedTLS_jll Zlib_jll Artifacts Libdl))
 $(eval $(call sysimg_builder,REPL,InteractiveUtils Markdown Sockets Unicode))
-$(eval $(call sysimg_builder,SharedArrays,Distributed Mmap Random Serialization))
+$(eval $(call pkgimg_builder,SharedArrays,Distributed Mmap Random Serialization))
 $(eval $(call sysimg_builder,TOML,Dates))
 $(eval $(call sysimg_builder,Test,Logging Random Serialization InteractiveUtils))
 
