@@ -306,6 +306,7 @@ end
 function issimplertype(𝕃::AbstractLattice, @nospecialize(typea), @nospecialize(typeb))
     typea isa MaybeUndef && (typea = typea.typ) # n.b. does not appear in inference
     typeb isa MaybeUndef && (typeb = typeb.typ) # n.b. does not appear in inference
+    @assert !isa(typea, LimitedAccuracy) && !isa(typeb, LimitedAccuracy) "LimitedAccuracy not supported by simplertype laattice" # n.b. the caller was supposed to handle these
     typea === typeb && return true
     if typea isa PartialStruct
         aty = widenconst(typea)
@@ -327,7 +328,7 @@ function issimplertype(𝕃::AbstractLattice, @nospecialize(typea), @nospecializ
         end
     elseif typea isa Type
         return issimpleenoughtype(typea)
-    # elseif typea isa Const # fall-through good
+    # elseif typea isa Const # fall-through to true is good
     elseif typea isa Conditional # follow issubconditional query
         typeb isa Const && return true
         typeb isa Conditional || return false
@@ -352,6 +353,12 @@ function issimplertype(𝕃::AbstractLattice, @nospecialize(typea), @nospecializ
         issimplertype(𝕃, typea.fldtyp, typeb.fldtyp) || return false
     elseif typea isa PartialOpaque
         # TODO
+        aty = widenconst(typea)
+        bty = widenconst(typeb)
+        if typea.source === typeb.source && typea.parent === typeb.parent && aty == bty && typea.env == typeb.env
+            return false
+        end
+        return false
     end
     return true
 end

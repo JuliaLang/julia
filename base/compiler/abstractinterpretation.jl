@@ -2991,7 +2991,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     if !isempty(frame.limitations)
                         rt = LimitedAccuracy(rt, copy(frame.limitations))
                     end
-                    if tchanged(𝕃ₚ, rt, bestguess)
+                    if !⊑(𝕃ₚ, rt, bestguess)
                         # new (wider) return type for frame
                         bestguess = tmerge(𝕃ₚ, bestguess, rt)
                         # TODO: if bestguess isa InterConditional && !interesting(bestguess); bestguess = widenconditional(bestguess); end
