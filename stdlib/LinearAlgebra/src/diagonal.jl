@@ -579,8 +579,10 @@ for Tri in (:UpperTriangular, :LowerTriangular)
     @eval ldiv!(C::$Tri, D::Diagonal, A::$Tri) = $Tri(ldiv!(C.data, D, A.data))
     @eval ldiv!(C::$Tri, D::Diagonal, A::$UTri) = $Tri(_setdiag!(ldiv!(C.data, D, A.data), inv, D.diag))
     # 3-arg mul!: invoke 5-arg mul! rather than lmul!
-    @eval mul!(C::$Tri, A::$Tri, D::Diagonal) = mul!(C, A, D, true, false)
-    @eval mul!(C::$Tri, A::$UTri, D::Diagonal) = mul!(C, A, D, true, false)
+    for tri_input in (Tri, UTri)
+        @eval @inline mul!(C::$Tri, A::$tri_input, D::Diagonal) = mul!(C, A, D, true, false)
+        @eval @inline mul!(C::$Tri, D::Diagonal, A::$tri_input) = mul!(C, D, A, true, false)
+    end
     # 5-arg mul!
     @eval @inline mul!(C::$Tri, D::Diagonal, A::$Tri, α::Number, β::Number) = $Tri(mul!(C.data, D, A.data, α, β))
     @eval @inline function mul!(C::$Tri, D::Diagonal, A::$UTri, α::Number, β::Number)
