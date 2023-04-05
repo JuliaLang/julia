@@ -597,6 +597,8 @@ end
 end
 
 *(A::HermOrSym, B::HermOrSym) = A * copyto!(similar(parent(B)), B)
+mul!(C::StridedMatrix{T}, A::HermOrSym, B::HermOrSym) where {T<:BlasFloat} =
+    mul!(C, copyto!(A.data, A), B)
 
 function dot(x::AbstractVector, A::RealHermSymComplexHerm, y::AbstractVector)
     require_one_based_indexing(x, y)
