@@ -375,6 +375,7 @@ end
                 @test_throws DimensionMismatch Hermitian(aherm) * Vector{eltya}(undef, n+1)
                 LinearAlgebra.mul!(C,a,Hermitian(aherm))
                 @test C ≈ a*aherm
+                @test LinearAlgebra.mul!(similar(parent(a)), Hermitian(aherm), Hermitian(aherm)) ≈ aherm * aherm
 
                 @test Symmetric(asym) * Symmetric(asym) ≈ asym*asym
                 @test Symmetric(asym) * a ≈ asym * a
@@ -385,6 +386,8 @@ end
                 @test_throws DimensionMismatch Symmetric(asym) * Vector{eltya}(undef, n+1)
                 LinearAlgebra.mul!(C,a,Symmetric(asym))
                 @test C ≈ a*asym
+                @test LinearAlgebra.mul!(similar(parent(a)), Symmetric(asym), Symmetric(asym)) ≈ asym * asym
+                @test LinearAlgebra.mul!(similar(parent(a)), Symmetric(asym), Hermitian(aherm)) ≈ asym * aherm
 
                 tri_b = UpperTriangular(triu(b))
                 @test Array(transpose(Hermitian(aherm)) * tri_b) ≈ transpose(aherm) * Array(tri_b)
