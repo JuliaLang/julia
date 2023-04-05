@@ -199,39 +199,6 @@ if Libdl !== nothing
     """
 end
 
-Test = get(Base.loaded_modules,
-          Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test"),
-          nothing)
-if Test !== nothing
-    hardcoded_precompile_statements *= """
-    precompile(Tuple{typeof(Test.do_test), Test.ExecutionResult, Any})
-    precompile(Tuple{typeof(Test.testset_beginend_call), Tuple{String, Expr}, Expr, LineNumberNode})
-    precompile(Tuple{Type{Test.DefaultTestSet}, String})
-    precompile(Tuple{Type{Test.DefaultTestSet}, AbstractString})
-    precompile(Tuple{Core.kwftype(Type{Test.DefaultTestSet}), Any, Type{Test.DefaultTestSet}, AbstractString})
-    precompile(Tuple{typeof(Test.finish), Test.DefaultTestSet})
-    precompile(Tuple{typeof(Test.eval_test), Expr, Expr, LineNumberNode, Bool})
-    precompile(Tuple{typeof(Test._inferred), Expr, Module})
-    precompile(Tuple{typeof(Test.push_testset), Test.DefaultTestSet})
-    precompile(Tuple{typeof(Test.get_alignment), Test.DefaultTestSet, Int})
-    precompile(Tuple{typeof(Test.get_test_result), Any, Any})
-    precompile(Tuple{typeof(Test.do_test_throws), Test.ExecutionResult, Any, Any})
-    precompile(Tuple{typeof(Test.print_counts), Test.DefaultTestSet, Int, Int, Int, Int, Int, Int, Int})
-    precompile(Tuple{typeof(Test._check_testset), Type, Expr})
-    precompile(Tuple{typeof(Test.test_expr!), Any, Any})
-    precompile(Tuple{typeof(Test.test_expr!), Any, Any, Vararg{Any, 100}})
-    precompile(Tuple{typeof(Test.pop_testset)})
-    precompile(Tuple{typeof(Test.match_logs), Function, Tuple{Symbol, Regex}})
-    precompile(Tuple{typeof(Test.match_logs), Function, Tuple{String, Regex}})
-    precompile(Tuple{typeof(Base.CoreLogging.shouldlog), Test.TestLogger, Base.CoreLogging.LogLevel, Module, Symbol, Symbol})
-    precompile(Tuple{typeof(Base.CoreLogging.handle_message), Test.TestLogger, Base.CoreLogging.LogLevel, String, Module, Symbol, Symbol, String, Int})
-    precompile(Tuple{typeof(Test.detect_ambiguities), Any})
-    precompile(Tuple{typeof(Test.collect_test_logs), Function})
-    precompile(Tuple{typeof(Test.do_broken_test), Test.ExecutionResult, Any})
-    precompile(Tuple{typeof(Test.record), Test.DefaultTestSet, Union{Test.Error, Test.Fail}})
-    precompile(Tuple{typeof(Test.filter_errors), Test.DefaultTestSet})
-    """
-end
 
 const JULIA_PROMPT = "julia> "
 const PKG_PROMPT = "pkg> "
