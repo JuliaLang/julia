@@ -523,6 +523,50 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
     return tu;
 }
 
+jl_value_t *simple_union(jl_value_t *a, jl_value_t *b)
+{
+    size_t nt = count_union_components(&a, 1);
+    nt += count_union_components(&b, 1);
+    jl_value_t **temp;
+    JL_GC_PUSHARGS(temp, nt+1);
+    size_t count = 0;
+    flatten_type_union(&a, 1, temp, &count);
+    flatten_type_union(&b, 1, temp, &count);
+    assert(count == nt);
+    size_t i, j;
+    for (i = 0; i < nt; i++) {
+        int has_free = 1; // TODO: is this worthwhile? temp[i] != NULL && jl_has_free_typevars(temp[i]);
+        for (j = 0; j < nt; j++) {
+            if (j != i && temp[i] && temp[j]) {
+                if (temp[i] == jl_bottom_type ||
+                    temp[j] == (jl_value_t*)jl_any_type ||
+                    jl_egal(temp[i], temp[j]) ||
+                    (!has_free && !jl_has_free_typevars(temp[j]) &&
+                     jl_subtype(temp[i], temp[j]))) {
+                    temp[i] = NULL;
+                }
+            }
+        }
+    }
+    isort_union(temp, nt);
+    jl_value_t **ptu = &temp[nt];
+    *ptu = jl_bottom_type;
+    int k;
+    for (k = (int)nt-1; k >= 0; --k) {
+        if (temp[k] != NULL) {
+            if (*ptu == jl_bottom_type)
+                *ptu = temp[k];
+            else
+                *ptu = jl_new_struct(jl_uniontype_type, temp[k], *ptu);
+        }
+    }
+    assert(*ptu != NULL);
+    jl_value_t *tu = *ptu;
+    JL_GC_POP();
+    return tu;
+}
+
+
 // unionall types -------------------------------------------------------------
 
 JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
