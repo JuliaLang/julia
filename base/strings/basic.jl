@@ -621,26 +621,34 @@ isascii(c::AbstractChar) = UInt32(c) < 0x80
     return 0 ≤ r < 0x80
 end
 
+
+# Julia Strings are stored in the following way
+# |  8-Byte size   | N-Bytes of UInt8 Code units |
+#                  |<- String pointer is address of first codeunit byte
+@inline function _isascii_subword(bytes::AbstractVector{UInt8},first,n)
+    # Loading bytes before the string is safe because the bytes in front of a string are the 8 bytes the representing the size
+    # This is important because those bytes are technically owned by the same object( which if you read past the end may not be the case)
+    n_trash = 8 - n
+    #It would be nice to use reinterpret here but there is no good way to get at a negative index
+    qword = unsafe_load(Ptr{UInt64}(pointer(bytes,first - n_trash)),1)
+    qword >>= n_trash * 8
+    return iszero(qword & UInt64(0x8080808080808080))
+end
+
 @inline function _isascii(bytes::AbstractVector{UInt8},first,last)
     n = last-first+1
-    nqword, epilog_bytes = divrem(n,8)
-    qwords = @inline reinterpret(UInt64,@inbounds view(bytes,first:(last-epilog_bytes)))
+    n <= 7 && return _isascii_subword(bytes,first,n)
+
+    nqword, prolog_bytes = divrem(n,8)
     rqword = zero(UInt64)
+    if prolog_bytes > 0
+        rqword = unsafe_load(Ptr{UInt64}(pointer(bytes,first)),1)
+    end
+    qwords = @inline reinterpret(UInt64,@inbounds view(bytes,(first+prolog_bytes):last))
     for i=1:nqword
         @inbounds rqword |= qwords[i]
     end
-    iszero(rqword & UInt64(0x8080808080808080)) || return false
-    epilog_bytes == 0 && return true
-
-    i = last-epilog_bytes
-    r = UInt8(0)
-
-    # This loop should get unwound
-    for j = 1:7
-        @inbounds r |= bytes[i += 1]
-        (j < epilog_bytes) || break
-    end
-    return r < 0x80
+    return iszero(rqword & UInt64(0x8080808080808080))
 end
 
 #The chunking algorithm makes the last two chunks overlap inorder to keep the size fixed
