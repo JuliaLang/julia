@@ -526,7 +526,7 @@ module IteratorsMD
         dimrev = ntuple(i -> sum(==(i), dims; init = 0) == 1, Val(length(indices)))
         length(dims) == sum(dimrev) || throw(ArgumentError(Base.LazyString("invalid dimensions ", dims, " in reverse")))
         length(dims) == length(indices) && return Base._reverse(iter, :)
-        indices′ = map((i, f) -> f ? reverse(i) : i, indices, dimrev)
+        indices′ = map((i, f) -> f ? (@noinline reverse(i)) : i, indices, dimrev)
         return CartesianIndices(indices′)
     end
 
