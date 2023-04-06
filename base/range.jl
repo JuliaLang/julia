@@ -20,8 +20,8 @@
 (:)(start::T, step::T, stop::T) where {T<:AbstractFloat} =
     _colon(OrderStyle(T), ArithmeticStyle(T), start, step, stop)
 (:)(start::T, step::T, stop::T) where {T<:Real} =
-    (@inline; _colon(OrderStyle(T), ArithmeticStyle(T), start, step, stop))
-_colon(::Ordered, ::Any, start::T, step, stop::T) where {T} = (@inline; StepRange(start, step, stop))
+    _colon(OrderStyle(T), ArithmeticStyle(T), start, step, stop)
+_colon(::Ordered, ::Any, start::T, step, stop::T) where {T} = StepRange(start, step, stop)
 # for T<:Union{Float16,Float32,Float64} see twiceprecision.jl
 _colon(::Ordered, ::ArithmeticRounds, start::T, step, stop::T) where {T} =
     StepRangeLen(start, step, convert(Integer, fld(stop - start, step)) + 1)
@@ -319,7 +319,6 @@ struct StepRange{T,S} <: OrdinalRange{T,S}
     stop::T
 
     function StepRange{T,S}(start, step, stop) where {T,S}
-        @inline
         start = convert(T, start)
         step = convert(S, step)
         stop = convert(T, stop)
@@ -329,7 +328,6 @@ end
 
 # to make StepRange constructor inlineable, so optimizer can see `step` value
 function steprange_last(start, step, stop)::typeof(stop)
-    @inline
     if isa(start, AbstractFloat) || isa(step, AbstractFloat)
         throw(ArgumentError("StepRange should not be used with floating point"))
     end
@@ -352,7 +350,8 @@ function steprange_last(start, step, stop)::typeof(stop)
             # Compute remainder as a nonnegative number:
             if absdiff isa Signed && absdiff < zero(absdiff)
                 # unlikely, but handle the signed overflow case with unsigned rem
-                remain = convert(typeof(absdiff), unsigned(absdiff) % absstep)
+                overflow_case(absdiff, absstep) = (@noinline; convert(typeof(absdiff), unsigned(absdiff) % absstep))
+                remain = overflow_case(absdiff, absstep)
             else
                 remain = convert(typeof(absdiff), absdiff % absstep)
             end
@@ -376,8 +375,8 @@ end
 # For types where x+oneunit(x) may not be well-defined use the user-given value for stop
 steprange_last_empty(start, step, stop) = stop
 
-StepRange{T}(start, step::S, stop) where {T,S} = (@inline; StepRange{T,S}(start, step, stop))
-StepRange(start::T, step::S, stop::T) where {T,S} = (@inline; StepRange{T,S}(start, step, stop))
+StepRange{T}(start, step::S, stop) where {T,S} = StepRange{T,S}(start, step, stop)
+StepRange(start::T, step::S, stop::T) where {T,S} = StepRange{T,S}(start, step, stop)
 
 """
     UnitRange{T<:Real}
