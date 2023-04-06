@@ -7,6 +7,7 @@ New language features
 Language changes
 ----------------
 
+* When a task forks a child, the parent task's task-local RNG (random number generator) is no longer affected. The seeding of child based on the parent task also takes a more disciplined approach to collision resistance, using a design based on the SplitMix and DotMix splittable RNG schemes ([#49110]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -69,6 +70,8 @@ Standard library changes
   `Factorization` ([#46874]).
 * New functions `hermitianpart` and `hermitianpart!` for extracting the Hermitian
   (real symmetric) part of a matrix ([#31836]).
+* The `norm` of the adjoint or transpose of an `AbstractMatrix` now returns the norm of the
+  parent matrix by default, matching the current behaviour for `AbstractVector`s ([#49020]).
 
 #### Printf
 * Format specifiers now support dynamic width and precision, e.g. `%*s` and `%*.*g` ([#40105]).

@@ -1043,11 +1043,7 @@ function test_intersection()
                    Type{Tuple{Int,T}} where T<:Integer)
     @testintersect(Type{<:Tuple{Any,Vararg{Any}}},
                    Type{Tuple{Vararg{Int,N}}} where N,
-                   !Union{})
-
-    @test typeintersect(Type{<:Tuple{Any,Vararg{Any}}}, Type{Tuple{Vararg{Int,N}}} where N) != Type{Tuple{Int,Vararg{Int}}}
-    @test_broken typeintersect(Type{<:Tuple{Any,Vararg{Any}}}, Type{Tuple{Vararg{Int,N}}} where N) == Type{Tuple{Int,Vararg{Int,N}}} where N
-    @test_broken typeintersect(Type{<:Tuple{Any,Vararg{Any}}}, Type{Tuple{Vararg{Int,N}}} where N) != Type{<:Tuple{Int,Vararg{Int}}}
+                   Type{Tuple{Int,Vararg{Int,N}}} where N)
 
     @testintersect(Type{<:Array},
                    Type{AbstractArray{T}} where T,
@@ -1813,6 +1809,10 @@ end
                Tuple{Type{F}, Any, Int} where {F<:(Pair{T, A} where {T, A<:Array{T}})},
                Tuple{Type{Pair{T, A} where {T, A<:(Array{T})}}, Int, Int})
 
+@testintersect(Type{Ref{Union{Int, Tuple{S,S} where S<:T}}} where T,
+              Type{F} where F<:(Base.RefValue{Union{Int, Tuple{S,S} where S<:T}} where T),
+              Union{})
+
 # issue #32488
 struct S32488{S <: Tuple, T, N, L}
     data::NTuple{L,T}
@@ -2202,17 +2202,19 @@ let A = Pair{NTuple{N, Int}, NTuple{N, Int}} where N,
     Bs = (Pair{<:Tuple{Int, Vararg{Int}}, <:Tuple{Int, Int, Vararg{Int}}},
           Pair{Tuple{Int, Vararg{Int,N1}}, Tuple{Int, Int, Vararg{Int,N2}}} where {N1,N2},
           Pair{<:Tuple{Int, Vararg{Int,N}} where {N}, <:Tuple{Int, Int, Vararg{Int,N}} where {N}})
-    Cerr = Pair{Tuple{Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
-    for B in Bs
-        C = typeintersect(A, B)
-        @test C == typeintersect(B, A) != Union{}
-        @test C != Cerr
-        @test_broken C != B
+    Cs = (Bs[2], Bs[2], Bs[3])
+    for (B, C) in zip(Bs, Cs)
+        # TODO: The ideal result is Pair{Tuple{Int, Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
+        @testintersect(A, B, C)
     end
 end
 
 # Example from pr#39098
 @testintersect(NTuple, Tuple{Any,Vararg}, Tuple{T, Vararg{T}} where {T})
+
+@testintersect(Val{T} where T<:Tuple{Tuple{Any, Vararg{Any}}},
+               Val{Tuple{Tuple{Vararg{Any, N}}}} where {N},
+               Val{Tuple{Tuple{Any, Vararg{Any, N}}}} where {N})
 
 let A = Pair{NTuple{N, Int}, Val{N}} where N,
     Bs = (Pair{<:Tuple{Int, Vararg{Int}}, <:Val},
@@ -2411,7 +2413,7 @@ abstract type P47654{A} end
     # issue 22123
     t1 = Ref{Ref{Ref{Union{Int64, T}}} where T}
     t2 = Ref{Ref{Ref{Union{T, S}}} where T} where S
-    @test_broken t1 <: t2
+    @test t1 <: t2
 
     # issue 21153
     @test_broken (Tuple{T1,T1} where T1<:(Val{T2} where T2)) <: (Tuple{Val{S},Val{S}} where S)
@@ -2463,3 +2465,16 @@ end
 
 #issue 48961
 @test !<:(Type{Union{Missing, Int}}, Type{Union{Missing, Nothing, Int}})
+
+#issue 49127
+struct F49127{m,n} <: Function end
+let a = [TypeVar(:V, Union{}, Function) for i in 1:32]
+    b = a[1:end-1]
+    S = foldr((v, d) -> UnionAll(v, d), a; init = foldl((i, j) -> F49127{i, j}, a))
+    T = foldr((v, d) -> UnionAll(v, d), b; init = foldl((i, j) -> F49127{i, j}, b))
+    @test S <: T
+end
+
+# requires assertions enabled (to test union-split in `obviously_disjoint`)
+@test !<:(Tuple{Type{Int}, Int}, Tuple{Type{Union{Int, T}}, T} where T<:Union{Int8,Int16})
+@test <:(Tuple{Type{Int}, Int}, Tuple{Type{Union{Int, T}}, T} where T<:Union{Int8,Int})

@@ -89,6 +89,9 @@ WITH_GC_DEBUG_ENV := 0
 # Enable DTrace support
 WITH_DTRACE := 0
 
+# Enable ITTAPI integration
+WITH_ITTAPI := 0
+
 # Enable Tracy support
 WITH_TRACY := 0
 
@@ -452,7 +455,11 @@ endif
 
 # Compiler specific stuff
 
-CC_VERSION_STRING = $(shell $(CC) --version)
+CC := $(CROSS_COMPILE)$(CC) # attempt to add cross-compiler prefix, if the user
+                            # is not overriding the default, to form target-triple-cc (which
+                            # may not exist), and use that to decide what compiler the user
+                            # is using for the target build (or default to gcc)
+CC_VERSION_STRING = $(shell $(CC) --version 2>/dev/null)
 ifneq (,$(findstring clang,$(CC_VERSION_STRING)))
 USECLANG := 1
 USEGCC := 0
@@ -722,6 +729,12 @@ ifeq ($(WITH_DTRACE), 1)
 JCXXFLAGS += -DUSE_DTRACE
 JCFLAGS += -DUSE_DTRACE
 DTRACE := dtrace
+endif
+
+ifeq ($(WITH_ITTAPI), 1)
+JCXXFLAGS += -DUSE_ITTAPI
+JCFLAGS += -DUSE_ITTAPI
+LIBITTAPI:=-littnotify
 endif
 
 ifeq ($(WITH_TRACY), 1)

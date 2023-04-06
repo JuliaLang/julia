@@ -648,7 +648,7 @@ let
     world = Core.Compiler.get_world_counter()
     match = Base._methods_by_ftype(T22979, -1, world)[1]
     instance = Core.Compiler.specialize_method(match)
-    cinfo_generated = Core.Compiler.get_staged(instance)
+    cinfo_generated = Core.Compiler.get_staged(instance, world)
     @test_throws ErrorException Base.uncompressed_ir(match.method)
 
     test_similar_codeinfo(code_lowered(f22979, typeof(x22979))[1], cinfo_generated)
@@ -1039,3 +1039,19 @@ ambig_effects_test(a, b) = 1
 end
 
 @test Base._methods_by_ftype(Tuple{}, -1, Base.get_world_counter()) == Any[]
+
+@testset "specializations" begin
+    f(x) = 1
+    f(1)
+    f("hello")
+    @test length(Base.specializations(only(methods(f)))) == 2
+end
+
+# https://github.com/JuliaLang/julia/issues/48856
+@test !Base.ismutationfree(Vector{Any})
+@test !Base.ismutationfree(Vector{Symbol})
+@test !Base.ismutationfree(Vector{UInt8})
+@test !Base.ismutationfree(Vector{Int32})
+@test !Base.ismutationfree(Vector{UInt64})
+
+@test Base.ismutationfree(Type{Union{}})

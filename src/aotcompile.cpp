@@ -258,8 +258,6 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
     *ci_out = codeinst;
 }
 
-void replaceUsesWithLoad(Function &F, function_ref<GlobalVariable *(Instruction &I)> should_replace, MDNode *tbaa_const);
-
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup, and can
 // also be used be extern consumers like GPUCompiler.jl to obtain a module containing
@@ -945,7 +943,7 @@ struct ShardTimers {
 };
 
 // Perform the actual optimization and emission of the output files
-static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *outputs, StringRef *names,
+static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *outputs, const std::string *names,
                     NewArchiveMember *unopt, NewArchiveMember *opt, NewArchiveMember *obj, NewArchiveMember *asm_,
                     ShardTimers &timers, unsigned shardidx) {
     auto TM = std::unique_ptr<TargetMachine>(
@@ -965,6 +963,7 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
         AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
         ModulePassManager MPM;
         MPM.addPass(BitcodeWriterPass(OS));
+        MPM.run(M, AM.MAM);
         *unopt = NewArchiveMember(MemoryBufferRef(*outputs++, *names++));
         timers.unopt.stopTimer();
     }
@@ -1029,6 +1028,7 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
         AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
         ModulePassManager MPM;
         MPM.addPass(BitcodeWriterPass(OS));
+        MPM.run(M, AM.MAM);
         *opt = NewArchiveMember(MemoryBufferRef(*outputs++, *names++));
         timers.opt.stopTimer();
     }
@@ -1224,6 +1224,8 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
     unsigned outcount = unopt_out + opt_out + obj_out + asm_out;
     assert(outcount);
     outputs.resize(outputs.size() + outcount * threads * 2);
+    auto names_start = outputs.data() + outputs.size() - outcount * threads * 2;
+    auto outputs_start = names_start + outcount * threads;
     unopt.resize(unopt.size() + unopt_out * threads);
     opt.resize(opt.size() + opt_out * threads);
     obj.resize(obj.size() + obj_out * threads);
@@ -1264,7 +1266,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
         }
     }
     for (unsigned i = 0; i < threads; ++i) {
-        auto start = &outputs[outputs.size() - outcount * threads * 2 + i * outcount];
+        auto start = names_start + i * outcount;
         auto istr = std::to_string(i);
         if (unopt_out)
             *start++ = (name + "_unopt#" + istr + ".bc").str();
@@ -1278,10 +1280,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
     // Single-threaded case
     if (threads == 1) {
         output_timer.startTimer();
-        SmallVector<StringRef, 4> names;
-        for (unsigned i = outputs.size() - outcount * 2; i < outputs.size() - outcount; ++i)
-            names.push_back(outputs[i]);
-        add_output_impl(M, TM, outputs.data() + outputs.size() - outcount, names.data(),
+        add_output_impl(M, TM, outputs_start, names_start,
                         unopt_out ? unopt.data() + unopt.size() - 1 : nullptr,
                         opt_out ? opt.data() + opt.size() - 1 : nullptr,
                         obj_out ? obj.data() + obj.size() - 1 : nullptr,
@@ -1318,7 +1317,6 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
 
     output_timer.startTimer();
 
-    auto outstart = outputs.data() + outputs.size() - outcount * threads;
     auto unoptstart = unopt_out ? unopt.data() + unopt.size() - threads : nullptr;
     auto optstart = opt_out ? opt.data() + opt.size() - threads : nullptr;
     auto objstart = obj_out ? obj.data() + obj.size() - threads : nullptr;
@@ -1341,17 +1339,18 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
             timers[i].construct.startTimer();
             construct_vars(*M, partitions[i]);
             M->setModuleFlag(Module::Error, "julia.mv.suffix", MDString::get(M->getContext(), "_" + std::to_string(i)));
+            // The DICompileUnit file is not used for anything, but ld64 requires it be a unique string per object file
+            // or it may skip emitting debug info for that file. Here set it to ./julia#N
+            DIFile *topfile = DIFile::get(M->getContext(), "julia#" + std::to_string(i), ".");
+            for (DICompileUnit *CU : M->debug_compile_units())
+                CU->replaceOperandWith(0, topfile);
             timers[i].construct.stopTimer();
 
             timers[i].deletion.startTimer();
             dropUnusedDeclarations(*M);
             timers[i].deletion.stopTimer();
 
-            SmallVector<StringRef, 4> names(outcount);
-            for (unsigned j = 0; j < outcount; ++j)
-                names[j] = outputs[i * outcount + j];
-
-            add_output_impl(*M, TM, outstart + i * outcount, names.data(),
+            add_output_impl(*M, TM, outputs_start + i * outcount, names_start + i * outcount,
                             unoptstart ? unoptstart + i : nullptr,
                             optstart ? optstart + i : nullptr,
                             objstart ? objstart + i : nullptr,
@@ -1502,11 +1501,7 @@ void jl_dump_native_impl(void *native_code,
     dataM->setTargetTriple(SourceTM->getTargetTriple().str());
     dataM->setDataLayout(jl_create_datalayout(*SourceTM));
 
-    Type *T_size;
-    if (sizeof(size_t) == 8)
-        T_size = Type::getInt64Ty(Context);
-    else
-        T_size = Type::getInt32Ty(Context);
+    Type *T_size = dataM->getDataLayout().getIntPtrType(Context);
     Type *T_psize = T_size->getPointerTo();
 
     bool imaging_mode = imaging_default() || jl_options.outputo;
@@ -1578,7 +1573,7 @@ void jl_dump_native_impl(void *native_code,
     // DO NOT DELETE, this is necessary to ensure memorybuffers
     // have a stable backing store for both their object files and
     // their names
-    outputs.reserve(threads * (!!unopt_bc_fname + !!bc_fname + !!obj_fname + !!asm_fname) * 2 + 2);
+    outputs.reserve((threads + 1) * (!!unopt_bc_fname + !!bc_fname + !!obj_fname + !!asm_fname) * 2);
 
     auto compile = [&](Module &M, StringRef name, unsigned threads) { add_output(
             M, *SourceTM, outputs, name,
@@ -2023,7 +2018,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
             if (src)
                 jlrettype = src->rettype;
             else if (jl_is_method(mi->def.method)) {
-                src = mi->def.method->generator ? jl_code_for_staged(mi) : (jl_code_info_t*)mi->def.method->source;
+                src = mi->def.method->generator ? jl_code_for_staged(mi, world) : (jl_code_info_t*)mi->def.method->source;
                 if (src && !jl_is_code_info(src) && jl_is_method(mi->def.method))
                     src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
             }

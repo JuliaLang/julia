@@ -2739,8 +2739,9 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_pointer_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_pointer_type))->name;
 
     // LLVMPtr{T, AS} where {T, AS}
-    tv = jl_svec2(tvar("T"), tvar("AS"));
-    jl_svec_t *tv_base = jl_svec1(tvar("T"));
+    jl_tvar_t *elvar = tvar("T");
+    tv = jl_svec2(elvar, tvar("AS"));
+    jl_svec_t *tv_base = jl_svec1(elvar);
     jl_llvmpointer_type = (jl_unionall_t*)
         jl_new_primitivetype((jl_value_t*)jl_symbol("LLVMPtr"), core,
                              (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_ref_type, jl_svec_data(tv_base), 1), tv,
@@ -2768,7 +2769,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         NULL,
                         jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(15,
+                        jl_perm_symsvec(16,
                                         "next",
                                         "queue",
                                         "storage",
@@ -2780,11 +2781,12 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "rngState1",
                                         "rngState2",
                                         "rngState3",
+                                        "rngState4",
                                         "_state",
                                         "sticky",
                                         "_isexception",
                                         "priority"),
-                        jl_svec(15,
+                        jl_svec(16,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
@@ -2792,6 +2794,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
+                                jl_uint64_type,
                                 jl_uint64_type,
                                 jl_uint64_type,
                                 jl_uint64_type,
@@ -2891,6 +2894,10 @@ void jl_init_types(void) JL_GC_DISABLED
     // Array's mutable data is hidden, so we need to override it
     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_array_type))->ismutationfree = 0;
     ((jl_datatype_t*)jl_array_any_type)->ismutationfree = 0;
+    ((jl_datatype_t*)jl_array_symbol_type)->ismutationfree = 0;
+    ((jl_datatype_t*)jl_array_uint8_type)->ismutationfree = 0;
+    ((jl_datatype_t*)jl_array_int32_type)->ismutationfree = 0;
+    ((jl_datatype_t*)jl_array_uint64_type)->ismutationfree = 0;
 
     // override the preferred layout for a couple types
     jl_lineinfonode_type->name->mayinlinealloc = 0; // FIXME: assumed to be a pointer by codegen

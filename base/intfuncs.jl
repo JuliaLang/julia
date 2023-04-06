@@ -1111,7 +1111,7 @@ Base.@assume_effects :terminates_locally function binomial(n::T, k::T) where T<:
     while rr <= k
         xt = div(widemul(x, nn), rr)
         x = xt % T
-        x == xt || throw(OverflowError(LazyString("binomial(", n0, ", ", k0, " overflows")))
+        x == xt || throw(OverflowError(LazyString("binomial(", n0, ", ", k0, ") overflows")))
         rr += one(T)
         nn += one(T)
     end

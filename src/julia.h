@@ -91,6 +91,7 @@ typedef struct _jl_value_t jl_value_t;
 
 struct _jl_taggedvalue_bits {
     uintptr_t gc:2;
+    uintptr_t in_image:1;
 };
 
 JL_EXTENSION struct _jl_taggedvalue_t {
@@ -1498,7 +1499,7 @@ JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
                                                  _Atomic(jl_value_t*) *bp,
                                                  jl_binding_t *bnd);
 JL_DLLEXPORT jl_method_t *jl_method_def(jl_svec_t *argdata, jl_methtable_t *mt, jl_code_info_t *f, jl_module_t *module);
-JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo);
+JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, size_t world);
 JL_DLLEXPORT jl_code_info_t *jl_copy_code_info(jl_code_info_t *src);
 JL_DLLEXPORT size_t jl_get_world_counter(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_box_bool(int8_t x) JL_NOTSAFEPOINT;
@@ -1910,6 +1911,8 @@ typedef struct _jl_handler_t {
     size_t world_age;
 } jl_handler_t;
 
+#define JL_RNG_SIZE 5 // xoshiro 4 + splitmix 1
+
 typedef struct _jl_task_t {
     JL_DATA_TYPE
     jl_value_t *next; // invasive linked list for scheduler
@@ -1921,7 +1924,7 @@ typedef struct _jl_task_t {
     jl_function_t *start;
     // 4 byte padding on 32-bit systems
     // uint32_t padding0;
-    uint64_t rngState[4];
+    uint64_t rngState[JL_RNG_SIZE];
     _Atomic(uint8_t) _state;
     uint8_t sticky; // record whether this Task can be migrated to a new thread
     _Atomic(uint8_t) _isexception; // set if `result` is an exception to throw or that we exited with

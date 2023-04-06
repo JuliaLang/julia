@@ -2096,5 +2096,6 @@ function _check_bitarray_consistency(B::BitArray{N}) where N
 end
 
 include("logging.jl")
+include("precompile.jl")
 
 end # module
