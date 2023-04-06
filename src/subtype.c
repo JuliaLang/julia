@@ -630,17 +630,6 @@ static jl_value_t *simple_meet(jl_value_t *a, jl_value_t *b, int overesi)
     return overesi ? b : jl_bottom_type;
 }
 
-static jl_unionall_t *rename_unionall(jl_unionall_t *u)
-{
-    jl_tvar_t *v = jl_new_typevar(u->var->name, u->var->lb, u->var->ub);
-    jl_value_t *t = NULL;
-    JL_GC_PUSH2(&v, &t);
-    t = jl_instantiate_unionall(u, (jl_value_t*)v);
-    t = jl_new_struct(jl_unionall_type, v, t);
-    JL_GC_POP();
-    return (jl_unionall_t*)t;
-}
-
 // main subtyping algorithm
 
 static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param);
@@ -935,7 +924,7 @@ static jl_unionall_t *unalias_unionall(jl_unionall_t *u, jl_stenv_t *e)
             // outer var can only refer to inner var if bounds changed
             (btemp->lb != btemp->var->lb && jl_has_typevar(btemp->lb, u->var)) ||
             (btemp->ub != btemp->var->ub && jl_has_typevar(btemp->ub, u->var))) {
-            u = rename_unionall(u);
+            u = jl_rename_unionall(u);
             break;
         }
         btemp = btemp->prev;
@@ -1569,6 +1558,10 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
 {
     int16_t oldRmore = e->Runions.more;
     int sub;
+    int kindx = !jl_has_free_typevars(x);
+    int kindy = !jl_has_free_typevars(y);
+    if (kindx && kindy)
+        return jl_subtype(x, y);
     if (may_contain_union_decision(y, e, NULL) && pick_union_decision(e, 1) == 0) {
         jl_saved_unionstate_t oldRunions; push_unionstate(&oldRunions, &e->Runions);
         e->Lunions.used = e->Runions.used = 0;
@@ -1581,6 +1574,8 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
         // Once limit_slow == 1, also skip it if
         // 1) `forall_exists_subtype` return false
         // 2) the left `Union` looks big
+        if (limit_slow == -1)
+            limit_slow = kindx || kindy;
         if (noRmore || (limit_slow && (count > 3  || !sub)))
             e->Runions.more = oldRmore;
     }
@@ -1630,8 +1625,7 @@ static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 
     jl_saved_unionstate_t oldLunions; push_unionstate(&oldLunions, &e->Lunions);
 
-    int limit_slow = !jl_has_free_typevars(x) || !jl_has_free_typevars(y);
-    int sub = local_forall_exists_subtype(x, y, e, 2, limit_slow);
+    int sub = local_forall_exists_subtype(x, y, e, 2, -1);
     if (sub) {
         flip_offset(e);
         sub = local_forall_exists_subtype(y, x, e, 0, 0);
@@ -2940,7 +2934,7 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
         }
         if (btemp->var == u->var || btemp->lb == (jl_value_t*)u->var ||
             btemp->ub == (jl_value_t*)u->var) {
-            u = rename_unionall(u);
+            u = jl_rename_unionall(u);
             break;
         }
         btemp = btemp->prev;
@@ -3007,6 +3001,8 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
                            e->invdepth, NULL, e->vars };
     JL_GC_PUSH4(&res, &vb.lb, &vb.ub, &vb.innervars);
     save_env(e, &se, 1);
+    if (is_leaf_typevar(u->var) && !var_occurs_invariant(u->body, u->var, 0))
+        vb.constraintkind = 1;
     res = intersect_unionall_(t, u, e, R, param, &vb);
     if (vb.limited) {
         // if the environment got too big, avoid tree recursion and propagate the flag
@@ -3014,13 +3010,19 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
             e->vars->limited = 1;
     }
     else if (res != jl_bottom_type) {
+        int constraint1 = vb.constraintkind;
         if (vb.concrete || vb.occurs_inv>1 || (vb.occurs_inv && vb.occurs_cov))
             vb.constraintkind = vb.concrete ? 1 : 2;
         else if (u->var->lb != jl_bottom_type)
             vb.constraintkind = 2;
         else if (vb.occurs_cov && !var_occurs_invariant(u->body, u->var, 0))
             vb.constraintkind = 1;
-        if (vb.constraintkind) {
+        int reintersection = constraint1 != vb.constraintkind || vb.concrete;
+        if (reintersection) {
+            if (constraint1 == 1) {
+                vb.lb = vb.var->lb;
+                vb.ub = vb.var->ub;
+            }
             restore_env(e, &se, vb.constraintkind == 1 ? 1 : 0);
             vb.occurs = vb.occurs_cov = vb.occurs_inv = 0;
             res = intersect_unionall_(t, u, e, R, param, &vb);
