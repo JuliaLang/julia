@@ -341,21 +341,6 @@ JL_DLLEXPORT int jl_get_size(jl_value_t *val, size_t *pnt)
 
 // --- type union ---
 
-static int count_union_components(jl_value_t **types, size_t n)
-{
-    size_t i, c = 0;
-    for (i = 0; i < n; i++) {
-        jl_value_t *e = types[i];
-        while (jl_is_uniontype(e)) {
-            jl_uniontype_t *u = (jl_uniontype_t*)e;
-            c += count_union_components(&u->a, 1);
-            e = u->b;
-        }
-        c++;
-    }
-    return c;
-}
-
 int jl_count_union_components(jl_value_t *v)
 {
     size_t c = 0;
@@ -402,21 +387,6 @@ int jl_find_union_component(jl_value_t *haystack, jl_value_t *needle, unsigned *
         return 1;
     (*nth)++;
     return 0;
-}
-
-static void flatten_type_union(jl_value_t **types, size_t n, jl_value_t **out, size_t *idx) JL_NOTSAFEPOINT
-{
-    size_t i;
-    for (i = 0; i < n; i++) {
-        jl_value_t *e = types[i];
-        while (jl_is_uniontype(e)) {
-            jl_uniontype_t *u = (jl_uniontype_t*)e;
-            flatten_type_union(&u->a, 1, out, idx);
-            e = u->b;
-        }
-        out[*idx] = e;
-        (*idx)++;
-    }
 }
 
 STATIC_INLINE const char *datatype_module_name(jl_value_t *t) JL_NOTSAFEPOINT
@@ -515,6 +485,53 @@ static int union_sort_cmp(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
     }
 }
 
+static int count_union_components(jl_value_t **types, size_t n)
+{
+    size_t i, c = 0;
+    for (i = 0; i < n; i++) {
+        jl_value_t *e = types[i];
+        while (jl_is_uniontype(e)) {
+            jl_uniontype_t *u = (jl_uniontype_t*)e;
+            c += count_union_components(&u->a, 1);
+            e = u->b;
+        }
+        if (jl_is_unionall(e) && jl_is_uniontype(jl_unwrap_unionall(e))) {
+            jl_uniontype_t *u = (jl_uniontype_t*)jl_unwrap_unionall(e);
+            c += count_union_components(&u->a, 2);
+        }
+        else {
+            c++;
+        }
+    }
+    return c;
+}
+
+static void flatten_type_union(jl_value_t **types, size_t n, jl_value_t **out, size_t *idx)
+{
+    size_t i;
+    for (i = 0; i < n; i++) {
+        jl_value_t *e = types[i];
+        while (jl_is_uniontype(e)) {
+            jl_uniontype_t *u = (jl_uniontype_t*)e;
+            flatten_type_union(&u->a, 1, out, idx);
+            e = u->b;
+        }
+        if (jl_is_unionall(e) && jl_is_uniontype(jl_unwrap_unionall(e))) {
+            // flatten this UnionAll into place by switching the union and unionall
+            jl_uniontype_t *u = (jl_uniontype_t*)jl_unwrap_unionall(e);
+            size_t old_idx = 0;
+            flatten_type_union(&u->a, 2, out, idx);
+            for (; old_idx < *idx; old_idx++)
+                out[old_idx] = jl_rewrap_unionall(out[old_idx], e);
+        }
+        else {
+            out[*idx] = e;
+            (*idx)++;
+        }
+    }
+}
+
+
 static void isort_union(jl_value_t **a, size_t len) JL_NOTSAFEPOINT
 {
     size_t i, j;
@@ -601,28 +618,27 @@ jl_value_t *simple_union(jl_value_t *a, jl_value_t *b)
                     temp[j] == (jl_value_t*)jl_any_type ||
                     jl_egal(temp[i], temp[j]) ||
                     (!has_free && !jl_has_free_typevars(temp[j]) &&
-                        // issue #24521: don't merge Type{T} where typeof(T) varies
-                        !(jl_is_type_type(temp[i]) && jl_is_type_type(temp[j]) && jl_typeof(jl_tparam0(temp[i])) != jl_typeof(jl_tparam0(temp[j]))) &&
-                        jl_subtype(temp[i], temp[j]))) {
+                     // issue #24521: don't merge Type{T} where typeof(T) varies
+                     !(jl_is_type_type(temp[i]) && jl_is_type_type(temp[j]) && jl_typeof(jl_tparam0(temp[i])) != jl_typeof(jl_tparam0(temp[j]))) &&
+                     jl_subtype(temp[i], temp[j]))) {
                     temp[i] = NULL;
                 }
             }
         }
     }
     isort_union(temp, nt);
-    jl_value_t **ptu = &temp[nt];
-    *ptu = jl_bottom_type;
-    int k;
-    for (k = (int)nt-1; k >= 0; --k) {
+    temp[nt] = jl_bottom_type;
+    size_t k;
+    for (k = nt; k-- > 0; ) {
         if (temp[k] != NULL) {
-            if (*ptu == jl_bottom_type)
-                *ptu = temp[k];
+            if (temp[nt] == jl_bottom_type)
+                temp[nt] = temp[k];
             else
-                *ptu = jl_new_struct(jl_uniontype_type, temp[k], *ptu);
+                temp[nt] = jl_new_struct(jl_uniontype_type, temp[k], temp[nt]);
         }
     }
-    assert(*ptu != NULL);
-    jl_value_t *tu = *ptu;
+    assert(temp[nt] != NULL);
+    jl_value_t *tu = temp[nt];
     JL_GC_POP();
     return tu;
 }
