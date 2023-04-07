@@ -566,6 +566,7 @@ static int is_any_like(jl_value_t* x, jl_typeenv_t *env) JL_NOTSAFEPOINT
     return 0;
 }
 
+jl_value_t *simple_union(jl_value_t *a, jl_value_t *b);
 // compute a least upper bound of `a` and `b`
 static jl_value_t *simple_join(jl_value_t *a, jl_value_t *b)
 {
@@ -589,13 +590,7 @@ static jl_value_t *simple_join(jl_value_t *a, jl_value_t *b)
         return a;
     if (jl_is_typevar(b) && obviously_egal(a, ((jl_tvar_t*)b)->lb))
         return b;
-    if (!jl_has_free_typevars(a) && !jl_has_free_typevars(b) &&
-        // issue #24521: don't merge Type{T} where typeof(T) varies
-        !(jl_is_type_type(a) && jl_is_type_type(b) && jl_typeof(jl_tparam0(a)) != jl_typeof(jl_tparam0(b)))) {
-        if (jl_subtype(a, b)) return b;
-        if (jl_subtype(b, a)) return a;
-    }
-    return jl_new_struct(jl_uniontype_type, a, b);
+    return simple_union(a, b);
 }
 
 // Compute a greatest lower bound of `a` and `b`
@@ -2759,7 +2754,7 @@ static jl_value_t *omit_bad_union(jl_value_t *u, jl_tvar_t *t)
         b = omit_bad_union(b, t);
         res = a == NULL ? b :
               b == NULL ? a :
-              jl_new_struct(jl_uniontype_type, a, b);
+              simple_join(a, b);
         JL_GC_POP();
     }
     return res;
