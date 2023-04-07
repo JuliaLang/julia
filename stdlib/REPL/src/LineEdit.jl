@@ -323,6 +323,11 @@ function common_prefix(completions::Vector{String})
     end
 end
 
+# This is the maximum number of completions that will be displayed in a single
+# column, anything above that and multiple columns will be used. Note that this
+# does not restrict column length when multiple columns are used.
+const MULTICOLUMN_THRESHOLD = 5
+
 # Show available completions
 function show_completions(s::PromptState, completions::Vector{String})
     # skip any lines of input after the cursor
@@ -331,9 +336,12 @@ function show_completions(s::PromptState, completions::Vector{String})
     if any(Base.Fix1(occursin, '\n'), completions)
         foreach(Base.Fix1(println, terminal(s)), completions)
     else
-        colmax = 2 + maximum(length, completions; init=1) # n.b. length >= textwidth
-        num_cols = max(div(width(terminal(s)), colmax), 1)
         n = length(completions)
+        colmax = 2 + maximum(length, completions; init=1) # n.b. length >= textwidth
+
+        num_cols = min(cld(n, MULTICOLUMN_THRESHOLD),
+                       max(div(width(terminal(s)), colmax), 1))
+
         entries_per_col = cld(n, num_cols)
         idx = 0
         for _ in 1:entries_per_col
