@@ -599,10 +599,51 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
     return tu;
 }
 
+// note: this is turned off as `Union` doesn't do such normalization.
+// static int simple_subtype(jl_value_t *a, jl_value_t *b)
+// {
+//     if (jl_is_kind(b) && jl_is_type_type(a) && jl_typeof(jl_tparam0(a)) == b)
+//         return 1;
+//     if (jl_is_typevar(b) && obviously_egal(a, ((jl_tvar_t*)b)->lb))
+//         return 1;
+//     return 0;
+// }
+
+static int simple_subtype2(jl_value_t *a, jl_value_t *b, int hasfree)
+{
+    int subab = 0, subba = 0;
+    if (jl_egal(a, b)) {
+        subab = subba = 1;
+    }
+    else if (a == jl_bottom_type || b == (jl_value_t*)jl_any_type) {
+        subab = 1;
+    }
+    else if (b == jl_bottom_type || a == (jl_value_t*)jl_any_type) {
+        subba = 1;
+    }
+    else if (hasfree) {
+        // subab = simple_subtype(a, b);
+        // subba = simple_subtype(b, a);
+    }
+    else if (jl_is_type_type(a) && jl_is_type_type(b) &&
+             jl_typeof(jl_tparam0(a)) != jl_typeof(jl_tparam0(b))) {
+        // issue #24521: don't merge Type{T} where typeof(T) varies
+    }
+    else if (jl_typeof(a) == jl_typeof(b) && jl_types_egal(a, b)) {
+        subab = subba = 1;
+    }
+    else {
+        subab = jl_subtype(a, b);
+        subba = jl_subtype(b, a);
+    }
+    return subab | (subba<<1);
+}
+
 jl_value_t *simple_union(jl_value_t *a, jl_value_t *b)
 {
-    size_t nt = count_union_components(&a, 1);
-    nt += count_union_components(&b, 1);
+    size_t nta = count_union_components(&a, 1);
+    size_t ntb = count_union_components(&b, 1);
+    size_t nt = nta + ntb;
     jl_value_t **temp;
     JL_GC_PUSHARGS(temp, nt+1);
     size_t count = 0;
@@ -610,21 +651,36 @@ jl_value_t *simple_union(jl_value_t *a, jl_value_t *b)
     flatten_type_union(&b, 1, temp, &count);
     assert(count == nt);
     size_t i, j;
-    for (i = 0; i < nt; i++) {
-        int has_free = temp[i] != NULL && jl_has_free_typevars(temp[i]);
-        for (j = 0; j < nt; j++) {
-            if (j != i && temp[i] && temp[j]) {
-                if (temp[i] == jl_bottom_type ||
-                    temp[j] == (jl_value_t*)jl_any_type ||
-                    jl_egal(temp[i], temp[j]) ||
-                    (!has_free && !jl_has_free_typevars(temp[j]) &&
-                     // issue #24521: don't merge Type{T} where typeof(T) varies
-                     !(jl_is_type_type(temp[i]) && jl_is_type_type(temp[j]) && jl_typeof(jl_tparam0(temp[i])) != jl_typeof(jl_tparam0(temp[j]))) &&
-                     jl_subtype(temp[i], temp[j]))) {
-                    temp[i] = NULL;
-                }
+    size_t ra = nta, rb = ntb;
+    for (i = 0; i < nta; i++) {
+        if (temp[i] == NULL) continue;
+        int hasfree = jl_has_free_typevars(temp[i]);
+        for (j = nta; j < nt; j++) {
+            if (temp[j] == NULL) continue;
+            int subs = simple_subtype2(temp[i], temp[j], hasfree || jl_has_free_typevars(temp[j]));
+            int subab = subs & 1, subba = subs >> 1;
+            if (subab) {
+                temp[i] = NULL;
+                if (!subba) ra--;
+                count--;
+                break;
+            }
+            else if (subba) {
+                temp[j] = NULL;
+                rb--;
+                count--;
             }
         }
+    }
+    if (count == ra) {
+        assert(rb <= ra);
+        JL_GC_POP();
+        return a;
+    }
+    if (count == rb) {
+        assert(ra <= rb);
+        JL_GC_POP();
+        return b;
     }
     isort_union(temp, nt);
     temp[nt] = jl_bottom_type;
