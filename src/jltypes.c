@@ -535,14 +535,16 @@ jl_value_t *simple_union(jl_value_t *a, jl_value_t *b)
     assert(count == nt);
     size_t i, j;
     for (i = 0; i < nt; i++) {
-        int has_free = 1; // TODO: is this worthwhile? temp[i] != NULL && jl_has_free_typevars(temp[i]);
+        int has_free = temp[i] != NULL && jl_has_free_typevars(temp[i]);
         for (j = 0; j < nt; j++) {
             if (j != i && temp[i] && temp[j]) {
                 if (temp[i] == jl_bottom_type ||
                     temp[j] == (jl_value_t*)jl_any_type ||
                     jl_egal(temp[i], temp[j]) ||
                     (!has_free && !jl_has_free_typevars(temp[j]) &&
-                     jl_subtype(temp[i], temp[j]))) {
+                        // issue #24521: don't merge Type{T} where typeof(T) varies
+                        !(jl_is_type_type(temp[i]) && jl_is_type_type(temp[j]) && jl_typeof(jl_tparam0(temp[i])) != jl_typeof(jl_tparam0(temp[j]))) &&
+                        jl_subtype(temp[i], temp[j]))) {
                     temp[i] = NULL;
                 }
             }
