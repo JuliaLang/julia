@@ -1015,7 +1015,7 @@ struct _jl_typestack_t;
 typedef struct _jl_typestack_t jl_typestack_t;
 
 static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
-                                       jl_typestack_t *stack, jl_typeenv_t *env);
+                                       jl_typestack_t *stack, jl_typeenv_t *env, int check);
 
 // Build an environment mapping a TypeName's parameters to parameter values.
 // This is the environment needed for instantiating a type's supertype and field types.
@@ -1023,7 +1023,7 @@ static jl_value_t *inst_datatype_env(jl_value_t *dt, jl_svec_t *p, jl_value_t **
                                      jl_typestack_t *stack, jl_typeenv_t *env, int c)
 {
     if (jl_is_datatype(dt))
-        return inst_datatype_inner((jl_datatype_t*)dt, p, iparams, ntp, stack, env);
+        return inst_datatype_inner((jl_datatype_t*)dt, p, iparams, ntp, stack, env, 1);
     assert(jl_is_unionall(dt));
     jl_unionall_t *ua = (jl_unionall_t*)dt;
     jl_typeenv_t e = { ua->var, iparams[c], env };
@@ -1152,6 +1152,18 @@ JL_DLLEXPORT jl_value_t *jl_instantiate_unionall(jl_unionall_t *u, jl_value_t *p
 {
     jl_typeenv_t env = { u->var, p, NULL };
     return inst_type_w_(u->body, &env, NULL, 1);
+}
+
+jl_unionall_t *jl_rename_unionall(jl_unionall_t *u)
+{
+    jl_tvar_t *v = jl_new_typevar(u->var->name, u->var->lb, u->var->ub);
+    jl_value_t *t = NULL;
+    JL_GC_PUSH2(&v, &t);
+    jl_typeenv_t env = { u->var, (jl_value_t *)v, NULL };
+    t = inst_type_w_(u->body, &env, NULL, 0);
+    t = jl_new_struct(jl_unionall_type, v, t);
+    JL_GC_POP();
+    return (jl_unionall_t*)t;
 }
 
 jl_value_t *jl_substitute_var(jl_value_t *t, jl_tvar_t *var, jl_value_t *val)
@@ -1503,13 +1515,13 @@ jl_value_t *normalize_unionalls(jl_value_t *t)
 static jl_value_t *_jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals, jl_typeenv_t *prev, jl_typestack_t *stack);
 
 static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
-                                       jl_typestack_t *stack, jl_typeenv_t *env)
+                                       jl_typestack_t *stack, jl_typeenv_t *env, int check)
 {
     jl_typestack_t top;
     jl_typename_t *tn = dt->name;
     int istuple = (tn == jl_tuple_typename);
     int isnamedtuple = (tn == jl_namedtuple_typename);
-    if (tn != jl_type_typename) {
+    if (check && tn != jl_type_typename) {
         size_t i;
         for (i = 0; i < ntp; i++)
             iparams[i] = normalize_unionalls(iparams[i]);
@@ -1566,7 +1578,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     if (stack_lkup)
         return stack_lkup;
 
-    if (!istuple) {
+    if (check && !istuple) {
         // check parameters against bounds in type definition
         check_datatype_parameters(tn, iparams, ntp);
     }
@@ -1686,7 +1698,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         ndt->super = jl_any_type;
     }
     else if (dt->super) {
-        ndt->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)dt->super, env, stack, 1);
+        ndt->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)dt->super, env, stack, check);
         jl_gc_wb(ndt, ndt->super);
     }
     jl_svec_t *ftypes = dt->types;
@@ -1734,7 +1746,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
 
 static jl_tupletype_t *jl_apply_tuple_type_v_(jl_value_t **p, size_t np, jl_svec_t *params)
 {
-    return (jl_datatype_t*)inst_datatype_inner(jl_anytuple_type, params, p, np, NULL, NULL);
+    return (jl_datatype_t*)inst_datatype_inner(jl_anytuple_type, params, p, np, NULL, NULL, 1);
 }
 
 JL_DLLEXPORT jl_tupletype_t *jl_apply_tuple_type(jl_svec_t *params)
@@ -1773,7 +1785,7 @@ jl_tupletype_t *jl_inst_arg_tuple_type(jl_value_t *arg1, jl_value_t **args, size
             }
             jl_svecset(params, i, ai);
         }
-        tt = (jl_datatype_t*)inst_datatype_inner(jl_anytuple_type, params, jl_svec_data(params), nargs, NULL, NULL);
+        tt = (jl_datatype_t*)inst_datatype_inner(jl_anytuple_type, params, jl_svec_data(params), nargs, NULL, NULL, 1);
         JL_GC_POP();
     }
     return tt;
@@ -1844,14 +1856,14 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_
     int i;
     for (i = 0; i < ntp; i++) {
         jl_value_t *elt = jl_svecref(tp, i);
-        jl_value_t *pi = inst_type_w_(elt, env, stack, 0);
+        jl_value_t *pi = inst_type_w_(elt, env, stack, check);
         iparams[i] = pi;
         if (ip_heap)
             jl_gc_wb(ip_heap, pi);
         bound |= (pi != elt);
     }
     if (bound)
-        t = inst_datatype_inner(tt, ip_heap, iparams, ntp, stack, env);
+        t = inst_datatype_inner(tt, ip_heap, iparams, ntp, stack, env, check);
     JL_GC_POP();
     return t;
 }
@@ -1904,8 +1916,14 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
         JL_GC_PUSH2(&a, &b);
         b = inst_type_w_(u->b, env, stack, check);
         if (a != u->a || b != u->b) {
-            jl_value_t *uargs[2] = {a, b};
-            t = jl_type_union(uargs, 2);
+            if (check) {
+                jl_value_t *uargs[2] = {a, b};
+                t = jl_type_union(uargs, 2);
+            }
+            else {
+                // fast path for `jl_rename_unionall`.
+                t = jl_new_struct(jl_uniontype_type, a, b);
+            }
         }
         JL_GC_POP();
         return t;
@@ -1947,7 +1965,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
     }
     // if t's parameters are not bound in the environment, return it uncopied (#9378)
     if (bound)
-        t = inst_datatype_inner(tt, NULL, iparams, ntp, stack, env);
+        t = inst_datatype_inner(tt, NULL, iparams, ntp, stack, env, check);
     JL_GC_POP();
     return t;
 }
