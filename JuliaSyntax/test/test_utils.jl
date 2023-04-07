@@ -9,7 +9,7 @@ using .JuliaSyntax:
     SourceFile,
     source_location,
     parse!,
-    parse,
+    parsestmt,
     parseall,
     parseatom,
     build_tree,
@@ -71,7 +71,7 @@ end
 # Parse text with JuliaSyntax vs reference parser and show a textural diff of
 # the resulting expressions
 function parse_diff(text, showfunc=dump)
-    ex = parse(Expr, text, filename="none")
+    ex = parsestmt(Expr, text, filename="none")
     fl_ex = fl_parse(text)
     show_expr_text_diff(stdout, showfunc, ex, fl_ex)
 end

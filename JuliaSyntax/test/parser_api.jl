@@ -1,34 +1,44 @@
 @testset "parser API" begin
     @testset "parse with String input" begin
-        @test parse(Expr, " x ") == :x
+        @test parsestmt(Expr, " x ") == :x
         @test JuliaSyntax.remove_linenums!(parseall(Expr, " x ")) == Expr(:toplevel, :x)
         @test parseatom(Expr, " x ") == :x
         @test parseatom(Expr, "(x)") == :x
 
         # SubString
-        @test parse(Expr, SubString("x+y")) == :(x+y)
-        @test parse(Expr, SubString("α+x")) == :(α+x)
+        @test parsestmt(Expr, SubString("x+y")) == :(x+y)
+        @test parsestmt(Expr, SubString("α+x")) == :(α+x)
         @test parseatom(Expr, SubString("x+y",3,3)) == :y
 
         # Exceptions due to extra trailing syntax
         @test_throws JuliaSyntax.ParseError parseatom(Expr, "x+y")
-        @test_throws JuliaSyntax.ParseError parse(Expr, "x+y\nz")
+        @test_throws JuliaSyntax.ParseError parsestmt(Expr, "x+y\nz")
 
         # ignore_warnings flag
-        @test_throws JuliaSyntax.ParseError parse(Expr, "import . .A")
-        @test parse(Expr, "import . .A", ignore_warnings=true) == :(import ..A)
+        @test_throws JuliaSyntax.ParseError parsestmt(Expr, "import . .A")
+        @test parsestmt(Expr, "import . .A", ignore_warnings=true) == :(import ..A)
 
         # version selection
-        @test_throws JuliaSyntax.ParseError parse(Expr, "[a ;; b]", version=v"1.6")
-        @test parse(Expr, "[a ;; b]", version=v"1.7") == Expr(:ncat, 2, :a, :b)
+        @test_throws JuliaSyntax.ParseError parsestmt(Expr, "[a ;; b]", version=v"1.6")
+        @test parsestmt(Expr, "[a ;; b]", version=v"1.7") == Expr(:ncat, 2, :a, :b)
 
         # filename
-        @test JuliaSyntax.parse(Expr, "begin\na\nend", filename="foo.jl", first_line=55) ==
+        @test parsestmt(Expr, "begin\na\nend", filename="foo.jl", first_line=55) ==
             Expr(:block, LineNumberNode(56, Symbol("foo.jl")), :a)
 
         # ignore_trivia
         @test parseatom(Expr, " x ", ignore_trivia=true) == :x
         @test_throws JuliaSyntax.ParseError parseatom(Expr, " x ", ignore_trivia=false)
+
+        # Top level parsing
+        @test parseall(Expr, "a\nb") ==
+            Expr(:toplevel, LineNumberNode(1), :a, LineNumberNode(2), :b)
+        @test parseall(Expr, "a\nb #==#") ==
+            Expr(:toplevel, LineNumberNode(1), :a, LineNumberNode(2), :b)
+        @test parseall(Expr, "#==#\na\nb") ==
+            Expr(:toplevel, LineNumberNode(2), :a, LineNumberNode(3), :b)
+        @test parseall(Expr, "a\nb\n#==#") ==
+            Expr(:toplevel, LineNumberNode(1), :a, LineNumberNode(2), :b)
     end
 
     @testset "IO input" begin
@@ -67,18 +77,18 @@
             @test JuliaSyntax.remove_linenums!(ex) == Expr(:toplevel, :(x+y), :z)
             @test pos == 6
         end
-        @test parse(Expr, "x+y\nz", 1)     == (:(x+y), 4)
+        @test parsestmt(Expr, "x+y\nz", 1)     == (:(x+y), 4)
         @test parseatom(Expr, "x+y\nz", 1) == (:x, 2)
         @test parseatom(Expr, "x+y\nz", 5) == (:z, 6)
 
         # SubString
-        @test parse(Expr, SubString("α+x\ny"), 1)  == (:(α+x), 5)
+        @test parsestmt(Expr, SubString("α+x\ny"), 1)  == (:(α+x), 5)
         @test parseatom(Expr, SubString("x+y"), 1) == (:x, 2)
         @test parseatom(Expr, SubString("x+y"), 3) == (:y, 4)
     end
 
     @testset "error/warning handling" begin
-        parseshow(s;kws...) = sprint(show, MIME("text/x.sexpression"), parse(SyntaxNode, s; kws...))
+        parseshow(s;kws...) = sprint(show, MIME("text/x.sexpression"), parsestmt(SyntaxNode, s; kws...))
         @test_throws JuliaSyntax.ParseError parseshow("try finally catch ex end")
         @test parseshow("try finally catch ex end", ignore_warnings=true) ==
             "(try (block) (finally (block)) (catch ex (block)))"
@@ -97,7 +107,7 @@ end
 
 @testset "ParseError printing" begin
     try
-        JuliaSyntax.parse(JuliaSyntax.SyntaxNode, "a -- b -- c", filename="somefile.jl")
+        JuliaSyntax.parsestmt(JuliaSyntax.SyntaxNode, "a -- b -- c", filename="somefile.jl")
         @assert false "error should be thrown"
     catch exc
         @test exc isa JuliaSyntax.ParseError

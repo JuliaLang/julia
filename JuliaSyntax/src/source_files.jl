@@ -36,18 +36,18 @@ function SourceFile(; filename, kwargs...)
 end
 
 # Get line number of the given byte within the code
-function source_line_index(source::SourceFile, byte_index)
+function _source_line_index(source::SourceFile, byte_index)
     lineidx = searchsortedlast(source.line_starts, byte_index)
     return (lineidx < lastindex(source.line_starts)) ? lineidx : lineidx-1
 end
 _source_line(source::SourceFile, lineidx) = lineidx + source.first_line - 1
-source_line(source::SourceFile, byte_index) = _source_line(source, source_line_index(source, byte_index))
+source_line(source::SourceFile, byte_index) = _source_line(source, _source_line_index(source, byte_index))
 
 """
 Get line number and character within the line at the given byte index.
 """
 function source_location(source::SourceFile, byte_index)
-    lineidx = source_line_index(source, byte_index)
+    lineidx = _source_line_index(source, byte_index)
     i = source.line_starts[lineidx]
     column = 1
     while i < byte_index
@@ -63,7 +63,7 @@ Get byte range of the source line at byte_index, buffered by
 """
 function source_line_range(source::SourceFile, byte_index;
                            context_lines_before=0, context_lines_after=0)
-    lineidx = source_line_index(source, byte_index)
+    lineidx = _source_line_index(source, byte_index)
     fbyte = source.line_starts[max(lineidx-context_lines_before, 1)]
     lbyte = source.line_starts[min(lineidx+1+context_lines_after, end)] - 1
     fbyte,lbyte
