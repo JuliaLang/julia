@@ -546,8 +546,8 @@ CC_BASE := $(shell echo $(CC) | cut -d' ' -f1)
 CC_ARG := $(shell echo $(CC) | cut -s -d' ' -f2-)
 CXX_BASE := $(shell echo $(CXX) | cut -d' ' -f1)
 CXX_ARG := $(shell echo $(CXX) | cut -s -d' ' -f2-)
-FC_BASE := $(shell echo $(FC) | cut -d' ' -f1)
-FC_ARG := $(shell echo $(FC) | cut -s -d' ' -f2-)
+FC_BASE := $(shell echo $(FC) 2>/dev/null | cut -d' ' -f1)
+FC_ARG := $(shell echo $(FC) 2>/dev/null | cut -s -d' ' -f2-)
 endif
 
 JFFLAGS := -O2 $(fPIC)
