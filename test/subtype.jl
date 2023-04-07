@@ -2511,5 +2511,5 @@ let T = Tuple{Union{Type{T}, Type{S}}, Union{Val{T}, Val{S}}, Union{Val{T}, S}} 
     S = Tuple{Type{T}, T, Val{T}} where T<:(Val{S} where S<:Val)
     # optimal = Union{}?
     @test typeintersect(T, S) == Tuple{Type{T}, T, Val{T}} where T<:(Val{S} where S<:Val)
-    @test typeintersect(S, T) == Tuple{Union{Type{T}, Type{T1}}, Union{Val{T1}, Val{S1}, T}, Union{S, S1}} where {T<:(Val{S} where S<:Val), S<:Union{Val{T}, T}, T1<:Val, S1<:Val{T1}}
+    @test typeintersect(S, T) == Tuple{Union{Type{T}, Type{T1}}, Union{Val{T1}, Val{S1}, T}, Union{S, S1}} where {T<:(Val{S} where S<:Val), S<:Val{T}, T1<:Val, S1<:Val{T1}}
 end
