@@ -122,7 +122,7 @@ end
 # Debug log file for dumping parsed code
 const _debug_log = Ref{Union{Nothing,IO}}(nothing)
 
-function _core_parser_hook(code, filename, lineno, offset, options)
+function _core_parser_hook(code, filename::String, lineno::Int, offset::Int, options::Symbol)
     try
         # TODO: Check that we do all this input wrangling without copying the
         # code buffer
@@ -144,8 +144,7 @@ function _core_parser_hook(code, filename, lineno, offset, options)
         seek(io, offset)
 
         stream = ParseStream(io)
-        rule = options === :all ? :toplevel : options
-        if rule === :statement || rule === :atom
+        if options === :statement || options === :atom
             # To copy the flisp parser driver:
             # * Parsing atoms      consumes leading trivia
             # * Parsing statements consumes leading+trailing trivia
@@ -157,8 +156,8 @@ function _core_parser_hook(code, filename, lineno, offset, options)
                 return Core.svec(nothing, last_byte(stream))
             end
         end
-        parse!(stream; rule=rule)
-        if rule === :statement
+        parse!(stream; rule=options)
+        if options === :statement
             bump_trivia(stream)
         end
 
@@ -342,7 +341,7 @@ function _fl_parse_string(text::AbstractString, filename::AbstractString,
     ex, offset+1
 end
 
-# Convenience functions to mirror `JuliaSyntax.parse(Expr, ...)` in simple cases.
+# Convenience functions to mirror `JuliaSyntax.parsestmt(Expr, ...)` in simple cases.
 fl_parse(::Type{Expr}, args...; kws...) = fl_parse(args...; kws...)
 fl_parseall(::Type{Expr}, args...; kws...) = fl_parseall(args...; kws...)
 

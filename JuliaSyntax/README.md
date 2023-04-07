@@ -50,15 +50,16 @@ First, a source-ordered AST with `SyntaxNode` (`call-i` in the dump here means
 the `call` has the infix `-i` flag):
 
 ```julia
-julia> using JuliaSyntax: JuliaSyntax, SyntaxNode, GreenNode
+julia> using JuliaSyntax
 
-julia> JuliaSyntax.parse(SyntaxNode, "(x + y)*z", filename="foo.jl")
+julia> parsestmt(SyntaxNode, "(x + y)*z", filename="foo.jl")
 line:col│ tree                                   │ file_name
    1:1  │[call-i]                                │foo.jl
-   1:2  │  [call-i]
-   1:2  │    x
-   1:4  │    +
-   1:6  │    y
+   1:1  │  [parens]
+   1:2  │    [call-i]
+   1:2  │      x
+   1:4  │      +
+   1:6  │      y
    1:8  │  *
    1:9  │  z
 ```
@@ -71,16 +72,17 @@ representation, despite being important for parsing.
 
 ```julia
 julia> text = "(x + y)*z"
-       greentree = JuliaSyntax.parse(GreenNode, text)
+       greentree = parsestmt(JuliaSyntax.GreenNode, text)
      1:9      │[call]
-     1:1      │  (
-     2:6      │  [call]
-     2:2      │    Identifier           ✔
-     3:3      │    Whitespace
-     4:4      │    +                    ✔
-     5:5      │    Whitespace
-     6:6      │    Identifier           ✔
-     7:7      │  )
+     1:7      │  [parens]
+     1:1      │    (
+     2:6      │    [call]
+     2:2      │      Identifier         ✔
+     3:3      │      Whitespace
+     4:4      │      +                  ✔
+     5:5      │      Whitespace
+     6:6      │      Identifier         ✔
+     7:7      │    )
      8:8      │  *                      ✔
      9:9      │  Identifier             ✔
 ```
@@ -91,14 +93,15 @@ supplying the source text string:
 ```julia
 julia> show(stdout, MIME"text/plain"(), greentree, text)
      1:9      │[call]
-     1:1      │  (                          "("
-     2:6      │  [call]
-     2:2      │    Identifier           ✔   "x"
-     3:3      │    Whitespace               " "
-     4:4      │    +                    ✔   "+"
-     5:5      │    Whitespace               " "
-     6:6      │    Identifier           ✔   "y"
-     7:7      │  )                          ")"
+     1:7      │  [parens]
+     1:1      │    (                        "("
+     2:6      │    [call]
+     2:2      │      Identifier         ✔   "x"
+     3:3      │      Whitespace             " "
+     4:4      │      +                  ✔   "+"
+     5:5      │      Whitespace             " "
+     6:6      │      Identifier         ✔   "y"
+     7:7      │    )                        ")"
      8:8      │  *                      ✔   "*"
      9:9      │  Identifier             ✔   "z"
 ```
@@ -106,7 +109,7 @@ julia> show(stdout, MIME"text/plain"(), greentree, text)
 Julia `Expr` can also be produced:
 
 ```julia
-julia> JuliaSyntax.parse(Expr, "(x + y)*z")
+julia> JuliaSyntax.parsestmt(Expr, "(x + y)*z")
 :((x + y) * z)
 ```
 

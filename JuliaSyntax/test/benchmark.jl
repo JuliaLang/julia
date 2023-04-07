@@ -15,7 +15,7 @@ end
 
 all_base_code = concat_base()
 
-b_ParseStream = @benchmark JuliaSyntax.parse!(JuliaSyntax.ParseStream(all_base_code), rule=:toplevel)
+b_ParseStream = @benchmark JuliaSyntax.parse!(JuliaSyntax.ParseStream(all_base_code), rule=:all)
 b_GreenNode   = @benchmark JuliaSyntax.parseall(JuliaSyntax.GreenNode, all_base_code)
 b_SyntaxNode  = @benchmark JuliaSyntax.parseall(JuliaSyntax.SyntaxNode, all_base_code)
 b_Expr        = @benchmark JuliaSyntax.parseall(Expr, all_base_code)
@@ -30,5 +30,5 @@ b_Expr        = @benchmark JuliaSyntax.parseall(Expr, all_base_code)
 # Allocs.clear()
 # stream = JuliaSyntax.ParseStream(text);
 # JuliaSyntax.peek(stream);
-# Allocs.@profile sample_rate=1 JuliaSyntax.parse(stream)
+# Allocs.@profile sample_rate=1 JuliaSyntax.parsestmt(stream)
 # PProf.Allocs.pprof()
