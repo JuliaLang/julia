@@ -132,6 +132,12 @@ let ex = quote
         macro testcmd_cmd(s) end
         macro tϵsτcmδ_cmd(s) end
 
+        var"complicated symbol with spaces" = 5
+
+        struct WeirdNames
+        end
+        Base.propertynames(::WeirdNames) = (Symbol("oh no!"), Symbol("oh yes!"))
+
         end # module CompletionFoo
         test_repl_comp_dict = CompletionFoo.test_dict
         test_repl_comp_customdict = CompletionFoo.test_customdict
@@ -1801,3 +1807,27 @@ let s = "pop!(global_xs)."
     @test "value" in c
 end
 @test length(global_xs) == 1 # the completion above shouldn't evaluate `pop!` call
+
+# Test completion of var"" identifiers (#49280)
+let s = "var\"complicated "
+    c, r = test_complete_foo(s)
+    @test c == Any["var\"complicated symbol with spaces\""]
+end
+
+let s = "WeirdNames().var\"oh "
+    c, r = test_complete_foo(s)
+    @test c == Any["var\"oh no!\"", "var\"oh yes!\""]
+end
+
+# Test completion of non-Expr literals
+let s = "\"abc\"."
+    c, r = test_complete(s)
+    # (no completion, but shouldn't error)
+    @test isempty(c)
+end
+
+let s = "`abc`.e"
+    c, r = test_complete(s)
+    # (no completion, but shouldn't error)
+    @test c == Any["env", "exec"]
+end
