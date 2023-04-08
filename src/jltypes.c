@@ -652,6 +652,7 @@ jl_value_t *simple_union(jl_value_t *a, jl_value_t *b)
     assert(count == nt);
     size_t i, j;
     size_t ra = nta, rb = ntb;
+    // first remove cross-redundancy and check if `a >: b` or `a <: b`.
     for (i = 0; i < nta; i++) {
         if (temp[i] == NULL) continue;
         int hasfree = jl_has_free_typevars(temp[i]);
@@ -681,6 +682,25 @@ jl_value_t *simple_union(jl_value_t *a, jl_value_t *b)
         assert(ra <= rb);
         JL_GC_POP();
         return b;
+    }
+    // then remove self-redundancy
+    for (i = 0; i < nt; i++) {
+        int has_free = temp[i] != NULL && jl_has_free_typevars(temp[i]);
+        size_t jmin = i < nta ? 0 : nta;
+        size_t jmax = i < nta ? nta : nt;
+        for (j = jmin; j < jmax; j++) {
+            if (j != i && temp[i] && temp[j]) {
+                if (temp[i] == jl_bottom_type ||
+                    temp[j] == (jl_value_t*)jl_any_type ||
+                    jl_egal(temp[i], temp[j]) ||
+                    (!has_free && !jl_has_free_typevars(temp[j]) &&
+                     // issue #24521: don't merge Type{T} where typeof(T) varies
+                     !(jl_is_type_type(temp[i]) && jl_is_type_type(temp[j]) && jl_typeof(jl_tparam0(temp[i])) != jl_typeof(jl_tparam0(temp[j]))) &&
+                     jl_subtype(temp[i], temp[j]))) {
+                    temp[i] = NULL;
+                }
+            }
+        }
     }
     isort_union(temp, nt);
     temp[nt] = jl_bottom_type;
