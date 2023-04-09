@@ -704,7 +704,7 @@ clear!(wp)
 # default_worker_pool! tests
 wp_default = Distributed.default_worker_pool()
 try
-    wp = CachingPool(workers())
+    local wp = CachingPool(workers())
     Distributed.default_worker_pool!(wp)
     @test [1:100...] == pmap(x->x, wp, 1:100)
     @test !isempty(wp.map_obj2ref)
