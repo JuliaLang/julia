@@ -1799,7 +1799,7 @@ function _require(pkg::PkgId, env=nothing)
 
         if JLOptions().use_compiled_modules != 0
             if (0 == ccall(:jl_generating_output, Cint, ())) || (JLOptions().incremental != 0)
-                if !pkg_precompile_attempted && isassigned(PKG_PRECOMPILE_HOOK)
+                if !pkg_precompile_attempted && isinteractive() && isassigned(PKG_PRECOMPILE_HOOK)
                     pkg_precompile_attempted = true
                     unlock(require_lock)
                     try
