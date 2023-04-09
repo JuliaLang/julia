@@ -2606,9 +2606,13 @@ module TypeTreesIO
                 end
                 push!(curs.children, TypeTreeNode(str, curs))
             else
-                p = curs.parent
-                if p !== nothing
-                    treeio.cursor = p
+                if curs.children === nothing
+                    curs.children = TypeTreeNode[]
+                else
+                    p = curs.parent
+                    if p !== nothing
+                        treeio.cursor = p
+                    end
                 end
             end
         elseif c != ' '
@@ -2657,7 +2661,7 @@ module TypeTreesIO
         if childs !== nothing
             delimidx = node.delimidx
             iszero(delimidx) || print(io, delims[delimidx][1])
-            if thisdepth >= maxdepth
+            if thisdepth >= maxdepth && node.children !== nothing && !isempty(node.children)
                 print(io, truncchar)
             else
                 n = lastindex(childs)
@@ -2715,7 +2719,9 @@ module TypeTreesIO
             for child in childs
                 width_by_depth!(wd, wtrunc, child, depth+1)
             end
-            wd[depth+1] += length(per_param) * (length(childs) - 1)
+            if lastindex(wd) > depth
+                wd[depth+1] += length(per_param) * (length(childs) - 1)
+            end
         end
         return wd, wtrunc
     end
@@ -2736,7 +2742,7 @@ function show_tuple_as_call(out::IO, name::Symbol, @nospecialize(sig::Type);
                             qualified=false, hasfirst=true)
     # print a method signature tuple for a lambda definition
     if sig === Tuple
-        print(io, demangle ? demangle_function_name(name) : name, "(...)")
+        print(out, demangle ? demangle_function_name(name) : name, "(...)")
         return
     end
     tv = Any[]
