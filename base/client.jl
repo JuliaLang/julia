@@ -220,7 +220,7 @@ function exec_options(opts)
     history_file          = (opts.historyfile != 0)
     color_set             = (opts.color != 0) # --color!=auto
     global have_color     = color_set ? (opts.color == 1) : nothing # --color=on
-    global is_interactive = (opts.isinteractive != 0)
+    is_interactive        = (opts.isinteractive != 0)
 
     # pre-process command line argument list
     arg_is_program = !isempty(ARGS)
@@ -261,8 +261,8 @@ function exec_options(opts)
         invokelatest(Main.Distributed.process_opts, opts)
     end
 
-    interactiveinput = (repl || is_interactive::Bool) && isa(stdin, TTY)
-    is_interactive::Bool |= interactiveinput
+    interactiveinput = (repl || is_interactive) && isa(stdin, TTY)
+    is_interactive |= interactiveinput
 
     # load ~/.julia/config/startup.jl file
     if startup
@@ -270,7 +270,7 @@ function exec_options(opts)
             load_julia_startup()
         catch
             invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
-            !(repl || is_interactive::Bool) && exit(1)
+            !(repl || is_interactive) && exit(1)
         end
     end
 
@@ -543,7 +543,7 @@ function _start()
         invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
         exit(1)
     end
-    if is_interactive && get(stdout, :color, false)
+    if isinteractive() && get(stdout, :color, false)
         print(color_normal)
     end
 end

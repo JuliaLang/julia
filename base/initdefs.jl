@@ -30,14 +30,12 @@ exit() = exit(0)
 
 const roottask = current_task()
 
-is_interactive = false
-
 """
     isinteractive() -> Bool
 
 Determine whether Julia is running an interactive session.
 """
-isinteractive() = (is_interactive::Bool)
+isinteractive() = JLOptions().isinteractive != 0
 
 ## package depots (registries, packages, environments) ##
 
