@@ -107,6 +107,7 @@ include("macros.jl")      # @spawn and friends
 include("workerpool.jl")
 include("pmap.jl")
 include("managers.jl")    # LocalManager and SSHManager
+include("precompile.jl")
 
 function __init__()
     init_parallel()
