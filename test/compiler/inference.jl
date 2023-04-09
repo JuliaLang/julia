@@ -98,12 +98,12 @@ let # 40336
     @test t !== r && t <: r
 end
 
-@test Core.Compiler.unionlen(Union{}) == 1
-@test Core.Compiler.unionlen(Int8) == 1
-@test Core.Compiler.unionlen(Union{Int8, Int16}) == 2
-@test Core.Compiler.unionlen(Union{Int8, Int16, Int32, Int64}) == 4
-@test Core.Compiler.unionlen(Tuple{Union{Int8, Int16, Int32, Int64}}) == 1
-@test Core.Compiler.unionlen(Union{Int8, Int16, Int32, T} where T) == 1
+@test Core.Compiler.nvariants(Union{}) == 1
+@test Core.Compiler.nvariants(Int8) == 1
+@test Core.Compiler.nvariants(Union{Int8, Int16}) == 2
+@test Core.Compiler.nvariants(Union{Int8, Int16, Int32, Int64}) == 4
+@test Core.Compiler.nvariants(Tuple{Union{Int8, Int16, Int32, Int64}}) == 1
+@test Core.Compiler.nvariants(Union{Int8, Int16, Int32, T} where T) == 1
 
 @test Core.Compiler.unioncomplexity(Union{}) == 0
 @test Core.Compiler.unioncomplexity(Int8) == 0

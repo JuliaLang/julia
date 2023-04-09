@@ -837,7 +837,7 @@ function make_typealiases(@nospecialize(x::Type))
                                 continue
                             end
                     end
-                    ul = unionlen(applied)
+                    ul = nvariants(applied)
                     for p in xenv
                         applied = rewrap_unionall(applied, p)
                     end

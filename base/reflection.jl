@@ -983,8 +983,91 @@ hasgenerator(m::Core.MethodInstance) = hasgenerator(m.def::Method)
 
 # low-level method lookup functions used by the compiler
 
-unionlen(x::Union) = unionlen(x.a) + unionlen(x.b)
-unionlen(@nospecialize(x)) = 1
+"""
+    Base.nvariants(T) -> Int
+
+Returns the number of type variants that `T` represents.
+"""
+function nvariants(@nospecialize(t))
+    @_total_meta
+    n = 0
+    while isa(t, Union)
+        n += 1
+        t = t.b
+    end
+    return n
+end
+
+"""
+    Base.tag_to_variant(T, tag)
+
+Returns the variant type of `T` associated with the union bits tag. If there is no variant
+associate with `tag` then `Union{}` is returned.
+
+# Examples
+
+```jldoctest
+julia> U = Union{Nothing, UInt8, UInt16, UInt32};
+
+julia> tag = Base.variant_to_tag(U, UInt32);
+
+julia> Base.tag_to_variant(U, tag) == UInt32
+true
+```
+
+"""
+function tag_to_variant(t::Union, tag)
+    @_total_meta
+    a = t.a
+    b = t.b
+    while true
+        tag == 0 && return a
+        isa(b, Union) || return (tag == 0 ? b : Union{})
+        a = b.a
+        b = b.b
+        tag -= 1
+    end
+end
+tag_to_variant(@nospecialize(t), tag) = tag == 0 ? t : Union{}
+
+"""
+    Base.variant_to_tag(T, V)
+
+Returns the tag for identifying the variant `V` in `T`. If `V` is not found in `U` then tag
+will be `nvariants(T)`.
+
+# Examples
+
+```jldoctest
+julia> U = Union{Nothing, UInt8, UInt16, UInt32};
+
+julia> Base.tag_to_variant(U, Base.variant_to_tag(U, Nothing)) == Nothing
+true
+
+julia> tag = Base.variant_to_tag(U, Float64)
+4
+
+julia> Base.tag_to_variant(U, tag)
+Union{}
+```
+
+"""
+function variant_to_tag(t::Union, @nospecialize(vt))
+    @_total_meta
+    tag = 0
+    a = t.a
+    b = t.b
+    while true
+        vt <: a && return tag
+        tag += 1
+        # if last member of union doesn'vt match `vt` then return tag that will never be
+        # reached by `tag_to_variant`
+        isa(b, Union) || return (b == vt ? tag : (tag + 1))
+        a = b.a
+        b = b.b
+    end
+end
+variant_to_tag(@nospecialize(t), @nospecialize(vt)) = vt <: t ? 0 : 1
 
 _uniontypes(x::Union, ts) = (_uniontypes(x.a,ts); _uniontypes(x.b,ts); ts)
 _uniontypes(@nospecialize(x), ts) = (push!(ts, x); ts)
