@@ -319,7 +319,7 @@ const _UTF8_DFA_INVALID = _UTF8DFAState(10) # If the state machine is ever in th
 # The dfa step is broken out so that it may be used in other functions. The mask was calculated to work with state shifts above
 @inline _utf_dfa_step(state::_UTF8DFAState, byte::UInt8) = @inbounds (_UTF8_DFA_TABLE[byte+1] >> state) & _UTF8DFAState(0x0000001E)
 
-@inline function _isvalid_utf8_dfa(state::_UTF8DFAState, bytes::AbstractVector{UInt8}, first::Int = 1, last::Int = length(bytes))
+@inline function _isvalid_utf8_dfa(state::_UTF8DFAState, bytes::AbstractVector{UInt8}, first::Int = firstindex(bytes), last::Int = lastindex(bytes))
     for i = first:last
        @inbounds state = _utf_dfa_step(state, bytes[i])
     end
