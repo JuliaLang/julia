@@ -134,8 +134,7 @@ let ex = quote
 
         var"complicated symbol with spaces" = 5
 
-        struct WeirdNames
-        end
+        struct WeirdNames end
         Base.propertynames(::WeirdNames) = (Symbol("oh no!"), Symbol("oh yes!"))
 
         end # module CompletionFoo
@@ -1828,6 +1827,6 @@ end
 
 let s = "`abc`.e"
     c, r = test_complete(s)
-    # (no completion, but shouldn't error)
+    # (completions for the fields of `Cmd`)
     @test c == Any["env", "exec"]
 end
