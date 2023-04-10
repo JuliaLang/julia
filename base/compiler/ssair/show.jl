@@ -48,7 +48,7 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         print(io, ", ")
         print(io, stmt.typ)
         print(io, ")")
-    elseif isexpr(stmt, :invoke)
+    elseif isexpr(stmt, :invoke) && length(stmt.args) >= 2 && isa(stmt.args[1], MethodInstance)
         stmt = stmt::Expr
         # TODO: why is this here, and not in Base.show_unquoted
         print(io, "invoke ")
