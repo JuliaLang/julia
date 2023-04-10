@@ -2104,30 +2104,21 @@ STATIC_INLINE void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_v
     jl_value_t **scan_end = obj_end;
     if (too_big) {
         scan_end = obj_begin + step * MAX_REFS_AT_ONCE;
-        if ((nptr & 0x3) != 0x2) {
-            jl_gc_chunk_t c = {GC_objary_chunk, obj_parent, scan_end,
-                               obj_end,      NULL,       NULL,
-                               step,         nptr};
-            gc_chunkqueue_push(mq, &c);
-            obj_end = scan_end;
-        }
     }
     for (; obj_begin < scan_end; obj_begin += step) {
         new_obj = *obj_begin;
         if (new_obj != NULL) {
             verify_parent2("obj array", obj_parent, obj_begin, "elem(%d)",
-                           gc_slot_to_arrayidx(obj_parent, obj_begin));
+                        gc_slot_to_arrayidx(obj_parent, obj_begin));
             gc_try_claim_and_push(mq, new_obj, &nptr);
             gc_heap_snapshot_record_array_edge(obj_parent, &new_obj);
         }
     }
     if (too_big) {
-        if (obj_end != scan_end) {
-            jl_gc_chunk_t c = {GC_objary_chunk, obj_parent, scan_end,
-                               obj_end,      NULL,       NULL,
-                               step,         nptr};
-            gc_chunkqueue_push(mq, &c);
-        }
+        jl_gc_chunk_t c = {GC_objary_chunk, obj_parent, scan_end,
+                            obj_end,      NULL,       NULL,
+                            step,         nptr};
+        gc_chunkqueue_push(mq, &c);
     }
     else {
         gc_mark_push_remset(ptls, obj_parent, nptr);
@@ -2173,13 +2164,6 @@ STATIC_INLINE void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_va
     jl_value_t **scan_end = ary8_end;
     if (too_big) {
         scan_end = ary8_begin + elsize * MAX_REFS_AT_ONCE;
-        if ((nptr & 0x3) != 0x2) {
-            jl_gc_chunk_t c = {GC_objary_chunk, ary8_parent, scan_end,
-                               ary8_end,      NULL,       NULL,
-                               elsize,         nptr};
-            gc_chunkqueue_push(mq, &c);
-            ary8_end = scan_end;
-        }
     }
     for (; ary8_begin < ary8_end; ary8_begin += elsize) {
         for (uint8_t *pindex = elem_begin; pindex < elem_end; pindex++) {
@@ -2193,12 +2177,10 @@ STATIC_INLINE void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_va
         }
     }
     if (too_big) {
-        if (ary8_end != scan_end) {
-            jl_gc_chunk_t c = {GC_objary_chunk, ary8_parent, scan_end,
-                               ary8_end,      NULL,       NULL,
-                               elsize,         nptr};
-            gc_chunkqueue_push(mq, &c);
-        }
+        jl_gc_chunk_t c = {GC_objary_chunk, ary8_parent, scan_end,
+                            ary8_end,      elem_begin,       elem_end,
+                            elsize,         nptr};
+        gc_chunkqueue_push(mq, &c);
     }
     else {
         gc_mark_push_remset(ptls, ary8_parent, nptr);
@@ -2244,13 +2226,6 @@ STATIC_INLINE void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl_
     jl_value_t **scan_end = ary16_end;
     if (too_big) {
         scan_end = ary16_begin + elsize * MAX_REFS_AT_ONCE;
-        if ((nptr & 0x3) != 0x2) {
-            jl_gc_chunk_t c = {GC_objary_chunk, ary16_parent, scan_end,
-                               ary16_end,      NULL,       NULL,
-                               elsize,         nptr};
-            gc_chunkqueue_push(mq, &c);
-            ary16_end = scan_end;
-        }
     }
     for (; ary16_begin < ary16_end; ary16_begin += elsize) {
         for (uint16_t *pindex = elem_begin; pindex < elem_end; pindex++) {
@@ -2264,12 +2239,10 @@ STATIC_INLINE void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl_
         }
     }
     if (too_big) {
-        if (ary16_end != scan_end) {
-            jl_gc_chunk_t c = {GC_objary_chunk, ary16_parent, scan_end,
-                               ary16_end,      NULL,       NULL,
-                               elsize,         nptr};
-            gc_chunkqueue_push(mq, &c);
-        }
+        jl_gc_chunk_t c = {GC_objary_chunk, ary16_parent, scan_end,
+                            ary16_end,      elem_begin,       elem_end,
+                            elsize,         nptr};
+        gc_chunkqueue_push(mq, &c);
     }
     else {
         gc_mark_push_remset(ptls, ary16_parent, nptr);
