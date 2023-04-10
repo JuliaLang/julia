@@ -2984,10 +2984,10 @@ static Value *emit_bufferlen(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
     Value *t = boxed(ctx, tinfo);
     Value *addr = ctx.builder.CreateStructGEP(ctx.types().T_jlbuffer,
             emit_bitcast(ctx, decay_derived(ctx, t), ctx.types().T_pjlbuffer), 0);
-    LoadInst *len = ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()), addr, Align(sizeof(size_t)));
+    LoadInst *len = ctx.builder.CreateAlignedLoad(ctx.types().T_size, addr, Align(sizeof(size_t)));
     len->setOrdering(AtomicOrdering::NotAtomic);
     MDBuilder MDB(ctx.builder.getContext());
-    auto rng = MDB.createRange(Constant::getNullValue(getSizeTy(ctx.builder.getContext())), ConstantInt::get(getSizeTy(ctx.builder.getContext()), buffertype_maxsize(tinfo.typ)));
+    auto rng = MDB.createRange(Constant::getNullValue(ctx.types().T_size), ConstantInt::get(ctx.types().T_size, buffertype_maxsize(tinfo.typ)));
     len->setMetadata(LLVMContext::MD_range, rng);
     jl_aliasinfo_t bi = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
     return bi.decorateInst(len);
@@ -3048,8 +3048,8 @@ static Value *emit_buffer_index(
         const jl_cgval_t &idx, jl_value_t *inbounds)
 {
     ++EmittedBufferIndex;
-    Value *i = emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), idx, (jl_value_t*)jl_long_type);
-    i = ctx.builder.CreateSub(i, ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1));
+    Value *i = emit_unbox(ctx, ctx.types().T_size, idx, (jl_value_t*)jl_long_type);
+    i = ctx.builder.CreateSub(i, ConstantInt::get(ctx.types().T_size, 1));
 
 #if CHECK_BOUNDS==1
     bool bc = bounds_check_enabled(ctx, inbounds);
@@ -3063,7 +3063,7 @@ static Value *emit_buffer_index(
         ctx.builder.SetInsertPoint(failBB);
         // FIXME Buffer use correct error function
         // ctx.builder.CreateCall(prepare_call(jlboundserrorv_func),
-        //     { mark_callee_rooted(ctx, a), tmp, ConstantInt::get(getSizeTy(ctx.builder.getContext()), nidxs) });
+        //     { mark_callee_rooted(ctx, a), tmp, ConstantInt::get(ctx.types().T_size, nidxs) });
         ctx.builder.CreateCall(prepare_call(jlvboundserror_func), { binfo.V, len, i});
         ctx.builder.CreateUnreachable();
         ctx.f->getBasicBlockList().push_back(endBB);

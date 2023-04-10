@@ -1493,7 +1493,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     }
     else if (is_libjulia_func(jl_buffer_ptr)) {
         ++CCALL_STAT(jl_buffer_ptr);
-        assert(lrt == getSizeTy(ctx.builder.getContext()));
+        assert(lrt == ctx.types().T_size);
         assert(!isVa && !llvmcall && nccallargs == 1);
         const jl_cgval_t &buf = argv[0];
         JL_GC_POP();
@@ -1804,13 +1804,13 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                                                 false, rt, unionall, static_rt);
             }
             else if (!jl_has_free_typevars(ety)) {
-                Value *idx = emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), idxv, (jl_value_t*)jl_ulong_type);
+                Value *idx = emit_unbox(ctx, ctx.types().T_size, idxv, (jl_value_t*)jl_ulong_type);
                 Value *arrayptr = emit_bitcast(ctx, emit_bufferptr(ctx, bufv, bufex), ctx.types().T_pprjlvalue);
                 if (!lyt.isboxed) {
                     size_t stride = LLT_ALIGN(lyt.elsize, lyt.alignment) / sizeof(jl_value_t*);
                     if (stride != 1)
-                        idx = ctx.builder.CreateMul(idx, ConstantInt::get(getSizeTy(ctx.builder.getContext()), stride));
-                    idx = ctx.builder.CreateAdd(idx, ConstantInt::get(getSizeTy(ctx.builder.getContext()), ((jl_datatype_t*)ety)->layout->first_ptr));
+                        idx = ctx.builder.CreateMul(idx, ConstantInt::get(ctx.types().T_size, stride));
+                    idx = ctx.builder.CreateAdd(idx, ConstantInt::get(ctx.types().T_size, ((jl_datatype_t*)ety)->layout->first_ptr));
                 }
                 Value *slot_addr = ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, arrayptr, idx);
                 LoadInst *load = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, slot_addr, Align(sizeof(void*)));

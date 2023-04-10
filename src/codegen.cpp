@@ -294,7 +294,7 @@ struct jl_typecache_t {
         T_jlarray = StructType::get(context, makeArrayRef(vaelts));
         T_pjlarray = PointerType::get(T_jlarray, 0);
 
-        Type *vbelts[] = {getSizeTy(context), PointerType::get(getInt8Ty(context), AddressSpace::Loaded)};
+        Type *vbelts[] = {T_size, PointerType::get(getInt8Ty(context), AddressSpace::Loaded)};
         T_jlbuffer = StructType::get(context, makeArrayRef(vbelts));
         T_pjlbuffer = PointerType::get(T_jlbuffer, 0);
     }
@@ -1290,9 +1290,9 @@ static const auto &builtin_func_map() {
           { jl_f_compilerbarrier_addr,    new JuliaFunction<>{XSTR(jl_f_compilerbarrier), get_func_sig, get_func_attrs} },
           { jl_f_finalizer_addr,          new JuliaFunction<>{XSTR(jl_f_finalizer), get_func_sig, get_func_attrs} },
           { jl_f__svec_ref_addr,          new JuliaFunction<>{XSTR(jl_f__svec_ref), get_func_sig, get_func_attrs} },
-          { jl_f_bufref_addr,             new JuliaFunction{XSTR(jl_f_bufref), get_func_sig, get_func_attrs} },
-          { jl_f_bufset_addr,             new JuliaFunction{XSTR(jl_f_bufset), get_func_sig, get_func_attrs} },
-          { jl_f_bufferlen_addr,             new JuliaFunction{XSTR(jl_f_bufferlen), get_func_sig, get_func_attrs} },
+          { jl_f_bufref_addr,             new JuliaFunction<>{XSTR(jl_f_bufref), get_func_sig, get_func_attrs} },
+          { jl_f_bufset_addr,             new JuliaFunction<>{XSTR(jl_f_bufset), get_func_sig, get_func_attrs} },
+          { jl_f_bufferlen_addr,          new JuliaFunction<>{XSTR(jl_f_bufferlen), get_func_sig, get_func_attrs} },
         };
     return builtins;
 }
