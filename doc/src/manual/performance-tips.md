@@ -525,7 +525,7 @@ at the time `k` is compiled.
 
 ### Be aware of when Julia avoids specializing
 
-As a heuristic, Julia avoids automatically specializing on argument type parameters in three
+As a heuristic, Julia avoids automatically [specializing](@ref man-method-specializations) on argument type parameters in three
 specific cases: `Type`, `Function`, and `Vararg`. Julia will always specialize when the argument is
 used within the method, but not if the argument is just passed through to another function. This
 usually has no performance impact at runtime and
@@ -584,7 +584,7 @@ h_vararg(x::Vararg{Any, N}) where {N} = tuple(x...)
 Note that [`@code_typed`](@ref) and friends will always show you specialized code, even if Julia
 would not normally specialize that method call. You need to check the
 [method internals](@ref ast-lowered-method) if you want to see whether specializations are generated
-when argument types are changed, i.e., if `(@which f(...)).specializations` contains specializations
+when argument types are changed, i.e., if `Base.specializations(@which f(...))` contains specializations
 for the argument in question.
 
 ## Break functions into multiple definitions

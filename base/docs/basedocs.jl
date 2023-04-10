@@ -60,6 +60,27 @@ See the [manual section about modules](@ref modules) for details.
 kw"export"
 
 """
+    as
+
+`as` is used as a keyword to rename an identifier brought into scope by
+`import` or `using`, for the purpose of working around name conflicts as
+well as for shortening names.  (Outside of `import` or `using` statements,
+`as` is not a keyword and can be used as an ordinary identifier.)
+
+`import LinearAlgebra as LA` brings the imported `LinearAlgebra` standard library
+into scope as `LA`.
+
+`import LinearAlgebra: eigen as eig, cholesky as chol` brings the `eigen` and `cholesky` methods
+from `LinearAlgebra` into scope as `eig` and `chol` respectively.
+
+`as` works with `using` only when individual identifiers are brought into scope.
+For example, `using LinearAlgebra: eigen as eig` or `using LinearAlgebra: eigen as eig, cholesky as chol` works,
+but `using LinearAlgebra as LA` is invalid syntax, since it is nonsensical to
+rename *all* exported names from `LinearAlgebra` to `LA`.
+"""
+kw"as"
+
+"""
     abstract type
 
 `abstract type` declares a type that cannot be instantiated, and serves only as a node in the
@@ -499,7 +520,8 @@ sense to write something like `let x = x`, since the two `x` variables are disti
 the left-hand side locally shadowing the `x` from the outer scope. This can even
 be a useful idiom as new local variables are freshly created each time local scopes
 are entered, but this is only observable in the case of variables that outlive their
-scope via closures.
+scope via closures.  A `let` variable without an assignment, such as `var2` in the
+example above, declares a new local variable that is not yet bound to a value.
 
 By contrast, [`begin`](@ref) blocks also group multiple expressions together but do
 not introduce scope or have the special assignment syntax.
@@ -1141,8 +1163,16 @@ Adding `;` at the end of a line in the REPL will suppress printing the result of
 
 In function declarations, and optionally in calls, `;` separates regular arguments from keywords.
 
-While constructing arrays, if the arguments inside the square brackets are separated by `;`
-then their contents are vertically concatenated together.
+In array literals, arguments separated by semicolons have their contents
+concatenated together. A separator made of a single `;` concatenates vertically
+(i.e. along the first dimension), `;;` concatenates horizontally (second
+dimension), `;;;` concatenates along the third dimension, etc. Such a separator
+can also be used in last position in the square brackets to add trailing
+dimensions of length 1.
+
+A `;` in first position inside of parentheses can be used to construct a named
+tuple. The same `(; ...)` syntax on the left side of an assignment allows for
+property destructuring.
 
 In the standard REPL, typing `;` on an empty line will switch to shell mode.
 
@@ -1166,10 +1196,39 @@ julia> function plot(x, y; style="solid", width=1, color="black")
            ###
        end
 
-julia> [1 2; 3 4]
+julia> A = [1 2; 3 4]
 2×2 Matrix{Int64}:
  1  2
  3  4
+
+julia> [1; 3;; 2; 4;;; 10*A]
+2×2×2 Array{Int64, 3}:
+[:, :, 1] =
+ 1  2
+ 3  4
+
+[:, :, 2] =
+ 10  20
+ 30  40
+
+julia> [2; 3;;;]
+2×1×1 Array{Int64, 3}:
+[:, :, 1] =
+ 2
+ 3
+
+julia> nt = (; x=1) # without the ; or a trailing comma this would assign to x
+(x = 1,)
+
+julia> key = :a; c = 3;
+
+julia> nt2 = (; key => 1, b=2, c, nt.x)
+(a = 1, b = 2, c = 3, x = 1)
+
+julia> (; b, x) = nt2; # set variables b and x using property destructuring
+
+julia> b, x
+(2, 1)
 
 julia> ; # upon typing ;, the prompt changes (in place) to: shell>
 shell> echo hello
@@ -1410,13 +1469,6 @@ parser rather than being implemented as a normal string macro `@var_str`.
 
 """
 kw"var\"name\"", kw"@var_str"
-
-"""
-    ans
-
-A variable referring to the last computed value, automatically set at the interactive prompt.
-"""
-kw"ans"
 
 """
     devnull
@@ -1678,7 +1730,7 @@ The argument `val` to a function or constructor is outside the valid domain.
 ```jldoctest
 julia> sqrt(-1)
 ERROR: DomainError with -1.0:
-sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+sqrt was called with a negative real argument but will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
 [...]
 ```
@@ -2078,7 +2130,7 @@ Symbol(x...)
 
 Construct a tuple of the given objects.
 
-See also [`Tuple`](@ref), [`NamedTuple`](@ref).
+See also [`Tuple`](@ref), [`ntuple`](@ref), [`NamedTuple`](@ref).
 
 # Examples
 ```jldoctest
@@ -2204,6 +2256,82 @@ If supported by the hardware, this may be optimized to the appropriate hardware
 instruction, otherwise it'll use a loop.
 """
 replacefield!
+
+"""
+    getglobal(module::Module, name::Symbol, [order::Symbol=:monotonic])
+
+Retrieve the value of the binding `name` from the module `module`. Optionally, an
+atomic ordering can be defined for the operation, otherwise it defaults to
+monotonic.
+
+While accessing module bindings using [`getfield`](@ref) is still supported to
+maintain compatibility, using `getglobal` should always be preferred since
+`getglobal` allows for control over atomic ordering (`getfield` is always
+monotonic) and better signifies the code's intent both to the user as well as the
+compiler.
+
+Most users should not have to call this function directly -- The
+[`getproperty`](@ref Base.getproperty) function or corresponding syntax (i.e.
+`module.name`) should be preferred in all but few very specific use cases.
+
+!!! compat "Julia 1.9"
+    This function requires Julia 1.9 or later.
+
+See also [`getproperty`](@ref Base.getproperty) and [`setglobal!`](@ref).
+
+# Examples
+```jldoctest
+julia> a = 1
+1
+
+julia> module M
+       a = 2
+       end;
+
+julia> getglobal(@__MODULE__, :a)
+1
+
+julia> getglobal(M, :a)
+2
+```
+"""
+getglobal
+
+"""
+    setglobal!(module::Module, name::Symbol, x, [order::Symbol=:monotonic])
+
+Set or change the value of the binding `name` in the module `module` to `x`. No
+type conversion is performed, so if a type has already been declared for the
+binding, `x` must be of appropriate type or an error is thrown.
+
+Additionally, an atomic ordering can be specified for this operation, otherwise it
+defaults to monotonic.
+
+Users will typically access this functionality through the
+[`setproperty!`](@ref Base.setproperty!) function or corresponding syntax
+(i.e. `module.name = x`) instead, so this is intended only for very specific use
+cases.
+
+!!! compat "Julia 1.9"
+    This function requires Julia 1.9 or later.
+
+See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal`](@ref)
+
+# Examples
+```jldoctest
+julia> module M end;
+
+julia> M.a  # same as `getglobal(M, :a)`
+ERROR: UndefVarError: `a` not defined
+
+julia> setglobal!(M, :a, 1)
+1
+
+julia> M.a
+1
+```
+"""
+setglobal!
 
 """
     typeof(x)
@@ -2776,17 +2904,48 @@ Vararg
 """
     Tuple{Types...}
 
-Tuples are an abstraction of the arguments of a function – without the function itself. The salient aspects of
-a function's arguments are their order and their types. Therefore a tuple type is similar to a parameterized
-immutable type where each parameter is the type of one field. Tuple types may have any number of parameters.
+A tuple is a fixed-length container that can hold any values of different
+types, but cannot be modified (it is immutable). The values can be accessed via
+indexing. Tuple literals are written with commas and parentheses:
+
+```jldoctest
+julia> (1, 1+1)
+(1, 2)
+
+julia> (1,)
+(1,)
+
+julia> x = (0.0, "hello", 6*7)
+(0.0, "hello", 42)
+
+julia> x[2]
+"hello"
+
+julia> typeof(x)
+Tuple{Float64, String, Int64}
+```
+
+A length-1 tuple must be written with a comma, `(1,)`, since `(1)` would just
+be a parenthesized value. `()` represents the empty (length-0) tuple.
+
+A tuple can be constructed from an iterator by using a `Tuple` type as constructor:
+
+```jldoctest
+julia> Tuple(["a", 1])
+("a", 1)
+
+julia> Tuple{String, Float64}(["a", 1])
+("a", 1.0)
+```
 
 Tuple types are covariant in their parameters: `Tuple{Int}` is a subtype of `Tuple{Any}`. Therefore `Tuple{Any}`
 is considered an abstract type, and tuple types are only concrete if their parameters are. Tuples do not have
 field names; fields are only accessed by index.
+Tuple types may have any number of parameters.
 
 See the manual section on [Tuple Types](@ref).
 
-See also [`Vararg`](@ref), [`NTuple`](@ref), [`tuple`](@ref), [`NamedTuple`](@ref).
+See also [`Vararg`](@ref), [`NTuple`](@ref), [`ntuple`](@ref), [`tuple`](@ref), [`NamedTuple`](@ref).
 """
 Tuple
 
@@ -2850,8 +3009,8 @@ the syntax `@atomic a.b` calls `getproperty(a, :b, :sequentially_consistent)`.
 
 # Examples
 ```jldoctest
-julia> struct MyType
-           x
+julia> struct MyType{T <: Number}
+           x::T
        end
 
 julia> function Base.getproperty(obj::MyType, sym::Symbol)
@@ -2870,6 +3029,11 @@ julia> obj.special
 julia> obj.x
 1
 ```
+
+One should overload `getproperty` only when necessary, as it can be confusing if
+the behavior of the syntax `obj.f` is unusual.
+Also note that using methods is often preferable. See also this style guide documentation
+for more information: [Prefer exported methods over direct field access](@ref).
 
 See also [`getfield`](@ref Core.getfield),
 [`propertynames`](@ref Base.propertynames) and
@@ -2944,7 +3108,7 @@ with elements of type `T` and `N` dimensions.
 If `A` is a `StridedArray`, then its elements are stored in memory with offsets, which may
 vary between dimensions but are constant within a dimension. For example, `A` could
 have stride 2 in dimension 1, and stride 3 in dimension 2. Incrementing `A` along
-dimension `d` jumps in memory by [`strides(A, d)`] slots. Strided arrays are
+dimension `d` jumps in memory by [`stride(A, d)`] slots. Strided arrays are
 particularly important and useful because they can sometimes be passed directly
 as pointers to foreign language libraries like BLAS.
 """

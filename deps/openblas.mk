@@ -5,7 +5,7 @@ OPENBLAS_GIT_URL := https://github.com/xianyi/OpenBLAS.git
 OPENBLAS_TAR_URL = https://api.github.com/repos/xianyi/OpenBLAS/tarball/$1
 $(eval $(call git-external,openblas,OPENBLAS,,,$(BUILDDIR)))
 
-OPENBLAS_BUILD_OPTS := CC="$(CC) $(SANITIZE_OPTS)" FC="$(FC) $(SANITIZE_OPTS) -L/home/keno/julia-msan/usr/lib" LD="$(LD) $(SANITIZE_LDFLAGS)" RANLIB="$(RANLIB)" BINARY=$(BINARY)
+OPENBLAS_BUILD_OPTS := CC="$(CC) $(SANITIZE_OPTS)" FC="$(FC) $(SANITIZE_OPTS)" LD="$(LD) $(SANITIZE_LDFLAGS)" RANLIB="$(RANLIB)" BINARY=$(BINARY)
 
 # Thread support
 ifeq ($(OPENBLAS_USE_THREAD), 1)

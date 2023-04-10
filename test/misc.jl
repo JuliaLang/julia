@@ -353,12 +353,48 @@ end
 
 after_comp, after_recomp = Base.cumulative_compile_time_ns() # no need to turn timing off, @time will do that
 @test after_comp >= before_comp;
+@test after_recomp >= before_recomp;
+@test after_recomp - before_recomp <= after_comp - before_comp;
 
 # should be approximately 60,000,000 ns, we definitely shouldn't exceed 100x that value
 # failing this probably means an uninitialized variable somewhere
 @test after_comp - before_comp < 6_000_000_000;
 
 end # redirect_stdout
+
+# issue #48024, avoid overcounting timers
+begin
+    double(x::Real) = 2x;
+    calldouble(container) = double(container[1]);
+    calldouble2(container) = calldouble(container);
+
+    Base.Experimental.@force_compile;
+    local elapsed = Base.time_ns();
+    Base.cumulative_compile_timing(true);
+    local compiles = Base.cumulative_compile_time_ns();
+    @eval calldouble([1.0]);
+    Base.cumulative_compile_timing(false);
+    compiles = Base.cumulative_compile_time_ns() .- compiles;
+    elapsed = Base.time_ns() - elapsed;
+
+    # compile time should be at most total time
+    @test compiles[1] <= elapsed
+    # recompile time should be at most compile time
+    @test compiles[2] <= compiles[1]
+
+    elapsed = Base.time_ns();
+    Base.cumulative_compile_timing(true);
+    compiles = Base.cumulative_compile_time_ns();
+    @eval calldouble(1.0);
+    Base.cumulative_compile_timing(false);
+    compiles = Base.cumulative_compile_time_ns() .- compiles;
+    elapsed = Base.time_ns() - elapsed;
+
+    # compile time should be at most total time
+    @test compiles[1] <= elapsed
+    # recompile time should be at most compile time
+    @test compiles[2] <= compiles[1]
+end
 
 macro capture_stdout(ex)
     quote
@@ -370,6 +406,27 @@ macro capture_stdout(ex)
             read(f, String)
         end
     end
+end
+
+# issue #48024, but with the time macro itself
+begin
+    double(x::Real) = 2x;
+    calldouble(container) = double(container[1]);
+    calldouble2(container) = calldouble(container);
+
+    local first = @capture_stdout @time @eval calldouble([1.0])
+    local second = @capture_stdout @time @eval calldouble2(1.0)
+
+    # these functions were not recompiled
+    local matches = collect(eachmatch(r"(\d+(?:\.\d+)?)%", first))
+    @test length(matches) == 1
+    @test parse(Float64, matches[1][1]) > 0.0
+    @test parse(Float64, matches[1][1]) <= 100.0
+
+    matches = collect(eachmatch(r"(\d+(?:\.\d+)?)%", second))
+    @test length(matches) == 1
+    @test parse(Float64, matches[1][1]) > 0.0
+    @test parse(Float64, matches[1][1]) <= 100.0
 end
 
 # compilation reports in @time, @timev
@@ -802,6 +859,10 @@ let buf = IOBuffer()
     printstyled(buf_color, "foo"; bold=true, color=:red)
     @test String(take!(buf)) == "\e[31m\e[1mfoo\e[22m\e[39m"
 
+    # Check that italic is turned off
+    printstyled(buf_color, "foo"; italic=true, color=:red)
+    @test String(take!(buf)) == "\e[31m\e[3mfoo\e[23m\e[39m"
+
     # Check that underline is turned off
     printstyled(buf_color, "foo"; color = :red, underline = true)
     @test String(take!(buf)) == "\e[31m\e[4mfoo\e[24m\e[39m"
@@ -819,8 +880,8 @@ let buf = IOBuffer()
     @test String(take!(buf)) == "\e[31m\e[8mfoo\e[28m\e[39m"
 
     # Check that all options can be turned on simultaneously
-    printstyled(buf_color, "foo"; color = :red, bold = true, underline = true, blink = true, reverse = true, hidden = true)
-    @test String(take!(buf)) == "\e[31m\e[1m\e[4m\e[5m\e[7m\e[8mfoo\e[28m\e[27m\e[25m\e[24m\e[22m\e[39m"
+    printstyled(buf_color, "foo"; color = :red, bold = true, italic = true, underline = true, blink = true, reverse = true, hidden = true)
+    @test String(take!(buf)) == "\e[31m\e[1m\e[3m\e[4m\e[5m\e[7m\e[8mfoo\e[28m\e[27m\e[25m\e[24m\e[22m\e[23m\e[39m"
 end
 
 abstract type DA_19281{T, N} <: AbstractArray{T, N} end
@@ -849,7 +910,7 @@ mutable struct Demo_20254
 end
 
 # these cause stack overflows and are a little flaky on CI, ref #20256
-if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+if Base.get_bool_env("JULIA_TESTFULL", false)
     function Demo_20254(arr::AbstractArray=Any[])
         Demo_20254(string.(arr))
     end
@@ -1323,5 +1384,21 @@ end
 
     # sanity check `@allocations` returns what we expect in some very simple cases
     @test (@allocations "a") == 0
-    @test (@allocations "a" * "b") == 1
+    @test (@allocations "a" * "b") == 0 # constant propagation
+    @test (@allocations "a" * Base.inferencebarrier("b")) == 1
+end
+
+@testset "in_finalizer" begin
+    @test !GC.in_finalizer()
+
+    in_fin = Ref{Any}()
+    wait(@async begin
+        r = Ref(1)
+        finalizer(r) do _
+            in_fin[] = GC.in_finalizer()
+        end
+        nothing
+    end)
+    GC.gc(true); yield()
+    @test in_fin[]
 end

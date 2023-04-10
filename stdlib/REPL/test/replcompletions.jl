@@ -121,7 +121,7 @@ let ex = quote
 
         const tuple = (1, 2)
 
-        test_y_array=[CompletionFoo.Test_y(rand()) for i in 1:10]
+        test_y_array=[(@__MODULE__).Test_y(rand()) for i in 1:10]
         test_dict = Dict("abc"=>1, "abcd"=>10, :bar=>2, :bar2=>9, Base=>3,
                          occursin=>4, `ls`=>5, 66=>7, 67=>8, ("q",3)=>11,
                          "α"=>12, :α=>13)
@@ -132,7 +132,7 @@ let ex = quote
         macro testcmd_cmd(s) end
         macro tϵsτcmδ_cmd(s) end
 
-        end
+        end # module CompletionFoo
         test_repl_comp_dict = CompletionFoo.test_dict
         test_repl_comp_customdict = CompletionFoo.test_customdict
         test_dict_ℂ = Dict(1=>2)
@@ -548,22 +548,17 @@ let s = "convert("
     @test length(c2) > REPL.REPLCompletions.MAX_METHOD_COMPLETIONS
 end
 
-########## Test where the current inference logic fails ########
-# Fails due to inference fails to determine a concrete type for arg 1
-# But it returns AbstractArray{T,N} and hence is able to remove test5(x::Float64) from the suggestions
-let s = "CompletionFoo.test5(AbstractArray[[]][1],"
+let s = "CompletionFoo.test5(AbstractArray[Bool[]][1],"
     c, r, res = test_complete(s)
     @test !res
-    @test length(c) == 2
+    @test length(c) == 1
 end
 
-# equivalent to above but due to the time macro the completion fails to find the concrete type
-let s = "CompletionFoo.test3(@time([1, 2] + CompletionFoo.varfloat),"
+let s = "CompletionFoo.test3(@time([1, 2] .+ CompletionFoo.varfloat),"
     c, r, res = test_complete(s)
     @test !res
     @test length(c) == 2
 end
-#################################################################
 
 # method completions with kwargs
 let s = "CompletionFoo.kwtest( "
@@ -780,7 +775,7 @@ end
 let s = "CompletionFoo.test10(\"a\", Union{Signed,Bool,String}[3][1], "
     c, r, res = test_complete(s)
     @test !res
-    @test length(c) == 4
+    @test length(c) == 2
     @test all(startswith("test10("), c)
     @test allunique(c)
     @test !any(str->occursin("test10(a::Integer, b::Integer, c)", str), c)
@@ -790,7 +785,7 @@ end
 let s = "CompletionFoo.test11(Integer[false][1], Integer[14][1], "
     c, r, res = test_complete(s)
     @test !res
-    @test length(c) == 4
+    @test length(c) == 3
     @test all(startswith("test11("), c)
     @test allunique(c)
 end
@@ -798,10 +793,10 @@ end
 let s = "CompletionFoo.test11(Integer[-7][1], Integer[0x6][1], 6,"
     c, r, res = test_complete(s)
     @test !res
-    @test length(c) == 3
+    @test length(c) == 2
     @test any(str->occursin("test11(a::Integer, b, c)", str), c)
     @test any(str->occursin("test11(u, v::Integer, w)", str), c)
-    @test any(str->occursin("test11(x::$Int, y::$Int, z)", str), c)
+    @test !any(str->occursin("test11(x::$Int, y::$Int, z)", str), c)
 end
 
 let s = "CompletionFoo.test11(3, 4,"
@@ -1606,9 +1601,14 @@ let s = ":(function foo(::Int) end).args[1].args[2]."
     @test c == Any[]
 end
 
-let s = "log(log.(x),"
+let s = "log(log.(varfloat),"
     c, r = test_complete_foo(s)
     @test !isempty(c)
+end
+
+let s = "log(log.(noexist),"
+    c, r = test_complete_foo(s)
+    @test isempty(c)
 end
 
 let s = "Base.return_types(getin"
@@ -1698,8 +1698,7 @@ end
 @testset "https://github.com/JuliaLang/julia/issues/40247" begin
     # getfield type completion can work for complicated expression
 
-    let
-        m = Module()
+    let m = Module()
         @eval m begin
             struct Rs
                 rs::Vector{Regex}
@@ -1716,8 +1715,7 @@ end
         @test length(c) == fieldcount(Regex)
     end
 
-    let
-        m = Module()
+    let m = Module()
         @eval m begin
             struct R
                 r::Regex
@@ -1739,10 +1737,8 @@ end
     end
 end
 
-
 @testset "https://github.com/JuliaLang/julia/issues/47593" begin
-    let
-        m = Module()
+    let m = Module()
         @eval m begin
             struct TEST_47594
                 var"("::Int
@@ -1754,3 +1750,54 @@ end
         @test c == Any["var\"(\""]
     end
 end
+
+# https://github.com/JuliaLang/julia/issues/36437
+struct Issue36437{T}
+    v::T
+end
+Base.propertynames(::Issue36437) = (:a, :b, :c)
+function Base.getproperty(v::Issue36437, s::Symbol)
+    if s === :a
+        return 1
+    elseif s === :b
+        return 2
+    elseif s === :c
+        return getfield(v, :v)
+    else
+        throw(ArgumentError(lazy"`(v::Issue36437).$s` is not supported"))
+    end
+end
+
+let s = "Issue36437(42)."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+end
+
+let s = "Some(Issue36437(42)).value."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+end
+
+# aggressive concrete evaluation on mutable allocation in `repl_frame`
+let s = "Ref(Issue36437(42))[]."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    for n in ("a", "b", "c")
+        @test n in c
+    end
+    @test "v" ∉ c
+end
+
+const global_xs = [Some(42)]
+let s = "pop!(global_xs)."
+    c, r, res = test_complete_context(s, @__MODULE__)
+    @test res
+    @test "value" in c
+end
+@test length(global_xs) == 1 # the completion above shouldn't evaluate `pop!` call

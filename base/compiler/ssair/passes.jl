@@ -46,10 +46,6 @@ function compute_live_ins(cfg::CFG, du::SSADefUse)
     compute_live_ins(cfg, sort!(du.defs), uses)
 end
 
-# assume `stmt == getfield(obj, field, ...)` or `stmt == setfield!(obj, field, val, ...)`
-try_compute_field_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr) =
-    try_compute_field(ir, stmt.args[3])
-
 function try_compute_field(ir::Union{IncrementalCompact,IRCode}, @nospecialize(field))
     # fields are usually literals, handle them manually
     if isa(field, QuoteNode)
@@ -67,8 +63,9 @@ function try_compute_field(ir::Union{IncrementalCompact,IRCode}, @nospecialize(f
     return isa(field, Union{Int, Symbol}) ? field : nothing
 end
 
+# assume `stmt` is a call of `getfield`/`setfield!`/`isdefined`
 function try_compute_fieldidx_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr, typ::DataType)
-    field = try_compute_field_stmt(ir, stmt)
+    field = try_compute_field(ir, stmt.args[3])
     return try_compute_fieldidx(typ, field)
 end
 
@@ -607,21 +604,6 @@ function is_old(compact, @nospecialize(old_node_ssa))
         !already_inserted(compact, old_node_ssa)
 end
 
-mutable struct LazyGenericDomtree{IsPostDom}
-    ir::IRCode
-    domtree::GenericDomTree{IsPostDom}
-    LazyGenericDomtree{IsPostDom}(ir::IRCode) where {IsPostDom} = new{IsPostDom}(ir)
-end
-function get!(x::LazyGenericDomtree{IsPostDom}) where {IsPostDom}
-    isdefined(x, :domtree) && return x.domtree
-    return @timeit "domtree 2" x.domtree = IsPostDom ?
-        construct_postdomtree(x.ir.cfg.blocks) :
-        construct_domtree(x.ir.cfg.blocks)
-end
-
-const LazyDomtree = LazyGenericDomtree{false}
-const LazyPostDomtree = LazyGenericDomtree{true}
-
 function perform_lifting!(compact::IncrementalCompact,
         visited_phinodes::Vector{AnySSAValue}, @nospecialize(cache_key),
         lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
@@ -799,7 +781,6 @@ end
     end && return nothing
 
     arg = sig.parameters[i]
-    isa(arg, DataType) || return nothing
 
     rarg = def.args[2 + i]
     isa(rarg, SSAValue) || return nothing
@@ -808,6 +789,9 @@ end
         rarg = argdef.args[1]
         isa(rarg, SSAValue) || return nothing
         argdef = compact[rarg][:inst]
+    else
+        isType(arg) || return nothing
+        arg = arg.parameters[1]
     end
 
     is_known_call(argdef, Core.apply_type, compact) || return nothing
@@ -818,15 +802,23 @@ end
     applyT = applyT.val
 
     isa(applyT, UnionAll) || return nothing
+    # N.B.: At the moment we only lift the valI == 1 case, so we
+    # only need to look at the outermost tvar.
     applyTvar = applyT.var
     applyTbody = applyT.body
 
-    isa(applyTbody, DataType) || return nothing
-    applyTbody.name == arg.name || return nothing
-    length(applyTbody.parameters) == length(arg.parameters) == 1 || return nothing
-    applyTbody.parameters[1] === applyTvar || return nothing
-    arg.parameters[1] === tvar || return nothing
-    return LiftedValue(argdef.args[3])
+    arg = unwrap_unionall(arg)
+    applyTbody = unwrap_unionall(applyTbody)
+
+    (isa(arg, DataType) && isa(applyTbody, DataType)) || return nothing
+    applyTbody.name === arg.name || return nothing
+    length(applyTbody.parameters) == length(arg.parameters) || return nothing
+    for i = 1:length(applyTbody.parameters)
+        if applyTbody.parameters[i] === applyTvar && arg.parameters[i] === tvar
+            return LiftedValue(argdef.args[3])
+        end
+    end
+    return nothing
 end
 
 # NOTE we use `IdSet{Int}` instead of `BitSet` for in these passes since they work on IR after inlining,
@@ -953,14 +945,11 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             continue
         end
 
-        # analyze this `getfield` / `isdefined` / `setfield!` call
-
-        if !is_finalizer
-            field = try_compute_field_stmt(compact, stmt)
-            field === nothing && continue
-            val = stmt.args[2]
-        else
+        if is_finalizer
             val = stmt.args[3]
+        else
+            # analyze `getfield` / `isdefined` / `setfield!` call
+            val = stmt.args[2]
         end
 
         struct_typ = unwrap_unionall(widenconst(argextype(val, compact)))
@@ -1014,7 +1003,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
 
         # perform SROA on immutable structs here on
 
-        field = try_compute_fieldidx(struct_typ, field)
+        field = try_compute_fieldidx_stmt(compact, stmt, struct_typ)
         field === nothing && continue
 
         leaves, visited_phinodes = collect_leaves(compact, val, struct_typ, 𝕃ₒ)
@@ -1079,7 +1068,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
         end
         src = @atomic :monotonic code.inferred
     else
-        src = code
+        src = nothing
     end
 
     src = inlining_policy(inlining.interp, src, info, IR_FLAG_NULL, mi, Any[])
@@ -1116,7 +1105,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     return true
 end
 
-is_nothrow(ir::IRCode, pc::Int) = (ir.stmts[pc][:flag] & IR_FLAG_NOTHROW) ≠ 0
+is_nothrow(ir::IRCode, ssa::SSAValue) = (ir[ssa][:flag] & IR_FLAG_NOTHROW) ≠ 0
 
 function reachable_blocks(cfg::CFG, from_bb::Int, to_bb::Union{Nothing,Int} = nothing)
     worklist = Int[from_bb]
@@ -1199,7 +1188,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
     # Check #3
     dominates(domtree, finalizer_bb, bb_insert_block) || return nothing
 
-    if !inlining.params.assume_fatal_throw
+    if !OptimizationParams(inlining.interp).assume_fatal_throw
         # Collect all reachable blocks between the finalizer registration and the
         # insertion point
         blocks = finalizer_bb == bb_insert_block ? Int[finalizer_bb] :
@@ -1210,7 +1199,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
             return all(s:e) do sidx::Int
                 sidx == finalizer_idx && return true
                 sidx == idx && return true
-                return is_nothrow(ir, sidx)
+                return is_nothrow(ir, SSAValue(sidx))
             end
         end
         for bb in blocks
@@ -1418,11 +1407,14 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             end
             all_eliminated || continue
             # all "usages" (i.e. `getfield` and `isdefined` calls) are eliminated,
-            # now eliminate "definitions" (`setfield!`) calls
+            # now eliminate "definitions" (i.e. `setfield!`) calls
             # (NOTE the allocation itself will be eliminated by DCE pass later)
-            for stmt in du.defs
-                stmt == newidx && continue
-                ir[SSAValue(stmt)][:inst] = nothing
+            for idx in du.defs
+                idx == newidx && continue # this is allocation
+                # verify this statement won't throw, otherwise it can't be eliminated safely
+                ssa = SSAValue(idx)
+                is_nothrow(ir, ssa) || continue
+                ir[ssa][:inst] = nothing
             end
         end
         preserve_uses === nothing && continue
@@ -1701,8 +1693,8 @@ function type_lift_pass!(ir::IRCode)
             # a phi node (or an UpsilonNode() argument to a PhiC node), so lift
             # all these nodes that have maybe undef values
             val = stmt.args[(stmt.head === :isdefined) ? 1 : 2]
-            if stmt.head === :isdefined && (val isa Slot || val isa GlobalRef ||
-                    isexpr(val, :static_parameter) || val isa Argument || val isa Symbol)
+            if stmt.head === :isdefined && (val isa GlobalRef || isexpr(val, :static_parameter) ||
+                                            val isa Argument || val isa Symbol)
                 # this is a legal node, so assume it was not introduced by
                 # slot2ssa (at worst, we might leave in a runtime check that
                 # shouldn't have been there)
@@ -2178,14 +2170,10 @@ function cfg_simplify!(ir::IRCode)
         end
     end
 
-    compact = IncrementalCompact(ir, true)
     # Run instruction compaction to produce the result,
     # but we're messing with the CFG
     # so we don't want compaction to do so independently
-    compact.fold_constant_branches = false
-    compact.bb_rename_succ = bb_rename_succ
-    compact.bb_rename_pred = bb_rename_pred
-    compact.result_bbs = cresult_bbs
+    compact = IncrementalCompact(ir, CFGTransformState(true, false, cresult_bbs, bb_rename_pred, bb_rename_succ))
     result_idx = 1
     for (idx, orig_bb) in enumerate(result_bbs)
         ms = orig_bb

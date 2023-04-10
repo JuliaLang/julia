@@ -547,7 +547,7 @@ end
 
 # meta nodes for optional positional arguments
 let src = Meta.lower(Main, :(@inline f(p::Int=2) = 3)).args[1].code[end-1].args[3]
-    @test Core.Compiler.is_inlineable(src)
+    @test Core.Compiler.is_declared_inline(src)
 end
 
 # issue #16096
@@ -1558,9 +1558,8 @@ end
 
 # issue #27129
 f27129(x = 1) = (@inline; x)
-for meth in methods(f27129)
-    src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), meth, C_NULL, meth.source)
-    @test Core.Compiler.is_inlineable(src)
+for method in methods(f27129)
+    @test Core.Compiler.is_declared_inline(method)
 end
 
 # issue #27710
@@ -2008,7 +2007,7 @@ end
 @test Meta.parse("import Base.Foo.:(==).bar") == :(import Base.Foo.==.bar)
 
 # issue #33135
-function f33135(x::T) where {C1, T}
+@test_warn "declares type variable C1 but does not use it" @eval function f33135(x::T) where {C1, T}
     let C1 = 1, C2 = 2
         C1
     end
@@ -2331,7 +2330,7 @@ f35201(c) = h35201((;c...), k=true)
 f44343(;kw...) = NamedTuple(kw)
 @test f44343(u = (; :a => 1)) === (u = (; :a => 1),)
 
-@testset "issue #34544/35367" begin
+@testset "issue #34544/35367/35429" begin
     # Test these evals shouldn't segfault
     eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar1, Expr(:block)))))
     eval(Expr(:module, true, :bar2, Expr(:block)))
@@ -2339,6 +2338,11 @@ f44343(;kw...) = NamedTuple(kw)
     @test_throws ErrorException eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar4, Expr(:quote)))))
     @test_throws ErrorException eval(Expr(:module, true, :bar5, Expr(:foo)))
     @test_throws ErrorException eval(Expr(:module, true, :bar6, Expr(:quote)))
+
+    #35429
+    @test_throws ErrorException eval(Expr(:thunk, x->x+9))
+    @test_throws ErrorException eval(Expr(:thunk, Meta.parse("x=17")))
+    @test_throws ErrorException eval(Expr(:thunk, Meta.parse("17")))
 end
 
 # issue #35391
@@ -2537,7 +2541,8 @@ using Test
 
 module Mod
 const x = 1
-global maybe_undef
+global maybe_undef, always_undef
+export always_undef
 def() = (global maybe_undef = 0)
 func(x) = 2x + 1
 
@@ -2575,10 +2580,18 @@ import .Mod.maybe_undef as mu
 Mod.def()
 @test mu === 0
 
-using .Mod: func as f
-@test f(10) == 21
-@test !@isdefined(func)
-@test_throws ErrorException("error in method definition: function Mod.func must be explicitly imported to be extended") eval(:(f(x::Int) = x))
+module Mod3
+using ..Mod: func as f
+using ..Mod
+end
+@test Mod3.f(10) == 21
+@test !isdefined(Mod3, :func)
+@test_throws ErrorException("invalid method definition in Mod3: function Mod3.f must be explicitly imported to be extended") Core.eval(Mod3, :(f(x::Int) = x))
+@test !isdefined(Mod3, :always_undef) # resolve this binding now in Mod3
+@test_throws ErrorException("invalid method definition in Mod3: exported function Mod.always_undef does not exist") Core.eval(Mod3, :(always_undef(x::Int) = x))
+@test_throws ErrorException("cannot assign a value to imported variable Mod.always_undef from module Mod3") Core.eval(Mod3, :(const always_undef = 3))
+@test_throws ErrorException("cannot assign a value to imported variable Mod3.f") Core.eval(Mod3, :(const f = 3))
+@test_throws ErrorException("cannot declare Mod.maybe_undef constant; it already has a value") Core.eval(Mod, :(const maybe_undef = 3))
 
 z = 42
 import .z as also_z
@@ -2866,7 +2879,7 @@ end
 @test eval(:(x = $(QuoteNode(Core.SSAValue(1))))) == Core.SSAValue(1)
 @test eval(:(x = $(QuoteNode(Core.SlotNumber(1))))) == Core.SlotNumber(1)
 @test_throws ErrorException("syntax: SSAValue objects should not occur in an AST") eval(:(x = $(Core.SSAValue(1))))
-@test_throws ErrorException("syntax: Slot objects should not occur in an AST") eval(:(x = $(Core.SlotNumber(1))))
+@test_throws ErrorException("syntax: SlotNumber objects should not occur in an AST") eval(:(x = $(Core.SlotNumber(1))))
 
 # juxtaposition of radical symbols (#40094)
 @test Meta.parse("2√3") == Expr(:call, :*, 2, Expr(:call, :√, 3))
@@ -3040,9 +3053,6 @@ end
 end
 
 # issue 25678
-@generated f25678(x::T) where {T} = code_lowered(sin, Tuple{x})[]
-@test f25678(pi/6) === sin(pi/6)
-
 @generated g25678(x) = return :x
 @test g25678(7) === 7
 

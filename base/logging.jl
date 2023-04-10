@@ -349,7 +349,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
                     kwargs = (;$(log_data.kwargs...))
                     true
                 else
-                    logging_error(logger, level, _module, group, id, file, line, err, false)
+                    @invokelatest logging_error(logger, level, _module, group, id, file, line, err, false)
                     false
                 end
             end
@@ -361,7 +361,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
                 kwargs = (;$(log_data.kwargs...))
                 true
             catch err
-                logging_error(logger, level, _module, group, id, file, line, err, true)
+                @invokelatest logging_error(logger, level, _module, group, id, file, line, err, true)
                 false
             end
         end
@@ -445,7 +445,7 @@ function default_group_code(file)
         QuoteNode(default_group(file))  # precompute if we can
     else
         ref = Ref{Symbol}()  # memoized run-time execution
-        :(isassigned($ref) ? $ref[] : $ref[] = default_group(something($file, "")))
+        :(isassigned($ref) ? $ref[] : $ref[] = default_group(something($file, ""))::Symbol)
     end
 end
 

@@ -112,14 +112,14 @@ get_llvm_target_str(const TargetData<1> &data)
 
 using namespace Fallback;
 
-jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl)
+jl_image_t jl_init_processor_sysimg(void *hdl)
 {
     if (!jit_targets.empty())
         jl_error("JIT targets already initialized");
     return parse_sysimg(hdl, sysimg_init_cb);
 }
 
-jl_sysimg_fptrs_t jl_init_processor_pkgimg(void *hdl)
+jl_image_t jl_init_processor_pkgimg(void *hdl)
 {
     if (jit_targets.empty())
         jl_error("JIT targets not initialized");
@@ -168,6 +168,11 @@ JL_DLLEXPORT void jl_dump_host_cpu(void)
 {
     jl_safe_printf("CPU: %s\n", host_cpu_name().c_str());
     jl_safe_printf("Features: %s\n", jl_get_cpu_features_llvm().c_str());
+}
+
+JL_DLLEXPORT void jl_check_pkgimage_clones(char *data)
+{
+    pkgimg_init_cb(data);
 }
 
 extern "C" int jl_test_cpu_feature(jl_cpu_feature_t)

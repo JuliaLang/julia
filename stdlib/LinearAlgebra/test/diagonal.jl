@@ -12,6 +12,12 @@ using .Main.Furlongs
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
+isdefined(Main, :InfiniteArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "InfiniteArrays.jl"))
+using .Main.InfiniteArrays
+
+isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
+using .Main.FillArrays
+
 const n=12 # Size of matrix problem to test
 Random.seed!(1)
 
@@ -37,11 +43,14 @@ Random.seed!(1)
         end
         @test eltype(Diagonal{elty}([1,2,3,4])) == elty
         @test isa(Diagonal{elty,Vector{elty}}(GenericArray([1,2,3,4])), Diagonal{elty,Vector{elty}})
+        @test isa(Diagonal{elty}(rand(Int,n,n)), Diagonal{elty,Vector{elty}})
         DI = Diagonal([1,2,3,4])
         @test Diagonal(DI) === DI
         @test isa(Diagonal{elty}(DI), Diagonal{elty})
         # issue #26178
-        @test_throws MethodError convert(Diagonal, [1, 2, 3, 4])
+        @test_throws MethodError convert(Diagonal, [1,2,3,4])
+        @test_throws DimensionMismatch convert(Diagonal, [1 2 3 4])
+        @test_throws InexactError convert(Diagonal, ones(2,2))
     end
 
     @testset "Basic properties" begin
@@ -1131,6 +1140,30 @@ Base.size(::SMatrix1) = (1, 1)
     C = map(a -> SMatrix1(string(a)), A)
     @test C == fill(SMatrix1(string(1)), 1, 1)
     @test C isa Matrix{SMatrix1{String}}
+end
+
+@testset "copyto! with UniformScaling" begin
+    @testset "Fill" begin
+        for len in (4, InfiniteArrays.Infinity())
+            d = FillArrays.Fill(1, len)
+            D = Diagonal(d)
+            @test copyto!(D, I) === D
+        end
+    end
+    D = Diagonal(fill(2, 2))
+    copyto!(D, I)
+    @test all(isone, diag(D))
+end
+
+@testset "diagonal triple multiplication (#49005)" begin
+    n = 10
+    @test *(Diagonal(ones(n)), Diagonal(1:n), Diagonal(ones(n))) isa Diagonal
+    @test_throws DimensionMismatch (*(Diagonal(ones(n)), Diagonal(1:n), Diagonal(ones(n+1))))
+    @test_throws DimensionMismatch (*(Diagonal(ones(n)), Diagonal(1:n+1), Diagonal(ones(n+1))))
+    @test_throws DimensionMismatch (*(Diagonal(ones(n+1)), Diagonal(1:n), Diagonal(ones(n))))
+
+    # currently falls back to two-term *
+    @test *(Diagonal(ones(n)), Diagonal(1:n), Diagonal(ones(n)), Diagonal(1:n)) isa Diagonal
 end
 
 end # module TestDiagonal

@@ -189,7 +189,7 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
             # OC was constructed from inferred source. There's only one
             # specialization and we can't infer anything more precise either.
             world = f.source.primary_world
-            linfo = f.source.specializations[1]
+            linfo = f.source.specializations::Core.MethodInstance
             Core.Compiler.hasintersect(typeof(f).parameters[1], t) || (warning = OC_MISMATCH_WARNING)
         else
             linfo = Core.Compiler.specialize_method(f.source, Tuple{typeof(f.captures), t.parameters...}, Core.svec())
@@ -268,7 +268,7 @@ Keyword argument `debuginfo` may be one of source (default) or none, to specify 
 """
 function code_llvm(io::IO, @nospecialize(f), @nospecialize(types), raw::Bool,
                    dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default)
-    d = _dump_function(f, types, false, false, !raw, dump_module, :att, optimize, debuginfo, false)
+    d = _dump_function(f, types, false, false, !raw, dump_module, :intel, optimize, debuginfo, false)
     if highlighting[:llvm] && get(io, :color, false)::Bool
         print_llvm(io, d)
     else
@@ -281,12 +281,12 @@ code_llvm(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); raw=false, 
     code_llvm(stdout, f, types; raw, dump_module, optimize, debuginfo)
 
 """
-    code_native([io=stdout,], f, types; syntax=:att, debuginfo=:default, binary=false, dump_module=true)
+    code_native([io=stdout,], f, types; syntax=:intel, debuginfo=:default, binary=false, dump_module=true)
 
 Prints the native assembly instructions generated for running the method matching the given
 generic function and type signature to `io`.
 
-* Set assembly syntax by setting `syntax` to `:att` (default) for AT&T syntax or `:intel` for Intel syntax.
+* Set assembly syntax by setting `syntax` to `:intel` (default) for intel syntax or `:att` for AT&T syntax.
 * Specify verbosity of code comments by setting `debuginfo` to `:source` (default) or `:none`.
 * If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
 * If `dump_module` is `false`, do not print metadata such as rodata or directives.
@@ -294,7 +294,7 @@ generic function and type signature to `io`.
 See also: [`@code_native`](@ref), [`code_llvm`](@ref), [`code_typed`](@ref) and [`code_lowered`](@ref)
 """
 function code_native(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f));
-                     dump_module::Bool=true, syntax::Symbol=:att, debuginfo::Symbol=:default, binary::Bool=false)
+                     dump_module::Bool=true, syntax::Symbol=:intel, debuginfo::Symbol=:default, binary::Bool=false)
     d = _dump_function(f, types, true, false, false, dump_module, syntax, true, debuginfo, binary)
     if highlighting[:native] && get(io, :color, false)::Bool
         print_native(io, d)
@@ -302,7 +302,7 @@ function code_native(io::IO, @nospecialize(f), @nospecialize(types=Base.default_
         print(io, d)
     end
 end
-code_native(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); dump_module::Bool=true, syntax::Symbol=:att, debuginfo::Symbol=:default, binary::Bool=false) =
+code_native(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); dump_module::Bool=true, syntax::Symbol=:intel, debuginfo::Symbol=:default, binary::Bool=false) =
     code_native(stdout, f, types; dump_module, syntax, debuginfo, binary)
 code_native(::IO, ::Any, ::Symbol) = error("invalid code_native call") # resolve ambiguous call
 

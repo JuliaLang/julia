@@ -7,7 +7,7 @@ module Distributed
 
 # imports for extension
 import Base: getindex, wait, put!, take!, fetch, isready, push!, length,
-             hash, ==, kill, close, isopen, showerror
+             hash, ==, kill, close, isopen, showerror, iterate, IteratorSize
 
 # imports for use
 using Base: Process, Semaphore, JLOptions, buffer_writes, @async_unwrap,
@@ -107,6 +107,7 @@ include("macros.jl")      # @spawn and friends
 include("workerpool.jl")
 include("pmap.jl")
 include("managers.jl")    # LocalManager and SSHManager
+include("precompile.jl")
 
 function __init__()
     init_parallel()

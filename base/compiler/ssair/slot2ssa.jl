@@ -1,5 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+struct TypedSlot
+    id::Int
+    typ
+    TypedSlot(id::Int, @nospecialize(typ)) = new(id, typ)
+end
+
 const UnoptSlot = Union{SlotNumber, TypedSlot}
 
 mutable struct SlotInfo
@@ -203,7 +209,7 @@ function strip_trailing_junk!(ci::CodeInfo, code::Vector{Any}, info::Vector{Call
         push!(ssavaluetypes, Union{})
         push!(codelocs, 0)
         push!(info, NoCallInfo())
-        push!(ssaflags, IR_FLAG_NULL)
+        push!(ssaflags, IR_FLAG_NOTHROW)
     end
     nothing
 end
@@ -213,10 +219,10 @@ struct DelayedTyp
 end
 
 # maybe use expr_type?
-function typ_for_val(@nospecialize(x), ci::CodeInfo, sptypes::Vector{Any}, idx::Int, slottypes::Vector{Any})
+function typ_for_val(@nospecialize(x), ci::CodeInfo, sptypes::Vector{VarState}, idx::Int, slottypes::Vector{Any})
     if isa(x, Expr)
         if x.head === :static_parameter
-            return sptypes[x.args[1]::Int]
+            return sptypes[x.args[1]::Int].typ
         elseif x.head === :boundscheck
             return Bool
         elseif x.head === :copyast
@@ -229,7 +235,7 @@ function typ_for_val(@nospecialize(x), ci::CodeInfo, sptypes::Vector{Any}, idx::
     isa(x, Argument) && return slottypes[x.n]
     isa(x, NewSSAValue) && return DelayedTyp(x)
     isa(x, QuoteNode) && return Const(x.value)
-    isa(x, Union{Symbol, PiNode, PhiNode, SlotNumber, TypedSlot}) && error("unexpected val type")
+    isa(x, Union{Symbol, PiNode, PhiNode, UnoptSlot}) && error("unexpected val type")
     return Const(x)
 end
 
@@ -338,7 +344,9 @@ function iterated_dominance_frontier(cfg::CFG, liveness::BlockLiveness, domtree:
 end
 
 function rename_incoming_edge(old_edge::Int, old_to::Int, result_order::Vector{Int}, bb_rename::Vector{Int})
+    old_edge == 0 && return 0
     new_edge_from = bb_rename[old_edge]
+    new_edge_from < 0 && return new_edge_from
     if old_edge == old_to - 1
         # Could have been a crit edge break
         if new_edge_from < length(result_order) && result_order[new_edge_from + 1] == 0
@@ -364,7 +372,7 @@ function rename_phinode_edges(node::PhiNode, bb::Int, result_order::Vector{Int},
     new_edges = Int32[]
     for (idx, edge) in pairs(node.edges)
         edge = Int(edge)
-        (edge == 0 || bb_rename[edge] != 0) || continue
+        (edge == 0 || bb_rename[edge] != -1) || continue
         new_edge_from = edge == 0 ? 0 : rename_incoming_edge(edge, bb, result_order, bb_rename)
         push!(new_edges, new_edge_from)
         if isassigned(node.values, idx)
@@ -387,7 +395,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
     # First compute the new order of basic blocks
     result_order = Int[]
     stack = Int[]
-    bb_rename = zeros(Int, length(ir.cfg.blocks))
+    bb_rename = fill(-1, length(ir.cfg.blocks))
     node = 1
     ncritbreaks = 0
     nnewfallthroughs = 0
@@ -498,7 +506,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         bb_start_off += length(inst_range)
         local new_preds, new_succs
         let bb = bb, bb_rename = bb_rename, result_order = result_order
-            new_preds = Int[i == 0 ? 0 : rename_incoming_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].preds]
+            new_preds = Int[bb for bb in (rename_incoming_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].preds) if bb != -1]
             new_succs = Int[             rename_outgoing_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].succs]
         end
         new_bbs[new_bb] = BasicBlock(inst_range, new_preds, new_succs)
@@ -565,7 +573,7 @@ function compute_live_ins(cfg::CFG, defs::Vector{Int}, uses::Vector{Int})
 end
 
 function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode,
-    sptypes::Vector{Any}, slottypes::Vector{Any}, nstmts::Int, 𝕃ₒ::AbstractLattice)
+    sptypes::Vector{VarState}, slottypes::Vector{Any}, nstmts::Int, 𝕃ₒ::AbstractLattice)
     new_typ = Union{}
     for i = 1:length(node.values)
         if isa(node, PhiNode) && !isassigned(node.values, i)

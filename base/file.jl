@@ -32,7 +32,7 @@ export
 # get and set current directory
 
 """
-    pwd() -> AbstractString
+    pwd() -> String
 
 Get the current working directory.
 
@@ -105,7 +105,7 @@ if Sys.iswindows()
     end
 else
     function cd(f::Function, dir::AbstractString)
-        fd = ccall(:open, Int32, (Cstring, Int32), :., 0)
+        fd = ccall(:open, Int32, (Cstring, Int32, UInt32...), :., 0)
         systemerror(:open, fd == -1)
         try
             cd(dir)
@@ -544,7 +544,10 @@ function temp_cleanup_purge(; force::Bool=false)
             end
             !ispath(path) && delete!(TEMP_CLEANUP, path)
         catch ex
-            @warn "temp cleanup" _group=:file exception=(ex, catch_backtrace())
+            @warn """
+                Failed to clean up temporary path $(repr(path))
+                $ex
+                """ _group=:file
         end
     end
 end
@@ -675,8 +678,9 @@ mktemp(parent)
     mktempdir(parent=tempdir(); prefix=$(repr(temp_prefix)), cleanup=true) -> path
 
 Create a temporary directory in the `parent` directory with a name
-constructed from the given prefix and a random suffix, and return its path.
-Additionally, any trailing `X` characters may be replaced with random characters.
+constructed from the given `prefix` and a random suffix, and return its path.
+Additionally, on some platforms, any trailing `'X'` characters in `prefix` may be replaced
+with random characters.
 If `parent` does not exist, throw an error. The `cleanup` option controls whether
 the temporary directory is automatically deleted when the process exits.
 
@@ -840,7 +844,7 @@ julia> readdir("base", join=true)
  ⋮
  "base/version_git.sh"
  "base/views.jl"
- "base/weakkeydict.jl"```
+ "base/weakkeydict.jl"
 
 julia> readdir(abspath("base"), join=true)
 145-element Array{String,1}:
@@ -1109,7 +1113,7 @@ function symlink(target::AbstractString, link::AbstractString;
 end
 
 """
-    readlink(path::AbstractString) -> AbstractString
+    readlink(path::AbstractString) -> String
 
 Return the target location a symbolic link `path` points to.
 """

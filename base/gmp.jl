@@ -10,7 +10,7 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, 
              trailing_zeros, trailing_ones, count_ones, count_zeros, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
-             sign, hastypemax, isodd, iseven, digits!, hash, hash_integer
+             sign, hastypemax, isodd, iseven, digits!, hash, hash_integer, top_set_bit
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -21,8 +21,16 @@ else
 end
 const CdoubleMax = Union{Float16, Float32, Float64}
 
-version() = VersionNumber(unsafe_string(unsafe_load(cglobal((:__gmp_version, :libgmp), Ptr{Cchar}))))
-bits_per_limb() = Int(unsafe_load(cglobal((:__gmp_bits_per_limb, :libgmp), Cint)))
+if Sys.iswindows()
+    const libgmp = "libgmp-10.dll"
+elseif Sys.isapple()
+    const libgmp = "@rpath/libgmp.10.dylib"
+else
+    const libgmp = "libgmp.so.10"
+end
+
+version() = VersionNumber(unsafe_string(unsafe_load(cglobal((:__gmp_version, libgmp), Ptr{Cchar}))))
+bits_per_limb() = Int(unsafe_load(cglobal((:__gmp_bits_per_limb, libgmp), Cint)))
 
 const VERSION = version()
 const BITS_PER_LIMB = bits_per_limb()
@@ -54,7 +62,7 @@ mutable struct BigInt <: Signed
 
     function BigInt(; nbits::Integer=0)
         b = MPZ.init2!(new(), nbits)
-        finalizer(cglobal((:__gmpz_clear, :libgmp)), b)
+        finalizer(cglobal((:__gmpz_clear, libgmp)), b)
         return b
     end
 end
@@ -100,7 +108,7 @@ function __init__()
             bits_per_limb() != BITS_PER_LIMB ? @error(msg) : @warn(msg)
         end
 
-        ccall((:__gmp_set_memory_functions, :libgmp), Cvoid,
+        ccall((:__gmp_set_memory_functions, libgmp), Cvoid,
               (Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid}),
               cglobal(:jl_gc_counted_malloc),
               cglobal(:jl_gc_counted_realloc_with_old_size),
@@ -112,7 +120,7 @@ function __init__()
     end
     # This only works with a patched version of GMP, ignore otherwise
     try
-        ccall((:__gmp_set_alloc_overflow_function, :libgmp), Cvoid,
+        ccall((:__gmp_set_alloc_overflow_function, libgmp), Cvoid,
               (Ptr{Cvoid},),
               cglobal(:jl_throw_out_of_memory_error))
         ALLOC_OVERFLOW_FUNCTION[] = true
@@ -132,20 +140,20 @@ module MPZ
 # - a method modifying its input has a "!" appended to its name, according to Julia's conventions
 # - some convenient methods are added (in addition to the pure MPZ ones), e.g. `add(a, b) = add!(BigInt(), a, b)`
 #   and `add!(x, a) = add!(x, x, a)`.
-using ..GMP: BigInt, Limb, BITS_PER_LIMB
+using ..GMP: BigInt, Limb, BITS_PER_LIMB, libgmp
 
 const mpz_t = Ref{BigInt}
 const bitcnt_t = Culong
 
-gmpz(op::Symbol) = (Symbol(:__gmpz_, op), :libgmp)
+gmpz(op::Symbol) = (Symbol(:__gmpz_, op), libgmp)
 
-init!(x::BigInt) = (ccall((:__gmpz_init, :libgmp), Cvoid, (mpz_t,), x); x)
-init2!(x::BigInt, a) = (ccall((:__gmpz_init2, :libgmp), Cvoid, (mpz_t, bitcnt_t), x, a); x)
+init!(x::BigInt) = (ccall((:__gmpz_init, libgmp), Cvoid, (mpz_t,), x); x)
+init2!(x::BigInt, a) = (ccall((:__gmpz_init2, libgmp), Cvoid, (mpz_t, bitcnt_t), x, a); x)
 
-realloc2!(x, a) = (ccall((:__gmpz_realloc2, :libgmp), Cvoid, (mpz_t, bitcnt_t), x, a); x)
+realloc2!(x, a) = (ccall((:__gmpz_realloc2, libgmp), Cvoid, (mpz_t, bitcnt_t), x, a); x)
 realloc2(a) = realloc2!(BigInt(), a)
 
-sizeinbase(a::BigInt, b) = Int(ccall((:__gmpz_sizeinbase, :libgmp), Csize_t, (mpz_t, Cint), a, b))
+sizeinbase(a::BigInt, b) = Int(ccall((:__gmpz_sizeinbase, libgmp), Csize_t, (mpz_t, Cint), a, b))
 
 for (op, nbits) in (:add => :(BITS_PER_LIMB*(1 + max(abs(a.size), abs(b.size)))),
                     :sub => :(BITS_PER_LIMB*(1 + max(abs(a.size), abs(b.size)))),
@@ -161,7 +169,7 @@ for (op, nbits) in (:add => :(BITS_PER_LIMB*(1 + max(abs(a.size), abs(b.size))))
 end
 
 invert!(x::BigInt, a::BigInt, b::BigInt) =
-    ccall((:__gmpz_invert, :libgmp), Cint, (mpz_t, mpz_t, mpz_t), x, a, b)
+    ccall((:__gmpz_invert, libgmp), Cint, (mpz_t, mpz_t, mpz_t), x, a, b)
 invert(a::BigInt, b::BigInt) = invert!(BigInt(), a, b)
 invert!(x::BigInt, b::BigInt) = invert!(x, x, b)
 
@@ -174,7 +182,7 @@ for op in (:add_ui, :sub_ui, :mul_ui, :mul_2exp, :fdiv_q_2exp, :pow_ui, :bin_ui)
     end
 end
 
-ui_sub!(x::BigInt, a, b::BigInt) = (ccall((:__gmpz_ui_sub, :libgmp), Cvoid, (mpz_t, Culong, mpz_t), x, a, b); x)
+ui_sub!(x::BigInt, a, b::BigInt) = (ccall((:__gmpz_ui_sub, libgmp), Cvoid, (mpz_t, Culong, mpz_t), x, a, b); x)
 ui_sub(a, b::BigInt) = ui_sub!(BigInt(), a, b)
 
 for op in (:scan1, :scan0)
@@ -183,7 +191,7 @@ for op in (:scan1, :scan0)
     @eval $op(a::BigInt, b) = Int(signed(ccall($(gmpz(op)), Culong, (mpz_t, Culong), a, b)))
 end
 
-mul_si!(x::BigInt, a::BigInt, b) = (ccall((:__gmpz_mul_si, :libgmp), Cvoid, (mpz_t, mpz_t, Clong), x, a, b); x)
+mul_si!(x::BigInt, a::BigInt, b) = (ccall((:__gmpz_mul_si, libgmp), Cvoid, (mpz_t, mpz_t, Clong), x, a, b); x)
 mul_si(a::BigInt, b) = mul_si!(BigInt(), a, b)
 mul_si!(x::BigInt, b) = mul_si!(x, x, b)
 
@@ -205,47 +213,58 @@ for (op, T) in ((:fac_ui, Culong), (:set_ui, Culong), (:set_si, Clong), (:set_d,
     end
 end
 
-popcount(a::BigInt) = Int(signed(ccall((:__gmpz_popcount, :libgmp), Culong, (mpz_t,), a)))
+popcount(a::BigInt) = Int(signed(ccall((:__gmpz_popcount, libgmp), Culong, (mpz_t,), a)))
 
-mpn_popcount(d::Ptr{Limb}, s::Integer) = Int(ccall((:__gmpn_popcount, :libgmp), Culong, (Ptr{Limb}, Csize_t), d, s))
+mpn_popcount(d::Ptr{Limb}, s::Integer) = Int(ccall((:__gmpn_popcount, libgmp), Culong, (Ptr{Limb}, Csize_t), d, s))
 mpn_popcount(a::BigInt) = mpn_popcount(a.d, abs(a.size))
 
 function tdiv_qr!(x::BigInt, y::BigInt, a::BigInt, b::BigInt)
-    ccall((:__gmpz_tdiv_qr, :libgmp), Cvoid, (mpz_t, mpz_t, mpz_t, mpz_t), x, y, a, b)
+    ccall((:__gmpz_tdiv_qr, libgmp), Cvoid, (mpz_t, mpz_t, mpz_t, mpz_t), x, y, a, b)
     x, y
 end
 tdiv_qr(a::BigInt, b::BigInt) = tdiv_qr!(BigInt(), BigInt(), a, b)
 
 powm!(x::BigInt, a::BigInt, b::BigInt, c::BigInt) =
-    (ccall((:__gmpz_powm, :libgmp), Cvoid, (mpz_t, mpz_t, mpz_t, mpz_t), x, a, b, c); x)
+    (ccall((:__gmpz_powm, libgmp), Cvoid, (mpz_t, mpz_t, mpz_t, mpz_t), x, a, b, c); x)
 powm(a::BigInt, b::BigInt, c::BigInt) = powm!(BigInt(), a, b, c)
 powm!(x::BigInt, b::BigInt, c::BigInt) = powm!(x, x, b, c)
 
 function gcdext!(x::BigInt, y::BigInt, z::BigInt, a::BigInt, b::BigInt)
-    ccall((:__gmpz_gcdext, :libgmp), Cvoid, (mpz_t, mpz_t, mpz_t, mpz_t, mpz_t), x, y, z, a, b)
+    ccall((:__gmpz_gcdext, libgmp), Cvoid, (mpz_t, mpz_t, mpz_t, mpz_t, mpz_t), x, y, z, a, b)
     x, y, z
 end
 gcdext(a::BigInt, b::BigInt) = gcdext!(BigInt(), BigInt(), BigInt(), a, b)
 
-cmp(a::BigInt, b::BigInt) = Int(ccall((:__gmpz_cmp, :libgmp), Cint, (mpz_t, mpz_t), a, b))
-cmp_si(a::BigInt, b) = Int(ccall((:__gmpz_cmp_si, :libgmp), Cint, (mpz_t, Clong), a, b))
-cmp_ui(a::BigInt, b) = Int(ccall((:__gmpz_cmp_ui, :libgmp), Cint, (mpz_t, Culong), a, b))
-cmp_d(a::BigInt, b) = Int(ccall((:__gmpz_cmp_d, :libgmp), Cint, (mpz_t, Cdouble), a, b))
+cmp(a::BigInt, b::BigInt) = Int(ccall((:__gmpz_cmp, libgmp), Cint, (mpz_t, mpz_t), a, b))
+cmp_si(a::BigInt, b) = Int(ccall((:__gmpz_cmp_si, libgmp), Cint, (mpz_t, Clong), a, b))
+cmp_ui(a::BigInt, b) = Int(ccall((:__gmpz_cmp_ui, libgmp), Cint, (mpz_t, Culong), a, b))
+cmp_d(a::BigInt, b) = Int(ccall((:__gmpz_cmp_d, libgmp), Cint, (mpz_t, Cdouble), a, b))
 
-mpn_cmp(a::Ptr{Limb}, b::Ptr{Limb}, c) = ccall((:__gmpn_cmp, :libgmp), Cint, (Ptr{Limb}, Ptr{Limb}, Clong), a, b, c)
+mpn_cmp(a::Ptr{Limb}, b::Ptr{Limb}, c) = ccall((:__gmpn_cmp, libgmp), Cint, (Ptr{Limb}, Ptr{Limb}, Clong), a, b, c)
 mpn_cmp(a::BigInt, b::BigInt, c) = mpn_cmp(a.d, b.d, c)
 
-get_str!(x, a, b::BigInt) = (ccall((:__gmpz_get_str,:libgmp), Ptr{Cchar}, (Ptr{Cchar}, Cint, mpz_t), x, a, b); x)
-set_str!(x::BigInt, a, b) = Int(ccall((:__gmpz_set_str, :libgmp), Cint, (mpz_t, Ptr{UInt8}, Cint), x, a, b))
-get_d(a::BigInt) = ccall((:__gmpz_get_d, :libgmp), Cdouble, (mpz_t,), a)
+get_str!(x, a, b::BigInt) = (ccall((:__gmpz_get_str,libgmp), Ptr{Cchar}, (Ptr{Cchar}, Cint, mpz_t), x, a, b); x)
+set_str!(x::BigInt, a, b) = Int(ccall((:__gmpz_set_str, libgmp), Cint, (mpz_t, Ptr{UInt8}, Cint), x, a, b))
+get_d(a::BigInt) = ccall((:__gmpz_get_d, libgmp), Cdouble, (mpz_t,), a)
 
-limbs_write!(x::BigInt, a) = ccall((:__gmpz_limbs_write, :libgmp), Ptr{Limb}, (mpz_t, Clong), x, a)
-limbs_finish!(x::BigInt, a) = ccall((:__gmpz_limbs_finish, :libgmp), Cvoid, (mpz_t, Clong), x, a)
-import!(x::BigInt, a, b, c, d, e, f) = ccall((:__gmpz_import, :libgmp), Cvoid,
+function export!(a::AbstractVector{T}, n::BigInt; order::Integer=-1, nails::Integer=0, endian::Integer=0) where {T<:Base.BitInteger}
+    stride(a, 1) == 1 || throw(ArgumentError("a must have stride 1"))
+    ndigits = cld(sizeinbase(n, 2), 8*sizeof(T) - nails)
+    length(a) < ndigits && resize!(a, ndigits)
+    count = Ref{Csize_t}()
+    ccall((:__gmpz_export, libgmp), Ptr{T}, (Ptr{T}, Ref{Csize_t}, Cint, Csize_t, Cint, Csize_t, mpz_t),
+        a, count, order, sizeof(T), endian, nails, n)
+    @assert count[] ≤ length(a)
+    return a, Int(count[])
+end
+
+limbs_write!(x::BigInt, a) = ccall((:__gmpz_limbs_write, libgmp), Ptr{Limb}, (mpz_t, Clong), x, a)
+limbs_finish!(x::BigInt, a) = ccall((:__gmpz_limbs_finish, libgmp), Cvoid, (mpz_t, Clong), x, a)
+import!(x::BigInt, a, b, c, d, e, f) = ccall((:__gmpz_import, libgmp), Cvoid,
     (mpz_t, Csize_t, Cint, Csize_t, Cint, Csize_t, Ptr{Cvoid}), x, a, b, c, d, e, f)
 
-setbit!(x, a) = (ccall((:__gmpz_setbit, :libgmp), Cvoid, (mpz_t, bitcnt_t), x, a); x)
-tstbit(a::BigInt, b) = ccall((:__gmpz_tstbit, :libgmp), Cint, (mpz_t, bitcnt_t), a, b) % Bool
+setbit!(x, a) = (ccall((:__gmpz_setbit, libgmp), Cvoid, (mpz_t, bitcnt_t), x, a); x)
+tstbit(a::BigInt, b) = ccall((:__gmpz_tstbit, libgmp), Cint, (mpz_t, bitcnt_t), a, b) % Bool
 
 end # module MPZ
 
@@ -396,7 +415,7 @@ function Float64(x::BigInt, ::RoundingMode{:Nearest})
         z = Float64((unsafe_load(x.d, 2) % UInt64) << BITS_PER_LIMB + unsafe_load(x.d))
     else
         y1 = unsafe_load(x.d, xsize) % UInt64
-        n = 64 - leading_zeros(y1)
+        n = top_set_bit(y1)
         # load first 54(1 + 52 bits of fraction + 1 for rounding)
         y = y1 >> (n - (precision(Float64)+1))
         if Limb == UInt64
@@ -586,6 +605,12 @@ Number of ones in the binary representation of abs(x).
 """
 count_ones_abs(x::BigInt) = iszero(x) ? 0 : MPZ.mpn_popcount(x)
 
+function top_set_bit(x::BigInt)
+    x < 0 && throw(DomainError(x, "top_set_bit only supports negative arguments when they have type BitSigned."))
+    x == 0 && return 0
+    Int(ccall((:__gmpz_sizeinbase, :libgmp), Csize_t, (Base.GMP.MPZ.mpz_t, Cint), x, 2))
+end
+
 divrem(x::BigInt, y::BigInt) = MPZ.tdiv_qr(x, y)
 divrem(x::BigInt, y::Integer) = MPZ.tdiv_qr(x, big(y))
 
@@ -682,8 +707,16 @@ end
 
 factorial(x::BigInt) = isneg(x) ? BigInt(0) : MPZ.fac_ui(x)
 
-binomial(n::BigInt, k::UInt) = MPZ.bin_ui(n, k)
-binomial(n::BigInt, k::Integer) = k < 0 ? BigInt(0) : binomial(n, UInt(k))
+function binomial(n::BigInt, k::Integer)
+    k < 0 && return BigInt(0)
+    k <= typemax(Culong) && return binomial(n, Culong(k))
+    n < 0 && return isodd(k) ? -binomial(k - n - 1, k) : binomial(k - n - 1, k)
+    κ = n - k
+    κ < 0 && return BigInt(0)
+    κ <= typemax(Culong) && return binomial(n, Culong(κ))
+    throw(OverflowError("Computation would exceed memory"))
+end
+binomial(n::BigInt, k::Culong) = MPZ.bin_ui(n, k)
 
 ==(x::BigInt, y::BigInt) = cmp(x,y) == 0
 ==(x::BigInt, i::Integer) = cmp(x,i) == 0
@@ -736,19 +769,29 @@ function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
 end
 
 function digits!(a::AbstractVector{T}, n::BigInt; base::Integer = 10) where {T<:Integer}
-    if 2 ≤ base ≤ 62
-        s = codeunits(string(n; base))
-        i, j = firstindex(a)-1, length(s)+1
-        lasti = min(lastindex(a), firstindex(a) + length(s)-1 - isneg(n))
-        while i < lasti
-            # base ≤ 36: 0-9, plus a-z for 10-35
-            # base > 36: 0-9, plus A-Z for 10-35 and a-z for 36..61
-            x = s[j -= 1]
-            a[i += 1] = base ≤ 36 ? (x>0x39 ? x-0x57 : x-0x30) : (x>0x39 ? (x>0x60 ? x-0x3d : x-0x37) : x-0x30)
+    if base ≥ 2
+        if base ≤ 62
+            # fast path using mpz_get_str via string(n; base)
+            s = codeunits(string(n; base))
+            i, j = firstindex(a)-1, length(s)+1
+            lasti = min(lastindex(a), firstindex(a) + length(s)-1 - isneg(n))
+            while i < lasti
+                # base ≤ 36: 0-9, plus a-z for 10-35
+                # base > 36: 0-9, plus A-Z for 10-35 and a-z for 36..61
+                x = s[j -= 1]
+                a[i += 1] = base ≤ 36 ? (x>0x39 ? x-0x57 : x-0x30) : (x>0x39 ? (x>0x60 ? x-0x3d : x-0x37) : x-0x30)
+            end
+            lasti = lastindex(a)
+            while i < lasti; a[i+=1] = zero(T); end
+            return isneg(n) ? map!(-,a,a) : a
+        elseif a isa StridedVector{<:Base.BitInteger} && stride(a,1) == 1 && ispow2(base) && base-1 ≤ typemax(T)
+            # fast path using mpz_export
+            origlen = length(a)
+            _, writelen = MPZ.export!(a, n; nails = 8sizeof(T) - trailing_zeros(base))
+            length(a) != origlen && resize!(a, origlen) # truncate to least-significant digits
+            a[begin+writelen:end] .= zero(T)
+            return isneg(n) ? map!(-,a,a) : a
         end
-        lasti = lastindex(a)
-        while i < lasti; a[i+=1] = zero(T); end
-        return isneg(n) ? map!(-,a,a) : a
     end
     return invoke(digits!, Tuple{typeof(a), Integer}, a, n; base) # slow generic fallback
 end
@@ -878,9 +921,9 @@ module MPQ
 
 # Rational{BigInt}
 import .Base: unsafe_rational, __throw_rational_argerror_zero
-import ..GMP: BigInt, MPZ, Limb, isneg
+import ..GMP: BigInt, MPZ, Limb, isneg, libgmp
 
-gmpq(op::Symbol) = (Symbol(:__gmpq_, op), :libgmp)
+gmpq(op::Symbol) = (Symbol(:__gmpq_, op), libgmp)
 
 mutable struct _MPQ
     num_alloc::Cint
@@ -917,20 +960,20 @@ function Rational{BigInt}(num::BigInt, den::BigInt)
         return set_si(flipsign(1, num), 0)
     end
     xq = _MPQ(MPZ.set(num), MPZ.set(den))
-    ccall((:__gmpq_canonicalize, :libgmp), Cvoid, (mpq_t,), xq)
+    ccall((:__gmpq_canonicalize, libgmp), Cvoid, (mpq_t,), xq)
     return sync_rational!(xq)
 end
 
 # define set, set_ui, set_si, set_z, and their inplace versions
 function set!(z::Rational{BigInt}, x::Rational{BigInt})
     zq = _MPQ(z)
-    ccall((:__gmpq_set, :libgmp), Cvoid, (mpq_t, mpq_t), zq, _MPQ(x))
+    ccall((:__gmpq_set, libgmp), Cvoid, (mpq_t, mpq_t), zq, _MPQ(x))
     return sync_rational!(zq)
 end
 
 function set_z!(z::Rational{BigInt}, x::BigInt)
     zq = _MPQ(z)
-    ccall((:__gmpq_set_z, :libgmp), Cvoid, (mpq_t, MPZ.mpz_t), zq, x)
+    ccall((:__gmpq_set_z, libgmp), Cvoid, (mpq_t, MPZ.mpz_t), zq, x)
     return sync_rational!(zq)
 end
 
@@ -962,7 +1005,7 @@ function add!(z::Rational{BigInt}, x::Rational{BigInt}, y::Rational{BigInt})
         return set!(z, iszero(x.den) ? x : y)
     end
     zq = _MPQ(z)
-    ccall((:__gmpq_add, :libgmp), Cvoid,
+    ccall((:__gmpq_add, libgmp), Cvoid,
           (mpq_t,mpq_t,mpq_t), zq, _MPQ(x), _MPQ(y))
     return sync_rational!(zq)
 end
@@ -976,7 +1019,7 @@ function sub!(z::Rational{BigInt}, x::Rational{BigInt}, y::Rational{BigInt})
         return set_si!(z, flipsign(-1, y.num), 0)
     end
     zq = _MPQ(z)
-    ccall((:__gmpq_sub, :libgmp), Cvoid,
+    ccall((:__gmpq_sub, libgmp), Cvoid,
           (mpq_t,mpq_t,mpq_t), zq, _MPQ(x), _MPQ(y))
     return sync_rational!(zq)
 end
@@ -989,7 +1032,7 @@ function mul!(z::Rational{BigInt}, x::Rational{BigInt}, y::Rational{BigInt})
         return set_si!(z, ifelse(xor(isneg(x.num), isneg(y.num)), -1, 1), 0)
     end
     zq = _MPQ(z)
-    ccall((:__gmpq_mul, :libgmp), Cvoid,
+    ccall((:__gmpq_mul, libgmp), Cvoid,
           (mpq_t,mpq_t,mpq_t), zq, _MPQ(x), _MPQ(y))
     return sync_rational!(zq)
 end
@@ -1010,7 +1053,7 @@ function div!(z::Rational{BigInt}, x::Rational{BigInt}, y::Rational{BigInt})
         return set_si!(z, flipsign(1, x.num), 0)
     end
     zq = _MPQ(z)
-    ccall((:__gmpq_div, :libgmp), Cvoid,
+    ccall((:__gmpq_div, libgmp), Cvoid,
           (mpq_t,mpq_t,mpq_t), zq, _MPQ(x), _MPQ(y))
     return sync_rational!(zq)
 end
@@ -1024,7 +1067,7 @@ for (fJ, fC) in ((:+, :add), (:-, :sub), (:*, :mul), (://, :div))
 end
 
 function Base.cmp(x::Rational{BigInt}, y::Rational{BigInt})
-    Int(ccall((:__gmpq_cmp, :libgmp), Cint, (mpq_t, mpq_t), _MPQ(x), _MPQ(y)))
+    Int(ccall((:__gmpq_cmp, libgmp), Cint, (mpq_t, mpq_t), _MPQ(x), _MPQ(y)))
 end
 
 end # MPQ module

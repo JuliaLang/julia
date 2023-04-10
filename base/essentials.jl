@@ -32,21 +32,6 @@ An `AbstractDict{K, V}` should be an iterator of `Pair{K, V}`.
 """
 abstract type AbstractDict{K,V} end
 
-"""
-    Iterators.Pairs(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
-
-Transforms an indexable container into a Dictionary-view of the same data.
-Modifying the key-space of the underlying data may invalidate this object.
-"""
-struct Pairs{K, V, I, A} <: AbstractDict{K, V}
-    data::A
-    itr::I
-end
-Pairs{K, V}(data::A, itr::I) where {K, V, I, A} = Pairs{K, V, I, A}(data, itr)
-Pairs{K}(data::A, itr::I) where {K, I, A} = Pairs{K, eltype(A), I, A}(data, itr)
-Pairs(data::A, itr::I) where  {I, A} = Pairs{eltype(I), eltype(A), I, A}(data, itr)
-pairs(::Type{NamedTuple}) = Pairs{Symbol, V, NTuple{N, Symbol}, NamedTuple{names, T}} where {V, N, names, T<:NTuple{N, Any}}
-
 ## optional pretty printer:
 #const NamedTuplePair{N, V, names, T<:NTuple{N, Any}} = Pairs{Symbol, V, NTuple{N, Symbol}, NamedTuple{names, T}}
 #export NamedTuplePair
@@ -192,6 +177,19 @@ macro isdefined(s::Symbol)
     return Expr(:escape, Expr(:isdefined, s))
 end
 
+"""
+    nameof(m::Module) -> Symbol
+
+Get the name of a `Module` as a [`Symbol`](@ref).
+
+# Examples
+```jldoctest
+julia> nameof(Base.Broadcast)
+:Broadcast
+```
+"""
+nameof(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
+
 function _is_internal(__module__)
     if ccall(:jl_base_relative_to, Any, (Any,), __module__)::Module === Core.Compiler ||
        nameof(__module__) === :Base
@@ -200,10 +198,6 @@ function _is_internal(__module__)
     return false
 end
 
-# can be used in place of `@pure` (supposed to be used for bootstrapping)
-macro _pure_meta()
-    return _is_internal(__module__) && Expr(:meta, :pure)
-end
 # can be used in place of `@assume_effects :total` (supposed to be used for bootstrapping)
 macro _total_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
@@ -225,6 +219,39 @@ macro _foldable_meta()
         #=:terminates_locally=#false,
         #=:notaskstate=#false,
         #=:inaccessiblememonly=#true))
+end
+# can be used in place of `@assume_effects :nothrow` (supposed to be used for bootstrapping)
+macro _nothrow_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#false,
+        #=:effect_free=#false,
+        #=:nothrow=#true,
+        #=:terminates_globally=#false,
+        #=:terminates_locally=#false,
+        #=:notaskstate=#false,
+        #=:inaccessiblememonly=#false))
+end
+# can be used in place of `@assume_effects :terminates_locally` (supposed to be used for bootstrapping)
+macro _terminates_locally_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#false,
+        #=:effect_free=#false,
+        #=:nothrow=#false,
+        #=:terminates_globally=#false,
+        #=:terminates_locally=#true,
+        #=:notaskstate=#false,
+        #=:inaccessiblememonly=#false))
+end
+# can be used in place of `@assume_effects :effect_free :terminates_locally` (supposed to be used for bootstrapping)
+macro _effect_free_terminates_locally_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#false,
+        #=:effect_free=#true,
+        #=:nothrow=#false,
+        #=:terminates_globally=#false,
+        #=:terminates_locally=#true,
+        #=:notaskstate=#false,
+        #=:inaccessiblememonly=#false))
 end
 
 # another version of inlining that propagates an inbounds context
@@ -310,6 +337,26 @@ macro eval(mod, ex)
     return Expr(:escape, Expr(:call, GlobalRef(Core, :eval), mod, Expr(:quote, ex)))
 end
 
+# use `@eval` here to directly form `:new` expressions avoid implicit `convert`s
+# in order to achieve better effects inference
+@eval struct Pairs{K, V, I, A} <: AbstractDict{K, V}
+    data::A
+    itr::I
+    Pairs{K, V, I, A}(data, itr) where {K, V, I, A} = $(Expr(:new, :(Pairs{K, V, I, A}), :(convert(A, data)), :(convert(I, itr))))
+    Pairs{K, V}(data::A, itr::I) where {K, V, I, A} = $(Expr(:new, :(Pairs{K, V, I, A}), :data, :itr))
+    Pairs{K}(data::A, itr::I) where {K, I, A} = $(Expr(:new, :(Pairs{K, eltype(A), I, A}), :data, :itr))
+    Pairs(data::A, itr::I) where  {I, A} = $(Expr(:new, :(Pairs{eltype(I), eltype(A), I, A}), :data, :itr))
+end
+pairs(::Type{NamedTuple}) = Pairs{Symbol, V, NTuple{N, Symbol}, NamedTuple{names, T}} where {V, N, names, T<:NTuple{N, Any}}
+
+"""
+    Iterators.Pairs(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
+
+Transforms an indexable container into a Dictionary-view of the same data.
+Modifying the key-space of the underlying data may invalidate this object.
+"""
+Pairs
+
 argtail(x, rest...) = rest
 
 """
@@ -362,13 +409,8 @@ function rename_unionall(@nospecialize(u))
     if !isa(u, UnionAll)
         return u
     end
-    body = rename_unionall(u.body)
-    if body === u.body
-        body = u
-    else
-        body = UnionAll(u.var, body)
-    end
     var = u.var::TypeVar
+    body = UnionAll(var, rename_unionall(u.body))
     nv = TypeVar(var.name, var.lb, var.ub)
     return UnionAll(nv, body{nv})
 end
@@ -386,8 +428,10 @@ function isvatuple(@nospecialize(t))
     return false
 end
 
-unwrapva(t::Core.TypeofVararg) = isdefined(t, :T) ? t.T : Any
-unwrapva(@nospecialize(t)) = t
+function unwrapva(@nospecialize(t))
+    isa(t, Core.TypeofVararg) || return t
+    return isdefined(t, :T) ? t.T : Any
+end
 
 function unconstrain_vararg_length(va::Core.TypeofVararg)
     # construct a new Vararg type where its length is unconstrained,
@@ -694,8 +738,9 @@ end
 
 # SimpleVector
 
-@eval getindex(v::SimpleVector, i::Int) = Core._svec_ref($(Expr(:boundscheck)), v, i)
+@eval getindex(v::SimpleVector, i::Int) = (@_foldable_meta; Core._svec_ref($(Expr(:boundscheck)), v, i))
 function length(v::SimpleVector)
+    @_total_meta
     t = @_gc_preserve_begin v
     len = unsafe_load(Ptr{Int}(pointer_from_objref(v)))
     @_gc_preserve_end t
@@ -939,7 +984,7 @@ function popfirst! end
     peek(stream[, T=UInt8])
 
 Read and return a value of type `T` from a stream without advancing the current position
-in the stream.
+in the stream.   See also [`startswith(stream, char_or_string)`](@ref).
 
 # Examples
 

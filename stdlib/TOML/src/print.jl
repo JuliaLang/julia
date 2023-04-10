@@ -93,7 +93,7 @@ function printvalue(f::MbyFunc, io::IO, value::TOMLValue)
     value isa Dates.Time     ? Base.print(io, Dates.format(value, Dates.dateformat"HH:MM:SS.sss")) :
     value isa Dates.Date     ? Base.print(io, Dates.format(value, Dates.dateformat"YYYY-mm-dd")) :
     value isa Bool           ? Base.print(io, value ? "true" : "false") :
-    value isa Integer        ? Base.print(io, Int64(value)) :  # TOML specifies 64-bit signed long range for integer
+    value isa Integer        ? print_integer(io, value) :  # Julia's own printing should be compatible with TOML on integers
     value isa AbstractFloat  ? Base.print(io, isnan(value) ? "nan" :
                                               isinf(value) ? string(value > 0 ? "+" : "-", "inf") :
                                               Float64(value)) :  # TOML specifies IEEE 754 binary64 for float
@@ -102,6 +102,14 @@ function printvalue(f::MbyFunc, io::IO, value::TOMLValue)
                                 Base.print(io, "\"")) :
     value isa AbstractDict ? print_inline_table(f, io, value) :
     error("internal error in TOML printing, unhandled value")
+end
+
+function print_integer(io::IO, value::Integer)
+    value isa Signed && return Base.show(io, value)
+    # unsigned integers are printed as hex
+    n = 2 * ndigits(value, base=256)
+    Base.print(io, "0x", string(value, base=16, pad=n))
+    return
 end
 
 function print_inline_table(f::MbyFunc, io::IO, value::AbstractDict)
@@ -126,7 +134,7 @@ is_array_of_tables(value) = isa(value, AbstractArray) &&
                                 isa(value, AbstractArray{<:AbstractDict}) ||
                                 all(v -> isa(v, AbstractDict), value)
                             )
-is_tabular(value)         = is_table(value) || is_array_of_tables(value)
+is_tabular(value)         = is_table(value) || @invokelatest(is_array_of_tables(value))
 
 function print_table(f::MbyFunc, io::IO, a::AbstractDict,
     ks::Vector{String} = String[];
@@ -163,7 +171,8 @@ function print_table(f::MbyFunc, io::IO, a::AbstractDict,
         end
         if is_table(value)
             push!(ks, String(key))
-            header = isempty(value) || !all(is_tabular(v) for v in values(value))::Bool
+            _values = @invokelatest values(value)
+            header = isempty(value) || !all(is_tabular(v) for v in _values)::Bool
             if header
                 # print table
                 first_block || println(io)
@@ -176,7 +185,7 @@ function print_table(f::MbyFunc, io::IO, a::AbstractDict,
             # Use runtime dispatch here since the type of value seems not to be enforced other than as AbstractDict
             @invokelatest print_table(f, io, value, ks; indent = indent + header, first_block = header, sorted=sorted, by=by)
             pop!(ks)
-        elseif is_array_of_tables(value)
+        elseif @invokelatest(is_array_of_tables(value))
             # print array of tables
             first_block || println(io)
             first_block = false

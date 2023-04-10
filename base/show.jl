@@ -1004,9 +1004,9 @@ end
 # If an object with this name exists in 'from', we need to check that it's the same binding
 # and that it's not deprecated.
 function isvisible(sym::Symbol, parent::Module, from::Module)
-    owner = ccall(:jl_binding_owner, Any, (Any, Any), parent, sym)
-    from_owner = ccall(:jl_binding_owner, Any, (Any, Any), from, sym)
-    return owner !== nothing && from_owner === owner &&
+    owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), parent, sym)
+    from_owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), from, sym)
+    return owner !== C_NULL && from_owner === owner &&
         !isdeprecated(parent, sym) &&
         isdefined(from, sym) # if we're going to return true, force binding resolution
 end
@@ -1060,11 +1060,12 @@ end
 function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
     parameters = x.parameters::SimpleVector
     istuple = x.name === Tuple.name
+    isnamedtuple = x.name === typename(NamedTuple)
     n = length(parameters)
 
     # Print tuple types with homogeneous tails longer than max_n compactly using `NTuple` or `Vararg`
-    max_n = 3
     if istuple
+        max_n = 3
         taillen = 1
         for i in (n-1):-1:1
             if parameters[i] === parameters[n]
@@ -1090,10 +1091,31 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
             end
             print(io, "}")
         end
-    else
-        show_type_name(io, x.name)
-        show_typeparams(io, parameters, (unwrap_unionall(x.name.wrapper)::DataType).parameters, wheres)
+        return
+    elseif isnamedtuple
+        syms, types = parameters
+        first = true
+        if syms isa Tuple && types isa DataType
+            print(io, "@NamedTuple{")
+            for i in 1:length(syms)
+                if !first
+                    print(io, ", ")
+                end
+                print(io, syms[i])
+                typ = types.parameters[i]
+                if typ !== Any
+                    print(io, "::")
+                    show(io, typ)
+                end
+                first = false
+            end
+            print(io, "}")
+            return
+        end
     end
+
+    show_type_name(io, x.name)
+    show_typeparams(io, parameters, (unwrap_unionall(x.name.wrapper)::DataType).parameters, wheres)
 end
 
 function show_supertypes(io::IO, typ::DataType)
@@ -1372,9 +1394,11 @@ show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0, 0)
 #   eval(Meta.parse("Set{Int64}([2,3,1])")) # ==> An actual set
 # While this isn’t true of ALL show methods, it is of all ASTs.
 
-const ExprNode = Union{Expr, QuoteNode, Slot, LineNumberNode, SSAValue,
-                       GotoNode, GlobalRef, PhiNode, PhiCNode, UpsilonNode,
-                       Core.Compiler.GotoIfNot, Core.Compiler.ReturnNode}
+using Core.Compiler: TypedSlot, UnoptSlot
+
+const ExprNode = Union{Expr, QuoteNode, UnoptSlot, LineNumberNode, SSAValue,
+                       GotoNode, GotoIfNot, GlobalRef, PhiNode, PhiCNode, UpsilonNode,
+                       ReturnNode}
 # Operators have precedence levels from 1-N, and show_unquoted defaults to a
 # precedence level of 0 (the fourth argument). The top-level print and show
 # methods use a precedence of -1 to specially allow space-separated macro syntax.
@@ -1723,7 +1747,7 @@ function show_globalref(io::IO, ex::GlobalRef; allow_macroname=false)
     nothing
 end
 
-function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
+function show_unquoted(io::IO, ex::UnoptSlot, ::Int, ::Int)
     typ = isa(ex, TypedSlot) ? ex.typ : Any
     slotid = ex.id
     slotnames = get(io, :SOURCE_SLOTNAMES, false)
@@ -1818,10 +1842,16 @@ function show_import_path(io::IO, ex, quote_level)
         end
     elseif ex.head === :(.)
         for i = 1:length(ex.args)
-            if ex.args[i] === :(.)
+            sym = ex.args[i]::Symbol
+            if sym === :(.)
                 print(io, '.')
             else
-                show_sym(io, ex.args[i]::Symbol, allow_macroname=(i==length(ex.args)))
+                if sym === :(..)
+                    # special case for https://github.com/JuliaLang/julia/issues/49168
+                    print(io, "(..)")
+                else
+                    show_sym(io, sym, allow_macroname=(i==length(ex.args)))
+                end
                 i < length(ex.args) && print(io, '.')
             end
         end
@@ -1842,10 +1872,10 @@ function allow_macroname(ex)
     end
 end
 
-function is_core_macro(arg::GlobalRef, macro_name::AbstractString)
-    arg == GlobalRef(Core, Symbol(macro_name))
-end
+is_core_macro(arg::GlobalRef, macro_name::AbstractString) = is_core_macro(arg, Symbol(macro_name))
+is_core_macro(arg::GlobalRef, macro_name::Symbol) = arg == GlobalRef(Core, macro_name)
 is_core_macro(@nospecialize(arg), macro_name::AbstractString) = false
+is_core_macro(@nospecialize(arg), macro_name::Symbol) = false
 
 # symbol for IOContext flag signaling whether "begin" is treated
 # as an ordinary symbol, which is true in indexing expressions.
@@ -2173,12 +2203,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     elseif head === :macrocall && nargs >= 2
         # handle some special syntaxes
         # `a b c`
-        if is_core_macro(args[1], "@cmd")
+        if is_core_macro(args[1], :var"@cmd")
             print(io, "`", args[3], "`")
         # 11111111111111111111, 0xfffffffffffffffff, 1111...many digits...
-        elseif is_core_macro(args[1], "@int128_str") ||
-               is_core_macro(args[1], "@uint128_str") ||
-               is_core_macro(args[1], "@big_str")
+        elseif is_core_macro(args[1], :var"@int128_str") ||
+               is_core_macro(args[1], :var"@uint128_str") ||
+               is_core_macro(args[1], :var"@big_str")
             print(io, args[3])
         # x"y" and x"y"z
         elseif isa(args[1], Symbol) && nargs >= 3 && isa(args[3], String) &&
@@ -2588,7 +2618,7 @@ module IRShow
     const Compiler = Core.Compiler
     using Core.IR
     import ..Base
-    import .Compiler: IRCode, ReturnNode, GotoIfNot, CFG, scan_ssa_use!, Argument,
+    import .Compiler: IRCode, TypedSlot, CFG, scan_ssa_use!,
         isexpr, compute_basic_blocks, block_for_inst, IncrementalCompact,
         Effects, ALWAYS_TRUE, ALWAYS_FALSE
     Base.getindex(r::Compiler.StmtRange, ind::Integer) = Compiler.getindex(r, ind)
@@ -2634,13 +2664,18 @@ function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
 end
 
 function show(io::IO, inferred::Core.Compiler.InferenceResult)
-    tt = inferred.linfo.specTypes.parameters[2:end]
+    mi = inferred.linfo
+    tt = mi.specTypes.parameters[2:end]
     tts = join(["::$(t)" for t in tt], ", ")
     rettype = inferred.result
     if isa(rettype, Core.Compiler.InferenceState)
         rettype = rettype.bestguess
     end
-    print(io, "$(inferred.linfo.def.name)($(tts)) => $(rettype)")
+    if isa(mi.def, Method)
+        print(io, mi.def.name, "(", tts, " => ", rettype, ")")
+    else
+        print(io, "Toplevel MethodInstance thunk from ", mi.def, " => ", rettype)
+    end
 end
 
 function show(io::IO, ::Core.Compiler.NativeInterpreter)

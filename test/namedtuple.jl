@@ -76,6 +76,26 @@ let NT = NamedTuple{(:a,:b),Tuple{Int8,Int16}}, nt = (x=3,y=4)
     @test_throws MethodError convert(NT, nt)
 end
 
+@testset "convert NamedTuple" begin
+    conv1 = convert(NamedTuple{(:a,),Tuple{I}} where I, (;a=1))
+    @test conv1 === (a = 1,)
+
+    conv2 = convert(NamedTuple{(:a,),Tuple{Any}}, (;a=1))
+    @test conv2 === NamedTuple{(:a,), Tuple{Any}}((1,))
+
+    conv3 = convert(NamedTuple{(:a,),}, (;a=1))
+    @test conv3 === (a = 1,)
+
+    conv4 = convert(NamedTuple{(:a,),Tuple{I}} where I<:Unsigned, (;a=1))
+    @test conv4 === NamedTuple{(:a,), Tuple{Unsigned}}((1,))
+
+    conv5 = convert(NamedTuple, (;a=1))
+    @test conv1 === (a = 1,)
+
+    conv_res = @test_throws MethodError convert(NamedTuple{(:a,),Tuple{I}} where I<:AbstractString, (;a=1))
+    @test conv_res.value.f === convert && conv_res.value.args === (AbstractString, 1)
+end
+
 @test NamedTuple{(:a,:c)}((b=1,z=2,c=3,aa=4,a=5)) === (a=5, c=3)
 @test NamedTuple{(:a,)}(NamedTuple{(:b, :a), Tuple{Int, Union{Int,Nothing}}}((1, 2))) ===
     NamedTuple{(:a,), Tuple{Union{Int,Nothing}}}((2,))
@@ -83,6 +103,9 @@ end
 @test eltype((a=[1,2], b=[3,4])) === Vector{Int}
 @test eltype(NamedTuple{(:x, :y),Tuple{Union{Missing, Int},Union{Missing, Float64}}}(
     (missing, missing))) === Union{Real, Missing}
+
+@test valtype((a=[1,2], b=[3,4])) === Vector{Int}
+@test keytype((a=[1,2], b=[3,4])) === Symbol
 
 @test Tuple((a=[1,2], b=[3,4])) == ([1,2], [3,4])
 @test Tuple(NamedTuple()) === ()
@@ -121,7 +144,7 @@ end
 let nt = merge(NamedTuple{(:a,:b),Tuple{Int32,Union{Int32,Nothing}}}((1,Int32(2))),
                NamedTuple{(:a,:c),Tuple{Union{Int8,Nothing},Float64}}((nothing,1.0)))
     @test typeof(nt) == NamedTuple{(:a,:b,:c),Tuple{Union{Int8,Nothing},Union{Int32,Nothing},Float64}}
-    @test repr(nt) == "NamedTuple{(:a, :b, :c), Tuple{Union{Nothing, Int8}, Union{Nothing, Int32}, Float64}}((nothing, 2, 1.0))"
+    @test repr(nt) == "@NamedTuple{a::Union{Nothing, Int8}, b::Union{Nothing, Int32}, c::Float64}((nothing, 2, 1.0))"
 end
 
 @test merge(NamedTuple(), [:a=>1, :b=>2, :c=>3, :a=>4, :c=>5]) == (a=4, b=2, c=5)
@@ -349,4 +372,19 @@ end
     @test mapfoldl(abs, =>, (;), init=-10) == -10
     @test mapfoldl(abs, Pair{Any,Any}, NamedTuple(Symbol(:x,i) => i for i in 1:30)) == mapfoldl(abs, Pair{Any,Any}, [1:30;])
     @test_throws "reducing over an empty collection" mapfoldl(abs, =>, (;))
+end
+
+# Test effect/inference for merge/diff of unknown NamedTuples
+for f in (Base.merge, Base.structdiff)
+    let eff = Base.infer_effects(f, Tuple{NamedTuple, NamedTuple})
+        @test Core.Compiler.is_foldable(eff) && eff.nonoverlayed
+    end
+    @test Core.Compiler.return_type(f, Tuple{NamedTuple, NamedTuple}) == NamedTuple
+end
+@test Core.Compiler.is_foldable(Base.infer_effects(pairs, Tuple{NamedTuple}))
+
+# Test that merge/diff preserves nt field types
+let a = Base.NamedTuple{(:a, :b), Tuple{Any, Any}}((1, 2)), b = Base.NamedTuple{(:b,), Tuple{Float64}}(3)
+    @test typeof(Base.merge(a, b)) == Base.NamedTuple{(:a, :b), Tuple{Any, Float64}}
+    @test typeof(Base.structdiff(a, b)) == Base.NamedTuple{(:a,), Tuple{Any}}
 end

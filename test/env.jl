@@ -127,7 +127,6 @@ end
         for v in ("t", "true", "y", "yes", "1")
             for _v in (v, uppercasefirst(v), uppercase(v))
                 ENV["testing_gbe"] = _v
-                @test Base.get_bool_env("testing_gbe") == true
                 @test Base.get_bool_env("testing_gbe", false) == true
                 @test Base.get_bool_env("testing_gbe", true) == true
             end
@@ -137,7 +136,6 @@ end
         for v in ("f", "false", "n", "no", "0")
             for _v in (v, uppercasefirst(v), uppercase(v))
                 ENV["testing_gbe"] = _v
-                @test Base.get_bool_env("testing_gbe") == false
                 @test Base.get_bool_env("testing_gbe", true) == false
                 @test Base.get_bool_env("testing_gbe", false) == false
             end
@@ -145,25 +143,26 @@ end
     end
     @testset "empty" begin
         ENV["testing_gbe"] = ""
-        @test Base.get_bool_env("testing_gbe") == false
         @test Base.get_bool_env("testing_gbe", true) == true
         @test Base.get_bool_env("testing_gbe", false) == false
     end
     @testset "undefined" begin
         delete!(ENV, "testing_gbe")
         @test !haskey(ENV, "testing_gbe")
-        @test Base.get_bool_env("testing_gbe") == false
         @test Base.get_bool_env("testing_gbe", true) == true
         @test Base.get_bool_env("testing_gbe", false) == false
     end
     @testset "unrecognized" begin
         for v in ("truw", "falls")
             ENV["testing_gbe"] = v
-            @test Base.get_bool_env("testing_gbe") === nothing
             @test Base.get_bool_env("testing_gbe", true) === nothing
             @test Base.get_bool_env("testing_gbe", false) === nothing
         end
     end
+
+    # the "default" arg shouldn't have a default val, for clarity.
+    @test_throws MethodError Base.get_bool_env("testing_gbe")
+
     delete!(ENV, "testing_gbe")
     @test !haskey(ENV, "testing_gbe")
 end
