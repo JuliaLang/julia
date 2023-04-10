@@ -5153,7 +5153,7 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     for (size_t i = 0; i < jl_svec_len(argt_typ->parameters); ++i) {
         jl_svecset(sig_args, 1+i, jl_svecref(argt_typ->parameters, i));
     }
-    sigtype = (jl_value_t*)jl_apply_tuple_type_v(jl_svec_data(sig_args), nsig);
+    sigtype = jl_apply_tuple_type_v(jl_svec_data(sig_args), nsig);
 
     jl_method_instance_t *mi = jl_specializations_get_linfo(closure_method, sigtype, jl_emptysvec);
     jl_code_instance_t *ci = (jl_code_instance_t*)jl_rettype_inferred(mi, ctx.world, ctx.world);
@@ -5476,7 +5476,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
 
         if (can_optimize) {
             jl_value_t *closure_t = NULL;
-            jl_tupletype_t *env_t = NULL;
+            jl_value_t *env_t = NULL;
             JL_GC_PUSH2(&closure_t, &env_t);
 
             SmallVector<jl_value_t *> env_component_ts(nargs-4);
@@ -5486,10 +5486,10 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
 
             env_t = jl_apply_tuple_type_v(env_component_ts.data(), nargs-4);
             // we need to know the full env type to look up the right specialization
-            if (jl_is_concrete_type((jl_value_t*)env_t)) {
+            if (jl_is_concrete_type(env_t)) {
                 jl_tupletype_t *argt_typ = (jl_tupletype_t*)argt.constant;
                 Function *F, *specF;
-                std::tie(F, specF) = get_oc_function(ctx, (jl_method_t*)source.constant, env_t, argt_typ, ub.constant);
+                std::tie(F, specF) = get_oc_function(ctx, (jl_method_t*)source.constant, (jl_datatype_t*)env_t, argt_typ, ub.constant);
                 if (F) {
                     jl_cgval_t jlcall_ptr = mark_julia_type(ctx, F, false, jl_voidpointer_type);
                     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
@@ -5502,7 +5502,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
                         fptr = mark_julia_type(ctx, (llvm::Value*)Constant::getNullValue(ctx.types().T_size), false, jl_voidpointer_type);
 
                     // TODO: Inline the env at the end of the opaque closure and generate a descriptor for GC
-                    jl_cgval_t env = emit_new_struct(ctx, (jl_value_t*)env_t, nargs-4, &argv.data()[4]);
+                    jl_cgval_t env = emit_new_struct(ctx, env_t, nargs-4, &argv.data()[4]);
 
                     jl_cgval_t closure_fields[5] = {
                         env,
@@ -6448,7 +6448,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
         sigt = NULL;
     }
     else {
-        sigt = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)sigt);
+        sigt = jl_apply_tuple_type((jl_svec_t*)sigt);
     }
     if (sigt && !(unionall_env && jl_has_typevar_from_unionall(rt, unionall_env))) {
         unionall_env = NULL;
@@ -6898,9 +6898,9 @@ static jl_datatype_t *compute_va_type(jl_method_instance_t *lam, size_t nreq)
         }
         jl_svecset(tupargs, i-nreq, argType);
     }
-    jl_datatype_t *typ = jl_apply_tuple_type(tupargs);
+    jl_value_t *typ = jl_apply_tuple_type(tupargs);
     JL_GC_POP();
-    return typ;
+    return (jl_datatype_t*)typ;
 }
 
 

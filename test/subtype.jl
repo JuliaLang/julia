@@ -588,7 +588,7 @@ function test_old()
 end
 
 const easy_menagerie =
-    Any[Bottom, Any, Int, Int8, Integer, Real,
+    Any[Any, Int, Int8, Integer, Real,
         Array{Int,1}, AbstractArray{Int,1},
         Tuple{Int,Vararg{Integer}}, Tuple{Integer,Vararg{Int}}, Tuple{},
         Union{Int,Int8},
@@ -627,6 +627,10 @@ end
 
 add_variants!(easy_menagerie)
 add_variants!(hard_menagerie)
+push!(easy_menagerie, Bottom)
+push!(easy_menagerie, Ref{Bottom})
+push!(easy_menagerie, @UnionAll N NTuple{N,Bottom})
+push!(easy_menagerie, @UnionAll S<:Bottom Ref{S})
 
 const menagerie = [easy_menagerie; hard_menagerie]
 
@@ -673,9 +677,11 @@ function test_properties()
             @test isequal_type(T, S) == isequal_type(Ref{T}, Ref{S})
 
             # covariance
-            @test issubTS == issub(Tuple{T}, Tuple{S})
-            @test issubTS == issub(Tuple{Vararg{T}}, Tuple{Vararg{S}})
-            @test issubTS == issub(Tuple{T}, Tuple{Vararg{S}})
+            if T !== Bottom && S !== Bottom
+                @test issubTS == issub(Tuple{T}, Tuple{S})
+                @test issubTS == issub(Tuple{Vararg{T}}, Tuple{Vararg{S}})
+                @test issubTS == issub(Tuple{T}, Tuple{Vararg{S}})
+            end
 
             # pseudo-contravariance
             @test issubTS == issub(¬S, ¬T)
@@ -1870,8 +1876,11 @@ s26065 = Ref{Tuple{T,Ref{Union{Ref{Tuple{Ref{Union{Ref{Ref{Tuple{Ref{Tuple{Union
              Tuple{Type{Tuple{Vararg{V}}}, Tuple{Vararg{V}}} where V)
 
 # issue 36100
-@test NamedTuple{(:a, :b), Tuple{Missing, Union{}}} == NamedTuple{(:a, :b), Tuple{Missing, Union{}}}
-@test Val{Tuple{Missing, Union{}}} === Val{Tuple{Missing, Union{}}}
+@test Pair{(:a, :b), Tuple{Missing, Vararg{Union{},N}} where N} ===
+      Pair{(:a, :b), Tuple{Missing, Vararg{Union{},N}} where N} !=
+      Pair{(:a, :b), Tuple{Missing, Vararg{Union{}}}} === Pair{(:a, :b), Tuple{Missing}}
+@test Val{Tuple{Missing, Vararg{Union{},N}} where N} === Val{Tuple{Missing, Vararg{Union{},N}} where N} !=
+      Val{Tuple{Missing, Vararg{Union{}}}} === Val{Tuple{Missing}}
 
 # issue #36869
 struct F36869{T, V} <: AbstractArray{Union{T, V}, 1}

@@ -541,6 +541,8 @@ function abstract_call_method(interp::AbstractInterpreter,
         add_remark!(interp, sv, "Refusing to infer into `depwarn`")
         return MethodCallResult(Any, false, false, nothing, Effects())
     end
+    sigtuple = unwrap_unionall(sig)
+    sigtuple isa DataType || return MethodCallResult(Any, false, false, nothing, Effects())
 
     # Limit argument type tuple growth of functions:
     # look through the parents list to see if there's a call to the same method
@@ -577,7 +579,6 @@ function abstract_call_method(interp::AbstractInterpreter,
     washardlimit = hardlimit
 
     if topmost !== nothing
-        sigtuple = unwrap_unionall(sig)::DataType
         msig = unwrap_unionall(method.sig)::DataType
         spec_len = length(msig.parameters) + 1
         ls = length(sigtuple.parameters)
@@ -1394,7 +1395,11 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
             va = isvarargtype(last)
             elts = Any[ fieldtype(tti0, i) for i = 1:len ]
             if va
-                elts[len] = Vararg{elts[len]}
+                if elts[len] === Union{}
+                    pop!(elts)
+                else
+                    elts[len] = Vararg{elts[len]}
+                end
             end
             return AbstractIterationResult(elts, nothing)
         end
@@ -1403,6 +1408,9 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
     elseif tti0 === Any
         return AbstractIterationResult(Any[Vararg{Any}], nothing, Effects())
     elseif tti0 <: Array
+        if eltype(tti0) === Union{}
+            return AbstractIterationResult(Any[], nothing)
+        end
         return AbstractIterationResult(Any[Vararg{eltype(tti0)}], nothing)
     else
         return abstract_iteration(interp, itft, typ, sv)
@@ -2115,7 +2123,7 @@ end
 
 function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
     isref = false
-    if T === Bottom
+    if unwrapva(T) === Bottom
         return Bottom
     elseif isa(T, Type)
         if isa(T, DataType) && (T::DataType).name === _REF_NAME
@@ -2152,8 +2160,13 @@ end
 function abstract_eval_cfunction(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     f = abstract_eval_value(interp, e.args[2], vtypes, sv)
     # rt = sp_type_rewrap(e.args[3], sv.linfo, true)
-    at = Any[ sp_type_rewrap(argt, frame_instance(sv), false) for argt in e.args[4]::SimpleVector ]
-    pushfirst!(at, f)
+    atv = e.args[4]::SimpleVector
+    at = Vector{Any}(undef, length(atv) + 1)
+    at[1] = f
+    for i = 1:length(atv)
+        at[i + 1] = sp_type_rewrap(at[i], frame_instance(sv), false)
+        at[i + 1] === Bottom && return
+    end
     # this may be the wrong world for the call,
     # but some of the result is likely to be valid anyways
     # and that may help generate better codegen
@@ -2370,7 +2383,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
                 end))
                 nothrow = isexact
                 t = Const(ccall(:jl_new_structt, Any, (Any, Any), t, at.val))
-            elseif (isa(at, PartialStruct) && at ⊑ᵢ Tuple && n == length(at.fields::Vector{Any}) &&
+            elseif (isa(at, PartialStruct) && at ⊑ᵢ Tuple && n > 0 && n == length(at.fields::Vector{Any}) && !isvarargtype(at.fields[end]) &&
                     (let t = t, at = at, ⊑ᵢ = ⊑ᵢ
                         all(i::Int->(at.fields::Vector{Any})[i] ⊑ᵢ fieldtype(t, i), 1:n)
                     end))

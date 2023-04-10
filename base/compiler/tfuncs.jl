@@ -1904,7 +1904,15 @@ add_tfunc(apply_type, 1, INT_INF, apply_type_tfunc, 10)
 # convert the dispatch tuple type argtype to the real (concrete) type of
 # the tuple of those values
 function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
+    isempty(argtypes) && return Const(())
     argtypes = anymap(widenslotwrapper, argtypes)
+    if isvarargtype(argtypes[end]) && unwrapva(argtypes[end]) === Union{}
+        # Drop the Vararg in Tuple{...,Vararg{Union{}}} since it must be length 0.
+        # If there is a Vararg num also, it must be a TypeVar, and it must be
+        # zero, but that generally shouldn't show up here, since it implies a
+        # UnionAll context is missing around this.
+        pop!(argtypes)
+    end
     all_are_const = true
     for i in 1:length(argtypes)
         if !isa(argtypes[i], Const)
@@ -1947,6 +1955,8 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
                 params[i] = x
             elseif !isvarargtype(x) && hasintersect(x, Type)
                 params[i] = Union{x, Type}
+            elseif x === Union{}
+                return Bottom # argtypes is malformed, but try not to crash
             else
                 params[i] = x
             end

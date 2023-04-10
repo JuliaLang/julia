@@ -12,7 +12,7 @@ using .Base:
     @inline, Pair, Pairs, AbstractDict, IndexLinear, IndexStyle, AbstractVector, Vector,
     SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
     @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator,
-    AbstractRange, AbstractUnitRange, UnitRange, LinearIndices,
+    AbstractRange, AbstractUnitRange, UnitRange, LinearIndices, TupleOrBottom,
     (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, missing,
     any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
     tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape
@@ -209,7 +209,7 @@ size(e::Enumerate) = size(e.itr)
 end
 last(e::Enumerate) = (length(e.itr), e.itr[end])
 
-eltype(::Type{Enumerate{I}}) where {I} = Tuple{Int, eltype(I)}
+eltype(::Type{Enumerate{I}}) where {I} = TupleOrBottom(Int, eltype(I))
 
 IteratorSize(::Type{Enumerate{I}}) where {I} = IteratorSize(I)
 IteratorEltype(::Type{Enumerate{I}}) where {I} = IteratorEltype(I)
@@ -394,7 +394,7 @@ _promote_tuple_shape((m,)::Tuple{Integer}, (n,)::Tuple{Integer}) = (min(m, n),)
 _promote_tuple_shape(a, b) = promote_shape(a, b)
 _promote_tuple_shape(a, b...) = _promote_tuple_shape(a, _promote_tuple_shape(b...))
 _promote_tuple_shape(a) = a
-eltype(::Type{Zip{Is}}) where {Is<:Tuple} = Tuple{map(eltype, fieldtypes(Is))...}
+eltype(::Type{Zip{Is}}) where {Is<:Tuple} = TupleOrBottom(map(eltype, fieldtypes(Is))...)
 #eltype(::Type{Zip{Tuple{}}}) = Tuple{}
 #eltype(::Type{Zip{Tuple{A}}}) where {A} = Tuple{eltype(A)}
 #eltype(::Type{Zip{Tuple{A, B}}}) where {A, B} = Tuple{eltype(A), eltype(B)}
@@ -1072,8 +1072,7 @@ end
 
 eltype(::Type{ProductIterator{I}}) where {I} = _prod_eltype(I)
 _prod_eltype(::Type{Tuple{}}) = Tuple{}
-_prod_eltype(::Type{I}) where {I<:Tuple} =
-    Tuple{ntuple(n -> eltype(fieldtype(I, n)), _counttuple(I)::Int)...}
+_prod_eltype(::Type{I}) where {I<:Tuple} = TupleOrBottom(ntuple(n -> eltype(fieldtype(I, n)), _counttuple(I)::Int)...)
 
 iterate(::ProductIterator{Tuple{}}) = (), true
 iterate(::ProductIterator{Tuple{}}, state) = nothing
@@ -1442,6 +1441,7 @@ end
 function _approx_iter_type(itrT::Type, vstate::Type)
     vstate <: Union{Nothing, Tuple{Any, Any}} || return Any
     vstate <: Union{} && return Union{}
+    itrT <: Union{} && return Union{}
     nextvstate = Base._return_type(doiterate, Tuple{itrT, vstate})
     return (nextvstate <: vstate ? vstate : Any)
 end

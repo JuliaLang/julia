@@ -1416,7 +1416,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
         jl_value_t *params[2];
         params[0] = xtyp;
         params[1] = (jl_value_t*)jl_bool_type;
-        jl_datatype_t *tuptyp = jl_apply_tuple_type_v(params, 2);
+        jl_datatype_t *tuptyp = (jl_datatype_t*)jl_apply_tuple_type_v(params, 2);
         *newtyp = tuptyp;
 
         Value *tupval;

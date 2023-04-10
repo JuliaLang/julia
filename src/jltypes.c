@@ -1154,7 +1154,7 @@ static jl_value_t *inst_datatype_env(jl_value_t *dt, jl_svec_t *p, jl_value_t **
 jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n)
 {
     if (tc == (jl_value_t*)jl_anytuple_type)
-        return (jl_value_t*)jl_apply_tuple_type_v(params, n);
+        return jl_apply_tuple_type_v(params, n);
     if (tc == (jl_value_t*)jl_uniontype_type)
         return (jl_value_t*)jl_type_union(params, n);
     size_t i;
@@ -1243,20 +1243,20 @@ jl_datatype_t *jl_apply_cmpswap_type(jl_value_t *dt)
     }
     params[0] = dt;
     params[1] = (jl_value_t*)jl_bool_type;
-    jl_datatype_t *tuptyp = jl_apply_tuple_type_v(params, 2);
+    jl_datatype_t *tuptyp = (jl_datatype_t*)jl_apply_tuple_type_v(params, 2);
     JL_GC_PROMISE_ROOTED(tuptyp); // (JL_ALWAYS_LEAFTYPE)
     jl_datatype_t *rettyp = (jl_datatype_t*)jl_apply_type2((jl_value_t*)jl_namedtuple_type, names, (jl_value_t*)tuptyp);
     JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
     return rettyp;
 }
 
-JL_DLLEXPORT jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *v)
+// used to expand an NTuple to a flat representation
+static jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *v)
 {
-    // TODO: replace with just using NTuple
     jl_value_t *p = NULL;
     JL_GC_PUSH1(&p);
     p = (jl_value_t*)jl_svec_fill(n, v);
-    p = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)p);
+    p = jl_apply_tuple_type((jl_svec_t*)p);
     JL_GC_POP();
     return p;
 }
@@ -1662,9 +1662,31 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     int cacheable = 1;
     if (istuple) {
         size_t i;
-        for (i = 0; cacheable && i < ntp; i++)
-            if (!jl_is_concrete_type(iparams[i]) && iparams[i] != jl_bottom_type)
+        for (i = 0; i < ntp; i++) {
+            jl_value_t *pi = iparams[i];
+            if (jl_is_vararg(pi) && jl_unwrap_vararg(pi) == jl_bottom_type) {
+                jl_value_t *va1 = jl_unwrap_vararg_num(pi);
+                if (va1 && jl_is_long(va1)) {
+                    ssize_t nt = jl_unbox_long(va1);
+                    if (nt == 0)
+                        va1 = NULL;
+                    else
+                        pi = jl_bottom_type; // trigger errorf below
+                }
+                // This imposes an implicit constraint that va1==0,
+                // so we keep the Vararg if it has a TypeVar
+                if (va1 == NULL) {
+                    p = NULL;
+                    ntp -= 1;
+                    assert(i == ntp);
+                    break;
+                }
+            }
+            if (pi == jl_bottom_type)
+                jl_errorf("Tuple field type cannot be Union{}");
+            if (cacheable && !jl_is_concrete_type(pi))
                 cacheable = 0;
+        }
     }
     else {
         size_t i;
@@ -1746,7 +1768,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
                 l = ntp - 1 + nt;
                 for (; i < l; i++)
                     jl_svecset(p, i, va0);
-                jl_value_t *ndt = (jl_value_t*)jl_apply_tuple_type(p);
+                jl_value_t *ndt = jl_apply_tuple_type(p);
                 JL_GC_POP();
                 return ndt;
             }
@@ -1875,17 +1897,17 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     return (jl_value_t*)ndt;
 }
 
-static jl_tupletype_t *jl_apply_tuple_type_v_(jl_value_t **p, size_t np, jl_svec_t *params)
+static jl_value_t *jl_apply_tuple_type_v_(jl_value_t **p, size_t np, jl_svec_t *params)
 {
-    return (jl_datatype_t*)inst_datatype_inner(jl_anytuple_type, params, p, np, NULL, NULL, 1);
+    return inst_datatype_inner(jl_anytuple_type, params, p, np, NULL, NULL, 1);
 }
 
-JL_DLLEXPORT jl_tupletype_t *jl_apply_tuple_type(jl_svec_t *params)
+JL_DLLEXPORT jl_value_t *jl_apply_tuple_type(jl_svec_t *params)
 {
     return jl_apply_tuple_type_v_(jl_svec_data(params), jl_svec_len(params), params);
 }
 
-JL_DLLEXPORT jl_tupletype_t *jl_apply_tuple_type_v(jl_value_t **p, size_t np)
+JL_DLLEXPORT jl_value_t *jl_apply_tuple_type_v(jl_value_t **p, size_t np)
 {
     return jl_apply_tuple_type_v_(p, np, NULL);
 }
@@ -1971,7 +1993,7 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_
             ssize_t nt = jl_unbox_long(N);
             if (nt < 0)
                 jl_errorf("size or dimension is negative: %zd", nt);
-            return (jl_value_t*)jl_tupletype_fill(nt, T);
+            return jl_tupletype_fill(nt, T);
         }
     }
     jl_value_t **iparams;
@@ -2442,7 +2464,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_anytuple_type->layout = NULL;
 
     jl_typeofbottom_type->super = jl_wrap_Type(jl_bottom_type);
-    jl_emptytuple_type = jl_apply_tuple_type(jl_emptysvec);
+    jl_emptytuple_type = (jl_datatype_t*)jl_apply_tuple_type(jl_emptysvec);
     jl_emptytuple = jl_gc_permobj(0, jl_emptytuple_type);
     jl_emptytuple_type->instance = jl_emptytuple;
 
