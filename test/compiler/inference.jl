@@ -4841,3 +4841,13 @@ Base.@assume_effects :foldable _recur_irinterp2(x, y) = @noinline recur_irinterp
     recur_irinterp2(0, y)
 end |> only === Tuple{Int,Symbol}
 @test last(recur_irinterp2(0, :y)) === :y
+
+# test Conditional Union splitting of info derived from fieldtype (e.g. in abstract setproperty! handling)
+@test only(Base.return_types((Int, Pair{Int,Nothing}, Symbol)) do a, x, s
+    T = fieldtype(typeof(x), s)
+    if a isa T
+        throw(a)
+    else
+        return T
+    end
+end) == Type{Nothing}
