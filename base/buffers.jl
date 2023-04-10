@@ -48,7 +48,7 @@ struct ElementLayout
         @_foldable_meta
         sz = RefValue{Csize_t}(0)
         al = RefValue{Csize_t}(0)
-        cnt = ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), T, sz, al) != 0
+        cnt = ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), T, sz, al)
         # the number of inline elements represented at each position
         # 0  : boxed pointer
         # 1  : one type
@@ -99,79 +99,80 @@ struct BufferLayout
     end
 end
 
-function allocate_buffer(::Type{T}, len::Int) where {T}
-    lyt = BufferLayout(T, len)
-    if lyt.isinline
-        buf = ccall(:jl_gc_alloc_buffer_inline, Buffer{T}, (Any, Csize_t, Csize_t),  Buffer{T}, len, lyt.object_size)
-    else
-        buf = ccall(:jl_gc_malloc_buffer, Buffer{T}, (Any, Csize_t, Csize_t, Csize_t), Buffer{T}, len, lyt.data_size, lyt.object_size)
-    end
-    if lyt.element_layout.requires_initialization
-        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), buf, 0, lyt.data_size)
-    elseif BUFFER_IMPL_NULL && lyt.elsize === 1
-        t = @_gc_preserve_begin buf
-        unsafe_store!(unsafe_convert(Ptr{UInt8}, buf) + len, 0x00)
-        @_gc_preserve_end t
-    end
-    return buf
+# hack to get proper effects for `pointer(b)` when we know that `b` is preserved from
+# garbage collection
+function _preserved_pointer(b::BufferType{T}) where {T}
+    @_nothrow_meta
+    @_effect_free_terminates_locally_meta
+    unsafe_convert(Ptr{T}, b)
 end
 
-function bufref(b::BufferType{T}, i::Int) where {T}
+function get_buffer_value(b::BufferType{T}, i::Int, bounds_check::Bool, assigned_check::Bool) where {T}
     lyt = ElementLayout(T)
+    idx0 = i - 1
     if lyt.nvariants === 0
-        @boundscheck 1 <= i <= length(b) || throw(BoundsError(b, i))
+        bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
         t = @_gc_preserve_begin b
-        p = unsafe_convert(Ptr{T}, b) + ((i - 1) * lyt.elsize)
-        out = ccall(:jl_value_ptr, Ref{T}, (Ptr{Cvoid},), unsafe_load(Base.unsafe_convert(Ptr{Ptr{Cvoid}}, p)))
+        p = _preserved_pointer(b) + (idx0 * Core.sizeof(Ptr{Cvoid}))
+        pt = unsafe_load(unsafe_convert(Ptr{Ptr{T}}, p))
+        assigned_check || (pt === C_NULL && throw(UndefRefError()))
+        out = unsafe_load(pt)
         @_gc_preserve_end t
+        return out
     elseif lyt.nvariants === 1
-        @boundscheck 1 <= i <= length(b) || throw(BoundsError(b, i))
-        t = @_gc_preserve_begin b
-        out = unsafe_load(unsafe_convert(Ptr{T}, b) + ((i - 1) * lyt.elsize))
-        @_gc_preserve_end t
+        bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
+        if isdefined(T, :instance)
+            return getfield(T, :instance)
+        else
+            t = @_gc_preserve_begin b
+            out = unsafe_load(_preserved_pointer(b) + (idx0 * lyt.elsize))
+            @_gc_preserve_end t
+            return out
+        end
     else
         len = length(b)
-        @boundscheck 1 <= i <= len || throw(BoundsError(b, i))
+        bounds_check && (1 <= i <= len || throw(BoundsError(b, i)))
         t = @_gc_preserve_begin b
-        idx = i - 1
-        p = unsafe_convert(Ptr{T}, b)
-        tag = unsafe_load(unsafe_convert(Ptr{UInt8}, p) + (lyt.elsize * len) + idx)
+        p = _preserved_pointer(b)
+        tag = unsafe_load(unsafe_convert(Ptr{UInt8}, p) + (lyt.elsize * len) + idx0)
         vt = tag_to_variant(T, tag)
         if isdefined(vt, :instance)
             out = vt.instance
         else
-            out = unsafe_load(unsafe_convert(Ptr{vt}, p) + (idx * lyt.elsize))
+            out = unsafe_load(unsafe_convert(Ptr{vt}, p) + (idx0 * lyt.elsize))
         end
         @_gc_preserve_end t
+        return out
     end
-    return out
 end
 
-function bufset!(b::BufferType{T}, v::T, i::Int) where {T}
+function set_buffer_value!(b::BufferType{T}, v::T, i::Int, bounds_check::Bool) where {T}
     lyt = ElementLayout(T)
+    idx0 = i - 1
     if lyt.nvariants === 0
-        @boundscheck 1 <= i <= length(b) || throw(BoundsError(b, i))
+        bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
         t = @_gc_preserve_begin b
-        p = unsafe_convert(Ptr{T}, b) + ((i - 1) * lyt.elsize)
+        p = unsafe_convert(Ptr{T}, b) + (idx0 * lyt.elsize)
         # FIXME this won't work for immutable values
         unsafe_store!(unsafe_convert(Ptr{Ptr{Cvoid}}, p), pointer_from_objref(v))
         @_gc_preserve_end t
     elseif lyt.nvariants === 1
-        @boundscheck 1 <= i <= length(b) || throw(BoundsError(b, i))
-        t = @_gc_preserve_begin b
-        unsafe_store!(unsafe_convert(Ptr{T}, b) + ((i - 1) * lyt.elsize), v)
-        @_gc_preserve_end t
+        bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
+        if !isdefined(vt, :instance)
+            t = @_gc_preserve_begin b
+            unsafe_store!(unsafe_convert(Ptr{T}, b) + (idx0 * lyt.elsize), v)
+            @_gc_preserve_end t
+        end
     else
         len = length(b)
-        @boundscheck 1 <= i <= len || throw(BoundsError(b, i))
+        bounds_check && (1 <= i <= len || throw(BoundsError(b, i)))
         t = @_gc_preserve_begin b
-        idx = i - 1
         p = unsafe_convert(Ptr{T}, b)
         vt = typeof(v)
         tag = variant_to_tag(T, vt)
-        unsafe_store!(convert(Ptr{UInt8}, p) + (lyt.elsize * len) + idx, tag)
+        unsafe_store!(convert(Ptr{UInt8}, p) + (lyt.elsize * len) + idx0, tag)
         if !isdefined(vt, :instance)
-            unsafe_store!(unsafe_convert(Ptr{vt}, p) + (idx * lyt.elsize), v)
+            unsafe_store!(unsafe_convert(Ptr{vt}, p) + (idx0 * lyt.elsize), v)
         end
         @_gc_preserve_end t
     end
@@ -200,8 +201,22 @@ DynamicBuffer
 
 if !isdefined(Main, :Base)
 
-Buffer{T}(::UndefInitializer, len::Int) where {T} =
-    ccall(:jl_new_buffer, Buffer{T}, (Any, Int), Buffer{T}, len)
+function Buffer{T}(::UndefInitializer, len::Int) where {T}
+    lyt = BufferLayout(T, len)
+    if lyt.isinline
+        buf = ccall(:jl_gc_alloc_buffer_inline, Buffer{T}, (Any, Csize_t, Csize_t),  Buffer{T}, len, lyt.object_size)
+    else
+        buf = ccall(:jl_gc_malloc_buffer, Buffer{T}, (Any, Csize_t, Csize_t, Csize_t), Buffer{T}, len, lyt.data_size, lyt.object_size)
+    end
+    if lyt.element_layout.requires_initialization
+        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), buf, 0, lyt.data_size)
+    elseif BUFFER_IMPL_NULL && lyt.elsize === 1
+        t = @_gc_preserve_begin buf
+        unsafe_store!(unsafe_convert(Ptr{UInt8}, buf) + len, 0x00)
+        @_gc_preserve_end t
+    end
+    return buf
+end
 Buffer(a::AbstractArray{T}) where {T} = Buffer{T}(a)
 function Buffer{T}(a::AbstractArray) where {T}
     n = length(a)
@@ -214,8 +229,22 @@ function Buffer{T}(a::AbstractArray) where {T}
     return b
 end
 
-DynamicBuffer{T}(::UndefInitializer, len::Int) where {T} =
-    ccall(:jl_new_buffer, DynamicBuffer{T}, (Any, Int), DynamicBuffer{T}, len)
+function DynamicBuffer{T}(::UndefInitializer, len::Int) where {T}
+    lyt = BufferLayout(T, len)
+    if lyt.isinline
+        buf = ccall(:jl_gc_alloc_buffer_inline, DynamicBuffer{T}, (Any, Csize_t, Csize_t),  DynamicBuffer{T}, len, lyt.object_size)
+    else
+        buf = ccall(:jl_gc_malloc_buffer, DynamicBuffer{T}, (Any, Csize_t, Csize_t, Csize_t), DynamicBuffer{T}, len, lyt.data_size, lyt.object_size)
+    end
+    if lyt.element_layout.requires_initialization
+        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), buf, 0, lyt.data_size)
+    elseif BUFFER_IMPL_NULL && lyt.elsize === 1
+        t = @_gc_preserve_begin buf
+        unsafe_store!(unsafe_convert(Ptr{UInt8}, buf) + len, 0x00)
+        @_gc_preserve_end t
+    end
+    return buf
+end
 DynamicBuffer(a::AbstractArray{T}) where {T} = Dynamicfer{T}(a)
 function DynamicBuffer{T}(a::AbstractArray) where {T}
     n = length(a)
