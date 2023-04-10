@@ -478,7 +478,6 @@
     XX(jl_try_substrtod) \
     XX(jl_try_substrtof) \
     XX(jl_tty_set_mode) \
-    XX(jl_tupletype_fill) \
     XX(jl_typeassert) \
     XX(jl_typeinf_lock_begin) \
     XX(jl_typeinf_lock_end) \

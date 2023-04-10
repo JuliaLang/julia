@@ -187,6 +187,7 @@ function typesubtract(@nospecialize(a), @nospecialize(b), max_union_splitting::I
                             bp = b.parameters[i]
                             (isvarargtype(ap) || isvarargtype(bp)) && return a
                             ta[i] = typesubtract(ap, bp, min(2, max_union_splitting))
+                            ta[i] === Union{} && return Union{}
                             return Tuple{ta...}
                         end
                     end
