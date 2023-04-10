@@ -308,6 +308,15 @@ function _unioncomplexity(@nospecialize x)
     end
 end
 
+function unionall_depth(@nospecialize ua) # aka subtype_env_size
+    depth = 0
+    while ua isa UnionAll
+        depth += 1
+        ua = ua.body
+    end
+    return depth
+end
+
 # convert a Union of Tuple types to a Tuple of Unions
 function unswitchtupleunion(u::Union)
     ts = uniontypes(u)

@@ -1779,31 +1779,55 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
             uncertain = true
             unw = unwrap_unionall(ai)
             isT = isType(unw)
+            # compute our desired upper bound value
             if isT
-                tai = ai
-                while isa(tai, UnionAll)
-                    if contains_is(outervars, tai.var)
-                        ai = rename_unionall(ai)
-                        unw = unwrap_unionall(ai)
-                        break
-                    end
-                    tai = tai.body
-                end
+                ub = rewrap_unionall(unw.parameters[1], ai)
+            else
+                ub = Any
             end
-            ai_w = widenconst(ai)
-            ub = ai_w isa Type && ai_w <: Type ? instanceof_tfunc(ai)[1] : Any
+            if !istuple && unionall_depth(ai) > 3
+                # Heuristic: if we are adding more than N unknown parameters here to the
+                # outer type, use the wrapper type, instead of letting it nest more
+                # complexity here. This is not monotonic, but seems to work out pretty well.
+                if isT
+                    ub = unwrap_unionall(unw.parameters[1])
+                    if ub isa DataType
+                        ub = ub.name.wrapper
+                        unw = Type{unwrap_unionall(ub)}
+                        ai = rewrap_unionall(unw, ub)
+                    else
+                        isT = false
+                        ai = unw = ub = Any
+                    end
+                else
+                    isT = false
+                    ai = unw = ub = Any
+                end
+            elseif !isT
+                # if we didn't have isType to compute ub directly, try to use instanceof_tfunc to refine this guess
+                ai_w = widenconst(ai)
+                ub = ai_w isa Type && ai_w <: Type ? instanceof_tfunc(ai)[1] : Any
+            end
             if istuple
                 # in the last parameter of a Tuple type, if the upper bound is Any
                 # then this could be a Vararg type.
                 if i == largs && ub === Any
-                    push!(tparams, Vararg)
-                elseif isT
-                    push!(tparams, rewrap_unionall((unw::DataType).parameters[1], ai))
-                else
-                    push!(tparams, Any)
+                    ub = Vararg
                 end
+                push!(tparams, ub)
             elseif isT
-                push!(tparams, (unw::DataType).parameters[1])
+                tai = ai
+                while isa(tai, UnionAll)
+                    # make sure vars introduced here are unique
+                    if contains_is(outervars, tai.var)
+                        ai = rename_unionall(ai)
+                        unw = unwrap_unionall(ai)::DataType
+                        # ub = rewrap_unionall(unw, ai)
+                        break
+                    end
+                    tai = tai.body
+                end
+                push!(tparams, unw.parameters[1])
                 while isa(ai, UnionAll)
                     push!(outervars, ai.var)
                     ai = ai.body
