@@ -342,7 +342,7 @@ end
 @eval struct Pairs{K, V, I, A} <: AbstractDict{K, V}
     data::A
     itr::I
-    Pairs{K, V, I, A}(data, itr) where {K, V, I, A} = $(Expr(:new, :(Pairs{K, V, I, A}), :(convert(A, data)), :(convert(I, itr))))
+    Pairs{K, V, I, A}(data, itr) where {K, V, I, A} = $(Expr(:new, :(Pairs{K, V, I, A}), :(data isa A ? data : convert(A, data)), :(itr isa I ? itr : convert(I, itr))))
     Pairs{K, V}(data::A, itr::I) where {K, V, I, A} = $(Expr(:new, :(Pairs{K, V, I, A}), :data, :itr))
     Pairs{K}(data::A, itr::I) where {K, I, A} = $(Expr(:new, :(Pairs{K, eltype(A), I, A}), :data, :itr))
     Pairs(data::A, itr::I) where  {I, A} = $(Expr(:new, :(Pairs{eltype(I), eltype(A), I, A}), :data, :itr))
@@ -459,7 +459,13 @@ function convert(::Type{T}, x::NTuple{N,Any}) where {N, T<:Tuple}
     if typeintersect(NTuple{N,Any}, T) === Union{}
         _tuple_error(T, x)
     end
-    cvt1(n) = (@inline; convert(fieldtype(T, n), getfield(x, n, #=boundscheck=#false)))
+    function cvt1(n)
+        @inline
+        Tn = fieldtype(T, n)
+        xn = getfield(x, n, #=boundscheck=#false)
+        xn isa Tn && return xn
+        return convert(Tn, xn)
+    end
     return ntuple(cvt1, Val(N))::NTuple{N,Any}
 end
 
@@ -512,7 +518,7 @@ julia> oftype(y, x)
 4.0
 ```
 """
-oftype(x, y) = convert(typeof(x), y)
+oftype(x, y) = y isa typeof(x) ? y : convert(typeof(x), y)::typeof(x)
 
 unsigned(x::Int) = reinterpret(UInt, x)
 signed(x::UInt) = reinterpret(Int, x)
@@ -533,7 +539,7 @@ Neither `convert` nor `cconvert` should take a Julia object and turn it into a `
 """
 function cconvert end
 
-cconvert(T::Type, x) = convert(T, x) # do the conversion eagerly in most cases
+cconvert(T::Type, x) = x isa T ? x : convert(T, x) # do the conversion eagerly in most cases
 cconvert(::Type{<:Ptr}, x) = x # but defer the conversion to Ptr to unsafe_convert
 unsafe_convert(::Type{T}, x::T) where {T} = x # unsafe_convert (like convert) defaults to assuming the convert occurred
 unsafe_convert(::Type{T}, x::T) where {T<:Ptr} = x  # to resolve ambiguity with the next method

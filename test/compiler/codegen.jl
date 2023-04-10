@@ -649,7 +649,7 @@ end
 
 # issue #41157
 f41157(a, b) = a[1] = b[1]
-@test_throws BoundsError f41157(Tuple{Int}[], Tuple{Union{}}[])
+@test_throws BoundsError f41157(Tuple{Int}[], (NTuple{N,Union{}} where N)[])
 
 # issue #41096
 struct Modulate41096{M<:Union{Function, Val{true}, Val{false}}, id}
@@ -785,11 +785,6 @@ f_isa_type(@nospecialize(x)) = isa(x, Type)
 # Issue #47247
 f47247(a::Ref{Int}, b::Nothing) = setfield!(a, :x, b)
 @test_throws TypeError f47247(Ref(5), nothing)
-
-@testset "regression in generic_bitcast: should support Union{} values" begin
-    f(x) = Core.bitcast(UInt64, x)
-    @test occursin("llvm.trap", get_llvm(f, Tuple{Union{}}))
-end
 
 f48085(@nospecialize x...) = length(x)
 @test Core.Compiler.get_compileable_sig(which(f48085, (Vararg{Any},)), Tuple{typeof(f48085), Vararg{Int}}, Core.svec()) === nothing

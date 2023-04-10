@@ -117,9 +117,9 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
     # to the appropriate `Tuple` type or `PartialStruct` instance.
     if !toplevel && isva
         if specTypes::Type == Tuple
+            linfo_argtypes = Any[Any for i = 1:nargs]
             if nargs > 1
-                linfo_argtypes = Any[Any for i = 1:nargs]
-                linfo_argtypes[end] = Vararg{Any}
+                linfo_argtypes[end] = Tuple
             end
             vargtype = Tuple
         else
