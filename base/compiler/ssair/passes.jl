@@ -604,21 +604,6 @@ function is_old(compact, @nospecialize(old_node_ssa))
         !already_inserted(compact, old_node_ssa)
 end
 
-mutable struct LazyGenericDomtree{IsPostDom}
-    ir::IRCode
-    domtree::GenericDomTree{IsPostDom}
-    LazyGenericDomtree{IsPostDom}(ir::IRCode) where {IsPostDom} = new{IsPostDom}(ir)
-end
-function get!(x::LazyGenericDomtree{IsPostDom}) where {IsPostDom}
-    isdefined(x, :domtree) && return x.domtree
-    return @timeit "domtree 2" x.domtree = IsPostDom ?
-        construct_postdomtree(x.ir.cfg.blocks) :
-        construct_domtree(x.ir.cfg.blocks)
-end
-
-const LazyDomtree = LazyGenericDomtree{false}
-const LazyPostDomtree = LazyGenericDomtree{true}
-
 function perform_lifting!(compact::IncrementalCompact,
         visited_phinodes::Vector{AnySSAValue}, @nospecialize(cache_key),
         lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},

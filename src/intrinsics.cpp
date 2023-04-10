@@ -46,10 +46,10 @@ FunctionType *get_intr_args5(LLVMContext &C) { return FunctionType::get(JuliaTyp
 
 const auto &runtime_func() {
     static struct runtime_funcs_t {
-        std::array<JuliaFunction *, num_intrinsics> runtime_func;
+        std::array<JuliaFunction<> *, num_intrinsics> runtime_func;
         runtime_funcs_t() :
         runtime_func{
-#define ADD_I(name, nargs) new JuliaFunction{XSTR(jl_##name), get_intr_args##nargs, nullptr},
+#define ADD_I(name, nargs) new JuliaFunction<>{XSTR(jl_##name), get_intr_args##nargs, nullptr},
 #define ADD_HIDDEN ADD_I
 #define ALIAS(alias, base) nullptr,
     INTRINSICS
@@ -505,20 +505,25 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
     Type *llvmt = bitstype_to_llvm((jl_value_t*)bt, ctx.builder.getContext(), true);
     uint32_t nb = jl_datatype_size(bt);
 
+    Value *bt_value_rt = NULL;
+    if (!jl_is_concrete_type((jl_value_t*)bt)) {
+        bt_value_rt = boxed(ctx, bt_value);
+        emit_concretecheck(ctx, bt_value_rt, "bitcast: target type not a leaf primitive type");
+    }
+
     // Examine the second argument //
     bool isboxed;
     Type *vxt = julia_type_to_llvm(ctx, v.typ, &isboxed);
-
     if (!jl_is_primitivetype(v.typ) || jl_datatype_size(v.typ) != nb) {
         Value *typ = emit_typeof_boxed(ctx, v);
         if (!jl_is_primitivetype(v.typ)) {
             if (jl_is_datatype(v.typ) && !jl_is_abstracttype(v.typ)) {
-                emit_error(ctx, "bitcast: expected primitive type value for second argument");
+                emit_error(ctx, "bitcast: value not a primitive type");
                 return jl_cgval_t();
             }
             else {
                 Value *isprimitive = emit_datatype_isprimitivetype(ctx, typ);
-                error_unless(ctx, isprimitive, "bitcast: expected primitive type value for second argument");
+                error_unless(ctx, isprimitive, "bitcast: value not a primitive type");
             }
         }
         if (jl_is_datatype(v.typ) && !jl_is_abstracttype(v.typ)) {
@@ -571,7 +576,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
         return mark_julia_type(ctx, vx, false, bt);
     }
     else {
-        Value *box = emit_allocobj(ctx, nb, boxed(ctx, bt_value));
+        Value *box = emit_allocobj(ctx, nb, bt_value_rt);
         init_bits_value(ctx, box, vx, ctx.tbaa().tbaa_immut);
         return mark_julia_type(ctx, box, true, bt->name->wrapper);
     }
@@ -625,7 +630,9 @@ static jl_cgval_t generic_cast(
         return mark_julia_type(ctx, ans, false, jlto);
     }
     else {
-        Value *box = emit_allocobj(ctx, nb, boxed(ctx, targ));
+        Value *targ_rt = boxed(ctx, targ);
+        emit_concretecheck(ctx, targ_rt, std::string(jl_intrinsic_name(f)) + ": target type not a leaf primitive type");
+        Value *box = emit_allocobj(ctx, nb, targ_rt);
         init_bits_value(ctx, box, ans, ctx.tbaa().tbaa_immut);
         return mark_julia_type(ctx, box, true, jlto->name->wrapper);
     }
@@ -735,7 +742,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
     Value *thePtr;
     if (ety == (jl_value_t*)jl_any_type) {
         // unsafe_store to Ptr{Any} is allowed to implicitly drop GC roots.
-        thePtr = emit_unbox(ctx, getSizePtrTy(ctx.builder.getContext()), e, e.typ);
+        thePtr = emit_unbox(ctx, ctx.types().T_size->getPointerTo(), e, e.typ);
         Instruction *store = ctx.builder.CreateAlignedStore(
           ctx.builder.CreatePtrToInt(emit_pointer_from_objref(ctx, boxed(ctx, x)), ctx.types().T_size),
             ctx.builder.CreateInBoundsGEP(ctx.types().T_size, thePtr, im1), Align(align_nb));

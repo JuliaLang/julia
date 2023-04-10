@@ -4762,3 +4762,64 @@ fhasmethod(::Integer, ::Int32) = 3
 @test only(Base.return_types(()) do; Val(hasmethod(tuple, Tuple{Vararg{Int}})); end) === Val{true}
 @test only(Base.return_types(()) do; Val(hasmethod(sin, Tuple{Int, Vararg{Int}})); end) == Val{false}
 @test only(Base.return_types(()) do; Val(hasmethod(sin, Tuple{Int, Int, Vararg{Int}})); end) === Val{false}
+
+# TODO (#48913) enable interprocedural call inference from irinterp
+# # interprocedural call inference from irinterp
+# @noinline Base.@assume_effects :total issue48679_unknown_any(x) = Base.inferencebarrier(x)
+
+# @noinline _issue48679(y::Union{Nothing,T}) where {T} = T::Type
+# Base.@constprop :aggressive function issue48679(x, b)
+#     if b
+#         x = issue48679_unknown_any(x)
+#     end
+#     return _issue48679(x)
+# end
+# @test Base.return_types((Float64,)) do x
+#     issue48679(x, false)
+# end |> only == Type{Float64}
+
+# Base.@constprop :aggressive @noinline _issue48679_const(b, y::Union{Nothing,T}) where {T} = b ? nothing : T::Type
+# Base.@constprop :aggressive function issue48679_const(x, b)
+#     if b
+#         x = issue48679_unknown_any(x)
+#     end
+#     return _issue48679_const(b, x)
+# end
+# @test Base.return_types((Float64,)) do x
+#     issue48679_const(x, false)
+# end |> only == Type{Float64}
+
+# `invoke` call in irinterp
+@noinline _irinterp_invoke(x::Any) = :any
+@noinline _irinterp_invoke(x::T) where T = T
+Base.@constprop :aggressive Base.@assume_effects :foldable function irinterp_invoke(x::T, b) where T
+    return @invoke _irinterp_invoke(x::(b ? T : Any))
+end
+@test Base.return_types((Int,)) do x
+    irinterp_invoke(x, true)
+end |> only == Type{Int}
+
+# recursion detection for semi-concrete interpretation
+# avoid direct infinite loop via `concrete_eval_invoke`
+Base.@assume_effects :foldable function recur_irinterp1(x, y)
+    if rand(Bool)
+        return x, y
+    end
+    return recur_irinterp1(x+1, y)
+end
+@test Base.return_types((Symbol,)) do y
+    recur_irinterp1(0, y)
+end |> only === Tuple{Int,Symbol}
+@test last(recur_irinterp1(0, :y)) === :y
+# avoid indirect infinite loop via `concrete_eval_invoke`
+Base.@assume_effects :foldable function recur_irinterp2(x, y)
+    if rand(Bool)
+        return x, y
+    end
+    return _recur_irinterp2(x+1, y)
+end
+Base.@assume_effects :foldable _recur_irinterp2(x, y) = @noinline recur_irinterp2(x, y)
+@test Base.return_types((Symbol,)) do y
+    recur_irinterp2(0, y)
+end |> only === Tuple{Int,Symbol}
+@test last(recur_irinterp2(0, :y)) === :y

@@ -125,9 +125,9 @@ struct InliningState{Interp<:AbstractInterpreter}
     world::UInt
     interp::Interp
 end
-function InliningState(frame::InferenceState, interp::AbstractInterpreter)
-    et = EdgeTracker(frame.stmt_edges[1]::Vector{Any}, frame.valid_worlds)
-    return InliningState(et, frame.world, interp)
+function InliningState(sv::InferenceState, interp::AbstractInterpreter)
+    et = EdgeTracker(sv.stmt_edges[1]::Vector{Any}, sv.valid_worlds)
+    return InliningState(et, sv.world, interp)
 end
 function InliningState(interp::AbstractInterpreter)
     return InliningState(nothing, get_world_counter(interp), interp)
@@ -150,12 +150,12 @@ mutable struct OptimizationState{Interp<:AbstractInterpreter}
     cfg::Union{Nothing,CFG}
     insert_coverage::Bool
 end
-function OptimizationState(frame::InferenceState, interp::AbstractInterpreter,
+function OptimizationState(sv::InferenceState, interp::AbstractInterpreter,
                            recompute_cfg::Bool=true)
-    inlining = InliningState(frame, interp)
-    cfg = recompute_cfg ? nothing : frame.cfg
-    return OptimizationState(frame.linfo, frame.src, nothing, frame.stmt_info, frame.mod,
-               frame.sptypes, frame.slottypes, inlining, cfg, frame.insert_coverage)
+    inlining = InliningState(sv, interp)
+    cfg = recompute_cfg ? nothing : sv.cfg
+    return OptimizationState(sv.linfo, sv.src, nothing, sv.stmt_info, sv.mod,
+                             sv.sptypes, sv.slottypes, inlining, cfg, sv.insert_coverage)
 end
 function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::AbstractInterpreter)
     # prepare src for running optimization passes if it isn't already
@@ -389,8 +389,8 @@ function argextype(
         return Const(x)
     end
 end
+abstract_eval_ssavalue(s::SSAValue, src::CodeInfo) = abstract_eval_ssavalue(s, src.ssavaluetypes::Vector{Any})
 abstract_eval_ssavalue(s::SSAValue, src::Union{IRCode,IncrementalCompact}) = types(src)[s]
-
 
 """
     finish(interp::AbstractInterpreter, opt::OptimizationState,

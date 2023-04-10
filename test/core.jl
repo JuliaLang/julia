@@ -7977,3 +7977,7 @@ end
 
 f48950(::Union{Int,d}, ::Union{c,Nothing}...) where {c,d} = 1
 @test f48950(1, 1, 1) == 1
+
+# Module as tparam in unionall
+struct ModTParamUnionAll{A, B}; end
+@test isa(objectid(ModTParamUnionAll{Base}), UInt)

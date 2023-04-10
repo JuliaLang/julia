@@ -301,6 +301,7 @@ static inline void memmove_refs(void **dstp, void *const *srcp, size_t n) JL_NOT
 #define GC_MARKED 1 // reachable and young
 #define GC_OLD    2 // if it is reachable it will be marked as old
 #define GC_OLD_MARKED (GC_OLD | GC_MARKED) // reachable and old
+#define GC_IN_IMAGE 4
 
 // useful constants
 extern jl_methtable_t *jl_type_type_mt JL_GLOBALLY_ROOTED;
@@ -693,6 +694,7 @@ JL_DLLEXPORT int jl_type_morespecific_no_subtype(jl_value_t *a, jl_value_t *b);
 jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n);
 JL_DLLEXPORT jl_value_t *jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals);
 jl_value_t *jl_substitute_var(jl_value_t *t, jl_tvar_t *var, jl_value_t *val);
+jl_unionall_t *jl_rename_unionall(jl_unionall_t *u);
 JL_DLLEXPORT jl_value_t *jl_unwrap_unionall(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u);
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall_(jl_value_t *t, jl_value_t *u);

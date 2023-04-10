@@ -348,6 +348,8 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
     }
     if (tv == jl_symbol_type)
         return ((jl_sym_t*)v)->hash;
+    if (tv == jl_module_type)
+        return ((jl_module_t*)v)->hash;
     assert(!tv->name->mutabl);
     return immut_id_(tv, v, tv->hash);
 }
