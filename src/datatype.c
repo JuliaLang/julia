@@ -109,6 +109,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->name = NULL;
     t->super = NULL;
     t->parameters = NULL;
+    t->freevars = NULL;
     t->layout = NULL;
     t->types = NULL;
     t->instance = NULL;
@@ -715,7 +716,8 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     t->super = super;
     if (super != NULL) jl_gc_wb(t, t->super);
     t->parameters = parameters;
-    jl_gc_wb(t, t->parameters);
+    t->freevars = parameters;
+    jl_gc_wb(t, parameters);
     t->types = ftypes;
     if (ftypes != NULL) jl_gc_wb(t, t->types);
 

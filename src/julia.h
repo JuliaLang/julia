@@ -538,6 +538,7 @@ typedef struct _jl_datatype_t {
     jl_typename_t *name;
     struct _jl_datatype_t *super;
     jl_svec_t *parameters;
+    jl_svec_t *freevars;
     jl_svec_t *types;
     jl_value_t *instance;  // for singletons
     const jl_datatype_layout_t *layout;
