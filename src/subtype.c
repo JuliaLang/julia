@@ -2733,16 +2733,34 @@ static jl_value_t *omit_bad_union(jl_value_t *u, jl_tvar_t *t)
     if (jl_is_unionall(u)) {
         jl_tvar_t *var = ((jl_unionall_t *)u)->var;
         jl_value_t *ub = var->ub, *body = ((jl_unionall_t *)u)->body;
-        JL_GC_PUSH3(&ub, &body, &var);
         assert(var != t);
-        ub = omit_bad_union(ub, t);
-        body = omit_bad_union(body, t);
-        if (ub != NULL && body != NULL && !jl_has_typevar(var->lb, t)) {
-            if (ub != var->ub) {
-                var = jl_new_typevar(var->name, var->lb, ub);
-                body = jl_substitute_var(body, ((jl_unionall_t *)u)->var, (jl_value_t *)var);
+        if (!jl_has_typevar(var->lb, t)) {
+            JL_GC_PUSH3(&ub, &body, &var);
+            body = omit_bad_union(body, t);
+            if (!jl_has_typevar(body, var)) {
+                res = body;
             }
-            res = jl_new_struct(jl_unionall_type, var, body);
+            else {
+                ub = omit_bad_union(ub, t);
+                if (ub == jl_bottom_type && var->lb != ub) {
+                    res = jl_bottom_type;
+                }
+                else if (obviously_egal(var->lb, ub)) {
+                    JL_TRY {
+                        res = jl_substitute_var(body, var, ub);
+                    }
+                    JL_CATCH {
+                        res = jl_bottom_type;
+                    }
+                }
+                else {
+                    if (ub != var->ub) {
+                        var = jl_new_typevar(var->name, var->lb, ub);
+                        body = jl_substitute_var(body, ((jl_unionall_t *)u)->var, (jl_value_t *)var);
+                    }
+                    res = jl_new_struct(jl_unionall_type, var, body);
+                }
+            }
         }
         JL_GC_POP();
     }
@@ -2752,11 +2770,13 @@ static jl_value_t *omit_bad_union(jl_value_t *u, jl_tvar_t *t)
         JL_GC_PUSH2(&a, &b);
         a = omit_bad_union(a, t);
         b = omit_bad_union(b, t);
-        res = a == NULL ? b :
-              b == NULL ? a :
-              simple_join(a, b);
+        res = simple_join(a, b);
         JL_GC_POP();
     }
+    else {
+        res = jl_bottom_type;
+    }
+    assert(res != NULL);
     return res;
 }
 
@@ -2833,7 +2853,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         if (jl_has_typevar(btemp->ub, vb->var)) {
             if (vb->ub == (jl_value_t*)btemp->var) {
                 btemp->ub = omit_bad_union(btemp->ub, vb->var);
-                if (btemp->ub == NULL) {
+                if (btemp->ub == jl_bottom_type && btemp->ub != btemp->lb) {
                     JL_GC_POP();
                     return jl_bottom_type;
                 }
@@ -2997,7 +3017,7 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
             JL_GC_PUSH1(&res);
             vb->ub = omit_bad_union(vb->ub, u->var);
             JL_GC_POP();
-            if (vb->ub == NULL)
+            if (vb->ub == jl_bottom_type && vb->ub != vb->lb)
                 res = jl_bottom_type;
         }
     }
