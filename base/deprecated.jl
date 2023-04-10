@@ -310,6 +310,8 @@ end
 
 # BEGIN 1.8 deprecations
 
+@deprecate unionlen(t) nvariants(t)
+
 const var"@_inline_meta" = var"@inline"
 const var"@_noinline_meta" = var"@noinline"
 @deprecate getindex(t::Tuple, i::Real) t[convert(Int, i)]
