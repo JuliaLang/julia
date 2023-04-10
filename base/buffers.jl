@@ -1,5 +1,183 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+function tag_to_variant(t::Union, tag::UInt8)
+    @_total_meta
+    a = t.a
+    b = t.b
+    while true
+        tag === 0x00 && return a
+        isa(b, Union) || return (tag === 0x00 ? b : Union{})
+        a = b.a
+        b = b.b
+        tag -= 0x01
+    end
+end
+
+function variant_to_tag(t::Union, @nospecialize(vt))
+    @_total_meta
+    tag = 0x00
+    a = t.a
+    b = t.b
+    while true
+        vt <: a && return tag
+        tag += 0x01
+        # if last member of union doesn'vt match `vt` then return tag that will never be
+        # reached by `tag_to_variant`
+        isa(b, Union) || return (b == vt ? tag : (tag + 0x01))
+        a = b.a
+        b = b.b
+    end
+end
+
+const BUFFER_IMPL_NULL = false
+const N_CALL_CACHE = 4096
+const ARRAY_INLINE_NBYTES = 2048 * sizeof(Int)
+const ARRAY_CACHE_ALIGN_THRESHOLD = 2048
+const CACHE_BYTE_ALIGNMENT = 64
+const SMALL_BYTE_ALIGNMENT = 16
+const MIN_BUFFER_SIZE = sizeof(Int) + sizeof(Int)
+
+struct ElementLayout
+    nvariants::Int
+    elsize::Int
+    alignment::Int
+    hasptr::Bool
+    requires_initialization::Bool
+
+    function ElementLayout(@nospecialize(T::Type))
+        @_foldable_meta
+        sz = RefValue{Csize_t}(0)
+        al = RefValue{Csize_t}(0)
+        cnt = ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), T, sz, al) != 0
+        # the number of inline elements represented at each position
+        # 0  : boxed pointer
+        # 1  : one type
+        # >1 : bits union
+        nvariants = (cnt == 0 || cnt > 127) ? 0 : Int(cnt)
+        if nvariants === 0
+            elsz = alignment = Core.sizeof(Ptr{Cvoid})
+        else
+            alignment = Int(al[])
+            elsz = Int(LLT_ALIGN(sz[], alignment))
+        end
+        hasptr = nvariants !== 0 && isa(T, DataType) && !datatype_pointerfree(T)
+        zeroinit = nvariants !== 1 || hasptr || (isa(T, DataType) && (T.flags & 0x0010) == 0x0010)
+        return new(nvariants, elsz, alignment, hasptr, zeroinit)
+    end
+end
+
+struct BufferLayout
+    element_layout::ElementLayout
+    data_size::Int
+    object_size::Int
+    isinline::Bool
+
+    function BufferLayout(@nospecialize(T::Type), len::Int)
+        @_foldable_meta
+        lyt = ElementLayout(T)
+        data_size = len * lyt.elsize
+        if lyt.nvariants !== 0
+            if lyt.nvariants === 1
+                data_size += 1
+            else
+                data_size += len
+            end
+        end
+        object_size = MIN_BUFFER_SIZE
+        if data_size <= ARRAY_INLINE_NBYTES
+            if data_size >= ARRAY_CACHE_ALIGN_THRESHOLD
+                object_size = LLT_ALIGN(object_size, CACHE_BYTE_ALIGNMENT)
+            elseif lyt.nvariants !== 0 && lyt.elsize >= 4
+                object_size = LLT_ALIGN(object_size, SMALL_BYTE_ALIGNMENT)
+            end
+            object_size += data_size
+            isinline = true
+        else
+            isinline = false
+        end
+        return new(lyt, data_size, object_size, isinline)
+    end
+end
+
+function allocate_buffer(::Type{T}, len::Int) where {T}
+    lyt = BufferLayout(T, len)
+    if lyt.isinline
+        buf = ccall(:jl_gc_alloc_buffer_inline, Buffer{T}, (Any, Csize_t, Csize_t),  Buffer{T}, len, lyt.object_size)
+    else
+        buf = ccall(:jl_gc_malloc_buffer, Buffer{T}, (Any, Csize_t, Csize_t, Csize_t), Buffer{T}, len, lyt.data_size, lyt.object_size)
+    end
+    if lyt.element_layout.requires_initialization
+        ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), buf, 0, lyt.data_size)
+    elseif BUFFER_IMPL_NULL && lyt.elsize === 1
+        t = @_gc_preserve_begin buf
+        unsafe_store!(unsafe_convert(Ptr{UInt8}, buf) + len, 0x00)
+        @_gc_preserve_end t
+    end
+    return buf
+end
+
+function bufref(b::BufferType{T}, i::Int) where {T}
+    lyt = ElementLayout(T)
+    if lyt.nvariants === 0
+        @boundscheck 1 <= i <= length(b) || throw(BoundsError(b, i))
+        t = @_gc_preserve_begin b
+        p = unsafe_convert(Ptr{T}, b) + ((i - 1) * lyt.elsize)
+        out = ccall(:jl_value_ptr, Ref{T}, (Ptr{Cvoid},), unsafe_load(Base.unsafe_convert(Ptr{Ptr{Cvoid}}, p)))
+        @_gc_preserve_end t
+    elseif lyt.nvariants === 1
+        @boundscheck 1 <= i <= length(b) || throw(BoundsError(b, i))
+        t = @_gc_preserve_begin b
+        out = unsafe_load(unsafe_convert(Ptr{T}, b) + ((i - 1) * lyt.elsize))
+        @_gc_preserve_end t
+    else
+        len = length(b)
+        @boundscheck 1 <= i <= len || throw(BoundsError(b, i))
+        t = @_gc_preserve_begin b
+        idx = i - 1
+        p = unsafe_convert(Ptr{T}, b)
+        tag = unsafe_load(unsafe_convert(Ptr{UInt8}, p) + (lyt.elsize * len) + idx)
+        vt = tag_to_variant(T, tag)
+        if isdefined(vt, :instance)
+            out = vt.instance
+        else
+            out = unsafe_load(unsafe_convert(Ptr{vt}, p) + (idx * lyt.elsize))
+        end
+        @_gc_preserve_end t
+    end
+    return out
+end
+
+function bufset!(b::BufferType{T}, v::T, i::Int) where {T}
+    lyt = ElementLayout(T)
+    if lyt.nvariants === 0
+        @boundscheck 1 <= i <= length(b) || throw(BoundsError(b, i))
+        t = @_gc_preserve_begin b
+        p = unsafe_convert(Ptr{T}, b) + ((i - 1) * lyt.elsize)
+        # FIXME this won't work for immutable values
+        unsafe_store!(unsafe_convert(Ptr{Ptr{Cvoid}}, p), pointer_from_objref(v))
+        @_gc_preserve_end t
+    elseif lyt.nvariants === 1
+        @boundscheck 1 <= i <= length(b) || throw(BoundsError(b, i))
+        t = @_gc_preserve_begin b
+        unsafe_store!(unsafe_convert(Ptr{T}, b) + ((i - 1) * lyt.elsize), v)
+        @_gc_preserve_end t
+    else
+        len = length(b)
+        @boundscheck 1 <= i <= len || throw(BoundsError(b, i))
+        t = @_gc_preserve_begin b
+        idx = i - 1
+        p = unsafe_convert(Ptr{T}, b)
+        vt = typeof(v)
+        tag = variant_to_tag(T, vt)
+        unsafe_store!(convert(Ptr{UInt8}, p) + (lyt.elsize * len) + idx, tag)
+        if !isdefined(vt, :instance)
+            unsafe_store!(unsafe_convert(Ptr{vt}, p) + (idx * lyt.elsize), v)
+        end
+        @_gc_preserve_end t
+    end
+    return nothing
+end
+
 """
     Buffer{T} <: DenseVector{T}
 
@@ -21,33 +199,35 @@ A one-dimensional vector of mutable elements dynamic length.
 DynamicBuffer
 
 if !isdefined(Main, :Base)
-    Buffer{T}(::UndefInitializer, len::Int) where {T} =
-        ccall(:jl_new_buffer, Buffer{T}, (Any, Int), Buffer{T}, len)
-    Buffer(a::AbstractArray{T}) where {T} = Buffer{T}(a)
-    function Buffer{T}(a::AbstractArray) where {T}
-        n = length(a)
-        b = Buffer{T}(undef, n)
-        i = 1
-        for a_i in a
-            @inbounds b[i] = a_i
-            i += 1
-        end
-        return b
-    end
 
-    DynamicBuffer{T}(::UndefInitializer, len::Int) where {T} =
-        ccall(:jl_new_buffer, DynamicBuffer{T}, (Any, Int), DynamicBuffer{T}, len)
-    DynamicBuffer(a::AbstractArray{T}) where {T} = Dynamicfer{T}(a)
-    function DynamicBuffer{T}(a::AbstractArray) where {T}
-        n = length(a)
-        b = DynamicBuffer{T}(undef, n)
-        i = 1
-        for a_i in a
-            @inbounds b[i] = a_i
-            i += 1
-        end
-        return b
+Buffer{T}(::UndefInitializer, len::Int) where {T} =
+    ccall(:jl_new_buffer, Buffer{T}, (Any, Int), Buffer{T}, len)
+Buffer(a::AbstractArray{T}) where {T} = Buffer{T}(a)
+function Buffer{T}(a::AbstractArray) where {T}
+    n = length(a)
+    b = Buffer{T}(undef, n)
+    i = 1
+    for a_i in a
+        @inbounds b[i] = a_i
+        i += 1
     end
+    return b
+end
+
+DynamicBuffer{T}(::UndefInitializer, len::Int) where {T} =
+    ccall(:jl_new_buffer, DynamicBuffer{T}, (Any, Int), DynamicBuffer{T}, len)
+DynamicBuffer(a::AbstractArray{T}) where {T} = Dynamicfer{T}(a)
+function DynamicBuffer{T}(a::AbstractArray) where {T}
+    n = length(a)
+    b = DynamicBuffer{T}(undef, n)
+    i = 1
+    for a_i in a
+        @inbounds b[i] = a_i
+        i += 1
+    end
+    return b
+end
+
 end
 
 eltype(::Type{<:BufferType{T}}) where {T} = T
@@ -55,7 +235,6 @@ eltype(::Type{<:BufferType{T}}) where {T} = T
 elsize(@nospecialize T::Type{<:BufferType}) = aligned_sizeof(eltype(T))
 
 length(b::Buffer) = Core.Intrinsics.bufferlen(b)
-
 # FIXME DynamicBuffer effects: this is set correctly for `Core.bufferlen` but not for `length`
 length(b::DynamicBuffer) = Core.Intrinsics.bufferlen(b)
 
@@ -205,7 +384,6 @@ function unsafe_copyto!(dest::Union{Buffer{T}, DynamicBuffer{T}}, doffs, src::Un
     @_gc_preserve_end t1
     return dest
 end
-
 
 sizeof(b::BufferType) = Core.sizeof(b)
 

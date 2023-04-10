@@ -84,37 +84,55 @@ size_t jl_buffer_object_size(jl_buffer_t *b) JL_NOTSAFEPOINT
     return _buffer_object_size(lyt, data_size);
 }
 
+JL_DLLEXPORT jl_buffer_t *jl_gc_alloc_buffer_inline(jl_value_t *btype, size_t len,
+    size_t obj_size)
+{
+    jl_buffer_t *b;
+    void *data;
+    jl_task_t *ct = jl_current_task;
+    b = (jl_buffer_t*)jl_gc_alloc(ct->ptls, obj_size, btype);
+    data = (char*)b + sizeof(jl_buffer_t);
+    b->length = len;
+    b->data = data;
+    return b;
+}
+
+JL_DLLEXPORT jl_buffer_t *jl_gc_malloc_buffer(jl_value_t *btype, size_t len,
+    size_t data_size, size_t obj_size)
+{
+    jl_buffer_t *b;
+    void *data;
+    data = jl_gc_managed_malloc(data_size);
+    // allocate buffer **after** allocating the data
+    // to make sure the buffer is still young
+    jl_task_t *ct = jl_current_task;
+    b = (jl_buffer_t*)jl_gc_alloc(ct->ptls, obj_size, btype);
+    // No allocation or safepoint allowed after this
+    jl_gc_track_malloced_buffer(ct->ptls, b);
+    b->length = len;
+    b->data = data;
+    return b;
+}
+
 static jl_buffer_t *_new_buffer(jl_value_t *btype, size_t len,
     jl_eltype_layout_t lyt, int8_t zeroinit)
 {
     jl_buffer_t *b;
-    jl_task_t *ct = jl_current_task;
     size_t data_size = jl_nbytes_eltype_data(lyt, len);
     size_t obj_size = _buffer_object_size(lyt, data_size);
-    // size of raw data and object fields
-    void *data;
     if (data_size <= ARRAY_INLINE_NBYTES) {
-        b = (jl_buffer_t*)jl_gc_alloc(ct->ptls, obj_size, btype);
-        data = (char*)b + sizeof(jl_buffer_t);
+        b = jl_gc_alloc_buffer_inline(btype, len, obj_size);
     }
     else {
-        data = jl_gc_managed_malloc(data_size);
-        // allocate buffer **after** allocating the data
-        // to make sure the buffer is still young
-        b = (jl_buffer_t*)jl_gc_alloc(ct->ptls, obj_size, btype);
-        // No allocation or safepoint allowed after this
-        jl_gc_track_malloced_buffer(ct->ptls, b);
+        b = jl_gc_malloc_buffer(btype, len, data_size, obj_size);
     }
 
     // zero initialize data that may otherwise error on load
     if (zeroinit)
-        memset(data, 0, data_size);
-
-    b->length = len;
-    b->data = data;
+        memset(b->data, 0, data_size);
 
     if (JL_BUFFER_IMPL_NUL && lyt.elsize == 1)
-         ((char*)data)[data_size - 1] = '\0';
+         ((char*)(b->data))[data_size - 1] = '\0';
     return b;
 }
 
