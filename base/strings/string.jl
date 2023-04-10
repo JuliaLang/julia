@@ -281,18 +281,18 @@ const _UTF8_DFA_TABLE = let # let block rather than function doesn't pollute bas
                             11, 6, 6, 6, 5, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8 ]
 
     # These are the rows discussed in comments above
-    state_arrays = [[ 0  1  2  2  2  2  2  2  2  2],
-                    [ 2  2  2  1  3  2  3  2  4  4],
-                    [ 3  3  2  2  2  2  2  2  2  2],
-                    [ 4  4  2  2  2  2  2  2  2  2],
-                    [ 6  6  2  2  2  2  2  2  2  2],
-                    [ 9  9  2  2  2  2  2  2  2  2],
-                    [ 8  8  2  2  2  2  2  2  2  2],
-                    [ 2  2  2  1  3  3  2  4  4  2],
-                    [ 2  2  2  2  2  2  2  2  2  2],
-                    [ 2  2  2  1  3  2  3  4  4  2],
-                    [ 5  5  2  2  2  2  2  2  2  2],
-                    [ 7  7  2  2  2  2  2  2  2  2]]
+    state_arrays = [ 0  1  2  2  2  2  2  2  2  2;
+                     2  2  2  1  3  2  3  2  4  4;
+                     3  3  2  2  2  2  2  2  2  2;
+                     4  4  2  2  2  2  2  2  2  2;
+                     6  6  2  2  2  2  2  2  2  2;
+                     9  9  2  2  2  2  2  2  2  2;
+                     8  8  2  2  2  2  2  2  2  2;
+                     2  2  2  1  3  3  2  4  4  2;
+                     2  2  2  2  2  2  2  2  2  2;
+                     2  2  2  1  3  2  3  4  4  2;
+                     5  5  2  2  2  2  2  2  2  2;
+                     7  7  2  2  2  2  2  2  2  2]
 
     #This converts the state_arrays into the shift encoded _UTF8DFAState
     class_row = zeros(_UTF8DFAState, num_classes)
@@ -301,7 +301,7 @@ const _UTF8_DFA_TABLE = let # let block rather than function doesn't pollute bas
         row = _UTF8DFAState(0)
         for j in 1:num_states
             #Calculate the shift required for the next state
-            to_shift = UInt8((state_shifts[state_arrays[i][j]+1]) )
+            to_shift = UInt8((state_shifts[state_arrays[i,j]+1]) )
             #Shift the next state into the position of the current state
             row = row | (_UTF8DFAState(to_shift) << state_shifts[j])
         end
