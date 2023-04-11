@@ -726,19 +726,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     end
 end
 
-let exename = `$(Base.julia_cmd(; cpu_target="native;native")) --startup-file=no --color=no`
-    # --pkgimages with multiple cpu targets
-    @testset let v = readchomperrors(`$exename --pkgimages=no`)
-        @test !v[1]
-        @test isempty(v[2])
-        @test v[3] == "ERROR: More than one command line CPU targets specified without a `--output-` flag specified"
-    end
-
-    @test readchomp(`$exename --pkgimages=yes -e '
-        println("cpu_target = $(unsafe_string(Base.JLOptions().cpu_target)) and use_pkgimages = $(Base.JLOptions().use_pkgimages)")'`) ==
-        "cpu_target = native;native and use_pkgimages = 1"
-end
-
 # Object file with multiple cpu targets
 @testset "Object file for multiple microarchitectures" begin
     julia_path = joinpath(Sys.BINDIR, Base.julia_exename())
@@ -760,6 +747,14 @@ end
         @test v[2] == ""
         @test !contains(v[3], "More than one command line CPU targets specified")
         @test v[3] == "ERROR: File \"boot.jl\" not found"
+    end
+
+    # This is to test that with `pkgimages=yes`, multiple CPU targets are parsed.
+    # We intentionally fail fast due to a lack of an `--output-o` flag.
+    let v = readchomperrors(`$julia_path --cpu-target='native;native' --pkgimages=yes`)
+        @test v[1] == false
+        @test v[2] == ""
+        @test contains(v[3], "More than one command line CPU targets specified")
     end
 end
 
