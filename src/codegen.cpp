@@ -4457,7 +4457,24 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
             return mark_julia_type(ctx, ret, true, rt);
         }
     }
+    /*
+    // handle calling an OpaqueClosure
+    if (jl_is_concrete_type(f.typ) && jl_subtype(f.typ, jl_opaque_closure_type)) {
+        jl_value_t *oc_argt = jl_tparam0(f.typ);
+        if (jl_tupletype_length_compat(oc_argt, nargs-1)) {
+            jl_svec_t *types = jl_get_fieldtypes((jl_datatype_t*)oc_argt);
+            size_t ntypes = jl_svec_len(types);
+            for (int i = 0; i < nargs-1; ++i) {
+                jl_value_t *typ = i >= ntypes ? jl_svecref(types, ntypes-1) : jl_svecref(types, i);
+                if (jl_is_vararg(typ))
+                    typ = jl_unwrap_vararg(typ);
+                emit_typecheck(ctx, args[i+1], typ, "typeassert");
+                args[i+1] = update_julia_type(ctx, args[i+1], typ);
+            }
+            
 
+    }
+    */
     // emit function and arguments
     Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, generic_argv.data(), n_generic_args, julia_call);
     return mark_julia_type(ctx, callval, true, rt);
@@ -5474,7 +5491,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         if (source.constant == NULL) {
             // For now, we require non-constant source to be handled by using
             // eval. This should probably be a verifier error and an abort here.
-            emit_error(ctx, "(internal error) invalid IR: opaque closure source be constant");
+            emit_error(ctx, "(internal error) invalid IR: opaque closure source must be constant");
             return jl_cgval_t();
         }
         bool can_optimize = argt.constant != NULL && lb.constant != NULL && ub.constant != NULL &&
@@ -6718,7 +6735,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
     return w;
 }
 
-static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, StringRef name, jl_value_t *sig, jl_value_t *jlrettype, bool is_opaque_closure)
+static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value *fval, jl_value_t *sig, jl_value_t *jlrettype, bool is_opaque_closure)
 {
     jl_returninfo_t props = {};
     SmallVector<Type*, 8> fsig;
@@ -6855,6 +6872,12 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
     else if (rt == ctx.types().T_prjlvalue)
         RetAttrs = RetAttrs.addAttribute(ctx.builder.getContext(), Attribute::NonNull);
     AttributeList attributes = AttributeList::get(ctx.builder.getContext(), FnAttrs, RetAttrs, attrs);
+    props.decl = fval;
+    return props;
+}
+
+static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, StringRef name, jl_value_t *sig, jl_value_t *jlrettype, bool is_opaque_closure)
+{
     FunctionType *ftype = FunctionType::get(rt, fsig, false);
     Function *f = M ? cast_or_null<Function>(M->getNamedValue(name)) : NULL;
     if (f == NULL) {
@@ -6865,8 +6888,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
     else {
         assert(f->getFunctionType() == ftype);
     }
-    props.decl = f;
-    return props;
+    return get_specsig_function(ctx, M, (Value*)f, sig, jlrettype, is_opaque_closure);
 }
 
 static void emit_sret_roots(jl_codectx_t &ctx, bool isptr, Value *Src, Type *T, Value *Shadow, Type *ShadowT, unsigned count)

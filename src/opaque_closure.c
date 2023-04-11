@@ -65,12 +65,12 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
     JL_GC_PROMISE_ROOTED(oc_type);
 
     jl_method_instance_t *mi = jl_specializations_get_linfo(source, sigtype, jl_emptysvec);
-    size_t world = jl_current_task->world_age;
+    jl_task_t *ct = jl_current_task;
+    size_t world = ct->world_age;
     jl_code_instance_t *ci = NULL;
     if (do_compile)
         ci = jl_compile_method_internal(mi, world);
 
-    jl_task_t *ct = jl_current_task;
     jl_opaque_closure_t *oc = (jl_opaque_closure_t*)jl_gc_alloc(ct->ptls, sizeof(jl_opaque_closure_t), oc_type);
     JL_GC_POP();
     oc->source = source;

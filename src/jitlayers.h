@@ -178,7 +178,7 @@ typedef struct _jl_llvm_functions_t {
 } jl_llvm_functions_t;
 
 struct jl_returninfo_t {
-    llvm::Function *decl;
+    llvm::Value *decl;
     enum CallingConv {
         Boxed = 0,
         Register,
