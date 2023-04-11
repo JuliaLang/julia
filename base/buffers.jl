@@ -99,15 +99,28 @@ struct BufferLayout
     end
 end
 
-# hack to get proper effects for `pointer(b)` when we know that `b` is preserved from
-# garbage collection
+macro _preserved_pointer_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#false,
+        #=:effect_free=#true,
+        #=:nothrow=#true,
+        #=:terminates_globally=#true,
+        #=:terminates_locally=#false,
+        #=:notaskstate=#true,
+        #=:inaccessiblememonly=#false))
+end
+
+# FIXME this is just a hack to improve some of the effects for `pointer(b)` when we know
+# that `b` is preserved from garbage collection. This should probably be replaced with a
+# a more flexible/safe solution but for now allows us to work on how much we can improve
+# native Julia implementations (reducing allocations, const-prop, etc.)
 function _preserved_pointer(b::BufferType{T}) where {T}
-    @_nothrow_meta
-    @_effect_free_terminates_locally_meta
+    @_preserved_pointer_meta
     unsafe_convert(Ptr{T}, b)
 end
 
 function get_buffer_value(b::BufferType{T}, i::Int, bounds_check::Bool, assigned_check::Bool) where {T}
+    @inline
     lyt = ElementLayout(T)
     idx0 = i - 1
     if lyt.nvariants === 0
@@ -152,22 +165,23 @@ function set_buffer_value!(b::BufferType{T}, v::T, i::Int, bounds_check::Bool) w
     if lyt.nvariants === 0
         bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
         t = @_gc_preserve_begin b
-        p = unsafe_convert(Ptr{T}, b) + (idx0 * lyt.elsize)
-        # FIXME this won't work for immutable values
+        p = _preserved_pointer(b) + (idx0 * lyt.elsize)
+        # FIXME this won't work for immutable values and probably needs updating with
+        #`jl_gc_wb`
         unsafe_store!(unsafe_convert(Ptr{Ptr{Cvoid}}, p), pointer_from_objref(v))
         @_gc_preserve_end t
     elseif lyt.nvariants === 1
         bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
         if !isdefined(vt, :instance)
             t = @_gc_preserve_begin b
-            unsafe_store!(unsafe_convert(Ptr{T}, b) + (idx0 * lyt.elsize), v)
+            unsafe_store!(_preserved_pointer(b) + (idx0 * lyt.elsize), v)
             @_gc_preserve_end t
         end
     else
         len = length(b)
         bounds_check && (1 <= i <= len || throw(BoundsError(b, i)))
         t = @_gc_preserve_begin b
-        p = unsafe_convert(Ptr{T}, b)
+        p = _preserved_pointer(b)
         vt = typeof(v)
         tag = variant_to_tag(T, vt)
         unsafe_store!(convert(Ptr{UInt8}, p) + (lyt.elsize * len) + idx0, tag)
@@ -212,7 +226,7 @@ function Buffer{T}(::UndefInitializer, len::Int) where {T}
         ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), buf, 0, lyt.data_size)
     elseif BUFFER_IMPL_NULL && lyt.elsize === 1
         t = @_gc_preserve_begin buf
-        unsafe_store!(unsafe_convert(Ptr{UInt8}, buf) + len, 0x00)
+        unsafe_store!(unsafe_convert(Ptr{UInt8}, _preserved_pointer(buf)) + len, 0x00)
         @_gc_preserve_end t
     end
     return buf
@@ -240,7 +254,7 @@ function DynamicBuffer{T}(::UndefInitializer, len::Int) where {T}
         ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), buf, 0, lyt.data_size)
     elseif BUFFER_IMPL_NULL && lyt.elsize === 1
         t = @_gc_preserve_begin buf
-        unsafe_store!(unsafe_convert(Ptr{UInt8}, buf) + len, 0x00)
+        unsafe_store!(unsafe_convert(Ptr{UInt8}, _preserved_pointer(buf)) + len, 0x00)
         @_gc_preserve_end t
     end
     return buf
