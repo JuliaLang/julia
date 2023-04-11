@@ -662,24 +662,22 @@ jl_value_t *simple_union(jl_value_t *a, jl_value_t *b)
             int subab = subs & 1, subba = subs >> 1;
             if (subab) {
                 temp[i] = NULL;
-                if (!subba) ra--;
+                if (!subba) ra = 0;
                 count--;
                 break;
             }
             else if (subba) {
                 temp[j] = NULL;
-                rb--;
+                rb = 0;
                 count--;
             }
         }
     }
     if (count == ra) {
-        assert(rb <= ra);
         JL_GC_POP();
         return a;
     }
     if (count == rb) {
-        assert(ra <= rb);
         JL_GC_POP();
         return b;
     }
