@@ -1,29 +1,29 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function tag_to_variant(t::Union, tag::UInt8)
+function tag_to_variant(t::Union, tag::Int)
     @_total_meta
     a = t.a
     b = t.b
     while true
-        tag === 0x00 && return a
-        isa(b, Union) || return (tag === 0x00 ? b : Union{})
+        tag === 0 && return a
+        isa(b, Union) || return (tag === 0 ? b : Union{})
         a = b.a
         b = b.b
-        tag -= 0x01
+        tag -= 1
     end
 end
 
 function variant_to_tag(t::Union, @nospecialize(vt))
     @_total_meta
-    tag = 0x00
+    tag = 0
     a = t.a
     b = t.b
     while true
         vt <: a && return tag
-        tag += 0x01
+        tag += 1
         # if last member of union doesn'vt match `vt` then return tag that will never be
         # reached by `tag_to_variant`
-        isa(b, Union) || return (b == vt ? tag : (tag + 0x01))
+        isa(b, Union) || return (b == vt ? tag : (tag + 1))
         a = b.a
         b = b.b
     end
@@ -127,9 +127,9 @@ function get_buffer_value(b::BufferType{T}, i::Int, bounds_check::Bool, assigned
         bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
         t = @_gc_preserve_begin b
         p = _preserved_pointer(b) + (idx0 * Core.sizeof(Ptr{Cvoid}))
-        pt = unsafe_load(unsafe_convert(Ptr{Ptr{T}}, p))
+        pt = unsafe_load(unsafe_convert(Ptr{Ptr{Cvoid}}, p))
         assigned_check || (pt === C_NULL && throw(UndefRefError()))
-        out = unsafe_load(pt)
+        out = unsafe_load(unsafe_convert(Ptr{T}, pt))
         @_gc_preserve_end t
         return out
     elseif lyt.nvariants === 1
@@ -147,7 +147,7 @@ function get_buffer_value(b::BufferType{T}, i::Int, bounds_check::Bool, assigned
         bounds_check && (1 <= i <= len || throw(BoundsError(b, i)))
         t = @_gc_preserve_begin b
         p = _preserved_pointer(b)
-        tag = unsafe_load(unsafe_convert(Ptr{UInt8}, p) + (lyt.elsize * len) + idx0)
+        tag = Int(unsafe_load(unsafe_convert(Ptr{UInt8}, p) + (lyt.elsize * len) + idx0))
         vt = tag_to_variant(T, tag)
         if isdefined(vt, :instance)
             out = vt.instance
@@ -184,7 +184,7 @@ function set_buffer_value!(b::BufferType{T}, v::T, i::Int, bounds_check::Bool) w
         p = _preserved_pointer(b)
         vt = typeof(v)
         tag = variant_to_tag(T, vt)
-        unsafe_store!(convert(Ptr{UInt8}, p) + (lyt.elsize * len) + idx0, tag)
+        unsafe_store!(convert(Ptr{UInt8}, p) + (lyt.elsize * len) + idx0, UInt8(tag))
         if !isdefined(vt, :instance)
             unsafe_store!(unsafe_convert(Ptr{vt}, p) + (idx0 * lyt.elsize), v)
         end
