@@ -6,104 +6,104 @@ include(joinpath("..", "testhelpers", "llvmpasses.jl"))
 # COM: Check broadcasted outer product is vectorized
 
 # COM: Float32
-# CHECK: @japi1_outer_product
+# CHECK: @japi1_prod_v_vT
 # CHECK: load <[[VEC_FACTOR:[0-9]+]] x float>
 # CHECK: fmul <[[VEC_FACTOR]] x float>
 # CHECK: store <[[VEC_FACTOR]] x float>
 
 # COM: Float64
-# CHECK: @japi1_outer_product
+# CHECK: @japi1_prod_v_vT
 # CHECK: load <[[VEC_FACTOR:[0-9]+]] x double>
 # CHECK: fmul <[[VEC_FACTOR]] x double>
 # CHECK: store <[[VEC_FACTOR]] x double>
 
 # COM: Int32
-# CHECK: @japi1_outer_product
+# CHECK: @japi1_prod_v_vT
 # CHECK: load <[[VEC_FACTOR:[0-9]+]] x i32>
 # CHECK: mul <[[VEC_FACTOR]] x i32>
 # CHECK: store <[[VEC_FACTOR]] x i32>
 
 # COM: Int64
-# CHECK: @japi1_outer_product
+# CHECK: @japi1_prod_v_vT
 # CHECK: load <[[VEC_FACTOR:[0-9]+]] x i64>
 # CHECK: mul <[[VEC_FACTOR]] x i64>
 # CHECK: store <[[VEC_FACTOR]] x i64>
 
-function outer_product(R, x, y)
+function prod_v_vT(R, x, y)
     R .= x .* y'
 end
 
 # COM: Check broadcasted inner product is vectorized
 
 # COM: Float32
-# CHECK: @japi1_inner_product
+# CHECK: @japi1_prod_vT_v
 # CHECK: load <[[VEC_FACTOR:[0-9]+]] x float>
 # CHECK: fmul <[[VEC_FACTOR]] x float>
 # CHECK: store <[[VEC_FACTOR]] x float>
 
 # COM: Float64
-# CHECK: @japi1_inner_product
+# CHECK: @japi1_prod_vT_v
 # CHECK: load <[[VEC_FACTOR:[0-9]+]] x double>
 # CHECK: fmul <[[VEC_FACTOR]] x double>
 # CHECK: store <[[VEC_FACTOR]] x double>
 
 # COM: Int32
-# CHECK: @japi1_inner_product
+# CHECK: @japi1_prod_vT_v
 # CHECK: load <[[VEC_FACTOR:[0-9]+]] x i32>
 # CHECK: mul <[[VEC_FACTOR]] x i32>
 # CHECK: store <[[VEC_FACTOR]] x i32>
 
 # COM: Int64
-# CHECK: @japi1_inner_product
+# CHECK: @japi1_prod_vT_v
 # CHECK: load <[[VEC_FACTOR:[0-9]+]] x i64>
 # CHECK: mul <[[VEC_FACTOR]] x i64>
 # CHECK: store <[[VEC_FACTOR]] x i64>
 
-function inner_product(R, x, y)
+function prod_vT_v(R, x, y)
     R .= x' .* y
 end
 
 # COM: Check broadcasted multiplications are vectorized
 
 # COM: Float32
-# CHECK: @japi1_squash
+# CHECK: @japi1_prod_v_M_vT
 # CHECK: load <[[VEC_FACTOR:[0-9]+]] x float>
 # CHECK: fmul <[[VEC_FACTOR]] x float>
 # CHECK: store <[[VEC_FACTOR]] x float>
 
 # COM: Float64
-# CHECK: @japi1_squash
+# CHECK: @japi1_prod_v_M_vT
 # CHECK: load <[[VEC_FACTOR:[0-9]+]] x double>
 # CHECK: fmul <[[VEC_FACTOR]] x double>
 # CHECK: store <[[VEC_FACTOR]] x double>
 
 # COM: Int32
-# CHECK: @japi1_squash
+# CHECK: @japi1_prod_v_M_vT
 # CHECK: load <[[VEC_FACTOR:[0-9]+]] x i32>
 # CHECK: mul <[[VEC_FACTOR]] x i32>
 # CHECK: store <[[VEC_FACTOR]] x i32>
 
 # COM: Int64
-# CHECK: @japi1_squash
+# CHECK: @japi1_prod_v_M_vT
 # CHECK: load <[[VEC_FACTOR:[0-9]+]] x i64>
 # CHECK: mul <[[VEC_FACTOR]] x i64>
 # CHECK: store <[[VEC_FACTOR]] x i64>
 
-function squash(R, x, M, y)
+function prod_v_M_vT(R, x, M, y)
     R .= x .* M .* y'
 end
 
-emit(outer_product, Matrix{Float32}, Vector{Float32}, Vector{Float32})
-emit(outer_product, Matrix{Float64}, Vector{Float64}, Vector{Float64})
-emit(outer_product, Matrix{Int32}, Vector{Int32}, Vector{Int32})
-emit(outer_product, Matrix{Int64}, Vector{Int64}, Vector{Int64})
+emit(prod_v_vT, Matrix{Float32}, Vector{Float32}, Vector{Float32})
+emit(prod_v_vT, Matrix{Float64}, Vector{Float64}, Vector{Float64})
+emit(prod_v_vT, Matrix{Int32}, Vector{Int32}, Vector{Int32})
+emit(prod_v_vT, Matrix{Int64}, Vector{Int64}, Vector{Int64})
 
-emit(inner_product, Matrix{Float32}, Vector{Float32}, Vector{Float32})
-emit(inner_product, Matrix{Float64}, Vector{Float64}, Vector{Float64})
-emit(inner_product, Matrix{Int32}, Vector{Int32}, Vector{Int32})
-emit(inner_product, Matrix{Int64}, Vector{Int64}, Vector{Int64})
+emit(prod_vT_v, Matrix{Float32}, Vector{Float32}, Vector{Float32})
+emit(prod_vT_v, Matrix{Float64}, Vector{Float64}, Vector{Float64})
+emit(prod_vT_v, Matrix{Int32}, Vector{Int32}, Vector{Int32})
+emit(prod_vT_v, Matrix{Int64}, Vector{Int64}, Vector{Int64})
 
-emit(squash, Matrix{Float32}, Vector{Float32}, Matrix{Float32}, Vector{Float32})
-emit(squash, Matrix{Float64}, Vector{Float64}, Matrix{Float64}, Vector{Float64})
-emit(squash, Matrix{Int32}, Vector{Int32}, Matrix{Int32}, Vector{Int32})
-emit(squash, Matrix{Int64}, Vector{Int64}, Matrix{Int64}, Vector{Int64})
+emit(prod_v_M_vT, Matrix{Float32}, Vector{Float32}, Matrix{Float32}, Vector{Float32})
+emit(prod_v_M_vT, Matrix{Float64}, Vector{Float64}, Matrix{Float64}, Vector{Float64})
+emit(prod_v_M_vT, Matrix{Int32}, Vector{Int32}, Matrix{Int32}, Vector{Int32})
+emit(prod_v_M_vT, Matrix{Int64}, Vector{Int64}, Matrix{Int64}, Vector{Int64})
