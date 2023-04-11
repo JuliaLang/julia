@@ -453,17 +453,6 @@ function getindex(::Type{T}, vals...) where T
     return a
 end
 
-# safe version
-function getindex(::Type{T}, vals::T...) where T
-    @inline
-    @_effect_free_terminates_locally_meta
-    a = Vector{T}(undef, length(vals))
-    @_safeindex for i in 1:length(vals)
-        a[i] = vals[i]
-    end
-    return a
-end
-
 function getindex(::Type{Any}, @nospecialize vals...)
     @_effect_free_terminates_locally_meta
     a = Vector{Any}(undef, length(vals))
