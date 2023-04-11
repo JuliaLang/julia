@@ -35,14 +35,19 @@ getproperty(x::Tuple, f::Int) = (@inline; getfield(x, f))
 setproperty!(x::Tuple, f::Int, v) = setfield!(x, f, v) # to get a decent error
 
 getproperty(x, f::Symbol) = (@inline; getfield(x, f))
-setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
+function setproperty!(x, f::Symbol, v)
+    ty = fieldtype(typeof(x), f)
+    val = v isa ty ? v : convert(ty, v)
+    return setfield!(x, f, val)
+end
 
 dotgetproperty(x, f) = getproperty(x, f)
 
 getproperty(x::Module, f::Symbol, order::Symbol) = (@inline; getglobal(x, f, order))
 function setproperty!(x::Module, f::Symbol, v, order::Symbol=:monotonic)
     @inline
-    val::Core.get_binding_type(x, f) = v
+    ty = Core.get_binding_type(x, f)
+    val = v isa ty ? v : convert(ty, v)
     return setglobal!(x, f, val, order)
 end
 getproperty(x::Type, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
@@ -51,14 +56,29 @@ getproperty(x::Tuple, f::Int, order::Symbol) = (@inline; getfield(x, f, order))
 setproperty!(x::Tuple, f::Int, v, order::Symbol) = setfield!(x, f, v, order) # to get a decent error
 
 getproperty(x, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
-setproperty!(x, f::Symbol, v, order::Symbol) = (@inline; setfield!(x, f, convert(fieldtype(typeof(x), f), v), order))
+function setproperty!(x, f::Symbol, v, order::Symbol)
+    @inline
+    ty = fieldtype(typeof(x), f)
+    val = v isa ty ? v : convert(ty, v)
+    return setfield!(x, f, val, order)
+end
 
-swapproperty!(x, f::Symbol, v, order::Symbol=:not_atomic) =
-    (@inline; Core.swapfield!(x, f, convert(fieldtype(typeof(x), f), v), order))
-modifyproperty!(x, f::Symbol, op, v, order::Symbol=:not_atomic) =
-    (@inline; Core.modifyfield!(x, f, op, v, order))
-replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order) =
-    (@inline; Core.replacefield!(x, f, expected, convert(fieldtype(typeof(x), f), desired), success_order, fail_order))
+function swapproperty!(x, f::Symbol, v, order::Symbol=:not_atomic)
+    @inline
+    ty = fieldtype(typeof(x), f)
+    val = v isa ty ? v : convert(ty, v)
+    return Core.swapfield!(x, f, val, order)
+end
+function modifyproperty!(x, f::Symbol, op, v, order::Symbol=:not_atomic)
+    @inline
+    return Core.modifyfield!(x, f, op, v, order)
+end
+function replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
+    @inline
+    ty = fieldtype(typeof(x), f)
+    val = desired isa ty ? desired : convert(ty, desired)
+    return Core.replacefield!(x, f, expected, val, success_order, fail_order)
+end
 
 convert(::Type{Any}, Core.@nospecialize x) = x
 convert(::Type{T}, x::T) where {T} = x
@@ -149,7 +169,7 @@ include("refpointer.jl")
 delete_method(which(Pair{Any,Any}, (Any, Any)))
 @eval function (P::Type{Pair{A, B}})(@nospecialize(a), @nospecialize(b)) where {A, B}
     @inline
-    return $(Expr(:new, :P, :(convert(A, a)), :(convert(B, b))))
+    return $(Expr(:new, :P, :(a isa A ? a : convert(A, a)), :(b isa B ? b : convert(B, b))))
 end
 
 # The REPL stdlib hooks into Base using this Ref
