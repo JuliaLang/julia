@@ -22,6 +22,7 @@ JL_DLLEXPORT int jl_is_valid_oc_argtype(jl_tupletype_t *argt, jl_method_t *sourc
     return 1;
 }
 
+// TODO: merge this with jl_argtype_with_function
 static jl_value_t *prepend_type(jl_value_t *t0, jl_tupletype_t *t)
 {
     jl_svec_t *sig_args = NULL;
@@ -32,7 +33,7 @@ static jl_value_t *prepend_type(jl_value_t *t0, jl_tupletype_t *t)
     for (size_t i = 0; i < nsig-1; ++i) {
         jl_svecset(sig_args, 1+i, jl_tparam(t, i));
     }
-    jl_value_t *sigtype = (jl_value_t*)jl_apply_tuple_type_v(jl_svec_data(sig_args), nsig);
+    jl_value_t *sigtype = jl_apply_tuple_type(sig_args);
     JL_GC_POP();
     return sigtype;
 }

@@ -1227,7 +1227,7 @@ static jl_method_instance_t *cache_method(
     intptr_t nspec = (kwmt == NULL || kwmt == jl_type_type_mt || kwmt == jl_nonfunction_mt || kwmt == jl_kwcall_mt ? definition->nargs + 1 : jl_atomic_load_relaxed(&kwmt->max_args) + 2 + 2 * (mt == jl_kwcall_mt));
     jl_compilation_sig(tt, sparams, definition, nspec, &newparams);
     if (newparams) {
-        temp2 = (jl_value_t*)jl_apply_tuple_type(newparams);
+        temp2 = jl_apply_tuple_type(newparams);
         // Now there may be a problem: the widened signature is more general
         // than just the given arguments, so it might conflict with another
         // definition that does not have cache instances yet. To fix this, we
@@ -1350,7 +1350,7 @@ static jl_method_instance_t *cache_method(
         }
     }
     if (newparams) {
-        simplett = jl_apply_tuple_type(newparams);
+        simplett = (jl_datatype_t*)jl_apply_tuple_type(newparams);
         temp2 = (jl_value_t*)simplett;
     }
 
@@ -2513,7 +2513,7 @@ JL_DLLEXPORT jl_value_t *jl_normalize_to_compilable_sig(jl_methtable_t *mt, jl_t
     jl_compilation_sig(ti, env, m, nspec, &newparams);
     int is_compileable = ((jl_datatype_t*)ti)->isdispatchtuple;
     if (newparams) {
-        tt = jl_apply_tuple_type(newparams);
+        tt = (jl_datatype_t*)jl_apply_tuple_type(newparams);
         if (!is_compileable) {
             // compute new env, if used below
             jl_value_t *ti = jl_type_intersection_env((jl_value_t*)tt, (jl_value_t*)m->sig, &newparams);

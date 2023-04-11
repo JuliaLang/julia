@@ -1323,7 +1323,7 @@ JL_CALLABLE(jl_f_apply_type)
                 jl_type_error_rt("Tuple", "parameter", (jl_value_t*)jl_type_type, pi);
             }
         }
-        return (jl_value_t*)jl_apply_tuple_type_v(&args[1], nargs-1);
+        return jl_apply_tuple_type_v(&args[1], nargs-1);
     }
     else if (args[0] == (jl_value_t*)jl_uniontype_type) {
         // Union{} has extra restrictions, so it needs to be checked after
