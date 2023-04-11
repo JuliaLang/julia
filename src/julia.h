@@ -344,7 +344,9 @@ typedef struct _jl_method_t {
     uint8_t isva;
     uint8_t is_for_opaque_closure;
     // uint8 settings
-    uint8_t constprop;     // 0x00 = use heuristic; 0x01 = aggressive; 0x02 = none
+    uint8_t constprop;      // 0x00 = use heuristic; 0x01 = aggressive; 0x02 = none
+    uint8_t max_varargs;    // 0xFF = use heuristic; otherwise, max # of args to expand
+                            // varargs when specializing.
 
     // Override the conclusions of inter-procedural effect analysis,
     // forcing the conclusion to always true.

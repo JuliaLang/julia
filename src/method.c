@@ -809,6 +809,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->deleted_world = ~(size_t)0;
     m->is_for_opaque_closure = 0;
     m->constprop = 0;
+    m->max_varargs = UINT8_MAX;
     JL_MUTEX_INIT(&m->writelock);
     return m;
 }
