@@ -2265,19 +2265,33 @@ int jl_has_intersect_type_not_kind(jl_value_t *t)
     t = jl_unwrap_unionall(t);
     if (t == (jl_value_t*)jl_any_type)
         return 1;
-    if (jl_is_uniontype(t)) {
+    assert(!jl_is_vararg(t));
+    if (jl_is_uniontype(t))
         return jl_has_intersect_type_not_kind(((jl_uniontype_t*)t)->a) ||
                jl_has_intersect_type_not_kind(((jl_uniontype_t*)t)->b);
-    }
-    if (jl_is_typevar(t)) {
+    if (jl_is_typevar(t))
         return jl_has_intersect_type_not_kind(((jl_tvar_t*)t)->ub);
-    }
-    if (jl_is_datatype(t)) {
+    if (jl_is_datatype(t))
         if (((jl_datatype_t*)t)->name == jl_type_typename)
             return 1;
-    }
     return 0;
 }
+
+// compute if DataType<:t || Union<:t || UnionAll<:t etc.
+int jl_has_intersect_kind_not_type(jl_value_t *t)
+{
+    t = jl_unwrap_unionall(t);
+    if (t == (jl_value_t*)jl_any_type || jl_is_kind(t))
+        return 1;
+    assert(!jl_is_vararg(t));
+    if (jl_is_uniontype(t))
+        return jl_has_intersect_kind_not_type(((jl_uniontype_t*)t)->a) ||
+               jl_has_intersect_kind_not_type(((jl_uniontype_t*)t)->b);
+    if (jl_is_typevar(t))
+        return jl_has_intersect_kind_not_type(((jl_tvar_t*)t)->ub);
+    return 0;
+}
+
 
 JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
 {
@@ -4476,6 +4490,7 @@ int tuple_cmp_typeofbottom(jl_datatype_t *a, jl_datatype_t *b)
     for (i = 0; i < la || i < lb; i++) {
         jl_value_t *pa = i < la ? jl_tparam(a, i) : NULL;
         jl_value_t *pb = i < lb ? jl_tparam(b, i) : NULL;
+        assert(jl_typeofbottom_type); // for clang-sa
         int xa = pa == (jl_value_t*)jl_typeofbottom_type || pa == (jl_value_t*)jl_typeofbottom_type->super;
         int xb = pb == (jl_value_t*)jl_typeofbottom_type || pb == (jl_value_t*)jl_typeofbottom_type->super;
         if (xa != xb)
