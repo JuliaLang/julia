@@ -1708,7 +1708,7 @@ static void check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, si
     JL_GC_POP();
 }
 
-static jl_value_t *extract_wrapper(jl_value_t *t JL_PROPAGATES_ROOT) JL_GLOBALLY_ROOTED
+jl_value_t *extract_wrapper(jl_value_t *t JL_PROPAGATES_ROOT) JL_GLOBALLY_ROOTED
 {
     t = jl_unwrap_unionall(t);
     if (jl_is_datatype(t))

@@ -311,7 +311,7 @@ See also: [`round`](@ref), [`trunc`](@ref), [`oftype`](@ref), [`reinterpret`](@r
 function convert end
 
 # ensure this is never ambiguous, and therefore fast for lookup
-convert(T::Type{Union{}}, x) = throw(MethodError(convert, (T, x)))
+convert(T::Type{Union{}}, x...) = throw(ArgumentError("cannot convert a value to Union{} for assignment"))
 
 convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization
                                    # in the absence of inlining-enabled
@@ -535,6 +535,7 @@ Neither `convert` nor `cconvert` should take a Julia object and turn it into a `
 function cconvert end
 
 cconvert(T::Type, x) = x isa T ? x : convert(T, x) # do the conversion eagerly in most cases
+cconvert(::Type{Union{}}, x...) = convert(Union{}, x...)
 cconvert(::Type{<:Ptr}, x) = x # but defer the conversion to Ptr to unsafe_convert
 unsafe_convert(::Type{T}, x::T) where {T} = x # unsafe_convert (like convert) defaults to assuming the convert occurred
 unsafe_convert(::Type{T}, x::T) where {T<:Ptr} = x  # to resolve ambiguity with the next method
