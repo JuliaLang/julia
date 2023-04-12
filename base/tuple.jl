@@ -313,6 +313,8 @@ function map(f, t::Any32)
 end
 # 2 argument function
 map(f, t::Tuple{},        s::Tuple{})        = ()
+map(f, t::Tuple,          s::Tuple{})        = ()
+map(f, t::Tuple{},        s::Tuple)          = ()
 map(f, t::Tuple{Any,},    s::Tuple{Any,})    = (@inline; (f(t[1],s[1]),))
 map(f, t::Tuple{Any,Any}, s::Tuple{Any,Any}) = (@inline; (f(t[1],s[1]), f(t[2],s[2])))
 function map(f, t::Tuple, s::Tuple)
@@ -320,7 +322,7 @@ function map(f, t::Tuple, s::Tuple)
     (f(t[1],s[1]), map(f, tail(t), tail(s))...)
 end
 function map(f, t::Any32, s::Any32)
-    n = length(t)
+    n = min(length(t), length(s))
     A = Vector{Any}(undef, n)
     for i = 1:n
         A[i] = f(t[i], s[i])
@@ -331,12 +333,16 @@ end
 heads(ts::Tuple...) = map(t -> t[1], ts)
 tails(ts::Tuple...) = map(tail, ts)
 map(f, ::Tuple{}...) = ()
+anyempty(x::Tuple{}, xs...) = true
+anyempty(x::Tuple, xs...) = anyempty(xs...)
+anyempty() = false
 function map(f, t1::Tuple, t2::Tuple, ts::Tuple...)
     @inline
+    anyempty(t1, t2, ts...) && return ()
     (f(heads(t1, t2, ts...)...), map(f, tails(t1, t2, ts...)...)...)
 end
 function map(f, t1::Any32, t2::Any32, ts::Any32...)
-    n = length(t1)
+    n = min(length(t1), length(t2), minimum(length, ts))
     A = Vector{Any}(undef, n)
     for i = 1:n
         A[i] = f(t1[i], t2[i], map(t -> t[i], ts)...)
