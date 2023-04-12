@@ -9,7 +9,7 @@ module MiniCassette
 
     using Core.Compiler: retrieve_code_info, CodeInfo,
         MethodInstance, SSAValue, GotoNode, GotoIfNot, ReturnNode, SlotNumber, quoted,
-        signature_type
+        signature_type, anymap
     using Base: _methods_by_ftype
     using Base.Meta: isexpr
     using Test
@@ -19,10 +19,11 @@ module MiniCassette
     struct Ctx; end
 
     # A no-op cassette-like transform
-    function transform_expr(expr, map_slot_number, map_ssa_value, sparams)
-        transform(expr) = transform_expr(expr, map_slot_number, map_ssa_value, sparams)
+    function transform_expr(expr, map_slot_number, map_ssa_value, sparams::Core.SimpleVector)
+        @nospecialize expr
+        transform(@nospecialize expr) = transform_expr(expr, map_slot_number, map_ssa_value, sparams)
         if isexpr(expr, :call)
-            return Expr(:call, overdub, SlotNumber(2), map(transform, expr.args)...)
+            return Expr(:call, overdub, SlotNumber(2), anymap(transform, expr.args)...)
         elseif isa(expr, GotoIfNot)
             return GotoIfNot(transform(expr.cond), map_ssa_value(SSAValue(expr.dest)).id)
         elseif isexpr(expr, :static_parameter)
@@ -30,7 +31,7 @@ module MiniCassette
         elseif isa(expr, ReturnNode)
             return ReturnNode(transform(expr.val))
         elseif isa(expr, Expr)
-            return Expr(expr.head, map(transform, expr.args)...)
+            return Expr(expr.head, anymap(transform, expr.args)...)
         elseif isa(expr, GotoNode)
             return GotoNode(map_ssa_value(SSAValue(expr.label)).id)
         elseif isa(expr, SlotNumber)
@@ -42,16 +43,16 @@ module MiniCassette
         end
     end
 
-    function transform!(ci, nargs, sparams)
+    function transform!(ci::CodeInfo, nargs::Int, sparams::Core.SimpleVector)
         code = ci.code
         ci.slotnames = Symbol[Symbol("#self#"), :ctx, :f, :args, ci.slotnames[nargs+1:end]...]
         ci.slotflags = UInt8[(0x00 for i = 1:4)..., ci.slotflags[nargs+1:end]...]
         # Insert one SSAValue for every argument statement
-        prepend!(code, [Expr(:call, getfield, SlotNumber(4), i) for i = 1:nargs])
-        prepend!(ci.codelocs, [0 for i = 1:nargs])
-        prepend!(ci.ssaflags, [0x00 for i = 1:nargs])
+        prepend!(code, Any[Expr(:call, getfield, SlotNumber(4), i) for i = 1:nargs])
+        prepend!(ci.codelocs, fill(0, nargs))
+        prepend!(ci.ssaflags, fill(0x00, nargs))
         ci.ssavaluetypes += nargs
-        function map_slot_number(slot)
+        function map_slot_number(slot::Int)
             if slot == 1
                 # self in the original function is now `f`
                 return SlotNumber(3)

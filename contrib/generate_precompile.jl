@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 if Threads.maxthreadid() != 1
-    @warn "Running this file with multiple Julia threads may lead to a build error" Base.maxthreadid()
+    @warn "Running this file with multiple Julia threads may lead to a build error" Threads.maxthreadid()
 end
 
 if Base.isempty(Base.ARGS) || Base.ARGS[1] !== "0"
@@ -129,28 +129,6 @@ if have_repl
     """
 end
 
-Distributed = get(Base.loaded_modules,
-          Base.PkgId(Base.UUID("8ba89e20-285c-5b6f-9357-94700520ee1b"), "Distributed"),
-          nothing)
-if Distributed !== nothing
-    hardcoded_precompile_statements *= """
-    precompile(Tuple{typeof(Distributed.remotecall),Function,Int,Module,Vararg{Any, 100}})
-    precompile(Tuple{typeof(Distributed.procs)})
-    precompile(Tuple{typeof(Distributed.finalize_ref), Distributed.Future})
-    """
-# This is disabled because it doesn't give much benefit
-# and the code in Distributed is poorly typed causing many invalidations
-#=
-    precompile_script *= """
-    using Distributed
-    addprocs(2)
-    pmap(x->iseven(x) ? 1 : 0, 1:4)
-    @distributed (+) for i = 1:100 Int(rand(Bool)) end
-    """
-=#
-end
-
-
 Artifacts = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("56f22d72-fd6d-98f1-02f0-08ddc0907c33"), "Artifacts"),
           nothing)
@@ -199,53 +177,6 @@ if Libdl !== nothing
     """
 end
 
-Test = get(Base.loaded_modules,
-          Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test"),
-          nothing)
-if Test !== nothing
-    hardcoded_precompile_statements *= """
-    precompile(Tuple{typeof(Test.do_test), Test.ExecutionResult, Any})
-    precompile(Tuple{typeof(Test.testset_beginend_call), Tuple{String, Expr}, Expr, LineNumberNode})
-    precompile(Tuple{Type{Test.DefaultTestSet}, String})
-    precompile(Tuple{Type{Test.DefaultTestSet}, AbstractString})
-    precompile(Tuple{Core.kwftype(Type{Test.DefaultTestSet}), Any, Type{Test.DefaultTestSet}, AbstractString})
-    precompile(Tuple{typeof(Test.finish), Test.DefaultTestSet})
-    precompile(Tuple{typeof(Test.eval_test), Expr, Expr, LineNumberNode, Bool})
-    precompile(Tuple{typeof(Test._inferred), Expr, Module})
-    precompile(Tuple{typeof(Test.push_testset), Test.DefaultTestSet})
-    precompile(Tuple{typeof(Test.get_alignment), Test.DefaultTestSet, Int})
-    precompile(Tuple{typeof(Test.get_test_result), Any, Any})
-    precompile(Tuple{typeof(Test.do_test_throws), Test.ExecutionResult, Any, Any})
-    precompile(Tuple{typeof(Test.print_counts), Test.DefaultTestSet, Int, Int, Int, Int, Int, Int, Int})
-    precompile(Tuple{typeof(Test._check_testset), Type, Expr})
-    precompile(Tuple{typeof(Test.test_expr!), Any, Any})
-    precompile(Tuple{typeof(Test.test_expr!), Any, Any, Vararg{Any, 100}})
-    precompile(Tuple{typeof(Test.pop_testset)})
-    precompile(Tuple{typeof(Test.match_logs), Function, Tuple{Symbol, Regex}})
-    precompile(Tuple{typeof(Test.match_logs), Function, Tuple{String, Regex}})
-    precompile(Tuple{typeof(Base.CoreLogging.shouldlog), Test.TestLogger, Base.CoreLogging.LogLevel, Module, Symbol, Symbol})
-    precompile(Tuple{typeof(Base.CoreLogging.handle_message), Test.TestLogger, Base.CoreLogging.LogLevel, String, Module, Symbol, Symbol, String, Int})
-    precompile(Tuple{typeof(Test.detect_ambiguities), Any})
-    precompile(Tuple{typeof(Test.collect_test_logs), Function})
-    precompile(Tuple{typeof(Test.do_broken_test), Test.ExecutionResult, Any})
-    precompile(Tuple{typeof(Test.record), Test.DefaultTestSet, Union{Test.Error, Test.Fail}})
-    precompile(Tuple{typeof(Test.filter_errors), Test.DefaultTestSet})
-    """
-end
-
-Profile = get(Base.loaded_modules,
-          Base.PkgId(Base.UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile"),
-          nothing)
-if Profile !== nothing
-    repl_script = Profile.precompile_script * repl_script # do larger workloads first for better parallelization
-    hardcoded_precompile_statements *= """
-    precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Int, UInt})
-    precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Int, UnitRange{UInt}})
-    precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, UnitRange{Int}, UInt})
-    precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, UnitRange{Int}, UnitRange{UInt}})
-    precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Vector{Int}, Vector{UInt}})
-    """
-end
 
 const JULIA_PROMPT = "julia> "
 const PKG_PROMPT = "pkg> "

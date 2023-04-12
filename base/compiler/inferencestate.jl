@@ -1,14 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-"""
-    const VarTable = Vector{VarState}
-
-The extended lattice that maps local variables to inferred type represented as `AbstractLattice`.
-Each index corresponds to the `id` of `SlotNumber` which identifies each local variable.
-Note that `InferenceState` will maintain multiple `VarTable`s at each SSA statement
-to enable flow-sensitive analysis.
-"""
-const VarTable = Vector{VarState}
+# data structures
+# ===============
 
 mutable struct BitSetBoundedMinPrioritySet <: AbstractSet{Int}
     elems::BitSet
@@ -78,6 +71,130 @@ function append!(bsbmp::BitSetBoundedMinPrioritySet, itr)
     end
 end
 
+mutable struct TwoPhaseVectorView <: AbstractVector{Int}
+    const data::Vector{Int}
+    count::Int
+    const range::UnitRange{Int}
+end
+size(tpvv::TwoPhaseVectorView) = (tpvv.count,)
+function getindex(tpvv::TwoPhaseVectorView, i::Int)
+    checkbounds(tpvv, i)
+    @inbounds tpvv.data[first(tpvv.range) + i - 1]
+end
+function push!(tpvv::TwoPhaseVectorView, v::Int)
+    tpvv.count += 1
+    tpvv.data[first(tpvv.range) + tpvv.count - 1] = v
+    return nothing
+end
+
+"""
+    mutable struct TwoPhaseDefUseMap
+
+This struct is intended as a memory- and GC-pressure-efficient mechanism
+for incrementally computing def-use maps. The idea is that the def-use map
+is constructed into two passes over the IR. In the first, we simply count the
+the number of uses, computing the number of uses for each def as well as the
+total number of uses. In the second pass, we actually fill in the def-use
+information.
+
+The idea is that either of these two phases can be combined with other useful
+work that needs to scan the instruction stream anyway, while avoiding the
+significant allocation pressure of e.g. allocating an array for every SSA value
+or attempting to dynamically move things around as new uses are discovered.
+
+The def-use map is presented as a vector of vectors. For every def, indexing
+into the map will return a vector of uses.
+"""
+mutable struct TwoPhaseDefUseMap <: AbstractVector{TwoPhaseVectorView}
+    ssa_uses::Vector{Int}
+    data::Vector{Int}
+    complete::Bool
+end
+
+function complete!(tpdum::TwoPhaseDefUseMap)
+    cumsum = 0
+    for i = 1:length(tpdum.ssa_uses)
+        this_val = cumsum + 1
+        cumsum += tpdum.ssa_uses[i]
+        tpdum.ssa_uses[i] = this_val
+    end
+    resize!(tpdum.data, cumsum)
+    fill!(tpdum.data, 0)
+    tpdum.complete = true
+end
+
+function TwoPhaseDefUseMap(nssas::Int)
+    ssa_uses = zeros(Int, nssas)
+    data = Int[]
+    complete = false
+    return TwoPhaseDefUseMap(ssa_uses, data, complete)
+end
+
+function count!(tpdum::TwoPhaseDefUseMap, arg::SSAValue)
+    @assert !tpdum.complete
+    tpdum.ssa_uses[arg.id] += 1
+end
+
+function kill_def_use!(tpdum::TwoPhaseDefUseMap, def::Int, use::Int)
+    if !tpdum.complete
+        tpdum.ssa_uses[def] -= 1
+    else
+        range = tpdum.ssa_uses[def]:(def == length(tpdum.ssa_uses) ? length(tpdum.data) : (tpdum.ssa_uses[def + 1] - 1))
+        # TODO: Sorted
+        useidx = findfirst(idx->tpdum.data[idx] == use, range)
+        @assert useidx !== nothing
+        idx = range[useidx]
+        while idx < lastindex(range)
+            ndata = tpdum.data[idx+1]
+            ndata == 0 && break
+            tpdum.data[idx] = ndata
+        end
+        tpdum.data[idx + 1] = 0
+    end
+end
+kill_def_use!(tpdum::TwoPhaseDefUseMap, def::SSAValue, use::Int) =
+    kill_def_use!(tpdum, def.id, use)
+
+function getindex(tpdum::TwoPhaseDefUseMap, idx::Int)
+    @assert tpdum.complete
+    range = tpdum.ssa_uses[idx]:(idx == length(tpdum.ssa_uses) ? length(tpdum.data) : (tpdum.ssa_uses[idx + 1] - 1))
+    # TODO: Make logarithmic
+    nelems = 0
+    for i in range
+        tpdum.data[i] == 0 && break
+        nelems += 1
+    end
+    return TwoPhaseVectorView(tpdum.data, nelems, range)
+end
+
+mutable struct LazyGenericDomtree{IsPostDom}
+    ir::IRCode
+    domtree::GenericDomTree{IsPostDom}
+    LazyGenericDomtree{IsPostDom}(ir::IRCode) where {IsPostDom} = new{IsPostDom}(ir)
+end
+function get!(x::LazyGenericDomtree{IsPostDom}) where {IsPostDom}
+    isdefined(x, :domtree) && return x.domtree
+    return @timeit "domtree 2" x.domtree = IsPostDom ?
+        construct_postdomtree(x.ir.cfg.blocks) :
+        construct_domtree(x.ir.cfg.blocks)
+end
+
+const LazyDomtree = LazyGenericDomtree{false}
+const LazyPostDomtree = LazyGenericDomtree{true}
+
+# InferenceState
+# ==============
+
+"""
+    const VarTable = Vector{VarState}
+
+The extended lattice that maps local variables to inferred type represented as `AbstractLattice`.
+Each index corresponds to the `id` of `SlotNumber` which identifies each local variable.
+Note that `InferenceState` will maintain multiple `VarTable`s at each SSA statement
+to enable flow-sensitive analysis.
+"""
+const VarTable = Vector{VarState}
+
 mutable struct InferenceState
     #= information about this method instance =#
     linfo::MethodInstance
@@ -87,6 +204,7 @@ mutable struct InferenceState
     slottypes::Vector{Any}
     src::CodeInfo
     cfg::CFG
+    method_info::MethodInfo
 
     #= intermediate states for local abstract interpretation =#
     currbb::Int
@@ -106,7 +224,7 @@ mutable struct InferenceState
     cycle_backedges::Vector{Tuple{InferenceState, Int}} # call-graph backedges connecting from callee to caller
     callers_in_cycle::Vector{InferenceState}
     dont_work_on_me::Bool
-    parent::Union{Nothing, InferenceState}
+    parent # ::Union{Nothing,AbsIntState}
 
     #= results =#
     result::InferenceResult # remember where to put the result
@@ -135,6 +253,7 @@ mutable struct InferenceState
         sptypes = sptypes_from_meth_instance(linfo)
         code = src.code::Vector{Any}
         cfg = compute_basic_blocks(code)
+        method_info = MethodInfo(src)
 
         currbb = currpc = 1
         ip = BitSet(1) # TODO BitSetBoundedMinPrioritySet(1)
@@ -183,7 +302,7 @@ mutable struct InferenceState
         cache !== :no && push!(get_inference_cache(interp), result)
 
         return new(
-            linfo, world, mod, sptypes, slottypes, src, cfg,
+            linfo, world, mod, sptypes, slottypes, src, cfg, method_info,
             currbb, currpc, ip, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
             pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent,
             result, valid_worlds, bestguess, ipo_effects,
@@ -194,43 +313,6 @@ end
 
 is_inferred(sv::InferenceState) = is_inferred(sv.result)
 is_inferred(result::InferenceResult) = result.result !== nothing
-
-function merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::Effects)
-    caller.ipo_effects = merge_effects(caller.ipo_effects, effects)
-end
-
-merge_effects!(interp::AbstractInterpreter, caller::InferenceState, callee::InferenceState) =
-    merge_effects!(interp, caller, Effects(callee))
-merge_effects!(interp::AbstractInterpreter, caller::IRCode, effects::Effects) = nothing
-
-is_effect_overridden(sv::InferenceState, effect::Symbol) = is_effect_overridden(sv.linfo, effect)
-function is_effect_overridden(linfo::MethodInstance, effect::Symbol)
-    def = linfo.def
-    return isa(def, Method) && is_effect_overridden(def, effect)
-end
-is_effect_overridden(method::Method, effect::Symbol) = is_effect_overridden(decode_effects_override(method.purity), effect)
-is_effect_overridden(override::EffectsOverride, effect::Symbol) = getfield(override, effect)
-
-add_remark!(::AbstractInterpreter, sv::Union{InferenceState, IRCode}, remark) = return
-
-struct InferenceLoopState
-    sig
-    rt
-    effects::Effects
-    function InferenceLoopState(@nospecialize(sig), @nospecialize(rt), effects::Effects)
-        new(sig, rt, effects)
-    end
-end
-
-function bail_out_toplevel_call(::AbstractInterpreter, state::InferenceLoopState, sv::Union{InferenceState, IRCode})
-    return isa(sv, InferenceState) && sv.restrict_abstract_call_sites && !isdispatchtuple(state.sig)
-end
-function bail_out_call(::AbstractInterpreter, state::InferenceLoopState, sv::Union{InferenceState, IRCode})
-    return state.rt === Any && !is_foldable(state.effects)
-end
-function bail_out_apply(::AbstractInterpreter, state::InferenceLoopState, sv::Union{InferenceState, IRCode})
-    return state.rt === Any
-end
 
 was_reached(sv::InferenceState, pc::Int) = sv.ssavaluetypes[pc] !== NOT_FOUND
 
@@ -339,29 +421,6 @@ function should_insert_coverage(mod::Module, src::CodeInfo)
         end
     end
     return false
-end
-
-"""
-    Iterate through all callers of the given InferenceState in the abstract
-    interpretation stack (including the given InferenceState itself), vising
-    children before their parents (i.e. ascending the tree from the given
-    InferenceState). Note that cycles may be visited in any order.
-"""
-struct InfStackUnwind
-    inf::InferenceState
-end
-iterate(unw::InfStackUnwind) = (unw.inf, (unw.inf, 0))
-function iterate(unw::InfStackUnwind, (infstate, cyclei)::Tuple{InferenceState, Int})
-    # iterate through the cycle before walking to the parent
-    if cyclei < length(infstate.callers_in_cycle)
-        cyclei += 1
-        infstate = infstate.callers_in_cycle[cyclei]
-    else
-        cyclei = 0
-        infstate = infstate.parent
-    end
-    infstate === nothing && return nothing
-    (infstate::InferenceState, (infstate, cyclei))
 end
 
 function InferenceState(result::InferenceResult, cache::Symbol, interp::AbstractInterpreter)
@@ -511,14 +570,7 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
     return sptypes
 end
 
-_topmod(sv::InferenceState) = _topmod(sv.mod)
-
-# work towards converging the valid age range for sv
-function update_valid_age!(sv::InferenceState, valid_worlds::WorldRange)
-    valid_worlds = sv.valid_worlds = intersect(valid_worlds, sv.valid_worlds)
-    @assert(sv.world in valid_worlds, "invalid age range update")
-    return valid_worlds
-end
+_topmod(sv::InferenceState) = _topmod(frame_module(sv))
 
 function record_ssa_assign!(𝕃ᵢ::AbstractLattice, ssa_id::Int, @nospecialize(new), frame::InferenceState)
     ssavaluetypes = frame.ssavaluetypes
@@ -552,44 +604,16 @@ function add_cycle_backedge!(caller::InferenceState, frame::InferenceState, curr
     return frame
 end
 
-# temporarily accumulate our edges to later add as backedges in the callee
-function add_backedge!(caller::InferenceState, mi::MethodInstance)
-    edges = get_stmt_edges!(caller)
-    if edges !== nothing
-        push!(edges, mi)
-    end
-    return nothing
-end
-
-function add_invoke_backedge!(caller::InferenceState, @nospecialize(invokesig::Type), mi::MethodInstance)
-    edges = get_stmt_edges!(caller)
-    if edges !== nothing
-        push!(edges, invokesig, mi)
-    end
-    return nothing
-end
-
-# used to temporarily accumulate our no method errors to later add as backedges in the callee method table
-function add_mt_backedge!(caller::InferenceState, mt::MethodTable, @nospecialize(typ))
-    edges = get_stmt_edges!(caller)
-    if edges !== nothing
-        push!(edges, mt, typ)
-    end
-    return nothing
-end
-
-function get_stmt_edges!(caller::InferenceState)
-    if !isa(caller.linfo.def, Method)
-        return nothing # don't add backedges to toplevel exprs
-    end
-    edges = caller.stmt_edges[caller.currpc]
+function get_stmt_edges!(caller::InferenceState, currpc::Int=caller.currpc)
+    stmt_edges = caller.stmt_edges
+    edges = stmt_edges[currpc]
     if edges === nothing
-        edges = caller.stmt_edges[caller.currpc] = []
+        edges = stmt_edges[currpc] = []
     end
     return edges
 end
 
-function empty_backedges!(frame::InferenceState, currpc::Int = frame.currpc)
+function empty_backedges!(frame::InferenceState, currpc::Int=frame.currpc)
     edges = frame.stmt_edges[currpc]
     edges === nothing || empty!(edges)
     return nothing
@@ -608,10 +632,6 @@ function print_callstack(sv::InferenceState)
     end
 end
 
-get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]
-add_curr_ssaflag!(sv::InferenceState, flag::UInt8) = sv.src.ssaflags[sv.currpc] |= flag
-sub_curr_ssaflag!(sv::InferenceState, flag::UInt8) = sv.src.ssaflags[sv.currpc] &= ~flag
-
 function narguments(sv::InferenceState, include_va::Bool=true)
     def = sv.linfo.def
     nargs = length(sv.result.argtypes)
@@ -620,3 +640,223 @@ function narguments(sv::InferenceState, include_va::Bool=true)
     end
     return nargs
 end
+
+# IRInterpretationState
+# =====================
+
+# TODO add `result::InferenceResult` and put the irinterp result into the inference cache?
+mutable struct IRInterpretationState
+    const method_info::MethodInfo
+    const ir::IRCode
+    const mi::MethodInstance
+    const world::UInt
+    curridx::Int
+    const argtypes_refined::Vector{Bool}
+    const sptypes::Vector{VarState}
+    const tpdum::TwoPhaseDefUseMap
+    const ssa_refined::BitSet
+    const lazydomtree::LazyDomtree
+    valid_worlds::WorldRange
+    const edges::Vector{Any}
+    parent # ::Union{Nothing,AbsIntState}
+
+    function IRInterpretationState(interp::AbstractInterpreter,
+        method_info::MethodInfo, ir::IRCode, mi::MethodInstance, argtypes::Vector{Any},
+        world::UInt, min_world::UInt, max_world::UInt)
+        curridx = 1
+        given_argtypes = Vector{Any}(undef, length(argtypes))
+        for i = 1:length(given_argtypes)
+            given_argtypes[i] = widenslotwrapper(argtypes[i])
+        end
+        given_argtypes = va_process_argtypes(optimizer_lattice(interp), given_argtypes, mi)
+        argtypes_refined = Bool[!⊑(optimizer_lattice(interp), ir.argtypes[i], given_argtypes[i])
+            for i = 1:length(given_argtypes)]
+        empty!(ir.argtypes)
+        append!(ir.argtypes, given_argtypes)
+        tpdum = TwoPhaseDefUseMap(length(ir.stmts))
+        ssa_refined = BitSet()
+        lazydomtree = LazyDomtree(ir)
+        valid_worlds = WorldRange(min_world, max_world == typemax(UInt) ? get_world_counter() : max_world)
+        edges = Any[]
+        parent = nothing
+        return new(method_info, ir, mi, world, curridx, argtypes_refined, ir.sptypes, tpdum,
+                   ssa_refined, lazydomtree, valid_worlds, edges, parent)
+    end
+end
+
+function IRInterpretationState(interp::AbstractInterpreter,
+    code::CodeInstance, mi::MethodInstance, argtypes::Vector{Any}, world::UInt)
+    @assert code.def === mi
+    src = @atomic :monotonic code.inferred
+    if isa(src, Vector{UInt8})
+        src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, C_NULL, src)::CodeInfo
+    else
+        isa(src, CodeInfo) || return nothing
+    end
+    method_info = MethodInfo(src)
+    ir = inflate_ir(src, mi)
+    return IRInterpretationState(interp, method_info, ir, mi, argtypes, world,
+                                 src.min_world, src.max_world)
+end
+
+# AbsIntState
+# ===========
+
+const AbsIntState = Union{InferenceState,IRInterpretationState}
+
+frame_instance(sv::InferenceState) = sv.linfo
+frame_instance(sv::IRInterpretationState) = sv.mi
+
+function frame_module(sv::AbsIntState)
+    mi = frame_instance(sv)
+    def = mi.def
+    isa(def, Module) && return def
+    return def.module
+end
+
+frame_parent(sv::InferenceState) = sv.parent::Union{Nothing,AbsIntState}
+frame_parent(sv::IRInterpretationState) = sv.parent::Union{Nothing,AbsIntState}
+
+is_constproped(sv::InferenceState) = any(sv.result.overridden_by_const)
+is_constproped(::IRInterpretationState) = true
+
+is_cached(sv::InferenceState) = sv.cached
+is_cached(::IRInterpretationState) = false
+
+method_info(sv::InferenceState) = sv.method_info
+method_info(sv::IRInterpretationState) = sv.method_info
+
+propagate_inbounds(sv::AbsIntState) = method_info(sv).propagate_inbounds
+method_for_inference_limit_heuristics(sv::AbsIntState) = method_info(sv).method_for_inference_limit_heuristics
+
+frame_world(sv::InferenceState) = sv.world
+frame_world(sv::IRInterpretationState) = sv.world
+
+callers_in_cycle(sv::InferenceState) = sv.callers_in_cycle
+callers_in_cycle(sv::IRInterpretationState) = ()
+
+is_effect_overridden(sv::AbsIntState, effect::Symbol) = is_effect_overridden(frame_instance(sv), effect)
+function is_effect_overridden(linfo::MethodInstance, effect::Symbol)
+    def = linfo.def
+    return isa(def, Method) && is_effect_overridden(def, effect)
+end
+is_effect_overridden(method::Method, effect::Symbol) = is_effect_overridden(decode_effects_override(method.purity), effect)
+is_effect_overridden(override::EffectsOverride, effect::Symbol) = getfield(override, effect)
+
+has_conditional(𝕃::AbstractLattice, ::InferenceState) = has_conditional(𝕃)
+has_conditional(::AbstractLattice, ::IRInterpretationState) = false
+
+# work towards converging the valid age range for sv
+function update_valid_age!(sv::AbsIntState, valid_worlds::WorldRange)
+    valid_worlds = sv.valid_worlds = intersect(valid_worlds, sv.valid_worlds)
+    @assert sv.world in valid_worlds "invalid age range update"
+    return valid_worlds
+end
+
+"""
+    AbsIntStackUnwind(sv::AbsIntState)
+
+Iterate through all callers of the given `AbsIntState` in the abstract interpretation stack
+(including the given `AbsIntState` itself), visiting children before their parents (i.e.
+ascending the tree from the given `AbsIntState`).
+Note that cycles may be visited in any order.
+"""
+struct AbsIntStackUnwind
+    sv::AbsIntState
+end
+iterate(unw::AbsIntStackUnwind) = (unw.sv, (unw.sv, 0))
+function iterate(unw::AbsIntStackUnwind, (sv, cyclei)::Tuple{AbsIntState, Int})
+    # iterate through the cycle before walking to the parent
+    if cyclei < length(callers_in_cycle(sv))
+        cyclei += 1
+        parent = callers_in_cycle(sv)[cyclei]
+    else
+        cyclei = 0
+        parent = frame_parent(sv)
+    end
+    parent === nothing && return nothing
+    return (parent, (parent, cyclei))
+end
+
+# temporarily accumulate our edges to later add as backedges in the callee
+function add_backedge!(caller::InferenceState, mi::MethodInstance)
+    isa(caller.linfo.def, Method) || return nothing # don't add backedges to toplevel method instance
+    return push!(get_stmt_edges!(caller), mi)
+end
+function add_backedge!(irsv::IRInterpretationState, mi::MethodInstance)
+    return push!(irsv.edges, mi)
+end
+
+function add_invoke_backedge!(caller::InferenceState, @nospecialize(invokesig::Type), mi::MethodInstance)
+    isa(caller.linfo.def, Method) || return nothing # don't add backedges to toplevel method instance
+    return push!(get_stmt_edges!(caller), invokesig, mi)
+end
+function add_invoke_backedge!(irsv::IRInterpretationState, @nospecialize(invokesig::Type), mi::MethodInstance)
+    return push!(irsv.edges, invokesig, mi)
+end
+
+# used to temporarily accumulate our no method errors to later add as backedges in the callee method table
+function add_mt_backedge!(caller::InferenceState, mt::MethodTable, @nospecialize(typ))
+    isa(caller.linfo.def, Method) || return nothing # don't add backedges to toplevel method instance
+    return push!(get_stmt_edges!(caller), mt, typ)
+end
+function add_mt_backedge!(irsv::IRInterpretationState, mt::MethodTable, @nospecialize(typ))
+    return push!(irsv.edges, mt, typ)
+end
+
+get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]
+get_curr_ssaflag(sv::IRInterpretationState) = sv.ir.stmts[sv.curridx][:flag]
+
+add_curr_ssaflag!(sv::InferenceState, flag::UInt8) = sv.src.ssaflags[sv.currpc] |= flag
+add_curr_ssaflag!(sv::IRInterpretationState, flag::UInt8) = sv.ir.stmts[sv.curridx][:flag] |= flag
+
+sub_curr_ssaflag!(sv::InferenceState, flag::UInt8) = sv.src.ssaflags[sv.currpc] &= ~flag
+sub_curr_ssaflag!(sv::IRInterpretationState, flag::UInt8) = sv.ir.stmts[sv.curridx][:flag] &= ~flag
+
+merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::Effects) =
+    caller.ipo_effects = merge_effects(caller.ipo_effects, effects)
+merge_effects!(::AbstractInterpreter, ::IRInterpretationState, ::Effects) = return
+
+struct InferenceLoopState
+    sig
+    rt
+    effects::Effects
+    function InferenceLoopState(@nospecialize(sig), @nospecialize(rt), effects::Effects)
+        new(sig, rt, effects)
+    end
+end
+
+bail_out_toplevel_call(::AbstractInterpreter, state::InferenceLoopState, sv::InferenceState) =
+    sv.restrict_abstract_call_sites && !isdispatchtuple(state.sig)
+bail_out_toplevel_call(::AbstractInterpreter, ::InferenceLoopState, ::IRInterpretationState) = false
+
+bail_out_call(::AbstractInterpreter, state::InferenceLoopState, ::InferenceState) =
+    state.rt === Any && !is_foldable(state.effects)
+bail_out_call(::AbstractInterpreter, state::InferenceLoopState, ::IRInterpretationState) =
+    state.rt === Any && !is_foldable(state.effects)
+
+bail_out_apply(::AbstractInterpreter, state::InferenceLoopState, ::InferenceState) =
+    state.rt === Any
+bail_out_apply(::AbstractInterpreter, state::InferenceLoopState, ::IRInterpretationState) =
+    state.rt === Any
+
+function should_infer_this_call(interp::AbstractInterpreter, sv::InferenceState)
+    if InferenceParams(interp).unoptimize_throw_blocks
+        # Disable inference of calls in throw blocks, since we're unlikely to
+        # need their types. There is one exception however: If up until now, the
+        # function has not seen any side effects, we would like to make sure there
+        # aren't any in the throw block either to enable other optimizations.
+        if is_stmt_throw_block(get_curr_ssaflag(sv))
+            should_infer_for_effects(sv) || return false
+        end
+    end
+    return true
+end
+function should_infer_for_effects(sv::InferenceState)
+    effects = sv.ipo_effects
+    return is_terminates(effects) && is_effect_free(effects)
+end
+should_infer_this_call(::AbstractInterpreter, ::IRInterpretationState) = true
+
+add_remark!(::AbstractInterpreter, ::InferenceState, remark) = return
+add_remark!(::AbstractInterpreter, ::IRInterpretationState, remark) = return

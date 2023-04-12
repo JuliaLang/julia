@@ -395,10 +395,10 @@ precompile_test_harness(false) do dir
                      Base.PkgId(m) => Base.module_build_id(m)
                  end for s in
                 [:ArgTools, :Artifacts, :Base64, :CompilerSupportLibraries_jll, :CRC32c, :Dates,
-                 :Distributed, :Downloads, :FileWatching, :Future, :InteractiveUtils, :libblastrampoline_jll,
-                 :LazyArtifacts, :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
+                 :Downloads, :FileWatching, :Future, :InteractiveUtils, :libblastrampoline_jll,
+                 :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
                  :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :OpenBLAS_jll, :Pkg, :Printf,
-                 :Profile, :p7zip_jll, :REPL, :Random, :SHA, :Serialization, :SharedArrays, :Sockets,
+                 :p7zip_jll, :REPL, :Random, :SHA, :Serialization, :Sockets,
                  :TOML, :Tar, :Test, :UUIDs, :Unicode,
                  :nghttp2_jll]
             ),
@@ -662,12 +662,13 @@ precompile_test_harness("code caching") do dir
         @test all(i -> root_provenance(m, i) == Mid, 1:length(m.roots))
     end
     # Check that we can cache external CodeInstances:
-    # size(::Vector) has an inferred specialization for Vector{X}
-    msize = which(size, (Vector{<:Any},))
+    # length(::Vector) has an inferred specialization for `Vector{X}`
+    msize = which(length, (Vector{<:Any},))
     hasspec = false
     for mi in Base.specializations(msize)
-        if mi.specTypes == Tuple{typeof(size),Vector{Cacheb8321416e8a3e2f1.X}}
-            if isdefined(mi, :cache) && isa(mi.cache, Core.CodeInstance) && mi.cache.max_world == typemax(UInt) && mi.cache.inferred !== nothing
+        if mi.specTypes == Tuple{typeof(length),Vector{Cacheb8321416e8a3e2f1.X}}
+            if (isdefined(mi, :cache) && isa(mi.cache, Core.CodeInstance) &&
+                mi.cache.max_world == typemax(UInt) && mi.cache.inferred !== nothing)
                 hasspec = true
                 break
             end

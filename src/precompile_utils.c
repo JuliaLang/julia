@@ -120,7 +120,7 @@ static void _compile_all_union(jl_value_t *sig)
                 jl_svecset(p, i, ty);
             }
         }
-        methsig = (jl_value_t*)jl_apply_tuple_type(p);
+        methsig = jl_apply_tuple_type(p);
         methsig = jl_rewrap_unionall(methsig, sig);
         _compile_all_tvar_union(methsig);
     }
