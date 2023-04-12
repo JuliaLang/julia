@@ -134,8 +134,8 @@ static int speccache_eq(size_t idx, const void *ty, jl_svec_t *data, uint_t hv)
 // get or create the MethodInstance for a specialization
 static jl_method_instance_t *jl_specializations_get_linfo_(jl_method_t *m JL_PROPAGATES_ROOT, jl_value_t *type, jl_svec_t *sparams, jl_method_instance_t *mi_insert)
 {
-    if (m->sig == (jl_value_t*)jl_anytuple_type && jl_atomic_load_relaxed(&m->unspecialized) != NULL)
-        return jl_atomic_load_relaxed(&m->unspecialized); // handle builtin methods
+    //if (m->sig == (jl_value_t*)jl_anytuple_type && jl_atomic_load_relaxed(&m->unspecialized) != NULL)
+    //    return jl_atomic_load_relaxed(&m->unspecialized); // handle builtin methods
     jl_value_t *ut = jl_is_unionall(type) ? jl_unwrap_unionall(type) : type;
     JL_TYPECHK(specializations, datatype, ut);
     uint_t hv = ((jl_datatype_t*)ut)->hash;
@@ -2546,6 +2546,8 @@ JL_DLLEXPORT jl_callptr_t jl_fptr_const_return_addr = &jl_fptr_const_return;
 
 JL_DLLEXPORT jl_callptr_t jl_fptr_sparam_addr = &jl_fptr_sparam;
 
+JL_DLLEXPORT jl_callptr_t jl_f_opaque_closure_call_addr = (jl_callptr_t)&jl_f_opaque_closure_call;
+
 // Return the index of the invoke api, if known
 JL_DLLEXPORT int32_t jl_invoke_api(jl_code_instance_t *codeinst)
 {
@@ -2813,18 +2815,20 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
 }
 
 // add type of `f` to front of argument tuple type
-static jl_value_t *jl_argtype_with_function(jl_function_t *f, jl_value_t *types0)
+jl_value_t *jl_argtype_with_function(jl_value_t *f, jl_value_t *types0)
+{
+    return jl_argtype_with_function_type(jl_is_type(f) ? (jl_value_t*)jl_wrap_Type(f) : jl_typeof(f), types0);
+}
+
+jl_value_t *jl_argtype_with_function_type(jl_value_t *ft JL_MAYBE_UNROOTED, jl_value_t *types0)
 {
     jl_value_t *types = jl_unwrap_unionall(types0);
     size_t l = jl_nparams(types);
-    jl_value_t *tt = (jl_value_t*)jl_alloc_svec(1+l);
-    size_t i;
-    JL_GC_PUSH1(&tt);
-    if (jl_is_type(f))
-        jl_svecset(tt, 0, jl_wrap_Type(f));
-    else
-        jl_svecset(tt, 0, jl_typeof(f));
-    for(i=0; i < l; i++)
+    jl_value_t *tt = NULL;
+    JL_GC_PUSH2(&tt, &ft);
+    tt = (jl_value_t*)jl_alloc_svec(1+l);
+    jl_svecset(tt, 0, ft);
+    for(size_t i=0; i < l; i++)
         jl_svecset(tt, i+1, jl_tparam(types,i));
     tt = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)tt);
     tt = jl_rewrap_unionall_(tt, types0);
@@ -3118,7 +3122,7 @@ jl_value_t *jl_gf_invoke(jl_value_t *types0, jl_value_t *gf, jl_value_t **args, 
     size_t world = jl_current_task->world_age;
     jl_value_t *types = NULL;
     JL_GC_PUSH1(&types);
-    types = jl_argtype_with_function(gf, types0);
+    types = jl_argtype_with_function((jl_value_t*)gf, types0);
     jl_method_t *method = (jl_method_t*)jl_gf_invoke_lookup(types, jl_nothing, world);
     JL_GC_PROMISE_ROOTED(method);
 

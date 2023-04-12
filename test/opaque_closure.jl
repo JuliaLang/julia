@@ -177,7 +177,7 @@ mk_va_opaque() = @opaque (x...)->x
 @test mk_va_opaque()(1,2) == (1,2)
 
 # OpaqueClosure show method
-@test repr(@opaque x->1) == "(::Any)::Any->◌"
+@test repr(@opaque x->Base.inferencebarrier(1)) == "(::Any)::Any->◌"
 
 # Opaque closure in CodeInfo returned from generated functions
 let ci = @code_lowered const_int()

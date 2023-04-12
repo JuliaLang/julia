@@ -615,8 +615,10 @@ typedef union {
 
 JL_DLLEXPORT jl_code_info_t *jl_type_infer(jl_method_instance_t *li, size_t world, int force);
 JL_DLLEXPORT jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *meth JL_PROPAGATES_ROOT, size_t world);
+JL_DLLEXPORT void *jl_compile_oc_wrapper(jl_code_instance_t *ci);
 jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world);
 void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec);
+void jl_generate_fptr_for_oc_wrapper(jl_code_instance_t *unspec);
 JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
         jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_value_t *rettype,
         size_t min_world, size_t max_world);
@@ -996,7 +998,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types,
 jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_svec_t *sp);
 JL_DLLEXPORT jl_value_t *jl_rettype_inferred(jl_method_instance_t *li JL_PROPAGATES_ROOT, size_t min_world, size_t max_world);
 JL_DLLEXPORT jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world);
-JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_value_t *type, size_t world);
+JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt JL_PROPAGATES_ROOT, jl_value_t *type, size_t world);
 JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(
     jl_method_t *m JL_PROPAGATES_ROOT, jl_value_t *type, jl_svec_t *sparams);
 jl_method_instance_t *jl_specializations_get_or_insert(jl_method_instance_t *mi_ins);
@@ -1477,6 +1479,27 @@ void typemap_slurp_search(jl_typemap_entry_t *ml, struct typemap_intersection_en
 JL_DLLEXPORT size_t (jl_svec_len)(jl_svec_t *t) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_svec_ref(jl_svec_t *t JL_PROPAGATES_ROOT, ssize_t i);
 
+// check whether the specified number of arguments is compatible with the
+// specified number of parameters of the tuple type
+STATIC_INLINE int jl_tupletype_length_compat(jl_value_t *v, size_t nargs) JL_NOTSAFEPOINT
+{
+    v = jl_unwrap_unionall(v);
+    assert(jl_is_tuple_type(v));
+    size_t nparams = jl_nparams(v);
+    if (nparams == 0)
+        return nargs == 0;
+    jl_value_t *va = jl_tparam(v,nparams-1);
+    if (jl_is_vararg(va)) {
+        jl_value_t *len = jl_unwrap_vararg_num(va);
+        if (len &&jl_is_long(len))
+            return nargs == nparams - 1 + jl_unbox_long(len);
+        return nargs >= nparams - 1;
+    }
+    return nparams == nargs;
+}
+
+JL_DLLEXPORT jl_value_t *jl_argtype_with_function(jl_value_t *f, jl_value_t *types0);
+JL_DLLEXPORT jl_value_t *jl_argtype_with_function_type(jl_value_t *ft JL_MAYBE_UNROOTED, jl_value_t *types0);
 
 JL_DLLEXPORT unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *field_type);
 

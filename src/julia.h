@@ -235,6 +235,8 @@ typedef jl_value_t *(*jl_fptr_sparam_t)(jl_value_t*, jl_value_t**, uint32_t, jl_
 extern jl_call_t jl_fptr_interpret_call;
 JL_DLLEXPORT extern jl_callptr_t jl_fptr_interpret_call_addr;
 
+JL_DLLEXPORT extern jl_callptr_t jl_f_opaque_closure_call_addr;
+
 typedef struct _jl_line_info_node_t {
     struct _jl_module_t *module;
     jl_value_t *method; // may contain a jl_symbol, jl_method_t, or jl_method_instance_t

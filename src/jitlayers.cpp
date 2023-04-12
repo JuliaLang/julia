@@ -191,7 +191,6 @@ static jl_callptr_t _jl_compile_codeinst(
     assert(jl_is_code_instance(codeinst));
     assert(codeinst->min_world <= world && (codeinst->max_world >= world || codeinst->max_world == 0) &&
         "invalid world for method-instance");
-    assert(src && jl_is_code_info(src));
 
     JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
 #ifdef USE_TRACY
@@ -268,6 +267,9 @@ static jl_callptr_t _jl_compile_codeinst(
         }
         else if (decls.functionObject == "jl_fptr_sparam") {
             addr = jl_fptr_sparam_addr;
+        }
+        else if (decls.functionObject == "jl_f_opaque_closure_call") {
+            addr = jl_f_opaque_closure_call_addr;
         }
         else {
             addr = (jl_callptr_t)getAddressForFunction(decls.functionObject);
@@ -460,7 +462,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
         is_recompile = jl_atomic_load_relaxed(&mi->cache) != NULL;
     }
     if (src == NULL && jl_is_method(mi->def.method) &&
-             jl_symbol_name(mi->def.method->name)[0] != '@') {
+             jl_symbol_name(mi->def.method->name)[0] != '@' ) {
         if (mi->def.method->source != jl_nothing) {
             // If the caller didn't provide the source and IR is available,
             // see if it is inferred, or try to infer it for ourself.
@@ -501,6 +503,19 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     }
     JL_GC_POP();
     return codeinst;
+}
+
+extern "C" JL_DLLEXPORT
+void jl_generate_fptr_for_oc_wrapper_impl(jl_code_instance_t *unspec)
+{
+    if (jl_atomic_load_relaxed(&unspec->invoke) != NULL) {
+        return;
+    }
+    JL_LOCK(&jl_codegen_lock);
+    if (jl_atomic_load_relaxed(&unspec->invoke) == NULL) {
+        _jl_compile_codeinst(unspec, NULL, 1, *jl_ExecutionEngine->getContext());
+    }
+    JL_UNLOCK(&jl_codegen_lock); // Might GC
 }
 
 extern "C" JL_DLLEXPORT
