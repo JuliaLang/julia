@@ -353,6 +353,7 @@ function issimplertype(𝕃::AbstractLattice, @nospecialize(typea), @nospecializ
         issimplertype(𝕃, typea.fldtyp, typeb.fldtyp) || return false
     elseif typea isa PartialOpaque
         # TODO
+        typeb isa PartialOpaque || return false
         aty = widenconst(typea)
         bty = widenconst(typeb)
         if typea.source === typeb.source && typea.parent === typeb.parent && aty == bty && typea.env == typeb.env
