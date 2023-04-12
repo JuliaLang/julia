@@ -2645,18 +2645,18 @@ struct BestguessInfo{Interp<:AbstractInterpreter}
     end
 end
 
-function widenreturn(@nospecialize(rt), info::BestguessInfo)
+@nospecializeinfer function widenreturn(@nospecialize(rt), info::BestguessInfo)
     return widenreturn(typeinf_lattice(info.interp), rt, info)
 end
 
-function widenreturn(𝕃ᵢ::AbstractLattice, @nospecialize(rt), info::BestguessInfo)
+@nospecializeinfer function widenreturn(𝕃ᵢ::AbstractLattice, @nospecialize(rt), info::BestguessInfo)
     return widenreturn(widenlattice(𝕃ᵢ), rt, info)
 end
-function widenreturn_noslotwrapper(𝕃ᵢ::AbstractLattice, @nospecialize(rt), info::BestguessInfo)
+@nospecializeinfer function widenreturn_noslotwrapper(𝕃ᵢ::AbstractLattice, @nospecialize(rt), info::BestguessInfo)
     return widenreturn_noslotwrapper(widenlattice(𝕃ᵢ), rt, info)
 end
 
-function widenreturn(𝕃ᵢ::MustAliasesLattice, @nospecialize(rt), info::BestguessInfo)
+@nospecializeinfer function widenreturn(𝕃ᵢ::MustAliasesLattice, @nospecialize(rt), info::BestguessInfo)
     if isa(rt, MustAlias)
         if 1 ≤ rt.slot ≤ info.nargs
             rt = InterMustAlias(rt)
@@ -2668,7 +2668,7 @@ function widenreturn(𝕃ᵢ::MustAliasesLattice, @nospecialize(rt), info::Bestg
     return widenreturn(widenlattice(𝕃ᵢ), rt, info)
 end
 
-function widenreturn(𝕃ᵢ::ConditionalsLattice, @nospecialize(rt), info::BestguessInfo)
+@nospecializeinfer function widenreturn(𝕃ᵢ::ConditionalsLattice, @nospecialize(rt), info::BestguessInfo)
     ⊑ᵢ = ⊑(𝕃ᵢ)
     if !(⊑(ipo_lattice(info.interp), info.bestguess, Bool)) || info.bestguess === Bool
         # give up inter-procedural constraint back-propagation
@@ -2705,7 +2705,7 @@ function widenreturn(𝕃ᵢ::ConditionalsLattice, @nospecialize(rt), info::Best
     isa(rt, InterConditional) && return rt
     return widenreturn(widenlattice(𝕃ᵢ), rt, info)
 end
-function bool_rt_to_conditional(@nospecialize(rt), info::BestguessInfo)
+@nospecializeinfer function bool_rt_to_conditional(@nospecialize(rt), info::BestguessInfo)
     bestguess = info.bestguess
     if isa(bestguess, InterConditional)
         # if the bestguess so far is already `Conditional`, try to convert
@@ -2723,7 +2723,7 @@ function bool_rt_to_conditional(@nospecialize(rt), info::BestguessInfo)
     end
     return rt
 end
-function bool_rt_to_conditional(@nospecialize(rt), slot_id::Int, info::BestguessInfo)
+@nospecializeinfer function bool_rt_to_conditional(@nospecialize(rt), slot_id::Int, info::BestguessInfo)
     ⊑ᵢ = ⊑(typeinf_lattice(info.interp))
     old = info.slottypes[slot_id]
     new = widenslotwrapper(info.changes[slot_id].typ) # avoid nested conditional
@@ -2742,13 +2742,13 @@ function bool_rt_to_conditional(@nospecialize(rt), slot_id::Int, info::Bestguess
     return rt
 end
 
-function widenreturn(𝕃ᵢ::PartialsLattice, @nospecialize(rt), info::BestguessInfo)
+@nospecializeinfer function widenreturn(𝕃ᵢ::PartialsLattice, @nospecialize(rt), info::BestguessInfo)
     return widenreturn_partials(𝕃ᵢ, rt, info)
 end
-function widenreturn_noslotwrapper(𝕃ᵢ::PartialsLattice, @nospecialize(rt), info::BestguessInfo)
+@nospecializeinfer function widenreturn_noslotwrapper(𝕃ᵢ::PartialsLattice, @nospecialize(rt), info::BestguessInfo)
     return widenreturn_partials(𝕃ᵢ, rt, info)
 end
-function widenreturn_partials(𝕃ᵢ::PartialsLattice, @nospecialize(rt), info::BestguessInfo)
+@nospecializeinfer function widenreturn_partials(𝕃ᵢ::PartialsLattice, @nospecialize(rt), info::BestguessInfo)
     if isa(rt, PartialStruct)
         fields = copy(rt.fields)
         local anyrefine = false
@@ -2771,21 +2771,21 @@ function widenreturn_partials(𝕃ᵢ::PartialsLattice, @nospecialize(rt), info:
     return widenreturn(widenlattice(𝕃ᵢ), rt, info)
 end
 
-function widenreturn(::ConstsLattice, @nospecialize(rt), ::BestguessInfo)
+@nospecializeinfer function widenreturn(::ConstsLattice, @nospecialize(rt), ::BestguessInfo)
     return widenreturn_consts(rt)
 end
-function widenreturn_noslotwrapper(::ConstsLattice, @nospecialize(rt), ::BestguessInfo)
+@nospecializeinfer function widenreturn_noslotwrapper(::ConstsLattice, @nospecialize(rt), ::BestguessInfo)
     return widenreturn_consts(rt)
 end
-function widenreturn_consts(@nospecialize(rt))
+@nospecializeinfer function widenreturn_consts(@nospecialize(rt))
     isa(rt, Const) && return rt
     return widenconst(rt)
 end
 
-function widenreturn(::JLTypeLattice, @nospecialize(rt), ::BestguessInfo)
+@nospecializeinfer function widenreturn(::JLTypeLattice, @nospecialize(rt), ::BestguessInfo)
     return widenconst(rt)
 end
-function widenreturn_noslotwrapper(::JLTypeLattice, @nospecialize(rt), ::BestguessInfo)
+@nospecializeinfer function widenreturn_noslotwrapper(::JLTypeLattice, @nospecialize(rt), ::BestguessInfo)
     return widenconst(rt)
 end
 
