@@ -1031,6 +1031,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         end
 
         compact[idx] = val === nothing ? nothing : val.val
+        compact[SSAValue(idx)][:flag] |= IR_FLAG_REFINED
     end
 
     non_dce_finish!(compact)
@@ -1379,6 +1380,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                     if use.kind === :getfield
                         ir[SSAValue(use.idx)][:inst] = compute_value_for_use(ir, domtree, allblocks,
                             du, phinodes, fidx, use.idx)
+                        ir[SSAValue(use.idx)][:flag] |= IR_FLAG_REFINED
                     elseif use.kind === :isdefined
                         continue # already rewritten if possible
                     elseif use.kind === :nopreserve
