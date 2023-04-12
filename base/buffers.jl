@@ -1,34 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function tag_to_variant(t::Union, tag::Int)
-    @_total_meta
-    a = t.a
-    b = t.b
-    while true
-        tag === 0 && return a
-        isa(b, Union) || return (tag === 0 ? b : Union{})
-        a = b.a
-        b = b.b
-        tag -= 1
-    end
-end
-
-function variant_to_tag(t::Union, @nospecialize(vt))
-    @_total_meta
-    tag = 0
-    a = t.a
-    b = t.b
-    while true
-        vt <: a && return tag
-        tag += 1
-        # if last member of union doesn'vt match `vt` then return tag that will never be
-        # reached by `tag_to_variant`
-        isa(b, Union) || return (b == vt ? tag : (tag + 1))
-        a = b.a
-        b = b.b
-    end
-end
-
 const BUFFER_IMPL_NULL = false
 const N_CALL_CACHE = 4096
 const ARRAY_INLINE_NBYTES = 2048 * sizeof(Int)
@@ -119,17 +90,34 @@ function _preserved_pointer(b::BufferType{T}) where {T}
     unsafe_convert(Ptr{T}, b)
 end
 
-function get_buffer_value(b::BufferType{T}, i::Int, bounds_check::Bool, assigned_check::Bool) where {T}
+function _get_variant_ptr(p::Ptr{T}, offset::UInt, len::UInt, elsz::UInt) where {T}
+    tag = unsafe_load(unsafe_convert(Ptr{UInt8}, p) + ((elsz * len) + offset))
+    a = T.a
+    b = T.b
+    while true
+        # 
+        tag === 0x00 && return unsafe_convert(Ptr{a}, p)
+        isa(b, Union) || return unsafe_convert(Ptr{b}, p)
+        tag -= 0x01
+        a = b.a
+        b = b.b
+    end
+end
+ 
+# * `Int`s get converted to an unsigned integer when doing pointer math. Once bounds
+#   checking is complete, we know that this won't throw an error but we have to help out
+#   effect analysis by performing an explicit bitcast
+# * we keep conversion of pointers close to variant type look-up for inference (in `_get_variant_ptr`)
+#   Otherwise, inference falls apart quickly pointer conversion becomes very costly
+function get_buffer_value(b::BufferType{T}, i::Int, bounds_check::Bool) where {T}
     @inline
     lyt = ElementLayout(T)
-    idx0 = i - 1
+    elsz = bitcast(UInt, lyt.elsize)
     if lyt.nvariants === 0
         bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
         t = @_gc_preserve_begin b
-        p = _preserved_pointer(b) + (idx0 * Core.sizeof(Ptr{Cvoid}))
-        pt = unsafe_load(unsafe_convert(Ptr{Ptr{Cvoid}}, p))
-        assigned_check || (pt === C_NULL && throw(UndefRefError()))
-        out = unsafe_load(unsafe_convert(Ptr{T}, pt))
+        p = _preserved_pointer(b) + ((bitcast(UInt, i) - UInt(1)) * elsz)
+        out = ccall(:jl_value_ptr, Ref{T}, (Ptr{Cvoid},), unsafe_load(unsafe_convert(Ptr{Ptr{Cvoid}}, p)))
         @_gc_preserve_end t
         return out
     elseif lyt.nvariants === 1
@@ -138,55 +126,63 @@ function get_buffer_value(b::BufferType{T}, i::Int, bounds_check::Bool, assigned
             return getfield(T, :instance)
         else
             t = @_gc_preserve_begin b
-            out = unsafe_load(_preserved_pointer(b) + (idx0 * lyt.elsize))
+            out = unsafe_load(_preserved_pointer(b) + ((bitcast(UInt, i) - UInt(1)) * elsz))
             @_gc_preserve_end t
             return out
         end
     else
         len = length(b)
         bounds_check && (1 <= i <= len || throw(BoundsError(b, i)))
+        offset = bitcast(UInt, i) - UInt(1)
         t = @_gc_preserve_begin b
-        p = _preserved_pointer(b)
-        tag = Int(unsafe_load(unsafe_convert(Ptr{UInt8}, p) + (lyt.elsize * len) + idx0))
-        vt = tag_to_variant(T, tag)
-        if isdefined(vt, :instance)
-            out = vt.instance
-        else
-            out = unsafe_load(unsafe_convert(Ptr{vt}, p) + (idx0 * lyt.elsize))
-        end
+        p = _get_variant_ptr(_preserved_pointer(b), offset, bitcast(UInt, len), elsz) + (offset * elsz)
+        return unsafe_load(p)
         @_gc_preserve_end t
-        return out
+    end
+end
+
+function _variant_to_tag(U::Union, vt::DataType)
+    @_total_meta
+    tag = 0x00
+    a = U.a
+    b = U.b
+    while true
+        a === vt && return tag
+        tag += 0x01
+        isa(b, Union) ||return tag # `utail.b` is last variant available
+        a = b.a
+        b = b.b
     end
 end
 
 function set_buffer_value!(b::BufferType{T}, v::T, i::Int, bounds_check::Bool) where {T}
     lyt = ElementLayout(T)
-    idx0 = i - 1
+    elsz = bitcast(UInt, lyt.elsize)
     if lyt.nvariants === 0
         bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
         t = @_gc_preserve_begin b
-        p = _preserved_pointer(b) + (idx0 * lyt.elsize)
+        p = _preserved_pointer(b) + ((bitcast(UInt, i) - UInt(1)) * elsz)
         # FIXME this won't work for immutable values and probably needs updating with
         #`jl_gc_wb`
         unsafe_store!(unsafe_convert(Ptr{Ptr{Cvoid}}, p), pointer_from_objref(v))
         @_gc_preserve_end t
     elseif lyt.nvariants === 1
         bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
-        if !isdefined(vt, :instance)
+        if !isdefined(T, :instance)
             t = @_gc_preserve_begin b
-            unsafe_store!(_preserved_pointer(b) + (idx0 * lyt.elsize), v)
+            unsafe_store!(_preserved_pointer(b) + ((bitcast(UInt, i) - UInt(1)) * elsz), v)
             @_gc_preserve_end t
         end
     else
         len = length(b)
         bounds_check && (1 <= i <= len || throw(BoundsError(b, i)))
         t = @_gc_preserve_begin b
+        offset = (bitcast(UInt, i) - UInt(1))
         p = _preserved_pointer(b)
         vt = typeof(v)
-        tag = variant_to_tag(T, vt)
-        unsafe_store!(convert(Ptr{UInt8}, p) + (lyt.elsize * len) + idx0, UInt8(tag))
+        unsafe_store!(convert(Ptr{UInt8}, p) + (elsz * len) + offset, _variant_to_tag(T, vt))
         if !isdefined(vt, :instance)
-            unsafe_store!(unsafe_convert(Ptr{vt}, p) + (idx0 * lyt.elsize), v)
+            unsafe_store!(unsafe_convert(Ptr{vt}, p) + (offset * elsz), v)
         end
         @_gc_preserve_end t
     end
@@ -382,10 +378,15 @@ function isassigned(b::BufferType, i::Int, ii::Int...)
     @boundscheck all(isone, ii) || return false
     return isassigned(b, i)
 end
-function isassigned(b::BufferType, i::Int)
+function isassigned(b::BufferType{T}, i::Int) where {T}
     @inline
     @boundscheck 1 <= i <= length(b) || return false
-    ccall(:jl_buffer_isassigned, Cint, (Any, UInt), b, i - 1) == 1
+    lyt = ElementLayout(T)
+    lyt.nvariants === 0 || return true
+    t = @_gc_preserve_begin b
+    p = _preserved_pointer(b) + ((bitcast(UInt, i) - UInt(1)) * bitcast(UInt, lyt.elsize))
+    return unsafe_load(unsafe_convert(Ptr{Ptr{Cvoid}}, p)) !== C_NULL
+    @_gc_preserve_end t
 end
 
 function ==(v1::BufferType, v2::BufferType)

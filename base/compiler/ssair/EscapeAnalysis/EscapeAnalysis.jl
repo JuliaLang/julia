@@ -1633,10 +1633,10 @@ end
 function escape_builtin!(::typeof(bufref), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) ≥ 4 || return false
     # check potential thrown escapes from this bufref call
-    boundscheckt = argextype(args[2], astate.ir)
+    boundcheckt = argextype(args[2], astate.ir)
     bufty = argextype(args[3], astate.ir)
     idxty = argextype(args[4], astate.ir)
-    if buffer_builtin_common_typecheck(boundscheckt, bufty, idxty)
+    if buffer_builtin_common_typecheck(boundcheckt, bufty, idxty)
         add_thrown_escapes!(astate, pc, args, 2)
     end
     buf = args[3]
@@ -1696,11 +1696,11 @@ function escape_builtin!(::typeof(bufset), astate::AnalysisState, pc::Int, args:
     # check potential escapes from this arrayset call
     # NOTE here we essentially only need to account for TypeError, assuming that
     # UndefRefError or BoundsError don't capture any of the arguments here
-    boundscheckt = argextype(args[2], astate.ir)
+    boundcheckt = argextype(args[2], astate.ir)
     bufty = argextype(args[3], astate.ir)
     valty = argextype(args[4], astate.ir)
     idxty = argextype(args[5], astate.ir)
-    if !(buffer_builtin_common_typecheck(boundscheckt, bufty, idxty) &&
+    if !(buffer_builtin_common_typecheck(boundcheckt, bufty, idxty) &&
         arrayset_typecheck(bufty, valty))
         add_thrown_escapes!(astate, pc, args, 2)
     end
