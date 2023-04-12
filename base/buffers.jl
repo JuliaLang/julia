@@ -48,7 +48,7 @@ struct BufferLayout
         lyt = ElementLayout(T)
         data_size = len * lyt.elsize
         if lyt.nvariants !== 0
-            if lyt.nvariants === 1
+            if lyt.nvariants === 1 && lyt.elsize === 1
                 data_size += 1
             else
                 data_size += len
