@@ -261,7 +261,7 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         elseif isa(c, DataType) && t.name === c.name
             cP = c.parameters
             length(cP) < length(tP) && return true
-            length(cP) > length(tP) && isvarargtype(cP[end]) && return false
+            isempty(tP) && return false
             length(cP) > length(tP) && !isvarargtype(tP[end]) && depth == 1 && return false # is this line necessary?
             ntail = length(cP) - length(tP) # assume parameters were dropped from the tuple head
             # allow creating variation within a nested tuple, but only so deep
