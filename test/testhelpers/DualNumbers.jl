@@ -4,8 +4,9 @@ module DualNumbers
 
 export Dual
 
-# Dual numbers type with minimal interface, example of a (real) number type that
-# subtypes Number, but not Real. Can be used to test generic linear algebra functions.
+# Dual numbers type with minimal interface
+# example of a (real) number type that subtypes Number, but not Real.
+# Can be used to test generic linear algebra functions.
 
 struct Dual{T<:Real} <: Number
     val::T
@@ -29,7 +30,7 @@ Base.convert(::Type{Dual{T}}, x::Dual) where {T} = Dual(convert(T, x.val), conve
 Base.convert(::Type{Dual{T}}, x::Real) where {T} = Dual(convert(T, x), zero(T))
 
 Base.float(x::Dual) = Dual(float(x.val), float(x.eps))
-# the folowing two are needed for normalize
+# the following two methods are needed for normalize (to check for potential overflow)
 Base.typemax(x::Dual) = Dual(typemax(x.val), zero(x.eps))
 Base.prevfloat(x::Dual{<:AbstractFloat}) = prevfloat(x.val)
 
