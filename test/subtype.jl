@@ -2453,8 +2453,11 @@ let A = Tuple{Type{T}, T} where T,
     @testintersect(A, B, C)
 end
 
-let a = (isodd(i) ? Pair{Char, String} : Pair{String, String} for i in 1:2000)
+let
+    a = (isodd(i) ? Pair{Char, String} : Pair{String, String} for i in 1:2000)
     @test Tuple{Type{Pair{Union{Char, String}, String}}, a...} <: Tuple{Type{Pair{K, V}}, Vararg{Pair{A, B} where B where A}} where V where K
+    a = (isodd(i) ? Matrix{Int} : Vector{Int} for i in 1:4000)
+    @test Tuple{Type{Pair{Union{Char, String}, String}}, a...,} <: Tuple{Type{Pair{K, V}}, Vararg{Array}} where V where K
 end
 
 #issue 48582

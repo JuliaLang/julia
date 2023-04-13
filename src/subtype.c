@@ -1536,7 +1536,7 @@ static int may_contain_union_decision(jl_value_t *x, jl_stenv_t *e, jl_typeenv_t
         return 0;
     }
     if (!jl_is_typevar(x))
-        return 1;
+        return jl_is_type(x);
     jl_typeenv_t *t = log;
     while (t != NULL) {
         if (x == (jl_value_t *)t->var)
