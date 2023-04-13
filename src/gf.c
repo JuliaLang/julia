@@ -924,7 +924,7 @@ static void jl_compilation_sig(
         if (max_varargs > 0) {
             type_i = jl_svecref(*newparams, nspec - 2);
         } else {
-            // If max varargs is < 1, always specialize to (Any...) since
+            // If max varargs is zero, always specialize to (Any...) since
             // there is no preceding parameter to use for `type_i`
             type_i = jl_bottom_type;
         }
