@@ -315,8 +315,9 @@ end
         P("x86_64", "linux"; libgfortran_version=v"5") => "linux8",
 
         # Ambiguity test
-        P("aarch64", "linux"; libgfortran_version=v"3") => "linux4",
+        P("aarch64", "linux"; libgfortran_version=v"3") => "linux3",
         P("aarch64", "linux"; libgfortran_version=v"3", libstdcxx_version=v"3.4.18") => "linux5",
+        P("aarch64", "linux"; libgfortran_version=v"3", libstdcxx_version=v"3.4.18", foo="bar") => "linux9",
 
         # OS test
         P("x86_64", "macos"; libgfortran_version=v"3") => "mac4",
@@ -327,8 +328,10 @@ end
     @test select_platform(platforms, P("x86_64", "linux"; libgfortran_version=v"4")) == "linux7"
 
     # Ambiguity test
-    @test select_platform(platforms, P("aarch64", "linux")) == "linux5"
-    @test select_platform(platforms, P("aarch64", "linux"; libgfortran_version=v"3")) == "linux5"
+    @test select_platform(platforms, P("aarch64", "linux")) == "linux3"
+    @test select_platform(platforms, P("aarch64", "linux"; libgfortran_version=v"3")) == "linux3"
+    # This one may be surprising, but we still match `linux3`, and since linux3 is shorter, we choose it.
+    @test select_platform(platforms, P("aarch64", "linux"; libgfortran_version=v"3", libstdcxx_version=v"3.4.18")) === "linux3"
     @test select_platform(platforms, P("aarch64", "linux"; libgfortran_version=v"4")) === nothing
 
     @test select_platform(platforms, P("x86_64", "macos")) == "mac4"
@@ -339,6 +342,14 @@ end
 
     # Sorry, Alex. ;)
     @test select_platform(platforms, P("x86_64", "freebsd")) === nothing
+
+    # The new "prefer shortest matching" algorithm is meant to be used to resolve ambiguities such as the following:
+    platforms = Dict(
+        # Typical binning test
+        P("x86_64", "linux") => "good",
+        P("x86_64", "linux"; sanitize="memory") => "bad",
+    )
+    @test select_platform(platforms, P("x86_64", "linux")) == "good"
 end
 
 @testset "Custom comparators" begin

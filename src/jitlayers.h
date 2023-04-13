@@ -73,7 +73,7 @@ GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M) JL_NOTSAFEPOINT;
 DataLayout jl_create_datalayout(TargetMachine &TM) JL_NOTSAFEPOINT;
 
 static inline bool imaging_default() JL_NOTSAFEPOINT {
-    return jl_options.image_codegen || (jl_generating_output() && jl_options.use_pkgimages);
+    return jl_options.image_codegen || (jl_generating_output() && (!jl_options.incremental || jl_options.use_pkgimages));
 }
 
 struct OptimizationOptions {

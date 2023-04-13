@@ -1080,6 +1080,7 @@ function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
 end
 
 function run_package_callbacks(modkey::PkgId)
+    run_extension_callbacks(modkey)
     assert_havelock(require_lock)
     unlock(require_lock)
     try
@@ -1204,54 +1205,50 @@ function run_extension_callbacks(extid::ExtensionId)
     return succeeded
 end
 
-function run_extension_callbacks()
+function run_extension_callbacks(pkgid::PkgId)
     assert_havelock(require_lock)
-    loaded_triggers = collect(intersect(keys(Base.loaded_modules), keys(Base.EXT_DORMITORY)))
-    sort!(loaded_triggers; by=x->x.uuid)
-    for pkgid in loaded_triggers
-        # take ownership of extids that depend on this pkgid
-        extids = pop!(EXT_DORMITORY, pkgid, nothing)
-        extids === nothing && continue
-        for extid in extids
-            if extid.ntriggers > 0
-                # It is possible that pkgid was loaded in an environment
-                # below the one of the parent. This will cause a load failure when the
-                # pkg ext tries to load the triggers. Therefore, check this first
-                # before loading the pkg ext.
-                pkgenv = identify_package_env(extid.id, pkgid.name)
-                ext_not_allowed_load = false
-                if pkgenv === nothing
-                    ext_not_allowed_load = true
-                else
-                    pkg, env = pkgenv
-                    path = Base.locate_package(pkg, env)
-                    if path === nothing
-                        ext_not_allowed_load = true
-                    end
-                end
-                if ext_not_allowed_load
-                    @debug "Extension $(extid.id.name) of $(extid.parentid.name) will not be loaded \
-                            since $(pkgid.name) loaded in environment lower in load path"
-                    # indicate extid is expected to fail
-                    extid.ntriggers *= -1
-                else
-                    # indicate pkgid is loaded
-                    extid.ntriggers -= 1
-                end
-            end
-            if extid.ntriggers < 0
-                # indicate pkgid is loaded
-                extid.ntriggers += 1
-                succeeded = false
+    # take ownership of extids that depend on this pkgid
+    extids = pop!(EXT_DORMITORY, pkgid, nothing)
+    extids === nothing && return
+    for extid in extids
+        if extid.ntriggers > 0
+            # It is possible that pkgid was loaded in an environment
+            # below the one of the parent. This will cause a load failure when the
+            # pkg ext tries to load the triggers. Therefore, check this first
+            # before loading the pkg ext.
+            pkgenv = identify_package_env(extid.id, pkgid.name)
+            ext_not_allowed_load = false
+            if pkgenv === nothing
+                ext_not_allowed_load = true
             else
-                succeeded = true
+                pkg, env = pkgenv
+                path = locate_package(pkg, env)
+                if path === nothing
+                    ext_not_allowed_load = true
+                end
             end
-            if extid.ntriggers == 0
-                # actually load extid, now that all dependencies are met,
-                # and record the result
-                succeeded = succeeded && run_extension_callbacks(extid)
-                succeeded || push!(EXT_DORMITORY_FAILED, extid)
+            if ext_not_allowed_load
+                @debug "Extension $(extid.id.name) of $(extid.parentid.name) will not be loaded \
+                        since $(pkgid.name) loaded in environment lower in load path"
+                # indicate extid is expected to fail
+                extid.ntriggers *= -1
+            else
+                # indicate pkgid is loaded
+                extid.ntriggers -= 1
             end
+        end
+        if extid.ntriggers < 0
+            # indicate pkgid is loaded
+            extid.ntriggers += 1
+            succeeded = false
+        else
+            succeeded = true
+        end
+        if extid.ntriggers == 0
+            # actually load extid, now that all dependencies are met,
+            # and record the result
+            succeeded = succeeded && run_extension_callbacks(extid)
+            succeeded || push!(EXT_DORMITORY_FAILED, extid)
         end
     end
     return
@@ -1276,7 +1273,7 @@ function retry_load_extensions()
     end
     prepend!(EXT_DORMITORY_FAILED, failed)
     end
-    nothing
+    return
 end
 
 """
@@ -1669,10 +1666,6 @@ function _require_prelocked(uuidkey::PkgId, env=nothing)
     else
         newm = root_module(uuidkey)
     end
-    # Load extensions when not precompiling and not in a nested package load
-    if JLOptions().incremental == 0 && isempty(package_locks)
-        run_extension_callbacks()
-    end
     return newm
 end
 
@@ -1806,7 +1799,7 @@ function _require(pkg::PkgId, env=nothing)
 
         if JLOptions().use_compiled_modules != 0
             if (0 == ccall(:jl_generating_output, Cint, ())) || (JLOptions().incremental != 0)
-                if !pkg_precompile_attempted && isassigned(PKG_PRECOMPILE_HOOK)
+                if !pkg_precompile_attempted && isinteractive() && isassigned(PKG_PRECOMPILE_HOOK)
                     pkg_precompile_attempted = true
                     unlock(require_lock)
                     try

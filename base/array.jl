@@ -187,7 +187,7 @@ function vect(X...)
     return T[X...]
 end
 
-size(a::Array, d::Integer) = arraysize(a, convert(Int, d))
+size(a::Array, d::Integer) = arraysize(a, d isa Int ? d : convert(Int, d))
 size(a::Vector) = (arraysize(a,1),)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
 size(a::Array{<:Any,N}) where {N} = (@inline; ntuple(M -> size(a, M), Val(N))::Dims)
@@ -383,7 +383,7 @@ copyto!(dest::Array{T}, src::Array{T}) where {T} = copyto!(dest, 1, src, 1, leng
 # N.B: The generic definition in multidimensional.jl covers, this, this is just here
 # for bootstrapping purposes.
 function fill!(dest::Array{T}, x) where T
-    xT = convert(T, x)
+    xT = x isa T ? x : convert(T, x)::T
     for i in eachindex(dest)
         @inbounds dest[i] = xT
     end
@@ -453,17 +453,6 @@ function getindex(::Type{T}, vals...) where T
     return a
 end
 
-# safe version
-function getindex(::Type{T}, vals::T...) where T
-    @inline
-    @_effect_free_terminates_locally_meta
-    a = Vector{T}(undef, length(vals))
-    @_safeindex for i in 1:length(vals)
-        a[i] = vals[i]
-    end
-    return a
-end
-
 function getindex(::Type{Any}, @nospecialize vals...)
     @_effect_free_terminates_locally_meta
     a = Vector{Any}(undef, length(vals))
@@ -475,7 +464,7 @@ end
 getindex(::Type{Any}) = Vector{Any}()
 
 function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
-    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), a, convert(eltype(a), x), length(a))
+    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), a, x isa eltype(a) ? x : convert(eltype(a), x), length(a))
     return a
 end
 
@@ -1020,9 +1009,9 @@ Dict{String, Int64} with 2 entries:
 function setindex! end
 
 @eval setindex!(A::Array{T}, x, i1::Int) where {T} =
-    arrayset($(Expr(:boundscheck)), A, convert(T,x)::T, i1)
+    arrayset($(Expr(:boundscheck)), A, x isa T ? x : convert(T,x)::T, i1)
 @eval setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T} =
-    (@inline; arrayset($(Expr(:boundscheck)), A, convert(T,x)::T, i1, i2, I...))
+    (@inline; arrayset($(Expr(:boundscheck)), A, x isa T ? x : convert(T,x)::T, i1, i2, I...))
 
 __inbounds_setindex!(A::Array{T}, x, i1::Int) where {T} =
     arrayset(false, A, convert(T,x)::T, i1)
@@ -1116,7 +1105,7 @@ function push! end
 
 function push!(a::Vector{T}, item) where T
     # convert first so we don't grow the array if the assignment won't work
-    itemT = convert(T, item)
+    itemT = item isa T ? item : convert(T, item)::T
     _growend!(a, 1)
     @_safeindex a[length(a)] = itemT
     return a
@@ -1466,7 +1455,7 @@ julia> pushfirst!([1, 2, 3, 4], 5, 6)
 ```
 """
 function pushfirst!(a::Vector{T}, item) where T
-    item = convert(T, item)
+    item = item isa T ? item : convert(T, item)::T
     _growbeg!(a, 1)
     @_safeindex a[1] = item
     return a
@@ -1553,7 +1542,7 @@ julia> insert!(Any[1:6;], 3, "here")
 """
 function insert!(a::Array{T,1}, i::Integer, item) where T
     # Throw convert error before changing the shape of the array
-    _item = convert(T, item)
+    _item = item isa T ? item : convert(T, item)::T
     _growat!(a, i, 1)
     # _growat! already did bound check
     @inbounds a[i] = _item
@@ -2194,7 +2183,7 @@ findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::AbstractUnitR
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
     isempty(r) && return nothing
     minimum(r) <= p.x <= maximum(r) || return nothing
-    d = convert(S, p.x - first(r))
+    d = convert(S, p.x - first(r))::S
     iszero(d % step(r)) || return nothing
     return d ÷ step(r) + 1
 end

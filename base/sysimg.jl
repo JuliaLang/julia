@@ -56,7 +56,6 @@ let
 
         # 2-depth packages
         :Dates,
-        :Distributed,
         :Future,
         :InteractiveUtils,
         :LibGit2,
@@ -65,7 +64,6 @@ let
         # 3-depth packages
         :REPL,
         :TOML,
-        :Test,
 
         # 4-depth packages
         :LibCURL,

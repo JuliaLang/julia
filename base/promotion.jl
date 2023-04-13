@@ -472,6 +472,11 @@ else
     _return_type(@nospecialize(f), @nospecialize(t)) = Any
 end
 
+function TupleOrBottom(tt...)
+    any(p -> p === Union{}, tt) && return Union{}
+    return Tuple{tt...}
+end
+
 """
     promote_op(f, argtypes...)
 
@@ -483,7 +488,12 @@ Guess what an appropriate container eltype would be for storing results of
     the container eltype on the type of the actual elements. Only in the absence of any
     elements (for an empty result container), it may be unavoidable to call `promote_op`.
 """
-promote_op(f, S::Type...) = _return_type(f, Tuple{S...})
+function promote_op(f, S::Type...)
+    argT = TupleOrBottom(S...)
+    argT === Union{} && return Union{}
+    return _return_type(f, argT)
+end
+
 
 ## catch-alls to prevent infinite recursion when definitions are missing ##
 
