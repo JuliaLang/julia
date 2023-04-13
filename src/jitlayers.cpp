@@ -251,7 +251,7 @@ static jl_callptr_t _jl_compile_codeinst(
     size_t i = 0;
     for (auto &def : emitted) {
         jl_code_instance_t *this_code = def.first;
-        if (i < 10)
+        if (i < jl_timing_print_limit)
             jl_timing_show_func_sig(this_code->def->specTypes, JL_TIMING_CURRENT_BLOCK);
 
         jl_llvm_functions_t decls = std::get<1>(def.second);
@@ -297,7 +297,7 @@ static jl_callptr_t _jl_compile_codeinst(
             fptr = addr;
         i++;
     }
-    if (i > 10)
+    if (i > jl_timing_print_limit)
         jl_timing_printf(JL_TIMING_CURRENT_BLOCK, "... <%d methods truncated>", i - 10);
 
     uint64_t end_time = 0;

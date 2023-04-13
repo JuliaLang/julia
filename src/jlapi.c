@@ -685,8 +685,11 @@ static void rr_detach_teleport(void) {
 JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
 {
 #ifdef USE_TRACY
-    if (getenv("WAIT_FOR_TRACY"))
-        while (!TracyCIsConnected) ; // Wait for connection
+    // Apply e.g. JULIA_TIMING_SUBSYSTEMS="+GC,-INFERENCE" and
+    //            JULIA_TIMING_METADATA_PRINT_LIMIT=20
+    jl_timing_apply_env();
+    if (getenv("JULIA_WAIT_FOR_TRACY"))
+        while (!TracyCIsConnected) jl_cpu_pause(); // Wait for connection
 #endif
 
     // no-op on Windows, note that the caller must have already converted

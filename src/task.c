@@ -1222,8 +1222,6 @@ CFI_NORETURN
     _start_task();
 }
 
-const char* fiber = "task";
-
 STATIC_OR_JS void NOINLINE JL_NORETURN _start_task(void)
 {
 CFI_NORETURN

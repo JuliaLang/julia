@@ -16,6 +16,21 @@ void jl_destroy_timing(void) JL_NOTSAFEPOINT;
 // Returns -1 if no matching sub-system was found.
 int jl_timing_set_enable(const char *subsystem, uint8_t enabled);
 
+// Check for environment vars "JULIA_TIMING_METADATA_PRINT_LIMIT" and
+// "JULIA_TIMING_SUBSYSTEMS" and if present apply these to the metadata
+// print limit and the timings enable mask, respectively.
+//
+// For example, to enable INFERENCE and METHOD_MATCH and disable GC:
+//     JULIA_TIMING_SUBSYSTEMS="+INFERENCE,-GC,+METHOD_MATCH"
+//
+// For example, to increase the metadata item print limit from 10 to 20:
+//     JULIA_TIMING_METADATA_PRINT_LIMIT=20
+void jl_timing_apply_env(void);
+
+// Configurable item limit, runtime code should use this to limit printing
+// when adding potentially many items of metadata to a single timing zone.
+extern uint32_t jl_timing_print_limit;
+
 #ifdef __cplusplus
 }
 #endif

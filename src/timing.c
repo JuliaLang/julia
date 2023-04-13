@@ -36,6 +36,11 @@ JL_DLLEXPORT uint64_t jl_timing_enable_mask = 0xFFFFFFFFFFFFFFFF;
 #endif
 
 JL_DLLEXPORT uint64_t jl_timing_counts[(int)JL_TIMING_LAST] = {0};
+
+// Used to as an item limit when several strings of metadata can
+// potentially be associated with a single timing zone.
+JL_DLLEXPORT uint32_t jl_timing_print_limit = 10;
+
 const char *jl_timing_names[(int)JL_TIMING_LAST] =
     {
 #define X(name) #name
@@ -100,14 +105,16 @@ void jl_timing_block_enter_task(jl_task_t *ct, jl_ptls_t ptls, jl_timing_block_t
 jl_timing_block_t *jl_timing_block_exit_task(jl_task_t *ct, jl_ptls_t ptls)
 {
 #ifdef USE_TRACY
-    // Tracy is fairly strict about not leaving a fiber that
-    // hasn't been entered, which happens often when
-    // connecting to a running Julia session.
+    // Tracy is fairly strict about not leaving a fiber that hasn't
+    // been entered, which happens often when connecting to a running
+    // Julia session.
     //
-    // Eventually, Tracy will support telling the server that
-    // which fibers are active upon connection, but until then
-    // work around around the problem by just entering the new
-    // fiber directly, which implicitly leaves any active fibers.
+    // Eventually, Tracy will support telling the server which fibers
+    // are active upon connection, but until then we work around the
+    // problem by not explicitly leaving the fiber at all.
+    //
+    // Later when we enter the new fiber directly, that will cause the
+    // the active fiber to be left implicitly.
 
     //TracyCFiberLeave;
 #endif
@@ -220,11 +227,71 @@ JL_DLLEXPORT int jl_timing_set_enable(const char *subsystem, uint8_t enabled)
     return -1;
 }
 
+static void jl_timing_set_enable_from_env(void)
+{
+    const char *env = getenv("JULIA_TIMING_SUBSYSTEMS");
+    if (!env)
+        return;
+
+    // Copy `env`, so that we can modify it
+    size_t sz = strlen(env) + 1;
+    char *env_copy = (char *)malloc(sz);
+    memcpy(env_copy, env, sz);
+
+    char *subsystem = env_copy;
+    char *ch = subsystem;
+    uint8_t enable = 1;
+    while (1) {
+        // +SUBSYSTEM means enable, -SUBSYSTEM means disable
+        if (*subsystem == '+' || *subsystem == '-')
+            enable = (*subsystem++ == '+');
+
+        if (*ch == ',') {
+            *ch++ = '\0';
+            if ((*subsystem != '\0') && jl_timing_set_enable(subsystem, enable))
+                fprintf(stderr, "warning: unable to configure timing for non-existent subsystem \"%s\"\n", subsystem);
+
+            subsystem = ch;
+            enable = 1;
+        }
+        else if (*ch == '\0') {
+            if ((*subsystem != '\0') && jl_timing_set_enable(subsystem, enable))
+                fprintf(stderr, "warning: unable to configure timing for non-existent subsystem \"%s\"\n", subsystem);
+
+            break;
+        }
+        else ch++;
+    }
+    free(env_copy);
+}
+
+static void jl_timing_set_print_limit_from_env(void)
+{
+    const char *const env = getenv("JULIA_TIMING_METADATA_PRINT_LIMIT");
+    if (!env)
+        return;
+
+    char *endp;
+    long value = strtol(env, &endp, 10);
+    if (*endp == '\0' && value >= 0 && value <= UINT32_MAX)
+        jl_timing_print_limit = (uint32_t)value;
+}
+
+void jl_timing_apply_env(void)
+{
+    // JULIA_TIMING_SUBSYSTEMS
+    jl_timing_set_enable_from_env();
+
+    // JULIA_TIMING_METADATA_PRINT_LIMIT
+    jl_timing_set_print_limit_from_env();
+}
+
 #else
 
 void jl_init_timing(void) { }
 void jl_destroy_timing(void) { }
 JL_DLLEXPORT int jl_timing_set_enable(const char *subsystem, uint8_t enabled) { return -1; }
+JL_DLLEXPORT uint32_t jl_timing_print_limit = 0;
 
 #endif
 
