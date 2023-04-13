@@ -14,7 +14,8 @@ end
 Base.:+(x::Dual, y::Dual) = Dual(x.val + y.val, x.eps + y.eps)
 Base.:-(x::Dual, y::Dual) = Dual(x.val - y.val, x.eps - y.eps)
 Base.:*(x::Dual, y::Dual) = Dual(x.val * y.val, x.eps * y.val + y.eps * x.val)
-Base.:*(x::Integer, y::Dual) = Dual(x*y.val, x*y.eps)
+Base.:*(x::Number, y::Dual) = Dual(x*y.val, x*y.eps)
+Base.:*(x::Dual, y::Number) = Dual(x.val*y, x.eps*y)
 Base.:/(x::Dual, y::Dual) = Dual(x.val / y.val, (x.eps*y.val - x.val*y.eps)/(y.val*y.val))
 
 Base.:(==)(x::Dual, y::Dual) = x.val == y.val && x.eps == y.eps
@@ -38,7 +39,7 @@ Base.sqrt(x::Dual) = Dual(sqrt(x.val), x.eps/(2sqrt(x.val)))
 
 Base.isless(x::Dual, y::Dual) = x.val < y.val
 Base.isless(x::Real, y::Dual) = x < y.val
-Base.isinf(x::Dual) = isinf(x.val)
+Base.isinf(x::Dual) = isinf(x.val) & isfinite(x.eps)
 Base.real(x::Dual) = x # since we curently only consider Dual{<:Real}
 
 end # module
