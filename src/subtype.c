@@ -2733,16 +2733,34 @@ static jl_value_t *omit_bad_union(jl_value_t *u, jl_tvar_t *t)
     if (jl_is_unionall(u)) {
         jl_tvar_t *var = ((jl_unionall_t *)u)->var;
         jl_value_t *ub = var->ub, *body = ((jl_unionall_t *)u)->body;
-        JL_GC_PUSH3(&ub, &body, &var);
         assert(var != t);
-        ub = omit_bad_union(ub, t);
-        body = omit_bad_union(body, t);
-        if (ub != NULL && body != NULL && !jl_has_typevar(var->lb, t)) {
-            if (ub != var->ub) {
-                var = jl_new_typevar(var->name, var->lb, ub);
-                body = jl_substitute_var(body, ((jl_unionall_t *)u)->var, (jl_value_t *)var);
+        if (!jl_has_typevar(var->lb, t)) {
+            JL_GC_PUSH3(&ub, &body, &var);
+            body = omit_bad_union(body, t);
+            if (!jl_has_typevar(body, var)) {
+                res = body;
             }
-            res = jl_new_struct(jl_unionall_type, var, body);
+            else {
+                ub = omit_bad_union(ub, t);
+                if (ub == jl_bottom_type && var->lb != ub) {
+                    res = jl_bottom_type;
+                }
+                else if (obviously_egal(var->lb, ub)) {
+                    JL_TRY {
+                        res = jl_substitute_var(body, var, ub);
+                    }
+                    JL_CATCH {
+                        res = jl_bottom_type;
+                    }
+                }
+                else {
+                    if (ub != var->ub) {
+                        var = jl_new_typevar(var->name, var->lb, ub);
+                        body = jl_substitute_var(body, ((jl_unionall_t *)u)->var, (jl_value_t *)var);
+                    }
+                    res = jl_new_struct(jl_unionall_type, var, body);
+                }
+            }
         }
         JL_GC_POP();
     }
@@ -2752,11 +2770,13 @@ static jl_value_t *omit_bad_union(jl_value_t *u, jl_tvar_t *t)
         JL_GC_PUSH2(&a, &b);
         a = omit_bad_union(a, t);
         b = omit_bad_union(b, t);
-        res = a == NULL ? b :
-              b == NULL ? a :
-              simple_join(a, b);
+        res = simple_join(a, b);
         JL_GC_POP();
     }
+    else {
+        res = jl_bottom_type;
+    }
+    assert(res != NULL);
     return res;
 }
 
@@ -2800,9 +2820,8 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         newvar = jl_new_typevar(vb->var->name, vb->lb, vb->ub);
 
     // remove/replace/rewrap free occurrences of this var in the environment
-    jl_varbinding_t *btemp = e->vars;
     jl_varbinding_t *wrap = NULL;
-    while (btemp != NULL) {
+    for (jl_varbinding_t *btemp = e->vars; btemp != NULL; btemp = btemp->prev) {
         if (jl_has_typevar(btemp->lb, vb->var)) {
             if (vb->lb == (jl_value_t*)btemp->var) {
                 JL_GC_POP();
@@ -2819,17 +2838,12 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
             else if (btemp->lb == (jl_value_t*)vb->var) {
                 btemp->lb = vb->lb;
             }
-            else if (btemp->depth0 == vb->depth0 && !jl_has_typevar(vb->lb, btemp->var) &&
-                     !jl_has_typevar(vb->ub, btemp->var) && jl_has_typevar(btemp->ub, vb->var)) {
+            else if (btemp->depth0 == vb->depth0 && !jl_has_typevar(vb->lb, btemp->var) && !jl_has_typevar(vb->ub, btemp->var)) {
                 // if our variable is T, and some outer variable has constraint S = Ref{T},
                 // move the `where T` outside `where S` instead of putting it here. issue #21243.
-                if (newvar != vb->var) {
+                if (newvar != vb->var)
                     btemp->lb = jl_substitute_var(btemp->lb, vb->var, (jl_value_t*)newvar);
-                    btemp->ub = jl_substitute_var(btemp->ub, vb->var, (jl_value_t*)newvar);
-                }
                 wrap = btemp;
-                btemp = btemp->prev;
-                continue;
             }
             else {
                 btemp->lb = jl_new_struct(jl_unionall_type, vb->var, btemp->lb);
@@ -2839,7 +2853,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         if (jl_has_typevar(btemp->ub, vb->var)) {
             if (vb->ub == (jl_value_t*)btemp->var) {
                 btemp->ub = omit_bad_union(btemp->ub, vb->var);
-                if (btemp->ub == NULL) {
+                if (btemp->ub == jl_bottom_type && btemp->ub != btemp->lb) {
                     JL_GC_POP();
                     return jl_bottom_type;
                 }
@@ -2852,13 +2866,22 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                     res = jl_bottom_type;
                 }
             }
-            else if (btemp->ub == (jl_value_t*)vb->var)
+            else if (btemp->ub == (jl_value_t*)vb->var) {
+                // TODO: this loses some constraints, such as in this test, where we replace T4<:S3 (e.g. T4==S3 since T4 only appears covariantly once) with T4<:Any
+                // a = Tuple{Float64,T3,T4} where T4 where T3
+                // b = Tuple{S2,Tuple{S3},S3} where S2 where S3
+                // Tuple{Float64, T3, T4} where {S3, T3<:Tuple{S3}, T4<:S3}
                 btemp->ub = vb->ub;
+            }
+            else if (btemp->depth0 == vb->depth0 && !jl_has_typevar(vb->lb, btemp->var) && !jl_has_typevar(vb->ub, btemp->var)) {
+                if (newvar != vb->var)
+                    btemp->ub = jl_substitute_var(btemp->ub, vb->var, (jl_value_t*)newvar);
+                wrap = btemp;
+            }
             else
                 btemp->ub = jl_new_struct(jl_unionall_type, vb->var, btemp->ub);
             assert((jl_value_t*)btemp->var != btemp->ub);
         }
-        btemp = btemp->prev;
     }
 
     if (wrap) {
@@ -2867,8 +2890,8 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         if (wrap->innervars == NULL)
             wrap->innervars = jl_alloc_array_1d(jl_array_any_type, 0);
         jl_array_ptr_1d_push(wrap->innervars, (jl_value_t*)newvar);
+        // TODO: should we move all the innervars here too?
     }
-
 
     // if `v` still occurs, re-wrap body in `UnionAll v` or eliminate the UnionAll
     if (jl_has_typevar(res, vb->var)) {
@@ -2895,12 +2918,27 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         }
     }
 
-    if (res != jl_bottom_type && vb->innervars != NULL) {
-        int i;
-        for(i=0; i < jl_array_len(vb->innervars); i++) {
+    if (vb->innervars != NULL) {
+        for (size_t i = 0; i < jl_array_len(vb->innervars); i++) {
             jl_tvar_t *var = (jl_tvar_t*)jl_array_ptr_ref(vb->innervars, i);
-            if (jl_has_typevar(res, var))
-                res = jl_type_unionall((jl_tvar_t*)var, res);
+            // the `btemp->prev` walk is only giving a sort of post-order guarantee (since we are
+            // iterating 2 trees at once), so once we set `wrap`, there might remain other branches
+            // of the type walk that now still may have incomplete bounds: finish those now too
+            jl_varbinding_t *wrap = NULL;
+            for (jl_varbinding_t *btemp = e->vars; btemp != NULL; btemp = btemp->prev) {
+                if (btemp->depth0 == vb->depth0 && (jl_has_typevar(btemp->lb, var) || jl_has_typevar(btemp->ub, var))) {
+                    wrap = btemp;
+                }
+            }
+            if (wrap) {
+                if (wrap->innervars == NULL)
+                    wrap->innervars = jl_alloc_array_1d(jl_array_any_type, 0);
+                jl_array_ptr_1d_push(wrap->innervars, (jl_value_t*)var);
+            }
+            else if (res != jl_bottom_type) {
+                if (jl_has_typevar(res, var))
+                    res = jl_type_unionall((jl_tvar_t*)var, res);
+            }
         }
     }
 
@@ -2979,7 +3017,7 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
             JL_GC_PUSH1(&res);
             vb->ub = omit_bad_union(vb->ub, u->var);
             JL_GC_POP();
-            if (vb->ub == NULL)
+            if (vb->ub == jl_bottom_type && vb->ub != vb->lb)
                 res = jl_bottom_type;
         }
     }
@@ -3361,6 +3399,23 @@ static int subtype_by_bounds(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_NOT
     return compareto_var(x, (jl_tvar_t*)y, e, -1) || compareto_var(y, (jl_tvar_t*)x, e, 1);
 }
 
+static int has_typevar_via_env(jl_value_t *x, jl_tvar_t *t, jl_stenv_t *e)
+{
+    if (e->Loffset == 0) {
+        jl_varbinding_t *temp = e->vars;
+        while (temp != NULL) {
+            if (temp->var == t)
+                break;
+            if (temp->lb == temp->ub &&
+                temp->lb == (jl_value_t *)t &&
+                jl_has_typevar(x, temp->var))
+                return 1;
+            temp = temp->prev;
+        }
+    }
+    return jl_has_typevar(x, t);
+}
+
 // `param` means we are currently looking at a parameter of a type constructor
 // (as opposed to being outside any type constructor, or comparing variable bounds).
 // this is used to record the positions where type variables occur for the
@@ -3488,8 +3543,8 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                 if (R) flip_offset(e);
                 if (!ccheck)
                     return jl_bottom_type;
-                if ((jl_has_typevar(xub, (jl_tvar_t*)y) || jl_has_typevar(xub, (jl_tvar_t*)x)) &&
-                    (jl_has_typevar(yub, (jl_tvar_t*)x) || jl_has_typevar(yub, (jl_tvar_t*)y))) {
+                if ((has_typevar_via_env(xub, (jl_tvar_t*)y, e) || has_typevar_via_env(xub, (jl_tvar_t*)x, e)) &&
+                    (has_typevar_via_env(yub, (jl_tvar_t*)x, e) || has_typevar_via_env(yub, (jl_tvar_t*)y, e))) {
                     // TODO: This doesn't make much sense.
                     // circular constraint. the result will be Bottom, but in the meantime
                     // we need to avoid computing intersect(xub, yub) since it won't terminate.
