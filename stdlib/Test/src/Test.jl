@@ -165,6 +165,7 @@ function Base.show(io::IO, t::Fail)
             print(io, "\n     Context: ", t.context)
         end
     end
+    println(io) # add some visual space to separate sequential failures
 end
 
 """
@@ -1405,6 +1406,7 @@ julia> @testset let logi = log(im)
 Test Failed at none:3
   Expression: !(iszero(real(logi)))
      Context: logi = 0.0 + 1.5707963267948966im
+
 ERROR: There was an error during testing
 ```
 """
@@ -2094,5 +2096,6 @@ function _check_bitarray_consistency(B::BitArray{N}) where N
 end
 
 include("logging.jl")
+include("precompile.jl")
 
 end # module

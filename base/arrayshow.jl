@@ -462,8 +462,10 @@ function _show_nonempty(io::IO, @nospecialize(X::AbstractMatrix), prefix::String
 end
 
 
-_show_nonempty(io::IO, X::AbstractArray, prefix::String) =
+function _show_nonempty(io::IO, X::AbstractArray, prefix::String)
+    print(io, prefix)
     show_nd(io, X, (io, slice) -> _show_nonempty(io, inferencebarrier(slice), prefix, true, axes(slice)), false)
+end
 
 # a specific call path is used to show vectors (show_vector)
 _show_nonempty(::IO, ::AbstractVector, ::String) =

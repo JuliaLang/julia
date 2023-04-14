@@ -3151,63 +3151,76 @@ mktempdir() do dir
                 run(pipeline(`openssl req -new -x509 -newkey rsa:2048 -sha256 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`, stderr=devnull))
                 run(`openssl x509 -in $cert -out $pem -outform PEM`)
 
-                # Find an available port by listening
-                port, server = listenany(49152)
-                close(server)
+                local pobj, port
+                for attempt in 1:10
+                    # Find an available port by listening, but there's a race condition where
+                    # another process could grab this port, so retry on failure
+                    port, server = listenany(49152)
+                    close(server)
 
-                # Make a fake Julia package and minimal HTTPS server with our generated
-                # certificate. The minimal server can't actually serve a Git repository.
-                mkdir(joinpath(root, "Example.jl"))
-                pobj = cd(root) do
-                    run(pipeline(`openssl s_server -key $key -cert $cert -WWW -accept $port`, stderr=RawFD(2)), wait=false)
+                    # Make a fake Julia package and minimal HTTPS server with our generated
+                    # certificate. The minimal server can't actually serve a Git repository.
+                    mkdir(joinpath(root, "Example.jl"))
+                    pobj = cd(root) do
+                        run(pipeline(`openssl s_server -key $key -cert $cert -WWW -accept $port`, stderr=RawFD(2)), wait=false)
+                    end
+                    @test readuntil(pobj, "ACCEPT") == ""
+
+                    # Two options: Either we reached "ACCEPT" and the process is running and ready
+                    # or it failed to listen and exited, in which case we try again.
+                    process_running(pobj) && break
                 end
 
-                errfile = joinpath(root, "error")
-                repo_url = "https://$common_name:$port/Example.jl"
-                repo_dir = joinpath(root, "dest")
-                code = """
-                    using Serialization
-                    import LibGit2
-                    dest_dir = "$repo_dir"
-                    open("$errfile", "w+") do f
-                        try
-                            repo = LibGit2.clone("$repo_url", dest_dir)
-                        catch err
-                            serialize(f, err)
-                        finally
-                            isdir(dest_dir) && rm(dest_dir, recursive=true)
+                @test process_running(pobj)
+
+                if process_running(pobj)
+                    errfile = joinpath(root, "error")
+                    repo_url = "https://$common_name:$port/Example.jl"
+                    repo_dir = joinpath(root, "dest")
+                    code = """
+                        using Serialization
+                        import LibGit2
+                        dest_dir = "$repo_dir"
+                        open("$errfile", "w+") do f
+                            try
+                                repo = LibGit2.clone("$repo_url", dest_dir)
+                            catch err
+                                serialize(f, err)
+                            finally
+                                isdir(dest_dir) && rm(dest_dir, recursive=true)
+                            end
                         end
-                    end
-                """
-                cmd = `$(Base.julia_cmd()) --startup-file=no -e $code`
+                    """
+                    cmd = `$(Base.julia_cmd()) --startup-file=no -e $code`
 
-                try
-                    # The generated certificate is normally invalid
-                    run(cmd)
-                    err = open(errfile, "r") do f
-                        deserialize(f)
-                    end
-                    @test err.code == LibGit2.Error.ERROR
-                    @test startswith(lowercase(err.msg),
-                                     lowercase("user rejected certificate for localhost"))
-
-                    rm(errfile)
-
-                    # Specify that Julia use only the custom certificate. Note: we need to
-                    # spawn a new Julia process in order for this ENV variable to take effect.
-                    withenv("SSL_CERT_FILE" => pem) do
+                    try
+                        # The generated certificate is normally invalid
                         run(cmd)
                         err = open(errfile, "r") do f
                             deserialize(f)
                         end
                         @test err.code == LibGit2.Error.ERROR
-                        @test occursin(r"invalid content-type: '?text/plain'?"i, err.msg)
-                    end
+                        @test startswith(lowercase(err.msg),
+                                        lowercase("user rejected certificate for localhost"))
 
-                    # OpenSSL s_server should still be running
-                    @test process_running(pobj)
-                finally
-                    kill(pobj)
+                        rm(errfile)
+
+                        # Specify that Julia use only the custom certificate. Note: we need to
+                        # spawn a new Julia process in order for this ENV variable to take effect.
+                        withenv("SSL_CERT_FILE" => pem) do
+                            run(cmd)
+                            err = open(errfile, "r") do f
+                                deserialize(f)
+                            end
+                            @test err.code == LibGit2.Error.ERROR
+                            @test occursin(r"invalid content-type: '?text/plain'?"i, err.msg)
+                        end
+
+                        # OpenSSL s_server should still be running
+                        @test process_running(pobj)
+                    finally
+                        kill(pobj)
+                    end
                 end
             end
         end

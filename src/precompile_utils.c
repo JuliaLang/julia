@@ -120,7 +120,7 @@ static void _compile_all_union(jl_value_t *sig)
                 jl_svecset(p, i, ty);
             }
         }
-        methsig = (jl_value_t*)jl_apply_tuple_type(p);
+        methsig = jl_apply_tuple_type(p);
         methsig = jl_rewrap_unionall(methsig, sig);
         _compile_all_tvar_union(methsig);
     }
@@ -214,12 +214,17 @@ static int precompile_enq_all_specializations__(jl_typemap_entry_t *def, void *c
         jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)mi);
     }
     else {
-        jl_svec_t *specializations = jl_atomic_load_relaxed(&def->func.method->specializations);
-        size_t i, l = jl_svec_len(specializations);
-        for (i = 0; i < l; i++) {
-            jl_value_t *mi = jl_svecref(specializations, i);
-            if (mi != jl_nothing)
-                precompile_enq_specialization_((jl_method_instance_t*)mi, closure);
+        jl_value_t *specializations = jl_atomic_load_relaxed(&def->func.method->specializations);
+        if (!jl_is_svec(specializations)) {
+            precompile_enq_specialization_((jl_method_instance_t*)specializations, closure);
+        }
+        else {
+            size_t i, l = jl_svec_len(specializations);
+            for (i = 0; i < l; i++) {
+                jl_value_t *mi = jl_svecref(specializations, i);
+                if (mi != jl_nothing)
+                    precompile_enq_specialization_((jl_method_instance_t*)mi, closure);
+            }
         }
     }
     if (m->ccallable)
@@ -255,7 +260,8 @@ static void *jl_precompile_(jl_array_t *m, int external_linkage)
             jl_array_ptr_1d_push(m2, item);
         }
     }
-    void *native_code = jl_create_native(m2, NULL, NULL, 0, 1, external_linkage);
+    void *native_code = jl_create_native(m2, NULL, NULL, 0, 1, external_linkage,
+                                         jl_atomic_load_acquire(&jl_world_counter));
     JL_GC_POP();
     return native_code;
 }
@@ -291,12 +297,17 @@ static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_met
     for (i = 0; i < n; i++) {
         jl_method_t *method = (jl_method_t*)jl_array_ptr_ref(extext_methods, i);
         assert(jl_is_method(method));
-        jl_svec_t *specializations = jl_atomic_load_relaxed(&method->specializations);
-        size_t j, l = jl_svec_len(specializations);
-        for (j = 0; j < l; j++) {
-            jl_value_t *mi = jl_svecref(specializations, j);
-            if (mi != jl_nothing)
-                precompile_enq_specialization_((jl_method_instance_t*)mi, m);
+        jl_value_t *specializations = jl_atomic_load_relaxed(&method->specializations);
+        if (!jl_is_svec(specializations)) {
+            precompile_enq_specialization_((jl_method_instance_t*)specializations, m);
+        }
+        else {
+            size_t j, l = jl_svec_len(specializations);
+            for (j = 0; j < l; j++) {
+                jl_value_t *mi = jl_svecref(specializations, j);
+                if (mi != jl_nothing)
+                    precompile_enq_specialization_((jl_method_instance_t*)mi, m);
+            }
         }
     }
     n = jl_array_len(new_specializations);

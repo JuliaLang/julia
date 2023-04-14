@@ -10,7 +10,7 @@ export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
        acosd, acotd, acscd, asecd, asind, atand,
        rad2deg, deg2rad,
        log, log2, log10, log1p, exponent, exp, exp2, exp10, expm1,
-       cbrt, sqrt, significand,
+       cbrt, sqrt, fourthroot, significand,
        hypot, max, min, minmax, ldexp, frexp,
        clamp, clamp!, modf, ^, mod2pi, rem2pi,
        @evalpoly, evalpoly
@@ -716,6 +716,13 @@ julia> .√(1:4)
 sqrt(x)
 
 """
+    fourthroot(x)
+
+Return the fourth root of `x` by applying `sqrt` twice successively.
+"""
+fourthroot(x::Number) = sqrt(sqrt(x))
+
+"""
     hypot(x, y)
 
 Compute the hypotenuse ``\\sqrt{|x|^2+|y|^2}`` avoiding overflow and underflow.
@@ -843,6 +850,20 @@ function _hypot(x::NTuple{N,<:Number}) where {N}
     else
         return maxabs * sqrt(sum(y -> abs2(y / maxabs), x))
     end
+end
+
+function _hypot(x::NTuple{N,<:IEEEFloat}) where {N}
+    T = eltype(x)
+    infT = convert(T, Inf)
+    x = abs.(x) # doesn't change result but enables computational shortcuts
+    # note: any() was causing this to not inline for N=3 but mapreduce() was not
+    mapreduce(==(infT), |, x) && return infT # return Inf even if an argument is NaN
+    maxabs = reinterpret(T, maximum(z -> reinterpret(Signed, z), x)) # for abs(::IEEEFloat) values, a ::BitInteger cast does not change the result
+    maxabs > zero(T) || return maxabs # catch NaN before the @fastmath below, but also shortcut 0 since we can (remove if no more @fastmath below)
+    scale,invscale = scaleinv(maxabs)
+     # @fastmath(+) to allow reassociation (see #48129)
+    add_fast(x, y) = Core.Intrinsics.add_float_fast(x, y) # @fastmath is not available during bootstrap
+    return scale * sqrt(mapreduce(y -> abs2(y * invscale), add_fast, x))
 end
 
 atan(y::Real, x::Real) = atan(promote(float(y),float(x))...)
@@ -1068,6 +1089,40 @@ function frexp(x::T) where T<:IEEEFloat
     k -= (exponent_bias(T) - 1)
     xu = (xu & ~exponent_mask(T)) | exponent_half(T)
     return reinterpret(T, xu), k
+end
+
+"""
+    $(@__MODULE__).scaleinv(x)
+
+Compute `(scale, invscale)` where `scale` and `invscale` are non-subnormal
+(https://en.wikipedia.org/wiki/Subnormal_number) finite powers of two such that
+`scale * invscale == 1` and `scale` is roughly on the order of `abs(x)`.
+Inf, NaN, and zero inputs also result in finite nonzero outputs.
+These values are useful to scale computations to prevent overflow and underflow
+without round-off errors or division.
+
+UNSTABLE DETAIL: For `x isa IEEEFLoat`, `scale` is chosen to be the
+`prevpow(2,abs(x))` when possible, but is never less than floatmin(x) or greater
+than inv(floatmin(x)). `Inf` and `NaN` resolve to `inv(floatmin(x))`. This
+behavior is subject to change.
+
+# Examples
+```jldoctest
+julia> $(@__MODULE__).scaleinv(7.5)
+(4.0, 0.25)
+```
+"""
+function scaleinv(x::T) where T<:IEEEFloat
+    # by removing the sign and significand and restricting values to a limited range,
+    # we can invert a number using bit-twiddling instead of division
+    U = uinttype(T)
+    umin = reinterpret(U, floatmin(T))
+    umax = reinterpret(U, inv(floatmin(T)))
+    emask = exponent_mask(T) # used to strip sign and significand
+    u = clamp(reinterpret(U, x) & emask, umin, umax)
+    scale = reinterpret(T, u)
+    invscale = reinterpret(T, umin + umax - u) # inv(scale)
+    return scale, invscale
 end
 
 # NOTE: This `rem` method is adapted from the msun `remainder` and `remainderf`
@@ -1489,7 +1544,7 @@ include("special/log.jl")
 # Float16 definitions
 
 for func in (:sin,:cos,:tan,:asin,:acos,:atan,:cosh,:tanh,:asinh,:acosh,
-             :atanh,:log,:log2,:log10,:sqrt,:log1p)
+             :atanh,:log,:log2,:log10,:sqrt,:fourthroot,:log1p)
     @eval begin
         $func(a::Float16) = Float16($func(Float32(a)))
         $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
@@ -1525,5 +1580,6 @@ end
 exp2(x::AbstractFloat) = 2^x
 exp10(x::AbstractFloat) = 10^x
 clamp(::Missing, lo, hi) = missing
+fourthroot(::Missing) = missing
 
 end # module

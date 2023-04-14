@@ -3883,7 +3883,8 @@ PossiblyInvalidUnion{T} = Union{T,Int}
 # issue #13007
 call13007(::Type{Array{T,N}}) where {T,N} = 0
 call13007(::Type{Array}) = 1
-@test length(Base._methods(call13007, Tuple{Type{x} where x<:Array}, 4, typemax(UInt))) == 2
+@test Base._methods(call13007, Tuple{Type{x} where x<:Array}, 4, typemax(UInt)) === nothing
+@test length(Base._methods(call13007, Tuple{Type{x} where x<:Array}, 4, Base.get_world_counter())) == 2
 
 # detecting cycles during type intersection, e.g. #1631
 cycle_in_solve_tvar_constraints(::Type{Some{S}}, x::S) where {S} = 0
@@ -5267,10 +5268,10 @@ end
 GC.enable(true)
 
 # issue #18710
-bad_tvars() where {T} = 1
+@test_warn "declares type variable T but does not use it" @eval bad_tvars() where {T} = 1
 @test isa(which(bad_tvars, ()), Method)
 @test bad_tvars() === 1
-bad_tvars2() where {T} = T
+@test_warn "declares type variable T but does not use it" @eval bad_tvars2() where {T} = T
 @test_throws UndefVarError(:T) bad_tvars2()
 missing_tvar(::T...) where {T} = T
 @test_throws UndefVarError(:T) missing_tvar()
@@ -7326,11 +7327,11 @@ struct sparse_t31649
 end
 Base.convert(::Any, v::sparse_t31649) = copy(v.val)
 let spvec = sparse_t31649(zeros(Float64,5), Vector{Int64}())
-    @test_throws MethodError repr(spvec)
+    @test_throws MethodError convert(Any, spvec)
     # Try manually putting the problematic method into the cache (in
     # the original issue compiling the showerror method caused this to happen)
     @test convert(Any, nothing) === nothing
-    @test_throws MethodError repr(spvec)
+    @test_throws MethodError convert(Any, spvec)
 end
 
 # Issue #31062 - Accidental recursion in jl_has_concrete_subtype
@@ -7370,16 +7371,20 @@ end
 let code = code_lowered(FieldConvert)[1].code
     @test code[1] == Expr(:call, GlobalRef(Core, :apply_type), GlobalRef(@__MODULE__, :FieldConvert), GlobalRef(@__MODULE__, :FieldTypeA), Expr(:static_parameter, 1))
     @test code[2] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 1)
-    @test code[3] == Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(2), Core.SlotNumber(2))
-    @test code[4] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 2)
-    @test code[5] == Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(4), Core.SlotNumber(3))
-    @test code[6] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 4)
-    @test code[7] == Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(6), Core.SlotNumber(5))
-    @test code[8] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 5)
-    @test code[9] == Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(8), Core.SlotNumber(6))
-    @test code[10] == Expr(:new, Core.SSAValue(1), Core.SSAValue(3), Core.SSAValue(5), Core.SlotNumber(4), Core.SSAValue(7), Core.SSAValue(9))
-    @test code[11] == Core.ReturnNode(Core.SSAValue(10))
- end
+    @test code[7] == Expr(:(=), Core.SlotNumber(10), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(2), Core.SlotNumber(10)))
+    @test code[8] == Core.SlotNumber(10)
+    @test code[9] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 2)
+    @test code[14] == Expr(:(=), Core.SlotNumber(9), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(9), Core.SlotNumber(9)))
+    @test code[15] == Core.SlotNumber(9)
+    @test code[16] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 4)
+    @test code[21] == Expr(:(=), Core.SlotNumber(8), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(16), Core.SlotNumber(8)))
+    @test code[22] == Core.SlotNumber(8)
+    @test code[23] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 5)
+    @test code[28] == Expr(:(=), Core.SlotNumber(7), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(23), Core.SlotNumber(7)))
+    @test code[29] == Core.SlotNumber(7)
+    @test code[30] == Expr(:new, Core.SSAValue(1), Core.SSAValue(8), Core.SSAValue(15), Core.SlotNumber(4), Core.SSAValue(22), Core.SSAValue(29))
+    @test code[31] == Core.ReturnNode(Core.SSAValue(30))
+end
 
 # Issue #32820
 function f32820(refs)
@@ -7968,8 +7973,15 @@ vect47476(::Type{T}) where {T} = T
 g47476(::Union{Nothing,Int,Val{T}}...) where {T} = T
 @test_throws UndefVarError(:T) g47476(nothing, 1, nothing, 2, nothing, 3, nothing, 4, nothing, 5)
 @test g47476(nothing, 1, nothing, 2, nothing, 3, nothing, 4, nothing, 5, Val(6)) === 6
-let spec = only(methods(g47476)).specializations
+let spec = only(methods(g47476)).specializations::Core.SimpleVector
     @test !isempty(spec)
     @test any(mi -> mi !== nothing && Base.isvatuple(mi.specTypes), spec)
     @test all(mi -> mi === nothing || !Base.has_free_typevars(mi.specTypes), spec)
 end
+
+f48950(::Union{Int,d}, ::Union{c,Nothing}...) where {c,d} = 1
+@test f48950(1, 1, 1) == 1
+
+# Module as tparam in unionall
+struct ModTParamUnionAll{A, B}; end
+@test isa(objectid(ModTParamUnionAll{Base}), UInt)

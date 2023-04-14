@@ -3,13 +3,14 @@
 """
 Run Evaluate Print Loop (REPL)
 
-    Example minimal code
-    ```
-    import REPL
-    term = REPL.Terminals.TTYTerminal("dumb", stdin, stdout, stderr)
-    repl = REPL.LineEditREPL(term, true)
-    REPL.run_repl(repl)
-    ```
+Example minimal code
+
+```julia
+import REPL
+term = REPL.Terminals.TTYTerminal("dumb", stdin, stdout, stderr)
+repl = REPL.LineEditREPL(term, true)
+REPL.run_repl(repl)
+```
 """
 module REPL
 
@@ -1395,7 +1396,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     nothing
 end
 
-module IPython
+module Numbered
 
 using ..REPL
 
@@ -1406,12 +1407,24 @@ function repl_eval_counter(hp)
 end
 
 function out_transform(@nospecialize(x), n::Ref{Int})
-    return quote
+    return Expr(:toplevel, get_usings!([], x)..., quote
         let __temp_val_a72df459 = $x
             $capture_result($n, __temp_val_a72df459)
             __temp_val_a72df459
         end
+    end)
+end
+
+function get_usings!(usings, ex)
+    # get all `using` and `import` statements which are at the top level
+    for (i, arg) in enumerate(ex.args)
+        if Base.isexpr(arg, :toplevel)
+            get_usings!(usings, arg)
+        elseif Base.isexpr(arg, [:using, :import])
+            push!(usings, popat!(ex.args, i))
+        end
     end
+    return usings
 end
 
 function capture_result(n::Ref{Int}, @nospecialize(x))
@@ -1455,7 +1468,7 @@ function __current_ast_transforms(backend)
 end
 
 
-function ipython_mode!(repl::LineEditREPL=Base.active_repl, backend=nothing)
+function numbered_prompt!(repl::LineEditREPL=Base.active_repl, backend=nothing)
     n = Ref{Int}(0)
     set_prompt(repl, n)
     set_output_prefix(repl, n)
@@ -1467,7 +1480,7 @@ end
     Out[n]
 
 A variable referring to all previously computed values, automatically imported to the interactive prompt.
-Only defined and exists while using [IPython mode](@ref IPython-mode).
+Only defined and exists while using [Numbered prompt](@ref Numbered-prompt).
 
 See also [`ans`](@ref).
 """
@@ -1475,6 +1488,6 @@ Base.MainInclude.Out
 
 end
 
-import .IPython.ipython_mode!
+import .Numbered.numbered_prompt!
 
 end # module

@@ -171,7 +171,7 @@ function copyto!(dest::Diagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for i in axs[1]
-        dest.diag[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, i))
+        dest.diag[i] = @inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i, i))
     end
     return dest
 end
@@ -181,15 +181,15 @@ function copyto!(dest::Bidiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for i in axs[1]
-        dest.dv[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, i))
+        dest.dv[i] = @inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i, i))
     end
     if dest.uplo == 'U'
         for i = 1:size(dest, 1)-1
-            dest.ev[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, i+1))
+            dest.ev[i] = @inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i, i+1))
         end
     else
         for i = 1:size(dest, 1)-1
-            dest.ev[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i+1, i))
+            dest.ev[i] = @inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i+1, i))
         end
     end
     return dest
@@ -200,11 +200,11 @@ function copyto!(dest::SymTridiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for i in axs[1]
-        dest.dv[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, i))
+        dest.dv[i] = @inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i, i))
     end
     for i = 1:size(dest, 1)-1
-        v = Broadcast._broadcast_getindex(bc, CartesianIndex(i, i+1))
-        v == Broadcast._broadcast_getindex(bc, CartesianIndex(i+1, i)) || throw(ArgumentError("broadcasted assignment breaks symmetry between locations ($i, $(i+1)) and ($(i+1), $i)"))
+        v = @inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i, i+1))
+        v == (@inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i+1, i))) || throw(ArgumentError("broadcasted assignment breaks symmetry between locations ($i, $(i+1)) and ($(i+1), $i)"))
         dest.ev[i] = v
     end
     return dest
@@ -215,11 +215,11 @@ function copyto!(dest::Tridiagonal, bc::Broadcasted{<:StructuredMatrixStyle})
     axs = axes(dest)
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for i in axs[1]
-        dest.d[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, i))
+        dest.d[i] = @inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i, i))
     end
     for i = 1:size(dest, 1)-1
-        dest.du[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, i+1))
-        dest.dl[i] = Broadcast._broadcast_getindex(bc, CartesianIndex(i+1, i))
+        dest.du[i] = @inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i, i+1))
+        dest.dl[i] = @inbounds Broadcast._broadcast_getindex(bc, CartesianIndex(i+1, i))
     end
     return dest
 end
@@ -230,7 +230,7 @@ function copyto!(dest::LowerTriangular, bc::Broadcasted{<:StructuredMatrixStyle}
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for j in axs[2]
         for i in j:axs[1][end]
-            dest.data[i,j] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, j))
+            @inbounds dest.data[i,j] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, j))
         end
     end
     return dest
@@ -242,7 +242,7 @@ function copyto!(dest::UpperTriangular, bc::Broadcasted{<:StructuredMatrixStyle}
     axes(bc) == axs || Broadcast.throwdm(axes(bc), axs)
     for j in axs[2]
         for i in 1:j
-            dest.data[i,j] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, j))
+            @inbounds dest.data[i,j] = Broadcast._broadcast_getindex(bc, CartesianIndex(i, j))
         end
     end
     return dest
