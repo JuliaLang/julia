@@ -42,6 +42,7 @@ thefname = "the fname!//\\&\1*"
 include_string_test_func = include_string(@__MODULE__, "include_string_test() = @__FILE__", thefname)
 @test include_string_test_func() == thefname
 @test include_string(@__MODULE__, "Base.source_path()", thefname) == Base.source_path()
+@test isdir(Base.source_dir())
 @test basename(@__FILE__) == "loading.jl"
 @test isabspath(@__FILE__)
 
@@ -982,6 +983,8 @@ end
             # Package in manifest in current env not present in depot
             @test Base.locate_package(pkg) !== nothing
 
+            @test Base.find_package("Baz") !== nothing  # coverage
+
             pushfirst!(LOAD_PATH, joinpath(tmp, "Env1"))
 
             @test Base.locate_package(pkg) === nothing
@@ -1008,10 +1011,10 @@ end
                 begin
                     push!(empty!(DEPOT_PATH), '$(repr(depot_path))')
                     using HasExtensions
-                    # Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly got an extension")
+                    Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly got an extension")
                     HasExtensions.ext_loaded && error("ext_loaded set")
                     using HasDepWithExtensions
-                    # Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
+                    Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
                     HasExtensions.ext_loaded || error("ext_loaded not set")
                     HasExtensions.ext_folder_loaded && error("ext_folder_loaded set")
                     HasDepWithExtensions.do_something() || error("do_something errored")
@@ -1029,11 +1032,28 @@ end
             @test success(cmd)
         end
 
-        # 48351
         sep = Sys.iswindows() ? ';' : ':'
+
+        # 48351
         cmd = gen_extension_cmd(``)
         cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([mktempdir(), proj], sep))
         cmd = pipeline(cmd; stdout, stderr)
+        @test success(cmd)
+
+        # Only load env from where package is loaded
+        envs = [joinpath(@__DIR__, "project", "Extensions", "EnvWithHasExtensionsv2"), joinpath(@__DIR__, "project", "Extensions", "EnvWithHasExtensions")]
+        cmd = addenv(```$(Base.julia_cmd()) --startup-file=no -e '
+        begin
+
+
+            push!(empty!(DEPOT_PATH), '$(repr(depot_path))')
+            using HasExtensions
+            using ExtDep
+            Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly loaded ext from other env")
+            Base.get_extension(HasExtensions, :Extension2) === nothing && error("did not load ext from active env")
+        end
+        '
+        ```, "JULIA_LOAD_PATH" => join(envs, sep))
         @test success(cmd)
     finally
         try
@@ -1069,20 +1089,30 @@ end
     for (P, D, C, I, O) in Iterators.product(0:1, 0:2, 0:2, 0:1, 0:3)
         julia = joinpath(Sys.BINDIR, Base.julia_exename())
         script = """
-        using Test
         let
             cf = Base.CacheFlags()
             opts = Base.JLOptions()
-            @test cf.use_pkgimages == opts.use_pkgimages == $P
-            @test cf.debug_level == opts.debug_level == $D
-            @test cf.check_bounds == opts.check_bounds == $C
-            @test cf.inline == opts.can_inline == $I
-            @test cf.opt_level == opts.opt_level == $O
+            cf.use_pkgimages == opts.use_pkgimages == $P || error("use_pkgimages")
+            cf.debug_level == opts.debug_level == $D || error("debug_level")
+            cf.check_bounds == opts.check_bounds == $C || error("check_bounds")
+            cf.inline == opts.can_inline == $I || error("inline")
+            cf.opt_level == opts.opt_level == $O || error("opt_level")
         end
         """
         cmd = `$julia $(pkgimage(P)) $(opt_level(O)) $(debug_level(D)) $(check_bounds(C)) $(inline(I)) -e $script`
         @test success(pipeline(cmd; stdout, stderr))
     end
+
+    cf = Base.CacheFlags(255)
+    @test cf.use_pkgimages
+    @test cf.debug_level == 3
+    @test cf.check_bounds == 3
+    @test cf.inline
+    @test cf.opt_level == 3
+
+    io = PipeBuffer()
+    show(io, cf)
+    @test read(io, String) == "use_pkgimages = true, debug_level = 3, check_bounds = 3, inline = true, opt_level = 3"
 end
 
 empty!(Base.DEPOT_PATH)
@@ -1120,4 +1150,8 @@ append!(Base.DEPOT_PATH, original_depot_path)
     @lock Base.require_lock Base.end_loading(pkid4, "loaded_pkgid4")        # end
     wait(t2)
     wait(t1)
+end
+
+@testset "Upgradable stdlibs" begin
+    @test success(`$(Base.julia_cmd()) --startup-file=no -e 'using DelimitedFiles'`)
 end

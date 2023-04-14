@@ -117,9 +117,9 @@ let cfg = CFG(BasicBlock[
     make_bb([2, 3]    , []    ),
 ], Int[])
     insts = Compiler.InstructionStream([], [], Any[], Int32[], UInt8[])
-    code = Compiler.IRCode(insts, cfg, LineInfoNode[], [], Expr[], [])
-    compact = Compiler.IncrementalCompact(code, true)
-    @test length(compact.result_bbs) == 4 && 0 in compact.result_bbs[3].preds
+    ir = Compiler.IRCode(insts, cfg, Core.LineInfoNode[], Any[], Expr[], Compiler.VarState[])
+    compact = Compiler.IncrementalCompact(ir, true)
+    @test length(compact.cfg_transform.result_bbs) == 4 && 0 in compact.cfg_transform.result_bbs[3].preds
 end
 
 # Issue #32579 - Optimizer bug involving type constraints
@@ -356,6 +356,25 @@ end
     @test first(only(Base.code_ircode(demo))) isa Compiler.IRCode
     @test first(only(Base.code_ircode(demo; optimize_until = 3))) isa Compiler.IRCode
     @test first(only(Base.code_ircode(demo; optimize_until = "SROA"))) isa Compiler.IRCode
+end
+
+# slots after SSA conversion
+function f_with_slots(a, b)
+    # `c` and `d` are local variables
+    c = a + b
+    d = c > 0
+    return (c, d)
+end
+let # #self#, a, b, c, d
+    unopt = code_typed1(f_with_slots, (Int,Int); optimize=false)
+    @test length(unopt.slotnames) == length(unopt.slotflags) == length(unopt.slottypes) == 5
+    ir_withslots = first(only(Base.code_ircode(f_with_slots, (Int,Int); optimize_until="convert")))
+    @test length(ir_withslots.argtypes) == 5
+    # #self#, a, b
+    opt = code_typed1(f_with_slots, (Int,Int); optimize=true)
+    @test length(opt.slotnames) == length(opt.slotflags) == length(opt.slottypes) == 3
+    ir_ssa = first(only(Base.code_ircode(f_with_slots, (Int,Int); optimize_until="slot2reg")))
+    @test length(ir_ssa.argtypes) == 3
 end
 
 let

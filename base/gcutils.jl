@@ -1,5 +1,36 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+
+"""
+    WeakRef(x)
+
+`w = WeakRef(x)` constructs a [weak reference](https://en.wikipedia.org/wiki/Weak_reference)
+to the Julia value `x`: although `w` contains a reference to `x`, it does not prevent `x` from being
+garbage collected. `w.value` is either `x` (if `x` has not been garbage-collected yet) or `nothing`
+(if `x` has been garbage-collected).
+
+```jldoctest
+julia> x = "a string"
+"a string"
+
+julia> w = WeakRef(x)
+WeakRef("a string")
+
+julia> GC.gc()
+
+julia> w           # a reference is maintained via `x`
+WeakRef("a string")
+
+julia> x = nothing # clear reference
+
+julia> GC.gc()
+
+julia> w
+WeakRef(nothing)
+```
+"""
+WeakRef
+
 ==(w::WeakRef, v::WeakRef) = isequal(w.value, v.value)
 ==(w::WeakRef, v) = isequal(w.value, v)
 ==(w, v::WeakRef) = isequal(w, v.value)
@@ -129,6 +160,23 @@ end
 
 function disable_finalizers() @inline
     ccall(:jl_gc_disable_finalizers_internal, Cvoid, ())
+end
+
+"""
+    GC.in_finalizer()::Bool
+
+Returns `true` if the current task is running a finalizer, returns `false`
+otherwise. Will also return `false` within a finalizer which was inlined by the
+compiler's eager finalization optimization, or if `finalize` is called on the
+finalizer directly.
+
+The result of this function may be useful, for example, when a finalizer must
+wait on a resource to become available; instead of polling the resource in a
+`yield` loop (which is not legal to execute within a task running finalizers),
+busy polling or an `@async` continuation could be used instead.
+"""
+function in_finalizer() @inline
+    ccall(:jl_gc_is_in_finalizer, Int8, ()) > 0
 end
 
 """

@@ -70,7 +70,7 @@ end
 @nospecialize
 
 """
-    Result
+    Test.Result
 
 All tests produce a result object. This object may or may not be
 stored, depending on whether the test is part of a test set.
@@ -78,7 +78,7 @@ stored, depending on whether the test is part of a test set.
 abstract type Result end
 
 """
-    Pass
+    Test.Pass <: Test.Result
 
 The test condition was true, i.e. the expression evaluated to true or
 the correct exception was thrown.
@@ -108,7 +108,7 @@ function Base.show(io::IO, t::Pass)
 end
 
 """
-    Fail
+    Test.Fail <: Test.Result
 
 The test condition was false, i.e. the expression evaluated to false or
 the correct exception was not thrown.
@@ -165,10 +165,11 @@ function Base.show(io::IO, t::Fail)
             print(io, "\n     Context: ", t.context)
         end
     end
+    println(io) # add some visual space to separate sequential failures
 end
 
 """
-    Error
+    Test.Error <: Test.Result
 
 The test condition couldn't be evaluated due to an exception, or
 it evaluated to something other than a [`Bool`](@ref).
@@ -249,7 +250,7 @@ function Base.show(io::IO, t::Error)
 end
 
 """
-    Broken
+    Test.Broken <: Test.Result
 
 The test condition is the expected (failed) result of a broken test,
 or was explicitly skipped with `@test_skip`.
@@ -713,7 +714,7 @@ Test Passed
 
 julia> @test_throws "Try sqrt(Complex" sqrt(-1)
 Test Passed
-     Message: "DomainError with -1.0:\\nsqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x))."
+     Message: "DomainError with -1.0:\\nsqrt was called with a negative real argument but will only return a complex result if called with a complex argument. Try sqrt(Complex(x))."
 ```
 
 In the final example, instead of matching a single string it could alternatively have been performed with:
@@ -1035,8 +1036,8 @@ record(ts::DefaultTestSet, t::Pass) = (ts.n_passed += 1; t)
 
 # For the other result types, immediately print the error message
 # but do not terminate. Print a backtrace.
-function record(ts::DefaultTestSet, t::Union{Fail, Error})
-    if TESTSET_PRINT_ENABLE[]
+function record(ts::DefaultTestSet, t::Union{Fail, Error}; print_result::Bool=TESTSET_PRINT_ENABLE[])
+    if print_result
         print(ts.description, ": ")
         # don't print for interrupted tests
         if !(t isa Error) || t.test_type !== :test_interrupted
@@ -1127,7 +1128,7 @@ const TESTSET_PRINT_ENABLE = Ref(true)
 
 # Called at the end of a @testset, behaviour depends on whether
 # this is a child of another testset, or the "root" testset
-function finish(ts::DefaultTestSet)
+function finish(ts::DefaultTestSet; print_results::Bool=TESTSET_PRINT_ENABLE[])
     ts.time_end = time()
     # If we are a nested test set, do not print a full summary
     # now - let the parent test set do the printing
@@ -1144,7 +1145,7 @@ function finish(ts::DefaultTestSet)
     total_broken = broken + c_broken
     total = total_pass + total_fail + total_error + total_broken
 
-    if TESTSET_PRINT_ENABLE[]
+    if print_results
         print_test_results(ts)
     end
 
@@ -1405,6 +1406,7 @@ julia> @testset let logi = log(im)
 Test Failed at none:3
   Expression: !(iszero(real(logi)))
      Context: logi = 0.0 + 1.5707963267948966im
+
 ERROR: There was an error during testing
 ```
 """
@@ -1970,54 +1972,11 @@ function detect_unbound_args(mods...;
     return collect(ambs)
 end
 
-# find if var will be constrained to have a definite value
-# in any concrete leaftype subtype of typ
-function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool)
-    typ === var && return true
-    while typ isa UnionAll
-        covariant && constrains_param(var, typ.var.ub, covariant) && return true
-        # typ.var.lb doesn't constrain var
-        typ = typ.body
-    end
-    if typ isa Union
-        # for unions, verify that both options would constrain var
-        ba = constrains_param(var, typ.a, covariant)
-        bb = constrains_param(var, typ.b, covariant)
-        (ba && bb) && return true
-    elseif typ isa DataType
-        # return true if any param constrains var
-        fc = length(typ.parameters)
-        if fc > 0
-            if typ.name === Tuple.name
-                # vararg tuple needs special handling
-                for i in 1:(fc - 1)
-                    p = typ.parameters[i]
-                    constrains_param(var, p, covariant) && return true
-                end
-                lastp = typ.parameters[fc]
-                vararg = Base.unwrap_unionall(lastp)
-                if vararg isa Core.TypeofVararg && isdefined(vararg, :N)
-                    constrains_param(var, vararg.N, covariant) && return true
-                    # T = vararg.parameters[1] doesn't constrain var
-                else
-                    constrains_param(var, lastp, covariant) && return true
-                end
-            else
-                for i in 1:fc
-                    p = typ.parameters[i]
-                    constrains_param(var, p, false) && return true
-                end
-            end
-        end
-    end
-    return false
-end
-
 function has_unbound_vars(@nospecialize sig)
     while sig isa UnionAll
         var = sig.var
         sig = sig.body
-        if !constrains_param(var, sig, true)
+        if !Core.Compiler.constrains_param(var, sig, #=covariant=#true, #=type_constrains=#true)
             return true
         end
     end
@@ -2137,5 +2096,6 @@ function _check_bitarray_consistency(B::BitArray{N}) where N
 end
 
 include("logging.jl")
+include("precompile.jl")
 
 end # module

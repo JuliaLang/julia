@@ -238,6 +238,7 @@ export
     bitrotate,
     bswap,
     cbrt,
+    fourthroot,
     ceil,
     cis,
     cispi,
@@ -364,6 +365,7 @@ export
     zero,
     √,
     ∛,
+    ∜,
     ≈,
     ≉,
 

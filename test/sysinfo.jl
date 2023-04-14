@@ -9,3 +9,32 @@ Base.Sys.loadavg()
 
 @test Base.libllvm_path() isa Symbol
 @test contains(String(Base.libllvm_path()), "LLVM")
+
+if Sys.isunix()
+    mktempdir() do tempdir
+        firstdir = joinpath(tempdir, "first")
+        seconddir = joinpath(tempdir, "second")
+
+        mkpath(firstdir)
+        mkpath(seconddir)
+
+        touch(joinpath(firstdir, "foo"))
+        touch(joinpath(seconddir, "foo"))
+
+        chmod(joinpath(firstdir, "foo"), 0o777)
+        chmod(joinpath(seconddir, "foo"), 0o777)
+
+        # zero permissions on first directory
+        chmod(firstdir, 0o000)
+
+        original_path = ENV["PATH"]
+        ENV["PATH"] = string(firstdir, ":", seconddir, ":", original_path)
+        try
+            @test abspath(Base.Sys.which("foo")) == abspath(joinpath(seconddir, "foo"))
+        finally
+            # clean up
+            chmod(firstdir, 0o777)
+            ENV["PATH"] = original_path
+        end
+    end
+end

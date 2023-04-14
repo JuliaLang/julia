@@ -247,6 +247,17 @@ get_str!(x, a, b::BigInt) = (ccall((:__gmpz_get_str,libgmp), Ptr{Cchar}, (Ptr{Cc
 set_str!(x::BigInt, a, b) = Int(ccall((:__gmpz_set_str, libgmp), Cint, (mpz_t, Ptr{UInt8}, Cint), x, a, b))
 get_d(a::BigInt) = ccall((:__gmpz_get_d, libgmp), Cdouble, (mpz_t,), a)
 
+function export!(a::AbstractVector{T}, n::BigInt; order::Integer=-1, nails::Integer=0, endian::Integer=0) where {T<:Base.BitInteger}
+    stride(a, 1) == 1 || throw(ArgumentError("a must have stride 1"))
+    ndigits = cld(sizeinbase(n, 2), 8*sizeof(T) - nails)
+    length(a) < ndigits && resize!(a, ndigits)
+    count = Ref{Csize_t}()
+    ccall((:__gmpz_export, libgmp), Ptr{T}, (Ptr{T}, Ref{Csize_t}, Cint, Csize_t, Cint, Csize_t, mpz_t),
+        a, count, order, sizeof(T), endian, nails, n)
+    @assert count[] ≤ length(a)
+    return a, Int(count[])
+end
+
 limbs_write!(x::BigInt, a) = ccall((:__gmpz_limbs_write, libgmp), Ptr{Limb}, (mpz_t, Clong), x, a)
 limbs_finish!(x::BigInt, a) = ccall((:__gmpz_limbs_finish, libgmp), Cvoid, (mpz_t, Clong), x, a)
 import!(x::BigInt, a, b, c, d, e, f) = ccall((:__gmpz_import, libgmp), Cvoid,
@@ -696,8 +707,16 @@ end
 
 factorial(x::BigInt) = isneg(x) ? BigInt(0) : MPZ.fac_ui(x)
 
-binomial(n::BigInt, k::UInt) = MPZ.bin_ui(n, k)
-binomial(n::BigInt, k::Integer) = k < 0 ? BigInt(0) : binomial(n, UInt(k))
+function binomial(n::BigInt, k::Integer)
+    k < 0 && return BigInt(0)
+    k <= typemax(Culong) && return binomial(n, Culong(k))
+    n < 0 && return isodd(k) ? -binomial(k - n - 1, k) : binomial(k - n - 1, k)
+    κ = n - k
+    κ < 0 && return BigInt(0)
+    κ <= typemax(Culong) && return binomial(n, Culong(κ))
+    throw(OverflowError("Computation would exceed memory"))
+end
+binomial(n::BigInt, k::Culong) = MPZ.bin_ui(n, k)
 
 ==(x::BigInt, y::BigInt) = cmp(x,y) == 0
 ==(x::BigInt, i::Integer) = cmp(x,i) == 0
@@ -750,19 +769,29 @@ function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
 end
 
 function digits!(a::AbstractVector{T}, n::BigInt; base::Integer = 10) where {T<:Integer}
-    if 2 ≤ base ≤ 62
-        s = codeunits(string(n; base))
-        i, j = firstindex(a)-1, length(s)+1
-        lasti = min(lastindex(a), firstindex(a) + length(s)-1 - isneg(n))
-        while i < lasti
-            # base ≤ 36: 0-9, plus a-z for 10-35
-            # base > 36: 0-9, plus A-Z for 10-35 and a-z for 36..61
-            x = s[j -= 1]
-            a[i += 1] = base ≤ 36 ? (x>0x39 ? x-0x57 : x-0x30) : (x>0x39 ? (x>0x60 ? x-0x3d : x-0x37) : x-0x30)
+    if base ≥ 2
+        if base ≤ 62
+            # fast path using mpz_get_str via string(n; base)
+            s = codeunits(string(n; base))
+            i, j = firstindex(a)-1, length(s)+1
+            lasti = min(lastindex(a), firstindex(a) + length(s)-1 - isneg(n))
+            while i < lasti
+                # base ≤ 36: 0-9, plus a-z for 10-35
+                # base > 36: 0-9, plus A-Z for 10-35 and a-z for 36..61
+                x = s[j -= 1]
+                a[i += 1] = base ≤ 36 ? (x>0x39 ? x-0x57 : x-0x30) : (x>0x39 ? (x>0x60 ? x-0x3d : x-0x37) : x-0x30)
+            end
+            lasti = lastindex(a)
+            while i < lasti; a[i+=1] = zero(T); end
+            return isneg(n) ? map!(-,a,a) : a
+        elseif a isa StridedVector{<:Base.BitInteger} && stride(a,1) == 1 && ispow2(base) && base-1 ≤ typemax(T)
+            # fast path using mpz_export
+            origlen = length(a)
+            _, writelen = MPZ.export!(a, n; nails = 8sizeof(T) - trailing_zeros(base))
+            length(a) != origlen && resize!(a, origlen) # truncate to least-significant digits
+            a[begin+writelen:end] .= zero(T)
+            return isneg(n) ? map!(-,a,a) : a
         end
-        lasti = lastindex(a)
-        while i < lasti; a[i+=1] = zero(T); end
-        return isneg(n) ? map!(-,a,a) : a
     end
     return invoke(digits!, Tuple{typeof(a), Integer}, a, n; base) # slow generic fallback
 end

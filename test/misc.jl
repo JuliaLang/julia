@@ -859,6 +859,10 @@ let buf = IOBuffer()
     printstyled(buf_color, "foo"; bold=true, color=:red)
     @test String(take!(buf)) == "\e[31m\e[1mfoo\e[22m\e[39m"
 
+    # Check that italic is turned off
+    printstyled(buf_color, "foo"; italic=true, color=:red)
+    @test String(take!(buf)) == "\e[31m\e[3mfoo\e[23m\e[39m"
+
     # Check that underline is turned off
     printstyled(buf_color, "foo"; color = :red, underline = true)
     @test String(take!(buf)) == "\e[31m\e[4mfoo\e[24m\e[39m"
@@ -876,8 +880,8 @@ let buf = IOBuffer()
     @test String(take!(buf)) == "\e[31m\e[8mfoo\e[28m\e[39m"
 
     # Check that all options can be turned on simultaneously
-    printstyled(buf_color, "foo"; color = :red, bold = true, underline = true, blink = true, reverse = true, hidden = true)
-    @test String(take!(buf)) == "\e[31m\e[1m\e[4m\e[5m\e[7m\e[8mfoo\e[28m\e[27m\e[25m\e[24m\e[22m\e[39m"
+    printstyled(buf_color, "foo"; color = :red, bold = true, italic = true, underline = true, blink = true, reverse = true, hidden = true)
+    @test String(take!(buf)) == "\e[31m\e[1m\e[3m\e[4m\e[5m\e[7m\e[8mfoo\e[28m\e[27m\e[25m\e[24m\e[22m\e[23m\e[39m"
 end
 
 abstract type DA_19281{T, N} <: AbstractArray{T, N} end
@@ -1380,5 +1384,21 @@ end
 
     # sanity check `@allocations` returns what we expect in some very simple cases
     @test (@allocations "a") == 0
-    @test (@allocations "a" * "b") == 1
+    @test (@allocations "a" * "b") == 0 # constant propagation
+    @test (@allocations "a" * Base.inferencebarrier("b")) == 1
+end
+
+@testset "in_finalizer" begin
+    @test !GC.in_finalizer()
+
+    in_fin = Ref{Any}()
+    wait(@async begin
+        r = Ref(1)
+        finalizer(r) do _
+            in_fin[] = GC.in_finalizer()
+        end
+        nothing
+    end)
+    GC.gc(true); yield()
+    @test in_fin[]
 end

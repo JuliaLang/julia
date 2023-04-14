@@ -543,9 +543,21 @@ function which(program_name::String)
     for path_dir in path_dirs
         for pname in program_names
             program_path = joinpath(path_dir, pname)
-            # If we find something that matches our name and we can execute
-            if isfile(program_path) && isexecutable(program_path)
-                return program_path
+            try
+                # If we find something that matches our name and we can execute
+                if isfile(program_path) && isexecutable(program_path)
+                    return program_path
+                end
+            catch e
+                # If we encounter a permission error, we skip this directory
+                # and continue to the next directory in the PATH variable.
+                if isa(e, Base.IOError) && e.code == Base.UV_EACCES
+                    # Permission denied, continue searching
+                    continue
+                else
+                    # Rethrow the exception if it's not a permission error
+                    rethrow(e)
+                end
             end
         end
     end

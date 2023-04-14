@@ -924,6 +924,7 @@ false
 
 julia> issubnormal(1.0f-38)
 true
+```
 """
 function issubnormal(x::T) where {T<:IEEEFloat}
     y = reinterpret(Unsigned, x)

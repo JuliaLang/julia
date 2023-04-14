@@ -440,7 +440,11 @@ det(A::Eigen) = prod(A.values)
 function eigen!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function,Nothing}=eigsortby) where T<:BlasReal
     issymmetric(A) && isposdef(B) && return eigen!(Symmetric(A), Symmetric(B), sortby=sortby)
     n = size(A, 1)
-    alphar, alphai, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
+    if LAPACK.version() < v"3.6.0"
+        alphar, alphai, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
+    else
+        alphar, alphai, beta, _, vr = LAPACK.ggev3!('N', 'V', A, B)
+    end
     iszero(alphai) && return GeneralizedEigen(sorteig!(alphar ./ beta, vr, sortby)...)
 
     vecs = zeros(Complex{T}, n, n)
@@ -462,7 +466,11 @@ end
 
 function eigen!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function,Nothing}=eigsortby) where T<:BlasComplex
     ishermitian(A) && isposdef(B) && return eigen!(Hermitian(A), Hermitian(B), sortby=sortby)
-    alpha, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
+    if LAPACK.version() < v"3.6.0"
+        alpha, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
+    else
+        alpha, beta, _, vr = LAPACK.ggev3!('N', 'V', A, B)
+    end
     return GeneralizedEigen(sorteig!(alpha./beta, vr, sortby)...)
 end
 
@@ -565,12 +573,20 @@ julia> B
 """
 function eigvals!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function,Nothing}=eigsortby) where T<:BlasReal
     issymmetric(A) && isposdef(B) && return sorteig!(eigvals!(Symmetric(A), Symmetric(B)), sortby)
-    alphar, alphai, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
+    if LAPACK.version() < v"3.6.0"
+        alphar, alphai, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
+    else
+        alphar, alphai, beta, vl, vr = LAPACK.ggev3!('N', 'N', A, B)
+    end
     return sorteig!((iszero(alphai) ? alphar : complex.(alphar, alphai))./beta, sortby)
 end
 function eigvals!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function,Nothing}=eigsortby) where T<:BlasComplex
     ishermitian(A) && isposdef(B) && return sorteig!(eigvals!(Hermitian(A), Hermitian(B)), sortby)
-    alpha, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
+    if LAPACK.version() < v"3.6.0"
+        alpha, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
+    else
+        alpha, beta, vl, vr = LAPACK.ggev3!('N', 'N', A, B)
+    end
     return sorteig!(alpha./beta, sortby)
 end
 

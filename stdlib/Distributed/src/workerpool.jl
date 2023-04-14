@@ -239,12 +239,14 @@ perform a `remote_do` on it.
 """
 remote_do(f, pool::AbstractWorkerPool, args...; kwargs...) = remotecall_pool(remote_do, f, pool, args...; kwargs...)
 
-const _default_worker_pool = Ref{Union{WorkerPool, Nothing}}(nothing)
+const _default_worker_pool = Ref{Union{AbstractWorkerPool, Nothing}}(nothing)
 
 """
     default_worker_pool()
 
-[`WorkerPool`](@ref) containing idle [`workers`](@ref) - used by `remote(f)` and [`pmap`](@ref) (by default).
+[`AbstractWorkerPool`](@ref) containing idle [`workers`](@ref) - used by `remote(f)` and [`pmap`](@ref)
+(by default). Unless one is explicitly set via `default_worker_pool!(pool)`, the default worker pool is
+initialized to a [`WorkerPool`](@ref).
 
 # Examples
 ```julia-repl
@@ -265,6 +267,15 @@ function default_worker_pool()
         end
     end
     return _default_worker_pool[]
+end
+
+"""
+    default_worker_pool!(pool::AbstractWorkerPool)
+
+Set a [`AbstractWorkerPool`](@ref) to be used by `remote(f)` and [`pmap`](@ref) (by default).
+"""
+function default_worker_pool!(pool::AbstractWorkerPool)
+    _default_worker_pool[] = pool
 end
 
 """

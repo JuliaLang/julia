@@ -2007,7 +2007,7 @@ end
 @test Meta.parse("import Base.Foo.:(==).bar") == :(import Base.Foo.==.bar)
 
 # issue #33135
-function f33135(x::T) where {C1, T}
+@test_warn "declares type variable C1 but does not use it" @eval function f33135(x::T) where {C1, T}
     let C1 = 1, C2 = 2
         C1
     end
@@ -2879,7 +2879,7 @@ end
 @test eval(:(x = $(QuoteNode(Core.SSAValue(1))))) == Core.SSAValue(1)
 @test eval(:(x = $(QuoteNode(Core.SlotNumber(1))))) == Core.SlotNumber(1)
 @test_throws ErrorException("syntax: SSAValue objects should not occur in an AST") eval(:(x = $(Core.SSAValue(1))))
-@test_throws ErrorException("syntax: Slot objects should not occur in an AST") eval(:(x = $(Core.SlotNumber(1))))
+@test_throws ErrorException("syntax: SlotNumber objects should not occur in an AST") eval(:(x = $(Core.SlotNumber(1))))
 
 # juxtaposition of radical symbols (#40094)
 @test Meta.parse("2√3") == Expr(:call, :*, 2, Expr(:call, :√, 3))
@@ -3053,9 +3053,6 @@ end
 end
 
 # issue 25678
-@generated f25678(x::T) where {T} = code_lowered(sin, Tuple{x})[]
-@test f25678(pi/6) === sin(pi/6)
-
 @generated g25678(x) = return :x
 @test g25678(7) === 7
 

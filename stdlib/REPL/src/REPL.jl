@@ -3,13 +3,14 @@
 """
 Run Evaluate Print Loop (REPL)
 
-    Example minimal code
-    ```
-    import REPL
-    term = REPL.Terminals.TTYTerminal("dumb", stdin, stdout, stderr)
-    repl = REPL.LineEditREPL(term, true)
-    REPL.run_repl(repl)
-    ```
+Example minimal code
+
+```julia
+import REPL
+term = REPL.Terminals.TTYTerminal("dumb", stdin, stdout, stderr)
+repl = REPL.LineEditREPL(term, true)
+REPL.run_repl(repl)
+```
 """
 module REPL
 
@@ -70,10 +71,6 @@ include("TerminalMenus/TerminalMenus.jl")
 include("docview.jl")
 
 @nospecialize # use only declared type signatures
-
-function __init__()
-    Base.REPL_MODULE_REF[] = REPL
-end
 
 answer_color(::AbstractREPL) = ""
 
@@ -152,7 +149,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
                 end
                 value = Core.eval(mod, ast)
                 backend.in_eval = false
-                setglobal!(mod, :ans, value)
+                setglobal!(Base.MainInclude, :ans, value)
                 put!(backend.response_channel, Pair{Any, Bool}(value, false))
             end
             break
@@ -294,7 +291,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
             Base.sigatomic_end()
             if iserr
                 val = Base.scrub_repl_backtrace(val)
-                Base.istrivialerror(val) || setglobal!(Main, :err, val)
+                Base.istrivialerror(val) || setglobal!(Base.MainInclude, :err, val)
                 Base.invokelatest(Base.display_error, errio, val)
             else
                 if val !== nothing && show_value
@@ -317,7 +314,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 println(errio, "SYSTEM (REPL): showing an error caused an error")
                 try
                     excs = Base.scrub_repl_backtrace(current_exceptions())
-                    setglobal!(Main, :err, excs)
+                    setglobal!(Base.MainInclude, :err, excs)
                     Base.invokelatest(Base.display_error, errio, excs)
                 catch e
                     # at this point, only print the name of the type as a Symbol to
@@ -1399,7 +1396,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     nothing
 end
 
-module IPython
+module Numbered
 
 using ..REPL
 
@@ -1410,18 +1407,32 @@ function repl_eval_counter(hp)
 end
 
 function out_transform(@nospecialize(x), n::Ref{Int})
-    return quote
+    return Expr(:toplevel, get_usings!([], x)..., quote
         let __temp_val_a72df459 = $x
             $capture_result($n, __temp_val_a72df459)
             __temp_val_a72df459
         end
+    end)
+end
+
+function get_usings!(usings, ex)
+    # get all `using` and `import` statements which are at the top level
+    for (i, arg) in enumerate(ex.args)
+        if Base.isexpr(arg, :toplevel)
+            get_usings!(usings, arg)
+        elseif Base.isexpr(arg, [:using, :import])
+            push!(usings, popat!(ex.args, i))
+        end
     end
+    return usings
 end
 
 function capture_result(n::Ref{Int}, @nospecialize(x))
     n = n[]
-    mod = REPL.active_module()
+    mod = Base.MainInclude
     if !isdefined(mod, :Out)
+        @eval mod global Out
+        @eval mod export Out
         setglobal!(mod, :Out, Dict{Int, Any}())
     end
     if x !== getglobal(mod, :Out) && x !== nothing # remove this?
@@ -1457,15 +1468,26 @@ function __current_ast_transforms(backend)
 end
 
 
-function ipython_mode!(repl::LineEditREPL=Base.active_repl, backend=nothing)
+function numbered_prompt!(repl::LineEditREPL=Base.active_repl, backend=nothing)
     n = Ref{Int}(0)
     set_prompt(repl, n)
     set_output_prefix(repl, n)
     push!(__current_ast_transforms(backend), @nospecialize(ast) -> out_transform(ast, n))
     return
 end
+
+"""
+    Out[n]
+
+A variable referring to all previously computed values, automatically imported to the interactive prompt.
+Only defined and exists while using [Numbered prompt](@ref Numbered-prompt).
+
+See also [`ans`](@ref).
+"""
+Base.MainInclude.Out
+
 end
 
-import .IPython.ipython_mode!
+import .Numbered.numbered_prompt!
 
 end # module

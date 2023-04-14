@@ -172,8 +172,10 @@
     XX(jl_gc_external_obj_hdr_size) \
     XX(jl_gc_find_taggedvalue_pool) \
     XX(jl_gc_get_total_bytes) \
+    XX(jl_gc_get_max_memory) \
     XX(jl_gc_internal_obj_base_ptr) \
     XX(jl_gc_is_enabled) \
+    XX(jl_gc_is_in_finalizer) \
     XX(jl_gc_live_bytes) \
     XX(jl_gc_managed_malloc) \
     XX(jl_gc_managed_realloc) \
@@ -274,7 +276,6 @@
     XX(jl_ios_fd) \
     XX(jl_ios_get_nbyte_int) \
     XX(jl_ir_flag_inferred) \
-    XX(jl_ir_flag_pure) \
     XX(jl_ir_flag_has_fcall) \
     XX(jl_ir_flag_inlining) \
     XX(jl_ir_inlining_cost) \
@@ -477,7 +478,6 @@
     XX(jl_try_substrtod) \
     XX(jl_try_substrtof) \
     XX(jl_tty_set_mode) \
-    XX(jl_tupletype_fill) \
     XX(jl_typeassert) \
     XX(jl_typeinf_lock_begin) \
     XX(jl_typeinf_lock_end) \
@@ -486,7 +486,6 @@
     XX(jl_typename_str) \
     XX(jl_typeof_str) \
     XX(jl_types_equal) \
-    XX(jl_type_equality_is_identity) \
     XX(jl_type_error) \
     XX(jl_type_error_rt) \
     XX(jl_type_intersection) \

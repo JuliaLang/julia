@@ -16,6 +16,16 @@ using Random: randcycle
     @test binomial(Int64(67), Int64(29)) == binomial(BigInt(67), BigInt(29)) == 7886597962249166160
     @test binomial(Int128(131), Int128(62)) == binomial(BigInt(131), BigInt(62)) == 157311720980559117816198361912717812000
     @test_throws OverflowError binomial(Int64(67), Int64(30))
+
+    #Issue 48072
+    ∐ = parse(BigInt, "1" * "0"^13 * "666" * "0"^13 * "1")
+    @test binomial(∐, ∐ - 1) == ∐
+    @test binomial(∐, ∐ - 2) == 500000000000066600000000002218280000000000033300000000000000
+    @test binomial(∐, ∐ - 3) == binomial(∐, 3)
+    @test binomial(-big(2), ∐ - 3) == 1000000000000066599999999999999
+    @test_throws OverflowError binomial(big(2)^65, big(2)^64)
+    @test_throws OverflowError binomial(-big(2)^65, big(2)^64)
+    @test binomial(∐, 2 * ∐) == BigInt(0)
 end
 
 @testset "permutations" begin

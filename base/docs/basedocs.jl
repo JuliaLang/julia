@@ -60,6 +60,27 @@ See the [manual section about modules](@ref modules) for details.
 kw"export"
 
 """
+    as
+
+`as` is used as a keyword to rename an identifier brought into scope by
+`import` or `using`, for the purpose of working around name conflicts as
+well as for shortening names.  (Outside of `import` or `using` statements,
+`as` is not a keyword and can be used as an ordinary identifier.)
+
+`import LinearAlgebra as LA` brings the imported `LinearAlgebra` standard library
+into scope as `LA`.
+
+`import LinearAlgebra: eigen as eig, cholesky as chol` brings the `eigen` and `cholesky` methods
+from `LinearAlgebra` into scope as `eig` and `chol` respectively.
+
+`as` works with `using` only when individual identifiers are brought into scope.
+For example, `using LinearAlgebra: eigen as eig` or `using LinearAlgebra: eigen as eig, cholesky as chol` works,
+but `using LinearAlgebra as LA` is invalid syntax, since it is nonsensical to
+rename *all* exported names from `LinearAlgebra` to `LA`.
+"""
+kw"as"
+
+"""
     abstract type
 
 `abstract type` declares a type that cannot be instantiated, and serves only as a node in the
@@ -1450,21 +1471,6 @@ parser rather than being implemented as a normal string macro `@var_str`.
 kw"var\"name\"", kw"@var_str"
 
 """
-    ans
-
-A variable referring to the last computed value, automatically set at the interactive prompt.
-"""
-kw"ans"
-
-"""
-    err
-
-A variable referring to the last thrown errors, automatically set at the interactive prompt.
-The thrown errors are collected in a stack of exceptions.
-"""
-kw"err"
-
-"""
     devnull
 
 Used in a stream redirect to discard all data written to it. Essentially equivalent to
@@ -1724,7 +1730,7 @@ The argument `val` to a function or constructor is outside the valid domain.
 ```jldoctest
 julia> sqrt(-1)
 ERROR: DomainError with -1.0:
-sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+sqrt was called with a negative real argument but will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
 [...]
 ```
@@ -3102,7 +3108,7 @@ with elements of type `T` and `N` dimensions.
 If `A` is a `StridedArray`, then its elements are stored in memory with offsets, which may
 vary between dimensions but are constant within a dimension. For example, `A` could
 have stride 2 in dimension 1, and stride 3 in dimension 2. Incrementing `A` along
-dimension `d` jumps in memory by [`strides(A, d)`] slots. Strided arrays are
+dimension `d` jumps in memory by [`stride(A, d)`] slots. Strided arrays are
 particularly important and useful because they can sometimes be passed directly
 as pointers to foreign language libraries like BLAS.
 """

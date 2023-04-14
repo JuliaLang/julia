@@ -258,7 +258,7 @@ struct LoadingCache
     require_parsed::Set{String}
     identified_where::Dict{Tuple{PkgId, String}, Union{Nothing, Tuple{PkgId, Union{Nothing, String}}}}
     identified::Dict{String, Union{Nothing, Tuple{PkgId, Union{Nothing, String}}}}
-    located::Dict{Tuple{PkgId, Union{String, Nothing}}, Union{String, Nothing}}
+    located::Dict{Tuple{PkgId, Union{String, Nothing}}, Union{Tuple{Union{String, Nothing}, Union{String, Nothing}}, Nothing}}
 end
 const LOADING_CACHE = Ref{Union{LoadingCache, Nothing}}(nothing)
 LoadingCache() = LoadingCache(load_path(), Dict(), Dict(), Dict(), Set(), Dict(), Dict(), Dict())
@@ -390,30 +390,17 @@ identify_package(where::Module, name::String) = _nothing_or_first(identify_packa
 identify_package(where::PkgId, name::String)  = _nothing_or_first(identify_package_env(where, name))
 identify_package(name::String)                = _nothing_or_first(identify_package_env(name))
 
-
-"""
-    Base.locate_package(pkg::PkgId)::Union{String, Nothing}
-
-The path to the entry-point file for the package corresponding to the identifier
-`pkg`, or `nothing` if not found. See also [`identify_package`](@ref).
-
-```julia-repl
-julia> pkg = Base.identify_package("Pkg")
-Pkg [44cfe95a-1eb2-52ea-b672-e2afdf69b78f]
-
-julia> Base.locate_package(pkg)
-"/path/to/julia/stdlib/v$(VERSION.major).$(VERSION.minor)/Pkg/src/Pkg.jl"
-```
-"""
-function locate_package(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)::Union{Nothing,String}
+function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
     cache = LOADING_CACHE[]
     if cache !== nothing
-        path = get(cache.located, (pkg, stopenv), nothing)
-        path === nothing || return path
+        pathenv = get(cache.located, (pkg, stopenv), nothing)
+        pathenv === nothing || return pathenv
     end
     path = nothing
+    env′ = nothing
     if pkg.uuid === nothing
         for env in load_path()
+            env′ = env
             # look for the toplevel pkg `pkg.name` in this entry
             found = project_deps_get(env, pkg.name)
             if found !== nothing
@@ -430,6 +417,7 @@ function locate_package(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)::Un
         end
     else
         for env in load_path()
+            env′ = env
             path = manifest_uuid_path(env, pkg)
             # missing is used as a sentinel to stop looking further down in envs
             if path === missing
@@ -452,9 +440,27 @@ function locate_package(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)::Un
     end
     @label done
     if cache !== nothing
-        cache.located[(pkg, stopenv)] = path
+        cache.located[(pkg, stopenv)] = path, env′
     end
-    return path
+    return path, env′
+end
+
+"""
+    Base.locate_package(pkg::PkgId)::Union{String, Nothing}
+
+The path to the entry-point file for the package corresponding to the identifier
+`pkg`, or `nothing` if not found. See also [`identify_package`](@ref).
+
+```julia-repl
+julia> pkg = Base.identify_package("Pkg")
+Pkg [44cfe95a-1eb2-52ea-b672-e2afdf69b78f]
+
+julia> Base.locate_package(pkg)
+"/path/to/julia/stdlib/v$(VERSION.major).$(VERSION.minor)/Pkg/src/Pkg.jl"
+```
+"""
+function locate_package(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)::Union{Nothing,String}
+    _nothing_or_first(locate_package_env(pkg, stopenv))
 end
 
 """
@@ -1020,11 +1026,9 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
                 elapsed = round((time_ns() - t_before) / 1e6, digits = 1)
                 comp_time, recomp_time = cumulative_compile_time_ns() .- t_comp_before
                 print(lpad(elapsed, 9), " ms  ")
-                for extid in EXT_DORMITORY
-                    if extid.id == pkg
-                        print(extid.parentid.name, " → ")
-                        break
-                    end
+                parentid = get(EXT_PRIMED, pkg, nothing)
+                if parentid !== nothing
+                    print(parentid.name, " → ")
                 end
                 print(pkg.name)
                 if comp_time > 0
@@ -1104,18 +1108,22 @@ mutable struct ExtensionId
     ntriggers::Int # how many more packages must be defined until this is loaded
 end
 
-const EXT_DORMITORY = Dict{PkgId,Vector{ExtensionId}}()
+const EXT_PRIMED = Dict{PkgId, PkgId}() # Extension -> Parent
+const EXT_DORMITORY = Dict{PkgId,Vector{ExtensionId}}() # Trigger -> Extensions that can be triggered by it
 const EXT_DORMITORY_FAILED = ExtensionId[]
 
 function insert_extension_triggers(pkg::PkgId)
     pkg.uuid === nothing && return
-    extensions_added = Set{PkgId}()
-    for env in load_path()
-        insert_extension_triggers!(extensions_added, env, pkg)
+    path_env_loc = locate_package_env(pkg)
+    path_env_loc === nothing && return
+    path, env_loc = path_env_loc
+    if path === nothing || env_loc === nothing
+        return
     end
+    insert_extension_triggers(env_loc, pkg)
 end
 
-function insert_extension_triggers!(extensions_added::Set{PkgId}, env::String, pkg::PkgId)::Union{Nothing,Missing}
+function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missing}
     project_file = env_project_file(env)
     if project_file isa String
         manifest_file = project_file_manifest_path(project_file)
@@ -1133,7 +1141,7 @@ function insert_extension_triggers!(extensions_added::Set{PkgId}, env::String, p
                     extensions === nothing && return
                     weakdeps === nothing && return
                     if weakdeps isa Dict{String, Any}
-                        return _insert_extension_triggers!(extensions_added, pkg, extensions, weakdeps)
+                        return _insert_extension_triggers(pkg, extensions, weakdeps)
                     end
 
                     d_weakdeps = Dict{String, String}()
@@ -1148,7 +1156,7 @@ function insert_extension_triggers!(extensions_added::Set{PkgId}, env::String, p
                         d_weakdeps[dep_name] = uuid
                     end
                     @assert length(d_weakdeps) == length(weakdeps)
-                    return _insert_extension_triggers!(extensions_added, pkg, extensions, d_weakdeps)
+                    return _insert_extension_triggers(pkg, extensions, d_weakdeps)
                 end
             end
         end
@@ -1156,13 +1164,14 @@ function insert_extension_triggers!(extensions_added::Set{PkgId}, env::String, p
     return nothing
 end
 
-function _insert_extension_triggers!(extensions_added::Set{PkgId}, parent::PkgId, extensions::Dict{String, <:Any}, weakdeps::Dict{String, <:Any})
+function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, <:Any}, weakdeps::Dict{String, <:Any})
     for (ext::String, triggers::Union{String, Vector{String}}) in extensions
         triggers isa String && (triggers = [triggers])
         id = PkgId(uuid5(parent.uuid, ext), ext)
-        # Only add triggers for an extension from one env.
-        id in extensions_added && continue
-        push!(extensions_added, id)
+        if id in keys(EXT_PRIMED) || haskey(Base.loaded_modules, id)
+            continue  # extension is already primed or loaded, don't add it again
+        end
+        EXT_PRIMED[id] = parent
         gid = ExtensionId(id, parent, 1 + length(triggers))
         trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, parent)
         push!(trigger1, gid)
@@ -1188,8 +1197,9 @@ function run_extension_callbacks(extid::ExtensionId)
         true
     catch
         # Try to continue loading if loading an extension errors
+        errs = current_exceptions()
         @error "Error during loading of extension $(extid.id.name) of $(extid.parentid.name), \
-                use `Base.retry_load_extensions()` to retry."
+                use `Base.retry_load_extensions()` to retry." exception=errs
         false
     end
     return succeeded
@@ -1206,13 +1216,13 @@ function run_extension_callbacks(pkgid::PkgId)
             # below the one of the parent. This will cause a load failure when the
             # pkg ext tries to load the triggers. Therefore, check this first
             # before loading the pkg ext.
-            pkgenv = Base.identify_package_env(extid.id, pkgid.name)
+            pkgenv = identify_package_env(extid.id, pkgid.name)
             ext_not_allowed_load = false
             if pkgenv === nothing
                 ext_not_allowed_load = true
             else
                 pkg, env = pkgenv
-                path = Base.locate_package(pkg, env)
+                path = locate_package(pkg, env)
                 if path === nothing
                     ext_not_allowed_load = true
                 end
@@ -1241,7 +1251,7 @@ function run_extension_callbacks(pkgid::PkgId)
             succeeded || push!(EXT_DORMITORY_FAILED, extid)
         end
     end
-    nothing
+    return
 end
 
 """
@@ -1263,7 +1273,7 @@ function retry_load_extensions()
     end
     prepend!(EXT_DORMITORY_FAILED, failed)
     end
-    nothing
+    return
 end
 
 """
@@ -1530,11 +1540,11 @@ end
 """
     include_dependency(path::AbstractString)
 
-In a module, declare that the file specified by `path` (relative or absolute) is a
-dependency for precompilation; that is, the module will need to be recompiled if this file
-changes.
+In a module, declare that the file, directory, or symbolic link specified by `path`
+(relative or absolute) is a dependency for precompilation; that is, the module will need
+to be recompiled if the modification time of `path` changes.
 
-This is only needed if your module depends on a file that is not used via [`include`](@ref). It has
+This is only needed if your module depends on a path that is not used via [`include`](@ref). It has
 no effect outside of compilation.
 """
 function include_dependency(path::AbstractString)
@@ -1637,6 +1647,8 @@ end
 
 require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
 
+const REPL_PKGID = PkgId(UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL")
+
 function _require_prelocked(uuidkey::PkgId, env=nothing)
     assert_havelock(require_lock)
     if !root_module_exists(uuidkey)
@@ -1648,6 +1660,9 @@ function _require_prelocked(uuidkey::PkgId, env=nothing)
         insert_extension_triggers(uuidkey)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
+        if uuidkey == REPL_PKGID
+            REPL_MODULE_REF[] = newm
+        end
     else
         newm = root_module(uuidkey)
     end
@@ -1736,6 +1751,9 @@ function set_pkgorigin_version_path(pkg::PkgId, path::Union{String,Nothing})
     nothing
 end
 
+# A hook to allow code load to use Pkg.precompile
+const PKG_PRECOMPILE_HOOK = Ref{Function}()
+
 # Returns `nothing` or the new(ish) module
 function _require(pkg::PkgId, env=nothing)
     assert_havelock(require_lock)
@@ -1755,8 +1773,11 @@ function _require(pkg::PkgId, env=nothing)
         end
         set_pkgorigin_version_path(pkg, path)
 
+        pkg_precompile_attempted = false # being safe to avoid getting stuck in a Pkg.precompile loop
+
         # attempt to load the module file via the precompile cache locations
         if JLOptions().use_compiled_modules != 0
+            @label load_from_cache
             m = _require_search_from_serialized(pkg, path, UInt128(0))
             if m isa Module
                 return m
@@ -1778,6 +1799,16 @@ function _require(pkg::PkgId, env=nothing)
 
         if JLOptions().use_compiled_modules != 0
             if (0 == ccall(:jl_generating_output, Cint, ())) || (JLOptions().incremental != 0)
+                if !pkg_precompile_attempted && isinteractive() && isassigned(PKG_PRECOMPILE_HOOK)
+                    pkg_precompile_attempted = true
+                    unlock(require_lock)
+                    try
+                        PKG_PRECOMPILE_HOOK[](pkg.name, _from_loading = true)
+                    finally
+                        lock(require_lock)
+                    end
+                    @goto load_from_cache
+                end
                 # spawn off a new incremental pre-compile task for recursive `require` calls
                 cachefile = compilecache(pkg, path)
                 if isa(cachefile, Exception)
@@ -2070,7 +2101,8 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
                               --color=$(have_color === nothing ? "auto" : have_color ? "yes" : "no")
                               $trace
                               -`,
-                              "OPENBLAS_NUM_THREADS" => 1),
+                              "OPENBLAS_NUM_THREADS" => 1,
+                              "JULIA_NUM_THREADS" => 1),
                        stderr = internal_stderr, stdout = internal_stdout),
               "w", stdout)
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
@@ -2219,7 +2251,11 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                     rm(evicted_cachefile; force=true)
                     try
                         rm(ocachefile_from_cachefile(evicted_cachefile); force=true)
-                    catch
+                        @static if Sys.isapple()
+                            rm(ocachefile_from_cachefile(evicted_cachefile) * ".dSYM"; force=true, recursive=true)
+                        end
+                    catch e
+                        e isa IOError || rethrow()
                     end
                 end
             end
@@ -2245,6 +2281,9 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                     # TODO: Risk for a race here if some other process grabs this name before us
                     cachefile = cachefile_from_ocachefile(ocachefile)
                     rename(tmppath_so, ocachefile::String; force=true)
+                end
+                @static if Sys.isapple()
+                    run(`$(Linking.dsymutil()) $ocachefile`, Base.DevNull(), Base.DevNull(), Base.DevNull())
                 end
             end
             # this is atomic according to POSIX (not Win32):
@@ -2473,7 +2512,7 @@ end
 
 # Test to see if this UUID is mentioned in this `Project.toml`; either as
 # the top-level UUID (e.g. that of the project itself), as a dependency,
-# or as an extra for Preferences.
+# or as an extra/weakdep for Preferences.
 function get_uuid_name(project::Dict{String, Any}, uuid::UUID)
     uuid_p = get(project, "uuid", nothing)::Union{Nothing, String}
     name = get(project, "name", nothing)::Union{Nothing, String}
@@ -2488,7 +2527,7 @@ function get_uuid_name(project::Dict{String, Any}, uuid::UUID)
             end
         end
     end
-    for subkey in ("deps", "extras")
+    for subkey in ("deps", "extras", "weakdeps")
         subsection = get(project, subkey, nothing)::Union{Nothing, Dict{String, Any}}
         if subsection !== nothing
             for (k, v) in subsection
@@ -2792,7 +2831,7 @@ end
             end
             for chi in includes
                 f, ftime_req = chi.filename, chi.mtime
-                if !isfile(f)
+                if !ispath(f)
                     _f = fixup_stdlib_path(f)
                     if isfile(_f) && startswith(_f, Sys.STDLIB)
                         # mtime is changed by extraction
