@@ -571,6 +571,20 @@ end
     end
 end
 
+@testset "eigendecomposition with lapack_method" begin
+    for T in (Float64, ComplexF64)
+        n = 4
+        A = T <: Real ? Symmetric(randn(T, n,n)) : Hermitian(randn(T, n,n))
+        d, v = eigen(A)
+        for lapack_method in (:syev, :syevr, :syevd)
+            @test eigvals(A, lapack_method) ≈ d
+            d2, v2 = eigen(A, lapack_method)
+            @test d2 ≈ d
+            @test A * v2 ≈ v2 * Diagonal(d2)
+        end
+    end
+end
+
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
 using .Main.ImmutableArrays
