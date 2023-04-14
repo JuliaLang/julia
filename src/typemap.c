@@ -565,6 +565,16 @@ static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct t
 int jl_has_intersect_type_not_kind(jl_value_t *t);
 int jl_has_intersect_kind_not_type(jl_value_t *t);
 
+// if TypeVar tv is used covariantly, it cannot be Union{}
+int has_covariant_var(jl_datatype_t *ttypes, jl_tvar_t *tv)
+{
+    size_t i, l = jl_nparams(ttypes);
+    for (i = 0; i < l; i++)
+        if (jl_tparam(ttypes, i) == (jl_value_t*)tv)
+            return 1;
+    return 0;
+}
+
 void typemap_slurp_search(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure)
 {
     // n.b. we could consider mt->max_args here too, so this optimization
@@ -640,7 +650,12 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                     typetype = jl_unwrap_unionall(ty);
                     typetype = jl_is_type_type(typetype) ? jl_tparam0(typetype) : NULL;
                     name = typetype ? jl_type_extract_name(typetype) : NULL;
-                    exclude_typeofbottom = !(typetype ? jl_parameter_includes_bottom(typetype) : jl_subtype((jl_value_t*)jl_typeofbottom_type, ty));
+                    if (!typetype)
+                        exclude_typeofbottom = !jl_subtype((jl_value_t*)jl_typeofbottom_type, ty);
+                    else if (jl_is_typevar(typetype))
+                        exclude_typeofbottom = has_covariant_var((jl_datatype_t*)ttypes, (jl_tvar_t*)typetype);
+                    else
+                        exclude_typeofbottom = !jl_parameter_includes_bottom(typetype);
                 }
             }
             // First check for intersections with methods defined on Type{T}, where T was a concrete type
