@@ -5,20 +5,12 @@ eigencopy_oftype(A::Hermitian, S) = Hermitian(copy_similar(A, S), sym_uplo(A.upl
 eigencopy_oftype(A::Symmetric, S) = Symmetric(copy_similar(A, S), sym_uplo(A.uplo))
 
 # Eigensolvers for symmetric and Hermitian matrices
-eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) =
-    Eigen(sorteig!(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)..., sortby)...)
-
-function eigen(A::RealHermSymComplexHerm; sortby::Union{Function,Nothing}=nothing)
-    S = eigtype(eltype(A))
-    eigen!(eigencopy_oftype(A, S), sortby=sortby)
-end
-
-function eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, lapack_method::Symbol; sortby::Union{Function,Nothing}=nothing)
-    if lapack_method == :syevr
+function eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, lapack_method::Symbol=:syevr; sortby::Union{Function,Nothing}=nothing)
+    if lapack_method === :syevr
       Eigen(sorteig!(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)..., sortby)...)
-    elseif lapack_method == :syev
+    elseif lapack_method === :syev
       Eigen(sorteig!(LAPACK.syev!('V', A.uplo, A.data)..., sortby)...)
-    elseif lapack_method == :syevd
+    elseif lapack_method === :syevd
       Eigen(sorteig!(LAPACK.syevd!('V', A.uplo, A.data)..., sortby)...)
     else
       throw(ArgumentError("Wrong lapack_method $lapack_method. Must be :syevr or :syev or :syevd."))
@@ -26,7 +18,7 @@ function eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, lapack_me
 end
 
 """
-    eigen(A::Union{SymTridiagonal, Hermitian, Symmetric}, lapack_method::Symbol) -> Eigen
+    eigen(A::Union{Hermitian, Symmetric}, lapack_method::Symbol=:syevr) -> Eigen
 
 Compute the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
 which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
@@ -34,16 +26,17 @@ matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vec
 
 Iterating the decomposition produces the components `F.values` and `F.vectors`.
 
-`lapack_method` specifies which LAPACK method to use for eigenvalue decomposition.
-* `lapack_method = :syev`: Use QR iteration
-* `lapack_method = :syevr`: Use multiple relatively robust representations
-* `lapack_method = :syevd`: Use divide-and-conquer method
+`lapack_method` specifies which LAPACK method to use for eigenvalue decomposition:
+- `lapack_method = :syevr` (default): Use multiple relatively robust representations
+- `lapack_method = :syev`: Use QR iteration
+- `lapack_method = :syevd`: Use divide-and-conquer method
+
 See James W. Demmel et al, SIAM J. Sci. Comput. 30, 3, 1508 (2008) for
 a comparison of the accuracy and performance of different methods.
 
 The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`](@ref), and [`isposdef`](@ref).
 """
-function eigen(A::RealHermSymComplexHerm, lapack_method::Symbol; sortby::Union{Function,Nothing}=nothing)
+function eigen(A::RealHermSymComplexHerm, lapack_method::Symbol=:syevr; sortby::Union{Function,Nothing}=nothing)
     S = eigtype(eltype(A))
     eigen!(eigencopy_oftype(A, S), lapack_method; sortby)
 end
@@ -99,23 +92,13 @@ function eigen(A::RealHermSymComplexHerm, vl::Real, vh::Real)
     eigen!(eigencopy_oftype(A, S), vl, vh)
 end
 
-function eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing)
-    vals = LAPACK.syevr!('N', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)[1]
-    !isnothing(sortby) && sort!(vals, by=sortby)
-    return vals
-end
 
-function eigvals(A::RealHermSymComplexHerm; sortby::Union{Function,Nothing}=nothing)
-    S = eigtype(eltype(A))
-    eigvals!(eigencopy_oftype(A, S), sortby=sortby)
-end
-
-function eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, lapack_method::Symbol; sortby::Union{Function,Nothing}=nothing)
-    if lapack_method == :syevr
+function eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, lapack_method::Symbol=:syevr; sortby::Union{Function,Nothing}=nothing)
+    if lapack_method === :syevr
       vals = LAPACK.syevr!('N', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)[1]
-    elseif lapack_method == :syev
+    elseif lapack_method === :syev
       vals = LAPACK.syev!('N', A.uplo, A.data)
-    elseif lapack_method == :syevd
+    elseif lapack_method === :syevd
       vals = LAPACK.syevd!('N', A.uplo, A.data)
     else
       throw(ArgumentError("Wrong lapack_method $lapack_method. Must be :syevr or :syev or :syevd."))
@@ -125,18 +108,19 @@ function eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, lapack_
 end
 
 """
-    eigvals(A::Union{SymTridiagonal, Hermitian, Symmetric}, lapack_method::Symbol) -> values
+    eigvals(A::Union{Hermitian, Symmetric}, lapack_method::Symbol=:syevr) -> values
 
 Return the eigenvalues of `A`.
 
 `lapack_method` specifies which LAPACK method to use for eigenvalue decomposition.
-* `lapack_method = :syev`: Use QR iteration
-* `lapack_method = :syevr`: Use multiple relatively robust representations
-* `lapack_method = :syevd`: Use divide-and-conquer method
+- `lapack_method = :syevr` (default): Use multiple relatively robust representations
+- `lapack_method = :syev`: Use QR iteration
+- `lapack_method = :syevd`: Use divide-and-conquer method
+
 See James W. Demmel et al, SIAM J. Sci. Comput. 30, 3, 1508 (2008) for
 a comparison of the accuracy and performance of different methods.
 """
-function eigvals(A::RealHermSymComplexHerm, lapack_method::Symbol; sortby::Union{Function,Nothing}=nothing)
+function eigvals(A::RealHermSymComplexHerm, lapack_method::Symbol=:syevr; sortby::Union{Function,Nothing}=nothing)
     S = eigtype(eltype(A))
     eigvals!(eigencopy_oftype(A, S), lapack_method; sortby)
 end
