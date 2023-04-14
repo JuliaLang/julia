@@ -34,6 +34,8 @@ Iterating the decomposition produces the components `F.values` and `F.vectors`.
 See James W. Demmel et al, SIAM J. Sci. Comput. 30, 3, 1508 (2008) for
 a comparison of the accuracy and performance of different methods.
 
+The default `lapack_method` used may change in the future.
+
 The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`](@ref), and [`isposdef`](@ref).
 """
 function eigen(A::RealHermSymComplexHerm, lapack_method::Symbol=:syevr; sortby::Union{Function,Nothing}=nothing)
@@ -119,6 +121,8 @@ Return the eigenvalues of `A`.
 
 See James W. Demmel et al, SIAM J. Sci. Comput. 30, 3, 1508 (2008) for
 a comparison of the accuracy and performance of different methods.
+
+The default `lapack_method` used may change in the future.
 """
 function eigvals(A::RealHermSymComplexHerm, lapack_method::Symbol=:syevr; sortby::Union{Function,Nothing}=nothing)
     S = eigtype(eltype(A))
