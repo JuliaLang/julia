@@ -537,8 +537,9 @@ let f(@nospecialize(x)) = x===Base.ImmutableDict(Int128=>:big)
     @test !f(Dict(Int=>Int))
 end
 
-# issue #37974
+# issue #37974, #49318
 primitive type UInt24 24 end
+primitive type UInt136 136 end
 let a = Core.Intrinsics.trunc_int(UInt24, 3),
     f(t) = t[2]
     @test f((a, true)) === true
@@ -547,6 +548,11 @@ let a = Core.Intrinsics.trunc_int(UInt24, 3),
     @test sizeof(UInt24) == 3
     @test sizeof(Union{UInt8,UInt24}) == 3
     @test sizeof(Base.RefValue{Union{UInt8,UInt24}}) == 8
+    @test sizeof(Tuple{UInt24}) == 4
+    @test Base.datatype_haspadding(Tuple{UInt24})
+    @test sizeof(UInt136) == 17
+    @test sizeof(Tuple{UInt136}) == 24
+    @test Base.datatype_haspadding(Tuple{UInt136})
 end
 
 # issue #39232

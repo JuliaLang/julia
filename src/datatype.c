@@ -358,13 +358,13 @@ int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree)
     return 0;
 }
 
-static unsigned union_isinlinable(jl_value_t *ty, int pointerfree, size_t *nbytes, size_t *align, int asfield)
+static unsigned union_isinlinable(jl_value_t *ty, int pointerfree, size_t *nbytes, size_t *align)
 {
     if (jl_is_uniontype(ty)) {
-        unsigned na = union_isinlinable(((jl_uniontype_t*)ty)->a, 1, nbytes, align, asfield);
+        unsigned na = union_isinlinable(((jl_uniontype_t*)ty)->a, 1, nbytes, align);
         if (na == 0)
             return 0;
-        unsigned nb = union_isinlinable(((jl_uniontype_t*)ty)->b, 1, nbytes, align, asfield);
+        unsigned nb = union_isinlinable(((jl_uniontype_t*)ty)->b, 1, nbytes, align);
         if (nb == 0)
             return 0;
         return na + nb;
@@ -372,9 +372,6 @@ static unsigned union_isinlinable(jl_value_t *ty, int pointerfree, size_t *nbyte
     if (jl_is_datatype(ty) && jl_datatype_isinlinealloc((jl_datatype_t*)ty, pointerfree)) {
         size_t sz = jl_datatype_size(ty);
         size_t al = jl_datatype_align(ty);
-        // primitive types in struct slots need their sizes aligned. issue #37974
-        if (asfield && jl_is_primitivetype(ty))
-            sz = LLT_ALIGN(sz, al);
         if (*nbytes < sz)
             *nbytes = sz;
         if (*align < al)
@@ -387,12 +384,12 @@ static unsigned union_isinlinable(jl_value_t *ty, int pointerfree, size_t *nbyte
 int jl_uniontype_size(jl_value_t *ty, size_t *sz)
 {
     size_t al = 0;
-    return union_isinlinable(ty, 0, sz, &al, 0) != 0;
+    return union_isinlinable(ty, 0, sz, &al) != 0;
 }
 
 JL_DLLEXPORT int jl_islayout_inline(jl_value_t *eltype, size_t *fsz, size_t *al)
 {
-    unsigned countbits = union_isinlinable(eltype, 0, fsz, al, 1);
+    unsigned countbits = union_isinlinable(eltype, 0, fsz, al);
     return (countbits > 0 && countbits < 127) ? countbits : 0;
 }
 
@@ -571,15 +568,26 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         for (i = 0; i < nfields; i++) {
             jl_value_t *fld = jl_field_type(st, i);
             int isatomic = jl_field_isatomic(st, i);
-            size_t fsz = 0, al = 1;
+            size_t fsz = 0, al = 1, storage_size = 0;
             if (jl_islayout_inline(fld, &fsz, &al) && (!isatomic || jl_is_datatype(fld))) { // aka jl_datatype_isinlinealloc
+                storage_size = fsz;
+                // for odd-size primitive types, alignment can be greater than data size, and
+                // the field needs to be padded in those cases. see issues #37974 and #49318
+                if (fsz && al > fsz) {
+                    storage_size += (al - fsz);
+                    haspadding = 1;
+                }
                 if (__unlikely(fsz > max_size))
                     // Should never happen
                     throw_ovf(should_malloc, desc, st, fsz);
                 desc[i].isptr = 0;
                 if (jl_is_uniontype(fld)) {
                     haspadding = 1;
-                    fsz += 1; // selector byte
+                    // add space for selector byte
+                    storage_size += 1;
+                    // if storage_size > fsz, the field size needs to be expanded to include
+                    // the entire storage plus the selector byte
+                    fsz = storage_size;
                     zeroinit = 1;
                 }
                 else {
@@ -601,6 +609,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                 fsz = sizeof(void*);
                 if (fsz > MAX_ALIGN)
                     fsz = MAX_ALIGN;
+                storage_size = fsz;
                 al = fsz;
                 desc[i].isptr = 1;
                 zeroinit = 1;
@@ -613,7 +622,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             if (isatomic && fsz > MAX_ATOMIC_SIZE)
                 needlock = 1;
             if (isatomic && fsz <= MAX_ATOMIC_SIZE)
-                al = fsz = next_power_of_two(fsz);
+                storage_size = al = fsz = next_power_of_two(fsz);
             if (al != 0) {
                 size_t alsz = LLT_ALIGN(sz, al);
                 if (alsz != sz)
@@ -627,7 +636,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             desc[i].size = fsz;
             if (__unlikely(max_offset - sz < fsz))
                 throw_ovf(should_malloc, desc, st, sz);
-            sz += fsz;
+            sz += storage_size;
         }
         if (needlock) {
             size_t offset = LLT_ALIGN(sizeof(jl_mutex_t), alignm);
