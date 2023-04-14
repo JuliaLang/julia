@@ -56,7 +56,6 @@ let
 
         # 2-depth packages
         :Dates,
-        :Distributed,
         :Future,
         :InteractiveUtils,
         :LibGit2,
@@ -64,9 +63,7 @@ let
 
         # 3-depth packages
         :REPL,
-        :SharedArrays,
         :TOML,
-        :Test,
 
         # 4-depth packages
         :LibCURL,
@@ -76,9 +73,6 @@ let
 
         # 6-depth packages
         :Pkg,
-
-        # 7-depth packages
-        :LazyArtifacts,
     ]
     # PackageCompiler can filter out stdlibs so it can be empty
     maxlen = maximum(textwidth.(string.(stdlibs)); init=0)

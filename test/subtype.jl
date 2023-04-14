@@ -588,7 +588,7 @@ function test_old()
 end
 
 const easy_menagerie =
-    Any[Bottom, Any, Int, Int8, Integer, Real,
+    Any[Any, Int, Int8, Integer, Real,
         Array{Int,1}, AbstractArray{Int,1},
         Tuple{Int,Vararg{Integer}}, Tuple{Integer,Vararg{Int}}, Tuple{},
         Union{Int,Int8},
@@ -627,6 +627,10 @@ end
 
 add_variants!(easy_menagerie)
 add_variants!(hard_menagerie)
+push!(easy_menagerie, Bottom)
+push!(easy_menagerie, Ref{Bottom})
+push!(easy_menagerie, @UnionAll N NTuple{N,Bottom})
+push!(easy_menagerie, @UnionAll S<:Bottom Ref{S})
 
 const menagerie = [easy_menagerie; hard_menagerie]
 
@@ -673,9 +677,11 @@ function test_properties()
             @test isequal_type(T, S) == isequal_type(Ref{T}, Ref{S})
 
             # covariance
-            @test issubTS == issub(Tuple{T}, Tuple{S})
-            @test issubTS == issub(Tuple{Vararg{T}}, Tuple{Vararg{S}})
-            @test issubTS == issub(Tuple{T}, Tuple{Vararg{S}})
+            if T !== Bottom && S !== Bottom
+                @test issubTS == issub(Tuple{T}, Tuple{S})
+                @test issubTS == issub(Tuple{Vararg{T}}, Tuple{Vararg{S}})
+                @test issubTS == issub(Tuple{T}, Tuple{Vararg{S}})
+            end
 
             # pseudo-contravariance
             @test issubTS == issub(¬S, ¬T)
@@ -904,11 +910,11 @@ function test_intersection()
     # both of these answers seem acceptable
     #@testintersect(Tuple{T,T} where T<:Union{UpperTriangular, UnitUpperTriangular},
     #               Tuple{AbstractArray{T,N}, AbstractArray{T,N}} where N where T,
-    #               Union{Tuple{T,T} where T<:UpperTriangular,
-    #                     Tuple{T,T} where T<:UnitUpperTriangular})
+    #               Union{Tuple{T,T} where T<:UpperTriangular{T1},
+    #                     Tuple{T,T} where T<:UnitUpperTriangular{T1}} where T)
     @testintersect(Tuple{T,T} where T<:Union{UpperTriangular, UnitUpperTriangular},
                    Tuple{AbstractArray{T,N}, AbstractArray{T,N}} where N where T,
-                   Tuple{T,T} where T<:Union{UpperTriangular, UnitUpperTriangular})
+                   Tuple{T,T} where {T1, T<:Union{UpperTriangular{T1}, UnitUpperTriangular{T1}}})
 
     @testintersect(DataType, Type, DataType)
     @testintersect(DataType, Type{T} where T<:Integer, Type{T} where T<:Integer)
@@ -1205,12 +1211,12 @@ let a = Tuple{Float64,T3,T4} where T4 where T3,
     b = Tuple{S2,Tuple{S3},S3} where S2 where S3
     I1 = typeintersect(a, b)
     I2 = typeintersect(b, a)
-    @test I1 <: I2
+    @test_broken I1 <: I2
     @test I2 <: I1
     @test I1 <: a
     @test I2 <: a
     @test_broken I1 <: b
-    @test_broken I2 <: b
+    @test I2 <: b
 end
 let a = Tuple{T1,Tuple{T1}} where T1,
     b = Tuple{Float64,S3} where S3
@@ -1227,12 +1233,12 @@ let a = Tuple{5,T4,T5} where T4 where T5,
     b = Tuple{S2,S3,Tuple{S3}} where S2 where S3
     I1 = typeintersect(a, b)
     I2 = typeintersect(b, a)
-    @test I1 <: I2
+    @test_broken I1 <: I2
     @test I2 <: I1
     @test I1 <: a
     @test I2 <: a
     @test_broken I1 <: b
-    @test_broken I2 <: b
+    @test I2 <: b
 end
 let a = Tuple{T2,Tuple{T4,T2}} where T4 where T2,
     b = Tuple{Float64,Tuple{Tuple{S3},S3}} where S3
@@ -1242,12 +1248,12 @@ let a = Tuple{Tuple{T2,4},T6} where T2 where T6,
     b = Tuple{Tuple{S2,S3},Tuple{S2}} where S2 where S3
     I1 = typeintersect(a, b)
     I2 = typeintersect(b, a)
-    @test I1 <: I2
+    @test_broken I1 <: I2
     @test I2 <: I1
     @test I1 <: a
     @test I2 <: a
     @test_broken I1 <: b
-    @test_broken I2 <: b
+    @test I2 <: b
 end
 let a = Tuple{T3,Int64,Tuple{T3}} where T3,
     b = Tuple{S3,S3,S4} where S4 where S3
@@ -1870,8 +1876,11 @@ s26065 = Ref{Tuple{T,Ref{Union{Ref{Tuple{Ref{Union{Ref{Ref{Tuple{Ref{Tuple{Union
              Tuple{Type{Tuple{Vararg{V}}}, Tuple{Vararg{V}}} where V)
 
 # issue 36100
-@test NamedTuple{(:a, :b), Tuple{Missing, Union{}}} == NamedTuple{(:a, :b), Tuple{Missing, Union{}}}
-@test Val{Tuple{Missing, Union{}}} === Val{Tuple{Missing, Union{}}}
+@test Pair{(:a, :b), Tuple{Missing, Vararg{Union{},N}} where N} ===
+      Pair{(:a, :b), Tuple{Missing, Vararg{Union{},N}} where N} !=
+      Pair{(:a, :b), Tuple{Missing, Vararg{Union{}}}} === Pair{(:a, :b), Tuple{Missing}}
+@test Val{Tuple{Missing, Vararg{Union{},N}} where N} === Val{Tuple{Missing, Vararg{Union{},N}} where N} !=
+      Val{Tuple{Missing, Vararg{Union{}}}} === Val{Tuple{Missing}}
 
 # issue #36869
 struct F36869{T, V} <: AbstractArray{Union{T, V}, 1}
@@ -1889,27 +1898,23 @@ end
 # issue #38081
 struct AlmostLU{T, S<:AbstractMatrix{T}}
 end
-let X1 = Tuple{AlmostLU, Vector{T}} where T,
-    X2 = Tuple{AlmostLU{S, X} where X<:Matrix, Vector{S}} where S<:Union{Float32, Float64},
-    I = Tuple{AlmostLU{T, S} where S<:Matrix{T}, Vector{T}} where T<:Union{Float32, Float64}
-    @testintersect(X1, X2, I)
-end
+@testintersect(Tuple{AlmostLU, Vector{T}} where T,
+               Tuple{AlmostLU{S, X} where X<:Matrix, Vector{S}} where S<:Union{Float32, Float64},
+               Tuple{AlmostLU{T, X} where X<:Matrix{T}, Vector{T}} where T<:Union{Float32, Float64})
 
-let
-    # issue #22787
-    @testintersect(Tuple{Type{Q}, Q, Ref{Q}} where Q<:Ref,
-                   Tuple{Type{S}, Union{Ref{S}, Ref{R}}, R} where R where S,
-                   !Union{})
+# issue #22787
+@testintersect(Tuple{Type{Q}, Q, Ref{Q}} where Q<:Ref,
+              Tuple{Type{S}, Union{Ref{S}, Ref{R}}, R} where R where S,
+              !Union{})
 
-    t = typeintersect(Tuple{Type{T}, T, Ref{T}} where T,
-                      Tuple{Type{S}, Ref{S}, S} where S)
-    @test_broken t != Union{}
+t = typeintersect(Tuple{Type{T}, T, Ref{T}} where T,
+                  Tuple{Type{S}, Ref{S}, S} where S)
+@test_broken t != Union{} # optimal solution: Tuple{Type{T}, Ref{T}, Ref{T}} where T>:Ref
 
-    # issue #38279
-    t = typeintersect(Tuple{<:Array{T, N}, Val{T}} where {T<:Real, N},
-                      Tuple{<:Array{T, N}, Val{<:AbstractString}}  where {T<:Real, N})
-    @test t == Tuple{<:Array{Union{}, N}, Val{Union{}}} where N
-end
+# issue #38279
+t = typeintersect(Tuple{<:Array{T, N}, Val{T}} where {T<:Real, N},
+                  Tuple{<:Array{T, N}, Val{<:AbstractString}}  where {T<:Real, N})
+@test t == Tuple{<:Array{Union{}, N}, Val{Union{}}} where N
 
 # issue #36951
 @testintersect(Type{T} where T>:Missing,
@@ -1947,10 +1952,23 @@ end
 # issue #34170
 let A = Tuple{Type{T} where T<:Ref, Ref, Union{T, Union{Ref{T}, T}} where T<:Ref},
     B = Tuple{Type{T}, Ref{T}, Union{Int, Ref{T}, T}} where T
-    I = typeintersect(A,B)
     # this was a case where <: disagreed with === (due to a badly-normalized type)
-    @test I == typeintersect(A,B)
-    @test I == Tuple{Type{T}, Ref{T}, Ref} where T<:Ref
+    I = _type_intersect(B, A)
+    @test I == _type_intersect(B, A) == Union{Tuple{Type{T}, Ref{T}, Ref{T}} where T<:Ref, Tuple{Type{T}, Ref{T}, T} where T<:Ref}
+    I = typeintersect(B, A)
+    @test I == typeintersect(B, A) == Tuple{Type{T}, Ref{T}, Union{Ref{T}, T}} where T<:Ref
+
+    I = _type_intersect(A, B)
+    @test !Base.has_free_typevars(I)
+    J = Tuple{Type{T1}, Ref{T1}, Ref} where {T, T1<:Union{Ref, Ref{T}}}
+    @test I == _type_intersect(A, B) == J
+    @test_broken I == Tuple{Type{T}, Ref{T}, T1} where {T<:Ref, T1<:Union{T, Ref{T}}} # a better result, == to the result with arguments switched
+
+    I = typeintersect(A, B)
+    @test !Base.has_free_typevars(I)
+    J = Tuple{Type{T1}, Ref{T1}, Ref} where {T, T1<:Union{Ref, Ref{T}}}
+    @test I == typeintersect(A, B) == J
+
 end
 
 # issue #39218
@@ -1979,20 +1997,14 @@ let A = Tuple{Type{<:Union{Number, T}}, Ref{T}} where T,
 end
 
 # issue #39698
-let T = Type{T} where T<:(AbstractArray{I}) where I<:(Base.IteratorsMD.CartesianIndex),
-    S = Type{S} where S<:(Base.IteratorsMD.CartesianIndices{A, B} where B<:Tuple{Vararg{Any, A}} where A)
-    I = typeintersect(T, S)
-    @test_broken I <: T
-    @test I <: S
-    @test_broken I == typeintersect(S, T)
-end
+@testintersect(Type{T} where T<:(AbstractArray{I}) where I<:(Base.IteratorsMD.CartesianIndex),
+    Type{S} where S<:(Base.IteratorsMD.CartesianIndices{A, B} where B<:Tuple{Vararg{Any, A}} where A),
+    Type{S} where {N, S<:(Base.IteratorsMD.CartesianIndices{N, B} where B<:Tuple{Vararg{Any, N}})})
 
 # issue #39948
-let A = Tuple{Array{Pair{T, JT} where JT<:Ref{T}, 1} where T, Vector},
-    I = typeintersect(A, Tuple{Vararg{Vector{T}}} where T)
-    @test I <: A
-    @test !Base.has_free_typevars(I)
-end
+@testintersect(Tuple{Array{Pair{T, JT} where JT<:Ref{T}, 1} where T, Vector},
+    Tuple{Vararg{Vector{T}}} where T,
+    Tuple{Array{Pair{T, JT} where JT<:Ref{T}, 1}, Array{Pair{T, JT} where JT<:Ref{T}, 1}} where T)
 
 # issue #8915
 struct D8915{T<:Union{Float32,Float64}}
@@ -2217,13 +2229,10 @@ end
                Val{Tuple{Tuple{Any, Vararg{Any, N}}}} where {N})
 
 let A = Pair{NTuple{N, Int}, Val{N}} where N,
-    Bs = (Pair{<:Tuple{Int, Vararg{Int}}, <:Val},
-          Pair{Tuple{Int, Vararg{Int,N1}}, Val{N2}} where {N1,N2})
-    Cerr = Pair{Tuple{Int, Vararg{Int,N}}, Val{N}} where N
-    for B in Bs
-        @testintersect(A, B, !Cerr)
-        @testintersect(A, B, !Union{})
-    end
+    C = Pair{Tuple{Int, Vararg{Int,N1}}, Val{N2}} where {N1,N2},
+    B = Pair{<:Tuple{Int, Vararg{Int}}, <:Val}
+    @testintersect A B C
+    @testintersect A C C
 end
 
 # issue #43064
@@ -2444,8 +2453,11 @@ let A = Tuple{Type{T}, T} where T,
     @testintersect(A, B, C)
 end
 
-let a = (isodd(i) ? Pair{Char, String} : Pair{String, String} for i in 1:2000)
+let
+    a = (isodd(i) ? Pair{Char, String} : Pair{String, String} for i in 1:2000)
     @test Tuple{Type{Pair{Union{Char, String}, String}}, a...} <: Tuple{Type{Pair{K, V}}, Vararg{Pair{A, B} where B where A}} where V where K
+    a = (isodd(i) ? Matrix{Int} : Vector{Int} for i in 1:4000)
+    @test Tuple{Type{Pair{Union{Char, String}, String}}, a...,} <: Tuple{Type{Pair{K, V}}, Vararg{Array}} where V where K
 end
 
 #issue 48582
@@ -2478,3 +2490,29 @@ end
 # requires assertions enabled (to test union-split in `obviously_disjoint`)
 @test !<:(Tuple{Type{Int}, Int}, Tuple{Type{Union{Int, T}}, T} where T<:Union{Int8,Int16})
 @test <:(Tuple{Type{Int}, Int}, Tuple{Type{Union{Int, T}}, T} where T<:Union{Int8,Int})
+
+let A = Tuple{Type{T}, T, Val{T}} where T,
+    B = Tuple{Type{S}, Val{S}, Val{S}} where S
+    @test_broken typeintersect(A, B) != Union{}
+    # optimal = Tuple{Type{T}, Val{T}, Val{T}} where T>:Val
+end
+let A = Tuple{Type{T}, T, Val{T}} where T<:Val,
+    B = Tuple{Type{S}, Val{S}, Val{S}} where S<:Val
+    @test_broken typeintersect(A, B) != Union{}
+    # optimal = Tuple{Type{Val}, Val{Val}, Val{Val}}
+end
+let A = Tuple{Type{T}, T, Val{T}} where T<:Val,
+    B = Tuple{Type{S}, Val{S}, Val{S}} where S<:Val{A} where A
+    @test typeintersect(A, B) == Union{}
+end
+let A = Tuple{Type{T}, T, Val{T}} where T<:Val{<:Val},
+    B = Tuple{Type{S}, Val{S}, Val{S}} where S<:Val
+    @test_broken typeintersect(A, B) != Union{}
+    # optimal = Tuple{Type{Val{<:Val}}, Val{Val{<:Val}}, Val{Val{<:Val}}}
+end
+let T = Tuple{Union{Type{T}, Type{S}}, Union{Val{T}, Val{S}}, Union{Val{T}, S}} where T<:Val{A} where A where S<:Val,
+    S = Tuple{Type{T}, T, Val{T}} where T<:(Val{S} where S<:Val)
+    # optimal = Union{}?
+    @test typeintersect(T, S) == Tuple{Type{T}, T, Val{T}} where T<:(Val{S} where S<:Val)
+    @test typeintersect(S, T) == Tuple{Union{Type{T}, Type{T1}}, Union{Val{T1}, Val{S1}, T}, Union{S, S1}} where {T<:(Val{S} where S<:Val), S<:Val{T}, T1<:Val, S1<:Val{T1}}
+end

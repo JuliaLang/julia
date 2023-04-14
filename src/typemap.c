@@ -9,7 +9,7 @@
 #endif
 #include "julia_assert.h"
 
-#define MAX_METHLIST_COUNT 12 // this can strongly affect the sysimg size and speed!
+#define MAX_METHLIST_COUNT 6 // this helps configure the sysimg size and speed.
 
 #ifdef __cplusplus
 extern "C" {

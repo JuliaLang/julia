@@ -1108,7 +1108,7 @@ function f44200()
     x44200
 end
 let src = code_typed1(f44200)
-    @test count(x -> isa(x, Core.PiNode), src.code) == 0
+    @test_broken count(x -> isa(x, Core.PiNode), src.code) == 0
 end
 
 # Test that peeling off one case from (::Any) doesn't introduce

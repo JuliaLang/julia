@@ -1170,7 +1170,7 @@ function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
         if isa(result, ConstPropResult)
             mi = result.result.linfo
             validate_sparams(mi.sparam_vals) || return nothing
-            if argtypes_to_type(argtypes) <: mi.def.sig
+            if Union{} !== argtypes_to_type(argtypes) <: mi.def.sig
                 item = resolve_todo(mi, result.result, argtypes, info, flag, state; invokesig)
                 handle_single_case!(todo, ir, idx, stmt, item, OptimizationParams(state.interp), true)
                 return nothing

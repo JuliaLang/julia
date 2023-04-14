@@ -187,6 +187,7 @@ function typesubtract(@nospecialize(a), @nospecialize(b), max_union_splitting::I
                             bp = b.parameters[i]
                             (isvarargtype(ap) || isvarargtype(bp)) && return a
                             ta[i] = typesubtract(ap, bp, min(2, max_union_splitting))
+                            ta[i] === Union{} && return Union{}
                             return Tuple{ta...}
                         end
                     end
@@ -306,6 +307,15 @@ function _unioncomplexity(@nospecialize x)
     else
         return 0
     end
+end
+
+function unionall_depth(@nospecialize ua) # aka subtype_env_size
+    depth = 0
+    while ua isa UnionAll
+        depth += 1
+        ua = ua.body
+    end
+    return depth
 end
 
 # convert a Union of Tuple types to a Tuple of Unions

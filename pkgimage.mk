@@ -93,7 +93,7 @@ $(eval $(call pkgimg_builder,LibSSH2_jll,Artifacts Libdl MbedTLS_jll))
 $(eval $(call pkgimg_builder,MPFR_jll,Artifacts Libdl GMP_jll))
 $(eval $(call sysimg_builder,LinearAlgebra,Libdl libblastrampoline_jll OpenBLAS_jll))
 $(eval $(call sysimg_builder,Dates,Printf))
-$(eval $(call sysimg_builder,Distributed,Random Serialization Sockets))
+$(eval $(call pkgimg_builder,Distributed,Random Serialization Sockets))
 $(eval $(call sysimg_builder,Future,Random))
 $(eval $(call sysimg_builder,InteractiveUtils,Markdown))
 $(eval $(call sysimg_builder,LibGit2,NetworkOptions Printf SHA Base64))
@@ -103,9 +103,9 @@ $(eval $(call sysimg_builder,UUIDs,Random SHA))
  # LibGit2_jll
 $(eval $(call pkgimg_builder,LibCURL_jll,LibSSH2_jll nghttp2_jll MbedTLS_jll Zlib_jll Artifacts Libdl))
 $(eval $(call sysimg_builder,REPL,InteractiveUtils Markdown Sockets Unicode))
-$(eval $(call sysimg_builder,SharedArrays,Distributed Mmap Random Serialization))
+$(eval $(call pkgimg_builder,SharedArrays,Distributed Mmap Random Serialization))
 $(eval $(call sysimg_builder,TOML,Dates))
-$(eval $(call sysimg_builder,Test,Logging Random Serialization InteractiveUtils))
+$(eval $(call pkgimg_builder,Test,Logging Random Serialization InteractiveUtils))
 
 # 4-depth packages
 $(eval $(call sysimg_builder,LibCURL,LibCURL_jll MozillaCACerts_jll))
@@ -117,7 +117,7 @@ $(eval $(call sysimg_builder,Downloads,ArgTools FileWatching LibCURL NetworkOpti
 $(eval $(call sysimg_builder,Pkg,Dates LibGit2 Libdl Logging Printf Random SHA UUIDs)) # Markdown REPL
 
 # 7-depth packages
-$(eval $(call sysimg_builder,LazyArtifacts,Artifacts Pkg))
+$(eval $(call pkgimg_builder,LazyArtifacts,Artifacts Pkg))
 
 $(eval $(call pkgimg_builder,SparseArrays,Libdl LinearAlgebra Random Serialization))
 # SuiteSparse_jll
