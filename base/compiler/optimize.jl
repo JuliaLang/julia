@@ -623,7 +623,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     # NOTE this `argtypes` contains types of slots yet: it will be modified to contain the
     # types of call arguments only once `slot2reg` converts this `IRCode` to the SSA form
     # and eliminates slots (see below)
-    argtypes = sv.slottypes
+    argtypes = copy(sv.slottypes)
     return IRCode(stmts, cfg, linetable, argtypes, meta, sv.sptypes)
 end
 
