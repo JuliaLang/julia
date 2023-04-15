@@ -17,6 +17,11 @@ extern "C" {
 
 #define JL_BUFFER_IMPL_NUL 1
 
+JL_DLLEXPORT void *jl_pointer_from_buffer(jl_buffer_t *b) JL_NOTSAFEPOINT
+{
+    return (void*)(b);
+}
+
 // at this size and bigger, allocate resized buffer data with malloc directly
 // instead of managing them separately as gc objects
 #define MALLOC_THRESH 1048576
@@ -175,6 +180,22 @@ JL_DLLEXPORT jl_value_t *jl_bufref(jl_buffer_t *b, size_t i)
     }
 }
 
+JL_DLLEXPORT void jl_gc_wb_buffer(void *b JL_ROOTING_ARGUMENT, jl_value_t *rhs JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED)
+{
+    jl_gc_wb(b, rhs);
+}
+
+JL_DLLEXPORT void jl_gc_multi_wb_buffer(void *b JL_ROOTING_ARGUMENT, jl_value_t *rhs JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED)
+{
+    jl_gc_multi_wb(b, rhs);
+}
+
+JL_DLLEXPORT void jl_set_buffer_ptr(jl_buffer_t *b JL_ROOTING_ARGUMENT, jl_value_t *rhs JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, size_t i)
+{
+    jl_atomic_store_release(((_Atomic(jl_value_t*)*)((char*)(jl_buffer_data(b)))) + i, rhs);
+    jl_gc_wb(b, rhs);
+}
+
 JL_DLLEXPORT void jl_bufset(jl_buffer_t *b JL_ROOTING_ARGUMENT, jl_value_t *rhs JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, size_t i)
 {
     size_t len = jl_buffer_len(b);
@@ -197,16 +218,23 @@ JL_DLLEXPORT void jl_bufset(jl_buffer_t *b JL_ROOTING_ARGUMENT, jl_value_t *rhs 
             if (jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(rhs)))
                 return;
         }
-        switch (lyt.elsize) {
-        case  0: break;
-        case  1: *(uint8_t*)(data + i)  = *(uint8_t*)rhs;  break;
-        case  2: *(uint16_t*)(data + (i * 2)) = *(uint16_t*)rhs; break;
-        case  4: *(uint32_t*)(data + (i * 4)) = *(uint32_t*)rhs; break;
-        case  8: *(uint64_t*)(data + (i * 8)) = *(uint64_t*)rhs; break;
-        case 16:
-            memcpy(jl_assume_aligned((data + (i * lyt.elsize)), 16), jl_assume_aligned(rhs, 16), 16);
-            break;
-        default: memcpy((data + (i * lyt.elsize)), rhs, lyt.elsize);
+        if (lyt.hasptr) {
+            size_t nptr = lyt.elsize / sizeof(void*);
+            memmove_refs((void**)(data + (i * lyt.elsize)), (void* const*)rhs, nptr);
+            jl_gc_multi_wb(b, rhs);
+        }
+        else {
+            switch (lyt.elsize) {
+            case  0: break;
+            case  1: *(uint8_t*)(data + i)  = *(uint8_t*)rhs;  break;
+            case  2: *(uint16_t*)(data + (i * 2)) = *(uint16_t*)rhs; break;
+            case  4: *(uint32_t*)(data + (i * 4)) = *(uint32_t*)rhs; break;
+            case  8: *(uint64_t*)(data + (i * 8)) = *(uint64_t*)rhs; break;
+            case 16:
+                memcpy(jl_assume_aligned((data + (i * lyt.elsize)), 16), jl_assume_aligned(rhs, 16), 16);
+                break;
+            default: memcpy((data + (i * lyt.elsize)), rhs, lyt.elsize);
+            }
         }
     }
 }
@@ -436,8 +464,6 @@ static NOINLINE size_t jl_buffer_ptr_copy_backward(jl_value_t *owner,
     }
     return n;
 }
-
-
 // Unsafe, assume inbounds and that dest and src have the same eltype
 JL_DLLEXPORT void jl_buffer_ptr_copy(jl_buffer_t *dest, void **dest_p,
                                      jl_buffer_t *src, void **src_p, size_t n) JL_NOTSAFEPOINT

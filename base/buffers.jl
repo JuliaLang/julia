@@ -6,12 +6,13 @@ const ARRAY_INLINE_NBYTES = 2048 * sizeof(Int)
 const ARRAY_CACHE_ALIGN_THRESHOLD = 2048
 const CACHE_BYTE_ALIGNMENT = 64
 const SMALL_BYTE_ALIGNMENT = 16
-const MIN_BUFFER_SIZE = sizeof(Int) + sizeof(Int)
+const PTR_SIZE = bitcast(UInt, Core.sizeof(Ptr{Cvoid}))
+const JL_BUFFER_SIZEOF = PTR_SIZE + PTR_SIZE
 
 struct ElementLayout
-    nvariants::Int
-    elsize::Int
-    alignment::Int
+    nvariants::UInt
+    elsize::UInt
+    alignment::UInt
     hasptr::Bool
     requires_initialization::Bool
 
@@ -19,46 +20,48 @@ struct ElementLayout
         @_foldable_meta
         sz = RefValue{Csize_t}(0)
         al = RefValue{Csize_t}(0)
-        cnt = ccall(:jl_islayout_inline, Cint, (Any, Ptr{Csize_t}, Ptr{Csize_t}), T, sz, al)
+        cnt = ccall(:jl_islayout_inline, UInt, (Any, Ptr{Csize_t}, Ptr{Csize_t}), T, sz, al)
         # the number of inline elements represented at each position
         # 0  : boxed pointer
         # 1  : one type
         # >1 : bits union
-        nvariants = (cnt == 0 || cnt > 127) ? 0 : Int(cnt)
-        if nvariants === 0
-            elsz = alignment = Core.sizeof(Ptr{Cvoid})
+        nvariants = (cnt > UInt(0) || cnt < UInt(127)) ? cnt : UInt(0)
+        if nvariants === UInt(0)
+            elsz = alignment = PTR_SIZE
         else
-            alignment = Int(al[])
-            elsz = Int(LLT_ALIGN(sz[], alignment))
+            alignment = al[]
+            elsz = LLT_ALIGN(sz[], alignment)
         end
         hasptr = nvariants !== 0 && isa(T, DataType) && !datatype_pointerfree(T)
-        zeroinit = nvariants !== 1 || hasptr || (isa(T, DataType) && (T.flags & 0x0010) == 0x0010)
-        return new(nvariants, elsz, alignment, hasptr, zeroinit)
+        reqinit = nvariants !== UInt(1) || hasptr || (isa(T, DataType) && (T.flags & 0x0010) == 0x0010)
+        return new(nvariants, elsz, alignment, hasptr, reqinit)
     end
 end
 
 struct BufferLayout
     element_layout::ElementLayout
-    data_size::Int
-    object_size::Int
+    data_size::UInt
+    object_size::UInt
     isinline::Bool
 
     function BufferLayout(@nospecialize(T::Type), len::Int)
         @_foldable_meta
         lyt = ElementLayout(T)
+        @assert len >= 0
+        ulen = bitcast(UInt, len)
         data_size = len * lyt.elsize
-        if lyt.nvariants !== 0
-            if lyt.nvariants === 1 && lyt.elsize === 1
-                data_size += 1
+        if lyt.nvariants !== UInt(0)
+            if lyt.nvariants === UInt(1) && lyt.elsize === UInt(1)
+                data_size += UInt(1)
             else
                 data_size += len
             end
         end
-        object_size = MIN_BUFFER_SIZE
+        object_size = JL_BUFFER_SIZEOF
         if data_size <= ARRAY_INLINE_NBYTES
             if data_size >= ARRAY_CACHE_ALIGN_THRESHOLD
                 object_size = LLT_ALIGN(object_size, CACHE_BYTE_ALIGNMENT)
-            elseif lyt.nvariants !== 0 && lyt.elsize >= 4
+            elseif lyt.nvariants !== UInt(0) && lyt.elsize >= UInt(4)
                 object_size = LLT_ALIGN(object_size, SMALL_BYTE_ALIGNMENT)
             end
             object_size += data_size
@@ -68,6 +71,34 @@ struct BufferLayout
         end
         return new(lyt, data_size, object_size, isinline)
     end
+end
+
+# bassed on memmove_refs in "julia_internal.h"
+function memmove_ptrs!(dstp::Ptr{Ptr{Cvoid}}, srcp::Ptr{Ptr{Cvoid}}, elsz::UInt)
+    @_foldable_meta
+    if (dstp < srcp || dstp > srcp + elsz)
+        i = UInt(0)
+        while i < elsz
+            unsafe_store!(dstp + i, unsafe_load(srcp + i))
+            i = i + PTR_SIZE
+        end
+    else
+        i = UInt(0)
+        while i < elsz
+            unsafe_store!(dstp + (elsz - i - PTR_SIZE), unsafe_load(srcp + (elsz - i - PTR_SIZE)))
+            i = i + PTR_SIZE
+        end
+    end
+    return nothing
+end
+
+function gc_wb!(bptr::Ptr{Cvoid}, vptr::Ptr{Cvoid})
+    @_foldable_meta
+    ccall(:jl_gc_wb_buffer, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), bptr, vptr)
+end
+function gc_multi_wb!(bptr::Ptr{Cvoid}, vptr::Ptr{Cvoid})
+    @_foldable_meta
+    ccall(:jl_gc_multi_wb_buffer, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), bptr, vptr)
 end
 
 macro _preserved_pointer_meta()
@@ -90,12 +121,16 @@ function _preserved_pointer(b::BufferType{T}) where {T}
     unsafe_convert(Ptr{T}, b)
 end
 
+function _pointer_from_buffer(b::BufferType)
+    @_preserved_pointer_meta
+    ccall(:jl_pointer_from_buffer, Ptr{Cvoid}, (Any,), b)
+end
+
 function _get_variant_ptr(p::Ptr{T}, offset::UInt, len::UInt, elsz::UInt) where {T}
     tag = unsafe_load(unsafe_convert(Ptr{UInt8}, p) + ((elsz * len) + offset))
     a = T.a
     b = T.b
     while true
-        # 
         tag === 0x00 && return unsafe_convert(Ptr{a}, p)
         isa(b, Union) || return unsafe_convert(Ptr{b}, p)
         tag -= 0x01
@@ -112,15 +147,15 @@ end
 function get_buffer_value(b::BufferType{T}, i::Int, bounds_check::Bool) where {T}
     @inline
     lyt = ElementLayout(T)
-    elsz = bitcast(UInt, lyt.elsize)
-    if lyt.nvariants === 0
+    elsz = lyt.elsize
+    if lyt.nvariants === UInt(0)
         bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
         t = @_gc_preserve_begin b
         p = _preserved_pointer(b) + ((bitcast(UInt, i) - UInt(1)) * elsz)
         out = ccall(:jl_value_ptr, Ref{T}, (Ptr{Cvoid},), unsafe_load(unsafe_convert(Ptr{Ptr{Cvoid}}, p)))
         @_gc_preserve_end t
         return out
-    elseif lyt.nvariants === 1
+    elseif lyt.nvariants === UInt(1)
         bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
         if isdefined(T, :instance)
             return getfield(T, :instance)
@@ -155,36 +190,68 @@ function _variant_to_tag(U::Union, vt::DataType)
     end
 end
 
+
 function set_buffer_value!(b::BufferType{T}, v::T, i::Int, bounds_check::Bool) where {T}
     lyt = ElementLayout(T)
-    elsz = bitcast(UInt, lyt.elsize)
-    if lyt.nvariants === 0
+    elsz = lyt.elsize
+    if lyt.nvariants === UInt(0)
         bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
-        t = @_gc_preserve_begin b
-        p = _preserved_pointer(b) + ((bitcast(UInt, i) - UInt(1)) * elsz)
-        # FIXME this won't work for immutable values and probably needs updating with
-        #`jl_gc_wb`
-        unsafe_store!(unsafe_convert(Ptr{Ptr{Cvoid}}, p), pointer_from_objref(v))
-        @_gc_preserve_end t
-    elseif lyt.nvariants === 1
+        t1 = @_gc_preserve_begin v
+        t2 = @_gc_preserve_begin b
+        bptr = _pointer_from_buffer(b)
+        data_i = bptr + (JL_BUFFER_SIZEOF + (bitcast(UInt, i) - UInt(1)) * elsz)
+        vptr = unsafe_load(unsafe_convert(Ptr{Ptr{Cvoid}}, pointer_from_objref(Ref(v))))
+        unsafe_store!(unsafe_convert(Ptr{Ptr{Cvoid}}, data_i), vptr)
+        gc_wb!(bptr, unsafe_convert(Ptr{Cvoid}, vptr))
+        @_gc_preserve_end t2
+        @_gc_preserve_end t1
+    elseif lyt.nvariants === UInt(1)
         bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
         if !isdefined(T, :instance)
-            t = @_gc_preserve_begin b
-            unsafe_store!(_preserved_pointer(b) + ((bitcast(UInt, i) - UInt(1)) * elsz), v)
-            @_gc_preserve_end t
+            if lyt.hasptr
+                t1 = @_gc_preserve_begin v
+                t2 = @_gc_preserve_begin b
+                bptr = _pointer_from_buffer(b)
+                data_i = unsafe_load(unsafe_convert(Ptr{Ptr{Ptr{Cvoid}}}, bptr + PTR_SIZE))
+                data_i = data_i + ((bitcast(UInt, i) - UInt(1)) * elsz)
+                vptr = unsafe_convert(Ptr{Ptr{Cvoid}}, pointer_from_objref(Ref(v)))
+                memmove_ptrs!(data_i, vptr, elsz)
+                gc_multi_wb!(bptr, unsafe_convert(Ptr{Cvoid}, vptr))
+                @_gc_preserve_end t2
+                @_gc_preserve_end t1
+            else
+                t1 = @_gc_preserve_begin v
+                t2 = @_gc_preserve_begin b
+                bptr = _pointer_from_buffer(b)
+                data_i = unsafe_load(unsafe_convert(Ptr{Ptr{T}}, bptr + PTR_SIZE))
+                data_i = data_i + ((bitcast(UInt, i) - UInt(1)) * elsz)
+                unsafe_store!(unsafe_convert(Ptr{T}, data_i), v)
+                @_gc_preserve_end t2
+                @_gc_preserve_end t1
+            end
         end
     else
         len = length(b)
         bounds_check && (1 <= i <= len || throw(BoundsError(b, i)))
-        t = @_gc_preserve_begin b
+        t1 = @_gc_preserve_begin v
+        t2 = @_gc_preserve_begin b
         offset = (bitcast(UInt, i) - UInt(1))
-        p = _preserved_pointer(b)
+        bptr = _pointer_from_buffer(b)
+        data_ptr = unsafe_load(unsafe_convert(Ptr{Ptr{UInt8}}, bptr + PTR_SIZE))
         vt = typeof(v)
-        unsafe_store!(convert(Ptr{UInt8}, p) + (elsz * len) + offset, _variant_to_tag(T, vt))
+        unsafe_store!(data_ptr + (elsz * len) + offset, _variant_to_tag(T, vt))
         if !isdefined(vt, :instance)
-            unsafe_store!(unsafe_convert(Ptr{vt}, p) + (offset * elsz), v)
+            data_i = bptr + (offset * elsz)
+            if lyt.hasptr
+                vptr = unsafe_convert(Ptr{Ptr{Cvoid}}, pointer_from_objref(Ref(v)))
+                memmove_ptrs!(unsafe_convert(Ptr{Ptr{Cvoid}}, data_i), vptr, elsz)
+                gc_multi_wb(bptr, unsafe_convert(Ptr{Cvoid}, vptr))
+            else
+                unsafe_store!(unsafe_convert(Ptr{vt}, data_i) + (offset * elsz), v)
+            end
         end
-        @_gc_preserve_end t
+        @_gc_preserve_end t2
+        @_gc_preserve_end t1
     end
     return nothing
 end
@@ -382,11 +449,21 @@ function isassigned(b::BufferType{T}, i::Int) where {T}
     @inline
     @boundscheck 1 <= i <= length(b) || return false
     lyt = ElementLayout(T)
-    lyt.nvariants === 0 || return true
-    t = @_gc_preserve_begin b
-    p = _preserved_pointer(b) + ((bitcast(UInt, i) - UInt(1)) * bitcast(UInt, lyt.elsize))
-    return unsafe_load(unsafe_convert(Ptr{Ptr{Cvoid}}, p)) !== C_NULL
-    @_gc_preserve_end t
+    if lyt.nvariants === UInt(0)
+        t = @_gc_preserve_begin b
+        p = _preserved_pointer(b) + ((bitcast(UInt, i) - UInt(1)) * lyt.elsize)
+        return unsafe_load(unsafe_convert(Ptr{Ptr{Cvoid}}, p)) !== C_NULL
+        @_gc_preserve_end t
+    elseif lyt.hasptr
+        t = @_gc_preserve_begin b
+        data = unsafe_load(unsafe_convert(Ptr{Ptr{Ptr{Cvoid}}}, _pointer_from_buffer(b) + PTR_SIZE))
+        data = data + ((bitcast(UInt, i) - UInt(1)) * lyt.elsize)
+        off = fieldoffset(T, unsafe_load(unsafe_convert(Ptr{DataTypeLayout}, T.layout)).firstptr + 1)
+        return unsafe_load(data + off) !== C_NULL
+        @_gc_preserve_end t
+    else
+        return true
+    end
 end
 
 function ==(v1::BufferType, v2::BufferType)
@@ -429,8 +506,6 @@ function unsafe_copyto!(dest::Union{Buffer{T}, DynamicBuffer{T}}, doffs, src::Un
     return dest
 end
 
-sizeof(b::BufferType) = Core.sizeof(b)
-
 # TODO promotion between Buffer and DynamicBuffer
 function promote_rule(a::Type{Buffer{T}}, b::Type{Buffer{S}}) where {T, S}
     el_same(promote_type(T, S), a, b)
@@ -466,3 +541,4 @@ end
 function unsafe_delete_at!(b::DynamicBuffer, i::Integer, delta::Integer, len::Integer=length(b))
     ccall(:jl_buffer_del_at_end, Cvoid, (Any, UInt, UInt, UInt), b, i - 1, delta, len)
 end
+
