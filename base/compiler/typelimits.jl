@@ -261,7 +261,8 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         elseif isa(c, DataType) && t.name === c.name
             cP = c.parameters
             length(cP) < length(tP) && return true
-            length(cP) > length(tP) && !isvarargtype(tP[end]) && depth == 1 && return false
+            isempty(tP) && return false
+            length(cP) > length(tP) && !isvarargtype(tP[end]) && depth == 1 && return false # is this line necessary?
             ntail = length(cP) - length(tP) # assume parameters were dropped from the tuple head
             # allow creating variation within a nested tuple, but only so deep
             if t.name === Tuple.name && tupledepth > 0
@@ -353,6 +354,7 @@ function issimplertype(𝕃::AbstractLattice, @nospecialize(typea), @nospecializ
         issimplertype(𝕃, typea.fldtyp, typeb.fldtyp) || return false
     elseif typea isa PartialOpaque
         # TODO
+        typeb isa PartialOpaque || return false
         aty = widenconst(typea)
         bty = widenconst(typeb)
         if typea.source === typeb.source && typea.parent === typeb.parent && aty == bty && typea.env == typeb.env

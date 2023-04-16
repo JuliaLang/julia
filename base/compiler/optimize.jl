@@ -32,6 +32,10 @@ const IR_FLAG_EFFECT_FREE = 0x01 << 4
 const IR_FLAG_NOTHROW     = 0x01 << 5
 # This is :consistent
 const IR_FLAG_CONSISTENT  = 0x01 << 6
+# An optimization pass has updated this statement in a way that may
+# have exposed information that inference did not see. Re-running
+# inference on this statement may be profitable.
+const IR_FLAG_REFINED     = 0x01 << 7
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
