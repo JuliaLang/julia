@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# TODO test native julia immplementations of delete and grow
+
+
 const BUFFER_IMPL_NULL = false
 const N_CALL_CACHE = 4096
 const ARRAY_INLINE_NBYTES = 2048 * sizeof(Int)
@@ -8,12 +11,61 @@ const CACHE_BYTE_ALIGNMENT = 64
 const SMALL_BYTE_ALIGNMENT = 16
 const PTR_SIZE = bitcast(UInt, Core.sizeof(Ptr{Cvoid}))
 const JL_BUFFER_SIZEOF = PTR_SIZE + PTR_SIZE
+const JL_TAGGEDVALUE_SIZEOF = Core.sizeof(UInt)
+
+tagged_from_value(v::Ptr{Cvoid}) = v - JL_TAGGEDVALUE_SIZEOF
+header_from_value(v::Ptr{Cvoid}) = unsafe_convert(UInt, tagged_from_value(v))
+
+# PTR_SIZE is the offset to jl_taggedvalue_t
+is_gc_marked_value(v::Ptr{Cvoid}) = (header_from_value(v) & UInt(1)) === UInt(1)
+is_gc_old_value(v::Ptr{Cvoid}) = (header_from_value(v) & UInt(2)) === UInt(2)
+is_gc_in_image(v::Ptr{Cvoid}) = (header_from_value(v) & UInt(4)) === UInt(4)
+function is_gc_old_marked_value(v::Ptr{Cvoid})
+    hdr = header_from_value(v)
+    ((hdr & UInt(1)) === UInt(1)) && ((hdr & UInt(2)) === UInt(2))
+end
+
+#=
+
+The following distinct element layouts exist:
+
+* immutable bits: each element is bits types (see [`isbitstype`](@ref)).
+  `unsafe_load(::Ptr{T})` is used to get and `unsafe_store!(::Ptr{T}, ::T)` is used to set.
+* tagged union: union of concrete bits types associated. The largest sized value in the
+  union dictates the size allocated to store raw bits associated with the union value. An
+  additionaly `UInt8` value "tags" the variant type within the union to look up at runtime.
+  Therefore, tagged union involves an addition step to look-up the varaint type
+  (for loading) or setting the appropriate tag (for storing) in addition to storage of the
+  raw bits.
+
+The previous layout patterns have all the relevant raw data stored directly with each
+element and do not require and additional interaction with the garbage collector. Storing
+pointers to data that isn't stored directly within each element requires additional steps
+to secure valid pointers throughout the lifetime of the container type.
+
+* boxed values: if we can't store the raw data of each element directly in the container,
+  then a pointer to each value is stored. Type information concerning the value can also be
+  accessed from this pointer, allowing storage of types that are unkown at compile time.
+  Unlike storage of immutable bits where access involves dereferencing `Ptr{T}`, boxed
+  values will dereference `Ptr{Ptr{Cvoid}` then look up the type information from
+  `Ptr{Cvoid}` and convert it to the relevant type for another dereference. Storage
+  requires using `jl_gc_wb` to tell the compiler that the underlying data is still being
+  used by the container and shouldn't be thrown away.
+* mixed immutable bits and pointers: this allows storing a mix of raw data in the container
+  and pointers to boxed values. This is similar to the previous layout pattern but we might
+  end up having multiple pointers stored in each element, so `memmove_ptrs!` is necessary.
+=#
+
+const BITS_KIND = 0x00
+const UNION_KIND = 0x01
+const BOX_KIND = 0x02
+const HAS_PTR_KIND = 0x03
+const BOOL_KIND = 0x04
 
 struct ElementLayout
-    nvariants::UInt
     elsize::UInt
     alignment::UInt
-    hasptr::Bool
+    kind::UInt8
     requires_initialization::Bool
 
     function ElementLayout(@nospecialize(T::Type))
@@ -21,20 +73,25 @@ struct ElementLayout
         sz = RefValue{Csize_t}(0)
         al = RefValue{Csize_t}(0)
         cnt = ccall(:jl_islayout_inline, UInt, (Any, Ptr{Csize_t}, Ptr{Csize_t}), T, sz, al)
-        # the number of inline elements represented at each position
-        # 0  : boxed pointer
-        # 1  : one type
-        # >1 : bits union
-        nvariants = (cnt > UInt(0) || cnt < UInt(127)) ? cnt : UInt(0)
-        if nvariants === UInt(0)
+        if cnt === UInt(0) || cnt < UInt(127)
+            kind = BOX_KIND
             elsz = alignment = PTR_SIZE
+            reqinit = true
         else
+            if cnt > UInt(1)
+                kind = UNION_KIND
+                reqinit = true
+            elseif isa(T, DataType) && !datatype_pointerfree(T)
+                kind = HAS_PTR_KIND
+                reqinit = true
+            else
+                kind = BITS_KIND
+                reqinit = isa(T, DataType) && (T.flags & 0x0010) === 0x0010
+            end
             alignment = al[]
             elsz = LLT_ALIGN(sz[], alignment)
         end
-        hasptr = nvariants !== 0 && isa(T, DataType) && !datatype_pointerfree(T)
-        reqinit = nvariants !== UInt(1) || hasptr || (isa(T, DataType) && (T.flags & 0x0010) == 0x0010)
-        return new(nvariants, elsz, alignment, hasptr, reqinit)
+        return new(elsz, alignment, kind, reqinit)
     end
 end
 
@@ -50,8 +107,8 @@ struct BufferLayout
         @assert len >= 0
         ulen = bitcast(UInt, len)
         data_size = len * lyt.elsize
-        if lyt.nvariants !== UInt(0)
-            if lyt.nvariants === UInt(1) && lyt.elsize === UInt(1)
+        if lyt.kind !== BOX_KIND
+            if lyt.kind === BITS_KIND && lyt.elsize === UInt(1)
                 data_size += UInt(1)
             else
                 data_size += len
@@ -61,7 +118,7 @@ struct BufferLayout
         if data_size <= ARRAY_INLINE_NBYTES
             if data_size >= ARRAY_CACHE_ALIGN_THRESHOLD
                 object_size = LLT_ALIGN(object_size, CACHE_BYTE_ALIGNMENT)
-            elseif lyt.nvariants !== UInt(0) && lyt.elsize >= UInt(4)
+            elseif lyt.kind !== BOX_KIND && lyt.elsize >= UInt(4)
                 object_size = LLT_ALIGN(object_size, SMALL_BYTE_ALIGNMENT)
             end
             object_size += data_size
@@ -72,26 +129,9 @@ struct BufferLayout
         return new(lyt, data_size, object_size, isinline)
     end
 end
-
-# bassed on memmove_refs in "julia_internal.h"
-function memmove_ptrs!(dstp::Ptr{Ptr{Cvoid}}, srcp::Ptr{Ptr{Cvoid}}, elsz::UInt)
-    @_foldable_meta
-    if (dstp < srcp || dstp > srcp + elsz)
-        i = UInt(0)
-        while i < elsz
-            unsafe_store!(dstp + i, unsafe_load(srcp + i))
-            i = i + PTR_SIZE
-        end
-    else
-        i = UInt(0)
-        while i < elsz
-            unsafe_store!(dstp + (elsz - i - PTR_SIZE), unsafe_load(srcp + (elsz - i - PTR_SIZE)))
-            i = i + PTR_SIZE
-        end
-    end
-    return nothing
+function gc_queue_root!(owner)
+    ccall(:jl_gc_queue_root, Cvoid, (Any,), owner)
 end
-
 function gc_wb!(bptr::Ptr{Cvoid}, vptr::Ptr{Cvoid})
     @_foldable_meta
     ccall(:jl_gc_wb_buffer, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), bptr, vptr)
@@ -99,6 +139,82 @@ end
 function gc_multi_wb!(bptr::Ptr{Cvoid}, vptr::Ptr{Cvoid})
     @_foldable_meta
     ccall(:jl_gc_multi_wb_buffer, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), bptr, vptr)
+end
+
+# this is a version of memcpy that preserves atomic memory ordering
+# which makes it safe to use for objects that can contain memory references
+# without risk of creating pointers out of thin air
+# (based on memmove_refs in "julia_internal.h")
+function memmove_ptrs!(dstp::Ptr{Ptr{Cvoid}}, srcp::Ptr{Ptr{Cvoid}}, nbytes::UInt)
+    @_foldable_meta
+    if (dstp < srcp || dstp > srcp + nbytes)
+        i = UInt(0)
+        while i < nbytes
+            unsafe_store!(dstp + i, unsafe_load(srcp + i))
+            i = i + PTR_SIZE
+        end
+    else
+        i = UInt(0)
+        while i < nbytes
+            unsafe_store!(dstp + (nbytes - i - PTR_SIZE), unsafe_load(srcp + (nbytes - i - PTR_SIZE)))
+            i = i + PTR_SIZE
+        end
+    end
+    return nothing
+end
+
+function memcpy!(dst::Ptr{Cvoid}, src::Ptr{Cvoid}, nbytes::Csize_t)
+    ccall(:memcpy, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), dst, src, nbytes)
+end
+function memmove!(dst::Ptr{Cvoid}, src::Ptr{Cvoid}, nbytes::Csize_t)
+    ccall(:memmove, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), dst, src, nbytes)
+end
+function memset!(p::Ptr{Cvoid}, val, nbytes::Csize_t)
+    ccall(:memset, Cvoid, (Ptr{Cvoid}, Cint, Csize_t), p, val, nbytes)
+end
+
+function memcpy_ptrs!(
+    downer::Ptr{Cvoid},
+    sowner::Ptr{Cvoid},
+    dst::Ptr{Ptr{Cvoid}},
+    src::Ptr{Ptr{Cvoid}},
+    nbytes::UInt
+)
+    # destination is old and doesn't refer to any young object
+    if is_gc_old_marked_value(downer)
+        # Source is young or being promoted or might refer to young objects
+        # (i.e. source is not an old object that doesn't have wb triggered)
+        if !is_gc_old_value(sowner)
+            ndone = UInt(0)
+            if dst < src || dst > src + nbytes
+                while ndone < nbytes
+                    valp = unsafe_load(src + ndone)
+                    unsafe_store!(dst + ndone, valp)
+                    if valp !== C_NULL && !is_gc_marked_value(valp)
+                        gc_queue_root(downer)
+                        break
+                    else
+                        ndone += PTR_SIZE
+                    end
+                end
+                dst += ndone
+                src += ndone
+            else
+                while i < nbytes
+                    valp = unsafe_load(srcp + (nbytes - ndone - PTR_SIZE))
+                    unsafe_store!(dstp + (nbytes - ndone - PTR_SIZE), valp)
+                    if valp !== C_NULL && !is_gc_marked_value(valp)
+                        gc_queue_root(downer)
+                        break
+                    else
+                        ndone += PTR_SIZE
+                    end
+                end
+            end
+        end
+    end
+    memmove_ptrs!(dst, src, nbytes - ndone)
+    return nothing
 end
 
 macro _preserved_pointer_meta()
@@ -126,6 +242,11 @@ function _pointer_from_buffer(b::BufferType)
     ccall(:jl_pointer_from_buffer, Ptr{Cvoid}, (Any,), b)
 end
 
+# returns pointer to data, where `p` points to a buffer type
+pointer_to_data(p::Ptr{Cvoid}) = unsafe_convert(Ptr{Ptr{Cvoid}}, p + PTR_SIZE)
+
+pointer_to_length(p::Ptr{Cvoid}) = unsafe_convert(Ptr{Csize_t}, p)
+
 function _get_variant_ptr(p::Ptr{T}, offset::UInt, len::UInt, elsz::UInt) where {T}
     tag = unsafe_load(unsafe_convert(Ptr{UInt8}, p) + ((elsz * len) + offset))
     a = T.a
@@ -148,14 +269,22 @@ function get_buffer_value(b::BufferType{T}, i::Int, bounds_check::Bool) where {T
     @inline
     lyt = ElementLayout(T)
     elsz = lyt.elsize
-    if lyt.nvariants === UInt(0)
+    if lyt.kind === BOX_KIND
         bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
         t = @_gc_preserve_begin b
         p = _preserved_pointer(b) + ((bitcast(UInt, i) - UInt(1)) * elsz)
         out = ccall(:jl_value_ptr, Ref{T}, (Ptr{Cvoid},), unsafe_load(unsafe_convert(Ptr{Ptr{Cvoid}}, p)))
         @_gc_preserve_end t
         return out
-    elseif lyt.nvariants === UInt(1)
+    elseif lyt.kind === UNION_KIND
+        len = length(b)
+        bounds_check && (1 <= i <= len || throw(BoundsError(b, i)))
+        offset = bitcast(UInt, i) - UInt(1)
+        t = @_gc_preserve_begin b
+        p = _get_variant_ptr(_preserved_pointer(b), offset, bitcast(UInt, len), elsz) + (offset * elsz)
+        return unsafe_load(p)
+        @_gc_preserve_end t
+    else
         bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
         if isdefined(T, :instance)
             return getfield(T, :instance)
@@ -165,14 +294,6 @@ function get_buffer_value(b::BufferType{T}, i::Int, bounds_check::Bool) where {T
             @_gc_preserve_end t
             return out
         end
-    else
-        len = length(b)
-        bounds_check && (1 <= i <= len || throw(BoundsError(b, i)))
-        offset = bitcast(UInt, i) - UInt(1)
-        t = @_gc_preserve_begin b
-        p = _get_variant_ptr(_preserved_pointer(b), offset, bitcast(UInt, len), elsz) + (offset * elsz)
-        return unsafe_load(p)
-        @_gc_preserve_end t
     end
 end
 
@@ -194,7 +315,7 @@ end
 function set_buffer_value!(b::BufferType{T}, v::T, i::Int, bounds_check::Bool) where {T}
     lyt = ElementLayout(T)
     elsz = lyt.elsize
-    if lyt.nvariants === UInt(0)
+    if lyt.kind === BOX_KIND
         bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
         t1 = @_gc_preserve_begin v
         t2 = @_gc_preserve_begin b
@@ -205,32 +326,30 @@ function set_buffer_value!(b::BufferType{T}, v::T, i::Int, bounds_check::Bool) w
         gc_wb!(bptr, unsafe_convert(Ptr{Cvoid}, vptr))
         @_gc_preserve_end t2
         @_gc_preserve_end t1
-    elseif lyt.nvariants === UInt(1)
+    elseif lyt.kind === BITS_KIND
         bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
         if !isdefined(T, :instance)
-            if lyt.hasptr
-                t1 = @_gc_preserve_begin v
-                t2 = @_gc_preserve_begin b
-                bptr = _pointer_from_buffer(b)
-                data_i = unsafe_load(unsafe_convert(Ptr{Ptr{Ptr{Cvoid}}}, bptr + PTR_SIZE))
-                data_i = data_i + ((bitcast(UInt, i) - UInt(1)) * elsz)
-                vptr = unsafe_convert(Ptr{Ptr{Cvoid}}, pointer_from_objref(Ref(v)))
-                memmove_ptrs!(data_i, vptr, elsz)
-                gc_multi_wb!(bptr, unsafe_convert(Ptr{Cvoid}, vptr))
-                @_gc_preserve_end t2
-                @_gc_preserve_end t1
-            else
-                t1 = @_gc_preserve_begin v
-                t2 = @_gc_preserve_begin b
-                bptr = _pointer_from_buffer(b)
-                data_i = unsafe_load(unsafe_convert(Ptr{Ptr{T}}, bptr + PTR_SIZE))
-                data_i = data_i + ((bitcast(UInt, i) - UInt(1)) * elsz)
-                unsafe_store!(unsafe_convert(Ptr{T}, data_i), v)
-                @_gc_preserve_end t2
-                @_gc_preserve_end t1
-            end
+            t1 = @_gc_preserve_begin v
+            t2 = @_gc_preserve_begin b
+            bptr = _pointer_from_buffer(b)
+            data_i = unsafe_load(unsafe_convert(Ptr{Ptr{T}}, bptr + PTR_SIZE))
+            data_i = data_i + ((bitcast(UInt, i) - UInt(1)) * elsz)
+            unsafe_store!(unsafe_convert(Ptr{T}, data_i), v)
+            @_gc_preserve_end t2
+            @_gc_preserve_end t1
         end
-    else
+    elseif lyt.kind === HAS_PTR_KIND
+        t1 = @_gc_preserve_begin v
+        t2 = @_gc_preserve_begin b
+        bptr = _pointer_from_buffer(b)
+        data_i = unsafe_load(unsafe_convert(Ptr{Ptr{Ptr{Cvoid}}}, bptr + PTR_SIZE))
+        data_i = data_i + ((bitcast(UInt, i) - UInt(1)) * elsz)
+        vptr = unsafe_convert(Ptr{Ptr{Cvoid}}, pointer_from_objref(Ref(v)))
+        memmove_ptrs!(data_i, vptr, elsz)
+        gc_multi_wb!(bptr, unsafe_convert(Ptr{Cvoid}, vptr))
+        @_gc_preserve_end t2
+        @_gc_preserve_end t1
+    elseif lyt.kind === UNION_KIND
         len = length(b)
         bounds_check && (1 <= i <= len || throw(BoundsError(b, i)))
         t1 = @_gc_preserve_begin v
@@ -242,13 +361,7 @@ function set_buffer_value!(b::BufferType{T}, v::T, i::Int, bounds_check::Bool) w
         unsafe_store!(data_ptr + (elsz * len) + offset, _variant_to_tag(T, vt))
         if !isdefined(vt, :instance)
             data_i = bptr + (offset * elsz)
-            if lyt.hasptr
-                vptr = unsafe_convert(Ptr{Ptr{Cvoid}}, pointer_from_objref(Ref(v)))
-                memmove_ptrs!(unsafe_convert(Ptr{Ptr{Cvoid}}, data_i), vptr, elsz)
-                gc_multi_wb(bptr, unsafe_convert(Ptr{Cvoid}, vptr))
-            else
-                unsafe_store!(unsafe_convert(Ptr{vt}, data_i) + (offset * elsz), v)
-            end
+            unsafe_store!(unsafe_convert(Ptr{vt}, data_i) + (offset * elsz), v)
         end
         @_gc_preserve_end t2
         @_gc_preserve_end t1
@@ -449,12 +562,12 @@ function isassigned(b::BufferType{T}, i::Int) where {T}
     @inline
     @boundscheck 1 <= i <= length(b) || return false
     lyt = ElementLayout(T)
-    if lyt.nvariants === UInt(0)
+    if lyt.kind === BOX_KIND
         t = @_gc_preserve_begin b
         p = _preserved_pointer(b) + ((bitcast(UInt, i) - UInt(1)) * lyt.elsize)
         return unsafe_load(unsafe_convert(Ptr{Ptr{Cvoid}}, p)) !== C_NULL
         @_gc_preserve_end t
-    elseif lyt.hasptr
+    elseif lyt.kind === HAS_PTR_KIND
         t = @_gc_preserve_begin b
         data = unsafe_load(unsafe_convert(Ptr{Ptr{Ptr{Cvoid}}}, _pointer_from_buffer(b) + PTR_SIZE))
         data = data + ((bitcast(UInt, i) - UInt(1)) * lyt.elsize)
@@ -487,17 +600,16 @@ function unsafe_copyto!(dest::Union{Buffer{T}, DynamicBuffer{T}}, doffs, src::Un
     destp = unsafe_convert(Ptr{T}, dest)
     srcp = unsafe_convert(Ptr{T}, src)
     if !allocatedinline(T)
+        # FIXME transition to:
+        # memcpy_ptrs!(downer, sowner, dest, destp + dtoffset, src, srcp + stoffset, n * tsz)
         ccall(:jl_buffer_ptr_copy, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
               dest, destp + dtoffset, src, srcp + stoffset, n)
     elseif isbitstype(T)
-        ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
-              destp + dtoffset, srcp + stoffset, n * tsz)
+        memmove!(destp + dtoffset, srcp + stoffset, n * tsz)
     elseif isbitsunion(T)
-        ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
-              destp + dtoffset, srcp + stoffset, n * tsz)
+        memmove!(destp + dtoffset, srcp + stoffset, n * tsz)
         # copy selector bytes
-        ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
-              destp + (length(dest) * tsz) + doffset, srcp + (length(src) * tsz) + soffset, n)
+        memmove!(destp + (length(dest) * tsz) + doffset, srcp + (length(src) * tsz) + soffset, n)
     else
         _unsafe_copyto!(dest, doffs, src, soffs, n)
     end
@@ -520,8 +632,6 @@ end
 function similar(b::DynamicBuffer, T::Type=eltype(b), dims::Tuple{Int}=(length(b),))
     DynamicBuffer{T}(undef, getfield(dims, 1))
 end
-
-# TODO memset
 
 # resizing methods
 function resize!(b::DynamicBuffer, sz::Integer)
