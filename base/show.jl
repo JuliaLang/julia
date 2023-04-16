@@ -2570,13 +2570,8 @@ module TypeTreesIO
 
     function Base.write(treeio::TypeTreeIO, c::Char)
         curs = treeio.cursor
-        if c ∈ ('{', '(')
+        if c == '{' || (c == '(' && isempty(curs.name) && curs.parent === nothing)
             str = String(take!(getio(treeio)))
-            if c == '(' && str == "typeof"
-                # oops, we shouldn't have grabbed this, put it back
-                print(getio(treeio), str, '(')
-                return textwidth(c)
-            end
             if isempty(curs.name)
                 if curs.children === nothing
                     curs.children = TypeTreeNode[]
@@ -2593,14 +2588,9 @@ module TypeTreesIO
                 push!(curs.children, newcurs)
                 treeio.cursor = newcurs
             end
-        elseif c ∈ (',', '}', ')')
+        elseif c ∈ (',', '}') || (c == ')' && curs.delimidx == 1)
             str = String(take!(getio(treeio)))
             if !isempty(str)
-                if c == ')' && startswith(str, "typeof(")
-                    # put it back
-                    print(getio(treeio), str, c)
-                    return textwidth(c)
-                end
                 if curs.children === nothing
                     curs.children = TypeTreeNode[]
                 end
@@ -2643,7 +2633,7 @@ module TypeTreesIO
             maxwidth = get(io, :type_maxwidth, typemax(Int))::Int
             depth = choose_depth(bundle, maxdepth, maxwidth)
         end
-        _print(io, bundle.body, 1, depth)
+        _print(io, bundle.body, 1, depth, true)
         vars = bundle.vars
         if vars !== nothing
             children = vars.children
@@ -2651,27 +2641,51 @@ module TypeTreesIO
                 vars = children[1]
                 print(io, " where ")
             end
-            _print(io, vars, 1, depth)
+            _print(io, vars, 1, depth, false)
         end
     end
 
-    function _print(io::IO, node::TypeTreeNode, thisdepth, maxdepth)
-        print(io, node.name)
-        childs = node.children
-        if childs !== nothing
-            delimidx = node.delimidx
-            iszero(delimidx) || print(io, delims[delimidx][1])
-            if thisdepth >= maxdepth && node.children !== nothing && !isempty(node.children)
-                print(io, truncchar)
+    function _print(io::IO, node::TypeTreeNode, thisdepth, maxdepth, isbody::Bool)
+        bold = thisdepth==1 && isbody
+        light = thisdepth==2 && isbody && get(io, :backtrace, false)::Bool
+        if thisdepth == 2 && isbody
+            sname = split(node.name, "::")
+            if length(sname) == 2
+                Base.print_within_stacktrace(io, sname[1]; color=:light_black)
+                print(io, "::")
+                print(io, sname[2])   # the top-level type is printed in :normal
             else
-                n = lastindex(childs)
-                for (i, child) in pairs(childs)
-                    _print(io, child, thisdepth+1, maxdepth)
-                    i < n && print(io, per_param)
-                end
+                print(io, node.name)
             end
-            iszero(delimidx) || print(io, delims[delimidx][end])
+        else
+            Base.print_within_stacktrace(io, node.name; bold)
         end
+        children = node.children
+        if children !== nothing
+            if light
+                Base.with_output_color(:light_black, io) do io
+                    _print_children(io, children, node.delimidx, thisdepth, maxdepth, isbody)
+                end
+            else
+                _print_children(io, children, node.delimidx, thisdepth, maxdepth, isbody)
+            end
+        end
+    end
+
+    function _print_children(io::IO, children::Vector{TypeTreeNode}, delimidx, thisdepth, maxdepth, isbody)
+        bold = thisdepth==1 && isbody
+        iszero(delimidx) || Base.print_within_stacktrace(io, delims[delimidx][1]; bold)
+        if thisdepth >= maxdepth && !isempty(children)
+            print(io, truncchar)
+        else
+            n = lastindex(children)
+            for (i, child) in pairs(children)
+                _print(io, child, thisdepth+1, maxdepth, isbody)
+                i < n && print(io, per_param)
+            end
+        end
+        iszero(delimidx) || Base.print_within_stacktrace(io, delims[delimidx][end]; bold)
+        return
     end
 
     function choose_depth(wd::Vector{Int}, wtrunc::Vector{Int}, maxdepth::Int, maxwidth::Int)
@@ -2750,6 +2764,7 @@ function show_tuple_as_call(out::IO, name::Symbol, @nospecialize(sig::Type);
         io = TypeTreeIO()
         if isa(out, IOContext)
             io = IOContext(io, out)
+            io = IOContext(io, :color => false)   # avoid ANSI escapes during tree construction (fix in `show`)
         end
     else
         io = out
