@@ -1323,7 +1323,7 @@ ifeq (supported, $(shell echo $(IFUNC_DETECT_SRC) | $(CC) -Werror -x c - -S -o /
 JCPPFLAGS += -DJULIA_HAS_IFUNC_SUPPORT=1
 endif
 JLDFLAGS += -Wl,-Bdynamic
-OSLIBS += -Wl,--version-script=$(BUILDROOT)/src/julia.generated.expmap
+OSLIBS += -Wl,--version-script=$(BUILDROOT)/src/julia.expmap
 ifneq ($(SANITIZE),1)
 JLDFLAGS += -Wl,-no-undefined
 endif
@@ -1348,7 +1348,7 @@ OSLIBS += -lelf -lkvm -lrt -lpthread -latomic
 # See #21788
 OSLIBS += -lgcc_s
 
-OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(BUILDROOT)/src/julia.generated.expmap \
+OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
 	$(NO_WHOLE_ARCHIVE)
 endif
 
@@ -1363,7 +1363,7 @@ endif
 
 ifeq ($(OS), WINNT)
 HAVE_SSP := 1
-OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(BUILDROOT)/src/julia.generated.expmap \
+OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
 	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic
 JLDFLAGS += -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
