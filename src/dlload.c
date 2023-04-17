@@ -253,7 +253,7 @@ void *jl_find_dynamic_library_by_addr(void *symbol) {
     if (!dladdr(symbol, &info) || !info.dli_fname) {
         jl_error("could not load base module");
     }
-    handle = dlopen(info.dli_fname, RTLD_NOW | RTLD_NOLOAD);
+    handle = dlopen(info.dli_fname, RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
     dlclose(handle); // Undo ref count increment from `dlopen`
 #endif
     return handle;
