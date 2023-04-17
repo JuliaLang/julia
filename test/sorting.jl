@@ -980,17 +980,17 @@ end
     end
 end
 
-struct MyArrayNNNNN{T, N} <: AbstractArray{T, N}
+struct MyArray49392{T, N} <: AbstractArray{T, N}
     data::Array{T, N}
 end
-Base.size(A::MyArrayNNNNN) = size(A.data)
-Base.getindex(A::MyArrayNNNNN, i...) = getindex(A.data, i...)
-Base.setindex!(A::MyArrayNNNNN, v, i...) = setindex!(A.data, v, i...)
-Base.similar(A::MyArrayNNNNN, ::Type{T}, dims::Dims{N}) where {T, N} = MyArrayNNNNN(similar(A.data, T, dims))
+Base.size(A::MyArray49392) = size(A.data)
+Base.getindex(A::MyArray49392, i...) = getindex(A.data, i...)
+Base.setindex!(A::MyArray49392, v, i...) = setindex!(A.data, v, i...)
+Base.similar(A::MyArray49392, ::Type{T}, dims::Dims{N}) where {T, N} = MyArray49392(similar(A.data, T, dims))
 
-@testset "Custom matrices (#NNNNN)" begin
+@testset "Custom matrices (#49392)" begin
     x = rand(10, 10)
-    y = MyArrayNNNNN(copy(x))
+    y = MyArray49392(copy(x))
     @test all(sort!(y, dims=2) .== sort!(x,dims=2))
 end
 
