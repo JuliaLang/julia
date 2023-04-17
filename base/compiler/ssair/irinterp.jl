@@ -335,7 +335,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
         end
     end
 
-    if last(irsv.valid_worlds) >= get_world_counter()
+    if last(irsv.valid_worlds) >= get_world_counter() && frame_instance(irsv) !== nothing
         # if we aren't cached, we don't need this edge
         # but our caller might, so let's just make it anyways
         store_backedges(frame_instance(irsv), irsv.edges)

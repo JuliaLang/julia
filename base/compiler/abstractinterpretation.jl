@@ -18,8 +18,12 @@ call_result_unused(sv::InferenceState, currpc::Int) =
 call_result_unused(si::StmtInfo) = !si.used
 
 function get_max_methods(sv::AbsIntState, interp::AbstractInterpreter)
-    max_methods = ccall(:jl_get_module_max_methods, Cint, (Any,), frame_module(sv)) % Int
-    return max_methods < 0 ? InferenceParams(interp).max_methods : max_methods
+    if frame_instance(sv) === nothing
+        return InferenceParams(interp).max_methods
+    else
+        max_methods = ccall(:jl_get_module_max_methods, Cint, (Any,), frame_module(sv)) % Int
+        return max_methods < 0 ? InferenceParams(interp).max_methods : max_methods
+    end
 end
 
 function get_max_methods(@nospecialize(f), sv::AbsIntState, interp::AbstractInterpreter)
@@ -540,7 +544,7 @@ function abstract_call_method(interp::AbstractInterpreter,
 
     for sv′ in AbsIntStackUnwind(sv)
         infmi = frame_instance(sv′)
-        if method === infmi.def
+        if infmi !== nothing && method === infmi.def
             if infmi.specTypes::Type == sig::Type
                 # avoid widening when detecting self-recursion
                 # TODO: merge call cycle and return right away
@@ -571,7 +575,7 @@ function abstract_call_method(interp::AbstractInterpreter,
         ls = length(sigtuple.parameters)
         mi = frame_instance(sv)
 
-        if method === mi.def
+        if mi !== nothing && method === mi.def
             # Under direct self-recursion, permit much greater use of reducers.
             # here we assume that complexity(specTypes) :>= complexity(sig)
             comparison = mi.specTypes
@@ -706,7 +710,7 @@ function edge_matches_sv(interp::AbstractInterpreter, frame::AbsIntState,
 
         # If the method defines a recursion relation, give it a chance
         # to tell us that this recursion is actually ok.
-        if isdefined(method, :recursion_relation)
+        if isdefined(method, :recursion_relation) && frame_instance(frame) !== nothing
             if Core._apply_pure(method.recursion_relation, Any[method, callee_method2, sig, frame_instance(frame).specTypes])
                 return false
             end
@@ -737,7 +741,9 @@ function matches_sv(parent::AbsIntState, sv::AbsIntState)
     sv_method2 isa Method || (sv_method2 = nothing)
     parent_method2 = method_for_inference_limit_heuristics(parent) # limit only if user token match
     parent_method2 isa Method || (parent_method2 = nothing)
-    return frame_instance(parent).def === frame_instance(sv).def && sv_method2 === parent_method2
+    fip = frame_instance(parent)
+    fisv = frame_instance(sv)
+    return fip !== nothing && fisv !== nothing && fip.def === fisv.def && sv_method2 === parent_method2
 end
 
 function is_edge_recursed(edge::MethodInstance, caller::AbsIntState)
@@ -748,7 +754,8 @@ end
 
 function is_method_recursed(method::Method, caller::AbsIntState)
     return any(AbsIntStackUnwind(caller)) do sv::AbsIntState
-        return method === frame_instance(sv).def
+        fisv = frame_instance(sv)
+        return fisv !== nothing && method === fisv.def
     end
 end
 
@@ -760,7 +767,8 @@ end
 
 function is_constprop_method_recursed(method::Method, caller::AbsIntState)
     return any(AbsIntStackUnwind(caller)) do sv::AbsIntState
-        return method === frame_instance(sv).def && is_constproped(sv)
+        fisv = frame_instance(sv)
+        return fisv !== nothing && method === fisv.def && is_constproped(sv)
     end
 end
 

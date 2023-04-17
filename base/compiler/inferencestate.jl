@@ -648,7 +648,7 @@ end
 mutable struct IRInterpretationState
     const method_info::MethodInfo
     const ir::IRCode
-    const mi::MethodInstance
+    const mi::Union{Nothing, MethodInstance}
     const world::UInt
     curridx::Int
     const argtypes_refined::Vector{Bool}
@@ -661,16 +661,20 @@ mutable struct IRInterpretationState
     parent # ::Union{Nothing,AbsIntState}
 
     function IRInterpretationState(interp::AbstractInterpreter,
-        method_info::MethodInfo, ir::IRCode, mi::MethodInstance, argtypes::Vector{Any},
+        method_info::MethodInfo, ir::IRCode, mi::Union{Nothing, MethodInstance}, argtypes::Vector{Any},
         world::UInt, min_world::UInt, max_world::UInt)
         curridx = 1
         given_argtypes = Vector{Any}(undef, length(argtypes))
         for i = 1:length(given_argtypes)
             given_argtypes[i] = widenslotwrapper(argtypes[i])
         end
-        given_argtypes = va_process_argtypes(optimizer_lattice(interp), given_argtypes, mi)
-        argtypes_refined = Bool[!⊑(optimizer_lattice(interp), ir.argtypes[i], given_argtypes[i])
-            for i = 1:length(given_argtypes)]
+        if mi === nothing
+            argtypes_refined = zeros(Bool, length(argtypes))
+        else
+            given_argtypes = va_process_argtypes(optimizer_lattice(interp), given_argtypes, mi)
+            argtypes_refined = Bool[!⊑(optimizer_lattice(interp), ir.argtypes[i], given_argtypes[i])
+                for i = 1:length(given_argtypes)]
+        end
         empty!(ir.argtypes)
         append!(ir.argtypes, given_argtypes)
         tpdum = TwoPhaseDefUseMap(length(ir.stmts))
