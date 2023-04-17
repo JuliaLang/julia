@@ -75,6 +75,9 @@ function copy(c::CodeInfo)
     cnew.code = copy_exprargs(cnew.code)
     cnew.slotnames = copy(cnew.slotnames)
     cnew.slotflags = copy(cnew.slotflags)
+    if cnew.slottypes !== nothing
+        cnew.slottypes = copy(cnew.slottypes)
+    end
     cnew.codelocs  = copy(cnew.codelocs)
     cnew.linetable = copy(cnew.linetable::Union{Vector{Any},Vector{Core.LineInfoNode}})
     cnew.ssaflags  = copy(cnew.ssaflags)
