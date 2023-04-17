@@ -1488,6 +1488,6 @@ Base.MainInclude.Out
 
 end
 
-import .Numbered.numbered_prompt!
+const numbered_prompt! = Numbered.numbered_prompt!
 
 end # module
