@@ -1118,9 +1118,7 @@ For more details on how to pass callbacks to C libraries, see this [blog post](h
 
 ## C++
 
-For direct C++ interfacing, see the [Cxx](https://github.com/Keno/Cxx.jl) package. For tools to create C++
-bindings, see the [CxxWrap](https://github.com/JuliaInterop/CxxWrap.jl) package.
-
+For tools to create C++ bindings, see the [CxxWrap](https://github.com/JuliaInterop/CxxWrap.jl) package.
 
 
 [^1]: Non-library function calls in both C and Julia can be inlined and thus may have
