@@ -2109,6 +2109,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
                               $trace
                               -`,
                               "OPENBLAS_NUM_THREADS" => 1,
+                              "JULIA_WAIT_FOR_TRACY" => nothing,
                               "JULIA_NUM_THREADS" => 1),
                        stderr = internal_stderr, stdout = internal_stdout),
               "w", stdout)
