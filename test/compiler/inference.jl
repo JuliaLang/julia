@@ -3769,7 +3769,7 @@ end
     timing1 = time_inference() do
         @eval M1.g(2, 3.0)
     end
-    @test occursin(r"Core.Compiler.Timings.Timing\(InferenceFrameInfo for Core.Compiler.Timings.ROOT\(\)\) with \d+ children", sprint(show, timing1))
+    @test occursin(r"Core.Compiler.Timings.Timing\(Core.Compiler.AbstractInterpreter, InferenceFrameInfo for Core.Compiler.Timings.ROOT\(\)\) with \d+ children", sprint(show, timing1))
     # The last two functions to be inferred should be `i` and `i2`, inferred at runtime with
     # their concrete types.
     @test sort([mi_info.mi.def.name for (time,mi_info) in flatten_times(timing1)[end-1:end]]) == [:i, :i2]

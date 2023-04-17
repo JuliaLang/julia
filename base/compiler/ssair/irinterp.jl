@@ -346,10 +346,10 @@ function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRI
     irinterp = switch_to_irinterp(interp)
     if __measure_typeinf__[]
         inf_frame = Timings.InferenceFrameInfo(irsv.mi, irsv.world, VarState[], Any[], length(irsv.ir.argtypes))
-        Timings.enter_new_timer(inf_frame)
+        Timings.enter_new_timer(irinterp, inf_frame)
         ret = _ir_abstract_constant_propagation(irinterp, irsv)
         append!(inf_frame.slottypes, irsv.ir.argtypes)
-        Timings.exit_current_timer(inf_frame)
+        Timings.exit_current_timer(irinterp, inf_frame)
         return ret
     else
         return _ir_abstract_constant_propagation(irinterp, irsv)

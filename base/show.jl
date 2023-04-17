@@ -1299,7 +1299,7 @@ function show(io::IO, mi_info::Core.Compiler.Timings.InferenceFrameInfo)
 end
 
 function show(io::IO, tinf::Core.Compiler.Timings.Timing)
-    print(io, "Core.Compiler.Timings.Timing(", tinf.mi_info, ") with ", length(tinf.children), " children")
+    print(io, "Core.Compiler.Timings.Timing(", tinf.interpT, ", ", tinf.mi_info, ") with ", length(tinf.children), " children")
 end
 
 function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl,
