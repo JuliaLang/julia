@@ -1,4 +1,4 @@
-{
+@JULIA_SHLIB_SYMBOL_VERSION@ {
   global:
     pthread*;
     __stack_chk_guard;
