@@ -1060,11 +1060,12 @@ end
 function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
     parameters = x.parameters::SimpleVector
     istuple = x.name === Tuple.name
+    isnamedtuple = x.name === typename(NamedTuple)
     n = length(parameters)
 
     # Print tuple types with homogeneous tails longer than max_n compactly using `NTuple` or `Vararg`
-    max_n = 3
     if istuple
+        max_n = 3
         taillen = 1
         for i in (n-1):-1:1
             if parameters[i] === parameters[n]
@@ -1090,10 +1091,31 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
             end
             print(io, "}")
         end
-    else
-        show_type_name(io, x.name)
-        show_typeparams(io, parameters, (unwrap_unionall(x.name.wrapper)::DataType).parameters, wheres)
+        return
+    elseif isnamedtuple
+        syms, types = parameters
+        first = true
+        if syms isa Tuple && types isa DataType
+            print(io, "@NamedTuple{")
+            for i in 1:length(syms)
+                if !first
+                    print(io, ", ")
+                end
+                print(io, syms[i])
+                typ = types.parameters[i]
+                if typ !== Any
+                    print(io, "::")
+                    show(io, typ)
+                end
+                first = false
+            end
+            print(io, "}")
+            return
+        end
     end
+
+    show_type_name(io, x.name)
+    show_typeparams(io, parameters, (unwrap_unionall(x.name.wrapper)::DataType).parameters, wheres)
 end
 
 function show_supertypes(io::IO, typ::DataType)
@@ -1820,10 +1842,16 @@ function show_import_path(io::IO, ex, quote_level)
         end
     elseif ex.head === :(.)
         for i = 1:length(ex.args)
-            if ex.args[i] === :(.)
+            sym = ex.args[i]::Symbol
+            if sym === :(.)
                 print(io, '.')
             else
-                show_sym(io, ex.args[i]::Symbol, allow_macroname=(i==length(ex.args)))
+                if sym === :(..)
+                    # special case for https://github.com/JuliaLang/julia/issues/49168
+                    print(io, "(..)")
+                else
+                    show_sym(io, sym, allow_macroname=(i==length(ex.args)))
+                end
                 i < length(ex.args) && print(io, '.')
             end
         end
@@ -2636,13 +2664,18 @@ function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
 end
 
 function show(io::IO, inferred::Core.Compiler.InferenceResult)
-    tt = inferred.linfo.specTypes.parameters[2:end]
+    mi = inferred.linfo
+    tt = mi.specTypes.parameters[2:end]
     tts = join(["::$(t)" for t in tt], ", ")
     rettype = inferred.result
     if isa(rettype, Core.Compiler.InferenceState)
         rettype = rettype.bestguess
     end
-    print(io, "$(inferred.linfo.def.name)($(tts)) => $(rettype)")
+    if isa(mi.def, Method)
+        print(io, mi.def.name, "(", tts, " => ", rettype, ")")
+    else
+        print(io, "Toplevel MethodInstance thunk from ", mi.def, " => ", rettype)
+    end
 end
 
 function show(io::IO, ::Core.Compiler.NativeInterpreter)

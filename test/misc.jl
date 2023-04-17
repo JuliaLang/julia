@@ -1384,5 +1384,21 @@ end
 
     # sanity check `@allocations` returns what we expect in some very simple cases
     @test (@allocations "a") == 0
-    @test (@allocations "a" * "b") == 1
+    @test (@allocations "a" * "b") == 0 # constant propagation
+    @test (@allocations "a" * Base.inferencebarrier("b")) == 1
+end
+
+@testset "in_finalizer" begin
+    @test !GC.in_finalizer()
+
+    in_fin = Ref{Any}()
+    wait(@async begin
+        r = Ref(1)
+        finalizer(r) do _
+            in_fin[] = GC.in_finalizer()
+        end
+        nothing
+    end)
+    GC.gc(true); yield()
+    @test in_fin[]
 end

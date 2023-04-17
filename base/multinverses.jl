@@ -14,7 +14,7 @@ unsigned(::Type{Int64}) = UInt64
 unsigned(::Type{Int128}) = UInt128
 unsigned(::Type{T}) where {T<:Unsigned} = T
 
-abstract type  MultiplicativeInverse{T} end
+abstract type  MultiplicativeInverse{T} <: Number end
 
 # Computes integer division by a constant using multiply, add, and bitshift.
 
@@ -97,7 +97,6 @@ struct UnsignedMultiplicativeInverse{T<:Unsigned} <: MultiplicativeInverse{T}
 
     function UnsignedMultiplicativeInverse{T}(d::T) where T<:Unsigned
         d == 0 && throw(ArgumentError("cannot compute magic for d == $d"))
-        u2 = convert(T, 2)
         add = false
         signedmin = one(d) << (sizeof(d)*8-1)
         signedmax = signedmin - one(T)
@@ -135,13 +134,33 @@ struct UnsignedMultiplicativeInverse{T<:Unsigned} <: MultiplicativeInverse{T}
 end
 UnsignedMultiplicativeInverse(x::Unsigned) = UnsignedMultiplicativeInverse{typeof(x)}(x)
 
+# Returns the higher half of the product a*b
+function _mul_high(a::T, b::T) where {T<:Union{Signed, Unsigned}}
+    ((widen(a)*b) >>> (sizeof(a)*8)) % T
+end
+
+function _mul_high(a::UInt128, b::UInt128)
+    shift = sizeof(a)*4
+    mask = typemax(UInt128) >> shift
+    a1, a2 = a >>> shift, a & mask
+    b1, b2 = b >>> shift, b & mask
+    a1b1, a1b2, a2b1, a2b2 = a1*b1, a1*b2, a2*b1, a2*b2
+    carry = ((a1b2 & mask) + (a2b1 & mask) + (a2b2 >>> shift)) >>> shift
+    a1b1 + (a1b2 >>> shift) + (a2b1 >>> shift) + carry
+end
+function _mul_high(a::Int128, b::Int128)
+    shift = sizeof(a)*8 - 1
+    t1, t2 = (a >> shift) & b % UInt128, (b >> shift) & a % UInt128
+    (_mul_high(a % UInt128, b % UInt128) - t1 - t2) % Int128
+end
+
 function div(a::T, b::SignedMultiplicativeInverse{T}) where T
-    x = ((widen(a)*b.multiplier) >>> (sizeof(a)*8)) % T
+    x = _mul_high(a, b.multiplier)
     x += (a*b.addmul) % T
     ifelse(abs(b.divisor) == 1, a*b.divisor, (signbit(x) + (x >> b.shift)) % T)
 end
 function div(a::T, b::UnsignedMultiplicativeInverse{T}) where T
-    x = ((widen(a)*b.multiplier) >>> (sizeof(a)*8)) % T
+    x = _mul_high(a, b.multiplier)
     x = ifelse(b.add, convert(T, convert(T, (convert(T, a - x) >>> 1)) + x), x)
     ifelse(b.divisor == 1, a, x >>> b.shift)
 end

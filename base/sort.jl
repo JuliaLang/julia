@@ -533,6 +533,7 @@ Base.@propagate_inbounds function Base.setindex!(v::WithoutMissingVector, x, i)
     v
 end
 Base.size(v::WithoutMissingVector) = size(v.data)
+Base.axes(v::WithoutMissingVector) = axes(v.data)
 
 """
     send_to_end!(f::Function, v::AbstractVector; [lo, hi])
@@ -577,19 +578,20 @@ elements that are not
 
 function _sort!(v::AbstractVector, a::MissingOptimization, o::Ordering, kw)
     @getkw lo hi
-    if nonmissingtype(eltype(v)) != eltype(v) && o isa DirectOrdering
+    if o isa DirectOrdering && eltype(v) >: Missing && nonmissingtype(eltype(v)) != eltype(v)
         lo, hi = send_to_end!(ismissing, v, o; lo, hi)
         _sort!(WithoutMissingVector(v, unsafe=true), a.next, o, (;kw..., lo, hi))
-    elseif eltype(v) <: Integer && o isa Perm && o.order isa DirectOrdering &&
-                nonmissingtype(eltype(o.data)) != eltype(o.data) &&
+    elseif o isa Perm && o.order isa DirectOrdering && eltype(v) <: Integer &&
+                eltype(o.data) >: Missing && nonmissingtype(eltype(o.data)) != eltype(o.data) &&
                 all(i === j for (i,j) in zip(v, eachindex(o.data)))
         # TODO make this branch known at compile time
         # This uses a custom function because we need to ensure stability of both sides and
         # we can assume v is equal to eachindex(o.data) which allows a copying partition
         # without allocations.
         lo_i, hi_i = lo, hi
-        for (i,x) in zip(eachindex(o.data), o.data)
-            if ismissing(x) == (o.order == Reverse) # should i go at the beginning?
+        for i in eachindex(o.data) # equal to copy(v)
+            x = o.data[i]
+            if ismissing(x) == (o.order == Reverse) # should x go at the beginning/end?
                 v[lo_i] = i
                 lo_i += 1
             else
@@ -1342,7 +1344,8 @@ specific algorithm to use via the `alg` keyword (see [Sorting Algorithms](@ref) 
 available algorithms). The `by` keyword lets you provide a function that will be applied to
 each element before comparison; the `lt` keyword allows providing a custom "less than"
 function (note that for every `x` and `y`, only one of `lt(x,y)` and `lt(y,x)` can return
-`true`); use `rev=true` to reverse the sorting order. These options are independent and can
+`true`); use `rev=true` to reverse the sorting order. `rev=true` preserves forward stability:
+Elements that compare equal are not reversed. These options are independent and can
 be used together in all possible combinations: if both `by` and `lt` are specified, the `lt`
 function is applied to the result of the `by` function; `rev=true` reverses whatever
 ordering specified via the `by` and `lt` keywords.
@@ -1925,6 +1928,7 @@ julia> map(x->issorted(x[k]), (s1, s2))
 
 julia> s1[k] == s2[k]
 true
+```
 """
 struct PartialQuickSort{T <: Union{Integer,OrdinalRange}} <: Algorithm
     k::T

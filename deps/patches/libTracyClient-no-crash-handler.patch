@@ -1,0 +1,21 @@
+diff --git a/public/client/TracyProfiler.cpp b/public/client/TracyProfiler.cpp
+index ea168e4f..9287d433 100644
+--- a/public/client/TracyProfiler.cpp
++++ b/public/client/TracyProfiler.cpp
+@@ -1454,7 +1454,7 @@ Profiler::~Profiler()
+     if( m_crashHandlerInstalled ) RemoveVectoredExceptionHandler( m_exceptionHandler );
+ #endif
+
+-#ifdef __linux__
++#if defined __linux__ && !defined TRACY_NO_CRASH_HANDLER
+     if( m_crashHandlerInstalled )
+     {
+         sigaction( TRACY_CRASH_SIGNAL, &m_prevSignal.pwr, nullptr );
+@@ -1520,7 +1520,7 @@ bool Profiler::ShouldExit()
+
+ void Profiler::Worker()
+ {
+-#ifdef __linux__
++#if defined __linux__ && !defined TRACY_NO_CRASH_HANDLER
+     s_profilerTid = syscall( SYS_gettid );
+ #endif

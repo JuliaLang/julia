@@ -141,6 +141,7 @@ julia> hi, lo = Base.div12(x, y)
 
 julia> Float64(hi) + Float64(lo)
 1.0134170444063066
+```
 """
 function div12(x::T, y::T) where {T<:AbstractFloat}
     # We lose precision if any intermediate calculation results in a subnormal.

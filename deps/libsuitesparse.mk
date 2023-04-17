@@ -26,7 +26,7 @@ LIBSUITESPARSE_MFLAGS := CC="$(CC) $(SANITIZE_OPTS)" CXX="$(CXX) $(SANITIZE_OPTS
 	  AR="$(AR)" RANLIB="$(RANLIB)" \
 	  BLAS="-L$(build_shlibdir) -lblastrampoline" \
 	  LAPACK="-L$(build_shlibdir) -lblastrampoline" \
-	  LDFLAGS="$(SUITESPARSE_LIB) $(SANITIZE_LDFLAGS) -Wl,--warn-unresolved-symbols" CFOPENMP="" CUDA=no CUDA_PATH="" \
+	  LDFLAGS="$(SUITESPARSE_LIB) $(SANITIZE_LDFLAGS)" CFOPENMP="" CUDA=no CUDA_PATH="" \
 	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" \
 	  CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)" \
 	  SPQR_CONFIG="$(SPQR_CONFIG)"

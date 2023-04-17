@@ -46,8 +46,8 @@ let err = try
     @test occursin("Possible fix, define\n  ambig(::Integer, ::Integer)", errstr)
 end
 
-ambig_with_bounds(x, ::Int, ::T) where {T<:Integer,S} = 0
-ambig_with_bounds(::Int, x, ::T) where {T<:Integer,S} = 1
+@test_warn "declares type variable S but does not use it" @eval ambig_with_bounds(x, ::Int, ::T) where {T<:Integer,S} = 0
+@test_warn "declares type variable S but does not use it" @eval ambig_with_bounds(::Int, x, ::T) where {T<:Integer,S} = 1
 let err = try
               ambig_with_bounds(1, 2, 3)
           catch _e_
@@ -357,7 +357,7 @@ f35983(::Type, ::Type) = 2
 @test length(Base.methods(f35983, (Any, Any))) == 2
 @test first(Base.methods(f35983, (Any, Any))).sig == Tuple{typeof(f35983), Type, Type}
 let ambig = Ref{Int32}(0)
-    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, nothing, -1, typemax(UInt), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, nothing, -1, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
     @test ms isa Vector
     @test length(ms) == 1
     @test ambig[] == 0
@@ -366,7 +366,7 @@ f35983(::Type{Int16}, ::Any) = 3
 @test length(Base.methods_including_ambiguous(f35983, (Type, Type))) == 2
 @test length(Base.methods(f35983, (Type, Type))) == 1
 let ambig = Ref{Int32}(0)
-    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, nothing, -1, typemax(UInt), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, nothing, -1, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
     @test ms isa Vector
     @test length(ms) == 2
     @test ambig[] == 1
@@ -374,7 +374,7 @@ end
 
 struct B38280 <: Real; val; end
 let ambig = Ref{Int32}(0)
-    ms = Base._methods_by_ftype(Tuple{Type{B38280}, Any}, nothing, 1, typemax(UInt), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    ms = Base._methods_by_ftype(Tuple{Type{B38280}, Any}, nothing, 1, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
     @test ms isa Vector
     @test length(ms) == 1
     @test ambig[] == 1
@@ -385,7 +385,7 @@ f11407(::Dict{K,V}, ::Dict{Any,V}) where {K,V} = 1
 f11407(::Dict{K,V}, ::Dict{K,Any}) where {K,V} = 2
 @test_throws MethodError f11407(Dict{Any,Any}(), Dict{Any,Any}()) # ambiguous
 @test f11407(Dict{Any,Int}(), Dict{Any,Int}()) == 1
-f11407(::Dict{Any,Any}, ::Dict{Any,Any}) where {K,V} = 3
+@test_warn "declares type variable V but does not use it" @eval f11407(::Dict{Any,Any}, ::Dict{Any,Any}) where {K,V} = 3
 @test f11407(Dict{Any,Any}(), Dict{Any,Any}()) == 3
 
 # issue #12814
@@ -399,8 +399,9 @@ end
 
 # issue #43040
 module M43040
+   using Test
    struct C end
-   stripType(::Type{C}) where {T} = C # where {T} is intentionally incorrect
+   @test_warn "declares type variable T but does not use it" @eval M43040 stripType(::Type{C}) where {T} = C # where {T} is intentionally incorrect
 end
 
 @test isempty(detect_ambiguities(M43040; recursive=true))

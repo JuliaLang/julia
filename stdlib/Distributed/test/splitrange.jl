@@ -28,6 +28,8 @@ isdefined(Main, :OffsetArrays) || @eval Main @everywhere include(joinpath($(BASE
 using .Main.OffsetArrays
 
 oa = OffsetArray([123, -345], (-2,))
+
+@everywhere using Test
 @sync @distributed for i in eachindex(oa)
     @test i ∈ (-1, 0)
 end

@@ -165,7 +165,7 @@ function typesubtract(@nospecialize(a), @nospecialize(b), max_union_splitting::I
         if ub isa DataType
             if a.name === ub.name === Tuple.name &&
                     length(a.parameters) == length(ub.parameters)
-                if 1 < unionsplitcost(a.parameters) <= max_union_splitting
+                if 1 < unionsplitcost(JLTypeLattice(), a.parameters) <= max_union_splitting
                     ta = switchtupleunion(a)
                     return typesubtract(Union{ta...}, b, 0)
                 elseif b isa DataType
@@ -187,6 +187,7 @@ function typesubtract(@nospecialize(a), @nospecialize(b), max_union_splitting::I
                             bp = b.parameters[i]
                             (isvarargtype(ap) || isvarargtype(bp)) && return a
                             ta[i] = typesubtract(ap, bp, min(2, max_union_splitting))
+                            ta[i] === Union{} && return Union{}
                             return Tuple{ta...}
                         end
                     end
@@ -227,12 +228,11 @@ end
 # or outside of the Tuple/Union nesting, though somewhat more expensive to be
 # outside than inside because the representation is larger (because and it
 # informs the callee whether any splitting is possible).
-function unionsplitcost(argtypes::Union{SimpleVector,Vector{Any}})
+function unionsplitcost(𝕃::AbstractLattice, argtypes::Union{SimpleVector,Vector{Any}})
     nu = 1
     max = 2
     for ti in argtypes
-        # TODO remove this to implement callsite refinement of MustAlias
-        if isa(ti, MustAlias) && isa(widenconst(ti), Union)
+        if has_extended_unionsplit(𝕃) && !isvarargtype(ti)
             ti = widenconst(ti)
         end
         if isa(ti, Union)
@@ -252,12 +252,12 @@ end
 # and `Union{return...} == ty`
 function switchtupleunion(@nospecialize(ty))
     tparams = (unwrap_unionall(ty)::DataType).parameters
-    return _switchtupleunion(Any[tparams...], length(tparams), [], ty)
+    return _switchtupleunion(JLTypeLattice(), Any[tparams...], length(tparams), [], ty)
 end
 
-switchtupleunion(argtypes::Vector{Any}) = _switchtupleunion(argtypes, length(argtypes), [], nothing)
+switchtupleunion(𝕃::AbstractLattice, argtypes::Vector{Any}) = _switchtupleunion(𝕃, argtypes, length(argtypes), [], nothing)
 
-function _switchtupleunion(t::Vector{Any}, i::Int, tunion::Vector{Any}, @nospecialize(origt))
+function _switchtupleunion(𝕃::AbstractLattice, t::Vector{Any}, i::Int, tunion::Vector{Any}, @nospecialize(origt))
     if i == 0
         if origt === nothing
             push!(tunion, copy(t))
@@ -268,17 +268,20 @@ function _switchtupleunion(t::Vector{Any}, i::Int, tunion::Vector{Any}, @nospeci
     else
         origti = ti = t[i]
         # TODO remove this to implement callsite refinement of MustAlias
-        if isa(ti, MustAlias) && isa(widenconst(ti), Union)
-            ti = widenconst(ti)
-        end
         if isa(ti, Union)
-            for ty in uniontypes(ti::Union)
+            for ty in uniontypes(ti)
                 t[i] = ty
-                _switchtupleunion(t, i - 1, tunion, origt)
+                _switchtupleunion(𝕃, t, i - 1, tunion, origt)
+            end
+            t[i] = origti
+        elseif has_extended_unionsplit(𝕃) && !isa(ti, Const) && !isvarargtype(ti) && isa(widenconst(ti), Union)
+            for ty in uniontypes(ti)
+                t[i] = ty
+                _switchtupleunion(𝕃, t, i - 1, tunion, origt)
             end
             t[i] = origti
         else
-            _switchtupleunion(t, i - 1, tunion, origt)
+            _switchtupleunion(𝕃, t, i - 1, tunion, origt)
         end
     end
     return tunion
@@ -304,6 +307,15 @@ function _unioncomplexity(@nospecialize x)
     else
         return 0
     end
+end
+
+function unionall_depth(@nospecialize ua) # aka subtype_env_size
+    depth = 0
+    while ua isa UnionAll
+        depth += 1
+        ua = ua.body
+    end
+    return depth
 end
 
 # convert a Union of Tuple types to a Tuple of Unions
@@ -338,13 +350,29 @@ function unwraptv_lb(@nospecialize t)
 end
 const unwraptv = unwraptv_ub
 
-# this query is specially written for `adjust_effects` and returns true if a value of this type
-# never involves inconsistency of mutable objects that are allocated somewhere within a call graph
-is_consistent_argtype(@nospecialize ty) =
-    is_consistent_type(widenconst(ignorelimited(ty)))
-is_consistent_type(@nospecialize ty) = isidentityfree(ty)
+"""
+    is_identity_free_argtype(argtype) -> Bool
 
-is_immutable_argtype(@nospecialize ty) = is_immutable_type(widenconst(ignorelimited(ty)))
+Return `true` if the `argtype` object is identity free in the sense that this type or any
+reachable through its fields has non-content-based identity (see `Base.isidentityfree`).
+This query is specifically designed for `adjust_effects`, enabling it to refine the
+`:consistent` effect property tainted by mutable allocation(s) within the analyzed call
+graph when the return value type is `is_identity_free_argtype`, ensuring that the allocated
+mutable objects are never returned.
+"""
+is_identity_free_argtype(@nospecialize ty) = is_identity_free_type(widenconst(ignorelimited(ty)))
+is_identity_free_type(@nospecialize ty) = isidentityfree(ty)
+
+"""
+    is_immutable_argtype(argtype) -> Bool
+
+Return `true` if the `argtype` object is known to be immutable.
+This query is specifically designed for `getfield_effects` and `isdefined_effects`, allowing
+them to prove `:consistent`-cy of `getfield` / `isdefined` calls when applied to immutable
+objects. Otherwise, we need to additionally prove that the non-immutable object is not a
+global object to prove the `:consistent`-cy.
+"""
+is_immutable_argtype(@nospecialize argtype) = is_immutable_type(widenconst(ignorelimited(argtype)))
 is_immutable_type(@nospecialize ty) = _is_immutable_type(unwrap_unionall(ty))
 function _is_immutable_type(@nospecialize ty)
     if isa(ty, Union)
@@ -353,6 +381,16 @@ function _is_immutable_type(@nospecialize ty)
     return !isabstracttype(ty) && !ismutabletype(ty)
 end
 
-is_mutation_free_argtype(@nospecialize argtype) =
+"""
+    is_mutation_free_argtype(argtype) -> Bool
+
+Return `true` if `argtype` object is mutation free in the sense that no mutable memory
+is reachable from this type (either in the type itself) or through any fields
+(see `Base.ismutationfree`).
+This query is specifically written for analyzing the `:inaccessiblememonly` effect property
+and is supposed to improve the analysis accuracy by not tainting the `:inaccessiblememonly`
+property when there is access to mutation-free global object.
+"""
+is_mutation_free_argtype(@nospecialize(argtype)) =
     is_mutation_free_type(widenconst(ignorelimited(argtype)))
 is_mutation_free_type(@nospecialize ty) = ismutationfree(ty)

@@ -935,9 +935,11 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
 {
     int flags;
     int fd;
-    if (!(rd || wr))
+    if (!(rd || wr)) {
         // must specify read and/or write
+        errno = EINVAL;
         goto open_file_err;
+    }
     flags = wr ? (rd ? O_RDWR : O_WRONLY) : O_RDONLY;
     if (create) flags |= O_CREAT;
     if (trunc)  flags |= O_TRUNC;

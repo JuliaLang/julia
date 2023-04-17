@@ -76,6 +76,7 @@ typedef struct {
     uint64_t    max_memory;
     uint64_t    time_to_safepoint;
     uint64_t    max_time_to_safepoint;
+    uint64_t    total_time_to_safepoint;
     uint64_t    sweep_time;
     uint64_t    mark_time;
     uint64_t    total_sweep_time;

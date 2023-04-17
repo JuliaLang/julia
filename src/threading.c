@@ -600,17 +600,16 @@ void jl_init_threading(void)
     // specified on the command line (and so are in `jl_options`) or by the
     // environment variable. Set the globals `jl_n_threadpools`, `jl_n_threads`
     // and `jl_n_threads_per_pool`.
-    jl_n_threadpools = 1;
+    jl_n_threadpools = 2;
     int16_t nthreads = JULIA_NUM_THREADS;
     int16_t nthreadsi = 0;
     char *endptr, *endptri;
 
     if (jl_options.nthreads != 0) { // --threads specified
-        jl_n_threadpools = jl_options.nthreadpools;
         nthreads = jl_options.nthreads_per_pool[0];
         if (nthreads < 0)
             nthreads = jl_effective_threads();
-        if (jl_n_threadpools == 2)
+        if (jl_options.nthreadpools == 2)
             nthreadsi = jl_options.nthreads_per_pool[1];
     }
     else if ((cp = getenv(NUM_THREADS_NAME))) { // ENV[NUM_THREADS_NAME] specified
@@ -635,15 +634,13 @@ void jl_init_threading(void)
                 if (errno != 0 || endptri == cp || nthreadsi < 0)
                     nthreadsi = 0;
             }
-            if (nthreadsi > 0)
-                jl_n_threadpools++;
         }
     }
 
     jl_all_tls_states_size = nthreads + nthreadsi;
     jl_n_threads_per_pool = (int*)malloc_s(2 * sizeof(int));
-    jl_n_threads_per_pool[0] = nthreads;
-    jl_n_threads_per_pool[1] = nthreadsi;
+    jl_n_threads_per_pool[0] = nthreadsi;
+    jl_n_threads_per_pool[1] = nthreads;
 
     jl_atomic_store_release(&jl_all_tls_states, (jl_ptls_t*)calloc(jl_all_tls_states_size, sizeof(jl_ptls_t)));
     jl_atomic_store_release(&jl_n_threads, jl_all_tls_states_size);
