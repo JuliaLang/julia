@@ -980,6 +980,20 @@ end
     end
 end
 
+struct MyArrayNNNNN{T, N} <: AbstractArray{T, N}
+    data::Array{T, N}
+end
+Base.size(A::MyArrayNNNNN) = size(A.data)
+Base.getindex(A::MyArrayNNNNN, i...) = getindex(A.data, i...)
+Base.setindex!(A::MyArrayNNNNN, v, i...) = setindex!(A.data, v, i...)
+Base.similar(A::MyArrayNNNNN, ::Type{T}, dims::Dims{N}) where {T, N} = MyArrayNNNNN(similar(A.data, T, dims))
+
+@testset "Custom matrices (#NNNNN)" begin
+    x = rand(10, 10)
+    y = MyArrayNNNNN(copy(x))
+    @test all(sort!(y, dims=2) .== sort!(x,dims=2))
+end
+
 # This testset is at the end of the file because it is slow.
 @testset "searchsorted" begin
     numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
