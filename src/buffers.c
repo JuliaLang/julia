@@ -180,22 +180,6 @@ JL_DLLEXPORT jl_value_t *jl_bufref(jl_buffer_t *b, size_t i)
     }
 }
 
-JL_DLLEXPORT void jl_gc_wb_buffer(void *b JL_ROOTING_ARGUMENT, jl_value_t *rhs JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED)
-{
-    jl_gc_wb(b, rhs);
-}
-
-JL_DLLEXPORT void jl_gc_multi_wb_buffer(void *b JL_ROOTING_ARGUMENT, jl_value_t *rhs JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED)
-{
-    jl_gc_multi_wb(b, rhs);
-}
-
-JL_DLLEXPORT void jl_set_buffer_ptr(jl_buffer_t *b JL_ROOTING_ARGUMENT, jl_value_t *rhs JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, size_t i)
-{
-    jl_atomic_store_release(((_Atomic(jl_value_t*)*)((char*)(jl_buffer_data(b)))) + i, rhs);
-    jl_gc_wb(b, rhs);
-}
-
 JL_DLLEXPORT void jl_bufset(jl_buffer_t *b JL_ROOTING_ARGUMENT, jl_value_t *rhs JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, size_t i)
 {
     size_t len = jl_buffer_len(b);

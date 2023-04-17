@@ -34,6 +34,16 @@ end
     @test ptrs[2] === d
 end
 
+@testset "Buffer with embedded pointers" begin
+    b = Buffer{Tuple{Int16,Vector{Int},Vector{Int}}}(undef, 1000);
+    v = (Int16(1), Int[], Int[])
+    @test !isassigned(b, 1)
+    b[1] = v
+    @test isassigned(b, 1)
+    push!(v[2], 1)
+    @test b[1] == v
+end
+
 @testset "Buffer malloced data" begin
     b = Buffer{Int}(undef, 1000);
     b[end] = 10
