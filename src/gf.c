@@ -38,6 +38,36 @@ JL_DLLEXPORT size_t jl_get_tls_world_age(void) JL_NOTSAFEPOINT
     return jl_current_task->world_age;
 }
 
+// Compute the maximum number of times to unroll Varargs{T}, based on
+// m->max_varargs (if specified) or a heuristic based on the maximum
+// number of non-varargs arguments in the provided method table.
+//
+// If provided, `may_increase` is set to 1 if the returned value is
+// heuristic-based and has a chance of increasing in the future.
+static size_t get_max_varargs(
+        jl_method_t *m,
+        jl_methtable_t *kwmt,
+        jl_methtable_t *mt,
+        uint8_t *may_increase) JL_NOTSAFEPOINT
+{
+    size_t max_varargs = 1;
+    if (may_increase != NULL)
+        *may_increase = 0;
+
+    if (m->max_varargs != UINT8_MAX)
+        max_varargs = m->max_varargs;
+    else if (kwmt != NULL && kwmt != jl_type_type_mt && kwmt != jl_nonfunction_mt && kwmt != jl_kwcall_mt) {
+        if (may_increase != NULL)
+            *may_increase = 1; // `max_args` can increase as new methods are inserted
+
+        max_varargs = jl_atomic_load_relaxed(&kwmt->max_args) + 2;
+        if (mt == jl_kwcall_mt)
+            max_varargs += 2;
+        max_varargs -= m->nargs;
+    }
+    return max_varargs;
+}
+
 /// ----- Handling for Julia callbacks ----- ///
 
 JL_DLLEXPORT int8_t jl_is_in_pure_context(void)
@@ -727,13 +757,14 @@ static void jl_compilation_sig(
     jl_tupletype_t *const tt, // the original tupletype of the call (or DataType from precompile)
     jl_svec_t *sparams,
     jl_method_t *definition,
-    intptr_t nspec,
+    intptr_t max_varargs,
     // output:
     jl_svec_t **const newparams JL_REQUIRE_ROOTED_SLOT)
 {
     assert(jl_is_tuple_type(tt));
     jl_value_t *decl = definition->sig;
     size_t nargs = definition->nargs; // == jl_nparams(jl_unwrap_unionall(decl));
+    size_t nspec = max_varargs + nargs;
 
     if (definition->generator) {
         // staged functions aren't optimized
@@ -769,7 +800,8 @@ static void jl_compilation_sig(
     case JL_VARARG_UNBOUND:
         if (np < nspec && jl_is_va_tuple(tt))
             // there are insufficient given parameters for jl_isa_compileable_sig now to like this type
-            // (there were probably fewer methods defined when we first selected this signature)
+            // (there were probably fewer methods defined when we first selected this signature, or
+            //  the max varargs limit was not reached indicating the type is already fully-specialized)
             return;
         break;
     }
@@ -922,7 +954,13 @@ static void jl_compilation_sig(
     // and the types we find should be bigger.
     if (np >= nspec && jl_va_tuple_kind((jl_datatype_t*)decl) == JL_VARARG_UNBOUND) {
         if (!*newparams) *newparams = tt->parameters;
-        type_i = jl_svecref(*newparams, nspec - 2);
+        if (max_varargs > 0) {
+            type_i = jl_svecref(*newparams, nspec - 2);
+        } else {
+            // If max varargs is zero, always specialize to (Any...) since
+            // there is no preceding parameter to use for `type_i`
+            type_i = jl_bottom_type;
+        }
         // if all subsequent arguments are subtypes of type_i, specialize
         // on that instead of decl. for example, if decl is
         // (Any...)
@@ -991,18 +1029,16 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
     // supertype of any other method signatures. so far we are conservative
     // and the types we find should be bigger.
     if (definition->isva) {
-        unsigned nspec_min = nargs + 1; // min number of non-vararg values before vararg
-        unsigned nspec_max = INT32_MAX; // max number of non-vararg values before vararg
+        unsigned nspec_min = nargs + 1; // min number of arg values (including tail vararg)
+        unsigned nspec_max = INT32_MAX; // max number of arg values (including tail vararg)
         jl_methtable_t *mt = jl_method_table_for(decl);
         jl_methtable_t *kwmt = mt == jl_kwcall_mt ? jl_kwmethod_table_for(decl) : mt;
         if ((jl_value_t*)mt != jl_nothing) {
             // try to refine estimate of min and max
-            if (kwmt != NULL && kwmt != jl_type_type_mt && kwmt != jl_nonfunction_mt && kwmt != jl_kwcall_mt)
-                // new methods may be added, increasing nspec_min later
-                nspec_min = jl_atomic_load_relaxed(&kwmt->max_args) + 2 + 2 * (mt == jl_kwcall_mt);
-            else
-                // nspec is always nargs+1, regardless of the other contents of these mt
-                nspec_max = nspec_min;
+            uint8_t heuristic_used = 0;
+            nspec_max = nspec_min = nargs + get_max_varargs(definition, kwmt, mt, &heuristic_used);
+            if (heuristic_used)
+                nspec_max = INT32_MAX; // new methods may be added, increasing nspec_min later
         }
         int isunbound = (jl_va_tuple_kind((jl_datatype_t*)decl) == JL_VARARG_UNBOUND);
         if (jl_is_vararg(jl_tparam(type, np - 1))) {
@@ -1227,8 +1263,8 @@ static jl_method_instance_t *cache_method(
     int cache_with_orig = 1;
     jl_tupletype_t *compilationsig = tt;
     jl_methtable_t *kwmt = mt == jl_kwcall_mt ? jl_kwmethod_table_for(definition->sig) : mt;
-    intptr_t nspec = (kwmt == NULL || kwmt == jl_type_type_mt || kwmt == jl_nonfunction_mt || kwmt == jl_kwcall_mt ? definition->nargs + 1 : jl_atomic_load_relaxed(&kwmt->max_args) + 2 + 2 * (mt == jl_kwcall_mt));
-    jl_compilation_sig(tt, sparams, definition, nspec, &newparams);
+    intptr_t max_varargs = get_max_varargs(definition, kwmt, mt, NULL);
+    jl_compilation_sig(tt, sparams, definition, max_varargs, &newparams);
     if (newparams) {
         temp2 = jl_apply_tuple_type(newparams);
         // Now there may be a problem: the widened signature is more general
@@ -2513,8 +2549,8 @@ JL_DLLEXPORT jl_value_t *jl_normalize_to_compilable_sig(jl_methtable_t *mt, jl_t
     jl_svec_t *newparams = NULL;
     JL_GC_PUSH2(&tt, &newparams);
     jl_methtable_t *kwmt = mt == jl_kwcall_mt ? jl_kwmethod_table_for(m->sig) : mt;
-    intptr_t nspec = (kwmt == NULL || kwmt == jl_type_type_mt || kwmt == jl_nonfunction_mt || kwmt == jl_kwcall_mt ? m->nargs + 1 : jl_atomic_load_relaxed(&kwmt->max_args) + 2 + 2 * (mt == jl_kwcall_mt));
-    jl_compilation_sig(ti, env, m, nspec, &newparams);
+    intptr_t max_varargs = get_max_varargs(m, kwmt, mt, NULL);
+    jl_compilation_sig(ti, env, m, max_varargs, &newparams);
     int is_compileable = ((jl_datatype_t*)ti)->isdispatchtuple;
     if (newparams) {
         tt = (jl_datatype_t*)jl_apply_tuple_type(newparams);
