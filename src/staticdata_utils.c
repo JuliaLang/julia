@@ -475,7 +475,8 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets, jl_arra
     // and compute the old methods list, ready for serialization
     jl_value_t *matches = NULL;
     jl_array_t *callee_ids = NULL;
-    JL_GC_PUSH2(&matches, &callee_ids);
+    jl_value_t *sig = NULL;
+    JL_GC_PUSH3(&matches, &callee_ids, &sig);
     for (size_t i = 0; i < l; i += 2) {
         jl_array_t *callees = (jl_array_t*)jl_array_ptr_ref(edges, i + 1);
         size_t l = jl_array_len(callees);
@@ -519,14 +520,17 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets, jl_arra
                     }
                 }
                 else {
-                    jl_value_t *sig;
-                    if (jl_is_method_instance(callee))
-                        sig = ((jl_method_instance_t*)callee)->specTypes;
-                    else
+                    if (jl_is_method_instance(callee)) {
+                        jl_method_instance_t *mi = (jl_method_instance_t*)callee;
+                        sig = jl_type_intersection(mi->def.method->sig, (jl_value_t*)mi->specTypes);
+                    }
+                    else {
                         sig = callee;
+                    }
                     int ambig = 0;
                     matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing,
                             INT32_MAX, 0, world, &min_valid, &max_valid, &ambig);
+                    sig = NULL;
                     if (matches == jl_nothing) {
                         callee_ids = NULL; // invalid
                         break;
@@ -840,7 +844,8 @@ static jl_array_t *jl_verify_edges(jl_array_t *targets, size_t minworld)
     memset(jl_array_data(maxvalids), 0, l * sizeof(size_t));
     jl_value_t *loctag = NULL;
     jl_value_t *matches = NULL;
-    JL_GC_PUSH3(&maxvalids, &matches, &loctag);
+    jl_value_t *sig = NULL;
+    JL_GC_PUSH4(&maxvalids, &matches, &sig, &loctag);
     for (i = 0; i < l; i++) {
         jl_value_t *invokesig = jl_array_ptr_ref(targets, i * 3);
         jl_value_t *callee = jl_array_ptr_ref(targets, i * 3 + 1);
@@ -867,11 +872,13 @@ static jl_array_t *jl_verify_edges(jl_array_t *targets, size_t minworld)
             }
         }
         else {
-            jl_value_t *sig;
-            if (jl_is_method_instance(callee))
-                sig = ((jl_method_instance_t*)callee)->specTypes;
-            else
+            if (jl_is_method_instance(callee)) {
+                jl_method_instance_t *mi = (jl_method_instance_t*)callee;
+                sig = jl_type_intersection(mi->def.method->sig, (jl_value_t*)mi->specTypes);
+            }
+            else {
                 sig = callee;
+            }
             assert(jl_is_array(expected));
             int ambig = 0;
             // TODO: possibly need to included ambiguities too (for the optimizer correctness)?
@@ -879,6 +886,7 @@ static jl_array_t *jl_verify_edges(jl_array_t *targets, size_t minworld)
             matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing,
                     _jl_debug_method_invalidation ? INT32_MAX : jl_array_len(expected),
                     0, minworld, &min_valid, &max_valid, &ambig);
+            sig = NULL;
             if (matches == jl_nothing) {
                 max_valid = 0;
             }
