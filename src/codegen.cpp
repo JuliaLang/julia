@@ -5917,7 +5917,7 @@ static Function* gen_cfun_wrapper(
 
     Value *world_v = ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()),
         prepare_global_in(jl_Module, jlgetworld_global), Align(sizeof(size_t)));
-    cast<LoadInst>(world_v)->setOrdering(AtomicOrdering::Monotonic);
+    cast<LoadInst>(world_v)->setOrdering(AtomicOrdering::Acquire);
 
     Value *age_ok = NULL;
     if (calltype) {
@@ -7743,7 +7743,7 @@ static jl_llvm_functions_t
     if (toplevel && !ctx.is_opaque_closure) {
         LoadInst *load_world = ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()),
             prepare_global_in(jl_Module, jlgetworld_global), Align(sizeof(size_t)));
-        load_world->setOrdering(AtomicOrdering::Monotonic);
+        load_world->setOrdering(AtomicOrdering::Acquire);
         ctx.builder.CreateAlignedStore(load_world, world_age_field, Align(sizeof(size_t)));
     }
 
@@ -8315,7 +8315,7 @@ static jl_llvm_functions_t
                     LoadInst *load_world = new LoadInst(getSizeTy(ctx.builder.getContext()),
                         prepare_global_in(jl_Module, jlgetworld_global), Twine(),
                         /*isVolatile*/false, Align(sizeof(size_t)), /*insertBefore*/&I);
-                    load_world->setOrdering(AtomicOrdering::Monotonic);
+                    load_world->setOrdering(AtomicOrdering::Acquire);
                     StoreInst *store_world = new StoreInst(load_world, world_age_field,
                         /*isVolatile*/false, Align(sizeof(size_t)), /*insertBefore*/&I);
                     (void)store_world;
