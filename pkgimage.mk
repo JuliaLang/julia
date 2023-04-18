@@ -29,14 +29,14 @@ $1_SRCS := $$(shell find $$(build_datarootdir)/julia/stdlib/$$(VERSDIR)/$1/src -
 $$(BUILDDIR)/stdlib/$1.release.image: $$($1_SRCS) $$(addsuffix .release.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys.$(SHLIB_EXT)
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no -e 'Base.compilecache(Base.identify_package("$1"))')
 	touch $$@
-$$(BUILDDIR)/stdlib/$1.cb.release.image: $$($1_SRCS) $$(addsuffix .release.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys.$(SHLIB_EXT)
+$$(BUILDDIR)/stdlib/$1.cb.release.image: $$($1_SRCS) $$(addsuffix .cb.release.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys.$(SHLIB_EXT)
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'Base.compilecache(Base.identify_package("$1"))')
 	touch $$@
 cache-release-$1: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.cb.release.image
 $$(BUILDDIR)/stdlib/$1.debug.image: $$($1_SRCS) $$(addsuffix .debug.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no -e 'Base.compilecache(Base.identify_package("$1"))')
 	touch $$@
-$$(BUILDDIR)/stdlib/$1.cb.debug.image: $$($1_SRCS) $$(addsuffix .debug.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
+$$(BUILDDIR)/stdlib/$1.cb.debug.image: $$($1_SRCS) $$(addsuffix .cb.debug.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'Base.compilecache(Base.identify_package("$1"))')
 	touch $$@
 cache-debug-$1: $$(BUILDDIR)/stdlib/$1.debug.image $$(BUILDDIR)/stdlib/$1.cb.debug.image
@@ -46,6 +46,8 @@ endef
 # Used to just define them in the dependency graph
 # reside in the system image
 define sysimg_builder
+STDLIB_SRCS := $$(shell find $$(build_datarootdir)/julia/stdlib/$$(VERSDIR)/$1/src -name \*.jl) \
+    $$(wildcard $$(build_prefix)/manifest/$$(VERSDIR)/$1)
 $$(BUILDDIR)/stdlib/$1.release.image:
 	touch $$@
 $$(BUILDDIR)/stdlib/$1.cb.release.image:
@@ -58,6 +60,8 @@ $$(BUILDDIR)/stdlib/$1.cb.debug.image:
 cache-debug-$1: $$(BUILDDIR)/stdlib/$1.debug.image $$(BUILDDIR)/stdlib/$1.cb.debug.image
 .SECONDARY: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.cb.release.image $$(BUILDDIR)/stdlib/$1.debug.image $$(BUILDDIR)/stdlib/$1.cb.debug.image
 endef
+
+STDLIB_SRCS :=
 
 # no dependencies
 $(eval $(call pkgimg_builder,MozillaCACerts_jll,))

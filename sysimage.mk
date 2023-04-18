@@ -2,6 +2,7 @@ SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BUILDDIR := .
 JULIAHOME := $(SRCDIR)
 include $(JULIAHOME)/Make.inc
+include $(JULIAHOME)/pkgimage.mk # For STDLIB_SRCS
 
 default: sysimg-$(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: sysimg-release sysimg-debug
@@ -53,8 +54,7 @@ COMPILER_SRCS += $(shell find $(JULIAHOME)/base/compiler -name \*.jl)
 # sort these to remove duplicates
 BASE_SRCS := $(sort $(shell find $(JULIAHOME)/base -name \*.jl -and -not -name sysimg.jl) \
                     $(shell find $(BUILDROOT)/base -name \*.jl  -and -not -name sysimg.jl))
-STDLIB_SRCS := $(JULIAHOME)/base/sysimg.jl $(shell find $(build_datarootdir)/julia/stdlib/$(VERSDIR)/*/src -name \*.jl) \
-                    $(wildcard $(build_prefix)/manifest/$(VERSDIR)/*)
+STDLIB_SRCS += $(JULIAHOME)/base/sysimg.jl
 RELBUILDROOT := $(call rel_path,$(JULIAHOME)/base,$(BUILDROOT)/base)/ # <-- make sure this always has a trailing slash
 
 $(build_private_libdir)/corecompiler.ji: $(COMPILER_SRCS)
