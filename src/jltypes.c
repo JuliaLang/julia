@@ -737,6 +737,9 @@ jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi)
             temp[i] = NULL;
     }
     // then check subtyping.
+    // stemp[k] == -1 : ∃i temp[k] >:ₛ temp[i]
+    // stemp[k] == 1 : ∃i temp[k] == temp[i]
+    // stemp[k] == 2 : ∃i temp[k] <:ₛ temp[i]
     int8_t *stemp = (int8_t *)alloca(count);
     memset(stemp, 0, count);
     for (i = 0; i < nta; i++) {
@@ -748,19 +751,22 @@ jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi)
             int subab = subs & 1, subba = subs >> 1;
             if (subba && !subab) {
                 stemp[i] = -1;
+                if (stemp[j] >= 0) stemp[j] = 2;
             }
-            if (subab && !subba) {
+            else if (subab && !subba) {
                 stemp[j] = -1;
-                temp[j] = temp[i];
+                if (stemp[i] >= 0) stemp[i] = 2;
             }
-            if (stemp[i] == 0 && subab) stemp[i] = 1;
-            if (stemp[j] == 0 && subba) stemp[j] = 1;
+            else if (subs) {
+                if (stemp[i] == 0) stemp[i] = 1;
+                if (stemp[j] == 0) stemp[j] = 1;
+            }
         }
     }
     int subs[2] = {1, 1}, rs[2] = {1, 1};
     for (i = 0; i < nt; i++) {
-        subs[i >= nta] &= (temp[i] == NULL || stemp[i] == 1);
-        rs[i >= nta] &= (temp[i] != NULL && stemp[i] == 1);
+        subs[i >= nta] &= (temp[i] == NULL || stemp[i] > 0);
+        rs[i >= nta] &= (temp[i] != NULL && stemp[i] > 0);
     }
     // return a(b) if a(b) <: b(a)
     if (rs[0]) {
@@ -776,9 +782,17 @@ jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi)
         JL_GC_POP();
         return jl_bottom_type;
     }
-    nt = subs[0] ? nta : nt;
-    count = subs[0] ? nta : ntb;
-    i = subs[0] ? 0 : nta;
+    nt = subs[0] ? nta : subs[1] ? nt  : nt;
+    i  = subs[0] ? 0   : subs[1] ? nta : 0;
+    count = nt - i;
+    if (!subs[0] && !subs[1]) {
+        // prepare for over estimation
+        // only preserve `a` with strict <:, but preserve `b` without strict >:
+        for (j = 0; j < nt; j++) {
+            if (stemp[j] < (j < nta ? 2 : 0))
+                temp[j] = NULL;
+        }
+    }
     isort_union(&temp[i], count);
     temp[nt] = jl_bottom_type;
     size_t k;
