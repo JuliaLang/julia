@@ -718,6 +718,21 @@ jl_value_t *simple_union(jl_value_t *a, jl_value_t *b)
 }
 
 int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity);
+
+static int simple_disjoint(jl_value_t *a, jl_value_t *b, int hasfree)
+{
+    if (jl_is_uniontype(b)) {
+        jl_value_t *b1 = ((jl_uniontype_t *)b)->a, *b2 = ((jl_uniontype_t *)b)->b;
+        JL_GC_PUSH2(&b1, &b2);
+        int res = simple_disjoint(a, b1, hasfree) && simple_disjoint(a, b2, hasfree);
+        JL_GC_POP();
+        return res;
+    }
+    if (!hasfree && !jl_has_free_typevars(b))
+        return jl_has_empty_intersection(a, b);
+    return obviously_disjoint(a, b, 0);
+}
+
 jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi)
 {
     // Unlike `Union`, we don't unwrap `UnionAll` here to avoid possible widening.
@@ -733,7 +748,7 @@ jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi)
     size_t i, j;
     // first remove disjoint elements.
     for (i = 0; i < nt; i++) {
-        if (obviously_disjoint(temp[i], (i < nta ? b : a), 0))
+        if (simple_disjoint(temp[i], (i < nta ? b : a), jl_has_free_typevars(temp[i])))
             temp[i] = NULL;
     }
     // then check subtyping.
