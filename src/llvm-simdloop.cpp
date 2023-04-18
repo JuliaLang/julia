@@ -123,7 +123,8 @@ static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) JL_NOTSAFEPOIN
     int length = 0;
     for (chainVector::const_iterator K=chain.begin(); K!=chain.end(); ++K) {
         LLVM_DEBUG(dbgs() << "LSL: marking " << **K << "\n");
-        (*K)->setFast(true);
+        (*K)->setHasAllowReassoc(true);
+        (*K)->setHasAllowContract(true);
         ++length;
     }
     ReductionChainLength += length;
