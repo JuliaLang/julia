@@ -4854,3 +4854,9 @@ end |> only === Tuple{Int,Symbol}
         return T
     end
 end) == Type{Nothing}
+
+# Test that Core.Compiler.return_type inference works for the 1-arg version
+function cc_rt_one_arg()
+    Core.Compiler.return_type(Tuple{typeof(+), Int, Int})
+end
+@test Core.Compiler.return_type(Tuple{typeof(cc_rt_one_arg)}) == Type{Int}
