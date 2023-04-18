@@ -57,7 +57,8 @@ static size_t get_max_varargs(
     if (m->max_varargs != UINT8_MAX)
         max_varargs = m->max_varargs;
     else if (kwmt != NULL && kwmt != jl_type_type_mt && kwmt != jl_nonfunction_mt && kwmt != jl_kwcall_mt) {
-        *may_increase = 1; // `max_args` can increase as new methods are inserted
+        if (may_increase != NULL)
+            *may_increase = 1; // `max_args` can increase as new methods are inserted
 
         max_varargs = jl_atomic_load_relaxed(&kwmt->max_args) + 2;
         if (mt == jl_kwcall_mt)
