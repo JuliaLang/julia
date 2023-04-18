@@ -27,15 +27,20 @@ define pkgimg_builder
 $1_SRCS := $$(shell find $$(build_datarootdir)/julia/stdlib/$$(VERSDIR)/$1/src -name \*.jl) \
     $$(wildcard $$(build_prefix)/manifest/$$(VERSDIR)/$1)
 $$(BUILDDIR)/stdlib/$1.release.image: $$($1_SRCS) $$(addsuffix .release.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys.$(SHLIB_EXT)
-	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'Base.compilecache(Base.identify_package("$1"))')
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no -e 'Base.compilecache(Base.identify_package("$1"))')
 	touch $$@
-cache-release-$1: $$(BUILDDIR)/stdlib/$1.release.image
-$$(BUILDDIR)/stdlib/$1.debug.image: $$($1_SRCS) $$(addsuffix .debug.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
+$$(BUILDDIR)/stdlib/$1.cb.release.image: $$($1_SRCS) $$(addsuffix .release.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys.$(SHLIB_EXT)
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'Base.compilecache(Base.identify_package("$1"))')
+	touch $$@
+cache-release-$1: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.cb.release.image
+$$(BUILDDIR)/stdlib/$1.debug.image: $$($1_SRCS) $$(addsuffix .debug.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no -e 'Base.compilecache(Base.identify_package("$1"))')
-cache-debug-$1: $$(BUILDDIR)/stdlib/$1.debug.image
-.SECONDARY: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.debug.image
+	touch $$@
+$$(BUILDDIR)/stdlib/$1.cb.debug.image: $$($1_SRCS) $$(addsuffix .debug.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
+	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'Base.compilecache(Base.identify_package("$1"))')
+	touch $$@
+cache-debug-$1: $$(BUILDDIR)/stdlib/$1.debug.image $$(BUILDDIR)/stdlib/$1.cb.debug.image
+.SECONDARY: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.cb.release.image $$(BUILDDIR)/stdlib/$1.debug.image $$(BUILDDIR)/stdlib/$1.cb.debug.image
 endef
 
 # Used to just define them in the dependency graph
@@ -43,11 +48,15 @@ endef
 define sysimg_builder
 $$(BUILDDIR)/stdlib/$1.release.image:
 	touch $$@
-cache-release-$1: $$(BUILDDIR)/stdlib/$1.release.image
+$$(BUILDDIR)/stdlib/$1.cb.release.image:
+	touch $$@
+cache-release-$1: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.cb.release.image
 $$(BUILDDIR)/stdlib/$1.debug.image:
 	touch $$@
-cache-debug-$1: $$(BUILDDIR)/stdlib/$1.debug.image
-.SECONDARY: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.debug.image
+$$(BUILDDIR)/stdlib/$1.cb.debug.image:
+	touch $$@
+cache-debug-$1: $$(BUILDDIR)/stdlib/$1.debug.image $$(BUILDDIR)/stdlib/$1.cb.debug.image
+.SECONDARY: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.cb.release.image $$(BUILDDIR)/stdlib/$1.debug.image $$(BUILDDIR)/stdlib/$1.cb.debug.image
 endef
 
 # no dependencies
