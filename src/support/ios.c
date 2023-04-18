@@ -196,6 +196,9 @@ static char *_buf_realloc(ios_t *s, size_t sz)
 
     if (sz <= s->maxsize) return s->buf;
 
+    if (!s->growable)
+        return NULL;
+
     if (s->ownbuf && s->buf != &s->local[0]) {
         // if we own the buffer we're free to resize it
         temp = (char*)LLT_REALLOC(s->buf, sz);
@@ -892,6 +895,7 @@ static void _ios_init(ios_t *s)
     s->readable = 1;
     s->writable = 1;
     s->rereadable = 0;
+    s->growable = 1;
 }
 
 /* stream object initializers. we do no allocation. */
@@ -935,9 +939,11 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
 {
     int flags;
     int fd;
-    if (!(rd || wr))
+    if (!(rd || wr)) {
         // must specify read and/or write
+        errno = EINVAL;
         goto open_file_err;
+    }
     flags = wr ? (rd ? O_RDWR : O_WRONLY) : O_RDONLY;
     if (create) flags |= O_CREAT;
     if (trunc)  flags |= O_TRUNC;

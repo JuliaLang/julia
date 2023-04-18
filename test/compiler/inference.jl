@@ -90,6 +90,9 @@ end
 @test  Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Type{Union{Float32,Float64}}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Any, Core.svec(Union{Float32,Float64}), 1, 1, 1)
 
+# issue #49287
+@test !Core.Compiler.type_more_complex(Tuple{Vararg{Tuple{}}}, Tuple{Vararg{Tuple}}, Core.svec(), 0, 0, 0)
+@test  Core.Compiler.type_more_complex(Tuple{Vararg{Tuple}}, Tuple{Vararg{Tuple{}}}, Core.svec(), 0, 0, 0)
 
 let # 40336
     t = Type{Type{Int}}
@@ -946,7 +949,7 @@ end
 
 # issue #21410
 f21410(::V, ::Pair{V,E}) where {V, E} = E
-@test code_typed(f21410, Tuple{Ref, Pair{Ref{T},Ref{T}} where T<:Number})[1].second ==
+@test only(Base.return_types(f21410, Tuple{Ref, Pair{Ref{T},Ref{T}} where T<:Number})) ==
     Type{E} where E <: (Ref{T} where T<:Number)
 
 # issue #21369

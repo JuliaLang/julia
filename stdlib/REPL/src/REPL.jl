@@ -1396,7 +1396,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     nothing
 end
 
-module IPython
+module Numbered
 
 using ..REPL
 
@@ -1468,7 +1468,7 @@ function __current_ast_transforms(backend)
 end
 
 
-function ipython_mode!(repl::LineEditREPL=Base.active_repl, backend=nothing)
+function numbered_prompt!(repl::LineEditREPL=Base.active_repl, backend=nothing)
     n = Ref{Int}(0)
     set_prompt(repl, n)
     set_output_prefix(repl, n)
@@ -1480,7 +1480,7 @@ end
     Out[n]
 
 A variable referring to all previously computed values, automatically imported to the interactive prompt.
-Only defined and exists while using [IPython mode](@ref IPython-mode).
+Only defined and exists while using [Numbered prompt](@ref Numbered-prompt).
 
 See also [`ans`](@ref).
 """
@@ -1488,6 +1488,6 @@ Base.MainInclude.Out
 
 end
 
-import .IPython.ipython_mode!
+import .Numbered.numbered_prompt!
 
 end # module

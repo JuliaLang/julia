@@ -2710,11 +2710,15 @@ end
     @test rem2pi(T(-13), RoundUp)      ≈ -13+4π
 end
 
-@testset "PR #36420 $T" for T in (Float16, Float32, Float64)
+@testset "PR #36420 $T" for T in (Float16, Float32, Float64, BigFloat)
+    nan = reinterpret(Float64, reinterpret(UInt64, NaN) | rand(UInt64))
     for r in (RoundToZero, RoundNearest, RoundDown, RoundUp)
-        for x in (Inf, -Inf, NaN, -NaN)
+        for x in (Inf, -Inf, NaN, -NaN, nan)
             @test isnan(rem2pi(T(x), r))
             @test rem2pi(T(x), r) isa T
+            if isnan(x) && T !== BigFloat
+                @test rem2pi(T(x), r) === T(x)
+            end
         end
     end
 end

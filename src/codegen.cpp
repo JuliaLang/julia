@@ -8422,7 +8422,8 @@ jl_llvm_functions_t jl_emit_code(
         jl_value_t *jlrettype,
         jl_codegen_params_t &params)
 {
-    JL_TIMING(CODEGEN);
+    JL_TIMING(CODEGEN, CODEGEN);
+    jl_timing_show_func_sig((jl_value_t *)li->specTypes, JL_TIMING_CURRENT_BLOCK);
     // caller must hold codegen_lock
     jl_llvm_functions_t decls = {};
     assert((params.params == &jl_default_cgparams /* fast path */ || !params.cache ||
@@ -8464,7 +8465,8 @@ jl_llvm_functions_t jl_emit_codeinst(
         jl_code_info_t *src,
         jl_codegen_params_t &params)
 {
-    JL_TIMING(CODEGEN);
+    JL_TIMING(CODEGEN, CODEGEN);
+    jl_timing_show_method_instance(codeinst->def, JL_TIMING_CURRENT_BLOCK);
     JL_GC_PUSH1(&src);
     if (!src) {
         src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
@@ -8543,7 +8545,7 @@ void jl_compile_workqueue(
     Module &original,
     jl_codegen_params_t &params, CompilationPolicy policy)
 {
-    JL_TIMING(CODEGEN);
+    JL_TIMING(CODEGEN, CODEGEN);
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
     while (!params.workqueue.empty()) {
@@ -8838,6 +8840,15 @@ extern "C" void jl_init_llvm(void)
     clopt = llvmopts.lookup("enable-tail-merge"); // NOO TOUCHIE; NO TOUCH! See #922
     if (clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "0", 1);
+#ifdef JL_USE_NEW_PM
+    // For parity with LoopUnswitch
+    clopt = llvmopts.lookup("unswitch-threshold");
+    if (clopt->getNumOccurrences() == 0)
+        cl::ProvidePositionalOption(clopt, "100", 1);
+    clopt = llvmopts.lookup("enable-unswitch-cost-multiplier");
+    if (clopt->getNumOccurrences() == 0)
+        cl::ProvidePositionalOption(clopt, "false", 1);
+#endif
     // if the patch adding this option has been applied, lower its limit to provide
     // better DAGCombiner performance.
     clopt = llvmopts.lookup("combiner-store-merge-dependence-limit");
@@ -8916,7 +8927,7 @@ extern "C" JL_DLLEXPORT void jl_init_codegen_impl(void)
 extern "C" JL_DLLEXPORT void jl_teardown_codegen_impl() JL_NOTSAFEPOINT
 {
     // output LLVM timings and statistics
-    reportAndResetTimings();
+    jl_ExecutionEngine->printTimers();
     PrintStatistics();
 }
 

@@ -1940,3 +1940,53 @@ let result = @test_throws MethodError issue49074(Issue49050Concrete)
     @test result.value.f === issue49074
     @test result.value.args === (Any,)
 end
+
+# Regression for finalizer inlining with more complex control flow
+global finalizer_escape::Int = 0
+mutable struct FinalizerEscapeTest
+    x::Int
+    function FinalizerEscapeTest()
+        this = new(0)
+        finalizer(this) do this
+            global finalizer_escape
+            finalizer_escape = this.x
+        end
+        return this
+    end
+end
+
+function run_finalizer_escape_test1(b1, b2)
+    x = FinalizerEscapeTest()
+    x.x = 1
+    if b1
+        x.x = 2
+    end
+    if b2
+        Base.donotdelete(b2)
+    end
+    x.x = 3
+    return nothing
+end
+
+function run_finalizer_escape_test2(b1, b2)
+    x = FinalizerEscapeTest()
+    x.x = 1
+    if b1
+        x.x = 2
+    end
+    x.x = 3
+    return nothing
+end
+
+for run_finalizer_escape_test in (run_finalizer_escape_test1, run_finalizer_escape_test2)
+    global finalizer_escape::Int = 0
+
+    let src = code_typed1(run_finalizer_escape_test, Tuple{Bool, Bool})
+        @test any(x->isexpr(x, :(=)), src.code)
+    end
+
+    let
+        run_finalizer_escape_test(true, true)
+        @test finalizer_escape == 3
+    end
+end

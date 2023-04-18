@@ -1935,6 +1935,10 @@ typedef struct _jl_task_t {
     uint16_t priority;
 
 // hidden state:
+
+#ifdef USE_TRACY
+    const char *name;
+#endif
     // id of owning thread - does not need to be defined until the task runs
     _Atomic(int16_t) tid;
     // threadpool id
