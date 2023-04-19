@@ -559,7 +559,8 @@ function profile_printing_listener()
     try
         while true
             wait(PROFILE_PRINT_COND[])
-            profile = @something(profile, require(Base, :Profile))
+            profile = @something(profile, require(PkgId(UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile")))
+            
             invokelatest(profile.peek_report[])
             if Base.get_bool_env("JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", false) === true
                 println(stderr, "Saving heap snapshot...")
