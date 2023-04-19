@@ -70,6 +70,9 @@ let
 
         # 5-depth packages
         :Downloads,
+
+        # 6-depth packages
+        :Pkg,
     ]
     # PackageCompiler can filter out stdlibs so it can be empty
     maxlen = maximum(textwidth.(string.(stdlibs)); init=0)
