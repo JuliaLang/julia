@@ -690,6 +690,7 @@ function handle_message(logger::SimpleLogger, level::LogLevel, message, _module,
     end
     println(iob, "└ @ ", _module, " ", filepath, ":", line)
     write(stream, take!(buf))
+    flush(stream)
     nothing
 end
 
