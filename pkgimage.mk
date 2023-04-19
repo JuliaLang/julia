@@ -104,7 +104,7 @@ $(eval $(call sysimg_builder,UUIDs,Random SHA))
 $(eval $(call pkgimg_builder,LibCURL_jll,LibSSH2_jll nghttp2_jll MbedTLS_jll Zlib_jll Artifacts Libdl))
 $(eval $(call sysimg_builder,REPL,InteractiveUtils Markdown Sockets Unicode))
 $(eval $(call pkgimg_builder,SharedArrays,Distributed Mmap Random Serialization))
-$(eval $(call sysimg_builder,TOML,Dates))
+$(eval $(call pkgimg_builder,TOML,Dates))
 $(eval $(call pkgimg_builder,Test,Logging Random Serialization InteractiveUtils))
 
 # 4-depth packages

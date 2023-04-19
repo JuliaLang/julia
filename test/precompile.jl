@@ -399,7 +399,7 @@ precompile_test_harness(false) do dir
                  :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
                  :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :OpenBLAS_jll, :Printf,
                  :REPL, :Random, :SHA, :Serialization, :Sockets,
-                 :TOML, :Tar, :Test, :UUIDs, :Unicode,
+                 :Tar, :Test, :UUIDs, :Unicode,
                  :nghttp2_jll]
             ),
         )
