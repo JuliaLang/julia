@@ -1795,6 +1795,22 @@ static int invalidate_mt_cache(jl_typemap_entry_t *oldentry, void *closure0)
                 break;
             }
         }
+        if (intersects && (jl_value_t*)oldentry->sig != mi->specTypes) {
+            // the entry may point to a widened MethodInstance, in which case it is worthwhile to check if the new method
+            // actually has any meaningful intersection with the old one
+            intersects = !jl_has_empty_intersection((jl_value_t*)oldentry->sig, (jl_value_t*)env->newentry->sig);
+        }
+        if (intersects && oldentry->guardsigs != jl_emptysvec) {
+            // similarly, if it already matches an existing guardsigs, this is already safe to keep
+            size_t i, l;
+            for (i = 0, l = jl_svec_len(oldentry->guardsigs); i < l; i++) {
+                // see corresponding code in jl_typemap_entry_assoc_exact
+                if (jl_subtype((jl_value_t*)env->newentry->sig, jl_svecref(oldentry->guardsigs, i))) {
+                    intersects = 0;
+                    break;
+                }
+            }
+        }
         if (intersects) {
             if (_jl_debug_method_invalidation) {
                 jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)mi);
@@ -1937,8 +1953,7 @@ enum morespec_options {
 };
 
 // check if `type` is replacing `m` with an ambiguity here, given other methods in `d` that already match it
-// precondition: type is not more specific than `m`
-static int is_replacing(jl_value_t *type, jl_method_t *m, jl_method_t *const *d, size_t n, jl_value_t *isect, jl_value_t *isect2, char *morespec)
+static int is_replacing(char ambig, jl_value_t *type, jl_method_t *m, jl_method_t *const *d, size_t n, jl_value_t *isect, jl_value_t *isect2, char *morespec)
 {
     size_t k;
     for (k = 0; k < n; k++) {
@@ -1951,11 +1966,15 @@ static int is_replacing(jl_value_t *type, jl_method_t *m, jl_method_t *const *d,
         if (morespec[k] == (char)morespec_is)
             // not actually shadowing this--m2 will still be better
             return 0;
+        // if type is not more specific than m (thus now dominating it)
+        // then there is a new ambiguity here,
         // since m2 was also a previous match over isect,
-        // see if m was also previously dominant over all m2
-        if (!jl_type_morespecific(m->sig, m2->sig))
-            // m and m2 were previously ambiguous over the full intersection of mi with type, and will still be ambiguous with type
+        // see if m was previously dominant over all m2
+        // or if this was already ambiguous before
+        if (ambig != morespec_is && !jl_type_morespecific(m->sig, m2->sig)) {
+            // m and m2 were previously ambiguous over the full intersection of mi with type, and will still be ambiguous with addition of type
             return 0;
+        }
     }
     return 1;
 }
@@ -2096,7 +2115,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                             ambig = jl_type_morespecific(type, m->sig) ? morespec_is : morespec_isnot;
                         // replacing a method--see if this really was the selected method previously
                         // over the intersection (not ambiguous) and the new method will be selected now (morespec_is)
-                        int replaced_dispatch = ambig == morespec_is || is_replacing(type, m, d, n, isect, isect2, morespec);
+                        int replaced_dispatch = is_replacing(ambig, type, m, d, n, isect, isect2, morespec);
                         // found that this specialization dispatch got replaced by m
                         // call invalidate_backedges(&do_nothing_with_codeinst, mi, max_world, "jl_method_table_insert");
                         // but ignore invoke-type edges
@@ -2110,7 +2129,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                                 int replaced_edge;
                                 if (invokeTypes) {
                                     // n.b. normally we must have mi.specTypes <: invokeTypes <: m.sig (though it might not strictly hold), so we only need to check the other subtypes
-                                    replaced_edge = jl_subtype(invokeTypes, type) && (ambig == morespec_is || is_replacing(type, m, d, n, invokeTypes, NULL, morespec));
+                                    replaced_edge = jl_subtype(invokeTypes, type) && is_replacing(ambig, type, m, d, n, invokeTypes, NULL, morespec);
                                 }
                                 else {
                                     replaced_edge = replaced_dispatch;
@@ -2137,7 +2156,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
             }
             if (jl_array_len(oldmi)) {
                 // search mt->cache and leafcache and drop anything that might overlap with the new method
-                // TODO: keep track of just the `mi` for which shadowing was true (to avoid recomputing that here)
+                // this is very cheap, so we don't mind being fairly conservative at over-approximating this
                 struct invalidate_mt_env mt_cache_env;
                 mt_cache_env.max_world = max_world;
                 mt_cache_env.shadowed = oldmi;
