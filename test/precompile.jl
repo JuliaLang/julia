@@ -394,12 +394,12 @@ precompile_test_harness(false) do dir
             Dict(let m = Base.root_module(Base, s)
                      Base.PkgId(m) => Base.module_build_id(m)
                  end for s in
-                [:ArgTools, :Artifacts, :Base64, :CompilerSupportLibraries_jll, :CRC32c, :Dates,
-                 :Downloads, :FileWatching, :Future, :InteractiveUtils, :libblastrampoline_jll,
-                 :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
-                 :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :OpenBLAS_jll, :Printf,
+                [:ArgTools, :Artifacts, :Base64, :CompilerSupportLibraries_jll,
+                 :Downloads, :FileWatching, :InteractiveUtils, :libblastrampoline_jll,
+                 :LibCURL, :LibCURL_jll, :Libdl, :LinearAlgebra,
+                 :Logging, :Markdown, :MozillaCACerts_jll, :NetworkOptions, :OpenBLAS_jll, :Printf,
                  :REPL, :Random, :SHA, :Serialization, :Sockets,
-                 :TOML, :Tar, :Test, :UUIDs, :Unicode,
+                 :TOML, :Test, :Unicode,
                  :nghttp2_jll]
             ),
         )

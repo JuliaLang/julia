@@ -36,11 +36,9 @@ let
         :ArgTools,
         :Artifacts,
         :Base64,
-        :CRC32c,
         :FileWatching,
         :Libdl,
         :Logging,
-        :Mmap,
         :NetworkOptions,
         :SHA,
         :Serialization,
@@ -52,14 +50,9 @@ let
         :Markdown,
         :Printf,
         :Random,
-        :Tar,
 
         # 2-depth packages
-        :Dates,
-        :Future,
         :InteractiveUtils,
-        :LibGit2,
-        :UUIDs,
 
         # 3-depth packages
         :REPL,
