@@ -459,6 +459,17 @@ end
     end
 end
 
+@testset "issue #49230" begin
+    struct model
+        B::Hermitian{Float64, AbstractMatrix{Float64}}
+    end
+
+    H = Hermitian(rand(10,10))
+    M = model(H)
+    M2 = Hermitian(M.B)
+    @test typeof(M2) == typeof(H)
+end
+
 #Issue #7647: test xsyevr, xheevr, xstevr drivers.
 @testset "Eigenvalues in interval for $(typeof(Mi7647))" for Mi7647 in
         (Symmetric(diagm(0 => 1.0:3.0)),

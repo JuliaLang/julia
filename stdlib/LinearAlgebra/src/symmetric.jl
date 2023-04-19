@@ -187,7 +187,7 @@ hermitian_type(::Type{T}) where {T<:Number} = T
 
 for (S, H) in ((:Symmetric, :Hermitian), (:Hermitian, :Symmetric))
     @eval begin
-        $S(A::$S) = A
+        $S(A::$S) = $S(parent(A), sym_uplo(A.uplo)) # technically a no-op, but rewrapping the parent might narrow types
         function $S(A::$S, uplo::Symbol)
             if A.uplo == char_uplo(uplo)
                 return A
