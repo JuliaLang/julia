@@ -2069,6 +2069,13 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     Base.IRShow.show_ir(io, ir, Base.IRShow.default_config(ir; verbose_linetable=true))
     seekstart(io)
     @test count(contains(r"@ a{80}:\d+ within `my_fun28173"), eachline(io)) == 10
+
+    # Test that a bad :invoke doesn't cause an error during printing
+    Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(Expr(:invoke, nothing, sin), Any), false)
+    io = IOBuffer()
+    Base.IRShow.show_ir(io, ir)
+    seekstart(io)
+    @test contains(String(take!(io)), "Expr(:invoke, nothing")
 end
 
 # Verify that extra instructions at the end of the IR

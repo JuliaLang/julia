@@ -349,7 +349,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
     // TODO: Destroy threads?
 
     jl_destroy_timing(); // cleans up the current timing_stack for noreturn
-#ifdef ENABLE_TIMINGS
+#ifdef USE_TIMING_COUNTS
     jl_print_timings();
 #endif
     jl_teardown_codegen(); // prints stats

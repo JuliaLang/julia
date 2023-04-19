@@ -567,7 +567,9 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module)
 
     CC.typeinf(interp, frame)
 
-    return frame.result.result
+    result = frame.result.result
+    result === Union{} && return nothing # for whatever reason, callers expect this as the Bottom and/or Top type instead
+    return result
 end
 
 # Method completion on function call expression that look like :(max(1))

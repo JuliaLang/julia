@@ -1096,6 +1096,31 @@ function setup_interface(
                 edit_insert(s, '?')
             end
         end,
+        ']' => function (s::MIState,o...)
+            if isempty(s) || position(LineEdit.buffer(s)) == 0
+                pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
+                if Base.locate_package(pkgid) !== nothing # Only try load Pkg if we can find it
+                    Pkg = Base.require(Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"))
+                    # Pkg should have loaded its REPL mode by now, let's find it so we can transition to it.
+                    pkg_mode = nothing
+                    for mode in repl.interface.modes
+                        if mode isa LineEdit.Prompt && mode.complete isa Pkg.REPLMode.PkgCompletionProvider
+                            pkg_mode = mode
+                            break
+                        end
+                    end
+                    # TODO: Cache the `pkg_mode`?
+                    if pkg_mode !== nothing
+                        buf = copy(LineEdit.buffer(s))
+                        transition(s, pkg_mode) do
+                            LineEdit.state(s, pkg_mode).input_buffer = buf
+                        end
+                        return
+                    end
+                end
+            end
+            edit_insert(s, ']')
+        end,
 
         # Bracketed Paste Mode
         "\e[200~" => (s::MIState,o...)->begin
@@ -1396,7 +1421,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     nothing
 end
 
-module IPython
+module Numbered
 
 using ..REPL
 
@@ -1468,7 +1493,7 @@ function __current_ast_transforms(backend)
 end
 
 
-function ipython_mode!(repl::LineEditREPL=Base.active_repl, backend=nothing)
+function numbered_prompt!(repl::LineEditREPL=Base.active_repl, backend=nothing)
     n = Ref{Int}(0)
     set_prompt(repl, n)
     set_output_prefix(repl, n)
@@ -1480,7 +1505,7 @@ end
     Out[n]
 
 A variable referring to all previously computed values, automatically imported to the interactive prompt.
-Only defined and exists while using [IPython mode](@ref IPython-mode).
+Only defined and exists while using [Numbered prompt](@ref Numbered-prompt).
 
 See also [`ans`](@ref).
 """
@@ -1488,6 +1513,6 @@ Base.MainInclude.Out
 
 end
 
-import .IPython.ipython_mode!
+import .Numbered.numbered_prompt!
 
 end # module
