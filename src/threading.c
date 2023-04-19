@@ -732,6 +732,13 @@ JL_DLLEXPORT void jl_exit_threaded_region(void)
 // These keep the implementation functions clean in case
 // multiple profiler implementations are supported
 
+static void profile_lock_init(jl_mutex_t *lock, const char *name) JL_NOTSAFEPOINT {
+#ifdef USE_ITTAPI
+    //ITTAPI implementation
+    __itt_sync_create(lock, "jl_mutex_t", name, __itt_attr_mutex);
+#endif
+}
+
 static void profile_lock_start_wait(jl_mutex_t *lock) JL_NOTSAFEPOINT {
 #ifdef USE_ITTAPI
     //ITTAPI implementation
@@ -746,20 +753,6 @@ static void profile_lock_acquired(jl_mutex_t *lock) JL_NOTSAFEPOINT {
 #endif
 }
 
-static void profile_lock_gc_start(jl_mutex_t *lock) JL_NOTSAFEPOINT {
-#ifdef USE_ITTAPI
-    //ITTAPI implementation
-    __itt_sync_cancel(lock);
-#endif
-}
-
-static void profile_lock_gc_end(jl_mutex_t *lock) JL_NOTSAFEPOINT {
-#ifdef USE_ITTAPI
-    //ITTAPI implementation
-    __itt_sync_prepare(lock);
-#endif
-}
-
 static void profile_lock_release_start(jl_mutex_t *lock) JL_NOTSAFEPOINT {
 #ifdef USE_ITTAPI
     //ITTAPI implementation
@@ -769,6 +762,13 @@ static void profile_lock_release_start(jl_mutex_t *lock) JL_NOTSAFEPOINT {
 
 static void profile_lock_release_end(jl_mutex_t *lock) JL_NOTSAFEPOINT {
     //No ITTAPI implementation
+}
+
+void _jl_mutex_init(jl_mutex_t *lock, const char *name) JL_NOTSAFEPOINT
+{
+    jl_atomic_store_relaxed(&lock->owner, (jl_task_t*)NULL);
+    lock->count = 0;
+    profile_lock_init(lock, name);
 }
 
 void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
@@ -786,9 +786,7 @@ void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
             return;
         }
         if (safepoint) {
-            profile_lock_gc_start(lock);
             jl_gc_safepoint_(self->ptls);
-            profile_lock_gc_end(lock);
         }
         if (jl_running_under_rr(0)) {
             // when running under `rr`, use system mutexes rather than spin locking

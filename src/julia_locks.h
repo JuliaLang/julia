@@ -17,6 +17,7 @@ extern "C" {
 // The JL_LOCK* and JL_UNLOCK* macros are no-op for non-threading build
 // while the jl_mutex_* functions are always locking and unlocking the locks.
 
+JL_DLLEXPORT void _jl_mutex_init(jl_mutex_t *lock, const char *name) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint);
 JL_DLLEXPORT void _jl_mutex_lock(jl_task_t *self, jl_mutex_t *lock);
 JL_DLLEXPORT int _jl_mutex_trylock_nogc(jl_task_t *self, jl_mutex_t *lock) JL_NOTSAFEPOINT;
@@ -86,13 +87,12 @@ static inline void jl_mutex_unlock_nogc(jl_mutex_t *lock) JL_NOTSAFEPOINT JL_NOT
     _jl_mutex_unlock_nogc(lock);
 }
 
-static inline void jl_mutex_init(jl_mutex_t *lock) JL_NOTSAFEPOINT
+static inline void jl_mutex_init(jl_mutex_t *lock, const char *name) JL_NOTSAFEPOINT
 {
-    jl_atomic_store_relaxed(&lock->owner, (jl_task_t*)NULL);
-    lock->count = 0;
+    _jl_mutex_init(lock, name);
 }
 
-#define JL_MUTEX_INIT(m) jl_mutex_init(m)
+#define JL_MUTEX_INIT(m, name) jl_mutex_init(m, name)
 #define JL_LOCK(m) jl_mutex_lock(m)
 #define JL_UNLOCK(m) jl_mutex_unlock(m)
 #define JL_LOCK_NOGC(m) jl_mutex_lock_nogc(m)
