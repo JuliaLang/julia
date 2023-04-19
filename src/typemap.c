@@ -425,7 +425,7 @@ static int jl_typemap_intersection_array_visitor(jl_array_t *a, jl_value_t *ty, 
             if (tydt == jl_any_type || // easy case: Any always matches
                 tname_intersection(tydt, (jl_typename_t*)t, height)) {
                 if (jl_is_array(ml)) {
-                    if (!jl_typemap_intersection_array_visitor((jl_array_t*)ml, ty, 1, offs, closure))
+                    if (!jl_typemap_intersection_array_visitor((jl_array_t*)ml, ty, tparam & ~2, offs, closure))
                         goto exit;
                 }
                 else {
