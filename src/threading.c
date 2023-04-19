@@ -729,40 +729,36 @@ JL_DLLEXPORT void jl_exit_threaded_region(void)
 }
 
 // Profiling stubs
-// These keep the implementation functions clean in case
-// multiple profiler implementations are supported
 
-static void profile_lock_init(jl_mutex_t *lock, const char *name) JL_NOTSAFEPOINT {
 #ifdef USE_ITTAPI
-    //ITTAPI implementation
-    __itt_sync_create(lock, "jl_mutex_t", name, __itt_attr_mutex);
-#endif
-}
 
-static void profile_lock_start_wait(jl_mutex_t *lock) JL_NOTSAFEPOINT {
-#ifdef USE_ITTAPI
-    //ITTAPI implementation
-    __itt_sync_prepare(lock);
-#endif
-}
+#define profile_lock_init(lock, name) __itt_sync_create(lock, "jl_mutex_t", name, __itt_attr_mutex)
+#define profile_lock_start_wait(lock) __itt_sync_prepare(lock)
+#define profile_lock_acquired(lock) __itt_sync_acquired(lock)
+#define profile_lock_release_start(lock) __itt_sync_releasing(lock)
+#define profile_lock_release_end(lock)
 
-static void profile_lock_acquired(jl_mutex_t *lock) JL_NOTSAFEPOINT {
-#ifdef USE_ITTAPI
-    //ITTAPI implementation
-    __itt_sync_acquired(lock);
 #endif
-}
 
-static void profile_lock_release_start(jl_mutex_t *lock) JL_NOTSAFEPOINT {
-#ifdef USE_ITTAPI
-    //ITTAPI implementation
-    __itt_sync_releasing(lock);
+#ifndef profile_lock_init
+#define profile_lock_init(lock, name)
 #endif
-}
 
-static void profile_lock_release_end(jl_mutex_t *lock) JL_NOTSAFEPOINT {
-    //No ITTAPI implementation
-}
+#ifndef profile_lock_start_wait
+#define profile_lock_start_wait(lock)
+#endif
+
+#ifndef profile_lock_acquired
+#define profile_lock_acquired(lock)
+#endif
+
+#ifndef profile_lock_release_start
+#define profile_lock_release_start(lock)
+#endif
+
+#ifndef profile_lock_release_end
+#define profile_lock_release_end(lock)
+#endif
 
 void _jl_mutex_init(jl_mutex_t *lock, const char *name) JL_NOTSAFEPOINT
 {
