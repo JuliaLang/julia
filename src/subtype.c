@@ -538,50 +538,16 @@ static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
     return 0;
 }
 
-static int is_any_like(jl_value_t* x, jl_typeenv_t *env) JL_NOTSAFEPOINT
-{
-    if (x == (jl_value_t *)jl_any_type)
-        return 1;
-    if (jl_is_uniontype(x))
-        return is_any_like(((jl_uniontype_t*)x)->a, env) ||
-               is_any_like(((jl_uniontype_t*)x)->b, env);
-    if (jl_is_unionall(x)) {
-        jl_unionall_t *ua = (jl_unionall_t*)x;
-        jl_typeenv_t newenv = { ua->var, NULL, env };
-        return is_any_like(ua->body, &newenv);
-    }
-    if (jl_is_typevar(x) && env != NULL) {
-        jl_tvar_t *v = (jl_tvar_t *)x;
-        if (v->lb != jl_bottom_type)
-            return 0;
-        int in_env = 0;
-        jl_typeenv_t *vs = env;
-        while (vs != NULL) {
-            in_env = vs->var == v;
-            if (in_env) break;
-            vs = vs->prev;
-        }
-        return in_env && is_any_like(v->ub, env);
-    }
-    return 0;
-}
-
 jl_value_t *simple_union(jl_value_t *a, jl_value_t *b);
 // compute a least upper bound of `a` and `b`
 static jl_value_t *simple_join(jl_value_t *a, jl_value_t *b)
 {
-    if (is_any_like(a, NULL) || is_any_like(b, NULL))
-        return (jl_value_t *)jl_any_type;
-    if (a == jl_bottom_type || obviously_egal(a,b))
+    if (a == jl_bottom_type || b == (jl_value_t*)jl_any_type || obviously_egal(a, b))
         return b;
-    if (b == jl_bottom_type)
+    if (b == jl_bottom_type || a == (jl_value_t*)jl_any_type)
         return a;
     if (!(jl_is_type(a) || jl_is_typevar(a)) || !(jl_is_type(b) || jl_is_typevar(b)))
         return (jl_value_t*)jl_any_type;
-    if (jl_is_uniontype(a) && obviously_in_union(a, b))
-        return a;
-    if (jl_is_uniontype(b) && obviously_in_union(b, a))
-        return b;
     if (jl_is_kind(a) && jl_is_type_type(b) && jl_typeof(jl_tparam0(b)) == a)
         return a;
     if (jl_is_kind(b) && jl_is_type_type(a) && jl_typeof(jl_tparam0(a)) == b)
@@ -1536,7 +1502,7 @@ static int may_contain_union_decision(jl_value_t *x, jl_stenv_t *e, jl_typeenv_t
         return 0;
     }
     if (!jl_is_typevar(x))
-        return 1;
+        return jl_is_type(x);
     jl_typeenv_t *t = log;
     while (t != NULL) {
         if (x == (jl_value_t *)t->var)

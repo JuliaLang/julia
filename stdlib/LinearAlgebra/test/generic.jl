@@ -12,6 +12,8 @@ using .Main.Quaternions
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
+isdefined(Main, :DualNumbers) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "DualNumbers.jl"))
+using .Main.DualNumbers
 
 Random.seed!(123)
 
@@ -78,30 +80,7 @@ n = 5 # should be odd
     end
 
     @testset "det with nonstandard Number type" begin
-        struct MyDual{T<:Real} <: Real
-            val::T
-            eps::T
-        end
-        Base.:+(x::MyDual, y::MyDual) = MyDual(x.val + y.val, x.eps + y.eps)
-        Base.:*(x::MyDual, y::MyDual) = MyDual(x.val * y.val, x.eps * y.val + y.eps * x.val)
-        Base.:/(x::MyDual, y::MyDual) = x.val / y.val
-        Base.:(==)(x::MyDual, y::MyDual) = x.val == y.val && x.eps == y.eps
-        Base.zero(::MyDual{T}) where {T} = MyDual(zero(T), zero(T))
-        Base.zero(::Type{MyDual{T}}) where {T} = MyDual(zero(T), zero(T))
-        Base.one(::MyDual{T}) where {T} = MyDual(one(T), zero(T))
-        Base.one(::Type{MyDual{T}}) where {T} = MyDual(one(T), zero(T))
-        # the following line is required for BigFloat, IDK why it doesn't work via
-        # promote_rule like for all other types
-        Base.promote_type(::Type{MyDual{BigFloat}}, ::Type{BigFloat}) = MyDual{BigFloat}
-        Base.promote_rule(::Type{MyDual{T}}, ::Type{S}) where {T,S<:Real} =
-            MyDual{promote_type(T, S)}
-        Base.promote_rule(::Type{MyDual{T}}, ::Type{MyDual{S}}) where {T,S} =
-            MyDual{promote_type(T, S)}
-        Base.convert(::Type{MyDual{T}}, x::MyDual) where {T} =
-            MyDual(convert(T, x.val), convert(T, x.eps))
-        if elty <: Real
-            @test det(triu(MyDual.(A, zero(A)))) isa MyDual
-        end
+        elty <: Real && @test det(Dual.(triu(A), zero(A))) isa Dual
     end
 end
 
@@ -390,6 +369,7 @@ end
         [1.0 2.0 3.0; 4.0 5.0 6.0], # 2-dim
         rand(1,2,3),                # higher dims
         rand(1,2,3,4),
+        Dual.(randn(2,3), randn(2,3)),
         OffsetArray([-1,0], (-2,))  # no index 1
     )
         @test normalize(arr) == normalize!(copy(arr))

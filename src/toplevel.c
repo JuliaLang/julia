@@ -64,7 +64,8 @@ static jl_function_t *jl_module_get_initializer(jl_module_t *m JL_PROPAGATES_ROO
 
 void jl_module_run_initializer(jl_module_t *m)
 {
-    JL_TIMING(INIT_MODULE);
+    JL_TIMING(INIT_MODULE, INIT_MODULE);
+    jl_timing_show_module(m, JL_TIMING_CURRENT_BLOCK);
     jl_function_t *f = jl_module_get_initializer(m);
     if (f == NULL)
         return;
