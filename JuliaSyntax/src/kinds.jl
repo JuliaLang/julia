@@ -890,6 +890,7 @@ const _kind_names =
         "ref"
         "vect"
         "parens"
+        "importpath"
         # Concatenation syntax
         "braces"
         "bracescat"

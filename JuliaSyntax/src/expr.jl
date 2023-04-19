@@ -334,20 +334,13 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
         pushfirst!(args, :*)
     elseif headsym === :struct
         pushfirst!(args, has_flags(node, MUTABLE_FLAG))
-    elseif headsym === :import || headsym == :using
-        # Permit nonsense additional quoting such as
-        # import A.(:b).:c
-        if !isempty(args) && Meta.isexpr(args[1], Symbol(":"))
-            imports = args[1].args
-        else
-            imports = args
-        end
-        for imp in imports
-            imp_path = Meta.isexpr(imp, :as) ? imp.args[1].args : imp.args
-            for i = 1:length(imp_path)
-                if imp_path[i] isa QuoteNode
-                    imp_path[i] = imp_path[i].value
-                end
+    elseif headsym === :importpath
+        headsym = :.
+        for i = 1:length(args)
+            if args[i] isa QuoteNode
+                # Permit nonsense additional quoting such as
+                # import A.(:b).:c
+                args[i] = args[i].value
             end
         end
     end
