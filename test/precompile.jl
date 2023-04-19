@@ -397,8 +397,8 @@ precompile_test_harness(false) do dir
                 [:ArgTools, :Artifacts, :Base64, :CompilerSupportLibraries_jll, :CRC32c, :Dates,
                  :Downloads, :FileWatching, :Future, :InteractiveUtils, :libblastrampoline_jll,
                  :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
-                 :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :OpenBLAS_jll, :Pkg, :Printf,
-                 :p7zip_jll, :REPL, :Random, :SHA, :Serialization, :Sockets,
+                 :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :OpenBLAS_jll, :Printf,
+                 :REPL, :Random, :SHA, :Serialization, :Sockets,
                  :TOML, :Tar, :Test, :UUIDs, :Unicode,
                  :nghttp2_jll]
             ),

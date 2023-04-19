@@ -564,9 +564,10 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, siz
         return (jl_code_info_t*)jl_copy_ast((jl_value_t*)uninferred);
     }
 
-    JL_TIMING(STAGED_FUNCTION);
+    JL_TIMING(STAGED_FUNCTION, STAGED_FUNCTION);
     jl_value_t *tt = linfo->specTypes;
     jl_method_t *def = linfo->def.method;
+    jl_timing_show_method_instance(linfo, JL_TIMING_CURRENT_BLOCK);
     jl_value_t *generator = def->generator;
     assert(generator != NULL);
     assert(jl_is_method(def));
@@ -809,6 +810,8 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->deleted_world = ~(size_t)0;
     m->is_for_opaque_closure = 0;
     m->constprop = 0;
+    m->purity.bits = 0;
+    m->max_varargs = UINT8_MAX;
     JL_MUTEX_INIT(&m->writelock);
     return m;
 }

@@ -646,13 +646,7 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
     int finalizers_inhibited = ptls->finalizers_inhibited;
     ptls->finalizers_inhibited = 0;
 
-#ifdef ENABLE_TIMINGS
-    jl_timing_block_t *blk = ptls->timing_stack;
-    if (blk)
-        jl_timing_block_stop(blk);
-    ptls->timing_stack = NULL;
-#endif
-
+    jl_timing_block_t *blk = jl_timing_block_exit_task(ct, ptls);
     ctx_switch(ct);
 
 #ifdef MIGRATE_TASKS
@@ -672,15 +666,7 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
            0 != ct->ptls &&
            0 == ptls->finalizers_inhibited);
     ptls->finalizers_inhibited = finalizers_inhibited;
-
-#ifdef ENABLE_TIMINGS
-    assert(ptls->timing_stack == NULL);
-    ptls->timing_stack = blk;
-    if (blk)
-        jl_timing_block_start(blk);
-#else
-    (void)ct;
-#endif
+    jl_timing_block_enter_task(ct, ptls, blk); (void)blk;
 
     sig_atomic_t other_defer_signal = ptls->defer_signal;
     ptls->defer_signal = defer_signal;
@@ -1082,6 +1068,30 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->start = start;
     t->result = jl_nothing;
     t->donenotify = completion_future;
+#ifdef USE_TRACY
+    jl_value_t *start_type = jl_typeof(t->start);
+    const char *start_name = "";
+    if (jl_is_datatype(start_type))
+        start_name = jl_symbol_name(((jl_datatype_t *) start_type)->name->name);
+
+    static uint16_t task_id = 1;
+
+    // XXX: Tracy uses this as a handle internally and requires that this
+    // string live forever, so this allocation is intentionally leaked.
+    char *fiber_name;
+    if (start_name[0] == '#') {
+        jl_method_instance_t *mi = jl_method_lookup(&t->start, 1, jl_get_world_counter());
+        size_t fiber_name_len = strlen(jl_symbol_name(mi->def.method->file)) + 22; // 22 characters in "Task 65535 (:0000000)\0"
+        fiber_name = (char *)malloc(fiber_name_len);
+        snprintf(fiber_name, fiber_name_len,  "Task %d (%s:%d)", task_id++, jl_symbol_name(mi->def.method->file), mi->def.method->line);
+    } else {
+        size_t fiber_name_len = strlen(start_name) + 16; // 16 characters in "Task 65535 (\"\")\0"
+        fiber_name = (char *)malloc(fiber_name_len);
+        snprintf(fiber_name, fiber_name_len,  "Task %d (\"%s\")", task_id++, start_name);
+    }
+
+    t->name = fiber_name;
+#endif
     jl_atomic_store_relaxed(&t->_isexception, 0);
     // Inherit logger state from parent task
     t->logstate = ct->logstate;
@@ -1211,6 +1221,7 @@ CFI_NORETURN
     sanitizer_finish_switch_fiber(ptls->previous_task, ct);
     _start_task();
 }
+
 STATIC_OR_JS void NOINLINE JL_NORETURN _start_task(void)
 {
 CFI_NORETURN
@@ -1234,6 +1245,7 @@ CFI_NORETURN
 
     ct->started = 1;
     JL_PROBE_RT_START_TASK(ct);
+    jl_timing_block_enter_task(ct, ptls, NULL);
     if (jl_atomic_load_relaxed(&ct->_isexception)) {
         record_backtrace(ptls, 0);
         jl_push_excstack(&ct->excstack, ct->result,
@@ -1246,7 +1258,7 @@ CFI_NORETURN
                 ptls->defer_signal = 0;
                 jl_sigint_safepoint(ptls);
             }
-            JL_TIMING(ROOT);
+            JL_TIMING(ROOT, ROOT);
             res = jl_apply(&ct->start, 1);
         }
         JL_CATCH {
@@ -1666,6 +1678,12 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
         ct->stkbuf = stack;
         ct->bufsz = ssize;
     }
+
+#ifdef USE_TRACY
+    char *unique_string = (char *)malloc(strlen("Root") + 1);
+    strcpy(unique_string, "Root");
+    ct->name = unique_string;
+#endif
     ct->started = 1;
     ct->next = jl_nothing;
     ct->queue = jl_nothing;
@@ -1697,6 +1715,8 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
 #ifdef _COMPILER_ASAN_ENABLED_
     ct->ctx.asan_fake_stack = NULL;
 #endif
+
+    jl_timing_block_enter_task(ct, ptls, NULL);
 
 #ifdef COPY_STACKS
     // initialize the base_ctx from which all future copy_stacks will be copies

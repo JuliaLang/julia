@@ -192,6 +192,8 @@ static jl_callptr_t _jl_compile_codeinst(
         "invalid world for method-instance");
     assert(src && jl_is_code_info(src));
 
+    JL_TIMING(LLVM_MODULE_FINISH, LLVM_MODULE_FINISH);
+
     jl_callptr_t fptr = NULL;
     // emit the code in LLVM IR form
     jl_codegen_params_t params(std::move(context), jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple()); // Locks the context
@@ -245,10 +247,13 @@ static jl_callptr_t _jl_compile_codeinst(
         MaxWorkqueueSize.updateMax(emitted.size());
         IndirectCodeinsts += emitted.size() - 1;
     }
-    JL_TIMING(LLVM_MODULE_FINISH);
 
+    size_t i = 0;
     for (auto &def : emitted) {
         jl_code_instance_t *this_code = def.first;
+        if (i < jl_timing_print_limit)
+            jl_timing_show_func_sig(this_code->def->specTypes, JL_TIMING_CURRENT_BLOCK);
+
         jl_llvm_functions_t decls = std::get<1>(def.second);
         jl_callptr_t addr;
         bool isspecsig = false;
@@ -290,7 +295,10 @@ static jl_callptr_t _jl_compile_codeinst(
         }
         if (this_code == codeinst)
             fptr = addr;
+        i++;
     }
+    if (i > jl_timing_print_limit)
+        jl_timing_printf(JL_TIMING_CURRENT_BLOCK, "... <%d methods truncated>", i - 10);
 
     uint64_t end_time = 0;
     if (timed)
@@ -1183,7 +1191,7 @@ namespace {
                     }
                 }
 
-                JL_TIMING(LLVM_OPT);
+                JL_TIMING(LLVM_OPT, LLVM_OPT);
 
                 //Run the optimization
                 assert(!verifyModule(M, &errs()));
@@ -1427,7 +1435,7 @@ void JuliaOJIT::addGlobalMapping(StringRef Name, uint64_t Addr)
 
 void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 {
-    JL_TIMING(LLVM_MODULE_FINISH);
+    JL_TIMING(LLVM_MODULE_FINISH, LLVM_MODULE_FINISH);
     ++ModulesAdded;
     orc::SymbolLookupSet NewExports;
     TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT {
