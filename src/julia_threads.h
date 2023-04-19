@@ -170,6 +170,10 @@ typedef struct {
     arraylist_t free_stacks[JL_N_STACK_POOLS];
 } jl_thread_heap_t;
 
+#define PREFETCH_BUFFER_SIZE  (1 << 8)
+#define PREFETCH_BUFFER_MIN   128 /* keep pb at least this full */
+#define PREFETCH_BUFFER_MASK  (PREFETCH_BUFFER_SIZE - 1)
+
 typedef struct {
     struct _jl_gc_chunk_t *chunk_start;
     struct _jl_gc_chunk_t *current_chunk;
@@ -177,6 +181,10 @@ typedef struct {
     struct _jl_value_t **start;
     struct _jl_value_t **current;
     struct _jl_value_t **end;
+    size_t enqueued;
+    size_t dequeued;
+    struct _jl_value_t **prefetch_buffer;
+    uint8_t push_remset;
 } jl_gc_markqueue_t;
 
 typedef struct {
