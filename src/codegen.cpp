@@ -7760,11 +7760,19 @@ static jl_llvm_functions_t
 
     Instruction &prologue_end = ctx.builder.GetInsertBlock()->back();
 
-    // step 11a. Emit the entry safepoint
+    // step 11a. For top-level code, load the world age
+    if (toplevel && !ctx.is_opaque_closure) {
+        LoadInst *world = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
+            prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr);
+        world->setOrdering(AtomicOrdering::Acquire);
+        ctx.builder.CreateAlignedStore(world, world_age_field, ctx.types().alignof_ptr);
+    }
+
+    // step 11b. Emit the entry safepoint
     if (JL_FEAT_TEST(ctx, safepoint_on_entry))
         emit_gc_safepoint(ctx.builder, ctx.types().T_size, get_current_ptls(ctx), ctx.tbaa().tbaa_const);
 
-    // step 11b. Do codegen in control flow order
+    // step 11c. Do codegen in control flow order
     std::vector<int> workstack;
     std::map<int, BasicBlock*> BB;
     std::map<size_t, BasicBlock*> come_from_bb;
@@ -8087,13 +8095,6 @@ static jl_llvm_functions_t
             ctx.builder.SetInsertPoint(tryblk);
         }
         else {
-            if (!jl_is_method(ctx.linfo->def.method) && !ctx.is_opaque_closure) {
-                // TODO: inference is invalid if this has any effect (which it often does)
-                LoadInst *world = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
-                    prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr);
-                world->setOrdering(AtomicOrdering::Acquire);
-                ctx.builder.CreateAlignedStore(world, world_age_field, ctx.types().alignof_ptr);
-            }
             emit_stmtpos(ctx, stmt, cursor);
             mallocVisitStmt(debuginfoloc, nullptr);
         }
@@ -8319,12 +8320,12 @@ static jl_llvm_functions_t
     }
 
     // step 12. Perform any delayed instantiations
-    if (ctx.debug_enabled) {
-        bool in_prologue = true;
-        for (auto &BB : *ctx.f) {
-            for (auto &I : BB) {
-                CallBase *call = dyn_cast<CallBase>(&I);
-                if (call && !I.getDebugLoc()) {
+    bool in_prologue = true;
+    for (auto &BB : *ctx.f) {
+        for (auto &I : BB) {
+            CallBase *call = dyn_cast<CallBase>(&I);
+            if (call) {
+                if (ctx.debug_enabled && !I.getDebugLoc()) {
                     // LLVM Verifier: inlinable function call in a function with debug info must have a !dbg location
                     // make sure that anything we attempt to call has some inlining info, just in case optimization messed up
                     // (except if we know that it is an intrinsic used in our prologue, which should never have its own debug subprogram)
@@ -8333,12 +8334,24 @@ static jl_llvm_functions_t
                         I.setDebugLoc(topdebugloc);
                     }
                 }
-                if (&I == &prologue_end)
-                    in_prologue = false;
+                if (toplevel && !ctx.is_opaque_closure && !in_prologue) {
+                    // we're at toplevel; insert an atomic barrier between every instruction
+                    // TODO: inference is invalid if this has any effect (which it often does)
+                    LoadInst *world = new LoadInst(ctx.types().T_size,
+                        prepare_global_in(jl_Module, jlgetworld_global), Twine(),
+                        /*isVolatile*/false, ctx.types().alignof_ptr, /*insertBefore*/&I);
+                    world->setOrdering(AtomicOrdering::Acquire);
+                    StoreInst *store_world = new StoreInst(world, world_age_field,
+                        /*isVolatile*/false, ctx.types().alignof_ptr, /*insertBefore*/&I);
+                    (void)store_world;
+                }
             }
+            if (&I == &prologue_end)
+                in_prologue = false;
         }
-        dbuilder.finalize();
     }
+    if (ctx.debug_enabled)
+        dbuilder.finalize();
 
     if (ctx.vaSlot > 0) {
         // remove VA allocation if we never referenced it
@@ -8422,7 +8435,8 @@ jl_llvm_functions_t jl_emit_code(
         jl_value_t *jlrettype,
         jl_codegen_params_t &params)
 {
-    JL_TIMING(CODEGEN);
+    JL_TIMING(CODEGEN, CODEGEN);
+    jl_timing_show_func_sig((jl_value_t *)li->specTypes, JL_TIMING_CURRENT_BLOCK);
     // caller must hold codegen_lock
     jl_llvm_functions_t decls = {};
     assert((params.params == &jl_default_cgparams /* fast path */ || !params.cache ||
@@ -8464,7 +8478,8 @@ jl_llvm_functions_t jl_emit_codeinst(
         jl_code_info_t *src,
         jl_codegen_params_t &params)
 {
-    JL_TIMING(CODEGEN);
+    JL_TIMING(CODEGEN, CODEGEN);
+    jl_timing_show_method_instance(codeinst->def, JL_TIMING_CURRENT_BLOCK);
     JL_GC_PUSH1(&src);
     if (!src) {
         src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
@@ -8543,7 +8558,7 @@ void jl_compile_workqueue(
     Module &original,
     jl_codegen_params_t &params, CompilationPolicy policy)
 {
-    JL_TIMING(CODEGEN);
+    JL_TIMING(CODEGEN, CODEGEN);
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
     while (!params.workqueue.empty()) {
@@ -8838,6 +8853,15 @@ extern "C" void jl_init_llvm(void)
     clopt = llvmopts.lookup("enable-tail-merge"); // NOO TOUCHIE; NO TOUCH! See #922
     if (clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "0", 1);
+#ifdef JL_USE_NEW_PM
+    // For parity with LoopUnswitch
+    clopt = llvmopts.lookup("unswitch-threshold");
+    if (clopt->getNumOccurrences() == 0)
+        cl::ProvidePositionalOption(clopt, "100", 1);
+    clopt = llvmopts.lookup("enable-unswitch-cost-multiplier");
+    if (clopt->getNumOccurrences() == 0)
+        cl::ProvidePositionalOption(clopt, "false", 1);
+#endif
     // if the patch adding this option has been applied, lower its limit to provide
     // better DAGCombiner performance.
     clopt = llvmopts.lookup("combiner-store-merge-dependence-limit");
@@ -8916,7 +8940,7 @@ extern "C" JL_DLLEXPORT void jl_init_codegen_impl(void)
 extern "C" JL_DLLEXPORT void jl_teardown_codegen_impl() JL_NOTSAFEPOINT
 {
     // output LLVM timings and statistics
-    reportAndResetTimings();
+    jl_ExecutionEngine->printTimers();
     PrintStatistics();
 }
 

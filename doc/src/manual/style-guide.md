@@ -378,7 +378,7 @@ You generally want to use [`isa`](@ref) and [`<:`](@ref) for testing types,
 not `==`. Checking types for exact equality typically only makes sense when comparing to a known
 concrete type (e.g. `T == Float64`), or if you *really, really* know what you're doing.
 
-## Do not write `x->f(x)`
+## Don't write a trivial anonymous function `x->f(x)` for a named function `f`
 
 Since higher-order functions are often called with anonymous functions, it is easy to conclude
 that this is desirable or even necessary. But any function can be passed directly, without being
