@@ -108,10 +108,10 @@ $(eval $(call sysimg_builder,TOML,Dates))
 $(eval $(call pkgimg_builder,Test,Logging Random Serialization InteractiveUtils))
 
 # 4-depth packages
-$(eval $(call sysimg_builder,LibCURL,LibCURL_jll MozillaCACerts_jll))
+$(eval $(call pkgimg_builder,LibCURL,LibCURL_jll MozillaCACerts_jll))
 
 # 5-depth packages
-$(eval $(call sysimg_builder,Downloads,ArgTools FileWatching LibCURL NetworkOptions))
+$(eval $(call pkgimg_builder,Downloads,ArgTools FileWatching LibCURL NetworkOptions))
 
 # 6-depth packages
 $(eval $(call pkgimg_builder,Pkg,Dates LibGit2 Libdl Logging Printf Random SHA UUIDs)) # Markdown REPL

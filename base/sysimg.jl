@@ -64,12 +64,6 @@ let
         # 3-depth packages
         :REPL,
         :TOML,
-
-        # 4-depth packages
-        :LibCURL,
-
-        # 5-depth packages
-        :Downloads,
     ]
     # PackageCompiler can filter out stdlibs so it can be empty
     maxlen = maximum(textwidth.(string.(stdlibs)); init=0)
