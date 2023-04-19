@@ -2374,21 +2374,21 @@ function parse_atsym(ps::ParseState, allow_quotes=true)
         # export ($f)   ==> (export ($ f))
         mark = position(ps)
         if allow_quotes && peek(ps) == K":"
-            # import A.:+  ==>  (import (. A (quote +)))
+            # import A.:+  ==>  (import (importpath A (quote +)))
             emit_diagnostic(ps, warning="quoting with `:` is not required here")
         end
         parse_unary_prefix(ps)
         pos = position(ps)
         warn_parens = false
         if peek_behind(ps, pos).kind == K"parens"
-            # import A.(:+)  ==>  (import (. A (parens (quote +))))
+            # import A.(:+)  ==>  (import (importpath A (parens (quote +))))
             pos = first_child_position(ps, pos)
             warn_parens = true
         end
         if allow_quotes && peek_behind(ps, pos).kind == K"quote"
             pos = first_child_position(ps, pos)
             if peek_behind(ps, pos).kind == K"parens"
-                # import A.:(+)  ==>  (import (. A (quote (parens +))))
+                # import A.:(+)  ==>  (import (importpath A (quote (parens +))))
                 pos = first_child_position(ps, pos)
                 warn_parens = true
             end
@@ -2423,7 +2423,7 @@ function parse_imports(ps::ParseState)
         bump(ps, TRIVIA_FLAG)
         has_import_prefix = true
         if initial_as
-            # import A as B: x  ==>  (import (: (error (as (. A) B)) (. x)))
+            # import A as B: x  ==>  (import (: (error (as (importpath A) B)) (importpath x)))
             emit(ps, emark, K"error", error="`as` before `:` in import/using")
         end
     elseif k == K","
@@ -2431,14 +2431,14 @@ function parse_imports(ps::ParseState)
         has_comma = true
     end
     if has_import_prefix || has_comma
-        # import A, y      ==>  (import (. A) (. y))
-        # import A: x, y   ==>  (import (: (. A) (. x) (. y)))
-        # import A: +, ==  ==>  (import (: (. A) (. +) (. ==)))
+        # import A, y      ==>  (import (importpath A) (importpath y))
+        # import A: x, y   ==>  (import (: (importpath A) (importpath x) (importpath y)))
+        # import A: +, ==  ==>  (import (: (importpath A) (importpath +) (importpath ==)))
         has_import_prefix_ = has_import_prefix
         parse_comma_separated(ps, ps1->parse_import(ps1, word, has_import_prefix_))
         if peek(ps) == K":"
             # Error recovery
-            # import A: x, B: y ==> (import (: (. A) (. x) (. B) (error-t (. y))))
+            # import A: x, B: y ==> (import (: (importpath A) (importpath x) (importpath B) (error-t (importpath y))))
             emark = position(ps)
             bump(ps, TRIVIA_FLAG)
             parse_comma_separated(ps, ps1->parse_import(ps1, word, has_import_prefix_))
@@ -2447,11 +2447,11 @@ function parse_imports(ps::ParseState)
         end
     end
     if has_import_prefix
-        # import A: x  ==>  (import (: (. A) (. x)))
+        # import A: x  ==>  (import (: (importpath A) (importpath x)))
         emit(ps, mark, K":")
     end
-    # using  A  ==>  (using (. A))
-    # import A  ==>  (import (. A))
+    # using  A  ==>  (using (importpath A))
+    # import A  ==>  (import (importpath A))
     emit(ps, mark, word)
 end
 
@@ -2461,21 +2461,21 @@ end
 function parse_import(ps::ParseState, word, has_import_prefix)
     mark = position(ps)
     parse_import_path(ps)
-    # import A: x, y   ==>  (import (: (. A) (. x) (. y)))
+    # import A: x, y   ==>  (import (: (importpath A) (importpath x) (importpath y)))
     if peek(ps) == K"as"
-        # import A as B     ==>  (import (as (. A) B))
-        # import A: x as y  ==>  (import (: (. A) (as (. x) y)))
-        # using  A: x as y  ==>  (using (: (. A) (as (. x) y)))
+        # import A as B     ==>  (import (as (importpath A) B))
+        # import A: x as y  ==>  (import (: (importpath A) (as (importpath x) y)))
+        # using  A: x as y  ==>  (using (: (importpath A) (as (importpath x) y)))
         bump(ps, TRIVIA_FLAG)
         parse_atsym(ps)
         emit(ps, mark, K"as")
         if word == K"using" && !has_import_prefix
-            # using A as B     ==>  (using (error (as (. A) B)))
-            # using A, B as C  ==>  (using (. A) (error (as (. B) C)))
+            # using A as B     ==>  (using (error (as (importpath A) B)))
+            # using A, B as C  ==>  (using (importpath A) (error (as (importpath B) C)))
             emit(ps, mark, K"error",
                  error="`using` with `as` renaming requires a `:` and context module")
         end
-        #v1.5: import A as B     ==>  (import (error (as (. A) B)))
+        #v1.5: import A as B     ==>  (import (error (as (importpath A) B)))
         min_supported_version(v"1.6", ps, mark, "`import ... as`")
         return true
     else
@@ -2489,12 +2489,12 @@ function parse_import_path(ps::ParseState)
     bump_trivia(ps)
     # The tokenizer produces conjoined dotted tokens .. and ...
     # When parsing import we must split these into single dots
-    # import .A     ==> (import (. . A))
-    # import ..A    ==> (import (. . . A))
-    # import ...A   ==> (import (. . . . A))
-    # import ....A  ==> (import (. . . . . A))
+    # import .A     ==> (import (importpath . A))
+    # import ..A    ==> (import (importpath . . A))
+    # import ...A   ==> (import (importpath . . . A))
+    # import ....A  ==> (import (importpath . . . . A))
     # Dots with spaces are allowed (a misfeature?)
-    # import . .A    ==> (import (. . . A))
+    # import . .A    ==> (import (importpath . . A))
     first_dot = true
     while true
         t = peek_token(ps)
@@ -2516,32 +2516,32 @@ function parse_import_path(ps::ParseState)
     end
     if is_dotted(peek_token(ps))
         # Modules with operator symbol names
-        # import .⋆  ==>  (import (. . ⋆))
+        # import .⋆  ==>  (import (importpath . ⋆))
         bump_trivia(ps)
         bump_split(ps, (1,K".",EMPTY_FLAGS), (1,peek(ps),EMPTY_FLAGS))
     else
-        # import @x     ==>  (import (. @x))
-        # import $A     ==>  (import (. ($ A)))
+        # import @x     ==>  (import (importpath @x))
+        # import $A     ==>  (import (importpath ($ A)))
         parse_atsym(ps)
     end
     while true
         t = peek_token(ps)
         k = kind(t)
         if k == K"."
-            # import A.B    ==>  (import (. A B))
-            # import $A.@x  ==>  (import (. ($ A) @x))
-            # import A.B.C  ==>  (import (. A B C))
+            # import A.B    ==>  (import (importpath A B))
+            # import $A.@x  ==>  (import (importpath ($ A) @x))
+            # import A.B.C  ==>  (import (importpath A B C))
             bump_disallowed_space(ps)
             bump(ps, TRIVIA_FLAG)
             parse_atsym(ps)
         elseif is_dotted(t)
             # Resolve tokenization ambiguity: In imports, dots are part of the
             # path, not operators
-            # import A.==   ==>  (import (. A ==))
-            # import A.⋆.f  ==>  (import (. A ⋆ f))
+            # import A.==   ==>  (import (importpath A ==))
+            # import A.⋆.f  ==>  (import (importpath A ⋆ f))
             if preceding_whitespace(t)
                 # Whitespace in import path allowed but discouraged
-                # import A .==  ==>  (import (. A ==))
+                # import A .==  ==>  (import (importpath A ==))
                 emit_diagnostic(ps, whitespace=true,
                                 warning="space between dots in import path")
             end
@@ -2549,17 +2549,17 @@ function parse_import_path(ps::ParseState)
             bump_split(ps, (1,K".",TRIVIA_FLAG), (1,k,EMPTY_FLAGS))
         elseif k == K"..."
             # Import the .. operator
-            # import A...  ==>  (import (. A ..))
+            # import A...  ==>  (import (importpath A ..))
             bump_split(ps, (1,K".",TRIVIA_FLAG), (2,K"..",EMPTY_FLAGS))
         elseif k in KSet"NewlineWs ; , : EndMarker"
-            # import A; B  ==>  (import (. A))
+            # import A; B  ==>  (import (importpath A))
             break
         else
             # Could we emit a more comprehensible error here?
             break
         end
     end
-    emit(ps, mark, K".")
+    emit(ps, mark, K"importpath")
 end
 
 # parse comma-separated assignments, like "i=1:n,j=1:m,..."
