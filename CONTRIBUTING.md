@@ -30,8 +30,6 @@ If you are already familiar with Julia itself, this blog post by Katharine Hyatt
 
 * Review discussions on the [Julia Discourse forum](https://discourse.julialang.org).
 
-* Review [Writing Documentation](https://github.com/JuliaLang/julia/blob/master/doc/src/manual/documentation.md#writing-documentation).
-
 * For more detailed tips, read the [submission guide](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md#submitting-contributions) below.
 
 * Relax and have fun!
@@ -181,15 +179,6 @@ At the moment, this should always be done with the following `compat` admonition
   ```
   !!! compat "Julia 1.X"
       This method was added in Julia 1.X.
-  ```
-
-#### Documenting unstable APIs
-
-Some contributions are intended primarily for internal use or may be part of an API that is still in development. In addition to appropriate documentation, relevant code should be clearly annotated as unstable as follows:
-
-  ```
-  !!! danger "Unstable"
-      This method is unstable and subject to change without notice.
   ```
 
 ### Contributing to core functionality or base libraries
