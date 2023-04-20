@@ -7,3 +7,5 @@ Just do
 And then
 
     make
+
+Welome to zbikLang
