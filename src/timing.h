@@ -43,7 +43,7 @@ extern uint32_t jl_timing_print_limit;
 #define HAVE_TIMING_SUPPORT
 #endif
 
-#if defined( USE_TRACY ) || defined( USE_TIMING_COUNTS )
+#if defined( USE_TRACY ) || defined( USE_ITTAPI ) || defined( USE_TIMING_COUNTS )
 #define ENABLE_TIMINGS
 #endif
 
@@ -61,11 +61,21 @@ extern uint32_t jl_timing_print_limit;
 #define jl_timing_block_exit_task(ct, ptls) ((jl_timing_block_t *)NULL)
 #define jl_pop_timing_block(blk)
 
+#define jl_profile_lock_init(lock, name)
+#define jl_profile_lock_start_wait(lock)
+#define jl_profile_lock_acquired(lock)
+#define jl_profile_lock_release_start(lock)
+#define jl_profile_lock_release_end(lock)
+
 #else
 
 #include "julia_assert.h"
 #ifdef USE_TRACY
 #include "tracy/TracyC.h"
+#endif
+
+#ifdef USE_ITTAPI
+#include <ittapi/ittnotify.h>
 #endif
 
 #ifdef __cplusplus
@@ -313,6 +323,29 @@ struct jl_timing_suspend_cpp_t {
     jl_timing_suspend_t __timing_suspend; \
     _jl_timing_suspend_ctor(&__timing_suspend, #subsystem, ct)
 #endif
+
+// Locking profiling
+static inline void jl_profile_lock_init(jl_mutex_t *lock, const char *name) {
+#ifdef USE_ITTAPI
+    __itt_sync_create(lock, "jl_mutex_t", name, __itt_attr_mutex);
+#endif
+}
+static inline void jl_profile_lock_start_wait(jl_mutex_t *lock) {
+#ifdef USE_ITTAPI
+    __itt_sync_prepare(lock);
+#endif
+}
+static inline void jl_profile_lock_acquired(jl_mutex_t *lock) {
+#ifdef USE_ITTAPI
+    __itt_sync_acquired(lock);
+#endif
+}
+static inline void jl_profile_lock_release_start(jl_mutex_t *lock) {
+#ifdef USE_ITTAPI
+    __itt_sync_releasing(lock);
+#endif
+}
+static inline void jl_profile_lock_release_end(jl_mutex_t *lock) {}
 
 #endif
 

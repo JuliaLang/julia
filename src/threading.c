@@ -730,41 +730,11 @@ JL_DLLEXPORT void jl_exit_threaded_region(void)
 
 // Profiling stubs
 
-#ifdef USE_ITTAPI
-
-#define profile_lock_init(lock, name) __itt_sync_create(lock, "jl_mutex_t", name, __itt_attr_mutex)
-#define profile_lock_start_wait(lock) __itt_sync_prepare(lock)
-#define profile_lock_acquired(lock) __itt_sync_acquired(lock)
-#define profile_lock_release_start(lock) __itt_sync_releasing(lock)
-#define profile_lock_release_end(lock)
-
-#endif
-
-#ifndef profile_lock_init
-#define profile_lock_init(lock, name)
-#endif
-
-#ifndef profile_lock_start_wait
-#define profile_lock_start_wait(lock)
-#endif
-
-#ifndef profile_lock_acquired
-#define profile_lock_acquired(lock)
-#endif
-
-#ifndef profile_lock_release_start
-#define profile_lock_release_start(lock)
-#endif
-
-#ifndef profile_lock_release_end
-#define profile_lock_release_end(lock)
-#endif
-
 void _jl_mutex_init(jl_mutex_t *lock, const char *name) JL_NOTSAFEPOINT
 {
     jl_atomic_store_relaxed(&lock->owner, (jl_task_t*)NULL);
     lock->count = 0;
-    profile_lock_init(lock, name);
+    jl_profile_lock_init(lock, name);
 }
 
 void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
@@ -774,11 +744,11 @@ void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
         lock->count++;
         return;
     }
-    profile_lock_start_wait(lock);
+    jl_profile_lock_start_wait(lock);
     while (1) {
         if (owner == NULL && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
             lock->count = 1;
-            profile_lock_acquired(lock);
+            jl_profile_lock_acquired(lock);
             return;
         }
         if (safepoint) {
@@ -854,7 +824,7 @@ void _jl_mutex_unlock_nogc(jl_mutex_t *lock)
     assert(jl_atomic_load_relaxed(&lock->owner) == jl_current_task &&
            "Unlocking a lock in a different thread.");
     if (--lock->count == 0) {
-        profile_lock_release_start(lock);
+        jl_profile_lock_release_start(lock);
         jl_atomic_store_release(&lock->owner, (jl_task_t*)NULL);
         jl_cpu_wake();
         if (jl_running_under_rr(0)) {
@@ -863,7 +833,7 @@ void _jl_mutex_unlock_nogc(jl_mutex_t *lock)
             uv_cond_broadcast(&cond);
             uv_mutex_unlock(&tls_lock);
         }
-        profile_lock_release_end(lock);
+        jl_profile_lock_release_end(lock);
     }
 #endif
 }
