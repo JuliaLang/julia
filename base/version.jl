@@ -80,7 +80,6 @@ VersionNumber(major::Integer, minor::Integer = 0, patch::Integer = 0,
         map(x->x isa Integer ? UInt64(x) : String(x), bld))
 
 VersionNumber(v::Tuple) = VersionNumber(v...)
-VersionNumber(v::VersionNumber) = v
 
 function print(io::IO, v::VersionNumber)
     v == typemax(VersionNumber) && return print(io, "∞")
@@ -289,7 +288,7 @@ function banner(io::IO = stdout)
 
     commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" : " ($(split(Base.GIT_VERSION_INFO.date_string)[1]))"
 
-    if get(io, :color, false)::Bool
+    if get(io, :color, false)
         c = text_colors
         tx = c[:normal] # text
         jl = c[:normal] # julia
@@ -298,26 +297,24 @@ function banner(io::IO = stdout)
         d3 = c[:bold] * c[:green]   # third dot
         d4 = c[:bold] * c[:magenta] # fourth dot
 
-        print(io,"""               $(d3)_$(tx)
-           $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  Documentation: https://docs.julialang.org
-          $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
-           $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
-          $(jl)| | | | | | |/ _` |$(tx)  |
-          $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
-         $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
-        $(jl)|__/$(tx)                   |
-
+        print(io,"""
+                     $(d3)_$(tx)
+          $(d1)_$(jl)   _    $(d2)_$(tx)$(d3)(_)$(tx)$(d4)_$(tx)     |  Documentation: https://docs.julialang.org
+         $(d1)(_)$(jl) | |  $(d2)(_)$(jl) |$(d4)(_)$(jl)_  |
+         $(jl)____| |_  _| | / /$(tx)  |  Type \"?\" for help, \"]?\" for Pkg help.
+        $(jl)|_  /| _ \\| | |/ /$(tx)   |
+         $(jl)/ /_||_| | | |\\ \\$(tx)   |  Version $(VERSION)$(commit_date)
+        $(jl)/____|___/|_|_| \\_\\$(tx)  |  $(commit_string)
         """)
     else
         print(io,"""
-                       _
-           _       _ _(_)_     |  Documentation: https://docs.julialang.org
-          (_)     | (_) (_)    |
-           _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
-          | | | | | | |/ _` |  |
-          | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
-         _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
-        |__/                   |
+                     _
+          _   _    _(_)_     |  Documentation: https://docs.julialang.org
+         (_) | |  (_) |(_)_  |
+         ____| |_  _| | / /  |  Type "?" for help, "]?" for Pkg help.
+        |_  /| _ \\| | |/ /   |
+         / /_||_| | | |\\ \\   |  Version 1.8.4 (2022-12-23)
+        /____|___/|_|_| \\_\\  |  Official https://julialang.org/ release
 
         """)
     end
