@@ -311,7 +311,7 @@ function banner(io::IO = stdout)
         print(io,"""
                      _
           _   _    _(_)_     |  Documentation: https://docs.julialang.org
-         (_) | |  (_) |(_)_  |
+         (_) | |  (_) |(_)_  |  SeMPage: http://smp.if.uj.edu.pl
          ____| |_  _| | / /  |  Type "?" for help, "]?" for Pkg help.
         |_  /| _ \\| | |/ /   |
          / /_||_| | | |\\ \\   |  Version 1.8.4 (2022-12-23)
