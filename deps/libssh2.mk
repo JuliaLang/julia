@@ -67,7 +67,7 @@ define LIBSSH2_INSTALL
 ifeq ($$(BUILD_OS),WINNT)
 	mkdir -p $2/$$(build_shlibdir) $2/$$(build_libdir)
 	cp $1/src/libssh2.$$(SHLIB_EXT) $2/$$(build_shlibdir)/libssh2.$$(SHLIB_EXT)
-	cp $1/src/liblibssh2.dll.a $2/$$(build_libdir)/
+	cp $1/src/libssh2.dll.a $2/$$(build_libdir)/
 else
 	$(call MAKE_INSTALL,$1,$2,$3)
 endif
