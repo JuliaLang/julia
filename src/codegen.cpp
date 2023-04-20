@@ -8894,13 +8894,6 @@ extern "C" void jl_init_llvm(void)
     if (jit_profiling && atoi(jit_profiling)) {
         jl_using_intel_jitevents = 1;
     }
-    if (!jl_using_intel_jitevents) {
-        // Check if we are running under Intel VTune Amplifier
-        const char *vtune = getenv("INTEL_JIT_PROFILER64");
-        if (vtune && strlen(vtune) > 0) {
-            jl_using_intel_jitevents = 1;
-        }
-    }
 #endif
 
 #if defined(JL_USE_OPROFILE_JITEVENTS)
