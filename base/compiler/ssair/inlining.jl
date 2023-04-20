@@ -822,7 +822,6 @@ end
 function compileable_specialization(match::MethodMatch, effects::Effects,
         et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
     mi = specialize_method(match)
-    mi === nothing && return
     return compileable_specialization(mi, effects, et, info; compilesig_invokes)
 end
 
@@ -957,8 +956,7 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
 
     # Get the specialization for this method signature
     # (later we will decide what to do with it)
-    mi = specialize_method(match) # Union{Nothing, MethodInstance}
-    mi === nothing && return nothing
+    mi = specialize_method(match)
     return resolve_todo(mi, match, argtypes, info, flag, state; invokesig)
 end
 
