@@ -45,13 +45,30 @@ end
 end
 
 # TODO: test copy(::Buffer) and unsafe_copyto!
-# @testset "Buffer copy" begin
-# end
+@testset "Buffer copy" begin
+    b = Buffer{Int}(undef, 3)
+    b[1] = 1; b[2] = 2; b[3] = 3;
+    b2 = copy(b)
+    @test b2 == b
+    @test b2 !== b
+    b = Buffer{Union{Int32,Int64}}(undef, 3)
+    b[1] = 1; b[2] = 2; b[3] = 3;
+    b2 = copy(b)
+    @test b2 == b
+    @test b2 !== b
+    b = Buffer{Any}(undef, 3)
+    b[1] = 1; b[2] = 2; b[3] = 3;
+    b2 = copy(b)
+    @test b2 == b
+    @test b2 !== b
+
+end
 
 
 @test Base.summarysize(Buffer{Union{Nothing,Missing}}(undef, 16)) <
     Base.summarysize(Buffer{Union{Nothing,Missing}}(undef, 32))
 @test Base.summarysize(Buffer{Nothing}(undef, 16)) ==
     Base.summarysize(Buffer{Nothing}(undef, 32))
+
 
 

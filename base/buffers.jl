@@ -14,7 +14,7 @@ const JL_BUFFER_SIZEOF = PTR_SIZE + PTR_SIZE
 const JL_TAGGEDVALUE_SIZEOF = PTR_SIZE
 
 tagged_from_value(v::Ptr{Cvoid}) = v - JL_TAGGEDVALUE_SIZEOF
-header_from_value(v::Ptr{Cvoid}) = unsafe_convert(UInt, tagged_from_value(v))
+header_from_value(v::Ptr{Cvoid}) = UInt(tagged_from_value(v))
 
 # PTR_SIZE is the offset to jl_taggedvalue_t
 is_gc_marked_value(v::Ptr{Cvoid}) = (header_from_value(v) & UInt(1)) === UInt(1)
@@ -95,14 +95,13 @@ function memmove_ptrs!(dst::Ptr{Ptr{Cvoid}}, src_start::Ptr{Ptr{Cvoid}}, nbytes:
     return nothing
 end
 
-function memcpy!(dst::Ptr{Cvoid}, src::Ptr{Cvoid}, nbytes::Csize_t)
+function memcpy!(dst::Ptr, src::Ptr, nbytes::Integer)
     ccall(:memcpy, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), dst, src, nbytes)
 end
-function memmove(dst::Ptr{Cvoid}, src::Ptr{Cvoid}, nbytes::Csize_t)
+function memmove(dst::Ptr, src::Ptr, nbytes::Integer)
     ccall(:memmove, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), dst, src, nbytes)
 end
-
-function memset(p::Ptr{Cvoid}, val, nbytes::Csize_t)
+function memset(p::Ptr, val, nbytes::Integer)
     ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), p, val, nbytes)
 end
 
@@ -114,17 +113,17 @@ function memcpy_ptrs!(
     nbytes::UInt
 )
     # destination is old and doesn't refer to any young object
+    ndone = UInt(0)
     if is_gc_old_marked_value(downer)
         # Source is young or being promoted or might refer to young objects
         # (i.e. source is not an old object that doesn't have wb triggered)
         if !is_gc_old_value(sowner)
-            ndone = UInt(0)
             if dst < src || dst > src + nbytes
                 while ndone < nbytes
                     valp = unsafe_load(src + ndone)
                     unsafe_store!(dst + ndone, valp)
                     if valp !== C_NULL && !is_gc_marked_value(valp)
-                        ccall(:jl_gc_queue_root, Cvoid, (Any,), owner)
+                        ccall(:jl_gc_queue_root, Cvoid, (Any,), downer)
                         break
                     else
                         ndone += PTR_SIZE
@@ -137,8 +136,7 @@ function memcpy_ptrs!(
                     valp = unsafe_load(srcp + (nbytes - ndone - PTR_SIZE))
                     unsafe_store!(dstp + (nbytes - ndone - PTR_SIZE), valp)
                     if valp !== C_NULL && !is_gc_marked_value(valp)
-                        ccall(:jl_gc_queue_root, Cvoid, (Any,), owner)
-                        gc_queue_root(downer)
+                        ccall(:jl_gc_queue_root, Cvoid, (Any,), downer)
                         break
                     else
                         ndone += PTR_SIZE
@@ -582,31 +580,56 @@ function ==(v1::BufferType, v2::BufferType)
     return true
 end
 
-copy(b::T) where {T<:BufferType} = ccall(:jl_buffer_copy, Ref{T}, (Any,), b)
+#copy(b::T) where {T<:BufferType} = ccall(:jl_buffer_copy, Ref{T}, (Any,), b)
 
-function unsafe_copyto!(dest::Union{Buffer{T}, DynamicBuffer{T}}, doffs, src::Union{Buffer{T}, DynamicBuffer{T}}, soffs, n) where T
+function copy(b::BufferType{T}) where {T}
+    len = length(b)
+    dst = similar(b, len)
+    unsafe_copyto!(dst, 1, b, 1, len)
+    return dst
+end
+
+# this is only needed to avoid possible ambiguities with methods added in some packages
+function copyto!(dest::BufferType{T}, doffs::Integer, src::BufferType{T}, soffs::Integer, n::Integer) where T
+    return _copyto_impl!(dest, doffs, src, soffs, n)
+end
+function _copyto_impl!(dest::BufferType, doffs::BufferType, src::Array, soffs::Integer, n::Integer)
+    n == 0 && return dest
+    n > 0 || _throw_argerror("Number of elements to copy must be nonnegative.")
+    @boundscheck checkbounds(dest, doffs:doffs+n-1)
+    @boundscheck checkbounds(src, soffs:soffs+n-1)
+    unsafe_copyto!(dest, doffs, src, soffs, n)
+    return dest
+end
+
+function unsafe_copyto!(dest::Union{Buffer{T}, DynamicBuffer{T}}, doffs, src::BufferType{T}, soffs, n) where T
+    lyt = ElementLayout(T)
+    elsz = UInt(lyt.elsize)
     t1 = @_gc_preserve_begin dest
     t2 = @_gc_preserve_begin src
-    tsz = elsize(dest)
     doffset = doffs - 1
     soffset = soffs - 1
-    dtoffset = tsz * doffset
-    stoffset = tsz * soffset
-    destp = unsafe_convert(Ptr{T}, dest)
-    srcp = unsafe_convert(Ptr{T}, src)
-    if !allocatedinline(T)
-        # FIXME transition to:
-        # memcpy_ptrs!(downer, sowner, dest, destp + dtoffset, src, srcp + stoffset, n * tsz)
-        ccall(:jl_buffer_ptr_copy, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
-              dest, destp + dtoffset, src, srcp + stoffset, n)
-    elseif isbitstype(T)
-        memmove(destp + dtoffset, srcp + stoffset, n * tsz)
-    elseif isbitsunion(T)
-        memmove(destp + dtoffset, srcp + stoffset, n * tsz)
+    dtoffset = elsz * doffset
+    stoffset = elsz * soffset
+    dest_obj = _pointer_from_buffer(dest)
+    src_obj = _pointer_from_buffer(dest)
+    destp = unsafe_convert(Ptr{Ptr{Cvoid}}, dest_obj + PTR_SIZE)
+    srcp = unsafe_convert(Ptr{Ptr{Cvoid}}, src_obj + PTR_SIZE)
+    if lyt.kind === BOX_KIND
+        memcpy_ptrs!(dest_obj, src_obj,
+            unsafe_convert(Ptr{Ptr{Cvoid}}, destp + dtoffset),
+            unsafe_convert(Ptr{Ptr{Cvoid}}, srcp + stoffset), n * elsz)
+        # ccall(:jl_buffer_ptr_copy, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
+        #       dest, destp + dtoffset, src, srcp + stoffset, n)
+    elseif lyt.kind === UNION_KIND
+        memmove(destp + dtoffset, srcp + stoffset, n * elsz)
         # copy selector bytes
-        memmove(destp + (length(dest) * tsz) + doffset, srcp + (length(src) * tsz) + soffset, n)
+        memmove(destp + (length(dest) * elsz) + doffset, srcp + (length(src) * elsz) + soffset, n)
+    elseif lyt.kind === BOOL_KIND
+        # TODO Do we need to use memcpy_ptrs! for HAS_PTR_KIND?
+        # FIXME BOOL_KIND unsafe_copyto!
     else
-        _unsafe_copyto!(dest, doffs, src, soffs, n)
+        memmove(destp + dtoffset, srcp + stoffset, n * elsz)
     end
     @_gc_preserve_end t2
     @_gc_preserve_end t1
