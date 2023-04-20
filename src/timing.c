@@ -11,28 +11,26 @@ extern "C" {
 #endif
 
 #ifdef ENABLE_TIMINGS
-#include "timing.h"
 
 #ifndef HAVE_TIMING_SUPPORT
 #error Timings are not supported on your compiler
 #endif
 
 static uint64_t t0;
-#ifdef USE_TRACY
+#if defined(USE_TRACY) || defined(USE_ITTAPI)
 /**
  * These sources often generate millions of events / minute. Although Tracy
  * can generally keep up with that, those events also bloat the saved ".tracy"
  * files, so we disable them by default.
  **/
-JL_DLLEXPORT uint64_t jl_timing_enable_mask = 0xFFFFFFFFFFFFFFFF &
-                                              ~(1ull << JL_TIMING_ROOT) &
-                                              ~(1ull << JL_TIMING_TYPE_CACHE_LOOKUP) &
-                                              ~(1ull << JL_TIMING_METHOD_MATCH) &
-                                              ~(1ull << JL_TIMING_METHOD_LOOKUP_FAST) &
-                                              ~(1ull << JL_TIMING_AST_COMPRESS) &
-                                              ~(1ull << JL_TIMING_AST_UNCOMPRESS);
+JL_DLLEXPORT uint64_t jl_timing_enable_mask = ~((1ull << JL_TIMING_ROOT) |
+                                              (1ull << JL_TIMING_TYPE_CACHE_LOOKUP) |
+                                              (1ull << JL_TIMING_METHOD_MATCH) |
+                                              (1ull << JL_TIMING_METHOD_LOOKUP_FAST) |
+                                              (1ull << JL_TIMING_AST_COMPRESS) |
+                                              (1ull << JL_TIMING_AST_UNCOMPRESS));
 #else
-JL_DLLEXPORT uint64_t jl_timing_enable_mask = 0xFFFFFFFFFFFFFFFF;
+JL_DLLEXPORT uint64_t jl_timing_enable_mask = ~0ull;
 #endif
 
 JL_DLLEXPORT uint64_t jl_timing_counts[(int)JL_TIMING_LAST] = {0};
@@ -43,10 +41,14 @@ JL_DLLEXPORT uint32_t jl_timing_print_limit = 10;
 
 const char *jl_timing_names[(int)JL_TIMING_LAST] =
     {
-#define X(name) #name
+#define X(name) #name,
         JL_TIMING_OWNERS
 #undef X
     };
+
+#ifdef USE_ITTAPI
+JL_DLLEXPORT __itt_event jl_timing_ittapi_events[(int)JL_TIMING_EVENT_LAST];
+#endif
 
 void jl_print_timings(void)
 {
@@ -66,6 +68,16 @@ void jl_print_timings(void)
 void jl_init_timing(void)
 {
     t0 = cycleclock();
+
+    _Static_assert(JL_TIMING_EVENT_LAST < sizeof(uint64_t) * CHAR_BIT, "Too many timing events!");
+    _Static_assert((int)JL_TIMING_LAST <= (int)JL_TIMING_EVENT_LAST, "More owners than events!");
+
+    int i = 0;
+#ifdef USE_ITTAPI
+#define X(name) jl_timing_ittapi_events[i++] = __itt_event_create(#name, strlen(#name));
+    JL_TIMING_EVENTS
+#undef X
+#endif
 }
 
 void jl_destroy_timing(void)

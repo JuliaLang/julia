@@ -311,7 +311,7 @@ NOINLINE uintptr_t gc_get_stack_ptr(void)
 
 void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
 {
-    JL_TIMING(GC, Stop);
+    JL_TIMING(GC, GC_Stop);
 #ifdef USE_TRACY
     TracyCZoneCtx ctx = *(JL_TIMING_CURRENT_BLOCK->tracy_ctx);
     TracyCZoneColor(ctx, 0x696969);
@@ -3043,7 +3043,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     uint64_t start_mark_time = jl_hrtime();
     JL_PROBE_GC_MARK_BEGIN();
     {
-        JL_TIMING(GC, Mark);
+        JL_TIMING(GC, GC_Mark);
 
         // 1. fix GC bits of objects in the remset.
         assert(gc_n_threads);
@@ -3204,7 +3204,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     uint64_t start_sweep_time = jl_hrtime();
     JL_PROBE_GC_SWEEP_BEGIN(sweep_full);
     {
-        JL_TIMING(GC, Sweep);
+        JL_TIMING(GC, GC_Sweep);
 #ifdef USE_TRACY
         if (sweep_full) {
             TracyCZoneCtx ctx = *(JL_TIMING_CURRENT_BLOCK->tracy_ctx);
@@ -3405,7 +3405,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     // Doing this on all threads is racy (it's impossible to check
     // or wait for finalizers on other threads without dead lock).
     if (!ptls->finalizers_inhibited && ptls->locks.len == 0) {
-        JL_TIMING(GC, Finalizers);
+        JL_TIMING(GC, GC_Finalizers);
         run_finalizers(ct);
     }
     JL_PROBE_GC_FINALIZER();
