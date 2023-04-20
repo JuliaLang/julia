@@ -104,7 +104,7 @@ void *mach_segv_listener(void *arg)
 }
 
 
-static void allocate_mach_handler()
+static void allocate_mach_handler(void)
 {
     // ensure KEYMGR_GCC3_DW2_OBJ_LIST is initialized, as this requires malloc
     // and thus can deadlock when used without first initializing it.
