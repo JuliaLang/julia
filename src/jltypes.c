@@ -927,7 +927,7 @@ static ssize_t lookup_type_idx_linearvalue(jl_svec_t *cache, jl_value_t *key1, j
 
 static jl_value_t *lookup_type(jl_typename_t *tn JL_PROPAGATES_ROOT, jl_value_t **key, size_t n)
 {
-    JL_TIMING(TYPE_CACHE_LOOKUP);
+    JL_TIMING(TYPE_CACHE_LOOKUP, TYPE_CACHE_LOOKUP);
     if (tn == jl_type_typename) {
         assert(n == 1);
         jl_value_t *uw = jl_unwrap_unionall(key[0]);
@@ -948,7 +948,7 @@ static jl_value_t *lookup_type(jl_typename_t *tn JL_PROPAGATES_ROOT, jl_value_t 
 
 static jl_value_t *lookup_typevalue(jl_typename_t *tn, jl_value_t *key1, jl_value_t **key, size_t n, int leaf)
 {
-    JL_TIMING(TYPE_CACHE_LOOKUP);
+    JL_TIMING(TYPE_CACHE_LOOKUP, TYPE_CACHE_LOOKUP);
     unsigned hv = typekeyvalue_hash(tn, key1, key, n, leaf);
     if (hv) {
         jl_svec_t *cache = jl_atomic_load_relaxed(&tn->cache);
@@ -1069,7 +1069,7 @@ static int is_cacheable(jl_datatype_t *type)
 
 void jl_cache_type_(jl_datatype_t *type)
 {
-    JL_TIMING(TYPE_CACHE_INSERT);
+    JL_TIMING(TYPE_CACHE_INSERT, TYPE_CACHE_INSERT);
     assert(is_cacheable(type));
     jl_value_t **key = jl_svec_data(type->parameters);
     int n = jl_svec_len(type->parameters);
@@ -2829,7 +2829,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(28,
+                        jl_perm_symsvec(29,
                             "name",
                             "module",
                             "file",
@@ -2857,8 +2857,9 @@ void jl_init_types(void) JL_GC_DISABLED
                             "isva",
                             "is_for_opaque_closure",
                             "constprop",
+                            "max_varargs",
                             "purity"),
-                        jl_svec(28,
+                        jl_svec(29,
                             jl_symbol_type,
                             jl_module_type,
                             jl_symbol_type,
@@ -2885,6 +2886,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_int32_type,
                             jl_bool_type,
                             jl_bool_type,
+                            jl_uint8_type,
                             jl_uint8_type,
                             jl_uint8_type),
                         jl_emptysvec,

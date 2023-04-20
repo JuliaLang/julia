@@ -43,6 +43,12 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
                 error("")
             end
         end
+
+        use_inst = ir[op]
+        if isa(use_inst[:inst], Union{GotoIfNot, GotoNode, ReturnNode})
+            @verify_error "At statement %$use_idx: Invalid use of value statement or terminator %$(op.id)"
+            error("")
+        end
     elseif isa(op, GlobalRef)
         if !isdefined(op.mod, op.name) || !isconst(op.mod, op.name)
             @verify_error "Unbound GlobalRef not allowed in value position"
