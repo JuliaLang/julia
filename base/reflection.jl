@@ -343,7 +343,10 @@ If `x === y` then `objectid(x) == objectid(y)`, and usually when `x !== y`, `obj
 
 See also [`hash`](@ref), [`IdDict`](@ref).
 """
-objectid(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
+function objectid(@nospecialize(x))
+    @_foldable_meta
+    ccall(:jl_object_id, UInt, (Any,), x)
+end
 
 # concrete datatype predicates
 
