@@ -343,10 +343,18 @@ If `x === y` then `objectid(x) == objectid(y)`, and usually when `x !== y`, `obj
 
 See also [`hash`](@ref), [`IdDict`](@ref).
 """
-function objectid(@nospecialize(x))
-    @_foldable_meta
-    ccall(:jl_object_id, UInt, (Any,), x)
+function objectid(x)
+    # objectid is foldable iff it isn't a pointer.
+    if isimmutable(x) || x isa String || x isa Symbol
+        return _foldable_objectid(x)
+    end
+    return _objectid(x)
 end
+function _foldable_objectid(@nospecialize(x))
+    @_foldable_meta
+    _objectid(x)
+end
+_objectid(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
 
 # concrete datatype predicates
 
