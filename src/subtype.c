@@ -2774,10 +2774,9 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
         // given x<:T<:x, substitute x for T
         varval = vb->ub;
     }
-    // TODO: `vb.occurs_cov == 1` here allows substituting Tuple{<:X} => Tuple{X},
-    // which is valid but changes some ambiguity errors so we don't need to do it yet.
-    else if ((/*vb->occurs_cov == 1 || */is_leaf_bound(vb->ub)) &&
-             !var_occurs_invariant(u->body, u->var, 0)) {
+    // TODO: `vb.occurs_cov == 1`, we could also substitute Tuple{<:X} => Tuple{X},
+    // but it may change some ambiguity errors so we don't need to do it yet.
+    else if (vb->occurs_cov && is_leaf_bound(vb->ub) && !jl_has_free_typevars(vb->ub)) {
         // replace T<:x with x in covariant position when possible
         varval = vb->ub;
     }
