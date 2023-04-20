@@ -142,8 +142,8 @@ tests = [
         "a..b"       => "(call-i a .. b)"
         "a … b"      => "(call-i a … b)"
         "a .… b"     => "(dotcall-i a … b)"
-        "[1 :a]"     => "(hcat 1 (quote a))"
-        "[1 2:3 :a]" =>  "(hcat 1 (call-i 2 : 3) (quote a))"
+        "[1 :a]"     => "(hcat 1 (quote-: a))"
+        "[1 2:3 :a]" =>  "(hcat 1 (call-i 2 : 3) (quote-: a))"
         "x..."     => "(... x)"
         "x:y..."   => "(... (call-i x : y))"
         "x..y..."  => "(... (call-i x .. y))"
@@ -195,7 +195,7 @@ tests = [
         "x 'y"      =>  "x"
     ],
     JuliaSyntax.parse_unary => [
-        ":T"       => "(quote T)"
+        ":T"       => "(quote-: T)"
         "in::T"    => "(::-i in T)"
         "isa::T"   => "(::-i isa T)"
         "-2^x"     => "(call-pre - (call-i 2 ^ x))"
@@ -374,7 +374,7 @@ tests = [
         "(a=1)[]" =>  "(ref (parens (= a 1)))" => Expr(:ref, Expr(:(=), :a, 1))
         "a[end]"  =>  "(ref a end)"
         "a[begin]"  =>  "(ref a begin)"
-        "a[:(end)]" => "(typed_hcat a (quote (parens (error-t))) (error-t))"
+        "a[:(end)]" => "(typed_hcat a (quote-: (parens (error-t))) (error-t))"
         "T[x   y]"  =>  "(typed_hcat T x y)"
         "T[x ; y]"  =>  "(typed_vcat T x y)"
         "T[a b; c d]"  =>  "(typed_vcat T (row a b) (row c d))"
@@ -393,8 +393,8 @@ tests = [
         "(a=1).()" =>  "(dotcall (parens (= a 1)))" => Expr(:., Expr(:(=), :a, 1), Expr(:tuple))
         "f. (x)"    =>  "(dotcall f (error-t) x)"
         # Other dotted syntax
-        "A.:+"      =>  "(. A (quote +))"
-        "A.: +"     =>  "(. A (quote (error-t) +))"
+        "A.:+"      =>  "(. A (quote-: +))"
+        "A.: +"     =>  "(. A (quote-: (error-t) +))"
         "f.\$x"     =>  "(. f (inert (\$ x)))"
         "f.\$(x+y)" =>  "(. f (inert (\$ (parens (call-i x + y)))))"
         "A.\$B.@x"  =>  "(macrocall (. (. A (inert (\$ B))) (quote @x)))"
@@ -648,9 +648,9 @@ tests = [
         "import \$A.@x" =>  "(import (importpath (\$ A) @x))"
         "import A.B"    =>  "(import (importpath A B))"
         "import A.B.C"  =>  "(import (importpath A B C))"
-        "import A.:+"   =>  "(import (importpath A (quote +)))"
-        "import A.(:+)" =>  "(import (importpath A (parens (quote +))))"
-        "import A.:(+)" =>  "(import (importpath A (quote (parens +))))"
+        "import A.:+"   =>  "(import (importpath A (quote-: +)))"
+        "import A.(:+)" =>  "(import (importpath A (parens (quote-: +))))"
+        "import A.:(+)" =>  "(import (importpath A (quote-: (parens +))))"
         "import A.=="   =>  "(import (importpath A ==))"
         "import A.⋆.f"  =>  "(import (importpath A ⋆ f))"
         "import A..."   =>  "(import (importpath A ..))"
@@ -712,13 +712,13 @@ tests = [
         "''"            =>  "(char (error))"
         "'"             =>  "(char (error))"
         # symbol/expression quote
-        ":foo"   => "(quote foo)"
+        ":foo"   => "(quote-: foo)"
         # Literal colons
         ":)"     => ":"
         ": end"  => ":"
         # Whitespace after quoting colon
-        ": foo"  => "(quote (error-t) foo)"
-        ":\nfoo" => "(quote (error-t) foo)"
+        ": foo"  => "(quote-: (error-t) foo)"
+        ":\nfoo" => "(quote-: (error-t) foo)"
         # plain equals
         "="      => "(error =)"
         # Identifiers
@@ -745,12 +745,12 @@ tests = [
         "+"  =>  "+"
         "~"  =>  "~"
         # Quoted syntactic operators allowed
-        ":+="  =>  "(quote +=)"
-        ":.="  =>  "(quote .=)"
+        ":+="  =>  "(quote-: +=)"
+        ":.="  =>  "(quote-: .=)"
         # Special symbols quoted
-        ":end" => "(quote end)"
-        ":(end)" => "(quote (parens (error-t)))"
-        ":<:"  => "(quote <:)"
+        ":end" => "(quote-: end)"
+        ":(end)" => "(quote-: (parens (error-t)))"
+        ":<:"  => "(quote-: <:)"
         # unexpect =
         "="    => "(error =)"
         # parse_cat
@@ -782,9 +782,9 @@ tests = [
         "[x=1, y=2]"    =>  "(vect (= x 1) (= y 2))"
         "[x=1, ; y=2]"  =>  "(vect (= x 1) (parameters (= y 2)))"
         # parse_paren
-        ":(=)"  =>  "(quote (parens =))"
-        ":(::)"  =>  "(quote (parens ::))"
-        ":(::\n)" => "(quote (parens ::))"
+        ":(=)"  =>  "(quote-: (parens =))"
+        ":(::)"  =>  "(quote-: (parens ::))"
+        ":(::\n)" => "(quote-: (parens ::))"
         "(function f \n end)" => "(parens (function f))"
         # braces
         "{x y}"      =>  "(bracescat (row x y))"

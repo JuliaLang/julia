@@ -844,8 +844,8 @@ function parse_range(ps::ParseState)
                     preceding_whitespace(peek_token(ps)) &&
                     !preceding_whitespace(peek_token(ps, 2))
                 # Tricky cases in space sensitive mode
-                # [1 :a]      ==>  (hcat 1 (quote a))
-                # [1 2:3 :a]  ==>  (hcat 1 (call-i 2 : 3) (quote a))
+                # [1 :a]      ==>  (hcat 1 (quote-: a))
+                # [1 2:3 :a]  ==>  (hcat 1 (call-i 2 : 3) (quote-: a))
                 break
             end
             t2 = peek_token(ps,2)
@@ -1159,7 +1159,7 @@ function parse_unary(ps::ParseState)
             is_syntactic_operator(op_k)
         )
         # `op_t` is not an initial operator
-        # :T      ==>  (quote T)
+        # :T      ==>  (quote-: T)
         # in::T   ==>  (:: in T)
         # isa::T  ==>  (:: isa T)
         parse_factor(ps)
@@ -1609,13 +1609,13 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 parse_call_arglist(ps, K")")
                 emit(ps, mark, K"dotcall")
             elseif k == K":"
-                # A.:+  ==>  (. A (quote +))
-                # A.: +  ==>  (. A (error-t) (quote +))
+                # A.:+  ==>  (. A (quote-: +))
+                # A.: +  ==>  (. A (error-t) (quote-: +))
                 m = position(ps)
                 bump(ps, TRIVIA_FLAG)
                 bump_disallowed_space(ps)
                 parse_atom(ps, false)
-                emit(ps, m, K"quote")
+                emit(ps, m, K"quote", COLON_QUOTE)
                 emit(ps, mark, K".")
             elseif k == K"$"
                 # f.$x      ==>  (. f (inert ($ x)))
@@ -2374,21 +2374,21 @@ function parse_atsym(ps::ParseState, allow_quotes=true)
         # export ($f)   ==> (export ($ f))
         mark = position(ps)
         if allow_quotes && peek(ps) == K":"
-            # import A.:+  ==>  (import (importpath A (quote +)))
+            # import A.:+  ==>  (import (importpath A (quote-: +)))
             emit_diagnostic(ps, warning="quoting with `:` is not required here")
         end
         parse_unary_prefix(ps)
         pos = position(ps)
         warn_parens = false
         if peek_behind(ps, pos).kind == K"parens"
-            # import A.(:+)  ==>  (import (importpath A (parens (quote +))))
+            # import A.(:+)  ==>  (import (importpath A (parens (quote-: +))))
             pos = first_child_position(ps, pos)
             warn_parens = true
         end
         if allow_quotes && peek_behind(ps, pos).kind == K"quote"
             pos = first_child_position(ps, pos)
             if peek_behind(ps, pos).kind == K"parens"
-                # import A.:(+)  ==>  (import (importpath A (quote (parens +))))
+                # import A.:(+)  ==>  (import (importpath A (quote-: (parens +))))
                 pos = first_child_position(ps, pos)
                 warn_parens = true
             end
@@ -3015,14 +3015,14 @@ function parse_paren(ps::ParseState, check_identifiers=true)
         emit(ps, mark, K"tuple", PARENS_FLAG)
     elseif is_syntactic_operator(k)
         # allow :(=) etc in unchecked contexts, eg quotes
-        # :(=)  ==>  (quote (parens =))
+        # :(=)  ==>  (quote-: (parens =))
         parse_atom(ps, check_identifiers)
         bump_closing_token(ps, K")")
         emit(ps, mark, K"parens")
     elseif !check_identifiers && k == K"::" &&
             peek(ps, 2, skip_newlines=true) == K")"
         # allow :(::) as a special case
-        # :(::)  ==>  (quote (parens ::))
+        # :(::)  ==>  (quote-: (parens ::))
         bump(ps)
         bump(ps, TRIVIA_FLAG, skip_newlines=true)
         emit(ps, mark, K"parens")
@@ -3415,7 +3415,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         emit(ps, mark, K"char")
     elseif leading_kind == K":"
         # symbol/expression quote
-        # :foo  ==>  (quote foo)
+        # :foo  ==>  (quote-: foo)
         t = peek_token(ps, 2)
         k = kind(t)
         if is_closing_token(ps, k) && (!is_keyword(k) || preceding_whitespace(t))
@@ -3427,19 +3427,19 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         end
         bump(ps, TRIVIA_FLAG) # K":"
         if preceding_whitespace(t)
-            # : foo   ==>  (quote (error-t) foo)
-            # :\nfoo  ==>  (quote (error-t) foo)
+            # : foo   ==>  (quote-: (error-t) foo)
+            # :\nfoo  ==>  (quote-: (error-t) foo)
             bump_trivia(ps, TRIVIA_FLAG, skip_newlines=true,
                         error="whitespace not allowed after `:` used for quoting")
         end
         # Being inside quote makes keywords into identifiers at the
         # first level of nesting
-        # :end ==> (quote end)
-        # :(end) ==> (quote (parens (error-t)))
+        # :end ==> (quote-: end)
+        # :(end) ==> (quote-: (parens (error-t)))
         # Being inside quote makes end non-special again (issue #27690)
-        # a[:(end)]  ==>  (ref a (quote (error-t end)))
+        # a[:(end)]  ==>  (ref a (quote-: (error-t end)))
         parse_atom(ParseState(ps, end_symbol=false), false)
-        emit(ps, mark, K"quote")
+        emit(ps, mark, K"quote", COLON_QUOTE)
     elseif check_identifiers && leading_kind == K"=" && is_plain_equals(peek_token(ps))
         # =   ==> (error =)
         bump(ps, error="unexpected `=`")
@@ -3505,12 +3505,12 @@ function parse_atom(ps::ParseState, check_identifiers=true)
             end
             emit(ps, mark, K"var")
         elseif check_identifiers && is_closing_token(ps, leading_kind)
-            # :(end)  ==>  (quote (error end))
+            # :(end)  ==>  (quote-: (error end))
             bump(ps, error="invalid identifier")
         else
             # Remap keywords to identifiers.
-            # :end  ==>  (quote end)
-            # :<:   ==> (quote <:)
+            # :end  ==>  (quote-: end)
+            # :<:   ==> (quote-: <:)
             bump(ps, remap_kind=K"Identifier")
         end
     elseif leading_kind == K"(" # parens or tuple
