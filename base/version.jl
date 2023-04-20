@@ -299,12 +299,13 @@ function banner(io::IO = stdout)
 
         print(io,"""
                      $(d3)_$(tx)
-          $(d1)_$(jl)   _    $(d2)_$(tx)$(d3)(_)$(tx)$(d4)_$(tx)     |  Documentation: https://docs.julialang.org
-         $(d1)(_)$(jl) | |  $(d2)(_)$(jl) |$(d4)(_)$(jl)_  |
+          $(d1)_$(jl)   _    $(d2)_$(tx)$(d3)(_)$(tx) $(d4)_$(tx)     |  Documentation: https://docs.julialang.org
+         $(d1)(_)$(jl) | |  $(d2)(_)$(jl) |$(d4)(_)$(jl)_  |  SeMPage: http://smp.if.uj.edu.pl
          $(jl)____| |_  _| | / /$(tx)  |  Type \"?\" for help, \"]?\" for Pkg help.
         $(jl)|_  /| _ \\| | |/ /$(tx)   |
          $(jl)/ /_||_| | | |\\ \\$(tx)   |  Version $(VERSION)$(commit_date)
         $(jl)/____|___/|_|_| \\_\\$(tx)  |  $(commit_string)
+
         """)
     else
         print(io,"""
