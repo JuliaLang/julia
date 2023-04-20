@@ -21,8 +21,8 @@ end
     @test convert(Union{Nothing, Missing}, nothing) === nothing
     @test convert(Union{Missing, Nothing, Float64}, 1) === 1.0
 
-    @test_throws MethodError convert(Missing, 1)
-    @test_throws MethodError convert(Union{Nothing, Missing}, 1)
+    @test_throws ErrorException("cannot convert a value to missing for assignment") convert(Missing, 1)
+    @test_throws ErrorException("cannot convert a value to missing for assignment") convert(Union{Nothing, Missing}, 1)
     @test_throws MethodError convert(Union{Int, Missing}, "a")
 end
 

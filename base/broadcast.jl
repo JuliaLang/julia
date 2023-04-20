@@ -34,6 +34,9 @@ that you may be able to leverage; see the
 """
 abstract type BroadcastStyle end
 
+struct Unknown <: BroadcastStyle end
+BroadcastStyle(::Type{Union{}}, slurp...) = Unknown()  # ambiguity resolution
+
 """
 `Broadcast.Style{C}()` defines a [`BroadcastStyle`](@ref) signaling through the type
 parameter `C`. You can use this as an alternative to creating custom subtypes of `BroadcastStyle`,
@@ -44,9 +47,6 @@ for example
 struct Style{T} <: BroadcastStyle end
 
 BroadcastStyle(::Type{<:Tuple}) = Style{Tuple}()
-
-struct Unknown <: BroadcastStyle end
-BroadcastStyle(::Type{Union{}}) = Unknown()  # ambiguity resolution
 
 """
 `Broadcast.AbstractArrayStyle{N} <: BroadcastStyle` is the abstract supertype for any style
