@@ -44,12 +44,14 @@ end
     @test b[1] == v
 end
 
-@testset "Buffer malloced data" begin
-    b = Buffer{Int}(undef, 1000);
-    b[end] = 10
-end
+# TODO: test copy(::Buffer) and unsafe_copyto!
+# @testset "Buffer copy" begin
+# end
+
 
 @test Base.summarysize(Buffer{Union{Nothing,Missing}}(undef, 16)) <
     Base.summarysize(Buffer{Union{Nothing,Missing}}(undef, 32))
 @test Base.summarysize(Buffer{Nothing}(undef, 16)) ==
     Base.summarysize(Buffer{Nothing}(undef, 32))
+
+

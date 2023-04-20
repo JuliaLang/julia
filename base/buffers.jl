@@ -74,20 +74,20 @@ function memmove_ptrs!(dst::Ptr{Ptr{Cvoid}}, src_start::Ptr{Ptr{Cvoid}}, nbytes:
     @_foldable_meta
     src_stop = src_start + nbytes
     if (dst < src_start || dst > src_stop)
-        Intrinsics.atomic_pointerset(dst, Core.Intrinsics.atomic_pointerref(src_stop, :aquire), :monotonic)
+        Core.Intrinsics.atomic_pointerset(dst, Core.Intrinsics.atomic_pointerref(src_start, :acquire), :monotonic)
         dst += PTR_SIZE
         src_start += PTR_SIZE
         while src_start < src_stop
-            Intrinsics.atomic_pointerset(dst, Core.Intrinsics.atomic_pointerref(src_stop, :aquire), :monotonic)
+            Core.Intrinsics.atomic_pointerset(dst, Core.Intrinsics.atomic_pointerref(src_start, :acquire), :monotonic)
             dst += PTR_SIZE
             src_start += PTR_SIZE
         end
     else
         src_stop -= PTR_SIZE
         dst = dst + (nbytes - PTR_SIZE)
-        Intrinsics.atomic_pointerset(dst, Core.Intrinsics.atomic_pointerref(src_stop, :aquire), :monotonic)
+        Core.Intrinsics.atomic_pointerset(dst, Core.Intrinsics.atomic_pointerref(src_stop, :acquire), :monotonic)
         while src_start <= src_stop
-            Intrinsics.atomic_pointerset(dst, Core.Intrinsics.atomic_pointerref(src_stop, :aquire), :monotonic)
+            Core.Intrinsics.atomic_pointerset(dst, Core.Intrinsics.atomic_pointerref(src_stop, :acquire), :monotonic)
             dst -= PTR_SIZE
             src_stop -= PTR_SIZE
         end
@@ -102,8 +102,8 @@ function memmove(dst::Ptr{Cvoid}, src::Ptr{Cvoid}, nbytes::Csize_t)
     ccall(:memmove, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), dst, src, nbytes)
 end
 
-function memset_zero(p::Ptr{Cvoid}, nbytes::Csize_t)
-    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), p, Int32(0), nbytes)
+function memset(p::Ptr{Cvoid}, val, nbytes::Csize_t)
+    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), p, val, nbytes)
 end
 
 function memcpy_ptrs!(
@@ -190,55 +190,6 @@ function _get_variant_ptr(p::Ptr{T}, offset::UInt, len::UInt, elsz::UInt) where 
     end
 end
 
-# * `Int`s get converted to an unsigned integer when doing pointer math. Once bounds
-#   checking is complete, we know that this won't throw an error but we have to help out
-#   effect analysis by performing an explicit bitcast
-# * we keep conversion of pointers close to variant type look-up for inference (in `_get_variant_ptr`)
-#   Otherwise, inference falls apart quickly pointer conversion becomes very costly
-function get_buffer_value(b::BufferType{T}, i::Int, bounds_check::Bool) where {T}
-    @inline
-    lyt = ElementLayout(T)
-    elsz = lyt.elsize
-    if lyt.kind === BOX_KIND
-        bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
-        t = @_gc_preserve_begin b
-        p = unsafe_load(unsafe_convert(Ptr{Ptr{Ptr{Cvoid}}}, _pointer_from_buffer(b) + PTR_SIZE))
-        p = p + ((bitcast(UInt, i) - UInt(1)) * elsz)
-        out = ccall(:jl_value_ptr, Ref{T}, (Ptr{Cvoid},), unsafe_load(p))
-        @_gc_preserve_end t
-        return out
-    elseif lyt.kind === UNION_KIND
-        len = length(b)
-        bounds_check && (1 <= i <= len || throw(BoundsError(b, i)))
-        offset = bitcast(UInt, i) - UInt(1)
-        t = @_gc_preserve_begin b
-        data_start = unsafe_load(unsafe_convert(Ptr{Ptr{T}}, _pointer_from_buffer(b) + PTR_SIZE))
-        p = _get_variant_ptr(data_start, offset, bitcast(UInt, len), elsz) + (offset * elsz)
-        out = unsafe_load(p)
-        @_gc_preserve_end t
-        return out
-    elseif lyt.kind === BOOL_KIND
-        bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
-        idx0 = bitcast(UInt, i) - UInt(1)
-        t = @_gc_preserve_begin b
-        data_start = unsafe_load(unsafe_convert(Ptr{Ptr{UInt64}}, _pointer_from_buffer(b) + PTR_SIZE))
-        out = unsafe_load(data_start + (idx >> 6)) & (UInt64(1) << (idx0 & 63)) !== UInt(0)
-        @_gc_preserve_end t
-        return out
-    else
-        bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
-        if isdefined(T, :instance)
-            return getfield(T, :instance)
-        else
-            t = @_gc_preserve_begin b
-            p = unsafe_load(unsafe_convert(Ptr{Ptr{T}}, _pointer_from_buffer(b) + PTR_SIZE))
-            out = unsafe_load(p + ((bitcast(UInt, i) - UInt(1)) * elsz))
-            @_gc_preserve_end t
-            return out
-        end
-    end
-end
-
 function _variant_to_tag(U::Union, vt::DataType)
     @_total_meta
     tag = 0x00
@@ -251,76 +202,6 @@ function _variant_to_tag(U::Union, vt::DataType)
         a = b.a
         b = b.b
     end
-end
-
-function set_buffer_value!(b::BufferType{T}, v::T, i::Int, bounds_check::Bool) where {T}
-    lyt = ElementLayout(T)
-    elsz = lyt.elsize
-    if lyt.kind === BOX_KIND
-        bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
-        t1 = @_gc_preserve_begin v
-        t2 = @_gc_preserve_begin b
-        bptr = _pointer_from_buffer(b)
-        data_i = bptr + (JL_BUFFER_SIZEOF + (bitcast(UInt, i) - UInt(1)) * elsz)
-        vptr = unsafe_load(unsafe_convert(Ptr{Ptr{Cvoid}}, pointer_from_objref(Ref(v))))
-        unsafe_store!(unsafe_convert(Ptr{Ptr{Cvoid}}, data_i), vptr)
-        # vptr = unsafe_convert(Ptr{Cvoid}, vptr)
-        ccall(:jl_gc_queue_root, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), bptr, vptr)
-        @_gc_preserve_end t2
-        @_gc_preserve_end t1
-    elseif lyt.kind === BITS_KIND
-        bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
-        if !isdefined(T, :instance)
-            t1 = @_gc_preserve_begin v
-            t2 = @_gc_preserve_begin b
-            bptr = _pointer_from_buffer(b)
-            data_i = unsafe_load(unsafe_convert(Ptr{Ptr{T}}, bptr + PTR_SIZE))
-            data_i = data_i + ((bitcast(UInt, i) - UInt(1)) * elsz)
-            unsafe_store!(unsafe_convert(Ptr{T}, data_i), v)
-            @_gc_preserve_end t2
-            @_gc_preserve_end t1
-        end
-    elseif lyt.kind === HAS_PTR_KIND
-        t1 = @_gc_preserve_begin v
-        t2 = @_gc_preserve_begin b
-        bptr = _pointer_from_buffer(b)
-        data_i = unsafe_load(unsafe_convert(Ptr{Ptr{Ptr{Cvoid}}}, bptr + PTR_SIZE))
-        data_i = data_i + ((bitcast(UInt, i) - UInt(1)) * elsz)
-        vptr = pointer_from_objref(Ref(v))
-        memmove_ptrs!(data_i, unsafe_convert(Ptr{Ptr{Cvoid}}, vptr), elsz)
-        ccall(:jl_gc_queue_multiroot, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), bptr, vptr)
-        @_gc_preserve_end t2
-        @_gc_preserve_end t1
-    elseif lyt.kind === UNION_KIND
-        len = length(b)
-        bounds_check && (1 <= i <= len || throw(BoundsError(b, i)))
-        t1 = @_gc_preserve_begin v
-        t2 = @_gc_preserve_begin b
-        offset = (bitcast(UInt, i) - UInt(1))
-        bptr = _pointer_from_buffer(b)
-        data_ptr = unsafe_load(unsafe_convert(Ptr{Ptr{UInt8}}, bptr + PTR_SIZE))
-        vt = typeof(v)
-        unsafe_store!(data_ptr + (elsz * len) + offset, _variant_to_tag(T, vt))
-        if !isdefined(vt, :instance)
-            data_i = bptr + (offset * elsz)
-            unsafe_store!(unsafe_convert(Ptr{vt}, data_i) + (offset * elsz), v)
-        end
-        @_gc_preserve_end t2
-        @_gc_preserve_end t1
-    elseif lyt.kind === BOOL_KIND
-        bounds_check && (1 <= i <= length(b) || throw(BoundsError(b, i)))
-        idx0 = bitcast(UInt, i) - UInt(1)
-        t = @_gc_preserve_begin b
-        chunk_ptr = unsafe_load(unsafe_convert(Ptr{Ptr{UInt64}}, _pointer_from_buffer(b) + PTR_SIZE))
-        chunk_ptr = chunk_ptr + (idx >> UInt(6))
-        if v
-            unsafe_store!(unsafe_load(chunk_ptr) | (UInt64(1) << (idx0 & 63)))
-        else
-            unsafe_store!(unsafe_load(chunk_ptr) & (~(UInt64(1) << (idx0 & 63))))
-        end
-        @_gc_preserve_end t
-    end
-    return nothing
 end
 
 """
@@ -385,7 +266,7 @@ for BT in (Buffer, DynamicBuffer)
                 data_start = Core.Compiler.unsafe_convert(Ptr{Cvoid}, Core.Compiler.:+(bptr, Core.Compiler.JL_BUFFER_SIZEOF))
                 Core.Intrinsics.pointerset(Core.Compiler.unsafe_convert(Ptr{Ptr{Cvoid}}, Core.Compiler.:+(bptr, sizeof(UInt))), data_start, 1, 1)
                 if lyt.requires_initialization
-                    Core.Compiler.memset_zero(data_start, data_size)
+                    Core.Compiler.memset(data_start, Int32(0), data_size)
                 elseif Core.Compiler.BUFFER_IMPL_NULL && lyt.elsize === UInt(1)
                     Core.Intrinsics.pointerset(Core.Compiler.:+(Core.Compiler.unsafe_convert(Ptr{UInt8}, data_start), data_size), 0x00, 1, 1)
                 end
@@ -398,7 +279,7 @@ for BT in (Buffer, DynamicBuffer)
                 Core.Intrinsics.pointerset(Core.Compiler.unsafe_convert(Ptr{UInt}, bptr), ulen, 1, 1)
                 Core.Intrinsics.pointerset(Core.Compiler.unsafe_convert(Ptr{Ptr{Cvoid}}, Core.Compiler.:+(bptr, sizeof(UInt))), data_start, 1, 1)
                 if lyt.requires_initialization
-                    Core.Compiler.memset_zero(data_start, data_size)
+                    Core.Compiler.memset(data_start, Int32(0), data_size)
                 elseif Core.Compiler.BUFFER_IMPL_NULL && lyt.elsize === UInt(1)
                     Core.Intrinsics.pointerset(Core.Comipler.:+(Core.Compiler.unsafe_convert(Ptr{UInt8}, data_start), data_size), 0x00, 1, 1)
                 end
@@ -464,7 +345,53 @@ iterate(v::BufferType, i=1) = (length(v) < i ? nothing : (v[i], i + 1))
 
 isempty(b::BufferType) = (length(b) == 0)
 
-@eval getindex(b::BufferType{T}, i::Int) where {T} = Core.bufref($(Expr(:boundscheck)), b, i)
+# @eval getindex(b::BufferType{T}, i::Int) where {T} = Core.bufref($(Expr(:boundscheck)), b, i)
+
+# * `Int`s get converted to an unsigned integer when doing pointer math. Once bounds
+#   checking is complete, we know that this won't throw an error but we have to help out
+#   effect analysis by performing an explicit bitcast
+# * we keep conversion of pointers close to variant type look-up for inference (in `_get_variant_ptr`)
+#   Otherwise, inference falls apart quickly pointer conversion becomes very costly
+function getindex(b::BufferType{T}, i::Int) where {T}
+    @inline
+    lyt = ElementLayout(T)
+    elsz = lyt.elsize
+    if lyt.kind === BOX_KIND
+        @boundscheck (1 <= i <= length(b)) || throw(BoundsError(b, i))
+        t = @_gc_preserve_begin b
+        p = unsafe_load(unsafe_convert(Ptr{Ptr{Ptr{Cvoid}}}, _pointer_from_buffer(b) + PTR_SIZE))
+        p = p + ((bitcast(UInt, i) - UInt(1)) * elsz)
+        out = ccall(:jl_value_ptr, Any, (Ptr{Cvoid},), unsafe_load(p))
+        @_gc_preserve_end t
+        return out
+    elseif lyt.kind === UNION_KIND
+        len = length(b)
+        @boundscheck (1 <= i <= len) || throw(BoundsError(b, i))
+        offset = bitcast(UInt, i) - UInt(1)
+        t = @_gc_preserve_begin b
+        data_start = unsafe_load(unsafe_convert(Ptr{Ptr{T}}, _pointer_from_buffer(b) + PTR_SIZE))
+        p = _get_variant_ptr(data_start, offset, bitcast(UInt, len), elsz) + (offset * elsz)
+        out = unsafe_load(p)
+        @_gc_preserve_end t
+        return out
+    elseif lyt.kind === BOOL_KIND
+        @boundscheck (1 <= i <= length(b)) || throw(BoundsError(b, i))
+        idx0 = bitcast(UInt, i) - UInt(1)
+        t = @_gc_preserve_begin b
+        data_start = unsafe_load(unsafe_convert(Ptr{Ptr{UInt64}}, _pointer_from_buffer(b) + PTR_SIZE))
+        out = unsafe_load(data_start + (idx >> 6)) & (UInt64(1) << (idx0 & 63)) !== UInt(0)
+        @_gc_preserve_end t
+        return out
+    else
+        @boundscheck (1 <= i <= length(b)) || throw(BoundsError(b, i))
+        isdefined(T, :instance) && return getfield(T, :instance)
+        t = @_gc_preserve_begin b
+        p = unsafe_load(unsafe_convert(Ptr{Ptr{T}}, _pointer_from_buffer(b) + PTR_SIZE))
+        out = unsafe_load(p + ((bitcast(UInt, i) - UInt(1)) * elsz))
+        @_gc_preserve_end t
+        return out
+    end
+end
 
 # Faster contiguous indexing using copyto! for AbstractUnitRange and Colon
 function getindex(b::BufferType{T}, idxs::AbstractUnitRange{Int}) where {T}
@@ -499,8 +426,81 @@ function getindex(b::BufferType{T}, idxs::AbstractRange{Int}) where {T}
     return dst
 end
 
-@eval setindex!(b::BufferType{T}, x, i::Int) where {T} =
-    Core.bufset($(Expr(:boundscheck)), b, convert(T, x)::T, i)
+# @eval setindex!(b::BufferType{T}, x, i::Int) where {T} =
+#     Core.bufset($(Expr(:boundscheck)), b, convert(T, x)::T, i)
+
+setindex!(b::BufferType{T}, v, i::Int) where {T} = setindex!(b, convert(T, v), i)
+function setindex!(b::BufferType{T}, v::T, i::Int) where {T}
+    lyt = ElementLayout(T)
+    elsz = lyt.elsize
+    if lyt.kind === BOX_KIND
+        @boundscheck (1 <= i <= length(b) || throw(BoundsError(b, i)))
+        t1 = @_gc_preserve_begin v
+        t2 = @_gc_preserve_begin b
+        bptr = _pointer_from_buffer(b)
+        data = unsafe_load(unsafe_convert(Ptr{Ptr{Ptr{Cvoid}}}, bptr + PTR_SIZE))
+        if ismutable(v)
+            vptr = pointer_from_objref(v)
+        else
+            vptr = unsafe_load(unsafe_convert(Ptr{Ptr{Cvoid}}, pointer_from_objref(RefValue{Any}(v))))
+        end
+        Core.Intrinsics.atomic_pointerset(data + ((bitcast(UInt, i) - UInt(1)) * elsz), vptr, :monotonic)
+        # vptr = unsafe_convert(Ptr{Cvoid}, vptr)
+        ccall(:jl_gc_queue_root, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), bptr, vptr)
+        @_gc_preserve_end t2
+        @_gc_preserve_end t1
+    elseif lyt.kind === BITS_KIND
+        @boundscheck (1 <= i <= length(b) || throw(BoundsError(b, i)))
+        if !isdefined(T, :instance)
+            t1 = @_gc_preserve_begin v
+            t2 = @_gc_preserve_begin b
+            bptr = _pointer_from_buffer(b)
+            data = unsafe_load(unsafe_convert(Ptr{Ptr{T}}, bptr + PTR_SIZE))
+            unsafe_store!(unsafe_convert(Ptr{T}, data + ((bitcast(UInt, i) - UInt(1)) * elsz)), v)
+            @_gc_preserve_end t2
+            @_gc_preserve_end t1
+        end
+    elseif lyt.kind === HAS_PTR_KIND
+        @boundscheck (1 <= i <= length(b) || throw(BoundsError(b, i)))
+        t1 = @_gc_preserve_begin v
+        t2 = @_gc_preserve_begin b
+        bptr = _pointer_from_buffer(b)
+        data = unsafe_load(unsafe_convert(Ptr{Ptr{Ptr{Cvoid}}}, bptr + PTR_SIZE))
+        vptr = unsafe_convert(Ptr{Ptr{Cvoid}}, pointer_from_objref(Ref(v)))
+        memmove_ptrs!(data + ((bitcast(UInt, i) - UInt(1)) * elsz), vptr, elsz)
+        ccall(:jl_gc_queue_multiroot, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), bptr, vptr)
+        @_gc_preserve_end t2
+        @_gc_preserve_end t1
+    elseif lyt.kind === UNION_KIND
+        len = length(b)
+        @boundscheck (1 <= i <= len || throw(BoundsError(b, i)))
+        t1 = @_gc_preserve_begin v
+        t2 = @_gc_preserve_begin b
+        offset = (bitcast(UInt, i) - UInt(1))
+        bptr = _pointer_from_buffer(b)
+        data_ptr = unsafe_load(unsafe_convert(Ptr{Ptr{UInt8}}, bptr + PTR_SIZE))
+        vt = typeof(v)
+        unsafe_store!(data_ptr + (elsz * len) + offset, _variant_to_tag(T, vt))
+        if !isdefined(vt, :instance)
+            unsafe_store!(unsafe_convert(Ptr{vt}, data_ptr) + (offset * elsz), v)
+        end
+        @_gc_preserve_end t2
+        @_gc_preserve_end t1
+    elseif lyt.kind === BOOL_KIND
+        @boundscheck (1 <= i <= length(b) || throw(BoundsError(b, i)))
+        idx0 = bitcast(UInt, i) - UInt(1)
+        t = @_gc_preserve_begin b
+        chunk_ptr = unsafe_load(unsafe_convert(Ptr{Ptr{UInt64}}, _pointer_from_buffer(b) + PTR_SIZE))
+        chunk_ptr = chunk_ptr + (idx >> UInt(6))
+        if v
+            unsafe_store!(unsafe_load(chunk_ptr) | (UInt64(1) << (idx0 & 63)))
+        else
+            unsafe_store!(unsafe_load(chunk_ptr) & (~(UInt64(1) << (idx0 & 63))))
+        end
+        @_gc_preserve_end t
+    end
+    return nothing
+end
 
 # This is redundant with the abstract fallbacks but needed and helpful for bootstrap
 function setindex!(b::BufferType, vals::AbstractArray, idxs::AbstractArray{Int, 1})
@@ -707,7 +707,7 @@ function unsafe_grow_at2!(b::DynamicBuffer{T}, i::UInt, delta::UInt) where {T}
         has_newbuf = true
     end
     if BUFFER_IMPL_NULL && elsize === UInt(1)
-        memset_zero(new_data + old_nbytes - 1, new_nbytes - old_nbytes + 1);
+        memset(new_data + old_nbytes - 1, Int32(0), new_nbytes - old_nbytes + 1);
     end
     nbinc = inc * lyt.elsize;
     has_gap = olden > idx
@@ -719,7 +719,7 @@ function unsafe_grow_at2!(b::DynamicBuffer{T}, i::UInt, delta::UInt) where {T}
             if has_gap
                 memcpy!(newtypetagdata + idx + inc, typetagdata + idx, len - idx)
             end
-            memset_zero(newtypetagdata + idx, inc)
+            memset(newtypetagdata + idx, Int32(0), inc)
         end
         if has_gap
             memcpy!(newdata + nb1 + nbinc, data + nb1, n * lyt.elsize - nb1)
@@ -731,7 +731,7 @@ function unsafe_grow_at2!(b::DynamicBuffer{T}, i::UInt, delta::UInt) where {T}
                 memmove(newtypetagdata + idx + inc, typetagdata + idx, n - idx);
             end
             memmove(newtypetagdata, typetagdata, idx);
-            memset_zero(newtypetagdata + idx, inc);
+            memset(newtypetagdata + idx, Int32(0), inc);
         end
         if has_gap
             nb1 = idx * lyt.elsize
@@ -745,7 +745,7 @@ function unsafe_grow_at2!(b::DynamicBuffer{T}, i::UInt, delta::UInt) where {T}
     unsafe_store!(olddata, newdata)
     unsafe_store!(lenptr, newlen)
     if lyt.requires_initialization
-        memset_zero(newdata + idx * lyt.elsize, inc * lyt.elsize)
+        memset(newdata + idx * lyt.elsize, Int32(0), inc * lyt.elsize)
     end
     @_gc_preserve_end t
     return nothing
