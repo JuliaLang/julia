@@ -263,7 +263,7 @@ end
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
-    maxprobe < sz || error() # This error will never trigger, but is needed for terminates_locally to be valid
+    maxprobe < sz || throw(AssertionError()) # This error will never trigger, but is needed for terminates_locally to be valid
     index, sh = hashindex(key, sz)
     keys = h.keys
 
