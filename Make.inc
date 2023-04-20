@@ -740,6 +740,12 @@ JCFLAGS += -DUSE_ITTAPI
 LIBITTAPI:=-littnotify
 endif
 
+ifeq ($(WITH_ITTAPI), 1)
+ifeq ($(WITH_DTRACE), 1)
+$(error "Only one of ITTAPI or DTRACE can be enabled")
+endif
+endif
+
 ifeq ($(WITH_TRACY), 1)
 JCXXFLAGS += -DUSE_TRACY -DTRACY_ENABLE -DTRACY_FIBERS
 JCFLAGS += -DUSE_TRACY -DTRACY_ENABLE -DTRACY_FIBERS
