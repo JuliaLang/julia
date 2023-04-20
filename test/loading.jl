@@ -1026,7 +1026,6 @@ end
                 using ExtDep2
                 $ew using ExtDep2
                 $ew HasExtensions.ext_folder_loaded || error("ext_folder_loaded not set")
-                
             end
             """
             return `$(Base.julia_cmd()) $compile --startup-file=no -e $cmd`
