@@ -74,7 +74,6 @@ function test_callsite(bt, file_ts, file_t)
 end
 
 macrocall_location(bt, file) = findfirst(ip -> ip_has_file_and_func(ip, file, (Symbol("macro expansion"),)), bt)
-toplevel_location(bt, file) = findfirst(ip -> ip_has_file_and_func(ip, file, (Symbol("top-level scope"),)), bt)
 
 function scrub_backtrace(bt, file_ts, file_t)
     do_test_ind = findfirst(ip -> ip_has_file_and_func(ip, @__FILE__, (:do_test, :do_test_throws)), bt)
