@@ -2265,33 +2265,19 @@ int jl_has_intersect_type_not_kind(jl_value_t *t)
     t = jl_unwrap_unionall(t);
     if (t == (jl_value_t*)jl_any_type)
         return 1;
-    assert(!jl_is_vararg(t));
-    if (jl_is_uniontype(t))
+    if (jl_is_uniontype(t)) {
         return jl_has_intersect_type_not_kind(((jl_uniontype_t*)t)->a) ||
                jl_has_intersect_type_not_kind(((jl_uniontype_t*)t)->b);
-    if (jl_is_typevar(t))
+    }
+    if (jl_is_typevar(t)) {
         return jl_has_intersect_type_not_kind(((jl_tvar_t*)t)->ub);
-    if (jl_is_datatype(t))
+    }
+    if (jl_is_datatype(t)) {
         if (((jl_datatype_t*)t)->name == jl_type_typename)
             return 1;
+    }
     return 0;
 }
-
-// compute if DataType<:t || Union<:t || UnionAll<:t etc.
-int jl_has_intersect_kind_not_type(jl_value_t *t)
-{
-    t = jl_unwrap_unionall(t);
-    if (t == (jl_value_t*)jl_any_type || jl_is_kind(t))
-        return 1;
-    assert(!jl_is_vararg(t));
-    if (jl_is_uniontype(t))
-        return jl_has_intersect_kind_not_type(((jl_uniontype_t*)t)->a) ||
-               jl_has_intersect_kind_not_type(((jl_uniontype_t*)t)->b);
-    if (jl_is_typevar(t))
-        return jl_has_intersect_kind_not_type(((jl_tvar_t*)t)->ub);
-    return 0;
-}
-
 
 JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
 {
@@ -4483,22 +4469,6 @@ static int num_occurs(jl_tvar_t *v, jl_typeenv_t *env)
     return 0;
 }
 
-int tuple_cmp_typeofbottom(jl_datatype_t *a, jl_datatype_t *b)
-{
-    size_t i, la = jl_nparams(a), lb = jl_nparams(b);
-    for (i = 0; i < la || i < lb; i++) {
-        jl_value_t *pa = i < la ? jl_tparam(a, i) : NULL;
-        jl_value_t *pb = i < lb ? jl_tparam(b, i) : NULL;
-        assert(jl_typeofbottom_type); // for clang-sa
-        int xa = pa == (jl_value_t*)jl_typeofbottom_type || pa == (jl_value_t*)jl_typeofbottom_type->super;
-        int xb = pb == (jl_value_t*)jl_typeofbottom_type || pb == (jl_value_t*)jl_typeofbottom_type->super;
-        if (xa != xb)
-            return xa - xb;
-    }
-    return 0;
-}
-
-
 #define HANDLE_UNIONALL_A                                               \
     jl_unionall_t *ua = (jl_unionall_t*)a;                              \
     jl_typeenv_t newenv = { ua->var, 0x0, env };                        \
@@ -4517,13 +4487,6 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
         return 0;
 
     if (jl_is_tuple_type(a) && jl_is_tuple_type(b)) {
-        // compare whether a and b have Type{Union{}} included,
-        // which makes them instantly the most specific, regardless of all else,
-        // for whichever is left most (the left-to-right behavior here ensures
-        // we do not need to keep track of conflicts with multiple methods).
-        int msp = tuple_cmp_typeofbottom((jl_datatype_t*)a, (jl_datatype_t*)b);
-        if (msp)
-            return msp > 0;
         // When one is JL_VARARG_BOUND and the other has fixed length,
         // allow the argument length to fix the tvar
         jl_vararg_kind_t akind = jl_va_tuple_kind((jl_datatype_t*)a);
