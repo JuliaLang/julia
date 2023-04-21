@@ -2851,18 +2851,18 @@ static jl_value_t *jl_ensure_rooted(jl_codectx_t &ctx, jl_value_t *val)
     jl_method_t *m = ctx.linfo->def.method;
     if (jl_is_method(m)) {
         // the method might have a root for this already; use it if so
-        JL_LOCK(&m->writelock);
+        JL_SPIN_LOCK(&m->writelock);
         if (m->roots) {
             size_t i, len = jl_array_dim0(m->roots);
             for (i = 0; i < len; i++) {
                 jl_value_t *mval = jl_array_ptr_ref(m->roots, i);
                 if (mval == val || jl_egal(mval, val)) {
-                    JL_UNLOCK(&m->writelock);
+                    JL_SPIN_UNLOCK(&m->writelock);
                     return mval;
                 }
             }
         }
-        JL_UNLOCK(&m->writelock);
+        JL_SPIN_UNLOCK(&m->writelock);
     }
     return jl_as_global_root(val);
 }

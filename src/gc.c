@@ -143,11 +143,11 @@ JL_DLLEXPORT void jl_gc_set_cb_notify_gc_pressure(jl_gc_cb_notify_gc_pressure_t 
 // For accessing `ptls->finalizers`, the lock is needed if a thread
 // is going to realloc the buffer (of its own list) or accessing the
 // list of another thread
-static jl_mutex_t finalizers_lock;
+static jl_spin_mutex_t finalizers_lock;
 static uv_mutex_t gc_cache_lock;
 
 // mutex for gc-heap-snapshot.
-jl_mutex_t heapsnapshot_lock;
+jl_spin_mutex_t heapsnapshot_lock;
 
 // Flag that tells us whether we need to support conservative marking
 // of objects.
@@ -401,7 +401,7 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NO
     jl_gc_push_arraylist(ct, list);
     void **items = list->items;
     size_t len = list->len;
-    JL_UNLOCK_NOGC(&finalizers_lock);
+    JL_SPIN_UNLOCK_NOGC(&finalizers_lock);
     // run finalizers in reverse order they were added, so lower-level finalizers run last
     for (size_t i = len-4; i >= 2; i -= 2)
         run_finalizer(ct, items[i], items[i + 1]);
@@ -430,9 +430,9 @@ static void run_finalizers(jl_task_t *ct)
     // will flush it.
     if (to_finalize.len == 0)
         return;
-    JL_LOCK_NOGC(&finalizers_lock);
+    JL_SPIN_LOCK_NOGC(&finalizers_lock);
     if (to_finalize.len == 0) {
-        JL_UNLOCK_NOGC(&finalizers_lock);
+        JL_SPIN_UNLOCK_NOGC(&finalizers_lock);
         return;
     }
     arraylist_t copied_list;
@@ -572,14 +572,14 @@ void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT
     // between the acquire and the release of the length.
     size_t oldlen = jl_atomic_load_acquire((_Atomic(size_t)*)&a->len);
     if (__unlikely(oldlen + 2 > a->max)) {
-        JL_LOCK_NOGC(&finalizers_lock);
+        JL_SPIN_LOCK_NOGC(&finalizers_lock);
         // `a->len` might have been modified.
         // Another possibility is to always grow the array to `oldlen + 2` but
         // it's simpler this way and uses slightly less memory =)
         oldlen = a->len;
         arraylist_grow(a, 2);
         a->len = oldlen;
-        JL_UNLOCK_NOGC(&finalizers_lock);
+        JL_SPIN_UNLOCK_NOGC(&finalizers_lock);
     }
     void **items = a->items;
     items[oldlen] = v;
@@ -611,7 +611,7 @@ JL_DLLEXPORT void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_funct
 
 JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o)
 {
-    JL_LOCK_NOGC(&finalizers_lock);
+    JL_SPIN_LOCK_NOGC(&finalizers_lock);
     // Copy the finalizers into a temporary list so that code in the finalizer
     // won't change the list as we loop through them.
     // This list is also used as the GC frame when we are running the finalizers
@@ -636,7 +636,7 @@ JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o)
         jl_gc_run_finalizers_in_list(ct, &copied_list);
     }
     else {
-        JL_UNLOCK_NOGC(&finalizers_lock);
+        JL_SPIN_UNLOCK_NOGC(&finalizers_lock);
     }
     arraylist_free(&copied_list);
 }
@@ -3490,8 +3490,8 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     gc_invoke_callbacks(jl_gc_cb_pre_gc_t,
         gc_cblist_pre_gc, (collection));
 
-    if (!jl_atomic_load_acquire(&jl_gc_disable_counter)) {
-        JL_LOCK_NOGC(&finalizers_lock); // all the other threads are stopped, so this does not make sense, right? otherwise, failing that, this seems like plausibly a deadlock
+    if (!jl_atomic_load_relaxed(&jl_gc_disable_counter)) {
+        JL_SPIN_LOCK_NOGC(&finalizers_lock); // all the other threads are stopped, so this does not make sense, right? otherwise, failing that, this seems like plausibly a deadlock
 #ifndef __clang_gcanalyzer__
         if (_jl_gc_collect(ptls, collection)) {
             // recollect
@@ -3500,7 +3500,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
             assert(!ret);
         }
 #endif
-        JL_UNLOCK_NOGC(&finalizers_lock);
+        JL_SPIN_UNLOCK_NOGC(&finalizers_lock);
     }
 
     gc_n_threads = 0;
@@ -3596,8 +3596,8 @@ void jl_init_thread_heap(jl_ptls_t ptls)
 // System-wide initializations
 void jl_gc_init(void)
 {
-    JL_MUTEX_INIT(&heapsnapshot_lock, "heapsnapshot_lock");
-    JL_MUTEX_INIT(&finalizers_lock, "finalizers_lock");
+    JL_SPIN_MUTEX_INIT(&heapsnapshot_lock, "heapsnapshot_lock");
+    JL_SPIN_MUTEX_INIT(&finalizers_lock, "finalizers_lock");
     uv_mutex_init(&gc_cache_lock);
     uv_mutex_init(&gc_perm_lock);
     uv_mutex_init(&gc_threads_lock);

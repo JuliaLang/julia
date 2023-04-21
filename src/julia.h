@@ -372,7 +372,7 @@ typedef struct _jl_method_t {
 
 // hidden fields:
     // lock for modifications to the method
-    jl_mutex_t writelock;
+    jl_spin_mutex_t writelock;
 } jl_method_t;
 
 // This type is a placeholder to cache data for a specType signature specialization of a Method
@@ -624,7 +624,7 @@ typedef struct _jl_module_t {
     int8_t infer;
     uint8_t istopmod;
     int8_t max_methods;
-    jl_mutex_t lock;
+    jl_spin_mutex_t lock;
     intptr_t hash;
 } jl_module_t;
 
@@ -682,7 +682,7 @@ typedef struct _jl_methtable_t {
     _Atomic(intptr_t) max_args;  // max # of non-vararg arguments in a signature
     jl_module_t *module; // sometimes used for debug printing
     jl_array_t *backedges; // (sig, caller::MethodInstance) pairs
-    jl_mutex_t writelock;
+    jl_spin_mutex_t writelock;
     uint8_t offs;  // 0, or 1 to skip splitting typemap on first (function) argument
     uint8_t frozen; // whether this accepts adding new methods
 } jl_methtable_t;

@@ -25,7 +25,7 @@ using namespace llvm;
 
 // map from user-specified lib names to handles
 static std::map<std::string, void*> libMap;
-static jl_mutex_t libmap_lock;
+static jl_spin_mutex_t libmap_lock;
 extern "C"
 void *jl_get_library_(const char *f_lib, int throw_err)
 {
@@ -37,7 +37,7 @@ void *jl_get_library_(const char *f_lib, int throw_err)
         return jl_libjulia_internal_handle;
     if (f_lib == JL_LIBJULIA_DL_LIBNAME)
         return jl_libjulia_handle;
-    JL_LOCK(&libmap_lock);
+    JL_SPIN_LOCK(&libmap_lock);
     // This is the only operation we do on the map, which doesn't invalidate
     // any references or iterators.
     void **map_slot = &libMap[f_lib];
@@ -47,7 +47,7 @@ void *jl_get_library_(const char *f_lib, int throw_err)
         if (hnd != NULL)
             *map_slot = hnd;
     }
-    JL_UNLOCK(&libmap_lock);
+    JL_SPIN_UNLOCK(&libmap_lock);
     return hnd;
 }
 
@@ -364,6 +364,6 @@ JL_GCC_IGNORE_STOP
 
 void jl_init_runtime_ccall(void)
 {
-    JL_MUTEX_INIT(&libmap_lock, "libmap_lock");
+    JL_SPIN_MUTEX_INIT(&libmap_lock, "libmap_lock");
     uv_mutex_init(&trampoline_lock);
 }

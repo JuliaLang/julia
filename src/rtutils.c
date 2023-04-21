@@ -270,7 +270,7 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     int unlocks = locks->len > eh->locks_len;
     if (unlocks) {
         for (size_t i = locks->len; i > eh->locks_len; i--)
-            jl_mutex_unlock_nogc((jl_mutex_t*)locks->items[i - 1]);
+            jl_dyn_mutex_unlock_nogc(locks->items[i - 1]);
         locks->len = eh->locks_len;
     }
     ct->world_age = eh->world_age;

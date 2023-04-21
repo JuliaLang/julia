@@ -2023,10 +2023,10 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     // acquire the write lock now that we know we need a new object
     // since we're going to immediately leak it globally via the instantiation stack
     if (cacheable) {
-        JL_LOCK(&typecache_lock); // Might GC
+        JL_SPIN_LOCK(&typecache_lock); // Might GC
         jl_value_t *lkup = (jl_value_t*)lookup_type(tn, iparams, ntp);
         if (lkup != NULL) {
-            JL_UNLOCK(&typecache_lock); // Might GC
+            JL_SPIN_UNLOCK(&typecache_lock); // Might GC
             JL_GC_POP();
             return lkup;
         }
@@ -2128,7 +2128,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         if (ndt->layout == NULL && ndt->types != NULL && ndt->isconcretetype)
             jl_compute_field_offsets(ndt);
         jl_cache_type_(ndt);
-        JL_UNLOCK(&typecache_lock); // Might GC
+        JL_SPIN_UNLOCK(&typecache_lock); // Might GC
     }
 
     JL_GC_POP();

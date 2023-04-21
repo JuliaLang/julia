@@ -2286,7 +2286,7 @@ static void jl_strip_all_codeinfos(void)
 // --- entry points ---
 
 jl_array_t *jl_global_roots_table;
-jl_mutex_t global_roots_lock;
+jl_spin_mutex_t global_roots_lock;
 
 JL_DLLEXPORT int jl_is_globally_rooted(jl_value_t *val JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
 {
@@ -2315,7 +2315,7 @@ JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val JL_MAYBE_UNROOTED)
             return jl_box_int64(n);
     }
     JL_GC_PUSH1(&val);
-    JL_LOCK(&global_roots_lock);
+    JL_SPIN_LOCK(&global_roots_lock);
     jl_value_t *rval = jl_eqtable_getkey(jl_global_roots_table, val, NULL);
     if (rval) {
         val = rval;
@@ -2323,7 +2323,7 @@ JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val JL_MAYBE_UNROOTED)
     else {
         jl_global_roots_table = jl_eqtable_put(jl_global_roots_table, val, jl_nothing, NULL);
     }
-    JL_UNLOCK(&global_roots_lock);
+    JL_SPIN_UNLOCK(&global_roots_lock);
     JL_GC_POP();
     return val;
 }

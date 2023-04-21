@@ -411,27 +411,27 @@ static inline void jl_timing_counter_dec(int counter, uint64_t val) JL_NOTSAFEPO
 }
 
 // Locking profiling
-static inline void jl_profile_lock_init(jl_mutex_t *lock, const char *name) {
+static inline void jl_profile_lock_init(jl_spin_mutex_t *lock, const char *name) {
 #ifdef USE_ITTAPI
-    __itt_sync_create(lock, "jl_mutex_t", name, __itt_attr_mutex);
+    __itt_sync_create(lock, "jl_spin_mutex_t", name, __itt_attr_mutex);
 #endif
 }
-static inline void jl_profile_lock_start_wait(jl_mutex_t *lock) {
+static inline void jl_profile_lock_start_wait(jl_spin_mutex_t *lock) {
 #ifdef USE_ITTAPI
     __itt_sync_prepare(lock);
 #endif
 }
-static inline void jl_profile_lock_acquired(jl_mutex_t *lock) {
+static inline void jl_profile_lock_acquired(jl_spin_mutex_t *lock) {
 #ifdef USE_ITTAPI
     __itt_sync_acquired(lock);
 #endif
 }
-static inline void jl_profile_lock_release_start(jl_mutex_t *lock) {
+static inline void jl_profile_lock_release_start(jl_spin_mutex_t *lock) {
 #ifdef USE_ITTAPI
     __itt_sync_releasing(lock);
 #endif
 }
-static inline void jl_profile_lock_release_end(jl_mutex_t *lock) {}
+static inline void jl_profile_lock_release_end(jl_spin_mutex_t *lock) {}
 
 #endif
 
