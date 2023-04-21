@@ -114,9 +114,11 @@ violate this invariant. Of course, messing around with an object's internals uni
 You (or someone else) can also provide additional outer constructor methods at any later point, but
 once a type is declared, there is no way to add more inner constructor methods. Since outer constructor
 methods can only create objects by calling other constructor methods, ultimately, some inner constructor
-must be called to create an object. This guarantees that all objects of the declared type must come into
-existence by a call to one of the inner constructor methods provided with the type, thereby giving
-some degree of enforcement of a type's invariants.
+must be called to create an object. This means that usually at any given moment all existing objects of
+the declared type have come into existence by a call to one of the inner constructor methods provided
+with the type, thereby giving some degree of enforcement of a type's invariants. This rule does not
+always apply, though: objects may be created without their inner constructors being called when, e.g.,
+[Incomplete Initialization](@ref), [`undef`](@ref) or [`reinterpret`](@ref) are used.
 
 If any inner constructor method is defined, no default constructor method is provided: it is presumed
 that you have supplied yourself with all the inner constructors you need. The default constructor
