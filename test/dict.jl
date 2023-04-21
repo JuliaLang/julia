@@ -1363,3 +1363,9 @@ end
     sizehint!(d, 10)
     @test length(d.slots) < 100
 end
+
+# getindex is effect free and nothrow but not consistent
+for T in (String, Module, Symbol, Int, Float64)
+    @test Core.Compiler.is_effect_free(Base.infer_effects(getindex, (Dict{T, BigInt},T)))
+    @test Core.Compiler.is_terminates(Base.infer_effects(getindex, (Dict{T, BigInt},T)))
+end
