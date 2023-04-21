@@ -1038,8 +1038,9 @@ ambig_effects_test(a, b) = 1
     for T in (String, Module, Symbol)
          @test Core.Compiler.is_foldable(Base.infer_effects(hash, (T,)))
     end
-    # darn unbound typevars
+    # darn unbound
     @test !Core.Compiler.is_consistent(Base.infer_effects(hash, (DataType,)))
+    @test !Core.Compiler.is_consistent(Base.infer_effects(hash, (Tuple{Vector{Int}},)))
 end
 
 @test Base._methods_by_ftype(Tuple{}, -1, Base.get_world_counter()) == Any[]
