@@ -102,6 +102,7 @@ Standard library changes
 
 * The `@test_broken` macro (or `@test` with `broken=true`) now complains if the test expression returns a
   non-boolean value in the same way as a non-broken test. ([#47804])
+* When a call to `@test` fails or errors inside a function, a larger stacktrace is now printed such that the location of the test within a `@testset` can be retrieved ([#49451])
 
 #### Dates
 
