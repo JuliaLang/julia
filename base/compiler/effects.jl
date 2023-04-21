@@ -72,7 +72,7 @@ struct Effects
         notaskstate::Bool,
         inaccessiblememonly::UInt8,
         nonoverlayed::Bool,
-        noinbounds::Bool = true)
+        noinbounds::Bool)
         return new(
             consistent,
             effect_free,

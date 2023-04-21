@@ -22,15 +22,6 @@ enum AddressSpace {
     LastSpecial = Loaded,
 };
 
-static inline auto getSizeTy(llvm::LLVMContext &ctxt) {
-    //return M.getDataLayout().getIntPtrType(M.getContext());
-    if (sizeof(size_t) > sizeof(uint32_t)) {
-        return llvm::Type::getInt64Ty(ctxt);
-    } else {
-        return llvm::Type::getInt32Ty(ctxt);
-    }
-}
-
 namespace JuliaType {
     static inline llvm::StructType* get_jlvalue_ty(llvm::LLVMContext &C) {
         return llvm::StructType::get(C);
@@ -179,7 +170,7 @@ static inline llvm::Value *emit_bitcast_with_builder(llvm::IRBuilder<> &builder,
 }
 
 // Get PTLS through current task.
-static inline llvm::Value *get_current_task_from_pgcstack(llvm::IRBuilder<> &builder, llvm::Value *pgcstack)
+static inline llvm::Value *get_current_task_from_pgcstack(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *pgcstack)
 {
     using namespace llvm;
     auto T_ppjlvalue = JuliaType::get_ppjlvalue_ty(builder.getContext());
@@ -187,17 +178,16 @@ static inline llvm::Value *get_current_task_from_pgcstack(llvm::IRBuilder<> &bui
     const int pgcstack_offset = offsetof(jl_task_t, gcstack);
     return builder.CreateInBoundsGEP(
             T_pjlvalue, emit_bitcast_with_builder(builder, pgcstack, T_ppjlvalue),
-            ConstantInt::get(getSizeTy(builder.getContext()), -(pgcstack_offset / sizeof(void *))),
+            ConstantInt::get(T_size, -(pgcstack_offset / sizeof(void *))),
             "current_task");
 }
 
 // Get PTLS through current task.
-static inline llvm::Value *get_current_ptls_from_task(llvm::IRBuilder<> &builder, llvm::Value *current_task, llvm::MDNode *tbaa)
+static inline llvm::Value *get_current_ptls_from_task(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *current_task, llvm::MDNode *tbaa)
 {
     using namespace llvm;
     auto T_ppjlvalue = JuliaType::get_ppjlvalue_ty(builder.getContext());
     auto T_pjlvalue = JuliaType::get_pjlvalue_ty(builder.getContext());
-    auto T_size = getSizeTy(builder.getContext());
     const int ptls_offset = offsetof(jl_task_t, ptls);
     llvm::Value *pptls = builder.CreateInBoundsGEP(
             T_pjlvalue, current_task,
@@ -211,11 +201,10 @@ static inline llvm::Value *get_current_ptls_from_task(llvm::IRBuilder<> &builder
 }
 
 // Get signal page through current task.
-static inline llvm::Value *get_current_signal_page_from_ptls(llvm::IRBuilder<> &builder, llvm::Value *ptls, llvm::MDNode *tbaa)
+static inline llvm::Value *get_current_signal_page_from_ptls(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, llvm::MDNode *tbaa)
 {
     using namespace llvm;
     // return builder.CreateCall(prepare_call(reuse_signal_page_func));
-    auto T_size = getSizeTy(builder.getContext());
     auto T_psize = T_size->getPointerTo();
     auto T_ppsize = T_psize->getPointerTo();
     int nthfield = offsetof(jl_tls_states_t, safepoint) / sizeof(void *);
@@ -234,22 +223,20 @@ static inline void emit_signal_fence(llvm::IRBuilder<> &builder)
     builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SyncScope::SingleThread);
 }
 
-static inline void emit_gc_safepoint(llvm::IRBuilder<> &builder, llvm::Value *ptls, llvm::MDNode *tbaa, bool final = false)
+static inline void emit_gc_safepoint(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, llvm::MDNode *tbaa, bool final = false)
 {
     using namespace llvm;
-    llvm::Value *signal_page = get_current_signal_page_from_ptls(builder, ptls, tbaa);
+    llvm::Value *signal_page = get_current_signal_page_from_ptls(builder, T_size, ptls, tbaa);
     emit_signal_fence(builder);
     Module *M = builder.GetInsertBlock()->getModule();
     LLVMContext &C = builder.getContext();
     // inline jlsafepoint_func->realize(M)
     if (final) {
-        auto T_size = getSizeTy(builder.getContext());
         builder.CreateLoad(T_size, signal_page, true);
     }
     else {
         Function *F = M->getFunction("julia.safepoint");
         if (!F) {
-            auto T_size = getSizeTy(builder.getContext());
             auto T_psize = T_size->getPointerTo();
             FunctionType *FT = FunctionType::get(Type::getVoidTy(C), {T_psize}, false);
             F = Function::Create(FT, Function::ExternalLinkage, "julia.safepoint", M);
@@ -260,7 +247,7 @@ static inline void emit_gc_safepoint(llvm::IRBuilder<> &builder, llvm::Value *pt
     emit_signal_fence(builder);
 }
 
-static inline llvm::Value *emit_gc_state_set(llvm::IRBuilder<> &builder, llvm::Value *ptls, llvm::Value *state, llvm::Value *old_state, bool final)
+static inline llvm::Value *emit_gc_state_set(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, llvm::Value *state, llvm::Value *old_state, bool final)
 {
     using namespace llvm;
     Type *T_int8 = state->getType();
@@ -286,38 +273,38 @@ static inline llvm::Value *emit_gc_state_set(llvm::IRBuilder<> &builder, llvm::V
                          passBB, exitBB);
     builder.SetInsertPoint(passBB);
     MDNode *tbaa = get_tbaa_const(builder.getContext());
-    emit_gc_safepoint(builder, ptls, tbaa, final);
+    emit_gc_safepoint(builder, T_size, ptls, tbaa, final);
     builder.CreateBr(exitBB);
     builder.SetInsertPoint(exitBB);
     return old_state;
 }
 
-static inline llvm::Value *emit_gc_unsafe_enter(llvm::IRBuilder<> &builder, llvm::Value *ptls, bool final)
+static inline llvm::Value *emit_gc_unsafe_enter(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, bool final)
 {
     using namespace llvm;
     Value *state = builder.getInt8(0);
-    return emit_gc_state_set(builder, ptls, state, nullptr, final);
+    return emit_gc_state_set(builder, T_size, ptls, state, nullptr, final);
 }
 
-static inline llvm::Value *emit_gc_unsafe_leave(llvm::IRBuilder<> &builder, llvm::Value *ptls, llvm::Value *state, bool final)
+static inline llvm::Value *emit_gc_unsafe_leave(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, llvm::Value *state, bool final)
 {
     using namespace llvm;
     Value *old_state = builder.getInt8(0);
-    return emit_gc_state_set(builder, ptls, state, old_state, final);
+    return emit_gc_state_set(builder, T_size, ptls, state, old_state, final);
 }
 
-static inline llvm::Value *emit_gc_safe_enter(llvm::IRBuilder<> &builder, llvm::Value *ptls, bool final)
+static inline llvm::Value *emit_gc_safe_enter(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, bool final)
 {
     using namespace llvm;
     Value *state = builder.getInt8(JL_GC_STATE_SAFE);
-    return emit_gc_state_set(builder, ptls, state, nullptr, final);
+    return emit_gc_state_set(builder, T_size, ptls, state, nullptr, final);
 }
 
-static inline llvm::Value *emit_gc_safe_leave(llvm::IRBuilder<> &builder, llvm::Value *ptls, llvm::Value *state, bool final)
+static inline llvm::Value *emit_gc_safe_leave(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, llvm::Value *state, bool final)
 {
     using namespace llvm;
     Value *old_state = builder.getInt8(JL_GC_STATE_SAFE);
-    return emit_gc_state_set(builder, ptls, state, old_state, final);
+    return emit_gc_state_set(builder, T_size, ptls, state, old_state, final);
 }
 
 // Compatibility shims for LLVM attribute APIs that were renamed in LLVM 14.
@@ -448,5 +435,157 @@ inline Attribute getAttributeAtIndex(const AttributeList &L, unsigned Index, Att
 #else
     return L.getAttribute(Index, Kind);
 #endif
+}
+
+// Iterate through uses of a particular type.
+// Recursively scan through `ConstantExpr` and `ConstantAggregate` use.
+template<typename U>
+struct ConstantUses {
+    template<typename T>
+    struct Info {
+        llvm::Use *use;
+        T *val;
+        // If `samebits == true`, the offset the original value appears in the constant.
+        size_t offset;
+        // This specify whether the original value appears in the current value in exactly
+        // the same bit pattern (with possibly an offset determined by `offset`).
+        bool samebits;
+        Info(llvm::Use *use, T *val, size_t offset, bool samebits) :
+            use(use),
+            val(val),
+            offset(offset),
+            samebits(samebits)
+        {
+        }
+        Info(llvm::Use *use, size_t offset, bool samebits) :
+            use(use),
+            val(cast<T>(use->getUser())),
+            offset(offset),
+            samebits(samebits)
+        {
+        }
+    };
+    using UseInfo = Info<U>;
+    struct Frame : Info<llvm::Constant> {
+        template<typename... Args>
+        Frame(Args &&... args) :
+            Info<llvm::Constant>(std::forward<Args>(args)...),
+            cur(this->val->use_empty() ? nullptr : &*this->val->use_begin()),
+            _next(cur ? cur->getNext() : nullptr)
+        {
+        }
+    private:
+        void next()
+        {
+            cur = _next;
+            if (!cur)
+                return;
+            _next = cur->getNext();
+        }
+        llvm::Use *cur;
+        llvm::Use *_next;
+        friend struct ConstantUses;
+    };
+    ConstantUses(llvm::Constant *c, llvm::Module &M)
+        : stack{Frame(nullptr, c, 0u, true)},
+          M(M)
+    {
+        forward();
+    }
+    UseInfo get_info() const
+    {
+        auto &top = stack.back();
+        return UseInfo(top.cur, top.offset, top.samebits);
+    }
+    const auto &get_stack() const
+    {
+        return stack;
+    }
+    void next()
+    {
+        stack.back().next();
+        forward();
+    }
+    bool done()
+    {
+        return stack.empty();
+    }
+private:
+    void forward();
+    llvm::SmallVector<Frame, 4> stack;
+    llvm::Module &M;
+};
+
+template<typename U>
+void ConstantUses<U>::forward()
+{
+    assert(!stack.empty());
+    auto frame = &stack.back();
+    const auto &DL = M.getDataLayout();
+    auto pop = [&] {
+        stack.pop_back();
+        if (stack.empty()) {
+            return false;
+        }
+        frame = &stack.back();
+        return true;
+    };
+    auto push = [&] (llvm::Use *use, llvm::Constant *c, size_t offset, bool samebits) {
+        stack.emplace_back(use, c, offset, samebits);
+        frame = &stack.back();
+    };
+    auto handle_constaggr = [&] (llvm::Use *use, llvm::ConstantAggregate *aggr) {
+        if (!frame->samebits) {
+            push(use, aggr, 0, false);
+            return;
+        }
+        if (auto strct = dyn_cast<llvm::ConstantStruct>(aggr)) {
+            auto layout = DL.getStructLayout(strct->getType());
+            push(use, strct, frame->offset + layout->getElementOffset(use->getOperandNo()), true);
+        }
+        else if (auto ary = dyn_cast<llvm::ConstantArray>(aggr)) {
+            auto elty = ary->getType()->getElementType();
+            push(use, ary, frame->offset + DL.getTypeAllocSize(elty) * use->getOperandNo(), true);
+        }
+        else if (auto vec = dyn_cast<llvm::ConstantVector>(aggr)) {
+            auto elty = vec->getType()->getElementType();
+            push(use, vec, frame->offset + DL.getTypeAllocSize(elty) * use->getOperandNo(), true);
+        }
+        else {
+            abort();
+        }
+    };
+    auto handle_constexpr = [&] (llvm::Use *use, llvm::ConstantExpr *expr) {
+        if (!frame->samebits) {
+            push(use, expr, 0, false);
+            return;
+        }
+        auto opcode = expr->getOpcode();
+        if (opcode == llvm::Instruction::PtrToInt || opcode == llvm::Instruction::IntToPtr ||
+            opcode == llvm::Instruction::AddrSpaceCast || opcode == llvm::Instruction::BitCast) {
+            push(use, expr, frame->offset, true);
+        }
+        else {
+            push(use, expr, 0, false);
+        }
+    };
+    while (true) {
+        auto use = frame->cur;
+        if (!use) {
+            if (!pop())
+                return;
+            continue;
+        }
+        auto user = use->getUser();
+        if (isa<U>(user))
+            return;
+        frame->next();
+        if (auto aggr = dyn_cast<llvm::ConstantAggregate>(user)) {
+            handle_constaggr(use, aggr);
+        }
+        else if (auto expr = dyn_cast<llvm::ConstantExpr>(user)) {
+            handle_constexpr(use, expr);
+        }
+    }
 }
 }

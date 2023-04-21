@@ -18,8 +18,9 @@ struct GC_Num
     full_sweep      ::Cint
     max_pause       ::Int64
     max_memory      ::Int64
-    time_to_safepoint             ::Int64
-    max_time_to_safepointp        ::Int64
+    time_to_safepoint           ::Int64
+    max_time_to_safepoint       ::Int64
+    total_time_to_safepoint     ::Int64
     sweep_time      ::Int64
     mark_time       ::Int64
     total_sweep_time  ::Int64
@@ -103,7 +104,7 @@ Return the total amount (in bytes) allocated by the just-in-time compiler
 for e.g. native code and data.
 """
 function jit_total_bytes()
-    return Int(ccall(:jl_jit_total_bytes, Csize_t, ()))
+    return ccall(:jl_jit_total_bytes, Csize_t, ())
 end
 
 # print elapsed time, return expression value

@@ -85,7 +85,7 @@ static uint64_t jl_worklist_key(jl_array_t *worklist) JL_NOTSAFEPOINT
 
 static jl_array_t *newly_inferred JL_GLOBALLY_ROOTED /*FIXME*/;
 // Mutex for newly_inferred
-static jl_mutex_t newly_inferred_mutex;
+jl_mutex_t newly_inferred_mutex;
 
 // Register array of newly-inferred MethodInstances
 // This gets called as the first step of Base.include_package_for_output
@@ -230,6 +230,8 @@ static jl_array_t *queue_external_cis(jl_array_t *list)
     for (i = n0; i-- > 0; ) {
         jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(list, i);
         assert(jl_is_code_instance(ci));
+        if (!ci->relocatability)
+            continue;
         jl_method_instance_t *mi = ci->def;
         jl_method_t *m = mi->def.method;
         if (ci->inferred && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
@@ -367,12 +369,18 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure)
     }
     if (edges_map == NULL)
         return 1;
-    jl_svec_t *specializations = m->specializations;
-    size_t i, l = jl_svec_len(specializations);
-    for (i = 0; i < l; i++) {
-        jl_method_instance_t *callee = (jl_method_instance_t*)jl_svecref(specializations, i);
-        if ((jl_value_t*)callee != jl_nothing)
-            collect_backedges(callee, !s);
+    jl_value_t *specializations = jl_atomic_load_relaxed(&m->specializations);
+    if (!jl_is_svec(specializations)) {
+        jl_method_instance_t *callee = (jl_method_instance_t*)specializations;
+        collect_backedges(callee, !s);
+    }
+    else {
+        size_t i, l = jl_svec_len(specializations);
+        for (i = 0; i < l; i++) {
+            jl_method_instance_t *callee = (jl_method_instance_t*)jl_svecref(specializations, i);
+            if ((jl_value_t*)callee != jl_nothing)
+                collect_backedges(callee, !s);
+        }
     }
     return 1;
 }
@@ -518,7 +526,7 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets, jl_arra
                         sig = callee;
                     int ambig = 0;
                     matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing,
-                            -1, 0, world, &min_valid, &max_valid, &ambig);
+                            INT32_MAX, 0, world, &min_valid, &max_valid, &ambig);
                     if (matches == jl_nothing) {
                         callee_ids = NULL; // invalid
                         break;
@@ -867,8 +875,10 @@ static jl_array_t *jl_verify_edges(jl_array_t *targets, size_t minworld)
             assert(jl_is_array(expected));
             int ambig = 0;
             // TODO: possibly need to included ambiguities too (for the optimizer correctness)?
+            // len + 1 is to allow us to log causes of invalidation (SnoopCompile's @snoopr)
             matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing,
-                    -1, 0, minworld, &min_valid, &max_valid, &ambig);
+                    _jl_debug_method_invalidation ? INT32_MAX : jl_array_len(expected),
+                    0, minworld, &min_valid, &max_valid, &ambig);
             if (matches == jl_nothing) {
                 max_valid = 0;
             }
@@ -1012,18 +1022,18 @@ static int jl_verify_graph_edge(size_t *maxvalids2_data, jl_array_t *edges, size
         if (idx != childidx) {
             if (max_valid < maxvalids2_data[childidx])
                 maxvalids2_data[childidx] = max_valid;
-            if (_jl_debug_method_invalidation && max_valid != ~(size_t)0) {
-                jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(edges, childidx * 2);
-                jl_value_t *loctag = NULL;
-                JL_GC_PUSH1(&loctag);
-                jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)mi);
-                loctag = jl_cstr_to_string("verify_methods");
-                jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
-                jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)cause);
-                JL_GC_POP();
-            }
         }
         visited->items[childidx] = (void*)1;
+        if (_jl_debug_method_invalidation && max_valid != ~(size_t)0) {
+            jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(edges, childidx * 2);
+            jl_value_t *loctag = NULL;
+            JL_GC_PUSH1(&loctag);
+            jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)mi);
+            loctag = jl_cstr_to_string("verify_methods");
+            jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
+            jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)cause);
+            JL_GC_POP();
+        }
     }
     return 0;
 }

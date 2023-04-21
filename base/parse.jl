@@ -36,6 +36,7 @@ julia> parse(Complex{Float64}, "3.2e-1 + 4.5im")
 ```
 """
 parse(T::Type, str; base = Int)
+parse(::Type{Union{}}, slurp...; kwargs...) = error("cannot parse a value as Union{}")
 
 function parse(::Type{T}, c::AbstractChar; base::Integer = 10) where T<:Integer
     a::Int = (base <= 36 ? 10 : 36)
@@ -251,6 +252,7 @@ function parse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = noth
     convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s),
                                  base===nothing ? 0 : check_valid_base(base), true))
 end
+tryparse(::Type{Union{}}, slurp...; kwargs...) = error("cannot parse a value as Union{}")
 
 ## string to float functions ##
 

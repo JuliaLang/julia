@@ -173,6 +173,13 @@ pagetable_t memory_map;
 // List of marked big objects.  Not per-thread.  Accessed only by master thread.
 bigval_t *big_objects_marked = NULL;
 
+// Eytzinger tree of images. Used for very fast jl_object_in_image queries during gc
+// See https://algorithmica.org/en/eytzinger
+static arraylist_t eytzinger_image_tree;
+static arraylist_t eytzinger_idxs;
+static uintptr_t gc_img_min;
+static uintptr_t gc_img_max;
+
 // -- Finalization --
 // `ptls->finalizers` and `finalizer_list_marked` might have tagged pointers.
 // If an object pointer has the lowest bit set, the next pointer is an unboxed c function pointer.
@@ -183,6 +190,118 @@ arraylist_t finalizer_list_marked;
 arraylist_t to_finalize;
 JL_DLLEXPORT _Atomic(int) jl_gc_have_pending_finalizers = 0;
 
+static int ptr_cmp(const void *l, const void *r)
+{
+    uintptr_t left = *(const uintptr_t*)l;
+    uintptr_t right = *(const uintptr_t*)r;
+    // jl_safe_printf("cmp %p %p\n", (void*)left, (void*)right);
+    return (left > right) - (left < right);
+}
+
+// Build an eytzinger tree from a sorted array
+static int eytzinger(uintptr_t *src, uintptr_t *dest, size_t i, size_t k, size_t n)
+{
+    if (k <= n) {
+        i = eytzinger(src, dest, i, 2 * k, n);
+        dest[k-1] = src[i];
+        i++;
+        i = eytzinger(src, dest, i, 2 * k + 1, n);
+    }
+    return i;
+}
+
+static size_t eyt_obj_idx(jl_value_t *obj) JL_NOTSAFEPOINT
+{
+    size_t n = eytzinger_image_tree.len - 1;
+    if (n == 0)
+        return n;
+    assert(n % 2 == 0 && "Eytzinger tree not even length!");
+    uintptr_t cmp = (uintptr_t) obj;
+    if (cmp <= gc_img_min || cmp > gc_img_max)
+        return n;
+    uintptr_t *tree = (uintptr_t*)eytzinger_image_tree.items;
+    size_t k = 1;
+    // note that k preserves the history of how we got to the current node
+    while (k <= n) {
+        int greater = (cmp > tree[k - 1]);
+        k <<= 1;
+        k |= greater;
+    }
+    // Free to assume k is nonzero, since we start with k = 1
+    // and cmp > gc_img_min
+    // This shift does a fast revert of the path until we get
+    // to a node that evaluated less than cmp.
+    k >>= (__builtin_ctzll(k) + 1);
+    assert(k != 0);
+    assert(k <= n && "Eytzinger tree index out of bounds!");
+    assert(tree[k - 1] < cmp && "Failed to find lower bound for object!");
+    return k - 1;
+}
+
+//used in staticdata.c after we add an image
+void rebuild_image_blob_tree(void)
+{
+    size_t inc = 1 + jl_linkage_blobs.len - eytzinger_image_tree.len;
+    assert(eytzinger_idxs.len == eytzinger_image_tree.len);
+    assert(eytzinger_idxs.max == eytzinger_image_tree.max);
+    arraylist_grow(&eytzinger_idxs, inc);
+    arraylist_grow(&eytzinger_image_tree, inc);
+    eytzinger_idxs.items[eytzinger_idxs.len - 1] = (void*)jl_linkage_blobs.len;
+    eytzinger_image_tree.items[eytzinger_image_tree.len - 1] = (void*)1; // outside image
+    for (size_t i = 0; i < jl_linkage_blobs.len; i++) {
+        assert((uintptr_t) jl_linkage_blobs.items[i] % 4 == 0 && "Linkage blob not 4-byte aligned!");
+        // We abuse the pointer here a little so that a couple of properties are true:
+        // 1. a start and an end are never the same value. This simplifies the binary search.
+        // 2. ends are always after starts. This also simplifies the binary search.
+        // We assume that there exist no 0-size blobs, but that's a safe assumption
+        // since it means nothing could be there anyways
+        uintptr_t val = (uintptr_t) jl_linkage_blobs.items[i];
+        eytzinger_idxs.items[i] = (void*)(val + (i & 1));
+    }
+    qsort(eytzinger_idxs.items, eytzinger_idxs.len - 1, sizeof(void*), ptr_cmp);
+    gc_img_min = (uintptr_t) eytzinger_idxs.items[0];
+    gc_img_max = (uintptr_t) eytzinger_idxs.items[eytzinger_idxs.len - 2] + 1;
+    eytzinger((uintptr_t*)eytzinger_idxs.items, (uintptr_t*)eytzinger_image_tree.items, 0, 1, eytzinger_idxs.len - 1);
+    // Reuse the scratch memory to store the indices
+    // Still O(nlogn) because binary search
+    for (size_t i = 0; i < jl_linkage_blobs.len; i ++) {
+        uintptr_t val = (uintptr_t) jl_linkage_blobs.items[i];
+        // This is the same computation as in the prior for loop
+        uintptr_t eyt_val = val + (i & 1);
+        size_t eyt_idx = eyt_obj_idx((jl_value_t*)(eyt_val + 1)); assert(eyt_idx < eytzinger_idxs.len - 1);
+        assert(eytzinger_image_tree.items[eyt_idx] == (void*)eyt_val && "Eytzinger tree failed to find object!");
+        if (i & 1)
+            eytzinger_idxs.items[eyt_idx] = (void*)n_linkage_blobs();
+        else
+            eytzinger_idxs.items[eyt_idx] = (void*)(i / 2);
+    }
+}
+
+static int eyt_obj_in_img(jl_value_t *obj) JL_NOTSAFEPOINT
+{
+    assert((uintptr_t) obj % 4 == 0 && "Object not 4-byte aligned!");
+    int idx = eyt_obj_idx(obj);
+    // Now we use a tiny trick: tree[idx] & 1 is whether or not tree[idx] is a
+    // start (0) or an end (1) of a blob. If it's a start, then the object is
+    // in the image, otherwise it is not.
+    int in_image = ((uintptr_t)eytzinger_image_tree.items[idx] & 1) == 0;
+    return in_image;
+}
+
+size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    assert((uintptr_t) v % 4 == 0 && "Object not 4-byte aligned!");
+    int eyt_idx = eyt_obj_idx(v);
+    // We fill the invalid slots with the length, so we can just return that
+    size_t idx = (size_t) eytzinger_idxs.items[eyt_idx];
+    return idx;
+}
+
+uint8_t jl_object_in_image(jl_value_t *obj) JL_NOTSAFEPOINT
+{
+    return eyt_obj_in_img(obj);
+}
+
 NOINLINE uintptr_t gc_get_stack_ptr(void)
 {
     return (uintptr_t)jl_get_frame_addr();
@@ -192,6 +311,11 @@ NOINLINE uintptr_t gc_get_stack_ptr(void)
 
 void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
 {
+    JL_TIMING(GC, Stop);
+#ifdef USE_TRACY
+    TracyCZoneCtx ctx = *(JL_TIMING_CURRENT_BLOCK->tracy_ctx);
+    TracyCZoneColor(ctx, 0x696969);
+#endif
     assert(gc_n_threads);
     if (gc_n_threads > 1)
         jl_wake_libuv();
@@ -382,9 +506,9 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list) JL_NO
     ct->sticky = sticky;
 }
 
-static uint64_t finalizer_rngState[4];
+static uint64_t finalizer_rngState[JL_RNG_SIZE];
 
-void jl_rng_split(uint64_t to[4], uint64_t from[4]) JL_NOTSAFEPOINT;
+void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_gc_init_finalizer_rng_state(void)
 {
@@ -413,7 +537,7 @@ static void run_finalizers(jl_task_t *ct)
     jl_atomic_store_relaxed(&jl_gc_have_pending_finalizers, 0);
     arraylist_new(&to_finalize, 0);
 
-    uint64_t save_rngState[4];
+    uint64_t save_rngState[JL_RNG_SIZE];
     memcpy(&save_rngState[0], &ct->rngState[0], sizeof(save_rngState));
     jl_rng_split(ct->rngState, finalizer_rngState);
 
@@ -486,6 +610,11 @@ JL_DLLEXPORT void jl_gc_enable_finalizers(jl_task_t *ct, int on)
     if (jl_atomic_load_relaxed(&jl_gc_have_pending_finalizers)) {
         jl_gc_run_pending_finalizers(ct);
     }
+}
+
+JL_DLLEXPORT int8_t jl_gc_is_in_finalizer(void)
+{
+    return jl_current_task->ptls->in_finalizer;
 }
 
 static void schedule_all_finalizers(arraylist_t *flist) JL_NOTSAFEPOINT
@@ -847,8 +976,8 @@ STATIC_INLINE void gc_setmark_pool_(jl_ptls_t ptls, jl_taggedvalue_t *o,
             page->has_young = 1;
             char *page_begin = gc_page_data(o) + GC_PAGE_OFFSET;
             int obj_id = (((char*)o) - page_begin) / page->osize;
-            uint8_t *ages = page->ages + obj_id / 8;
-            jl_atomic_fetch_and_relaxed((_Atomic(uint8_t)*)ages, ~(1 << (obj_id % 8)));
+            uint32_t *ages = page->ages + obj_id / 32;
+            jl_atomic_fetch_and_relaxed((_Atomic(uint32_t)*)ages, ~(1 << (obj_id % 32)));
         }
     }
     objprofile_count(jl_typeof(jl_valueof(o)),
@@ -1277,7 +1406,7 @@ static NOINLINE jl_taggedvalue_t *add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_gc_pagemeta_t *pg = jl_gc_alloc_page();
     pg->osize = p->osize;
-    pg->ages = (uint8_t*)malloc_s(GC_PAGE_SZ / 8 / p->osize + 1);
+    pg->ages = (uint32_t*)malloc_s(LLT_ALIGN(GC_PAGE_SZ / 8 / p->osize + 1, sizeof(uint32_t)));
     pg->thread_n = ptls->tid;
     jl_taggedvalue_t *fl = reset_page(ptls, p, pg, NULL);
     p->newpages = fl;
@@ -1377,7 +1506,7 @@ int64_t lazy_freed_pages = 0;
 static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_taggedvalue_t **pfl, int sweep_full, int osize) JL_NOTSAFEPOINT
 {
     char *data = pg->data;
-    uint8_t *ages = pg->ages;
+    uint32_t *ages = pg->ages;
     jl_taggedvalue_t *v = (jl_taggedvalue_t*)(data + GC_PAGE_OFFSET);
     char *lim = (char*)v + GC_PAGE_SZ - GC_PAGE_OFFSET - osize;
     size_t old_nfree = pg->nfree;
@@ -1428,18 +1557,25 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
         int16_t prev_nold = 0;
         int pg_nfree = 0;
         jl_taggedvalue_t **pfl_begin = NULL;
-        uint8_t msk = 1; // mask for the age bit in the current age byte
+        uint32_t msk = 1; // mask for the age bit in the current age byte
+        uint32_t age = *ages;
         while ((char*)v <= lim) {
+            if (!msk) {
+                msk = 1;
+                *ages = age;
+                ages++;
+                age = *ages;
+            }
             int bits = v->bits.gc;
             if (!gc_marked(bits)) {
                 *pfl = v;
                 pfl = &v->next;
                 pfl_begin = pfl_begin ? pfl_begin : pfl;
                 pg_nfree++;
-                *ages &= ~msk;
+                age &= ~msk;
             }
             else { // marked young or old
-                if (*ages & msk || bits == GC_OLD_MARKED) { // old enough
+                if (age & msk || bits == GC_OLD_MARKED) { // old enough
                     // `!age && bits == GC_OLD_MARKED` is possible for
                     // non-first-class objects like array buffers
                     // (they may get promoted by jl_gc_wb_buf for example,
@@ -1455,17 +1591,13 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
                     has_young = 1;
                 }
                 has_marked |= gc_marked(bits);
-                *ages |= msk;
+                age |= msk;
                 freedall = 0;
             }
             v = (jl_taggedvalue_t*)((char*)v + osize);
             msk <<= 1;
-            if (!msk) {
-                msk = 1;
-                ages++;
-            }
         }
-
+        *ages = age;
         assert(!freedall);
         pg->has_marked = has_marked;
         pg->has_young = has_young;
@@ -1946,6 +2078,7 @@ STATIC_INLINE jl_value_t *gc_mark_obj32(jl_ptls_t ptls, char *obj32_parent, uint
             gc_heap_snapshot_record_object_edge((jl_value_t*)obj32_parent, slot);
         }
     }
+    gc_mark_push_remset(ptls, (jl_value_t *)obj32_parent, nptr);
     return new_obj;
 }
 
@@ -1957,24 +2090,47 @@ STATIC_INLINE void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_v
     jl_value_t *new_obj;
     // Decide whether need to chunk objary
     (void)jl_assume(step > 0);
-    size_t nobjs = (obj_end - obj_begin) / step;
-    if (nobjs > MAX_REFS_AT_ONCE) {
-        jl_gc_chunk_t c = {GC_objary_chunk, obj_parent, obj_begin + step * MAX_REFS_AT_ONCE,
-                           obj_end,      NULL,       NULL,
-                           step,         nptr};
-        gc_chunkqueue_push(mq, &c);
-        obj_end = obj_begin + step * MAX_REFS_AT_ONCE;
+    if ((nptr & 0x2) == 0x2) {
+        // pre-scan this object: most of this object should be old, so look for
+        // the first young object before starting this chunk
+        // (this also would be valid for young objects, but probably less beneficial)
+        for (; obj_begin < obj_end; obj_begin += step) {
+            new_obj = *obj_begin;
+            if (new_obj != NULL) {
+                verify_parent2("obj array", obj_parent, obj_begin, "elem(%d)",
+                               gc_slot_to_arrayidx(obj_parent, obj_begin));
+                jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
+                if (!gc_old(o->header))
+                    nptr |= 1;
+                if (!gc_marked(o->header))
+                    break;
+                gc_heap_snapshot_record_array_edge(obj_parent, &new_obj);
+            }
+        }
     }
-    for (; obj_begin < obj_end; obj_begin += step) {
+    size_t too_big = (obj_end - obj_begin) / MAX_REFS_AT_ONCE > step; // use this order of operations to avoid idiv
+    jl_value_t **scan_end = obj_end;
+    if (too_big) {
+        scan_end = obj_begin + step * MAX_REFS_AT_ONCE;
+    }
+    for (; obj_begin < scan_end; obj_begin += step) {
         new_obj = *obj_begin;
         if (new_obj != NULL) {
             verify_parent2("obj array", obj_parent, obj_begin, "elem(%d)",
-                           gc_slot_to_arrayidx(obj_parent, obj_begin));
+                        gc_slot_to_arrayidx(obj_parent, obj_begin));
             gc_try_claim_and_push(mq, new_obj, &nptr);
             gc_heap_snapshot_record_array_edge(obj_parent, &new_obj);
         }
     }
-    gc_mark_push_remset(ptls, obj_parent, nptr);
+    if (too_big) {
+        jl_gc_chunk_t c = {GC_objary_chunk, obj_parent, scan_end,
+                            obj_end,      NULL,       NULL,
+                            step,         nptr};
+        gc_chunkqueue_push(mq, &c);
+    }
+    else {
+        gc_mark_push_remset(ptls, obj_parent, nptr);
+    }
 }
 
 // Mark array with 8bit field descriptors
@@ -1986,14 +2142,36 @@ STATIC_INLINE void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_va
     jl_value_t *new_obj;
     size_t elsize = ((jl_array_t *)ary8_parent)->elsize / sizeof(jl_value_t *);
     assert(elsize > 0);
-    // Decide whether need to chunk ary8
-    size_t nrefs = (ary8_end - ary8_begin) / elsize;
-    if (nrefs > MAX_REFS_AT_ONCE) {
-        jl_gc_chunk_t c = {GC_ary8_chunk, ary8_parent, ary8_begin + elsize * MAX_REFS_AT_ONCE,
-                           ary8_end,   elem_begin,  elem_end,
-                           0,          nptr};
-        gc_chunkqueue_push(mq, &c);
-        ary8_end = ary8_begin + elsize * MAX_REFS_AT_ONCE;
+    // Decide whether need to chunk objary
+    if ((nptr & 0x2) == 0x2) {
+        // pre-scan this object: most of this object should be old, so look for
+        // the first young object before starting this chunk
+        // (this also would be valid for young objects, but probably less beneficial)
+        for (; ary8_begin < ary8_end; ary8_begin += elsize) {
+            int early_end = 0;
+            for (uint8_t *pindex = elem_begin; pindex < elem_end; pindex++) {
+                new_obj = ary8_begin[*pindex];
+                if (new_obj != NULL) {
+                    verify_parent2("array", ary8_parent, &new_obj, "elem(%d)",
+                                gc_slot_to_arrayidx(ary8_parent, ary8_begin));
+                    jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
+                    if (!gc_old(o->header))
+                        nptr |= 1;
+                    if (!gc_marked(o->header)){
+                        early_end = 1;
+                        break;
+                    }
+                    gc_heap_snapshot_record_array_edge(ary8_parent, &new_obj);
+                }
+            }
+            if (early_end)
+                break;
+        }
+    }
+    size_t too_big = (ary8_end - ary8_begin) / MAX_REFS_AT_ONCE > elsize; // use this order of operations to avoid idiv
+    jl_value_t **scan_end = ary8_end;
+    if (too_big) {
+        scan_end = ary8_begin + elsize * MAX_REFS_AT_ONCE;
     }
     for (; ary8_begin < ary8_end; ary8_begin += elsize) {
         for (uint8_t *pindex = elem_begin; pindex < elem_end; pindex++) {
@@ -2006,7 +2184,15 @@ STATIC_INLINE void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_va
             }
         }
     }
-    gc_mark_push_remset(ptls, ary8_parent, nptr);
+    if (too_big) {
+        jl_gc_chunk_t c = {GC_objary_chunk, ary8_parent, scan_end,
+                           ary8_end,        elem_begin,       elem_end,
+                           0,               nptr};
+        gc_chunkqueue_push(mq, &c);
+    }
+    else {
+        gc_mark_push_remset(ptls, ary8_parent, nptr);
+    }
 }
 
 // Mark array with 16bit field descriptors
@@ -2018,16 +2204,38 @@ STATIC_INLINE void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl_
     jl_value_t *new_obj;
     size_t elsize = ((jl_array_t *)ary16_parent)->elsize / sizeof(jl_value_t *);
     assert(elsize > 0);
-    // Decide whether need to chunk ary16
-    size_t nrefs = (ary16_end - ary16_begin) / elsize;
-    if (nrefs > MAX_REFS_AT_ONCE) {
-        jl_gc_chunk_t c = {GC_ary16_chunk, ary16_parent, ary16_begin + elsize * MAX_REFS_AT_ONCE,
-                           ary16_end,   elem_begin,   elem_end,
-                           0,           nptr};
-        gc_chunkqueue_push(mq, &c);
-        ary16_end = ary16_begin + elsize * MAX_REFS_AT_ONCE;
+    // Decide whether need to chunk objary
+    if ((nptr & 0x2) == 0x2) {
+        // pre-scan this object: most of this object should be old, so look for
+        // the first young object before starting this chunk
+        // (this also would be valid for young objects, but probably less beneficial)
+        for (; ary16_begin < ary16_end; ary16_begin += elsize) {
+            int early_end = 0;
+            for (uint16_t *pindex = elem_begin; pindex < elem_end; pindex++) {
+                new_obj = ary16_begin[*pindex];
+                if (new_obj != NULL) {
+                    verify_parent2("array", ary16_parent, &new_obj, "elem(%d)",
+                                gc_slot_to_arrayidx(ary16_parent, ary16_begin));
+                    jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
+                    if (!gc_old(o->header))
+                        nptr |= 1;
+                    if (!gc_marked(o->header)){
+                        early_end = 1;
+                        break;
+                    }
+                    gc_heap_snapshot_record_array_edge(ary16_parent, &new_obj);
+                }
+            }
+            if (early_end)
+                break;
+        }
     }
-    for (; ary16_begin < ary16_end; ary16_begin += elsize) {
+    size_t too_big = (ary16_end - ary16_begin) / MAX_REFS_AT_ONCE > elsize; // use this order of operations to avoid idiv
+    jl_value_t **scan_end = ary16_end;
+    if (too_big) {
+        scan_end = ary16_begin + elsize * MAX_REFS_AT_ONCE;
+    }
+    for (; ary16_begin < scan_end; ary16_begin += elsize) {
         for (uint16_t *pindex = elem_begin; pindex < elem_end; pindex++) {
             new_obj = ary16_begin[*pindex];
             if (new_obj != NULL) {
@@ -2038,7 +2246,15 @@ STATIC_INLINE void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl_
             }
         }
     }
-    gc_mark_push_remset(ptls, ary16_parent, nptr);
+    if (too_big) {
+        jl_gc_chunk_t c = {GC_objary_chunk, ary16_parent, scan_end,
+                            ary16_end,      elem_begin,       elem_end,
+                            elsize,         nptr};
+        gc_chunkqueue_push(mq, &c);
+    }
+    else {
+        gc_mark_push_remset(ptls, ary16_parent, nptr);
+    }
 }
 
 // Mark chunk of large array
@@ -2265,7 +2481,8 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
         uint8_t bits = (gc_old(o->header) && !mark_reset_age) ? GC_OLD_MARKED : GC_MARKED;
         int update_meta = __likely(!meta_updated && !gc_verifying);
         int foreign_alloc = 0;
-        if (update_meta && jl_object_in_image(new_obj)) {
+        // directly point at eyt_obj_in_img to encourage inlining
+        if (update_meta && o->bits.in_image) {
             foreign_alloc = 1;
             update_meta = 0;
         }
@@ -2815,79 +3032,86 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 {
     combine_thread_gc_counts(&gc_num);
 
+#ifdef USE_TRACY
+    TracyCPlot("Heap size", live_bytes + gc_num.allocd);
+#endif
+
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
 
     uint64_t gc_start_time = jl_hrtime();
     int64_t last_perm_scanned_bytes = perm_scanned_bytes;
-    JL_PROBE_GC_MARK_BEGIN();
     uint64_t start_mark_time = jl_hrtime();
+    JL_PROBE_GC_MARK_BEGIN();
+    {
+        JL_TIMING(GC, Mark);
 
-    // 1. fix GC bits of objects in the remset.
-    assert(gc_n_threads);
-    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
-        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
-        if (ptls2 != NULL)
-            gc_premark(ptls2);
-    }
-
-    assert(gc_n_threads);
-    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
-        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
-        if (ptls2 != NULL) {
-            // 2.1. mark every thread local root
-            gc_queue_thread_local(mq, ptls2);
-            // 2.2. mark any managed objects in the backtrace buffer
-            // TODO: treat these as roots for gc_heap_snapshot_record
-            gc_queue_bt_buf(mq, ptls2);
-            // 2.3. mark every object in the `last_remsets` and `rem_binding`
-            gc_queue_remset(ptls, ptls2);
+        // 1. fix GC bits of objects in the remset.
+        assert(gc_n_threads);
+        for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+            jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+            if (ptls2 != NULL)
+                gc_premark(ptls2);
         }
-    }
 
-    // 3. walk roots
-    gc_mark_roots(mq);
-    if (gc_cblist_root_scanner) {
-        gc_invoke_callbacks(jl_gc_cb_root_scanner_t,
-            gc_cblist_root_scanner, (collection));
-    }
-    gc_mark_loop(ptls);
+        assert(gc_n_threads);
+        for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+            jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+            if (ptls2 != NULL) {
+                // 2.1. mark every thread local root
+                gc_queue_thread_local(mq, ptls2);
+                // 2.2. mark any managed objects in the backtrace buffer
+                // TODO: treat these as roots for gc_heap_snapshot_record
+                gc_queue_bt_buf(mq, ptls2);
+                // 2.3. mark every object in the `last_remsets` and `rem_binding`
+                gc_queue_remset(ptls, ptls2);
+            }
+        }
 
-    // 4. check for objects to finalize
-    clear_weak_refs();
-    // Record the length of the marked list since we need to
-    // mark the object moved to the marked list from the
-    // `finalizer_list` by `sweep_finalizer_list`
-    size_t orig_marked_len = finalizer_list_marked.len;
-    assert(gc_n_threads);
-    for (int i = 0; i < gc_n_threads; i++) {
-        jl_ptls_t ptls2 = gc_all_tls_states[i];
-        if (ptls2 != NULL)
-            sweep_finalizer_list(&ptls2->finalizers);
+        // 3. walk roots
+        gc_mark_roots(mq);
+        if (gc_cblist_root_scanner) {
+            gc_invoke_callbacks(jl_gc_cb_root_scanner_t,
+                gc_cblist_root_scanner, (collection));
+        }
+        gc_mark_loop(ptls);
+
+        // 4. check for objects to finalize
+        clear_weak_refs();
+        // Record the length of the marked list since we need to
+        // mark the object moved to the marked list from the
+        // `finalizer_list` by `sweep_finalizer_list`
+        size_t orig_marked_len = finalizer_list_marked.len;
+        assert(gc_n_threads);
+        for (int i = 0; i < gc_n_threads; i++) {
+            jl_ptls_t ptls2 = gc_all_tls_states[i];
+            if (ptls2 != NULL)
+                sweep_finalizer_list(&ptls2->finalizers);
+        }
+        if (prev_sweep_full) {
+            sweep_finalizer_list(&finalizer_list_marked);
+            orig_marked_len = 0;
+        }
+        assert(gc_n_threads);
+        for (int i = 0; i < gc_n_threads; i++) {
+            jl_ptls_t ptls2 = gc_all_tls_states[i];
+            if (ptls2 != NULL)
+                gc_mark_finlist(mq, &ptls2->finalizers, 0);
+        }
+        gc_mark_finlist(mq, &finalizer_list_marked, orig_marked_len);
+        // "Flush" the mark stack before flipping the reset_age bit
+        // so that the objects are not incorrectly reset.
+        gc_mark_loop(ptls);
+        // Conservative marking relies on age to tell allocated objects
+        // and freelist entries apart.
+        mark_reset_age = !jl_gc_conservative_gc_support_enabled();
+        // Reset the age and old bit for any unmarked objects referenced by the
+        // `to_finalize` list. These objects are only reachable from this list
+        // and should not be referenced by any old objects so this won't break
+        // the GC invariant.
+        gc_mark_finlist(mq, &to_finalize, 0);
+        gc_mark_loop(ptls);
+        mark_reset_age = 0;
     }
-    if (prev_sweep_full) {
-        sweep_finalizer_list(&finalizer_list_marked);
-        orig_marked_len = 0;
-    }
-    assert(gc_n_threads);
-    for (int i = 0; i < gc_n_threads; i++) {
-        jl_ptls_t ptls2 = gc_all_tls_states[i];
-        if (ptls2 != NULL)
-            gc_mark_finlist(mq, &ptls2->finalizers, 0);
-    }
-    gc_mark_finlist(mq, &finalizer_list_marked, orig_marked_len);
-    // "Flush" the mark stack before flipping the reset_age bit
-    // so that the objects are not incorrectly reset.
-    gc_mark_loop(ptls);
-    // Conservative marking relies on age to tell allocated objects
-    // and freelist entries apart.
-    mark_reset_age = !jl_gc_conservative_gc_support_enabled();
-    // Reset the age and old bit for any unmarked objects referenced by the
-    // `to_finalize` list. These objects are only reachable from this list
-    // and should not be referenced by any old objects so this won't break
-    // the GC invariant.
-    gc_mark_finlist(mq, &to_finalize, 0);
-    gc_mark_loop(ptls);
-    mark_reset_age = 0;
 
     gc_num.since_sweep += gc_num.allocd;
     JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes);
@@ -2934,12 +3158,14 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 
     // update heuristics only if this GC was automatically triggered
     if (collection == JL_GC_AUTO) {
-        if (not_freed_enough) {
-            gc_num.interval = gc_num.interval * 2;
-        }
         if (large_frontier) {
             sweep_full = 1;
+            gc_num.interval = last_long_collect_interval;
         }
+        if (not_freed_enough || large_frontier) {
+            gc_num.interval = gc_num.interval * 2;
+        }
+
         size_t maxmem = 0;
 #ifdef _P64
         // on a big memory machine, increase max_collect_interval to totalmem / nthreads / 2
@@ -2952,7 +3178,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
             gc_num.interval = maxmem;
         }
     }
-
 
     // If the live data outgrows the suggested max_total_memory
     // we keep going with minimum intervals and full gcs until
@@ -2972,20 +3197,30 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         // on the first collection after sweep_full, and the current scan
         perm_scanned_bytes = 0;
         promoted_bytes = 0;
+        last_long_collect_interval = gc_num.interval;
     }
     scanned_bytes = 0;
     // 6. start sweeping
     uint64_t start_sweep_time = jl_hrtime();
     JL_PROBE_GC_SWEEP_BEGIN(sweep_full);
-    sweep_weak_refs();
-    sweep_stack_pools();
-    gc_sweep_foreign_objs();
-    gc_sweep_other(ptls, sweep_full);
-    gc_scrub();
-    gc_verify_tags();
-    gc_sweep_pool(sweep_full);
-    if (sweep_full)
-        gc_sweep_perm_alloc();
+    {
+        JL_TIMING(GC, Sweep);
+#ifdef USE_TRACY
+        if (sweep_full) {
+            TracyCZoneCtx ctx = *(JL_TIMING_CURRENT_BLOCK->tracy_ctx);
+            TracyCZoneColor(ctx, 0xFFA500);
+        }
+#endif
+        sweep_weak_refs();
+        sweep_stack_pools();
+        gc_sweep_foreign_objs();
+        gc_sweep_other(ptls, sweep_full);
+        gc_scrub();
+        gc_verify_tags();
+        gc_sweep_pool(sweep_full);
+        if (sweep_full)
+            gc_sweep_perm_alloc();
+    }
     JL_PROBE_GC_SWEEP_END();
 
     uint64_t gc_end_time = jl_hrtime();
@@ -3041,9 +3276,20 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     live_bytes += -gc_num.freed + gc_num.since_sweep;
 
     if (collection == JL_GC_AUTO) {
+        //If we aren't freeing enough or are seeing lots and lots of pointers let it increase faster
+        if(!not_freed_enough || large_frontier) {
+            int64_t tot = 2 * (live_bytes + gc_num.since_sweep) / 3;
+            if (gc_num.interval > tot) {
+                gc_num.interval = tot;
+                last_long_collect_interval = tot;
+            }
         // If the current interval is larger than half the live data decrease the interval
-        int64_t half = live_bytes/2;
-        if (gc_num.interval > half) gc_num.interval = half;
+        } else {
+            int64_t half = (live_bytes / 2);
+            if (gc_num.interval > half)
+                gc_num.interval = half;
+        }
+
         // But never go below default
         if (gc_num.interval < default_collect_interval) gc_num.interval = default_collect_interval;
     }
@@ -3051,12 +3297,13 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     if (gc_num.interval + live_bytes > max_total_memory) {
         if (live_bytes < max_total_memory) {
             gc_num.interval = max_total_memory - live_bytes;
+            last_long_collect_interval = max_total_memory - live_bytes;
         }
         else {
             // We can't stay under our goal so let's go back to
             // the minimum interval and hope things get better
             gc_num.interval = default_collect_interval;
-       }
+        }
     }
 
     gc_time_summary(sweep_full, t_start, gc_end_time, gc_num.freed,
@@ -3102,7 +3349,10 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
         jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
         return;
     }
-    JL_TIMING(GC);
+
+    JL_TIMING_SUSPEND(GC, ct);
+    JL_TIMING(GC, GC);
+
     int last_errno = errno;
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
@@ -3127,6 +3377,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     if (duration > gc_num.max_time_to_safepoint)
         gc_num.max_time_to_safepoint = duration;
     gc_num.time_to_safepoint = duration;
+    gc_num.total_time_to_safepoint += duration;
 
     gc_invoke_callbacks(jl_gc_cb_pre_gc_t,
         gc_cblist_pre_gc, (collection));
@@ -3154,6 +3405,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     // Doing this on all threads is racy (it's impossible to check
     // or wait for finalizers on other threads without dead lock).
     if (!ptls->finalizers_inhibited && ptls->locks.len == 0) {
+        JL_TIMING(GC, Finalizers);
         run_finalizers(ct);
     }
     JL_PROBE_GC_FINALIZER();
@@ -3164,6 +3416,10 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     SetLastError(last_error);
 #endif
     errno = last_errno;
+
+#ifdef USE_TRACY
+    TracyCPlot("Heap size", jl_gc_live_bytes());
+#endif
 }
 
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
@@ -3228,11 +3484,9 @@ void jl_init_thread_heap(jl_ptls_t ptls)
 // System-wide initializations
 void jl_gc_init(void)
 {
-    if (jl_options.heap_size_hint)
-        jl_gc_set_max_memory(jl_options.heap_size_hint);
 
-    JL_MUTEX_INIT(&heapsnapshot_lock);
-    JL_MUTEX_INIT(&finalizers_lock);
+    JL_MUTEX_INIT(&heapsnapshot_lock, "heapsnapshot_lock");
+    JL_MUTEX_INIT(&finalizers_lock, "finalizers_lock");
     uv_mutex_init(&gc_cache_lock);
     uv_mutex_init(&gc_perm_lock);
 
@@ -3241,6 +3495,10 @@ void jl_gc_init(void)
 
     arraylist_new(&finalizer_list_marked, 0);
     arraylist_new(&to_finalize, 0);
+    arraylist_new(&eytzinger_image_tree, 0);
+    arraylist_new(&eytzinger_idxs, 0);
+    arraylist_push(&eytzinger_idxs, (void*)0);
+    arraylist_push(&eytzinger_image_tree, (void*)1); // outside image
 
     gc_num.interval = default_collect_interval;
     last_long_collect_interval = default_collect_interval;
@@ -3253,9 +3511,19 @@ void jl_gc_init(void)
     uint64_t constrained_mem = uv_get_constrained_memory();
     if (constrained_mem > 0 && constrained_mem < total_mem)
         total_mem = constrained_mem;
-    max_total_memory = total_mem / 10 * 6;
+    double percent;
+    if (total_mem < 128e9)
+        percent = total_mem * 2.34375e-12 + 0.6; // 60% at 0 gigs and 90% at 128 to not
+    else                                         // overcommit too much on memory contrained devices
+        percent = 0.9;
+    max_total_memory = total_mem * percent;
 #endif
+    if (jl_options.heap_size_hint)
+        jl_gc_set_max_memory(jl_options.heap_size_hint);
 
+#ifdef USE_TRACY
+    TracyCPlotConfig("Heap size", TracyPlotFormatMemory, /* rectilinear */ 0, /* fill */ 1, /* color */ 0);
+#endif
     t_start = jl_hrtime();
 }
 
@@ -3265,6 +3533,11 @@ JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem)
         && max_mem < (uint64_t)1 << (sizeof(memsize_t) * 8 - 1)) {
         max_total_memory = max_mem;
     }
+}
+
+JL_DLLEXPORT uint64_t jl_gc_get_max_memory(void)
+{
+    return max_total_memory;
 }
 
 // callback for passing OOM errors from gmp
@@ -3747,7 +4020,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
             goto valid_object;
         // We know now that the age bit reflects liveness status during
         // the last sweep and that the cell has not been reused since.
-        if (!(meta->ages[obj_id / 8] & (1 << (obj_id % 8)))) {
+        if (!(meta->ages[obj_id / 32] & (1 << (obj_id % 32)))) {
             return NULL;
         }
         // Not a freelist entry, therefore a valid object.
