@@ -81,14 +81,15 @@ end
 function _term_header(io::IO, md, char, columns)
     text = terminline_string(io, md.text)
     with_output_color(:bold, io) do io
-        print(io, ' '^margin)
+        pre = ' '^margin
+        print(io, pre)
         line_no, lastline_width = print_wrapped(io, text,
-                                                width=columns - 4margin; pre=" ")
-        line_width = min(1 + lastline_width, columns)
+                                                width=columns - 4margin; pre)
+        line_width = min(lastline_width, columns)
         if line_no > 1
-            line_width = max(line_width, div(columns, 3))
+            line_width = max(line_width, div(columns, 3)+length(pre))
         end
-        header_width = max(0, line_width-margin)
+        header_width = max(0, line_width-length(pre))
         char != ' ' && header_width > 0 && print(io, '\n', ' '^(margin), char^header_width)
     end
 end
