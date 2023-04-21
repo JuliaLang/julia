@@ -97,8 +97,8 @@ macro _preserved_pointer_meta()
         #=:consistent=#false,
         #=:effect_free=#true,
         #=:nothrow=#true,
-        #=:terminates_globally=#false,
-        #=:terminates_locally=#true,
+        #=:terminates_globally=#true,
+        #=:terminates_locally=#false,
         #=:notaskstate=#true,
         #=:inaccessiblememonly=#false))
 end
@@ -172,10 +172,10 @@ for BT in (Buffer, DynamicBuffer)
     Core.eval(Core, :(
         function allocate_buffer(::Type{$(BT)}, ::Type{T}, len::Int) where {T}
             lyt = Core.Compiler.ElementLayout(T)
-            Core.Intrinsics.ule_int(0, len) || throw(ArgumentError("buffer type cannot have a negative length"))
+            Intrinsics.ule_int(0, len) || throw(ArgumentError("buffer type cannot have a negative length"))
             ulen = bitcast(UInt, len)
-            data_size = Core.Intrinsics.mul_int(ulen, lyt.elsize)
-            if Core.Intrinsics.not_int(lyt.kind === Core.Compiler.BOX_KIND)
+            data_size = Intrinsics.mul_int(ulen, lyt.elsize)
+            if Intrinsics.not_int(lyt.kind === Core.Compiler.BOX_KIND)
                 if lyt.kind === Core.Compiler.BITS_KIND && lyt.elsize === UInt(1)
                     data_size = Core.add_int(data_size, UInt(1))
                 elseif lyt.kind === Core.Compiler.UNION_KIND
@@ -186,13 +186,13 @@ for BT in (Buffer, DynamicBuffer)
                 data_size = Core.Compiler.:>>(Core.add_int(ulen, UInt(63)), UInt(6))
             end
             object_size = Core.Compiler.JL_BUFFER_SIZEOF
-            if Core.Intrinsics.ule_int(data_size, Core.Compiler.ARRAY_INLINE_NBYTES)
-                if Core.Intrinsics.ule_int(data_size, Core.Compiler.ARRAY_CACHE_ALIGN_THRESHOLD)
+            if Intrinsics.ule_int(data_size, Core.Compiler.ARRAY_INLINE_NBYTES)
+                if Intrinsics.ule_int(data_size, Core.Compiler.ARRAY_CACHE_ALIGN_THRESHOLD)
                     object_size = Core.and_int(Core.add_int(object_size, Core.sub_int(Core.Compiler.CACHE_BYTE_ALIGNMENT, UInt(1))),
-                        Core.Intrinsics.neg_int(Core.Compiler.CACHE_BYTE_ALIGNMENT))
-                elseif Core.Intrinsics.not_int(lyt.kind === Core.Compiler.BOX_KIND && Core.Intrinsics.ule_int(UInt(4), lyt.elsize))
+                        Intrinsics.neg_int(Core.Compiler.CACHE_BYTE_ALIGNMENT))
+                elseif Intrinsics.not_int(lyt.kind === Core.Compiler.BOX_KIND && Intrinsics.ule_int(UInt(4), lyt.elsize))
                     object_size = Core.and_int(Core.add_int(object_size, Core.sub_int(Core.Compiler.SMALL_BYTE_ALIGNMENT, UInt(1))),
-                        Core.Intrinsics.neg_int(Core.Compiler.SMALL_BYTE_ALIGNMENT))
+                        Intrinsics.neg_int(Core.Compiler.SMALL_BYTE_ALIGNMENT))
                 end
                 object_size = Core.add_int(object_size, data_size)
                 b = ccall(:jl_gc_alloc, $(BT){T}, (Any, UInt, Any), Core.getptls(), object_size, $(BT){T});
@@ -203,13 +203,13 @@ for BT in (Buffer, DynamicBuffer)
                 # @assert iszero((UInt(bptr) & UInt(15)))
                 # this is printing out right now in order to interactively see how the data is being marked by the GC
                 println(stdout, Core.and_int(UInt(bptr), UInt(15)))
-                Core.Intrinsics.pointerset(Core.Compiler.unsafe_convert(Ptr{UInt}, bptr), ulen, 1, 1)
+                Intrinsics.pointerset(Core.Compiler.unsafe_convert(Ptr{UInt}, bptr), ulen, 1, 1)
                 data_start = Core.Compiler.unsafe_convert(Ptr{Cvoid}, Core.Compiler.:+(bptr, Core.Compiler.JL_BUFFER_SIZEOF))
-                Core.Intrinsics.pointerset(Core.Compiler.unsafe_convert(Ptr{Ptr{Cvoid}}, Core.Compiler.:+(bptr, sizeof(UInt))), data_start, 1, 1)
+                Intrinsics.pointerset(Core.Compiler.unsafe_convert(Ptr{Ptr{Cvoid}}, Core.Compiler.:+(bptr, Core.sizeof(UInt))), data_start, 1, 1)
                 if lyt.requires_initialization
                     Core.Compiler.memset(data_start, Int32(0), data_size)
                 elseif Core.Compiler.BUFFER_IMPL_NULL && lyt.elsize === UInt(1)
-                    Core.Intrinsics.pointerset(Core.Compiler.:+(Core.Compiler.unsafe_convert(Ptr{UInt8}, data_start), data_size), 0x00, 1, 1)
+                    Intrinsics.pointerset(Core.Compiler.:+(Core.Compiler.unsafe_convert(Ptr{UInt8}, data_start), data_size), 0x00, 1, 1)
                 end
                 Core.Compiler.@_gc_preserve_end t
             else
@@ -217,12 +217,12 @@ for BT in (Buffer, DynamicBuffer)
                 t = Core.Compiler.@_gc_preserve_begin b
                 b = ccall(:jl_gc_alloc, $(BT){T}, (Any, UInt, Any), Core.getptls(), object_size, $(BT){T});
                 bptr = Core.Compiler._pointer_from_buffer(b)
-                Core.Intrinsics.pointerset(Core.Compiler.unsafe_convert(Ptr{UInt}, bptr), ulen, 1, 1)
-                Core.Intrinsics.pointerset(Core.Compiler.unsafe_convert(Ptr{Ptr{Cvoid}}, Core.Compiler.:+(bptr, sizeof(UInt))), data_start, 1, 1)
+                Intrinsics.pointerset(Core.Compiler.unsafe_convert(Ptr{UInt}, bptr), ulen, 1, 1)
+                Intrinsics.pointerset(Core.Compiler.unsafe_convert(Ptr{Ptr{Cvoid}}, Core.Compiler.:+(bptr, Core.sizeof(UInt))), data_start, 1, 1)
                 if lyt.requires_initialization
                     Core.Compiler.memset(data_start, Int32(0), data_size)
                 elseif Core.Compiler.BUFFER_IMPL_NULL && lyt.elsize === UInt(1)
-                    Core.Intrinsics.pointerset(Core.Comipler.:+(Core.Compiler.unsafe_convert(Ptr{UInt8}, data_start), data_size), 0x00, 1, 1)
+                    Intrinsics.pointerset(Core.Comipler.:+(Core.Compiler.unsafe_convert(Ptr{UInt8}, data_start), data_size), 0x00, 1, 1)
                 end
                 Core.Compiler.@_gc_preserve_end t
             end
@@ -498,20 +498,22 @@ function isassigned(b::BufferType, i::Int, ii::Int...)
     @boundscheck all(isone, ii) || return false
     return isassigned(b, i)
 end
-function isassigned(b::BufferType{T}, i::Int) where {T}
+function isassigned(b::BufferType, i::Int)
     @inline
     @boundscheck 1 <= i <= length(b) || return false
+    unsafe_isassigned(b, i)
     lyt = ElementLayout(T)
     if lyt.kind === BOX_KIND
         t = @_gc_preserve_begin b
-        data_start = unsafe_load(unsafe_convert(Ptr{Ptr{Ptr{Cvoid}}}, _pointer_from_buffer(b) + PTR_SIZE))
-        return unsafe_load(data_start + ((bitcast(UInt, i) - UInt(1)) * lyt.elsize)) !== C_NULL
+        data_start = unsafe_load(unsafe_convert(Ptr{Ptr{Ptr{Cvoid}}},
+            _pointer_from_buffer(b) + Core.sizeof(Ptr{Cvoid})))
+        return unsafe_load(data_start + (bitcast(UInt, i - 1) * lyt.elsize)) !== C_NULL
         @_gc_preserve_end t
     elseif lyt.kind === HAS_PTR_KIND
         t = @_gc_preserve_begin b
         bptr = _pointer_from_buffer(b)
-        data_i = unsafe_load(unsafe_convert(Ptr{Ptr{Ptr{Cvoid}}}, bptr + PTR_SIZE))
-        data_i = data_i + ((bitcast(UInt, i) - UInt(1)) * lyt.elsize)
+        data_i = unsafe_load(unsafe_convert(Ptr{Ptr{Ptr{Cvoid}}}, bptr + Core.sizeof(Ptr{Cvoid})))
+        data_i = data_i + (bitcast(UInt, i - 1) * lyt.elsize)
         off = fieldoffset(T, unsafe_load(unsafe_convert(Ptr{DataTypeLayout}, T.layout)).firstptr + 1)
         return unsafe_load(data_i + off) !== C_NULL
         @_gc_preserve_end t
@@ -634,14 +636,6 @@ function resize!(b::DynamicBuffer, sz::Integer)
     end
     return b
 end
-
-# function unsafe_grow_at!(b::DynamicBuffer, i::Integer, delta::Integer, len::Integer=length(b))
-#     ccall(:jl_buffer_grow_at_end, Cvoid, (Any, UInt, UInt, UInt), b, i - 1, delta, len)
-# end
-
-# function unsafe_delete_at!(b::DynamicBuffer, i::Integer, delta::Integer, len::Integer=length(b))
-#     ccall(:jl_buffer_del_at_end, Cvoid, (Any, UInt, UInt, UInt), b, i - 1, delta, len)
-# end
 
 function unsafe_delete_at!(b::DynamicBuffer{T}, i::UInt, delta::UInt) where {T}
     lyt = ElementLayout(T)

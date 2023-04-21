@@ -66,10 +66,13 @@ end
     @test src !== dst
 end
 
-b = DynamicBuffer{Int}(undef, 3)
-Base.unsafe_grow_at!(b, UInt(3), UInt(1))
+@testset "DynamicBuffer resize" begin
+    b = DynamicBuffer{Int}(undef, 3)
+    Base.unsafe_grow_at!(b, UInt(3), UInt(1))
 
-Base.unsafe_delete_at!(b, UInt(3), UInt(1))
+    Base.unsafe_delete_at!(b, UInt(3), UInt(1))
+end
+
 
 @test Base.summarysize(Buffer{Union{Nothing,Missing}}(undef, 16)) <
     Base.summarysize(Buffer{Union{Nothing,Missing}}(undef, 32))
