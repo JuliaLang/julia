@@ -182,6 +182,7 @@ static jl_binding_t *new_binding(jl_module_t *mod, jl_sym_t *name)
     b->imported = 0;
     b->deprecated = 0;
     b->usingfailed = 0;
+    b->padding = 0;
     JL_GC_PUSH1(&b);
     b->globalref = jl_new_globalref(mod, name, b);
     JL_GC_POP();
