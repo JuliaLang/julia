@@ -1151,7 +1151,7 @@ function parse_unary(ps::ParseState)
     bump_trivia(ps)
     op_t = peek_token(ps)
     op_k = kind(op_t)
-    if ( 
+    if (
             !is_operator(op_k)           ||
             is_word_operator(op_k)       ||
             (op_k in KSet": ' .'")       ||
@@ -1194,19 +1194,13 @@ function parse_unary(ps::ParseState)
         end
     end
     if is_closing_token(ps, k2) || k2 in KSet"NewlineWs ="
-        if is_dotted(op_t)
-            # Standalone dotted operators are parsed as (|.| op)
-            # .+    ==>  (. +)
-            # .+\n  ==>  (. +)
-            # .+ =  ==>  (. +)
-            # .+)   ==>  (. +)
-            # .&    ==>  (. &)
-            bump_dotsplit(ps, emit_dot_node=true)
-        else
-            # Standalone non-dotted operators
-            # +)  ==>  +
-            bump(ps)
-        end
+        # Standalone operators parsed as `op` or `(. op)`
+        # +)   ==>  +
+        # +\n  ==>  +
+        # + =  ==>  +
+        # .+   ==>  (. +)
+        # .&   ==>  (. &)
+        parse_atom(ps)
     elseif k2 == K"{" || (!is_unary_op(op_t) && k2 == K"(")
         # Call with type parameters or non-unary prefix call
         # +{T}(x::T)  ==>  (call (curly + T) (:: x T))
@@ -1267,28 +1261,13 @@ function parse_unary(ps::ParseState)
                 emit(ps, mark, op_k)
                 reset_node!(ps, op_pos, flags=TRIVIA_FLAG)
             else
-                if is_dotted(op_t)
-                    # Ugly hack to undo the split in bump_dotsplit
-                    # .+(a,)    ==>  (call .+ a)
-                    reset_node!(ps, op_pos, kind=K"TOMBSTONE")
-                    tb1 = ps.stream.tokens[op_pos.token_index-1]
-                    ps.stream.tokens[op_pos.token_index-1] =
-                        SyntaxToken(SyntaxHead(K"TOMBSTONE", EMPTY_FLAGS),
-                                    K"TOMBSTONE", tb1.preceding_whitespace,
-                                    tb1.next_byte-1)
-                    tb0 = ps.stream.tokens[op_pos.token_index]
-                    ps.stream.tokens[op_pos.token_index] =
-                        SyntaxToken(SyntaxHead(kind(tb0), flags(tb0)),
-                                    tb0.orig_kind, tb0.preceding_whitespace,
-                                    tb0.next_byte)
-                end
                 emit(ps, mark, K"call")
             end
             parse_call_chain(ps, mark)
             parse_factor_with_initial_ex(ps, mark)
         else
             # Unary function calls with brackets as grouping, not an arglist
-            # .+(a)    ==>  (dotcall-pre (. +) (parens a))
+            # .+(a)    ==>  (dotcall-pre + (parens a))
             if opts.is_block
                 # +(a;b)   ==>  (call-pre + (block-p a b))
                 emit(ps, mark_before_paren, K"block", PARENS_FLAG)
@@ -1627,6 +1606,10 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 parse_atom(ps)
                 emit(ps, m, K"$")
                 macro_name_position = position(ps)
+                # We need `inert` rather than `quote` here for subtle reasons:
+                # We need the expression expander to "see through" the quote
+                # around the `$x` in `:(f.$x)`, so that the `$x` is expanded
+                # even though it's double quoted.
                 emit(ps, m, K"inert")
                 emit(ps, mark, K".")
             elseif k == K"@"
@@ -2307,6 +2290,10 @@ function parse_do(ps::ParseState, mark)
     emit(ps, mark, K"do")
 end
 
+function _is_valid_macro_name(peektok)
+    return !is_error(peektok.kind) && (peektok.is_leaf || peektok.kind == K"var")
+end
+
 function fix_macro_name_kind!(ps::ParseState, macro_name_position, name_kind=nothing)
     k = peek_behind(ps, macro_name_position).kind
     if k == K"var"
@@ -2321,7 +2308,8 @@ function fix_macro_name_kind!(ps::ParseState, macro_name_position, name_kind=not
         return
     end
     if isnothing(name_kind)
-        name_kind = (k == K"Identifier") ? K"MacroName" : K"error"
+        name_kind = _is_valid_macro_name(peek_behind(ps, macro_name_position)) ?
+                    K"MacroName" : K"error"
         if name_kind == K"error"
             # TODO: This isn't quite accurate
             emit_diagnostic(ps, macro_name_position, macro_name_position,
@@ -2343,11 +2331,11 @@ function parse_macro_name(ps::ParseState)
     bump_disallowed_space(ps)
     mark = position(ps)
     parse_atom(ps, false)
-    kb = peek_behind(ps, position(ps)).kind
-    if kb == K"parens"
+    b = peek_behind(ps, position(ps))
+    if b.kind == K"parens"
         emit_diagnostic(ps, mark,
             warning="parenthesizing macro names is unnecessary")
-    elseif !(kb in KSet"Identifier var")
+    elseif !_is_valid_macro_name(b)
         # @[x] y z  ==>  (macrocall (error (vect x)) y z)
         emit(ps, mark, K"error", error="invalid macro name")
     end
@@ -3448,20 +3436,18 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         # x₁  ==>  x₁
         bump(ps)
     elseif is_operator(leading_kind)
+        # +     ==>  +
+        # .+    ==>  (. +)
+        # .=    ==>  (. =)
+        bump_dotsplit(ps, emit_dot_node=true)
         if check_identifiers && !is_valid_identifier(leading_kind)
             # +=   ==>  (error +=)
-            # .+=  ==>  (error .+=)
-            bump(ps, error="invalid identifier")
+            # ?    ==>  (error ?)
+            # .+=  ==>  (error (. +=))
+            emit(ps, mark, K"error", error="invalid identifier")
         else
-            # +     ==>  +
-            # ~     ==>  ~
             # Quoted syntactic operators allowed
-            # :+=   ==>  (quote +=)
-            # :.=   ==>  (quote .=)
-            # Remap the kind here to K"Identifier", as operators parsed in this
-            # branch should be in "identifier-like" positions (I guess this is
-            # correct? is it convenient?)
-            bump(ps, remap_kind=K"Identifier")
+            # :+=  ==>  (quote-: +=)
         end
     elseif is_keyword(leading_kind)
         if leading_kind == K"var" && (t = peek_token(ps,2);

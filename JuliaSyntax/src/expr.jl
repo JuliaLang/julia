@@ -31,7 +31,7 @@ function reorder_parameters!(args, params_pos)
 end
 
 function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
-                  eq_to_kw=false, map_kw_in_params=false)
+                  eq_to_kw=false, map_kw_in_params=false, coalesce_dot=false)
     nodekind = kind(node)
     if !haschildren(node)
         val = node.val
@@ -150,8 +150,13 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
                     args[2*i-1] = source_location(LineNumberNode, n.source, n.position)
                 end
                 eq_to_kw = eq_to_kw_in_call && i > 1 || eq_to_kw_all
+                coalesce_dot_with_ops = i==1 &&
+                    (nodekind in KSet"call dotcall curly" ||
+                     nodekind == K"quote" && flags(node) == COLON_QUOTE)
                 args[insert_linenums ? 2*i : i] =
-                    _to_expr(n, eq_to_kw=eq_to_kw, map_kw_in_params=in_vcbr)
+                    _to_expr(n, eq_to_kw=eq_to_kw,
+                             map_kw_in_params=in_vcbr,
+                             coalesce_dot=coalesce_dot_with_ops)
             end
             if nodekind == K"block" && has_flags(node, PARENS_FLAG)
                 popfirst!(args)
@@ -190,6 +195,10 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
                 args[1] = Symbol(".", args[1])
             end
         end
+    elseif headsym === :. && length(args) == 1 &&
+           is_operator(kind(node[1])) &&
+           (coalesce_dot || is_syntactic_operator(kind(node[1])))
+        return Symbol(".", args[1])
     elseif headsym in (:ref, :curly)
         # Move parameters blocks to args[2]
         reorder_parameters!(args, 2)
@@ -303,11 +312,15 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
     elseif headsym === :module
         pushfirst!(args, !has_flags(node, BARE_MODULE_FLAG))
         pushfirst!(args[3].args, loc)
-    elseif headsym === :inert || (headsym === :quote && length(args) == 1 &&
-                 !(a1 = only(args); a1 isa Expr || a1 isa QuoteNode ||
-                   a1 isa Bool  # <- compat hack, Julia 1.4+
-                  ))
+    elseif headsym === :inert
         return QuoteNode(only(args))
+    elseif (headsym === :quote && length(args) == 1)
+        a1 = only(args)
+        if !(a1 isa Expr || a1 isa QuoteNode || a1 isa Bool)
+            # Flisp parser does an optimization here: simple values are stored
+            # as inert QuoteNode rather than in `Expr(:quote)` quasiquote
+            return QuoteNode(a1)
+        end
     elseif headsym === :do
         @check length(args) == 3
         return Expr(:do, args[1], Expr(:->, args[2], args[3]))
