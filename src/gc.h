@@ -9,6 +9,7 @@
 #ifndef JL_GC_H
 #define JL_GC_H
 
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -170,7 +171,7 @@ typedef struct {
     uint16_t fl_end_offset;   // offset of last free object in this page
     uint16_t thread_n;        // thread id of the heap that owns this page
     char *data;
-    uint8_t *ages;
+    uint32_t *ages;
 } jl_gc_pagemeta_t;
 
 // Page layout:

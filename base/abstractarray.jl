@@ -183,11 +183,13 @@ CartesianIndex{2}
      For arrays, this function requires at least Julia 1.2.
 """
 keytype(a::AbstractArray) = keytype(typeof(a))
+keytype(::Type{Union{}}, slurp...) = eltype(Union{})
 
 keytype(A::Type{<:AbstractArray}) = CartesianIndex{ndims(A)}
 keytype(A::Type{<:AbstractVector}) = Int
 
 valtype(a::AbstractArray) = valtype(typeof(a))
+valtype(::Type{Union{}}, slurp...) = eltype(Union{})
 
 """
     valtype(T::Type{<:AbstractArray})
@@ -232,7 +234,7 @@ UInt8
 ```
 """
 eltype(::Type) = Any
-eltype(::Type{Bottom}) = throw(ArgumentError("Union{} does not have elements"))
+eltype(::Type{Bottom}, slurp...) = throw(ArgumentError("Union{} does not have elements"))
 eltype(x) = eltype(typeof(x))
 eltype(::Type{<:AbstractArray{E}}) where {E} = @isdefined(E) ? E : Any
 
@@ -268,6 +270,7 @@ julia> ndims(A)
 """
 ndims(::AbstractArray{T,N}) where {T,N} = N
 ndims(::Type{<:AbstractArray{<:Any,N}}) where {N} = N
+ndims(::Type{Union{}}, slurp...) = throw(ArgumentError("Union{} does not have elements"))
 
 """
     length(collection) -> Integer

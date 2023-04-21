@@ -976,8 +976,8 @@ STATIC_INLINE void gc_setmark_pool_(jl_ptls_t ptls, jl_taggedvalue_t *o,
             page->has_young = 1;
             char *page_begin = gc_page_data(o) + GC_PAGE_OFFSET;
             int obj_id = (((char*)o) - page_begin) / page->osize;
-            uint8_t *ages = page->ages + obj_id / 8;
-            jl_atomic_fetch_and_relaxed((_Atomic(uint8_t)*)ages, ~(1 << (obj_id % 8)));
+            uint32_t *ages = page->ages + obj_id / 32;
+            jl_atomic_fetch_and_relaxed((_Atomic(uint32_t)*)ages, ~(1 << (obj_id % 32)));
         }
     }
     objprofile_count(jl_typeof(jl_valueof(o)),
@@ -1406,7 +1406,7 @@ static NOINLINE jl_taggedvalue_t *add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_gc_pagemeta_t *pg = jl_gc_alloc_page();
     pg->osize = p->osize;
-    pg->ages = (uint8_t*)malloc_s(GC_PAGE_SZ / 8 / p->osize + 1);
+    pg->ages = (uint32_t*)malloc_s(LLT_ALIGN(GC_PAGE_SZ / 8 / p->osize + 1, sizeof(uint32_t)));
     pg->thread_n = ptls->tid;
     jl_taggedvalue_t *fl = reset_page(ptls, p, pg, NULL);
     p->newpages = fl;
@@ -1506,7 +1506,7 @@ int64_t lazy_freed_pages = 0;
 static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_taggedvalue_t **pfl, int sweep_full, int osize) JL_NOTSAFEPOINT
 {
     char *data = pg->data;
-    uint8_t *ages = pg->ages;
+    uint32_t *ages = pg->ages;
     jl_taggedvalue_t *v = (jl_taggedvalue_t*)(data + GC_PAGE_OFFSET);
     char *lim = (char*)v + GC_PAGE_SZ - GC_PAGE_OFFSET - osize;
     size_t old_nfree = pg->nfree;
@@ -1557,18 +1557,25 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
         int16_t prev_nold = 0;
         int pg_nfree = 0;
         jl_taggedvalue_t **pfl_begin = NULL;
-        uint8_t msk = 1; // mask for the age bit in the current age byte
+        uint32_t msk = 1; // mask for the age bit in the current age byte
+        uint32_t age = *ages;
         while ((char*)v <= lim) {
+            if (!msk) {
+                msk = 1;
+                *ages = age;
+                ages++;
+                age = *ages;
+            }
             int bits = v->bits.gc;
             if (!gc_marked(bits)) {
                 *pfl = v;
                 pfl = &v->next;
                 pfl_begin = pfl_begin ? pfl_begin : pfl;
                 pg_nfree++;
-                *ages &= ~msk;
+                age &= ~msk;
             }
             else { // marked young or old
-                if (*ages & msk || bits == GC_OLD_MARKED) { // old enough
+                if (age & msk || bits == GC_OLD_MARKED) { // old enough
                     // `!age && bits == GC_OLD_MARKED` is possible for
                     // non-first-class objects like array buffers
                     // (they may get promoted by jl_gc_wb_buf for example,
@@ -1584,17 +1591,13 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
                     has_young = 1;
                 }
                 has_marked |= gc_marked(bits);
-                *ages |= msk;
+                age |= msk;
                 freedall = 0;
             }
             v = (jl_taggedvalue_t*)((char*)v + osize);
             msk <<= 1;
-            if (!msk) {
-                msk = 1;
-                ages++;
-            }
         }
-
+        *ages = age;
         assert(!freedall);
         pg->has_marked = has_marked;
         pg->has_young = has_young;
@@ -2087,24 +2090,47 @@ STATIC_INLINE void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_v
     jl_value_t *new_obj;
     // Decide whether need to chunk objary
     (void)jl_assume(step > 0);
-    size_t nobjs = (obj_end - obj_begin) / step;
-    if (nobjs > MAX_REFS_AT_ONCE) {
-        jl_gc_chunk_t c = {GC_objary_chunk, obj_parent, obj_begin + step * MAX_REFS_AT_ONCE,
-                           obj_end,      NULL,       NULL,
-                           step,         nptr};
-        gc_chunkqueue_push(mq, &c);
-        obj_end = obj_begin + step * MAX_REFS_AT_ONCE;
+    if ((nptr & 0x2) == 0x2) {
+        // pre-scan this object: most of this object should be old, so look for
+        // the first young object before starting this chunk
+        // (this also would be valid for young objects, but probably less beneficial)
+        for (; obj_begin < obj_end; obj_begin += step) {
+            new_obj = *obj_begin;
+            if (new_obj != NULL) {
+                verify_parent2("obj array", obj_parent, obj_begin, "elem(%d)",
+                               gc_slot_to_arrayidx(obj_parent, obj_begin));
+                jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
+                if (!gc_old(o->header))
+                    nptr |= 1;
+                if (!gc_marked(o->header))
+                    break;
+                gc_heap_snapshot_record_array_edge(obj_parent, &new_obj);
+            }
+        }
     }
-    for (; obj_begin < obj_end; obj_begin += step) {
+    size_t too_big = (obj_end - obj_begin) / MAX_REFS_AT_ONCE > step; // use this order of operations to avoid idiv
+    jl_value_t **scan_end = obj_end;
+    if (too_big) {
+        scan_end = obj_begin + step * MAX_REFS_AT_ONCE;
+    }
+    for (; obj_begin < scan_end; obj_begin += step) {
         new_obj = *obj_begin;
         if (new_obj != NULL) {
             verify_parent2("obj array", obj_parent, obj_begin, "elem(%d)",
-                           gc_slot_to_arrayidx(obj_parent, obj_begin));
+                        gc_slot_to_arrayidx(obj_parent, obj_begin));
             gc_try_claim_and_push(mq, new_obj, &nptr);
             gc_heap_snapshot_record_array_edge(obj_parent, &new_obj);
         }
     }
-    gc_mark_push_remset(ptls, obj_parent, nptr);
+    if (too_big) {
+        jl_gc_chunk_t c = {GC_objary_chunk, obj_parent, scan_end,
+                            obj_end,      NULL,       NULL,
+                            step,         nptr};
+        gc_chunkqueue_push(mq, &c);
+    }
+    else {
+        gc_mark_push_remset(ptls, obj_parent, nptr);
+    }
 }
 
 // Mark array with 8bit field descriptors
@@ -2116,14 +2142,36 @@ STATIC_INLINE void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_va
     jl_value_t *new_obj;
     size_t elsize = ((jl_array_t *)ary8_parent)->elsize / sizeof(jl_value_t *);
     assert(elsize > 0);
-    // Decide whether need to chunk ary8
-    size_t nrefs = (ary8_end - ary8_begin) / elsize;
-    if (nrefs > MAX_REFS_AT_ONCE) {
-        jl_gc_chunk_t c = {GC_ary8_chunk, ary8_parent, ary8_begin + elsize * MAX_REFS_AT_ONCE,
-                           ary8_end,   elem_begin,  elem_end,
-                           0,          nptr};
-        gc_chunkqueue_push(mq, &c);
-        ary8_end = ary8_begin + elsize * MAX_REFS_AT_ONCE;
+    // Decide whether need to chunk objary
+    if ((nptr & 0x2) == 0x2) {
+        // pre-scan this object: most of this object should be old, so look for
+        // the first young object before starting this chunk
+        // (this also would be valid for young objects, but probably less beneficial)
+        for (; ary8_begin < ary8_end; ary8_begin += elsize) {
+            int early_end = 0;
+            for (uint8_t *pindex = elem_begin; pindex < elem_end; pindex++) {
+                new_obj = ary8_begin[*pindex];
+                if (new_obj != NULL) {
+                    verify_parent2("array", ary8_parent, &new_obj, "elem(%d)",
+                                gc_slot_to_arrayidx(ary8_parent, ary8_begin));
+                    jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
+                    if (!gc_old(o->header))
+                        nptr |= 1;
+                    if (!gc_marked(o->header)){
+                        early_end = 1;
+                        break;
+                    }
+                    gc_heap_snapshot_record_array_edge(ary8_parent, &new_obj);
+                }
+            }
+            if (early_end)
+                break;
+        }
+    }
+    size_t too_big = (ary8_end - ary8_begin) / MAX_REFS_AT_ONCE > elsize; // use this order of operations to avoid idiv
+    jl_value_t **scan_end = ary8_end;
+    if (too_big) {
+        scan_end = ary8_begin + elsize * MAX_REFS_AT_ONCE;
     }
     for (; ary8_begin < ary8_end; ary8_begin += elsize) {
         for (uint8_t *pindex = elem_begin; pindex < elem_end; pindex++) {
@@ -2136,7 +2184,15 @@ STATIC_INLINE void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_va
             }
         }
     }
-    gc_mark_push_remset(ptls, ary8_parent, nptr);
+    if (too_big) {
+        jl_gc_chunk_t c = {GC_objary_chunk, ary8_parent, scan_end,
+                           ary8_end,        elem_begin,       elem_end,
+                           0,               nptr};
+        gc_chunkqueue_push(mq, &c);
+    }
+    else {
+        gc_mark_push_remset(ptls, ary8_parent, nptr);
+    }
 }
 
 // Mark array with 16bit field descriptors
@@ -2148,16 +2204,38 @@ STATIC_INLINE void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl_
     jl_value_t *new_obj;
     size_t elsize = ((jl_array_t *)ary16_parent)->elsize / sizeof(jl_value_t *);
     assert(elsize > 0);
-    // Decide whether need to chunk ary16
-    size_t nrefs = (ary16_end - ary16_begin) / elsize;
-    if (nrefs > MAX_REFS_AT_ONCE) {
-        jl_gc_chunk_t c = {GC_ary16_chunk, ary16_parent, ary16_begin + elsize * MAX_REFS_AT_ONCE,
-                           ary16_end,   elem_begin,   elem_end,
-                           0,           nptr};
-        gc_chunkqueue_push(mq, &c);
-        ary16_end = ary16_begin + elsize * MAX_REFS_AT_ONCE;
+    // Decide whether need to chunk objary
+    if ((nptr & 0x2) == 0x2) {
+        // pre-scan this object: most of this object should be old, so look for
+        // the first young object before starting this chunk
+        // (this also would be valid for young objects, but probably less beneficial)
+        for (; ary16_begin < ary16_end; ary16_begin += elsize) {
+            int early_end = 0;
+            for (uint16_t *pindex = elem_begin; pindex < elem_end; pindex++) {
+                new_obj = ary16_begin[*pindex];
+                if (new_obj != NULL) {
+                    verify_parent2("array", ary16_parent, &new_obj, "elem(%d)",
+                                gc_slot_to_arrayidx(ary16_parent, ary16_begin));
+                    jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
+                    if (!gc_old(o->header))
+                        nptr |= 1;
+                    if (!gc_marked(o->header)){
+                        early_end = 1;
+                        break;
+                    }
+                    gc_heap_snapshot_record_array_edge(ary16_parent, &new_obj);
+                }
+            }
+            if (early_end)
+                break;
+        }
     }
-    for (; ary16_begin < ary16_end; ary16_begin += elsize) {
+    size_t too_big = (ary16_end - ary16_begin) / MAX_REFS_AT_ONCE > elsize; // use this order of operations to avoid idiv
+    jl_value_t **scan_end = ary16_end;
+    if (too_big) {
+        scan_end = ary16_begin + elsize * MAX_REFS_AT_ONCE;
+    }
+    for (; ary16_begin < scan_end; ary16_begin += elsize) {
         for (uint16_t *pindex = elem_begin; pindex < elem_end; pindex++) {
             new_obj = ary16_begin[*pindex];
             if (new_obj != NULL) {
@@ -2168,7 +2246,15 @@ STATIC_INLINE void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl_
             }
         }
     }
-    gc_mark_push_remset(ptls, ary16_parent, nptr);
+    if (too_big) {
+        jl_gc_chunk_t c = {GC_objary_chunk, ary16_parent, scan_end,
+                            ary16_end,      elem_begin,       elem_end,
+                            elsize,         nptr};
+        gc_chunkqueue_push(mq, &c);
+    }
+    else {
+        gc_mark_push_remset(ptls, ary16_parent, nptr);
+    }
 }
 
 // Mark chunk of large array
@@ -3934,7 +4020,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
             goto valid_object;
         // We know now that the age bit reflects liveness status during
         // the last sweep and that the cell has not been reused since.
-        if (!(meta->ages[obj_id / 8] & (1 << (obj_id % 8)))) {
+        if (!(meta->ages[obj_id / 32] & (1 << (obj_id % 32)))) {
             return NULL;
         }
         // Not a freelist entry, therefore a valid object.
