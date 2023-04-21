@@ -742,6 +742,7 @@ end
     eval(Expr(:macrocall, Symbol("@test"), nothing, :false))
     eval(Expr(:macrocall, Symbol("@testset"), nothing, "Testset without source", quote
         @test false
+        @test error("failed")
     end))
     """)
 
@@ -770,7 +771,8 @@ end
         m = match(r"(Tests|Other tests|Testset without source): .*? at (.*?)\n  Expression: (.*)(?:.|\n)*\n+Stacktrace:\n((?:.|\n)*)", m.match)
         (; testset = m[1], source = m[2], ex = m[3], stacktrace = m[4])
     end
-    @test length(failures) == 8 # 8 tests in total, 8 failures
+    @test length(failures) == 8 # 8 failed tests
+    @test count(contains("Error During Test"), split(msg, '\n')) == 1 # 1 error
     test_properties_macro_source = runtests * ":6"
     test_properties2_macro_source = utils * ":2"
 
