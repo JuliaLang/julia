@@ -1635,7 +1635,6 @@ int jl_uniontype_size(jl_value_t *ty, size_t *sz);
 JL_DLLEXPORT int jl_islayout_inline(jl_value_t *eltype, size_t *fsz, size_t *al);
 
 // buffers
-JL_DLLEXPORT jl_buffer_t *jl_buffer_copy(jl_buffer_t *a);
 JL_DLLEXPORT jl_buffer_t *jl_buffer_fill(size_t n, jl_value_t *x);
 JL_DLLEXPORT jl_value_t *jl_bufref(jl_buffer_t *a, size_t i);  // 0-indexed
 JL_DLLEXPORT void jl_bufset(jl_buffer_t *sb JL_ROOTING_ARGUMENT, jl_value_t *v JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, size_t i);  // 0-indexed

@@ -10,20 +10,7 @@ const MALLOC_THRESH = UInt(1048576)
 const CACHE_BYTE_ALIGNMENT = UInt(64)
 const SMALL_BYTE_ALIGNMENT = UInt(16)
 const PTR_SIZE = bitcast(UInt, Core.sizeof(Ptr{Cvoid}))
-const JL_BUFFER_SIZEOF = PTR_SIZE + PTR_SIZE
-const JL_TAGGEDVALUE_SIZEOF = PTR_SIZE
-
-tagged_from_value(v::Ptr{Cvoid}) = v - JL_TAGGEDVALUE_SIZEOF
-header_from_value(v::Ptr{Cvoid}) = UInt(tagged_from_value(v))
-
-# PTR_SIZE is the offset to jl_taggedvalue_t
-is_gc_marked_value(v::Ptr{Cvoid}) = (header_from_value(v) & UInt(1)) === UInt(1)
-is_gc_old_value(v::Ptr{Cvoid}) = (header_from_value(v) & UInt(2)) === UInt(2)
-is_gc_in_image(v::Ptr{Cvoid}) = (header_from_value(v) & UInt(4)) === UInt(4)
-function is_gc_old_marked_value(v::Ptr{Cvoid})
-    hdr = header_from_value(v)
-    ((hdr & UInt(1)) === UInt(1)) && ((hdr & UInt(2)) === UInt(2))
-end
+const JL_BUFFER_SIZEOF = Core.sizeof(Ptr{Cvoid}) + Core.sizeof(Ptr{Cvoid})
 
 const BITS_KIND = 0x00
 const UNION_KIND = 0x01
@@ -38,7 +25,7 @@ struct ElementLayout
     requires_initialization::Bool
 
     function ElementLayout(@nospecialize(T::Type))
-        @_foldable_meta
+        @_total_meta
         sz = RefValue{Csize_t}(0)
         al = RefValue{Csize_t}(0)
         cnt = ccall(:jl_islayout_inline, UInt, (Any, Ptr{Csize_t}, Ptr{Csize_t}), T, sz, al)
@@ -103,50 +90,6 @@ function memmove(dst::Ptr, src::Ptr, nbytes::Integer)
 end
 function memset(p::Ptr, val, nbytes::Integer)
     ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), p, val, nbytes)
-end
-
-function memcpy_ptrs!(
-    downer::Ptr{Cvoid},
-    sowner::Ptr{Cvoid},
-    dst::Ptr{Ptr{Cvoid}},
-    src::Ptr{Ptr{Cvoid}},
-    nbytes::UInt
-)
-    # destination is old and doesn't refer to any young object
-    ndone = UInt(0)
-    if is_gc_old_marked_value(downer)
-        # Source is young or being promoted or might refer to young objects
-        # (i.e. source is not an old object that doesn't have wb triggered)
-        if !is_gc_old_value(sowner)
-            if dst < src || dst > src + nbytes
-                while ndone < nbytes
-                    valp = unsafe_load(src + ndone)
-                    unsafe_store!(dst + ndone, valp)
-                    if valp !== C_NULL && !is_gc_marked_value(valp)
-                        ccall(:jl_gc_queue_root, Cvoid, (Any,), downer)
-                        break
-                    else
-                        ndone += PTR_SIZE
-                    end
-                end
-                dst += ndone
-                src += ndone
-            else
-                while i < nbytes
-                    valp = unsafe_load(srcp + (nbytes - ndone - PTR_SIZE))
-                    unsafe_store!(dstp + (nbytes - ndone - PTR_SIZE), valp)
-                    if valp !== C_NULL && !is_gc_marked_value(valp)
-                        ccall(:jl_gc_queue_root, Cvoid, (Any,), downer)
-                        break
-                    else
-                        ndone += PTR_SIZE
-                    end
-                end
-            end
-        end
-    end
-    memmove_ptrs!(dst, src, nbytes - ndone)
-    return nothing
 end
 
 macro _preserved_pointer_meta()
@@ -327,8 +270,13 @@ eltype(::Type{<:BufferType{T}}) where {T} = T
 elsize(@nospecialize T::Type{<:BufferType}) = aligned_sizeof(eltype(T))
 
 length(b::Buffer) = Core.Intrinsics.bufferlen(b)
-# FIXME DynamicBuffer effects: this is set correctly for `Core.bufferlen` but not for `length`
-length(b::DynamicBuffer) = Core.Intrinsics.bufferlen(b)
+
+# this is computed directly from the pointer to ensure that the assumed effects aren't
+# as strong as those for buffer variants that don't change sizes
+function length(b::DynamicBuffer)
+    @_terminates_locally_meta
+    unsafe_load(unsafe_convert(Ptr{Int}, _pointer_from_buffer(b)))
+end
 
 firstindex(b::BufferType) = 1
 
@@ -432,7 +380,7 @@ function setindex!(b::BufferType{T}, v::T, i::Int) where {T}
     lyt = ElementLayout(T)
     elsz = lyt.elsize
     if lyt.kind === BOX_KIND
-        @boundscheck (1 <= i <= length(b) || throw(BoundsError(b, i)))
+        @boundscheck (1 <= i <= length(b)) || throw(BoundsError(b, i))
         t1 = @_gc_preserve_begin v
         t2 = @_gc_preserve_begin b
         bptr = _pointer_from_buffer(b)
@@ -448,7 +396,7 @@ function setindex!(b::BufferType{T}, v::T, i::Int) where {T}
         @_gc_preserve_end t2
         @_gc_preserve_end t1
     elseif lyt.kind === BITS_KIND
-        @boundscheck (1 <= i <= length(b) || throw(BoundsError(b, i)))
+        @boundscheck (1 <= i <= length(b)) || throw(BoundsError(b, i))
         if !isdefined(T, :instance)
             t1 = @_gc_preserve_begin v
             t2 = @_gc_preserve_begin b
@@ -459,7 +407,7 @@ function setindex!(b::BufferType{T}, v::T, i::Int) where {T}
             @_gc_preserve_end t1
         end
     elseif lyt.kind === HAS_PTR_KIND
-        @boundscheck (1 <= i <= length(b) || throw(BoundsError(b, i)))
+        @boundscheck (1 <= i <= length(b)) || throw(BoundsError(b, i))
         t1 = @_gc_preserve_begin v
         t2 = @_gc_preserve_begin b
         bptr = _pointer_from_buffer(b)
@@ -471,7 +419,7 @@ function setindex!(b::BufferType{T}, v::T, i::Int) where {T}
         @_gc_preserve_end t1
     elseif lyt.kind === UNION_KIND
         len = length(b)
-        @boundscheck (1 <= i <= len || throw(BoundsError(b, i)))
+        @boundscheck (1 <= i <= len) || throw(BoundsError(b, i))
         t1 = @_gc_preserve_begin v
         t2 = @_gc_preserve_begin b
         offset = (bitcast(UInt, i) - UInt(1))
@@ -580,8 +528,6 @@ function ==(v1::BufferType, v2::BufferType)
     return true
 end
 
-#copy(b::T) where {T<:BufferType} = ccall(:jl_buffer_copy, Ref{T}, (Any,), b)
-
 function copy(b::BufferType{T}) where {T}
     len = length(b)
     dst = similar(b, len)
@@ -602,34 +548,61 @@ function _copyto_impl!(dest::BufferType, doffs::BufferType, src::Array, soffs::I
     return dest
 end
 
+# TODO does HAS_PTR_KIND need special management for the pointers?
+#  - (this doesn't seem to be the case in array.c)
 function unsafe_copyto!(dest::Union{Buffer{T}, DynamicBuffer{T}}, doffs, src::BufferType{T}, soffs, n) where T
     lyt = ElementLayout(T)
     elsz = UInt(lyt.elsize)
     t1 = @_gc_preserve_begin dest
     t2 = @_gc_preserve_begin src
-    doffset = doffs - 1
-    soffset = soffs - 1
-    dtoffset = elsz * doffset
-    stoffset = elsz * soffset
-    dest_obj = _pointer_from_buffer(dest)
-    src_obj = _pointer_from_buffer(dest)
-    destp = unsafe_convert(Ptr{Ptr{Cvoid}}, dest_obj + PTR_SIZE)
-    srcp = unsafe_convert(Ptr{Ptr{Cvoid}}, src_obj + PTR_SIZE)
+    doffset = (doffs - 1) * elsz
+    soffset = (soffs - 1) * elsz
+    dst_obj = _pointer_from_buffer(dest)
+    src_obj = _pointer_from_buffer(src)
+    nbytes = (n * elsz)
     if lyt.kind === BOX_KIND
-        memcpy_ptrs!(dest_obj, src_obj,
-            unsafe_convert(Ptr{Ptr{Cvoid}}, destp + dtoffset),
-            unsafe_convert(Ptr{Ptr{Cvoid}}, srcp + stoffset), n * elsz)
-        # ccall(:jl_buffer_ptr_copy, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
-        #       dest, destp + dtoffset, src, srcp + stoffset, n)
+        dst_data = unsafe_load(unsafe_convert(Ptr{Ptr{Ptr{Cvoid}}}, dst_obj +
+            Core.sizeof(Ptr{Cvoid}))) + doffset
+        src_start = unsafe_load(unsafe_convert(Ptr{Ptr{Ptr{Cvoid}}}, src_obj +
+            Core.sizeof(Ptr{Cvoid}))) + soffset
+        src_stop = src_start + nbytes
+        if (dst_data < src_start || dst_data > src_stop)
+            valp = Intrinsics.atomic_pointerref(src_start, :acquire)
+            Intrinsics.atomic_pointerset(dst_data, valp, :monotonic)
+            dst_data += Core.sizeof(Ptr{Cvoid})
+            src_start += Core.sizeof(Ptr{Cvoid})
+            while src_start < src_stop
+                valp = Core.Intrinsics.atomic_pointerref(src_start, :acquire)
+                Core.Intrinsics.atomic_pointerset(dst_data, valp, :monotonic)
+                ccall(:jl_gc_queue_root, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), dst_obj, valp)
+                dst_data += Core.sizeof(Ptr{Cvoid})
+                src_start += Core.sizeof(Ptr{Cvoid})
+            end
+        else
+            src_stop -= Core.sizeof(Ptr{Cvoid})
+            dst_data += (nbytes - Core.sizeof(Ptr{Cvoid}))
+            while src_start <= src_stop
+                valp = Intrinsics.atomic_pointerref(src_stop, :acquire)
+                Intrinsics.atomic_pointerset(dst_data, valp, :monotonic)
+                ccall(:jl_gc_queue_root, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), dst_obj, valp)
+                dst_data -= Core.sizeof(Ptr{Cvoid})
+                src_stop -= Core.sizeof(Ptr{Cvoid})
+            end
+        end
     elseif lyt.kind === UNION_KIND
-        memmove(destp + dtoffset, srcp + stoffset, n * elsz)
+        destp = unsafe_load(unsafe_convert(Ptr{Ptr{Cvoid}}, dst_obj + Core.sizeof(Ptr{Cvoid})))
+        srcp = unsafe_load(unsafe_convert(Ptr{Ptr{Cvoid}}, src_obj + Core.sizeof(Ptr{Cvoid})))
+        memmove(destp + doffset, srcp + soffset, nbytes)
         # copy selector bytes
         memmove(destp + (length(dest) * elsz) + doffset, srcp + (length(src) * elsz) + soffset, n)
     elseif lyt.kind === BOOL_KIND
-        # TODO Do we need to use memcpy_ptrs! for HAS_PTR_KIND?
+        destp = unsafe_load(unsafe_convert(Ptr{Ptr{Cvoid}}, dst_obj + Core.sizeof(Ptr{Cvoid})))
+        srcp = unsafe_load(unsafe_convert(Ptr{Ptr{Cvoid}}, src_obj + Core.sizeof(Ptr{Cvoid})))
         # FIXME BOOL_KIND unsafe_copyto!
     else
-        memmove(destp + dtoffset, srcp + stoffset, n * elsz)
+        destp = unsafe_load(unsafe_convert(Ptr{Ptr{Cvoid}}, dst_obj + Core.sizeof(Ptr{Cvoid})))
+        srcp = unsafe_load(unsafe_convert(Ptr{Ptr{Cvoid}}, src_obj + Core.sizeof(Ptr{Cvoid})))
+        memmove(destp + doffset, srcp + soffset, nbytes)
     end
     @_gc_preserve_end t2
     @_gc_preserve_end t1
@@ -662,15 +635,15 @@ function resize!(b::DynamicBuffer, sz::Integer)
     return b
 end
 
-function unsafe_grow_at!(b::DynamicBuffer, i::Integer, delta::Integer, len::Integer=length(b))
-    ccall(:jl_buffer_grow_at_end, Cvoid, (Any, UInt, UInt, UInt), b, i - 1, delta, len)
-end
+# function unsafe_grow_at!(b::DynamicBuffer, i::Integer, delta::Integer, len::Integer=length(b))
+#     ccall(:jl_buffer_grow_at_end, Cvoid, (Any, UInt, UInt, UInt), b, i - 1, delta, len)
+# end
 
-function unsafe_delete_at!(b::DynamicBuffer, i::Integer, delta::Integer, len::Integer=length(b))
-    ccall(:jl_buffer_del_at_end, Cvoid, (Any, UInt, UInt, UInt), b, i - 1, delta, len)
-end
+# function unsafe_delete_at!(b::DynamicBuffer, i::Integer, delta::Integer, len::Integer=length(b))
+#     ccall(:jl_buffer_del_at_end, Cvoid, (Any, UInt, UInt, UInt), b, i - 1, delta, len)
+# end
 
-function unsafe_delete_at2!(b::DynamicBuffer{T}, i::UInt, delta::UInt) where {T}
+function unsafe_delete_at!(b::DynamicBuffer{T}, i::UInt, delta::UInt) where {T}
     lyt = ElementLayout(T)
     elsz = lyt.elsize
     offset = (i - UInt(1))
@@ -681,7 +654,7 @@ function unsafe_delete_at2!(b::DynamicBuffer{T}, i::UInt, delta::UInt) where {T}
     len = unsafe_load(lenptr)
     if len > stop
         nmoved = len - stop
-        data = unsafe_convert(Ptr{Ptr{Cvoid}}, bptr + PTR_SIZE)
+        data = unsafe_convert(Ptr{Ptr{Cvoid}}, bptr + Core.sizeof(Ptr{Cvoid}))
         if lyt.kind === UNION_KIND
             typetag_data = unsafe_convert(Ptr{UInt8}, data) + (len * elsz)
             memmove(typetag_data + offset, typetag_data + stop, nmoved)
@@ -698,77 +671,82 @@ function unsafe_delete_at2!(b::DynamicBuffer{T}, i::UInt, delta::UInt) where {T}
     if lyt.elsize === UInt(1) && lyt.kind === BITS_KIND
         unsafe_store!(unsafe_convert(Ptr{UInt8}, data + len), 0x00)
     end
-    unsafe_store!(lenptr, len - dec)
+    unsafe_store!(lenptr, len - delta)
     @_gc_preserve_end t
     return nothing
 end
 
-function unsafe_grow_at2!(b::DynamicBuffer{T}, i::UInt, delta::UInt) where {T}
+function unsafe_grow_at!(b::DynamicBuffer{T}, i::UInt, delta::UInt) where {T}
     lyt = ElementLayout(T)
     t = @_gc_preserve_begin b
     bptr = _pointer_from_buffer(b)
     lenptr = unsafe_convert(Ptr{Csize_t}, bptr)
-    olddata = unsafe_convert(Ptr{Ptr{Cvoid}}, bptr + PTR_SIZE)
+    data_ptr = unsafe_convert(Ptr{Ptr{Cvoid}}, bptr + Core.sizeof(Ptr{Cvoid}))
+    old_data = unsafe_load(data_ptr)
     oldlen = unsafe_load(lenptr)
     newlen = delta + oldlen
     idx = i - UInt(1)
     old_nbytes = oldlen * lyt.elsize
+    new_nbytes = newlen * lyt.elsize
     if old_nbytes > ARRAY_INLINE_NBYTES
-        ccall(:jl_gc_managed_realloc, Cvoid,
-            (Ptr{Cvoid}, Csize_t, Csize_t, Cint, Any),
+        # already malloc'd, use realloc
+        new_data = ccall(:jl_gc_managed_realloc, Cvoid, (Ptr{Cvoid}, Csize_t, Csize_t, Cint, Any),
              old_data, new_nbytes, old_nbytes, isaligned, bptr)
         has_newbuf = false
     else
         if new_nbytes >= MALLOC_THRESH
             new_data = ccall(:jl_gc_managed_malloc, Ptr{Cvoid}, (Csize_t,), new_nbytes)
             ccall(:jl_gc_track_malloced_buffer, Cvoid, (Any, Any), Core.getptls(), bptr)
-        else
-            # TODO bit tag as unmarked
-            new_data = ccall(:jl_gc_alloc_buf, Ptr{Cvoid}, (Any, Csize_t), Core.getptls(),new_nbytes)
-            ccall(:jl_gc_wb_buf, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), bptr, new_data, new_nbytes)
+        else # TODO bit tag as unmarked
+            btag = ccall(:jl_get_buff_tag, Ptr{Cvoid}, ())
+            new_data = ccall(:jl_gc_alloc, Ptr{Cvoid}, (Any, UInt, Any),
+                Core.getptls(), new_nbytes, btag);
+            ccall(:jl_gc_wb_bufnew, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
+                bptr, new_data, new_nbytes)
         end
         has_newbuf = true
     end
     if BUFFER_IMPL_NULL && elsize === UInt(1)
         memset(new_data + old_nbytes - 1, Int32(0), new_nbytes - old_nbytes + 1);
     end
-    nbinc = inc * lyt.elsize;
-    has_gap = olden > idx
+    nbinc = delta * lyt.elsize;
+    has_gap = oldlen > idx
     if has_newbuf
         nb1 = idx * lyt.elsize
-        memcpy!(newdata, data, nb1)
+        memcpy!(new_data, old_data, nb1)
         if lyt.kind === UNION_KIND
             memcpy(newtypetagdata, typetagdata, idx)
             if has_gap
-                memcpy!(newtypetagdata + idx + inc, typetagdata + idx, len - idx)
+                memcpy!(newtypetagdata + idx + delta, typetagdata + idx, len - idx)
             end
-            memset(newtypetagdata + idx, Int32(0), inc)
+            memset(newtypetagdata + idx, Int32(0), delta)
         end
         if has_gap
-            memcpy!(newdata + nb1 + nbinc, data + nb1, n * lyt.elsize - nb1)
+            memcpy!(new_data + nb1 + nbinc, old_data + nb1, oldlen * lyt.elsize - nb1)
         end
     else
         if lyt.kind === UNION_KIND
-            typetagdata = newdata + old_nbytes;
+            typetagdata = new_data + old_nbytes;
             if has_gap
-                memmove(newtypetagdata + idx + inc, typetagdata + idx, n - idx);
+                memmove(newtypetagdata + idx + delta, typetagdata + idx, oldlen - idx);
             end
-            memmove(newtypetagdata, typetagdata, idx);
-            memset(newtypetagdata + idx, Int32(0), inc);
+            memmove(newtypetagdata, typetagdata, idx)
+            memset(newtypetagdata + idx, Int32(0), delta)
         end
         if has_gap
             nb1 = idx * lyt.elsize
             if lyt.hasptr
-                memmove_ptrs!(newdata + nb1 + nbinc, newdata + nb1, n * lyt.elsize - nb1)
+                memmove_ptrs!(new_data + nb1 + nbinc,
+                new_data + nb1, oldlen * lyt.elsize - nb1)
             else
-                memmove(newdata + nb1 + nbinc, newdata + nb1, n * lyt.elsize - nb1)
+                memmove(new_data + nb1 + nbinc, new_data + nb1, oldlen * lyt.elsize - nb1)
             end
         end
     end
-    unsafe_store!(olddata, newdata)
+    unsafe_store!(data_ptr, new_data)
     unsafe_store!(lenptr, newlen)
     if lyt.requires_initialization
-        memset(newdata + idx * lyt.elsize, Int32(0), inc * lyt.elsize)
+        memset(new_data + idx * lyt.elsize, Int32(0), delta * lyt.elsize)
     end
     @_gc_preserve_end t
     return nothing

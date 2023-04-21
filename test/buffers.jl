@@ -44,31 +44,35 @@ end
     @test b[1] == v
 end
 
-# TODO: test copy(::Buffer) and unsafe_copyto!
 @testset "Buffer copy" begin
-    b = Buffer{Int}(undef, 3)
-    b[1] = 1; b[2] = 2; b[3] = 3;
-    b2 = copy(b)
-    @test b2 == b
-    @test b2 !== b
-    b = Buffer{Union{Int32,Int64}}(undef, 3)
-    b[1] = 1; b[2] = 2; b[3] = 3;
-    b2 = copy(b)
-    @test b2 == b
-    @test b2 !== b
-    b = Buffer{Any}(undef, 3)
-    b[1] = 1; b[2] = 2; b[3] = 3;
-    b2 = copy(b)
-    @test b2 == b
-    @test b2 !== b
+    # copy bits
+    src = Buffer{Int}(undef, 3)
+    src[1] = 1; src[2] = 2; src[3] = 3;
+    dst = copy(src)
+    @test src == dst
+    @test src !== dst
 
+    # copy bits unions
+    src = Buffer{Union{Int32,Int64}}(undef, 3)
+    src[1] = 1; src[2] = 2; src[3] = 3;
+    dst = copy(src)
+    @test src == dst
+    @test src !== dst
+
+    src = Buffer{Any}(undef, 3)
+    src[1] = 1; src[2] = 2; src[3] = 3;
+    dst = copy(src)
+    @test src == dst
+    @test src !== dst
 end
 
+b = DynamicBuffer{Int}(undef, 3)
+Base.unsafe_grow_at!(b, UInt(3), UInt(1))
+
+Base.unsafe_delete_at!(b, UInt(3), UInt(1))
 
 @test Base.summarysize(Buffer{Union{Nothing,Missing}}(undef, 16)) <
     Base.summarysize(Buffer{Union{Nothing,Missing}}(undef, 32))
 @test Base.summarysize(Buffer{Nothing}(undef, 16)) ==
     Base.summarysize(Buffer{Nothing}(undef, 32))
-
-
 

@@ -457,7 +457,6 @@
     XX(jl_svec_fill) \
     XX(jl_svec_ref) \
     XX(jl_new_buffer) \
-    XX(jl_buffer_copy) \
     XX(jl_bufref) \
     XX(jl_bufset) \
     XX(jl_bufferlen) \

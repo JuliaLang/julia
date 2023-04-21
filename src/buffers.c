@@ -239,23 +239,6 @@ JL_DLLEXPORT int jl_buffer_isassigned(jl_buffer_t *b, size_t i)
     return 1;
 }
 
-JL_DLLEXPORT jl_buffer_t *jl_buffer_copy(jl_buffer_t *old_buf)
-{
-    jl_value_t *btype = jl_typeof(old_buf);
-    jl_value_t *eltype = jl_tparam0(btype);
-    jl_eltype_layout_t lyt = jl_eltype_layout(eltype);
-    size_t len = jl_buffer_len(old_buf);
-    jl_buffer_t *new_buf = _new_buffer(btype, len, lyt, 0);
-    void *old_data = old_buf->data;
-    void *new_data = new_buf->data;
-    size_t data_len = len * lyt.elsize;
-    memcpy(new_data, old_data, data_len);
-    // ensure isbits union buffers copy their selector bytes correctly
-    if (lyt.ntags > 1)
-        memcpy(((char*)new_data) + len, ((char*)old_data) + len, len);
-    return new_buf;
-}
-
 // Resizing methods for `jl_buffer_t` are different from `jl_array_t` in a number of ways.
 //
 // - If the type variant associated with `buf` enforces a fixed length, these will erorr.
@@ -411,66 +394,9 @@ JL_DLLEXPORT void jl_buffer_del_at_end(jl_buffer_t *buf, size_t idx, size_t dec,
     buf->length = n;
 }
 
-// Copy element by element until we hit a young object, at which point
-// we can finish by using `memmove`.
-static NOINLINE size_t jl_buffer_ptr_copy_forward(jl_value_t *owner,
-                                                  void **src_p, void **dest_p,
-                                                  size_t n) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_gc_wb_bufnew(void *parent, void *bufptr, size_t minsz) JL_NOTSAFEPOINT // parent isa jl_value_t*
 {
-    _Atomic(void*) *src_pa = (_Atomic(void*)*)src_p;
-    _Atomic(void*) *dest_pa = (_Atomic(void*)*)dest_p;
-    for (ssize_t i = 0; i < n; i++) {
-        void *val = jl_atomic_load_relaxed(src_pa + i);
-        jl_atomic_store_release(dest_pa + i, val);
-        // `val` is young or old-unmarked
-        if (val && !(jl_astaggedvalue(val)->bits.gc & GC_MARKED)) {
-            jl_gc_queue_root(owner);
-            return i;
-        }
-    }
-    return n;
-}
-
-static NOINLINE size_t jl_buffer_ptr_copy_backward(jl_value_t *owner,
-                                                   void **src_p, void **dest_p,
-                                                   size_t n) JL_NOTSAFEPOINT
-{
-    _Atomic(void*) *src_pa = (_Atomic(void*)*)src_p;
-    _Atomic(void*) *dest_pa = (_Atomic(void*)*)dest_p;
-    for (ssize_t i = 0; i < n; i++) {
-        void *val = jl_atomic_load_relaxed(src_pa + n - i - 1);
-        jl_atomic_store_release(dest_pa + n - i - 1, val);
-        // `val` is young or old-unmarked
-        if (val && !(jl_astaggedvalue(val)->bits.gc & GC_MARKED)) {
-            jl_gc_queue_root(owner);
-            return i;
-        }
-    }
-    return n;
-}
-// Unsafe, assume inbounds and that dest and src have the same eltype
-JL_DLLEXPORT void jl_buffer_ptr_copy(jl_buffer_t *dest, void **dest_p,
-                                     jl_buffer_t *src, void **src_p, size_t n) JL_NOTSAFEPOINT
-{
-    // assert(dest->flags.ptrarray && src->flags.ptrarray);
-    // Destination is old and doesn't refer to any young object
-    if (__unlikely(jl_astaggedvalue(dest)->bits.gc == GC_OLD_MARKED)) {
-        // Source is young or being promoted or might refer to young objects
-        // (i.e. source is not an old object that doesn't have wb triggered)
-        if (jl_astaggedvalue(src)->bits.gc != GC_OLD_MARKED) {
-            ssize_t done;
-            if (dest_p < src_p || dest_p > src_p + n) {
-                done = jl_buffer_ptr_copy_forward((jl_value_t*)dest, src_p, dest_p, n);
-                dest_p += done;
-                src_p += done;
-            }
-            else {
-                done = jl_buffer_ptr_copy_backward((jl_value_t*)dest, src_p, dest_p, n);
-            }
-            n -= done;
-        }
-    }
-    memmove_refs(dest_p, src_p, n);
+    jl_gc_wb_buf(parent, bufptr, minsz);
 }
 
 #ifdef __cplusplus
