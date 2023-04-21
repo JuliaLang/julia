@@ -1179,6 +1179,19 @@ let word = "Markdown" # pre is of size Markdown.margin when wrapping title
     @test all(startswith(Base.text_colors[:bold] * ' '^Markdown.margin), lines)
 end
 
+struct Struct49454 end
+Base.show(io::IO, ::Struct49454) =
+    print(io, Base.text_colors[:underline], "Struct 49454()", Base.text_colors[:normal])
+
+let buf = IOBuffer()
+    ctx = IOContext(buf, :color => true, :displaysize => (displaysize(buf)[1], 10))
+    show(stdout, MIME("text/plain"), md"""
+    text without $(Struct49454()) underline.
+    """)
+    lines = split(String(take!(buf)), '\n')
+    @test !occursin(Base.text_colors[:underline], lines[end])
+end
+
 # table rendering with term #25213
 t = """
     a   |   b

@@ -22,9 +22,12 @@ function wrapped_line(io::IO, s::AbstractString, width, i)
                 maybe_underline = findlast(Base.text_colors[:underline], last_line)
                 if !isnothing(maybe_underline)
                     # disable underline style at end of line if not already disabled.
-                    maybe_disable_underline = findlast(Base.disable_text_style[:underline], last_line)
-                    if isnothing(maybe_disable_underline) ||
-                        last(maybe_disable_underline) < last(maybe_underline)
+                    maybe_disable_underline = max(
+                        last(something(findlast(Base.disable_text_style[:underline], last_line), -1)),
+                        last(something(findlast(Base.text_colors[:normal], last_line), -1)),
+                    )
+
+                    if maybe_disable_underline < 0 || maybe_disable_underline < last(maybe_underline)
 
                         lines[end] = last_line * Base.disable_text_style[:underline]
                         word = Base.text_colors[:underline] * word
