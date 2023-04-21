@@ -120,6 +120,8 @@ end
 MustAlias(var::SlotNumber, @nospecialize(vartyp), fldidx::Int, @nospecialize(fldtyp)) =
     MustAlias(slot_id(var), vartyp, fldidx, fldtyp)
 
+_uniontypes(x::MustAlias, ts) = _uniontypes(widenconst(x), ts)
+
 """
     alias::InterMustAlias
 
@@ -734,22 +736,15 @@ widenconst(::LimitedAccuracy) = error("unhandled LimitedAccuracy")
 # state management #
 ####################
 
-issubstate(lattice::AbstractLattice, a::VarState, b::VarState) =
-    ⊑(lattice, a.typ, b.typ) && a.undef <= b.undef
-
 function smerge(lattice::AbstractLattice, sa::Union{NotFound,VarState}, sb::Union{NotFound,VarState})
     sa === sb && return sa
     sa === NOT_FOUND && return sb
     sb === NOT_FOUND && return sa
-    issubstate(lattice, sa, sb) && return sb
-    issubstate(lattice, sb, sa) && return sa
     return VarState(tmerge(lattice, sa.typ, sb.typ), sa.undef | sb.undef)
 end
 
-@inline tchanged(lattice::AbstractLattice, @nospecialize(n), @nospecialize(o)) =
-    o === NOT_FOUND || (n !== NOT_FOUND && !⊑(lattice, n, o))
 @inline schanged(lattice::AbstractLattice, @nospecialize(n), @nospecialize(o)) =
-    (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !issubstate(lattice, n::VarState, o::VarState)))
+    (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !(n.undef <= o.undef && ⊑(lattice, n.typ, o.typ))))
 
 # remove any lattice elements that wrap the reassigned slot object from the vartable
 function invalidate_slotwrapper(vt::VarState, changeid::Int, ignore_conditional::Bool)

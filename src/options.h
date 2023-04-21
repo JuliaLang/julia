@@ -78,9 +78,6 @@
 // OBJPROFILE counts objects by type
 // #define OBJPROFILE
 
-// Automatic Instrumenting Profiler
-//#define ENABLE_TIMINGS
-
 
 // method dispatch profiling --------------------------------------------------
 

@@ -122,8 +122,50 @@ const DenseVecOrMat{T} = Union{DenseVector{T}, DenseMatrix{T}}
 
 using Core: arraysize, arrayset, const_arrayref
 
+"""
+    @_safeindex
+
+This internal macro converts:
+- `getindex(xs::Tuple, )` -> `__inbounds_getindex(args...)`
+- `setindex!(xs::Vector, args...)` -> `__inbounds_setindex!(xs, args...)`
+to tell the compiler that indexing operations within the applied expression are always
+inbounds and do not need to taint `:consistent` and `:nothrow`.
+"""
+macro _safeindex(ex)
+    return esc(_safeindex(__module__, ex))
+end
+function _safeindex(__module__, ex)
+    isa(ex, Expr) || return ex
+    if ex.head === :(=)
+        lhs = arrayref(true, ex.args, 1)
+        if isa(lhs, Expr) && lhs.head === :ref # xs[i] = x
+            rhs = arrayref(true, ex.args, 2)
+            xs = arrayref(true, lhs.args, 1)
+            args = Vector{Any}(undef, length(lhs.args)-1)
+            for i = 2:length(lhs.args)
+                arrayset(true, args, _safeindex(__module__, arrayref(true, lhs.args, i)), i-1)
+            end
+            return Expr(:call, GlobalRef(__module__, :__inbounds_setindex!), xs, _safeindex(__module__, rhs), args...)
+        end
+    elseif ex.head === :ref # xs[i]
+        return Expr(:call, GlobalRef(__module__, :__inbounds_getindex), ex.args...)
+    end
+    args = Vector{Any}(undef, length(ex.args))
+    for i = 1:length(ex.args)
+        arrayset(true, args, _safeindex(__module__, arrayref(true, ex.args, i)), i)
+    end
+    return Expr(ex.head, args...)
+end
+
 vect() = Vector{Any}()
-vect(X::T...) where {T} = T[ X[i] for i = 1:length(X) ]
+function vect(X::T...) where T
+    @_terminates_locally_meta
+    vec = Vector{T}(undef, length(X))
+    @_safeindex for i = 1:length(X)
+        vec[i] = X[i]
+    end
+    return vec
+end
 
 """
     vect(X...)
@@ -145,7 +187,7 @@ function vect(X...)
     return T[X...]
 end
 
-size(a::Array, d::Integer) = arraysize(a, convert(Int, d))
+size(a::Array, d::Integer) = arraysize(a, d isa Int ? d : convert(Int, d))
 size(a::Vector) = (arraysize(a,1),)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
 size(a::Array{<:Any,N}) where {N} = (@inline; ntuple(M -> size(a, M), Val(N))::Dims)
@@ -177,11 +219,11 @@ function _unsetindex!(A::Array{T}, i::Int) where {T}
     t = @_gc_preserve_begin A
     p = Ptr{Ptr{Cvoid}}(pointer(A, i))
     if !allocatedinline(T)
-        unsafe_store!(p, C_NULL)
+        Intrinsics.atomic_pointerset(p, C_NULL, :monotonic)
     elseif T isa DataType
         if !datatype_pointerfree(T)
-            for j = 1:(Core.sizeof(T) ÷ Core.sizeof(Ptr{Cvoid}))
-                unsafe_store!(p, C_NULL, j)
+            for j = 1:Core.sizeof(Ptr{Cvoid}):Core.sizeof(T)
+                Intrinsics.atomic_pointerset(p + j - 1, C_NULL, :monotonic)
             end
         end
     end
@@ -210,7 +252,10 @@ function bitsunionsize(u::Union)
     return sz
 end
 
+# Deprecate this, as it seems to have no documented meaning and is unused here,
+# but is frequently accessed in packages
 elsize(@nospecialize _::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)
+elsize(::Type{Union{}}, slurp...) = 0
 sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)
@@ -267,7 +312,7 @@ end
 """
     unsafe_copyto!(dest::Array, do, src::Array, so, N)
 
-Copy `N` elements from a source array to a destination, starting at offset `so` in the
+Copy `N` elements from a source array to a destination, starting at the linear index `so` in the
 source and `do` in the destination (1-indexed).
 
 The `unsafe` prefix on this function indicates that no validation is performed to ensure
@@ -307,8 +352,8 @@ unsafe_copyto!(dest::Array, doffs, src::Array, soffs, n) =
 """
     copyto!(dest, do, src, so, N)
 
-Copy `N` elements from collection `src` starting at offset `so`, to array `dest` starting at
-offset `do`. Return `dest`.
+Copy `N` elements from collection `src` starting at the linear index `so`, to array `dest` starting at
+the index `do`. Return `dest`.
 """
 function copyto!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer)
     return _copyto_impl!(dest, doffs, src, soffs, n)
@@ -321,7 +366,7 @@ end
 
 function _copyto_impl!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer)
     n == 0 && return dest
-    n > 0 || _throw_argerror()
+    n > 0 || _throw_argerror("Number of elements to copy must be nonnegative.")
     @boundscheck checkbounds(dest, doffs:doffs+n-1)
     @boundscheck checkbounds(src, soffs:soffs+n-1)
     unsafe_copyto!(dest, doffs, src, soffs, n)
@@ -331,10 +376,7 @@ end
 # Outlining this because otherwise a catastrophic inference slowdown
 # occurs, see discussion in #27874.
 # It is also mitigated by using a constant string.
-function _throw_argerror()
-    @noinline
-    throw(ArgumentError("Number of elements to copy must be nonnegative."))
-end
+_throw_argerror(s) = (@noinline; throw(ArgumentError(s)))
 
 copyto!(dest::Array, src::Array) = copyto!(dest, 1, src, 1, length(src))
 
@@ -344,7 +386,7 @@ copyto!(dest::Array{T}, src::Array{T}) where {T} = copyto!(dest, 1, src, 1, leng
 # N.B: The generic definition in multidimensional.jl covers, this, this is just here
 # for bootstrapping purposes.
 function fill!(dest::Array{T}, x) where T
-    xT = convert(T, x)
+    xT = x isa T ? x : convert(T, x)::T
     for i in eachindex(dest)
         @inbounds dest[i] = xT
     end
@@ -397,9 +439,11 @@ julia> getindex(Int8, 1, 2, 3)
 ```
 """
 function getindex(::Type{T}, vals...) where T
+    @inline
+    @_effect_free_terminates_locally_meta
     a = Vector{T}(undef, length(vals))
     if vals isa NTuple
-        @inbounds for i in 1:length(vals)
+        @_safeindex for i in 1:length(vals)
             a[i] = vals[i]
         end
     else
@@ -413,8 +457,9 @@ function getindex(::Type{T}, vals...) where T
 end
 
 function getindex(::Type{Any}, @nospecialize vals...)
+    @_effect_free_terminates_locally_meta
     a = Vector{Any}(undef, length(vals))
-    @inbounds for i = 1:length(vals)
+    @_safeindex for i = 1:length(vals)
         a[i] = vals[i]
     end
     return a
@@ -422,7 +467,7 @@ end
 getindex(::Type{Any}) = Vector{Any}()
 
 function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
-    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), a, convert(eltype(a), x), length(a))
+    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), a, x isa eltype(a) ? x : convert(eltype(a), x), length(a))
     return a
 end
 
@@ -966,9 +1011,15 @@ Dict{String, Int64} with 2 entries:
 """
 function setindex! end
 
-@eval setindex!(A::Array{T}, x, i1::Int) where {T} = arrayset($(Expr(:boundscheck)), A, convert(T,x)::T, i1)
+@eval setindex!(A::Array{T}, x, i1::Int) where {T} =
+    arrayset($(Expr(:boundscheck)), A, x isa T ? x : convert(T,x)::T, i1)
 @eval setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T} =
-    (@inline; arrayset($(Expr(:boundscheck)), A, convert(T,x)::T, i1, i2, I...))
+    (@inline; arrayset($(Expr(:boundscheck)), A, x isa T ? x : convert(T,x)::T, i1, i2, I...))
+
+__inbounds_setindex!(A::Array{T}, x, i1::Int) where {T} =
+    arrayset(false, A, convert(T,x)::T, i1)
+__inbounds_setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T} =
+    (@inline; arrayset(false, A, convert(T,x)::T, i1, i2, I...))
 
 # This is redundant with the abstract fallbacks but needed and helpful for bootstrap
 function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
@@ -1055,26 +1106,27 @@ See also [`pushfirst!`](@ref).
 """
 function push! end
 
-function push!(a::Array{T,1}, item) where T
+function push!(a::Vector{T}, item) where T
     # convert first so we don't grow the array if the assignment won't work
-    itemT = convert(T, item)
+    itemT = item isa T ? item : convert(T, item)::T
     _growend!(a, 1)
-    @inbounds a[end] = itemT
+    @_safeindex a[length(a)] = itemT
     return a
 end
 
 # specialize and optimize the single argument case
 function push!(a::Vector{Any}, @nospecialize x)
     _growend!(a, 1)
-    arrayset(true, a, x, length(a))
+    @_safeindex a[length(a)] = x
     return a
 end
 function push!(a::Vector{Any}, @nospecialize x...)
+    @_terminates_locally_meta
     na = length(a)
     nx = length(x)
     _growend!(a, nx)
-    for i = 1:nx
-        arrayset(true, a, x[i], na+i)
+    @_safeindex for i = 1:nx
+        a[na+i] = x[i]
     end
     return a
 end
@@ -1129,10 +1181,11 @@ push!(a::AbstractVector, iter...) = append!(a, iter)
 append!(a::AbstractVector, iter...) = foldl(append!, iter, init=a)
 
 function _append!(a, ::Union{HasLength,HasShape}, iter)
+    @_terminates_locally_meta
     n = length(a)
     i = lastindex(a)
     resize!(a, n+Int(length(iter))::Int)
-    @inbounds for (i, item) in zip(i+1:lastindex(a), iter)
+    @_safeindex for (i, item) in zip(i+1:lastindex(a), iter)
         a[i] = item
     end
     a
@@ -1194,12 +1247,13 @@ pushfirst!(a::Vector, iter...) = prepend!(a, iter)
 prepend!(a::AbstractVector, iter...) = foldr((v, a) -> prepend!(a, v), iter, init=a)
 
 function _prepend!(a, ::Union{HasLength,HasShape}, iter)
+    @_terminates_locally_meta
     require_one_based_indexing(a)
     n = length(iter)
     _growbeg!(a, n)
     i = 0
     for item in iter
-        @inbounds a[i += 1] = item
+        @_safeindex a[i += 1] = item
     end
     a
 end
@@ -1249,7 +1303,7 @@ function resize!(a::Vector, nl::Integer)
         _growend!(a, nl-l)
     elseif nl != l
         if nl < 0
-            throw(ArgumentError("new length must be ≥ 0"))
+            _throw_argerror("new length must be ≥ 0")
         end
         _deleteend!(a, l-nl)
     end
@@ -1329,7 +1383,7 @@ julia> pop!(Dict(1=>2))
 """
 function pop!(a::Vector)
     if isempty(a)
-        throw(ArgumentError("array must be non-empty"))
+        _throw_argerror("array must be non-empty")
     end
     item = a[end]
     _deleteend!(a, 1)
@@ -1403,24 +1457,25 @@ julia> pushfirst!([1, 2, 3, 4], 5, 6)
  4
 ```
 """
-function pushfirst!(a::Array{T,1}, item) where T
-    item = convert(T, item)
+function pushfirst!(a::Vector{T}, item) where T
+    item = item isa T ? item : convert(T, item)::T
     _growbeg!(a, 1)
-    a[1] = item
+    @_safeindex a[1] = item
     return a
 end
 
 # specialize and optimize the single argument case
 function pushfirst!(a::Vector{Any}, @nospecialize x)
     _growbeg!(a, 1)
-    a[1] = x
+    @_safeindex a[1] = x
     return a
 end
 function pushfirst!(a::Vector{Any}, @nospecialize x...)
+    @_terminates_locally_meta
     na = length(a)
     nx = length(x)
     _growbeg!(a, nx)
-    for i = 1:nx
+    @_safeindex for i = 1:nx
         a[i] = x[i]
     end
     return a
@@ -1460,7 +1515,7 @@ julia> A
 """
 function popfirst!(a::Vector)
     if isempty(a)
-        throw(ArgumentError("array must be non-empty"))
+        _throw_argerror("array must be non-empty")
     end
     item = a[1]
     _deletebeg!(a, 1)
@@ -1490,7 +1545,7 @@ julia> insert!(Any[1:6;], 3, "here")
 """
 function insert!(a::Array{T,1}, i::Integer, item) where T
     # Throw convert error before changing the shape of the array
-    _item = convert(T, item)
+    _item = item isa T ? item : convert(T, item)::T
     _growat!(a, i, 1)
     # _growat! already did bound check
     @inbounds a[i] = _item
@@ -1600,7 +1655,7 @@ function _deleteat!(a::Vector, inds, dltd=Nowhere())
         (i,s) = y
         if !(q <= i <= n)
             if i < q
-                throw(ArgumentError("indices must be unique and sorted"))
+                _throw_argerror("indices must be unique and sorted")
             else
                 throw(BoundsError())
             end
@@ -1856,7 +1911,7 @@ for (f,_f) in ((:reverse,:_reverse), (:reverse!,:_reverse!))
         $_f(A::AbstractVector, ::Colon) = $f(A, firstindex(A), lastindex(A))
         $_f(A::AbstractVector, dim::Tuple{Integer}) = $_f(A, first(dim))
         function $_f(A::AbstractVector, dim::Integer)
-            dim == 1 || throw(ArgumentError("invalid dimension $dim ≠ 1"))
+            dim == 1 || _throw_argerror(LazyString("invalid dimension ", dim, " ≠ 1"))
             return $_f(A, :)
         end
     end
@@ -1916,7 +1971,7 @@ function reverse!(v::AbstractVector, start::Integer, stop::Integer=lastindex(v))
     return v
 end
 
-# concatenations of homogeneous combinations of vectors, horizontal and vertical
+# concatenations of (in)homogeneous combinations of vectors, horizontal and vertical
 
 vcat() = Vector{Any}()
 hcat() = Vector{Any}()
@@ -1930,6 +1985,7 @@ function hcat(V::Vector{T}...) where T
     end
     return [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end
+hcat(A::Vector...) = cat(A...; dims=Val(2)) # more special than SparseArrays's hcat
 
 function vcat(arrays::Vector{T}...) where T
     n = 0
@@ -1946,6 +2002,19 @@ function vcat(arrays::Vector{T}...) where T
     end
     return arr
 end
+vcat(A::Vector...) = cat(A...; dims=Val(1)) # more special than SparseArrays's vcat
+
+# disambiguation with LinAlg/special.jl
+# Union{Number,Vector,Matrix} is for LinearAlgebra._DenseConcatGroup
+# VecOrMat{T} is for LinearAlgebra._TypedDenseConcatGroup
+hcat(A::Union{Number,Vector,Matrix}...) = cat(A...; dims=Val(2))
+hcat(A::VecOrMat{T}...) where {T} = typed_hcat(T, A...)
+vcat(A::Union{Number,Vector,Matrix}...) = cat(A...; dims=Val(1))
+vcat(A::VecOrMat{T}...) where {T} = typed_vcat(T, A...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::Union{Number,Vector,Matrix}...) =
+    typed_hvcat(promote_eltypeof(xs...), rows, xs...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::VecOrMat{T}...) where {T} =
+    typed_hvcat(T, rows, xs...)
 
 _cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(Returns(1), n-1)..., length(x)))
 
@@ -2117,7 +2186,7 @@ findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::AbstractUnitR
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
     isempty(r) && return nothing
     minimum(r) <= p.x <= maximum(r) || return nothing
-    d = convert(S, p.x - first(r))
+    d = convert(S, p.x - first(r))::S
     iszero(d % step(r)) || return nothing
     return d ÷ step(r) + 1
 end
@@ -2338,7 +2407,11 @@ julia> findall(x -> x >= 0, d)
 
 ```
 """
-findall(testf::Function, A) = collect(first(p) for p in pairs(A) if testf(last(p)))
+function findall(testf::Function, A)
+    T = eltype(keys(A))
+    gen = (first(p) for p in pairs(A) if testf(last(p)))
+    isconcretetype(T) ? collect(T, gen) : collect(gen)
+end
 
 # Broadcasting is much faster for small testf, and computing
 # integer indices from logical index using findall has a negligible cost

@@ -120,6 +120,7 @@ Float64
 real(T::Type) = typeof(real(zero(T)))
 real(::Type{T}) where {T<:Real} = T
 real(C::Type{<:Complex}) = fieldtype(C, 1)
+real(::Type{Union{}}, slurp...) = Union{}(im)
 
 """
     isreal(x) -> Bool
@@ -245,6 +246,8 @@ bswap(z::Complex) = Complex(bswap(real(z)), bswap(imag(z)))
 ==(x::Real, z::Complex) = isreal(z) && real(z) == x
 
 isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) & isequal(imag(z),imag(w))
+isequal(z::Complex, w::Real) = isequal(real(z),w) & isequal(imag(z),zero(w))
+isequal(z::Real, w::Complex) = isequal(z,real(w)) & isequal(zero(z),imag(w))
 
 in(x::Complex, r::AbstractRange{<:Real}) = isreal(x) && real(x) in r
 

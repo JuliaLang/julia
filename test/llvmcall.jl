@@ -264,5 +264,7 @@ MyStruct(kern) = MyStruct(kern, reinterpret(Core.LLVMPtr{UInt8,1}, 0))
 MyStruct() = MyStruct(0)
 s = MyStruct()
 
+# ensure LLVMPtr properly subtypes
+@test eltype(supertype(Core.LLVMPtr{UInt8,1})) <: UInt8
 @test s.kern == 0
 @test reinterpret(Int, s.ptr) == 0

@@ -1164,7 +1164,7 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
-help_result(line, mod::Module=Base) = mod.eval(REPL._helpmode(IOBuffer(), line))
+help_result(line, mod::Module=Base) = Core.eval(mod, REPL._helpmode(IOBuffer(), line))
 
 # Docs.helpmode tests: we test whether the correct expressions are being generated here,
 # rather than complete integration with Julia's REPL mode system.
@@ -1203,7 +1203,9 @@ end
 @test occursin("broadcast", sprint(show, help_result(".<=")))
 
 # Issue 39427
-@test occursin("does not exist", sprint(show, help_result(":=")))
+@test occursin("does not exist.", sprint(show, help_result(":=")))
+global some_undef_global
+@test occursin("exists,", sprint(show, help_result("some_undef_global", @__MODULE__)))
 
 # Issue #40563
 @test occursin("does not exist", sprint(show, help_result("..")))
@@ -1481,7 +1483,7 @@ fake_repl() do stdin_write, stdout_read, repl
     end
     # initialize `err` to `nothing`
     t = @async (readline(stdout_read); readuntil(stdout_read, "\e[0m\n"))
-    write(stdin_write, "global err = nothing\n")
+    write(stdin_write, "setglobal!(Base.MainInclude, :err, nothing)\n")
     wait(t)
     readuntil(stdout_read, "julia> ", keep=true)
     # generate top-level error
@@ -1600,7 +1602,7 @@ fake_repl() do stdin_write, stdout_read, repl
     @test buffercontents(LineEdit.buffer(s)) == "1234αβ56γ"
 end
 
-# Non standard output_prefix, tested via `ipython_mode!`
+# Non standard output_prefix, tested via `numbered_prompt!`
 fake_repl() do stdin_write, stdout_read, repl
     repl.interface = REPL.setup_interface(repl)
 
@@ -1609,7 +1611,7 @@ fake_repl() do stdin_write, stdout_read, repl
         REPL.run_repl(repl; backend)
     end
 
-    REPL.ipython_mode!(repl, backend)
+    REPL.numbered_prompt!(repl, backend)
 
     global c = Base.Event(true)
     function sendrepl2(cmd, txt)
@@ -1644,6 +1646,11 @@ fake_repl() do stdin_write, stdout_read, repl
     # Test for https://github.com/JuliaLang/julia/issues/46451
     s = sendrepl2("x_47878 = range(-1; stop = 1)\n", "-1:1")
     @test contains(s, "Out[11]: -1:1")
+
+    # Test for https://github.com/JuliaLang/julia/issues/49041
+    s = sendrepl2("using Test; @test true", "In [14]")
+    @test !contains(s, "ERROR")
+    @test contains(s, "Test Passed")
 
     write(stdin_write, '\x04')
     Base.wait(repltask)

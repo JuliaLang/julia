@@ -184,7 +184,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         else
             return s->locals[jl_source_nslots(src) + id];
     }
-    if (jl_is_slot(e) || jl_is_argument(e)) {
+    if (jl_is_slotnumber(e) || jl_is_argument(e)) {
         ssize_t n = jl_slot_number(e);
         if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
             jl_error("access to invalid slot number");
@@ -230,7 +230,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     else if (head == jl_isdefined_sym) {
         jl_value_t *sym = args[0];
         int defined = 0;
-        if (jl_is_slot(sym) || jl_is_argument(sym)) {
+        if (jl_is_slotnumber(sym) || jl_is_argument(sym)) {
             ssize_t n = jl_slot_number(sym);
             if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
                 jl_error("access to invalid slot number");
@@ -472,7 +472,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             if (head == jl_assign_sym) {
                 jl_value_t *lhs = jl_exprarg(stmt, 0);
                 jl_value_t *rhs = eval_value(jl_exprarg(stmt, 1), s);
-                if (jl_is_slot(lhs)) {
+                if (jl_is_slotnumber(lhs)) {
                     ssize_t n = jl_slot_number(lhs);
                     assert(n <= jl_source_nslots(s->src) && n > 0);
                     s->locals[n - 1] = rhs;
@@ -608,7 +608,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
         }
         else if (jl_is_newvarnode(stmt)) {
             jl_value_t *var = jl_fieldref(stmt, 0);
-            assert(jl_is_slot(var));
+            assert(jl_is_slotnumber(var));
             ssize_t n = jl_slot_number(var);
             assert(n <= jl_source_nslots(s->src) && n > 0);
             s->locals[n - 1] = NULL;
@@ -626,7 +626,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
 
 // preparing method IR for interpreter
 
-jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi)
+jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
 {
     jl_code_info_t *src = (jl_code_info_t*)jl_atomic_load_relaxed(&mi->uninferred);
     if (jl_is_method(mi->def.value)) {
@@ -636,7 +636,7 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi)
             }
             else {
                 assert(mi->def.method->generator);
-                src = jl_code_for_staged(mi);
+                src = jl_code_for_staged(mi, world);
             }
         }
         if (src && (jl_value_t*)src != jl_nothing) {
@@ -659,7 +659,9 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
 {
     interpreter_state *s;
     jl_method_instance_t *mi = codeinst->def;
-    jl_code_info_t *src = jl_code_for_interpreter(mi);
+    jl_task_t *ct = jl_current_task;
+    size_t world = ct->world_age;
+    jl_code_info_t *src = jl_code_for_interpreter(mi, world);
     jl_array_t *stmts = src->code;
     assert(jl_typeis(stmts, jl_array_any_type));
     unsigned nroots = jl_source_nslots(src) + jl_source_nssavalues(src) + 2;

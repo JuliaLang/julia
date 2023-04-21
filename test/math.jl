@@ -180,9 +180,10 @@ end
             @test atan(x,y) ≈ atan(big(x),big(y))
             @test atanh(x) ≈ atanh(big(x))
             @test cbrt(x) ≈ cbrt(big(x))
+            @test fourthroot(x) ≈ fourthroot(big(x))
             @test cos(x) ≈ cos(big(x))
             @test cosh(x) ≈ cosh(big(x))
-	    @test cospi(x) ≈ cospi(big(x))
+            @test cospi(x) ≈ cospi(big(x))
             @test exp(x) ≈ exp(big(x))
             @test exp10(x) ≈ exp10(big(x))
             @test exp2(x) ≈ exp2(big(x))
@@ -200,7 +201,7 @@ end
             @test sqrt(x) ≈ sqrt(big(x))
             @test tan(x) ≈ tan(big(x))
             @test tanh(x) ≈ tanh(big(x))
-	    @test tanpi(x) ≈ tanpi(big(x))
+            @test tanpi(x) ≈ tanpi(big(x))
             @test sec(x) ≈ sec(big(x))
             @test csc(x) ≈ csc(big(x))
             @test secd(x) ≈ secd(big(x))
@@ -219,6 +220,9 @@ end
             @test isequal(cbrt(T(0)), T(0))
             @test isequal(cbrt(T(1)), T(1))
             @test isequal(cbrt(T(1000000000))^3, T(1000)^3)
+            @test isequal(fourthroot(T(0)), T(0))
+            @test isequal(fourthroot(T(1)), T(1))
+            @test isequal(fourthroot(T(100000000))^4, T(100)^4)
             @test isequal(cos(T(0)), T(1))
             @test cos(T(pi)/2) ≈ T(0) atol=eps(T)
             @test isequal(cos(T(pi)), T(-1))
@@ -271,6 +275,8 @@ end
             @test asin(sin(x)) ≈ x
             @test cbrt(x)^3 ≈ x
             @test cbrt(x^3) ≈ x
+            @test fourthroot(x)^4 ≈ x
+            @test fourthroot(x^4) ≈ x
             @test asinh(sinh(x)) ≈ x
             @test atan(tan(x)) ≈ x
             @test atan(x,y) ≈ atan(x/y)
@@ -503,22 +509,22 @@ end
             @test cospi(convert(T,-1.5))::fT ⩲ zero(fT)
             @test_throws DomainError cospi(convert(T,Inf))
         end
-	@testset "trig pi functions accuracy" for numerator in -20:1:20
-	    for func in (sinpi, cospi, tanpi,
-	                 x -> sincospi(x)[1],
-			 x -> sincospi(x)[2])
+        @testset "trig pi functions accuracy" for numerator in -20:1:20
+            for func in (sinpi, cospi, tanpi,
+                         x -> sincospi(x)[1],
+                         x -> sincospi(x)[2])
                 x = numerator // 20
-		# Check that rational function works
-		@test func(x) ≈ func(BigFloat(x))
-		# Use short value so that wider values will be exactly equal
-		shortx = Float16(x)
-		# Compare to BigFloat value
-		bigvalue = func(BigFloat(shortx))
-		for T in (Float16,Float32,Float64)
-		    @test func(T(shortx)) ≈ T(bigvalue)
+                # Check that rational function works
+                @test func(x) ≈ func(BigFloat(x))
+                # Use short value so that wider values will be exactly equal
+                shortx = Float16(x)
+                # Compare to BigFloat value
+                bigvalue = func(BigFloat(shortx))
+                for T in (Float16,Float32,Float64)
+                    @test func(T(shortx)) ≈ T(bigvalue)
                 end
             end
-	end
+        end
         @testset begin
             # If the machine supports fma (fused multiply add), we require exact equality.
             # Otherwise, we only require approximate equality.
@@ -621,7 +627,7 @@ end
             @test sinpi(complex(x, x)) ≈ ComplexF64(sinpi(complex(big(x), big(x))))
             @test cospi(complex(x, x)) ≈ ComplexF64(cospi(complex(big(x), big(x))))
         end
-	@test tanpi(x) ≈ Float64(tanpi(big(x)))
+        @test tanpi(x) ≈ Float64(tanpi(big(x)))
         @test sinc(x)  ≈ Float64(sinc(big(x)))
         @test cosc(x)  ≈ Float64(cosc(big(x)))
         @test sinc(complex(x, x))  ≈ ComplexF64(sinc(complex(big(x),  big(x))))
@@ -1255,6 +1261,22 @@ end
     end
 end
 
+@testset "fourthroot" begin
+    for T in (Float32, Float64)
+        @test fourthroot(zero(T)) === zero(T)
+        @test fourthroot(one(T)) === one(T)
+        @test fourthroot(T(Inf)) === T(Inf)
+        @test isnan_type(T, fourthroot(T(NaN)))
+        for x in (pcnfloat(nextfloat(nextfloat(zero(T))))...,
+                  0.45, 0.6, 0.98,
+                  map(x->x^3, 1.0:1.0:1024.0)...,
+                  prevfloat(T(Inf)))
+            by = fourthroot(big(T(x)))
+            @test fourthroot(T(x)) ≈ by rtol=eps(T)
+        end
+    end
+end
+
 @testset "hypot" begin
     @test hypot(0, 0) == 0.0
     @test hypot(3, 4) == 5.0
@@ -1519,7 +1541,7 @@ end
 end
 
 # test constant-foldability
-for fn in (:sin, :cos, :tan, :log, :log2, :log10, :log1p, :exponent, :sqrt, :cbrt,
+for fn in (:sin, :cos, :tan, :log, :log2, :log10, :log1p, :exponent, :sqrt, :cbrt, :fourthroot,
            :asin, :atan, :acos, :sinh, :cosh, :tanh, :asinh, :acosh, :atanh,
            :exp, :exp2, :exp10, :expm1
            )

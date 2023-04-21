@@ -24,9 +24,9 @@
 _colon(::Ordered, ::Any, start::T, step, stop::T) where {T} = StepRange(start, step, stop)
 # for T<:Union{Float16,Float32,Float64} see twiceprecision.jl
 _colon(::Ordered, ::ArithmeticRounds, start::T, step, stop::T) where {T} =
-    StepRangeLen(start, step, floor(Integer, (stop-start)/step)+1)
+    StepRangeLen(start, step, convert(Integer, fld(stop - start, step)) + 1)
 _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
-    StepRangeLen(start, step, floor(Integer, (stop-start)/step)+1)
+    StepRangeLen(start, step, convert(Integer, fld(stop - start, step)) + 1)
 
 """
     (:)(start, [step], stop)
@@ -1243,19 +1243,17 @@ end
 
 # _findin (the index of intersection)
 function _findin(r::AbstractRange{<:Integer}, span::AbstractUnitRange{<:Integer})
-    local ifirst
-    local ilast
     fspan = first(span)
     lspan = last(span)
     fr = first(r)
     lr = last(r)
     sr = step(r)
     if sr > 0
-        ifirst = fr >= fspan ? 1 : ceil(Integer,(fspan-fr)/sr)+1
-        ilast = lr <= lspan ? length(r) : length(r) - ceil(Integer,(lr-lspan)/sr)
+        ifirst = fr >= fspan ? 1 : cld(fspan-fr, sr)+1
+        ilast = lr <= lspan ? length(r) : length(r) - cld(lr-lspan, sr)
     elseif sr < 0
-        ifirst = fr <= lspan ? 1 : ceil(Integer,(lspan-fr)/sr)+1
-        ilast = lr >= fspan ? length(r) : length(r) - ceil(Integer,(lr-fspan)/sr)
+        ifirst = fr <= lspan ? 1 : cld(lspan-fr, sr)+1
+        ilast = lr >= fspan ? length(r) : length(r) - cld(lr-fspan, sr)
     else
         ifirst = fr >= fspan ? 1 : length(r)+1
         ilast = fr <= lspan ? length(r) : 0

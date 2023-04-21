@@ -179,7 +179,7 @@ for (t1, t2) in ((:UnitUpperTriangular, :UpperTriangular),
                  (:UnitLowerTriangular, :LowerTriangular))
     @eval begin
         function (+)(UL::$t1, J::UniformScaling)
-            ULnew = copymutable_oftype(UL.data, Base._return_type(+, Tuple{eltype(UL), typeof(J)}))
+            ULnew = copymutable_oftype(UL.data, Base.promote_op(+, eltype(UL), typeof(J)))
             for i in axes(ULnew, 1)
                 ULnew[i,i] = one(ULnew[i,i]) + J
             end
@@ -193,7 +193,7 @@ end
 # However, to preserve type stability, we do not special-case a
 # UniformScaling{<:Complex} that happens to be real.
 function (+)(A::Hermitian, J::UniformScaling{<:Complex})
-    TS = Base._return_type(+, Tuple{eltype(A), typeof(J)})
+    TS = Base.promote_op(+, eltype(A), typeof(J))
     B = copytri!(copymutable_oftype(parent(A), TS), A.uplo, true)
     for i in diagind(B)
         B[i] = A[i] + J
@@ -202,7 +202,7 @@ function (+)(A::Hermitian, J::UniformScaling{<:Complex})
 end
 
 function (-)(J::UniformScaling{<:Complex}, A::Hermitian)
-    TS = Base._return_type(+, Tuple{eltype(A), typeof(J)})
+    TS = Base.promote_op(+, eltype(A), typeof(J))
     B = copytri!(copymutable_oftype(parent(A), TS), A.uplo, true)
     B .= .-B
     for i in diagind(B)
@@ -213,7 +213,7 @@ end
 
 function (+)(A::AbstractMatrix, J::UniformScaling)
     checksquare(A)
-    B = copymutable_oftype(A, Base._return_type(+, Tuple{eltype(A), typeof(J)}))
+    B = copymutable_oftype(A, Base.promote_op(+, eltype(A), typeof(J)))
     for i in intersect(axes(A,1), axes(A,2))
         @inbounds B[i,i] += J
     end
@@ -222,7 +222,7 @@ end
 
 function (-)(J::UniformScaling, A::AbstractMatrix)
     checksquare(A)
-    B = convert(AbstractMatrix{Base._return_type(+, Tuple{eltype(A), typeof(J)})}, -A)
+    B = convert(AbstractMatrix{Base.promote_op(+, eltype(A), typeof(J))}, -A)
     for i in intersect(axes(A,1), axes(A,2))
         @inbounds B[i,i] += J
     end
@@ -381,6 +381,22 @@ function copyto!(A::AbstractMatrix, J::UniformScaling)
     return A
 end
 
+function copyto!(A::Diagonal, J::UniformScaling)
+    A.diag .= J.λ
+    return A
+end
+function copyto!(A::Union{Bidiagonal, SymTridiagonal}, J::UniformScaling)
+    A.ev .= 0
+    A.dv .= J.λ
+    return A
+end
+function copyto!(A::Tridiagonal, J::UniformScaling)
+    A.dl .= 0
+    A.du .= 0
+    A.d .= J.λ
+    return A
+end
+
 function cond(J::UniformScaling{T}) where T
     onereal = inv(one(real(J.λ)))
     return J.λ ≠ zero(T) ? onereal : oftype(onereal, Inf)
@@ -403,10 +419,14 @@ promote_to_arrays(n,k, ::Type{T}, A, B, Cs...) where {T} =
     (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B), promote_to_arrays(n,k+2, T, Cs...)...)
 promote_to_array_type(A::Tuple{Vararg{Union{AbstractVecOrMat,UniformScaling,Number}}}) = Matrix
 
+_us2number(A) = A
+_us2number(J::UniformScaling) = J.λ
+
 for (f, _f, dim, name) in ((:hcat, :_hcat, 1, "rows"), (:vcat, :_vcat, 2, "cols"))
     @eval begin
         @inline $f(A::Union{AbstractVecOrMat,UniformScaling}...) = $_f(A...)
-        @inline $f(A::Union{AbstractVecOrMat,UniformScaling,Number}...) = $_f(A...)
+        # if there's a Number present, J::UniformScaling must be 1x1-dimensional
+        @inline $f(A::Union{AbstractVecOrMat,UniformScaling,Number}...) = $f(map(_us2number, A)...)
         function $_f(A::Union{AbstractVecOrMat,UniformScaling,Number}...; array_type = promote_to_array_type(A))
             n = -1
             for a in A
@@ -509,10 +529,6 @@ Array{T}(s::UniformScaling, m::Integer, n::Integer) where {T} = Matrix{T}(s, m, 
 Array(s::UniformScaling, m::Integer, n::Integer) = Matrix(s, m, n)
 Array(s::UniformScaling, dims::Dims{2}) = Matrix(s, dims)
 
-## Diagonal construction from UniformScaling
-Diagonal{T}(s::UniformScaling, m::Integer) where {T} = Diagonal{T}(fill(T(s.λ), m))
-Diagonal(s::UniformScaling, m::Integer) = Diagonal{eltype(s)}(s, m)
-
 dot(A::AbstractMatrix, J::UniformScaling) = dot(tr(A), J.λ)
 dot(J::UniformScaling, A::AbstractMatrix) = dot(J.λ, tr(A))
 
@@ -523,8 +539,3 @@ dot(x::AbstractVector, a::Union{Real,Complex}, y::AbstractVector) = a*dot(x, y)
 # muladd
 Base.muladd(A::UniformScaling, B::UniformScaling, z::UniformScaling) =
     UniformScaling(A.λ * B.λ + z.λ)
-Base.muladd(A::Union{Diagonal, UniformScaling}, B::Union{Diagonal, UniformScaling}, z::Union{Diagonal, UniformScaling}) =
-    Diagonal(_diag_or_value(A) .* _diag_or_value(B) .+ _diag_or_value(z))
-
-_diag_or_value(A::Diagonal) = A.diag
-_diag_or_value(A::UniformScaling) = A.λ

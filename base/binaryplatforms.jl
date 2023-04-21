@@ -741,10 +741,10 @@ function Base.parse(::Type{Platform}, triplet::String; validate_strict::Bool = f
         end
         os_version = nothing
         if os == "macos"
-            os_version = extract_os_version("macos", r".*darwin([\d\.]+)")
+            os_version = extract_os_version("macos", r".*darwin([\d\.]+)"sa)
         end
         if os == "freebsd"
-            os_version = extract_os_version("freebsd", r".*freebsd([\d.]+)")
+            os_version = extract_os_version("freebsd", r".*freebsd([\d.]+)"sa)
         end
         tags["os_version"] = os_version
 
@@ -798,13 +798,13 @@ function parse_dl_name_version(path::String, os::String)
     local dlregex
     if os == "windows"
         # On Windows, libraries look like `libnettle-6.dll`
-        dlregex = r"^(.*?)(?:-((?:[\.\d]+)*))?\.dll$"
+        dlregex = r"^(.*?)(?:-((?:[\.\d]+)*))?\.dll$"sa
     elseif os == "macos"
         # On OSX, libraries look like `libnettle.6.3.dylib`
-        dlregex = r"^(.*?)((?:\.[\d]+)*)\.dylib$"
+        dlregex = r"^(.*?)((?:\.[\d]+)*)\.dylib$"sa
     else
         # On Linux and FreeBSD, libraries look like `libnettle.so.6.3.0`
-        dlregex = r"^(.*?)\.so((?:\.[\d]+)*)$"
+        dlregex = r"^(.*?)\.so((?:\.[\d]+)*)$"sa
     end
 
     m = match(dlregex, basename(path))
@@ -904,7 +904,7 @@ function detect_cxxstring_abi()
     end
 
     function open_libllvm(f::Function)
-        for lib_name in ("libLLVM-14jl", "libLLVM", "LLVM", "libLLVMSupport")
+        for lib_name in (Base.libllvm_name, "libLLVM", "LLVM", "libLLVMSupport")
             hdl = Libdl.dlopen_e(lib_name)
             if hdl != C_NULL
                 try
@@ -1067,12 +1067,20 @@ function select_platform(download_info::Dict, platform::AbstractPlatform = HostP
         return nothing
     end
 
-    # At this point, we may have multiple possibilities.  E.g. if, in the future,
-    # Julia can be built without a direct dependency on libgfortran, we may match
-    # multiple tarballs that vary only within their libgfortran ABI.  To narrow it
-    # down, we just sort by triplet, then pick the last one.  This has the effect
-    # of generally choosing the latest release (e.g. a `libgfortran5` tarball
-    # rather than a `libgfortran3` tarball)
+    # At this point, we may have multiple possibilities.  We now engage a multi-
+    # stage selection algorithm, where we first choose simpler matches over more
+    # complex matches.  We define a simpler match as one that has fewer tags
+    # overall.  As these candidate matches have already been filtered to match
+    # the given platform, the only other tags that exist are ones that are in
+    # addition to the tags declared by the platform. Hence, selecting the
+    # minimum in number of tags is equivalent to selecting the closest match.
+    min_tag_count = minimum(length(tags(p)) for p in ps)
+    filter!(p -> length(tags(p)) == min_tag_count, ps)
+
+    # Now we _still_ may continue to have multiple matches, so we now simply sort
+    # the candidate matches by their triplets and take the last one, so as to
+    # generally choose the latest release (e.g. a `libgfortran5` tarball over a
+    # `libgfortran3` tarball).
     p = last(sort(ps, by = p -> triplet(p)))
     return download_info[p]
 end

@@ -5,6 +5,7 @@
 # Stateful string
 mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     data::T # T should support: getindex, setindex!, length, copyto!, and resize!
+    reinit::Bool # if true, data needs to be re-allocated (after take!)
     readable::Bool
     writable::Bool
     seekable::Bool # if not seekable, implementation is free to destroy (compact) past read data
@@ -17,7 +18,7 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     function GenericIOBuffer{T}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
                                 maxsize::Integer) where T<:AbstractVector{UInt8}
         require_one_based_indexing(data)
-        new(data,readable,writable,seekable,append,length(data),maxsize,1,-1)
+        new(data,false,readable,writable,seekable,append,length(data),maxsize,1,-1)
     end
 end
 const IOBuffer = GenericIOBuffer{Vector{UInt8}}
@@ -137,8 +138,12 @@ PipeBuffer(data::Vector{UInt8}=UInt8[]; maxsize::Int = typemax(Int)) =
     GenericIOBuffer(data,true,true,false,true,maxsize)
 PipeBuffer(maxsize::Integer) = (x = PipeBuffer(StringVector(maxsize), maxsize = maxsize); x.size=0; x)
 
+_similar_data(b::GenericIOBuffer, len::Int) = similar(b.data, len)
+_similar_data(b::IOBuffer, len::Int) = StringVector(len)
+
 function copy(b::GenericIOBuffer)
-    ret = typeof(b)(b.writable ? copy(b.data) : b.data,
+    ret = typeof(b)(b.reinit ? _similar_data(b, 0) : b.writable ?
+                    copyto!(_similar_data(b, length(b.data)), b.data) : b.data,
                     b.readable, b.writable, b.seekable, b.append, b.maxsize)
     ret.size = b.size
     ret.ptr  = b.ptr
@@ -270,7 +275,10 @@ function truncate(io::GenericIOBuffer, n::Integer)
     io.seekable || throw(ArgumentError("truncate failed, IOBuffer is not seekable"))
     n < 0 && throw(ArgumentError("truncate failed, n bytes must be ≥ 0, got $n"))
     n > io.maxsize && throw(ArgumentError("truncate failed, $(n) bytes is exceeds IOBuffer maxsize $(io.maxsize)"))
-    if n > length(io.data)
+    if io.reinit
+        io.data = _similar_data(io, n)
+        io.reinit = false
+    elseif n > length(io.data)
         resize!(io.data, n)
     end
     io.data[io.size+1:n] .= 0
@@ -325,9 +333,14 @@ end
         ensureroom_slowpath(io, nshort)
     end
     n = min((nshort % Int) + (io.append ? io.size : io.ptr-1), io.maxsize)
-    l = length(io.data)
-    if n > l
-        _growend!(io.data, (n - l) % UInt)
+    if io.reinit
+        io.data = _similar_data(io, n)
+        io.reinit = false
+    else
+        l = length(io.data)
+        if n > l
+            _growend!(io.data, (n - l) % UInt)
+        end
     end
     return io
 end
@@ -390,18 +403,26 @@ end
 function take!(io::IOBuffer)
     ismarked(io) && unmark(io)
     if io.seekable
-        data = io.data
         if io.writable
-            maxsize = (io.maxsize == typemax(Int) ? 0 : min(length(io.data),io.maxsize))
-            io.data = StringVector(maxsize)
+            if io.reinit
+                data = StringVector(0)
+            else
+                data = resize!(io.data, io.size)
+                io.reinit = true
+            end
         else
-            data = copy(data)
+            data = copyto!(StringVector(io.size), 1, io.data, 1, io.size)
         end
-        resize!(data,io.size)
     else
         nbytes = bytesavailable(io)
-        a = StringVector(nbytes)
-        data = read!(io, a)
+        if io.writable
+            data = io.data
+            io.reinit = true
+            _deletebeg!(data, io.ptr-1)
+            resize!(data, nbytes)
+        else
+            data = read!(io, StringVector(nbytes))
+        end
     end
     if io.writable
         io.ptr = 1
@@ -409,6 +430,19 @@ function take!(io::IOBuffer)
     end
     return data
 end
+
+"""
+    _unsafe_take!(io::IOBuffer)
+
+This simply returns the raw resized `io.data`, with no checks to be
+sure that `io` is readable etcetera, and leaves `io` in an inconsistent
+state.  This should only be used internally for performance-critical
+`String` routines that immediately discard `io` afterwards, and it
+*assumes* that `io` is writable and seekable.
+
+It saves no allocations compared to `take!`, it just omits some checks.
+"""
+_unsafe_take!(io::IOBuffer) = resize!(io.data, io.size)
 
 function write(to::IO, from::GenericIOBuffer)
     if to === from

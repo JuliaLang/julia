@@ -3,7 +3,6 @@
 // Pointers that are exposed through the public libjulia
 #define JL_EXPORTED_DATA_POINTERS(XX) \
     XX(jl_abstractarray_type) \
-    XX(jl_abstractslot_type) \
     XX(jl_abstractstring_type) \
     XX(jl_an_empty_string) \
     XX(jl_an_empty_vec_any) \
@@ -104,7 +103,6 @@
     XX(jl_true) \
     XX(jl_tuple_typename) \
     XX(jl_tvar_type) \
-    XX(jl_typedslot_type) \
     XX(jl_typeerror_type) \
     XX(jl_typemap_entry_type) \
     XX(jl_typemap_level_type) \
@@ -128,8 +126,6 @@
     XX(jl_voidpointer_type) \
     XX(jl_void_type) \
     XX(jl_weakref_type) \
-    XX(jl_build_ids) \
-    XX(jl_linkage_blobs) \
 
 // Data symbols that are defined inside the public libjulia
 #define JL_EXPORTED_DATA_SYMBOLS(XX) \

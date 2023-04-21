@@ -258,9 +258,17 @@ UnionAll(v::TypeVar, @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any
 
 const Vararg = ccall(:jl_toplevel_eval_in, Any, (Any, Any), Core, _expr(:new, TypeofVararg))
 
-# let the compiler assume that calling Union{} as a constructor does not need
-# to be considered ever (which comes up often as Type{<:T})
-Union{}(a...) = throw(MethodError(Union{}, a))
+# dispatch token indicating a kwarg (keyword sorter) call
+function kwcall end
+# deprecated internal functions:
+kwfunc(@nospecialize(f)) = kwcall
+kwftype(@nospecialize(t)) = typeof(kwcall)
+
+# Let the compiler assume that calling Union{} as a constructor does not need
+# to be considered ever (which comes up often as Type{<:T} inference, and
+# occasionally in user code from eltype).
+Union{}(a...) = throw(ArgumentError("cannot construct a value of type Union{} for return result"))
+kwcall(kwargs, ::Type{Union{}}, a...) = Union{}(a...)
 
 Expr(@nospecialize args...) = _expr(args...)
 
@@ -369,12 +377,6 @@ include(m::Module, fname::String) = ccall(:jl_load_, Any, (Any, Any), m, fname)
 
 eval(m::Module, @nospecialize(e)) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
 
-# dispatch token indicating a kwarg (keyword sorter) call
-function kwcall end
-# deprecated internal functions:
-kwfunc(@nospecialize(f)) = kwcall
-kwftype(@nospecialize(t)) = typeof(kwcall)
-
 mutable struct Box
     contents::Any
     Box(@nospecialize(x)) = new(x)
@@ -415,7 +417,6 @@ eval(Core, quote
     LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int32, inlined_at::Int32) =
         $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))
     SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))
-    TypedSlot(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))
     PhiNode(edges::Array{Int32, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))
     PiNode(@nospecialize(val), @nospecialize(typ)) = $(Expr(:new, :PiNode, :val, :typ))
     PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))
@@ -521,17 +522,18 @@ Symbol(s::Symbol) = s
 
 # module providing the IR object model
 module IR
+
 export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
+    NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
-    Const, PartialStruct
+    Const, PartialStruct, InterConditional
 
 import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
+    NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
-    Const, PartialStruct
+    Const, PartialStruct, InterConditional
 
-end
+end # module IR
 
 # docsystem basics
 const unescape = Symbol("hygienic-scope")
@@ -590,28 +592,25 @@ println(@nospecialize a...) = println(stdout, a...)
 
 struct GeneratedFunctionStub
     gen
-    argnames::Array{Any,1}
-    spnames::Union{Nothing, Array{Any,1}}
-    line::Int
-    file::Symbol
-    expand_early::Bool
+    argnames::SimpleVector
+    spnames::SimpleVector
 end
 
-# invoke and wrap the results of @generated
-function (g::GeneratedFunctionStub)(@nospecialize args...)
+# invoke and wrap the results of @generated expression
+function (g::GeneratedFunctionStub)(world::UInt, source::LineNumberNode, @nospecialize args...)
+    # args is (spvals..., argtypes...)
     body = g.gen(args...)
-    if body isa CodeInfo
-        return body
-    end
-    lam = Expr(:lambda, g.argnames,
-               Expr(Symbol("scope-block"),
+    file = source.file
+    file isa Symbol || (file = :none)
+    lam = Expr(:lambda, Expr(:argnames, g.argnames...).args,
+               Expr(:var"scope-block",
                     Expr(:block,
-                         LineNumberNode(g.line, g.file),
-                         Expr(:meta, :push_loc, g.file, Symbol("@generated body")),
+                         source,
+                         Expr(:meta, :push_loc, file, :var"@generated body"),
                          Expr(:return, body),
                          Expr(:meta, :pop_loc))))
     spnames = g.spnames
-    if spnames === nothing
+    if spnames === svec()
         return lam
     else
         return Expr(Symbol("with-static-parameters"), lam, spnames...)
@@ -848,6 +847,11 @@ struct Pair{A, B}
         @inline
         return new(a::A, b::B)
     end
+end
+
+function _hasmethod(@nospecialize(tt)) # this function has a special tfunc
+    world = ccall(:jl_get_tls_world_age, UInt, ())
+    return Intrinsics.not_int(ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world) === nothing)
 end
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)

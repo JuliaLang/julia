@@ -326,7 +326,7 @@ function already_inserted(compact::IncrementalCompact, old::OldSSAValue)
     end
     id -= length(compact.ir.stmts)
     if id < length(compact.ir.new_nodes)
-        error("")
+        return already_inserted(compact, OldSSAValue(compact.ir.new_nodes.info[id].pos))
     end
     id -= length(compact.ir.new_nodes)
     @assert id <= length(compact.pending_nodes)
@@ -603,21 +603,6 @@ function is_old(compact, @nospecialize(old_node_ssa))
         !is_pending(compact, old_node_ssa) &&
         !already_inserted(compact, old_node_ssa)
 end
-
-mutable struct LazyGenericDomtree{IsPostDom}
-    ir::IRCode
-    domtree::GenericDomTree{IsPostDom}
-    LazyGenericDomtree{IsPostDom}(ir::IRCode) where {IsPostDom} = new{IsPostDom}(ir)
-end
-function get!(x::LazyGenericDomtree{IsPostDom}) where {IsPostDom}
-    isdefined(x, :domtree) && return x.domtree
-    return @timeit "domtree 2" x.domtree = IsPostDom ?
-        construct_postdomtree(x.ir.cfg.blocks) :
-        construct_domtree(x.ir.cfg.blocks)
-end
-
-const LazyDomtree = LazyGenericDomtree{false}
-const LazyPostDomtree = LazyGenericDomtree{true}
 
 function perform_lifting!(compact::IncrementalCompact,
         visited_phinodes::Vector{AnySSAValue}, @nospecialize(cache_key),
@@ -1046,6 +1031,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         end
 
         compact[idx] = val === nothing ? nothing : val.val
+        compact[SSAValue(idx)][:flag] |= IR_FLAG_REFINED
     end
 
     non_dce_finish!(compact)
@@ -1083,7 +1069,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
         end
         src = @atomic :monotonic code.inferred
     else
-        src = code
+        src = nothing
     end
 
     src = inlining_policy(inlining.interp, src, info, IR_FLAG_NULL, mi, Any[])
@@ -1166,12 +1152,10 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
     function note_block_use!(usebb::Int, useidx::Int)
         new_bb_insert_block = nearest_common_dominator(get!(lazypostdomtree),
             bb_insert_block, usebb)
-        if new_bb_insert_block == bb_insert_block == usebb
-            if bb_insert_idx !== nothing
-                bb_insert_idx = max(bb_insert_idx::Int, useidx)
-            else
-                bb_insert_idx = useidx
-            end
+        if new_bb_insert_block == bb_insert_block && bb_insert_idx !== nothing
+            bb_insert_idx = max(bb_insert_idx::Int, useidx)
+        elseif new_bb_insert_block == usebb
+            bb_insert_idx = useidx
         else
             bb_insert_idx = nothing
         end
@@ -1203,7 +1187,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
     # Check #3
     dominates(domtree, finalizer_bb, bb_insert_block) || return nothing
 
-    if !inlining.params.assume_fatal_throw
+    if !OptimizationParams(inlining.interp).assume_fatal_throw
         # Collect all reachable blocks between the finalizer registration and the
         # insertion point
         blocks = finalizer_bb == bb_insert_block ? Int[finalizer_bb] :
@@ -1394,6 +1378,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                     if use.kind === :getfield
                         ir[SSAValue(use.idx)][:inst] = compute_value_for_use(ir, domtree, allblocks,
                             du, phinodes, fidx, use.idx)
+                        ir[SSAValue(use.idx)][:flag] |= IR_FLAG_REFINED
                     elseif use.kind === :isdefined
                         continue # already rewritten if possible
                     elseif use.kind === :nopreserve
@@ -1708,8 +1693,8 @@ function type_lift_pass!(ir::IRCode)
             # a phi node (or an UpsilonNode() argument to a PhiC node), so lift
             # all these nodes that have maybe undef values
             val = stmt.args[(stmt.head === :isdefined) ? 1 : 2]
-            if stmt.head === :isdefined && (val isa Slot || val isa GlobalRef ||
-                    isexpr(val, :static_parameter) || val isa Argument || val isa Symbol)
+            if stmt.head === :isdefined && (val isa GlobalRef || isexpr(val, :static_parameter) ||
+                                            val isa Argument || val isa Symbol)
                 # this is a legal node, so assume it was not introduced by
                 # slot2ssa (at worst, we might leave in a runtime check that
                 # shouldn't have been there)
@@ -2185,14 +2170,10 @@ function cfg_simplify!(ir::IRCode)
         end
     end
 
-    compact = IncrementalCompact(ir, true)
     # Run instruction compaction to produce the result,
     # but we're messing with the CFG
     # so we don't want compaction to do so independently
-    compact.fold_constant_branches = false
-    compact.bb_rename_succ = bb_rename_succ
-    compact.bb_rename_pred = bb_rename_pred
-    compact.result_bbs = cresult_bbs
+    compact = IncrementalCompact(ir, CFGTransformState(true, false, cresult_bbs, bb_rename_pred, bb_rename_succ))
     result_idx = 1
     for (idx, orig_bb) in enumerate(result_bbs)
         ms = orig_bb

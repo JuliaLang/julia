@@ -30,7 +30,7 @@ to implement indexing (and indexed assignment) with a single `Int` index;
 all other indexing expressions — including multidimensional accesses — will
 be recomputed to the linear index.  For example, if `A` were a `2×3` custom
 matrix with linear indexing, and we referenced `A[1, 3]`, this would be
-recomputed to the equivalent linear index and call `A[5]` since `2*1 + 3 = 5`.
+recomputed to the equivalent linear index and call `A[5]` since `1 + 2*(3 - 1) = 5`.
 
 See also [`IndexCartesian`](@ref).
 """
@@ -53,7 +53,7 @@ to implement indexing (and indexed assignment) with exactly `N` `Int` indices;
 all other indexing expressions — including linear indexing — will
 be recomputed to the equivalent Cartesian location.  For example, if `A` were a `2×3` custom
 matrix with cartesian indexing, and we referenced `A[5]`, this would be
-recomputed to the equivalent Cartesian index and call `A[1, 3]` since `5 = 2*1 + 3`.
+recomputed to the equivalent Cartesian index and call `A[1, 3]` since `5 = 1 + 2*(3 - 1)`.
 
 It is significantly more expensive to compute Cartesian indices from a linear index than it is
 to go the other way.  The former operation requires division — a very costly operation — whereas
@@ -92,7 +92,7 @@ particular, [`eachindex`](@ref) creates an iterator whose type depends
 on the setting of this trait.
 """
 IndexStyle(A::AbstractArray) = IndexStyle(typeof(A))
-IndexStyle(::Type{Union{}}) = IndexLinear()
+IndexStyle(::Type{Union{}}, slurp...) = IndexLinear()
 IndexStyle(::Type{<:AbstractArray}) = IndexCartesian()
 IndexStyle(::Type{<:Array}) = IndexLinear()
 IndexStyle(::Type{<:AbstractRange}) = IndexLinear()

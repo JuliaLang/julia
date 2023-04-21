@@ -371,8 +371,8 @@ private:
     SmallVector<int, 1> GetPHIRefinements(PHINode *phi, State &S);
     void FixUpRefinements(ArrayRef<int> PHINumbers, State &S);
     void RefineLiveSet(LargeSparseBitVector &LS, State &S, const std::vector<int> &CalleeRoots);
-    Value *EmitTagPtr(IRBuilder<> &builder, Type *T, Value *V);
-    Value *EmitLoadTag(IRBuilder<> &builder, Value *V);
+    Value *EmitTagPtr(IRBuilder<> &builder, Type *T, Type *T_size, Value *V);
+    Value *EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *V);
 };
 
 static unsigned getValueAddrSpace(Value *V) {
@@ -2207,20 +2207,19 @@ std::vector<int> LateLowerGCFrame::ColorRoots(const State &S) {
 }
 
 // Size of T is assumed to be `sizeof(void*)`
-Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Value *V)
+Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Type *T_size, Value *V)
 {
-    auto T_size = getSizeTy(T->getContext());
     assert(T == T_size || isa<PointerType>(T));
     auto TV = cast<PointerType>(V->getType());
     auto cast = builder.CreateBitCast(V, T->getPointerTo(TV->getAddressSpace()));
     return builder.CreateInBoundsGEP(T, cast, ConstantInt::get(T_size, -1));
 }
 
-Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Value *V)
+Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *V)
 {
-    auto T_size = getSizeTy(builder.getContext());
-    auto addr = EmitTagPtr(builder, T_size, V);
-    LoadInst *load = builder.CreateAlignedLoad(T_size, addr, Align(sizeof(size_t)));
+    auto addr = EmitTagPtr(builder, T_size, T_size, V);
+    auto &M = *builder.GetInsertBlock()->getModule();
+    LoadInst *load = builder.CreateAlignedLoad(T_size, addr, M.getDataLayout().getPointerABIAlignment(0));
     load->setOrdering(AtomicOrdering::Unordered);
     load->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
     MDBuilder MDB(load->getContext());
@@ -2278,7 +2277,7 @@ MDNode *createMutableTBAAAccessTag(MDNode *Tag) {
 
 bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
     auto T_int32 = Type::getInt32Ty(F.getContext());
-    auto T_size = getSizeTy(F.getContext());
+    auto T_size = F.getParent()->getDataLayout().getIntPtrType(F.getContext());
     bool ChangesMade = false;
     // We create one alloca for all the jlcall frames that haven't been processed
     // yet. LLVM would merge them anyway later, so might as well save it a bit
@@ -2346,7 +2345,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 // Create a call to the `julia.gc_alloc_bytes` intrinsic, which is like
                 // `julia.gc_alloc_obj` except it doesn't set the tag.
                 auto allocBytesIntrinsic = getOrDeclare(jl_intrinsics::GCAllocBytes);
-                auto ptlsLoad = get_current_ptls_from_task(builder, CI->getArgOperand(0), tbaa_gcframe);
+                auto ptlsLoad = get_current_ptls_from_task(builder, T_size, CI->getArgOperand(0), tbaa_gcframe);
                 auto ptls = builder.CreateBitCast(ptlsLoad, Type::getInt8PtrTy(builder.getContext()));
                 auto newI = builder.CreateCall(
                     allocBytesIntrinsic,
@@ -2398,8 +2397,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     }
                 }
                 // Set the tag.
+                auto &M = *builder.GetInsertBlock()->getModule();
                 StoreInst *store = builder.CreateAlignedStore(
-                    tag, EmitTagPtr(builder, tag_type, newI), Align(sizeof(size_t)));
+                    tag, EmitTagPtr(builder, tag_type, T_size, newI), M.getDataLayout().getPointerABIAlignment(0));
                 store->setOrdering(AtomicOrdering::Unordered);
                 store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
 
@@ -2413,7 +2413,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 assert(CI->arg_size() == 1);
                 IRBuilder<> builder(CI);
                 builder.SetCurrentDebugLocation(CI->getDebugLoc());
-                auto tag = EmitLoadTag(builder, CI->getArgOperand(0));
+                auto tag = EmitLoadTag(builder, T_size, CI->getArgOperand(0));
                 auto masked = builder.CreateAnd(tag, ConstantInt::get(T_size, ~(uintptr_t)15));
                 auto typ = builder.CreateAddrSpaceCast(builder.CreateIntToPtr(masked, JuliaType::get_pjlvalue_ty(masked->getContext())),
                                                        T_prjlvalue);
@@ -2512,14 +2512,14 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
         }
         IRBuilder<> builder(CI);
         builder.SetCurrentDebugLocation(CI->getDebugLoc());
-        auto parBits = builder.CreateAnd(EmitLoadTag(builder, parent), 3);
+        auto parBits = builder.CreateAnd(EmitLoadTag(builder, T_size, parent), 3);
         auto parOldMarked = builder.CreateICmpEQ(parBits, ConstantInt::get(T_size, 3));
         auto mayTrigTerm = SplitBlockAndInsertIfThen(parOldMarked, CI, false);
         builder.SetInsertPoint(mayTrigTerm);
         Value *anyChldNotMarked = NULL;
         for (unsigned i = 1; i < CI->arg_size(); i++) {
             Value *child = CI->getArgOperand(i);
-            Value *chldBit = builder.CreateAnd(EmitLoadTag(builder, child), 1);
+            Value *chldBit = builder.CreateAnd(EmitLoadTag(builder, T_size, child), 1);
             Value *chldNotMarked = builder.CreateICmpEQ(chldBit, ConstantInt::get(T_size, 0));
             anyChldNotMarked = anyChldNotMarked ? builder.CreateOr(anyChldNotMarked, chldNotMarked) : chldNotMarked;
         }
