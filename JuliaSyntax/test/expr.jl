@@ -241,16 +241,36 @@
             Expr(:tuple, Expr(:parameters, Expr(:kw, :a, 1)))
     end
 
-    @testset "dotcall" begin
+    @testset "dotcall / dotted operators" begin
         @test parsestmt(Expr, "f.(x,y)") == Expr(:., :f, Expr(:tuple, :x, :y))
         @test parsestmt(Expr, "f.(x=1)") == Expr(:., :f, Expr(:tuple, Expr(:kw, :x, 1)))
         @test parsestmt(Expr, "x .+ y")  == Expr(:call, Symbol(".+"), :x, :y)
         @test parsestmt(Expr, "(x=1) .+ y") == Expr(:call, Symbol(".+"), Expr(:(=), :x, 1), :y)
         @test parsestmt(Expr, "a .< b .< c") == Expr(:comparison, :a, Symbol(".<"),
                                                  :b, Symbol(".<"), :c)
-        @test parsestmt(Expr, ".*(x)")  == Expr(:call, Symbol(".*"), :x)
-        @test parsestmt(Expr, ".+(x)")  == Expr(:call, Symbol(".+"), :x)
-        @test parsestmt(Expr, ".+x")    == Expr(:call, Symbol(".+"), :x)
+        @test parsestmt(Expr, ".*(x)")    == Expr(:call, Symbol(".*"), :x)
+        @test parsestmt(Expr, ".+(x)")    == Expr(:call, Symbol(".+"), :x)
+        @test parsestmt(Expr, ".+x")      == Expr(:call, Symbol(".+"), :x)
+        @test parsestmt(Expr, "(.+)(x)")  == Expr(:call, Expr(:., :+), :x)
+        @test parsestmt(Expr, "(.+).(x)") == Expr(:., Expr(:., :+), Expr(:tuple, :x))
+
+        @test parsestmt(Expr, ".+")    == Expr(:., :+)
+        @test parsestmt(Expr, ":.+")   == QuoteNode(Symbol(".+"))
+        @test parsestmt(Expr, ":(.+)") == Expr(:quote, (Expr(:., :+)))
+        @test parsestmt(Expr, "quote .+ end")   == Expr(:quote,
+                                                        Expr(:block,
+                                                             LineNumberNode(1),
+                                                             Expr(:., :+)))
+        @test parsestmt(Expr, ".+{x}") == Expr(:curly, Symbol(".+"), :x)
+
+        # Quoted syntactic ops act different when in parens
+        @test parsestmt(Expr, ":.=")   == QuoteNode(Symbol(".="))
+        @test parsestmt(Expr, ":(.=)") == QuoteNode(Symbol(".="))
+
+        # A few other cases of bare dotted ops
+        @test parsestmt(Expr, "f(.+)")   == Expr(:call, :f, Expr(:., :+))
+        @test parsestmt(Expr, "(a, .+)") == Expr(:tuple, :a, Expr(:., :+))
+        @test parsestmt(Expr, "A.:.+")   == Expr(:., :A, QuoteNode(Symbol(".+")))
     end
 
     @testset "where" begin
@@ -361,6 +381,7 @@
     end
 
     @testset "import" begin
+        @test parsestmt(Expr, "import A") == Expr(:import, Expr(:., :A))
         @test parsestmt(Expr, "import A.(:b).:c: x.:z", ignore_warnings=true) ==
             Expr(:import, Expr(Symbol(":"), Expr(:., :A, :b, :c), Expr(:., :x, :z)))
         # Stupid parens and quotes in import paths

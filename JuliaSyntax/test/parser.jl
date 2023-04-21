@@ -222,10 +222,10 @@ tests = [
         # Call with type parameters or non-unary prefix call
         "+{T}(x::T)"  =>  "(call (curly + T) (::-i x T))"
         "*(x)"        =>  "(call * x)"
-        ".*(x)"       =>  "(call .* x)"
+        ".*(x)"       =>  "(call (. *) x)"
         # Prefix function calls for operators which are both binary and unary
         "+(a,b)"   =>  "(call + a b)"
-        ".+(a,)"   =>  "(call .+ a)"
+        ".+(a,)"   =>  "(call (. +) a)"
         "(.+)(a)"  =>  "(call (parens (. +)) a)"
         "+(a=1,)"  =>  "(call + (= a 1))" => Expr(:call, :+, Expr(:kw, :a, 1))
         "+(a...)"  =>  "(call + (... a))"
@@ -304,7 +304,7 @@ tests = [
         # parse_call
         "f(x)"    =>  "(call f x)"
         "\$f(x)"  =>  "(call (\$ f) x)"
-        ".&(x,y)" =>  "(call .& x y)"
+        ".&(x,y)" =>  "(call (. &) x y)"
         # parse_call_chain
         "f(a).g(b)" => "(call (. (call f a) (quote g)) b)"
         "\$A.@x"    =>  "(macrocall (. (\$ A) (quote @x)))"
@@ -394,6 +394,7 @@ tests = [
         "f. (x)"    =>  "(dotcall f (error-t) x)"
         # Other dotted syntax
         "A.:+"      =>  "(. A (quote-: +))"
+        "A.:.+"     =>  "(. A (quote-: (. +)))"
         "A.: +"     =>  "(. A (quote-: (error-t) +))"
         "f.\$x"     =>  "(. f (inert (\$ x)))"
         "f.\$(x+y)" =>  "(. f (inert (\$ (parens (call-i x + y)))))"
@@ -738,15 +739,17 @@ tests = [
         """var"x"end""" =>  "(var x (error-t))"
         """var"x"1"""   =>  "(var x (error-t))"
         """var"x"y"""   =>  "(var x (error-t))"
-        # Syntactic operators
+        # Standalone syntactic operators are errors
         "+="  =>  "(error +=)"
-        ".+="  =>  "(error .+=)"
+        "?"   =>  "(error ?)"
+        ".+=" =>  "(error (. +=))"
         # Normal operators
         "+"  =>  "+"
         "~"  =>  "~"
         # Quoted syntactic operators allowed
         ":+="  =>  "(quote-: +=)"
-        ":.="  =>  "(quote-: .=)"
+        ":.="  =>  "(quote-: (. =))"
+        ":.&&" =>  "(quote-: (. &&))"
         # Special symbols quoted
         ":end" => "(quote-: end)"
         ":(end)" => "(quote-: (parens (error-t)))"
