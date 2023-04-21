@@ -3485,8 +3485,8 @@ void jl_init_thread_heap(jl_ptls_t ptls)
 void jl_gc_init(void)
 {
 
-    JL_MUTEX_INIT(&heapsnapshot_lock);
-    JL_MUTEX_INIT(&finalizers_lock);
+    JL_MUTEX_INIT(&heapsnapshot_lock, "heapsnapshot_lock");
+    JL_MUTEX_INIT(&finalizers_lock, "finalizers_lock");
     uv_mutex_init(&gc_cache_lock);
     uv_mutex_init(&gc_perm_lock);
 

@@ -85,7 +85,7 @@ static uint64_t jl_worklist_key(jl_array_t *worklist) JL_NOTSAFEPOINT
 
 static jl_array_t *newly_inferred JL_GLOBALLY_ROOTED /*FIXME*/;
 // Mutex for newly_inferred
-static jl_mutex_t newly_inferred_mutex;
+jl_mutex_t newly_inferred_mutex;
 
 // Register array of newly-inferred MethodInstances
 // This gets called as the first step of Base.include_package_for_output

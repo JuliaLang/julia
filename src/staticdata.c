@@ -2127,7 +2127,7 @@ static void jl_strip_all_codeinfos(void)
 // --- entry points ---
 
 jl_array_t *jl_global_roots_table;
-static jl_mutex_t global_roots_lock;
+jl_mutex_t global_roots_lock;
 
 JL_DLLEXPORT int jl_is_globally_rooted(jl_value_t *val JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
 {
