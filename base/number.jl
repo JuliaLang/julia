@@ -307,7 +307,6 @@ julia> zero(rand(2,2))
 """
 zero(x::Number) = oftype(x,0)
 zero(::Type{T}) where {T<:Number} = convert(T,0)
-zero(::Type{Union{}}, slurp...) = Union{}(0)
 
 """
     one(x)
@@ -346,7 +345,6 @@ julia> import Dates; one(Dates.Day(1))
 """
 one(::Type{T}) where {T<:Number} = convert(T,1)
 one(x::T) where {T<:Number} = one(T)
-one(::Type{Union{}}, slurp...) = Union{}(1)
 # note that convert(T, 1) should throw an error if T is dimensionful,
 # so this fallback definition should be okay.
 
@@ -370,7 +368,6 @@ julia> import Dates; oneunit(Dates.Day)
 """
 oneunit(x::T) where {T} = T(one(x))
 oneunit(::Type{T}) where {T} = T(one(T))
-oneunit(::Type{Union{}}, slurp...) = Union{}(1)
 
 """
     big(T::Type)
@@ -391,4 +388,3 @@ Complex{BigInt}
 ```
 """
 big(::Type{T}) where {T<:Number} = typeof(big(zero(T)))
-big(::Type{Union{}}, slurp...) = Union{}(0)
