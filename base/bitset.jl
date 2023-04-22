@@ -38,8 +38,6 @@ end
 
 @inline intoffset(s::BitSet) = s.offset << 6
 
-eltype(::Type{BitSet}) = Int
-
 empty(s::BitSet, ::Type{Int}=Int) = BitSet()
 emptymutable(s::BitSet, ::Type{Int}=Int) = BitSet()
 
