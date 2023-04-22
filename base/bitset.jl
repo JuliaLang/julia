@@ -253,24 +253,6 @@ push!(s::BitSet, ns::Integer...) = (for n in ns; push!(s, n); end; s)
 
 @inline pop!(s::BitSet) = pop!(s, last(s))
 
-@inline function pop!(s::BitSet, n::Integer)
-    if n in s
-        delete!(s, n)
-        n
-    else
-        throw(KeyError(n))
-    end
-end
-
-@inline function pop!(s::BitSet, n::Integer, default)
-    if n in s
-        delete!(s, n)
-        n
-    else
-        default
-    end
-end
-
 @inline _is_convertible_Int(n) = typemin(Int) <= n <= typemax(Int)
 @inline delete!(s::BitSet, n::Int) = _setint!(s, n, false)
 @inline delete!(s::BitSet, n::Integer) = _is_convertible_Int(n) ? delete!(s, Int(n)) : s

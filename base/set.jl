@@ -101,8 +101,7 @@ function in!(x, s::Set)
 end
 
 push!(s::Set, x) = (s.dict[x] = nothing; s)
-pop!(s::Set, x) = (pop!(s.dict, x); x)
-pop!(s::Set, x, default) = (x in s ? pop!(s, x) : default)
+pop!(s::Set, x) = (pop!(s.dict, x); x) # Faster than the AbstractSet fallback
 
 function pop!(s::Set)
     isempty(s) && throw(ArgumentError("set must be non-empty"))

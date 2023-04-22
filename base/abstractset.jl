@@ -289,6 +289,11 @@ function symdiff!(s::AbstractSet, itr::AbstractSet)
     return s
 end
 
+## pop!
+
+pop!(s::AbstractSet, x)          = x in s ? (delete!(s, x); x) : throw(KeyError(x))
+pop!(s::AbstractSet, x, default) = x in s ? (delete!(s, x); x) : default
+
 ## non-strict subset comparison
 
 const ⊆ = issubset

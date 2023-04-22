@@ -19,8 +19,7 @@ isempty(s::IdSet) = isempty(s.dict)
 length(s::IdSet)  = length(s.dict)
 in(@nospecialize(x), s::IdSet) = haskey(s.dict, x)
 push!(s::IdSet, @nospecialize(x)) = (s.dict[x] = nothing; s)
-pop!(s::IdSet, @nospecialize(x)) = (pop!(s.dict, x); x)
-pop!(s::IdSet, @nospecialize(x), @nospecialize(default)) = (x in s ? pop!(s, x) : default)
+pop!(s::IdSet, @nospecialize(x)) = (pop!(s.dict, x); x) # Faster than the AbstractSet fallback
 delete!(s::IdSet, @nospecialize(x)) = (delete!(s.dict, x); s)
 
 sizehint!(s::IdSet, newsz) = (sizehint!(s.dict, newsz); s)
