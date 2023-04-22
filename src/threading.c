@@ -744,6 +744,7 @@ void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
         lock->count++;
         return;
     }
+    JL_TIMING(LOCK_SPIN, LOCK_SPIN);
     jl_profile_lock_start_wait(lock);
     while (1) {
         if (owner == NULL && jl_atomic_cmpswap(&lock->owner, &owner, self)) {

@@ -8435,7 +8435,7 @@ jl_llvm_functions_t jl_emit_code(
         jl_value_t *jlrettype,
         jl_codegen_params_t &params)
 {
-    JL_TIMING(CODEGEN, CODEGEN);
+    JL_TIMING(CODEGEN, CODEGEN_LLVM);
     jl_timing_show_func_sig((jl_value_t *)li->specTypes, JL_TIMING_CURRENT_BLOCK);
     // caller must hold codegen_lock
     jl_llvm_functions_t decls = {};
@@ -8478,7 +8478,7 @@ jl_llvm_functions_t jl_emit_codeinst(
         jl_code_info_t *src,
         jl_codegen_params_t &params)
 {
-    JL_TIMING(CODEGEN, CODEGEN);
+    JL_TIMING(CODEGEN, CODEGEN_Codeinst);
     jl_timing_show_method_instance(codeinst->def, JL_TIMING_CURRENT_BLOCK);
     JL_GC_PUSH1(&src);
     if (!src) {
@@ -8558,7 +8558,7 @@ void jl_compile_workqueue(
     Module &original,
     jl_codegen_params_t &params, CompilationPolicy policy)
 {
-    JL_TIMING(CODEGEN, CODEGEN);
+    JL_TIMING(CODEGEN, CODEGEN_Workqueue);
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
     while (!params.workqueue.empty()) {
