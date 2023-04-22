@@ -523,6 +523,144 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
     return tu;
 }
 
+static int simple_subtype2(jl_value_t *a, jl_value_t *b, int hasfree)
+{
+    int subab = 0, subba = 0;
+    if (jl_egal(a, b)) {
+        subab = subba = 1;
+    }
+    else if (a == jl_bottom_type || b == (jl_value_t*)jl_any_type) {
+        subab = 1;
+    }
+    else if (b == jl_bottom_type || a == (jl_value_t*)jl_any_type) {
+        subba = 1;
+    }
+    else if (hasfree) {
+        // subab = simple_subtype(a, b);
+        // subba = simple_subtype(b, a);
+    }
+    else if (jl_is_type_type(a) && jl_is_type_type(b) &&
+             jl_typeof(jl_tparam0(a)) != jl_typeof(jl_tparam0(b))) {
+        // issue #24521: don't merge Type{T} where typeof(T) varies
+    }
+    else if (jl_typeof(a) == jl_typeof(b) && jl_types_egal(a, b)) {
+        subab = subba = 1;
+    }
+    else {
+        subab = jl_subtype(a, b);
+        subba = jl_subtype(b, a);
+    }
+    return subab | (subba<<1);
+}
+
+int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity);
+
+static int simple_disjoint(jl_value_t *a, jl_value_t *b, int hasfree)
+{
+    if (jl_is_uniontype(b)) {
+        jl_value_t *b1 = ((jl_uniontype_t *)b)->a, *b2 = ((jl_uniontype_t *)b)->b;
+        JL_GC_PUSH2(&b1, &b2);
+        int res = simple_disjoint(a, b1, hasfree) && simple_disjoint(a, b2, hasfree);
+        JL_GC_POP();
+        return res;
+    }
+    if (!hasfree && !jl_has_free_typevars(b))
+        return jl_has_empty_intersection(a, b);
+    return obviously_disjoint(a, b, 0);
+}
+
+jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi)
+{
+    // Unlike `Union`, we don't unwrap `UnionAll` here to avoid possible widening.
+    size_t nta = count_union_components(&a, 1);
+    size_t ntb = count_union_components(&b, 1);
+    size_t nt = nta + ntb;
+    jl_value_t **temp;
+    JL_GC_PUSHARGS(temp, nt+1);
+    size_t count = 0;
+    flatten_type_union(&a, 1, temp, &count);
+    flatten_type_union(&b, 1, temp, &count);
+    assert(count == nt);
+    size_t i, j;
+    // first remove disjoint elements.
+    for (i = 0; i < nt; i++) {
+        if (simple_disjoint(temp[i], (i < nta ? b : a), jl_has_free_typevars(temp[i])))
+            temp[i] = NULL;
+    }
+    // then check subtyping.
+    // stemp[k] == -1 : ∃i temp[k] >:ₛ temp[i]
+    // stemp[k] == 1 : ∃i temp[k] == temp[i]
+    // stemp[k] == 2 : ∃i temp[k] <:ₛ temp[i]
+    int8_t *stemp = (int8_t *)alloca(count);
+    memset(stemp, 0, count);
+    for (i = 0; i < nta; i++) {
+        if (temp[i] == NULL) continue;
+        int hasfree = jl_has_free_typevars(temp[i]);
+        for (j = nta; j < nt; j++) {
+            if (temp[j] == NULL) continue;
+            int subs = simple_subtype2(temp[i], temp[j], hasfree || jl_has_free_typevars(temp[j]));
+            int subab = subs & 1, subba = subs >> 1;
+            if (subba && !subab) {
+                stemp[i] = -1;
+                if (stemp[j] >= 0) stemp[j] = 2;
+            }
+            else if (subab && !subba) {
+                stemp[j] = -1;
+                if (stemp[i] >= 0) stemp[i] = 2;
+            }
+            else if (subs) {
+                if (stemp[i] == 0) stemp[i] = 1;
+                if (stemp[j] == 0) stemp[j] = 1;
+            }
+        }
+    }
+    int subs[2] = {1, 1}, rs[2] = {1, 1};
+    for (i = 0; i < nt; i++) {
+        subs[i >= nta] &= (temp[i] == NULL || stemp[i] > 0);
+        rs[i >= nta] &= (temp[i] != NULL && stemp[i] > 0);
+    }
+    // return a(b) if a(b) <: b(a)
+    if (rs[0]) {
+        JL_GC_POP();
+        return a;
+    }
+    if (rs[1]) {
+        JL_GC_POP();
+        return b;
+    }
+    // return `Union{}` for `merge_env` if we can't prove `<:` or `>:`
+    if (!overesi && !subs[0] && !subs[1]) {
+        JL_GC_POP();
+        return jl_bottom_type;
+    }
+    nt = subs[0] ? nta : subs[1] ? nt  : nt;
+    i  = subs[0] ? 0   : subs[1] ? nta : 0;
+    count = nt - i;
+    if (!subs[0] && !subs[1]) {
+        // prepare for over estimation
+        // only preserve `a` with strict <:, but preserve `b` without strict >:
+        for (j = 0; j < nt; j++) {
+            if (stemp[j] < (j < nta ? 2 : 0))
+                temp[j] = NULL;
+        }
+    }
+    isort_union(&temp[i], count);
+    temp[nt] = jl_bottom_type;
+    size_t k;
+    for (k = nt; k-- > i; ) {
+        if (temp[k] != NULL) {
+            if (temp[nt] == jl_bottom_type)
+                temp[nt] = temp[k];
+            else
+                temp[nt] = jl_new_struct(jl_uniontype_type, temp[k], temp[nt]);
+        }
+    }
+    assert(temp[nt] != NULL);
+    jl_value_t *tu = temp[nt];
+    JL_GC_POP();
+    return tu;
+}
+
 // unionall types -------------------------------------------------------------
 
 JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
