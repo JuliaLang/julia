@@ -1368,7 +1368,7 @@ function deserialize_typename(s::AbstractSerializer, number)
                     end
                 else
                     # old object format -- try to forward from old to new
-                    @eval Core.kwcall(kwargs, f::$ty, args...) = $kws(kwargs, f, args...)
+                    @eval Core.kwcall(kwargs::NamedTuple, f::$ty, args...) = $kws(kwargs, f, args...)
                 end
             end
         end
