@@ -447,7 +447,7 @@ static int obviously_in_union(jl_value_t *u, jl_value_t *x)
     return obviously_egal(u, x);
 }
 
-static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
+int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
 {
     if (a == b || a == (jl_value_t*)jl_any_type || b == (jl_value_t*)jl_any_type)
         return 0;
@@ -559,6 +559,7 @@ static jl_value_t *simple_join(jl_value_t *a, jl_value_t *b)
     return simple_union(a, b);
 }
 
+jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi);
 // Compute a greatest lower bound of `a` and `b`
 // For the subtype path, we need to over-estimate this by returning `b` in many cases.
 // But for `merge_env`, we'd better under-estimate and return a `Union{}`
@@ -570,10 +571,6 @@ static jl_value_t *simple_meet(jl_value_t *a, jl_value_t *b, int overesi)
         return a;
     if (!(jl_is_type(a) || jl_is_typevar(a)) || !(jl_is_type(b) || jl_is_typevar(b)))
         return jl_bottom_type;
-    if (jl_is_uniontype(a) && obviously_in_union(a, b))
-        return b;
-    if (jl_is_uniontype(b) && obviously_in_union(b, a))
-        return a;
     if (jl_is_kind(a) && jl_is_type_type(b) && jl_typeof(jl_tparam0(b)) == a)
         return b;
     if (jl_is_kind(b) && jl_is_type_type(a) && jl_typeof(jl_tparam0(a)) == b)
@@ -582,13 +579,7 @@ static jl_value_t *simple_meet(jl_value_t *a, jl_value_t *b, int overesi)
         return a;
     if (jl_is_typevar(b) && obviously_egal(a, ((jl_tvar_t*)b)->ub))
         return b;
-    if (obviously_disjoint(a, b, 0))
-        return jl_bottom_type;
-    if (!jl_has_free_typevars(a) && !jl_has_free_typevars(b)) {
-        if (jl_subtype(a, b)) return a;
-        if (jl_subtype(b, a)) return b;
-    }
-    return overesi ? b : jl_bottom_type;
+    return simple_intersect(a, b, overesi);
 }
 
 // main subtyping algorithm
