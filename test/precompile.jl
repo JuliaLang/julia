@@ -931,7 +931,7 @@ precompile_test_harness("code caching") do dir
     @test isa(invalidations[j-2], Type)
     @test isa(invalidations[j+1], Vector{Any}) # [nbits(::UInt8)]
     m = only(methods(MB.useA2))
-    mi = only(Base.specializations(m))
+    mi = first(m.specializations)
     @test !hasvalid(mi, world)
     @test mi ∈ invalidations
 
