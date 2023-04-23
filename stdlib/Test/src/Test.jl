@@ -52,19 +52,23 @@ end
 in_file(frame, file) = string(frame.file) == file
 
 function test_location(bt, file_ts, file_t)
-    (isnothing(file_ts) || isnothing(file_t)) && return macrocall_location(bt, something(file_ts, @__FILE__))
-    index = test_callsite(bt, file_ts, file_t)
-    # A stacktrace index pointing to a relevant callsite has been found.
-    !isnothing(index) && return index
-    # The macrocall `__source__` will be printed in the test message upon failure.
-    # Always include at least the internal macrocall location in the stacktrace.
-    return macrocall_location(bt, @__FILE__)
+    if (isnothing(file_ts) || isnothing(file_t))
+        return macrocall_location(bt, something(file_ts, @__FILE__))
+    else
+        return test_callsite(bt, file_ts, file_t)
+    end
 end
 
 function test_callsite(bt, file_ts, file_t)
-    macrocall = findfirst(ip -> any(frame -> in_file(frame, file_t), StackTraces.lookup(ip)), bt)::Int
-    testset = macrocall_location(bt, file_ts)::Int
-    # If stacktrace locations differ, use the stacktrace in which `@testset` appears.
+    # We avoid duplicate calls to `StackTraces.lookup`, as it is an expensive call.
+    # For that, we retrieve locations from lower to higher stack elements
+    # and only traverse parts of the backtrace which we haven't traversed before.
+    # The order will always be <internal functions> -> `@test` -> `@testset`.
+    internal = macrocall_location(bt, @__FILE__)::Int
+    macrocall = internal - 1 + findfirst(ip -> any(frame -> in_file(frame, file_t), StackTraces.lookup(ip)), @view bt[internal:end])::Int
+    testset = macrocall - 1 + macrocall_location(@view(bt[macrocall:end]), file_ts)::Int
+
+    # If stacktrace locations differ, include frames until the `@testset` appears.
     macrocall != testset && return testset
     # `@test` and `@testset` occurred at the same stacktrace location.
     # This may happen if `@test` occurred directly in scope of the testset,
@@ -72,9 +76,10 @@ function test_callsite(bt, file_ts, file_t)
     frames = StackTraces.lookup(bt[testset])
     outer_frame = findfirst(frame -> in_file(frame, file_ts) && frame.func == Symbol("macro expansion"), frames)::Int
     # The `@test` call occurred directly in scope of a `@testset`.
-    # The __source__ from `@test` is enough, no need to include more frames.
-    in_file(frames[outer_frame], file_t) && return nothing
-    # The `@test` call was simply inlined, so we still need to include the callsite.
+    # The __source__ from `@test` will be printed in the test message upon failure.
+    # There is no need to include more frames, but always include at least the internal macrocall location in the stacktrace.
+    in_file(frames[outer_frame], file_t) && return internal
+    # The `@test` call was inlined, so we still need to include the callsite.
     return testset
 end
 
@@ -86,7 +91,7 @@ function scrub_backtrace(bt, file_ts, file_t)
         bt = bt[do_test_ind + 1:end]
     end
     stop_at = test_location(bt, file_ts, file_t)
-    !isnothing(stop_at) && !isempty(bt) && return bt[1:stop_at]
+    !isempty(bt) && return bt[1:stop_at]
     return bt
 end
 
