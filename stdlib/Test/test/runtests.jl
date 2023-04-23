@@ -739,6 +739,8 @@ end
         test_properties2(2)
     end
     test_properties2(8)
+
+    # Test calls to `@test` and `@testset` with no file/lineno information (__source__ == nothing).
     eval(Expr(:macrocall, Symbol("@test"), nothing, :false))
     eval(Expr(:macrocall, Symbol("@testset"), nothing, "Testset without source", quote
         @test false
@@ -818,12 +820,12 @@ end
     @test fail.testset == "Tests" && fail.source == "none:0" && fail.ex == "false"
     @test count(contains(runtests * ":10"), lines) == 1 # @testset
     @test count(contains(runtests * ":14"), lines) == 1 # include
-    @test count(contains(included * ":6"), lines) == 1 # test
+    @test count(contains(included * ":8"), lines) == 1 # test
 
     fail = failures[8]; lines = split(fail.stacktrace, '\n')
     @test length(lines)/2 ≤ 5
-    @test fail.testset == "Testset without source" && fail.source == included * ":8" && fail.ex == "false"
-    @test count(contains(included * ":8"), lines) == 2 # @testset + test
+    @test fail.testset == "Testset without source" && fail.source == included * ":10" && fail.ex == "false"
+    @test count(contains(included * ":10"), lines) == 2 # @testset + test
     @test count(contains(runtests * ":10"), lines) == 0 # @testset (stop at the innermost testset)
 end
 
