@@ -366,10 +366,75 @@ Expr(:ncat)
 
 ## Tree differences between GreenNode and Expr
 
-Wherever possible, the tree structure of `GreenNode`/`SyntaxNode` is 1:1 with
-`Expr`. There are, however, some exceptions. First, `GreenNode` inherently
-stores source position, so there's no need for the `LineNumberNode`s used by
-`Expr`. There's also a small number of other differences
+The tree structure of `GreenNode`/`SyntaxNode` is similar to Julia's `Expr`
+data structure but there are various differences:
+
+### Source ordered children
+
+The children of our trees are strictly in source order. This has many
+consequences in places where `Expr` reorders child expressions.
+
+* Infix and postfix operator calls have the operator name in the *second* child position. `a + b` is parsed as `(call-i a + b)` - where the infix `-i` flag indicates infix child position - rather than `Expr(:call, :+, :a, :b)`.
+* Flattened generators are represented in source order
+
+### No `LineNumberNode`s
+
+Our syntax nodes inherently stores source position, so there's no need for the
+`LineNumberNode`s used by `Expr`.
+
+### More consistent / less redundant `block`s
+
+Sometimes `Expr` needs redundant block constructs to store `LineNumberNode`s,
+but we don't need these. Also in cases which do use blocks we try to use them
+consistently.
+
+* No block is used on the right hand side of short form function syntax
+* No block is used for the conditional in `elseif`
+* No block is used for the body of anonymous functions after the `->`
+* `let` argument lists always use a block regardless of number or form of bindings
+
+### Faithful representation of the source text / avoid premature lowering
+
+Some cases of "premature lowering" have been removed, preferring to represent
+the source text more closely.
+
+* `K"macrocall"` - allow users to easily distinguish macrocalls with parentheses from those without them (#218)
+* Grouping parentheses are represented with a node of kind `K"parens"` (#222)
+* Ternary syntax is not immediately lowered to an `if` node: `a ? b : c` parses as `(? a b c)` rather than `Expr(:if, :a, :b, :c)` (#85)
+* `global const` and `const global` are not normalized by the parser. This is done in `Expr` conversion (#130)
+* The AST for `do` is flatter and not lowered to a lambda by the parser: `f(x) do y ; body end` is parsed as `(do (call f x) (tuple y) (block body))` (#98)
+* `@.` is not lowered to `@__dot__` inside the parser (#146)
+* Docstrings use the `K"doc"` kind, and are not lowered to `Core.@doc` until later (#217)
+
+### Containers for string-like constructs
+
+String-like constructs always come within a container node, not as a single
+token. These are useful for tooling which works with the tokens of the source
+text. Also separating the delimiters from the text they delimit removes a whole
+class of tokenization errors and lets the parser deal with them.
+
+* string always use `K"string"` to wrap strings, even when they only contain a single string chunk (#94)
+* char literals are wrapped in the `K"char"` kind, containing the character literal string along with their delimiters (#121)
+* backticks use the `K"cmdstring"` kind
+* `var""` syntax uses `K"var"` as the head (#127)
+* The parser splits triple quoted strings into string chunks interspersed with whitespace trivia
+
+### Improvements for AST inconsistencies
+
+* Dotted call syntax like `f.(a,b)` and `a .+ b` has been made consistent with the `K"dotcall"` head (#90)
+* Standalone dotted operators are always parsed as `(. op)`. For example `.*(x,y)` is parsed as `(call (. *) x y)` (#240)
+* The `K"="` kind is used for keyword syntax rather than `kw`, to avoid various inconsistencies and ambiguities (#103)
+* Unadorned postfix adjoint is parsed as `call` rather than as a syntactic operator for consistency with suffixed versions like `x'ᵀ` (#124)
+
+### Improvements to awkward AST forms
+
+* Frakentuples with multiple parameter blocks like `(a=1, b=2; c=3; d=4)` are flattened into the parent tuple instead of using nested `K"parameters"` nodes (#133)
+* Using `try catch else finally end` is parsed with `K"catch"` `K"else"` and `K"finally"` children to avoid the awkwardness of the optional child nodes in the `Expr` representation (#234)
+* The dotted import path syntax as in `import A.b.c` is parsed with a `K"importpath"` kind rather than `K"."`, because a bare `A.b.c` has a very different nested/quoted expression representation (#244)
+* We use flags rather than child nodes to represent the difference between `struct` and `mutable struct`, `module` and `baremodule` (#220)
+
+
+## More detail on tree differences
 
 ### Flattened generators
 
@@ -459,21 +524,6 @@ julia> text = "x = \"\"\"\n    \$a\n    b\"\"\""
     20:20     │    String               ✔   "b"
     21:23     │    """                      "\"\"\""
 ```
-
-### Less redundant `block`s
-
-Sometimes `Expr` needs to contain redundant block constructs in order to have a
-place to store `LineNumberNode`s, but we don't need these and avoid adding them
-in several cases:
-* The right hand side of short form function syntax
-* The conditional in `elseif`
-* The body of anonymous functions after the `->`
-
-### Distinct conditional ternary expression
-
-The syntax `a ? b : c` is the same as `if a b else c` in `Expr` so macros can't
-distinguish these cases. Instead, we use a distinct expression head `K"?"` and
-lower to `Expr(:if)` during `Expr` conversion.
 
 ### String nodes always wrapped in `K"string"` or `K"cmdstring"`
 
