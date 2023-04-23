@@ -1081,9 +1081,10 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     char *fiber_name;
     if (start_name[0] == '#') {
         jl_method_instance_t *mi = jl_method_lookup(&t->start, 1, jl_get_world_counter());
-        size_t fiber_name_len = strlen(jl_symbol_name(mi->def.method->file)) + 22; // 22 characters in "Task 65535 (:0000000)\0"
+        const char *filename = basename(jl_symbol_name(mi->def.method->file));
+        size_t fiber_name_len = strlen(filename) + 22; // 22 characters in "Task 65535 (:0000000)\0"
         fiber_name = (char *)malloc(fiber_name_len);
-        snprintf(fiber_name, fiber_name_len,  "Task %d (%s:%d)", task_id++, jl_symbol_name(mi->def.method->file), mi->def.method->line);
+        snprintf(fiber_name, fiber_name_len,  "Task %d (%s:%d)", task_id++, filename, mi->def.method->line);
     } else {
         size_t fiber_name_len = strlen(start_name) + 16; // 16 characters in "Task 65535 (\"\")\0"
         fiber_name = (char *)malloc(fiber_name_len);
