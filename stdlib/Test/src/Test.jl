@@ -65,11 +65,11 @@ function test_callsite(bt, file_ts, file_t)
     # and only traverse parts of the backtrace which we haven't traversed before.
     # The order will always be <internal functions> -> `@test` -> `@testset`.
     internal = macrocall_location(bt, @__FILE__)::Int
-    macrocall = internal - 1 + findfirst(ip -> any(frame -> in_file(frame, file_t), StackTraces.lookup(ip)), @view bt[internal:end])::Int
-    testset = macrocall - 1 + macrocall_location(@view(bt[macrocall:end]), file_ts)::Int
+    test = internal - 1 + findfirst(ip -> any(frame -> in_file(frame, file_t), StackTraces.lookup(ip)), @view bt[internal:end])::Int
+    testset = test - 1 + macrocall_location(@view(bt[test:end]), file_ts)::Int
 
     # If stacktrace locations differ, include frames until the `@testset` appears.
-    macrocall != testset && return testset
+    test != testset && return testset
     # `@test` and `@testset` occurred at the same stacktrace location.
     # This may happen if `@test` occurred directly in scope of the testset,
     # or if `@test` occurred in a function that has been inlined in the testset.
