@@ -1694,7 +1694,9 @@ end
 
 # issue #3221
 let x = fill(nothing, 1)
-    @test_throws MethodError x[1] = 1
+    @test_throws ErrorException("cannot convert a value to nothing for assignment") x[1] = 1
+    x = Vector{Union{}}(undef, 1)
+    @test_throws ArgumentError("cannot convert a value to Union{} for assignment") x[1] = 1
 end
 
 # issue #3220
@@ -4916,7 +4918,7 @@ struct f47209
     x::Int
     f47209()::Nothing = new(1)
 end
-@test_throws MethodError f47209()
+@test_throws ErrorException("cannot convert a value to nothing for assignment") f47209()
 
 # issue #12096
 let a = Val{Val{TypeVar(:_, Int)}},
