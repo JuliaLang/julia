@@ -23,7 +23,7 @@ being used for this purpose alone.
 module Timings
 
 using Core.Compiler: -, +, :, Vector, length, first, empty!, push!, pop!, @inline,
-    @inbounds, copy, backtrace, AbstractInterpreter
+    @inbounds, copy, backtrace
 
 # What we record for any given frame we infer during type inference.
 struct InferenceFrameInfo
@@ -48,13 +48,12 @@ end
 _typeinf_identifier(frame::InferenceFrameInfo) = frame
 
 """
-    Core.Compiler.Timing(interpT, mi_info, start_time, ...)
+    Core.Compiler.Timing(mi_info, start_time, ...)
 
 Internal type containing the timing result for running type inference on a single
 MethodInstance.
 """
 struct Timing
-    interpT::DataType
     mi_info::InferenceFrameInfo
     start_time::UInt64
     cur_start_time::UInt64
@@ -62,8 +61,8 @@ struct Timing
     children::Core.Array{Timing,1}
     bt         # backtrace collected upon initial entry to typeinf
 end
-Timing(interpT, mi_info, start_time, cur_start_time, time, children) = Timing(interpT, mi_info, start_time, cur_start_time, time, children, nothing)
-Timing(interpT, mi_info, start_time) = Timing(interpT, mi_info, start_time, start_time, UInt64(0), Timing[])
+Timing(mi_info, start_time, cur_start_time, time, children) = Timing(mi_info, start_time, cur_start_time, time, children, nothing)
+Timing(mi_info, start_time) = Timing(mi_info, start_time, start_time, UInt64(0), Timing[])
 
 _time_ns() = ccall(:jl_hrtime, UInt64, ())  # Re-implemented here because Base not yet available.
 
@@ -89,7 +88,6 @@ start the ROOT() timer again. `ROOT()` measures all time spent _outside_ inferen
 function reset_timings()
     empty!(_timings)
     push!(_timings, Timing(
-        AbstractInterpreter,
         # The MethodInstance for ROOT(), and default empty values for other fields.
         InferenceFrameInfo(ROOTmi, 0x0, Core.Compiler.VarState[], Any[Core.Const(ROOT)], 1),
         _time_ns()))
@@ -110,7 +108,6 @@ reset_timings()
     # Add in accum_time ("modify" the immutable struct)
     @inbounds begin
         _timings[end] = Timing(
-            parent_timer.interpT,
             parent_timer.mi_info,
             parent_timer.start_time,
             parent_timer.cur_start_time,
@@ -122,7 +119,7 @@ reset_timings()
     return nothing
 end
 
-@inline function enter_new_timer(interp::AbstractInterpreter, frame)
+@inline function enter_new_timer(frame)
     # Very first thing, stop the active timer: get the current time and add in the
     # time since it was last started to its aggregate exclusive time.
     close_current_timer()
@@ -130,7 +127,7 @@ end
     mi_info = _typeinf_identifier(frame)
 
     # Start the new timer right before returning
-    push!(_timings, Timing(typeof(interp), mi_info, UInt64(0)))
+    push!(_timings, Timing(mi_info, UInt64(0)))
     len = length(_timings)
     new_timer = @inbounds _timings[len]
     # Set the current time _after_ appending the node, to try to exclude the
@@ -139,7 +136,6 @@ end
 
     @inbounds begin
         _timings[len] = Timing(
-            new_timer.interpT,
             new_timer.mi_info,
             start,
             start,
@@ -154,7 +150,7 @@ end
 # _expected_frame_ is not needed within this function; it is used in the `@assert`, to
 # assert that indeed we are always returning to a parent after finishing all of its
 # children (that is, asserting that inference proceeds via depth-first-search).
-@inline function exit_current_timer(interp, _expected_frame_)
+@inline function exit_current_timer(_expected_frame_)
     # Finish the new timer
     stop_time = _time_ns()
 
@@ -172,7 +168,6 @@ end
     accum_time = stop_time - new_timer.cur_start_time
     # Add in accum_time ("modify" the immutable struct)
     new_timer = Timing(
-        new_timer.interpT,
         new_timer.mi_info,
         new_timer.start_time,
         new_timer.cur_start_time,
@@ -187,7 +182,6 @@ end
     len = length(_timings)
     @inbounds begin
         _timings[len] = Timing(
-            parent_timer.interpT,
             parent_timer.mi_info,
             parent_timer.start_time,
             _time_ns(),
@@ -214,9 +208,9 @@ const __measure_typeinf__ = fill(false)
 function typeinf(interp::AbstractInterpreter, frame::InferenceState)
     interp = switch_from_irinterp(interp)
     if __measure_typeinf__[]
-        Timings.enter_new_timer(interp, frame)
+        Timings.enter_new_timer(frame)
         v = _typeinf(interp, frame)
-        Timings.exit_current_timer(interp, frame)
+        Timings.exit_current_timer(frame)
         return v
     else
         return _typeinf(interp, frame)
