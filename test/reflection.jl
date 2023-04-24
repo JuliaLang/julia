@@ -1038,7 +1038,7 @@ ambig_effects_test(a, b) = 1
     for T in (String, Module, Symbol)
          @test Core.Compiler.is_foldable(Base.infer_effects(hash, (T,)))
     end
-    # darn unbound
+    # objectid for datatypes is inconsistant for types that have unbound type parameters.
     @test !Core.Compiler.is_consistent(Base.infer_effects(hash, (DataType,)))
     @test !Core.Compiler.is_consistent(Base.infer_effects(hash, (Tuple{Vector{Int}},)))
 end
