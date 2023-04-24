@@ -80,6 +80,10 @@ function peek_behind(ps::ParseState, args...; kws...)
     peek_behind(ps.stream, args...; kws...)
 end
 
+function peek_behind_pos(ps::ParseState, args...; kws...)
+    peek_behind_pos(ps.stream, args...; kws...)
+end
+
 function bump(ps::ParseState, flags=EMPTY_FLAGS; skip_newlines=nothing, kws...)
     skip_nl = isnothing(skip_newlines) ? ps.whitespace_newline : skip_newlines
     bump(ps.stream, flags; skip_newlines=skip_nl, kws...)
@@ -306,7 +310,7 @@ end
 # The expression is a call after stripping `where` and `::`
 function was_eventually_call(ps::ParseState)
     stream = ps.stream
-    p = position(ps)
+    p = peek_behind_pos(ps)
     while true
         b = peek_behind(stream, p)
         if b.kind == K"call"
