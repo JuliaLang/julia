@@ -525,6 +525,8 @@ sum(f, A::AbstractArray; dims)
     sum!(r, A)
 
 Sum elements of `A` over the singleton dimensions of `r`, and write results to `r`.
+Note that since the sum! function is intended to operate without making any allocations,
+the target should not alias with the source.
 
 # Examples
 ```jldoctest
