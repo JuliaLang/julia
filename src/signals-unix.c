@@ -645,7 +645,7 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
 }
 
 const static int sigwait_sigs[] = {
-    SIGINT, SIGTERM, SIGABRT, SIGQUIT,
+    SIGINT, SIGTERM, SIGQUIT,
 #ifdef SIGINFO
     SIGINFO,
 #else
