@@ -527,20 +527,23 @@ Retroactively inspecting or modifying the parser's output can be confusing, so
 using this function should be avoided where possible.
 """
 function peek_behind(stream::ParseStream, pos::ParseStreamPosition)
-    if token_is_last(stream, pos) && !isempty(stream.tokens)
+    if token_is_last(stream, pos) && pos.token_index > 0
         t = stream.tokens[pos.token_index]
         return (kind=kind(t),
                 flags=flags(t),
                 orig_kind=t.orig_kind,
                 is_leaf=true)
-    elseif !isempty(stream.ranges)
+    elseif !isempty(stream.ranges) && pos.range_index > 0
         r = stream.ranges[pos.range_index]
         return (kind=kind(r),
                 flags=flags(r),
                 orig_kind=K"None",
                 is_leaf=false)
     else
-        internal_error("Can't peek behind at start of stream")
+        return (kind=K"None",
+                flags=EMPTY_FLAGS,
+                orig_kind=K"None",
+                is_leaf=true)
     end
 end
 
@@ -585,7 +588,11 @@ function first_child_position(stream::ParseStream, pos::ParseStreamPosition)
     end
 end
 
-function peek_behind(stream::ParseStream; skip_trivia::Bool=true)
+# Get last position in stream "of interest", skipping
+# * parens nodes
+# * deleted tokens (TOMBSTONE)
+# * whitespace (if skip_trivia=true)
+function peek_behind_pos(stream::ParseStream; skip_trivia::Bool=true)
     token_index = lastindex(stream.tokens)
     range_index = lastindex(stream.ranges)
     while range_index >= firstindex(stream.ranges) &&
@@ -601,11 +608,11 @@ function peek_behind(stream::ParseStream; skip_trivia::Bool=true)
         end
         token_index -= 1
     end
-    if token_index > 0
-        return peek_behind(stream, ParseStreamPosition(token_index, range_index))
-    else
-        internal_error("Can't peek behind at start of stream")
-    end
+    return ParseStreamPosition(token_index, range_index)
+end
+
+function peek_behind(stream::ParseStream; skip_trivia::Bool=true)
+    peek_behind(stream, peek_behind_pos(stream; skip_trivia=skip_trivia))
 end
 
 #-------------------------------------------------------------------------------

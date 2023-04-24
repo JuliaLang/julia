@@ -589,6 +589,7 @@ tests = [
         "function (f() where T) where U end" => "(function (where (parens (where (call f) T)) U) (block))"
         "function (f()::S) end"=>  "(function (parens (::-i (call f) S)) (block))"         => Expr(:function, Expr(:(::), Expr(:call, :f), :S), Expr(:block))
         "function ((f()::S) where T) end" => "(function (parens (where (parens (::-i (call f) S)) T)) (block))"
+        "function (x*y ) end" => "(function (parens (call-i x * y)) (block))"
         # body
         "function f() \n a \n b end"  =>  "(function (call f) (block a b))"
         "function f() end"       =>  "(function (call f) (block))"
