@@ -1520,7 +1520,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         JL_GC_POP();
         return mark_or_box_ccall_result(ctx, retval, retboxed, rt, unionall, static_rt);
     }
-    else if (is_libjulia_func(jl_cpu_pause)) {
+    else if (is_libjulia_func(jl_cpu_pause)||is_libjulia_func(jl_cpu_suspend)) {
         ++CCALL_STAT(jl_cpu_pause);
         // Keep in sync with the julia_threads.h version
         assert(lrt == getVoidTy(ctx.builder.getContext()));
@@ -1539,9 +1539,14 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                         && ctx.emission_context.TargetTriple.getSubArch() != Triple::SubArchType::NoSubArch
                         // ARMv7 and above is < armv6
                         && ctx.emission_context.TargetTriple.getSubArch() < Triple::SubArchType::ARMSubArch_v6)) {
-            auto wfeinst = InlineAsm::get(FunctionType::get(getVoidTy(ctx.builder.getContext()), false), "wfe",
+            InlineAsm* wait_inst;
+            if (is_libjulia_func(jl_cpu_pause))
+                wait_inst = InlineAsm::get(FunctionType::get(getVoidTy(ctx.builder.getContext()), false), "isb",
                                                 "~{memory}", true);
-            ctx.builder.CreateCall(wfeinst);
+            else
+                wait_inst = InlineAsm::get(FunctionType::get(getVoidTy(ctx.builder.getContext()), false), "wfe",
+                                                "~{memory}", true);
+            ctx.builder.CreateCall(wait_inst);
             JL_GC_POP();
             return ghostValue(ctx, jl_nothing_type);
         } else {
