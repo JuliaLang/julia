@@ -927,6 +927,15 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
 
 JL_DLLEXPORT jl_sym_t *jl_module_name(jl_module_t *m) { return m->name; }
 JL_DLLEXPORT jl_module_t *jl_module_parent(jl_module_t *m) { return m->parent; }
+jl_module_t *jl_module_root(jl_module_t *m)
+{
+    while (1) {
+        if (m->parent == NULL || m->parent == m)
+            return m;
+        m = m->parent;
+    }
+}
+
 JL_DLLEXPORT jl_uuid_t jl_module_build_id(jl_module_t *m) { return m->build_id; }
 JL_DLLEXPORT jl_uuid_t jl_module_uuid(jl_module_t* m) { return m->uuid; }
 
