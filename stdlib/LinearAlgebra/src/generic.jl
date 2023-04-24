@@ -689,7 +689,7 @@ function opnorm2(A::AbstractMatrix{T}) where T
         newv = norm(x)
         # the numerics got very wonky
         !isfinite(newv) && return first(svdvals(A))
-        isapprox(v, newv; rtol=10*eps(T)) && return sqrt(newv)
+        isapprox(v, newv; rtol=10*eps(Tnorm)) && return sqrt(newv)
         v = newv
         x .*= inv(newv)
     end
