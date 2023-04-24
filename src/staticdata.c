@@ -481,7 +481,7 @@ static void jl_load_sysimg_so(void)
         jl_pgcstack_getkey((jl_get_pgcstack_func**)pgcstack_func_slot, (jl_pgcstack_key_t*)pgcstack_key_slot);
 
         size_t *tls_offset_idx;
-        jl_dlsym(jl_sysimg_handle, "jl_tls_offset", (void **)&tls_offset_idx, 1);
+        jl_dlsym(jl_sysimg_handle, "jl_tls_offset_image", (void **)&tls_offset_idx, 1);
         *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
 
 #ifdef _OS_WINDOWS_
@@ -3475,7 +3475,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
         jl_pgcstack_getkey((jl_get_pgcstack_func**)pgcstack_func_slot, (jl_pgcstack_key_t*)pgcstack_key_slot);
 
         size_t *tls_offset_idx;
-        jl_dlsym(pkgimg_handle, "jl_tls_offset", (void **)&tls_offset_idx, 1);
+        jl_dlsym(pkgimg_handle, "jl_tls_offset_image", (void **)&tls_offset_idx, 1);
         *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
     }
 
