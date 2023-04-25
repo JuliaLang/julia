@@ -509,20 +509,25 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
     Type *llvmt = bitstype_to_llvm((jl_value_t*)bt, ctx.builder.getContext(), true);
     uint32_t nb = jl_datatype_size(bt);
 
+    Value *bt_value_rt = NULL;
+    if (!jl_is_concrete_type((jl_value_t*)bt)) {
+        bt_value_rt = boxed(ctx, bt_value);
+        emit_concretecheck(ctx, bt_value_rt, "bitcast: target type not a leaf primitive type");
+    }
+
     // Examine the second argument //
     bool isboxed;
     Type *vxt = julia_type_to_llvm(ctx, v.typ, &isboxed);
-
     if (!jl_is_primitivetype(v.typ) || jl_datatype_size(v.typ) != nb) {
         Value *typ = emit_typeof_boxed(ctx, v);
         if (!jl_is_primitivetype(v.typ)) {
             if (jl_is_datatype(v.typ) && !jl_is_abstracttype(v.typ)) {
-                emit_error(ctx, "bitcast: expected primitive type value for second argument");
+                emit_error(ctx, "bitcast: value not a primitive type");
                 return jl_cgval_t();
             }
             else {
                 Value *isprimitive = emit_datatype_isprimitivetype(ctx, typ);
-                error_unless(ctx, isprimitive, "bitcast: expected primitive type value for second argument");
+                error_unless(ctx, isprimitive, "bitcast: value not a primitive type");
             }
         }
         if (jl_is_datatype(v.typ) && !jl_is_abstracttype(v.typ)) {
@@ -575,7 +580,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
         return mark_julia_type(ctx, vx, false, bt);
     }
     else {
-        Value *box = emit_allocobj(ctx, nb, boxed(ctx, bt_value));
+        Value *box = emit_allocobj(ctx, nb, bt_value_rt);
         init_bits_value(ctx, box, vx, ctx.tbaa().tbaa_immut);
         return mark_julia_type(ctx, box, true, bt->name->wrapper);
     }
@@ -627,7 +632,9 @@ static jl_cgval_t generic_cast(
         return mark_julia_type(ctx, ans, false, jlto);
     }
     else {
-        Value *box = emit_allocobj(ctx, nb, boxed(ctx, targ));
+        Value *targ_rt = boxed(ctx, targ);
+        emit_concretecheck(ctx, targ_rt, std::string(jl_intrinsic_name(f)) + ": target type not a leaf primitive type");
+        Value *box = emit_allocobj(ctx, nb, targ_rt);
         init_bits_value(ctx, box, ans, ctx.tbaa().tbaa_immut);
         return mark_julia_type(ctx, box, true, jlto->name->wrapper);
     }

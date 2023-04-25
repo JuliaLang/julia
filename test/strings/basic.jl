@@ -1144,4 +1144,7 @@ end
         end
         return a
     end |> Core.Compiler.is_foldable
+    let i=49248
+        @test String(lazy"PR n°$i") == "PR n°49248"
+    end
 end

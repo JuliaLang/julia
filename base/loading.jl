@@ -1080,6 +1080,7 @@ function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
 end
 
 function run_package_callbacks(modkey::PkgId)
+    run_extension_callbacks(modkey)
     assert_havelock(require_lock)
     unlock(require_lock)
     try
@@ -1188,9 +1189,12 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, <:An
     end
 end
 
+loading_extension::Bool = false
 function run_extension_callbacks(extid::ExtensionId)
     assert_havelock(require_lock)
     succeeded = try
+        # Used by Distributed to now load extensions in the package callback
+        global loading_extension = true
         _require_prelocked(extid.id)
         @debug "Extension $(extid.id.name) of $(extid.parentid.name) loaded"
         true
@@ -1200,58 +1204,56 @@ function run_extension_callbacks(extid::ExtensionId)
         @error "Error during loading of extension $(extid.id.name) of $(extid.parentid.name), \
                 use `Base.retry_load_extensions()` to retry." exception=errs
         false
+    finally
+        global loading_extension = false
     end
     return succeeded
 end
 
-function run_extension_callbacks()
+function run_extension_callbacks(pkgid::PkgId)
     assert_havelock(require_lock)
-    loaded_triggers = collect(intersect(keys(Base.loaded_modules), keys(Base.EXT_DORMITORY)))
-    sort!(loaded_triggers; by=x->x.uuid)
-    for pkgid in loaded_triggers
-        # take ownership of extids that depend on this pkgid
-        extids = pop!(EXT_DORMITORY, pkgid, nothing)
-        extids === nothing && continue
-        for extid in extids
-            if extid.ntriggers > 0
-                # It is possible that pkgid was loaded in an environment
-                # below the one of the parent. This will cause a load failure when the
-                # pkg ext tries to load the triggers. Therefore, check this first
-                # before loading the pkg ext.
-                pkgenv = Base.identify_package_env(extid.id, pkgid.name)
-                ext_not_allowed_load = false
-                if pkgenv === nothing
-                    ext_not_allowed_load = true
-                else
-                    pkg, env = pkgenv
-                    path = Base.locate_package(pkg, env)
-                    if path === nothing
-                        ext_not_allowed_load = true
-                    end
-                end
-                if ext_not_allowed_load
-                    @debug "Extension $(extid.id.name) of $(extid.parentid.name) will not be loaded \
-                            since $(pkgid.name) loaded in environment lower in load path"
-                    # indicate extid is expected to fail
-                    extid.ntriggers *= -1
-                else
-                    # indicate pkgid is loaded
-                    extid.ntriggers -= 1
-                end
-            end
-            if extid.ntriggers < 0
-                # indicate pkgid is loaded
-                extid.ntriggers += 1
-                succeeded = false
+    # take ownership of extids that depend on this pkgid
+    extids = pop!(EXT_DORMITORY, pkgid, nothing)
+    extids === nothing && return
+    for extid in extids
+        if extid.ntriggers > 0
+            # It is possible that pkgid was loaded in an environment
+            # below the one of the parent. This will cause a load failure when the
+            # pkg ext tries to load the triggers. Therefore, check this first
+            # before loading the pkg ext.
+            pkgenv = identify_package_env(extid.id, pkgid.name)
+            ext_not_allowed_load = false
+            if pkgenv === nothing
+                ext_not_allowed_load = true
             else
-                succeeded = true
+                pkg, env = pkgenv
+                path = locate_package(pkg, env)
+                if path === nothing
+                    ext_not_allowed_load = true
+                end
             end
-            if extid.ntriggers == 0
-                # actually load extid, now that all dependencies are met,
-                # and record the result
-                succeeded = succeeded && run_extension_callbacks(extid)
-                succeeded || push!(EXT_DORMITORY_FAILED, extid)
+            if ext_not_allowed_load
+                @debug "Extension $(extid.id.name) of $(extid.parentid.name) will not be loaded \
+                        since $(pkgid.name) loaded in environment lower in load path"
+                # indicate extid is expected to fail
+                extid.ntriggers *= -1
+            else
+                # indicate pkgid is loaded
+                extid.ntriggers -= 1
             end
+        end
+        if extid.ntriggers < 0
+            # indicate pkgid is loaded
+            extid.ntriggers += 1
+            succeeded = false
+        else
+            succeeded = true
+        end
+        if extid.ntriggers == 0
+            # actually load extid, now that all dependencies are met,
+            # and record the result
+            succeeded = succeeded && run_extension_callbacks(extid)
+            succeeded || push!(EXT_DORMITORY_FAILED, extid)
         end
     end
     return
@@ -1276,7 +1278,7 @@ function retry_load_extensions()
     end
     prepend!(EXT_DORMITORY_FAILED, failed)
     end
-    nothing
+    return
 end
 
 """
@@ -1510,11 +1512,11 @@ end
 """
     include_dependency(path::AbstractString)
 
-In a module, declare that the file specified by `path` (relative or absolute) is a
-dependency for precompilation; that is, the module will need to be recompiled if this file
-changes.
+In a module, declare that the file, directory, or symbolic link specified by `path`
+(relative or absolute) is a dependency for precompilation; that is, the module will need
+to be recompiled if the modification time of `path` changes.
 
-This is only needed if your module depends on a file that is not used via [`include`](@ref). It has
+This is only needed if your module depends on a path that is not used via [`include`](@ref). It has
 no effect outside of compilation.
 """
 function include_dependency(path::AbstractString)
@@ -1630,10 +1632,6 @@ function _require_prelocked(uuidkey::PkgId, env=nothing)
         run_package_callbacks(uuidkey)
     else
         newm = root_module(uuidkey)
-    end
-    # Load extensions when not precompiling and not in a nested package load
-    if JLOptions().incremental == 0 && isempty(package_locks)
-        run_extension_callbacks()
     end
     return newm
 end
@@ -2790,7 +2788,7 @@ end
             end
             for chi in includes
                 f, ftime_req = chi.filename, chi.mtime
-                if !isfile(f)
+                if !ispath(f)
                     _f = fixup_stdlib_path(f)
                     if isfile(_f) && startswith(_f, Sys.STDLIB)
                         # mtime is changed by extraction

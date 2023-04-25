@@ -1600,7 +1600,7 @@ fake_repl() do stdin_write, stdout_read, repl
     @test buffercontents(LineEdit.buffer(s)) == "1234αβ56γ"
 end
 
-# Non standard output_prefix, tested via `ipython_mode!`
+# Non standard output_prefix, tested via `numbered_prompt!`
 fake_repl() do stdin_write, stdout_read, repl
     repl.interface = REPL.setup_interface(repl)
 
@@ -1609,7 +1609,7 @@ fake_repl() do stdin_write, stdout_read, repl
         REPL.run_repl(repl; backend)
     end
 
-    REPL.ipython_mode!(repl, backend)
+    REPL.numbered_prompt!(repl, backend)
 
     global c = Base.Event(true)
     function sendrepl2(cmd, txt)

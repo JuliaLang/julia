@@ -329,7 +329,7 @@ bool LowerPTLS::run(bool *CFGModified)
             if (imaging_mode) {
                 pgcstack_func_slot = create_aliased_global(T_pgcstack_getter, "jl_pgcstack_func_slot");
                 pgcstack_key_slot = create_aliased_global(getSizeTy(M->getContext()), "jl_pgcstack_key_slot"); // >= sizeof(jl_pgcstack_key_t)
-                pgcstack_offset = create_aliased_global(getSizeTy(M->getContext()), "jl_tls_offset");
+                pgcstack_offset = create_aliased_global(getSizeTy(M->getContext()), "jl_tls_offset_image");
             }
             need_init = false;
         }
