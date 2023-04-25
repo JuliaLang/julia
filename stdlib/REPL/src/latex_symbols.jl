@@ -1289,6 +1289,7 @@ const latex_symbols = Dict(
     "\\bsolhsub" => "\u27c8",  # reverse solidus preceding subset
     "\\suphsol" => "\u27c9",  # superset preceding solidus
     "\\wedgedot" => "⟑",  # and with dot
+    "\\veedot" => "⟇",  # or with dot
     "\\upin" => "⟒",  # element of opening upwards
     "\\bigbot" => "⟘",  # large up tack
     "\\bigtop" => "⟙",  # large down tack

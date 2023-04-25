@@ -1,4 +1,4 @@
 STATISTICS_BRANCH = master
-STATISTICS_SHA1 = 20fbe576ec406180b1dddf4c7fbe16458a7aef21
+STATISTICS_SHA1 = a3feba2bb63f06b7f40024185e9fa5f6385e2510
 STATISTICS_GIT_URL := https://github.com/JuliaStats/Statistics.jl.git
 STATISTICS_TAR_URL = https://api.github.com/repos/JuliaStats/Statistics.jl/tarball/$1

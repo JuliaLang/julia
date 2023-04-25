@@ -14,11 +14,11 @@ target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
 # CHECK-LABEL: @return_obj
 # CHECK-NOT: @julia.gc_alloc_obj
 # CHECK: %current_task = getelementptr inbounds {}*, {}** %gcstack, i64 -12
-# CHECK-NEXT: [[ptls_field:%.*]] = getelementptr inbounds {}*, {}** %current_task, i64 15
+# CHECK-NEXT: [[ptls_field:%.*]] = getelementptr inbounds {}*, {}** %current_task, i64 16
 # CHECK-NEXT: [[ptls_load:%.*]] = load {}*, {}** [[ptls_field]], align 8, !tbaa !0
 # CHECK-NEXT: [[ppjl_ptls:%.*]] = bitcast {}* [[ptls_load]] to {}**
 # CHECK-NEXT: [[ptls_i8:%.*]] = bitcast {}** [[ppjl_ptls]] to i8*
-# CHECK-NEXT: %v = call noalias nonnull {} addrspace(10)* @ijl_gc_pool_alloc(i8* [[ptls_i8]], i32 [[SIZE_T:[0-9]+]], i32 16)
+# CHECK-NEXT: %v = call noalias nonnull dereferenceable({{[0-9]+}}) {} addrspace(10)* @ijl_gc_pool_alloc(i8* [[ptls_i8]], i32 [[SIZE_T:[0-9]+]], i32 16)
 # CHECK: store atomic {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* {{.*}} unordered, align 8, !tbaa !4
 println("""
 define {} addrspace(10)* @return_obj() {

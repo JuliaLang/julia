@@ -164,6 +164,12 @@ end
     @test endswith(y)(y)
     @test endswith(z, z)
     @test endswith(z)(z)
+    #40616 startswith for IO objects
+    let s = "JuliaLang", io = IOBuffer(s)
+        for prefix in ("Julia", "July", s^2, "Ju", 'J', 'x', ('j','J'))
+            @test startswith(io, prefix) == startswith(s, prefix)
+        end
+    end
 end
 
 @testset "SubStrings and Views" begin
@@ -938,6 +944,21 @@ end
     end
 end
 
+@testset "Conversion to Type{Union{String, SubString{String}}}" begin
+    str = "abc"
+    substr = SubString(str)
+    for T in [String, SubString{String}]
+        conv_str = convert(T, str)
+        conv_substr = convert(T, substr)
+
+        if T == String
+            @test conv_str === conv_substr === str
+        elseif T == SubString{String}
+            @test conv_str === conv_substr === substr
+        end
+    end
+end
+
 @test unsafe_wrap(Vector{UInt8},"\xcc\xdd\xee\xff\x80") == [0xcc,0xdd,0xee,0xff,0x80]
 
 @test iterate("a", 1)[2] == 2
@@ -1104,6 +1125,32 @@ end
     @test sprint(summary, "") == "empty String"
 end
 
+@testset "isascii" begin
+    N = 1
+    @test isascii("S"^N) == true
+    @test isascii("S"^(N - 1)) == true
+    @test isascii("S"^(N + 1)) == true
+
+    @test isascii("λ" * ("S"^(N))) == false
+    @test isascii(("S"^(N)) * "λ") == false
+
+    for p = 1:16
+        N = 2^p
+        @test isascii("S"^N) == true
+        @test isascii("S"^(N - 1)) == true
+        @test isascii("S"^(N + 1)) == true
+
+        @test isascii("λ" * ("S"^(N))) == false
+        @test isascii(("S"^(N)) * "λ") == false
+        @test isascii("λ"*("S"^(N - 1))) == false
+        @test isascii(("S"^(N - 1)) * "λ") == false
+        if N > 4
+            @test isascii("λ" * ("S"^(N - 3))) == false
+            @test isascii(("S"^(N - 3)) * "λ") == false
+        end
+    end
+end
+
 @testset "Plug holes in test coverage" begin
     @test_throws MethodError checkbounds(Bool, "abc", [1.0, 2.0])
 
@@ -1144,4 +1191,198 @@ end
         end
         return a
     end |> Core.Compiler.is_foldable
+    let i=49248
+        @test String(lazy"PR n°$i") == "PR n°49248"
+    end
+end
+
+@testset "String Effects" begin
+    for (f, Ts) in [(*, (String, String)),
+                   (*, (Char, String)),
+                   (*, (Char, Char)),
+                   (string, (Symbol, String, Char)),
+                   (==, (String, String)),
+                   (cmp, (String, String)),
+                   (==, (Symbol, Symbol)),
+                   (cmp, (Symbol, Symbol)),
+                   (String, (Symbol,)),
+                   (length, (String,)),
+                   (hash, (String,UInt)),
+                   (hash, (Char,UInt)),]
+        e = Base.infer_effects(f, Ts)
+        @test Core.Compiler.is_foldable(e) || (f, Ts)
+        @test Core.Compiler.is_removable_if_unused(e) || (f, Ts)
+    end
+    for (f, Ts) in [(^, (String, Int)),
+                   (^, (Char, Int)),
+                   (codeunit, (String, Int)),
+                   ]
+        e = Base.infer_effects(f, Ts)
+        @test Core.Compiler.is_foldable(e) || (f, Ts)
+        @test !Core.Compiler.is_removable_if_unused(e) || (f, Ts)
+    end
+    # Substrings don't have any nice effects because the compiler can
+    # invent fake indices leading to out of bounds
+    for (f, Ts) in [(^, (SubString{String}, Int)),
+                   (string, (String, SubString{String})),
+                   (string, (Symbol, SubString{String})),
+                   (hash, (SubString{String},UInt)),
+                   ]
+        e = Base.infer_effects(f, Ts)
+        @test !Core.Compiler.is_foldable(e) || (f, Ts)
+        @test !Core.Compiler.is_removable_if_unused(e) || (f, Ts)
+    end
+    @test_throws ArgumentError Symbol("a\0a")
+end
+
+@testset "Ensure UTF-8 DFA can never leave invalid state" begin
+    for b = typemin(UInt8):typemax(UInt8)
+        @test Base._isvalid_utf8_dfa(Base._UTF8_DFA_INVALID,[b],1,1) == Base._UTF8_DFA_INVALID
+    end
+end
+@testset "Ensure  UTF-8 DFA stays in ASCII State for all ASCII" begin
+    for b = 0x00:0x7F
+        @test Base._isvalid_utf8_dfa(Base._UTF8_DFA_ASCII,[b],1,1) == Base._UTF8_DFA_ASCII
+    end
+end
+
+@testset "Validate UTF-8 DFA" begin
+    # Unicode 15
+    # Table 3-7. Well-Formed UTF-8 Byte Sequences
+
+    table_rows = [  [0x00:0x7F],
+                    [0xC2:0xDF,0x80:0xBF],
+                    [0xE0:0xE0,0xA0:0xBF,0x80:0xBF],
+                    [0xE1:0xEC,0x80:0xBF,0x80:0xBF],
+                    [0xED:0xED,0x80:0x9F,0x80:0xBF],
+                    [0xEE:0xEF,0x80:0xBF,0x80:0xBF],
+                    [0xF0:0xF0,0x90:0xBF,0x80:0xBF,0x80:0xBF],
+                    [0xF1:0xF3,0x80:0xBF,0x80:0xBF,0x80:0xBF],
+                    [0xF4:0xF4,0x80:0x8F,0x80:0xBF,0x80:0xBF]]
+    invalid_first_bytes = union(0xC0:0xC1,0xF5:0xFF,0x80:0xBF)
+
+    valid_first_bytes = union(collect(first(r) for r in table_rows)...)
+
+
+
+    # Prove that the first byte sets in the table & invalid cover all bytes
+    @test length(union(valid_first_bytes,invalid_first_bytes)) == 256
+    @test length(intersect(valid_first_bytes,invalid_first_bytes)) == 0
+
+    #Check the ASCII range
+    for b = 0x00:0x7F
+        #Test from both UTF-8 state and ascii state
+        @test Base._isvalid_utf8_dfa(Base._UTF8_DFA_ACCEPT,[b],1,1) == Base._UTF8_DFA_ACCEPT
+        @test Base._isvalid_utf8_dfa(Base._UTF8_DFA_ASCII,[b],1,1) == Base._UTF8_DFA_ASCII
+    end
+
+    #Check the remaining first bytes
+    for b = 0x80:0xFF
+        if b ∈ invalid_first_bytes
+            @test Base._isvalid_utf8_dfa(Base._UTF8_DFA_ACCEPT,[b],1,1) == Base._UTF8_DFA_INVALID
+            @test Base._isvalid_utf8_dfa(Base._UTF8_DFA_ASCII,[b],1,1) == Base._UTF8_DFA_INVALID
+        else
+            @test Base._isvalid_utf8_dfa(Base._UTF8_DFA_ACCEPT,[b],1,1) != Base._UTF8_DFA_INVALID
+            @test Base._isvalid_utf8_dfa(Base._UTF8_DFA_ASCII,[b],1,1) != Base._UTF8_DFA_INVALID
+        end
+    end
+
+    # Check two byte Sequences
+    for table_row in [table_rows[2]]
+        b1 = first(table_row[1])
+        state1 = Base._isvalid_utf8_dfa(Base._UTF8_DFA_ACCEPT,[b1],1,1)
+        state2 = Base._isvalid_utf8_dfa(Base._UTF8_DFA_ASCII,[b1],1,1)
+        @test state1 == state2
+        #Prove that all the first bytes in a row give same state
+        for b1 in table_row[1]
+            @test state1 == Base._isvalid_utf8_dfa(Base._UTF8_DFA_ACCEPT,[b1],1,1)
+            @test state1 == Base._isvalid_utf8_dfa(Base._UTF8_DFA_ASCII,[b1],1,1)
+        end
+        b1 = first(table_row[1])
+        #Prove that all valid second bytes return correct state
+        for b2 = table_row[2]
+            @test Base._UTF8_DFA_ACCEPT == Base._isvalid_utf8_dfa(state1,[b2],1,1)
+        end
+        for b2 = setdiff(0x00:0xFF,table_row[2])
+            @test Base._UTF8_DFA_INVALID == Base._isvalid_utf8_dfa(state1,[b2],1,1)
+        end
+    end
+
+    # Check three byte Sequences
+    for table_row in table_rows[3:6]
+        b1 = first(table_row[1])
+        state1 = Base._isvalid_utf8_dfa(Base._UTF8_DFA_ACCEPT,[b1],1,1)
+        state2 = Base._isvalid_utf8_dfa(Base._UTF8_DFA_ASCII,[b1],1,1)
+        @test state1 == state2
+        #Prove that all the first bytes in a row give same state
+        for b1 in table_row[1]
+            @test state1 == Base._isvalid_utf8_dfa(Base._UTF8_DFA_ACCEPT,[b1],1,1)
+            @test state1 == Base._isvalid_utf8_dfa(Base._UTF8_DFA_ASCII,[b1],1,1)
+        end
+
+        b1 = first(table_row[1])
+        b2 = first(table_row[2])
+        #Prove that all valid second bytes return same state
+        state2 = Base._isvalid_utf8_dfa(state1,[b2],1,1)
+        for b2 = table_row[2]
+            @test state2 == Base._isvalid_utf8_dfa(state1,[b2],1,1)
+        end
+        for b2 = setdiff(0x00:0xFF,table_row[2])
+            @test Base._UTF8_DFA_INVALID == Base._isvalid_utf8_dfa(state1,[b2],1,1)
+        end
+
+        b2 = first(table_row[2])
+        #Prove that all valid third bytes return correct state
+        for b3 = table_row[3]
+            @test Base._UTF8_DFA_ACCEPT == Base._isvalid_utf8_dfa(state2,[b3],1,1)
+        end
+        for b3 = setdiff(0x00:0xFF,table_row[3])
+            @test Base._UTF8_DFA_INVALID == Base._isvalid_utf8_dfa(state2,[b3],1,1)
+        end
+    end
+
+    # Check Four byte Sequences
+    for table_row in table_rows[7:9]
+        b1 = first(table_row[1])
+        state1 = Base._isvalid_utf8_dfa(Base._UTF8_DFA_ACCEPT,[b1],1,1)
+        state2 = Base._isvalid_utf8_dfa(Base._UTF8_DFA_ASCII,[b1],1,1)
+        @test state1 == state2
+        #Prove that all the first bytes in a row give same state
+        for b1 in table_row[1]
+            @test state1 == Base._isvalid_utf8_dfa(Base._UTF8_DFA_ACCEPT,[b1],1,1)
+            @test state1 == Base._isvalid_utf8_dfa(Base._UTF8_DFA_ASCII,[b1],1,1)
+        end
+
+        b1 = first(table_row[1])
+        b2 = first(table_row[2])
+        #Prove that all valid second bytes return same state
+        state2 = Base._isvalid_utf8_dfa(state1,[b2],1,1)
+        for b2 = table_row[2]
+            @test state2 == Base._isvalid_utf8_dfa(state1,[b2],1,1)
+        end
+        for b2 = setdiff(0x00:0xFF,table_row[2])
+            @test Base._UTF8_DFA_INVALID == Base._isvalid_utf8_dfa(state1,[b2],1,1)
+        end
+
+
+        b2 = first(table_row[2])
+        b3 = first(table_row[3])
+        state3 = Base._isvalid_utf8_dfa(state2,[b3],1,1)
+        #Prove that all valid third bytes return same state
+        for b3 = table_row[3]
+            @test state3 == Base._isvalid_utf8_dfa(state2,[b3],1,1)
+        end
+        for b3 = setdiff(0x00:0xFF,table_row[3])
+            @test Base._UTF8_DFA_INVALID == Base._isvalid_utf8_dfa(state2,[b3],1,1)
+        end
+
+        b3 = first(table_row[3])
+        #Prove that all valid forth bytes return correct state
+        for b4 = table_row[4]
+            @test Base._UTF8_DFA_ACCEPT == Base._isvalid_utf8_dfa(state3,[b4],1,1)
+        end
+        for b4 = setdiff(0x00:0xFF,table_row[4])
+            @test Base._UTF8_DFA_INVALID == Base._isvalid_utf8_dfa(state3,[b4],1,1)
+        end
+    end
 end

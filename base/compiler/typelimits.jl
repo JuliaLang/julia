@@ -6,7 +6,6 @@
 
 const MAX_TYPEUNION_COMPLEXITY = 3
 const MAX_TYPEUNION_LENGTH = 3
-const MAX_INLINE_CONST_SIZE = 256
 
 #########################
 # limitation heuristics #
@@ -36,6 +35,12 @@ end
 # try to find `type` somewhere in `comparison` type
 # at a minimum nesting depth of `mindepth`
 function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
+    if has_free_typevars(t) || has_free_typevars(c)
+        # Don't allow finding types with free typevars. These strongly depend
+        # on identity and we do not make any effort to make sure this returns
+        # sensible results in that case.
+        return false
+    end
     if t === c
         return mindepth <= 1
     end
@@ -88,10 +93,7 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
         return t # fast path: unparameterized are always simple
     else
         ut = unwrap_unionall(t)
-        if isa(ut, DataType) && isa(c, Type) && c !== Union{} && c <: t
-            # TODO: need to check that the UnionAll bounds on t are limited enough too
-            return t # t is already wider than the comparison in the type lattice
-        elseif is_derived_type_from_any(ut, sources, depth)
+        if is_derived_type_from_any(ut, sources, depth)
             return t # t isn't something new
         end
     end
@@ -209,9 +211,6 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         return false # Bottom is as simple as they come
     elseif isa(t, DataType) && isempty(t.parameters)
         return false # fastpath: unparameterized types are always finite
-    elseif tupledepth > 0 && isa(unwrap_unionall(t), DataType) && isa(c, Type) && c !== Union{} && c <: t
-        # TODO: need to check that the UnionAll bounds on t are limited enough too
-        return false # t is already wider than the comparison in the type lattice
     elseif tupledepth > 0 && is_derived_type_from_any(unwrap_unionall(t), sources, depth)
         return false # t isn't something new
     end
@@ -228,7 +227,7 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
     end
     # rules for various comparison types
     if isa(c, TypeVar)
-        tupledepth = 1 # allow replacing a TypeVar with a concrete value (since we know the UnionAll must be in covariant position)
+        tupledepth = 1
         if isa(t, TypeVar)
             return !(t.lb === Union{} || t.lb === c.lb) || # simplify lb towards Union{}
                    type_more_complex(t.ub, c.ub, sources, depth + 1, tupledepth, 0)
@@ -262,7 +261,8 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         elseif isa(c, DataType) && t.name === c.name
             cP = c.parameters
             length(cP) < length(tP) && return true
-            length(cP) > length(tP) && !isvarargtype(tP[end]) && depth == 1 && return false
+            isempty(tP) && return false
+            length(cP) > length(tP) && !isvarargtype(tP[end]) && depth == 1 && return false # is this line necessary?
             ntail = length(cP) - length(tP) # assume parameters were dropped from the tuple head
             # allow creating variation within a nested tuple, but only so deep
             if t.name === Tuple.name && tupledepth > 0
@@ -304,25 +304,24 @@ end
 
 # A simplified type_more_complex query over the extended lattice
 # (assumes typeb ⊑ typea)
-function issimplertype(lattice::AbstractLattice, @nospecialize(typea), @nospecialize(typeb))
-    typea = ignorelimited(typea)
-    typeb = ignorelimited(typeb)
+function issimplertype(𝕃::AbstractLattice, @nospecialize(typea), @nospecialize(typeb))
     typea isa MaybeUndef && (typea = typea.typ) # n.b. does not appear in inference
     typeb isa MaybeUndef && (typeb = typeb.typ) # n.b. does not appear in inference
+    @assert !isa(typea, LimitedAccuracy) && !isa(typeb, LimitedAccuracy) "LimitedAccuracy not supported by simplertype lattice" # n.b. the caller was supposed to handle these
     typea === typeb && return true
     if typea isa PartialStruct
         aty = widenconst(typea)
         for i = 1:length(typea.fields)
             ai = unwrapva(typea.fields[i])
             bi = fieldtype(aty, i)
-            is_lattice_equal(lattice, ai, bi) && continue
+            is_lattice_equal(𝕃, ai, bi) && continue
             tni = _typename(widenconst(ai))
             if tni isa Const
                 bi = (tni.val::Core.TypeName).wrapper
-                is_lattice_equal(lattice, ai, bi) && continue
+                is_lattice_equal(𝕃, ai, bi) && continue
             end
-            bi = getfield_tfunc(lattice, typeb, Const(i))
-            is_lattice_equal(lattice, ai, bi) && continue
+            bi = getfield_tfunc(𝕃, typeb, Const(i))
+            is_lattice_equal(𝕃, ai, bi) && continue
             # It is not enough for ai to be simpler than bi: it must exactly equal
             # (for this, an invariant struct field, by contrast to
             # type_more_complex above which handles covariant tuples).
@@ -330,21 +329,38 @@ function issimplertype(lattice::AbstractLattice, @nospecialize(typea), @nospecia
         end
     elseif typea isa Type
         return issimpleenoughtype(typea)
-    # elseif typea isa Const # fall-through good
+    # elseif typea isa Const # fall-through to true is good
     elseif typea isa Conditional # follow issubconditional query
         typeb isa Const && return true
         typeb isa Conditional || return false
         is_same_conditionals(typea, typeb) || return false
-        issimplertype(lattice, typea.thentype, typeb.thentype) || return false
-        issimplertype(lattice, typea.elsetype, typeb.elsetype) || return false
+        issimplertype(𝕃, typea.thentype, typeb.thentype) || return false
+        issimplertype(𝕃, typea.elsetype, typeb.elsetype) || return false
     elseif typea isa InterConditional # ibid
         typeb isa Const && return true
         typeb isa InterConditional || return false
         is_same_conditionals(typea, typeb) || return false
-        issimplertype(lattice, typea.thentype, typeb.thentype) || return false
-        issimplertype(lattice, typea.elsetype, typeb.elsetype) || return false
+        issimplertype(𝕃, typea.thentype, typeb.thentype) || return false
+        issimplertype(𝕃, typea.elsetype, typeb.elsetype) || return false
+    elseif typea isa MustAlias
+        typeb isa MustAlias || return false
+        issubalias(typeb, typea) || return false
+        issimplertype(𝕃, typea.vartyp, typeb.vartyp) || return false
+        issimplertype(𝕃, typea.fldtyp, typeb.fldtyp) || return false
+    elseif typea isa InterMustAlias
+        typeb isa InterMustAlias || return false
+        issubalias(typeb, typea) || return false
+        issimplertype(𝕃, typea.vartyp, typeb.vartyp) || return false
+        issimplertype(𝕃, typea.fldtyp, typeb.fldtyp) || return false
     elseif typea isa PartialOpaque
         # TODO
+        typeb isa PartialOpaque || return false
+        aty = widenconst(typea)
+        bty = widenconst(typeb)
+        if typea.source === typeb.source && typea.parent === typeb.parent && aty == bty && typea.env == typeb.env
+            return false
+        end
+        return false
     end
     return true
 end
@@ -363,7 +379,6 @@ end
     return nothing
 end
 
-
 function tmerge(lattice::OptimizerLattice, @nospecialize(typea), @nospecialize(typeb))
     r = tmerge_fast_path(lattice, typea, typeb)
     r !== nothing && return r
@@ -377,29 +392,87 @@ function tmerge(lattice::OptimizerLattice, @nospecialize(typea), @nospecialize(t
     return tmerge(widenlattice(lattice), typea, typeb)
 end
 
-function tmerge(lattice::InferenceLattice, @nospecialize(typea), @nospecialize(typeb))
-    r = tmerge_fast_path(lattice, typea, typeb)
-    r !== nothing && return r
+function union_causes(causesa::IdSet{InferenceState}, causesb::IdSet{InferenceState})
+    if causesa ⊆ causesb
+        return causesb
+    elseif causesb ⊆ causesa
+        return causesa
+    else
+        return union!(copy(causesa), causesb)
+    end
+end
 
-    # type-lattice for LimitedAccuracy wrapper
-    # the merge create a slightly narrower type than needed, but we can't
-    # represent the precise intersection of causes and don't attempt to
-    # enumerate some of these cases where we could
+function merge_causes(causesa::IdSet{InferenceState}, causesb::IdSet{InferenceState})
+    # TODO: When lattice elements are equal, we're allowed to discard one or the
+    # other set, but we'll need to come up with a consistent rule. For now, we
+    # just check the length, but other heuristics may be applicable.
+    if length(causesa) < length(causesb)
+        return causesa
+    elseif length(causesb) < length(causesa)
+        return causesb
+    else
+        return union!(copy(causesa), causesb)
+    end
+end
+
+@noinline function tmerge_limited(lattice::InferenceLattice, @nospecialize(typea), @nospecialize(typeb))
+    typea === Union{} && return typeb
+    typeb === Union{} && return typea
+
+    # Like tmerge_fast_path, but tracking which causes need to be preserved at
+    # the same time.
     if isa(typea, LimitedAccuracy) && isa(typeb, LimitedAccuracy)
-        if typea.causes ⊆ typeb.causes
-            causes = typeb.causes
-        elseif typeb.causes ⊆ typea.causes
-            causes = typea.causes
+        causesa = typea.causes
+        causesb = typeb.causes
+        typea = typea.typ
+        typeb = typeb.typ
+        suba = ⊑(lattice, typea, typeb)
+        subb = ⊑(lattice, typeb, typea)
+
+        # Approximated types are lattice equal. Merge causes.
+        if suba && subb
+            return LimitedAccuracy(typeb, merge_causes(causesa, causesb))
+        elseif suba
+            issimplertype(lattice, typeb, typea) && return LimitedAccuracy(typeb, causesb)
+            causes = causesb
+            # `a`'s causes may be discarded
+        elseif subb
+            causes = causesa
         else
-            causes = union!(copy(typea.causes), typeb.causes)
+            causes = union_causes(causesa, causesb)
         end
-        return LimitedAccuracy(tmerge(widenlattice(lattice), typea.typ, typeb.typ), causes)
-    elseif isa(typea, LimitedAccuracy)
-        return LimitedAccuracy(tmerge(widenlattice(lattice), typea.typ, typeb), typea.causes)
-    elseif isa(typeb, LimitedAccuracy)
-        return LimitedAccuracy(tmerge(widenlattice(lattice), typea, typeb.typ), typeb.causes)
+    else
+        if isa(typeb, LimitedAccuracy)
+            (typea, typeb) = (typeb, typea)
+        end
+        typea = typea::LimitedAccuracy
+
+        causes = typea.causes
+        typea = typea.typ
+
+        suba = ⊑(lattice, typea, typeb)
+        if suba
+            issimplertype(lattice, typeb, typea) && return typeb
+            # `typea` was narrower than `typeb`. Whatever tmerge produces,
+            # we know it must be wider than `typeb`, so we may drop the
+            # causes.
+            causes = nothing
+        end
+        subb = ⊑(lattice, typeb, typea)
     end
 
+    suba && subb && return LimitedAccuracy(typea, causes)
+    subb && issimplertype(lattice, typea, typeb) && return LimitedAccuracy(typea, causes)
+    return LimitedAccuracy(tmerge(widenlattice(lattice), typea, typeb), causes)
+end
+
+function tmerge(lattice::InferenceLattice, @nospecialize(typea), @nospecialize(typeb))
+    if isa(typea, LimitedAccuracy) || isa(typeb, LimitedAccuracy)
+        return tmerge_limited(lattice, typea, typeb)
+    end
+
+    r = tmerge_fast_path(widenlattice(lattice), typea, typeb)
+    r !== nothing && return r
     return tmerge(widenlattice(lattice), typea, typeb)
 end
 
@@ -421,8 +494,8 @@ function tmerge(lattice::ConditionalsLattice, @nospecialize(typea), @nospecializ
     end
     if isa(typea, Conditional) && isa(typeb, Conditional)
         if is_same_conditionals(typea, typeb)
-            thentype = tmerge(typea.thentype, typeb.thentype)
-            elsetype = tmerge(typea.elsetype, typeb.elsetype)
+            thentype = tmerge(widenlattice(lattice), typea.thentype, typeb.thentype)
+            elsetype = tmerge(widenlattice(lattice), typea.elsetype, typeb.elsetype)
             if thentype !== elsetype
                 return Conditional(typea.slot, thentype, elsetype)
             end
@@ -456,8 +529,8 @@ function tmerge(lattice::InterConditionalsLattice, @nospecialize(typea), @nospec
     end
     if isa(typea, InterConditional) && isa(typeb, InterConditional)
         if is_same_conditionals(typea, typeb)
-            thentype = tmerge(typea.thentype, typeb.thentype)
-            elsetype = tmerge(typea.elsetype, typeb.elsetype)
+            thentype = tmerge(widenlattice(lattice), typea.thentype, typeb.thentype)
+            elsetype = tmerge(widenlattice(lattice), typea.elsetype, typeb.elsetype)
             if thentype !== elsetype
                 return InterConditional(typea.slot, thentype, elsetype)
             end
@@ -473,66 +546,89 @@ function tmerge(lattice::InterConditionalsLattice, @nospecialize(typea), @nospec
     return tmerge(widenlattice(lattice), typea, typeb)
 end
 
-function tmerge(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(typeb))
-    # type-lattice for Const and PartialStruct wrappers
-    acp = isa(typea, Const) || isa(typea, PartialStruct)
-    bcp = isa(typeb, Const) || isa(typeb, PartialStruct)
-    if acp && bcp
-        aty = widenconst(typea)
-        bty = widenconst(typeb)
-        if aty === bty
-            # must have egal here, since we do not create PartialStruct for non-concrete types
-            typea_nfields = nfields_tfunc(typea)
-            typeb_nfields = nfields_tfunc(typeb)
-            isa(typea_nfields, Const) || return aty
-            isa(typeb_nfields, Const) || return aty
-            type_nfields = typea_nfields.val::Int
-            type_nfields === typeb_nfields.val::Int || return aty
-            type_nfields == 0 && return aty
-            fields = Vector{Any}(undef, type_nfields)
-            anyrefine = false
-            for i = 1:type_nfields
-                ai = getfield_tfunc(lattice, typea, Const(i))
-                bi = getfield_tfunc(lattice, typeb, Const(i))
-                ft = fieldtype(aty, i)
-                if is_lattice_equal(lattice, ai, bi) || is_lattice_equal(lattice, ai, ft)
-                    # Since ai===bi, the given type has no restrictions on complexity.
-                    # and can be used to refine ft
-                    tyi = ai
-                elseif is_lattice_equal(lattice, bi, ft)
-                    tyi = bi
+function tmerge(𝕃::AnyMustAliasesLattice, @nospecialize(typea), @nospecialize(typeb))
+    typea = widenmustalias(typea)
+    typeb = widenmustalias(typeb)
+    return tmerge(widenlattice(𝕃), typea, typeb)
+end
+
+# N.B. This can also be called with both typea::Const and typeb::Const to
+# to recover PartialStruct from `Const`s with overlapping fields.
+function tmerge_partial_struct(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(typeb))
+    aty = widenconst(typea)
+    bty = widenconst(typeb)
+    if aty === bty
+        # must have egal here, since we do not create PartialStruct for non-concrete types
+        typea_nfields = nfields_tfunc(lattice, typea)
+        typeb_nfields = nfields_tfunc(lattice, typeb)
+        isa(typea_nfields, Const) || return nothing
+        isa(typeb_nfields, Const) || return nothing
+        type_nfields = typea_nfields.val::Int
+        type_nfields === typeb_nfields.val::Int || return nothing
+        type_nfields == 0 && return nothing
+        fields = Vector{Any}(undef, type_nfields)
+        anyrefine = false
+        for i = 1:type_nfields
+            ai = getfield_tfunc(lattice, typea, Const(i))
+            bi = getfield_tfunc(lattice, typeb, Const(i))
+            # N.B.: We're assuming here that !isType(aty), because that case
+            # only arises when typea === typeb, which should have been caught
+            # before calling this.
+            ft = fieldtype(aty, i)
+            if is_lattice_equal(lattice, ai, bi) || is_lattice_equal(lattice, ai, ft)
+                # Since ai===bi, the given type has no restrictions on complexity.
+                # and can be used to refine ft
+                tyi = ai
+            elseif is_lattice_equal(lattice, bi, ft)
+                tyi = bi
+            elseif (tyi′ = tmerge_field(lattice, ai, bi); tyi′ !== nothing)
+                # allow external lattice implementation to provide a custom field-merge strategy
+                tyi = tyi′
+            else
+                # Otherwise use the default aggressive field-merge implementation, and
+                # choose between using the fieldtype or some other simple merged type.
+                # The wrapper type never has restrictions on complexity,
+                # so try to use that to refine the estimated type too.
+                tni = _typename(widenconst(ai))
+                if tni isa Const && tni === _typename(widenconst(bi))
+                    # A tmeet call may cause tyi to become complex, but since the inputs were
+                    # strictly limited to being egal, this has no restrictions on complexity.
+                    # (Otherwise, we would need to use <: and take the narrower one without
+                    # intersection. See the similar comment in abstract_call_method.)
+                    tyi = typeintersect(ft, (tni.val::Core.TypeName).wrapper)
                 else
-                    # Otherwise choose between using the fieldtype or some other simple merged type.
-                    # The wrapper type never has restrictions on complexity,
-                    # so try to use that to refine the estimated type too.
-                    tni = _typename(widenconst(ai))
-                    if tni isa Const && tni === _typename(widenconst(bi))
-                        # A tmeet call may cause tyi to become complex, but since the inputs were
-                        # strictly limited to being egal, this has no restrictions on complexity.
-                        # (Otherwise, we would need to use <: and take the narrower one without
-                        # intersection. See the similar comment in abstract_call_method.)
-                        tyi = typeintersect(ft, (tni.val::Core.TypeName).wrapper)
-                    else
-                        # Since aty===bty, the fieldtype has no restrictions on complexity.
-                        tyi = ft
-                    end
-                end
-                fields[i] = tyi
-                if !anyrefine
-                    anyrefine = has_nontrivial_const_info(lattice, tyi) || # constant information
-                                ⋤(lattice, tyi, ft) # just a type-level information, but more precise than the declared type
+                    # Since aty===bty, the fieldtype has no restrictions on complexity.
+                    tyi = ft
                 end
             end
-            return anyrefine ? PartialStruct(aty, fields) : aty
+            fields[i] = tyi
+            if !anyrefine
+                anyrefine = has_nontrivial_extended_info(lattice, tyi) || # extended information
+                            ⋤(lattice, tyi, ft) # just a type-level information, but more precise than the declared type
+            end
         end
+        anyrefine && return PartialStruct(aty, fields)
     end
+    return nothing
+end
 
+function tmerge(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(typeb))
+    # type-lattice for Const and PartialStruct wrappers
+    aps = isa(typea, PartialStruct)
+    bps = isa(typeb, PartialStruct)
+    acp = aps || isa(typea, Const)
+    bcp = bps || isa(typeb, Const)
+    if acp && bcp
+        typea === typeb && return typea
+        psrt = tmerge_partial_struct(lattice, typea, typeb)
+        psrt !== nothing && return psrt
+    end
 
     # Don't widen const here - external AbstractInterpreter might insert lattice
     # layers between us and `ConstsLattice`.
     wl = widenlattice(lattice)
-    isa(typea, PartialStruct) && (typea = widenlattice(wl, typea))
-    isa(typeb, PartialStruct) && (typeb = widenlattice(wl, typeb))
+    aps && (typea = widenlattice(wl, typea))
+    bps && (typeb = widenlattice(wl, typeb))
 
     # type-lattice for PartialOpaque wrapper
     apo = isa(typea, PartialOpaque)
@@ -559,21 +655,36 @@ function tmerge(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(ty
     return tmerge(wl, typea, typeb)
 end
 
+
 function tmerge(lattice::ConstsLattice, @nospecialize(typea), @nospecialize(typeb))
-    # the equality of the constants can be checked here, but the equivalent check is usually
-    # done by `tmerge_fast_path` at earlier lattice stage
+    acp = isa(typea, Const) || isa(typea, PartialTypeVar)
+    bcp = isa(typeb, Const) || isa(typeb, PartialTypeVar)
+    if acp && bcp
+        typea === typeb && return typea
+    end
     wl = widenlattice(lattice)
-    (isa(typea, Const) || isa(typea, PartialTypeVar)) && (typea = widenlattice(wl, typea))
-    (isa(typeb, Const) || isa(typeb, PartialTypeVar)) && (typeb = widenlattice(wl, typeb))
+    acp && (typea = widenlattice(wl, typea))
+    bcp && (typeb = widenlattice(wl, typeb))
     return tmerge(wl, typea, typeb)
 end
 
 function tmerge(::JLTypeLattice, @nospecialize(typea::Type), @nospecialize(typeb::Type))
-    typea == typeb && return typea
     # it's always ok to form a Union of two concrete types
-    if (isconcretetype(typea) || isType(typea)) && (isconcretetype(typeb) || isType(typeb))
+    act = isconcretetype(typea)
+    bct = isconcretetype(typeb)
+    if act && bct
+        # Extra fast path for pointer-egal concrete types
+        (pointer_from_objref(typea) === pointer_from_objref(typeb)) && return typea
+    end
+    if (act || isType(typea)) && (bct || isType(typeb))
         return Union{typea, typeb}
     end
+    typea <: typeb && return typeb
+    typeb <: typea && return typea
+    return tmerge_types_slow(typea, typeb)
+end
+
+@noinline function tmerge_types_slow(@nospecialize(typea::Type), @nospecialize(typeb::Type))
     # collect the list of types from past tmerge calls returning Union
     # and then reduce over that list
     types = Any[]

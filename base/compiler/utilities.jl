@@ -77,6 +77,12 @@ function quoted(@nospecialize(x))
     return is_self_quoting(x) ? x : QuoteNode(x)
 end
 
+############
+# inlining #
+############
+
+const MAX_INLINE_CONST_SIZE = 256
+
 function count_const_size(@nospecialize(x), count_self::Bool = true)
     (x isa Type || x isa Symbol) && return 0
     ismutable(x) && return MAX_INLINE_CONST_SIZE + 1
@@ -108,23 +114,23 @@ end
 invoke_api(li::CodeInstance) = ccall(:jl_invoke_api, Cint, (Any,), li)
 use_const_api(li::CodeInstance) = invoke_api(li) == 2
 
-function get_staged(mi::MethodInstance)
+function get_staged(mi::MethodInstance, world::UInt)
     may_invoke_generator(mi) || return nothing
     try
         # user code might throw errors – ignore them
-        ci = ccall(:jl_code_for_staged, Any, (Any,), mi)::CodeInfo
+        ci = ccall(:jl_code_for_staged, Any, (Any, UInt), mi, world)::CodeInfo
         return ci
     catch
         return nothing
     end
 end
 
-function retrieve_code_info(linfo::MethodInstance)
+function retrieve_code_info(linfo::MethodInstance, world::UInt)
     m = linfo.def::Method
     c = nothing
     if isdefined(m, :generator)
         # user code might throw errors – ignore them
-        c = get_staged(linfo)
+        c = get_staged(linfo, world)
     end
     if c === nothing && isdefined(m, :source)
         src = m.source
@@ -152,8 +158,8 @@ function get_compileable_sig(method::Method, @nospecialize(atype), sparams::Simp
         mt, atype, sparams, method)
 end
 
-isa_compileable_sig(@nospecialize(atype), method::Method) =
-    !iszero(ccall(:jl_isa_compileable_sig, Int32, (Any, Any), atype, method))
+isa_compileable_sig(@nospecialize(atype), sparams::SimpleVector, method::Method) =
+    !iszero(ccall(:jl_isa_compileable_sig, Int32, (Any, Any, Any), atype, sparams, method))
 
 # eliminate UnionAll vars that might be degenerate due to having identical bounds,
 # or a concrete upper bound and appearing covariantly.
@@ -193,14 +199,9 @@ function normalize_typevars(method::Method, @nospecialize(atype), sparams::Simpl
 end
 
 # get a handle to the unique specialization object representing a particular instantiation of a call
-function specialize_method(method::Method, @nospecialize(atype), sparams::SimpleVector; preexisting::Bool=false, compilesig::Bool=false)
+function specialize_method(method::Method, @nospecialize(atype), sparams::SimpleVector; preexisting::Bool=false)
     if isa(atype, UnionAll)
         atype, sparams = normalize_typevars(method, atype, sparams)
-    end
-    if compilesig
-        new_atype = get_compileable_sig(method, atype, sparams)
-        new_atype === nothing && return nothing
-        atype = new_atype
     end
     if preexisting
         # check cached specializations
@@ -212,6 +213,27 @@ end
 
 function specialize_method(match::MethodMatch; kwargs...)
     return specialize_method(match.method, match.spec_types, match.sparams; kwargs...)
+end
+
+"""
+    is_declared_inline(method::Method) -> Bool
+
+Check if `method` is declared as `@inline`.
+"""
+is_declared_inline(method::Method) = _is_declared_inline(method, true)
+
+"""
+    is_declared_noinline(method::Method) -> Bool
+
+Check if `method` is declared as `@noinline`.
+"""
+is_declared_noinline(method::Method) = _is_declared_inline(method, false)
+
+function _is_declared_inline(method::Method, inline::Bool)
+    isdefined(method, :source) || return false
+    src = method.source
+    isa(src, MaybeCompressed) || return false
+    return (inline ? is_declared_inline : is_declared_noinline)(src)
 end
 
 """
@@ -239,8 +261,8 @@ Return an iterator over a list of backedges. Iteration returns `(sig, caller)` e
 which will be one of the following:
 
 - `BackedgePair(nothing, caller::MethodInstance)`: a call made by ordinary inferable dispatch
-- `BackedgePair(invokesig, caller::MethodInstance)`: a call made by `invoke(f, invokesig, args...)`
-- `BackedgePair(specsig, mt::MethodTable)`: an abstract call
+- `BackedgePair(invokesig::Type, caller::MethodInstance)`: a call made by `invoke(f, invokesig, args...)`
+- `BackedgePair(specsig::Type, mt::MethodTable)`: an abstract call
 
 # Examples
 
@@ -254,7 +276,7 @@ callyou (generic function with 1 method)
 julia> callyou(2.0)
 3.0
 
-julia> mi = first(which(callme, (Any,)).specializations)
+julia> mi = which(callme, (Any,)).specializations
 MethodInstance for callme(::Float64)
 
 julia> @eval Core.Compiler for (; sig, caller) in BackedgeIterator(Main.mi.backedges)
@@ -273,17 +295,17 @@ const empty_backedge_iter = BackedgeIterator(Any[])
 
 struct BackedgePair
     sig # ::Union{Nothing,Type}
-    caller::Union{MethodInstance,Core.MethodTable}
-    BackedgePair(@nospecialize(sig), caller::Union{MethodInstance,Core.MethodTable}) = new(sig, caller)
+    caller::Union{MethodInstance,MethodTable}
+    BackedgePair(@nospecialize(sig), caller::Union{MethodInstance,MethodTable}) = new(sig, caller)
 end
 
 function iterate(iter::BackedgeIterator, i::Int=1)
     backedges = iter.backedges
     i > length(backedges) && return nothing
     item = backedges[i]
-    isa(item, MethodInstance) && return BackedgePair(nothing, item), i+1           # regular dispatch
-    isa(item, Core.MethodTable) && return BackedgePair(backedges[i+1], item), i+2  # abstract dispatch
-    return BackedgePair(item, backedges[i+1]::MethodInstance), i+2                 # `invoke` calls
+    isa(item, MethodInstance) && return BackedgePair(nothing, item), i+1      # regular dispatch
+    isa(item, MethodTable) && return BackedgePair(backedges[i+1], item), i+2  # abstract dispatch
+    return BackedgePair(item, backedges[i+1]::MethodInstance), i+2            # `invoke` calls
 end
 
 #########
@@ -291,11 +313,12 @@ end
 #########
 
 function singleton_type(@nospecialize(ft))
+    ft = widenslotwrapper(ft)
     if isa(ft, Const)
         return ft.val
     elseif isconstType(ft)
         return ft.parameters[1]
-    elseif ft isa DataType && isdefined(ft, :instance)
+    elseif issingletontype(ft)
         return ft.instance
     end
     return nothing
@@ -303,7 +326,7 @@ end
 
 function maybe_singleton_const(@nospecialize(t))
     if isa(t, DataType)
-        if isdefined(t, :instance)
+        if issingletontype(t)
             return Const(t.instance)
         elseif isconstType(t)
             return Const(t.parameters[1])
@@ -449,8 +472,11 @@ function find_throw_blocks(code::Vector{Any}, handler_at::Vector{Int})
 end
 
 # using a function to ensure we can infer this
-@inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id :
-    isa(s, Argument) ? (s::Argument).n : (s::TypedSlot).id
+@inline function slot_id(s)
+    isa(s, SlotNumber) && return s.id
+    isa(s, Argument) && return s.n
+    return (s::TypedSlot).id
+end
 
 ###########
 # options #

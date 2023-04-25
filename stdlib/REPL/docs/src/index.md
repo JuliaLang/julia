@@ -617,19 +617,33 @@ julia> REPL.activate(CustomMod)
   var       8 bytes Int64
 ```
 
-## IPython mode
+## Numbered prompt
 
-It is possible to get an interface which is similar to the IPython REPL with numbered input prompts and output prefixes. This is done by calling `REPL.ipython_mode!()`. If you want to have this enabled on startup, add
+It is possible to get an interface which is similar to the IPython REPL and the Mathematica notebook with numbered input prompts and output prefixes. This is done by calling `REPL.numbered_prompt!()`. If you want to have this enabled on startup, add
+
 ```julia
 atreplinit() do repl
     if !isdefined(repl, :interface)
         repl.interface = REPL.setup_interface(repl)
     end
-    REPL.ipython_mode!(repl)
+    REPL.numbered_prompt!(repl)
 end
 ```
 
-to your `startup.jl` file.
+to your `startup.jl` file. In numbered prompt the variable `Out[n]` (where `n` is an integer) can be used to refer to earlier results:
+
+```julia-repl
+In [1]: 5 + 3
+Out[1]: 8
+
+In [2]: Out[1] + 5
+Out[2]: 13
+
+In [3]: Out
+Out[3]: Dict{Int64, Any} with 2 entries:
+  2 => 13
+  1 => 8
+```
 
 ## TerminalMenus
 

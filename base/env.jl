@@ -74,7 +74,7 @@ all keys to uppercase for display, iteration, and copying. Portable code should 
 ability to distinguish variables by case, and should beware that setting an ostensibly lowercase
 variable may result in an uppercase `ENV` key.)
 
-    !!! warning
+!!! warning
     Mutating the environment is not thread-safe.
 
 # Examples
@@ -96,6 +96,44 @@ julia> ENV["JULIA_EDITOR"]
 See also: [`withenv`](@ref), [`addenv`](@ref).
 """
 const ENV = EnvDict()
+
+const get_bool_env_truthy = (
+    "t", "T",
+    "true", "True", "TRUE",
+    "y", "Y",
+    "yes", "Yes", "YES",
+    "1")
+const get_bool_env_falsy = (
+    "f", "F",
+    "false", "False", "FALSE",
+    "n", "N",
+    "no", "No", "NO",
+    "0")
+
+"""
+    Base.get_bool_env(name::String, default::Bool)::Union{Bool,Nothing}
+
+Evaluate whether the value of environnment variable `name` is a truthy or falsy string,
+and return `nothing` if it is not recognized as either. If the variable is not set, or is set to "",
+return `default`.
+
+Recognized values are the following, and their Capitalized and UPPERCASE forms:
+    truthy: "t", "true", "y", "yes", "1"
+    falsy:  "f", "false", "n", "no", "0"
+"""
+function get_bool_env(name::String, default::Bool)
+    haskey(ENV, name) || return default
+    val = ENV[name]
+    if isempty(val)
+        return default
+    elseif val in get_bool_env_truthy
+        return true
+    elseif val in get_bool_env_falsy
+        return false
+    else
+        return nothing
+    end
+end
 
 getindex(::EnvDict, k::AbstractString) = access_env(k->throw(KeyError(k)), k)
 get(::EnvDict, k::AbstractString, def) = access_env(Returns(def), k)
@@ -184,7 +222,7 @@ by zero or more `"var"=>val` arguments `kv`. `withenv` is generally used via the
 environment variable (if it is set). When `withenv` returns, the original environment has
 been restored.
 
-    !!! warning
+!!! warning
     Changing the environment is not thread-safe. For running external commands with a different
     environment from the parent process, prefer using [`addenv`](@ref) over `withenv`.
 """

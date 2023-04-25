@@ -848,7 +848,7 @@ function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractSt
             end
         finally
             if !isempty(newbase)
-                close(onto_ann)
+                close(onto_ann::GitAnnotated)
             end
             close(upst_ann)
             close(head_ann)

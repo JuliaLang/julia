@@ -211,8 +211,8 @@ reducedim_init(f, op::typeof(|), A::AbstractArrayOrBroadcasted, region) = reduce
 let
     BitIntFloat = Union{BitInteger, IEEEFloat}
     T = Union{
-        [AbstractArray{t} for t in uniontypes(BitIntFloat)]...,
-        [AbstractArray{Complex{t}} for t in uniontypes(BitIntFloat)]...}
+        Any[AbstractArray{t} for t in uniontypes(BitIntFloat)]...,
+        Any[AbstractArray{Complex{t}} for t in uniontypes(BitIntFloat)]...}
 
     global function reducedim_init(f, op::Union{typeof(+),typeof(add_sum)}, A::T, region)
         z = zero(f(zero(eltype(A))))

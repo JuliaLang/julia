@@ -25,6 +25,8 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/Debug.h>
+#include "julia.h"
+#include "jitlayers.h"
 
 #define DEBUG_TYPE "demote_float16"
 
@@ -43,13 +45,34 @@ INST_STATISTIC(FRem);
 INST_STATISTIC(FCmp);
 #undef INST_STATISTIC
 
+extern JuliaOJIT *jl_ExecutionEngine;
+
 namespace {
+
+static bool have_fp16(Function &caller, const Triple &TT) {
+    Attribute FSAttr = caller.getFnAttribute("target-features");
+    StringRef FS =
+        FSAttr.isValid() ? FSAttr.getValueAsString() : jl_ExecutionEngine->getTargetFeatureString();
+    if (TT.isAArch64()) {
+        if (FS.find("+fp16fml") != llvm::StringRef::npos || FS.find("+fullfp16") != llvm::StringRef::npos){
+            return true;
+        }
+    } else if (TT.getArch() == Triple::x86_64) {
+        if (FS.find("+avx512fp16") != llvm::StringRef::npos){
+            return true;
+        }
+    }
+    return false;
+}
 
 static bool demoteFloat16(Function &F)
 {
+    auto TT = Triple(F.getParent()->getTargetTriple());
+    if (have_fp16(F, TT))
+        return false;
+
     auto &ctx = F.getContext();
     auto T_float32 = Type::getFloatTy(ctx);
-
     SmallVector<Instruction *, 0> erase;
     for (auto &BB : F) {
         for (auto &I : BB) {

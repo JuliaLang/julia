@@ -13,6 +13,12 @@ using .Main.Furlongs
 isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
 using .Main.Quaternions
 
+isdefined(Main, :InfiniteArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "InfiniteArrays.jl"))
+using .Main.InfiniteArrays
+
+isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
+using .Main.FillArrays
+
 include("testutils.jl") # test_approx_eq_modphase
 
 n = 10 #Size of test matrix
@@ -215,6 +221,17 @@ Random.seed!(1)
                 @test isone(BDone)
                 @test !iszero(BDmix)
                 @test !isone(BDmix)
+            end
+        end
+
+        @testset "trace" begin
+            for uplo in (:U, :L)
+                B = Bidiagonal(dv, ev, uplo)
+                if relty <: Integer
+                    @test tr(B) == tr(Matrix(B))
+                else
+                    @test tr(B) ≈ tr(Matrix(B)) rtol=2eps(relty)
+                end
             end
         end
 
@@ -781,6 +798,21 @@ end
             @test iszero(BL[i,j])
         end
     end
+end
+
+@testset "copyto! with UniformScaling" begin
+    @testset "Fill" begin
+        for len in (4, InfiniteArrays.Infinity())
+            d = FillArrays.Fill(1, len)
+            ud = FillArrays.Fill(0, len-1)
+            B = Bidiagonal(d, ud, :U)
+            @test copyto!(B, I) === B
+        end
+    end
+    B = Bidiagonal(fill(2, 4), fill(3, 3), :U)
+    copyto!(B, I)
+    @test all(isone, diag(B))
+    @test all(iszero, diag(B, 1))
 end
 
 end # module TestBidiagonal

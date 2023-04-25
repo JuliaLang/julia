@@ -244,8 +244,8 @@ ERROR: UndefRefError: access to undefined reference
 This avoids the need to continually check for `null` values. However, not all object fields are
 references. Julia considers some types to be "plain data", meaning all of their data is self-contained
 and does not reference other objects. The plain data types consist of primitive types (e.g. `Int`)
-and immutable structs of other plain data types. The initial contents of a plain data type is
-undefined:
+and immutable structs of other plain data types (see also: [`isbits`](@ref), [`isbitstype`](@ref)).
+The initial contents of a plain data type is undefined:
 
 ```julia-repl
 julia> struct HasPlain

@@ -151,9 +151,9 @@ julia> UnitUpperTriangular(A)
 """
 UnitUpperTriangular
 
-const UpperOrUnitUpperTriangular{T} = Union{UpperTriangular{T}, UnitUpperTriangular{T}}
-const LowerOrUnitLowerTriangular{T} = Union{LowerTriangular{T}, UnitLowerTriangular{T}}
-const UpperOrLowerTriangular{T} = Union{UpperOrUnitUpperTriangular{T}, LowerOrUnitLowerTriangular{T}}
+const UpperOrUnitUpperTriangular{T,S} = Union{UpperTriangular{T,S}, UnitUpperTriangular{T,S}}
+const LowerOrUnitLowerTriangular{T,S} = Union{LowerTriangular{T,S}, UnitLowerTriangular{T,S}}
+const UpperOrLowerTriangular{T,S} = Union{UpperOrUnitUpperTriangular{T,S}, LowerOrUnitLowerTriangular{T,S}}
 
 imag(A::UpperTriangular) = UpperTriangular(imag(A.data))
 imag(A::LowerTriangular) = LowerTriangular(imag(A.data))
@@ -297,10 +297,10 @@ function istriu(A::Union{UpperTriangular,UnitUpperTriangular}, k::Integer=0)
     k <= 0 && return true
     return _istriu(A, k)
 end
-istril(A::Adjoint) = istriu(A.parent)
-istril(A::Transpose) = istriu(A.parent)
-istriu(A::Adjoint) = istril(A.parent)
-istriu(A::Transpose) = istril(A.parent)
+istril(A::Adjoint, k::Integer=0) = istriu(A.parent, -k)
+istril(A::Transpose, k::Integer=0) = istriu(A.parent, -k)
+istriu(A::Adjoint, k::Integer=0) = istril(A.parent, -k)
+istriu(A::Transpose, k::Integer=0) = istril(A.parent, -k)
 
 function tril!(A::UpperTriangular, k::Integer=0)
     n = size(A,1)
@@ -427,6 +427,11 @@ function -(A::UnitUpperTriangular)
     end
     UpperTriangular(Anew)
 end
+
+tr(A::LowerTriangular) = tr(A.data)
+tr(A::UnitLowerTriangular) = size(A, 1) * oneunit(eltype(A))
+tr(A::UpperTriangular) = tr(A.data)
+tr(A::UnitUpperTriangular) = size(A, 1) * oneunit(eltype(A))
 
 # copy and scale
 function copyto!(A::T, B::T) where T<:Union{UpperTriangular,UnitUpperTriangular}

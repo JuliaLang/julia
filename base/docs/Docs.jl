@@ -39,7 +39,7 @@ You can document an object after its definition by
     @doc "foo" function_to_doc
     @doc "bar" TypeToDoc
 
-For macros, the syntax is `@doc "macro doc" :(@Module.macro)` or `@doc "macro doc"
+For macros, the syntax is `@doc "macro doc" :(Module.@macro)` or `@doc "macro doc"
 :(string_macro"")` for string macros. Without the quote `:()` the expansion of the macro
 will be documented.
 
@@ -73,9 +73,9 @@ const modules = Module[]
 const META    = gensym(:meta)
 const METAType = IdDict{Any,Any}
 
-function meta(m::Module)
+function meta(m::Module; autoinit::Bool=true)
     if !isdefined(m, META) || getfield(m, META) === nothing
-        initmeta(m)
+        autoinit ? initmeta(m) : return nothing
     end
     return getfield(m, META)::METAType
 end
@@ -161,7 +161,8 @@ end
 function docstr(binding::Binding, typesig = Union{})
     @nospecialize typesig
     for m in modules
-        dict = meta(m)
+        dict = meta(m; autoinit=false)
+        isnothing(dict) && continue
         if haskey(dict, binding)
             docs = dict[binding].docs
             if haskey(docs, typesig)
@@ -516,11 +517,12 @@ function docm(source::LineNumberNode, mod::Module, ex)
     @nospecialize ex
     if isexpr(ex, :->) && length(ex.args) > 1
         return docm(source, mod, ex.args...)
-    else
+    elseif isassigned(Base.REPL_MODULE_REF)
         # TODO: this is a shim to continue to allow `@doc` for looking up docstrings
         REPL = Base.REPL_MODULE_REF[]
         return REPL.lookup_doc(ex)
     end
+    return nothing
 end
 # Drop incorrect line numbers produced by nested macro calls.
 docm(source::LineNumberNode, mod::Module, _, _, x...) = docm(source, mod, x...)

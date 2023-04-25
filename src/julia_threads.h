@@ -150,7 +150,6 @@ typedef struct {
     struct _bigval_t *big_objects;
 
     // variables for tracking "remembered set"
-    arraylist_t rem_bindings;
     arraylist_t _remset[2]; // contains jl_value_t*
     // lower bound of the number of pointers inside remembered values
     int remset_nptr;
@@ -171,16 +170,14 @@ typedef struct {
     arraylist_t free_stacks[JL_N_STACK_POOLS];
 } jl_thread_heap_t;
 
-// Cache of thread local change to global metadata during GC
-// This is sync'd after marking.
-typedef union _jl_gc_mark_data jl_gc_mark_data_t;
-
 typedef struct {
-    void **pc; // Current stack address for the pc (up growing)
-    jl_gc_mark_data_t *data; // Current stack address for the data (up growing)
-    void **pc_start; // Cached value of `gc_cache->pc_stack`
-    void **pc_end; // Cached value of `gc_cache->pc_stack_end`
-} jl_gc_mark_sp_t;
+    struct _jl_gc_chunk_t *chunk_start;
+    struct _jl_gc_chunk_t *current_chunk;
+    struct _jl_gc_chunk_t *chunk_end;
+    struct _jl_value_t **start;
+    struct _jl_value_t **current;
+    struct _jl_value_t **end;
+} jl_gc_markqueue_t;
 
 typedef struct {
     // thread local increment of `perm_scanned_bytes`
@@ -198,9 +195,6 @@ typedef struct {
     // this makes sure that a single objects can only appear once in
     // the lists (the mark bit cannot be flipped to `0` without sweeping)
     void *big_obj[1024];
-    void **pc_stack;
-    void **pc_stack_end;
-    jl_gc_mark_data_t *data_stack;
 } jl_gc_mark_cache_t;
 
 struct _jl_bt_element_t;
@@ -266,9 +260,9 @@ typedef struct _jl_tls_states_t {
 #endif
     jl_thread_t system_id;
     arraylist_t finalizers;
+    jl_gc_markqueue_t mark_queue;
     jl_gc_mark_cache_t gc_cache;
     arraylist_t sweep_objs;
-    jl_gc_mark_sp_t gc_mark_sp;
     // Saved exception for previous *external* API call or NULL if cleared.
     // Access via jl_exception_occurred().
     struct _jl_value_t *previous_exception;
@@ -355,10 +349,10 @@ STATIC_INLINE int8_t jl_gc_state_save_and_set(jl_ptls_t ptls,
     return jl_gc_state_set(ptls, state, jl_atomic_load_relaxed(&ptls->gc_state));
 }
 #ifdef __clang_gcanalyzer__
-int8_t jl_gc_unsafe_enter(jl_ptls_t ptls); // Can be a safepoint
-int8_t jl_gc_unsafe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT;
-int8_t jl_gc_safe_enter(jl_ptls_t ptls) JL_NOTSAFEPOINT;
-int8_t jl_gc_safe_leave(jl_ptls_t ptls, int8_t state); // Can be a safepoint
+int8_t jl_gc_unsafe_enter(jl_ptls_t ptls) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE; // this could be a safepoint, but we will assume it is not
+void jl_gc_unsafe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
+int8_t jl_gc_safe_enter(jl_ptls_t ptls) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
+void jl_gc_safe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT_LEAVE; // this might not be a safepoint, but we have to assume it could be (statically)
 #else
 #define jl_gc_unsafe_enter(ptls) jl_gc_state_save_and_set(ptls, 0)
 #define jl_gc_unsafe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), 0))
@@ -371,6 +365,7 @@ JL_DLLEXPORT void jl_gc_disable_finalizers_internal(void);
 JL_DLLEXPORT void jl_gc_enable_finalizers_internal(void);
 JL_DLLEXPORT void jl_gc_run_pending_finalizers(struct _jl_task_t *ct);
 extern JL_DLLEXPORT _Atomic(int) jl_gc_have_pending_finalizers;
+JL_DLLEXPORT int8_t jl_gc_is_in_finalizer(void);
 
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid);
 
