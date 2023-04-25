@@ -1364,8 +1364,10 @@ end
     @test length(d.slots) < 100
 end
 
-# getindex is effect free and nothrow but not consistent
-for T in (String, Module, Symbol, Int, Float64)
-    @test Core.Compiler.is_effect_free(Base.infer_effects(getindex, (Dict{T, BigInt},T)))
-    @test Core.Compiler.is_terminates(Base.infer_effects(getindex, (Dict{T, BigInt},T)))
+# getindex is :effect_free and :terminates but not :consistent
+for T in (Int, Float64, String, Symbol)
+    @test !Core.Compiler.is_consistent(Base.infer_effects(getindex, (Dict{T,Any}, T)))
+    @test Core.Compiler.is_effect_free(Base.infer_effects(getindex, (Dict{T,Any}, T)))
+    @test !Core.Compiler.is_nothrow(Base.infer_effects(getindex, (Dict{T,Any}, T)))
+    @test Core.Compiler.is_terminates(Base.infer_effects(getindex, (Dict{T,Any}, T)))
 end

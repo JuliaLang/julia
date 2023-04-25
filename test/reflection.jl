@@ -1035,12 +1035,6 @@ ambig_effects_test(a, b) = 1
     @test Base.infer_effects(===, (Any,Any)) |> Core.Compiler.is_foldable_nothrow
     @test (Base.infer_effects(setfield!, ()); true) # `builtin_effects` shouldn't throw on empty `argtypes`
     @test (Base.infer_effects(Core.Intrinsics.arraylen, ()); true) # `intrinsic_effects` shouldn't throw on empty `argtypes`
-    for T in (Int, String, Symbol, Some{Int}, Some{String}, Some{Symbol}, Some{Some{Int}}, Some{Some{String}}, Some{Some{Symbol}})
-         @test Core.Compiler.is_foldable(Base.infer_effects(hash, (T,)))
-    end
-    # objectid for datatypes is inconsistant for types that have unbound type parameters.
-    @test !Core.Compiler.is_consistent(Base.infer_effects(hash, (DataType,)))
-    @test !Core.Compiler.is_consistent(Base.infer_effects(hash, (Tuple{Vector{Int}},)))
 end
 
 @test Base._methods_by_ftype(Tuple{}, -1, Base.get_world_counter()) == Any[]
