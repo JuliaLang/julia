@@ -8,6 +8,7 @@ using JuliaSyntax: GreenNode, SyntaxNode,
     children, child, setchild!, SyntaxHead
 
 include("test_utils.jl")
+include("fuzz_test.jl")
 
 # Tests for the test_utils go here to allow the utils to be included on their
 # own without invoking the tests.

@@ -885,51 +885,6 @@ const cutdown_tokens = [
 
 #-------------------------------------------------------------------------------
 
-function parser_throws_exception(str)
-    try
-        JuliaSyntax.parseall(JuliaSyntax.SyntaxNode, str, ignore_errors=true)
-        false
-    catch
-        true
-    end
-end
-
-"""
-Reduce test case via combination of bisection and random deletion.
-
-This is suited to randomly generated strings, but it's surprisingly effective
-for code-like strings as well.
-"""
-function rand_reduce(str, parse_failure=parser_throws_exception)
-    while true
-        if length(str) <= 1
-            return str
-        end
-        m1 = thisind(str, length(str)÷2)
-        m2 = nextind(str, m1)
-        if parse_failure(str[1:m1])
-            str = str[1:m1]
-        elseif parse_failure(str[m2:end])
-            str = str[m2:end]
-        else
-            chunklen = clamp(length(str)÷10, 1, 10)
-            reduced = false
-            for i = 1:100
-                m = thisind(str, rand(1:length(str)-chunklen))
-                s = str[1:m]*str[nextind(str, m+chunklen):end]
-                if parse_failure(s)
-                    str = s
-                    reduced = true
-                    break
-                end
-            end
-            if !reduced
-                return str
-            end
-        end
-    end
-end
-
 # The parser should never throw an exception. To test whether this is true,
 # try passing randomly generated bad input data into it.
 function _fuzz_test(bad_input_iter)
@@ -939,7 +894,7 @@ function _fuzz_test(bad_input_iter)
             JuliaSyntax.parseall(JuliaSyntax.SyntaxNode, str, ignore_errors=true);
         catch exc
             !(exc isa InterruptException) || rethrow()
-            rstr = rand_reduce(str)
+            rstr = reduce_text(str, parser_throws_exception)
             @error "Parser threw exception" rstr exception=current_exceptions()
             push!(error_strings, rstr)
         end
@@ -1005,7 +960,7 @@ Fuzz test parser against randomly generated binary strings
 """
 function fuzz_binary(nbytes, N)
     bad_strs = _fuzz_test(String(rand(UInt8, nbytes)) for _ in 1:N)
-    rand_reduce.(bad_strs)
+    reduce_text.(bad_strs, parser_throws_exception)
 end
 
 """

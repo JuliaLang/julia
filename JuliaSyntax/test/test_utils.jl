@@ -51,31 +51,6 @@ function remove_all_linenums!(ex)
     remove_macro_linenums!(ex)
 end
 
-function show_expr_text_diff(io::IO, showfunc, e1, e2; context=2)
-    if Sys.isunix()
-        mktemp() do path1, io1
-            mktemp() do path2, io2
-                showfunc(io1, e1);   close(io1)
-                showfunc(io2, e2); close(io2)
-                run(pipeline(ignorestatus(`diff -U$context --color=always $path1 $path2`), io))
-            end
-        end
-    else
-        showfunc(io, ex)
-        println(io, "------------------------------------")
-        showfunc(io, e2)
-    end
-    nothing
-end
-
-# Parse text with JuliaSyntax vs reference parser and show a textural diff of
-# the resulting expressions
-function parse_diff(text, showfunc=dump)
-    ex = parsestmt(Expr, text, filename="none")
-    fl_ex = fl_parse(text)
-    show_expr_text_diff(stdout, showfunc, ex, fl_ex)
-end
-
 function kw_to_eq(ex)
     return Meta.isexpr(ex, :kw) ? Expr(:(=), ex.args...) : ex
 end
@@ -179,8 +154,7 @@ function exprs_roughly_equal(fl_ex, ex)
     return true
 end
 
-function parsers_agree_on_file(filename; exprs_equal=exprs_equal_no_linenum,
-                               show_diff=false)
+function parsers_agree_on_file(filename; kws...)
     text = try
         read(filename, String)
     catch
@@ -188,6 +162,10 @@ function parsers_agree_on_file(filename; exprs_equal=exprs_equal_no_linenum,
         # ignore this case.
         return true
     end
+    parsers_agree_on_file(text, filename; kws...)
+end
+
+function parsers_agree_on_file(text, filename; exprs_equal=exprs_equal_no_linenum)
     fl_ex = fl_parseall(text, filename=filename)
     if Meta.isexpr(fl_ex, :toplevel) && !isempty(fl_ex.args) &&
             Meta.isexpr(fl_ex.args[end], (:error, :incomplete))
@@ -199,12 +177,7 @@ function parsers_agree_on_file(filename; exprs_equal=exprs_equal_no_linenum,
         stream = ParseStream(text)
         parse!(stream)
         ex = build_tree(Expr, stream, filename=filename)
-        if show_diff && ex != fl_ex
-            show_expr_text_diff(stdout, show, ex, fl_ex)
-        end
         return !JuliaSyntax.any_error(stream) && exprs_equal(fl_ex, ex)
-        # Could alternatively use
-        # exprs_roughly_equal(fl_ex, ex)
     catch exc
         @error "Parsing failed" filename exception=current_exceptions()
         return false
@@ -220,10 +193,29 @@ function find_source_in_path(basedir)
     src_list
 end
 
-function test_parse_all_in_path(basedir)
-    for f in find_source_in_path(basedir)
-        @testset "Parse $(relpath(f, basedir))" begin
-            @test parsers_agree_on_file(f)
+test_parse_all_in_path(basedir) = test_parse_all_in_path(path->true, basedir)
+
+function test_parse_all_in_path(path_allowed::Function, basedir)
+    for filepath in find_source_in_path(basedir)
+        if !path_allowed(filepath)
+            continue
+        end
+        @testset "Parse $(relpath(filepath, basedir))" begin
+            text = try
+                read(filepath, String)
+            catch
+                # Something went wrong reading the file. This isn't a parser failure so
+                # ignore this case.
+                continue
+            end
+            parsers_agree = parsers_agree_on_file(text, filepath,
+                                                  exprs_equal=exprs_equal_no_linenum)
+            @test parsers_agree
+            if !parsers_agree
+                reduced_failures = reduce_text.(sourcetext.(reduce_tree(text)),
+                                                parsers_fuzzy_disagree)
+                @test reduced_failures == []
+            end
         end
     end
 end
@@ -247,7 +239,7 @@ function equals_flisp_parse(exprs_equal, tree)
     exprs_equal(fl_ex, ex)
 end
 
-function _reduce_test(failing_subtrees, tree; exprs_equal=exprs_equal_no_linenum)
+function _reduce_tree(failing_subtrees, tree; exprs_equal=exprs_equal_no_linenum)
     if equals_flisp_parse(exprs_equal, tree)
         return false
     end
@@ -261,7 +253,7 @@ function _reduce_test(failing_subtrees, tree; exprs_equal=exprs_equal_no_linenum
             if is_trivia(child) || !haschildren(child)
                 continue
             end
-            had_failing_subtrees |= _reduce_test(failing_subtrees, child; exprs_equal=exprs_equal)
+            had_failing_subtrees |= _reduce_tree(failing_subtrees, child; exprs_equal=exprs_equal)
         end
     end
     if !had_failing_subtrees
@@ -271,120 +263,96 @@ function _reduce_test(failing_subtrees, tree; exprs_equal=exprs_equal_no_linenum
 end
 
 """
-    reduce_test(text::AbstractString; exprs_equal=exprs_equal_no_linenum)
-    reduce_test(tree::SyntaxNode; exprs_equal=exprs_equal_no_linenum)
+    reduce_tree(text::AbstractString; exprs_equal=exprs_equal_no_linenum)
+    reduce_tree(tree::SyntaxNode; exprs_equal=exprs_equal_no_linenum)
 
 Select minimal subtrees of `text` or `tree` which are inconsistent between
 flisp and JuliaSyntax parsers.
 """
-function reduce_test(tree::SyntaxNode; kws...)
+function reduce_tree(tree::SyntaxNode; kws...)
     subtrees = Vector{typeof(tree)}()
-    _reduce_test(subtrees, tree; kws...)
+    _reduce_tree(subtrees, tree; kws...)
     subtrees
 end
 
-function reduce_test(text::AbstractString; kws...)
+function reduce_tree(text::AbstractString; kws...)
     tree = parseall(SyntaxNode, text)
-    reduce_test(tree; kws...)
+    reduce_tree(tree; kws...)
 end
 
-
-"""
-    format_reduced_tests(out::IO, file_content)
-
-Reduced the syntax (a string or SyntaxNode) from `file_content` into the
-minimal failing subtrees of syntax and write the results to `out`.
-"""
-function format_reduced_tests(out::IO, file_content; filename=nothing)
-    println(out, "#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-    if !isnothing(filename)
-        println(out, "# $filename")
-    end
-    text = nothing
-    try
-        rtrees = reduce_test(file_content)
-        for rt in rtrees
-            print(out, "\n#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n")
-            t = sourcetext(rt)
-            print(out, t)
-            if !endswith(t, '\n')
-                println(out)
-            end
-        end
-    catch exc
-        exc isa InterruptException && rethrow()
-        @error "Error reducing file" exception=current_exceptions()
-        print(out, file_content isa AbstractString ?
-              file_content : sourcetext(file_content))
-    end
-end
-
-function reduce_all_failures_in_path(basedir, outdir)
-    rm(outdir, force=true, recursive=true)
-    mkpath(outdir)
-    for filename in find_source_in_path(basedir)
-        if !parsers_agree_on_file(filename)
-            @info "Found failure" filename
-            bn,_ = splitext(basename(filename))
-            outname = joinpath(outdir, "$bn.jl")
-            i = 1
-            while isfile(outname)
-                outname = joinpath(outdir, "$bn-$i.jl")
-                i += 1
-            end
-            open(outname, "w") do io
-                format_reduced_tests(io, read(filename, String), filename=filename)
-            end
-        end
-    end
-end
 
 #-------------------------------------------------------------------------------
-"""
-    itest_parse(production, code; version::VersionNumber=v"1.6")
-
-Parse `code`, entering the recursive descent parser at the given function
-`production`. This function shows the various tree representations on stdout
-for debugging.
-"""
-function itest_parse(production, code; version::VersionNumber=v"1.6")
-    stream = ParseStream(code; version=version)
-    production(JuliaSyntax.ParseState(stream))
-    JuliaSyntax.validate_tokens(stream)
-    t = JuliaSyntax.build_tree(GreenNode, stream, wrap_toplevel_as_kind=K"toplevel")
-
-    println(stdout, "# Code:\n$code\n")
-
-    println(stdout, "# Green tree:")
-    show(stdout, MIME"text/plain"(), t, code)
-    JuliaSyntax.show_diagnostics(stdout, stream, code)
-
-    s = SyntaxNode(SourceFile(code, filename="none"), t)
-    println(stdout, "\n# SyntaxNode:")
-    show(stdout, MIME"text/x.sexpression"(), s)
-
-    ex = Expr(s)
-    println(stdout, "\n\n# Julia Expr:")
-    show(stdout, MIME"text/plain"(), ex)
-
-    f_ex = JuliaSyntax.remove_linenums!(fl_parse(code, raise=false))
-    if JuliaSyntax.remove_linenums!(ex) != f_ex
-        printstyled(stdout, "\n\n# flisp Julia Expr:\n", color=:red)
-        show(stdout, MIME"text/plain"(), f_ex)
-
-        printstyled(stdout, "\n\n# Diff of AST dump:\n", color=:red)
-        show_expr_text_diff(stdout, show, ex, f_ex, context=10)
-        # return (ex, f_ex)
-        # return (code, stream, t, s, ex)
+# Text-based test case reduction
+function parser_throws_exception(text)
+    try
+        JuliaSyntax.parseall(JuliaSyntax.SyntaxNode, text, ignore_errors=true)
+        false
+    catch
+        true
     end
-    nothing
+end
+
+function parsers_fuzzy_disagree(text::AbstractString)
+    fl_ex = fl_parseall(text, filename="none")
+    if Meta.isexpr(fl_ex, (:error,:incomplete)) ||
+            (Meta.isexpr(fl_ex, :toplevel) && length(fl_ex.args) >= 1 &&
+             Meta.isexpr(fl_ex.args[end], (:error,:incomplete)))
+        return false
+    end
+    try
+        ex = parseall(Expr, text, filename="none", ignore_errors=true)
+        return !exprs_roughly_equal(fl_ex, ex)
+    catch
+        @error "Reduction failed" text
+        return false
+    end
+end
+
+
+"""
+Reduce text of a test case via combination of bisection and random deletion.
+
+This is suited to randomly generated strings, but it's surprisingly effective
+for code-like strings as well.
+"""
+function reduce_text(str, parse_differs)
+    while true
+        if length(str) <= 1
+            return str
+        end
+        m1 = thisind(str, length(str)÷2)
+        m2 = nextind(str, m1)
+        if parse_differs(str[1:m1])
+            str = str[1:m1]
+        elseif parse_differs(str[m2:end])
+            str = str[m2:end]
+        else
+            chunklen = clamp(length(str)÷10, 1, 10)
+            reduced = false
+            for i = 1:100
+                m = thisind(str, rand(1:length(str)-chunklen))
+                m3 = nextind(str, m+chunklen)
+                if m3 == nextind(str, m)
+                    continue
+                end
+                s = str[1:m]*str[m3:end]
+                if parse_differs(s)
+                    str = s
+                    reduced = true
+                    break
+                end
+            end
+            if !reduced
+                return str
+            end
+        end
+    end
 end
 
 function show_green_tree(code; version::VersionNumber=v"1.6")
     t = JuliaSyntax.parseall(GreenNode, code, version=version)
     sprint(show, MIME"text/plain"(), t, code)
 end
-
 
 #-------------------------------------------------------------------------------
 # Parse s-expressions

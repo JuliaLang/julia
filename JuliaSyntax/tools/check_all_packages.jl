@@ -17,22 +17,6 @@ mismatch_count = 0
 t0 = time()
 exceptions = []
 
-function parsers_disagree(text::AbstractString)
-    fl_ex = fl_parseall(text, filename="none")
-    if Meta.isexpr(fl_ex, (:error,:incomplete)) ||
-            (Meta.isexpr(fl_ex, :toplevel) && length(fl_ex.args) >= 1 &&
-             Meta.isexpr(fl_ex.args[end], (:error,:incomplete)))
-        return false
-    end
-    try
-        ex = parseall(Expr, text, filename="none", ignore_errors=true)
-        return !exprs_roughly_equal(fl_ex, ex)
-    catch
-        @error "Reduction failed" text
-        return false
-    end
-end
-
 all_reduced_failures = String[]
 
 Logging.with_logger(TerminalLogger()) do
@@ -49,13 +33,13 @@ Logging.with_logger(TerminalLogger()) do
             if !exprs_roughly_equal(e2, e1)
                 mismatch_count += 1
                 failing_source = sprint(context=:color=>true) do io
-                    for c in reduce_test(text)
+                    for c in reduce_tree(text)
                         JuliaSyntax.highlight(io, c.source, range(c), context_lines_inner=5)
                         println(io, "\n")
                     end
                 end
-                reduced_failures = rand_reduce.(sourcetext.(reduce_test(text)),
-                                                   parsers_disagree)
+                reduced_failures = reduce_text.(sourcetext.(reduce_tree(text)),
+                                                parsers_fuzzy_disagree)
                 append!(all_reduced_failures, reduced_failures)
                 @error("Parsers succeed but disagree",
                        fpath,
