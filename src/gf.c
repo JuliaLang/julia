@@ -1984,7 +1984,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     JL_TIMING(ADD_METHOD, ADD_METHOD);
     assert(jl_is_method(method));
     assert(jl_is_mtable(mt));
-    jl_timing_show((jl_value_t *)method, JL_TIMING_CURRENT_BLOCK);
+    jl_timing_show_method(method, JL_TIMING_CURRENT_BLOCK);
     jl_value_t *type = method->sig;
     jl_value_t *oldvalue = NULL;
     jl_array_t *oldmi = NULL;

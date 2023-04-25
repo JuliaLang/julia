@@ -143,7 +143,7 @@ jl_timing_block_t *jl_timing_block_exit_task(jl_task_t *ct, jl_ptls_t ptls)
 
 static inline const char *gnu_basename(const char *path)
 {
-    char *base = strrchr(path, '/');
+    const char *base = strrchr(path, '/');
     return base ? base+1 : path;
 }
 
@@ -186,6 +186,15 @@ JL_DLLEXPORT void jl_timing_show_method_instance(jl_method_instance_t *mi, jl_ti
                      gnu_basename(jl_symbol_name(def->file)),
                      def->line,
                      jl_symbol_name(def->module->name));
+}
+
+JL_DLLEXPORT void jl_timing_show_method(jl_method_t *method, jl_timing_block_t *cur_block)
+{
+    jl_timing_show((jl_value_t *)method, cur_block);
+    jl_timing_printf(cur_block, "%s:%d in %s",
+                    gnu_basename(jl_symbol_name(method->file)),
+                    method->line,
+                    jl_symbol_name(method->module->name));
 }
 
 JL_DLLEXPORT void jl_timing_show_func_sig(jl_value_t *v, jl_timing_block_t *cur_block)
