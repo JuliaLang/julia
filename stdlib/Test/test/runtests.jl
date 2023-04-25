@@ -723,7 +723,8 @@ end
 end
 
 @testset "provide informative location in backtrace for test failures" begin
-    utils = tempname()
+    win2unix(filename) = replace(filename, "\\" => '/')
+    utils = win2unix(tempname())
     write(utils,
     """
     function test_properties2(value)
@@ -731,7 +732,7 @@ end
     end
     """)
 
-    included = tempname()
+    included = win2unix(tempname())
     write(included,
     """
     @testset "Other tests" begin
@@ -748,7 +749,7 @@ end
     end))
     """)
 
-    runtests = tempname()
+    runtests = win2unix(tempname())
     write(runtests,
     """
     using Test
@@ -768,7 +769,7 @@ end
     end
     """)
     msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $runtests`), stderr=devnull), String)
-    msg = filter(!=('\r'), msg)
+    msg = win2unix(msg)
     regex = r"((?:Tests|Other tests|Testset without source): Test Failed (?:.|\n)*?)\n\nStacktrace:(?:.|\n)*?(?=\n(?:Tests|Other tests))"
     failures = map(eachmatch(regex, msg)) do m
         m = match(r"(Tests|Other tests|Testset without source): .*? at (.*?)\n  Expression: (.*)(?:.|\n)*\n+Stacktrace:\n((?:.|\n)*)", m.match)
