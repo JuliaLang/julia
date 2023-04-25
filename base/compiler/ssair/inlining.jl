@@ -793,34 +793,37 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
     return new_argtypes
 end
 
-function compileable_specialization(match::MethodMatch, effects::Effects,
+function compileable_specialization(mi::MethodInstance, effects::Effects,
         et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
-    if !compilesig_invokes
-        # If there are unknown typevars, this MethodInstance is illegal to
-        # :invoke, but we only check for compilesig usually, so check here to
-        # avoid generating bad code.
-        # TODO: We could also compute the correct type parameters in the runtime
-        # and let this go through, but that requires further changes, because
-        # currently the runtime assumes that a MethodInstance with the appropriate
-        # sparams is created.
+    mi_invoke = mi
+    if compilesig_invokes
+        method, atype, sparams = mi.def::Method, mi.specTypes, mi.sparam_vals
+        new_atype = get_compileable_sig(method, atype, sparams)
+        new_atype === nothing && return nothing
+        if atype !== new_atype
+            sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), new_atype, method.sig)::SimpleVector
+            if sparams === sp_[2]::SimpleVector
+                mi_invoke = specialize_method(method, new_atype, sparams)
+                mi_invoke === nothing && return nothing
+            end
+        end
+    else
+        # If this caller does not want us to optimize calls to use their
+        # declared compilesig, then it is also likely they would handle sparams
+        # incorrectly if there were any unknown typevars, so we conservatively return nothing
         if _any(t->isa(t, TypeVar), match.sparams)
             return nothing
         end
     end
-    mi = specialize_method(match; compilesig=compilesig_invokes)
-    mi === nothing && return nothing
     add_inlining_backedge!(et, mi)
-    return InvokeCase(mi, effects, info)
+    return InvokeCase(mi_invoke, effects, info)
 end
 
-function compileable_specialization(linfo::MethodInstance, effects::Effects,
+function compileable_specialization(match::MethodMatch, effects::Effects,
         et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
-    return compileable_specialization(MethodMatch(linfo.specTypes,
-     linfo.sparam_vals, linfo.def::Method, false), effects, et, info; compilesig_invokes)
+    mi = specialize_method(match)
+    return compileable_specialization(mi, effects, et, info; compilesig_invokes)
 end
-
-compileable_specialization(result::InferenceResult, args...; kwargs...) = (@nospecialize;
-    compileable_specialization(result.linfo, args...; kwargs...))
 
 struct CachedResult
     src::Any
@@ -872,12 +875,12 @@ function resolve_todo(mi::MethodInstance, result::Union{MethodMatch,InferenceRes
     # the duplicated check might have been done already within `analyze_method!`, but still
     # we need it here too since we may come here directly using a constant-prop' result
     if !OptimizationParams(state.interp).inlining || is_stmt_noinline(flag)
-        return compileable_specialization(result, effects, et, info;
+        return compileable_specialization(mi, effects, et, info;
             compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
     end
 
     src = inlining_policy(state.interp, src, info, flag, mi, argtypes)
-    src === nothing && return compileable_specialization(result, effects, et, info;
+    src === nothing && return compileable_specialization(mi, effects, et, info;
         compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
 
     add_inlining_backedge!(et, mi)
@@ -951,15 +954,9 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
         (allow_typevars && !may_have_fcalls(match.method)) || return nothing
     end
 
-    # See if there exists a specialization for this method signature
-    mi = specialize_method(match; preexisting=true) # Union{Nothing, MethodInstance}
-    if mi === nothing
-        et = InliningEdgeTracker(state.et, invokesig)
-        effects = info_effects(nothing, match, state)
-        return compileable_specialization(match, effects, et, info;
-            compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
-    end
-
+    # Get the specialization for this method signature
+    # (later we will decide what to do with it)
+    mi = specialize_method(match)
     return resolve_todo(mi, match, argtypes, info, flag, state; invokesig)
 end
 

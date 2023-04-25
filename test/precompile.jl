@@ -397,8 +397,8 @@ precompile_test_harness(false) do dir
                 [:ArgTools, :Artifacts, :Base64, :CompilerSupportLibraries_jll, :CRC32c, :Dates,
                  :Downloads, :FileWatching, :Future, :InteractiveUtils, :libblastrampoline_jll,
                  :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
-                 :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :OpenBLAS_jll, :Printf,
-                 :REPL, :Random, :SHA, :Serialization, :Sockets,
+                 :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :OpenBLAS_jll, :Pkg, :Printf,
+                 :p7zip_jll, :REPL, :Random, :SHA, :Serialization, :Sockets,
                  :TOML, :Tar, :Test, :UUIDs, :Unicode,
                  :nghttp2_jll]
             ),
@@ -857,9 +857,13 @@ precompile_test_harness("code caching") do dir
 
         # This will be invalidated if StaleC is loaded
         useA() = $StaleA.stale("hello")
+        useA2() = useA()
 
         # force precompilation
-        useA()
+        begin
+            Base.Experimental.@force_compile
+            useA2()
+        end
 
         ## Reporting tests
         call_nbits(x::Integer) = $StaleA.nbits(x)
@@ -940,6 +944,10 @@ precompile_test_harness("code caching") do dir
     @test invalidations[j-1] == "insert_backedges_callee"
     @test isa(invalidations[j-2], Type)
     @test isa(invalidations[j+1], Vector{Any}) # [nbits(::UInt8)]
+    m = only(methods(MB.useA2))
+    mi = only(Base.specializations(m))
+    @test !hasvalid(mi, world)
+    @test mi ∈ invalidations
 
     m = only(methods(MB.map_nbits))
     @test !hasvalid(m.specializations::Core.MethodInstance, world+1) # insert_backedges invalidations also trigger their backedges

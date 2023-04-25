@@ -83,7 +83,7 @@ $(eval $(call sysimg_builder,libblastrampoline_jll,Artifacts Libdl))
 $(eval $(call sysimg_builder,OpenBLAS_jll,Artifacts Libdl))
 $(eval $(call sysimg_builder,Markdown,Base64))
 $(eval $(call sysimg_builder,Printf,Unicode))
-$(eval $(call sysimg_builder,Random,Serialization SHA))
+$(eval $(call sysimg_builder,Random,SHA))
 $(eval $(call sysimg_builder,Tar,ArgTools,SHA))
 $(eval $(call pkgimg_builder,DelimitedFiles,Mmap))
 
@@ -114,7 +114,7 @@ $(eval $(call sysimg_builder,LibCURL,LibCURL_jll MozillaCACerts_jll))
 $(eval $(call sysimg_builder,Downloads,ArgTools FileWatching LibCURL NetworkOptions))
 
 # 6-depth packages
-$(eval $(call pkgimg_builder,Pkg,Dates LibGit2 Libdl Logging Printf Random SHA UUIDs)) # Markdown REPL
+$(eval $(call sysimg_builder,Pkg,Dates LibGit2 Libdl Logging Printf Random SHA UUIDs)) # Markdown REPL
 
 # 7-depth packages
 $(eval $(call pkgimg_builder,LazyArtifacts,Artifacts Pkg))

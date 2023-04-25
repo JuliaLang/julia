@@ -10,6 +10,10 @@
 #include "julia_internal.h"
 #include "julia_assert.h"
 
+#ifdef USE_ITTAPI
+#include "ittapi/ittnotify.h"
+#endif
+
 // Ref https://www.uclibc.org/docs/tls.pdf
 // For variant 1 JL_ELF_TLS_INIT_SIZE is the size of the thread control block (TCB)
 // For variant 2 JL_ELF_TLS_INIT_SIZE is 0
@@ -724,6 +728,15 @@ JL_DLLEXPORT void jl_exit_threaded_region(void)
     }
 }
 
+// Profiling stubs
+
+void _jl_mutex_init(jl_mutex_t *lock, const char *name) JL_NOTSAFEPOINT
+{
+    jl_atomic_store_relaxed(&lock->owner, (jl_task_t*)NULL);
+    lock->count = 0;
+    jl_profile_lock_init(lock, name);
+}
+
 void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
 {
     jl_task_t *owner = jl_atomic_load_relaxed(&lock->owner);
@@ -731,9 +744,12 @@ void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
         lock->count++;
         return;
     }
+    JL_TIMING(LOCK_SPIN, LOCK_SPIN);
+    jl_profile_lock_start_wait(lock);
     while (1) {
         if (owner == NULL && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
             lock->count = 1;
+            jl_profile_lock_acquired(lock);
             return;
         }
         if (safepoint) {
@@ -809,6 +825,7 @@ void _jl_mutex_unlock_nogc(jl_mutex_t *lock)
     assert(jl_atomic_load_relaxed(&lock->owner) == jl_current_task &&
            "Unlocking a lock in a different thread.");
     if (--lock->count == 0) {
+        jl_profile_lock_release_start(lock);
         jl_atomic_store_release(&lock->owner, (jl_task_t*)NULL);
         jl_cpu_wake();
         if (jl_running_under_rr(0)) {
@@ -817,6 +834,7 @@ void _jl_mutex_unlock_nogc(jl_mutex_t *lock)
             uv_cond_broadcast(&cond);
             uv_mutex_unlock(&tls_lock);
         }
+        jl_profile_lock_release_end(lock);
     }
 #endif
 }

@@ -192,7 +192,7 @@ static jl_callptr_t _jl_compile_codeinst(
         "invalid world for method-instance");
     assert(src && jl_is_code_info(src));
 
-    JL_TIMING(LLVM_MODULE_FINISH, LLVM_MODULE_FINISH);
+    JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
 
     jl_callptr_t fptr = NULL;
     // emit the code in LLVM IR form
@@ -1435,7 +1435,7 @@ void JuliaOJIT::addGlobalMapping(StringRef Name, uint64_t Addr)
 
 void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 {
-    JL_TIMING(LLVM_MODULE_FINISH, LLVM_MODULE_FINISH);
+    JL_TIMING(LLVM_ORC, LLVM_ORC);
     ++ModulesAdded;
     orc::SymbolLookupSet NewExports;
     TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT {

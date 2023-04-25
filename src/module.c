@@ -36,7 +36,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
     m->max_methods = -1;
     m->hash = parent == NULL ? bitmix(name->hash, jl_module_type->hash) :
         bitmix(name->hash, parent->hash);
-    JL_MUTEX_INIT(&m->lock);
+    JL_MUTEX_INIT(&m->lock, "module->lock");
     jl_atomic_store_relaxed(&m->bindings, jl_emptysvec);
     jl_atomic_store_relaxed(&m->bindingkeyset, (jl_array_t*)jl_an_empty_vec_any);
     arraylist_new(&m->usings, 0);
@@ -182,6 +182,7 @@ static jl_binding_t *new_binding(jl_module_t *mod, jl_sym_t *name)
     b->imported = 0;
     b->deprecated = 0;
     b->usingfailed = 0;
+    b->padding = 0;
     JL_GC_PUSH1(&b);
     b->globalref = jl_new_globalref(mod, name, b);
     JL_GC_POP();

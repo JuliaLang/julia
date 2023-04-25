@@ -563,11 +563,11 @@ JL_NO_ASAN static void gc_scrub_range(char *low, char *high)
         // Find the age bit
         char *page_begin = gc_page_data(tag) + GC_PAGE_OFFSET;
         int obj_id = (((char*)tag) - page_begin) / osize;
-        uint8_t *ages = pg->ages + obj_id / 8;
+        uint32_t *ages = pg->ages + obj_id / 32;
         // Force this to be a young object to save some memory
         // (especially on 32bit where it's more likely to have pointer-like
         //  bit patterns)
-        *ages &= ~(1 << (obj_id % 8));
+        *ages &= ~(1 << (obj_id % 32));
         memset(tag, 0xff, osize);
         // set mark to GC_MARKED (young and marked)
         tag->bits.gc = GC_MARKED;

@@ -261,7 +261,9 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
         if d.repl isa LineEditREPL
             mistate = d.repl.mistate
             mode = LineEdit.mode(mistate)
-            LineEdit.write_output_prefix(io, mode, get(io, :color, false)::Bool)
+            if mode isa LineEdit.Prompt
+                LineEdit.write_output_prefix(io, mode, get(io, :color, false)::Bool)
+            end
         end
         get(io, :color, false)::Bool && write(io, answer_color(d.repl))
         if isdefined(d.repl, :options) && isdefined(d.repl.options, :iocontext)
@@ -1095,31 +1097,6 @@ function setup_interface(
             else
                 edit_insert(s, '?')
             end
-        end,
-        ']' => function (s::MIState,o...)
-            if isempty(s) || position(LineEdit.buffer(s)) == 0
-                pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
-                if Base.locate_package(pkgid) !== nothing # Only try load Pkg if we can find it
-                    Pkg = Base.require(Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"))
-                    # Pkg should have loaded its REPL mode by now, let's find it so we can transition to it.
-                    pkg_mode = nothing
-                    for mode in repl.interface.modes
-                        if mode isa LineEdit.Prompt && mode.complete isa Pkg.REPLMode.PkgCompletionProvider
-                            pkg_mode = mode
-                            break
-                        end
-                    end
-                    # TODO: Cache the `pkg_mode`?
-                    if pkg_mode !== nothing
-                        buf = copy(LineEdit.buffer(s))
-                        transition(s, pkg_mode) do
-                            LineEdit.state(s, pkg_mode).input_buffer = buf
-                        end
-                        return
-                    end
-                end
-            end
-            edit_insert(s, ']')
         end,
 
         # Bracketed Paste Mode
