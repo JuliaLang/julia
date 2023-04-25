@@ -129,7 +129,7 @@ void jl_timing_printf(jl_timing_block_t *cur_block, const char *format, ...);
         X(AST_UNCOMPRESS)        \
         X(SYSIMG_LOAD)           \
         X(SYSIMG_DUMP)           \
-        X(NATIVE_DUMP)           \
+        X(NATIVE_AOT)            \
         X(ADD_METHOD)            \
         X(LOAD_MODULE)           \
         X(LOAD_IMAGE)            \
@@ -157,6 +157,8 @@ void jl_timing_printf(jl_timing_block_t *cur_block, const char *format, ...);
         X(VERIFY_Graph) \
         X(STACKWALK_Backtrace) \
         X(STACKWALK_Excstack) \
+        X(NATIVE_Dump) \
+        X(NATIVE_Create) \
 
 
 enum jl_timing_owners {
