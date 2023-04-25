@@ -173,7 +173,7 @@ JL_DLLEXPORT void jl_timing_show_module(jl_module_t *m, jl_timing_block_t *cur_b
         TracyCZoneText(*(cur_block->tracy_ctx), module_name, strlen(module_name));
     } else {
 
-        jl_timing_printf(cur_block, "%s->%s", jl_symbol_name(root->name), jl_symbol_name(m->name));
+        jl_timing_printf(cur_block, "%s.%s", jl_symbol_name(root->name), jl_symbol_name(m->name));
     }
 #endif
 }
