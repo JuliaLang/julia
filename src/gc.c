@@ -2981,6 +2981,7 @@ static void gc_mark_roots(jl_gc_markqueue_t *mq)
     gc_try_claim_and_push(mq, jl_emptytuple_type, NULL);
     gc_try_claim_and_push(mq, cmpswap_names, NULL);
     gc_try_claim_and_push(mq, jl_global_roots_table, NULL);
+    gc_try_claim_and_push(mq, jl_atomic_load_relaxed(&jl_interrupt_handler), NULL);
 }
 
 // find unmarked objects that need to be finalized from the finalizer list "list".

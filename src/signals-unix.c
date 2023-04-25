@@ -527,9 +527,9 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
         int force = jl_check_force_sigint();
         if (force || (!ptls->defer_signal && ptls->io_wait)) {
             jl_safepoint_consume_sigint();
+            // Force a throw
             if (force)
                 jl_safe_printf("WARNING: Force throwing a SIGINT\n");
-            // Force a throw
             jl_clear_force_sigint();
             jl_throw_in_ctx(ct, jl_interrupt_exception, sig, ctx);
         }
@@ -601,6 +601,16 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
 
 #endif
 #endif // HAVE_MACH
+
+static void jl_deliver_handled_sigint(void)
+{
+    jl_ptls_t other = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
+    jl_wake_libuv();
+    jl_atomic_store_release(&other->signal_request, 2);
+    // This also makes sure `sleep` is aborted.
+    pthread_kill(other->system_id, SIGUSR2);
+    jl_wake_thread(0);
+}
 
 static void allocate_segv_handler(void)
 {
@@ -767,7 +777,7 @@ static void *signal_listener(void *arg)
         profile = (sig == SIGUSR1);
 #if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
         if (profile && !(info.si_code == SI_TIMER &&
-                info.si_value.sival_ptr == &timerprof))
+            info.si_value.sival_ptr == &timerprof))
             profile = 0;
 #endif
 #endif
@@ -779,6 +789,10 @@ static void *signal_listener(void *arg)
             }
             else if (exit_on_sigint) {
                 critical = 1;
+            }
+            else if (want_interrupt_handler()) {
+                jl_deliver_handled_sigint();
+                continue;
             }
             else {
                 jl_try_deliver_sigint();

@@ -77,12 +77,37 @@ end  # !Sys.iswindows
 # sig 2 is SIGINT per the POSIX.1-1990 standard
 if !Sys.iswindows()
     Base.exit_on_sigint(false)
+
+    # test old interrupt behavior
+    Base._unregister_global_interrupt_handler()
+    Base.INTERRUPT_HANDLER_RUNNING[] = false
     @test_throws InterruptException begin
         ccall(:kill, Cvoid, (Cint, Cint,), getpid(), 2)
         for i in 1:10
             Libc.systemsleep(0.1)
             ccall(:jl_gc_safepoint, Cvoid, ()) # wait for SIGINT to arrive
         end
+    end
+
+    # interrupt handlers
+    Base.start_simple_interrupt_handler()
+    let exc_ref = Ref{Any}()
+        handler = Threads.@spawn begin
+            try
+                wait()
+            catch exc
+                exc_ref[] = exc
+            end
+        end
+        yield() # let the handler start
+        Base.register_interrupt_handler(Base, handler)
+        ccall(:kill, Cvoid, (Cint, Cint,), getpid(), 2)
+        for i in 1:10
+            Libc.systemsleep(0.1)
+            yield() # wait for the handler to be run
+        end
+        Base.unregister_interrupt_handler(Base, handler)
+        @test isassigned(exc_ref) && exc_ref[] isa InterruptException
     end
     Base.exit_on_sigint(true)
 end

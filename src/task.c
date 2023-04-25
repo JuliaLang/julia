@@ -623,6 +623,8 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
 
 JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
 {
+    jl_schedule_interrupt_handler();
+
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
     jl_task_t *t = ptls->next_task;
@@ -1140,7 +1142,7 @@ JL_DLLEXPORT void jl_task_wait()
     jl_apply(&wait_func, 1);
     ct->world_age = last_age;
 }
-
+#endif
 JL_DLLEXPORT void jl_schedule_task(jl_task_t *task)
 {
     static jl_function_t *sched_func = NULL;
@@ -1154,7 +1156,6 @@ JL_DLLEXPORT void jl_schedule_task(jl_task_t *task)
     jl_apply(args, 2);
     ct->world_age = last_age;
 }
-#endif
 
 // Do one-time initializations for task system
 void jl_init_tasks(void) JL_GC_DISABLED

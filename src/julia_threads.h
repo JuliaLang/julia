@@ -375,7 +375,12 @@ JL_DLLEXPORT void jl_gc_run_pending_finalizers(struct _jl_task_t *ct);
 extern JL_DLLEXPORT _Atomic(int) jl_gc_have_pending_finalizers;
 JL_DLLEXPORT int8_t jl_gc_is_in_finalizer(void);
 
+JL_DLLEXPORT int jl_wake_thread(int16_t tid);
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid);
+
+JL_DLLEXPORT void jl_schedule_task(struct _jl_task_t *task);
+
+JL_DLLEXPORT void jl_schedule_interrupt_handler(void);
 
 #ifdef __cplusplus
 }

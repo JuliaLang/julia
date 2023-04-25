@@ -29,6 +29,8 @@ void jl_gc_mark_threadfun(void *arg);
 void jl_gc_sweep_threadfun(void *arg);
 void jl_threadfun(void *arg);
 
+extern JL_DLLIMPORT _Atomic(jl_task_t*) jl_interrupt_handler JL_GLOBALLY_ROOTED;
+
 #ifdef __cplusplus
 }
 #endif

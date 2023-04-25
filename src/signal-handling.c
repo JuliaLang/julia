@@ -303,6 +303,33 @@ static void jl_check_profile_autostop(void)
     }
 }
 
+// Graceful interrupt handler
+
+static _Atomic(int) handle_interrupt = 0;
+JL_DLLEXPORT void jl_schedule_interrupt_handler(void)
+{
+    if (jl_atomic_exchange_relaxed(&handle_interrupt, 0) != 1)
+        return;
+    jl_task_t *handler = jl_atomic_load_relaxed(&jl_interrupt_handler);
+    if (!handler)
+        return;
+    assert(jl_is_task(handler));
+    if (jl_atomic_load_relaxed(&handler->_state) != JL_TASK_STATE_RUNNABLE)
+        return;
+    handler->result = jl_interrupt_exception;
+    jl_atomic_store_relaxed(&handler->_isexception, 1);
+    jl_schedule_task(handler);
+}
+static int want_interrupt_handler(void)
+{
+    if (jl_atomic_load_relaxed(&jl_interrupt_handler)) {
+        // Set flag to trigger user handlers on next task switch
+        jl_atomic_store_relaxed(&handle_interrupt, 1);
+        return 1;
+    }
+    return 0;
+}
+
 #if defined(_WIN32)
 #include "signals-win.c"
 #else

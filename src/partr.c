@@ -241,7 +241,7 @@ static int sleep_check_after_threshold(uint64_t *start_cycles)
 }
 
 
-static int wake_thread(int16_t tid) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_wake_thread(int16_t tid) JL_NOTSAFEPOINT
 {
     jl_ptls_t other = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     int8_t state = sleeping;
@@ -287,7 +287,7 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid) JL_NOTSAFEPOINT
     }
     else {
         // something added to the sticky-queue: notify that thread
-        if (wake_thread(tid) && uvlock != ct) {
+        if (jl_wake_thread(tid) && uvlock != ct) {
             // check if we need to notify uv_run too
             jl_fence();
             jl_ptls_t other = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
@@ -308,7 +308,7 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid) JL_NOTSAFEPOINT
         int nthreads = jl_atomic_load_acquire(&jl_n_threads);
         for (tid = 0; tid < nthreads; tid++) {
             if (tid != self)
-                anysleep |= wake_thread(tid);
+                anysleep |= jl_wake_thread(tid);
         }
         // check if we need to notify uv_run too
         if (uvlock != ct && anysleep) {
@@ -378,6 +378,8 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
     uint64_t start_cycles = 0;
 
     while (1) {
+        jl_schedule_interrupt_handler();
+
         jl_task_t *task = get_next_task(trypoptask, q);
         if (task)
             return task;
