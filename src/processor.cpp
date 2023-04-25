@@ -629,6 +629,7 @@ static inline std::vector<TargetData<n>> &get_cmdline_targets(F &&feature_cb)
 template<typename F>
 static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
 {
+    JL_TIMING(LOAD_IMAGE, LOAD_Processor);
     jl_image_t res{};
 
     const jl_image_pointers_t *pointers;

@@ -151,6 +151,7 @@ void jl_timing_printf(jl_timing_block_t *cur_block, const char *format, ...);
         X(CODEGEN_Workqueue) \
         X(LOAD_Sysimg) \
         X(LOAD_Pkgimg) \
+        X(LOAD_Processor) \
         X(VERIFY_Edges) \
         X(VERIFY_Methods) \
         X(VERIFY_Graph) \
