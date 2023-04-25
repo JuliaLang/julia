@@ -293,6 +293,7 @@ end
 
 function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState;
     extra_reprocess::Union{Nothing,BitSet} = nothing)
+
     (; ir, tpdum, ssa_refined) = irsv
 
     bbs = ir.cfg.blocks
@@ -416,7 +417,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
     return maybe_singleton_const(ultimate_rt)
 end
 
-function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState)
+function ir_abstract_constant_propagation(interp::NativeInterpreter, irsv::IRInterpretationState)
     if __measure_typeinf__[]
         inf_frame = Timings.InferenceFrameInfo(irsv.mi, irsv.world, Any[], Any[], length(irsv.ir.argtypes))
         Timings.enter_new_timer(inf_frame)
@@ -429,3 +430,5 @@ function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRI
         return T
     end
 end
+ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState) =
+    _ir_abstract_constant_propagation(interp, irsv)
