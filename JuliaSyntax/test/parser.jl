@@ -260,7 +260,7 @@ tests = [
         # Not a unary operator
         "/x"     => "(call-pre (error /) x)"
         "+₁ x"   => "(call-pre (error +₁) x)"
-        ".<: x"  => "(dotcall-pre (error .<:) x)"
+        ".<: x"  => "(dotcall-pre (error (. <:)) x)"
         "?\"str\"" => """(call-pre (error ?) (string "str"))"""
     ],
     JuliaSyntax.parse_factor => [
@@ -283,6 +283,9 @@ tests = [
         "<: x"          =>  "(<:-pre x)"
         "<: <: x"       =>  "(<:-pre (<:-pre x))"
         "<: A where B"  =>  "(<:-pre (where A B))"
+        # FIXME: The following bizarre precedence seems broken, but is
+        # compatible with the reference parser (see #248)
+        "+ <: A where B"  =>  "(where (call-pre + (<:-pre A)) B)"
         # Really for parse_where
         "x where \n {T}"  =>  "(where x T)"
         "x where {T,S}"  =>  "(where x T S)"
@@ -291,6 +294,9 @@ tests = [
         "x where T"  =>  "(where x T)"
         "x where \n T"  =>  "(where x T)"
         "x where T<:S"  =>  "(where x (<: T S))"
+        # nested unary and unary-syntactic ops
+        "<: + <: + A" => "(<:-pre (call-pre + (<:-pre (call-pre + A))))"
+        "* <: A"      => "(call-pre (error *) (<:-pre A))"
     ],
     JuliaSyntax.parse_unary_prefix => [
         "&)"   => "&"
