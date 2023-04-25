@@ -405,6 +405,8 @@ the source text more closely.
 * The AST for `do` is flatter and not lowered to a lambda by the parser: `f(x) do y ; body end` is parsed as `(do (call f x) (tuple y) (block body))` (#98)
 * `@.` is not lowered to `@__dot__` inside the parser (#146)
 * Docstrings use the `K"doc"` kind, and are not lowered to `Core.@doc` until later (#217)
+* Juxtaposition uses the `K"juxtapose"` kind rather than lowering immediately to `*` (#220)
+* `return` without a value has zero children, rather than lowering to `return nothing` (#220)
 
 ### Containers for string-like constructs
 
