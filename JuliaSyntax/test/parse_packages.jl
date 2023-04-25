@@ -25,23 +25,21 @@ end
 
 base_tests_path = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test")
 @testset "Parse Base tests at $base_tests_path" begin
-    for f in find_source_in_path(base_tests_path)
-        @testset "Parse $(relpath(f, base_tests_path))" begin
-            # In julia-1.6, test/copy.jl had spurious syntax which became the
-            # multidimensional array syntax in 1.7.
-            endswith(f, "copy.jl") && v"1.6" <= VERSION < v"1.7" && continue
-
-            # syntax.jl has some intentially weird syntax which we parse
-            # differently than the flisp parser, and some cases which we've
-            # decided are syntax errors.
-            endswith(f, "syntax.jl") && continue
-
-            @test parsers_agree_on_file(f)
-            # TODO:
-            # exprs_equal = endswith(f, "syntax.jl") ?
-            #               exprs_roughly_equal : exprs_equal_no_linenum
-            # @test parsers_agree_on_file(f; exprs_equal=exprs_equal)
+    test_parse_all_in_path(base_tests_path) do f
+        # In julia-1.6, test/copy.jl had spurious syntax which became the
+        # multidimensional array syntax in 1.7.
+        if endswith(f, "copy.jl") && v"1.6" <= VERSION < v"1.7"
+            return false
         end
+
+        # syntax.jl has some intentially weird syntax which we parse
+        # differently than the flisp parser, and some cases which we've
+        # decided are syntax errors.
+        if endswith(f, "syntax.jl")
+            return false
+        end
+
+        return true
     end
 end
 
