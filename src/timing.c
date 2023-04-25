@@ -168,7 +168,7 @@ JL_DLLEXPORT void jl_timing_show_module(jl_module_t *m, jl_timing_block_t *cur_b
 {
 #ifdef USE_TRACY
     jl_module_t *root = jl_module_root(m);
-    if (root == m) {
+    if (root == m || root == jl_main_module) {
         const char *module_name = jl_symbol_name(m->name);
         TracyCZoneText(*(cur_block->tracy_ctx), module_name, strlen(module_name));
     } else {
