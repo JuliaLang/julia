@@ -5,6 +5,12 @@
 
 #include "julia.h"
 
+static inline const char *gnu_basename(const char *path)
+{
+    const char *base = strrchr(path, '/');
+    return base ? base+1 : path;
+}
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -135,6 +141,8 @@ void jl_timing_printf(jl_timing_block_t *cur_block, const char *format, ...);
         X(SAVE_MODULE)           \
         X(INIT_MODULE)           \
         X(LOCK_SPIN)             \
+        X(DL_OPEN)                \
+
 
 
 #define JL_TIMING_EVENTS \

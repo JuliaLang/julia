@@ -272,11 +272,14 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
         }
         handle = dlopen(info.dli_fname, RTLD_NOW);
 #endif
-        goto done;
+        return handle;
     }
 
     abspath = jl_isabspath(modname);
     is_atpath = 0;
+
+    JL_TIMING(DL_OPEN, DL_OPEN);
+    jl_timing_printf(JL_TIMING_CURRENT_BLOCK, gnu_basename(modname));
 
     // Detect if our `modname` is something like `@rpath/libfoo.dylib`
 #ifdef _OS_DARWIN_
@@ -334,7 +337,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
 #endif
                         handle = jl_dlopen(path, flags);
                         if (handle)
-                            goto done;
+                            return handle;
 #ifdef _OS_WINDOWS_
                         err = GetLastError();
                     }
@@ -354,7 +357,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
         snprintf(path, PATHBUF, "%s%s", modname, ext);
         handle = jl_dlopen(path, flags);
         if (handle)
-            goto done;
+            return handle;
 #ifdef _OS_WINDOWS_
         err = GetLastError();
         break; // LoadLibrary already tested the rest
@@ -377,7 +380,6 @@ notfound:
     }
     handle = NULL;
 
-done:
     return handle;
 }
 
