@@ -679,8 +679,8 @@ function opnorm2(A::AbstractMatrix{T}) where T
     if m == 0 || n == 0 return zero(Tnorm) end
     if m == 1 || n == 1 return norm2(A) end
     # to minimize the chance of x being orthogonal to the largest eigenvector
-    x = rand(Tnorm, m)
-    tmp = similar(x)
+    x = randn(Tnorm, n)
+    tmp = zeros(Tnorm, m)
     At = A'
     v = one(Tnorm)
     # this will converge quickly as long as the top two eigenvalues are distinct
