@@ -1300,7 +1300,6 @@ function parse_unary(ps::ParseState)
             end
         end
     else
-        @assert !is_type_operator(op_t) # `<:x` handled in parse_unary_subtype
         if is_unary_op(op_t)
             # Normal unary calls
             # +x  ==>  (call-pre + x)
@@ -1310,15 +1309,21 @@ function parse_unary(ps::ParseState)
             # -0x1 ==> (call-pre - 0x01)
             # - 2  ==> (call-pre - 2)
             # .-2  ==> (dotcall-pre - 2)
-            bump_dotsplit(ps, EMPTY_FLAGS)
+            op_pos = bump_dotsplit(ps, EMPTY_FLAGS)
         else
             # /x     ==>  (call-pre (error /) x)
             # +₁ x   ==>  (call-pre (error +₁) x)
-            # .<: x  ==>  (dotcall-pre (error .<:) x)
-            bump(ps, error="not a unary operator")
+            # .<: x  ==>  (dotcall-pre (error (. <:)) x)
+            bump_dotsplit(ps, EMPTY_FLAGS, emit_dot_node=true)
+            op_pos = emit(ps, mark, K"error", error="not a unary operator")
         end
         parse_unary(ps)
-        emit(ps, mark, is_dotted(op_t) ? K"dotcall" : K"call", PREFIX_OP_FLAG)
+        if is_type_operator(op_t)
+            reset_node!(ps, op_pos, flags=TRIVIA_FLAG)
+            emit(ps, mark, op_k, PREFIX_OP_FLAG)
+        else
+            emit(ps, mark, is_dotted(op_t) ? K"dotcall" : K"call", PREFIX_OP_FLAG)
+        end
     end
 end
 
