@@ -601,19 +601,20 @@ function _wide_qr_ldiv!(A::QR{T}, B::AbstractMatrix{T}) where T
             B[m + 1:mB,1:nB] .= zero(T)
             for j = 1:nB
                 for k = 1:m
-                    vBj = B[k,j]
+                    vBj = B[k,j]'
                     for i = m + 1:n
-                        vBj += B[i,j]*R[k,i]'
+                        vBj += B[i,j]'*R[k,i]'
                     end
                     vBj *= τ[k]
-                    B[k,j] -= vBj
+                    B[k,j] -= vBj'
                     for i = m + 1:n
-                        B[i,j] -= R[k,i]*vBj
+                        B[i,j] -= R[k,i]'*vBj'
                     end
                 end
             end
         end
     end
+    B[A.p,:] = B[1:n,:]
     return B
 end
 
