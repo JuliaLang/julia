@@ -3137,6 +3137,8 @@ void jl_init_types(void) JL_GC_DISABLED
     // Technically not ismutationfree, but there's a separate system to deal
     // with mutations for global state.
     jl_module_type->ismutationfree = 1;
+    // Module object identity is determined by its name and parent name.
+    jl_module_type->isidentityfree = 1;
 
     // Array's mutable data is hidden, so we need to override it
     ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_array_type))->ismutationfree = 0;

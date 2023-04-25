@@ -7987,7 +7987,7 @@ struct ModTParamUnionAll{A, B}; end
 @test isa(objectid(ModTParamUnionAll{Base}), UInt)
 
 # effects for objectid
-for T in (Int, String, Symbol)
+for T in (Int, String, Symbol, Module)
     @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (T,)))
     @test Core.Compiler.is_foldable(Base.infer_effects(hash, (T,)))
     @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Some{T},)))
