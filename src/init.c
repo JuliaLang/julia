@@ -349,7 +349,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
     // TODO: Destroy threads?
 
     jl_destroy_timing(); // cleans up the current timing_stack for noreturn
-#ifdef ENABLE_TIMINGS
+#ifdef USE_TIMING_COUNTS
     jl_print_timings();
 #endif
     jl_teardown_codegen(); // prints stats
@@ -705,6 +705,9 @@ static void jl_set_io_wait(int v)
 }
 
 extern jl_mutex_t jl_modules_mutex;
+extern jl_mutex_t precomp_statement_out_lock;
+extern jl_mutex_t newly_inferred_mutex;
+extern jl_mutex_t global_roots_lock;
 
 static void restore_fp_env(void)
 {
@@ -716,6 +719,15 @@ static void restore_fp_env(void)
 static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_task_t *ct);
 
 JL_DLLEXPORT int jl_default_debug_info_kind;
+
+static void init_global_mutexes(void) {
+    JL_MUTEX_INIT(&jl_modules_mutex, "jl_modules_mutex");
+    JL_MUTEX_INIT(&precomp_statement_out_lock, "precomp_statement_out_lock");
+    JL_MUTEX_INIT(&newly_inferred_mutex, "newly_inferred_mutex");
+    JL_MUTEX_INIT(&global_roots_lock, "global_roots_lock");
+    JL_MUTEX_INIT(&jl_codegen_lock, "jl_codegen_lock");
+    JL_MUTEX_INIT(&typecache_lock, "typecache_lock");
+}
 
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 {
@@ -746,7 +758,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     jl_safepoint_init();
     jl_page_size = jl_getpagesize();
     htable_new(&jl_current_modules, 0);
-    JL_MUTEX_INIT(&jl_modules_mutex);
+    init_global_mutexes();
     jl_precompile_toplevel_module = NULL;
     ios_set_io_wait_func = jl_set_io_wait;
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),

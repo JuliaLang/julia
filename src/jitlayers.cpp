@@ -192,6 +192,8 @@ static jl_callptr_t _jl_compile_codeinst(
         "invalid world for method-instance");
     assert(src && jl_is_code_info(src));
 
+    JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
+
     jl_callptr_t fptr = NULL;
     // emit the code in LLVM IR form
     jl_codegen_params_t params(std::move(context), jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple()); // Locks the context
@@ -245,10 +247,13 @@ static jl_callptr_t _jl_compile_codeinst(
         MaxWorkqueueSize.updateMax(emitted.size());
         IndirectCodeinsts += emitted.size() - 1;
     }
-    JL_TIMING(LLVM_MODULE_FINISH);
 
+    size_t i = 0;
     for (auto &def : emitted) {
         jl_code_instance_t *this_code = def.first;
+        if (i < jl_timing_print_limit)
+            jl_timing_show_func_sig(this_code->def->specTypes, JL_TIMING_CURRENT_BLOCK);
+
         jl_llvm_functions_t decls = std::get<1>(def.second);
         jl_callptr_t addr;
         bool isspecsig = false;
@@ -290,7 +295,10 @@ static jl_callptr_t _jl_compile_codeinst(
         }
         if (this_code == codeinst)
             fptr = addr;
+        i++;
     }
+    if (i > jl_timing_print_limit)
+        jl_timing_printf(JL_TIMING_CURRENT_BLOCK, "... <%d methods truncated>", i - 10);
 
     uint64_t end_time = 0;
     if (timed)
@@ -1103,6 +1111,9 @@ namespace {
         int optlevel;
         PMCreator(TargetMachine &TM, int optlevel) JL_NOTSAFEPOINT
             : TM(cantFail(createJTMBFromTM(TM, optlevel).createTargetMachine())), optlevel(optlevel) {}
+        // overload for newpm compatibility
+        PMCreator(TargetMachine &TM, int optlevel, std::vector<std::function<void()>> &) JL_NOTSAFEPOINT
+            : PMCreator(TM, optlevel) {}
         PMCreator(const PMCreator &other) JL_NOTSAFEPOINT
             : PMCreator(*other.TM, other.optlevel) {}
         PMCreator(PMCreator &&other) JL_NOTSAFEPOINT
@@ -1128,18 +1139,23 @@ namespace {
     struct PMCreator {
         orc::JITTargetMachineBuilder JTMB;
         OptimizationLevel O;
-        PMCreator(TargetMachine &TM, int optlevel) JL_NOTSAFEPOINT
-            : JTMB(createJTMBFromTM(TM, optlevel)), O(getOptLevel(optlevel)) {}
+        std::vector<std::function<void()>> &printers;
+        PMCreator(TargetMachine &TM, int optlevel, std::vector<std::function<void()>> &printers) JL_NOTSAFEPOINT
+            : JTMB(createJTMBFromTM(TM, optlevel)), O(getOptLevel(optlevel)), printers(printers) {}
 
         auto operator()() JL_NOTSAFEPOINT {
-            return std::make_unique<NewPM>(cantFail(JTMB.createTargetMachine()), O);
+            auto NPM = std::make_unique<NewPM>(cantFail(JTMB.createTargetMachine()), O);
+            printers.push_back([NPM = NPM.get()]() JL_NOTSAFEPOINT {
+                NPM->printTimers();
+            });
+            return NPM;
         }
     };
 #endif
 
     struct OptimizerT {
-        OptimizerT(TargetMachine &TM, int optlevel) JL_NOTSAFEPOINT
-            : optlevel(optlevel), PMs(PMCreator(TM, optlevel)) {}
+        OptimizerT(TargetMachine &TM, int optlevel, std::vector<std::function<void()>> &printers) JL_NOTSAFEPOINT
+            : optlevel(optlevel), PMs(PMCreator(TM, optlevel, printers)) {}
         OptimizerT(OptimizerT&) JL_NOTSAFEPOINT = delete;
         OptimizerT(OptimizerT&&) JL_NOTSAFEPOINT = default;
 
@@ -1175,7 +1191,7 @@ namespace {
                     }
                 }
 
-                JL_TIMING(LLVM_OPT);
+                JL_TIMING(LLVM_OPT, LLVM_OPT);
 
                 //Run the optimization
                 assert(!verifyModule(M, &errs()));
@@ -1247,11 +1263,15 @@ llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
     return jl_data_layout;
 }
 
-JuliaOJIT::PipelineT::PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel)
+JuliaOJIT::PipelineT::PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel, std::vector<std::function<void()>> &PrintLLVMTimers)
   : CompileLayer(BaseLayer.getExecutionSession(), BaseLayer,
       std::make_unique<CompilerT>(orc::irManglingOptionsFromTargetOptions(TM.Options), TM, optlevel)),
     OptimizeLayer(CompileLayer.getExecutionSession(), CompileLayer,
-            llvm::orc::IRTransformLayer::TransformFunction(OptimizerT(TM, optlevel))) {}
+            llvm::orc::IRTransformLayer::TransformFunction(OptimizerT(TM, optlevel, PrintLLVMTimers))) {}
+
+#ifdef _COMPILER_ASAN_ENABLED_
+int64_t ___asan_globals_registered;
+#endif
 
 JuliaOJIT::JuliaOJIT()
   : TM(createTargetMachine()),
@@ -1285,10 +1305,10 @@ JuliaOJIT::JuliaOJIT()
 #endif
     LockLayer(ObjectLayer),
     Pipelines{
-        std::make_unique<PipelineT>(LockLayer, *TM, 0),
-        std::make_unique<PipelineT>(LockLayer, *TM, 1),
-        std::make_unique<PipelineT>(LockLayer, *TM, 2),
-        std::make_unique<PipelineT>(LockLayer, *TM, 3),
+        std::make_unique<PipelineT>(LockLayer, *TM, 0, PrintLLVMTimers),
+        std::make_unique<PipelineT>(LockLayer, *TM, 1, PrintLLVMTimers),
+        std::make_unique<PipelineT>(LockLayer, *TM, 2, PrintLLVMTimers),
+        std::make_unique<PipelineT>(LockLayer, *TM, 3, PrintLLVMTimers),
     },
     OptSelLayer(Pipelines)
 {
@@ -1393,6 +1413,11 @@ JuliaOJIT::JuliaOJIT()
         reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::origin)), JITSymbolFlags::Exported);
     cantFail(GlobalJD.define(orc::absoluteSymbols(msan_crt)));
 #endif
+#ifdef _COMPILER_ASAN_ENABLED_
+    orc::SymbolMap asan_crt;
+    asan_crt[mangle("___asan_globals_registered")] = JITEvaluatedSymbol::fromPointer(&___asan_globals_registered, JITSymbolFlags::Exported);
+    cantFail(JD.define(orc::absoluteSymbols(asan_crt)));
+#endif
 }
 
 JuliaOJIT::~JuliaOJIT() = default;
@@ -1410,7 +1435,7 @@ void JuliaOJIT::addGlobalMapping(StringRef Name, uint64_t Addr)
 
 void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 {
-    JL_TIMING(LLVM_MODULE_FINISH);
+    JL_TIMING(LLVM_ORC, LLVM_ORC);
     ++ModulesAdded;
     orc::SymbolLookupSet NewExports;
     TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT {
@@ -1582,6 +1607,16 @@ size_t JuliaOJIT::getTotalBytes() const
     return getRTDyldMemoryManagerTotalBytes(MemMgr.get());
 }
 #endif
+
+void JuliaOJIT::printTimers()
+{
+#ifdef JL_USE_NEW_PM
+    for (auto &printer : PrintLLVMTimers) {
+        printer();
+    }
+#endif
+    reportAndResetTimings();
+}
 
 JuliaOJIT *jl_ExecutionEngine;
 

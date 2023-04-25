@@ -1804,21 +1804,18 @@ function normalize!(a::AbstractArray, p::Real=2)
     __normalize!(a, nrm)
 end
 
-@inline function __normalize!(a::AbstractArray, nrm::Real)
+@inline function __normalize!(a::AbstractArray, nrm)
     # The largest positive floating point number whose inverse is less than infinity
     δ = inv(prevfloat(typemax(nrm)))
-
     if nrm ≥ δ # Safe to multiply with inverse
         invnrm = inv(nrm)
         rmul!(a, invnrm)
-
     else # scale elements to avoid overflow
         εδ = eps(one(nrm))/δ
         rmul!(a, εδ)
         rmul!(a, inv(nrm*εδ))
     end
-
-    a
+    return a
 end
 
 """

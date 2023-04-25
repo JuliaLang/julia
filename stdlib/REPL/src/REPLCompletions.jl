@@ -119,7 +119,8 @@ function completes_global(x, name)
 end
 
 function appendmacro!(syms, macros, needle, endchar)
-    for s in macros
+    for macsym in macros
+        s = String(macsym)
         if endswith(s, needle)
             from = nextind(s, firstindex(s))
             to = prevind(s, sizeof(s)-sizeof(needle)+1)
@@ -131,28 +132,21 @@ end
 function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool = false, imported::Bool = false)
     ssyms = names(mod, all = all, imported = imported)
     filter!(ffunc, ssyms)
-    syms = String[string(s) for s in ssyms]
-    macros =  filter(x -> startswith(x, "@" * name), syms)
+    macros = filter(x -> startswith(String(x), "@" * name), ssyms)
+    syms = String[sprint((io,s)->Base.show_sym(io, s; allow_macroname=true), s) for s in ssyms if completes_global(String(s), name)]
     appendmacro!(syms, macros, "_str", "\"")
     appendmacro!(syms, macros, "_cmd", "`")
-    filter!(x->completes_global(x, name), syms)
     return [ModuleCompletion(mod, sym) for sym in syms]
 end
 
 # REPL Symbol Completions
-function complete_symbol(sym::String, @nospecialize(ffunc), context_module::Module=Main)
+function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), context_module::Module=Main)
     mod = context_module
-    name = sym
 
     lookup_module = true
     t = Union{}
     val = nothing
-    if something(findlast(in(non_identifier_chars), sym), 0) < something(findlast(isequal('.'), sym), 0)
-        # Find module
-        lookup_name, name = rsplit(sym, ".", limit=2)
-
-        ex = Meta.parse(lookup_name, raise=false, depwarn=false)
-
+    if ex !== nothing
         res = repl_eval_ex(ex, context_module)
         res === nothing && return Completion[]
         if res isa Const
@@ -573,7 +567,9 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module)
 
     CC.typeinf(interp, frame)
 
-    return frame.result.result
+    result = frame.result.result
+    result === Union{} && return nothing # for whatever reason, callers expect this as the Bottom and/or Top type instead
+    return result
 end
 
 # Method completion on function call expression that look like :(max(1))
@@ -898,7 +894,7 @@ function complete_keyword_argument(partial, last_idx, context_module)
     end
 
     suggestions = Completion[KeywordArgumentCompletion(kwarg) for kwarg in kwargs]
-    append!(suggestions, complete_symbol(last_word, Returns(true), context_module))
+    append!(suggestions, complete_symbol(nothing, last_word, Returns(true), context_module))
 
     return sort!(suggestions, by=completion_text), wordrange
 end
@@ -917,6 +913,55 @@ function project_deps_get_completion_candidates(pkgstarts::String, project_file:
         end
     end
     return Completion[PackageCompletion(name) for name in loading_candidates]
+end
+
+function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ffunc::Function), context_module::Module, string::String, name::String, pos::Int, dotpos::Int, startpos::Int, comp_keywords=false)
+    ex = nothing
+    comp_keywords && append!(suggestions, complete_keyword(name))
+    if dotpos > 1 && string[dotpos] == '.'
+        s = string[1:dotpos-1]
+        # First see if the whole string up to `pos` is a valid expression. If so, use it.
+        ex = Meta.parse(s, raise=false, depwarn=false)
+        if isexpr(ex, :incomplete)
+            s = string[startpos:pos]
+            # Heuristic to find the start of the expression. TODO: This would be better
+            # done with a proper error-recovering parser.
+            if 0 < startpos <= lastindex(string) && string[startpos] == '.'
+                i = prevind(string, startpos)
+                while 0 < i
+                    c = string[i]
+                    if c in (')', ']')
+                        if c == ')'
+                            c_start = '('
+                            c_end = ')'
+                        elseif c == ']'
+                            c_start = '['
+                            c_end = ']'
+                        end
+                        frange, end_of_identifier = find_start_brace(string[1:prevind(string, i)], c_start=c_start, c_end=c_end)
+                        isempty(frange) && break # unbalanced parens
+                        startpos = first(frange)
+                        i = prevind(string, startpos)
+                    elseif c in ('\'', '\"', '\`')
+                        s = "$c$c"*string[startpos:pos]
+                        break
+                    else
+                        break
+                    end
+                    s = string[startpos:pos]
+                end
+            end
+            if something(findlast(in(non_identifier_chars), s), 0) < something(findlast(isequal('.'), s), 0)
+                lookup_name, name = rsplit(s, ".", limit=2)
+                name = String(name)
+
+                ex = Meta.parse(lookup_name, raise=false, depwarn=false)
+            end
+            isexpr(ex, :incomplete) && (ex = nothing)
+        end
+    end
+    append!(suggestions, complete_symbol(ex, name, ffunc, context_module))
+    return sort!(unique(suggestions), by=completion_text), (dotpos+1):pos, true
 end
 
 function completions(string::String, pos::Int, context_module::Module=Main, shift::Bool=true)
@@ -962,8 +1007,25 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         length(matches)>0 && return Completion[DictCompletion(identifier, match) for match in sort!(matches)], loc::Int:pos, true
     end
 
+    ffunc = Returns(true)
+    suggestions = Completion[]
+
+    # Check if this is a var"" string macro that should be completed like
+    # an identifier rather than a string.
+    # TODO: It would be nice for the parser to give us more information here
+    # so that we can lookup the macro by identity rather than pattern matching
+    # its invocation.
+    varrange = findprev("var\"", string, pos)
+
+    if varrange !== nothing
+        ok, ret = bslash_completions(string, pos)
+        ok && return ret
+        startpos = first(varrange) + 4
+        dotpos = something(findprev(isequal('.'), string, startpos), 0)
+        return complete_identifiers!(Completion[], ffunc, context_module, string,
+            string[startpos:pos], pos, dotpos, startpos)
     # otherwise...
-    if inc_tag in [:cmd, :string]
+    elseif inc_tag in [:cmd, :string]
         m = match(r"[\t\n\r\"`><=*?|]| (?!\\)", reverse(partial))
         startpos = nextind(partial, reverseind(partial, m.offset))
         r = startpos:pos
@@ -1010,9 +1072,8 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         startpos += length(m.match)
     end
 
-    ffunc = Returns(true)
-    suggestions = Completion[]
-    comp_keywords = true
+    name = string[max(startpos, dotpos+1):pos]
+    comp_keywords = !isempty(name) && startpos > dotpos
     if afterusing(string, startpos)
         # We're right after using or import. Let's look only for packages
         # and modules we can reach from here
@@ -1054,38 +1115,11 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         ffunc = (mod,x)->(Base.isbindingresolved(mod, x) && isdefined(mod, x) && isa(getfield(mod, x), Module))
         comp_keywords = false
     end
+
     startpos == 0 && (pos = -1)
     dotpos < startpos && (dotpos = startpos - 1)
-    s = string[startpos:pos]
-    comp_keywords && append!(suggestions, complete_keyword(s))
-    # if the start of the string is a `.`, try to consume more input to get back to the beginning of the last expression
-    if 0 < startpos <= lastindex(string) && string[startpos] == '.'
-        i = prevind(string, startpos)
-        while 0 < i
-            c = string[i]
-            if c in (')', ']')
-                if c == ')'
-                    c_start = '('
-                    c_end = ')'
-                elseif c == ']'
-                    c_start = '['
-                    c_end = ']'
-                end
-                frange, end_of_identifier = find_start_brace(string[1:prevind(string, i)], c_start=c_start, c_end=c_end)
-                isempty(frange) && break # unbalanced parens
-                startpos = first(frange)
-                i = prevind(string, startpos)
-            elseif c in ('\'', '\"', '\`')
-                s = "$c$c"*string[startpos:pos]
-                break
-            else
-                break
-            end
-            s = string[startpos:pos]
-        end
-    end
-    append!(suggestions, complete_symbol(s, ffunc, context_module))
-    return sort!(unique(suggestions), by=completion_text), (dotpos+1):pos, true
+    return complete_identifiers!(suggestions, ffunc, context_module, string,
+        name, pos, dotpos, startpos, comp_keywords)
 end
 
 function shell_completions(string, pos)

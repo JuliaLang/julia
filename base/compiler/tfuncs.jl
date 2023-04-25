@@ -1779,31 +1779,55 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
             uncertain = true
             unw = unwrap_unionall(ai)
             isT = isType(unw)
+            # compute our desired upper bound value
             if isT
-                tai = ai
-                while isa(tai, UnionAll)
-                    if contains_is(outervars, tai.var)
-                        ai = rename_unionall(ai)
-                        unw = unwrap_unionall(ai)
-                        break
-                    end
-                    tai = tai.body
-                end
+                ub = rewrap_unionall(unw.parameters[1], ai)
+            else
+                ub = Any
             end
-            ai_w = widenconst(ai)
-            ub = ai_w isa Type && ai_w <: Type ? instanceof_tfunc(ai)[1] : Any
+            if !istuple && unionall_depth(ai) > 3
+                # Heuristic: if we are adding more than N unknown parameters here to the
+                # outer type, use the wrapper type, instead of letting it nest more
+                # complexity here. This is not monotonic, but seems to work out pretty well.
+                if isT
+                    ub = unwrap_unionall(unw.parameters[1])
+                    if ub isa DataType
+                        ub = ub.name.wrapper
+                        unw = Type{unwrap_unionall(ub)}
+                        ai = rewrap_unionall(unw, ub)
+                    else
+                        isT = false
+                        ai = unw = ub = Any
+                    end
+                else
+                    isT = false
+                    ai = unw = ub = Any
+                end
+            elseif !isT
+                # if we didn't have isType to compute ub directly, try to use instanceof_tfunc to refine this guess
+                ai_w = widenconst(ai)
+                ub = ai_w isa Type && ai_w <: Type ? instanceof_tfunc(ai)[1] : Any
+            end
             if istuple
                 # in the last parameter of a Tuple type, if the upper bound is Any
                 # then this could be a Vararg type.
                 if i == largs && ub === Any
-                    push!(tparams, Vararg)
-                elseif isT
-                    push!(tparams, rewrap_unionall((unw::DataType).parameters[1], ai))
-                else
-                    push!(tparams, Any)
+                    ub = Vararg
                 end
+                push!(tparams, ub)
             elseif isT
-                push!(tparams, (unw::DataType).parameters[1])
+                tai = ai
+                while isa(tai, UnionAll)
+                    # make sure vars introduced here are unique
+                    if contains_is(outervars, tai.var)
+                        ai = rename_unionall(ai)
+                        unw = unwrap_unionall(ai)::DataType
+                        # ub = rewrap_unionall(unw, ai)
+                        break
+                    end
+                    tai = tai.body
+                end
+                push!(tparams, unw.parameters[1])
                 while isa(ai, UnionAll)
                     push!(outervars, ai.var)
                     ai = ai.body
@@ -1880,7 +1904,15 @@ add_tfunc(apply_type, 1, INT_INF, apply_type_tfunc, 10)
 # convert the dispatch tuple type argtype to the real (concrete) type of
 # the tuple of those values
 function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
+    isempty(argtypes) && return Const(())
     argtypes = anymap(widenslotwrapper, argtypes)
+    if isvarargtype(argtypes[end]) && unwrapva(argtypes[end]) === Union{}
+        # Drop the Vararg in Tuple{...,Vararg{Union{}}} since it must be length 0.
+        # If there is a Vararg num also, it must be a TypeVar, and it must be
+        # zero, but that generally shouldn't show up here, since it implies a
+        # UnionAll context is missing around this.
+        pop!(argtypes)
+    end
     all_are_const = true
     for i in 1:length(argtypes)
         if !isa(argtypes[i], Const)
@@ -1923,6 +1955,8 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
                 params[i] = x
             elseif !isvarargtype(x) && hasintersect(x, Type)
                 params[i] = Union{x, Type}
+            elseif x === Union{}
+                return Bottom # argtypes is malformed, but try not to crash
             else
                 params[i] = x
             end
@@ -2574,60 +2608,72 @@ end
 # since abstract_call_gf_by_type is a very inaccurate model of _method and of typeinf_type,
 # while this assumes that it is an absolutely precise and accurate and exact model of both
 function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo, sv::AbsIntState)
-    if length(argtypes) == 3
-        tt = widenslotwrapper(argtypes[3])
-        if isa(tt, Const) || (isType(tt) && !has_free_typevars(tt))
-            aft = widenslotwrapper(argtypes[2])
-            if isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
-                   (isconcretetype(aft) && !(aft <: Builtin))
-                af_argtype = isa(tt, Const) ? tt.val : (tt::DataType).parameters[1]
-                if isa(af_argtype, DataType) && af_argtype <: Tuple
-                    argtypes_vec = Any[aft, af_argtype.parameters...]
-                    if contains_is(argtypes_vec, Union{})
-                        return CallMeta(Const(Union{}), EFFECTS_TOTAL, NoCallInfo())
-                    end
-                    #
-                    # Run the abstract_call without restricting abstract call
-                    # sites. Otherwise, our behavior model of abstract_call
-                    # below will be wrong.
-                    if isa(sv, InferenceState)
-                        old_restrict = sv.restrict_abstract_call_sites
-                        sv.restrict_abstract_call_sites = false
-                        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, -1)
-                        sv.restrict_abstract_call_sites = old_restrict
-                    else
-                        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, -1)
-                    end
-                    info = verbose_stmt_info(interp) ? MethodResultPure(ReturnTypeCallInfo(call.info)) : MethodResultPure()
-                    rt = widenslotwrapper(call.rt)
-                    if isa(rt, Const)
-                        # output was computed to be constant
-                        return CallMeta(Const(typeof(rt.val)), EFFECTS_TOTAL, info)
-                    end
-                    rt = widenconst(rt)
-                    if rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))
-                        # output cannot be improved so it is known for certain
-                        return CallMeta(Const(rt), EFFECTS_TOTAL, info)
-                    elseif isa(sv, InferenceState) && !isempty(sv.pclimitations)
-                        # conservatively express uncertainty of this result
-                        # in two ways: both as being a subtype of this, and
-                        # because of LimitedAccuracy causes
-                        return CallMeta(Type{<:rt}, EFFECTS_TOTAL, info)
-                    elseif (isa(tt, Const) || isconstType(tt)) &&
-                        (isa(aft, Const) || isconstType(aft))
-                        # input arguments were known for certain
-                        # XXX: this doesn't imply we know anything about rt
-                        return CallMeta(Const(rt), EFFECTS_TOTAL, info)
-                    elseif isType(rt)
-                        return CallMeta(Type{rt}, EFFECTS_TOTAL, info)
-                    else
-                        return CallMeta(Type{<:rt}, EFFECTS_TOTAL, info)
-                    end
-                end
-            end
-        end
+    UNKNOWN = CallMeta(Type, EFFECTS_THROWS, NoCallInfo())
+    if !(2 <= length(argtypes) <= 3)
+        return UNKNOWN
     end
-    return CallMeta(Type, EFFECTS_THROWS, NoCallInfo())
+
+    tt = widenslotwrapper(argtypes[end])
+    if !isa(tt, Const) && !(isType(tt) && !has_free_typevars(tt))
+        return UNKNOWN
+    end
+
+    af_argtype = isa(tt, Const) ? tt.val : (tt::DataType).parameters[1]
+    if !isa(af_argtype, DataType) || !(af_argtype <: Tuple)
+        return UNKNOWN
+    end
+
+    if length(argtypes) == 3
+        aft = widenslotwrapper(argtypes[2])
+        if !isa(aft, Const) && !(isType(aft) && !has_free_typevars(aft)) &&
+                !(isconcretetype(aft) && !(aft <: Builtin))
+            return UNKNOWN
+        end
+        argtypes_vec = Any[aft, af_argtype.parameters...]
+    else
+        argtypes_vec = Any[af_argtype.parameters...]
+    end
+
+    if contains_is(argtypes_vec, Union{})
+        return CallMeta(Const(Union{}), EFFECTS_TOTAL, NoCallInfo())
+    end
+
+    # Run the abstract_call without restricting abstract call
+    # sites. Otherwise, our behavior model of abstract_call
+    # below will be wrong.
+    if isa(sv, InferenceState)
+        old_restrict = sv.restrict_abstract_call_sites
+        sv.restrict_abstract_call_sites = false
+        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, -1)
+        sv.restrict_abstract_call_sites = old_restrict
+    else
+        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, -1)
+    end
+    info = verbose_stmt_info(interp) ? MethodResultPure(ReturnTypeCallInfo(call.info)) : MethodResultPure()
+    rt = widenslotwrapper(call.rt)
+    if isa(rt, Const)
+        # output was computed to be constant
+        return CallMeta(Const(typeof(rt.val)), EFFECTS_TOTAL, info)
+    end
+    rt = widenconst(rt)
+    if rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))
+        # output cannot be improved so it is known for certain
+        return CallMeta(Const(rt), EFFECTS_TOTAL, info)
+    elseif isa(sv, InferenceState) && !isempty(sv.pclimitations)
+        # conservatively express uncertainty of this result
+        # in two ways: both as being a subtype of this, and
+        # because of LimitedAccuracy causes
+        return CallMeta(Type{<:rt}, EFFECTS_TOTAL, info)
+    elseif (isa(tt, Const) || isconstType(tt)) &&
+        (isa(aft, Const) || isconstType(aft))
+        # input arguments were known for certain
+        # XXX: this doesn't imply we know anything about rt
+        return CallMeta(Const(rt), EFFECTS_TOTAL, info)
+    elseif isType(rt)
+        return CallMeta(Type{rt}, EFFECTS_TOTAL, info)
+    else
+        return CallMeta(Type{<:rt}, EFFECTS_TOTAL, info)
+    end
 end
 
 # a simplified model of abstract_call_gf_by_type for applicable

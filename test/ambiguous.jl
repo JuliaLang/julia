@@ -177,12 +177,10 @@ ambs = detect_ambiguities(Ambig48312)
         @test good
     end
 
-    # some ambiguities involving Union{} type parameters are expected, but not required
+    # some ambiguities involving Union{} type parameters may be expected, but not required
     let ambig = Set(detect_ambiguities(Core; recursive=true, ambiguous_bottom=true))
-        m1 = which(Core.Compiler.convert, Tuple{Type{<:Core.IntrinsicFunction}, Any})
-        m2 = which(Core.Compiler.convert, Tuple{Type{<:Nothing}, Any})
-        pop!(ambig, (m1, m2))
         @test !isempty(ambig)
+        @test length(ambig) < 30
     end
 
     STDLIB_DIR = Sys.STDLIB

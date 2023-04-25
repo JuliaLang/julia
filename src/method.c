@@ -564,9 +564,10 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, siz
         return (jl_code_info_t*)jl_copy_ast((jl_value_t*)uninferred);
     }
 
-    JL_TIMING(STAGED_FUNCTION);
+    JL_TIMING(STAGED_FUNCTION, STAGED_FUNCTION);
     jl_value_t *tt = linfo->specTypes;
     jl_method_t *def = linfo->def.method;
+    jl_timing_show_method_instance(linfo, JL_TIMING_CURRENT_BLOCK);
     jl_value_t *generator = def->generator;
     assert(generator != NULL);
     assert(jl_is_method(def));
@@ -809,7 +810,9 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->deleted_world = ~(size_t)0;
     m->is_for_opaque_closure = 0;
     m->constprop = 0;
-    JL_MUTEX_INIT(&m->writelock);
+    m->purity.bits = 0;
+    m->max_varargs = UINT8_MAX;
+    JL_MUTEX_INIT(&m->writelock, "method->writelock");
     return m;
 }
 
@@ -989,7 +992,9 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     JL_GC_PUSH3(&f, &m, &argtype);
     size_t i, na = jl_svec_len(atypes);
 
-    argtype = (jl_value_t*)jl_apply_tuple_type(atypes);
+    argtype = jl_apply_tuple_type(atypes);
+    if (!jl_is_datatype(argtype))
+        jl_error("invalid type in method definition (Union{})");
 
     jl_methtable_t *external_mt = mt;
     if (!mt)
@@ -1024,49 +1029,19 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
         }
     }
 
-    for (i = jl_svec_len(tvars); i > 0; i--) {
-        jl_value_t *tv = jl_svecref(tvars, i - 1);
-        if (!jl_is_typevar(tv))
-            jl_type_error("method signature", (jl_value_t*)jl_tvar_type, tv);
-        if (!jl_has_typevar(argtype, (jl_tvar_t*)tv)) // deprecate this to an error in v2
-            jl_printf(JL_STDERR,
-                      "WARNING: method definition for %s at %s:%d declares type variable %s but does not use it.\n",
-                      jl_symbol_name(name),
-                      jl_symbol_name(file),
-                      line,
-                      jl_symbol_name(((jl_tvar_t*)tv)->name));
-        argtype = jl_new_struct(jl_unionall_type, tv, argtype);
-    }
-    if (jl_has_free_typevars(argtype)) {
-        jl_exceptionf(jl_argumenterror_type,
-                      "method definition for %s at %s:%d has free type variables",
-                      jl_symbol_name(name),
-                      jl_symbol_name(file),
-                      line);
-    }
-
-
     if (!jl_is_code_info(f)) {
         // this occurs when there is a closure being added to an out-of-scope function
         // the user should only do this at the toplevel
         // the result is that the closure variables get interpolated directly into the IR
         f = jl_new_code_info_from_ir((jl_expr_t*)f);
     }
-    m = jl_new_method_uninit(module);
-    m->external_mt = (jl_value_t*)external_mt;
-    if (external_mt)
-        jl_gc_wb(m, external_mt);
-    m->sig = argtype;
-    m->name = name;
-    m->isva = isva;
-    m->nargs = nargs;
-    m->file = file;
-    m->line = line;
-    jl_method_set_source(m, f);
 
     for (i = 0; i < na; i++) {
         jl_value_t *elt = jl_svecref(atypes, i);
-        if (!jl_is_type(elt) && !jl_is_typevar(elt) && !jl_is_vararg(elt)) {
+        int isvalid = jl_is_type(elt) || jl_is_typevar(elt) || jl_is_vararg(elt);
+        if (elt == jl_bottom_type || (jl_is_vararg(elt) && jl_unwrap_vararg(elt) == jl_bottom_type))
+            isvalid = 0;
+        if (!isvalid) {
             jl_sym_t *argname = (jl_sym_t*)jl_array_ptr_ref(f->slotnames, i);
             if (argname == jl_unused_sym)
                 jl_exceptionf(jl_argumenterror_type,
@@ -1090,6 +1065,38 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
                           jl_symbol_name(file),
                           line);
     }
+    for (i = jl_svec_len(tvars); i > 0; i--) {
+        jl_value_t *tv = jl_svecref(tvars, i - 1);
+        if (!jl_is_typevar(tv))
+            jl_type_error("method signature", (jl_value_t*)jl_tvar_type, tv);
+        if (!jl_has_typevar(argtype, (jl_tvar_t*)tv)) // deprecate this to an error in v2
+            jl_printf(JL_STDERR,
+                      "WARNING: method definition for %s at %s:%d declares type variable %s but does not use it.\n",
+                      jl_symbol_name(name),
+                      jl_symbol_name(file),
+                      line,
+                      jl_symbol_name(((jl_tvar_t*)tv)->name));
+        argtype = jl_new_struct(jl_unionall_type, tv, argtype);
+    }
+    if (jl_has_free_typevars(argtype)) {
+        jl_exceptionf(jl_argumenterror_type,
+                      "method definition for %s at %s:%d has free type variables",
+                      jl_symbol_name(name),
+                      jl_symbol_name(file),
+                      line);
+    }
+
+    m = jl_new_method_uninit(module);
+    m->external_mt = (jl_value_t*)external_mt;
+    if (external_mt)
+        jl_gc_wb(m, external_mt);
+    m->sig = argtype;
+    m->name = name;
+    m->isva = isva;
+    m->nargs = nargs;
+    m->file = file;
+    m->line = line;
+    jl_method_set_source(m, f);
 
 #ifdef RECORD_METHOD_ORDER
     if (jl_all_methods == NULL)

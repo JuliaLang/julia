@@ -1189,9 +1189,12 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, <:An
     end
 end
 
+loading_extension::Bool = false
 function run_extension_callbacks(extid::ExtensionId)
     assert_havelock(require_lock)
     succeeded = try
+        # Used by Distributed to now load extensions in the package callback
+        global loading_extension = true
         _require_prelocked(extid.id)
         @debug "Extension $(extid.id.name) of $(extid.parentid.name) loaded"
         true
@@ -1201,6 +1204,8 @@ function run_extension_callbacks(extid::ExtensionId)
         @error "Error during loading of extension $(extid.id.name) of $(extid.parentid.name), \
                 use `Base.retry_load_extensions()` to retry." exception=errs
         false
+    finally
+        global loading_extension = false
     end
     return succeeded
 end
@@ -2102,6 +2107,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
                               $trace
                               -`,
                               "OPENBLAS_NUM_THREADS" => 1,
+                              "JULIA_WAIT_FOR_TRACY" => nothing,
                               "JULIA_NUM_THREADS" => 1),
                        stderr = internal_stderr, stdout = internal_stdout),
               "w", stdout)

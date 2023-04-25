@@ -22,9 +22,14 @@ promote_rule(::Type{<:AbstractMatrix{T}}, ::Type{<:AbstractQ{T}}) where {T} =
     (@inline; Union{AbstractMatrix{T},AbstractQ{T}})
 
 # conversion
-AbstractQ{S}(Q::AbstractQ{S}) where {S} = Q
-# the following eltype promotion needs to be defined for each subtype
+# the following eltype promotion should be defined for each subtype `QType`
 # convert(::Type{AbstractQ{T}}, Q::QType) where {T} = QType{T}(Q)
+# and then care has to be taken that
+# QType{T}(Q::QType{T}) where T = ...
+# is implemented as a no-op
+
+# the following conversion method ensures functionality when the above method is not defined
+# (as for HessenbergQ), but no eltype conversion is required either (say, in multiplication)
 convert(::Type{AbstractQ{T}}, Q::AbstractQ{T}) where {T} = Q
 convert(::Type{AbstractQ{T}}, adjQ::AdjointQ{T}) where {T} = adjQ
 convert(::Type{AbstractQ{T}}, adjQ::AdjointQ) where {T} = convert(AbstractQ{T}, adjQ.Q)'
@@ -35,8 +40,7 @@ Matrix{T}(adjQ::AdjointQ{S}) where {T,S} = convert(Matrix{T}, lmul!(adjQ, Matrix
 Matrix(Q::AbstractQ{T}) where {T} = Matrix{T}(Q)
 Array{T}(Q::AbstractQ) where {T} = Matrix{T}(Q)
 Array(Q::AbstractQ) = Matrix(Q)
-convert(::Type{T}, Q::AbstractQ) where {T<:Array} = T(Q)
-convert(::Type{T}, Q::AbstractQ) where {T<:Matrix} = T(Q)
+convert(::Type{T}, Q::AbstractQ) where {T<:AbstractArray} = T(Q)
 # legacy
 @deprecate(convert(::Type{AbstractMatrix{T}}, Q::AbstractQ) where {T},
     convert(LinearAlgebra.AbstractQ{T}, Q))
@@ -227,11 +231,9 @@ QRCompactWYQ{S}(factors::AbstractMatrix, T::AbstractMatrix) where {S} =
 @deprecate(QRCompactWYQ{S,M}(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) where {S,M},
            QRCompactWYQ{S,M,typeof(T)}(factors, T), false)
 
-QRPackedQ{T}(Q::QRPackedQ) where {T} = QRPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
+QRPackedQ{T}(Q::QRPackedQ) where {T} = QRPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(AbstractVector{T}, Q.τ))
 QRCompactWYQ{S}(Q::QRCompactWYQ) where {S} = QRCompactWYQ(convert(AbstractMatrix{S}, Q.factors), convert(AbstractMatrix{S}, Q.T))
 
-AbstractQ{S}(Q::QRPackedQ) where {S} = QRPackedQ{S}(Q)
-AbstractQ{S}(Q::QRCompactWYQ) where {S} = QRCompactWYQ{S}(Q)
 # override generic square fallback
 Matrix{T}(Q::Union{QRCompactWYQ{S},QRPackedQ{S}}) where {T,S} =
     convert(Matrix{T}, lmul!(Q, Matrix{S}(I, size(Q, 1), min(size(Q.factors)...))))
@@ -505,7 +507,7 @@ struct LQPackedQ{T,S<:AbstractMatrix{T},C<:AbstractVector{T}} <: AbstractQ{T}
     τ::C
 end
 
-LQPackedQ{T}(Q::LQPackedQ) where {T} = LQPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
+LQPackedQ{T}(Q::LQPackedQ) where {T} = LQPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(AbstractVector{T}, Q.τ))
 @deprecate(AbstractMatrix{T}(Q::LQPackedQ) where {T},
     convert(AbstractQ{T}, Q),
     false)

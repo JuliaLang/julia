@@ -1006,33 +1006,46 @@ end
     try
         proj = joinpath(@__DIR__, "project", "Extensions", "HasDepWithExtensions.jl")
 
-        function gen_extension_cmd(compile)
-            ```$(Base.julia_cmd()) $compile --startup-file=no -e '
-                begin
-                    push!(empty!(DEPOT_PATH), '$(repr(depot_path))')
-                    using HasExtensions
-                    Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly got an extension")
-                    HasExtensions.ext_loaded && error("ext_loaded set")
-                    using HasDepWithExtensions
-                    Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
-                    HasExtensions.ext_loaded || error("ext_loaded not set")
-                    HasExtensions.ext_folder_loaded && error("ext_folder_loaded set")
-                    HasDepWithExtensions.do_something() || error("do_something errored")
-                    using ExtDep2
-                    HasExtensions.ext_folder_loaded || error("ext_folder_loaded not set")
-                end
-                '
-            ```
+        function gen_extension_cmd(compile, distr=false)
+            load_distr = distr ? "using Distributed; addprocs(1)" : ""
+            ew = distr ? "@everywhere" : ""
+            cmd = """
+            $load_distr
+            begin
+                $ew push!(empty!(DEPOT_PATH), $(repr(depot_path)))
+                using HasExtensions
+                $ew using HasExtensions
+                $ew Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly got an extension")
+                $ew HasExtensions.ext_loaded && error("ext_loaded set")
+                using HasDepWithExtensions
+                $ew using HasDepWithExtensions
+                $ew Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
+                $ew HasExtensions.ext_loaded || error("ext_loaded not set")
+                $ew HasExtensions.ext_folder_loaded && error("ext_folder_loaded set")
+                $ew HasDepWithExtensions.do_something() || error("do_something errored")
+                using ExtDep2
+                $ew using ExtDep2
+                $ew HasExtensions.ext_folder_loaded || error("ext_folder_loaded not set")
+            end
+            """
+            return `$(Base.julia_cmd()) $compile --startup-file=no -e $cmd`
         end
 
         for compile in (`--compiled-modules=no`, ``, ``) # Once when requiring precompilation, once where it is already precompiled
             cmd = gen_extension_cmd(compile)
             cmd = addenv(cmd, "JULIA_LOAD_PATH" => proj)
             cmd = pipeline(cmd; stdout, stderr)
+            @show compile
             @test success(cmd)
         end
 
         sep = Sys.iswindows() ? ';' : ':'
+
+        cmd = gen_extension_cmd(``, true)
+        cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([proj, "@stdlib"], sep))
+        str = read(cmd, String)
+        @test !occursin("Error during loading of extension", str)
+        @test !occursin("ConcurrencyViolationError", str)
 
         # 48351
         cmd = gen_extension_cmd(``)

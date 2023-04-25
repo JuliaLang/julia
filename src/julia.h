@@ -92,6 +92,11 @@ typedef struct _jl_value_t jl_value_t;
 struct _jl_taggedvalue_bits {
     uintptr_t gc:2;
     uintptr_t in_image:1;
+#ifdef _P64
+    uintptr_t padding:61;
+#else
+    uintptr_t padding:29;
+#endif
 };
 
 JL_EXTENSION struct _jl_taggedvalue_t {
@@ -344,7 +349,9 @@ typedef struct _jl_method_t {
     uint8_t isva;
     uint8_t is_for_opaque_closure;
     // uint8 settings
-    uint8_t constprop;     // 0x00 = use heuristic; 0x01 = aggressive; 0x02 = none
+    uint8_t constprop;      // 0x00 = use heuristic; 0x01 = aggressive; 0x02 = none
+    uint8_t max_varargs;    // 0xFF = use heuristic; otherwise, max # of args to expand
+                            // varargs when specializing.
 
     // Override the conclusions of inter-procedural effect analysis,
     // forcing the conclusion to always true.
@@ -553,6 +560,7 @@ typedef struct _jl_datatype_t {
     uint16_t isprimitivetype:1; // whether this is declared with 'primitive type' keyword (sized, no fields, and immutable)
     uint16_t ismutationfree:1; // whether any mutable memory is reachable through this type (in the type or via fields)
     uint16_t isidentityfree:1; // whether this type or any object reachable through its fields has non-content-based identity
+    uint16_t padding:6;
 } jl_datatype_t;
 
 typedef struct _jl_vararg_t {
@@ -577,6 +585,7 @@ typedef struct _jl_binding_t {
     uint8_t imported:1;
     uint8_t usingfailed:1;
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
+    uint8_t padding:2;
 } jl_binding_t;
 
 typedef struct {
@@ -1452,8 +1461,8 @@ JL_DLLEXPORT jl_value_t *jl_apply_type1(jl_value_t *tc, jl_value_t *p1);
 JL_DLLEXPORT jl_value_t *jl_apply_type2(jl_value_t *tc, jl_value_t *p1, jl_value_t *p2);
 JL_DLLEXPORT jl_datatype_t *jl_apply_modify_type(jl_value_t *dt);
 JL_DLLEXPORT jl_datatype_t *jl_apply_cmpswap_type(jl_value_t *dt);
-JL_DLLEXPORT jl_tupletype_t *jl_apply_tuple_type(jl_svec_t *params);
-JL_DLLEXPORT jl_tupletype_t *jl_apply_tuple_type_v(jl_value_t **p, size_t np);
+JL_DLLEXPORT jl_value_t *jl_apply_tuple_type(jl_svec_t *params);
+JL_DLLEXPORT jl_value_t *jl_apply_tuple_type_v(jl_value_t **p, size_t np);
 JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name,
                                             jl_module_t *module,
                                             jl_datatype_t *super,
@@ -1487,7 +1496,6 @@ JL_DLLEXPORT jl_svec_t *jl_alloc_svec(size_t n);
 JL_DLLEXPORT jl_svec_t *jl_alloc_svec_uninit(size_t n);
 JL_DLLEXPORT jl_svec_t *jl_svec_copy(jl_svec_t *a);
 JL_DLLEXPORT jl_svec_t *jl_svec_fill(size_t n, jl_value_t *x);
-JL_DLLEXPORT jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *v);
 JL_DLLEXPORT jl_sym_t *jl_symbol(const char *str) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_symbol_lookup(const char *str) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, size_t len) JL_NOTSAFEPOINT;
@@ -1934,6 +1942,10 @@ typedef struct _jl_task_t {
     uint16_t priority;
 
 // hidden state:
+
+#ifdef USE_TRACY
+    const char *name;
+#endif
     // id of owning thread - does not need to be defined until the task runs
     _Atomic(int16_t) tid;
     // threadpool id

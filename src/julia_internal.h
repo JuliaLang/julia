@@ -583,6 +583,9 @@ void jl_gc_reset_alloc_count(void);
 uint32_t jl_get_gs_ctr(void);
 void jl_set_gs_ctr(uint32_t ctr);
 
+typedef struct _jl_static_show_config_t { uint8_t quiet; } jl_static_show_config_t;
+size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_config_t ctx) JL_NOTSAFEPOINT;
+
 STATIC_INLINE jl_value_t *undefref_check(jl_datatype_t *dt, jl_value_t *v) JL_NOTSAFEPOINT
 {
      if (dt->layout->first_ptr >= 0) {
@@ -1459,12 +1462,14 @@ struct typemap_intersection_env {
     jl_typemap_intersection_visitor_fptr const fptr; // fptr to call on a match
     jl_value_t *const type; // type to match
     jl_value_t *const va; // the tparam0 for the vararg in type, if applicable (or NULL)
+    size_t search_slurp;
     // output values
     jl_value_t *ti; // intersection type
     jl_svec_t *env; // intersection env (initialize to null to perform intersection without an environment)
     int issubty;    // if `a <: b` is true in `intersect(a,b)`
 };
 int jl_typemap_intersection_visitor(jl_typemap_t *a, int offs, struct typemap_intersection_env *closure);
+void typemap_slurp_search(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure);
 
 // -- simplevector.c -- //
 
