@@ -330,8 +330,7 @@ end
     # Ambiguity test
     @test select_platform(platforms, P("aarch64", "linux")) == "linux3"
     @test select_platform(platforms, P("aarch64", "linux"; libgfortran_version=v"3")) == "linux3"
-    # This one may be surprising, but we still match `linux3`, and since linux3 is shorter, we choose it.
-    @test select_platform(platforms, P("aarch64", "linux"; libgfortran_version=v"3", libstdcxx_version=v"3.4.18")) === "linux3"
+    @test select_platform(platforms, P("aarch64", "linux"; libgfortran_version=v"3", libstdcxx_version=v"3.4.18")) === "linux5"
     @test select_platform(platforms, P("aarch64", "linux"; libgfortran_version=v"4")) === nothing
 
     @test select_platform(platforms, P("x86_64", "macos")) == "mac4"
@@ -343,13 +342,21 @@ end
     # Sorry, Alex. ;)
     @test select_platform(platforms, P("x86_64", "freebsd")) === nothing
 
-    # The new "prefer shortest matching" algorithm is meant to be used to resolve ambiguities such as the following:
+    # The new "most complete match" algorithm deals with ambiguities as follows:
     platforms = Dict(
-        # Typical binning test
-        P("x86_64", "linux") => "good",
-        P("x86_64", "linux"; sanitize="memory") => "bad",
+        P("x86_64", "linux") => "normal",
+        P("x86_64", "linux"; sanitize="memory") => "sanitized",
     )
-    @test select_platform(platforms, P("x86_64", "linux")) == "good"
+    @test select_platform(platforms, P("x86_64", "linux")) == "normal"
+    @test select_platform(platforms, P("x86_64", "linux"; sanitize="memory")) == "sanitized"
+
+    # Ties are broken by reverse-sorting by triplet:
+    platforms = Dict(
+        P("x86_64", "linux"; libgfortran_version=v"3") => "libgfortran3",
+        P("x86_64", "linux"; libgfortran_version=v"4") => "libgfortran4",
+    )
+    @test select_platform(platforms, P("x86_64", "linux")) == "libgfortran4"
+    @test select_platform(platforms, P("x86_64", "linux"; libgfortran_version=v"3")) == "libgfortran3"
 end
 
 @testset "Custom comparators" begin
