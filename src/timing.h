@@ -137,6 +137,7 @@ void jl_timing_printf(jl_timing_block_t *cur_block, const char *format, ...);
         X(SAVE_MODULE)           \
         X(INIT_MODULE)           \
         X(LOCK_SPIN)             \
+        X(STACKWALK)             \
 
 
 #define JL_TIMING_EVENTS \
@@ -153,6 +154,8 @@ void jl_timing_printf(jl_timing_block_t *cur_block, const char *format, ...);
         X(VERIFY_Edges) \
         X(VERIFY_Methods) \
         X(VERIFY_Graph) \
+        X(STACKWALK_Backtrace) \
+        X(STACKWALK_Excstack) \
 
 
 enum jl_timing_owners {
