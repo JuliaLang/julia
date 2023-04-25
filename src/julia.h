@@ -1639,6 +1639,7 @@ JL_DLLEXPORT jl_buffer_t *jl_buffer_fill(size_t n, jl_value_t *x);
 JL_DLLEXPORT jl_value_t *jl_bufref(jl_buffer_t *a, size_t i);  // 0-indexed
 JL_DLLEXPORT void jl_bufset(jl_buffer_t *sb JL_ROOTING_ARGUMENT, jl_value_t *v JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, size_t i);  // 0-indexed
 JL_DLLEXPORT void *jl_pointer_from_buffer(jl_buffer_t *b);
+JL_DLLEXPORT void jl_buffer_grow_at(jl_buffer_t *buf, size_t idx, size_t inc, size_t n);
 
 JL_DLLEXPORT int jl_buffer_isassigned(jl_buffer_t *b, size_t i);  // 0-indexed
 JL_DLLEXPORT void *jl_buffer_ptr(jl_buffer_t *b);

@@ -231,10 +231,166 @@ JL_DLLEXPORT int jl_buffer_isassigned(jl_buffer_t *b, size_t i)
     return 1;
 }
 
-JL_DLLEXPORT void jl_gc_wb_bufnew(void *parent, void *bufptr, size_t minsz) JL_NOTSAFEPOINT // parent isa jl_value_t*
+// Resizing methods for `jl_buffer_t` are different from `jl_array_t` in a number of ways.
+//
+// - If the type variant associated with `buf` enforces a fixed length, these will erorr.
+// - currently, `buf` is always assumed to be the owner of `buf->data`.
+// - `jl_buffer_t` has no offset into its data and there is no attempt to overallocate
+//   and prevent the need for repeated resizing, so if you request a resize you get
+// - all changes in allocation happen at the end of `jl_buffer_t`
+
+
+// Resize the buffer to `newlen`
+// The buffer can either be newly allocated or realloc'd, the return
+// value is 1 if a new buffer is allocated and 0 if it is realloc'd.
+// the caller needs to take care of moving the data from the old buffer
+// to the new one if necessary.
+// When this function returns, the `->data` pointer always points to
+// the **beginning** of the new buffer.
+static int NOINLINE resize_buffer(jl_buffer_t *buf, jl_eltype_layout_t lyt, size_t newlen)
 {
-    jl_gc_wb_buf(parent, bufptr, minsz);
+    jl_task_t *ct = jl_current_task;
+    size_t oldlen = jl_buffer_len(buf);
+    size_t old_nbytes = jl_nbytes_eltype_data(lyt, oldlen);
+    size_t new_nbytes = jl_nbytes_eltype_data(lyt, newlen);
+    int newbuf = 0;
+    if (old_nbytes > ARRAY_INLINE_NBYTES) {
+        // already malloc'd - use realloc
+        char *olddata = (char*)buf->data;
+        buf->data = jl_gc_managed_realloc(olddata, new_nbytes, old_nbytes,
+                                        !jl_buffer_isshared(buf), (jl_value_t*)buf);
+    }
+    else {
+        newbuf = 1;
+        if (new_nbytes >= MALLOC_THRESH) {
+            buf->data = jl_gc_managed_malloc(new_nbytes);
+            jl_gc_track_malloced_buffer(ct->ptls, buf);
+        }
+        else {
+            // mark second to last bit as unmarked
+            buf->data = (void*)((uintptr_t)(jl_gc_alloc_buf(ct->ptls, new_nbytes)) | 2);
+            jl_gc_wb_buf(buf, buf->data, new_nbytes);
+        }
+    }
+    if (JL_BUFFER_IMPL_NUL && lyt.elsize == 1)
+        memset((char*)buf->data + old_nbytes - 1, 0, new_nbytes - old_nbytes + 1);
+    (void)oldlen;
+    assert(oldlen == jl_buffer_len(buf) &&
+           "Race condition detected: recursive resizing on the same buffer.");
+    buf->length = newlen;
+    return newbuf;
 }
+
+
+JL_DLLEXPORT void jl_buffer_grow_at(jl_buffer_t *buf, size_t idx, size_t inc, size_t n)
+{
+    if (__unlikely(!jl_is_dynbuffer(buf)))
+        jl_error("attempt to grow buffer of a fixed length");
+    size_t oldlen = jl_buffer_len(buf);
+    size_t newlen = oldlen + inc;
+    jl_value_t *eltype = jl_tparam0(jl_typeof(buf));
+    jl_eltype_layout_t lyt = jl_eltype_layout(eltype);
+    char *olddata = (char*)buf->data;
+    char *typetagdata;
+    char *newtypetagdata;
+    size_t old_nbytes = oldlen * lyt.elsize;
+    if (lyt.ntags > 1)
+        typetagdata = olddata + old_nbytes;
+    int has_gap = n > idx;
+    size_t nb1 = idx * lyt.elsize;
+    size_t nbinc = inc * lyt.elsize;
+    int newbuf = resize_buffer(buf, lyt, newlen);
+    char *newdata = (char*)buf->data;
+    if (lyt.ntags > 1)
+        newtypetagdata = newdata + (newlen * lyt.elsize);
+    if (newbuf) {
+        memcpy(newdata, olddata, nb1);
+        if (lyt.ntags > 1) {
+            memcpy(newtypetagdata, typetagdata, idx);
+            if (has_gap) memcpy(newtypetagdata + idx + inc, typetagdata + idx, n - idx);
+            memset(newtypetagdata + idx, 0, inc);
+        }
+        if (has_gap)
+            memcpy(newdata + nb1 + nbinc, olddata + nb1, n * lyt.elsize - nb1);
+    }
+    else {
+        if (lyt.ntags > 1) {
+            typetagdata = newdata + old_nbytes;
+            if (has_gap)
+                memmove(newtypetagdata + idx + inc, typetagdata + idx, n - idx);
+            memmove(newtypetagdata, typetagdata, idx);
+            memset(newtypetagdata + idx, 0, inc);
+        }
+        if (has_gap) {
+            if (lyt.hasptr) {
+                memmove_refs((void**)(newdata + nb1 + nbinc), (void**)(newdata + nb1), (n * lyt.elsize - nb1) / sizeof(void*));
+            }
+            else {
+                memmove(newdata + nb1 + nbinc, newdata + nb1, n * lyt.elsize - nb1);
+            }
+        }
+    }
+    olddata = newdata;
+    buf->data = newdata;
+    buf->length = newlen;
+    if (lyt.isboxed || lyt.ntags > 1 || lyt.hasptr ||
+        (jl_is_datatype(eltype) && ((jl_datatype_t*)eltype)->zeroinit)) {
+        memset(olddata + idx * lyt.elsize, 0, inc * lyt.elsize);
+    }
+}
+
+JL_DLLEXPORT void jl_buffer_delete_at(jl_buffer_t *buf, size_t idx, size_t delta, size_t n)
+{
+    if (__unlikely(!jl_is_dynbuffer(buf)))
+        jl_error("attempt to grow buffer of a fixed length");
+    size_t oldlen = jl_buffer_len(buf);
+    size_t newlen = oldlen - delta;
+    jl_value_t *eltype = jl_tparam0(jl_typeof(buf));
+    jl_eltype_layout_t lyt = jl_eltype_layout(eltype);
+    char *olddata = (char*)buf->data;
+    char *typetagdata;
+    char *newtypetagdata;
+    size_t old_nbytes = oldlen * lyt.elsize;
+    if (lyt.ntags > 1)
+        typetagdata = olddata + old_nbytes;
+    int has_gap = n > idx;
+    size_t nb1 = idx * lyt.elsize;
+    size_t nbinc = delta * lyt.elsize;
+    int newbuf = resize_buffer(buf, lyt, newlen);
+    char *newdata = (char*)buf->data;
+    if (lyt.ntags > 1)
+        newtypetagdata = newdata + (newlen * lyt.elsize);
+    if (newbuf) {
+        memcpy(newdata, olddata, nb1);
+        if (lyt.ntags > 1) {
+            memcpy(newtypetagdata, typetagdata, idx);
+            if (has_gap)
+                memcpy(newtypetagdata + idx - delta, typetagdata + idx, n - idx);
+        }
+        if (has_gap)
+            memcpy(newdata + nb1 - nbinc, olddata + nb1, n * lyt.elsize - nb1);
+    }
+    else {
+        if (lyt.ntags > 1) {
+            typetagdata = newdata + old_nbytes;
+            if (has_gap)
+                memmove(newtypetagdata + idx - delta, typetagdata + idx, n - idx);
+            memmove(newtypetagdata, typetagdata, idx);
+        }
+        if (has_gap) {
+            if (lyt.hasptr) {
+                memmove_refs((void**)(newdata + nb1 - nbinc), (void**)(newdata + nb1), (n * lyt.elsize - nb1) / sizeof(void*));
+            }
+            else {
+                memmove(newdata + nb1 + nbinc, newdata + nb1, n * lyt.elsize - nb1);
+            }
+        }
+    }
+    olddata = newdata;
+    buf->data = newdata;
+    buf->length = newlen;
+}
+
 
 #ifdef __cplusplus
 }

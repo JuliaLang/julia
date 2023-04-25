@@ -66,16 +66,23 @@ end
     @test src !== dst
 end
 
-@testset "DynamicBuffer resize" begin
-    b = DynamicBuffer{Int}(undef, 3)
-    Base.unsafe_grow_at!(b, UInt(3), UInt(1))
-
-    Base.unsafe_delete_at!(b, UInt(3), UInt(1))
-end
-
-
 @test Base.summarysize(Buffer{Union{Nothing,Missing}}(undef, 16)) <
     Base.summarysize(Buffer{Union{Nothing,Missing}}(undef, 32))
 @test Base.summarysize(Buffer{Nothing}(undef, 16)) ==
     Base.summarysize(Buffer{Nothing}(undef, 32))
+
+@testset "DynamicBuffer resize" begin
+    # allocated inline
+    b = DynamicBuffer([1, 2, 3])
+    append!(b, b)
+    @test b == [1, 2, 3, 1, 2, 3]
+    push!(b, 0)
+    @test b == [1, 2, 3, 1, 2, 3, 0]
+    insert!(b, 2, 0)
+    @test b == [1, 0, 2, 3, 1, 2, 3, 0]
+    pushfirst!(b, 0)
+    @test b == [0, 1, 0, 2, 3, 1, 2, 3, 0]
+    prepend!(b, [999])
+    @test b == [999, 0, 1, 0, 2, 3, 1, 2, 3, 0]
+end
 
