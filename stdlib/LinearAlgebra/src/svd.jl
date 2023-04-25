@@ -213,7 +213,6 @@ Base.propertynames(F::SVD, private::Bool=false) =
 
 Return the singular values of `A`, saving space by overwriting the input.
 See also [`svdvals`](@ref) and [`svd`](@ref).
-```
 """
 svdvals!(A::StridedMatrix{T}) where {T<:BlasFloat} = isempty(A) ? zeros(real(T), 0) : LAPACK.gesdd!('N', A)[2]
 svdvals!(A::StridedVector{T}) where {T<:BlasFloat} = svdvals!(reshape(A, (length(A), 1)))

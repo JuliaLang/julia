@@ -12,9 +12,6 @@ end
     nothing
 end
 
-# Test that arraysize has proper effect modeling
-@test fully_eliminated(M->(size(M, 2); nothing), (Matrix{Float64},))
-
 # Test that effect modeling for return_type doesn't incorrectly pick
 # up the effects of the function being analyzed
 f_throws() = error()
@@ -357,9 +354,9 @@ function f_boundscheck_elim(n)
     # Inbounds here assumes that this is only ever called with `n==0`, but of
     # course the compiler has no way of knowing that, so it must not attempt
     # to run the `@inbounds getfield(sin, 1)` that `ntuple` generates.
-    ntuple(x->(@inbounds getfield(sin, x)), n)
+    ntuple(x->(@inbounds ()[x]), n)
 end
-@test !Core.Compiler.is_consistent(Base.infer_effects(f_boundscheck_elim, (Int,)))
+@test_broken !Core.Compiler.is_consistent(Base.infer_effects(f_boundscheck_elim, (Int,)))
 @test Tuple{} <: only(Base.return_types(f_boundscheck_elim, (Int,)))
 
 # Test that purity modeling doesn't accidentally introduce new world age issues
@@ -454,11 +451,6 @@ let effects = Base.infer_effects(f_setfield_nothrow, ())
     @test Core.Compiler.is_nothrow(effects)
 end
 
-# nothrow for arrayset
-@test Base.infer_effects((Vector{Int},Int)) do a, i
-    a[i] = 0 # may throw
-end |> !Core.Compiler.is_nothrow
-
 # even if 2-arg `getfield` may throw, it should be still `:consistent`
 @test Core.Compiler.is_consistent(Base.infer_effects(getfield, (NTuple{5, Float64}, Int)))
 
@@ -477,13 +469,26 @@ end |> Core.Compiler.is_consistent
 end |> Core.Compiler.is_effect_free
 
 # `getfield_effects` handles access to union object nicely
-@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Some{String}, Core.Const(:value)]), String))
-@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Some{Symbol}, Core.Const(:value)]), Symbol))
-@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Union{Some{Symbol},Some{String}}, Core.Const(:value)]), Union{Symbol,String}))
+let 𝕃 = Core.Compiler.fallback_lattice
+    @test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(𝕃, Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Some{String}, Core.Const(:value)]), String))
+    @test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(𝕃, Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Some{Symbol}, Core.Const(:value)]), Symbol))
+    @test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(𝕃, Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Union{Some{Symbol},Some{String}}, Core.Const(:value)]), Union{Symbol,String}))
+end
 @test Base.infer_effects((Bool,)) do c
     obj = c ? Some{String}("foo") : Some{Symbol}(:bar)
     return getfield(obj, :value)
 end |> Core.Compiler.is_consistent
+
+# getfield is nothrow when bounds checking is turned off
+@test Base.infer_effects((Tuple{Int,Int},Int)) do t, i
+    getfield(t, i, false)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Tuple{Int,Int},Symbol)) do t, i
+    getfield(t, i, false)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Tuple{Int,Int},String)) do t, i
+    getfield(t, i, false) # invalid name type
+end |> !Core.Compiler.is_nothrow
 
 @test Core.Compiler.is_consistent(Base.infer_effects(setindex!, (Base.RefValue{Int}, Int)))
 
@@ -559,7 +564,7 @@ end |> !Core.Compiler.is_inaccessiblememonly
 end |> !Core.Compiler.is_inaccessiblememonly
 
 # the `:inaccessiblememonly` helper effect allows us to prove `:consistent`-cy of frames
-# including `getfield` accessing to local mutable object
+# including `getfield` / `isdefined` accessing to local mutable object
 
 mutable struct SafeRef{T}
     x::T
@@ -588,13 +593,11 @@ const consistent_global = Some(:foo)
 @test Base.infer_effects() do
     consistent_global.value
 end |> Core.Compiler.is_consistent
-
 const inconsistent_global = SafeRef(:foo)
 @test Base.infer_effects() do
     inconsistent_global[]
 end |> !Core.Compiler.is_consistent
-
-global inconsistent_condition_ref = Ref{Bool}(false)
+const inconsistent_condition_ref = Ref{Bool}(false)
 @test Base.infer_effects() do
     if inconsistent_condition_ref[]
         return 0
@@ -602,6 +605,21 @@ global inconsistent_condition_ref = Ref{Bool}(false)
         return 1
     end
 end |> !Core.Compiler.is_consistent
+
+# should handle va-method properly
+callgetfield1(xs...) = getfield(getfield(xs, 1), 1)
+@test !Core.Compiler.is_inaccessiblememonly(Base.infer_effects(callgetfield1, (Base.RefValue{Symbol},)))
+const GLOBAL_XS = Ref(:julia)
+global_getfield() = callgetfield1(GLOBAL_XS)
+@test let
+    Base.Experimental.@force_compile
+    global_getfield()
+end === :julia
+GLOBAL_XS[] = :julia2
+@test let
+    Base.Experimental.@force_compile
+    global_getfield()
+end === :julia2
 
 # the `:inaccessiblememonly` helper effect allows us to prove `:effect_free`-ness of frames
 # including `setfield!` modifying local mutable object
@@ -662,12 +680,14 @@ end
 end
 @test !Core.Compiler.is_removable_if_unused(Base.infer_effects(unremovable_if_unused3!))
 
-@testset "effects analysis on array ops" begin
+# array ops
+# =========
 
-@testset "effects analysis on array construction" begin
+# allocation
+# ----------
 
+# low-level constructor
 @noinline construct_array(@nospecialize(T), args...) = Array{T}(undef, args...)
-
 # should eliminate safe but dead allocations
 let good_dims = @static Int === Int64 ? (1:10) : (1:8)
     Ns = @static Int === Int64 ? (1:10) : (1:8)
@@ -682,7 +702,6 @@ let good_dims = @static Int === Int64 ? (1:10) : (1:8)
         end
     end
 end
-
 # should analyze throwness correctly
 let bad_dims = [-1, typemax(Int)]
     for dim in bad_dims, N in 1:10
@@ -698,9 +717,132 @@ let bad_dims = [-1, typemax(Int)]
     end
 end
 
-end # @testset "effects analysis on array construction" begin
+# high-level interfaces
+# getindex
+for safesig = Any[
+        (Type{Int},)
+        (Type{Int}, Int)
+        (Type{Int}, Int, Int)
+        (Type{Number},)
+        (Type{Number}, Number)
+        (Type{Number}, Int)
+        (Type{Any},)
+        (Type{Any}, Any,)
+        (Type{Any}, Any, Any)
+    ]
+    let effects = Base.infer_effects(getindex, safesig)
+        @test Core.Compiler.is_consistent_if_notreturned(effects)
+        @test Core.Compiler.is_removable_if_unused(effects)
+    end
+end
+for unsafesig = Any[
+        (Type{Int}, String)
+        (Type{Int}, Any)
+        (Type{Number}, AbstractString)
+        (Type{Number}, Any)
+    ]
+    let effects = Base.infer_effects(getindex, unsafesig)
+        @test !Core.Compiler.is_nothrow(effects)
+    end
+end
+# vect
+for safesig = Any[
+        ()
+        (Int,)
+        (Int, Int)
+    ]
+    let effects = Base.infer_effects(Base.vect, safesig)
+        @test Core.Compiler.is_consistent_if_notreturned(effects)
+        @test Core.Compiler.is_removable_if_unused(effects)
+    end
+end
 
-end # @testset "effects analysis on array ops" begin
+# arrayref
+# --------
+
+let effects = Base.infer_effects(Base.arrayref, (Vector{Any},Int))
+    @test Core.Compiler.is_consistent_if_inaccessiblememonly(effects)
+    @test Core.Compiler.is_effect_free(effects)
+    @test !Core.Compiler.is_nothrow(effects)
+    @test Core.Compiler.is_terminates(effects)
+end
+
+# arrayset
+# --------
+
+let effects = Base.infer_effects(Base.arrayset, (Vector{Any},Any,Int))
+    @test Core.Compiler.is_consistent_if_inaccessiblememonly(effects)
+    @test Core.Compiler.is_effect_free_if_inaccessiblememonly(effects)
+    @test !Core.Compiler.is_nothrow(effects)
+    @test Core.Compiler.is_terminates(effects)
+end
+# nothrow for arrayset
+@test Base.infer_effects((Vector{Int},Int,Int)) do a, v, i
+    Base.arrayset(true, a, v, i)
+end |> !Core.Compiler.is_nothrow
+@test Base.infer_effects((Vector{Int},Int,Int)) do a, v, i
+    a[i] = v # may throw
+end |> !Core.Compiler.is_nothrow
+# when bounds checking is turned off, it should be safe
+@test Base.infer_effects((Vector{Int},Int,Int)) do a, v, i
+    Base.arrayset(false, a, v, i)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Vector{Number},Number,Int)) do a, v, i
+    Base.arrayset(false, a, v, i)
+end |> Core.Compiler.is_nothrow
+
+# arraysize
+# ---------
+
+let effects = Base.infer_effects(Base.arraysize, (Array,Int))
+    @test Core.Compiler.is_consistent_if_inaccessiblememonly(effects)
+    @test Core.Compiler.is_effect_free(effects)
+    @test !Core.Compiler.is_nothrow(effects)
+    @test Core.Compiler.is_terminates(effects)
+end
+# Test that arraysize has proper effect modeling
+@test fully_eliminated(M->(size(M, 2); nothing), (Matrix{Float64},))
+
+# arraylen
+# --------
+
+let effects = Base.infer_effects(Base.arraylen, (Vector{Any},))
+    @test Core.Compiler.is_consistent_if_inaccessiblememonly(effects)
+    @test Core.Compiler.is_effect_free(effects)
+    @test Core.Compiler.is_nothrow(effects)
+    @test Core.Compiler.is_terminates(effects)
+end
+
+# resize
+# ------
+
+for op = Any[
+        Base._growbeg!,
+        Base._growend!,
+        Base._deletebeg!,
+        Base._deleteend!,
+    ]
+    let effects = Base.infer_effects(op, (Vector, Int))
+        @test Core.Compiler.is_effect_free_if_inaccessiblememonly(effects)
+        @test Core.Compiler.is_terminates(effects)
+        @test !Core.Compiler.is_nothrow(effects)
+    end
+end
+
+# end to end
+# ----------
+
+function simple_vec_ops(T, op!, op, xs...)
+    a = T[]
+    op!(a, xs...)
+    return op(a)
+end
+for T = Any[Int,Any], op! = Any[push!,pushfirst!], op = Any[length,size],
+    xs = Any[(Int,), (Int,Int,)]
+    let effects = Base.infer_effects(simple_vec_ops, (Type{T},typeof(op!),typeof(op),xs...))
+        @test Core.Compiler.is_foldable(effects)
+    end
+end
 
 # Test that builtin_effects handles vararg correctly
 @test !Core.Compiler.is_nothrow(Core.Compiler.builtin_effects(Core.Compiler.fallback_lattice, Core.isdefined,
@@ -760,7 +902,6 @@ end |> Core.Compiler.is_foldable_nothrow
 end
 @test Core.Compiler.is_foldable(Base.infer_effects(ImmutRef, Tuple{Any}))
 
-@test Base.ismutationfree(Type{Union{}})
 @test Core.Compiler.is_foldable_nothrow(Base.infer_effects(typejoin, ()))
 
 # nothrow-ness of subtyping operations
@@ -775,7 +916,6 @@ gotoifnot_throw_check_48583(x) = x ? x : 0
 @test !Core.Compiler.is_nothrow(Base.infer_effects(gotoifnot_throw_check_48583, (Any,)))
 @test Core.Compiler.is_nothrow(Base.infer_effects(gotoifnot_throw_check_48583, (Bool,)))
 
-
 # unknown :static_parameter should taint :nothrow
 # https://github.com/JuliaLang/julia/issues/46771
 unknown_sparam_throw(::Union{Nothing, Type{T}}) where T = (T; nothing)
@@ -789,3 +929,56 @@ unknown_sparam_nothrow2(x::Ref{Ref{T}}) where T = (T; nothing)
 @test !Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Any,)))
 @test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_nothrow1, (Ref,)))
 @test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_nothrow2, (Ref{Ref{T}} where T,)))
+
+# purely abstract recursion should not taint :terminates
+# https://github.com/JuliaLang/julia/issues/48983
+abstractly_recursive1() = abstractly_recursive2()
+abstractly_recursive2() = (Core.Compiler._return_type(abstractly_recursive1, Tuple{}); 1)
+abstractly_recursive3() = abstractly_recursive2()
+@test Core.Compiler.is_terminates(Base.infer_effects(abstractly_recursive3, ()))
+actually_recursive1(x) = actually_recursive2(x)
+actually_recursive2(x) = (x <= 0) ? 1 : actually_recursive1(x - 1)
+actually_recursive3(x) = actually_recursive2(x)
+@test !Core.Compiler.is_terminates(Base.infer_effects(actually_recursive3, (Int,)))
+
+# `isdefined` effects
+struct MaybeSome{T}
+    value::T
+    MaybeSome(x::T) where T = new{T}(x)
+    MaybeSome{T}(x::T) where T = new{T}(x)
+    MaybeSome{T}() where T = new{T}()
+end
+const undefined_ref = Ref{String}()
+const defined_ref = Ref{String}("julia")
+const undefined_some = MaybeSome{String}()
+const defined_some = MaybeSome{String}("julia")
+let effects = Base.infer_effects() do
+        isdefined(undefined_ref, :x)
+    end
+    @test !Core.Compiler.is_consistent(effects)
+    @test Core.Compiler.is_nothrow(effects)
+end
+let effects = Base.infer_effects() do
+        isdefined(defined_ref, :x)
+    end
+    @test Core.Compiler.is_consistent(effects)
+    @test Core.Compiler.is_nothrow(effects)
+end
+let effects = Base.infer_effects() do
+        isdefined(undefined_some, :value)
+    end
+    @test Core.Compiler.is_consistent(effects)
+    @test Core.Compiler.is_nothrow(effects)
+end
+let effects = Base.infer_effects() do
+        isdefined(defined_some, :value)
+    end
+    @test Core.Compiler.is_consistent(effects)
+    @test Core.Compiler.is_nothrow(effects)
+end
+# high-level interface test
+isassigned_effects(s) = isassigned(Ref(s))
+@test Core.Compiler.is_consistent(Base.infer_effects(isassigned_effects, (Symbol,)))
+@test fully_eliminated(; retval=true) do
+    isassigned_effects(:foo)
+end

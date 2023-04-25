@@ -7,6 +7,13 @@ New language features
 Language changes
 ----------------
 
+* When a task forks a child, the parent task's task-local RNG (random number generator) is no longer affected. The seeding of child based on the parent task also takes a more disciplined approach to collision resistance, using a design based on the SplitMix and DotMix splittable RNG schemes ([#49110]).
+* A new morespecific rule for methods resolves ambiguities containing Union{} in favor of
+  the method defined explicitly to handle the Union{} argument. This makes it possible to
+  define methods to explicitly handle Union{} without the ambiguities that commonly would
+  result previously. This also lets the runtime optimize certain method lookups in a way
+  that significantly improves load and inference times for heavily overloaded methods that
+  dispatch on Types (such as traits and constructors).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -27,6 +34,8 @@ Build system changes
 New library functions
 ---------------------
 * `tanpi` is now defined. It computes tan(πx) more accurately than `tan(pi*x)` ([#48575]).
+* `fourthroot(x)` is now defined in `Base.Math` and can be used to compute the fourth root of `x`.
+   It can also be accessed using the unicode character `∜`, which can be typed by `\fourthroot<tab>` ([#48899]).
 
 New library features
 --------------------
@@ -40,6 +49,7 @@ Standard library changes
 ------------------------
 
 * `startswith` now supports seekable `IO` streams ([#43055])
+* printing integral `Rational`s will skip the denominator in `Rational`-typed IO context (e.g. in `Arrays`) ([#45396])
 
 #### Package Manager
 
@@ -66,6 +76,8 @@ Standard library changes
   `Factorization` ([#46874]).
 * New functions `hermitianpart` and `hermitianpart!` for extracting the Hermitian
   (real symmetric) part of a matrix ([#31836]).
+* The `norm` of the adjoint or transpose of an `AbstractMatrix` now returns the norm of the
+  parent matrix by default, matching the current behaviour for `AbstractVector`s ([#49020]).
 
 #### Printf
 * Format specifiers now support dynamic width and precision, e.g. `%*s` and `%*.*g` ([#40105]).

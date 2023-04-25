@@ -362,6 +362,6 @@ JL_GCC_IGNORE_STOP
 
 void jl_init_runtime_ccall(void)
 {
-    JL_MUTEX_INIT(&libmap_lock);
+    JL_MUTEX_INIT(&libmap_lock, "libmap_lock");
     uv_mutex_init(&trampoline_lock);
 }

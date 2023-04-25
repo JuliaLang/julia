@@ -98,6 +98,7 @@ String(s::AbstractString) = print_to_string(s)
 @assume_effects :total String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
 
 unsafe_wrap(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
+unsafe_wrap(::Type{Vector{UInt8}}, s::FastContiguousSubArray{UInt8,1,Vector{UInt8}}) = unsafe_wrap(Vector{UInt8}, pointer(s), size(s))
 
 Vector{UInt8}(s::CodeUnits{UInt8,String}) = copyto!(Vector{UInt8}(undef, length(s)), s)
 Vector{UInt8}(s::String) = Vector{UInt8}(codeunits(s))
@@ -113,7 +114,8 @@ pointer(s::String, i::Integer) = pointer(s) + Int(i)::Int - 1
 ncodeunits(s::String) = Core.sizeof(s)
 codeunit(s::String) = UInt8
 
-@inline function codeunit(s::String, i::Integer)
+codeunit(s::String, i::Integer) = codeunit(s, Int(i))
+@assume_effects :foldable @inline function codeunit(s::String, i::Int)
     @boundscheck checkbounds(s, i)
     b = GC.@preserve s unsafe_load(pointer(s, i))
     return b
@@ -121,20 +123,20 @@ end
 
 ## comparison ##
 
-_memcmp(a::Union{Ptr{UInt8},AbstractString}, b::Union{Ptr{UInt8},AbstractString}, len) =
+@assume_effects :total _memcmp(a::String, b::String) = @invoke _memcmp(a::Union{Ptr{UInt8},AbstractString},b::Union{Ptr{UInt8},AbstractString})
+
+_memcmp(a::Union{Ptr{UInt8},AbstractString}, b::Union{Ptr{UInt8},AbstractString}) = _memcmp(a, b, min(sizeof(a), sizeof(b)))
+function _memcmp(a::Union{Ptr{UInt8},AbstractString}, b::Union{Ptr{UInt8},AbstractString}, len::Int)
     ccall(:memcmp, Cint, (Ptr{UInt8}, Ptr{UInt8}, Csize_t), a, b, len % Csize_t) % Int
+end
 
 function cmp(a::String, b::String)
     al, bl = sizeof(a), sizeof(b)
-    c = _memcmp(a, b, min(al,bl))
+    c = _memcmp(a, b)
     return c < 0 ? -1 : c > 0 ? +1 : cmp(al,bl)
 end
 
-function ==(a::String, b::String)
-    pointer_from_objref(a) == pointer_from_objref(b) && return true
-    al = sizeof(a)
-    return al == sizeof(b) && 0 == _memcmp(a, b, al)
-end
+==(a::String, b::String) = a===b
 
 typemin(::Type{String}) = ""
 typemin(::String) = typemin(String)
@@ -190,15 +192,201 @@ end
 end
 
 ## checking UTF-8 & ACSII validity ##
+#=
+    The UTF-8 Validation is performed by a shift based DFA.
+    ┌───────────────────────────────────────────────────────────────────┐
+    │    UTF-8 DFA State Diagram    ┌──────────────2──────────────┐     │
+    │                               ├────────3────────┐           │     │
+    │                 ┌──────────┐  │     ┌─┐        ┌▼┐          │     │
+    │      ASCII      │  UTF-8   │  ├─5──►│9├───1────► │          │     │
+    │                 │          │  │     ├─┤        │ │         ┌▼┐    │
+    │                 │  ┌─0─┐   │  ├─6──►│8├─1,7,9──►4├──1,7,9──► │    │
+    │      ┌─0─┐      │  │   │   │  │     ├─┤        │ │         │ │    │
+    │      │   │      │ ┌▼───┴┐  │  ├─11─►│7├──7,9───► │ ┌───────►3├─┐  │
+    │     ┌▼───┴┐     │ │     │  ▼  │     └─┘        └─┘ │       │ │ │  │
+    │     │  0  ├─────┘ │  1  ├─► ──┤                    │  ┌────► │ │  │
+    │     └─────┘       │     │     │     ┌─┐            │  │    └─┘ │  │
+    │                   └──▲──┘     ├─10─►│5├─────7──────┘  │        │  │
+    │                      │        │     ├─┤               │        │  │
+    │                      │        └─4──►│6├─────1,9───────┘        │  │
+    │          INVALID     │              └─┘                        │  │
+    │           ┌─*─┐      └──────────────────1,7,9──────────────────┘  │
+    │          ┌▼───┴┐                                                  │
+    │          │  2  ◄─── All undefined transitions result in state 2   │
+    │          └─────┘                                                  │
+    └───────────────────────────────────────────────────────────────────┘
 
-byte_string_classify(s::Union{String,Vector{UInt8},FastContiguousSubArray{UInt8,1,Vector{UInt8}}}) =
-    ccall(:u8_isvalid, Int32, (Ptr{UInt8}, Int), s, sizeof(s))
+        Validation States
+            0 -> _UTF8_DFA_ASCII is the start state and will only stay in this state if the string is only ASCII characters
+                        If the DFA ends in this state the string is ASCII only
+            1 -> _UTF8_DFA_ACCEPT is the valid complete character state of the DFA once it has encountered a UTF-8 Unicode character
+            2 -> _UTF8_DFA_INVALID is only reached by invalid bytes and once in this state it will not change
+                    as seen by all 1s in that column of table below
+            3 -> One valid continuation byte needed to return to state 0
+        4,5,6 -> Two valid continuation bytes needed to return to state 0
+        7,8,9 -> Three valids continuation bytes needed to return to state 0
+
+                        Current State
+                    0̲  1̲  2̲  3̲  4̲  5̲  6̲  7̲  8̲  9̲
+                0 | 0  1  2  2  2  2  2  2  2  2
+                1 | 2  2  2  1  3  2  3  2  4  4
+                2 | 3  3  2  2  2  2  2  2  2  2
+                3 | 4  4  2  2  2  2  2  2  2  2
+                4 | 6  6  2  2  2  2  2  2  2  2
+    Character   5 | 9  9  2  2  2  2  2  2  2  2     <- Next State
+    Class       6 | 8  8  2  2  2  2  2  2  2  2
+                7 | 2  2  2  1  3  3  2  4  4  2
+                8 | 2  2  2  2  2  2  2  2  2  2
+                9 | 2  2  2  1  3  2  3  4  4  2
+               10 | 5  5  2  2  2  2  2  2  2  2
+               11 | 7  7  2  2  2  2  2  2  2  2
+
+           Shifts | 0  4 10 14 18 24  8 20 12 26
+
+    The shifts that represent each state were derived using teh SMT solver Z3, to ensure when encoded into
+    the rows the correct shift was a result.
+
+    Each character class row is encoding 10 states with shifts as defined above. By shifting the bitsof a row by
+    the current state then masking the result with 0x11110 give the shift for the new state
+
+
+=#
+
+#State type used by UTF-8 DFA
+const _UTF8DFAState = UInt32
+# Fill the table with 256 UInt64 representing the DFA transitions for all bytes
+const _UTF8_DFA_TABLE = let # let block rather than function doesn't pollute base
+    num_classes=12
+    num_states=10
+    bit_per_state = 6
+
+    # These shifts were derived using a SMT solver
+    state_shifts = [0, 4, 10, 14, 18, 24, 8, 20, 12, 26]
+
+    character_classes = [   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                            9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
+                            7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+                            7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+                            8, 8, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+                            2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+                            10, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 3, 3,
+                            11, 6, 6, 6, 5, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8 ]
+
+    # These are the rows discussed in comments above
+    state_arrays = [ 0  1  2  2  2  2  2  2  2  2;
+                     2  2  2  1  3  2  3  2  4  4;
+                     3  3  2  2  2  2  2  2  2  2;
+                     4  4  2  2  2  2  2  2  2  2;
+                     6  6  2  2  2  2  2  2  2  2;
+                     9  9  2  2  2  2  2  2  2  2;
+                     8  8  2  2  2  2  2  2  2  2;
+                     2  2  2  1  3  3  2  4  4  2;
+                     2  2  2  2  2  2  2  2  2  2;
+                     2  2  2  1  3  2  3  4  4  2;
+                     5  5  2  2  2  2  2  2  2  2;
+                     7  7  2  2  2  2  2  2  2  2]
+
+    #This converts the state_arrays into the shift encoded _UTF8DFAState
+    class_row = zeros(_UTF8DFAState, num_classes)
+
+    for i = 1:num_classes
+        row = _UTF8DFAState(0)
+        for j in 1:num_states
+            #Calculate the shift required for the next state
+            to_shift = UInt8((state_shifts[state_arrays[i,j]+1]) )
+            #Shift the next state into the position of the current state
+            row = row | (_UTF8DFAState(to_shift) << state_shifts[j])
+        end
+        class_row[i]=row
+    end
+
+    map(c->class_row[c+1],character_classes)
+end
+
+
+const _UTF8_DFA_ASCII = _UTF8DFAState(0) #This state represents the start and end of any valid string
+const _UTF8_DFA_ACCEPT = _UTF8DFAState(4) #This state represents the start and end of any valid string
+const _UTF8_DFA_INVALID = _UTF8DFAState(10) # If the state machine is ever in this state just stop
+
+# The dfa step is broken out so that it may be used in other functions. The mask was calculated to work with state shifts above
+@inline _utf_dfa_step(state::_UTF8DFAState, byte::UInt8) = @inbounds (_UTF8_DFA_TABLE[byte+1] >> state) & _UTF8DFAState(0x0000001E)
+
+@inline function _isvalid_utf8_dfa(state::_UTF8DFAState, bytes::AbstractVector{UInt8}, first::Int = firstindex(bytes), last::Int = lastindex(bytes))
+    for i = first:last
+       @inbounds state = _utf_dfa_step(state, bytes[i])
+    end
+    return (state)
+end
+
+@inline function  _find_nonascii_chunk(chunk_size,cu::AbstractVector{CU}, first,last) where {CU}
+    n=first
+    while n <= last - chunk_size
+        _isascii(cu,n,n+chunk_size-1) || return n
+        n += chunk_size
+    end
+    n= last-chunk_size+1
+    _isascii(cu,n,last) || return n
+    return nothing
+end
+
+##
+
+# Classifcations of string
     # 0: neither valid ASCII nor UTF-8
     # 1: valid ASCII
     # 2: valid UTF-8
+ byte_string_classify(s::AbstractString) = byte_string_classify(codeunits(s))
 
-isvalid(::Type{String}, s::Union{Vector{UInt8},FastContiguousSubArray{UInt8,1,Vector{UInt8}},String}) = byte_string_classify(s) ≠ 0
-isvalid(s::String) = isvalid(String, s)
+
+function byte_string_classify(bytes::AbstractVector{UInt8})
+    chunk_size = 1024
+    chunk_threshold =  chunk_size + (chunk_size ÷ 2)
+    n = length(bytes)
+    if n > chunk_threshold
+        start = _find_nonascii_chunk(chunk_size,bytes,1,n)
+        isnothing(start) && return 1
+    else
+        _isascii(bytes,1,n) && return 1
+        start = 1
+    end
+    return _byte_string_classify_nonascii(bytes,start,n)
+end
+
+function _byte_string_classify_nonascii(bytes::AbstractVector{UInt8}, first::Int, last::Int)
+    chunk_size = 256
+
+    start = first
+    stop = min(last,first + chunk_size - 1)
+    state = _UTF8_DFA_ACCEPT
+    while start <= last
+        # try to process ascii chunks
+        while state == _UTF8_DFA_ACCEPT
+            _isascii(bytes,start,stop) || break
+            (start = start + chunk_size) <= last || break
+            stop = min(last,stop + chunk_size)
+        end
+        # Process non ascii chunk
+        state = _isvalid_utf8_dfa(state,bytes,start,stop)
+        state == _UTF8_DFA_INVALID && return 0
+
+        start = start + chunk_size
+        stop = min(last,stop + chunk_size)
+    end
+    return ifelse(state == _UTF8_DFA_ACCEPT,2,0)
+end
+
+isvalid(::Type{String}, bytes::AbstractVector{UInt8}) = (@inline byte_string_classify(bytes)) ≠ 0
+isvalid(::Type{String}, s::AbstractString) =  (@inline byte_string_classify(s)) ≠ 0
+
+@inline isvalid(s::AbstractString) = @inline isvalid(String, codeunits(s))
 
 is_valid_continuation(c) = c & 0xc0 == 0x80
 
@@ -284,9 +472,11 @@ getindex(s::String, r::AbstractUnitRange{<:Integer}) = s[Int(first(r)):Int(last(
     return ss
 end
 
-length(s::String) = length_continued(s, 1, ncodeunits(s), ncodeunits(s))
+# nothrow because we know the start and end indices are valid
+@assume_effects :nothrow length(s::String) = length_continued(s, 1, ncodeunits(s), ncodeunits(s))
 
-@inline function length(s::String, i::Int, j::Int)
+# effects needed because @inbounds
+@assume_effects :consistent :effect_free @inline function length(s::String, i::Int, j::Int)
     @boundscheck begin
         0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
         0 ≤ j < ncodeunits(s)+1 || throw(BoundsError(s, j))
@@ -294,13 +484,13 @@ length(s::String) = length_continued(s, 1, ncodeunits(s), ncodeunits(s))
     j < i && return 0
     @inbounds i, k = thisind(s, i), i
     c = j - i + (i == k)
-    length_continued(s, i, j, c)
+    @inbounds length_continued(s, i, j, c)
 end
 
-@inline function length_continued(s::String, i::Int, n::Int, c::Int)
+@assume_effects :terminates_locally @inline @propagate_inbounds function length_continued(s::String, i::Int, n::Int, c::Int)
     i < n || return c
-    @inbounds b = codeunit(s, i)
-    @inbounds while true
+    b = codeunit(s, i)
+    while true
         while true
             (i += 1) ≤ n || return c
             0xc0 ≤ b ≤ 0xf7 && break
@@ -326,12 +516,10 @@ end
 
 isvalid(s::String, i::Int) = checkbounds(Bool, s, i) && thisind(s, i) == i
 
-function isascii(s::String)
-    @inbounds for i = 1:ncodeunits(s)
-        codeunit(s, i) >= 0x80 && return false
-    end
-    return true
-end
+isascii(s::String) = isascii(codeunits(s))
+
+# don't assume effects for general integers since we cannot know their implementation
+@assume_effects :foldable repeat(c::Char, r::BitInteger) = @invoke repeat(c::Char, r::Integer)
 
 """
     repeat(c::AbstractChar, r::Integer) -> String
@@ -345,8 +533,8 @@ julia> repeat('A', 3)
 "AAA"
 ```
 """
-repeat(c::AbstractChar, r::Integer) = repeat(Char(c), r) # fallback
-function repeat(c::Char, r::Integer)
+function repeat(c::AbstractChar, r::Integer)
+    c = Char(c)::Char
     r == 0 && return ""
     r < 0 && throw(ArgumentError("can't repeat a character $r times"))
     u = bswap(reinterpret(UInt32, c))

@@ -536,12 +536,12 @@ function hash(a::AbstractDict, h::UInt)
     hash(hv, h)
 end
 
-function getindex(t::AbstractDict, key)
+function getindex(t::AbstractDict{<:Any,V}, key) where V
     v = get(t, key, secret_table_token)
     if v === secret_table_token
         throw(KeyError(key))
     end
-    return v
+    return v::V
 end
 
 # t[k1,k2,ks...] is syntactic sugar for t[(k1,k2,ks...)].  (Note
@@ -560,8 +560,6 @@ function get!(default::Callable, t::AbstractDict{K,V}, key) where K where V
 end
 
 push!(t::AbstractDict, p::Pair) = setindex!(t, p.second, p.first)
-push!(t::AbstractDict, p::Pair, q::Pair) = push!(push!(t, p), q)
-push!(t::AbstractDict, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), q), r...)
 
 # AbstractDicts are convertible
 convert(::Type{T}, x::T) where {T<:AbstractDict} = x

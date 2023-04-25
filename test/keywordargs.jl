@@ -389,7 +389,7 @@ f41416(a...="a"; b=true) = (b, a)
 @test f41416(3; b=false) === (false, (3,))
 
 Core.kwcall(i::Int) = "hi $i"
-let m = first(methods(Core.kwcall, (Any,typeof(kwf1),Vararg)))
+let m = first(methods(Core.kwcall, (NamedTuple,typeof(kwf1),Vararg)))
     @test m.name === :kwf1
     @test Core.kwcall(1) == "hi 1"
     @test which(Core.kwcall, (Int,)).name === :kwcall

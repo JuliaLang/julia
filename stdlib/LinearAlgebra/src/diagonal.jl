@@ -96,6 +96,11 @@ julia> diag(A, 2)
 ```
 """
 Diagonal(A::AbstractMatrix) = Diagonal(diag(A))
+Diagonal{T}(A::AbstractMatrix) where T = Diagonal{T}(diag(A))
+function convert(::Type{T}, A::AbstractMatrix) where T<:Diagonal
+    checksquare(A)
+    isdiag(A) ? T(A) : throw(InexactError(:convert, T, A))
+end
 
 Diagonal(D::Diagonal) = D
 Diagonal{T}(D::Diagonal{T}) where {T} = D
@@ -378,6 +383,12 @@ function (*)(Da::Diagonal, A::AbstractMatrix, Db::Diagonal)
     _muldiag_size_check(Da, A)
     _muldiag_size_check(A, Db)
     return broadcast(*, Da.diag, A, permutedims(Db.diag))
+end
+
+function (*)(Da::Diagonal, Db::Diagonal, Dc::Diagonal)
+    _muldiag_size_check(Da, Db)
+    _muldiag_size_check(Db, Dc)
+    return Diagonal(Da.diag .* Db.diag .* Dc.diag)
 end
 
 # Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
@@ -664,7 +675,8 @@ end
 conj(D::Diagonal) = Diagonal(conj(D.diag))
 transpose(D::Diagonal{<:Number}) = D
 transpose(D::Diagonal) = Diagonal(transpose.(D.diag))
-adjoint(D::Diagonal{<:Number}) = conj(D)
+adjoint(D::Diagonal{<:Number}) = Diagonal(vec(adjoint(D.diag)))
+adjoint(D::Diagonal{<:Number,<:Base.ReshapedArray{<:Number,1,<:Adjoint}}) = Diagonal(adjoint(parent(D.diag)))
 adjoint(D::Diagonal) = Diagonal(adjoint.(D.diag))
 permutedims(D::Diagonal) = D
 permutedims(D::Diagonal, perm) = (Base.checkdims_perm(D, D, perm); D)

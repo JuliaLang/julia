@@ -40,7 +40,8 @@ unitaxis(::AbstractArray) = Base.OneTo(1)
 
 function Slices(A::P, slicemap::SM, ax::AX) where {P,SM,AX}
     N = length(ax)
-    S = Base._return_type(view, Tuple{P, map((a,l) -> l === (:) ? Colon : eltype(a), axes(A), slicemap)...})
+    argT = map((a,l) -> l === (:) ? Colon : eltype(a), axes(A), slicemap)
+    S = Base.promote_op(view, P, argT...)
     Slices{P,SM,AX,S,N}(A, slicemap, ax)
 end
 

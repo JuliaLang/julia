@@ -43,11 +43,14 @@ Random.seed!(1)
         end
         @test eltype(Diagonal{elty}([1,2,3,4])) == elty
         @test isa(Diagonal{elty,Vector{elty}}(GenericArray([1,2,3,4])), Diagonal{elty,Vector{elty}})
+        @test isa(Diagonal{elty}(rand(Int,n,n)), Diagonal{elty,Vector{elty}})
         DI = Diagonal([1,2,3,4])
         @test Diagonal(DI) === DI
         @test isa(Diagonal{elty}(DI), Diagonal{elty})
         # issue #26178
-        @test_throws MethodError convert(Diagonal, [1, 2, 3, 4])
+        @test_throws MethodError convert(Diagonal, [1,2,3,4])
+        @test_throws DimensionMismatch convert(Diagonal, [1 2 3 4])
+        @test_throws InexactError convert(Diagonal, ones(2,2))
     end
 
     @testset "Basic properties" begin
@@ -378,9 +381,17 @@ Random.seed!(1)
 
     @testset "conj and transpose" begin
         @test transpose(D) == D
-        if elty <: BlasComplex
+        if elty <: Real
+            @test transpose(D) === D
+            @test adjoint(D) === D
+        elseif elty <: BlasComplex
             @test Array(conj(D)) ≈ conj(DM)
             @test adjoint(D) == conj(D)
+            local D2 = copy(D)
+            local D2adj = adjoint(D2)
+            D2adj[1,1] = rand(eltype(D2adj))
+            @test D2[1,1] == adjoint(D2adj[1,1])
+            @test D2adj' === D2
         end
         # Translates to Ac/t_mul_B, which is specialized after issue 21286
         @test(D' * vv == conj(D) * vv)
@@ -1150,6 +1161,17 @@ end
     D = Diagonal(fill(2, 2))
     copyto!(D, I)
     @test all(isone, diag(D))
+end
+
+@testset "diagonal triple multiplication (#49005)" begin
+    n = 10
+    @test *(Diagonal(ones(n)), Diagonal(1:n), Diagonal(ones(n))) isa Diagonal
+    @test_throws DimensionMismatch (*(Diagonal(ones(n)), Diagonal(1:n), Diagonal(ones(n+1))))
+    @test_throws DimensionMismatch (*(Diagonal(ones(n)), Diagonal(1:n+1), Diagonal(ones(n+1))))
+    @test_throws DimensionMismatch (*(Diagonal(ones(n+1)), Diagonal(1:n), Diagonal(ones(n))))
+
+    # currently falls back to two-term *
+    @test *(Diagonal(ones(n)), Diagonal(1:n), Diagonal(ones(n)), Diagonal(1:n)) isa Diagonal
 end
 
 end # module TestDiagonal

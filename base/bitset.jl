@@ -15,7 +15,7 @@ mutable struct BitSet <: AbstractSet{Int}
     # 1st stored Int equals 64*offset
     offset::Int
 
-    BitSet() = new(sizehint!(zeros(UInt64, 0), 4), NO_OFFSET)
+    BitSet() = new(resize!(Vector{UInt64}(undef, 4), 0), NO_OFFSET)
 end
 
 """
@@ -37,8 +37,6 @@ function union!(s::BitSet, itr)
 end
 
 @inline intoffset(s::BitSet) = s.offset << 6
-
-eltype(::Type{BitSet}) = Int
 
 empty(s::BitSet, ::Type{Int}=Int) = BitSet()
 emptymutable(s::BitSet, ::Type{Int}=Int) = BitSet()

@@ -1189,17 +1189,23 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, <:An
     end
 end
 
+loading_extension::Bool = false
 function run_extension_callbacks(extid::ExtensionId)
     assert_havelock(require_lock)
     succeeded = try
+        # Used by Distributed to now load extensions in the package callback
+        global loading_extension = true
         _require_prelocked(extid.id)
         @debug "Extension $(extid.id.name) of $(extid.parentid.name) loaded"
         true
     catch
         # Try to continue loading if loading an extension errors
+        errs = current_exceptions()
         @error "Error during loading of extension $(extid.id.name) of $(extid.parentid.name), \
-                use `Base.retry_load_extensions()` to retry."
+                use `Base.retry_load_extensions()` to retry." exception=errs
         false
+    finally
+        global loading_extension = false
     end
     return succeeded
 end
@@ -1215,13 +1221,13 @@ function run_extension_callbacks(pkgid::PkgId)
             # below the one of the parent. This will cause a load failure when the
             # pkg ext tries to load the triggers. Therefore, check this first
             # before loading the pkg ext.
-            pkgenv = Base.identify_package_env(extid.id, pkgid.name)
+            pkgenv = identify_package_env(extid.id, pkgid.name)
             ext_not_allowed_load = false
             if pkgenv === nothing
                 ext_not_allowed_load = true
             else
                 pkg, env = pkgenv
-                path = Base.locate_package(pkg, env)
+                path = locate_package(pkg, env)
                 if path === nothing
                     ext_not_allowed_load = true
                 end
@@ -1250,7 +1256,7 @@ function run_extension_callbacks(pkgid::PkgId)
             succeeded || push!(EXT_DORMITORY_FAILED, extid)
         end
     end
-    nothing
+    return
 end
 
 """
@@ -1272,7 +1278,7 @@ function retry_load_extensions()
     end
     prepend!(EXT_DORMITORY_FAILED, failed)
     end
-    nothing
+    return
 end
 
 """
@@ -1539,11 +1545,11 @@ end
 """
     include_dependency(path::AbstractString)
 
-In a module, declare that the file specified by `path` (relative or absolute) is a
-dependency for precompilation; that is, the module will need to be recompiled if this file
-changes.
+In a module, declare that the file, directory, or symbolic link specified by `path`
+(relative or absolute) is a dependency for precompilation; that is, the module will need
+to be recompiled if the modification time of `path` changes.
 
-This is only needed if your module depends on a file that is not used via [`include`](@ref). It has
+This is only needed if your module depends on a path that is not used via [`include`](@ref). It has
 no effect outside of compilation.
 """
 function include_dependency(path::AbstractString)
@@ -1750,6 +1756,9 @@ function set_pkgorigin_version_path(pkg::PkgId, path::Union{String,Nothing})
     nothing
 end
 
+# A hook to allow code load to use Pkg.precompile
+const PKG_PRECOMPILE_HOOK = Ref{Function}()
+
 # Returns `nothing` or the new(ish) module
 function _require(pkg::PkgId, env=nothing)
     assert_havelock(require_lock)
@@ -1769,8 +1778,11 @@ function _require(pkg::PkgId, env=nothing)
         end
         set_pkgorigin_version_path(pkg, path)
 
+        pkg_precompile_attempted = false # being safe to avoid getting stuck in a Pkg.precompile loop
+
         # attempt to load the module file via the precompile cache locations
         if JLOptions().use_compiled_modules != 0
+            @label load_from_cache
             m = _require_search_from_serialized(pkg, path, UInt128(0))
             if m isa Module
                 return m
@@ -1792,6 +1804,16 @@ function _require(pkg::PkgId, env=nothing)
 
         if JLOptions().use_compiled_modules != 0
             if (0 == ccall(:jl_generating_output, Cint, ())) || (JLOptions().incremental != 0)
+                if !pkg_precompile_attempted && isinteractive() && isassigned(PKG_PRECOMPILE_HOOK)
+                    pkg_precompile_attempted = true
+                    unlock(require_lock)
+                    try
+                        PKG_PRECOMPILE_HOOK[](pkg.name, _from_loading = true)
+                    finally
+                        lock(require_lock)
+                    end
+                    @goto load_from_cache
+                end
                 # spawn off a new incremental pre-compile task for recursive `require` calls
                 cachefile = compilecache(pkg, path)
                 if isa(cachefile, Exception)
@@ -2085,6 +2107,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
                               $trace
                               -`,
                               "OPENBLAS_NUM_THREADS" => 1,
+                              "JULIA_WAIT_FOR_TRACY" => nothing,
                               "JULIA_NUM_THREADS" => 1),
                        stderr = internal_stderr, stdout = internal_stdout),
               "w", stdout)
@@ -2237,7 +2260,8 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                         @static if Sys.isapple()
                             rm(ocachefile_from_cachefile(evicted_cachefile) * ".dSYM"; force=true, recursive=true)
                         end
-                    catch
+                    catch e
+                        e isa IOError || rethrow()
                     end
                 end
             end
@@ -2813,7 +2837,7 @@ end
             end
             for chi in includes
                 f, ftime_req = chi.filename, chi.mtime
-                if !isfile(f)
+                if !ispath(f)
                     _f = fixup_stdlib_path(f)
                     if isfile(_f) && startswith(_f, Sys.STDLIB)
                         # mtime is changed by extraction

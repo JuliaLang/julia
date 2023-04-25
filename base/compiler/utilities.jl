@@ -114,23 +114,23 @@ end
 invoke_api(li::CodeInstance) = ccall(:jl_invoke_api, Cint, (Any,), li)
 use_const_api(li::CodeInstance) = invoke_api(li) == 2
 
-function get_staged(mi::MethodInstance)
+function get_staged(mi::MethodInstance, world::UInt)
     may_invoke_generator(mi) || return nothing
     try
         # user code might throw errors – ignore them
-        ci = ccall(:jl_code_for_staged, Any, (Any,), mi)::CodeInfo
+        ci = ccall(:jl_code_for_staged, Any, (Any, UInt), mi, world)::CodeInfo
         return ci
     catch
         return nothing
     end
 end
 
-function retrieve_code_info(linfo::MethodInstance)
+function retrieve_code_info(linfo::MethodInstance, world::UInt)
     m = linfo.def::Method
     c = nothing
     if isdefined(m, :generator)
         # user code might throw errors – ignore them
-        c = get_staged(linfo)
+        c = get_staged(linfo, world)
     end
     if c === nothing && isdefined(m, :source)
         src = m.source
@@ -199,19 +199,9 @@ function normalize_typevars(method::Method, @nospecialize(atype), sparams::Simpl
 end
 
 # get a handle to the unique specialization object representing a particular instantiation of a call
-function specialize_method(method::Method, @nospecialize(atype), sparams::SimpleVector; preexisting::Bool=false, compilesig::Bool=false)
+function specialize_method(method::Method, @nospecialize(atype), sparams::SimpleVector; preexisting::Bool=false)
     if isa(atype, UnionAll)
         atype, sparams = normalize_typevars(method, atype, sparams)
-    end
-    if compilesig
-        new_atype = get_compileable_sig(method, atype, sparams)
-        new_atype === nothing && return nothing
-        if atype !== new_atype
-            sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), new_atype, method.sig)::SimpleVector
-            if sparams === sp_[2]::SimpleVector
-                atype = new_atype
-            end
-        end
     end
     if preexisting
         # check cached specializations
@@ -271,8 +261,8 @@ Return an iterator over a list of backedges. Iteration returns `(sig, caller)` e
 which will be one of the following:
 
 - `BackedgePair(nothing, caller::MethodInstance)`: a call made by ordinary inferable dispatch
-- `BackedgePair(invokesig, caller::MethodInstance)`: a call made by `invoke(f, invokesig, args...)`
-- `BackedgePair(specsig, mt::MethodTable)`: an abstract call
+- `BackedgePair(invokesig::Type, caller::MethodInstance)`: a call made by `invoke(f, invokesig, args...)`
+- `BackedgePair(specsig::Type, mt::MethodTable)`: an abstract call
 
 # Examples
 
@@ -286,7 +276,7 @@ callyou (generic function with 1 method)
 julia> callyou(2.0)
 3.0
 
-julia> mi = first(which(callme, (Any,)).specializations)
+julia> mi = which(callme, (Any,)).specializations
 MethodInstance for callme(::Float64)
 
 julia> @eval Core.Compiler for (; sig, caller) in BackedgeIterator(Main.mi.backedges)
@@ -305,17 +295,17 @@ const empty_backedge_iter = BackedgeIterator(Any[])
 
 struct BackedgePair
     sig # ::Union{Nothing,Type}
-    caller::Union{MethodInstance,Core.MethodTable}
-    BackedgePair(@nospecialize(sig), caller::Union{MethodInstance,Core.MethodTable}) = new(sig, caller)
+    caller::Union{MethodInstance,MethodTable}
+    BackedgePair(@nospecialize(sig), caller::Union{MethodInstance,MethodTable}) = new(sig, caller)
 end
 
 function iterate(iter::BackedgeIterator, i::Int=1)
     backedges = iter.backedges
     i > length(backedges) && return nothing
     item = backedges[i]
-    isa(item, MethodInstance) && return BackedgePair(nothing, item), i+1           # regular dispatch
-    isa(item, Core.MethodTable) && return BackedgePair(backedges[i+1], item), i+2  # abstract dispatch
-    return BackedgePair(item, backedges[i+1]::MethodInstance), i+2                 # `invoke` calls
+    isa(item, MethodInstance) && return BackedgePair(nothing, item), i+1      # regular dispatch
+    isa(item, MethodTable) && return BackedgePair(backedges[i+1], item), i+2  # abstract dispatch
+    return BackedgePair(item, backedges[i+1]::MethodInstance), i+2            # `invoke` calls
 end
 
 #########
