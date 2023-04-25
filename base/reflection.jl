@@ -435,6 +435,10 @@ located at `(dt.layout + sizeof(DataTypeLayout))`.
 Can be called on any `isconcretetype`.
 
 See also [`fieldoffset`](@ref).
+
+!!! danger "Unstable"
+    This method is unstable and subject to change without notice.
+
 """
 function datatype_fielddesc_type(dt::DataType)
     @_foldable_meta
@@ -629,6 +633,9 @@ Determine whether type `T` is mutation free in the sense that no mutable memory
 is reachable from this type (either in the type itself) or through any fields.
 Note that the type itself need not be immutable. For example, an empty mutable
 type is `ismutabletype`, but also `ismutationfree`.
+
+!!! danger "Unstable"
+    This method is unstable and subject to change without notice.
 """
 function ismutationfree(@nospecialize(t))
     t = unwrap_unionall(t)
@@ -648,6 +655,9 @@ datatype_isidentityfree(dt::DataType) = (@_total_meta; (dt.flags & 0x0200) == 0x
 
 Determine whether type `T` is identity free in the sense that this type or any
 reachable through its fields has non-content-based identity.
+
+!!! danger "Unstable"
+    This method is unstable and subject to change without notice.
 """
 function isidentityfree(@nospecialize(t))
     t = unwrap_unionall(t)
@@ -799,6 +809,9 @@ fieldtype
 
 Get the index of a named field, throwing an error if the field does not exist (when err==true)
 or returning 0 (when err==false).
+
+!!! danger "Unstable"
+    This method is unstable and subject to change without notice.
 
 # Examples
 ```jldoctest
@@ -1128,6 +1141,9 @@ end
     specializations(m::Method) → itr
 
 Return an iterator `itr` of all compiler-generated specializations of `m`.
+
+!!! danger "Unstable"
+    This method is unstable and subject to change without notice.
 """
 specializations(m::Method) = MethodSpecializations(isdefined(m, :specializations) ? m.specializations : nothing)
 function iterate(specs::MethodSpecializations)
@@ -1228,6 +1244,9 @@ computes whether we are in either of these cases.
 
 Unlike normal functions, the compilation heuristics still can't generate good dispatch
 in some cases, but this may still allow inference not to fall over in some limited cases.
+
+!!! danger "Unstable"
+    This method is unstable and subject to change without notice.
 """
 function may_invoke_generator(mi::MethodInstance)
     return may_invoke_generator(mi.def::Method, mi.specTypes, mi.sparam_vals)
@@ -1360,6 +1379,9 @@ end
 
 Similar to [`code_typed`](@ref), except the argument is a tuple type describing
 a full signature to query.
+
+!!! danger "Unstable"
+    This method is unstable and subject to change without notice.
 """
 function code_typed_by_type(@nospecialize(tt::Type);
                             optimize=true,
@@ -1416,6 +1438,9 @@ The `Method` is included instead of `IRCode` otherwise.
 
 See also: [`code_typed`](@ref)
 
+!!! danger "Unstable"
+    This method is unstable and subject to change without notice.
+
 # Internal Keyword Arguments
 
 This section should be considered internal, and is only for who understands Julia compiler
@@ -1469,6 +1494,9 @@ end
 
 Similar to [`code_ircode`](@ref), except the argument is a tuple type describing
 a full signature to query.
+
+!!! danger "Unstable"
+    This method is unstable and subject to change without notice.
 """
 function code_ircode_by_type(
     @nospecialize(tt::Type);
@@ -1564,6 +1592,9 @@ end
 
 Print type-inferred and optimized code for `f` given argument types `types`,
 prepending each line with its cost as estimated by the compiler's inlining engine.
+
+!!! danger "Unstable"
+    This method is unstable and subject to change without notice.
 """
 function print_statement_costs(io::IO, @nospecialize(f), @nospecialize(t); kwargs...)
     tt = signature_type(f, t)
@@ -1781,6 +1812,9 @@ end
 Find the keyword "body function" (the function that contains the body of the method
 as written, called after all missing keyword-arguments have been assigned default values).
 `basemethod` is the method you obtain via [`which`](@ref) or [`methods`](@ref).
+
+!!! danger "Unstable"
+    This method is unstable and subject to change without notice.
 """
 function bodyfunction(basemethod::Method)
     fmod = parentmodule(basemethod)
@@ -1943,6 +1977,9 @@ end
     delete_method(m::Method)
 
 Make method `m` uncallable and force recompilation of any methods that use(d) it.
+
+!!! danger "Unstable"
+    This method is unstable and subject to change without notice.
 """
 function delete_method(m::Method)
     ccall(:jl_method_table_disable, Cvoid, (Any, Any), get_methodtable(m), m)
@@ -1956,6 +1993,9 @@ end
     has_bottom_parameter(t) -> Bool
 
 Determine whether `t` is a Type for which one or more of its parameters is `Union{}`.
+
+!!! danger "Unstable"
+    This method is unstable and subject to change without notice.
 """
 function has_bottom_parameter(t::DataType)
     for p in t.parameters
