@@ -663,7 +663,7 @@ function isascii(bytes::AbstractVector{UInt8}, first, last)
     if epilog_bytes > 0
         _isascii_subqword(bytes,epilog_first,epilog_bytes) || return false
     end
-    epilog_bytes > 0 || return true
+    nqwords > 0 || return true
     nchunks, prolog_qwords = divrem(nqwords,q_chunk_size)
 
     qwords = @inline @inbounds reinterpret(UInt64,@inbounds view(bytes,first:(epilog_first - 1)))
