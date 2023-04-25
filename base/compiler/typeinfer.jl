@@ -204,9 +204,9 @@ If set to `true`, record per-method-instance timings within type inference in th
 __set_measure_typeinf(onoff::Bool) = __measure_typeinf__[] = onoff
 const __measure_typeinf__ = fill(false)
 
-# Wrapper around _typeinf that optionally records the exclusive time for each invocation.
+# Wrapper around `_typeinf` that optionally records the exclusive time for
+# each inference performed by `NativeInterpreter`.
 function typeinf(interp::NativeInterpreter, frame::InferenceState)
-    interp = switch_from_irinterp(interp)
     if __measure_typeinf__[]
         Timings.enter_new_timer(frame)
         v = _typeinf(interp, frame)
@@ -216,7 +216,6 @@ function typeinf(interp::NativeInterpreter, frame::InferenceState)
         return _typeinf(interp, frame)
     end
 end
-# disable recording timings for external `AbstractInterpreter`s
 typeinf(interp::AbstractInterpreter, frame::InferenceState) = _typeinf(interp, frame)
 
 function finish!(interp::AbstractInterpreter, caller::InferenceResult)
