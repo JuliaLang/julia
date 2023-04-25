@@ -600,8 +600,7 @@ See also [`hash`](@ref), [`IdDict`](@ref).
 """
 function objectid(x)
     # objectid is foldable iff it isn't a pointer.
-    # Sring, Symbol, Module, and DataType are safe because jl_objectid for them works by value.
-    if x isa String || Core.Compiler.valid_tparam(x)
+    if isidentityfree(typeof(x))
         return _foldable_objectid(x)
     end
     return _objectid(x)
