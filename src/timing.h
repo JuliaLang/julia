@@ -132,6 +132,8 @@ void jl_timing_printf(jl_timing_block_t *cur_block, const char *format, ...);
         X(NATIVE_DUMP)           \
         X(ADD_METHOD)            \
         X(LOAD_MODULE)           \
+        X(LOAD_IMAGE)            \
+        X(VERIFY_IMAGE)          \
         X(SAVE_MODULE)           \
         X(INIT_MODULE)           \
         X(LOCK_SPIN)             \
@@ -146,6 +148,11 @@ void jl_timing_printf(jl_timing_block_t *cur_block, const char *format, ...);
         X(CODEGEN_LLVM) \
         X(CODEGEN_Codeinst) \
         X(CODEGEN_Workqueue) \
+        X(LOAD_Sysimg) \
+        X(LOAD_Pkgimg) \
+        X(VERIFY_Edges) \
+        X(VERIFY_Methods) \
+        X(VERIFY_Graph) \
 
 
 enum jl_timing_owners {
