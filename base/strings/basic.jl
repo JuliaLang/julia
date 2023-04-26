@@ -670,7 +670,7 @@ function isascii(bytes::AbstractVector{UInt8}, first, last)
 
     qwords_start = 1
     if prolog_qwords > 0
-        _isascii_qword(qwords,qwords_start,prolog_qwords) || return false
+        _isascii_qword(qwords, qwords_start, prolog_qwords) || return false
         qwords_start = prolog_qwords +1
     end
 
