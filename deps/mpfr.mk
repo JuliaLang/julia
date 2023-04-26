@@ -36,7 +36,18 @@ $(SRCCACHE)/mpfr-$(MPFR_VER)/source-extracted: $(SRCCACHE)/mpfr-$(MPFR_VER).tar.
 checksum-mpfr: $(SRCCACHE)/mpfr-$(MPFR_VER).tar.bz2
 	$(JLCHECKSUM) $<
 
-$(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured: $(SRCCACHE)/mpfr-$(MPFR_VER)/source-extracted
+$(SRCCACHE)/mpfr-$(MPFR_VER).patch: $(SRCCACHE)/mpfr-$(MPFR_VER)/source-extracted
+	$(JLDOWNLOAD) $@ https://www.mpfr.org/mpfr-current/allpatches
+
+checksum-mpfr-patch: $(SRCCACHE)/mpfr-$(MPFR_VER).patch
+	$(JLCHECKSUM) $<
+
+$(SRCCACHE)/mpfr-$(MPFR_VER)/source-patched: $(SRCCACHE)/mpfr-$(MPFR_VER).patch
+	cd $(dir $@) && \
+		patch -p1 < $(SRCCACHE)/mpfr-$(MPFR_VER).patch
+	echo 1 > $@
+
+$(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured: $(SRCCACHE)/mpfr-$(MPFR_VER)/source-patched
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(MPFR_CONFIGURE_OPTS)
