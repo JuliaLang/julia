@@ -560,8 +560,6 @@ function get!(default::Callable, t::AbstractDict{K,V}, key) where K where V
 end
 
 push!(t::AbstractDict, p::Pair) = setindex!(t, p.second, p.first)
-push!(t::AbstractDict, p::Pair, q::Pair) = push!(push!(t, p), q)
-push!(t::AbstractDict, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), q), r...)
 
 # AbstractDicts are convertible
 convert(::Type{T}, x::T) where {T<:AbstractDict} = x

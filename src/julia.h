@@ -92,6 +92,11 @@ typedef struct _jl_value_t jl_value_t;
 struct _jl_taggedvalue_bits {
     uintptr_t gc:2;
     uintptr_t in_image:1;
+#ifdef _P64
+    uintptr_t padding:61;
+#else
+    uintptr_t padding:29;
+#endif
 };
 
 JL_EXTENSION struct _jl_taggedvalue_t {
@@ -555,6 +560,7 @@ typedef struct _jl_datatype_t {
     uint16_t isprimitivetype:1; // whether this is declared with 'primitive type' keyword (sized, no fields, and immutable)
     uint16_t ismutationfree:1; // whether any mutable memory is reachable through this type (in the type or via fields)
     uint16_t isidentityfree:1; // whether this type or any object reachable through its fields has non-content-based identity
+    uint16_t padding:6;
 } jl_datatype_t;
 
 typedef struct _jl_vararg_t {
@@ -579,6 +585,7 @@ typedef struct _jl_binding_t {
     uint8_t imported:1;
     uint8_t usingfailed:1;
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
+    uint8_t padding:2;
 } jl_binding_t;
 
 typedef struct {
