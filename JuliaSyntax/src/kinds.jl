@@ -1060,7 +1060,7 @@ function untokenize(k::Kind; unique=true)
 end
 
 # Error kind => description
-_token_error_descriptions = Dict{Kind, String}(
+const _token_error_descriptions = Dict{Kind, String}(
     K"ErrorEofMultiComment" => "unterminated multi-line comment #= ... =#",
     K"ErrorInvalidNumericConstant" => "invalid numeric constant",
     K"ErrorHexFloatMustContainP" => "hex float literal must contain `p` or `P`",
