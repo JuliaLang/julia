@@ -655,10 +655,10 @@ Transpose(x::RootInt) = x
 
 @testset "#14293" begin
     a = [RootInt(3)]
-    C = [0]
+    C = [0;;]
     mul!(C, a, transpose(a))
     @test C[1] == 9
-    C = [1]
+    C = [1;;]
     mul!(C, a, transpose(a), 2, 3)
     @test C[1] == 21
     a = [RootInt(2), RootInt(10)]
