@@ -494,6 +494,7 @@ static void reportWriterError(const ErrorInfoBase &E)
     jl_safe_printf("ERROR: failed to emit output file %s\n", err.c_str());
 }
 
+#if JULIA_FLOAT16_ABI == 1
 static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionType *FT)
 {
     Function *target = M.getFunction(alias);
@@ -510,7 +511,7 @@ static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionT
     auto val = builder.CreateCall(target, CallArgs);
     builder.CreateRet(val);
 }
-
+#endif
 void multiversioning_preannotate(Module &M);
 
 // See src/processor.h for documentation about this table. Corresponds to jl_image_shard_t.
@@ -943,6 +944,8 @@ struct ShardTimers {
     }
 };
 
+void emitFloat16Wrappers(Module &M, bool external);
+
 // Perform the actual optimization and emission of the output files
 static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *outputs, const std::string *names,
                     NewArchiveMember *unopt, NewArchiveMember *opt, NewArchiveMember *obj, NewArchiveMember *asm_,
@@ -1003,7 +1006,9 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
         }
     }
     // no need to inject aliases if we have no functions
+
     if (inject_aliases) {
+#if JULIA_FLOAT16_ABI == 1
         // We would like to emit an alias or an weakref alias to redirect these symbols
         // but LLVM doesn't let us emit a GlobalAlias to a declaration...
         // So for now we inject a definition of these functions that calls our runtime
@@ -1018,8 +1023,10 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
                 FunctionType::get(Type::getHalfTy(M.getContext()), { Type::getFloatTy(M.getContext()) }, false));
         injectCRTAlias(M, "__truncdfhf2", "julia__truncdfhf2",
                 FunctionType::get(Type::getHalfTy(M.getContext()), { Type::getDoubleTy(M.getContext()) }, false));
+#else
+        emitFloat16Wrappers(M, false);
+#endif
     }
-
     timers.optimize.stopTimer();
 
     if (opt) {
