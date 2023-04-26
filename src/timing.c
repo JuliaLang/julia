@@ -6,6 +6,8 @@
 #include "options.h"
 #include "stdio.h"
 
+jl_module_t *jl_module_root(jl_module_t *m);
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -165,8 +167,14 @@ JL_DLLEXPORT void jl_timing_show(jl_value_t *v, jl_timing_block_t *cur_block)
 JL_DLLEXPORT void jl_timing_show_module(jl_module_t *m, jl_timing_block_t *cur_block)
 {
 #ifdef USE_TRACY
-    const char *module_name = jl_symbol_name(m->name);
-    TracyCZoneText(*(cur_block->tracy_ctx), module_name, strlen(module_name));
+    jl_module_t *root = jl_module_root(m);
+    if (root == m || root == jl_main_module) {
+        const char *module_name = jl_symbol_name(m->name);
+        TracyCZoneText(*(cur_block->tracy_ctx), module_name, strlen(module_name));
+    } else {
+
+        jl_timing_printf(cur_block, "%s.%s", jl_symbol_name(root->name), jl_symbol_name(m->name));
+    }
 #endif
 }
 
