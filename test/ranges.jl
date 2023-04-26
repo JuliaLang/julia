@@ -2400,3 +2400,16 @@ end
     @test test_firstindex(StepRange{Union{Int64,Int128},Int}(Int64(1), 1, Int128(1)))
     @test test_firstindex(StepRange{Union{Int64,Int128},Int}(Int64(1), 1, Int128(0)))
 end
+
+@testset "PR 49516" begin
+	struct PR49516 <: Signed
+		n::Int
+	end
+	PR49516(f::PR49516) = f
+	Base.:*(x::Integer, f::PR49516) = PR49516(*(x, f.n))
+	Base.:+(f1::PR49516, f2::PR49516) = PR49516(+(f1.n, f2.n))
+	Base.show(io::IO, f::PR49516) = print(io, "PR49516(", f.n, ")")
+
+	srl = StepRangeLen(PR49516(1), PR49516(2), 10)
+	@test sprint(show, srl) == "PR49516(1):PR49516(2):PR49516(19)"
+end
