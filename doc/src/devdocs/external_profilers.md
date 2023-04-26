@@ -4,15 +4,17 @@ Julia provides explicit support for some external tracing profilers, enabling yo
 
 The currently supported profilers are:
 - [Tracy](https://github.com/wolfpld/tracy)
-- [ITTAPI](https://github.com/intel/ittapi)
+- [ITTAPI (VTune)](https://github.com/intel/ittapi)
 
 ### Adding New Zones
 
-To add new zones, use the `JL_TIMING` macro. You can find numerous examples throughout the codebase by searching for `JL_TIMING`.
+To add new zones, use the `JL_TIMING` macro. You can find numerous examples throughout the codebase by searching for `JL_TIMING`. To add a new type of zone
+you add it to `JL_TIMING_OWNERS` (and possibly `JL_TIMING_EVENTS`).
 
 ### Dynamically Enabling and Disabling Zones
 
-The `JULIA_TIMING_SUBSYSTEMS` environment variable allows you to enable or disable profiling zones of various categories for a specific Julia run. For instance, setting the variable to `+GC,-INFERENCE` will enable the GC zone category and disable the inference category.
+The `JULIA_TIMING_SUBSYSTEMS` environment variable allows you to enable or disable zones for a specific Julia run. For instance, setting the variable to `+GC,-INFERENCE` will enable the `GC` zones and disable the `INFERENCE`
+zones.
 
 ## Tracy Profiler
 
