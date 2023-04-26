@@ -106,6 +106,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->maybe_subtype_of_cache = 1;
     t->ismutationfree = 0;
     t->isidentityfree = 0;
+    t->padding = 0;
     t->name = NULL;
     t->super = NULL;
     t->parameters = NULL;

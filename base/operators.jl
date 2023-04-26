@@ -888,6 +888,7 @@ julia> widen(1.5f0)
 """
 widen(x::T) where {T} = convert(widen(T), x)
 widen(x::Type{T}) where {T} = throw(MethodError(widen, (T,)))
+widen(x::Type{Union{}}, slurp...) = throw(MethodError(widen, (Union{},)))
 
 # function pipelining
 

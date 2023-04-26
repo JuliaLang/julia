@@ -1694,7 +1694,9 @@ end
 
 # issue #3221
 let x = fill(nothing, 1)
-    @test_throws MethodError x[1] = 1
+    @test_throws ErrorException("cannot convert a value to nothing for assignment") x[1] = 1
+    x = Vector{Union{}}(undef, 1)
+    @test_throws ArgumentError("cannot convert a value to Union{} for assignment") x[1] = 1
 end
 
 # issue #3220
@@ -4916,7 +4918,7 @@ struct f47209
     x::Int
     f47209()::Nothing = new(1)
 end
-@test_throws MethodError f47209()
+@test_throws ErrorException("cannot convert a value to nothing for assignment") f47209()
 
 # issue #12096
 let a = Val{Val{TypeVar(:_, Int)}},
@@ -7985,3 +7987,22 @@ f48950(::Union{Int,d}, ::Union{c,Nothing}...) where {c,d} = 1
 # Module as tparam in unionall
 struct ModTParamUnionAll{A, B}; end
 @test isa(objectid(ModTParamUnionAll{Base}), UInt)
+
+# effects for objectid
+for T in (Int, String, Symbol, Module)
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (T,)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (T,)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Some{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Some{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Some{Some{T}},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Some{Some{T}},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Tuple{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{T,T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Tuple{T,T},)))
+end
+@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Ref{Int},)))
+@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Tuple{Ref{Int}},)))
+# objectid for datatypes is inconsistant for types that have unbound type parameters.
+@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (DataType,)))
+@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Tuple{Vector{Int}},)))

@@ -1462,12 +1462,14 @@ struct typemap_intersection_env {
     jl_typemap_intersection_visitor_fptr const fptr; // fptr to call on a match
     jl_value_t *const type; // type to match
     jl_value_t *const va; // the tparam0 for the vararg in type, if applicable (or NULL)
+    size_t search_slurp;
     // output values
     jl_value_t *ti; // intersection type
     jl_svec_t *env; // intersection env (initialize to null to perform intersection without an environment)
     int issubty;    // if `a <: b` is true in `intersect(a,b)`
 };
 int jl_typemap_intersection_visitor(jl_typemap_t *a, int offs, struct typemap_intersection_env *closure);
+void typemap_slurp_search(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure);
 
 // -- simplevector.c -- //
 
