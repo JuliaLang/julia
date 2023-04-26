@@ -55,6 +55,7 @@ function deepcopy_internal(x::BufferType, stackdict::IdDict)
             if !isbits(xi)
                 xi = deepcopy_internal(xi, stackdict)::typeof(xi)
             end
+            # TODO replace with set_buffer_index
             ccall(:jl_bufset, Cvoid, (Any, Any, Csize_t), dest, xi, i-1)
         end
     end

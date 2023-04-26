@@ -35,7 +35,6 @@ const n_int_literals = 33
 const n_reserved_slots = 24
 const n_reserved_tags = 8
 
-# FIXME add Buffer to TAGS, :bufref, :bufset
 const TAGS = Any[
     Symbol, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128,
     Float16, Float32, Float64, Char, DataType, Union, UnionAll, Core.TypeName, Tuple,

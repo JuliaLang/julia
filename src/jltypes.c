@@ -318,7 +318,7 @@ int jl_type_mappable_to_c(jl_value_t *ty)
         return 1;
     if (ty == (jl_value_t*)jl_any_type || ty == (jl_value_t*)jl_bottom_type)
         return 1; // as boxed
-    if (jl_is_abstract_ref_type(ty) || jl_is_array_type(ty) ||
+    if (jl_is_abstract_ref_type(ty) || jl_is_array_type(ty) || jl_is_buffer_kind_type(ty) ||
         (jl_is_datatype(ty) && ((jl_datatype_t*)ty)->layout != NULL &&
             jl_is_layout_opaque(((jl_datatype_t*)ty)->layout)))
         return 1; // as boxed

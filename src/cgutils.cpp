@@ -37,7 +37,6 @@ STATISTIC(EmittedArrayElsize, "Number of array elsize calls emitted");
 STATISTIC(EmittedArrayOffset, "Number of array offset calls emitted");
 STATISTIC(EmittedArrayNdIndex, "Number of array nd index calls emitted");
 STATISTIC(EmittedBufferptr, "Number of buffer data pointer loads emitted");
-STATISTIC(EmittedBufferIndex, "Number of buffer index calls emitted");
 STATISTIC(EmittedBufferlen, "Number of buffer length calls emitted");
 STATISTIC(EmittedBoxes, "Number of box operations emitted");
 STATISTIC(EmittedCPointerChecks, "Number of C pointer checks emitted");
@@ -3042,38 +3041,6 @@ static Value *emit_bufferptr(jl_codectx_t &ctx, const jl_cgval_t &tinfo, jl_valu
 {
     return emit_bufferptr(ctx, tinfo, isboxed);
 }
-
-static Value *emit_buffer_index(
-        jl_codectx_t &ctx, const jl_cgval_t &binfo, jl_value_t *ex,
-        const jl_cgval_t &idx, jl_value_t *inbounds)
-{
-    ++EmittedBufferIndex;
-    Value *i = emit_unbox(ctx, ctx.types().T_size, idx, (jl_value_t*)jl_long_type);
-    i = ctx.builder.CreateSub(i, ConstantInt::get(ctx.types().T_size, 1));
-
-#if CHECK_BOUNDS==1
-    bool bc = bounds_check_enabled(ctx, inbounds);
-    BasicBlock *failBB = NULL, *endBB = NULL;
-    if (bc) {
-        failBB = BasicBlock::Create(ctx.builder.getContext(), "oob");
-        endBB = BasicBlock::Create(ctx.builder.getContext(), "idxend");
-        Value *len = emit_bufferlen(ctx, binfo);
-        ctx.builder.CreateCondBr(ctx.builder.CreateICmpULT(i, len), endBB, failBB);
-        ctx.f->getBasicBlockList().push_back(failBB);
-        ctx.builder.SetInsertPoint(failBB);
-        // FIXME Buffer use correct error function
-        // ctx.builder.CreateCall(prepare_call(jlboundserrorv_func),
-        //     { mark_callee_rooted(ctx, a), tmp, ConstantInt::get(ctx.types().T_size, nidxs) });
-        ctx.builder.CreateCall(prepare_call(jlvboundserror_func), { binfo.V, len, i});
-        ctx.builder.CreateUnreachable();
-        ctx.f->getBasicBlockList().push_back(endBB);
-        ctx.builder.SetInsertPoint(endBB);
-    }
-#endif
-
-    return i;
-}
-
 
 // --- boxing ---
 

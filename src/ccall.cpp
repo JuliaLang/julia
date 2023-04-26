@@ -1296,7 +1296,7 @@ static const std::string verify_ccall_sig(jl_value_t *&rt, jl_value_t *at,
     JL_TYPECHK(ccall, type, rt);
     JL_TYPECHK(ccall, simplevector, at);
 
-    if (rt == (jl_value_t*)jl_any_type || jl_is_array_type(rt) ||
+    if (rt == (jl_value_t*)jl_any_type || jl_is_array_type(rt) || jl_is_buffer_kind_type(rt) ||
             (jl_is_datatype(rt) && ((jl_datatype_t*)rt)->layout != NULL &&
              jl_is_layout_opaque(((jl_datatype_t*)rt)->layout))) {
         // n.b. `Array` used as return type just returns a julia object reference

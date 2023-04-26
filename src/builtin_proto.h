@@ -33,8 +33,6 @@ DECLARE_BUILTIN(_call_in_world_total);
 DECLARE_BUILTIN(_call_latest);
 DECLARE_BUILTIN(replacefield);
 DECLARE_BUILTIN(const_arrayref);
-DECLARE_BUILTIN(bufref);
-DECLARE_BUILTIN(bufset);
 DECLARE_BUILTIN(bufferlen);
 DECLARE_BUILTIN(_expr);
 DECLARE_BUILTIN(fieldtype);

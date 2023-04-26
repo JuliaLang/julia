@@ -1482,6 +1482,8 @@ JL_DLLEXPORT int jl_buffer_isassigned(jl_buffer_t *b, size_t i);
 JL_DLLEXPORT jl_buffer_t *jl_new_buffer(jl_value_t *btype, size_t len);
 JL_DLLEXPORT jl_buffer_t *jl_gc_alloc_buffer_inline(jl_value_t *btype, size_t len, size_t obj_size);
 JL_DLLEXPORT jl_buffer_t *jl_gc_malloc_buffer(jl_value_t *btype, size_t len, size_t data_size, size_t obj_size);
+JL_DLLEXPORT jl_buffer_t *jl_buffer_copy(jl_buffer_t *buf);
+
 size_t jl_buffer_nbytes(jl_buffer_t *b) JL_NOTSAFEPOINT;
 size_t jl_buffer_object_size(jl_buffer_t *b) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gc_track_malloced_buffer(jl_ptls_t ptls, jl_buffer_t *b) JL_NOTSAFEPOINT;

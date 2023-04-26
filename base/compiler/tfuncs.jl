@@ -1969,25 +1969,6 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
 end
 
 # Buffer
-@nospecs function bufref_tfunc(𝕃::AbstractLattice, boundscheck, buf, idx)
-    hasintersect(widenconst(boundscheck), Bool) || return false
-    widebuf = widenconst(buf)
-    (hasintersect(widebuf, Buffer) || hasintersect(widebuf, DynamicBuffer)) || return false
-    hasintersect(widenconst(idx), Int) || return false
-    return buffer_elmtype(buf)
-end
-add_tfunc(Core.bufref, 3, INT_INF, bufref_tfunc, 20)
-
-@nospecs function bufset_tfunc(𝕃::AbstractLattice, boundscheck, buf, item, idx)
-    hasintersect(widenconst(boundscheck), Bool) || return Bottom
-    widebuf = widenconst(buf)
-    (hasintersect(widebuf, Buffer) || hasintersect(widebuf, DynamicBuffer)) || return Bottom
-    hasintersect(widenconst(idx), Int) || return Bottom
-    hasintersect(widenconst(item), buffer_elmtype(buf)) || return Bottom
-    return buf
-end
-add_tfunc(Core.bufset, 4, INT_INF, bufset_tfunc, 20)
-
 add_tfunc(Core.Intrinsics.bufferlen, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Int), 4)
 
 function buffer_elmtype(@nospecialize buf)
@@ -2176,12 +2157,6 @@ end
         return arrayset_typecheck(argtypes[2], argtypes[3])
     elseif f === arrayref || f === const_arrayref
         return array_builtin_common_nothrow(argtypes, 3, #=isarrayref=#true)
-    elseif f === Core.bufset
-        buffer_builtin_common_nothrow(argtypes, 4) || return false
-        # Additionally check element type compatibility
-        return arrayset_typecheck(argtypes[2], argtypes[3])
-    elseif f === Core.bufref
-        return buffer_builtin_common_nothrow(argtypes, 3)
     elseif f === Core._expr
         length(argtypes) >= 1 || return false
         return argtypes[1] ⊑ Symbol
@@ -2302,7 +2277,6 @@ const _EFFECT_FREE_BUILTINS = [
     arraysize,
     Core.bufferlen,
     const_arrayref,
-    Core.bufref,
     isdefined,
     Core.sizeof,
     Core.ifelse,
@@ -2336,8 +2310,6 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
 const _ARGMEM_BUILTINS = Any[
     arrayref,
     arrayset,
-    Core.bufref,
-    Core.bufset,
     arraysize,
     Core.bufferlen,
     modifyfield!,
@@ -2495,7 +2467,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argin
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
             consistent = ALWAYS_TRUE
-        elseif f === arrayref || f === arrayset || f === arraysize || f === Core.bufset
+        elseif f === arrayref || f === arrayset || f === arraysize
             consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
         elseif f === Core._typevar
             consistent = CONSISTENT_IF_NOTRETURNED

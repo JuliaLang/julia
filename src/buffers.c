@@ -231,6 +231,26 @@ JL_DLLEXPORT int jl_buffer_isassigned(jl_buffer_t *b, size_t i)
     return 1;
 }
 
+JL_DLLEXPORT jl_buffer_t *jl_buffer_copy(jl_buffer_t *buf)
+{
+
+    jl_value_t *btype = jl_typeof(buf);
+    jl_value_t *eltype = jl_tparam0(btype);
+    jl_eltype_layout_t lyt = jl_eltype_layout(eltype);
+    size_t len = jl_buffer_len(buf);
+    int8_t zi = (lyt.isboxed || lyt.ntags > 1 || lyt.hasptr || (jl_is_datatype(eltype) && ((jl_datatype_t*)eltype)->zeroinit));
+    jl_buffer_t *new_buf = _new_buffer(btype, len, lyt, zi);
+    size_t nbytes = len * lyt.elsize;
+    memcpy(new_buf->data, buf->data, nbytes);
+    // ensure isbits union arrays copy their selector bytes correctly
+    if (lyt.ntags > 1) {
+        memcpy((char*)(new_buf->data) + nbytes, (char*)(buf->data) + nbytes, len);
+    }
+    return new_buf;
+}
+
+
+
 // Resizing methods for `jl_buffer_t` are different from `jl_array_t` in a number of ways.
 //
 // - If the type variant associated with `buf` enforces a fixed length, these will erorr.

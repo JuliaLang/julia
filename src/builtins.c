@@ -612,6 +612,9 @@ static jl_value_t *do_apply(jl_value_t **args, uint32_t nargs, jl_value_t *itera
         else if (jl_is_tuple(args[i]) || jl_is_namedtuple(args[i])) {
             precount += jl_nfields(args[i]);
         }
+        else if (jl_is_buffer_kind(args[i])) {
+            precount += jl_buffer_len(args[i]);
+        }
         else if (jl_is_array(args[i])) {
             precount += jl_array_len(args[i]);
         }
@@ -700,6 +703,31 @@ static jl_value_t *do_apply(jl_value_t **args, uint32_t nargs, jl_value_t *itera
             else {
                 for (j = 0; j < al; j++) {
                     newargs[n++] = jl_arrayref(aai, j);
+                    if (arg_heap)
+                        jl_gc_wb(arg_heap, newargs[n - 1]);
+                }
+            }
+        }
+        else if (jl_is_buffer_kind(ai)) {
+            jl_buffer_t *bai = (jl_buffer_t*)ai;
+            size_t j, al = jl_buffer_len(bai);
+            precount = (precount > al) ? precount - al : 0;
+            _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, n + precount + al, extra);
+            assert(newargs != NULL); // inform GCChecker that we didn't write a NULL here
+            if (jl_eltype_layout(jl_buffer_eltype(bai)).ntags == 0) {
+                for (j = 0; j < al; j++) {
+                    jl_value_t *arg = jl_buffer_ptr_ref(bai, j);
+                    // apply with buffer splatting may have embedded NULL value (#11772)
+                    if (__unlikely(arg == NULL))
+                        jl_throw(jl_undefref_exception);
+                    newargs[n++] = arg;
+                    if (arg_heap)
+                        jl_gc_wb(arg_heap, arg);
+                }
+            }
+            else {
+                for (j = 0; j < al; j++) {
+                    newargs[n++] = jl_bufref(bai, j);
                     if (arg_heap)
                         jl_gc_wb(arg_heap, newargs[n - 1]);
                 }
@@ -1509,37 +1537,6 @@ JL_CALLABLE(jl_f_bufferlen)
     return jl_box_long(jl_buffer_len(args[0]));
 }
 
-JL_CALLABLE(jl_f_bufref)
-{
-    JL_NARGS(bufref, 3, 3);
-    JL_TYPECHK(bufref, bool, args[0]);
-    if (!jl_is_buffer_kind(args[1])) {
-        jl_type_error("bufref", (jl_value_t*)jl_buffer_type, args[1]);
-    }
-    jl_buffer_t *sb = (jl_buffer_t*)args[1];
-    size_t len = jl_buffer_len(sb);
-    size_t idx = (size_t)jl_unbox_long((jl_value_t*)args[2]);
-    if (idx < 1 || idx > len) {
-        jl_bounds_error_int((jl_value_t*)sb, idx);
-    }
-    return jl_bufref(sb, idx - 1);
-}
-
-JL_CALLABLE(jl_f_bufset)
-{
-    JL_NARGS(bufset, 4, 4);
-    JL_TYPECHK(bufset, bool, args[0]);
-    JL_TYPECHK(bufset, buffer, args[1]);
-    jl_buffer_t *b = (jl_buffer_t*)args[1];
-    size_t len = jl_buffer_len(b);
-    size_t idx = (size_t)jl_unbox_long((jl_value_t*)args[3]);
-    if (idx < 1 || idx > len) {
-        jl_bounds_error_int((jl_value_t*)b, idx);
-    }
-    jl_bufset(b, args[2], idx - 1);
-    return args[1];
-}
-
 // type definition ------------------------------------------------------------
 
 JL_CALLABLE(jl_f__structtype)
@@ -2027,8 +2024,6 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin_arraysize = add_builtin_func("arraysize", jl_f_arraysize);
 
     // buffer primitives
-    jl_builtin_bufref = add_builtin_func("bufref", jl_f_bufref);
-    jl_builtin_bufset = add_builtin_func("bufset", jl_f_bufset);
     jl_builtin_bufferlen = add_builtin_func("bufferlen", jl_f_bufferlen);
 
     // method table utils

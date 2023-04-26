@@ -1010,6 +1010,33 @@ JL_DLLEXPORT void jl_gc_safepoint(void);
 #define jl_buffer_isunmarked(b) ((uintptr_t)((jl_buffer_t*)(b)->data) & 2)
 
 #ifdef __clang_gcanalyzer__
+jl_value_t **jl_buffer_ptr_data(jl_buffer_t *b JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
+STATIC_INLINE jl_value_t *jl_buffer_ptr_ref(void *b JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
+STATIC_INLINE jl_value_t *jl_buffer_ptr_set(
+    void *b JL_ROOTING_ARGUMENT, size_t i,
+    void *x JL_ROOTED_ARGUMENT) JL_NOTSAFEPOINT;
+#else
+#define jl_buffer_ptr_data(b)  ((jl_value_t**)((jl_buffer_t*)(b))->data)
+STATIC_INLINE jl_value_t *jl_buffer_ptr_ref(void *b JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT
+{
+    assert(i < jl_buffer_len(b));
+    return jl_atomic_load_relaxed(((_Atomic(jl_value_t*)*)(jl_buffer_data(b))) + i);
+}
+STATIC_INLINE jl_value_t *jl_buffer_ptr_set(
+    void *b JL_ROOTING_ARGUMENT, size_t i,
+    void *x JL_ROOTED_ARGUMENT) JL_NOTSAFEPOINT
+{
+    assert(i < jl_buffer_len(b));
+    jl_atomic_store_release(((_Atomic(jl_value_t*)*)(jl_buffer_data(b))) + i, (jl_value_t*)x);
+    if (x) {
+        jl_gc_wb(b, x);
+    }
+    return (jl_value_t*)x;
+}
+#endif
+
+
+#ifdef __clang_gcanalyzer__
 STATIC_INLINE jl_value_t *jl_svecref(void *t JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
 STATIC_INLINE jl_value_t *jl_svecset(
     void *t JL_ROOTING_ARGUMENT JL_PROPAGATES_ROOT,

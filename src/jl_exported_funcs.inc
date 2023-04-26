@@ -462,6 +462,8 @@
     XX(jl_bufferlen) \
     XX(jl_buffer_ptr) \
     XX(jl_buffer_isassigned) \
+    XX(jl_buffer_grow_at) \
+    XX(jl_buffer_delete_at) \
     XX(jl_switch) \
     XX(jl_switchto) \
     XX(jl_symbol) \

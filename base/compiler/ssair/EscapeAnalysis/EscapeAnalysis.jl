@@ -19,7 +19,7 @@ import Core:
     MethodInstance, Const, Argument, SSAValue, PiNode, PhiNode, UpsilonNode, PhiCNode,
     ReturnNode, GotoNode, GotoIfNot, SimpleVector, Buffer,
     MethodMatch, CodeInstance,
-    sizeof, ifelse, arrayset, arrayref, arraysize, bufset, bufref, bufferlen
+    sizeof, ifelse, arrayset, arrayref, arraysize, bufferlen
 import ._TOP_MOD:     # Base definitions
     @__MODULE__, @eval, @assert, @specialize, @nospecialize, @inbounds, @inline, @noinline,
     @label, @goto, !, !==, !=, ≠, +, -, *, ≤, <, ≥, >, &, |, <<, error, missing, copy,
@@ -1630,7 +1630,7 @@ function escape_builtin!(::typeof(bufferlen), astate::AnalysisState, pc::Int, ar
     return true
 end
 
-function escape_builtin!(::typeof(bufref), astate::AnalysisState, pc::Int, args::Vector{Any})
+function escape_builtin!(::typeof(Core.Compiler.get_buffer_index), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) ≥ 4 || return false
     # check potential thrown escapes from this bufref call
     boundcheckt = argextype(args[2], astate.ir)
@@ -1691,7 +1691,7 @@ function escape_builtin!(::typeof(bufref), astate::AnalysisState, pc::Int, args:
     return true
 end
 
-function escape_builtin!(::typeof(bufset), astate::AnalysisState, pc::Int, args::Vector{Any})
+function escape_builtin!(::typeof(Core.Compiler.set_buffer_index!), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) ≥ 5 || return false
     # check potential escapes from this arrayset call
     # NOTE here we essentially only need to account for TypeError, assuming that
