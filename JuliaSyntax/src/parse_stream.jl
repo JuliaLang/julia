@@ -738,7 +738,7 @@ example
 TODO: Are these the only cases?  Can we replace this general utility with a
 simpler one which only splits preceding dots?
 """
-function bump_split(stream::ParseStream, split_spec...)
+function bump_split(stream::ParseStream, split_spec::Vararg{Any, N}) where {N}
     tok = stream.lookahead[stream.lookahead_index]
     stream.lookahead_index += 1
     b = _next_byte(stream)
