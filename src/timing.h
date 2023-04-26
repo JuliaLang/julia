@@ -226,7 +226,7 @@ enum jl_timing_events {
 #define _ITTAPI_STOP(block) if (_jl_timing_enabled(block->owner)) __itt_event_end(jl_timing_ittapi_events[block->event])
 #else
 #define _ITTAPI_CTX_MEMBER
-#define _ITTAPI_CTOR(block, event)
+#define _ITTAPI_CTOR(block, owner, event)
 #define _ITTAPI_START(block)
 #define _ITTAPI_STOP(block)
 #endif
