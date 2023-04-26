@@ -159,6 +159,7 @@ DevDocs = [
         "devdocs/backtraces.md",
         "devdocs/debuggingtips.md",
         "devdocs/valgrind.md",
+        "devdocs/external_profilers.md",
         "devdocs/sanitizers.md",
         "devdocs/probes.md",
     ],
