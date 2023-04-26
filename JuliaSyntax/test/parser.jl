@@ -948,19 +948,27 @@ tests = [
     end
 end
 
-parseall_test_specs = [
+parsestmt_test_specs = [
     # whitespace before keywords in space-insensitive mode
-    "(y::\nif x z end)" => "(toplevel (parens (::-i y (if x (block z)))))"
+    "(y::\nif x z end)" => "(parens (::-i y (if x (block z))))"
+    # parsing of tricky primes
+    "x in'c'"   => "(call-i x in (char 'c'))"
+    "1where'c'" => "(where 1 (char 'c'))"
+    ":+'y'"     => "(juxtapose (call-post (quote-: +) ') (call-post y '))"
 
     # The following may not be ideal error recovery! But at least the parser
     # shouldn't crash
-    "@(x y)" => "(toplevel (macrocall (parens @x (error-t y))))"
-    "|(&\nfunction" => "(toplevel (call | (& (function (error (error)) (block (error)) (error-t))) (error-t)))"
+    "@(x y)" => "(macrocall (parens @x (error-t y)))"
+    "|(&\nfunction" => "(call | (& (function (error (error)) (block (error)) (error-t))) (error-t))"
+
+    # The following are currently broken but at least the parser shouldn't
+    # crash.
+    "x in' '" => "(call-i x in (char (error))) (error-t ')"
 ]
 
 @testset "Parser does not crash on broken code" begin
-    @testset "$(repr(input))" for (input, output) in parseall_test_specs
-        test_parse(JuliaSyntax.parse_toplevel, input, output)
+    @testset "$(repr(input))" for (input, output) in parsestmt_test_specs
+        test_parse(JuliaSyntax.parse_stmts, input, output)
     end
 end
 
