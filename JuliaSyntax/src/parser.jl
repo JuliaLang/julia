@@ -3389,8 +3389,25 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         # char literal
         bump(ps, TRIVIA_FLAG)
         k = peek(ps)
-        if k == K"Char"
-            bump(ps)
+        if k == K"'"
+            # ''  ==>  (char (error))
+            bump_invisible(ps, K"error", error="empty character literal")
+        elseif k == K"EndMarker"
+            # '   ==>  (char (error))
+            bump_invisible(ps, K"error", error="unterminated character literal")
+        else
+            if k == K"Char"
+                bump(ps)
+            else
+                # FIXME: This case is actually a tokenization error.
+                # Make a best-effort attempt to workaround this for now by
+                # remapping the kind. This needs to be fixed by rewinding the
+                # tokenizer's buffer and re-tokenizing the next token as a
+                # char. (A lot of work for a very obscure edge case)
+                #
+                # x in'c'  ==>  (call-i x in (char 'c'))
+                bump(ps, remap_kind=K"Char")
+            end
             if peek(ps) == K"'"
                 # 'a'         ==>  (char 'a')
                 # 'α'         ==>  (char 'α')
@@ -3401,15 +3418,12 @@ function parse_atom(ps::ParseState, check_identifiers=true)
                 bump_invisible(ps, K"error", TRIVIA_FLAG,
                                error="unterminated character literal")
             end
-        elseif k == K"'"
-            # ''  ==>  (char (error))
-            bump_invisible(ps, K"error", error="empty character literal")
-        else
-            # '   ==>  (char (error))
-            @check k == K"EndMarker"
-            bump_invisible(ps, K"error", error="unterminated character literal")
         end
         emit(ps, mark, K"char")
+    elseif leading_kind == K"Char"
+        # FIXME: This is a tokenization error and should be preceeded with
+        # K"'". However this workaround is better than emitting a bare Char.
+        bump(ps, remap_kind=K"Identifier")
     elseif leading_kind == K":"
         # symbol/expression quote
         # :foo  ==>  (quote-: foo)
