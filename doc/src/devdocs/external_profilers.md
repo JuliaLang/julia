@@ -51,6 +51,12 @@ JULIA_WAIT_FOR_TRACY=1 ./julia -e '...'
 
 The environment variable ensures that Julia waits until it has successfully connected to the Tracy profiler before continuing execution. Afterward, use the Tracy profiler UI, click `Connect`, and Julia execution should resume and profiling should start.
 
+### Adding metadata to zones
+
+The various `jl_timing_show_*` and `jl_timing_printf` functions can be used to attach a string (or strings) to a zone. For example, the trace zone for inference shows the method instance that is being inferred.
+
+The `TracyCZoneColor` function can be used to set the color of a certain zone. Search through the codebase to see how it is used.
+
 ### Hosting Tracy Traces Online
 
 *This section is yet to be written.*
