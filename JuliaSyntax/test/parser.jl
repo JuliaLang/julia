@@ -227,7 +227,7 @@ tests = [
         "+(a,b)"   =>  "(call + a b)"
         ".+(a,)"   =>  "(call (. +) a)"
         "(.+)(a)"  =>  "(call (parens (. +)) a)"
-        "+(a=1,)"  =>  "(call + (= a 1))" => Expr(:call, :+, Expr(:kw, :a, 1))
+        "+(a=1,)"  =>  "(call + (= a 1))"
         "+(a...)"  =>  "(call + (... a))"
         "+(a;b,c)" =>  "(call + a (parameters b c))"
         "+(;a)"    =>  "(call + (parameters a))"
@@ -243,7 +243,7 @@ tests = [
         # Unary function calls with brackets as grouping, not an arglist
         ".+(a)"   =>  "(dotcall-pre + (parens a))"
         "+(a;b)"  =>  "(call-pre + (block-p a b))"
-        "+(a=1)"  =>  "(call-pre + (parens (= a 1)))"  => Expr(:call, :+, Expr(:(=), :a, 1))
+        "+(a=1)"  =>  "(call-pre + (parens (= a 1)))"
         # Unary operators have lower precedence than ^
         "+(a)^2"  =>  "(call-pre + (call-i (parens a) ^ 2))"
         ".+(a)^2" =>  "(dotcall-pre + (call-i (parens a) ^ 2))"
@@ -326,10 +326,10 @@ tests = [
         "@A.foo a b"   =>  "(macrocall (. A (quote @foo)) a b)"
         "[@foo x]"     =>  "(vect (macrocall @foo x))"
         "[@foo]"       =>  "(vect (macrocall @foo))"
-        "@var\"#\" a"  =>  "(macrocall (var @#) a)"                => Expr(:macrocall, Symbol("@#"), LineNumberNode(1), :a)
+        "@var\"#\" a"  =>  "(macrocall (var @#) a)"
         "@(A) x"       =>  "(macrocall (parens @A) x)"
         "A.@x y"       =>  "(macrocall (. A (quote @x)) y)"
-        "A.@var\"#\" a"=>  "(macrocall (. A (quote (var @#))) a)"  => Expr(:macrocall, Expr(:., :A, QuoteNode(Symbol("@#"))), LineNumberNode(1), :a)
+        "A.@var\"#\" a"=>  "(macrocall (. A (quote (var @#))) a)"
         "@+x y"        =>  "(macrocall @+ x y)"
         "A.@.x"        =>  "(macrocall (. A (quote @.)) x)"
         # Macro names
@@ -347,11 +347,9 @@ tests = [
 
         # calls with brackets
         "f(a,b)"  => "(call f a b)"
-        "f(a=1; b=2)" => "(call f (= a 1) (parameters (= b 2)))" =>
-            Expr(:call, :f, Expr(:parameters, Expr(:kw, :b, 2)), Expr(:kw, :a, 1))
-        "f(a; b; c)" => "(call f a (parameters b) (parameters c))" =>
-            Expr(:call, :f, Expr(:parameters, Expr(:parameters, :c), :b), :a)
-        "(a=1)()" =>  "(call (parens (= a 1)))" => Expr(:call, Expr(:(=), :a, 1))
+        "f(a=1; b=2)" => "(call f (= a 1) (parameters (= b 2)))"
+        "f(a; b; c)" => "(call f a (parameters b) (parameters c))"
+        "(a=1)()" =>  "(call (parens (= a 1)))"
         "f (a)" => "(call f (error-t) a)"
         "@x(a, b)"   =>  "(macrocall-p @x a b)"
         "A.@x(y)"    =>  "(macrocall-p (. A (quote @x)) y)"
@@ -363,21 +361,17 @@ tests = [
         "f(x) do y body end"  =>  "(do (call f x) (tuple y) (block body))"
 
         # square brackets
-        "@S[a,b]"  => "(macrocall @S (vect a b))" =>
-            Expr(:macrocall, Symbol("@S"), LineNumberNode(1), Expr(:vect, :a, :b))
-        "@S[a b]"  => "(macrocall @S (hcat a b))" =>
-            Expr(:macrocall, Symbol("@S"), LineNumberNode(1), Expr(:hcat, :a, :b))
-        "@S[a; b]" => "(macrocall @S (vcat a b))" =>
-            Expr(:macrocall, Symbol("@S"), LineNumberNode(1), Expr(:vcat, :a, :b))
+        "@S[a,b]"  => "(macrocall @S (vect a b))"
+        "@S[a b]"  => "(macrocall @S (hcat a b))"
+        "@S[a; b]" => "(macrocall @S (vcat a b))"
         "A.@S[a]"  =>  "(macrocall (. A (quote @S)) (vect a))"
         "@S[a].b"  =>  "(. (macrocall @S (vect a)) (quote b))"
-        ((v=v"1.7",), "@S[a ;; b]")  =>  "(macrocall @S (ncat-2 a b))" =>
-            Expr(:macrocall, Symbol("@S"), LineNumberNode(1), Expr(:ncat, 2, :a, :b))
+        ((v=v"1.7",), "@S[a ;; b]")  =>  "(macrocall @S (ncat-2 a b))"
         ((v=v"1.6",), "@S[a ;; b]")  =>  "(macrocall @S (error (ncat-2 a b)))"
         "a[i]"  =>  "(ref a i)"
         "a [i]"  =>  "(ref a (error-t) i)"
         "a[i,j]"  =>  "(ref a i j)"
-        "(a=1)[]" =>  "(ref (parens (= a 1)))" => Expr(:ref, Expr(:(=), :a, 1))
+        "(a=1)[]" =>  "(ref (parens (= a 1)))"
         "a[end]"  =>  "(ref a end)"
         "a[begin]"  =>  "(ref a begin)"
         "a[:(end)]" => "(typed_hcat a (quote-: (parens (error-t))) (error-t))"
@@ -394,9 +388,8 @@ tests = [
         "A.@B.x"    =>  "(macrocall (. (. A (quote B)) (error-t) (quote @x)))"
         "@M.(x)"    =>  "(macrocall (dotcall @M (error-t) x))"
         "f.(a,b)"   =>  "(dotcall f a b)"
-        "f.(a=1; b=2)" => "(dotcall f (= a 1) (parameters (= b 2)))" =>
-            Expr(:., :f, Expr(:tuple, Expr(:parameters, Expr(:kw, :b, 2)), Expr(:kw, :a, 1)))
-        "(a=1).()" =>  "(dotcall (parens (= a 1)))" => Expr(:., Expr(:(=), :a, 1), Expr(:tuple))
+        "f.(a=1; b=2)" => "(dotcall f (= a 1) (parameters (= b 2)))"
+        "(a=1).()" =>  "(dotcall (parens (= a 1)))"
         "f. (x)"    =>  "(dotcall f (error-t) x)"
         # Other dotted syntax
         "A.:+"      =>  "(. A (quote-: +))"
@@ -460,15 +453,15 @@ tests = [
         "for x in xs end" => "(for (= x xs) (block))"
         "for x in xs, y in ys \n a \n end" => "(for (block (= x xs) (= y ys)) (block a))"
         # let
-        "let x=1\n end"    =>  "(let (block (= x 1)) (block))"  => Expr(:let, Expr(:(=), :x, 1),  Expr(:block))
-        "let x=1 ; end"    =>  "(let (block (= x 1)) (block))"  => Expr(:let, Expr(:(=), :x, 1),  Expr(:block))
-        "let x ; end"      =>  "(let (block x) (block))"        => Expr(:let, :x,                 Expr(:block))
-        "let x::1 ; end"   =>  "(let (block (::-i x 1)) (block))" => Expr(:let, Expr(:(::), :x, 1), Expr(:block))
-        "let x=1,y=2 end"  =>  "(let (block (= x 1) (= y 2)) (block))" => Expr(:let, Expr(:block, Expr(:(=), :x, 1), Expr(:(=), :y, 2)), Expr(:block))
-        "let x+=1 ; end"   =>  "(let (block (+= x 1)) (block))" => Expr(:let, Expr(:block, Expr(:+=, :x, 1)), Expr(:block))
-        "let ; end"        =>  "(let (block) (block))"          => Expr(:let, Expr(:block), Expr(:block))
-        "let ; body end"   =>  "(let (block) (block body))"     => Expr(:let, Expr(:block), Expr(:block, :body))
-        "let\na\nb\nend"   =>  "(let (block) (block a b))"      => Expr(:let, Expr(:block), Expr(:block, :a, :b))
+        "let x=1\n end"    =>  "(let (block (= x 1)) (block))"
+        "let x=1 ; end"    =>  "(let (block (= x 1)) (block))"
+        "let x ; end"      =>  "(let (block x) (block))"
+        "let x::1 ; end"   =>  "(let (block (::-i x 1)) (block))"
+        "let x=1,y=2 end"  =>  "(let (block (= x 1) (= y 2)) (block))"
+        "let x+=1 ; end"   =>  "(let (block (+= x 1)) (block))"
+        "let ; end"        =>  "(let (block) (block))"
+        "let ; body end"   =>  "(let (block) (block body))"
+        "let\na\nb\nend"   =>  "(let (block) (block a b))"
         # abstract type
         "abstract type A end"            =>  "(abstract A)"
         "abstract type A ; end"          =>  "(abstract A)"
@@ -482,12 +475,12 @@ tests = [
         "primitive type A \$N end"  =>  "(primitive A (\$ N))"
         "primitive type A <: B \n 8 \n end"  =>  "(primitive (<: A B) 8)"
         # struct
-        "struct A <: B \n a::X \n end" =>  "(struct (<: A B) (block (::-i a X)))" => Expr(:struct, false, Expr(:<:, :A, :B), Expr(:block, Expr(:(::), :a, :X)))
-        "struct A \n a \n b \n end"    =>  "(struct A (block a b))"             => Expr(:struct, false, :A, Expr(:block, :a, :b))
+        "struct A <: B \n a::X \n end" =>  "(struct (<: A B) (block (::-i a X)))"
+        "struct A \n a \n b \n end"    =>  "(struct A (block a b))"
         "mutable struct A end"         =>  "(struct-mut A (block))"
-        ((v=v"1.8",), "struct A const a end") => "(struct A (block (const a)))" => Expr(:struct, false, :A, Expr(:block, Expr(:const, :a)))
+        ((v=v"1.8",), "struct A const a end") => "(struct A (block (const a)))"
         ((v=v"1.7",), "struct A const a end") => "(struct A (block (error (const a))))"
-        "struct A end"    =>  "(struct A (block))"  => Expr(:struct, false, :A, Expr(:block))
+        "struct A end"    =>  "(struct A (block))"
         "struct try end"  =>  "(struct (error (try)) (block))"
         # return
         "return\nx"   =>  "(return)"
@@ -505,16 +498,16 @@ tests = [
         "module A \n a \n b \n end"  =>  "(module A (block a b))"
         """module A \n "x"\na\n end""" => """(module A (block (doc (string "x") a)))"""
         # export
-        "export a"   =>  "(export a)"  => Expr(:export, :a)
-        "export @a"  =>  "(export @a)" => Expr(:export, Symbol("@a"))
-        "export @var\"'\"" =>  "(export (var @'))" => Expr(:export, Symbol("@'"))
-        "export a, \n @b"  =>  "(export a @b)"     => Expr(:export, :a, Symbol("@b"))
-        "export +, =="     =>  "(export + ==)"     => Expr(:export, :+, :(==))
-        "export \n a"      =>  "(export a)"        => Expr(:export, :a)
-        "export \$a, \$(a*b)"  =>  "(export (\$ a) (\$ (parens (call-i a * b))))"  => Expr(:export, Expr(:$, :a), Expr(:$, Expr(:call, :*, :a, :b)))
+        "export a"   =>  "(export a)"
+        "export @a"  =>  "(export @a)"
+        "export @var\"'\"" =>  "(export (var @'))"
+        "export a, \n @b"  =>  "(export a @b)"
+        "export +, =="     =>  "(export + ==)"
+        "export \n a"      =>  "(export a)"
+        "export \$a, \$(a*b)"  =>  "(export (\$ a) (\$ (parens (call-i a * b))))"
         "export (x::T)"  =>  "(export (error (parens (::-i x T))))"
-        "export outer"  =>  "(export outer)"   =>  Expr(:export, :outer)
-        "export (\$f)"  =>  "(export (parens (\$ f)))"  =>  Expr(:export, Expr(:$, :f))
+        "export outer"  =>  "(export outer)"
+        "export (\$f)"  =>  "(export (parens (\$ f)))"
     ],
     JuliaSyntax.parse_if_elseif => [
         "if a xx elseif b yy else zz end" => "(if a (block xx) (elseif b (block yy) (block zz)))"
@@ -532,18 +525,18 @@ tests = [
         "if true; x ? true : elseif true end"  => "(if true (block (if x true (error-t))) (elseif true (block)))"
     ],
     JuliaSyntax.parse_resword => [
-        "global x"    =>  "(global x)"   => Expr(:global, :x)
-        "local x"     =>  "(local x)"    => Expr(:local, :x)
-        "global x,y"  =>  "(global x y)" => Expr(:global, :x, :y)
-        "global const x = 1" => "(global (const (= x 1)))" => Expr(:const, Expr(:global, Expr(:(=), :x, 1)))
-        "local const x = 1"  => "(local (const (= x 1)))"  => Expr(:const, Expr(:local, Expr(:(=), :x, 1)))
-        "const global x = 1" => "(const (global (= x 1)))" => Expr(:const, Expr(:global, Expr(:(=), :x, 1)))
-        "const local x = 1"  => "(const (local (= x 1)))"  => Expr(:const, Expr(:local, Expr(:(=), :x, 1)))
-        "const x,y = 1,2"    => "(const (= (tuple x y) (tuple 1 2)))" => Expr(:const, Expr(:(=), Expr(:tuple, :x, :y), Expr(:tuple, 1, 2)))
-        "const x = 1"    =>  "(const (= x 1))"           => Expr(:const, Expr(:(=), :x, 1))
+        "global x"    =>  "(global x)"
+        "local x"     =>  "(local x)"
+        "global x,y"  =>  "(global x y)"
+        "global const x = 1" => "(global (const (= x 1)))"
+        "local const x = 1"  => "(local (const (= x 1)))"
+        "const global x = 1" => "(const (global (= x 1)))"
+        "const local x = 1"  => "(const (local (= x 1)))"
+        "const x,y = 1,2"    => "(const (= (tuple x y) (tuple 1 2)))"
+        "const x = 1"    =>  "(const (= x 1))"
         "const x .= 1"   => "(error (const (.= x 1)))"
-        "global x ~ 1"   =>  "(global (call-i x ~ 1))"   => Expr(:global, Expr(:call, :~, :x, 1))
-        "global x += 1"  => "(global (+= x 1))"          => Expr(:global, Expr(:+=, :x, 1))
+        "global x ~ 1"   =>  "(global (call-i x ~ 1))"
+        "global x += 1"  => "(global (+= x 1))"
         "const x"        => "(error (const x))"
         "global const x" => "(global (error (const x)))"
         "const global x" => "(error (const (global x)))"
@@ -590,10 +583,10 @@ tests = [
         "function f()::S where T end" => "(function (where (::-i (call f) S) T) (block))"
         # Ugly cases for compat where extra parentheses existed and we've
         # already parsed at least the call part of the signature
-        "function (f() where T) end" => "(function (parens (where (call f) T)) (block))" => Expr(:function, Expr(:where, Expr(:call, :f), :T), Expr(:block))
+        "function (f() where T) end" => "(function (parens (where (call f) T)) (block))"
         "function (f()) where T end" => "(function (where (parens (call f)) T) (block))"
         "function (f() where T) where U end" => "(function (where (parens (where (call f) T)) U) (block))"
-        "function (f()::S) end"=>  "(function (parens (::-i (call f) S)) (block))"         => Expr(:function, Expr(:(::), Expr(:call, :f), :S), Expr(:block))
+        "function (f()::S) end"=>  "(function (parens (::-i (call f) S)) (block))"
         "function ((f()::S) where T) end" => "(function (parens (where (parens (::-i (call f) S)) T)) (block))"
         "function (x*y ) end" => "(function (parens (call-i x * y)) (block))"
         # body
@@ -682,15 +675,13 @@ tests = [
         "(x,y)"       =>  "(tuple-p x y)"
         "(x=1, y=2)"  =>  "(tuple-p (= x 1) (= y 2))"
         # Named tuples with initial semicolon
-        "(;)"         =>  "(tuple-p (parameters))"         =>  Expr(:tuple, Expr(:parameters))
-        "(; a=1)"     =>  "(tuple-p (parameters (= a 1)))" =>  Expr(:tuple, Expr(:parameters, Expr(:kw, :a, 1)))
+        "(;)"         =>  "(tuple-p (parameters))"
+        "(; a=1)"     =>  "(tuple-p (parameters (= a 1)))"
         # Extra credit: nested parameters and frankentuples
         "(x...; y)"       => "(tuple-p (... x) (parameters y))"
         "(x...;)"         => "(tuple-p (... x) (parameters))"
-        "(; a=1; b=2)"    => "(tuple-p (parameters (= a 1)) (parameters (= b 2)))" =>
-            Expr(:tuple, Expr(:parameters, Expr(:parameters, Expr(:kw, :b, 2)), Expr(:kw, :a, 1)))
-        "(a; b; c,d)"     => "(tuple-p a (parameters b) (parameters c d))" =>
-            Expr(:tuple, Expr(:parameters, Expr(:parameters, :c, :d), :b), :a)
+        "(; a=1; b=2)"    => "(tuple-p (parameters (= a 1)) (parameters (= b 2)))"
+        "(a; b; c,d)"     => "(tuple-p a (parameters b) (parameters c d))"
         "(a=1, b=2; c=3)" => "(tuple-p (= a 1) (= b 2) (parameters (= c 3)))"
         # Block syntax
         "(;;)"        =>  "(block-p)"
@@ -788,7 +779,7 @@ tests = [
         "[x,\n y]"      =>  "(vect x y)"
         "[x\n, y]"      =>  "(vect x y)"
         "[x\n,, y]"     =>  "(vect x (error-t ✘ y))"
-        "[x,y ; z]"     =>  "(vect x y (parameters z))"  => Expr(:vect, Expr(:parameters, :z), :x, :y)
+        "[x,y ; z]"     =>  "(vect x y (parameters z))"
         "[x=1, y=2]"    =>  "(vect (= x 1) (= y 2))"
         "[x=1, ; y=2]"  =>  "(vect (= x 1) (parameters (= y 2)))"
         # parse_paren
@@ -802,7 +793,7 @@ tests = [
         # Macro names can be keywords
         "@end x" => "(macrocall @end x)"
         # __dot__ macro
-        "@. x" => "(macrocall @. x)" => Expr(:macrocall, Symbol("@__dot__"), LineNumberNode(1), :x)
+        "@. x" => "(macrocall @. x)"
         # cmd strings
         "``"         =>  "(macrocall core_@cmd (cmdstring-r \"\"))"
         "`cmd`"      =>  "(macrocall core_@cmd (cmdstring-r \"cmd\"))"
