@@ -11,7 +11,7 @@ function is_stringchunk(node)
     return k == K"String" || k == K"CmdString"
 end
 
-function reorder_parameters!(args, params_pos)
+function reorder_parameters!(args::Vector{Any}, params_pos)
     p = 0
     for i = length(args):-1:1
         if !Meta.isexpr(args[i], :parameters)
@@ -24,7 +24,7 @@ function reorder_parameters!(args, params_pos)
     end
     # nest frankentuples parameters sections
     for i = length(args)-1:-1:p
-        pushfirst!(args[i].args, pop!(args))
+        pushfirst!((args[i]::Expr).args, pop!(args))
     end
     # Move parameters to args[params_pos]
     insert!(args, params_pos, pop!(args))
