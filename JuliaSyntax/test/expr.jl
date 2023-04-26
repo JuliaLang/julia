@@ -70,6 +70,14 @@
                 Expr(:function, :f)
             @test parsestmt(Expr, "macro f end") ==
                 Expr(:macro, :f)
+
+            # weird cases with extra parens
+            @test parsestmt(Expr, "function (f() where T) end") ==
+                Expr(:function, Expr(:where, Expr(:call, :f), :T),
+                     Expr(:block, LineNumberNode(1), LineNumberNode(1)))
+            @test parsestmt(Expr, "function (f()::S) end") ==
+                Expr(:function, Expr(:(::), Expr(:call, :f), :S),
+                     Expr(:block, LineNumberNode(1), LineNumberNode(1)))
         end
 
         @testset "elseif" begin
@@ -180,10 +188,22 @@
             Expr(:call, :f, Expr(:parameters, Expr(:kw, :b, 2)))
         @test parsestmt(Expr, "f(a=1; b=2)") ==
             Expr(:call, :f, Expr(:parameters, Expr(:kw, :b, 2)), Expr(:kw, :a, 1))
+        @test parsestmt(Expr, "f(a; b; c)") == 
+            Expr(:call, :f, Expr(:parameters, Expr(:parameters, :c), :b), :a)
+        @test parsestmt(Expr, "+(a=1,)") ==
+            Expr(:call, :+, Expr(:kw, :a, 1))
+        @test parsestmt(Expr, "(a=1)()") ==
+            Expr(:call, Expr(:(=), :a, 1))
 
-        # Infix call = is not :kw
+        # Operator calls:  = is not :kw
         @test parsestmt(Expr, "(x=1) != 2") ==
             Expr(:call, :!=, Expr(:(=), :x, 1), 2)
+        @test parsestmt(Expr, "+(a=1)") == 
+            Expr(:call, :+, Expr(:(=), :a, 1))
+        @test parsestmt(Expr, "(a=1)'") == 
+            Expr(Symbol("'"), Expr(:(=), :a, 1))
+        @test parsestmt(Expr, "(a=1)'ᵀ") == 
+            Expr(:call, Symbol("'ᵀ"), Expr(:(=), :a, 1))
 
         # Dotcall
         @test parsestmt(Expr, "f.(a=1; b=2)") ==
@@ -232,7 +252,6 @@
             Expr(:call, :f, Expr(:.=, :a, 1))
 
         # = inside parens in calls and tuples
-        # (TODO: we should warn for these cases.)
         @test parsestmt(Expr, "f(((a = 1)))") ==
             Expr(:call, :f, Expr(:kw, :a, 1))
         @test parsestmt(Expr, "(((a = 1)),)") ==
@@ -244,6 +263,9 @@
     @testset "dotcall / dotted operators" begin
         @test parsestmt(Expr, "f.(x,y)") == Expr(:., :f, Expr(:tuple, :x, :y))
         @test parsestmt(Expr, "f.(x=1)") == Expr(:., :f, Expr(:tuple, Expr(:kw, :x, 1)))
+        @test parsestmt(Expr, "f.(a=1; b=2)") ==
+            Expr(:., :f, Expr(:tuple, Expr(:parameters, Expr(:kw, :b, 2)), Expr(:kw, :a, 1)))
+        @test parsestmt(Expr, "(a=1).()") == Expr(:., Expr(:(=), :a, 1), Expr(:tuple))
         @test parsestmt(Expr, "x .+ y")  == Expr(:call, Symbol(".+"), :x, :y)
         @test parsestmt(Expr, "(x=1) .+ y") == Expr(:call, Symbol(".+"), Expr(:(=), :x, 1), :y)
         @test parsestmt(Expr, "a .< b .< c") == Expr(:comparison, :a, Symbol(".<"),
@@ -273,6 +295,27 @@
         @test parsestmt(Expr, "A.:.+")   == Expr(:., :A, QuoteNode(Symbol(".+")))
     end
 
+    @testset "let" begin
+        @test parsestmt(Expr, "let x=1\n end") ==
+            Expr(:let, Expr(:(=), :x, 1),  Expr(:block, LineNumberNode(2)))
+        @test parsestmt(Expr, "let x=1 ; end") ==
+            Expr(:let, Expr(:(=), :x, 1),  Expr(:block, LineNumberNode(1)))
+        @test parsestmt(Expr, "let x ; end") ==
+            Expr(:let, :x, Expr(:block, LineNumberNode(1)))
+        @test parsestmt(Expr, "let x::1 ; end") ==
+            Expr(:let, Expr(:(::), :x, 1), Expr(:block, LineNumberNode(1)))
+        @test parsestmt(Expr, "let x=1,y=2 end") ==
+            Expr(:let, Expr(:block, Expr(:(=), :x, 1), Expr(:(=), :y, 2)), Expr(:block, LineNumberNode(1)))
+        @test parsestmt(Expr, "let x+=1 ; end") ==
+            Expr(:let, Expr(:block, Expr(:+=, :x, 1)), Expr(:block, LineNumberNode(1)))
+        @test parsestmt(Expr, "let ; end") ==
+            Expr(:let, Expr(:block), Expr(:block, LineNumberNode(1)))
+        @test parsestmt(Expr, "let ; body end") ==
+            Expr(:let, Expr(:block), Expr(:block, LineNumberNode(1), :body))
+        @test parsestmt(Expr, "let\na\nb\nend") ==
+            Expr(:let, Expr(:block), Expr(:block, LineNumberNode(2), :a, LineNumberNode(3), :b))
+    end
+
     @testset "where" begin
         @test parsestmt(Expr, "A where {X, Y; Z}") == Expr(:where, :A, Expr(:parameters, :Z), :X, :Y)
     end
@@ -289,6 +332,24 @@
         # @__dot__
         @test parsestmt(Expr, "@.") == Expr(:macrocall, Symbol("@__dot__"), LineNumberNode(1))
         @test parsestmt(Expr, "using A: @.") == Expr(:using, Expr(Symbol(":"), Expr(:., :A), Expr(:., Symbol("@__dot__"))))
+
+        # var""
+        @test parsestmt(Expr, "@var\"#\" a") == Expr(:macrocall, Symbol("@#"), LineNumberNode(1), :a)
+        @test parsestmt(Expr, "A.@var\"#\" a") == Expr(:macrocall, Expr(:., :A, QuoteNode(Symbol("@#"))), LineNumberNode(1), :a)
+
+        # Square brackets
+        @test parsestmt(Expr, "@S[a,b]") ==
+            Expr(:macrocall, Symbol("@S"), LineNumberNode(1), Expr(:vect, :a, :b))
+        @test parsestmt(Expr, "@S[a b]") ==
+            Expr(:macrocall, Symbol("@S"), LineNumberNode(1), Expr(:hcat, :a, :b))
+        @test parsestmt(Expr, "@S[a; b]") ==
+            Expr(:macrocall, Symbol("@S"), LineNumberNode(1), Expr(:vcat, :a, :b))
+        @test parsestmt(Expr, "@S[a ;; b]", version=v"1.7") ==
+            Expr(:macrocall, Symbol("@S"), LineNumberNode(1), Expr(:ncat, 2, :a, :b))
+    end
+
+    @testset "vect" begin
+        @test parsestmt(Expr, "[x,y ; z]") == Expr(:vect, Expr(:parameters, :z), :x, :y)
     end
 
     @testset "try" begin
@@ -360,6 +421,47 @@
             Expr(:struct, false, :A, Expr(:block, LineNumberNode(1)))
         @test parsestmt(Expr, "mutable struct A end") ==
             Expr(:struct, true, :A, Expr(:block, LineNumberNode(1)))
+
+        @test parsestmt(Expr, "struct A <: B \n a::X \n end") ==
+            Expr(:struct, false, Expr(:<:, :A, :B),
+                 Expr(:block, LineNumberNode(2), Expr(:(::), :a, :X)))
+        @test parsestmt(Expr, "struct A \n a \n b \n end") ==
+            Expr(:struct, false, :A,
+                 Expr(:block, LineNumberNode(2), :a, LineNumberNode(3), :b))
+        @test parsestmt(Expr, "struct A const a end", version=v"1.8") ==
+            Expr(:struct, false, :A, Expr(:block, LineNumberNode(1), Expr(:const, :a)))
+    end
+
+    @testset "export" begin
+        @test parsestmt(Expr, "export a") == Expr(:export, :a)
+        @test parsestmt(Expr, "export @a") == Expr(:export, Symbol("@a"))
+        @test parsestmt(Expr, "export @var\"'\"") == Expr(:export, Symbol("@'"))
+        @test parsestmt(Expr, "export a, \n @b") == Expr(:export, :a, Symbol("@b"))
+        @test parsestmt(Expr, "export +, ==") == Expr(:export, :+, :(==))
+        @test parsestmt(Expr, "export \n a") == Expr(:export, :a)
+    end
+
+    @testset "global/const/local" begin
+        @test parsestmt(Expr, "global x") == Expr(:global, :x)
+        @test parsestmt(Expr, "local x") == Expr(:local, :x)
+        @test parsestmt(Expr, "global x,y") == Expr(:global, :x, :y)
+        @test parsestmt(Expr, "global const x = 1") == Expr(:const, Expr(:global, Expr(:(=), :x, 1)))
+        @test parsestmt(Expr, "local const x = 1") == Expr(:const, Expr(:local, Expr(:(=), :x, 1)))
+        @test parsestmt(Expr, "const global x = 1") == Expr(:const, Expr(:global, Expr(:(=), :x, 1)))
+        @test parsestmt(Expr, "const local x = 1") == Expr(:const, Expr(:local, Expr(:(=), :x, 1)))
+        @test parsestmt(Expr, "const x,y = 1,2") == Expr(:const, Expr(:(=), Expr(:tuple, :x, :y), Expr(:tuple, 1, 2)))
+        @test parsestmt(Expr, "const x = 1") == Expr(:const, Expr(:(=), :x, 1))
+        @test parsestmt(Expr, "global x ~ 1") == Expr(:global, Expr(:call, :~, :x, 1))
+        @test parsestmt(Expr, "global x += 1") == Expr(:global, Expr(:+=, :x, 1))
+    end
+
+    @testset "tuples" begin
+        @test parsestmt(Expr, "(;)")       == Expr(:tuple, Expr(:parameters))
+        @test parsestmt(Expr, "(; a=1)")   == Expr(:tuple, Expr(:parameters, Expr(:kw, :a, 1)))
+        @test parsestmt(Expr, "(; a=1; b=2)") ==
+            Expr(:tuple, Expr(:parameters, Expr(:parameters, Expr(:kw, :b, 2)), Expr(:kw, :a, 1)))
+        @test parsestmt(Expr, "(a; b; c,d)") ==
+            Expr(:tuple, Expr(:parameters, Expr(:parameters, :c, :d), :b), :a)
     end
 
     @testset "module" begin
