@@ -103,6 +103,9 @@ end
 thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)
 nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
 
+parent(s::SubString) = s.string
+parentindices(s::SubString) = (s.offset + 1 : thisind(s.string, s.offset + s.ncodeunits),)
+
 function ==(a::Union{String, SubString{String}}, b::Union{String, SubString{String}})
     sizeof(a) == sizeof(b) && _memcmp(a, b) == 0
 end
