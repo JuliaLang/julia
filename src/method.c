@@ -494,8 +494,9 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
     return src;
 }
 
-void jl_add_function_name_to_lineinfo(jl_code_info_t *ci, jl_value_t *name)
+void jl_add_function_to_lineinfo(jl_code_info_t *ci, jl_value_t *func)
 {
+    // func may contain jl_symbol (function name), jl_method_t, or jl_method_instance_t
     jl_array_t *li = (jl_array_t*)ci->linetable;
     size_t i, n = jl_array_len(li);
     jl_value_t *rt = NULL, *lno = NULL, *inl = NULL;
@@ -508,10 +509,10 @@ void jl_add_function_name_to_lineinfo(jl_code_info_t *ci, jl_value_t *name)
         lno = jl_fieldref(ln, 3);
         inl = jl_fieldref(ln, 4);
         // respect a given linetable if available
-        jl_value_t *ln_name = jl_fieldref_noalloc(ln, 1);
-        if (jl_is_symbol(ln_name) && (jl_sym_t*)ln_name == jl_symbol("none") && jl_is_int32(inl) && jl_unbox_int32(inl) == 0)
-            ln_name = name;
-        rt = jl_new_struct(jl_lineinfonode_type, mod, ln_name, file, lno, inl);
+        jl_value_t *ln_func = jl_fieldref_noalloc(ln, 1);
+        if (jl_is_symbol(ln_func) && (jl_sym_t*)ln_func == jl_symbol("none") && jl_is_int32(inl) && jl_unbox_int32(inl) == 0)
+            ln_func = func;
+        rt = jl_new_struct(jl_lineinfonode_type, mod, ln_func, file, lno, inl);
         jl_array_ptr_set(li, i, rt);
     }
     JL_GC_POP();
@@ -604,7 +605,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, siz
                 jl_error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure, a comprehension or a generator.");
             }
         }
-        jl_add_function_name_to_lineinfo(func, (jl_value_t*)def->name);
+        jl_add_function_to_lineinfo(func, (jl_value_t*)def->name);
 
         // If this generated function has an opaque closure, cache it for
         // correctness of method identity
@@ -682,7 +683,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     m->called = called;
     m->constprop = src->constprop;
     m->purity.bits = src->purity.bits;
-    jl_add_function_name_to_lineinfo(src, (jl_value_t*)m->name);
+    jl_add_function_to_lineinfo(src, (jl_value_t*)m->name);
 
     jl_array_t *copy = NULL;
     jl_svec_t *sparam_vars = jl_outer_unionall_vars(m->sig);
