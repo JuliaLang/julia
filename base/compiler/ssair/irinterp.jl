@@ -38,7 +38,7 @@ function concrete_eval_invoke(interp::AbstractInterpreter,
         newirsv = IRInterpretationState(interp, code, mi, argtypes, world)
         if newirsv !== nothing
             newirsv.parent = irsv
-            return _ir_abstract_constant_propagation(interp, newirsv)
+            return ir_abstract_constant_propagation(interp, newirsv)
         end
         return Pair{Any,Bool}(nothing, is_nothrow(effects))
     end
@@ -194,6 +194,8 @@ end
 default_reprocess(::AbstractInterpreter, ::IRInterpretationState) = nothing
 function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState;
     extra_reprocess::Union{Nothing,BitSet} = default_reprocess(interp, irsv))
+    interp = switch_to_irinterp(interp)
+
     (; ir, tpdum, ssa_refined) = irsv
 
     bbs = ir.cfg.blocks
@@ -342,16 +344,17 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
     return Pair{Any,Bool}(maybe_singleton_const(ultimate_rt), nothrow)
 end
 
-function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState)
-    irinterp = switch_to_irinterp(interp)
+function ir_abstract_constant_propagation(interp::NativeInterpreter, irsv::IRInterpretationState)
     if __measure_typeinf__[]
         inf_frame = Timings.InferenceFrameInfo(irsv.mi, irsv.world, VarState[], Any[], length(irsv.ir.argtypes))
         Timings.enter_new_timer(inf_frame)
-        ret = _ir_abstract_constant_propagation(irinterp, irsv)
+        ret = _ir_abstract_constant_propagation(interp, irsv)
         append!(inf_frame.slottypes, irsv.ir.argtypes)
         Timings.exit_current_timer(inf_frame)
         return ret
     else
-        return _ir_abstract_constant_propagation(irinterp, irsv)
+        return _ir_abstract_constant_propagation(interp, irsv)
     end
 end
+ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState) =
+    _ir_abstract_constant_propagation(interp, irsv)
