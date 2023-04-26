@@ -143,12 +143,6 @@ jl_timing_block_t *jl_timing_block_exit_task(jl_task_t *ct, jl_ptls_t ptls)
     return blk;
 }
 
-static inline const char *gnu_basename(const char *path)
-{
-    char *base = strrchr(path, '/');
-    return base ? base+1 : path;
-}
-
 JL_DLLEXPORT void jl_timing_show(jl_value_t *v, jl_timing_block_t *cur_block)
 {
 #ifdef USE_TRACY
