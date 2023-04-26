@@ -1286,7 +1286,8 @@ PreservedAnalyses AllocOptPass::run(Function &F, FunctionAnalysisManager &AM) {
     }
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddAllocOptPass_impl(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddAllocOptPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createAllocOptPass());
 }

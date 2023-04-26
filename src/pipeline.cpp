@@ -720,7 +720,7 @@ void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
         });
 }
 
-extern "C" JL_DLLEXPORT ::llvm::PassPluginLibraryInfo
-llvmGetPassPluginInfo() JL_NOTSAFEPOINT {
+extern "C" JL_DLLEXPORT_CODEGEN
+::llvm::PassPluginLibraryInfo llvmGetPassPluginInfo() JL_NOTSAFEPOINT {
       return {LLVM_PLUGIN_API_VERSION, "Julia", "1", registerCallbacks};
 }

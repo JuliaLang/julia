@@ -126,12 +126,12 @@ static void *getTLSAddress(void *control)
 #endif
 
 // Snooping on which functions are being compiled, and how long it takes
-extern "C" JL_DLLEXPORT
+extern "C" JL_DLLEXPORT_CODEGEN
 void jl_dump_compiles_impl(void *s)
 {
     **jl_ExecutionEngine->get_dump_compiles_stream() = (ios_t*)s;
 }
-extern "C" JL_DLLEXPORT
+extern "C" JL_DLLEXPORT_CODEGEN
 void jl_dump_llvm_opt_impl(void *s)
 {
     **jl_ExecutionEngine->get_dump_llvm_opt_stream() = (ios_t*)s;
@@ -159,6 +159,7 @@ void jl_link_global(GlobalVariable *GV, void *addr) JL_NOTSAFEPOINT
     else {
         GV->setConstant(true);
         GV->setLinkage(GlobalValue::PrivateLinkage);
+        GV->setVisibility(GlobalValue::DefaultVisibility);
         GV->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
     }
 }
@@ -329,7 +330,7 @@ static jl_callptr_t _jl_compile_codeinst(
 const char *jl_generate_ccallable(LLVMOrcThreadSafeModuleRef llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
 
 // compile a C-callable alias
-extern "C" JL_DLLEXPORT
+extern "C" JL_DLLEXPORT_CODEGEN
 int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
 {
     auto ct = jl_current_task;
@@ -389,7 +390,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
 }
 
 // declare a C-callable entry point; called during code loading from the toplevel
-extern "C" JL_DLLEXPORT
+extern "C" JL_DLLEXPORT_CODEGEN
 void jl_extern_c_impl(jl_value_t *declrt, jl_tupletype_t *sigt)
 {
     // validate arguments. try to do as many checks as possible here to avoid
@@ -432,7 +433,7 @@ void jl_extern_c_impl(jl_value_t *declrt, jl_tupletype_t *sigt)
 }
 
 // this compiles li and emits fptr
-extern "C" JL_DLLEXPORT
+extern "C" JL_DLLEXPORT_CODEGEN
 jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
     auto ct = jl_current_task;
@@ -446,10 +447,12 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
         compiler_start_time = jl_hrtime();
     // if we don't have any decls already, try to generate it now
     jl_code_info_t *src = NULL;
-    JL_GC_PUSH1(&src);
+    jl_code_instance_t *codeinst = NULL;
+    JL_GC_PUSH2(&src, &codeinst);
     JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
-    jl_value_t *ci = jl_rettype_inferred(mi, world, world);
-    jl_code_instance_t *codeinst = (ci == jl_nothing ? NULL : (jl_code_instance_t*)ci);
+    jl_value_t *ci = jl_rettype_inferred_addr(mi, world, world);
+    if (ci != jl_nothing)
+        codeinst = (jl_code_instance_t*)ci;
     if (codeinst) {
         src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
         if ((jl_value_t*)src == jl_nothing)
@@ -505,7 +508,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     return codeinst;
 }
 
-extern "C" JL_DLLEXPORT
+extern "C" JL_DLLEXPORT_CODEGEN
 void jl_generate_fptr_for_oc_wrapper_impl(jl_code_instance_t *oc_wrap)
 {
     if (jl_atomic_load_relaxed(&oc_wrap->invoke) != NULL) {
@@ -518,7 +521,7 @@ void jl_generate_fptr_for_oc_wrapper_impl(jl_code_instance_t *oc_wrap)
     JL_UNLOCK(&jl_codegen_lock); // Might GC
 }
 
-extern "C" JL_DLLEXPORT
+extern "C" JL_DLLEXPORT_CODEGEN
 void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
 {
     if (jl_atomic_load_relaxed(&unspec->invoke) != NULL) {
@@ -571,7 +574,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
 
 
 // get a native disassembly for a compiled method
-extern "C" JL_DLLEXPORT
+extern "C" JL_DLLEXPORT_CODEGEN
 jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
         char raw_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary)
 {
@@ -1921,7 +1924,7 @@ void add_named_global(StringRef name, void *addr)
     jl_ExecutionEngine->addGlobalMapping(name, (uint64_t)(uintptr_t)addr);
 }
 
-extern "C" JL_DLLEXPORT
+extern "C" JL_DLLEXPORT_CODEGEN
 size_t jl_jit_total_bytes_impl(void)
 {
     return jl_ExecutionEngine->getTotalBytes();

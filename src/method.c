@@ -964,12 +964,6 @@ JL_DLLEXPORT jl_methtable_t *jl_method_get_table(jl_method_t *method JL_PROPAGAT
     return method->external_mt ? (jl_methtable_t*)method->external_mt : jl_method_table_for(method->sig);
 }
 
-// get the MethodTable implied by a single given type, or `nothing`
-JL_DLLEXPORT jl_methtable_t *jl_argument_method_table(jl_value_t *argt JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
-{
-    return nth_methtable(argt, 0);
-}
-
 jl_array_t *jl_all_methods JL_GLOBALLY_ROOTED;
 
 JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,

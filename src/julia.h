@@ -3,7 +3,10 @@
 #ifndef JULIA_H
 #define JULIA_H
 
-#ifdef LIBRARY_EXPORTS
+#if defined(JL_LIBRARY_EXPORTS_INTERNAL) || defined(JL_LIBRARY_EXPORTS_CODEGEN)
+#define JL_LIBRARY_EXPORTS
+#endif
+#ifdef JL_LIBRARY_EXPORTS
 // Generated file, needs to be searched in include paths so that the builddir
 // retains priority
 #include <jl_internal_funcs.inc>
@@ -70,7 +73,7 @@
 typedef struct _jl_taggedvalue_t jl_taggedvalue_t;
 typedef struct _jl_tls_states_t *jl_ptls_t;
 
-#ifdef LIBRARY_EXPORTS
+#ifdef JL_LIBRARY_EXPORTS
 #include "uv.h"
 #endif
 #include "julia_atomics.h"
@@ -228,20 +231,20 @@ typedef jl_call_t *jl_callptr_t;
 // "speccall" calling convention signatures.
 // This describes some of the special ABI used by compiled julia functions.
 extern jl_call_t jl_fptr_args;
-JL_DLLEXPORT extern jl_callptr_t jl_fptr_args_addr;
+JL_DLLEXPORT extern const jl_callptr_t jl_fptr_args_addr;
 typedef jl_value_t *(*jl_fptr_args_t)(jl_value_t*, jl_value_t**, uint32_t);
 
 extern jl_call_t jl_fptr_const_return;
-JL_DLLEXPORT extern jl_callptr_t jl_fptr_const_return_addr;
+JL_DLLEXPORT extern const jl_callptr_t jl_fptr_const_return_addr;
 
 extern jl_call_t jl_fptr_sparam;
-JL_DLLEXPORT extern jl_callptr_t jl_fptr_sparam_addr;
+JL_DLLEXPORT extern const jl_callptr_t jl_fptr_sparam_addr;
 typedef jl_value_t *(*jl_fptr_sparam_t)(jl_value_t*, jl_value_t**, uint32_t, jl_svec_t*);
 
 extern jl_call_t jl_fptr_interpret_call;
-JL_DLLEXPORT extern jl_callptr_t jl_fptr_interpret_call_addr;
+JL_DLLEXPORT extern const jl_callptr_t jl_fptr_interpret_call_addr;
 
-JL_DLLEXPORT extern jl_callptr_t jl_f_opaque_closure_call_addr;
+JL_DLLEXPORT extern const jl_callptr_t jl_f_opaque_closure_call_addr;
 
 typedef struct _jl_line_info_node_t {
     struct _jl_module_t *module;
@@ -1691,10 +1694,10 @@ JL_DLLEXPORT size_t jl_array_size(jl_value_t *a, int d);
 JL_DLLEXPORT const char *jl_string_ptr(jl_value_t *s);
 
 // modules and global variables
-extern JL_DLLEXPORT jl_module_t *jl_main_module JL_GLOBALLY_ROOTED;
-extern JL_DLLEXPORT jl_module_t *jl_core_module JL_GLOBALLY_ROOTED;
-extern JL_DLLEXPORT jl_module_t *jl_base_module JL_GLOBALLY_ROOTED;
-extern JL_DLLEXPORT jl_module_t *jl_top_module JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_module_t *jl_main_module JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_module_t *jl_core_module JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_module_t *jl_base_module JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_module_t *jl_top_module JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name, jl_module_t *parent);
 JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on);
 JL_DLLEXPORT void jl_set_module_optlevel(jl_module_t *self, int lvl);
@@ -1757,7 +1760,7 @@ JL_DLLEXPORT long jl_getallocationgranularity(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_is_debugbuild(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_UNAME(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void) JL_NOTSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_get_libllvm(void) JL_NOTSAFEPOINT;
+JL_DLLIMPORT jl_value_t *jl_get_libllvm(void) JL_NOTSAFEPOINT;
 extern JL_DLLIMPORT int jl_n_threadpools;
 extern JL_DLLIMPORT _Atomic(int) jl_n_threads;
 extern JL_DLLIMPORT int jl_n_gcthreads;
@@ -1831,7 +1834,7 @@ typedef enum {
     //JL_IMAGE_LIBJULIA = 2,
 } JL_IMAGE_SEARCH;
 
-JL_DLLEXPORT const char *jl_get_libdir(void);
+JL_DLLIMPORT const char *jl_get_libdir(void);
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel);
 JL_DLLEXPORT void jl_init(void);
 JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
@@ -2086,7 +2089,7 @@ void (jl_longjmp)(jmp_buf _Buf, int _Value);
 JL_DLLEXPORT int (ijl_setjmp)(jmp_buf _Buf);
 void (ijl_longjmp)(jmp_buf _Buf, int _Value);
 #endif
-#ifdef LIBRARY_EXPORTS
+#ifdef JL_LIBRARY_EXPORTS
 #define jl_setjmp_f ijl_setjmp
 #define jl_setjmp_name "ijl_setjmp"
 #define jl_setjmp(a,b) ijl_setjmp(a)
@@ -2114,7 +2117,7 @@ void (ijl_longjmp)(jmp_buf _Buf, int _Value);
 #define jl_setjmp(a,b) sigsetjmp(a,b)
 #if defined(_COMPILER_ASAN_ENABLED_) && __GLIBC__
 // Bypass the ASAN longjmp wrapper - we're unpoisoning the stack ourselves.
-extern int __attribute__ ((nothrow)) (__libc_siglongjmp)(jl_jmp_buf buf, int val);
+JL_DLLIMPORT int __attribute__ ((nothrow)) (__libc_siglongjmp)(jl_jmp_buf buf, int val);
 #define jl_longjmp(a,b) __libc_siglongjmp(a,b)
 #else
 #define jl_longjmp(a,b) siglongjmp(a,b)
