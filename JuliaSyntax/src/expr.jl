@@ -221,7 +221,9 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
             # This case should only occur when there's an error inside the
             # parens, and we've passed ignore_errors=true to the parser.
             # Wrap in a block to preserve both the value and the error.
-            @check all(Meta.isexpr(args[j], :error) for j in 2:length(args))
+            let args = args
+                @check all(Meta.isexpr(args[j], :error) for j in 2:length(args))
+            end
             return Expr(:block, args...)
         end
     elseif headsym === :try
