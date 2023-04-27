@@ -197,7 +197,7 @@ static jl_callptr_t _jl_compile_codeinst(
 #ifdef USE_TRACY
     if (is_recompile) {
         TracyCZoneCtx ctx = *(JL_TIMING_CURRENT_BLOCK->tracy_ctx);
-        TracyCZoneColor(ctx, 0xFF0000);
+        TracyCZoneColor(ctx, 0xFFA500);
     }
 #endif
     jl_callptr_t fptr = NULL;
