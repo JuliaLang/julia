@@ -784,7 +784,7 @@ JL_DLLEXPORT jl_value_t *jl_fl_parse(const char *text, size_t text_len,
                                      size_t offset, jl_value_t *options)
 {
     JL_TIMING(PARSING, PARSING);
-    jl_timing_show_filename(jl_string_data(filename), JL_TIMING_CURRENT_BLOCK);
+    jl_timing_show_filename(jl_string_data(filename), JL_TIMING_BLOCK(PARSING, PARSING));
     if (offset > text_len) {
         jl_value_t *textstr = jl_pchar_to_string(text, text_len);
         JL_GC_PUSH1(&textstr);

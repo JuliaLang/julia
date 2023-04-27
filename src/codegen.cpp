@@ -8436,7 +8436,7 @@ jl_llvm_functions_t jl_emit_code(
         jl_codegen_params_t &params)
 {
     JL_TIMING(CODEGEN, CODEGEN_LLVM);
-    jl_timing_show_func_sig((jl_value_t *)li->specTypes, JL_TIMING_CURRENT_BLOCK);
+    jl_timing_show_func_sig((jl_value_t *)li->specTypes, JL_TIMING_BLOCK(CODEGEN, CODEGEN_LLVM));
     // caller must hold codegen_lock
     jl_llvm_functions_t decls = {};
     assert((params.params == &jl_default_cgparams /* fast path */ || !params.cache ||
@@ -8479,7 +8479,7 @@ jl_llvm_functions_t jl_emit_codeinst(
         jl_codegen_params_t &params)
 {
     JL_TIMING(CODEGEN, CODEGEN_Codeinst);
-    jl_timing_show_method_instance(codeinst->def, JL_TIMING_CURRENT_BLOCK);
+    jl_timing_show_method_instance(codeinst->def, JL_TIMING_BLOCK(CODEGEN, CODEGEN_Codeinst));
     JL_GC_PUSH1(&src);
     if (!src) {
         src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);

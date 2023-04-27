@@ -279,7 +279,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
     is_atpath = 0;
 
     JL_TIMING(DL_OPEN, DL_OPEN);
-    jl_timing_printf(JL_TIMING_CURRENT_BLOCK, gnu_basename(modname));
+    jl_timing_printf(JL_TIMING_BLOCK(DL_OPEN, DL_OPEN), gnu_basename(modname));
 
     // Detect if our `modname` is something like `@rpath/libfoo.dylib`
 #ifdef _OS_DARWIN_

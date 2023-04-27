@@ -368,7 +368,7 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
     fargs[1] = (jl_value_t*)mi;
     fargs[2] = jl_box_ulong(world);
 
-    jl_timing_show_method_instance(mi, JL_TIMING_CURRENT_BLOCK);
+    jl_timing_show_method_instance(mi, JL_TIMING_BLOCK(INFERENCE, INFERENCE));
 #ifdef TRACE_INFERENCE
     if (mi->specTypes != (jl_value_t*)jl_emptytuple_type) {
         jl_printf(JL_STDERR,"inference on ");
@@ -1986,7 +1986,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     JL_TIMING(ADD_METHOD, ADD_METHOD);
     assert(jl_is_method(method));
     assert(jl_is_mtable(mt));
-    jl_timing_show_method(method, JL_TIMING_CURRENT_BLOCK);
+    jl_timing_show_method(method, JL_TIMING_BLOCK(ADD_METHOD, ADD_METHOD));
     jl_value_t *type = method->sig;
     jl_value_t *oldvalue = NULL;
     jl_array_t *oldmi = NULL;
