@@ -9,6 +9,7 @@
 #include <llvm-c/Types.h>
 
 #include <llvm/Pass.h>
+#include <llvm/ADT/Triple.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
@@ -161,6 +162,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
         SmallVector<uint32_t, 2> Weights{9, 1};
         TerminatorInst *fastTerm;
         TerminatorInst *slowTerm;
+        assert(pgcstack->getType()); // Static analyzer
         auto cmp = new ICmpInst(phi, CmpInst::ICMP_NE, pgcstack, Constant::getNullValue(pgcstack->getType()));
         SplitBlockAndInsertIfThenElse(cmp, phi, &fastTerm, &slowTerm,
                                       MDB.createBranchWeights(Weights));
