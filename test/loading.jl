@@ -1032,7 +1032,6 @@ end
             cmd = gen_extension_cmd(compile)
             cmd = addenv(cmd, "JULIA_LOAD_PATH" => proj)
             cmd = pipeline(cmd; stdout, stderr)
-            @show compile
             @test success(cmd)
         end
 
