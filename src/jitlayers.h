@@ -49,7 +49,7 @@
 #endif
 // The sanitizers don't play well with our memory manager
 
-#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_) || defined(JL_FORCE_JITLINK) || defined(HAS_SANITIZER)
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_) || defined(JL_FORCE_JITLINK) || JL_LLVM_VERSION >= 150000 && defined(HAS_SANITIZER)
 # if JL_LLVM_VERSION < 130000
 #  pragma message("On aarch64-darwin, LLVM version >= 13 is required for JITLink; fallback suffers from occasional segfaults")
 # endif
