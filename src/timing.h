@@ -146,6 +146,7 @@ void jl_timing_printf(jl_timing_block_t *cur_block, const char *format, ...);
         X(LOCK_SPIN)             \
         X(STACKWALK)             \
         X(DL_OPEN)               \
+        X(JULIA_INIT)            \
 
 
 #define JL_TIMING_EVENTS \

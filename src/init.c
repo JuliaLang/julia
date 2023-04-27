@@ -833,6 +833,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 
 static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_task_t *ct)
 {
+    JL_TIMING(JULIA_INIT, JULIA_INIT);
     jl_resolve_sysimg_location(rel);
     // loads sysimg if available, and conditionally sets jl_options.cpu_target
     if (jl_options.image_file)
