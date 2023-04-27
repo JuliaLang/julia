@@ -268,6 +268,7 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
 extern "C" JL_DLLEXPORT
 void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode, int _external_linkage, size_t _world)
 {
+    JL_TIMING(NATIVE_AOT, NATIVE_Create);
     ++CreateNativeCalls;
     CreateNativeMax.updateMax(jl_array_len(methods));
     if (cgparams == NULL)
@@ -1448,7 +1449,7 @@ void jl_dump_native_impl(void *native_code,
         const char *asm_fname,
         const char *sysimg_data, size_t sysimg_len, ios_t *s)
 {
-    JL_TIMING(NATIVE_DUMP, NATIVE_DUMP);
+    JL_TIMING(NATIVE_AOT, NATIVE_Dump);
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
     if (!bc_fname && !unopt_bc_fname && !obj_fname && !asm_fname) {
         LLVM_DEBUG(dbgs() << "No output requested, skipping native code dump?\n");

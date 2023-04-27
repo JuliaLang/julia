@@ -112,6 +112,7 @@ end |> only === Nothing
 @newinterp Issue48097Interp
 @MethodTable Issue48097MT
 CC.method_table(interp::Issue48097Interp) = CC.OverlayMethodTable(CC.get_world_counter(interp), Issue48097MT)
+CC.InferenceParams(::Issue48097Interp) = CC.InferenceParams(; unoptimize_throw_blocks=false)
 @overlay Issue48097MT @noinline Core.throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = return
 issue48097(; kwargs...) = return 42
 @test fully_eliminated(; interp=Issue48097Interp(), retval=42) do

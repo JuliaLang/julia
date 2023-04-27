@@ -2247,7 +2247,7 @@ STATIC_INLINE void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_va
         }
     }
     if (too_big) {
-        jl_gc_chunk_t c = {GC_objary_chunk, ary8_parent, scan_end,
+        jl_gc_chunk_t c = {GC_ary8_chunk, ary8_parent, scan_end,
                            ary8_end,        elem_begin,       elem_end,
                            0,               nptr};
         gc_chunkqueue_push(mq, &c);
@@ -2309,7 +2309,7 @@ STATIC_INLINE void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl_
         }
     }
     if (too_big) {
-        jl_gc_chunk_t c = {GC_objary_chunk, ary16_parent, scan_end,
+        jl_gc_chunk_t c = {GC_ary16_chunk, ary16_parent, scan_end,
                             ary16_end,      elem_begin,       elem_end,
                             elsize,         nptr};
         gc_chunkqueue_push(mq, &c);
