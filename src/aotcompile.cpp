@@ -1768,15 +1768,15 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
                 PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
             }
         }
-#if defined(_COMPILER_ASAN_ENABLED_)
-        PM->add(createAddressSanitizerFunctionPass());
-#endif
-#if defined(_COMPILER_MSAN_ENABLED_)
-        PM->add(createMemorySanitizerLegacyPassPass());
-#endif
-#if defined(_COMPILER_TSAN_ENABLED_)
-        PM->add(createThreadSanitizerLegacyPassPass());
-#endif
+// #if defined(_COMPILER_ASAN_ENABLED_)
+//         PM->add(createAddressSanitizerFunctionPass());
+// #endif
+// #if defined(_COMPILER_MSAN_ENABLED_)
+//         PM->add(createMemorySanitizerLegacyPassPass());
+// #endif
+// #if defined(_COMPILER_TSAN_ENABLED_)
+//         PM->add(createThreadSanitizerLegacyPassPass());
+// #endif
         return;
     }
     PM->add(createPropagateJuliaAddrspaces());
@@ -1927,15 +1927,15 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     }
     PM->add(createCombineMulAddPass());
     PM->add(createDivRemPairsPass());
-#if defined(_COMPILER_ASAN_ENABLED_)
-    PM->add(createAddressSanitizerFunctionPass());
-#endif
-#if defined(_COMPILER_MSAN_ENABLED_)
-    PM->add(createMemorySanitizerLegacyPassPass());
-#endif
-#if defined(_COMPILER_TSAN_ENABLED_)
-    PM->add(createThreadSanitizerLegacyPassPass());
-#endif
+// #if defined(_COMPILER_ASAN_ENABLED_)
+//     PM->add(createAddressSanitizerFunctionPass());
+// #endif
+// #if defined(_COMPILER_MSAN_ENABLED_)
+//     PM->add(createMemorySanitizerLegacyPassPass());
+// #endif
+// #if defined(_COMPILER_TSAN_ENABLED_)
+//     PM->add(createThreadSanitizerLegacyPassPass());
+// #endif
 }
 
 // An LLVM module pass that just runs all julia passes in order. Useful for
