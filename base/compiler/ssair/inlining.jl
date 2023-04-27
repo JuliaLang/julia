@@ -826,7 +826,7 @@ function compileable_specialization(mi::MethodInstance, effects::Effects,
         # If this caller does not want us to optimize calls to use their
         # declared compilesig, then it is also likely they would handle sparams
         # incorrectly if there were any unknown typevars, so we conservatively return nothing
-        if _any(t->isa(t, TypeVar), match.sparams)
+        if any(@nospecialize(t)->isa(t, TypeVar), mi.sparam_vals)
             return nothing
         end
     end
