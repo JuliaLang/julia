@@ -1021,7 +1021,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         ok, ret = bslash_completions(string, pos)
         ok && return ret
         startpos = first(varrange) + 4
-        dotpos = something(findprev(isequal('.'), string, startpos), 0)
+        dotpos = something(findprev(isequal('.'), string, first(varrange)-1), 0)
         return complete_identifiers!(Completion[], ffunc, context_module, string,
             string[startpos:pos], pos, dotpos, startpos)
     # otherwise...
