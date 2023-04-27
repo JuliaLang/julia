@@ -8,6 +8,12 @@ using Base.BinaryPlatforms, Base.TOML
 export artifact_exists, artifact_path, artifact_meta, artifact_hash,
        select_downloadable_artifacts, find_artifacts_toml, @artifact_str
 
+const _artifact_world_age = Ref(typemax(UInt))
+function __init__()
+    _artifact_world_age[] = Base.get_world_counter()
+end
+
+
 """
     parse_toml(path::String)
 
@@ -698,7 +704,11 @@ macro artifact_str(name, platform=nothing, artifacts_toml_path=nothing)
         platform = HostPlatform()
         artifact_name, artifact_path_tail, hash = artifact_slash_lookup(name, artifact_dict, artifacts_toml, platform)
         return quote
-            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), $(artifact_name), $(artifact_path_tail), $(artifact_dict), $(hash), $(platform), $(lazyartifacts))::String
+            if _artifact_world_age[] != typemax(UInt)
+                Base.invoke_in_world(_artifact_world_age[], _artifact_str, $(__module__), $(artifacts_toml), $(artifact_name), $(artifact_path_tail), $(artifact_dict), $(hash), $(platform), $(lazyartifacts))::String
+            else
+                Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), $(artifact_name), $(artifact_path_tail), $(artifact_dict), $(hash), $(platform), $(lazyartifacts))::String
+            end
         end
     else
         if platform === nothing
@@ -707,7 +717,11 @@ macro artifact_str(name, platform=nothing, artifacts_toml_path=nothing)
         return quote
             local platform = $(esc(platform))
             local artifact_name, artifact_path_tail, hash = artifact_slash_lookup($(esc(name)), $(artifact_dict), $(artifacts_toml), platform)
-            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), artifact_name, artifact_path_tail, $(artifact_dict), hash, platform, $(lazyartifacts))::String
+            if _artifact_world_age[] != typemax(UInt)
+                Base.invoke_in_world(_artifact_world_age[], _artifact_str, $(__module__), $(artifacts_toml), artifact_name, artifact_path_tail, $(artifact_dict), hash, platform, $(lazyartifacts))::String
+            else
+                Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), artifact_name, artifact_path_tail, $(artifact_dict), hash, platform, $(lazyartifacts))::String
+            end
         end
     end
 end
