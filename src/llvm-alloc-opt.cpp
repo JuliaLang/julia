@@ -1089,9 +1089,12 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                     ref->setOrdering(AtomicOrdering::NotAtomic);
                     operands.push_back(ref);
                 }
+#ifndef __clang_analyzer__
+                // FIXME: SA finds "Called C++ object pointer is null" inside the LLVM code.
                 auto new_call = builder.CreateCall(pass.gc_preserve_begin_func, operands);
                 new_call->takeName(call);
                 call->replaceAllUsesWith(new_call);
+#endif
                 call->eraseFromParent();
                 return;
             }

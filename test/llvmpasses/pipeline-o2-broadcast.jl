@@ -7,25 +7,25 @@ include(joinpath("..", "testhelpers", "llvmpasses.jl"))
 
 # COM: Float32
 # CHECK: @japi1_prod_v_vT
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x float>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x float>
 # CHECK: fmul <[[VSCALE]][[VEC_FACTOR]] x float>
 # CHECK: store <[[VSCALE]][[VEC_FACTOR]] x float>
 
 # COM: Float64
 # CHECK: @japi1_prod_v_vT
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x double>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x double>
 # CHECK: fmul <[[VSCALE]][[VEC_FACTOR]] x double>
 # CHECK: store <[[VSCALE]][[VEC_FACTOR]] x double>
 
 # COM: Int32
 # CHECK: @japi1_prod_v_vT
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i32>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i32>
 # CHECK: mul <[[VSCALE]][[VEC_FACTOR]] x i32>
 # CHECK: store <[[VSCALE]][[VEC_FACTOR]] x i32>
 
 # COM: Int64
 # CHECK: @japi1_prod_v_vT
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i64>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i64>
 # CHECK: mul <[[VSCALE]][[VEC_FACTOR]] x i64>
 # CHECK: store <[[VSCALE]][[VEC_FACTOR]] x i64>
 
@@ -37,25 +37,25 @@ end
 
 # COM: Float32
 # CHECK: @japi1_prod_vT_v
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x float>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x float>
 # CHECK: fmul <[[VSCALE]][[VEC_FACTOR]] x float>
 # CHECK: store <[[VSCALE]][[VEC_FACTOR]] x float>
 
 # COM: Float64
 # CHECK: @japi1_prod_vT_v
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x double>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x double>
 # CHECK: fmul <[[VSCALE]][[VEC_FACTOR]] x double>
 # CHECK: store <[[VSCALE]][[VEC_FACTOR]] x double>
 
 # COM: Int32
 # CHECK: @japi1_prod_vT_v
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i32>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i32>
 # CHECK: mul <[[VSCALE]][[VEC_FACTOR]] x i32>
 # CHECK: store <[[VSCALE]][[VEC_FACTOR]] x i32>
 
 # COM: Int64
 # CHECK: @japi1_prod_vT_v
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i64>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i64>
 # CHECK: mul <[[VSCALE]][[VEC_FACTOR]] x i64>
 # CHECK: store <[[VSCALE]][[VEC_FACTOR]] x i64>
 
@@ -67,25 +67,25 @@ end
 
 # COM: Float32
 # CHECK: @japi1_prod_v_M_vT
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x float>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x float>
 # CHECK: fmul <[[VSCALE]][[VEC_FACTOR]] x float>
 # CHECK: store <[[VSCALE]][[VEC_FACTOR]] x float>
 
 # COM: Float64
 # CHECK: @japi1_prod_v_M_vT
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x double>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x double>
 # CHECK: fmul <[[VSCALE]][[VEC_FACTOR]] x double>
 # CHECK: store <[[VSCALE]][[VEC_FACTOR]] x double>
 
 # COM: Int32
 # CHECK: @japi1_prod_v_M_vT
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i32>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i32>
 # CHECK: mul <[[VSCALE]][[VEC_FACTOR]] x i32>
 # CHECK: store <[[VSCALE]][[VEC_FACTOR]] x i32>
 
 # COM: Int64
 # CHECK: @japi1_prod_v_M_vT
-# CHECK: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i64>
+# COM: load <[[VSCALE:(vscale x )?]][[VEC_FACTOR:[0-9]+]] x i64>
 # CHECK: mul <[[VSCALE]][[VEC_FACTOR]] x i64>
 # CHECK: store <[[VSCALE]][[VEC_FACTOR]] x i64>
 
