@@ -42,7 +42,14 @@
 // and feature support (e.g. Windows, JITEventListeners for various profilers,
 // etc.). Thus, we currently only use JITLink where absolutely required, that is,
 // for Mac/aarch64.
-#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_) || defined(_COMPILER_ASAN_ENABLED_) || defined(JL_FORCE_JITLINK)
+// #define JL_FORCE_JITLINK
+
+#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
+# define HAS_SANITIZER
+#endif
+// The sanitizers don't play well with our memory manager
+
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_) || defined(JL_FORCE_JITLINK) || JL_LLVM_VERSION >= 150000 && defined(HAS_SANITIZER)
 # if JL_LLVM_VERSION < 130000
 #  pragma message("On aarch64-darwin, LLVM version >= 13 is required for JITLink; fallback suffers from occasional segfaults")
 # endif
@@ -93,7 +100,9 @@ struct OptimizationOptions {
 // for middle-end IR optimizations. However, we have not qualified the new
 // pass manager on our optimization pipeline yet, so this remains an optional
 // define
-// #define JL_USE_NEW_PM
+#if defined(HAS_SANITIZER) && JL_LLVM_VERSION >= 150000
+#define JL_USE_NEW_PM
+#endif
 
 struct NewPM {
     std::unique_ptr<TargetMachine> TM;

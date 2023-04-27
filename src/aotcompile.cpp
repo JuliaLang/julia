@@ -1775,6 +1775,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
                 PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
             }
         }
+#if JL_LLVM_VERSION < 150000
 #if defined(_COMPILER_ASAN_ENABLED_)
         PM->add(createAddressSanitizerFunctionPass());
 #endif
@@ -1783,6 +1784,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 #endif
 #if defined(_COMPILER_TSAN_ENABLED_)
         PM->add(createThreadSanitizerLegacyPassPass());
+#endif
 #endif
         return;
     }
@@ -1934,6 +1936,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     }
     PM->add(createCombineMulAddPass());
     PM->add(createDivRemPairsPass());
+#if JL_LLVM_VERSION < 150000
 #if defined(_COMPILER_ASAN_ENABLED_)
     PM->add(createAddressSanitizerFunctionPass());
 #endif
@@ -1942,6 +1945,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 #endif
 #if defined(_COMPILER_TSAN_ENABLED_)
     PM->add(createThreadSanitizerLegacyPassPass());
+#endif
 #endif
 }
 
