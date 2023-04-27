@@ -673,6 +673,41 @@ function unsafe_delete_at!(b::DynamicBuffer, i::Integer, delta::Integer, len::In
     ccall(:jl_buffer_delete_at, Cvoid, (Any, Csize_t, Csize_t, Csize_t), b, i - 1, delta, len)
 end
 
+function pop!(b::DynamicBuffer)
+    len = length(b)
+    @boundscheck len != 0 || throw(BoundsError(b, 1))
+    item = unsafe_getindex(b, len)
+    unsafe_delete_at!(b, len, 1, len)
+    return item
+end
+
+function popfirst!(b::DynamicBuffer)
+    len = length(b)
+    @boundscheck len != 0 || throw(BoundsError(b, 1))
+    item = unsafe_getindex(b, 1)
+    unsafe_delete_at!(b, 1, 1, len)
+    return item
+end
+
+function popat!(b::DynamicBuffer, i::Integer)
+    len = length(b)
+    @boundscheck (1 <= i <= len) || throw(BoundsError(b))
+    item = unsafe_getindex(b, i)
+    unsafe_delete_at!(b, i, 1, len)
+    return item
+end
+
+function popat!(b::DynamicBuffer, i::Integer, default)
+    len = length(b)
+    if (1 <= i <= len)
+        item = unsafe_getindex(b, i)
+        unsafe_delete_at!(b, i, 1, len)
+        return item
+    else
+        return default
+    end
+end
+
 # TODO keepat!
 
 function deleteat!(b::DynamicBuffer, i::Integer)

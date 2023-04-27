@@ -84,5 +84,15 @@ end
     @test b == [0, 1, 0, 2, 3, 1, 2, 3, 0]
     prepend!(b, [999])
     @test b == [999, 0, 1, 0, 2, 3, 1, 2, 3, 0]
+    @test popfirst!(b) == 999
+    @test b == [0, 1, 0, 2, 3, 1, 2, 3, 0]
+    @test pop!(b) == 0
+    @test b == [0, 1, 0, 2, 3, 1, 2, 3]
+    @test popat!(b, 3) == 0
+    @test b == [0, 1, 2, 3, 1, 2, 3]
+    deleteat!(b, 1)
+    @test b == [1, 2, 3, 1, 2, 3]
+    deleteat!(b, 1:3)
+    @test b == [1, 2, 3]
 end
 
