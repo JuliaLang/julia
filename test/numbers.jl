@@ -2483,6 +2483,7 @@ Base.abs(x::TestNumber) = TestNumber(abs(x.inner))
             d == 0 && continue
             fastd = Base.multiplicativeinverse(d)
             for n in numrange
+                d == -1 && n == typemin(typeof(n)) && continue
                 @test div(n,d) == div(n,fastd)
             end
         end
@@ -2494,7 +2495,7 @@ Base.abs(x::TestNumber) = TestNumber(abs(x.inner))
     end
     for T in [UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Int128]
         testmi(map(T, typemax(T)-50:typemax(T)), map(T, 1:50))
-        testmi(filter(!iszero, rand(T, 50)), filter(!iszero, rand(T, 50)))
+        testmi(rand(T, 50), rand(T, 50))
         @test_throws ArgumentError Base.multiplicativeinverse(T(0))
     end
 
