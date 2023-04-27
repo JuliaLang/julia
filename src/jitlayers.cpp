@@ -1383,6 +1383,7 @@ JuliaOJIT::JuliaOJIT()
 
     JD.addToLinkOrder(GlobalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
 
+#if JULIA_FLOAT16_ABI == 1
     orc::SymbolAliasMap jl_crt = {
         { mangle("__gnu_h2f_ieee"), { mangle("julia__gnu_h2f_ieee"), JITSymbolFlags::Exported } },
         { mangle("__extendhfsf2"),  { mangle("julia__gnu_h2f_ieee"), JITSymbolFlags::Exported } },
@@ -1391,6 +1392,7 @@ JuliaOJIT::JuliaOJIT()
         { mangle("__truncdfhf2"),   { mangle("julia__truncdfhf2"),   JITSymbolFlags::Exported } }
     };
     cantFail(GlobalJD.define(orc::symbolAliases(jl_crt)));
+#endif
 
 #ifdef MSAN_EMUTLS_WORKAROUND
     orc::SymbolMap msan_crt;
