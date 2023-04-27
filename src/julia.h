@@ -1984,6 +1984,9 @@ JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e, jl_task_t *ct);
 JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 #define jl_current_task (container_of(jl_get_pgcstack(), jl_task_t, gcstack))
 
+extern JL_DLLIMPORT int jl_task_gcstack_offset;
+extern JL_DLLIMPORT int jl_task_ptls_offset;
+
 #include "julia_locks.h"   // requires jl_task_t definition
 
 JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh);
