@@ -44,7 +44,7 @@
 // for Mac/aarch64.
 // #define JL_FORCE_JITLINK
 
-#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
+#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
 # define HAS_SANITIZER
 #endif
 // The sanitizers don't play well with our memory manager
@@ -100,7 +100,7 @@ struct OptimizationOptions {
 // for middle-end IR optimizations. However, we have not qualified the new
 // pass manager on our optimization pipeline yet, so this remains an optional
 // define
-#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
+#if defined(HAS_SANITIZER) && JL_LLVM_VERSION >= 150000
 #define JL_USE_NEW_PM
 #endif
 
