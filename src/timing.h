@@ -63,6 +63,7 @@ extern uint32_t jl_timing_print_limit;
 #define jl_timing_show_module(m, b)
 #define jl_timing_show_filename(f, b)
 #define jl_timing_show_method_instance(mi, b)
+#define jl_timing_show_method(mi, b)
 #define jl_timing_show_func_sig(tt, b)
 #define jl_timing_printf(s, f, ...)
 #define jl_timing_block_enter_task(ct, ptls, blk)
@@ -102,6 +103,7 @@ void jl_timing_show(jl_value_t *v, jl_timing_block_t *cur_block);
 void jl_timing_show_module(jl_module_t *m, jl_timing_block_t *cur_block);
 void jl_timing_show_filename(const char *path, jl_timing_block_t *cur_block);
 void jl_timing_show_method_instance(jl_method_instance_t *mi, jl_timing_block_t *cur_block);
+void jl_timing_show_method(jl_method_t *method, jl_timing_block_t *cur_block);
 void jl_timing_show_func_sig(jl_value_t *v, jl_timing_block_t *cur_block);
 void jl_timing_printf(jl_timing_block_t *cur_block, const char *format, ...);
 #ifdef __cplusplus

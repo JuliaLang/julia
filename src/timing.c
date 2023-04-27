@@ -190,6 +190,15 @@ JL_DLLEXPORT void jl_timing_show_method_instance(jl_method_instance_t *mi, jl_ti
                      jl_symbol_name(def->module->name));
 }
 
+JL_DLLEXPORT void jl_timing_show_method(jl_method_t *method, jl_timing_block_t *cur_block)
+{
+    jl_timing_show((jl_value_t *)method, cur_block);
+    jl_timing_printf(cur_block, "%s:%d in %s",
+                    gnu_basename(jl_symbol_name(method->file)),
+                    method->line,
+                    jl_symbol_name(method->module->name));
+}
+
 JL_DLLEXPORT void jl_timing_show_func_sig(jl_value_t *v, jl_timing_block_t *cur_block)
 {
 #ifdef USE_TRACY
