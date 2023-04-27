@@ -13,11 +13,11 @@ export libgmp, libgmpxx
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libgmp_handle = C_NULL
-libgmp_path = ""
-libgmpxx_handle = C_NULL
-libgmpxx_path = ""
+artifact_dir::String = ""
+libgmp_handle::Ptr{Cvoid} = C_NULL
+libgmp_path::String = ""
+libgmpxx_handle::Ptr{Cvoid} = C_NULL
+libgmpxx_path::String = ""
 
 if Sys.iswindows()
     const libgmp = "libgmp-10.dll"

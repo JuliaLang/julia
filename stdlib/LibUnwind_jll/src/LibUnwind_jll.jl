@@ -14,9 +14,9 @@ export libunwind
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libunwind_handle = C_NULL
-libunwind_path = ""
+artifact_dir::String = ""
+libunwind_handle::Ptr{Cvoid} = C_NULL
+libunwind_path::String = ""
 
 const libunwind = "libunwind.so.8"
 

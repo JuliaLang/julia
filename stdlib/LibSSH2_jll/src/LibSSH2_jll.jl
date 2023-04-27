@@ -14,9 +14,9 @@ export libssh2
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libssh2_handle = C_NULL
-libssh2_path = ""
+artifact_dir::String = ""
+libssh2_handle::Ptr{Cvoid} = C_NULL
+libssh2_path::String = ""
 
 if Sys.iswindows()
     const libssh2 = "libssh2.dll"
