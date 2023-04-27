@@ -1643,6 +1643,7 @@ static void do_nothing_with_codeinst(jl_code_instance_t *ci) {}
 // recursively invalidate cached methods that had an edge to a replaced method
 static void invalidate_method_instance(void (*f)(jl_code_instance_t*), jl_method_instance_t *replaced, size_t max_world, int depth)
 {
+    jl_timing_counter_inc(JL_TIMING_COUNTER_Invalidations, 1);
     if (_jl_debug_method_invalidation) {
         jl_value_t *boxeddepth = NULL;
         JL_GC_PUSH1(&boxeddepth);

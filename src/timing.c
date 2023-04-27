@@ -48,6 +48,8 @@ const char *jl_timing_names[(int)JL_TIMING_LAST] =
 #undef X
     };
 
+JL_DLLEXPORT jl_timing_counter_t jl_timing_counters[JL_TIMING_COUNTER_LAST];
+
 #ifdef USE_ITTAPI
 JL_DLLEXPORT __itt_event jl_timing_ittapi_events[(int)JL_TIMING_EVENT_LAST];
 #endif
@@ -60,11 +62,22 @@ void jl_print_timings(void)
         root_time -= jl_timing_counts[i];
     }
     jl_timing_counts[0] = root_time;
+    fprintf(stderr, "\nJULIA TIMINGS\n");
     for (int i = 0; i < JL_TIMING_LAST; i++) {
         if (jl_timing_counts[i] != 0)
             fprintf(stderr, "%-25s : %5.2f %%   %" PRIu64 "\n", jl_timing_names[i],
                     100 * (((double)jl_timing_counts[i]) / total_time), jl_timing_counts[i]);
     }
+
+    fprintf(stderr, "\nJULIA COUNTERS\n");
+    uint64_t val = 0;
+#ifdef USE_TIMING_COUNTS
+#define X(name) val = jl_atomic_load_relaxed(&jl_timing_counters[(int)JL_TIMING_COUNTER_##name].basic_counter); \
+    if (val != 0) \
+        fprintf(stderr, "%-25s : %" PRIu64 "\n", #name, val);
+    JL_TIMING_COUNTERS
+#undef X
+#endif
 }
 
 void jl_init_timing(void)
@@ -78,6 +91,10 @@ void jl_init_timing(void)
 #ifdef USE_ITTAPI
 #define X(name) jl_timing_ittapi_events[i++] = __itt_event_create(#name, strlen(#name));
     JL_TIMING_EVENTS
+#undef X
+    i = 0;
+#define X(name) jl_timing_counters[i++].ittapi_counter = __itt_counter_create(#name, "julia.runtime");
+    JL_TIMING_COUNTERS
 #undef X
 #endif
 }
