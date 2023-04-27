@@ -477,7 +477,7 @@ FC := $(CROSS_COMPILE)gfortran
 ifeq ($(OS), Darwin)
 APPLE_ARCH := $(shell uname -m)
 ifneq ($(APPLE_ARCH),arm64)
-MACOSX_VERSION_MIN := 10.10
+MACOSX_VERSION_MIN := 10.14
 else
 MACOSX_VERSION_MIN := 11.0
 endif
