@@ -1,12 +1,16 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# matmul.jl: Everything to do with dense matrix multiplication
+
 # Matrix-matrix multiplication
 
 AdjOrTransStridedMat{T} = Union{Adjoint{<:Any, <:StridedMatrix{T}}, Transpose{<:Any, <:StridedMatrix{T}}}
 StridedMaybeAdjOrTransMat{T} = Union{StridedMatrix{T}, Adjoint{<:Any, <:StridedMatrix{T}}, Transpose{<:Any, <:StridedMatrix{T}}}
 StridedMaybeAdjOrTransVecOrMat{T} = Union{StridedVecOrMat{T}, AdjOrTrans{<:Any, <:StridedVecOrMat{T}}}
 
-# matmul.jl: Everything to do with dense matrix multiplication
+_parent(A) = A
+_parent(A::Adjoint) = parent(A)
+_parent(A::Transpose) = parent(A)
 
 matprod(x, y) = x*y + x*y
 
@@ -62,44 +66,31 @@ end
 (*)(a::AbstractVector, adjB::AdjointAbsMat) = reshape(a, length(a), 1) * adjB
 (*)(a::AbstractVector, B::AbstractMatrix) = reshape(a, length(a), 1) * B
 
-@inline mul!(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T},
-             alpha::Number, beta::Number) where {T<:BlasFloat} =
-    gemv!(y, 'N', A, x, alpha, beta)
-
+@inline mul!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector,
+                alpha::Number, beta::Number) =
+    generic_matvecmul!(y, adj_or_trans_char(A), _parent(A), x, MulAddMul(alpha, beta))
+# BLAS cases
+@inline mul!(y::StridedVector{T}, A::StridedMaybeAdjOrTransVecOrMat{T}, x::StridedVector{T},
+                alpha::Number, beta::Number) where {T<:BlasFloat} =
+    gemv!(y, adj_or_trans_char(A), _parent(A), x, alpha, beta)
+# catch the real adjoint case and rewrap to transpose
+@inline mul!(y::StridedVector{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, x::StridedVector{T},
+                alpha::Number, beta::Number) where {T<:BlasReal} =
+    mul!(y, transpose(adjA.parent), x, alpha, beta)
 # Complex matrix times real vector.
 # Reinterpret the matrix as a real matrix and do real matvec computation.
 @inline mul!(y::StridedVector{Complex{T}}, A::StridedVecOrMat{Complex{T}}, x::StridedVector{T},
         alpha::Number, beta::Number) where {T<:BlasReal} =
     gemv!(y, 'N', A, x, alpha, beta)
-
 # Real matrix times complex vector.
 # Multiply the matrix with the real and imaginary parts separately
 @inline mul!(y::StridedVector{Complex{T}}, A::StridedMaybeAdjOrTransMat{T}, x::StridedVector{Complex{T}},
         alpha::Number, beta::Number) where {T<:BlasReal} =
     gemv!(y, A isa StridedArray ? 'N' : 'T', _parent(A), x, alpha, beta)
 
-@inline mul!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector,
-             alpha::Number, beta::Number) =
-    generic_matvecmul!(y, adj_or_trans_char(A), _parent(A), x, MulAddMul(alpha, beta))
-
-@inline mul!(y::StridedVector{T}, tA::Transpose{T,<:StridedVecOrMat}, x::StridedVector{T},
-                      alpha::Number, beta::Number) where {T<:BlasFloat} =
-    gemv!(y, 'T', tA.parent, x, alpha, beta)
-
-@inline mul!(y::StridedVector{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, x::StridedVector{T},
-                      alpha::Number, beta::Number) where {T<:BlasReal} =
-    mul!(y, transpose(adjA.parent), x, alpha, beta)
-@inline mul!(y::StridedVector{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, x::StridedVector{T},
-                      alpha::Number, beta::Number) where {T<:BlasComplex} =
-    gemv!(y, 'C', adjA.parent, x, alpha, beta)
-
 # Vector-Matrix multiplication
 (*)(x::AdjointAbsVec,   A::AbstractMatrix) = (A'*x')'
 (*)(x::TransposeAbsVec, A::AbstractMatrix) = transpose(transpose(A)*transpose(x))
-
-_parent(A) = A
-_parent(A::Adjoint) = parent(A)
-_parent(A::Transpose) = parent(A)
 
 # Matrix-matrix multiplication
 """
