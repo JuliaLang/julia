@@ -2646,9 +2646,9 @@ module TypeTreesIO
     end
 
     function _print(io::IO, node::TypeTreeNode, thisdepth, maxdepth, isbody::Bool)
-        bold = thisdepth==1 && isbody
-        light = thisdepth==2 && isbody && get(io, :backtrace, false)::Bool
-        if thisdepth == 2 && isbody
+        iscall = thisdepth==1 && isbody
+        isargs = thisdepth==2 && isbody
+        if isargs
             sname = split(node.name, "::")
             if length(sname) == 2
                 Base.print_within_stacktrace(io, sname[1]; color=:light_black)
@@ -2658,11 +2658,14 @@ module TypeTreesIO
                 print(io, node.name)
             end
         else
-            Base.print_within_stacktrace(io, node.name; bold)
+            addparens = iscall && occursin("::", node.name)
+            addparens && print(io, '(')
+            Base.print_within_stacktrace(io, node.name; bold=iscall)
+            addparens && print(io, ')')
         end
         children = node.children
         if children !== nothing
-            if light
+            if isargs && get(io, :backtrace, false)::Bool
                 Base.with_output_color(:light_black, io) do io
                     _print_children(io, children, node.delimidx, thisdepth, maxdepth, isbody)
                 end
