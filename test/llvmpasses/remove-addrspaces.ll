@@ -47,7 +47,7 @@ top:
 %list = type { i64, %list* }
 
 ; COM: There's nothing to remove in this function; but remove-addrspaces shouldn't crash.
-define i64 @sum.linked.list() #0 {
+define i64 @sum.linked.list() {
 ; CHECK-LABEL: @sum.linked.list
 top:
   %a = alloca %list
@@ -109,3 +109,9 @@ define void @byval_type([1 x {} addrspace(10)*] addrspace(11)* byval([1 x {} add
 ; CHECK: define void @byval_type([1 x {}*]* byval([1 x {}*]) %0)
   ret void
 }
+
+
+; COM: check that other function attributes are preserved
+declare void @convergent_function() #0
+attributes #0 = { convergent }
+; CHECK: attributes #0 = { convergent }

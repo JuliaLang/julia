@@ -323,7 +323,7 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
 
         Function *NF = Function::Create(
                 NFTy, F->getLinkage(), F->getAddressSpace(), Name, &M);
-        // no need to copy attributes here, that's done by CloneFunctionInto
+        NF->copyAttributesFrom(F);
         VMap[F] = NF;
     }
 
@@ -385,8 +385,7 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
                 &TypeRemapper,
                 &Materializer);
 
-        // CloneFunctionInto unconditionally copies the attributes from F to NF,
-        // without considering e.g. the byval attribute type.
+        // Update function attributes that contain types
         AttributeList Attrs = F->getAttributes();
         LLVMContext &C = F->getContext();
         for (unsigned i = 0; i < Attrs.getNumAttrSets(); ++i) {
