@@ -868,6 +868,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
     if (jl_base_module == NULL) {
         // nthreads > 1 requires code in Base
         jl_atomic_store_relaxed(&jl_n_threads, 1);
+        jl_n_gcthreads = 0;
     }
     jl_start_threads();
 
