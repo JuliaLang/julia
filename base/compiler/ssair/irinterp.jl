@@ -140,7 +140,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union
         # Handled at the very end
         return false
     elseif isa(inst, PiNode)
-        rt = tmeet(optimizer_lattice(interp), argextype(inst.val, ir), widenconst(inst.typ))
+        rt = tmeet(typeinf_lattice(interp), argextype(inst.val, ir), widenconst(inst.typ))
     elseif inst === nothing
         return false
     elseif isa(inst, GlobalRef)
@@ -148,7 +148,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union
     else
         error("reprocess_instruction!: unhandled instruction found")
     end
-    if rt !== nothing && !⊑(optimizer_lattice(interp), typ, rt)
+    if rt !== nothing && !⊑(typeinf_lattice(interp), typ, rt)
         ir.stmts[idx][:type] = rt
         return true
     end
@@ -316,7 +316,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
             end
             inst = ir.stmts[idx][:inst]::ReturnNode
             rt = argextype(inst.val, ir)
-            ultimate_rt = tmerge(optimizer_lattice(interp), ultimate_rt, rt)
+            ultimate_rt = tmerge(typeinf_lattice(interp), ultimate_rt, rt)
         end
     end
 
