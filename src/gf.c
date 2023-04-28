@@ -2828,7 +2828,7 @@ jl_value_t *jl_argtype_with_function_type(jl_value_t *ft JL_MAYBE_UNROOTED, jl_v
     JL_GC_PUSH2(&tt, &ft);
     tt = (jl_value_t*)jl_alloc_svec(1+l);
     jl_svecset(tt, 0, ft);
-    for(size_t i=0; i < l; i++)
+    for (size_t i = 0; i < l; i++)
         jl_svecset(tt, i+1, jl_tparam(types,i));
     tt = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)tt);
     tt = jl_rewrap_unionall_(tt, types0);

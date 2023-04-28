@@ -462,7 +462,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
         is_recompile = jl_atomic_load_relaxed(&mi->cache) != NULL;
     }
     if (src == NULL && jl_is_method(mi->def.method) &&
-             jl_symbol_name(mi->def.method->name)[0] != '@' ) {
+             jl_symbol_name(mi->def.method->name)[0] != '@') {
         if (mi->def.method->source != jl_nothing) {
             // If the caller didn't provide the source and IR is available,
             // see if it is inferred, or try to infer it for ourself.

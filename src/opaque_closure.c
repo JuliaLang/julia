@@ -60,7 +60,7 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
         invoke = (jl_fptr_args_t)jl_atomic_load_relaxed(&ci->invoke);
         specptr = jl_atomic_load_relaxed(&ci->specptr.fptr);
         if (invoke == (jl_fptr_args_t) jl_fptr_interpret_call) {
-            invoke =(jl_fptr_args_t) jl_interpret_opaque_closure;
+            invoke = (jl_fptr_args_t)jl_interpret_opaque_closure;
         }
         else if (invoke == (jl_fptr_args_t)jl_fptr_args) {
             invoke = (jl_fptr_args_t)specptr;
@@ -76,7 +76,8 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
             // wrapper, but lets leave that for later.
             specptr = NULL;
             selected_rt = jl_type_intersection(rt_lb, ci->rettype);
-        } else {
+        }
+        else {
             selected_rt = ci->rettype;
         }
     }
