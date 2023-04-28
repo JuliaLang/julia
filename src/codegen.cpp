@@ -4476,7 +4476,7 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
     if (jl_is_concrete_type(f.typ) && jl_subtype(f.typ, (jl_value_t*)jl_opaque_closure_type)) {
         jl_value_t *oc_argt = jl_tparam0(f.typ);
         jl_value_t *oc_rett = jl_tparam1(f.typ);
-        if (jl_tupletype_length_compat(oc_argt, nargs-1)) {
+        if (jl_is_datatype(oc_argt) && jl_tupletype_length_compat(oc_argt, nargs-1)) {
             jl_svec_t *types = jl_get_fieldtypes((jl_datatype_t*)oc_argt);
             size_t ntypes = jl_svec_len(types);
             for (size_t i = 0; i < nargs-1; ++i) {
@@ -4495,7 +4495,8 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
             Value *argaddr = NULL;
             if (theArg.ispointer()) {
                 argaddr = emit_bitcast(ctx, data_pointer(ctx, theArg), pint8);
-            } else {
+            }
+            else {
                 Type *to = julia_type_to_llvm(ctx, f.typ);
                 argaddr = emit_static_alloca(ctx, to);
                 jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, theArg.tbaa);
@@ -5796,10 +5797,12 @@ static void emit_cfunc_invalidate(
         Type *et;
         if (i == 0 && is_for_opaque_closure) {
             et = PointerType::get(ctx.types().T_jlvalue, AddressSpace::Derived);
-        } else if (deserves_argbox(jt)) {
+        }
+        else if (deserves_argbox(jt)) {
             et = ctx.types().T_prjlvalue;
             isboxed = true;
-        } else {
+        }
+        else {
             et = julia_type_to_llvm(ctx, jt);
         }
         if (is_uniquerep_Type(jt)) {
@@ -6892,7 +6895,8 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
         if (i == 0 && is_opaque_closure) {
             ty = PointerType::get(ctx.types().T_jlvalue, AddressSpace::Derived);
             isboxed = true; // true-ish anyway - we might not have the type tag
-        } else {
+        }
+        else {
             if (is_uniquerep_Type(jt))
                 continue;
             isboxed = deserves_argbox(jt);
@@ -6942,7 +6946,8 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
             assert(f->getFunctionType() == ftype);
         }
         fval = f;
-    } else {
+    }
+    else {
         if (fval->getType()->isIntegerTy())
             fval = emit_inttoptr(ctx, fval, ftype->getPointerTo());
         else
@@ -7592,7 +7597,8 @@ static jl_llvm_functions_t
             isboxed = true;
             llvmArgType = PointerType::get(ctx.types().T_jlvalue, AddressSpace::Derived);
             argType = (jl_value_t*)jl_any_type;
-        } else {
+        }
+        else {
             llvmArgType = isboxed ? ctx.types().T_prjlvalue : julia_type_to_llvm(ctx, argType);
         }
         if (s == jl_unused_sym) {
@@ -7630,7 +7636,8 @@ static jl_llvm_functions_t
                 jl_cgval_t closure_env = typed_load(ctx, envaddr, NULL, (jl_value_t*)jl_any_type,
                     nullptr, nullptr, true, AtomicOrdering::NotAtomic, false, sizeof(void*));
                 theArg = convert_julia_type(ctx, closure_env, vi.value.typ);
-            } else if (specsig) {
+            }
+            else if (specsig) {
                 theArg = get_specsig_arg(argType, llvmArgType, isboxed);
             }
             else {
