@@ -371,6 +371,42 @@ Call `calloc` from the C standard library.
 """
 calloc(num::Integer, size::Integer) = ccall(:calloc, Ptr{Cvoid}, (Csize_t, Csize_t), num, size)
 
+"""
+    memcpy(dst::Ptr, src::Ptr, n::Integer) -> Ptr{Cvoid}
+
+Call `memcpy` from the C standard library.
+"""
+function memcpy(dst::Ptr, src::Ptr, n::Integer)
+    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), dst, src, n)
+end
+
+"""
+    memmove(dst::Ptr, src::Ptr, n::Integer) -> Ptr{Cvoid}
+
+Call `memmove` from the C standard library.
+"""
+function memmove(dst::Ptr, src::Ptr, n::Integer)
+    ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), dst, src, n)
+end
+
+"""
+    memset(dst::Ptr, val, n::Integer) -> Ptr{Cvoid}
+
+Call `memset` from the C standard library.
+"""
+function memset(p::Ptr, val, n::Integer)
+    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), p, val, n)
+end
+
+"""
+    memcmp(a::Ptr, b::Ptr, n::Integer) -> Int
+
+Call `memcmp` from the C standard library.
+"""
+function memcmp(a::Ptr, b::Ptr, n::Integer)
+    ccall(:memcmp, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), a, b, n % Csize_t) % Int
+end
+
 free(p::Cstring) = free(convert(Ptr{UInt8}, p))
 free(p::Cwstring) = free(convert(Ptr{Cwchar_t}, p))
 
