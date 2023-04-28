@@ -91,7 +91,7 @@ function scrub_backtrace(bt, file_ts, file_t)
         bt = bt[do_test_ind + 1:end]
     end
     stop_at = test_location(bt, file_ts, file_t)
-    !isempty(bt) && return bt[1:stop_at]
+    !isnothing(stop_at) && !isempty(bt) && return bt[1:stop_at]
     return bt
 end
 
