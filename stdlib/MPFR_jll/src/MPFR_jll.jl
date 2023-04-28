@@ -13,9 +13,9 @@ export libmpfr
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libmpfr_handle = C_NULL
-libmpfr_path = ""
+artifact_dir::String = ""
+libmpfr_handle::Ptr{Cvoid} = C_NULL
+libmpfr_path::String = ""
 
 if Sys.iswindows()
     const libmpfr = "libmpfr-6.dll"

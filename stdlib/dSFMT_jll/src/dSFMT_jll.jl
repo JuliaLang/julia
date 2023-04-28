@@ -14,9 +14,9 @@ export libdSFMT
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libdSFMT_handle = C_NULL
-libdSFMT_path = ""
+artifact_dir::String = ""
+libdSFMT_handle::Ptr{Cvoid} = C_NULL
+libdSFMT_path::String = ""
 
 if Sys.iswindows()
     const libdSFMT = "libdSFMT.dll"

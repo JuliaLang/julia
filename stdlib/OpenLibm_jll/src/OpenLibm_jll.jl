@@ -13,9 +13,9 @@ export libopenlibm
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libopenlibm_handle = C_NULL
-libopenlibm_path = ""
+artifact_dir::String = ""
+libopenlibm_handle::Ptr{Cvoid} = C_NULL
+libopenlibm_path::String = ""
 
 if Sys.iswindows()
     const libopenlibm = "libopenlibm.dll"
