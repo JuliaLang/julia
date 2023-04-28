@@ -16,8 +16,6 @@ struct Cmd <: AbstractCmd
     cpus::Union{Nothing,Vector{UInt16}}
     Cmd(exec::Vector{String}) =
         new(exec, false, 0x00, nothing, "", nothing)
-    Cmd(exec::Vector{<:AbstractString}) =
-        new(string.(exec), false, 0x00, nothing, "", nothing)
     Cmd(cmd::Cmd, ignorestatus, flags, env, dir, cpus = nothing) =
         new(cmd.exec, ignorestatus, flags, env,
             dir === cmd.dir ? dir : cstr(dir), cpus)
@@ -33,6 +31,7 @@ struct Cmd <: AbstractCmd
             dir === cmd.dir ? dir : cstr(dir), cpus)
     end
 end
+Cmd(exec::Vector{<:AbstractString}) = Cmd(string.(exec))
 
 has_nondefault_cmd_flags(c::Cmd) =
     c.ignorestatus ||
