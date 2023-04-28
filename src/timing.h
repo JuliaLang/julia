@@ -312,6 +312,7 @@ STATIC_INLINE void _jl_timing_block_ctor(jl_timing_block_t *block, int enabled, 
     if (jl_timing_enabled(owner)) {
         _ITTAPI_CTOR(block, event);
         _ITTAPI_START(block);
+        block->enabled |= 0b10;
     }
     uint64_t t = cycleclock(); (void)t;
     _COUNTS_CTOR(&block->counts_ctx);
@@ -330,7 +331,7 @@ STATIC_INLINE void _jl_timing_block_destroy(jl_timing_block_t *block) JL_NOTSAFE
     _TRACY_DESTROY(block->tracy_ctx);
     if (!block->enabled) return;
     uint64_t t = cycleclock(); (void)t;
-    if (jl_timing_enabled(block->owner)) {
+    if (block->enabled & 0b10) {
         _ITTAPI_STOP(block);
     }
     _COUNTS_STOP(&block->counts_ctx, t);
