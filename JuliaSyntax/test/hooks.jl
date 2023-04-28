@@ -10,10 +10,23 @@
         @test JuliaSyntax._core_parser_hook(" x \n", "somefile", 1, 0, :atom)      == Core.svec(:x,2)
     end
 
-    @testset "filename is used" begin
+    @testset "filename and lineno" begin
         ex = JuliaSyntax._core_parser_hook("@a", "somefile", 1, 0, :statement)[1]
         @test Meta.isexpr(ex, :macrocall)
         @test ex.args[2] == LineNumberNode(1, "somefile")
+
+        ex = JuliaSyntax._core_parser_hook("@a", "otherfile", 2, 0, :statement)[1]
+        @test ex.args[2] == LineNumberNode(2, "otherfile")
+
+        # Errors also propagate file & lineno
+        err = JuliaSyntax._core_parser_hook("[x)", "f1", 1, 0, :statement)[1].args[1]
+        @test err isa JuliaSyntax.ParseError
+        @test err.source.filename == "f1"
+        @test err.source.first_line == 1
+        err = JuliaSyntax._core_parser_hook("[x)", "f2", 2, 0, :statement)[1].args[1]
+        @test err isa JuliaSyntax.ParseError
+        @test err.source.filename == "f2"
+        @test err.source.first_line == 2
     end
 
     @testset "enable_in_core!" begin

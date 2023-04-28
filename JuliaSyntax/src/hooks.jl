@@ -162,7 +162,8 @@ function _core_parser_hook(code, filename::String, lineno::Int, offset::Int, opt
         end
 
         if any_error(stream)
-            tree = build_tree(SyntaxNode, stream, wrap_toplevel_as_kind=K"None")
+            tree = build_tree(SyntaxNode, stream,
+                              wrap_toplevel_as_kind=K"None", first_line=lineno)
             _,err = _first_error(tree)
             # In the flisp parser errors are normally `Expr(:error, msg)` where
             # `msg` is a String. By using a ParseError for msg we can do fancy
@@ -179,7 +180,7 @@ function _core_parser_hook(code, filename::String, lineno::Int, offset::Int, opt
                                        "incomplete: premature end of input"
                 error_ex = Expr(:incomplete, msg)
             else
-                error_ex = Expr(:error, ParseError(stream, filename=filename))
+                error_ex = Expr(:error, ParseError(stream, filename=filename, first_line=lineno))
             end
             ex = options === :all ? Expr(:toplevel, error_ex) : error_ex
         else
@@ -190,8 +191,8 @@ function _core_parser_hook(code, filename::String, lineno::Int, offset::Int, opt
             #
             # show_diagnostics(stdout, stream.diagnostics, code)
             #
-            # FIXME: Add support to lineno to this tree build (via SourceFile?)
-            ex = build_tree(Expr, stream; filename=filename, wrap_toplevel_as_kind=K"None")
+            ex = build_tree(Expr, stream; filename=filename,
+                            wrap_toplevel_as_kind=K"None", first_line=lineno)
             if Meta.isexpr(ex, :None)
                 # The None wrapping is only to give somewhere for trivia to be
                 # attached; unwrap!

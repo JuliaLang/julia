@@ -22,7 +22,6 @@ function SourceFile(code::AbstractString; filename=nothing, first_line=1)
     line_starts = Int[1]
     for i in eachindex(code)
         # The line is considered to start after the `\n`
-        # FIXME: \r and \n\r
         code[i] == '\n' && push!(line_starts, i+1)
     end
     if isempty(code) || last(code) != '\n'
