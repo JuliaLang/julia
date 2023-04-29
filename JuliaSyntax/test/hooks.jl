@@ -54,7 +54,6 @@
         @test Meta.isexpr(Meta.parse("[x"), :incomplete)
 
         for (str, tag) in [
-                ""             => :none
                 "\""           => :string
                 "\"\$foo"      => :string
                 "#="           => :comment
@@ -101,6 +100,12 @@
                 "1, "          => :other
                 "1,\n"         => :other
                 "1, \n"        => :other
+
+                # Syntax which may be an error but is not incomplete
+                ""             => :none
+                ")"            => :none
+                "1))"          => :none
+                "a b"          => :none
             ]
             @testset "$(repr(str))" begin
                 @test Base.incomplete_tag(Meta.parse(str, raise=false)) == tag
