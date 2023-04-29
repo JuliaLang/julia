@@ -17,11 +17,15 @@ Language changes
 
 Compiler/Runtime improvements
 -----------------------------
+
 * The `@pure` macro is now deprecated. Use `Base.@assume_effects :foldable` instead ([#48682]).
+* The mark phase of the Garbage Collector is now multi-threaded ([#48600]).
 
 Command-line option changes
 ---------------------------
 
+* New option `--gcthreads` to set how many threads will be used by the Garbage Collector ([#48600]).
+  The default is set to `N/2` where `N` is the amount of worker threads (`--threads`) used by Julia.
 
 Multi-threading changes
 -----------------------
