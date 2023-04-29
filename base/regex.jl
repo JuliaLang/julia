@@ -212,9 +212,9 @@ julia> hr
 "11"
 ```
 """
-struct RegexMatch <: AbstractMatch
-    match::SubString{String}
-    captures::Vector{Union{Nothing,SubString{String}}}
+struct RegexMatch{S<:AbstractString} <: AbstractMatch
+    match::SubString{S}
+    captures::Vector{Union{Nothing,SubString{S}}}
     offset::Int
     offsets::Vector{Int}
     regex::Regex
@@ -418,7 +418,7 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer,
                                         SubString(str, unsafe_load(p,2i+1)+1,
                                                   prevind(str, unsafe_load(p,2i+2)+1)) for i=1:n]
     off = Int[ unsafe_load(p,2i+1)+1 for i=1:n ]
-    result = RegexMatch(mat, cap, unsafe_load(p,1)+1, off, re)
+    result = RegexMatch{String}(mat, cap, unsafe_load(p,1)+1, off, re)
     PCRE.free_match_data(data)
     return result
 end
