@@ -8,6 +8,11 @@ jl_value_t *jl_fptr_const_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **a
     return oc->captures;
 }
 
+jl_value_t *jl_fptr_const_opaque_closure_typeerror(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
+{
+    jl_type_error("OpaqueClosure", jl_tparam1(jl_typeof(oc)), oc->captures);
+}
+
 // determine whether `argt` is a valid argument type tuple for the given opaque closure method
 JL_DLLEXPORT int jl_is_valid_oc_argtype(jl_tupletype_t *argt, jl_method_t *source)
 {
@@ -59,28 +64,36 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
     if (ci) {
         invoke = (jl_fptr_args_t)jl_atomic_load_relaxed(&ci->invoke);
         specptr = jl_atomic_load_relaxed(&ci->specptr.fptr);
-        if (invoke == (jl_fptr_args_t) jl_fptr_interpret_call) {
-            invoke = (jl_fptr_args_t)jl_interpret_opaque_closure;
-        }
-        else if (invoke == (jl_fptr_args_t)jl_fptr_args) {
-            invoke = (jl_fptr_args_t)specptr;
-        }
-        else if (invoke == (jl_fptr_args_t)jl_fptr_const_return) {
-            invoke = (jl_fptr_args_t)jl_fptr_const_opaque_closure;
-            captures = ci->rettype_const;
-        }
 
         selected_rt = ci->rettype;
         // If we're not allowed to generate a specsig with this, rt, fall
         // back to the invoke wrapper. We could instead generate a specsig->specsig
         // wrapper, but lets leave that for later.
         if (!jl_subtype(rt_lb, selected_rt)) {
-            specptr = NULL;
+            // TODO: It would be better to try to get a specialization with the
+            // correct rt check here (or we could codegen a wrapper).
+            specptr = NULL; invoke = (jl_fptr_args_t)jl_interpret_opaque_closure;
             jl_value_t *ts[2] = {rt_lb, (jl_value_t*)ci->rettype};
             selected_rt = jl_type_union(ts, 2);
         }
         if (!jl_subtype(ci->rettype, rt_ub)) {
+            // TODO: It would be better to try to get a specialization with the
+            // correct rt check here (or we could codegen a wrapper).
+            specptr = NULL; invoke = (jl_fptr_args_t)jl_interpret_opaque_closure;
             selected_rt = jl_type_intersection(rt_ub, selected_rt);
+        }
+
+        if (invoke == (jl_fptr_args_t) jl_fptr_interpret_call) {
+            invoke = (jl_fptr_args_t)jl_interpret_opaque_closure;
+        }
+        else if (invoke == (jl_fptr_args_t)jl_fptr_args && specptr) {
+            invoke = (jl_fptr_args_t)specptr;
+        }
+        else if (invoke == (jl_fptr_args_t)jl_fptr_const_return) {
+            invoke = jl_isa(ci->rettype_const, selected_rt) ?
+                (jl_fptr_args_t)jl_fptr_const_opaque_closure :
+                (jl_fptr_args_t)jl_fptr_const_opaque_closure_typeerror;
+            captures = ci->rettype_const;
         }
     }
 
