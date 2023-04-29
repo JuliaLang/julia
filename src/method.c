@@ -18,6 +18,7 @@ extern "C" {
 extern jl_value_t *jl_builtin_getfield;
 extern jl_value_t *jl_builtin_tuple;
 jl_methtable_t *jl_kwcall_mt;
+jl_method_t *jl_opaque_closure_method;
 
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
     int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva);

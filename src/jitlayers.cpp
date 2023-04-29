@@ -506,14 +506,14 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
 }
 
 extern "C" JL_DLLEXPORT
-void jl_generate_fptr_for_oc_wrapper_impl(jl_code_instance_t *unspec)
+void jl_generate_fptr_for_oc_wrapper_impl(jl_code_instance_t *oc_wrap)
 {
-    if (jl_atomic_load_relaxed(&unspec->invoke) != NULL) {
+    if (jl_atomic_load_relaxed(&oc_wrap->invoke) != NULL) {
         return;
     }
     JL_LOCK(&jl_codegen_lock);
-    if (jl_atomic_load_relaxed(&unspec->invoke) == NULL) {
-        _jl_compile_codeinst(unspec, NULL, 1, *jl_ExecutionEngine->getContext());
+    if (jl_atomic_load_relaxed(&oc_wrap->invoke) == NULL) {
+        _jl_compile_codeinst(oc_wrap, NULL, 1, *jl_ExecutionEngine->getContext(), 0);
     }
     JL_UNLOCK(&jl_codegen_lock); // Might GC
 }

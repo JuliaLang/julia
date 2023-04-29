@@ -70,15 +70,17 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
             captures = ci->rettype_const;
         }
 
-        if (!jl_subtype(rt_lb, ci->rettype)) {
-            // If we're not allowed to generate a specsig with this, rt, fall
-            // back to the invoke wrapper. We could instead generate a specsig->specsig
-            // wrapper, but lets leave that for later.
+        selected_rt = ci->rettype;
+        // If we're not allowed to generate a specsig with this, rt, fall
+        // back to the invoke wrapper. We could instead generate a specsig->specsig
+        // wrapper, but lets leave that for later.
+        if (!jl_subtype(rt_lb, selected_rt)) {
             specptr = NULL;
-            selected_rt = jl_type_intersection(rt_lb, ci->rettype);
+            jl_value_t *ts[2] = {rt_lb, (jl_value_t*)ci->rettype};
+            selected_rt = jl_type_union(ts, 2);
         }
-        else {
-            selected_rt = ci->rettype;
+        if (!jl_subtype(ci->rettype, rt_ub)) {
+            selected_rt = jl_type_intersection(rt_ub, selected_rt);
         }
     }
 
@@ -86,11 +88,8 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
     JL_GC_PROMISE_ROOTED(oc_type);
 
     if (!specptr) {
-        // Generate a specsig wrapper that just calls ->invoke
-        jl_method_t *generic_method = (jl_method_t*)jl_methtable_lookup(jl_opaque_closure_typename->mt, (jl_value_t*)jl_anytuple_type, world);
-
         sigtype = jl_argtype_with_function_type((jl_value_t*)oc_type, (jl_value_t*)argt);
-        jl_method_instance_t *mi_generic = jl_specializations_get_linfo(generic_method, sigtype, jl_emptysvec);
+        jl_method_instance_t *mi_generic = jl_specializations_get_linfo(jl_opaque_closure_method, sigtype, jl_emptysvec);
 
         // OC wrapper methods are not world dependent
         ci = jl_get_method_inferred(mi_generic, selected_rt, 1, ~(size_t)0);
@@ -160,6 +159,25 @@ JL_CALLABLE(jl_new_opaque_closure_jlcall)
         jl_error("new_opaque_closure: Not enough arguments");
     return (jl_value_t*)jl_new_opaque_closure((jl_tupletype_t*)args[0],
         args[1], args[2], args[3], &args[4], nargs-4, 1);
+}
+
+// check whether the specified number of arguments is compatible with the
+// specified number of parameters of the tuple type
+int jl_tupletype_length_compat(jl_value_t *v, size_t nargs)
+{
+    v = jl_unwrap_unionall(v);
+    assert(jl_is_tuple_type(v));
+    size_t nparams = jl_nparams(v);
+    if (nparams == 0)
+        return nargs == 0;
+    jl_value_t *va = jl_tparam(v,nparams-1);
+    if (jl_is_vararg(va)) {
+        jl_value_t *len = jl_unwrap_vararg_num(va);
+        if (len &&jl_is_long(len))
+            return nargs == nparams - 1 + jl_unbox_long(len);
+        return nargs >= nparams - 1;
+    }
+    return nparams == nargs;
 }
 
 JL_CALLABLE(jl_f_opaque_closure_call)

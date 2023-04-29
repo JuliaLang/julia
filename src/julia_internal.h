@@ -307,6 +307,7 @@ static inline void memmove_refs(void **dstp, void *const *srcp, size_t n) JL_NOT
 extern jl_methtable_t *jl_type_type_mt JL_GLOBALLY_ROOTED;
 extern jl_methtable_t *jl_nonfunction_mt JL_GLOBALLY_ROOTED;
 extern jl_methtable_t *jl_kwcall_mt JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_method_t *jl_opaque_closure_method JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT _Atomic(size_t) jl_world_counter;
 
 typedef void (*tracer_cb)(jl_value_t *tracee);
@@ -1481,22 +1482,7 @@ JL_DLLEXPORT jl_value_t *jl_svec_ref(jl_svec_t *t JL_PROPAGATES_ROOT, ssize_t i)
 
 // check whether the specified number of arguments is compatible with the
 // specified number of parameters of the tuple type
-STATIC_INLINE int jl_tupletype_length_compat(jl_value_t *v, size_t nargs) JL_NOTSAFEPOINT
-{
-    v = jl_unwrap_unionall(v);
-    assert(jl_is_tuple_type(v));
-    size_t nparams = jl_nparams(v);
-    if (nparams == 0)
-        return nargs == 0;
-    jl_value_t *va = jl_tparam(v,nparams-1);
-    if (jl_is_vararg(va)) {
-        jl_value_t *len = jl_unwrap_vararg_num(va);
-        if (len &&jl_is_long(len))
-            return nargs == nparams - 1 + jl_unbox_long(len);
-        return nargs >= nparams - 1;
-    }
-    return nparams == nargs;
-}
+JL_DLLEXPORT int jl_tupletype_length_compat(jl_value_t *v, size_t nargs) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT jl_value_t *jl_argtype_with_function(jl_value_t *f, jl_value_t *types0);
 JL_DLLEXPORT jl_value_t *jl_argtype_with_function_type(jl_value_t *ft JL_MAYBE_UNROOTED, jl_value_t *types0);

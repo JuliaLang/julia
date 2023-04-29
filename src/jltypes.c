@@ -3182,6 +3182,8 @@ void jl_init_types(void) JL_GC_DISABLED
 
     tv = jl_svec2(tvar("A"), tvar("R"));
     jl_opaque_closure_type = (jl_unionall_t*)jl_new_datatype(jl_symbol("OpaqueClosure"), core, jl_function_type, tv,
+        // N.B.: OpaqueClosure call code relies on specptr being field 5.
+        // Update that code if you change this.
         jl_perm_symsvec(5, "captures", "world", "source", "invoke", "specptr"),
         jl_svec(5, jl_any_type, jl_long_type, jl_any_type, pointer_void, pointer_void),
         jl_emptysvec, 0, 0, 5)->name->wrapper;
