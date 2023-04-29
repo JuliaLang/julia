@@ -5,6 +5,7 @@ module XoshiroSimd
 import ..Random: TaskLocalRNG, rand, rand!, Xoshiro, CloseOpen01, UnsafeView,
                  SamplerType, SamplerTrivial
 using Base: BitInteger_types
+using Base.Libc
 using Core.Intrinsics: llvmcall
 
 # Vector-width. Influences random stream.
@@ -180,7 +181,7 @@ end
         s3 = _rotl45(s3)
         ref = Ref(f(res, T))
         # TODO: This may make the random-stream dependent on system endianness
-        memcpy(dst+i, ref, len-i)
+        memcpy(dst+i, pointer_from_objref(ref), len-i)
     end
     if rng isa TaskLocalRNG
         task.rngState0, task.rngState1, task.rngState2, task.rngState3 = s0, s1, s2, s3
