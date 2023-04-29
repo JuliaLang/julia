@@ -220,6 +220,10 @@ struct RegexMatch{S<:AbstractString} <: AbstractMatch
     regex::Regex
 end
 
+RegexMatch(match::SubString{S}, captures::Vector{Union{Nothing,SubString{S}}},
+           offset::Union{Int, UInt}, offsets::Vector{Int}, regex::Regex) where {S<:AbstractString} =
+    RegexMatch{S}(match, captures, offset, offsets, regex)
+
 """
     keys(m::RegexMatch) -> Vector
 
@@ -418,9 +422,35 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer,
                                         SubString(str, unsafe_load(p,2i+1)+1,
                                                   prevind(str, unsafe_load(p,2i+2)+1)) for i=1:n]
     off = Int[ unsafe_load(p,2i+1)+1 for i=1:n ]
-    result = RegexMatch{String}(mat, cap, unsafe_load(p,1)+1, off, re)
+    result = RegexMatch(mat, cap, unsafe_load(p,1)+1, off, re)
     PCRE.free_match_data(data)
     return result
+end
+
+function _styledmatch(m::RegexMatch{S}, str::StyledString{S}) where {S<:AbstractString}
+    RegexMatch{StyledString{S}}(
+        (@inbounds SubString{StyledString{S}}(
+            str, m.match.offset, m.match.ncodeunits, Val(:noshift))),
+        Union{Nothing,SubString{StyledString{S}}}[
+            if !isnothing(cap)
+                (@inbounds SubString{StyledString{S}}(
+                    str, cap.offset, cap.ncodeunits, Val(:noshift)))
+            end for cap in m.captures],
+        m.offset, m.offsets, m.regex)
+end
+
+function match(re::Regex, str::StyledString)
+    m = match(re, str.string)
+    if !isnothing(m)
+        _styledmatch(m, str)
+    end
+end
+
+function match(re::Regex, str::StyledString, idx::Integer, add_opts::UInt32=UInt32(0))
+    m = match(re, str.string, idx, add_opts)
+    if !isnothing(m)
+        _styledmatch(m, str)
+    end
 end
 
 match(r::Regex, s::AbstractString) = match(r, s, firstindex(s))
@@ -671,18 +701,19 @@ function _replace(io, repl_s::SubstitutionString, str, r, re)
     end
 end
 
-struct RegexMatchIterator
+struct RegexMatchIterator{S <: AbstractString}
     regex::Regex
-    string::String
+    string::S
     overlap::Bool
 
-    function RegexMatchIterator(regex::Regex, string::AbstractString, ovr::Bool=false)
-        new(regex, string, ovr)
-    end
+    RegexMatchIterator(regex::Regex, string::AbstractString, ovr::Bool=false) =
+        new{String}(regex, String(string), ovr)
+    RegexMatchIterator(regex::Regex, string::StyledString, ovr::Bool=false) =
+        new{StyledString{String}}(regex, StyledString(String(string.string), string.properties), ovr)
 end
 compile(itr::RegexMatchIterator) = (compile(itr.regex); itr)
-eltype(::Type{RegexMatchIterator}) = RegexMatch
-IteratorSize(::Type{RegexMatchIterator}) = SizeUnknown()
+eltype(::Type{<:RegexMatchIterator}) = RegexMatch
+IteratorSize(::Type{<:RegexMatchIterator}) = SizeUnknown()
 
 function iterate(itr::RegexMatchIterator, (offset,prevempty)=(1,false))
     opts_nonempty = UInt32(PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART)
@@ -727,7 +758,7 @@ julia> rx = r"a.a"
 r"a.a"
 
 julia> m = eachmatch(rx, "a1a2a3a")
-Base.RegexMatchIterator(r"a.a", "a1a2a3a", false)
+Base.RegexMatchIterator{String}(r"a.a", "a1a2a3a", false)
 
 julia> collect(m)
 2-element Vector{RegexMatch}:

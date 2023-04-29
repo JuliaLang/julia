@@ -241,9 +241,10 @@ end
 """
     *(s::Union{AbstractString, AbstractChar}, t::Union{AbstractString, AbstractChar}...) -> AbstractString
 
-Concatenate strings and/or characters, producing a [`String`](@ref). This is equivalent
-to calling the [`string`](@ref) function on the arguments. Concatenation of built-in
-string types always produces a value of type `String` but other string types may choose
+Concatenate strings and/or characters, producing a [`String`](@ref) or
+[`StyledString`](@ref) (as appropriate). This is equivalent to calling the
+[`string`](@ref) or [`styledstring`](@ref) function on the arguments. Concatenation of built-in string
+types always produces a value of type `String` but other string types may choose
 to return a string of a different type as appropriate.
 
 # Examples
@@ -255,7 +256,15 @@ julia> 'j' * "ulia"
 "julia"
 ```
 """
-(*)(s1::Union{AbstractChar, AbstractString}, ss::Union{AbstractChar, AbstractString}...) = string(s1, ss...)
+function (*)(s1::Union{AbstractChar, AbstractString}, ss::Union{AbstractChar, AbstractString}...)
+    isstyled = s1 isa StyledString || s1 isa StyledChar ||
+        any(s -> s isa StyledString || s isa StyledChar, ss)
+    if isstyled
+        styledstring(s1, ss...)
+    else
+        string(s1, ss...)
+    end
+end
 
 one(::Union{T,Type{T}}) where {T<:AbstractString} = convert(T, "")
 
@@ -309,7 +318,8 @@ end
     ==(a::AbstractString, b::AbstractString) -> Bool
 
 Test whether two strings are equal character by character (technically, Unicode
-code point by code point).
+code point by code point). Should either string be a [`StyledString`](@ref) the
+string properties must match too.
 
 # Examples
 ```jldoctest

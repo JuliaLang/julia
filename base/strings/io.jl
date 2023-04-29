@@ -764,3 +764,26 @@ function String(chars::AbstractVector{<:AbstractChar})
         end
     end
 end
+
+function StyledString(chars::AbstractVector{C}) where {C<:AbstractChar}
+    str = if C <: StyledChar
+        String(getfield.(chars, :char))
+    else
+        sprint(sizehint=length(chars)) do io
+            for c in chars
+                print(io, c)
+            end
+        end
+    end
+    props = Tuple{UnitRange{Int}, Pair{Symbol, Any}}[]
+    point = 1
+    for c in chars
+        if c isa StyledChar
+            for prop in c.properties
+                push!(props, (point:point, prop))
+            end
+        end
+        point += ncodeunits(c)
+    end
+    StyledString(str, props)
+end

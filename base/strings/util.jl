@@ -458,13 +458,15 @@ function lpad(
     s::Union{AbstractChar,AbstractString},
     n::Integer,
     p::Union{AbstractChar,AbstractString}=' ',
-) :: String
+)
+    stringfn = if any(isa.((s, p), Union{StyledString, StyledChar, SubString{<:StyledString}}))
+        styledstring else string end
     n = Int(n)::Int
     m = signed(n) - Int(textwidth(s))::Int
-    m ≤ 0 && return string(s)
+    m ≤ 0 && return stringfn(s)
     l = textwidth(p)
     q, r = divrem(m, l)
-    r == 0 ? string(p^q, s) : string(p^q, first(p, r), s)
+    r == 0 ? stringfn(p^q, s) : stringfn(p^q, first(p, r), s)
 end
 
 """
@@ -488,13 +490,15 @@ function rpad(
     s::Union{AbstractChar,AbstractString},
     n::Integer,
     p::Union{AbstractChar,AbstractString}=' ',
-) :: String
+)
+    stringfn = if any(isa.((s, p), Union{StyledString, StyledChar, SubString{<:StyledString}}))
+        styledstring else string end
     n = Int(n)::Int
     m = signed(n) - Int(textwidth(s))::Int
-    m ≤ 0 && return string(s)
+    m ≤ 0 && return stringfn(s)
     l = textwidth(p)
     q, r = divrem(m, l)
-    r == 0 ? string(s, p^q) : string(s, p^q, first(p, r))
+    r == 0 ? stringfn(s, p^q) : stringfn(s, p^q, first(p, r))
 end
 
 """
