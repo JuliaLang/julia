@@ -129,12 +129,15 @@ julia> example()
 ```
 
 You may notice that in the example above the first stack frame points at line 4, where
-[`stacktrace`](@ref) is called, rather than line 2, where *bad_function* is called, and `bad_function`'s
+[`stacktrace`](@ref) is called, rather than line 2, where _bad_function_ is called, and `bad_function`'s
 frame is missing entirely. This is understandable, given that [`stacktrace`](@ref) is called
-from the context of the *catch*. While in this example it's fairly easy to find the actual source
+from the context of the _catch_. While in this example it's fairly easy to find the actual source
 of the error, in complex cases tracking down the source of the error becomes nontrivial.
 
 This can be remedied by passing the result of [`catch_backtrace`](@ref) to [`stacktrace`](@ref).
+`catch_backtrace` is a function that allows you to catch an exception and inspect its backtrace, which is a record of the function calls that led up to the point where the exception was thrown.
+The `catch_backtrace` function takes two arguments: an exception type, and a function to execute. If an exception of the specified type is thrown within the function, `catch_backtrace` will catch it and return a `CatchBacktrace` object that contains the backtrace information.
+
 Instead of returning callstack information for the current context, [`catch_backtrace`](@ref)
 returns stack information for the context of the most recent exception:
 
@@ -188,11 +191,11 @@ ERROR: Whoops!
 ## Exception stacks and [`current_exceptions`](@ref)
 
 !!! compat "Julia 1.1"
-    Exception stacks requires at least Julia 1.1.
+Exception stacks requires at least Julia 1.1.
 
 While handling an exception further exceptions may be thrown. It can be useful to inspect all these exceptions to
 identify the root cause of a problem. The julia runtime supports this by pushing each exception onto an internal
-*exception stack* as it occurs. When the code exits a `catch` normally, any exceptions which were pushed onto the stack
+_exception stack_ as it occurs. When the code exits a `catch` normally, any exceptions which were pushed onto the stack
 in the associated `try` are considered to be successfully handled and are removed from the stack.
 
 The stack of current exceptions can be accessed using the [`current_exceptions`](@ref) function. For example,
