@@ -986,6 +986,11 @@ isfinite(x::BigFloat) = !isinf(x) && !isnan(x)
 iszero(x::BigFloat) = x == Clong(0)
 isone(x::BigFloat) = x == Clong(1)
 
+# The branchy version should be faster for `BigFloat` because MPFR
+# arithmetic is expensive, and the branchless version requires more
+# arithmetic.
+Base.add12(x::T, y::T) where {T<:BigFloat} = Base.add12_branchful(x, y)
+
 @eval typemax(::Type{BigFloat}) = $(BigFloat(Inf))
 @eval typemin(::Type{BigFloat}) = $(BigFloat(-Inf))
 

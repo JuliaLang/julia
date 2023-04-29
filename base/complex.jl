@@ -1125,3 +1125,190 @@ function complex(A::AbstractArray{T}) where T
     end
     convert(AbstractArray{typeof(complex(zero(T)))}, A)
 end
+
+const ComplexFloat = Complex{<:AbstractFloat}
+
+## Multi-word floating-point for `Complex`
+
+complex_twiceprec(real::Tw, imag::Tw) where {Tw<:TwicePrecision{<:AbstractFloat}} =
+    TwicePrecision(
+        complex(real.hi, imag.hi),
+        complex(real.lo, imag.lo),
+    )
+
+real(c::TwicePrecision{<:ComplexFloat}) =
+    TwicePrecision(real(c.hi), real(c.lo))
+
+imag(c::TwicePrecision{<:ComplexFloat}) =
+    TwicePrecision(imag(c.hi), imag(c.lo))
+
+# +
+
+function +(x::TwicePrecision{<:AbstractFloat}, y::ComplexFloat)
+    y_re = real(y)
+    y_im = imag(y)
+    sum = x + y_re
+    TwicePrecision(complex(sum.hi, y_im), complex(sum.lo))
+end
+
+function +(
+    x::TwicePrecision{<:ComplexFloat},
+    y::Union{AbstractFloat,TwicePrecision{<:AbstractFloat}},
+)
+    x_re = real(x)
+    x_im = imag(x)
+    sum = x_re + y
+    complex_twiceprec(sum, x_im)
+end
+
++(x::TwicePrecision{T}, y::T) where {T<:ComplexFloat} =
+    TwicePrecision(mw_operate(+, Tuple(x), (y,))...)
+
++(x::TwicePrecision{<:AbstractFloat}, y::TwicePrecision{<:ComplexFloat}) =
+    y + x
+
++(x::Tw, y::Tw) where {Tw<:TwicePrecision{<:ComplexFloat}} =
+    TwicePrecision(mw_operate(+, Tuple(x), Tuple(y))...)
+
+# -
+
+-(x::TwicePrecision{<:AbstractFloat}, y::ComplexFloat) =
+    x + -y
+
+-(x::TwicePrecision{<:ComplexFloat}, y::Union{AbstractFloat,ComplexFloat}) =
+    x + -y
+
+-(
+    x::TwicePrecision{<:ComplexFloat},
+    y::TwicePrecision{<:Union{AbstractFloat,ComplexFloat}},
+) =
+    x + -y
+
+-(x::TwicePrecision{<:ComplexFloat}, y::TwicePrecision{<:AbstractFloat}) =
+    x + -y
+
+# *
+
+function *(x::TwicePrecision{<:AbstractFloat}, y::ComplexFloat)
+    y_re = real(y)
+    y_im = imag(y)
+    res_re = x * y_re
+    res_im = x * y_im
+    complex_twiceprec(res_re, res_im)
+end
+
+function *(
+    x::TwicePrecision{<:ComplexFloat},
+    y::Union{AbstractFloat,TwicePrecision{<:AbstractFloat}},
+)
+    x_re = real(x)
+    x_im = imag(x)
+    res_re = x_re * y
+    res_im = x_im * y
+    complex_twiceprec(res_re, res_im)
+end
+
+function *(x::Tw, y::Union{T,Tw}) where {T<:ComplexFloat,Tw<:TwicePrecision{T}}
+    # TODO: evaluate whether it makes sense to write custom code, with
+    # separate methods for `*(x::Tw, y::T)` and `*(x::Tw, y::Tw)`.
+
+    # TODO: try preventing some overflows and underflows?
+
+    # TODO: for `*(x::Tw, y::T)`: evaluate whether it makes sense to
+    # use Algorithm 3 from the paper "Accurate Complex Multiplication
+    # in Floating-Point Arithmetic", https://hal.science/hal-02001080v2
+    # The algorithm must first be adapted to return double-word results
+    # as explained in the same paper.
+
+    x_re = real(x)
+    x_im = imag(x)
+    y_re = real(y)
+    y_im = imag(y)
+    res_re = x_re*y_re - x_im*y_im
+    res_im = x_im*y_re + x_re*y_im
+    complex_twiceprec(res_re, res_im)
+end
+
+*(x::TwicePrecision{<:AbstractFloat}, y::TwicePrecision{<:ComplexFloat}) =
+    y * x
+
+# abs2
+
+function abs2(x::TwicePrecision{<:ComplexFloat})
+    # TODO: evaluate whether it makes sense to write custom code
+
+    # TODO: try preventing some overflows and underflows?
+
+    re = real(x)
+    im = imag(x)
+    re*re + im*im
+end
+
+# /
+
+function div_complex_twiceprec_impl(
+    x::Union{AbstractFloat,TwicePrecision{<:AbstractFloat}},
+    y,
+)
+    # TODO: use the inverse of abs2 instead for better performance?
+    a = abs2(y)
+
+    y_re = real(y)
+    y_im = imag(y)
+    res_re = x*y_re/a
+    res_im = -x*y_im/a
+    complex_twiceprec(res_re, res_im)
+end
+
+function div_complex_twiceprec_impl(
+    x::Union{ComplexFloat,TwicePrecision{<:ComplexFloat}},
+    y,
+)
+    # TODO: use the inverse of abs2 instead for better performance?
+    a = abs2(y)
+
+    x_re = real(x)
+    x_im = imag(x)
+    y_re = real(y)
+    y_im = imag(y)
+    res_re = (x_re*y_re + x_im*y_im) / a
+    res_im = (x_im*y_re - x_re*y_im) / a
+    complex_twiceprec(res_re, res_im)
+end
+
+/(
+    x::TwicePrecision{<:AbstractFloat},
+    y::Union{ComplexFloat,TwicePrecision{<:ComplexFloat}},
+) =
+    # TODO: evaluate whether it makes sense to write custom code
+    # TODO: try preventing some overflows and underflows?
+    div_complex_twiceprec_impl(x, y)
+
+/(
+    x::AbstractFloat,
+    y::TwicePrecision{<:ComplexFloat},
+) =
+    # TODO: evaluate whether it makes sense to write custom code
+    # TODO: try preventing some overflows and underflows?
+    div_complex_twiceprec_impl(x, y)
+
+function /(
+    x::TwicePrecision{<:ComplexFloat},
+    y::Union{AbstractFloat,TwicePrecision{<:AbstractFloat}},
+)
+    x_re = real(x)
+    x_im = imag(x)
+    res_re = x_re / y
+    res_im = x_im / y
+    complex_twiceprec(res_re, res_im)
+end
+
+/(x::Tw, y::Union{T,Tw}) where {T<:ComplexFloat,Tw<:TwicePrecision{T}} =
+    # TODO: evaluate whether it makes sense to write custom code
+    # TODO: try preventing some overflows and underflows?
+    div_complex_twiceprec_impl(x, y)
+
+/(x::ComplexFloat, y::TwicePrecision{<:ComplexFloat}) =
+    # TODO: evaluate whether it makes sense to write custom code
+    # TODO: try preventing some overflows and underflows?
+    div_complex_twiceprec_impl(x, y)

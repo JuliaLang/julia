@@ -38,16 +38,64 @@ truncbits(x, nb) = x
 
 ## Dekker arithmetic
 
+# Reference for double-word floating-point arithmetic:
+#
+# Tight and Rigorous Error Bounds for Basic Building Blocks of
+# Double-Word Arithmetic
+#
+# ACM Transactions on Mathematical Software, Vol. 44, No. 2, Article
+# 15res. Publication date: October 2017
+#
+# Mioara Joldes, Jean-Michel Muller, and Valentina Popescu
+#
+# https://doi.org/10.1145/3121432
+#
+# There's also a book by some of the same authors: the "Handbook of
+# Floating-Point Arithmetic"
+
+# A lot of the code here is missing constraints that might seem natural
+# to have. For example, an `<:AbstractFloat` constraint is often
+# inappropriate because we want to support
+# `TwicePrecision{<:Complex{<:AbstractFloat}}` arithmetic with some of
+# the same code used for `TwicePrecision{<:AbstractFloat}` types (this
+# makes sense because `Complex` is a Cartesian/orthogonal
+# representation of the complex numbers, i.e., it's a sum of a real and
+# imaginary part). Furthermore, we actually need to support ranges
+# whose elements aren't even instances of `Number`, thus even
+# constraining to `TwicePrecision{<:Number}` would not be appropriate.
+
+function fast_two_sum(big::T, little::T) where {T}
+    h = big + little
+    (h, (big - h) + little)
+end
+
 """
     hi, lo = canonicalize2(big, little)
 
 Generate a representation where all the nonzero bits in `hi` are more
 significant than any of the nonzero bits in `lo`. `big` must be larger
-in absolute value than `little`.
+in absolute value than `little`. Sometimes known as "Fast2Sum" in the
+literature.
 """
-function canonicalize2(big, little)
-    h = big+little
-    h, (big - h) + little
+canonicalize2(big, little) = fast_two_sum(big, little)
+
+# `add12_branchful` and `add12_branchless` are equivalent, known to
+# produce the same results as long as there's no overflow and no
+# underflow
+
+function add12_branchful(x::T, y::T) where {T}
+    x, y = ifelse(abs(y) > abs(x), (y, x), (x, y))
+    fast_two_sum(x, y)
+end
+
+function add12_branchless(a::T, b::T) where {T}
+    s = a + b
+    a_ = s - b
+    b_ = s - a_
+    δa = a - a_
+    δb = b - b_
+    t = δa + δb
+    (s, t)
 end
 
 """
@@ -80,43 +128,165 @@ julia> big(hi) + big(lo)
 `lo` differs from 1.0e-19 because `hi` is not exactly equal to
 the first 16 decimal digits of the answer.
 """
-function add12(x::T, y::T) where {T}
-    x, y = ifelse(abs(y) > abs(x), (y, x), (x, y))
-    canonicalize2(x, y)
-end
+add12(x::T, y::T) where {T} = add12_branchless(x, y)
 add12(x, y) = add12(promote(x, y)...)
 
-"""
-    zhi, zlo = mul12(x, y)
+mw_kernel(op::typeof(+), x::Tuple{T}, y::Tuple{T}) where {T} =
+    add12(only(x), only(y))
 
-A high-precision representation of `x * y` for floating-point
-numbers. Mathematically, `zhi + zlo = x * y`, where `zhi` contains the
-most significant bits and `zlo` the least significant.
+mw_kernel(op::typeof(*), x::Tuple{T}, y::Tuple{T}) where {T} =
+    Base.Math.two_mul(only(x), only(y))
 
-Example:
-```julia-repl
-julia> x = Float32(π)
-3.1415927f0
+mw_kernel(op::typeof(/), x::Tuple{T}, y::Tuple{T}) where {T} =
+   mw_kernel(/, (x..., zero(first(x))), y)
 
-julia> x * x
-9.869605f0
-
-julia> Float64(x) * Float64(x)
-9.869604950382893
-
-julia> hi, lo = Base.mul12(x, x)
-(9.869605f0, -1.140092f-7)
-
-julia> Float64(hi) + Float64(lo)
-9.869604950382893
-```
-"""
-function mul12(x::T, y::T) where {T<:AbstractFloat}
-    (h, l) = Base.Math.two_mul(x, y)
-    ifelse(!isfinite(h), (h, h), (h, l))
+# "DWPlusFP" AKA "Algorithm 4" from Joldes, Muller, Popescu
+function mw_kernel(::typeof(+), x::NTuple{2,T}, yt::Tuple{T}) where {T}
+    (x_hi, x_lo) = x
+    (y,) = yt
+    (s_hi, s_lo) = add12(x_hi, y)
+    v = x_lo + s_lo
+    fast_two_sum(s_hi, v)
 end
-mul12(x::T, y::T) where {T} = (p = x * y; (p, zero(p)))
-mul12(x, y) = mul12(promote(x, y)...)
+
+# "AccurateDWPlusDW" AKA "Algorithm 6" from Joldes, Muller, Popescu
+function mw_kernel(::typeof(+), x::NTuple{2,T}, y::NTuple{2,T}) where {T}
+    (x_hi, x_lo) = x
+    (y_hi, y_lo) = y
+    (s_hi, s_lo) = add12(x_hi, y_hi)
+    (t_hi, t_lo) = add12(x_lo, y_lo)
+    c = s_lo + t_hi
+    (v_hi, v_lo) = fast_two_sum(s_hi, c)
+    w = t_lo + v_lo
+    fast_two_sum(v_hi, w)
+end
+
+# "DWTimesFP1" AKA "Algorithm 7" from Joldes, Muller, Popescu
+function mw_kernel(::typeof(*), x::NTuple{2,T}, yt::Tuple{T}) where {T}
+    (x_hi, x_lo) = x
+    (y,) = yt
+    (c_hi, c_l1) = Base.Math.two_mul(x_hi, y)
+    c_l2 = x_lo * y
+    (t_hi, t_l1) = fast_two_sum(c_hi, c_l2)
+    t_l2 = t_l1 + c_l1
+    fast_two_sum(t_hi, t_l2)
+end
+
+# "DWTimesDW3" AKA "Algorithm 12" from Joldes, Muller, Popescu
+function mw_kernel(::typeof(*), x::NTuple{2,T}, y::NTuple{2,T}) where {T}
+    (x_hi, x_lo) = x
+    (y_hi, y_lo) = y
+    (c_hi, c_l1) = Base.Math.two_mul(x_hi, y_hi)
+    t_l0 = x_lo * y_lo
+    t_l1 = fma(x_hi, y_lo, t_l0)
+    c_l2 = fma(x_lo, y_hi, t_l1)
+    c_l3 = c_l1 + c_l2
+    fast_two_sum(c_hi, c_l3)
+end
+
+# "DWDivFP3" AKA "Algorithm 15" from Joldes, Muller, Popescu
+function mw_kernel(::typeof(/), x::NTuple{2,T}, yt::Tuple{T}) where {T}
+    (x_hi, x_lo) = x
+    (y,) = yt
+    hi = x_hi / y
+    π = Base.Math.two_mul(hi, y)
+    δ_hi = x_hi - first(π)  # exact operation
+    δ_t = δ_hi - last(π)    # exact operation
+    δ = δ_t + x_lo
+    lo = δ / y
+    fast_two_sum(hi, lo)
+end
+
+# "DWDivDW3" AKA "Algorithm 18" from Joldes, Muller, Popescu
+function mw_kernel(::typeof(/), x::NTuple{2,T}, y::NTuple{2,T}) where {T}
+    (x_hi, x_lo) = x
+    (y_hi, y_lo) = y
+    t_hi = 1 / y_hi
+    r_hi = fma(-y_hi, t_hi, true) # exact operation
+    r_lo = -y_lo * t_hi
+    e = fast_two_sum(r_hi, r_lo)
+    δ = mw_kernel(*, e, (t_hi,))
+    m = mw_kernel(+, δ, (t_hi,))
+    mw_kernel(*, x, m)
+end
+
+const NonemptyNTuple = Tuple{T,Vararg{T,n}} where {T,n}
+
+mw_error_check(x::NonemptyNTuple{T}, y::NonemptyNTuple{T}) where {T} =
+    (length(y) ≤ length(x)) ||
+        error("the left operand must be at least as long as the right one")
+
+function mw_operate(
+    op::Op,
+    x::NonemptyNTuple{T},
+    y::NonemptyNTuple{T},
+) where {Op<:Function,T}
+    mw_error_check(x, y)
+    hi = op(first(x), first(y))
+    ifelse(
+        iszero(hi) | !isfinite(hi),
+        (hi, hi),
+        mw_kernel(op, x, y),
+    )
+end
+
+# Avoid overflow/underflow when possible. Requires `one`, `ldexp`,
+# `frexp`.
+#
+# TODO: write custom code instead of using `ldexp` and `frexp`?
+function mw_kernel_transformed(
+    op::typeof(/),
+    x::Tuple{T},
+    y::Tuple{T},
+) where {T<:AbstractFloat}
+    xs, xe = frexp(only(x))
+    ys, ye = frexp(only(y))
+    rh, rl = mw_kernel(op, (xs,), (ys,))
+    fast_two_sum(
+        ldexp(rh, xe - ye),
+        ldexp(rl, xe - ye),
+    )
+end
+
+# Avoid overflow/underflow when possible. Requires `one`, `ldexp`,
+# `frexp`.
+#
+# TODO: write custom code instead of using `ldexp` and `frexp`?
+function mw_kernel_transformed(
+    op::typeof(/),
+    x::NonemptyNTuple{T},
+    y::NonemptyNTuple{T},
+) where {T<:AbstractFloat}
+    xe = last(frexp(first(x)))
+    ye = last(frexp(first(y)))
+    o = one(first(x))
+    fac_inv_x = ldexp(o, -xe)
+    fac_inv_y = ldexp(o, -ye)
+    fac_xy = ldexp(o, xe - ye)
+    mw_kernel(
+        *,
+        mw_kernel(
+            /,
+            mw_kernel(*, x, (fac_inv_x,)),
+            mw_kernel(*, y, (fac_inv_y,)),
+        ),
+        (fac_xy,),
+    )
+end
+
+function mw_operate(
+    op::typeof(/),
+    x::NonemptyNTuple{T},
+    y::NonemptyNTuple{T},
+) where {T<:AbstractFloat}
+    mw_error_check(x, y)
+    hi = op(first(x), first(y))
+    ifelse(
+        iszero(hi) | !isfinite(hi),
+        (hi, hi),
+        mw_kernel_transformed(op, x, y),
+    )
+end
 
 """
     zhi, zlo = div12(x, y)
@@ -143,16 +313,7 @@ julia> Float64(hi) + Float64(lo)
 1.0134170444063066
 ```
 """
-function div12(x::T, y::T) where {T<:AbstractFloat}
-    # We lose precision if any intermediate calculation results in a subnormal.
-    # To prevent this from happening, standardize the values.
-    xs, xe = frexp(x)
-    ys, ye = frexp(y)
-    r = xs / ys
-    rh, rl = canonicalize2(r, -fma(r, ys, -xs)/ys)
-    ifelse(iszero(r) | !isfinite(r), (r, r), (ldexp(rh, xe-ye), ldexp(rl, xe-ye)))
-end
-div12(x::T, y::T) where {T} = (p = x / y; (p, zero(p)))
+div12(x::T, y::T) where {T<:AbstractFloat} = mw_operate(/, (x,), (y,))
 div12(x, y) = div12(promote(x, y)...)
 
 
@@ -197,6 +358,8 @@ struct TwicePrecision{T}
     hi::T    # most significant bits
     lo::T    # least significant bits
 end
+
+Tuple(t::TwicePrecision) = (t.hi, t.lo)
 
 TwicePrecision{T}(x::T) where {T} = TwicePrecision{T}(x, zero(T))
 
@@ -285,26 +448,23 @@ end
 
 # Arithmetic
 
-function +(x::TwicePrecision, y::Number)
-    s_hi, s_lo = add12(x.hi, y)
-    TwicePrecision(canonicalize2(s_hi, s_lo+x.lo)...)
-end
++(x::TwicePrecision{T}, y::T) where {T} =
+    TwicePrecision(mw_operate(+, Tuple(x), (y,))...)
+
 +(x::Number, y::TwicePrecision) = y+x
 
-function +(x::TwicePrecision{T}, y::TwicePrecision{T}) where T
-    r = x.hi + y.hi
-    s = abs(x.hi) > abs(y.hi) ? (((x.hi - r) + y.hi) + y.lo) + x.lo : (((y.hi - r) + x.hi) + x.lo) + y.lo
-    TwicePrecision(canonicalize2(r, s)...)
-end
++(x::Tw, y::Tw) where {Tw<:TwicePrecision} =
+    Tw(mw_operate(+, Tuple(x), Tuple(y))...)
+
 +(x::TwicePrecision, y::TwicePrecision) = +(promote(x, y)...)
 
 -(x::TwicePrecision, y::TwicePrecision) = x + (-y)
 -(x::TwicePrecision, y::Number) = x + (-y)
 -(x::Number, y::TwicePrecision) = x + (-y)
 
-function *(x::TwicePrecision, v::Number)
-    v == 0 && return TwicePrecision(x.hi*v, x.lo*v)
-    x * TwicePrecision(oftype(x.hi*v, v))
+function *(x::TwicePrecision{T}, v::T) where {T}
+    iszero(v) && return TwicePrecision(x.hi*v, x.lo*v)
+    TwicePrecision(mw_operate(*, Tuple(x), (v,))...)
 end
 function *(x::TwicePrecision{<:IEEEFloat}, v::Integer)
     v == 0 && return TwicePrecision(x.hi*v, x.lo*v)
@@ -314,24 +474,77 @@ function *(x::TwicePrecision{<:IEEEFloat}, v::Integer)
 end
 *(v::Number, x::TwicePrecision) = x*v
 
-function *(x::TwicePrecision{T}, y::TwicePrecision{T}) where {T}
-    zh, zl = mul12(x.hi, y.hi)
-    ret = TwicePrecision{T}(canonicalize2(zh, (x.hi * y.lo + x.lo * y.hi) + zl)...)
-    ifelse(iszero(zh) | !isfinite(zh), TwicePrecision{T}(zh, zh), ret)
+function *(x::Tw, y::Tw) where {Tw<:TwicePrecision}
+    zh = x.hi * y.hi
+    ifelse(
+        !isfinite(zh),
+        Tw(zh, zh),
+        Tw(mw_operate(*, Tuple(x), Tuple(y))...),
+    )
 end
 *(x::TwicePrecision, y::TwicePrecision) = *(promote(x, y)...)
 
-function /(x::TwicePrecision, v::Number)
-    x / TwicePrecision(oftype(x.hi/v, v))
+function /(x::TwicePrecision{T}, v::T) where {T}
+    TwicePrecision(mw_operate(/, Tuple(x), (v,))...)
 end
 
-function /(x::TwicePrecision, y::TwicePrecision)
+function /(x::Tw, y::Tw) where {Tw<:TwicePrecision}
     hi = x.hi / y.hi
-    uh, ul = mul12(hi, y.hi)
-    lo = ((((x.hi - uh) - ul) + x.lo) - hi*y.lo)/y.hi
-    ret = TwicePrecision(canonicalize2(hi, lo)...)
-    ifelse(iszero(hi) | !isfinite(hi), TwicePrecision(hi, hi), ret)
+    ifelse(
+        !isfinite(hi),
+        Tw(hi, hi),
+        Tw(mw_operate(/, Tuple(x), Tuple(y))...),
+    )
 end
+
+/(x::TwicePrecision, y::TwicePrecision) = /(promote(x, y)...)
+/(x, y::TwicePrecision) = /(promote(x, y)...)
+
+# Some special cases requiring conversion
+
+twiceprecision_promote_type(op::Op, x::TwicePrecision, y) where {Op<:Function} =
+    typeof(op(first(Tuple(x)), y))
+
+# Whitelist some small types to prevent promoting them to
+# `TwicePrecision`.
+function twiceprecision_promote(
+    op::Op,
+    x::TwicePrecision,
+    y::Union{Bool,Int8,Int16,UInt8,UInt16,Float16},
+) where {Op<:Function}
+    T = twiceprecision_promote_type(op, x, y)
+    (convert(TwicePrecision{T}, x), convert(T, y))
+end
+
+twiceprecision_conversion_physical_unit_helper(
+    ::Type{T},
+    y,
+) where {T<:Number} =
+    convert(TwicePrecision{T}, y)
+
+# This sadly loses accuracy, but seems necessary for supporting ranges
+# of some non-`Number` types in the ecosystem (e.g., those for
+# modelling physical units).
+twiceprecision_conversion_physical_unit_helper(
+    ::Type{T},
+    y,
+) where {T} =
+    TwicePrecision{T}(convert(T, y))
+
+function twiceprecision_promote(op::Op, x::TwicePrecision, y) where {Op<:Function}
+    T = twiceprecision_promote_type(op, x, y)
+    (
+        convert(TwicePrecision{T}, x),
+
+        twiceprecision_conversion_physical_unit_helper(T, y),
+    )
+end
+
++(x::TwicePrecision, y) = +(twiceprecision_promote(+, x, y)...)
+
+*(x::TwicePrecision, y) = *(twiceprecision_promote(*, x, y)...)
+
+/(x::TwicePrecision, y) = /(twiceprecision_promote(/, x, y)...)
 
 ## StepRangeLen
 
