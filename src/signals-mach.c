@@ -621,8 +621,7 @@ void *mach_profile_listener(void *arg)
             if (_dyld_atfork_prepare != NULL && _dyld_atfork_parent != NULL)
                 _dyld_atfork_prepare(); // briefly acquire the dlsym lock
             host_thread_state_t state;
-            if (!jl_thread_suspend_and_get_state2(i, &state))
-                continue;
+            int valid_thread = jl_thread_suspend_and_get_state2(i, &state);
             unw_context_t *uc = (unw_context_t*)&state;
             if (_dyld_atfork_prepare != NULL && _dyld_atfork_parent != NULL)
                 _dyld_atfork_parent(); // quickly release the dlsym lock
