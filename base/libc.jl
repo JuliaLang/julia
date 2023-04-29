@@ -8,8 +8,9 @@ Interface to libc, the C standard library.
 import Base: transcode, windowserror, show
 import Core.Intrinsics: bitcast
 
-export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, calloc, realloc,
-    errno, strerror, flush_cstdio, systemsleep, time, transcode
+export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, memcpy,
+    memmove, memset, calloc, realloc, errno, strerror, flush_cstdio, systemsleep, time,
+    transcode
 if Sys.iswindows()
     export GetLastError, FormatMessage
 end

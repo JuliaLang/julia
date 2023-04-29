@@ -12,7 +12,7 @@ import Base.Docs.apropos
 
 using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_unquoted, summarysize,
     signature_type, format_bytes
-
+using Base.Libc
 using Markdown
 
 include("editless.jl")

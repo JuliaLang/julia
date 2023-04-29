@@ -180,7 +180,7 @@ end
         s3 = _rotl45(s3)
         ref = Ref(f(res, T))
         # TODO: This may make the random-stream dependent on system endianness
-        ccall(:memcpy, Ptr{Cvoid}, (Ptr{UInt8}, Ptr{UInt64}, Csize_t), dst+i, ref, len-i)
+        memcpy(dst+i, ref, len-i)
     end
     if rng isa TaskLocalRNG
         task.rngState0, task.rngState1, task.rngState2, task.rngState3 = s0, s1, s2, s3
@@ -222,7 +222,7 @@ end
         res = _plus(_rotl23(_plus(s0,s3)),s0)
         resLoc = _and(res, 0x0101010101010101)
         ref = Ref(resLoc)
-        ccall(:memcpy, Ptr{Cvoid}, (Ptr{UInt8}, Ptr{UInt64}, Csize_t), dst+i, ref, len-i)
+        memcpy(dst+i, ref, len-i)
         t = _shl17(s1)
         s2 = _xor(s2, s0)
         s3 = _xor(s3, s1)
