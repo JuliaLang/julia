@@ -178,7 +178,8 @@ static jl_callptr_t _jl_compile_codeinst(
         jl_code_instance_t *codeinst,
         jl_code_info_t *src,
         size_t world,
-        orc::ThreadSafeContext context)
+        orc::ThreadSafeContext context,
+        bool is_recompile)
 {
     // caller must hold codegen_lock
     // and have disabled finalizers
@@ -193,7 +194,12 @@ static jl_callptr_t _jl_compile_codeinst(
     assert(src && jl_is_code_info(src));
 
     JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
-
+#ifdef USE_TRACY
+    if (is_recompile) {
+        TracyCZoneCtx ctx = *(JL_TIMING_CURRENT_BLOCK->tracy_ctx);
+        TracyCZoneColor(ctx, 0xFFA500);
+    }
+#endif
     jl_callptr_t fptr = NULL;
     // emit the code in LLVM IR form
     jl_codegen_params_t params(std::move(context), jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple()); // Locks the context
@@ -475,7 +481,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
             }
         }
         ++SpecFPtrCount;
-        _jl_compile_codeinst(codeinst, src, world, *jl_ExecutionEngine->getContext());
+        _jl_compile_codeinst(codeinst, src, world, *jl_ExecutionEngine->getContext(), is_recompile);
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL)
             codeinst = NULL;
     }
@@ -532,7 +538,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         }
         assert(src && jl_is_code_info(src));
         ++UnspecFPtrCount;
-        _jl_compile_codeinst(unspec, src, unspec->min_world, *jl_ExecutionEngine->getContext());
+        _jl_compile_codeinst(unspec, src, unspec->min_world, *jl_ExecutionEngine->getContext(), 0);
         jl_callptr_t null = nullptr;
         // if we hit a codegen bug (or ran into a broken generated function or llvmcall), fall back to the interpreter as a last resort
         jl_atomic_cmpswap(&unspec->invoke, &null, jl_fptr_interpret_call_addr);
@@ -591,7 +597,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
                 specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                 if (src && jl_is_code_info(src)) {
                     if (fptr == (uintptr_t)jl_fptr_const_return_addr && specfptr == 0) {
-                        fptr = (uintptr_t)_jl_compile_codeinst(codeinst, src, world, *jl_ExecutionEngine->getContext());
+                        fptr = (uintptr_t)_jl_compile_codeinst(codeinst, src, world, *jl_ExecutionEngine->getContext(), 0);
                         specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                     }
                 }
@@ -1383,6 +1389,7 @@ JuliaOJIT::JuliaOJIT()
 
     JD.addToLinkOrder(GlobalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
 
+#if JULIA_FLOAT16_ABI == 1
     orc::SymbolAliasMap jl_crt = {
         { mangle("__gnu_h2f_ieee"), { mangle("julia__gnu_h2f_ieee"), JITSymbolFlags::Exported } },
         { mangle("__extendhfsf2"),  { mangle("julia__gnu_h2f_ieee"), JITSymbolFlags::Exported } },
@@ -1391,6 +1398,7 @@ JuliaOJIT::JuliaOJIT()
         { mangle("__truncdfhf2"),   { mangle("julia__truncdfhf2"),   JITSymbolFlags::Exported } }
     };
     cantFail(GlobalJD.define(orc::symbolAliases(jl_crt)));
+#endif
 
 #ifdef MSAN_EMUTLS_WORKAROUND
     orc::SymbolMap msan_crt;

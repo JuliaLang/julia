@@ -4,7 +4,8 @@ using Test
 using Base.Meta
 using Core: ReturnNode
 
-include(normpath(@__DIR__, "irutils.jl"))
+include("irutils.jl")
+include("newinterp.jl")
 
 """
 Helper to walk the AST and call a function on every node.
@@ -1989,4 +1990,48 @@ for run_finalizer_escape_test in (run_finalizer_escape_test1, run_finalizer_esca
         run_finalizer_escape_test(true, true)
         @test finalizer_escape == 3
     end
+end
+
+# `compilesig_invokes` inlining option
+@newinterp NoCompileSigInvokes
+Core.Compiler.OptimizationParams(::NoCompileSigInvokes) =
+    Core.Compiler.OptimizationParams(; compilesig_invokes=false)
+@noinline no_compile_sig_invokes(@nospecialize x) = (x !== Any && !Base.has_free_typevars(x))
+# test the single dispatch candidate case
+let src = code_typed1((Type,)) do x
+        no_compile_sig_invokes(x)
+    end
+    @test count(src.code) do @nospecialize x
+        isinvoke(:no_compile_sig_invokes, x) &&
+        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),Any}
+    end == 1
+end
+let src = code_typed1((Type,); interp=NoCompileSigInvokes()) do x
+        no_compile_sig_invokes(x)
+    end
+    @test count(src.code) do @nospecialize x
+        isinvoke(:no_compile_sig_invokes, x) &&
+        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),Type}
+    end == 1
+end
+# test the union split case
+let src = code_typed1((Union{DataType,UnionAll},)) do x
+        no_compile_sig_invokes(x)
+    end
+    @test count(src.code) do @nospecialize x
+        isinvoke(:no_compile_sig_invokes, x) &&
+        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),Any}
+    end == 2
+end
+let src = code_typed1((Union{DataType,UnionAll},); interp=NoCompileSigInvokes()) do x
+        no_compile_sig_invokes(x)
+    end
+    @test count(src.code) do @nospecialize x
+        isinvoke(:no_compile_sig_invokes, x) &&
+        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),DataType}
+    end == 1
+    @test count(src.code) do @nospecialize x
+        isinvoke(:no_compile_sig_invokes, x) &&
+        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),UnionAll}
+    end == 1
 end

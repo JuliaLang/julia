@@ -921,15 +921,20 @@ static const auto jl_alloc_obj_func = new JuliaFunction<TypeFnContextAndSizeT>{
         return FunctionType::get(T_prjlvalue,
                 {T_ppjlvalue, T_size, T_prjlvalue}, false);
     },
-    [](LLVMContext &C) { return AttributeList::get(C,
-            AttributeSet::get(C, makeArrayRef({Attribute::getWithAllocSizeArgs(C, 1, None)})), // returns %1 bytes
-
-            Attributes(C, {Attribute::NoAlias, Attribute::NonNull,
+    [](LLVMContext &C) {
+        auto FnAttrs = AttrBuilder(C);
+        FnAttrs.addAllocSizeAttr(1, None); // returns %1 bytes
 #if JL_LLVM_VERSION >= 150000
-            Attribute::get(C, Attribute::AllocKind, AllocFnKind::Alloc | AllocFnKind::Uninitialized | AllocFnKind::Aligned),
+        FnAttrs.addAllocKindAttr(AllocFnKind::Alloc | AllocFnKind::Uninitialized | AllocFnKind::Aligned);
 #endif
-            }),
-            None); },
+        auto RetAttrs = AttrBuilder(C);
+        RetAttrs.addAttribute(Attribute::NoAlias);
+        RetAttrs.addAttribute(Attribute::NonNull);
+        return AttributeList::get(C,
+            AttributeSet::get(C, FnAttrs),
+            AttributeSet::get(C, RetAttrs),
+            None);
+    },
 };
 static const auto jl_newbits_func = new JuliaFunction<>{
     XSTR(jl_new_bits),
@@ -2349,7 +2354,11 @@ static void jl_init_function(Function *F, const Triple &TT)
         attr.addStackAlignmentAttr(16);
     }
     if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
+#if JL_LLVM_VERSION < 150000
         attr.addAttribute(Attribute::UWTable); // force NeedsWinEH
+#else
+        attr.addUWTableAttr(llvm::UWTableKind::Default); // force NeedsWinEH
+#endif
     }
     if (jl_fpo_disabled(TT))
         attr.addAttribute("frame-pointer", "all");
@@ -5809,6 +5818,7 @@ static void emit_cfunc_invalidate(
         prepare_call_in(gf_thunk->getParent(), jlapplygeneric_func));
 }
 
+#include <iostream>
 static Function* gen_cfun_wrapper(
     Module *into, jl_codegen_params_t &params,
     const function_sig_t &sig, jl_value_t *ff, const char *aliasname,
@@ -6312,8 +6322,6 @@ static Function* gen_cfun_wrapper(
     }
     else if (!type_is_ghost(sig.lrt)) {
         Type *prt = sig.prt;
-        if (sig.sret)
-            prt = sig.fargt_sig[0]->getContainedType(0); // sret is a PointerType
         bool issigned = jl_signed_type && jl_subtype(declrt, (jl_value_t*)jl_signed_type);
         Value *v = emit_unbox(ctx, sig.lrt, retval, retval.typ);
         r = llvm_type_rewrite(ctx, v, prt, issigned);
@@ -8697,6 +8705,58 @@ static JuliaVariable *julia_const_gv(jl_value_t *val)
     return nullptr;
 }
 
+// Handle FLOAT16 ABI v2
+#if JULIA_FLOAT16_ABI == 2
+static void makeCastCall(Module &M, StringRef wrapperName, StringRef calledName, FunctionType *FTwrapper, FunctionType *FTcalled, bool external)
+{
+    Function *calledFun = M.getFunction(calledName);
+    if (!calledFun) {
+        calledFun = Function::Create(FTcalled, Function::ExternalLinkage, calledName, M);
+    }
+    auto linkage = external ? Function::ExternalLinkage : Function::InternalLinkage;
+    auto wrapperFun = Function::Create(FTwrapper, linkage, wrapperName, M);
+    wrapperFun->addFnAttr(Attribute::AlwaysInline);
+    llvm::IRBuilder<> builder(BasicBlock::Create(M.getContext(), "top", wrapperFun));
+    SmallVector<Value *, 4> CallArgs;
+    if (wrapperFun->arg_size() != calledFun->arg_size()){
+        llvm::errs() << "FATAL ERROR: Can't match wrapper to called function";
+        abort();
+    }
+    for (auto wrapperArg = wrapperFun->arg_begin(), calledArg = calledFun->arg_begin();
+            wrapperArg != wrapperFun->arg_end() && calledArg != calledFun->arg_end(); ++wrapperArg, ++calledArg)
+    {
+        CallArgs.push_back(builder.CreateBitCast(wrapperArg, calledArg->getType()));
+    }
+    auto val = builder.CreateCall(calledFun, CallArgs);
+    auto retval = builder.CreateBitCast(val,wrapperFun->getReturnType());
+    builder.CreateRet(retval);
+}
+
+void emitFloat16Wrappers(Module &M, bool external)
+{
+    auto &ctx = M.getContext();
+    makeCastCall(M, "__gnu_h2f_ieee", "julia__gnu_h2f_ieee", FunctionType::get(Type::getFloatTy(ctx), { Type::getHalfTy(ctx) }, false),
+                FunctionType::get(Type::getFloatTy(ctx), { Type::getInt16Ty(ctx) }, false), external);
+    makeCastCall(M, "__extendhfsf2", "julia__gnu_h2f_ieee", FunctionType::get(Type::getFloatTy(ctx), { Type::getHalfTy(ctx) }, false),
+                FunctionType::get(Type::getFloatTy(ctx), { Type::getInt16Ty(ctx) }, false), external);
+    makeCastCall(M, "__gnu_f2h_ieee", "julia__gnu_f2h_ieee", FunctionType::get(Type::getHalfTy(ctx), { Type::getFloatTy(ctx) }, false),
+                FunctionType::get(Type::getInt16Ty(ctx), { Type::getFloatTy(ctx) }, false), external);
+    makeCastCall(M, "__truncsfhf2", "julia__gnu_f2h_ieee", FunctionType::get(Type::getHalfTy(ctx), { Type::getFloatTy(ctx) }, false),
+                FunctionType::get(Type::getInt16Ty(ctx), { Type::getFloatTy(ctx) }, false), external);
+    makeCastCall(M, "__truncdfhf2", "julia__truncdfhf2", FunctionType::get(Type::getHalfTy(ctx), { Type::getDoubleTy(ctx) }, false),
+                FunctionType::get(Type::getInt16Ty(ctx), { Type::getDoubleTy(ctx) }, false), external);
+}
+
+static void init_f16_funcs(void)
+{
+    auto ctx = jl_ExecutionEngine->acquireContext();
+    auto TSM =  jl_create_ts_module("F16Wrappers", ctx, imaging_default());
+    auto aliasM = TSM.getModuleUnlocked();
+    emitFloat16Wrappers(*aliasM, true);
+    jl_ExecutionEngine->addModule(std::move(TSM));
+}
+#endif
+
 static void init_jit_functions(void)
 {
     add_named_global(jlstack_chk_guard_var, &__stack_chk_guard);
@@ -8935,6 +8995,9 @@ extern "C" JL_DLLEXPORT void jl_init_codegen_impl(void)
     jl_init_llvm();
     // Now that the execution engine exists, initialize all modules
     init_jit_functions();
+#if JULIA_FLOAT16_ABI == 2
+    init_f16_funcs();
+#endif
 }
 
 extern "C" JL_DLLEXPORT void jl_teardown_codegen_impl() JL_NOTSAFEPOINT
