@@ -2,7 +2,8 @@
 
 Julia provides a rich interface to deal with streaming I/O objects such as terminals, pipes and
 TCP sockets.
-These objects allow data to be sent and received in a stream-like fashion, which means that data is processed sequentially as it becomes available.
+These objects allow data to be sent and received in a stream-like fashion, which means that data is processed
+sequentially as it becomes available.
 This interface, though asynchronous at the system level, is presented in a synchronous manner to the programmer.
 This is achieved by making heavy use of Julia cooperative threading ([coroutine](@ref man-tasks))
 functionality.
@@ -201,6 +202,26 @@ close(out_file)
 ```
 
 Redirecting stdout to a file can help you save and analyze program output, automate processes, and meet compliance requirements.
+
+Redirecting stderr
+
+```
+# Open a file to redirect stderr to
+logfile = open("error.log", "w")
+
+# Redirect stderr to the log file
+redirect_stderr(logfile) do
+    # Code that might produce errors
+    println("This will be printed to stdout")
+    println("This will also be printed to stdout")
+    error("Something went wrong!")
+end
+
+# Close the log file
+close(logfile)
+```
+
+Similar to stdout, stderr is used to output error messages and diagnostic information from a program.
 
 ## A simple TCP example
 
