@@ -205,6 +205,14 @@ function show(io::IO, z::Complex)
         else
             show(io, -i)
         end
+    elseif i == 0
+        if signbit(r)
+            print(io, compact ? "-" : " - ")
+            show(io, -r)
+        else
+            print(io, compact ? "" : " + ")
+            show(io, r)
+        end
     else
         print(io, compact ? "+" : " + ")
         show(io, i)
@@ -214,6 +222,7 @@ function show(io::IO, z::Complex)
     end
     print(io, "im")
 end
+
 show(io::IO, z::Complex{Bool}) =
     print(io, z == im ? "im" : "Complex($(z.re),$(z.im))")
 
@@ -226,6 +235,20 @@ function show_unquoted(io::IO, z::Complex, ::Int, prec::Int)
         show(io, z)
     end
 end
+
+# Fix for positive imaginary part
+function Base.show(io::IO, ::MIME"text/plain", z::Complex)
+    r, i = reim(z)
+    if i == 0
+        show(io, z)
+    elseif i > 0
+        show(io, r)
+        print(io, " + 0x", hex(i), "*im")
+    else
+        show(io, z)
+    end
+end
+
 
 function read(s::IO, ::Type{Complex{T}}) where T<:Real
     r = read(s,T)
