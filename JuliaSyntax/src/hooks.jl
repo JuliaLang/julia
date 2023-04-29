@@ -29,15 +29,20 @@ end
 # next if the incomplete stream was to continue. (Though this is just rough. In
 # practice several categories are combined for the purposes of the REPL -
 # perhaps we can/should do something more precise in the future.)
-function _incomplete_tag(n::SyntaxNode)
+function _incomplete_tag(n::SyntaxNode, codelen)
     i,c = _first_error(n)
-    if isnothing(c)
+    if isnothing(c) || last_byte(c) < codelen || codelen == 0
         return :none
+    elseif first_byte(c) < codelen
+        if kind(c) == K"ErrorEofMultiComment" && last_byte(c) == codelen
+            # This is the one weird case where the token itself is an
+            # incomplete error
+            return :comment
+        else
+            return :none
+        end
     end
-    # TODO: Check error hits last character
-    if kind(c) == K"ErrorEofMultiComment"
-        return :comment
-    elseif kind(c) == K"error" && begin
+    if kind(c) == K"error" && begin
                 cs = children(c)
                 length(cs) > 0
             end
@@ -71,10 +76,8 @@ function _incomplete_tag(n::SyntaxNode)
 end
 
 #-------------------------------------------------------------------------------
-@static if isdefined(Core, :_setparser!)
+if isdefined(Core, :_setparser!)
     const _set_core_parse_hook = Core._setparser!
-elseif isdefined(Core, :set_parser)
-    const _set_core_parse_hook = Core.set_parser
 else
     function _set_core_parse_hook(parser)
         # HACK! Fool the runtime into allowing us to set Core._parse, even during
@@ -164,12 +167,8 @@ function _core_parser_hook(code, filename::String, lineno::Int, offset::Int, opt
         if any_error(stream)
             tree = build_tree(SyntaxNode, stream,
                               wrap_toplevel_as_kind=K"None", first_line=lineno)
-            _,err = _first_error(tree)
-            # In the flisp parser errors are normally `Expr(:error, msg)` where
-            # `msg` is a String. By using a ParseError for msg we can do fancy
-            # error reporting instead.
-            if last_byte(err) == lastindex(code)
-                tag = _incomplete_tag(tree)
+            tag = _incomplete_tag(tree, lastindex(code))
+            if tag !== :none
                 # Here we replicate the particular messages 
                 msg =
                     tag === :string  ? "incomplete: invalid string syntax"     :
@@ -180,6 +179,9 @@ function _core_parser_hook(code, filename::String, lineno::Int, offset::Int, opt
                                        "incomplete: premature end of input"
                 error_ex = Expr(:incomplete, msg)
             else
+                # In the flisp parser errors are normally `Expr(:error, msg)` where
+                # `msg` is a String. By using a JuliaSyntax.ParseError for msg
+                # we can do fancy error reporting instead.
                 error_ex = Expr(:error, ParseError(stream, filename=filename, first_line=lineno))
             end
             ex = options === :all ? Expr(:toplevel, error_ex) : error_ex
