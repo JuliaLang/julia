@@ -3,7 +3,7 @@
 Julia provides a rich interface to deal with streaming I/O objects such as terminals, pipes and
 TCP sockets.
 These objects allow data to be sent and received in a stream-like fashion, which means that data is processed sequentially as it becomes available.
-This interface, though asynchronous at the system level, is presented in a synchronous manner to the programmer and it is usually unnecessary to think about the underlying asynchronous operation.
+This interface, though asynchronous at the system level, is presented in a synchronous manner to the programmer.
 This is achieved by making heavy use of Julia cooperative threading ([coroutine](@ref man-tasks))
 functionality.
 
