@@ -3557,7 +3557,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         # )  ==>  error
         msg = leading_kind == K"EndMarker" ?
               "premature end of input" :
-              "unexpected closing token"
+              "unexpected `$(untokenize(leading_kind))`"
         bump_invisible(ps, K"error", error=msg)
     else
         bump(ps, error="invalid syntax atom")

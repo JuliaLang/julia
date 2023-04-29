@@ -24,6 +24,9 @@ end
     # TODO: better range
 	@test diagnostic("@A.\$x a") ==
         Diagnostic(6, 5, :error, "invalid macro name")
+
+	@test diagnostic("a, , b") ==
+        Diagnostic(4, 3, :error, "unexpected `,`")
 end
 
 @testset "parser warnings" begin
