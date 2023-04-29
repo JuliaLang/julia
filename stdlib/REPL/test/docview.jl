@@ -46,7 +46,7 @@ end
     checks = ["var", "raw", "r"]
     symbols = "@" .* checks .* "_str"
     results = checks .* "\"\""
-    for (i,r) in zip(symbols,results)
+    for (i, r) in zip(symbols, results)
         @test r ∈ REPL.doc_completions(i)
     end
 end
@@ -54,6 +54,11 @@ end
     # https://github.com/JunoLab/FuzzyCompletions.jl/issues/7
     # shouldn't throw when there is a space in a middle of query
     @test (REPL.matchinds("a ", "a file.txt"); true)
+    
+    @test REPL.fuzzyscore("abc", "xyz") == 0
+    @test REPL.fuzzyscore("abc", "abc") == 1
+    @test REPL.fuzzyscore("abc", "dcab") == 0.25
+    @test REPL.fuzzyscore("abc", "dab") ≈ 1 / 3
 end
 
 @testset "Unicode doc lookup (#41589)" begin
