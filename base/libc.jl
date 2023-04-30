@@ -377,8 +377,8 @@ calloc(num::Integer, size::Integer) = ccall(:calloc, Ptr{Cvoid}, (Csize_t, Csize
 
 Call `memcpy` from the C standard library.
 
-!!! compat "Julia 1.9"
-    Support for `memcpy` as a tuple requires at least Julia 1.9.
+!!! compat "Julia 1.10"
+    Support for `memcpy` requires at least Julia 1.10.
 
 """
 function memcpy(dst::Ptr, src::Ptr, n::Integer)
@@ -390,8 +390,8 @@ end
 
 Call `memmove` from the C standard library.
 
-!!! compat "Julia 1.9"
-    Support for `memmove` as a tuple requires at least Julia 1.9.
+!!! compat "Julia 1.10"
+    Support for `memmove` requires at least Julia 1.10.
 
 """
 function memmove(dst::Ptr, src::Ptr, n::Integer)
@@ -403,8 +403,8 @@ end
 
 Call `memset` from the C standard library.
 
-!!! compat "Julia 1.9"
-    Support for `memset` as a tuple requires at least Julia 1.9.
+!!! compat "Julia 1.10"
+    Support for `memset` requires at least Julia 1.10.
 
 """
 function memset(p::Ptr, val, n::Integer)
@@ -416,8 +416,8 @@ end
 
 Call `memcmp` from the C standard library.
 
-!!! compat "Julia 1.9"
-    Support for `memcmp` as a tuple requires at least Julia 1.9.
+!!! compat "Julia 1.10"
+    Support for `memcmp` requires at least Julia 1.9.
 
 """
 function memcmp(a::Ptr, b::Ptr, n::Integer)

@@ -375,8 +375,8 @@ function writeshortest(buf::Vector{UInt8}, pos, x::T,
         output2 = div(output2, UInt32(10000))
         c0 = (c % 100) << 1
         c1 = (c ÷ 100) << 1
-        memcpy(ptr + pos + olength - i - 1, ptr2 + c0, 2)
-        memcpy(ptr + pos + olength - i - 3, ptr2 + c1, 2)
+        memcpy(ptr + pos + olength - i - 3, ptr2 + c0, 2)
+        memcpy(ptr + pos + olength - i - 4, ptr2 + c1, 2)
         i += 4
     end
     if output2 >= 100
