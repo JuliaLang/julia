@@ -167,3 +167,9 @@ end
     @test length(Base.manifest_names) == n
     @test length(Base.preferences_names) == n
 end
+
+@testset "Platform equatlity" begin
+    armv7l_linux_1 = Platform("armv7l", "linux")
+    armv7l_linux_2 = Platform("armv7l", "linux")
+    @test armv7l_linux_1 == armv7l_linux_2
+end
