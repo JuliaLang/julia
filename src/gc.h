@@ -379,6 +379,9 @@ STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list) JL_NOTSAFE
     *list = hdr;
 }
 
+extern uv_mutex_t gc_threads_lock;
+extern uv_cond_t gc_threads_cond;
+extern _Atomic(int) gc_n_threads_marking;
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
 void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin,
                                     jl_value_t **fl_end) JL_NOTSAFEPOINT;
@@ -386,6 +389,7 @@ void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list,
                                    size_t start) JL_NOTSAFEPOINT;
 void gc_mark_loop_serial_(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
 void gc_mark_loop_serial(jl_ptls_t ptls);
+void gc_mark_loop_parallel(jl_ptls_t ptls, int master);
 void sweep_stack_pools(void);
 void jl_gc_debug_init(void);
 

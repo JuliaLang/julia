@@ -307,12 +307,12 @@ static arraylist_t object_worklist;  // used to mimic recursion by jl_serialize_
 arraylist_t jl_linkage_blobs;
 arraylist_t jl_image_relocs;
 
-// Eytzinger tree of images. Used for very fast jl_object_in_image queries during gc
+// Eytzinger tree of images. Used for very fast jl_object_in_image queries
 // See https://algorithmica.org/en/eytzinger
 arraylist_t eytzinger_image_tree;
 arraylist_t eytzinger_idxs;
-static uintptr_t gc_img_min;
-static uintptr_t gc_img_max;
+static uintptr_t img_min;
+static uintptr_t img_max;
 
 static int ptr_cmp(const void *l, const void *r)
 {
@@ -340,7 +340,7 @@ static size_t eyt_obj_idx(jl_value_t *obj) JL_NOTSAFEPOINT
         return n;
     assert(n % 2 == 0 && "Eytzinger tree not even length!");
     uintptr_t cmp = (uintptr_t) obj;
-    if (cmp <= gc_img_min || cmp > gc_img_max)
+    if (cmp <= img_min || cmp > img_max)
         return n;
     uintptr_t *tree = (uintptr_t*)eytzinger_image_tree.items;
     size_t k = 1;
@@ -382,8 +382,8 @@ void rebuild_image_blob_tree(void)
         eytzinger_idxs.items[i] = (void*)(val + (i & 1));
     }
     qsort(eytzinger_idxs.items, eytzinger_idxs.len - 1, sizeof(void*), ptr_cmp);
-    gc_img_min = (uintptr_t) eytzinger_idxs.items[0];
-    gc_img_max = (uintptr_t) eytzinger_idxs.items[eytzinger_idxs.len - 2] + 1;
+    img_min = (uintptr_t) eytzinger_idxs.items[0];
+    img_max = (uintptr_t) eytzinger_idxs.items[eytzinger_idxs.len - 2] + 1;
     eytzinger((uintptr_t*)eytzinger_idxs.items, (uintptr_t*)eytzinger_image_tree.items, 0, 1, eytzinger_idxs.len - 1);
     // Reuse the scratch memory to store the indices
     // Still O(nlogn) because binary search
