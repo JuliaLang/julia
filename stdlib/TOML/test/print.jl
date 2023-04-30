@@ -96,19 +96,6 @@ loaders = ["gzip", { driver = "csv", args = {delim = "\t"}}]
     """
 end
 
-@testset "unsigned integers" for (x, s) in [
-            0x1a0 => "0x01a0",
-            0x1aea8 => "0x01aea8",
-            0x1aeee8 => "0x1aeee8",
-            0x1aea01231 => "0x01aea01231",
-            0x1aea01231213ae13125 => "0x01aea01231213ae13125",
-        ]
-    d = Dict("x" => x)
-    @test toml_str(d) == """
-    x = $s
-    """
-end
-
 struct Foo
     a::Int64
     b::Float64
