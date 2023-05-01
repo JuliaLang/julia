@@ -438,7 +438,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             if precompile(ps...)
                 n_succeeded += 1
             else
-                @debug "precompile failed for $(ps)"
+                @warn "Failed to precompile expression" form=statement _module=nothing _file=nothing _line=0
             end
             failed = length(statements) - n_succeeded
             yield() # Make clock spinning
