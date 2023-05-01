@@ -13,6 +13,10 @@ function run_gctest(file)
     end
 end
 
+# !!! note:
+#     Since we run our tests on 32bit OS as well we confine ourselves
+#     to parameters that allocate about 512MB of objects. Max RSS is lower
+#     than that.
 @testset "GC threads" begin
     run_gctest("gc/binarytree.jl")
     run_gctest("gc/linkedlist.jl")
