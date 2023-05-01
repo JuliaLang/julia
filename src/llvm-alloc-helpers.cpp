@@ -7,6 +7,8 @@
 
 #include <llvm/IR/IntrinsicInst.h>
 
+#define DEBUG_TYPE "escape-analysis"
+
 using namespace llvm;
 using namespace jl_alloc;
 
@@ -156,6 +158,8 @@ JL_USED_FUNC void AllocUseInfo::dump()
     dump(dbgs());
 }
 
+#define REMARK(remark) if (options.ORE) options.ORE->emit(remark)
+
 void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArgs required, EscapeAnalysisOptionalArgs options) {
     required.use_info.reset();
     if (I->use_empty())
@@ -173,9 +177,11 @@ void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArg
     };
 
     auto check_inst = [&] (Instruction *inst, Use *use) {
+        LLVM_DEBUG(dbgs() << "Checking: " << *inst << "\n");
         if (isa<LoadInst>(inst)) {
             required.use_info.hasload = true;
             if (cur.offset == UINT32_MAX) {
+                LLVM_DEBUG(dbgs() << "Load inst has unknown offset\n");
                 auto elty = inst->getType();
                 required.use_info.has_unknown_objref |= hasObjref(elty);
                 required.use_info.has_unknown_objrefaggr |= hasObjref(elty) && !isa<PointerType>(elty);
@@ -198,13 +204,16 @@ void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArg
                             !isa<ConstantInt>(call->getArgOperand(2)) ||
                             !isa<ConstantInt>(call->getArgOperand(1)) ||
                             (cast<ConstantInt>(call->getArgOperand(2))->getLimitedValue() >=
-                             UINT32_MAX - cur.offset))
+                             UINT32_MAX - cur.offset)) {
+                            LLVM_DEBUG(dbgs() << "Memset inst has unknown offset\n");
                             required.use_info.hasunknownmem = true;
+                        }
                         return true;
                     }
                     if (id == Intrinsic::lifetime_start || id == Intrinsic::lifetime_end ||
                         isa<DbgInfoIntrinsic>(II))
                         return true;
+                    LLVM_DEBUG(dbgs() << "Unknown intrinsic, marking addrescape\n");
                     required.use_info.addrescaped = true;
                     return true;
                 }
@@ -232,23 +241,38 @@ void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArg
             if (!call->isBundleOperand(opno) ||
                 call->getOperandBundleForOperand(opno).getTagName() != "jl_roots") {
                 if (isa<UnreachableInst>(call->getParent()->getTerminator())) {
+                    LLVM_DEBUG(dbgs() << "Detected use of allocation in block terminating with unreachable, likely error function\n");
                     required.use_info.haserror = true;
                     return true;
                 }
+                LLVM_DEBUG(dbgs() << "Unknown call, marking escape\n");
+                REMARK([&]() {
+                    return OptimizationRemarkMissed(DEBUG_TYPE, "UnknownCall",
+                                                    inst)
+                           << "Unknown call, marking escape (" << ore::NV("Call", inst) << ")";
+                });
                 required.use_info.escaped = true;
                 return false;
             }
+            LLVM_DEBUG(dbgs() << "Call is in jl_roots bundle, marking haspreserve\n");
             required.use_info.haspreserve = true;
             return true;
         }
         if (auto store = dyn_cast<StoreInst>(inst)) {
             // Only store value count
             if (use->getOperandNo() != StoreInst::getPointerOperandIndex()) {
+                LLVM_DEBUG(dbgs() << "Object address is stored somewhere, marking escape\n");
+                REMARK([&]() {
+                    return OptimizationRemarkMissed(DEBUG_TYPE, "StoreObjAddr",
+                                                    inst)
+                           << "Object address is stored somewhere, marking escape (" << ore::NV("Store", inst) << ")";
+                });
                 required.use_info.escaped = true;
                 return false;
             }
             auto storev = store->getValueOperand();
             if (cur.offset == UINT32_MAX) {
+                LLVM_DEBUG(dbgs() << "Store inst has unknown offset\n");
                 auto elty = storev->getType();
                 required.use_info.has_unknown_objref |= hasObjref(elty);
                 required.use_info.has_unknown_objrefaggr |= hasObjref(elty) && !isa<PointerType>(elty);
@@ -262,6 +286,12 @@ void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArg
         if (isa<AtomicCmpXchgInst>(inst) || isa<AtomicRMWInst>(inst)) {
             // Only store value count
             if (use->getOperandNo() != isa<AtomicCmpXchgInst>(inst) ? AtomicCmpXchgInst::getPointerOperandIndex() : AtomicRMWInst::getPointerOperandIndex()) {
+                LLVM_DEBUG(dbgs() << "Object address is cmpxchg/rmw-ed somewhere, marking escape\n");
+                REMARK([&]() {
+                    return OptimizationRemarkMissed(DEBUG_TYPE, "StoreObjAddr",
+                                                    inst)
+                           << "Object address is cmpxchg/rmw-ed somewhere, marking escape (" << ore::NV("Store", inst) << ")";
+                });
                 required.use_info.escaped = true;
                 return false;
             }
@@ -269,8 +299,10 @@ void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArg
             auto storev = isa<AtomicCmpXchgInst>(inst) ? cast<AtomicCmpXchgInst>(inst)->getNewValOperand() : cast<AtomicRMWInst>(inst)->getValOperand();
             if (cur.offset == UINT32_MAX || !required.use_info.addMemOp(inst, use->getOperandNo(),
                                                                cur.offset, storev->getType(),
-                                                               true, required.DL))
+                                                               true, required.DL)) {
+                LLVM_DEBUG(dbgs() << "Atomic inst has unknown offset\n");
                 required.use_info.hasunknownmem = true;
+            }
             required.use_info.refload = true;
             return true;
         }
@@ -284,10 +316,12 @@ void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArg
                 APInt apoffset(sizeof(void*) * 8, cur.offset, true);
                 if (!gep->accumulateConstantOffset(required.DL, apoffset) || apoffset.isNegative()) {
                     next_offset = UINT32_MAX;
+                    LLVM_DEBUG(dbgs() << "GEP inst has unknown offset\n");
                 }
                 else {
                     next_offset = apoffset.getLimitedValue();
                     if (next_offset > UINT32_MAX) {
+                        LLVM_DEBUG(dbgs() << "GEP inst exceeeds 32-bit offset\n");
                         next_offset = UINT32_MAX;
                     }
                 }
@@ -297,9 +331,16 @@ void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArg
             return true;
         }
         if (isa<ReturnInst>(inst)) {
+            LLVM_DEBUG(dbgs() << "Allocation is returned\n");
             required.use_info.returned = true;
             return true;
         }
+        LLVM_DEBUG(dbgs() << "Unknown instruction, marking escape\n");
+        REMARK([&]() {
+            return OptimizationRemarkMissed(DEBUG_TYPE, "UnknownInst",
+                                            inst)
+                   << "Unknown instruction, marking escape (" << ore::NV("Inst", inst) << ")";
+        });
         required.use_info.escaped = true;
         return false;
     };

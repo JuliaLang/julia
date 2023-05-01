@@ -368,7 +368,7 @@ void Optimizer::checkInst(Instruction *I)
 {
     LLVM_DEBUG(dbgs() << "Running escape analysis on " << *I << "\n");
     jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, pass, *pass.DL};
-    jl_alloc::runEscapeAnalysis(I, required);
+    jl_alloc::runEscapeAnalysis(I, required, jl_alloc::EscapeAnalysisOptionalArgs().with_optimization_remark_emitter(&ORE));
     ORE.emit([&](){
         std::string suse_info;
         llvm::raw_string_ostream osuse_info(suse_info);
