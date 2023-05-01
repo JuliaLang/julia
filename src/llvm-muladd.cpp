@@ -7,6 +7,7 @@
 #include <llvm-c/Types.h>
 
 #include <llvm/ADT/Statistic.h>
+#include <llvm/Analysis/OptimizationRemarkEmitter.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/PassManager.h>
@@ -23,7 +24,7 @@
 #include "julia.h"
 #include "julia_assert.h"
 
-#define DEBUG_TYPE "combine_muladd"
+#define DEBUG_TYPE "combine-muladd"
 #undef DEBUG
 
 using namespace llvm;
@@ -41,16 +42,25 @@ STATISTIC(TotalContracted, "Total number of multiplies marked for FMA");
  */
 
 // Return true if we changed the mulOp
-static bool checkCombine(Value *maybeMul) JL_NOTSAFEPOINT
+static bool checkCombine(Value *maybeMul, OptimizationRemarkEmitter &ORE) JL_NOTSAFEPOINT
 {
     auto mulOp = dyn_cast<Instruction>(maybeMul);
     if (!mulOp || mulOp->getOpcode() != Instruction::FMul)
         return false;
-    if (!mulOp->hasOneUse())
+    if (!mulOp->hasOneUse()) {
+        ORE.emit([&](){
+            return OptimizationRemarkMissed(DEBUG_TYPE, "Multiuse FMul", mulOp)
+                << "fmul had multiple uses " << ore::NV("fmul", mulOp);
+        });
         return false;
+    }
     // On 5.0+ we only need to mark the mulOp as contract and the backend will do the work for us.
     auto fmf = mulOp->getFastMathFlags();
     if (!fmf.allowContract()) {
+        ORE.emit([&](){
+            return OptimizationRemark(DEBUG_TYPE, "Marked for FMA", mulOp)
+                << "marked for fma " << ore::NV("fmul", mulOp);
+        });
         ++TotalContracted;
         fmf.setAllowContract(true);
         mulOp->copyFastMathFlags(fmf);
@@ -61,6 +71,7 @@ static bool checkCombine(Value *maybeMul) JL_NOTSAFEPOINT
 
 static bool combineMulAdd(Function &F) JL_NOTSAFEPOINT
 {
+    OptimizationRemarkEmitter ORE(&F);
     bool modified = false;
     for (auto &BB: F) {
         for (auto it = BB.begin(); it != BB.end();) {
@@ -70,13 +81,13 @@ static bool combineMulAdd(Function &F) JL_NOTSAFEPOINT
             case Instruction::FAdd: {
                 if (!I.isFast())
                     continue;
-                modified |= checkCombine(I.getOperand(0)) || checkCombine(I.getOperand(1));
+                modified |= checkCombine(I.getOperand(0), ORE) || checkCombine(I.getOperand(1), ORE);
                 break;
             }
             case Instruction::FSub: {
                 if (!I.isFast())
                     continue;
-                modified |= checkCombine(I.getOperand(0)) || checkCombine(I.getOperand(1));
+                modified |= checkCombine(I.getOperand(0), ORE) || checkCombine(I.getOperand(1), ORE);
                 break;
             }
             default:
