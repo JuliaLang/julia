@@ -122,6 +122,7 @@ Standard library changes
 #### InteractiveUtils
 
  * `code_native` and `@code_native` now default to intel syntax instead of AT&T.
+ * `@time_imports` now shows the timing of any module `__init__()`s that are run ([#49529])
 
 Deprecated or removed
 ---------------------
