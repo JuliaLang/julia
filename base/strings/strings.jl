@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 include("strings/styled.jl")
+include("strings/faces.jl")
 include("strings/search.jl")
 include("strings/unicode.jl")
 

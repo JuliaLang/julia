@@ -50,6 +50,7 @@ export
     Dims,
     Enum,
     ExponentialBackOff,
+    Face,
     IndexCartesian,
     IndexLinear,
     IndexStyle,
@@ -582,6 +583,7 @@ export
     ∪,
 
 # strings
+    addface!,
     ascii,
     bitstring,
     bytes2hex,
@@ -610,6 +612,7 @@ export
     isspace,
     isuppercase,
     isxdigit,
+    loadfaces!,
     lowercase,
     lowercasefirst,
     isvalid,
