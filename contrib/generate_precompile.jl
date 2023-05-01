@@ -182,6 +182,14 @@ if Libdl !== nothing
     """
 end
 
+InteractiveUtils = get(Base.loaded_modules,
+          Base.PkgId(Base.UUID("b77e0a4c-d291-57a0-90e8-8db25a27a240"), "InteractiveUtils"),
+          nothing)
+if InteractiveUtils !== nothing
+    repl_script *= """
+    @time_imports using Random
+    """
+end
 
 const JULIA_PROMPT = "julia> "
 const PKG_PROMPT = "pkg> "
