@@ -72,7 +72,7 @@ printstyled("a", "b")
 display([1])
 display([1 2; 3 4])
 foo(x) = 1
-@time foo(1)
+@time @eval foo(1)
 ; pwd
 $CTRL_C
 $CTRL_R$CTRL_C
