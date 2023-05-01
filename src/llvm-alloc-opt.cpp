@@ -10,6 +10,7 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/ADT/Statistic.h>
+#include <llvm/Analysis/OptimizationRemarkEmitter.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/LegacyPassManager.h>
@@ -37,7 +38,7 @@
 #include <map>
 #include <set>
 
-#define DEBUG_TYPE "alloc_opt"
+#define DEBUG_TYPE "alloc-opt"
 #include "julia_assert.h"
 
 using namespace llvm;
@@ -112,6 +113,7 @@ struct AllocOpt : public JuliaPassContext {
 struct Optimizer {
     Optimizer(Function &F, AllocOpt &pass, function_ref<DominatorTree&()> GetDT)
         : F(F),
+          ORE(&F),
           pass(pass),
           GetDT(std::move(GetDT))
     {}
@@ -139,6 +141,7 @@ private:
     void optimizeTag(CallInst *orig_inst);
 
     Function &F;
+    OptimizationRemarkEmitter ORE;
     AllocOpt &pass;
     DominatorTree *_DT = nullptr;
     function_ref<DominatorTree &()> GetDT;
@@ -215,17 +218,39 @@ void Optimizer::optimizeAll()
         size_t sz = item.second;
         checkInst(orig);
         if (use_info.escaped) {
-            if (use_info.hastypeof)
+            ORE.emit([&]() {
+                return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                    << "GC allocation escaped " << ore::NV("GC Allocation", orig);
+            });
+            if (use_info.hastypeof) {
+                ORE.emit([&]() {
+                    return OptimizationRemark(DEBUG_TYPE, "Type Tag", orig)
+                        << "GC allocation typeof optimized out " << ore::NV("GC Allocation", orig);
+                });
                 optimizeTag(orig);
+            }
             continue;
         }
         if (use_info.haserror || use_info.returned) {
-            if (use_info.hastypeof)
+            ORE.emit([&]() {
+                return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                    << "GC allocation has error or was returned " << ore::NV("GC Allocation", orig);
+            });
+            if (use_info.hastypeof) {
+                ORE.emit([&]() {
+                    return OptimizationRemark(DEBUG_TYPE, "Type Tag", orig)
+                        << "GC allocation typeof optimized out " << ore::NV("GC Allocation", orig);
+                });
                 optimizeTag(orig);
+            }
             continue;
         }
         if (!use_info.addrescaped && !use_info.hasload && (!use_info.haspreserve ||
                                                            !use_info.refstore)) {
+            ORE.emit([&]() {
+                return OptimizationRemark(DEBUG_TYPE, "Dead Allocation", orig)
+                    << "GC allocation removed " << ore::NV("GC Allocation", orig);
+            });
             // No one took the address, no one reads anything and there's no meaningful
             // preserve of fields (either no preserve/ccall or no object reference fields)
             // We can just delete all the uses.
@@ -246,16 +271,33 @@ void Optimizer::optimizeAll()
                 }
             }
         }
-        if (!use_info.hasunknownmem && !use_info.addrescaped && !has_refaggr) {
+        if (has_refaggr) {
+            ORE.emit([&]() {
+                return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                    << "GC allocation has unusual object reference, unable to move to stack " << ore::NV("GC Allocation", orig);
+            });
+            if (use_info.hastypeof) {
+                ORE.emit([&]() {
+                    return OptimizationRemark(DEBUG_TYPE, "Type Tag", orig)
+                        << "GC allocation typeof optimized out " << ore::NV("GC Allocation", orig);
+                });
+                optimizeTag(orig);
+            }
+            continue;
+        }
+        if (!use_info.hasunknownmem && !use_info.addrescaped) {
+            ORE.emit([&](){
+                return OptimizationRemark(DEBUG_TYPE, "Stack Split Allocation", orig)
+                    << "GC allocation split on stack " << ore::NV("GC Allocation", orig);
+            });
             // No one actually care about the memory layout of this object, split it.
             splitOnStack(orig);
             continue;
         }
-        if (has_refaggr) {
-            if (use_info.hastypeof)
-                optimizeTag(orig);
-            continue;
-        }
+        ORE.emit([&](){
+            return OptimizationRemark(DEBUG_TYPE, "Stack Move Allocation", orig)
+                << "GC allocation moved to stack " << ore::NV("GC Allocation", orig);
+        });
         // The object has no fields with mix reference access
         moveToStack(orig, sz, has_ref);
     }
@@ -326,6 +368,12 @@ void Optimizer::checkInst(Instruction *I)
 {
     jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, pass, *pass.DL};
     jl_alloc::runEscapeAnalysis(I, required);
+    ORE.emit([&](){
+        std::string suse_info;
+        llvm::raw_string_ostream osuse_info(suse_info);
+        use_info.dump(osuse_info);
+        return OptimizationRemarkAnalysis(DEBUG_TYPE, "EscapeAnalysis", I) << "escape analysis for " << ore::NV("GC Allocation", I) << "\n" << ore::NV("UseInfo", osuse_info.str());
+    });
 }
 
 void Optimizer::insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert)
