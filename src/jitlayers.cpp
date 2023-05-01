@@ -1306,9 +1306,6 @@ JuliaOJIT::JuliaOJIT()
     JD(ES.createBareJITDylib("JuliaOJIT")),
     ContextPool([](){
         auto ctx = std::make_unique<LLVMContext>();
-#ifdef JL_LLVM_OPAQUE_POINTERS
-        ctx->setOpaquePointers(true);
-#endif
         return orc::ThreadSafeContext(std::move(ctx));
     }),
 #ifdef JL_USE_JITLINK
