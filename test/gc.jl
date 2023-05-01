@@ -17,4 +17,5 @@ end
     run_gctest("gc/binarytree.jl")
     run_gctest("gc/linkedlist.jl")
     run_gctest("gc/objarray.jl")
+    run_gctest("gc/chunks.jl")
 end
