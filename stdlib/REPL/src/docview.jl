@@ -624,10 +624,6 @@ bestmatch(needle, haystack) =
     longer(matchinds(needle, haystack, acronym = true),
            matchinds(needle, haystack))
 
-avgdistance(xs) =
-    isempty(xs) ? 0 :
-    (xs[end] - xs[1] - length(xs)+1)/length(xs)
-
 function fuzzyscore(needle, haystack)
     return 1 - levenshtein(needle, haystack) / max(length(needle), length(haystack))
 end
