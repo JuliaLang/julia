@@ -98,7 +98,8 @@ lazy_static! {
         Arc::new((Mutex::new(0), Condvar::new()));
     pub static ref STOP_MUTATORS: Arc<(Mutex<usize>, Condvar)> =
         Arc::new((Mutex::new(0), Condvar::new()));
-    pub static ref ROOTS: Mutex<HashSet<Address>> = Mutex::new(HashSet::new());
+    pub static ref ROOT_NODES: Mutex<HashSet<ObjectReference>> = Mutex::new(HashSet::new());
+    pub static ref ROOT_EDGES: Mutex<HashSet<Address>> = Mutex::new(HashSet::new());
     pub static ref FINALIZER_ROOTS: RwLock<HashSet<JuliaFinalizableObject>> =
         RwLock::new(HashSet::new());
     pub static ref MUTATOR_TLS: RwLock<HashSet<String>> = RwLock::new(HashSet::new());

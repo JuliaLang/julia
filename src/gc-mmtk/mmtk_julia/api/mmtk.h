@@ -17,12 +17,8 @@ typedef struct {
 } closure_pointer;
 typedef void* MMTk_Mutator;
 typedef void* MMTk_TraceLocal;
-typedef void* (*TraceSlotFn)(void* slot, long offset);
-typedef void* (*TraceObjFn)(void* obj, bool scan_obj);
-typedef void* (*ScanObjFn)(void* obj);
-typedef void* (*DispatchScnObjFn)(void** vec, int len, int cap, int final, closure_pointer closure);
-typedef void* (*ProcessEdgeFn)(closure_pointer closure, void* slot);
-typedef void* (*ProcessOffsetEdgeFn)(closure_pointer closure, void* slot, int offset);
+typedef void (*ProcessEdgeFn)(closure_pointer closure, void* slot);
+typedef void (*ProcessOffsetEdgeFn)(closure_pointer closure, void* slot, int offset);
 
 /**
  * Allocation
@@ -41,6 +37,7 @@ extern void post_alloc(MMTk_Mutator mutator, void* refer,
     int bytes, int allocator);
 
 extern void add_object_to_mmtk_roots(void *obj);
+extern void process_root_edges(closure_pointer c, void* slot);
 
 extern void* mmtk_counted_malloc(size_t size);
 extern void* mmtk_malloc(size_t size);
