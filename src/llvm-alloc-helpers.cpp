@@ -110,38 +110,50 @@ bool AllocUseInfo::addMemOp(Instruction *inst, unsigned opno, uint32_t offset,
     return true;
 }
 
+JL_USED_FUNC void AllocUseInfo::dump(llvm::raw_ostream &OS)
+{
+    OS << "AllocUseInfo:\n";
+    OS << "escaped: " << escaped << '\n';
+    OS << "addrescaped: " << addrescaped << '\n';
+    OS << "returned: " << returned << '\n';
+    OS << "haserror: " << haserror << '\n';
+    OS << "hasload: " << hasload << '\n';
+    OS << "haspreserve: " << haspreserve << '\n';
+    OS << "hasunknownmem: " << hasunknownmem << '\n';
+    OS << "hastypeof: " << hastypeof << '\n';
+    OS << "refload: " << refload << '\n';
+    OS << "refstore: " << refstore << '\n';
+    OS << "Uses: " << uses.size() << '\n';
+    for (auto inst: uses)
+        inst->print(OS);
+    if (!preserves.empty()) {
+        OS << "Preserves: " << preserves.size() << '\n';
+        for (auto inst: preserves)
+            inst->print(OS);
+    }
+    OS << "MemOps: " << memops.size() << '\n';
+    for (auto &field: memops) {
+        OS << "  offset: " << field.first << '\n';
+        OS << "  size: " << field.second.size << '\n';
+        OS << "  hasobjref: " << field.second.hasobjref << '\n';
+        OS << "  hasload: " << field.second.hasload << '\n';
+        OS << "  hasaggr: " << field.second.hasaggr << '\n';
+        OS << "  accesses: " << field.second.accesses.size() << '\n';
+        for (auto &memop: field.second.accesses) {
+            OS << "    ";
+            memop.inst->print(OS);
+            OS << '\n';
+            OS << "    " << (memop.isaggr ? "aggr" : "scalar") << '\n';
+            OS << "    " << (memop.isobjref ? "objref" : "bits") << '\n';
+            OS << "    " << memop.offset << '\n';
+            OS << "    " << memop.size << '\n';
+        }
+    }
+}
+
 JL_USED_FUNC void AllocUseInfo::dump()
 {
-    jl_safe_printf("escaped: %d\n", escaped);
-    jl_safe_printf("addrescaped: %d\n", addrescaped);
-    jl_safe_printf("returned: %d\n", returned);
-    jl_safe_printf("haserror: %d\n", haserror);
-    jl_safe_printf("hasload: %d\n", hasload);
-    jl_safe_printf("haspreserve: %d\n", haspreserve);
-    jl_safe_printf("hasunknownmem: %d\n", hasunknownmem);
-    jl_safe_printf("hastypeof: %d\n", hastypeof);
-    jl_safe_printf("refload: %d\n", refload);
-    jl_safe_printf("refstore: %d\n", refstore);
-    jl_safe_printf("Uses: %d\n", (unsigned)uses.size());
-    for (auto inst: uses)
-        llvm_dump(inst);
-    if (!preserves.empty()) {
-        jl_safe_printf("Preserves: %d\n", (unsigned)preserves.size());
-        for (auto inst: preserves) {
-            llvm_dump(inst);
-        }
-    }
-    if (!memops.empty()) {
-        jl_safe_printf("Memops: %d\n", (unsigned)memops.size());
-        for (auto &field: memops) {
-            jl_safe_printf("  Field %d @ %d\n", field.second.size, field.first);
-            jl_safe_printf("    Accesses:\n");
-            for (auto memop: field.second.accesses) {
-                jl_safe_printf("    ");
-                llvm_dump(memop.inst);
-            }
-        }
-    }
+    dump(dbgs());
 }
 
 void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArgs required, EscapeAnalysisOptionalArgs options) {

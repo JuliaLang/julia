@@ -8,6 +8,7 @@
 #include <llvm/Analysis/LoopIterator.h>
 #include <llvm/Analysis/MemorySSA.h>
 #include <llvm/Analysis/MemorySSAUpdater.h>
+#include <llvm/Analysis/OptimizationRemarkEmitter.h>
 #include <llvm/Analysis/ValueTracking.h>
 #include <llvm/Analysis/ScalarEvolution.h>
 #include <llvm/ADT/Statistic.h>
@@ -142,7 +143,7 @@ struct JuliaLICM : public JuliaPassContext {
                 GetMSSA(GetMSSA),
                 GetSE(GetSE) {}
 
-    bool runOnLoop(Loop *L)
+    bool runOnLoop(Loop *L, OptimizationRemarkEmitter &ORE)
     {
         // Get the preheader block to move instructions into,
         // required to run this pass.
@@ -214,6 +215,10 @@ struct JuliaLICM : public JuliaPassContext {
                         continue;
                     ++HoistedPreserveBegin;
                     moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
+                    ORE.emit([&](){
+                        return OptimizationRemark(DEBUG_TYPE, "Hoisted", call)
+                            << "hoisting preserve begin " << ore::NV("PreserveBegin", call);
+                    });
                     changed = true;
                 }
                 else if (callee == gc_preserve_end_func) {
@@ -229,10 +234,18 @@ struct JuliaLICM : public JuliaPassContext {
                     }
                     ++SunkPreserveEnd;
                     moveInstructionBefore(*call, *exit_pts[0], MSSAU, SE);
+                    ORE.emit([&](){
+                        return OptimizationRemark(DEBUG_TYPE, "Sunk", call)
+                            << "sinking preserve end " << ore::NV("PreserveEnd", call);
+                    });
                     for (unsigned i = 1; i < exit_pts.size(); i++) {
                         // Clone exit
                         auto CI = CallInst::Create(call, {}, exit_pts[i]);
                         createNewInstruction(CI, call, MSSAU);
+                        ORE.emit([&](){
+                            return OptimizationRemark(DEBUG_TYPE, "Sunk", call)
+                                << "cloning and sinking preserve end" << ore::NV("PreserveEnd", call);
+                        });
                     }
                 }
                 else if (callee == write_barrier_func) {
@@ -245,20 +258,17 @@ struct JuliaLICM : public JuliaPassContext {
                             break;
                         }
                     }
-                    if (valid) {
-                        ++HoistedWriteBarrier;
-                        moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
-                        changed = true;
-                    }
+                    if (!valid)
+                        continue;
+                    ++HoistedWriteBarrier;
+                    moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
+                    changed = true;
+                    ORE.emit([&](){
+                        return OptimizationRemark(DEBUG_TYPE, "Hoist", call)
+                            << "hoisting write barrier " << ore::NV("GC Write Barrier", call);
+                    });
                 }
                 else if (callee == alloc_obj_func) {
-                    jl_alloc::AllocUseInfo use_info;
-                    jl_alloc::CheckInst::Stack check_stack;
-                    jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, *this, DL};
-                    jl_alloc::runEscapeAnalysis(call, required, jl_alloc::EscapeAnalysisOptionalArgs().with_valid_set(&L->getBlocksSet()));
-                    if (use_info.escaped || use_info.addrescaped) {
-                        continue;
-                    }
                     bool valid = true;
                     for (std::size_t i = 0; i < call->arg_size(); i++) {
                         if (!makeLoopInvariant(L, call->getArgOperand(i), changed,
@@ -267,16 +277,51 @@ struct JuliaLICM : public JuliaPassContext {
                             break;
                         }
                     }
+                    if (!valid)
+                        continue;
+                    jl_alloc::AllocUseInfo use_info;
+                    jl_alloc::CheckInst::Stack check_stack;
+                    jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, *this, DL};
+                    jl_alloc::runEscapeAnalysis(call, required, jl_alloc::EscapeAnalysisOptionalArgs().with_valid_set(&L->getBlocksSet()));
+                    ORE.emit([&](){
+                        std::string suse_info;
+                        llvm::raw_string_ostream osuse_info(suse_info);
+                        use_info.dump(osuse_info);
+                        return OptimizationRemarkAnalysis(DEBUG_TYPE, "EscapeAnalysis", call) << "escape analysis for " << ore::NV("GC Allocation", call) << "\n" << ore::NV("UseInfo", osuse_info.str());
+                    });
+                    if (use_info.escaped) {
+                        ORE.emit([&](){
+                            return OptimizationRemarkMissed(DEBUG_TYPE, "Escape", call)
+                                << "not hoisting gc allocation " << ore::NV("GC Allocation", call)
+                                << " because it may escape";
+                        });
+                        continue;
+                    }
+                    if (use_info.addrescaped) {
+                        ORE.emit([&](){
+                            return OptimizationRemarkMissed(DEBUG_TYPE, "Escape", call)
+                                << "not hoisting gc allocation " << ore::NV("GC Allocation", call)
+                                << " because its address may escape";
+                        });
+                        continue;
+                    }
                     if (use_info.refstore) {
                         // We need to add write barriers to any stores
                         // that may start crossing generations
+                        ORE.emit([&](){
+                            return OptimizationRemarkMissed(DEBUG_TYPE, "Escape", call)
+                                << "not hoisting gc allocation " << ore::NV("GC Allocation", call)
+                                << " because it may have an object stored to it";
+                        });
                         continue;
                     }
-                    if (valid) {
-                        ++HoistedAllocation;
-                        moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
-                        changed = true;
-                    }
+                    ORE.emit([&](){
+                        return OptimizationRemark(DEBUG_TYPE, "Hoist", call)
+                            << "hoisting gc allocation " << ore::NV("GC Allocation", call);
+                    });
+                    ++HoistedAllocation;
+                    moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
+                    changed = true;
                 }
             }
         }
@@ -291,6 +336,7 @@ struct JuliaLICM : public JuliaPassContext {
 };
 
 bool JuliaLICMPassLegacy::runOnLoop(Loop *L, LPPassManager &LPM) {
+    OptimizationRemarkEmitter ORE(L->getHeader()->getParent());
     auto GetDT = [this]() -> DominatorTree & {
         return getAnalysis<DominatorTreeWrapperPass>().getDomTree();
     };
@@ -304,7 +350,7 @@ bool JuliaLICMPassLegacy::runOnLoop(Loop *L, LPPassManager &LPM) {
         return nullptr;
     };
     auto juliaLICM = JuliaLICM(GetDT, GetLI, GetMSSA, GetSE);
-    return juliaLICM.runOnLoop(L);
+    return juliaLICM.runOnLoop(L, ORE);
 }
 
 char JuliaLICMPassLegacy::ID = 0;
@@ -316,6 +362,7 @@ static RegisterPass<JuliaLICMPassLegacy>
 PreservedAnalyses JuliaLICMPass::run(Loop &L, LoopAnalysisManager &AM,
                           LoopStandardAnalysisResults &AR, LPMUpdater &U)
 {
+    OptimizationRemarkEmitter ORE(L.getHeader()->getParent());
     auto GetDT = [&AR]() -> DominatorTree & {
         return AR.DT;
     };
@@ -329,7 +376,7 @@ PreservedAnalyses JuliaLICMPass::run(Loop &L, LoopAnalysisManager &AM,
         return &AR.SE;
     };
     auto juliaLICM = JuliaLICM(GetDT, GetLI, GetMSSA, GetSE);
-    if (juliaLICM.runOnLoop(&L)) {
+    if (juliaLICM.runOnLoop(&L, ORE)) {
         auto preserved = getLoopPassPreservedAnalyses();
         preserved.preserveSet<CFGAnalyses>();
         preserved.preserve<MemorySSAAnalysis>();

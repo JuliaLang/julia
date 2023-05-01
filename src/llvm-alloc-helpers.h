@@ -110,6 +110,7 @@ namespace jl_alloc {
             preserves.clear();
             memops.clear();
         }
+        void dump(llvm::raw_ostream &OS);
         void dump();
         bool addMemOp(llvm::Instruction *inst, unsigned opno, uint32_t offset, llvm::Type *elty,
                       bool isstore, const llvm::DataLayout &DL);
