@@ -416,6 +416,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
     if interactive && isassigned(REPL_MODULE_REF)
         invokelatest(REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
+            global current_terminfo = load_terminfo(term_env)
             term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
             banner == :no || Base.banner(term, short=banner==:short)
             if term.term_type == "dumb"
