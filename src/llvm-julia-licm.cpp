@@ -290,7 +290,7 @@ struct JuliaLICM : public JuliaPassContext {
                         LLVM_DEBUG(dbgs() << "Failed to hoist alloc_obj: " << *call << "\n");
                         continue;
                     }
-                    dbgs() << "Running escape analysis for " << *call << "\n";
+                    LLVM_DEBUG(dbgs() << "Running escape analysis for " << *call << "\n");
                     jl_alloc::AllocUseInfo use_info;
                     jl_alloc::CheckInst::Stack check_stack;
                     jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, *this, DL};
