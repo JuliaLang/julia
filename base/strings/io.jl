@@ -787,3 +787,272 @@ function StyledString(chars::AbstractVector{C}) where {C<:AbstractChar}
     end
     StyledString(str, props)
 end
+
+## Styled printing ##
+
+"""
+A mapping between ANSI named colours and indices in the standard 256-color
+table. The standard colors are 0-7, and high intensity colors 8-15.
+
+The high intensity colors are prefixed by "bright_". The "bright_black" color is
+given two aliases: "grey" and "gray".
+"""
+const ANSI_4BIT_COLORS = Dict{Symbol, Int}(
+    :black => 0,
+    :red => 1,
+    :green => 2,
+    :yellow => 3,
+    :blue => 4,
+    :magenta => 5,
+    :cyan => 6,
+    :white => 7,
+    :bright_black => 8,
+    :grey => 8,
+    :gray => 8,
+    :bright_red => 9,
+    :bright_green => 10,
+    :bright_yellow => 11,
+    :bright_blue => 12,
+    :bright_magenta => 13,
+    :bright_cyan => 14,
+    :bright_white => 15)
+
+"""
+    ansi_4bit_color_code(color::Symbol, background::Bool=false)
+
+Provide the color code (30-37, 40-47, 90-97, 100-107) for `color`, as a string.
+When `background` is set the background variant will be provided, otherwise
+the provided code is for setting the foreground color.
+"""
+function ansi_4bit_color_code(color::Symbol, background::Bool=false)
+    if haskey(ANSI_4BIT_COLORS, color)
+        code = ANSI_4BIT_COLORS[color]
+        code >= 8 && (code += 52)
+        background && (code += 10)
+        string(code + 30)
+    else
+        ifelse(background, "49", "39")
+    end
+end
+
+"""
+    termcolor8bit(io::IO, color::RGBTuple, category::Char)
+
+Print to `io` the best 8-bit SGR color code that sets the `category` color to
+be close to `color`.
+"""
+function termcolor8bit(io::IO, (; r, g, b)::RGBTuple, category::Char)
+    # Magic numbers? Lots.
+    cdistsq(r1, g1, b1) = (r1 - r)^2 + (g1 - g)^2 + (b1 - b)^2
+    to6cube(value) = if value < 48; 1
+    elseif value < 114; 2
+    else 1 + (value - 35) ÷ 40 end
+    r6cube, g6cube, b6cube = to6cube(r), to6cube(g), to6cube(b)
+    sixcube = (0, 95, 135, 175, 215, 255)
+    rnear, gnear, bnear = sixcube[r6cube], sixcube[g6cube], sixcube[b6cube]
+    colorcode = if r == rnear && g == gnear && b == bnear
+        16 + 35 * r6cube + 6 * g6cube + b6cube
+    else
+        grey_avg = Int(r + g + b) ÷ 3
+        grey_index = if grey_avg > 238 23 else (grey_avg - 3) ÷ 10 end
+        grey = 8 + 10 * grey_index
+        if cdistsq(grey, grey, grey) <= cdistsq(rnear, gnear, bnear)
+            232 + grey
+        else
+            16 + 35 * r6cube + 6 * g6cube + b6cube
+        end
+    end
+    print(io, "\e[", category, "8;5;", string(colorcode), 'm')
+end
+
+"""
+    termcolor24bit(io::IO, color::RGBTuple, category::Char)
+
+Print to `io` the 24-bit SGR color code to set the `category`8 slot to `color`.
+"""
+function termcolor24bit(io::IO, color::RGBTuple, category::Char)
+    print(io, "\e[", category, "8;2;",
+          string(color.r), ';',
+          string(color.g), ';',
+          string(color.b), 'm')
+end
+
+"""
+    termcolor(io::IO, color::SimpleColor, category::Char)
+
+Print to `io` the SGR code to set the `category`'s slot to `color`,
+where `category` is set as follows:
+- `'3'` sets the foreground color
+- `'4'` sets the background color
+- `'5'` sets the underline color
+
+If `color` is a `SimpleColor{Symbol}`, the value should be a a member of
+`ANSI_4BIT_COLORS`. Any other value will cause the color to be reset.
+
+If `color` is a `SimpleColor{RGBTuple}` and `get_have_truecolor()` returns true,
+24-bit color is used. Otherwise, an 8-bit approximation of `color` is used.
+"""
+function termcolor(io::IO, color::SimpleColor, category::Char)
+    if color.value isa RGBTuple
+        if get_have_truecolor()
+            termcolor24bit(io, color.value, category)
+        else
+            termcolor8bit(io, color.value, category)
+        end
+    elseif (fg = get(FACES.current[], color.value, getface()).foreground) != SimpleColor(color.value)
+        termcolor(io, fg, category)
+    else
+        print(io, "\e[",
+              if category == '3' || category == '4'
+                  ansi_4bit_color_code(color.value, category == '4')
+              elseif category == '5'
+                  if haskey(ANSI_4BIT_COLORS, color.value)
+                      string("58;5;", ANSI_4BIT_COLORS[color.value])
+                  else "59" end
+              end,
+              'm')
+    end
+end
+
+"""
+    termcolor(io::IO, ::Nothing, category::Char)
+
+Print to `io` the SGR code to reset the color for `category`.
+"""
+termcolor(io::IO, ::Nothing, category::Char) =
+    print(io, "\e[", category, '9', 'm')
+
+const ANSI_STYLE_CODES = (
+    bold_weight = "\e[1m",
+    dim_weight = "\e[2m",
+    normal_weight = "\e[22m",
+    start_italics = "\e[3m",
+    end_italics = "\e[23m",
+    start_underline = "\e[4m",
+    end_underline = "\e[24m",
+    start_reverse = "\e[7m",
+    end_reverse = "\e[27m",
+    start_strikethrough = "\e[9m",
+    end_strikethrough = "\e[29m"
+)
+
+function termstyle(io::IO, face::Face, lastface::Face=getface())
+    face.foreground == lastface.foreground ||
+        termcolor(io, face.foreground, '3')
+    face.background == lastface.background ||
+        termcolor(io, face.background, '4')
+    face.weight == lastface.weight ||
+        print(io, if face.weight ∈ (:medium, :semibold, :bold, :extrabold, :black)
+                  get(current_terminfo, :bold, "\e[1m")
+              elseif face.weight ∈ (:semilight, :light, :extralight, :thin)
+                  get(current_terminfo, :dim, "")
+              else # :normal
+                  ANSI_STYLE_CODES.normal_weight
+              end)
+    face.slant == lastface.slant ||
+        if haskey(current_terminfo, :enter_italics_mode)
+            print(io, ifelse(face.slant ∈ (:italic, :oblique),
+                             ANSI_STYLE_CODES.start_italics,
+                             ANSI_STYLE_CODES.end_italics))
+        elseif face.slant ∈ (:italic, :oblique) && face.underline ∈ (nothing, false)
+            print(io, ANSI_STYLE_CODES.start_underline)
+        elseif face.slant ∉ (:italic, :oblique) && lastface.underline ∈ (nothing, false)
+            print(io, ANSI_STYLE_CODES.end_underline)
+        end
+    # Kitty fancy underlines, see <https://sw.kovidgoyal.net/kitty/underlines>
+    # Supported in Kitty, VTE, iTerm2, Alacritty, and Wezterm.
+    face.underline == lastface.underline ||
+        if get(current_terminfo, :Su, false) # Color/style capabilities
+            if face.underline isa Tuple # Color and style
+                color, style = face.underline
+                print(io, "\e[4:",
+                        if style == :straight;   '1'
+                        elseif style == :double; '2'
+                        elseif style == :curly;  '3'
+                        elseif style == :dotted; '4'
+                        elseif style == :dashed; '5'
+                        else '0' end, 'm')
+                !isnothing(color) && termcolor(io, color, '5')
+            elseif face.underline isa SimpleColor
+                if !(lastface.underline isa SimpleColor || lastface.underline == true)
+                    print(io, ANSI_STYLE_CODES.start_underline)
+                end
+                termcolor(io, face.underline, '5')
+            else
+                if lastface.underline isa SimpleColor || lastface.underline isa Tuple && first(lastface.underline) isa SimpleColor
+                    termcolor(io, SimpleColor(:none), '5')
+                end
+                print(io, ifelse(face.underline == true,
+                                ANSI_STYLE_CODES.start_underline,
+                                ANSI_STYLE_CODES.end_underline))
+            end
+        else
+            print(io, ifelse(face.underline !== false,
+                             ANSI_STYLE_CODES.start_underline,
+                             ANSI_STYLE_CODES.end_underline))
+        end
+    face.strikethrough == lastface.strikethrough || !haskey(current_terminfo, :smxx) ||
+        print(io, ifelse(face.strikethrough === true,
+                         ANSI_STYLE_CODES.start_strikethrough,
+                         ANSI_STYLE_CODES.end_strikethrough))
+    face.inverse == lastface.inverse || !haskey(current_terminfo, :enter_reverse_mode) ||
+        print(io, ifelse(face.inverse === true,
+                         ANSI_STYLE_CODES.start_reverse,
+                         ANSI_STYLE_CODES.end_reverse))
+end
+
+function _ansi_writer(io::IO, s::Union{<:StyledString, SubString{<:StyledString}},
+                      string_writer::Function)
+    if get(io, :color, false)::Bool
+        for (str, styles) in eachstyle(s)
+            face = getface(styles)
+            link = let idx=findfirst(==(:link) ∘ first, styles)
+                if !isnothing(idx)
+                    string(last(styles[idx]))::String
+                end end
+            !isnothing(link) && write(io, "\e]8;;", link, "\e\\")
+            termstyle(io, face, lastface)
+            string_writer(io, str)
+            !isnothing(link) && write(io, "\e]8;;\e\\")
+            lastface = face
+        end
+        termstyle(io, getface(), lastface)
+    elseif s isa StyledString
+        string_writer(io, s.string)
+    elseif s isa SubString
+        string_writer(
+            io, SubString(s.string.string, s.offset, s.ncodeunits, Val(:noshift)))
+    end
+end
+
+write(io::IO, s::Union{<:StyledString, SubString{<:StyledString}}) =
+    _ansi_writer(io, s, write)
+
+print(io::IO, s::Union{<:StyledString, SubString{<:StyledString}}) =
+    (write(io, s); nothing)
+
+escape_string(io::IO, s::Union{<:StyledString, SubString{<:StyledString}},
+              esc = ""; keep = ()) =
+    (_ansi_writer(io, s, (io, s) -> escape_string(io, s, esc; keep)); nothing)
+
+function write(io::IO, c::StyledChar)
+    if get(io, :color, false) == true
+        termstyle(io, getface(c), getface())
+        print(io, c.char)
+        termstyle(io, getface(), getface(c))
+    else
+        print(io, c.char)
+    end
+end
+
+print(io::IO, c::StyledChar) = (write(io, c); nothing)
+
+function show(io::IO, c::StyledChar)
+    if get(io, :color, false) == true
+        out = IOBuffer()
+        show(out, c.char)
+        print(io, ''', StyledString(String(take!(out)[2:end-1]), c.properties), ''')
+    else
+        show(io, c.char)
+    end
+end
