@@ -684,7 +684,7 @@ function printmatches(io::IO, word, matches; cols::Int = _displaysize(io)[2])
     total = 0
     for match in matches
         total + length(match) + 1 > cols && break
-        fuzzyscore(word, match) < 0 && break
+        fuzzyscore(word, match) < 0.6 && break
         print(io, " ")
         printmatch(io, word, match)
         total += length(match) + 1

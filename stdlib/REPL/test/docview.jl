@@ -54,7 +54,7 @@ end
     # https://github.com/JunoLab/FuzzyCompletions.jl/issues/7
     # shouldn't throw when there is a space in a middle of query
     @test (REPL.matchinds("a ", "a file.txt"); true)
-    
+
     @test REPL.fuzzyscore("abc", "xyz") == 0
     @test REPL.fuzzyscore("abc", "abc") == 1
     @test REPL.fuzzyscore("abc", "dcab") == 0.25
