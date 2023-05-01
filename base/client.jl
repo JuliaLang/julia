@@ -4,6 +4,7 @@
 ##             and REPL
 
 have_color = nothing
+have_truecolor = nothing
 const default_color_warn = :yellow
 const default_color_error = :light_red
 const default_color_info = :cyan
