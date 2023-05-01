@@ -426,8 +426,11 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             ps.head = :tuple
             # println(ps)
             ps = Core.eval(PrecompileStagingArea, ps)
-            precompile(ps...)
-            n_succeeded += 1
+            if precompile(ps...)
+                n_succeeded += 1
+            else
+                @debug "precompile failed for $(ps)"
+            end
             failed = length(statements) - n_succeeded
             yield() # Make clock spinning
             print_state("step3" => string("R$n_succeeded", failed > 0 ? " ($failed failed)" : ""))
