@@ -158,8 +158,10 @@ struct JuliaLICM : public JuliaPassContext {
         // `gc_preserve_end_func` must be from `gc_preserve_begin_func`.
         // We also hoist write barriers here, so we don't exit if write_barrier_func exists
         if (!gc_preserve_begin_func && !write_barrier_func &&
-            !alloc_obj_func)
+            !alloc_obj_func) {
+            LLVM_DEBUG(dbgs() << "No gc_preserve_begin_func or write_barrier_func or alloc_obj_func found, skipping JuliaLICM\n");
             return false;
+        }
         auto LI = &GetLI();
         auto DT = &GetDT();
         auto MSSA = GetMSSA();
@@ -215,6 +217,7 @@ struct JuliaLICM : public JuliaPassContext {
                         continue;
                     ++HoistedPreserveBegin;
                     moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
+                    LLVM_DEBUG(dbgs() << "Hoisted gc_preserve_begin: " << *call << "\n");
                     ORE.emit([&](){
                         return OptimizationRemark(DEBUG_TYPE, "Hoisted", call)
                             << "hoisting preserve begin " << ore::NV("PreserveBegin", call);
@@ -234,6 +237,7 @@ struct JuliaLICM : public JuliaPassContext {
                     }
                     ++SunkPreserveEnd;
                     moveInstructionBefore(*call, *exit_pts[0], MSSAU, SE);
+                    LLVM_DEBUG(dbgs() << "Sunk gc_preserve_end: " << *call << "\n");
                     ORE.emit([&](){
                         return OptimizationRemark(DEBUG_TYPE, "Sunk", call)
                             << "sinking preserve end " << ore::NV("PreserveEnd", call);
@@ -242,6 +246,7 @@ struct JuliaLICM : public JuliaPassContext {
                         // Clone exit
                         auto CI = CallInst::Create(call, {}, exit_pts[i]);
                         createNewInstruction(CI, call, MSSAU);
+                        LLVM_DEBUG(dbgs() << "Cloned and sunk gc_preserve_end: " << *CI << "\n");
                         ORE.emit([&](){
                             return OptimizationRemark(DEBUG_TYPE, "Sunk", call)
                                 << "cloning and sinking preserve end" << ore::NV("PreserveEnd", call);
@@ -255,11 +260,14 @@ struct JuliaLICM : public JuliaPassContext {
                             changed, preheader->getTerminator(),
                             MSSAU, SE)) {
                             valid = false;
+                            LLVM_DEBUG(dbgs() << "Failed to hoist write barrier argument: " << *call->getArgOperand(i) << "\n");
                             break;
                         }
                     }
-                    if (!valid)
+                    if (!valid) {
+                        LLVM_DEBUG(dbgs() << "Failed to hoist write barrier: " << *call << "\n");
                         continue;
+                    }
                     ++HoistedWriteBarrier;
                     moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
                     changed = true;
@@ -274,11 +282,15 @@ struct JuliaLICM : public JuliaPassContext {
                         if (!makeLoopInvariant(L, call->getArgOperand(i), changed,
                             preheader->getTerminator(), MSSAU, SE)) {
                             valid = false;
+                            LLVM_DEBUG(dbgs() << "Failed to hoist alloc_obj argument: " << *call->getArgOperand(i) << "\n");
                             break;
                         }
                     }
-                    if (!valid)
+                    if (!valid) {
+                        LLVM_DEBUG(dbgs() << "Failed to hoist alloc_obj: " << *call << "\n");
                         continue;
+                    }
+                    dbgs() << "Running escape analysis for " << *call << "\n";
                     jl_alloc::AllocUseInfo use_info;
                     jl_alloc::CheckInst::Stack check_stack;
                     jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, *this, DL};

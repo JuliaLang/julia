@@ -366,6 +366,7 @@ ssize_t Optimizer::getGCAllocSize(Instruction *I)
 
 void Optimizer::checkInst(Instruction *I)
 {
+    LLVM_DEBUG(dbgs() << "Running escape analysis on " << *I << "\n");
     jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, pass, *pass.DL};
     jl_alloc::runEscapeAnalysis(I, required);
     ORE.emit([&](){
@@ -663,8 +664,10 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
         }
         return false;
     };
-    if (simple_replace(orig_inst, new_inst))
+    if (simple_replace(orig_inst, new_inst)) {
+        LLVM_DEBUG(dbgs() << "Simple replace of allocation was successful in stack move\n");
         return;
+    }
     assert(replace_stack.empty());
     ReplaceUses::Frame cur{orig_inst, new_inst};
     auto finish_cur = [&] () {
@@ -779,8 +782,10 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
         }
         return false;
     };
-    if (simple_remove(orig_inst))
+    if (simple_remove(orig_inst)) {
+        LLVM_DEBUG(dbgs() << "Simple remove of allocation was successful in removeAlloc\n");
         return;
+    }
     assert(replace_stack.empty());
     ReplaceUses::Frame cur{orig_inst, nullptr};
     auto finish_cur = [&] () {
@@ -866,6 +871,10 @@ void Optimizer::optimizeTag(CallInst *orig_inst)
             auto callee = call->getCalledOperand();
             if (pass.typeof_func == callee) {
                 ++RemovedTypeofs;
+                ORE.emit([&](){
+                    return OptimizationRemark(DEBUG_TYPE, "typeof", call)
+                        << "removed typeof call for GC allocation " << ore::NV("Alloc", orig_inst);
+                });
                 call->replaceAllUsesWith(tag);
                 // Push to the removed instructions to trigger `finalize` to
                 // return the correct result.
@@ -942,8 +951,10 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         }
         return false;
     };
-    if (simple_replace(orig_inst))
+    if (simple_replace(orig_inst)) {
+        LLVM_DEBUG(dbgs() << "Simple replace of allocation was successful in stack split\n");
         return;
+    }
     assert(replace_stack.empty());
     ReplaceUses::Frame cur{orig_inst, uint32_t(0)};
     auto finish_cur = [&] () {
@@ -1223,8 +1234,10 @@ bool AllocOpt::doInitialization(Module &M)
 
 bool AllocOpt::runOnFunction(Function &F, function_ref<DominatorTree&()> GetDT)
 {
-    if (!alloc_obj_func)
+    if (!alloc_obj_func) {
+        LLVM_DEBUG(dbgs() << "AllocOpt: no alloc_obj function found, skipping pass\n");
         return false;
+    }
     Optimizer optimizer(F, *this, std::move(GetDT));
     optimizer.initialize();
     optimizer.optimizeAll();

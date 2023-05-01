@@ -48,6 +48,7 @@ static bool checkCombine(Value *maybeMul, OptimizationRemarkEmitter &ORE) JL_NOT
     if (!mulOp || mulOp->getOpcode() != Instruction::FMul)
         return false;
     if (!mulOp->hasOneUse()) {
+        LLVM_DEBUG(dbgs() << "mulOp has multiple uses: " << *maybeMul << "\n");
         ORE.emit([&](){
             return OptimizationRemarkMissed(DEBUG_TYPE, "Multiuse FMul", mulOp)
                 << "fmul had multiple uses " << ore::NV("fmul", mulOp);
@@ -57,6 +58,7 @@ static bool checkCombine(Value *maybeMul, OptimizationRemarkEmitter &ORE) JL_NOT
     // On 5.0+ we only need to mark the mulOp as contract and the backend will do the work for us.
     auto fmf = mulOp->getFastMathFlags();
     if (!fmf.allowContract()) {
+        LLVM_DEBUG(dbgs() << "Marking mulOp for FMA: " << *maybeMul << "\n");
         ORE.emit([&](){
             return OptimizationRemark(DEBUG_TYPE, "Marked for FMA", mulOp)
                 << "marked for fma " << ore::NV("fmul", mulOp);
