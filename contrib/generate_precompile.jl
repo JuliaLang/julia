@@ -45,6 +45,7 @@ precompile(Tuple{typeof(push!), Vector{Function}, Function})
 # miscellaneous
 precompile(Tuple{typeof(Base.require), Base.PkgId})
 precompile(Tuple{typeof(Base.recursive_prefs_merge), Base.Dict{String, Any}})
+precompile(Tuple{typeof(Base.recursive_prefs_merge), Base.Dict{String, Any}, Base.Dict{String, Any}, Vararg{Base.Dict{String, Any}}})
 precompile(Tuple{typeof(Base.hashindex), Tuple{Base.PkgId, Nothing}, Int64})
 precompile(Tuple{typeof(Base.hashindex), Tuple{Base.PkgId, String}, Int64})
 precompile(Tuple{typeof(isassigned), Core.SimpleVector, Int})
