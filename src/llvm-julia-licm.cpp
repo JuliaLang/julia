@@ -339,9 +339,11 @@ struct JuliaLICM : public JuliaPassContext {
                     ++HoistedAllocation;
                     moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
                     IRBuilder<> builder(preheader->getTerminator());
+                    builder.SetCurrentDebugLocation(call->getDebugLoc());
                     auto obj_i8 = builder.CreateBitCast(call, Type::getInt8PtrTy(call->getContext(), call->getType()->getPointerAddressSpace()));
-                    // Note that this alignment is assuming the GC allocates 16-byte aligned memory
-                    auto clear_obj = builder.CreateMemSet(obj_i8, ConstantInt::get(Type::getInt8Ty(call->getContext()), 0), call->getArgOperand(1), Align(16));
+                    // Note that this alignment is assuming the GC allocates at least pointer-aligned memory
+                    auto align = Align(DL.getPointerSize(0));
+                    auto clear_obj = builder.CreateMemSet(obj_i8, ConstantInt::get(Type::getInt8Ty(call->getContext()), 0), call->getArgOperand(1), align);
                     if (MSSAU.getMemorySSA()) {
                         auto alloc_mdef = MSSAU.getMemorySSA()->getMemoryAccess(call);
                         assert(isa<MemoryDef>(alloc_mdef) && "Expected alloc to be associated with a memory def!");
