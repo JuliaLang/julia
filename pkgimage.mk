@@ -83,7 +83,7 @@ $(eval $(call sysimg_builder,libblastrampoline_jll,Artifacts Libdl))
 $(eval $(call sysimg_builder,OpenBLAS_jll,Artifacts Libdl))
 $(eval $(call sysimg_builder,Markdown,Base64))
 $(eval $(call sysimg_builder,Printf,Unicode))
-$(eval $(call sysimg_builder,Random,Serialization SHA))
+$(eval $(call sysimg_builder,Random,SHA))
 $(eval $(call sysimg_builder,Tar,ArgTools,SHA))
 $(eval $(call pkgimg_builder,DelimitedFiles,Mmap))
 

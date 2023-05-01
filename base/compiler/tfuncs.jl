@@ -2608,60 +2608,72 @@ end
 # since abstract_call_gf_by_type is a very inaccurate model of _method and of typeinf_type,
 # while this assumes that it is an absolutely precise and accurate and exact model of both
 function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo, sv::AbsIntState)
-    if length(argtypes) == 3
-        tt = widenslotwrapper(argtypes[3])
-        if isa(tt, Const) || (isType(tt) && !has_free_typevars(tt))
-            aft = widenslotwrapper(argtypes[2])
-            if isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
-                   (isconcretetype(aft) && !(aft <: Builtin))
-                af_argtype = isa(tt, Const) ? tt.val : (tt::DataType).parameters[1]
-                if isa(af_argtype, DataType) && af_argtype <: Tuple
-                    argtypes_vec = Any[aft, af_argtype.parameters...]
-                    if contains_is(argtypes_vec, Union{})
-                        return CallMeta(Const(Union{}), EFFECTS_TOTAL, NoCallInfo())
-                    end
-                    #
-                    # Run the abstract_call without restricting abstract call
-                    # sites. Otherwise, our behavior model of abstract_call
-                    # below will be wrong.
-                    if isa(sv, InferenceState)
-                        old_restrict = sv.restrict_abstract_call_sites
-                        sv.restrict_abstract_call_sites = false
-                        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, -1)
-                        sv.restrict_abstract_call_sites = old_restrict
-                    else
-                        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, -1)
-                    end
-                    info = verbose_stmt_info(interp) ? MethodResultPure(ReturnTypeCallInfo(call.info)) : MethodResultPure()
-                    rt = widenslotwrapper(call.rt)
-                    if isa(rt, Const)
-                        # output was computed to be constant
-                        return CallMeta(Const(typeof(rt.val)), EFFECTS_TOTAL, info)
-                    end
-                    rt = widenconst(rt)
-                    if rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))
-                        # output cannot be improved so it is known for certain
-                        return CallMeta(Const(rt), EFFECTS_TOTAL, info)
-                    elseif isa(sv, InferenceState) && !isempty(sv.pclimitations)
-                        # conservatively express uncertainty of this result
-                        # in two ways: both as being a subtype of this, and
-                        # because of LimitedAccuracy causes
-                        return CallMeta(Type{<:rt}, EFFECTS_TOTAL, info)
-                    elseif (isa(tt, Const) || isconstType(tt)) &&
-                        (isa(aft, Const) || isconstType(aft))
-                        # input arguments were known for certain
-                        # XXX: this doesn't imply we know anything about rt
-                        return CallMeta(Const(rt), EFFECTS_TOTAL, info)
-                    elseif isType(rt)
-                        return CallMeta(Type{rt}, EFFECTS_TOTAL, info)
-                    else
-                        return CallMeta(Type{<:rt}, EFFECTS_TOTAL, info)
-                    end
-                end
-            end
-        end
+    UNKNOWN = CallMeta(Type, EFFECTS_THROWS, NoCallInfo())
+    if !(2 <= length(argtypes) <= 3)
+        return UNKNOWN
     end
-    return CallMeta(Type, EFFECTS_THROWS, NoCallInfo())
+
+    tt = widenslotwrapper(argtypes[end])
+    if !isa(tt, Const) && !(isType(tt) && !has_free_typevars(tt))
+        return UNKNOWN
+    end
+
+    af_argtype = isa(tt, Const) ? tt.val : (tt::DataType).parameters[1]
+    if !isa(af_argtype, DataType) || !(af_argtype <: Tuple)
+        return UNKNOWN
+    end
+
+    if length(argtypes) == 3
+        aft = widenslotwrapper(argtypes[2])
+        if !isa(aft, Const) && !(isType(aft) && !has_free_typevars(aft)) &&
+                !(isconcretetype(aft) && !(aft <: Builtin))
+            return UNKNOWN
+        end
+        argtypes_vec = Any[aft, af_argtype.parameters...]
+    else
+        argtypes_vec = Any[af_argtype.parameters...]
+    end
+
+    if contains_is(argtypes_vec, Union{})
+        return CallMeta(Const(Union{}), EFFECTS_TOTAL, NoCallInfo())
+    end
+
+    # Run the abstract_call without restricting abstract call
+    # sites. Otherwise, our behavior model of abstract_call
+    # below will be wrong.
+    if isa(sv, InferenceState)
+        old_restrict = sv.restrict_abstract_call_sites
+        sv.restrict_abstract_call_sites = false
+        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, -1)
+        sv.restrict_abstract_call_sites = old_restrict
+    else
+        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, -1)
+    end
+    info = verbose_stmt_info(interp) ? MethodResultPure(ReturnTypeCallInfo(call.info)) : MethodResultPure()
+    rt = widenslotwrapper(call.rt)
+    if isa(rt, Const)
+        # output was computed to be constant
+        return CallMeta(Const(typeof(rt.val)), EFFECTS_TOTAL, info)
+    end
+    rt = widenconst(rt)
+    if rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))
+        # output cannot be improved so it is known for certain
+        return CallMeta(Const(rt), EFFECTS_TOTAL, info)
+    elseif isa(sv, InferenceState) && !isempty(sv.pclimitations)
+        # conservatively express uncertainty of this result
+        # in two ways: both as being a subtype of this, and
+        # because of LimitedAccuracy causes
+        return CallMeta(Type{<:rt}, EFFECTS_TOTAL, info)
+    elseif (isa(tt, Const) || isconstType(tt)) &&
+        (isa(aft, Const) || isconstType(aft))
+        # input arguments were known for certain
+        # XXX: this doesn't imply we know anything about rt
+        return CallMeta(Const(rt), EFFECTS_TOTAL, info)
+    elseif isType(rt)
+        return CallMeta(Type{rt}, EFFECTS_TOTAL, info)
+    else
+        return CallMeta(Type{<:rt}, EFFECTS_TOTAL, info)
+    end
 end
 
 # a simplified model of abstract_call_gf_by_type for applicable

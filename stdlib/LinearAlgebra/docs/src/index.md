@@ -838,6 +838,7 @@ LinearAlgebra.LAPACK.hetri!
 LinearAlgebra.LAPACK.hetrs!
 LinearAlgebra.LAPACK.syev!
 LinearAlgebra.LAPACK.syevr!
+LinearAlgebra.LAPACK.syevd!
 LinearAlgebra.LAPACK.sygvd!
 LinearAlgebra.LAPACK.bdsqr!
 LinearAlgebra.LAPACK.bdsdc!

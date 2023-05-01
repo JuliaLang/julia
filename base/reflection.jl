@@ -334,17 +334,6 @@ macro locals()
     return Expr(:locals)
 end
 
-"""
-    objectid(x) -> UInt
-
-Get a hash value for `x` based on object identity.
-
-If `x === y` then `objectid(x) == objectid(y)`, and usually when `x !== y`, `objectid(x) != objectid(y)`.
-
-See also [`hash`](@ref), [`IdDict`](@ref).
-"""
-objectid(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
-
 # concrete datatype predicates
 
 datatype_fieldtypes(x::DataType) = ccall(:jl_get_fieldtypes, Core.SimpleVector, (Any,), x)
@@ -599,6 +588,28 @@ isbitstype(@nospecialize t) = (@_total_meta; isa(t, DataType) && (t.flags & 0x00
 Return `true` if `x` is an instance of an [`isbitstype`](@ref) type.
 """
 isbits(@nospecialize x) = isbitstype(typeof(x))
+
+"""
+    objectid(x) -> UInt
+
+Get a hash value for `x` based on object identity.
+
+If `x === y` then `objectid(x) == objectid(y)`, and usually when `x !== y`, `objectid(x) != objectid(y)`.
+
+See also [`hash`](@ref), [`IdDict`](@ref).
+"""
+function objectid(x)
+    # objectid is foldable iff it isn't a pointer.
+    if isidentityfree(typeof(x))
+        return _foldable_objectid(x)
+    end
+    return _objectid(x)
+end
+function _foldable_objectid(@nospecialize(x))
+    @_foldable_meta
+    _objectid(x)
+end
+_objectid(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
 
 """
     isdispatchtuple(T)
@@ -1741,7 +1752,7 @@ function hasmethod(@nospecialize(f), @nospecialize(t))
     return Core._hasmethod(f, t isa Type ? t : to_tuple_type(t))
 end
 
-function Core.kwcall(kwargs, ::typeof(hasmethod), @nospecialize(f), @nospecialize(t))
+function Core.kwcall(kwargs::NamedTuple, ::typeof(hasmethod), @nospecialize(f), @nospecialize(t))
     world = kwargs.world::UInt # make sure this is the only local, to avoid confusing kwarg_decl()
     return ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), signature_type(f, t), nothing, world) !== nothing
 end
@@ -1752,7 +1763,7 @@ function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_c
     t = to_tuple_type(t)
     ft = Core.Typeof(f)
     u = unwrap_unionall(t)::DataType
-    tt = rewrap_unionall(Tuple{typeof(Core.kwcall), typeof(pairs((;))), ft, u.parameters...}, t)
+    tt = rewrap_unionall(Tuple{typeof(Core.kwcall), NamedTuple, ft, u.parameters...}, t)
     match = ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world)
     match === nothing && return false
     kws = ccall(:jl_uncompress_argnames, Array{Symbol,1}, (Any,), (match::Method).slot_syms)

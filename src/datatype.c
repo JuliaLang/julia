@@ -53,7 +53,7 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
     jl_atomic_store_relaxed(&mt->cache, jl_nothing);
     jl_atomic_store_relaxed(&mt->max_args, 0);
     mt->backedges = NULL;
-    JL_MUTEX_INIT(&mt->writelock);
+    JL_MUTEX_INIT(&mt->writelock, "methodtable->writelock");
     mt->offs = 0;
     mt->frozen = 0;
     return mt;
@@ -106,6 +106,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->maybe_subtype_of_cache = 1;
     t->ismutationfree = 0;
     t->isidentityfree = 0;
+    t->padding = 0;
     t->name = NULL;
     t->super = NULL;
     t->parameters = NULL;

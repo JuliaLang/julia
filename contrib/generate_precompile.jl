@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 if Threads.maxthreadid() != 1
-    @warn "Running this file with multiple Julia threads may lead to a build error" Base.maxthreadid()
+    @warn "Running this file with multiple Julia threads may lead to a build error" Threads.maxthreadid()
 end
 
 if Base.isempty(Base.ARGS) || Base.ARGS[1] !== "0"
@@ -45,6 +45,8 @@ precompile(Tuple{typeof(push!), Vector{Function}, Function})
 # miscellaneous
 precompile(Tuple{typeof(Base.require), Base.PkgId})
 precompile(Tuple{typeof(Base.recursive_prefs_merge), Base.Dict{String, Any}})
+precompile(Tuple{typeof(Base.hashindex), Tuple{Base.PkgId, Nothing}, Int64})
+precompile(Tuple{typeof(Base.hashindex), Tuple{Base.PkgId, String}, Int64})
 precompile(Tuple{typeof(isassigned), Core.SimpleVector, Int})
 precompile(Tuple{typeof(getindex), Core.SimpleVector, Int})
 precompile(Tuple{typeof(Base.Experimental.register_error_hint), Any, Type})
@@ -54,6 +56,7 @@ precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, 
 precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, Symbol, Module))
 precompile(Base.CoreLogging.env_override_minlevel, (Symbol, Module))
 precompile(Base.StackTraces.lookup, (Ptr{Nothing},))
+precompile(Tuple{typeof(Base.run_module_init), Module, Int})
 """
 
 for T in (Float16, Float32, Float64), IO in (IOBuffer, IOContext{IOBuffer}, Base.TTY, IOContext{Base.TTY})

@@ -921,15 +921,20 @@ static const auto jl_alloc_obj_func = new JuliaFunction<TypeFnContextAndSizeT>{
         return FunctionType::get(T_prjlvalue,
                 {T_ppjlvalue, T_size, T_prjlvalue}, false);
     },
-    [](LLVMContext &C) { return AttributeList::get(C,
-            AttributeSet::get(C, makeArrayRef({Attribute::getWithAllocSizeArgs(C, 1, None)})), // returns %1 bytes
-
-            Attributes(C, {Attribute::NoAlias, Attribute::NonNull,
+    [](LLVMContext &C) {
+        auto FnAttrs = AttrBuilder(C);
+        FnAttrs.addAllocSizeAttr(1, None); // returns %1 bytes
 #if JL_LLVM_VERSION >= 150000
-            Attribute::get(C, Attribute::AllocKind, AllocFnKind::Alloc | AllocFnKind::Uninitialized | AllocFnKind::Aligned),
+        FnAttrs.addAllocKindAttr(AllocFnKind::Alloc | AllocFnKind::Uninitialized | AllocFnKind::Aligned);
 #endif
-            }),
-            None); },
+        auto RetAttrs = AttrBuilder(C);
+        RetAttrs.addAttribute(Attribute::NoAlias);
+        RetAttrs.addAttribute(Attribute::NonNull);
+        return AttributeList::get(C,
+            AttributeSet::get(C, FnAttrs),
+            AttributeSet::get(C, RetAttrs),
+            None);
+    },
 };
 static const auto jl_newbits_func = new JuliaFunction<>{
     XSTR(jl_new_bits),
@@ -2349,7 +2354,11 @@ static void jl_init_function(Function *F, const Triple &TT)
         attr.addStackAlignmentAttr(16);
     }
     if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
+#if JL_LLVM_VERSION < 150000
         attr.addAttribute(Attribute::UWTable); // force NeedsWinEH
+#else
+        attr.addUWTableAttr(llvm::UWTableKind::Default); // force NeedsWinEH
+#endif
     }
     if (jl_fpo_disabled(TT))
         attr.addAttribute("frame-pointer", "all");
@@ -5809,6 +5818,7 @@ static void emit_cfunc_invalidate(
         prepare_call_in(gf_thunk->getParent(), jlapplygeneric_func));
 }
 
+#include <iostream>
 static Function* gen_cfun_wrapper(
     Module *into, jl_codegen_params_t &params,
     const function_sig_t &sig, jl_value_t *ff, const char *aliasname,
@@ -6312,8 +6322,6 @@ static Function* gen_cfun_wrapper(
     }
     else if (!type_is_ghost(sig.lrt)) {
         Type *prt = sig.prt;
-        if (sig.sret)
-            prt = sig.fargt_sig[0]->getContainedType(0); // sret is a PointerType
         bool issigned = jl_signed_type && jl_subtype(declrt, (jl_value_t*)jl_signed_type);
         Value *v = emit_unbox(ctx, sig.lrt, retval, retval.typ);
         r = llvm_type_rewrite(ctx, v, prt, issigned);
@@ -7760,11 +7768,19 @@ static jl_llvm_functions_t
 
     Instruction &prologue_end = ctx.builder.GetInsertBlock()->back();
 
-    // step 11a. Emit the entry safepoint
+    // step 11a. For top-level code, load the world age
+    if (toplevel && !ctx.is_opaque_closure) {
+        LoadInst *world = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
+            prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr);
+        world->setOrdering(AtomicOrdering::Acquire);
+        ctx.builder.CreateAlignedStore(world, world_age_field, ctx.types().alignof_ptr);
+    }
+
+    // step 11b. Emit the entry safepoint
     if (JL_FEAT_TEST(ctx, safepoint_on_entry))
         emit_gc_safepoint(ctx.builder, ctx.types().T_size, get_current_ptls(ctx), ctx.tbaa().tbaa_const);
 
-    // step 11b. Do codegen in control flow order
+    // step 11c. Do codegen in control flow order
     std::vector<int> workstack;
     std::map<int, BasicBlock*> BB;
     std::map<size_t, BasicBlock*> come_from_bb;
@@ -8087,13 +8103,6 @@ static jl_llvm_functions_t
             ctx.builder.SetInsertPoint(tryblk);
         }
         else {
-            if (!jl_is_method(ctx.linfo->def.method) && !ctx.is_opaque_closure) {
-                // TODO: inference is invalid if this has any effect (which it often does)
-                LoadInst *world = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
-                    prepare_global_in(jl_Module, jlgetworld_global), ctx.types().alignof_ptr);
-                world->setOrdering(AtomicOrdering::Acquire);
-                ctx.builder.CreateAlignedStore(world, world_age_field, ctx.types().alignof_ptr);
-            }
             emit_stmtpos(ctx, stmt, cursor);
             mallocVisitStmt(debuginfoloc, nullptr);
         }
@@ -8319,12 +8328,12 @@ static jl_llvm_functions_t
     }
 
     // step 12. Perform any delayed instantiations
-    if (ctx.debug_enabled) {
-        bool in_prologue = true;
-        for (auto &BB : *ctx.f) {
-            for (auto &I : BB) {
-                CallBase *call = dyn_cast<CallBase>(&I);
-                if (call && !I.getDebugLoc()) {
+    bool in_prologue = true;
+    for (auto &BB : *ctx.f) {
+        for (auto &I : BB) {
+            CallBase *call = dyn_cast<CallBase>(&I);
+            if (call) {
+                if (ctx.debug_enabled && !I.getDebugLoc()) {
                     // LLVM Verifier: inlinable function call in a function with debug info must have a !dbg location
                     // make sure that anything we attempt to call has some inlining info, just in case optimization messed up
                     // (except if we know that it is an intrinsic used in our prologue, which should never have its own debug subprogram)
@@ -8333,12 +8342,24 @@ static jl_llvm_functions_t
                         I.setDebugLoc(topdebugloc);
                     }
                 }
-                if (&I == &prologue_end)
-                    in_prologue = false;
+                if (toplevel && !ctx.is_opaque_closure && !in_prologue) {
+                    // we're at toplevel; insert an atomic barrier between every instruction
+                    // TODO: inference is invalid if this has any effect (which it often does)
+                    LoadInst *world = new LoadInst(ctx.types().T_size,
+                        prepare_global_in(jl_Module, jlgetworld_global), Twine(),
+                        /*isVolatile*/false, ctx.types().alignof_ptr, /*insertBefore*/&I);
+                    world->setOrdering(AtomicOrdering::Acquire);
+                    StoreInst *store_world = new StoreInst(world, world_age_field,
+                        /*isVolatile*/false, ctx.types().alignof_ptr, /*insertBefore*/&I);
+                    (void)store_world;
+                }
             }
+            if (&I == &prologue_end)
+                in_prologue = false;
         }
-        dbuilder.finalize();
     }
+    if (ctx.debug_enabled)
+        dbuilder.finalize();
 
     if (ctx.vaSlot > 0) {
         // remove VA allocation if we never referenced it
@@ -8422,7 +8443,8 @@ jl_llvm_functions_t jl_emit_code(
         jl_value_t *jlrettype,
         jl_codegen_params_t &params)
 {
-    JL_TIMING(CODEGEN);
+    JL_TIMING(CODEGEN, CODEGEN_LLVM);
+    jl_timing_show_func_sig((jl_value_t *)li->specTypes, JL_TIMING_CURRENT_BLOCK);
     // caller must hold codegen_lock
     jl_llvm_functions_t decls = {};
     assert((params.params == &jl_default_cgparams /* fast path */ || !params.cache ||
@@ -8464,7 +8486,8 @@ jl_llvm_functions_t jl_emit_codeinst(
         jl_code_info_t *src,
         jl_codegen_params_t &params)
 {
-    JL_TIMING(CODEGEN);
+    JL_TIMING(CODEGEN, CODEGEN_Codeinst);
+    jl_timing_show_method_instance(codeinst->def, JL_TIMING_CURRENT_BLOCK);
     JL_GC_PUSH1(&src);
     if (!src) {
         src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
@@ -8543,7 +8566,7 @@ void jl_compile_workqueue(
     Module &original,
     jl_codegen_params_t &params, CompilationPolicy policy)
 {
-    JL_TIMING(CODEGEN);
+    JL_TIMING(CODEGEN, CODEGEN_Workqueue);
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
     while (!params.workqueue.empty()) {
@@ -8681,6 +8704,58 @@ static JuliaVariable *julia_const_gv(jl_value_t *val)
     }
     return nullptr;
 }
+
+// Handle FLOAT16 ABI v2
+#if JULIA_FLOAT16_ABI == 2
+static void makeCastCall(Module &M, StringRef wrapperName, StringRef calledName, FunctionType *FTwrapper, FunctionType *FTcalled, bool external)
+{
+    Function *calledFun = M.getFunction(calledName);
+    if (!calledFun) {
+        calledFun = Function::Create(FTcalled, Function::ExternalLinkage, calledName, M);
+    }
+    auto linkage = external ? Function::ExternalLinkage : Function::InternalLinkage;
+    auto wrapperFun = Function::Create(FTwrapper, linkage, wrapperName, M);
+    wrapperFun->addFnAttr(Attribute::AlwaysInline);
+    llvm::IRBuilder<> builder(BasicBlock::Create(M.getContext(), "top", wrapperFun));
+    SmallVector<Value *, 4> CallArgs;
+    if (wrapperFun->arg_size() != calledFun->arg_size()){
+        llvm::errs() << "FATAL ERROR: Can't match wrapper to called function";
+        abort();
+    }
+    for (auto wrapperArg = wrapperFun->arg_begin(), calledArg = calledFun->arg_begin();
+            wrapperArg != wrapperFun->arg_end() && calledArg != calledFun->arg_end(); ++wrapperArg, ++calledArg)
+    {
+        CallArgs.push_back(builder.CreateBitCast(wrapperArg, calledArg->getType()));
+    }
+    auto val = builder.CreateCall(calledFun, CallArgs);
+    auto retval = builder.CreateBitCast(val,wrapperFun->getReturnType());
+    builder.CreateRet(retval);
+}
+
+void emitFloat16Wrappers(Module &M, bool external)
+{
+    auto &ctx = M.getContext();
+    makeCastCall(M, "__gnu_h2f_ieee", "julia__gnu_h2f_ieee", FunctionType::get(Type::getFloatTy(ctx), { Type::getHalfTy(ctx) }, false),
+                FunctionType::get(Type::getFloatTy(ctx), { Type::getInt16Ty(ctx) }, false), external);
+    makeCastCall(M, "__extendhfsf2", "julia__gnu_h2f_ieee", FunctionType::get(Type::getFloatTy(ctx), { Type::getHalfTy(ctx) }, false),
+                FunctionType::get(Type::getFloatTy(ctx), { Type::getInt16Ty(ctx) }, false), external);
+    makeCastCall(M, "__gnu_f2h_ieee", "julia__gnu_f2h_ieee", FunctionType::get(Type::getHalfTy(ctx), { Type::getFloatTy(ctx) }, false),
+                FunctionType::get(Type::getInt16Ty(ctx), { Type::getFloatTy(ctx) }, false), external);
+    makeCastCall(M, "__truncsfhf2", "julia__gnu_f2h_ieee", FunctionType::get(Type::getHalfTy(ctx), { Type::getFloatTy(ctx) }, false),
+                FunctionType::get(Type::getInt16Ty(ctx), { Type::getFloatTy(ctx) }, false), external);
+    makeCastCall(M, "__truncdfhf2", "julia__truncdfhf2", FunctionType::get(Type::getHalfTy(ctx), { Type::getDoubleTy(ctx) }, false),
+                FunctionType::get(Type::getInt16Ty(ctx), { Type::getDoubleTy(ctx) }, false), external);
+}
+
+static void init_f16_funcs(void)
+{
+    auto ctx = jl_ExecutionEngine->acquireContext();
+    auto TSM =  jl_create_ts_module("F16Wrappers", ctx, imaging_default());
+    auto aliasM = TSM.getModuleUnlocked();
+    emitFloat16Wrappers(*aliasM, true);
+    jl_ExecutionEngine->addModule(std::move(TSM));
+}
+#endif
 
 static void init_jit_functions(void)
 {
@@ -8836,6 +8911,15 @@ extern "C" void jl_init_llvm(void)
     clopt = llvmopts.lookup("enable-tail-merge"); // NOO TOUCHIE; NO TOUCH! See #922
     if (clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "0", 1);
+#ifdef JL_USE_NEW_PM
+    // For parity with LoopUnswitch
+    clopt = llvmopts.lookup("unswitch-threshold");
+    if (clopt->getNumOccurrences() == 0)
+        cl::ProvidePositionalOption(clopt, "100", 1);
+    clopt = llvmopts.lookup("enable-unswitch-cost-multiplier");
+    if (clopt->getNumOccurrences() == 0)
+        cl::ProvidePositionalOption(clopt, "false", 1);
+#endif
     // if the patch adding this option has been applied, lower its limit to provide
     // better DAGCombiner performance.
     clopt = llvmopts.lookup("combiner-store-merge-dependence-limit");
@@ -8909,12 +8993,15 @@ extern "C" JL_DLLEXPORT void jl_init_codegen_impl(void)
     jl_init_llvm();
     // Now that the execution engine exists, initialize all modules
     init_jit_functions();
+#if JULIA_FLOAT16_ABI == 2
+    init_f16_funcs();
+#endif
 }
 
 extern "C" JL_DLLEXPORT void jl_teardown_codegen_impl() JL_NOTSAFEPOINT
 {
     // output LLVM timings and statistics
-    reportAndResetTimings();
+    jl_ExecutionEngine->printTimers();
     PrintStatistics();
 }
 

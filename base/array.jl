@@ -252,7 +252,10 @@ function bitsunionsize(u::Union)
     return sz
 end
 
+# Deprecate this, as it seems to have no documented meaning and is unused here,
+# but is frequently accessed in packages
 elsize(@nospecialize _::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)
+elsize(::Type{Union{}}, slurp...) = 0
 sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)
@@ -449,17 +452,6 @@ function getindex(::Type{T}, vals...) where T
             @inbounds a[i] = v
             return i + 1
         end
-    end
-    return a
-end
-
-# safe version
-function getindex(::Type{T}, vals::T...) where T
-    @inline
-    @_effect_free_terminates_locally_meta
-    a = Vector{T}(undef, length(vals))
-    @_safeindex for i in 1:length(vals)
-        a[i] = vals[i]
     end
     return a
 end

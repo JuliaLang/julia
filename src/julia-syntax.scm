@@ -507,6 +507,7 @@
                               positional-sparams)))
                   sparams))
          (kw      (gensy))
+         (kwdecl  `(|::| ,kw (core NamedTuple)))
          (rkw     (if (null? restkw) (make-ssavalue) (symbol (string (car restkw) "..."))))
          (restkw  (map (lambda (v) `(|::| ,v (call (top pairs) (core NamedTuple)))) restkw))
          (mangled (let ((und (and name (undot-name name))))
@@ -555,7 +556,7 @@
           `((|::|
              ;; if there are optional positional args, we need to be able to reference the function name
              ,(if (any kwarg? pargl) (gensy) UNUSED)
-             (call (core kwftype) ,ftype)) ,kw ,@pargl ,@vararg)
+             (call (core kwftype) ,ftype)) ,kwdecl ,@pargl ,@vararg)
           `(block
             ;; propagate method metadata to keyword sorter
             ,@(map propagate-method-meta (filter meta? prologue))

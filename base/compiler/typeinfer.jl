@@ -204,9 +204,9 @@ If set to `true`, record per-method-instance timings within type inference in th
 __set_measure_typeinf(onoff::Bool) = __measure_typeinf__[] = onoff
 const __measure_typeinf__ = fill(false)
 
-# Wrapper around _typeinf that optionally records the exclusive time for each invocation.
-function typeinf(interp::AbstractInterpreter, frame::InferenceState)
-    interp = switch_from_irinterp(interp)
+# Wrapper around `_typeinf` that optionally records the exclusive time for
+# each inference performed by `NativeInterpreter`.
+function typeinf(interp::NativeInterpreter, frame::InferenceState)
     if __measure_typeinf__[]
         Timings.enter_new_timer(frame)
         v = _typeinf(interp, frame)
@@ -216,6 +216,7 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
         return _typeinf(interp, frame)
     end
 end
+typeinf(interp::AbstractInterpreter, frame::InferenceState) = _typeinf(interp, frame)
 
 function finish!(interp::AbstractInterpreter, caller::InferenceResult)
     # If we didn't transform the src for caching, we may have to transform
@@ -242,6 +243,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceResult)
 end
 
 function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
+    interp = switch_from_irinterp(interp)
     typeinf_nocycle(interp, frame) || return false # frame is now part of a higher cycle
     # with no active ip's, frame is done
     frames = frame.callers_in_cycle
@@ -1009,7 +1011,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
             tree.slotflags = fill(IR_FLAG_NULL, nargs)
             tree.ssavaluetypes = 1
             tree.codelocs = Int32[1]
-            tree.linetable = LineInfoNode[LineInfoNode(method.module, method.name, method.file, method.line, Int32(0))]
+            tree.linetable = LineInfoNode[LineInfoNode(method.module, mi, method.file, method.line, Int32(0))]
             tree.ssaflags = UInt8[0]
             set_inlineable!(tree, true)
             tree.parent = mi

@@ -27,6 +27,13 @@ using LinearAlgebra: BlasInt
         @test LAPACK.syevr!('N', 'V', 'U', copy(Asym), 0.0, 1.0, 4, 5, -1.0)[1] ≈ vals[vals .< 1.0]
         @test LAPACK.syevr!('N', 'I', 'U', copy(Asym), 0.0, 1.0, 4, 5, -1.0)[1] ≈ vals[4:5]
         @test vals ≈ LAPACK.syev!('N', 'U', copy(Asym))
+        @test vals ≈ LAPACK.syevd!('N', 'U', copy(Asym))
+        vals_test, Z_test = LAPACK.syev!('V', 'U', copy(Asym))
+        @test vals_test ≈ vals
+        @test Z_test*(Diagonal(vals)*Z_test') ≈ Asym
+        vals_test, Z_test = LAPACK.syevd!('V', 'U', copy(Asym))
+        @test vals_test ≈ vals
+        @test Z_test*(Diagonal(vals)*Z_test') ≈ Asym
         @test_throws DimensionMismatch LAPACK.sygvd!(1, 'V', 'U', copy(Asym), zeros(elty, 6, 6))
     end
 end
