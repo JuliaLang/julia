@@ -559,3 +559,257 @@ function convert(::Type{Face}, spec::Dict)
              Symbol[]
          end)
 end
+
+## Style macro ##
+
+"""
+    @S_str -> StyledString
+
+Construct a styled string. Within the string, `{<specs>:<content>}` structures
+apply the formatting to `<content>`, according to the list of comma-separated
+specifications `<specs>`. Each spec can either take the form of a face name,
+an inline face specification, or a `key=value` pair. The value must be wrapped
+by `{...}` should it contain any of the characters `,=:{}`.
+
+String interpolation with `\$` functions in the same way as regular strings,
+except quotes need to be escaped. Faces, keys, and values can also be
+interpolated with `\$`.
+
+# Example
+
+```julia
+S"The {bold:{italic:quick} {(foreground=#cd853f):brown} fox} jumped over \
+the {link={https://en.wikipedia.org/wiki/Laziness}:lazy} dog"
+```
+"""
+macro S_str(raw_content::String)
+    parts = Any[]
+    content = unescape_string(raw_content, ('{', '}', '$', '\n'))
+    content_bytes = Vector{UInt8}(content)
+    s = Iterators.Stateful(zip(eachindex(content), content))
+    offset = 0
+    point = 1
+    escape = false
+    active_styles = Vector{Vector{Tuple{Int, Union{Symbol, Expr, Pair{Symbol, Any}}}}}()
+    pending_styles = Vector{Tuple{UnitRange{Int}, Union{Symbol, Expr, Pair{Symbol, Any}}}}()
+    interpolated = false
+    function addpart(stop::Int)
+        str = String(content_bytes[point:stop+offset+ncodeunits(content[stop])-1])
+        push!(parts,
+              if isempty(pending_styles) && isempty(active_styles)
+                  str
+              else
+                  styles = Expr[]
+                  relevant_styles = Iterators.filter(
+                      (start, _)::Tuple -> start <= stop + offset + 1,
+                      Iterators.flatten(active_styles))
+                  for (start, prop) in relevant_styles
+                      range = (start - point):(stop - point + offset + 1)
+                      push!(styles, Expr(:tuple, range, prop))
+                  end
+                  for (range, prop) in pending_styles
+                      if !isempty(range)
+                          push!(styles, Expr(:tuple, range .- point, prop))
+                      end
+                  end
+                  empty!(pending_styles)
+                  if isempty(styles)
+                      str
+                  else
+                      :(StyledString($str, $(Expr(:vect, styles...))))
+                  end
+              end)
+        point = nextind(content, stop) + offset
+    end
+    function addpart(start::Int, expr, stop::Int)
+        if point < start
+            addpart(start)
+        end
+        if isempty(active_styles)
+            push!(parts, expr)
+        else
+            push!(parts,
+                  :(StyledString(string($expr),
+                                 $(last.(Iterators.flatten(active_styles))...))))
+            map!.((_, prop)::Tuple -> (nextind(content, stop + offset), prop), active_styles, active_styles)
+        end
+    end
+    for (i, char) in s
+        if char == '\\'
+            escape = true
+        elseif escape
+            if char in ('{', '}', '$')
+                deleteat!(content_bytes, i + offset - 1)
+                offset -= 1
+            elseif char == '\n'
+                deleteat!(content_bytes, i+offset-1:i+offset)
+                offset -= 2
+            end
+            escape = false
+        elseif char == '$'
+            # Interpolation
+            expr, nexti = Meta.parseatom(content, i + 1)
+            deleteat!(content_bytes, i + offset)
+            offset -= 1
+            nchars = length(content[i:prevind(content, nexti)])
+            for _ in 1:min(length(s), nchars-1)
+                popfirst!(s)
+            end
+            addpart(i, expr, nexti)
+            point = nexti + offset
+            interpolated = true
+        elseif char == '{'
+            # Property declaration parsing and application
+            properties = true
+            hasvalue = false
+            newstyles = Vector{Tuple{Int, Union{Symbol, Expr, Pair{Symbol, Any}}}}()
+            while properties
+                if !isnothing(peek(s)) && last(peek(s)) == '('
+                    # Inline face
+                    popfirst!(s)
+                    specstr = Iterators.takewhile(c -> last(c) != ')', s) |>
+                        collect .|> last |> String
+                    spec = map(split(specstr, ',')) do spec
+                        spec = rstrip(spec)
+                        kv = split(spec, '=', limit=2)
+                        if length(kv) == 2
+                            kv[1] => @something(tryparse(Bool, kv[2]),
+                                                String(kv[2]))
+                        else "" => "" end
+                    end |> Dict
+                    push!(newstyles,
+                          (nextind(content, i + offset),
+                           Pair{Symbol, Any}(:face, convert(Face, spec))))
+                    if isnothing(peek(s)) || last(popfirst!(s)) != ','
+                        properties = false
+                    end
+                else
+                    # Face symbol or key=value pair
+                    key = if isempty(s)
+                        break
+                    elseif last(peek(s)) == '$'
+                        interpolated = true
+                        j, _ = popfirst!(s)
+                        expr, nextj = Meta.parseatom(content, j + 1)
+                        nchars = length(content[j:prevind(content, nextj)])
+                        for _ in 1:min(length(s), nchars-1)
+                            popfirst!(s)
+                        end
+                        if !isempty(s)
+                            _, c = popfirst!(s)
+                            if c == ':'
+                                properties = false
+                            elseif c == '='
+                                hasvalue = true
+                            end
+                        end
+                        expr
+                    else
+                        Iterators.takewhile(
+                            function(c)
+                                if last(c) == ':' # Start of content
+                                    properties = false
+                                elseif last(c) == '=' # Start of value
+                                    hasvalue = true
+                                    false
+                                elseif last(c) == ',' # Next key
+                                    false
+                                else true end
+                            end, s) |> collect .|> last |> String
+                    end
+                    if hasvalue
+                        hasvalue = false
+                        value = if !isnothing(peek(s))
+                            if last(peek(s)) == '{'
+                                # Grab {}-wrapped value
+                                popfirst!(s)
+                                isescaped = false
+                                val = Vector{Char}()
+                                while (next = popfirst!(s)) |> !isnothing
+                                    (_, c) = next
+                                    if isescaped && c ∈ ('\\', '}')
+                                        push!(val, c)
+                                    elseif isescaped
+                                        push!(val, '\\', c)
+                                    elseif c == '}'
+                                        break
+                                    else
+                                        push!(val, c)
+                                    end
+                                end
+                                String(val)
+                            elseif last(peek(s)) == '$'
+                                j, _ = popfirst!(s)
+                                expr, nextj = Meta.parseatom(content, j + 1)
+                                nchars = length(content[j:prevind(content, nextj)])
+                                for _ in 1:min(length(s), nchars-1)
+                                    popfirst!(s)
+                                end
+                                interpolated = true
+                                expr
+                            else
+                                # Grab up to next value, or start of content.
+                                Iterators.takewhile(
+                                    function (c)
+                                        if last(c) == ':'
+                                            properties = false
+                                        elseif last(c) == ','
+                                            false
+                                        else true end
+                                    end, s) |> collect .|> last |> String
+                            end
+                        end
+                        push!(newstyles,
+                              (nextind(content, i + offset),
+                               if key isa String && !(value isa Symbol || value isa Expr)
+                                   Pair{Symbol, Any}(Symbol(key), value)
+                               elseif key isa Expr || key isa Symbol
+                                   :(Pair{Symbol, Any}($key, $value))
+                               else
+                                   :(Pair{Symbol, Any}(
+                                       $(QuoteNode(Symbol(key))), $value))
+                               end))
+                    elseif key !== "" # No value, hence a Face property
+                        push!(newstyles,
+                              (nextind(content, i + offset),
+                               if key isa Symbol || key isa Expr
+                                   :(Pair{Symbol, Any}(:face, $key))
+                               else # Face symbol
+                                   Pair{Symbol, Any}(:face, Symbol(key))
+                               end))
+                    end
+                end
+            end
+            push!(active_styles, newstyles)
+            # Adjust content_bytes/offset based on how much the index
+            # has been incremented in the processing of the
+            # style declaration(s).
+            if !isnothing(peek(s))
+                nexti = first(peek(s))
+                deleteat!(content_bytes, i+offset:nexti+offset-1)
+                offset -= nexti - i
+            end
+        elseif char == '}' && !isempty(active_styles)
+            # Close off most recent active style
+            for (start, prop) in pop!(active_styles)
+                push!(pending_styles, (start:i+offset, prop))
+            end
+            deleteat!(content_bytes, i + offset)
+            offset -= 1
+        end
+    end
+    # Ensure that any trailing unstyled content is added
+    if point <= lastindex(content) + offset
+        addpart(lastindex(content))
+    end
+    if !isempty(active_styles)
+        println(stderr, "WARNING: Styled string macro in module ", __module__,
+                " at ", something(__source__.file, ""), ':', string(__source__.line),
+                " contains unterminated styled constructs.")
+    end
+    if interpolated
+        :(styledstring($(parts...))) |> esc
+    else
+        styledstring(map(eval, parts)...)
+    end
+end

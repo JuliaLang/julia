@@ -1018,6 +1018,7 @@ export
     @b_str,    # byte vector
     @r_str,    # regex
     @s_str,    # regex substitution string
+    @S_str,    # styled string
     @v_str,    # version number
     @raw_str,  # raw string with no interpolation/unescaping
     @NamedTuple,
