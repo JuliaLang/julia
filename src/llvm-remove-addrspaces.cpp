@@ -323,7 +323,7 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
 
         Function *NF = Function::Create(
                 NFTy, F->getLinkage(), F->getAddressSpace(), Name, &M);
-        NF->copyAttributesFrom(F);
+        // no need to copy attributes here, that's done by CloneFunctionInto
         VMap[F] = NF;
     }
 
@@ -356,11 +356,9 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
 
     // Similarly, copy over and rewrite function bodies
     for (Function *F : Functions) {
-        if (F->isDeclaration())
-            continue;
-
         Function *NF = cast<Function>(VMap[F]);
         LLVM_DEBUG(dbgs() << "Processing function " << NF->getName() << "\n");
+        // we also need this to run for declarations, or attributes won't be copied
 
         Function::arg_iterator DestI = NF->arg_begin();
         for (Function::const_arg_iterator I = F->arg_begin(); I != F->arg_end();
@@ -409,9 +407,6 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
             }
         }
         NF->setAttributes(Attrs);
-
-        if (F->hasPersonalityFn())
-            NF->setPersonalityFn(MapValue(F->getPersonalityFn(), VMap));
 
         copyComdat(NF, F);
 

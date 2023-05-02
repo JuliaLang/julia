@@ -111,7 +111,7 @@ define void @byval_type([1 x {} addrspace(10)*] addrspace(11)* byval([1 x {} add
 }
 
 
-; COM: check that other function attributes are preserved
+; COM: check that function attributes are preserved on declarations too
 declare void @convergent_function() #0
 attributes #0 = { convergent }
 ; CHECK: attributes #0 = { convergent }
