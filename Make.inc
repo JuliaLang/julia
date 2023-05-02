@@ -458,7 +458,7 @@ endif
 
 # Compiler specific stuff
 
-ifeq (,$(findstring $(CROSS_COMPILE),$(CC)))
+ifeq (default,$(origin CC))
 CC := $(CROSS_COMPILE)$(CC) # attempt to add cross-compiler prefix, if the user
                             # is not overriding the default, to form target-triple-cc (which
                             # may not exist), and use that to decide what compiler the user
