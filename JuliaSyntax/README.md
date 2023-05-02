@@ -400,6 +400,7 @@ the source text more closely.
 
 * `K"macrocall"` - allow users to easily distinguish macrocalls with parentheses from those without them (#218)
 * Grouping parentheses are represented with a node of kind `K"parens"` (#222)
+* The right hand side of `x where {T}` retains the `K"braces"` node around the `T` to distinguish it from `x where T`.
 * Ternary syntax is not immediately lowered to an `if` node: `a ? b : c` parses as `(? a b c)` rather than `Expr(:if, :a, :b, :c)` (#85)
 * `global const` and `const global` are not normalized by the parser. This is done in `Expr` conversion (#130)
 * The AST for `do` is flatter and not lowered to a lambda by the parser: `f(x) do y ; body end` is parsed as `(do (call f x) (tuple y) (block body))` (#98)

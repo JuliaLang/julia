@@ -317,6 +317,9 @@
     end
 
     @testset "where" begin
+        @test parsestmt(Expr, "A where T") == Expr(:where, :A, :T)
+        @test parsestmt(Expr, "A where {T}") == Expr(:where, :A, :T)
+        @test parsestmt(Expr, "A where {S, T}") == Expr(:where, :A, :S, :T)
         @test parsestmt(Expr, "A where {X, Y; Z}") == Expr(:where, :A, Expr(:parameters, :Z), :X, :Y)
     end
 

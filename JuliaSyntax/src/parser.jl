@@ -1047,17 +1047,15 @@ function parse_where_chain(ps0::ParseState, mark)
         bump_trivia(ps, skip_newlines=true)
         k = peek(ps)
         if k == K"{"
+            # x where \n {T}  ==>  (where x (braces T))
+            # x where {T,S}  ==>  (where x (braces T S))
+            # Also various nonsensical forms permitted
+            # x where {T S}  ==>  (where x (bracescat (row T S)))
+            # x where {y for y in ys}  ==>  (where x (braces (generator y (= y ys))))
             m = position(ps)
             bump(ps, TRIVIA_FLAG)
-            # x where \n {T}  ==>  (where x T)
-            # x where {T,S}  ==>  (where x T S)
             ckind, cflags = parse_cat(ps, K"}", ps.end_symbol)
-            if ckind != K"vect"
-                # Various nonsensical forms permitted here
-                # x where {T S}  ==>  (where x (bracescat (row T S)))
-                # x where {y for y in ys}  ==>  (where x (braces (generator y (= y ys))))
-                emit_braces(ps, m, ckind, cflags)
-            end
+            emit_braces(ps, m, ckind, cflags)
             emit(ps, mark, K"where")
         else
             # x where T     ==>  (where x T)
@@ -2170,7 +2168,7 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
     end
     if peek(ps) == K"where"
         # Function signature where syntax
-        # function f() where {T} end   ==>  (function (where (call f) T) (block))
+        # function f() where {T} end   ==>  (function (where (call f) (braces T)) (block))
         # function f() where T   end   ==>  (function (where (call f) T) (block))
         parse_where_chain(ps, mark)
     end
