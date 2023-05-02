@@ -38,7 +38,7 @@ Logging.with_logger(TerminalLogger()) do
                         println(io, "\n")
                     end
                 end
-                reduced_failures = reduce_text.(sourcetext.(reduce_tree(text)),
+                reduced_failures = reduce_text.(reduce_tree(text),
                                                 parsers_fuzzy_disagree)
                 append!(all_reduced_failures, reduced_failures)
                 @error("Parsers succeed but disagree",
