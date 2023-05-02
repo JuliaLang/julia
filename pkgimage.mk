@@ -6,6 +6,7 @@ include $(JULIAHOME)/Make.inc
 VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
 
 export JULIA_DEPOT_PATH := $(build_prefix)/share/julia
+export JULIA_LOAD_PATH := "@stdlib"
 
 $(JULIA_DEPOT_PATH):
 	mkdir -p $@
@@ -28,19 +29,15 @@ $1_SRCS := $$(shell find $$(build_datarootdir)/julia/stdlib/$$(VERSDIR)/$1/src -
     $$(wildcard $$(build_prefix)/manifest/$$(VERSDIR)/$1)
 $$(BUILDDIR)/stdlib/$1.release.image: $$($1_SRCS) $$(addsuffix .release.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys.$(SHLIB_EXT)
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no -e 'Base.compilecache(Base.identify_package("$1"))')
-	touch $$@
-$$(BUILDDIR)/stdlib/$1.cb.release.image: $$($1_SRCS) $$(addsuffix .cb.release.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys.$(SHLIB_EXT)
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'Base.compilecache(Base.identify_package("$1"))')
 	touch $$@
 cache-release-$1: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.cb.release.image
 $$(BUILDDIR)/stdlib/$1.debug.image: $$($1_SRCS) $$(addsuffix .debug.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no -e 'Base.compilecache(Base.identify_package("$1"))')
-	touch $$@
-$$(BUILDDIR)/stdlib/$1.cb.debug.image: $$($1_SRCS) $$(addsuffix .cb.debug.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'Base.compilecache(Base.identify_package("$1"))')
 	touch $$@
-cache-debug-$1: $$(BUILDDIR)/stdlib/$1.debug.image $$(BUILDDIR)/stdlib/$1.cb.debug.image
-.SECONDARY: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.cb.release.image $$(BUILDDIR)/stdlib/$1.debug.image $$(BUILDDIR)/stdlib/$1.cb.debug.image
+cache-debug-$1: $$(BUILDDIR)/stdlib/$1.debug.image
+.SECONDARY: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.debug.image
 endef
 
 # Used to just define them in the dependency graph
@@ -50,15 +47,11 @@ STDLIB_SRCS := $$(shell find $$(build_datarootdir)/julia/stdlib/$$(VERSDIR)/$1/s
     $$(wildcard $$(build_prefix)/manifest/$$(VERSDIR)/$1)
 $$(BUILDDIR)/stdlib/$1.release.image:
 	touch $$@
-$$(BUILDDIR)/stdlib/$1.cb.release.image:
-	touch $$@
-cache-release-$1: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.cb.release.image
+cache-release-$1: $$(BUILDDIR)/stdlib/$1.release.image
 $$(BUILDDIR)/stdlib/$1.debug.image:
 	touch $$@
-$$(BUILDDIR)/stdlib/$1.cb.debug.image:
-	touch $$@
-cache-debug-$1: $$(BUILDDIR)/stdlib/$1.debug.image $$(BUILDDIR)/stdlib/$1.cb.debug.image
-.SECONDARY: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.cb.release.image $$(BUILDDIR)/stdlib/$1.debug.image $$(BUILDDIR)/stdlib/$1.cb.debug.image
+cache-debug-$1: $$(BUILDDIR)/stdlib/$1.debug.image
+.SECONDARY: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.debug.image
 endef
 
 STDLIB_SRCS :=
