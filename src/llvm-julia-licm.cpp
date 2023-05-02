@@ -39,6 +39,12 @@ STATISTIC(HoistedAllocation, "Number of allocations hoisted out of a loop");
  * loop context as well but it is inside a loop where they matter the most.
  */
 
+#ifndef __clang_gcanalyzer__
+#define REMARK(remark) ORE.emit(remark)
+#else
+#define REMARK(remark) (void) 0;
+#endif
+
 namespace {
 
 //Stolen and modified from LICM.cpp
@@ -218,7 +224,7 @@ struct JuliaLICM : public JuliaPassContext {
                     ++HoistedPreserveBegin;
                     moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
                     LLVM_DEBUG(dbgs() << "Hoisted gc_preserve_begin: " << *call << "\n");
-                    ORE.emit([&](){
+                    REMARK([&](){
                         return OptimizationRemark(DEBUG_TYPE, "Hoisted", call)
                             << "hoisting preserve begin " << ore::NV("PreserveBegin", call);
                     });
@@ -238,7 +244,7 @@ struct JuliaLICM : public JuliaPassContext {
                     ++SunkPreserveEnd;
                     moveInstructionBefore(*call, *exit_pts[0], MSSAU, SE);
                     LLVM_DEBUG(dbgs() << "Sunk gc_preserve_end: " << *call << "\n");
-                    ORE.emit([&](){
+                    REMARK([&](){
                         return OptimizationRemark(DEBUG_TYPE, "Sunk", call)
                             << "sinking preserve end " << ore::NV("PreserveEnd", call);
                     });
@@ -247,7 +253,7 @@ struct JuliaLICM : public JuliaPassContext {
                         auto CI = CallInst::Create(call, {}, exit_pts[i]);
                         createNewInstruction(CI, call, MSSAU);
                         LLVM_DEBUG(dbgs() << "Cloned and sunk gc_preserve_end: " << *CI << "\n");
-                        ORE.emit([&](){
+                        REMARK([&](){
                             return OptimizationRemark(DEBUG_TYPE, "Sunk", call)
                                 << "cloning and sinking preserve end" << ore::NV("PreserveEnd", call);
                         });
@@ -271,7 +277,7 @@ struct JuliaLICM : public JuliaPassContext {
                     ++HoistedWriteBarrier;
                     moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
                     changed = true;
-                    ORE.emit([&](){
+                    REMARK([&](){
                         return OptimizationRemark(DEBUG_TYPE, "Hoist", call)
                             << "hoisting write barrier " << ore::NV("GC Write Barrier", call);
                     });
@@ -295,14 +301,14 @@ struct JuliaLICM : public JuliaPassContext {
                     jl_alloc::CheckInst::Stack check_stack;
                     jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, *this, DL};
                     jl_alloc::runEscapeAnalysis(call, required, jl_alloc::EscapeAnalysisOptionalArgs().with_valid_set(&L->getBlocksSet()).with_optimization_remark_emitter(&ORE));
-                    ORE.emit([&](){
+                    REMARK([&](){
                         std::string suse_info;
                         llvm::raw_string_ostream osuse_info(suse_info);
                         use_info.dump(osuse_info);
                         return OptimizationRemarkAnalysis(DEBUG_TYPE, "EscapeAnalysis", call) << "escape analysis for " << ore::NV("GC Allocation", call) << "\n" << ore::NV("UseInfo", osuse_info.str());
                     });
                     if (use_info.escaped) {
-                        ORE.emit([&](){
+                        REMARK([&](){
                             return OptimizationRemarkMissed(DEBUG_TYPE, "Escape", call)
                                 << "not hoisting gc allocation " << ore::NV("GC Allocation", call)
                                 << " because it may escape";
@@ -310,7 +316,7 @@ struct JuliaLICM : public JuliaPassContext {
                         continue;
                     }
                     if (use_info.addrescaped) {
-                        ORE.emit([&](){
+                        REMARK([&](){
                             return OptimizationRemarkMissed(DEBUG_TYPE, "Escape", call)
                                 << "not hoisting gc allocation " << ore::NV("GC Allocation", call)
                                 << " because its address may escape";
@@ -320,14 +326,14 @@ struct JuliaLICM : public JuliaPassContext {
                     if (use_info.refstore) {
                         // We need to add write barriers to any stores
                         // that may start crossing generations
-                        ORE.emit([&](){
+                        REMARK([&](){
                             return OptimizationRemarkMissed(DEBUG_TYPE, "Escape", call)
                                 << "not hoisting gc allocation " << ore::NV("GC Allocation", call)
                                 << " because it may have an object stored to it";
                         });
                         continue;
                     }
-                    ORE.emit([&](){
+                    REMARK([&](){
                         return OptimizationRemark(DEBUG_TYPE, "Hoist", call)
                             << "hoisting gc allocation " << ore::NV("GC Allocation", call);
                     });

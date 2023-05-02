@@ -43,6 +43,11 @@ STATISTIC(MaxChainLength, "Max length of reduction chain");
 STATISTIC(AddChains, "Addition reduction chains");
 STATISTIC(MulChains, "Multiply reduction chains");
 
+#ifndef __clang_gcanalyzer__
+#define REMARK(remark) ORE.emit(remark)
+#else
+#define REMARK(remark) (void) 0;
+#endif
 namespace {
 
 static unsigned getReduceOpcode(Instruction *J, Instruction *operand) JL_NOTSAFEPOINT
@@ -82,7 +87,7 @@ static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L, OptimizationRe
             if (L->contains(U)) {
                 if (J) {
                     LLVM_DEBUG(dbgs() << "LSL: not a reduction var because op has two internal uses: " << *I << "\n");
-                    ORE.emit([&]() {
+                    REMARK([&]() {
                         return OptimizationRemarkMissed(DEBUG_TYPE, "NotReductionVar", U)
                                << "not a reduction variable because operation has two internal uses";
                     });
@@ -93,7 +98,7 @@ static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L, OptimizationRe
         }
         if (!J) {
             LLVM_DEBUG(dbgs() << "LSL: chain prematurely terminated at " << *I << "\n");
-            ORE.emit([&]() {
+            REMARK([&]() {
                 return OptimizationRemarkMissed(DEBUG_TYPE, "ChainPrematurelyTerminated", I)
                        << "chain prematurely terminated at " << ore::NV("Instruction", I);
             });
@@ -107,7 +112,7 @@ static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L, OptimizationRe
             // Check that arithmetic op matches prior arithmetic ops in the chain.
             if (getReduceOpcode(J, I) != opcode) {
                 LLVM_DEBUG(dbgs() << "LSL: chain broke at " << *J << " because of wrong opcode\n");
-                ORE.emit([&](){
+                REMARK([&](){
                     return OptimizationRemarkMissed(DEBUG_TYPE, "ChainBroke", J)
                            << "chain broke at " << ore::NV("Instruction", J) << " because of wrong opcode";
                 });
@@ -119,7 +124,7 @@ static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L, OptimizationRe
             opcode = getReduceOpcode(J, I);
             if (!opcode) {
                 LLVM_DEBUG(dbgs() << "LSL: first arithmetic op in chain is uninteresting" << *J << "\n");
-                ORE.emit([&]() {
+                REMARK([&]() {
                     return OptimizationRemarkMissed(DEBUG_TYPE, "FirstArithmeticOpInChainIsUninteresting", J)
                            << "first arithmetic op in chain is uninteresting";
                 });
@@ -140,7 +145,7 @@ static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L, OptimizationRe
     int length = 0;
     for (chainVector::const_iterator K=chain.begin(); K!=chain.end(); ++K) {
         LLVM_DEBUG(dbgs() << "LSL: marking " << **K << "\n");
-        ORE.emit([&]() {
+        REMARK([&]() {
             return OptimizationRemark(DEBUG_TYPE, "MarkedUnsafeAlgebra", *K)
                    << "marked unsafe algebra on " << ore::NV("Instruction", *K);
         });
@@ -204,7 +209,7 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
 
         LLVM_DEBUG(dbgs() << "LSL: simd: " << simd << " ivdep: " << ivdep << "\n");
 
-        ORE.emit([&]() {
+        REMARK([&]() {
             return OptimizationRemarkAnalysis(DEBUG_TYPE, "Loop SIMD Flags", I)
                 << "Loop marked for SIMD vectorization with flags { \"simd\": " << (simd ? "true" : "false") << ", \"ivdep\": " << (ivdep ? "true" : "false") << " }";
         });

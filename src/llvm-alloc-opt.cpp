@@ -99,6 +99,11 @@ static void removeGCPreserve(CallInst *call, Instruction *val)
  * * Handle jl_box*
  */
 
+#ifndef __clang_gcanalyzer__
+#define REMARK(remark) ORE.emit(remark)
+#else
+#define REMARK(remark) (void) 0;
+#endif
 struct AllocOpt : public JuliaPassContext {
 
     const DataLayout *DL;
@@ -218,36 +223,26 @@ void Optimizer::optimizeAll()
         size_t sz = item.second;
         checkInst(orig);
         if (use_info.escaped) {
-            ORE.emit([&]() {
+            REMARK([&]() {
                 return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
                     << "GC allocation escaped " << ore::NV("GC Allocation", orig);
             });
-            if (use_info.hastypeof) {
-                ORE.emit([&]() {
-                    return OptimizationRemark(DEBUG_TYPE, "Type Tag", orig)
-                        << "GC allocation typeof optimized out " << ore::NV("GC Allocation", orig);
-                });
+            if (use_info.hastypeof)
                 optimizeTag(orig);
-            }
             continue;
         }
         if (use_info.haserror || use_info.returned) {
-            ORE.emit([&]() {
+            REMARK([&]() {
                 return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
                     << "GC allocation has error or was returned " << ore::NV("GC Allocation", orig);
             });
-            if (use_info.hastypeof) {
-                ORE.emit([&]() {
-                    return OptimizationRemark(DEBUG_TYPE, "Type Tag", orig)
-                        << "GC allocation typeof optimized out " << ore::NV("GC Allocation", orig);
-                });
+            if (use_info.hastypeof)
                 optimizeTag(orig);
-            }
             continue;
         }
         if (!use_info.addrescaped && !use_info.hasload && (!use_info.haspreserve ||
                                                            !use_info.refstore)) {
-            ORE.emit([&]() {
+            REMARK([&]() {
                 return OptimizationRemark(DEBUG_TYPE, "Dead Allocation", orig)
                     << "GC allocation removed " << ore::NV("GC Allocation", orig);
             });
@@ -272,21 +267,16 @@ void Optimizer::optimizeAll()
             }
         }
         if (has_refaggr) {
-            ORE.emit([&]() {
+            REMARK([&]() {
                 return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
                     << "GC allocation has unusual object reference, unable to move to stack " << ore::NV("GC Allocation", orig);
             });
-            if (use_info.hastypeof) {
-                ORE.emit([&]() {
-                    return OptimizationRemark(DEBUG_TYPE, "Type Tag", orig)
-                        << "GC allocation typeof optimized out " << ore::NV("GC Allocation", orig);
-                });
+            if (use_info.hastypeof)
                 optimizeTag(orig);
-            }
             continue;
         }
         if (!use_info.hasunknownmem && !use_info.addrescaped) {
-            ORE.emit([&](){
+            REMARK([&](){
                 return OptimizationRemark(DEBUG_TYPE, "Stack Split Allocation", orig)
                     << "GC allocation split on stack " << ore::NV("GC Allocation", orig);
             });
@@ -294,7 +284,7 @@ void Optimizer::optimizeAll()
             splitOnStack(orig);
             continue;
         }
-        ORE.emit([&](){
+        REMARK([&](){
             return OptimizationRemark(DEBUG_TYPE, "Stack Move Allocation", orig)
                 << "GC allocation moved to stack " << ore::NV("GC Allocation", orig);
         });
@@ -369,7 +359,7 @@ void Optimizer::checkInst(Instruction *I)
     LLVM_DEBUG(dbgs() << "Running escape analysis on " << *I << "\n");
     jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, pass, *pass.DL};
     jl_alloc::runEscapeAnalysis(I, required, jl_alloc::EscapeAnalysisOptionalArgs().with_optimization_remark_emitter(&ORE));
-    ORE.emit([&](){
+    REMARK([&](){
         std::string suse_info;
         llvm::raw_string_ostream osuse_info(suse_info);
         use_info.dump(osuse_info);
@@ -871,7 +861,7 @@ void Optimizer::optimizeTag(CallInst *orig_inst)
             auto callee = call->getCalledOperand();
             if (pass.typeof_func == callee) {
                 ++RemovedTypeofs;
-                ORE.emit([&](){
+                REMARK([&](){
                     return OptimizationRemark(DEBUG_TYPE, "typeof", call)
                         << "removed typeof call for GC allocation " << ore::NV("Alloc", orig_inst);
                 });

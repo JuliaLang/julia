@@ -158,7 +158,11 @@ JL_USED_FUNC void AllocUseInfo::dump()
     dump(dbgs());
 }
 
+#ifndef __clang_gcanalyzer__
 #define REMARK(remark) if (options.ORE) options.ORE->emit(remark)
+#else
+#define REMARK(remark)
+#endif
 
 void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArgs required, EscapeAnalysisOptionalArgs options) {
     required.use_info.reset();

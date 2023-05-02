@@ -30,6 +30,12 @@
 using namespace llvm;
 STATISTIC(TotalContracted, "Total number of multiplies marked for FMA");
 
+#ifndef __clang_gcanalyzer__
+#define REMARK(remark) ORE.emit(remark)
+#else
+#define REMARK(remark) (void) 0;
+#endif
+
 /**
  * Combine
  * ```
@@ -49,7 +55,7 @@ static bool checkCombine(Value *maybeMul, OptimizationRemarkEmitter &ORE) JL_NOT
         return false;
     if (!mulOp->hasOneUse()) {
         LLVM_DEBUG(dbgs() << "mulOp has multiple uses: " << *maybeMul << "\n");
-        ORE.emit([&](){
+        REMARK([&](){
             return OptimizationRemarkMissed(DEBUG_TYPE, "Multiuse FMul", mulOp)
                 << "fmul had multiple uses " << ore::NV("fmul", mulOp);
         });
@@ -59,7 +65,7 @@ static bool checkCombine(Value *maybeMul, OptimizationRemarkEmitter &ORE) JL_NOT
     auto fmf = mulOp->getFastMathFlags();
     if (!fmf.allowContract()) {
         LLVM_DEBUG(dbgs() << "Marking mulOp for FMA: " << *maybeMul << "\n");
-        ORE.emit([&](){
+        REMARK([&](){
             return OptimizationRemark(DEBUG_TYPE, "Marked for FMA", mulOp)
                 << "marked for fma " << ore::NV("fmul", mulOp);
         });
