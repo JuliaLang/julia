@@ -14,6 +14,7 @@ Language changes
   result previously. This also lets the runtime optimize certain method lookups in a way
   that significantly improves load and inference times for heavily overloaded methods that
   dispatch on Types (such as traits and constructors).
+* The "h bar" `ℏ` (`\hslash` U+210F) character is now treated as equivalent to `ħ` (`\hbar` U+0127).
 
 Compiler/Runtime improvements
 -----------------------------
