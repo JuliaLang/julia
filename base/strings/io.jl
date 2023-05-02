@@ -1004,19 +1004,22 @@ end
 function _ansi_writer(io::IO, s::Union{<:StyledString, SubString{<:StyledString}},
                       string_writer::Function)
     if get(io, :color, false)::Bool
+        buf = IOBuffer() # Avoid the overhead in repeatadly printing to `stdout`
+        lastface::Face = FACES.current[][:default]
         for (str, styles) in eachstyle(s)
             face = getface(styles)
             link = let idx=findfirst(==(:link) ∘ first, styles)
                 if !isnothing(idx)
                     string(last(styles[idx]))::String
                 end end
-            !isnothing(link) && write(io, "\e]8;;", link, "\e\\")
-            termstyle(io, face, lastface)
-            string_writer(io, str)
-            !isnothing(link) && write(io, "\e]8;;\e\\")
+            !isnothing(link) && write(buf, "\e]8;;", link, "\e\\")
+            termstyle(buf, face, lastface)
+            string_writer(buf, str)
+            !isnothing(link) && write(buf, "\e]8;;\e\\")
             lastface = face
         end
-        termstyle(io, getface(), lastface)
+        termstyle(buf, getface(), lastface)
+        write(io, take!(buf))
     elseif s isa StyledString
         string_writer(io, s.string)
     elseif s isa SubString
