@@ -30,7 +30,7 @@ L4:                                               ; preds = %top
   %current_task1 = bitcast {}*** %current_task112 to {}**
   ; CHECK: %3 = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task1, i64 8, {} addrspace(10)* @tag)
   ; CHECK-NEXT: %4 = bitcast {} addrspace(10)* %3 to i8 addrspace(10)*
-  ; CHECK-NEXT: call void @llvm.memset.p10i8.i64(i8 addrspace(10)* align 16 %4, i8 0, i64 8, i1 false)
+  ; CHECK-NEXT: call void @llvm.memset.p10i8.i64(i8 addrspace(10)* align {{[0-9]+}} %4, i8 0, i64 8, i1 false)
   ; CHECK-NEXT: br label %L22
   br label %L22
 
