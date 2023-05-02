@@ -27,9 +27,10 @@ end
 
 function run(maxsize)
     Threads.@threads for i in 1:maxsize
-        work(i*500)
+        work(i*375)
     end
 end
 
-run(4)
+# Memory usage 581 MB
+@time run(4)
 GC.gc()

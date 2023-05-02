@@ -8,14 +8,16 @@ mutable struct ListNode
   ListNode(x,y) = new(x,y);
 end
 
-function list(n=128)
+function list(N=16*1024^2)
     start::ListNode = ListNode(1)
     current::ListNode = start
-    for i = 2:(n*1024^2)
+    for i = 2:N
         current = ListNode(i,current)
     end
     return current.key
 end
 
+# Memory use is 512 MB
 _ = list()
+
 GC.gc()
