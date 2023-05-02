@@ -1010,6 +1010,9 @@ for (gels, gesv, getrs, getri, elty) in
             if n != size(B, 1)
                 throw(DimensionMismatch("B has leading dimension $(size(B,1)), but needs $n"))
             end
+            if n != length(ipiv)
+                throw(DimensionMismatch("ipiv has length $(length(ipiv)), but needs to be $n"))
+            end
             nrhs = size(B, 2)
             info = Ref{BlasInt}()
             ccall((@blasfunc($getrs), libblastrampoline), Cvoid,
