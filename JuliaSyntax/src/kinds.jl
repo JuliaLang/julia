@@ -905,7 +905,7 @@ const _kind_names =
         # Comprehensions
         "generator"
         "filter"
-        "flatten"
+        "cartesian_iterator"
         "comprehension"
         "typed_comprehension"
     "END_SYNTAX_KINDS"
