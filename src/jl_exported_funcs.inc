@@ -546,6 +546,7 @@
     YY(jl_register_fptrs) \
     YY(jl_generate_fptr) \
     YY(jl_generate_fptr_for_unspecialized) \
+    YY(jl_generate_fptr_for_oc_wrapper) \
     YY(jl_compile_extern_c) \
     YY(jl_teardown_codegen) \
     YY(jl_jit_total_bytes) \

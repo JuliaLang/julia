@@ -48,6 +48,8 @@ JL_DLLEXPORT void jl_generate_fptr_for_unspecialized_fallback(jl_code_instance_t
     jl_atomic_store_release(&unspec->invoke, &jl_fptr_interpret_call);
 }
 
+JL_DLLEXPORT void jl_generate_fptr_for_oc_wrapper_fallback(jl_code_instance_t *unspec) UNAVAILABLE
+
 JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION_fallback(void)
 {
     return 0;

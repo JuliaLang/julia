@@ -191,7 +191,6 @@ static jl_callptr_t _jl_compile_codeinst(
     assert(jl_is_code_instance(codeinst));
     assert(codeinst->min_world <= world && (codeinst->max_world >= world || codeinst->max_world == 0) &&
         "invalid world for method-instance");
-    assert(src && jl_is_code_info(src));
 
     JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
 #ifdef USE_TRACY
@@ -268,6 +267,9 @@ static jl_callptr_t _jl_compile_codeinst(
         }
         else if (decls.functionObject == "jl_fptr_sparam") {
             addr = jl_fptr_sparam_addr;
+        }
+        else if (decls.functionObject == "jl_f_opaque_closure_call") {
+            addr = jl_f_opaque_closure_call_addr;
         }
         else {
             addr = (jl_callptr_t)getAddressForFunction(decls.functionObject);
@@ -501,6 +503,19 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     }
     JL_GC_POP();
     return codeinst;
+}
+
+extern "C" JL_DLLEXPORT
+void jl_generate_fptr_for_oc_wrapper_impl(jl_code_instance_t *oc_wrap)
+{
+    if (jl_atomic_load_relaxed(&oc_wrap->invoke) != NULL) {
+        return;
+    }
+    JL_LOCK(&jl_codegen_lock);
+    if (jl_atomic_load_relaxed(&oc_wrap->invoke) == NULL) {
+        _jl_compile_codeinst(oc_wrap, NULL, 1, *jl_ExecutionEngine->getContext(), 0);
+    }
+    JL_UNLOCK(&jl_codegen_lock); // Might GC
 }
 
 extern "C" JL_DLLEXPORT

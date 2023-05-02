@@ -4,6 +4,7 @@ using Core: OpaqueClosure
 using Base.Experimental: @opaque
 
 const_int() = 1
+const_int_barrier() = Base.inferencebarrier(1)::typeof(1)
 
 const lno = LineNumberNode(1, :none)
 
@@ -177,7 +178,7 @@ mk_va_opaque() = @opaque (x...)->x
 @test mk_va_opaque()(1,2) == (1,2)
 
 # OpaqueClosure show method
-@test repr(@opaque x->1) == "(::Any)::Any->◌"
+@test repr(@opaque x->Base.inferencebarrier(1)) == "(::Any)::Any->◌"
 
 # Opaque closure in CodeInfo returned from generated functions
 let ci = @code_lowered const_int()
@@ -273,5 +274,26 @@ let src = code_typed((Int,Int)) do x, y...
     let oc = OpaqueClosure(ir; isva=true)
         @test oc(1,2) === (1,(2,))
         @test_throws MethodError oc(1,2,3)
+    end
+end
+
+# Check for correct handling in case of broken return type.
+eval_oc_dyn(oc) = Base.inferencebarrier(oc)()
+eval_oc_spec(oc) = oc()
+for f in (const_int, const_int_barrier)
+    ci = code_lowered(f, Tuple{})[1]
+    for compiled in (true, false)
+        oc_expr = Expr(:new_opaque_closure, Tuple{}, Union{}, Float64,
+            Expr(:opaque_closure_method, nothing, 0, false, lno, ci))
+        oc_mismatch = let ci = code_lowered(f, Tuple{})[1]
+            if compiled
+                eval(:((()->$oc_expr)()))
+            else
+                eval(oc_expr)
+            end
+        end
+        @test isa(oc_mismatch, OpaqueClosure{Tuple{}, Union{}})
+        @test_throws TypeError eval_oc_dyn(oc_mismatch)
+        @test_throws TypeError eval_oc_spec(oc_mismatch)
     end
 end
