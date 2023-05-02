@@ -127,13 +127,14 @@ function exprs_roughly_equal(fl_ex, ex)
         args = args[1].args
     elseif h == :function && Meta.isexpr(fl_args[1], :block)
         blockargs = filter(x->!(x isa LineNumberNode), fl_args[1].args)
-        ps = blockargs[2:end]
-        for i = 1:length(ps)
-            if Meta.isexpr(ps[i], :(=))
-                ps[i] = Expr(:kw, ps[i].args...)
+        posargs = blockargs[1:max(0, length(blockargs))]
+        kwargs = blockargs[2:end]
+        for i = 1:length(kwargs)
+            if Meta.isexpr(kwargs[i], :(=))
+                kwargs[i] = Expr(:kw, kwargs[i].args...)
             end
         end
-        fl_args[1] = Expr(:tuple, Expr(:parameters, ps...), blockargs[1])
+        fl_args[1] = Expr(:tuple, Expr(:parameters, kwargs...), posargs...)
     end
     if length(fl_args) != length(args)
         return false
@@ -212,7 +213,7 @@ function test_parse_all_in_path(path_allowed::Function, basedir)
                                                   exprs_equal=exprs_equal_no_linenum)
             @test parsers_agree
             if !parsers_agree
-                reduced_failures = reduce_text.(sourcetext.(reduce_tree(text)),
+                reduced_failures = reduce_text.(reduce_tree(text),
                                                 parsers_fuzzy_disagree)
                 @test reduced_failures == []
             end
@@ -263,11 +264,10 @@ function _reduce_tree(failing_subtrees, tree; exprs_equal=exprs_equal_no_linenum
 end
 
 """
-    reduce_tree(text::AbstractString; exprs_equal=exprs_equal_no_linenum)
     reduce_tree(tree::SyntaxNode; exprs_equal=exprs_equal_no_linenum)
 
-Select minimal subtrees of `text` or `tree` which are inconsistent between
-flisp and JuliaSyntax parsers.
+Select minimal subtrees of `tree` which are inconsistent between flisp and
+JuliaSyntax parsers.
 """
 function reduce_tree(tree::SyntaxNode; kws...)
     subtrees = Vector{typeof(tree)}()
@@ -275,9 +275,16 @@ function reduce_tree(tree::SyntaxNode; kws...)
     subtrees
 end
 
+"""
+    reduce_tree(text::AbstractString; exprs_equal=exprs_equal_no_linenum)
+
+Find the minimal subtrees of the parsed form of `text` which are inconsistent
+between flisp and JuliaSyntax parsers and return the source text of those
+subtrees.
+"""
 function reduce_tree(text::AbstractString; kws...)
     tree = parseall(SyntaxNode, text)
-    reduce_tree(tree; kws...)
+    sourcetext.(reduce_tree(tree; kws...))
 end
 
 
