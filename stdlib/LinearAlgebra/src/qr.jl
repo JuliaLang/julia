@@ -570,6 +570,7 @@ ldiv!(A::QRPivoted{T,<:StridedMatrix}, B::AbstractVector{T}) where {T<:BlasFloat
     vec(ldiv!(A, reshape(B, length(B), 1)))
 ldiv!(A::QRPivoted{T,<:StridedMatrix}, B::AbstractMatrix{T}) where {T<:BlasFloat} =
     ldiv!(A, B, min(size(A)...)*eps(real(float(one(eltype(B))))))[1]
+
 function _wide_qr_ldiv!(A::QR{T}, B::AbstractMatrix{T}) where T
     m, n = size(A)
     minmn = min(m,n)
@@ -614,7 +615,6 @@ function _wide_qr_ldiv!(A::QR{T}, B::AbstractMatrix{T}) where T
             end
         end
     end
-    B[A.p,:] = B[1:n,:]
     return B
 end
 
