@@ -818,6 +818,10 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 
     arraylist_new(&jl_linkage_blobs, 0);
     arraylist_new(&jl_image_relocs, 0);
+    arraylist_new(&eytzinger_image_tree, 0);
+    arraylist_new(&eytzinger_idxs, 0);
+    arraylist_push(&eytzinger_idxs, (void*)0);
+    arraylist_push(&eytzinger_image_tree, (void*)1); // outside image
 
     jl_ptls_t ptls = jl_init_threadtls(0);
 #pragma GCC diagnostic push
