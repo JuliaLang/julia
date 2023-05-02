@@ -408,9 +408,6 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
         }
         NF->setAttributes(Attrs);
 
-        if (F->hasPersonalityFn())
-            NF->setPersonalityFn(MapValue(F->getPersonalityFn(), VMap));
-
         copyComdat(NF, F);
 
         RemoveNoopAddrSpaceCasts(NF);
