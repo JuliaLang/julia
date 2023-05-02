@@ -1389,7 +1389,8 @@ CredentialPayload(p::CredentialPayload) = p
 function Base.shred!(p::CredentialPayload)
     # Note: Avoid shredding the `explicit` or `cache` fields as these are just references
     # and it is not our responsibility to shred them.
-    p.credential !== nothing && Base.shred!(p.credential)
+    credential = p.credential
+    credential !== nothing && Base.shred!(credential)
     p.credential = nothing
 end
 
@@ -1430,8 +1431,9 @@ function approve(p::CredentialPayload; shred::Bool=true)
 
     # Each `approve` call needs to avoid shredding the passed in credential as we need
     # the credential information intact for subsequent approve calls.
-    if p.cache !== nothing
-        approve(p.cache, cred, p.url)
+    cache = p.cache
+    if cache !== nothing
+        approve(cache, cred, p.url)
         shred = false  # Avoid wiping `cred` as this would also wipe the cached copy
     end
     if p.allow_git_helpers
@@ -1460,8 +1462,9 @@ function reject(p::CredentialPayload; shred::Bool=true)
 
     # Note: each `reject` call needs to avoid shredding the passed in credential as we need
     # the credential information intact for subsequent reject calls.
-    if p.cache !== nothing
-        reject(p.cache, cred, p.url)
+    cache = p.cache
+    if cache !== nothing
+        reject(cache, cred, p.url)
     end
     if p.allow_git_helpers
         reject(p.config, cred, p.url)

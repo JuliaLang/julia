@@ -42,7 +42,7 @@ top:
     %0 = bitcast {}*** %pgcstack to {}**
     %current_task = getelementptr inbounds {}*, {}** %0, i64 -12
 ; CHECK: %current_task = getelementptr inbounds {}*, {}** %0, i64 -12
-; CHECK-NEXT: [[ptls_field:%.*]] = getelementptr inbounds {}*, {}** %current_task, i64 15
+; CHECK-NEXT: [[ptls_field:%.*]] = getelementptr inbounds {}*, {}** %current_task, i64 16
 ; CHECK-NEXT: [[ptls_load:%.*]] = load {}*, {}** [[ptls_field]], align 8, !tbaa !0
 ; CHECK-NEXT: [[ppjl_ptls:%.*]] = bitcast {}* [[ptls_load]] to {}**
 ; CHECK-NEXT: [[ptls_i8:%.*]] = bitcast {}** [[ppjl_ptls]] to i8*
@@ -67,7 +67,7 @@ top:
     %0 = bitcast {}*** %pgcstack to {}**
     %current_task = getelementptr inbounds {}*, {}** %0, i64 -12
 ; CHECK: %current_task = getelementptr inbounds {}*, {}** %0, i64 -12
-; CHECK-NEXT: [[ptls_field:%.*]] = getelementptr inbounds {}*, {}** %current_task, i64 15
+; CHECK-NEXT: [[ptls_field:%.*]] = getelementptr inbounds {}*, {}** %current_task, i64 16
 ; CHECK-NEXT: [[ptls_load:%.*]] = load {}*, {}** [[ptls_field]], align 8, !tbaa !0
 ; CHECK-NEXT: [[ppjl_ptls:%.*]] = bitcast {}* [[ptls_load]] to {}**
 ; CHECK-NEXT: [[ptls_i8:%.*]] = bitcast {}** [[ppjl_ptls]] to i8*
@@ -147,6 +147,25 @@ define {} addrspace(10)* @gclift_switch({} addrspace(13)* addrspace(10)* %input,
   ; CHECK: %gclift
   ret {} addrspace(10)* %ret
 }
+
+define void @decayar([2 x {} addrspace(10)* addrspace(11)*] %ar) {
+  %v2 = call {}*** @julia.get_pgcstack()
+  %e0 = extractvalue [2 x {} addrspace(10)* addrspace(11)*] %ar, 0
+  %l0 = load {} addrspace(10)*, {} addrspace(10)* addrspace(11)* %e0
+  %e1 = extractvalue [2 x {} addrspace(10)* addrspace(11)*] %ar, 1
+  %l1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(11)* %e1
+  %r = call i32 @callee_root({} addrspace(10)* %l0, {} addrspace(10)* %l1) 
+  ret void
+}
+
+; CHECK-LABEL: @decayar
+; CHECK:  %gcframe = call {} addrspace(10)** @julia.new_gc_frame(i32 2)
+; CHECK:  %1 = call {} addrspace(10)** @julia.get_gc_frame_slot({} addrspace(10)** %gcframe, i32 1)
+; CHECK:  store {} addrspace(10)* %l0, {} addrspace(10)** %1, align 8
+; CHECK:  %2 = call {} addrspace(10)** @julia.get_gc_frame_slot({} addrspace(10)** %gcframe, i32 0)
+; CHECK: store {} addrspace(10)* %l1, {} addrspace(10)** %2, align 8
+; CHECK: %r = call i32 @callee_root({} addrspace(10)* %l0, {} addrspace(10)* %l1)
+; CHECK: call void @julia.pop_gc_frame({} addrspace(10)** %gcframe)
 
 !0 = !{i64 0, i64 23}
 !1 = !{!1}

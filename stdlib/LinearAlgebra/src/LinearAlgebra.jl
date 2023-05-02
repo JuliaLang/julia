@@ -15,10 +15,10 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     length, log, map, ndims, one, oneunit, parent, permutedims, power_by_squaring,
     print_matrix, promote_rule, real, round, sec, sech, setindex!, show, similar, sin,
     sincos, sinh, size, sqrt, strides, stride, tan, tanh, transpose, trunc, typed_hcat,
-    vec, zero
+    vec, view, zero
 using Base: IndexLinear, promote_eltype, promote_op, promote_typeof,
     @propagate_inbounds, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
-    Splat
+    splat
 using Base.Broadcast: Broadcasted, broadcasted
 using Base.PermutedDimsArrays: CommutativeOps
 using OpenBLAS_jll
@@ -94,6 +94,8 @@ export
     eigvecs,
     factorize,
     givens,
+    hermitianpart,
+    hermitianpart!,
     hessenberg,
     hessenberg!,
     isdiag,
@@ -429,8 +431,6 @@ include("tridiag.jl")
 include("triangular.jl")
 
 include("factorization.jl")
-include("qr.jl")
-include("lq.jl")
 include("eigen.jl")
 include("svd.jl")
 include("symmetric.jl")
@@ -441,7 +441,10 @@ include("diagonal.jl")
 include("symmetriceigen.jl")
 include("bidiag.jl")
 include("uniformscaling.jl")
+include("qr.jl")
+include("lq.jl")
 include("hessenberg.jl")
+include("abstractq.jl")
 include("givens.jl")
 include("special.jl")
 include("bitarray.jl")
@@ -478,11 +481,30 @@ _makevector(x::AbstractVector) = Vector(x)
 _pushzero(A) = (B = similar(A, length(A)+1); @inbounds B[begin:end-1] .= A; @inbounds B[end] = zero(eltype(B)); B)
 _droplast!(A) = deleteat!(A, lastindex(A))
 
+# some trait like this would be cool
+# onedefined(::Type{T}) where {T} = hasmethod(one, (T,))
+# but we are actually asking for oneunit(T), that is, however, defined for generic T as
+# `T(one(T))`, so the question is equivalent for whether one(T) is defined
+onedefined(::Type) = false
+onedefined(::Type{<:Number}) = true
+
+# initialize return array for op(A, B)
+_init_eltype(::typeof(*), ::Type{TA}, ::Type{TB}) where {TA,TB} =
+    (onedefined(TA) && onedefined(TB)) ?
+        typeof(matprod(oneunit(TA), oneunit(TB))) :
+        promote_op(matprod, TA, TB)
+_init_eltype(op, ::Type{TA}, ::Type{TB}) where {TA,TB} =
+    (onedefined(TA) && onedefined(TB)) ?
+        typeof(op(oneunit(TA), oneunit(TB))) :
+        promote_op(op, TA, TB)
+_initarray(op, ::Type{TA}, ::Type{TB}, C) where {TA,TB} =
+    similar(C, _init_eltype(op, TA, TB), size(C))
+
 # General fallback definition for handling under- and overdetermined system as well as square problems
 # While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs
 # which is required by LAPACK but not SuiteSparse which allows real-complex solves in some cases. Hence,
 # we restrict this method to only the LAPACK factorizations in LinearAlgebra.
-# The definition is put here since it explicitly references all the Factorizion structs so it has
+# The definition is put here since it explicitly references all the Factorization structs so it has
 # to be located after all the files that define the structs.
 const LAPACKFactorizations{T,S} = Union{
     BunchKaufman{T,S},
@@ -493,7 +515,12 @@ const LAPACKFactorizations{T,S} = Union{
     QRCompactWY{T,S},
     QRPivoted{T,S},
     SVD{T,<:Real,S}}
-function (\)(F::Union{<:LAPACKFactorizations,Adjoint{<:Any,<:LAPACKFactorizations}}, B::AbstractVecOrMat)
+
+(\)(F::LAPACKFactorizations, B::AbstractVecOrMat) = ldiv(F, B)
+(\)(F::AdjointFactorization{<:Any,<:LAPACKFactorizations}, B::AbstractVecOrMat) = ldiv(F, B)
+(\)(F::TransposeFactorization{<:Any,<:LU}, B::AbstractVecOrMat) = ldiv(F, B)
+
+function ldiv(F::Factorization, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     m, n = size(F)
     if m != size(B, 1)
@@ -523,7 +550,11 @@ function (\)(F::Union{<:LAPACKFactorizations,Adjoint{<:Any,<:LAPACKFactorization
 end
 # disambiguate
 (\)(F::LAPACKFactorizations{T}, B::VecOrMat{Complex{T}}) where {T<:BlasReal} =
-    invoke(\, Tuple{Factorization{T}, VecOrMat{Complex{T}}}, F, B)
+    @invoke \(F::Factorization{T}, B::VecOrMat{Complex{T}})
+(\)(F::AdjointFactorization{T,<:LAPACKFactorizations}, B::VecOrMat{Complex{T}}) where {T<:BlasReal} =
+    ldiv(F, B)
+(\)(F::TransposeFactorization{T,<:LU}, B::VecOrMat{Complex{T}}) where {T<:BlasReal} =
+    ldiv(F, B)
 
 """
     LinearAlgebra.peakflops(n::Integer=2000; parallel::Bool=false)
@@ -570,7 +601,8 @@ function versioninfo(io::IO=stdout)
         println(io, indent, "--> ", lib.libname, " (", interface, ")")
     end
     println(io, "Threading:")
-    println(io, indent, "Threads.nthreads() = ", Base.Threads.nthreads())
+    println(io, indent, "Threads.threadpoolsize() = ", Threads.threadpoolsize())
+    println(io, indent, "Threads.maxthreadid() = ", Base.Threads.maxthreadid())
     println(io, indent, "LinearAlgebra.BLAS.get_num_threads() = ", BLAS.get_num_threads())
     println(io, "Relevant environment variables:")
     env_var_names = [

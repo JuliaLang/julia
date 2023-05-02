@@ -344,7 +344,7 @@ diagm(m::Integer, n::Integer, v::AbstractVector) = diagm(m, n, 0 => v)
 function tr(A::Matrix{T}) where T
     n = checksquare(A)
     t = zero(T)
-    for i=1:n
+    @inbounds @simd for i in 1:n
         t += A[i,i]
     end
     t
@@ -591,10 +591,9 @@ julia> exp(A)
  0.0      2.71828
 ```
 """
-exp(A::StridedMatrix{<:BlasFloat}) = exp!(copy(A))
-exp(A::StridedMatrix{<:Union{Integer,Complex{<:Integer}}}) = exp!(float.(A))
-exp(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(exp(parent(A)))
-exp(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(exp(parent(A)))
+exp(A::AbstractMatrix) = exp!(copy_similar(A, eigtype(eltype(A))))
+exp(A::AdjointAbsMat) = adjoint(exp(parent(A)))
+exp(A::TransposeAbsMat) = transpose(exp(parent(A)))
 
 """
     cis(A::AbstractMatrix)
@@ -755,7 +754,7 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
 end
 
 ## Swap rows i and j and columns i and j in X
-function rcswap!(i::Integer, j::Integer, X::StridedMatrix{<:Number})
+function rcswap!(i::Integer, j::Integer, X::AbstractMatrix{<:Number})
     for k = 1:size(X,1)
         X[k,i], X[k,j] = X[k,j], X[k,i]
     end
@@ -765,7 +764,7 @@ function rcswap!(i::Integer, j::Integer, X::StridedMatrix{<:Number})
 end
 
 """
-    log(A::StridedMatrix)
+    log(A::AbstractMatrix)
 
 If `A` has no negative real eigenvalue, compute the principal matrix logarithm of `A`, i.e.
 the unique matrix ``X`` such that ``e^X = A`` and ``-\\pi < Im(\\lambda) < \\pi`` for all
@@ -796,7 +795,7 @@ julia> log(A)
  0.0  1.0
 ```
 """
-function log(A::StridedMatrix)
+function log(A::AbstractMatrix)
     # If possible, use diagonalization
     if ishermitian(A)
         logHermA = log(Hermitian(A))
@@ -824,8 +823,8 @@ function log(A::StridedMatrix)
     end
 end
 
-log(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(log(parent(A)))
-log(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(log(parent(A)))
+log(A::AdjointAbsMat) = adjoint(log(parent(A)))
+log(A::TransposeAbsMat) = transpose(log(parent(A)))
 
 """
     sqrt(A::AbstractMatrix)
@@ -873,9 +872,9 @@ julia> sqrt(A)
  0.0  2.0
 ```
 """
-sqrt(::StridedMatrix)
+sqrt(::AbstractMatrix)
 
-function sqrt(A::StridedMatrix{T}) where {T<:Union{Real,Complex}}
+function sqrt(A::AbstractMatrix{T}) where {T<:Union{Real,Complex}}
     if ishermitian(A)
         sqrtHermA = sqrt(Hermitian(A))
         return ishermitian(sqrtHermA) ? copytri!(parent(sqrtHermA), 'U', true) : parent(sqrtHermA)
@@ -903,8 +902,8 @@ function sqrt(A::StridedMatrix{T}) where {T<:Union{Real,Complex}}
     end
 end
 
-sqrt(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(sqrt(parent(A)))
-sqrt(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(sqrt(parent(A)))
+sqrt(A::AdjointAbsMat) = adjoint(sqrt(parent(A)))
+sqrt(A::TransposeAbsMat) = transpose(sqrt(parent(A)))
 
 function inv(A::StridedMatrix{T}) where T
     checksquare(A)
@@ -1341,7 +1340,7 @@ julia> factorize(A) # factorize will check to see that A is already factorized
 This returns a `5×5 Bidiagonal{Float64}`, which can now be passed to other linear algebra functions
 (e.g. eigensolvers) which will use specialized methods for `Bidiagonal` types.
 """
-function factorize(A::StridedMatrix{T}) where T
+function factorize(A::AbstractMatrix{T}) where T
     m, n = size(A)
     if m == n
         if m == 1 return A[1] end
@@ -1543,7 +1542,7 @@ function nullspace(A::AbstractVecOrMat; atol::Real = 0.0, rtol::Real = (min(size
     SVD = svd(A; full=true)
     tol = max(atol, SVD.S[1]*rtol)
     indstart = sum(s -> s .> tol, SVD.S) + 1
-    return copy(SVD.Vt[indstart:end,:]')
+    return copy((@view SVD.Vt[indstart:end,:])')
 end
 
 """

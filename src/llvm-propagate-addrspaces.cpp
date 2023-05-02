@@ -23,7 +23,7 @@
 #include <llvm/Support/Debug.h>
 
 #include "passes.h"
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 
 #define DEBUG_TYPE "propagate_julia_addrspaces"
 
@@ -302,7 +302,11 @@ struct PropagateJuliaAddrspacesLegacy : FunctionPass {
 
     PropagateJuliaAddrspacesLegacy() : FunctionPass(ID) {}
     bool runOnFunction(Function &F) override {
-        return propagateJuliaAddrspaces(F);
+        bool modified = propagateJuliaAddrspaces(F);
+#ifdef JL_VERIFY_PASSES
+        assert(!verifyFunction(F, &errs()));
+#endif
+        return modified;
     }
 };
 
@@ -314,7 +318,12 @@ Pass *createPropagateJuliaAddrspaces() {
 }
 
 PreservedAnalyses PropagateJuliaAddrspacesPass::run(Function &F, FunctionAnalysisManager &AM) {
-    if (propagateJuliaAddrspaces(F)) {
+    bool modified = propagateJuliaAddrspaces(F);
+
+#ifdef JL_VERIFY_PASSES
+    assert(!verifyFunction(F, &errs()));
+#endif
+    if (modified) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();
     } else {
         return PreservedAnalyses::all();

@@ -40,9 +40,9 @@ following meanings:
     This state corresponds to LLVM's `inaccessiblemem_or_argmemonly` function attribute.
 - `nonoverlayed::Bool`: indicates that any methods that may be called within this method
   are not defined in an [overlayed method table](@ref OverlayMethodTable).
-- `noinbounds::Bool`: indicates this method can't be `:consistent` because of bounds checking.
-  This effect is currently only set on `InferenceState` construction and used to taint
-  `:consistent`-cy before caching. We may want to track it with more accuracy in the future.
+- `noinbounds::Bool`: If set, indicates that this method does not read the parent's `:inbounds`
+  state. In particular, it does not have any reached `:boundscheck` exprs, not propagates inbounds
+  to any children that do.
 
 Note that the representations above are just internal implementation details and thus likely
 to change in the future. See [`Base.@assume_effects`](@ref) for more detailed explanation
@@ -72,7 +72,7 @@ struct Effects
         notaskstate::Bool,
         inaccessiblememonly::UInt8,
         nonoverlayed::Bool,
-        noinbounds::Bool = true)
+        noinbounds::Bool)
         return new(
             consistent,
             effect_free,
@@ -98,12 +98,12 @@ const EFFECT_FREE_IF_INACCESSIBLEMEMONLY = 0x01 << 1
 # :inaccessiblememonly bits
 const INACCESSIBLEMEM_OR_ARGMEMONLY = 0x01 << 1
 
-const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  true,  true,  true,  ALWAYS_TRUE,  true)
-const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  false, true,  true,  ALWAYS_TRUE,  true)
-const EFFECTS_UNKNOWN  = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, true)  # unknown mostly, but it's not overlayed at least (e.g. it's not a call)
-const EFFECTS_UNKNOWN′ = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, false) # unknown really
+const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  true,  true,  true,  ALWAYS_TRUE,  true,  true)
+const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  false, true,  true,  ALWAYS_TRUE,  true,  true)
+const EFFECTS_UNKNOWN  = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, true,  false)  # unknown mostly, but it's not overlayed at least (e.g. it's not a call)
+const _EFFECTS_UNKNOWN = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, false, false) # unknown really
 
-function Effects(e::Effects = EFFECTS_UNKNOWN′;
+function Effects(e::Effects = _EFFECTS_UNKNOWN;
     consistent::UInt8 = e.consistent,
     effect_free::UInt8 = e.effect_free,
     nothrow::Bool = e.nothrow,
@@ -157,7 +157,7 @@ is_foldable(effects::Effects) =
     is_effect_free(effects) &&
     is_terminates(effects)
 
-is_total(effects::Effects) =
+is_foldable_nothrow(effects::Effects) =
     is_foldable(effects) &&
     is_nothrow(effects)
 
@@ -184,7 +184,8 @@ function encode_effects(e::Effects)
            ((e.terminates          % UInt32) << 6) |
            ((e.notaskstate         % UInt32) << 7) |
            ((e.inaccessiblememonly % UInt32) << 8) |
-           ((e.nonoverlayed        % UInt32) << 10)
+           ((e.nonoverlayed        % UInt32) << 10)|
+           ((e.noinbounds          % UInt32) << 11)
 end
 
 function decode_effects(e::UInt32)
@@ -195,7 +196,8 @@ function decode_effects(e::UInt32)
         _Bool((e >> 6) & 0x01),
         _Bool((e >> 7) & 0x01),
         UInt8((e >> 8) & 0x03),
-        _Bool((e >> 10) & 0x01))
+        _Bool((e >> 10) & 0x01),
+        _Bool((e >> 11) & 0x01))
 end
 
 struct EffectsOverride

@@ -139,7 +139,7 @@ Notes for various architectures:
 
 * [ARM](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/arm.md)
 
-## [Required Build Tools and External Libraries](@id build-tools)
+## Required Build Tools and External Libraries
 
 Building Julia requires that the following software be installed:
 
@@ -187,6 +187,7 @@ uses are listed in [`deps/$(libname).version`](https://github.com/JuliaLang/juli
 - **[mbedtls]**              — library used for cryptography and transport layer security, used by libssh2
 - **[utf8proc]**             — a library for processing UTF-8 encoded Unicode strings.
 - **[LLVM libunwind]**       — LLVM's fork of [libunwind], a library that determines the call-chain of a program.
+- **[ITTAPI]**               — Intel's Instrumentation and Tracing Technology and Just-In-Time API.
 
 [GNU make]:     https://www.gnu.org/software/make
 [patch]:        https://www.gnu.org/software/patch
@@ -222,6 +223,7 @@ uses are listed in [`deps/$(libname).version`](https://github.com/JuliaLang/juli
 [pkg-config]:   https://www.freedesktop.org/wiki/Software/pkg-config/
 [powershell]:   https://docs.microsoft.com/en-us/powershell/scripting/wmf/overview
 [which]:        https://carlowood.github.io/which/
+[ITTAPI]:       https://github.com/intel/ittapi
 
 ## Build dependencies
 
@@ -302,7 +304,7 @@ From this point, you should
 ```
 (Note that `sudo` isn't installed, but neither is it necessary since you are running as `root`, so you can omit `sudo` from all commands.)
 
-Then add all the [build dependencies](@ref build-tools), a console-based editor of your choice, `git`, and anything else you'll need (e.g., `gdb`, `rr`, etc). Pick a directory to work in and `git clone` Julia, check out the branch you wish to debug, and build Julia as usual.
+Then add all the [build dependencies](#required-build-tools-and-external-libraries), a console-based editor of your choice, `git`, and anything else you'll need (e.g., `gdb`, `rr`, etc). Pick a directory to work in and `git clone` Julia, check out the branch you wish to debug, and build Julia as usual.
 
 
 ## Update the version number of a dependency

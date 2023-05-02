@@ -90,7 +90,8 @@ MinGW-w64 compilers available through Cygwin's package manager.
 
     3. Start the build
        ```sh
-       make -j 4   # Adjust the number of threads (4) to match your build environment.
+       make -j 4       # Adjust the number of threads (4) to match your build environment.
+       make -j 4 debug # This builds julia-debug.exe
        ```
 
 

@@ -268,7 +268,6 @@ end
 @test repr(Expr(:import, :Foo)) == ":(\$(Expr(:import, :Foo)))"
 @test repr(Expr(:import, Expr(:(.), ))) == ":(\$(Expr(:import, :(\$(Expr(:.))))))"
 
-
 @test repr(Expr(:using, Expr(:(.), :A))) == ":(using A)"
 @test repr(Expr(:using, Expr(:(.), :A),
                         Expr(:(.), :B))) == ":(using A, B)"
@@ -285,6 +284,10 @@ end
                          Expr(:(.), :D))) == ":(import A, B.C, D)"
 @test repr(Expr(:import, Expr(:(.), :A, :B),
                          Expr(:(.), :C, :D))) == ":(import A.B, C.D)"
+
+# https://github.com/JuliaLang/julia/issues/49168
+@test repr(:(using A: (..))) == ":(using A: (..))"
+@test repr(:(using A: (..) as twodots)) == ":(using A: (..) as twodots)"
 
 # range syntax
 @test_repr "1:2"
@@ -1275,12 +1278,6 @@ end
 let repr = sprint(dump, Core.svec())
     @test repr == "empty SimpleVector\n"
 end
-let sv = Core.svec(:a, :b, :c)
-    # unsafe replacement of :c with #undef to test handling of incomplete SimpleVectors
-    unsafe_store!(convert(Ptr{Ptr{Cvoid}}, Base.pointer_from_objref(sv)) + 3 * sizeof(Ptr), C_NULL)
-    repr = sprint(dump, sv)
-    @test repr == "SimpleVector\n  1: Symbol a\n  2: Symbol b\n  3: #undef\n"
-end
 let repr = sprint(dump, sin)
     @test repr == "sin (function of type typeof(sin))\n"
 end
@@ -1353,6 +1350,14 @@ test_repr("(:).a")
 @test repr(Tuple{Float32, Float32, Float32}) == "Tuple{Float32, Float32, Float32}"
 @test repr(Tuple{String, Int64, Int64, Int64}) == "Tuple{String, Int64, Int64, Int64}"
 @test repr(Tuple{String, Int64, Int64, Int64, Int64}) == "Tuple{String, Vararg{Int64, 4}}"
+
+# Test printing of NamedTuples using the macro syntax
+@test repr(@NamedTuple{kw::Int64}) == "@NamedTuple{kw::Int64}"
+@test repr(@NamedTuple{kw::Union{Float64, Int64}, kw2::Int64}) == "@NamedTuple{kw::Union{Float64, Int64}, kw2::Int64}"
+@test repr(@NamedTuple{kw::@NamedTuple{kw2::Int64}}) == "@NamedTuple{kw::@NamedTuple{kw2::Int64}}"
+@test repr(@NamedTuple{kw::NTuple{7, Int64}}) == "@NamedTuple{kw::NTuple{7, Int64}}"
+@test repr(@NamedTuple{a::Float64, b}) == "@NamedTuple{a::Float64, b}"
+
 
 @testset "issue #42931" begin
     @test repr(NTuple{4, :A}) == "NTuple{4, :A}"
@@ -1833,8 +1838,8 @@ end
     # issue #27747
     let t = (x = Integer[1, 2],)
         v = [t, t]
-        @test showstr(v) == "NamedTuple{(:x,), Tuple{Vector{Integer}}}[(x = [1, 2],), (x = [1, 2],)]"
-        @test replstr(v) == "2-element Vector{NamedTuple{(:x,), Tuple{Vector{Integer}}}}:\n (x = [1, 2],)\n (x = [1, 2],)"
+        @test showstr(v) == "@NamedTuple{x::Vector{Integer}}[(x = [1, 2],), (x = [1, 2],)]"
+        @test replstr(v) == "2-element Vector{@NamedTuple{x::Vector{Integer}}}:\n (x = [1, 2],)\n (x = [1, 2],)"
     end
 
     # issue #25857
@@ -1873,6 +1878,10 @@ end
     @test replstr((; var"#var#"=1)) == """(var"#var#" = 1,)"""
     @test replstr((; var"a"=1, b=2)) == "(a = 1, b = 2)"
     @test replstr((; a=1, b=2)) == "(a = 1, b = 2)"
+
+    # issue 48828, typeinfo missing for arrays with >2 dimensions
+    @test showstr(Float16[1.0 3.0; 2.0 4.0;;; 5.0 7.0; 6.0 8.0]) ==
+                 "Float16[1.0 3.0; 2.0 4.0;;; 5.0 7.0; 6.0 8.0]"
 end
 
 @testset "#14684: `display` should print associative types in full" begin
@@ -2042,21 +2051,17 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     lines2 = split(repr(ir), '\n')
     @test all(isspace, pop!(lines2))
     @test popfirst!(lines2) == "2  1 ──       $(QuoteNode(1))"
-    @test popfirst!(lines2) == "   │          $(QuoteNode(2))" # TODO: this should print after the next statement
     let line1 = popfirst!(lines1)
         line2 = popfirst!(lines2)
         @test startswith(line1, "2  1 ── ")
         @test startswith(line2, "   │    ")
         @test line2[12:end] == line2[12:end]
     end
-    let line1 = pop!(lines1)
-        line2 = pop!(lines2)
-        @test startswith(line1, "17 ")
-        @test startswith(line2, "   ")
-        @test line1[3:end] == line2[3:end]
-    end
-    @test pop!(lines2) == "   │          \$(QuoteNode(4))"
-    @test pop!(lines2) == "17 │          \$(QuoteNode(3))" # TODO: this should print after the next statement
+    @test popfirst!(lines2) == "   │          $(QuoteNode(2))"
+    @test pop!(lines2) == "   └───       \$(QuoteNode(4))"
+    @test pop!(lines1) == "17 └───       return %18"
+    @test pop!(lines2) == "   │          return %18"
+    @test pop!(lines2) == "17 │          \$(QuoteNode(3))"
     @test lines1 == lines2
 
     # verbose linetable
@@ -2064,6 +2069,13 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     Base.IRShow.show_ir(io, ir, Base.IRShow.default_config(ir; verbose_linetable=true))
     seekstart(io)
     @test count(contains(r"@ a{80}:\d+ within `my_fun28173"), eachline(io)) == 10
+
+    # Test that a bad :invoke doesn't cause an error during printing
+    Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(Expr(:invoke, nothing, sin), Any), false)
+    io = IOBuffer()
+    Base.IRShow.show_ir(io, ir)
+    seekstart(io)
+    @test contains(String(take!(io)), "Expr(:invoke, nothing")
 end
 
 # Verify that extra instructions at the end of the IR
@@ -2389,6 +2401,10 @@ Base.show(io::IO, ces::⛵) = Base.print(io, '⛵')
 @test Base.alignment(IOContext(IOBuffer(), :color=>true), ColoredLetter()) == (0, 1)
 @test Base.alignment(IOContext(IOBuffer(), :color=>false), ColoredLetter()) == (0, 1)
 
+# spacing around dots in Diagonal, etc:
+redminusthree = sprint((io, x) -> printstyled(io, x, color=:red), "-3", context=stdout)
+@test Base.replace_with_centered_mark(redminusthree) == Base.replace_with_centered_mark("-3")
+
 # `show` implementations for `Method`
 let buf = IOBuffer()
 
@@ -2484,4 +2500,120 @@ end
 
     ir = Core.Compiler.complete(compact)
     @test lines_shown(compact) == instructions + 1
+end
+
+@testset "#46424: IncrementalCompact displays wrong basic-block boundaries" begin
+    # get some cfg
+    function foo(i)
+        j = i+42
+        j == 1 ? 1 : 2
+    end
+    ir = only(Base.code_ircode(foo, (Int,)))[1]
+
+    # at every point we should be able to observe these three basic blocks
+    function verify_display(ir)
+        str = sprint(io->show(io, ir))
+        @test contains(str, "1 ─ %1 = ")
+        @test contains(str, r"2 ─ \s+ return 1")
+        @test contains(str, r"3 ─ \s+ return 2")
+    end
+    verify_display(ir)
+
+    # insert some instructions
+    for i in 1:3
+        inst = Core.Compiler.NewInstruction(Expr(:call, :identity, i), Int)
+        Core.Compiler.insert_node!(ir, 2, inst)
+    end
+
+    # compact
+    compact = Core.Compiler.IncrementalCompact(ir)
+    verify_display(compact)
+
+    # Compact the first instruction
+    state = Core.Compiler.iterate(compact)
+
+    # Insert some instructions here
+    for i in 1:2
+        inst = Core.Compiler.NewInstruction(Expr(:call, :identity, i), Int, Int32(1))
+        Core.Compiler.insert_node_here!(compact, inst)
+        verify_display(compact)
+    end
+
+    while state !== nothing
+        state = Core.Compiler.iterate(compact, state[2])
+        verify_display(compact)
+    end
+
+    # complete
+    ir = Core.Compiler.complete(compact)
+    verify_display(ir)
+end
+
+@testset "IRCode: CFG display" begin
+    # get a cfg
+    function foo(i)
+        j = i+42
+        j == 1 ? 1 : 2
+    end
+    ir = only(Base.code_ircode(foo, (Int,)))[1]
+    cfg = ir.cfg
+
+    str = sprint(io->show(io, cfg))
+    @test contains(str, r"CFG with \d+ blocks")
+    @test contains(str, r"bb 1 \(stmt.+\) → bb.*")
+end
+
+@testset "IncrementalCompact: correctly display attach-after nodes" begin
+    # set some IR
+    function foo(i)
+        j = i+42
+        return j
+    end
+    ir = only(Base.code_ircode(foo, (Int,)))[1]
+
+    # insert a bunch of nodes, inserting both before and after instruction 1
+    inst = Core.Compiler.NewInstruction(Expr(:call, :identity, 1), Int)
+    Core.Compiler.insert_node!(ir, 1, inst)
+    inst = Core.Compiler.NewInstruction(Expr(:call, :identity, 2), Int)
+    Core.Compiler.insert_node!(ir, 1, inst)
+    inst = Core.Compiler.NewInstruction(Expr(:call, :identity, 3), Int)
+    Core.Compiler.insert_node!(ir, 1, inst, true)
+    inst = Core.Compiler.NewInstruction(Expr(:call, :identity, 4), Int)
+    Core.Compiler.insert_node!(ir, 1, inst, true)
+
+    # at every point we should be able to observe these instructions (in order)
+    function verify_display(ir)
+        str = sprint(io->show(io, ir))
+        lines = split(str, '\n')
+        patterns = ["identity(1)",
+                    "identity(2)",
+                    "add_int",
+                    "identity(3)",
+                    "identity(4)",
+                    "return"]
+        line_idx = 1
+        pattern_idx = 1
+        while pattern_idx <= length(patterns) && line_idx <= length(lines)
+            # we test pattern-per-pattern, in order,
+            # so that we skip e.g. the compaction boundary
+            if contains(lines[line_idx], patterns[pattern_idx])
+                pattern_idx += 1
+            end
+            line_idx += 1
+        end
+        @test pattern_idx > length(patterns)
+    end
+    verify_display(ir)
+
+    compact = Core.Compiler.IncrementalCompact(ir)
+    verify_display(compact)
+
+    state = Core.Compiler.iterate(compact)
+    while state !== nothing
+        verify_display(compact)
+        state = Core.Compiler.iterate(compact, state[2])
+    end
+
+    ir = Core.Compiler.complete(compact)
+    verify_display(ir)
 end

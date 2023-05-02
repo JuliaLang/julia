@@ -7,8 +7,8 @@ const ThreadSynchronizer = GenericCondition{Threads.SpinLock}
     ReentrantLock()
 
 Creates a re-entrant lock for synchronizing [`Task`](@ref)s. The same task can
-acquire the lock as many times as required. Each [`lock`](@ref) must be matched
-with an [`unlock`](@ref).
+acquire the lock as many times as required (this is what the "Reentrant" part
+of the name means). Each [`lock`](@ref) must be matched with an [`unlock`](@ref).
 
 Calling 'lock' will also inhibit running of finalizers on that thread until the
 corresponding 'unlock'. Use of the standard lock pattern illustrated below

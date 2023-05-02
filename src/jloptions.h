@@ -15,6 +15,7 @@ typedef struct {
     const char *cpu_target;
     int8_t nthreadpools;
     int16_t nthreads;
+    int16_t ngcthreads;
     const int16_t *nthreads_per_pool;
     int32_t nprocs;
     const char *machine_file;
@@ -42,6 +43,7 @@ typedef struct {
     int8_t handle_signals;
     int8_t use_sysimage_native_code;
     int8_t use_compiled_modules;
+    int8_t use_pkgimages;
     const char *bindto;
     const char *outputbc;
     const char *outputunoptbc;

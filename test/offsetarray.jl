@@ -658,6 +658,14 @@ end
     @test last(v, 100) == v0
     @test last(v, 100) !== v
     @test last(v, 1) == [v[end]]
+
+    @testset "overflow (issue #45842)" begin
+        a = [2,3,4]
+        b = OffsetArray(a, 2:4)
+        @test first(a, typemax(Int)) == first(b, typemax(Int))
+        b = OffsetArray(a, typemin(Int))
+        @test last(a, 100) == last(b, 100)
+    end
 end
 
 @testset "Resizing OffsetVectors" begin

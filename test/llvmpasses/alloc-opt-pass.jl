@@ -32,7 +32,7 @@ define void @preserve_branches(i8* %fptr, i1 %b, i1 %b2) {
 
 L1:
   %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, $isz 8, {} addrspace(10)* @tag)
-  %tok = call token (...) @llvm.julia.gc_preserve_begin({} addrspace(10)* %v)
+  %tok = call token (...) @llvm.julia.gc_preserve_begin({} addrspace(10)* nonnull %v)
   call void @external_function()
   br i1 %b2, label %L2, label %L3
 
@@ -68,7 +68,7 @@ define void @preserve_branches2(i8* %fptr, i1 %b, i1 %b2) {
 
 L1:
   %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, $isz 8, {} addrspace(10)* @tag)
-  %tok = call token (...) @llvm.julia.gc_preserve_begin({} addrspace(10)* %v, {} addrspace(10)* %v2)
+  %tok = call token (...) @llvm.julia.gc_preserve_begin({} addrspace(10)* %v, {} addrspace(10)* nonnull %v2)
   call void @external_function()
   br i1 %b2, label %L2, label %L3
 

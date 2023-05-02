@@ -9,7 +9,7 @@
 #include <llvm/Support/raw_ostream.h>
 
 #include "julia.h"
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 
 using namespace llvm;
 

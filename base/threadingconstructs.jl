@@ -11,33 +11,40 @@ ID `1`.
 """
 threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
 
+# lower bound on the largest threadid()
 """
-    Threads.nthreads([:default|:interactive]) -> Int
+    Threads.maxthreadid() -> Int
 
-Get the number of threads (across all thread pools or within the specified
-thread pool) available to Julia. The number of threads across all thread
-pools is the inclusive upper bound on [`threadid()`](@ref).
-
-See also: `BLAS.get_num_threads` and `BLAS.set_num_threads` in the
-[`LinearAlgebra`](@ref man-linalg) standard library, and `nprocs()` in the
-[`Distributed`](@ref man-distributed) standard library.
+Get a lower bound on the number of threads (across all thread pools) available
+to the Julia process, with atomic-acquire semantics. The result will always be
+greater than or equal to [`threadid()`](@ref) as well as `threadid(task)` for
+any task you were able to observe before calling `maxthreadid`.
 """
-function nthreads end
+maxthreadid() = Int(Core.Intrinsics.atomic_pointerref(cglobal(:jl_n_threads, Cint), :acquire))
 
-nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
-function nthreads(pool::Symbol)
-    if pool === :default
-        tpid = Int8(0)
-    elseif pool === :interactive
-        tpid = Int8(1)
-    else
-        error("invalid threadpool specified")
-    end
-    return _nthreads_in_pool(tpid)
-end
+"""
+    Threads.nthreads(:default | :interactive) -> Int
+
+Get the current number of threads within the specified thread pool. The threads in default
+have id numbers `1:nthreads(:default)`.
+
+See also `BLAS.get_num_threads` and `BLAS.set_num_threads` in the [`LinearAlgebra`](@ref
+man-linalg) standard library, and `nprocs()` in the [`Distributed`](@ref man-distributed)
+standard library and [`Threads.maxthreadid()`](@ref).
+"""
+nthreads(pool::Symbol) = threadpoolsize(pool)
+
 function _nthreads_in_pool(tpid::Int8)
     p = unsafe_load(cglobal(:jl_n_threads_per_pool, Ptr{Cint}))
     return Int(unsafe_load(p, tpid + 1))
+end
+
+function _tpid_to_sym(tpid::Int8)
+    return tpid == 0 ? :interactive : :default
+end
+
+function _sym_to_tpid(tp::Symbol)
+    return tp === :interactive ? Int8(0) : Int8(1)
 end
 
 """
@@ -47,7 +54,7 @@ Returns the specified thread's threadpool; either `:default` or `:interactive`.
 """
 function threadpool(tid = threadid())
     tpid = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1)
-    return tpid == 0 ? :default : :interactive
+    return _tpid_to_sym(tpid)
 end
 
 """
@@ -57,15 +64,57 @@ Returns the number of threadpools currently configured.
 """
 nthreadpools() = Int(unsafe_load(cglobal(:jl_n_threadpools, Cint)))
 
+"""
+    Threads.threadpoolsize(pool::Symbol = :default) -> Int
+
+Get the number of threads available to the default thread pool (or to the
+specified thread pool).
+
+See also: `BLAS.get_num_threads` and `BLAS.set_num_threads` in the
+[`LinearAlgebra`](@ref man-linalg) standard library, and `nprocs()` in the
+[`Distributed`](@ref man-distributed) standard library.
+"""
+function threadpoolsize(pool::Symbol = :default)
+    if pool === :default || pool === :interactive
+        tpid = _sym_to_tpid(pool)
+    else
+        error("invalid threadpool specified")
+    end
+    return _nthreads_in_pool(tpid)
+end
+
+"""
+    threadpooltids(pool::Symbol)
+
+Returns a vector of IDs of threads in the given pool.
+"""
+function threadpooltids(pool::Symbol)
+    ni = _nthreads_in_pool(Int8(0))
+    if pool === :interactive
+        return collect(1:ni)
+    elseif pool === :default
+        return collect(ni+1:ni+_nthreads_in_pool(Int8(1)))
+    else
+        error("invalid threadpool specified")
+    end
+end
+
+"""
+    Threads.ngcthreads() -> Int
+
+Returns the number of GC threads currently configured.
+"""
+ngcthreads() = Int(unsafe_load(cglobal(:jl_n_gcthreads, Cint))) + 1
 
 function threading_run(fun, static)
     ccall(:jl_enter_threaded_region, Cvoid, ())
-    n = nthreads()
+    n = threadpoolsize()
+    tid_offset = threadpoolsize(:interactive)
     tasks = Vector{Task}(undef, n)
     for i = 1:n
         t = Task(() -> fun(i)) # pass in tid
         t.sticky = static
-        static && ccall(:jl_set_task_tid, Cint, (Any, Cint), t, i-1)
+        static && ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
         tasks[i] = t
         schedule(t)
     end
@@ -93,7 +142,7 @@ function _threadsfor(iter, lbody, schedule)
                 tid = 1
                 len, rem = lenr, 0
             else
-                len, rem = divrem(lenr, nthreads())
+                len, rem = divrem(lenr, threadpoolsize())
             end
             # not enough iterations for all the threads?
             if len == 0
@@ -161,7 +210,7 @@ unsynchronized memory accesses may result in undefined behavior.
 
 For example, the above conditions imply that:
 
-- The lock taken in an iteration *must* be released within the same iteration.
+- A lock taken in an iteration *must* be released within the same iteration.
 - Communicating between iterations using blocking primitives like `Channel`s is incorrect.
 - Write only to locations not shared across iterations (unless a lock or atomic operation is
   used).
@@ -185,7 +234,7 @@ assumption may be removed in the future.
 This scheduling option is merely a hint to the underlying execution mechanism. However, a
 few properties can be expected. The number of `Task`s used by `:dynamic` scheduler is
 bounded by a small constant multiple of the number of available worker threads
-([`nthreads()`](@ref Threads.nthreads)). Each task processes contiguous regions of the
+([`Threads.threadpoolsize()`](@ref)). Each task processes contiguous regions of the
 iteration space. Thus, `@threads :dynamic for x in xs; f(x); end` is typically more
 efficient than `@sync for x in xs; @spawn f(x); end` if `length(xs)` is significantly
 larger than the number of the worker threads and the run-time of `f(x)` is relatively
@@ -222,7 +271,7 @@ julia> function busywait(seconds)
 
 julia> @time begin
             Threads.@spawn busywait(5)
-            Threads.@threads :static for i in 1:Threads.nthreads()
+            Threads.@threads :static for i in 1:Threads.threadpoolsize()
                 busywait(1)
             end
         end
@@ -230,7 +279,7 @@ julia> @time begin
 
 julia> @time begin
             Threads.@spawn busywait(5)
-            Threads.@threads :dynamic for i in 1:Threads.nthreads()
+            Threads.@threads :dynamic for i in 1:Threads.threadpoolsize()
                 busywait(1)
             end
         end
@@ -268,6 +317,15 @@ macro threads(args...)
     return _threadsfor(ex.args[1], ex.args[2], sched)
 end
 
+function _spawn_set_thrpool(t::Task, tp::Symbol)
+    tpid = _sym_to_tpid(tp)
+    if _nthreads_in_pool(tpid) == 0
+        tpid = _sym_to_tpid(:default)
+    end
+    ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, tpid)
+    nothing
+end
+
 """
     Threads.@spawn [:default|:interactive] expr
 
@@ -296,7 +354,7 @@ the variable's value in the current task.
     A threadpool may be specified as of Julia 1.9.
 """
 macro spawn(args...)
-    tpid = Int8(0)
+    tp = :default
     na = length(args)
     if na == 2
         ttype, ex = args
@@ -306,9 +364,9 @@ macro spawn(args...)
             # TODO: allow unquoted symbols
             ttype = nothing
         end
-        if ttype === :interactive
-            tpid = Int8(1)
-        elseif ttype !== :default
+        if ttype === :interactive || ttype === :default
+            tp = ttype
+        else
             throw(ArgumentError("unsupported threadpool in @spawn: $ttype"))
         end
     elseif na == 1
@@ -325,7 +383,7 @@ macro spawn(args...)
         let $(letargs...)
             local task = Task($thunk)
             task.sticky = false
-            ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), task, $tpid)
+            _spawn_set_thrpool(task, $(QuoteNode(tp)))
             if $(Expr(:islocal, var))
                 put!($var, task)
             end

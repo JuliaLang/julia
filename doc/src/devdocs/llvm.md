@@ -82,6 +82,8 @@ Here are example settings using `bash` syntax:
   * `export JULIA_LLVM_ARGS=-debug-only=loop-vectorize` dumps LLVM `DEBUG(...)` diagnostics for
     loop vectorizer. If you get warnings about "Unknown command line argument", rebuild LLVM with
     `LLVM_ASSERTIONS = 1`.
+  * `export JULIA_LLVM_ARGS=-help` shows a list of available options.
+  * `export JULIA_LLVM_ARGS="-fatal-warnings -print-options"` is an example how to use multiple options.
 
 ## Debugging LLVM transformations in isolation
 

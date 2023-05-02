@@ -67,6 +67,25 @@ function startswith(a::Union{String, SubString{String}},
     end
 end
 
+"""
+    startswith(io::IO, prefix::Union{AbstractString,Base.Chars})
+
+Check if an `IO` object starts with a prefix.  See also [`peek`](@ref).
+"""
+function Base.startswith(io::IO, prefix::Base.Chars)
+    mark(io)
+    c = read(io, Char)
+    reset(io)
+    return c in prefix
+end
+function Base.startswith(io::IO, prefix::Union{String,SubString{String}})
+    mark(io)
+    s = read(io, ncodeunits(prefix))
+    reset(io)
+    return s == codeunits(prefix)
+end
+Base.startswith(io::IO, prefix::AbstractString) = startswith(io, String(prefix))
+
 function endswith(a::Union{String, SubString{String}},
                   b::Union{String, SubString{String}})
     cub = ncodeunits(b)
@@ -500,7 +519,10 @@ See also [`split`](@ref).
 julia> a = "Ma.rch"
 "Ma.rch"
 
-julia> collect(eachsplit(a, "."))
+julia> b = eachsplit(a, ".")
+Base.SplitIterator{String, String}("Ma.rch", ".", 0, true)
+
+julia> collect(b)
 2-element Vector{SubString{String}}:
  "Ma"
  "rch"
@@ -827,7 +849,7 @@ julia> hex2bytes(a)
 """
 function hex2bytes end
 
-hex2bytes(s) = hex2bytes!(Vector{UInt8}(undef, length(s) >> 1), s)
+hex2bytes(s) = hex2bytes!(Vector{UInt8}(undef, length(s)::Int >> 1), s)
 
 # special case - valid bytes are checked in the generic implementation
 function hex2bytes!(dest::AbstractArray{UInt8}, s::String)

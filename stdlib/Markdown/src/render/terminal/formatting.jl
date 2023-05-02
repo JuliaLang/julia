@@ -3,7 +3,7 @@
 # Wrapping
 
 function ansi_length(s)
-    replace(s, r"\e\[[0-9]+m" => "") |> length
+    replace(s, r"\e\[[0-9]+m" => "") |> textwidth
 end
 
 words(s) = split(s, " ")

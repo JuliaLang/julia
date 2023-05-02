@@ -148,7 +148,6 @@ end
     @test_intrinsic Core.Intrinsics.sub_float Float16(3.3) Float16(2) Float16(1.301)
     @test_intrinsic Core.Intrinsics.mul_float Float16(3.3) Float16(2) Float16(6.6)
     @test_intrinsic Core.Intrinsics.div_float Float16(3.3) Float16(2) Float16(1.65)
-    @test_intrinsic Core.Intrinsics.rem_float Float16(3.3) Float16(2) Float16(1.301)
 
     # ternary
     @test_intrinsic Core.Intrinsics.fma_float Float16(3.3) Float16(4.4) Float16(5.5) Float16(20.02)
@@ -169,14 +168,14 @@ end
     @test_intrinsic Core.Intrinsics.fptoui UInt Float16(3.3) UInt(3)
 end
 
-if Sys.ARCH == :aarch64
+if Sys.ARCH == :aarch64 ||  Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
     # On AArch64 we are following the `_Float16` ABI. Buthe these functions expect `Int16`.
     # TODO: SHould we have `Chalf == Int16` and `Cfloat16 == Float16`?
-    extendhfsf2(x::Float16) = ccall("extern __extendhfsf2", llvmcall, Float32, (Int16,), reinterpret(Int16, x))
-    gnu_h2f_ieee(x::Float16) = ccall("extern __gnu_h2f_ieee", llvmcall, Float32, (Int16,), reinterpret(Int16, x))
-    truncsfhf2(x::Float32) = reinterpret(Float16, ccall("extern __truncsfhf2", llvmcall, Int16, (Float32,), x))
-    gnu_f2h_ieee(x::Float32) = reinterpret(Float16, ccall("extern __gnu_f2h_ieee", llvmcall, Int16, (Float32,), x))
-    truncdfhf2(x::Float64) = reinterpret(Float16, ccall("extern __truncdfhf2", llvmcall, Int16, (Float64,), x))
+    extendhfsf2(x::Float16) = ccall("extern __extendhfsf2", llvmcall, Float32, (UInt16,), reinterpret(UInt16, x))
+    gnu_h2f_ieee(x::Float16) = ccall("extern __gnu_h2f_ieee", llvmcall, Float32, (UInt16,), reinterpret(UInt16, x))
+    truncsfhf2(x::Float32) = reinterpret(Float16, ccall("extern __truncsfhf2", llvmcall, UInt16, (Float32,), x))
+    gnu_f2h_ieee(x::Float32) = reinterpret(Float16, ccall("extern __gnu_f2h_ieee", llvmcall, UInt16, (Float32,), x))
+    truncdfhf2(x::Float64) = reinterpret(Float16, ccall("extern __truncdfhf2", llvmcall, UInt16, (Float64,), x))
 else
     extendhfsf2(x::Float16) = ccall("extern __extendhfsf2", llvmcall, Float32, (Float16,), x)
     gnu_h2f_ieee(x::Float16) = ccall("extern __gnu_h2f_ieee", llvmcall, Float32, (Float16,), x)
