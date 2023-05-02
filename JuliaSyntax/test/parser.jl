@@ -287,8 +287,8 @@ tests = [
         # compatible with the reference parser (see #248)
         "+ <: A where B"  =>  "(where (call-pre + (<:-pre A)) B)"
         # Really for parse_where
-        "x where \n {T}"  =>  "(where x T)"
-        "x where {T,S}"  =>  "(where x T S)"
+        "x where \n {T}"  =>  "(where x (braces T))"
+        "x where {T,S}"  =>  "(where x (braces T S))"
         "x where {T S}"  =>  "(where x (bracescat (row T S)))"
         "x where {y for y in ys}"  =>  "(where x (braces (generator y (= y ys))))"
         "x where T"  =>  "(where x T)"
@@ -578,7 +578,7 @@ tests = [
         "function f body end"    =>  "(function (error f) (block body))"
         "function f()::T    end" =>  "(function (::-i (call f) T) (block))"
         "function f()::g(T) end" =>  "(function (::-i (call f) (call g T)) (block))"
-        "function f() where {T} end"  => "(function (where (call f) T) (block))"
+        "function f() where {T} end"  => "(function (where (call f) (braces T)) (block))"
         "function f() where T   end"  => "(function (where (call f) T) (block))"
         "function f()::S where T end" => "(function (where (::-i (call f) S) T) (block))"
         # Ugly cases for compat where extra parentheses existed and we've

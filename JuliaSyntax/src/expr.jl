@@ -212,7 +212,11 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
             end
         end
     elseif headsym === :where
-        reorder_parameters!(args, 2)
+        if length(args) == 2 && Meta.isexpr(args[2], :braces)
+            a2 = args[2].args
+            reorder_parameters!(a2, 2)
+            args = Any[args[1], a2...]
+        end
     elseif headsym === :parens
         # parens are used for grouping and don't appear in the Expr AST
         if length(args) == 1
