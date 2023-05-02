@@ -530,34 +530,26 @@ static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct t
     // mark this `register` because (for branch prediction)
     // that can be absolutely critical for speed
     register jl_typemap_intersection_visitor_fptr fptr = closure->fptr;
-    while (ml != (void*)jl_nothing) {
-        if (closure->type == (jl_value_t*)ml->sig) {
-            // fast-path for the intersection of a type with itself
-            if (closure->env)
-                closure->env = jl_outer_unionall_vars((jl_value_t*)ml->sig);
-            closure->ti = closure->type;
-            closure->issubty = 1;
-            if (!fptr(ml, closure))
-                return 0;
+    for (;  ml != (void*)jl_nothing; ml = jl_atomic_load_relaxed(&ml->next)) {
+        if (closure->max_valid < ml->min_world)
+            continue;
+        if (closure->min_valid > ml->max_world)
+            continue;
+        jl_svec_t **penv = NULL;
+        if (closure->env) {
+            closure->env = jl_emptysvec;
+            penv = &closure->env;
         }
-        else {
-            jl_svec_t **penv = NULL;
-            if (closure->env) {
-                closure->env = jl_emptysvec;
-                penv = &closure->env;
-            }
-            closure->ti = jl_type_intersection_env_s(closure->type, (jl_value_t*)ml->sig, penv, &closure->issubty);
-            if (closure->ti != (jl_value_t*)jl_bottom_type) {
-                // In some corner cases type intersection is conservative and returns something
-                // for intersect(A, B) even though A is a dispatch tuple and !(A <: B).
-                // For dispatch purposes in such a case we know there's no match. This check
-                // fixes issue #30394.
-                if (closure->issubty || !jl_is_dispatch_tupletype(closure->type))
-                    if (!fptr(ml, closure))
-                        return 0;
-            }
+        closure->ti = jl_type_intersection_env_s(closure->type, (jl_value_t*)ml->sig, penv, &closure->issubty);
+        if (closure->ti != (jl_value_t*)jl_bottom_type) {
+            // In some corner cases type intersection is conservative and returns something
+            // for intersect(A, B) even though A is a dispatch tuple and !(A <: B).
+            // For dispatch purposes in such a case we know there's no match. This check
+            // fixes issue #30394.
+            if (closure->issubty || !jl_is_dispatch_tupletype(closure->type))
+                if (!fptr(ml, closure))
+                    return 0;
         }
-        ml = jl_atomic_load_relaxed(&ml->next);
     }
     return 1;
 }
@@ -844,6 +836,10 @@ static jl_typemap_entry_t *jl_typemap_entry_assoc_by_type(
     size_t n = jl_nparams(unw);
     int typesisva = n == 0 ? 0 : jl_is_vararg(jl_tparam(unw, n-1));
     for (; ml != (void*)jl_nothing; ml = jl_atomic_load_relaxed(&ml->next)) {
+        if (search->max_valid < ml->min_world)
+            continue;
+        if (search->min_valid > ml->max_world)
+            continue;
         size_t lensig = jl_nparams(jl_unwrap_unionall((jl_value_t*)ml->sig));
         if (lensig == n || (ml->va && lensig <= n+1)) {
             int resetenv = 0, ismatch = 1;

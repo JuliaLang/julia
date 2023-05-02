@@ -1470,6 +1470,8 @@ struct typemap_intersection_env {
     jl_value_t *const va; // the tparam0 for the vararg in type, if applicable (or NULL)
     size_t search_slurp;
     // output values
+    size_t min_valid;
+    size_t max_valid;
     jl_value_t *ti; // intersection type
     jl_svec_t *env; // intersection env (initialize to null to perform intersection without an environment)
     int issubty;    // if `a <: b` is true in `intersect(a,b)`
