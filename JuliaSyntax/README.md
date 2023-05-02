@@ -375,7 +375,7 @@ The children of our trees are strictly in source order. This has many
 consequences in places where `Expr` reorders child expressions.
 
 * Infix and postfix operator calls have the operator name in the *second* child position. `a + b` is parsed as `(call-i a + b)` - where the infix `-i` flag indicates infix child position - rather than `Expr(:call, :+, :a, :b)`.
-* Flattened generators are represented in source order
+* Generators are represented in source order as a single node rather than multiple nested flatten and generator expressions.
 
 ### No `LineNumberNode`s
 
@@ -435,15 +435,16 @@ class of tokenization errors and lets the parser deal with them.
 * Using `try catch else finally end` is parsed with `K"catch"` `K"else"` and `K"finally"` children to avoid the awkwardness of the optional child nodes in the `Expr` representation (#234)
 * The dotted import path syntax as in `import A.b.c` is parsed with a `K"importpath"` kind rather than `K"."`, because a bare `A.b.c` has a very different nested/quoted expression representation (#244)
 * We use flags rather than child nodes to represent the difference between `struct` and `mutable struct`, `module` and `baremodule` (#220)
+* Multiple iterations within the header of a `for`, as in `for a=as, b=bs body end` are represented with a `cartesian_iterator` head rather than a `block`, as these lists of iterators are neither semantically nor syntactically a sequence of statements. Unlike other uses of `block` (see also generators).
 
 
 ## More detail on tree differences
 
-### Flattened generators
+### Generators
 
 Flattened generators are uniquely problematic because the Julia AST doesn't
 respect a key rule we normally expect: that the children of an AST node are a
-*contiguous* range in the source text. This is because the `for`s in
+*contiguous* range in the source text. For example, the `for`s in
 `[xy for x in xs for y in ys]` are parsed in the normal order of a for loop to
 mean
 
@@ -470,14 +471,28 @@ however, note that if this tree were flattened, the order would be
 source order.
 
 However, our green tree is strictly source-ordered, so we must deviate from the
-Julia AST. The natural representation seems to be to remove the generators and
-use a flattened structure:
+Julia AST. We deal with this by grouping cartesian products of iterators
+(separated by commas) within `cartesian_iterator` blocks as in `for` loops, and
+use the presence of multiple iterator blocks rather than the `flatten` head to
+distinguish flattened iterators. The nested flattens and generators of `Expr`
+forms are reconstructed later. In this form the tree structure resembles the
+source much more closely. For example, `(xy for x in xs for y in ys)` is parsed as
 
 ```
-(flatten
+(generator
   xy
   (= x xs)
   (= y ys))
+```
+
+And the cartesian iteration `(xy for x in xs, y in ys)` is parsed as
+
+```
+(generator
+  xy
+  (cartesian_iterator
+    (= x xs)
+    (= y ys)))
 ```
 
 ### Whitespace trivia inside strings

@@ -126,41 +126,34 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
     # Convert children
     insert_linenums = (headsym === :block || headsym === :toplevel) && need_linenodes
     args = Vector{Any}(undef, length(node_args)*(insert_linenums ? 2 : 1))
-    if headsym === :for && length(node_args) == 2
-        # No line numbers in for loop iteration spec
-        args[1] = _to_expr(node_args[1], iteration_spec=true, need_linenodes=false)
-        args[2] = _to_expr(node_args[2])
-    elseif headsym === :let && length(node_args) == 2
-        # No line numbers in let statement binding list
-        args[1] = _to_expr(node_args[1], need_linenodes=false)
-        args[2] = _to_expr(node_args[2])
+    eq_to_kw_in_call =
+        ((headsym === :call || headsym === :dotcall) && is_prefix_call(node)) ||
+        headsym === :ref
+    eq_to_kw_all = (headsym === :parameters && !map_kw_in_params) ||
+                   (headsym === :parens && eq_to_kw)
+    in_vcbr = headsym === :vect || headsym === :curly || headsym === :braces || headsym === :ref
+    if insert_linenums && isempty(node_args)
+        push!(args, source_location(LineNumberNode, node.source, node.position))
     else
-        eq_to_kw_in_call =
-            ((headsym === :call || headsym === :dotcall) && is_prefix_call(node)) ||
-            headsym === :ref
-        eq_to_kw_all = (headsym === :parameters && !map_kw_in_params) ||
-                       (headsym === :parens && eq_to_kw)
-        in_vcbr = headsym === :vect || headsym === :curly || headsym === :braces || headsym === :ref
-        if insert_linenums && isempty(node_args)
-            push!(args, source_location(LineNumberNode, node.source, node.position))
-        else
-            for i in 1:length(node_args)
-                n = node_args[i]
-                if insert_linenums
-                    args[2*i-1] = source_location(LineNumberNode, n.source, n.position)
-                end
-                eq_to_kw = eq_to_kw_in_call && i > 1 || eq_to_kw_all
-                coalesce_dot_with_ops = i==1 &&
-                    (nodekind in KSet"call dotcall curly" ||
-                     nodekind == K"quote" && flags(node) == COLON_QUOTE)
-                args[insert_linenums ? 2*i : i] =
-                    _to_expr(n, eq_to_kw=eq_to_kw,
-                             map_kw_in_params=in_vcbr,
-                             coalesce_dot=coalesce_dot_with_ops)
+        for i in 1:length(node_args)
+            n = node_args[i]
+            if insert_linenums
+                args[2*i-1] = source_location(LineNumberNode, n.source, n.position)
             end
-            if nodekind == K"block" && has_flags(node, PARENS_FLAG)
-                popfirst!(args)
-            end
+            eq_to_kw = eq_to_kw_in_call && i > 1 || eq_to_kw_all
+            coalesce_dot_with_ops = i==1 &&
+                (nodekind in KSet"call dotcall curly" ||
+                 nodekind == K"quote" && flags(node) == COLON_QUOTE)
+            args[insert_linenums ? 2*i : i] =
+                _to_expr(n, eq_to_kw=eq_to_kw,
+                         map_kw_in_params=in_vcbr,
+                         coalesce_dot=coalesce_dot_with_ops,
+                         iteration_spec=(headsym == :for && i == 1),
+                         need_linenodes=!(headsym == :let && i == 1)
+                        )
+        end
+        if nodekind == K"block" && has_flags(node, PARENS_FLAG)
+            popfirst!(args)
         end
     end
 
@@ -202,6 +195,10 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
     elseif headsym in (:ref, :curly)
         # Move parameters blocks to args[2]
         reorder_parameters!(args, 2)
+    elseif headsym === :for
+        if Meta.isexpr(args[1], :cartesian_iterator)
+            args[1] = Expr(:block, args[1].args...)
+        end
     elseif headsym in (:tuple, :vect, :braces)
         # Move parameters blocks to args[1]
         reorder_parameters!(args, 1)
@@ -262,18 +259,32 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
                 push!(args, else_)
             end
         end
-    elseif headsym === :filter
-        pushfirst!(args, last(args))
-        pop!(args)
-    elseif headsym === :flatten
-        # The order of nodes inside the generators in Julia's flatten AST
-        # is noncontiguous in the source text, so need to reconstruct
-        # Julia's AST here from our alternative `flatten` expression.
-        gen = Expr(:generator, args[1], args[end])
-        for i in length(args)-1:-1:2
-            gen = Expr(:flatten, Expr(:generator, gen, args[i]))
+    elseif headsym === :generator
+        # Reconstruct the nested Expr form for generator from our flatter
+        # source-ordered `generator` format.
+        gen = args[1]
+        for j = length(args):-1:2
+            if Meta.isexpr(args[j], :cartesian_iterator)
+                gen = Expr(:generator, gen, args[j].args...)
+            else
+                gen = Expr(:generator, gen, args[j])
+            end
+            if j < length(args)
+                # Additional `for`s flatten the inner generator
+                gen = Expr(:flatten, gen)
+            end
         end
         return gen
+    elseif headsym == :filter
+        @assert length(args) == 2
+        iterspec = args[1]
+        outargs = Any[args[2]]
+        if Meta.isexpr(iterspec, :cartesian_iterator)
+            append!(outargs, iterspec.args)
+        else
+            push!(outargs, iterspec)
+        end
+        args = outargs
     elseif headsym in (:nrow, :ncat)
         # For lack of a better place, the dimension argument to nrow/ncat
         # is stored in the flags

@@ -98,18 +98,7 @@
                 )
         end
 
-        @testset "No line numbers in for/let bindings" begin
-            @test parsestmt(Expr, "for i=is, j=js\nbody\nend") ==
-                Expr(:for,
-                     Expr(:block,
-                         Expr(:(=), :i, :is),
-                         Expr(:(=), :j, :js),
-                     ),
-                     Expr(:block,
-                         LineNumberNode(2),
-                         :body
-                     )
-                )
+        @testset "No line numbers in let bindings" begin
             @test parsestmt(Expr, "let i=is, j=js\nbody\nend") ==
                 Expr(:let,
                      Expr(:block,
@@ -140,6 +129,28 @@
                  Expr(:block,
                       LineNumberNode(1)
                      ))
+    end
+
+    @testset "for" begin
+        @test parsestmt(Expr, "for i=is body end") ==
+            Expr(:for,
+                 Expr(:(=), :i, :is),
+                 Expr(:block,
+                     LineNumberNode(1),
+                     :body
+                 )
+            )
+        @test parsestmt(Expr, "for i=is, j=js\nbody\nend") ==
+            Expr(:for,
+                 Expr(:block,
+                     Expr(:(=), :i, :is),
+                     Expr(:(=), :j, :js),
+                 ),
+                 Expr(:block,
+                     LineNumberNode(2),
+                     :body
+                 )
+            )
     end
 
     @testset "Long form anonymous functions" begin
@@ -353,6 +364,53 @@
 
     @testset "vect" begin
         @test parsestmt(Expr, "[x,y ; z]") == Expr(:vect, Expr(:parameters, :z), :x, :y)
+    end
+
+    @testset "generators" begin
+        @test parsestmt(Expr, "(x for a in as for b in bs)") ==
+            Expr(:flatten, Expr(:generator,
+                                Expr(:generator, :x, Expr(:(=), :b, :bs)),
+                                Expr(:(=), :a, :as)))
+        @test parsestmt(Expr, "(x for a in as, b in bs)") ==
+            Expr(:generator, :x, Expr(:(=), :a, :as), Expr(:(=), :b, :bs))
+        @test parsestmt(Expr, "(x for a in as, b in bs if z)") ==
+            Expr(:generator, :x,
+                 Expr(:filter, :z, Expr(:(=), :a, :as), Expr(:(=), :b, :bs)))
+        @test parsestmt(Expr, "(x for a in as, b in bs for c in cs, d in ds)") ==
+            Expr(:flatten, 
+                Expr(:generator, 
+                     Expr(:generator, :x, Expr(:(=), :c, :cs), Expr(:(=), :d, :ds)),
+                     Expr(:(=), :a, :as), Expr(:(=), :b, :bs)))
+        @test parsestmt(Expr, "(x for a in as for b in bs if z)") ==
+            Expr(:flatten, Expr(:generator,
+                                Expr(:generator, :x, Expr(:filter, :z, Expr(:(=), :b, :bs))),
+                                Expr(:(=), :a, :as)))
+        @test parsestmt(Expr, "(x for a in as if z for b in bs)") ==
+            Expr(:flatten, Expr(:generator,
+                                Expr(:generator, :x, Expr(:(=), :b, :bs)),
+                                Expr(:filter, :z, Expr(:(=), :a, :as))))
+        @test parsestmt(Expr, "[x for a = as for b = bs if cond1 for c = cs if cond2]" ) ==
+            Expr(:comprehension,
+                 Expr(:flatten,
+                      Expr(:generator,
+                           Expr(:flatten,
+                                Expr(:generator,
+                                     Expr(:generator,
+                                          :x,
+                                          Expr(:filter,
+                                               :cond2,
+                                               Expr(:(=), :c, :cs))),
+                                     Expr(:filter,
+                                          :cond1,
+                                          Expr(:(=), :b, :bs)))),
+                           Expr(:(=), :a, :as))))
+        @test parsestmt(Expr, "[x for a = as if begin cond2 end]" ) ==
+            Expr(:comprehension, Expr(:generator, :x,
+                                      Expr(:filter,
+                                           Expr(:block, LineNumberNode(1), :cond2),
+                                           Expr(:(=), :a, :as))))
+        @test parsestmt(Expr, "(x for a in as if z)") ==
+            Expr(:generator, :x, Expr(:filter, :z, Expr(:(=), :a, :as)))
     end
 
     @testset "try" begin

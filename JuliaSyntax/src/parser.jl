@@ -1783,13 +1783,9 @@ function parse_resword(ps::ParseState)
         emit(ps, mark, K"while")
     elseif word == K"for"
         # for x in xs end  ==>  (for (= x xs) (block))
-        # for x in xs, y in ys \n a \n end ==> (for (block (= x xs) (= y ys)) (block a))
+        # for x in xs, y in ys \n a \n end ==> (for (cartesian_iterator (= x xs) (= y ys)) (block a))
         bump(ps, TRIVIA_FLAG)
-        m = position(ps)
-        n_subexprs = parse_comma_separated(ps, parse_iteration_spec)
-        if n_subexprs > 1
-            emit(ps, m, K"block")
-        end
+        parse_iteration_specs(ps)
         parse_block(ps)
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"for")
@@ -2625,6 +2621,16 @@ function parse_iteration_spec(ps::ParseState)
     emit(ps, mark, K"=")
 end
 
+# Parse an iteration spec, or a comma separate list of such for for loops and
+# generators
+function parse_iteration_specs(ps::ParseState)
+    mark = position(ps)
+    n_iters = parse_comma_separated(ps, parse_iteration_spec)
+    if n_iters > 1
+        emit(ps, mark, K"cartesian_iterator")
+    end
+end
+
 # flisp: parse-space-separated-exprs
 function parse_space_separated_exprs(ps::ParseState)
     ps = with_space_sensitive(ps)
@@ -2669,61 +2675,41 @@ function parse_vect(ps::ParseState, closer)
     return (K"vect", EMPTY_FLAGS)
 end
 
-# Flattened generators are hard because the Julia AST doesn't respect a key
-# rule we normally expect: that the children of an AST node are a contiguous
-# range in the source text. This is because the `for`s in
-# `[xy for x in xs for y in ys]` are parsed in the normal order of a for as
+# Parse generators
 #
-# (flatten
-#  (generator
-#   (generator
-#    xy
-#    y in ys)
-#   x in xs))
+# We represent generators quite differently from `Expr`:
+# * Cartesian products of iterators are grouped within cartesian_iterator
+#   nodes, as in the short form of `for` loops.
+# * The `generator` kind is used for both cartesian and flattened generators
 #
-# We deal with this by only emitting the flatten:
-#
-# (flatten xy (= x xs) (= y ys))
-#
-# then reconstructing the nested flattens and generators when converting to Expr.
-#
-# [x for a = as for b = bs if cond1 for c = cs if cond2] ==> (comprehension (flatten x (= a as) (filter (= b bs) cond1) (filter (= c cs) cond2)))
-# [x for a = as if begin cond2 end]  =>  (comprehension (generator x (filter (= a as) (block cond2))))
+# (x for a in as for b in bs) ==> (parens (generator x (= a as) (= b bs)))
+# (x for a in as, b in bs) ==> (parens (generator x (cartesian_iterator (= a as) (= b bs))))
+# (x for a in as, b in bs if z)  ==> (parens (generator x (filter (cartesian_iterator (= a as) (= b bs)) z)))
 #
 # flisp: parse-generator
-function parse_generator(ps::ParseState, mark, flatten=false)
-    t = peek_token(ps)
-    if !preceding_whitespace(t)
-        # [(x)for x in xs]  ==>  (comprehension (generator (parens x) (error) (= x xs)))
-        bump_invisible(ps, K"error", TRIVIA_FLAG,
-                       error="Expected space before `for` in generator")
-    end
-    @check kind(t) == K"for"
-    bump(ps, TRIVIA_FLAG)
-    filter_mark = position(ps)
-    parse_comma_separated(ps, parse_iteration_spec)
-    if peek(ps) == K"if"
-        # (a for x in xs if cond) ==> (parens (generator a (filter (= x xs) cond)))
-        bump(ps, TRIVIA_FLAG)
-        parse_cond(ps)
-        emit(ps, filter_mark, K"filter")
-    end
-    t = peek_token(ps)
-    if kind(t) == K"for"
-        # (xy for x in xs for y in ys)  ==> (parens (flatten xy (= x xs) (= y ys)))
-        # (xy for x in xs for y in ys for z in zs)  ==> (parens (flatten xy (= x xs) (= y ys) (= z zs)))
-        parse_generator(ps, mark, true)
-        if !flatten
-            emit(ps, mark, K"flatten")
+function parse_generator(ps::ParseState, mark)
+    while (t = peek_token(ps); kind(t) == K"for")
+        if !preceding_whitespace(t)
+            # ((x)for x in xs)  ==>  (parens (generator (parens x) (error) (= x xs)))
+            bump_invisible(ps, K"error", TRIVIA_FLAG,
+                           error="Expected space before `for` in generator")
         end
-    elseif !flatten
-        # (x for a in as)  ==>  (parens (generator x (= a as)))
-        emit(ps, mark, K"generator")
+        bump(ps, TRIVIA_FLAG)
+        iter_mark = position(ps)
+        parse_iteration_specs(ps)
+        if peek(ps) == K"if"
+            # (x for a in as if z) ==> (parens (generator x (filter (= a as) z)))
+            bump(ps, TRIVIA_FLAG)
+            parse_cond(ps)
+            emit(ps, iter_mark, K"filter")
+        end
     end
+    emit(ps, mark, K"generator")
 end
 
 # flisp: parse-comprehension
 function parse_comprehension(ps::ParseState, mark, closer)
+    # [x for a in as] ==> (comprehension (generator x a in as))
     ps = ParseState(ps, whitespace_newline=true,
                     space_sensitive=false,
                     end_symbol=false)

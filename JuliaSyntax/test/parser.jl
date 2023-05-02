@@ -451,7 +451,7 @@ tests = [
         "while x < y \n a \n b \n end"  =>  "(while (call-i x < y) (block a b))"
         # for
         "for x in xs end" => "(for (= x xs) (block))"
-        "for x in xs, y in ys \n a \n end" => "(for (block (= x xs) (= y ys)) (block a))"
+        "for x in xs, y in ys \n a \n end" => "(for (cartesian_iterator (= x xs) (= y ys)) (block a))"
         # let
         "let x=1\n end"    =>  "(let (block (= x 1)) (block))"
         "let x=1 ; end"    =>  "(let (block (= x 1)) (block))"
@@ -766,13 +766,16 @@ tests = [
         "[x for a in as]"  =>  "(comprehension (generator x (= a as)))"
         "[x \n\n for a in as]"  =>  "(comprehension (generator x (= a as)))"
         # parse_generator
-        "[x for a = as for b = bs if cond1 for c = cs if cond2]"  =>  "(comprehension (flatten x (= a as) (filter (= b bs) cond1) (filter (= c cs) cond2)))"
+        "(x for a in as for b in bs)" => "(parens (generator x (= a as) (= b bs)))"
+        "(x for a in as, b in bs)" => "(parens (generator x (cartesian_iterator (= a as) (= b bs))))"
+        "(x for a in as, b in bs if z)" => "(parens (generator x (filter (cartesian_iterator (= a as) (= b bs)) z)))"
+        "(x for a in as, b in bs for c in cs, d in ds)" => "(parens (generator x (cartesian_iterator (= a as) (= b bs)) (cartesian_iterator (= c cs) (= d ds))))"
+        "(x for a in as for b in bs if z)" => "(parens (generator x (= a as) (filter (= b bs) z)))"
+        "(x for a in as if z for b in bs)" => "(parens (generator x (filter (= a as) z) (= b bs)))"
+        "[x for a = as for b = bs if cond1 for c = cs if cond2]"  =>  "(comprehension (generator x (= a as) (filter (= b bs) cond1) (filter (= c cs) cond2)))"
         "[x for a = as if begin cond2 end]"  =>  "(comprehension (generator x (filter (= a as) (block cond2))))"
         "[(x)for x in xs]"  =>  "(comprehension (generator (parens x) (error-t) (= x xs)))"
-        "(a for x in xs if cond)"  =>  "(parens (generator a (filter (= x xs) cond)))"
-        "(xy for x in xs for y in ys)"  =>  "(parens (flatten xy (= x xs) (= y ys)))"
-        "(xy for x in xs for y in ys for z in zs)"  =>  "(parens (flatten xy (= x xs) (= y ys) (= z zs)))"
-        "(x for a in as)"  =>  "(parens (generator x (= a as)))"
+        "(x for a in as if z)" => "(parens (generator x (filter (= a as) z)))"
         # parse_vect
         "[x, y]"        =>  "(vect x y)"
         "[x, y]"        =>  "(vect x y)"
