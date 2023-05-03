@@ -361,7 +361,8 @@ static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimizat
     {
         FunctionPassManager FPM;
         FPM.addPass(SROAPass());
-        FPM.addPass(InstSimplifyPass());
+        // SROA can duplicate PHI nodes which can block LowerSIMD
+        FPM.addPass(InstCombinePass());
         FPM.addPass(JumpThreadingPass());
         FPM.addPass(CorrelatedValuePropagationPass());
         FPM.addPass(ReassociatePass());
