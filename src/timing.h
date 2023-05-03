@@ -11,6 +11,13 @@ static inline const char *gnu_basename(const char *path)
     return base ? base+1 : path;
 }
 
+#ifdef USE_TRACY
+typedef struct {
+    _Atomic(uint64_t) val;
+    char* name;
+} jl_tracy_counter_t;
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -413,6 +420,12 @@ struct jl_timing_suspend_cpp_t {
 #define _ITTAPI_COUNTER_MEMBER
 #endif
 
+#ifdef USE_TRACY
+# define _TRACY_COUNTER_MEMBER jl_tracy_counter_t tracy_counter;
+# else
+# define _TRACY_COUNTER_MEMBER
+#endif
+
 #ifdef USE_TIMING_COUNTS
 #define _COUNTS_MEMBER _Atomic(uint64_t) basic_counter;
 #else
@@ -421,6 +434,7 @@ struct jl_timing_suspend_cpp_t {
 
 typedef struct {
     _ITTAPI_COUNTER_MEMBER
+    _TRACY_COUNTER_MEMBER
     _COUNTS_MEMBER
 } jl_timing_counter_t;
 
@@ -430,6 +444,11 @@ static inline void jl_timing_counter_inc(int counter, uint64_t val) JL_NOTSAFEPO
 #ifdef USE_ITTAPI
     __itt_counter_inc_delta(jl_timing_counters[counter].ittapi_counter, val);
 #endif
+#ifdef USE_TRACY
+    jl_tracy_counter_t *tracy_counter = &jl_timing_counters[counter].tracy_counter;
+    uint64_t oldval = jl_atomic_fetch_add_relaxed(&tracy_counter->val, val);
+    TracyCPlot(tracy_counter->name, oldval + val);
+#endif
 #ifdef USE_TIMING_COUNTS
     jl_atomic_fetch_add_relaxed(&jl_timing_counters[counter].basic_counter, val);
 #endif
@@ -438,6 +457,11 @@ static inline void jl_timing_counter_inc(int counter, uint64_t val) JL_NOTSAFEPO
 static inline void jl_timing_counter_dec(int counter, uint64_t val) JL_NOTSAFEPOINT {
 #ifdef USE_ITTAPI
     __itt_counter_dec_delta(jl_timing_counters[counter].ittapi_counter, val);
+#endif
+#ifdef USE_TRACY
+    jl_tracy_counter_t *tracy_counter = &jl_timing_counters[counter].tracy_counter;
+    uint64_t oldval = jl_atomic_fetch_add_relaxed(&tracy_counter->val, -(int64_t)val);
+    TracyCPlot(tracy_counter->name, oldval - val);
 #endif
 #ifdef USE_TIMING_COUNTS
     jl_atomic_fetch_add_relaxed(&jl_timing_counters[counter].basic_counter, -(int64_t)val);
