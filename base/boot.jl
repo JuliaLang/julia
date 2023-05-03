@@ -109,7 +109,7 @@
 
 #struct LineInfoNode
 #    module::Module
-#    method::Symbol
+#    method::Any (Union{Symbol, Method, MethodInstance})
 #    file::Symbol
 #    line::Int32
 #    inlined_at::Int32
