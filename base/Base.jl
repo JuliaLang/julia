@@ -315,8 +315,6 @@ include("version.jl")
 
 # system & environment
 include("sysinfo.jl")
-include("libc.jl")
-using .Libc: getpid, gethostname, time
 
 # These used to be in build_h.jl and are retained for backwards compatibility.
 # NOTE: keep in sync with `libblastrampoline_jll.libblastrampoline`.
@@ -337,6 +335,10 @@ include("partr.jl")
 include("task.jl")
 include("threads_overloads.jl")
 include("weakkeydict.jl")
+
+# Libc and Libdl
+include("libc.jl")
+using .Libc: getpid, gethostname, time
 
 include("env.jl")
 

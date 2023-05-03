@@ -76,8 +76,54 @@ function dlsym_e(hnd::Ptr, s::Union{Symbol,AbstractString})
     return something(dlsym(hnd, s; throw_error=false), C_NULL)
 end
 
+if Sys.isapple()
+    const dlpattern = r"^([^.]+).*\.dylib$"
+elseif Sys.iswindows()
+    const dlpattern = r"^(.+)\.dll$"
+else
+    #assume Sys.islinux, or similar
+    const dlpattern = r"^(.+?)\.so(?:\..*)?$"
+end
+
+# Returns the name of the library.
+function _dlname(path)
+    bn = basename(path)
+    m = match(dlpattern, bn)
+    return isnothing(m) ? bn : m.captures[1]
+end
+
+# Returns absolute path without symbolic links.
+_dlabspath(x) = isfile(x) ? abspath(realpath(x)) : x
+
+const _dlname_cache = Dict{String, String}()
+const _suppressed_warnings = Set{String}()
+
+# Checks if the same shared library is loaded from two different files.
+function _check_dllist()
+    paths = dllist()
+    names = [get!(() -> _dlname(x), _dlname_cache, x) for x in paths]
+    dict = Dict{String, String}() # name => path
+    for (name, path) in zip(names, paths)
+        # Test if there is a duplicity (name already in `dict`)
+        oldpath = get!(dict, name, path)
+        path == oldpath && continue
+        # Test if already suppressed
+        name ∈ _suppressed_warnings && continue
+        # Show the warning only once (suppress in the future)
+        push!(_suppressed_warnings, name)
+        # Test if absolute paths are equal
+        _dlabspath(path) == _dlabspath(oldpath) && continue
+        @warn """Detected possible duplicate library loaded: $(name)
+This may lead to unexpected behavior!
+$(path)
+$(oldpath)
+To suppress this warning, you can use the following argument:
+dlopen([name_or_path]; suppress_warnings = ["$(name)"])"""
+    end
+end
+
 """
-    dlopen(libfile::AbstractString [, flags::Integer]; throw_error:Bool = true)
+    dlopen(libfile::AbstractString [, flags::Integer]; throw_error:Bool = true, suppress_warnings::Vector{String} = String[])
 
 Load a shared library, returning an opaque handle.
 
@@ -107,18 +153,34 @@ If the library cannot be found, this method throws an error, unless the keyword 
      From Julia 1.6 on, this method replaces paths starting with `@executable_path/` with
      the path to the Julia executable, allowing for relocatable relative-path loads. In
      Julia 1.5 and earlier, this only worked on macOS.
+
+!!! note
+     From Julia 1.8 on, this method detects when a library with the same name is loaded
+     multiple times from different files because it may lead to unexpected behavior. In such
+     a case, the method produces a warning. The warning be suppressed by adding the name of
+     the library into a newly introduced keyword argument `suppress_warnings`.
 """
 function dlopen end
+
+const _dlopen_lock = ReentrantLock()
 
 dlopen(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND; kwargs...) =
     dlopen(string(s), flags; kwargs...)
 
-function dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND; throw_error::Bool = true)
-    ret = ccall(:jl_load_dynamic_library, Ptr{Cvoid}, (Cstring,UInt32,Cint), s, flags, Cint(throw_error))
-    if ret == C_NULL
-        return nothing
+function dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND; throw_error::Bool = true, suppress_warnings::Vector{String} = String[])
+    @lock _dlopen_lock begin
+        union!(_suppressed_warnings, suppress_warnings)
+        if isempty(s) # Do not load anything, but run _check_dllist()
+            _check_dllist()
+            return nothing
+        end
+        ret = ccall(:jl_load_dynamic_library, Ptr{Cvoid}, (Cstring,UInt32,Cint), s, flags, Cint(throw_error))
+        if ret == C_NULL
+            return nothing
+        end
+        _check_dllist()
+        return ret
     end
-    return ret
 end
 
 """
