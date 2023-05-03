@@ -97,6 +97,13 @@ void jl_init_timing(void)
     JL_TIMING_COUNTERS
 #undef X
 #endif
+#ifdef USE_TRACY
+    i = 0;
+#define X(counter_name) jl_timing_counters[i].tracy_counter = (jl_tracy_counter_t){0, #counter_name}; \
+        TracyCPlotConfig(jl_timing_counters[i++].tracy_counter.name, TracyPlotFormatNumber, /* rectilinear */ 1, /* fill */ 1, /* color */ 0);
+    JL_TIMING_COUNTERS
+#undef X
+#endif
 }
 
 void jl_destroy_timing(void)
