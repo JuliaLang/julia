@@ -118,7 +118,9 @@ macro deprecate(old, new, export_old=true)
     end
 end
 
-function depwarn(msg, funcsym; force::Bool=false)
+depwarn(msg, funcsym; force::Bool=false) = (@invokelatest _depwarn(msg, funcsym; force))::Nothing
+
+function _depwarn(msg, funcsym; force::Bool=false)
     opts = JLOptions()
     if opts.depwarn == 2
         throw(ErrorException(msg))
