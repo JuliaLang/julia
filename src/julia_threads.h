@@ -290,23 +290,28 @@ JL_DLLEXPORT void *jl_get_ptls_states(void);
 // Update codegen version in `ccall.cpp` after changing either `pause` or `wake`
 #ifdef __MIC__
 #  define jl_cpu_pause() _mm_delay_64(100)
+#  define jl_cpu_suspend() _mm_delay_64(100)
 #  define jl_cpu_wake() ((void)0)
 #  define JL_CPU_WAKE_NOOP 1
 #elif defined(_CPU_X86_64_) || defined(_CPU_X86_)  /* !__MIC__ */
 #  define jl_cpu_pause() _mm_pause()
+#  define jl_cpu_suspend() _mm_pause()
 #  define jl_cpu_wake() ((void)0)
 #  define JL_CPU_WAKE_NOOP 1
 #elif defined(_CPU_AARCH64_) || (defined(_CPU_ARM_) && __ARM_ARCH >= 7)
-#  define jl_cpu_pause() __asm__ volatile ("wfe" ::: "memory")
+#  define jl_cpu_pause() __asm__ volatile ("isb" ::: "memory")
+#  define jl_cpu_suspend() __asm__ volatile ("wfe" ::: "memory")
 #  define jl_cpu_wake() __asm__ volatile ("sev" ::: "memory")
 #  define JL_CPU_WAKE_NOOP 0
 #else
 #  define jl_cpu_pause() ((void)0)
+#  define jl_cpu_suspend() ((void)0)
 #  define jl_cpu_wake() ((void)0)
 #  define JL_CPU_WAKE_NOOP 1
 #endif
 
 JL_DLLEXPORT void (jl_cpu_pause)(void);
+JL_DLLEXPORT void (jl_cpu_suspend)(void);
 JL_DLLEXPORT void (jl_cpu_wake)(void);
 
 #ifdef __clang_gcanalyzer__
