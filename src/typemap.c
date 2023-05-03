@@ -1038,7 +1038,7 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
                     }
                 }
                 else {
-                    if (!ty || !jl_has_empty_intersection((jl_value_t*)jl_type_type, ty)) {
+                    if (!ty || !jl_has_empty_intersection((jl_value_t*)jl_type_type, ty, NULL, NULL)) {
                         // couldn't figure out unique `a0` initial point, so scan all for matches
                         size_t i, l = jl_array_len(tname);
                         _Atomic(jl_typemap_t*) *data = (_Atomic(jl_typemap_t*)*)jl_array_ptr_data(tname);

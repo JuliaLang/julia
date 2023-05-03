@@ -740,7 +740,8 @@ jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi)
         for (j = nta; j < nt; j++) {
             if (!stemp[i] || !stemp[j]) {
                 int intersect = !hasfree && !jl_has_free_typevars(temp[j]);
-                if (!(intersect ? jl_has_empty_intersection(temp[i], temp[j]) : obviously_disjoint(temp[i], temp[j], 0)))
+                if (!(intersect ? jl_has_empty_intersection(temp[i], temp[j], NULL, NULL) : obviously_disjoint(temp[i], temp[j], 0)))
+                    // TODO: this may have already checked subtyping if intersect is true
                     stemp[i] = stemp[j] = 1;
             }
         }

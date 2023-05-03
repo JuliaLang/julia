@@ -1799,7 +1799,7 @@ static int invalidate_mt_cache(jl_typemap_entry_t *oldentry, void *closure0)
         if (intersects && (jl_value_t*)oldentry->sig != mi->specTypes) {
             // the entry may point to a widened MethodInstance, in which case it is worthwhile to check if the new method
             // actually has any meaningful intersection with the old one
-            intersects = !jl_has_empty_intersection((jl_value_t*)oldentry->sig, (jl_value_t*)env->newentry->sig);
+            intersects = !jl_has_empty_intersection((jl_value_t*)oldentry->sig, (jl_value_t*)env->newentry->sig, NULL, NULL);
         }
         if (intersects && oldentry->guardsigs != jl_emptysvec) {
             // similarly, if it already matches an existing guardsigs, this is already safe to keep
@@ -3506,16 +3506,18 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                 if (!subt2 && subt)
                     break;
                 if (subt == subt2) {
-                    if (lim != -1) {
-                        if (subt || !jl_has_empty_intersection(m->sig, m2->sig))
-                            if (!jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig))
-                                break;
-                    }
-                    else {
-                        // if unlimited, use approximate sorting, with the only
-                        // main downside being that it may be overly-
-                        // conservative at reporting existence of ambiguities
-                        if (jl_type_morespecific((jl_value_t*)m2->sig, (jl_value_t*)m->sig))
+                    int subt3 = 0;
+                    if (subt || !jl_has_empty_intersection(m2->sig, m->sig, &subt2, &subt3)) {
+                        int morespec;
+                        if (subt) // rare
+                            morespec = jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig);
+                        else if (subt2)
+                            morespec = 0;
+                        else if (subt3)
+                            morespec = 1;
+                        else
+                            morespec = jl_type_morespecific_no_subtype((jl_value_t*)m->sig, (jl_value_t*)m2->sig);
+                        if (!morespec)
                             break;
                     }
                 }
@@ -3770,7 +3772,6 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                         jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, i);
                         jl_method_t *m = matc->method;
                         jl_tupletype_t *ti = matc->spec_types;
-                        int subt = matc->fully_covers == FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m->sig)
                         char ambig1 = 0;
                         for (j = agid; j < len && ambig_groupid[j] == agid; j++) {
                             if (j == i)
@@ -3779,18 +3780,16 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                             jl_method_t *m2 = matc2->method;
                             int subt2 = matc2->fully_covers == FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m2->sig)
                             // if their intersection contributes to the ambiguity cycle
-                            if (subt || subt2 || !jl_has_empty_intersection((jl_value_t*)ti, m2->sig)) {
-                                // and the contribution of m is fully ambiguous with the portion of the cycle from m2
-                                if (subt2 || jl_subtype((jl_value_t*)ti, m2->sig)) {
-                                    // but they aren't themselves simply ordered (here
-                                    // we don't consider that a third method might be
-                                    // disrupting that ordering and just consider them
-                                    // pairwise to keep this simple).
-                                    if (!jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig) &&
-                                        !jl_type_morespecific((jl_value_t*)m2->sig, (jl_value_t*)m->sig)) {
-                                        ambig1 = 1;
-                                        break;
-                                    }
+                            // and the contribution of m is fully ambiguous with the portion of the cycle from m2
+                            if (subt2 || jl_subtype((jl_value_t*)ti, m2->sig)) {
+                                // but they aren't themselves simply ordered (here
+                                // we don't consider that a third method might be
+                                // disrupting that ordering and just consider them
+                                // pairwise to keep this simple).
+                                if (!jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig) &&
+                                    !jl_type_morespecific((jl_value_t*)m2->sig, (jl_value_t*)m->sig)) {
+                                    ambig1 = 1;
+                                    break;
                                 }
                             }
                         }

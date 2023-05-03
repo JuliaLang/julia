@@ -3881,18 +3881,28 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 
 // type intersection entry points
 
-static jl_value_t *intersect_types(jl_value_t *x, jl_value_t *y, int emptiness_only)
+static jl_value_t *intersect_types(jl_value_t *x, jl_value_t *y, int emptiness_only, int *issubty, int *isrsubty)
 {
     jl_stenv_t e;
-    if (obviously_disjoint(x, y, 0))
+    if (issubty) *issubty = 0;
+    if (isrsubty) *isrsubty = 0;
+    if (obviously_disjoint(x, y, 0)) {
+        if (issubty && x == jl_bottom_type) *issubty = 1;
+        if (isrsubty && y == jl_bottom_type) *isrsubty = 1;
         return jl_bottom_type;
-    if (jl_is_dispatch_tupletype(x) || jl_is_dispatch_tupletype(y)) {
-        if (jl_subtype(x, y))
+    }
+    if (emptiness_only || jl_is_dispatch_tupletype(x) || jl_is_dispatch_tupletype(y)) {
+        if (jl_subtype(x, y)) {
+            if (issubty) *issubty = 1;
             return x;
-        else if (jl_subtype(y, x))
+        }
+        else if (jl_subtype(y, x)) {
+            if (isrsubty) *isrsubty = 1;
             return y;
-        else
+        }
+        else if (!emptiness_only || jl_is_dispatch_tupletype(x) || jl_is_dispatch_tupletype(y)) {
             return jl_bottom_type;
+        }
     }
     init_stenv(&e, NULL, 0);
     e.intersection = e.ignore_free = 1;
@@ -3902,13 +3912,13 @@ static jl_value_t *intersect_types(jl_value_t *x, jl_value_t *y, int emptiness_o
 
 JL_DLLEXPORT jl_value_t *jl_intersect_types(jl_value_t *x, jl_value_t *y)
 {
-    return intersect_types(x, y, 0);
+    return intersect_types(x, y, 0, NULL, NULL);
 }
 
 // TODO: this can probably be done more efficiently
-JL_DLLEXPORT int jl_has_empty_intersection(jl_value_t *x, jl_value_t *y)
+JL_DLLEXPORT int jl_has_empty_intersection(jl_value_t *x, jl_value_t *y, int *issubty, int *isrsubty)
 {
-    return intersect_types(x, y, 1) == jl_bottom_type;
+    return intersect_types(x, y, 1, issubty, isrsubty) == jl_bottom_type;
 }
 
 // return a SimpleVector of all vars from UnionAlls wrapping a given type
