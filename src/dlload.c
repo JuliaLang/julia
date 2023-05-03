@@ -275,6 +275,10 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
     int n_extensions = endswith_extension(modname) ? 1 : N_EXTENSIONS;
     int ret;
 
+    // modname == NULL is a sentinel value requesting the handle of libjulia-internal
+    if (modname == NULL)
+        return jl_find_dynamic_library_by_addr(&jl_load_dynamic_library);
+
     abspath = jl_isabspath(modname);
     is_atpath = 0;
 
