@@ -996,7 +996,7 @@ void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
                    "(%.2f ms in post_mark) %s | next in %" PRId64 " kB\n",
                    jl_ns2ms(sweep_pause), live_bytes / 1024,
                    gc_num.freed / 1024, estimate_freed / 1024,
-                   gc_num.freed - estimate_freed, pct, gc_num.since_sweep / 1024,
+                   gc_num.freed - estimate_freed, pct, gc_num.allocd / 1024,
                    jl_ns2ms(gc_postmark_end - gc_premark_end),
                    sweep_full ? "full" : "quick", -gc_num.allocd / 1024);
 }
