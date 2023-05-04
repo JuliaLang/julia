@@ -571,7 +571,7 @@ end
     end
 end
 
-@testset "eigendecomposition with alg" begin
+@testset "eigendecomposition Algorithms" begin
     using LinearAlgebra: DivideAndConquer, QRIteration, RobustRepresentations
     for T in (Float64, ComplexF64, Float32, ComplexF32)
         n = 4
