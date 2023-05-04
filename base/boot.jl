@@ -109,7 +109,7 @@
 
 #struct LineInfoNode
 #    module::Module
-#    method::Symbol
+#    method::Any (Union{Symbol, Method, MethodInstance})
 #    file::Symbol
 #    line::Int32
 #    inlined_at::Int32
@@ -258,9 +258,17 @@ UnionAll(v::TypeVar, @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any
 
 const Vararg = ccall(:jl_toplevel_eval_in, Any, (Any, Any), Core, _expr(:new, TypeofVararg))
 
-# let the compiler assume that calling Union{} as a constructor does not need
-# to be considered ever (which comes up often as Type{<:T})
-Union{}(a...) = throw(MethodError(Union{}, a))
+# dispatch token indicating a kwarg (keyword sorter) call
+function kwcall end
+# deprecated internal functions:
+kwfunc(@nospecialize(f)) = kwcall
+kwftype(@nospecialize(t)) = typeof(kwcall)
+
+# Let the compiler assume that calling Union{} as a constructor does not need
+# to be considered ever (which comes up often as Type{<:T} inference, and
+# occasionally in user code from eltype).
+Union{}(a...) = throw(ArgumentError("cannot construct a value of type Union{} for return result"))
+kwcall(kwargs, ::Type{Union{}}, a...) = Union{}(a...)
 
 Expr(@nospecialize args...) = _expr(args...)
 
@@ -368,12 +376,6 @@ getptls() = ccall(:jl_get_ptls_states, Ptr{Cvoid}, ())
 include(m::Module, fname::String) = ccall(:jl_load_, Any, (Any, Any), m, fname)
 
 eval(m::Module, @nospecialize(e)) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
-
-# dispatch token indicating a kwarg (keyword sorter) call
-function kwcall end
-# deprecated internal functions:
-kwfunc(@nospecialize(f)) = kwcall
-kwftype(@nospecialize(t)) = typeof(kwcall)
 
 mutable struct Box
     contents::Any

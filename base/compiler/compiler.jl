@@ -152,7 +152,6 @@ include("compiler/ssair/domtree.jl")
 include("compiler/ssair/ir.jl")
 
 include("compiler/abstractlattice.jl")
-
 include("compiler/inferenceresult.jl")
 include("compiler/inferencestate.jl")
 

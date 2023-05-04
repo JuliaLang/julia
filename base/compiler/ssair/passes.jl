@@ -326,7 +326,7 @@ function already_inserted(compact::IncrementalCompact, old::OldSSAValue)
     end
     id -= length(compact.ir.stmts)
     if id < length(compact.ir.new_nodes)
-        error("")
+        return already_inserted(compact, OldSSAValue(compact.ir.new_nodes.info[id].pos))
     end
     id -= length(compact.ir.new_nodes)
     @assert id <= length(compact.pending_nodes)
@@ -603,21 +603,6 @@ function is_old(compact, @nospecialize(old_node_ssa))
         !is_pending(compact, old_node_ssa) &&
         !already_inserted(compact, old_node_ssa)
 end
-
-mutable struct LazyGenericDomtree{IsPostDom}
-    ir::IRCode
-    domtree::GenericDomTree{IsPostDom}
-    LazyGenericDomtree{IsPostDom}(ir::IRCode) where {IsPostDom} = new{IsPostDom}(ir)
-end
-function get!(x::LazyGenericDomtree{IsPostDom}) where {IsPostDom}
-    isdefined(x, :domtree) && return x.domtree
-    return @timeit "domtree 2" x.domtree = IsPostDom ?
-        construct_postdomtree(x.ir.cfg.blocks) :
-        construct_domtree(x.ir.cfg.blocks)
-end
-
-const LazyDomtree = LazyGenericDomtree{false}
-const LazyPostDomtree = LazyGenericDomtree{true}
 
 function perform_lifting!(compact::IncrementalCompact,
         visited_phinodes::Vector{AnySSAValue}, @nospecialize(cache_key),
@@ -1046,6 +1031,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         end
 
         compact[idx] = val === nothing ? nothing : val.val
+        compact[SSAValue(idx)][:flag] |= IR_FLAG_REFINED
     end
 
     non_dce_finish!(compact)
@@ -1099,7 +1085,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     # TODO: Should there be a special line number node for inlined finalizers?
     inlined_at = ir[SSAValue(idx)][:line]
     ((sp_ssa, argexprs), linetable_offset) = ir_prepare_inlining!(InsertBefore(ir, SSAValue(idx)), ir,
-        ir.linetable, src, mi.sparam_vals, mi.def, inlined_at, argexprs)
+        ir.linetable, src, mi.sparam_vals, mi, inlined_at, argexprs)
 
     # TODO: Use the actual inliner here rather than open coding this special purpose inliner.
     spvals = mi.sparam_vals
@@ -1166,12 +1152,10 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
     function note_block_use!(usebb::Int, useidx::Int)
         new_bb_insert_block = nearest_common_dominator(get!(lazypostdomtree),
             bb_insert_block, usebb)
-        if new_bb_insert_block == bb_insert_block == usebb
-            if bb_insert_idx !== nothing
-                bb_insert_idx = max(bb_insert_idx::Int, useidx)
-            else
-                bb_insert_idx = useidx
-            end
+        if new_bb_insert_block == bb_insert_block && bb_insert_idx !== nothing
+            bb_insert_idx = max(bb_insert_idx::Int, useidx)
+        elseif new_bb_insert_block == usebb
+            bb_insert_idx = useidx
         else
             bb_insert_idx = nothing
         end
@@ -1394,6 +1378,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                     if use.kind === :getfield
                         ir[SSAValue(use.idx)][:inst] = compute_value_for_use(ir, domtree, allblocks,
                             du, phinodes, fidx, use.idx)
+                        ir[SSAValue(use.idx)][:flag] |= IR_FLAG_REFINED
                     elseif use.kind === :isdefined
                         continue # already rewritten if possible
                     elseif use.kind === :nopreserve

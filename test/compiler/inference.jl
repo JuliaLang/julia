@@ -90,6 +90,9 @@ end
 @test  Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Type{Union{Float32,Float64}}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Any, Core.svec(Union{Float32,Float64}), 1, 1, 1)
 
+# issue #49287
+@test !Core.Compiler.type_more_complex(Tuple{Vararg{Tuple{}}}, Tuple{Vararg{Tuple}}, Core.svec(), 0, 0, 0)
+@test  Core.Compiler.type_more_complex(Tuple{Vararg{Tuple}}, Tuple{Vararg{Tuple{}}}, Core.svec(), 0, 0, 0)
 
 let # 40336
     t = Type{Type{Int}}
@@ -682,6 +685,7 @@ end
 # inference of `fieldtype`
 mutable struct UndefField__
     x::Union{}
+    UndefField__() = new()
 end
 f_infer_undef_field() = fieldtype(UndefField__, :x)
 @test Base.return_types(f_infer_undef_field, ()) == Any[Type{Union{}}]
@@ -945,7 +949,7 @@ end
 
 # issue #21410
 f21410(::V, ::Pair{V,E}) where {V, E} = E
-@test code_typed(f21410, Tuple{Ref, Pair{Ref{T},Ref{T}} where T<:Number})[1].second ==
+@test only(Base.return_types(f21410, Tuple{Ref, Pair{Ref{T},Ref{T}} where T<:Number})) ==
     Type{E} where E <: (Ref{T} where T<:Number)
 
 # issue #21369
@@ -1020,7 +1024,7 @@ end
 g21771(T) = T
 f21771(::Val{U}) where {U} = Tuple{g21771(U)}
 @test @inferred(f21771(Val{Int}())) === Tuple{Int}
-@test @inferred(f21771(Val{Union{}}())) === Tuple{Union{}}
+@test_throws ErrorException @inferred(f21771(Val{Union{}}()))
 @test @inferred(f21771(Val{Integer}())) === Tuple{Integer}
 
 # PR #28284, check that constants propagate through calls to new
@@ -2658,10 +2662,16 @@ let 𝕃 = Core.Compiler.fallback_lattice
     @test apply_type_tfunc(𝕃, Const(Issue47089), Const(String)) === Union{}
     @test apply_type_tfunc(𝕃, Const(Issue47089), Const(AbstractString)) === Union{}
     @test apply_type_tfunc(𝕃, Const(Issue47089), Type{Ptr}, Type{Ptr{T}} where T) === Base.rewrap_unionall(Type{Issue47089.body.body}, Issue47089)
+    # check complexity size limiting
+    @test apply_type_tfunc(𝕃, Const(Val), Type{Pair{Pair{Pair{Pair{A,B},C},D},E}} where {A,B,C,D,E}) == Type{Val{Pair{A, B}}} where {A, B}
+    @test apply_type_tfunc(𝕃, Const(Pair), Base.rewrap_unionall(Type{Pair.body.body},Pair), Type{Pair{Pair{Pair{Pair{A,B},C},D},E}} where {A,B,C,D,E}) == Type{Pair{Pair{A, B}, Pair{C, D}}} where {A, B, C, D}
+    @test apply_type_tfunc(𝕃, Const(Val), Type{Union{Int,Pair{Pair{Pair{Pair{A,B},C},D},E}}} where {A,B,C,D,E}) == Type{Val{_A}} where _A
 end
 @test only(Base.return_types(keys, (Dict{String},))) == Base.KeySet{String, T} where T<:(Dict{String})
 @test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{Int}},))) == Vector{<:Array{Int}}
 @test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{<:Real}},))) == Vector{<:Array{<:Real}}
+# test complexity limit on apply_type on a function capturing functions returning functions
+@test only(Base.return_types(Base.afoldl, (typeof((m, n) -> () -> Returns(nothing)(m, n)), Function, Function, Vararg{Function}))) === Function
 
 let A = Tuple{A,B,C,D,E,F,G,H} where {A,B,C,D,E,F,G,H}
     B = Core.Compiler.rename_unionall(A)
@@ -4394,18 +4404,18 @@ end
 
     init = Base.ImmutableDict{Number,Number}()
     a = Const(init)
-    b = Core.PartialStruct(typeof(init), Any[Const(init), Any, ComplexF64])
+    b = Core.Compiler.PartialStruct(typeof(init), Any[Const(init), Any, ComplexF64])
     c = Core.Compiler.tmerge(a, b)
     @test ⊑(a, c) && ⊑(b, c)
     @test c === typeof(init)
 
-    a = Core.PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
+    a = Core.Compiler.PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
     c = Core.Compiler.tmerge(a, b)
     @test ⊑(a, c) && ⊑(b, c)
     @test c.fields[2] === Any # or Number
     @test c.fields[3] === ComplexF64
 
-    b = Core.PartialStruct(typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
+    b = Core.Compiler.PartialStruct(typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
     c = Core.Compiler.tmerge(a, b)
     @test ⊑(a, c)
     @test ⊑(b, c)
@@ -4447,12 +4457,23 @@ end
     Core.Compiler.return_type(+, NTuple{2, Rational})
 end == Rational
 
-# vararg-tuple comparison within `PartialStruct`
+# vararg-tuple comparison within `Compiler.PartialStruct`
 # https://github.com/JuliaLang/julia/issues/44965
 let 𝕃ᵢ = Core.Compiler.fallback_lattice
-    t = Core.Compiler.tuple_tfunc(𝕃ᵢ, Any[Core.Const(42), Vararg{Any}])
+    t = Core.Compiler.tuple_tfunc(𝕃ᵢ, Any[Const(42), Vararg{Any}])
     @test Core.Compiler.issimplertype(𝕃ᵢ, t, t)
+
+    t = Core.Compiler.tuple_tfunc(𝕃ᵢ, Any[Const(42), Vararg{Union{}}])
+    @test t === Const((42,))
+    t = Core.Compiler.tuple_tfunc(𝕃ᵢ, Any[Const(42), Int, Vararg{Union{}}])
+    @test t.typ === Tuple{Int, Int}
+    @test t.fields == Any[Const(42), Int]
 end
+
+foo_empty_vararg(i...) = i[2]
+bar_empty_vararg(i) = foo_empty_vararg(10, 20, 30, i...)
+@test bar_empty_vararg(Union{}[]) === 20
+
 
 # check the inference convergence with an empty vartable:
 # the inference state for the toplevel chunk below will have an empty vartable,
@@ -4762,3 +4783,79 @@ fhasmethod(::Integer, ::Int32) = 3
 @test only(Base.return_types(()) do; Val(hasmethod(tuple, Tuple{Vararg{Int}})); end) === Val{true}
 @test only(Base.return_types(()) do; Val(hasmethod(sin, Tuple{Int, Vararg{Int}})); end) == Val{false}
 @test only(Base.return_types(()) do; Val(hasmethod(sin, Tuple{Int, Int, Vararg{Int}})); end) === Val{false}
+
+# TODO (#48913) enable interprocedural call inference from irinterp
+# # interprocedural call inference from irinterp
+# @noinline Base.@assume_effects :total issue48679_unknown_any(x) = Base.inferencebarrier(x)
+
+# @noinline _issue48679(y::Union{Nothing,T}) where {T} = T::Type
+# Base.@constprop :aggressive function issue48679(x, b)
+#     if b
+#         x = issue48679_unknown_any(x)
+#     end
+#     return _issue48679(x)
+# end
+# @test Base.return_types((Float64,)) do x
+#     issue48679(x, false)
+# end |> only == Type{Float64}
+
+# Base.@constprop :aggressive @noinline _issue48679_const(b, y::Union{Nothing,T}) where {T} = b ? nothing : T::Type
+# Base.@constprop :aggressive function issue48679_const(x, b)
+#     if b
+#         x = issue48679_unknown_any(x)
+#     end
+#     return _issue48679_const(b, x)
+# end
+# @test Base.return_types((Float64,)) do x
+#     issue48679_const(x, false)
+# end |> only == Type{Float64}
+
+# `invoke` call in irinterp
+@noinline _irinterp_invoke(x::Any) = :any
+@noinline _irinterp_invoke(x::T) where T = T
+Base.@constprop :aggressive Base.@assume_effects :foldable function irinterp_invoke(x::T, b) where T
+    return @invoke _irinterp_invoke(x::(b ? T : Any))
+end
+@test Base.return_types((Int,)) do x
+    irinterp_invoke(x, true)
+end |> only == Type{Int}
+
+# recursion detection for semi-concrete interpretation
+# avoid direct infinite loop via `concrete_eval_invoke`
+Base.@assume_effects :foldable function recur_irinterp1(x, y)
+    if rand(Bool)
+        return x, y
+    end
+    return recur_irinterp1(x+1, y)
+end
+@test Base.return_types((Symbol,)) do y
+    recur_irinterp1(0, y)
+end |> only === Tuple{Int,Symbol}
+@test last(recur_irinterp1(0, :y)) === :y
+# avoid indirect infinite loop via `concrete_eval_invoke`
+Base.@assume_effects :foldable function recur_irinterp2(x, y)
+    if rand(Bool)
+        return x, y
+    end
+    return _recur_irinterp2(x+1, y)
+end
+Base.@assume_effects :foldable _recur_irinterp2(x, y) = @noinline recur_irinterp2(x, y)
+@test Base.return_types((Symbol,)) do y
+    recur_irinterp2(0, y)
+end |> only === Tuple{Int,Symbol}
+@test last(recur_irinterp2(0, :y)) === :y
+
+# test Conditional Union splitting of info derived from fieldtype (e.g. in abstract setproperty! handling)
+@test only(Base.return_types((Int, Pair{Int,Nothing}, Symbol)) do a, x, s
+    T = fieldtype(typeof(x), s)
+    if a isa T
+        throw(a)
+    else
+        return T
+    end
+end) == Type{Nothing}
+
+# Test that Core.Compiler.return_type inference works for the 1-arg version
+@test Base.return_types() do
+    Core.Compiler.return_type(Tuple{typeof(+), Int, Int})
+end |> only == Type{Int}

@@ -43,14 +43,14 @@ julia> ans
 "12"
 ```
 
-In Julia mode, the REPL supports something called *prompt pasting*. This activates when pasting
-text that starts with `julia> ` into the REPL. In that case, only expressions starting with
-`julia> ` are parsed, others are removed. This makes it possible to paste a chunk of code
-that has been copied from a REPL session without having to scrub away prompts and outputs. This
-feature is enabled by default but can be disabled or enabled at will with `REPL.enable_promptpaste(::Bool)`.
-If it is enabled, you can try it out by pasting the code block above this paragraph straight into
-the REPL. This feature does not work on the standard Windows command prompt due to its limitation
-at detecting when a paste occurs.
+In Julia mode, the REPL supports something called *prompt pasting*. This activates when pasting text
+that starts with `julia> ` into the REPL. In that case, only expressions starting with `julia> ` (as
+well as the other REPL mode prompts: `shell> `, `help?> `, `pkg>` ) are parsed, but others are
+removed. This makes it possible to paste a chunk of text that has been copied from a REPL session
+without having to scrub away prompts and outputs. This feature is enabled by default but can be
+disabled or enabled at will with `REPL.enable_promptpaste(::Bool)`. If it is enabled, you can try it
+out by pasting the code block above this paragraph straight into the REPL. This feature does not
+work on the standard Windows command prompt due to its limitation at detecting when a paste occurs.
 
 Objects are printed at the REPL using the [`show`](@ref) function with a specific [`IOContext`](@ref).
 In particular, the `:limit` attribute is set to `true`.
@@ -617,19 +617,20 @@ julia> REPL.activate(CustomMod)
   var       8 bytes Int64
 ```
 
-## IPython mode
+## Numbered prompt
 
-It is possible to get an interface which is similar to the IPython REPL with numbered input prompts and output prefixes. This is done by calling `REPL.ipython_mode!()`. If you want to have this enabled on startup, add
+It is possible to get an interface which is similar to the IPython REPL and the Mathematica notebook with numbered input prompts and output prefixes. This is done by calling `REPL.numbered_prompt!()`. If you want to have this enabled on startup, add
+
 ```julia
 atreplinit() do repl
     if !isdefined(repl, :interface)
         repl.interface = REPL.setup_interface(repl)
     end
-    REPL.ipython_mode!(repl)
+    REPL.numbered_prompt!(repl)
 end
 ```
 
-to your `startup.jl` file. In `IPython` mode the variable `Out[n]` (where `n` is an integer) can be used to refer to earlier results:
+to your `startup.jl` file. In numbered prompt the variable `Out[n]` (where `n` is an integer) can be used to refer to earlier results:
 
 ```julia-repl
 In [1]: 5 + 3

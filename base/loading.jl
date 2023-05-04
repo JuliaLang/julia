@@ -747,10 +747,10 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{No
     return nothing
 end
 
-function is_v1_format_manifest(raw_manifest::Dict)
+function is_v1_format_manifest(raw_manifest::Dict{String})
     if haskey(raw_manifest, "manifest_format")
         mf = raw_manifest["manifest_format"]
-        if mf isa Dict && haskey(mf, "uuid")
+        if mf isa Dict{String} && haskey(mf, "uuid")
             # the off-chance where an old format manifest has a dep called "manifest_format"
             return true
         end
@@ -1008,10 +1008,10 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
 
     if ocachepath !== nothing
         @debug "Loading object cache file $ocachepath for $pkg"
-        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint), ocachepath, depmods, false)
+        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring), ocachepath, depmods, false, pkg.name)
     else
         @debug "Loading cache file $path for $pkg"
-        sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint), path, depmods, false)
+        sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), path, depmods, false, pkg.name)
     end
     if isa(sv, Exception)
         return sv
@@ -1071,7 +1071,9 @@ function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
     if !isempty(inits)
         unlock(require_lock) # temporarily _unlock_ during these callbacks
         try
-            ccall(:jl_init_restored_modules, Cvoid, (Any,), inits)
+            for (i, mod) in pairs(inits)
+                run_module_init(mod, i)
+            end
         finally
             lock(require_lock)
         end
@@ -1079,7 +1081,40 @@ function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
     return restored
 end
 
+function run_module_init(mod::Module, i::Int=1)
+    # `i` informs ordering for the `@time_imports` report formatting
+    if TIMING_IMPORTS[] == 0
+        ccall(:jl_init_restored_module, Cvoid, (Any,), mod)
+    else
+        if isdefined(mod, :__init__)
+            connector = i > 1 ? "├" : "┌"
+            printstyled("               $connector ", color = :light_black)
+
+            elapsedtime = time_ns()
+            cumulative_compile_timing(true)
+            compile_elapsedtimes = cumulative_compile_time_ns()
+
+            ccall(:jl_init_restored_module, Cvoid, (Any,), mod)
+
+            elapsedtime = (time_ns() - elapsedtime) / 1e6
+            cumulative_compile_timing(false);
+            comp_time, recomp_time = (cumulative_compile_time_ns() .- compile_elapsedtimes) ./ 1e6
+
+            print(round(elapsedtime, digits=1), " ms $mod.__init__() ")
+            if comp_time > 0
+                printstyled(Ryu.writefixed(Float64(100 * comp_time / elapsedtime), 2), "% compilation time", color = Base.info_color())
+            end
+            if recomp_time > 0
+                perc = Float64(100 * recomp_time / comp_time)
+                printstyled(" (", perc < 1 ? "<1" : Ryu.writefixed(perc, 0), "% recompilation)", color = Base.warn_color())
+            end
+            println()
+        end
+    end
+end
+
 function run_package_callbacks(modkey::PkgId)
+    run_extension_callbacks(modkey)
     assert_havelock(require_lock)
     unlock(require_lock)
     try
@@ -1188,9 +1223,12 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, <:An
     end
 end
 
+loading_extension::Bool = false
 function run_extension_callbacks(extid::ExtensionId)
     assert_havelock(require_lock)
     succeeded = try
+        # Used by Distributed to now load extensions in the package callback
+        global loading_extension = true
         _require_prelocked(extid.id)
         @debug "Extension $(extid.id.name) of $(extid.parentid.name) loaded"
         true
@@ -1200,58 +1238,56 @@ function run_extension_callbacks(extid::ExtensionId)
         @error "Error during loading of extension $(extid.id.name) of $(extid.parentid.name), \
                 use `Base.retry_load_extensions()` to retry." exception=errs
         false
+    finally
+        global loading_extension = false
     end
     return succeeded
 end
 
-function run_extension_callbacks()
+function run_extension_callbacks(pkgid::PkgId)
     assert_havelock(require_lock)
-    loaded_triggers = collect(intersect(keys(Base.loaded_modules), keys(Base.EXT_DORMITORY)))
-    sort!(loaded_triggers; by=x->x.uuid)
-    for pkgid in loaded_triggers
-        # take ownership of extids that depend on this pkgid
-        extids = pop!(EXT_DORMITORY, pkgid, nothing)
-        extids === nothing && continue
-        for extid in extids
-            if extid.ntriggers > 0
-                # It is possible that pkgid was loaded in an environment
-                # below the one of the parent. This will cause a load failure when the
-                # pkg ext tries to load the triggers. Therefore, check this first
-                # before loading the pkg ext.
-                pkgenv = identify_package_env(extid.id, pkgid.name)
-                ext_not_allowed_load = false
-                if pkgenv === nothing
-                    ext_not_allowed_load = true
-                else
-                    pkg, env = pkgenv
-                    path = Base.locate_package(pkg, env)
-                    if path === nothing
-                        ext_not_allowed_load = true
-                    end
-                end
-                if ext_not_allowed_load
-                    @debug "Extension $(extid.id.name) of $(extid.parentid.name) will not be loaded \
-                            since $(pkgid.name) loaded in environment lower in load path"
-                    # indicate extid is expected to fail
-                    extid.ntriggers *= -1
-                else
-                    # indicate pkgid is loaded
-                    extid.ntriggers -= 1
-                end
-            end
-            if extid.ntriggers < 0
-                # indicate pkgid is loaded
-                extid.ntriggers += 1
-                succeeded = false
+    # take ownership of extids that depend on this pkgid
+    extids = pop!(EXT_DORMITORY, pkgid, nothing)
+    extids === nothing && return
+    for extid in extids
+        if extid.ntriggers > 0
+            # It is possible that pkgid was loaded in an environment
+            # below the one of the parent. This will cause a load failure when the
+            # pkg ext tries to load the triggers. Therefore, check this first
+            # before loading the pkg ext.
+            pkgenv = identify_package_env(extid.id, pkgid.name)
+            ext_not_allowed_load = false
+            if pkgenv === nothing
+                ext_not_allowed_load = true
             else
-                succeeded = true
+                pkg, env = pkgenv
+                path = locate_package(pkg, env)
+                if path === nothing
+                    ext_not_allowed_load = true
+                end
             end
-            if extid.ntriggers == 0
-                # actually load extid, now that all dependencies are met,
-                # and record the result
-                succeeded = succeeded && run_extension_callbacks(extid)
-                succeeded || push!(EXT_DORMITORY_FAILED, extid)
+            if ext_not_allowed_load
+                @debug "Extension $(extid.id.name) of $(extid.parentid.name) will not be loaded \
+                        since $(pkgid.name) loaded in environment lower in load path"
+                # indicate extid is expected to fail
+                extid.ntriggers *= -1
+            else
+                # indicate pkgid is loaded
+                extid.ntriggers -= 1
             end
+        end
+        if extid.ntriggers < 0
+            # indicate pkgid is loaded
+            extid.ntriggers += 1
+            succeeded = false
+        else
+            succeeded = true
+        end
+        if extid.ntriggers == 0
+            # actually load extid, now that all dependencies are met,
+            # and record the result
+            succeeded = succeeded && run_extension_callbacks(extid)
+            succeeded || push!(EXT_DORMITORY_FAILED, extid)
         end
     end
     return
@@ -1276,7 +1312,7 @@ function retry_load_extensions()
     end
     prepend!(EXT_DORMITORY_FAILED, failed)
     end
-    nothing
+    return
 end
 
 """
@@ -1543,11 +1579,11 @@ end
 """
     include_dependency(path::AbstractString)
 
-In a module, declare that the file specified by `path` (relative or absolute) is a
-dependency for precompilation; that is, the module will need to be recompiled if this file
-changes.
+In a module, declare that the file, directory, or symbolic link specified by `path`
+(relative or absolute) is a dependency for precompilation; that is, the module will need
+to be recompiled if the modification time of `path` changes.
 
-This is only needed if your module depends on a file that is not used via [`include`](@ref). It has
+This is only needed if your module depends on a path that is not used via [`include`](@ref). It has
 no effect outside of compilation.
 """
 function include_dependency(path::AbstractString)
@@ -1669,10 +1705,6 @@ function _require_prelocked(uuidkey::PkgId, env=nothing)
     else
         newm = root_module(uuidkey)
     end
-    # Load extensions when not precompiling and not in a nested package load
-    if JLOptions().incremental == 0 && isempty(package_locks)
-        run_extension_callbacks()
-    end
     return newm
 end
 
@@ -1758,6 +1790,9 @@ function set_pkgorigin_version_path(pkg::PkgId, path::Union{String,Nothing})
     nothing
 end
 
+# A hook to allow code load to use Pkg.precompile
+const PKG_PRECOMPILE_HOOK = Ref{Function}()
+
 # Returns `nothing` or the new(ish) module
 function _require(pkg::PkgId, env=nothing)
     assert_havelock(require_lock)
@@ -1777,8 +1812,11 @@ function _require(pkg::PkgId, env=nothing)
         end
         set_pkgorigin_version_path(pkg, path)
 
+        pkg_precompile_attempted = false # being safe to avoid getting stuck in a Pkg.precompile loop
+
         # attempt to load the module file via the precompile cache locations
         if JLOptions().use_compiled_modules != 0
+            @label load_from_cache
             m = _require_search_from_serialized(pkg, path, UInt128(0))
             if m isa Module
                 return m
@@ -1800,6 +1838,16 @@ function _require(pkg::PkgId, env=nothing)
 
         if JLOptions().use_compiled_modules != 0
             if (0 == ccall(:jl_generating_output, Cint, ())) || (JLOptions().incremental != 0)
+                if !pkg_precompile_attempted && isinteractive() && isassigned(PKG_PRECOMPILE_HOOK)
+                    pkg_precompile_attempted = true
+                    unlock(require_lock)
+                    try
+                        PKG_PRECOMPILE_HOOK[](pkg.name, _from_loading = true)
+                    finally
+                        lock(require_lock)
+                    end
+                    @goto load_from_cache
+                end
                 # spawn off a new incremental pre-compile task for recursive `require` calls
                 cachefile = compilecache(pkg, path)
                 if isa(cachefile, Exception)
@@ -2093,6 +2141,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
                               $trace
                               -`,
                               "OPENBLAS_NUM_THREADS" => 1,
+                              "JULIA_WAIT_FOR_TRACY" => nothing,
                               "JULIA_NUM_THREADS" => 1),
                        stderr = internal_stderr, stdout = internal_stdout),
               "w", stdout)
@@ -2822,7 +2871,7 @@ end
             end
             for chi in includes
                 f, ftime_req = chi.filename, chi.mtime
-                if !isfile(f)
+                if !ispath(f)
                     _f = fixup_stdlib_path(f)
                     if isfile(_f) && startswith(_f, Sys.STDLIB)
                         # mtime is changed by extraction

@@ -253,7 +253,7 @@ istaskfailed(t::Task) = (load_state_acquire(t) === task_state_failed)
 Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
 function Threads.threadpool(t::Task)
     tpid = ccall(:jl_get_task_threadpoolid, Int8, (Any,), t)
-    return tpid == 0 ? :default : :interactive
+    return Threads._tpid_to_sym(tpid)
 end
 
 task_result(t::Task) = t.result
@@ -786,7 +786,7 @@ function enq_work(t::Task)
         if Threads.threadpoolsize(tp) == 1
             # There's only one thread in the task's assigned thread pool;
             # use its work queue.
-            tid = (tp === :default) ? 1 : Threads.threadpoolsize(:default)+1
+            tid = (tp === :interactive) ? 1 : Threads.threadpoolsize(:interactive)+1
             ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
             push!(workqueue_for(tid), t)
         else

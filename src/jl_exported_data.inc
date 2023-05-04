@@ -131,6 +131,9 @@
 #define JL_EXPORTED_DATA_SYMBOLS(XX) \
     XX(jl_n_threadpools, int) \
     XX(jl_n_threads, _Atomic(int)) \
+    XX(jl_n_gcthreads, int) \
     XX(jl_options, jl_options_t) \
+    XX(jl_task_gcstack_offset, int) \
+    XX(jl_task_ptls_offset, int) \
 
 // end of file

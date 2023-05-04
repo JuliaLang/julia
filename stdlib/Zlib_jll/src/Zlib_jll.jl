@@ -13,9 +13,9 @@ export libz
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libz_handle = C_NULL
-libz_path = ""
+artifact_dir::String = ""
+libz_handle::Ptr{Cvoid} = C_NULL
+libz_path::String = ""
 
 if Sys.iswindows()
     const libz = "libz.dll"

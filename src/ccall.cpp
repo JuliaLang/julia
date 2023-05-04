@@ -61,7 +61,6 @@ static bool runtime_sym_gvs(jl_codectx_t &ctx, const char *f_lib, const char *f_
     bool runtime_lib = false;
     GlobalVariable *libptrgv;
     jl_codegen_params_t::SymMapGV *symMap;
-#ifdef _OS_WINDOWS_
     if ((intptr_t)f_lib == (intptr_t)JL_EXE_LIBNAME) {
         libptrgv = prepare_global_in(M, jlexe_var);
         symMap = &ctx.emission_context.symMapExe;
@@ -74,9 +73,7 @@ static bool runtime_sym_gvs(jl_codectx_t &ctx, const char *f_lib, const char *f_
         libptrgv = prepare_global_in(M, jldll_var);
         symMap = &ctx.emission_context.symMapDll;
     }
-    else
-#endif
-    if (f_lib == NULL) {
+    else if (f_lib == NULL) {
         libptrgv = jl_emit_RTLD_DEFAULT_var(M);
         symMap = &ctx.emission_context.symMapDefault;
     }
@@ -631,16 +628,12 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
                 std::string iname("i");
                 iname += f_name;
                 if (jl_dlsym(jl_libjulia_internal_handle, iname.c_str(), &symaddr, 0)) {
-#ifdef _OS_WINDOWS_
                     f_lib = JL_LIBJULIA_INTERNAL_DL_LIBNAME;
-#endif
                     f_name = jl_symbol_name(jl_symbol(iname.c_str()));
                 }
-#ifdef _OS_WINDOWS_
                 else {
-                    f_lib = jl_dlfind_win32(f_name);
+                    f_lib = jl_dlfind(f_name);
                 }
-#endif
             }
         }
         else if (jl_is_cpointer_type(jl_typeof(ptr))) {
@@ -726,7 +719,8 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
             void *symaddr;
 
             void* libsym = jl_get_library_(sym.f_lib, 0);
-            if (!libsym || !jl_dlsym(libsym, sym.f_name, &symaddr, 0)) {
+            int symbol_found = jl_dlsym(libsym, sym.f_name, &symaddr, 0);
+            if (!libsym || !symbol_found) {
                 // Error mode, either the library or the symbol couldn't be find during compiletime.
                 // Fallback to a runtime symbol lookup.
                 res = runtime_sym_lookup(ctx, cast<PointerType>(getInt8PtrTy(ctx.builder.getContext())), sym.f_lib, NULL, sym.f_name, ctx.f);
@@ -839,7 +833,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
      * type. Otherwise we pass a pointer to a jl_value_t.
      */
     std::vector<llvm::Type*> argtypes;
-    Value **argvals = (Value**)alloca(nargt * sizeof(Value*));
+    SmallVector<Value *, 8> argvals(nargt);
     for (size_t i = 0; i < nargt; ++i) {
         jl_value_t *tti = jl_svecref(tt,i);
         bool toboxed;
@@ -986,7 +980,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     Function *decl = Function::Create(decl_typ, def->getLinkage(), def->getAddressSpace(),
                                       def->getName(), jl_Module);
     decl->setAttributes(def->getAttributes());
-    CallInst *inst = ctx.builder.CreateCall(decl, ArrayRef<Value *>(&argvals[0], nargt));
+    CallInst *inst = ctx.builder.CreateCall(decl, argvals);
 
     // save the module to be linked later.
     // we cannot do this right now, because linking mutates the destination module,
@@ -1381,25 +1375,26 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         if ((uintptr_t)fptr == ptr)
             return true;
         if (f_lib) {
-#ifdef _OS_WINDOWS_
             if ((f_lib == JL_EXE_LIBNAME) || // preventing invalid pointer access
                 (f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME) ||
-                (f_lib == JL_LIBJULIA_DL_LIBNAME) ||
-                (!strcmp(f_lib, jl_crtdll_basename))) {
+                (f_lib == JL_LIBJULIA_DL_LIBNAME)) {
                 // libjulia-like
             }
             else
-                return false;
-#else
-            return false;
+#ifdef _OS_WINDOWS_
+            if (strcmp(f_lib, jl_crtdll_basename) == 0) {
+                // libjulia-like
+            }
+            else
 #endif
+            return false;
         }
         return f_name && f_name == name;
     };
 #define is_libjulia_func(name) _is_libjulia_func((uintptr_t)&(name), StringRef(XSTR(name)))
 
     // emit arguments
-    jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nccallargs);
+    SmallVector<jl_cgval_t, 4> argv(nccallargs);
     for (size_t i = 0; i < nccallargs; i++) {
         // Julia (expression) value of current parameter
         jl_value_t *argi = ccallarg(i);
@@ -1520,7 +1515,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         JL_GC_POP();
         return mark_or_box_ccall_result(ctx, retval, retboxed, rt, unionall, static_rt);
     }
-    else if (is_libjulia_func(jl_cpu_pause)) {
+    else if (is_libjulia_func(jl_cpu_pause)||is_libjulia_func(jl_cpu_suspend)) {
         ++CCALL_STAT(jl_cpu_pause);
         // Keep in sync with the julia_threads.h version
         assert(lrt == getVoidTy(ctx.builder.getContext()));
@@ -1539,9 +1534,14 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                         && ctx.emission_context.TargetTriple.getSubArch() != Triple::SubArchType::NoSubArch
                         // ARMv7 and above is < armv6
                         && ctx.emission_context.TargetTriple.getSubArch() < Triple::SubArchType::ARMSubArch_v6)) {
-            auto wfeinst = InlineAsm::get(FunctionType::get(getVoidTy(ctx.builder.getContext()), false), "wfe",
+            InlineAsm* wait_inst;
+            if (is_libjulia_func(jl_cpu_pause))
+                wait_inst = InlineAsm::get(FunctionType::get(getVoidTy(ctx.builder.getContext()), false), "isb",
                                                 "~{memory}", true);
-            ctx.builder.CreateCall(wfeinst);
+            else
+                wait_inst = InlineAsm::get(FunctionType::get(getVoidTy(ctx.builder.getContext()), false), "wfe",
+                                                "~{memory}", true);
+            ctx.builder.CreateCall(wait_inst);
             JL_GC_POP();
             return ghostValue(ctx, jl_nothing_type);
         } else {
@@ -1897,7 +1897,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     jl_cgval_t retval = sig.emit_a_ccall(
             ctx,
             symarg,
-            argv,
+            argv.data(),
             gc_uses,
             static_rt);
     JL_GC_POP();
@@ -1919,7 +1919,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
 
     FunctionType *functype = this->functype(ctx.builder.getContext());
 
-    Value **argvals = (Value**) alloca((nccallargs + sret) * sizeof(Value*));
+    SmallVector<Value *, 8> argvals(nccallargs + sret);
     for (size_t ai = 0; ai < nccallargs; ai++) {
         // Current C function parameter
         jl_cgval_t &arg = argv[ai];
@@ -2082,7 +2082,8 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         else {
             void *symaddr;
             void *libsym = jl_get_library_(symarg.f_lib, 0);
-            if (!libsym || !jl_dlsym(libsym, symarg.f_name, &symaddr, 0)) {
+            int symbol_found = jl_dlsym(libsym, symarg.f_name, &symaddr, 0);
+            if (!libsym || !symbol_found) {
                 ++DeferredCCallLookups;
                 // either the library or the symbol could not be found, place a runtime
                 // lookup here instead.
@@ -2099,7 +2100,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     OperandBundleDef OpBundle("jl_roots", gc_uses);
     // the actual call
     CallInst *ret = ctx.builder.CreateCall(functype, llvmf,
-            ArrayRef<Value*>(&argvals[0], nccallargs + sret),
+            argvals,
             ArrayRef<OperandBundleDef>(&OpBundle, gc_uses.empty() ? 0 : 1));
     ((CallInst*)ret)->setAttributes(attributes);
 

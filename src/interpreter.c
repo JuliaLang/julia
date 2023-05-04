@@ -736,8 +736,8 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
     jl_value_t *r = eval_body(code->code, s, 0, 0);
     locals[0] = r; // GC root
     JL_GC_PROMISE_ROOTED(r);
-    jl_typeassert(r, jl_tparam1(jl_typeof(oc)));
     ct->world_age = last_age;
+    jl_typeassert(r, jl_tparam1(jl_typeof(oc)));
     JL_GC_POP();
     return r;
 }

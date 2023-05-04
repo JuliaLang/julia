@@ -47,23 +47,56 @@ const FAIL_FAST = Ref{Bool}(false)
 
 # Backtrace utility functions
 function ip_has_file_and_func(ip, file, funcs)
-    return any(fr -> (string(fr.file) == file && fr.func in funcs), StackTraces.lookup(ip))
+    return any(fr -> (in_file(fr, file) && fr.func in funcs), StackTraces.lookup(ip))
+end
+in_file(frame, file) = string(frame.file) == file
+
+function test_location(bt, file_ts, file_t)
+    if (isnothing(file_ts) || isnothing(file_t))
+        return macrocall_location(bt, something(file_ts, @__FILE__))
+    else
+        return test_callsite(bt, file_ts, file_t)
+    end
 end
 
-function scrub_backtrace(bt)
+function test_callsite(bt, file_ts, file_t)
+    # We avoid duplicate calls to `StackTraces.lookup`, as it is an expensive call.
+    # For that, we retrieve locations from lower to higher stack elements
+    # and only traverse parts of the backtrace which we haven't traversed before.
+    # The order will always be <internal functions> -> `@test` -> `@testset`.
+    internal = macrocall_location(bt, @__FILE__)::Int
+    test = internal - 1 + findfirst(ip -> any(frame -> in_file(frame, file_t), StackTraces.lookup(ip)), @view bt[internal:end])::Int
+    testset = test - 1 + macrocall_location(@view(bt[test:end]), file_ts)::Int
+
+    # If stacktrace locations differ, include frames until the `@testset` appears.
+    test != testset && return testset
+    # `@test` and `@testset` occurred at the same stacktrace location.
+    # This may happen if `@test` occurred directly in scope of the testset,
+    # or if `@test` occurred in a function that has been inlined in the testset.
+    frames = StackTraces.lookup(bt[testset])
+    outer_frame = findfirst(frame -> in_file(frame, file_ts) && frame.func == Symbol("macro expansion"), frames)::Int
+    # The `@test` call occurred directly in scope of a `@testset`.
+    # The __source__ from `@test` will be printed in the test message upon failure.
+    # There is no need to include more frames, but always include at least the internal macrocall location in the stacktrace.
+    in_file(frames[outer_frame], file_t) && return internal
+    # The `@test` call was inlined, so we still need to include the callsite.
+    return testset
+end
+
+macrocall_location(bt, file) = findfirst(ip -> ip_has_file_and_func(ip, file, (Symbol("macro expansion"),)), bt)
+
+function scrub_backtrace(bt, file_ts, file_t)
     do_test_ind = findfirst(ip -> ip_has_file_and_func(ip, @__FILE__, (:do_test, :do_test_throws)), bt)
     if do_test_ind !== nothing && length(bt) > do_test_ind
         bt = bt[do_test_ind + 1:end]
     end
-    name_ind = findfirst(ip -> ip_has_file_and_func(ip, @__FILE__, (Symbol("macro expansion"),)), bt)
-    if name_ind !== nothing && length(bt) != 0
-        bt = bt[1:name_ind]
-    end
+    stop_at = test_location(bt, file_ts, file_t)
+    !isnothing(stop_at) && !isempty(bt) && return bt[1:stop_at]
     return bt
 end
 
-function scrub_exc_stack(stack)
-    return Any[ (x[1], scrub_backtrace(x[2]::Vector{Union{Ptr{Nothing},Base.InterpreterIP}})) for x in stack ]
+function scrub_exc_stack(stack, file_ts, file_t)
+    return Any[ (x[1], scrub_backtrace(x[2]::Vector{Union{Ptr{Nothing},Base.InterpreterIP}}, file_ts, file_t)) for x in stack ]
 end
 
 # define most of the test infrastructure without type specialization
@@ -185,7 +218,7 @@ struct Error <: Result
 
     function Error(test_type::Symbol, orig_expr, value, bt, source::LineNumberNode)
         if test_type === :test_error
-            bt = scrub_exc_stack(bt)
+            bt = scrub_exc_stack(bt, nothing, extract_file(source))
         end
         if test_type === :test_error || test_type === :nontest_error
             bt_str = try # try the latest world for this, since we might have eval'd new code for show
@@ -1013,8 +1046,9 @@ mutable struct DefaultTestSet <: AbstractTestSet
     time_start::Float64
     time_end::Union{Float64,Nothing}
     failfast::Bool
+    file::Union{String,Nothing}
 end
-function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = true, failfast::Union{Nothing,Bool} = nothing)
+function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = true, failfast::Union{Nothing,Bool} = nothing, source = nothing)
     if isnothing(failfast)
         # pass failfast state into child testsets
         parent_ts = get_testset()
@@ -1024,8 +1058,11 @@ function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming:
             failfast = false
         end
     end
-    return DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, time(), nothing, failfast)
+    return DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, time(), nothing, failfast, extract_file(source))
 end
+extract_file(source::LineNumberNode) = extract_file(source.file)
+extract_file(file::Symbol) = string(file)
+extract_file(::Nothing) = nothing
 
 struct FailFastError <: Exception end
 
@@ -1043,7 +1080,7 @@ function record(ts::DefaultTestSet, t::Union{Fail, Error}; print_result::Bool=TE
         if !(t isa Error) || t.test_type !== :test_interrupted
             print(t)
             if !isa(t, Error) # if not gets printed in the show method
-                Base.show_backtrace(stdout, scrub_backtrace(backtrace()))
+                Base.show_backtrace(stdout, scrub_backtrace(backtrace(), ts.file, extract_file(t.source)))
             end
             println()
         end
@@ -1489,7 +1526,11 @@ function testset_beginend_call(args, tests, source)
     ex = quote
         _check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
         local ret
-        local ts = $(testsettype)($desc; $options...)
+        local ts = if ($testsettype === $DefaultTestSet) && $(isa(source, LineNumberNode))
+            $(testsettype)($desc; source=$(QuoteNode(source.file)), $options...)
+        else
+            $(testsettype)($desc; $options...)
+        end
         push_testset(ts)
         # we reproduce the logic of guardseed, but this function
         # cannot be used as it changes slightly the semantic of @testset,
@@ -1585,7 +1626,11 @@ function testset_forloop(args, testloop, source)
             copy!(RNG, tmprng)
 
         end
-        ts = $(testsettype)($desc; $options...)
+        ts = if ($testsettype === $DefaultTestSet) && $(isa(source, LineNumberNode))
+            $(testsettype)($desc; source=$(QuoteNode(source.file)), $options...)
+        else
+            $(testsettype)($desc; $options...)
+        end
         push_testset(ts)
         first_iteration = false
         try
@@ -2096,5 +2141,6 @@ function _check_bitarray_consistency(B::BitArray{N}) where N
 end
 
 include("logging.jl")
+include("precompile.jl")
 
 end # module

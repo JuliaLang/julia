@@ -120,6 +120,7 @@ Float64
 real(T::Type) = typeof(real(zero(T)))
 real(::Type{T}) where {T<:Real} = T
 real(C::Type{<:Complex}) = fieldtype(C, 1)
+real(::Type{Union{}}, slurp...) = Union{}(im)
 
 """
     isreal(x) -> Bool
