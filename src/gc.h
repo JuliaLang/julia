@@ -9,6 +9,7 @@
 #ifndef JL_GC_H
 #define JL_GC_H
 
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
@@ -83,26 +84,33 @@ typedef struct {
     uint64_t    total_mark_time;
 } jl_gc_num_t;
 
+// Array chunks (work items representing suffixes of
+// large arrays of pointers left to be marked)
+
 typedef enum {
-    GC_empty_chunk,
-    GC_objary_chunk,
-    GC_ary8_chunk,
-    GC_ary16_chunk,
-    GC_finlist_chunk,
+    GC_empty_chunk = 0, // for sentinel representing no items left in chunk queue
+    GC_objary_chunk,    // for chunk of object array
+    GC_ary8_chunk,      // for chunk of array with 8 bit field descriptors
+    GC_ary16_chunk,     // for chunk of array with 16 bit field descriptors
+    GC_finlist_chunk,   // for chunk of finalizer list
 } gc_chunk_id_t;
 
 typedef struct _jl_gc_chunk_t {
     gc_chunk_id_t cid;
-    struct _jl_value_t *parent;
-    struct _jl_value_t **begin;
-    struct _jl_value_t **end;
-    void *elem_begin;
-    void *elem_end;
-    uint32_t step;
-    uintptr_t nptr;
+    struct _jl_value_t *parent; // array owner
+    struct _jl_value_t **begin; // pointer to first element that needs scanning
+    struct _jl_value_t **end;   // pointer to last element that needs scanning
+    void *elem_begin;           // used to scan pointers within objects when marking `ary8` or `ary16`
+    void *elem_end;             // used to scan pointers within objects when marking `ary8` or `ary16`
+    uint32_t step;              // step-size used when marking objarray
+    uintptr_t nptr;             // (`nptr` & 0x1) if array has young element and (`nptr` & 0x2) if array owner is old
 } jl_gc_chunk_t;
 
-#define MAX_REFS_AT_ONCE (1 << 16)
+#define GC_CHUNK_BATCH_SIZE (1 << 16)       // maximum number of references that can be processed
+                                            // without creating a chunk
+
+#define GC_PTR_QUEUE_INIT_SIZE (1 << 18)    // initial size of queue of `jl_value_t *`
+#define GC_CHUNK_QUEUE_INIT_SIZE (1 << 14)  // initial size of chunk-queue
 
 // layout for big (>2k) objects
 
@@ -170,7 +178,7 @@ typedef struct {
     uint16_t fl_end_offset;   // offset of last free object in this page
     uint16_t thread_n;        // thread id of the heap that owns this page
     char *data;
-    uint8_t *ages;
+    uint32_t *ages;
 } jl_gc_pagemeta_t;
 
 // Page layout:
@@ -371,13 +379,17 @@ STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list) JL_NOTSAFE
     *list = hdr;
 }
 
+extern uv_mutex_t gc_threads_lock;
+extern uv_cond_t gc_threads_cond;
+extern _Atomic(int) gc_n_threads_marking;
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
 void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin,
                                     jl_value_t **fl_end) JL_NOTSAFEPOINT;
 void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list,
                                    size_t start) JL_NOTSAFEPOINT;
-void gc_mark_loop_(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
-void gc_mark_loop(jl_ptls_t ptls);
+void gc_mark_loop_serial_(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
+void gc_mark_loop_serial(jl_ptls_t ptls);
+void gc_mark_loop_parallel(jl_ptls_t ptls, int master);
 void sweep_stack_pools(void);
 void jl_gc_debug_init(void);
 

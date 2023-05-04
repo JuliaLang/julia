@@ -311,3 +311,8 @@ let A = Tuple{Type{SubString{S}},AbstractString} where S<:AbstractString,
     @test  args_morespecific(B, C)
     @test  args_morespecific(A, C)
 end
+
+@test args_morespecific(Tuple{Type{Union{}}, Any}, Tuple{Any, Type{Union{}}})
+@test args_morespecific(Tuple{typeof(Union{}), Any}, Tuple{Any, Type{Union{}}})
+@test args_morespecific(Tuple{Type{Union{}}, Type{Union{}}, Any}, Tuple{Type{Union{}}, Any, Type{Union{}}})
+@test args_morespecific(Tuple{Type{Union{}}, Type{Union{}}, Any, Type{Union{}}}, Tuple{Type{Union{}}, Any, Type{Union{}}, Type{Union{}}})

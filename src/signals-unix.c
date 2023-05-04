@@ -621,7 +621,7 @@ static void allocate_segv_handler(void)
 static void *alloc_sigstack(size_t *ssize)
 {
     void *stk = jl_malloc_stack(ssize, NULL);
-    if (stk == MAP_FAILED)
+    if (stk == NULL)
         jl_errorf("fatal error allocating signal stack: mmap: %s", strerror(errno));
     return stk;
 }
@@ -645,7 +645,7 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
 }
 
 const static int sigwait_sigs[] = {
-    SIGINT, SIGTERM, SIGABRT, SIGQUIT,
+    SIGINT, SIGTERM, SIGQUIT,
 #ifdef SIGINFO
     SIGINFO,
 #else

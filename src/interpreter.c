@@ -626,7 +626,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
 
 // preparing method IR for interpreter
 
-jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi)
+jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
 {
     jl_code_info_t *src = (jl_code_info_t*)jl_atomic_load_relaxed(&mi->uninferred);
     if (jl_is_method(mi->def.value)) {
@@ -636,7 +636,7 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi)
             }
             else {
                 assert(mi->def.method->generator);
-                src = jl_code_for_staged(mi);
+                src = jl_code_for_staged(mi, world);
             }
         }
         if (src && (jl_value_t*)src != jl_nothing) {
@@ -659,7 +659,9 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
 {
     interpreter_state *s;
     jl_method_instance_t *mi = codeinst->def;
-    jl_code_info_t *src = jl_code_for_interpreter(mi);
+    jl_task_t *ct = jl_current_task;
+    size_t world = ct->world_age;
+    jl_code_info_t *src = jl_code_for_interpreter(mi, world);
     jl_array_t *stmts = src->code;
     assert(jl_typeis(stmts, jl_array_any_type));
     unsigned nroots = jl_source_nslots(src) + jl_source_nssavalues(src) + 2;
@@ -734,8 +736,8 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
     jl_value_t *r = eval_body(code->code, s, 0, 0);
     locals[0] = r; // GC root
     JL_GC_PROMISE_ROOTED(r);
-    jl_typeassert(r, jl_tparam1(jl_typeof(oc)));
     ct->world_age = last_age;
+    jl_typeassert(r, jl_tparam1(jl_typeof(oc)));
     JL_GC_POP();
     return r;
 }

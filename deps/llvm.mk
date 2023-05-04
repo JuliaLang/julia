@@ -120,7 +120,7 @@ ifeq ($(USE_LLVM_SHLIB),1)
 LLVM_CMAKE += -DLLVM_BUILD_LLVM_DYLIB:BOOL=ON -DLLVM_LINK_LLVM_DYLIB:BOOL=ON
 endif
 ifeq ($(USE_INTEL_JITEVENTS), 1)
-LLVM_CMAKE += -DLLVM_USE_INTEL_JITEVENTS:BOOL=ON
+LLVM_CMAKE += -DLLVM_USE_INTEL_JITEVENTS:BOOL=ON -DITTAPI_SOURCE_DIR=$(SRCCACHE)/$(ITTAPI_SRC_DIR)
 endif # USE_INTEL_JITEVENTS
 
 ifeq ($(USE_OPROFILE_JITEVENTS), 1)
@@ -286,6 +286,11 @@ configure-llvm: $(LLVM_BUILDDIR_withtype)/build-configured
 compile-llvm: $(LLVM_BUILDDIR_withtype)/build-compiled
 fastcheck-llvm: #none
 check-llvm: $(LLVM_BUILDDIR_withtype)/build-checked
+
+ifeq ($(USE_INTEL_JITEVENTS),1)
+extract-llvm: $(SRCCACHE)/$(ITTAPI_SRC_DIR)/source-extracted
+endif
+
 #todo: LLVM make check target is broken on julia.mit.edu (and really slow elsewhere)
 
 else # USE_BINARYBUILDER_LLVM

@@ -69,6 +69,7 @@ The name-value pairs can also be provided by splatting a named tuple or any
 iterator that yields two-value collections holding each a symbol as first
 value:
 
+```jldoctest
 julia> keys = (:a, :b, :c); values = (1, 2, 3);
 
 julia> NamedTuple{keys}(values)
@@ -123,7 +124,10 @@ end
 function NamedTuple{names, T}(nt::NamedTuple) where {names, T <: Tuple}
     if @generated
         Expr(:new, :(NamedTuple{names, T}),
-             Any[ :(convert(fieldtype(T, $n), getfield(nt, $(QuoteNode(names[n]))))) for n in 1:length(names) ]...)
+             Any[ :(let Tn = fieldtype(T, $n),
+                      ntn = getfield(nt, $(QuoteNode(names[n])))
+                      ntn isa Tn ? ntn : convert(Tn, ntn)
+                  end) for n in 1:length(names) ]...)
     else
         NamedTuple{names, T}(map(Fix1(getfield, nt), names))
     end
@@ -194,7 +198,7 @@ end
 
 if nameof(@__MODULE__) === :Base
     Tuple(nt::NamedTuple) = (nt...,)
-    (::Type{T})(nt::NamedTuple) where {T <: Tuple} = convert(T, Tuple(nt))
+    (::Type{T})(nt::NamedTuple) where {T <: Tuple} = (t = Tuple(nt); t isa T ? t : convert(T, t)::T)
 end
 
 function show(io::IO, t::NamedTuple)
@@ -461,20 +465,20 @@ This macro gives a more convenient syntax for declaring `NamedTuple` types. It r
 type with the given keys and types, equivalent to `NamedTuple{(:key1, :key2, ...), Tuple{Type1,Type2,...}}`.
 If the `::Type` declaration is omitted, it is taken to be `Any`.   The `begin ... end` form allows the
 declarations to be split across multiple lines (similar to a `struct` declaration), but is otherwise
-equivalent.
+equivalent. The `NamedTuple` macro is used when printing `NamedTuple` types to e.g. the REPL.
 
-For example, the tuple `(a=3.1, b="hello")` has a type `NamedTuple{(:a, :b),Tuple{Float64,String}}`, which
+For example, the tuple `(a=3.1, b="hello")` has a type `NamedTuple{(:a, :b), Tuple{Float64, String}}`, which
 can also be declared via `@NamedTuple` as:
 
 ```jldoctest
 julia> @NamedTuple{a::Float64, b::String}
-NamedTuple{(:a, :b), Tuple{Float64, String}}
+@NamedTuple{a::Float64, b::String}
 
 julia> @NamedTuple begin
            a::Float64
            b::String
        end
-NamedTuple{(:a, :b), Tuple{Float64, String}}
+@NamedTuple{a::Float64, b::String}
 ```
 
 !!! compat "Julia 1.5"

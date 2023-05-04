@@ -98,7 +98,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    157
+#define NUM_TAGS    158
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -241,6 +241,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_nonfunction_mt);
         INSERT_TAG(jl_kwcall_mt);
         INSERT_TAG(jl_kwcall_func);
+        INSERT_TAG(jl_opaque_closure_method);
 
         // some Core.Builtin Functions that we want to be able to reference:
         INSERT_TAG(jl_builtin_throw);
@@ -304,9 +305,126 @@ static arraylist_t object_worklist;  // used to mimic recursion by jl_serialize_
 // Permanent list of void* (begin, end+1) pairs of system/package images we've loaded previously
 // together with their module build_ids (used for external linkage)
 // jl_linkage_blobs.items[2i:2i+1] correspond to build_ids[i]   (0-offset indexing)
-// TODO: Keep this sorted so that we can use binary-search
 arraylist_t jl_linkage_blobs;
 arraylist_t jl_image_relocs;
+
+// Eytzinger tree of images. Used for very fast jl_object_in_image queries
+// See https://algorithmica.org/en/eytzinger
+arraylist_t eytzinger_image_tree;
+arraylist_t eytzinger_idxs;
+static uintptr_t img_min;
+static uintptr_t img_max;
+
+static int ptr_cmp(const void *l, const void *r)
+{
+    uintptr_t left = *(const uintptr_t*)l;
+    uintptr_t right = *(const uintptr_t*)r;
+    return (left > right) - (left < right);
+}
+
+// Build an eytzinger tree from a sorted array
+static int eytzinger(uintptr_t *src, uintptr_t *dest, size_t i, size_t k, size_t n)
+{
+    if (k <= n) {
+        i = eytzinger(src, dest, i, 2 * k, n);
+        dest[k-1] = src[i];
+        i++;
+        i = eytzinger(src, dest, i, 2 * k + 1, n);
+    }
+    return i;
+}
+
+static size_t eyt_obj_idx(jl_value_t *obj) JL_NOTSAFEPOINT
+{
+    size_t n = eytzinger_image_tree.len - 1;
+    if (n == 0)
+        return n;
+    assert(n % 2 == 0 && "Eytzinger tree not even length!");
+    uintptr_t cmp = (uintptr_t) obj;
+    if (cmp <= img_min || cmp > img_max)
+        return n;
+    uintptr_t *tree = (uintptr_t*)eytzinger_image_tree.items;
+    size_t k = 1;
+    // note that k preserves the history of how we got to the current node
+    while (k <= n) {
+        int greater = (cmp > tree[k - 1]);
+        k <<= 1;
+        k |= greater;
+    }
+    // Free to assume k is nonzero, since we start with k = 1
+    // and cmp > gc_img_min
+    // This shift does a fast revert of the path until we get
+    // to a node that evaluated less than cmp.
+    k >>= (__builtin_ctzll(k) + 1);
+    assert(k != 0);
+    assert(k <= n && "Eytzinger tree index out of bounds!");
+    assert(tree[k - 1] < cmp && "Failed to find lower bound for object!");
+    return k - 1;
+}
+
+//used in staticdata.c after we add an image
+void rebuild_image_blob_tree(void)
+{
+    size_t inc = 1 + jl_linkage_blobs.len - eytzinger_image_tree.len;
+    assert(eytzinger_idxs.len == eytzinger_image_tree.len);
+    assert(eytzinger_idxs.max == eytzinger_image_tree.max);
+    arraylist_grow(&eytzinger_idxs, inc);
+    arraylist_grow(&eytzinger_image_tree, inc);
+    eytzinger_idxs.items[eytzinger_idxs.len - 1] = (void*)jl_linkage_blobs.len;
+    eytzinger_image_tree.items[eytzinger_image_tree.len - 1] = (void*)1; // outside image
+    for (size_t i = 0; i < jl_linkage_blobs.len; i++) {
+        assert((uintptr_t) jl_linkage_blobs.items[i] % 4 == 0 && "Linkage blob not 4-byte aligned!");
+        // We abuse the pointer here a little so that a couple of properties are true:
+        // 1. a start and an end are never the same value. This simplifies the binary search.
+        // 2. ends are always after starts. This also simplifies the binary search.
+        // We assume that there exist no 0-size blobs, but that's a safe assumption
+        // since it means nothing could be there anyways
+        uintptr_t val = (uintptr_t) jl_linkage_blobs.items[i];
+        eytzinger_idxs.items[i] = (void*)(val + (i & 1));
+    }
+    qsort(eytzinger_idxs.items, eytzinger_idxs.len - 1, sizeof(void*), ptr_cmp);
+    img_min = (uintptr_t) eytzinger_idxs.items[0];
+    img_max = (uintptr_t) eytzinger_idxs.items[eytzinger_idxs.len - 2] + 1;
+    eytzinger((uintptr_t*)eytzinger_idxs.items, (uintptr_t*)eytzinger_image_tree.items, 0, 1, eytzinger_idxs.len - 1);
+    // Reuse the scratch memory to store the indices
+    // Still O(nlogn) because binary search
+    for (size_t i = 0; i < jl_linkage_blobs.len; i ++) {
+        uintptr_t val = (uintptr_t) jl_linkage_blobs.items[i];
+        // This is the same computation as in the prior for loop
+        uintptr_t eyt_val = val + (i & 1);
+        size_t eyt_idx = eyt_obj_idx((jl_value_t*)(eyt_val + 1)); assert(eyt_idx < eytzinger_idxs.len - 1);
+        assert(eytzinger_image_tree.items[eyt_idx] == (void*)eyt_val && "Eytzinger tree failed to find object!");
+        if (i & 1)
+            eytzinger_idxs.items[eyt_idx] = (void*)n_linkage_blobs();
+        else
+            eytzinger_idxs.items[eyt_idx] = (void*)(i / 2);
+    }
+}
+
+static int eyt_obj_in_img(jl_value_t *obj) JL_NOTSAFEPOINT
+{
+    assert((uintptr_t) obj % 4 == 0 && "Object not 4-byte aligned!");
+    int idx = eyt_obj_idx(obj);
+    // Now we use a tiny trick: tree[idx] & 1 is whether or not tree[idx] is a
+    // start (0) or an end (1) of a blob. If it's a start, then the object is
+    // in the image, otherwise it is not.
+    int in_image = ((uintptr_t)eytzinger_image_tree.items[idx] & 1) == 0;
+    return in_image;
+}
+
+size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    assert((uintptr_t) v % 4 == 0 && "Object not 4-byte aligned!");
+    int eyt_idx = eyt_obj_idx(v);
+    // We fill the invalid slots with the length, so we can just return that
+    size_t idx = (size_t) eytzinger_idxs.items[eyt_idx];
+    return idx;
+}
+
+uint8_t jl_object_in_image(jl_value_t *obj) JL_NOTSAFEPOINT
+{
+    return eyt_obj_in_img(obj);
+}
 
 // hash of definitions for predefined function pointers
 static htable_t fptr_to_id;
@@ -1758,6 +1876,7 @@ void gc_sweep_sysimg(void)
             last_pos = pos;
             jl_taggedvalue_t *o = (jl_taggedvalue_t *)(base + pos);
             o->bits.gc = GC_OLD;
+            assert(o->bits.in_image == 1);
         }
     }
 }
@@ -2126,7 +2245,7 @@ static void jl_strip_all_codeinfos(void)
 // --- entry points ---
 
 jl_array_t *jl_global_roots_table;
-static jl_mutex_t global_roots_lock;
+jl_mutex_t global_roots_lock;
 
 JL_DLLEXPORT int jl_is_globally_rooted(jl_value_t *val JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
 {
@@ -2366,6 +2485,10 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         jl_write_relocations(&s);
     }
 
+    // This ensures that we can use the low bit of addresses for
+    // identifying end pointers in gc's eytzinger search.
+    write_padding(&sysimg, 4 - (sysimg.size % 4));
+
     if (sysimg.size > ((uintptr_t)1 << RELOC_TAG_OFFSET)) {
         jl_printf(
             JL_STDERR,
@@ -2515,7 +2638,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
 {
     jl_gc_collect(JL_GC_FULL);
     jl_gc_collect(JL_GC_INCREMENTAL);   // sweep finalizers
-    JL_TIMING(SYSIMG_DUMP);
+    JL_TIMING(SYSIMG_DUMP, SYSIMG_DUMP);
 
     // iff emit_split
     // write header and src_text to one file f/s
@@ -2658,6 +2781,8 @@ JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
 // }
 #endif
 
+extern void rebuild_image_blob_tree(void);
+
 static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl_array_t *depmods, uint64_t checksum,
                                 /* outputs */    jl_array_t **restored,         jl_array_t **init_order,
                                                  jl_array_t **extext_methods,
@@ -2665,7 +2790,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                                                  jl_array_t **ext_targets, jl_array_t **edges,
                                                  char **base, arraylist_t *ccallable_list, pkgcachesizes *cachesizes) JL_GC_DISABLED
 {
-    JL_TIMING(SYSIMG_LOAD);
     int en = jl_gc_enable(0);
     ios_t sysimg, const_data, symbols, relocs, gvar_record, fptr_record;
     jl_serializer_state s;
@@ -2805,7 +2929,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         *base = image_base;
 
     s.s = &sysimg;
-    jl_read_reloclist(&s, s.link_ids_gctags, GC_OLD); // gctags
+    jl_read_reloclist(&s, s.link_ids_gctags, GC_OLD | GC_IN_IMAGE); // gctags
     size_t sizeof_tags = ios_pos(&relocs);
     (void)sizeof_tags;
     jl_read_reloclist(&s, s.link_ids_relocs, 0); // general relocs
@@ -2916,7 +3040,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             arraylist_push(&cleanup_list, (void*)obj);
         }
         if (tag)
-            *pfld = (uintptr_t)newobj | GC_OLD;
+            *pfld = (uintptr_t)newobj | GC_OLD | GC_IN_IMAGE;
         else
             *pfld = (uintptr_t)newobj;
         assert(!(image_base < (char*)newobj && (char*)newobj <= image_base + sizeof_sysimg + sizeof(uintptr_t)));
@@ -2959,6 +3083,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             memset(o, 0xba, sizeof(jl_value_t*) + sizeof(jl_datatype_t));
         else
             memset(o, 0xba, sizeof(jl_value_t*) + 0); // singleton
+        o->bits.in_image = 1;
     }
     arraylist_grow(&cleanup_list, -cleanup_list.len);
     // finally cache all our new types now
@@ -3026,6 +3151,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         jl_value_t *t = jl_typeof(item);
         if (t == (jl_value_t*)jl_method_instance_type)
             memset(o, 0xba, sizeof(jl_value_t*) * 3); // only specTypes and sparams fields stored
+        o->bits.in_image = 1;
     }
     arraylist_free(&cleanup_list);
     for (size_t i = 0; i < s.fixup_objs.len; i++) {
@@ -3151,6 +3277,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     arraylist_push(&jl_linkage_blobs, (void*)image_base);
     arraylist_push(&jl_linkage_blobs, (void*)(image_base + sizeof_sysimg + sizeof(uintptr_t)));
     arraylist_push(&jl_image_relocs, (void*)relocs_base);
+    rebuild_image_blob_tree();
 
     // jl_printf(JL_STDOUT, "%ld blobs to link against\n", jl_linkage_blobs.len >> 1);
     jl_gc_enable(en);
@@ -3183,8 +3310,10 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_
 }
 
 // TODO?: refactor to make it easier to create the "package inspector"
-static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *image, jl_array_t *depmods, int completeinfo)
+static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *image, jl_array_t *depmods, int completeinfo, const char *pkgname)
 {
+    JL_TIMING(LOAD_IMAGE, LOAD_Pkgimg);
+    jl_timing_printf(JL_TIMING_CURRENT_BLOCK, pkgname);
     uint64_t checksum = 0;
     int64_t dataendpos = 0;
     int64_t datastartpos = 0;
@@ -3255,19 +3384,20 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
 
 static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image, uint32_t checksum)
 {
+    JL_TIMING(LOAD_IMAGE, LOAD_Sysimg);
     jl_restore_system_image_from_stream_(f, image, NULL, checksum | ((uint64_t)0xfdfcfbfa << 32), NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
-JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, jl_image_t *image, size_t sz, jl_array_t *depmods, int completeinfo)
+JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, jl_image_t *image, size_t sz, jl_array_t *depmods, int completeinfo, const char *pkgname)
 {
     ios_t f;
     ios_static_buffer(&f, (char*)buf, sz);
-    jl_value_t *ret = jl_restore_package_image_from_stream(&f, image, depmods, completeinfo);
+    jl_value_t *ret = jl_restore_package_image_from_stream(&f, image, depmods, completeinfo, pkgname);
     ios_close(&f);
     return ret;
 }
 
-JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods, int completeinfo)
+JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods, int completeinfo, const char *pkgname)
 {
     ios_t f;
     if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {
@@ -3275,7 +3405,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *d
             "Cache file \"%s\" not found.\n", fname);
     }
     jl_image_t pkgimage = {};
-    jl_value_t *ret = jl_restore_package_image_from_stream(&f, &pkgimage, depmods, completeinfo);
+    jl_value_t *ret = jl_restore_package_image_from_stream(&f, &pkgimage, depmods, completeinfo, pkgname);
     ios_close(&f);
     return ret;
 }
@@ -3325,7 +3455,7 @@ JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len)
     JL_SIGATOMIC_END();
 }
 
-JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, jl_array_t *depmods, int completeinfo)
+JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, jl_array_t *depmods, int completeinfo, const char *pkgname)
 {
     void *pkgimg_handle = jl_dlopen(fname, JL_RTLD_LAZY);
     if (!pkgimg_handle) {
@@ -3346,7 +3476,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
 
     jl_image_t pkgimage = jl_init_processor_pkgimg(pkgimg_handle);
 
-    jl_value_t* mod = jl_restore_incremental_from_buf(pkgimg_data, &pkgimage, *plen, depmods, completeinfo);
+    jl_value_t* mod = jl_restore_incremental_from_buf(pkgimg_data, &pkgimage, *plen, depmods, completeinfo, pkgname);
 
     return mod;
 }

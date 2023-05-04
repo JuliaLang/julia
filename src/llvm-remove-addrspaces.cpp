@@ -51,7 +51,7 @@ public:
             else {
                 //Remove once opaque pointer transition is complete
                 DstTy = PointerType::get(
-                        remapType(Ty->getPointerElementType()),
+                        remapType(Ty->getNonOpaquePointerElementType()),
                         ASRemapper(Ty->getAddressSpace()));
             }
         }
@@ -161,7 +161,7 @@ public:
                     auto ptrty = cast<PointerType>(Src->getType()->getScalarType());
                     //Remove once opaque pointer transition is complete
                     if (!ptrty->isOpaque()) {
-                        Type *SrcTy = remapType(ptrty->getPointerElementType());
+                        Type *SrcTy = remapType(ptrty->getNonOpaquePointerElementType());
                         DstV = CE->getWithOperands(Ops, Ty, false, SrcTy);
                     }
                 }
@@ -356,11 +356,9 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
 
     // Similarly, copy over and rewrite function bodies
     for (Function *F : Functions) {
-        if (F->isDeclaration())
-            continue;
-
         Function *NF = cast<Function>(VMap[F]);
         LLVM_DEBUG(dbgs() << "Processing function " << NF->getName() << "\n");
+        // we also need this to run for declarations, or attributes won't be copied
 
         Function::arg_iterator DestI = NF->arg_begin();
         for (Function::const_arg_iterator I = F->arg_begin(); I != F->arg_end();
@@ -385,8 +383,7 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
                 &TypeRemapper,
                 &Materializer);
 
-        // CloneFunctionInto unconditionally copies the attributes from F to NF,
-        // without considering e.g. the byval attribute type.
+        // Update function attributes that contain types
         AttributeList Attrs = F->getAttributes();
         LLVMContext &C = F->getContext();
         for (unsigned i = 0; i < Attrs.getNumAttrSets(); ++i) {
@@ -410,9 +407,6 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
             }
         }
         NF->setAttributes(Attrs);
-
-        if (F->hasPersonalityFn())
-            NF->setPersonalityFn(MapValue(F->getPersonalityFn(), VMap));
 
         copyComdat(NF, F);
 

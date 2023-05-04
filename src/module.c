@@ -36,7 +36,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
     m->max_methods = -1;
     m->hash = parent == NULL ? bitmix(name->hash, jl_module_type->hash) :
         bitmix(name->hash, parent->hash);
-    JL_MUTEX_INIT(&m->lock);
+    JL_MUTEX_INIT(&m->lock, "module->lock");
     jl_atomic_store_relaxed(&m->bindings, jl_emptysvec);
     jl_atomic_store_relaxed(&m->bindingkeyset, (jl_array_t*)jl_an_empty_vec_any);
     arraylist_new(&m->usings, 0);
@@ -182,6 +182,7 @@ static jl_binding_t *new_binding(jl_module_t *mod, jl_sym_t *name)
     b->imported = 0;
     b->deprecated = 0;
     b->usingfailed = 0;
+    b->padding = 0;
     JL_GC_PUSH1(&b);
     b->globalref = jl_new_globalref(mod, name, b);
     JL_GC_POP();
@@ -927,6 +928,15 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
 
 JL_DLLEXPORT jl_sym_t *jl_module_name(jl_module_t *m) { return m->name; }
 JL_DLLEXPORT jl_module_t *jl_module_parent(jl_module_t *m) { return m->parent; }
+jl_module_t *jl_module_root(jl_module_t *m)
+{
+    while (1) {
+        if (m->parent == NULL || m->parent == m)
+            return m;
+        m = m->parent;
+    }
+}
+
 JL_DLLEXPORT jl_uuid_t jl_module_build_id(jl_module_t *m) { return m->build_id; }
 JL_DLLEXPORT jl_uuid_t jl_module_uuid(jl_module_t* m) { return m->uuid; }
 
@@ -962,19 +972,15 @@ JL_DLLEXPORT void jl_clear_implicit_imports(jl_module_t *m)
     JL_UNLOCK(&m->lock);
 }
 
-JL_DLLEXPORT void jl_init_restored_modules(jl_array_t *init_order)
+JL_DLLEXPORT void jl_init_restored_module(jl_value_t *mod)
 {
-    int i, l = jl_array_len(init_order);
-    for (i = 0; i < l; i++) {
-        jl_value_t *mod = jl_array_ptr_ref(init_order, i);
-        if (!jl_generating_output() || jl_options.incremental) {
-            jl_module_run_initializer((jl_module_t*)mod);
-        }
-        else {
-            if (jl_module_init_order == NULL)
-                jl_module_init_order = jl_alloc_vec_any(0);
-            jl_array_ptr_1d_push(jl_module_init_order, mod);
-        }
+    if (!jl_generating_output() || jl_options.incremental) {
+        jl_module_run_initializer((jl_module_t*)mod);
+    }
+    else {
+        if (jl_module_init_order == NULL)
+            jl_module_init_order = jl_alloc_vec_any(0);
+        jl_array_ptr_1d_push(jl_module_init_order, mod);
     }
 }
 

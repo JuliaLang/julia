@@ -75,6 +75,9 @@ function copy(c::CodeInfo)
     cnew.code = copy_exprargs(cnew.code)
     cnew.slotnames = copy(cnew.slotnames)
     cnew.slotflags = copy(cnew.slotflags)
+    if cnew.slottypes !== nothing
+        cnew.slottypes = copy(cnew.slottypes)
+    end
     cnew.codelocs  = copy(cnew.codelocs)
     cnew.linetable = copy(cnew.linetable::Union{Vector{Any},Vector{Core.LineInfoNode}})
     cnew.ssaflags  = copy(cnew.ssaflags)
@@ -962,10 +965,7 @@ macro generated(f)
                          Expr(:block,
                               lno,
                               Expr(:if, Expr(:generated),
-                                   # https://github.com/JuliaLang/julia/issues/25678
-                                   Expr(:block,
-                                        :(local $tmp = $body),
-                                        :(if $tmp isa $(GlobalRef(Core, :CodeInfo)); return $tmp; else $tmp; end)),
+                                   body,
                                    Expr(:block,
                                         Expr(:meta, :generated_only),
                                         Expr(:return, nothing))))))

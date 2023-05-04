@@ -629,6 +629,7 @@ static inline std::vector<TargetData<n>> &get_cmdline_targets(F &&feature_cb)
 template<typename F>
 static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
 {
+    JL_TIMING(LOAD_IMAGE, LOAD_Processor);
     jl_image_t res{};
 
     const jl_image_pointers_t *pointers;
@@ -822,20 +823,24 @@ static inline void check_cmdline(T &&cmdline, bool imaging)
     // sysimg means. Make it an error for now.
     if (!imaging) {
         if (cmdline.size() > 1) {
-            jl_error("More than one command line CPU targets specified "
-                     "without a `--output-` flag specified");
+            jl_safe_printf("More than one command line CPU targets specified "
+                      "without a `--output-` flag specified");
+            exit(1);
         }
         if (cmdline[0].en.flags & JL_TARGET_CLONE_ALL) {
-            jl_error("\"clone_all\" feature specified "
-                     "without a `--output-` flag specified");
+            jl_safe_printf("\"clone_all\" feature specified "
+                      "without a `--output-` flag specified");
+            exit(1);
         }
         if (cmdline[0].en.flags & JL_TARGET_OPTSIZE) {
-            jl_error("\"opt_size\" feature specified "
-                     "without a `--output-` flag specified");
+            jl_safe_printf("\"opt_size\" feature specified "
+                      "without a `--output-` flag specified");
+            exit(1);
         }
         if (cmdline[0].en.flags & JL_TARGET_MINSIZE) {
-            jl_error("\"min_size\" feature specified "
-                     "without a `--output-` flag specified");
+            jl_safe_printf("\"min_size\" feature specified "
+                      "without a `--output-` flag specified");
+            exit(1);
         }
     }
 }

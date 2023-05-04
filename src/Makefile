@@ -99,7 +99,7 @@ ifeq ($(USE_SYSTEM_LIBUV),0)
 UV_HEADERS += uv.h
 UV_HEADERS += uv/*.h
 endif
-PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_assert.h julia_threads.h julia_fasttls.h julia_locks.h julia_atomics.h jloptions.h)
+PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,work-stealing-queue.h julia.h julia_assert.h julia_threads.h julia_fasttls.h julia_locks.h julia_atomics.h jloptions.h)
 ifeq ($(OS),WINNT)
 PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,win32_ucontext.h)
 endif
@@ -157,8 +157,8 @@ LIBJULIA_PATH_REL := libjulia
 endif
 
 COMMON_LIBPATHS := -L$(build_libdir) -L$(build_shlibdir)
-RT_LIBS := $(WHOLE_ARCHIVE) $(LIBUV) $(WHOLE_ARCHIVE) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(LIBUNWIND) $(RT_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT)
-CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT)
+RT_LIBS := $(WHOLE_ARCHIVE) $(LIBUV) $(WHOLE_ARCHIVE) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(LIBUNWIND) $(RT_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI)
+CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI)
 RT_DEBUG_LIBS := $(COMMON_LIBPATHS) $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp-debug.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport-debug.a -ljulia-debug $(RT_LIBS)
 CG_DEBUG_LIBS := $(COMMON_LIBPATHS) $(CG_LIBS) -ljulia-debug -ljulia-internal-debug
 RT_RELEASE_LIBS := $(COMMON_LIBPATHS) $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport.a -ljulia $(RT_LIBS)

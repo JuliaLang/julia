@@ -32,6 +32,14 @@ struct StmtInfo
     used::Bool
 end
 
+struct MethodInfo
+    propagate_inbounds::Bool
+    method_for_inference_limit_heuristics::Union{Nothing,Method}
+end
+MethodInfo(src::CodeInfo) = MethodInfo(
+    src.propagate_inbounds,
+    src.method_for_inference_limit_heuristics::Union{Nothing,Method})
+
 """
     v::VarState
 
@@ -69,6 +77,9 @@ mutable struct InferenceResult
     argescapes               # ::ArgEscapeCache if optimized, nothing otherwise
     must_be_codeinf::Bool    # if this must come out as CodeInfo or leaving it as IRCode is ok
     function InferenceResult(linfo::MethodInstance, cache_argtypes::Vector{Any}, overridden_by_const::BitVector)
+        # def = linfo.def
+        # nargs = def isa Method ? Int(def.nargs) : 0
+        # @assert length(cache_argtypes) == nargs
         return new(linfo, cache_argtypes, overridden_by_const, nothing, nothing,
             WorldRange(), Effects(), Effects(), nothing, true)
     end
@@ -338,7 +349,7 @@ function NativeInterpreter(world::UInt = get_world_counter();
                            inf_params::InferenceParams = InferenceParams(),
                            opt_params::OptimizationParams = OptimizationParams())
     # Sometimes the caller is lazy and passes typemax(UInt).
-    # we cap it to the current world age
+    # we cap it to the current world age for correctness
     if world == typemax(UInt)
         world = get_world_counter()
     end
@@ -462,12 +473,22 @@ optimizer_lattice(interp::NativeInterpreter) = OptimizerLattice(SimpleInferenceL
 """
     switch_to_irinterp(interp::AbstractInterpreter) -> irinterp::AbstractInterpreter
 
-Optionally convert `interp` to new `irinterp::AbstractInterpreter` to perform semi-concrete
-interpretation. `NativeInterpreter` uses this interface to switch its lattice to
-`optimizer_lattice` during semi-concrete interpretation on `IRCode`.
+This interface allows `ir_abstract_constant_propagation` to convert `interp` to a new
+`irinterp::AbstractInterpreter` to perform semi-concrete interpretation.
+`NativeInterpreter` uses this interface to switch its lattice to `optimizer_lattice` during
+semi-concrete interpretation on `IRCode`.
 """
 switch_to_irinterp(interp::AbstractInterpreter) = interp
 switch_to_irinterp(interp::NativeInterpreter) = NativeInterpreter(interp; irinterp=true)
+
+"""
+    switch_from_irinterp(irinterp::AbstractInterpreter) -> interp::AbstractInterpreter
+
+The inverse operation of `switch_to_irinterp`, allowing `typeinf` to convert `irinterp` back
+to a new `interp::AbstractInterpreter` to perform ordinary abstract interpretation.
+"""
+switch_from_irinterp(irinterp::AbstractInterpreter) = irinterp
+switch_from_irinterp(irinterp::NativeInterpreter) = NativeInterpreter(irinterp; irinterp=false)
 
 abstract type CallInfo end
 

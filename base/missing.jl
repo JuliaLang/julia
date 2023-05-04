@@ -41,6 +41,7 @@ nonmissingtype(::Type{T}) where {T} = typesplit(T, Missing)
 function nonmissingtype_checked(T::Type)
     R = nonmissingtype(T)
     R >: T && error("could not compute non-missing type")
+    R <: Union{} && error("cannot convert a value to missing for assignment")
     return R
 end
 
@@ -68,7 +69,6 @@ convert(::Type{T}, x::T) where {T>:Missing} = x
 convert(::Type{T}, x::T) where {T>:Union{Missing, Nothing}} = x
 convert(::Type{T}, x) where {T>:Missing} = convert(nonmissingtype_checked(T), x)
 convert(::Type{T}, x) where {T>:Union{Missing, Nothing}} = convert(nonmissingtype_checked(nonnothingtype_checked(T)), x)
-
 
 # Comparison operators
 ==(::Missing, ::Missing) = missing

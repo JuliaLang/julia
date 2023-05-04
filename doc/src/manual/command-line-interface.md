@@ -69,7 +69,7 @@ Note that although you should have a `~/.julia` directory once you've run Julia 
 first time, you may need to create the `~/.julia/config` folder and the
 `~/.julia/config/startup.jl` file if you use it.
 
-To have startup code run only in [The Julia REPL] (and not when `julia` is *e.g.* run
+To have startup code run only in [The Julia REPL](@ref) (and not when `julia` is *e.g.* run
 on a script), use [`atreplinit`](@ref) in `startup.jl`:
 
 ```julia
@@ -106,8 +106,9 @@ The following is a complete list of command-line switches available when launchi
 |`-e`, `--eval <expr>`                  |Evaluate `<expr>`|
 |`-E`, `--print <expr>`                 |Evaluate `<expr>` and display the result|
 |`-L`, `--load <file>`                  |Load `<file>` immediately on all processors|
-|`-t`, `--threads {N\|auto`}            |Enable N threads; `auto` tries to infer a useful default number of threads to use but the exact behavior might change in the future.  Currently, `auto` uses the number of CPUs assigned to this julia process based on the OS-specific affinity assignment interface, if supported (Linux and Windows). If this is not supported (macOS) or process affinity is not configured, it uses the number of CPU threads.|
-|`-p`, `--procs {N\|auto`}              |Integer value N launches N additional local worker processes; `auto` launches as many workers as the number of local CPU threads (logical cores)|
+|`-t`, `--threads {N\|auto}`            |Enable N threads; `auto` tries to infer a useful default number of threads to use but the exact behavior might change in the future.  Currently, `auto` uses the number of CPUs assigned to this julia process based on the OS-specific affinity assignment interface, if supported (Linux and Windows). If this is not supported (macOS) or process affinity is not configured, it uses the number of CPU threads.|
+| `--gcthreads {N}`                     |Enable N GC threads; If unspecified is set to half of the compute worker threads.|
+|`-p`, `--procs {N\|auto}`              |Integer value N launches N additional local worker processes; `auto` launches as many workers as the number of local CPU threads (logical cores)|
 |`--machine-file <file>`                |Run processes on hosts listed in `<file>`|
 |`-i`                                   |Interactive mode; REPL runs and `isinteractive()` is true|
 |`-q`, `--quiet`                        |Quiet startup: no banner, suppress REPL warnings|

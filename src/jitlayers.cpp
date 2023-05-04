@@ -178,7 +178,8 @@ static jl_callptr_t _jl_compile_codeinst(
         jl_code_instance_t *codeinst,
         jl_code_info_t *src,
         size_t world,
-        orc::ThreadSafeContext context)
+        orc::ThreadSafeContext context,
+        bool is_recompile)
 {
     // caller must hold codegen_lock
     // and have disabled finalizers
@@ -190,8 +191,14 @@ static jl_callptr_t _jl_compile_codeinst(
     assert(jl_is_code_instance(codeinst));
     assert(codeinst->min_world <= world && (codeinst->max_world >= world || codeinst->max_world == 0) &&
         "invalid world for method-instance");
-    assert(src && jl_is_code_info(src));
 
+    JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
+#ifdef USE_TRACY
+    if (is_recompile) {
+        TracyCZoneCtx ctx = *(JL_TIMING_CURRENT_BLOCK->tracy_ctx);
+        TracyCZoneColor(ctx, 0xFFA500);
+    }
+#endif
     jl_callptr_t fptr = NULL;
     // emit the code in LLVM IR form
     jl_codegen_params_t params(std::move(context), jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple()); // Locks the context
@@ -245,10 +252,13 @@ static jl_callptr_t _jl_compile_codeinst(
         MaxWorkqueueSize.updateMax(emitted.size());
         IndirectCodeinsts += emitted.size() - 1;
     }
-    JL_TIMING(LLVM_MODULE_FINISH);
 
+    size_t i = 0;
     for (auto &def : emitted) {
         jl_code_instance_t *this_code = def.first;
+        if (i < jl_timing_print_limit)
+            jl_timing_show_func_sig(this_code->def->specTypes, JL_TIMING_CURRENT_BLOCK);
+
         jl_llvm_functions_t decls = std::get<1>(def.second);
         jl_callptr_t addr;
         bool isspecsig = false;
@@ -257,6 +267,9 @@ static jl_callptr_t _jl_compile_codeinst(
         }
         else if (decls.functionObject == "jl_fptr_sparam") {
             addr = jl_fptr_sparam_addr;
+        }
+        else if (decls.functionObject == "jl_f_opaque_closure_call") {
+            addr = jl_f_opaque_closure_call_addr;
         }
         else {
             addr = (jl_callptr_t)getAddressForFunction(decls.functionObject);
@@ -290,7 +303,10 @@ static jl_callptr_t _jl_compile_codeinst(
         }
         if (this_code == codeinst)
             fptr = addr;
+        i++;
     }
+    if (i > jl_timing_print_limit)
+        jl_timing_printf(JL_TIMING_CURRENT_BLOCK, "... <%d methods truncated>", i - 10);
 
     uint64_t end_time = 0;
     if (timed)
@@ -467,7 +483,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
             }
         }
         ++SpecFPtrCount;
-        _jl_compile_codeinst(codeinst, src, world, *jl_ExecutionEngine->getContext());
+        _jl_compile_codeinst(codeinst, src, world, *jl_ExecutionEngine->getContext(), is_recompile);
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL)
             codeinst = NULL;
     }
@@ -487,6 +503,19 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     }
     JL_GC_POP();
     return codeinst;
+}
+
+extern "C" JL_DLLEXPORT
+void jl_generate_fptr_for_oc_wrapper_impl(jl_code_instance_t *oc_wrap)
+{
+    if (jl_atomic_load_relaxed(&oc_wrap->invoke) != NULL) {
+        return;
+    }
+    JL_LOCK(&jl_codegen_lock);
+    if (jl_atomic_load_relaxed(&oc_wrap->invoke) == NULL) {
+        _jl_compile_codeinst(oc_wrap, NULL, 1, *jl_ExecutionEngine->getContext(), 0);
+    }
+    JL_UNLOCK(&jl_codegen_lock); // Might GC
 }
 
 extern "C" JL_DLLEXPORT
@@ -514,7 +543,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
                 // TODO: this is wrong
                 assert(def->generator);
                 // TODO: jl_code_for_staged can throw
-                src = jl_code_for_staged(unspec->def);
+                src = jl_code_for_staged(unspec->def, ~(size_t)0);
             }
             if (src && (jl_value_t*)src != jl_nothing)
                 src = jl_uncompress_ir(def, NULL, (jl_array_t*)src);
@@ -524,7 +553,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         }
         assert(src && jl_is_code_info(src));
         ++UnspecFPtrCount;
-        _jl_compile_codeinst(unspec, src, unspec->min_world, *jl_ExecutionEngine->getContext());
+        _jl_compile_codeinst(unspec, src, unspec->min_world, *jl_ExecutionEngine->getContext(), 0);
         jl_callptr_t null = nullptr;
         // if we hit a codegen bug (or ran into a broken generated function or llvmcall), fall back to the interpreter as a last resort
         jl_atomic_cmpswap(&unspec->invoke, &null, jl_fptr_interpret_call_addr);
@@ -574,7 +603,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
                 if (jl_is_method(def)) {
                     if (!src) {
                         // TODO: jl_code_for_staged can throw
-                        src = def->generator ? jl_code_for_staged(mi) : (jl_code_info_t*)def->source;
+                        src = def->generator ? jl_code_for_staged(mi, world) : (jl_code_info_t*)def->source;
                     }
                     if (src && (jl_value_t*)src != jl_nothing)
                         src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
@@ -583,7 +612,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
                 specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                 if (src && jl_is_code_info(src)) {
                     if (fptr == (uintptr_t)jl_fptr_const_return_addr && specfptr == 0) {
-                        fptr = (uintptr_t)_jl_compile_codeinst(codeinst, src, world, *jl_ExecutionEngine->getContext());
+                        fptr = (uintptr_t)_jl_compile_codeinst(codeinst, src, world, *jl_ExecutionEngine->getContext(), 0);
                         specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                     }
                 }
@@ -1103,6 +1132,9 @@ namespace {
         int optlevel;
         PMCreator(TargetMachine &TM, int optlevel) JL_NOTSAFEPOINT
             : TM(cantFail(createJTMBFromTM(TM, optlevel).createTargetMachine())), optlevel(optlevel) {}
+        // overload for newpm compatibility
+        PMCreator(TargetMachine &TM, int optlevel, std::vector<std::function<void()>> &) JL_NOTSAFEPOINT
+            : PMCreator(TM, optlevel) {}
         PMCreator(const PMCreator &other) JL_NOTSAFEPOINT
             : PMCreator(*other.TM, other.optlevel) {}
         PMCreator(PMCreator &&other) JL_NOTSAFEPOINT
@@ -1128,18 +1160,23 @@ namespace {
     struct PMCreator {
         orc::JITTargetMachineBuilder JTMB;
         OptimizationLevel O;
-        PMCreator(TargetMachine &TM, int optlevel) JL_NOTSAFEPOINT
-            : JTMB(createJTMBFromTM(TM, optlevel)), O(getOptLevel(optlevel)) {}
+        std::vector<std::function<void()>> &printers;
+        PMCreator(TargetMachine &TM, int optlevel, std::vector<std::function<void()>> &printers) JL_NOTSAFEPOINT
+            : JTMB(createJTMBFromTM(TM, optlevel)), O(getOptLevel(optlevel)), printers(printers) {}
 
         auto operator()() JL_NOTSAFEPOINT {
-            return std::make_unique<NewPM>(cantFail(JTMB.createTargetMachine()), O);
+            auto NPM = std::make_unique<NewPM>(cantFail(JTMB.createTargetMachine()), O);
+            printers.push_back([NPM = NPM.get()]() JL_NOTSAFEPOINT {
+                NPM->printTimers();
+            });
+            return NPM;
         }
     };
 #endif
 
     struct OptimizerT {
-        OptimizerT(TargetMachine &TM, int optlevel) JL_NOTSAFEPOINT
-            : optlevel(optlevel), PMs(PMCreator(TM, optlevel)) {}
+        OptimizerT(TargetMachine &TM, int optlevel, std::vector<std::function<void()>> &printers) JL_NOTSAFEPOINT
+            : optlevel(optlevel), PMs(PMCreator(TM, optlevel, printers)) {}
         OptimizerT(OptimizerT&) JL_NOTSAFEPOINT = delete;
         OptimizerT(OptimizerT&&) JL_NOTSAFEPOINT = default;
 
@@ -1175,7 +1212,7 @@ namespace {
                     }
                 }
 
-                JL_TIMING(LLVM_OPT);
+                JL_TIMING(LLVM_OPT, LLVM_OPT);
 
                 //Run the optimization
                 assert(!verifyModule(M, &errs()));
@@ -1247,11 +1284,15 @@ llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
     return jl_data_layout;
 }
 
-JuliaOJIT::PipelineT::PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel)
+JuliaOJIT::PipelineT::PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel, std::vector<std::function<void()>> &PrintLLVMTimers)
   : CompileLayer(BaseLayer.getExecutionSession(), BaseLayer,
       std::make_unique<CompilerT>(orc::irManglingOptionsFromTargetOptions(TM.Options), TM, optlevel)),
     OptimizeLayer(CompileLayer.getExecutionSession(), CompileLayer,
-            llvm::orc::IRTransformLayer::TransformFunction(OptimizerT(TM, optlevel))) {}
+            llvm::orc::IRTransformLayer::TransformFunction(OptimizerT(TM, optlevel, PrintLLVMTimers))) {}
+
+#ifdef _COMPILER_ASAN_ENABLED_
+int64_t ___asan_globals_registered;
+#endif
 
 JuliaOJIT::JuliaOJIT()
   : TM(createTargetMachine()),
@@ -1285,10 +1326,10 @@ JuliaOJIT::JuliaOJIT()
 #endif
     LockLayer(ObjectLayer),
     Pipelines{
-        std::make_unique<PipelineT>(LockLayer, *TM, 0),
-        std::make_unique<PipelineT>(LockLayer, *TM, 1),
-        std::make_unique<PipelineT>(LockLayer, *TM, 2),
-        std::make_unique<PipelineT>(LockLayer, *TM, 3),
+        std::make_unique<PipelineT>(LockLayer, *TM, 0, PrintLLVMTimers),
+        std::make_unique<PipelineT>(LockLayer, *TM, 1, PrintLLVMTimers),
+        std::make_unique<PipelineT>(LockLayer, *TM, 2, PrintLLVMTimers),
+        std::make_unique<PipelineT>(LockLayer, *TM, 3, PrintLLVMTimers),
     },
     OptSelLayer(Pipelines)
 {
@@ -1363,6 +1404,7 @@ JuliaOJIT::JuliaOJIT()
 
     JD.addToLinkOrder(GlobalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
 
+#if JULIA_FLOAT16_ABI == 1
     orc::SymbolAliasMap jl_crt = {
         { mangle("__gnu_h2f_ieee"), { mangle("julia__gnu_h2f_ieee"), JITSymbolFlags::Exported } },
         { mangle("__extendhfsf2"),  { mangle("julia__gnu_h2f_ieee"), JITSymbolFlags::Exported } },
@@ -1371,6 +1413,7 @@ JuliaOJIT::JuliaOJIT()
         { mangle("__truncdfhf2"),   { mangle("julia__truncdfhf2"),   JITSymbolFlags::Exported } }
     };
     cantFail(GlobalJD.define(orc::symbolAliases(jl_crt)));
+#endif
 
 #ifdef MSAN_EMUTLS_WORKAROUND
     orc::SymbolMap msan_crt;
@@ -1393,6 +1436,11 @@ JuliaOJIT::JuliaOJIT()
         reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::origin)), JITSymbolFlags::Exported);
     cantFail(GlobalJD.define(orc::absoluteSymbols(msan_crt)));
 #endif
+#ifdef _COMPILER_ASAN_ENABLED_
+    orc::SymbolMap asan_crt;
+    asan_crt[mangle("___asan_globals_registered")] = JITEvaluatedSymbol::fromPointer(&___asan_globals_registered, JITSymbolFlags::Exported);
+    cantFail(JD.define(orc::absoluteSymbols(asan_crt)));
+#endif
 }
 
 JuliaOJIT::~JuliaOJIT() = default;
@@ -1410,7 +1458,7 @@ void JuliaOJIT::addGlobalMapping(StringRef Name, uint64_t Addr)
 
 void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 {
-    JL_TIMING(LLVM_MODULE_FINISH);
+    JL_TIMING(LLVM_ORC, LLVM_ORC);
     ++ModulesAdded;
     orc::SymbolLookupSet NewExports;
     TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT {
@@ -1583,6 +1631,16 @@ size_t JuliaOJIT::getTotalBytes() const
 }
 #endif
 
+void JuliaOJIT::printTimers()
+{
+#ifdef JL_USE_NEW_PM
+    for (auto &printer : PrintLLVMTimers) {
+        printer();
+    }
+#endif
+    reportAndResetTimings();
+}
+
 JuliaOJIT *jl_ExecutionEngine;
 
 // destructively move the contents of src into dest
@@ -1694,8 +1752,8 @@ void jl_merge_module(orc::ThreadSafeModule &destTSM, orc::ThreadSafeModule srcTS
             NamedMDNode *sNMD = src.getNamedMetadata("llvm.dbg.cu");
             if (sNMD) {
                 NamedMDNode *dNMD = dest.getOrInsertNamedMetadata("llvm.dbg.cu");
-                for (NamedMDNode::op_iterator I = sNMD->op_begin(), E = sNMD->op_end(); I != E; ++I) {
-                    dNMD->addOperand(*I);
+                for (MDNode *I : sNMD->operands()) {
+                    dNMD->addOperand(I);
                 }
             }
         });
