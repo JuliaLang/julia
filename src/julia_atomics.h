@@ -79,8 +79,8 @@ enum jl_memory_order {
  * `mfence`. GCC 11 did switch to this representation. See #48123
  */
 #if defined(_CPU_X86_64_) && \
-	((defined(__GNUC__) && __GNUC__ < 11) || \
-	 (defined(__clang__)))
+    ((defined(__GNUC__) && __GNUC__ < 11) || \
+     (defined(__clang__)))
     #define jl_fence() __asm__ volatile("lock orq $0 , (%rsp)")
 #else
     #define jl_fence() atomic_thread_fence(memory_order_seq_cst)
