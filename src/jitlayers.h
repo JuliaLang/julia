@@ -44,7 +44,12 @@
 // for Mac/aarch64.
 // #define JL_FORCE_JITLINK
 
-#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_) || defined(JL_FORCE_JITLINK)
+#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
+# define HAS_SANITIZER
+#endif
+// The sanitizers don't play well with our memory manager
+
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_) || defined(JL_FORCE_JITLINK) || JL_LLVM_VERSION >= 150000 && defined(HAS_SANITIZER)
 # if JL_LLVM_VERSION < 130000
 #  pragma message("On aarch64-darwin, LLVM version >= 13 is required for JITLink; fallback suffers from occasional segfaults")
 # endif
@@ -73,7 +78,7 @@ GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M) JL_NOTSAFEPOINT;
 DataLayout jl_create_datalayout(TargetMachine &TM) JL_NOTSAFEPOINT;
 
 static inline bool imaging_default() JL_NOTSAFEPOINT {
-    return jl_options.image_codegen || (jl_generating_output() && jl_options.use_pkgimages);
+    return jl_options.image_codegen || (jl_generating_output() && (!jl_options.incremental || jl_options.use_pkgimages));
 }
 
 struct OptimizationOptions {
@@ -91,6 +96,14 @@ struct OptimizationOptions {
     }
 };
 
+// LLVM's new pass manager is scheduled to replace the legacy pass manager
+// for middle-end IR optimizations. However, we have not qualified the new
+// pass manager on our optimization pipeline yet, so this remains an optional
+// define
+#if defined(HAS_SANITIZER) && JL_LLVM_VERSION >= 150000
+#define JL_USE_NEW_PM
+#endif
+
 struct NewPM {
     std::unique_ptr<TargetMachine> TM;
     StandardInstrumentations SI;
@@ -103,6 +116,8 @@ struct NewPM {
     ~NewPM() JL_NOTSAFEPOINT;
 
     void run(Module &M) JL_NOTSAFEPOINT;
+
+    void printTimers() JL_NOTSAFEPOINT;
 };
 
 struct AnalysisManagers {
@@ -163,7 +178,8 @@ typedef struct _jl_llvm_functions_t {
 } jl_llvm_functions_t;
 
 struct jl_returninfo_t {
-    llvm::Function *decl;
+    llvm::FunctionCallee decl;
+    llvm::AttributeList attrs;
     enum CallingConv {
         Boxed = 0,
         Register,
@@ -182,6 +198,8 @@ typedef std::tuple<jl_returninfo_t::CallingConv, unsigned, llvm::Function*, bool
 typedef struct _jl_codegen_params_t {
     orc::ThreadSafeContext tsctx;
     orc::ThreadSafeContext::Lock tsctx_lock;
+    DataLayout DL;
+    Triple TargetTriple;
 
     inline LLVMContext &getContext() {
         return *tsctx.getContext();
@@ -190,19 +208,18 @@ typedef struct _jl_codegen_params_t {
     // outputs
     std::vector<std::pair<jl_code_instance_t*, jl_codegen_call_target_t>> workqueue;
     std::map<void*, GlobalVariable*> globals;
-    std::map<std::tuple<jl_code_instance_t*,bool>, Function*> external_fns;
+    std::map<std::tuple<jl_code_instance_t*,bool>, GlobalVariable*> external_fns;
     std::map<jl_datatype_t*, DIType*> ditypes;
     std::map<jl_datatype_t*, Type*> llvmtypes;
     DenseMap<Constant*, GlobalVariable*> mergedConstants;
     // Map from symbol name (in a certain library) to its GV in sysimg and the
     // DL handle address in the current session.
     StringMap<std::pair<GlobalVariable*,SymMapGV>> libMapGV;
-#ifdef _OS_WINDOWS_
+    SymMapGV symMapDefault;
+    // These symMaps are Windows-only
     SymMapGV symMapExe;
     SymMapGV symMapDll;
     SymMapGV symMapDlli;
-#endif
-    SymMapGV symMapDefault;
     // Map from distinct callee's to its GOT entry.
     // In principle the attribute, function type and calling convention
     // don't need to be part of the key but it seems impossible to forward
@@ -213,14 +230,16 @@ typedef struct _jl_codegen_params_t {
         std::tuple<GlobalVariable*, FunctionType*, CallingConv::ID>,
         GlobalVariable*>> allPltMap;
     std::unique_ptr<Module> _shared_module;
-    inline Module &shared_module(Module &from);
+    inline Module &shared_module();
     // inputs
     size_t world = 0;
     const jl_cgparams_t *params = &jl_default_cgparams;
     bool cache = false;
     bool external_linkage = false;
     bool imaging;
-    _jl_codegen_params_t(orc::ThreadSafeContext ctx) : tsctx(std::move(ctx)), tsctx_lock(tsctx.getLock()), imaging(imaging_default()) {}
+    _jl_codegen_params_t(orc::ThreadSafeContext ctx, DataLayout DL, Triple triple)
+        : tsctx(std::move(ctx)), tsctx_lock(tsctx.getLock()),
+            DL(std::move(DL)), TargetTriple(std::move(triple)), imaging(imaging_default()) {}
 } jl_codegen_params_t;
 
 jl_llvm_functions_t jl_emit_code(
@@ -417,7 +436,7 @@ public:
         std::unique_ptr<WNMutex> mutex;
     };
     struct PipelineT {
-        PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel);
+        PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel, std::vector<std::function<void()>> &PrintLLVMTimers);
         CompileLayerT CompileLayer;
         OptimizeLayerT OptimizeLayer;
     };
@@ -487,6 +506,7 @@ public:
     TargetIRAnalysis getTargetIRAnalysis() const JL_NOTSAFEPOINT;
 
     size_t getTotalBytes() const JL_NOTSAFEPOINT;
+    void printTimers() JL_NOTSAFEPOINT;
 
     jl_locked_stream &get_dump_emitted_mi_name_stream() JL_NOTSAFEPOINT {
         return dump_emitted_mi_name_stream;
@@ -519,12 +539,14 @@ private:
     jl_locked_stream dump_compiles_stream;
     jl_locked_stream dump_llvm_opt_stream;
 
+    std::vector<std::function<void()>> PrintLLVMTimers;
+
     ResourcePool<orc::ThreadSafeContext, 0, std::queue<orc::ThreadSafeContext>> ContextPool;
 
 #ifndef JL_USE_JITLINK
     const std::shared_ptr<RTDyldMemoryManager> MemMgr;
 #else
-    std::atomic<size_t> total_size;
+    std::atomic<size_t> total_size{0};
     const std::unique_ptr<jitlink::JITLinkMemoryManager> MemMgr;
 #endif
     ObjLayerT ObjectLayer;
@@ -539,14 +561,9 @@ inline orc::ThreadSafeModule jl_create_ts_module(StringRef name, orc::ThreadSafe
     return orc::ThreadSafeModule(jl_create_llvm_module(name, *ctx.getContext(), imaging_mode, DL, triple), ctx);
 }
 
-Module &jl_codegen_params_t::shared_module(Module &from) JL_NOTSAFEPOINT {
+Module &jl_codegen_params_t::shared_module() JL_NOTSAFEPOINT {
     if (!_shared_module) {
-        _shared_module = jl_create_llvm_module("globals", getContext(), imaging, from.getDataLayout(), Triple(from.getTargetTriple()));
-        assert(&from.getContext() == tsctx.getContext() && "Module context differs from codegen_params context!");
-    } else {
-        assert(&from.getContext() == &getContext() && "Module context differs from shared module context!");
-        assert(from.getDataLayout() == _shared_module->getDataLayout() && "Module data layout differs from shared module data layout!");
-        assert(from.getTargetTriple() == _shared_module->getTargetTriple() && "Module target triple differs from shared module target triple!");
+        _shared_module = jl_create_llvm_module("globals", getContext(), imaging, DL, TargetTriple);
     }
     return *_shared_module;
 }

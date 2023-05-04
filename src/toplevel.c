@@ -64,7 +64,8 @@ static jl_function_t *jl_module_get_initializer(jl_module_t *m JL_PROPAGATES_ROO
 
 void jl_module_run_initializer(jl_module_t *m)
 {
-    JL_TIMING(INIT_MODULE);
+    JL_TIMING(INIT_MODULE, INIT_MODULE);
+    jl_timing_show_module(m, JL_TIMING_CURRENT_BLOCK);
     jl_function_t *f = jl_module_get_initializer(m);
     if (f == NULL)
         return;
@@ -874,8 +875,9 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
     int has_ccall = 0, has_defs = 0, has_loops = 0, has_opaque = 0, forced_compile = 0;
     assert(head == jl_thunk_sym);
     thk = (jl_code_info_t*)jl_exprarg(ex, 0);
-    assert(jl_is_code_info(thk));
-    assert(jl_typeis(thk->code, jl_array_any_type));
+    if (!jl_is_code_info(thk) || !jl_typeis(thk->code, jl_array_any_type)) {
+        jl_eval_errorf(m, "malformed \"thunk\" statement");
+    }
     body_attributes((jl_array_t*)thk->code, &has_ccall, &has_defs, &has_loops, &has_opaque, &forced_compile);
 
     jl_value_t *result;

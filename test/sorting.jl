@@ -84,6 +84,8 @@ end
         @test issorted(sort(1:2000, alg=Alg, by=x->0))
         @test issorted(sort(1:2000, alg=Alg, by=x->x÷100))
     end
+    @test sort(1:2000, by=x->x÷100, rev=true) == sort(1:2000, by=x->-x÷100) ==
+        vcat(2000, (x:x+99 for x in 1900:-100:100)..., 1:99)
 end
 
 @testset "partialsort" begin
@@ -560,6 +562,13 @@ end
     end
 end
 
+@testset "Offset with missing (#48862)" begin
+    v = [-1.0, missing, 1.0, 0.0, missing, -0.5, 0.5, 1.0, -0.5, missing, 0.5, -0.8, 1.5, NaN]
+    vo = OffsetArray(v, (firstindex(v):lastindex(v)).+100)
+    @test issorted(sort!(vo))
+    @test issorted(v)
+end
+
 @testset "searchsortedfirst/last with generalized indexing" begin
     o = OffsetVector(1:3, -2)
     @test searchsortedfirst(o, 4) == lastindex(o) + 1
@@ -764,6 +773,18 @@ end
 @testset "Unions with missing" begin
     @test issorted(sort(shuffle!(vcat(fill(missing, 10), rand(Int, 100)))))
     @test issorted(sort(vcat(rand(Int8, 600), [missing])))
+
+    # Because we define defalg(::AbstractArray{Missing})
+    @test all(fill(missing, 10) .=== sort(fill(missing, 10)))
+
+    # Unit tests for WithoutMissingVector
+    a = [1,7,missing,4]
+    @test_throws ArgumentError Base.Sort.WithoutMissingVector(a)
+    @test eltype(a[[1,2,4]]) == eltype(a)
+    @test eltype(Base.Sort.WithoutMissingVector(a[[1,2,4]])) == Int
+    am = Base.Sort.WithoutMissingVector(a, unsafe=true)
+    @test am[2] == 7
+    @test eltype(am) == Int
 end
 
 @testset "Specific algorithms" begin
@@ -946,6 +967,17 @@ function test_allocs()
 end
 @testset "Small calls do not unnecessarily allocate" begin
     test_allocs()
+end
+
+@testset "Presorted and reverse-presorted" begin
+    for len in [7, 92, 412, 780]
+        x = sort(randn(len))
+        for _ in 1:2
+            @test issorted(sort(x))
+            @test issorted(sort(x), by=x -> x+7)
+            reverse!(x)
+        end
+    end
 end
 
 # This testset is at the end of the file because it is slow.

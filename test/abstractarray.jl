@@ -520,9 +520,6 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @test convert(Matrix, Y) == Y
     @test convert(Matrix, view(Y, 1:2, 1:2)) == Y
     @test_throws MethodError convert(Matrix, X)
-
-    # convert(::Type{Union{}}, A::AbstractMatrix)
-    @test_throws MethodError convert(Union{}, X)
 end
 
 mutable struct TestThrowNoGetindex{T} <: AbstractVector{T} end
@@ -993,9 +990,9 @@ end
     end
 
     i = CartesianIndex(17,-2)
-    @test CR .+ i === i .+ CR === CartesianIndices((19:21, -1:3))
-    @test CR .- i === CartesianIndices((-15:-13, 3:7))
-    @test collect(i .- CR) == Ref(i) .- collect(CR)
+    @test CR .+ i === i .+ CR === CartesianIndices((19:21, -1:3)) == collect(CR) .+ i
+    @test CR .- i === CartesianIndices((-15:-13, 3:7)) == collect(CR) .- i
+    @test collect(i .- CR) == Ref(i) .- collect(CR) == i .- collect(CR)
 end
 
 @testset "issue #25770" begin
@@ -1160,8 +1157,9 @@ Base.unsafe_convert(::Type{Ptr{T}}, S::Strider{T}) where {T} = pointer(S.data, S
             Ps = Strider{Int, 3}(vec(A), 1, strides(A)[collect(perm)], sz[collect(perm)])
             @test pointer(Ap) == pointer(Sp) == pointer(Ps)
             for i in 1:length(Ap)
-                # This is intentionally disabled due to ambiguity
-                @test_broken pointer(Ap, i) == pointer(Sp, i) == pointer(Ps, i)
+                # This is intentionally disabled due to ambiguity. See `Base.pointer(A::PermutedDimsArray, i::Integer)`.
+                # But only evaluate one iteration as broken to reduce test report noise
+                i == 1 && @test_broken pointer(Ap, i) == pointer(Sp, i) == pointer(Ps, i)
                 @test P[i] == Ap[i] == Sp[i] == Ps[i]
             end
             Pv = view(P, idxs[collect(perm)]...)
@@ -1180,8 +1178,9 @@ Base.unsafe_convert(::Type{Ptr{T}}, S::Strider{T}) where {T} = pointer(S.data, S
             Svp = Base.PermutedDimsArray(Sv, perm)
             @test pointer(Avp) == pointer(Svp)
             for i in 1:length(Avp)
-                # This is intentionally disabled due to ambiguity
-                @test_broken pointer(Avp, i) == pointer(Svp, i)
+                # This is intentionally disabled due to ambiguity. See `Base.pointer(A::PermutedDimsArray, i::Integer)`
+                # But only evaluate one iteration as broken to reduce test report noise
+                i == 1 && @test_broken pointer(Avp, i) == pointer(Svp, i)
                 @test Ip[i] == Vp[i] == Avp[i] == Svp[i]
             end
         end
@@ -1220,8 +1219,9 @@ end
         Ps = Strider{Int, 2}(vec(A), 1, strides(A)[collect(perm)], sz[collect(perm)])
         @test pointer(Ap) == pointer(Sp) == pointer(Ps) == pointer(At) == pointer(Aa)
         for i in 1:length(Ap)
-            # This is intentionally disabled due to ambiguity
-            @test_broken pointer(Ap, i) == pointer(Sp, i) == pointer(Ps, i) == pointer(At, i) == pointer(Aa, i) == pointer(St, i) == pointer(Sa, i)
+            # This is intentionally disabled due to ambiguity. See `Base.pointer(A::PermutedDimsArray, i::Integer)`
+            # But only evaluate one iteration as broken to reduce test report noise
+            i == 1 && @test_broken pointer(Ap, i) == pointer(Sp, i) == pointer(Ps, i) == pointer(At, i) == pointer(Aa, i) == pointer(St, i) == pointer(Sa, i)
             @test pointer(Ps, i) == pointer(At, i) == pointer(Aa, i) == pointer(St, i) == pointer(Sa, i)
             @test P[i] == Ap[i] == Sp[i] == Ps[i] == At[i] == Aa[i] == St[i] == Sa[i]
         end
@@ -1247,8 +1247,9 @@ end
         Svp = Base.PermutedDimsArray(Sv, perm)
         @test pointer(Avp) == pointer(Svp) == pointer(Avt) == pointer(Ava)
         for i in 1:length(Avp)
-            # This is intentionally disabled due to ambiguity
-            @test_broken pointer(Avp, i) == pointer(Svp, i) == pointer(Avt, i) == pointer(Ava, i) == pointer(Svt, i) == pointer(Sva, i)
+            # This is intentionally disabled due to ambiguity. See `Base.pointer(A::PermutedDimsArray, i::Integer)`
+            # But only evaluate one iteration as broken to reduce test report noise
+            i == 1 && @test_broken pointer(Avp, i) == pointer(Svp, i) == pointer(Avt, i) == pointer(Ava, i) == pointer(Svt, i) == pointer(Sva, i)
             @test pointer(Avt, i) == pointer(Ava, i) == pointer(Svt, i) == pointer(Sva, i)
             @test Vp[i] == Avp[i] == Svp[i] == Avt[i] == Ava[i] == Svt[i] == Sva[i]
         end

@@ -1,8 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base: @propagate_inbounds
-import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, convert, similar
-
 ### basic definitions (types, aliases, constructors, abstractarray interface, sundry similar)
 
 # note that Adjoint and Transpose must be able to wrap not only vectors and matrices
@@ -12,7 +9,7 @@ import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, c
     Adjoint
 
 Lazy wrapper type for an adjoint view of the underlying linear algebra object,
-usually an `AbstractVector`/`AbstractMatrix`, but also some `Factorization`, for instance.
+usually an `AbstractVector`/`AbstractMatrix`.
 Usually, the `Adjoint` constructor should not be called directly, use [`adjoint`](@ref)
 instead. To materialize the view use [`copy`](@ref).
 
@@ -39,7 +36,7 @@ end
     Transpose
 
 Lazy wrapper type for a transpose view of the underlying linear algebra object,
-usually an `AbstractVector`/`AbstractMatrix`, but also some `Factorization`, for instance.
+usually an `AbstractVector`/`AbstractMatrix`.
 Usually, the `Transpose` constructor should not be called directly, use [`transpose`](@ref)
 instead. To materialize the view use [`copy`](@ref).
 
@@ -291,6 +288,9 @@ wrapperop(_) = identity
 wrapperop(::Adjoint) = adjoint
 wrapperop(::Transpose) = transpose
 
+# the following fallbacks can be removed if Adjoint/Transpose are restricted to AbstractVecOrMat
+size(A::AdjOrTrans) = reverse(size(A.parent))
+axes(A::AdjOrTrans) = reverse(axes(A.parent))
 # AbstractArray interface, basic definitions
 length(A::AdjOrTrans) = length(A.parent)
 size(v::AdjOrTransAbsVec) = (1, length(v.parent))

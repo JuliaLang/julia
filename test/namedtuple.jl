@@ -76,6 +76,26 @@ let NT = NamedTuple{(:a,:b),Tuple{Int8,Int16}}, nt = (x=3,y=4)
     @test_throws MethodError convert(NT, nt)
 end
 
+@testset "convert NamedTuple" begin
+    conv1 = convert(NamedTuple{(:a,),Tuple{I}} where I, (;a=1))
+    @test conv1 === (a = 1,)
+
+    conv2 = convert(NamedTuple{(:a,),Tuple{Any}}, (;a=1))
+    @test conv2 === NamedTuple{(:a,), Tuple{Any}}((1,))
+
+    conv3 = convert(NamedTuple{(:a,),}, (;a=1))
+    @test conv3 === (a = 1,)
+
+    conv4 = convert(NamedTuple{(:a,),Tuple{I}} where I<:Unsigned, (;a=1))
+    @test conv4 === NamedTuple{(:a,), Tuple{Unsigned}}((1,))
+
+    conv5 = convert(NamedTuple, (;a=1))
+    @test conv1 === (a = 1,)
+
+    conv_res = @test_throws MethodError convert(NamedTuple{(:a,),Tuple{I}} where I<:AbstractString, (;a=1))
+    @test conv_res.value.f === convert && conv_res.value.args === (AbstractString, 1)
+end
+
 @test NamedTuple{(:a,:c)}((b=1,z=2,c=3,aa=4,a=5)) === (a=5, c=3)
 @test NamedTuple{(:a,)}(NamedTuple{(:b, :a), Tuple{Int, Union{Int,Nothing}}}((1, 2))) ===
     NamedTuple{(:a,), Tuple{Union{Int,Nothing}}}((2,))
@@ -124,7 +144,7 @@ end
 let nt = merge(NamedTuple{(:a,:b),Tuple{Int32,Union{Int32,Nothing}}}((1,Int32(2))),
                NamedTuple{(:a,:c),Tuple{Union{Int8,Nothing},Float64}}((nothing,1.0)))
     @test typeof(nt) == NamedTuple{(:a,:b,:c),Tuple{Union{Int8,Nothing},Union{Int32,Nothing},Float64}}
-    @test repr(nt) == "NamedTuple{(:a, :b, :c), Tuple{Union{Nothing, Int8}, Union{Nothing, Int32}, Float64}}((nothing, 2, 1.0))"
+    @test repr(nt) == "@NamedTuple{a::Union{Nothing, Int8}, b::Union{Nothing, Int32}, c::Float64}((nothing, 2, 1.0))"
 end
 
 @test merge(NamedTuple(), [:a=>1, :b=>2, :c=>3, :a=>4, :c=>5]) == (a=4, b=2, c=5)

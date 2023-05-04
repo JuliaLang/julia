@@ -48,6 +48,8 @@ JL_DLLEXPORT void jl_generate_fptr_for_unspecialized_fallback(jl_code_instance_t
     jl_atomic_store_release(&unspec->invoke, &jl_fptr_interpret_call);
 }
 
+JL_DLLEXPORT void jl_generate_fptr_for_oc_wrapper_fallback(jl_code_instance_t *unspec) UNAVAILABLE
+
 JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION_fallback(void)
 {
     return 0;
@@ -67,7 +69,7 @@ JL_DLLEXPORT size_t jl_jit_total_bytes_fallback(void)
     return 0;
 }
 
-JL_DLLEXPORT void *jl_create_native_fallback(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode, int _external_linkage) UNAVAILABLE
+JL_DLLEXPORT void *jl_create_native_fallback(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode, int _external_linkage, size_t _world) UNAVAILABLE
 
 JL_DLLEXPORT void jl_dump_compiles_fallback(void *s)
 {

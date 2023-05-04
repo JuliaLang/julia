@@ -490,14 +490,14 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
 
     char *f_lib = NULL;
     if (jl_is_tuple(v) && jl_nfields(v) > 1) {
-        jl_value_t *t1 = jl_fieldref_noalloc(v, 1);
-        v = jl_fieldref(v, 0);
+        jl_value_t *t1 = jl_fieldref(v, 1);
         if (jl_is_symbol(t1))
             f_lib = jl_symbol_name((jl_sym_t*)t1);
         else if (jl_is_string(t1))
             f_lib = jl_string_data(t1);
         else
             JL_TYPECHK(cglobal, symbol, t1)
+        v = jl_fieldref(v, 0);
     }
 
     char *f_name = NULL;
@@ -508,10 +508,8 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
     else
         JL_TYPECHK(cglobal, symbol, v)
 
-#ifdef _OS_WINDOWS_
     if (!f_lib)
-        f_lib = (char*)jl_dlfind_win32(f_name);
-#endif
+        f_lib = (char*)jl_dlfind(f_name);
 
     void *ptr;
     jl_dlsym(jl_get_library(f_lib), f_name, &ptr, 1);
@@ -717,7 +715,7 @@ SELECTOR_FUNC(intrinsic_1)
 #define un_iintrinsic(name, u) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a) \
 { \
-    return jl_iintrinsic_1(jl_typeof(a), a, #name, u##signbitbyte, jl_intrinsiclambda_ty1, name##_list); \
+    return jl_iintrinsic_1(a, #name, u##signbitbyte, jl_intrinsiclambda_ty1, name##_list); \
 }
 #define un_iintrinsic_fast(LLVMOP, OP, name, u) \
 un_iintrinsic_ctype(OP, name, 8, u##int##8_t) \
@@ -743,7 +741,7 @@ SELECTOR_FUNC(intrinsic_u1)
 #define uu_iintrinsic(name, u) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a) \
 { \
-    return jl_iintrinsic_1(jl_typeof(a), a, #name, u##signbitbyte, jl_intrinsiclambda_u1, name##_list); \
+    return jl_iintrinsic_1(a, #name, u##signbitbyte, jl_intrinsiclambda_u1, name##_list); \
 }
 #define uu_iintrinsic_fast(LLVMOP, OP, name, u) \
 uu_iintrinsic_ctype(OP, name, 8, u##int##8_t) \
@@ -765,14 +763,13 @@ static const select_intrinsic_u1_t name##_list = { \
 uu_iintrinsic(name, u)
 
 static inline
-jl_value_t *jl_iintrinsic_1(jl_value_t *ty, jl_value_t *a, const char *name,
+jl_value_t *jl_iintrinsic_1(jl_value_t *a, const char *name,
                             char (*getsign)(void*, unsigned),
                             jl_value_t *(*lambda1)(jl_value_t*, void*, unsigned, unsigned, const void*), const void *list)
 {
-    if (!jl_is_primitivetype(jl_typeof(a)))
-        jl_errorf("%s: value is not a primitive type", name);
+    jl_value_t *ty = jl_typeof(a);
     if (!jl_is_primitivetype(ty))
-        jl_errorf("%s: type is not a primitive type", name);
+        jl_errorf("%s: value is not a primitive type", name);
     void *pa = jl_data_ptr(a);
     unsigned isize = jl_datatype_size(jl_typeof(a));
     unsigned isize2 = next_power_of_two(isize);
@@ -833,11 +830,12 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *ty, jl_value_t *a) \
 
 static inline jl_value_t *jl_intrinsic_cvt(jl_value_t *ty, jl_value_t *a, const char *name, intrinsic_cvt_t op)
 {
+    JL_TYPECHKS(name, datatype, ty);
+    if (!jl_is_concrete_type(ty) || !jl_is_primitivetype(ty))
+        jl_errorf("%s: target type not a leaf primitive type", name);
     jl_value_t *aty = jl_typeof(a);
     if (!jl_is_primitivetype(aty))
         jl_errorf("%s: value is not a primitive type", name);
-    if (!jl_is_primitivetype(ty))
-        jl_errorf("%s: type is not a primitive type", name);
     void *pa = jl_data_ptr(a);
     unsigned isize = jl_datatype_size(aty);
     unsigned osize = jl_datatype_size(ty);
@@ -1035,7 +1033,7 @@ static inline jl_value_t *jl_intrinsiclambda_checked(jl_value_t *ty, void *pa, v
     jl_value_t *params[2];
     params[0] = ty;
     params[1] = (jl_value_t*)jl_bool_type;
-    jl_datatype_t *tuptyp = jl_apply_tuple_type_v(params, 2);
+    jl_datatype_t *tuptyp = (jl_datatype_t*)jl_apply_tuple_type_v(params, 2);
     JL_GC_PROMISE_ROOTED(tuptyp); // (JL_ALWAYS_LEAFTYPE)
     jl_task_t *ct = jl_current_task;
     jl_value_t *newv = jl_gc_alloc(ct->ptls, jl_datatype_size(tuptyp), tuptyp);
@@ -1182,7 +1180,6 @@ bi_fintrinsic(add,add_float)
 bi_fintrinsic(sub,sub_float)
 bi_fintrinsic(mul,mul_float)
 bi_fintrinsic(div,div_float)
-bi_fintrinsic(frem,rem_float)
 
 // ternary operators //
 // runtime fma is broken on windows, define julia_fma(f) ourself with fma_emulated as reference.

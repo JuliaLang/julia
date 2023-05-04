@@ -165,9 +165,11 @@ JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, jl_task_t *owner) JL_NOTSAFEPO
         ssize = LLT_ALIGN(ssize, jl_page_size);
     }
     if (stk == NULL) {
-        if (jl_atomic_load_relaxed(&num_stack_mappings) >= MAX_STACK_MAPPINGS)
+        if (jl_atomic_load_relaxed(&num_stack_mappings) >= MAX_STACK_MAPPINGS) {
             // we accept that this can go over by as much as nthreads since it's not a CAS
+            errno = ENOMEM;
             return NULL;
+        }
         // TODO: allocate blocks of stacks? but need to mprotect individually anyways
         stk = malloc_stack(ssize);
         if (stk == MAP_FAILED)

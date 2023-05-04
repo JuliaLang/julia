@@ -347,6 +347,8 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
     }
     if (tv == jl_symbol_type)
         return ((jl_sym_t*)v)->hash;
+    if (tv == jl_module_type)
+        return ((jl_module_t*)v)->hash;
     assert(!tv->name->mutabl);
     return immut_id_(tv, v, tv->hash);
 }
@@ -1318,7 +1320,7 @@ JL_CALLABLE(jl_f_apply_type)
                 jl_type_error_rt("Tuple", "parameter", (jl_value_t*)jl_type_type, pi);
             }
         }
-        return (jl_value_t*)jl_apply_tuple_type_v(&args[1], nargs-1);
+        return jl_apply_tuple_type_v(&args[1], nargs-1);
     }
     else if (args[0] == (jl_value_t*)jl_uniontype_type) {
         // Union{} has extra restrictions, so it needs to be checked after
@@ -1918,6 +1920,11 @@ void jl_init_intrinsic_functions(void) JL_GC_DISABLED
         (jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_opaque_closure_type),
         "OpaqueClosure", jl_f_opaque_closure_call);
 
+    // Save a reference to the just created OpaqueClosure method, so we can provide special
+    // codegen for it later.
+    jl_opaque_closure_method = (jl_method_t*)jl_methtable_lookup(jl_opaque_closure_typename->mt,
+        (jl_value_t*)jl_anytuple_type, 1);
+
 #define ADD_I(name, nargs) add_intrinsic(inm, #name, name);
 #define ADD_HIDDEN(name, nargs)
 #define ALIAS ADD_I
@@ -2029,9 +2036,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("TypeMapLevel", (jl_value_t*)jl_typemap_level_type);
     add_builtin("Symbol", (jl_value_t*)jl_symbol_type);
     add_builtin("SSAValue", (jl_value_t*)jl_ssavalue_type);
-    add_builtin("Slot", (jl_value_t*)jl_abstractslot_type);
     add_builtin("SlotNumber", (jl_value_t*)jl_slotnumber_type);
-    add_builtin("TypedSlot", (jl_value_t*)jl_typedslot_type);
     add_builtin("Argument", (jl_value_t*)jl_argument_type);
     add_builtin("Const", (jl_value_t*)jl_const_type);
     add_builtin("PartialStruct", (jl_value_t*)jl_partial_struct_type);

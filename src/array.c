@@ -627,7 +627,7 @@ JL_DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i)
     if (i >= jl_array_len(a))
         jl_bounds_error_int((jl_value_t*)a, i + 1);
     if (a->flags.ptrarray)
-        jl_atomic_store_release(((_Atomic(jl_value_t*)*)a->data) + i, NULL);
+        jl_atomic_store_relaxed(((_Atomic(jl_value_t*)*)a->data) + i, NULL);
     else if (a->flags.hasptr) {
         size_t elsize = a->elsize;
         jl_assume(elsize >= sizeof(void*) && elsize % sizeof(void*) == 0);

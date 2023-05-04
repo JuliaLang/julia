@@ -297,10 +297,10 @@ function istriu(A::Union{UpperTriangular,UnitUpperTriangular}, k::Integer=0)
     k <= 0 && return true
     return _istriu(A, k)
 end
-istril(A::Adjoint) = istriu(A.parent)
-istril(A::Transpose) = istriu(A.parent)
-istriu(A::Adjoint) = istril(A.parent)
-istriu(A::Transpose) = istril(A.parent)
+istril(A::Adjoint, k::Integer=0) = istriu(A.parent, -k)
+istril(A::Transpose, k::Integer=0) = istriu(A.parent, -k)
+istriu(A::Adjoint, k::Integer=0) = istril(A.parent, -k)
+istriu(A::Transpose, k::Integer=0) = istril(A.parent, -k)
 
 function tril!(A::UpperTriangular, k::Integer=0)
     n = size(A,1)

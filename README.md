@@ -1,8 +1,10 @@
-<a name="logo"/>
 <div align="center">
-<a href="https://julialang.org/" target="_blank">
-<img src="doc/src/assets/logo.svg" alt="Julia Logo" width="210" height="142"></img>
-</a>
+    <a href="https://julialang.org/" target="_blank">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="doc/src/assets/julialogoheaderimage_dark.svg">
+          <img alt="The Julia logo" src="doc/src/assets/julialogoheaderimage_light.svg">
+        </picture>
+    </a>
 </div>
 
 <table>
@@ -26,7 +28,8 @@
     <tr>
         <td>Code coverage</td>
         <td>
-            <a href="https://coveralls.io/r/JuliaLang/julia?branch=master"><img src='https://img.shields.io/coveralls/github/JuliaLang/julia/master.svg?label=coveralls'/></a> <a href="https://codecov.io/github/JuliaLang/julia?branch=master"><img src='https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov'/></a>
+            <a href='https://coveralls.io/github/JuliaLang/julia?branch=master'><img src='https://coveralls.io/repos/github/JuliaLang/julia/badge.svg?branch=master' alt='Coverage Status'/></a>
+            <a href="https://codecov.io/gh/JuliaLang/julia"><img src="https://codecov.io/gh/JuliaLang/julia/branch/master/graph/badge.svg?token=TckCRxc7HS"/></a>
         </td>
     </tr>
 </table>
@@ -92,7 +95,7 @@ and then use the command prompt to change into the resulting julia directory. By
 Julia. However, most users should use the [most recent stable version](https://github.com/JuliaLang/julia/releases)
 of Julia. You can get this version by running:
 
-    git checkout v1.8.4
+    git checkout v1.8.5
 
 To build the `julia` executable, run `make` from within the julia directory.
 

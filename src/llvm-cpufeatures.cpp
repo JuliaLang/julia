@@ -38,20 +38,18 @@ STATISTIC(LoweredWithoutFMA, "Number of have_fma's that were lowered to false");
 extern JuliaOJIT *jl_ExecutionEngine;
 
 // whether this platform unconditionally (i.e. without needing multiversioning) supports FMA
-Optional<bool> always_have_fma(Function &intr) JL_NOTSAFEPOINT {
-    auto intr_name = intr.getName();
-    auto typ = intr_name.substr(strlen("julia.cpu.have_fma."));
-
-#if defined(_CPU_AARCH64_)
-    return typ == "f32" || typ == "f64";
-#else
-    (void)typ;
-    return {};
-#endif
+Optional<bool> always_have_fma(Function &intr, const Triple &TT) JL_NOTSAFEPOINT {
+    if (TT.isAArch64()) {
+        auto intr_name = intr.getName();
+        auto typ = intr_name.substr(strlen("julia.cpu.have_fma."));
+        return typ == "f32" || typ == "f64";
+    } else {
+        return {};
+    }
 }
 
-bool have_fma(Function &intr, Function &caller) JL_NOTSAFEPOINT {
-    auto unconditional = always_have_fma(intr);
+static bool have_fma(Function &intr, Function &caller, const Triple &TT) JL_NOTSAFEPOINT {
+    auto unconditional = always_have_fma(intr, TT);
     if (unconditional.hasValue())
         return unconditional.getValue();
 
@@ -65,21 +63,21 @@ bool have_fma(Function &intr, Function &caller) JL_NOTSAFEPOINT {
     SmallVector<StringRef, 6> Features;
     FS.split(Features, ',');
     for (StringRef Feature : Features)
-#if defined _CPU_ARM_
+    if (TT.isARM()) {
       if (Feature == "+vfp4")
-        return typ == "f32" || typ == "f64";lowerCPUFeatures
+        return typ == "f32" || typ == "f64";
       else if (Feature == "+vfp4sp")
         return typ == "f32";
-#else
+    } else {
       if (Feature == "+fma" || Feature == "+fma4")
         return typ == "f32" || typ == "f64";
-#endif
+    }
 
     return false;
 }
 
-void lowerHaveFMA(Function &intr, Function &caller, CallInst *I) JL_NOTSAFEPOINT {
-    if (have_fma(intr, caller)) {
+void lowerHaveFMA(Function &intr, Function &caller, const Triple &TT, CallInst *I) JL_NOTSAFEPOINT {
+    if (have_fma(intr, caller, TT)) {
         ++LoweredWithFMA;
         I->replaceAllUsesWith(ConstantInt::get(I->getType(), 1));
     } else {
@@ -91,6 +89,7 @@ void lowerHaveFMA(Function &intr, Function &caller, CallInst *I) JL_NOTSAFEPOINT
 
 bool lowerCPUFeatures(Module &M) JL_NOTSAFEPOINT
 {
+    auto TT = Triple(M.getTargetTriple());
     SmallVector<Instruction*,6> Materialized;
 
     for (auto &F: M.functions()) {
@@ -100,7 +99,7 @@ bool lowerCPUFeatures(Module &M) JL_NOTSAFEPOINT
             for (Use &U: F.uses()) {
                 User *RU = U.getUser();
                 CallInst *I = cast<CallInst>(RU);
-                lowerHaveFMA(F, *I->getParent()->getParent(), I);
+                lowerHaveFMA(F, *I->getParent()->getParent(), TT, I);
                 Materialized.push_back(I);
             }
         }

@@ -60,6 +60,78 @@ let
     @test format_filename("%a%%b") == "a%b"
 end
 
+@testset "julia_cmd" begin
+    julia_basic = Base.julia_cmd()
+    opts = Base.JLOptions()
+    get_julia_cmd(arg) = strip(read(`$julia_basic $arg -e 'print(repr(Base.julia_cmd()))'`, String), ['`'])
+
+    for (arg, default) in (
+                            ("-C$(unsafe_string(opts.cpu_target))",  false),
+
+                            ("-J$(unsafe_string(opts.image_file))",  false),
+
+                            ("--depwarn=yes",   false),
+                            ("--depwarn=error", false),
+                            ("--depwarn=no",    true),
+
+                            ("--check-bounds=yes",  false),
+                            ("--check-bounds=no",   false),
+                            ("--check-bounds=auto", true),
+
+                            ("--inline=no",         false),
+                            ("--inline=yes",        true),
+
+                            ("-O0", false),
+                            ("-O1", false),
+                            ("-O2", true),
+                            ("-O3", false),
+
+                            ("--min-optlevel=0",    true),
+                            ("--min-optlevel=1",    false),
+                            ("--min-optlevel=2",    false),
+                            ("--min-optlevel=3",    false),
+
+                            ("-g0", false),
+                            ("-g1", false),
+                            ("-g2", false),
+
+                            ("--compile=no",    false),
+                            ("--compile=all",   false),
+                            ("--compile=min",   false),
+                            ("--compile=yes",   true),
+
+                            ("--code-coverage=@",    false),
+                            ("--code-coverage=user", false),
+                            ("--code-coverage=all",  false),
+                            ("--code-coverage=none", true),
+
+                            ("--track-allocation=@",    false),
+                            ("--track-allocation=user", false),
+                            ("--track-allocation=all",  false),
+                            ("--track-allocation=none", true),
+
+                            ("--color=yes", false),
+                            ("--color=no",  false),
+
+                            ("--startup-file=no",   false),
+                            ("--startup-file=yes",  true),
+
+                            # ("--sysimage-native-code=no",   false), # takes a lot longer (30s)
+                            ("--sysimage-native-code=yes",  true),
+
+                            ("--pkgimages=yes", true),
+                            ("--pkgimages=no",  false),
+                        )
+        @testset "$arg" begin
+            if default
+                @test !occursin(arg, get_julia_cmd(arg))
+            else
+                @test occursin(arg, get_julia_cmd(arg))
+            end
+        end
+    end
+end
+
 let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # tests for handling of ENV errors
     let v = writereadpipeline("println(\"REPL: \", @which(less), @isdefined(InteractiveUtils))",
@@ -267,6 +339,24 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     let p = run(`$exename --procs=1.0`, wait=false)
         wait(p)
         @test p.exitcode == 1 && p.termsignal == 0
+    end
+
+    # --gcthreads
+    code = "print(Threads.ngcthreads())"
+    cpu_threads = ccall(:jl_effective_threads, Int32, ())
+    @test (cpu_threads == 1 ? "1" : string(div(cpu_threads, 2))) ==
+          read(`$exename --threads auto -e $code`, String) ==
+          read(`$exename --threads=auto -e $code`, String) ==
+          read(`$exename -tauto -e $code`, String) ==
+          read(`$exename -t auto -e $code`, String)
+    for nt in (nothing, "1")
+        withenv("JULIA_NUM_GC_THREADS" => nt) do
+            @test read(`$exename --gcthreads=2 -e $code`, String) == "2"
+        end
+    end
+
+    withenv("JULIA_NUM_GC_THREADS" => 2) do
+        @test read(`$exename -e $code`, String) == "2"
     end
 
     # --machine-file
@@ -625,6 +715,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         (false, "", "ERROR: option `--inline` is missing an argument")
     @test readchomperrors(`$exename --startup-file=no -e "@show ARGS" -now -- julia RUN.jl`) ==
         (false, "", "ERROR: unknown option `-n`")
+    @test readchomperrors(`$exename --interactive=yes`) ==
+        (false, "", "ERROR: option `-i/--interactive` does not accept an argument")
 
     # --compiled-modules={yes|no}
     @test readchomp(`$exename -E "Bool(Base.JLOptions().use_compiled_modules)"`) == "true"
@@ -652,6 +744,37 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     end
 end
 
+# Object file with multiple cpu targets
+@testset "Object file for multiple microarchitectures" begin
+    julia_path = joinpath(Sys.BINDIR, Base.julia_exename())
+    outputo_file = tempname()
+    write(outputo_file, "1")
+    object_file = tempname() * ".o"
+
+    # This is to test that even with `pkgimages=no`, we can create object file
+    # with multiple cpu-targets
+    # The cmd is checked for `--object-o` as soon as it is run. So, to avoid long
+    # testing times, intentionally don't pass `--sysimage`; when we reach the
+    # corresponding error, we know that `check_cmdline` has already passed
+    let v = readchomperrors(`$julia_path
+        --cpu-target='native;native'
+        --output-o=$object_file $outputo_file
+        --pkgimages=no`)
+
+        @test v[1] == false
+        @test v[2] == ""
+        @test !contains(v[3], "More than one command line CPU targets specified")
+        @test v[3] == "ERROR: File \"boot.jl\" not found"
+    end
+
+    # This is to test that with `pkgimages=yes`, multiple CPU targets are parsed.
+    # We intentionally fail fast due to a lack of an `--output-o` flag.
+    let v = readchomperrors(`$julia_path --cpu-target='native;native' --pkgimages=yes`)
+        @test v[1] == false
+        @test v[2] == ""
+        @test contains(v[3], "More than one command line CPU targets specified")
+    end
+end
 
 # Find the path of libjulia (or libjulia-debug, as the case may be)
 # to use as a dummy shlib to open
@@ -827,4 +950,6 @@ end
         @test lines[3] == "foo"
         @test lines[4] == "bar"
     end
+#heap-size-hint
+@test readchomp(`$(Base.julia_cmd()) --startup-file=no --heap-size-hint=500M -e "println(@ccall jl_gc_get_max_memory()::UInt64)"`) == "524288000"
 end

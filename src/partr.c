@@ -108,7 +108,32 @@ void jl_init_threadinginfra(void)
 
 void JL_NORETURN jl_finish_task(jl_task_t *t);
 
-// thread function: used by all except the main thread
+// gc thread function
+void jl_gc_threadfun(void *arg)
+{
+    jl_threadarg_t *targ = (jl_threadarg_t*)arg;
+
+    // initialize this thread (set tid and create heap)
+    jl_ptls_t ptls = jl_init_threadtls(targ->tid);
+
+    // wait for all threads
+    jl_gc_state_set(ptls, JL_GC_STATE_WAITING, 0);
+    uv_barrier_wait(targ->barrier);
+
+    // free the thread argument here
+    free(targ);
+
+    while (1) {
+        uv_mutex_lock(&gc_threads_lock);
+        while (jl_atomic_load(&gc_n_threads_marking) == 0) {
+            uv_cond_wait(&gc_threads_cond, &gc_threads_lock);
+        }
+        uv_mutex_unlock(&gc_threads_lock);
+        gc_mark_loop_parallel(ptls, 0);
+    }
+}
+
+// thread function: used by all mutator threads except the main thread
 void jl_threadfun(void *arg)
 {
     jl_threadarg_t *targ = (jl_threadarg_t*)arg;
@@ -229,7 +254,7 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid) JL_NOTSAFEPOINT
     }
     else {
         // something added to the sticky-queue: notify that thread
-        if (wake_thread(tid)) {
+        if (wake_thread(tid) && uvlock != ct) {
             // check if we need to notify uv_run too
             jl_fence();
             jl_ptls_t other = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
@@ -237,7 +262,7 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid) JL_NOTSAFEPOINT
             // now that we have changed the thread to not-sleeping, ensure that
             // either it has not yet acquired the libuv lock, or that it will
             // observe the change of state to not_sleeping
-            if (uvlock != ct && jl_atomic_load_relaxed(&jl_uv_mutex.owner) == tid_task)
+            if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == tid_task)
                 wake_libuv();
         }
     }
@@ -386,7 +411,16 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
             }
             else if (ptls->tid == 0) {
                 uvlock = 1;
-                JL_UV_LOCK(); // jl_mutex_lock(&jl_uv_mutex);
+                JL_UV_LOCK();
+            }
+            else {
+                // Since we might have started some IO work, we might need
+                // to ensure tid = 0 will go watch that new event source.
+                // If trylock would have succeeded, that may have been our
+                // responsibility, so need to make sure thread 0 will take care
+                // of us.
+                if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == NULL) // aka trylock
+                    jl_wakeup_thread(0);
             }
             if (uvlock) {
                 int enter_eventloop = may_sleep(ptls);
@@ -439,7 +473,6 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                     break;
                 }
                 uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
-                // TODO: help with gc work here, if applicable
             }
             assert(jl_atomic_load_relaxed(&ptls->sleep_check_state) == not_sleeping);
             uv_mutex_unlock(&ptls->sleep_lock);

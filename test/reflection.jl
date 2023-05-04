@@ -84,7 +84,6 @@ end # module ReflectionTest
 @test isconcretetype(DataType)
 @test isconcretetype(Union)
 @test !isconcretetype(Union{})
-@test isconcretetype(Tuple{Union{}})
 @test !isconcretetype(Complex)
 @test !isconcretetype(Complex.body)
 @test !isconcretetype(AbstractArray{Int,1})
@@ -532,7 +531,7 @@ let
     ft = typeof(f18888)
 
     code_typed(f18888, Tuple{}; optimize=false)
-    @test !isempty(m.specializations) # uncached, but creates the specializations entry
+    @test m.specializations !== Core.svec() # uncached, but creates the specializations entry
     mi = Core.Compiler.specialize_method(m, Tuple{ft}, Core.svec())
     interp = Core.Compiler.NativeInterpreter(world)
     @test !Core.Compiler.haskey(Core.Compiler.code_cache(interp), mi)
@@ -648,7 +647,7 @@ let
     world = Core.Compiler.get_world_counter()
     match = Base._methods_by_ftype(T22979, -1, world)[1]
     instance = Core.Compiler.specialize_method(match)
-    cinfo_generated = Core.Compiler.get_staged(instance)
+    cinfo_generated = Core.Compiler.get_staged(instance, world)
     @test_throws ErrorException Base.uncompressed_ir(match.method)
 
     test_similar_codeinfo(code_lowered(f22979, typeof(x22979))[1], cinfo_generated)
@@ -725,6 +724,31 @@ Base.delete_method(m)
 @test foo4(1.0) == 1
 @test faz4(1) == 1
 @test faz4(1.0) == 1
+
+# Deletion & invoke (issue #48802)
+function f48802!(log, x::Integer)
+    log[] = "default"
+    return x + 1
+end
+function addmethod_48802()
+    @eval function f48802!(log, x::Int)
+        ret = invoke(f48802!, Tuple{Any, Integer}, log, x)
+        log[] = "specialized"
+        return ret
+    end
+end
+log = Ref{String}()
+@test f48802!(log, 1) == 2
+@test log[] == "default"
+addmethod_48802()
+@test f48802!(log, 1) == 2
+@test log[] == "specialized"
+Base.delete_method(which(f48802!, Tuple{Any, Int}))
+@test f48802!(log, 1) == 2
+@test log[] == "default"
+addmethod_48802()
+@test f48802!(log, 1) == 2
+@test log[] == "specialized"
 
 # Methods with keyword arguments
 fookw(x; direction=:up) = direction
@@ -1007,10 +1031,30 @@ ambig_effects_test(a, b) = 1
     @test Base.infer_effects(ambig_effects_test, (Int,Int)) |> !Core.Compiler.is_nothrow # ambiguity error
     @test Base.infer_effects(ambig_effects_test, (Int,Any)) |> !Core.Compiler.is_nothrow # ambiguity error
     # builtins
-    @test Base.infer_effects(typeof, (Any,)) |> Core.Compiler.is_total
-    @test Base.infer_effects(===, (Any,Any)) |> Core.Compiler.is_total
+    @test Base.infer_effects(typeof, (Any,)) |> Core.Compiler.is_foldable_nothrow
+    @test Base.infer_effects(===, (Any,Any)) |> Core.Compiler.is_foldable_nothrow
     @test (Base.infer_effects(setfield!, ()); true) # `builtin_effects` shouldn't throw on empty `argtypes`
     @test (Base.infer_effects(Core.Intrinsics.arraylen, ()); true) # `intrinsic_effects` shouldn't throw on empty `argtypes`
 end
 
 @test Base._methods_by_ftype(Tuple{}, -1, Base.get_world_counter()) == Any[]
+@test length(methods(Base.Broadcast.broadcasted, Tuple{Any, Any, Vararg})) >
+      length(methods(Base.Broadcast.broadcasted, Tuple{Base.Broadcast.BroadcastStyle, Any, Vararg})) >=
+      length(methods(Base.Broadcast.broadcasted, Tuple{Base.Broadcast.DefaultArrayStyle{1}, Any, Vararg})) >=
+      10
+
+@testset "specializations" begin
+    f(x) = 1
+    f(1)
+    f("hello")
+    @test length(Base.specializations(only(methods(f)))) == 2
+end
+
+# https://github.com/JuliaLang/julia/issues/48856
+@test !Base.ismutationfree(Vector{Any})
+@test !Base.ismutationfree(Vector{Symbol})
+@test !Base.ismutationfree(Vector{UInt8})
+@test !Base.ismutationfree(Vector{Int32})
+@test !Base.ismutationfree(Vector{UInt64})
+
+@test Base.ismutationfree(Type{Union{}})

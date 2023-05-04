@@ -880,7 +880,7 @@ let
     @test Broadcast.broadcasted(+, AD1(rand(3)), AD2(rand(3))) isa Broadcast.Broadcasted{Broadcast.ArrayConflict}
     @test Broadcast.broadcasted(+, AD1(rand(3)), AD2(rand(3))) isa Broadcast.Broadcasted{<:Broadcast.AbstractArrayStyle{Any}}
 
-    @test @inferred(Base.IteratorSize(Broadcast.broadcasted((1,2,3),a1,zeros(3,3,3)))) === Base.HasShape{3}()
+    @test @inferred(Base.IteratorSize(Broadcast.broadcasted(+, (1,2,3), a1, zeros(3,3,3)))) === Base.HasShape{3}()
 
     # inference on nested
     bc = Base.broadcasted(+, AD1(randn(3)), AD1(randn(3)))
@@ -1122,6 +1122,11 @@ end
     A[pos .< 0] .= false
     @test all(>=(0), pos[A])
     @test count(A) == count(>=(0), pos)
+end
+
+@testset "issue #38432: make CartesianIndex a broadcast scalar" begin
+    @test CartesianIndex(1,2) .+ (CartesianIndex(3,4), CartesianIndex(5,6)) == (CartesianIndex(4, 6), CartesianIndex(6, 8))
+    @test CartesianIndex(1,2) .+ [CartesianIndex(3,4), CartesianIndex(5,6)] == [CartesianIndex(4, 6), CartesianIndex(6, 8)]
 end
 
 # test that `Broadcast` definition is defined as total and eligible for concrete evaluation

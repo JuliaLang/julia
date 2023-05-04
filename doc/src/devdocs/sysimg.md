@@ -8,6 +8,9 @@ as many platforms as possible, so as to give vastly improved startup times.  On 
 not ship with a precompiled system image file, one can be generated from the source files shipped
 in Julia's `DATAROOTDIR/julia/base` folder.
 
+Julia will by default generate its system image on half of the available system threads. This
+may be controlled by the [`JULIA_IMAGE_THREADS`](@ref env-image-threads) environment variable.
+
 This operation is useful for multiple reasons.  A user may:
 
   * Build a precompiled shared library system image on a platform that did not ship with one, thereby
@@ -101,7 +104,7 @@ See code comments for each components for more implementation details.
     (see comments in `MultiVersioning::runOnModule` for how this is done),
     the pass also generates metadata so that the runtime can load and initialize the
     system image correctly.
-    A detail description of the metadata is available in `src/processor.h`.
+    A detailed description of the metadata is available in `src/processor.h`.
 
 2. System image loading
 

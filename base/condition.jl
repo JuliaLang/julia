@@ -87,7 +87,7 @@ function _wait2(c::GenericCondition, waiter::Task, first::Bool=false)
         push!(c.waitq, waiter)
     end
     # since _wait2 is similar to schedule, we should observe the sticky bit now
-    if waiter.sticky && Threads.threadid(waiter) == 0
+    if waiter.sticky && Threads.threadid(waiter) == 0 && !GC.in_finalizer()
         # Issue #41324
         # t.sticky && tid == 0 is a task that needs to be co-scheduled with
         # the parent task. If the parent (current_task) is not sticky we must

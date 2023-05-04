@@ -15,6 +15,8 @@ Typically, any type that implements `hash` should also implement its own [`==`](
 (operator `-`) should also implement [`widen`](@ref), which is required to hash
 values inside heterogeneous arrays.
 
+The hash value may change when a new Julia process is started.
+
 ```jldoctest
 julia> a = hash(10)
 0x95ea2955abd45275
@@ -110,7 +112,7 @@ end
 const memhash = UInt === UInt64 ? :memhash_seed : :memhash32_seed
 const memhash_seed = UInt === UInt64 ? 0x71e729fd56419c81 : 0x56419c81
 
-function hash(s::String, h::UInt)
+@assume_effects :total function hash(s::String, h::UInt)
     h += memhash_seed
     ccall(memhash, UInt, (Ptr{UInt8}, Csize_t, UInt32), s, sizeof(s), h % UInt32) + h
 end

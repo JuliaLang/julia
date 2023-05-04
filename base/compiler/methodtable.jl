@@ -39,7 +39,7 @@ external table, e.g., to override existing method.
 """
 struct OverlayMethodTable <: MethodTableView
     world::UInt
-    mt::Core.MethodTable
+    mt::MethodTable
 end
 
 struct MethodMatchKey
@@ -98,7 +98,7 @@ function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int
         !isempty(result))
 end
 
-function _findall(@nospecialize(sig::Type), mt::Union{Nothing,Core.MethodTable}, world::UInt, limit::Int)
+function _findall(@nospecialize(sig::Type), mt::Union{Nothing,MethodTable}, world::UInt, limit::Int)
     _min_val = RefValue{UInt}(typemin(UInt))
     _max_val = RefValue{UInt}(typemax(UInt))
     _ambig = RefValue{Int32}(0)
@@ -155,7 +155,7 @@ function findsup(@nospecialize(sig::Type), table::OverlayMethodTable)
         false)
 end
 
-function _findsup(@nospecialize(sig::Type), mt::Union{Nothing,Core.MethodTable}, world::UInt)
+function _findsup(@nospecialize(sig::Type), mt::Union{Nothing,MethodTable}, world::UInt)
     min_valid = RefValue{UInt}(typemin(UInt))
     max_valid = RefValue{UInt}(typemax(UInt))
     match = ccall(:jl_gf_invoke_lookup_worlds, Any, (Any, Any, UInt, Ptr{Csize_t}, Ptr{Csize_t}),

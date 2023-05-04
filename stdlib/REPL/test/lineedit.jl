@@ -306,21 +306,21 @@ seek(buf,0)
 
 ## edit_delete_prev_word ##
 
-buf = IOBuffer("type X\n ")
+buf = IOBuffer(Vector{UInt8}("type X\n "), read=true, write=true)
 seekend(buf)
 @test !isempty(@inferred(LineEdit.edit_delete_prev_word(buf)))
 @test position(buf) == 5
 @test buf.size == 5
 @test content(buf) == "type "
 
-buf = IOBuffer("4 +aaa+ x")
+buf = IOBuffer(Vector{UInt8}("4 +aaa+ x"), read=true, write=true)
 seek(buf,8)
 @test !isempty(LineEdit.edit_delete_prev_word(buf))
 @test position(buf) == 3
 @test buf.size == 4
 @test content(buf) == "4 +x"
 
-buf = IOBuffer("x = func(arg1,arg2 , arg3)")
+buf = IOBuffer(Vector{UInt8}("x = func(arg1,arg2 , arg3)"), read=true, write=true)
 seekend(buf)
 LineEdit.char_move_word_left(buf)
 @test position(buf) == 21

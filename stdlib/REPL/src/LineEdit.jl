@@ -761,10 +761,11 @@ function edit_splice!(s::BufferLike, r::Region=region(s), ins::String = ""; rigi
     elseif buf.mark >= B
         buf.mark += sizeof(ins) - B + A
     end
+    ensureroom(buf, B) # handle !buf.reinit from take!
     ret = splice!(buf.data, A+1:B, codeunits(String(ins))) # position(), etc, are 0-indexed
     buf.size = buf.size + sizeof(ins) - B + A
     adjust_pos && seek(buf, position(buf) + sizeof(ins))
-    return String(ret)
+    return String(copy(ret))
 end
 
 edit_splice!(s::MIState, ins::AbstractString) = edit_splice!(s, region(s), ins)
@@ -1281,7 +1282,7 @@ end
 # compute the number of spaces from b till the next non-space on the right
 # (which can also be "end of line" or "end of buffer")
 function leadingspaces(buf::IOBuffer, b::Int)
-    ls = something(findnext(_notspace, buf.data, b+1), 0)-1
+    @views ls = something(findnext(_notspace, buf.data[1:buf.size], b+1), 0)-1
     ls == -1 && (ls = buf.size)
     ls -= b
     return ls
@@ -1357,19 +1358,22 @@ function edit_input(s, f = (filename, line, column) -> InteractiveUtils.edit(fil
         col += 1
     end
 
+    # Write current input to temp file, edit, read back
     write(filename, str)
     f(filename, line, col)
     str_mod = readchomp(filename)
     rm(filename)
-    if str != str_mod # something was changed, run the input
-        write(buf, str_mod)
-        commit_line(s)
-        :done
-    else # no change, the edit session probably unsuccessful
-        write(buf, str)
-        seek(buf, pos) # restore state from before edit
-        refresh_line(s)
+
+    # Write updated content
+    write(buf, str_mod)
+    if str == str_mod
+        # If input was not modified: reset cursor
+        seek(buf, pos)
+    else
+        # If input was modified: move cursor to end
+        move_input_end(s)
     end
+    refresh_line(s)
 end
 
 # return the identifier under the cursor, possibly with other words concatenated
@@ -2235,7 +2239,7 @@ end
 
 function move_line_end(buf::IOBuffer)
     eof(buf) && return
-    pos = findnext(isequal(UInt8('\n')), buf.data, position(buf)+1)
+    @views pos = findnext(isequal(UInt8('\n')), buf.data[1:buf.size], position(buf)+1)
     if pos === nothing
         move_input_end(buf)
         return
