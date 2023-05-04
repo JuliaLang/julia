@@ -15,6 +15,8 @@ Typically, any type that implements `hash` should also implement its own [`==`](
 (operator `-`) should also implement [`widen`](@ref), which is required to hash
 values inside heterogeneous arrays.
 
+The hash value may change when a new Julia process is started.
+
 ```jldoctest
 julia> a = hash(10)
 0x95ea2955abd45275
