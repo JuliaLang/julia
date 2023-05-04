@@ -74,7 +74,7 @@ void jl_init_timing(void)
     _Static_assert(JL_TIMING_EVENT_LAST < sizeof(uint64_t) * CHAR_BIT, "Too many timing events!");
     _Static_assert((int)JL_TIMING_LAST <= (int)JL_TIMING_EVENT_LAST, "More owners than events!");
 
-    int i = 0;
+    int i __attribute__((unused)) = 0;
 #ifdef USE_ITTAPI
 #define X(name) jl_timing_ittapi_events[i++] = __itt_event_create(#name, strlen(#name));
     JL_TIMING_EVENTS
