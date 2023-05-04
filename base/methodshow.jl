@@ -194,10 +194,11 @@ function functionloc(@nospecialize(f))
 end
 
 function sym_to_string(sym)
-    s = String(sym)
-    if s === :var"..."
+    if sym === :var"..."
         return "..."
-    elseif endswith(s, "...")
+    end
+    s = String(sym)
+    if endswith(s, "...")
         return string(sprint(show_sym, Symbol(s[1:end-3])), "...")
     else
         return sprint(show_sym, sym)

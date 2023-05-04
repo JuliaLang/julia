@@ -134,7 +134,7 @@ static int speccache_eq(size_t idx, const void *ty, jl_svec_t *data, uint_t hv)
 // get or create the MethodInstance for a specialization
 static jl_method_instance_t *jl_specializations_get_linfo_(jl_method_t *m JL_PROPAGATES_ROOT, jl_value_t *type, jl_svec_t *sparams, jl_method_instance_t *mi_insert)
 {
-    if (m->sig == (jl_value_t*)jl_anytuple_type && jl_atomic_load_relaxed(&m->unspecialized) != NULL)
+    if (m->sig == (jl_value_t*)jl_anytuple_type && jl_atomic_load_relaxed(&m->unspecialized) != NULL && m != jl_opaque_closure_method)
         return jl_atomic_load_relaxed(&m->unspecialized); // handle builtin methods
     jl_value_t *ut = jl_is_unionall(type) ? jl_unwrap_unionall(type) : type;
     JL_TYPECHK(specializations, datatype, ut);
@@ -1481,12 +1481,9 @@ struct matches_env {
 static int get_intersect_visitor(jl_typemap_entry_t *oldentry, struct typemap_intersection_env *closure0)
 {
     struct matches_env *closure = container_of(closure0, struct matches_env, match);
-    if (oldentry == closure->newentry)
-        return 1;
-    if (oldentry->max_world < ~(size_t)0 || oldentry->min_world == closure->newentry->min_world)
-        // skip if no world has both active
-        // also be careful not to try to scan something from the current dump-reload though
-        return 1;
+    assert(oldentry != closure->newentry && "entry already added");
+    assert(oldentry->min_world <= closure->newentry->min_world && "old method cannot be newer than new method");
+    assert(oldentry->max_world == ~(size_t)0 && "method cannot be added at the same time as method deleted");
     // don't need to consider other similar methods if this oldentry will always fully intersect with them and dominates all of them
     typemap_slurp_search(oldentry, &closure->match);
     jl_method_t *oldmethod = oldentry->func.method;
@@ -1500,7 +1497,7 @@ static int get_intersect_visitor(jl_typemap_entry_t *oldentry, struct typemap_in
     return 1;
 }
 
-static jl_value_t *get_intersect_matches(jl_typemap_t *defs, jl_typemap_entry_t *newentry, jl_typemap_entry_t **replaced, int8_t offs)
+static jl_value_t *get_intersect_matches(jl_typemap_t *defs, jl_typemap_entry_t *newentry, jl_typemap_entry_t **replaced, int8_t offs, size_t world)
 {
     jl_tupletype_t *type = newentry->sig;
     jl_tupletype_t *ttypes = (jl_tupletype_t*)jl_unwrap_unionall((jl_value_t*)type);
@@ -1513,7 +1510,9 @@ static jl_value_t *get_intersect_matches(jl_typemap_t *defs, jl_typemap_entry_t 
         else
             va = NULL;
     }
+    // search for all intersecting methods active in the previous world, to determine the changes needed to be made for the next world
     struct matches_env env = {{get_intersect_visitor, (jl_value_t*)type, va, /* .search_slurp = */ 0,
+            /* .min_valid = */ world, /* .max_valid = */ world,
             /* .ti = */ NULL, /* .env = */ jl_emptysvec, /* .issubty = */ 0},
         /* .newentry = */ newentry, /* .shadowed */ NULL, /* .replaced */ NULL};
     JL_GC_PUSH3(&env.match.env, &env.match.ti, &env.shadowed);
@@ -1986,7 +1985,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     JL_TIMING(ADD_METHOD, ADD_METHOD);
     assert(jl_is_method(method));
     assert(jl_is_mtable(mt));
-    jl_timing_show((jl_value_t *)method, JL_TIMING_CURRENT_BLOCK);
+    jl_timing_show_method(method, JL_TIMING_CURRENT_BLOCK);
     jl_value_t *type = method->sig;
     jl_value_t *oldvalue = NULL;
     jl_array_t *oldmi = NULL;
@@ -2006,7 +2005,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     jl_typemap_insert(&mt->defs, (jl_value_t*)mt, newentry, jl_cachearg_offset(mt));
     jl_typemap_entry_t *replaced = NULL;
     // then check what entries we replaced
-    oldvalue = get_intersect_matches(jl_atomic_load_relaxed(&mt->defs), newentry, &replaced, jl_cachearg_offset(mt));
+    oldvalue = get_intersect_matches(jl_atomic_load_relaxed(&mt->defs), newentry, &replaced, jl_cachearg_offset(mt), max_world);
     int invalidated = 0;
     if (replaced) {
         oldvalue = (jl_value_t*)replaced;
@@ -2266,7 +2265,6 @@ jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t w
 JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, jl_value_t *mt, int lim, int include_ambiguous,
                                              size_t world, size_t *min_valid, size_t *max_valid, int *ambig)
 {
-    JL_TIMING(METHOD_MATCH, METHOD_MATCH);
     if (ambig != NULL)
         *ambig = 0;
     jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)types);
@@ -2547,6 +2545,8 @@ JL_DLLEXPORT jl_callptr_t jl_fptr_const_return_addr = &jl_fptr_const_return;
 
 JL_DLLEXPORT jl_callptr_t jl_fptr_sparam_addr = &jl_fptr_sparam;
 
+JL_DLLEXPORT jl_callptr_t jl_f_opaque_closure_call_addr = (jl_callptr_t)&jl_f_opaque_closure_call;
+
 // Return the index of the invoke api, if known
 JL_DLLEXPORT int32_t jl_invoke_api(jl_code_instance_t *codeinst)
 {
@@ -2814,18 +2814,20 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
 }
 
 // add type of `f` to front of argument tuple type
-static jl_value_t *jl_argtype_with_function(jl_function_t *f, jl_value_t *types0)
+jl_value_t *jl_argtype_with_function(jl_value_t *f, jl_value_t *types0)
+{
+    return jl_argtype_with_function_type(jl_is_type(f) ? (jl_value_t*)jl_wrap_Type(f) : jl_typeof(f), types0);
+}
+
+jl_value_t *jl_argtype_with_function_type(jl_value_t *ft JL_MAYBE_UNROOTED, jl_value_t *types0)
 {
     jl_value_t *types = jl_unwrap_unionall(types0);
     size_t l = jl_nparams(types);
-    jl_value_t *tt = (jl_value_t*)jl_alloc_svec(1+l);
-    size_t i;
-    JL_GC_PUSH1(&tt);
-    if (jl_is_type(f))
-        jl_svecset(tt, 0, jl_wrap_Type(f));
-    else
-        jl_svecset(tt, 0, jl_typeof(f));
-    for(i=0; i < l; i++)
+    jl_value_t *tt = NULL;
+    JL_GC_PUSH2(&tt, &ft);
+    tt = (jl_value_t*)jl_alloc_svec(1+l);
+    jl_svecset(tt, 0, ft);
+    for (size_t i = 0; i < l; i++)
         jl_svecset(tt, i+1, jl_tparam(types,i));
     tt = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)tt);
     tt = jl_rewrap_unionall_(tt, types0);
@@ -3119,7 +3121,7 @@ jl_value_t *jl_gf_invoke(jl_value_t *types0, jl_value_t *gf, jl_value_t **args, 
     size_t world = jl_current_task->world_age;
     jl_value_t *types = NULL;
     JL_GC_PUSH1(&types);
-    types = jl_argtype_with_function(gf, types0);
+    types = jl_argtype_with_function((jl_value_t*)gf, types0);
     jl_method_t *method = (jl_method_t*)jl_gf_invoke_lookup(types, jl_nothing, world);
     JL_GC_PROMISE_ROOTED(method);
 
@@ -3213,9 +3215,6 @@ struct ml_matches_env {
     int include_ambiguous;
     // results:
     jl_value_t *t; // array of method matches
-    size_t min_valid;
-    size_t max_valid;
-    // temporary:
     jl_method_match_t *matc; // current working method match
 };
 
@@ -3243,22 +3242,22 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
         return 1;
     if (closure->world < ml->min_world) {
         // ignore method table entries that are part of a later world
-        if (closure->max_valid >= ml->min_world)
-            closure->max_valid = ml->min_world - 1;
+        if (closure->match.max_valid >= ml->min_world)
+            closure->match.max_valid = ml->min_world - 1;
         return 1;
     }
     else if (closure->world > ml->max_world) {
         // ignore method table entries that have been replaced in the current world
-        if (closure->min_valid <= ml->max_world)
-            closure->min_valid = ml->max_world + 1;
+        if (closure->match.min_valid <= ml->max_world)
+            closure->match.min_valid = ml->max_world + 1;
         return 1;
     }
     else {
-        // intersect the env valid range with method's valid range
-        if (closure->min_valid < ml->min_world)
-            closure->min_valid = ml->min_world;
-        if (closure->max_valid > ml->max_world)
-            closure->max_valid = ml->max_world;
+        // intersect the env valid range with method's inclusive valid range
+        if (closure->match.min_valid < ml->min_world)
+            closure->match.min_valid = ml->min_world;
+        if (closure->match.max_valid > ml->max_world)
+            closure->match.max_valid = ml->max_world;
     }
     jl_method_t *meth = ml->func.method;
     if (closure->lim >= 0 && jl_is_dispatch_tupletype(meth->sig)) {
@@ -3304,6 +3303,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                               int intersections, size_t world, int cache_result,
                               size_t *min_valid, size_t *max_valid, int *ambig)
 {
+    JL_TIMING(METHOD_MATCH, METHOD_MATCH);
     if (world > jl_atomic_load_acquire(&jl_world_counter))
         return jl_nothing; // the future is not enumerable
     int has_ambiguity = 0;
@@ -3319,9 +3319,10 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
             va = NULL;
     }
     struct ml_matches_env env = {{ml_matches_visitor, (jl_value_t*)type, va, /* .search_slurp = */ 0,
+            /* .min_valid = */ *min_valid, /* .max_valid = */ *max_valid,
             /* .ti = */ NULL, /* .env = */ jl_emptysvec, /* .issubty = */ 0},
         intersections, world, lim, include_ambiguous, /* .t = */ jl_an_empty_vec_any,
-        /* .min_valid = */ *min_valid, /* .max_valid = */ *max_valid, /* .matc = */ NULL};
+        /* .matc = */ NULL};
     struct jl_typemap_assoc search = {(jl_value_t*)type, world, jl_emptysvec, 1, ~(size_t)0};
     jl_value_t *isect2 = NULL;
     JL_GC_PUSH6(&env.t, &env.matc, &env.match.env, &search.env, &env.match.ti, &isect2);
@@ -3396,8 +3397,8 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
             return jl_nothing;
         }
     }
-    *min_valid = env.min_valid;
-    *max_valid = env.max_valid;
+    *min_valid = env.match.min_valid;
+    *max_valid = env.match.max_valid;
     // done with many of these values now
     env.match.ti = NULL; env.matc = NULL; env.match.env = NULL; search.env = NULL;
     size_t i, j, len = jl_array_len(env.t);
@@ -3819,7 +3820,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
             jl_method_t *meth = env.matc->method;
             jl_svec_t *tpenv = env.matc->sparams;
             JL_LOCK(&mt->writelock);
-            cache_method(mt, &mt->cache, (jl_value_t*)mt, (jl_tupletype_t*)unw, meth, world, env.min_valid, env.max_valid, tpenv);
+            cache_method(mt, &mt->cache, (jl_value_t*)mt, (jl_tupletype_t*)unw, meth, world, env.match.min_valid, env.match.max_valid, tpenv);
             JL_UNLOCK(&mt->writelock);
         }
     }

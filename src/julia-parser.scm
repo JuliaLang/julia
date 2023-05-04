@@ -49,7 +49,7 @@
         ((not (length> l 8))
          (eval `(lambda (x)
                   (not (not (,(if (every symbol? l) 'memq 'memv) x (quote ,l)))))))
-        ((and (every symbol? l) (not (length> l 20)))
+        ((and (not (length> l 20)) (every symbol? l))
          (eval `(lambda (x)
                   (not (not (memq x (quote ,l)))))))
         (else

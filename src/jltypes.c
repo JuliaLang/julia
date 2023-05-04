@@ -831,8 +831,8 @@ JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
     if (jl_is_vararg(body)) {
         if (jl_options.depwarn) {
             if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
-                jl_error("Wrapping `Vararg` directly in UnionAll is deprecated (wrap the tuple instead).");
-            jl_printf(JL_STDERR, "WARNING: Wrapping `Vararg` directly in UnionAll is deprecated (wrap the tuple instead).\n");
+                jl_error("Wrapping `Vararg` directly in UnionAll is deprecated (wrap the tuple instead).\nYou may need to write `f(x::Vararg{T})` rather than `f(x::Vararg{<:T})` or `f(x::Vararg{T}) where T` instead of `f(x::Vararg{T} where T)`.");
+            jl_printf(JL_STDERR, "WARNING: Wrapping `Vararg` directly in UnionAll is deprecated (wrap the tuple instead).\nYou may need to write `f(x::Vararg{T})` rather than `f(x::Vararg{<:T})` or `f(x::Vararg{T}) where T` instead of `f(x::Vararg{T} where T)`.\n");
         }
         jl_vararg_t *vm = (jl_vararg_t*)body;
         int T_has_tv = vm->T && jl_has_typevar(vm->T, v);
@@ -3182,6 +3182,8 @@ void jl_init_types(void) JL_GC_DISABLED
 
     tv = jl_svec2(tvar("A"), tvar("R"));
     jl_opaque_closure_type = (jl_unionall_t*)jl_new_datatype(jl_symbol("OpaqueClosure"), core, jl_function_type, tv,
+        // N.B.: OpaqueClosure call code relies on specptr being field 5.
+        // Update that code if you change this.
         jl_perm_symsvec(5, "captures", "world", "source", "invoke", "specptr"),
         jl_svec(5, jl_any_type, jl_long_type, jl_any_type, pointer_void, pointer_void),
         jl_emptysvec, 0, 0, 5)->name->wrapper;

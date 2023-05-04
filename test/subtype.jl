@@ -2235,6 +2235,17 @@ let A = Pair{NTuple{N, Int}, Val{N}} where N,
     @testintersect A C C
 end
 
+# issue #49484
+let S = Tuple{Integer, U} where {II<:Array, U<:Tuple{Vararg{II, 1}}}
+    T = Tuple{Int, U} where {II<:Array, U<:Tuple{Vararg{II, 1}}}
+    @testintersect(S, Tuple{Int, U} where {U<:Tuple{Vararg{Any}}}, T)
+    @testintersect(S, Tuple{Int, U} where {N, U<:Tuple{Vararg{Any,N}}}, T)
+    @testintersect(S, Tuple{Int, U} where {U<:Tuple{Any,Vararg{Any}}}, T)
+    @testintersect(S, Tuple{Int, U} where {N, U<:Tuple{Any,Vararg{Any,N}}}, T)
+    @testintersect(S, Tuple{Int, U} where {U<:Tuple{Any,Any,Vararg{Any}}}, Union{})
+    @testintersect(S, Tuple{Int, U} where {N, U<:Tuple{Any,Any,Vararg{Any,N}}}, Union{})
+end
+
 # issue #43064
 let
     env_tuple(@nospecialize(x), @nospecialize(y)) = (intersection_env(x, y)[2]...,)

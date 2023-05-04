@@ -166,7 +166,6 @@ JL_DLLEXPORT void jl_timing_show_module(jl_module_t *m, jl_timing_block_t *cur_b
         const char *module_name = jl_symbol_name(m->name);
         TracyCZoneText(*(cur_block->tracy_ctx), module_name, strlen(module_name));
     } else {
-
         jl_timing_printf(cur_block, "%s.%s", jl_symbol_name(root->name), jl_symbol_name(m->name));
     }
 #endif
@@ -188,6 +187,15 @@ JL_DLLEXPORT void jl_timing_show_method_instance(jl_method_instance_t *mi, jl_ti
                      gnu_basename(jl_symbol_name(def->file)),
                      def->line,
                      jl_symbol_name(def->module->name));
+}
+
+JL_DLLEXPORT void jl_timing_show_method(jl_method_t *method, jl_timing_block_t *cur_block)
+{
+    jl_timing_show((jl_value_t *)method, cur_block);
+    jl_timing_printf(cur_block, "%s:%d in %s",
+                    gnu_basename(jl_symbol_name(method->file)),
+                    method->line,
+                    jl_symbol_name(method->module->name));
 }
 
 JL_DLLEXPORT void jl_timing_show_func_sig(jl_value_t *v, jl_timing_block_t *cur_block)
@@ -223,6 +231,13 @@ JL_DLLEXPORT void jl_timing_printf(jl_timing_block_t *cur_block, const char *for
     TracyCZoneText(*(cur_block->tracy_ctx), buf.buf, buf.size);
 #endif
     va_end(args);
+}
+
+JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str)
+{
+#ifdef USE_TRACY
+    TracyCZoneText(*(cur_block->tracy_ctx), str, strlen(str));
+#endif
 }
 
 JL_DLLEXPORT int jl_timing_set_enable(const char *subsystem, uint8_t enabled)

@@ -836,6 +836,7 @@ static void jl_copy_roots(jl_array_t *method_roots_list, uint64_t key)
 // verify that these edges intersect with the same methods as before
 static jl_array_t *jl_verify_edges(jl_array_t *targets, size_t minworld)
 {
+    JL_TIMING(VERIFY_IMAGE, VERIFY_Edges);
     size_t i, l = jl_array_len(targets) / 3;
     static jl_value_t *ulong_array JL_ALWAYS_LEAFTYPE = NULL;
     if (ulong_array == NULL)
@@ -936,6 +937,7 @@ static jl_array_t *jl_verify_edges(jl_array_t *targets, size_t minworld)
 // Combine all edges relevant to a method to initialize the maxvalids list
 static jl_array_t *jl_verify_methods(jl_array_t *edges, jl_array_t *maxvalids)
 {
+    JL_TIMING(VERIFY_IMAGE, VERIFY_Methods);
     jl_value_t *loctag = NULL;
     jl_array_t *maxvalids2 = NULL;
     JL_GC_PUSH2(&loctag, &maxvalids2);
@@ -1049,6 +1051,7 @@ static int jl_verify_graph_edge(size_t *maxvalids2_data, jl_array_t *edges, size
 // Visit all entries in edges, verify if they are valid
 static void jl_verify_graph(jl_array_t *edges, jl_array_t *maxvalids2)
 {
+    JL_TIMING(VERIFY_IMAGE, VERIFY_Graph);
     arraylist_t stack, visited;
     arraylist_new(&stack, 0);
     size_t i, n = jl_array_len(edges) / 2;

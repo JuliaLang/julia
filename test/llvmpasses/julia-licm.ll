@@ -1,3 +1,5 @@
+; This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -JuliaLICM -S %s | FileCheck %s
 ; RUN: opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaLICM' -S %s | FileCheck %s
 
@@ -7,6 +9,8 @@ declare void @julia.write_barrier({}*, ...)
 
 declare {}*** @julia.get_pgcstack()
 
+; COM: check basic allocation hoisting functionality
+; CHECK-LABEL: @julia_allocation_hoist
 define nonnull {} addrspace(10)* @julia_allocation_hoist(i64 signext %0) #0 {
 top:
   %1 = call {}*** @julia.get_pgcstack()
@@ -38,6 +42,26 @@ L22:                                              ; preds = %L4, %L22
   %.not = icmp eq i64 %value_phi5, %0
   %5 = add i64 %value_phi5, 1
   br i1 %.not, label %L3.loopexit, label %L22
+}
+
+; COM: check that we hoist the allocation out of the loop despite returning the allocation
+; CHECK-LABEL: @julia_hoist_returned
+define nonnull {} addrspace(10)* @julia_hoist_returned(i64 signext %n, i1 zeroext %ret) {
+top:
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %current_task = bitcast {}*** %pgcstack to {}**
+; CHECK: br label %preheader
+  br label %preheader
+; CHECK: preheader:
+preheader:
+; CHECK-NEXT: %alloc = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task, i64 8, {} addrspace(10)* @tag)
+; CHECK-NEXT: br label %loop
+  br label %loop
+loop:
+  %alloc = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task, i64 8, {} addrspace(10)* @tag)
+  br i1 %ret, label %return, label %loop
+return:
+  ret {} addrspace(10)* %alloc
 }
 
 ; Function Attrs: allocsize(1)

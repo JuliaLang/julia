@@ -268,6 +268,7 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
 extern "C" JL_DLLEXPORT
 void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode, int _external_linkage, size_t _world)
 {
+    JL_TIMING(NATIVE_AOT, NATIVE_Create);
     ++CreateNativeCalls;
     CreateNativeMax.updateMax(jl_array_len(methods));
     if (cgparams == NULL)
@@ -493,6 +494,7 @@ static void reportWriterError(const ErrorInfoBase &E)
     jl_safe_printf("ERROR: failed to emit output file %s\n", err.c_str());
 }
 
+#if JULIA_FLOAT16_ABI == 1
 static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionType *FT)
 {
     Function *target = M.getFunction(alias);
@@ -509,7 +511,7 @@ static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionT
     auto val = builder.CreateCall(target, CallArgs);
     builder.CreateRet(val);
 }
-
+#endif
 void multiversioning_preannotate(Module &M);
 
 // See src/processor.h for documentation about this table. Corresponds to jl_image_shard_t.
@@ -942,6 +944,8 @@ struct ShardTimers {
     }
 };
 
+void emitFloat16Wrappers(Module &M, bool external);
+
 // Perform the actual optimization and emission of the output files
 static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *outputs, const std::string *names,
                     NewArchiveMember *unopt, NewArchiveMember *opt, NewArchiveMember *obj, NewArchiveMember *asm_,
@@ -1002,7 +1006,9 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
         }
     }
     // no need to inject aliases if we have no functions
+
     if (inject_aliases) {
+#if JULIA_FLOAT16_ABI == 1
         // We would like to emit an alias or an weakref alias to redirect these symbols
         // but LLVM doesn't let us emit a GlobalAlias to a declaration...
         // So for now we inject a definition of these functions that calls our runtime
@@ -1017,8 +1023,10 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
                 FunctionType::get(Type::getHalfTy(M.getContext()), { Type::getFloatTy(M.getContext()) }, false));
         injectCRTAlias(M, "__truncdfhf2", "julia__truncdfhf2",
                 FunctionType::get(Type::getHalfTy(M.getContext()), { Type::getDoubleTy(M.getContext()) }, false));
+#else
+        emitFloat16Wrappers(M, false);
+#endif
     }
-
     timers.optimize.stopTimer();
 
     if (opt) {
@@ -1448,7 +1456,7 @@ void jl_dump_native_impl(void *native_code,
         const char *asm_fname,
         const char *sysimg_data, size_t sysimg_len, ios_t *s)
 {
-    JL_TIMING(NATIVE_DUMP, NATIVE_DUMP);
+    JL_TIMING(NATIVE_AOT, NATIVE_Dump);
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
     if (!bc_fname && !unopt_bc_fname && !obj_fname && !asm_fname) {
         LLVM_DEBUG(dbgs() << "No output requested, skipping native code dump?\n");
@@ -1767,6 +1775,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
                 PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
             }
         }
+#if JL_LLVM_VERSION < 150000
 #if defined(_COMPILER_ASAN_ENABLED_)
         PM->add(createAddressSanitizerFunctionPass());
 #endif
@@ -1775,6 +1784,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 #endif
 #if defined(_COMPILER_TSAN_ENABLED_)
         PM->add(createThreadSanitizerLegacyPassPass());
+#endif
 #endif
         return;
     }
@@ -1926,6 +1936,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     }
     PM->add(createCombineMulAddPass());
     PM->add(createDivRemPairsPass());
+#if JL_LLVM_VERSION < 150000
 #if defined(_COMPILER_ASAN_ENABLED_)
     PM->add(createAddressSanitizerFunctionPass());
 #endif
@@ -1934,6 +1945,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 #endif
 #if defined(_COMPILER_TSAN_ENABLED_)
     PM->add(createThreadSanitizerLegacyPassPass());
+#endif
 #endif
 }
 

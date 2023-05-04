@@ -8,6 +8,11 @@
 static inline const char *gnu_basename(const char *path)
 {
     const char *base = strrchr(path, '/');
+#ifdef _WIN32
+    const char *backslash = strrchr(path, '\\');
+    if (backslash > base)
+        base = backslash;
+#endif
     return base ? base+1 : path;
 }
 
@@ -63,8 +68,10 @@ extern uint32_t jl_timing_print_limit;
 #define jl_timing_show_module(m, b)
 #define jl_timing_show_filename(f, b)
 #define jl_timing_show_method_instance(mi, b)
+#define jl_timing_show_method(mi, b)
 #define jl_timing_show_func_sig(tt, b)
-#define jl_timing_printf(s, f, ...)
+#define jl_timing_printf(b, f, ...)
+#define jl_timing_puts(b, s)
 #define jl_timing_block_enter_task(ct, ptls, blk)
 #define jl_timing_block_exit_task(ct, ptls) ((jl_timing_block_t *)NULL)
 #define jl_pop_timing_block(blk)
@@ -102,8 +109,10 @@ void jl_timing_show(jl_value_t *v, jl_timing_block_t *cur_block);
 void jl_timing_show_module(jl_module_t *m, jl_timing_block_t *cur_block);
 void jl_timing_show_filename(const char *path, jl_timing_block_t *cur_block);
 void jl_timing_show_method_instance(jl_method_instance_t *mi, jl_timing_block_t *cur_block);
+void jl_timing_show_method(jl_method_t *method, jl_timing_block_t *cur_block);
 void jl_timing_show_func_sig(jl_value_t *v, jl_timing_block_t *cur_block);
 void jl_timing_printf(jl_timing_block_t *cur_block, const char *format, ...);
+void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
 #ifdef __cplusplus
 }
 #endif
@@ -133,16 +142,18 @@ void jl_timing_printf(jl_timing_block_t *cur_block, const char *format, ...);
         X(MACRO_INVOCATION)      \
         X(AST_COMPRESS)          \
         X(AST_UNCOMPRESS)        \
-        X(SYSIMG_LOAD)           \
         X(SYSIMG_DUMP)           \
-        X(NATIVE_DUMP)           \
+        X(NATIVE_AOT)            \
         X(ADD_METHOD)            \
         X(LOAD_MODULE)           \
+        X(LOAD_IMAGE)            \
+        X(VERIFY_IMAGE)          \
         X(SAVE_MODULE)           \
         X(INIT_MODULE)           \
         X(LOCK_SPIN)             \
-        X(DL_OPEN)                \
-
+        X(STACKWALK)             \
+        X(DL_OPEN)               \
+        X(JULIA_INIT)            \
 
 
 #define JL_TIMING_EVENTS \
@@ -154,6 +165,16 @@ void jl_timing_printf(jl_timing_block_t *cur_block, const char *format, ...);
         X(CODEGEN_LLVM) \
         X(CODEGEN_Codeinst) \
         X(CODEGEN_Workqueue) \
+        X(LOAD_Sysimg) \
+        X(LOAD_Pkgimg) \
+        X(LOAD_Processor) \
+        X(VERIFY_Edges) \
+        X(VERIFY_Methods) \
+        X(VERIFY_Graph) \
+        X(STACKWALK_Backtrace) \
+        X(STACKWALK_Excstack) \
+        X(NATIVE_Dump) \
+        X(NATIVE_Create) \
 
 
 enum jl_timing_owners {
@@ -209,13 +230,13 @@ enum jl_timing_events {
 #endif
 
 #ifdef USE_ITTAPI
-#define _ITTAPI_CTX_MEMBER int event;
-#define _ITTAPI_CTOR(block, event) block->event = event
-#define _ITTAPI_START(block) if (_jl_timing_enabled(block->event)) __itt_event_start(jl_timing_ittapi_events[block->event])
-#define _ITTAPI_STOP(block) if (_jl_timing_enabled(block->event)) __itt_event_end(jl_timing_ittapi_events[block->event])
+#define _ITTAPI_CTX_MEMBER int owner; int event;
+#define _ITTAPI_CTOR(block, owner, event) block->owner = owner; block->event = event
+#define _ITTAPI_START(block) if (_jl_timing_enabled(block->owner)) __itt_event_start(jl_timing_ittapi_events[block->event])
+#define _ITTAPI_STOP(block) if (_jl_timing_enabled(block->owner)) __itt_event_end(jl_timing_ittapi_events[block->event])
 #else
 #define _ITTAPI_CTX_MEMBER
-#define _ITTAPI_CTOR(block, event)
+#define _ITTAPI_CTOR(block, owner, event)
 #define _ITTAPI_START(block)
 #define _ITTAPI_STOP(block)
 #endif
@@ -287,7 +308,7 @@ STATIC_INLINE void _jl_timing_block_ctor(jl_timing_block_t *block, int owner, in
     uint64_t t = cycleclock(); (void)t;
     _COUNTS_CTOR(&block->counts_ctx, owner);
     _COUNTS_START(&block->counts_ctx, t);
-    _ITTAPI_CTOR(block, event);
+    _ITTAPI_CTOR(block, owner, event);
     _ITTAPI_START(block);
 
     jl_task_t *ct = jl_current_task;
