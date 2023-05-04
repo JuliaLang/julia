@@ -153,7 +153,9 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
     if (dt == jl_datatype_type) {
         jl_datatype_t *dta = (jl_datatype_t*)a;
         jl_datatype_t *dtb = (jl_datatype_t*)b;
-        if (dta->name != dtb->name)
+        if (dta->name != dtb->name || dta->hash != dtb->hash)
+            return 0;
+        if (dta->name != jl_tuple_typename && (dta->isconcretetype || dtb->isconcretetype))
             return 0;
         size_t i, l = jl_nparams(dta);
         if (jl_nparams(dtb) != l)
@@ -228,7 +230,7 @@ int jl_egal__special(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b 
     if (dt == jl_datatype_type) {
         jl_datatype_t *dta = (jl_datatype_t*)a;
         jl_datatype_t *dtb = (jl_datatype_t*)b;
-        if (dta->name != dtb->name)
+        if (dta->name != dtb->name || dta->hash != dtb->hash)
             return 0;
         if (dta->name != jl_tuple_typename && (dta->isconcretetype || dtb->isconcretetype))
             return 0;
