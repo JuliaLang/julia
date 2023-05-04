@@ -233,6 +233,13 @@ JL_DLLEXPORT void jl_timing_printf(jl_timing_block_t *cur_block, const char *for
     va_end(args);
 }
 
+JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str)
+{
+#ifdef USE_TRACY
+    TracyCZoneText(*(cur_block->tracy_ctx), str, strlen(str));
+#endif
+}
+
 JL_DLLEXPORT int jl_timing_set_enable(const char *subsystem, uint8_t enabled)
 {
     for (int i = 0; i < JL_TIMING_LAST; i++) {
