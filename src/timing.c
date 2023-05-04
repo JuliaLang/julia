@@ -56,6 +56,7 @@ JL_DLLEXPORT __itt_event jl_timing_ittapi_events[(int)JL_TIMING_EVENT_LAST];
 
 void jl_print_timings(void)
 {
+#ifdef USE_TIMING_COUNTS
     uint64_t total_time = cycleclock() - t0;
     uint64_t root_time = total_time;
     for (int i = 0; i < JL_TIMING_LAST; i++) {
@@ -70,11 +71,12 @@ void jl_print_timings(void)
     }
 
     fprintf(stderr, "\nJULIA COUNTERS\n");
-    uint64_t val = 0;
-#ifdef USE_TIMING_COUNTS
-#define X(name) val = jl_atomic_load_relaxed(&jl_timing_counters[(int)JL_TIMING_COUNTER_##name].basic_counter); \
-    if (val != 0) \
-        fprintf(stderr, "%-25s : %" PRIu64 "\n", #name, val);
+#define X(name) do { \
+        int64_t val = (int64_t) jl_atomic_load_relaxed(&jl_timing_counters[(int)JL_TIMING_COUNTER_##name].basic_counter); \
+        if (val != 0) \
+            fprintf(stderr, "%-25s : %" PRIi64 "\n", #name, val); \
+    } while (0);
+
     JL_TIMING_COUNTERS
 #undef X
 #endif
