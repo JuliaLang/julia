@@ -29,8 +29,8 @@ matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vec
 Iterating the decomposition produces the components `F.values` and `F.vectors`.
 
 `alg` specifies which algorithm and LAPACK method to use for eigenvalue decomposition:
-- `alg = DivideAndConquer()` (default): Calls `LAPACK.syevd`.
-- `alg = QRIteration()`: Calls `LAPACK.syev`.
+- `alg = DivideAndConquer()` (default): Calls `LAPACK.syevd!`.
+- `alg = QRIteration()`: Calls `LAPACK.syev!`.
 - `alg = RobustRepresentations()`: Multiple relatively robust representations method, Calls `LAPACK.syevr!`.
 
 See James W. Demmel et al, SIAM J. Sci. Comput. 30, 3, 1508 (2008) for
@@ -120,8 +120,8 @@ end
 Return the eigenvalues of `A`.
 
 `alg` specifies which algorithm and LAPACK method to use for eigenvalue decomposition:
-- `alg = DivideAndConquer()` (default): Calls `LAPACK.syevd`.
-- `alg = QRIteration()`: Calls `LAPACK.syev`.
+- `alg = DivideAndConquer()` (default): Calls `LAPACK.syevd!`.
+- `alg = QRIteration()`: Calls `LAPACK.syev!`.
 - `alg = RobustRepresentations()`: Multiple relatively robust representations method, Calls `LAPACK.syevr!`.
 
 See James W. Demmel et al, SIAM J. Sci. Comput. 30, 3, 1508 (2008) for
