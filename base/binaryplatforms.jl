@@ -741,10 +741,10 @@ function Base.parse(::Type{Platform}, triplet::String; validate_strict::Bool = f
         end
         os_version = nothing
         if os == "macos"
-            os_version = extract_os_version("macos", r".*darwin([\d\.]+)")
+            os_version = extract_os_version("macos", r".*darwin([\d\.]+)"sa)
         end
         if os == "freebsd"
-            os_version = extract_os_version("freebsd", r".*freebsd([\d.]+)")
+            os_version = extract_os_version("freebsd", r".*freebsd([\d.]+)"sa)
         end
         tags["os_version"] = os_version
 
@@ -798,13 +798,13 @@ function parse_dl_name_version(path::String, os::String)
     local dlregex
     if os == "windows"
         # On Windows, libraries look like `libnettle-6.dll`
-        dlregex = r"^(.*?)(?:-((?:[\.\d]+)*))?\.dll$"
+        dlregex = r"^(.*?)(?:-((?:[\.\d]+)*))?\.dll$"sa
     elseif os == "macos"
         # On OSX, libraries look like `libnettle.6.3.dylib`
-        dlregex = r"^(.*?)((?:\.[\d]+)*)\.dylib$"
+        dlregex = r"^(.*?)((?:\.[\d]+)*)\.dylib$"sa
     else
         # On Linux and FreeBSD, libraries look like `libnettle.so.6.3.0`
-        dlregex = r"^(.*?)\.so((?:\.[\d]+)*)$"
+        dlregex = r"^(.*?)\.so((?:\.[\d]+)*)$"sa
     end
 
     m = match(dlregex, basename(path))
@@ -873,7 +873,7 @@ function detect_libstdcxx_version(max_minor_version::Int=30)
     end
 
     # Brute-force our way through GLIBCXX_* symbols to discover which version we're linked against
-    hdl = Libdl.dlopen(first(libstdcxx_paths))
+    hdl = Libdl.dlopen(first(libstdcxx_paths))::Ptr{Cvoid}
     # Try all GLIBCXX versions down to GCC v4.8:
     # https://gcc.gnu.org/onlinedocs/libstdc++/manual/abi.html
     for minor_version in max_minor_version:-1:18
@@ -904,7 +904,7 @@ function detect_cxxstring_abi()
     end
 
     function open_libllvm(f::Function)
-        for lib_name in ("libLLVM-14jl", "libLLVM", "LLVM", "libLLVMSupport")
+        for lib_name in (Base.libllvm_name, "libLLVM", "LLVM", "libLLVMSupport")
             hdl = Libdl.dlopen_e(lib_name)
             if hdl != C_NULL
                 try
@@ -1016,19 +1016,19 @@ function platforms_match(a::AbstractPlatform, b::AbstractPlatform)
 
         # Throw an error if `a` and `b` have both set non-default comparison strategies for `k`
         # and they're not the same strategy.
-        if a_comp != compare_default && b_comp != compare_default && a_comp != b_comp
+        if a_comp !== compare_default && b_comp !== compare_default && a_comp !== b_comp
             throw(ArgumentError("Cannot compare Platform objects with two different non-default comparison strategies for the same key \"$(k)\""))
         end
 
         # Select the custom comparator, if we have one.
         comparator = a_comp
-        if b_comp != compare_default
+        if b_comp !== compare_default
             comparator = b_comp
         end
 
         # Call the comparator, passing in which objects requested this comparison (one, the other, or both)
         # For some comparators this doesn't matter, but for non-symmetrical comparisons, it does.
-        if !(comparator(ak, bk, a_comp == comparator, b_comp == comparator)::Bool)
+        if !(comparator(ak, bk, a_comp === comparator, b_comp === comparator)::Bool)
             return false
         end
     end
@@ -1067,14 +1067,30 @@ function select_platform(download_info::Dict, platform::AbstractPlatform = HostP
         return nothing
     end
 
-    # At this point, we may have multiple possibilities.  E.g. if, in the future,
-    # Julia can be built without a direct dependency on libgfortran, we may match
-    # multiple tarballs that vary only within their libgfortran ABI.  To narrow it
-    # down, we just sort by triplet, then pick the last one.  This has the effect
-    # of generally choosing the latest release (e.g. a `libgfortran5` tarball
-    # rather than a `libgfortran3` tarball)
-    p = last(sort(ps, by = p -> triplet(p)))
-    return download_info[p]
+    # At this point, we may have multiple possibilities.  We now engage a multi-
+    # stage selection algorithm, where we first sort the matches by how complete
+    # the match is, e.g. preferring matches where the intersection of tags is
+    # equal to the union of the tags:
+    function match_loss(a, b)
+        a_tags = Set(keys(tags(a)))
+        b_tags = Set(keys(tags(b)))
+        return length(union(a_tags, b_tags)) - length(intersect(a_tags, b_tags))
+    end
+
+    # We prefer these better matches, and secondarily reverse-sort by triplet so
+    # as to generally choose the latest release (e.g. a `libgfortran5` tarball
+    # over a `libgfortran3` tarball).
+    ps = sort(ps, lt = (a, b) -> begin
+        loss_a = match_loss(a, platform)
+        loss_b = match_loss(b, platform)
+        if loss_a != loss_b
+            return loss_a < loss_b
+        end
+        return triplet(a) > triplet(b)
+    end)
+
+    # @invokelatest here to not get invalidated by new defs of `==(::Function, ::Function)`
+    return @invokelatest getindex(download_info, first(ps))
 end
 
 # precompiles to reduce latency (see https://github.com/JuliaLang/julia/pull/43990#issuecomment-1025692379)

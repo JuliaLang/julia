@@ -440,7 +440,7 @@ value 1 and the variable `b`. Note the important distinction between the way `a`
 
 As hinted above, one extremely useful feature of Julia is the capability to generate and manipulate
 Julia code within Julia itself. We have already seen one example of a function returning [`Expr`](@ref)
-objects: the [`parse`](@ref) function, which takes a string of Julia code and returns the corresponding
+objects: the [`Meta.parse`](@ref) function, which takes a string of Julia code and returns the corresponding
 `Expr`. A function can also take one or more `Expr` objects as arguments, and return another
 `Expr`. Here is a simple, motivating example:
 

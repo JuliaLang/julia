@@ -13,9 +13,9 @@ export libopenblas
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libopenblas_handle = C_NULL
-libopenblas_path = ""
+artifact_dir::String = ""
+libopenblas_handle::Ptr{Cvoid} = C_NULL
+libopenblas_path::String = ""
 
 if Base.USE_BLAS64
     const libsuffix = "64_"
@@ -47,7 +47,7 @@ function __init__()
        !haskey(ENV, "OMP_NUM_THREADS")
         # We set this to `1` here, and then LinearAlgebra will update
         # to the true value in its `__init__()` function.
-        ENV["OPENBLAS_NUM_THREADS"] = "1"
+        ENV["OPENBLAS_DEFAULT_NUM_THREADS"] = "1"
     end
 
     global libopenblas_handle = dlopen(libopenblas)

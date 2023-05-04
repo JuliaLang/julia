@@ -113,6 +113,7 @@ has_offset_axes(A::AbstractVector) = Int(firstindex(A))::Int != 1 # improve perf
 # note: this could call `any` directly if the compiler can infer it
 has_offset_axes(As...) = _any_tuple(has_offset_axes, false, As...)
 has_offset_axes(::Colon) = false
+has_offset_axes(::Array) = false
 
 """
     require_one_based_indexing(A::AbstractArray)
@@ -182,11 +183,13 @@ CartesianIndex{2}
      For arrays, this function requires at least Julia 1.2.
 """
 keytype(a::AbstractArray) = keytype(typeof(a))
+keytype(::Type{Union{}}, slurp...) = eltype(Union{})
 
 keytype(A::Type{<:AbstractArray}) = CartesianIndex{ndims(A)}
 keytype(A::Type{<:AbstractVector}) = Int
 
 valtype(a::AbstractArray) = valtype(typeof(a))
+valtype(::Type{Union{}}, slurp...) = eltype(Union{})
 
 """
     valtype(T::Type{<:AbstractArray})
@@ -231,7 +234,7 @@ UInt8
 ```
 """
 eltype(::Type) = Any
-eltype(::Type{Bottom}) = throw(ArgumentError("Union{} does not have elements"))
+eltype(::Type{Bottom}, slurp...) = throw(ArgumentError("Union{} does not have elements"))
 eltype(x) = eltype(typeof(x))
 eltype(::Type{<:AbstractArray{E}}) where {E} = @isdefined(E) ? E : Any
 
@@ -267,6 +270,7 @@ julia> ndims(A)
 """
 ndims(::AbstractArray{T,N}) where {T,N} = N
 ndims(::Type{<:AbstractArray{<:Any,N}}) where {N} = N
+ndims(::Type{Union{}}, slurp...) = throw(ArgumentError("Union{} does not have elements"))
 
 """
     length(collection) -> Integer
@@ -766,6 +770,8 @@ false
 checkindex(::Type{Bool}, inds::AbstractUnitRange, i) =
     throw(ArgumentError("unable to check bounds for indices of type $(typeof(i))"))
 checkindex(::Type{Bool}, inds::AbstractUnitRange, i::Real) = (first(inds) <= i) & (i <= last(inds))
+checkindex(::Type{Bool}, inds::IdentityUnitRange, i::Real) = checkindex(Bool, inds.indices, i)
+checkindex(::Type{Bool}, inds::OneTo{T}, i::T) where {T<:BitInteger} = unsigned(i - one(i)) < unsigned(last(inds))
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Colon) = true
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Slice) = true
 function checkindex(::Type{Bool}, inds::AbstractUnitRange, r::AbstractRange)
@@ -936,7 +942,7 @@ end
 
 ## from general iterable to any array
 
-# This is `@Experimental.max_methods 1 function copyto! end`, which is not
+# This is `Experimental.@max_methods 1 function copyto! end`, which is not
 # defined at this point in bootstrap.
 typeof(function copyto! end).name.max_methods = UInt8(1)
 
@@ -1982,12 +1988,16 @@ julia> cat(1, [2], [3;;]; dims=Val(2))
 
 # The specializations for 1 and 2 inputs are important
 # especially when running with --inline=no, see #11158
+# The specializations for Union{AbstractVecOrMat,Number} are necessary
+# to have more specialized methods here than in LinearAlgebra/uniformscaling.jl
 vcat(A::AbstractArray) = cat(A; dims=Val(1))
 vcat(A::AbstractArray, B::AbstractArray) = cat(A, B; dims=Val(1))
 vcat(A::AbstractArray...) = cat(A...; dims=Val(1))
+vcat(A::Union{AbstractVecOrMat,Number}...) = cat(A...; dims=Val(1))
 hcat(A::AbstractArray) = cat(A; dims=Val(2))
 hcat(A::AbstractArray, B::AbstractArray) = cat(A, B; dims=Val(2))
 hcat(A::AbstractArray...) = cat(A...; dims=Val(2))
+hcat(A::Union{AbstractVecOrMat,Number}...) = cat(A...; dims=Val(2))
 
 typed_vcat(T::Type, A::AbstractArray) = _cat_t(Val(1), T, A)
 typed_vcat(T::Type, A::AbstractArray, B::AbstractArray) = _cat_t(Val(1), T, A, B)
@@ -2137,6 +2147,8 @@ end
 
 hvcat(rows::Tuple{Vararg{Int}}, xs::Number...) = typed_hvcat(promote_typeof(xs...), rows, xs...)
 hvcat(rows::Tuple{Vararg{Int}}, xs...) = typed_hvcat(promote_eltypeof(xs...), rows, xs...)
+# the following method is needed to provide a more specific one compared to LinearAlgebra/uniformscaling.jl
+hvcat(rows::Tuple{Vararg{Int}}, xs::Union{AbstractVecOrMat,Number}...) = typed_hvcat(promote_eltypeof(xs...), rows, xs...)
 
 function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...) where T
     nr = length(rows)

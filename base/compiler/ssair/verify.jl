@@ -43,6 +43,12 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
                 error("")
             end
         end
+
+        use_inst = ir[op]
+        if isa(use_inst[:inst], Union{GotoIfNot, GotoNode, ReturnNode})
+            @verify_error "At statement %$use_idx: Invalid use of value statement or terminator %$(op.id)"
+            error("")
+        end
     elseif isa(op, GlobalRef)
         if !isdefined(op.mod, op.name) || !isconst(op.mod, op.name)
             @verify_error "Unbound GlobalRef not allowed in value position"
@@ -63,7 +69,7 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
     elseif isa(op, Union{OldSSAValue, NewSSAValue})
         @verify_error "Left over SSA marker"
         error("")
-    elseif isa(op, Union{SlotNumber, TypedSlot})
+    elseif isa(op, UnoptSlot)
         @verify_error "Left over slot detected in converted IR"
         error("")
     end
@@ -79,8 +85,9 @@ function count_int(val::Int, arr::Vector{Int})
     n
 end
 
-function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=false,
-                   lattice = OptimizerLattice())
+function verify_ir(ir::IRCode, print::Bool=true,
+                   allow_frontend_forms::Bool=false,
+                   𝕃ₒ::AbstractLattice = OptimizerLattice())
     # For now require compact IR
     # @assert isempty(ir.new_nodes)
     # Verify CFG
@@ -110,9 +117,9 @@ function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=fals
                 error("")
             end
             if !(idx in ir.cfg.blocks[s].preds)
-                #@Base.show ir.cfg
-                #@Base.show ir
-                #@Base.show ir.argtypes
+                #Base.@show ir.cfg
+                #Base.@show ir
+                #Base.@show ir.argtypes
                 @verify_error "Successor $s of block $idx not in predecessor list"
                 error("")
             end
@@ -191,8 +198,8 @@ function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=fals
                     end
                 end
                 if !(edge == 0 && bb == 1) && !(edge in ir.cfg.blocks[bb].preds)
-                    #@Base.show ir.argtypes
-                    #@Base.show ir
+                    #Base.@show ir.argtypes
+                    #Base.@show ir
                     @verify_error "Edge $edge of φ node $idx not in predecessor list"
                     error("")
                 end
@@ -207,7 +214,7 @@ function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=fals
                 val = stmt.values[i]
                 phiT = ir.stmts[idx][:type]
                 if isa(val, SSAValue)
-                    if !⊑(lattice, types(ir)[val], phiT)
+                    if !⊑(𝕃ₒ, types(ir)[val], phiT)
                         #@verify_error """
                         #    PhiNode $idx, has operand $(val.id), whose type is not a sub lattice element.
                         #    PhiNode type was $phiT
@@ -267,7 +274,7 @@ function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=fals
                 elseif stmt.head === :foreigncall
                     isforeigncall = true
                 elseif stmt.head === :isdefined && length(stmt.args) == 1 &&
-                        (stmt.args[1] isa GlobalRef || (stmt.args[1] isa Expr && stmt.args[1].head === :static_parameter))
+                        (stmt.args[1] isa GlobalRef || isexpr(stmt.args[1], :static_parameter))
                     # a GlobalRef or static_parameter isdefined check does not evaluate its argument
                     continue
                 elseif stmt.head === :call

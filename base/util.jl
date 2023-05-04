@@ -22,6 +22,7 @@ const text_colors = Dict{Union{Symbol,Int},String}(
     :normal        => "\033[0m",
     :default       => "\033[39m",
     :bold          => "\033[1m",
+    :italic        => "\033[3m",
     :underline     => "\033[4m",
     :blink         => "\033[5m",
     :reverse       => "\033[7m",
@@ -35,6 +36,7 @@ end
 
 const disable_text_style = Dict{Symbol,String}(
     :bold      => "\033[22m",
+    :italic    => "\033[23m",
     :underline => "\033[24m",
     :blink     => "\033[25m",
     :reverse   => "\033[27m",
@@ -47,7 +49,7 @@ const disable_text_style = Dict{Symbol,String}(
 # Create a docstring with an automatically generated list
 # of colors.
 let color_syms = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors))),
-    formatting_syms = [:normal, :bold, :default]
+    formatting_syms = [:normal, :bold, :italic, :default]
     global const available_text_colors = cat(
         sort!(intersect(color_syms, formatting_syms), rev=true),
         sort!(setdiff(  color_syms, formatting_syms));
@@ -69,7 +71,7 @@ Printing with the color `:nothing` will print the string without modifications.
 text_colors
 
 function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}, io::IO, args...;
-        bold::Bool = false, underline::Bool = false, blink::Bool = false,
+        bold::Bool = false, italic::Bool = false, underline::Bool = false, blink::Bool = false,
         reverse::Bool = false, hidden::Bool = false)
     buf = IOBuffer()
     iscolor = get(io, :color, false)::Bool
@@ -80,12 +82,14 @@ function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}
             print(io, str)
         else
             bold && color === :bold && (color = :nothing)
+            italic && color === :italic && (color = :nothing)
             underline && color === :underline && (color = :nothing)
             blink && color === :blink && (color = :nothing)
             reverse && color === :reverse && (color = :nothing)
             hidden && color === :hidden && (color = :nothing)
             enable_ansi  = get(text_colors, color, text_colors[:default]) *
                                (bold ? text_colors[:bold] : "") *
+                               (italic ? text_colors[:italic] : "") *
                                (underline ? text_colors[:underline] : "") *
                                (blink ? text_colors[:blink] : "") *
                                (reverse ? text_colors[:reverse] : "") *
@@ -96,6 +100,7 @@ function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}
                            (blink ? disable_text_style[:blink] : "") *
                            (underline ? disable_text_style[:underline] : "") *
                            (bold ? disable_text_style[:bold] : "") *
+                           (italic ? disable_text_style[:italic] : "") *
                                get(disable_text_style, color, text_colors[:default])
             first = true
             for line in eachsplit(str, '\n')
@@ -110,48 +115,63 @@ function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}
 end
 
 """
-    printstyled([io], xs...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Symbol,Int}=:normal)
+    printstyled([io], xs...; bold::Bool=false, italic::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Symbol,Int}=:normal)
 
 Print `xs` in a color specified as a symbol or integer, optionally in bold.
 
 Keyword `color` may take any of the values $(Base.available_text_colors_docstring)
 or an integer between 0 and 255 inclusive. Note that not all terminals support 256 colors.
 
-Keywords `bold=true`, `underline=true`, `blink=true` are self-explanatory.
+Keywords `bold=true`, `italic=true`, `underline=true`, `blink=true` are self-explanatory.
 Keyword `reverse=true` prints with foreground and background colors exchanged,
 and `hidden=true` should be invisible in the terminal but can still be copied.
 These properties can be used in any combination.
 
 See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
 
+!!! note
+    Not all terminals support italic output. Some terminals interpret italic as reverse or
+    blink.
+
 !!! compat "Julia 1.7"
     Keywords except `color` and `bold` were added in Julia 1.7.
+!!! compat "Julia 1.9"
+    Support for italic output was added in Julia 1.9.
 """
-@constprop :none printstyled(io::IO, msg...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
-    with_output_color(print, color, io, msg...; bold=bold, underline=underline, blink=blink, reverse=reverse, hidden=hidden)
-@constprop :none printstyled(msg...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
-    printstyled(stdout, msg...; bold=bold, underline=underline, blink=blink, reverse=reverse, hidden=hidden, color=color)
+@constprop :none printstyled(io::IO, msg...; bold::Bool=false, italic::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
+    with_output_color(print, color, io, msg...; bold=bold, italic=italic, underline=underline, blink=blink, reverse=reverse, hidden=hidden)
+@constprop :none printstyled(msg...; bold::Bool=false, italic::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
+    printstyled(stdout, msg...; bold=bold, italic=italic, underline=underline, blink=blink, reverse=reverse, hidden=hidden, color=color)
 
 """
-    Base.julia_cmd(juliapath=joinpath(Sys.BINDIR, julia_exename()))
+    Base.julia_cmd(juliapath=joinpath(Sys.BINDIR, julia_exename()); cpu_target)
 
 Return a julia command similar to the one of the running process.
 Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-native-code`,
-`--compiled-modules`, `--inline`, `--check-bounds`, `--optimize`, `-g`,
+`--compiled-modules`, `--pkgimages`, `--inline`, `--check-bounds`, `--optimize`, `--min-optlevel`, `-g`,
 `--code-coverage`, `--track-allocation`, `--color`, `--startup-file`, and `--depwarn`
 command line arguments that are not at their default values.
 
 Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notably not propagated currently.
+
+To get the julia command without propagated command line arguments, `julia_cmd()[1]` can be used.
 
 !!! compat "Julia 1.1"
     Only the `--cpu-target`, `--sysimage`, `--depwarn`, `--compile` and `--check-bounds` flags were propagated before Julia 1.1.
 
 !!! compat "Julia 1.5"
     The flags `--color` and `--startup-file` were added in Julia 1.5.
+
+!!! compat "Julia 1.9"
+    The keyword argument `cpu_target` was added.
+
+    The flag `--pkgimages` was added in Julia 1.9.
 """
-function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
+function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Union{Nothing,String} = nothing)
     opts = JLOptions()
-    cpu_target = unsafe_string(opts.cpu_target)
+    if cpu_target === nothing
+        cpu_target = unsafe_string(opts.cpu_target)
+    end
     image_file = unsafe_string(opts.image_file)
     addflags = String[]
     let compile = if opts.compile_enabled == 0
@@ -219,6 +239,12 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
     end
     if opts.use_sysimage_native_code == 0
         push!(addflags, "--sysimage-native-code=no")
+    end
+    if opts.use_pkgimages == 0
+        push!(addflags, "--pkgimages=no")
+    else
+        # If pkgimage is set, malloc_log and code_coverage should not
+        @assert opts.malloc_log == 0 && opts.code_coverage == 0
     end
     return `$julia -C$cpu_target -J$image_file $addflags`
 end
@@ -487,10 +513,17 @@ function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
 end
 _crc32c(io::IO, crc::UInt32=0x00000000) = _crc32c(io, typemax(Int64), crc)
 _crc32c(io::IOStream, crc::UInt32=0x00000000) = _crc32c(io, filesize(io)-position(io), crc)
-_crc32c(uuid::UUID, crc::UInt32=0x00000000) =
-    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, uuid.value, 16)
+_crc32c(uuid::UUID, crc::UInt32=0x00000000) = _crc32c(uuid.value, crc)
+_crc32c(x::UInt128, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, x, 16)
 _crc32c(x::UInt64, crc::UInt32=0x00000000) =
     ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt64}, Csize_t), crc, x, 8)
+_crc32c(x::UInt32, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt32}, Csize_t), crc, x, 4)
+_crc32c(x::UInt16, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt16}, Csize_t), crc, x, 2)
+_crc32c(x::UInt8, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt8}, Csize_t), crc, x, 1)
 
 """
     @kwdef typedef
@@ -655,7 +688,8 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
     seed !== nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_THREADS"] = "$ncores"
-    ENV2["JULIA_DEPOT_PATH"] = mktempdir(; cleanup = true)
+    pathsep = Sys.iswindows() ? ";" : ":"
+    ENV2["JULIA_DEPOT_PATH"] = string(mktempdir(; cleanup = true), pathsep) # make sure the default depots can be loaded
     delete!(ENV2, "JULIA_LOAD_PATH")
     delete!(ENV2, "JULIA_PROJECT")
     try

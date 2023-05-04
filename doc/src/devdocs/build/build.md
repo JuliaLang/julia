@@ -187,6 +187,7 @@ uses are listed in [`deps/$(libname).version`](https://github.com/JuliaLang/juli
 - **[mbedtls]**              — library used for cryptography and transport layer security, used by libssh2
 - **[utf8proc]**             — a library for processing UTF-8 encoded Unicode strings.
 - **[LLVM libunwind]**       — LLVM's fork of [libunwind], a library that determines the call-chain of a program.
+- **[ITTAPI]**               — Intel's Instrumentation and Tracing Technology and Just-In-Time API.
 
 [GNU make]:     https://www.gnu.org/software/make
 [patch]:        https://www.gnu.org/software/patch
@@ -222,6 +223,7 @@ uses are listed in [`deps/$(libname).version`](https://github.com/JuliaLang/juli
 [pkg-config]:   https://www.freedesktop.org/wiki/Software/pkg-config/
 [powershell]:   https://docs.microsoft.com/en-us/powershell/scripting/wmf/overview
 [which]:        https://carlowood.github.io/which/
+[ITTAPI]:       https://github.com/intel/ittapi
 
 ## Build dependencies
 

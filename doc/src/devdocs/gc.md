@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Julia has a generational non-moving mark-sweep garbage collector.
+Julia has a serial, stop-the-world, generational, non-moving mark-sweep garbage collector.
 Native objects are precisely scanned and foreign ones are conservatively marked.
 
 ## Memory layout of objects and GC bits
@@ -15,7 +15,8 @@ Objects are aligned by a multiple of 4 bytes to ensure this pointer tagging is l
 
 ## Pool allocation
 
-Sufficiently small objects (up to 2032 bytes) are pool-allocated.
+Sufficiently small objects (up to 2032 bytes) are allocated on per-thread object
+pools.
 
 A three-level tree (analogous to a three-level page-table) is used to keep metadata
 (e.g. whether a page has been allocated, whether contains marked objects, number of free objects etc.)

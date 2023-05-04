@@ -221,7 +221,7 @@ end
 
 function Float32(x::UInt128)
     x == 0 && return 0f0
-    n = 128-leading_zeros(x) # ndigits0z(x,2)
+    n = top_set_bit(x) # ndigits0z(x,2)
     if n <= 24
         y = ((x % UInt32) << (24-n)) & 0x007f_ffff
     else
@@ -237,7 +237,7 @@ function Float32(x::Int128)
     x == 0 && return 0f0
     s = ((x >>> 96) % UInt32) & 0x8000_0000 # sign bit
     x = abs(x) % UInt128
-    n = 128-leading_zeros(x) # ndigits0z(x,2)
+    n = top_set_bit(x) # ndigits0z(x,2)
     if n <= 24
         y = ((x % UInt32) << (24-n)) & 0x007f_ffff
     else
@@ -310,6 +310,7 @@ Float64
 """
 float(::Type{T}) where {T<:Number} = typeof(float(zero(T)))
 float(::Type{T}) where {T<:AbstractFloat} = T
+float(::Type{Union{}}, slurp...) = Union{}(0.0)
 
 """
     unsafe_trunc(T, x)
@@ -619,7 +620,7 @@ See also: [`iszero`](@ref), [`isone`](@ref), [`isinf`](@ref), [`ismissing`](@ref
 isnan(x::AbstractFloat) = (x != x)::Bool
 isnan(x::Number) = false
 
-isfinite(x::AbstractFloat) = x - x == 0
+isfinite(x::AbstractFloat) = !isnan(x - x)
 isfinite(x::Real) = decompose(x)[3] != 0
 isfinite(x::Integer) = true
 
@@ -631,6 +632,7 @@ Test whether a number is infinite.
 See also: [`Inf`](@ref), [`iszero`](@ref), [`isfinite`](@ref), [`isnan`](@ref).
 """
 isinf(x::Real) = !isnan(x) & !isfinite(x)
+isinf(x::IEEEFloat) = abs(x) === oftype(x, Inf)
 
 const hx_NaN = hash_uint64(reinterpret(UInt64, NaN))
 let Tf = Float64, Tu = UInt64, Ti = Int64
@@ -923,6 +925,7 @@ false
 
 julia> issubnormal(1.0f-38)
 true
+```
 """
 function issubnormal(x::T) where {T<:IEEEFloat}
     y = reinterpret(Unsigned, x)

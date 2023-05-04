@@ -225,7 +225,7 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
     @static if Sys.isapple()
         # if we didn't explicitly parse the weekday or year day, use mktime
         # to fill them in automatically.
-        if !occursin(r"([^%]|^)%(a|A|j|w|Ow)", fmt)
+        if !occursin(r"([^%]|^)%(a|A|j|w|Ow)"a, fmt)
             ccall(:mktime, Int, (Ref{TmStruct},), tm)
         end
     end
@@ -235,14 +235,14 @@ end
 # system date in seconds
 
 """
-    time(t::TmStruct)
+    time(t::TmStruct) -> Float64
 
 Converts a `TmStruct` struct to a number of seconds since the epoch.
 """
 time(tm::TmStruct) = Float64(ccall(:mktime, Int, (Ref{TmStruct},), tm))
 
 """
-    time()
+    time() -> Float64
 
 Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
 """
@@ -260,7 +260,7 @@ getpid() = ccall(:uv_os_getpid, Int32, ())
 ## network functions ##
 
 """
-    gethostname() -> AbstractString
+    gethostname() -> String
 
 Get the local machine's host name.
 """

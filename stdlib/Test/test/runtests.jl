@@ -722,6 +722,115 @@ end
     rm(f; force=true)
 end
 
+@testset "provide informative location in backtrace for test failures" begin
+    win2unix(filename) = replace(filename, "\\" => '/')
+    utils = win2unix(tempname())
+    write(utils,
+    """
+    function test_properties2(value)
+        @test isodd(value)
+    end
+    """)
+
+    included = win2unix(tempname())
+    write(included,
+    """
+    @testset "Other tests" begin
+        @test 1 + 1 == 3
+        test_properties2(2)
+    end
+    test_properties2(8)
+
+    # Test calls to `@test` and `@testset` with no file/lineno information (__source__ == nothing).
+    eval(Expr(:macrocall, Symbol("@test"), nothing, :false))
+    eval(Expr(:macrocall, Symbol("@testset"), nothing, "Testset without source", quote
+        @test false
+        @test error("failed")
+    end))
+    """)
+
+    runtests = win2unix(tempname())
+    write(runtests,
+    """
+    using Test
+
+    include("$utils")
+
+    function test_properties(value)
+        @test isodd(value)
+    end
+
+    @testset "Tests" begin
+        test_properties(8)
+        @noinline test_properties(8)
+        test_properties2(8)
+
+        include("$included")
+    end
+    """)
+    msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $runtests`), stderr=devnull), String)
+    msg = win2unix(msg)
+    regex = r"((?:Tests|Other tests|Testset without source): Test Failed (?:.|\n)*?)\n\nStacktrace:(?:.|\n)*?(?=\n(?:Tests|Other tests))"
+    failures = map(eachmatch(regex, msg)) do m
+        m = match(r"(Tests|Other tests|Testset without source): .*? at (.*?)\n  Expression: (.*)(?:.|\n)*\n+Stacktrace:\n((?:.|\n)*)", m.match)
+        (; testset = m[1], source = m[2], ex = m[3], stacktrace = m[4])
+    end
+    @test length(failures) == 8 # 8 failed tests
+    @test count(contains("Error During Test"), split(msg, '\n')) == 1 # 1 error
+    test_properties_macro_source = runtests * ":6"
+    test_properties2_macro_source = utils * ":2"
+
+    fail = failures[1]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 6
+    @test fail.testset == "Tests" && fail.source == test_properties_macro_source && fail.ex == "isodd(value)"
+    @test count(contains(runtests * ":10"), lines) == 2 # @testset + test
+
+    fail = failures[2]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 6
+    @test fail.testset == "Tests" && fail.source == test_properties_macro_source && fail.ex == "isodd(value)"
+    @test count(contains(runtests * ":10"), lines) == 1 # @testset
+    @test count(contains(runtests * ":11"), lines) == 1 # test
+
+    fail = failures[3]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 6
+    @test fail.testset == "Tests" && fail.source == test_properties2_macro_source && fail.ex == "isodd(value)"
+    @test count(contains(runtests * ":10"), lines) == 1 # @testset
+    @test count(contains(runtests * ":12"), lines) == 1 # test
+
+    fail = failures[4]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 5
+    @test fail.testset == "Other tests" && fail.source == included * ":2" && fail.ex == "1 + 1 == 3"
+    @test count(contains(included * ":2"), lines) == 2 # @testset + test
+    @test count(contains(runtests * ":10"), lines) == 0 # @testset (stop at the innermost testset)
+
+    fail = failures[5]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 6
+    @test fail.testset == "Other tests" && fail.source == test_properties2_macro_source && fail.ex == "isodd(value)"
+    @test count(contains(included * ":2"), lines) == 1 # @testset
+    @test count(contains(included * ":3"), lines) == 1 # test
+    @test count(contains(runtests * ":10"), lines) == 0 # @testset (stop at the innermost testset)
+
+    fail = failures[6]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 8
+    @test fail.testset == "Tests" && fail.source == test_properties2_macro_source && fail.ex == "isodd(value)"
+    @test count(contains(runtests * ":10"), lines) == 1 # @testset
+    @test count(contains(runtests * ":14"), lines) == 1 # include
+    @test count(contains(included * ":5"), lines) == 1 # test
+
+    fail = failures[7]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 9
+    @test fail.testset == "Tests" && fail.source == "none:0" && fail.ex == "false"
+    @test count(contains(runtests * ":10"), lines) == 1 # @testset
+    @test count(contains(runtests * ":14"), lines) == 1 # include
+    @test count(contains(included * ":8"), lines) == 1 # test
+
+    fail = failures[8]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 5
+    @test fail.testset == "Testset without source" && fail.source == included * ":10" && fail.ex == "false"
+    @test count(contains(included * ":10"), lines) == 2 # @testset + test
+    @test count(contains(runtests * ":10"), lines) == 0 # @testset (stop at the innermost testset)
+end
+
 let io = IOBuffer()
     exc = Test.TestSetException(1,2,3,4,Vector{Union{Test.Error, Test.Fail}}())
     Base.showerror(io, exc, backtrace())

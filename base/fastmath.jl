@@ -28,7 +28,7 @@ module FastMath
 export @fastmath
 
 import Core.Intrinsics: sqrt_llvm_fast, neg_float_fast,
-    add_float_fast, sub_float_fast, mul_float_fast, div_float_fast, rem_float_fast,
+    add_float_fast, sub_float_fast, mul_float_fast, div_float_fast,
     eq_float_fast, ne_float_fast, lt_float_fast, le_float_fast
 
 const fast_op =
@@ -41,6 +41,8 @@ const fast_op =
          :!= => :ne_fast,
          :< => :lt_fast,
          :<= => :le_fast,
+         :> => :gt_fast,
+         :>= => :ge_fast,
          :abs => :abs_fast,
          :abs2 => :abs2_fast,
          :cmp => :cmp_fast,
@@ -82,7 +84,12 @@ const fast_op =
          :sinh => :sinh_fast,
          :sqrt => :sqrt_fast,
          :tan => :tan_fast,
-         :tanh => :tanh_fast)
+         :tanh => :tanh_fast,
+         # reductions
+         :maximum => :maximum_fast,
+         :minimum => :minimum_fast,
+         :maximum! => :maximum!_fast,
+         :minimum! => :minimum!_fast)
 
 const rewrite_op =
     Dict(:+= => :+,
@@ -166,7 +173,6 @@ add_fast(x::T, y::T) where {T<:FloatTypes} = add_float_fast(x, y)
 sub_fast(x::T, y::T) where {T<:FloatTypes} = sub_float_fast(x, y)
 mul_fast(x::T, y::T) where {T<:FloatTypes} = mul_float_fast(x, y)
 div_fast(x::T, y::T) where {T<:FloatTypes} = div_float_fast(x, y)
-rem_fast(x::T, y::T) where {T<:FloatTypes} = rem_float_fast(x, y)
 
 add_fast(x::T, y::T, zs::T...) where {T<:FloatTypes} =
     add_fast(add_fast(x, y), zs...)
@@ -182,6 +188,8 @@ eq_fast(x::T, y::T) where {T<:FloatTypes} = eq_float_fast(x, y)
 ne_fast(x::T, y::T) where {T<:FloatTypes} = ne_float_fast(x, y)
 lt_fast(x::T, y::T) where {T<:FloatTypes} = lt_float_fast(x, y)
 le_fast(x::T, y::T) where {T<:FloatTypes} = le_float_fast(x, y)
+gt_fast(x, y) = lt_fast(y, x)
+ge_fast(x, y) = le_fast(y, x)
 
 isinf_fast(x) = false
 isfinite_fast(x) = true
@@ -295,6 +303,11 @@ sincos_fast(v::AbstractFloat) = (sin_fast(v), cos_fast(v))
 sincos_fast(v::Real) = sincos_fast(float(v)::AbstractFloat)
 sincos_fast(v) = (sin_fast(v), cos_fast(v))
 
+
+function rem_fast(x::T, y::T) where {T<:FloatTypes}
+    return @fastmath copysign(Base.rem_internal(abs(x), abs(y)), x)
+end
+
 @fastmath begin
     hypot_fast(x::T, y::T) where {T<:FloatTypes} = sqrt(x*x + y*y)
 
@@ -361,5 +374,28 @@ for f in (:^, :atan, :hypot, :log)
         $f_fast(x::T, y::T) where {T<:Number} = $f(x, y)
     end
 end
+
+# Reductions
+
+maximum_fast(a; kw...) = Base.reduce(max_fast, a; kw...)
+minimum_fast(a; kw...) = Base.reduce(min_fast, a; kw...)
+
+maximum_fast(f, a; kw...) = Base.mapreduce(f, max_fast, a; kw...)
+minimum_fast(f, a; kw...) = Base.mapreduce(f, min_fast, a; kw...)
+
+Base.reducedim_init(f, ::typeof(max_fast), A::AbstractArray, region) =
+    Base.reducedim_init(f, max, A::AbstractArray, region)
+Base.reducedim_init(f, ::typeof(min_fast), A::AbstractArray, region) =
+    Base.reducedim_init(f, min, A::AbstractArray, region)
+
+maximum!_fast(r::AbstractArray, A::AbstractArray; kw...) =
+    maximum!_fast(identity, r, A; kw...)
+minimum!_fast(r::AbstractArray, A::AbstractArray; kw...) =
+    minimum!_fast(identity, r, A; kw...)
+
+maximum!_fast(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
+    Base.mapreducedim!(f, max_fast, Base.initarray!(r, f, max, init, A), A)
+minimum!_fast(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
+    Base.mapreducedim!(f, min_fast, Base.initarray!(r, f, min, init, A), A)
 
 end

@@ -198,41 +198,48 @@ if Sys.isbsd() || Sys.islinux()
     @testset "SIGINFO/SIGUSR1 profile triggering" begin
         let cmd = Base.julia_cmd()
             script = """
-                x = rand(1000, 1000)
-                println("started")
-                while true
-                    x * x
-                    yield()
-                end
+                print(stderr, "started\n")
+                eof(stdin)
+                close(t)
                 """
             iob = Base.BufferStream()
-            p = run(pipeline(`$cmd -e $script`, stderr = devnull, stdout = iob), wait = false)
+            notify_exit = Base.PipeEndpoint()
+            p = run(pipeline(`$cmd -e $script`, stdin=notify_exit, stderr=iob, stdout=devnull), wait=false)
             t = Timer(120) do t
                 # should be under 10 seconds, so give it 2 minutes then report failure
                 println("KILLING BY PROFILE TEST WATCHDOG\n")
                 kill(p, Base.SIGTERM)
                 sleep(10)
                 kill(p, Base.SIGKILL)
-                close(iob)
+                close(p)
             end
             try
-                s = readuntil(iob, "started", keep = true)
+                s = readuntil(iob, "started", keep=true)
                 @assert occursin("started", s)
                 @assert process_running(p)
-                for _ in 1:2
-                    sleep(2.5)
+                for i in 1:2
+                    i > 1 && sleep(5)
                     if Sys.isbsd()
                         kill(p, 29) # SIGINFO
                     elseif Sys.islinux()
                         kill(p, 10) # SIGUSR1
                     end
-                    s = readuntil(iob, "Overhead ╎", keep = true)
+                    s = readuntil(iob, "Overhead ╎", keep=true)
                     @test process_running(p)
+                    readavailable(iob)
                     @test occursin("Overhead ╎", s)
                 end
-            finally
-                kill(p, Base.SIGKILL)
+                close(notify_exit) # notify test finished
+                s = read(iob, String) # consume test output
+                wait(p) # wait for test completion
                 close(t)
+            catch
+                close(notify_exit)
+                errs = read(iob, String) # consume test output
+                isempty(errs) || println("CHILD STDERR after test failure: ", errs)
+                wait(p) # wait for test completion
+                close(t)
+                rethrow()
             end
         end
     end
@@ -272,7 +279,10 @@ end
 end
 
 @testset "HeapSnapshot" begin
-    fname = read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`, String)
+    tmpdir = mktempdir()
+    fname = cd(tmpdir) do
+        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`, String)
+    end
 
     @test isfile(fname)
 
@@ -281,6 +291,7 @@ end
     end
 
     rm(fname)
+    rm(tmpdir, force = true, recursive = true)
 end
 
 include("allocs.jl")

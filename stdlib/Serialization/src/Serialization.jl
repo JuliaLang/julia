@@ -39,7 +39,7 @@ const TAGS = Any[
     Float16, Float32, Float64, Char, DataType, Union, UnionAll, Core.TypeName, Tuple,
     Array, Expr, LineNumberNode, :__LabelNode__, GotoNode, QuoteNode, CodeInfo, TypeVar,
     Core.Box, Core.MethodInstance, Module, Task, String, SimpleVector, Method,
-    GlobalRef, SlotNumber, TypedSlot, NewvarNode, SSAValue,
+    GlobalRef, SlotNumber, Const, NewvarNode, SSAValue,
 
     # dummy entries for tags that don't correspond directly to types
     Symbol, # UNDEFREF_TAG
@@ -77,14 +77,13 @@ const TAGS = Any[
     (Int64(0):Int64(n_int_literals-1))...
 ]
 
-@assert length(TAGS) == 255
+const NTAGS = length(TAGS)
+@assert NTAGS == 255
 
-const ser_version = 20 # do not make changes without bumping the version #!
+const ser_version = 23 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
-
-const NTAGS = length(TAGS)
 
 function sertag(@nospecialize(v))
     # NOTE: we use jl_value_ptr directly since we know at least one of the arguments
@@ -194,7 +193,7 @@ serialize(s::AbstractSerializer, ::Tuple{}) = writetag(s.io, EMPTYTUPLE_TAG)
 
 function serialize(s::AbstractSerializer, t::Tuple)
     l = length(t)
-    if l <= 255
+    if l <= NTAGS
         writetag(s.io, TUPLE_TAG)
         write(s.io, UInt8(l))
     else
@@ -224,7 +223,7 @@ function serialize(s::AbstractSerializer, x::Symbol)
     if len > 7
         serialize_cycle(s, x) && return
     end
-    if len <= 255
+    if len <= NTAGS
         writetag(s.io, SYMBOL_TAG)
         write(s.io, UInt8(len))
     else
@@ -295,7 +294,7 @@ function serialize(s::AbstractSerializer, ss::String)
         serialize_cycle(s, ss) && return
         writetag(s.io, SHARED_REF_TAG)
     end
-    if len <= 255
+    if len <= NTAGS
         writetag(s.io, STRING_TAG)
         write(s.io, UInt8(len))
     else
@@ -327,7 +326,7 @@ end
 function serialize(s::AbstractSerializer, ex::Expr)
     serialize_cycle(s, ex) && return
     l = length(ex.args)
-    if l <= 255
+    if l <= NTAGS
         writetag(s.io, EXPR_TAG)
         write(s.io, UInt8(l))
     else
@@ -1027,8 +1026,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     nargs = deserialize(s)::Int32
     isva = deserialize(s)::Bool
     is_for_opaque_closure = false
-    constprop = 0x00
-    purity = 0x00
+    constprop = purity = 0x00
     template_or_is_opaque = deserialize(s)
     if isa(template_or_is_opaque, Bool)
         is_for_opaque_closure = template_or_is_opaque
@@ -1061,7 +1059,6 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         if template !== nothing
             # TODO: compress template
             meth.source = template::CodeInfo
-            meth.pure = template.pure
             if !@isdefined(slot_syms)
                 slot_syms = ccall(:jl_compress_argnames, Ref{String}, (Any,), meth.source.slotnames)
             end
@@ -1183,22 +1180,32 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
         end
     end
     ci.inferred = deserialize(s)
-    inlining = deserialize(s)
-    if isa(inlining, Bool)
-        Core.Compiler.set_inlineable!(ci, inlining)
-    else
-        ci.inlining_cost = inlining
+    if format_version(s) < 22
+        inlining_cost = deserialize(s)
+        if isa(inlining_cost, Bool)
+            Core.Compiler.set_inlineable!(ci, inlining_cost)
+        else
+            ci.inlining_cost = inlining_cost
+        end
     end
     ci.propagate_inbounds = deserialize(s)
-    ci.pure = deserialize(s)
+    if format_version(s) < 23
+        deserialize(s) # `pure` field has been removed
+    end
     if format_version(s) >= 20
         ci.has_fcall = deserialize(s)
+    end
+    if format_version(s) >= 21
+        ci.inlining = deserialize(s)::UInt8
     end
     if format_version(s) >= 14
         ci.constprop = deserialize(s)::UInt8
     end
     if format_version(s) >= 17
         ci.purity = deserialize(s)::UInt8
+    end
+    if format_version(s) >= 22
+        ci.inlining_cost = deserialize(s)::UInt16
     end
     return ci
 end
@@ -1361,7 +1368,7 @@ function deserialize_typename(s::AbstractSerializer, number)
                     end
                 else
                     # old object format -- try to forward from old to new
-                    @eval Core.kwcall(kwargs, f::$ty, args...) = $kws(kwargs, f, args...)
+                    @eval Core.kwcall(kwargs::NamedTuple, f::$ty, args...) = $kws(kwargs, f, args...)
                 end
             end
         end

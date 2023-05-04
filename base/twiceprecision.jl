@@ -112,8 +112,8 @@ julia> Float64(hi) + Float64(lo)
 ```
 """
 function mul12(x::T, y::T) where {T<:AbstractFloat}
-    h = x * y
-    ifelse(iszero(h) | !isfinite(h), (h, h), canonicalize2(h, fma(x, y, -h)))
+    (h, l) = Base.Math.two_mul(x, y)
+    ifelse(!isfinite(h), (h, h), (h, l))
 end
 mul12(x::T, y::T) where {T} = (p = x * y; (p, zero(p)))
 mul12(x, y) = mul12(promote(x, y)...)
@@ -141,6 +141,7 @@ julia> hi, lo = Base.div12(x, y)
 
 julia> Float64(hi) + Float64(lo)
 1.0134170444063066
+```
 """
 function div12(x::T, y::T) where {T<:AbstractFloat}
     # We lose precision if any intermediate calculation results in a subnormal.
@@ -199,14 +200,12 @@ end
 
 TwicePrecision{T}(x::T) where {T} = TwicePrecision{T}(x, zero(T))
 
+TwicePrecision{T}(x::TwicePrecision{T}) where {T} = x
+
 function TwicePrecision{T}(x) where {T}
-    xT = convert(T, x)
+    xT = T(x)
     Δx = x - xT
     TwicePrecision{T}(xT, T(Δx))
-end
-
-function TwicePrecision{T}(x::TwicePrecision) where {T}
-    TwicePrecision{T}(x.hi, x.lo)
 end
 
 TwicePrecision{T}(i::Integer) where {T<:AbstractFloat} =
@@ -254,7 +253,7 @@ nbitslen(::Type{T}, len, offset) where {T<:IEEEFloat} =
     min(cld(precision(T), 2), nbitslen(len, offset))
 # The +1 here is for safety, because the precision of the significand
 # is 1 bit higher than the number that are explicitly stored.
-nbitslen(len, offset) = len < 2 ? 0 : ceil(Int, log2(max(offset-1, len-offset))) + 1
+nbitslen(len, offset) = len < 2 ? 0 : top_set_bit(max(offset-1, len-offset) - 1) + 1
 
 eltype(::Type{TwicePrecision{T}}) where {T} = T
 
@@ -263,8 +262,7 @@ promote_rule(::Type{TwicePrecision{R}}, ::Type{TwicePrecision{S}}) where {R,S} =
 promote_rule(::Type{TwicePrecision{R}}, ::Type{S}) where {R,S<:Number} =
     TwicePrecision{promote_type(R,S)}
 
-(::Type{T})(x::TwicePrecision) where {T<:Number} = T(x.hi + x.lo)::T
-TwicePrecision{T}(x::Number) where {T} = TwicePrecision{T}(T(x), zero(T))
+(::Type{T})(x::TwicePrecision) where {T<:Number} = (T(x.hi) + T(x.lo))::T
 
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision{T}) where {T} = x
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision) where {T} =
@@ -310,7 +308,7 @@ function *(x::TwicePrecision, v::Number)
 end
 function *(x::TwicePrecision{<:IEEEFloat}, v::Integer)
     v == 0 && return TwicePrecision(x.hi*v, x.lo*v)
-    nb = ceil(Int, log2(abs(v)))
+    nb = top_set_bit(abs(v)-1)
     u = truncbits(x.hi, nb)
     TwicePrecision(canonicalize2(u*v, ((x.hi-u) + x.lo)*v)...)
 end

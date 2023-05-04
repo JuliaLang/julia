@@ -23,7 +23,7 @@
 #include <llvm/Support/Debug.h>
 
 #include "passes.h"
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 
 #define DEBUG_TYPE "propagate_julia_addrspaces"
 

@@ -4,6 +4,7 @@ module TestBLAS
 
 using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasReal, BlasComplex
+using Libdl: dlsym, dlopen
 fabs(x::Real) = abs(x)
 fabs(x::Complex) = abs(real(x)) + abs(imag(x))
 
@@ -711,6 +712,13 @@ end
         @test_throws "input" BLAS.gemv!('N', true, A, a, false, copy(b))
         @test_throws "dest" BLAS.gemv!('N', true, A, copy(a), false, b)
     end
+end
+
+# Make sure we can use `Base.libblas_name`.  Avoid causing
+# https://github.com/JuliaLang/julia/issues/48427 again.
+@testset "libblas_name" begin
+    dot_sym = dlsym(dlopen(Base.libblas_name), "cblas_ddot" * (Sys.WORD_SIZE == 64 ? "64_" : ""))
+    @test 23.0 === @ccall $(dot_sym)(2::Int, [2.0, 3.0]::Ref{Cdouble}, 1::Int, [4.0, 5.0]::Ref{Cdouble}, 1::Int)::Cdouble
 end
 
 end # module TestBLAS

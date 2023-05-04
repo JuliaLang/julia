@@ -55,7 +55,6 @@
     XX(jl_atomic_swap_bits) \
     XX(jl_backtrace_from_here) \
     XX(jl_base_relative_to) \
-    XX(jl_binding_owner) \
     XX(jl_binding_resolved_p) \
     XX(jl_bitcast) \
     XX(jl_boundp) \
@@ -118,6 +117,7 @@
     XX(jl_dlopen) \
     XX(jl_dlsym) \
     XX(jl_dump_host_cpu) \
+    XX(jl_check_pkgimage_clones) \
     XX(jl_egal) \
     XX(jl_egal__bits) \
     XX(jl_egal__special) \
@@ -172,8 +172,10 @@
     XX(jl_gc_external_obj_hdr_size) \
     XX(jl_gc_find_taggedvalue_pool) \
     XX(jl_gc_get_total_bytes) \
+    XX(jl_gc_get_max_memory) \
     XX(jl_gc_internal_obj_base_ptr) \
     XX(jl_gc_is_enabled) \
+    XX(jl_gc_is_in_finalizer) \
     XX(jl_gc_live_bytes) \
     XX(jl_gc_managed_malloc) \
     XX(jl_gc_managed_realloc) \
@@ -209,7 +211,6 @@
     XX(jl_get_binding) \
     XX(jl_get_binding_for_method_def) \
     XX(jl_get_binding_or_error) \
-    XX(jl_get_binding_wr_or_error) \
     XX(jl_get_binding_wr) \
     XX(jl_get_cpu_name) \
     XX(jl_get_current_task) \
@@ -223,7 +224,6 @@
     XX(jl_get_julia_bin) \
     XX(jl_get_julia_bindir) \
     XX(jl_get_method_inferred) \
-    XX(jl_get_module_binding) \
     XX(jl_get_module_compile) \
     XX(jl_get_module_infer) \
     XX(jl_get_module_of_binding) \
@@ -258,7 +258,7 @@
     XX(jl_infer_thunk) \
     XX(jl_init) \
     XX(jl_init_options) \
-    XX(jl_init_restored_modules) \
+    XX(jl_init_restored_module) \
     XX(jl_init_with_image) \
     XX(jl_init_with_image__threading) \
     XX(jl_init__threading) \
@@ -276,8 +276,9 @@
     XX(jl_ios_fd) \
     XX(jl_ios_get_nbyte_int) \
     XX(jl_ir_flag_inferred) \
+    XX(jl_ir_flag_has_fcall) \
+    XX(jl_ir_flag_inlining) \
     XX(jl_ir_inlining_cost) \
-    XX(jl_ir_flag_pure) \
     XX(jl_ir_nslots) \
     XX(jl_ir_slotflag) \
     XX(jl_isa) \
@@ -394,6 +395,8 @@
     XX(jl_queue_work) \
     XX(jl_raise_debugger) \
     XX(jl_readuntil) \
+    XX(jl_cache_flags) \
+    XX(jl_match_cache_flags) \
     XX(jl_read_verify_header) \
     XX(jl_realloc) \
     XX(jl_register_newmeth_tracer) \
@@ -475,7 +478,6 @@
     XX(jl_try_substrtod) \
     XX(jl_try_substrtof) \
     XX(jl_tty_set_mode) \
-    XX(jl_tupletype_fill) \
     XX(jl_typeassert) \
     XX(jl_typeinf_lock_begin) \
     XX(jl_typeinf_lock_end) \
@@ -484,7 +486,6 @@
     XX(jl_typename_str) \
     XX(jl_typeof_str) \
     XX(jl_types_equal) \
-    XX(jl_type_equality_is_identity) \
     XX(jl_type_error) \
     XX(jl_type_error_rt) \
     XX(jl_type_intersection) \
@@ -536,6 +537,7 @@
     YY(jl_get_LLVM_VERSION) \
     YY(jl_dump_native) \
     YY(jl_get_llvm_gvs) \
+    YY(jl_get_llvm_external_fns) \
     YY(jl_dump_function_asm) \
     YY(jl_LLVMCreateDisasm) \
     YY(jl_LLVMDisasmInstruction) \
@@ -544,6 +546,7 @@
     YY(jl_register_fptrs) \
     YY(jl_generate_fptr) \
     YY(jl_generate_fptr_for_unspecialized) \
+    YY(jl_generate_fptr_for_oc_wrapper) \
     YY(jl_compile_extern_c) \
     YY(jl_teardown_codegen) \
     YY(jl_jit_total_bytes) \

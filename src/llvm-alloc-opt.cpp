@@ -10,6 +10,7 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/ADT/Statistic.h>
+#include <llvm/Analysis/OptimizationRemarkEmitter.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/LegacyPassManager.h>
@@ -28,7 +29,7 @@
 #include <llvm/InitializePasses.h>
 
 #include "passes.h"
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 #include "julia.h"
 #include "julia_internal.h"
 #include "llvm-pass-helpers.h"
@@ -37,7 +38,7 @@
 #include <map>
 #include <set>
 
-#define DEBUG_TYPE "alloc_opt"
+#define DEBUG_TYPE "alloc-opt"
 #include "julia_assert.h"
 
 using namespace llvm;
@@ -98,6 +99,11 @@ static void removeGCPreserve(CallInst *call, Instruction *val)
  * * Handle jl_box*
  */
 
+#ifndef __clang_gcanalyzer__
+#define REMARK(remark) ORE.emit(remark)
+#else
+#define REMARK(remark) (void) 0;
+#endif
 struct AllocOpt : public JuliaPassContext {
 
     const DataLayout *DL;
@@ -112,6 +118,7 @@ struct AllocOpt : public JuliaPassContext {
 struct Optimizer {
     Optimizer(Function &F, AllocOpt &pass, function_ref<DominatorTree&()> GetDT)
         : F(F),
+          ORE(&F),
           pass(pass),
           GetDT(std::move(GetDT))
     {}
@@ -139,6 +146,7 @@ private:
     void optimizeTag(CallInst *orig_inst);
 
     Function &F;
+    OptimizationRemarkEmitter ORE;
     AllocOpt &pass;
     DominatorTree *_DT = nullptr;
     function_ref<DominatorTree &()> GetDT;
@@ -215,17 +223,29 @@ void Optimizer::optimizeAll()
         size_t sz = item.second;
         checkInst(orig);
         if (use_info.escaped) {
+            REMARK([&]() {
+                return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                    << "GC allocation escaped " << ore::NV("GC Allocation", orig);
+            });
             if (use_info.hastypeof)
                 optimizeTag(orig);
             continue;
         }
         if (use_info.haserror || use_info.returned) {
+            REMARK([&]() {
+                return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                    << "GC allocation has error or was returned " << ore::NV("GC Allocation", orig);
+            });
             if (use_info.hastypeof)
                 optimizeTag(orig);
             continue;
         }
         if (!use_info.addrescaped && !use_info.hasload && (!use_info.haspreserve ||
                                                            !use_info.refstore)) {
+            REMARK([&]() {
+                return OptimizationRemark(DEBUG_TYPE, "Dead Allocation", orig)
+                    << "GC allocation removed " << ore::NV("GC Allocation", orig);
+            });
             // No one took the address, no one reads anything and there's no meaningful
             // preserve of fields (either no preserve/ccall or no object reference fields)
             // We can just delete all the uses.
@@ -246,16 +266,28 @@ void Optimizer::optimizeAll()
                 }
             }
         }
-        if (!use_info.hasunknownmem && !use_info.addrescaped && !has_refaggr) {
-            // No one actually care about the memory layout of this object, split it.
-            splitOnStack(orig);
-            continue;
-        }
         if (has_refaggr) {
+            REMARK([&]() {
+                return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                    << "GC allocation has unusual object reference, unable to move to stack " << ore::NV("GC Allocation", orig);
+            });
             if (use_info.hastypeof)
                 optimizeTag(orig);
             continue;
         }
+        if (!use_info.hasunknownmem && !use_info.addrescaped) {
+            REMARK([&](){
+                return OptimizationRemark(DEBUG_TYPE, "Stack Split Allocation", orig)
+                    << "GC allocation split on stack " << ore::NV("GC Allocation", orig);
+            });
+            // No one actually care about the memory layout of this object, split it.
+            splitOnStack(orig);
+            continue;
+        }
+        REMARK([&](){
+            return OptimizationRemark(DEBUG_TYPE, "Stack Move Allocation", orig)
+                << "GC allocation moved to stack " << ore::NV("GC Allocation", orig);
+        });
         // The object has no fields with mix reference access
         moveToStack(orig, sz, has_ref);
     }
@@ -324,8 +356,15 @@ ssize_t Optimizer::getGCAllocSize(Instruction *I)
 
 void Optimizer::checkInst(Instruction *I)
 {
+    LLVM_DEBUG(dbgs() << "Running escape analysis on " << *I << "\n");
     jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, pass, *pass.DL};
-    jl_alloc::runEscapeAnalysis(I, required);
+    jl_alloc::runEscapeAnalysis(I, required, jl_alloc::EscapeAnalysisOptionalArgs().with_optimization_remark_emitter(&ORE));
+    REMARK([&](){
+        std::string suse_info;
+        llvm::raw_string_ostream osuse_info(suse_info);
+        use_info.dump(osuse_info);
+        return OptimizationRemarkAnalysis(DEBUG_TYPE, "EscapeAnalysis", I) << "escape analysis for " << ore::NV("GC Allocation", I) << "\n" << ore::NV("UseInfo", osuse_info.str());
+    });
 }
 
 void Optimizer::insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert)
@@ -615,8 +654,10 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
         }
         return false;
     };
-    if (simple_replace(orig_inst, new_inst))
+    if (simple_replace(orig_inst, new_inst)) {
+        LLVM_DEBUG(dbgs() << "Simple replace of allocation was successful in stack move\n");
         return;
+    }
     assert(replace_stack.empty());
     ReplaceUses::Frame cur{orig_inst, new_inst};
     auto finish_cur = [&] () {
@@ -731,8 +772,10 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
         }
         return false;
     };
-    if (simple_remove(orig_inst))
+    if (simple_remove(orig_inst)) {
+        LLVM_DEBUG(dbgs() << "Simple remove of allocation was successful in removeAlloc\n");
         return;
+    }
     assert(replace_stack.empty());
     ReplaceUses::Frame cur{orig_inst, nullptr};
     auto finish_cur = [&] () {
@@ -818,6 +861,10 @@ void Optimizer::optimizeTag(CallInst *orig_inst)
             auto callee = call->getCalledOperand();
             if (pass.typeof_func == callee) {
                 ++RemovedTypeofs;
+                REMARK([&](){
+                    return OptimizationRemark(DEBUG_TYPE, "typeof", call)
+                        << "removed typeof call for GC allocation " << ore::NV("Alloc", orig_inst);
+                });
                 call->replaceAllUsesWith(tag);
                 // Push to the removed instructions to trigger `finalize` to
                 // return the correct result.
@@ -894,8 +941,10 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         }
         return false;
     };
-    if (simple_replace(orig_inst))
+    if (simple_replace(orig_inst)) {
+        LLVM_DEBUG(dbgs() << "Simple replace of allocation was successful in stack split\n");
         return;
+    }
     assert(replace_stack.empty());
     ReplaceUses::Frame cur{orig_inst, uint32_t(0)};
     auto finish_cur = [&] () {
@@ -975,7 +1024,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 assert(slot.offset == offset);
                 auto T_pjlvalue = JuliaType::get_pjlvalue_ty(builder.getContext());
                 if (!isa<PointerType>(store_ty)) {
-                    store_val = builder.CreateBitCast(store_val, getSizeTy(builder.getContext()));
+                    store_val = builder.CreateBitCast(store_val, pass.DL->getIntPtrType(builder.getContext(), T_pjlvalue->getAddressSpace()));
                     store_val = builder.CreateIntToPtr(store_val, T_pjlvalue);
                     store_ty = T_pjlvalue;
                 }
@@ -1038,7 +1087,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                                 else {
                                     uint64_t intval;
                                     memset(&intval, val, 8);
-                                    Constant *val = ConstantInt::get(getSizeTy(builder.getContext()), intval);
+                                    Constant *val = ConstantInt::get(pass.DL->getIntPtrType(builder.getContext(), pass.T_prjlvalue->getAddressSpace()), intval);
                                     val = ConstantExpr::getIntToPtr(val, JuliaType::get_pjlvalue_ty(builder.getContext()));
                                     ptr = ConstantExpr::getAddrSpaceCast(val, pass.T_prjlvalue);
                                 }
@@ -1175,8 +1224,10 @@ bool AllocOpt::doInitialization(Module &M)
 
 bool AllocOpt::runOnFunction(Function &F, function_ref<DominatorTree&()> GetDT)
 {
-    if (!alloc_obj_func)
+    if (!alloc_obj_func) {
+        LLVM_DEBUG(dbgs() << "AllocOpt: no alloc_obj function found, skipping pass\n");
         return false;
+    }
     Optimizer optimizer(F, *this, std::move(GetDT));
     optimizer.initialize();
     optimizer.optimizeAll();

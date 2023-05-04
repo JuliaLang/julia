@@ -52,7 +52,7 @@ function artifacts_dirs(args...)
         return String[abspath(depot, "artifacts", args...) for depot in Base.DEPOT_PATH]
     else
         # If we've been given an override, use _only_ that directory.
-        return String[abspath(ARTIFACTS_DIR_OVERRIDE[], args...)]
+        return String[abspath(ARTIFACTS_DIR_OVERRIDE[]::String, args...)]
     end
 end
 

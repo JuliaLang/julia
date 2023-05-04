@@ -6,7 +6,8 @@ calling Julia functions from C code. This can be used to integrate Julia code in
 C/C++ project, without the need to rewrite everything in C/C++. Julia has a C API to make
 this possible. As almost all programming languages have some way to call C functions, the
 Julia C API can also be used to build further language bridges (e.g. calling Julia from
-Python or C#).
+Python, Rust or C#). Even though Rust and C++ can use the C embedding API directly, both
+have packages helping with it, for C++ [Jluna](https://github.com/Clemapfel/jluna) is useful.
 
 ## High-Level Embedding
 
@@ -406,8 +407,10 @@ As an alternative for very simple cases, it is possible to just create a global 
 per pointer using
 
 ```c
-jl_binding_t *bp = jl_get_binding_wr(jl_main_module, jl_symbol("var"), 1);
-jl_checked_assignment(bp, val);
+jl_module_t *mod = jl_main_module;
+jl_sym_t *var = jl_symbol("var");
+jl_binding_t *bp = jl_get_binding_wr(mod, var);
+jl_checked_assignment(bp, mod, var, val);
 ```
 
 ### Updating fields of GC-managed objects

@@ -110,14 +110,14 @@ static void jl_encode_as_indexed_root(jl_ircode_state *s, jl_value_t *v)
         write_uint8(s->s, TAG_RELOC_METHODROOT);
         write_uint64(s->s, rr.key);
     }
-    if (id < 256) {
+    if (id <= UINT8_MAX) {
         write_uint8(s->s, TAG_METHODROOT);
         write_uint8(s->s, id);
     }
     else {
-        assert(id <= UINT16_MAX);
+        assert(id <= UINT32_MAX);
         write_uint8(s->s, TAG_LONG_METHODROOT);
-        write_uint16(s->s, id);
+        write_uint32(s->s, id);
     }
 }
 
@@ -385,7 +385,7 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
         }
     }
     else if (as_literal || jl_is_uniontype(v) || jl_is_newvarnode(v) || jl_is_linenode(v) ||
-             jl_is_upsilonnode(v) || jl_is_pinode(v) || jl_is_slot(v) || jl_is_ssavalue(v) ||
+             jl_is_upsilonnode(v) || jl_is_pinode(v) || jl_is_slotnumber(v) || jl_is_ssavalue(v) ||
              (jl_isbits(jl_typeof(v)) && jl_datatype_size(jl_typeof(v)) <= 64)) {
         jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
         size_t tsz = jl_datatype_size(t);
@@ -434,12 +434,14 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
     }
 }
 
-static jl_code_info_flags_t code_info_flags(uint8_t pure, uint8_t propagate_inbounds, uint8_t inferred, uint8_t constprop)
+static jl_code_info_flags_t code_info_flags(uint8_t inferred, uint8_t propagate_inbounds,
+                                            uint8_t has_fcall, uint8_t inlining, uint8_t constprop)
 {
     jl_code_info_flags_t flags;
-    flags.bits.pure = pure;
-    flags.bits.propagate_inbounds = propagate_inbounds;
     flags.bits.inferred = inferred;
+    flags.bits.propagate_inbounds = propagate_inbounds;
+    flags.bits.has_fcall = has_fcall;
+    flags.bits.inlining = inlining;
     flags.bits.constprop = constprop;
     return flags;
 }
@@ -646,11 +648,17 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
         key = read_uint64(s->s);
         tag = read_uint8(s->s);
         assert(tag == TAG_METHODROOT || tag == TAG_LONG_METHODROOT);
-        return lookup_root(s->method, key, tag == TAG_METHODROOT ? read_uint8(s->s) : read_uint16(s->s));
+        int index = -1;
+        if (tag == TAG_METHODROOT)
+            index = read_uint8(s->s);
+        else if (tag == TAG_LONG_METHODROOT)
+            index = read_uint32(s->s);
+        assert(index >= 0);
+        return lookup_root(s->method, key, index);
     case TAG_METHODROOT:
         return lookup_root(s->method, 0, read_uint8(s->s));
     case TAG_LONG_METHODROOT:
-        return lookup_root(s->method, 0, read_uint16(s->s));
+        return lookup_root(s->method, 0, read_uint32(s->s));
     case TAG_SVEC: JL_FALLTHROUGH; case TAG_LONG_SVEC:
         return jl_decode_value_svec(s, tag);
     case TAG_COMMONSYM:
@@ -752,7 +760,7 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
 
 JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
 {
-    JL_TIMING(AST_COMPRESS);
+    JL_TIMING(AST_COMPRESS, AST_COMPRESS);
     JL_LOCK(&m->writelock); // protect the roots array (Might GC)
     assert(jl_is_method(m));
     assert(jl_is_code_info(code));
@@ -772,7 +780,8 @@ JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         1
     };
 
-    jl_code_info_flags_t flags = code_info_flags(code->pure, code->propagate_inbounds, code->inferred, code->constprop);
+    jl_code_info_flags_t flags = code_info_flags(code->inferred, code->propagate_inbounds,
+                                                 code->has_fcall, code->inlining, code->constprop);
     write_uint8(s.s, flags.packed);
     write_uint8(s.s, code->purity.bits);
     write_uint16(s.s, code->inlining_cost);
@@ -826,7 +835,6 @@ JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         ios_write(s.s, (char*)jl_array_data(code->codelocs), nstmt * sizeof(int32_t));
     }
 
-    write_uint8(s.s, code->has_fcall);
     write_uint8(s.s, s.relocatability);
 
     ios_flush(s.s);
@@ -847,7 +855,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
 {
     if (jl_is_code_info(data))
         return (jl_code_info_t*)data;
-    JL_TIMING(AST_UNCOMPRESS);
+    JL_TIMING(AST_UNCOMPRESS, AST_UNCOMPRESS);
     JL_LOCK(&m->writelock); // protect the roots array (Might GC)
     assert(jl_is_method(m));
     assert(jl_typeis(data, jl_array_uint8_type));
@@ -867,10 +875,11 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     jl_code_info_t *code = jl_new_code_info_uninit();
     jl_code_info_flags_t flags;
     flags.packed = read_uint8(s.s);
+    code->inlining = flags.bits.inlining;
     code->constprop = flags.bits.constprop;
     code->inferred = flags.bits.inferred;
     code->propagate_inbounds = flags.bits.propagate_inbounds;
-    code->pure = flags.bits.pure;
+    code->has_fcall = flags.bits.has_fcall;
     code->purity.bits = read_uint8(s.s);
     code->inlining_cost = read_uint16(s.s);
 
@@ -909,7 +918,6 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
         ios_readall(s.s, (char*)jl_array_data(code->codelocs), nstmt * sizeof(int32_t));
     }
 
-    code->has_fcall = read_uint8(s.s);
     (void) read_uint8(s.s);   // relocatability
 
     assert(ios_getc(s.s) == -1);
@@ -938,14 +946,24 @@ JL_DLLEXPORT uint8_t jl_ir_flag_inferred(jl_array_t *data)
     return flags.bits.inferred;
 }
 
-JL_DLLEXPORT uint8_t jl_ir_flag_pure(jl_array_t *data)
+JL_DLLEXPORT uint8_t jl_ir_flag_inlining(jl_array_t *data)
 {
     if (jl_is_code_info(data))
-        return ((jl_code_info_t*)data)->pure;
+        return ((jl_code_info_t*)data)->inlining;
     assert(jl_typeis(data, jl_array_uint8_type));
     jl_code_info_flags_t flags;
     flags.packed = ((uint8_t*)data->data)[0];
-    return flags.bits.pure;
+    return flags.bits.inlining;
+}
+
+JL_DLLEXPORT uint8_t jl_ir_flag_has_fcall(jl_array_t *data)
+{
+    if (jl_is_code_info(data))
+        return ((jl_code_info_t*)data)->has_fcall;
+    assert(jl_typeis(data, jl_array_uint8_type));
+    jl_code_info_flags_t flags;
+    flags.packed = ((uint8_t*)data->data)[0];
+    return flags.bits.has_fcall;
 }
 
 JL_DLLEXPORT uint16_t jl_ir_inlining_cost(jl_array_t *data)
@@ -1084,13 +1102,13 @@ void jl_init_serializer(void)
                      jl_densearray_type, jl_function_type, jl_typename_type,
                      jl_builtin_type, jl_task_type, jl_uniontype_type,
                      jl_array_any_type, jl_intrinsic_type,
-                     jl_abstractslot_type, jl_methtable_type, jl_typemap_level_type,
+                     jl_methtable_type, jl_typemap_level_type,
                      jl_voidpointer_type, jl_newvarnode_type, jl_abstractstring_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
                      jl_emptytuple_type, jl_array_uint8_type, jl_code_info_type,
                      jl_typeofbottom_type, jl_typeofbottom_type->super,
                      jl_namedtuple_type, jl_array_int32_type,
-                     jl_typedslot_type, jl_uint32_type, jl_uint64_type,
+                     jl_uint32_type, jl_uint64_type,
                      jl_type_type_mt, jl_nonfunction_mt,
                      jl_opaque_closure_type,
 

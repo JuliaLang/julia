@@ -238,6 +238,7 @@ export
     bitrotate,
     bswap,
     cbrt,
+    fourthroot,
     ceil,
     cis,
     cispi,
@@ -352,6 +353,7 @@ export
     tan,
     tand,
     tanh,
+    tanpi,
     trailing_ones,
     trailing_zeros,
     trunc,
@@ -363,6 +365,7 @@ export
     zero,
     √,
     ∛,
+    ∜,
     ≈,
     ≉,
 
@@ -816,7 +819,7 @@ export
     atreplinit,
     exit,
     ntuple,
-    Splat,
+    splat,
 
 # I/O and events
     close,

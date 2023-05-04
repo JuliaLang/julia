@@ -45,6 +45,7 @@
 #include <libgen.h>
 #include <unistd.h>
 #include <dlfcn.h>
+#include <signal.h>
 
 #endif
 

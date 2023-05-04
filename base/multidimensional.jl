@@ -32,6 +32,10 @@ module IteratorsMD
     A `CartesianIndex` is sometimes produced by [`eachindex`](@ref), and
     always when iterating with an explicit [`CartesianIndices`](@ref).
 
+    An `I::CartesianIndex` is treated as a "scalar" (not a container)
+    for `broadcast`.   In order to iterate over the components of a
+    `CartesianIndex`, convert it to a tuple with `Tuple(I)`.
+
     # Examples
     ```jldoctest
     julia> A = reshape(Vector(1:16), (2, 2, 2, 2))
@@ -61,6 +65,10 @@ module IteratorsMD
     julia> A[CartesianIndex((1, 1, 2, 1))]
     5
     ```
+
+    !!! compat "Julia 1.10"
+        Using a `CartesianIndex` as a "scalar" for `broadcast` requires
+        Julia 1.10; in previous releases, use `Ref(I)`.
     """
     struct CartesianIndex{N} <: AbstractCartesianIndex{N}
         I::NTuple{N,Int}
@@ -501,8 +509,30 @@ module IteratorsMD
     end
 
     # reversed CartesianIndices iteration
+    @inline function Base._reverse(iter::CartesianIndices, ::Colon)
+        CartesianIndices(reverse.(iter.indices))
+    end
 
-    Base.reverse(iter::CartesianIndices) = CartesianIndices(reverse.(iter.indices))
+    Base.@constprop :aggressive function Base._reverse(iter::CartesianIndices, dim::Integer)
+        1 <= dim <= ndims(iter) || throw(ArgumentError(Base.LazyString("invalid dimension ", dim, " in reverse")))
+        ndims(iter) == 1 && return Base._reverse(iter, :)
+        indices = iter.indices
+        return CartesianIndices(Base.setindex(indices, reverse(indices[dim]), dim))
+    end
+
+    Base.@constprop :aggressive function Base._reverse(iter::CartesianIndices, dims::Tuple{Vararg{Integer}})
+        indices = iter.indices
+        # use `sum` to force const fold
+        dimrev = ntuple(i -> sum(==(i), dims; init = 0) == 1, Val(length(indices)))
+        length(dims) == sum(dimrev) || throw(ArgumentError(Base.LazyString("invalid dimensions ", dims, " in reverse")))
+        length(dims) == length(indices) && return Base._reverse(iter, :)
+        indices′ = map((i, f) -> f ? (@noinline reverse(i)) : i, indices, dimrev)
+        return CartesianIndices(indices′)
+    end
+
+    # fix ambiguity with array.jl:
+    Base._reverse(iter::CartesianIndices{1}, dims::Tuple{Integer}) =
+        Base._reverse(iter, first(dims))
 
     @inline function iterate(r::Reverse{<:CartesianIndices})
         iterfirst = last(r.itr)

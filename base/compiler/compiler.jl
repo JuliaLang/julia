@@ -6,7 +6,7 @@ using Core.Intrinsics, Core.IR
 
 import Core: print, println, show, write, unsafe_write, stdout, stderr,
              _apply_iterate, svec, apply_type, Builtin, IntrinsicFunction,
-             MethodInstance, CodeInstance, MethodMatch, PartialOpaque,
+             MethodInstance, CodeInstance, MethodTable, MethodMatch, PartialOpaque,
              TypeofVararg
 
 const getproperty = Core.getfield
@@ -50,7 +50,7 @@ ntuple(f, n) = (Any[f(i) for i = 1:n]...,)
 
 # core operations & types
 function return_type end # promotion.jl expects this to exist
-is_return_type(@Core.nospecialize(f)) = f === return_type
+is_return_type(Core.@nospecialize(f)) = f === return_type
 include("promotion.jl")
 include("tuple.jl")
 include("pair.jl")
@@ -152,7 +152,6 @@ include("compiler/ssair/domtree.jl")
 include("compiler/ssair/ir.jl")
 
 include("compiler/abstractlattice.jl")
-
 include("compiler/inferenceresult.jl")
 include("compiler/inferencestate.jl")
 

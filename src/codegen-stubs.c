@@ -12,8 +12,9 @@
 
 JL_DLLEXPORT void jl_dump_native_fallback(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
-        const char *sysimg_data, size_t sysimg_len) UNAVAILABLE
+        const char *sysimg_data, size_t sysimg_len, ios_t *s) UNAVAILABLE
 JL_DLLEXPORT void jl_get_llvm_gvs_fallback(void *native_code, arraylist_t *gvs) UNAVAILABLE
+JL_DLLEXPORT void jl_get_llvm_external_fns_fallback(void *native_code, arraylist_t *gvs) UNAVAILABLE
 
 JL_DLLEXPORT void jl_extern_c_fallback(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name) UNAVAILABLE
 JL_DLLEXPORT jl_value_t *jl_dump_method_asm_fallback(jl_method_instance_t *linfo, size_t world,
@@ -31,10 +32,10 @@ JL_DLLEXPORT int jl_getFunctionInfo_fallback(jl_frame_t **frames, uintptr_t poin
     return 0;
 }
 
-JL_DLLEXPORT void jl_register_fptrs_fallback(uint64_t sysimage_base, const struct _jl_sysimg_fptrs_t *fptrs,
+JL_DLLEXPORT void jl_register_fptrs_fallback(uint64_t image_base, const struct _jl_image_fptrs_t *fptrs,
                        jl_method_instance_t **linfos, size_t n)
 {
-    (void)sysimage_base; (void)fptrs; (void)linfos; (void)n;
+    (void)image_base; (void)fptrs; (void)linfos; (void)n;
 }
 
 JL_DLLEXPORT jl_code_instance_t *jl_generate_fptr_fallback(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
@@ -47,6 +48,8 @@ JL_DLLEXPORT void jl_generate_fptr_for_unspecialized_fallback(jl_code_instance_t
     jl_atomic_store_release(&unspec->invoke, &jl_fptr_interpret_call);
 }
 
+JL_DLLEXPORT void jl_generate_fptr_for_oc_wrapper_fallback(jl_code_instance_t *unspec) UNAVAILABLE
+
 JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION_fallback(void)
 {
     return 0;
@@ -57,7 +60,7 @@ JL_DLLEXPORT int jl_compile_extern_c_fallback(LLVMOrcThreadSafeModuleRef llvmmod
     return 0;
 }
 
-JL_DLLEXPORT void jl_teardown_codegen_fallback(void)
+JL_DLLEXPORT void jl_teardown_codegen_fallback(void) JL_NOTSAFEPOINT
 {
 }
 
@@ -66,7 +69,7 @@ JL_DLLEXPORT size_t jl_jit_total_bytes_fallback(void)
     return 0;
 }
 
-JL_DLLEXPORT void *jl_create_native_fallback(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode) UNAVAILABLE
+JL_DLLEXPORT void *jl_create_native_fallback(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode, int _external_linkage, size_t _world) UNAVAILABLE
 
 JL_DLLEXPORT void jl_dump_compiles_fallback(void *s)
 {

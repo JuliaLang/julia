@@ -120,6 +120,8 @@ end
 MustAlias(var::SlotNumber, @nospecialize(vartyp), fldidx::Int, @nospecialize(fldtyp)) =
     MustAlias(slot_id(var), vartyp, fldidx, fldtyp)
 
+_uniontypes(x::MustAlias, ts) = _uniontypes(widenconst(x), ts)
+
 """
     alias::InterMustAlias
 
@@ -169,9 +171,44 @@ struct StateUpdate
     conditional::Bool
 end
 
-# Represent that the type estimate has been approximated, due to "causes"
-# (only used in abstract interpretation, doesn't appear in optimization)
-# N.B. in the lattice, this is epsilon smaller than `typ` (except Union{})
+"""
+    struct LimitedAccuracy
+
+A `LimitedAccuracy` lattice element is used to indicate that the true inference
+result was approximate due to heuristic termination of a recursion. For example,
+consider two call stacks starting from `A` and `B` that look like:
+
+    A -> C -> A -> D
+    B -> C -> A -> D
+
+In the first case, inference may have decided that `A->C->A` constitutes a cycle,
+widening the result it obtained for `C`, even if it might otherwise have been
+able to obtain a result. In this case, the result inferred for `C` will be
+annotated with this lattice type to indicate that the obtained result is an
+upper bound for the non-limited inference. In particular, this means that the
+call stack originating at `B` will re-perform inference without being poisoned
+by the potentially inaccurate result obtained during the inference of `A`.
+
+N.B.: We do *not* take any efforts to ensure the reverse. For example, if `B`
+is inferred first, then we may cache a precise result for `C` and re-use this
+result while inferring `A`, even if inference of `A` would have not been able
+to obtain this result due to limiting. This is undesirable, because it makes
+some inference results order dependent, but there it is unclear how this situation
+could be avoided.
+
+A `LimitedAccuracy` element wraps another lattice element (let's call it `T`)
+and additionally tracks the `causes` due to which limitation occurred. As a
+lattice element, `LimitedAccuracy(T)` is considered ε smaller than the
+corresponding lattice element `T`, but in particular, all lattice elements that
+are `⊑ T` (but not equal `T`) are also `⊑ LimitedAccuracy(T)`.
+
+The `causes` list is used to determine whether a particular cause of limitation is
+inevitable and if so, widening `LimitedAccuracy(T)` back to `T`. For example,
+in the call stacks above, if any call to `A` always leads back to `A`, then
+it does not matter whether we start at `A` or reach it via `B`: Any inference
+that reaches `A` will always hit the same limitation and the result may thus
+be cached.
+"""
 struct LimitedAccuracy
     typ
     causes::IdSet{InferenceState}
@@ -180,6 +217,7 @@ struct LimitedAccuracy
         return new(typ, causes)
     end
 end
+LimitedAccuracy(@nospecialize(T), ::Nothing) = T
 
 """
     struct NotFound end
@@ -364,17 +402,22 @@ ignorelimited(typ::LimitedAccuracy) = typ.typ
 # =============
 
 function ⊑(lattice::InferenceLattice, @nospecialize(a), @nospecialize(b))
-    if isa(b, LimitedAccuracy)
-        if !isa(a, LimitedAccuracy)
-            return false
-        end
-        if b.causes ⊈ a.causes
-            return false
-        end
-        b = b.typ
+    r = ⊑(widenlattice(lattice), ignorelimited(a), ignorelimited(b))
+    r || return false
+    isa(b, LimitedAccuracy) || return true
+
+    # We've found that ignorelimited(a) ⊑ ignorelimited(b).
+    # Now perform the reverse query to check for equality.
+    ab_eq = ⊑(widenlattice(lattice), b.typ, ignorelimited(a))
+
+    if !ab_eq
+        # a's unlimited type is strictly smaller than b's
+        return true
     end
-    isa(a, LimitedAccuracy) && (a = a.typ)
-    return ⊑(widenlattice(lattice), a, b)
+
+    # a and b's unlimited types are equal.
+    isa(a, LimitedAccuracy) || return false # b is limited, so ε smaller
+    return b.causes ⊆ a.causes
 end
 
 function ⊑(lattice::OptimizerLattice, @nospecialize(a), @nospecialize(b))
@@ -506,9 +549,13 @@ function ⊑(lattice::ConstsLattice, @nospecialize(a), @nospecialize(b))
 end
 
 function is_lattice_equal(lattice::InferenceLattice, @nospecialize(a), @nospecialize(b))
-    if isa(a, LimitedAccuracy) || isa(b, LimitedAccuracy)
-        # TODO: Unwrap these and recurse to is_lattice_equal
-        return ⊑(lattice, a, b) && ⊑(lattice, b, a)
+    if isa(a, LimitedAccuracy)
+        isa(b, LimitedAccuracy) || return false
+        a.causes == b.causes || return false
+        a = a.typ
+        b = b.typ
+    elseif isa(b, LimitedAccuracy)
+        return false
     end
     return is_lattice_equal(widenlattice(lattice), a, b)
 end
@@ -689,22 +736,15 @@ widenconst(::LimitedAccuracy) = error("unhandled LimitedAccuracy")
 # state management #
 ####################
 
-issubstate(lattice::AbstractLattice, a::VarState, b::VarState) =
-    ⊑(lattice, a.typ, b.typ) && a.undef <= b.undef
-
 function smerge(lattice::AbstractLattice, sa::Union{NotFound,VarState}, sb::Union{NotFound,VarState})
     sa === sb && return sa
     sa === NOT_FOUND && return sb
     sb === NOT_FOUND && return sa
-    issubstate(lattice, sa, sb) && return sb
-    issubstate(lattice, sb, sa) && return sa
     return VarState(tmerge(lattice, sa.typ, sb.typ), sa.undef | sb.undef)
 end
 
-@inline tchanged(lattice::AbstractLattice, @nospecialize(n), @nospecialize(o)) =
-    o === NOT_FOUND || (n !== NOT_FOUND && !⊑(lattice, n, o))
 @inline schanged(lattice::AbstractLattice, @nospecialize(n), @nospecialize(o)) =
-    (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !issubstate(lattice, n::VarState, o::VarState)))
+    (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !(n.undef <= o.undef && ⊑(lattice, n.typ, o.typ))))
 
 # remove any lattice elements that wrap the reassigned slot object from the vartable
 function invalidate_slotwrapper(vt::VarState, changeid::Int, ignore_conditional::Bool)

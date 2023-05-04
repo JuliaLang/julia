@@ -107,6 +107,29 @@ for op in (:+, :-)
     end
 end
 
+function *(H::UpperHessenberg, B::Bidiagonal)
+    T = promote_op(matprod, eltype(H), eltype(B))
+    A = mul!(similar(H, T, size(H)), H, B)
+    return B.uplo == 'U' ? UpperHessenberg(A) : A
+end
+function *(B::Bidiagonal, H::UpperHessenberg)
+    T = promote_op(matprod, eltype(B), eltype(H))
+    A = mul!(similar(H, T, size(H)), B, H)
+    return B.uplo == 'U' ? UpperHessenberg(A) : A
+end
+
+function /(H::UpperHessenberg, B::Bidiagonal)
+    T = typeof(oneunit(eltype(H))/oneunit(eltype(B)))
+    A = _rdiv!(similar(H, T, size(H)), H, B)
+    return B.uplo == 'U' ? UpperHessenberg(A) : A
+end
+
+function \(B::Bidiagonal, H::UpperHessenberg)
+    T = typeof(oneunit(eltype(B))\oneunit(eltype(H)))
+    A = ldiv!(similar(H, T, size(H)), B, H)
+    return B.uplo == 'U' ? UpperHessenberg(A) : A
+end
+
 # specialized +/- for structured matrices. If these are removed, it falls
 # back to broadcasting which has ~2-10x speed regressions.
 # For the other structure matrix pairs, broadcasting works well.
@@ -235,65 +258,15 @@ function (-)(A::UniformScaling, B::Diagonal)
     Diagonal(Ref(A) .- B.diag)
 end
 
-lmul!(Q::AbstractQ, B::AbstractTriangular) = lmul!(Q, full!(B))
-lmul!(Q::QRPackedQ, B::AbstractTriangular) = lmul!(Q, full!(B)) # disambiguation
-lmul!(Q::Adjoint{<:Any,<:AbstractQ}, B::AbstractTriangular) = lmul!(Q, full!(B))
-lmul!(Q::Adjoint{<:Any,<:QRPackedQ}, B::AbstractTriangular) = lmul!(Q, full!(B)) # disambiguation
+## Diagonal construction from UniformScaling
+Diagonal{T}(s::UniformScaling, m::Integer) where {T} = Diagonal{T}(fill(T(s.λ), m))
+Diagonal(s::UniformScaling, m::Integer) = Diagonal{eltype(s)}(s, m)
 
-function _qlmul(Q::AbstractQ, B)
-    TQB = promote_type(eltype(Q), eltype(B))
-    if size(Q.factors, 1) == size(B, 1)
-        Bnew = Matrix{TQB}(B)
-    elseif size(Q.factors, 2) == size(B, 1)
-        Bnew = [Matrix{TQB}(B); zeros(TQB, size(Q.factors, 1) - size(B,1), size(B, 2))]
-    else
-        throw(DimensionMismatch("first dimension of matrix must have size either $(size(Q.factors, 1)) or $(size(Q.factors, 2))"))
-    end
-    lmul!(convert(AbstractMatrix{TQB}, Q), Bnew)
-end
-function _qlmul(adjQ::Adjoint{<:Any,<:AbstractQ}, B)
-    TQB = promote_type(eltype(adjQ), eltype(B))
-    lmul!(adjoint(convert(AbstractMatrix{TQB}, parent(adjQ))), Matrix{TQB}(B))
-end
+Base.muladd(A::Union{Diagonal, UniformScaling}, B::Union{Diagonal, UniformScaling}, z::Union{Diagonal, UniformScaling}) =
+    Diagonal(_diag_or_value(A) .* _diag_or_value(B) .+ _diag_or_value(z))
 
-*(Q::AbstractQ, B::AbstractTriangular) = _qlmul(Q, B)
-*(Q::Adjoint{<:Any,<:AbstractQ}, B::AbstractTriangular) = _qlmul(Q, B)
-*(Q::AbstractQ, B::BiTriSym) = _qlmul(Q, B)
-*(Q::Adjoint{<:Any,<:AbstractQ}, B::BiTriSym) = _qlmul(Q, B)
-*(Q::AbstractQ, B::Diagonal) = _qlmul(Q, B)
-*(Q::Adjoint{<:Any,<:AbstractQ}, B::Diagonal) = _qlmul(Q, B)
-
-rmul!(A::AbstractTriangular, Q::AbstractQ) = rmul!(full!(A), Q)
-rmul!(A::AbstractTriangular, Q::Adjoint{<:Any,<:AbstractQ}) = rmul!(full!(A), Q)
-
-function _qrmul(A, Q::AbstractQ)
-    TAQ = promote_type(eltype(A), eltype(Q))
-    return rmul!(Matrix{TAQ}(A), convert(AbstractMatrix{TAQ}, Q))
-end
-function _qrmul(A, adjQ::Adjoint{<:Any,<:AbstractQ})
-    Q = adjQ.parent
-    TAQ = promote_type(eltype(A), eltype(Q))
-    if size(A,2) == size(Q.factors, 1)
-        Anew = Matrix{TAQ}(A)
-    elseif size(A,2) == size(Q.factors,2)
-        Anew = [Matrix{TAQ}(A) zeros(TAQ, size(A, 1), size(Q.factors, 1) - size(Q.factors, 2))]
-    else
-        throw(DimensionMismatch("matrix A has dimensions $(size(A)) but matrix B has dimensions $(size(Q))"))
-    end
-    return rmul!(Anew, adjoint(convert(AbstractMatrix{TAQ}, Q)))
-end
-
-*(A::AbstractTriangular, Q::AbstractQ) = _qrmul(A, Q)
-*(A::AbstractTriangular, Q::Adjoint{<:Any,<:AbstractQ}) = _qrmul(A, Q)
-*(A::BiTriSym, Q::AbstractQ) = _qrmul(A, Q)
-*(A::BiTriSym, Q::Adjoint{<:Any,<:AbstractQ}) = _qrmul(A, Q)
-*(A::Diagonal, Q::AbstractQ) = _qrmul(A, Q)
-*(A::Diagonal, Q::Adjoint{<:Any,<:AbstractQ}) = _qrmul(A, Q)
-
-*(Q::AbstractQ, B::AbstractQ) = Q * (B * I)
-*(Q::Adjoint{<:Any,<:AbstractQ}, B::AbstractQ) = Q * (B * I)
-*(Q::AbstractQ, B::Adjoint{<:Any,<:AbstractQ}) = Q * (B * I)
-*(Q::Adjoint{<:Any,<:AbstractQ}, B::Adjoint{<:Any,<:AbstractQ}) = Q * (B * I)
+_diag_or_value(A::Diagonal) = A.diag
+_diag_or_value(A::UniformScaling) = A.λ
 
 # fill[stored]! methods
 fillstored!(A::Diagonal, x) = (fill!(A.diag, x); A)
@@ -323,6 +296,10 @@ end
 
 zero(D::Diagonal) = Diagonal(zero.(D.diag))
 oneunit(D::Diagonal) = Diagonal(oneunit.(D.diag))
+
+isdiag(A::HermOrSym{<:Any,<:Diagonal}) = isdiag(parent(A))
+dot(x::AbstractVector, A::RealHermSymComplexSym{<:Real,<:Diagonal}, y::AbstractVector) =
+    dot(x, A.data, y)
 
 # equals and approx equals methods for structured matrices
 # SymTridiagonal == Tridiagonal is already defined in tridiag.jl
@@ -358,9 +335,7 @@ const _TypedDenseConcatGroup{T} = Union{Vector{T}, Adjoint{T,Vector{T}}, Transpo
 promote_to_array_type(::Tuple{Vararg{Union{_DenseConcatGroup,UniformScaling}}}) = Matrix
 
 Base._cat(dims, xs::_DenseConcatGroup...) = Base._cat_t(dims, promote_eltype(xs...), xs...)
-vcat(A::Vector...) = Base.typed_vcat(promote_eltype(A...), A...)
 vcat(A::_DenseConcatGroup...) = Base.typed_vcat(promote_eltype(A...), A...)
-hcat(A::Vector...) = Base.typed_hcat(promote_eltype(A...), A...)
 hcat(A::_DenseConcatGroup...) = Base.typed_hcat(promote_eltype(A...), A...)
 hvcat(rows::Tuple{Vararg{Int}}, xs::_DenseConcatGroup...) = Base.typed_hvcat(promote_eltype(xs...), rows, xs...)
 # For performance, specially handle the case where the matrices/vectors have homogeneous eltype

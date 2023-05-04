@@ -83,6 +83,11 @@ end
 
 function show(io::IO, x::Rational)
     show(io, numerator(x))
+
+    if isone(denominator(x)) && get(io, :typeinfo, Any) <: Rational
+        return
+    end
+
     print(io, "//")
     show(io, denominator(x))
 end
@@ -272,7 +277,7 @@ signbit(x::Rational) = signbit(x.num)
 copysign(x::Rational, y::Real) = unsafe_rational(copysign(x.num, y), x.den)
 copysign(x::Rational, y::Rational) = unsafe_rational(copysign(x.num, y.num), x.den)
 
-abs(x::Rational) = Rational(abs(x.num), x.den)
+abs(x::Rational) = unsafe_rational(checked_abs(x.num), x.den)
 
 typemin(::Type{Rational{T}}) where {T<:Signed} = unsafe_rational(T, -one(T), zero(T))
 typemin(::Type{Rational{T}}) where {T<:Integer} = unsafe_rational(T, zero(T), one(T))
@@ -540,7 +545,7 @@ function hash(x::Rational{<:BitInteger64}, h::UInt)
         pow = trailing_zeros(den)
         den >>= pow
         pow = -pow
-        if den == 1 && abs(num) < 9007199254740992
+        if den == 1 && uabs(num) < UInt64(maxintfloat(Float64))
             return hash(ldexp(Float64(num),pow),h)
         end
     end

@@ -48,7 +48,7 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         print(io, ", ")
         print(io, stmt.typ)
         print(io, ")")
-    elseif isexpr(stmt, :invoke)
+    elseif isexpr(stmt, :invoke) && length(stmt.args) >= 2 && isa(stmt.args[1], MethodInstance)
         stmt = stmt::Expr
         # TODO: why is this here, and not in Base.show_unquoted
         print(io, "invoke ")
@@ -171,10 +171,17 @@ function default_expr_type_printer(io::IO; @nospecialize(type), used::Bool, show
     return nothing
 end
 
-normalize_method_name(m::Method) = m.name
-normalize_method_name(m::MethodInstance) = (m.def::Method).name
-normalize_method_name(m::Symbol) = m
-normalize_method_name(m) = Symbol("")
+function normalize_method_name(m)
+    if m isa Method
+        return m.name
+    elseif m isa MethodInstance
+        return (m.def::Method).name
+    elseif m isa Symbol
+        return m
+    else
+        return Symbol("")
+    end
+end
 @noinline method_name(m::LineInfoNode) = normalize_method_name(m.method)
 
 # converts the linetable for line numbers
@@ -796,7 +803,7 @@ function inline_linfo_printer(code::IRCode)
     end
 end
 
-_strip_color(s::String) = replace(s, r"\e\[\d+m" => "")
+_strip_color(s::String) = replace(s, r"\e\[\d+m"a => "")
 
 function statementidx_lineinfo_printer(f, code::IRCode)
     printer = f(code.linetable)
@@ -858,7 +865,7 @@ function show_ir_stmts(io::IO, ir::Union{IRCode, CodeInfo, IncrementalCompact}, 
     return bb_idx
 end
 
-function finish_show_ir(io::IO, cfg, config::IRShowConfig)
+function finish_show_ir(io::IO, cfg::CFG, config::IRShowConfig)
     max_bb_idx_size = length(string(length(cfg.blocks)))
     config.line_info_preprinter(io, " "^(max_bb_idx_size + 2), 0)
     return nothing
@@ -902,7 +909,7 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
 
     # while compacting, the end of the active result bb will not have been determined
     # (this is done post-hoc by `finish_current_bb!`), so determine it here from scratch.
-    result_bbs = copy(compact.result_bbs)
+    result_bbs = copy(compact.cfg_transform.result_bbs)
     if compact.active_result_bb <= length(result_bbs)
         # count the total number of nodes we'll add to this block
         input_bb_idx = block_for_inst(compact.ir.cfg, compact.idx)
@@ -1012,6 +1019,8 @@ function Base.show(io::IO, e::Effects)
     printstyled(io, effectbits_letter(e, :notaskstate, 's'); color=effectbits_color(e, :notaskstate))
     print(io, ',')
     printstyled(io, effectbits_letter(e, :inaccessiblememonly, 'm'); color=effectbits_color(e, :inaccessiblememonly))
+    print(io, ',')
+    printstyled(io, effectbits_letter(e, :noinbounds, 'i'); color=effectbits_color(e, :noinbounds))
     print(io, ')')
     e.nonoverlayed || printstyled(io, '′'; color=:red)
 end

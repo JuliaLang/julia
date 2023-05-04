@@ -21,11 +21,14 @@ Base.:(==)(::Infinity, ::Int) = false
 Base.:(==)(::Int, ::Infinity) = false
 Base.:(<)(::Int, ::Infinity) = true
 Base.:(≤)(::Int, ::Infinity) = true
+Base.:(<)(::Infinity, ::Int) = false
 Base.:(≤)(::Infinity, ::Int) = false
 Base.:(≤)(::Infinity, ::Infinity) = true
 Base.:(-)(::Infinity, ::Int) = Infinity()
 Base.:(+)(::Infinity, ::Int) = Infinity()
 Base.:(:)(::Infinity, ::Infinity) = 1:0
+Base.max(::Infinity, ::Int) = Infinity()
+Base.max(::Int, ::Infinity) = Infinity()
 
 """
     OneToInf(n)

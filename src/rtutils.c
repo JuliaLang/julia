@@ -524,7 +524,7 @@ JL_DLLEXPORT jl_value_t *jl_stdout_obj(void) JL_NOTSAFEPOINT
 {
     if (jl_base_module == NULL)
         return NULL;
-    jl_binding_t *stdout_obj = jl_get_module_binding(jl_base_module, jl_symbol("stdout"));
+    jl_binding_t *stdout_obj = jl_get_module_binding(jl_base_module, jl_symbol("stdout"), 0);
     return stdout_obj ? jl_atomic_load_relaxed(&stdout_obj->value) : NULL;
 }
 
@@ -532,34 +532,35 @@ JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT
 {
     if (jl_base_module == NULL)
         return NULL;
-    jl_binding_t *stderr_obj = jl_get_module_binding(jl_base_module, jl_symbol("stderr"));
+    jl_binding_t *stderr_obj = jl_get_module_binding(jl_base_module, jl_symbol("stderr"), 0);
     return stderr_obj ? jl_atomic_load_relaxed(&stderr_obj->value) : NULL;
 }
 
 // toys for debugging ---------------------------------------------------------
-
-static size_t jl_show_svec(JL_STREAM *out, jl_svec_t *t, const char *head, const char *opn, const char *cls) JL_NOTSAFEPOINT
-{
-    size_t i, n=0, len = jl_svec_len(t);
-    n += jl_printf(out, "%s", head);
-    n += jl_printf(out, "%s", opn);
-    for (i = 0; i < len; i++) {
-        jl_value_t *v = jl_svecref(t,i);
-        n += jl_static_show(out, v);
-        if (i != len-1)
-            n += jl_printf(out, ", ");
-    }
-    n += jl_printf(out, "%s", cls);
-    return n;
-}
 
 struct recur_list {
     struct recur_list *prev;
     jl_value_t *v;
 };
 
-static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth) JL_NOTSAFEPOINT;
-static size_t jl_static_show_next_(JL_STREAM *out, jl_value_t *v, jl_value_t *prev, struct recur_list *depth) JL_NOTSAFEPOINT;
+static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth, jl_static_show_config_t ctx) JL_NOTSAFEPOINT;
+static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt, struct recur_list *depth, jl_static_show_config_t ctx) JL_NOTSAFEPOINT;
+static size_t jl_static_show_next_(JL_STREAM *out, jl_value_t *v, jl_value_t *prev, struct recur_list *depth, jl_static_show_config_t ctx) JL_NOTSAFEPOINT;
+
+static size_t jl_show_svec(JL_STREAM *out, jl_svec_t *t, const char *head, const char *opn, const char *cls, jl_static_show_config_t ctx) JL_NOTSAFEPOINT
+{
+    size_t i, n=0, len = jl_svec_len(t);
+    n += jl_printf(out, "%s", head);
+    n += jl_printf(out, "%s", opn);
+    for (i = 0; i < len; i++) {
+        jl_value_t *v = jl_svecref(t,i);
+        n += jl_static_show_x(out, v, 0, ctx);
+        if (i != len-1)
+            n += jl_printf(out, ", ");
+    }
+    n += jl_printf(out, "%s", cls);
+    return n;
+}
 
 JL_DLLEXPORT int jl_id_start_char(uint32_t wc) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_id_char(uint32_t wc) JL_NOTSAFEPOINT;
@@ -625,9 +626,9 @@ JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt JL_PROPAGATES_ROO
 static int is_globname_binding(jl_value_t *v, jl_datatype_t *dv) JL_NOTSAFEPOINT
 {
     jl_sym_t *globname = dv->name->mt != NULL ? dv->name->mt->name : NULL;
-    if (globname && dv->name->module && jl_binding_resolved_p(dv->name->module, globname)) {
-        jl_binding_t *b = jl_get_module_binding(dv->name->module, globname);
-        if (b && b->constp) {
+    if (globname && dv->name->module) {
+        jl_binding_t *b = jl_get_module_binding(dv->name->module, globname, 0);
+        if (b && jl_atomic_load_relaxed(&b->owner) && b->constp) {
             jl_value_t *bv = jl_atomic_load_relaxed(&b->value);
             // The `||` makes this function work for both function instances and function types.
             if (bv == v || jl_typeof(bv) == v)
@@ -697,7 +698,7 @@ static int jl_static_is_function_(jl_datatype_t *vt) JL_NOTSAFEPOINT {
 // This is necessary to make sure that this function doesn't allocate any
 // memory through the Julia GC
 static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt,
-                                struct recur_list *depth) JL_NOTSAFEPOINT
+                                struct recur_list *depth, jl_static_show_config_t ctx) JL_NOTSAFEPOINT
 {
     size_t n = 0;
     if ((uintptr_t)vt < 4096U) {
@@ -705,7 +706,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if ((uintptr_t)v < 4096U) {
         n += jl_printf(out, "<?#%p::", (void*)v);
-        n += jl_static_show_x(out, (jl_value_t*)vt, depth);
+        n += jl_static_show_x(out, (jl_value_t*)vt, depth, ctx);
         n += jl_printf(out, ">");
     }
     else if (vt == (jl_datatype_t*)jl_buff_tag) {
@@ -746,17 +747,17 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             n += jl_static_show_func_sig(out, li->def.method->sig);
         }
         else {
-            n += jl_static_show_x(out, (jl_value_t*)li->def.module, depth);
+            n += jl_static_show_x(out, (jl_value_t*)li->def.module, depth, ctx);
             n += jl_printf(out, ".<toplevel thunk> -> ");
-            n += jl_static_show_x(out, jl_atomic_load_relaxed(&li->uninferred), depth);
+            n += jl_static_show_x(out, jl_atomic_load_relaxed(&li->uninferred), depth, ctx);
         }
     }
     else if (vt == jl_typename_type) {
-        n += jl_static_show_x(out, jl_unwrap_unionall(((jl_typename_t*)v)->wrapper), depth);
+        n += jl_static_show_x(out, jl_unwrap_unionall(((jl_typename_t*)v)->wrapper), depth, ctx);
         n += jl_printf(out, ".name");
     }
     else if (vt == jl_simplevector_type) {
-        n += jl_show_svec(out, (jl_svec_t*)v, "svec", "(", ")");
+        n += jl_show_svec(out, (jl_svec_t*)v, "svec", "(", ")", ctx);
     }
     else if (v == (jl_value_t*)jl_unionall_type) {
         // avoid printing `typeof(Type)` for `UnionAll`.
@@ -767,10 +768,10 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, "Vararg");
         if (vm->T) {
             n += jl_printf(out, "{");
-            n += jl_static_show_x(out, vm->T, depth);
+            n += jl_static_show_x(out, vm->T, depth, ctx);
             if (vm->N) {
                 n += jl_printf(out, ", ");
-                n += jl_static_show_x(out, vm->N, depth);
+                n += jl_static_show_x(out, vm->N, depth, ctx);
             }
             n += jl_printf(out, "}");
         }
@@ -797,7 +798,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             }
             if (taillen == tlen && taillen > 3) {
                 n += jl_printf(out, "NTuple{%d, ", tlen);
-                n += jl_static_show_x(out, jl_tparam0(dv), depth);
+                n += jl_static_show_x(out, jl_tparam0(dv), depth, ctx);
                 n += jl_printf(out, "}");
             }
             else {
@@ -805,22 +806,25 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                 for (i = 0; i < (taillen > 3 ? tlen-taillen : tlen); i++) {
                     if (i > 0)
                         n += jl_printf(out, ", ");
-                    n += jl_static_show_x(out, jl_tparam(dv, i), depth);
+                    n += jl_static_show_x(out, jl_tparam(dv, i), depth, ctx);
                 }
                 if (taillen > 3) {
                     n += jl_printf(out, ", Vararg{");
-                    n += jl_static_show_x(out, jl_tparam(dv, tlen-1), depth);
+                    n += jl_static_show_x(out, jl_tparam(dv, tlen-1), depth, ctx);
                     n += jl_printf(out, ", %d}", taillen);
                 }
                 n += jl_printf(out, "}");
             }
             return n;
         }
+        if (ctx.quiet) {
+            return jl_printf(out, "%s", jl_symbol_name(dv->name->name));
+        }
         if (globfunc) {
             n += jl_printf(out, "typeof(");
         }
         if (jl_core_module && (dv->name->module != jl_core_module || !jl_module_exports_p(jl_core_module, sym))) {
-            n += jl_static_show_x(out, (jl_value_t*)dv->name->module, depth);
+            n += jl_static_show_x(out, (jl_value_t*)dv->name->module, depth, ctx);
             n += jl_printf(out, ".");
             size_t i = 0;
             if (globfunc && !jl_id_start_char(u8_nextchar(sn, &i))) {
@@ -841,7 +845,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                 n += jl_printf(out, "{");
                 for (j = 0; j < tlen; j++) {
                     jl_value_t *p = jl_tparam(dv,j);
-                    n += jl_static_show_x(out, p, depth);
+                    n += jl_static_show_x(out, p, depth, ctx);
                     if (j != tlen-1)
                         n += jl_printf(out, ", ");
                 }
@@ -908,22 +912,22 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, "Union{");
         while (jl_is_uniontype(v)) {
             // tail-recurse on b to flatten the printing of the Union structure in the common case
-            n += jl_static_show_x(out, ((jl_uniontype_t*)v)->a, depth);
+            n += jl_static_show_x(out, ((jl_uniontype_t*)v)->a, depth, ctx);
             n += jl_printf(out, ", ");
             v = ((jl_uniontype_t*)v)->b;
         }
-        n += jl_static_show_x(out, v, depth);
+        n += jl_static_show_x(out, v, depth, ctx);
         n += jl_printf(out, "}");
     }
     else if (vt == jl_unionall_type) {
         jl_unionall_t *ua = (jl_unionall_t*)v;
-        n += jl_static_show_x(out, ua->body, depth);
+        n += jl_static_show_x(out, ua->body, depth, ctx);
         n += jl_printf(out, " where ");
-        n += jl_static_show_x(out, (jl_value_t*)ua->var, depth->prev);
+        n += jl_static_show_x(out, (jl_value_t*)ua->var, depth->prev, ctx);
     }
     else if (vt == jl_typename_type) {
         n += jl_printf(out, "typename(");
-        n += jl_static_show_x(out, jl_unwrap_unionall(((jl_typename_t*)v)->wrapper), depth);
+        n += jl_static_show_x(out, jl_unwrap_unionall(((jl_typename_t*)v)->wrapper), depth, ctx);
         n += jl_printf(out, ")");
     }
     else if (vt == jl_tvar_type) {
@@ -943,7 +947,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             int ua = jl_is_unionall(lb);
             if (ua)
                 n += jl_printf(out, "(");
-            n += jl_static_show_x(out, lb, depth);
+            n += jl_static_show_x(out, lb, depth, ctx);
             if (ua)
                 n += jl_printf(out, ")");
             n += jl_printf(out, "<:");
@@ -955,7 +959,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             n += jl_printf(out, "<:");
             if (ua)
                 n += jl_printf(out, "(");
-            n += jl_static_show_x(out, ub, depth);
+            n += jl_static_show_x(out, ub, depth, ctx);
             if (ua)
                 n += jl_printf(out, ")");
         }
@@ -963,7 +967,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if (vt == jl_module_type) {
         jl_module_t *m = (jl_module_t*)v;
         if (m->parent != m && m->parent != jl_main_module) {
-            n += jl_static_show_x(out, (jl_value_t*)m->parent, depth);
+            n += jl_static_show_x(out, (jl_value_t*)m->parent, depth, ctx);
             n += jl_printf(out, ".");
         }
         n += jl_printf(out, "%s", jl_symbol_name(m->name));
@@ -984,7 +988,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                        (uintptr_t)((jl_ssavalue_t*)v)->id);
     }
     else if (vt == jl_globalref_type) {
-        n += jl_static_show_x(out, (jl_value_t*)jl_globalref_mod(v), depth);
+        n += jl_static_show_x(out, (jl_value_t*)jl_globalref_mod(v), depth, ctx);
         char *name = jl_symbol_name(jl_globalref_name(v));
         n += jl_printf(out, jl_is_identifier(name) ? ".%s" : ".:(%s)", name);
     }
@@ -999,7 +1003,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         else {
             n += jl_printf(out, ":(");
         }
-        n += jl_static_show_x(out, qv, depth);
+        n += jl_static_show_x(out, qv, depth, ctx);
         if (!jl_is_symbol(qv)) {
             n += jl_printf(out, " end");
         }
@@ -1009,20 +1013,20 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_newvarnode_type) {
         n += jl_printf(out, "<newvar ");
-        n += jl_static_show_x(out, *(jl_value_t**)v, depth);
+        n += jl_static_show_x(out, *(jl_value_t**)v, depth, ctx);
         n += jl_printf(out, ">");
     }
     else if (vt == jl_linenumbernode_type) {
         n += jl_printf(out, "#= ");
-        n += jl_static_show_x(out, jl_linenode_file(v), depth);
+        n += jl_static_show_x(out, jl_linenode_file(v), depth, ctx);
         n += jl_printf(out, ":%" PRIuPTR " =#", jl_linenode_line(v));
     }
     else if (vt == jl_expr_type) {
         jl_expr_t *e = (jl_expr_t*)v;
         if (e->head == jl_assign_sym && jl_array_len(e->args) == 2) {
-            n += jl_static_show_x(out, jl_exprarg(e,0), depth);
+            n += jl_static_show_x(out, jl_exprarg(e,0), depth, ctx);
             n += jl_printf(out, " = ");
-            n += jl_static_show_x(out, jl_exprarg(e,1), depth);
+            n += jl_static_show_x(out, jl_exprarg(e,1), depth, ctx);
         }
         else {
             char sep = ' ';
@@ -1030,14 +1034,14 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             size_t i, len = jl_array_len(e->args);
             for (i = 0; i < len; i++) {
                 n += jl_printf(out, ",%c", sep);
-                n += jl_static_show_x(out, jl_exprarg(e,i), depth);
+                n += jl_static_show_x(out, jl_exprarg(e,i), depth, ctx);
             }
             n += jl_printf(out, ")");
         }
     }
     else if (jl_array_type && jl_is_array_type(vt)) {
         n += jl_printf(out, "Array{");
-        n += jl_static_show_x(out, (jl_value_t*)jl_tparam0(vt), depth);
+        n += jl_static_show_x(out, (jl_value_t*)jl_tparam0(vt), depth, ctx);
         n += jl_printf(out, ", (");
         size_t i, ndims = jl_array_ndims(v);
         if (ndims == 1)
@@ -1072,13 +1076,13 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         for (j = 0; j < tlen; j++) {
             if (av->flags.ptrarray) {
                 jl_value_t **ptr = ((jl_value_t**)av->data) + j;
-                n += jl_static_show_x(out, *ptr, depth);
+                n += jl_static_show_x(out, *ptr, depth, ctx);
             }
             else {
                 char *ptr = ((char*)av->data) + j * av->elsize;
                 n += jl_static_show_x_(out, (jl_value_t*)ptr,
                         typetagdata ? (jl_datatype_t*)jl_nth_union_component(el_type, typetagdata[j]) : (jl_datatype_t*)el_type,
-                        depth);
+                        depth, ctx);
             }
             if (j != tlen - 1)
                 n += jl_printf(out, nlsep ? ",\n  " : ", ");
@@ -1087,16 +1091,16 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_loaderror_type) {
         n += jl_printf(out, "LoadError(at ");
-        n += jl_static_show_x(out, *(jl_value_t**)v, depth);
+        n += jl_static_show_x(out, *(jl_value_t**)v, depth, ctx);
         // Access the field directly to avoid allocation
         n += jl_printf(out, " line %" PRIdPTR, ((intptr_t*)v)[1]);
         n += jl_printf(out, ": ");
-        n += jl_static_show_x(out, ((jl_value_t**)v)[2], depth);
+        n += jl_static_show_x(out, ((jl_value_t**)v)[2], depth, ctx);
         n += jl_printf(out, ")");
     }
     else if (vt == jl_errorexception_type) {
         n += jl_printf(out, "ErrorException(");
-        n += jl_static_show_x(out, *(jl_value_t**)v, depth);
+        n += jl_static_show_x(out, *(jl_value_t**)v, depth, ctx);
         n += jl_printf(out, ")");
     }
     else if (jl_static_is_function_(vt) && is_globname_binding(v, (jl_datatype_t*)vt)) {
@@ -1106,7 +1110,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         int globfunc = is_globfunction(v, dv, &sym);
         int quote = 0;
         if (jl_core_module && (dv->name->module != jl_core_module || !jl_module_exports_p(jl_core_module, sym))) {
-            n += jl_static_show_x(out, (jl_value_t*)dv->name->module, depth);
+            n += jl_static_show_x(out, (jl_value_t*)dv->name->module, depth, ctx);
             n += jl_printf(out, ".");
 
             size_t i = 0;
@@ -1136,7 +1140,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                 n += jl_printf(out, "NamedTuple");
         }
         else if (!istuple) {
-            n += jl_static_show_x(out, (jl_value_t*)vt, depth);
+            n += jl_static_show_x(out, (jl_value_t*)vt, depth, ctx);
         }
         n += jl_printf(out, "(");
         size_t nb = jl_datatype_size(vt);
@@ -1159,7 +1163,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                 size_t offs = jl_field_offset(vt, i);
                 char *fld_ptr = (char*)v + offs;
                 if (jl_field_isptr(vt, i)) {
-                    n += jl_static_show_x(out, *(jl_value_t**)fld_ptr, depth);
+                    n += jl_static_show_x(out, *(jl_value_t**)fld_ptr, depth, ctx);
                 }
                 else {
                     jl_datatype_t *ft = (jl_datatype_t*)jl_field_type_concrete(vt, i);
@@ -1167,7 +1171,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                         uint8_t sel = ((uint8_t*)fld_ptr)[jl_field_size(vt, i) - 1];
                         ft = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)ft, sel);
                     }
-                    n += jl_static_show_x_(out, (jl_value_t*)fld_ptr, ft, depth);
+                    n += jl_static_show_x_(out, (jl_value_t*)fld_ptr, ft, depth, ctx);
                 }
                 if ((istuple || isnamedtuple) && tlen == 1)
                     n += jl_printf(out, ",");
@@ -1177,26 +1181,26 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             if (vt == jl_typemap_entry_type) {
                 n += jl_printf(out, ", next=↩︎\n  ");
                 jl_value_t *next = (jl_value_t*)jl_atomic_load_relaxed(&((jl_typemap_entry_t*)v)->next);
-                n += jl_static_show_next_(out, next, v, depth);
+                n += jl_static_show_next_(out, next, v, depth, ctx);
             }
         }
         n += jl_printf(out, ")");
     }
     else {
         n += jl_printf(out, "<?#%p::", (void*)v);
-        n += jl_static_show_x(out, (jl_value_t*)vt, depth);
+        n += jl_static_show_x(out, (jl_value_t*)vt, depth, ctx);
         n += jl_printf(out, ">");
     }
     return n;
 }
 
-static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth) JL_NOTSAFEPOINT
+static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth, jl_static_show_config_t ctx) JL_NOTSAFEPOINT
 {
     // show values without calling a julia method or allocating through the GC
-    return jl_static_show_next_(out, v, NULL, depth);
+    return jl_static_show_next_(out, v, NULL, depth, ctx);
 }
 
-static size_t jl_static_show_next_(JL_STREAM *out, jl_value_t *v, jl_value_t *prev, struct recur_list *depth) JL_NOTSAFEPOINT
+static size_t jl_static_show_next_(JL_STREAM *out, jl_value_t *v, jl_value_t *prev, struct recur_list *depth, jl_static_show_config_t ctx) JL_NOTSAFEPOINT
 {
     // helper for showing a typemap list by following the next pointers
     // while being careful about avoiding any recursion due to malformed (circular) references
@@ -1217,7 +1221,7 @@ static size_t jl_static_show_next_(JL_STREAM *out, jl_value_t *v, jl_value_t *pr
             while (m && jl_typeis(m, jl_typemap_entry_type)) {
                 if (m == v) {
                     return jl_printf(out, "<typemap reference #%u @-%u ", nid, dist) +
-                           jl_static_show_x(out, (jl_value_t*)((jl_typemap_entry_t*)m)->sig, depth) +
+                           jl_static_show_x(out, (jl_value_t*)((jl_typemap_entry_t*)m)->sig, depth, ctx) +
                            jl_printf(out, ">");
                 }
                 if (m == prev) {
@@ -1248,15 +1252,22 @@ static size_t jl_static_show_next_(JL_STREAM *out, jl_value_t *v, jl_value_t *pr
         dist++;
         p = p->prev;
     }
-    return jl_static_show_x_(out, v, (jl_datatype_t*)jl_typeof(v), newdepth);
+    return jl_static_show_x_(out, v, (jl_datatype_t*)jl_typeof(v), newdepth, ctx);
 }
 
 JL_DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v) JL_NOTSAFEPOINT
 {
-    return jl_static_show_x(out, v, 0);
+    jl_static_show_config_t ctx = { /* quiet */ 0 };
+    return jl_static_show_x(out, v, 0, ctx);
 }
 
 JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_NOTSAFEPOINT
+{
+    jl_static_show_config_t ctx = { /* quiet */ 0 };
+    return jl_static_show_func_sig_(s, type, ctx);
+}
+
+JL_DLLEXPORT size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_config_t ctx) JL_NOTSAFEPOINT
 {
     size_t n = 0;
     size_t i;
@@ -1286,7 +1297,7 @@ JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_N
     }
     else {
         n += jl_printf(s, "(::");
-        n += jl_static_show_x(s, ftype, depth);
+        n += jl_static_show_x(s, ftype, depth, ctx);
         n += jl_printf(s, ")");
     }
     size_t tl = jl_nparams(type);
@@ -1294,7 +1305,7 @@ JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_N
     for (i = 1; i < tl; i++) {
         jl_value_t *tp = jl_tparam(type, i);
         if (i != tl - 1) {
-            n += jl_static_show_x(s, tp, depth);
+            n += jl_static_show_x(s, tp, depth, ctx);
             n += jl_printf(s, ", ");
         }
         else {
@@ -1302,13 +1313,13 @@ JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_N
                 tp = jl_unwrap_vararg(tp);
                 if (jl_is_unionall(tp))
                     n += jl_printf(s, "(");
-                n += jl_static_show_x(s, tp, depth);
+                n += jl_static_show_x(s, tp, depth, ctx);
                 if (jl_is_unionall(tp))
                     n += jl_printf(s, ")");
                 n += jl_printf(s, "...");
             }
             else {
-                n += jl_static_show_x(s, tp, depth);
+                n += jl_static_show_x(s, tp, depth, ctx);
             }
         }
     }
@@ -1320,7 +1331,7 @@ JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_N
         while (jl_is_unionall(tvars)) {
             if (!first)
                 n += jl_printf(s, ", ");
-            n += jl_static_show_x(s, (jl_value_t*)tvars->var, first ? NULL : depth);
+            n += jl_static_show_x(s, (jl_value_t*)tvars->var, first ? NULL : depth,  ctx);
             tvars = (jl_unionall_t*)tvars->body;
             if (!first)
                 depth += 1;

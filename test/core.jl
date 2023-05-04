@@ -15,7 +15,7 @@ include("testenv.jl")
 for (T, c) in (
         (Core.CodeInfo, []),
         (Core.CodeInstance, [:def, :rettype, :rettype_const, :ipo_purity_bits, :argescapes]),
-        (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :pure, :is_for_opaque_closure, :constprop=#]),
+        (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :is_for_opaque_closure, :constprop=#]),
         (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals=#]),
         (Core.MethodTable, [:module]),
         (Core.TypeMapEntry, [:sig, :simplesig, :guardsigs, :min_world, :max_world, :func, :isleafsig, :issimplesig, :va]),
@@ -57,14 +57,14 @@ mutable struct ABCDconst
     c
     const d::Union{Int,Nothing}
 end
-@test_throws(ErrorException("invalid redefinition of constant ABCDconst"),
+@test_throws(ErrorException("invalid redefinition of constant $(nameof(curmod)).ABCDconst"),
     mutable struct ABCDconst
         const a
         const b::Int
         c
         d::Union{Int,Nothing}
     end)
-@test_throws(ErrorException("invalid redefinition of constant ABCDconst"),
+@test_throws(ErrorException("invalid redefinition of constant $(nameof(curmod)).ABCDconst"),
     mutable struct ABCDconst
         a
         b::Int
@@ -273,6 +273,30 @@ let mi = T26321{3,NTuple{3,Int}}((1,2,3)), mf = T26321{3,NTuple{3,Float64}}((1.0
     @test a[2] === mf
     @test eltype(a) == J
     @test a isa Vector{<:T26321{3}}
+end
+
+@test Base.return_types() do
+    typejoin(Int, UInt)
+end  |> only == Type{typejoin(Int, UInt)}
+@test Base.return_types() do
+    typejoin(Int, UInt, Float64)
+end  |> only == Type{typejoin(Int, UInt, Float64)}
+
+let res = @test_throws TypeError let
+        Base.Experimental.@force_compile
+        typejoin(1, 2)
+        nothing
+    end
+    err = res.value
+    @test err.func === :<:
+end
+let res = @test_throws TypeError let
+        Base.Experimental.@force_compile
+        typejoin(1, 2, 3)
+        nothing
+    end
+    err = res.value
+    @test err.func === :<:
 end
 
 # promote_typejoin returns a Union only with Nothing/Missing combined with concrete types
@@ -780,11 +804,15 @@ let
     @test isassigned(a,1) && !isassigned(a,2)
     a = Vector{Float64}(undef,1)
     @test isassigned(a,1)
+    @test isassigned(a,1,1)
     @test isassigned(a)
     @test !isassigned(a,2)
     a = Array{Float64}(undef, 2, 2, 2)
     @test isassigned(a,1)
-    @test isassigned(a)
+    @test isassigned(a,8)
+    @test isassigned(a,2,2,2)
+    @test isassigned(a,2,2,2,1)
+    @test !isassigned(a)
     @test !isassigned(a,9)
     a = Array{Float64}(undef, 1)
     @test isassigned(a,1)
@@ -792,8 +820,15 @@ let
     @test !isassigned(a,2)
     a = Array{Float64}(undef, 2, 2, 2, 2)
     @test isassigned(a,1)
-    @test isassigned(a)
+    @test isassigned(a,2,2,2,2)
+    @test isassigned(a,2,2,2,2,1)
+    @test isassigned(a,16)
+    @test !isassigned(a)
     @test !isassigned(a,17)
+    @test !isassigned(a,3,1,1,1)
+    @test !isassigned(a,1,3,1,1)
+    @test !isassigned(a,1,1,3,1)
+    @test !isassigned(a,1,1,1,3)
 end
 
 # isassigned, issue #11167
@@ -1659,7 +1694,9 @@ end
 
 # issue #3221
 let x = fill(nothing, 1)
-    @test_throws MethodError x[1] = 1
+    @test_throws ErrorException("cannot convert a value to nothing for assignment") x[1] = 1
+    x = Vector{Union{}}(undef, 1)
+    @test_throws ArgumentError("cannot convert a value to Union{} for assignment") x[1] = 1
 end
 
 # issue #3220
@@ -3848,7 +3885,8 @@ PossiblyInvalidUnion{T} = Union{T,Int}
 # issue #13007
 call13007(::Type{Array{T,N}}) where {T,N} = 0
 call13007(::Type{Array}) = 1
-@test length(Base._methods(call13007, Tuple{Type{x} where x<:Array}, 4, typemax(UInt))) == 2
+@test Base._methods(call13007, Tuple{Type{x} where x<:Array}, 4, typemax(UInt)) === nothing
+@test length(Base._methods(call13007, Tuple{Type{x} where x<:Array}, 4, Base.get_world_counter())) == 2
 
 # detecting cycles during type intersection, e.g. #1631
 cycle_in_solve_tvar_constraints(::Type{Some{S}}, x::S) where {S} = 0
@@ -4880,7 +4918,7 @@ struct f47209
     x::Int
     f47209()::Nothing = new(1)
 end
-@test_throws MethodError f47209()
+@test_throws ErrorException("cannot convert a value to nothing for assignment") f47209()
 
 # issue #12096
 let a = Val{Val{TypeVar(:_, Int)}},
@@ -5232,10 +5270,10 @@ end
 GC.enable(true)
 
 # issue #18710
-bad_tvars() where {T} = 1
+@test_warn "declares type variable T but does not use it" @eval bad_tvars() where {T} = 1
 @test isa(which(bad_tvars, ()), Method)
 @test bad_tvars() === 1
-bad_tvars2() where {T} = T
+@test_warn "declares type variable T but does not use it" @eval bad_tvars2() where {T} = T
 @test_throws UndefVarError(:T) bad_tvars2()
 missing_tvar(::T...) where {T} = T
 @test_throws UndefVarError(:T) missing_tvar()
@@ -5952,7 +5990,7 @@ module GlobalDef18933
         global sincos
         nothing
     end
-    @test which(Main, :sincos) === Base.Math
+    @test which(@__MODULE__, :sincos) === Base.Math
     @test @isdefined sincos
     @test sincos === Base.sincos
 end
@@ -7291,11 +7329,11 @@ struct sparse_t31649
 end
 Base.convert(::Any, v::sparse_t31649) = copy(v.val)
 let spvec = sparse_t31649(zeros(Float64,5), Vector{Int64}())
-    @test_throws MethodError repr(spvec)
+    @test_throws MethodError convert(Any, spvec)
     # Try manually putting the problematic method into the cache (in
     # the original issue compiling the showerror method caused this to happen)
     @test convert(Any, nothing) === nothing
-    @test_throws MethodError repr(spvec)
+    @test_throws MethodError convert(Any, spvec)
 end
 
 # Issue #31062 - Accidental recursion in jl_has_concrete_subtype
@@ -7335,16 +7373,20 @@ end
 let code = code_lowered(FieldConvert)[1].code
     @test code[1] == Expr(:call, GlobalRef(Core, :apply_type), GlobalRef(@__MODULE__, :FieldConvert), GlobalRef(@__MODULE__, :FieldTypeA), Expr(:static_parameter, 1))
     @test code[2] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 1)
-    @test code[3] == Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(2), Core.SlotNumber(2))
-    @test code[4] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 2)
-    @test code[5] == Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(4), Core.SlotNumber(3))
-    @test code[6] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 4)
-    @test code[7] == Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(6), Core.SlotNumber(5))
-    @test code[8] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 5)
-    @test code[9] == Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(8), Core.SlotNumber(6))
-    @test code[10] == Expr(:new, Core.SSAValue(1), Core.SSAValue(3), Core.SSAValue(5), Core.SlotNumber(4), Core.SSAValue(7), Core.SSAValue(9))
-    @test code[11] == Core.ReturnNode(Core.SSAValue(10))
- end
+    @test code[7] == Expr(:(=), Core.SlotNumber(10), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(2), Core.SlotNumber(10)))
+    @test code[8] == Core.SlotNumber(10)
+    @test code[9] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 2)
+    @test code[14] == Expr(:(=), Core.SlotNumber(9), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(9), Core.SlotNumber(9)))
+    @test code[15] == Core.SlotNumber(9)
+    @test code[16] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 4)
+    @test code[21] == Expr(:(=), Core.SlotNumber(8), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(16), Core.SlotNumber(8)))
+    @test code[22] == Core.SlotNumber(8)
+    @test code[23] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 5)
+    @test code[28] == Expr(:(=), Core.SlotNumber(7), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(23), Core.SlotNumber(7)))
+    @test code[29] == Core.SlotNumber(7)
+    @test code[30] == Expr(:new, Core.SSAValue(1), Core.SSAValue(8), Core.SSAValue(15), Core.SlotNumber(4), Core.SSAValue(22), Core.SSAValue(29))
+    @test code[31] == Core.ReturnNode(Core.SSAValue(30))
+end
 
 # Issue #32820
 function f32820(refs)
@@ -7524,7 +7566,7 @@ end
 struct X36104; x::Int; end
 @test fieldtypes(X36104) == (Int,)
 primitive type P36104 8 end
-@test_throws ErrorException("invalid redefinition of constant P36104") @eval(primitive type P36104 16 end)
+@test_throws ErrorException("invalid redefinition of constant $(nameof(curmod)).P36104") @eval(primitive type P36104 16 end)
 
 # Malformed invoke
 f_bad_invoke(x::Int) = invoke(x, (Any,), x)
@@ -7836,6 +7878,17 @@ import .Foo45350: x45350
 f45350() = (global x45350 = 2)
 @test_throws ErrorException f45350()
 
+@testset "Error behavior of unsafe_convert for RefValue" begin
+    b = Base.RefValue{Int}()
+    @test Base.unsafe_convert(Ptr{Int}, b) !== C_NULL
+    b = Base.RefValue{Base.RefValue{Int}}()
+    # throws because we hit `b.x`
+    @test_throws Core.UndefRefError Base.unsafe_convert(Ptr{Base.RefValue{Int}}, b)
+    # throws because we hit `b.x`
+    b = Base.RefValue{Integer}()
+    @test_throws Core.UndefRefError Base.unsafe_convert(Ptr{Integer}, b)
+end
+
 # #46503 - redefine `invoke`d methods
 foo46503(@nospecialize(a), b::Union{Vector{Any}, Float64, Nothing}) = rand()
 foo46503(a::Int, b::Nothing) = @invoke foo46503(a::Any, b)
@@ -7922,8 +7975,34 @@ vect47476(::Type{T}) where {T} = T
 g47476(::Union{Nothing,Int,Val{T}}...) where {T} = T
 @test_throws UndefVarError(:T) g47476(nothing, 1, nothing, 2, nothing, 3, nothing, 4, nothing, 5)
 @test g47476(nothing, 1, nothing, 2, nothing, 3, nothing, 4, nothing, 5, Val(6)) === 6
-let spec = only(methods(g47476)).specializations
+let spec = only(methods(g47476)).specializations::Core.SimpleVector
     @test !isempty(spec)
     @test any(mi -> mi !== nothing && Base.isvatuple(mi.specTypes), spec)
     @test all(mi -> mi === nothing || !Base.has_free_typevars(mi.specTypes), spec)
 end
+
+f48950(::Union{Int,d}, ::Union{c,Nothing}...) where {c,d} = 1
+@test f48950(1, 1, 1) == 1
+
+# Module as tparam in unionall
+struct ModTParamUnionAll{A, B}; end
+@test isa(objectid(ModTParamUnionAll{Base}), UInt)
+
+# effects for objectid
+for T in (Int, String, Symbol, Module)
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (T,)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (T,)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Some{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Some{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Some{Some{T}},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Some{Some{T}},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Tuple{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{T,T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Tuple{T,T},)))
+end
+@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Ref{Int},)))
+@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Tuple{Ref{Int}},)))
+# objectid for datatypes is inconsistant for types that have unbound type parameters.
+@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (DataType,)))
+@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Tuple{Vector{Int}},)))
