@@ -200,14 +200,12 @@ end
 
 TwicePrecision{T}(x::T) where {T} = TwicePrecision{T}(x, zero(T))
 
+TwicePrecision{T}(x::TwicePrecision{T}) where {T} = x
+
 function TwicePrecision{T}(x) where {T}
-    xT = convert(T, x)
+    xT = T(x)
     Δx = x - xT
     TwicePrecision{T}(xT, T(Δx))
-end
-
-function TwicePrecision{T}(x::TwicePrecision) where {T}
-    TwicePrecision{T}(x.hi, x.lo)
 end
 
 TwicePrecision{T}(i::Integer) where {T<:AbstractFloat} =
@@ -264,8 +262,7 @@ promote_rule(::Type{TwicePrecision{R}}, ::Type{TwicePrecision{S}}) where {R,S} =
 promote_rule(::Type{TwicePrecision{R}}, ::Type{S}) where {R,S<:Number} =
     TwicePrecision{promote_type(R,S)}
 
-(::Type{T})(x::TwicePrecision) where {T<:Number} = T(x.hi + x.lo)::T
-TwicePrecision{T}(x::Number) where {T} = TwicePrecision{T}(T(x), zero(T))
+(::Type{T})(x::TwicePrecision) where {T<:Number} = (T(x.hi) + T(x.lo))::T
 
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision{T}) where {T} = x
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision) where {T} =
