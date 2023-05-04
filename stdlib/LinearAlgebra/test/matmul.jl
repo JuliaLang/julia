@@ -667,6 +667,19 @@ Transpose(x::RootInt) = x
     @test A * a == [56]
 end
 
+@testset "#46865: mul!() with non-const alpha, beta" begin
+    f!(C,A,B,alphas,betas) = mul!(C, A, B, alphas[1], betas[1])
+    alphas = [1.0]
+    betas = [0.5]
+    for d in [2,3,4]  # test native small-matrix cases as well as BLAS
+        A = rand(d,d)
+        B = copy(A)
+        C = copy(A)
+        f!(C, A, B, alphas, betas)
+        @test (@allocated f!(C, A, B, alphas, betas)) == 0
+    end
+end
+
 function test_mul(C, A, B)
     mul!(C, A, B)
     @test Array(A) * Array(B) ≈ C
