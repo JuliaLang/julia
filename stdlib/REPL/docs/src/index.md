@@ -43,14 +43,14 @@ julia> ans
 "12"
 ```
 
-In Julia mode, the REPL supports something called *prompt pasting*. This activates when pasting
-text that starts with `julia> ` into the REPL. In that case, only expressions starting with
-`julia> ` are parsed, others are removed. This makes it possible to paste a chunk of code
-that has been copied from a REPL session without having to scrub away prompts and outputs. This
-feature is enabled by default but can be disabled or enabled at will with `REPL.enable_promptpaste(::Bool)`.
-If it is enabled, you can try it out by pasting the code block above this paragraph straight into
-the REPL. This feature does not work on the standard Windows command prompt due to its limitation
-at detecting when a paste occurs.
+In Julia mode, the REPL supports something called *prompt pasting*. This activates when pasting text
+that starts with `julia> ` into the REPL. In that case, only expressions starting with `julia> ` (as
+well as the other REPL mode prompts: `shell> `, `help?> `, `pkg>` ) are parsed, but others are
+removed. This makes it possible to paste a chunk of text that has been copied from a REPL session
+without having to scrub away prompts and outputs. This feature is enabled by default but can be
+disabled or enabled at will with `REPL.enable_promptpaste(::Bool)`. If it is enabled, you can try it
+out by pasting the code block above this paragraph straight into the REPL. This feature does not
+work on the standard Windows command prompt due to its limitation at detecting when a paste occurs.
 
 Objects are printed at the REPL using the [`show`](@ref) function with a specific [`IOContext`](@ref).
 In particular, the `:limit` attribute is set to `true`.
