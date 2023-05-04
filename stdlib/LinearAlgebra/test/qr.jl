@@ -475,6 +475,16 @@ end
 end
 
 @testset "issue #48911" begin
+    # testcase in the original issue
+    # test ldiv!(::QRPivoted, ::AbstractVector)
+    A = Complex{BigFloat}[1+im 1-im]
+    b = Complex{BigFloat}[3+im]
+    x = A\b
+    AF = Complex{Float64}[1+im 1-im]
+    bf = Complex{Float64}[3+im]
+    xf = AF\bf
+    @test x ≈ xf
+
     # test ldiv!(::QRPivoted, ::AbstractVector)
     A = Complex{BigFloat}[1+im 2-2im 3+3im; 4-4im 5+5im 6-6im]
     b = Complex{BigFloat}[1+im; 0]
