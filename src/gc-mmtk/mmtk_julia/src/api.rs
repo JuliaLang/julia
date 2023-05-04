@@ -447,3 +447,29 @@ pub extern "C" fn mmtk_gc_poll(tls: VMMutatorThread) {
 pub extern "C" fn runtime_panic() {
     panic!("Panicking at runtime!")
 }
+
+#[no_mangle]
+pub extern "C" fn mmtk_object_reference_write_post(
+    mutator: *mut Mutator<JuliaVM>,
+    src: ObjectReference,
+    target: ObjectReference,
+) {
+    let mutator = unsafe { &mut *mutator };
+    memory_manager::object_reference_write_post(
+        mutator,
+        src,
+        crate::edges::JuliaVMEdge::Simple(mmtk::vm::edge_shape::SimpleEdge::from_address(
+            Address::ZERO,
+        )),
+        target,
+    )
+}
+
+#[no_mangle]
+pub extern "C" fn mmtk_needs_write_barrier() -> u8 {
+    use mmtk::plan::BarrierSelector;
+    match SINGLETON.get_plan().constraints().barrier {
+        BarrierSelector::NoBarrier => 0,
+        BarrierSelector::ObjectBarrier => 1,
+    }
+}
