@@ -193,6 +193,7 @@ void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
 
 #define JL_TIMING_COUNTERS \
         X(Invalidations) \
+        X(HeapSize) \
 
 
 enum jl_timing_owners {

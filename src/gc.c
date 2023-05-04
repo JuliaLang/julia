@@ -1193,6 +1193,7 @@ void jl_gc_reset_alloc_count(void) JL_NOTSAFEPOINT
 {
     combine_thread_gc_counts(&gc_num);
     live_bytes += (gc_num.deferred_alloc + gc_num.allocd);
+    jl_timing_counter_inc(JL_TIMING_COUNTER_HeapSize, gc_num.deferred_alloc + gc_num.allocd);
     gc_num.allocd = 0;
     gc_num.deferred_alloc = 0;
     reset_thread_gc_counts();
@@ -3343,6 +3344,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 
     last_live_bytes = live_bytes;
     live_bytes += -gc_num.freed + gc_num.allocd;
+    jl_timing_counter_inc(JL_TIMING_COUNTER_HeapSize, -gc_num.freed + gc_num.allocd);
 
     if (collection == JL_GC_AUTO) {
         //If we aren't freeing enough or are seeing lots and lots of pointers let it increase faster
@@ -3782,6 +3784,7 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
     if (jl_astaggedvalue(owner)->bits.gc == GC_OLD_MARKED) {
         ptls->gc_cache.perm_scanned_bytes += allocsz - oldsz;
         live_bytes += allocsz - oldsz;
+        jl_timing_counter_inc(JL_TIMING_COUNTER_HeapSize, allocsz - oldsz);
     }
     else if (allocsz < oldsz)
         jl_atomic_store_relaxed(&ptls->gc_num.freed,
