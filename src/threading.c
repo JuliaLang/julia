@@ -798,7 +798,7 @@ void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
                 uv_cond_wait(&cond, &tls_lock);
             uv_mutex_unlock(&tls_lock);
         }
-        jl_cpu_pause();
+        jl_cpu_suspend();
         owner = jl_atomic_load_relaxed(&lock->owner);
     }
 }

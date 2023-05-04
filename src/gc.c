@@ -11,17 +11,15 @@
 extern "C" {
 #endif
 
+// Number of threads currently running the GC mark-loop
+_Atomic(int) gc_n_threads_marking;
 // `tid` of mutator thread that triggered GC
 _Atomic(int) gc_master_tid;
 // `tid` of first GC thread
 int gc_first_tid;
-
 // Mutex/cond used to synchronize sleep/wakeup of GC threads
 uv_mutex_t gc_threads_lock;
 uv_cond_t gc_threads_cond;
-
-// Number of threads currently running the GC mark-loop
-_Atomic(int) gc_n_threads_marking;
 
 // Linked list of callback functions
 
@@ -142,8 +140,8 @@ static _Atomic(int) support_conservative_marking = 0;
  * Note about GC synchronization:
  *
  * When entering `jl_gc_collect()`, `jl_gc_running` is atomically changed from
- * `0` to `1` to make sure that only one thread can be running the GC. Other
- * threads that enters `jl_gc_collect()` at the same time (or later calling
+ * `0` to `1` to make sure that only one thread can be running `_jl_gc_collect`. Other
+ * mutator threads that enters `jl_gc_collect()` at the same time (or later calling
  * from unmanaged code) will wait in `jl_gc_collect()` until the GC is finished.
  *
  * Before starting the mark phase the GC thread calls `jl_safepoint_start_gc()`
@@ -153,7 +151,7 @@ static _Atomic(int) support_conservative_marking = 0;
  * GC (`gc_state != 0`). It also acquires the `finalizers` lock so that no
  * other thread will access them when the GC is running.
  *
- * During the mark and sweep phase of the GC, the threads that are not running
+ * During the mark and sweep phase of the GC, the mutator threads that are not running
  * the GC should either be running unmanaged code (or code section that does
  * not have a GC critical region mainly including storing to the stack or
  * another object) or paused at a safepoint and wait for the GC to finish.
@@ -185,13 +183,6 @@ pagetable_t memory_map;
 // List of marked big objects.  Not per-thread.  Accessed only by master thread.
 bigval_t *big_objects_marked = NULL;
 
-// Eytzinger tree of images. Used for very fast jl_object_in_image queries during gc
-// See https://algorithmica.org/en/eytzinger
-static arraylist_t eytzinger_image_tree;
-static arraylist_t eytzinger_idxs;
-static uintptr_t gc_img_min;
-static uintptr_t gc_img_max;
-
 // -- Finalization --
 // `ptls->finalizers` and `finalizer_list_marked` might have tagged pointers.
 // If an object pointer has the lowest bit set, the next pointer is an unboxed c function pointer.
@@ -202,117 +193,6 @@ arraylist_t finalizer_list_marked;
 arraylist_t to_finalize;
 JL_DLLEXPORT _Atomic(int) jl_gc_have_pending_finalizers = 0;
 
-static int ptr_cmp(const void *l, const void *r)
-{
-    uintptr_t left = *(const uintptr_t*)l;
-    uintptr_t right = *(const uintptr_t*)r;
-    // jl_safe_printf("cmp %p %p\n", (void*)left, (void*)right);
-    return (left > right) - (left < right);
-}
-
-// Build an eytzinger tree from a sorted array
-static int eytzinger(uintptr_t *src, uintptr_t *dest, size_t i, size_t k, size_t n)
-{
-    if (k <= n) {
-        i = eytzinger(src, dest, i, 2 * k, n);
-        dest[k-1] = src[i];
-        i++;
-        i = eytzinger(src, dest, i, 2 * k + 1, n);
-    }
-    return i;
-}
-
-static size_t eyt_obj_idx(jl_value_t *obj) JL_NOTSAFEPOINT
-{
-    size_t n = eytzinger_image_tree.len - 1;
-    if (n == 0)
-        return n;
-    assert(n % 2 == 0 && "Eytzinger tree not even length!");
-    uintptr_t cmp = (uintptr_t) obj;
-    if (cmp <= gc_img_min || cmp > gc_img_max)
-        return n;
-    uintptr_t *tree = (uintptr_t*)eytzinger_image_tree.items;
-    size_t k = 1;
-    // note that k preserves the history of how we got to the current node
-    while (k <= n) {
-        int greater = (cmp > tree[k - 1]);
-        k <<= 1;
-        k |= greater;
-    }
-    // Free to assume k is nonzero, since we start with k = 1
-    // and cmp > gc_img_min
-    // This shift does a fast revert of the path until we get
-    // to a node that evaluated less than cmp.
-    k >>= (__builtin_ctzll(k) + 1);
-    assert(k != 0);
-    assert(k <= n && "Eytzinger tree index out of bounds!");
-    assert(tree[k - 1] < cmp && "Failed to find lower bound for object!");
-    return k - 1;
-}
-
-//used in staticdata.c after we add an image
-void rebuild_image_blob_tree(void)
-{
-    size_t inc = 1 + jl_linkage_blobs.len - eytzinger_image_tree.len;
-    assert(eytzinger_idxs.len == eytzinger_image_tree.len);
-    assert(eytzinger_idxs.max == eytzinger_image_tree.max);
-    arraylist_grow(&eytzinger_idxs, inc);
-    arraylist_grow(&eytzinger_image_tree, inc);
-    eytzinger_idxs.items[eytzinger_idxs.len - 1] = (void*)jl_linkage_blobs.len;
-    eytzinger_image_tree.items[eytzinger_image_tree.len - 1] = (void*)1; // outside image
-    for (size_t i = 0; i < jl_linkage_blobs.len; i++) {
-        assert((uintptr_t) jl_linkage_blobs.items[i] % 4 == 0 && "Linkage blob not 4-byte aligned!");
-        // We abuse the pointer here a little so that a couple of properties are true:
-        // 1. a start and an end are never the same value. This simplifies the binary search.
-        // 2. ends are always after starts. This also simplifies the binary search.
-        // We assume that there exist no 0-size blobs, but that's a safe assumption
-        // since it means nothing could be there anyways
-        uintptr_t val = (uintptr_t) jl_linkage_blobs.items[i];
-        eytzinger_idxs.items[i] = (void*)(val + (i & 1));
-    }
-    qsort(eytzinger_idxs.items, eytzinger_idxs.len - 1, sizeof(void*), ptr_cmp);
-    gc_img_min = (uintptr_t) eytzinger_idxs.items[0];
-    gc_img_max = (uintptr_t) eytzinger_idxs.items[eytzinger_idxs.len - 2] + 1;
-    eytzinger((uintptr_t*)eytzinger_idxs.items, (uintptr_t*)eytzinger_image_tree.items, 0, 1, eytzinger_idxs.len - 1);
-    // Reuse the scratch memory to store the indices
-    // Still O(nlogn) because binary search
-    for (size_t i = 0; i < jl_linkage_blobs.len; i ++) {
-        uintptr_t val = (uintptr_t) jl_linkage_blobs.items[i];
-        // This is the same computation as in the prior for loop
-        uintptr_t eyt_val = val + (i & 1);
-        size_t eyt_idx = eyt_obj_idx((jl_value_t*)(eyt_val + 1)); assert(eyt_idx < eytzinger_idxs.len - 1);
-        assert(eytzinger_image_tree.items[eyt_idx] == (void*)eyt_val && "Eytzinger tree failed to find object!");
-        if (i & 1)
-            eytzinger_idxs.items[eyt_idx] = (void*)n_linkage_blobs();
-        else
-            eytzinger_idxs.items[eyt_idx] = (void*)(i / 2);
-    }
-}
-
-static int eyt_obj_in_img(jl_value_t *obj) JL_NOTSAFEPOINT
-{
-    assert((uintptr_t) obj % 4 == 0 && "Object not 4-byte aligned!");
-    int idx = eyt_obj_idx(obj);
-    // Now we use a tiny trick: tree[idx] & 1 is whether or not tree[idx] is a
-    // start (0) or an end (1) of a blob. If it's a start, then the object is
-    // in the image, otherwise it is not.
-    int in_image = ((uintptr_t)eytzinger_image_tree.items[idx] & 1) == 0;
-    return in_image;
-}
-
-size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT
-{
-    assert((uintptr_t) v % 4 == 0 && "Object not 4-byte aligned!");
-    int eyt_idx = eyt_obj_idx(v);
-    // We fill the invalid slots with the length, so we can just return that
-    size_t idx = (size_t) eytzinger_idxs.items[eyt_idx];
-    return idx;
-}
-
-uint8_t jl_object_in_image(jl_value_t *obj) JL_NOTSAFEPOINT
-{
-    return eyt_obj_in_img(obj);
-}
 
 NOINLINE uintptr_t gc_get_stack_ptr(void)
 {
@@ -345,9 +225,6 @@ void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
         }
     }
 }
-
-
-void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads);
 
 // malloc wrappers, aligned allocation
 
@@ -3242,20 +3119,20 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         int single_threaded = (jl_n_gcthreads == 0 || gc_heap_snapshot_enabled);
         for (int t_i = 0; t_i < gc_n_threads; t_i++) {
             jl_ptls_t ptls2 = gc_all_tls_states[t_i];
-            jl_gc_markqueue_t *mq2 = mq;
-            jl_ptls_t ptls_gc_thread = NULL;
+            jl_ptls_t ptls_dest = ptls;
+            jl_gc_markqueue_t *mq_dest = mq;
             if (!single_threaded) {
-                ptls_gc_thread = gc_all_tls_states[gc_first_tid + t_i % jl_n_gcthreads];
-                mq2 = &ptls_gc_thread->mark_queue;
+                ptls_dest = gc_all_tls_states[gc_first_tid + t_i % jl_n_gcthreads];
+                mq_dest = &ptls_dest->mark_queue;
             }
             if (ptls2 != NULL) {
                 // 2.1. mark every thread local root
-                gc_queue_thread_local(mq2, ptls2);
+                gc_queue_thread_local(mq_dest, ptls2);
                 // 2.2. mark any managed objects in the backtrace buffer
                 // TODO: treat these as roots for gc_heap_snapshot_record
-                gc_queue_bt_buf(mq2, ptls2);
+                gc_queue_bt_buf(mq_dest, ptls2);
                 // 2.3. mark every object in the `last_remsets` and `rem_binding`
-                gc_queue_remset(single_threaded ? ptls : ptls_gc_thread, ptls2);
+                gc_queue_remset(ptls_dest, ptls2);
             }
         }
 
@@ -3307,7 +3184,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         mark_reset_age = 0;
     }
 
-    gc_num.since_sweep += gc_num.allocd;
     JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes);
     gc_settime_premark_end();
     gc_time_mark_pause(gc_start_time, scanned_bytes, perm_scanned_bytes);
@@ -3315,14 +3191,14 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     uint64_t mark_time = end_mark_time - start_mark_time;
     gc_num.mark_time = mark_time;
     gc_num.total_mark_time += mark_time;
-    int64_t actual_allocd = gc_num.since_sweep;
+    int64_t allocd = gc_num.allocd;
     gc_settime_postmark_end();
     // marking is over
 
     // Flush everything in mark cache
     gc_sync_all_caches_nolock(ptls);
 
-    int64_t live_sz_ub = live_bytes + actual_allocd;
+    int64_t live_sz_ub = live_bytes + allocd;
     int64_t live_sz_est = scanned_bytes + perm_scanned_bytes;
     int64_t estimate_freed = live_sz_ub - live_sz_est;
 
@@ -3332,11 +3208,11 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_stats_big_obj();
     objprofile_printall();
     objprofile_reset();
-    gc_num.total_allocd += gc_num.since_sweep;
+    gc_num.total_allocd += gc_num.allocd;
     if (!prev_sweep_full)
         promoted_bytes += perm_scanned_bytes - last_perm_scanned_bytes;
     // 5. next collection decision
-    int not_freed_enough = (collection == JL_GC_AUTO) && estimate_freed < (7*(actual_allocd/10));
+    int not_freed_enough = (collection == JL_GC_AUTO) && estimate_freed < (7*(allocd/10));
     int nptr = 0;
     assert(gc_n_threads);
     for (int i = 0; i < gc_n_threads; i++) {
@@ -3457,7 +3333,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     _report_gc_finished(pause, gc_num.freed, sweep_full, recollect);
 
     gc_final_pause_end(gc_start_time, gc_end_time);
-    gc_time_sweep_pause(gc_end_time, actual_allocd, live_bytes,
+    gc_time_sweep_pause(gc_end_time, allocd, live_bytes,
                         estimate_freed, sweep_full);
     gc_num.full_sweep += sweep_full;
     uint64_t max_memory = last_live_bytes + gc_num.allocd;
@@ -3465,14 +3341,13 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         gc_num.max_memory = max_memory;
     }
 
-    gc_num.allocd = 0;
     last_live_bytes = live_bytes;
-    live_bytes += -gc_num.freed + gc_num.since_sweep;
+    live_bytes += -gc_num.freed + gc_num.allocd;
 
     if (collection == JL_GC_AUTO) {
         //If we aren't freeing enough or are seeing lots and lots of pointers let it increase faster
         if (!not_freed_enough || large_frontier) {
-            int64_t tot = 2 * (live_bytes + gc_num.since_sweep) / 3;
+            int64_t tot = 2 * (live_bytes + gc_num.allocd) / 3;
             if (gc_num.interval > tot) {
                 gc_num.interval = tot;
                 last_long_collect_interval = tot;
@@ -3509,7 +3384,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     prev_sweep_full = sweep_full;
     gc_num.pause += !recollect;
     gc_num.total_time += pause;
-    gc_num.since_sweep = 0;
+    gc_num.allocd = 0;
     gc_num.freed = 0;
     if (pause > gc_num.max_pause) {
         gc_num.max_pause = pause;
@@ -3696,10 +3571,6 @@ void jl_gc_init(void)
 
     arraylist_new(&finalizer_list_marked, 0);
     arraylist_new(&to_finalize, 0);
-    arraylist_new(&eytzinger_image_tree, 0);
-    arraylist_new(&eytzinger_idxs, 0);
-    arraylist_push(&eytzinger_idxs, (void*)0);
-    arraylist_push(&eytzinger_image_tree, (void*)1); // outside image
 
     gc_num.interval = default_collect_interval;
     last_long_collect_interval = default_collect_interval;

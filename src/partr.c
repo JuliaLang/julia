@@ -108,11 +108,6 @@ void jl_init_threadinginfra(void)
 
 void JL_NORETURN jl_finish_task(jl_task_t *t);
 
-extern uv_mutex_t gc_threads_lock;
-extern uv_cond_t gc_threads_cond;
-extern _Atomic(int) gc_n_threads_marking;
-extern void gc_mark_loop_parallel(jl_ptls_t ptls, int master);
-
 // gc thread function
 void jl_gc_threadfun(void *arg)
 {

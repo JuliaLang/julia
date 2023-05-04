@@ -1920,6 +1920,11 @@ void jl_init_intrinsic_functions(void) JL_GC_DISABLED
         (jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_opaque_closure_type),
         "OpaqueClosure", jl_f_opaque_closure_call);
 
+    // Save a reference to the just created OpaqueClosure method, so we can provide special
+    // codegen for it later.
+    jl_opaque_closure_method = (jl_method_t*)jl_methtable_lookup(jl_opaque_closure_typename->mt,
+        (jl_value_t*)jl_anytuple_type, 1);
+
 #define ADD_I(name, nargs) add_intrinsic(inm, #name, name);
 #define ADD_HIDDEN(name, nargs)
 #define ALIAS ADD_I

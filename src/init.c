@@ -771,19 +771,19 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 
     jl_init_intrinsic_properties();
 
+    // Important offset for external codegen.
+    jl_task_gcstack_offset = offsetof(jl_task_t, gcstack);
+    jl_task_ptls_offset = offsetof(jl_task_t, ptls);
+
     jl_prep_sanitizers();
     void *stack_lo, *stack_hi;
     jl_init_stack_limits(1, &stack_lo, &stack_hi);
 
-    jl_libjulia_internal_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT, 1);
+    jl_libjulia_internal_handle = jl_find_dynamic_library_by_addr(&jl_load_dynamic_library);
+    jl_libjulia_handle = jl_find_dynamic_library_by_addr(&jl_any_type);
 #ifdef _OS_WINDOWS_
     jl_exe_handle = GetModuleHandleA(NULL);
     jl_RTLD_DEFAULT_handle = jl_libjulia_internal_handle;
-    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                            (LPCWSTR)&jl_any_type,
-                            (HMODULE*)&jl_libjulia_handle)) {
-        jl_error("could not load base module");
-    }
     jl_ntdll_handle = jl_dlopen("ntdll.dll", JL_RTLD_NOLOAD); // bypass julia's pathchecking for system dlls
     jl_kernel32_handle = jl_dlopen("kernel32.dll", JL_RTLD_NOLOAD);
     jl_crtdll_handle = jl_dlopen(jl_crtdll_name, JL_RTLD_NOLOAD);
@@ -818,6 +818,10 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 
     arraylist_new(&jl_linkage_blobs, 0);
     arraylist_new(&jl_image_relocs, 0);
+    arraylist_new(&eytzinger_image_tree, 0);
+    arraylist_new(&eytzinger_idxs, 0);
+    arraylist_push(&eytzinger_idxs, (void*)0);
+    arraylist_push(&eytzinger_image_tree, (void*)1); // outside image
 
     jl_ptls_t ptls = jl_init_threadtls(0);
 #pragma GCC diagnostic push

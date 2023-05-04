@@ -1016,19 +1016,19 @@ function platforms_match(a::AbstractPlatform, b::AbstractPlatform)
 
         # Throw an error if `a` and `b` have both set non-default comparison strategies for `k`
         # and they're not the same strategy.
-        if a_comp != compare_default && b_comp != compare_default && a_comp != b_comp
+        if a_comp !== compare_default && b_comp !== compare_default && a_comp !== b_comp
             throw(ArgumentError("Cannot compare Platform objects with two different non-default comparison strategies for the same key \"$(k)\""))
         end
 
         # Select the custom comparator, if we have one.
         comparator = a_comp
-        if b_comp != compare_default
+        if b_comp !== compare_default
             comparator = b_comp
         end
 
         # Call the comparator, passing in which objects requested this comparison (one, the other, or both)
         # For some comparators this doesn't matter, but for non-symmetrical comparisons, it does.
-        if !(comparator(ak, bk, a_comp == comparator, b_comp == comparator)::Bool)
+        if !(comparator(ak, bk, a_comp === comparator, b_comp === comparator)::Bool)
             return false
         end
     end
@@ -1089,7 +1089,8 @@ function select_platform(download_info::Dict, platform::AbstractPlatform = HostP
         return triplet(a) > triplet(b)
     end)
 
-    return download_info[first(ps)]
+    # @invokelatest here to not get invalidated by new defs of `==(::Function, ::Function)`
+    return @invokelatest getindex(download_info, first(ps))
 end
 
 # precompiles to reduce latency (see https://github.com/JuliaLang/julia/pull/43990#issuecomment-1025692379)

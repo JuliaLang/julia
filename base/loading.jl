@@ -747,10 +747,10 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{No
     return nothing
 end
 
-function is_v1_format_manifest(raw_manifest::Dict)
+function is_v1_format_manifest(raw_manifest::Dict{String})
     if haskey(raw_manifest, "manifest_format")
         mf = raw_manifest["manifest_format"]
-        if mf isa Dict && haskey(mf, "uuid")
+        if mf isa Dict{String} && haskey(mf, "uuid")
             # the off-chance where an old format manifest has a dep called "manifest_format"
             return true
         end
@@ -1071,12 +1071,46 @@ function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
     if !isempty(inits)
         unlock(require_lock) # temporarily _unlock_ during these callbacks
         try
-            ccall(:jl_init_restored_modules, Cvoid, (Any,), inits)
+            for (i, mod) in pairs(inits)
+                run_module_init(mod, i)
+            end
         finally
             lock(require_lock)
         end
     end
     return restored
+end
+
+function run_module_init(mod::Module, i::Int=1)
+    # `i` informs ordering for the `@time_imports` report formatting
+    if TIMING_IMPORTS[] == 0
+        ccall(:jl_init_restored_module, Cvoid, (Any,), mod)
+    else
+        if isdefined(mod, :__init__)
+            connector = i > 1 ? "├" : "┌"
+            printstyled("               $connector ", color = :light_black)
+
+            elapsedtime = time_ns()
+            cumulative_compile_timing(true)
+            compile_elapsedtimes = cumulative_compile_time_ns()
+
+            ccall(:jl_init_restored_module, Cvoid, (Any,), mod)
+
+            elapsedtime = (time_ns() - elapsedtime) / 1e6
+            cumulative_compile_timing(false);
+            comp_time, recomp_time = (cumulative_compile_time_ns() .- compile_elapsedtimes) ./ 1e6
+
+            print(round(elapsedtime, digits=1), " ms $mod.__init__() ")
+            if comp_time > 0
+                printstyled(Ryu.writefixed(Float64(100 * comp_time / elapsedtime), 2), "% compilation time", color = Base.info_color())
+            end
+            if recomp_time > 0
+                perc = Float64(100 * recomp_time / comp_time)
+                printstyled(" (", perc < 1 ? "<1" : Ryu.writefixed(perc, 0), "% recompilation)", color = Base.warn_color())
+            end
+            println()
+        end
+    end
 end
 
 function run_package_callbacks(modkey::PkgId)

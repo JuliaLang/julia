@@ -265,8 +265,10 @@ end
         @test map(foo, (1,2,3,4), (1,2,3,4)) === (2,4,6,8)
         @test map(foo, longtuple, longtuple) === ntuple(i->2i,20)
         @test map(foo, vlongtuple, vlongtuple) === ntuple(i->2i,33)
-        @test_throws BoundsError map(foo, (), (1,))
-        @test_throws BoundsError map(foo, (1,), ())
+        @test map(foo, longtuple, vlongtuple) === ntuple(i->2i,20)
+        @test map(foo, vlongtuple, longtuple) === ntuple(i->2i,20)
+        @test map(foo, (), (1,)) === ()
+        @test map(foo, (1,), ()) === ()
     end
 
     @testset "n arguments" begin
@@ -276,8 +278,11 @@ end
         @test map(foo, (1,2,3,4), (1,2,3,4), (1,2,3,4)) === (3,6,9,12)
         @test map(foo, longtuple, longtuple, longtuple) === ntuple(i->3i,20)
         @test map(foo, vlongtuple, vlongtuple, vlongtuple) === ntuple(i->3i,33)
-        @test_throws BoundsError map(foo, (), (1,), (1,))
-        @test_throws BoundsError map(foo, (1,), (1,), ())
+        @test map(foo, vlongtuple, longtuple, longtuple) === ntuple(i->3i,20)
+        @test map(foo, longtuple, vlongtuple, longtuple) === ntuple(i->3i,20)
+        @test map(foo, longtuple, vlongtuple, vlongtuple) === ntuple(i->3i,20)
+        @test map(foo, (), (1,), (1,)) === ()
+        @test map(foo, (1,), (1,), ()) === ()
     end
 end
 
