@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Checked: checked_length
+using InteractiveUtils: code_llvm
 
 @testset "range construction" begin
     @test_throws ArgumentError range(start=1, step=1, stop=2, length=10)
@@ -2399,4 +2400,28 @@ end
     end
     @test test_firstindex(StepRange{Union{Int64,Int128},Int}(Int64(1), 1, Int128(1)))
     @test test_firstindex(StepRange{Union{Int64,Int128},Int}(Int64(1), 1, Int128(0)))
+end
+
+@testset "Inline StepRange Construction #49270" begin
+    x = rand(Float32, 80)
+    a = rand(round(Int, length(x) / 2):length(x), 10^6)
+
+    function test(x, a)
+        c = zero(Float32)
+
+        @inbounds for j in a
+            for i in 1:8:j
+                c += x[i]
+            end
+        end
+
+        return c
+    end
+
+    llvm_ir(f, args) = sprint((io, args...) -> code_llvm(io, args...; debuginfo=:none), f, Base.typesof(args...))
+
+    ir = llvm_ir(test, (x, a))
+    @test !occursin("steprange_last", ir)
+    @test !occursin("_colon", ir)
+    @test !occursin("StepRange", ir)
 end
