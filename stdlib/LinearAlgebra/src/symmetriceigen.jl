@@ -4,21 +4,23 @@
 eigencopy_oftype(A::Hermitian, S) = Hermitian(copy_similar(A, S), sym_uplo(A.uplo))
 eigencopy_oftype(A::Symmetric, S) = Symmetric(copy_similar(A, S), sym_uplo(A.uplo))
 
+default_eigen_alg(A) = DivideAndConquer()
+
 # Eigensolvers for symmetric and Hermitian matrices
-function eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, lapack_method::Symbol=:syevr; sortby::Union{Function,Nothing}=nothing)
-    if lapack_method === :syevr
-      Eigen(sorteig!(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)..., sortby)...)
-    elseif lapack_method === :syev
-      Eigen(sorteig!(LAPACK.syev!('V', A.uplo, A.data)..., sortby)...)
-    elseif lapack_method === :syevd
-      Eigen(sorteig!(LAPACK.syevd!('V', A.uplo, A.data)..., sortby)...)
+function eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, alg::Algorithm = default_eigen_alg(A); sortby::Union{Function,Nothing}=nothing)
+    if alg === DivideAndConquer()
+        Eigen(sorteig!(LAPACK.syevd!('V', A.uplo, A.data)..., sortby)...)
+    elseif alg === QRIteration()
+        Eigen(sorteig!(LAPACK.syev!('V', A.uplo, A.data)..., sortby)...)
+    elseif alg === RobustRepresentations()
+        Eigen(sorteig!(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)..., sortby)...)
     else
-      throw(ArgumentError("Wrong lapack_method $lapack_method. Must be :syevr or :syev or :syevd."))
+        throw(ArgumentError("Unsupported value for `alg` keyword."))
     end
 end
 
 """
-    eigen(A::Union{Hermitian, Symmetric}, lapack_method::Symbol=:syevr) -> Eigen
+    eigen(A::Union{Hermitian, Symmetric}, alg::Algorithm = default_eigen_alg(A)) -> Eigen
 
 Compute the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
 which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
@@ -26,21 +28,24 @@ matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vec
 
 Iterating the decomposition produces the components `F.values` and `F.vectors`.
 
-`lapack_method` specifies which LAPACK method to use for eigenvalue decomposition:
-- `lapack_method = :syevr` (default): Use multiple relatively robust representations
-- `lapack_method = :syev`: Use QR iteration
-- `lapack_method = :syevd`: Use divide-and-conquer method
+`alg` specifies which algorithm and LAPACK method to use for eigenvalue decomposition:
+- `alg = DivideAndConquer()` (default): Calls `LAPACK.syevd`.
+- `alg = QRIteration()`: Calls `LAPACK.syev`.
+- `alg = RobustRepresentations()`: Multiple relatively robust representations method, Calls `LAPACK.syevr!`.
 
 See James W. Demmel et al, SIAM J. Sci. Comput. 30, 3, 1508 (2008) for
-a comparison of the accuracy and performance of different methods.
+a comparison of the accuracy and performance of different algorithms.
 
-The default `lapack_method` used may change in the future.
+The default `alg` used may change in the future.
+
+!!! compat "Julia 1.10"
+    The `alg` keyword argument requires Julia 1.10 or later.
 
 The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`](@ref), and [`isposdef`](@ref).
 """
-function eigen(A::RealHermSymComplexHerm, lapack_method::Symbol=:syevr; sortby::Union{Function,Nothing}=nothing)
+function eigen(A::RealHermSymComplexHerm, alg::Algorithm = default_eigen_alg(A); sortby::Union{Function,Nothing}=nothing)
     S = eigtype(eltype(A))
-    eigen!(eigencopy_oftype(A, S), lapack_method; sortby)
+    eigen!(eigencopy_oftype(A, S), alg; sortby)
 end
 
 
@@ -95,38 +100,38 @@ function eigen(A::RealHermSymComplexHerm, vl::Real, vh::Real)
 end
 
 
-function eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, lapack_method::Symbol=:syevr; sortby::Union{Function,Nothing}=nothing)
-    if lapack_method === :syevr
-      vals = LAPACK.syevr!('N', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)[1]
-    elseif lapack_method === :syev
-      vals = LAPACK.syev!('N', A.uplo, A.data)
-    elseif lapack_method === :syevd
-      vals = LAPACK.syevd!('N', A.uplo, A.data)
+function eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, alg::Algorithm = default_eigen_alg(A); sortby::Union{Function,Nothing}=nothing)
+    vals::Vector{real(eltype(A))} = if alg === DivideAndConquer()
+        LAPACK.syevd!('N', A.uplo, A.data)
+    elseif alg === QRIteration()
+        LAPACK.syev!('N', A.uplo, A.data)
+    elseif alg === RobustRepresentations()
+        LAPACK.syevr!('N', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)[1]
     else
-      throw(ArgumentError("Wrong lapack_method $lapack_method. Must be :syevr or :syev or :syevd."))
+        throw(ArgumentError("Unsupported value for `alg` keyword."))
     end
     !isnothing(sortby) && sort!(vals, by=sortby)
     return vals
 end
 
 """
-    eigvals(A::Union{Hermitian, Symmetric}, lapack_method::Symbol=:syevr) -> values
+    eigvals(A::Union{Hermitian, Symmetric}, alg::Algorithm = default_eigen_alg(A))) -> values
 
 Return the eigenvalues of `A`.
 
-`lapack_method` specifies which LAPACK method to use for eigenvalue decomposition.
-- `lapack_method = :syevr` (default): Use multiple relatively robust representations
-- `lapack_method = :syev`: Use QR iteration
-- `lapack_method = :syevd`: Use divide-and-conquer method
+`alg` specifies which algorithm and LAPACK method to use for eigenvalue decomposition:
+- `alg = DivideAndConquer()` (default): Calls `LAPACK.syevd`.
+- `alg = QRIteration()`: Calls `LAPACK.syev`.
+- `alg = RobustRepresentations()`: Multiple relatively robust representations method, Calls `LAPACK.syevr!`.
 
 See James W. Demmel et al, SIAM J. Sci. Comput. 30, 3, 1508 (2008) for
 a comparison of the accuracy and performance of different methods.
 
-The default `lapack_method` used may change in the future.
+The default `alg` used may change in the future.
 """
-function eigvals(A::RealHermSymComplexHerm, lapack_method::Symbol=:syevr; sortby::Union{Function,Nothing}=nothing)
+function eigvals(A::RealHermSymComplexHerm, alg::Algorithm = default_eigen_alg(A); sortby::Union{Function,Nothing}=nothing)
     S = eigtype(eltype(A))
-    eigvals!(eigencopy_oftype(A, S), lapack_method; sortby)
+    eigvals!(eigencopy_oftype(A, S), alg; sortby)
 end
 
 

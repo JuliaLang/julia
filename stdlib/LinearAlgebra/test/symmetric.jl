@@ -571,14 +571,15 @@ end
     end
 end
 
-@testset "eigendecomposition with lapack_method" begin
-    for T in (Float64, ComplexF64)
+@testset "eigendecomposition with alg" begin
+    using LinearAlgebra: DivideAndConquer, QRIteration, RobustRepresentations
+    for T in (Float64, ComplexF64, Float32, ComplexF32)
         n = 4
-        A = T <: Real ? Symmetric(randn(T, n,n)) : Hermitian(randn(T, n,n))
+        A = T <: Real ? Symmetric(randn(T, n, n)) : Hermitian(randn(T, n, n))
         d, v = eigen(A)
-        for lapack_method in (:syev, :syevr, :syevd)
-            @test eigvals(A, lapack_method) ≈ d
-            d2, v2 = eigen(A, lapack_method)
+        for alg in (DivideAndConquer(), QRIteration(), RobustRepresentations())
+            @test (@inferred eigvals(A, alg)) ≈ d
+            d2, v2 = @inferred eigen(A, alg)
             @test d2 ≈ d
             @test A * v2 ≈ v2 * Diagonal(d2)
         end

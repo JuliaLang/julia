@@ -175,6 +175,7 @@ end
 abstract type Algorithm end
 struct DivideAndConquer <: Algorithm end
 struct QRIteration <: Algorithm end
+struct RobustRepresentations <: Algorithm end
 
 abstract type PivotingStrategy end
 struct NoPivot <: PivotingStrategy end
