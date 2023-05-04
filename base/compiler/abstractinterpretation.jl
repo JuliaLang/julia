@@ -36,23 +36,10 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     ⊑ₚ = ⊑(ipo_lattice(interp))
     if !should_infer_this_call(interp, sv)
         add_remark!(interp, sv, "Skipped call in throw block")
-        nonoverlayed = false
-        if isoverlayed(method_table(interp)) && is_nonoverlayed(sv.ipo_effects)
-            # as we may want to concrete-evaluate this frame in cases when there are
-            # no overlayed calls, try an additional effort now to check if this call
-            # isn't overlayed rather than just handling it conservatively
-            matches = find_matching_methods(typeinf_lattice(interp), arginfo.argtypes, atype, method_table(interp),
-                InferenceParams(interp).max_union_splitting, max_methods)
-            if !isa(matches, FailedMethodMatch)
-                nonoverlayed = matches.nonoverlayed
-            end
-        else
-            nonoverlayed = true
-        end
         # At this point we are guaranteed to end up throwing on this path,
         # which is all that's required for :consistent-cy. Of course, we don't
         # know anything else about this statement.
-        effects = Effects(; consistent=ALWAYS_TRUE, nonoverlayed)
+        effects = Effects(; consistent=ALWAYS_TRUE, nonoverlayed=!isoverlayed(method_table(interp)))
         return CallMeta(Any, effects, NoCallInfo())
     end
 
@@ -541,6 +528,8 @@ function abstract_call_method(interp::AbstractInterpreter,
         add_remark!(interp, sv, "Refusing to infer into `depwarn`")
         return MethodCallResult(Any, false, false, nothing, Effects())
     end
+    sigtuple = unwrap_unionall(sig)
+    sigtuple isa DataType || return MethodCallResult(Any, false, false, nothing, Effects())
 
     # Limit argument type tuple growth of functions:
     # look through the parents list to see if there's a call to the same method
@@ -577,7 +566,6 @@ function abstract_call_method(interp::AbstractInterpreter,
     washardlimit = hardlimit
 
     if topmost !== nothing
-        sigtuple = unwrap_unionall(sig)::DataType
         msig = unwrap_unionall(method.sig)::DataType
         spec_len = length(msig.parameters) + 1
         ls = length(sigtuple.parameters)
@@ -1394,7 +1382,11 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
             va = isvarargtype(last)
             elts = Any[ fieldtype(tti0, i) for i = 1:len ]
             if va
-                elts[len] = Vararg{elts[len]}
+                if elts[len] === Union{}
+                    pop!(elts)
+                else
+                    elts[len] = Vararg{elts[len]}
+                end
             end
             return AbstractIterationResult(elts, nothing)
         end
@@ -1403,6 +1395,9 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
     elseif tti0 === Any
         return AbstractIterationResult(Any[Vararg{Any}], nothing, Effects())
     elseif tti0 <: Array
+        if eltype(tti0) === Union{}
+            return AbstractIterationResult(Any[], nothing)
+        end
         return AbstractIterationResult(Any[Vararg{eltype(tti0)}], nothing)
     else
         return abstract_iteration(interp, itft, typ, sv)
@@ -1728,20 +1723,32 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
     elseif has_conditional(𝕃ᵢ, sv) && (rt === Bool || (isa(rt, Const) && isa(rt.val, Bool))) && isa(fargs, Vector{Any})
         # perform very limited back-propagation of type information for `is` and `isa`
         if f === isa
+            # try splitting value argument, based on types
             a = ssa_def_slot(fargs[2], sv)
             a2 = argtypes[2]
+            a3 = argtypes[3]
             if isa(a, SlotNumber)
-                cndt = isa_condition(a2, argtypes[3], InferenceParams(interp).max_union_splitting, rt)
+                cndt = isa_condition(a2, a3, InferenceParams(interp).max_union_splitting, rt)
                 if cndt !== nothing
                     return Conditional(a, cndt.thentype, cndt.elsetype)
                 end
             end
             if isa(a2, MustAlias)
                 if !isa(rt, Const) # skip refinement when the field is known precisely (just optimization)
-                    cndt = isa_condition(a2, argtypes[3], InferenceParams(interp).max_union_splitting)
+                    cndt = isa_condition(a2, a3, InferenceParams(interp).max_union_splitting)
                     if cndt !== nothing
                         return form_mustalias_conditional(a2, cndt.thentype, cndt.elsetype)
                     end
+                end
+            end
+            # try splitting type argument, based on value
+            if isdispatchelem(widenconst(a2)) && a3 isa Union && !has_free_typevars(a3) && !isa(rt, Const)
+                b = ssa_def_slot(fargs[3], sv)
+                if isa(b, SlotNumber)
+                    # !(x isa T) implies !(Type{a2} <: T)
+                    # TODO: complete splitting, based on which portions of the Union a3 for which isa_tfunc returns Const(true) or Const(false) instead of Bool
+                    elsetype = typesubtract(a3, Type{widenconst(a2)}, InferenceParams(interp).max_union_splitting)
+                    return Conditional(b, a3, elsetype)
                 end
             end
         elseif f === (===)
@@ -2078,7 +2085,7 @@ function most_general_argtypes(closure::PartialOpaque)
     if !isa(argt, DataType) || argt.name !== typename(Tuple)
         argt = Tuple
     end
-    return most_general_argtypes(closure.source, argt, #=withfirst=#false)
+    return Any[argt.parameters...]
 end
 
 # call where the function is any lattice element
@@ -2115,7 +2122,7 @@ end
 
 function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
     isref = false
-    if T === Bottom
+    if unwrapva(T) === Bottom
         return Bottom
     elseif isa(T, Type)
         if isa(T, DataType) && (T::DataType).name === _REF_NAME
@@ -2152,8 +2159,13 @@ end
 function abstract_eval_cfunction(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     f = abstract_eval_value(interp, e.args[2], vtypes, sv)
     # rt = sp_type_rewrap(e.args[3], sv.linfo, true)
-    at = Any[ sp_type_rewrap(argt, frame_instance(sv), false) for argt in e.args[4]::SimpleVector ]
-    pushfirst!(at, f)
+    atv = e.args[4]::SimpleVector
+    at = Vector{Any}(undef, length(atv) + 1)
+    at[1] = f
+    for i = 1:length(atv)
+        at[i + 1] = sp_type_rewrap(at[i], frame_instance(sv), false)
+        at[i + 1] === Bottom && return
+    end
     # this may be the wrong world for the call,
     # but some of the result is likely to be valid anyways
     # and that may help generate better codegen
@@ -2370,7 +2382,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
                 end))
                 nothrow = isexact
                 t = Const(ccall(:jl_new_structt, Any, (Any, Any), t, at.val))
-            elseif (isa(at, PartialStruct) && at ⊑ᵢ Tuple && n == length(at.fields::Vector{Any}) &&
+            elseif (isa(at, PartialStruct) && at ⊑ᵢ Tuple && n > 0 && n == length(at.fields::Vector{Any}) && !isvarargtype(at.fields[end]) &&
                     (let t = t, at = at, ⊑ᵢ = ⊑ᵢ
                         all(i::Int->(at.fields::Vector{Any})[i] ⊑ᵢ fieldtype(t, i), 1:n)
                     end))
@@ -2991,7 +3003,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     if !isempty(frame.limitations)
                         rt = LimitedAccuracy(rt, copy(frame.limitations))
                     end
-                    if tchanged(𝕃ₚ, rt, bestguess)
+                    if !⊑(𝕃ₚ, rt, bestguess)
                         # new (wider) return type for frame
                         bestguess = tmerge(𝕃ₚ, bestguess, rt)
                         # TODO: if bestguess isa InterConditional && !interesting(bestguess); bestguess = widenconditional(bestguess); end

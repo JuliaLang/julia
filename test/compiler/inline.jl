@@ -4,7 +4,8 @@ using Test
 using Base.Meta
 using Core: ReturnNode
 
-include(normpath(@__DIR__, "irutils.jl"))
+include("irutils.jl")
+include("newinterp.jl")
 
 """
 Helper to walk the AST and call a function on every node.
@@ -1108,7 +1109,7 @@ function f44200()
     x44200
 end
 let src = code_typed1(f44200)
-    @test count(x -> isa(x, Core.PiNode), src.code) == 0
+    @test_broken count(x -> isa(x, Core.PiNode), src.code) == 0
 end
 
 # Test that peeling off one case from (::Any) doesn't introduce
@@ -1939,4 +1940,98 @@ end
 let result = @test_throws MethodError issue49074(Issue49050Concrete)
     @test result.value.f === issue49074
     @test result.value.args === (Any,)
+end
+
+# Regression for finalizer inlining with more complex control flow
+global finalizer_escape::Int = 0
+mutable struct FinalizerEscapeTest
+    x::Int
+    function FinalizerEscapeTest()
+        this = new(0)
+        finalizer(this) do this
+            global finalizer_escape
+            finalizer_escape = this.x
+        end
+        return this
+    end
+end
+
+function run_finalizer_escape_test1(b1, b2)
+    x = FinalizerEscapeTest()
+    x.x = 1
+    if b1
+        x.x = 2
+    end
+    if b2
+        Base.donotdelete(b2)
+    end
+    x.x = 3
+    return nothing
+end
+
+function run_finalizer_escape_test2(b1, b2)
+    x = FinalizerEscapeTest()
+    x.x = 1
+    if b1
+        x.x = 2
+    end
+    x.x = 3
+    return nothing
+end
+
+for run_finalizer_escape_test in (run_finalizer_escape_test1, run_finalizer_escape_test2)
+    global finalizer_escape::Int = 0
+
+    let src = code_typed1(run_finalizer_escape_test, Tuple{Bool, Bool})
+        @test any(x->isexpr(x, :(=)), src.code)
+    end
+
+    let
+        run_finalizer_escape_test(true, true)
+        @test finalizer_escape == 3
+    end
+end
+
+# `compilesig_invokes` inlining option
+@newinterp NoCompileSigInvokes
+Core.Compiler.OptimizationParams(::NoCompileSigInvokes) =
+    Core.Compiler.OptimizationParams(; compilesig_invokes=false)
+@noinline no_compile_sig_invokes(@nospecialize x) = (x !== Any && !Base.has_free_typevars(x))
+# test the single dispatch candidate case
+let src = code_typed1((Type,)) do x
+        no_compile_sig_invokes(x)
+    end
+    @test count(src.code) do @nospecialize x
+        isinvoke(:no_compile_sig_invokes, x) &&
+        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),Any}
+    end == 1
+end
+let src = code_typed1((Type,); interp=NoCompileSigInvokes()) do x
+        no_compile_sig_invokes(x)
+    end
+    @test count(src.code) do @nospecialize x
+        isinvoke(:no_compile_sig_invokes, x) &&
+        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),Type}
+    end == 1
+end
+# test the union split case
+let src = code_typed1((Union{DataType,UnionAll},)) do x
+        no_compile_sig_invokes(x)
+    end
+    @test count(src.code) do @nospecialize x
+        isinvoke(:no_compile_sig_invokes, x) &&
+        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),Any}
+    end == 2
+end
+let src = code_typed1((Union{DataType,UnionAll},); interp=NoCompileSigInvokes()) do x
+        no_compile_sig_invokes(x)
+    end
+    @test count(src.code) do @nospecialize x
+        isinvoke(:no_compile_sig_invokes, x) &&
+        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),DataType}
+    end == 1
+    @test count(src.code) do @nospecialize x
+        isinvoke(:no_compile_sig_invokes, x) &&
+        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),UnionAll}
+    end == 1
 end

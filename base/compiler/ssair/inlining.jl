@@ -302,18 +302,39 @@ function finish_cfg_inline!(state::CFGInliningState)
     end
 end
 
+# duplicated from IRShow
+function normalize_method_name(m)
+    if m isa Method
+        return m.name
+    elseif m isa MethodInstance
+        return (m.def::Method).name
+    elseif m isa Symbol
+        return m
+    else
+        return Symbol("")
+    end
+end
+@noinline method_name(m::LineInfoNode) = normalize_method_name(m.method)
+
+inline_node_is_duplicate(topline::LineInfoNode, line::LineInfoNode) =
+    topline.module === line.module &&
+    method_name(topline) === method_name(line) &&
+    topline.file === line.file &&
+    topline.line === line.line
+
 function ir_inline_linetable!(linetable::Vector{LineInfoNode}, inlinee_ir::IRCode,
-                              inlinee::Method,
+                              inlinee::MethodInstance,
                               inlined_at::Int32)
-    coverage = coverage_enabled(inlinee.module)
+    inlinee_def = inlinee.def::Method
+    coverage = coverage_enabled(inlinee_def.module)
     linetable_offset::Int32 = length(linetable)
     # Append the linetable of the inlined function to our line table
     topline::Int32 = linetable_offset + Int32(1)
     coverage_by_path = JLOptions().code_coverage == 3
-    push!(linetable, LineInfoNode(inlinee.module, inlinee.name, inlinee.file, inlinee.line, inlined_at))
+    push!(linetable, LineInfoNode(inlinee_def.module, inlinee, inlinee_def.file, inlinee_def.line, inlined_at))
     oldlinetable = inlinee_ir.linetable
     extra_coverage_line = zero(Int32)
-    for oldline in 1:length(oldlinetable)
+    for oldline in eachindex(oldlinetable)
         entry = oldlinetable[oldline]
         if !coverage && coverage_by_path && is_file_tracked(entry.file)
             # include topline coverage entry if in path-specific coverage mode, and any file falls under path
@@ -323,7 +344,7 @@ function ir_inline_linetable!(linetable::Vector{LineInfoNode}, inlinee_ir::IRCod
             (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset + (oldline == 1) : inlined_at))
         if oldline == 1
             # check for a duplicate on the first iteration (likely true)
-            if newentry === linetable[topline]
+            if inline_node_is_duplicate(linetable[topline], newentry)
                 continue
             else
                 linetable_offset += 1
@@ -339,9 +360,10 @@ end
 
 function ir_prepare_inlining!(insert_node!::Inserter, inline_target::Union{IRCode, IncrementalCompact},
         linetable::Vector{LineInfoNode}, ir′::IRCode, sparam_vals::SimpleVector,
-        def::Method, inlined_at::Int32, argexprs::Vector{Any})
+        mi::MethodInstance, inlined_at::Int32, argexprs::Vector{Any})
+    def = mi.def::Method
     topline::Int32 = length(linetable) + Int32(1)
-    linetable_offset, extra_coverage_line = ir_inline_linetable!(linetable, ir′, def, inlined_at)
+    linetable_offset, extra_coverage_line = ir_inline_linetable!(linetable, ir′, mi, inlined_at)
     if extra_coverage_line != 0
         insert_node!(NewInstruction(Expr(:code_coverage_effect), Nothing, extra_coverage_line))
     end
@@ -371,11 +393,10 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                          boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
     # Ok, do the inlining here
     sparam_vals = item.mi.sparam_vals
-    def = item.mi.def::Method
     inlined_at = compact.result[idx][:line]
 
     ((sp_ssa, argexprs), linetable_offset) = ir_prepare_inlining!(InsertHere(compact),
-        compact, linetable, item.ir, sparam_vals, def, inlined_at, argexprs)
+        compact, linetable, item.ir, sparam_vals, item.mi, inlined_at, argexprs)
 
     if boundscheck === :default || boundscheck === :propagate
         if (compact.result[idx][:flag] & IR_FLAG_INBOUNDS) != 0
@@ -385,6 +406,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     # If the iterator already moved on to the next basic block,
     # temporarily re-open in again.
     local return_value
+    def = item.mi.def::Method
     sig = def.sig
     # Special case inlining that maintains the current basic block if there's only one BB in the target
     new_new_offset = length(compact.new_new_nodes)
@@ -793,34 +815,37 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
     return new_argtypes
 end
 
-function compileable_specialization(match::MethodMatch, effects::Effects,
+function compileable_specialization(mi::MethodInstance, effects::Effects,
         et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
-    if !compilesig_invokes
-        # If there are unknown typevars, this MethodInstance is illegal to
-        # :invoke, but we only check for compilesig usually, so check here to
-        # avoid generating bad code.
-        # TODO: We could also compute the correct type parameters in the runtime
-        # and let this go through, but that requires further changes, because
-        # currently the runtime assumes that a MethodInstance with the appropriate
-        # sparams is created.
-        if _any(t->isa(t, TypeVar), match.sparams)
+    mi_invoke = mi
+    if compilesig_invokes
+        method, atype, sparams = mi.def::Method, mi.specTypes, mi.sparam_vals
+        new_atype = get_compileable_sig(method, atype, sparams)
+        new_atype === nothing && return nothing
+        if atype !== new_atype
+            sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), new_atype, method.sig)::SimpleVector
+            if sparams === sp_[2]::SimpleVector
+                mi_invoke = specialize_method(method, new_atype, sparams)
+                mi_invoke === nothing && return nothing
+            end
+        end
+    else
+        # If this caller does not want us to optimize calls to use their
+        # declared compilesig, then it is also likely they would handle sparams
+        # incorrectly if there were any unknown typevars, so we conservatively return nothing
+        if any(@nospecialize(t)->isa(t, TypeVar), mi.sparam_vals)
             return nothing
         end
     end
-    mi = specialize_method(match; compilesig=compilesig_invokes)
-    mi === nothing && return nothing
     add_inlining_backedge!(et, mi)
-    return InvokeCase(mi, effects, info)
+    return InvokeCase(mi_invoke, effects, info)
 end
 
-function compileable_specialization(linfo::MethodInstance, effects::Effects,
+function compileable_specialization(match::MethodMatch, effects::Effects,
         et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
-    return compileable_specialization(MethodMatch(linfo.specTypes,
-     linfo.sparam_vals, linfo.def::Method, false), effects, et, info; compilesig_invokes)
+    mi = specialize_method(match)
+    return compileable_specialization(mi, effects, et, info; compilesig_invokes)
 end
-
-compileable_specialization(result::InferenceResult, args...; kwargs...) = (@nospecialize;
-    compileable_specialization(result.linfo, args...; kwargs...))
 
 struct CachedResult
     src::Any
@@ -872,12 +897,12 @@ function resolve_todo(mi::MethodInstance, result::Union{MethodMatch,InferenceRes
     # the duplicated check might have been done already within `analyze_method!`, but still
     # we need it here too since we may come here directly using a constant-prop' result
     if !OptimizationParams(state.interp).inlining || is_stmt_noinline(flag)
-        return compileable_specialization(result, effects, et, info;
+        return compileable_specialization(mi, effects, et, info;
             compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
     end
 
     src = inlining_policy(state.interp, src, info, flag, mi, argtypes)
-    src === nothing && return compileable_specialization(result, effects, et, info;
+    src === nothing && return compileable_specialization(mi, effects, et, info;
         compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
 
     add_inlining_backedge!(et, mi)
@@ -951,15 +976,9 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
         (allow_typevars && !may_have_fcalls(match.method)) || return nothing
     end
 
-    # See if there exists a specialization for this method signature
-    mi = specialize_method(match; preexisting=true) # Union{Nothing, MethodInstance}
-    if mi === nothing
-        et = InliningEdgeTracker(state.et, invokesig)
-        effects = info_effects(nothing, match, state)
-        return compileable_specialization(match, effects, et, info;
-            compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
-    end
-
+    # Get the specialization for this method signature
+    # (later we will decide what to do with it)
+    mi = specialize_method(match)
     return resolve_todo(mi, match, argtypes, info, flag, state; invokesig)
 end
 
@@ -1170,7 +1189,7 @@ function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
         if isa(result, ConstPropResult)
             mi = result.result.linfo
             validate_sparams(mi.sparam_vals) || return nothing
-            if argtypes_to_type(argtypes) <: mi.def.sig
+            if Union{} !== argtypes_to_type(argtypes) <: mi.def.sig
                 item = resolve_todo(mi, result.result, argtypes, info, flag, state; invokesig)
                 handle_single_case!(todo, ir, idx, stmt, item, OptimizationParams(state.interp), true)
                 return nothing

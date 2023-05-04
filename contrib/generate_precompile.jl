@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 if Threads.maxthreadid() != 1
-    @warn "Running this file with multiple Julia threads may lead to a build error" Base.maxthreadid()
+    @warn "Running this file with multiple Julia threads may lead to a build error" Threads.maxthreadid()
 end
 
 if Base.isempty(Base.ARGS) || Base.ARGS[1] !== "0"
@@ -45,6 +45,9 @@ precompile(Tuple{typeof(push!), Vector{Function}, Function})
 # miscellaneous
 precompile(Tuple{typeof(Base.require), Base.PkgId})
 precompile(Tuple{typeof(Base.recursive_prefs_merge), Base.Dict{String, Any}})
+precompile(Tuple{typeof(Base.recursive_prefs_merge), Base.Dict{String, Any}, Base.Dict{String, Any}, Vararg{Base.Dict{String, Any}}})
+precompile(Tuple{typeof(Base.hashindex), Tuple{Base.PkgId, Nothing}, Int64})
+precompile(Tuple{typeof(Base.hashindex), Tuple{Base.PkgId, String}, Int64})
 precompile(Tuple{typeof(isassigned), Core.SimpleVector, Int})
 precompile(Tuple{typeof(getindex), Core.SimpleVector, Int})
 precompile(Tuple{typeof(Base.Experimental.register_error_hint), Any, Type})
@@ -54,6 +57,7 @@ precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, 
 precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, Symbol, Module))
 precompile(Base.CoreLogging.env_override_minlevel, (Symbol, Module))
 precompile(Base.StackTraces.lookup, (Ptr{Nothing},))
+precompile(Tuple{typeof(Base.run_module_init), Module, Int})
 """
 
 for T in (Float16, Float32, Float64), IO in (IOBuffer, IOContext{IOBuffer}, Base.TTY, IOContext{Base.TTY})
@@ -67,7 +71,8 @@ print("")
 printstyled("a", "b")
 display([1])
 display([1 2; 3 4])
-@time 1+1
+foo(x) = 1
+@time @eval foo(1)
 ; pwd
 $CTRL_C
 $CTRL_R$CTRL_C
@@ -129,28 +134,6 @@ if have_repl
     """
 end
 
-Distributed = get(Base.loaded_modules,
-          Base.PkgId(Base.UUID("8ba89e20-285c-5b6f-9357-94700520ee1b"), "Distributed"),
-          nothing)
-if Distributed !== nothing
-    hardcoded_precompile_statements *= """
-    precompile(Tuple{typeof(Distributed.remotecall),Function,Int,Module,Vararg{Any, 100}})
-    precompile(Tuple{typeof(Distributed.procs)})
-    precompile(Tuple{typeof(Distributed.finalize_ref), Distributed.Future})
-    """
-# This is disabled because it doesn't give much benefit
-# and the code in Distributed is poorly typed causing many invalidations
-#=
-    precompile_script *= """
-    using Distributed
-    addprocs(2)
-    pmap(x->iseven(x) ? 1 : 0, 1:4)
-    @distributed (+) for i = 1:100 Int(rand(Bool)) end
-    """
-=#
-end
-
-
 Artifacts = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("56f22d72-fd6d-98f1-02f0-08ddc0907c33"), "Artifacts"),
           nothing)
@@ -199,6 +182,14 @@ if Libdl !== nothing
     """
 end
 
+InteractiveUtils = get(Base.loaded_modules,
+          Base.PkgId(Base.UUID("b77e0a4c-d291-57a0-90e8-8db25a27a240"), "InteractiveUtils"),
+          nothing)
+if InteractiveUtils !== nothing
+    repl_script *= """
+    @time_imports using Random
+    """
+end
 
 const JULIA_PROMPT = "julia> "
 const PKG_PROMPT = "pkg> "
@@ -444,8 +435,11 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             ps.head = :tuple
             # println(ps)
             ps = Core.eval(PrecompileStagingArea, ps)
-            precompile(ps...)
-            n_succeeded += 1
+            if precompile(ps...)
+                n_succeeded += 1
+            else
+                @warn "Failed to precompile expression" form=statement _module=nothing _file=nothing _line=0
+            end
             failed = length(statements) - n_succeeded
             yield() # Make clock spinning
             print_state("step3" => string("R$n_succeeded", failed > 0 ? " ($failed failed)" : ""))

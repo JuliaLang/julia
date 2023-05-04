@@ -56,7 +56,6 @@ let
 
         # 2-depth packages
         :Dates,
-        :Distributed,
         :Future,
         :InteractiveUtils,
         :LibGit2,

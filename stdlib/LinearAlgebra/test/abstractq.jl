@@ -29,6 +29,9 @@ n = 5
         A = rand(T, n, n)
         F = qr(A)
         Q = MyQ(F.Q)
+        @test ndims(Q) == 2
+        T <: Real && @test transpose(Q) == adjoint(Q)
+        T <: Complex && @test_throws ErrorException transpose(Q)
         @test convert(AbstractQ{complex(T)}, Q) isa MyQ{complex(T)}
         @test convert(AbstractQ{complex(T)}, Q') isa AdjointQ{<:complex(T),<:MyQ{complex(T)}}
         @test Q*I ≈ Q.Q*I rtol=2eps(real(T))
@@ -50,13 +53,15 @@ n = 5
             @test mul!(X, transQ(Q), transY(Y)) ≈ transQ(Q) * transY(Y) ≈ transQ(Q.Q) * transY(Y)
             @test mul!(X, transY(Y), transQ(Q)) ≈ transY(Y) * transQ(Q) ≈ transY(Y) * transQ(Q.Q)
         end
-        @test Matrix(Q) ≈ Q[:,:] ≈ copyto!(zeros(T, size(Q)), Q) ≈ Q.Q*I
-        @test Matrix(Q') ≈ (Q')[:,:] ≈ copyto!(zeros(T, size(Q)), Q') ≈ Q.Q'*I
-        @test Q[1,:] == Q.Q[1,:]
-        @test Q[:,1] == Q.Q[:,1]
+        @test convert(Matrix, Q) ≈ Matrix(Q) ≈ Q[:,:] ≈ copyto!(zeros(T, size(Q)), Q) ≈ Q.Q*I
+        @test convert(Matrix, Q') ≈ Matrix(Q') ≈ (Q')[:,:] ≈ copyto!(zeros(T, size(Q)), Q') ≈ Q.Q'*I
+        @test Q[1,:] == Q.Q[1,:] == view(Q, 1, :)
+        @test Q[:,1] == Q.Q[:,1] == view(Q, :, 1)
         @test Q[1,1] == Q.Q[1,1]
         @test Q[:] == Q.Q[:]
-        @test Q[:,1:3] == Q.Q[:,1:3] == Matrix(Q)[:,1:3]
+        @test Q[:,1:3] == Q.Q[:,1:3] == view(Q, :, 1:3)
+        @test Q[:,1:3] ≈ Matrix(Q)[:,1:3]
+        @test Q[2:3,2:3] == view(Q, 2:3, 2:3) ≈ Matrix(Q)[2:3,2:3]
         @test_throws BoundsError Q[0,1]
         @test_throws BoundsError Q[n+1,1]
         @test_throws BoundsError Q[1,0]

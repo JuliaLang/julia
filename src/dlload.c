@@ -189,6 +189,7 @@ JL_DLLEXPORT JL_NO_SANITIZE void *jl_dlopen(const char *filename, unsigned flags
         if (!dlopen)
             return NULL;
         void *libdl_handle = dlopen("libdl.so", RTLD_NOW | RTLD_NOLOAD);
+        assert(libdl_handle);
         dlopen = (dlopen_prototype*)dlsym(libdl_handle, "dlopen");
         dlclose(libdl_handle);
         assert(dlopen);
@@ -239,6 +240,25 @@ JL_DLLEXPORT int jl_dlclose(void *handle) JL_NOTSAFEPOINT
 #endif
 }
 
+void *jl_find_dynamic_library_by_addr(void *symbol) {
+    void *handle;
+#ifdef _OS_WINDOWS_
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            (LPCWSTR)symbol,
+                            (HMODULE*)&handle)) {
+        jl_error("could not load base module");
+    }
+#else
+    Dl_info info;
+    if (!dladdr(symbol, &info) || !info.dli_fname) {
+        jl_error("could not load base module");
+    }
+    handle = dlopen(info.dli_fname, RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
+    dlclose(handle); // Undo ref count increment from `dlopen`
+#endif
+    return handle;
+}
+
 JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, int throw_err)
 {
     char path[PATHBUF], relocated[PATHBUF];
@@ -255,28 +275,15 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
     int n_extensions = endswith_extension(modname) ? 1 : N_EXTENSIONS;
     int ret;
 
-    /*
-      this branch returns handle of libjulia-internal
-    */
-    if (modname == NULL) {
-#ifdef _OS_WINDOWS_
-        if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                                (LPCWSTR)(uintptr_t)(&jl_load_dynamic_library),
-                                (HMODULE*)&handle)) {
-            jl_error("could not load base module");
-        }
-#else
-        Dl_info info;
-        if (!dladdr((void*)(uintptr_t)&jl_load_dynamic_library, &info) || !info.dli_fname) {
-            jl_error("could not load base module");
-        }
-        handle = dlopen(info.dli_fname, RTLD_NOW);
-#endif
-        goto done;
-    }
+    // modname == NULL is a sentinel value requesting the handle of libjulia-internal
+    if (modname == NULL)
+        return jl_find_dynamic_library_by_addr(&jl_load_dynamic_library);
 
     abspath = jl_isabspath(modname);
     is_atpath = 0;
+
+    JL_TIMING(DL_OPEN, DL_OPEN);
+    jl_timing_puts(JL_TIMING_CURRENT_BLOCK, modname);
 
     // Detect if our `modname` is something like `@rpath/libfoo.dylib`
 #ifdef _OS_DARWIN_
@@ -333,8 +340,10 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
                     if (i == 0) { // LoadLibrary already tested the extensions, we just need to check the `stat` result
 #endif
                         handle = jl_dlopen(path, flags);
-                        if (handle)
-                            goto done;
+                        if (handle) {
+                            jl_timing_puts(JL_TIMING_CURRENT_BLOCK, jl_pathname_for_handle(handle));
+                            return handle;
+                        }
 #ifdef _OS_WINDOWS_
                         err = GetLastError();
                     }
@@ -353,8 +362,10 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
         path[0] = '\0';
         snprintf(path, PATHBUF, "%s%s", modname, ext);
         handle = jl_dlopen(path, flags);
-        if (handle)
-            goto done;
+        if (handle) {
+            jl_timing_puts(JL_TIMING_CURRENT_BLOCK, jl_pathname_for_handle(handle));
+            return handle;
+        }
 #ifdef _OS_WINDOWS_
         err = GetLastError();
         break; // LoadLibrary already tested the rest
@@ -377,7 +388,6 @@ notfound:
     }
     handle = NULL;
 
-done:
     return handle;
 }
 
@@ -421,9 +431,8 @@ JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int t
     return symbol_found;
 }
 
-#ifdef _OS_WINDOWS_
-//Look for symbols in win32 libraries
-JL_DLLEXPORT const char *jl_dlfind_win32(const char *f_name)
+// Look for symbols in internal libraries
+JL_DLLEXPORT const char *jl_dlfind(const char *f_name)
 {
     void * dummy;
     if (jl_dlsym(jl_exe_handle, f_name, &dummy, 0))
@@ -432,6 +441,7 @@ JL_DLLEXPORT const char *jl_dlfind_win32(const char *f_name)
         return JL_LIBJULIA_INTERNAL_DL_LIBNAME;
     if (jl_dlsym(jl_libjulia_handle, f_name, &dummy, 0))
         return JL_LIBJULIA_DL_LIBNAME;
+#ifdef _OS_WINDOWS_
     if (jl_dlsym(jl_kernel32_handle, f_name, &dummy, 0))
         return "kernel32";
     if (jl_dlsym(jl_crtdll_handle, f_name, &dummy, 0)) // Prefer crtdll over ntdll
@@ -440,6 +450,7 @@ JL_DLLEXPORT const char *jl_dlfind_win32(const char *f_name)
         return "ntdll";
     if (jl_dlsym(jl_winsock_handle, f_name, &dummy, 0))
         return "ws2_32";
+#endif
     // additional common libraries (libc?) could be added here, but in general,
     // it is better to specify the library explicitly in the code. This exists
     // mainly to ease compatibility with linux, and for libraries that don't
@@ -451,7 +462,6 @@ JL_DLLEXPORT const char *jl_dlfind_win32(const char *f_name)
     // which defaults to jl_libjulia_internal_handle, where we won't find it, and
     // will throw the appropriate error.
 }
-#endif
 
 #ifdef __cplusplus
 }

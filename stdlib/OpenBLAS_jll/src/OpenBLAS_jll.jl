@@ -13,9 +13,9 @@ export libopenblas
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libopenblas_handle = C_NULL
-libopenblas_path = ""
+artifact_dir::String = ""
+libopenblas_handle::Ptr{Cvoid} = C_NULL
+libopenblas_path::String = ""
 
 if Base.USE_BLAS64
     const libsuffix = "64_"

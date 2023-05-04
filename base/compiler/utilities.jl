@@ -199,19 +199,9 @@ function normalize_typevars(method::Method, @nospecialize(atype), sparams::Simpl
 end
 
 # get a handle to the unique specialization object representing a particular instantiation of a call
-function specialize_method(method::Method, @nospecialize(atype), sparams::SimpleVector; preexisting::Bool=false, compilesig::Bool=false)
+function specialize_method(method::Method, @nospecialize(atype), sparams::SimpleVector; preexisting::Bool=false)
     if isa(atype, UnionAll)
         atype, sparams = normalize_typevars(method, atype, sparams)
-    end
-    if compilesig
-        new_atype = get_compileable_sig(method, atype, sparams)
-        new_atype === nothing && return nothing
-        if atype !== new_atype
-            sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), new_atype, method.sig)::SimpleVector
-            if sparams === sp_[2]::SimpleVector
-                atype = new_atype
-            end
-        end
     end
     if preexisting
         # check cached specializations

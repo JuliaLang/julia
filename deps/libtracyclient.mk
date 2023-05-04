@@ -10,7 +10,7 @@ LIBTRACYCLIENT_SRCCACHE := $(SRCCACHE)/$(LIBTRACYCLIENT_SRC_DIR)
 LIBTRACYCLIENT_CMAKE :=
 LIBTRACYCLIENT_CMAKE += -DBUILD_SHARED_LIBS=ON
 LIBTRACYCLIENT_CMAKE += -DTRACY_FIBERS=ON
-LIBTRACYCLIENT_CMAKE += -DTRACY_NO_BROADCAST=ON
+LIBTRACYCLIENT_CMAKE += -DTRACY_NO_SAMPLING=ON
 LIBTRACYCLIENT_CMAKE += -DTRACY_ONLY_LOCALHOST=ON
 LIBTRACYCLIENT_CMAKE += -DTRACY_NO_CODE_TRANSFER=ON
 LIBTRACYCLIENT_CMAKE += -DTRACY_NO_FRAME_IMAGE=ON
@@ -30,12 +30,17 @@ $(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-freebsd-elfw.patch-applied: $(LIBTRACY
 		patch -p1 -f < $(SRCDIR)/patches/libTracyClient-freebsd-elfw.patch
 	echo 1 > $@
 
-$(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-no-crash-handler.patch-applied: $(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-freebsd-elfw.patch-applied
+$(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-no-sampling.patch-applied: $(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-freebsd-elfw.patch-applied
 	cd $(LIBTRACYCLIENT_BUILDDIR) && \
-		patch -p1 -f < $(SRCDIR)/patches/libTracyClient-no-crash-handler.patch
+		patch -p1 -f < $(SRCDIR)/patches/libTracyClient-no-sampling.patch
 	echo 1 > $@
 
-$(LIBTRACYCLIENT_BUILDDIR)/build-configured: $(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-no-crash-handler.patch-applied
+$(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-plot-config.patch-applied: $(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-no-sampling.patch-applied
+	cd $(LIBTRACYCLIENT_BUILDDIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/libTracyClient-plot-config.patch
+	echo 1 > $@
+
+$(LIBTRACYCLIENT_BUILDDIR)/build-configured: $(LIBTRACYCLIENT_BUILDDIR)/libTracyClient-plot-config.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 		$(CMAKE) . $(CMAKE_GENERATOR_COMMAND) $(CMAKE_COMMON) $(LIBTRACYCLIENT_CMAKE) \

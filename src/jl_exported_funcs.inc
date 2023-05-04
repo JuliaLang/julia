@@ -258,7 +258,7 @@
     XX(jl_infer_thunk) \
     XX(jl_init) \
     XX(jl_init_options) \
-    XX(jl_init_restored_modules) \
+    XX(jl_init_restored_module) \
     XX(jl_init_with_image) \
     XX(jl_init_with_image__threading) \
     XX(jl_init__threading) \
@@ -478,7 +478,6 @@
     XX(jl_try_substrtod) \
     XX(jl_try_substrtof) \
     XX(jl_tty_set_mode) \
-    XX(jl_tupletype_fill) \
     XX(jl_typeassert) \
     XX(jl_typeinf_lock_begin) \
     XX(jl_typeinf_lock_end) \
@@ -547,6 +546,7 @@
     YY(jl_register_fptrs) \
     YY(jl_generate_fptr) \
     YY(jl_generate_fptr_for_unspecialized) \
+    YY(jl_generate_fptr_for_oc_wrapper) \
     YY(jl_compile_extern_c) \
     YY(jl_teardown_codegen) \
     YY(jl_jit_total_bytes) \

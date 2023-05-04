@@ -27,6 +27,13 @@ using LinearAlgebra: BlasInt
         @test LAPACK.syevr!('N', 'V', 'U', copy(Asym), 0.0, 1.0, 4, 5, -1.0)[1] ≈ vals[vals .< 1.0]
         @test LAPACK.syevr!('N', 'I', 'U', copy(Asym), 0.0, 1.0, 4, 5, -1.0)[1] ≈ vals[4:5]
         @test vals ≈ LAPACK.syev!('N', 'U', copy(Asym))
+        @test vals ≈ LAPACK.syevd!('N', 'U', copy(Asym))
+        vals_test, Z_test = LAPACK.syev!('V', 'U', copy(Asym))
+        @test vals_test ≈ vals
+        @test Z_test*(Diagonal(vals)*Z_test') ≈ Asym
+        vals_test, Z_test = LAPACK.syevd!('V', 'U', copy(Asym))
+        @test vals_test ≈ vals
+        @test Z_test*(Diagonal(vals)*Z_test') ≈ Asym
         @test_throws DimensionMismatch LAPACK.sygvd!(1, 'V', 'U', copy(Asym), zeros(elty, 6, 6))
     end
 end
@@ -712,5 +719,14 @@ end
 a = zeros(2,0), zeros(0)
 @test LinearAlgebra.LAPACK.geqrf!(a...) === a
 @test LinearAlgebra.LAPACK.gerqf!(a...) === a
+
+# Issue #49489: https://github.com/JuliaLang/julia/issues/49489
+# Dimension mismatch between A and ipiv causes segfaults
+@testset "issue #49489" begin
+    A = randn(23,23)
+    b = randn(23)
+    ipiv = collect(1:20)
+    @test_throws DimensionMismatch LinearAlgebra.LAPACK.getrs!('N', A, ipiv, b)
+end
 
 end # module TestLAPACK

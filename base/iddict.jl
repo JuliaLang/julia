@@ -86,7 +86,7 @@ end
 function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
     !isa(key, K) && throw(ArgumentError("$(limitrepr(key)) is not a valid key for type $K"))
     if !(val isa V) # avoid a dynamic call
-        val = convert(V, val)
+        val = convert(V, val)::V
     end
     if d.ndel >= ((3*length(d.ht))>>2)
         rehash!(d, max((length(d.ht)%UInt)>>1, 32))
@@ -155,7 +155,7 @@ copy(d::IdDict) = typeof(d)(d)
 function get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V}
     val = ccall(:jl_eqtable_get, Any, (Any, Any, Any), d.ht, key, secret_table_token)
     if val === secret_table_token
-        val = isa(default, V) ? default : convert(V, default)
+        val = isa(default, V) ? default : convert(V, default)::V
         setindex!(d, val, key)
         return val
     else

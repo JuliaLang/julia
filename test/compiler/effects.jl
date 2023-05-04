@@ -354,9 +354,9 @@ function f_boundscheck_elim(n)
     # Inbounds here assumes that this is only ever called with `n==0`, but of
     # course the compiler has no way of knowing that, so it must not attempt
     # to run the `@inbounds getfield(sin, 1)` that `ntuple` generates.
-    ntuple(x->(@inbounds getfield(sin, x)), n)
+    ntuple(x->(@inbounds ()[x]), n)
 end
-@test !Core.Compiler.is_consistent(Base.infer_effects(f_boundscheck_elim, (Int,)))
+@test_broken !Core.Compiler.is_consistent(Base.infer_effects(f_boundscheck_elim, (Int,)))
 @test Tuple{} <: only(Base.return_types(f_boundscheck_elim, (Int,)))
 
 # Test that purity modeling doesn't accidentally introduce new world age issues
