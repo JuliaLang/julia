@@ -59,9 +59,9 @@ The various `jl_timing_show_*` and `jl_timing_printf` functions can be used to a
 
 The `TracyCZoneColor` function can be used to set the color of a certain zone. Search through the codebase to see how it is used.
 
-### Hosting Tracy Traces Online
+### Online viewer of Tracy traces
 
-*This section is yet to be written.*
+Visit https://topolarity.github.io/tracy-traces/experimental/ to access an online viewer for Tracy traces. You can either upload a local trace file or provide a URL to a trace hosted online. Note that, due to web permission restrictions, the trace file must be hosted on GitHub. Once you've loaded an online-hosted trace file, you can share the browser link directly with others, enabling them to view the same trace.
 
 ## ITTAPI Profiler
 
