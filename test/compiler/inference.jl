@@ -4784,31 +4784,30 @@ fhasmethod(::Integer, ::Int32) = 3
 @test only(Base.return_types(()) do; Val(hasmethod(sin, Tuple{Int, Vararg{Int}})); end) == Val{false}
 @test only(Base.return_types(()) do; Val(hasmethod(sin, Tuple{Int, Int, Vararg{Int}})); end) === Val{false}
 
-# TODO (#48913) enable interprocedural call inference from irinterp
-# # interprocedural call inference from irinterp
-# @noinline Base.@assume_effects :total issue48679_unknown_any(x) = Base.inferencebarrier(x)
+# interprocedural call inference from irinterp
+@noinline Base.@assume_effects :total issue48679_unknown_any(x) = Base.inferencebarrier(x)
 
-# @noinline _issue48679(y::Union{Nothing,T}) where {T} = T::Type
-# Base.@constprop :aggressive function issue48679(x, b)
-#     if b
-#         x = issue48679_unknown_any(x)
-#     end
-#     return _issue48679(x)
-# end
-# @test Base.return_types((Float64,)) do x
-#     issue48679(x, false)
-# end |> only == Type{Float64}
+@noinline _issue48679(y::Union{Nothing,T}) where {T} = T::Type
+Base.@constprop :aggressive function issue48679(x, b)
+    if b
+        x = issue48679_unknown_any(x)
+    end
+    return _issue48679(x)
+end
+@test Base.return_types((Float64,)) do x
+    issue48679(x, false)
+end |> only == Type{Float64}
 
-# Base.@constprop :aggressive @noinline _issue48679_const(b, y::Union{Nothing,T}) where {T} = b ? nothing : T::Type
-# Base.@constprop :aggressive function issue48679_const(x, b)
-#     if b
-#         x = issue48679_unknown_any(x)
-#     end
-#     return _issue48679_const(b, x)
-# end
-# @test Base.return_types((Float64,)) do x
-#     issue48679_const(x, false)
-# end |> only == Type{Float64}
+Base.@constprop :aggressive @noinline _issue48679_const(b, y::Union{Nothing,T}) where {T} = b ? nothing : T::Type
+Base.@constprop :aggressive function issue48679_const(x, b)
+    if b
+        x = issue48679_unknown_any(x)
+    end
+    return _issue48679_const(b, x)
+end
+@test Base.return_types((Float64,)) do x
+    issue48679_const(x, false)
+end |> only == Type{Float64}
 
 # `invoke` call in irinterp
 @noinline _irinterp_invoke(x::Any) = :any
