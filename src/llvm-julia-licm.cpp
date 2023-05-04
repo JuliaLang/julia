@@ -134,7 +134,6 @@ struct JuliaLICMPassLegacy : public LoopPass {
             getLoopAnalysisUsage(AU);
         }
 };
-
 struct JuliaLICM : public JuliaPassContext {
     function_ref<DominatorTree &()> GetDT;
     function_ref<LoopInfo &()> GetLI;
@@ -339,6 +338,19 @@ struct JuliaLICM : public JuliaPassContext {
                     });
                     ++HoistedAllocation;
                     moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
+                    IRBuilder<> builder(preheader->getTerminator());
+                    builder.SetCurrentDebugLocation(call->getDebugLoc());
+                    auto obj_i8 = builder.CreateBitCast(call, Type::getInt8PtrTy(call->getContext(), call->getType()->getPointerAddressSpace()));
+                    // Note that this alignment is assuming the GC allocates at least pointer-aligned memory
+                    auto align = Align(DL.getPointerSize(0));
+                    auto clear_obj = builder.CreateMemSet(obj_i8, ConstantInt::get(Type::getInt8Ty(call->getContext()), 0), call->getArgOperand(1), align);
+                    if (MSSAU.getMemorySSA()) {
+                        auto alloc_mdef = MSSAU.getMemorySSA()->getMemoryAccess(call);
+                        assert(isa<MemoryDef>(alloc_mdef) && "Expected alloc to be associated with a memory def!");
+                        auto clear_mdef = MSSAU.createMemoryAccessAfter(clear_obj, nullptr, alloc_mdef);
+                        assert(isa<MemoryDef>(clear_mdef) && "Expected memset to be associated with a memory def!");
+                        (void) clear_mdef;
+                    }
                     changed = true;
                 }
             }
@@ -395,6 +407,10 @@ PreservedAnalyses JuliaLICMPass::run(Loop &L, LoopAnalysisManager &AM,
     };
     auto juliaLICM = JuliaLICM(GetDT, GetLI, GetMSSA, GetSE);
     if (juliaLICM.runOnLoop(&L, ORE)) {
+#ifdef JL_DEBUG_BUILD
+        if (AR.MSSA)
+            AR.MSSA->verifyMemorySSA();
+#endif
         auto preserved = getLoopPassPreservedAnalyses();
         preserved.preserveSet<CFGAnalyses>();
         preserved.preserve<MemorySSAAnalysis>();
