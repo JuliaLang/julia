@@ -1401,11 +1401,7 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
         int16_t prev_nold = 0;
         int pg_nfree = 0;
         jl_taggedvalue_t **pfl_begin = NULL;
-        uint32_t msk = 1; // mask for the age bit in the current age byte
         while ((char*)v <= lim) {
-            if (!msk) {
-                msk = 1;
-            }
             int bits = v->bits.gc;
             if (!gc_marked(bits)) {
                 *pfl = v;
@@ -1422,7 +1418,6 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
                 freedall = 0;
             }
             v = (jl_taggedvalue_t*)((char*)v + osize);
-            msk <<= 1;
         }
         assert(!freedall);
         pg->has_marked = has_marked;
@@ -2859,7 +2854,7 @@ void gc_mark_loop_barrier(void)
 
 void gc_mark_clean_reclaim_sets(void)
 {
-    // Clean up `reclaim-sets` and reset `top/bottom` of queues
+    // Clean up `reclaim-sets`
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
         arraylist_t *reclaim_set2 = &ptls2->mark_queue.reclaim_set;
