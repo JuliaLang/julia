@@ -1265,6 +1265,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
         typ = unwrap_unionall(ir.stmts[newidx][:type])
         # Could still end up here if we tried to setfield! on an immutable, which would
         # error at runtime, but is not illegal to have in the IR.
+        typ = widenconst(typ)
         ismutabletype(typ) || continue
         typ = typ::DataType
         # First check for any finalizer calls
