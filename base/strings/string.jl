@@ -559,7 +559,6 @@ end
 function getindex_continued(s::String, i::Int, u::UInt32)
     @inbounds b = codeunit(s,i) #It is faster to refetch b than recalculate u
     n = ncodeunits(s)
-    (i == n) && @goto ret
     shift = 24
     state = _gutf8_dfa_step(_GUTF8_DFA_ACCEPT, b)
     if (state == _GUTF8_DFA_INVALID)
