@@ -8,7 +8,6 @@ use mmtk::scheduler::*;
 use mmtk::util::opaque_pointer::*;
 use mmtk::util::Address;
 use mmtk::util::ObjectReference;
-use mmtk::vm::edge_shape;
 use mmtk::vm::EdgeVisitor;
 use mmtk::vm::VMBinding;
 use mmtk::MMTKBuilder;
@@ -50,7 +49,7 @@ impl VMBinding for JuliaVM {
     type VMCollection = collection::VMCollection;
     type VMActivePlan = active_plan::VMActivePlan;
     type VMReferenceGlue = reference_glue::VMReferenceGlue;
-    type VMMemorySlice = edge_shape::UnimplementedMemorySlice<JuliaVMEdge>;
+    type VMMemorySlice = edges::JuliaMemorySlice;
     type VMEdge = JuliaVMEdge;
 }
 

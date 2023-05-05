@@ -57,6 +57,8 @@ extern void modify_check(void* ref);
 extern int object_is_managed_by_mmtk(void* addr);
 extern void runtime_panic(void);
 
+// Write barriers
+extern void mmtk_memory_region_copy(MMTk_Mutator mutator, void* src_obj, void* src_addr, void* dst_obj, void* dst_addr, size_t size);
 extern void mmtk_object_reference_write_post(MMTk_Mutator mutator, const void* src, const void* target);
 extern uint8_t mmtk_needs_write_barrier(void);
 

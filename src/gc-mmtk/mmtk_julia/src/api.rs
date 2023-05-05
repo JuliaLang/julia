@@ -443,9 +443,32 @@ pub extern "C" fn mmtk_gc_poll(tls: VMMutatorThread) {
 }
 
 #[no_mangle]
-
 pub extern "C" fn runtime_panic() {
     panic!("Panicking at runtime!")
+}
+
+#[no_mangle]
+pub extern "C" fn mmtk_memory_region_copy(
+    mutator: *mut Mutator<JuliaVM>,
+    src_obj: ObjectReference,
+    src_addr: Address,
+    dst_obj: ObjectReference,
+    dst_addr: Address,
+    count: usize,
+) {
+    use crate::edges::JuliaMemorySlice;
+    let src = JuliaMemorySlice {
+        owner: src_obj,
+        start: src_addr,
+        count,
+    };
+    let dst = JuliaMemorySlice {
+        owner: dst_obj,
+        start: dst_addr,
+        count,
+    };
+    let mutator = unsafe { &mut *mutator };
+    memory_manager::memory_region_copy(mutator, src, dst);
 }
 
 #[no_mangle]
