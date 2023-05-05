@@ -1575,6 +1575,14 @@ void jl_dump_native_impl(void *native_code,
                                      GlobalVariable::ExternalLinkage,
                                      jlRTLD_DEFAULT_var,
                                      "jl_RTLD_DEFAULT_handle_pointer"), TheTriple);
+
+        // let the compiler know we are going to internalize a copy of this,
+        // if it has a current usage with ExternalLinkage
+        auto small_typeof_copy = dataM->getGlobalVariable("small_typeof");
+        if (small_typeof_copy) {
+            small_typeof_copy->setVisibility(GlobalValue::HiddenVisibility);
+            small_typeof_copy->setDSOLocal(true);
+        }
     }
 
     // Reserve space for the output files and names
@@ -1651,13 +1659,21 @@ void jl_dump_native_impl(void *native_code,
         auto shards = emit_shard_table(*sysimageM, T_size, T_psize, threads);
         auto ptls = emit_ptls_table(*sysimageM, T_size, T_psize);
         auto header = emit_image_header(*sysimageM, threads, nfvars, ngvars);
-        auto AT = ArrayType::get(T_psize, 4);
+        auto AT = ArrayType::get(T_size, sizeof(small_typeof) / sizeof(void*));
+        auto small_typeof_copy = new GlobalVariable(*sysimageM, AT, false,
+                                                    GlobalVariable::ExternalLinkage,
+                                                    Constant::getNullValue(AT),
+                                                    "small_typeof");
+        small_typeof_copy->setVisibility(GlobalValue::HiddenVisibility);
+        small_typeof_copy->setDSOLocal(true);
+        AT = ArrayType::get(T_psize, 5);
         auto pointers = new GlobalVariable(*sysimageM, AT, false,
                                            GlobalVariable::ExternalLinkage,
                                            ConstantArray::get(AT, {
                                                 ConstantExpr::getBitCast(header, T_psize),
                                                 ConstantExpr::getBitCast(shards, T_psize),
                                                 ConstantExpr::getBitCast(ptls, T_psize),
+                                                ConstantExpr::getBitCast(small_typeof_copy, T_psize),
                                                 ConstantExpr::getBitCast(target_ids, T_psize)
                                            }),
                                            "jl_image_pointers");

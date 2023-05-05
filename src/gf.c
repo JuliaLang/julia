@@ -2998,7 +2998,7 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
         jl_array_t *leafcache = jl_atomic_load_relaxed(&mt->leafcache);
         entry = NULL;
         if (leafcache != (jl_array_t*)jl_an_empty_vec_any &&
-                jl_typeis(jl_atomic_load_relaxed(&mt->cache), jl_typemap_level_type)) {
+                jl_typetagis(jl_atomic_load_relaxed(&mt->cache), jl_typemap_level_type)) {
             // hashing args is expensive, but looking at mt->cache is probably even more expensive
             tt = lookup_arg_type_tuple(F, args, nargs);
             if (tt != NULL)

@@ -293,7 +293,7 @@ static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q)
 {
     jl_gc_safepoint();
     jl_task_t *task = (jl_task_t*)jl_apply_generic(trypoptask, &q, 1);
-    if (jl_typeis(task, jl_task_type)) {
+    if (jl_is_task(task)) {
         int self = jl_atomic_load_relaxed(&jl_current_task->tid);
         jl_set_task_tid(task, self);
         return task;

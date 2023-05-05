@@ -673,7 +673,7 @@ void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
             while (debuginfoloc != 0) {
                 jl_line_info_node_t *locinfo = (jl_line_info_node_t*)
                     jl_array_ptr_ref(src->linetable, debuginfoloc - 1);
-                assert(jl_typeis(locinfo, jl_lineinfonode_type));
+                assert(jl_typetagis(locinfo, jl_lineinfonode_type));
                 const char *func_name = "Unknown";
                 jl_value_t *method = locinfo->method;
                 if (jl_is_method_instance(method))

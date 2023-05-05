@@ -598,20 +598,20 @@ static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v) JL_NOTS
     if (v == NULL || jl_is_symbol(v) || v == jl_nothing) {
         return 0;
     }
-    else if (jl_typeis(v, jl_int64_type)) {
+    else if (jl_typetagis(v, jl_int64_tag << 4)) {
         int64_t i64 = *(int64_t*)v + NBOX_C / 2;
         if ((uint64_t)i64 < NBOX_C)
             return 0;
     }
-    else if (jl_typeis(v, jl_int32_type)) {
+    else if (jl_typetagis(v, jl_int32_tag << 4)) {
         int32_t i32 = *(int32_t*)v + NBOX_C / 2;
         if ((uint32_t)i32 < NBOX_C)
             return 0;
     }
-    else if (jl_typeis(v, jl_uint8_type)) {
+    else if (jl_typetagis(v, jl_uint8_tag << 4)) {
         return 0;
     }
-    else if (jl_typeis(v, jl_task_type)) {
+    else if (jl_typetagis(v, jl_task_tag << 4)) {
         return 0;
     }
 
@@ -838,7 +838,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             }
         }
     }
-    else if (jl_typeis(v, jl_module_type)) {
+    else if (jl_typetagis(v, jl_module_tag << 4)) {
         jl_queue_module_for_serialization(s, (jl_module_t*)v);
     }
     else if (layout->nfields > 0) {
@@ -1024,17 +1024,17 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *
     else if (v == jl_nothing) {
         return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + 1;
     }
-    else if (jl_typeis(v, jl_int64_type)) {
+    else if (jl_typetagis(v, jl_int64_tag << 4)) {
         int64_t i64 = *(int64_t*)v + NBOX_C / 2;
         if ((uint64_t)i64 < NBOX_C)
             return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + i64 + 2;
     }
-    else if (jl_typeis(v, jl_int32_type)) {
+    else if (jl_typetagis(v, jl_int32_tag << 4)) {
         int32_t i32 = *(int32_t*)v + NBOX_C / 2;
         if ((uint32_t)i32 < NBOX_C)
             return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + i32 + 2 + NBOX_C;
     }
-    else if (jl_typeis(v, jl_uint8_type)) {
+    else if (jl_typetagis(v, jl_uint8_tag << 4)) {
         uint8_t u8 = *(uint8_t*)v;
         return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + u8 + 2 + NBOX_C + NBOX_C;
     }
@@ -1214,7 +1214,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
         else if (s->incremental && needs_recaching(v)) {
             arraylist_push(jl_is_datatype(v) ? &s->fixup_types : &s->fixup_objs, (void*)reloc_offset);
         }
-        else if (s->incremental && jl_typeis(v, jl_binding_type)) {
+        else if (s->incremental && jl_typetagis(v, jl_binding_type)) {
             jl_binding_t *b = (jl_binding_t*)v;
             if (b->globalref == NULL || jl_object_in_image((jl_value_t*)b->globalref->mod))
                 jl_error("Binding cannot be serialized"); // no way (currently) to recover its identity
@@ -1323,10 +1323,10 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 }
             }
         }
-        else if (jl_typeis(v, jl_module_type)) {
+        else if (jl_typetagis(v, jl_module_tag << 4)) {
             jl_write_module(s, item, (jl_module_t*)v);
         }
-        else if (jl_typeis(v, jl_task_type)) {
+        else if (jl_typetagis(v, jl_task_tag << 4)) {
             jl_error("Task cannot be serialized");
         }
         else if (jl_is_svec(v)) {
@@ -1350,7 +1350,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             assert(t->layout->npointers == 0);
             ios_write(s->s, (char*)v, jl_datatype_size(t));
         }
-        else if (jl_bigint_type && jl_typeis(v, jl_bigint_type)) {
+        else if (jl_bigint_type && jl_typetagis(v, jl_bigint_type)) {
             // foreign types require special handling
             jl_value_t *sizefield = jl_get_nth_field(v, 1);
             int32_t sz = jl_unbox_int32(sizefield);
@@ -1408,7 +1408,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
 
             // A few objects need additional handling beyond the generic serialization above
 
-            if (s->incremental && jl_typeis(v, jl_typemap_entry_type)) {
+            if (s->incremental && jl_typetagis(v, jl_typemap_entry_type)) {
                 jl_typemap_entry_t *newentry = (jl_typemap_entry_t*)&s->s->buf[reloc_offset];
                 if (newentry->max_world == ~(size_t)0) {
                     if (newentry->min_world > 1) {
@@ -1731,7 +1731,7 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
 #else
         size_t depsidx = 0;
 #endif
-        assert(depsidx < jl_array_len(s->buildid_depmods_idxs));
+        assert(s->buildid_depmods_idxs && depsidx < jl_array_len(s->buildid_depmods_idxs));
         size_t i = ((uint32_t*)jl_array_data(s->buildid_depmods_idxs))[depsidx];
         assert(2*i < jl_linkage_blobs.len);
         return (uintptr_t)jl_linkage_blobs.items[2*i] + offset*sizeof(void*);
@@ -1832,6 +1832,8 @@ static void jl_read_reloclist(jl_serializer_state *s, jl_array_t *link_ids, uint
         uintptr_t *pv = (uintptr_t *)(base + pos);
         uintptr_t v = *pv;
         v = get_item_for_reloc(s, base, size, v, link_ids, &link_index);
+        if (bits && v && ((jl_datatype_t*)v)->smalltag)
+            v = (uintptr_t)((jl_datatype_t*)v)->smalltag << 4; // TODO: should we have a representation that supports sweep without a relocation step?
         *pv = v | bits;
     }
     assert(!link_ids || link_index == jl_array_len(link_ids));
@@ -1944,6 +1946,9 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
     image->fptrs.base = NULL;
     if (fvars.base == NULL)
         return;
+
+    memcpy(image->small_typeof, &small_typeof, sizeof(small_typeof));
+
     int img_fvars_max = s->fptr_record->size / sizeof(void*);
     size_t i;
     uintptr_t base = (uintptr_t)&s->s->buf[0];
@@ -2782,6 +2787,7 @@ JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
 #endif
 
 extern void rebuild_image_blob_tree(void);
+extern void export_small_typeof(void);
 
 static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl_array_t *depmods, uint64_t checksum,
                                 /* outputs */    jl_array_t **restored,         jl_array_t **init_order,
@@ -2857,9 +2863,13 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             jl_value_t **tag = tags[i];
             *tag = jl_read_value(&s);
         }
+#define XX(name) \
+        small_typeof[(jl_##name##_tag << 4) / sizeof(*small_typeof)] = jl_##name##_type;
+        JL_SMALL_TYPEOF(XX)
+#undef XX
+        export_small_typeof();
         jl_global_roots_table = (jl_array_t*)jl_read_value(&s);
         // set typeof extra-special values now that we have the type set by tags above
-        jl_astaggedvalue(jl_current_task)->header = (uintptr_t)jl_task_type | jl_astaggedvalue(jl_current_task)->header;
         jl_astaggedvalue(jl_nothing)->header = (uintptr_t)jl_nothing_type | jl_astaggedvalue(jl_nothing)->header;
         s.ptls->root_task->tls = jl_read_value(&s);
         jl_gc_wb(s.ptls->root_task, s.ptls->root_task->tls);
@@ -2995,9 +3005,9 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                 continue;
             }
         }
-        jl_value_t *otyp = jl_typeof(obj);   // the original type of the object that was written here
+        uintptr_t otyp = jl_typetagof(obj);   // the original type of the object that was written here
         assert(image_base < (char*)obj && (char*)obj <= image_base + sizeof_sysimg + sizeof(uintptr_t));
-        if (otyp == (jl_value_t*)jl_datatype_type) {
+        if (otyp == jl_datatype_tag << 4) {
             jl_datatype_t *dt = (jl_datatype_t*)obj[0], *newdt;
             if (jl_is_datatype(dt)) {
                 newdt = dt; // already done
@@ -3044,7 +3054,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         else
             *pfld = (uintptr_t)newobj;
         assert(!(image_base < (char*)newobj && (char*)newobj <= image_base + sizeof_sysimg + sizeof(uintptr_t)));
-        assert(jl_typeis(obj, otyp));
+        assert(jl_typetagis(obj, otyp));
     }
     // A few fields (reached via super) might be self-recursive. This is rare, but handle them now.
     // They cannot be instances though, since the type must fully exist before the singleton field can be allocated
@@ -3121,8 +3131,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             pfld = (uintptr_t*)(image_base + item);
             obj = *(jl_value_t***)pfld;
         }
-        jl_value_t *otyp = jl_typeof(obj);   // the original type of the object that was written here
-        if (otyp == (jl_value_t*)jl_method_instance_type) {
+        uintptr_t otyp = jl_typetagof(obj);   // the original type of the object that was written here
+        if (otyp == (uintptr_t)jl_method_instance_type) {
             assert(image_base < (char*)obj && (char*)obj <= image_base + sizeof_sysimg + sizeof(uintptr_t));
             jl_value_t *m = obj[0];
             if (jl_is_method_instance(m)) {
@@ -3141,7 +3151,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         }
         *pfld = (uintptr_t)newobj;
         assert(!(image_base < (char*)newobj && (char*)newobj <= image_base + sizeof_sysimg + sizeof(uintptr_t)));
-        assert(jl_typeis(obj, otyp));
+        assert(jl_typetagis(obj, otyp));
     }
     arraylist_free(&s.uniquing_types);
     arraylist_free(&s.uniquing_objs);
@@ -3157,7 +3167,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     for (size_t i = 0; i < s.fixup_objs.len; i++) {
         uintptr_t item = (uintptr_t)s.fixup_objs.items[i];
         jl_value_t *obj = (jl_value_t*)(image_base + item);
-        if (jl_typeis(obj, jl_typemap_entry_type)) {
+        if (jl_typetagis(obj, jl_typemap_entry_type)) {
             jl_typemap_entry_t *entry = (jl_typemap_entry_t*)obj;
             entry->min_world = world;
         }
@@ -3198,7 +3208,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             // rehash IdDict
             //assert(((jl_datatype_t*)(jl_typeof(obj)))->name == jl_idtable_typename);
             jl_array_t **a = (jl_array_t**)obj;
-            assert(jl_typeis(*a, jl_array_any_type));
+            assert(jl_typetagis(*a, jl_array_any_type));
             *a = jl_idtable_rehash(*a, jl_array_len(*a));
             jl_gc_wb(obj, *a);
         }

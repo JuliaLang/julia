@@ -130,7 +130,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typeis(jl_current_exception(), jl_errorexception_type))
+                        if (jl_typetagis(jl_current_exception(), jl_errorexception_type))
                             jl_error("could not evaluate cfunction return type (it might depend on a local variable)");
                         else
                             jl_rethrow();
@@ -142,7 +142,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typeis(jl_current_exception(), jl_errorexception_type))
+                        if (jl_typetagis(jl_current_exception(), jl_errorexception_type))
                             jl_error("could not evaluate cfunction argument type (it might depend on a local variable)");
                         else
                             jl_rethrow();
@@ -163,7 +163,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typeis(jl_current_exception(), jl_errorexception_type))
+                        if (jl_typetagis(jl_current_exception(), jl_errorexception_type))
                             jl_error("could not evaluate ccall return type (it might depend on a local variable)");
                         else
                             jl_rethrow();
@@ -175,7 +175,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typeis(jl_current_exception(), jl_errorexception_type))
+                        if (jl_typetagis(jl_current_exception(), jl_errorexception_type))
                             jl_error("could not evaluate ccall argument type (it might depend on a local variable)");
                         else
                             jl_rethrow();
@@ -504,7 +504,7 @@ void jl_add_function_to_lineinfo(jl_code_info_t *ci, jl_value_t *func)
     JL_GC_PUSH3(&rt, &lno, &inl);
     for (i = 0; i < n; i++) {
         jl_value_t *ln = jl_array_ptr_ref(li, i);
-        assert(jl_typeis(ln, jl_lineinfonode_type));
+        assert(jl_typetagis(ln, jl_lineinfonode_type));
         jl_value_t *mod = jl_fieldref_noalloc(ln, 0);
         jl_value_t *file = jl_fieldref_noalloc(ln, 2);
         lno = jl_fieldref(ln, 3);
@@ -689,7 +689,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     jl_array_t *copy = NULL;
     jl_svec_t *sparam_vars = jl_outer_unionall_vars(m->sig);
     JL_GC_PUSH3(&copy, &sparam_vars, &src);
-    assert(jl_typeis(src->code, jl_array_any_type));
+    assert(jl_typetagis(src->code, jl_array_any_type));
     jl_array_t *stmts = (jl_array_t*)src->code;
     size_t i, n = jl_array_len(stmts);
     copy = jl_alloc_vec_any(n);

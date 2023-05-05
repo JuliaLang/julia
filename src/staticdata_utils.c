@@ -949,7 +949,7 @@ static jl_array_t *jl_verify_methods(jl_array_t *edges, jl_array_t *maxvalids)
         jl_method_instance_t *caller = (jl_method_instance_t*)jl_array_ptr_ref(edges, 2 * i);
         assert(jl_is_method_instance(caller) && jl_is_method(caller->def.method));
         jl_array_t *callee_ids = (jl_array_t*)jl_array_ptr_ref(edges, 2 * i + 1);
-        assert(jl_typeis((jl_value_t*)callee_ids, jl_array_int32_type));
+        assert(jl_typetagis((jl_value_t*)callee_ids, jl_array_int32_type));
         if (callee_ids == NULL) {
             // serializing the edges had failed
             maxvalids2_data[i] = 0;
@@ -999,7 +999,7 @@ static int jl_verify_graph_edge(size_t *maxvalids2_data, jl_array_t *edges, size
     size_t depth = stack->len;
     visited->items[idx] = (void*)(1 + depth);
     jl_array_t *callee_ids = (jl_array_t*)jl_array_ptr_ref(edges, idx * 2 + 1);
-    assert(jl_typeis((jl_value_t*)callee_ids, jl_array_int32_type));
+    assert(jl_typetagis((jl_value_t*)callee_ids, jl_array_int32_type));
     int32_t *idxs = (int32_t*)jl_array_data(callee_ids);
     size_t i, n = jl_array_len(callee_ids);
     cycle = depth;

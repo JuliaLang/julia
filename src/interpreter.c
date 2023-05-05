@@ -102,7 +102,7 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
 
     fname = eval_value(args[0], s);
     jl_methtable_t *mt = NULL;
-    if (jl_typeis(fname, jl_methtable_type)) {
+    if (jl_typetagis(fname, jl_methtable_type)) {
         mt = (jl_methtable_t*)fname;
     }
     atypes = eval_value(args[1], s);
@@ -663,7 +663,7 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     size_t world = ct->world_age;
     jl_code_info_t *src = jl_code_for_interpreter(mi, world);
     jl_array_t *stmts = src->code;
-    assert(jl_typeis(stmts, jl_array_any_type));
+    assert(jl_typetagis(stmts, jl_array_any_type));
     unsigned nroots = jl_source_nslots(src) + jl_source_nssavalues(src) + 2;
     jl_value_t **locals = NULL;
     JL_GC_PUSHFRAME(s, locals, nroots);
@@ -748,7 +748,7 @@ jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t 
     unsigned nroots = jl_source_nslots(src) + jl_source_nssavalues(src);
     JL_GC_PUSHFRAME(s, s->locals, nroots);
     jl_array_t *stmts = src->code;
-    assert(jl_typeis(stmts, jl_array_any_type));
+    assert(jl_typetagis(stmts, jl_array_any_type));
     s->src = src;
     s->module = m;
     s->sparam_vals = jl_emptysvec;
