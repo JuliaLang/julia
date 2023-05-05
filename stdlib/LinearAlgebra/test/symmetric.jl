@@ -824,4 +824,11 @@ end
     end
 end
 
+@testset "issue #49533" begin
+    A = Float64[1 1 0 0; 1 2 1 0; 0 1 3 1; 0 0 1 4] ;
+    B = Matrix(Diagonal(Float64[1:4;])) ;
+    @test eigvals(A, B) ≈ eigvals(A, Symmetric(B))
+    @test eigvals(A, B) ≈ eigvals(Symmetric(A), B)
+end
+
 end # module TestSymmetric

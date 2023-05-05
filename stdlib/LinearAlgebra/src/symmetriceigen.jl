@@ -195,3 +195,12 @@ function eigvals!(A::Hermitian{T,S}, B::Hermitian{T,S}; sortby::Union{Function,N
     return vals
 end
 eigvecs(A::HermOrSym) = eigvecs(eigen(A))
+
+# Note: No specilized LAPACK routines for Matrix+Symmetric and Symmetric+Matrix exist. Hence, the calls are forwarded to conventional Matrix eigvals!
+function eigvals!(A::AbstractMatrix{T}, B::HermOrSym{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:Union{BlasReal,BlasComplex},S<:StridedMatrix}
+    return eigvals!(A, Matrix{T}(B); sortby) ;
+end
+
+function eigvals!(A::HermOrSym{T,S}, B::AbstractMatrix{T}; sortby::Union{Function,Nothing}=nothing) where {T<:Union{BlasReal,BlasComplex},S<:StridedMatrix}
+    return eigvals!(Matrix{T}(A), B; sortby) ;
+end
