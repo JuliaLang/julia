@@ -4862,13 +4862,13 @@ end |> only == Type{Int}
 
 # Test that NamedTuple abstract iteration works for PartialStruct/Const
 function nt_splat_const()
-    nt = (; x=1, y = 2)
+    nt = (; x=1, y=2)
     Val{tuple(nt...)[2]}()
 end
-@test @inferred(nt_splat_const) == Val{2}()
+@test @inferred(nt_splat_const()) == Val{2}()
 
-function nt_splat_partial()
-    nt = (; x=1, y = 2)
+function nt_splat_partial(x::Int)
+    nt = (; x, y=2)
     Val{tuple(nt...)[2]}()
 end
-@test @inferred(nt_splat_partial) == Val{2}()
+@test @inferred(nt_splat_partial(42)) == Val{2}()
