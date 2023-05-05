@@ -690,7 +690,7 @@ static int mark_reset_age = 0;
  *
  * <-[(quick)sweep]-
  *                 |
- *     ---->  GC_OLD  <--[(quick)sweep && age>promotion]--
+ *     ---->  GC_OLD  <-----------------------------------
  *     |     |                                           |
  *     |     |  GC_MARKED (in remset)                    |
  *     |     |     ^            |                        |
