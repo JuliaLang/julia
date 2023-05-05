@@ -205,7 +205,7 @@ void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
 {
     JL_TIMING(GC, GC_Stop);
 #ifdef USE_TRACY
-    TracyCZoneCtx ctx = *(JL_TIMING_CURRENT_BLOCK->tracy_ctx);
+    TracyCZoneCtx ctx = JL_TIMING_DEFAULT_BLOCK->tracy_ctx;
     TracyCZoneColor(ctx, 0x696969);
 #endif
     assert(gc_n_threads);
@@ -3310,7 +3310,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         JL_TIMING(GC, GC_Sweep);
 #ifdef USE_TRACY
         if (sweep_full) {
-            TracyCZoneCtx ctx = *(JL_TIMING_CURRENT_BLOCK->tracy_ctx);
+            TracyCZoneCtx ctx = *(JL_TIMING_DEFAULT_BLOCK->tracy_ctx);
             TracyCZoneColor(ctx, 0xFFA500);
         }
 #endif
@@ -3456,7 +3456,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
         return;
     }
 
-    JL_TIMING_SUSPEND(GC, ct);
+    JL_TIMING_SUSPEND_TASK(GC, ct);
     JL_TIMING(GC, GC);
 
     int last_errno = errno;

@@ -55,9 +55,7 @@ extern JL_DLLEXPORT uint32_t jl_timing_print_limit;
 }
 #endif
 
-#ifdef __cplusplus
-#define HAVE_TIMING_SUPPORT
-#elif defined(_COMPILER_CLANG_)
+#if defined(_COMPILER_CLANG_)
 #define HAVE_TIMING_SUPPORT
 #elif defined(_COMPILER_GCC_)
 #define HAVE_TIMING_SUPPORT
@@ -70,7 +68,9 @@ extern JL_DLLEXPORT uint32_t jl_timing_print_limit;
 #if !defined( ENABLE_TIMINGS ) || !defined( HAVE_TIMING_SUPPORT )
 
 #define JL_TIMING(subsystem, event)
-#define JL_TIMING_SUSPEND(subsystem, ct)
+#define JL_TIMING_CREATE_BLOCK(new_block_name, subsystem, event)
+
+#define JL_TIMING_SUSPEND_TASK(subsystem, ct)
 
 #define jl_timing_show(v, b)
 #define jl_timing_show_module(m, b)
@@ -81,6 +81,7 @@ extern JL_DLLEXPORT uint32_t jl_timing_print_limit;
 #define jl_timing_printf(b, f, ...)
 #define jl_timing_puts(b, s)
 #define jl_timing_init_task(t)
+#define jl_timing_block_start(blk)
 #define jl_timing_block_enter_task(ct, ptls, blk)
 #define jl_timing_block_exit_task(ct, ptls) ((jl_timing_block_t *)NULL)
 #define jl_pop_timing_block(blk)
@@ -127,17 +128,14 @@ JL_DLLEXPORT void jl_timing_show_method(jl_method_t *method, jl_timing_block_t *
 JL_DLLEXPORT void jl_timing_show_func_sig(jl_value_t *v, jl_timing_block_t *cur_block);
 JL_DLLEXPORT void jl_timing_printf(jl_timing_block_t *cur_block, const char *format, ...);
 JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
+
 #ifdef __cplusplus
 }
 #endif
 
-#ifdef __cplusplus
-#define JL_TIMING_CURRENT_BLOCK (&__timing_block.block)
-#else
-#define JL_TIMING_CURRENT_BLOCK (&__timing_block)
-#endif
+#define JL_TIMING_DEFAULT_BLOCK (&__timing_block)
 
-#define JL_TIMING_OWNERS         \
+#define JL_TIMING_SUBSYSTEMS     \
         X(ROOT)                  \
         X(GC)                    \
         X(LOWERING)              \
@@ -171,7 +169,7 @@ JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
 
 
 #define JL_TIMING_EVENTS \
-        JL_TIMING_OWNERS \
+        JL_TIMING_SUBSYSTEMS \
         X(GC_Stop) \
         X(GC_Mark) \
         X(GC_Sweep) \
@@ -200,9 +198,9 @@ JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
         X(ImageSize) \
 
 
-enum jl_timing_owners {
+enum jl_timing_subsystems {
 #define X(name) JL_TIMING_ ## name,
-    JL_TIMING_OWNERS
+    JL_TIMING_SUBSYSTEMS
 #undef X
     JL_TIMING_LAST
 };
@@ -232,14 +230,14 @@ enum jl_timing_counter_types {
 
 #ifdef USE_TIMING_COUNTS
 #define _COUNTS_CTX_MEMBER jl_timing_counts_t counts_ctx;
-#define _COUNTS_CTOR(block, owner) _jl_timing_counts_ctor(block, owner)
-#define _COUNTS_DESTROY(block) _jl_timing_counts_destroy(block)
+#define _COUNTS_CTOR(block) _jl_timing_counts_ctor(block)
+#define _COUNTS_DESTROY(block, subsystem) _jl_timing_counts_destroy(block, subsystem)
 #define _COUNTS_START(block, t) _jl_timing_counts_start(block, t)
 #define _COUNTS_STOP(block, t) _jl_timing_counts_stop(block, t)
 #else
 #define _COUNTS_CTX_MEMBER
-#define _COUNTS_CTOR(block, owner)
-#define _COUNTS_DESTROY(block)
+#define _COUNTS_CTOR(block)
+#define _COUNTS_DESTROY(block, subsystem)
 #define _COUNTS_START(block, t)
 #define _COUNTS_STOP(block, t)
 #endif
@@ -249,24 +247,24 @@ enum jl_timing_counter_types {
  **/
 
 #ifdef USE_TRACY
-#define _TRACY_CTX_MEMBER TracyCZoneCtx *tracy_ctx;
-#define _TRACY_CTOR(context, name, enable) TracyCZoneN(__tracy_ctx, name, (enable)); \
-                                           (context) = &__tracy_ctx
-#define _TRACY_DESTROY(ctx) TracyCZoneEnd(*ctx)
+#define _TRACY_CTX_MEMBER TracyCZoneCtx tracy_ctx; const struct ___tracy_source_location_data *tracy_srcloc;
+#define _TRACY_CTOR(block, name) static const struct ___tracy_source_location_data TracyConcat(__tracy_source_location,TracyLine) = { name, __func__,  TracyFile, (uint32_t)TracyLine, 0 }; \
+                                         (block)->tracy_srcloc = &TracyConcat(__tracy_source_location,TracyLine)
+#define _TRACY_START(block) (block)->tracy_ctx = ___tracy_emit_zone_begin( (block)->tracy_srcloc, 1 );
+#define _TRACY_STOP(ctx) TracyCZoneEnd(*ctx)
 #else
 #define _TRACY_CTX_MEMBER
-#define _TRACY_CTOR(context, name, enable)
-#define _TRACY_DESTROY(block)
+#define _TRACY_CTOR(block, name)
+#define _TRACY_START(block)
+#define _TRACY_STOP(block)
 #endif
 
 #ifdef USE_ITTAPI
-#define _ITTAPI_CTX_MEMBER int owner; int event;
-#define _ITTAPI_CTOR(block, owner, event) block->owner = owner; block->event = event
-#define _ITTAPI_START(block) if (_jl_timing_enabled(block->owner)) __itt_event_start(jl_timing_ittapi_events[block->event])
-#define _ITTAPI_STOP(block) if (_jl_timing_enabled(block->owner)) __itt_event_end(jl_timing_ittapi_events[block->event])
+#define _ITTAPI_CTX_MEMBER
+#define _ITTAPI_START(block) __itt_event_start(jl_timing_ittapi_events[block->event])
+#define _ITTAPI_STOP(block) __itt_event_end(jl_timing_ittapi_events[block->event])
 #else
 #define _ITTAPI_CTX_MEMBER
-#define _ITTAPI_CTOR(block, owner, event)
 #define _ITTAPI_START(block)
 #define _ITTAPI_STOP(block)
 #endif
@@ -279,7 +277,6 @@ extern JL_DLLEXPORT uint64_t jl_timing_counts[(int)JL_TIMING_LAST];
 typedef struct _jl_timing_counts_t {
     uint64_t total;
     uint64_t t0;
-    int owner;
 #ifdef JL_DEBUG_BUILD
     uint8_t running;
 #endif
@@ -301,16 +298,15 @@ STATIC_INLINE void _jl_timing_counts_start(jl_timing_counts_t *block, uint64_t t
     block->t0 = t;
 }
 
-STATIC_INLINE void _jl_timing_counts_ctor(jl_timing_counts_t *block, int owner) JL_NOTSAFEPOINT {
-    block->owner = owner;
+STATIC_INLINE void _jl_timing_counts_ctor(jl_timing_counts_t *block) JL_NOTSAFEPOINT {
     block->total = 0;
 #ifdef JL_DEBUG_BUILD
     block->running = 0;
 #endif
 }
 
-STATIC_INLINE void _jl_timing_counts_destroy(jl_timing_counts_t *block) JL_NOTSAFEPOINT {
-    jl_timing_counts[block->owner] += block->total;
+STATIC_INLINE void _jl_timing_counts_destroy(jl_timing_counts_t *block, int subsystem) JL_NOTSAFEPOINT {
+    jl_timing_counts[subsystem] += block->total;
 }
 
 /**
@@ -325,46 +321,62 @@ extern JL_DLLEXPORT __itt_event jl_timing_ittapi_events[(int)JL_TIMING_EVENT_LAS
 
 struct _jl_timing_block_t { // typedef in julia.h
     struct _jl_timing_block_t *prev;
+
     _TRACY_CTX_MEMBER
     _ITTAPI_CTX_MEMBER
     _COUNTS_CTX_MEMBER
+
+    int subsystem;
+    int event;
+    int8_t is_running;
 };
 
-STATIC_INLINE int _jl_timing_enabled(int event) JL_NOTSAFEPOINT {
-    return !!(jl_timing_enable_mask & (1 << event));
+STATIC_INLINE int _jl_timing_enabled(int subsystem) JL_NOTSAFEPOINT {
+    return (jl_timing_enable_mask & (1 << subsystem)) != 0;
 }
 
-STATIC_INLINE void _jl_timing_block_ctor(jl_timing_block_t *block, int owner, int event) JL_NOTSAFEPOINT {
-    uint64_t t = cycleclock(); (void)t;
-    _COUNTS_CTOR(&block->counts_ctx, owner);
-    _COUNTS_START(&block->counts_ctx, t);
-    _ITTAPI_CTOR(block, owner, event);
-    _ITTAPI_START(block);
+STATIC_INLINE void jl_timing_block_start(jl_timing_block_t *block) {
+    assert(!block->is_running);
+    if (!_jl_timing_enabled(block->subsystem)) return;
 
-    jl_task_t *ct = jl_current_task;
-    jl_timing_block_t **prevp = &ct->ptls->timing_stack;
+    uint64_t t = cycleclock(); (void)t;
+    _COUNTS_START(&block->counts_ctx, t);
+    _ITTAPI_START(block);
+    _TRACY_START(block);
+
+    jl_timing_block_t **prevp = &jl_current_task->ptls->timing_stack;
     block->prev = *prevp;
+    block->is_running = 1;
     if (block->prev) {
         _COUNTS_STOP(&block->prev->counts_ctx, t);
     }
     *prevp = block;
 }
 
+STATIC_INLINE void _jl_timing_block_ctor(jl_timing_block_t *block, int subsystem, int event) JL_NOTSAFEPOINT {
+    block->subsystem = subsystem;
+    block->event = event;
+    block->is_running = 0;
+    _COUNTS_CTOR(&block->counts_ctx);
+}
+
 STATIC_INLINE void _jl_timing_block_destroy(jl_timing_block_t *block) JL_NOTSAFEPOINT {
-    uint64_t t = cycleclock(); (void)t;
+    if (block->is_running) {
+        uint64_t t = cycleclock(); (void)t;
+        _ITTAPI_STOP(block);
+        _COUNTS_STOP(&block->counts_ctx, t);
+        _TRACY_STOP(&block->tracy_ctx);
 
-    _ITTAPI_STOP(block);
-    _COUNTS_STOP(&block->counts_ctx, t);
-    _COUNTS_DESTROY(&block->counts_ctx);
-    _TRACY_DESTROY(block->tracy_ctx);
-
-    jl_task_t *ct = jl_current_task;
-    jl_timing_block_t **pcur = &ct->ptls->timing_stack;
-    assert(*pcur == block);
-    *pcur = block->prev;
-    if (block->prev) {
-        _COUNTS_START(&block->prev->counts_ctx, t);
+        jl_task_t *ct = jl_current_task;
+        jl_timing_block_t **pcur = &ct->ptls->timing_stack;
+        assert(*pcur == block);
+        *pcur = block->prev;
+        if (block->prev) {
+            _COUNTS_START(&block->prev->counts_ctx, t);
+        }
     }
+
+    _COUNTS_DESTROY(&block->counts_ctx, block->subsystem);
 }
 
 typedef struct _jl_timing_suspend_t {
@@ -384,51 +396,20 @@ STATIC_INLINE void _jl_timing_suspend_destroy(jl_timing_suspend_t *suspend) JL_N
 #endif
 }
 
-#ifdef __cplusplus
-struct jl_timing_block_cpp_t {
-    jl_timing_block_t block;
-    jl_timing_block_cpp_t(int owner, int event) JL_NOTSAFEPOINT {
-        _jl_timing_block_ctor(&block, owner, event);
-    }
-    ~jl_timing_block_cpp_t() JL_NOTSAFEPOINT {
-        _jl_timing_block_destroy(&block);
-    }
-    jl_timing_block_cpp_t(const jl_timing_block_cpp_t&) = delete;
-    jl_timing_block_cpp_t(const jl_timing_block_cpp_t&&) = delete;
-    jl_timing_block_cpp_t& operator=(const jl_timing_block_cpp_t &) = delete;
-    jl_timing_block_cpp_t& operator=(const jl_timing_block_cpp_t &&) = delete;
-};
-#define JL_TIMING(subsystem, event) jl_timing_block_cpp_t __timing_block(JL_TIMING_ ## subsystem, JL_TIMING_EVENT_ ## event); \
-    _TRACY_CTOR(__timing_block.block.tracy_ctx, #event, (jl_timing_enable_mask >> (JL_TIMING_ ## subsystem)) & 1)
-#else
 #define JL_TIMING(subsystem, event) \
-    __attribute__((cleanup(_jl_timing_block_destroy))) \
-    jl_timing_block_t __timing_block; \
-    _jl_timing_block_ctor(&__timing_block, JL_TIMING_ ## subsystem, JL_TIMING_EVENT_ ## event); \
-    _TRACY_CTOR(__timing_block.tracy_ctx, #event, (jl_timing_enable_mask >> (JL_TIMING_ ## subsystem)) & 1)
-#endif
+    JL_TIMING_CREATE_BLOCK(__timing_block, subsystem, event); \
+    jl_timing_block_start(&__timing_block)
 
-#ifdef __cplusplus
-struct jl_timing_suspend_cpp_t {
-    jl_timing_suspend_t suspend;
-    jl_timing_suspend_cpp_t(const char *subsystem, jl_task_t *ct) JL_NOTSAFEPOINT {
-        _jl_timing_suspend_ctor(&suspend, subsystem, ct);
-    }
-    ~jl_timing_suspend_cpp_t() JL_NOTSAFEPOINT {
-        _jl_timing_suspend_destroy(&suspend);
-    }
-    jl_timing_suspend_cpp_t(const jl_timing_suspend_cpp_t &) = delete;
-    jl_timing_suspend_cpp_t(jl_timing_suspend_cpp_t &&) = delete;
-    jl_timing_suspend_cpp_t& operator=(const jl_timing_suspend_cpp_t &) = delete;
-    jl_timing_suspend_cpp_t& operator=(jl_timing_suspend_cpp_t &&) = delete;
-};
-#define JL_TIMING_SUSPEND(subsystem, ct) jl_timing_suspend_cpp_t __suspend_block(#subsystem, ct)
-#else
-#define JL_TIMING_SUSPEND(subsystem, ct) \
+#define JL_TIMING_CREATE_BLOCK(new_block_name, subsystem, event) \
+    __attribute__((cleanup(_jl_timing_block_destroy))) \
+    jl_timing_block_t new_block_name; \
+    _jl_timing_block_ctor(&new_block_name, JL_TIMING_ ## subsystem, JL_TIMING_EVENT_ ## event); \
+    _TRACY_CTOR(&new_block_name, #event)
+
+#define JL_TIMING_SUSPEND_TASK(subsystem, ct) \
     __attribute__((cleanup(_jl_timing_suspend_destroy))) \
     jl_timing_suspend_t __timing_suspend; \
     _jl_timing_suspend_ctor(&__timing_suspend, #subsystem, ct)
-#endif
 
 // Counting
 #ifdef USE_ITTAPI
