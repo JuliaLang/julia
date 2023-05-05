@@ -125,7 +125,7 @@ include("options.jl")
 
 # define invoke(f, T, args...; kwargs...), without kwargs wrapping
 # to forward to invoke
-function Core.kwcall(kwargs, ::typeof(invoke), f, T, args...)
+function Core.kwcall(kwargs::NamedTuple, ::typeof(invoke), f, T, args...)
     @inline
     # prepend kwargs and f to the invoked from the user
     T = rewrap_unionall(Tuple{Core.Typeof(kwargs), Core.Typeof(f), (unwrap_unionall(T)::DataType).parameters...}, T)
@@ -136,7 +136,7 @@ setfield!(typeof(invoke).name.mt, :max_args, 3, :monotonic) # invoke, f, T, args
 
 # define applicable(f, T, args...; kwargs...), without kwargs wrapping
 # to forward to applicable
-function Core.kwcall(kwargs, ::typeof(applicable), @nospecialize(args...))
+function Core.kwcall(kwargs::NamedTuple, ::typeof(applicable), @nospecialize(args...))
     @inline
     return applicable(Core.kwcall, kwargs, args...)
 end
@@ -559,7 +559,8 @@ function profile_printing_listener()
     try
         while true
             wait(PROFILE_PRINT_COND[])
-            profile = @something(profile, require(Base, :Profile))
+            profile = @something(profile, require(PkgId(UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile")))
+
             invokelatest(profile.peek_report[])
             if Base.get_bool_env("JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", false) === true
                 println(stderr, "Saving heap snapshot...")

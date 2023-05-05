@@ -1,12 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# TODO (#48913) remove this overload to enable interprocedural call inference from irinterp
-function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
-    arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
-    sv::IRInterpretationState, max_methods::Int)
-    return CallMeta(Any, Effects(), NoCallInfo())
-end
-
 function collect_limitations!(@nospecialize(typ), ::IRInterpretationState)
     @assert !isa(typ, LimitedAccuracy) "irinterp is unable to handle heavy recursion"
     return typ
@@ -38,7 +31,7 @@ function concrete_eval_invoke(interp::AbstractInterpreter,
         newirsv = IRInterpretationState(interp, code, mi, argtypes, world)
         if newirsv !== nothing
             newirsv.parent = irsv
-            return _ir_abstract_constant_propagation(interp, newirsv)
+            return ir_abstract_constant_propagation(interp, newirsv)
         end
         return Pair{Any,Bool}(nothing, is_nothrow(effects))
     end
@@ -147,7 +140,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union
         # Handled at the very end
         return false
     elseif isa(inst, PiNode)
-        rt = tmeet(optimizer_lattice(interp), argextype(inst.val, ir), widenconst(inst.typ))
+        rt = tmeet(typeinf_lattice(interp), argextype(inst.val, ir), widenconst(inst.typ))
     elseif inst === nothing
         return false
     elseif isa(inst, GlobalRef)
@@ -155,7 +148,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union
     else
         error("reprocess_instruction!: unhandled instruction found")
     end
-    if rt !== nothing && !⊑(optimizer_lattice(interp), typ, rt)
+    if rt !== nothing && !⊑(typeinf_lattice(interp), typ, rt)
         ir.stmts[idx][:type] = rt
         return true
     end
@@ -194,6 +187,8 @@ end
 default_reprocess(::AbstractInterpreter, ::IRInterpretationState) = nothing
 function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState;
     extra_reprocess::Union{Nothing,BitSet} = default_reprocess(interp, irsv))
+    interp = switch_to_irinterp(interp)
+
     (; ir, tpdum, ssa_refined) = irsv
 
     bbs = ir.cfg.blocks
@@ -321,7 +316,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
             end
             inst = ir.stmts[idx][:inst]::ReturnNode
             rt = argextype(inst.val, ir)
-            ultimate_rt = tmerge(optimizer_lattice(interp), ultimate_rt, rt)
+            ultimate_rt = tmerge(typeinf_lattice(interp), ultimate_rt, rt)
         end
     end
 
@@ -342,16 +337,17 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
     return Pair{Any,Bool}(maybe_singleton_const(ultimate_rt), nothrow)
 end
 
-function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState)
-    irinterp = switch_to_irinterp(interp)
+function ir_abstract_constant_propagation(interp::NativeInterpreter, irsv::IRInterpretationState)
     if __measure_typeinf__[]
         inf_frame = Timings.InferenceFrameInfo(irsv.mi, irsv.world, VarState[], Any[], length(irsv.ir.argtypes))
         Timings.enter_new_timer(inf_frame)
-        ret = _ir_abstract_constant_propagation(irinterp, irsv)
+        ret = _ir_abstract_constant_propagation(interp, irsv)
         append!(inf_frame.slottypes, irsv.ir.argtypes)
         Timings.exit_current_timer(inf_frame)
         return ret
     else
-        return _ir_abstract_constant_propagation(irinterp, irsv)
+        return _ir_abstract_constant_propagation(interp, irsv)
     end
 end
+ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState) =
+    _ir_abstract_constant_propagation(interp, irsv)

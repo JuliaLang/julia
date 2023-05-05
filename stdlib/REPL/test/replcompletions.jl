@@ -1819,7 +1819,7 @@ let s = "var\"complicated "
     @test c == Any["var\"complicated symbol with spaces\""]
 end
 
-let s = "WeirdNames().var\"oh "
+for s in ("WeirdNames().var\"oh ", "WeirdNames().var\"")
     c, r = test_complete_foo(s)
     @test c == Any["var\"oh no!\"", "var\"oh yes!\""]
 end

@@ -783,7 +783,8 @@ JL_DLLEXPORT jl_value_t *jl_fl_parse(const char *text, size_t text_len,
                                      jl_value_t *filename, size_t lineno,
                                      size_t offset, jl_value_t *options)
 {
-    JL_TIMING(PARSING);
+    JL_TIMING(PARSING, PARSING);
+    jl_timing_show_filename(jl_string_data(filename), JL_TIMING_CURRENT_BLOCK);
     if (offset > text_len) {
         jl_value_t *textstr = jl_pchar_to_string(text, text_len);
         JL_GC_PUSH1(&textstr);
@@ -1000,7 +1001,7 @@ int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT
 static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule, jl_module_t **ctx, size_t world, int throw_load_error)
 {
     jl_task_t *ct = jl_current_task;
-    JL_TIMING(MACRO_INVOCATION);
+    JL_TIMING(MACRO_INVOCATION, MACRO_INVOCATION);
     size_t nargs = jl_array_len(args) + 1;
     JL_NARGSV("macrocall", 3); // macro name, location, and module
     jl_value_t **margs;
@@ -1139,7 +1140,7 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
 
 JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule)
 {
-    JL_TIMING(LOWERING);
+    JL_TIMING(LOWERING, LOWERING);
     JL_GC_PUSH1(&expr);
     expr = jl_copy_ast(expr);
     expr = jl_expand_macros(expr, inmodule, NULL, 0, jl_atomic_load_acquire(&jl_world_counter), 0);
@@ -1150,7 +1151,7 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule)
 
 JL_DLLEXPORT jl_value_t *jl_macroexpand1(jl_value_t *expr, jl_module_t *inmodule)
 {
-    JL_TIMING(LOWERING);
+    JL_TIMING(LOWERING, LOWERING);
     JL_GC_PUSH1(&expr);
     expr = jl_copy_ast(expr);
     expr = jl_expand_macros(expr, inmodule, NULL, 1, jl_atomic_load_acquire(&jl_world_counter), 0);
@@ -1176,7 +1177,7 @@ JL_DLLEXPORT jl_value_t *jl_expand_with_loc(jl_value_t *expr, jl_module_t *inmod
 JL_DLLEXPORT jl_value_t *jl_expand_in_world(jl_value_t *expr, jl_module_t *inmodule,
                                             const char *file, int line, size_t world)
 {
-    JL_TIMING(LOWERING);
+    JL_TIMING(LOWERING, LOWERING);
     JL_GC_PUSH1(&expr);
     expr = jl_copy_ast(expr);
     expr = jl_expand_macros(expr, inmodule, NULL, 0, world, 1);
@@ -1189,7 +1190,7 @@ JL_DLLEXPORT jl_value_t *jl_expand_in_world(jl_value_t *expr, jl_module_t *inmod
 JL_DLLEXPORT jl_value_t *jl_expand_with_loc_warn(jl_value_t *expr, jl_module_t *inmodule,
                                                  const char *file, int line)
 {
-    JL_TIMING(LOWERING);
+    JL_TIMING(LOWERING, LOWERING);
     jl_array_t *kwargs = NULL;
     JL_GC_PUSH2(&expr, &kwargs);
     expr = jl_copy_ast(expr);
@@ -1237,7 +1238,7 @@ JL_DLLEXPORT jl_value_t *jl_expand_with_loc_warn(jl_value_t *expr, jl_module_t *
 JL_DLLEXPORT jl_value_t *jl_expand_stmt_with_loc(jl_value_t *expr, jl_module_t *inmodule,
                                                  const char *file, int line)
 {
-    JL_TIMING(LOWERING);
+    JL_TIMING(LOWERING, LOWERING);
     JL_GC_PUSH1(&expr);
     expr = jl_copy_ast(expr);
     expr = jl_expand_macros(expr, inmodule, NULL, 0, ~(size_t)0, 1);

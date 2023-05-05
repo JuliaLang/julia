@@ -1,15 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#############
-# constants #
-#############
-
-const _REF_NAME = Ref.body.name
-
-#########
-# logic #
-#########
-
 # See if the inference result of the current statement's result value might affect
 # the final answer for the method (aside from optimization potential and exceptions).
 # To do that, we need to check both for slot assignment and SSA usage.
@@ -36,23 +26,10 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     ⊑ₚ = ⊑(ipo_lattice(interp))
     if !should_infer_this_call(interp, sv)
         add_remark!(interp, sv, "Skipped call in throw block")
-        nonoverlayed = false
-        if isoverlayed(method_table(interp)) && is_nonoverlayed(sv.ipo_effects)
-            # as we may want to concrete-evaluate this frame in cases when there are
-            # no overlayed calls, try an additional effort now to check if this call
-            # isn't overlayed rather than just handling it conservatively
-            matches = find_matching_methods(typeinf_lattice(interp), arginfo.argtypes, atype, method_table(interp),
-                InferenceParams(interp).max_union_splitting, max_methods)
-            if !isa(matches, FailedMethodMatch)
-                nonoverlayed = matches.nonoverlayed
-            end
-        else
-            nonoverlayed = true
-        end
         # At this point we are guaranteed to end up throwing on this path,
         # which is all that's required for :consistent-cy. Of course, we don't
         # know anything else about this statement.
-        effects = Effects(; consistent=ALWAYS_TRUE, nonoverlayed)
+        effects = Effects(; consistent=ALWAYS_TRUE, nonoverlayed=!isoverlayed(method_table(interp)))
         return CallMeta(Any, effects, NoCallInfo())
     end
 
@@ -2098,7 +2075,7 @@ function most_general_argtypes(closure::PartialOpaque)
     if !isa(argt, DataType) || argt.name !== typename(Tuple)
         argt = Tuple
     end
-    return most_general_argtypes(closure.source, argt, #=withfirst=#false)
+    return Any[argt.parameters...]
 end
 
 # call where the function is any lattice element
@@ -2138,7 +2115,7 @@ function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
     if unwrapva(T) === Bottom
         return Bottom
     elseif isa(T, Type)
-        if isa(T, DataType) && (T::DataType).name === _REF_NAME
+        if isa(T, DataType) && (T::DataType).name === Ref.body.name
             isref = true
             T = T.parameters[1]
             if isreturn && T === Any

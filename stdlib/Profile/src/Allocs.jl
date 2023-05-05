@@ -216,9 +216,4 @@ function stacktrace_memoized(
     return stack
 end
 
-# Precompile once for the package cache.
-@assert precompile(start, ())
-@assert precompile(stop, ())
-@assert precompile(fetch, ())
-
 end

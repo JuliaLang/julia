@@ -147,8 +147,7 @@ end
 empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
 
 # Gets 7 most significant bits from the hash (hsh), first bit is 1
-_shorthash7(hsh::UInt32) = (hsh >> UInt(25))%UInt8 | 0x80
-_shorthash7(hsh::UInt64) = (hsh >> UInt(57))%UInt8 | 0x80
+_shorthash7(hsh::UInt) = (hsh >> (8sizeof(UInt)-7))%UInt8 | 0x80
 
 # hashindex (key, sz) - computes optimal position and shorthash7
 #     idx - optimal position in the hash table
@@ -258,11 +257,12 @@ function empty!(h::Dict{K,V}) where V where K
 end
 
 # get the index where a key is stored, or -1 if not present
-function ht_keyindex(h::Dict{K,V}, key) where V where K
+@assume_effects :terminates_locally function ht_keyindex(h::Dict{K,V}, key) where V where K
     isempty(h) && return -1
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
+    maxprobe < sz || throw(AssertionError()) # This error will never trigger, but is needed for terminates_locally to be valid
     index, sh = hashindex(key, sz)
     keys = h.keys
 
