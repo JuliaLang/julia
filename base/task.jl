@@ -131,7 +131,8 @@ true
 ```
 """
 macro task(ex)
-    :(Task(()->$(esc(ex))))
+    thunk = Base.replace_linenums!(:(()->$(esc(ex))), __source__)
+    :(Task($thunk))
 end
 
 """
@@ -503,15 +504,15 @@ isolating the asynchronous code from changes to the variable's value in the curr
     Interpolating values via `\$` is available as of Julia 1.4.
 """
 macro async(expr)
-    do_async_macro(expr)
+    do_async_macro(expr, __source__)
 end
 
 # generate the code for @async, possibly wrapping the task in something before
 # pushing it to the wait queue.
-function do_async_macro(expr; wrap=identity)
+function do_async_macro(expr, linenums; wrap=identity)
     letargs = Base._lift_one_interp!(expr)
 
-    thunk = esc(:(()->($expr)))
+    thunk = Base.replace_linenums!(:(()->($(esc(expr)))), linenums)
     var = esc(sync_varname)
     quote
         let $(letargs...)
@@ -551,7 +552,7 @@ fetch(t::UnwrapTaskFailedException) = unwrap_task_failed(fetch, t)
 
 # macro for running async code that doesn't throw wrapped exceptions
 macro async_unwrap(expr)
-    do_async_macro(expr, wrap=task->:(Base.UnwrapTaskFailedException($task)))
+    do_async_macro(expr, __source__, wrap=task->:(Base.UnwrapTaskFailedException($task)))
 end
 
 """
