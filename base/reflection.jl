@@ -1525,6 +1525,40 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
     return rts
 end
 
+"""
+    infer_effects(f, types=default_tt(f); world=get_world_counter(), interp=Core.Compiler.NativeInterpreter(world))
+
+Compute the `Effects` of a function `f` with argument types `types`. The `Effects` represents the computational effects of the function call, such as whether it is free of side effects, guaranteed not to throw an exception, guaranteed to terminate, etc. The `world` and `interp` arguments specify the world counter and the native interpreter to use for the analysis.
+
+# Arguments
+- `f`: The function to analyze.
+- `types` (optional): The argument types of the function. Defaults to the default tuple type of `f`.
+- `world` (optional): The world counter to use for the analysis. Defaults to the current world counter.
+- `interp` (optional): The native interpreter to use for the analysis. Defaults to a new `Core.Compiler.NativeInterpreter` with the specified `world`.
+
+# Returns
+- `effects::Effects`: The computed effects of the function call.
+
+# Example
+
+```julia
+function foo(x)
+    y = x * 2
+    return y
+end
+
+effects = Base.infer_effects(foo, Tuple{Int})
+```
+
+This function will return an `Effects` object with information about the computational effects of the function `foo` when called with an `Int` argument. See the documentation for `Effects` for more information on the various effect properties.
+
+# Notes
+The `infer_effects` function should not be used from generated functions; doing so will result in an error. The analysis performed by `infer_effects` is flow-insensitive and conservative, meaning that local effects detected on each statement may overestimate the global effects of the entire function.
+
+# See Also
+- [`Core.Compiler.Effects`](@ref): A type representing the computational effects of a method call.
+- [`Base.@assume_effects`](@ref): A macro for making assumptions about the effects of a function call.
+"""
 function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
                        world = get_world_counter(),
                        interp = Core.Compiler.NativeInterpreter(world))
