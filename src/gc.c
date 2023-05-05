@@ -723,13 +723,6 @@ static int mark_reset_age = 0;
 // When a write barrier triggers, the offending marked object is both queued,
 // so as not to trigger the barrier again, and put in the remset.
 
-
-#define PROMOTE_AGE 1
-// this cannot be increased as is without changing :
-// - sweep_page which is specialized for 1bit age
-// - the size of the age storage in jl_gc_pagemeta_t
-
-
 static int64_t scanned_bytes; // young bytes scanned while marking
 static int64_t perm_scanned_bytes; // old bytes scanned while marking
 int prev_sweep_full = 1;
