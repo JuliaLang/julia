@@ -172,7 +172,8 @@ JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
         JL_TIMING_SUBSYSTEMS \
         X(GC_Stop) \
         X(GC_Mark) \
-        X(GC_Sweep) \
+        X(GC_FullSweep) \
+        X(GC_IncrementalSweep) \
         X(GC_Finalizers) \
         X(CODEGEN_LLVM) \
         X(CODEGEN_Codeinst) \
