@@ -565,7 +565,7 @@ function getindex_continued(s::String, i::Int, u::UInt32)
         #Checks whether i is not at the beginning of a character which is an error
         # or a single invalid byte which returns
         @inbounds isvalid(s, i) && @goto ret
-        Base.string_index_err(s, i)
+        string_index_err(s, i)
     end
     for j in 1:3
         k = i + j
