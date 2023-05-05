@@ -743,17 +743,13 @@ function ldiv!(c::AbstractVecOrMat, A::Bidiagonal, b::AbstractVecOrMat)
     end
     return c
 end
-ldiv!(A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = @inline ldiv!(b, A, b)
-ldiv!(A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = @inline ldiv!(b, A, b)
-ldiv!(c::AbstractVecOrMat, A::Transpose{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) =
-    (_rdiv!(transpose(c), transpose(b), transpose(A)); return c)
-ldiv!(c::AbstractVecOrMat, A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) =
-    (_rdiv!(adjoint(c), adjoint(b), adjoint(A)); return c)
+ldiv!(A::AdjOrTrans{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) = @inline ldiv!(b, A, b)
+ldiv!(c::AbstractVecOrMat, A::AdjOrTrans{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) =
+    (t = adj_or_trans(A); _rdiv!(t(c), t(b), t(A)); return c)
 
 ### Generic promotion methods and fallbacks
 \(A::Bidiagonal, B::AbstractVecOrMat) = ldiv!(_initarray(\, eltype(A), eltype(B), B), A, B)
-\(tA::Transpose{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = copy(tA) \ B
-\(adjA::Adjoint{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = copy(adjA) \ B
+\(xA::AdjOrTrans{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = copy(xA) \ B
 
 ### Triangular specializations
 function \(B::Bidiagonal, U::UpperTriangular)
@@ -837,12 +833,9 @@ function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Bidiagonal)
     C
 end
 rdiv!(A::AbstractMatrix, B::Bidiagonal) = @inline _rdiv!(A, A, B)
-rdiv!(A::AbstractMatrix, B::Adjoint{<:Any,<:Bidiagonal}) = @inline _rdiv!(A, A, B)
-rdiv!(A::AbstractMatrix, B::Transpose{<:Any,<:Bidiagonal}) = @inline _rdiv!(A, A, B)
-_rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Adjoint{<:Any,<:Bidiagonal}) =
-    (ldiv!(adjoint(C), adjoint(B), adjoint(A)); return C)
-_rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Transpose{<:Any,<:Bidiagonal}) =
-    (ldiv!(transpose(C), transpose(B), transpose(A)); return C)
+rdiv!(A::AbstractMatrix, B::AdjOrTrans{<:Any,<:Bidiagonal}) = @inline _rdiv!(A, A, B)
+_rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::AdjOrTrans{<:Any,<:Bidiagonal}) =
+    (t = adj_or_trans(B); ldiv!(t(C), t(B), t(A)); return C)
 
 /(A::AbstractMatrix, B::Bidiagonal) = _rdiv!(_initarray(/, eltype(A), eltype(B), A), A, B)
 
