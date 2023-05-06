@@ -326,6 +326,14 @@ end
 end
 
 @testset "nextpow/prevpow" begin
+    fs = (prevpow, nextpow)
+    types = (Int8, BigInt, BigFloat)
+    for f ∈ fs, P ∈ types, R ∈ types, p ∈ 1:20, r ∈ 2:5
+        q = P(p)
+        n = R(r)
+        @test f(r, p) == f(n, q)
+    end
+
     @test nextpow(2, 3) == 4
     @test nextpow(2, 4) == 4
     @test nextpow(2, 7) == 8
@@ -339,7 +347,14 @@ end
     @test prevpow(10, 101.0) === 100
     @test prevpow(10.0, 101) === 100.0
     @test_throws DomainError prevpow(0, 3)
-    @test_throws DomainError prevpow(0, 3)
+    @test_throws DomainError prevpow(3, 0)
+
+    # "argument is beyond the range of type of the base"
+    @test_throws DomainError prevpow(Int8(3), 243)
+    @test_throws DomainError nextpow(Int8(3), 243)
+
+    # "result is beyond the range of type of the base"
+    @test_throws OverflowError nextpow(Int8(3), 82)
 end
 
 @testset "ndigits/ndigits0z" begin
