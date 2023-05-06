@@ -233,21 +233,10 @@ function method_instance(f, types=Base.default_tt(f))
     m = which(f, types)
     inst = nothing
     tt = Base.signature_type(f, types)
-    specs = m.specializations
-    if isa(specs, Core.SimpleVector)
-        for i = 1:length(specs)
-            mi = specs[i]
-            if mi isa Core.MethodInstance
-                if mi.specTypes <: tt && tt <: mi.specTypes
-                    inst = mi
-                    break
-                end
-            end
-        end
-    else
-        mi = specs::Core.MethodInstance
-        if mi.specTypes === tt
+    for mi in Base.specializations(m)
+        if mi.specTypes <: tt && tt <: mi.specTypes
             inst = mi
+            break
         end
     end
     return inst

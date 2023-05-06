@@ -687,7 +687,7 @@ end
 function getindex(compact::IncrementalCompact, ssa::OldSSAValue)
     id = ssa.id
     if id < compact.idx
-        new_idx = compact.ssa_rename[id]
+        new_idx = compact.ssa_rename[id]::Int
         return compact.result[new_idx]
     elseif id <= length(compact.ir.stmts)
         return compact.ir.stmts[id]
@@ -721,7 +721,7 @@ end
 function block_for_inst(compact::IncrementalCompact, idx::OldSSAValue)
     id = idx.id
     if id < compact.idx # if ssa within result
-        id = compact.ssa_rename[id]
+        id = compact.ssa_rename[id]::Int
         return block_for_inst(compact, SSAValue(id))
     else
         return block_for_inst(compact.ir.cfg, id)
@@ -962,7 +962,7 @@ end
 function setindex!(compact::IncrementalCompact, @nospecialize(v), idx::OldSSAValue)
     id = idx.id
     if id < compact.idx
-        new_idx = compact.ssa_rename[id]
+        new_idx = compact.ssa_rename[id]::Int
         (compact.result[new_idx][:inst] === v) && return compact
         kill_current_uses!(compact, compact.result[new_idx][:inst])
         compact.result[new_idx][:inst] = v

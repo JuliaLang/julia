@@ -69,6 +69,7 @@ The name-value pairs can also be provided by splatting a named tuple or any
 iterator that yields two-value collections holding each a symbol as first
 value:
 
+```jldoctest
 julia> keys = (:a, :b, :c); values = (1, 2, 3);
 
 julia> NamedTuple{keys}(values)
@@ -123,7 +124,10 @@ end
 function NamedTuple{names, T}(nt::NamedTuple) where {names, T <: Tuple}
     if @generated
         Expr(:new, :(NamedTuple{names, T}),
-             Any[ :(convert(fieldtype(T, $n), getfield(nt, $(QuoteNode(names[n]))))) for n in 1:length(names) ]...)
+             Any[ :(let Tn = fieldtype(T, $n),
+                      ntn = getfield(nt, $(QuoteNode(names[n])))
+                      ntn isa Tn ? ntn : convert(Tn, ntn)
+                  end) for n in 1:length(names) ]...)
     else
         NamedTuple{names, T}(map(Fix1(getfield, nt), names))
     end
@@ -194,7 +198,7 @@ end
 
 if nameof(@__MODULE__) === :Base
     Tuple(nt::NamedTuple) = (nt...,)
-    (::Type{T})(nt::NamedTuple) where {T <: Tuple} = convert(T, Tuple(nt))
+    (::Type{T})(nt::NamedTuple) where {T <: Tuple} = (t = Tuple(nt); t isa T ? t : convert(T, t)::T)
 end
 
 function show(io::IO, t::NamedTuple)

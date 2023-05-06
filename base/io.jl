@@ -219,6 +219,8 @@ julia> read(io, String)
 ```
 """
 read(stream, t)
+read(stream, ::Type{Union{}}, slurp...; kwargs...) = error("cannot read a value of type Union{}")
+
 
 """
     write(io::IO, x)

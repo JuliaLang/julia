@@ -74,7 +74,7 @@ $(build_private_libdir)/sys.ji: $(build_private_libdir)/corecompiler.ji $(JULIAH
 	@mv $@.tmp $@
 
 define sysimg_builder
-$$(build_private_libdir)/sys$1-o.a $$(build_private_libdir)/sys$1-bc.a : $$(build_private_libdir)/sys$1-%.a : $$(build_private_libdir)/sys.ji
+$$(build_private_libdir)/sys$1-o.a $$(build_private_libdir)/sys$1-bc.a : $$(build_private_libdir)/sys$1-%.a : $$(build_private_libdir)/sys.ji $$(JULIAHOME)/contrib/generate_precompile.jl
 	@$$(call PRINT_JULIA, cd $$(JULIAHOME)/base && \
 	if ! JULIA_BINDIR=$$(call cygpath_w,$(build_bindir)) WINEPATH="$$(call cygpath_w,$$(build_bindir));$$$$WINEPATH" \
 			JULIA_NUM_THREADS=1 \

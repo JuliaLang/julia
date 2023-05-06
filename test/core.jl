@@ -1694,7 +1694,9 @@ end
 
 # issue #3221
 let x = fill(nothing, 1)
-    @test_throws MethodError x[1] = 1
+    @test_throws ErrorException("cannot convert a value to nothing for assignment") x[1] = 1
+    x = Vector{Union{}}(undef, 1)
+    @test_throws ArgumentError("cannot convert a value to Union{} for assignment") x[1] = 1
 end
 
 # issue #3220
@@ -4916,7 +4918,7 @@ struct f47209
     x::Int
     f47209()::Nothing = new(1)
 end
-@test_throws MethodError f47209()
+@test_throws ErrorException("cannot convert a value to nothing for assignment") f47209()
 
 # issue #12096
 let a = Val{Val{TypeVar(:_, Int)}},
@@ -7327,11 +7329,11 @@ struct sparse_t31649
 end
 Base.convert(::Any, v::sparse_t31649) = copy(v.val)
 let spvec = sparse_t31649(zeros(Float64,5), Vector{Int64}())
-    @test_throws MethodError repr(spvec)
+    @test_throws MethodError convert(Any, spvec)
     # Try manually putting the problematic method into the cache (in
     # the original issue compiling the showerror method caused this to happen)
     @test convert(Any, nothing) === nothing
-    @test_throws MethodError repr(spvec)
+    @test_throws MethodError convert(Any, spvec)
 end
 
 # Issue #31062 - Accidental recursion in jl_has_concrete_subtype
@@ -7371,16 +7373,20 @@ end
 let code = code_lowered(FieldConvert)[1].code
     @test code[1] == Expr(:call, GlobalRef(Core, :apply_type), GlobalRef(@__MODULE__, :FieldConvert), GlobalRef(@__MODULE__, :FieldTypeA), Expr(:static_parameter, 1))
     @test code[2] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 1)
-    @test code[3] == Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(2), Core.SlotNumber(2))
-    @test code[4] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 2)
-    @test code[5] == Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(4), Core.SlotNumber(3))
-    @test code[6] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 4)
-    @test code[7] == Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(6), Core.SlotNumber(5))
-    @test code[8] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 5)
-    @test code[9] == Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(8), Core.SlotNumber(6))
-    @test code[10] == Expr(:new, Core.SSAValue(1), Core.SSAValue(3), Core.SSAValue(5), Core.SlotNumber(4), Core.SSAValue(7), Core.SSAValue(9))
-    @test code[11] == Core.ReturnNode(Core.SSAValue(10))
- end
+    @test code[7] == Expr(:(=), Core.SlotNumber(10), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(2), Core.SlotNumber(10)))
+    @test code[8] == Core.SlotNumber(10)
+    @test code[9] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 2)
+    @test code[14] == Expr(:(=), Core.SlotNumber(9), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(9), Core.SlotNumber(9)))
+    @test code[15] == Core.SlotNumber(9)
+    @test code[16] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 4)
+    @test code[21] == Expr(:(=), Core.SlotNumber(8), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(16), Core.SlotNumber(8)))
+    @test code[22] == Core.SlotNumber(8)
+    @test code[23] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 5)
+    @test code[28] == Expr(:(=), Core.SlotNumber(7), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(23), Core.SlotNumber(7)))
+    @test code[29] == Core.SlotNumber(7)
+    @test code[30] == Expr(:new, Core.SSAValue(1), Core.SSAValue(8), Core.SSAValue(15), Core.SlotNumber(4), Core.SSAValue(22), Core.SSAValue(29))
+    @test code[31] == Core.ReturnNode(Core.SSAValue(30))
+end
 
 # Issue #32820
 function f32820(refs)
@@ -7977,3 +7983,26 @@ end
 
 f48950(::Union{Int,d}, ::Union{c,Nothing}...) where {c,d} = 1
 @test f48950(1, 1, 1) == 1
+
+# Module as tparam in unionall
+struct ModTParamUnionAll{A, B}; end
+@test isa(objectid(ModTParamUnionAll{Base}), UInt)
+
+# effects for objectid
+for T in (Int, String, Symbol, Module)
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (T,)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (T,)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Some{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Some{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Some{Some{T}},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Some{Some{T}},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Tuple{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{T,T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Tuple{T,T},)))
+end
+@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Ref{Int},)))
+@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Tuple{Ref{Int}},)))
+# objectid for datatypes is inconsistant for types that have unbound type parameters.
+@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (DataType,)))
+@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Tuple{Vector{Int}},)))

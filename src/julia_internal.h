@@ -301,11 +301,13 @@ static inline void memmove_refs(void **dstp, void *const *srcp, size_t n) JL_NOT
 #define GC_MARKED 1 // reachable and young
 #define GC_OLD    2 // if it is reachable it will be marked as old
 #define GC_OLD_MARKED (GC_OLD | GC_MARKED) // reachable and old
+#define GC_IN_IMAGE 4
 
 // useful constants
 extern jl_methtable_t *jl_type_type_mt JL_GLOBALLY_ROOTED;
 extern jl_methtable_t *jl_nonfunction_mt JL_GLOBALLY_ROOTED;
 extern jl_methtable_t *jl_kwcall_mt JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_method_t *jl_opaque_closure_method JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT _Atomic(size_t) jl_world_counter;
 
 typedef void (*tracer_cb)(jl_value_t *tracee);
@@ -315,6 +317,8 @@ void print_func_loc(JL_STREAM *s, jl_method_t *m);
 extern jl_array_t *_jl_debug_method_invalidation JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT extern arraylist_t jl_linkage_blobs; // external linkage: sysimg/pkgimages
 JL_DLLEXPORT extern arraylist_t jl_image_relocs;  // external linkage: sysimg/pkgimages
+extern arraylist_t eytzinger_image_tree;
+extern arraylist_t eytzinger_idxs;
 
 extern JL_DLLEXPORT size_t jl_page_size;
 extern jl_function_t *jl_typeinf_func JL_GLOBALLY_ROOTED;
@@ -582,6 +586,9 @@ void jl_gc_reset_alloc_count(void);
 uint32_t jl_get_gs_ctr(void);
 void jl_set_gs_ctr(uint32_t ctr);
 
+typedef struct _jl_static_show_config_t { uint8_t quiet; } jl_static_show_config_t;
+size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_config_t ctx) JL_NOTSAFEPOINT;
+
 STATIC_INLINE jl_value_t *undefref_check(jl_datatype_t *dt, jl_value_t *v) JL_NOTSAFEPOINT
 {
      if (dt->layout->first_ptr >= 0) {
@@ -611,8 +618,10 @@ typedef union {
 
 JL_DLLEXPORT jl_code_info_t *jl_type_infer(jl_method_instance_t *li, size_t world, int force);
 JL_DLLEXPORT jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *meth JL_PROPAGATES_ROOT, size_t world);
+JL_DLLEXPORT void *jl_compile_oc_wrapper(jl_code_instance_t *ci);
 jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world);
 void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec);
+void jl_generate_fptr_for_oc_wrapper(jl_code_instance_t *unspec);
 JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
         jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_value_t *rettype,
         size_t min_world, size_t max_world);
@@ -693,6 +702,7 @@ JL_DLLEXPORT int jl_type_morespecific_no_subtype(jl_value_t *a, jl_value_t *b);
 jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n);
 JL_DLLEXPORT jl_value_t *jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals);
 jl_value_t *jl_substitute_var(jl_value_t *t, jl_tvar_t *var, jl_value_t *val);
+jl_unionall_t *jl_rename_unionall(jl_unionall_t *u);
 JL_DLLEXPORT jl_value_t *jl_unwrap_unionall(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u);
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall_(jl_value_t *t, jl_value_t *u);
@@ -954,28 +964,9 @@ STATIC_INLINE size_t n_linkage_blobs(void) JL_NOTSAFEPOINT
     return jl_image_relocs.len;
 }
 
-// TODO: Makes this a binary search
-STATIC_INLINE size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT {
-    size_t i, nblobs = n_linkage_blobs();
-    assert(jl_linkage_blobs.len == 2*nblobs);
-    for (i = 0; i < nblobs; i++) {
-        uintptr_t left = (uintptr_t)jl_linkage_blobs.items[2*i];
-        uintptr_t right = (uintptr_t)jl_linkage_blobs.items[2*i + 1];
-        if (left < (uintptr_t)v && (uintptr_t)v <= right) {
-            // the last object may be a singleton (v is shifted by a type tag, so we use exclusive bounds here)
-            break;
-        }
-    }
-    return i;
-}
+size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
 
-STATIC_INLINE uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT {
-    size_t blob = external_blob_index(v);
-    if (blob == n_linkage_blobs()) {
-        return 0;
-    }
-    return 1;
-}
+uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
 
 typedef struct {
     LLVMOrcThreadSafeModuleRef TSM;
@@ -1010,7 +1001,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types,
 jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_svec_t *sp);
 JL_DLLEXPORT jl_value_t *jl_rettype_inferred(jl_method_instance_t *li JL_PROPAGATES_ROOT, size_t min_world, size_t max_world);
 JL_DLLEXPORT jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world);
-JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_value_t *type, size_t world);
+JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt JL_PROPAGATES_ROOT, jl_value_t *type, size_t world);
 JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(
     jl_method_t *m JL_PROPAGATES_ROOT, jl_value_t *type, jl_svec_t *sparams);
 jl_method_instance_t *jl_specializations_get_or_insert(jl_method_instance_t *mi_ins);
@@ -1271,11 +1262,11 @@ JL_DLLEXPORT uint64_t jl_rand(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_srand(uint64_t) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_init_rand(void);
 
+JL_DLLEXPORT extern void *jl_exe_handle;
+JL_DLLEXPORT extern void *jl_libjulia_handle;
 JL_DLLEXPORT extern void *jl_libjulia_internal_handle;
 JL_DLLEXPORT extern void *jl_RTLD_DEFAULT_handle;
 #if defined(_OS_WINDOWS_)
-JL_DLLEXPORT extern void *jl_exe_handle;
-JL_DLLEXPORT extern void *jl_libjulia_handle;
 JL_DLLEXPORT extern const char *jl_crtdll_basename;
 extern void *jl_ntdll_handle;
 extern void *jl_kernel32_handle;
@@ -1285,6 +1276,7 @@ void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT;
 #endif
 
 JL_DLLEXPORT void *jl_get_library_(const char *f_lib, int throw_err);
+void *jl_find_dynamic_library_by_addr(void *symbol);
 #define jl_get_library(f_lib) jl_get_library_(f_lib, 1)
 JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *hnd);
 JL_DLLEXPORT void *jl_lazy_load_and_lookup(jl_value_t *lib_val, const char *f_name);
@@ -1294,11 +1286,11 @@ JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(
     jl_unionall_t *env, jl_value_t **vals);
 
 
-// Windows only
+// Special filenames used to refer to internal julia libraries
 #define JL_EXE_LIBNAME                  ((const char*)1)
 #define JL_LIBJULIA_DL_LIBNAME          ((const char*)2)
 #define JL_LIBJULIA_INTERNAL_DL_LIBNAME ((const char*)3)
-JL_DLLEXPORT const char *jl_dlfind_win32(const char *name);
+JL_DLLEXPORT const char *jl_dlfind(const char *name);
 
 // libuv wrappers:
 JL_DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path);
@@ -1476,12 +1468,16 @@ struct typemap_intersection_env {
     jl_typemap_intersection_visitor_fptr const fptr; // fptr to call on a match
     jl_value_t *const type; // type to match
     jl_value_t *const va; // the tparam0 for the vararg in type, if applicable (or NULL)
+    size_t search_slurp;
     // output values
+    size_t min_valid;
+    size_t max_valid;
     jl_value_t *ti; // intersection type
     jl_svec_t *env; // intersection env (initialize to null to perform intersection without an environment)
     int issubty;    // if `a <: b` is true in `intersect(a,b)`
 };
 int jl_typemap_intersection_visitor(jl_typemap_t *a, int offs, struct typemap_intersection_env *closure);
+void typemap_slurp_search(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure);
 
 // -- simplevector.c -- //
 
@@ -1489,6 +1485,12 @@ int jl_typemap_intersection_visitor(jl_typemap_t *a, int offs, struct typemap_in
 JL_DLLEXPORT size_t (jl_svec_len)(jl_svec_t *t) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_svec_ref(jl_svec_t *t JL_PROPAGATES_ROOT, ssize_t i);
 
+// check whether the specified number of arguments is compatible with the
+// specified number of parameters of the tuple type
+JL_DLLEXPORT int jl_tupletype_length_compat(jl_value_t *v, size_t nargs) JL_NOTSAFEPOINT;
+
+JL_DLLEXPORT jl_value_t *jl_argtype_with_function(jl_value_t *f, jl_value_t *types0);
+JL_DLLEXPORT jl_value_t *jl_argtype_with_function_type(jl_value_t *ft JL_MAYBE_UNROOTED, jl_value_t *types0);
 
 JL_DLLEXPORT unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *field_type);
 

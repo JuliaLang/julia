@@ -258,8 +258,6 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
     *ci_out = codeinst;
 }
 
-void replaceUsesWithLoad(Function &F, function_ref<GlobalVariable *(Instruction &I)> should_replace, MDNode *tbaa_const);
-
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup, and can
 // also be used be extern consumers like GPUCompiler.jl to obtain a module containing
@@ -270,6 +268,7 @@ void replaceUsesWithLoad(Function &F, function_ref<GlobalVariable *(Instruction 
 extern "C" JL_DLLEXPORT
 void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode, int _external_linkage, size_t _world)
 {
+    JL_TIMING(NATIVE_AOT, NATIVE_Create);
     ++CreateNativeCalls;
     CreateNativeMax.updateMax(jl_array_len(methods));
     if (cgparams == NULL)
@@ -495,6 +494,7 @@ static void reportWriterError(const ErrorInfoBase &E)
     jl_safe_printf("ERROR: failed to emit output file %s\n", err.c_str());
 }
 
+#if JULIA_FLOAT16_ABI == 1
 static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionType *FT)
 {
     Function *target = M.getFunction(alias);
@@ -511,7 +511,7 @@ static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionT
     auto val = builder.CreateCall(target, CallArgs);
     builder.CreateRet(val);
 }
-
+#endif
 void multiversioning_preannotate(Module &M);
 
 // See src/processor.h for documentation about this table. Corresponds to jl_image_shard_t.
@@ -944,8 +944,10 @@ struct ShardTimers {
     }
 };
 
+void emitFloat16Wrappers(Module &M, bool external);
+
 // Perform the actual optimization and emission of the output files
-static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *outputs, StringRef *names,
+static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *outputs, const std::string *names,
                     NewArchiveMember *unopt, NewArchiveMember *opt, NewArchiveMember *obj, NewArchiveMember *asm_,
                     ShardTimers &timers, unsigned shardidx) {
     auto TM = std::unique_ptr<TargetMachine>(
@@ -965,6 +967,7 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
         AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
         ModulePassManager MPM;
         MPM.addPass(BitcodeWriterPass(OS));
+        MPM.run(M, AM.MAM);
         *unopt = NewArchiveMember(MemoryBufferRef(*outputs++, *names++));
         timers.unopt.stopTimer();
     }
@@ -1003,7 +1006,9 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
         }
     }
     // no need to inject aliases if we have no functions
+
     if (inject_aliases) {
+#if JULIA_FLOAT16_ABI == 1
         // We would like to emit an alias or an weakref alias to redirect these symbols
         // but LLVM doesn't let us emit a GlobalAlias to a declaration...
         // So for now we inject a definition of these functions that calls our runtime
@@ -1018,8 +1023,10 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
                 FunctionType::get(Type::getHalfTy(M.getContext()), { Type::getFloatTy(M.getContext()) }, false));
         injectCRTAlias(M, "__truncdfhf2", "julia__truncdfhf2",
                 FunctionType::get(Type::getHalfTy(M.getContext()), { Type::getDoubleTy(M.getContext()) }, false));
+#else
+        emitFloat16Wrappers(M, false);
+#endif
     }
-
     timers.optimize.stopTimer();
 
     if (opt) {
@@ -1029,6 +1036,7 @@ static void add_output_impl(Module &M, TargetMachine &SourceTM, std::string *out
         AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
         ModulePassManager MPM;
         MPM.addPass(BitcodeWriterPass(OS));
+        MPM.run(M, AM.MAM);
         *opt = NewArchiveMember(MemoryBufferRef(*outputs++, *names++));
         timers.opt.stopTimer();
     }
@@ -1224,6 +1232,8 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
     unsigned outcount = unopt_out + opt_out + obj_out + asm_out;
     assert(outcount);
     outputs.resize(outputs.size() + outcount * threads * 2);
+    auto names_start = outputs.data() + outputs.size() - outcount * threads * 2;
+    auto outputs_start = names_start + outcount * threads;
     unopt.resize(unopt.size() + unopt_out * threads);
     opt.resize(opt.size() + opt_out * threads);
     obj.resize(obj.size() + obj_out * threads);
@@ -1264,7 +1274,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
         }
     }
     for (unsigned i = 0; i < threads; ++i) {
-        auto start = &outputs[outputs.size() - outcount * threads * 2 + i * outcount];
+        auto start = names_start + i * outcount;
         auto istr = std::to_string(i);
         if (unopt_out)
             *start++ = (name + "_unopt#" + istr + ".bc").str();
@@ -1278,10 +1288,7 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
     // Single-threaded case
     if (threads == 1) {
         output_timer.startTimer();
-        SmallVector<StringRef, 4> names;
-        for (unsigned i = outputs.size() - outcount * 2; i < outputs.size() - outcount; ++i)
-            names.push_back(outputs[i]);
-        add_output_impl(M, TM, outputs.data() + outputs.size() - outcount, names.data(),
+        add_output_impl(M, TM, outputs_start, names_start,
                         unopt_out ? unopt.data() + unopt.size() - 1 : nullptr,
                         opt_out ? opt.data() + opt.size() - 1 : nullptr,
                         obj_out ? obj.data() + obj.size() - 1 : nullptr,
@@ -1318,7 +1325,6 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
 
     output_timer.startTimer();
 
-    auto outstart = outputs.data() + outputs.size() - outcount * threads;
     auto unoptstart = unopt_out ? unopt.data() + unopt.size() - threads : nullptr;
     auto optstart = opt_out ? opt.data() + opt.size() - threads : nullptr;
     auto objstart = obj_out ? obj.data() + obj.size() - threads : nullptr;
@@ -1341,17 +1347,18 @@ static void add_output(Module &M, TargetMachine &TM, std::vector<std::string> &o
             timers[i].construct.startTimer();
             construct_vars(*M, partitions[i]);
             M->setModuleFlag(Module::Error, "julia.mv.suffix", MDString::get(M->getContext(), "_" + std::to_string(i)));
+            // The DICompileUnit file is not used for anything, but ld64 requires it be a unique string per object file
+            // or it may skip emitting debug info for that file. Here set it to ./julia#N
+            DIFile *topfile = DIFile::get(M->getContext(), "julia#" + std::to_string(i), ".");
+            for (DICompileUnit *CU : M->debug_compile_units())
+                CU->replaceOperandWith(0, topfile);
             timers[i].construct.stopTimer();
 
             timers[i].deletion.startTimer();
             dropUnusedDeclarations(*M);
             timers[i].deletion.stopTimer();
 
-            SmallVector<StringRef, 4> names(outcount);
-            for (unsigned j = 0; j < outcount; ++j)
-                names[j] = outputs[i * outcount + j];
-
-            add_output_impl(*M, TM, outstart + i * outcount, names.data(),
+            add_output_impl(*M, TM, outputs_start + i * outcount, names_start + i * outcount,
                             unoptstart ? unoptstart + i : nullptr,
                             optstart ? optstart + i : nullptr,
                             objstart ? objstart + i : nullptr,
@@ -1449,7 +1456,7 @@ void jl_dump_native_impl(void *native_code,
         const char *asm_fname,
         const char *sysimg_data, size_t sysimg_len, ios_t *s)
 {
-    JL_TIMING(NATIVE_DUMP);
+    JL_TIMING(NATIVE_AOT, NATIVE_Dump);
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
     if (!bc_fname && !unopt_bc_fname && !obj_fname && !asm_fname) {
         LLVM_DEBUG(dbgs() << "No output requested, skipping native code dump?\n");
@@ -1502,11 +1509,7 @@ void jl_dump_native_impl(void *native_code,
     dataM->setTargetTriple(SourceTM->getTargetTriple().str());
     dataM->setDataLayout(jl_create_datalayout(*SourceTM));
 
-    Type *T_size;
-    if (sizeof(size_t) == 8)
-        T_size = Type::getInt64Ty(Context);
-    else
-        T_size = Type::getInt32Ty(Context);
+    Type *T_size = dataM->getDataLayout().getIntPtrType(Context);
     Type *T_psize = T_size->getPointerTo();
 
     bool imaging_mode = imaging_default() || jl_options.outputo;
@@ -1578,7 +1581,7 @@ void jl_dump_native_impl(void *native_code,
     // DO NOT DELETE, this is necessary to ensure memorybuffers
     // have a stable backing store for both their object files and
     // their names
-    outputs.reserve(threads * (!!unopt_bc_fname + !!bc_fname + !!obj_fname + !!asm_fname) * 2 + 2);
+    outputs.reserve((threads + 1) * (!!unopt_bc_fname + !!bc_fname + !!obj_fname + !!asm_fname) * 2);
 
     auto compile = [&](Module &M, StringRef name, unsigned threads) { add_output(
             M, *SourceTM, outputs, name,
@@ -1772,6 +1775,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
                 PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
             }
         }
+#if JL_LLVM_VERSION < 150000
 #if defined(_COMPILER_ASAN_ENABLED_)
         PM->add(createAddressSanitizerFunctionPass());
 #endif
@@ -1780,6 +1784,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 #endif
 #if defined(_COMPILER_TSAN_ENABLED_)
         PM->add(createThreadSanitizerLegacyPassPass());
+#endif
 #endif
         return;
     }
@@ -1931,6 +1936,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     }
     PM->add(createCombineMulAddPass());
     PM->add(createDivRemPairsPass());
+#if JL_LLVM_VERSION < 150000
 #if defined(_COMPILER_ASAN_ENABLED_)
     PM->add(createAddressSanitizerFunctionPass());
 #endif
@@ -1939,6 +1945,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 #endif
 #if defined(_COMPILER_TSAN_ENABLED_)
     PM->add(createThreadSanitizerLegacyPassPass());
+#endif
 #endif
 }
 

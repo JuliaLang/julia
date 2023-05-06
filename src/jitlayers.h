@@ -44,7 +44,12 @@
 // for Mac/aarch64.
 // #define JL_FORCE_JITLINK
 
-#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_) || defined(JL_FORCE_JITLINK)
+#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
+# define HAS_SANITIZER
+#endif
+// The sanitizers don't play well with our memory manager
+
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_) || defined(JL_FORCE_JITLINK) || JL_LLVM_VERSION >= 150000 && defined(HAS_SANITIZER)
 # if JL_LLVM_VERSION < 130000
 #  pragma message("On aarch64-darwin, LLVM version >= 13 is required for JITLink; fallback suffers from occasional segfaults")
 # endif
@@ -73,7 +78,7 @@ GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M) JL_NOTSAFEPOINT;
 DataLayout jl_create_datalayout(TargetMachine &TM) JL_NOTSAFEPOINT;
 
 static inline bool imaging_default() JL_NOTSAFEPOINT {
-    return jl_options.image_codegen || (jl_generating_output() && jl_options.use_pkgimages);
+    return jl_options.image_codegen || (jl_generating_output() && (!jl_options.incremental || jl_options.use_pkgimages));
 }
 
 struct OptimizationOptions {
@@ -91,6 +96,14 @@ struct OptimizationOptions {
     }
 };
 
+// LLVM's new pass manager is scheduled to replace the legacy pass manager
+// for middle-end IR optimizations. However, we have not qualified the new
+// pass manager on our optimization pipeline yet, so this remains an optional
+// define
+#if defined(HAS_SANITIZER) && JL_LLVM_VERSION >= 150000
+#define JL_USE_NEW_PM
+#endif
+
 struct NewPM {
     std::unique_ptr<TargetMachine> TM;
     StandardInstrumentations SI;
@@ -103,6 +116,8 @@ struct NewPM {
     ~NewPM() JL_NOTSAFEPOINT;
 
     void run(Module &M) JL_NOTSAFEPOINT;
+
+    void printTimers() JL_NOTSAFEPOINT;
 };
 
 struct AnalysisManagers {
@@ -163,7 +178,8 @@ typedef struct _jl_llvm_functions_t {
 } jl_llvm_functions_t;
 
 struct jl_returninfo_t {
-    llvm::Function *decl;
+    llvm::FunctionCallee decl;
+    llvm::AttributeList attrs;
     enum CallingConv {
         Boxed = 0,
         Register,
@@ -420,7 +436,7 @@ public:
         std::unique_ptr<WNMutex> mutex;
     };
     struct PipelineT {
-        PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel);
+        PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel, std::vector<std::function<void()>> &PrintLLVMTimers);
         CompileLayerT CompileLayer;
         OptimizeLayerT OptimizeLayer;
     };
@@ -490,6 +506,7 @@ public:
     TargetIRAnalysis getTargetIRAnalysis() const JL_NOTSAFEPOINT;
 
     size_t getTotalBytes() const JL_NOTSAFEPOINT;
+    void printTimers() JL_NOTSAFEPOINT;
 
     jl_locked_stream &get_dump_emitted_mi_name_stream() JL_NOTSAFEPOINT {
         return dump_emitted_mi_name_stream;
@@ -521,6 +538,8 @@ private:
     jl_locked_stream dump_emitted_mi_name_stream;
     jl_locked_stream dump_compiles_stream;
     jl_locked_stream dump_llvm_opt_stream;
+
+    std::vector<std::function<void()>> PrintLLVMTimers;
 
     ResourcePool<orc::ThreadSafeContext, 0, std::queue<orc::ThreadSafeContext>> ContextPool;
 

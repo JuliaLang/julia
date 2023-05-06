@@ -350,7 +350,8 @@ function steprange_last(start, step, stop)::typeof(stop)
             # Compute remainder as a nonnegative number:
             if absdiff isa Signed && absdiff < zero(absdiff)
                 # unlikely, but handle the signed overflow case with unsigned rem
-                remain = convert(typeof(absdiff), unsigned(absdiff) % absstep)
+                overflow_case(absdiff, absstep) = (@noinline; convert(typeof(absdiff), unsigned(absdiff) % absstep))
+                remain = overflow_case(absdiff, absstep)
             else
                 remain = convert(typeof(absdiff), absdiff % absstep)
             end
@@ -1100,7 +1101,7 @@ show(io::IO, r::AbstractRange) = print(io, repr(first(r)), ':', repr(step(r)), '
 show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
 show(io::IO, r::OneTo) = print(io, "Base.OneTo(", r.stop, ")")
 function show(io::IO, r::StepRangeLen)
-    if step(r) != 0
+    if !iszero(step(r))
         print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
     else
         # ugly temporary printing, to avoid 0:0:0 etc.

@@ -268,7 +268,6 @@ end
 @test repr(Expr(:import, :Foo)) == ":(\$(Expr(:import, :Foo)))"
 @test repr(Expr(:import, Expr(:(.), ))) == ":(\$(Expr(:import, :(\$(Expr(:.))))))"
 
-
 @test repr(Expr(:using, Expr(:(.), :A))) == ":(using A)"
 @test repr(Expr(:using, Expr(:(.), :A),
                         Expr(:(.), :B))) == ":(using A, B)"
@@ -285,6 +284,10 @@ end
                          Expr(:(.), :D))) == ":(import A, B.C, D)"
 @test repr(Expr(:import, Expr(:(.), :A, :B),
                          Expr(:(.), :C, :D))) == ":(import A.B, C.D)"
+
+# https://github.com/JuliaLang/julia/issues/49168
+@test repr(:(using A: (..))) == ":(using A: (..))"
+@test repr(:(using A: (..) as twodots)) == ":(using A: (..) as twodots)"
 
 # range syntax
 @test_repr "1:2"
@@ -786,6 +789,14 @@ let ms = methods(S45879)
     @test ms isa Base.MethodList
     @test length(ms) == 0
     @test sprint(show, Base.MethodList(Method[], typeof(S45879).name.mt)) isa String
+end
+
+function f49475(a=12.0; b) end
+let ms = methods(f49475)
+    @test length(ms) == 2
+    repr1 = sprint(show, "text/plain", ms[1])
+    repr2 = sprint(show, "text/plain", ms[2])
+    @test occursin("f49475(; ...)", repr1) || occursin("f49475(; ...)", repr2)
 end
 
 if isempty(Base.GIT_VERSION_INFO.commit)
@@ -2066,6 +2077,13 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     Base.IRShow.show_ir(io, ir, Base.IRShow.default_config(ir; verbose_linetable=true))
     seekstart(io)
     @test count(contains(r"@ a{80}:\d+ within `my_fun28173"), eachline(io)) == 10
+
+    # Test that a bad :invoke doesn't cause an error during printing
+    Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(Expr(:invoke, nothing, sin), Any), false)
+    io = IOBuffer()
+    Base.IRShow.show_ir(io, ir)
+    seekstart(io)
+    @test contains(String(take!(io)), "Expr(:invoke, nothing")
 end
 
 # Verify that extra instructions at the end of the IR

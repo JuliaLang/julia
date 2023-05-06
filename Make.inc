@@ -95,6 +95,9 @@ WITH_ITTAPI := 0
 # Enable Tracy support
 WITH_TRACY := 0
 
+# Enable Timing Counts support
+WITH_TIMING_COUNTS := 0
+
 # Prevent picking up $ARCH from the environment variables
 ARCH:=
 
@@ -455,10 +458,12 @@ endif
 
 # Compiler specific stuff
 
+ifeq (default,$(origin CC))
 CC := $(CROSS_COMPILE)$(CC) # attempt to add cross-compiler prefix, if the user
                             # is not overriding the default, to form target-triple-cc (which
                             # may not exist), and use that to decide what compiler the user
                             # is using for the target build (or default to gcc)
+endif
 CC_VERSION_STRING = $(shell $(CC) --version 2>/dev/null)
 ifneq (,$(findstring clang,$(CC_VERSION_STRING)))
 USECLANG := 1
@@ -546,8 +551,8 @@ CC_BASE := $(shell echo $(CC) | cut -d' ' -f1)
 CC_ARG := $(shell echo $(CC) | cut -s -d' ' -f2-)
 CXX_BASE := $(shell echo $(CXX) | cut -d' ' -f1)
 CXX_ARG := $(shell echo $(CXX) | cut -s -d' ' -f2-)
-FC_BASE := $(shell echo $(FC) | cut -d' ' -f1)
-FC_ARG := $(shell echo $(FC) | cut -s -d' ' -f2-)
+FC_BASE := $(shell echo $(FC) 2>/dev/null | cut -d' ' -f1)
+FC_ARG := $(shell echo $(FC) 2>/dev/null | cut -s -d' ' -f2-)
 endif
 
 JFFLAGS := -O2 $(fPIC)
@@ -738,9 +743,14 @@ LIBITTAPI:=-littnotify
 endif
 
 ifeq ($(WITH_TRACY), 1)
-JCXXFLAGS += -DUSE_TRACY -DTRACY_ENABLE
-JCFLAGS += -DUSE_TRACY -DTRACY_ENABLE
+JCXXFLAGS += -DUSE_TRACY -DTRACY_ENABLE -DTRACY_FIBERS
+JCFLAGS += -DUSE_TRACY -DTRACY_ENABLE -DTRACY_FIBERS
 LIBTRACYCLIENT:=-lTracyClient
+endif
+
+ifeq ($(WITH_TIMING_COUNTS), 1)
+JCXXFLAGS += -DUSE_TIMING_COUNTS
+JCFLAGS += -DUSE_TIMING_COUNTS
 endif
 
 # ===========================================================================

@@ -1842,10 +1842,16 @@ function show_import_path(io::IO, ex, quote_level)
         end
     elseif ex.head === :(.)
         for i = 1:length(ex.args)
-            if ex.args[i] === :(.)
+            sym = ex.args[i]::Symbol
+            if sym === :(.)
                 print(io, '.')
             else
-                show_sym(io, ex.args[i]::Symbol, allow_macroname=(i==length(ex.args)))
+                if sym === :(..)
+                    # special case for https://github.com/JuliaLang/julia/issues/49168
+                    print(io, "(..)")
+                else
+                    show_sym(io, sym, allow_macroname=(i==length(ex.args)))
+                end
                 i < length(ex.args) && print(io, '.')
             end
         end
@@ -2658,13 +2664,18 @@ function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
 end
 
 function show(io::IO, inferred::Core.Compiler.InferenceResult)
-    tt = inferred.linfo.specTypes.parameters[2:end]
+    mi = inferred.linfo
+    tt = mi.specTypes.parameters[2:end]
     tts = join(["::$(t)" for t in tt], ", ")
     rettype = inferred.result
     if isa(rettype, Core.Compiler.InferenceState)
         rettype = rettype.bestguess
     end
-    print(io, "$(inferred.linfo.def.name)($(tts)) => $(rettype)")
+    if isa(mi.def, Method)
+        print(io, mi.def.name, "(", tts, " => ", rettype, ")")
+    else
+        print(io, "Toplevel MethodInstance thunk from ", mi.def, " => ", rettype)
+    end
 end
 
 function show(io::IO, ::Core.Compiler.NativeInterpreter)

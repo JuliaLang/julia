@@ -227,13 +227,13 @@ static void read_wrapper(int fd, char **ret, size_t *ret_len)
     size_t have_read = 0;
     while (1) {
         ssize_t n = read(fd, buf + have_read, len - have_read);
-        have_read += n;
         if (n == 0) break;
         if (n == -1 && errno != EINTR) {
             perror("(julia) libstdcxxprobe read");
             exit(1);
         }
         if (n == -1 && errno == EINTR) continue;
+        have_read += n;
         if (have_read == len) {
             buf = (char *)realloc(buf, 1 + (len *= 2));
             if (!buf) {

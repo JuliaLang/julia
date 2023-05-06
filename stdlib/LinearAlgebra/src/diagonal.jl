@@ -396,16 +396,12 @@ end
     _muldiag!(out, D, V, alpha, beta)
 @inline mul!(out::AbstractMatrix, D::Diagonal, B::AbstractMatrix, alpha::Number, beta::Number) =
     _muldiag!(out, D, B, alpha, beta)
-@inline mul!(out::AbstractMatrix, D::Diagonal, B::Adjoint{<:Any,<:AbstractVecOrMat},
-             alpha::Number, beta::Number) = _muldiag!(out, D, B, alpha, beta)
-@inline mul!(out::AbstractMatrix, D::Diagonal, B::Transpose{<:Any,<:AbstractVecOrMat},
+@inline mul!(out::AbstractMatrix, D::Diagonal, B::AdjOrTrans{<:Any,<:AbstractVecOrMat},
              alpha::Number, beta::Number) = _muldiag!(out, D, B, alpha, beta)
 
 @inline mul!(out::AbstractMatrix, A::AbstractMatrix, D::Diagonal, alpha::Number, beta::Number) =
     _muldiag!(out, A, D, alpha, beta)
-@inline mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:AbstractVecOrMat}, D::Diagonal,
-             alpha::Number, beta::Number) = _muldiag!(out, A, D, alpha, beta)
-@inline mul!(out::AbstractMatrix, A::Transpose{<:Any,<:AbstractVecOrMat}, D::Diagonal,
+@inline mul!(out::AbstractMatrix, A::AdjOrTrans{<:Any,<:AbstractVecOrMat}, D::Diagonal,
              alpha::Number, beta::Number) = _muldiag!(out, A, D, alpha, beta)
 @inline mul!(C::Diagonal, Da::Diagonal, Db::Diagonal, alpha::Number, beta::Number) =
     _muldiag!(C, Da, Db, alpha, beta)
@@ -675,7 +671,8 @@ end
 conj(D::Diagonal) = Diagonal(conj(D.diag))
 transpose(D::Diagonal{<:Number}) = D
 transpose(D::Diagonal) = Diagonal(transpose.(D.diag))
-adjoint(D::Diagonal{<:Number}) = conj(D)
+adjoint(D::Diagonal{<:Number}) = Diagonal(vec(adjoint(D.diag)))
+adjoint(D::Diagonal{<:Number,<:Base.ReshapedArray{<:Number,1,<:Adjoint}}) = Diagonal(adjoint(parent(D.diag)))
 adjoint(D::Diagonal) = Diagonal(adjoint.(D.diag))
 permutedims(D::Diagonal) = D
 permutedims(D::Diagonal, perm) = (Base.checkdims_perm(D, D, perm); D)

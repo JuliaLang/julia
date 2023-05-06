@@ -32,6 +32,14 @@ struct StmtInfo
     used::Bool
 end
 
+struct MethodInfo
+    propagate_inbounds::Bool
+    method_for_inference_limit_heuristics::Union{Nothing,Method}
+end
+MethodInfo(src::CodeInfo) = MethodInfo(
+    src.propagate_inbounds,
+    src.method_for_inference_limit_heuristics::Union{Nothing,Method})
+
 """
     v::VarState
 
@@ -458,19 +466,33 @@ typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.i
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
 optimizer_lattice(::AbstractInterpreter) = OptimizerLattice(SimpleInferenceLattice.instance)
 
-typeinf_lattice(interp::NativeInterpreter) = interp.irinterp ? optimizer_lattice(interp) : InferenceLattice(BaseInferenceLattice.instance)
-ipo_lattice(interp::NativeInterpreter) = interp.irinterp ? optimizer_lattice(interp) : InferenceLattice(IPOResultLattice.instance)
+typeinf_lattice(interp::NativeInterpreter) = interp.irinterp ?
+    OptimizerLattice(InferenceLattice(SimpleInferenceLattice.instance)) :
+    InferenceLattice(BaseInferenceLattice.instance)
+ipo_lattice(interp::NativeInterpreter) = interp.irinterp ?
+    InferenceLattice(SimpleInferenceLattice.instance) :
+    InferenceLattice(IPOResultLattice.instance)
 optimizer_lattice(interp::NativeInterpreter) = OptimizerLattice(SimpleInferenceLattice.instance)
 
 """
     switch_to_irinterp(interp::AbstractInterpreter) -> irinterp::AbstractInterpreter
 
-Optionally convert `interp` to new `irinterp::AbstractInterpreter` to perform semi-concrete
-interpretation. `NativeInterpreter` uses this interface to switch its lattice to
-`optimizer_lattice` during semi-concrete interpretation on `IRCode`.
+This interface allows `ir_abstract_constant_propagation` to convert `interp` to a new
+`irinterp::AbstractInterpreter` to perform semi-concrete interpretation.
+`NativeInterpreter` uses this interface to switch its lattice to `optimizer_lattice` during
+semi-concrete interpretation on `IRCode`.
 """
 switch_to_irinterp(interp::AbstractInterpreter) = interp
 switch_to_irinterp(interp::NativeInterpreter) = NativeInterpreter(interp; irinterp=true)
+
+"""
+    switch_from_irinterp(irinterp::AbstractInterpreter) -> interp::AbstractInterpreter
+
+The inverse operation of `switch_to_irinterp`, allowing `typeinf` to convert `irinterp` back
+to a new `interp::AbstractInterpreter` to perform ordinary abstract interpretation.
+"""
+switch_from_irinterp(irinterp::AbstractInterpreter) = irinterp
+switch_from_irinterp(irinterp::NativeInterpreter) = NativeInterpreter(irinterp; irinterp=false)
 
 abstract type CallInfo end
 

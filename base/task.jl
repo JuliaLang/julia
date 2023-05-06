@@ -131,7 +131,8 @@ true
 ```
 """
 macro task(ex)
-    :(Task(()->$(esc(ex))))
+    thunk = Base.replace_linenums!(:(()->$(esc(ex))), __source__)
+    :(Task($thunk))
 end
 
 """
@@ -253,7 +254,7 @@ istaskfailed(t::Task) = (load_state_acquire(t) === task_state_failed)
 Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
 function Threads.threadpool(t::Task)
     tpid = ccall(:jl_get_task_threadpoolid, Int8, (Any,), t)
-    return tpid == 0 ? :default : :interactive
+    return Threads._tpid_to_sym(tpid)
 end
 
 task_result(t::Task) = t.result
@@ -503,15 +504,15 @@ isolating the asynchronous code from changes to the variable's value in the curr
     Interpolating values via `\$` is available as of Julia 1.4.
 """
 macro async(expr)
-    do_async_macro(expr)
+    do_async_macro(expr, __source__)
 end
 
 # generate the code for @async, possibly wrapping the task in something before
 # pushing it to the wait queue.
-function do_async_macro(expr; wrap=identity)
+function do_async_macro(expr, linenums; wrap=identity)
     letargs = Base._lift_one_interp!(expr)
 
-    thunk = esc(:(()->($expr)))
+    thunk = Base.replace_linenums!(:(()->($(esc(expr)))), linenums)
     var = esc(sync_varname)
     quote
         let $(letargs...)
@@ -551,7 +552,7 @@ fetch(t::UnwrapTaskFailedException) = unwrap_task_failed(fetch, t)
 
 # macro for running async code that doesn't throw wrapped exceptions
 macro async_unwrap(expr)
-    do_async_macro(expr, wrap=task->:(Base.UnwrapTaskFailedException($task)))
+    do_async_macro(expr, __source__, wrap=task->:(Base.UnwrapTaskFailedException($task)))
 end
 
 """
@@ -786,7 +787,7 @@ function enq_work(t::Task)
         if Threads.threadpoolsize(tp) == 1
             # There's only one thread in the task's assigned thread pool;
             # use its work queue.
-            tid = (tp === :default) ? 1 : Threads.threadpoolsize(:default)+1
+            tid = (tp === :interactive) ? 1 : Threads.threadpoolsize(:interactive)+1
             ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
             push!(workqueue_for(tid), t)
         else
@@ -839,7 +840,7 @@ function schedule(t::Task, @nospecialize(arg); error=false)
     # schedule a task to be (re)started with the given value or exception
     t._state === task_state_runnable || Base.error("schedule: Task not runnable")
     if error
-        t.queue === nothing || Base.list_deletefirst!(t.queue, t)
+        t.queue === nothing || Base.list_deletefirst!(t.queue::IntrusiveLinkedList{Task}, t)
         setfield!(t, :result, arg)
         setfield!(t, :_isexception, true)
     else
@@ -863,7 +864,7 @@ function yield()
     try
         wait()
     catch
-        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
         rethrow()
     end
 end
