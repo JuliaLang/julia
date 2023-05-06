@@ -1321,14 +1321,18 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
                                 sv::AbsIntState)
     if isa(typ, PartialStruct)
         widet = typ.typ
-        if isa(widet, DataType) && widet.name === Tuple.name
-            return AbstractIterationResult(typ.fields, nothing)
+        if isa(widet, DataType)
+            if widet.name === Tuple.name
+                return AbstractIterationResult(typ.fields, nothing)
+            elseif widet.name === _NAMEDTUPLE_NAME
+                return AbstractIterationResult(typ.fields, nothing)
+            end
         end
     end
 
     if isa(typ, Const)
         val = typ.val
-        if isa(val, SimpleVector) || isa(val, Tuple)
+        if isa(val, SimpleVector) || isa(val, Tuple) || isa(val, NamedTuple)
             return AbstractIterationResult(Any[ Const(val[i]) for i in 1:length(val) ], nothing) # avoid making a tuple Generator here!
         end
     end
