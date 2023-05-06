@@ -164,17 +164,11 @@ function eigen!(A::Hermitian{T,S}, B::Hermitian{T,S}; sortby::Union{Function,Not
     vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
-function eigen!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, B::AbstractMatrix{T}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    return _choleigen!(A, B, sortby)
+function eigen!(A::RealHermSymComplexHerm{T,S}, B::AbstractMatrix{T}; sortby::Union{Function,Nothing}=nothing) where {T<:Number,S<:StridedMatrix}
+    return eigen!(Matrix{T}(A), B; sortby) ;
 end
-function eigen!(A::StridedMatrix{T}, B::Union{RealHermSymComplexHerm{T},Diagonal{T}}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    return _choleigen!(A, B, sortby)
-end
-function _choleigen!(A, B, sortby)
-    U = cholesky(B).U
-    vals, w = eigen!(UtiAUi!(A, U))
-    vecs = U \ w
-    GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
+function eigen!(A::AbstractMatrix{T}, B::RealHermSymComplexHerm{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:Number,S<:StridedMatrix}
+    return eigen!(A, Matrix{T}(B); sortby) ;
 end
 
 # Perform U' \ A / U in-place, where U::Union{UpperTriangular,Diagonal}
@@ -197,10 +191,10 @@ end
 eigvecs(A::HermOrSym) = eigvecs(eigen(A))
 
 # Note: No specilized LAPACK routines for Matrix+Symmetric and Symmetric+Matrix exist. Hence, the calls are forwarded to conventional Matrix eigvals!
-function eigvals!(A::AbstractMatrix{T}, B::HermOrSym{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:Union{BlasReal,BlasComplex},S<:StridedMatrix}
+function eigvals!(A::AbstractMatrix{T}, B::RealHermSymComplexHerm{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:Number,S<:StridedMatrix}
     return eigvals!(A, Matrix{T}(B); sortby) ;
 end
 
-function eigvals!(A::HermOrSym{T,S}, B::AbstractMatrix{T}; sortby::Union{Function,Nothing}=nothing) where {T<:Union{BlasReal,BlasComplex},S<:StridedMatrix}
+function eigvals!(A::RealHermSymComplexHerm{T,S}, B::AbstractMatrix{T}; sortby::Union{Function,Nothing}=nothing) where {T<:Number,S<:StridedMatrix}
     return eigvals!(Matrix{T}(A), B; sortby) ;
 end

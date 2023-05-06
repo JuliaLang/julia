@@ -827,6 +827,13 @@ end
 @testset "issue #49533" begin
     A = Float64[1 1 0 0; 1 2 1 0; 0 1 3 1; 0 0 1 4] ;
     B = Matrix(Diagonal(Float64[1:4;])) ;
+    # eigen
+    e0,v0 = eigen(A, B)
+    e1,v1 = eigen(A, Symmetric(B))
+    e2,v2 = eigen(Symmetric(A), B)
+    @test e0 ≈ e1 && v0 ≈ v1
+    @test e0 ≈ e2 && v0 ≈ v2
+    # eigvals
     @test eigvals(A, B) ≈ eigvals(A, Symmetric(B))
     @test eigvals(A, B) ≈ eigvals(Symmetric(A), B)
 end
