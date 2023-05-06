@@ -292,6 +292,8 @@ end
     @test prevpow(10.0, 101) === 100.0
     @test_throws DomainError prevpow(0, 3)
     @test_throws DomainError prevpow(0, 3)
+    @test @inferred nextpow(0x02, 5)== 0x08
+    @test @inferred prevpow(0x02, 5)== 0x04
 end
 
 @testset "ndigits/ndigits0z" begin
