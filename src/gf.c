@@ -3737,7 +3737,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                                 // now look for a third method m3 outside of this ambiguity group that fully resolves this intersection
                                 size_t k;
                                 for (k = agid; k > 0; k--) {
-                                    jl_method_match_t *matc3 = (jl_method_match_t*)jl_array_ptr_ref(env.t, k);
+                                    jl_method_match_t *matc3 = (jl_method_match_t*)jl_array_ptr_ref(env.t, k - 1);
                                     jl_method_t *m3 = matc3->method;
                                     if ((jl_subtype(ti, m3->sig) || (isect2 && jl_subtype(isect2, m3->sig)))
                                             && jl_type_morespecific((jl_value_t*)m3->sig, (jl_value_t*)m->sig)

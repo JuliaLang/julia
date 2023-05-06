@@ -138,7 +138,7 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
                     Q = Any[ tP[i] for i in 1:np ]
                     if ltP > np
                         # combine tp[np:end] into tP[np] using Vararg
-                        Q[np] = tuple_tail_elem(Bottom, Any[ tP[i] for i in np:ltP ])
+                        Q[np] = tuple_tail_elem(fallback_lattice, Bottom, Any[ tP[i] for i in np:ltP ])
                     end
                     for i = 1:np
                         # now apply limit element-wise to Q

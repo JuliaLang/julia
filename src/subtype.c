@@ -73,7 +73,7 @@ typedef struct jl_varbinding_t {
     // let ub = var.ub ∩ type
     // 0 - var.ub <: type ? var : ub
     // 1 - var.ub = ub; return var
-    // 2 - either (var.ub = ub; return var), or return ub
+    // 2 - var.lb = lb; return ub
     int8_t constraintkind;
     int8_t intvalued; // intvalued: must be integer-valued; i.e. occurs as N in Vararg{_,N}
     int8_t limited;
@@ -2646,14 +2646,24 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         return ub;
     }
     assert(bb->constraintkind == 2);
-    if (!jl_is_typevar(a)) {
-        if (ub == a && bb->lb != jl_bottom_type)
-            return ub;
-        else if (jl_egal(bb->ub, bb->lb))
-            return ub;
-        set_bound(&bb->ub, ub, b, e);
-    }
-    return (jl_value_t*)b;
+    if (ub == a && bb->lb != jl_bottom_type)
+        return ub;
+    if (jl_egal(bb->ub, bb->lb))
+        return ub;
+    if (is_leaf_bound(ub))
+        set_bound(&bb->lb, ub, b, e);
+    // TODO: can we improve this bound by pushing a new variable into the environment
+    // and adding that to the lower bound of our variable?
+    //jl_value_t *ntv = NULL;
+    //JL_GC_PUSH2(&ntv, &ub);
+    //if (bb->innervars == NULL)
+    //    bb->innervars = jl_alloc_array_1d(jl_array_any_type, 0);
+    //ntv = (jl_value_t*)jl_new_typevar(b->name, bb->lb, ub);
+    //jl_array_ptr_1d_push(bb->innervars, ntv);
+    //jl_value_t *lb = simple_join(b->lb, ntv);
+    //JL_GC_POP();
+    //bb->lb = lb;
+    return ub;
 }
 
 // test whether `var` occurs inside constructors. `want_inv` tests only inside

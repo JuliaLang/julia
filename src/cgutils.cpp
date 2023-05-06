@@ -1434,6 +1434,35 @@ static bool can_optimize_isa_union(jl_uniontype_t *type)
 static Value *emit_exactly_isa(jl_codectx_t &ctx, const jl_cgval_t &arg, jl_value_t *dt)
 {
     assert(jl_is_concrete_type(dt));
+    if (arg.TIndex) {
+        unsigned tindex = get_box_tindex((jl_datatype_t*)dt, arg.typ);
+        if (tindex > 0) {
+            // optimize more when we know that this is a split union-type where tindex = 0 is invalid
+            Value *xtindex = ctx.builder.CreateAnd(arg.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x7f));
+            return ctx.builder.CreateICmpEQ(xtindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), tindex));
+        }
+        else if (arg.Vboxed) {
+            // test for (arg.TIndex == 0x80 && typeof(arg.V) == type)
+            Value *isboxed = ctx.builder.CreateICmpEQ(arg.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x80));
+            BasicBlock *currBB = ctx.builder.GetInsertBlock();
+            BasicBlock *isaBB = BasicBlock::Create(ctx.builder.getContext(), "isa", ctx.f);
+            BasicBlock *postBB = BasicBlock::Create(ctx.builder.getContext(), "post_isa", ctx.f);
+            ctx.builder.CreateCondBr(isboxed, isaBB, postBB);
+            ctx.builder.SetInsertPoint(isaBB);
+            Value *istype_boxed = ctx.builder.CreateICmpEQ(emit_typeof(ctx, arg.Vboxed, false),
+                track_pjlvalue(ctx, literal_pointer_val(ctx, dt)));
+            ctx.builder.CreateBr(postBB);
+            isaBB = ctx.builder.GetInsertBlock(); // could have changed
+            ctx.builder.SetInsertPoint(postBB);
+            PHINode *istype = ctx.builder.CreatePHI(getInt1Ty(ctx.builder.getContext()), 2);
+            istype->addIncoming(ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0), currBB);
+            istype->addIncoming(istype_boxed, isaBB);
+            return istype;
+        } else {
+            // handle the case where we know that `arg` is unboxed (but of unknown type), but that concrete type `type` cannot be unboxed
+            return ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0);
+        }
+    }
     return ctx.builder.CreateICmpEQ(
             emit_typeof_boxed(ctx, arg),
             track_pjlvalue(ctx, literal_pointer_val(ctx, dt)));
@@ -1521,38 +1550,8 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
                 ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0)), false);
     }
     // tests for isa concretetype can be handled with pointer comparisons
-    if (jl_is_concrete_type(intersected_type)) {
-        if (x.TIndex) {
-            unsigned tindex = get_box_tindex((jl_datatype_t*)intersected_type, x.typ);
-            if (tindex > 0) {
-                // optimize more when we know that this is a split union-type where tindex = 0 is invalid
-                Value *xtindex = ctx.builder.CreateAnd(x.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x7f));
-                return std::make_pair(ctx.builder.CreateICmpEQ(xtindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), tindex)), false);
-            }
-            else if (x.Vboxed) {
-                // test for (x.TIndex == 0x80 && typeof(x.V) == type)
-                Value *isboxed = ctx.builder.CreateICmpEQ(x.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x80));
-                BasicBlock *currBB = ctx.builder.GetInsertBlock();
-                BasicBlock *isaBB = BasicBlock::Create(ctx.builder.getContext(), "isa", ctx.f);
-                BasicBlock *postBB = BasicBlock::Create(ctx.builder.getContext(), "post_isa", ctx.f);
-                ctx.builder.CreateCondBr(isboxed, isaBB, postBB);
-                ctx.builder.SetInsertPoint(isaBB);
-                Value *istype_boxed = ctx.builder.CreateICmpEQ(emit_typeof(ctx, x.Vboxed, false),
-                    track_pjlvalue(ctx, literal_pointer_val(ctx, intersected_type)));
-                ctx.builder.CreateBr(postBB);
-                isaBB = ctx.builder.GetInsertBlock(); // could have changed
-                ctx.builder.SetInsertPoint(postBB);
-                PHINode *istype = ctx.builder.CreatePHI(getInt1Ty(ctx.builder.getContext()), 2);
-                istype->addIncoming(ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0), currBB);
-                istype->addIncoming(istype_boxed, isaBB);
-                return std::make_pair(istype, false);
-            } else {
-                // handle the case where we know that `x` is unboxed (but of unknown type), but that concrete type `type` cannot be unboxed
-                return std::make_pair(ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0), false);
-            }
-        }
+    if (jl_is_concrete_type(intersected_type))
         return std::make_pair(emit_exactly_isa(ctx, x, intersected_type), false);
-    }
     jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(intersected_type);
     if (jl_is_datatype(dt) && !dt->name->abstract && jl_subtype(dt->name->wrapper, type)) {
         // intersection is a supertype of all instances of its constructor,

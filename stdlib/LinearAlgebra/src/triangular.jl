@@ -671,15 +671,16 @@ lmul!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B)
 mul!(C::AbstractVector, A::AbstractTriangular, B::AbstractVector) = _multrimat!(C, A, B)
 mul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractVector) = _multrimat!(C, A, B)
 mul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractMatrix) = _multrimat!(C, A, B)
-@inline mul!(C::AbstractMatrix, A::AbstractTriangular, B::Adjoint{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) =
-    mul!(C, A, copy(B), alpha, beta)
-@inline mul!(C::AbstractMatrix, A::AbstractTriangular, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) =
-    mul!(C, A, copy(B), alpha, beta)
-mul!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractTriangular) = _mulmattri!(C, A, B)
+  mul!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractTriangular) = _mulmattri!(C, A, B)
 mul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractTriangular) = _multrimat!(C, A, B)
 
+@inline mul!(C::AbstractMatrix, A::AbstractTriangular, B::AdjOrTrans{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) =
+    mul!(C, A, copy(B), alpha, beta)
+    mul!(C, A, copy(B), alpha, beta)
+
 # generic fallback for AbstractTriangular matrices outside of the four subtypes provided here
-_multrimat!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = lmul!(A, copyto!(C, B))
+_multrimat!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) =
+    lmul!(A, inplace_adj_or_trans(B)(C, _parent(B)))
 _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractTriangular) = rmul!(copyto!(C, A), B)
 
 # preserve triangular structure in in-place multiplication
@@ -1199,64 +1200,77 @@ function _ldiv!(c::AbstractVector, A::UnitLowerTriangular, b::AbstractVector)
     return c
 end
 
-# optimized memory access pattern in the adjoint/transpose case
-for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
-    @eval begin
-        function _ldiv!(c::AbstractVector, xA::UpperTriangular{<:Any,<:$t}, b::AbstractVector)
-            A = parent(parent(xA))
-            n = size(A, 2)
-            @inbounds for j in n:-1:1
-                ajj = A[j,j]
-                iszero(ajj) && throw(SingularException(j))
-                bj = b[j]
-                for i in j+1:n
-                    bj -= $tfun(A[i,j]) * c[i]
-                end
-                c[j] = $tfun(ajj) \ bj
-            end
-            return c
-        end
-        function _ldiv!(c::AbstractVector, xA::UnitUpperTriangular{<:Any,<:$t}, b::AbstractVector)
-            A = parent(parent(xA))
-            oA = oneunit(eltype(A))
-            n = size(A, 2)
-            @inbounds for j in n:-1:1
-                bj = b[j]
-                for i in j+1:n
-                    bj -= $tfun(A[i,j]) * c[i]
-                end
-                c[j] = oA \ bj
-            end
-            return c
-        end
-        function _ldiv!(c::AbstractVector, xA::LowerTriangular{<:Any,<:$t}, b::AbstractVector)
-            A = parent(parent(xA))
-            n = size(A, 2)
-            @inbounds for j in 1:n
-                ajj = A[j,j]
-                iszero(ajj) && throw(SingularException(j))
-                bj = b[j]
-                for i in 1:j-1
-                    bj -= $tfun(A[i,j]) * c[i]
-                end
-                c[j] = $tfun(ajj) \ bj
-            end
-            return c
-        end
-        function _ldiv!(c::AbstractVector, xA::UnitLowerTriangular{<:Any,<:$t}, b::AbstractVector)
-            A = parent(parent(xA))
-            oA = oneunit(eltype(A))
-            n = size(A, 2)
-            @inbounds for j in 1:n
-                bj = b[j]
-                for i in 1:j-1
-                    bj -= $tfun(A[i,j]) * c[i]
-                end
-                c[j] = oA \ bj
-            end
-            return c
-        end
+
+# in the following transpose and conjugate transpose naive substitution variants,
+# accumulating in z rather than b[j,k] significantly improves performance as of Dec 2015
+function _ldiv!(c::AbstractVector, xA::UpperTriangular{<:Any,<:AdjOrTrans}, b::AbstractVector)
+    tfun = adj_or_trans(parent(xA))
+    A = parent(parent(xA))
+    n = size(A, 1)
+    if !(n == length(b))
+        throw(DimensionMismatch("first dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
     end
+    @inbounds for j in n:-1:1
+        z = b[j]
+        for i in n:-1:j+1
+            z -= tfun(A[i,j]) * b[i]
+        end
+        iszero(A[j,j]) && throw(SingularException(j))
+        c[j] = tfun(A[j,j]) \ z
+    end
+    return c
+end
+
+function _ldiv!(c::AbstractVector, xA::UnitUpperTriangular{<:Any,<:AdjOrTrans}, b::AbstractVector)
+    tfun = adj_or_trans(parent(xA))
+    A = parent(parent(xA))
+    n = size(A, 1)
+    if !(n == length(b))
+        throw(DimensionMismatch("first dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
+    end
+    @inbounds for j in n:-1:1
+        z = b[j]
+        for i in n:-1:j+1
+            z -= tfun(A[i,j]) * b[i]
+        end
+        c[j] = z
+    end
+    return c
+end
+
+function _ldiv!(c::AbstractVector, xA::LowerTriangular{<:Any,<:AdjOrTrans}, b::AbstractVector)
+    tfun = adj_or_trans(parent(xA))
+    A = parent(parent(xA))
+    n = size(A, 1)
+    if !(n == length(b))
+        throw(DimensionMismatch("first dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
+    end
+    @inbounds for j in 1:n
+        z = b[j]
+        for i in 1:j-1
+            z -= tfun(A[i,j]) * b[i]
+        end
+        iszero(A[j,j]) && throw(SingularException(j))
+        c[j] = tfun(A[j,j]) \ z
+    end
+    return c
+end
+
+function _ldiv!(c::AbstractVector, xA::UnitLowerTriangular{<:Any,<:AdjOrTrans}, b::AbstractVector)
+    tfun = adj_or_trans(parent(xA))
+    A = parent(parent(xA))
+    n = size(A, 1)
+    if !(n == length(b))
+        throw(DimensionMismatch("first dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
+    end
+    @inbounds for j in 1:n
+        z = b[j]
+        for i in 1:j-1
+            z -= tfun(A[i,j]) * b[i]
+        end
+        c[j] = z
+    end
+    return c
 end
 
 rdiv!(A::AbstractMatrix, B::AbstractTriangular) = @inline _rdiv!(A, A, B)
