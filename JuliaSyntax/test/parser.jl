@@ -966,11 +966,6 @@ parsestmt_test_specs = [
     end
 end
 
-@testset "Broken tests" begin
-    # Technically broken. But do we even want this behavior?
-    @test_broken parse_to_sexpr_str(JuliaSyntax.parse_eq, "var\"\"\"x\"\"\"") == "(var x)"
-end
-
 @testset "Trivia attachment" begin
     # TODO: Need to expand this greatly to cover as many forms as possible!
     @test show_green_tree("f(a;b)") == """

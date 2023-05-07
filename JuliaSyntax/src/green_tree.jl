@@ -43,24 +43,9 @@ struct GreenNode{Head}
     args::Union{Tuple{},Vector{GreenNode{Head}}}
 end
 
-function GreenNode{Head}(head::Head, span::Integer) where {Head}
-    GreenNode{Head}(head, span, ())
+function GreenNode(head::Head, span::Integer, args) where {Head}
+    GreenNode{Head}(head, span, args)
 end
-
-function GreenNode(head::Head, span::Integer) where {Head}
-    GreenNode{Head}(head, span, ())
-end
-
-function GreenNode(head::Head, args) where {Head}
-    children = collect(GreenNode{Head}, args)
-    span = isempty(children) ? 0 : sum(x.span for x in children)
-    GreenNode{Head}(head, span, children)
-end
-
-function GreenNode(head::Head, args::GreenNode{Head}...) where {Head}
-    GreenNode{Head}(head, GreenNode{Head}[args...])
-end
-
 
 # Accessors / predicates
 haschildren(node::GreenNode) = !(node.args isa Tuple{})
@@ -113,5 +98,13 @@ end
 
 function Base.show(io::IO, ::MIME"text/plain", node::GreenNode, str::AbstractString; show_trivia=true)
     _show_green_node(io, node, "", 1, str, show_trivia)
+end
+
+function build_tree(::Type{GreenNode}, stream::ParseStream; kws...)
+    build_tree(GreenNode{SyntaxHead}, stream; kws...) do h, srcrange, cs
+        span = length(srcrange)
+        isnothing(cs) ? GreenNode(h, span, ()) :
+                        GreenNode(h, span, collect(GreenNode{SyntaxHead}, cs))
+    end
 end
 

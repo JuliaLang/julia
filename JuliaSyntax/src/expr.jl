@@ -1,20 +1,43 @@
 #-------------------------------------------------------------------------------
 # Conversion to Base.Expr
 
+"""
+    @isexpr(ex, head)
+    @isexpr(ex, head, nargs)
+
+Type inference friendly replacement for `Meta.isexpr`.
+
+When using the pattern
+```
+if @isexpr(ex, headsym)
+    body
+end
+```
+Julia's type inference knows `ex isa Expr` inside `body`. But `Meta.isexpr`
+hides this information from the compiler, for whatever reason.
+"""
+macro isexpr(ex, head)
+    ex isa Symbol || error("First argument to `@isexpr` must be a variable name")
+    :($(esc(ex)) isa Expr && $(esc(ex)).head == $(esc(head)))
+end
+
+macro isexpr(ex, head, nargs)
+    ex isa Symbol || error("First argument to `@isexpr` must be a variable name")
+    :($(esc(ex)) isa Expr &&
+      $(esc(ex)).head == $(esc(head)) &&
+      length($(esc(ex)).args) == $(esc(nargs)))
+end
+
 function is_eventually_call(ex)
-    return Meta.isexpr(ex, :call) || (Meta.isexpr(ex, (:where, :(::))) &&
-                                      is_eventually_call(ex.args[1]))
+    return ex isa Expr && (ex.head === :call ||
+        (ex.head === :where || ex.head === :(::)) && is_eventually_call(ex.args[1]))
 end
 
-function is_stringchunk(node)
-    k = kind(node)
-    return k == K"String" || k == K"CmdString"
-end
-
-function reorder_parameters!(args::Vector{Any}, params_pos)
+function _reorder_parameters!(args::Vector{Any}, params_pos)
     p = 0
     for i = length(args):-1:1
-        if !Meta.isexpr(args[i], :parameters)
+        ai = args[i]
+        if !@isexpr(ai, :parameters)
             break
         end
         p = i
@@ -30,204 +53,230 @@ function reorder_parameters!(args::Vector{Any}, params_pos)
     insert!(args, params_pos, pop!(args))
 end
 
-function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
-                  eq_to_kw=false, map_kw_in_params=false, coalesce_dot=false)
-    nodekind = kind(node)
-    if !haschildren(node)
-        val = node.val
+function _strip_parens(ex)
+    while true
+        if @isexpr(ex, :parens)
+            if length(ex.args) == 1
+                ex = ex.args[1]
+            else
+                # Only for error cases
+                return Expr(:block, ex.args...)
+            end
+        else
+            return ex
+        end
+    end
+end
+
+function _leaf_to_Expr(source, head, srcrange, node)
+    k = kind(head)
+    if k == K"core_@cmd"
+        return GlobalRef(Core, Symbol("@cmd"))
+    elseif k == K"MacroName" && view(source, srcrange) == "."
+        return Symbol("@__dot__")
+    elseif is_error(k)
+        return k == K"error" ?
+            Expr(:error) :
+            Expr(:error, "$(_token_error_descriptions[k]): `$(source[srcrange])`")
+    else
+        val = isnothing(node) ? parse_julia_literal(source, head, srcrange) : node.val
         if val isa Union{Int128,UInt128,BigInt}
             # Ignore the values of large integers and convert them back to
             # symbolic/textural form for compatibility with the Expr
             # representation of these.
-            str = replace(sourcetext(node), '_'=>"")
-            headsym = :macrocall
+            str = replace(source[srcrange], '_'=>"")
             macname = val isa Int128  ? Symbol("@int128_str")  :
                       val isa UInt128 ? Symbol("@uint128_str") :
                       Symbol("@big_str")
             return Expr(:macrocall, GlobalRef(Core, macname), nothing, str)
-        elseif nodekind == K"core_@cmd"
-            return GlobalRef(Core, Symbol("@cmd"))
-        elseif nodekind == K"MacroName" && val === Symbol("@.")
-            return Symbol("@__dot__")
-        elseif is_error(nodekind)
-            # TODO: Get non-token error messages in here as well, somehow?
-            # There's an awkward mismatch between the out-of-tree
-            # `Vector{Diagnostic}` vs Expr(:error) being part of the tree.
-            return nodekind == K"error" ?
-                Expr(:error) :
-                Expr(:error, "$(_token_error_descriptions[nodekind]): `$(sourcetext(node))`")
         else
             return val
         end
     end
-    node_args = children(node)
-    if nodekind == K"var"
-        @check length(node_args) == 1
-        return _to_expr(node_args[1])
-    elseif nodekind == K"char"
-        @check length(node_args) == 1
-        return _to_expr(node_args[1])
-    elseif nodekind == K"?"
-        headsym = :if
-    elseif nodekind == K"=" && !is_decorated(node) && eq_to_kw
-        headsym = :kw
-    else
-        headstr = untokenize(head(node), include_flag_suff=false)
-        headsym = !isnothing(headstr) ? Symbol(headstr) :
-            error("Can't untokenize head of kind $(nodekind)")
-    end
-    if headsym === :string || headsym === :cmdstring
-        # Julia string literals may be interspersed with trivia in two situations:
-        # 1. Triple quoted string indentation is trivia
-        # 2. An \ before newline removes the newline and any following indentation
-        #
-        # Such trivia is eagerly removed by the reference parser, so here we
-        # concatenate adjacent string chunks together for compatibility.
-        args = Vector{Any}()
-        i = 1
-        while i <= length(node_args)
-            if is_stringchunk(node_args[i])
-                if i < length(node_args) && is_stringchunk(node_args[i+1])
-                    buf = IOBuffer()
-                    while i <= length(node_args) && is_stringchunk(node_args[i])
-                        write(buf, node_args[i].val)
-                        i += 1
-                    end
-                    push!(args, String(take!(buf)))
-                else
-                    push!(args, node_args[i].val)
+end
+
+# Julia string literals in a `K"string"` node may be split into several chunks
+# interspersed with trivia in two situations:
+# 1. Triple quoted string indentation is trivia
+# 2. An \ before newline removes the newline and any following indentation
+#
+# This function concatenating adjacent string chunks together as done in the
+# reference parser.
+function _string_to_Expr(k, args)
+    args2 = Any[]
+    i = 1
+    while i <= length(args)
+        if args[i] isa String
+            if i < length(args) && args[i+1] isa String
+                buf = IOBuffer()
+                while i <= length(args) && args[i] isa String
+                    write(buf, args[i]::String)
                     i += 1
                 end
+                push!(args2, String(take!(buf)))
             else
-                e = _to_expr(node_args[i])
-                if e isa String && headsym === :string
+                push!(args2, args[i])
+                i += 1
+            end
+        else
+            ex = args[i]
+            if @isexpr(ex, :parens, 1)
+                ex = _strip_parens(ex)
+                if ex isa String
                     # Wrap interpolated literal strings in (string) so we can
                     # distinguish them from the surrounding text (issue #38501)
                     # Ie, "$("str")"  vs  "str"
                     # https://github.com/JuliaLang/julia/pull/38692
-                    e = Expr(:string, e)
+                    ex = Expr(:string, ex)
                 end
-                push!(args, e)
-                i += 1
             end
-        end
-        if length(args) == 1 && args[1] isa String
-            # If there's a single string remaining after joining, we unwrap
-            # to give a string literal.
-            #   """\n  a\n  b""" ==>  "a\nb"
-            # headsym === :cmdstring follows this branch
-            return only(args)
-        else
-            @check headsym === :string
-            return Expr(headsym, args...)
+            push!(args2, ex)
+            i += 1
         end
     end
-
-    # Convert children
-    insert_linenums = (headsym === :block || headsym === :toplevel) && need_linenodes
-    args = Vector{Any}(undef, length(node_args)*(insert_linenums ? 2 : 1))
-    eq_to_kw_in_call =
-        ((headsym === :call || headsym === :dotcall) && is_prefix_call(node)) ||
-        headsym === :ref
-    eq_to_kw_all = (headsym === :parameters && !map_kw_in_params) ||
-                   (headsym === :parens && eq_to_kw)
-    in_vcbr = headsym === :vect || headsym === :curly || headsym === :braces || headsym === :ref
-    if insert_linenums && isempty(node_args)
-        push!(args, source_location(LineNumberNode, node.source, node.position))
+    if length(args2) == 1 && args2[1] isa String
+        # If there's a single string remaining after joining, we unwrap
+        # to give a string literal.
+        #   """\n  a\n  b""" ==>  "a\nb"
+        # k == K"cmdstring" follows this branch
+        return only(args2)
     else
-        for i in 1:length(node_args)
-            n = node_args[i]
-            if insert_linenums
-                args[2*i-1] = source_location(LineNumberNode, n.source, n.position)
+        @check k == K"string"
+        return Expr(:string, args2...)
+    end
+end
+
+# Shared fixups for Expr children in cases where the type of the parent node
+# affects the child layout.
+function _fixup_Expr_children!(head, loc, args)
+    k = kind(head)
+    eq_to_kw_in_call = ((k == K"call" || k == K"dotcall") &&
+                        is_prefix_call(head)) || k == K"ref"
+    eq_to_kw_in_params = k != K"vect"   && k != K"curly" &&
+                         k != K"braces" && k != K"ref"
+    coalesce_dot = k in KSet"call dotcall curly" ||
+                   (k == K"quote" && flags(head) == COLON_QUOTE)
+    for i in 1:length(args)
+        arg = args[i]
+        was_parens = @isexpr(arg, :parens)
+        arg = _strip_parens(arg)
+        if @isexpr(arg, :(=)) && eq_to_kw_in_call && i > 1 
+            arg = Expr(:kw, arg.args...)
+        elseif k != K"parens" && @isexpr(arg, :., 1) && arg.args[1] isa Tuple
+            h, a = arg.args[1]::Tuple{SyntaxHead,Any}
+            arg = ((!was_parens && coalesce_dot && i == 1) ||
+                   (k == K"comparison" && iseven(i)) ||
+                   is_syntactic_operator(h)) ?
+                Symbol(".", a) : Expr(:., a)
+        elseif @isexpr(arg, :parameters) && eq_to_kw_in_params
+            pargs = arg.args
+            for j = 1:length(pargs)
+                pj = pargs[j]
+                if @isexpr(pj, :(=))
+                    pargs[j] = Expr(:kw, pj.args...)
+                end
             end
-            eq_to_kw = eq_to_kw_in_call && i > 1 || eq_to_kw_all
-            coalesce_dot_with_ops = i==1 &&
-                (nodekind in KSet"call dotcall curly" ||
-                 nodekind == K"quote" && flags(node) == COLON_QUOTE)
-            args[insert_linenums ? 2*i : i] =
-                _to_expr(n, eq_to_kw=eq_to_kw,
-                         map_kw_in_params=in_vcbr,
-                         coalesce_dot=coalesce_dot_with_ops,
-                         iteration_spec=(headsym == :for && i == 1),
-                         need_linenodes=!(headsym == :let && i == 1)
-                        )
+        elseif k == K"let" && i == 1 && @isexpr(arg, :block)
+            filter!(a -> !(a isa LineNumberNode), arg.args)
         end
-        if nodekind == K"block" && has_flags(node, PARENS_FLAG)
-            popfirst!(args)
+        if !(k == K"for" && i == 1) && @isexpr(arg, :(=))
+            aa2 = arg.args[2]
+            if is_eventually_call(arg.args[1]) && !@isexpr(aa2, :block)
+                # Add block for short form function locations
+                arg.args[2] = Expr(:block, loc, aa2)
+            end
         end
+        args[i] = arg
+    end
+    return args
+end
+
+# Convert internal node of the JuliaSyntax parse tree to an Expr
+function _internal_node_to_Expr(source, srcrange, head, childranges, childheads, args)
+    k = kind(head)
+    if k == K"var" || k == K"char"
+        @check length(args) == 1
+        return args[1]
+    elseif k == K"string" || k == K"cmdstring"
+        return _string_to_Expr(k, args)
     end
 
-    # Special cases for various expression heads
-    loc = source_location(LineNumberNode, node.source, node.position)
-    if headsym === :macrocall
-        reorder_parameters!(args, 2)
+    loc = source_location(LineNumberNode, source, first(srcrange))
+
+    _fixup_Expr_children!(head, loc, args)
+
+    headstr = untokenize(head, include_flag_suff=false)
+    headsym = !isnothing(headstr) ?
+              Symbol(headstr) :
+              error("Can't untokenize head of kind $(k)")
+
+    if k == K"?"
+        headsym = :if
+    elseif k == K"macrocall"
+        _reorder_parameters!(args, 2)
         insert!(args, 2, loc)
-    elseif headsym === :doc
-        return Expr(:macrocall, GlobalRef(Core, Symbol("@doc")),
-                    loc, args...)
-    elseif headsym in (:dotcall, :call)
+    elseif k == K"block" || k == K"toplevel"
+        if isempty(args)
+            push!(args, loc)
+        else
+            resize!(args, 2*length(args))
+            for i = length(childranges):-1:1
+                args[2*i] = args[i]
+                args[2*i-1] = source_location(LineNumberNode, source, first(childranges[i]))
+            end
+        end
+    elseif k == K"doc"
+        headsym = :macrocall
+        args = [GlobalRef(Core, Symbol("@doc")), loc, args...]
+    elseif k == K"dotcall" || k == K"call"
         # Julia's standard `Expr` ASTs have children stored in a canonical
         # order which is often not always source order. We permute the children
         # here as necessary to get the canonical order.
-        if is_infix_op_call(node) || is_postfix_op_call(node)
+        if is_infix_op_call(head) || is_postfix_op_call(head)
             args[2], args[1] = args[1], args[2]
         end
         # Lower (call x ') to special ' head
-        if is_postfix_op_call(node) && args[1] == Symbol("'")
+        if is_postfix_op_call(head) && args[1] == Symbol("'")
             popfirst!(args)
             headsym = Symbol("'")
         end
         # Move parameters blocks to args[2]
-        reorder_parameters!(args, 2)
+        _reorder_parameters!(args, 2)
         if headsym === :dotcall
-            if is_prefix_call(node)
-                return Expr(:., args[1], Expr(:tuple, args[2:end]...))
+            if is_prefix_call(head)
+                headsym = :.
+                args = Any[args[1], Expr(:tuple, args[2:end]...)]
             else
                 # operator calls
                 headsym = :call
                 args[1] = Symbol(".", args[1])
             end
         end
-    elseif headsym === :. && length(args) == 1 &&
-           is_operator(kind(node[1])) &&
-           (coalesce_dot || is_syntactic_operator(kind(node[1])))
-        return Symbol(".", args[1])
-    elseif headsym in (:ref, :curly)
+    elseif k == K"." && length(args) == 1 && is_operator(childheads[1])
+        # Hack: Here we preserve the head of the operator to determine whether
+        # we need to coalesce it with the dot into a single symbol later on.
+        args[1] = (childheads[1], args[1])
+    elseif k == K"ref" || k == K"curly"
         # Move parameters blocks to args[2]
-        reorder_parameters!(args, 2)
-    elseif headsym === :for
-        if Meta.isexpr(args[1], :cartesian_iterator)
-            args[1] = Expr(:block, args[1].args...)
+        _reorder_parameters!(args, 2)
+    elseif k == K"for"
+        a1 = args[1]
+        if @isexpr(a1, :cartesian_iterator)
+            args[1] = Expr(:block, a1.args...)
         end
-    elseif headsym in (:tuple, :vect, :braces)
+    elseif k in KSet"tuple vect braces"
         # Move parameters blocks to args[1]
-        reorder_parameters!(args, 1)
-    elseif headsym === :comparison
-        for i in 1:length(args)
-            if Meta.isexpr(args[i], :., 1)
-                args[i] = Symbol(".",args[i].args[1])
+        _reorder_parameters!(args, 1)
+    elseif k == K"where"
+        if length(args) == 2
+            a2 = args[2]
+            if @isexpr(a2, :braces)
+                a2a = a2.args
+                _reorder_parameters!(a2a, 2)
+                args = Any[args[1], a2a...]
             end
         end
-    elseif headsym === :where
-        if length(args) == 2 && Meta.isexpr(args[2], :braces)
-            a2 = args[2].args
-            reorder_parameters!(a2, 2)
-            args = Any[args[1], a2...]
-        end
-    elseif headsym === :parens
-        # parens are used for grouping and don't appear in the Expr AST
-        if length(args) == 1
-            return args[1]
-        else
-            # This case should only occur when there's an error inside the
-            # parens, and we've passed ignore_errors=true to the parser.
-            # Wrap in a block to preserve both the value and the error.
-            let args = args
-                @check all(Meta.isexpr(args[j], :error) for j in 2:length(args))
-            end
-            return Expr(:block, args...)
-        end
-    elseif headsym === :try
+    elseif k == K"try"
         # Try children in source order:
         #   try_block catch_var catch_block else_block finally_block
         # Expr ordering:
@@ -239,17 +288,17 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
         finally_ = false
         for i in 2:length(args)
             a = args[i]
-            if Meta.isexpr(a, :catch)
+            if @isexpr(a, :catch)
                 catch_var = a.args[1]
                 catch_ = a.args[2]
-            elseif Meta.isexpr(a, :else)
+            elseif @isexpr(a, :else)
                 else_ = only(a.args)
-            elseif Meta.isexpr(a, :finally)
+            elseif @isexpr(a, :finally)
                 finally_ = only(a.args)
-            elseif Meta.isexpr(a, :error)
+            elseif @isexpr(a, :error)
                 finally_ = Expr(:block, a) # Unclear where to put this but here will do?
             else
-                @check false "Illegal $a subclause in `try`"
+                @assert false "Illegal $a subclause in `try`"
             end
         end
         args = Any[try_, catch_var, catch_]
@@ -259,15 +308,16 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
                 push!(args, else_)
             end
         end
-    elseif headsym === :generator
+    elseif k == K"generator"
         # Reconstruct the nested Expr form for generator from our flatter
         # source-ordered `generator` format.
         gen = args[1]
         for j = length(args):-1:2
-            if Meta.isexpr(args[j], :cartesian_iterator)
-                gen = Expr(:generator, gen, args[j].args...)
+            aj = args[j]
+            if @isexpr(aj, :cartesian_iterator)
+                gen = Expr(:generator, gen, aj.args...)
             else
-                gen = Expr(:generator, gen, args[j])
+                gen = Expr(:generator, gen, aj)
             end
             if j < length(args)
                 # Additional `for`s flatten the inner generator
@@ -275,110 +325,159 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
             end
         end
         return gen
-    elseif headsym == :filter
+    elseif k == K"filter"
         @assert length(args) == 2
         iterspec = args[1]
         outargs = Any[args[2]]
-        if Meta.isexpr(iterspec, :cartesian_iterator)
+        if @isexpr(iterspec, :cartesian_iterator)
             append!(outargs, iterspec.args)
         else
             push!(outargs, iterspec)
         end
         args = outargs
-    elseif headsym in (:nrow, :ncat)
+    elseif k == K"nrow" || k == K"ncat"
         # For lack of a better place, the dimension argument to nrow/ncat
         # is stored in the flags
-        pushfirst!(args, numeric_flags(flags(node)))
-    elseif headsym === :typed_ncat
-        insert!(args, 2, numeric_flags(flags(node)))
-    # elseif headsym === :string && length(args) == 1 && version <= (1,5)
-    #   Strip string from interpolations in 1.5 and lower to preserve
-    #   "hi$("ho")" ==>  (string "hi" "ho")
-    elseif headsym === :(=) && !is_decorated(node)
-        if is_eventually_call(args[1]) && !iteration_spec && !Meta.isexpr(args[2], :block)
-            # Add block for short form function locations
-            args[2] = Expr(:block, loc, args[2])
-        end
-    elseif headsym === :elseif
+        pushfirst!(args, numeric_flags(flags(head)))
+    elseif k == K"typed_ncat"
+        insert!(args, 2, numeric_flags(flags(head)))
+    elseif k == K"elseif"
         # Block for conditional's source location
         args[1] = Expr(:block, loc, args[1])
-    elseif headsym === :(->)
-        if Meta.isexpr(args[2], :block)
-            pushfirst!(args[2].args, loc)
+    elseif k == K"->"
+        a2 = args[2]
+        if @isexpr(a2, :block)
+            pushfirst!(a2.args, loc)
         else
             # Add block for source locations
             args[2] = Expr(:block, loc, args[2])
         end
-    elseif headsym === :function
+    elseif k == K"function"
         if length(args) > 1
-            if Meta.isexpr(args[1], :tuple)
+            a1 = args[1]
+            if @isexpr(a1, :tuple)
                 # Convert to weird Expr forms for long-form anonymous functions.
                 #
                 # (function (tuple (... xs)) body) ==> (function (... xs) body)
-                if length(args[1].args) == 1 && Meta.isexpr(args[1].args[1], :...)
+                if length(a1.args) == 1 && (a11 = a1.args[1]; @isexpr(a11, :...))
                     # function (xs...) \n body end
-                    args[1] = args[1].args[1]
+                    args[1] = a11
                 end
             end
-            pushfirst!(args[2].args, loc)
+            pushfirst!((args[2]::Expr).args, loc)
         end
-    elseif headsym === :macro
+    elseif k == K"macro"
         if length(args) > 1
-            pushfirst!(args[2].args, loc)
+            pushfirst!((args[2]::Expr).args, loc)
         end
-    elseif headsym === :module
-        pushfirst!(args, !has_flags(node, BARE_MODULE_FLAG))
-        pushfirst!(args[3].args, loc)
-    elseif headsym === :inert
+    elseif k == K"module"
+        pushfirst!(args, !has_flags(head, BARE_MODULE_FLAG))
+        pushfirst!((args[3]::Expr).args, loc)
+    elseif k == K"inert"
         return QuoteNode(only(args))
-    elseif (headsym === :quote && length(args) == 1)
+    elseif k == K"quote" && length(args) == 1
         a1 = only(args)
         if !(a1 isa Expr || a1 isa QuoteNode || a1 isa Bool)
             # Flisp parser does an optimization here: simple values are stored
             # as inert QuoteNode rather than in `Expr(:quote)` quasiquote
             return QuoteNode(a1)
         end
-    elseif headsym === :do
+    elseif k == K"do"
         @check length(args) == 3
         return Expr(:do, args[1], Expr(:->, args[2], args[3]))
-    elseif headsym === :let
-        @check Meta.isexpr(args[1], :block)
-        a1 = args[1].args
-        # Ugly logic to strip the Expr(:block) in certian cases for compatibility
-        if length(a1) == 1
-            a = a1[1]
-            if a isa Symbol || Meta.isexpr(a, (:(=), :(::)))
-                args[1] = a
+    elseif k == K"let"
+        a1 = args[1]
+        if @isexpr(a1, :block)
+            a1a = (args[1]::Expr).args
+            # Ugly logic to strip the Expr(:block) in certian cases for compatibility
+            if length(a1a) == 1
+                a = a1a[1]
+                if a isa Symbol || @isexpr(a, :(=)) || @isexpr(a, :(::))
+                    args[1] = a
+                end
             end
         end
-    elseif headsym === :local || headsym === :global
-        if length(args) == 1 && Meta.isexpr(args[1], :const)
+    elseif k == K"local" || k === K"global"
+        if length(args) == 1 && (a1 = args[1]; @isexpr(a1, :const))
             # Normalize `local const` to `const local`
-            args[1] = Expr(headsym, args[1].args...)
+            args[1] = Expr(headsym, (a1::Expr).args...)
             headsym = :const
         end
-    elseif headsym === :return && isempty(args)
+    elseif k == K"return" && isempty(args)
         push!(args, nothing)
-    elseif headsym === :juxtapose
+    elseif k == K"juxtapose"
         headsym = :call
         pushfirst!(args, :*)
-    elseif headsym === :struct
-        pushfirst!(args, has_flags(node, MUTABLE_FLAG))
-    elseif headsym === :importpath
+    elseif k == K"struct"
+        pushfirst!(args, has_flags(head, MUTABLE_FLAG))
+    elseif k == K"importpath"
         headsym = :.
         for i = 1:length(args)
-            if args[i] isa QuoteNode
+            ai = args[i]
+            if ai isa QuoteNode
                 # Permit nonsense additional quoting such as
                 # import A.(:b).:c
-                args[i] = args[i].value
+                args[i] = ai.value
             end
         end
     end
+
     return Expr(headsym, args...)
 end
 
-Base.Expr(node::SyntaxNode) = _to_expr(node)
 
-function build_tree(::Type{Expr}, stream::ParseStream; kws...)
-    Expr(build_tree(SyntaxNode, stream; kws...))
+# Stack entry for build_tree Expr conversion.
+# We'd use `Tuple{UnitRange{Int},SyntaxHead,Any}` instead, but that's an
+# abstract type due to the `Any` and tuple covariance which destroys
+# performance.
+struct _BuildExprStackEntry
+    srcrange::UnitRange{Int}
+    head::SyntaxHead
+    ex::Any
 end
+
+function build_tree(::Type{Expr}, stream::ParseStream;
+                    filename=nothing, first_line=1, kws...)
+    source = SourceFile(sourcetext(stream), filename=filename, first_line=first_line)
+    args = Any[]
+    childranges = UnitRange{Int}[]
+    childheads = SyntaxHead[]
+    entry = build_tree(_BuildExprStackEntry, stream; kws...) do head, srcrange, nodechildren
+        if is_trivia(head) && !is_error(head)
+            return nothing
+        end
+        k = kind(head)
+        if isnothing(nodechildren)
+            ex = _leaf_to_Expr(source, head, srcrange, nothing)
+        else
+            resize!(childranges, length(nodechildren))
+            resize!(childheads, length(nodechildren))
+            resize!(args, length(nodechildren))
+            for (i,c) in enumerate(nodechildren)
+                childranges[i] = c.srcrange
+                childheads[i] = c.head
+                args[i] = c.ex
+            end
+            ex = _internal_node_to_Expr(source, srcrange, head, childranges, childheads, args)
+        end
+        return _BuildExprStackEntry(srcrange, head, ex)
+    end
+    loc = source_location(LineNumberNode, source, first(entry.srcrange))
+    only(_fixup_Expr_children!(SyntaxHead(K"None",EMPTY_FLAGS), loc, Any[entry.ex]))
+end
+
+function _to_expr(node::SyntaxNode)
+    if !haschildren(node)
+        return _leaf_to_Expr(node.source, head(node), range(node), node)
+    end
+    cs = children(node)
+    args = Any[_to_expr(c) for c in cs]
+    _internal_node_to_Expr(node.source, range(node), head(node), range.(cs), head.(cs), args)
+end
+
+function Base.Expr(node::SyntaxNode)
+    ex = _to_expr(node)
+    loc = source_location(LineNumberNode, node.source, first(range(node)))
+    only(_fixup_Expr_children!(SyntaxHead(K"None",EMPTY_FLAGS), loc, Any[ex]))
+end
+

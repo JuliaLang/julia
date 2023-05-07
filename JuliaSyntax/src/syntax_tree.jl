@@ -46,85 +46,9 @@ Base.show(io::IO, ::ErrorVal) = printstyled(io, "✘", color=:light_red)
 
 function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::Integer=1)
     if !haschildren(raw) && !(is_syntax_kind(raw) || is_keyword(raw))
-        # Leaf node
-        k = kind(raw)
-        val_range = position:position + span(raw) - 1
-        val_str = view(source, val_range)
         # Here we parse the values eagerly rather than representing them as
         # strings. Maybe this is good. Maybe not.
-        #
-        # Any errors parsing literals are represented as ErrorVal() - this can
-        # happen when the user sets `ignore_errors=true` during parsing.
-        val = if k == K"Integer"
-            parse_int_literal(val_str)
-        elseif k == K"Float"
-            v, code = parse_float_literal(Float64, source.code, position,
-                                          position+span(raw))
-            (code === :ok || code === :underflow) ? v : ErrorVal()
-        elseif k == K"Float32"
-            v, code = parse_float_literal(Float32, source.code, position,
-                                          position+span(raw))
-            (code === :ok || code === :underflow) ? v : ErrorVal()
-        elseif k in KSet"BinInt OctInt HexInt"
-            parse_uint_literal(val_str, k)
-        elseif k == K"true"
-            true
-        elseif k == K"false"
-            false
-        elseif k == K"Char"
-            io = IOBuffer()
-            had_error = unescape_julia_string(io, source.code, position,
-                                              position+span(raw), Diagnostic[])
-            if had_error
-                ErrorVal()
-            else
-                seek(io, 0)
-                c = read(io, Char)
-                eof(io) ? c : ErrorVal()
-            end
-        elseif k == K"Identifier"
-            if has_flags(head(raw), RAW_STRING_FLAG)
-                io = IOBuffer()
-                unescape_raw_string(io, val_str, false)
-                Symbol(normalize_identifier(String(take!(io))))
-            else
-                Symbol(normalize_identifier(val_str))
-            end
-        elseif is_keyword(k)
-            # This should only happen for tokens nested inside errors
-            Symbol(val_str)
-        elseif k in KSet"String CmdString"
-            io = IOBuffer()
-            had_error = false
-            if has_flags(head(raw), RAW_STRING_FLAG)
-                unescape_raw_string(io, val_str, k == K"CmdString")
-            else
-                had_error = unescape_julia_string(io, source.code, position,
-                                                  position+span(raw), Diagnostic[])
-            end
-            had_error ? ErrorVal() : String(take!(io))
-        elseif is_operator(k)
-            isempty(val_range)  ?
-                Symbol(untokenize(k)) : # synthetic invisible tokens
-                Symbol(normalize_identifier(val_str))
-        elseif k == K"error"
-            ErrorVal()
-        elseif k == K"MacroName"
-            Symbol("@$(normalize_identifier(val_str))")
-        elseif k == K"StringMacroName"
-            Symbol("@$(normalize_identifier(val_str))_str")
-        elseif k == K"CmdMacroName"
-            Symbol("@$(normalize_identifier(val_str))_cmd")
-        elseif k == K"core_@cmd"
-            Symbol("core_@cmd")
-        elseif is_syntax_kind(raw)
-            nothing
-        else
-            # FIXME: this allows us to recover from trivia is_error nodes
-            # that we insert below
-            @debug "Leaf node of kind $k unknown to SyntaxNode"
-            ErrorVal()
-        end
+        val = parse_julia_literal(source, head(raw), position:position + span(raw) - 1)
         return SyntaxNode(nothing, nothing, SyntaxData(source, raw, position, val))
     else
         cs = SyntaxNode[]
