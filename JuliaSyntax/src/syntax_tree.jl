@@ -44,7 +44,13 @@ end
 
 Base.show(io::IO, ::ErrorVal) = printstyled(io, "✘", color=:light_red)
 
-function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::Integer=1)
+function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead};
+                    keep_parens=false, position::Integer=1)
+    _to_SyntaxNode(source, raw, convert(Int, position), keep_parens)
+end
+
+function _to_SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead},
+                        position::Int, keep_parens::Bool)
     if !haschildren(raw) && !(is_syntax_kind(raw) || is_keyword(raw))
         # Here we parse the values eagerly rather than representing them as
         # strings. Maybe this is good. Maybe not.
@@ -56,9 +62,12 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         for (i,rawchild) in enumerate(children(raw))
             # FIXME: Allowing trivia is_error nodes here corrupts the tree layout.
             if !is_trivia(rawchild) || is_error(rawchild)
-                push!(cs, SyntaxNode(source, rawchild, pos))
+                push!(cs, _to_SyntaxNode(source, rawchild, pos, keep_parens))
             end
             pos += rawchild.span
+        end
+        if !keep_parens && kind(raw) == K"parens" && length(cs) == 1
+            return cs[1]
         end
         node = SyntaxNode(nothing, cs, SyntaxData(source, raw, position, nothing))
         for c in cs
@@ -182,10 +191,11 @@ end
 # shallow-copy the data
 Base.copy(data::SyntaxData) = SyntaxData(data.source, data.raw, data.position, data.val)
 
-function build_tree(::Type{SyntaxNode}, stream::ParseStream; filename=nothing, first_line=1, kws...)
+function build_tree(::Type{SyntaxNode}, stream::ParseStream;
+                    filename=nothing, first_line=1, keep_parens=false, kws...)
     green_tree = build_tree(GreenNode, stream; kws...)
     source = SourceFile(sourcetext(stream), filename=filename, first_line=first_line)
-    SyntaxNode(source, green_tree, first_byte(stream))
+    SyntaxNode(source, green_tree, position=first_byte(stream), keep_parens=keep_parens)
 end
 
 #-------------------------------------------------------------------------------

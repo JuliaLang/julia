@@ -7,7 +7,7 @@ function parse_to_sexpr_str(production, code::AbstractString; v=v"1.6", expr=fal
     JuliaSyntax.validate_tokens(stream)
     t = build_tree(GreenNode, stream, wrap_toplevel_as_kind=K"None")
     source = SourceFile(code)
-    s = SyntaxNode(source, t)
+    s = SyntaxNode(source, t, keep_parens=true)
     if expr
         JuliaSyntax.remove_linenums!(Expr(s))
     else

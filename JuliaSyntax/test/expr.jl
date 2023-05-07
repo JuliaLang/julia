@@ -5,9 +5,9 @@
              (s; kws...) -> JuliaSyntax.parsestmt(Expr, s; kws...),
              (s; kws...) -> JuliaSyntax.parseall(Expr, s; kws...))
         else
-            ((s; kws...) -> Expr(JuliaSyntax.parseatom(SyntaxNode, s; kws...)),
-             (s; kws...) -> Expr(JuliaSyntax.parsestmt(SyntaxNode, s; kws...)),
-             (s; kws...) -> Expr(JuliaSyntax.parseall(SyntaxNode, s; kws...)))
+            ((s; kws...) -> Expr(JuliaSyntax.parseatom(SyntaxNode, s; keep_parens=true, kws...)),
+             (s; kws...) -> Expr(JuliaSyntax.parsestmt(SyntaxNode, s; keep_parens=true, kws...)),
+             (s; kws...) -> Expr(JuliaSyntax.parseall(SyntaxNode, s; keep_parens=true, kws...)))
         end
 
     @testset "Quote nodes" begin
@@ -532,6 +532,16 @@
     @testset "return" begin
         @test parsestmt("return x") == Expr(:return, :x)
         @test parsestmt("return")  == Expr(:return, nothing)
+    end
+
+    @testset "Large integer macros" begin
+        @test parsestmt("0x00000000000000001") ==
+            Expr(:macrocall, GlobalRef(Core, Symbol("@uint128_str")),
+                 nothing, "0x00000000000000001")
+
+        @test parsestmt("(0x00000000000000001)") ==
+            Expr(:macrocall, GlobalRef(Core, Symbol("@uint128_str")),
+                 nothing, "0x00000000000000001")
     end
 
     @testset "struct" begin
