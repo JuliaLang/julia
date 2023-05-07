@@ -465,7 +465,7 @@ function _triscale!(A::UpperTriangular, B::UpperTriangular, c::Number, _add)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = 1:j
-            @inbounds _modify!(_add, B[i,j] * c, A, (i,j))
+            @inbounds _modify!(_add, B.data[i,j] * c, A.data, (i,j))
         end
     end
     return A
@@ -475,7 +475,7 @@ function _triscale!(A::UpperTriangular, c::Number, B::UpperTriangular, _add)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = 1:j
-            @inbounds _modify!(_add, c * B[i,j], A, (i,j))
+            @inbounds _modify!(_add, c * B.data[i,j], A.data, (i,j))
         end
     end
     return A
@@ -486,7 +486,7 @@ function _triscale!(A::UpperOrUnitUpperTriangular, B::UnitUpperTriangular, c::Nu
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
         for i = 1:(j - 1)
-            @inbounds _modify!(_add, B[i,j] * c, A, (i,j))
+            @inbounds _modify!(_add, B.data[i,j] * c, A.data, (i,j))
         end
     end
     return A
@@ -497,7 +497,7 @@ function _triscale!(A::UpperOrUnitUpperTriangular, c::Number, B::UnitUpperTriang
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
         for i = 1:(j - 1)
-            @inbounds _modify!(_add, c * B[i,j], A, (i,j))
+            @inbounds _modify!(_add, c * B.data[i,j], A.data, (i,j))
         end
     end
     return A
@@ -507,7 +507,7 @@ function _triscale!(A::LowerTriangular, B::LowerTriangular, c::Number, _add)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = j:n
-            @inbounds _modify!(_add, B[i,j] * c, A, (i,j))
+            @inbounds _modify!(_add, B.data[i,j] * c, A.data, (i,j))
         end
     end
     return A
@@ -517,7 +517,7 @@ function _triscale!(A::LowerTriangular, c::Number, B::LowerTriangular, _add)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = j:n
-            @inbounds _modify!(_add, c * B[i,j], A, (i,j))
+            @inbounds _modify!(_add, c * B.data[i,j], A.data, (i,j))
         end
     end
     return A
@@ -528,7 +528,7 @@ function _triscale!(A::LowerOrUnitLowerTriangular, B::UnitLowerTriangular, c::Nu
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
         for i = (j + 1):n
-            @inbounds _modify!(_add, B[i,j] * c, A, (i,j))
+            @inbounds _modify!(_add, B.data[i,j] * c, A.data, (i,j))
         end
     end
     return A
@@ -539,7 +539,7 @@ function _triscale!(A::LowerOrUnitLowerTriangular, c::Number, B::UnitLowerTriang
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
         for i = (j + 1):n
-            @inbounds _modify!(_add, c * B[i,j], A, (i,j))
+            @inbounds _modify!(_add, c * B.data[i,j], A.data, (i,j))
         end
     end
     return A
