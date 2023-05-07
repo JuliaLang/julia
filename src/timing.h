@@ -64,6 +64,7 @@ extern uint32_t jl_timing_print_limit;
 
 #define JL_TIMING(subsystem, event)
 #define JL_TIMING_SUSPEND(subsystem, ct)
+
 #define jl_timing_show(v, b)
 #define jl_timing_show_module(m, b)
 #define jl_timing_show_filename(f, b)
@@ -72,6 +73,7 @@ extern uint32_t jl_timing_print_limit;
 #define jl_timing_show_func_sig(tt, b)
 #define jl_timing_printf(b, f, ...)
 #define jl_timing_puts(b, s)
+#define jl_timing_init_task(t)
 #define jl_timing_block_enter_task(ct, ptls, blk)
 #define jl_timing_block_exit_task(ct, ptls) ((jl_timing_block_t *)NULL)
 #define jl_pop_timing_block(blk)
@@ -98,6 +100,8 @@ extern "C" {
 #endif
 void jl_print_timings(void);
 jl_timing_block_t *jl_pop_timing_block(jl_timing_block_t *cur_block);
+
+void jl_timing_init_task(jl_task_t *t);
 void jl_timing_block_enter_task(jl_task_t *ct, jl_ptls_t ptls, jl_timing_block_t *prev_blk);
 jl_timing_block_t *jl_timing_block_exit_task(jl_task_t *ct, jl_ptls_t ptls);
 

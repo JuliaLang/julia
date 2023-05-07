@@ -1068,30 +1068,6 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->start = start;
     t->result = jl_nothing;
     t->donenotify = completion_future;
-#ifdef USE_TRACY
-    jl_value_t *start_type = jl_typeof(t->start);
-    const char *start_name = "";
-    if (jl_is_datatype(start_type))
-        start_name = jl_symbol_name(((jl_datatype_t *) start_type)->name->name);
-
-    static uint16_t task_id = 1;
-
-    // XXX: Tracy uses this as a handle internally and requires that this
-    // string live forever, so this allocation is intentionally leaked.
-    char *fiber_name;
-    if (start_name[0] == '#') {
-        jl_method_instance_t *mi = jl_method_lookup(&t->start, 1, jl_get_world_counter());
-        size_t fiber_name_len = strlen(jl_symbol_name(mi->def.method->file)) + 22; // 22 characters in "Task 65535 (:0000000)\0"
-        fiber_name = (char *)malloc(fiber_name_len);
-        snprintf(fiber_name, fiber_name_len,  "Task %d (%s:%d)", task_id++, jl_symbol_name(mi->def.method->file), mi->def.method->line);
-    } else {
-        size_t fiber_name_len = strlen(start_name) + 16; // 16 characters in "Task 65535 (\"\")\0"
-        fiber_name = (char *)malloc(fiber_name_len);
-        snprintf(fiber_name, fiber_name_len,  "Task %d (\"%s\")", task_id++, start_name);
-    }
-
-    t->name = fiber_name;
-#endif
     jl_atomic_store_relaxed(&t->_isexception, 0);
     // Inherit logger state from parent task
     t->logstate = ct->logstate;
@@ -1109,6 +1085,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->ptls = NULL;
     t->world_age = ct->world_age;
     t->reentrant_timing = 0;
+    jl_timing_init_task(t);
 
 #ifdef COPY_STACKS
     if (!t->copy_stack) {

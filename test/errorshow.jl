@@ -987,3 +987,12 @@ bt_str = sprint(Base.show_backtrace, bt)
 @test occursin("g_collapse_pos_kw(x::Float64, y::Float64; z::Float64)", bt_str)
 @test !occursin("g_collapse_pos_kw(x::Float64, y::Float64)", bt_str)
 @test !occursin("g_collapse_pos_kw(x::Float64)", bt_str)
+
+# Test Base.print_with_compare in convert MethodErrors
+struct TypeCompareError{A,B} end
+let e = try convert(TypeCompareError{Float64,1}, TypeCompareError{Float64,2}()); catch e e end
+    str = sprint(Base.showerror, e)
+    @test  occursin("TypeCompareError{Float64,2}", str)
+    @test  occursin("TypeCompareError{Float64,1}", str)
+    @test !occursin("TypeCompareError{Float64{},2}", str) # No {...} for types without params
+end

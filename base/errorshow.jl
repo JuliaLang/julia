@@ -181,6 +181,7 @@ function print_with_compare(io::IO, @nospecialize(a::DataType), @nospecialize(b:
     if a.name === b.name
         Base.show_type_name(io, a.name)
         n = length(a.parameters)
+        n > 0 || return
         print(io, '{')
         for i = 1:n
             if i > length(b.parameters)

@@ -253,6 +253,7 @@ Stacktrace:
 """
 function bind(c::Channel, task::Task)
     T = Task(() -> close_chnl_on_taskdone(task, c))
+    T.sticky = false
     _wait2(task, T)
     return c
 end

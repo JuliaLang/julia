@@ -1,15 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#############
-# constants #
-#############
-
-const _REF_NAME = Ref.body.name
-
-#########
-# logic #
-#########
-
 # See if the inference result of the current statement's result value might affect
 # the final answer for the method (aside from optimization potential and exceptions).
 # To do that, we need to check both for slot assignment and SSA usage.
@@ -1331,14 +1321,18 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
                                 sv::AbsIntState)
     if isa(typ, PartialStruct)
         widet = typ.typ
-        if isa(widet, DataType) && widet.name === Tuple.name
-            return AbstractIterationResult(typ.fields, nothing)
+        if isa(widet, DataType)
+            if widet.name === Tuple.name
+                return AbstractIterationResult(typ.fields, nothing)
+            elseif widet.name === _NAMEDTUPLE_NAME
+                return AbstractIterationResult(typ.fields, nothing)
+            end
         end
     end
 
     if isa(typ, Const)
         val = typ.val
-        if isa(val, SimpleVector) || isa(val, Tuple)
+        if isa(val, SimpleVector) || isa(val, Tuple) || isa(val, NamedTuple)
             return AbstractIterationResult(Any[ Const(val[i]) for i in 1:length(val) ], nothing) # avoid making a tuple Generator here!
         end
     end
@@ -1549,7 +1543,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
                     # This is vararg, we're not gonna be able to do any inlining,
                     # drop the info
                     info = nothing
-                    tail = tuple_tail_elem(unwrapva(ct[end]), cti)
+                    tail = tuple_tail_elem(typeinf_lattice(interp), unwrapva(ct[end]), cti)
                     push!(ctypes´, push!(ct[1:(end - 1)], tail))
                 else
                     push!(ctypes´, append!(ct[:], cti))
@@ -1572,7 +1566,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
         for i = 1:lct-1
             cti = ct[i]
             if isvarargtype(cti)
-                ct[i] = tuple_tail_elem(unwrapva(cti), ct[(i+1):lct])
+                ct[i] = tuple_tail_elem(typeinf_lattice(interp), unwrapva(cti), ct[(i+1):lct])
                 resize!(ct, i)
                 break
             end
@@ -2125,7 +2119,7 @@ function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
     if unwrapva(T) === Bottom
         return Bottom
     elseif isa(T, Type)
-        if isa(T, DataType) && (T::DataType).name === _REF_NAME
+        if isa(T, DataType) && (T::DataType).name === Ref.body.name
             isref = true
             T = T.parameters[1]
             if isreturn && T === Any

@@ -29,13 +29,15 @@ L4:                                               ; preds = %top
   %current_task112 = getelementptr inbounds {}**, {}*** %1, i64 -12
   %current_task1 = bitcast {}*** %current_task112 to {}**
   ; CHECK: %3 = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task1, i64 8, {} addrspace(10)* @tag)
+  ; CHECK-NEXT: %4 = bitcast {} addrspace(10)* %3 to i8 addrspace(10)*
+  ; CHECK-NEXT: call void @llvm.memset.p10i8.i64(i8 addrspace(10)* align {{[0-9]+}} %4, i8 0, i64 8, i1 false)
   ; CHECK-NEXT: br label %L22
   br label %L22
 
 L22:                                              ; preds = %L4, %L22
   %value_phi5 = phi i64 [ 1, %L4 ], [ %5, %L22 ]
-  ; CHECK: %value_phi5 = phi i64 [ 1, %L4 ], [ %5, %L22 ]
-  ; CHECK-NEXT %4 = bitcast {} addrspace(10)* %3 to i64 addrspace(10)*
+  ; CHECK: %value_phi5 = phi i64 [ 1, %L4 ], [ %6, %L22 ]
+  ; CHECK-NEXT %5 = bitcast {} addrspace(10)* %3 to i64 addrspace(10)*
   %3 = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task1, i64 8, {} addrspace(10)* @tag) #1
   %4 = bitcast {} addrspace(10)* %3 to i64 addrspace(10)*
   store i64 %value_phi5, i64 addrspace(10)* %4, align 8, !tbaa !2
@@ -55,6 +57,8 @@ top:
 ; CHECK: preheader:
 preheader:
 ; CHECK-NEXT: %alloc = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task, i64 8, {} addrspace(10)* @tag)
+; CHECK-NEXT: [[casted:%.*]] = bitcast {} addrspace(10)* %alloc to i8 addrspace(10)*
+; CHECK-NEXT: call void @llvm.memset.p10i8.i64(i8 addrspace(10)* align {{[0-9]+}} [[casted]], i8 0, i64 8, i1 false)
 ; CHECK-NEXT: br label %loop
   br label %loop
 loop:

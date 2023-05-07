@@ -94,33 +94,33 @@ extern "C" {
 
 enum class MSanTLS
 {
-	param = 1,             // __msan_param_tls
-	param_origin,          //__msan_param_origin_tls
-	retval,                // __msan_retval_tls
-	retval_origin,         //__msan_retval_origin_tls
-	va_arg,                // __msan_va_arg_tls
-	va_arg_origin,         // __msan_va_arg_origin_tls
-	va_arg_overflow_size,  // __msan_va_arg_overflow_size_tls
-	origin,                //__msan_origin_tls
+    param = 1,             // __msan_param_tls
+    param_origin,          //__msan_param_origin_tls
+    retval,                // __msan_retval_tls
+    retval_origin,         //__msan_retval_origin_tls
+    va_arg,                // __msan_va_arg_tls
+    va_arg_origin,         // __msan_va_arg_origin_tls
+    va_arg_overflow_size,  // __msan_va_arg_overflow_size_tls
+    origin,                //__msan_origin_tls
 };
 
 static void *getTLSAddress(void *control)
 {
-	auto tlsIndex = static_cast<MSanTLS>(reinterpret_cast<uintptr_t>(control));
-	switch(tlsIndex)
-	{
-	case MSanTLS::param: return reinterpret_cast<void *>(&__msan_param_tls);
-	case MSanTLS::param_origin: return reinterpret_cast<void *>(&__msan_param_origin_tls);
-	case MSanTLS::retval: return reinterpret_cast<void *>(&__msan_retval_tls);
-	case MSanTLS::retval_origin: return reinterpret_cast<void *>(&__msan_retval_origin_tls);
-	case MSanTLS::va_arg: return reinterpret_cast<void *>(&__msan_va_arg_tls);
-	case MSanTLS::va_arg_origin: return reinterpret_cast<void *>(&__msan_va_arg_origin_tls);
-	case MSanTLS::va_arg_overflow_size: return reinterpret_cast<void *>(&__msan_va_arg_overflow_size_tls);
-	case MSanTLS::origin: return reinterpret_cast<void *>(&__msan_origin_tls);
-	default:
-		assert(false && "BAD MSAN TLS INDEX");
-		return nullptr;
-	}
+    auto tlsIndex = static_cast<MSanTLS>(reinterpret_cast<uintptr_t>(control));
+    switch(tlsIndex)
+    {
+    case MSanTLS::param: return reinterpret_cast<void *>(&__msan_param_tls);
+    case MSanTLS::param_origin: return reinterpret_cast<void *>(&__msan_param_origin_tls);
+    case MSanTLS::retval: return reinterpret_cast<void *>(&__msan_retval_tls);
+    case MSanTLS::retval_origin: return reinterpret_cast<void *>(&__msan_retval_origin_tls);
+    case MSanTLS::va_arg: return reinterpret_cast<void *>(&__msan_va_arg_tls);
+    case MSanTLS::va_arg_origin: return reinterpret_cast<void *>(&__msan_va_arg_origin_tls);
+    case MSanTLS::va_arg_overflow_size: return reinterpret_cast<void *>(&__msan_va_arg_overflow_size_tls);
+    case MSanTLS::origin: return reinterpret_cast<void *>(&__msan_origin_tls);
+    default:
+        assert(false && "BAD MSAN TLS INDEX");
+        return nullptr;
+    }
 }
 }
 #endif
