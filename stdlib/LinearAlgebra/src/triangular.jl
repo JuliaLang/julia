@@ -454,18 +454,13 @@ function copyto!(A::T, B::T) where {T<:Union{LowerTriangular,UnitLowerTriangular
 end
 
 # Define `mul!` for (Unit){Upper,Lower}Triangular matrices times a number.
-for (Trig, UnitTrig) in Any[(UpperTriangular, UnitUpperTriangular),
-                            (LowerTriangular, UnitLowerTriangular)]
-    for (TB, TC) in Any[(Trig, Number),
-                        (Number, Trig),
-                        (UnitTrig, Number),
-                        (Number, UnitTrig)]
-        @eval @inline mul!(A::$Trig, B::$TB, C::$TC, alpha::Number, beta::Number) =
-            _mul!(A, B, C, MulAddMul(alpha, beta))
-    end
-end
+# be permissive here and require compatibility later in _triscale!
+@inline mul!(A::UpperOrLowerTriangular, B::UpperOrLowerTriangular, C::Number, alpha::Number, beta::Number) =
+    _triscale!(A, B, C, MulAddMul(alpha, beta))
+@inline mul!(A::UpperOrLowerTriangular, B::Number, C::UpperOrLowerTriangular, alpha::Number, beta::Number) =
+    _triscale!(A, B, C, MulAddMul(alpha, beta))
 
-@inline function _mul!(A, B::UpperTriangular, c::Number, _add)
+function _triscale!(A::UpperTriangular, B::UpperTriangular, c::Number, _add)
     n = checksquare(B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
@@ -475,7 +470,7 @@ end
     end
     return A
 end
-@inline function _mul!(A, c::Number, B::UpperTriangular, _add)
+function _triscale!(A::UpperTriangular, c::Number, B::UpperTriangular, _add)
     n = checksquare(B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
@@ -485,7 +480,7 @@ end
     end
     return A
 end
-@inline function _mul!(A, B::UnitUpperTriangular, c::Number, _add)
+function _triscale!(A::UpperOrUnitUpperTriangular, B::UnitUpperTriangular, c::Number, _add)
     n = checksquare(B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
@@ -496,7 +491,7 @@ end
     end
     return A
 end
-@inline function _mul!(A, c::Number, B::UnitUpperTriangular, _add)
+function _triscale!(A::UpperOrUnitUpperTriangular, c::Number, B::UnitUpperTriangular, _add)
     n = checksquare(B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
@@ -507,7 +502,7 @@ end
     end
     return A
 end
-@inline function _mul!(A, B::LowerTriangular, c::Number, _add)
+function _triscale!(A::LowerTriangular, B::LowerTriangular, c::Number, _add)
     n = checksquare(B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
@@ -517,7 +512,7 @@ end
     end
     return A
 end
-@inline function _mul!(A, c::Number, B::LowerTriangular, _add)
+function _triscale!(A::LowerTriangular, c::Number, B::LowerTriangular, _add)
     n = checksquare(B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
@@ -527,7 +522,7 @@ end
     end
     return A
 end
-@inline function _mul!(A, B::UnitLowerTriangular, c::Number, _add)
+function _triscale!(A::LowerOrUnitLowerTriangular, B::UnitLowerTriangular, c::Number, _add)
     n = checksquare(B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
@@ -538,7 +533,7 @@ end
     end
     return A
 end
-@inline function _mul!(A, c::Number, B::UnitLowerTriangular, _add)
+function _triscale!(A::LowerOrUnitLowerTriangular, c::Number, B::UnitLowerTriangular, _add)
     n = checksquare(B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
@@ -550,8 +545,8 @@ end
     return A
 end
 
-rmul!(A::Union{UpperTriangular,LowerTriangular}, c::Number) = @inline mul!(A, A, c)
-lmul!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = @inline mul!(A, c, A)
+rmul!(A::UpperOrLowerTriangular, c::Number) = @inline _triscale!(A, A, c, MulAddMul())
+lmul!(c::Number, A::UpperOrLowerTriangular) = @inline _triscale!(A, c, A, MulAddMul())
 
 function dot(x::AbstractVector, A::UpperTriangular, y::AbstractVector)
     require_one_based_indexing(x, y)
@@ -668,15 +663,33 @@ fillstored!(A::UnitUpperTriangular, x) = (fillband!(A.data, x, 1, size(A,2)-1); 
 ######################
 
 lmul!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B)
-mul!(C::AbstractVector, A::AbstractTriangular, B::AbstractVector) = _multrimat!(C, A, B)
-mul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractVector) = _multrimat!(C, A, B)
+mul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVector) = _multrimat!(C, A, B)
 mul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractMatrix) = _multrimat!(C, A, B)
-  mul!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractTriangular) = _mulmattri!(C, A, B)
+mul!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractTriangular) = _mulmattri!(C, A, B)
 mul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractTriangular) = _multrimat!(C, A, B)
 
-@inline mul!(C::AbstractMatrix, A::AbstractTriangular, B::AdjOrTrans{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) =
-    mul!(C, A, copy(B), alpha, beta)
-    mul!(C, A, copy(B), alpha, beta)
+for TC in (:AbstractVector, :AbstractMatrix)
+    @eval @inline function mul!(C::$TC, A::AbstractTriangular, B::AbstractVector, alpha::Number, beta::Number)
+        if isone(alpha) && iszero(beta)
+            return mul!(C, A, B)
+        else
+            return generic_matvecmul!(C, 'N', A, B, MulAddMul(alpha, beta))
+        end
+    end
+end
+for (TA, TB) in ((:AbstractTriangular, :AbstractMatrix),
+                    (:AbstractMatrix, :AbstractTriangular),
+                    (:AbstractTriangular, :AbstractTriangular)
+                )
+    @eval @inline function mul!(C::AbstractMatrix, A::$TA, B::$TB, alpha::Number, beta::Number)
+        if isone(alpha) && iszero(beta)
+            return mul!(C, A, B)
+        else
+            return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
+        end
+    end
+end
+
 
 # generic fallback for AbstractTriangular matrices outside of the four subtypes provided here
 _multrimat!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) =
@@ -692,17 +705,9 @@ for (cty, aty, bty) in ((:UpperTriangular, :UpperTriangular, :UpperTriangular),
                         (:LowerTriangular, :LowerTriangular, :UnitLowerTriangular),
                         (:LowerTriangular, :UnitLowerTriangular, :LowerTriangular),
                         (:UnitLowerTriangular, :UnitLowerTriangular, :UnitLowerTriangular))
-    @eval function mul!(C::$cty, A::$aty, B::$bty)
+    @eval function _multrimat!(C::$cty, A::$aty, B::$bty)
         _multrimat!(parent(C), A, B)
         return C
-    end
-    @eval mul!(C::AbstractMatrix, A::$aty, B::$bty) = _multrimat!(C, A, B) # disambiguation
-    @eval @inline function mul!(C::$cty, A::$aty, B::$bty, alpha::Number, beta::Number)
-        if isone(alpha) && iszero(beta)
-            return mul!(C, A, B)
-        else
-            return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
-        end
     end
 end
 
@@ -1206,69 +1211,58 @@ end
 function _ldiv!(c::AbstractVector, xA::UpperTriangular{<:Any,<:AdjOrTrans}, b::AbstractVector)
     tfun = adj_or_trans(parent(xA))
     A = parent(parent(xA))
-    n = size(A, 1)
-    if !(n == length(b))
-        throw(DimensionMismatch("first dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
-    end
+    n = size(A, 2)
     @inbounds for j in n:-1:1
-        z = b[j]
-        for i in n:-1:j+1
-            z -= tfun(A[i,j]) * b[i]
+        ajj = A[j,j]
+        iszero(ajj) && throw(SingularException(j))
+        bj = b[j]
+        for i in j+1:n
+            bj -= tfun(A[i,j]) * c[i]
         end
-        iszero(A[j,j]) && throw(SingularException(j))
-        c[j] = tfun(A[j,j]) \ z
+        c[j] = tfun(ajj) \ bj
     end
     return c
 end
-
 function _ldiv!(c::AbstractVector, xA::UnitUpperTriangular{<:Any,<:AdjOrTrans}, b::AbstractVector)
     tfun = adj_or_trans(parent(xA))
     A = parent(parent(xA))
-    n = size(A, 1)
-    if !(n == length(b))
-        throw(DimensionMismatch("first dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
-    end
+    oA = oneunit(eltype(A))
+    n = size(A, 2)
     @inbounds for j in n:-1:1
-        z = b[j]
-        for i in n:-1:j+1
-            z -= tfun(A[i,j]) * b[i]
+        bj = b[j]
+        for i in j+1:n
+            bj -= tfun(A[i,j]) * c[i]
         end
-        c[j] = z
+        c[j] = oA \ bj
     end
     return c
 end
-
 function _ldiv!(c::AbstractVector, xA::LowerTriangular{<:Any,<:AdjOrTrans}, b::AbstractVector)
     tfun = adj_or_trans(parent(xA))
     A = parent(parent(xA))
-    n = size(A, 1)
-    if !(n == length(b))
-        throw(DimensionMismatch("first dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
-    end
+    n = size(A, 2)
     @inbounds for j in 1:n
-        z = b[j]
+        ajj = A[j,j]
+        iszero(ajj) && throw(SingularException(j))
+        bj = b[j]
         for i in 1:j-1
-            z -= tfun(A[i,j]) * b[i]
+            bj -= tfun(A[i,j]) * c[i]
         end
-        iszero(A[j,j]) && throw(SingularException(j))
-        c[j] = tfun(A[j,j]) \ z
+        c[j] = tfun(ajj) \ bj
     end
     return c
 end
-
 function _ldiv!(c::AbstractVector, xA::UnitLowerTriangular{<:Any,<:AdjOrTrans}, b::AbstractVector)
     tfun = adj_or_trans(parent(xA))
     A = parent(parent(xA))
-    n = size(A, 1)
-    if !(n == length(b))
-        throw(DimensionMismatch("first dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
-    end
+    oA = oneunit(eltype(A))
+    n = size(A, 2)
     @inbounds for j in 1:n
-        z = b[j]
+        bj = b[j]
         for i in 1:j-1
-            z -= tfun(A[i,j]) * b[i]
+            bj -= tfun(A[i,j]) * c[i]
         end
-        c[j] = z
+        c[j] = oA \ bj
     end
     return c
 end

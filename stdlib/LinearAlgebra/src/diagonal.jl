@@ -375,11 +375,22 @@ function __muldiag!(out, D1::Diagonal, D2::Diagonal, _add::MulAddMul{ais1,bis0})
     return out
 end
 
-function _mul!(out, A, B, _add)
+function _mul_diag!(out, A, B, _add)
     _muldiag_size_check(out, A, B)
     __muldiag!(out, A, B, _add)
     return out
 end
+
+_mul!(out::AbstractVecOrMat, D::Diagonal, V::AbstractVector, _add) =
+    _mul_diag!(out, D, V, _add)
+_mul!(out::AbstractMatrix, D::Diagonal, B::AbstractMatrix, _add) =
+    _mul_diag!(out, D, B, _add)
+_mul!(out::AbstractMatrix, A::AbstractMatrix, D::Diagonal, _add) =
+    _mul_diag!(out, A, D, _add)
+_mul!(C::Diagonal, Da::Diagonal, Db::Diagonal, _add) =
+    _mul_diag!(C, Da, Db, _add)
+_mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, _add) =
+    _mul_diag!(C, Da, Db, _add)
 
 function (*)(Da::Diagonal, A::AbstractMatrix, Db::Diagonal)
     _muldiag_size_check(Da, A)
