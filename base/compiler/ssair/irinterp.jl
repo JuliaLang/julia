@@ -1,12 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# TODO (#48913) remove this overload to enable interprocedural call inference from irinterp
-function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
-    arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
-    sv::IRInterpretationState, max_methods::Int)
-    return CallMeta(Any, Effects(), NoCallInfo())
-end
-
 function collect_limitations!(@nospecialize(typ), ::IRInterpretationState)
     @assert !isa(typ, LimitedAccuracy) "irinterp is unable to handle heavy recursion"
     return typ
@@ -147,7 +140,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union
         # Handled at the very end
         return false
     elseif isa(inst, PiNode)
-        rt = tmeet(optimizer_lattice(interp), argextype(inst.val, ir), widenconst(inst.typ))
+        rt = tmeet(typeinf_lattice(interp), argextype(inst.val, ir), widenconst(inst.typ))
     elseif inst === nothing
         return false
     elseif isa(inst, GlobalRef)
@@ -155,7 +148,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union
     else
         error("reprocess_instruction!: unhandled instruction found")
     end
-    if rt !== nothing && !⊑(optimizer_lattice(interp), typ, rt)
+    if rt !== nothing && !⊑(typeinf_lattice(interp), typ, rt)
         ir.stmts[idx][:type] = rt
         return true
     end
@@ -323,7 +316,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
             end
             inst = ir.stmts[idx][:inst]::ReturnNode
             rt = argextype(inst.val, ir)
-            ultimate_rt = tmerge(optimizer_lattice(interp), ultimate_rt, rt)
+            ultimate_rt = tmerge(typeinf_lattice(interp), ultimate_rt, rt)
         end
     end
 

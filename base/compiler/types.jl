@@ -466,8 +466,12 @@ typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.i
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
 optimizer_lattice(::AbstractInterpreter) = OptimizerLattice(SimpleInferenceLattice.instance)
 
-typeinf_lattice(interp::NativeInterpreter) = interp.irinterp ? optimizer_lattice(interp) : InferenceLattice(BaseInferenceLattice.instance)
-ipo_lattice(interp::NativeInterpreter) = interp.irinterp ? optimizer_lattice(interp) : InferenceLattice(IPOResultLattice.instance)
+typeinf_lattice(interp::NativeInterpreter) = interp.irinterp ?
+    OptimizerLattice(InferenceLattice(SimpleInferenceLattice.instance)) :
+    InferenceLattice(BaseInferenceLattice.instance)
+ipo_lattice(interp::NativeInterpreter) = interp.irinterp ?
+    InferenceLattice(SimpleInferenceLattice.instance) :
+    InferenceLattice(IPOResultLattice.instance)
 optimizer_lattice(interp::NativeInterpreter) = OptimizerLattice(SimpleInferenceLattice.instance)
 
 """

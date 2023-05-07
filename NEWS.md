@@ -4,6 +4,9 @@ Julia v1.10 Release Notes
 New language features
 ---------------------
 
+* `⥺` (U+297A, `\leftarrowsubset`) and `⥷` (U+2977, `\leftarrowless`)
+  may now be used as binary operators with arrow precedence. ([#45962])
+
 Language changes
 ----------------
 

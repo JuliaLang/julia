@@ -27,28 +27,28 @@ to enable USDT probes.
 > readelf -n usr/lib/libjulia-internal.so.1
 
 Displaying notes found in: .note.gnu.build-id
-  Owner                Data size 	Description
-  GNU                  0x00000014	NT_GNU_BUILD_ID (unique build ID bitstring)
+  Owner                Data size  Description
+  GNU                  0x00000014 NT_GNU_BUILD_ID (unique build ID bitstring)
     Build ID: 57161002f35548772a87418d2385c284ceb3ead8
 
 Displaying notes found in: .note.stapsdt
-  Owner                Data size 	Description
-  stapsdt              0x00000029	NT_STAPSDT (SystemTap probe descriptors)
+  Owner                Data size  Description
+  stapsdt              0x00000029 NT_STAPSDT (SystemTap probe descriptors)
     Provider: julia
     Name: gc__begin
     Location: 0x000000000013213e, Base: 0x00000000002bb4da, Semaphore: 0x0000000000346cac
     Arguments:
-  stapsdt              0x00000032	NT_STAPSDT (SystemTap probe descriptors)
+  stapsdt              0x00000032 NT_STAPSDT (SystemTap probe descriptors)
     Provider: julia
     Name: gc__stop_the_world
     Location: 0x0000000000132144, Base: 0x00000000002bb4da, Semaphore: 0x0000000000346cae
     Arguments:
-  stapsdt              0x00000027	NT_STAPSDT (SystemTap probe descriptors)
+  stapsdt              0x00000027 NT_STAPSDT (SystemTap probe descriptors)
     Provider: julia
     Name: gc__end
     Location: 0x000000000013214a, Base: 0x00000000002bb4da, Semaphore: 0x0000000000346cb0
     Arguments:
-  stapsdt              0x0000002d	NT_STAPSDT (SystemTap probe descriptors)
+  stapsdt              0x0000002d NT_STAPSDT (SystemTap probe descriptors)
     Provider: julia
     Name: gc__finalizer
     Location: 0x0000000000132150, Base: 0x00000000002bb4da, Semaphore: 0x0000000000346cb2
@@ -308,7 +308,7 @@ An example probe in the bpftrace format looks like:
 ```
 usdt:usr/lib/libjulia-internal.so:julia:gc__begin
 {
-	@start[pid] = nsecs;
+  @start[pid] = nsecs;
 }
 ```
 

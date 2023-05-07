@@ -377,7 +377,7 @@ macro spawn(args...)
 
     letargs = Base._lift_one_interp!(ex)
 
-    thunk = esc(:(()->($ex)))
+    thunk = Base.replace_linenums!(:(()->($(esc(ex)))), __source__)
     var = esc(Base.sync_varname)
     quote
         let $(letargs...)

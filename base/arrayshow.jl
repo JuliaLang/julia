@@ -202,7 +202,7 @@ function _print_matrix(io, @nospecialize(X::AbstractVecOrMat), pre, sep, post, h
     if n > maxpossiblecols
         colsA = [colsA[(0:maxpossiblecols-1) .+ firstindex(colsA)]; colsA[(end-maxpossiblecols+1):end]]
     else
-	    colsA = [colsA;]
+        colsA = [colsA;]
     end
     A = alignment(io, X, rowsA, colsA, screenwidth, screenwidth, sepsize, ncols)
     # Nine-slicing is accomplished using print_matrix_row repeatedly

@@ -458,10 +458,12 @@ endif
 
 # Compiler specific stuff
 
+ifeq (default,$(origin CC))
 CC := $(CROSS_COMPILE)$(CC) # attempt to add cross-compiler prefix, if the user
                             # is not overriding the default, to form target-triple-cc (which
                             # may not exist), and use that to decide what compiler the user
                             # is using for the target build (or default to gcc)
+endif
 CC_VERSION_STRING = $(shell $(CC) --version 2>/dev/null)
 ifneq (,$(findstring clang,$(CC_VERSION_STRING)))
 USECLANG := 1
