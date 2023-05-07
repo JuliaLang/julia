@@ -77,7 +77,7 @@ end
 
 function _parse(rule::Symbol, need_eof::Bool, ::Type{T}, text, index=1; version=VERSION,
                 ignore_trivia=true, filename=nothing, first_line=1, ignore_errors=false,
-                ignore_warnings=ignore_errors) where {T}
+                ignore_warnings=ignore_errors, kws...) where {T}
     stream = ParseStream(text, index; version=version)
     if ignore_trivia && rule != :all
         bump_trivia(stream, skip_newlines=true)
@@ -99,7 +99,7 @@ function _parse(rule::Symbol, need_eof::Bool, ::Type{T}, text, index=1; version=
     # * It's kind of required for GreenNode, as GreenNode only records spans,
     #   not absolute positions.
     # * Dropping it would be ok for SyntaxNode and Expr...
-    tree = build_tree(T, stream; wrap_toplevel_as_kind=K"toplevel", filename=filename, first_line=first_line)
+    tree = build_tree(T, stream; wrap_toplevel_as_kind=K"toplevel", filename=filename, first_line=first_line, kws...)
     tree, last_byte(stream) + 1
 end
 
