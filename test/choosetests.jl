@@ -11,7 +11,7 @@ const TESTNAMES = [
         "char", "strings", "triplequote", "unicode", "intrinsics",
         "dict", "hashing", "iobuffer", "staged", "offsetarray",
         "arrayops", "tuple", "reduce", "reducedim", "abstractarray",
-        "intfuncs", "simdloop", "vecelement", "rational",
+        "intfuncs", "simdloop", "vecelement", "rational", "rational_to_float",
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
         "operators", "ordering", "path", "ccall", "parse", "loading", "gmp",
         "sorting", "spawn", "backtrace", "exceptions",
