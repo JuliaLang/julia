@@ -151,19 +151,19 @@ Bool(x::Rational) = x==0 ? false : x==1 ? true :
 (::Type{T})(x::Rational) where {T<:Integer} = (isinteger(x) ? convert(T, x.num)::T :
     throw(InexactError(nameof(T), T, x)))
 
-AbstractFloat(x::Rational) = (float(x.num)/float(x.den))::AbstractFloat
-function (::Type{T})(x::Rational{S}) where T<:AbstractFloat where S
-    P = promote_type(T,S)
-    convert(T, convert(P,x.num)/convert(P,x.den))::T
+function rational_to_floating_point(::Type{F}, x, rm, prec) where {F}
+    nd = (numerator(x), denominator(x))
+    RationalToFloat.to_floating_point(F, nd..., rm, prec)::F
 end
- # avoid spurious overflow (#52394).  (Needed for UInt16 or larger;
- # we also include Int16 for consistency of accuracy.)
-Float16(x::Rational{<:Union{Int16,Int32,Int64,UInt16,UInt32,UInt64}}) =
-    Float16(Float32(x))
-Float16(x::Rational{<:Union{Int128,UInt128}}) =
-    Float16(Float64(x)) # UInt128 overflows Float32, include Int128 for consistency
-Float32(x::Rational{<:Union{Int128,UInt128}}) =
-    Float32(Float64(x)) # UInt128 overflows Float32, include Int128 for consistency
+
+function (::Type{F})(x::Rational, rm::RoundingMode = RoundNearest) where {F<:AbstractFloat}
+    rational_to_floating_point(F, x, rm, precision(F))::F
+end
+
+function AbstractFloat(x::Q) where {Q<:Rational}
+    T = float(Q)
+    T(x)::T::AbstractFloat
+end
 
 function Rational{T}(x::AbstractFloat) where T<:Integer
     r = rationalize(T, x, tol=0)
