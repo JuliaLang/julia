@@ -84,7 +84,7 @@ end
 const MAX_INLINE_CONST_SIZE = 256
 
 function count_const_size(@nospecialize(x), count_self::Bool = true)
-    (x isa Type || x isa Symbol) && return 0
+    (x isa Type || x isa Core.TypeName || x isa Symbol) && return 0
     ismutable(x) && return MAX_INLINE_CONST_SIZE + 1
     isbits(x) && return Core.sizeof(x)
     dt = typeof(x)
@@ -114,23 +114,23 @@ end
 invoke_api(li::CodeInstance) = ccall(:jl_invoke_api, Cint, (Any,), li)
 use_const_api(li::CodeInstance) = invoke_api(li) == 2
 
-function get_staged(mi::MethodInstance)
+function get_staged(mi::MethodInstance, world::UInt)
     may_invoke_generator(mi) || return nothing
     try
         # user code might throw errors – ignore them
-        ci = ccall(:jl_code_for_staged, Any, (Any,), mi)::CodeInfo
+        ci = ccall(:jl_code_for_staged, Any, (Any, UInt), mi, world)::CodeInfo
         return ci
     catch
         return nothing
     end
 end
 
-function retrieve_code_info(linfo::MethodInstance)
+function retrieve_code_info(linfo::MethodInstance, world::UInt)
     m = linfo.def::Method
     c = nothing
     if isdefined(m, :generator)
         # user code might throw errors – ignore them
-        c = get_staged(linfo)
+        c = get_staged(linfo, world)
     end
     if c === nothing && isdefined(m, :source)
         src = m.source
@@ -199,19 +199,9 @@ function normalize_typevars(method::Method, @nospecialize(atype), sparams::Simpl
 end
 
 # get a handle to the unique specialization object representing a particular instantiation of a call
-function specialize_method(method::Method, @nospecialize(atype), sparams::SimpleVector; preexisting::Bool=false, compilesig::Bool=false)
+function specialize_method(method::Method, @nospecialize(atype), sparams::SimpleVector; preexisting::Bool=false)
     if isa(atype, UnionAll)
         atype, sparams = normalize_typevars(method, atype, sparams)
-    end
-    if compilesig
-        new_atype = get_compileable_sig(method, atype, sparams)
-        new_atype === nothing && return nothing
-        if atype !== new_atype
-            sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), new_atype, method.sig)::SimpleVector
-            if sparams === sp_[2]::SimpleVector
-                atype = new_atype
-            end
-        end
     end
     if preexisting
         # check cached specializations
@@ -286,7 +276,7 @@ callyou (generic function with 1 method)
 julia> callyou(2.0)
 3.0
 
-julia> mi = first(which(callme, (Any,)).specializations)
+julia> mi = which(callme, (Any,)).specializations
 MethodInstance for callme(::Float64)
 
 julia> @eval Core.Compiler for (; sig, caller) in BackedgeIterator(Main.mi.backedges)

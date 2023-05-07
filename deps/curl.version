@@ -3,4 +3,4 @@
 CURL_JLL_NAME := LibCURL
 
 ## source build
-CURL_VER := 7.88.1
+CURL_VER := 8.0.1

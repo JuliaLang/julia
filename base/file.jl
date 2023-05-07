@@ -105,7 +105,7 @@ if Sys.iswindows()
     end
 else
     function cd(f::Function, dir::AbstractString)
-        fd = ccall(:open, Int32, (Cstring, Int32), :., 0)
+        fd = ccall(:open, Int32, (Cstring, Int32, UInt32...), :., 0)
         systemerror(:open, fd == -1)
         try
             cd(dir)
@@ -544,7 +544,10 @@ function temp_cleanup_purge(; force::Bool=false)
             end
             !ispath(path) && delete!(TEMP_CLEANUP, path)
         catch ex
-            @warn "temp cleanup" _group=:file exception=(ex, catch_backtrace())
+            @warn """
+                Failed to clean up temporary path $(repr(path))
+                $ex
+                """ _group=:file
         end
     end
 end
@@ -841,7 +844,7 @@ julia> readdir("base", join=true)
  ⋮
  "base/version_git.sh"
  "base/views.jl"
- "base/weakkeydict.jl"```
+ "base/weakkeydict.jl"
 
 julia> readdir(abspath("base"), join=true)
 145-element Array{String,1}:

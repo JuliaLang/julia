@@ -1230,3 +1230,18 @@ let src = code_typed1(named_tuple_elim, Tuple{Symbol, Tuple})
           count(iscall((src, Core._svec_ref)), src.code) == 0 &&
           count(iscall(x->!isa(argextype(x, src).val, Core.Builtin)), src.code) == 0
 end
+
+# Test that sroa works if the struct type is a PartialStruct
+mutable struct OneConstField
+    const a::Int
+    b::Int
+end
+
+@eval function one_const_field_partial()
+    # Use explicit :new here to avoid inlining messing with the type
+    strct = $(Expr(:new, OneConstField, 1, 2))
+    strct.b = 4
+    strct.b = 5
+    return strct.b
+end
+@test fully_eliminated(one_const_field_partial; retval=5)

@@ -62,7 +62,7 @@ LDLt{T}(F::LDLt) where {T} = LDLt(convert(AbstractMatrix{T}, F.data)::AbstractMa
 Factorization{T}(F::LDLt{T}) where {T} = F
 Factorization{T}(F::LDLt) where {T} = LDLt{T}(F)
 
-function getproperty(F::LDLt, d::Symbol)
+function getproperty(F::LDLt{<:Any, <:SymTridiagonal}, d::Symbol)
     Fdata = getfield(F, :data)
     if d === :d
         return Fdata.dv
@@ -211,7 +211,7 @@ function logabsdet(F::LDLt{<:Any,<:SymTridiagonal})
 end
 
 # Conversion methods
-function SymTridiagonal(F::LDLt)
+function SymTridiagonal(F::LDLt{<:Any, <:SymTridiagonal})
     e = copy(F.data.ev)
     d = copy(F.data.dv)
     e .*= d[1:end-1]

@@ -1,3 +1,5 @@
+; This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -AllocOpt -S %s | FileCheck %s
 
 source_filename = "text"

@@ -104,7 +104,7 @@ void *mach_segv_listener(void *arg)
 }
 
 
-static void allocate_mach_handler()
+static void allocate_mach_handler(void)
 {
     // ensure KEYMGR_GCC3_DW2_OBJ_LIST is initialized, as this requires malloc
     // and thus can deadlock when used without first initializing it.
@@ -614,12 +614,12 @@ void *mach_profile_listener(void *arg)
             if (_dyld_atfork_prepare != NULL && _dyld_atfork_parent != NULL)
                 _dyld_atfork_prepare(); // briefly acquire the dlsym lock
             host_thread_state_t state;
-            if (!jl_thread_suspend_and_get_state2(i, &state))
-                continue;
+            int valid_thread = jl_thread_suspend_and_get_state2(i, &state);
             unw_context_t *uc = (unw_context_t*)&state;
             if (_dyld_atfork_prepare != NULL && _dyld_atfork_parent != NULL)
                 _dyld_atfork_parent(); // quickly release the dlsym lock
-
+            if (!valid_thread)
+                continue;
             if (running) {
 #ifdef LLVMLIBUNWIND
                 /*

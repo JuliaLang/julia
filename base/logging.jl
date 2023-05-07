@@ -369,7 +369,8 @@ function logmsg_code(_module, file, line, level, message, exs...)
     return quote
         let
             level = $level
-            std_level = convert(LogLevel, level)
+            # simplify std_level code emitted, if we know it is one of our global constants
+            std_level = $(level isa Symbol ? :level : :(level isa LogLevel ? level : convert(LogLevel, level)::LogLevel))
             if std_level >= _min_enabled_level[]
                 group = $(log_data._group)
                 _module = $(log_data._module)

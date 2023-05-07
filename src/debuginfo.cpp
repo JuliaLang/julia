@@ -41,10 +41,10 @@ using namespace llvm;
 #include "julia_assert.h"
 #include "debug-registry.h"
 
-static JITDebugInfoRegistry DebugRegistry;
+static JITDebugInfoRegistry *DebugRegistry = new JITDebugInfoRegistry;
 
 static JITDebugInfoRegistry &getJITDebugRegistry() JL_NOTSAFEPOINT {
-    return DebugRegistry;
+    return *DebugRegistry;
 }
 
 struct debug_link_info {
@@ -503,7 +503,7 @@ static int lookup_pointer(
                 std::size_t semi_pos = func_name.find(';');
                 if (semi_pos != std::string::npos) {
                     func_name = func_name.substr(0, semi_pos);
-                    frame->linfo = NULL; // TODO: if (new_frames[n_frames - 1].linfo) frame->linfo = lookup(func_name in linfo)?
+                    frame->linfo = NULL; // Looked up on Julia side
                 }
             }
         }
