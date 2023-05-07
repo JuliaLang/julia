@@ -195,7 +195,7 @@ function _core_parser_hook(code, filename::String, lineno::Int, offset::Int, opt
             #
             ex = build_tree(Expr, stream; filename=filename,
                             wrap_toplevel_as_kind=K"None", first_line=lineno)
-            if Meta.isexpr(ex, :None)
+            if @isexpr(ex, :None)
                 # The None wrapping is only to give somewhere for trivia to be
                 # attached; unwrap!
                 ex = only(ex.args)
@@ -286,7 +286,7 @@ function _fl_parse_hook(code, filename, lineno, offset, options)
     else
         if options === :all
             ex = Base.parse_input_line(String(code), filename=filename, depwarn=false)
-            if !Meta.isexpr(ex, :toplevel)
+            if !@isexpr(ex, :toplevel)
                 ex = Expr(:toplevel, ex)
             end
             return ex, sizeof(code)

@@ -341,10 +341,6 @@ function token_last_byte(stream::ParseStream, i)
     stream.tokens[i].next_byte - 1
 end
 
-function token_span(stream::ParseStream, i)
-    stream.tokens[i].next_byte - stream.tokens[i-1].next_byte
-end
-
 function lookahead_token_first_byte(stream, i)
     i == 1 ? _next_byte(stream) : stream.lookahead[i-1].next_byte
 end
@@ -961,24 +957,25 @@ end
 # API for extracting results from ParseStream
 
 """
-    build_tree(::Type{NodeType}, stream::ParseStream;
+    build_tree(make_node::Function, ::Type{StackEntry}, stream::ParseStream;
                wrap_toplevel_as_kind=nothing, kws...)
 
-Construct a tree with `NodeType` nodes from a ParseStream using depth-first
-traversal. `NodeType` must have the constructors
+Construct a tree from a ParseStream using depth-first traversal. `make_node`
+must have the signature
 
-    NodeType(head::SyntaxHead, span::Integer)
-    NodeType(head::SyntaxHead, span::Integer, children::Vector{NodeType})
+    make_node(head::SyntaxHead, span::Integer, children)
+
+where `children` is either `nothing` for leaf nodes or an iterable of the
+children of type `StackEntry` for internal nodes. `StackEntry` may be a node
+type, but also may include other information required during building the tree.
 
 A single node which covers the input is expected, but if the ParseStream has
 multiple nodes at the top level, `wrap_toplevel_as_kind` may be used to wrap
 them in a single node.
 
-The tree here is constructed depth-first, but it would also be possible to use
-a bottom-up tree builder interface similar to rust-analyzer. (In that case we'd
-traverse the list of ranges backward rather than forward.)
+The tree here is constructed depth-first in postorder.
 """
-function build_tree(::Type{NodeType}, stream::ParseStream;
+function build_tree(make_node::Function, ::Type{NodeType}, stream::ParseStream;
                     wrap_toplevel_as_kind=nothing, kws...) where NodeType
     stack = Vector{NamedTuple{(:first_token,:node),Tuple{Int,NodeType}}}()
 
@@ -996,8 +993,15 @@ function build_tree(::Type{NodeType}, stream::ParseStream;
                 i += 1
                 continue # Ignore removed tokens
             end
-            node = NodeType(head(t), token_span(stream, i))
-            push!(stack, (first_token=i, node=node))
+            srcrange = (stream.tokens[i-1].next_byte:
+                        stream.tokens[i].next_byte - 1)
+            h = head(t)
+            children = (is_syntax_kind(h) || is_keyword(h)) ?
+                (stack[n].node for n=1:0) : nothing
+            node = make_node(h, srcrange, children)
+            if !isnothing(node)
+                push!(stack, (first_token=i, node=node))
+            end
             i += 1
         end
         if j > lastindex(ranges)
@@ -1018,10 +1022,14 @@ function build_tree(::Type{NodeType}, stream::ParseStream;
             while k > 1 && r.first_token <= stack[k-1].first_token
                 k -= 1
             end
+            srcrange = (stream.tokens[r.first_token-1].next_byte:
+                        stream.tokens[r.last_token].next_byte - 1)
             children = (stack[n].node for n = k:length(stack))
-            node = NodeType(head(r), children)
+            node = make_node(head(r), srcrange, children)
             resize!(stack, k-1)
-            push!(stack, (first_token=r.first_token, node=node))
+            if !isnothing(node)
+                push!(stack, (first_token=r.first_token, node=node))
+            end
             j += 1
         end
     end
@@ -1029,13 +1037,15 @@ function build_tree(::Type{NodeType}, stream::ParseStream;
         return only(stack).node
     elseif !isnothing(wrap_toplevel_as_kind)
         # Mostly for debugging
+        srcrange = (stream.tokens[1].next_byte:
+                    stream.tokens[end].next_byte - 1)
         children = (x.node for x in stack)
-        return NodeType(SyntaxHead(wrap_toplevel_as_kind, EMPTY_FLAGS), children)
+        return make_node(SyntaxHead(wrap_toplevel_as_kind, EMPTY_FLAGS),
+                         srcrange, children)
     else
         error("Found multiple nodes at top level")
     end
 end
-
 
 """
     sourcetext(stream::ParseStream; steal_textbuf=true)

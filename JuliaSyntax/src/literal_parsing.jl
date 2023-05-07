@@ -12,7 +12,7 @@ function parse_int_literal(str::AbstractString)
     end
     if isnothing(x)
         x = Base.tryparse(Int128, str)
-        if isnothing(x)
+        if x === nothing
             x = Base.parse(BigInt, str)
         end
     end
@@ -358,3 +358,83 @@ function normalize_identifier(str)
     flags = Base.Unicode.UTF8PROC_STABLE | Base.Unicode.UTF8PROC_COMPOSE
     return isascii(str) ? str : utf8proc_map(str, flags)
 end
+
+
+#-------------------------------------------------------------------------------
+function parse_julia_literal(source, head::SyntaxHead, srcrange)
+    # Leaf node
+    k = kind(head)
+    val_str = view(source, srcrange)
+    # Any errors parsing literals are represented as ErrorVal() - this can
+    # happen when the user sets `ignore_errors=true` during parsing.
+    val = if k == K"Integer"
+        parse_int_literal(val_str)
+    elseif k == K"Float"
+        v, code = parse_float_literal(Float64, source.code, first(srcrange),
+                                      last(srcrange)+1)
+        (code === :ok || code === :underflow) ? v : ErrorVal()
+    elseif k == K"Float32"
+        v, code = parse_float_literal(Float32, source.code, first(srcrange),
+                                      last(srcrange)+1)
+        (code === :ok || code === :underflow) ? v : ErrorVal()
+    elseif k in KSet"BinInt OctInt HexInt"
+        parse_uint_literal(val_str, k)
+    elseif k == K"true"
+        true
+    elseif k == K"false"
+        false
+    elseif k == K"Char"
+        io = IOBuffer()
+        had_error = unescape_julia_string(io, source.code, first(srcrange),
+                                          last(srcrange)+1, Diagnostic[])
+        if had_error
+            ErrorVal()
+        else
+            seek(io, 0)
+            c = read(io, Char)
+            eof(io) ? c : ErrorVal()
+        end
+    elseif k == K"Identifier"
+        if has_flags(head, RAW_STRING_FLAG)
+            io = IOBuffer()
+            unescape_raw_string(io, val_str, false)
+            Symbol(normalize_identifier(String(take!(io))))
+        else
+            Symbol(normalize_identifier(val_str))
+        end
+    elseif is_keyword(k)
+        # This should only happen for tokens nested inside errors
+        Symbol(val_str)
+    elseif k in KSet"String CmdString"
+        io = IOBuffer()
+        had_error = false
+        if has_flags(head, RAW_STRING_FLAG)
+            unescape_raw_string(io, val_str, k == K"CmdString")
+        else
+            had_error = unescape_julia_string(io, source.code, first(srcrange),
+                                              last(srcrange)+1, Diagnostic[])
+        end
+        had_error ? ErrorVal() : String(take!(io))
+    elseif is_operator(k)
+        isempty(srcrange)  ?
+            Symbol(untokenize(k)) : # synthetic invisible tokens
+            Symbol(normalize_identifier(val_str))
+    elseif k == K"error"
+        ErrorVal()
+    elseif k == K"MacroName"
+        Symbol("@$(normalize_identifier(val_str))")
+    elseif k == K"StringMacroName"
+        Symbol("@$(normalize_identifier(val_str))_str")
+    elseif k == K"CmdMacroName"
+        Symbol("@$(normalize_identifier(val_str))_cmd")
+    elseif k == K"core_@cmd"
+        Symbol("core_@cmd")
+    elseif is_syntax_kind(head)
+        nothing
+    else
+        # FIXME: this allows us to recover from trivia is_error nodes
+        # that we insert below
+        ErrorVal()
+    end
+end
+
