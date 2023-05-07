@@ -2364,7 +2364,7 @@ function parse_atsym(ps::ParseState, allow_quotes=true)
         # export outer  ==> (export outer)
         # export ($f)   ==> (export ($ f))
         mark = position(ps)
-        if allow_quotes && peek(ps) == K":"
+        if allow_quotes && peek(ps) == K":" && !is_closing_token(ps, peek(ps,2))
             # import A.:+  ==>  (import (importpath A (quote-: +)))
             emit_diagnostic(ps, warning="quoting with `:` is not required here")
         end
