@@ -62,9 +62,11 @@ The output represents the state of different effect properties in the following 
 1. `consistent` (`c`):
     - `+c` (green): `ALWAYS_TRUE`
     - `-c` (red): `ALWAYS_FALSE`
+    - `?c` (yellow): `CONSISTENT_IF_NOTRETURNED` and/or `CONSISTENT_IF_INACCESSIBLEMEMONLY`
 2. `effect_free` (`e`):
     - `+e` (green): `ALWAYS_TRUE`
     - `-e` (red): `ALWAYS_FALSE`
+    - `?e` (yellow): `EFFECT_FREE_IF_INACCESSIBLEMEMONLY`
 3. `nothrow` (`n`):
     - `+n` (green): `true`
     - `-n` (red): `false`
@@ -77,6 +79,7 @@ The output represents the state of different effect properties in the following 
 6. `inaccessiblememonly` (`m`):
     - `+m` (green): `ALWAYS_TRUE`
     - `-m` (red): `ALWAYS_FALSE`
+    - `?m` (yellow): `INACCESSIBLEMEM_OR_ARGMEMONLY`
 7. `noinbounds` (`i`):
     - `+i` (green): `true`
     - `-i` (red): `false`
