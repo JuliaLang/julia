@@ -836,8 +836,8 @@ end
 for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTriangular)
     @eval function inv(A::$t{T}) where {T}
         S = typeof(inv(oneunit(T)))
-        if S <: BlasFloat
-            $t(ldiv!(convert(AbstractArray{S}, A), Matrix{S}(I, size(A, 1), size(A, 1))))
+        if S <: BlasFloat || S === T # i.e. A is unitless
+            $t(ldiv!(convert(AbstractArray{S}, A), Matrix{S}(I, size(A))))
         else
             J = (one(T)*I)(size(A, 1))
             $t(ldiv!(similar(A, S, size(A)), A, J))
