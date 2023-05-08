@@ -130,8 +130,7 @@ Standard library changes
 
 #### REPL
 
-* `Alt-e` now opens the current input in an editor. The content (if modified) will be executed
-  upon exiting the editor ([#33759]).
+* `Alt-e` now opens the current input in an editor ([#33759]).
 * The contextual module which is active in the REPL can be changed (it is `Main` by default),
   via the `REPL.activate(::Module)` function or via typing the module in the REPL and pressing
   the keybinding Alt-m ([#33872]).
