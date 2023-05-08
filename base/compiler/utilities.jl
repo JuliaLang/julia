@@ -4,11 +4,27 @@
 # generic #
 ###########
 
-if !@isdefined(var"@timeit")
-    # This is designed to allow inserting timers when loading a second copy
-    # of inference for performing performance experiments.
-    macro timeit(args...)
-        esc(args[end])
+should_profile = true # TODO actually implement this
+
+if should_profile
+    function getzonedexpr(name, ex, func, source, color)
+        eventzone = ccall(:jl_timing_get_zone, UInt64, (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Cint, Cint), name, func, source.file, source.line, color)
+        return quote
+            timing_block = ccall(:jl_timing_begin_zone, Ptr{Cvoid}, (UInt64,), $eventzone)
+            $(Expr(:tryfinally,
+                :($(esc(ex))),
+                quote
+                 ccall(:jl_timing_end_zone, Cvoid, (Ptr{Cvoid},), timing_block)
+                end
+            ))
+        end
+    end
+    macro zone(name, ex::Expr)
+        return getzonedexpr(name, ex, :unknown_julia_function, __source__, 0)
+    end
+else
+    macro zone(name, ex::Expr)
+        return esc(ex)
     end
 end
 

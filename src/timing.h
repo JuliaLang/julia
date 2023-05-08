@@ -158,6 +158,7 @@ void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
         X(STACKWALK)             \
         X(DL_OPEN)               \
         X(JULIA_INIT)            \
+        X(JULIA_OPT)             \
 
 
 #define JL_TIMING_EVENTS \
@@ -179,6 +180,26 @@ void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
         X(STACKWALK_Excstack) \
         X(NATIVE_Dump) \
         X(NATIVE_Create) \
+        X(JOPT_DomTree2) \
+        X(JOPT_convert_pass) \
+        X(JOPT_slot2reg_pass) \
+        X(JOPT_compact_pass_1) \
+        X(JOPT_Inlining_pass) \
+        X(JOPT_verify2) \
+        X(JOPT_compact_pass2) \
+        X(JOPT_SROA_pass) \
+        X(JOPT_ADCE_pass) \
+        X(JOPT_type_lift_pass) \
+        X(JOPT_compact_pass_3) \
+        X(JOPT_verify3) \
+        X(JOPT_domtree1) \
+        X(JOPT_construct_ssa) \
+        X(JOPT_InliningAnalysis) \
+        X(JOPT_InliningExecution) \
+        X(JOPT_idf) \
+        X(JOPT_liveness) \
+        X(JOPT_SSARename) \
+        X(JOPT_domsort) \
 
 
 enum jl_timing_owners {

@@ -468,7 +468,7 @@ end
 
 # run the optimization work
 function optimize(interp::AbstractInterpreter, opt::OptimizationState, caller::InferenceResult)
-    @timeit "optimizer" ir = run_passes(opt.src, opt, caller)
+    @zone JULIA_OPT ir = run_passes(opt.src, opt, caller)
     return finish(interp, opt, ir, caller)
 end
 
@@ -498,11 +498,11 @@ function ipo_escape_cache(mi_cache::MICache) where MICache
 end
 null_escape_cache(linfo::Union{InferenceResult,MethodInstance}) = nothing
 
-macro pass(name, expr)
+macro pass(name, prof_name, expr)
     optimize_until = esc(:optimize_until)
     stage = esc(:__stage__)
-    macrocall = :(@timeit $(esc(name)) $(esc(expr)))
-    macrocall.args[2] = __source__  # `@timeit` may want to use it
+    macrocall = :(@zone $prof_name $(esc(expr)))
+    macrocall.args[2] = __source__  # `@zone` may want to use it
     quote
         $macrocall
         matchpass($optimize_until, ($stage += 1), $(esc(name))) && $(esc(:(@goto __done__)))
@@ -521,19 +521,19 @@ function run_passes(
 )
     __stage__ = 0  # used by @pass
     # NOTE: The pass name MUST be unique for `optimize_until::AbstractString` to work
-    @pass "convert"   ir = convert_to_ircode(ci, sv)
-    @pass "slot2reg"  ir = slot2reg(ir, ci, sv)
+    @pass "convert" JOPT_convert_pass   ir = convert_to_ircode(ci, sv)
+    @pass "slot2reg" JOPT_slot2reg_pass  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
-    @pass "compact 1" ir = compact!(ir)
-    @pass "Inlining"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
-    # @timeit "verify 2" verify_ir(ir)
-    @pass "compact 2" ir = compact!(ir)
-    @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
-    @pass "ADCE"      ir = adce_pass!(ir, sv.inlining)
-    @pass "type lift" ir = type_lift_pass!(ir)
-    @pass "compact 3" ir = compact!(ir)
+    @pass "compact 1" JOPT_compact_pass_1 ir = compact!(ir)
+    @pass "Inlining" JOPT_Inlining_pass  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
+    # @zone JOPT_verify2 verify_ir(ir)
+    @pass "compact 2" JOPT_compact_pass2 ir = compact!(ir)
+    @pass "SROA" JOPT_SROA_pass      ir = sroa_pass!(ir, sv.inlining)
+    @pass "ADCE" JOPT_ADCE_pass      ir = adce_pass!(ir, sv.inlining)
+    @pass "type lift" JOPT_type_lift_pass ir = type_lift_pass!(ir)
+    @pass "compact 3" JOPT_compact_pass_3 ir = compact!(ir)
     if JLOptions().debug_level == 2
-        @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
+        @zone JOPT_verify3 (verify_ir(ir); verify_linetable(ir.linetable))
     end
     @label __done__  # used by @pass
     return ir
@@ -639,10 +639,10 @@ function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
     svdef = sv.linfo.def
     nargs = isa(svdef, Method) ? Int(svdef.nargs) : 0
-    @timeit "domtree 1" domtree = construct_domtree(ir.cfg.blocks)
+    @zone JOPT_domtree1 domtree = construct_domtree(ir.cfg.blocks)
     defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.inst)
     𝕃ₒ = optimizer_lattice(sv.inlining.interp)
-    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, sv.slottypes, 𝕃ₒ) # consumes `ir`
+    @zone JOPT_construct_ssa ir = construct_ssa!(ci, ir, domtree, defuse_insts, sv.slottypes, 𝕃ₒ) # consumes `ir`
     # NOTE now we have converted `ir` to the SSA form and eliminated slots
     # let's resize `argtypes` now and remove unnecessary types for the eliminated slots
     resize!(ir.argtypes, nargs)
