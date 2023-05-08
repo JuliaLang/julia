@@ -2224,10 +2224,10 @@ Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *
     load->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
     MDBuilder MDB(load->getContext());
     auto *NullInt = ConstantInt::get(T_size, 0);
-    // We can be sure that the tag is larger than page size.
+    // We can be sure that the tag is at least 16 (1<<4)
     // Hopefully this is enough to convince LLVM that the value is still not NULL
     // after masking off the tag bits
-    auto *NonNullInt = ConstantExpr::getAdd(NullInt, ConstantInt::get(T_size, 4096));
+    auto *NonNullInt = ConstantExpr::getAdd(NullInt, ConstantInt::get(T_size, 16));
     load->setMetadata(LLVMContext::MD_range, MDB.createRange(NonNullInt, NullInt));
     return load;
 }

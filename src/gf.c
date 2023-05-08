@@ -443,7 +443,7 @@ JL_DLLEXPORT jl_value_t *jl_rettype_inferred(jl_method_instance_t *mi, size_t mi
     while (codeinst) {
         if (codeinst->min_world <= min_world && max_world <= codeinst->max_world) {
             jl_value_t *code = jl_atomic_load_relaxed(&codeinst->inferred);
-            if (code && (code == jl_nothing || jl_ir_flag_inferred((jl_array_t*)code)))
+            if (code && (code == jl_nothing || jl_ir_flag_inferred(code)))
                 return (jl_value_t*)codeinst;
         }
         codeinst = jl_atomic_load_relaxed(&codeinst->next);
@@ -2998,7 +2998,7 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
         jl_array_t *leafcache = jl_atomic_load_relaxed(&mt->leafcache);
         entry = NULL;
         if (leafcache != (jl_array_t*)jl_an_empty_vec_any &&
-                jl_typeis(jl_atomic_load_relaxed(&mt->cache), jl_typemap_level_type)) {
+                jl_typetagis(jl_atomic_load_relaxed(&mt->cache), jl_typemap_level_type)) {
             // hashing args is expensive, but looking at mt->cache is probably even more expensive
             tt = lookup_arg_type_tuple(F, args, nargs);
             if (tt != NULL)

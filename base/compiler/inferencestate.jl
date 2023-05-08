@@ -688,7 +688,7 @@ function IRInterpretationState(interp::AbstractInterpreter,
     code::CodeInstance, mi::MethodInstance, argtypes::Vector{Any}, world::UInt)
     @assert code.def === mi
     src = @atomic :monotonic code.inferred
-    if isa(src, Vector{UInt8})
+    if isa(src, String)
         src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, C_NULL, src)::CodeInfo
     else
         isa(src, CodeInfo) || return nothing
