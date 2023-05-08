@@ -249,6 +249,7 @@ enum jl_timing_events {
  * Implementation: Aggregated counts back-end
  **/
 
+#define JL_TIMING_EVENT_CHUNKS (((int) JL_TIMING_EVENT_LAST + CHAR_BIT * sizeof(uint64_t) - 1) / (CHAR_BIT * sizeof(uint64_t)))
 extern _Atomic(uint64_t) jl_self_timing_counts[(int)JL_TIMING_EVENT_LAST];
 extern _Atomic(uint64_t) jl_full_timing_counts[(int)JL_TIMING_EVENT_LAST];
 typedef struct _jl_timing_counts_t {
@@ -295,7 +296,7 @@ STATIC_INLINE void _jl_timing_counts_destroy(jl_timing_counts_t *block, uint64_t
  * Top-level jl_timing implementation
  **/
 
-extern uint64_t jl_timing_disable_mask;
+extern uint64_t jl_timing_disable_mask[JL_TIMING_EVENT_CHUNKS];
 extern const char *jl_timing_names[(int)JL_TIMING_EVENT_LAST];
 #ifdef USE_ITTAPI
 extern __itt_event jl_timing_ittapi_events[(int)JL_TIMING_EVENT_LAST];
@@ -309,7 +310,7 @@ struct _jl_timing_block_t { // typedef in julia.h
 };
 
 STATIC_INLINE int _jl_timing_enabled(int owner) JL_NOTSAFEPOINT {
-    return !(jl_timing_disable_mask & (1 << owner));
+    return !(jl_timing_disable_mask[owner / (sizeof(uint64_t) * CHAR_BIT)] & (1 << (owner % (sizeof(uint64_t) * CHAR_BIT))));
 }
 
 STATIC_INLINE void _jl_timing_block_ctor(jl_timing_block_t *block, int owner, int event) JL_NOTSAFEPOINT {
