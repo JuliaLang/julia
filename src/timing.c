@@ -35,16 +35,17 @@ JL_DLLEXPORT uint64_t jl_timing_enable_mask = ~((1ull << JL_TIMING_ROOT) |
 JL_DLLEXPORT uint64_t jl_timing_enable_mask = ~0ull;
 #endif
 
-JL_DLLEXPORT _Atomic(uint64_t) jl_timing_counts[(int)JL_TIMING_LAST] = {0};
+JL_DLLEXPORT _Atomic(uint64_t) jl_self_timing_counts[(int)JL_TIMING_EVENT_LAST] = {0};
+JL_DLLEXPORT _Atomic(uint64_t) jl_full_timing_counts[(int)JL_TIMING_EVENT_LAST] = {0};
 
 // Used to as an item limit when several strings of metadata can
 // potentially be associated with a single timing zone.
 JL_DLLEXPORT uint32_t jl_timing_print_limit = 10;
 
-const char *jl_timing_names[(int)JL_TIMING_LAST] =
+const char *jl_timing_names[(int)JL_TIMING_EVENT_LAST] =
     {
 #define X(name) #name,
-        JL_TIMING_OWNERS
+        JL_TIMING_EVENTS
 #undef X
     };
 
@@ -56,15 +57,23 @@ void jl_print_timings(void)
 {
     uint64_t total_time = cycleclock() - t0;
     uint64_t root_time = total_time;
-    for (int i = 0; i < JL_TIMING_LAST; i++) {
-        root_time -= jl_atomic_load_relaxed(&jl_timing_counts[i]);
+    for (int i = 0; i < JL_TIMING_EVENT_LAST; i++) {
+        root_time -= jl_atomic_load_relaxed(&jl_self_timing_counts[i]);
     }
-    jl_atomic_store_relaxed(&jl_timing_counts[0], root_time);
-    for (int i = 0; i < JL_TIMING_LAST; i++) {
-        uint64_t count = jl_atomic_load_relaxed(&jl_timing_counts[i]);
-        if (count)
-            fprintf(stderr, "%-25s : %5.2f %%   %" PRIu64 "\n", jl_timing_names[i],
-                    100 * (((double)count) / total_time), count);
+    jl_atomic_store_relaxed(&jl_self_timing_counts[0], root_time);
+    jl_atomic_store_relaxed(&jl_full_timing_counts[0], total_time);
+    if (root_time == total_time) {
+        // Did absolutely no work?
+        return;
+    }
+    fprintf(stderr, "%-25s, Self Cycles (%% of total), Total Cycles (%% of total)\n", "Event");
+    for (int i = 0; i < JL_TIMING_EVENT_LAST; i++) {
+        uint64_t self = jl_atomic_load_relaxed(&jl_self_timing_counts[i]);
+        uint64_t full = jl_atomic_load_relaxed(&jl_full_timing_counts[i]);
+        if (full) {
+            fprintf(stderr, "%-25s, %" PRIu64 " (%5.2f %%), %" PRIu64 " (%5.2f %%)\n", jl_timing_names[i], self,
+                    100 * (((double)self) / total_time), full, 100 * (((double)full) / total_time));
+        }
     }
 }
 
@@ -73,7 +82,6 @@ void jl_init_timing(void)
     t0 = cycleclock();
 
     _Static_assert(JL_TIMING_EVENT_LAST < sizeof(uint64_t) * CHAR_BIT, "Too many timing events!");
-    _Static_assert((int)JL_TIMING_LAST <= (int)JL_TIMING_EVENT_LAST, "More owners than events!");
 
     int i __attribute__((unused)) = 0;
 #ifdef USE_ITTAPI
@@ -279,7 +287,7 @@ void jl_timing_init_task(jl_task_t *t)
 
 JL_DLLEXPORT int jl_timing_set_enable(const char *subsystem, uint8_t enabled)
 {
-    for (int i = 0; i < JL_TIMING_LAST; i++) {
+    for (int i = 0; i < JL_TIMING_EVENT_LAST; i++) {
         if (strcmp(subsystem, jl_timing_names[i]) == 0) {
             uint64_t subsystem_bit = (1ul << i);
             if (enabled) {
