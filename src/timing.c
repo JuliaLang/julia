@@ -35,6 +35,9 @@ const char *jl_timing_names[(int)JL_TIMING_EVENT_LAST] =
 #undef X
     };
 
+static int jl_timing_names_sorted[(int)JL_TIMING_EVENT_LAST];
+static int jl_timing_event_owners[(int)JL_TIMING_EVENT_LAST];
+
 #ifdef USE_ITTAPI
 JL_DLLEXPORT __itt_event jl_timing_ittapi_events[(int)JL_TIMING_EVENT_LAST];
 #endif
@@ -59,16 +62,11 @@ void jl_print_timings(void)
         return;
     }
     fprintf(stderr, "%-25s, Self Cycles (%% of total), Total Cycles (%% of total)\n", "Event");
-    int sorted[(int)JL_TIMING_EVENT_LAST];
     for (int i = 0; i < JL_TIMING_EVENT_LAST; i++) {
-        sorted[i] = i;
-    }
-    qsort(&sorted, JL_TIMING_EVENT_LAST, sizeof(int), cmp_event_names);
-    for (int i = 0; i < JL_TIMING_EVENT_LAST; i++) {
-        uint64_t self = jl_atomic_load_relaxed(&jl_self_timing_counts[sorted[i]]);
-        uint64_t full = jl_atomic_load_relaxed(&jl_full_timing_counts[sorted[i]]);
+        uint64_t self = jl_atomic_load_relaxed(&jl_self_timing_counts[jl_timing_names_sorted[i]]);
+        uint64_t full = jl_atomic_load_relaxed(&jl_full_timing_counts[jl_timing_names_sorted[i]]);
         if (full) {
-            fprintf(stderr, "%-25s, %20" PRIu64 " (%5.2f %%), %20" PRIu64 " (%5.2f %%)\n", jl_timing_names[sorted[i]], self,
+            fprintf(stderr, "%-25s, %20" PRIu64 " (%5.2f %%), %20" PRIu64 " (%5.2f %%)\n", jl_timing_names[jl_timing_names_sorted[i]], self,
                     100 * (((double)self) / total_time), full, 100 * (((double)full) / total_time));
         }
     }
@@ -90,6 +88,53 @@ void jl_init_timing(void)
     DISABLE_EVENT(JL_TIMING_AST_COMPRESS);
     DISABLE_EVENT(JL_TIMING_AST_UNCOMPRESS);
 #undef DISABLE_EVENT
+
+    for (int i = 0; i < JL_TIMING_EVENT_LAST; i++) {
+        jl_timing_names_sorted[i] = i;
+        jl_timing_event_owners[i] = i;
+    }
+    qsort(jl_timing_names_sorted, JL_TIMING_EVENT_LAST, sizeof(int), cmp_event_names);
+
+    // Set all known owners now
+#define OWNER(owner, event) jl_timing_event_owners[(int) JL_TIMING_EVENT_##event] = (int) JL_TIMING_##owner;
+        OWNER(GC, GC_Stop);
+        OWNER(GC, GC_Mark);
+        OWNER(GC, GC_Sweep);
+        OWNER(GC, GC_Finalizers);
+        OWNER(CODEGEN, CODEGEN_LLVM);
+        OWNER(CODEGEN, CODEGEN_Codeinst);
+        OWNER(CODEGEN, CODEGEN_Workqueue);
+        OWNER(LOAD_IMAGE, LOAD_Sysimg);
+        OWNER(LOAD_IMAGE, LOAD_Pkgimg);
+        OWNER(LOAD_IMAGE, LOAD_Processor);
+        OWNER(VERIFY_IMAGE, VERIFY_Edges);
+        OWNER(VERIFY_IMAGE, VERIFY_Methods);
+        OWNER(VERIFY_IMAGE, VERIFY_Graph);
+        OWNER(STACKWALK, STACKWALK_Backtrace);
+        OWNER(STACKWALK, STACKWALK_Excstack);
+        OWNER(NATIVE_AOT, NATIVE_Dump);
+        OWNER(NATIVE_AOT, NATIVE_Create);
+        OWNER(JULIA_OPT, JOPT_DomTree2);
+        OWNER(JULIA_OPT, JOPT_convert_pass);
+        OWNER(JULIA_OPT, JOPT_slot2reg_pass);
+        OWNER(JULIA_OPT, JOPT_compact_pass_1);
+        OWNER(JULIA_OPT, JOPT_Inlining_pass);
+        OWNER(JULIA_OPT, JOPT_verify2);
+        OWNER(JULIA_OPT, JOPT_compact_pass2);
+        OWNER(JULIA_OPT, JOPT_SROA_pass);
+        OWNER(JULIA_OPT, JOPT_ADCE_pass);
+        OWNER(JULIA_OPT, JOPT_type_lift_pass);
+        OWNER(JULIA_OPT, JOPT_compact_pass_3);
+        OWNER(JULIA_OPT, JOPT_verify3);
+        OWNER(JULIA_OPT, JOPT_domtree1);
+        OWNER(JULIA_OPT, JOPT_construct_ssa);
+        OWNER(JULIA_OPT, JOPT_InliningAnalysis);
+        OWNER(JULIA_OPT, JOPT_InliningExecution);
+        OWNER(JULIA_OPT, JOPT_idf);
+        OWNER(JULIA_OPT, JOPT_liveness);
+        OWNER(JULIA_OPT, JOPT_SSARename);
+        OWNER(JULIA_OPT, JOPT_domsort);
+#undef OWNER
 
     int i __attribute__((unused)) = 0;
 #ifdef USE_ITTAPI
@@ -312,6 +357,79 @@ JL_DLLEXPORT int jl_timing_set_enable(const char *subsystem, uint8_t enabled)
     return -1;
 }
 
+//For julia source locations
+#ifdef USE_TRACY
+small_arraylist_t jl_timing_srclocs[JL_TIMING_EVENT_LAST];
+jl_mutex_t jl_timing_srclocs_lock[JL_TIMING_EVENT_LAST];
+
+static int32_t get_srcloc(const char *zone, int event, const char *function, const char *file, int line, int color) {
+    JL_LOCK(&jl_timing_srclocs_lock[event]);
+    small_arraylist_t *srclocs = &jl_timing_srclocs[event];
+    // We anticipate the number of source locations to be small for a given event/zone, so we just do a linear search
+    for (int32_t i = 0; i < srclocs->len; i++) {
+        __tracy_source_location_data *srcloc = (__tracy_source_location_data*)srclocs->items[i];
+        // The strings are interned so we can just do pointer comparisons
+        if (srcloc->name == zone && srcloc->function == function && srcloc->file == file && srcloc->line == line && srcloc->color == color) {
+            JL_UNLOCK(&jl_timing_srclocs_lock[event]);
+            return i;
+        }
+    }
+    __tracy_source_location_data *srcloc = (__tracy_source_location_data*) malloc(sizeof(__tracy_source_location_data));
+    srcloc->name = zone;
+    srcloc->function = function;
+    srcloc->file = file;
+    srcloc->line = line;
+    srcloc->color = color;
+    small_arraylist_push(srclocs, srcloc);
+    int32_t i = srclocs->len - 1;
+    JL_UNLOCK(&jl_timing_srclocs_lock[event]);
+    return i;
+}
+#endif
+
+static int cmp_event_name_idx(const void *a, const void *b) {
+    const char *name = (const char *)a;
+    const char *idx = jl_timing_names[*(const int *)b];
+    return strcmp(name, idx);
+}
+
+static const int *get_timing_event(const char *zone) {
+    return (const int *) bsearch(zone, jl_timing_names_sorted, JL_TIMING_EVENT_LAST, sizeof(int), cmp_event_name_idx);
+}
+
+JL_DLLEXPORT uint64_t jl_timing_get_zone(const char *zonename, const char *function, const char *file, int line, int color) {
+    const int *maybe_event = get_timing_event(zonename);
+    if (!maybe_event) {
+        jl_errorf("invalid timing zone name: %s", zonename);
+        return ~0ull;
+    }
+
+#ifdef USE_TRACY
+    return ((uint32_t) *maybe_event) | (get_srcloc(zonename, *maybe_event, function, file, line, color) << 32);
+#else
+    return ((uint32_t) *maybe_event) | 0;
+#endif
+}
+
+JL_DLLEXPORT void *jl_timing_begin_zone(uint64_t event_srcloc) {
+    int event = (uint32_t) event_srcloc;
+    int owner = jl_timing_event_owners[event];
+    jl_timing_block_t *block = (jl_timing_block_t *) malloc(sizeof(jl_timing_block_t));
+    _jl_timing_block_ctor(block, owner, event);
+#ifdef USE_TRACY
+    int srcloc = event_srcloc >> 32;
+    JL_LOCK(&jl_timing_srclocs_lock[event]);
+    __tracy_source_location_data *srcloc_data = (__tracy_source_location_data*)jl_timing_srclocs[event].items[srcloc];
+    JL_UNLOCK(&jl_timing_srclocs_lock[event]);
+    block->tracy_ctx = ___tracy_emit_zone_begin(srcloc_data, _jl_timing_enabled(owner));
+#endif
+    return block;
+}
+JL_DLLEXPORT void jl_timing_end_zone(void *timing_block) {
+    _jl_timing_block_destroy((jl_timing_block_t*) timing_block);
+    free(timing_block);
+}
+
 static void jl_timing_set_enable_from_env(void)
 {
     const char *env = getenv("JULIA_TIMING_SUBSYSTEMS");
@@ -377,6 +495,9 @@ void jl_init_timing(void) { }
 void jl_destroy_timing(void) { }
 JL_DLLEXPORT int jl_timing_set_enable(const char *subsystem, uint8_t enabled) { return -1; }
 JL_DLLEXPORT uint32_t jl_timing_print_limit = 0;
+JL_DLLEXPORT uint64_t jl_timing_get_zone(const char *zonename, const char *function, const char *file, int line, int color) { return 0; }
+JL_DLLEXPORT void *jl_timing_begin_zone(uint64_t event_srcloc) { return NULL; }
+JL_DLLEXPORT void jl_timing_end_zone(void) { }
 
 #endif
 
