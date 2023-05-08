@@ -1552,8 +1552,9 @@ effects = Base.infer_effects(foo, Tuple{Int})
 
 This function will return an `Effects` object with information about the computational effects of the function `foo` when called with an `Int` argument. See the documentation for `Effects` for more information on the various effect properties.
 
-# Notes
-The `infer_effects` function should not be used from generated functions; doing so will result in an error. The analysis performed by `infer_effects` is flow-insensitive and conservative, meaning that local effects detected on each statement may overestimate the global effects of the entire function.
+!!! warning
+    The `infer_effects` function should not be used from generated functions;
+    doing so will result in an error.
 
 # See Also
 - [`Core.Compiler.Effects`](@ref): A type representing the computational effects of a method call.
