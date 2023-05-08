@@ -20,7 +20,7 @@ import
         sinpi, cospi, sincospi, tanpi, sind, cosd, tand, asind, acosd, atand
 
 
-import .Base.Libc
+using .Base.Libc
 import ..Rounding: rounding_raw, setrounding_raw
 
 import ..GMP: ClongMax, CulongMax, CdoubleMax, Limb, libgmp
