@@ -5,8 +5,6 @@
 
 #include "julia.h"
 
-#define USE_TIMING_COUNTS
-
 static inline const char *gnu_basename(const char *path)
 {
     const char *base = strrchr(path, '/');
