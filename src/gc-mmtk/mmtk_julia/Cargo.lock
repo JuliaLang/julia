@@ -249,6 +249,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "delegate"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d358e0ec5c59a5e1603b933def447096886121660fc680dc1e64a0753981fe3c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "downcast-rs"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -534,7 +545,7 @@ dependencies = [
 [[package]]
 name = "mmtk"
 version = "0.18.0"
-source = "git+https://github.com/mmtk/mmtk-core.git?rev=ed347f19f230dfec8c05a24032f1529e9079478c#ed347f19f230dfec8c05a24032f1529e9079478c"
+source = "git+https://github.com/mmtk/mmtk-core.git?rev=e309f9351dff9cd0c8f3f590002c6edafd158c82#e309f9351dff9cd0c8f3f590002c6edafd158c82"
 dependencies = [
  "atomic 0.5.1",
  "atomic-traits",
@@ -542,6 +553,7 @@ dependencies = [
  "built",
  "cfg-if",
  "crossbeam",
+ "delegate",
  "downcast-rs",
  "enum-map",
  "env_logger",
@@ -578,7 +590,7 @@ dependencies = [
 [[package]]
 name = "mmtk-macros"
 version = "0.18.0"
-source = "git+https://github.com/mmtk/mmtk-core.git?rev=ed347f19f230dfec8c05a24032f1529e9079478c#ed347f19f230dfec8c05a24032f1529e9079478c"
+source = "git+https://github.com/mmtk/mmtk-core.git?rev=e309f9351dff9cd0c8f3f590002c6edafd158c82#e309f9351dff9cd0c8f3f590002c6edafd158c82"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",

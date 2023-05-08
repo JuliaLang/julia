@@ -448,6 +448,14 @@ pub extern "C" fn runtime_panic() {
 }
 
 #[no_mangle]
+#[allow(mutable_transmutes)]
+pub extern "C" fn mmtk_set_vm_space(start: Address, size: usize) {
+    let mmtk: &mmtk::MMTK<JuliaVM> = &SINGLETON;
+    let mmtk_mut: &mut mmtk::MMTK<JuliaVM> = unsafe { std::mem::transmute(mmtk) };
+    memory_manager::lazy_init_vm_space(mmtk_mut, start, size);
+}
+
+#[no_mangle]
 pub extern "C" fn mmtk_memory_region_copy(
     mutator: *mut Mutator<JuliaVM>,
     src_obj: ObjectReference,
