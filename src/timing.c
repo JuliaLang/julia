@@ -19,21 +19,7 @@ extern "C" {
 #endif
 
 static uint64_t t0;
-#if defined(USE_TRACY) || defined(USE_ITTAPI)
-/**
- * These sources often generate millions of events / minute. Although Tracy
- * can generally keep up with that, those events also bloat the saved ".tracy"
- * files, so we disable them by default.
- **/
-JL_DLLEXPORT uint64_t jl_timing_disable_mask = ((1ull << JL_TIMING_ROOT) |
-                                              (1ull << JL_TIMING_TYPE_CACHE_LOOKUP) |
-                                              (1ull << JL_TIMING_METHOD_MATCH) |
-                                              (1ull << JL_TIMING_METHOD_LOOKUP_FAST) |
-                                              (1ull << JL_TIMING_AST_COMPRESS) |
-                                              (1ull << JL_TIMING_AST_UNCOMPRESS));
-#else
-JL_DLLEXPORT uint64_t jl_timing_disable_mask = 0ull;
-#endif
+JL_DLLEXPORT uint64_t jl_timing_disable_mask[JL_TIMING_EVENT_CHUNKS];
 
 JL_DLLEXPORT _Atomic(uint64_t) jl_self_timing_counts[(int)JL_TIMING_EVENT_LAST] = {0};
 JL_DLLEXPORT _Atomic(uint64_t) jl_full_timing_counts[(int)JL_TIMING_EVENT_LAST] = {0};
@@ -91,14 +77,28 @@ void jl_print_timings(void)
 void jl_init_timing(void)
 {
     t0 = cycleclock();
-
-    _Static_assert(JL_TIMING_EVENT_LAST < sizeof(uint64_t) * CHAR_BIT, "Too many timing events!");
+/**
+ * These sources often generate millions of events / minute. Although Tracy
+ * can generally keep up with that, those events also bloat the saved ".tracy"
+ * files, so we disable them by default.
+ **/
+#define DISABLE_EVENT(event) jl_timing_disable_mask[((int) event / (sizeof(uint64_t) * CHAR_BIT))] &= ~(1ul << (event % (sizeof(uint64_t) * CHAR_BIT)))
+    DISABLE_EVENT(JL_TIMING_ROOT);
+    DISABLE_EVENT(JL_TIMING_TYPE_CACHE_LOOKUP);
+    DISABLE_EVENT(JL_TIMING_METHOD_MATCH);
+    DISABLE_EVENT(JL_TIMING_METHOD_LOOKUP_FAST);
+    DISABLE_EVENT(JL_TIMING_AST_COMPRESS);
+    DISABLE_EVENT(JL_TIMING_AST_UNCOMPRESS);
+#undef DISABLE_EVENT
 
     int i __attribute__((unused)) = 0;
 #ifdef USE_ITTAPI
 #define X(name) jl_timing_ittapi_events[i++] = __itt_event_create(#name, strlen(#name));
     JL_TIMING_EVENTS
 #undef X
+#endif
+#if defined(USE_TRACY) || defined(USE_ITTAPI)
+
 #endif
 }
 
@@ -300,11 +300,11 @@ JL_DLLEXPORT int jl_timing_set_enable(const char *subsystem, uint8_t enabled)
 {
     for (int i = 0; i < JL_TIMING_EVENT_LAST; i++) {
         if (strcmp(subsystem, jl_timing_names[i]) == 0) {
-            uint64_t subsystem_bit = (1ul << i);
+            uint64_t subsystem_bit = (1ul << i % (sizeof(uint64_t) * CHAR_BIT));
             if (enabled) {
-                jl_timing_disable_mask &= ~subsystem_bit;
+                jl_timing_disable_mask[i / (sizeof(uint64_t) * CHAR_BIT)] &= ~subsystem_bit;
             } else {
-                jl_timing_disable_mask |= subsystem_bit;
+                jl_timing_disable_mask[i / (sizeof(uint64_t) * CHAR_BIT)] |= subsystem_bit;
             }
             return 0;
         }
