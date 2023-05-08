@@ -1542,12 +1542,13 @@ Compute the `Effects` of a function `f` with argument types `types`. The `Effect
 # Example
 
 ```julia
-function foo(x)
-    y = x * 2
-    return y
-end
+julia> function foo(x)
+           y = x * 2
+           return y
+       end;
 
-effects = Base.infer_effects(foo, Tuple{Int})
+julia> effects = Base.infer_effects(foo, (Int,))
+(+c,+e,+n,+t,+s,+m,+i)
 ```
 
 This function will return an `Effects` object with information about the computational effects of the function `foo` when called with an `Int` argument. See the documentation for `Effects` for more information on the various effect properties.
