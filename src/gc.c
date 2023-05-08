@@ -3095,10 +3095,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 {
     combine_thread_gc_counts(&gc_num);
 
-#ifdef USE_TRACY
-    TracyCPlot("Heap size", live_bytes + gc_num.allocd);
-#endif
-
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
 
     uint64_t gc_start_time = jl_hrtime();
@@ -3488,10 +3484,6 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     SetLastError(last_error);
 #endif
     errno = last_errno;
-
-#ifdef USE_TRACY
-    TracyCPlot("Heap size", jl_gc_live_bytes());
-#endif
 }
 
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
@@ -3595,9 +3587,6 @@ void jl_gc_init(void)
     if (jl_options.heap_size_hint)
         jl_gc_set_max_memory(jl_options.heap_size_hint);
 
-#ifdef USE_TRACY
-    TracyCPlotConfig("Heap size", TracyPlotFormatMemory, /* rectilinear */ 0, /* fill */ 1, /* color */ 0);
-#endif
     t_start = jl_hrtime();
 }
 
