@@ -295,7 +295,7 @@ STATIC_INLINE void _jl_timing_counts_destroy(jl_timing_counts_t *block, uint64_t
  * Top-level jl_timing implementation
  **/
 
-extern uint64_t jl_timing_enable_mask;
+extern uint64_t jl_timing_disable_mask;
 extern const char *jl_timing_names[(int)JL_TIMING_EVENT_LAST];
 #ifdef USE_ITTAPI
 extern __itt_event jl_timing_ittapi_events[(int)JL_TIMING_EVENT_LAST];
@@ -308,8 +308,8 @@ struct _jl_timing_block_t { // typedef in julia.h
     _COUNTS_CTX_MEMBER
 };
 
-STATIC_INLINE int _jl_timing_enabled(int event) JL_NOTSAFEPOINT {
-    return !!(jl_timing_enable_mask & (1 << event));
+STATIC_INLINE int _jl_timing_enabled(int owner) JL_NOTSAFEPOINT {
+    return !(jl_timing_disable_mask & (1 << owner));
 }
 
 STATIC_INLINE void _jl_timing_block_ctor(jl_timing_block_t *block, int owner, int event) JL_NOTSAFEPOINT {
@@ -377,13 +377,13 @@ struct jl_timing_block_cpp_t {
     jl_timing_block_cpp_t& operator=(const jl_timing_block_cpp_t &&) = delete;
 };
 #define JL_TIMING(subsystem, event) jl_timing_block_cpp_t __timing_block(JL_TIMING_ ## subsystem, JL_TIMING_EVENT_ ## event); \
-    _TRACY_CTOR(__timing_block.block.tracy_ctx, #event, (jl_timing_enable_mask >> (JL_TIMING_ ## subsystem)) & 1)
+    _TRACY_CTOR(__timing_block.block.tracy_ctx, #event, _jl_timing_enabled(JL_TIMING_ ## subsystem))
 #else
 #define JL_TIMING(subsystem, event) \
     __attribute__((cleanup(_jl_timing_block_destroy))) \
     jl_timing_block_t __timing_block; \
     _jl_timing_block_ctor(&__timing_block, JL_TIMING_ ## subsystem, JL_TIMING_EVENT_ ## event); \
-    _TRACY_CTOR(__timing_block.tracy_ctx, #event, (jl_timing_enable_mask >> (JL_TIMING_ ## subsystem)) & 1)
+    _TRACY_CTOR(__timing_block.tracy_ctx, #event, _jl_timing_enabled(JL_TIMING_ ## subsystem))
 #endif
 
 #ifdef __cplusplus
