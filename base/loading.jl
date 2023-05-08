@@ -1198,6 +1198,15 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
     return nothing
 end
 
+function pkg_loadable_in_ext(extid::PkgId, pkgid::PkgId)
+    pkgenv = identify_package_env(extid, pkgid.name)
+    pkgenv === nothing && return false
+    pkg, env = pkgenv
+    path = locate_package(pkg, env)
+    path === nothing && return false
+    return true
+end
+
 function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, <:Any}, weakdeps::Dict{String, <:Any})
     for (ext::String, triggers::Union{String, Vector{String}}) in extensions
         triggers isa String && (triggers = [triggers])
@@ -1217,7 +1226,11 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, <:An
                 trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, trigger_id)
                 push!(trigger1, gid)
             else
-                gid.ntriggers -= 1
+                if pkg_loadable_in_ext(gid.id, trigger_id)
+                    gid.ntriggers -= 1
+                else
+                    gid.ntriggers = -1
+                end
             end
         end
     end
@@ -1255,38 +1268,19 @@ function run_extension_callbacks(pkgid::PkgId)
             # below the one of the parent. This will cause a load failure when the
             # pkg ext tries to load the triggers. Therefore, check this first
             # before loading the pkg ext.
-            pkgenv = identify_package_env(extid.id, pkgid.name)
-            ext_not_allowed_load = false
-            if pkgenv === nothing
-                ext_not_allowed_load = true
+            if pkg_loadable_in_ext(extid.id, pkgid)
+                 # indicate pkgid is loaded
+                 extid.ntriggers -= 1
             else
-                pkg, env = pkgenv
-                path = locate_package(pkg, env)
-                if path === nothing
-                    ext_not_allowed_load = true
-                end
-            end
-            if ext_not_allowed_load
                 @debug "Extension $(extid.id.name) of $(extid.parentid.name) will not be loaded \
                         since $(pkgid.name) loaded in environment lower in load path"
-                # indicate extid is expected to fail
-                extid.ntriggers *= -1
-            else
-                # indicate pkgid is loaded
-                extid.ntriggers -= 1
+                extid.ntriggers = -1
             end
-        end
-        if extid.ntriggers < 0
-            # indicate pkgid is loaded
-            extid.ntriggers += 1
-            succeeded = false
-        else
-            succeeded = true
         end
         if extid.ntriggers == 0
             # actually load extid, now that all dependencies are met,
             # and record the result
-            succeeded = succeeded && run_extension_callbacks(extid)
+            succeeded = run_extension_callbacks(extid)
             succeeded || push!(EXT_DORMITORY_FAILED, extid)
         end
     end
