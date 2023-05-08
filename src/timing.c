@@ -35,7 +35,7 @@ JL_DLLEXPORT uint64_t jl_timing_enable_mask = ~((1ull << JL_TIMING_ROOT) |
 JL_DLLEXPORT uint64_t jl_timing_enable_mask = ~0ull;
 #endif
 
-JL_DLLEXPORT uint64_t jl_timing_counts[(int)JL_TIMING_LAST] = {0};
+JL_DLLEXPORT _Atomic(uint64_t) jl_timing_counts[(int)JL_TIMING_LAST] = {0};
 
 // Used to as an item limit when several strings of metadata can
 // potentially be associated with a single timing zone.
@@ -57,13 +57,14 @@ void jl_print_timings(void)
     uint64_t total_time = cycleclock() - t0;
     uint64_t root_time = total_time;
     for (int i = 0; i < JL_TIMING_LAST; i++) {
-        root_time -= jl_timing_counts[i];
+        root_time -= jl_atomic_load_relaxed(&jl_timing_counts[i]);
     }
-    jl_timing_counts[0] = root_time;
+    jl_atomic_store_relaxed(&jl_timing_counts[0], root_time);
     for (int i = 0; i < JL_TIMING_LAST; i++) {
-        if (jl_timing_counts[i] != 0)
+        uint64_t count = jl_atomic_load_relaxed(&jl_timing_counts[i]);
+        if (count)
             fprintf(stderr, "%-25s : %5.2f %%   %" PRIu64 "\n", jl_timing_names[i],
-                    100 * (((double)jl_timing_counts[i]) / total_time), jl_timing_counts[i]);
+                    100 * (((double)count) / total_time), count);
     }
 }
 
