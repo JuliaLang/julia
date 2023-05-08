@@ -53,6 +53,12 @@ const char *jl_timing_names[(int)JL_TIMING_EVENT_LAST] =
 JL_DLLEXPORT __itt_event jl_timing_ittapi_events[(int)JL_TIMING_EVENT_LAST];
 #endif
 
+static int cmp_event_names(const void *a, const void *b) {
+    int i1 = *(const int *)a;
+    int i2 = *(const int *)b;
+    return strcmp(jl_timing_names[i1], jl_timing_names[i2]);
+}
+
 void jl_print_timings(void)
 {
     uint64_t total_time = cycleclock() - t0;
@@ -67,11 +73,16 @@ void jl_print_timings(void)
         return;
     }
     fprintf(stderr, "%-25s, Self Cycles (%% of total), Total Cycles (%% of total)\n", "Event");
+    int sorted[(int)JL_TIMING_EVENT_LAST];
     for (int i = 0; i < JL_TIMING_EVENT_LAST; i++) {
-        uint64_t self = jl_atomic_load_relaxed(&jl_self_timing_counts[i]);
-        uint64_t full = jl_atomic_load_relaxed(&jl_full_timing_counts[i]);
+        sorted[i] = i;
+    }
+    qsort(&sorted, JL_TIMING_EVENT_LAST, sizeof(int), cmp_event_names);
+    for (int i = 0; i < JL_TIMING_EVENT_LAST; i++) {
+        uint64_t self = jl_atomic_load_relaxed(&jl_self_timing_counts[sorted[i]]);
+        uint64_t full = jl_atomic_load_relaxed(&jl_full_timing_counts[sorted[i]]);
         if (full) {
-            fprintf(stderr, "%-25s, %" PRIu64 " (%5.2f %%), %" PRIu64 " (%5.2f %%)\n", jl_timing_names[i], self,
+            fprintf(stderr, "%-25s, %20" PRIu64 " (%5.2f %%), %20" PRIu64 " (%5.2f %%)\n", jl_timing_names[sorted[i]], self,
                     100 * (((double)self) / total_time), full, 100 * (((double)full) / total_time));
         }
     }
