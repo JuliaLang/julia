@@ -1558,7 +1558,7 @@ This function will return an `Effects` object with information about the computa
 
 # See Also
 - [`Core.Compiler.Effects`](@ref): A type representing the computational effects of a method call.
-- [`Base.@assume_effects`](@ref): A macro for making assumptions about the effects of a function call.
+- [`Base.@assume_effects`](@ref): A macro for making assumptions about the effects of a method.
 """
 function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
                        world = get_world_counter(),
