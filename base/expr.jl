@@ -516,7 +516,7 @@ The `:consistent` setting asserts that for egal (`===`) inputs:
 !!! note
     The `:consistent`-cy assertion currrently includes the assertion that the function
     will not execute any undefined behavior (for any input). Note that undefined behavior
-    may technically cause the function to violate other effect asswertions (such as
+    may technically cause the function to violate other effect assertions (such as
     `:nothrow` or `:effect_free`) as well, but we do not model this, and all effects
     except `:consistent` assume the absence of undefined behavior.
 
