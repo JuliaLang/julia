@@ -84,7 +84,7 @@ end
 const MAX_INLINE_CONST_SIZE = 256
 
 function count_const_size(@nospecialize(x), count_self::Bool = true)
-    (x isa Type || x isa Symbol) && return 0
+    (x isa Type || x isa Core.TypeName || x isa Symbol) && return 0
     ismutable(x) && return MAX_INLINE_CONST_SIZE + 1
     isbits(x) && return Core.sizeof(x)
     dt = typeof(x)
@@ -137,7 +137,7 @@ function retrieve_code_info(linfo::MethodInstance, world::UInt)
         if src === nothing
             # can happen in images built with --strip-ir
             return nothing
-        elseif isa(src, Array{UInt8,1})
+        elseif isa(src, String)
             c = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, src)
         else
             c = copy(src::CodeInfo)
@@ -199,19 +199,9 @@ function normalize_typevars(method::Method, @nospecialize(atype), sparams::Simpl
 end
 
 # get a handle to the unique specialization object representing a particular instantiation of a call
-function specialize_method(method::Method, @nospecialize(atype), sparams::SimpleVector; preexisting::Bool=false, compilesig::Bool=false)
+function specialize_method(method::Method, @nospecialize(atype), sparams::SimpleVector; preexisting::Bool=false)
     if isa(atype, UnionAll)
         atype, sparams = normalize_typevars(method, atype, sparams)
-    end
-    if compilesig
-        new_atype = get_compileable_sig(method, atype, sparams)
-        new_atype === nothing && return nothing
-        if atype !== new_atype
-            sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), new_atype, method.sig)::SimpleVector
-            if sparams === sp_[2]::SimpleVector
-                atype = new_atype
-            end
-        end
     end
     if preexisting
         # check cached specializations

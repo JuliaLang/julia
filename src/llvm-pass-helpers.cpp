@@ -101,7 +101,8 @@ llvm::Function *JuliaPassContext::getOrDeclare(
     else {
         // Otherwise, we'll declare it and add it to the module.
         // Declare the function.
-        auto func = desc.declare(*this);
+        auto T_size = module->getDataLayout().getIntPtrType(module->getContext());
+        auto func = desc.declare(T_size);
         // Add it to the function list.
         module->getFunctionList().push_back(func);
         // Return the newly created function.
@@ -121,7 +122,7 @@ namespace jl_intrinsics {
     // Annotates a function with attributes suitable for GC allocation
     // functions. Specifically, the return value is marked noalias and nonnull.
     // The allocation size is set to the first argument.
-    static Function *addGCAllocAttributes(Function *target, LLVMContext &context)
+    static Function *addGCAllocAttributes(Function *target)
     {
         addRetAttr(target, Attribute::NoAlias);
         addRetAttr(target, Attribute::NonNull);
@@ -130,11 +131,13 @@ namespace jl_intrinsics {
 
     const IntrinsicDescription getGCFrameSlot(
         GET_GC_FRAME_SLOT_NAME,
-        [](const JuliaPassContext &context) {
+        [](Type *T_size) {
+            auto &ctx = T_size->getContext();
+            auto T_pprjlvalue = JuliaType::get_pprjlvalue_ty(ctx);
             return Function::Create(
                 FunctionType::get(
-                    PointerType::get(context.T_prjlvalue, 0),
-                    {PointerType::get(context.T_prjlvalue, 0), Type::getInt32Ty(context.getLLVMContext())},
+                    T_pprjlvalue,
+                    {T_pprjlvalue, Type::getInt32Ty(ctx)},
                     false),
                 Function::ExternalLinkage,
                 GET_GC_FRAME_SLOT_NAME);
@@ -142,26 +145,27 @@ namespace jl_intrinsics {
 
     const IntrinsicDescription GCAllocBytes(
         GC_ALLOC_BYTES_NAME,
-        [](const JuliaPassContext &context) {
+        [](Type *T_size) {
+            auto &ctx = T_size->getContext();
+            auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
             auto intrinsic = Function::Create(
                 FunctionType::get(
-                    context.T_prjlvalue,
-                    { Type::getInt8PtrTy(context.getLLVMContext()),
-                        sizeof(size_t) == sizeof(uint32_t) ?
-                        Type::getInt32Ty(context.getLLVMContext()) :
-                        Type::getInt64Ty(context.getLLVMContext()) },
+                    T_prjlvalue,
+                    { Type::getInt8PtrTy(ctx), T_size },
                     false),
                 Function::ExternalLinkage,
                 GC_ALLOC_BYTES_NAME);
-            intrinsic->addFnAttr(Attribute::getWithAllocSizeArgs(context.getLLVMContext(), 1, None));
-            return addGCAllocAttributes(intrinsic, context.getLLVMContext());
+            intrinsic->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, None));
+            return addGCAllocAttributes(intrinsic);
         });
 
     const IntrinsicDescription newGCFrame(
         NEW_GC_FRAME_NAME,
-        [](const JuliaPassContext &context) {
+        [](Type *T_size) {
+            auto &ctx = T_size->getContext();
+            auto T_pprjlvalue = JuliaType::get_pprjlvalue_ty(ctx);
             auto intrinsic = Function::Create(
-                FunctionType::get(PointerType::get(context.T_prjlvalue, 0), {Type::getInt32Ty(context.getLLVMContext())}, false),
+                FunctionType::get(T_pprjlvalue, {Type::getInt32Ty(ctx)}, false),
                 Function::ExternalLinkage,
                 NEW_GC_FRAME_NAME);
             addRetAttr(intrinsic, Attribute::NoAlias);
@@ -172,11 +176,13 @@ namespace jl_intrinsics {
 
     const IntrinsicDescription pushGCFrame(
         PUSH_GC_FRAME_NAME,
-        [](const JuliaPassContext &context) {
+        [](Type *T_size) {
+            auto &ctx = T_size->getContext();
+            auto T_pprjlvalue = JuliaType::get_pprjlvalue_ty(ctx);
             return Function::Create(
                 FunctionType::get(
-                    Type::getVoidTy(context.getLLVMContext()),
-                    {PointerType::get(context.T_prjlvalue, 0), Type::getInt32Ty(context.getLLVMContext())},
+                    Type::getVoidTy(ctx),
+                    {T_pprjlvalue, Type::getInt32Ty(ctx)},
                     false),
                 Function::ExternalLinkage,
                 PUSH_GC_FRAME_NAME);
@@ -184,11 +190,13 @@ namespace jl_intrinsics {
 
     const IntrinsicDescription popGCFrame(
         POP_GC_FRAME_NAME,
-        [](const JuliaPassContext &context) {
+        [](Type *T_size) {
+            auto &ctx = T_size->getContext();
+            auto T_pprjlvalue = JuliaType::get_pprjlvalue_ty(ctx);
             return Function::Create(
                 FunctionType::get(
-                    Type::getVoidTy(context.getLLVMContext()),
-                    {PointerType::get(context.T_prjlvalue, 0)},
+                    Type::getVoidTy(ctx),
+                    {T_pprjlvalue},
                     false),
                 Function::ExternalLinkage,
                 POP_GC_FRAME_NAME);
@@ -196,11 +204,13 @@ namespace jl_intrinsics {
 
     const IntrinsicDescription queueGCRoot(
         QUEUE_GC_ROOT_NAME,
-        [](const JuliaPassContext &context) {
+        [](Type *T_size) {
+            auto &ctx = T_size->getContext();
+            auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
             auto intrinsic = Function::Create(
                 FunctionType::get(
-                    Type::getVoidTy(context.getLLVMContext()),
-                    { context.T_prjlvalue },
+                    Type::getVoidTy(ctx),
+                    { T_prjlvalue },
                     false),
                 Function::ExternalLinkage,
                 QUEUE_GC_ROOT_NAME);
@@ -210,12 +220,12 @@ namespace jl_intrinsics {
 
     const IntrinsicDescription safepoint(
         SAFEPOINT_NAME,
-        [](const JuliaPassContext &context) {
-            auto T_size = getSizeTy(context.getLLVMContext());
+        [](Type *T_size) {
+            auto &ctx = T_size->getContext();
             auto T_psize = T_size->getPointerTo();
             auto intrinsic = Function::Create(
                 FunctionType::get(
-                    Type::getVoidTy(context.getLLVMContext()),
+                    Type::getVoidTy(ctx),
                     {T_psize},
                     false),
                 Function::ExternalLinkage,
@@ -235,42 +245,45 @@ namespace jl_well_known {
 
     const WellKnownFunctionDescription GCBigAlloc(
         GC_BIG_ALLOC_NAME,
-        [](const JuliaPassContext &context) {
+        [](Type *T_size) {
+            auto &ctx = T_size->getContext();
+            auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
             auto bigAllocFunc = Function::Create(
                 FunctionType::get(
-                    context.T_prjlvalue,
-                    { Type::getInt8PtrTy(context.getLLVMContext()),
-                        sizeof(size_t) == sizeof(uint32_t) ?
-                        Type::getInt32Ty(context.getLLVMContext()) :
-                        Type::getInt64Ty(context.getLLVMContext()) },
+                    T_prjlvalue,
+                    { Type::getInt8PtrTy(ctx), T_size },
                     false),
                 Function::ExternalLinkage,
                 GC_BIG_ALLOC_NAME);
-            bigAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(context.getLLVMContext(), 1, None));
-            return addGCAllocAttributes(bigAllocFunc, context.getLLVMContext());
+            bigAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, None));
+            return addGCAllocAttributes(bigAllocFunc);
         });
 
     const WellKnownFunctionDescription GCPoolAlloc(
         GC_POOL_ALLOC_NAME,
-        [](const JuliaPassContext &context) {
+        [](Type *T_size) {
+            auto &ctx = T_size->getContext();
+            auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
             auto poolAllocFunc = Function::Create(
                 FunctionType::get(
-                    context.T_prjlvalue,
-                    { Type::getInt8PtrTy(context.getLLVMContext()), Type::getInt32Ty(context.getLLVMContext()), Type::getInt32Ty(context.getLLVMContext()) },
+                    T_prjlvalue,
+                    { Type::getInt8PtrTy(ctx), Type::getInt32Ty(ctx), Type::getInt32Ty(ctx) },
                     false),
                 Function::ExternalLinkage,
                 GC_POOL_ALLOC_NAME);
-            poolAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(context.getLLVMContext(), 2, None));
-            return addGCAllocAttributes(poolAllocFunc, context.getLLVMContext());
+            poolAllocFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 2, None));
+            return addGCAllocAttributes(poolAllocFunc);
         });
 
     const WellKnownFunctionDescription GCQueueRoot(
         GC_QUEUE_ROOT_NAME,
-        [](const JuliaPassContext &context) {
+        [](Type *T_size) {
+            auto &ctx = T_size->getContext();
+            auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
             auto func = Function::Create(
                 FunctionType::get(
-                    Type::getVoidTy(context.getLLVMContext()),
-                    { context.T_prjlvalue },
+                    Type::getVoidTy(ctx),
+                    { T_prjlvalue },
                     false),
                 Function::ExternalLinkage,
                 GC_QUEUE_ROOT_NAME);
@@ -280,19 +293,19 @@ namespace jl_well_known {
 
     const WellKnownFunctionDescription GCAllocTyped(
         GC_ALLOC_TYPED_NAME,
-        [](const JuliaPassContext &context) {
+        [](Type *T_size) {
+            auto &ctx = T_size->getContext();
+            auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
             auto allocTypedFunc = Function::Create(
                 FunctionType::get(
-                    context.T_prjlvalue,
-                    { Type::getInt8PtrTy(context.getLLVMContext()),
-                        sizeof(size_t) == sizeof(uint32_t) ?
-                        Type::getInt32Ty(context.getLLVMContext()) :
-                        Type::getInt64Ty(context.getLLVMContext()),
-                        Type::getInt8PtrTy(context.getLLVMContext()) },
+                    T_prjlvalue,
+                    { Type::getInt8PtrTy(ctx),
+                        T_size,
+                        Type::getInt8PtrTy(ctx) },
                     false),
                 Function::ExternalLinkage,
                 GC_ALLOC_TYPED_NAME);
-            allocTypedFunc->addFnAttr(Attribute::getWithAllocSizeArgs(context.getLLVMContext(), 1, None));
-            return addGCAllocAttributes(allocTypedFunc, context.getLLVMContext());
+            allocTypedFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, None));
+            return addGCAllocAttributes(allocTypedFunc);
         });
 }

@@ -138,7 +138,7 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
                     Q = Any[ tP[i] for i in 1:np ]
                     if ltP > np
                         # combine tp[np:end] into tP[np] using Vararg
-                        Q[np] = tuple_tail_elem(Bottom, Any[ tP[i] for i in np:ltP ])
+                        Q[np] = tuple_tail_elem(fallback_lattice, Bottom, Any[ tP[i] for i in np:ltP ])
                     end
                     for i = 1:np
                         # now apply limit element-wise to Q
@@ -261,7 +261,8 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         elseif isa(c, DataType) && t.name === c.name
             cP = c.parameters
             length(cP) < length(tP) && return true
-            length(cP) > length(tP) && !isvarargtype(tP[end]) && depth == 1 && return false
+            isempty(tP) && return false
+            length(cP) > length(tP) && !isvarargtype(tP[end]) && depth == 1 && return false # is this line necessary?
             ntail = length(cP) - length(tP) # assume parameters were dropped from the tuple head
             # allow creating variation within a nested tuple, but only so deep
             if t.name === Tuple.name && tupledepth > 0
@@ -306,6 +307,7 @@ end
 function issimplertype(𝕃::AbstractLattice, @nospecialize(typea), @nospecialize(typeb))
     typea isa MaybeUndef && (typea = typea.typ) # n.b. does not appear in inference
     typeb isa MaybeUndef && (typeb = typeb.typ) # n.b. does not appear in inference
+    @assert !isa(typea, LimitedAccuracy) && !isa(typeb, LimitedAccuracy) "LimitedAccuracy not supported by simplertype lattice" # n.b. the caller was supposed to handle these
     typea === typeb && return true
     if typea isa PartialStruct
         aty = widenconst(typea)
@@ -327,7 +329,7 @@ function issimplertype(𝕃::AbstractLattice, @nospecialize(typea), @nospecializ
         end
     elseif typea isa Type
         return issimpleenoughtype(typea)
-    # elseif typea isa Const # fall-through good
+    # elseif typea isa Const # fall-through to true is good
     elseif typea isa Conditional # follow issubconditional query
         typeb isa Const && return true
         typeb isa Conditional || return false
@@ -352,6 +354,13 @@ function issimplertype(𝕃::AbstractLattice, @nospecialize(typea), @nospecializ
         issimplertype(𝕃, typea.fldtyp, typeb.fldtyp) || return false
     elseif typea isa PartialOpaque
         # TODO
+        typeb isa PartialOpaque || return false
+        aty = widenconst(typea)
+        bty = widenconst(typeb)
+        if typea.source === typeb.source && typea.parent === typeb.parent && aty == bty && typea.env == typeb.env
+            return false
+        end
+        return false
     end
     return true
 end

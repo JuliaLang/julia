@@ -395,10 +395,10 @@ precompile_test_harness(false) do dir
                      Base.PkgId(m) => Base.module_build_id(m)
                  end for s in
                 [:ArgTools, :Artifacts, :Base64, :CompilerSupportLibraries_jll, :CRC32c, :Dates,
-                 :Distributed, :Downloads, :FileWatching, :Future, :InteractiveUtils, :libblastrampoline_jll,
-                 :LazyArtifacts, :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
+                 :Downloads, :FileWatching, :Future, :InteractiveUtils, :libblastrampoline_jll,
+                 :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
                  :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :OpenBLAS_jll, :Pkg, :Printf,
-                 :Profile, :p7zip_jll, :REPL, :Random, :SHA, :Serialization, :SharedArrays, :Sockets,
+                 :p7zip_jll, :REPL, :Random, :SHA, :Serialization, :Sockets,
                  :TOML, :Tar, :Test, :UUIDs, :Unicode,
                  :nghttp2_jll]
             ),
@@ -662,14 +662,13 @@ precompile_test_harness("code caching") do dir
         @test all(i -> root_provenance(m, i) == Mid, 1:length(m.roots))
     end
     # Check that we can cache external CodeInstances:
-    # size(::Vector) has an inferred specialization for Vector{X}
-    msize = which(size, (Vector{<:Any},))
+    # length(::Vector) has an inferred specialization for `Vector{X}`
+    msize = which(length, (Vector{<:Any},))
     hasspec = false
-    msizespecs = msize.specializations::Core.SimpleVector
-    for i = 1:length(msizespecs)
-        mi = msizespecs[i]
-        if isa(mi, Core.MethodInstance) && mi.specTypes == Tuple{typeof(size),Vector{Cacheb8321416e8a3e2f1.X}}
-            if isdefined(mi, :cache) && isa(mi.cache, Core.CodeInstance) && mi.cache.max_world == typemax(UInt) && mi.cache.inferred !== nothing
+    for mi in Base.specializations(msize)
+        if mi.specTypes == Tuple{typeof(length),Vector{Cacheb8321416e8a3e2f1.X}}
+            if (isdefined(mi, :cache) && isa(mi.cache, Core.CodeInstance) &&
+                mi.cache.max_world == typemax(UInt) && mi.cache.inferred !== nothing)
                 hasspec = true
                 break
             end
@@ -786,9 +785,7 @@ precompile_test_harness("code caching") do dir
     MB = getfield(@__MODULE__, RootB)
     M = getfield(MA, RootModule)
     m = which(M.f, (Any,))
-    mspecs = m.specializations
-    mspecs isa Core.SimpleVector || (mspecs = Core.svec(mspecs))
-    for mi in mspecs
+    for mi in Base.specializations(m)
         mi === nothing && continue
         mi = mi::Core.MethodInstance
         if mi.specTypes.parameters[2] === Int8
@@ -860,9 +857,13 @@ precompile_test_harness("code caching") do dir
 
         # This will be invalidated if StaleC is loaded
         useA() = $StaleA.stale("hello")
+        useA2() = useA()
 
         # force precompilation
-        useA()
+        begin
+            Base.Experimental.@force_compile
+            useA2()
+        end
 
         ## Reporting tests
         call_nbits(x::Integer) = $StaleA.nbits(x)
@@ -925,8 +926,7 @@ precompile_test_harness("code caching") do dir
     # Reporting test (ensure SnoopCompile works)
     @test all(i -> isassigned(invalidations, i), eachindex(invalidations))
     m = only(methods(MB.call_nbits))
-    for mi in m.specializations::Core.SimpleVector
-        mi === nothing && continue
+    for mi in Base.specializations(m)
         hv = hasvalid(mi, world)
         @test mi.specTypes.parameters[end] === Integer ? !hv : hv
     end
@@ -944,6 +944,10 @@ precompile_test_harness("code caching") do dir
     @test invalidations[j-1] == "insert_backedges_callee"
     @test isa(invalidations[j-2], Type)
     @test isa(invalidations[j+1], Vector{Any}) # [nbits(::UInt8)]
+    m = only(methods(MB.useA2))
+    mi = only(Base.specializations(m))
+    @test !hasvalid(mi, world)
+    @test mi ∈ invalidations
 
     m = only(methods(MB.map_nbits))
     @test !hasvalid(m.specializations::Core.MethodInstance, world+1) # insert_backedges invalidations also trigger their backedges
@@ -1088,13 +1092,13 @@ precompile_test_harness("invoke") do dir
     end
 
     m = get_method_for_type(M.h, Real)
-    @test m.specializations === Core.svec()
+    @test isempty(Base.specializations(m))
     m = get_method_for_type(M.hnc, Real)
-    @test m.specializations === Core.svec()
+    @test isempty(Base.specializations(m))
     m = only(methods(M.callq))
-    @test m.specializations === Core.svec() || nvalid(m.specializations::Core.MethodInstance) == 0
+    @test isempty(Base.specializations(m)) || nvalid(m.specializations::Core.MethodInstance) == 0
     m = only(methods(M.callqnc))
-    @test m.specializations === Core.svec() || nvalid(m.specializations::Core.MethodInstance) == 0
+    @test isempty(Base.specializations(m)) || nvalid(m.specializations::Core.MethodInstance) == 0
     m = only(methods(M.callqi))
     @test (m.specializations::Core.MethodInstance).specTypes == Tuple{typeof(M.callqi), Int}
     m = only(methods(M.callqnci))
@@ -1112,7 +1116,7 @@ precompile_test_harness("invoke") do dir
     m_any, m_int = sort(collect(methods(invokeme)); by=m->(m.file,m.line))
     @test precompile(invokeme, (Int,), m_any)
     @test (m_any.specializations::Core.MethodInstance).specTypes === Tuple{typeof(invokeme), Int}
-    @test m_int.specializations === Core.svec()
+    @test isempty(Base.specializations(m_int))
 end
 
 # test --compiled-modules=no command line option
@@ -1581,7 +1585,7 @@ precompile_test_harness("issue #46296") do load_path
         """
         module CodeInstancePrecompile
 
-        mi = first(methods(identity)).specializations[1]
+        mi = first(Base.specializations(first(methods(identity))))
         ci = Core.CodeInstance(mi, Any, nothing, nothing, zero(Int32), typemin(UInt),
                                typemax(UInt), zero(UInt32), zero(UInt32), nothing, 0x00)
 
@@ -1676,9 +1680,9 @@ precompile_test_harness("PkgCacheInspector") do load_path
     end
 
     if ocachefile !== nothing
-        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint), ocachefile, depmods, true)
+        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring), ocachefile, depmods, true, "PCI")
     else
-        sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint), cachefile, depmods, true)
+        sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), cachefile, depmods, true, "PCI")
     end
 
     modules, init_order, external_methods, new_specializations, new_method_roots, external_targets, edges = sv

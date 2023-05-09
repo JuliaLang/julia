@@ -7,6 +7,7 @@
     ios_*;
     arraylist_grow;
     small_arraylist_grow;
+    small_typeof;
     jl_*;
     ijl_*;
     _jl_mutex_*;
@@ -18,10 +19,7 @@
     memhash32;
     memhash32_seed;
     memhash_seed;
-    restore_arg_area_loc;
     restore_signals;
-    rl_clear_input;
-    save_arg_area_loc;
     u8_*;
     uv_*;
     add_library_mapping;

@@ -839,6 +839,8 @@ let ε=1, μ=2, x=3, î=4, ⋅=5, (-)=6
     @test Meta.parse("100.0f\u22122") === Meta.parse("100.0f-2")
     @test Meta.parse("0x100p\u22128") === Meta.parse("0x100P\u22128") === Meta.parse("0x100p-8")
     @test (−) == (-) == 6
+    # hbar ℏ to ħ - (#48870)
+    @test :ℏ === :ħ
 end
 
 # issue #8925
@@ -2224,6 +2226,14 @@ end
 @testset "binary ⫪ and ⫫" begin
     @test Meta.parse("a ⫪ b") == Expr(:call, :⫪, :a, :b)
     @test Meta.parse("a ⫫ b") == Expr(:call, :⫫, :a, :b)
+end
+
+# issue 45962
+@testset "binary ⭄, ⥺, ⭃, and ⥷" begin
+    @test Meta.parse("a ⭄ b") == Expr(:call, :⭄, :a, :b)
+    @test Meta.parse("a ⥺ b") == Expr(:call, :⥺, :a, :b)
+    @test Meta.parse("a ⭃ b") == Expr(:call, :⭃, :a, :b)
+    @test Meta.parse("a ⥷ b") == Expr(:call, :⥷, :a, :b)
 end
 
 # only allow certain characters after interpolated vars (#25231)

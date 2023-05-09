@@ -9,7 +9,7 @@
 #endif
 #include "julia_assert.h"
 
-#define MAX_METHLIST_COUNT 12 // this can strongly affect the sysimg size and speed!
+#define MAX_METHLIST_COUNT 6 // this helps configure the sysimg size and speed.
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,7 +23,7 @@ static int jl_is_any(jl_value_t *t1)
     return t1 == (jl_value_t*)jl_any_type;
 }
 
-static jl_value_t *jl_type_extract_name(jl_value_t *t1 JL_PROPAGATES_ROOT)
+static jl_value_t *jl_type_extract_name(jl_value_t *t1 JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
     if (jl_is_unionall(t1))
         t1 = jl_unwrap_unionall(t1);
@@ -32,6 +32,9 @@ static jl_value_t *jl_type_extract_name(jl_value_t *t1 JL_PROPAGATES_ROOT)
     }
     else if (jl_is_typevar(t1)) {
         return jl_type_extract_name(((jl_tvar_t*)t1)->ub);
+    }
+    else if (t1 == jl_bottom_type || t1 == (jl_value_t*)jl_typeofbottom_type || t1 == (jl_value_t*)jl_typeofbottom_type->super) {
+        return (jl_value_t*)jl_typeofbottom_type->name; // put Union{} and typeof(Union{}) and Type{Union{}} together for convenience
     }
     else if (jl_is_datatype(t1)) {
         jl_datatype_t *dt = (jl_datatype_t*)t1;
@@ -63,6 +66,9 @@ static int jl_type_extract_name_precise(jl_value_t *t1, int invariant)
     else if (jl_is_typevar(t1)) {
         return jl_type_extract_name_precise(((jl_tvar_t*)t1)->ub, 0);
     }
+    else if (t1 == jl_bottom_type || t1 == (jl_value_t*)jl_typeofbottom_type || t1 == (jl_value_t*)jl_typeofbottom_type->super) {
+        return 1;
+    }
     else if (jl_is_datatype(t1)) {
         jl_datatype_t *dt = (jl_datatype_t*)t1;
         if ((invariant || !dt->name->abstract) && !jl_is_kind(t1))
@@ -82,6 +88,18 @@ static int jl_type_extract_name_precise(jl_value_t *t1, int invariant)
         return 0;
     }
     return 1;
+}
+
+// return whether Type{Union{}} is a subtype of Type{t1} (which may have free typevars)
+static int jl_parameter_includes_bottom(jl_value_t *t1)
+{
+    if (jl_is_typevar(t1) || t1 == jl_bottom_type)
+        return 1;
+    else if (jl_is_uniontype(t1)) {
+        jl_uniontype_t *u1 = (jl_uniontype_t*)t1;
+        return jl_parameter_includes_bottom(u1->a) && jl_parameter_includes_bottom(u1->b);
+    }
+    return 0;
 }
 
 
@@ -367,7 +385,7 @@ exit:
     }
 }
 
-static unsigned jl_supertype_height(jl_datatype_t *dt)
+static unsigned jl_supertype_height(jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     unsigned height = 1;
     while (dt != jl_any_type) {
@@ -378,8 +396,10 @@ static unsigned jl_supertype_height(jl_datatype_t *dt)
 }
 
 // return true if a and b might intersect in the type domain (over just their type-names)
-static int tname_intersection(jl_datatype_t *a, jl_typename_t *bname, unsigned ha)
+static int tname_intersection_dt(jl_datatype_t *a, jl_typename_t *bname, unsigned ha) JL_NOTSAFEPOINT
 {
+    if (a == jl_any_type)
+        return 1;
     jl_datatype_t *b = (jl_datatype_t*)jl_unwrap_unionall(bname->wrapper);
     unsigned hb = 1;
     while (b != jl_any_type) {
@@ -395,8 +415,42 @@ static int tname_intersection(jl_datatype_t *a, jl_typename_t *bname, unsigned h
     return a->name == bname;
 }
 
-// tparam bit 1 is ::Type{T} (vs. T)
-// tparam bit 2 is typename(T) (vs. T)
+static int tname_intersection(jl_value_t *a, jl_typename_t *bname, int8_t tparam) JL_NOTSAFEPOINT
+{
+    if (a == (jl_value_t*)jl_any_type)
+        return 1;
+    a = jl_unwrap_unionall(a);
+    assert(!jl_is_vararg(a));
+    if (jl_is_uniontype(a))
+        return tname_intersection(((jl_uniontype_t*)a)->a, bname, tparam) ||
+               tname_intersection(((jl_uniontype_t*)a)->b, bname, tparam);
+    if (jl_is_typevar(a))
+        return tname_intersection(((jl_tvar_t*)a)->ub, bname, tparam);
+    if (jl_is_datatype(a)) {
+        if (tparam) {
+            if (!jl_is_type_type(a))
+                return 0;
+            a = jl_unwrap_unionall(jl_tparam0(a));
+            if (!jl_is_datatype(a))
+                return tname_intersection(a, bname, 0);
+        }
+        return tname_intersection_dt((jl_datatype_t*)a, bname, jl_supertype_height((jl_datatype_t*)a));
+    }
+    return 0;
+}
+
+static int concrete_intersects(jl_value_t *t, jl_value_t *ty, int8_t tparam)
+{
+    if (ty == (jl_value_t*)jl_any_type) // easy case: Any always matches
+        return 1;
+    if (tparam & 1)
+        return jl_isa(t, ty); // (Type{t} <: ty), where is_leaf_type(t) => isa(t, ty)
+    else
+        return t == ty || jl_subtype(t, ty);
+}
+
+// tparam bit 0 is ::Type{T} (vs. T)
+// tparam bit 1 is typename(T) (vs. T)
 static int jl_typemap_intersection_array_visitor(jl_array_t *a, jl_value_t *ty, int8_t tparam,
                                                  int8_t offs, struct typemap_intersection_env *closure)
 {
@@ -404,15 +458,26 @@ static int jl_typemap_intersection_array_visitor(jl_array_t *a, jl_value_t *ty, 
     size_t i, l = jl_array_len(a);
     _Atomic(jl_typemap_t*) *data = (_Atomic(jl_typemap_t*)*)jl_array_data(a);
     unsigned height = 0;
-    jl_datatype_t *tydt = NULL;
-    if (jl_is_kind(ty))
-        ty = (jl_value_t*)jl_any_type;
+    jl_datatype_t *tydt = jl_any_type;
     if (tparam & 2) {
-        tydt = (jl_datatype_t*)jl_unwrap_unionall(ty);
-        if (jl_is_datatype(ty))
-            height = jl_supertype_height(tydt);
-        else
+        // try to extract a description of ty for intersections, but since we
+        jl_value_t *ttype = jl_unwrap_unionall(ty);
+        if (tparam & 1)
+            // extract T from Type{T} (if possible)
+            ttype = jl_is_type_type(ttype) ? jl_tparam0(ttype) : NULL;
+        if (ttype && jl_is_datatype(ttype)) {
+            tydt = (jl_datatype_t*)ttype;
+        }
+        else if (ttype) {
+            ttype = jl_type_extract_name(ttype);
+            tydt = ttype ? (jl_datatype_t*)jl_unwrap_unionall(((jl_typename_t*)ttype)->wrapper) : NULL;
+        }
+        if (tydt == jl_any_type)
+            ty = (jl_value_t*)jl_any_type;
+        else if (tydt == NULL)
             tydt = jl_any_type;
+        else
+            height = jl_supertype_height(tydt);
     }
     for (i = 0; i < l; i += 2) {
         jl_value_t *t = jl_atomic_load_relaxed(&data[i]);
@@ -422,10 +487,13 @@ static int jl_typemap_intersection_array_visitor(jl_array_t *a, jl_value_t *ty, 
         if (tparam & 2) {
             jl_typemap_t *ml = jl_atomic_load_relaxed(&data[i + 1]);
             JL_GC_PROMISE_ROOTED(ml);
-            if (tydt == jl_any_type || // easy case: Any always matches
-                tname_intersection(tydt, (jl_typename_t*)t, height)) {
+            if (tydt == jl_any_type ?
+                    tname_intersection(ty, (jl_typename_t*)t, tparam & 1) :
+                    tname_intersection_dt(tydt, (jl_typename_t*)t, height)) {
+                if ((tparam & 1) && t == (jl_value_t*)jl_typeofbottom_type->name) // skip Type{Union{}} and Type{typeof(Union{})}, since the caller should have already handled those
+                    continue;
                 if (jl_is_array(ml)) {
-                    if (!jl_typemap_intersection_array_visitor((jl_array_t*)ml, ty, 1, offs, closure))
+                    if (!jl_typemap_intersection_array_visitor((jl_array_t*)ml, ty, tparam & ~2, offs, closure))
                         goto exit;
                 }
                 else {
@@ -436,10 +504,7 @@ static int jl_typemap_intersection_array_visitor(jl_array_t *a, jl_value_t *ty, 
         }
         else {
             // `t` is a leaftype, so intersection test becomes subtype (after excluding kinds)
-            if (ty == (jl_value_t*)jl_any_type || // easy case: Any always matches
-                (tparam & 1
-                 ? jl_isa(t, ty) // (Type{t} <: ty), where is_leaf_type(t) => isa(t, ty)
-                 : (t == ty || jl_subtype(t, ty)))) {
+            if (concrete_intersects(t, ty, tparam)) {
                 jl_typemap_t *ml = jl_atomic_load_relaxed(&data[i + 1]);
                 JL_GC_PROMISE_ROOTED(ml);
                 // NOTE: ml might be NULL if we're racing with the thread that's inserting the item
@@ -456,6 +521,7 @@ exit:
     return 0;
 }
 
+
 // calls fptr on each jl_typemap_entry_t in cache in sort order
 // for which type ∩ ml->type != Union{}, until fptr return false
 static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure)
@@ -464,36 +530,62 @@ static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct t
     // mark this `register` because (for branch prediction)
     // that can be absolutely critical for speed
     register jl_typemap_intersection_visitor_fptr fptr = closure->fptr;
-    while (ml != (void*)jl_nothing) {
-        if (closure->type == (jl_value_t*)ml->sig) {
-            // fast-path for the intersection of a type with itself
-            if (closure->env)
-                closure->env = jl_outer_unionall_vars((jl_value_t*)ml->sig);
-            closure->ti = closure->type;
-            closure->issubty = 1;
-            if (!fptr(ml, closure))
-                return 0;
+    for (;  ml != (void*)jl_nothing; ml = jl_atomic_load_relaxed(&ml->next)) {
+        if (closure->max_valid < ml->min_world)
+            continue;
+        if (closure->min_valid > ml->max_world)
+            continue;
+        jl_svec_t **penv = NULL;
+        if (closure->env) {
+            closure->env = jl_emptysvec;
+            penv = &closure->env;
         }
-        else {
-            jl_svec_t **penv = NULL;
-            if (closure->env) {
-                closure->env = jl_emptysvec;
-                penv = &closure->env;
-            }
-            closure->ti = jl_type_intersection_env_s(closure->type, (jl_value_t*)ml->sig, penv, &closure->issubty);
-            if (closure->ti != (jl_value_t*)jl_bottom_type) {
-                // In some corner cases type intersection is conservative and returns something
-                // for intersect(A, B) even though A is a dispatch tuple and !(A <: B).
-                // For dispatch purposes in such a case we know there's no match. This check
-                // fixes issue #30394.
-                if (closure->issubty || !jl_is_dispatch_tupletype(closure->type))
-                    if (!fptr(ml, closure))
-                        return 0;
-            }
+        closure->ti = jl_type_intersection_env_s(closure->type, (jl_value_t*)ml->sig, penv, &closure->issubty);
+        if (closure->ti != (jl_value_t*)jl_bottom_type) {
+            // In some corner cases type intersection is conservative and returns something
+            // for intersect(A, B) even though A is a dispatch tuple and !(A <: B).
+            // For dispatch purposes in such a case we know there's no match. This check
+            // fixes issue #30394.
+            if (closure->issubty || !jl_is_dispatch_tupletype(closure->type))
+                if (!fptr(ml, closure))
+                    return 0;
         }
-        ml = jl_atomic_load_relaxed(&ml->next);
     }
     return 1;
+}
+
+int jl_has_intersect_type_not_kind(jl_value_t *t);
+int jl_has_intersect_kind_not_type(jl_value_t *t);
+
+// if TypeVar tv is used covariantly, it cannot be Union{}
+int has_covariant_var(jl_datatype_t *ttypes, jl_tvar_t *tv)
+{
+    size_t i, l = jl_nparams(ttypes);
+    for (i = 0; i < l; i++)
+        if (jl_tparam(ttypes, i) == (jl_value_t*)tv)
+            return 1;
+    return 0;
+}
+
+void typemap_slurp_search(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure)
+{
+    // n.b. we could consider mt->max_args here too, so this optimization
+    //      usually works even if the user forgets the `slurp...` argument, but
+    //      there is discussion that parameter may be going away? (and it is
+    //      already not accurately up-to-date for all tables currently anyways)
+    if (closure->search_slurp && ml->va) {
+        jl_value_t *sig = jl_unwrap_unionall((jl_value_t*)ml->sig);
+        size_t nargs = jl_nparams(sig);
+        if (nargs > 1 && nargs - 1 == closure->search_slurp) {
+            jl_vararg_t *va = (jl_vararg_t*)jl_tparam(sig, nargs - 1);
+            assert(jl_is_vararg((jl_value_t*)va));
+            if (va->T == (jl_value_t*)jl_any_type && va->N == NULL) {
+                // instruct typemap it can set exclude_typeofbottom on parameter nargs
+                // since we found the necessary slurp argument
+                closure->search_slurp = 0;
+            }
+        }
+    }
 }
 
 int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
@@ -504,13 +596,12 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
     //TODO: fast-path for leaf-type tuples?
     //if (ttypes->isdispatchtuple) {
     //    register jl_typemap_intersection_visitor_fptr fptr = closure->fptr;
-    //        struct jl_typemap_assoc search = {(jl_value_t*)closure->type, world, closure->env, 0, ~(size_t)0};
-    //        jl_typemap_entry_t *ml = jl_typemap_assoc_by_type(map, search, offs, /*subtype*/1);
-    //        if (ml) {
-    //            closure->env = search->env;
-    //            if (!fptr(ml, closure))
-    //                return 0;
-    //        }
+    //    struct jl_typemap_assoc search = {(jl_value_t*)closure->type, world, closure->env, 0, ~(size_t)0};
+    //    jl_typemap_entry_t *ml = jl_typemap_assoc_by_type(map, search, offs, /*subtype*/1);
+    //    if (ml) {
+    //        closure->env = search->env;
+    //        if (!fptr(ml, closure))
+    //            return 0;
     //    }
     //    return 1;
     //}
@@ -532,23 +623,61 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
         if (ty) {
             while (jl_is_typevar(ty))
                 ty = ((jl_tvar_t*)ty)->ub;
-            jl_value_t *typetype = jl_unwrap_unionall(ty);
-            typetype = jl_is_type_type(typetype) ? jl_tparam0(typetype) : NULL;
-            jl_value_t *name = typetype ? jl_type_extract_name(typetype) : NULL;
             // approxify the tparam until we have a valid type
-            if (jl_has_free_typevars(ty)) {
-                ty = jl_unwrap_unionall(ty);
-                if (jl_is_datatype(ty))
-                    ty = ((jl_datatype_t*)ty)->name->wrapper;
-                else
-                    ty = (jl_value_t*)jl_any_type;
-            }
+            if (jl_has_free_typevars(ty))
+                ty = jl_rewrap_unionall(ty, closure->type);
+            JL_GC_PUSH1(&ty);
             jl_array_t *targ = jl_atomic_load_relaxed(&cache->targ);
-            if (targ != (jl_array_t*)jl_an_empty_vec_any
-                    && !(typetype && !jl_has_free_typevars(typetype) && !is_cache_leaf(typetype, 1))) { // cannot contain this, so don't bother with checking
-                if (name && !jl_is_typevar(typetype)) {
-                    // semi-direct lookup of types via their names
-                    if (jl_type_extract_name_precise(typetype, 1)) {
+            jl_array_t *tname = jl_atomic_load_relaxed(&cache->tname);
+            int maybe_type = 0;
+            int maybe_kind = 0;
+            int exclude_typeofbottom = 0;
+            jl_value_t *typetype = NULL;
+            jl_value_t *name = NULL;
+            // pre-check: optimized pre-intersection test to see if `ty` could intersect with any Type or Kind
+            if (targ != (jl_array_t*)jl_an_empty_vec_any || tname != (jl_array_t*)jl_an_empty_vec_any) {
+                maybe_kind = jl_has_intersect_kind_not_type(ty);
+                maybe_type = maybe_kind || jl_has_intersect_type_not_kind(ty);
+                if (maybe_type && !maybe_kind) {
+                    typetype = jl_unwrap_unionall(ty);
+                    typetype = jl_is_type_type(typetype) ? jl_tparam0(typetype) : NULL;
+                    name = typetype ? jl_type_extract_name(typetype) : NULL;
+                    if (!typetype)
+                        exclude_typeofbottom = !jl_subtype((jl_value_t*)jl_typeofbottom_type, ty);
+                    else if (jl_is_typevar(typetype))
+                        exclude_typeofbottom = has_covariant_var((jl_datatype_t*)ttypes, (jl_tvar_t*)typetype);
+                    else
+                        exclude_typeofbottom = !jl_parameter_includes_bottom(typetype);
+                }
+            }
+            // First check for intersections with methods defined on Type{T}, where T was a concrete type
+            if (targ != (jl_array_t*)jl_an_empty_vec_any && maybe_type &&
+                    (!typetype || jl_has_free_typevars(typetype) || is_cache_leaf(typetype, 1))) { // otherwise cannot contain this particular kind, so don't bother with checking
+                if (!exclude_typeofbottom) {
+                    // detect Type{Union{}}, Type{Type{Union{}}}, and Type{typeof(Union{}} and do those early here
+                    // otherwise the possibility of encountering `Type{Union{}}` in this intersection may
+                    // be forcing us to do some extra work here whenever we see a typevar, even though
+                    // the likelihood of that value actually occurring is frequently likely to be
+                    // zero (or result in an ambiguous match)
+                    targ = jl_atomic_load_relaxed(&cache->targ); // may be GC'd during type-intersection
+                    jl_value_t *ml = mtcache_hash_lookup(targ, (jl_value_t*)jl_typeofbottom_type->name);
+                    if (ml != jl_nothing) {
+                        size_t search_slurp = closure->search_slurp;
+                        closure->search_slurp = offs + 1;
+                        if (!jl_typemap_intersection_visitor((jl_typemap_t*)ml, offs+1, closure)) {
+                            closure->search_slurp = search_slurp;
+                            JL_GC_POP();
+                            return 0;
+                        }
+                        if (closure->search_slurp == 0)
+                            exclude_typeofbottom = 1;
+                        closure->search_slurp = search_slurp;
+                    }
+                }
+                if (name != (jl_value_t*)jl_typeofbottom_type->name) {
+                    targ = jl_atomic_load_relaxed(&cache->targ); // may be GC'd earlier
+                    if (exclude_typeofbottom && name && jl_type_extract_name_precise(typetype, 1)) {
+                        // attempt semi-direct lookup of types via their names
                         // consider the type name first
                         jl_value_t *ml = mtcache_hash_lookup(targ, (jl_value_t*)name);
                         if (jl_is_array(ml)) {
@@ -557,33 +686,21 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                                 if (is_cache_leaf(typetype, 1)) {
                                     ml = mtcache_hash_lookup((jl_array_t*)ml, typetype);
                                     if (ml != jl_nothing) {
-                                        if (!jl_typemap_intersection_visitor((jl_typemap_t*)ml, offs+1, closure)) return 0;
+                                        if (!jl_typemap_intersection_visitor((jl_typemap_t*)ml, offs+1, closure)) { JL_GC_POP(); return 0; }
                                     }
                                 }
                             }
                             else {
-                                if (!jl_typemap_intersection_array_visitor((jl_array_t*)ml, (jl_value_t*)ty, 1, offs, closure)) return 0;
+                                if (!jl_typemap_intersection_array_visitor((jl_array_t*)ml, ty, 1, offs, closure)) { JL_GC_POP(); return 0; }
                             }
                         }
                         else if (ml != jl_nothing) {
-                            if (!jl_typemap_intersection_visitor((jl_typemap_t*)ml, offs+1, closure)) return 0;
+                            if (!jl_typemap_intersection_visitor((jl_typemap_t*)ml, offs+1, closure)) { JL_GC_POP(); return 0; }
                         }
                     }
                     else {
-                        // consider all of the possible subtypes
-                        // TODO: the possibility of encountering `Type{Union{}}` in this intersection may
-                        // be forcing us to do some extra work here whenever we see a typevar, even though
-                        // the likelihood of that value actually occurring is frequently likely to be
-                        // zero (or result in an ambiguous match)
-                        if (!jl_typemap_intersection_array_visitor((jl_array_t*)targ, (jl_value_t*)ty, 3, offs, closure)) return 0;
-                    }
-                }
-                else {
-                    // else an array scan is required to check subtypes
-                    // first, fast-path: optimized pre-intersection test to see if `ty` could intersect with any Type
-                    if (typetype || !jl_has_empty_intersection((jl_value_t*)jl_type_type, ty)) {
-                        targ = jl_atomic_load_relaxed(&cache->targ); // may be GC'd during type-intersection
-                        if (!jl_typemap_intersection_array_visitor(targ, ty, 3, offs, closure)) return 0;
+                        // else an array scan is required to consider all the possible subtypes
+                        if (!jl_typemap_intersection_array_visitor(targ, exclude_typeofbottom && !maybe_kind ? ty : (jl_value_t*)jl_any_type, 3, offs, closure)) { JL_GC_POP(); return 0; }
                     }
                 }
             }
@@ -596,7 +713,7 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                     if (jl_is_array(ml))
                         ml = mtcache_hash_lookup((jl_array_t*)ml, ty);
                     if (ml != jl_nothing) {
-                        if (!jl_typemap_intersection_visitor(ml, offs+1, closure)) return 0;
+                        if (!jl_typemap_intersection_visitor(ml, offs+1, closure)) { JL_GC_POP(); return 0; }
                     }
                 }
                 else {
@@ -605,82 +722,87 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                         // direct lookup of leaf types
                         jl_value_t *ml = mtcache_hash_lookup(cachearg1, name);
                         if (jl_is_array(ml)) {
-                            if (!jl_typemap_intersection_array_visitor((jl_array_t*)ml, (jl_value_t*)ty, 0, offs, closure)) return 0;
+                            if (!jl_typemap_intersection_array_visitor((jl_array_t*)ml, ty, 0, offs, closure)) { JL_GC_POP(); return 0; }
                         }
                         else {
-                            if (!jl_typemap_intersection_visitor((jl_typemap_t*)ml, offs+1, closure)) return 0;
+                            if (!jl_typemap_intersection_visitor((jl_typemap_t*)ml, offs+1, closure)) { JL_GC_POP(); return 0; }
                         }
                     }
                     else {
                         // else an array scan is required to check subtypes
-                        if (!jl_typemap_intersection_array_visitor(cachearg1, ty, 2, offs, closure)) return 0;
+                        if (!jl_typemap_intersection_array_visitor(cachearg1, ty, 2, offs, closure)) { JL_GC_POP(); return 0; }
                     }
                 }
             }
-            jl_array_t *tname = jl_atomic_load_relaxed(&cache->tname);
-            if (tname != (jl_array_t*)jl_an_empty_vec_any) {
-                if (name && !jl_is_typevar(typetype)) {
-                    // semi-direct lookup of types
-                    // TODO: the possibility of encountering `Type{Union{}}` in this intersection may
+            // Next check for intersections with methods defined on Type{T}, where T was not concrete (it might even have been a TypeVar), but had an extractable TypeName
+            if (tname != (jl_array_t*)jl_an_empty_vec_any && maybe_type) {
+                if (!exclude_typeofbottom || (!typetype && jl_isa((jl_value_t*)jl_typeofbottom_type, ty))) {
+                    // detect Type{Union{}}, Type{Type{Union{}}}, and Type{typeof(Union{}} and do those early here
+                    // otherwise the possibility of encountering `Type{Union{}}` in this intersection may
                     // be forcing us to do some extra work here whenever we see a typevar, even though
                     // the likelihood of that value actually occurring is frequently likely to be
                     // zero (or result in an ambiguous match)
-                    jl_datatype_t *super = (jl_datatype_t*)jl_unwrap_unionall(((jl_typename_t*)name)->wrapper);
-                    if (jl_type_extract_name_precise(typetype, 1)) {
-                        // just consider the type and its direct super types
-                        while (1) {
-                            tname = jl_atomic_load_relaxed(&cache->tname); // reload after callback
-                            jl_typemap_t *ml = mtcache_hash_lookup(tname, (jl_value_t*)super->name);
-                            if (ml != jl_nothing) {
-                                if (!jl_typemap_intersection_visitor(ml, offs+1, closure)) return 0;
-                            }
-                            if (super == jl_any_type)
-                                break;
-                            super = super->super;
+                    tname = jl_atomic_load_relaxed(&cache->tname);  // may be GC'd earlier
+                    jl_value_t *ml = mtcache_hash_lookup(tname, (jl_value_t*)jl_typeofbottom_type->name);
+                    if (ml != jl_nothing) {
+                        size_t search_slurp = closure->search_slurp;
+                        closure->search_slurp = offs + 1;
+                        if (!jl_typemap_intersection_visitor((jl_typemap_t*)ml, offs+1, closure)) {
+                            closure->search_slurp = search_slurp;
+                            JL_GC_POP();
+                            return 0;
                         }
+                        if (closure->search_slurp == 0)
+                            exclude_typeofbottom = 1;
+                        closure->search_slurp = search_slurp;
                     }
-                    else {
-                        // consider all of the possible subtypes
-                        if (!jl_typemap_intersection_array_visitor(tname, (jl_value_t*)super, 3, offs, closure)) return 0;
+                }
+                if (exclude_typeofbottom && name && jl_type_extract_name_precise(typetype, 1)) {
+                    // semi-direct lookup of types
+                    // just consider the type and its direct super types
+                    jl_datatype_t *super = (jl_datatype_t*)jl_unwrap_unionall(((jl_typename_t*)name)->wrapper);
+                    if (super->name == jl_typeofbottom_type->name)
+                        super = super->super; // this was handled above
+                    while (1) {
+                        tname = jl_atomic_load_relaxed(&cache->tname); // reload after callback
+                        jl_typemap_t *ml = mtcache_hash_lookup(tname, (jl_value_t*)super->name);
+                        if (ml != jl_nothing) {
+                            if (!jl_typemap_intersection_visitor(ml, offs+1, closure)) { JL_GC_POP(); return 0; }
+                        }
+                        if (super == jl_any_type)
+                            break;
+                        super = super->super;
                     }
                 }
                 else {
-                    // else an array scan is required to check subtypes
-                    // first, fast-path: optimized pre-intersection test to see if `ty` could intersect with any Type
-                    if (name || !jl_has_empty_intersection((jl_value_t*)jl_type_type, ty)) {
-                        tname = jl_atomic_load_relaxed(&cache->tname);  // may be GC'd during type-intersection
-                        if (!jl_typemap_intersection_array_visitor(tname, (jl_value_t*)jl_any_type, 3, offs, closure)) return 0;
-                    }
+                    // else an array scan is required to check subtypes of typetype too
+                    tname = jl_atomic_load_relaxed(&cache->tname);  // may be GC'd earlier
+                    if (!jl_typemap_intersection_array_visitor(tname, exclude_typeofbottom && !maybe_kind ? ty : (jl_value_t*)jl_any_type, 3, offs, closure)) { JL_GC_POP(); return 0; }
                 }
             }
             jl_array_t *name1 = jl_atomic_load_relaxed(&cache->name1);
             if (name1 != (jl_array_t*)jl_an_empty_vec_any) {
                 jl_value_t *name = jl_type_extract_name(ty);
-                if (name) {
+                if (name && jl_type_extract_name_precise(ty, 0)) {
                     jl_datatype_t *super = (jl_datatype_t*)jl_unwrap_unionall(((jl_typename_t*)name)->wrapper);
-                    if (jl_type_extract_name_precise(ty, 0)) {
-                        // direct lookup of concrete types
-                        while (1) {
-                            name1 = jl_atomic_load_relaxed(&cache->name1); // reload after callback
-                            jl_typemap_t *ml = mtcache_hash_lookup(name1, (jl_value_t*)super->name);
-                            if (ml != jl_nothing) {
-                                if (!jl_typemap_intersection_visitor(ml, offs+1, closure)) return 0;
-                            }
-                            if (super == jl_any_type)
-                                break;
-                            super = super->super;
+                    // direct lookup of concrete types
+                    while (1) {
+                        name1 = jl_atomic_load_relaxed(&cache->name1); // reload after callback
+                        jl_typemap_t *ml = mtcache_hash_lookup(name1, (jl_value_t*)super->name);
+                        if (ml != jl_nothing) {
+                            if (!jl_typemap_intersection_visitor(ml, offs+1, closure)) { JL_GC_POP(); return 0; }
                         }
-                    }
-                    else {
-                        // consider all of the possible subtypes too
-                        if (!jl_typemap_intersection_array_visitor(name1, (jl_value_t*)super, 2, offs, closure)) return 0;
+                        if (super == jl_any_type)
+                            break;
+                        super = super->super;
                     }
                 }
                 else {
                     // else an array scan is required to check subtypes
-                    if (!jl_typemap_intersection_array_visitor(name1, (jl_value_t*)jl_any_type, 2, offs, closure)) return 0;
+                    if (!jl_typemap_intersection_array_visitor(name1, ty, 2, offs, closure)) { JL_GC_POP(); return 0; }
                 }
             }
+            JL_GC_POP();
         }
         if (!jl_typemap_intersection_node_visitor(jl_atomic_load_relaxed(&cache->linear), closure))
             return 0;
@@ -714,6 +836,10 @@ static jl_typemap_entry_t *jl_typemap_entry_assoc_by_type(
     size_t n = jl_nparams(unw);
     int typesisva = n == 0 ? 0 : jl_is_vararg(jl_tparam(unw, n-1));
     for (; ml != (void*)jl_nothing; ml = jl_atomic_load_relaxed(&ml->next)) {
+        if (search->max_valid < ml->min_world)
+            continue;
+        if (search->min_valid > ml->max_world)
+            continue;
         size_t lensig = jl_nparams(jl_unwrap_unionall((jl_value_t*)ml->sig));
         if (lensig == n || (ml->va && lensig <= n+1)) {
             int resetenv = 0, ismatch = 1;
