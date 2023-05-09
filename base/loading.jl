@@ -623,6 +623,24 @@ function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothi
             pkg_uuid = explicit_project_deps_get(project_file, name)
             return PkgId(pkg_uuid, name)
         end
+        d = parsed_toml(project_file)
+        exts = get(d, "extensions", nothing)::Union{Dict{String, Any}, Nothing}
+        if exts !== nothing
+            # Check if `where` is an extension of the project
+            if where.name in keys(exts) && where.uuid == uuid5(proj.uuid, where.name)
+                # Extensions can load weak deps...
+                weakdeps = get(d, "weakdeps", nothing)::Union{Dict{String, Any}, Nothing}
+                if weakdeps !== nothing
+                    wuuid = get(weakdeps, name, nothing)::Union{String, Nothing}
+                    if wuuid !== nothing
+                        return PkgId(UUID(wuuid), name)
+                    end
+                    # ... and they can load same deps as the project itself
+                    mby_uuid = explicit_project_deps_get(project_file, name)
+                    mby_uuid === nothing || return PkgId(mby_uuid, name)
+                end
+            end
+        end
         # look for manifest file and `where` stanza
         return explicit_manifest_deps_get(project_file, where, name)
     elseif project_file
@@ -640,11 +658,32 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
             # if `pkg` matches the project, return the project itself
             return project_file_path(project_file)
         end
+        mby_ext = project_file_ext_path(project_file, pkg.name)
+        mby_ext === nothing || return mby_ext
         # look for manifest file and `where` stanza
         return explicit_manifest_uuid_path(project_file, pkg)
     elseif project_file
         # if env names a directory, search it
         return implicit_manifest_uuid_path(env, pkg)
+    end
+    return nothing
+end
+
+
+function find_ext_path(project_path::String, extname::String)
+    extfiledir = joinpath(project_path, "ext", extname, extname * ".jl")
+    isfile(extfiledir) && return extfiledir
+    return joinpath(project_path, "ext", extname * ".jl")
+end
+
+function project_file_ext_path(project_file::String, name::String)
+    d = parsed_toml(project_file)
+    p = project_file_path(project_file)
+    exts = get(d, "extensions", nothing)::Union{Dict{String, Any}, Nothing}
+    if exts !== nothing
+        if name in keys(exts)
+            return find_ext_path(p, name)
+        end
     end
     return nothing
 end
@@ -880,9 +919,7 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
                     error("failed to find source of parent package: \"$name\"")
                 end
                 p = normpath(dirname(parent_path), "..")
-                extfiledir = joinpath(p, "ext", pkg.name, pkg.name * ".jl")
-                isfile(extfiledir) && return extfiledir
-                return joinpath(p, "ext", pkg.name * ".jl")
+                return find_ext_path(p, pkg.name)
             end
         end
     end
@@ -1164,6 +1201,18 @@ end
 function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missing}
     project_file = env_project_file(env)
     if project_file isa String
+        # Look in project for extensions to insert
+        proj_pkg = project_file_name_uuid(project_file, pkg.name)
+        if pkg == proj_pkg
+            d_proj = parsed_toml(project_file)
+            weakdeps = get(d_proj, "weakdeps", nothing)::Union{Nothing, Vector{String}, Dict{String,Any}}
+            extensions = get(d_proj, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
+            extensions === nothing && return
+            weakdeps === nothing && return
+            return _insert_extension_triggers(pkg, extensions, weakdeps)
+        end
+
+        # Now look in manifest
         manifest_file = project_file_manifest_path(project_file)
         manifest_file === nothing && return
         d = get_deps(parsed_toml(manifest_file))
