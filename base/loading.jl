@@ -413,7 +413,9 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
                     @goto done
                 end
             end
-            stopenv == env && @goto done
+            if !loading_extension
+                stopenv == env && @goto done
+            end
         end
     else
         for env in load_path()
@@ -428,7 +430,9 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
                 path = entry_path(path, pkg.name)
                 @goto done
             end
-            stopenv == env && break
+            if !loading_extension
+                stopenv == env && break
+            end
         end
         # Allow loading of stdlibs if the name/uuid are given
         # e.g. if they have been explicitly added to the project/manifest
@@ -1251,30 +1255,8 @@ function run_extension_callbacks(pkgid::PkgId)
     extids === nothing && return
     for extid in extids
         if extid.ntriggers > 0
-            # It is possible that pkgid was loaded in an environment
-            # below the one of the parent. This will cause a load failure when the
-            # pkg ext tries to load the triggers. Therefore, check this first
-            # before loading the pkg ext.
-            pkgenv = identify_package_env(extid.id, pkgid.name)
-            ext_not_allowed_load = false
-            if pkgenv === nothing
-                ext_not_allowed_load = true
-            else
-                pkg, env = pkgenv
-                path = locate_package(pkg, env)
-                if path === nothing
-                    ext_not_allowed_load = true
-                end
-            end
-            if ext_not_allowed_load
-                @debug "Extension $(extid.id.name) of $(extid.parentid.name) will not be loaded \
-                        since $(pkgid.name) loaded in environment lower in load path"
-                # indicate extid is expected to fail
-                extid.ntriggers *= -1
-            else
-                # indicate pkgid is loaded
-                extid.ntriggers -= 1
-            end
+            # indicate pkgid is loaded
+            extid.ntriggers -= 1
         end
         if extid.ntriggers < 0
             # indicate pkgid is loaded
@@ -2148,6 +2130,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     write(io.in, """
         empty!(Base.EXT_DORMITORY) # If we have a custom sysimage with `EXT_DORMITORY` prepopulated
+        Base.loading_extension = $(loading_extension)
         Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $deps, $(repr(source_path(nothing))))
         """)
