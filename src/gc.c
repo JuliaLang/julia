@@ -1,12 +1,14 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "gc.h"
+#include "julia.h"
 #include "julia_gcext.h"
 #include "julia_assert.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #ifdef __GLIBC__
 #include <malloc.h> // for malloc_trim
 #endif
@@ -3120,6 +3122,7 @@ JL_DLLEXPORT int64_t jl_gc_live_bytes(void)
 
 size_t jl_maxrss(void);
 
+int printed_file = 0;
 // Only one thread should be running in this function
 static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 {
@@ -3336,6 +3339,10 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 
     // Format the filename with the PID
     snprintf(filename, sizeof(filename), "distribution_%d.csv", pid);
+    if (!printed_file) {
+        jl_safe_printf("%s\n",filename);
+        printed_file = 1;
+    }
     FILE *file = fopen(filename, "a");
     if (file == NULL) {
         perror("Error opening file!\n");
@@ -3343,10 +3350,10 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     }
 
     // Write the array to the file
-    for(int i = 0; i < 255; i++) {
+    for(int i = 0; i < 256; i++) {
         fprintf(file, "%d", age_distribution[i]);
         // Don't write a comma at the end of the line
-        if(i < 254) {
+        if(i < 255) {
             fprintf(file, ",");
         }
     }
