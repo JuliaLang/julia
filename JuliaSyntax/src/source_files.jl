@@ -108,6 +108,10 @@ function Base.getindex(source::SourceFile, i::Int)
     source.code[i]
 end
 
+function Base.thisind(source::SourceFile, i::Int)
+    thisind(source.code, i)
+end
+
 Base.firstindex(source::SourceFile) = firstindex(source.code)
 Base.lastindex(source::SourceFile) = lastindex(source.code)
 
@@ -203,7 +207,7 @@ function highlight(io::IO, source::SourceFile, range::UnitRange;
         print(io, source[x:p-1])
         _printstyled(io, hitext; bgcolor=color)
         print(io, source[q+1:d])
-        source[d] == '\n' || print(io, "\n")
+        source[thisind(source, d)] == '\n' || print(io, "\n")
         _print_marker_line(io, source[a:p-1], hitext, true, true, marker_line_color, note, notecolor)
     else
         # x   --------------
@@ -232,13 +236,13 @@ function highlight(io::IO, source::SourceFile, range::UnitRange;
             _printstyled(io, source[z:q]; bgcolor=color)
         end
         print(io, source[q+1:d])
-        source[d] == '\n' || print(io, "\n")
+        source[thisind(source, d)] == '\n' || print(io, "\n")
         qline = source[c:q]
         _print_marker_line(io, "", qline, true, false, marker_line_color, note, notecolor)
     end
-    if context_lines_after > 0 && d+1 < lastindex(source)
+    if context_lines_after > 0 && d+1 <= lastindex(source)
         print(io, '\n')
-        w1 = source[w] == '\n' ? w - 1 : w
+        w1 = source[thisind(source, w)] == '\n' ? w - 1 : w
         print(io, source[d+1:w1])
     end
 end

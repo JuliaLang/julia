@@ -11,6 +11,10 @@ function diagnostic(str; only_first=false, allow_multiple=false)
     end
 end
 
+@testset "token errors" begin
+    @test diagnostic(":⥻") == Diagnostic(2, 4, :error, "unknown unicode character")
+end
+
 @testset "parser errors" begin
 	@test diagnostic("+ #==# (a,b)") ==
         Diagnostic(2, 7, :error, "whitespace not allowed between prefix function call and argument list")
