@@ -223,7 +223,7 @@ end
         res = _plus(_rotl23(_plus(s0,s3)),s0)
         resLoc = _and(res, 0x0101010101010101)
         ref = Ref(resLoc)
-        memcpy(dst+i, pointer_from_objref(ref), len-i)
+        GC.@preserve ref memcpy(dst+i, pointer_from_objref(ref), len-i)
         t = _shl17(s1)
         s2 = _xor(s2, s0)
         s3 = _xor(s3, s1)
