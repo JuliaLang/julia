@@ -1553,7 +1553,7 @@ sequence ends.
 
 The optional parameter `eltype` can specify the type of the generated values.
 
-See also: [`iterate`](@ref)
+See also: [`iterate`](@ref), [the iteration interface](@ref man-interface-iteration)
 
 !!! compat "Julia 1.9"
     This function was added in Julia 1.9.
