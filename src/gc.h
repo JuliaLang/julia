@@ -178,6 +178,7 @@ typedef struct {
     uint16_t thread_n;        // thread id of the heap that owns this page
     char *data;
     uint32_t *ages;
+    uint8_t *perobject_age;
 } jl_gc_pagemeta_t;
 
 // Page layout:
