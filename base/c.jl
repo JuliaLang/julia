@@ -129,7 +129,7 @@ A C-style string composed of the native wide character type
 [`Cwchar_t`](@ref)s. `Cwstring`s are NUL-terminated. For
 C-style strings composed of the native character
 type, see [`Cstring`](@ref). For more information
-about string interopability with C, see the
+about string interoperability with C, see the
 [manual](@ref man-bits-types).
 
 """
@@ -142,7 +142,7 @@ A C-style string composed of the native character type
 [`Cchar`](@ref)s. `Cstring`s are NUL-terminated. For
 C-style strings composed of the native wide character
 type, see [`Cwstring`](@ref). For more information
-about string interopability with C, see the
+about string interoperability with C, see the
 [manual](@ref man-bits-types).
 """
 Cstring
@@ -565,9 +565,9 @@ end
 """
     ccall_macro_parse(expression)
 
-`ccall_macro_parse` is an implementation detail of `@ccall
+`ccall_macro_parse` is an implementation detail of `@ccall`.
 
-it takes an expression like `:(printf("%d"::Cstring, value::Cuint)::Cvoid)`
+It takes an expression like `:(printf("%d"::Cstring, value::Cuint)::Cvoid)`
 returns: a tuple of `(function_name, return_type, arg_types, args)`
 
 The above input outputs this:

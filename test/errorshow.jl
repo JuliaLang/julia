@@ -343,7 +343,7 @@ let undefvar
     err_str = @except_str Vector{Any}(undef, 1)[1] UndefRefError
     @test err_str == "UndefRefError: access to undefined reference"
     err_str = @except_str undefvar UndefVarError
-    @test err_str == "UndefVarError: undefvar not defined"
+    @test err_str == "UndefVarError: `undefvar` not defined"
     err_str = @except_str read(IOBuffer(), UInt8) EOFError
     @test err_str == "EOFError: read end of file"
     err_str = @except_str Dict()[:doesnotexist] KeyError
@@ -404,8 +404,8 @@ let err_str
     @test occursin("MethodError: no method matching +(::$Int, ::Vector{Float64})", err_str)
     @test occursin("For element-wise addition, use broadcasting with dot syntax: scalar .+ array", err_str)
     err_str = @except_str rand(5) - 1//3 MethodError
-    @test occursin("MethodError: no method matching +(::Vector{Float64}, ::Rational{$Int})", err_str)
-    @test occursin("For element-wise addition, use broadcasting with dot syntax: array .+ scalar", err_str)
+    @test occursin("MethodError: no method matching -(::Vector{Float64}, ::Rational{$Int})", err_str)
+    @test occursin("For element-wise subtraction, use broadcasting with dot syntax: array .- scalar", err_str)
 end
 
 
@@ -431,25 +431,25 @@ let err_str,
     Base.stacktrace_contract_userdir() && (sp = Base.contractuser(sp))
 
     @test sprint(show, which(String, Tuple{})) ==
-        "String()\n     @ $curmod_str $sp:$(method_defs_lineno + 0)"
+        "String() @ $curmod_str $sp:$(method_defs_lineno + 0)"
     @test sprint(show, which("a", Tuple{})) ==
-        "(::String)()\n     @ $curmod_str $sp:$(method_defs_lineno + 1)"
+        "(::String)() @ $curmod_str $sp:$(method_defs_lineno + 1)"
     @test sprint(show, which(EightBitType, Tuple{})) ==
-        "$(curmod_prefix)EightBitType()\n     @ $curmod_str $sp:$(method_defs_lineno + 2)"
+        "$(curmod_prefix)EightBitType() @ $curmod_str $sp:$(method_defs_lineno + 2)"
     @test sprint(show, which(reinterpret(EightBitType, 0x54), Tuple{})) ==
-        "(::$(curmod_prefix)EightBitType)()\n     @ $curmod_str $sp:$(method_defs_lineno + 3)"
+        "(::$(curmod_prefix)EightBitType)() @ $curmod_str $sp:$(method_defs_lineno + 3)"
     @test sprint(show, which(EightBitTypeT, Tuple{})) ==
-        "$(curmod_prefix)EightBitTypeT()\n     @ $curmod_str $sp:$(method_defs_lineno + 4)"
+        "$(curmod_prefix)EightBitTypeT() @ $curmod_str $sp:$(method_defs_lineno + 4)"
     @test sprint(show, which(EightBitTypeT{Int32}, Tuple{})) ==
-        "$(curmod_prefix)EightBitTypeT{T}() where T\n     @ $curmod_str $sp:$(method_defs_lineno + 5)"
+        "$(curmod_prefix)EightBitTypeT{T}() where T @ $curmod_str $sp:$(method_defs_lineno + 5)"
     @test sprint(show, which(reinterpret(EightBitTypeT{Int32}, 0x54), Tuple{})) ==
-        "(::$(curmod_prefix)EightBitTypeT)()\n     @ $curmod_str $sp:$(method_defs_lineno + 6)"
+        "(::$(curmod_prefix)EightBitTypeT)() @ $curmod_str $sp:$(method_defs_lineno + 6)"
     @test startswith(sprint(show, which(Complex{Int}, Tuple{Int})),
                      "Complex{T}(")
     @test startswith(sprint(show, which(getfield(Base, Symbol("@doc")), Tuple{LineNumberNode, Module, Vararg{Any}})),
-                     "var\"@doc\"(__source__::LineNumberNode, __module__::Module, x...)\n     @ Core boot.jl:")
+                     "var\"@doc\"(__source__::LineNumberNode, __module__::Module, x...) @ Core boot.jl:")
     @test startswith(sprint(show, which(FunctionLike(), Tuple{})),
-                     "(::$(curmod_prefix)FunctionLike)()\n     @ $curmod_str $sp:$(method_defs_lineno + 7)")
+                     "(::$(curmod_prefix)FunctionLike)() @ $curmod_str $sp:$(method_defs_lineno + 7)")
     @test startswith(sprint(show, which(StructWithUnionAllMethodDefs{<:Integer}, (Any,))),
                      "($(curmod_prefix)StructWithUnionAllMethodDefs{T} where T<:Integer)(x)")
     @test repr("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 1 method)"
@@ -927,4 +927,72 @@ for (expr, errmsg) in
         e
     end
     @test contains(sprint(showerror, err), errmsg)
+end
+
+let err_str
+    err_str = @except_str "a" + "b" MethodError
+    @test occursin("String concatenation is performed with *", err_str)
+end
+
+@testset "unused argument names" begin
+    g(::Int) = backtrace()
+    bt = g(1)
+    @test !contains(sprint(Base.show_backtrace, bt), "#unused#")
+end
+
+# issue #49002
+let buf = IOBuffer()
+    Base.show_method_candidates(buf, Base.MethodError(typeof, (17,)), pairs((foo = :bar,)))
+    @test isempty(take!(buf))
+    Base.show_method_candidates(buf, Base.MethodError(isa, ()), pairs((a = 5,)))
+    @test isempty(take!(buf))
+end
+
+f_internal_wrap(g, a; kw...) = error();
+@inline f_internal_wrap(a; kw...) = f_internal_wrap(identity, a; kw...);
+bt = try
+    f_internal_wrap(1)
+catch
+    catch_backtrace()
+end
+@test !occursin("#f_internal_wrap#", sprint(Base.show_backtrace, bt))
+
+g_collapse_pos(x, y=1.0, z=2.0) = error()
+bt = try
+    g_collapse_pos(1.0)
+catch
+    catch_backtrace()
+end
+bt_str = sprint(Base.show_backtrace, bt)
+@test occursin("g_collapse_pos(x::Float64, y::Float64, z::Float64)", bt_str)
+@test !occursin("g_collapse_pos(x::Float64)", bt_str)
+
+g_collapse_kw(x; y=2.0) = error()
+bt = try
+    g_collapse_kw(1.0)
+catch
+    catch_backtrace()
+end
+bt_str = sprint(Base.show_backtrace, bt)
+@test occursin("g_collapse_kw(x::Float64; y::Float64)", bt_str)
+@test !occursin("g_collapse_kw(x::Float64)", bt_str)
+
+g_collapse_pos_kw(x, y=1.0; z=2.0) = error()
+bt = try
+    g_collapse_pos_kw(1.0)
+catch
+    catch_backtrace()
+end
+bt_str = sprint(Base.show_backtrace, bt)
+@test occursin("g_collapse_pos_kw(x::Float64, y::Float64; z::Float64)", bt_str)
+@test !occursin("g_collapse_pos_kw(x::Float64, y::Float64)", bt_str)
+@test !occursin("g_collapse_pos_kw(x::Float64)", bt_str)
+
+# Test Base.print_with_compare in convert MethodErrors
+struct TypeCompareError{A,B} <: Exception end
+let e = @test_throws MethodError convert(TypeCompareError{Float64,1}, TypeCompareError{Float64,2}())
+    str = sprint(Base.showerror, e.value)
+    @test  occursin("TypeCompareError{Float64,2}", str)
+    @test  occursin("TypeCompareError{Float64,1}", str)
+    @test !occursin("TypeCompareError{Float64{},2}", str) # No {...} for types without params
 end

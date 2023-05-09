@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Checked: checked_length
+using InteractiveUtils: code_llvm
 
 @testset "range construction" begin
     @test_throws ArgumentError range(start=1, step=1, stop=2, length=10)
@@ -254,6 +255,45 @@ end
     @test x.hi/2 === PhysQuantity{1}(2.0)
     @test_throws ErrorException("Int is incommensurate with PhysQuantity") x/2
     @test zero(typeof(x)) === Base.TwicePrecision(PhysQuantity{1}(0.0))
+
+    function twiceprecision_roundtrip_is_not_lossy(
+        ::Type{S},
+        x::T,
+    ) where {S<:Number, T<:Union{Number,Base.TwicePrecision}}
+        tw = Base.TwicePrecision{S}(x)
+        @test x == T(tw)
+    end
+
+    function twiceprecision_is_normalized(tw::Tw) where {Tw<:Base.TwicePrecision}
+        (hi, lo) = (tw.hi, tw.lo)
+        normalized = Tw(Base.canonicalize2(hi, lo)...)
+        @test (abs(lo) ≤ abs(hi)) & (tw == normalized)
+    end
+
+    rand_twiceprecision(::Type{T}) where {T<:Number} = Base.TwicePrecision{T}(rand(widen(T)))
+
+    rand_twiceprecision_is_ok(::Type{T}) where {T<:Number} = @test !iszero(rand_twiceprecision(T).lo)
+
+    # For this test the `BigFloat` mantissa needs to be just a bit
+    # larger than the `Float64` mantissa
+    setprecision(BigFloat, 70) do
+        n = 10
+        @testset "rand twiceprecision is ok" for T ∈ (Float32, Float64), i ∈ 1:n
+            rand_twiceprecision_is_ok(T)
+        end
+        @testset "twiceprecision roundtrip is not lossy 1" for i ∈ 1:n
+            twiceprecision_roundtrip_is_not_lossy(Float64, rand(BigFloat))
+        end
+        @testset "twiceprecision roundtrip is not lossy 2" for i ∈ 1:n
+            twiceprecision_roundtrip_is_not_lossy(Float64, rand_twiceprecision(Float32))
+        end
+        @testset "twiceprecision normalization 1: Float64 to Float32" for i ∈ 1:n
+            twiceprecision_is_normalized(Base.TwicePrecision{Float32}(rand_twiceprecision(Float64)))
+        end
+        @testset "twiceprecision normalization 2: Float32 to Float64" for i ∈ 1:n
+            twiceprecision_is_normalized(Base.TwicePrecision{Float64}(rand_twiceprecision(Float32)))
+        end
+    end
 end
 @testset "ranges" begin
     @test size(10:1:0) == (0,)
@@ -518,8 +558,10 @@ end
         @test !(3.5 in 1:5)
         @test (3 in 1:5)
         @test (3 in 5:-1:1)
-        #@test (3 in 3+0*(1:5))
-        #@test !(4 in 3+0*(1:5))
+        @test (3 in 3 .+ 0*(1:5))
+        @test !(4 in 3 .+ 0*(1:5))
+        @test 0. in (0. .* (1:10))
+        @test !(0.1 in (0. .* (1:10)))
 
         let r = 0.0:0.01:1.0
             @test (r[30] in r)
@@ -536,8 +578,17 @@ end
             x = (NaN16, Inf32, -Inf64, 1//0, -1//0)
             @test !(x in r)
         end
+
+        @test 1e40 ∉ 0:1.0 # Issue #45747
+        @test 1e20 ∉ 0:1e-20:1e-20
+        @test 1e20 ∉ 0:1e-20
+        @test 1.0  ∉ 0:1e-20:1e-20
+        @test 0.5  ∉ 0:1e-20:1e-20
+        @test 1    ∉ 0:1e-20:1e-20
+
+        @test_broken 17.0 ∈ 0:1e40 # Don't support really long ranges
     end
-    @testset "in() works across types, including non-numeric types (#21728)" begin
+    @testset "in() works across types, including non-numeric types (#21728 and #45646)" begin
         @test 1//1 in 1:3
         @test 1//1 in 1.0:3.0
         @test !(5//1 in 1:3)
@@ -558,6 +609,22 @@ end
         @test !(Complex(1, 0) in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
         @test !(π in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
         @test !("a" in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
+
+        # We use Ducks because of their propensity to stand in a row and because we know
+        # that no additional methods (e.g. isfinite) are defined specifically for Ducks.
+        struct Duck
+            location::Int
+        end
+        Base.:+(x::Duck, y::Int) = Duck(x.location + y)
+        Base.:-(x::Duck, y::Int) = Duck(x.location - y)
+        Base.:-(x::Duck, y::Duck) = x.location - y.location
+        Base.isless(x::Duck, y::Duck) = isless(x.location, y.location)
+
+        @test Duck(3) ∈ Duck(1):2:Duck(5)
+        @test Duck(3) ∈ Duck(5):-2:Duck(2)
+        @test Duck(4) ∉ Duck(5):-2:Duck(1)
+        @test Duck(4) ∈ Duck(1):Duck(5)
+        @test Duck(0) ∉ Duck(1):Duck(5)
     end
 end
 @testset "indexing range with empty range (#4309)" begin
@@ -860,7 +927,15 @@ function range_fuzztests(::Type{T}, niter, nrange) where {T}
         @test m == length(r)
         @test strt == first(r)
         @test Δ == step(r)
-        @test_skip stop ≈ last(r)
+        # potential floating point error:
+        #   stop = strt + (n-1)*Δ
+        #      *          error <= eps((n-1)*Δ)/2 <= abs((n-1)*Δ)/2 * eps(T)
+        #      +          error <= eps(stop)/2    <= abs(stop)/2    * eps(T)
+        #   last(r)
+        #     rat(strt)   error <= eps(strt)/2    <= abs(strt)/2    * eps(T)
+        #     rat(Δ)      error <= (n-1)*eps(Δ)/2 <= abs((n-1)*Δ)/2 * eps(T)
+        #     T(...)      error <= eps(last(r))/2 <= abs(stop)/2    * eps(T)
+        @test stop ≈ last(r) atol = (abs(strt)/2 + (n-1)*abs(Δ) + abs(stop)) * eps(T)
         l = range(strt, stop=stop, length=n)
         @test n == length(l)
         @test strt == first(l)
@@ -2031,8 +2106,17 @@ end
 end
 
 @testset "length(StepRange()) type stability" begin
-    typeof(length(StepRange(1,Int128(1),1))) == typeof(length(StepRange(1,Int128(1),0)))
-    typeof(checked_length(StepRange(1,Int128(1),1))) == typeof(checked_length(StepRange(1,Int128(1),0)))
+    for SR in (StepRange{Int,Int128}, StepRange{Int8,Int128})
+        r1, r2 = SR(1, 1, 1), SR(1, 1, 0)
+        @test typeof(length(r1)) == typeof(checked_length(r1)) ==
+              typeof(length(r2)) == typeof(checked_length(r2))
+    end
+    SR = StepRange{Union{Int64,Int128},Int}
+    test_length(r, l) = length(r) === checked_length(r) === l
+    @test test_length(SR(Int64(1), 1, Int128(1)), Int128(1))
+    @test test_length(SR(Int64(1), 1, Int128(0)), Int128(0))
+    @test test_length(SR(Int64(1), 1, Int64(1)), Int64(1))
+    @test test_length(SR(Int64(1), 1, Int64(0)), Int64(0))
 end
 
 @testset "LinRange eltype for element types that wrap integers" begin
@@ -2346,3 +2430,50 @@ end
 @test isempty(range(typemax(Int), length=0, step=UInt(2)))
 
 @test length(range(1, length=typemax(Int128))) === typemax(Int128)
+
+@testset "firstindex(::StepRange{<:Base.BitInteger})" begin
+    test_firstindex(x) = firstindex(x) === first(Base.axes1(x))
+    for T in Base.BitInteger_types, S in Base.BitInteger_types
+        @test test_firstindex(StepRange{T,S}(1, 1, 1))
+        @test test_firstindex(StepRange{T,S}(1, 1, 0))
+    end
+    @test test_firstindex(StepRange{Union{Int64,Int128},Int}(Int64(1), 1, Int128(1)))
+    @test test_firstindex(StepRange{Union{Int64,Int128},Int}(Int64(1), 1, Int128(0)))
+end
+
+@testset "PR 49516" begin
+    struct PR49516 <: Signed
+        n::Int
+    end
+    PR49516(f::PR49516) = f
+    Base.:*(x::Integer, f::PR49516) = PR49516(*(x, f.n))
+    Base.:+(f1::PR49516, f2::PR49516) = PR49516(+(f1.n, f2.n))
+    Base.show(io::IO, f::PR49516) = print(io, "PR49516(", f.n, ")")
+
+    srl = StepRangeLen(PR49516(1), PR49516(2), 10)
+    @test sprint(show, srl) == "PR49516(1):PR49516(2):PR49516(19)"
+end
+
+@testset "Inline StepRange Construction #49270" begin
+    x = rand(Float32, 80)
+    a = rand(round(Int, length(x) / 2):length(x), 10^6)
+
+    function test(x, a)
+        c = zero(Float32)
+
+        @inbounds for j in a
+            for i in 1:8:j
+                c += x[i]
+            end
+        end
+
+        return c
+    end
+
+    llvm_ir(f, args) = sprint((io, args...) -> code_llvm(io, args...; debuginfo=:none), f, Base.typesof(args...))
+
+    ir = llvm_ir(test, (x, a))
+    @test !occursin("steprange_last", ir)
+    @test !occursin("_colon", ir)
+    @test !occursin("StepRange", ir)
+end

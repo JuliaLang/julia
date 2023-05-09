@@ -91,6 +91,8 @@ size_t isLegalHA(jl_datatype_t *dt, Type *&base, LLVMContext &ctx) const
         size_t parent_members = jl_datatype_nfields(dt);
         for (size_t i = 0; i < parent_members; ++i) {
             jl_datatype_t *fdt = (jl_datatype_t*)jl_field_type(dt,i);
+            if (!jl_is_datatype(fdt))
+                return 0;
 
             Type *T = isLegalHAType(fdt, ctx);
             if (T)

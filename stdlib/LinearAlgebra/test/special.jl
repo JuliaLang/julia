@@ -191,7 +191,7 @@ end
         push!(mats, SymTridiagonal(Vector{T}(diag), Vector{T}(offdiag)))
     end
 
-    for op in (+,*) # to do: fix when operation is - and the matrix has a range as the underlying representation and we get a step size of 0.
+    for op in (+,-,*)
         for A in mats
             for B in mats
                 @test (op)(A, B) ≈ (op)(Matrix(A), Matrix(B)) ≈ Matrix((op)(A, B))
@@ -206,6 +206,17 @@ end
             end
         end
     end
+    diag = [randn(ComplexF64, 2, 2) for _ in 1:3]
+    odiag = [randn(ComplexF64, 2, 2) for _ in 1:2]
+    for A in (Diagonal(diag),
+                Bidiagonal(diag, odiag, :U),
+                Bidiagonal(diag, odiag, :L),
+                Tridiagonal(odiag, diag, odiag),
+                SymTridiagonal(diag, odiag)), B in uniformscalingmats
+        @test (A + B)::typeof(A) == (B + A)::typeof(A)
+        @test (A - B)::typeof(A) == ((A + (-B))::typeof(A))
+        @test (B - A)::typeof(A) == ((B + (-A))::typeof(A))
+    end
 end
 
 
@@ -215,16 +226,29 @@ end
         atri = typ(a)
         matri = Matrix(atri)
         b = rand(n,n)
-        qrb = qr(b, ColumnNorm())
-        @test atri * qrb.Q ≈ matri * qrb.Q ≈ rmul!(copy(atri), qrb.Q)
-        @test atri * qrb.Q' ≈ matri * qrb.Q' ≈ rmul!(copy(atri), qrb.Q')
-        @test qrb.Q * atri ≈ qrb.Q * matri ≈ lmul!(qrb.Q, copy(atri))
-        @test qrb.Q' * atri ≈ qrb.Q' * matri ≈ lmul!(qrb.Q', copy(atri))
-        qrb = qr(b, NoPivot())
-        @test atri * qrb.Q ≈ matri * qrb.Q ≈ rmul!(copy(atri), qrb.Q)
-        @test atri * qrb.Q' ≈ matri * qrb.Q' ≈ rmul!(copy(atri), qrb.Q')
-        @test qrb.Q * atri ≈ qrb.Q * matri ≈ lmul!(qrb.Q, copy(atri))
-        @test qrb.Q' * atri ≈ qrb.Q' * matri ≈ lmul!(qrb.Q', copy(atri))
+        for pivot in (ColumnNorm(), NoPivot())
+            qrb = qr(b, pivot)
+            @test atri * qrb.Q ≈ matri * qrb.Q
+            @test atri * qrb.Q' ≈ matri * qrb.Q'
+            @test qrb.Q * atri ≈ qrb.Q * matri
+            @test qrb.Q' * atri ≈ qrb.Q' * matri
+        end
+    end
+end
+
+@testset "Multiplication of Qs" begin
+    for pivot in (ColumnNorm(), NoPivot()), A in (rand(5, 3), rand(5, 5), rand(3, 5))
+        Q = qr(A, pivot).Q
+        m = size(A, 1)
+        C = Matrix{Float64}(undef, (m, m))
+        @test Q*Q ≈ (Q*I) * (Q*I) ≈ mul!(C, Q, Q)
+        @test size(Q*Q) == (m, m)
+        @test Q'Q ≈ (Q'*I) * (Q*I) ≈ mul!(C, Q', Q)
+        @test size(Q'Q) == (m, m)
+        @test Q*Q' ≈ (Q*I) * (Q'*I) ≈ mul!(C, Q, Q')
+        @test size(Q*Q') == (m, m)
+        @test Q'Q' ≈ (Q'*I) * (Q'*I) ≈ mul!(C, Q', Q')
+        @test size(Q'Q') == (m, m)
     end
 end
 
@@ -243,8 +267,7 @@ end
         @test hvcat((1,1), specialmata, specialmatb) == hvcat((1,1), MA, MB)
         @test cat(specialmata, specialmatb; dims=(1,2)) == cat(MA, MB; dims=(1,2))
     end
-    # Test concatenating pairwise combinations of special matrices with sparse matrices,
-    # dense matrices, or dense vectors
+    # Test concatenating pairwise combinations of special matrices with dense matrices or dense vectors
     densevec = fill(1., N)
     densemat = diagm(0 => densevec)
     for specialmat in specialmats
@@ -268,7 +291,7 @@ end
 @testset "concatenations of annotated types" begin
     N = 4
     # The tested annotation types
-    testfull = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+    testfull = Base.get_bool_env("JULIA_TESTFULL", false)
     utriannotations = (UpperTriangular, UnitUpperTriangular)
     ltriannotations = (LowerTriangular, UnitLowerTriangular)
     triannotations = (utriannotations..., ltriannotations...)

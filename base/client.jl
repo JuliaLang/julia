@@ -66,7 +66,15 @@ function repl_cmd(cmd, out)
             end
             cmd = `$shell -c $shell_escape_cmd`
         end
-        run(ignorestatus(cmd))
+        try
+            run(ignorestatus(cmd))
+        catch
+            # Windows doesn't shell out right now (complex issue), so Julia tries to run the program itself
+            # Julia throws an exception if it can't find the program, but the stack trace isn't useful
+            lasterr = current_exceptions()
+            lasterr = ExceptionStack([(exception = e[1], backtrace = [] ) for e in lasterr])
+            invokelatest(display_error, lasterr)
+        end
     end
     nothing
 end
@@ -124,14 +132,14 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
             end
             if lasterr !== nothing
                 lasterr = scrub_repl_backtrace(lasterr)
-                istrivialerror(lasterr) || setglobal!(Main, :err, lasterr)
+                istrivialerror(lasterr) || setglobal!(Base.MainInclude, :err, lasterr)
                 invokelatest(display_error, errio, lasterr)
                 errcount = 0
                 lasterr = nothing
             else
                 ast = Meta.lower(Main, ast)
                 value = Core.eval(Main, ast)
-                setglobal!(Main, :ans, value)
+                setglobal!(Base.MainInclude, :ans, value)
                 if !(value === nothing) && show_value
                     if have_color
                         print(answer_color())
@@ -151,7 +159,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
             end
             errcount += 1
             lasterr = scrub_repl_backtrace(current_exceptions())
-            setglobal!(Main, :err, lasterr)
+            setglobal!(Base.MainInclude, :err, lasterr)
             if errcount > 2
                 @error "It is likely that something important is broken, and Julia will not be able to continue normally" errcount
                 break
@@ -470,6 +478,25 @@ function include(fname::AbstractString)
     Base._include(identity, Main, fname)
 end
 eval(x) = Core.eval(Main, x)
+
+"""
+    ans
+
+A variable referring to the last computed value, automatically imported to the interactive prompt.
+"""
+global ans = nothing
+
+"""
+    err
+
+A variable referring to the last thrown errors, automatically imported to the interactive prompt.
+The thrown errors are collected in a stack of exceptions.
+"""
+global err = nothing
+
+# weakly exposes ans and err variables to Main
+export ans, err
+
 end
 
 """

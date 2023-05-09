@@ -20,6 +20,7 @@
 
 #include <llvm/ADT/Statistic.h>
 #include <llvm/Analysis/LoopPass.h>
+#include <llvm/Analysis/OptimizationRemarkEmitter.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Metadata.h>
@@ -38,12 +39,18 @@ STATISTIC(SimdLoops, "Number of loops with SIMD instructions");
 STATISTIC(IVDepInstructions, "Number of instructions marked ivdep");
 STATISTIC(ReductionChains, "Number of reduction chains folded");
 STATISTIC(ReductionChainLength, "Total sum of instructions folded from reduction chain");
+STATISTIC(MaxChainLength, "Max length of reduction chain");
 STATISTIC(AddChains, "Addition reduction chains");
 STATISTIC(MulChains, "Multiply reduction chains");
 
+#ifndef __clang_gcanalyzer__
+#define REMARK(remark) ORE.emit(remark)
+#else
+#define REMARK(remark) (void) 0;
+#endif
 namespace {
 
-static unsigned getReduceOpcode(Instruction *J, Instruction *operand)
+static unsigned getReduceOpcode(Instruction *J, Instruction *operand) JL_NOTSAFEPOINT
 {
     switch (J->getOpcode()) {
     case Instruction::FSub:
@@ -66,7 +73,7 @@ static unsigned getReduceOpcode(Instruction *J, Instruction *operand)
 /// If Phi is part of a reduction cycle of FAdd, FSub, FMul or FDiv,
 /// mark the ops as permitting reassociation/commuting.
 /// As of LLVM 4.0, FDiv is not handled by the loop vectorizer
-static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L)
+static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L, OptimizationRemarkEmitter &ORE) JL_NOTSAFEPOINT
 {
     typedef SmallVector<Instruction*, 8> chainVector;
     chainVector chain;
@@ -80,6 +87,10 @@ static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L)
             if (L->contains(U)) {
                 if (J) {
                     LLVM_DEBUG(dbgs() << "LSL: not a reduction var because op has two internal uses: " << *I << "\n");
+                    REMARK([&]() {
+                        return OptimizationRemarkMissed(DEBUG_TYPE, "NotReductionVar", U)
+                               << "not a reduction variable because operation has two internal uses";
+                    });
                     return;
                 }
                 J = U;
@@ -87,6 +98,10 @@ static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L)
         }
         if (!J) {
             LLVM_DEBUG(dbgs() << "LSL: chain prematurely terminated at " << *I << "\n");
+            REMARK([&]() {
+                return OptimizationRemarkMissed(DEBUG_TYPE, "ChainPrematurelyTerminated", I)
+                       << "chain prematurely terminated at " << ore::NV("Instruction", I);
+            });
             return;
         }
         if (J == Phi) {
@@ -97,6 +112,10 @@ static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L)
             // Check that arithmetic op matches prior arithmetic ops in the chain.
             if (getReduceOpcode(J, I) != opcode) {
                 LLVM_DEBUG(dbgs() << "LSL: chain broke at " << *J << " because of wrong opcode\n");
+                REMARK([&](){
+                    return OptimizationRemarkMissed(DEBUG_TYPE, "ChainBroke", J)
+                           << "chain broke at " << ore::NV("Instruction", J) << " because of wrong opcode";
+                });
                 return;
             }
         }
@@ -105,6 +124,10 @@ static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L)
             opcode = getReduceOpcode(J, I);
             if (!opcode) {
                 LLVM_DEBUG(dbgs() << "LSL: first arithmetic op in chain is uninteresting" << *J << "\n");
+                REMARK([&]() {
+                    return OptimizationRemarkMissed(DEBUG_TYPE, "FirstArithmeticOpInChainIsUninteresting", J)
+                           << "first arithmetic op in chain is uninteresting";
+                });
                 return;
             }
         }
@@ -119,14 +142,21 @@ static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L)
             break;
     }
     ++ReductionChains;
+    int length = 0;
     for (chainVector::const_iterator K=chain.begin(); K!=chain.end(); ++K) {
         LLVM_DEBUG(dbgs() << "LSL: marking " << **K << "\n");
+        REMARK([&]() {
+            return OptimizationRemark(DEBUG_TYPE, "MarkedUnsafeAlgebra", *K)
+                   << "marked unsafe algebra on " << ore::NV("Instruction", *K);
+        });
         (*K)->setFast(true);
-        ++ReductionChainLength;
+        ++length;
     }
+    ReductionChainLength += length;
+    MaxChainLength.updateMax(length);
 }
 
-static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Function &)> GetLI)
+static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Function &)> GetLI) JL_NOTSAFEPOINT
 {
     bool Changed = false;
     std::vector<Instruction*> ToDelete;
@@ -135,6 +165,7 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
         Instruction *I = cast<Instruction>(U);
         ToDelete.push_back(I);
 
+        OptimizationRemarkEmitter ORE(I->getParent()->getParent());
         LoopInfo &LI = GetLI(*I->getParent()->getParent());
         Loop *L = LI.getLoopFor(I->getParent());
         I->removeFromParent();
@@ -178,6 +209,11 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
 
         LLVM_DEBUG(dbgs() << "LSL: simd: " << simd << " ivdep: " << ivdep << "\n");
 
+        REMARK([&]() {
+            return OptimizationRemarkAnalysis(DEBUG_TYPE, "Loop SIMD Flags", I)
+                << "Loop marked for SIMD vectorization with flags { \"simd\": " << (simd ? "true" : "false") << ", \"ivdep\": " << (ivdep ? "true" : "false") << " }";
+        });
+
         MDNode *n = L->getLoopID();
         if (n) {
             // Loop already has a LoopID so copy over Metadata
@@ -216,7 +252,7 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
             // Mark floating-point reductions as okay to reassociate/commute.
             for (BasicBlock::iterator I = Lh->begin(), E = Lh->end(); I != E; ++I) {
                 if (PHINode *Phi = dyn_cast<PHINode>(I))
-                    enableUnsafeAlgebraIfReduction(Phi, L);
+                    enableUnsafeAlgebraIfReduction(Phi, L, ORE);
                 else
                     break;
             }
@@ -228,8 +264,9 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
     for (Instruction *I : ToDelete)
         I->deleteValue();
     marker->eraseFromParent();
-
-    assert(!verifyModule(M));
+#ifdef JL_VERIFY_PASSES
+    assert(!verifyModule(M, &errs()));
+#endif
     return Changed;
 }
 
@@ -279,7 +316,7 @@ public:
 
     Function *loopinfo_marker = M.getFunction("julia.loopinfo_marker");
 
-    auto GetLI = [this](Function &F) -> LoopInfo & {
+    auto GetLI = [this](Function &F) JL_NOTSAFEPOINT -> LoopInfo & {
         return getAnalysis<LoopInfoWrapperPass>(F).getLoopInfo();
     };
 

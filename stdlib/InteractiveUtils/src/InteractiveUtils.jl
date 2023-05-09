@@ -11,7 +11,7 @@ export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, 
 import Base.Docs.apropos
 
 using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_unquoted, summarysize,
-    to_tuple_type, signature_type, format_bytes
+    signature_type, format_bytes
 
 using Markdown
 
@@ -21,7 +21,7 @@ include("macros.jl")
 include("clipboard.jl")
 
 """
-    varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name, minsize::Int = 0)
+    varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, recursive::Bool = false, sortby::Symbol = :name, minsize::Int = 0)
 
 Return a markdown table giving information about exported global variables in a module, optionally restricted
 to those matching `pattern`.
@@ -33,6 +33,9 @@ The memory consumption estimate is an approximate lower bound on the size of the
 - `recursive` : recursively include objects in sub-modules, observing the same settings in each.
 - `sortby` : the column to sort results by. Options are `:name` (default), `:size`, and `:summary`.
 - `minsize` : only includes objects with size at least `minsize` bytes. Defaults to `0`.
+
+The output of `varinfo` is intended for display purposes only.  See also [`names`](@ref) to get an array of symbols defined in
+a module, which is suitable for more general manipulations.
 """
 function varinfo(m::Module=Base.active_module(), pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name, recursive::Bool = false, minsize::Int=0)
     sortby in (:name, :size, :summary) || throw(ArgumentError("Unrecognized `sortby` value `:$sortby`. Possible options are `:name`, `:size`, and `:summary`"))
@@ -96,7 +99,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     if !isempty(Base.GIT_VERSION_INFO.commit_short)
         println(io, "Commit $(Base.GIT_VERSION_INFO.commit_short) ($(Base.GIT_VERSION_INFO.date_string))")
     end
-    if ccall(:jl_is_debugbuild, Cint, ())!=0
+    if Base.isdebugbuild()
         println(io, "DEBUG build")
     end
     println(io, "Platform Info:")
@@ -141,7 +144,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
     println(io, "  LIBM: ",Base.libm_name)
     println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
-    println(io, "  Threads: ", Threads.nthreads(), " on ", Sys.CPU_THREADS, " virtual cores")
+    println(io, "  Threads: ", Threads.maxthreadid(), " on ", Sys.CPU_THREADS, " virtual cores")
 
     function is_nonverbose_env(k::String)
         return occursin(r"^JULIA_|^DYLD_|^LD_", k)
@@ -183,7 +186,7 @@ The optional second argument restricts the search to a particular module or func
 If keyword `supertypes` is `true`, also return arguments with a parent type of `typ`,
 excluding type `Any`.
 """
-function methodswith(t::Type, f::Base.Callable, meths = Method[]; supertypes::Bool=false)
+function methodswith(@nospecialize(t::Type), @nospecialize(f::Base.Callable), meths = Method[]; supertypes::Bool=false)
     for d in methods(f)
         if any(function (x)
                    let x = rewrap_unionall(x, d.sig)
@@ -200,7 +203,7 @@ function methodswith(t::Type, f::Base.Callable, meths = Method[]; supertypes::Bo
     return meths
 end
 
-function _methodswith(t::Type, m::Module, supertypes::Bool)
+function _methodswith(@nospecialize(t::Type), m::Module, supertypes::Bool)
     meths = Method[]
     for nm in names(m)
         if isdefined(m, nm)
@@ -213,9 +216,9 @@ function _methodswith(t::Type, m::Module, supertypes::Bool)
     return unique(meths)
 end
 
-methodswith(t::Type, m::Module; supertypes::Bool=false) = _methodswith(t, m, supertypes)
+methodswith(@nospecialize(t::Type), m::Module; supertypes::Bool=false) = _methodswith(t, m, supertypes)
 
-function methodswith(t::Type; supertypes::Bool=false)
+function methodswith(@nospecialize(t::Type); supertypes::Bool=false)
     meths = Method[]
     for mod in Base.loaded_modules_array()
         append!(meths, _methodswith(t, mod, supertypes))

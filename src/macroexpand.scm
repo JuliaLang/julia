@@ -183,6 +183,19 @@
       (cadr e)
       e))
 
+(define (unescape-global-lhs e env m parent-scope inarg)
+  (cond ((not (pair? e)) e)
+        ((eq? (car e) 'escape) (cadr e))
+        ((memq (car e) '(parameters tuple))
+         (list* (car e) (map (lambda (e)
+                          (unescape-global-lhs e env m parent-scope inarg))
+                        (cdr e))))
+        ((and (memq (car e) '(|::| kw)) (length= e 3))
+         (list (car e) (unescape-global-lhs (cadr e) env m parent-scope inarg)
+                       (resolve-expansion-vars-with-new-env (caddr e) env m parent-scope inarg)))
+        (else
+         (resolve-expansion-vars-with-new-env e env m parent-scope inarg))))
+
 (define (typedef-expr-name e)
   (cond ((atom? e) e)
         ((or (eq? (car e) 'curly) (eq? (car e) '<:)) (typedef-expr-name (cadr e)))
@@ -344,14 +357,14 @@
                      (m (cadr scope))
                      (parent-scope (cdr parent-scope)))
                 (resolve-expansion-vars-with-new-env (cadr e) env m parent-scope inarg))))
-           ((global) (let ((arg (cadr e)))
-                       (cond ((symbol? arg) e)
-                             ((assignment? arg)
-                              `(global
-                                (= ,(unescape (cadr arg))
-                                   ,(resolve-expansion-vars-with-new-env (caddr arg) env m parent-scope inarg))))
-                             (else
-                              `(global ,(resolve-expansion-vars-with-new-env arg env m parent-scope inarg))))))
+           ((global)
+            `(global
+               ,@(map (lambda (arg)
+                       (if (assignment? arg)
+                           `(= ,(unescape-global-lhs (cadr arg) env m parent-scope inarg)
+                               ,(resolve-expansion-vars-with-new-env (caddr arg) env m parent-scope inarg))
+                           (unescape-global-lhs arg env m parent-scope inarg)))
+                      (cdr e))))
            ((using import export meta line inbounds boundscheck loopinfo inline noinline) (map unescape e))
            ((macrocall) e) ; invalid syntax anyways, so just act like it's quoted.
            ((symboliclabel) e)

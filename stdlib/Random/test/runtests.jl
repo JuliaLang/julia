@@ -888,7 +888,8 @@ end
     @test (x >> 64) % UInt64 == xs[end-6]
     @test x % UInt64 == xs[end-7]
     x = rand(m, UInt64)
-    @test x == xs[end-8] # should not be == xs[end-7]
+    @test x == xs[end-8]
+    @test x != xs[end-7]
 
     s = Set{UInt64}()
     n = 0
@@ -993,4 +994,74 @@ end
     # 10% chance of having a true in it, so each value should converge to 0.1.
     @test minimum(m) >= 0.094
     @test maximum(m) <= 0.106
+end
+
+# issue #42752
+# test that running finalizers that launch tasks doesn't change RNG stream
+function f42752(do_gc::Bool, cell = (()->Any[[]])())
+    a = rand()
+    if do_gc
+        finalizer(cell[1]) do _
+            @async nothing
+        end
+        cell[1] = nothing
+        GC.gc()
+    end
+    b = rand()
+    (a, b)
+end
+guardseed() do
+    for _ in 1:4
+        Random.seed!(1)
+        val = f42752(false)
+        Random.seed!(1)
+        @test f42752(true) === val
+    end
+end
+
+@testset "TaskLocalRNG: stream collision smoke test" begin
+    # spawn a trinary tree of tasks:
+    # - spawn three recursive child tasks in each
+    # - generate a random UInt64 in each before, after and between
+    # - collect and count all the generated random values
+    # these should all be distinct across all tasks
+    function gen(d)
+        r = rand(UInt64)
+        vals = [r]
+        if d ≥ 0
+            append!(vals, gent(d - 1))
+            isodd(r) && append!(vals, gent(d - 1))
+            push!(vals, rand(UInt64))
+            iseven(r) && append!(vals, gent(d - 1))
+        end
+        push!(vals, rand(UInt64))
+    end
+    gent(d) = fetch(@async gen(d))
+    seeds = rand(RandomDevice(), UInt64, 5)
+    for seed in seeds
+        Random.seed!(seed)
+        vals = gen(6)
+        @test allunique(vals)
+    end
+end
+
+@testset "TaskLocalRNG: child doesn't affect parent" begin
+    seeds = rand(RandomDevice(), UInt64, 5)
+    for seed in seeds
+        Random.seed!(seed)
+        x = rand(UInt64)
+        y = rand(UInt64)
+        n = 3
+        for i = 1:n
+            Random.seed!(seed)
+            @sync for j = 0:i
+                @async rand(UInt64)
+            end
+            @test x == rand(UInt64)
+            @sync for j = 0:(n-i)
+                @async rand(UInt64)
+            end
+            @test y == rand(UInt64)
+        end
+    end
 end

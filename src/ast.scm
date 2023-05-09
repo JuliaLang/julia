@@ -226,13 +226,13 @@
                               ""))
                         "")
                     (string.rep "    " ilvl) "end"))
-	   ((do)
-	    (let ((call (cadr e))
-		  (args (cdr (cadr (caddr e))))
-		  (body (caddr (caddr e))))
-	      (deparse-block (string (deparse call) " do" (if (null? args) "" " ")
-				     (deparse-arglist args))
-			     (cdr body) ilvl)))
+           ((do)
+            (let ((call (cadr e))
+                  (args (cdr (cadr (caddr e))))
+                  (body (caddr (caddr e))))
+              (deparse-block (string (deparse call) " do" (if (null? args) "" " ")
+                                     (deparse-arglist args))
+                             (cdr body) ilvl)))
            ((struct)
             (string (if (equal? (cadr e) '(true)) "mutable " "")
                     "struct "
@@ -329,8 +329,8 @@
         (else
          (case (car v)
            ((...)
-	    (arg-name (cadr v)) ;; to check for errors
-	    (decl-var (cadr v)))
+            (arg-name (cadr v)) ;; to check for errors
+            (decl-var (cadr v)))
            ((|::|)
             (if (not (symbol? (cadr v)))
                 (bad-formal-argument (cadr v)))
@@ -522,6 +522,21 @@
 (define (nospecialize-meta? e (one #f))
   (and (if one (length= e 3) (length> e 2))
        (eq? (car e) 'meta) (memq (cadr e) '(nospecialize specialize))))
+
+(define (meta? e)
+  (and (length> e 1) (eq? (car e) 'meta)))
+
+(define (method-meta-sym? x)
+  (memq x '(inline noinline aggressive_constprop no_constprop propagate_inbounds)))
+
+(define (propagate-method-meta e)
+  `(meta ,@(filter (lambda (x)
+                     (or (method-meta-sym? x)
+                         (and (pair? x) (eq? (car x) 'purity))))
+                   (cdr e))))
+
+(define (argwide-nospecialize-meta? e)
+  (and (length= e 2) (eq? (car e) 'meta) (memq (cadr e) '(nospecialize specialize))))
 
 (define (if-generated? e)
   (and (length= e 4) (eq? (car e) 'if) (equal? (cadr e) '(generated))))

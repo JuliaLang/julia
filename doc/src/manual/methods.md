@@ -265,8 +265,40 @@ julia> methods(+)
 ```
 
 Multiple dispatch together with the flexible parametric type system give Julia its ability to
-abstractly express high-level algorithms decoupled from implementation details, yet generate efficient,
-specialized code to handle each case at run time.
+abstractly express high-level algorithms decoupled from implementation details.
+
+## [Method specializations](@id man-method-specializations)
+
+When you create multiple methods of the same function, this is sometimes called
+"specialization." In this case, you're specializing the *function* by adding additional
+methods to it: each new method is a new specialization of the function.
+As shown above, these specializations are returned by `methods`.
+
+There's another kind of specialization that occurs without programmer intervention:
+Julia's compiler can automatically specialize the *method* for the specific argument types used.
+Such specializations are *not* listed by `methods`, as this doesn't create new `Method`s, but tools like [`@code_typed`](@ref) allow you to inspect such specializations.
+
+For example, if you create a method
+
+```
+mysum(x::Real, y::Real) = x + y
+```
+
+you've given the function `mysum` one new method (possibly its only method), and that method takes any pair of `Real` number inputs. But if you then execute
+
+```julia-repl
+julia> mysum(1, 2)
+3
+
+julia> mysum(1.0, 2.0)
+3.0
+```
+
+Julia will compile `mysum` twice, once for `x::Int, y::Int` and again for `x::Float64, y::Float64`.
+The point of compiling twice is performance: the methods that get called for `+` (which `mysum` uses) vary depending on the specific types of `x` and `y`, and by compiling different specializations Julia can do all the method lookup ahead of time. This allows the program to run much more quickly, since it does not have to bother with method lookup while it is running.
+Julia's automatic specialization allows you to write generic algorithms and expect that the compiler will generate efficient, specialized code to handle each case you need.
+
+In cases where the number of potential specializations might be effectively unlimited, Julia may avoid this default specialization. See [Be aware of when Julia avoids specializing](@ref) for more information.
 
 ## [Method Ambiguities](@id man-ambiguities)
 
@@ -1215,5 +1247,6 @@ function f2(inc)
         x -> x - 1
     end
 end
+```
 
 [^Clarke61]: Arthur C. Clarke, *Profiles of the Future* (1961): Clarke's Third Law.

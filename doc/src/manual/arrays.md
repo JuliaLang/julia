@@ -1,4 +1,4 @@
-# [Multi-dimensional Arrays](@id man-multi-dim-arrays)
+# [Single- and multi-dimensional Arrays](@id man-multi-dim-arrays)
 
 Julia, like most technical computing languages, provides a first-class array implementation. Most
 technical computing languages pay a lot of attention to their array implementation at the expense
@@ -653,7 +653,7 @@ indices and can be converted to such by [`to_indices`](@ref):
     * [`CartesianIndex{N}`](@ref)s, which behave like an `N`-tuple of integers spanning multiple dimensions (see below for more details)
 2. An array of scalar indices. This includes:
     * Vectors and multidimensional arrays of integers
-    * Empty arrays like `[]`, which select no elements
+    * Empty arrays like `[]`, which select no elements e.g. `A[[]]` (not to be confused with `A[]`)
     * Ranges like `a:c` or `a:b:c`, which select contiguous or strided subsections from `a` to `c` (inclusive)
     * Any custom array of scalar indices that is a subtype of `AbstractArray`
     * Arrays of `CartesianIndex{N}` (see below for more details)
@@ -879,10 +879,15 @@ slower than multiplication. While some arrays — like [`Array`](@ref) itself �
 are implemented using a linear chunk of memory and directly use a linear index
 in their implementations, other arrays — like [`Diagonal`](@ref) — need the
 full set of cartesian indices to do their lookup (see [`IndexStyle`](@ref) to
-introspect which is which). As such, when iterating over an entire array, it's
-much better to iterate over [`eachindex(A)`](@ref) instead of `1:length(A)`.
-Not only will the former be much faster in cases where `A` is `IndexCartesian`,
-but it will also support [OffsetArrays](https://github.com/JuliaArrays/OffsetArrays.jl), too.
+introspect which is which).
+
+!!! warnings
+
+    When iterating over all the indices for an array, it is
+    better to iterate over [`eachindex(A)`](@ref) instead of `1:length(A)`.
+    Not only will this be faster in cases where `A` is `IndexCartesian`,
+    but it will also support arrays with custom indexing, such as [OffsetArrays](https://github.com/JuliaArrays/OffsetArrays.jl).
+    If only the values are needed, then is better to just iterate the array directly, i.e. `for a in A`.
 
 #### Omitted and extra indices
 
@@ -974,8 +979,11 @@ i = CartesianIndex(2, 2)
 i = CartesianIndex(3, 2)
 ```
 
-In contrast with `for i = 1:length(A)`, iterating with [`eachindex`](@ref) provides an efficient way to
-iterate over any array type.
+!!! note
+
+    In contrast with `for i = 1:length(A)`, iterating with [`eachindex`](@ref) provides an efficient way to
+    iterate over any array type. Besides, this also supports generic arrays with custom indexing such as
+    [OffsetArrays](https://github.com/JuliaArrays/OffsetArrays.jl).
 
 ## Array traits
 

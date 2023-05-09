@@ -174,8 +174,12 @@ julia> abs(-3)
 julia> abs(1 + im)
 1.4142135623730951
 
-julia> abs(typemin(Int64))
--9223372036854775808
+julia> abs.(Int8[-128 -127 -126 0 126 127])  # overflow at typemin(Int8)
+1×6 Matrix{Int8}:
+ -128  127  126  0  126  127
+
+julia> maximum(abs, [1, -2, 3, -4])
+4
 ```
 """
 function abs end
@@ -198,8 +202,11 @@ See also: [`signed`](@ref), [`sign`](@ref), [`signbit`](@ref).
 julia> unsigned(-2)
 0xfffffffffffffffe
 
-julia> unsigned(2)
-0x0000000000000002
+julia> unsigned(Int8(2))
+0x02
+
+julia> typeof(ans)
+UInt8
 
 julia> signed(unsigned(-2))
 -2
@@ -475,6 +482,32 @@ julia> trailing_ones(3)
 """
 trailing_ones(x::Integer) = trailing_zeros(~x)
 
+"""
+    top_set_bit(x::Integer) -> Integer
+
+The number of bits in `x`'s binary representation, excluding leading zeros.
+
+Equivalently, the position of the most significant set bit in `x`'s binary
+representation, measured from the least significant side.
+
+Negative `x` are only supported when `x::BitSigned`.
+
+See also: [`ndigits0z`](@ref), [`ndigits`](@ref).
+
+# Examples
+```jldoctest
+julia> Base.top_set_bit(4)
+3
+
+julia> Base.top_set_bit(0)
+0
+
+julia> Base.top_set_bit(-1)
+64
+```
+"""
+top_set_bit(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
+
 ## integer comparisons ##
 
 (< )(x::T, y::T) where {T<:BitUnsigned} = ult_int(x, y)
@@ -507,11 +540,11 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 
 for to in BitInteger_types, from in (BitInteger_types..., Bool)
     if !(to === from)
-        if to.size < from.size
+        if Core.sizeof(to) < Core.sizeof(from)
             @eval rem(x::($from), ::Type{$to}) = trunc_int($to, x)
         elseif from === Bool
             @eval rem(x::($from), ::Type{$to}) = convert($to, x)
-        elseif from.size < to.size
+        elseif Core.sizeof(from) < Core.sizeof(to)
             if from <: Signed
                 @eval rem(x::($from), ::Type{$to}) = sext_int($to, x)
             else
@@ -571,8 +604,17 @@ if nameof(@__MODULE__) === :Base
 
         # Examples
         ```jldoctest
-        julia> 129 % Int8
+        julia> x = 129 % Int8
         -127
+
+        julia> typeof(x)
+        Int8
+
+        julia> x = 129 % BigInt
+        129
+
+        julia> typeof(x)
+        BigInt
         ```
         """ $fname(x::Integer, T::Type{<:Integer})
     end
@@ -765,13 +807,24 @@ promote_rule(::Type{UInt128}, ::Type{Int128}) = UInt128
 
 The lowest value representable by the given (real) numeric DataType `T`.
 
+See also: [`floatmin`](@ref), [`typemax`](@ref), [`eps`](@ref).
+
 # Examples
 ```jldoctest
+julia> typemin(Int8)
+-128
+
+julia> typemin(UInt32)
+0x00000000
+
 julia> typemin(Float16)
 -Inf16
 
 julia> typemin(Float32)
 -Inf32
+
+julia> nextfloat(-Inf32)  # smallest finite Float32 floating point number
+-3.4028235f38
 ```
 """
 function typemin end
@@ -794,7 +847,10 @@ julia> typemax(UInt32)
 julia> typemax(Float64)
 Inf
 
-julia> floatmax(Float32)  # largest finite floating point number
+julia> typemax(Float32)
+Inf32
+
+julia> floatmax(Float32)  # largest finite Float32 floating point number
 3.4028235f38
 ```
 """

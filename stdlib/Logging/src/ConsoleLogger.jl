@@ -117,8 +117,8 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     # Generate a text representation of the message and all key value pairs,
     # split into lines.
     msglines = [(indent=0, msg=l) for l in split(chomp(convert(String, string(message))::String), '\n')]
-    stream = logger.stream
-    if !isopen(stream)
+    stream::IO = logger.stream
+    if !(isopen(stream)::Bool)
         stream = stderr
     end
     dsize = displaysize(stream)::Tuple{Int,Int}

@@ -239,17 +239,16 @@ if bc_opt != bc_off
     @test_throws BoundsError BadVector20469([1,2,3])[:]
 end
 
-# Ensure iteration over arrays is vectorizable with boundschecks off
+# Ensure iteration over arrays is vectorizable
 function g27079(X)
     r = 0
-    @inbounds for x in X
+    for x in X
         r += x
     end
     r
 end
-if bc_opt == bc_default || bc_opt == bc_off
-    @test occursin("vector.body", sprint(code_llvm, g27079, Tuple{Vector{Int}}))
-end
+
+@test occursin("vector.reduce.add", sprint(code_llvm, g27079, Tuple{Vector{Int}}))
 
 # Boundschecking removal of indices with different type, see #40281
 getindex_40281(v, a, b, c) = @inbounds getindex(v, a, b, c)

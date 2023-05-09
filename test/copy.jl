@@ -245,3 +245,26 @@ end
 @testset "deepcopy_internal arrays" begin
     @test (@inferred Base.deepcopy_internal(zeros(), IdDict())) == zeros()
 end
+
+@testset "`copyto!`'s unaliasing" begin
+    a = view([1:3;], :)
+    @test copyto!(a, 2, a, 1, 2) == [1;1:2;]
+    a = [1:3;]
+    @test copyto!(a, 2:3, 1:1, a, 1:2, 1:1) == [1;1:2;]
+end
+
+@testset "`deepcopy` a `GenericCondition`" begin
+    a = Base.GenericCondition(ReentrantLock())
+    @test !islocked(a.lock)
+    lock(a.lock)
+    @test islocked(a.lock)
+    b = deepcopy(a)
+    @test typeof(a) === typeof(b)
+    @test a != b
+    @test a !== b
+    @test typeof(a.lock) === typeof(b.lock)
+    @test a.lock != b.lock
+    @test a.lock !== b.lock
+    @test islocked(a.lock)
+    @test !islocked(b.lock)
+end

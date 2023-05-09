@@ -46,9 +46,11 @@ Take the number of seconds since unix epoch `1970-01-01T00:00:00` and convert to
 corresponding `DateTime`.
 """
 function unix2datetime(x)
-    rata = UNIXEPOCH + round(Int64, Int64(1000) * x)
+    # Rounding should match `now` below
+    rata = UNIXEPOCH + trunc(Int64, Int64(1000) * x)
     return DateTime(UTM(rata))
 end
+
 """
     datetime2unix(dt::DateTime) -> Float64
 
@@ -80,6 +82,13 @@ today() = Date(now())
     now(::Type{UTC}) -> DateTime
 
 Return a `DateTime` corresponding to the user's system time as UTC/GMT.
+For other time zones, see the TimeZones.jl package.
+
+# Example
+```julia
+julia> now(UTC)
+2023-01-04T10:52:24.864
+```
 """
 now(::Type{UTC}) = unix2datetime(time())
 

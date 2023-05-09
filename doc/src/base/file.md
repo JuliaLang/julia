@@ -59,6 +59,7 @@ Base.Filesystem.realpath
 Base.Filesystem.relpath
 Base.Filesystem.expanduser
 Base.Filesystem.contractuser
+Base.Filesystem.samefile
 Base.Filesystem.splitdir
 Base.Filesystem.splitdrive
 Base.Filesystem.splitext

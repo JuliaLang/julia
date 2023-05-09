@@ -459,3 +459,5 @@ function _indices_sub(i1::AbstractArray, I...)
     @inline
     (axes(i1)..., _indices_sub(I...)...)
 end
+
+has_offset_axes(S::SubArray) = has_offset_axes(S.indices...)

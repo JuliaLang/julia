@@ -515,6 +515,12 @@ end
 f39705() = Base.Cartesian.@nany 0 _ -> true
 @test f39705() === false
 
+@testset "Cartesian @nall macro test" begin
+    i_1, i_2, i_3 = 1, 2, 3;
+    @test Base.Cartesian.@nall 2 d->(i_d <= 2)
+    @test !Base.Cartesian.@nall 3 d->(i_d <= 2)
+end
+
 @testset "CartesianIndices with Bool" begin
     @test @inferred(CartesianIndices((true,))) == CartesianIndices((1,))
     @test @inferred(CartesianIndices((false,))) == CartesianIndices((0,))
