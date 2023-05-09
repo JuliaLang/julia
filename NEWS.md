@@ -44,6 +44,7 @@ New library functions
 * `tanpi` is now defined. It computes tan(πx) more accurately than `tan(pi*x)` ([#48575]).
 * `fourthroot(x)` is now defined in `Base.Math` and can be used to compute the fourth root of `x`.
    It can also be accessed using the unicode character `∜`, which can be typed by `\fourthroot<tab>` ([#48899]).
+* `Libc.memmove`, `Libc.memset`, and `Libc.memcpy` are now defined, whose functionality matches that of their respective C calls.
 
 New library features
 --------------------
