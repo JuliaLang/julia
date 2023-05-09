@@ -52,7 +52,7 @@ end
 
 
 @testset "highlight()" begin
-    src = JuliaSyntax.SourceFile("""
+    src = SourceFile("""
         abcd
         αβγδ
         +-*/""")
@@ -81,6 +81,10 @@ end
         αβγδ
         #└─┘
         +-*/"""
+    # multi-byte char at eof
+    @test sprint(highlight, SourceFile("a α"), 3:4) == "a α\n# ╙"
+    @test sprint(highlight, SourceFile("a\nα"), 1:4) == "┌\na\nα\n┘"
+    @test sprint(highlight, SourceFile("a\nb\nα"), 3:3) == "a\nb\n╙\nα"
 
     # Multi-line ranges
     @test sprint(highlight, src, 1:7) == """

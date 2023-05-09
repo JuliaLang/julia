@@ -888,7 +888,7 @@ function validate_tokens(stream::ParseStream)
         k = kind(t)
         fbyte = toks[i-1].next_byte
         nbyte = t.next_byte
-        lbyte = prevind(text, t.next_byte)
+        tokrange = fbyte:nbyte-1
         error_kind = K"None"
         if k in KSet"Integer BinInt OctInt HexInt"
             # The following shouldn't be able to error...
@@ -909,11 +909,11 @@ function validate_tokens(stream::ParseStream)
             if code === :ok
                 # pass
             elseif code === :overflow
-                emit_diagnostic(stream, fbyte:lbyte,
+                emit_diagnostic(stream, tokrange,
                                 error="overflow in floating point literal")
                 error_kind = K"ErrorNumericOverflow"
             elseif underflow0
-                emit_diagnostic(stream, fbyte:lbyte,
+                emit_diagnostic(stream, tokrange,
                                 warning="underflow to zero in floating point literal")
             end
         elseif k == K"Char"
@@ -928,7 +928,7 @@ function validate_tokens(stream::ParseStream)
                 read(charbuf, Char)
                 if !eof(charbuf)
                     error_kind = K"ErrorOverLongCharacter"
-                    emit_diagnostic(stream, fbyte:lbyte,
+                    emit_diagnostic(stream, tokrange,
                                     error="character literal contains multiple characters")
                 end
             end
@@ -940,7 +940,7 @@ function validate_tokens(stream::ParseStream)
             end
         elseif is_error(k) && k != K"error"
             # Emit messages for non-generic token errors
-            emit_diagnostic(stream, fbyte:lbyte,
+            emit_diagnostic(stream, tokrange,
                             error=_token_error_descriptions[k])
         end
         if error_kind != K"None"
