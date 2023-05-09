@@ -3290,207 +3290,270 @@ static int ml_mtable_visitor(jl_methtable_t *mt, void *closure0)
 }
 
 
-// Visit the candidate methods, starting from edges[idx], to determine if their sort ordering
+// Visit the candidate methods, starting from t[idx], to determine a possible valid sort ordering,
+// where every morespecific method appears before any method which it has a common
+// intersection with but is not partly ambiguous with (ambiguity is transitive, particularly
+// if lim==-1, although morespecific is not transitive).
 // Implements Tarjan's SCC (strongly connected components) algorithm, simplified to remove the count variable
+// Inputs:
+//  * `t`: the array of vertexes (method matches)
+//  * `idx`: the next vertex to add to the output
+//  * `visited`: the state of the algorithm for each vertex in `t`: either 1 if we visited it already or 1+depth if we are visiting it now
+//  * `stack`: the state of the algorithm for the current vertex (up to length equal to `t`): the list of all vertexes currently in the depth-first path or in the current SCC
+//  * `result`: the output of the algorithm, a sorted list of vertexes (up to length `lim`)
+//  * `allambig`: a list of all vertexes with an ambiguity (up to length equal to `t`), discovered while running the rest of the algorithm
+//  * `lim`: either -1 for unlimited matches, or the maximum length for `result` before returning failure (return -1).
+//           If specified as -1, this will return extra matches that would have been elided from the list because they were already covered by an earlier match.
+//           This gives a sort of maximal set of matching methods (up to the first minmax method).
+//           If specified as -1, the sorting will also include all "weak" edges (every ambiguous pair) which will create much larger ambiguity cycles,
+//           resulting in a less accurate sort order and much less accurate `*has_ambiguity` result.
+//  * `include_ambiguous`: whether to filter out fully ambiguous matches from `result`
+//  * `*has_ambiguity`: whether the algorithm does not need to compute if there is an unresolved ambiguity
+//  * `*found_minmax`: whether there is a minmax method already found, so future fully_covers matches should be ignored
+// Outputs:
+//  * `*has_ambiguity`: whether the caller should check if there remains an unresolved ambiguity (in `allambig`)
+// Returns:
+//  * -1: too many matches for lim, other outputs are undefined
+//  *  0: the child(ren) have been added to the output
+//  * 1+: the children are part of this SCC (up to this depth)
 // TODO: convert this function into an iterative call, rather than recursive
-static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, arraylist_t *stack, arraylist_t *result, int lim, int include_ambiguous, int *has_ambiguity, int *found_minmax)
+static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, arraylist_t *stack, arraylist_t *result, arraylist_t *allambig, int lim, int include_ambiguous, int *has_ambiguity, int *found_minmax)
 {
     size_t cycle = (size_t)visited->items[idx];
     if (cycle != 0)
         return cycle - 1; // depth remaining
+    jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, idx);
+    jl_method_t *m = matc->method;
+    jl_value_t *ti = (jl_value_t*)matc->spec_types;
+    int subt = matc->fully_covers != NOT_FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m->sig)
+    // first check if this new method is actually already fully covered by an
+    // existing match and we can just ignore this entry quickly
+    size_t result_len = 0;
+    if (subt) {
+        if (*found_minmax == 2)
+            visited->items[idx] = (void*)1;
+    }
+    else if (lim != -1) {
+        for (; result_len < result->len; result_len++) {
+            size_t idx2 = (size_t)result->items[result_len];
+            jl_method_match_t *matc2 = (jl_method_match_t*)jl_array_ptr_ref(t, idx2);
+            jl_method_t *m2 = matc2->method;
+            if (jl_subtype(ti, m2->sig)) {
+                if (include_ambiguous) {
+                    if (!jl_type_morespecific((jl_value_t*)m2->sig, (jl_value_t*)m->sig))
+                        continue;
+                }
+                visited->items[idx] = (void*)1;
+                break;
+            }
+        }
+    }
+    if ((size_t)visited->items[idx] == 1)
+        return 0;
     arraylist_push(stack, (void*)idx);
     size_t depth = stack->len;
     visited->items[idx] = (void*)(1 + depth);
-    jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, idx);
-    jl_method_t *m = matc->method;
     cycle = depth;
+    int addambig = 0;
+    int mayexclude = 0;
+    // First visit all "strong" edges where the child is definitely better.
+    // This likely won't hit any cycles, but might (because morespecific is not transitive).
+    // Along the way, record if we hit any ambiguities-we may need to track those later.
     for (size_t childidx = 0; childidx < jl_array_len(t); childidx++) {
-        if (childidx == idx || (size_t)visited->items[childidx] == 1)
+        if (childidx == idx)
             continue;
+        int child_cycle = (size_t)visited->items[childidx];
+        if (child_cycle == 1)
+            continue; // already handled
+        if (child_cycle != 0 && child_cycle - 1 >= cycle)
+            continue; // already part of this cycle
         jl_method_match_t *matc2 = (jl_method_match_t*)jl_array_ptr_ref(t, childidx);
         jl_method_t *m2 = matc2->method;
         int subt2 = matc2->fully_covers != NOT_FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m2->sig)
+        // TODO: we could change this to jl_has_empty_intersection(ti, (jl_value_t*)matc2->spec_types);
+        // since we only care about sorting of the intersections the user asked us about
         if (!subt2 && jl_has_empty_intersection(m2->sig, m->sig))
             continue;
-        if (jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig))
+        int msp = jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig);
+        int msp2 = !msp && jl_type_morespecific((jl_value_t*)m2->sig, (jl_value_t*)m->sig);
+        if (!msp) {
+            if (subt || !include_ambiguous || (lim != -1 && msp2)) {
+                if (subt2 || jl_subtype((jl_value_t*)ti, m2->sig)) {
+                    // this may be filtered out as fully intersected, if applicable later
+                    mayexclude = 1;
+                }
+            }
+            if (!msp2) {
+                addambig = 1; // record there is a least one previously-undetected ambiguity that may need to be investigated later (between m and m2)
+            }
+        }
+        if (lim == -1 ? msp : !msp2) // include only strong or also weak edges, depending on whether the result size is limited
             continue;
-        // m2 is better or ambiguous
-        int child_cycle = sort_mlmatches(t, childidx, visited, stack, result, lim, include_ambiguous, has_ambiguity, found_minmax);
+        // m2 is (lim!=-1 ? better : not-worse), so attempt to visit it first
+        // if limited, then we want to visit only better edges, because that results in finding k best matches quickest
+        // if not limited, then we want to visit all edges, since that results in finding the largest SCC cycles, which requires doing the fewest intersections
+        child_cycle = sort_mlmatches(t, childidx, visited, stack, result, allambig, lim, include_ambiguous, has_ambiguity, found_minmax);
         if (child_cycle == -1)
             return -1;
         if (child_cycle && child_cycle < cycle) {
             // record the cycle will resolve at depth "cycle"
             cycle = child_cycle;
         }
-    }
-    if (cycle != depth)
-        return cycle;
-    // If we are the top of the current cycle, we have the next set of mostspecific methods.
-    // Decide if we need to append those the current results.
-    int ncycle = 0;
-    for (size_t i = depth - 1; i < stack->len; i++) {
-        size_t childidx = (size_t)stack->items[i];
-        jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, childidx);
-        if ((size_t)visited->items[childidx] == 1) {
-            assert(matc->fully_covers != NOT_FULLY_COVERS);
-            continue;
-        }
-        assert(visited->items[childidx] == (void*)(2 + i));
-        // always remove fully_covers matches after the first minmax ambiguity group is handled
-        if (matc->fully_covers != NOT_FULLY_COVERS) {
-            if (*found_minmax)
-                visited->items[childidx] = (void*)1;
-            // but still need to count minmax itself, if this is the first time we are here
-            if (*found_minmax == 1)
-                ncycle += 1;
-            continue;
-        }
-        else if (lim != -1) {
-            // when limited, don't include this match if it was covered by an earlier one (and isn't perhaps ambiguous with something)
-            jl_value_t *ti = (jl_value_t*)matc->spec_types;
-            for (size_t i = 0; i < result->len; i++) {
-                size_t idx2 = (size_t)result->items[i];
-                jl_method_match_t *matc2 = (jl_method_match_t*)jl_array_ptr_ref(t, idx2);
-                jl_method_t *m2 = matc2->method;
-                if (jl_subtype((jl_value_t*)ti, m2->sig)) {
-                    visited->items[childidx] = (void*)1;
-                    break;
-                }
+        if (stack->len == depth) {
+            // if this child resolved without hitting a cycle, then there is
+            // some probability that this method is already fully covered now
+            // (same check as before), and we can delete this vertex now without
+            // anyone noticing (too much)
+            if (subt) {
+                if (*found_minmax == 2)
+                    visited->items[idx] = (void*)1;
             }
-        }
-        if ((size_t)visited->items[childidx] != 1)
-            ncycle += 1;
-    }
-    if (ncycle > 1 && !*has_ambiguity) {
-        if (lim == -1) {
-            *has_ambiguity = 1;
-        }
-        else {
-            // laborious test, checking for existence and coverage of m3
-            // (has_ambiguity is overestimated for lim==-1, since we don't compute skipped matches either)
-            // some method is ambiguous, but let's see if we can find another method (m3)
-            // outside of the ambiguity group that dominates any ambiguous methods,
-            // and means we can ignore this for has_ambiguity
-            jl_value_t *ti = NULL;
-            jl_value_t *isect2 = NULL;
-            JL_GC_PUSH2(&ti, &isect2);
-            for (size_t i = depth - 1; i < stack->len; i++) {
-                size_t childidx = (size_t)stack->items[i];
-                if ((size_t)visited->items[childidx] == 1)
-                    continue;
-                jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, childidx);
-                jl_method_t *m = matc->method;
-                int subt = matc->fully_covers == FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m->sig)
-                for (size_t j = depth - 1; j < stack->len; j++) {
-                    if (i == j)
-                        continue;
-                    size_t idx2 = (size_t)stack->items[j];
-                    assert(childidx != idx2);
-                    // n.b. even if we skipped them earlier, they still might
-                    // contribute to the ambiguities (due to lock of transitivity of
-                    // morespecific over subtyping)
-                    // TODO: we could improve this result by checking if the removal of some
-                    // edge earlier means that this subgraph is now well-ordered and then be
-                    // allowed to ignore these vertexes entirely here
+            else if (lim != -1) {
+                for (; result_len < result->len; result_len++) {
+                    size_t idx2 = (size_t)result->items[result_len];
                     jl_method_match_t *matc2 = (jl_method_match_t*)jl_array_ptr_ref(t, idx2);
                     jl_method_t *m2 = matc2->method;
-                    int subt2 = matc2->fully_covers == FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m2->sig)
-                    // if they aren't themselves simply ordered
-                    if (jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig) ||
-                        jl_type_morespecific((jl_value_t*)m2->sig, (jl_value_t*)m->sig))
-                        continue;
-                    if (subt) {
-                        ti = (jl_value_t*)matc2->spec_types;
-                        isect2 = NULL;
-                    }
-                    else if (subt2) {
-                        ti = (jl_value_t*)matc->spec_types;
-                        isect2 = NULL;
-                    }
-                    else {
-                        jl_type_intersection2((jl_value_t*)matc->spec_types, (jl_value_t*)matc2->spec_types, &ti, &isect2);
-                    }
-                    // and their intersection contributes to the ambiguity cycle
-                    if (ti != jl_bottom_type) {
-                        // now look for a third method m3 outside of this ambiguity group that fully resolves this intersection
-                        size_t k;
-                        for (k = 0; k < result->len; k++) {
-                            size_t idx3 = (size_t)result->items[k];
-                            jl_method_match_t *matc3 = (jl_method_match_t*)jl_array_ptr_ref(t, idx3);
-                            jl_method_t *m3 = matc3->method;
-                            if ((jl_subtype(ti, m3->sig) || (isect2 && jl_subtype(isect2, m3->sig)))
-                                    && jl_type_morespecific((jl_value_t*)m3->sig, (jl_value_t*)m->sig)
-                                    && jl_type_morespecific((jl_value_t*)m3->sig, (jl_value_t*)m2->sig)) {
-                                //if (jl_subtype(matc->spec_types, ti) || jl_subtype(matc->spec_types, matc3->m3->sig))
-                                //    // check if it covered not only this intersection, but all intersections with matc
-                                //    // if so, we do not need to check all of them separately
-                                //    j = len;
-                                break;
-                            }
+                    if (jl_subtype(ti, m2->sig)) {
+                        if (include_ambiguous) {
+                            if (!jl_type_morespecific((jl_value_t*)m2->sig, (jl_value_t*)m->sig))
+                                continue;
                         }
-                        if (k == result->len) {
-                            *has_ambiguity = 1;
-                        }
-                        isect2 = NULL;
-                    }
-                    ti = NULL;
-                    if (*has_ambiguity)
+                        visited->items[idx] = (void*)1;
                         break;
+                    }
                 }
-                if (*has_ambiguity)
-                    break;
             }
-            JL_GC_POP();
+            if ((size_t)visited->items[idx] == 1) {
+                assert(cycle == depth);
+                size_t childidx = (size_t)arraylist_pop(stack);
+                assert(childidx == idx); (void)childidx;
+                assert(!subt || *found_minmax == 2);
+                return 0;
+            }
         }
     }
-    // If we're only returning possible matches, now filter out this method
-    // if its intersection is fully ambiguous in this SCC group.
-    if (!include_ambiguous) {
+    if (matc->fully_covers == NOT_FULLY_COVERS && addambig)
+        arraylist_push(allambig, (void*)idx);
+    if (cycle != depth)
+        return cycle;
+    result_len = result->len;
+    if (stack->len == depth) {
+        // Found one "best" method to add right now. But we might exclude it if
+        // we determined earlier that we had that option.
+        if (mayexclude) {
+            if (!subt || *found_minmax == 2)
+                visited->items[idx] = (void*)1;
+        }
+    }
+    else {
+        // We have a set of ambiguous methods. Record that.
+        // This is greatly over-approximated for lim==-1
+        *has_ambiguity = 1;
+        // If we followed weak edges above, then this also fully closed the ambiguity cycle
+        if (lim == -1)
+            addambig = 0;
+        // If we're only returning possible matches, now filter out this method
+        // if its intersection is fully ambiguous in this SCC group.
+        // This is a repeat of the "first check", now that we have completed the cycle analysis
         for (size_t i = depth - 1; i < stack->len; i++) {
             size_t childidx = (size_t)stack->items[i];
-            if ((size_t)visited->items[childidx] == 1)
-                continue;
             jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, childidx);
-            jl_method_t *m = matc->method;
             jl_value_t *ti = (jl_value_t*)matc->spec_types;
-            for (size_t j = depth - 1; j < stack->len; j++) {
-                if (i == j)
-                    continue;
-                size_t idx2 = (size_t)stack->items[j];
-                jl_method_match_t *matc2 = (jl_method_match_t*)jl_array_ptr_ref(t, idx2);
-                jl_method_t *m2 = matc2->method;
-                int subt2 = matc2->fully_covers != NOT_FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m2->sig)
-                // if their intersection contributes to the ambiguity cycle
-                // and the contribution of m is fully ambiguous with the portion of the cycle from m2
-                if (subt2 || jl_subtype((jl_value_t*)ti, m2->sig)) {
-                    // but they aren't themselves simply ordered (here
-                    // we don't consider that a third method might be
-                    // disrupting that ordering and just consider them
-                    // pairwise to keep this simple).
-                    if (!jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig) &&
-                        !jl_type_morespecific((jl_value_t*)m2->sig, (jl_value_t*)m->sig)) {
-                        assert(lim != -1 || *has_ambiguity);
+            int subt = matc->fully_covers != NOT_FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m->sig)
+            if ((size_t)visited->items[childidx] == 1) {
+                assert(subt);
+                continue;
+            }
+            assert(visited->items[childidx] == (void*)(2 + i));
+            // if we only followed strong edges before above
+            // check also if this set has an unresolved ambiguity missing from it
+            if (lim != -1 && !addambig) {
+                for (size_t j = 0; j < allambig->len; j++) {
+                    if ((size_t)allambig->items[j] == childidx) {
+                        addambig = 1;
+                        break;
+                    }
+                }
+            }
+            // always remove fully_covers matches after the first minmax ambiguity group is handled
+            if (subt) {
+                if (*found_minmax)
+                    visited->items[childidx] = (void*)1;
+                continue;
+            }
+            else if (lim != -1) {
+                // when limited, don't include this match if it was covered by an earlier one
+                for (size_t result_len = 0; result_len < result->len; result_len++) {
+                    size_t idx2 = (size_t)result->items[result_len];
+                    jl_method_match_t *matc2 = (jl_method_match_t*)jl_array_ptr_ref(t, idx2);
+                    jl_method_t *m2 = matc2->method;
+                    if (jl_subtype(ti, m2->sig)) {
+                        if (include_ambiguous) {
+                            if (!jl_type_morespecific((jl_value_t*)m2->sig, (jl_value_t*)m->sig))
+                                continue;
+                        }
                         visited->items[childidx] = (void*)1;
                         break;
                     }
                 }
             }
         }
+        if (!include_ambiguous && lim == -1) {
+            for (size_t i = depth - 1; i < stack->len; i++) {
+                size_t childidx = (size_t)stack->items[i];
+                if ((size_t)visited->items[childidx] == 1)
+                    continue;
+                jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, childidx);
+                jl_method_t *m = matc->method;
+                jl_value_t *ti = (jl_value_t*)matc->spec_types;
+                for (size_t j = depth - 1; j < stack->len; j++) {
+                    if (i == j)
+                        continue;
+                    size_t idx2 = (size_t)stack->items[j];
+                    jl_method_match_t *matc2 = (jl_method_match_t*)jl_array_ptr_ref(t, idx2);
+                    jl_method_t *m2 = matc2->method;
+                    int subt2 = matc2->fully_covers != NOT_FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m2->sig)
+                    // if their intersection contributes to the ambiguity cycle
+                    // and the contribution of m is fully ambiguous with the portion of the cycle from m2
+                    if (subt2 || jl_subtype((jl_value_t*)ti, m2->sig)) {
+                        // but they aren't themselves simply ordered (here
+                        // we don't consider that a third method might be
+                        // disrupting that ordering and just consider them
+                        // pairwise to keep this simple).
+                        if (!jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig) &&
+                            !jl_type_morespecific((jl_value_t*)m2->sig, (jl_value_t*)m->sig)) {
+                            visited->items[childidx] = (void*)-1;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
     }
-    while (stack->len >= depth) {
-        size_t childidx = (size_t)arraylist_pop(stack);
-        // always remove fully_covers matches after the first minmax ambiguity group is handled
-        jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, childidx);
-        if (matc->fully_covers != NOT_FULLY_COVERS)
-            *found_minmax = 2;
-        if ((size_t)visited->items[childidx] != 1) {
-            assert(visited->items[childidx] == (void*)(2 + stack->len));
-            visited->items[childidx] = (void*)1;
+    // copy this cycle into the results
+    for (size_t i = depth - 1; i < stack->len; i++) {
+        size_t childidx = (size_t)stack->items[i];
+        if ((size_t)visited->items[childidx] == 1)
+            continue;
+        if ((size_t)visited->items[childidx] != -1) {
+            assert(visited->items[childidx] == (void*)(2 + i));
+            visited->items[childidx] = (void*)-1;
             if (lim == -1 || result->len < lim)
                 arraylist_push(result, (void*)childidx);
             else
                 return -1;
         }
+    }
+    // now finally cleanup the stack
+    while (stack->len >= depth) {
+        size_t childidx = (size_t)arraylist_pop(stack);
+        // always remove fully_covers matches after the first minmax ambiguity group is handled
+        //jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(t, childidx);
+        if (matc->fully_covers != NOT_FULLY_COVERS && !addambig)
+            *found_minmax = 2;
+        if (visited->items[childidx] != (void*)-1)
+            continue;
+        visited->items[childidx] = (void*)1;
     }
     return 0;
 }
@@ -3702,18 +3765,22 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
         }
     }
     if (len > 1) {
-        arraylist_t stack, visited, result;
+        arraylist_t stack, visited, result, allambig;
         arraylist_new(&result, lim != -1 && lim < len ? lim : len);
         arraylist_new(&stack, 0);
         arraylist_new(&visited, len);
+        arraylist_new(&allambig, len);
         arraylist_grow(&visited, len);
         memset(visited.items, 0, len * sizeof(size_t));
         // if we had a minmax method (any subtypes), now may now be able to
         // quickly cleanup some of methods
         int found_minmax = 0;
-        if (minmax != NULL || (minmax_ambig && !include_ambiguous)) {
+        if (minmax != NULL)
+            found_minmax = 2;
+        else if (minmax_ambig && !include_ambiguous)
             found_minmax = 1;
-        }
+        if (ambig == NULL) // if we don't care about the result, set it now so we won't bother attempting to compute it accurately later
+            has_ambiguity = 1;
         for (i = 0; i < len; i++) {
             assert(visited.items[i] == (void*)0 || visited.items[i] == (void*)1);
             jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, i);
@@ -3722,8 +3789,9 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                 // by visiting it and it might be a bit costly
                 continue;
             }
-            int child_cycle = sort_mlmatches((jl_array_t*)env.t, i, &visited, &stack, &result, lim == -1 || minmax == NULL ? lim : lim - 1, include_ambiguous, &has_ambiguity, &found_minmax);
+            int child_cycle = sort_mlmatches((jl_array_t*)env.t, i, &visited, &stack, &result, &allambig, lim == -1 || minmax == NULL ? lim : lim - 1, include_ambiguous, &has_ambiguity, &found_minmax);
             if (child_cycle == -1) {
+                arraylist_free(&allambig);
                 arraylist_free(&visited);
                 arraylist_free(&stack);
                 arraylist_free(&result);
@@ -3734,6 +3802,91 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
             assert(stack.len == 0);
             assert(visited.items[i] == (void*)1);
         }
+        // now compute whether there were ambiguities left in this cycle
+        if (has_ambiguity == 0 && allambig.len > 0) {
+            if (lim == -1) {
+                // lim is over-approximated, so has_ambiguities is too
+                has_ambiguity = 1;
+            }
+            else {
+                // go back and find the additional ambiguous methods and temporary add them to the stack
+                // (potentially duplicating them from lower on the stack to here)
+                jl_value_t *ti = NULL;
+                jl_value_t *isect2 = NULL;
+                JL_GC_PUSH2(&ti, &isect2);
+                for (size_t i = 0; i < allambig.len; i++) {
+                    size_t idx = (size_t)allambig.items[i];
+                    jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, idx);
+                    jl_method_t *m = matc->method;
+                    int subt = matc->fully_covers == FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m->sig)
+                    for (size_t idx2 = 0; idx2 < jl_array_len(env.t); idx2++) {
+                        if (idx2 == idx)
+                            continue;
+                        // laborious test, checking for existence and coverage of another method (m3)
+                        // outside of the ambiguity group that dominates any ambiguous methods,
+                        // and means we can ignore this for has_ambiguity
+                        // (has_ambiguity is overestimated for lim==-1, since we don't compute skipped matches either)
+                        // n.b. even if we skipped them earlier, they still might
+                        // contribute to the ambiguities (due to lock of transitivity of
+                        // morespecific over subtyping)
+                        // TODO: we could improve this result by checking if the removal of some
+                        // edge earlier means that this subgraph is now well-ordered and then be
+                        // allowed to ignore these vertexes entirely here
+                        jl_method_match_t *matc2 = (jl_method_match_t*)jl_array_ptr_ref(env.t, idx2);
+                        jl_method_t *m2 = matc2->method;
+                        int subt2 = matc2->fully_covers == FULLY_COVERS; // jl_subtype((jl_value_t*)type, (jl_value_t*)m2->sig)
+                        if (subt) {
+                            ti = (jl_value_t*)matc2->spec_types;
+                            isect2 = NULL;
+                        }
+                        else if (subt2) {
+                            ti = (jl_value_t*)matc->spec_types;
+                            isect2 = NULL;
+                        }
+                        else {
+                            jl_type_intersection2((jl_value_t*)matc->spec_types, (jl_value_t*)matc2->spec_types, &ti, &isect2);
+                        }
+                        // if their intersection contributes to the ambiguity cycle
+                        if (ti == jl_bottom_type)
+                            continue;
+                        // and they aren't themselves simply ordered
+                        if (jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig) ||
+                            jl_type_morespecific((jl_value_t*)m2->sig, (jl_value_t*)m->sig))
+                            continue;
+                        // now look for a third method m3 that dominated these and that fully covered this intersection already
+                        size_t k;
+                        for (k = 0; k < result.len; k++) {
+                            size_t idx3 = (size_t)result.items[k];
+                            if (idx3 == idx || idx3 == idx2) {
+                                has_ambiguity = 1;
+                                break;
+                            }
+                            jl_method_match_t *matc3 = (jl_method_match_t*)jl_array_ptr_ref(env.t, idx3);
+                            jl_method_t *m3 = matc3->method;
+                            if ((jl_subtype(ti, m3->sig) || (isect2 && jl_subtype(isect2, m3->sig)))
+                                    && jl_type_morespecific((jl_value_t*)m3->sig, (jl_value_t*)m->sig)
+                                    && jl_type_morespecific((jl_value_t*)m3->sig, (jl_value_t*)m2->sig)) {
+                                //if (jl_subtype(matc->spec_types, ti) || jl_subtype(matc->spec_types, matc3->m3->sig))
+                                //    // check if it covered not only this intersection, but all intersections with matc
+                                //    // if so, we do not need to check all of them separately
+                                //    j = len;
+                                break;
+                            }
+                        }
+                        if (k == result.len)
+                            has_ambiguity = 1;
+                        isect2 = NULL;
+                        ti = NULL;
+                        if (has_ambiguity)
+                            break;
+                    }
+                    if (has_ambiguity)
+                        break;
+                }
+                JL_GC_POP();
+            }
+        }
+        arraylist_free(&allambig);
         arraylist_free(&visited);
         arraylist_free(&stack);
         for (j = 0; j < result.len; j++) {
