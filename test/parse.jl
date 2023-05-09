@@ -265,6 +265,11 @@ end
 @test tryparse(Float32, "1.23") === 1.23f0
 @test tryparse(Float16, "1.23") === Float16(1.23)
 
+# Test floating-point rounding (#49689)
+@test tryparse(Float32, "17.328679084777833") == 17.32868f0
+@test_broken 17.328679084777833f0 == 17.32868f0
+# TODO: fix @test_broken in *nix platforms, add more test
+
 # parsing complex numbers (#22250)
 @testset "complex parsing" begin
     for sign in ('-','+'), Im in ("i","j","im"), s1 in (""," "), s2 in (""," "), s3 in (""," "), s4 in (""," ")
