@@ -181,7 +181,7 @@ end
         s3 = _rotl45(s3)
         ref = Ref(f(res, T))
         # TODO: This may make the random-stream dependent on system endianness
-        memcpy(dst+i, pointer_from_objref(ref), len-i)
+        GC.@preserve ref memcpy(dst+i, pointer_from_objref(ref), len-i)
     end
     if rng isa TaskLocalRNG
         task.rngState0, task.rngState1, task.rngState2, task.rngState3 = s0, s1, s2, s3
