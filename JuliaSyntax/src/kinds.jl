@@ -934,7 +934,25 @@ primitive type Kind 16 end
 # the K_str macro to self-name these kinds with their literal representation,
 # rather than needing to invent a new name for each.
 
-let kind_int_type = :UInt16,
+let kind_int_type = :UInt16
+    # Preprocess _kind_names to conflate category markers with the first/last
+    # in the category.
+    kindstr_to_int = Dict{String,UInt16}()
+    i = 1
+    while i <= length(_kind_names)
+        kn = _kind_names[i]
+        kind_int = i-1
+        if startswith(kn, "BEGIN_")
+            deleteat!(_kind_names, i)
+        elseif startswith(kn, "END_")
+            kind_int = i-2
+            deleteat!(_kind_names, i)
+        else
+            i += 1
+        end
+        push!(kindstr_to_int, kn=>kind_int)
+    end
+
     max_kind_int = length(_kind_names)-1
 
     @eval begin
@@ -945,9 +963,9 @@ let kind_int_type = :UInt16,
             return Base.bitcast(Kind, convert($kind_int_type, x))
         end
 
-        Base.convert(::Type{String}, k::Kind) = _kind_names[1 + Base.bitcast($kind_int_type, k)]
+        Base.convert(::Type{String}, k::Kind) = _kind_names[1 + reinterpret($kind_int_type, k)]
 
-        let kindstr_to_int = Dict(s=>i-1 for (i,s) in enumerate(_kind_names))
+        let kindstr_to_int=$kindstr_to_int
             function Base.convert(::Type{Kind}, s::AbstractString)
                 i = get(kindstr_to_int, s) do
                     error("unknown Kind name $(repr(s))")
@@ -1078,12 +1096,12 @@ const _token_error_descriptions = Dict{Kind, String}(
 
 #-------------------------------------------------------------------------------
 # Predicates
-is_contextual_keyword(k::Kind) = K"BEGIN_CONTEXTUAL_KEYWORDS" < k < K"END_CONTEXTUAL_KEYWORDS"
-is_error(k::Kind) = K"BEGIN_ERRORS" < k < K"END_ERRORS" || k == K"ErrorInvalidOperator" || k == K"Error**"
-is_keyword(k::Kind) = K"BEGIN_KEYWORDS" < k < K"END_KEYWORDS"
-is_block_continuation_keyword(k::Kind) = K"BEGIN_BLOCK_CONTINUATION_KEYWORDS" < k < K"END_BLOCK_CONTINUATION_KEYWORDS"
-is_literal(k::Kind) = K"BEGIN_LITERAL" < k < K"END_LITERAL"
-is_operator(k::Kind) = K"BEGIN_OPS" < k < K"END_OPS"
+is_contextual_keyword(k::Kind) = K"BEGIN_CONTEXTUAL_KEYWORDS" <= k <= K"END_CONTEXTUAL_KEYWORDS"
+is_error(k::Kind) = K"BEGIN_ERRORS" <= k <= K"END_ERRORS" || k == K"ErrorInvalidOperator" || k == K"Error**"
+is_keyword(k::Kind) = K"BEGIN_KEYWORDS" <= k <= K"END_KEYWORDS"
+is_block_continuation_keyword(k::Kind) = K"BEGIN_BLOCK_CONTINUATION_KEYWORDS" <= k <= K"END_BLOCK_CONTINUATION_KEYWORDS"
+is_literal(k::Kind) = K"BEGIN_LITERAL" <= k <= K"END_LITERAL"
+is_operator(k::Kind) = K"BEGIN_OPS" <= k <= K"END_OPS"
 is_word_operator(k::Kind) = (k == K"in" || k == K"isa" || k == K"where")
 
 is_contextual_keyword(k) = is_contextual_keyword(kind(k))
@@ -1097,28 +1115,28 @@ is_word_operator(k) = is_word_operator(kind(k))
 # Predicates for operator precedence
 # FIXME: Review how precedence depends on dottedness, eg
 # https://github.com/JuliaLang/julia/pull/36725
-is_prec_assignment(x)  = K"BEGIN_ASSIGNMENTS" < kind(x) < K"END_ASSIGNMENTS"
-is_prec_pair(x)        = K"BEGIN_PAIRARROW"   < kind(x) < K"END_PAIRARROW"
-is_prec_conditional(x) = K"BEGIN_CONDITIONAL" < kind(x) < K"END_CONDITIONAL"
-is_prec_arrow(x)       = K"BEGIN_ARROW"       < kind(x) < K"END_ARROW"
-is_prec_lazy_or(x)     = K"BEGIN_LAZYOR"      < kind(x) < K"END_LAZYOR"
-is_prec_lazy_and(x)    = K"BEGIN_LAZYAND"     < kind(x) < K"END_LAZYAND"
-is_prec_comparison(x)  = K"BEGIN_COMPARISON"  < kind(x) < K"END_COMPARISON"
-is_prec_pipe(x)        = K"BEGIN_PIPE"        < kind(x) < K"END_PIPE"
-is_prec_colon(x)       = K"BEGIN_COLON"       < kind(x) < K"END_COLON"
-is_prec_plus(x)        = K"BEGIN_PLUS"        < kind(x) < K"END_PLUS"
-is_prec_bitshift(x)    = K"BEGIN_BITSHIFTS"   < kind(x) < K"END_BITSHIFTS"
-is_prec_times(x)       = K"BEGIN_TIMES"       < kind(x) < K"END_TIMES"
-is_prec_rational(x)    = K"BEGIN_RATIONAL"    < kind(x) < K"END_RATIONAL"
-is_prec_power(x)       = K"BEGIN_POWER"       < kind(x) < K"END_POWER"
-is_prec_decl(x)        = K"BEGIN_DECL"        < kind(x) < K"END_DECL"
-is_prec_where(x)       = K"BEGIN_WHERE"       < kind(x) < K"END_WHERE"
-is_prec_dot(x)         = K"BEGIN_DOT"         < kind(x) < K"END_DOT"
-is_prec_unicode_ops(x) = K"BEGIN_UNICODE_OPS" < kind(x) < K"END_UNICODE_OPS"
+is_prec_assignment(x)  = K"BEGIN_ASSIGNMENTS" <= kind(x) <= K"END_ASSIGNMENTS"
+is_prec_pair(x)        = K"BEGIN_PAIRARROW"   <= kind(x) <= K"END_PAIRARROW"
+is_prec_conditional(x) = K"BEGIN_CONDITIONAL" <= kind(x) <= K"END_CONDITIONAL"
+is_prec_arrow(x)       = K"BEGIN_ARROW"       <= kind(x) <= K"END_ARROW"
+is_prec_lazy_or(x)     = K"BEGIN_LAZYOR"      <= kind(x) <= K"END_LAZYOR"
+is_prec_lazy_and(x)    = K"BEGIN_LAZYAND"     <= kind(x) <= K"END_LAZYAND"
+is_prec_comparison(x)  = K"BEGIN_COMPARISON"  <= kind(x) <= K"END_COMPARISON"
+is_prec_pipe(x)        = K"BEGIN_PIPE"        <= kind(x) <= K"END_PIPE"
+is_prec_colon(x)       = K"BEGIN_COLON"       <= kind(x) <= K"END_COLON"
+is_prec_plus(x)        = K"BEGIN_PLUS"        <= kind(x) <= K"END_PLUS"
+is_prec_bitshift(x)    = K"BEGIN_BITSHIFTS"   <= kind(x) <= K"END_BITSHIFTS"
+is_prec_times(x)       = K"BEGIN_TIMES"       <= kind(x) <= K"END_TIMES"
+is_prec_rational(x)    = K"BEGIN_RATIONAL"    <= kind(x) <= K"END_RATIONAL"
+is_prec_power(x)       = K"BEGIN_POWER"       <= kind(x) <= K"END_POWER"
+is_prec_decl(x)        = K"BEGIN_DECL"        <= kind(x) <= K"END_DECL"
+is_prec_where(x)       = K"BEGIN_WHERE"       <= kind(x) <= K"END_WHERE"
+is_prec_dot(x)         = K"BEGIN_DOT"         <= kind(x) <= K"END_DOT"
+is_prec_unicode_ops(x) = K"BEGIN_UNICODE_OPS" <= kind(x) <= K"END_UNICODE_OPS"
 is_prec_pipe_lt(x)     = kind(x) == K"<|"
 is_prec_pipe_gt(x)     = kind(x) == K"|>"
-is_syntax_kind(x)      = K"BEGIN_SYNTAX_KINDS" < kind(x) < K"END_SYNTAX_KINDS"
-is_macro_name(x)       = K"BEGIN_MACRO_NAMES" < kind(x) < K"END_MACRO_NAMES"
+is_syntax_kind(x)      = K"BEGIN_SYNTAX_KINDS"<= kind(x) <= K"END_SYNTAX_KINDS"
+is_macro_name(x)       = K"BEGIN_MACRO_NAMES" <= kind(x) <= K"END_MACRO_NAMES"
 
 function is_number(x)
     kind(x) in (K"Integer", K"BinInt", K"HexInt", K"OctInt", K"Float", K"Float32")

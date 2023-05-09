@@ -224,7 +224,7 @@ end
 end
 
 function optakessuffix(k)
-    (K"BEGIN_OPS" < k < K"END_OPS") &&
+    (K"BEGIN_OPS" <= k <= K"END_OPS") &&
     !(
         k == K"..." ||
         K"BEGIN_ASSIGNMENTS" <= k <= K"END_ASSIGNMENTS" ||
