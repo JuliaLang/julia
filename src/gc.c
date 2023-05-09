@@ -25,7 +25,7 @@ int gc_first_tid;
 uv_mutex_t gc_threads_lock;
 uv_cond_t gc_threads_cond;
 
-size_t age_distribution[255];
+size_t age_distribution[256];
 // Linked list of callback functions
 
 typedef void (*jl_gc_cb_func_t)(void);
