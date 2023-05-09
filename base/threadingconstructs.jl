@@ -8,6 +8,26 @@ export threadid, nthreads, @threads, @spawn,
 
 Get the ID number of the current thread of execution. The master thread has
 ID `1`.
+
+# Examples
+```julia-repl
+julia> Threads.threadid()
+1
+
+julia> Threads.@threads for i in 1:10
+          println(Threads.threadid())
+       end
+4
+2
+5
+4
+5
+2
+3
+3
+1
+2
+```
 """
 threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
 
@@ -352,6 +372,23 @@ the variable's value in the current task.
 
 !!! compat "Julia 1.9"
     A threadpool may be specified as of Julia 1.9.
+
+# Examples
+```julia-repl
+julia> t() = println("Hello from ", Threads.threadid());
+
+julia> tasks = fetch.([Threads.@spawn t() for i in 1:10]);
+Hello from 1
+Hello from 1
+Hello from 1
+Hello from 3
+Hello from 4
+Hello from 1
+Hello from 5
+Hello from 1
+Hello from 2
+Hello from 1
+```
 """
 macro spawn(args...)
     tp = :default
