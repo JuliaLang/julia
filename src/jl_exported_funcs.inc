@@ -120,7 +120,7 @@
     XX(jl_check_pkgimage_clones) \
     XX(jl_egal) \
     XX(jl_egal__bits) \
-    XX(jl_egal__special) \
+    XX(jl_egal__bitstag) \
     XX(jl_eh_restore_state) \
     XX(jl_enter_handler) \
     XX(jl_enter_threaded_region) \

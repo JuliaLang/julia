@@ -1163,8 +1163,8 @@ uncompressed_ir(m::Method) = isdefined(m, :source) ? _uncompressed_ir(m, m.sourc
                              isdefined(m, :generator) ? error("Method is @generated; try `code_lowered` instead.") :
                              error("Code for this Method is not available.")
 _uncompressed_ir(m::Method, s::CodeInfo) = copy(s)
-_uncompressed_ir(m::Method, s::Array{UInt8,1}) = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, s)::CodeInfo
-_uncompressed_ir(ci::Core.CodeInstance, s::Array{UInt8,1}) = ccall(:jl_uncompress_ir, Any, (Any, Any, Any), ci.def.def::Method, ci, s)::CodeInfo
+_uncompressed_ir(m::Method, s::String) = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, s)::CodeInfo
+_uncompressed_ir(ci::Core.CodeInstance, s::String) = ccall(:jl_uncompress_ir, Any, (Any, Any, Any), ci.def.def::Method, ci, s)::CodeInfo
 # for backwards compat
 const uncompressed_ast = uncompressed_ir
 const _uncompressed_ast = _uncompressed_ir

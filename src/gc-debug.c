@@ -369,10 +369,10 @@ static void gc_verify_tags_page(jl_gc_pagemeta_t *pg)
         if (!in_freelist) {
             jl_value_t *dt = jl_typeof(jl_valueof(v));
             if (dt != (jl_value_t*)jl_buff_tag &&
-                    // the following are used by the deserializer to invalidate objects
-                    v->header != 0x10 && v->header != 0x20 &&
-                    v->header != 0x30 && v->header != 0x40 &&
-                    v->header != 0x50 && v->header != 0x60) {
+                    // the following may be use (by the deserializer) to invalidate objects
+                    v->header != 0xf10 && v->header != 0xf20 &&
+                    v->header != 0xf30 && v->header != 0xf40 &&
+                    v->header != 0xf50 && v->header != 0xf60) {
                 assert(jl_typeof(dt) == (jl_value_t*)jl_datatype_type);
             }
         }

@@ -70,7 +70,7 @@ end
 """
     TaskFailedException
 
-This exception is thrown by a `wait(t)` call when task `t` fails.
+This exception is thrown by a [`wait(t)`](@ref) call when task `t` fails.
 `TaskFailedException` wraps the failed task `t`.
 """
 struct TaskFailedException <: Exception
@@ -318,22 +318,22 @@ end
 # have `waiter` wait for `t`
 function _wait2(t::Task, waiter::Task)
     if !istaskdone(t)
+        # since _wait2 is similar to schedule, we should observe the sticky
+        # bit, even if we don't call `schedule` with early-return below
+        if waiter.sticky && Threads.threadid(waiter) == 0 && !GC.in_finalizer()
+            # Issue #41324
+            # t.sticky && tid == 0 is a task that needs to be co-scheduled with
+            # the parent task. If the parent (current_task) is not sticky we must
+            # set it to be sticky.
+            # XXX: Ideally we would be able to unset this
+            current_task().sticky = true
+            tid = Threads.threadid()
+            ccall(:jl_set_task_tid, Cint, (Any, Cint), waiter, tid-1)
+        end
         lock(t.donenotify)
         if !istaskdone(t)
             push!(t.donenotify.waitq, waiter)
             unlock(t.donenotify)
-            # since _wait2 is similar to schedule, we should observe the sticky
-            # bit, even if we aren't calling `schedule` due to this early-return
-            if waiter.sticky && Threads.threadid(waiter) == 0 && !GC.in_finalizer()
-                # Issue #41324
-                # t.sticky && tid == 0 is a task that needs to be co-scheduled with
-                # the parent task. If the parent (current_task) is not sticky we must
-                # set it to be sticky.
-                # XXX: Ideally we would be able to unset this
-                current_task().sticky = true
-                tid = Threads.threadid()
-                ccall(:jl_set_task_tid, Cint, (Any, Cint), waiter, tid-1)
-            end
             return nothing
         else
             unlock(t.donenotify)
@@ -362,8 +362,8 @@ fetch(@nospecialize x) = x
 """
     fetch(t::Task)
 
-Wait for a Task to finish, then return its result value.
-If the task fails with an exception, a `TaskFailedException` (which wraps the failed task)
+Wait for a [`Task`](@ref) to finish, then return its result value.
+If the task fails with an exception, a [`TaskFailedException`](@ref) (which wraps the failed task)
 is thrown.
 """
 function fetch(t::Task)
