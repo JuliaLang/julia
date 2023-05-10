@@ -623,7 +623,7 @@ It is possible to get an interface which is similar to the IPython REPL and the 
 
 ```julia
 atreplinit() do repl
-    @eval using REPL
+    @eval import REPL
     if !isdefined(repl, :interface)
         repl.interface = REPL.setup_interface(repl)
     end
