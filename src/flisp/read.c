@@ -47,14 +47,16 @@ int isnumtok_base(fl_context_t *fl_ctx, char *tok, value_t *pval, int base)
             return 1;
         }
 
-        // NOTE(#49689): DO NOT convert double to float directly,
-        //  indirect conversion (string->double->float) will lose precision.
-        f = jl_strtof_c(tok, &end);
         // floats can end in f or f0
         if (end > tok && end[0] == 'f' &&
             (end[1] == '\0' ||
              (end[1] == '0' && end[2] == '\0'))) {
-            if (pval) *pval = mk_float(fl_ctx, f);
+            if (pval) {
+                // NOTE(#49689): DO NOT convert double to float directly,
+                //  indirect conversion (string->double->float) will lose precision.
+                f = jl_strtof_c(tok, &end);
+                *pval = mk_float(fl_ctx, f);
+            }
             return 1;
         }
     }
@@ -67,14 +69,16 @@ int isnumtok_base(fl_context_t *fl_ctx, char *tok, value_t *pval, int base)
             return 1;
         }
 
-        // NOTE(#49689): DO NOT convert double to float directly,
-        //  indirect conversion (string->double->float) will lose precision.
-        f = jl_strtof_c(tok, &end);
         // floats can end in f or f0
         if (end > tok && end[0] == 'f' &&
             (end[1] == '\0' ||
              (end[1] == '0' && end[2] == '\0'))) {
-            if (pval) *pval = mk_float(fl_ctx, f);
+            if (pval) {
+                // NOTE(#49689): DO NOT convert double to float directly,
+                //  indirect conversion (string->double->float) will lose precision.
+                f = jl_strtof_c(tok, &end);                
+                *pval = mk_float(fl_ctx, f);
+            }
             return 1;
         }
     }
