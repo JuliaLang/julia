@@ -21,21 +21,24 @@ include("macros.jl")
 include("clipboard.jl")
 
 """
-    varinfo(m::Module=Main, pattern::Regex=r""; all=false, imported=false, recursive=false, sortby::Symbol=:name, minsize::Int=0)
+    varinfo(m::Module = Base.active_module(), pattern::Regex = r""; <keyword arguments>)
 
 Return a markdown table giving information about exported global variables in a module, optionally restricted
 to those matching `pattern`.
 
 The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
 
-- `all` : also list non-exported objects defined in the module, deprecated objects, and compiler-generated objects.
-- `imported` : also list objects explicitly imported from other modules.
-- `recursive` : recursively include objects in sub-modules, observing the same settings in each.
-- `sortby` : the column to sort results by. Options are `:name` (default), `:size`, and `:summary`.
-- `minsize` : only includes objects with size at least `minsize` bytes. Defaults to `0`.
+# Arguments
 
-The output of `varinfo` is intended for display purposes only.  See also [`names`](@ref) to get an array of symbols defined in
-a module, which is suitable for more general manipulations.
+- `all::Bool=false`: also list non-exported objects defined in the module, deprecated objects, and compiler-generated objects?
+- `imported::Bool=false`: also list objects explicitly imported from other modules?
+- `recursive::Bool=false`: recursively include objects in sub-modules, observing the same settings in each?
+- `sortby::Symbol=:name`: the column to sort results by: `:name`, `:size`, or `:summary`
+- `minsize::Int=0`: only include objects with size at least `minsize` bytes
+
+The output of `varinfo` is intended for display purposes only.  See also [`names`](@ref)
+to get an array of symbols defined in a module, which is suitable for more general
+manipulations.
 """
 function varinfo(m::Module=Base.active_module(), pattern::Regex=r""; all::Bool = false, imported::Bool = false, recursive::Bool = false, sortby::Symbol = :name, minsize::Int=0)
     sortby in (:name, :size, :summary) || throw(ArgumentError("Unrecognized `sortby` value `:$sortby`. Possible options are `:name`, `:size`, and `:summary`"))
