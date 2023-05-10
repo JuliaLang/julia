@@ -166,7 +166,8 @@ const META_OFFSET_THREADID = 5
 
 Prints profiling results to `io` (by default, `stdout`). If you do not
 supply a `data` vector, the internal buffer of accumulated backtraces
-will be used.
+will be used. If examining results exported by a previous call to [`retrieve`](@ref),
+supply the `data` vector of backtraces and a `lidict` dictionary of line information.
 
 The keyword arguments can be any combination of:
 
@@ -284,15 +285,6 @@ function print(io::IO,
     return
 end
 
-"""
-    print([io::IO = stdout,] data::Vector, lidict::LineInfoDict; kwargs...)
-
-Prints profiling results to `io`. This variant is used to examine results exported by a
-previous call to [`retrieve`](@ref). Supply the vector `data` of backtraces and
-a dictionary `lidict` of line information.
-
-See `Profile.print([io], data)` for an explanation of the valid keyword arguments.
-"""
 print(data::Vector{<:Unsigned} = fetch(), lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data); kwargs...) =
     print(stdout, data, lidict; kwargs...)
 
