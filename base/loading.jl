@@ -413,7 +413,7 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
                     @goto done
                 end
             end
-            if !loading_extension
+            if !(loading_extension || precompiling_extension)
                 stopenv == env && @goto done
             end
         end
@@ -430,7 +430,7 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
                 path = entry_path(path, pkg.name)
                 @goto done
             end
-            if !loading_extension
+            if !(loading_extension || precompiling_extension)
                 stopenv == env && break
             end
         end
@@ -1277,6 +1277,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, <:An
 end
 
 loading_extension::Bool = false
+precompiling_extension::Bool = false
 function run_extension_callbacks(extid::ExtensionId)
     assert_havelock(require_lock)
     succeeded = try
@@ -2179,7 +2180,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     write(io.in, """
         empty!(Base.EXT_DORMITORY) # If we have a custom sysimage with `EXT_DORMITORY` prepopulated
-        Base.loading_extension = $(loading_extension)
+        Base.precompiling_extension = $(loading_extension)
         Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $deps, $(repr(source_path(nothing))))
         """)
