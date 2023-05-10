@@ -58,13 +58,13 @@ static void eraseInstruction(Instruction &I,
 //Stolen and modified from LICM.cpp
 static void moveInstructionBefore(Instruction &I, Instruction &Dest,
                                   MemorySSAUpdater &MSSAU,
-                                  ScalarEvolution *SE) {
+                                  ScalarEvolution *SE,
+                                  MemorySSA::InsertionPlace Place = MemorySSA::BeforeTerminator) {
   I.moveBefore(&Dest);
   if (MSSAU.getMemorySSA())
     if (MemoryUseOrDef *OldMemAcc = cast_or_null<MemoryUseOrDef>(
             MSSAU.getMemorySSA()->getMemoryAccess(&I)))
-      MSSAU.moveToPlace(OldMemAcc, Dest.getParent(),
-                         MemorySSA::BeforeTerminator);
+      MSSAU.moveToPlace(OldMemAcc, Dest.getParent(), Place);
   if (SE)
     SE->forgetValue(&I);
 }
@@ -241,7 +241,7 @@ struct JuliaLICM : public JuliaPassContext {
                         continue;
                     }
                     ++SunkPreserveEnd;
-                    moveInstructionBefore(*call, *exit_pts[0], MSSAU, SE);
+                    moveInstructionBefore(*call, *exit_pts[0], MSSAU, SE, MemorySSA::Beginning);
                     LLVM_DEBUG(dbgs() << "Sunk gc_preserve_end: " << *call << "\n");
                     REMARK([&](){
                         return OptimizationRemark(DEBUG_TYPE, "Sunk", call)

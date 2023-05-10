@@ -9073,15 +9073,23 @@ extern "C" void jl_init_llvm(void)
     clopt = llvmopts.lookup("unswitch-threshold");
     if (clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "100", 1);
-    clopt = llvmopts.lookup("enable-unswitch-cost-multiplier");
-    if (clopt->getNumOccurrences() == 0)
-        cl::ProvidePositionalOption(clopt, "false", 1);
 #endif
     // if the patch adding this option has been applied, lower its limit to provide
     // better DAGCombiner performance.
     clopt = llvmopts.lookup("combiner-store-merge-dependence-limit");
     if (clopt && clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "4", 1);
+
+#if JL_LLVM_VERSION >= 150000
+    clopt = llvmopts.lookup("opaque-pointers");
+    if (clopt && clopt->getNumOccurrences() == 0) {
+#ifdef JL_LLVM_OPAQUE_POINTERS
+        cl::ProvidePositionalOption(clopt, "true", 1);
+#else
+        cl::ProvidePositionalOption(clopt, "false", 1);
+#endif
+    }
+#endif
 
     jl_ExecutionEngine = new JuliaOJIT();
 
@@ -9158,7 +9166,9 @@ extern "C" JL_DLLEXPORT_CODEGEN void jl_init_codegen_impl(void)
 extern "C" JL_DLLEXPORT_CODEGEN void jl_teardown_codegen_impl() JL_NOTSAFEPOINT
 {
     // output LLVM timings and statistics
-    jl_ExecutionEngine->printTimers();
+    // Guard against exits before we have initialized the ExecutionEngine
+    if (jl_ExecutionEngine)
+        jl_ExecutionEngine->printTimers();
     PrintStatistics();
 }
 
