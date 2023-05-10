@@ -52,11 +52,8 @@
 #if defined(_CPU_AARCH64_) || defined(JL_FORCE_JITLINK) || JL_LLVM_VERSION >= 150000 && defined(HAS_SANITIZER)
 # define JL_USE_JITLINK
 #else
-# if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
-#  define JL_USE_JITLINK
-# endif
-# if defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
-#  if JL_LLVM_VERSION < 150000
+# if defined(_CPU_AARCH64_)
+#  if defined(_OS_LINUX_) && JL_LLVM_VERSION < 150000
 #   pragma message("On aarch64-gnu-linux, LLVM version >= 15 is required for JITLink; fallback suffers from occasional segfaults")
 #  endif
 #  define JL_USE_JITLINK
