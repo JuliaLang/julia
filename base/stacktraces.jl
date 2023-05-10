@@ -477,8 +477,29 @@ end
 """
     is_missing_file_debug_info(frame::StackFrame)
 
-Return whether the frame is missing file-level debug information.
+Return whether the `frame` is missing file-level debug information.
 """
 is_missing_file_debug_info(frame::StackFrame) = frame.line == -1
+
+"""
+    is_from_internal_code(frame::StackFrame)
+
+Return whether the `frame` originates from "internal" code, which includes
+Base, Core, Stdlibs, and `add`ed packages.
+"""
+is_from_internal_code(frame::StackFrame) =
+    is_julia_internal(frame) ||
+    is_in_julia_stdlib(frame) ||
+    is_in_julia_packages(frame)
+
+"""
+    is_from_internal_code(frame::StackFrame)
+
+Return whether the `frame` originates from "user" code, which includes
+anything not otherwise deemed "internal", including code on the REPL
+and `develop`ed packages.
+"""
+is_from_user_code(frame::StackFrame) =
+    !is_from_internal_code(frame)
 
 end
