@@ -452,7 +452,7 @@ is_julia_internal(frame::StackFrame) =
     is_julia_debug_included(frame::StackFrame)
 
 Return whether the `frame` is from a module or file that has specifically been
-included using `ENV[JULIA_DEBUG]`.
+included using `ENV["JULIA_DEBUG"]`.
 """
 function is_julia_debug_included(frame::StackFrame)
     debug_entries = split(get(ENV, "JULIA_DEBUG", ""), ",")
@@ -465,7 +465,7 @@ end
     is_julia_debug_excluded(frame::StackFrame)
 
 Return whether the `frame` is from a module or file that has specifically been
-excluded using `ENV[JULIA_DEBUG]`.
+excluded using `ENV["JULIA_DEBUG"]`.
 """
 function is_julia_debug_excluded(frame::StackFrame)
     debug_entries = split(get(ENV, "JULIA_DEBUG", ""), ",")
