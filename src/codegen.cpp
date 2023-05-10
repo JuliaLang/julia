@@ -9073,9 +9073,6 @@ extern "C" void jl_init_llvm(void)
     clopt = llvmopts.lookup("unswitch-threshold");
     if (clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "100", 1);
-    clopt = llvmopts.lookup("enable-unswitch-cost-multiplier");
-    if (clopt->getNumOccurrences() == 0)
-        cl::ProvidePositionalOption(clopt, "false", 1);
 #endif
     // if the patch adding this option has been applied, lower its limit to provide
     // better DAGCombiner performance.

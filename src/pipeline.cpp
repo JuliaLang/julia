@@ -385,7 +385,7 @@ static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimizat
 #endif
             LPM2.addPass(LICMPass(LICMOptions()));
             JULIA_PASS(LPM2.addPass(JuliaLICMPass()));
-            LPM2.addPass(SimpleLoopUnswitchPass(false, true));
+            LPM2.addPass(SimpleLoopUnswitchPass(/*NonTrivial*/true, true));
             LPM2.addPass(LICMPass(LICMOptions()));
             JULIA_PASS(LPM2.addPass(JuliaLICMPass()));
             //LICM needs MemorySSA now, so we must use it
