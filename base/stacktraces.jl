@@ -474,4 +474,11 @@ function is_julia_debug_excluded(frame::StackFrame)
         first(splitext(basename(frame.file))) ∈ debug_exclude
 end
 
+"""
+    is_missing_debug_info(frame::StackFrame)
+
+Return whether the frame is missing file-level debug information.
+"""
+is_from_sysimg(frame::StackFrame) = frame.line == -1
+
 end
