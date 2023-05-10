@@ -1777,19 +1777,27 @@ STATIC_INLINE uintptr_t gc_read_stack(void *_addr, uintptr_t offset,
     return *(uintptr_t*)real_addr;
 }
 
-JL_NORETURN NOINLINE void assert_validity_of_new_obj(jl_value_t* parent, jl_value_t* obj) {
+NOINLINE void assert_validity_of_new_obj(jl_value_t* parent, jl_value_t* obj) {
     jl_taggedvalue_t *o = jl_astaggedvalue(obj);
     uintptr_t vtag = o->header & ~(uintptr_t)0xf;
     jl_datatype_t *vt = (jl_datatype_t *)vtag;
     //jl_datatype_t* vt = (jl_datatype_t*) jl_typeof(obj);
     jl_datatype_t* parent_typ = (jl_datatype_t*) jl_typeof(parent);
 
-
-    // jl_safe_printf("Enqueuing object:\n");
-    // jl_(vt);
-
-    //if (__unlikely(!jl_is_datatype(vt) || vt->smalltag)) {
-    if (__unlikely(!jl_is_datatype(vt))) {
+    if (vtag == (jl_datatype_tag << 4) ||
+        vtag == (jl_unionall_tag << 4) ||
+        vtag == (jl_uniontype_tag << 4) ||
+        vtag == (jl_tvar_tag << 4) ||
+        vtag == (jl_vararg_tag << 4)) {
+        // Skip, since these wouldn't hit the object assert anyway
+        return;
+    }
+    else if (vtag < jl_max_tags << 4) {
+        // Skip, since these wouldn't hit the object assert anyway
+        return;
+    }
+    if (__unlikely(!jl_is_datatype(vt) || vt->smalltag)) {
+    // if (__unlikely(!jl_is_datatype(vt))) {
         jl_safe_printf("GC error (probable corruption) while enqueing:\n");
         jl_gc_debug_print_status();
         jl_safe_printf("Parent %p,", (void*)parent);
