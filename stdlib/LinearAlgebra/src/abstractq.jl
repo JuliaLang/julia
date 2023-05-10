@@ -44,7 +44,7 @@ convert(::Type{T}, Q::AbstractQ) where {T<:AbstractArray} = T(Q)
 # legacy
 @deprecate(convert(::Type{AbstractMatrix{T}}, Q::AbstractQ) where {T},
     convert(LinearAlgebra.AbstractQ{T}, Q))
-@deprecate(collect(Q::AbstractQ), Q*I)
+@deprecate(collect(Q::AbstractQ), copyto!(Matrix{eltype(Q)}(undef, size(Q)), Q))
 
 function size(Q::AbstractQ, dim::Integer)
     if dim < 1
