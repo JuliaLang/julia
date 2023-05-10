@@ -182,6 +182,7 @@ JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
         X(CODEGEN_LLVM) \
         X(CODEGEN_Codeinst) \
         X(CODEGEN_Workqueue) \
+        X(LOAD_Require)               \
         X(LOAD_Sysimg) \
         X(LOAD_Pkgimg) \
         X(LOAD_Processor) \
