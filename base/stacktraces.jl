@@ -399,4 +399,79 @@ function from(frame::StackFrame, m::Module)
     return parentmodule(frame) === m
 end
 
+
+"""
+    is_from_repl(frame::StackFrame)
+
+Return whether the `frame` was defined on the REPL.
+
+All code defined on the REPL starts with "./REPL", ".\\REPL", or "REPL".
+"""
+is_from_repl(path) = startswith(path, r"(.[/\\])?REPL")
+
+"""
+    is_in_julia_dev(frame::StackFrame)
+
+Return whether the `frame` is from a package that is being `develop`ed while located
+in a `DEPOT_PATH` `dev` directory.
+"""
+is_in_julia_dev(frame::StackFrame) =
+    any(x -> startswith(contractuser(frame.file), joinpath(contractuser(x), "dev")), DEPOT_PATH)
+
+"""
+    is_in_julia_packages(frame::StackFrame)
+
+Return whether the `frame` is from a package that has been `add`ed in a `DEPOT_PATH`
+`packages` directory.
+"""
+is_in_julia_packages(frame::StackFrame) =
+    any(x -> startswith(contractuser(frame.file), joinpath(contractuser(x), "packages")), DEPOT_PATH)
+
+"""
+    is_from_julia_stdlib(frame::StackFrame)
+
+Return whether the `frame` is from code in a Julia standard library.
+
+All frame paths from the standard library contain "/julia/stdlib/" or "\\julia\\stdlib\\".
+"""
+is_in_julia_stdlib(frame::StackFrame) =
+    contains(frame.file, r"[/\\]julia[/\\]stdlib[/\\]")
+
+"""
+    is_julia_internal(frame::StackFrame)
+
+Return whether the `frame` is from Julia Base.
+
+All frame paths that start with "./" or ".\\" are from Base, except for those
+from the REPL.
+"""
+is_julia_internal(frame::StackFrame) =
+    startswith(frame.file, r".[/\\]") && !is_from_repl(frame)
+
+"""
+    is_julia_debug_included(frame::StackFrame)
+
+Return whether the `frame` is from a module or file that has specifically been
+included using `ENV[JULIA_DEBUG]`.
+"""
+function is_julia_debug_included(frame::StackFrame)
+    debug_entries = split(get(ENV, "JULIA_DEBUG", ""), ",")
+    debug_include = filter(x -> !startswith(x, "!"), debug_entries)
+    return string(Base.parentmodule(frame)) ∈ debug_include ||
+        first(splitext(basename(frame.file))) ∈ debug_include
+end
+
+"""
+    is_julia_debug_excluded(frame::StackFrame)
+
+Return whether the `frame` is from a module or file that has specifically been
+excluded using `ENV[JULIA_DEBUG]`.
+"""
+function is_julia_debug_excluded(frame::StackFrame)
+    debug_entries = split(get(ENV, "JULIA_DEBUG", ""), ",")
+    debug_exclude = lstrip.(filter!(x -> startswith(x, "!"), debug_entries), '!')
+    return string(Base.parentmodule(frame)) ∈ debug_exclude ||
+        first(splitext(basename(frame.file))) ∈ debug_exclude
+end
+
 end
