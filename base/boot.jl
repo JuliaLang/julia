@@ -263,8 +263,6 @@ convert(::Type{T}, x::T) where {T} = x
 cconvert(::Type{T}, x) where {T} = convert(T, x)
 unsafe_convert(::Type{T}, x::T) where {T} = x
 
-const Vararg = ccall(:jl_wrap_vararg, Any, (Int, Int), 0, 0)
-
 # dispatch token indicating a kwarg (keyword sorter) call
 function kwcall end
 # deprecated internal functions:

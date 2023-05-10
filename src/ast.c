@@ -1259,8 +1259,8 @@ JL_DLLEXPORT jl_value_t *jl_expand_stmt(jl_value_t *expr, jl_module_t *inmodule)
 // Internal C entry point to parser
 // `text` is passed as a pointer to allow raw non-String buffers to be used
 // without copying.
-JL_DLLEXPORT jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
-                                  size_t lineno, size_t offset, jl_value_t *options)
+jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
+                     size_t lineno, size_t offset, jl_value_t *options)
 {
     jl_value_t *core_parse = NULL;
     if (jl_core_module) {

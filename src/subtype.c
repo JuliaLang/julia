@@ -1646,11 +1646,12 @@ static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, in
 static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
 {
     e->vars = NULL;
-    assert(env != NULL || envsz == 0);
     e->envsz = envsz;
     e->envout = env;
-    if (envsz)
+    if (envsz) {
+        assert(env != NULL);
         memset(env, 0, envsz*sizeof(void*));
+    }
     e->envidx = 0;
     e->invdepth = 0;
     e->ignore_free = 0;

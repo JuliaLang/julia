@@ -450,6 +450,7 @@ JL_DLLEXPORT jl_value_t *jl_rettype_inferred(jl_method_instance_t *mi, size_t mi
     }
     return (jl_value_t*)jl_nothing;
 }
+JL_DLLEXPORT jl_value_t *(*const jl_rettype_inferred_addr)(jl_method_instance_t *mi, size_t min_world, size_t max_world) JL_NOTSAFEPOINT = jl_rettype_inferred;
 
 
 JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
@@ -2539,13 +2540,13 @@ jl_value_t *jl_fptr_sparam(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_
     return invoke(f, args, nargs, sparams);
 }
 
-JL_DLLEXPORT jl_callptr_t jl_fptr_args_addr = &jl_fptr_args;
+JL_DLLEXPORT const jl_callptr_t jl_fptr_args_addr = &jl_fptr_args;
 
-JL_DLLEXPORT jl_callptr_t jl_fptr_const_return_addr = &jl_fptr_const_return;
+JL_DLLEXPORT const jl_callptr_t jl_fptr_const_return_addr = &jl_fptr_const_return;
 
-JL_DLLEXPORT jl_callptr_t jl_fptr_sparam_addr = &jl_fptr_sparam;
+JL_DLLEXPORT const jl_callptr_t jl_fptr_sparam_addr = &jl_fptr_sparam;
 
-JL_DLLEXPORT jl_callptr_t jl_f_opaque_closure_call_addr = (jl_callptr_t)&jl_f_opaque_closure_call;
+JL_DLLEXPORT const jl_callptr_t jl_f_opaque_closure_call_addr = (jl_callptr_t)&jl_f_opaque_closure_call;
 
 // Return the index of the invoke api, if known
 JL_DLLEXPORT int32_t jl_invoke_api(jl_code_instance_t *codeinst)

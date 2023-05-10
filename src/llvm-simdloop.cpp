@@ -343,12 +343,13 @@ static RegisterPass<LowerSIMDLoopLegacy> X("LowerSIMDLoop", "LowerSIMDLoop Pass"
                                      false /* Only looks at CFG */,
                                      false /* Analysis Pass */);
 
-JL_DLLEXPORT Pass *createLowerSimdLoopPass()
+Pass *createLowerSimdLoopPass()
 {
     return new LowerSIMDLoopLegacy();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddLowerSimdLoopPass_impl(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddLowerSimdLoopPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createLowerSimdLoopPass());
 }

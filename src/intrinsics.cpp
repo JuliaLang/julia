@@ -108,8 +108,8 @@ const auto &float_func() {
     return float_funcs.float_func;
 }
 
-extern "C"
-JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION_impl(void)
+extern "C" JL_DLLEXPORT_CODEGEN
+uint32_t jl_get_LLVM_VERSION_impl(void)
 {
     return 10000 * LLVM_VERSION_MAJOR + 100 * LLVM_VERSION_MINOR
 #ifdef LLVM_VERSION_PATCH

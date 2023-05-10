@@ -531,7 +531,8 @@ PreservedAnalyses RemoveJuliaAddrspacesPass::run(Module &M, ModuleAnalysisManage
     return RemoveAddrspacesPass(removeJuliaAddrspaces).run(M, AM);
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddRemoveJuliaAddrspacesPass_impl(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddRemoveJuliaAddrspacesPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createRemoveJuliaAddrspacesPass());
 }

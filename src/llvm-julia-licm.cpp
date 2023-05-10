@@ -424,7 +424,8 @@ Pass *createJuliaLICMPass()
     return new JuliaLICMPassLegacy();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraJuliaLICMPass_impl(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraJuliaLICMPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createJuliaLICMPass());
 }

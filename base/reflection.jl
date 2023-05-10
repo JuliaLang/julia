@@ -1200,7 +1200,7 @@ struct CodegenParams
                    prefer_specsig::Bool=false,
                    gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
                    safepoint_on_entry::Bool=true,
-                   lookup::Ptr{Cvoid}=cglobal(:jl_rettype_inferred),
+                   lookup::Ptr{Cvoid}=unsafe_load(cglobal(:jl_rettype_inferred_addr, Ptr{Cvoid})),
                    generic_context = nothing)
         return new(
             Cint(track_allocations), Cint(code_coverage),

@@ -2354,7 +2354,7 @@ jl_datatype_t *jl_wrap_Type(jl_value_t *t)
     return (jl_datatype_t*)jl_instantiate_unionall(jl_type_type, t);
 }
 
-JL_DLLEXPORT jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n)
+jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n)
 {
     if (n) {
         if (jl_is_typevar(n) || jl_is_uniontype(jl_unwrap_unionall(n))) {
