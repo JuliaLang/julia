@@ -44,6 +44,7 @@ convert(::Type{T}, Q::AbstractQ) where {T<:AbstractArray} = T(Q)
 # legacy
 @deprecate(convert(::Type{AbstractMatrix{T}}, Q::AbstractQ) where {T},
     convert(LinearAlgebra.AbstractQ{T}, Q))
+@deprecate(collect(Q::AbstractQ), Q*I)
 
 function size(Q::AbstractQ, dim::Integer)
     if dim < 1
@@ -165,8 +166,6 @@ function mul!(C::AbstractVecOrMat{T}, Q::AbstractQ{T}, B::Union{AbstractVecOrMat
     end
 end
 mul!(C::AbstractVecOrMat{T}, A::AbstractVecOrMat{T}, Q::AbstractQ{T}) where {T} = rmul!(copyto!(C, A), Q)
-mul!(C::AbstractVecOrMat{T}, adjQ::AdjointQ{T}, B::AbstractVecOrMat{T}) where {T} = lmul!(adjQ, copyto!(C, B))
-mul!(C::AbstractVecOrMat{T}, A::AbstractVecOrMat{T}, adjQ::AdjointQ{T}) where {T} = rmul!(copyto!(C, A), adjQ)
 
 ### division
 \(Q::AbstractQ, A::AbstractVecOrMat) = Q'*A
