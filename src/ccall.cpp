@@ -958,10 +958,8 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     // copy module properties that should always match
     Mod->setTargetTriple(jl_Module->getTargetTriple());
     Mod->setDataLayout(jl_Module->getDataLayout());
-#if JL_LLVM_VERSION >= 130000
     Mod->setStackProtectorGuard(jl_Module->getStackProtectorGuard());
     Mod->setOverrideStackAlignment(jl_Module->getOverrideStackAlignment());
-#endif
 
     // verify the definition
     Function *def = Mod->getFunction(ir_name);
@@ -1097,11 +1095,7 @@ std::string generate_func_sig(const char *fname)
             abi->use_sret(jl_voidpointer_type, LLVMCtx);
         }
         else if (abi->use_sret((jl_datatype_t*)rt, LLVMCtx)) {
-#if JL_LLVM_VERSION >= 140000
             AttrBuilder retattrs(LLVMCtx);
-#else
-            AttrBuilder retattrs;
-#endif
             if (!ctx->TargetTriple.isOSWindows()) {
                 // llvm used to use the old mingw ABI, skipping this marking works around that difference
                 retattrs.addStructRetAttr(lrt);
@@ -1120,11 +1114,7 @@ std::string generate_func_sig(const char *fname)
     }
 
     for (size_t i = 0; i < nccallargs; ++i) {
-#if JL_LLVM_VERSION >= 140000
         AttrBuilder ab(LLVMCtx);
-#else
-        AttrBuilder ab;
-#endif
         jl_value_t *tti = jl_svecref(at, i);
         Type *t = NULL;
         bool isboxed;

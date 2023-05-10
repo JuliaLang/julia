@@ -92,11 +92,7 @@
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/NativeFormatting.h>
 #include <llvm/Support/SourceMgr.h>
-#if JL_LLVM_VERSION >= 140000
 #include <llvm/MC/TargetRegistry.h>
-#else
-#include <llvm/Support/TargetRegistry.h>
-#endif
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -883,16 +879,10 @@ static void jl_dump_asm_internal(
       TheTarget->createMCSubtargetInfo(TheTriple.str(), cpu, features));
     assert(STI && "Unable to create subtarget info!");
 
-#if JL_LLVM_VERSION >= 130000
     MCContext Ctx(TheTriple, MAI.get(), MRI.get(), STI.get(), &SrcMgr);
     std::unique_ptr<MCObjectFileInfo> MOFI(
       TheTarget->createMCObjectFileInfo(Ctx, /*PIC=*/false, /*LargeCodeModel=*/ false));
     Ctx.setObjectFileInfo(MOFI.get());
-#else
-    std::unique_ptr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
-    MCContext Ctx(MAI.get(), MRI.get(), MOFI.get(), &SrcMgr);
-    MOFI->InitMCObjectFileInfo(TheTriple, /* PIC */ false, Ctx);
-#endif
 
     std::unique_ptr<MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI, Ctx));
     if (!DisAsm) {

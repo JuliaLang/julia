@@ -543,12 +543,8 @@ static void clone_function(Function *F, Function *new_f, ValueToValueMapTy &vmap
         vmap[&*J] = &*DestI++;
     }
     SmallVector<ReturnInst*,8> Returns;
-#if JL_LLVM_VERSION >= 130000
     // We are cloning into the same module
     CloneFunctionInto(new_f, F, vmap, CloneFunctionChangeType::GlobalChanges, Returns);
-#else
-    CloneFunctionInto(new_f, F, vmap, true, Returns);
-#endif
 }
 
 static void add_features(Function *F, TargetSpec &spec)
