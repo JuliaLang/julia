@@ -12,9 +12,7 @@
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/ExecutionEngine/Orc/CompileUtils.h>
 #include <llvm/ExecutionEngine/Orc/ExecutionUtils.h>
-#if JL_LLVM_VERSION >= 130000
 #include <llvm/ExecutionEngine/Orc/ExecutorProcessControl.h>
-#endif
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/FormattedStream.h>
@@ -26,11 +24,7 @@
 
 // target machine computation
 #include <llvm/CodeGen/TargetSubtargetInfo.h>
-#if JL_LLVM_VERSION >= 140000
 #include <llvm/MC/TargetRegistry.h>
-#else
-#include <llvm/Support/TargetRegistry.h>
-#endif
 #include <llvm/Target/TargetOptions.h>
 #include <llvm/Support/Host.h>
 #include <llvm/Support/TargetSelect.h>
@@ -44,9 +38,7 @@ using namespace llvm;
 #include "processor.h"
 
 #ifdef JL_USE_JITLINK
-# if JL_LLVM_VERSION >= 140000
-#  include <llvm/ExecutionEngine/Orc/DebuggerSupportPlugin.h>
-# endif
+# include <llvm/ExecutionEngine/Orc/DebuggerSupportPlugin.h>
 # include <llvm/ExecutionEngine/JITLink/EHFrameSupport.h>
 # include <llvm/ExecutionEngine/JITLink/JITLinkMemoryManager.h>
 # if JL_LLVM_VERSION >= 150000
@@ -820,11 +812,7 @@ public:
                 auto SecName = Sec.getName();
 #endif
                 // https://github.com/llvm/llvm-project/commit/118e953b18ff07d00b8f822dfbf2991e41d6d791
-#if JL_LLVM_VERSION >= 140000
                Info.SectionLoadAddresses[SecName] = jitlink::SectionRange(Sec).getStart().getValue();
-#else
-               Info.SectionLoadAddresses[SecName] = jitlink::SectionRange(Sec).getStart();
-#endif
             }
             return Error::success();
         });
@@ -866,9 +854,7 @@ public:
 // TODO: Port our memory management optimisations to JITLink instead of using the
 // default InProcessMemoryManager.
 std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager() {
-#if JL_LLVM_VERSION < 140000
-    return std::make_unique<jitlink::InProcessMemoryManager>();
-#elif JL_LLVM_VERSION < 150000
+#if JL_LLVM_VERSION < 150000
     return cantFail(jitlink::InProcessMemoryManager::Create());
 #else
     return cantFail(orc::MapperJITLinkMemoryManager::CreateWithMapper<orc::InProcessMemoryMapper>());
@@ -878,17 +864,11 @@ std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager() {
 
 # ifdef LLVM_SHLIB
 
-#  if JL_LLVM_VERSION >= 140000
-#   define EHFRAME_RANGE(name) orc::ExecutorAddrRange name
-#   define UNPACK_EHFRAME_RANGE(name) \
+# define EHFRAME_RANGE(name) orc::ExecutorAddrRange name
+# define UNPACK_EHFRAME_RANGE(name) \
         name.Start.toPtr<uint8_t *>(), \
         static_cast<size_t>(name.size())
-#  else
-#   define EHFRAME_RANGE(name) JITTargetAddress name##Addr, size_t name##Size
-#   define UNPACK_EHFRAME_RANGE(name) \
-        jitTargetAddressToPointer<uint8_t *>(name##Addr), \
-        name##Size
-#  endif
+
 
 class JLEHFrameRegistrar final : public jitlink::EHFrameRegistrar {
 public:
@@ -1022,19 +1002,6 @@ namespace {
             TheTriple.setObjectFormat(Triple::ELF);
         }
         //options.PrintMachineCode = true; //Print machine code produced during JIT compiling
-#if JL_LLVM_VERSION < 130000
-        if (TheTriple.isOSWindows() && TheTriple.getArch() == Triple::x86) {
-            // tell Win32 to assume the stack is always 16-byte aligned,
-            // and to ensure that it is 16-byte aligned for out-going calls,
-            // to ensure compatibility with GCC codes
-            // In LLVM 13 and onwards this has turned into a module option
-            options.StackAlignmentOverride = 16;
-        }
-#endif
-#if defined(JL_DEBUG_BUILD) && JL_LLVM_VERSION < 130000
-        // LLVM defaults to tls stack guard, which causes issues with Julia's tls implementation
-        options.StackProtectorGuard = StackProtectorGuards::Global;
-#endif
 #if defined(MSAN_EMUTLS_WORKAROUND)
         options.EmulatedTLS = true;
         options.ExplicitEmulatedTLS = true;
@@ -1300,11 +1267,7 @@ int64_t ___asan_globals_registered;
 JuliaOJIT::JuliaOJIT()
   : TM(createTargetMachine()),
     DL(jl_create_datalayout(*TM)),
-#if JL_LLVM_VERSION >= 130000
     ES(cantFail(orc::SelfExecutorProcessControl::Create())),
-#else
-    ES(),
-#endif
     GlobalJD(ES.createBareJITDylib("JuliaGlobals")),
     JD(ES.createBareJITDylib("JuliaOJIT")),
     ContextPool([](){
@@ -1568,10 +1531,6 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
 
 
 #ifdef JL_USE_JITLINK
-# if JL_LLVM_VERSION < 140000
-#  pragma message("JIT debugging (GDB integration) not available on LLVM < 14.0 (for JITLink)")
-void JuliaOJIT::enableJITDebuggingSupport() {}
-# else
 extern "C" orc::shared::CWrapperFunctionResult
 llvm_orc_registerJITLoaderGDBAllocAction(const char *Data, size_t Size);
 
@@ -1585,7 +1544,6 @@ void JuliaOJIT::enableJITDebuggingSupport()
     const auto Addr = ExecutorAddr::fromPtr(&llvm_orc_registerJITLoaderGDBAllocAction);
     ObjectLayer.addPlugin(std::make_unique<orc::GDBJITDebugInfoRegistrationPlugin>(Addr));
 }
-# endif
 #else
 void JuliaOJIT::enableJITDebuggingSupport()
 {
