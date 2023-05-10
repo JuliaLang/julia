@@ -171,6 +171,16 @@ function eigen!(A::AbstractMatrix{T}, B::RealHermSymComplexHerm{T,S}; sortby::Un
     return eigen!(A, Matrix{T}(B); sortby) ;
 end
 
+function eigen!(A::StridedMatrix{T}, C::Cholesky{T, StridedMatrix{T}}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
+    return _choleigen!(A, C.U, sortby)
+end
+
+function _choleigen!(A, U, sortby)
+    vals, w = eigen!(UtiAUi!(A, U))
+    vecs = U \ w
+    GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
+end
+
 # Perform U' \ A / U in-place, where U::Union{UpperTriangular,Diagonal}
 UtiAUi!(A::StridedMatrix, U) = _UtiAUi!(A, U)
 UtiAUi!(A::Symmetric, U) = Symmetric(_UtiAUi!(copytri!(parent(A), A.uplo), U), sym_uplo(A.uplo))
