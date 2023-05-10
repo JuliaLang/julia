@@ -493,7 +493,7 @@ is_from_internal_code(frame::StackFrame) =
     is_in_julia_packages(frame)
 
 """
-    is_from_internal_code(frame::StackFrame)
+    is_from_user_code(frame::StackFrame)
 
 Return whether the `frame` originates from "user" code, which includes
 anything not otherwise deemed "internal", including code on the REPL
