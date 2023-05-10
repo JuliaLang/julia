@@ -407,7 +407,7 @@ Return whether the `frame` was defined on the REPL.
 
 All code defined on the REPL starts with "./REPL", ".\\REPL", or "REPL".
 """
-is_from_repl(path) = startswith(path, r"(.[/\\])?REPL")
+is_from_repl(path) = startswith(path, r"(.[/\\])?REPL\[")
 
 """
     is_in_julia_dev(frame::StackFrame)
