@@ -942,9 +942,11 @@ end
 
 ## from general iterable to any array
 
+function copyto! end
+
 # This is `Experimental.@max_methods 1 function copyto! end`, which is not
 # defined at this point in bootstrap.
-typeof(function copyto! end).name.max_methods = UInt8(1)
+typeof(copyto!).name.max_methods = UInt8(1)
 
 function copyto!(dest::AbstractArray, src)
     destiter = eachindex(dest)
