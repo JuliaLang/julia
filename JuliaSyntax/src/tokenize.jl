@@ -2,7 +2,7 @@ module Tokenize
 
 export tokenize, untokenize, Tokens
 
-using ..JuliaSyntax: Kind, @K_str
+using ..JuliaSyntax: JuliaSyntax, Kind, @K_str
 
 import ..JuliaSyntax: kind,
     is_literal, is_error, is_contextual_keyword, is_word_operator
@@ -370,7 +370,7 @@ function _next_token(l::Lexer, c)
         return lex_identifier(l, c)
     elseif isdigit(c)
         return lex_digit(l, K"Integer")
-    elseif (k = get(UNICODE_OPS, c, K"error")) != K"error"
+    elseif (k = get(_unicode_ops, c, K"error")) != K"error"
         return emit(l, k)
     else
         emit_error(l, K"ErrorUnknownCharacter")
@@ -416,6 +416,7 @@ function lex_string_chunk(l)
             !(pc == EOF_CHAR || is_operator_start_char(pc) || is_never_id_char(pc))
         # Only allow certain characters after interpolated vars
         # https://github.com/JuliaLang/julia/pull/25234
+        readchar(l)
         return emit_error(l, K"ErrorInvalidInterpolationTerminator")
     end
     if pc == EOF_CHAR
@@ -771,7 +772,7 @@ function lex_digit(l::Lexer, kind)
             # If we enter the function with kind == K"Float" then a '.' has been parsed.
             readchar(l)
             return emit_error(l, K"ErrorInvalidNumericConstant")
-        elseif is_operator_start_char(ppc) && ppc !== ':'
+        elseif is_dottable_operator_start_char(ppc)
             readchar(l)
             return emit_error(l, K"ErrorAmbiguousNumericConstant") # `1.+`
         end
@@ -787,14 +788,14 @@ function lex_digit(l::Lexer, kind)
             accept(l, "+-−")
             if accept_batch(l, isdigit)
                 pc,ppc = dpeekchar(l)
-                if pc === '.' && !dotop2(ppc)
+                if pc === '.' && !is_dottable_operator_start_char(ppc)
                     readchar(l)
                     return emit_error(l, K"ErrorInvalidNumericConstant") # `1.e1.`
                 end
             else
                 return emit_error(l, K"ErrorInvalidNumericConstant") # `1.e`
             end
-        elseif pc == '.' && ppc != '.' && !is_operator_start_char(ppc)
+        elseif pc == '.' && ppc != '.' && !is_dottable_operator_start_char(ppc)
             readchar(l)
             return emit_error(l, K"ErrorInvalidNumericConstant") # `1.1.`
         elseif !had_fraction_digs && (is_identifier_start_char(pc) ||
@@ -808,7 +809,7 @@ function lex_digit(l::Lexer, kind)
         accept(l, "+-−")
         if accept_batch(l, isdigit)
             pc,ppc = dpeekchar(l)
-            if pc === '.' && !dotop2(ppc)
+            if pc === '.' && !is_dottable_operator_start_char(ppc)
                 accept(l, '.')
                 return emit_error(l, K"ErrorInvalidNumericConstant") # `1e1.`
             end
@@ -948,7 +949,7 @@ function lex_dot(l::Lexer)
         if accept(l, '.')
             return emit(l, K"...")
         else
-            if dotop2(peekchar(l))
+            if is_dottable_operator_start_char(peekchar(l))
                 readchar(l)
                 return emit_error(l, K"ErrorInvalidOperator")
             else
@@ -959,10 +960,7 @@ function lex_dot(l::Lexer)
         return lex_digit(l, K"Float")
     else
         pc, dpc = dpeekchar(l)
-        if dotop1(pc)
-            l.dotop = true
-            return _next_token(l, readchar(l))
-        elseif pc =='+'
+        if pc == '+'
             l.dotop = true
             readchar(l)
             return lex_plus(l)
@@ -1040,6 +1038,9 @@ function lex_dot(l::Lexer)
             l.dotop = true
             readchar(l)
             return lex_equal(l)
+        elseif is_dottable_operator_start_char(pc)
+            l.dotop = true
+            return _next_token(l, readchar(l))
         end
         return emit(l, K".")
     end
