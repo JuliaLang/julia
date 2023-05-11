@@ -44,6 +44,7 @@ New library features
 * `binomial(x, k)` now supports non-integer `x` ([#48124]).
 * A `CartesianIndex` is now treated as a "scalar" for broadcasting ([#47044]).
 * `printstyled` now supports italic output ([#45164]).
+* `parent` and `parentindices` support `SubString`s
 
 Standard library changes
 ------------------------

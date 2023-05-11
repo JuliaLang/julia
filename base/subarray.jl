@@ -81,7 +81,7 @@ parentindices(V::SubArray) = V.indices
 """
     parentindices(A)
 
-Return the indices in the [`parent`](@ref) which correspond to the array view `A`.
+Return the indices in the [`parent`](@ref) which correspond to the view `A`.
 
 # Examples
 ```jldoctest
@@ -96,6 +96,8 @@ julia> parentindices(V)
 (1, Base.Slice(Base.OneTo(2)))
 ```
 """
+function parentindices end
+
 parentindices(a::AbstractArray) = map(oneto, size(a))
 
 ## Aliasing detection
