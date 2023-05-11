@@ -89,6 +89,7 @@ extern uint32_t jl_timing_print_limit;
 #include "julia_assert.h"
 #ifdef USE_TRACY
 #include "tracy/TracyC.h"
+typedef struct ___tracy_source_location_data TracySrcLocData;
 #endif
 
 #ifdef USE_ITTAPI
@@ -244,10 +245,10 @@ enum jl_timing_events {
  **/
 
 #ifdef USE_TRACY
-#define _TRACY_CTX_MEMBER TracyCZoneCtx *tracy_ctx;
+#define _TRACY_CTX_MEMBER TracyCZoneCtx tracy_ctx;
 #define _TRACY_CTOR(context, name, enable) TracyCZoneN(__tracy_ctx, name, (enable)); \
-                                           (context) = &__tracy_ctx
-#define _TRACY_DESTROY(ctx) TracyCZoneEnd(*ctx)
+                                           (context) = __tracy_ctx
+#define _TRACY_DESTROY(ctx) TracyCZoneEnd(ctx)
 #else
 #define _TRACY_CTX_MEMBER
 #define _TRACY_CTOR(context, name, enable)
