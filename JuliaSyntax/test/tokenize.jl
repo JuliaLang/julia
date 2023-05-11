@@ -762,10 +762,9 @@ end
 end
 
 @testset "dotted and suffixed operators" begin
-ops = collect(values(Tokenize.UNICODE_OPS_REVERSE))
 
-for op in ops
-    op in (:isa, :in, :where, Symbol('\''), :?, :(:)) && continue
+for opkind in Tokenize._nondot_symbolic_operator_kinds()
+    op = string(opkind)
     strs = [
         1 => [ # unary
             "$(op)b",
@@ -978,7 +977,7 @@ end
         @test Tokenize.is_identifier_char(c) == false
         @test Tokenize.is_identifier_start_char(c) == false
         @test Tokenize.is_never_id_char(c) == true
-        @test Tokenize.dotop1(c) == false
+        @test Tokenize.is_dottable_operator_start_char(c) == false
         @test Tokenize.isopsuffix(c) == false
         @test Tokenize.is_operator_start_char(c) == false
         @test Tokenize.iswhitespace(c) == false
