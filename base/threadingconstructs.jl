@@ -14,19 +14,13 @@ ID `1`.
 julia> Threads.threadid()
 1
 
-julia> Threads.@threads for i in 1:10
+julia> Threads.@threads for i in 1:4
           println(Threads.threadid())
        end
 4
 2
 5
 4
-5
-2
-3
-3
-1
-2
 ```
 """
 threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
@@ -377,17 +371,11 @@ the variable's value in the current task.
 ```julia-repl
 julia> t() = println("Hello from ", Threads.threadid());
 
-julia> tasks = fetch.([Threads.@spawn t() for i in 1:10]);
-Hello from 1
+julia> tasks = fetch.([Threads.@spawn t() for i in 1:4]);
 Hello from 1
 Hello from 1
 Hello from 3
 Hello from 4
-Hello from 1
-Hello from 5
-Hello from 1
-Hello from 2
-Hello from 1
 ```
 """
 macro spawn(args...)
