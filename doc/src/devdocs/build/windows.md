@@ -100,7 +100,7 @@ MinGW-w64 compilers available through Cygwin's package manager.
     ```sh
     usr/bin/julia.exe
     usr/bin/julia-debug.exe
-    ```       
+    ```
 
 !!! note "Pro tip: build both!"
     ```sh
@@ -143,7 +143,7 @@ Note: MSYS2 requires **64 bit** Windows 7 or newer.
         ```
         pacman -S cmake diffutils git m4 make patch tar p7zip curl python
         ```
-        
+
         For 64 bit Julia, install the x86_64 version:
 
         ```
@@ -201,7 +201,7 @@ interfere with this method if using WSL.
 apt-get install wine-stable gcc wget p7zip-full winbind mingw-w64 gfortran-mingw-w64
 dpkg --add-architecture i386 && apt-get update && apt-get install wine32 # add sudo to each if needed
 # switch all of the following to their "-posix" variants (interactively):
-for pkg in i686-w64-mingw32-g++ i686-w64-mingw32-gcc i686-w64-mingw32-gfortran x86_64-w64-mingw32-g++ x86_64-w64-mingw32-gcc x86_64-w64-mingw32-gfortran; do 
+for pkg in i686-w64-mingw32-g++ i686-w64-mingw32-gcc i686-w64-mingw32-gfortran x86_64-w64-mingw32-g++ x86_64-w64-mingw32-gcc x86_64-w64-mingw32-gfortran; do
     sudo update-alternatives --config $pkg
 done
 ```
