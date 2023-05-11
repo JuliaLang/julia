@@ -219,7 +219,7 @@ JL_DLLEXPORT void jl_timing_show(jl_value_t *v, jl_timing_block_t *cur_block)
     if (buf.size == buf.maxsize)
         memset(&buf.buf[IOS_INLSIZE - 3], '.', 3);
 
-    TracyCZoneText(*(cur_block->tracy_ctx), buf.buf, buf.size);
+    TracyCZoneText(cur_block->tracy_ctx, buf.buf, buf.size);
 #endif
 }
 
@@ -229,7 +229,7 @@ JL_DLLEXPORT void jl_timing_show_module(jl_module_t *m, jl_timing_block_t *cur_b
     jl_module_t *root = jl_module_root(m);
     if (root == m || root == jl_main_module) {
         const char *module_name = jl_symbol_name(m->name);
-        TracyCZoneText(*(cur_block->tracy_ctx), module_name, strlen(module_name));
+        TracyCZoneText(cur_block->tracy_ctx, module_name, strlen(module_name));
     } else {
         jl_timing_printf(cur_block, "%s.%s", jl_symbol_name(root->name), jl_symbol_name(m->name));
     }
@@ -240,7 +240,7 @@ JL_DLLEXPORT void jl_timing_show_filename(const char *path, jl_timing_block_t *c
 {
 #ifdef USE_TRACY
     const char *filename = gnu_basename(path);
-    TracyCZoneText(*(cur_block->tracy_ctx), filename, strlen(filename));
+    TracyCZoneText(cur_block->tracy_ctx, filename, strlen(filename));
 #endif
 }
 
@@ -275,7 +275,7 @@ JL_DLLEXPORT void jl_timing_show_func_sig(jl_value_t *v, jl_timing_block_t *cur_
     if (buf.size == buf.maxsize)
         memset(&buf.buf[IOS_INLSIZE - 3], '.', 3);
 
-    TracyCZoneText(*(cur_block->tracy_ctx), buf.buf, buf.size);
+    TracyCZoneText(cur_block->tracy_ctx, buf.buf, buf.size);
 #endif
 }
 
@@ -293,7 +293,7 @@ JL_DLLEXPORT void jl_timing_printf(jl_timing_block_t *cur_block, const char *for
     if (buf.size == buf.maxsize)
         memset(&buf.buf[IOS_INLSIZE - 3], '.', 3);
 
-    TracyCZoneText(*(cur_block->tracy_ctx), buf.buf, buf.size);
+    TracyCZoneText(cur_block->tracy_ctx, buf.buf, buf.size);
 #endif
     va_end(args);
 }
@@ -301,7 +301,7 @@ JL_DLLEXPORT void jl_timing_printf(jl_timing_block_t *cur_block, const char *for
 JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str)
 {
 #ifdef USE_TRACY
-    TracyCZoneText(*(cur_block->tracy_ctx), str, strlen(str));
+    TracyCZoneText(cur_block->tracy_ctx, str, strlen(str));
 #endif
 }
 
@@ -367,14 +367,14 @@ static int32_t get_srcloc(const char *zone, int event, const char *function, con
     small_arraylist_t *srclocs = &jl_timing_srclocs[event];
     // We anticipate the number of source locations to be small for a given event/zone, so we just do a linear search
     for (int32_t i = 0; i < srclocs->len; i++) {
-        __tracy_source_location_data *srcloc = (__tracy_source_location_data*)srclocs->items[i];
+        TracySrcLocData *srcloc = (TracySrcLocData*)srclocs->items[i];
         // The strings are interned so we can just do pointer comparisons
         if (srcloc->name == zone && srcloc->function == function && srcloc->file == file && srcloc->line == line && srcloc->color == color) {
             JL_UNLOCK(&jl_timing_srclocs_lock[event]);
             return i;
         }
     }
-    __tracy_source_location_data *srcloc = (__tracy_source_location_data*) malloc(sizeof(__tracy_source_location_data));
+    TracySrcLocData *srcloc = (TracySrcLocData*) malloc(sizeof(TracySrcLocData));
     srcloc->name = zone;
     srcloc->function = function;
     srcloc->file = file;
@@ -405,7 +405,7 @@ JL_DLLEXPORT uint64_t jl_timing_get_zone(const char *zonename, const char *funct
     }
 
 #ifdef USE_TRACY
-    return ((uint32_t) *maybe_event) | (get_srcloc(zonename, *maybe_event, function, file, line, color) << 32);
+    return ((uint32_t) *maybe_event) | (((uint64_t)get_srcloc(zonename, *maybe_event, function, file, line, color)) << 32);
 #else
     return ((uint32_t) *maybe_event) | 0;
 #endif
@@ -419,7 +419,7 @@ JL_DLLEXPORT void *jl_timing_begin_zone(uint64_t event_srcloc) {
 #ifdef USE_TRACY
     int srcloc = event_srcloc >> 32;
     JL_LOCK(&jl_timing_srclocs_lock[event]);
-    __tracy_source_location_data *srcloc_data = (__tracy_source_location_data*)jl_timing_srclocs[event].items[srcloc];
+    TracySrcLocData *srcloc_data = (TracySrcLocData*)jl_timing_srclocs[event].items[srcloc];
     JL_UNLOCK(&jl_timing_srclocs_lock[event]);
     block->tracy_ctx = ___tracy_emit_zone_begin(srcloc_data, _jl_timing_enabled(owner));
 #endif
