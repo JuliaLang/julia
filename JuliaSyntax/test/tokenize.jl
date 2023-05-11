@@ -871,11 +871,16 @@ end
         raw"^ ↑ ↓ ⇵ ⟰ ⟱ ⤈ ⤉ ⤊ ⤋ ⤒ ⤓ ⥉ ⥌ ⥍ ⥏ ⥑ ⥔ ⥕ ⥘ ⥙ ⥜ ⥝ ⥠ ⥡ ⥣ ⥥ ⥮ ⥯ ￪ ￬"
         raw"::"
         raw"."
-        "⫪ ⫫"
-        "\u00b7 \u0387"
     ]
     if VERSION >= v"1.6.0"
         push!(ops, raw"<-- <-->")
+    end
+    if VERSION >= v"1.7.0"
+        append!(ops, [
+            "−"
+            "\u00b7 \u0387"
+            "⫪ ⫫"
+        ])
     end
     allops = split(join(ops, " "), " ")
     @test all(s->Base.isoperator(Symbol(s)) == is_operator(first(collect(tokenize(s))).kind), allops)
