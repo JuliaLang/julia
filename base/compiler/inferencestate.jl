@@ -860,3 +860,7 @@ should_infer_this_call(::AbstractInterpreter, ::IRInterpretationState) = true
 
 add_remark!(::AbstractInterpreter, ::InferenceState, remark) = return
 add_remark!(::AbstractInterpreter, ::IRInterpretationState, remark) = return
+
+is_call_argument(@nospecialize(x), sv::InferenceState) =
+    isa(x, SlotNumber) && slot_id(x) ≤ narguments(sv)
+is_call_argument(@nospecialize(x), sv::IRInterpretationState) = isa(x, Argument)

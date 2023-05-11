@@ -50,9 +50,19 @@ _topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
 
 function istopfunction(@nospecialize(f), name::Symbol)
     tn = typeof(f).name
-    if tn.mt.name === name
+    mn = tn.mt.name
+    if mn === name
         top = _topmod(tn.module)
         return isdefined(top, name) && isconst(top, name) && f === getglobal(top, name)
+    end
+    return false
+end
+
+function istoptype(@nospecialize(T), name::Symbol)
+    t = unwrap_unionall(T)
+    if isa(t, DataType) && t.name.name === name
+        top = _topmod(t.name.module)
+        return isdefined(top, name) && isconst(top, name) && T === getglobal(top, name)
     end
     return false
 end

@@ -61,7 +61,8 @@ is_source_inferred(@nospecialize src::MaybeCompressed) =
 struct InlineabilityInfo
     rt
     mi::MethodInstance
-    InlineabilityInfo(@nospecialize(rt), mi::MethodInstance) = new(rt, mi)
+    boost::Bool
+    InlineabilityInfo(@nospecialize(rt), mi::MethodInstance, boost::Bool=false) = new(rt, mi, boost)
 end
 
 """
@@ -80,7 +81,7 @@ function is_inlineable(interp::AbstractInterpreter, @nospecialize(src::MaybeComp
     params = OptimizationParams(interp)
     cost_threshold = default = params.inline_cost_threshold
     # if the method is declared as `@inline`, increase the cost threshold 20x
-    if is_declared_inline(src)
+    if is_declared_inline(src) || ibinfo.boost
         cost_threshold += 19*default
     end
     if ibinfo !== nothing
@@ -110,9 +111,10 @@ struct InliningInfo
     argtypes::Vector{Any}
     info::CallInfo
     stmt_flag::UInt8
+    boost::Bool
     function InliningInfo(@nospecialize(rt), mi::MethodInstance, argtypes::Vector{Any},
-                          @nospecialize(info::CallInfo), stmt_flag::UInt8)
-        return new(rt, mi, argtypes, info, stmt_flag)
+                          @nospecialize(info::CallInfo), stmt_flag::UInt8, boost::Bool=false)
+        return new(rt, mi, argtypes, info, stmt_flag, boost)
     end
 end
 
@@ -125,7 +127,8 @@ inlined by the inlining algorithm, otherwise return `nothing`.
 function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), iinfo::InliningInfo)
     if isa(src, MaybeCompressed)
         if is_source_inferred(src)
-            if is_stmt_inline(iinfo.stmt_flag) || is_inlineable(interp, src, InlineabilityInfo(iinfo.rt, iinfo.mi))
+            if (is_stmt_inline(iinfo.stmt_flag) ||
+                is_inlineable(interp, src, InlineabilityInfo(iinfo.rt, iinfo.mi, iinfo.boost)))
                 return src
             end
         end
@@ -134,7 +137,8 @@ function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), iinfo:
         # inferred source in the local cache
         # we still won't find a source for recursive call because the "single-level" inlining
         # seems to be more trouble and complex than it's worth
-        inf_result = cache_lookup(optimizer_lattice(interp), iinfo.mi, iinfo.argtypes, get_inference_cache(interp))
+        inf_cache = get_inference_cache(interp)
+        inf_result = cache_lookup(optimizer_lattice(interp), iinfo.mi, iinfo.argtypes, inf_cache)
         if inf_result !== nothing
             src = inf_result.src
             if isa(src, CodeInfo) && is_source_inferred(src)
