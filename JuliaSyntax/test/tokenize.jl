@@ -882,6 +882,9 @@ end
             "⫪ ⫫"
         ])
     end
+    if VERSION >= v"1.10-DEV"
+        push!(ops, "⥷ ⥺ ⟇")
+    end
     allops = split(join(ops, " "), " ")
     @test all(s->Base.isoperator(Symbol(s)) == is_operator(first(collect(tokenize(s))).kind), allops)
 end
