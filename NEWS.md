@@ -11,7 +11,7 @@ Language changes
 ----------------
 
 * When a task forks a child, the parent task's task-local RNG (random number generator) is no longer affected. The seeding of child based on the parent task also takes a more disciplined approach to collision resistance, using a design based on the SplitMix and DotMix splittable RNG schemes ([#49110]).
-* A new morespecific rule for methods resolves ambiguities containing Union{} in favor of
+* A new more-specific rule for methods resolves ambiguities containing Union{} in favor of
   the method defined explicitly to handle the Union{} argument. This makes it possible to
   define methods to explicitly handle Union{} without the ambiguities that commonly would
   result previously. This also lets the runtime optimize certain method lookups in a way
