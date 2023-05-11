@@ -542,7 +542,7 @@ function repeat(c::AbstractChar, r::Integer)
     s = _string_n(n*r)
     p = pointer(s)
     GC.@preserve s if n == 1
-        ccall(:memset, Ptr{Cvoid}, (Ptr{UInt8}, Cint, Csize_t), p, u % UInt8, r)
+        memset(p, u % UInt8, r)
     elseif n == 2
         p16 = reinterpret(Ptr{UInt16}, p)
         for i = 1:r

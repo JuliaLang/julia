@@ -6,6 +6,8 @@ Interface to libc, the C standard library.
 """ Libc
 
 import Base: transcode, windowserror, show
+# these need to be defined seperately for bootstrapping but belong to Libc
+import Base: free, malloc, realloc, calloc, memcpy, memmove, memset, memcmp
 import Core.Intrinsics: bitcast
 
 export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, memcpy,
@@ -335,97 +337,6 @@ if Sys.iswindows()
         return transcode(String, buf)
     end
 end
-
-## Memory related ##
-
-"""
-    free(addr::Ptr)
-
-Call `free` from the C standard library. Only use this on memory obtained from [`malloc`](@ref), not
-on pointers retrieved from other C libraries. [`Ptr`](@ref) objects obtained from C libraries should
-be freed by the free functions defined in that library, to avoid assertion failures if
-multiple `libc` libraries exist on the system.
-"""
-free(p::Ptr) = ccall(:free, Cvoid, (Ptr{Cvoid},), p)
-
-"""
-    malloc(size::Integer) -> Ptr{Cvoid}
-
-Call `malloc` from the C standard library.
-"""
-malloc(size::Integer) = ccall(:malloc, Ptr{Cvoid}, (Csize_t,), size)
-
-"""
-    realloc(addr::Ptr, size::Integer) -> Ptr{Cvoid}
-
-Call `realloc` from the C standard library.
-
-See warning in the documentation for [`free`](@ref) regarding only using this on memory originally
-obtained from [`malloc`](@ref).
-"""
-realloc(p::Ptr, size::Integer) = ccall(:realloc, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t), p, size)
-
-"""
-    calloc(num::Integer, size::Integer) -> Ptr{Cvoid}
-
-Call `calloc` from the C standard library.
-"""
-calloc(num::Integer, size::Integer) = ccall(:calloc, Ptr{Cvoid}, (Csize_t, Csize_t), num, size)
-
-"""
-    memcpy(dst::Ptr, src::Ptr, n::Integer) -> Ptr{Cvoid}
-
-Call `memcpy` from the C standard library.
-
-!!! compat "Julia 1.10"
-    Support for `memcpy` requires at least Julia 1.10.
-
-"""
-function memcpy(dst::Ptr, src::Ptr, n::Integer)
-    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), dst, src, n)
-end
-
-"""
-    memmove(dst::Ptr, src::Ptr, n::Integer) -> Ptr{Cvoid}
-
-Call `memmove` from the C standard library.
-
-!!! compat "Julia 1.10"
-    Support for `memmove` requires at least Julia 1.10.
-
-"""
-function memmove(dst::Ptr, src::Ptr, n::Integer)
-    ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), dst, src, n)
-end
-
-"""
-    memset(dst::Ptr, val, n::Integer) -> Ptr{Cvoid}
-
-Call `memset` from the C standard library.
-
-!!! compat "Julia 1.10"
-    Support for `memset` requires at least Julia 1.10.
-
-"""
-function memset(p::Ptr, val, n::Integer)
-    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), p, val, n)
-end
-
-"""
-    memcmp(a::Ptr, b::Ptr, n::Integer) -> Int
-
-Call `memcmp` from the C standard library.
-
-!!! compat "Julia 1.10"
-    Support for `memcmp` requires at least Julia 1.9.
-
-"""
-function memcmp(a::Ptr, b::Ptr, n::Integer)
-    ccall(:memcmp, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), a, b, n % Csize_t) % Int
-end
-
-free(p::Cstring) = free(convert(Ptr{UInt8}, p))
-free(p::Cwstring) = free(convert(Ptr{Cwchar_t}, p))
 
 ## Random numbers ##
 
