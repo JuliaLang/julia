@@ -419,7 +419,7 @@ end
 @testset "interpolation" begin
     @testset "basic" begin
         str = "\"\$x \$y\""
-    ts = collect(tokenize(str))
+        ts = collect(tokenize(str))
         @test ts[1]  ~ (K"\""         , "\"", str)
         @test ts[2]  ~ (K"$"          , "\$", str)
         @test ts[3]  ~ (K"Identifier" , "x" , str)
@@ -461,7 +461,7 @@ end
 
     @testset "duplicate \$" begin
         str = "\"\$\$\""
-    ts = collect(tokenize(str))
+        ts = collect(tokenize(str))
         @test ts[1]  ~ (K"\""        , "\"", str)
         @test ts[2]  ~ (K"$"         , "\$", str)
         @test ts[3]  ~ (K"$"         , "\$", str)
@@ -472,7 +472,7 @@ end
     @testset "Unmatched parens" begin
         # issue 73: https://github.com/JuliaLang/Tokenize.jl/issues/73
         str = "\"\$(fdsf\""
-    ts = collect(tokenize(str))
+        ts = collect(tokenize(str))
         @test ts[1] ~ (K"\""         , "\""   , str)
         @test ts[2] ~ (K"$"          , "\$"   , str)
         @test ts[3] ~ (K"("          , "("    , str)
@@ -484,7 +484,7 @@ end
     @testset "Unicode" begin
         # issue 178: https://github.com/JuliaLang/Tokenize.jl/issues/178
         str = """ "\$uₕx \$(uₕx - ux)" """
-    ts = collect(tokenize(str))
+        ts = collect(tokenize(str))
         @test ts[ 1] ~ (K"Whitespace" , " "   , str)
         @test ts[ 2] ~ (K"\""         , "\""  , str)
         @test ts[ 3] ~ (K"$"          , "\$"  , str)
@@ -505,7 +505,7 @@ end
 
     @testset "var\"...\" disabled in interpolations" begin
         str = """ "\$var"x" " """
-    ts = collect(tokenize(str))
+        ts = collect(tokenize(str))
         @test ts[ 1] ~ (K"Whitespace" , " "   , str)
         @test ts[ 2] ~ (K"\""         , "\""  , str)
         @test ts[ 3] ~ (K"$"          , "\$"  , str)
@@ -519,14 +519,30 @@ end
         @test ts[11] ~ (K"EndMarker"  , ""    , str)
     end
 
-    @testset "invalid chars after identifier" begin
-        str = """ "\$x෴" """
-    ts = collect(tokenize(str))
-        @test ts[4] ~ (K"Identifier" , "x" , str)
-        @test ts[5] ~ (K"ErrorInvalidInterpolationTerminator" , ""  , str)
-        @test ts[6] ~ (K"String"     , "෴" , str)
-        @test is_error(ts[5].kind)
-        @test ts[5].kind == K"ErrorInvalidInterpolationTerminator"
+    @testset "chars after interpolation identifier" begin
+        # Operators allowed
+        @test toks("\"\$x?\"") == [
+            "\""=>K"\""
+            "\$"=>K"$"
+            "x"=>K"Identifier"
+            "?"=>K"String"
+            "\""=>K"\""
+        ]
+        @test toks("\"\$x⫪\"") == [
+            "\""=>K"\""
+            "\$"=>K"$"
+            "x"=>K"Identifier"
+            "⫪"=>K"String"
+            "\""=>K"\""
+        ]
+        # Some chars disallowed (eg, U+0DF4)
+        @test toks("\"\$x෴\"") == [
+            "\""=>K"\""
+            "\$"=>K"$"
+            "x"=>K"Identifier"
+            "෴"=>K"ErrorInvalidInterpolationTerminator"
+            "\""=>K"\""
+        ]
     end
 end
 
@@ -635,8 +651,6 @@ end
     @test toks("3e2_2") == ["3e2"=>K"Float", "_2"=>K"Identifier"]
     @test toks("1e") == ["1"=>K"Integer", "e"=>K"Identifier"]
 
-    @test toks("1.:0") == ["1."=>K"Float", ":"=>K":", "0"=>K"Integer"]
-
     # Floating point with \minus rather than -
     @test onlytok("1.0e−0") == K"Float"
     @test onlytok("1.0f−0") == K"Float32"
@@ -681,11 +695,23 @@ end
                                    "f"=>K"Identifier", "("=>K"(", "a"=>K"Identifier", ")"=>K")"]
     @test toks("1f0./1") == ["1f0"=>K"Float32", "./"=>K"/", "1"=>K"Integer"]
 
+    # Dotted operators after numeric constants are ok
+    @test toks("1e1.⫪")  == ["1e1"=>K"Float", ".⫪"=>K"⫪"]
+    @test toks("1.1.⫪")  == ["1.1"=>K"Float", ".⫪"=>K"⫪"]
+    @test toks("1e1.−")  == ["1e1"=>K"Float", ".−"=>K"-"]
+    @test toks("1.1.−")  == ["1.1"=>K"Float", ".−"=>K"-"]
+    # Non-dottable operators are not ok
+    @test toks("1e1.\$")  == ["1e1."=>K"ErrorInvalidNumericConstant", "\$"=>K"$"]
+    @test toks("1.1.\$")  == ["1.1."=>K"ErrorInvalidNumericConstant", "\$"=>K"$"]
+
     # Ambiguous dotted operators
     @test toks("1.+") == ["1."=>K"ErrorAmbiguousNumericConstant", "+"=>K"+"]
     @test toks("1.+ ") == ["1."=>K"ErrorAmbiguousNumericConstant", "+"=>K"+", " "=>K"Whitespace"]
     @test toks("1.⤋")  == ["1."=>K"ErrorAmbiguousNumericConstant", "⤋"=>K"⤋"]
-    @test toks("1.?")  == ["1."=>K"ErrorAmbiguousNumericConstant", "?"=>K"?"]
+    @test toks("1.⫪")  == ["1."=>K"ErrorAmbiguousNumericConstant", "⫪"=>K"⫪"]
+    # non-dottable ops are the exception
+    @test toks("1.:")  == ["1."=>K"Float", ":"=>K":"]
+    @test toks("1.\$") == ["1."=>K"Float", "\$"=>K"$"]
 
     # Ambiguous - literal vs multiply by juxtaposition
     @test toks("1.x")  == ["1."=>K"ErrorAmbiguousNumericDotMultiply", "x"=>K"Identifier"]
@@ -846,6 +872,8 @@ end
         raw"^ ↑ ↓ ⇵ ⟰ ⟱ ⤈ ⤉ ⤊ ⤋ ⤒ ⤓ ⥉ ⥌ ⥍ ⥏ ⥑ ⥔ ⥕ ⥘ ⥙ ⥜ ⥝ ⥠ ⥡ ⥣ ⥥ ⥮ ⥯ ￪ ￬"
         raw"::"
         raw"."
+        "⫪ ⫫"
+        "\u00b7 \u0387"
     ]
     if VERSION >= v"1.6.0"
         push!(ops, raw"<-- <-->")
