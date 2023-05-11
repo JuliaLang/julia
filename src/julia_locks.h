@@ -3,8 +3,6 @@
 #ifndef JL_LOCKS_H
 #define JL_LOCKS_H
 
-#include "julia_assert.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif

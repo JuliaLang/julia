@@ -321,8 +321,8 @@ end
 f_if_typecheck() = (if nothing; end; unsafe_load(Ptr{Int}(0)))
 @test_throws TypeError f_if_typecheck()
 
-@test let # https://github.com/JuliaLang/julia/issues/42258
-    code = quote
+let # https://github.com/JuliaLang/julia/issues/42258
+    code = """
         function foo()
             a = @noinline rand(rand(0:10))
             if isempty(a)
@@ -335,10 +335,11 @@ f_if_typecheck() = (if nothing; end; unsafe_load(Ptr{Int}(0)))
         code_typed(foo; optimize=true)
 
         code_typed(Core.Compiler.setindex!, (Core.Compiler.UseRef,Core.Compiler.NewSSAValue); optimize=true)
-    end |> string
+        """
     cmd = `$(Base.julia_cmd()) -g 2 -e $code`
-    stderr = IOBuffer()
-    success(pipeline(Cmd(cmd); stdout=stdout, stderr=stderr)) && isempty(String(take!(stderr)))
+    stderr = Base.BufferStream()
+    @test success(pipeline(Cmd(cmd); stdout, stderr))
+    @test readchomp(stderr) == ""
 end
 
 @testset "code_ircode" begin

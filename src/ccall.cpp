@@ -803,7 +803,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         }
         ir = jl_fieldref(ir, 0);
 
-        if (!jl_is_string(ir) && !jl_typeis(ir, jl_array_uint8_type)) {
+        if (!jl_is_string(ir) && !jl_typetagis(ir, jl_array_uint8_type)) {
             emit_error(ctx, "Module IR passed to llvmcall must be a string or an array of bytes");
             JL_GC_POP();
             return jl_cgval_t();
@@ -958,10 +958,8 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     // copy module properties that should always match
     Mod->setTargetTriple(jl_Module->getTargetTriple());
     Mod->setDataLayout(jl_Module->getDataLayout());
-#if JL_LLVM_VERSION >= 130000
     Mod->setStackProtectorGuard(jl_Module->getStackProtectorGuard());
     Mod->setOverrideStackAlignment(jl_Module->getOverrideStackAlignment());
-#endif
 
     // verify the definition
     Function *def = Mod->getFunction(ir_name);
@@ -1097,11 +1095,7 @@ std::string generate_func_sig(const char *fname)
             abi->use_sret(jl_voidpointer_type, LLVMCtx);
         }
         else if (abi->use_sret((jl_datatype_t*)rt, LLVMCtx)) {
-#if JL_LLVM_VERSION >= 140000
             AttrBuilder retattrs(LLVMCtx);
-#else
-            AttrBuilder retattrs;
-#endif
             if (!ctx->TargetTriple.isOSWindows()) {
                 // llvm used to use the old mingw ABI, skipping this marking works around that difference
                 retattrs.addStructRetAttr(lrt);
@@ -1120,11 +1114,7 @@ std::string generate_func_sig(const char *fname)
     }
 
     for (size_t i = 0; i < nccallargs; ++i) {
-#if JL_LLVM_VERSION >= 140000
         AttrBuilder ab(LLVMCtx);
-#else
-        AttrBuilder ab;
-#endif
         jl_value_t *tti = jl_svecref(at, i);
         Type *t = NULL;
         bool isboxed;
@@ -1882,7 +1872,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             if (!val.isghost && !val.ispointer())
                 val = value_to_pointer(ctx, val);
             Value *args[] = {
-                emit_typeof_boxed(ctx, val),
+                emit_typeof(ctx, val),
                 val.isghost ? ConstantPointerNull::get(T_pint8_derived) :
                     ctx.builder.CreateBitCast(
                         decay_derived(ctx, data_pointer(ctx, val)),
@@ -1984,9 +1974,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             // XXX: result needs to be zero'd and given a GC root here
             // and has incorrect write barriers.
             // instead this code path should behave like `unsafe_load`
-            assert(jl_datatype_size(rt) > 0 && "sret shouldn't be a singleton instance");
-            result = emit_allocobj(ctx, jl_datatype_size(rt),
-                                   literal_pointer_val(ctx, (jl_value_t*)rt));
+            result = emit_allocobj(ctx, (jl_datatype_t*)rt);
             sretty = ctx.types().T_jlvalue;
             sretboxed = true;
             gc_uses.push_back(result);
@@ -2148,15 +2136,13 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         else if (jlretboxed && !retboxed) {
             assert(jl_is_datatype(rt));
             if (static_rt) {
-                Value *runtime_bt = literal_pointer_val(ctx, rt);
-                size_t rtsz = jl_datatype_size(rt);
-                assert(rtsz > 0);
-                Value *strct = emit_allocobj(ctx, rtsz, runtime_bt);
+                Value *strct = emit_allocobj(ctx, (jl_datatype_t*)rt);
                 MDNode *tbaa = jl_is_mutable(rt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut;
                 int boxalign = julia_alignment(rt);
                 // copy the data from the return value to the new struct
                 const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
                 auto resultTy = result->getType();
+                size_t rtsz = jl_datatype_size(rt);
                 if (DL.getTypeStoreSize(resultTy) > rtsz) {
                     // ARM and AArch64 can use a LLVM type larger than the julia type.
                     // When this happens, cast through memory.
