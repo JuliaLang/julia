@@ -705,7 +705,6 @@ parentmodule_before_main(x) = parentmodule_before_main(parentmodule(x))
 # Print a stack frame where the module color is set manually with `modulecolor`.
 function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolor)
     file, line = string(frame.file), frame.line
-    file = fixup_stdlib_path(file)
 
     # Used by the REPL to make it possible to open
     # the location of a stackframe/method in the editor.
@@ -745,6 +744,7 @@ function print_module_path_file(io, modul, file, line; modulecolor = :light_blac
     end
 
     # filepath
+    file = fixup_stdlib_path(file)
     stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
     stacktrace_contract_userdir() && (file = contractuser(file))
     print(io, " ")
