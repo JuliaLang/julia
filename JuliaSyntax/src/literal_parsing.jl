@@ -329,11 +329,11 @@ end
 
 # static wrapper around user callback function
 function utf8proc_custom_func(codepoint::UInt32, ::Ptr{Cvoid})::UInt32
-    (codepoint == 0x025B ? 0x03B5 :
-    codepoint == 0x00B5 ? 0x03BC :
-    codepoint == 0x00B7 ? 0x22C5 :
-    codepoint == 0x0387 ? 0x22C5 :
-    codepoint == 0x2212 ? 0x002D :
+    (codepoint == 0x025B ? 0x03B5 :  # 'ɛ' => 'ε'
+    codepoint == 0x00B5 ? 0x03BC :   # 'µ' => 'μ'
+    codepoint == 0x00B7 ? 0x22C5 :   # '·' => '⋅'
+    codepoint == 0x0387 ? 0x22C5 :   # '·' => '⋅'
+    codepoint == 0x2212 ? 0x002D :   # '−' => '-'
     codepoint)
 end
 
