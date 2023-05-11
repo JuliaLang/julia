@@ -6,27 +6,50 @@
 
 should_profile = true # TODO actually implement this
 
-if should_profile
-    function getzonedexpr(name, ex, func, source, color)
-        eventzone = ccall(:jl_timing_get_zone, UInt64, (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Cint, Cint), name, func, source.file, source.line, color)
-        return quote
-            timing_block = ccall(:jl_timing_begin_zone, Ptr{Cvoid}, (UInt64,), $eventzone)
-            $(Expr(:tryfinally,
-                :($(esc(ex))),
-                quote
-                 ccall(:jl_timing_end_zone, Cvoid, (Ptr{Cvoid},), timing_block)
-                end
-            ))
-        end
-    end
-    macro zone(name, ex::Expr)
-        return getzonedexpr(name, ex, :unknown_julia_function, __source__, 0)
-    end
-else
-    macro zone(name, ex::Expr)
-        return esc(ex)
-    end
+
+mutable struct TracySrcLoc
+    name::Ptr{UInt8};
+    _function::Ptr{UInt8};
+    file::Ptr{UInt8};
+    line::Cuint;
+    color::Cuint;
+
+    name_s::Symbol;
+    _function_s::Symbol;
+    file_s::Symbol;
+ end
+
+@noinline function init_srcloc!(srcloc::TracySrcLoc)
+    srcloc.name = unsafe_convert(Ptr{UInt8}, srcloc.name_s)
+    srcloc._function = unsafe_convert(Ptr{UInt8}, srcloc._function_s)
+    srcloc.file = unsafe_convert(Ptr{UInt8}, srcloc.file_s)
 end
+
+ if true
+     function getzonedexpr(name, ex, func, source, color)
+         srcloc = TracySrcLoc(Ptr{UInt8}(0), Ptr{UInt8}(0), Ptr{UInt8}(0), source.line, color, Symbol(name), func, source.file)
+         event = ccall(:jl_timing_get_zone, UInt64, (Ptr{UInt8},), name)
+         return quote
+            if $srcloc.name === Ptr{UInt8}(0)
+                init_srcloc!($srcloc)
+            end
+             timing_block = ccall(:jl_timing_begin_zone, Ptr{Cvoid}, (UInt64, Ptr{TracySrcLoc}), $event, pointer_from_objref($srcloc))
+             $(Expr(:tryfinally,
+                 :($(esc(ex))),
+                 quote
+                  ccall(:jl_timing_end_zone, Cvoid, (Ptr{Cvoid},), timing_block)
+                 end
+             ))
+         end
+     end
+     macro zone(name, ex::Expr)
+         return getzonedexpr(name, ex, :unknown_julia_function, __source__, 0)
+     end
+ else
+     macro zone(name, ex::Expr)
+         return esc(ex)
+     end
+ end
 
 # avoid cycle due to over-specializing `any` when used by inference
 function _any(@nospecialize(f), a)

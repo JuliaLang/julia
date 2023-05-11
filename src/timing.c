@@ -357,35 +357,6 @@ JL_DLLEXPORT int jl_timing_set_enable(const char *subsystem, uint8_t enabled)
     return -1;
 }
 
-//For julia source locations
-#ifdef USE_TRACY
-small_arraylist_t jl_timing_srclocs[JL_TIMING_EVENT_LAST];
-jl_mutex_t jl_timing_srclocs_lock[JL_TIMING_EVENT_LAST];
-
-static int32_t get_srcloc(const char *zone, int event, const char *function, const char *file, int line, int color) {
-    JL_LOCK(&jl_timing_srclocs_lock[event]);
-    small_arraylist_t *srclocs = &jl_timing_srclocs[event];
-    // We anticipate the number of source locations to be small for a given event/zone, so we just do a linear search
-    for (int32_t i = 0; i < srclocs->len; i++) {
-        TracySrcLocData *srcloc = (TracySrcLocData*)srclocs->items[i];
-        // The strings are interned so we can just do pointer comparisons
-        if (srcloc->name == zone && srcloc->function == function && srcloc->file == file && srcloc->line == line && srcloc->color == color) {
-            JL_UNLOCK(&jl_timing_srclocs_lock[event]);
-            return i;
-        }
-    }
-    TracySrcLocData *srcloc = (TracySrcLocData*) malloc(sizeof(TracySrcLocData));
-    srcloc->name = zone;
-    srcloc->function = function;
-    srcloc->file = file;
-    srcloc->line = line;
-    srcloc->color = color;
-    small_arraylist_push(srclocs, srcloc);
-    int32_t i = srclocs->len - 1;
-    JL_UNLOCK(&jl_timing_srclocs_lock[event]);
-    return i;
-}
-#endif
 
 static int cmp_event_name_idx(const void *a, const void *b) {
     const char *name = (const char *)a;
@@ -397,31 +368,25 @@ static const int *get_timing_event(const char *zone) {
     return (const int *) bsearch(zone, jl_timing_names_sorted, JL_TIMING_EVENT_LAST, sizeof(int), cmp_event_name_idx);
 }
 
-JL_DLLEXPORT uint64_t jl_timing_get_zone(const char *zonename, const char *function, const char *file, int line, int color) {
+JL_DLLEXPORT uint64_t jl_timing_get_zone(const char *zonename) {
     const int *maybe_event = get_timing_event(zonename);
     if (!maybe_event) {
         jl_errorf("invalid timing zone name: %s", zonename);
         return ~0ull;
     }
-
-#ifdef USE_TRACY
-    return ((uint32_t) *maybe_event) | (((uint64_t)get_srcloc(zonename, *maybe_event, function, file, line, color)) << 32);
-#else
     return ((uint32_t) *maybe_event) | 0;
-#endif
 }
 
-JL_DLLEXPORT void *jl_timing_begin_zone(uint64_t event_srcloc) {
-    int event = (uint32_t) event_srcloc;
+#ifdef USE_TRACY
+JL_DLLEXPORT void *jl_timing_begin_zone(uint64_t event, TracySrcLocData *srcloc) {
+#else
+JL_DLLEXPORT void *jl_timing_begin_zone(uint64_t event) {
+#endif
     int owner = jl_timing_event_owners[event];
     jl_timing_block_t *block = (jl_timing_block_t *) malloc(sizeof(jl_timing_block_t));
     _jl_timing_block_ctor(block, owner, event);
 #ifdef USE_TRACY
-    int srcloc = event_srcloc >> 32;
-    JL_LOCK(&jl_timing_srclocs_lock[event]);
-    TracySrcLocData *srcloc_data = (TracySrcLocData*)jl_timing_srclocs[event].items[srcloc];
-    JL_UNLOCK(&jl_timing_srclocs_lock[event]);
-    block->tracy_ctx = ___tracy_emit_zone_begin(srcloc_data, _jl_timing_enabled(owner));
+    block->tracy_ctx = ___tracy_emit_zone_begin(srcloc, _jl_timing_enabled(owner));
 #endif
     return block;
 }
