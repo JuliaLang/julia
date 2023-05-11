@@ -50,10 +50,6 @@ const char *jl_timing_names[(int)JL_TIMING_LAST] =
 
 JL_DLLEXPORT jl_timing_counter_t jl_timing_counters[JL_TIMING_COUNTER_LAST];
 
-#ifdef USE_ITTAPI
-JL_DLLEXPORT __itt_event jl_timing_ittapi_events[(int)JL_TIMING_EVENT_LAST];
-#endif
-
 void jl_print_timings(void)
 {
 #ifdef USE_TIMING_COUNTS
@@ -91,9 +87,6 @@ void jl_init_timing(void)
 
     int i __attribute__((unused)) = 0;
 #ifdef USE_ITTAPI
-#define X(name) jl_timing_ittapi_events[i++] = __itt_event_create(#name, strlen(#name));
-    JL_TIMING_EVENTS
-#undef X
     i = 0;
 #define X(name) jl_timing_counters[i++].ittapi_counter = __itt_counter_create(#name, "julia.runtime");
     JL_TIMING_COUNTERS

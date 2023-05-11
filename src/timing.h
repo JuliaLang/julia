@@ -220,10 +220,8 @@ enum jl_timing_counter_types {
     JL_TIMING_COUNTER_LAST
 };
 
-/**
- * Timing back-ends differ in terms of whether they support nested
- * and asynchronous events.
- **/
+#define TIMING_XCONCAT(x1, x2) x1##x2
+#define TIMING_CONCAT(x1, x2) TIMING_XCONCAT(x1, x2)
 
 /**
  * Timing Backend: Aggregated timing counts (implemented in timing.c)
@@ -249,8 +247,8 @@ enum jl_timing_counter_types {
 
 #ifdef USE_TRACY
 #define _TRACY_CTX_MEMBER TracyCZoneCtx tracy_ctx; const struct ___tracy_source_location_data *tracy_srcloc;
-#define _TRACY_CTOR(block, name) static const struct ___tracy_source_location_data TracyConcat(__tracy_source_location,TracyLine) = { name, __func__,  TracyFile, (uint32_t)TracyLine, 0 }; \
-                                         (block)->tracy_srcloc = &TracyConcat(__tracy_source_location,TracyLine)
+#define _TRACY_CTOR(block, name) static const struct ___tracy_source_location_data TIMING_CONCAT(__tracy_source_location,__LINE__) = { name, __func__,  TracyFile, (uint32_t)__LINE__, 0 }; \
+                                         (block)->tracy_srcloc = &TIMING_CONCAT(__tracy_source_location,__LINE__)
 #define _TRACY_START(block) (block)->tracy_ctx = ___tracy_emit_zone_begin( (block)->tracy_srcloc, 1 );
 #define _TRACY_STOP(ctx) TracyCZoneEnd(*ctx)
 #else
@@ -260,12 +258,21 @@ enum jl_timing_counter_types {
 #define _TRACY_STOP(block)
 #endif
 
+/**
+ * Timing Backend: Intel VTune (ITTAPI)
+ **/
+
 #ifdef USE_ITTAPI
-#define _ITTAPI_CTX_MEMBER
-#define _ITTAPI_START(block) __itt_event_start(jl_timing_ittapi_events[block->event])
-#define _ITTAPI_STOP(block) __itt_event_end(jl_timing_ittapi_events[block->event])
+#define _ITTAPI_CTX_MEMBER __itt_event ittapi_event;
+#define _ITTAPI_CTOR(block, name) static __itt_event TIMING_CONCAT(__itt_event,__LINE__) = INT_MAX; \
+                                  if (TIMING_CONCAT(__itt_event,__LINE__) == INT_MAX) \
+                                      TIMING_CONCAT(__itt_event,__LINE__) = __itt_event_create(name, strlen(name)); \
+                                  (block)->ittapi_event = TIMING_CONCAT(__itt_event,__LINE__)
+#define _ITTAPI_START(block) __itt_event_start((block)->ittapi_event)
+#define _ITTAPI_STOP(block) __itt_event_end((block)->ittapi_event)
 #else
 #define _ITTAPI_CTX_MEMBER
+#define _ITTAPI_CTOR(block, name)
 #define _ITTAPI_START(block)
 #define _ITTAPI_STOP(block)
 #endif
@@ -316,9 +323,6 @@ STATIC_INLINE void _jl_timing_counts_destroy(jl_timing_counts_t *block, int subs
 
 extern JL_DLLEXPORT uint64_t jl_timing_enable_mask;
 extern const char *jl_timing_names[(int)JL_TIMING_LAST];
-#ifdef USE_ITTAPI
-extern JL_DLLEXPORT __itt_event jl_timing_ittapi_events[(int)JL_TIMING_EVENT_LAST];
-#endif
 
 struct _jl_timing_block_t { // typedef in julia.h
     struct _jl_timing_block_t *prev;
@@ -401,11 +405,12 @@ STATIC_INLINE void _jl_timing_suspend_destroy(jl_timing_suspend_t *suspend) JL_N
     JL_TIMING_CREATE_BLOCK(__timing_block, subsystem, event); \
     jl_timing_block_start(&__timing_block)
 
-#define JL_TIMING_CREATE_BLOCK(new_block_name, subsystem, event) \
+#define JL_TIMING_CREATE_BLOCK(block, subsystem, event) \
     __attribute__((cleanup(_jl_timing_block_destroy))) \
-    jl_timing_block_t new_block_name; \
-    _jl_timing_block_ctor(&new_block_name, JL_TIMING_ ## subsystem, JL_TIMING_EVENT_ ## event); \
-    _TRACY_CTOR(&new_block_name, #event)
+    jl_timing_block_t block; \
+    _jl_timing_block_ctor(&block, JL_TIMING_ ## subsystem, JL_TIMING_EVENT_ ## event); \
+    _TRACY_CTOR(&block, #event); \
+    _ITTAPI_CTOR(&block, #event)
 
 #define JL_TIMING_SUSPEND_TASK(subsystem, ct) \
     __attribute__((cleanup(_jl_timing_suspend_destroy))) \
