@@ -247,15 +247,11 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
                 any_refined = true
                 delete!(ssa_refined, idx)
             end
-            did_reprocess = false
-            if any_refined
-                did_reprocess = reprocess_instruction!(interp,
+            if any_refined && reprocess_instruction!(interp,
                     idx, bb, inst, typ, irsv, extra_reprocess)
-                if did_reprocess
-                    push!(ssa_refined, idx)
-                    inst = ir.stmts[idx][:inst]
-                    typ = ir.stmts[idx][:type]
-                end
+                push!(ssa_refined, idx)
+                inst = ir.stmts[idx][:inst]
+                typ = ir.stmts[idx][:type]
             end
             if idx == lstmt
                 process_terminator!(ir, inst, idx, bb, all_rets, bb_ip) && @goto residual_scan
