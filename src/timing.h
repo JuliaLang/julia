@@ -109,14 +109,14 @@ jl_timing_block_t *jl_timing_block_exit_task(jl_task_t *ct, jl_ptls_t ptls);
 // profiling region corresponding to `cur_block`.
 //
 // If larger than IOS_INLSIZE (~80 characters), text is truncated.
-void jl_timing_show(jl_value_t *v, jl_timing_block_t *cur_block);
-void jl_timing_show_module(jl_module_t *m, jl_timing_block_t *cur_block);
-void jl_timing_show_filename(const char *path, jl_timing_block_t *cur_block);
-void jl_timing_show_method_instance(jl_method_instance_t *mi, jl_timing_block_t *cur_block);
-void jl_timing_show_method(jl_method_t *method, jl_timing_block_t *cur_block);
-void jl_timing_show_func_sig(jl_value_t *v, jl_timing_block_t *cur_block);
-void jl_timing_printf(jl_timing_block_t *cur_block, const char *format, ...);
-void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
+JL_DLLEXPORT void jl_timing_show(jl_value_t *v, jl_timing_block_t *cur_block);
+JL_DLLEXPORT void jl_timing_show_module(jl_module_t *m, jl_timing_block_t *cur_block);
+JL_DLLEXPORT void jl_timing_show_filename(const char *path, jl_timing_block_t *cur_block);
+JL_DLLEXPORT void jl_timing_show_method_instance(jl_method_instance_t *mi, jl_timing_block_t *cur_block);
+JL_DLLEXPORT void jl_timing_show_method(jl_method_t *method, jl_timing_block_t *cur_block);
+JL_DLLEXPORT void jl_timing_show_func_sig(jl_value_t *v, jl_timing_block_t *cur_block);
+JL_DLLEXPORT void jl_timing_printf(jl_timing_block_t *cur_block, const char *format, ...);
+JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
 #ifdef __cplusplus
 }
 #endif
@@ -249,7 +249,7 @@ enum jl_timing_events {
  * Implementation: Aggregated counts back-end
  **/
 
-extern uint64_t jl_timing_counts[(int)JL_TIMING_LAST];
+extern JL_DLLEXPORT uint64_t jl_timing_counts[(int)JL_TIMING_LAST];
 typedef struct _jl_timing_counts_t {
     uint64_t total;
     uint64_t t0;
@@ -291,10 +291,10 @@ STATIC_INLINE void _jl_timing_counts_destroy(jl_timing_counts_t *block) JL_NOTSA
  * Top-level jl_timing implementation
  **/
 
-extern uint64_t jl_timing_enable_mask;
+extern JL_DLLEXPORT uint64_t jl_timing_enable_mask;
 extern const char *jl_timing_names[(int)JL_TIMING_LAST];
 #ifdef USE_ITTAPI
-extern __itt_event jl_timing_ittapi_events[(int)JL_TIMING_EVENT_LAST];
+extern JL_DLLEXPORT __itt_event jl_timing_ittapi_events[(int)JL_TIMING_EVENT_LAST];
 #endif
 
 struct _jl_timing_block_t { // typedef in julia.h
