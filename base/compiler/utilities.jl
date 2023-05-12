@@ -6,11 +6,25 @@
 
 should_profile = true # TODO actually implement this
 
+mutable struct EventZone
+    idx::UInt64
+    # This is a dummy variable who's only purpose is to get nulled when
+    # serialized so that we know to reallocate the event on the first use
+    ptr::Ptr{UInt8}
+end
+
 if should_profile
-    function getzonedexpr(name, ex, func, source, color)
-        eventzone = ccall(:jl_timing_get_zone, UInt64, (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Cint, Cint), name, func, source.file, source.line, color)
+    function getzonedexpr(name::Union{Symbol, String}, ex::Expr, func::Symbol, file::Symbol, line::Integer, color::Integer)
+        eventzone = EventZone(0, Ptr{UInt8}(0))
+        name = QuoteNode(name)
+        func = QuoteNode(func)
+        file = QuoteNode(file)
         return quote
-            timing_block = ccall(:jl_timing_begin_zone, Ptr{Cvoid}, (UInt64,), $eventzone)
+            if $eventzone.ptr === Ptr{UInt8}(0)
+                $eventzone.idx = ccall(:jl_timing_get_zone, UInt64, (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Cint, Cint), $name, $func, $file, $line, $color)
+                $eventzone.ptr = Ptr{UInt8}(1)
+            end
+            timing_block = ccall(:jl_timing_begin_zone, Ptr{Cvoid}, (UInt64,), $eventzone.idx)
             $(Expr(:tryfinally,
                 :($(esc(ex))),
                 quote
@@ -20,7 +34,7 @@ if should_profile
         end
     end
     macro zone(name, ex::Expr)
-        return getzonedexpr(name, ex, :unknown_julia_function, __source__, 0)
+        return getzonedexpr(Symbol(name), ex, :unknown_julia_function, __source__.file, __source__.line, 0)
     end
 else
     macro zone(name, ex::Expr)
