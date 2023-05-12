@@ -113,6 +113,27 @@ struct NewPM {
     void run(Module &M) JL_NOTSAFEPOINT;
 
     void printTimers() JL_NOTSAFEPOINT;
+
+    void registerCallbacks()
+    {
+#ifdef ENABLE_TIMINGS
+        auto event = jl_timing_get_zone("LLVM_OPT_PASS", "", __FILE__, __LINE__, 0);
+        PIC->registerBeforeNonSkippedPassCallback([event, this](StringRef PassID, Any IR) {
+            auto block = jl_timing_begin_zone(event);
+            jl_timing_puts(block, PassID.str().c_str());
+        });
+        PIC->registerAfterPassCallback(
+            [event, this](StringRef PassID, Any IR, const PreservedAnalyses &PassPA) {
+                auto block = jl_current_task->ptls->timing_stack;
+                jl_timing_end_zone(block);
+            });
+        PIC->registerAfterPassInvalidatedCallback(
+            [event, this](StringRef PassID, const PreservedAnalyses &PassPA) {
+                auto block = jl_current_task->ptls->timing_stack;
+                jl_timing_end_zone(block);
+            });
+#endif
+    }
 };
 
 struct AnalysisManagers {

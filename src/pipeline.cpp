@@ -80,7 +80,6 @@
 #include "julia_assert.h"
 #include "passes.h"
 
-
 using namespace llvm;
 
 namespace {
@@ -571,7 +570,10 @@ PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 NewPM::NewPM(std::unique_ptr<TargetMachine> TM, OptimizationLevel O, OptimizationOptions options) :
     TM(std::move(TM)), SI(false), PIC(createPIC(SI)),
     PB(this->TM.get(), PipelineTuningOptions(), None, PIC.get()),
-    MPM(createMPM(PB, O, options)), O(O) {}
+    MPM(createMPM(PB, O, options)), O(O)
+     {
+        this->registerCallbacks();
+     }
 
 NewPM::~NewPM() = default;
 

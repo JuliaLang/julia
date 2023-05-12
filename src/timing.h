@@ -110,6 +110,9 @@ jl_timing_block_t *jl_timing_block_exit_task(jl_task_t *ct, jl_ptls_t ptls);
 // profiling region corresponding to `cur_block`.
 //
 // If larger than IOS_INLSIZE (~80 characters), text is truncated.
+JL_DLLEXPORT uint64_t jl_timing_get_zone(const char *zonename, const char *function, const char *file, int line, int color);
+JL_DLLEXPORT jl_timing_block_t *jl_timing_begin_zone(uint64_t event_srcloc);
+JL_DLLEXPORT void jl_timing_end_zone(void *timing_block);
 JL_DLLEXPORT void jl_timing_show(jl_value_t *v, jl_timing_block_t *cur_block);
 JL_DLLEXPORT void jl_timing_show_module(jl_module_t *m, jl_timing_block_t *cur_block);
 JL_DLLEXPORT void jl_timing_show_filename(const char *path, jl_timing_block_t *cur_block);
@@ -139,6 +142,7 @@ JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
         X(METHOD_LOOKUP_FAST)    \
         X(CODEINST_COMPILE)      \
         X(LLVM_OPT)              \
+        X(LLVM_OPT_PASS)         \
         X(LLVM_ORC)              \
         X(METHOD_MATCH)          \
         X(TYPE_CACHE_LOOKUP)     \
@@ -318,8 +322,8 @@ STATIC_INLINE void _jl_timing_counts_destroy(jl_timing_counts_t *block, uint64_t
  * Top-level jl_timing implementation
  **/
 
-extern JL_DLLEXPORT extern uint64_t jl_timing_disable_mask[JL_TIMING_EVENT_CHUNKS];
-extern JL_DLLEXPORT extern const char *jl_timing_names[(int)JL_TIMING_EVENT_LAST];
+extern JL_DLLEXPORT uint64_t jl_timing_disable_mask[JL_TIMING_EVENT_CHUNKS];
+extern JL_DLLEXPORT const char *jl_timing_names[(int)JL_TIMING_EVENT_LAST];
 #ifdef USE_ITTAPI
 extern JL_DLLEXPORT __itt_event jl_timing_ittapi_events[(int)JL_TIMING_EVENT_LAST];
 #endif

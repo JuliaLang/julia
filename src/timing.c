@@ -411,7 +411,7 @@ JL_DLLEXPORT uint64_t jl_timing_get_zone(const char *zonename, const char *funct
 #endif
 }
 
-JL_DLLEXPORT void *jl_timing_begin_zone(uint64_t event_srcloc) {
+JL_DLLEXPORT jl_timing_block_t *jl_timing_begin_zone(uint64_t event_srcloc) {
     int event = (uint32_t) event_srcloc;
     int owner = jl_timing_event_owners[event];
     jl_timing_block_t *block = (jl_timing_block_t *) malloc(sizeof(jl_timing_block_t));
