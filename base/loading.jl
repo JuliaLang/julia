@@ -635,10 +635,10 @@ function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothi
                     if wuuid !== nothing
                         return PkgId(UUID(wuuid), name)
                     end
-                    # ... and they can load same deps as the project itself
-                    mby_uuid = explicit_project_deps_get(project_file, name)
-                    mby_uuid === nothing || return PkgId(mby_uuid, name)
                 end
+                # ... and they can load same deps as the project itself
+                mby_uuid = explicit_project_deps_get(project_file, name)
+                mby_uuid === nothing || return PkgId(mby_uuid, name)
             end
         end
         # look for manifest file and `where` stanza
