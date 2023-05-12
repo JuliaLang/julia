@@ -1167,6 +1167,8 @@ See [`sizehint!`](@ref) for notes about the performance model.
 See also [`vcat`](@ref) for vectors, [`union!`](@ref) for sets,
 and [`prepend!`](@ref) and [`pushfirst!`](@ref) for the opposite order.
 """
+function append! end
+
 function append!(a::Vector, items::AbstractVector)
     itemindices = eachindex(items)
     n = length(itemindices)
@@ -1180,18 +1182,21 @@ push!(a::AbstractVector, iter...) = append!(a, iter)
 
 append!(a::AbstractVector, iter...) = foldl(append!, iter, init=a)
 
-function _append!(a, ::Union{HasLength,HasShape}, iter)
+function _append!(a::AbstractVector, ::Union{HasLength,HasShape}, iter)
     @_terminates_locally_meta
     n = length(a)
     i = lastindex(a)
     resize!(a, n+Int(length(iter))::Int)
-    @_safeindex for (i, item) in zip(i+1:lastindex(a), iter)
-        a[i] = item
+    for (i, item) in zip(i+1:lastindex(a), iter)
+        if isa(a, Vector) # give better effects for builtin vectors
+            @_safeindex a[i] = item
+        else
+            a[i] = item
+        end
     end
     a
 end
-
-function _append!(a, ::IteratorSize, iter)
+function _append!(a::AbstractVector, ::IteratorSize, iter)
     for item in iter
         push!(a, item)
     end
@@ -1246,7 +1251,7 @@ pushfirst!(a::Vector, iter...) = prepend!(a, iter)
 
 prepend!(a::AbstractVector, iter...) = foldr((v, a) -> prepend!(a, v), iter, init=a)
 
-function _prepend!(a, ::Union{HasLength,HasShape}, iter)
+function _prepend!(a::Vector, ::Union{HasLength,HasShape}, iter)
     @_terminates_locally_meta
     require_one_based_indexing(a)
     n = length(iter)
@@ -1257,7 +1262,7 @@ function _prepend!(a, ::Union{HasLength,HasShape}, iter)
     end
     a
 end
-function _prepend!(a, ::IteratorSize, iter)
+function _prepend!(a::Vector, ::IteratorSize, iter)
     n = 0
     for item in iter
         n += 1
