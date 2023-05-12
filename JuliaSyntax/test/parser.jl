@@ -25,12 +25,7 @@ function test_parse(production, input, output)
     else
         opts = NamedTuple()
     end
-    if output isa Pair
-        @test parse_to_sexpr_str(production, input; opts...) == output[1]
-        @test parse_to_sexpr_str(production, input; opts..., expr=true) == output[2]
-    else
-        @test parse_to_sexpr_str(production, input; opts...) == output
-    end
+    @test parse_to_sexpr_str(production, input; opts...) == output
 end
 
 function test_parse(inout::Pair)
@@ -724,16 +719,16 @@ tests = [
         "xx"     => "xx"
         "x₁"     => "x₁"
         # var syntax
-        """var"x" """   =>  "(var x)"  => :x
+        """var"x" """   =>  "(var x)"
         # var syntax raw string unescaping
-        "var\"\""          =>  "(var )"      => Symbol("")
-        "var\"\\\"\""      =>  "(var \")"    => Symbol("\"")
-        "var\"\\\\\\\"\""  =>  "(var \\\")"  => Symbol("\\\"")
-        "var\"\\\\x\""     =>  "(var \\\\x)" => Symbol("\\\\x")
+        "var\"\""          =>  "(var )"
+        "var\"\\\"\""      =>  "(var \")"
+        "var\"\\\\\\\"\""  =>  "(var \\\")"
+        "var\"\\\\x\""     =>  "(var \\\\x)"
         # trailing syntax after var
-        """var"x"+"""   =>  "(var x)" => :x
-        """var"x")"""   =>  "(var x)" => :x
-        """var"x"("""   =>  "(var x)" => :x
+        """var"x"+"""   =>  "(var x)"
+        """var"x")"""   =>  "(var x)"
+        """var"x"("""   =>  "(var x)"
         """var"x"end""" =>  "(var x (error-t))"
         """var"x"1"""   =>  "(var x (error-t))"
         """var"x"y"""   =>  "(var x (error-t))"

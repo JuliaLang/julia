@@ -399,6 +399,15 @@
             Expr(:macrocall, Symbol("@S"), LineNumberNode(1), Expr(:ncat, 2, :a, :b))
     end
 
+    @testset "var" begin
+        @test parsestmt("var\"x\"") == :x
+        @test parsestmt("var\"\"")         == Symbol("")
+        @test parsestmt("var\"\\\"\"")     == Symbol("\"")
+        @test parsestmt("var\"\\\\\\\"\"") == Symbol("\\\"")
+        @test parsestmt("var\"\\\\x\"")    == Symbol("\\\\x")
+        @test parsestmt("var\"x\"+y")      == Expr(:call, :+, :x, :y)
+    end
+
     @testset "vect" begin
         @test parsestmt("[x,y ; z]") == Expr(:vect, Expr(:parameters, :z), :x, :y)
     end
