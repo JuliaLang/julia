@@ -461,6 +461,12 @@ which have special meanings in the context of `@test`:
   test summary reporting as `Broken`, when `cond==true`.  This can be useful for
   tests that intermittently fail, or tests of not-yet-implemented functionality.
   Regular `@test ex` is evaluated when `cond==false`.
+* `expr=expression` uses the specified expression as the `Expression` in the
+  test report; the value may be anything that evaluates to a String or an Expr.
+  This can be used to provide better reports for various generated tests where
+  variables are used as tested values -- substituting for the variables in the
+  reported expression usually gives a test report that depends less on the
+  context and is thus easier to debug.
 
 # Examples
 
@@ -478,18 +484,24 @@ Test Broken
 
 julia> @test 2 + 2 == 4 skip=false
 Test Passed
+
+julia> @test 2 == 4 skip=false
+Test Passed
+
+julia> 
 ```
 
 !!! compat "Julia 1.7"
      The `broken` and `skip` keyword arguments require at least Julia 1.7.
 """
 macro test(ex, kws...)
-    # Collect the broken/skip keywords and remove them from the rest of keywords
-    broken = [kw.args[2] for kw in kws if kw.args[1] === :broken]
-    skip = [kw.args[2] for kw in kws if kw.args[1] === :skip]
-    kws = filter(kw -> kw.args[1] ∉ (:skip, :broken), kws)
+    # Collect the broken/skip/expr keywords and remove them from the rest of keywords
+    broken = [kw.args[2] for kw in kws if kw isa Expr && kw.args[1] === :broken]
+    skip = [kw.args[2] for kw in kws if kw isa Expr && kw.args[1] === :skip]
+    expr = [kw.args[2] for kw in kws if kw isa Expr && kw.args[1] === :expr]
+    kws = filter(kw -> kw.args[1] ∉ (:skip, :broken, :expr), kws)
     # Validation of broken/skip keywords
-    for (kw, name) in ((broken, :broken), (skip, :skip))
+    for (kw, name) in ((broken, :broken), (skip, :skip), (expr, :expr))
         if length(kw) > 1
             error("invalid test macro call: cannot set $(name) keyword multiple times")
         end
@@ -498,9 +510,9 @@ macro test(ex, kws...)
         error("invalid test macro call: cannot set both skip and broken keywords")
     end
 
-    # Build the test expression
+    # Build the test expression. The :inert trick only evaluates the $-interpolated parts of the expression
     test_expr!("@test", ex, kws...)
-    orig_ex = Expr(:inert, ex)
+    orig_ex = isempty(expr) ? Expr(:inert, ex) : :(eval(Expr(:inert,$(esc(first(expr))))))
 
     result = get_test_result(ex, __source__)
 
