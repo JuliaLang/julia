@@ -129,6 +129,8 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error(const char *fname,
 
 JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var)
 {
+    if (!jl_undefvarerror_type)
+        jl_errorf("UndefVarError(%s)", jl_symbol_name(var));
     jl_throw(jl_new_struct(jl_undefvarerror_type, var));
 }
 
@@ -1215,10 +1217,10 @@ static size_t jl_static_show_next_(JL_STREAM *out, jl_value_t *v, jl_value_t *pr
                       *newdepth = &this_item,
                       *p = depth;
     while (p) {
-        if (jl_typeis(v, jl_typemap_entry_type) && newdepth == &this_item) {
+        if (jl_typetagis(v, jl_typemap_entry_type) && newdepth == &this_item) {
             jl_value_t *m = p->v;
             unsigned nid = 1;
-            while (m && jl_typeis(m, jl_typemap_entry_type)) {
+            while (m && jl_typetagis(m, jl_typemap_entry_type)) {
                 if (m == v) {
                     return jl_printf(out, "<typemap reference #%u @-%u ", nid, dist) +
                            jl_static_show_x(out, (jl_value_t*)((jl_typemap_entry_t*)m)->sig, depth, ctx) +
@@ -1234,7 +1236,7 @@ static size_t jl_static_show_next_(JL_STREAM *out, jl_value_t *v, jl_value_t *pr
                 jl_value_t *m2 = p->v;
                 if (m2 == mnext)
                     break;
-                while (m2 && jl_typeis(m2, jl_typemap_entry_type)) {
+                while (m2 && jl_typetagis(m2, jl_typemap_entry_type)) {
                     jl_value_t *mnext2 = (jl_value_t*)jl_atomic_load_relaxed(&((jl_typemap_entry_t*)m2)->next);
                     if (mnext2 == mnext) {
                         if (m2 != m)
@@ -1267,7 +1269,7 @@ JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_N
     return jl_static_show_func_sig_(s, type, ctx);
 }
 
-JL_DLLEXPORT size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_config_t ctx) JL_NOTSAFEPOINT
+size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_config_t ctx) JL_NOTSAFEPOINT
 {
     size_t n = 0;
     size_t i;

@@ -375,11 +375,22 @@ function __muldiag!(out, D1::Diagonal, D2::Diagonal, _add::MulAddMul{ais1,bis0})
     return out
 end
 
-function _mul!(out, A, B, _add)
+function _mul_diag!(out, A, B, _add)
     _muldiag_size_check(out, A, B)
     __muldiag!(out, A, B, _add)
     return out
 end
+
+_mul!(out::AbstractVecOrMat, D::Diagonal, V::AbstractVector, _add) =
+    _mul_diag!(out, D, V, _add)
+_mul!(out::AbstractMatrix, D::Diagonal, B::AbstractMatrix, _add) =
+    _mul_diag!(out, D, B, _add)
+_mul!(out::AbstractMatrix, A::AbstractMatrix, D::Diagonal, _add) =
+    _mul_diag!(out, A, D, _add)
+_mul!(C::Diagonal, Da::Diagonal, Db::Diagonal, _add) =
+    _mul_diag!(C, Da, Db, _add)
+_mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, _add) =
+    _mul_diag!(C, Da, Db, _add)
 
 function (*)(Da::Diagonal, A::AbstractMatrix, Db::Diagonal)
     _muldiag_size_check(Da, A)
@@ -395,6 +406,7 @@ end
 
 /(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(similar(A, _init_eltype(/, eltype(A), eltype(D))), A, D)
 /(A::HermOrSym, D::Diagonal) = _rdiv!(similar(A, _init_eltype(/, eltype(A), eltype(D)), size(A)), A, D)
+
 rdiv!(A::AbstractVecOrMat, D::Diagonal) = @inline _rdiv!(A, A, D)
 # avoid copy when possible via internal 3-arg backend
 function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
@@ -557,22 +569,21 @@ for Tri in (:UpperTriangular, :LowerTriangular)
     # 3-arg ldiv!
     @eval ldiv!(C::$Tri, D::Diagonal, A::$Tri) = $Tri(ldiv!(C.data, D, A.data))
     @eval ldiv!(C::$Tri, D::Diagonal, A::$UTri) = $Tri(_setdiag!(ldiv!(C.data, D, A.data), inv, D.diag))
-    # 3-arg mul!: invoke 5-arg mul! rather than lmul!
-    @eval mul!(C::$Tri, A::Union{$Tri,$UTri}, D::Diagonal) = mul!(C, A, D, true, false)
+    # 3-arg mul! is disambiguated in special.jl
     # 5-arg mul!
     @eval _mul!(C::$Tri, D::Diagonal, A::$Tri, _add) = $Tri(mul!(C.data, D, A.data, _add.alpha, _add.beta))
-    @eval function _mul!(C::$Tri, D::Diagonal, A::$UTri, _add)
+    @eval function _mul!(C::$Tri, D::Diagonal, A::$UTri, _add::MulAddMul{ais1,bis0}) where {ais1,bis0}
         α, β = _add.alpha, _add.beta
         iszero(α) && return _rmul_or_fill!(C, β)
-        diag′ = iszero(β) ? nothing : diag(C)
+        diag′ = bis0 ? nothing : diag(C)
         data = mul!(C.data, D, A.data, α, β)
         $Tri(_setdiag!(data, _add, D.diag, diag′))
     end
     @eval _mul!(C::$Tri, A::$Tri, D::Diagonal, _add) = $Tri(mul!(C.data, A.data, D, _add.alpha, _add.beta))
-    @eval function _mul!(C::$Tri, A::$UTri, D::Diagonal, _add)
+    @eval function _mul!(C::$Tri, A::$UTri, D::Diagonal, _add::MulAddMul{ais1,bis0}) where {ais1,bis0}
         α, β = _add.alpha, _add.beta
         iszero(α) && return _rmul_or_fill!(C, β)
-        diag′ = iszero(β) ? nothing : diag(C)
+        diag′ = bis0 ? nothing : diag(C)
         data = mul!(C.data, A.data, D, α, β)
         $Tri(_setdiag!(data, _add, D.diag, diag′))
     end

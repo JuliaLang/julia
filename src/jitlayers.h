@@ -50,9 +50,6 @@
 // The sanitizers don't play well with our memory manager
 
 #if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_) || defined(JL_FORCE_JITLINK) || JL_LLVM_VERSION >= 150000 && defined(HAS_SANITIZER)
-# if JL_LLVM_VERSION < 130000
-#  pragma message("On aarch64-darwin, LLVM version >= 13 is required for JITLink; fallback suffers from occasional segfaults")
-# endif
 # define JL_USE_JITLINK
 #endif
 
@@ -97,10 +94,8 @@ struct OptimizationOptions {
 };
 
 // LLVM's new pass manager is scheduled to replace the legacy pass manager
-// for middle-end IR optimizations. However, we have not qualified the new
-// pass manager on our optimization pipeline yet, so this remains an optional
-// define
-#if defined(HAS_SANITIZER) && JL_LLVM_VERSION >= 150000
+// for middle-end IR optimizations.
+#if JL_LLVM_VERSION >= 150000
 #define JL_USE_NEW_PM
 #endif
 

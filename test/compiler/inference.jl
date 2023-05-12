@@ -4871,3 +4871,36 @@ function nt_splat_partial(x::Int)
     Val{tuple(nt...)[2]}()
 end
 @test @inferred(nt_splat_partial(42)) == Val{2}()
+
+# Test that irinterp refines based on discovered errors
+Base.@assume_effects :foldable Base.@constprop :aggressive function kill_error_edge(b1, b2, xs, x)
+    y = b1 ? "julia" : xs[]
+    if b2
+        a = length(y)
+    else
+        a = sin(y)
+    end
+    a + x
+end
+
+Base.@assume_effects :foldable Base.@constprop :aggressive function kill_error_edge(b1, b2, xs, ys, x)
+    y = b1 ? xs[] : ys[]
+    if b2
+        a = length(y)
+    else
+        a = sin(y)
+    end
+    a + x
+end
+
+let src = code_typed1((Bool,Base.RefValue{Any},Int,)) do b2, xs, x
+        kill_error_edge(true, b2, xs, x)
+    end
+    @test count(@nospecialize(x)->isa(x, Core.PhiNode), src.code) == 0
+end
+
+let src = code_typed1((Bool,Base.RefValue{String}, Base.RefValue{Any},Int,)) do b2, xs, ys, x
+        kill_error_edge(true, b2, xs, ys, x)
+    end
+    @test count(@nospecialize(x)->isa(x, Core.PhiNode), src.code) == 0
+end
