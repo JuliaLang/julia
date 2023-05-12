@@ -7,19 +7,6 @@ call_result_unused(sv::InferenceState, currpc::Int) =
     isexpr(sv.src.code[currpc], :call) && isempty(sv.ssavalue_uses[currpc])
 call_result_unused(si::StmtInfo) = !si.used
 
-function get_max_methods(sv::AbsIntState, interp::AbstractInterpreter)
-    max_methods = ccall(:jl_get_module_max_methods, Cint, (Any,), frame_module(sv)) % Int
-    return max_methods < 0 ? InferenceParams(interp).max_methods : max_methods
-end
-
-function get_max_methods(@nospecialize(f), sv::AbsIntState, interp::AbstractInterpreter)
-    if f !== nothing
-        fmm = typeof(f).name.max_methods
-        fmm !== UInt8(0) && return Int(fmm)
-    end
-    return get_max_methods(sv, interp)
-end
-
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
                                   sv::AbsIntState, max_methods::Int)
@@ -1488,7 +1475,7 @@ end
 
 # do apply(af, fargs...), where af is a function value
 function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo,
-                        sv::AbsIntState, max_methods::Int=get_max_methods(sv, interp))
+                        sv::AbsIntState, max_methods::Int=get_max_methods(interp, sv))
     itft = argtype_by_index(argtypes, 2)
     aft = argtype_by_index(argtypes, 3)
     (itft === Bottom || aft === Bottom) && return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
@@ -1936,7 +1923,7 @@ end
 function abstract_finalizer(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::AbsIntState)
     if length(argtypes) == 3
         finalizer_argvec = Any[argtypes[2], argtypes[3]]
-        call = abstract_call(interp, ArgInfo(nothing, finalizer_argvec), StmtInfo(false), sv, 1)
+        call = abstract_call(interp, ArgInfo(nothing, finalizer_argvec), StmtInfo(false), sv, #=max_methods=#1)
         return CallMeta(Nothing, Effects(), FinalizerInfo(call.info, call.effects))
     end
     return CallMeta(Nothing, Effects(), NoCallInfo())
@@ -1945,7 +1932,7 @@ end
 # call where the function is known exactly
 function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         arginfo::ArgInfo, si::StmtInfo, sv::AbsIntState,
-        max_methods::Int = get_max_methods(f, sv, interp))
+        max_methods::Int = get_max_methods(interp, f, sv))
     (; fargs, argtypes) = arginfo
     la = length(argtypes)
 
@@ -2107,10 +2094,10 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtIn
             return CallMeta(Any, Effects(), NoCallInfo())
         end
         # non-constant function, but the number of arguments is known and the `f` is not a builtin or intrinsic
-        max_methods = max_methods === nothing ? get_max_methods(sv, interp) : max_methods
+        max_methods = max_methods === nothing ? get_max_methods(interp, sv) : max_methods
         return abstract_call_gf_by_type(interp, nothing, arginfo, si, argtypes_to_type(argtypes), sv, max_methods)
     end
-    max_methods = max_methods === nothing ? get_max_methods(f, sv, interp) : max_methods
+    max_methods = max_methods === nothing ? get_max_methods(interp, f, sv) : max_methods
     return abstract_call_known(interp, f, arginfo, si, sv, max_methods)
 end
 
@@ -2544,6 +2531,7 @@ end
 function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
     if !isa(e, Expr)
         if isa(e, PhiNode)
+            add_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE)
             return abstract_eval_phi(interp, e, vtypes, sv)
         end
         return abstract_eval_special_value(interp, e, vtypes, sv)

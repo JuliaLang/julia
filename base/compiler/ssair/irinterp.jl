@@ -128,16 +128,12 @@ function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union
         end
         return propagate_control_effects!(interp, idx, inst, irsv, extra_reprocess)
     end
-
     rt = nothing
     if isa(inst, Expr)
         head = inst.head
         if head === :call || head === :foreigncall || head === :new || head === :splatnew
             (; rt, effects) = abstract_eval_statement_expr(interp, inst, nothing, irsv)
             ir.stmts[idx][:flag] |= flags_for_effects(effects)
-            if is_foldable(effects) && isa(rt, Const) && is_inlineable_constant(rt.val)
-                ir.stmts[idx][:inst] = quoted(rt.val)
-            end
         elseif head === :invoke
             rt, nothrow = concrete_eval_invoke(interp, inst, inst.args[1]::MethodInstance, irsv)
             if nothrow
@@ -167,7 +163,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union
     if rt !== nothing
         if isa(rt, Const)
             ir.stmts[idx][:type] = rt
-            if is_inlineable_constant(rt.val)
+            if is_inlineable_constant(rt.val) && (ir.stmts[idx][:flag] & IR_FLAG_EFFECT_FREE) != 0
                 ir.stmts[idx][:inst] = quoted(rt.val)
             end
             return true
@@ -251,15 +247,11 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
                 any_refined = true
                 delete!(ssa_refined, idx)
             end
-            did_reprocess = false
-            if any_refined
-                did_reprocess = reprocess_instruction!(interp,
+            if any_refined && reprocess_instruction!(interp,
                     idx, bb, inst, typ, irsv, extra_reprocess)
-                if did_reprocess
-                    push!(ssa_refined, idx)
-                    inst = ir.stmts[idx][:inst]
-                    typ = ir.stmts[idx][:type]
-                end
+                push!(ssa_refined, idx)
+                inst = ir.stmts[idx][:inst]
+                typ = ir.stmts[idx][:type]
             end
             if idx == lstmt
                 process_terminator!(ir, inst, idx, bb, all_rets, bb_ip) && @goto residual_scan
