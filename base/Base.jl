@@ -596,6 +596,7 @@ function __init__()
         ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), PROFILE_PRINT_COND[].handle)
         errormonitor(Threads.@spawn(profile_printing_listener()))
     end
+    delete!(ENV, "JULIA_WAIT_FOR_TRACY")
     nothing
 end
 

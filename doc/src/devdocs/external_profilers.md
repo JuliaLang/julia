@@ -58,9 +58,8 @@ The environment variable ensures that Julia waits until it has successfully conn
 To profile a package precompilation process it is easiest to explicitly call into `Base.compilecache` with the package you want to precompile:
 
 ```julia
-Base.precompile_wait_tracy = true
 pkg = Base.identify_package("SparseArrays")
-withenv("TRACY_PORT" => 9001) do
+withenv("JULIA_WAIT_FOR_TRACY" => 1, "TRACY_PORT" => 9001) do
     Base.compilecache(pkg)
 end
 ```
