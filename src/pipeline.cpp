@@ -36,19 +36,24 @@
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 #include <llvm/Transforms/IPO/ConstantMerge.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
+#include <llvm/Transforms/AggressiveInstCombine/AggressiveInstCombine.h>
 #include <llvm/Transforms/Instrumentation/AddressSanitizer.h>
 #include <llvm/Transforms/Instrumentation/MemorySanitizer.h>
 #include <llvm/Transforms/Instrumentation/ThreadSanitizer.h>
 #include <llvm/Transforms/Scalar/ADCE.h>
+#include "llvm/Transforms/Scalar/AlignmentFromAssumptions.h"
+#include <llvm/Transforms/Scalar/BDCE.h>
 #include <llvm/Transforms/Scalar/CorrelatedValuePropagation.h>
 #include <llvm/Transforms/Scalar/DCE.h>
 #include <llvm/Transforms/Scalar/DeadStoreElimination.h>
 #include <llvm/Transforms/Scalar/DivRemPairs.h>
+#include "llvm/Transforms/Scalar/Float2Int.h"
 #include <llvm/Transforms/Scalar/EarlyCSE.h>
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/Scalar/IndVarSimplify.h>
 #include <llvm/Transforms/Scalar/InductiveRangeCheckElimination.h>
 #include <llvm/Transforms/Scalar/InstSimplifyPass.h>
+#include <llvm/Transforms/Scalar/MergedLoadStoreMotion.h>
 #include <llvm/Transforms/Scalar/JumpThreading.h>
 #include <llvm/Transforms/Scalar/LICM.h>
 #include <llvm/Transforms/Scalar/LoopDeletion.h>
@@ -58,12 +63,14 @@
 #include <llvm/Transforms/Scalar/LoopRotation.h>
 #include <llvm/Transforms/Scalar/LoopSimplifyCFG.h>
 #include <llvm/Transforms/Scalar/LoopUnrollPass.h>
+#include "llvm/Transforms/Scalar/LowerConstantIntrinsics.h"
 #include <llvm/Transforms/Scalar/MemCpyOptimizer.h>
 #include <llvm/Transforms/Scalar/Reassociate.h>
 #include <llvm/Transforms/Scalar/SCCP.h>
 #include <llvm/Transforms/Scalar/SROA.h>
 #include <llvm/Transforms/Scalar/SimpleLoopUnswitch.h>
 #include <llvm/Transforms/Scalar/SimplifyCFG.h>
+#include <llvm/Transforms/Scalar/WarnMissedTransforms.h>
 #include <llvm/Transforms/Vectorize/LoopVectorize.h>
 #include <llvm/Transforms/Vectorize/SLPVectorizer.h>
 #include <llvm/Transforms/Vectorize/VectorCombine.h>
@@ -334,9 +341,10 @@ static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimizat
         //options here, and adding a run of CVP to take advantage
         //of the unsimplified codegen information (e.g. known
         //zeros or ones)
-        FPM.addPass(SimplifyCFGPass(basicSimplifyCFGOptions()));
+        FPM.addPass(SimplifyCFGPass());
         FPM.addPass(DCEPass());
         FPM.addPass(SROAPass());
+        FPM.addPass(EarlyCSEPass());
         MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
     }
     invokeEarlySimplificationCallbacks(MPM, PB, O);
@@ -361,12 +369,13 @@ static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimizat
     {
         FunctionPassManager FPM;
         FPM.addPass(SROAPass());
-        // SROA can duplicate PHI nodes which can block LowerSIMD
-        FPM.addPass(InstCombinePass());
+        FPM.addPass(EarlyCSEPass(true /* Enable mem-ssa. */));
         FPM.addPass(JumpThreadingPass());
         FPM.addPass(CorrelatedValuePropagationPass());
-        FPM.addPass(ReassociatePass());
-        FPM.addPass(EarlyCSEPass());
+        FPM.addPass(InstSimplifyPass());
+        FPM.addPass(AggressiveInstCombinePass());
+        FPM.addPass(
+            SimplifyCFGPass(SimplifyCFGOptions().convertSwitchRangeToICmp(true)));
         JULIA_PASS(FPM.addPass(AllocOptPass()));
         invokePeepholeEPCallbacks(FPM, PB, O);
         MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
@@ -376,13 +385,12 @@ static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimizat
         FunctionPassManager FPM;
         {
             LoopPassManager LPM1, LPM2;
+            LPM1.addPass(LoopInstSimplifyPass());
+            LPM1.addPass(LoopSimplifyCFGPass());
             LPM1.addPass(LoopRotatePass());
             invokeLateLoopOptimizationCallbacks(LPM1, PB, O);
-            //We don't know if the loop callbacks support MSSA
             FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM1), /*UseMemorySSA = */false));
-#if JL_LLVM_VERSION < 150000
-#define LICMOptions()
-#endif
+            //We don't know if the loop callbacks support MSSA
             LPM2.addPass(LICMPass(LICMOptions()));
             JULIA_PASS(LPM2.addPass(JuliaLICMPass()));
             LPM2.addPass(SimpleLoopUnswitchPass(/*NonTrivial*/true, true));
@@ -394,47 +402,58 @@ static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimizat
         FPM.addPass(IRCEPass());
         {
             LoopPassManager LPM;
-            LPM.addPass(LoopInstSimplifyPass());
             LPM.addPass(LoopIdiomRecognizePass());
             LPM.addPass(IndVarSimplifyPass());
             LPM.addPass(LoopDeletionPass());
             LPM.addPass(LoopFullUnrollPass());
             invokeLoopOptimizerEndCallbacks(LPM, PB, O);
             //We don't know if the loop end callbacks support MSSA
-            FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA = */false));
+            FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM),/*UseMemorySSA = */false));
         }
         JULIA_PASS(FPM.addPass(AllocOptPass()));
         FPM.addPass(SROAPass());
-        FPM.addPass(InstSimplifyPass());
-        FPM.addPass(GVNPass());
-        FPM.addPass(MemCpyOptPass());
+        FPM.addPass(MergedLoadStoreMotionPass());
+        FPM.addPass(GVNPass()); //Maybe check NewGVN?
         FPM.addPass(SCCPPass());
-        FPM.addPass(CorrelatedValuePropagationPass());
-        FPM.addPass(DCEPass());
-        FPM.addPass(IRCEPass());
+        FPM.addPass(BDCEPass());
         FPM.addPass(InstCombinePass());
         FPM.addPass(JumpThreadingPass());
+        FPM.addPass(CorrelatedValuePropagationPass());
+        FPM.addPass(ADCEPass());
+        FPM.addPass(MemCpyOptPass());
         if (O.getSpeedupLevel() >= 3) {
             FPM.addPass(GVNPass());
         }
         FPM.addPass(DSEPass());
         invokePeepholeEPCallbacks(FPM, PB, O);
         FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
+        FPM.addPass(Float2IntPass());
+        FPM.addPass(LowerConstantIntrinsicsPass());
         JULIA_PASS(FPM.addPass(AllocOptPass()));
         {
             LoopPassManager LPM;
+            LPM.addPass(LoopRotatePass());
             LPM.addPass(LoopDeletionPass());
             LPM.addPass(LoopInstSimplifyPass());
             FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM)));
         }
         invokeScalarOptimizerCallbacks(FPM, PB, O);
+
         //TODO look into loop vectorize options
         FPM.addPass(LoopVectorizePass());
         FPM.addPass(LoopLoadEliminationPass());
         FPM.addPass(InstCombinePass());
         FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
         FPM.addPass(SLPVectorizerPass());
+        FPM.addPass(VectorCombinePass());
+        FPM.addPass(InstCombinePass());
+        FPM.addPass(LoopUnrollPass());
+        FPM.addPass(WarnMissedTransformationsPass());
+        FPM.addPass(InstCombinePass());
         invokeVectorizerCallbacks(FPM, PB, O);
+        FPM.addPass(createFunctionToLoopPassAdaptor(
+            LICMPass(LICMOptions()), /*UseMemorySSA=*/true));
+        FPM.addPass(AlignmentFromAssumptionsPass());
         FPM.addPass(ADCEPass());
         //TODO add BDCEPass here?
         MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
