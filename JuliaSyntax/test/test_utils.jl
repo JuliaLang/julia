@@ -20,6 +20,9 @@ using .JuliaSyntax:
     # Node inspection
     kind,
     flags,
+    head,
+    span,
+    SyntaxHead,
     is_trivia,
     sourcetext,
     haschildren,
