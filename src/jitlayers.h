@@ -114,21 +114,36 @@ struct NewPM {
 
     void printTimers() JL_NOTSAFEPOINT;
 
+    bool ignore_trace_pass(StringRef PassID) JL_NOTSAFEPOINT {
+        auto pass_str = PassID.str();
+        if (pass_str.rfind("PassManager", 0) == 0) return true;
+        std::string end_str = "PassAdaptor";
+        if (pass_str.rfind(end_str) == pass_str.length() - end_str.length()) return true;
+        return false;
+    }
+
     void registerCallbacks()
     {
 #ifdef ENABLE_TIMINGS
         auto event = jl_timing_get_zone("LLVM_OPT_PASS", "", __FILE__, __LINE__, 0);
         PIC->registerBeforeNonSkippedPassCallback([event, this](StringRef PassID, Any IR) {
+            if (ignore_trace_pass(PassID)) return;
             auto block = jl_timing_begin_zone(event);
-            jl_timing_puts(block, PassID.str().c_str());
+            auto pass_str = PassID.str();
+            jl_timing_puts(block, pass_str.c_str());
+#ifdef USE_TRACY
+            TracyCZoneName(block->tracy_ctx, pass_str.c_str(), strlen(pass_str.c_str()));
+#endif
         });
         PIC->registerAfterPassCallback(
             [event, this](StringRef PassID, Any IR, const PreservedAnalyses &PassPA) {
+                if (ignore_trace_pass(PassID)) return;
                 auto block = jl_current_task->ptls->timing_stack;
                 jl_timing_end_zone(block);
             });
         PIC->registerAfterPassInvalidatedCallback(
             [event, this](StringRef PassID, const PreservedAnalyses &PassPA) {
+                if (ignore_trace_pass(PassID)) return;
                 auto block = jl_current_task->ptls->timing_stack;
                 jl_timing_end_zone(block);
             });
