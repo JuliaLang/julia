@@ -1056,8 +1056,6 @@ end
         envs = [joinpath(@__DIR__, "project", "Extensions", "EnvWithHasExtensionsv2"), joinpath(@__DIR__, "project", "Extensions", "EnvWithHasExtensions")]
         cmd = addenv(```$(Base.julia_cmd()) --startup-file=no -e '
         begin
-
-
             push!(empty!(DEPOT_PATH), '$(repr(depot_path))')
             using HasExtensions
             using ExtDep
@@ -1067,6 +1065,22 @@ end
         '
         ```, "JULIA_LOAD_PATH" => join(envs, sep))
         @test success(cmd)
+
+        test_ext_proj = """
+        begin
+            using HasExtensions
+            using ExtDep
+            Base.get_extension(HasExtensions, :Extension) isa Module || error("expected extension to load")
+            using ExtDep2
+            Base.get_extension(HasExtensions, :ExtensionFolder) isa Module || error("expected extension to load")
+        end
+        """
+        for compile in (`--compiled-modules=no`, ``)
+            cmd_proj_ext = `$(Base.julia_cmd()) $compile --startup-file=no -e $test_ext_proj`
+            proj = joinpath(@__DIR__, "project", "Extensions")
+            cmd_proj_ext = addenv(cmd_proj_ext, "JULIA_LOAD_PATH" => join([joinpath(proj, "HasExtensions.jl"), joinpath(proj, "EnvWithDeps")], sep))
+            run(cmd_proj_ext)
+        end
     finally
         try
             rm(depot_path, force=true, recursive=true)
