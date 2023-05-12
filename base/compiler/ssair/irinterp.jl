@@ -58,6 +58,49 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, irsv::IRIn
     return RTEffects(rt, effects)
 end
 
+function update_phi!(irsv::IRInterpretationState, from::Int, to::Int)
+    ir = irsv.ir
+    if length(ir.cfg.blocks[to].preds) == 0
+        # Kill the entire block
+        for bidx = ir.cfg.blocks[to].stmts
+            ir.stmts[bidx][:inst] = nothing
+            ir.stmts[bidx][:type] = Bottom
+            ir.stmts[bidx][:flag] = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+        end
+        return
+    end
+    for sidx = ir.cfg.blocks[to].stmts
+        sinst = ir.stmts[sidx][:inst]
+        isa(sinst, Nothing) && continue # allowed between `PhiNode`s
+        isa(sinst, PhiNode) || break
+        for (eidx, edge) in enumerate(sinst.edges)
+            if edge == from
+                deleteat!(sinst.edges, eidx)
+                deleteat!(sinst.values, eidx)
+                push!(irsv.ssa_refined, sidx)
+                break
+            end
+        end
+    end
+end
+update_phi!(irsv::IRInterpretationState) = (from::Int, to::Int)->update_phi!(irsv, from, to)
+
+function kill_terminator_edges!(irsv::IRInterpretationState, term_idx::Int, bb::Int=block_for_inst(irsv.ir, term_idx))
+    ir = irsv.ir
+    inst = ir[SSAValue(term_idx)][:inst]
+    if isa(inst, GotoIfNot)
+        kill_edge!(ir, bb, inst.dest, update_phi!(irsv))
+        kill_edge!(ir, bb, bb+1, update_phi!(irsv))
+    elseif isa(inst, GotoNode)
+        kill_edge!(ir, bb, inst.label, update_phi!(irsv))
+    elseif isa(inst, ReturnNode)
+        # Nothing to do
+    else
+        @assert !isexpr(inst, :enter)
+        kill_edge!(ir, bb, bb+1, update_phi!(irsv))
+    end
+end
+
 function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union{Int,Nothing},
     @nospecialize(inst), @nospecialize(typ), irsv::IRInterpretationState,
     extra_reprocess::Union{Nothing,BitSet,BitSetBoundedMinPrioritySet})
@@ -66,30 +109,6 @@ function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union
         cond = inst.cond
         condval = maybe_extract_const_bool(argextype(cond, ir))
         if condval isa Bool
-            function update_phi!(from::Int, to::Int)
-                if length(ir.cfg.blocks[to].preds) == 0
-                    # Kill the entire block
-                    for bidx = ir.cfg.blocks[to].stmts
-                        ir.stmts[bidx][:inst] = nothing
-                        ir.stmts[bidx][:type] = Bottom
-                        ir.stmts[bidx][:flag] = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
-                    end
-                    return
-                end
-                for sidx = ir.cfg.blocks[to].stmts
-                    sinst = ir.stmts[sidx][:inst]
-                    isa(sinst, Nothing) && continue # allowed between `PhiNode`s
-                    isa(sinst, PhiNode) || break
-                    for (eidx, edge) in enumerate(sinst.edges)
-                        if edge == from
-                            deleteat!(sinst.edges, eidx)
-                            deleteat!(sinst.values, eidx)
-                            push!(irsv.ssa_refined, sidx)
-                            break
-                        end
-                    end
-                end
-            end
             if isa(cond, SSAValue)
                 kill_def_use!(irsv.tpdum, cond, idx)
             end
@@ -100,32 +119,25 @@ function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union
             if condval
                 ir.stmts[idx][:inst] = nothing
                 ir.stmts[idx][:type] = Any
-                kill_edge!(ir, bb, inst.dest, update_phi!)
+                kill_edge!(ir, bb, inst.dest, update_phi!(irsv))
             else
                 ir.stmts[idx][:inst] = GotoNode(inst.dest)
-                kill_edge!(ir, bb, bb+1, update_phi!)
+                kill_edge!(ir, bb, bb+1, update_phi!(irsv))
             end
             return true
         end
         return propagate_control_effects!(interp, idx, inst, irsv, extra_reprocess)
     end
-
     rt = nothing
     if isa(inst, Expr)
         head = inst.head
         if head === :call || head === :foreigncall || head === :new || head === :splatnew
             (; rt, effects) = abstract_eval_statement_expr(interp, inst, nothing, irsv)
             ir.stmts[idx][:flag] |= flags_for_effects(effects)
-            if is_foldable(effects) && isa(rt, Const) && is_inlineable_constant(rt.val)
-                ir.stmts[idx][:inst] = quoted(rt.val)
-            end
         elseif head === :invoke
             rt, nothrow = concrete_eval_invoke(interp, inst, inst.args[1]::MethodInstance, irsv)
             if nothrow
                 ir.stmts[idx][:flag] |= IR_FLAG_NOTHROW
-                if isa(rt, Const) && is_inlineable_constant(rt.val)
-                    ir.stmts[idx][:inst] = quoted(rt.val)
-                end
             end
         elseif head === :throw_undef_if_not || # TODO: Terminate interpretation early if known false?
                head === :gc_preserve_begin ||
@@ -148,9 +160,17 @@ function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union
     else
         error("reprocess_instruction!: unhandled instruction found")
     end
-    if rt !== nothing && !⊑(typeinf_lattice(interp), typ, rt)
-        ir.stmts[idx][:type] = rt
-        return true
+    if rt !== nothing
+        if isa(rt, Const)
+            ir.stmts[idx][:type] = rt
+            if is_inlineable_constant(rt.val) && (ir.stmts[idx][:flag] & IR_FLAG_EFFECT_FREE) != 0
+                ir.stmts[idx][:inst] = quoted(rt.val)
+            end
+            return true
+        elseif !⊑(typeinf_lattice(interp), typ, rt)
+            ir.stmts[idx][:type] = rt
+            return true
+        end
     end
     return false
 end
@@ -228,11 +248,17 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
                 delete!(ssa_refined, idx)
             end
             if any_refined && reprocess_instruction!(interp,
-                idx, bb, inst, typ, irsv, extra_reprocess)
+                    idx, bb, inst, typ, irsv, extra_reprocess)
                 push!(ssa_refined, idx)
+                inst = ir.stmts[idx][:inst]
+                typ = ir.stmts[idx][:type]
             end
-            idx == lstmt && process_terminator!(ir, inst, idx, bb, all_rets, bb_ip) && @goto residual_scan
+            if idx == lstmt
+                process_terminator!(ir, inst, idx, bb, all_rets, bb_ip) && @goto residual_scan
+                (isa(inst, GotoNode) || isa(inst, GotoIfNot) || isa(inst, ReturnNode) || isexpr(inst, :enter)) && continue
+            end
             if typ === Bottom && !isa(inst, PhiNode)
+                kill_terminator_edges!(irsv, lstmt, bb)
                 break
             end
         end

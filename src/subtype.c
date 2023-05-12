@@ -1646,11 +1646,12 @@ static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, in
 static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
 {
     e->vars = NULL;
-    assert(env != NULL || envsz == 0);
     e->envsz = envsz;
     e->envout = env;
-    if (envsz)
+    if (envsz) {
+        assert(env != NULL);
         memset(env, 0, envsz*sizeof(void*));
+    }
     e->envidx = 0;
     e->invdepth = 0;
     e->ignore_free = 0;
@@ -2286,7 +2287,9 @@ int jl_has_intersect_kind_not_type(jl_value_t *t)
 
 JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
 {
-    if (jl_typeis(x,t) || t == (jl_value_t*)jl_any_type)
+    if (t == (jl_value_t*)jl_any_type || jl_typetagis(x,t))
+        return 1;
+    if (jl_typetagof(x) < (jl_max_tags << 4) && jl_is_datatype(t) && jl_typetagis(x,((jl_datatype_t*)t)->smalltag << 4))
         return 1;
     if (jl_is_type(x)) {
         if (t == (jl_value_t*)jl_type_type)

@@ -165,12 +165,14 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
         Instruction *I = cast<Instruction>(U);
         ToDelete.push_back(I);
 
-        OptimizationRemarkEmitter ORE(I->getParent()->getParent());
-        LoopInfo &LI = GetLI(*I->getParent()->getParent());
-        Loop *L = LI.getLoopFor(I->getParent());
-        I->removeFromParent();
-        if (!L)
+        BasicBlock *B = I->getParent();
+        OptimizationRemarkEmitter ORE(B->getParent());
+        LoopInfo &LI = GetLI(*B->getParent());
+        Loop *L = LI.getLoopFor(B);
+        if (!L) {
+            I->removeFromParent();
             continue;
+        }
 
         LLVM_DEBUG(dbgs() << "LSL: loopinfo marker found\n");
         bool simd = false;
@@ -209,8 +211,8 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
 
         LLVM_DEBUG(dbgs() << "LSL: simd: " << simd << " ivdep: " << ivdep << "\n");
 
-        REMARK([&]() {
-            return OptimizationRemarkAnalysis(DEBUG_TYPE, "Loop SIMD Flags", I)
+        REMARK([=]() {
+            return OptimizationRemarkAnalysis(DEBUG_TYPE, "Loop SIMD Flags", I->getDebugLoc(), B)
                 << "Loop marked for SIMD vectorization with flags { \"simd\": " << (simd ? "true" : "false") << ", \"ivdep\": " << (ivdep ? "true" : "false") << " }";
         });
 
@@ -257,6 +259,8 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
                     break;
             }
         }
+
+        I->removeFromParent();
 
         Changed = true;
     }
@@ -343,12 +347,13 @@ static RegisterPass<LowerSIMDLoopLegacy> X("LowerSIMDLoop", "LowerSIMDLoop Pass"
                                      false /* Only looks at CFG */,
                                      false /* Analysis Pass */);
 
-JL_DLLEXPORT Pass *createLowerSimdLoopPass()
+Pass *createLowerSimdLoopPass()
 {
     return new LowerSIMDLoopLegacy();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddLowerSimdLoopPass_impl(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddLowerSimdLoopPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createLowerSimdLoopPass());
 }

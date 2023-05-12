@@ -1163,8 +1163,8 @@ uncompressed_ir(m::Method) = isdefined(m, :source) ? _uncompressed_ir(m, m.sourc
                              isdefined(m, :generator) ? error("Method is @generated; try `code_lowered` instead.") :
                              error("Code for this Method is not available.")
 _uncompressed_ir(m::Method, s::CodeInfo) = copy(s)
-_uncompressed_ir(m::Method, s::Array{UInt8,1}) = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, s)::CodeInfo
-_uncompressed_ir(ci::Core.CodeInstance, s::Array{UInt8,1}) = ccall(:jl_uncompress_ir, Any, (Any, Any, Any), ci.def.def::Method, ci, s)::CodeInfo
+_uncompressed_ir(m::Method, s::String) = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, s)::CodeInfo
+_uncompressed_ir(ci::Core.CodeInstance, s::String) = ccall(:jl_uncompress_ir, Any, (Any, Any, Any), ci.def.def::Method, ci, s)::CodeInfo
 # for backwards compat
 const uncompressed_ast = uncompressed_ir
 const _uncompressed_ast = _uncompressed_ir
@@ -1200,7 +1200,7 @@ struct CodegenParams
                    prefer_specsig::Bool=false,
                    gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
                    safepoint_on_entry::Bool=true,
-                   lookup::Ptr{Cvoid}=cglobal(:jl_rettype_inferred),
+                   lookup::Ptr{Cvoid}=unsafe_load(cglobal(:jl_rettype_inferred_addr, Ptr{Cvoid})),
                    generic_context = nothing)
         return new(
             Cint(track_allocations), Cint(code_coverage),
@@ -1500,6 +1500,39 @@ function code_ircode_by_type(
     return asts
 end
 
+
+"""
+    Base.return_types(f::Function, types::DataType=default_tt(f);
+                      world::UInt=get_world_counter(), interp::NativeInterpreter=Core.Compiler.NativeInterpreter(world))
+
+Return a list of possible return types for a given function `f` and argument types `types`.
+The list corresponds to the results of type inference on all the possible method match
+candidates for `f` and `types` (see also [`methods(f, types)`](@ref methods).
+
+# Example
+
+```julia
+julia> Base.return_types(sum, Tuple{Vector{Int}})
+1-element Vector{Any}:
+ Int64
+
+julia> methods(sum, (Union{Vector{Int},UnitRange{Int}},))
+# 2 methods for generic function "sum" from Base:
+ [1] sum(r::AbstractRange{<:Real})
+     @ range.jl:1396
+ [2] sum(a::AbstractArray; dims, kw...)
+     @ reducedim.jl:996
+
+julia> Base.return_types(sum, (Union{Vector{Int},UnitRange{Int}},))
+2-element Vector{Any}:
+ Int64 # the result of inference on sum(r::AbstractRange{<:Real})
+ Int64 # the result of inference on sum(a::AbstractArray; dims, kw...)
+```
+
+!!! warning
+    The `return_types` function should not be used from generated functions;
+    doing so will result in an error.
+"""
 function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
                       world = get_world_counter(),
                       interp = Core.Compiler.NativeInterpreter(world))
@@ -1525,6 +1558,42 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
     return rts
 end
 
+"""
+    infer_effects(f, types=default_tt(f); world=get_world_counter(), interp=Core.Compiler.NativeInterpreter(world))
+
+Compute the `Effects` of a function `f` with argument types `types`. The `Effects` represents the computational effects of the function call, such as whether it is free of side effects, guaranteed not to throw an exception, guaranteed to terminate, etc. The `world` and `interp` arguments specify the world counter and the native interpreter to use for the analysis.
+
+# Arguments
+- `f`: The function to analyze.
+- `types` (optional): The argument types of the function. Defaults to the default tuple type of `f`.
+- `world` (optional): The world counter to use for the analysis. Defaults to the current world counter.
+- `interp` (optional): The native interpreter to use for the analysis. Defaults to a new `Core.Compiler.NativeInterpreter` with the specified `world`.
+
+# Returns
+- `effects::Effects`: The computed effects of the function call.
+
+# Example
+
+```julia
+julia> function foo(x)
+           y = x * 2
+           return y
+       end;
+
+julia> effects = Base.infer_effects(foo, (Int,))
+(+c,+e,+n,+t,+s,+m,+i)
+```
+
+This function will return an `Effects` object with information about the computational effects of the function `foo` when called with an `Int` argument. See the documentation for `Effects` for more information on the various effect properties.
+
+!!! warning
+    The `infer_effects` function should not be used from generated functions;
+    doing so will result in an error.
+
+# See Also
+- [`Core.Compiler.Effects`](@ref): A type representing the computational effects of a method call.
+- [`Base.@assume_effects`](@ref): A macro for making assumptions about the effects of a method.
+"""
 function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
                        world = get_world_counter(),
                        interp = Core.Compiler.NativeInterpreter(world))

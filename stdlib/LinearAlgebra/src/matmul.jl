@@ -265,15 +265,14 @@ julia> C
  730.0  740.0
 ```
 """
-@inline mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat,
-             alpha::Number, beta::Number) =
+@inline mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number, β::Number) =
     generic_matmatmul!(
         C,
         adj_or_trans_char(A),
         adj_or_trans_char(B),
         _parent(A),
         _parent(B),
-        MulAddMul(alpha, beta)
+        MulAddMul(α, β)
     )
 
 """
