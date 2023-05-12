@@ -194,10 +194,6 @@
 (define (jl-expand-to-thunk-stmt expr file line)
   (expand-to-thunk-stmt- expr file line))
 
-(define (jl-expand-macroscope expr)
-  (error-wrap (lambda ()
-                (julia-expand-macroscope expr))))
-
 ;; construct default definitions of `eval` for non-bare modules
 ;; called by jl_eval_module_expr
 (define (module-default-defs name file line)
