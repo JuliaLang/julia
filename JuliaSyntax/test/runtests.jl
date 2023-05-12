@@ -51,6 +51,7 @@ end
 
 include("parse_stream.jl")
 include("parser.jl")
+include("green_node.jl")
 include("syntax_tree.jl")
 include("diagnostics.jl")
 include("parser_api.jl")

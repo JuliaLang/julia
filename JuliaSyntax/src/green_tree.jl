@@ -55,6 +55,10 @@ head(node::GreenNode)        = node.head
 
 Base.summary(node::GreenNode) = summary(node.head)
 
+function Base.:(==)(n1::GreenNode, n2::GreenNode)
+    n1.head == n2.head && n1.span == n2.span && n1.args == n2.args
+end
+
 # Pretty printing
 function _show_green_node(io, node, indent, pos, str, show_trivia)
     if !show_trivia && is_trivia(node)
