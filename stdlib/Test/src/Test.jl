@@ -485,10 +485,7 @@ Test Broken
 julia> @test 2 + 2 == 4 skip=false
 Test Passed
 
-julia> @test 2 == 4 skip=false
-Test Passed
-
-julia> 
+julia>
 ```
 
 !!! compat "Julia 1.7"
