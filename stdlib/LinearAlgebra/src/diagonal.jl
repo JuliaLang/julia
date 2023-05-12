@@ -2,7 +2,7 @@
 
 ## Diagonal matrices
 
-struct Diagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
+struct Diagonal{T,V<:AbstractVector{T}} <: AbstractBandedMatrix{T}
     diag::V
 
     function Diagonal{T,V}(diag) where {T,V<:AbstractVector{T}}

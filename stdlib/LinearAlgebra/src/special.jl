@@ -108,34 +108,34 @@ for op in (:+, :-)
 end
 
 # disambiguation between triangular and banded matrices, banded ones "dominate"
-mul!(C::AbstractMatrix, A::AbstractTriangular, B::BandedMatrix) = _mul!(C, A, B, MulAddMul())
-mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractTriangular) = _mul!(C, A, B, MulAddMul())
-mul!(C::AbstractMatrix, A::AbstractTriangular, B::BandedMatrix, alpha::Number, beta::Number) =
+mul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractBandedMatrix) = _mul!(C, A, B, MulAddMul())
+mul!(C::AbstractMatrix, A::AbstractBandedMatrix, B::AbstractTriangular) = _mul!(C, A, B, MulAddMul())
+mul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractBandedMatrix, alpha::Number, beta::Number) =
     _mul!(C, A, B, MulAddMul(alpha, beta))
-mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractTriangular, alpha::Number, beta::Number) =
+mul!(C::AbstractMatrix, A::AbstractBandedMatrix, B::AbstractTriangular, alpha::Number, beta::Number) =
     _mul!(C, A, B, MulAddMul(alpha, beta))
 
-function *(H::UpperHessenberg, B::Bidiagonal)
+function *(H::UpperHessenberg, B::AbstractBandedMatrix)
     T = promote_op(matprod, eltype(H), eltype(B))
     A = mul!(similar(H, T, size(H)), H, B)
-    return B.uplo == 'U' ? UpperHessenberg(A) : A
+    return istriu(B) ? UpperHessenberg(A) : A
 end
-function *(B::Bidiagonal, H::UpperHessenberg)
+function *(B::AbstractBandedMatrix, H::UpperHessenberg)
     T = promote_op(matprod, eltype(B), eltype(H))
     A = mul!(similar(H, T, size(H)), B, H)
-    return B.uplo == 'U' ? UpperHessenberg(A) : A
+    return istriu(B) ? UpperHessenberg(A) : A
 end
 
-function /(H::UpperHessenberg, B::Bidiagonal)
+function /(H::UpperHessenberg, B::AbstractBandedMatrix)
     T = typeof(oneunit(eltype(H))/oneunit(eltype(B)))
     A = _rdiv!(similar(H, T, size(H)), H, B)
-    return B.uplo == 'U' ? UpperHessenberg(A) : A
+    return istriu(B) ? UpperHessenberg(A) : A
 end
 
-function \(B::Bidiagonal, H::UpperHessenberg)
+function \(B::AbstractBandedMatrix, H::UpperHessenberg)
     T = typeof(oneunit(eltype(B))\oneunit(eltype(H)))
     A = ldiv!(similar(H, T, size(H)), B, H)
-    return B.uplo == 'U' ? UpperHessenberg(A) : A
+    return istriu(B) ? UpperHessenberg(A) : A
 end
 
 # specialized +/- for structured matrices. If these are removed, it falls

@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Bidiagonal matrices
-struct Bidiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
+struct Bidiagonal{T,V<:AbstractVector{T}} <: AbstractBandedMatrix{T}
     dv::V      # diagonal
     ev::V      # sub/super diagonal
     uplo::Char # upper bidiagonal ('U') or lower ('L')
@@ -421,11 +421,11 @@ end
 const BandedMatrix = Union{Bidiagonal,Diagonal,Tridiagonal,SymTridiagonal} # or BiDiTriSym
 const BiTriSym = Union{Bidiagonal,Tridiagonal,SymTridiagonal}
 const BiTri = Union{Bidiagonal,Tridiagonal}
-@inline mul!(C::AbstractVector, A::BandedMatrix, B::AbstractVector, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractVector, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractMatrix, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::AbstractMatrix, B::BandedMatrix, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::BandedMatrix, B::BandedMatrix, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::AbstractVector, A::AbstractBandedMatrix, B::AbstractVector, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::AbstractMatrix, A::AbstractBandedMatrix, B::AbstractVector, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::AbstractMatrix, A::AbstractBandedMatrix, B::AbstractMatrix, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractBandedMatrix, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::AbstractMatrix, A::AbstractBandedMatrix, B::AbstractBandedMatrix, alpha::Number, beta::Number) = _mul!(C, A, B, MulAddMul(alpha, beta))
 
 function check_A_mul_B!_sizes(C, A, B)
     mA, nA = size(A)

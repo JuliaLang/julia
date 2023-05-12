@@ -3,7 +3,7 @@
 #### Specialized matrix types ####
 
 ## (complex) symmetric tridiagonal matrices
-struct SymTridiagonal{T, V<:AbstractVector{T}} <: AbstractMatrix{T}
+struct SymTridiagonal{T, V<:AbstractVector{T}} <: AbstractBandedMatrix{T}
     dv::V                        # diagonal
     ev::V                        # superdiagonal
     function SymTridiagonal{T, V}(dv, ev) where {T, V<:AbstractVector{T}}
@@ -450,7 +450,7 @@ end
 end
 
 ## Tridiagonal matrices ##
-struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
+struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractBandedMatrix{T}
     dl::V    # sub-diagonal
     d::V     # diagonal
     du::V    # sup-diagonal
