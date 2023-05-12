@@ -1856,7 +1856,8 @@ end
 function get_usings!(usings, ex)
     ex isa Expr || return usings
     # get all `using` and `import` statements which are at the top level
-    for (i, arg) in enumerate(ex.args)
+    for i in 1:length(ex.args)
+        arg = ex.args[i]
         if Base.isexpr(arg, :toplevel)
             get_usings!(usings, arg)
         elseif Base.isexpr(arg, [:using, :import])
