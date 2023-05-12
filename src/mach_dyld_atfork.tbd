@@ -21,5 +21,6 @@ install-name:    '/usr/lib/libSystem.B.dylib'
 exports:
   - targets:         [ arm64-macos, arm64e-macos, x86_64-macos, x86_64-maccatalyst,
                        arm64-maccatalyst, arm64e-maccatalyst ]
-    symbols:         [ __dyld_atfork_parent, __dyld_atfork_prepare ]
+    symbols:         [ __dyld_atfork_parent, __dyld_atfork_prepare,
+                      __dyld_dlopen_atfork_parent, __dyld_dlopen_atfork_prepare ]
 ...
