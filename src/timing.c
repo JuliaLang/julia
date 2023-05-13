@@ -111,6 +111,7 @@ void jl_init_timing(void)
     TracyCPlotConfig(jl_timing_counters[JL_TIMING_COUNTER_JITSize].tracy_counter.name, TracyPlotFormatMemory, /* rectilinear */ 0, /* fill */ 1, /* color */ 0);
     TracyCPlotConfig(jl_timing_counters[JL_TIMING_COUNTER_JITCodeSize].tracy_counter.name, TracyPlotFormatMemory, /* rectilinear */ 0, /* fill */ 1, /* color */ 0);
     TracyCPlotConfig(jl_timing_counters[JL_TIMING_COUNTER_JITDataSize].tracy_counter.name, TracyPlotFormatMemory, /* rectilinear */ 0, /* fill */ 1, /* color */ 0);
+    TracyCPlotConfig(jl_timing_counters[JL_TIMING_COUNTER_ImageSize].tracy_counter.name, TracyPlotFormatMemory, /* rectilinear */ 0, /* fill */ 1, /* color */ 0);
 #endif
 }
 

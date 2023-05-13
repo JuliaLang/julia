@@ -197,6 +197,7 @@ void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
         X(JITSize) \
         X(JITCodeSize) \
         X(JITDataSize) \
+        X(ImageSize) \
 
 
 enum jl_timing_owners {
