@@ -1,19 +1,34 @@
 # Garbage Collection in Julia
 
+## Summary
+
+We present in this document an overview of Julia's garbage collector, and describe
+instrumentation that can be used to gather useful statistics about garbage collection
+performance in Julia.
+
+Our overview of Julia's garbage collector has been roughly divided into: a discussion of our
+dynamic memaory allocation algorithm, a discussion of the mechanism that we use to halt
+Julia compute threads whenever a collection is about to start (e.g. safepoints) and a
+discussion of our mark-sweep algorithm, focusing on the implementation of generational
+behavior in the collector.
+
+The instrumentation section focuses on describing the metrics exported through Julia's
+`gc_num` that can be used to gather statistics about garbage collection performance, ranging
+from number of allocated bytes throughout the program execution to length of
+stop-the-world pauses.
+
+There are a number of other very useful tools that can be used to instrument the garbage
+collector and the Julia heap (e.g. BPFTrace probes and heap snapshots). We won't be focusing
+on them in this document, but more information about these tools can be found in other
+chapters of the developer documentation.
+
 ## Introduction
 
-Julia has a serial, stop-the-world, generational, non-moving mark-sweep garbage collector.
-Native objects are precisely scanned and foreign ones are conservatively marked.
+Julia has a stop-the-world, generational, non-moving, precise mark-sweep garbage collector.
+The mark phase may run in parallel with up to `--gcthreads` threads, while sweeping is
+serial.
 
-## Memory layout of objects and GC bits
-
-An opaque tag is stored in the front of GC managed objects, and its lowest two bits are
-used for garbage collection.  The lowest bit is set for marked objects and the second
-lowest bit stores age information (e.g. it's only set for old objects).
-
-Objects are aligned by a multiple of 4 bytes to ensure this pointer tagging is legal.
-
-## Pool allocation
+## Dynamic Memory Allocation Algorithm
 
 Sufficiently small objects (up to 2032 bytes) are allocated on per-thread object
 pools.
@@ -23,8 +38,6 @@ A three-level tree (analogous to a three-level page-table) is used to keep metad
 about address ranges spanning at least one page.
 Sweeping a pool allocated object consists of inserting it back into the free list
 maintained by its pool.
-
-## Malloc'd arrays and big objects
 
 Two lists are used to keep track of the remaining allocated objects:
 one for sufficiently large malloc'd arrays (`mallocarray_t`) and one for
@@ -63,6 +76,14 @@ After these stages, old objects will be left with their mark bits set,
 so that references from them are not explored in a subsequent generational collection.
 This scheme eliminates the need of explicitly keeping a flag to indicate a full mark
 (though a flag to indicate a full sweep is necessary).
+
+## Memory layout of objects and GC bits
+
+An opaque tag is stored in the front of GC managed objects, and its lowest two bits are
+used for garbage collection.  The lowest bit is set for marked objects and the second
+lowest bit stores age information (e.g. it's only set for old objects).
+
+Objects are aligned by a multiple of 4 bytes to ensure this pointer tagging is legal.
 
 ## Heuristics
 
