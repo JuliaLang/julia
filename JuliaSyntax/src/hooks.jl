@@ -33,7 +33,7 @@ function _incomplete_tag(n::SyntaxNode, codelen)
     i,c = _first_error(n)
     if isnothing(c) || last_byte(c) < codelen || codelen == 0
         return :none
-    elseif first_byte(c) < codelen
+    elseif first_byte(c) <= codelen
         if kind(c) == K"ErrorEofMultiComment" && last_byte(c) == codelen
             # This is the one weird case where the token itself is an
             # incomplete error

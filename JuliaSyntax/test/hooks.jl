@@ -106,6 +106,8 @@
                 ")"            => :none
                 "1))"          => :none
                 "a b"          => :none
+                "()x"          => :none
+                "."            => :none
             ]
             @testset "$(repr(str))" begin
                 @test Base.incomplete_tag(Meta.parse(str, raise=false)) == tag
