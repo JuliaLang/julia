@@ -248,4 +248,8 @@ end
     # https://github.com/JuliaLang/julia/pull/42561
     @test JuliaSyntax.normalize_identifier("julia\u025B\u00B5\u00B7\u0387\u2212") ==
         "julia\u03B5\u03BC\u22C5\u22C5\u002D"
+
+    # https://github.com/JuliaLang/julia/issues/48870
+    # ℏ -> ħ
+    @test JuliaSyntax.normalize_identifier("\u210f") == "\u0127"
 end
