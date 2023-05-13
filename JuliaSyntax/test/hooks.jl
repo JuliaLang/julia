@@ -29,6 +29,19 @@
         @test err.source.first_line == 2
     end
 
+    @testset "toplevel errors" begin
+        ex = JuliaSyntax._core_parser_hook("a\nb\n[x,\ny)", "somefile", 1, 0, :all)[1]
+        @test ex.head == :toplevel
+        @test ex.args[1:5] == [
+            LineNumberNode(1, "somefile"),
+            :a,
+            LineNumberNode(2, "somefile"),
+            :b,
+            LineNumberNode(4, "somefile"),
+        ]
+        @test Meta.isexpr(ex.args[6], :error)
+    end
+
     @testset "enable_in_core!" begin
         JuliaSyntax.enable_in_core!()
 

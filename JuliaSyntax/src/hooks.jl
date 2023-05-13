@@ -122,6 +122,18 @@ function core_parser_hook(code, filename, offset, options)
     core_parser_hook(code, filename, 1, offset, options)
 end
 
+function _has_nested_error(ex)
+    if ex isa Expr
+        if ex.head == :error
+            return true
+        else
+            return any(_has_nested_error(e) for e in ex.args)
+        end
+    else
+        return false
+    end
+end
+
 # Debug log file for dumping parsed code
 const _debug_log = Ref{Union{Nothing,IO}}(nothing)
 
@@ -166,7 +178,8 @@ function _core_parser_hook(code, filename::String, lineno::Int, offset::Int, opt
 
         if any_error(stream)
             tree = build_tree(SyntaxNode, stream,
-                              wrap_toplevel_as_kind=K"None", first_line=lineno)
+                              wrap_toplevel_as_kind=K"None", first_line=lineno,
+                              filename=filename)
             tag = _incomplete_tag(tree, lastindex(code))
             if tag !== :none
                 # Here we replicate the particular messages 
@@ -184,7 +197,25 @@ function _core_parser_hook(code, filename::String, lineno::Int, offset::Int, opt
                 # we can do fancy error reporting instead.
                 error_ex = Expr(:error, ParseError(stream, filename=filename, first_line=lineno))
             end
-            ex = options === :all ? Expr(:toplevel, error_ex) : error_ex
+            ex = if options === :all
+                # When encountering a toplevel error, the reference parser
+                # * truncates the top level expression arg list before that error
+                # * includes the last line number
+                # * appends the error message
+                topex = Expr(tree)
+                @assert topex.head == :toplevel
+                i = findfirst(_has_nested_error, topex.args)
+                if i > 1 && topex.args[i-1] isa LineNumberNode
+                    i -= 1
+                end
+                resize!(topex.args, i-1)
+                _,errort = _first_error(tree)
+                push!(topex.args, LineNumberNode(source_line(errort), filename))
+                push!(topex.args, error_ex)
+                topex
+            else
+                error_ex
+            end
         else
             # TODO: Figure out a way to show warnings. Meta.parse() has no API
             # to communicate this, and we also can't show them to stdout as
