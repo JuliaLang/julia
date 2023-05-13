@@ -851,10 +851,27 @@ public:
                           jitlink::PassConfiguration &Config) override {
         Config.PostAllocationPasses.push_back([this](jitlink::LinkGraph &G) {
             size_t graph_size = 0;
+            size_t code_size = 0;
+            size_t data_size = 0;
             for (auto block : G.blocks()) {
                 graph_size += block->getSize();
             }
+            for (auto &section : G.sections()) {
+                size_t secsize = 0;
+                for (auto block : section.blocks()) {
+                    secsize += block->getSize();
+                }
+                if ((section.getMemProt() & orc::MemProt::Exec) == orc::MemProt::None) {
+                    data_size += secsize;
+                } else {
+                    code_size += secsize;
+                }
+                graph_size += secsize;
+            }
             this->total_size.fetch_add(graph_size, std::memory_order_relaxed);
+            jl_timing_counter_inc(JL_TIMING_COUNTER_JITSize, graph_size);
+            jl_timing_counter_inc(JL_TIMING_COUNTER_JITCodeSize, code_size);
+            jl_timing_counter_inc(JL_TIMING_COUNTER_JITDataSize, data_size);
             return Error::success();
         });
     }

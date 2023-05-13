@@ -108,6 +108,9 @@ void jl_init_timing(void)
     // We reference these by enum indexing and then asking for the name, since that allows the compiler
     // to catch name mismatches.
     TracyCPlotConfig(jl_timing_counters[JL_TIMING_COUNTER_HeapSize].tracy_counter.name, TracyPlotFormatMemory, /* rectilinear */ 0, /* fill */ 1, /* color */ 0);
+    TracyCPlotConfig(jl_timing_counters[JL_TIMING_COUNTER_JITSize].tracy_counter.name, TracyPlotFormatMemory, /* rectilinear */ 0, /* fill */ 1, /* color */ 0);
+    TracyCPlotConfig(jl_timing_counters[JL_TIMING_COUNTER_JITCodeSize].tracy_counter.name, TracyPlotFormatMemory, /* rectilinear */ 0, /* fill */ 1, /* color */ 0);
+    TracyCPlotConfig(jl_timing_counters[JL_TIMING_COUNTER_JITDataSize].tracy_counter.name, TracyPlotFormatMemory, /* rectilinear */ 0, /* fill */ 1, /* color */ 0);
 #endif
 }
 
