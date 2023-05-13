@@ -127,7 +127,11 @@ end
 
 _memcmp(a::Union{Ptr{UInt8},AbstractString}, b::Union{Ptr{UInt8},AbstractString}) = _memcmp(a, b, min(sizeof(a), sizeof(b)))
 function _memcmp(a::Union{Ptr{UInt8},AbstractString}, b::Union{Ptr{UInt8},AbstractString}, len::Int)
-    ccall(:memcmp, Cint, (Ptr{UInt8}, Ptr{UInt8}, Csize_t), a, b, len % Csize_t) % Int
+    GC.@preserve a b begin
+        pa = unsafe_convert(Ptr{UInt8}, a)
+        pb = unsafe_convert(Ptr{UInt8}, b)
+        memcmp(pa, pb, len % Csize_t) % Int
+    end
 end
 
 function cmp(a::String, b::String)

@@ -98,4 +98,3 @@ Call `memcmp` from the C standard library.
 function memcmp(a::Ptr, b::Ptr, n::Integer)
     ccall(:memcmp, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), a, b, n % Csize_t) % Int
 end
-

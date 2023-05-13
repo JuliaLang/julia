@@ -464,7 +464,10 @@ end
 getindex(::Type{Any}) = Vector{Any}()
 
 function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
-    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), a, x isa eltype(a) ? x : convert(eltype(a), x), length(a))
+    t = @_gc_preserve_begin a
+    p = unsafe_convert(Ptr{Cvoid}, a)
+    memset(p, x isa eltype(a) ? x : convert(eltype(a), x), length(a))
+    @_gc_preserve_end t
     return a
 end
 
@@ -1832,22 +1835,60 @@ function empty!(a::Vector)
 end
 
 _memcmp(a, b, len) = ccall(:memcmp, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), a, b, len % Csize_t) % Int
+# function _memcmp(a, b, len)
+#     ta = @_gc_preserve_begin a
+#     tb = @_gc_preserve_begin b
+#     pa = unsafe_convert(Ptr{Cvoid}, a)
+#     pb = unsafe_convert(Ptr{Cvoid}, b)
+#     memcmp(pa, pb, len % Csize_t) % Int
+#     @_gc_preserve_end ta
+#     @_gc_preserve_end tb
+# end
 
 # use memcmp for cmp on byte arrays
 function cmp(a::Array{UInt8,1}, b::Array{UInt8,1})
-    c = _memcmp(a, b, min(length(a),length(b)))
+    ta = @_gc_preserve_begin a
+    tb = @_gc_preserve_begin b
+    pa = unsafe_convert(Ptr{Cvoid}, a)
+    pb = unsafe_convert(Ptr{Cvoid}, b)
+    c = memcmp(pa, pb, min(length(a),length(b)))
+    @_gc_preserve_end ta
+    @_gc_preserve_end tb
     return c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
 
 const BitIntegerArray{N} = Union{map(T->Array{T,N}, BitInteger_types)...} where N
 # use memcmp for == on bit integer types
-==(a::Arr, b::Arr) where {Arr <: BitIntegerArray} =
-    size(a) == size(b) && 0 == _memcmp(a, b, sizeof(eltype(Arr)) * length(a))
+function ==(a::Arr, b::Arr) where {Arr <: BitIntegerArray}
+    if size(a) == size(b)
+        ta = @_gc_preserve_begin a
+        tb = @_gc_preserve_begin b
+        pa = unsafe_convert(Ptr{Cvoid}, a)
+        pb = unsafe_convert(Ptr{Cvoid}, b)
+        c = memcmp(pa, pb, sizeof(eltype(Arr)) * length(a))
+        @_gc_preserve_end ta
+        @_gc_preserve_end tb
+        return c == 0
+    else
+        return false
+    end
+end
 
-# this is ~20% faster than the generic implementation above for very small arrays
 function ==(a::Arr, b::Arr) where Arr <: BitIntegerArray{1}
     len = length(a)
-    len == length(b) && 0 == _memcmp(a, b, sizeof(eltype(Arr)) * len)
+    if len == length(b)
+        ta = @_gc_preserve_begin a
+        tb = @_gc_preserve_begin b
+        T = eltype(Arr)
+        pa = unsafe_convert(Ptr{T}, a)
+        pb = unsafe_convert(Ptr{T}, b)
+        c = memcmp(pa, pb, sizeof(T) * len)
+        @_gc_preserve_end ta
+        @_gc_preserve_end tb
+        return c == 0
+    else
+        return false
+    end
 end
 
 """
