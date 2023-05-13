@@ -7,7 +7,7 @@ instrumentation that can be used to gather useful statistics about garbage colle
 performance in Julia.
 
 Our overview of Julia's garbage collector has been roughly divided into: a discussion of our
-dynamic memaory allocation algorithm, a discussion of the mechanism that we use to halt
+dynamic memory allocation algorithm, a discussion of the mechanism that we use to halt
 Julia compute threads whenever a collection is about to start (e.g. safepoints) and a
 discussion of our mark-sweep algorithm, focusing on the implementation of generational
 behavior in the collector.
