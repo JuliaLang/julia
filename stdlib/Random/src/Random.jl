@@ -325,6 +325,7 @@ Pick a random element or array of random elements from the set of values specifi
 When only one argument is passed besides the optional `rng` and is a `Tuple`, it is interpreted
 as a collection of values (`S`) and not as `dims`.
 
+Also see the `rand!` function.
 
 !!! compat "Julia 1.1"
     Support for `S` as a tuple requires at least Julia 1.1.
