@@ -33,10 +33,20 @@
                      LineNumberNode(4),
                      :c,
                 )
+            @test parsestmt("(a;b;c)") ==
+                Expr(:block,
+                     :a,
+                     LineNumberNode(1),
+                     :b,
+                     LineNumberNode(1),
+                     :c,
+                )
             @test parsestmt("begin end") ==
                 Expr(:block,
                      LineNumberNode(1)
                 )
+            @test parsestmt("(;;)") ==
+                Expr(:block)
 
             @test parseall("a\n\nb") ==
                 Expr(:toplevel,
@@ -45,6 +55,8 @@
                      LineNumberNode(3),
                      :b,
                 )
+            @test parsestmt("a;b") ==
+                Expr(:toplevel, :a, :b)
 
             @test parsestmt("module A\n\nbody\nend") ==
                 Expr(:module,

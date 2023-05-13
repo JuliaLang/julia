@@ -33,6 +33,8 @@ const RAW_STRING_FLAG = RawFlags(1<<6)
 const PARENS_FLAG = RawFlags(1<<5)
 # Set for K"quote" for the short form `:x` as oppsed to long form `quote x end`
 const COLON_QUOTE = RawFlags(1<<5)
+# Set for K"toplevel" which is delimited by parentheses
+const TOPLEVEL_SEMICOLONS_FLAG = RawFlags(1<<5)
 
 # Set for K"struct" when mutable
 const MUTABLE_FLAG = RawFlags(1<<5)
@@ -99,6 +101,8 @@ function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
             has_flags(head, PARENS_FLAG) && (str = str*"-p")
         elseif kind(head) == K"quote"
             has_flags(head, COLON_QUOTE) && (str = str*"-:")
+        elseif kind(head) == K"toplevel"
+            has_flags(head, TOPLEVEL_SEMICOLONS_FLAG) && (str = str*"-;")
         elseif kind(head) == K"struct"
             has_flags(head, MUTABLE_FLAG) && (str = str*"-mut")
         elseif kind(head) == K"module"
