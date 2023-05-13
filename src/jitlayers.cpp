@@ -861,7 +861,7 @@ public:
                 for (auto block : section.blocks()) {
                     secsize += block->getSize();
                 }
-                if ((section.getMemProt() & orc::MemProt::Exec) == orc::MemProt::None) {
+                if ((section.getMemProt() & jitlink::MemProt::Exec) == jitlink::MemProt::None) {
                     data_size += secsize;
                 } else {
                     code_size += secsize;
