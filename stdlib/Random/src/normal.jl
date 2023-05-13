@@ -19,6 +19,7 @@ The `Base` module currently provides an implementation for the types
 [`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default), and their
 [`Complex`](@ref) counterparts. When the type argument is complex, the values are drawn
 from the circularly symmetric complex normal distribution of variance 1 (corresponding to real and imaginary part having independent normal distribution with mean zero and variance `1/2`).
+Also see the `randn!` function.
 
 # Examples
 ```jldoctest
