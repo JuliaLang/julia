@@ -215,7 +215,7 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
     elseif k == K"macrocall"
         _reorder_parameters!(args, 2)
         insert!(args, 2, loc)
-    elseif k == K"block" || k == K"toplevel"
+    elseif k == K"block" || (k == K"toplevel" && !has_flags(head, TOPLEVEL_SEMICOLONS_FLAG))
         if isempty(args)
             push!(args, loc)
         else
@@ -224,6 +224,9 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
                 args[2*i] = args[i]
                 args[2*i-1] = source_location(LineNumberNode, source, first(childranges[i]))
             end
+        end
+        if k == K"block" && has_flags(head, PARENS_FLAG)
+            popfirst!(args)
         end
     elseif k == K"doc"
         headsym = :macrocall

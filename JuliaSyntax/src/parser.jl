@@ -495,7 +495,7 @@ function parse_stmts(ps::ParseState)
              error="extra tokens after end of expression")
     end
     if do_emit
-        emit(ps, mark, K"toplevel")
+        emit(ps, mark, K"toplevel", TOPLEVEL_SEMICOLONS_FLAG)
     end
 end
 

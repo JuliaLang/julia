@@ -39,7 +39,7 @@ end
 tests = [
     JuliaSyntax.parse_toplevel => [
         "a \n b"     =>  "(toplevel a b)"
-        "a;b \n c;d" =>  "(toplevel (toplevel a b) (toplevel c d))"
+        "a;b \n c;d" =>  "(toplevel (toplevel-; a b) (toplevel-; c d))"
         "a \n \n"    =>  "(toplevel a)"
         ""           =>  "(toplevel)"
     ],
@@ -51,10 +51,10 @@ tests = [
         "a\nb"    => "(block a b)"
     ],
     JuliaSyntax.parse_stmts => [
-        "a;b;c"   => "(toplevel a b c)"
-        "a;;;b;;" => "(toplevel a b)"
+        "a;b;c"   => "(toplevel-; a b c)"
+        "a;;;b;;" => "(toplevel-; a b)"
         """ "x" a ; "y" b """ =>
-            """(toplevel (doc (string "x") a) (doc (string "y") b))"""
+            """(toplevel-; (doc (string "x") a) (doc (string "y") b))"""
         "x y"  =>  "x (error-t y)"
     ],
     JuliaSyntax.parse_eq => [
