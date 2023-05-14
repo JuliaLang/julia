@@ -99,6 +99,7 @@ unsafe_wrap(Atype::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}},
 """
     unsafe_load(p::Ptr{T}, i::Integer=1)
     unsafe_load(p::Ptr{T}, order::Symbol)
+    unsafe_load(p::Ptr{T}, i::Integer, order::Symbol)
 
 Load a value of type `T` from the address of the `i`th element (1-indexed) starting at `p`.
 This is equivalent to the C expression `p[i-1]`. Optionally, an ordering can be provided.
@@ -117,6 +118,8 @@ end
 
 """
     unsafe_store!(p::Ptr{T}, x, i::Integer=1)
+    unsafe_store!(p::Ptr{T}, x, order::Symbol)
+    unsafe_store!(p::Ptr{T}, x, i::Integer, order::Symbol)
 
 Store a value of type `T` to the address of the `i`th element (1-indexed) starting at `p`.
 This is equivalent to the C expression `p[i-1] = x`. Optionally, an ordering can be
