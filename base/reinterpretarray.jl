@@ -26,7 +26,7 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
 
     global reinterpret
 
-    """
+    @doc """
         reinterpret(T::DataType, A::AbstractArray)
 
     Construct a view of the array with the same binary data as the given
