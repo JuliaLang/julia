@@ -608,6 +608,7 @@ tests = [
         "try x catch \n y end"  =>  "(try (block x) (catch false (block y)))"
         "try x catch e y end"   =>  "(try (block x) (catch e (block y)))"
         "try x catch \$e y end" =>  "(try (block x) (catch (\$ e) (block y)))"
+        "try x catch var\"#\" y end" => "(try (block x) (catch (var #) (block y)))"
         "try x catch e+3 y end" =>  "(try (block x) (catch (error (call-i e + 3)) (block y)))"
         "try x finally y end"   =>  "(try (block x) (finally (block y)))"
         # v1.8 only
