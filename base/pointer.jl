@@ -139,6 +139,64 @@ function unsafe_store!(p::Ptr, x, i::Integer, order::Symbol)
     unsafe_store!(p + (aligned_sizeof(eltype(p)) * (Int(i) - 1)), x, order)
 end
 
+"""
+    unsafe_modify!(p::Ptr{T}, op, x, [order::Symbol]) -> Pair
+
+These atomically perform the operations to get and set a field after applying
+the function `op`.
+
+    y = unsafe_load(p)
+    z = op(y, x)
+    unsafe_store!(p, z)
+    return y => z
+
+If supported by the hardware (for example, atomic increment), this may be
+optimized to the appropriate hardware instruction, otherwise it'll use a loop.
+"""
+function unsafe_modify!(p::Ptr, op, x, order::Symbol=:not_atomic)
+    Core.Intrinsics.atomic_pointermodify(p, op, x, order)
+end
+
+"""
+    unsafe_replace!(p::Ptr{T}, expected, desired,
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> (; old, success::Bool)
+
+These atomically perform the operations to get and conditionally set a field to
+a given value.
+
+    y = unsafe_load(p, fail_order)
+    ok = y === expected
+    if ok
+        unsafe_store!(p, desired, success_order)
+    end
+    return (; old = y, success = ok)
+
+If supported by the hardware, this may be optimized to the appropriate hardware
+instruction, otherwise it'll use a loop.
+"""
+function unsafe_replace!(p::Ptr{Any}, @nospecialize(expected), @nospecialize(desired), success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
+    Core.Intrinsics.atomic_pointerreplace(p, expected, desired, success_order, fail_order)
+end
+function unsafe_replace!(p::Ptr{T}, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order) where {T}
+    Core.Intrinsics.atomic_pointerreplace(p, convert(T, expected), convert(T, desired), success_order, fail_order)
+end
+
+"""
+    unsafe_swap!(p::Ptr{T}, x, [order::Symbol])
+
+These atomically perform the operations to simultaneously get and set a field:
+
+    y = unsafe_load(p)
+    unsafe_store!(p, x)
+    return y
+"""
+function unsafe_swap!(p::Ptr{Any}, @nospecialize(x), order::Symbol=:not_atomic)
+    Core.Intrinsics.atomic_pointerswap(p, x, order)
+end
+function unsafe_swap!(p::Ptr{T}, x, order::Symbol=:not_atomic) where {T}
+    Core.Intrinsics.atomic_pointerswap(p, convert(T, x), order)
+end
+
 # convert a raw Ptr to an object reference, and vice-versa
 """
     unsafe_pointer_to_objref(p::Ptr)
