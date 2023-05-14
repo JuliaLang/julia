@@ -109,6 +109,9 @@ pointer `p` to ensure that it is valid. Like C, the programmer is responsible fo
 that referenced memory is not freed or garbage collected while invoking this function.
 Incorrect usage may segfault your program or return garbage answers. Unlike C, dereferencing
 memory region allocated as different type may be valid provided that the types are compatible.
+
+!!! compat "Julia 1.10"
+     The `order` argument is available as of Julia 1.10.
 """
 unsafe_load(p::Ptr, i::Integer=1) = pointerref(p, Int(i), 1)
 unsafe_load(p::Ptr, order::Symbol) = atomic_pointerref(p, order)
@@ -130,11 +133,13 @@ pointer `p` to ensure that it is valid. Like C, the programmer is responsible fo
 that referenced memory is not freed or garbage collected while invoking this function.
 Incorrect usage may segfault your program. Unlike C, storing memory region allocated as
 different type may be valid provided that that the types are compatible.
+
+!!! compat "Julia 1.10"
+     The `order` argument is available as of Julia 1.10.
 """
 unsafe_store!(p::Ptr{Any}, @nospecialize(x), i::Integer=1) = pointerset(p, x, Int(i), 1)
 unsafe_store!(p::Ptr{T}, x, i::Integer=1) where {T} = pointerset(p, convert(T,x), Int(i), 1)
-unsafe_store!(p::Ptr{Any}, @nospecialize(x), order::Symbol) = atomic_pointerset(p, x, order)
-unsafe_store!(p::Ptr{T}, x, order::Symbol) where {T} = atomic_pointerset(p, convert(T, x), order)
+unsafe_store!(p::Ptr, x, order::Symbol) = atomic_pointerset(p, x, order)
 function unsafe_store!(p::Ptr, x, i::Integer, order::Symbol)
     unsafe_store!(p + (aligned_sizeof(eltype(p)) * (Int(i) - 1)), x, order)
 end
@@ -152,6 +157,9 @@ the function `op`.
 
 If supported by the hardware (for example, atomic increment), this may be
 optimized to the appropriate hardware instruction, otherwise it'll use a loop.
+
+!!! compat "Julia 1.10"
+     This function requires at least Julia 1.10.
 """
 function unsafe_modify!(p::Ptr, op, x, order::Symbol=:not_atomic)
     Core.Intrinsics.atomic_pointermodify(p, op, x, order)
@@ -173,12 +181,17 @@ a given value.
 
 If supported by the hardware, this may be optimized to the appropriate hardware
 instruction, otherwise it'll use a loop.
+
+!!! compat "Julia 1.10"
+     This function requires at least Julia 1.10.
 """
+function unsafe_replace!(p::Ptr{T}, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order) where {T}
+    @inline
+    xT = desired isa T ? desired : convert(T, desired)
+    Core.Intrinsics.atomic_pointerreplace(p, expected, xT, success_order, fail_order)
+end
 function unsafe_replace!(p::Ptr{Any}, @nospecialize(expected), @nospecialize(desired), success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
     Core.Intrinsics.atomic_pointerreplace(p, expected, desired, success_order, fail_order)
-end
-function unsafe_replace!(p::Ptr{T}, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order) where {T}
-    Core.Intrinsics.atomic_pointerreplace(p, convert(T, expected), convert(T, desired), success_order, fail_order)
 end
 
 """
@@ -189,12 +202,17 @@ These atomically perform the operations to simultaneously get and set a field:
     y = unsafe_load(p)
     unsafe_store!(p, x)
     return y
+
+!!! compat "Julia 1.10"
+     This function requires at least Julia 1.10.
 """
-function unsafe_swap!(p::Ptr{Any}, @nospecialize(x), order::Symbol=:not_atomic)
+function unsafe_swap!(p::Ptr{Any}, x, order::Symbol=:not_atomic)
     Core.Intrinsics.atomic_pointerswap(p, x, order)
 end
 function unsafe_swap!(p::Ptr{T}, x, order::Symbol=:not_atomic) where {T}
-    Core.Intrinsics.atomic_pointerswap(p, convert(T, x), order)
+    @inline
+    xT = x isa T ? x : convert(T, x)
+    return Core.Intrinsics.atomic_pointerswap(p, xT, order)
 end
 
 # convert a raw Ptr to an object reference, and vice-versa
