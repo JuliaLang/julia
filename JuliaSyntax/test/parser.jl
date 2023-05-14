@@ -226,8 +226,11 @@ tests = [
         "+(a...)"  =>  "(call + (... a))"
         "+(a;b,c)" =>  "(call + a (parameters b c))"
         "+(;a)"    =>  "(call + (parameters a))"
+        "+(;;a)"   =>  "(call + (parameters) (parameters a))"
         "+()"      =>  "(call +)"
         "+(\n;a)"  =>  "(call + (parameters a))"
+        "+(;)"     =>  "(call + (parameters))"
+        "+(\n;\n)" =>  "(call + (parameters))"
         "+(\n)"    =>  "(call +)"
         # Whitespace not allowed before prefix function call bracket
         "+ (a,b)"  =>  "(call + (error) a b)"
@@ -238,6 +241,11 @@ tests = [
         # Unary function calls with brackets as grouping, not an arglist
         ".+(a)"   =>  "(dotcall-pre + (parens a))"
         "+(a;b)"  =>  "(call-pre + (block-p a b))"
+        "+(;;)"   =>  "(call-pre + (block-p))"
+        "+(;;)"   =>  "(call-pre + (block-p))"
+        "+(a;)"   =>  "(call-pre + (block-p a))"
+        "+(a;;)"  =>  "(call-pre + (block-p a))"
+        "+(\n;\n;\n)" =>  "(call-pre + (block-p))"
         "+(a=1)"  =>  "(call-pre + (parens (= a 1)))"
         # Unary operators have lower precedence than ^
         "+(a)^2"  =>  "(call-pre + (call-i (parens a) ^ 2))"
