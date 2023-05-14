@@ -98,9 +98,10 @@ unsafe_wrap(Atype::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}},
 
 """
     unsafe_load(p::Ptr{T}, i::Integer=1)
+    unsafe_load(p::Ptr{T}, order::Symbol)
 
 Load a value of type `T` from the address of the `i`th element (1-indexed) starting at `p`.
-This is equivalent to the C expression `p[i-1]`.
+This is equivalent to the C expression `p[i-1]`. Optionally, an ordering can be provided.
 
 The `unsafe` prefix on this function indicates that no validation is performed on the
 pointer `p` to ensure that it is valid. Like C, the programmer is responsible for ensuring
@@ -109,12 +110,14 @@ Incorrect usage may segfault your program or return garbage answers. Unlike C, d
 memory region allocated as different type may be valid provided that the types are compatible.
 """
 unsafe_load(p::Ptr, i::Integer=1) = pointerref(p, Int(i), 1)
+unsafe_laod(p::Ptr, order::Symbol) = atomic_pointerref(p, order)
 
 """
     unsafe_store!(p::Ptr{T}, x, i::Integer=1)
 
 Store a value of type `T` to the address of the `i`th element (1-indexed) starting at `p`.
-This is equivalent to the C expression `p[i-1] = x`.
+This is equivalent to the C expression `p[i-1] = x`. Optionally, an ordering can be
+provided.
 
 The `unsafe` prefix on this function indicates that no validation is performed on the
 pointer `p` to ensure that it is valid. Like C, the programmer is responsible for ensuring
@@ -124,6 +127,9 @@ different type may be valid provided that that the types are compatible.
 """
 unsafe_store!(p::Ptr{Any}, @nospecialize(x), i::Integer=1) = pointerset(p, x, Int(i), 1)
 unsafe_store!(p::Ptr{T}, x, i::Integer=1) where {T} = pointerset(p, convert(T,x), Int(i), 1)
+unsafe_store!(p::Ptr{Any}, @nospecialize(x), order::Symbol) = atomic_pointerset(p, x, order)
+unsafe_store!(p::Ptr{T}, x, order::Symbol) where {T} = atomic_pointerset(p, convert(T, x), order)
+
 
 # convert a raw Ptr to an object reference, and vice-versa
 """

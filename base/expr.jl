@@ -1090,8 +1090,14 @@ function make_atomic(order, ex)
         if isexpr(ex, :., 2)
             l, r = esc(ex.args[1]), esc(ex.args[2])
             return :(getproperty($l, $r, $order))
+        elseif isexpr(ex, :call, 2) && ex.args[1] === :unsafe_load
+            return :(unsafe_load($(esc(ex.args[2])), $order))
         elseif isexpr(ex, :call, 3)
-            return make_atomic(order, ex.args[2], ex.args[1], ex.args[3])
+            if ex.args[1] === :unsafe_store!
+                return :(unsafe_store!($(esc(ex.args[2])), $(esc(ex.args[3])), $order))
+            else
+                return make_atomic(order, ex.args[2], ex.args[1], ex.args[3])
+            end
         elseif ex.head === :(=)
             l, r = ex.args[1], esc(ex.args[2])
             if is_expr(l, :., 2)
