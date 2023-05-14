@@ -111,6 +111,9 @@ memory region allocated as different type may be valid provided that the types a
 """
 unsafe_load(p::Ptr, i::Integer=1) = pointerref(p, Int(i), 1)
 unsafe_laod(p::Ptr, order::Symbol) = atomic_pointerref(p, order)
+function unsafe_laod(p::Ptr, i::Integer, order::Symbol)
+    unsafe_laod(p + (aligned_sizeof(eltype(p)) * (Int(i) - 1)), order)
+end
 
 """
     unsafe_store!(p::Ptr{T}, x, i::Integer=1)
@@ -129,7 +132,9 @@ unsafe_store!(p::Ptr{Any}, @nospecialize(x), i::Integer=1) = pointerset(p, x, In
 unsafe_store!(p::Ptr{T}, x, i::Integer=1) where {T} = pointerset(p, convert(T,x), Int(i), 1)
 unsafe_store!(p::Ptr{Any}, @nospecialize(x), order::Symbol) = atomic_pointerset(p, x, order)
 unsafe_store!(p::Ptr{T}, x, order::Symbol) where {T} = atomic_pointerset(p, convert(T, x), order)
-
+function unsafe_store!(p::Ptr, x, i::Integer, order::Symbol)
+    unsafe_store!(p + (aligned_sizeof(eltype(p)) * (Int(i) - 1)), x, order)
+end
 
 # convert a raw Ptr to an object reference, and vice-versa
 """
