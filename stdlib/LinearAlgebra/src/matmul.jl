@@ -70,23 +70,22 @@ end
                 alpha::Number, beta::Number) =
     generic_matvecmul!(y, adj_or_trans_char(A), _parent(A), x, MulAddMul(alpha, beta))
 # BLAS cases
-@inline mul!(y::StridedVector{T}, A::StridedMaybeAdjOrTransVecOrMat{T}, x::StridedVector{T},
-                alpha::Number, beta::Number) where {T<:BlasFloat} =
-    gemv!(y, adj_or_trans_char(A), _parent(A), x, alpha, beta)
-# catch the real adjoint case and rewrap to transpose
-@inline mul!(y::StridedVector{T}, adjA::Adjoint{<:Any,<:StridedVecOrMat{T}}, x::StridedVector{T},
-                alpha::Number, beta::Number) where {T<:BlasReal} =
-    mul!(y, transpose(adjA.parent), x, alpha, beta)
+# equal eltypes
+@inline generic_matvecmul!(y::StridedVector{T}, tA, A::StridedVecOrMat{T}, x::StridedVector{T},
+                _add::MulAddMul=MulAddMul()) where {T<:BlasFloat} =
+    gemv!(y, tA, _parent(A), x, _add.alpha, _add.beta)
+# Real (possibly transposed) matrix times complex vector.
+# Multiply the matrix with the real and imaginary parts separately
+@inline generic_matvecmul!(y::StridedVector{Complex{T}}, tA, A::StridedVecOrMat{T}, x::StridedVector{Complex{T}},
+                _add::MulAddMul=MulAddMul()) where {T<:BlasReal} =
+    gemv!(y, tA, _parent(A), x, _add.alpha, _add.beta)
 # Complex matrix times real vector.
 # Reinterpret the matrix as a real matrix and do real matvec computation.
-@inline mul!(y::StridedVector{Complex{T}}, A::StridedVecOrMat{Complex{T}}, x::StridedVector{T},
-        alpha::Number, beta::Number) where {T<:BlasReal} =
-    gemv!(y, 'N', A, x, alpha, beta)
-# Real matrix times complex vector.
-# Multiply the matrix with the real and imaginary parts separately
-@inline mul!(y::StridedVector{Complex{T}}, A::StridedMaybeAdjOrTransMat{T}, x::StridedVector{Complex{T}},
-        alpha::Number, beta::Number) where {T<:BlasReal} =
-    gemv!(y, A isa StridedArray ? 'N' : 'T', _parent(A), x, alpha, beta)
+# works only in cooperation with BLAS when A is untransposed (tA == 'N')
+# but that check is included in gemv! anyway
+@inline generic_matvecmul!(y::StridedVector{Complex{T}}, tA, A::StridedVecOrMat{Complex{T}}, x::StridedVector{T},
+                _add::MulAddMul=MulAddMul()) where {T<:BlasReal} =
+    gemv!(y, tA, _parent(A), x, _add.alpha, _add.beta)
 
 # Vector-Matrix multiplication
 (*)(x::AdjointAbsVec,   A::AbstractMatrix) = (A'*x')'
@@ -398,7 +397,7 @@ function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::
         !iszero(stride(x, 1)) # We only check input's stride here.
         return BLAS.gemv!(tA, alpha, A, x, beta, y)
     else
-        return generic_matvecmul!(y, tA, A, x, MulAddMul(α, β))
+        return _generic_matvecmul!(y, tA, A, x, MulAddMul(α, β))
     end
 end
 
@@ -419,7 +418,7 @@ function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar, A::StridedVecOrMa
         BLAS.gemv!(tA, alpha, reinterpret(T, A), x, beta, reinterpret(T, y))
         return y
     else
-        return generic_matvecmul!(y, tA, A, x, MulAddMul(α, β))
+        return _generic_matvecmul!(y, tA, A, x, MulAddMul(α, β))
     end
 end
 
@@ -442,7 +441,7 @@ function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar, A::StridedVecOrMa
         BLAS.gemv!(tA, alpha, A, xfl[2, :], beta, yfl[2, :])
         return y
     else
-        return generic_matvecmul!(y, tA, A, x, MulAddMul(α, β))
+        return _generic_matvecmul!(y, tA, A, x, MulAddMul(α, β))
     end
 end
 
@@ -646,8 +645,12 @@ end
 # NOTE: the generic version is also called as fallback for
 #       strides != 1 cases
 
-function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::AbstractVector,
-                            _add::MulAddMul = MulAddMul()) where R
+generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector,
+                    _add::MulAddMul = MulAddMul()) =
+    _generic_matvecmul!(C, tA, A, B, _add)
+
+function _generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector,
+                            _add::MulAddMul = MulAddMul())
     require_one_based_indexing(C, A, B)
     mB = length(B)
     mA, nA = lapack_size(tA, A)
