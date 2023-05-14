@@ -1030,8 +1030,6 @@ function parse_unary_subtype(ps::ParseState)
             mark = position(ps)
             bump(ps, TRIVIA_FLAG)
             parse_unary_subtype(ps)
-            # Flisp parser handled this, but I don't know how it can happen...
-            @check peek_behind(ps).kind != K"tuple"
             emit(ps, mark, kind(t), PREFIX_OP_FLAG)
         end
     else
@@ -2266,7 +2264,7 @@ function parse_catch(ps::ParseState)
         # try x catch $e y end  ==>  (try (block x) (catch ($ e) (block y)))
         m = position(ps)
         parse_eq_star(ps)
-        if !(peek_behind(ps).kind in KSet"Identifier $")
+        if !(peek_behind(ps).kind in KSet"Identifier var $")
             # try x catch e+3 y end  ==>  (try (block x) (catch (error (call-i e + 3)) (block y)))
             emit(ps, m, K"error", error="a variable name is expected after `catch`")
         end
