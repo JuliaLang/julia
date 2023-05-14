@@ -1230,9 +1230,12 @@ function parse_unary(ps::ParseState)
 
         mark_before_paren = position(ps)
         bump(ps, TRIVIA_FLAG) # (
-        _is_paren_call = peek(ps, skip_newlines=true) in KSet"; )"
+        initial_semi = peek(ps, skip_newlines=true) == K";"
         opts = parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
-            is_paren_call = had_commas || had_splat || _is_paren_call
+            is_paren_call = had_commas || had_splat               ||
+                            (initial_semi && num_subexprs > 0)    ||
+                            (initial_semi && num_semis == 1)      ||
+                            (num_semis == 0 && num_subexprs == 0)
             return (needs_parameters=is_paren_call,
                     is_paren_call=is_paren_call,
                     is_block=!is_paren_call && num_semis > 0)
