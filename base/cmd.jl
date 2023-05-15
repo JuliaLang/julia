@@ -73,7 +73,7 @@ while changing the settings of the optional keyword arguments:
 
 For any keywords that are not specified, the current settings from `cmd` are used.
 
-Note that the `Cmd` constructor does not create a copy of `exec`. Any subsequent changes to `exec` will be reflected in the `Cmd` object.
+Note that the `Cmd(exec)` constructor does not create a copy of `exec`. Any subsequent changes to `exec` will be reflected in the `Cmd` object.
 
 The most common way to construct a `Cmd` object is with command literals (backticks), e.g.
 
