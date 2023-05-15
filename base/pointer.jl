@@ -147,7 +147,7 @@ end
 """
     unsafe_modify!(p::Ptr{T}, op, x, [order::Symbol]) -> Pair
 
-These atomically perform the operations to get and set a field after applying
+These atomically perform the operations to get and set a memory address after applying
 the function `op`.
 
     y = unsafe_load(p)
