@@ -220,3 +220,4 @@ function eigvals(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby:
 end
 # Cholesky decomposition based eigenvalues
 _choleigvals!(A, U; sortby) = eigvals!(UtiAUi!(A, U); sortby)
+
