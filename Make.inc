@@ -494,7 +494,7 @@ endif
 
 JCFLAGS_COMMON    := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCFLAGS_CLANG     := $(JCFLAGS_COMMON)
-JCFLAGS_GCC       := $(JCFLAGS_COMMON)
+JCFLAGS_GCC       := $(JCFLAGS_COMMON) -fno-gnu-unique
 
 # AArch64 needs this flag to generate the .eh_frame used by libunwind
 JCPPFLAGS_COMMON  := -fasynchronous-unwind-tables
@@ -503,7 +503,7 @@ JCPPFLAGS_GCC     := $(JCPPFLAGS_COMMON)
 
 JCXXFLAGS_COMMON  := -pipe $(fPIC) -fno-rtti -std=c++14
 JCXXFLAGS_CLANG   := $(JCXXFLAGS_COMMON) -pedantic
-JCXXFLAGS_GCC     := $(JCXXFLAGS_COMMON)
+JCXXFLAGS_GCC     := $(JCXXFLAGS_COMMON) -fno-gnu-unique
 
 DEBUGFLAGS_COMMON := -O0 -DJL_DEBUG_BUILD -fstack-protector
 DEBUGFLAGS_CLANG  := $(DEBUGFLAGS_COMMON) -g
