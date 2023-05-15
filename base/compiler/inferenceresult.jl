@@ -78,12 +78,12 @@ function is_argtype_match(𝕃::AbstractLattice,
     return !overridden_by_const
 end
 
-va_process_argtypes(𝕃::AbstractLattice, given_argtypes::Vector{Any}, linfo::MethodInstance) =
-    va_process_argtypes(Returns(nothing), 𝕃, given_argtypes, linfo)
-function va_process_argtypes(@nospecialize(va_handler!), 𝕃::AbstractLattice, given_argtypes::Vector{Any}, linfo::MethodInstance)
-    def = linfo.def::Method
-    isva = def.isva
-    nargs = Int(def.nargs)
+va_process_argtypes(𝕃::AbstractLattice, given_argtypes::Vector{Any}, mi::MethodInstance) =
+    va_process_argtypes(Returns(nothing), 𝕃, given_argtypes, mi)
+function va_process_argtypes(@nospecialize(va_handler!), 𝕃::AbstractLattice, given_argtypes::Vector{Any}, mi::MethodInstance)
+    def = mi.def
+    isva = isa(def, Method) ? def.isva : false
+    nargs = isa(def, Method) ? Int(def.nargs) : length(mi.specTypes.parameters)
     if isva || isvarargtype(given_argtypes[end])
         isva_given_argtypes = Vector{Any}(undef, nargs)
         for i = 1:(nargs-isva)
@@ -100,7 +100,7 @@ function va_process_argtypes(@nospecialize(va_handler!), 𝕃::AbstractLattice, 
         end
         return isva_given_argtypes
     end
-    @assert length(given_argtypes) == nargs "invalid `given_argtypes` for `linfo`"
+    @assert length(given_argtypes) == nargs "invalid `given_argtypes` for `mi`"
     return given_argtypes
 end
 

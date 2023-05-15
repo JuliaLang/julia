@@ -125,7 +125,7 @@ function lookup_inline_frame_info(func::Symbol, file::Symbol, linenum::Int, inli
     or Symbol match is found? Or can a limit on the subsequent backtracks be placed?
     =#
     for (i, line) in enumerate(inlinetable)
-        Base.IRShow.method_name(line) == func && line.file ∈ (file, filestripped) && line.line == linenum || continue
+        Base.IRShow.method_name(line) === func && line.file ∈ (file, filestripped) && line.line == linenum || continue
         if line.method isa MethodInstance
             linfo = line.method
             break
@@ -134,7 +134,7 @@ function lookup_inline_frame_info(func::Symbol, file::Symbol, linenum::Int, inli
             # backtrack to find the matching MethodInstance, if possible
             for j in (i - 1):-1:1
                 nextline = inlinetable[j]
-                nextline.inlined_at == line.inlined_at && Base.IRShow.method_name(line) == Base.IRShow.method_name(nextline) && line.file == nextline.file || break
+                nextline.inlined_at == line.inlined_at && Base.IRShow.method_name(line) === Base.IRShow.method_name(nextline) && line.file === nextline.file || break
                 if nextline.method isa MethodInstance
                     linfo = nextline.method
                     break

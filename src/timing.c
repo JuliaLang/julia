@@ -74,7 +74,7 @@ void jl_init_timing(void)
     _Static_assert(JL_TIMING_EVENT_LAST < sizeof(uint64_t) * CHAR_BIT, "Too many timing events!");
     _Static_assert((int)JL_TIMING_LAST <= (int)JL_TIMING_EVENT_LAST, "More owners than events!");
 
-    int i = 0;
+    int i __attribute__((unused)) = 0;
 #ifdef USE_ITTAPI
 #define X(name) jl_timing_ittapi_events[i++] = __itt_event_create(#name, strlen(#name));
     JL_TIMING_EVENTS
@@ -231,6 +231,49 @@ JL_DLLEXPORT void jl_timing_printf(jl_timing_block_t *cur_block, const char *for
     TracyCZoneText(*(cur_block->tracy_ctx), buf.buf, buf.size);
 #endif
     va_end(args);
+}
+
+JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str)
+{
+#ifdef USE_TRACY
+    TracyCZoneText(*(cur_block->tracy_ctx), str, strlen(str));
+#endif
+}
+
+void jl_timing_init_task(jl_task_t *t)
+{
+#ifdef USE_TRACY
+    jl_value_t *start_type = jl_typeof(t->start);
+    const char *start_name = "";
+    if (jl_is_datatype(start_type))
+        start_name = jl_symbol_name(((jl_datatype_t *) start_type)->name->name);
+
+    static uint16_t task_id = 1;
+
+    // XXX: Tracy uses this as a handle internally and requires that this
+    // string live forever, so this allocation is intentionally leaked.
+    char *fiber_name;
+    if (start_name[0] == '#') {
+        jl_method_instance_t *mi = jl_method_lookup(&t->start, 1, jl_get_world_counter());
+        const char *filename = gnu_basename(jl_symbol_name(mi->def.method->file));
+        const char *module_name = jl_symbol_name(mi->def.method->module->name);
+
+        // 26 characters in "Task 65535 (:0000000 in )\0"
+        size_t fiber_name_len = strlen(filename) + strlen(module_name) + 26;
+        fiber_name = (char *)malloc(fiber_name_len);
+        snprintf(fiber_name, fiber_name_len,  "Task %d (%s:%d in %s)",
+                 task_id++, filename, mi->def.method->line, module_name);
+    } else {
+
+        // 16 characters in "Task 65535 (\"\")\0"
+        size_t fiber_name_len = strlen(start_name) + 16;
+        fiber_name = (char *)malloc(fiber_name_len);
+        snprintf(fiber_name, fiber_name_len,  "Task %d (\"%s\")",
+                 task_id++, start_name);
+    }
+
+    t->name = fiber_name;
+#endif
 }
 
 JL_DLLEXPORT int jl_timing_set_enable(const char *subsystem, uint8_t enabled)

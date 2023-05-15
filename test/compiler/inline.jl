@@ -684,9 +684,9 @@ begin
 end
 
 # https://github.com/JuliaLang/julia/issues/42246
-@test mktempdir() do dir
+mktempdir() do dir
     cd(dir) do
-        code = quote
+        code = """
             issue42246() = @noinline IOBuffer("a")
             let
                 ci, rt = only(code_typed(issue42246))
@@ -699,9 +699,9 @@ end
                     exit(1)
                end
             end
-        end |> string
+            """
         cmd = `$(Base.julia_cmd()) --code-coverage=tmp.info -e $code`
-        success(pipeline(Cmd(cmd); stdout=stdout, stderr=stderr))
+        @test success(pipeline(cmd; stdout, stderr))
     end
 end
 
@@ -1940,6 +1940,11 @@ end
 let result = @test_throws MethodError issue49074(Issue49050Concrete)
     @test result.value.f === issue49074
     @test result.value.args === (Any,)
+end
+
+# inlining of `TypeName`
+@test fully_eliminated() do
+    Ref.body.name
 end
 
 # Regression for finalizer inlining with more complex control flow

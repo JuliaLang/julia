@@ -192,12 +192,12 @@ try
      Baz = Base.require(Main, :Baz)
      @test length(Bar.mt) == 1
 finally
+    filter!((≠)(load_path), LOAD_PATH)
+    filter!((≠)(depot_path), DEPOT_PATH)
     rm(load_path, recursive=true, force=true)
     try
         rm(depot_path, force=true, recursive=true)
     catch err
         @show err
     end
-    filter!((≠)(load_path), LOAD_PATH)
-    filter!((≠)(depot_path), DEPOT_PATH)
 end

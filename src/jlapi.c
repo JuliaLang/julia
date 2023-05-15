@@ -477,6 +477,11 @@ JL_DLLEXPORT void (jl_cpu_pause)(void)
     jl_cpu_pause();
 }
 
+JL_DLLEXPORT void (jl_cpu_suspend)(void)
+{
+    jl_cpu_suspend();
+}
+
 JL_DLLEXPORT void (jl_cpu_wake)(void)
 {
     jl_cpu_wake();

@@ -1,34 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#############
-# constants #
-#############
-
-const _REF_NAME = Ref.body.name
-
-#########
-# logic #
-#########
-
 # See if the inference result of the current statement's result value might affect
 # the final answer for the method (aside from optimization potential and exceptions).
 # To do that, we need to check both for slot assignment and SSA usage.
 call_result_unused(sv::InferenceState, currpc::Int) =
     isexpr(sv.src.code[currpc], :call) && isempty(sv.ssavalue_uses[currpc])
 call_result_unused(si::StmtInfo) = !si.used
-
-function get_max_methods(sv::AbsIntState, interp::AbstractInterpreter)
-    max_methods = ccall(:jl_get_module_max_methods, Cint, (Any,), frame_module(sv)) % Int
-    return max_methods < 0 ? InferenceParams(interp).max_methods : max_methods
-end
-
-function get_max_methods(@nospecialize(f), sv::AbsIntState, interp::AbstractInterpreter)
-    if f !== nothing
-        fmm = typeof(f).name.max_methods
-        fmm !== UInt8(0) && return Int(fmm)
-    end
-    return get_max_methods(sv, interp)
-end
 
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
@@ -1331,14 +1308,18 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
                                 sv::AbsIntState)
     if isa(typ, PartialStruct)
         widet = typ.typ
-        if isa(widet, DataType) && widet.name === Tuple.name
-            return AbstractIterationResult(typ.fields, nothing)
+        if isa(widet, DataType)
+            if widet.name === Tuple.name
+                return AbstractIterationResult(typ.fields, nothing)
+            elseif widet.name === _NAMEDTUPLE_NAME
+                return AbstractIterationResult(typ.fields, nothing)
+            end
         end
     end
 
     if isa(typ, Const)
         val = typ.val
-        if isa(val, SimpleVector) || isa(val, Tuple)
+        if isa(val, SimpleVector) || isa(val, Tuple) || isa(val, NamedTuple)
             return AbstractIterationResult(Any[ Const(val[i]) for i in 1:length(val) ], nothing) # avoid making a tuple Generator here!
         end
     end
@@ -1494,7 +1475,7 @@ end
 
 # do apply(af, fargs...), where af is a function value
 function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo,
-                        sv::AbsIntState, max_methods::Int=get_max_methods(sv, interp))
+                        sv::AbsIntState, max_methods::Int=get_max_methods(interp, sv))
     itft = argtype_by_index(argtypes, 2)
     aft = argtype_by_index(argtypes, 3)
     (itft === Bottom || aft === Bottom) && return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
@@ -1549,7 +1530,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
                     # This is vararg, we're not gonna be able to do any inlining,
                     # drop the info
                     info = nothing
-                    tail = tuple_tail_elem(unwrapva(ct[end]), cti)
+                    tail = tuple_tail_elem(typeinf_lattice(interp), unwrapva(ct[end]), cti)
                     push!(ctypes´, push!(ct[1:(end - 1)], tail))
                 else
                     push!(ctypes´, append!(ct[:], cti))
@@ -1572,7 +1553,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
         for i = 1:lct-1
             cti = ct[i]
             if isvarargtype(cti)
-                ct[i] = tuple_tail_elem(unwrapva(cti), ct[(i+1):lct])
+                ct[i] = tuple_tail_elem(typeinf_lattice(interp), unwrapva(cti), ct[(i+1):lct])
                 resize!(ct, i)
                 break
             end
@@ -1942,7 +1923,7 @@ end
 function abstract_finalizer(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::AbsIntState)
     if length(argtypes) == 3
         finalizer_argvec = Any[argtypes[2], argtypes[3]]
-        call = abstract_call(interp, ArgInfo(nothing, finalizer_argvec), StmtInfo(false), sv, 1)
+        call = abstract_call(interp, ArgInfo(nothing, finalizer_argvec), StmtInfo(false), sv, #=max_methods=#1)
         return CallMeta(Nothing, Effects(), FinalizerInfo(call.info, call.effects))
     end
     return CallMeta(Nothing, Effects(), NoCallInfo())
@@ -1951,7 +1932,7 @@ end
 # call where the function is known exactly
 function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         arginfo::ArgInfo, si::StmtInfo, sv::AbsIntState,
-        max_methods::Int = get_max_methods(f, sv, interp))
+        max_methods::Int = get_max_methods(interp, f, sv))
     (; fargs, argtypes) = arginfo
     la = length(argtypes)
 
@@ -2085,7 +2066,7 @@ function most_general_argtypes(closure::PartialOpaque)
     if !isa(argt, DataType) || argt.name !== typename(Tuple)
         argt = Tuple
     end
-    return most_general_argtypes(closure.source, argt, #=withfirst=#false)
+    return Any[argt.parameters...]
 end
 
 # call where the function is any lattice element
@@ -2113,10 +2094,10 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtIn
             return CallMeta(Any, Effects(), NoCallInfo())
         end
         # non-constant function, but the number of arguments is known and the `f` is not a builtin or intrinsic
-        max_methods = max_methods === nothing ? get_max_methods(sv, interp) : max_methods
+        max_methods = max_methods === nothing ? get_max_methods(interp, sv) : max_methods
         return abstract_call_gf_by_type(interp, nothing, arginfo, si, argtypes_to_type(argtypes), sv, max_methods)
     end
-    max_methods = max_methods === nothing ? get_max_methods(f, sv, interp) : max_methods
+    max_methods = max_methods === nothing ? get_max_methods(interp, f, sv) : max_methods
     return abstract_call_known(interp, f, arginfo, si, sv, max_methods)
 end
 
@@ -2125,7 +2106,7 @@ function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
     if unwrapva(T) === Bottom
         return Bottom
     elseif isa(T, Type)
-        if isa(T, DataType) && (T::DataType).name === _REF_NAME
+        if isa(T, DataType) && (T::DataType).name === Ref.body.name
             isref = true
             T = T.parameters[1]
             if isreturn && T === Any
@@ -2550,6 +2531,7 @@ end
 function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
     if !isa(e, Expr)
         if isa(e, PhiNode)
+            add_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE)
             return abstract_eval_phi(interp, e, vtypes, sv)
         end
         return abstract_eval_special_value(interp, e, vtypes, sv)

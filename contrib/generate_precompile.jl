@@ -45,6 +45,7 @@ precompile(Tuple{typeof(push!), Vector{Function}, Function})
 # miscellaneous
 precompile(Tuple{typeof(Base.require), Base.PkgId})
 precompile(Tuple{typeof(Base.recursive_prefs_merge), Base.Dict{String, Any}})
+precompile(Tuple{typeof(Base.recursive_prefs_merge), Base.Dict{String, Any}, Base.Dict{String, Any}, Vararg{Base.Dict{String, Any}}})
 precompile(Tuple{typeof(Base.hashindex), Tuple{Base.PkgId, Nothing}, Int64})
 precompile(Tuple{typeof(Base.hashindex), Tuple{Base.PkgId, String}, Int64})
 precompile(Tuple{typeof(isassigned), Core.SimpleVector, Int})
@@ -56,6 +57,7 @@ precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, 
 precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, Symbol, Module))
 precompile(Base.CoreLogging.env_override_minlevel, (Symbol, Module))
 precompile(Base.StackTraces.lookup, (Ptr{Nothing},))
+precompile(Tuple{typeof(Base.run_module_init), Module, Int})
 """
 
 for T in (Float16, Float32, Float64), IO in (IOBuffer, IOContext{IOBuffer}, Base.TTY, IOContext{Base.TTY})
@@ -69,7 +71,8 @@ print("")
 printstyled("a", "b")
 display([1])
 display([1 2; 3 4])
-@time 1+1
+foo(x) = 1
+@time @eval foo(1)
 ; pwd
 $CTRL_C
 $CTRL_R$CTRL_C
@@ -179,6 +182,14 @@ if Libdl !== nothing
     """
 end
 
+InteractiveUtils = get(Base.loaded_modules,
+          Base.PkgId(Base.UUID("b77e0a4c-d291-57a0-90e8-8db25a27a240"), "InteractiveUtils"),
+          nothing)
+if InteractiveUtils !== nothing
+    repl_script *= """
+    @time_imports using Random
+    """
+end
 
 const JULIA_PROMPT = "julia> "
 const PKG_PROMPT = "pkg> "
@@ -424,8 +435,11 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             ps.head = :tuple
             # println(ps)
             ps = Core.eval(PrecompileStagingArea, ps)
-            precompile(ps...)
-            n_succeeded += 1
+            if precompile(ps...)
+                n_succeeded += 1
+            else
+                @warn "Failed to precompile expression" form=statement _module=nothing _file=nothing _line=0
+            end
             failed = length(statements) - n_succeeded
             yield() # Make clock spinning
             print_state("step3" => string("R$n_succeeded", failed > 0 ? " ($failed failed)" : ""))

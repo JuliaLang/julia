@@ -323,7 +323,7 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
 
         Function *NF = Function::Create(
                 NFTy, F->getLinkage(), F->getAddressSpace(), Name, &M);
-        NF->copyAttributesFrom(F);
+        // no need to copy attributes here, that's done by CloneFunctionInto
         VMap[F] = NF;
     }
 
@@ -343,11 +343,7 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
         for (auto MD : MDs)
             NGV->addMetadata(
                     MD.first,
-#if JL_LLVM_VERSION >= 130000
                     *MapMetadata(MD.second, VMap));
-#else
-                    *MapMetadata(MD.second, VMap, RF_MoveDistinctMDs));
-#endif
 
         copyComdat(NGV, GV);
 
@@ -356,11 +352,9 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
 
     // Similarly, copy over and rewrite function bodies
     for (Function *F : Functions) {
-        if (F->isDeclaration())
-            continue;
-
         Function *NF = cast<Function>(VMap[F]);
         LLVM_DEBUG(dbgs() << "Processing function " << NF->getName() << "\n");
+        // we also need this to run for declarations, or attributes won't be copied
 
         Function::arg_iterator DestI = NF->arg_begin();
         for (Function::const_arg_iterator I = F->arg_begin(); I != F->arg_end();
@@ -374,11 +368,7 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
                 NF,
                 F,
                 VMap,
-#if JL_LLVM_VERSION >= 130000
                 CloneFunctionChangeType::GlobalChanges,
-#else
-                /*ModuleLevelChanges=*/true,
-#endif
                 Returns,
                 "",
                 nullptr,
@@ -391,27 +381,15 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
         for (unsigned i = 0; i < Attrs.getNumAttrSets(); ++i) {
             for (Attribute::AttrKind TypedAttr :
                  {Attribute::ByVal, Attribute::StructRet, Attribute::ByRef}) {
-#if JL_LLVM_VERSION >= 140000
                 auto Attr = Attrs.getAttributeAtIndex(i, TypedAttr);
-#else
-                auto Attr = Attrs.getAttribute(i, TypedAttr);
-#endif
                 if (Type *Ty = Attr.getValueAsType()) {
-#if JL_LLVM_VERSION >= 140000
                     Attrs = Attrs.replaceAttributeTypeAtIndex(
                         C, i, TypedAttr, TypeRemapper.remapType(Ty));
-#else
-                    Attrs = Attrs.replaceAttributeType(
-                        C, i, TypedAttr, TypeRemapper.remapType(Ty));
-#endif
                     break;
                 }
             }
         }
         NF->setAttributes(Attrs);
-
-        if (F->hasPersonalityFn())
-            NF->setPersonalityFn(MapValue(F->getPersonalityFn(), VMap));
 
         copyComdat(NF, F);
 
@@ -536,7 +514,8 @@ PreservedAnalyses RemoveJuliaAddrspacesPass::run(Module &M, ModuleAnalysisManage
     return RemoveAddrspacesPass(removeJuliaAddrspaces).run(M, AM);
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddRemoveJuliaAddrspacesPass_impl(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddRemoveJuliaAddrspacesPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createRemoveJuliaAddrspacesPass());
 }

@@ -1,3 +1,5 @@
+; This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -RemoveJuliaAddrspaces -S %s | FileCheck %s
 ; RUN: opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='RemoveJuliaAddrspaces' -S %s | FileCheck %s
 
@@ -111,7 +113,7 @@ define void @byval_type([1 x {} addrspace(10)*] addrspace(11)* byval([1 x {} add
 }
 
 
-; COM: check that other function attributes are preserved
+; COM: check that function attributes are preserved on declarations too
 declare void @convergent_function() #0
 attributes #0 = { convergent }
 ; CHECK: attributes #0 = { convergent }

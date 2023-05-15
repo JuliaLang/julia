@@ -474,4 +474,34 @@ end
     @test MyIdentity{Float64}()[1,:] == [1.0, 0.0]
 end
 
+@testset "issue #48911" begin
+    # testcase in the original issue
+    # test ldiv!(::QRPivoted, ::AbstractVector)
+    A = Complex{BigFloat}[1+im 1-im]
+    b = Complex{BigFloat}[3+im]
+    x = A\b
+    AF = Complex{Float64}[1+im 1-im]
+    bf = Complex{Float64}[3+im]
+    xf = AF\bf
+    @test x ≈ xf
+
+    # test ldiv!(::QRPivoted, ::AbstractVector)
+    A = Complex{BigFloat}[1+im 2-2im 3+3im; 4-4im 5+5im 6-6im]
+    b = Complex{BigFloat}[1+im; 0]
+    x = A\b
+    AF = Complex{Float64}[1+im 2-2im 3+3im; 4-4im 5+5im 6-6im]
+    bf = Complex{Float64}[1+im; 0]
+    xf = AF\bf
+    @test x ≈ xf
+
+    # test ldiv!(::QRPivoted, ::AbstractMatrix)
+    C = Complex{BigFloat}[1+im 2-2im 3+3im; 4-4im 5+5im 6-6im]
+    D = Complex{BigFloat}[1+im 1-im; 0 0]
+    x = C\D
+    CF = Complex{Float64}[1+im 2-2im 3+3im; 4-4im 5+5im 6-6im]
+    DF = Complex{Float64}[1+im 1-im; 0 0]
+    xf = CF\DF
+    @test x ≈ xf
+end
+
 end # module TestQR
