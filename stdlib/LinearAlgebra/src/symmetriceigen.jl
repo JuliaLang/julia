@@ -205,11 +205,11 @@ eigvecs(A::HermOrSym) = eigvecs(eigen(A))
 
 # Note: No specilized LAPACK routines for Matrix+Symmetric and Symmetric+Matrix exist. Hence, the calls are forwarded to conventional Matrix eigvals!
 function eigvals!(A::AbstractMatrix{T}, B::RealHermSymComplexHerm{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:Number,S<:StridedMatrix}
-    return eigvals!(A, Matrix{T}(B); sortby) ;
+    return eigvals!(A, Matrix{T}(B); sortby)
 end
 
 function eigvals!(A::RealHermSymComplexHerm{T,S}, B::AbstractMatrix{T}; sortby::Union{Function,Nothing}=nothing) where {T<:Number,S<:StridedMatrix}
-    return eigvals!(Matrix{T}(A), B; sortby) ;
+    return eigvals!(Matrix{T}(A), B; sortby)
 end
 
 function eigvals!(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
@@ -221,3 +221,8 @@ end
 # Cholesky decomposition based eigenvalues
 _choleigvals!(A, U; sortby) = eigvals!(UtiAUi!(A, U); sortby)
 
+# Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues (proof of concept)
+function eigvals(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
+    A1 = A[B.p,B.p]
+    return eigvals!(B.D \ UtiAUi!(A1,B.L'); sortby)
+end
