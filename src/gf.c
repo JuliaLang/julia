@@ -344,7 +344,6 @@ jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_a
 // if inference doesn't occur (or can't finish), returns NULL instead
 jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
 {
-    JL_TIMING(INFERENCE, INFERENCE);
     if (jl_typeinf_func == NULL)
         return NULL;
     jl_task_t *ct = jl_current_task;
@@ -361,7 +360,7 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
 #ifdef ENABLE_INFERENCE
     if (mi->inInference && !force)
         return NULL;
-
+    JL_TIMING(INFERENCE, INFERENCE);
     jl_value_t **fargs;
     JL_GC_PUSHARGS(fargs, 3);
     fargs[0] = (jl_value_t*)jl_typeinf_func;
