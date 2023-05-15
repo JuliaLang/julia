@@ -188,7 +188,7 @@ instruction, otherwise it'll use a loop.
 function unsafe_replace!(p::Ptr{T}, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order) where {T}
     @inline
     xT = desired isa T ? desired : convert(T, desired)
-    Core.Intrinsics.atomic_pointerreplace(p, expected, xT, success_order, fail_order)
+    return atomic_pointerreplace(p, expected, xT, success_order, fail_order)
 end
 function unsafe_replace!(p::Ptr{Any}, @nospecialize(expected), @nospecialize(desired), success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
     Core.Intrinsics.atomic_pointerreplace(p, expected, desired, success_order, fail_order)
