@@ -248,7 +248,8 @@ enum jl_timing_counter_types {
 #ifdef USE_TRACY
 #define _TRACY_CTX_MEMBER TracyCZoneCtx tracy_ctx; const struct ___tracy_source_location_data *tracy_srcloc;
 #define _TRACY_CTOR(block, name) static const struct ___tracy_source_location_data TIMING_CONCAT(__tracy_source_location,__LINE__) = { name, __func__,  TracyFile, (uint32_t)__LINE__, 0 }; \
-                                         (block)->tracy_srcloc = &TIMING_CONCAT(__tracy_source_location,__LINE__)
+                                         (block)->tracy_srcloc = &TIMING_CONCAT(__tracy_source_location,__LINE__); \
+                                         (block)->tracy_ctx.active = 0
 #define _TRACY_START(block) (block)->tracy_ctx = ___tracy_emit_zone_begin( (block)->tracy_srcloc, 1 );
 #define _TRACY_STOP(ctx) TracyCZoneEnd(ctx)
 #else
