@@ -207,7 +207,7 @@ These atomically perform the operations to simultaneously get and set a field:
      This function requires at least Julia 1.10.
 """
 function unsafe_swap!(p::Ptr{Any}, x, order::Symbol=:not_atomic)
-    Core.Intrinsics.atomic_pointerswap(p, x, order)
+    return atomic_pointerswap(p, x, order)
 end
 function unsafe_swap!(p::Ptr{T}, x, order::Symbol=:not_atomic) where {T}
     @inline
