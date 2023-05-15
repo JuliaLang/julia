@@ -1469,8 +1469,8 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 
 JL_JITSymbol JuliaOJIT::findSymbol(StringRef Name, bool ExportedSymbolsOnly)
 {
-    orc::JITDylib* SearchOrders[2] = {&GlobalJD, &JD};
-    ArrayRef<orc::JITDylib*> SearchOrder = makeArrayRef(&SearchOrders[ExportedSymbolsOnly ? 0 : 1], ExportedSymbolsOnly ? 2 : 1);
+    orc::JITDylib* SearchOrders[2] = {&JD, &GlobalJD};
+    ArrayRef<orc::JITDylib*> SearchOrder = makeArrayRef(&SearchOrders[0], ExportedSymbolsOnly ? 2 : 1);
     auto Sym = ES.lookup(SearchOrder, Name);
     if (Sym)
         return *Sym;
