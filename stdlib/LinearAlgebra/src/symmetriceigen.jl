@@ -153,8 +153,8 @@ function eigvals(A::RealHermSymComplexHerm, vl::Real, vh::Real)
     eigvals!(eigencopy_oftype(A, S), vl, vh)
 end
 
-eigmax(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}) = eigvals(A, size(A, 1):size(A, 1))[1]
-eigmin(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}) = eigvals(A, 1:1)[1]
+eigmax(A::RealHermSymComplexHerm{<:Real}) = eigvals(A, size(A, 1):size(A, 1))[1]
+eigmin(A::RealHermSymComplexHerm{<:Real}) = eigvals(A, 1:1)[1]
 
 function eigen!(A::HermOrSym{T,S}, B::HermOrSym{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasReal,S<:StridedMatrix}
     vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))
@@ -164,7 +164,7 @@ function eigen!(A::Hermitian{T,S}, B::Hermitian{T,S}; sortby::Union{Function,Not
     vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
-function eigen!(A::RealHermSymComplexHerm{T,S}, B::AbstractMatrix{T}; sortby::Union{Function,Nothing}=nothing) where {T<:Number,S<:StridedMatrix}
+function eigen!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, B::AbstractMatrix{T}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     return _choleigen!(A, B, sortby)
 end
 function eigen!(A::StridedMatrix{T}, B::Union{RealHermSymComplexHerm{T},Diagonal{T}}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}

@@ -489,13 +489,13 @@ end
     @test B == A .* A'
 end
 
-@testset "test show methods for $t of Factorizations" for t in (Adjoint, Transpose)
-    A = randn(4, 4)
+@testset "test show methods for $t of Factorizations" for t in (adjoint, transpose)
+    A = randn(ComplexF64, 4, 4)
     F = lu(A)
     Fop = t(F)
-    @test "LinearAlgebra."*sprint(show, Fop) ==
+    @test sprint(show, Fop) ==
                   "$t of "*sprint(show, parent(Fop))
-    @test "LinearAlgebra."*sprint((io, t) -> show(io, MIME"text/plain"(), t), Fop) ==
+    @test sprint((io, t) -> show(io, MIME"text/plain"(), t), Fop) ==
                   "$t of "*sprint((io, t) -> show(io, MIME"text/plain"(), t), parent(Fop))
 end
 
@@ -634,6 +634,13 @@ end
     @test extrema([3,7,4]') == (3, 7)
     @test mapreduce(x -> [x;;;], +, [1, 2, 3]') == sum(x -> [x;;;], [1, 2, 3]') == [6;;;]
     @test mapreduce(string, *, [1 2; 3 4]') == mapreduce(string, *, copy([1 2; 3 4]')) == "1234"
+end
+
+@testset "trace" begin
+    for T in (Float64, ComplexF64), t in (adjoint, transpose)
+        A = randn(T, 10, 10)
+        @test tr(t(A)) == tr(copy(t(A))) == t(tr(A))
+    end
 end
 
 end # module TestAdjointTranspose

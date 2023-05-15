@@ -131,7 +131,7 @@ top:
 }
 ```
 
-For more informations see [`@code_lowered`](@ref), [`@code_typed`](@ref), [`@code_warntype`](@ref),
+For more information see [`@code_lowered`](@ref), [`@code_typed`](@ref), [`@code_warntype`](@ref),
 [`@code_llvm`](@ref), and [`@code_native`](@ref).
 
 ### Printing of debug information

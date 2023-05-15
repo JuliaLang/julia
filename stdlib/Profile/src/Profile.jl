@@ -31,27 +31,12 @@ macro profile(ex)
     end
 end
 
-# triggers printing the report after a SIGINFO/SIGUSR1 profile request
-const PROFILE_PRINT_COND = Ref{Base.AsyncCondition}()
-function profile_printing_listener()
-    try
-        while true
-            wait(PROFILE_PRINT_COND[])
-            peek_report[]()
-        end
-    catch ex
-        if !isa(ex, InterruptException)
-            @error "Profile printing listener crashed" exception=ex,catch_backtrace()
-        end
-    end
-end
-
 # An internal function called to show the report after an information request (SIGINFO or SIGUSR1).
 function _peek_report()
     iob = IOBuffer()
-    ioc = IOContext(IOContext(iob, stdout), :displaysize=>displaysize(stdout))
+    ioc = IOContext(IOContext(iob, stderr), :displaysize=>displaysize(stderr))
     print(ioc, groupby = [:thread, :task])
-    Base.print(stdout, String(take!(iob)))
+    Base.print(stderr, String(take!(iob)))
 end
 # This is a ref so that it can be overridden by other profile info consumers.
 const peek_report = Ref{Function}(_peek_report)
@@ -69,12 +54,7 @@ Set the duration in seconds of the profile "peek" that is triggered via `SIGINFO
 """
 set_peek_duration(t::Float64) = ccall(:jl_set_profile_peek_duration, Cvoid, (Float64,), t)
 
-precompile_script = """
-import Profile
-Profile.@profile while Profile.len_data() < 1000; rand(10,10) * rand(10,10); end
-Profile.peek_report[]()
-Profile.clear()
-"""
+
 
 ####
 #### User-level functions
@@ -142,18 +122,6 @@ function check_init()
     buffer_size = @ccall jl_profile_maxlen_data()::Int
     if buffer_size == 0
         default_init()
-    end
-end
-
-function __init__()
-    # Note: The profile buffer is no longer initialized during __init__ because Profile is in the sysimage,
-    # thus __init__ is called every startup. The buffer is lazily initialized the first time `@profile` is
-    # used, if not manually initialized before that.
-    @static if !Sys.iswindows()
-        # triggering a profile via signals is not implemented on windows
-        PROFILE_PRINT_COND[] = Base.AsyncCondition()
-        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), PROFILE_PRINT_COND[].handle)
-        errormonitor(Threads.@spawn(profile_printing_listener()))
     end
 end
 
@@ -607,7 +575,7 @@ error_codes = Dict(
 """
     fetch(;include_meta = true) -> data
 
-Returns a copy of the buffer of profile backtraces. Note that the
+Return a copy of the buffer of profile backtraces. Note that the
 values in `data` have meaning only on this machine in the current session, because it
 depends on the exact memory addresses used in JIT-compiling. This function is primarily for
 internal use; [`retrieve`](@ref) may be a better choice for most users.
@@ -1235,23 +1203,31 @@ end
 """
     Profile.take_heap_snapshot(io::IOStream, all_one::Bool=false)
     Profile.take_heap_snapshot(filepath::String, all_one::Bool=false)
+    Profile.take_heap_snapshot(all_one::Bool=false)
 
 Write a snapshot of the heap, in the JSON format expected by the Chrome
-Devtools Heap Snapshot viewer (.heapsnapshot extension), to the given
-file path or IO stream. If all_one is true, then report the size of
-every object as one so they can be easily counted. Otherwise, report
-the actual size.
+Devtools Heap Snapshot viewer (.heapsnapshot extension), to a file
+(`\$pid_\$timestamp.heapsnapshot`) in the current directory, or the given
+file path, or IO stream. If `all_one` is true, then report the size of
+every object as one so they can be easily counted. Otherwise, report the
+actual size.
 """
 function take_heap_snapshot(io::IOStream, all_one::Bool=false)
-    @Base._lock_ios(io, ccall(:jl_gc_take_heap_snapshot, Cvoid, (Ptr{Cvoid}, Cchar), io.handle, Cchar(all_one)))
+    Base.@_lock_ios(io, ccall(:jl_gc_take_heap_snapshot, Cvoid, (Ptr{Cvoid}, Cchar), io.handle, Cchar(all_one)))
 end
 function take_heap_snapshot(filepath::String, all_one::Bool=false)
     open(filepath, "w") do io
         take_heap_snapshot(io, all_one)
     end
+    return filepath
+end
+function take_heap_snapshot(all_one::Bool=false)
+    f = abspath("$(getpid())_$(time_ns()).heapsnapshot")
+    return take_heap_snapshot(f, all_one)
 end
 
 
 include("Allocs.jl")
+include("precompile.jl")
 
 end # module

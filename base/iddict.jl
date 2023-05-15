@@ -68,7 +68,7 @@ end
 
 empty(d::IdDict, ::Type{K}, ::Type{V}) where {K, V} = IdDict{K,V}()
 
-function rehash!(d::IdDict, newsz = length(d.ht))
+function rehash!(d::IdDict, newsz = length(d.ht)%UInt)
     d.ht = ccall(:jl_idtable_rehash, Vector{Any}, (Any, Csize_t), d.ht, newsz)
     d
 end
@@ -86,10 +86,10 @@ end
 function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
     !isa(key, K) && throw(ArgumentError("$(limitrepr(key)) is not a valid key for type $K"))
     if !(val isa V) # avoid a dynamic call
-        val = convert(V, val)
+        val = convert(V, val)::V
     end
     if d.ndel >= ((3*length(d.ht))>>2)
-        rehash!(d, max(length(d.ht)>>1, 32))
+        rehash!(d, max((length(d.ht)%UInt)>>1, 32))
         d.ndel = 0
     end
     inserted = RefValue{Cint}(0)
@@ -143,7 +143,7 @@ end
 _oidd_nextind(a, i) = reinterpret(Int, ccall(:jl_eqtable_nextind, Csize_t, (Any, Csize_t), a, i))
 
 function iterate(d::IdDict{K,V}, idx=0) where {K, V}
-    idx = _oidd_nextind(d.ht, idx)
+    idx = _oidd_nextind(d.ht, idx%UInt)
     idx == -1 && return nothing
     return (Pair{K, V}(d.ht[idx + 1]::K, d.ht[idx + 2]::V), idx + 2)
 end
@@ -155,7 +155,7 @@ copy(d::IdDict) = typeof(d)(d)
 function get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V}
     val = ccall(:jl_eqtable_get, Any, (Any, Any, Any), d.ht, key, secret_table_token)
     if val === secret_table_token
-        val = isa(default, V) ? default : convert(V, default)
+        val = isa(default, V) ? default : convert(V, default)::V
         setindex!(d, val, key)
         return val
     else

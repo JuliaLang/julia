@@ -226,13 +226,13 @@
                               ""))
                         "")
                     (string.rep "    " ilvl) "end"))
-	   ((do)
-	    (let ((call (cadr e))
-		  (args (cdr (cadr (caddr e))))
-		  (body (caddr (caddr e))))
-	      (deparse-block (string (deparse call) " do" (if (null? args) "" " ")
-				     (deparse-arglist args))
-			     (cdr body) ilvl)))
+           ((do)
+            (let ((call (cadr e))
+                  (args (cdr (cadr (caddr e))))
+                  (body (caddr (caddr e))))
+              (deparse-block (string (deparse call) " do" (if (null? args) "" " ")
+                                     (deparse-arglist args))
+                             (cdr body) ilvl)))
            ((struct)
             (string (if (equal? (cadr e) '(true)) "mutable " "")
                     "struct "
@@ -329,8 +329,8 @@
         (else
          (case (car v)
            ((...)
-	    (arg-name (cadr v)) ;; to check for errors
-	    (decl-var (cadr v)))
+            (arg-name (cadr v)) ;; to check for errors
+            (decl-var (cadr v)))
            ((|::|)
             (if (not (symbol? (cadr v)))
                 (bad-formal-argument (cadr v)))

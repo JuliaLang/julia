@@ -42,6 +42,7 @@ end
 
 const AInfo = IdSet{Any}
 const LivenessSet = BitSet
+const 𝕃ₒ = OptimizerLattice()
 
 """
     x::EscapeInfo
@@ -787,9 +788,10 @@ function compute_frameinfo(ir::IRCode, call_resolved::Bool)
         stmt = inst[:inst]
         if !call_resolved
             # TODO don't call `check_effect_free!` in the inlinear
-            check_effect_free!(ir, idx, stmt, inst[:type])
+            check_effect_free!(ir, idx, stmt, inst[:type], 𝕃ₒ)
         end
         if callinfo !== nothing && isexpr(stmt, :call)
+            # TODO: pass effects here
             callinfo[idx] = resolve_call(ir, stmt, inst[:info])
         elseif isexpr(stmt, :enter)
             @assert idx ≤ nstmts "try/catch inside new_nodes unsupported"
@@ -1596,10 +1598,10 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
     add_escape_change!(astate, val, ssainfo)
     # compute the throwness of this setfield! call here since builtin_nothrow doesn't account for that
     @label add_thrown_escapes
-    if length(args) == 4 && setfield!_nothrow(OptimizerLattice(),
+    if length(args) == 4 && setfield!_nothrow(𝕃ₒ,
         argextype(args[2], ir), argextype(args[3], ir), argextype(args[4], ir))
         return true
-    elseif length(args) == 3 && setfield!_nothrow(OptimizerLattice(),
+    elseif length(args) == 3 && setfield!_nothrow(𝕃ₒ,
         argextype(args[2], ir), argextype(args[3], ir))
         return true
     else

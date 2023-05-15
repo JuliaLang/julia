@@ -60,7 +60,9 @@ end
 end
 
 @testset "DateFormat printing" begin
-    @test sprint(show, DateFormat("yyyzzxmmdd\\MHH:MM:SS\\P")) == "dateformat\"yyyzzxmmdd\\MHH:MM:SSP\""
+    @test sprint(show, DateFormat("yyyzzxmmdd\\MHH:MM:SS\\P")) == "dateformat\"yyyzzxmmdd\\MHH:MM:SS\\P\""
+    @test sprint(show, dateformat"yyyy-mm-dd\THH:MM:SS.s") == "dateformat\"yyyy-mm-dd\\THH:MM:SS.s\""
+    @test sprint(show, dateformat"yyyy-mm-ddTHH:MM:SS.s") == "dateformat\"yyyy-mm-ddTHH:MM:SS.s\""
     @test sprint(show, DateFormat("yyy").tokens[1]) == "DatePart(yyy)"
     @test sprint(show, DateFormat("mmzzdd").tokens[2]) == "Delim(zz)"
     @test sprint(show, DateFormat("ddxmm").tokens[2]) == "Delim(x)"
@@ -584,6 +586,36 @@ end
     @test (@inferred f1()) == (@inferred f2()) == (@inferred f3()) == datetime
     g() = tryparse(DateTime, "2020-04-07", DateFormat("yyyy-mm-dd"))
     @test (@inferred Nothing g()) == datetime
+end
+
+@testset "Issue #43883: parsing empty strings" begin
+    for (T, name, fmt) in zip(
+            (DateTime, Date, Time),
+            ("DateTime", "Date or Time", "Date or Time"),
+            ("yyyy-mm-ddHHMMSS.s", "yyymmdd", "HHMMSS")
+        )
+        @test_throws ArgumentError T("")
+        @test_throws ArgumentError T("", fmt)
+        @test_throws ArgumentError T("", DateFormat(fmt))
+        try
+            T("")
+            @test false
+        catch err
+            @test err.msg == "Cannot parse an empty string as a $name"
+        end
+
+        @test_throws ArgumentError parse(T, "")
+        @test_throws ArgumentError parse(T, "", DateFormat(fmt))
+        try
+            parse(T, "")
+            @test false
+        catch err
+            @test err.msg == "Cannot parse an empty string as a $name"
+        end
+
+        @test tryparse(T, "") === nothing
+        @test tryparse(T, "", DateFormat(fmt)) === nothing
+    end
 end
 
 end

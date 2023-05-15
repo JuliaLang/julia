@@ -91,8 +91,9 @@ trace = (try; f(3); catch; stacktrace(catch_backtrace()); end)[1:3]
 can_inline = Bool(Base.JLOptions().can_inline)
 for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false))
     @test frame.func === typeof(func).name.mt.name
-    #@test get(frame.linfo).def === which(func, (Any,)).func
-    #@test get(frame.linfo).specTypes === Tuple{typeof(func), Int}
+    @test frame.linfo.def.module === which(func, (Any,)).module
+    @test frame.linfo.def === which(func, (Any,))
+    @test frame.linfo.specTypes === Tuple{typeof(func), Int}
     # line
     @test frame.file === Symbol(@__FILE__)
     @test !frame.from_c
@@ -104,7 +105,7 @@ let src = Meta.lower(Main, quote let x = 1 end end).args[1]::Core.CodeInfo,
     li = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ()),
     sf
 
-    li.uninferred = src
+    setfield!(li, :uninferred, src, :monotonic)
     li.specTypes = Tuple{}
     li.def = @__MODULE__
     sf = StackFrame(:a, :b, 3, li, false, false, 0)

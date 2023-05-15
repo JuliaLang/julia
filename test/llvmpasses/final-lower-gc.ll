@@ -1,3 +1,5 @@
+; This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -FinalLowerGC -S %s | FileCheck %s
 ; RUN: opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='FinalLowerGC' -S %s | FileCheck %s
 
@@ -59,8 +61,23 @@ top:
   %pgcstack = call {}*** @julia.get_pgcstack()
   %ptls = call {}*** @julia.ptls_states()
   %ptls_i8 = bitcast {}*** %ptls to i8*
-; CHECK: %v = call noalias nonnull {} addrspace(10)* @ijl_gc_pool_alloc
+; CHECK: %v = call noalias nonnull dereferenceable({{[0-9]+}}) {} addrspace(10)* @ijl_gc_pool_alloc
   %v = call {} addrspace(10)* @julia.gc_alloc_bytes(i8* %ptls_i8, i64 8)
+  %0 = bitcast {} addrspace(10)* %v to {} addrspace(10)* addrspace(10)*
+  %1 = getelementptr {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %0, i64 -1
+  store {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* %1, align 8, !tbaa !0
+  ret {} addrspace(10)* %v
+}
+
+define {} addrspace(10)* @gc_alloc_lowering_var(i64 %size) {
+top:
+; CHECK-LABEL: @gc_alloc_lowering_var
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %ptls = call {}*** @julia.ptls_states()
+  %ptls_i8 = bitcast {}*** %ptls to i8*
+; CHECK: %0 = add i64 %size, 8
+; CHECK: %v = call noalias nonnull dereferenceable(8) {} addrspace(10)* @ijl_gc_alloc_typed(i8* %ptls_i8, i64 %0, i8* null)
+  %v = call {} addrspace(10)* @julia.gc_alloc_bytes(i8* %ptls_i8, i64 %size)
   %0 = bitcast {} addrspace(10)* %v to {} addrspace(10)* addrspace(10)*
   %1 = getelementptr {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %0, i64 -1
   store {} addrspace(10)* @tag, {} addrspace(10)* addrspace(10)* %1, align 8, !tbaa !0

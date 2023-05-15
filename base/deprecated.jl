@@ -48,7 +48,7 @@ arguments of type `Any`.
 
 To restrict deprecation to a specific signature, annotate the
 arguments of `old`. For example,
-```jldoctest; filter = r"@ .*"
+```jldoctest; filter = r"@ .*"a
 julia> new(x::Int) = x;
 
 julia> new(x::Float64) = 2x;
@@ -318,8 +318,6 @@ const var"@_noinline_meta" = var"@noinline"
 
 # BEGIN 1.9 deprecations
 
-@deprecate splat(x) Splat(x) false
-
 # We'd generally like to avoid direct external access to internal fields
 # Core.Compiler.is_inlineable and Core.Compiler.set_inlineable! move towards this direction,
 # but we need to keep these around for compat
@@ -364,3 +362,25 @@ end
 end
 
 # END 1.9 deprecations
+
+# BEGIN 1.10 deprecations
+
+"""
+    @pure ex
+
+`@pure` gives the compiler a hint for the definition of a pure function,
+helping for type inference.
+
+!!! warning
+    This macro is intended for internal compiler use and may be subject to changes.
+
+!!! warning
+    In Julia 1.8 and higher, it is favorable to use [`@assume_effects`](@ref) instead of `@pure`.
+    This is because `@assume_effects` allows a finer grained control over Julia's purity
+    modeling and the effect system enables a wider range of optimizations.
+"""
+macro pure(ex)
+    return esc(:(Base.@assume_effects :foldable $ex))
+end
+
+# END 1.10 deprecations

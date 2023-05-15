@@ -970,6 +970,7 @@ abstract type $(curmod_prefix)Undocumented.at1{T>:Integer, N}
 
 ```
 $(curmod_prefix)Undocumented.mt6{Integer, N}
+$(curmod_prefix)Undocumented.st5{T>:Integer, N}
 ```
 
 # Supertype Hierarchy

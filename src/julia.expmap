@@ -5,7 +5,9 @@
     asprintf;
     bitvector_*;
     ios_*;
+    arraylist_grow;
     small_arraylist_grow;
+    small_typeof;
     jl_*;
     ijl_*;
     _jl_mutex_*;
@@ -17,10 +19,7 @@
     memhash32;
     memhash32_seed;
     memhash_seed;
-    restore_arg_area_loc;
     restore_signals;
-    rl_clear_input;
-    save_arg_area_loc;
     u8_*;
     uv_*;
     add_library_mapping;
@@ -33,6 +32,9 @@
     _Z22jl_malloc_data_pointerN4llvm9StringRefEi;
     LLVMExtra*;
     llvmGetPassPluginInfo;
+
+    /* Make visible so that linker will merge duplicate definitions across DSO boundaries */
+    _ZN4llvm3Any6TypeId*;
 
     /* freebsd */
     environ;

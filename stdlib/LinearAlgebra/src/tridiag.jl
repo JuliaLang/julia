@@ -149,7 +149,7 @@ function size(A::SymTridiagonal, d::Integer)
 end
 
 similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal(similar(S.dv, T), similar(S.ev, T))
-similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = zeros(T, dims...)
+similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = similar(S.dv, T, dims)
 
 copyto!(dest::SymTridiagonal, src::SymTridiagonal) =
     (copyto!(dest.dv, src.dv); copyto!(dest.ev, _evview(src)); dest)
@@ -171,6 +171,8 @@ Base.copy(S::Adjoint{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(ad
 
 ishermitian(S::SymTridiagonal) = isreal(S.dv) && isreal(_evview(S))
 issymmetric(S::SymTridiagonal) = true
+
+tr(S::SymTridiagonal) = sum(S.dv)
 
 function diag(M::SymTridiagonal{T}, n::Integer=0) where T<:Number
     # every branch call similar(..., ::Int) to make sure the
@@ -211,47 +213,10 @@ end
 *(B::Number, A::SymTridiagonal) = SymTridiagonal(B*A.dv, B*A.ev)
 /(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv/B, A.ev/B)
 \(B::Number, A::SymTridiagonal) = SymTridiagonal(B\A.dv, B\A.ev)
-==(A::SymTridiagonal, B::SymTridiagonal) = (A.dv==B.dv) && (_evview(A)==_evview(B))
-
-@inline mul!(A::StridedVecOrMat, B::SymTridiagonal, C::StridedVecOrMat,
-             alpha::Number, beta::Number) =
-    _mul!(A, B, C, MulAddMul(alpha, beta))
-
-@inline function _mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat,
-                          _add::MulAddMul)
-    m, n = size(B, 1), size(B, 2)
-    if !(m == size(S, 1) == size(C, 1))
-        throw(DimensionMismatch("A has first dimension $(size(S,1)), B has $(size(B,1)), C has $(size(C,1)) but all must match"))
-    end
-    if n != size(C, 2)
-        throw(DimensionMismatch("second dimension of B, $n, doesn't match second dimension of C, $(size(C,2))"))
-    end
-
-    if m == 0
-        return C
-    elseif iszero(_add.alpha)
-        return _rmul_or_fill!(C, _add.beta)
-    end
-
-    α = S.dv
-    β = S.ev
-    @inbounds begin
-        for j = 1:n
-            x₊ = B[1, j]
-            x₀ = zero(x₊)
-            # If m == 1 then β[1] is out of bounds
-            β₀ = m > 1 ? zero(β[1]) : zero(eltype(β))
-            for i = 1:m - 1
-                x₋, x₀, x₊ = x₀, x₊, B[i + 1, j]
-                β₋, β₀ = β₀, β[i]
-                _modify!(_add, β₋*x₋ + α[i]*x₀ + β₀*x₊, C, (i, j))
-            end
-            _modify!(_add, β₀*x₀ + α[m]*x₊, C, (m, j))
-        end
-    end
-
-    return C
-end
+==(A::SymTridiagonal{<:Number}, B::SymTridiagonal{<:Number}) =
+    (A.dv == B.dv) && (_evview(A) == _evview(B))
+==(A::SymTridiagonal, B::SymTridiagonal) =
+    size(A) == size(B) && all(i -> A[i,i] == B[i,i], axes(A, 1)) && (_evview(A) == _evview(B))
 
 function dot(x::AbstractVector, S::SymTridiagonal, y::AbstractVector)
     require_one_based_indexing(x, y)
@@ -277,34 +242,34 @@ function dot(x::AbstractVector, S::SymTridiagonal, y::AbstractVector)
     return r
 end
 
-(\)(T::SymTridiagonal, B::StridedVecOrMat) = ldlt(T)\B
+(\)(T::SymTridiagonal, B::AbstractVecOrMat) = ldlt(T)\B
 
 # division with optional shift for use in shifted-Hessenberg solvers (hessenberg.jl):
 ldiv!(A::SymTridiagonal, B::AbstractVecOrMat; shift::Number=false) = ldiv!(ldlt(A, shift=shift), B)
 rdiv!(B::AbstractVecOrMat, A::SymTridiagonal; shift::Number=false) = rdiv!(B, ldlt(A, shift=shift))
 
-eigen!(A::SymTridiagonal{<:BlasReal}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
+eigen!(A::SymTridiagonal{<:BlasReal,<:StridedVector}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
 eigen(A::SymTridiagonal{T}) where T = eigen!(copymutable_oftype(A, eigtype(T)))
 
-eigen!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
+eigen!(A::SymTridiagonal{<:BlasReal,<:StridedVector}, irange::UnitRange) =
     Eigen(LAPACK.stegr!('V', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)...)
 eigen(A::SymTridiagonal{T}, irange::UnitRange) where T =
     eigen!(copymutable_oftype(A, eigtype(T)), irange)
 
-eigen!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
+eigen!(A::SymTridiagonal{<:BlasReal,<:StridedVector}, vl::Real, vu::Real) =
     Eigen(LAPACK.stegr!('V', 'V', A.dv, A.ev, vl, vu, 0, 0)...)
 eigen(A::SymTridiagonal{T}, vl::Real, vu::Real) where T =
     eigen!(copymutable_oftype(A, eigtype(T)), vl, vu)
 
-eigvals!(A::SymTridiagonal{<:BlasReal}) = LAPACK.stev!('N', A.dv, A.ev)[1]
+eigvals!(A::SymTridiagonal{<:BlasReal,<:StridedVector}) = LAPACK.stev!('N', A.dv, A.ev)[1]
 eigvals(A::SymTridiagonal{T}) where T = eigvals!(copymutable_oftype(A, eigtype(T)))
 
-eigvals!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
+eigvals!(A::SymTridiagonal{<:BlasReal,<:StridedVector}, irange::UnitRange) =
     LAPACK.stegr!('N', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)[1]
 eigvals(A::SymTridiagonal{T}, irange::UnitRange) where T =
     eigvals!(copymutable_oftype(A, eigtype(T)), irange)
 
-eigvals!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
+eigvals!(A::SymTridiagonal{<:BlasReal,<:StridedVector}, vl::Real, vu::Real) =
     LAPACK.stegr!('N', 'V', A.dv, A.ev, vl, vu, 0, 0)[1]
 eigvals(A::SymTridiagonal{T}, vl::Real, vu::Real) where T =
     eigvals!(copymutable_oftype(A, eigtype(T)), vl, vu)
@@ -352,7 +317,7 @@ julia> eigvecs(A, [1.])
  -0.5547001962252291
 ```
 """
-eigvecs(A::SymTridiagonal{<:BlasFloat}, eigvals::Vector{<:Real}) = LAPACK.stein!(A.dv, A.ev, eigvals)
+eigvecs(A::SymTridiagonal{<:BlasFloat,<:StridedVector}, eigvals::Vector{<:Real}) = LAPACK.stein!(A.dv, A.ev, eigvals)
 
 function svdvals!(A::SymTridiagonal)
     vals = eigvals!(A)
@@ -593,7 +558,7 @@ Matrix(M::Tridiagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(M
 Array(M::Tridiagonal) = Matrix(M)
 
 similar(M::Tridiagonal, ::Type{T}) where {T} = Tridiagonal(similar(M.dl, T), similar(M.d, T), similar(M.du, T))
-similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = zeros(T, dims...)
+similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = similar(M.d, T, dims)
 
 # Operations on Tridiagonal matrices
 copyto!(dest::Tridiagonal, src::Tridiagonal) = (copyto!(dest.dl, src.dl); copyto!(dest.d, src.d); copyto!(dest.du, src.du); dest)
@@ -620,7 +585,7 @@ Base.copy(tS::Transpose{<:Any,<:Tridiagonal}) = (S = tS.parent; Tridiagonal(map(
 ishermitian(S::Tridiagonal) = all(ishermitian, S.d) && all(Iterators.map((x, y) -> x == y', S.du, S.dl))
 issymmetric(S::Tridiagonal) = all(issymmetric, S.d) && all(Iterators.map((x, y) -> x == transpose(y), S.du, S.dl))
 
-\(A::Adjoint{<:Any,<:Tridiagonal}, B::Adjoint{<:Any,<:StridedVecOrMat}) = copy(A) \ B
+\(A::Adjoint{<:Any,<:Tridiagonal}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = copy(A) \ B
 
 function diag(M::Tridiagonal{T}, n::Integer=0) where T
     # every branch call similar(..., ::Int) to make sure the
@@ -736,6 +701,8 @@ function triu!(M::Tridiagonal{T}, k::Integer=0) where T
     end
     return M
 end
+
+tr(M::Tridiagonal) = sum(M.d)
 
 ###################
 # Generic methods #

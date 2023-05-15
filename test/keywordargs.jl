@@ -181,7 +181,7 @@ end
     @test test4538_2(x=2) == 2
 
     # that, but in a module
-    @Foo4538.TEST()
+    Foo4538.@TEST()
     @test test4538_foo_2() == 1
     @test test4538_foo_2(x=2) == 2
 
@@ -387,3 +387,10 @@ f41416(a...="a"; b=true) = (b, a)
 @test f41416(;b=false)   === (false, ("a",))
 @test f41416(33)         === (true, (33,))
 @test f41416(3; b=false) === (false, (3,))
+
+Core.kwcall(i::Int) = "hi $i"
+let m = first(methods(Core.kwcall, (NamedTuple,typeof(kwf1),Vararg)))
+    @test m.name === :kwf1
+    @test Core.kwcall(1) == "hi 1"
+    @test which(Core.kwcall, (Int,)).name === :kwcall
+end

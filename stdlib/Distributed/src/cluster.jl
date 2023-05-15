@@ -615,7 +615,7 @@ function create_worker(manager, wconfig)
         end
     end
 
-    # set when the new worker has finshed connections with all other workers
+    # set when the new worker has finished connections with all other workers
     ntfy_oid = RRID()
     rr_ntfy_join = lookup_ref(ntfy_oid)
     rr_ntfy_join.waitingfor = myid()
@@ -1331,7 +1331,10 @@ function process_opts(opts)
     end
 
     # Propagate --threads to workers
-    exeflags = opts.nthreads > 0 ? `--threads=$(opts.nthreads)` : ``
+    threads = opts.nthreads > 0 ? `--threads=$(opts.nthreads)` : ``
+    gcthreads = opts.ngcthreads > 0 ? `--gcthreads=$(opts.ngcthreads)` : ``
+
+    exeflags = `$threads $gcthreads`
 
     # add processors
     if opts.nprocs > 0

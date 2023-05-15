@@ -47,30 +47,64 @@ const FAIL_FAST = Ref{Bool}(false)
 
 # Backtrace utility functions
 function ip_has_file_and_func(ip, file, funcs)
-    return any(fr -> (string(fr.file) == file && fr.func in funcs), StackTraces.lookup(ip))
+    return any(fr -> (in_file(fr, file) && fr.func in funcs), StackTraces.lookup(ip))
+end
+in_file(frame, file) = string(frame.file) == file
+
+function test_location(bt, file_ts, file_t)
+    if (isnothing(file_ts) || isnothing(file_t))
+        return macrocall_location(bt, something(file_ts, @__FILE__))
+    else
+        return test_callsite(bt, file_ts, file_t)
+    end
 end
 
-function scrub_backtrace(bt)
+function test_callsite(bt, file_ts, file_t)
+    # We avoid duplicate calls to `StackTraces.lookup`, as it is an expensive call.
+    # For that, we retrieve locations from lower to higher stack elements
+    # and only traverse parts of the backtrace which we haven't traversed before.
+    # The order will always be <internal functions> -> `@test` -> `@testset`.
+    internal = @something(macrocall_location(bt, @__FILE__), return nothing)
+    test = internal - 1 + @something(findfirst(ip -> any(frame -> in_file(frame, file_t), StackTraces.lookup(ip)), @view bt[internal:end]), return nothing)
+    testset = test - 1 + @something(macrocall_location(@view(bt[test:end]), file_ts), return nothing)
+
+    # If stacktrace locations differ, include frames until the `@testset` appears.
+    test != testset && return testset
+    # `@test` and `@testset` occurred at the same stacktrace location.
+    # This may happen if `@test` occurred directly in scope of the testset,
+    # or if `@test` occurred in a function that has been inlined in the testset.
+    frames = StackTraces.lookup(bt[testset])
+    outer_frame = findfirst(frame -> in_file(frame, file_ts) && frame.func == Symbol("macro expansion"), frames)
+    isnothing(outer_frame) && return nothing
+    # The `@test` call occurred directly in scope of a `@testset`.
+    # The __source__ from `@test` will be printed in the test message upon failure.
+    # There is no need to include more frames, but always include at least the internal macrocall location in the stacktrace.
+    in_file(frames[outer_frame], file_t) && return internal
+    # The `@test` call was inlined, so we still need to include the callsite.
+    return testset
+end
+
+macrocall_location(bt, file) = findfirst(ip -> ip_has_file_and_func(ip, file, (Symbol("macro expansion"),)), bt)
+
+function scrub_backtrace(bt, file_ts, file_t)
     do_test_ind = findfirst(ip -> ip_has_file_and_func(ip, @__FILE__, (:do_test, :do_test_throws)), bt)
     if do_test_ind !== nothing && length(bt) > do_test_ind
         bt = bt[do_test_ind + 1:end]
     end
-    name_ind = findfirst(ip -> ip_has_file_and_func(ip, @__FILE__, (Symbol("macro expansion"),)), bt)
-    if name_ind !== nothing && length(bt) != 0
-        bt = bt[1:name_ind]
-    end
+    stop_at = test_location(bt, file_ts, file_t)
+    !isnothing(stop_at) && !isempty(bt) && return bt[1:stop_at]
     return bt
 end
 
-function scrub_exc_stack(stack)
-    return Any[ (x[1], scrub_backtrace(x[2]::Vector{Union{Ptr{Nothing},Base.InterpreterIP}})) for x in stack ]
+function scrub_exc_stack(stack, file_ts, file_t)
+    return Any[ (x[1], scrub_backtrace(x[2]::Vector{Union{Ptr{Nothing},Base.InterpreterIP}}, file_ts, file_t)) for x in stack ]
 end
 
 # define most of the test infrastructure without type specialization
 @nospecialize
 
 """
-    Result
+    Test.Result
 
 All tests produce a result object. This object may or may not be
 stored, depending on whether the test is part of a test set.
@@ -78,7 +112,7 @@ stored, depending on whether the test is part of a test set.
 abstract type Result end
 
 """
-    Pass
+    Test.Pass <: Test.Result
 
 The test condition was true, i.e. the expression evaluated to true or
 the correct exception was thrown.
@@ -108,7 +142,7 @@ function Base.show(io::IO, t::Pass)
 end
 
 """
-    Fail
+    Test.Fail <: Test.Result
 
 The test condition was false, i.e. the expression evaluated to false or
 the correct exception was not thrown.
@@ -165,10 +199,11 @@ function Base.show(io::IO, t::Fail)
             print(io, "\n     Context: ", t.context)
         end
     end
+    println(io) # add some visual space to separate sequential failures
 end
 
 """
-    Error
+    Test.Error <: Test.Result
 
 The test condition couldn't be evaluated due to an exception, or
 it evaluated to something other than a [`Bool`](@ref).
@@ -184,7 +219,7 @@ struct Error <: Result
 
     function Error(test_type::Symbol, orig_expr, value, bt, source::LineNumberNode)
         if test_type === :test_error
-            bt = scrub_exc_stack(bt)
+            bt = scrub_exc_stack(bt, nothing, extract_file(source))
         end
         if test_type === :test_error || test_type === :nontest_error
             bt_str = try # try the latest world for this, since we might have eval'd new code for show
@@ -249,7 +284,7 @@ function Base.show(io::IO, t::Error)
 end
 
 """
-    Broken
+    Test.Broken <: Test.Result
 
 The test condition is the expected (failed) result of a broken test,
 or was explicitly skipped with `@test_skip`.
@@ -674,8 +709,13 @@ function do_broken_test(result::ExecutionResult, orig_expr)
     # Assume the test is broken and only change if the result is true
     if isa(result, Returned)
         value = result.value
-        if isa(value, Bool) && value
-            testres = Error(:test_unbroken, orig_expr, value, nothing, result.source)
+        if isa(value, Bool)
+            if value
+                testres = Error(:test_unbroken, orig_expr, value, nothing, result.source)
+            end
+        else
+            # If the result is non-Boolean, this counts as an Error
+            testres = Error(:test_nonbool, orig_expr, value, nothing, result.source)
         end
     end
     record(get_testset(), testres)
@@ -708,7 +748,7 @@ Test Passed
 
 julia> @test_throws "Try sqrt(Complex" sqrt(-1)
 Test Passed
-     Message: "DomainError with -1.0:\\nsqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x))."
+     Message: "DomainError with -1.0:\\nsqrt was called with a negative real argument but will only return a complex result if called with a complex argument. Try sqrt(Complex(x))."
 ```
 
 In the final example, instead of matching a single string it could alternatively have been performed with:
@@ -1007,8 +1047,9 @@ mutable struct DefaultTestSet <: AbstractTestSet
     time_start::Float64
     time_end::Union{Float64,Nothing}
     failfast::Bool
+    file::Union{String,Nothing}
 end
-function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = true, failfast::Union{Nothing,Bool} = nothing)
+function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = true, failfast::Union{Nothing,Bool} = nothing, source = nothing)
     if isnothing(failfast)
         # pass failfast state into child testsets
         parent_ts = get_testset()
@@ -1018,8 +1059,11 @@ function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming:
             failfast = false
         end
     end
-    return DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, time(), nothing, failfast)
+    return DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, time(), nothing, failfast, extract_file(source))
 end
+extract_file(source::LineNumberNode) = extract_file(source.file)
+extract_file(file::Symbol) = string(file)
+extract_file(::Nothing) = nothing
 
 struct FailFastError <: Exception end
 
@@ -1030,14 +1074,14 @@ record(ts::DefaultTestSet, t::Pass) = (ts.n_passed += 1; t)
 
 # For the other result types, immediately print the error message
 # but do not terminate. Print a backtrace.
-function record(ts::DefaultTestSet, t::Union{Fail, Error})
-    if TESTSET_PRINT_ENABLE[]
+function record(ts::DefaultTestSet, t::Union{Fail, Error}; print_result::Bool=TESTSET_PRINT_ENABLE[])
+    if print_result
         print(ts.description, ": ")
         # don't print for interrupted tests
         if !(t isa Error) || t.test_type !== :test_interrupted
             print(t)
             if !isa(t, Error) # if not gets printed in the show method
-                Base.show_backtrace(stdout, scrub_backtrace(backtrace()))
+                Base.show_backtrace(stdout, scrub_backtrace(backtrace(), ts.file, extract_file(t.source)))
             end
             println()
         end
@@ -1122,7 +1166,7 @@ const TESTSET_PRINT_ENABLE = Ref(true)
 
 # Called at the end of a @testset, behaviour depends on whether
 # this is a child of another testset, or the "root" testset
-function finish(ts::DefaultTestSet)
+function finish(ts::DefaultTestSet; print_results::Bool=TESTSET_PRINT_ENABLE[])
     ts.time_end = time()
     # If we are a nested test set, do not print a full summary
     # now - let the parent test set do the printing
@@ -1139,7 +1183,7 @@ function finish(ts::DefaultTestSet)
     total_broken = broken + c_broken
     total = total_pass + total_fail + total_error + total_broken
 
-    if TESTSET_PRINT_ENABLE[]
+    if print_results
         print_test_results(ts)
     end
 
@@ -1309,7 +1353,7 @@ end
     @testset [CustomTestSet] [option=val  ...] ["description"] begin ... end
     @testset [CustomTestSet] [option=val  ...] ["description \$v"] for v in (...) ... end
     @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] for v in (...), w in (...) ... end
-    @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] foo()
+    @testset [CustomTestSet] [option=val  ...] ["description"] foo()
     @testset let v = (...) ... end
 
 # With begin/end or function call
@@ -1327,12 +1371,12 @@ also be used for any nested `@testset` invocations. The given options are only
 applied to the test set where they are given. The default test set type
 accepts three boolean options:
 - `verbose`: if `true`, the result summary of the nested testsets is shown even
-when they all pass (the default is `false`).
+  when they all pass (the default is `false`).
 - `showtiming`: if `true`, the duration of each displayed testset is shown
-(the default is `true`).
+  (the default is `true`).
 - `failfast`: if `true`, any test failure or error will cause the testset and any
-child testsets to return immediately (the default is `false`). This can also be set
-globally via the env var `JULIA_TEST_FAILFAST`.
+  child testsets to return immediately (the default is `false`).
+  This can also be set globally via the env var `JULIA_TEST_FAILFAST`.
 
 !!! compat "Julia 1.8"
     `@testset foo()` requires at least Julia 1.8.
@@ -1342,7 +1386,8 @@ globally via the env var `JULIA_TEST_FAILFAST`.
 
 The description string accepts interpolation from the loop indices.
 If no description is provided, one is constructed based on the variables.
-If a function call is provided, its name will be used. Explicit description strings override this behavior.
+If a function call is provided, its name will be used.
+Explicit description strings override this behavior.
 
 By default the `@testset` macro will return the testset object itself, though
 this behavior can be customized in other testset types. If a `for` loop is used
@@ -1399,6 +1444,7 @@ julia> @testset let logi = log(im)
 Test Failed at none:3
   Expression: !(iszero(real(logi)))
      Context: logi = 0.0 + 1.5707963267948966im
+
 ERROR: There was an error during testing
 ```
 """
@@ -1413,7 +1459,7 @@ macro testset(args...)
         error("Expected function call, begin/end block or for loop as argument to @testset")
     end
 
-    FAIL_FAST[] = something(tryparse(Bool, get(ENV, "JULIA_TEST_FAILFAST", "false")), false)
+    FAIL_FAST[] = Base.get_bool_env("JULIA_TEST_FAILFAST", false)
 
     if tests.head === :for
         return testset_forloop(args, tests, __source__)
@@ -1481,7 +1527,11 @@ function testset_beginend_call(args, tests, source)
     ex = quote
         _check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
         local ret
-        local ts = $(testsettype)($desc; $options...)
+        local ts = if ($testsettype === $DefaultTestSet) && $(isa(source, LineNumberNode))
+            $(testsettype)($desc; source=$(QuoteNode(source.file)), $options...)
+        else
+            $(testsettype)($desc; $options...)
+        end
         push_testset(ts)
         # we reproduce the logic of guardseed, but this function
         # cannot be used as it changes slightly the semantic of @testset,
@@ -1577,7 +1627,11 @@ function testset_forloop(args, testloop, source)
             copy!(RNG, tmprng)
 
         end
-        ts = $(testsettype)($desc; $options...)
+        ts = if ($testsettype === $DefaultTestSet) && $(isa(source, LineNumberNode))
+            $(testsettype)($desc; source=$(QuoteNode(source.file)), $options...)
+        else
+            $(testsettype)($desc; $options...)
+        end
         push_testset(ts)
         first_iteration = false
         try
@@ -1689,7 +1743,7 @@ end
 """
     get_testset_depth()
 
-Returns the number of active test sets, not including the default test set
+Return the number of active test sets, not including the default test set
 """
 function get_testset_depth()
     testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
@@ -1819,7 +1873,7 @@ end
                                       ambiguous_bottom=false,
                                       allowed_undefineds=nothing)
 
-Returns a vector of `(Method,Method)` pairs of ambiguous methods
+Return a vector of `(Method,Method)` pairs of ambiguous methods
 defined in the specified modules.
 Use `recursive=true` to test in all submodules.
 
@@ -1850,7 +1904,7 @@ function detect_ambiguities(mods::Module...;
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)
             m.sig == Tuple && continue # ignore Builtins
-            is_in_mods(m.module, recursive, mods) || continue
+            is_in_mods(parentmodule(m), recursive, mods) || continue
             world = Base.get_world_counter()
             ambig = Ref{Int32}(0)
             ms = Base._methods_by_ftype(m.sig, nothing, -1, world, true, Ref(typemin(UInt)), Ref(typemax(UInt)), ambig)::Vector
@@ -1883,7 +1937,7 @@ function detect_ambiguities(mods::Module...;
             f = Base.unwrap_unionall(getfield(mod, n))
             if isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
                 push!(work, f)
-            elseif isa(f, DataType) && isdefined(f.name, :mt) && f.name.module === mod && f.name.name === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
+            elseif isa(f, DataType) && isdefined(f.name, :mt) && parentmodule(f) === mod && nameof(f) === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
                 examine(f.name.mt)
             end
         end
@@ -1896,7 +1950,7 @@ end
 """
     detect_unbound_args(mod1, mod2...; recursive=false, allowed_undefineds=nothing)
 
-Returns a vector of `Method`s which may have unbound type parameters.
+Return a vector of `Method`s which may have unbound type parameters.
 Use `recursive=true` to test in all submodules.
 
 By default, any undefined symbols trigger a warning. This warning can
@@ -1904,8 +1958,8 @@ be suppressed by supplying a collection of `GlobalRef`s for which
 the warning can be skipped. For example, setting
 
 ```
-allow_undefineds = Set([GlobalRef(Base, :active_repl),
-                        GlobalRef(Base, :active_repl_backend)])
+allowed_undefineds = Set([GlobalRef(Base, :active_repl),
+                          GlobalRef(Base, :active_repl_backend)])
 ```
 
 would suppress warnings about `Base.active_repl` and
@@ -1922,7 +1976,7 @@ function detect_unbound_args(mods...;
     mods = collect(mods)::Vector{Module}
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)
-            is_in_mods(m.module, recursive, mods) || continue
+            is_in_mods(parentmodule(m), recursive, mods) || continue
             has_unbound_vars(m.sig) || continue
             tuple_sig = Base.unwrap_unionall(m.sig)::DataType
             if Base.isvatuple(tuple_sig)
@@ -1954,7 +2008,7 @@ function detect_unbound_args(mods...;
             f = Base.unwrap_unionall(getfield(mod, n))
             if isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
                 push!(work, f)
-            elseif isa(f, DataType) && isdefined(f.name, :mt) && f.name.module === mod && f.name.name === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
+            elseif isa(f, DataType) && isdefined(f.name, :mt) && parentmodule(f) === mod && nameof(f) === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
                 examine(f.name.mt)
             end
         end
@@ -1964,54 +2018,11 @@ function detect_unbound_args(mods...;
     return collect(ambs)
 end
 
-# find if var will be constrained to have a definite value
-# in any concrete leaftype subtype of typ
-function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool)
-    typ === var && return true
-    while typ isa UnionAll
-        covariant && constrains_param(var, typ.var.ub, covariant) && return true
-        # typ.var.lb doesn't constrain var
-        typ = typ.body
-    end
-    if typ isa Union
-        # for unions, verify that both options would constrain var
-        ba = constrains_param(var, typ.a, covariant)
-        bb = constrains_param(var, typ.b, covariant)
-        (ba && bb) && return true
-    elseif typ isa DataType
-        # return true if any param constrains var
-        fc = length(typ.parameters)
-        if fc > 0
-            if typ.name === Tuple.name
-                # vararg tuple needs special handling
-                for i in 1:(fc - 1)
-                    p = typ.parameters[i]
-                    constrains_param(var, p, covariant) && return true
-                end
-                lastp = typ.parameters[fc]
-                vararg = Base.unwrap_unionall(lastp)
-                if vararg isa Core.TypeofVararg && isdefined(vararg, :N)
-                    constrains_param(var, vararg.N, covariant) && return true
-                    # T = vararg.parameters[1] doesn't constrain var
-                else
-                    constrains_param(var, lastp, covariant) && return true
-                end
-            else
-                for i in 1:fc
-                    p = typ.parameters[i]
-                    constrains_param(var, p, false) && return true
-                end
-            end
-        end
-    end
-    return false
-end
-
 function has_unbound_vars(@nospecialize sig)
     while sig isa UnionAll
         var = sig.var
         sig = sig.body
-        if !constrains_param(var, sig, true)
+        if !Core.Compiler.constrains_param(var, sig, #=covariant=#true, #=type_constrains=#true)
             return true
         end
     end
@@ -2131,5 +2142,6 @@ function _check_bitarray_consistency(B::BitArray{N}) where N
 end
 
 include("logging.jl")
+include("precompile.jl")
 
 end # module
