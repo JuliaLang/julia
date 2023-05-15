@@ -1835,15 +1835,6 @@ function empty!(a::Vector)
 end
 
 _memcmp(a, b, len) = ccall(:memcmp, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), a, b, len % Csize_t) % Int
-# function _memcmp(a, b, len)
-#     ta = @_gc_preserve_begin a
-#     tb = @_gc_preserve_begin b
-#     pa = unsafe_convert(Ptr{Cvoid}, a)
-#     pb = unsafe_convert(Ptr{Cvoid}, b)
-#     memcmp(pa, pb, len % Csize_t) % Int
-#     @_gc_preserve_end ta
-#     @_gc_preserve_end tb
-# end
 
 # use memcmp for cmp on byte arrays
 function cmp(a::Array{UInt8,1}, b::Array{UInt8,1})
