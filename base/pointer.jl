@@ -218,7 +218,7 @@ end
 function unsafe_swap!(p::Ptr{T}, x, order::Symbol=:not_atomic) where {T}
     @inline
     xT = x isa T ? x : convert(T, x)
-    return Core.Intrinsics.atomic_pointerswap(p, xT, order)
+    return atomic_pointerswap(p, xT, order)
 end
 
 # convert a raw Ptr to an object reference, and vice-versa
