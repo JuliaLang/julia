@@ -378,6 +378,17 @@ let ambig = Ref{Int32}(0)
     @test ambig[] == 1
 end
 
+fnoambig(::Int,::Int) = 1
+fnoambig(::Int,::Any) = 2
+fnoambig(::Any,::Int) = 3
+fnoambig(::Any,::Any) = 4
+let has_ambig = Ref(Int32(0))
+    ms = Base._methods_by_ftype(Tuple{typeof(fnoambig), Any, Any}, nothing, 4, Base.get_world_counter(), false, Ref(typemin(UInt)), Ref(typemax(UInt)), has_ambig)
+    @test ms isa Vector
+    @test length(ms) == 4
+    @test has_ambig[] == 0
+end
+
 # issue #11407
 f11407(::Dict{K,V}, ::Dict{Any,V}) where {K,V} = 1
 f11407(::Dict{K,V}, ::Dict{K,Any}) where {K,V} = 2
