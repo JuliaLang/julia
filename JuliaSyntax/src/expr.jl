@@ -179,13 +179,6 @@ function _fixup_Expr_children!(head, loc, args)
         elseif k == K"let" && i == 1 && @isexpr(arg, :block)
             filter!(a -> !(a isa LineNumberNode), arg.args)
         end
-        if !(k == K"for" && i == 1) && @isexpr(arg, :(=))
-            aa2 = arg.args[2]
-            if is_eventually_call(arg.args[1]) && !@isexpr(aa2, :block)
-                # Add block for short form function locations
-                arg.args[2] = Expr(:block, loc, aa2)
-            end
-        end
         args[i] = arg
     end
     return args
@@ -212,6 +205,12 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
 
     if k == K"?"
         headsym = :if
+    elseif k == K"=" && !is_decorated(head)
+        a2 = args[2]
+        if is_eventually_call(args[1]) && !@isexpr(a2, :block)
+            # Add block for short form function locations
+            args[2] = Expr(:block, loc, a2)
+        end
     elseif k == K"macrocall"
         _reorder_parameters!(args, 2)
         insert!(args, 2, loc)

@@ -168,14 +168,24 @@
                  Expr(:block,
                       LineNumberNode(1),
                       :xs))
-        # flisp parser quirk: In a for loop the block is not added, despite
-        # this defining a short-form function.
-        @test parsestmt("for f() = xs\nend") ==
-            Expr(:for,
-                 Expr(:(=), Expr(:call, :f), :xs),
+
+        @test parsestmt("let f(x) =\ng(x)=1\nend") ==
+            Expr(:let,
+                 Expr(:(=),
+                      Expr(:call, :f, :x),
+                      Expr(:block,
+                           LineNumberNode(1),
+                           Expr(:(=),
+                               Expr(:call, :g, :x),
+                               Expr(:block,
+                                    LineNumberNode(2),
+                                    1)))),
                  Expr(:block,
-                      LineNumberNode(1)
-                     ))
+                      LineNumberNode(3)))
+
+        # `.=` doesn't introduce short form functions
+        @test parsestmt("f() .= xs") ==
+            Expr(:(.=), Expr(:call, :f), :xs)
     end
 
     @testset "for" begin

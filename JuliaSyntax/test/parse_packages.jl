@@ -29,17 +29,22 @@ base_tests_path = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test")
         # In julia-1.6, test/copy.jl had spurious syntax which became the
         # multidimensional array syntax in 1.7.
         if endswith(f, "copy.jl") && v"1.6" <= VERSION < v"1.7"
-            return false
+            return nothing
         end
 
         # syntax.jl has some intentially weird syntax which we parse
         # differently than the flisp parser, and some cases which we've
         # decided are syntax errors.
         if endswith(f, "syntax.jl")
-            return false
+            return nothing
         end
 
-        return true
+        if endswith(f, "core.jl")
+            # Loose comparison due to `for f() = 1:3` syntax
+            return exprs_roughly_equal
+        end
+
+        return exprs_equal_no_linenum
     end
 end
 

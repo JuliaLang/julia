@@ -590,12 +590,14 @@ function parse_assignment_with_initial_ex(ps::ParseState, mark, down::T) where {
         # [a ~ b c]  ==>  (hcat (call-i a ~ b) c)
         # [a~b]      ==>  (vect (call-i a ~ b))
         bump_dotsplit(ps)
+        bump_trivia(ps)
         parse_assignment(ps, down)
         emit(ps, mark, is_dotted(t) ? K"dotcall" : K"call", INFIX_FLAG)
     else
         # a += b  ==>  (+= a b)
         # a .= b  ==>  (.= a b)
         bump(ps, TRIVIA_FLAG)
+        bump_trivia(ps)
         parse_assignment(ps, down)
         emit(ps, mark, k, flags(t))
     end
