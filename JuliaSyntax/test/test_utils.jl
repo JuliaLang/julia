@@ -138,6 +138,17 @@ function exprs_roughly_equal(fl_ex, ex)
             end
         end
         fl_args[1] = Expr(:tuple, Expr(:parameters, kwargs...), posargs...)
+    elseif h == :for
+        iterspec = args[1]
+        if JuliaSyntax.is_eventually_call(iterspec.args[1]) &&
+                Meta.isexpr(iterspec.args[2], :block)
+            blk = iterspec.args[2]
+            if length(blk.args) == 2 && blk.args[1] isa LineNumberNode
+                # Ignore short form function location differences in
+                # `for f() = 1:3 end`
+                iterspec.args[2] = blk.args[2]
+            end
+        end
     end
     if length(fl_args) != length(args)
         return false
@@ -197,11 +208,13 @@ function find_source_in_path(basedir)
     src_list
 end
 
-test_parse_all_in_path(basedir) = test_parse_all_in_path(path->true, basedir)
+test_parse_all_in_path(basedir) =
+    test_parse_all_in_path(path->exprs_equal_no_linenum, basedir)
 
-function test_parse_all_in_path(path_allowed::Function, basedir)
+function test_parse_all_in_path(compare_for_path::Function, basedir)
     for filepath in find_source_in_path(basedir)
-        if !path_allowed(filepath)
+        cmp = compare_for_path(filepath)
+        if isnothing(cmp)
             continue
         end
         @testset "Parse $(relpath(filepath, basedir))" begin
@@ -212,8 +225,7 @@ function test_parse_all_in_path(path_allowed::Function, basedir)
                 # ignore this case.
                 continue
             end
-            parsers_agree = parsers_agree_on_file(text, filepath,
-                                                  exprs_equal=exprs_equal_no_linenum)
+            parsers_agree = parsers_agree_on_file(text, filepath, exprs_equal=cmp)
             @test parsers_agree
             if !parsers_agree
                 reduced_failures = reduce_text.(reduce_tree(text),
