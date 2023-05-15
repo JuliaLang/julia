@@ -71,6 +71,12 @@ end
         end
     end
 
+    @testset "heterogeneous symtridiagonal" begin
+        one = elty(1)
+        v = fill(one, 2)
+        @test all(x -> x == one, SymTridiagonal(v, v[begin + 1: end]))
+    end
+
     @testset "constructor" begin
         for (x, y) in ((d, dl), (GenericArray(d), GenericArray(dl)))
             ST = (SymTridiagonal(x, y))::SymTridiagonal{elty, typeof(x)}

@@ -3,10 +3,10 @@
 #### Specialized matrix types ####
 
 ## (complex) symmetric tridiagonal matrices
-struct SymTridiagonal{T, V<:AbstractVector{T}} <: AbstractMatrix{T}
+struct SymTridiagonal{T, V<:AbstractVector{T}, W<:AbstractVector{T}} <: AbstractMatrix{T}
     dv::V                        # diagonal
-    ev::V                        # superdiagonal
-    function SymTridiagonal{T, V}(dv, ev) where {T, V<:AbstractVector{T}}
+    ev::W                        # superdiagonal
+    function SymTridiagonal{T, V, W}(dv, ev) where {T, V<:AbstractVector{T}, W<:AbstractVector{T}}
         require_one_based_indexing(dv, ev)
         if !(length(dv) - 1 <= length(ev) <= length(dv))
             throw(DimensionMismatch("subdiagonal has wrong length. Has length $(length(ev)), but should be either $(length(dv) - 1) or $(length(dv))."))
@@ -16,7 +16,7 @@ struct SymTridiagonal{T, V<:AbstractVector{T}} <: AbstractMatrix{T}
 end
 
 """
-    SymTridiagonal(dv::V, ev::V) where V <: AbstractVector
+    SymTridiagonal(dv::V, ev::W) where V, W <: AbstractVector
 
 Construct a symmetric tridiagonal matrix from the diagonal (`dv`) and first
 sub/super-diagonal (`ev`), respectively. The result is of type `SymTridiagonal`
@@ -67,8 +67,8 @@ julia> A[2,1]
  2  4
 ```
 """
-SymTridiagonal(dv::V, ev::V) where {T,V<:AbstractVector{T}} = SymTridiagonal{T}(dv, ev)
-SymTridiagonal{T}(dv::V, ev::V) where {T,V<:AbstractVector{T}} = SymTridiagonal{T,V}(dv, ev)
+SymTridiagonal(dv::V, ev::W) where {T,V<:AbstractVector{T},W<:AbstractVector{T}} = SymTridiagonal{T}(dv, ev)
+SymTridiagonal{T}(dv::V, ev::W) where {T,V<:AbstractVector{T},W<:AbstractVector{T}} = SymTridiagonal{T,V,W}(dv, ev)
 function SymTridiagonal{T}(dv::AbstractVector, ev::AbstractVector) where {T}
     SymTridiagonal(convert(AbstractVector{T}, dv)::AbstractVector{T},
                    convert(AbstractVector{T}, ev)::AbstractVector{T})
@@ -110,9 +110,9 @@ function SymTridiagonal(A::AbstractMatrix)
     end
 end
 
-SymTridiagonal{T,V}(S::SymTridiagonal{T,V}) where {T,V<:AbstractVector{T}} = S
-SymTridiagonal{T,V}(S::SymTridiagonal) where {T,V<:AbstractVector{T}} =
-    SymTridiagonal(convert(V, S.dv)::V, convert(V, S.ev)::V)
+SymTridiagonal{T,V,W}(S::SymTridiagonal{T,V,W}) where {T,V<:AbstractVector{T},W<:AbstractVector{T}} = S
+SymTridiagonal{T,V,W}(S::SymTridiagonal) where {T,V<:AbstractVector{T},W<:AbstractVector{T}} =
+    SymTridiagonal(convert(V, S.dv)::V, convert(W, S.ev)::W)
 SymTridiagonal{T}(S::SymTridiagonal{T}) where {T} = S
 SymTridiagonal{T}(S::SymTridiagonal) where {T} =
     SymTridiagonal(convert(AbstractVector{T}, S.dv)::AbstractVector{T},
