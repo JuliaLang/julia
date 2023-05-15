@@ -162,7 +162,7 @@ optimized to the appropriate hardware instruction, otherwise it'll use a loop.
      This function requires at least Julia 1.10.
 """
 function unsafe_modify!(p::Ptr, op, x, order::Symbol=:not_atomic)
-    Core.Intrinsics.atomic_pointermodify(p, op, x, order)
+    return atomic_pointermodify(p, op, x, order)
 end
 
 """
