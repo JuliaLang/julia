@@ -115,6 +115,47 @@ function init_depot_path()
     nothing
 end
 
+# replace leading dirname with `@depot, @stdlib` if `path` is located withiin any of
+# DEPOT_PATH/compiled or Sys.STDLIB
+# return normalized path otherwise
+function replace_depot_path(_path::AbstractString)
+    path = normpath(_path)
+    if startswith(path, Sys.STDLIB)
+        length(path) == 1+length(Sys.STDLIB) && return joinpath("@stdlib", "")
+        return joinpath("@stdlib", path[2+length(Sys.STDLIB):end])
+    end
+    for depot in DEPOT_PATH
+        if startswith(path, joinpath(depot, "compiled"))
+            return joinpath("@depot", path[2+length(depot):end])
+        end
+    end
+    return path
+end
+
+# resolve leading `@depot, @stdlib` alias from `_path` to point to a valid path in any
+# of DEPOT_PATH/compiled or Sys.STDLIb
+# if `_path` has no leading alias, we return a normalized path
+function resolve_depot_path(_path::AbstractString)
+    path = normpath(_path)
+    if startswith(path, "@stdlib")
+        length(path) == 1+length("@stdlib") && return joinpath(Sys.STDLIB, "")
+        fullpath = joinpath(Sys.STDLIB, path[2+length("@stdlib"):end])
+        ispath(fullpath) && return fullpath
+        throw(ErrorException("Failed to resolve `$path` to a stdlib path in `$(Sys.STDLIB)`."))
+    elseif startswith(path, joinpath("@depot", "compiled"))
+        dir = path[2+length("@depot"):end]
+        for depot in DEPOT_PATH
+            fullpath = joinpath(depot, dir)
+            ispath(fullpath) && return fullpath
+        end
+        io = IOBuffer()
+        print(io, "Failed to resolve `$path` to a valid path for any depot in `DEPOT_PATH = ",
+              DEPOT_PATH, "`.")
+        throw(ErrorException(String(take!(io))))
+    end
+    return path
+end
+
 ## LOAD_PATH & ACTIVE_PROJECT ##
 
 # JULIA_LOAD_PATH: split on `:` (or `;` on Windows)

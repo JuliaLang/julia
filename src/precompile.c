@@ -30,8 +30,8 @@ void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
         write_uint64(f, posfile);
         ios_seek_end(f);
         // Each source-text file is written as
-        //   int32: length of abspath
-        //   char*: abspath
+        //   int32: length of depot alias
+        //   char*: depot alias
         //   uint64: length of src text
         //   char*: src text
         // At the end we write int32(0) as a terminal sentinel.
@@ -50,12 +50,13 @@ void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
                 ios_t *srctp = ios_file(&srctext, depstr, 1, 0, 0, 0);
                 if (!srctp) {
                     jl_printf(JL_STDERR, "WARNING: could not cache source text for \"%s\".\n",
-                            jl_string_data(dep));
+                              depstr);
                     continue;
                 }
-                size_t slen = jl_string_len(dep);
+                jl_value_t *depalias = jl_fieldref(deptuple, 3);  // file @depot alias
+                size_t slen = jl_string_len(depalias);
                 write_int32(f, slen);
-                ios_write(f, depstr, slen);
+                ios_write(f, jl_string_data(depalias), slen);
                 posfile = ios_pos(f);
                 write_uint64(f, 0);   // placeholder for length of this file in bytes
                 uint64_t filelen = (uint64_t) ios_copyall(f, &srctext);

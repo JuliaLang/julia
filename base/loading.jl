@@ -1671,7 +1671,8 @@ function _include_dependency(mod::Module, _path::AbstractString)
     end
     if _track_dependencies[]
         @lock require_lock begin
-        push!(_require_dependencies, (mod, path, mtime(path)))
+        push!(_require_dependencies, (mod, path, mtime(path),
+                                      path[1] == '\0' ? path : replace_depot_path(path)))
         end
     end
     return path, prev
@@ -1787,7 +1788,9 @@ function __require(into::Module, mod::Symbol)
         end
         uuidkey, env = uuidkey_env
         if _track_dependencies[]
-            push!(_require_dependencies, (into, binpack(uuidkey), 0.0))
+            path = binpack(uuidkey)
+            push!(_require_dependencies, (into, path, 0.0,
+                                          path[1] == '\0' ? path : replace_depot_path(path)))
         end
         return _require_prelocked(uuidkey, env)
     finally
@@ -2632,6 +2635,8 @@ function parse_cache_header(f::IO)
         end
         if depname[1] == '\0'
             push!(requires, modkey => binunpack(depname))
+        elseif depname[1] == '@'
+            push!(includes, CacheHeaderIncludes(modkey, resolve_depot_path(depname), mtime, modpath))
         else
             push!(includes, CacheHeaderIncludes(modkey, depname, mtime, modpath))
         end
