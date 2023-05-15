@@ -84,7 +84,7 @@ end
 const MAX_INLINE_CONST_SIZE = 256
 
 function count_const_size(@nospecialize(x), count_self::Bool = true)
-    (x isa Type || x isa Symbol) && return 0
+    (x isa Type || x isa Core.TypeName || x isa Symbol) && return 0
     ismutable(x) && return MAX_INLINE_CONST_SIZE + 1
     isbits(x) && return Core.sizeof(x)
     dt = typeof(x)
@@ -137,7 +137,7 @@ function retrieve_code_info(linfo::MethodInstance, world::UInt)
         if src === nothing
             # can happen in images built with --strip-ir
             return nothing
-        elseif isa(src, Array{UInt8,1})
+        elseif isa(src, String)
             c = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, src)
         else
             c = copy(src::CodeInfo)

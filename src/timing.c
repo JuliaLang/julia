@@ -6,6 +6,8 @@
 #include "options.h"
 #include "stdio.h"
 
+jl_module_t *jl_module_root(jl_module_t *m);
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -72,7 +74,7 @@ void jl_init_timing(void)
     _Static_assert(JL_TIMING_EVENT_LAST < sizeof(uint64_t) * CHAR_BIT, "Too many timing events!");
     _Static_assert((int)JL_TIMING_LAST <= (int)JL_TIMING_EVENT_LAST, "More owners than events!");
 
-    int i = 0;
+    int i __attribute__((unused)) = 0;
 #ifdef USE_ITTAPI
 #define X(name) jl_timing_ittapi_events[i++] = __itt_event_create(#name, strlen(#name));
     JL_TIMING_EVENTS
@@ -141,12 +143,6 @@ jl_timing_block_t *jl_timing_block_exit_task(jl_task_t *ct, jl_ptls_t ptls)
     return blk;
 }
 
-static inline const char *gnu_basename(const char *path)
-{
-    char *base = strrchr(path, '/');
-    return base ? base+1 : path;
-}
-
 JL_DLLEXPORT void jl_timing_show(jl_value_t *v, jl_timing_block_t *cur_block)
 {
 #ifdef USE_TRACY
@@ -165,8 +161,13 @@ JL_DLLEXPORT void jl_timing_show(jl_value_t *v, jl_timing_block_t *cur_block)
 JL_DLLEXPORT void jl_timing_show_module(jl_module_t *m, jl_timing_block_t *cur_block)
 {
 #ifdef USE_TRACY
-    const char *module_name = jl_symbol_name(m->name);
-    TracyCZoneText(*(cur_block->tracy_ctx), module_name, strlen(module_name));
+    jl_module_t *root = jl_module_root(m);
+    if (root == m || root == jl_main_module) {
+        const char *module_name = jl_symbol_name(m->name);
+        TracyCZoneText(*(cur_block->tracy_ctx), module_name, strlen(module_name));
+    } else {
+        jl_timing_printf(cur_block, "%s.%s", jl_symbol_name(root->name), jl_symbol_name(m->name));
+    }
 #endif
 }
 
@@ -186,6 +187,15 @@ JL_DLLEXPORT void jl_timing_show_method_instance(jl_method_instance_t *mi, jl_ti
                      gnu_basename(jl_symbol_name(def->file)),
                      def->line,
                      jl_symbol_name(def->module->name));
+}
+
+JL_DLLEXPORT void jl_timing_show_method(jl_method_t *method, jl_timing_block_t *cur_block)
+{
+    jl_timing_show((jl_value_t *)method, cur_block);
+    jl_timing_printf(cur_block, "%s:%d in %s",
+                    gnu_basename(jl_symbol_name(method->file)),
+                    method->line,
+                    jl_symbol_name(method->module->name));
 }
 
 JL_DLLEXPORT void jl_timing_show_func_sig(jl_value_t *v, jl_timing_block_t *cur_block)
@@ -221,6 +231,49 @@ JL_DLLEXPORT void jl_timing_printf(jl_timing_block_t *cur_block, const char *for
     TracyCZoneText(*(cur_block->tracy_ctx), buf.buf, buf.size);
 #endif
     va_end(args);
+}
+
+JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str)
+{
+#ifdef USE_TRACY
+    TracyCZoneText(*(cur_block->tracy_ctx), str, strlen(str));
+#endif
+}
+
+void jl_timing_init_task(jl_task_t *t)
+{
+#ifdef USE_TRACY
+    jl_value_t *start_type = jl_typeof(t->start);
+    const char *start_name = "";
+    if (jl_is_datatype(start_type))
+        start_name = jl_symbol_name(((jl_datatype_t *) start_type)->name->name);
+
+    static uint16_t task_id = 1;
+
+    // XXX: Tracy uses this as a handle internally and requires that this
+    // string live forever, so this allocation is intentionally leaked.
+    char *fiber_name;
+    if (start_name[0] == '#') {
+        jl_method_instance_t *mi = jl_method_lookup(&t->start, 1, jl_get_world_counter());
+        const char *filename = gnu_basename(jl_symbol_name(mi->def.method->file));
+        const char *module_name = jl_symbol_name(mi->def.method->module->name);
+
+        // 26 characters in "Task 65535 (:0000000 in )\0"
+        size_t fiber_name_len = strlen(filename) + strlen(module_name) + 26;
+        fiber_name = (char *)malloc(fiber_name_len);
+        snprintf(fiber_name, fiber_name_len,  "Task %d (%s:%d in %s)",
+                 task_id++, filename, mi->def.method->line, module_name);
+    } else {
+
+        // 16 characters in "Task 65535 (\"\")\0"
+        size_t fiber_name_len = strlen(start_name) + 16;
+        fiber_name = (char *)malloc(fiber_name_len);
+        snprintf(fiber_name, fiber_name_len,  "Task %d (\"%s\")",
+                 task_id++, start_name);
+    }
+
+    t->name = fiber_name;
+#endif
 }
 
 JL_DLLEXPORT int jl_timing_set_enable(const char *subsystem, uint8_t enabled)

@@ -413,7 +413,9 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
                     @goto done
                 end
             end
-            stopenv == env && @goto done
+            if !(loading_extension || precompiling_extension)
+                stopenv == env && @goto done
+            end
         end
     else
         for env in load_path()
@@ -428,7 +430,9 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
                 path = entry_path(path, pkg.name)
                 @goto done
             end
-            stopenv == env && break
+            if !(loading_extension || precompiling_extension)
+                stopenv == env && break
+            end
         end
         # Allow loading of stdlibs if the name/uuid are given
         # e.g. if they have been explicitly added to the project/manifest
@@ -619,6 +623,24 @@ function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothi
             pkg_uuid = explicit_project_deps_get(project_file, name)
             return PkgId(pkg_uuid, name)
         end
+        d = parsed_toml(project_file)
+        exts = get(d, "extensions", nothing)::Union{Dict{String, Any}, Nothing}
+        if exts !== nothing
+            # Check if `where` is an extension of the project
+            if where.name in keys(exts) && where.uuid == uuid5(proj.uuid, where.name)
+                # Extensions can load weak deps...
+                weakdeps = get(d, "weakdeps", nothing)::Union{Dict{String, Any}, Nothing}
+                if weakdeps !== nothing
+                    wuuid = get(weakdeps, name, nothing)::Union{String, Nothing}
+                    if wuuid !== nothing
+                        return PkgId(UUID(wuuid), name)
+                    end
+                end
+                # ... and they can load same deps as the project itself
+                mby_uuid = explicit_project_deps_get(project_file, name)
+                mby_uuid === nothing || return PkgId(mby_uuid, name)
+            end
+        end
         # look for manifest file and `where` stanza
         return explicit_manifest_deps_get(project_file, where, name)
     elseif project_file
@@ -636,11 +658,32 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
             # if `pkg` matches the project, return the project itself
             return project_file_path(project_file)
         end
+        mby_ext = project_file_ext_path(project_file, pkg.name)
+        mby_ext === nothing || return mby_ext
         # look for manifest file and `where` stanza
         return explicit_manifest_uuid_path(project_file, pkg)
     elseif project_file
         # if env names a directory, search it
         return implicit_manifest_uuid_path(env, pkg)
+    end
+    return nothing
+end
+
+
+function find_ext_path(project_path::String, extname::String)
+    extfiledir = joinpath(project_path, "ext", extname, extname * ".jl")
+    isfile(extfiledir) && return extfiledir
+    return joinpath(project_path, "ext", extname * ".jl")
+end
+
+function project_file_ext_path(project_file::String, name::String)
+    d = parsed_toml(project_file)
+    p = project_file_path(project_file)
+    exts = get(d, "extensions", nothing)::Union{Dict{String, Any}, Nothing}
+    if exts !== nothing
+        if name in keys(exts)
+            return find_ext_path(p, name)
+        end
     end
     return nothing
 end
@@ -747,10 +790,10 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{No
     return nothing
 end
 
-function is_v1_format_manifest(raw_manifest::Dict)
+function is_v1_format_manifest(raw_manifest::Dict{String})
     if haskey(raw_manifest, "manifest_format")
         mf = raw_manifest["manifest_format"]
-        if mf isa Dict && haskey(mf, "uuid")
+        if mf isa Dict{String} && haskey(mf, "uuid")
             # the off-chance where an old format manifest has a dep called "manifest_format"
             return true
         end
@@ -876,9 +919,7 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
                     error("failed to find source of parent package: \"$name\"")
                 end
                 p = normpath(dirname(parent_path), "..")
-                extfiledir = joinpath(p, "ext", pkg.name, pkg.name * ".jl")
-                isfile(extfiledir) && return extfiledir
-                return joinpath(p, "ext", pkg.name * ".jl")
+                return find_ext_path(p, pkg.name)
             end
         end
     end
@@ -1008,10 +1049,10 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
 
     if ocachepath !== nothing
         @debug "Loading object cache file $ocachepath for $pkg"
-        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint), ocachepath, depmods, false)
+        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring), ocachepath, depmods, false, pkg.name)
     else
         @debug "Loading cache file $path for $pkg"
-        sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint), path, depmods, false)
+        sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), path, depmods, false, pkg.name)
     end
     if isa(sv, Exception)
         return sv
@@ -1071,12 +1112,46 @@ function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
     if !isempty(inits)
         unlock(require_lock) # temporarily _unlock_ during these callbacks
         try
-            ccall(:jl_init_restored_modules, Cvoid, (Any,), inits)
+            for (i, mod) in pairs(inits)
+                run_module_init(mod, i)
+            end
         finally
             lock(require_lock)
         end
     end
     return restored
+end
+
+function run_module_init(mod::Module, i::Int=1)
+    # `i` informs ordering for the `@time_imports` report formatting
+    if TIMING_IMPORTS[] == 0
+        ccall(:jl_init_restored_module, Cvoid, (Any,), mod)
+    else
+        if isdefined(mod, :__init__)
+            connector = i > 1 ? "├" : "┌"
+            printstyled("               $connector ", color = :light_black)
+
+            elapsedtime = time_ns()
+            cumulative_compile_timing(true)
+            compile_elapsedtimes = cumulative_compile_time_ns()
+
+            ccall(:jl_init_restored_module, Cvoid, (Any,), mod)
+
+            elapsedtime = (time_ns() - elapsedtime) / 1e6
+            cumulative_compile_timing(false);
+            comp_time, recomp_time = (cumulative_compile_time_ns() .- compile_elapsedtimes) ./ 1e6
+
+            print(round(elapsedtime, digits=1), " ms $mod.__init__() ")
+            if comp_time > 0
+                printstyled(Ryu.writefixed(Float64(100 * comp_time / elapsedtime), 2), "% compilation time", color = Base.info_color())
+            end
+            if recomp_time > 0
+                perc = Float64(100 * recomp_time / comp_time)
+                printstyled(" (", perc < 1 ? "<1" : Ryu.writefixed(perc, 0), "% recompilation)", color = Base.warn_color())
+            end
+            println()
+        end
+    end
 end
 
 function run_package_callbacks(modkey::PkgId)
@@ -1126,6 +1201,18 @@ end
 function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missing}
     project_file = env_project_file(env)
     if project_file isa String
+        # Look in project for extensions to insert
+        proj_pkg = project_file_name_uuid(project_file, pkg.name)
+        if pkg == proj_pkg
+            d_proj = parsed_toml(project_file)
+            weakdeps = get(d_proj, "weakdeps", nothing)::Union{Nothing, Vector{String}, Dict{String,Any}}
+            extensions = get(d_proj, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
+            extensions === nothing && return
+            weakdeps === nothing && return
+            return _insert_extension_triggers(pkg, extensions, weakdeps)
+        end
+
+        # Now look in manifest
         manifest_file = project_file_manifest_path(project_file)
         manifest_file === nothing && return
         d = get_deps(parsed_toml(manifest_file))
@@ -1190,6 +1277,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, <:An
 end
 
 loading_extension::Bool = false
+precompiling_extension::Bool = false
 function run_extension_callbacks(extid::ExtensionId)
     assert_havelock(require_lock)
     succeeded = try
@@ -1217,30 +1305,8 @@ function run_extension_callbacks(pkgid::PkgId)
     extids === nothing && return
     for extid in extids
         if extid.ntriggers > 0
-            # It is possible that pkgid was loaded in an environment
-            # below the one of the parent. This will cause a load failure when the
-            # pkg ext tries to load the triggers. Therefore, check this first
-            # before loading the pkg ext.
-            pkgenv = identify_package_env(extid.id, pkgid.name)
-            ext_not_allowed_load = false
-            if pkgenv === nothing
-                ext_not_allowed_load = true
-            else
-                pkg, env = pkgenv
-                path = locate_package(pkg, env)
-                if path === nothing
-                    ext_not_allowed_load = true
-                end
-            end
-            if ext_not_allowed_load
-                @debug "Extension $(extid.id.name) of $(extid.parentid.name) will not be loaded \
-                        since $(pkgid.name) loaded in environment lower in load path"
-                # indicate extid is expected to fail
-                extid.ntriggers *= -1
-            else
-                # indicate pkgid is loaded
-                extid.ntriggers -= 1
-            end
+            # indicate pkgid is loaded
+            extid.ntriggers -= 1
         end
         if extid.ntriggers < 0
             # indicate pkgid is loaded
@@ -2107,13 +2173,13 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
                               $trace
                               -`,
                               "OPENBLAS_NUM_THREADS" => 1,
-                              "JULIA_WAIT_FOR_TRACY" => nothing,
                               "JULIA_NUM_THREADS" => 1),
                        stderr = internal_stderr, stdout = internal_stdout),
               "w", stdout)
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     write(io.in, """
         empty!(Base.EXT_DORMITORY) # If we have a custom sysimage with `EXT_DORMITORY` prepopulated
+        Base.precompiling_extension = $(loading_extension)
         Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $deps, $(repr(source_path(nothing))))
         """)

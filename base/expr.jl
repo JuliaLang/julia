@@ -514,6 +514,13 @@ The `:consistent` setting asserts that for egal (`===`) inputs:
     the other was optimized).
 
 !!! note
+    The `:consistent`-cy assertion currrently includes the assertion that the function
+    will not execute any undefined behavior (for any input). Note that undefined behavior
+    may technically cause the function to violate other effect assertions (such as
+    `:nothrow` or `:effect_free`) as well, but we do not model this, and all effects
+    except `:consistent` assume the absence of undefined behavior.
+
+!!! note
     If `:consistent` functions terminate by throwing an exception, that exception
     itself is not required to meet the egality requirement specified above.
 
@@ -920,6 +927,26 @@ function remove_linenums!(src::CodeInfo)
     src.codelocs .= 0
     length(src.linetable) > 1 && resize!(src.linetable, 1)
     return src
+end
+
+replace_linenums!(ex, ln::LineNumberNode) = ex
+function replace_linenums!(ex::Expr, ln::LineNumberNode)
+    if ex.head === :block || ex.head === :quote
+        # replace line number expressions from metadata (not argument literal or inert) position
+        map!(ex.args, ex.args) do @nospecialize(x)
+            isa(x, Expr) && x.head === :line && length(x.args) == 1 && return Expr(:line, ln.line)
+            isa(x, Expr) && x.head === :line && length(x.args) == 2 && return Expr(:line, ln.line, ln.file)
+            isa(x, LineNumberNode) && return ln
+            return x
+        end
+    end
+    # preserve any linenums inside `esc(...)` guards
+    if ex.head !== :escape
+        for subex in ex.args
+            subex isa Expr && replace_linenums!(subex, ln)
+        end
+    end
+    return ex
 end
 
 macro generated()

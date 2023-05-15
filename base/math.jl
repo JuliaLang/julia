@@ -46,6 +46,11 @@ end
 
 # non-type specific math functions
 
+function two_mul(x::T, y::T) where {T<:Number}
+    xy = x*y
+    xy, fma(x, y, -xy)
+end
+
 @assume_effects :consistent @inline function two_mul(x::Float64, y::Float64)
     if Core.Intrinsics.have_fma(Float64)
         xy = x*y

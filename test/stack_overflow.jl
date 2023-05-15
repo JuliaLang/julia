@@ -17,3 +17,20 @@ let exename = Base.julia_cmd()
     @show readchomperrors(`$exename -e "f() = f(); f()"`)
     @show readchomperrors(`$exename -e "f() = f(); fetch(@async f())"`)
 end
+
+# Issue #49507: stackoverflow in type inference caused by close(::Channel, ::Exception)
+@testset "close(::Channel, ::StackOverflowError)" begin
+    ch = let result = Channel()
+        foo() = try
+            foo()
+        catch e;
+            close(result, e)
+        end
+
+        foo()  # This shouldn't fail with an internal stackoverflow error in inference.
+
+        result
+    end
+
+    @test (try take!(ch) catch e; e; end) isa StackOverflowError
+end

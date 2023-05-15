@@ -302,18 +302,39 @@ function finish_cfg_inline!(state::CFGInliningState)
     end
 end
 
+# duplicated from IRShow
+function normalize_method_name(m)
+    if m isa Method
+        return m.name
+    elseif m isa MethodInstance
+        return (m.def::Method).name
+    elseif m isa Symbol
+        return m
+    else
+        return Symbol("")
+    end
+end
+@noinline method_name(m::LineInfoNode) = normalize_method_name(m.method)
+
+inline_node_is_duplicate(topline::LineInfoNode, line::LineInfoNode) =
+    topline.module === line.module &&
+    method_name(topline) === method_name(line) &&
+    topline.file === line.file &&
+    topline.line === line.line
+
 function ir_inline_linetable!(linetable::Vector{LineInfoNode}, inlinee_ir::IRCode,
-                              inlinee::Method,
+                              inlinee::MethodInstance,
                               inlined_at::Int32)
-    coverage = coverage_enabled(inlinee.module)
+    inlinee_def = inlinee.def::Method
+    coverage = coverage_enabled(inlinee_def.module)
     linetable_offset::Int32 = length(linetable)
     # Append the linetable of the inlined function to our line table
     topline::Int32 = linetable_offset + Int32(1)
     coverage_by_path = JLOptions().code_coverage == 3
-    push!(linetable, LineInfoNode(inlinee.module, inlinee.name, inlinee.file, inlinee.line, inlined_at))
+    push!(linetable, LineInfoNode(inlinee_def.module, inlinee, inlinee_def.file, inlinee_def.line, inlined_at))
     oldlinetable = inlinee_ir.linetable
     extra_coverage_line = zero(Int32)
-    for oldline in 1:length(oldlinetable)
+    for oldline in eachindex(oldlinetable)
         entry = oldlinetable[oldline]
         if !coverage && coverage_by_path && is_file_tracked(entry.file)
             # include topline coverage entry if in path-specific coverage mode, and any file falls under path
@@ -323,7 +344,7 @@ function ir_inline_linetable!(linetable::Vector{LineInfoNode}, inlinee_ir::IRCod
             (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset + (oldline == 1) : inlined_at))
         if oldline == 1
             # check for a duplicate on the first iteration (likely true)
-            if newentry === linetable[topline]
+            if inline_node_is_duplicate(linetable[topline], newentry)
                 continue
             else
                 linetable_offset += 1
@@ -339,9 +360,10 @@ end
 
 function ir_prepare_inlining!(insert_node!::Inserter, inline_target::Union{IRCode, IncrementalCompact},
         linetable::Vector{LineInfoNode}, ir′::IRCode, sparam_vals::SimpleVector,
-        def::Method, inlined_at::Int32, argexprs::Vector{Any})
+        mi::MethodInstance, inlined_at::Int32, argexprs::Vector{Any})
+    def = mi.def::Method
     topline::Int32 = length(linetable) + Int32(1)
-    linetable_offset, extra_coverage_line = ir_inline_linetable!(linetable, ir′, def, inlined_at)
+    linetable_offset, extra_coverage_line = ir_inline_linetable!(linetable, ir′, mi, inlined_at)
     if extra_coverage_line != 0
         insert_node!(NewInstruction(Expr(:code_coverage_effect), Nothing, extra_coverage_line))
     end
@@ -371,11 +393,10 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                          boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
     # Ok, do the inlining here
     sparam_vals = item.mi.sparam_vals
-    def = item.mi.def::Method
     inlined_at = compact.result[idx][:line]
 
     ((sp_ssa, argexprs), linetable_offset) = ir_prepare_inlining!(InsertHere(compact),
-        compact, linetable, item.ir, sparam_vals, def, inlined_at, argexprs)
+        compact, linetable, item.ir, sparam_vals, item.mi, inlined_at, argexprs)
 
     if boundscheck === :default || boundscheck === :propagate
         if (compact.result[idx][:flag] & IR_FLAG_INBOUNDS) != 0
@@ -385,6 +406,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     # If the iterator already moved on to the next basic block,
     # temporarily re-open in again.
     local return_value
+    def = item.mi.def::Method
     sig = def.sig
     # Special case inlining that maintains the current basic block if there's only one BB in the target
     new_new_offset = length(compact.new_new_nodes)
@@ -811,7 +833,7 @@ function compileable_specialization(mi::MethodInstance, effects::Effects,
         # If this caller does not want us to optimize calls to use their
         # declared compilesig, then it is also likely they would handle sparams
         # incorrectly if there were any unknown typevars, so we conservatively return nothing
-        if _any(t->isa(t, TypeVar), match.sparams)
+        if any(@nospecialize(t)->isa(t, TypeVar), mi.sparam_vals)
             return nothing
         end
     end
@@ -922,7 +944,7 @@ end
 function may_have_fcalls(m::Method)
     isdefined(m, :source) || return true
     src = m.source
-    isa(src, CodeInfo) || isa(src, Vector{UInt8}) || return true
+    isa(src, MaybeCompressed) || return true
     return ccall(:jl_ir_flag_has_fcall, Bool, (Any,), src)
 end
 
@@ -960,8 +982,8 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
     return resolve_todo(mi, match, argtypes, info, flag, state; invokesig)
 end
 
-function retrieve_ir_for_inlining(mi::MethodInstance, src::Array{UInt8, 1})
-    src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, C_NULL, src::Vector{UInt8})::CodeInfo
+function retrieve_ir_for_inlining(mi::MethodInstance, src::String)
+    src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, C_NULL, src)::CodeInfo
     return inflate_ir!(src, mi)
 end
 retrieve_ir_for_inlining(mi::MethodInstance, src::CodeInfo) = inflate_ir(src, mi)

@@ -295,3 +295,10 @@ if Sys.WORD_SIZE >= 64
         objectid(s)
     end
 end
+
+# Issue #49620
+let t1 = Tuple{AbstractVector,AbstractVector{<:Integer},UnitRange{<:Integer}},
+    t2 = Tuple{AbstractVector,AbstractVector{<:Integer},UnitRange{<:Integer}}
+    @test hash(t1) == hash(t2)
+    @test length(Set{Type}([t1, t2])) == 1
+end
