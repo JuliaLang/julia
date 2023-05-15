@@ -840,27 +840,27 @@ end
     
     ## Complex valued
     A =  [1.0+im 1.0+1.0im 0 0; 1.0+1.0im 2.0+3.0im 1.0+1.0im 0; 0 1.0+2.0im 3.0+4.0im 1.0+5.0im; 0 0 1.0+1.0im 4.0+4.0im] ;
-    A = (A+A')/2 ;
+    AH = (A+A')/2 ;
     B =  [2.0+2.0im 1.0+1.0im 4.0+4.0im 3.0+3.0im; 0 3.0+2.0im 1.0+1.0im 3.0+4.0im; 3.0+3.0im 1.0+4.0im 0 0; 0 1.0+2.0im 3.0+1.0im 1.0+1.0im];
-    B = (B+B')/2 ; 
+    BH = (B+B')/2 ; 
     # eigen
     sf = x->(real(x),imag(x))
-    e0,v0 = eigen(A, B; sortby=sf)
-    e1,v1 = eigen(A, Hermitian(B); sortby=sf)
-    e2,v2 = eigen(Hermitian(A), B; sortby=sf)
-    @test e0 ≈ e1 && v0 ≈ v1
-    @test e0 ≈ e2 && v0 ≈ v2
+    e1,v1 = eigen(A, Hermitian(BH))
+    e2,v2 = eigen(Hermitian(AH), B)
+    @test A*v1 ≈ Hermitian(BH)*v1*Diagonal(e1)
+    @test Hermitian(AH)*v2 ≈ B*v2*Diagonal(e2)
     # eigvals
-    @test eigvals(A, B; sortby=sf) ≈ eigvals(A, Hermitian(B); sortby=sf)
-    @test eigvals(A, B; sortby=sf) ≈ eigvals(Hermitian(A), B; sortby=sf)
+    @test eigvals(A, BH; sortby=sf) ≈ eigvals(A, Hermitian(BH); sortby=sf)
+    @test eigvals(AH, B; sortby=sf) ≈ eigvals(Hermitian(AH), B; sortby=sf)
     
     ## Cholesky decomposition based
-    B1 = B*B' ;
+    BPD = B*B' ;
     # eigen
-    e0,v0 = eigen(A, B1; sortby=sf)
-    U = cholesky(B1) ;
-    e1,v1 = eigen(A,U; sortby=sf)
-    @test e0 ≈ e1 && v0 ≈ v1
+    C = cholesky(BPD) ;
+    e,v = eigen(A, C; sortby=sf)
+    @test A*v ≈ BPD*v*Diagonal(e) ;
+    # eigvals
+    @test eigvals(A, BPD; sortby=sf) ≈ eigvals(A, C; sortby=sf)
 end
 
 end # module TestSymmetric
