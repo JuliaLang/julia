@@ -139,7 +139,7 @@ different type may be valid provided that that the types are compatible.
 """
 unsafe_store!(p::Ptr{Any}, @nospecialize(x), i::Integer=1) = pointerset(p, x, Int(i), 1)
 unsafe_store!(p::Ptr{T}, x, i::Integer=1) where {T} = pointerset(p, convert(T,x), Int(i), 1)
-unsafe_store!(p::Ptr, x, order::Symbol) = atomic_pointerset(p, x, order)
+unsafe_store!(p::Ptr{T}, x, order::Symbol) where {T} = atomic_pointerset(p, x isa T ? x : convert(T,x), order)
 function unsafe_store!(p::Ptr, x, i::Integer, order::Symbol)
     unsafe_store!(p + (aligned_sizeof(eltype(p)) * (Int(i) - 1)), x, order)
 end
