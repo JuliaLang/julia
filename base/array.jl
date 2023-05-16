@@ -2482,9 +2482,7 @@ function _findall(f::Function, I::Vector, A::AbstractArray{Bool})
         cnt += f(v)
         cnt > len && return I
     end
-    # In case of impure f, this line could potentially be hit. In that case,
-    # we can't assume I is the correct length.
-    resize!(I, cnt - 1)
+    I
 end
 
 function _findall(f::Function, I::Vector, A::AbstractVector{Bool})
@@ -2493,13 +2491,13 @@ function _findall(f::Function, I::Vector, A::AbstractVector{Bool})
     len = length(I)
     while cnt ≤ len
         @inbounds I[cnt] = i
-        cnt += f(@inbounds A[i])
+        cnt += f(A[i])
         i = nextind(A, i)
     end
-    cnt - 1 == len ? I : resize!(I, cnt - 1)
+    I
 end
 
-findall(f::Function, A::AbstractArray{Bool}) = _findall(f, A)
+findall(f::Union{typeof(!), typeof(identity)}, A::AbstractArray{Bool}) = _findall(f, A)
 findall(f::Fix2{typeof(in)}, A::AbstractArray{Bool}) = _findall(f, A)
 findall(A::AbstractArray{Bool}) = _findall(identity, A)
 
