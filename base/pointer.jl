@@ -96,6 +96,10 @@ unsafe_wrap(Atype::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}},
             p::Ptr{T}, dims::NTuple{N,<:Integer}; own::Bool = false) where {T,N} =
     unsafe_wrap(Atype, p, convert(Tuple{Vararg{Int}}, dims), own = own)
 
+const ATOMIC_PTR_DOCS = """
+
+"""
+
 """
     unsafe_load(p::Ptr{T}, i::Integer=1)
     unsafe_load(p::Ptr{T}, order::Symbol)
@@ -109,6 +113,10 @@ pointer `p` to ensure that it is valid. Like C, the programmer is responsible fo
 that referenced memory is not freed or garbage collected while invoking this function.
 Incorrect usage may segfault your program or return garbage answers. Unlike C, dereferencing
 memory region allocated as different type may be valid provided that the types are compatible.
+
+This is compatible with loading pointers declared with `_Atomic` and `std::atomic`
+type in C11 and C++23 respectively. An error may be thrown if there is not support for
+atomically loading the Julia type `T`.
 
 !!! compat "Julia 1.10"
      The `order` argument is available as of Julia 1.10.
@@ -134,6 +142,10 @@ that referenced memory is not freed or garbage collected while invoking this fun
 Incorrect usage may segfault your program. Unlike C, storing memory region allocated as
 different type may be valid provided that that the types are compatible.
 
+This is compatible with storing pointers declared with `_Atomic` and `std::atomic`
+type in C11 and C++23 respectively. An error may be thrown if there is not support for
+atomically storing the Julia type `T`.
+
 !!! compat "Julia 1.10"
      The `order` argument is available as of Julia 1.10.
 """
@@ -148,7 +160,9 @@ end
     unsafe_modify!(p::Ptr{T}, op, x, [order::Symbol]) -> Pair
 
 These atomically perform the operations to get and set a memory address after applying
-the function `op`.
+the function `op`. If supported by the hardware (for example, atomic increment), this may be
+optimized to the appropriate hardware instruction, otherwise its execution will be
+similar to:
 
     y = unsafe_load(p)
     z = op(y, x)
@@ -158,14 +172,16 @@ the function `op`.
 The `unsafe` prefix on this function indicates that no validation is performed on the
 pointer `p` to ensure that it is valid. Like C, the programmer is responsible for ensuring
 that referenced memory is not freed or garbage collected while invoking this function.
-Incorrect usage may segfault your program. Unlike C, storing memory region allocated as
-different type may be valid provided that that the types are compatible.
+Incorrect usage may segfault your program.
 
-If supported by the hardware (for example, atomic increment), this may be
-optimized to the appropriate hardware instruction, otherwise it'll use a loop.
+This is compatible with modifying pointers declared with `_Atomic` and `std::atomic`
+type in C11 and C++23 respectively. An error may be thrown if there is not support for
+atomically modifying the Julia type `T`.
 
 !!! compat "Julia 1.10"
      This function requires at least Julia 1.10.
+
+See also: [`modifyfield!`](@ref), [`modifyproperty!`](@ref)
 """
 function unsafe_modify!(p::Ptr, op, x, order::Symbol=:not_atomic)
     return atomic_pointermodify(p, op, x, order)
@@ -175,8 +191,9 @@ end
     unsafe_replace!(p::Ptr{T}, expected, desired,
                   [success_order::Symbol, [fail_order::Symbol=success_order]) -> (; old, success::Bool)
 
-These atomically perform the operations to get and conditionally set a field to
-a given value.
+These atomically perform the operations to get and conditionally set a memory address to
+a given value. If supported by the hardware, this may be optimized to the appropriate
+hardware instruction, otherwise its execution will be similar to:
 
     y = unsafe_load(p, fail_order)
     ok = y === expected
@@ -185,11 +202,19 @@ a given value.
     end
     return (; old = y, success = ok)
 
-If supported by the hardware, this may be optimized to the appropriate hardware
-instruction, otherwise it'll use a loop.
+The `unsafe` prefix on this function indicates that no validation is performed on the
+pointer `p` to ensure that it is valid. Like C, the programmer is responsible for ensuring
+that referenced memory is not freed or garbage collected while invoking this function.
+Incorrect usage may segfault your program.
+
+This is compatible with loading and storing pointers declared with `_Atomic` and
+`std::atomic` type in C11 and C++23 respectively. An error may be thrown if there is not
+support for atomically loading and storing the Julia type `T`.
 
 !!! compat "Julia 1.10"
      This function requires at least Julia 1.10.
+
+See also: [`replacefield!`](@ref), [`replaceproperty!`](@ref)
 """
 function unsafe_replace!(p::Ptr{T}, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order) where {T}
     @inline
@@ -203,14 +228,27 @@ end
 """
     unsafe_swap!(p::Ptr{T}, x, [order::Symbol])
 
-These atomically perform the operations to simultaneously get and set a field:
+These atomically perform the operations to simultaneously get and set a memory address.
+If supported by the hardware, this may be optimized to the appropriate hardware
+instruction, otherwise its execution will be similar to:
 
     y = unsafe_load(p)
     unsafe_store!(p, x)
     return y
 
+The `unsafe` prefix on this function indicates that no validation is performed on the
+pointer `p` to ensure that it is valid. Like C, the programmer is responsible for ensuring
+that referenced memory is not freed or garbage collected while invoking this function.
+Incorrect usage may segfault your program.
+
+This is compatible with loading and storing pointers declared with `_Atomic` and
+`std::atomic` type in C11 and C++23 respectively. An error may be thrown if there is not
+support for atomically loading and storing the Julia type `T`.
+
 !!! compat "Julia 1.10"
      This function requires at least Julia 1.10.
+
+See also: [`swapfield!`](@ref), [`swapproperty!`](@ref)
 """
 function unsafe_swap!(p::Ptr{Any}, x, order::Symbol=:not_atomic)
     return atomic_pointerswap(p, x, order)
