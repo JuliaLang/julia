@@ -557,7 +557,7 @@ end
     ldiv(F, B)
 
 """
-    LinearAlgebra.peakflops(n::Integer=4096; dtype::DataType=Float64, ntrials::Integer=3, parallel::Bool=false)
+    LinearAlgebra.peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3, parallel::Bool=false)
 
 `peakflops` computes the peak flop rate of the computer by using double precision
 [`gemm!`](@ref LinearAlgebra.BLAS.gemm!). By default, if no arguments are specified, it
@@ -565,8 +565,8 @@ multiplies two `Float64` matrices of size `n x n`, where `n = 4096`. If the unde
 multiple threads, higher flop rates are realized. The number of BLAS threads can be set with
 [`BLAS.set_num_threads(n)`](@ref).
 
-If the keyword argument `dtype` is provided, `peakflops` will construct matrices with elements
-of type `dtype` for calculating the peak flop rate.
+If the keyword argument `eltype` is provided, `peakflops` will construct matrices with elements
+of type `eltype` for calculating the peak flop rate.
 
 By default, `peakflops` will use the best timing from 3 trials. If the `ntrials` keyword argument
 is provided, `peakflops` will use those many trials for picking the best timing.
@@ -580,10 +580,10 @@ of the problem that is solved on each processor.
     This function requires at least Julia 1.1. In Julia 1.0 it is available from
     the standard library `InteractiveUtils`.
 """
-function peakflops(n::Integer=4096; dtype::DataType=Float64, ntrials::Integer=3, parallel::Bool=false)
+function peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3, parallel::Bool=false)
     t = zeros(Float64, ntrials)
     for i=1:ntrials
-        a = ones(dtype,n,n)
+        a = ones(eltype,n,n)
         t[i] = @elapsed a2 = a*a
         @assert a2[1,1] == n
     end
