@@ -1078,38 +1078,7 @@ function parse_where(ps::ParseState, down)
     end
 end
 
-# given the previous expression kind and the next token, is there a
-# juxtaposition operator between them?
-#
-# flisp: juxtapose?
-function is_juxtapose(ps, prev_k, t)
-    k = kind(t)
-
-    # Not juxtaposition - parse_juxtapose will consume only the first token.
-    # x.3       ==>  x
-    # sqrt(2)2  ==>  (call sqrt 2)
-    # x' y      ==>  (call-post x ')
-    # x 'y      ==>  x
-
-    return !preceding_whitespace(t)                         &&
-    (is_number(prev_k) ||
-        (!is_number(k) &&  # disallow "x.3" and "sqrt(2)2"
-         k != K"@"     &&  # disallow "x@time"
-         !(is_block_form(prev_k)         ||
-           is_syntactic_unary_op(prev_k) ||
-           is_initial_reserved_word(ps, prev_k) )))  &&
-    (!is_operator(k) || is_radical_op(k))            &&
-    !is_closing_token(ps, k)                         &&
-    !is_initial_reserved_word(ps, k)
-end
-
-# Juxtoposition. Ugh! But so useful for units and Field identities like `im`
-#
-# 2x       ==>  (juxtapose 2 x)
-# 2(x)     ==>  (juxtapose 2 (parens x))
-# (2)(3)x  ==>  (juxtapose (parens 2) (parens 3) x)
-# (x-1)y   ==>  (juxtapose (parens (call-i x - 1)) y)
-# x'y      ==>  (juxtapose (call-post x ') y)
+# Juxtaposition. Kinda ugh but soo useful for units and Field identities like `im`
 #
 # flisp: parse-juxtapose
 function parse_juxtapose(ps::ParseState)
@@ -1117,19 +1086,46 @@ function parse_juxtapose(ps::ParseState)
     parse_unary(ps)
     n_terms = 1
     while true
-        prev_kind = peek_behind(ps).kind
         t = peek_token(ps)
-        if !is_juxtapose(ps, prev_kind, t)
-            break
+        k = kind(t)
+        prev_k = peek_behind(ps).kind
+        is_juxtapose = false
+        if !preceding_whitespace(t) &&
+                (is_number(prev_k) ||
+                    (!is_number(k) &&  # disallow "x.3" and "f(2)2"
+                     k != K"@"     &&  # disallow "x@y"
+                     !(is_block_form(prev_k)         ||
+                       is_syntactic_unary_op(prev_k) ||
+                       is_initial_reserved_word(ps, prev_k) )))  &&
+                (!is_operator(k) || is_radical_op(k))            &&
+                !is_closing_token(ps, k)
+            if prev_k == K"string" || is_string_delim(t)
+                bump_invisible(ps, K"error", TRIVIA_FLAG,
+                               error="cannot juxtapose string literal")
+                # JuliaLang/julia#20575
+                # Error, but assume juxtapose for recovery
+                # "a""b"  ==>  (juxtapose (string "a") (error-t) (string "b"))
+                # "a"x    ==>  (juxtapose (string "a") (error-t) x)
+                # "$y"x   ==>  (juxtapose (string y) (error-t) x)
+                # "a"begin end  ==> (juxtapose (string \"a\") (error-t) (block))
+                is_juxtapose = true
+            elseif !is_initial_reserved_word(ps, k)
+                # 2x       ==>  (juxtapose 2 x)
+                # 2(x)     ==>  (juxtapose 2 (parens x))
+                # (2)(3)x  ==>  (juxtapose (parens 2) (parens 3) x)
+                # (x-1)y   ==>  (juxtapose (parens (call-i x - 1)) y)
+                # x'y      ==>  (juxtapose (call-post x ') y)
+                # 1√x      ==>  (juxtapose 1 (call-pre √ x))
+                is_juxtapose = true
+            end
         end
-        if prev_kind == K"string" || is_string_delim(t)
-            # issue #20575
-            #
-            # "a""b"  ==>  (juxtapose (string "a") (error-t) (string "b"))
-            # "a"x    ==>  (juxtapose (string "a") (error-t) x)
-            # "$y"x   ==>  (juxtapose (string (string y)) (error-t) x)
-            bump_invisible(ps, K"error", TRIVIA_FLAG,
-                           error="cannot juxtapose string literal")
+        if !is_juxtapose
+            # x.3       ==>  x
+            # f(2)2     ==>  (call f 2)
+            # x' y      ==>  (call-post x ')
+            # x 'y      ==>  x
+            # x@y       ==>  x
+            break
         end
         if is_radical_op(t)
             parse_unary(ps)
@@ -2337,7 +2333,7 @@ function parse_macro_name(ps::ParseState)
     bump_disallowed_space(ps)
     mark = position(ps)
     parse_atom(ps, false)
-    b = peek_behind(ps, position(ps))
+    b = peek_behind(ps, skip_parens=false)
     if b.kind == K"parens"
         emit_diagnostic(ps, mark,
             warning="parenthesizing macro names is unnecessary")

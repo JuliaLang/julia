@@ -592,12 +592,15 @@ end
 # * parens nodes
 # * deleted tokens (TOMBSTONE)
 # * whitespace (if skip_trivia=true)
-function peek_behind_pos(stream::ParseStream; skip_trivia::Bool=true)
+function peek_behind_pos(stream::ParseStream; skip_trivia::Bool=true,
+                         skip_parens::Bool=true)
     token_index = lastindex(stream.tokens)
     range_index = lastindex(stream.ranges)
-    while range_index >= firstindex(stream.ranges) &&
-            kind(stream.ranges[range_index]) == K"parens"
-        range_index -= 1
+    if skip_parens
+        while range_index >= firstindex(stream.ranges) &&
+                kind(stream.ranges[range_index]) == K"parens"
+            range_index -= 1
+        end
     end
     last_token_in_nonterminal = range_index == 0 ? 0 :
                                 stream.ranges[range_index].last_token
@@ -611,8 +614,8 @@ function peek_behind_pos(stream::ParseStream; skip_trivia::Bool=true)
     return ParseStreamPosition(token_index, range_index)
 end
 
-function peek_behind(stream::ParseStream; skip_trivia::Bool=true)
-    peek_behind(stream, peek_behind_pos(stream; skip_trivia=skip_trivia))
+function peek_behind(stream::ParseStream; kws...)
+    peek_behind(stream, peek_behind_pos(stream; kws...))
 end
 
 #-------------------------------------------------------------------------------
