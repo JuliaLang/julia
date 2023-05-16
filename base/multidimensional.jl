@@ -1573,17 +1573,17 @@ end
 
 isassigned(a::AbstractArray, i::CartesianIndex) = isassigned(a, Tuple(i)...)
 function isassigned(A::AbstractArray, i::Union{Integer, CartesianIndex}...)
-    isa(i, Tuple{Vararg{Int}}) || return isassigned(A, CartesianIndex(A, i)...)
+    isa(i, Tuple{Vararg{Int}}) || return isassigned(A, CartesianIndex(i...))
     @boundscheck checkbounds(Bool, A, i...) || return false
     S = IndexStyle(A)
     ninds = length(i)
     if isa(S, IndexLinear) && ninds != 1
         return @inbounds isassigned(A, _to_linear_index(A, i...))
     elseif ndims(A) != ninds
-        return @inbounds isassigned(A, _to_subscript_indices(A, i...))
+        return @inbounds isassigned(A, _to_subscript_indices(A, i...)...)
     else
        try
-            a[i...]
+            A[i...]
             true
         catch e
             if isa(e, BoundsError) || isa(e, UndefRefError)
@@ -1594,7 +1594,6 @@ function isassigned(A::AbstractArray, i::Union{Integer, CartesianIndex}...)
         end
     end
 end
-
 
 ## permutedims
 
