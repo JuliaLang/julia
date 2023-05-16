@@ -14,7 +14,7 @@
     #error Only LLVM versions >= 14.0.0 are supported by Julia
 #endif
 
-#if JL_LLVM_VERSION >= 160000
+#if JL_LLVM_VERSION >= 150000
 #define JL_LLVM_OPAQUE_POINTERS 1
 #endif
 
