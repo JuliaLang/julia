@@ -1189,10 +1189,16 @@ static void reset_thread_gc_counts(void) JL_NOTSAFEPOINT
     }
 }
 
+static int64_t inc_live_bytes(int64_t inc) JL_NOTSAFEPOINT
+{
+    jl_timing_counter_inc(JL_TIMING_COUNTER_HeapSize, inc);
+    return live_bytes += inc;
+}
+
 void jl_gc_reset_alloc_count(void) JL_NOTSAFEPOINT
 {
     combine_thread_gc_counts(&gc_num);
-    live_bytes += (gc_num.deferred_alloc + gc_num.allocd);
+    inc_live_bytes(gc_num.deferred_alloc + gc_num.allocd);
     gc_num.allocd = 0;
     gc_num.deferred_alloc = 0;
     reset_thread_gc_counts();
@@ -3121,9 +3127,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 {
     combine_thread_gc_counts(&gc_num);
 
-#ifdef USE_TRACY
-    TracyCPlot("Heap size", live_bytes + gc_num.allocd);
-#endif
+    // We separate the update of the graph from the update of live_bytes here
+    // so that the sweep shows a downward trend in memory usage.
+    jl_timing_counter_inc(JL_TIMING_COUNTER_HeapSize, gc_num.allocd);
 
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
 
@@ -3369,7 +3375,10 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     }
 
     last_live_bytes = live_bytes;
+    // Can't call inc_live_bytes here because we already added allocd
+    // to the graph earlier
     live_bytes += -gc_num.freed + gc_num.allocd;
+    jl_timing_counter_dec(JL_TIMING_COUNTER_HeapSize, gc_num.freed);
 
     if (collection == JL_GC_AUTO) {
         //If we aren't freeing enough or are seeing lots and lots of pointers let it increase faster
@@ -3513,10 +3522,6 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     SetLastError(last_error);
 #endif
     errno = last_errno;
-
-#ifdef USE_TRACY
-    TracyCPlot("Heap size", jl_gc_live_bytes());
-#endif
 }
 
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
@@ -3620,9 +3625,6 @@ void jl_gc_init(void)
     if (jl_options.heap_size_hint)
         jl_gc_set_max_memory(jl_options.heap_size_hint);
 
-#ifdef USE_TRACY
-    TracyCPlotConfig("Heap size", TracyPlotFormatMemory, /* rectilinear */ 0, /* fill */ 1, /* color */ 0);
-#endif
     t_start = jl_hrtime();
 }
 
@@ -3808,7 +3810,7 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
 
     if (jl_astaggedvalue(owner)->bits.gc == GC_OLD_MARKED) {
         ptls->gc_cache.perm_scanned_bytes += allocsz - oldsz;
-        live_bytes += allocsz - oldsz;
+        inc_live_bytes(allocsz - oldsz);
     }
     else if (allocsz < oldsz)
         jl_atomic_store_relaxed(&ptls->gc_num.freed,

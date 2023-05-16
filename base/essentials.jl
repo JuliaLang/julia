@@ -542,11 +542,11 @@ unsafe_convert(::Type{T}, x::T) where {T<:Ptr} = x  # to resolve ambiguity with 
 unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
 
 """
-    reinterpret(type, A)
+    reinterpret(type, x)
 
-Change the type-interpretation of the binary data in the primitive type `A`
+Change the type-interpretation of the binary data in the primitive value `x`
 to that of the primitive type `type`.
-The size of `type` has to be the same as that of the type of `A`.
+The size of `type` has to be the same as that of the type of `x`.
 For example, `reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
 [`Float32`](@ref).
 

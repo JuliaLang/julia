@@ -48,23 +48,38 @@ const char *jl_timing_names[(int)JL_TIMING_LAST] =
 #undef X
     };
 
+JL_DLLEXPORT jl_timing_counter_t jl_timing_counters[JL_TIMING_COUNTER_LAST];
+
 #ifdef USE_ITTAPI
 JL_DLLEXPORT __itt_event jl_timing_ittapi_events[(int)JL_TIMING_EVENT_LAST];
 #endif
 
 void jl_print_timings(void)
 {
+#ifdef USE_TIMING_COUNTS
     uint64_t total_time = cycleclock() - t0;
     uint64_t root_time = total_time;
     for (int i = 0; i < JL_TIMING_LAST; i++) {
         root_time -= jl_timing_counts[i];
     }
     jl_timing_counts[0] = root_time;
+    fprintf(stderr, "\nJULIA TIMINGS\n");
     for (int i = 0; i < JL_TIMING_LAST; i++) {
         if (jl_timing_counts[i] != 0)
             fprintf(stderr, "%-25s : %5.2f %%   %" PRIu64 "\n", jl_timing_names[i],
                     100 * (((double)jl_timing_counts[i]) / total_time), jl_timing_counts[i]);
     }
+
+    fprintf(stderr, "\nJULIA COUNTERS\n");
+#define X(name) do { \
+        int64_t val = (int64_t) jl_atomic_load_relaxed(&jl_timing_counters[(int)JL_TIMING_COUNTER_##name].basic_counter); \
+        if (val != 0) \
+            fprintf(stderr, "%-25s : %" PRIi64 "\n", #name, val); \
+    } while (0);
+
+    JL_TIMING_COUNTERS
+#undef X
+#endif
 }
 
 void jl_init_timing(void)
@@ -79,6 +94,24 @@ void jl_init_timing(void)
 #define X(name) jl_timing_ittapi_events[i++] = __itt_event_create(#name, strlen(#name));
     JL_TIMING_EVENTS
 #undef X
+    i = 0;
+#define X(name) jl_timing_counters[i++].ittapi_counter = __itt_counter_create(#name, "julia.runtime");
+    JL_TIMING_COUNTERS
+#undef X
+#endif
+#ifdef USE_TRACY
+    i = 0;
+#define X(counter_name) jl_timing_counters[i].tracy_counter = (jl_tracy_counter_t){0, #counter_name}; \
+        TracyCPlotConfig(jl_timing_counters[i++].tracy_counter.name, TracyPlotFormatNumber, /* rectilinear */ 1, /* fill */ 1, /* color */ 0);
+    JL_TIMING_COUNTERS
+#undef X
+    // We reference these by enum indexing and then asking for the name, since that allows the compiler
+    // to catch name mismatches.
+    TracyCPlotConfig(jl_timing_counters[JL_TIMING_COUNTER_HeapSize].tracy_counter.name, TracyPlotFormatMemory, /* rectilinear */ 0, /* fill */ 1, /* color */ 0);
+    TracyCPlotConfig(jl_timing_counters[JL_TIMING_COUNTER_JITSize].tracy_counter.name, TracyPlotFormatMemory, /* rectilinear */ 0, /* fill */ 1, /* color */ 0);
+    TracyCPlotConfig(jl_timing_counters[JL_TIMING_COUNTER_JITCodeSize].tracy_counter.name, TracyPlotFormatMemory, /* rectilinear */ 0, /* fill */ 1, /* color */ 0);
+    TracyCPlotConfig(jl_timing_counters[JL_TIMING_COUNTER_JITDataSize].tracy_counter.name, TracyPlotFormatMemory, /* rectilinear */ 0, /* fill */ 1, /* color */ 0);
+    TracyCPlotConfig(jl_timing_counters[JL_TIMING_COUNTER_ImageSize].tracy_counter.name, TracyPlotFormatMemory, /* rectilinear */ 0, /* fill */ 1, /* color */ 0);
 #endif
 }
 
