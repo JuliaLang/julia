@@ -1672,11 +1672,14 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
     }
     assert(dt->isconcretetype || dt->isdispatchtuple ? dt->maybe_subtype_of_cache : 1);
     if (dt->name == jl_type_typename) {
-        cacheable = 0; // n.b. the cache for Type ignores parameter normalization, so it can't be used to make a stable hash value
         jl_value_t *p = jl_tparam(dt, 0);
         if (!jl_is_type(p) && !jl_is_typevar(p)) // Type{v} has no subtypes, if v is not a Type
             dt->has_concrete_subtype = 0;
         dt->maybe_subtype_of_cache = 1;
+        jl_value_t *uw = jl_unwrap_unionall(p);
+        // n.b. the cache for Type ignores parameter normalization except for Typeofwrapper, so it can't be used to make a stable hash value
+        if (!jl_is_datatype(uw) || ((jl_datatype_t*)uw)->name->wrapper != p)
+            cacheable = 0;
     }
     dt->hash = typekey_hash(dt->name, jl_svec_data(dt->parameters), l, cacheable);
 }
