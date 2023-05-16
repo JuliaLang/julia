@@ -228,10 +228,9 @@ _choleigvals!(A, U; sortby) = eigvals!(UtiAUi!(A, U); sortby)
 
 # Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues (proof of concept)
 function eigvals(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    A1 = A[B.p,B.p]
     if B.uplo == 'U'
-        return eigvals!(B.D \ UiAUti!(A1, B.U); sortby)
+        return eigvals!(B.D \ UiAUti!(A[B.p,B.p], B.U); sortby)
     else # B.uplo == 'L'
-        return eigvals!(B.D \ UiAUti!(A1, B.L); sortby)
+        return eigvals!(B.D \ UiAUti!(A[B.p,B.p], B.L); sortby)
     end
 end
