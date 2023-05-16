@@ -639,7 +639,6 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
 
     phi_slots = Vector{Int}[Int[] for _ = 1:length(ir.cfg.blocks)]
     new_phi_nodes = Vector{NewPhiNode}[NewPhiNode[] for _ = 1:length(cfg.blocks)]
-    phi_ssas = SSAValue[]
     new_phic_nodes = IdDict{Int, Vector{NewPhiCNode}}()
     for (; leave_block) in catch_entry_blocks
         new_phic_nodes[leave_block] = NewPhiCNode[]

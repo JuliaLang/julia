@@ -16,6 +16,13 @@ static inline const char *gnu_basename(const char *path)
     return base ? base+1 : path;
 }
 
+#ifdef USE_TRACY
+typedef struct {
+    _Atomic(int64_t) val;
+    char* name;
+} jl_tracy_counter_t;
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -77,6 +84,9 @@ extern JL_DLLEXPORT uint32_t jl_timing_print_limit;
 #define jl_timing_block_enter_task(ct, ptls, blk)
 #define jl_timing_block_exit_task(ct, ptls) ((jl_timing_block_t *)NULL)
 #define jl_pop_timing_block(blk)
+
+#define jl_timing_counter_inc(counter, value)
+#define jl_timing_counter_dec(counter, value)
 
 #define jl_profile_lock_init(lock, name)
 #define jl_profile_lock_start_wait(lock)
@@ -181,6 +191,15 @@ JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
         X(NATIVE_Create) \
 
 
+#define JL_TIMING_COUNTERS \
+        X(Invalidations) \
+        X(HeapSize) \
+        X(JITSize) \
+        X(JITCodeSize) \
+        X(JITDataSize) \
+        X(ImageSize) \
+
+
 enum jl_timing_owners {
 #define X(name) JL_TIMING_ ## name,
     JL_TIMING_OWNERS
@@ -193,6 +212,13 @@ enum jl_timing_events {
     JL_TIMING_EVENTS
 #undef X
     JL_TIMING_EVENT_LAST
+};
+
+enum jl_timing_counter_types {
+#define X(name) JL_TIMING_COUNTER_ ## name,
+    JL_TIMING_COUNTERS
+#undef X
+    JL_TIMING_COUNTER_LAST
 };
 
 /**
@@ -403,6 +429,61 @@ struct jl_timing_suspend_cpp_t {
     jl_timing_suspend_t __timing_suspend; \
     _jl_timing_suspend_ctor(&__timing_suspend, #subsystem, ct)
 #endif
+
+// Counting
+#ifdef USE_ITTAPI
+#define _ITTAPI_COUNTER_MEMBER __itt_counter ittapi_counter;
+#else
+#define _ITTAPI_COUNTER_MEMBER
+#endif
+
+#ifdef USE_TRACY
+# define _TRACY_COUNTER_MEMBER jl_tracy_counter_t tracy_counter;
+# else
+# define _TRACY_COUNTER_MEMBER
+#endif
+
+#ifdef USE_TIMING_COUNTS
+#define _COUNTS_MEMBER _Atomic(uint64_t) basic_counter;
+#else
+#define _COUNTS_MEMBER
+#endif
+
+typedef struct {
+    _ITTAPI_COUNTER_MEMBER
+    _TRACY_COUNTER_MEMBER
+    _COUNTS_MEMBER
+} jl_timing_counter_t;
+
+JL_DLLEXPORT extern jl_timing_counter_t jl_timing_counters[JL_TIMING_COUNTER_LAST];
+
+static inline void jl_timing_counter_inc(int counter, uint64_t val) JL_NOTSAFEPOINT {
+#ifdef USE_ITTAPI
+    __itt_counter_inc_delta(jl_timing_counters[counter].ittapi_counter, val);
+#endif
+#ifdef USE_TRACY
+    jl_tracy_counter_t *tracy_counter = &jl_timing_counters[counter].tracy_counter;
+    uint64_t oldval = jl_atomic_fetch_add_relaxed(&tracy_counter->val, val);
+    TracyCPlotI(tracy_counter->name, oldval + val);
+#endif
+#ifdef USE_TIMING_COUNTS
+    jl_atomic_fetch_add_relaxed(&jl_timing_counters[counter].basic_counter, val);
+#endif
+}
+
+static inline void jl_timing_counter_dec(int counter, uint64_t val) JL_NOTSAFEPOINT {
+#ifdef USE_ITTAPI
+    __itt_counter_dec_delta(jl_timing_counters[counter].ittapi_counter, val);
+#endif
+#ifdef USE_TRACY
+    jl_tracy_counter_t *tracy_counter = &jl_timing_counters[counter].tracy_counter;
+    uint64_t oldval = jl_atomic_fetch_add_relaxed(&tracy_counter->val, -val);
+    TracyCPlotI(tracy_counter->name, oldval - val);
+#endif
+#ifdef USE_TIMING_COUNTS
+    jl_atomic_fetch_add_relaxed(&jl_timing_counters[counter].basic_counter, -(int64_t)val);
+#endif
+}
 
 // Locking profiling
 static inline void jl_profile_lock_init(jl_mutex_t *lock, const char *name) {
