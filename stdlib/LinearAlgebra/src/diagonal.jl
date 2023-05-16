@@ -139,6 +139,16 @@ function size(D::Diagonal,d::Integer)
     return d<=2 ? length(D.diag) : 1
 end
 
+@inline function Base.isassigned(D::Diagonal, i::Int, j::Int)
+    @boundscheck checkbounds(Bool, D, i, j) || return false
+    if i == j
+        @inbounds r = isassigned(D.diag, i)
+    else
+        r = true
+    end
+    r
+end
+
 @inline function getindex(D::Diagonal, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
     if i == j
