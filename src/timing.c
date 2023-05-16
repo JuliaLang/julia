@@ -208,11 +208,16 @@ JL_DLLEXPORT void jl_timing_show_filename(const char *path, jl_timing_block_t *c
 JL_DLLEXPORT void jl_timing_show_method_instance(jl_method_instance_t *mi, jl_timing_block_t *cur_block)
 {
     jl_timing_show_func_sig(mi->specTypes, cur_block);
-    jl_method_t *def = mi->def.method;
-    jl_timing_printf(cur_block, "%s:%d in %s",
-                     gnu_basename(jl_symbol_name(def->file)),
-                     def->line,
-                     jl_symbol_name(def->module->name));
+    if (jl_is_method(mi->def.value)) {
+        jl_method_t *def = mi->def.method;
+        jl_timing_printf(cur_block, "%s:%d in %s",
+                         gnu_basename(jl_symbol_name(def->file)),
+                         def->line,
+                         jl_symbol_name(def->module->name));
+    } else {
+        jl_timing_printf(cur_block, "<top-level thunk> in %s",
+                         jl_symbol_name(mi->def.module->name));
+    }
 }
 
 JL_DLLEXPORT void jl_timing_show_method(jl_method_t *method, jl_timing_block_t *cur_block)
