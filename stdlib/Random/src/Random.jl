@@ -16,7 +16,6 @@ using Base.GMP: Limb
 import SHA
 
 using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing
-using Base.Libc
 import Base: copymutable, copy, copy!, ==, hash, convert,
              rand, randn, show
 

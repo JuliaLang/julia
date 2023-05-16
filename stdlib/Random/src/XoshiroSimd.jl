@@ -5,7 +5,7 @@ module XoshiroSimd
 import ..Random: TaskLocalRNG, rand, rand!, Xoshiro, CloseOpen01, UnsafeView,
                  SamplerType, SamplerTrivial
 using Base: BitInteger_types
-using Base.Libc
+using Base.Libc: memcpy
 using Core.Intrinsics: llvmcall
 
 # Vector-width. Influences random stream.
