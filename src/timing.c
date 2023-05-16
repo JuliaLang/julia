@@ -44,15 +44,11 @@ JL_DLLEXPORT uint32_t jl_timing_print_limit = 10;
 const char *jl_timing_names[(int)JL_TIMING_LAST] =
     {
 #define X(name) #name,
-        JL_TIMING_OWNERS
+        JL_TIMING_SUBSYSTEMS
 #undef X
     };
 
 JL_DLLEXPORT jl_timing_counter_t jl_timing_counters[JL_TIMING_COUNTER_LAST];
-
-#ifdef USE_ITTAPI
-JL_DLLEXPORT __itt_event jl_timing_ittapi_events[(int)JL_TIMING_EVENT_LAST];
-#endif
 
 void jl_print_timings(void)
 {
@@ -91,9 +87,6 @@ void jl_init_timing(void)
 
     int i __attribute__((unused)) = 0;
 #ifdef USE_ITTAPI
-#define X(name) jl_timing_ittapi_events[i++] = __itt_event_create(#name, strlen(#name));
-    JL_TIMING_EVENTS
-#undef X
     i = 0;
 #define X(name) jl_timing_counters[i++].ittapi_counter = __itt_counter_create(#name, "julia.runtime");
     JL_TIMING_COUNTERS
@@ -187,7 +180,7 @@ JL_DLLEXPORT void jl_timing_show(jl_value_t *v, jl_timing_block_t *cur_block)
     if (buf.size == buf.maxsize)
         memset(&buf.buf[IOS_INLSIZE - 3], '.', 3);
 
-    TracyCZoneText(*(cur_block->tracy_ctx), buf.buf, buf.size);
+    TracyCZoneText(cur_block->tracy_ctx, buf.buf, buf.size);
 #endif
 }
 
@@ -197,7 +190,7 @@ JL_DLLEXPORT void jl_timing_show_module(jl_module_t *m, jl_timing_block_t *cur_b
     jl_module_t *root = jl_module_root(m);
     if (root == m || root == jl_main_module) {
         const char *module_name = jl_symbol_name(m->name);
-        TracyCZoneText(*(cur_block->tracy_ctx), module_name, strlen(module_name));
+        TracyCZoneText(cur_block->tracy_ctx, module_name, strlen(module_name));
     } else {
         jl_timing_printf(cur_block, "%s.%s", jl_symbol_name(root->name), jl_symbol_name(m->name));
     }
@@ -208,7 +201,7 @@ JL_DLLEXPORT void jl_timing_show_filename(const char *path, jl_timing_block_t *c
 {
 #ifdef USE_TRACY
     const char *filename = gnu_basename(path);
-    TracyCZoneText(*(cur_block->tracy_ctx), filename, strlen(filename));
+    TracyCZoneText(cur_block->tracy_ctx, filename, strlen(filename));
 #endif
 }
 
@@ -243,7 +236,7 @@ JL_DLLEXPORT void jl_timing_show_func_sig(jl_value_t *v, jl_timing_block_t *cur_
     if (buf.size == buf.maxsize)
         memset(&buf.buf[IOS_INLSIZE - 3], '.', 3);
 
-    TracyCZoneText(*(cur_block->tracy_ctx), buf.buf, buf.size);
+    TracyCZoneText(cur_block->tracy_ctx, buf.buf, buf.size);
 #endif
 }
 
@@ -261,7 +254,7 @@ JL_DLLEXPORT void jl_timing_printf(jl_timing_block_t *cur_block, const char *for
     if (buf.size == buf.maxsize)
         memset(&buf.buf[IOS_INLSIZE - 3], '.', 3);
 
-    TracyCZoneText(*(cur_block->tracy_ctx), buf.buf, buf.size);
+    TracyCZoneText(cur_block->tracy_ctx, buf.buf, buf.size);
 #endif
     va_end(args);
 }
@@ -269,7 +262,7 @@ JL_DLLEXPORT void jl_timing_printf(jl_timing_block_t *cur_block, const char *for
 JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str)
 {
 #ifdef USE_TRACY
-    TracyCZoneText(*(cur_block->tracy_ctx), str, strlen(str));
+    TracyCZoneText(cur_block->tracy_ctx, str, strlen(str));
 #endif
 }
 

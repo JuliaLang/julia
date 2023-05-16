@@ -190,8 +190,7 @@ static jl_callptr_t _jl_compile_codeinst(
     JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
 #ifdef USE_TRACY
     if (is_recompile) {
-        TracyCZoneCtx ctx = *(JL_TIMING_CURRENT_BLOCK->tracy_ctx);
-        TracyCZoneColor(ctx, 0xFFA500);
+        TracyCZoneColor(JL_TIMING_DEFAULT_BLOCK->tracy_ctx, 0xFFA500);
     }
 #endif
     jl_callptr_t fptr = NULL;
@@ -252,7 +251,7 @@ static jl_callptr_t _jl_compile_codeinst(
     for (auto &def : emitted) {
         jl_code_instance_t *this_code = def.first;
         if (i < jl_timing_print_limit)
-            jl_timing_show_func_sig(this_code->def->specTypes, JL_TIMING_CURRENT_BLOCK);
+            jl_timing_show_func_sig(this_code->def->specTypes, JL_TIMING_DEFAULT_BLOCK);
 
         jl_llvm_functions_t decls = std::get<1>(def.second);
         jl_callptr_t addr;
@@ -301,7 +300,7 @@ static jl_callptr_t _jl_compile_codeinst(
         i++;
     }
     if (i > jl_timing_print_limit)
-        jl_timing_printf(JL_TIMING_CURRENT_BLOCK, "... <%d methods truncated>", i - 10);
+        jl_timing_printf(JL_TIMING_DEFAULT_BLOCK, "... <%d methods truncated>", i - 10);
 
     uint64_t end_time = 0;
     if (timed)
