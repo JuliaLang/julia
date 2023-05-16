@@ -189,7 +189,7 @@ end
 
 """
     unsafe_replace!(p::Ptr{T}, expected, desired,
-                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> (; old, success::Bool)
+                   [success_order::Symbol[, fail_order::Symbol=success_order]]) -> (; old, success::Bool)
 
 These atomically perform the operations to get and conditionally set a memory address to
 a given value. If supported by the hardware, this may be optimized to the appropriate
