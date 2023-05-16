@@ -188,8 +188,13 @@ end
 UtiAUi!(A::StridedMatrix, U) = _UtiAUi!(A, U)
 UtiAUi!(A::Symmetric, U) = Symmetric(_UtiAUi!(copytri!(parent(A), A.uplo), U), sym_uplo(A.uplo))
 UtiAUi!(A::Hermitian, U) = Hermitian(_UtiAUi!(copytri!(parent(A), A.uplo, true), U), sym_uplo(A.uplo))
-
 _UtiAUi!(A, U) = rdiv!(ldiv!(U', A), U)
+
+# Perform U \ A / U' in-place, where U::Union{UpperTriangular,Diagonal}
+UiAUti!(A::StridedMatrix, U) = _UiAUti!(A, U)
+UiAUti!(A::Symmetric, U) = Symmetric(_UiAUti!(copytri!(parent(A), A.uplo), U), sym_uplo(A.uplo))
+UiAUti!(A::Hermitian, U) = Hermitian(_UiAUti!(copytri!(parent(A), A.uplo, true), U), sym_uplo(A.uplo))
+_UiAUti!(A, U) = rdiv!(ldiv!(U, A), U')
 
 function eigvals!(A::HermOrSym{T,S}, B::HermOrSym{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasReal,S<:StridedMatrix}
     vals = LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))[1]
@@ -224,5 +229,9 @@ _choleigvals!(A, U; sortby) = eigvals!(UtiAUi!(A, U); sortby)
 # Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues (proof of concept)
 function eigvals(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     A1 = A[B.p,B.p]
-    return eigvals!(B.D \ UtiAUi!(A1,B.L'); sortby)
+    if B.uplo == 'U'
+        return eigvals!(B.D \ UiAUti!(A1, B.U); sortby)
+    else # B.uplo == 'L'
+        return eigvals!(B.D \ UiAUti!(A1, B.L); sortby)
+    end
 end
