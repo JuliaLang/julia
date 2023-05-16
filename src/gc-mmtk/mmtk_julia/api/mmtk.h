@@ -56,14 +56,19 @@ extern bool is_mapped_address(void* addr);
 extern void modify_check(void* ref);
 extern int object_is_managed_by_mmtk(void* addr);
 extern void runtime_panic(void);
+extern void unreachable(void);
 
 extern void mmtk_set_vm_space(void* addr, size_t size);
+extern void mmtk_immortal_region_post_alloc(void* addr, size_t size);
 
 // Write barriers
 extern void mmtk_memory_region_copy(MMTk_Mutator mutator, void* src_obj, void* src_addr, void* dst_obj, void* dst_addr, size_t size);
 extern void mmtk_object_reference_write_post(MMTk_Mutator mutator, const void* src, const void* target);
-extern uint8_t mmtk_needs_write_barrier(void);
-
+extern void mmtk_object_reference_write_slow(MMTk_Mutator mutator, const void* src, const void* target);
+extern const uint8_t MMTK_NEEDS_WRITE_BARRIER;
+extern const uint8_t NO_BARRIER;
+extern const uint8_t OBJECT_BARRIER;
+extern const void* MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
 /**
  * Tracing
  */
@@ -121,7 +126,7 @@ extern void gc_init(long long min_heap_size, long long max_heap_size, Julia_Upca
 extern bool will_never_move(void* object);
 extern bool process(char* name, char* value);
 extern void scan_region(void);
-extern void handle_user_collection_request(void *tls);
+extern void handle_user_collection_request(void *tls, uint8_t collection);
 extern void initialize_collection(void* tls);
 extern void enable_collection(void);
 extern void disable_collection(void);

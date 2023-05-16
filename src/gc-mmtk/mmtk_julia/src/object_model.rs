@@ -99,8 +99,9 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
     }
 
     #[inline(always)]
-    fn ref_to_header(object: ObjectReference) -> Address {
-        object.to_raw_address()
+    fn ref_to_header(_object: ObjectReference) -> Address {
+        unreachable!()
+        // object.to_raw_address() - 8
     }
 
     fn dump_object(_object: ObjectReference) {
@@ -109,5 +110,7 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
 }
 
 pub fn is_object_in_los(object: &ObjectReference) -> bool {
-    (*object).to_raw_address().as_usize() > 0x60000000000
+    // FIXME: get the range from MMTk. Or at least assert at boot time to make sure those constants are correct.
+    (*object).to_raw_address().as_usize() >= 0x600_0000_0000
+        && (*object).to_raw_address().as_usize() < 0x800_0000_0000
 }

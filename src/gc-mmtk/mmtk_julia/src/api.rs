@@ -13,7 +13,7 @@ use crate::{
     FINALIZERS_RUNNING, MUTATORS, MUTATOR_TLS, USER_TRIGGERED_GC,
 };
 use libc::c_char;
-use log::info;
+use log::*;
 use mmtk::memory_manager;
 use mmtk::scheduler::GCController;
 use mmtk::scheduler::GCWorker;
@@ -43,18 +43,12 @@ pub extern "C" fn gc_init(
         use mmtk::util::options::PlanSelector;
         let force_plan = if cfg!(feature = "nogc") {
             Some(PlanSelector::NoGC)
-        } else if cfg!(feature = "semispace") {
-            Some(PlanSelector::SemiSpace)
-        } else if cfg!(feature = "gencopy") {
-            Some(PlanSelector::GenCopy)
         } else if cfg!(feature = "marksweep") {
             Some(PlanSelector::MarkSweep)
-        } else if cfg!(feature = "markcompact") {
-            Some(PlanSelector::MarkCompact)
-        } else if cfg!(feature = "pageprotect") {
-            Some(PlanSelector::PageProtect)
         } else if cfg!(feature = "immix") {
             Some(PlanSelector::Immix)
+        } else if cfg!(feature = "stickyimmix") {
+            Some(PlanSelector::StickyImmix)
         } else {
             None
         };
@@ -251,13 +245,26 @@ pub extern "C" fn modify_check(object: ObjectReference) {
 }
 
 #[no_mangle]
-pub extern "C" fn handle_user_collection_request(tls: VMMutatorThread) {
+pub extern "C" fn handle_user_collection_request(tls: VMMutatorThread, collection: u8) {
     AtomicBool::store(&USER_TRIGGERED_GC, true, Ordering::SeqCst);
     if AtomicBool::load(&DISABLED_GC, Ordering::SeqCst) {
         AtomicBool::store(&USER_TRIGGERED_GC, false, Ordering::SeqCst);
         return;
     }
-    memory_manager::handle_user_collection_request::<JuliaVM>(&SINGLETON, tls);
+    // See jl_gc_collection_t
+    match collection {
+        // auto
+        0 => memory_manager::handle_user_collection_request::<JuliaVM>(&SINGLETON, tls),
+        // full
+        1 => SINGLETON
+            .get_plan()
+            .handle_user_collection_request(tls, true, true),
+        // incremental
+        2 => SINGLETON
+            .get_plan()
+            .handle_user_collection_request(tls, true, false),
+        _ => unreachable!(),
+    }
 }
 
 #[no_mangle]
@@ -353,7 +360,6 @@ pub extern "C" fn last_heap_address() -> Address {
 }
 
 #[no_mangle]
-#[cfg(feature = "malloc_counted_size")]
 pub extern "C" fn mmtk_counted_malloc(size: usize) -> Address {
     memory_manager::counted_malloc::<JuliaVM>(&SINGLETON, size)
 }
@@ -364,7 +370,6 @@ pub extern "C" fn mmtk_malloc(size: usize) -> Address {
 }
 
 #[no_mangle]
-#[cfg(feature = "malloc_counted_size")]
 pub extern "C" fn mmtk_malloc_aligned(size: usize, align: usize) -> Address {
     // allocate extra bytes to account for original memory that needs to be allocated and its size
     let ptr_size = std::mem::size_of::<Address>();
@@ -385,7 +390,6 @@ pub extern "C" fn mmtk_malloc_aligned(size: usize, align: usize) -> Address {
 }
 
 #[no_mangle]
-#[cfg(feature = "malloc_counted_size")]
 pub extern "C" fn mmtk_counted_calloc(num: usize, size: usize) -> Address {
     memory_manager::counted_calloc::<JuliaVM>(&SINGLETON, num, size)
 }
@@ -396,7 +400,6 @@ pub extern "C" fn mmtk_calloc(num: usize, size: usize) -> Address {
 }
 
 #[no_mangle]
-#[cfg(feature = "malloc_counted_size")]
 pub extern "C" fn mmtk_realloc_with_old_size(
     addr: Address,
     size: usize,
@@ -411,7 +414,6 @@ pub extern "C" fn mmtk_realloc(addr: Address, size: usize) -> Address {
 }
 
 #[no_mangle]
-#[cfg(feature = "malloc_counted_size")]
 pub extern "C" fn mmtk_free_with_size(addr: Address, old_size: usize) {
     memory_manager::free_with_size::<JuliaVM>(&SINGLETON, addr, old_size)
 }
@@ -422,7 +424,6 @@ pub extern "C" fn mmtk_free(addr: Address) {
 }
 
 #[no_mangle]
-#[cfg(feature = "malloc_counted_size")]
 pub extern "C" fn mmtk_free_aligned(addr: Address) {
     let ptr_size = std::mem::size_of::<Address>();
     let size_size = std::mem::size_of::<usize>();
@@ -448,11 +449,19 @@ pub extern "C" fn runtime_panic() {
 }
 
 #[no_mangle]
+pub extern "C" fn unreachable() {
+    unreachable!()
+}
+
+#[no_mangle]
 #[allow(mutable_transmutes)]
 pub extern "C" fn mmtk_set_vm_space(start: Address, size: usize) {
     let mmtk: &mmtk::MMTK<JuliaVM> = &SINGLETON;
     let mmtk_mut: &mut mmtk::MMTK<JuliaVM> = unsafe { std::mem::transmute(mmtk) };
     memory_manager::lazy_init_vm_space(mmtk_mut, start, size);
+
+    #[cfg(feature = "stickyimmix")]
+    set_side_log_bit_for_region(start, size);
 }
 
 #[no_mangle]
@@ -480,6 +489,23 @@ pub extern "C" fn mmtk_memory_region_copy(
 }
 
 #[no_mangle]
+#[allow(unused_variables)] // Args are only used for sticky immix.
+pub extern "C" fn mmtk_immortal_region_post_alloc(start: Address, size: usize) {
+    #[cfg(feature = "stickyimmix")]
+    set_side_log_bit_for_region(start, size);
+}
+
+#[cfg(feature = "stickyimmix")]
+fn set_side_log_bit_for_region(start: Address, size: usize) {
+    info!("Bulk set {} to {} ({} bytes)", start, start + size, size);
+    use crate::mmtk::vm::ObjectModel;
+    match <JuliaVM as mmtk::vm::VMBinding>::VMObjectModel::GLOBAL_LOG_BIT_SPEC.as_spec() {
+        mmtk::util::metadata::MetadataSpec::OnSide(side) => side.bset_metadata(start, size),
+        _ => unimplemented!(),
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn mmtk_object_reference_write_post(
     mutator: *mut Mutator<JuliaVM>,
     src: ObjectReference,
@@ -497,10 +523,35 @@ pub extern "C" fn mmtk_object_reference_write_post(
 }
 
 #[no_mangle]
-pub extern "C" fn mmtk_needs_write_barrier() -> u8 {
-    use mmtk::plan::BarrierSelector;
-    match SINGLETON.get_plan().constraints().barrier {
-        BarrierSelector::NoBarrier => 0,
-        BarrierSelector::ObjectBarrier => 1,
-    }
+pub extern "C" fn mmtk_object_reference_write_slow(
+    mutator: &'static mut Mutator<JuliaVM>,
+    src: ObjectReference,
+    target: ObjectReference,
+) {
+    use mmtk::MutatorContext;
+    mutator.barrier().object_reference_write_slow(
+        src,
+        crate::edges::JuliaVMEdge::Simple(mmtk::vm::edge_shape::SimpleEdge::from_address(
+            Address::ZERO,
+        )),
+        target,
+    );
 }
+
+/// Side log bit is the first side metadata spec starting.
+#[no_mangle]
+pub static MMTK_SIDE_LOG_BIT_BASE_ADDRESS: Address =
+    mmtk::util::metadata::side_metadata::GLOBAL_SIDE_METADATA_VM_BASE_ADDRESS;
+
+#[no_mangle]
+pub static NO_BARRIER: u8 = 0;
+#[no_mangle]
+pub static OBJECT_BARRIER: u8 = 1;
+
+#[no_mangle]
+#[cfg(feature = "immix")]
+pub static MMTK_NEEDS_WRITE_BARRIER: u8 = 0;
+
+#[no_mangle]
+#[cfg(feature = "stickyimmix")]
+pub static MMTK_NEEDS_WRITE_BARRIER: u8 = 1;

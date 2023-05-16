@@ -10,7 +10,7 @@ edition = "2018"
 [package.metadata.julia]
 # Our CI matches the following line and extract mmtk/julia. If this line is updated, please check ci yaml files and make sure it works.
 julia_repo = "https://github.com/mmtk/julia.git"
-julia_version = "eb407eb68ea976df72c8e1cd6ec8607ff8d98fa5"
+julia_version = "e7e43f11687e7db62dc18e90f3ab9b24099539fd"
 
 [lib]
 crate-type = ["staticlib", "rlib", "dylib"]
@@ -28,8 +28,8 @@ lazy_static = "1.1"
 # These changes are safe:
 # - change branch
 # - change repo name
-# But other changes including adding/removing whitespaces in commented lines may break the CI.
-mmtk = { git = "https://github.com/mmtk/mmtk-core.git", rev = "e309f9351dff9cd0c8f3f590002c6edafd158c82" }
+# But other changes including adding/removing whitespaces in commented lines may break the CI
+mmtk = { git = "https://github.com/mmtk/mmtk-core.git", rev = "7b06ead8bffc8a33b059919d440cb0b9812359b9" }
 # Uncomment the following to build locally
 # mmtk = { path = "../repos/mmtk-core" }
 log = {version = "0.4", features = ["max_level_trace", "release_max_level_off"] }
@@ -40,13 +40,16 @@ chrono = "*"
 # ykstackmaps = { git = "https://github.com/udesou/ykstackmaps.git", branch = "udesou-master", version = "*" }
 
 [features]
-default = []
+default = ["mmtk/malloc_counted_size", "scan_obj_c", "mmtk/vm_space"]
+
+# Plans
 nogc = []
-semispace = []
-gencopy = []
-pageprotect = []
-malloc_counted_size = ["mmtk/malloc_counted_size"]
-immix = ["malloc_counted_size", "mmtk/immix_non_moving", "mmtk/immix_smaller_block", "scan_obj_c", "mmtk/vm_space"]
-marksweep = ["malloc_counted_size", "scan_obj_c"]
+immix = ["non_moving_immix"]
+stickyimmix = ["non_moving_immix"]
+marksweep = []
+
+# TODO remove this when we properly support moving
+non_moving_immix = ["mmtk/immix_non_moving", "mmtk/immix_smaller_block"]
+
 # FIXME update and use rust object scanner as default for immix
 scan_obj_c = []
