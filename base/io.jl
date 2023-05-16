@@ -459,9 +459,9 @@ wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)::IO); wait_close(pipe
 
 
 """
-    write(filename::AbstractString, x)
+    write(filename::AbstractString, content)
 
-Write `x` to a file, which will be created if it does not exist yet.
+Write `content` to a file, which will be created if it does not exist yet.
 
 Return the number of bytes written into the stream.
 """
