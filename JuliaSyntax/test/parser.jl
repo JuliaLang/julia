@@ -180,14 +180,19 @@ tests = [
         "(2)(3)x"    => "(juxtapose (parens 2) (parens 3) x)"
         "(x-1)y"     => "(juxtapose (parens (call-i x - 1)) y)"
         "x'y"        => "(juxtapose (call-post x ') y)"
+        "1√x"        =>  "(juxtapose 1 (call-pre √ x))"
         # errors
         "\"a\"\"b\"" => "(juxtapose (string \"a\") (error-t) (string \"b\"))"
         "\"a\"x"     => "(juxtapose (string \"a\") (error-t) x)"
+        "\"\$y\"x"   => "(juxtapose (string y) (error-t) x)"
+        "\"a\"begin end" => "(juxtapose (string \"a\") (error-t) (block))"
         # Not juxtaposition - parse_juxtapose will consume only the first token.
         "x.3"       =>  "x"
-        "sqrt(2)2"  =>  "(call sqrt 2)"
+        "f(2)2"     =>  "(call f 2)"
         "x' y"      =>  "(call-post x ')"
         "x 'y"      =>  "x"
+        "x@y"       =>  "x"
+        "(begin end)x" => "(parens (block))"
     ],
     JuliaSyntax.parse_unary => [
         ":T"       => "(quote-: T)"
