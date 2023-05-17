@@ -1284,7 +1284,7 @@ static const auto &builtin_func_map() {
 
 static const auto jl_new_opaque_closure_jlcall_func = new JuliaFunction<>{XSTR(jl_new_opaque_closure_jlcall), get_func_sig, get_func_attrs};
 
-static _Atomic(int) globalUniqueGeneratedNames{1};
+static _Atomic(uint64_t) globalUniqueGeneratedNames{1};
 
 // --- code generation ---
 extern "C" {
