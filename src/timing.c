@@ -24,7 +24,7 @@ extern "C" {
 
 static uint64_t t0;
 
-JL_DLLEXPORT _Atomic(uint64_t) jl_timing_disable_mask;
+JL_DLLEXPORT _Atomic(uint64_t) jl_timing_disable_mask[(JL_TIMING_LAST + sizeof(uint64_t) * CHAR_BIT - 1) / (sizeof(uint64_t) * CHAR_BIT)];
 
 JL_DLLEXPORT _Atomic(uint64_t) jl_timing_counts[(int)JL_TIMING_LAST] = {0};
 
@@ -75,7 +75,6 @@ void jl_init_timing(void)
 {
     t0 = cycleclock();
 
-    _Static_assert(JL_TIMING_EVENT_LAST < sizeof(uint64_t) * CHAR_BIT, "Too many timing events!");
     _Static_assert((int)JL_TIMING_LAST <= (int)JL_TIMING_EVENT_LAST, "More owners than events!");
 
     int i __attribute__((unused)) = 0;
@@ -106,13 +105,13 @@ void jl_init_timing(void)
  * files, so we disable them by default.
  **/
 #ifdef DISABLE_FREQUENT_EVENTS
-#define DISABLE_EVENT(event) jl_atomic_fetch_or_relaxed(&jl_timing_disable_mask, JL_TIMING_##event)
-    DISABLE_EVENT(ROOT);
-    DISABLE_EVENT(TYPE_CACHE_LOOKUP);
-    DISABLE_EVENT(METHOD_MATCH);
-    DISABLE_EVENT(METHOD_LOOKUP_FAST);
-    DISABLE_EVENT(AST_COMPRESS);
-    DISABLE_EVENT(AST_UNCOMPRESS);
+#define DISABLE_SUBSYSTEM(subsystem) jl_atomic_fetch_or_relaxed(jl_timing_disable_mask + (JL_TIMING_##subsystem / (sizeof(uint64_t) * CHAR_BIT)), 1 << (JL_TIMING_##subsystem % (sizeof(uint64_t) * CHAR_BIT)))
+    DISABLE_SUBSYSTEM(ROOT);
+    DISABLE_SUBSYSTEM(TYPE_CACHE_LOOKUP);
+    DISABLE_SUBSYSTEM(METHOD_MATCH);
+    DISABLE_SUBSYSTEM(METHOD_LOOKUP_FAST);
+    DISABLE_SUBSYSTEM(AST_COMPRESS);
+    DISABLE_SUBSYSTEM(AST_UNCOMPRESS);
 #endif
 
 }
@@ -338,11 +337,11 @@ JL_DLLEXPORT int jl_timing_set_enable(const char *subsystem, uint8_t enabled)
 {
     for (int i = 0; i < JL_TIMING_LAST; i++) {
         if (strcmp(subsystem, jl_timing_names[i]) == 0) {
-            uint64_t subsystem_bit = (1ul << i);
+            uint64_t subsystem_bit = 1ul << (i % (sizeof(uint64_t) * CHAR_BIT));
             if (enabled) {
-                jl_atomic_fetch_and_relaxed(&jl_timing_disable_mask, ~subsystem_bit);
+                jl_atomic_fetch_and_relaxed(jl_timing_disable_mask + (i / (sizeof(uint64_t) * CHAR_BIT)), ~subsystem_bit);
             } else {
-                jl_atomic_fetch_or_relaxed(&jl_timing_disable_mask, subsystem_bit);
+                jl_atomic_fetch_or_relaxed(jl_timing_disable_mask + (i / (sizeof(uint64_t) * CHAR_BIT)), subsystem_bit);
             }
             return 0;
         }

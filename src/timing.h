@@ -326,7 +326,7 @@ STATIC_INLINE void _jl_timing_counts_destroy(jl_timing_counts_t *block, int subs
  * Top-level jl_timing implementation
  **/
 
-extern JL_DLLEXPORT _Atomic(uint64_t) jl_timing_disable_mask;
+extern JL_DLLEXPORT _Atomic(uint64_t) jl_timing_disable_mask[(JL_TIMING_LAST + sizeof(uint64_t) * CHAR_BIT - 1) / (sizeof(uint64_t) * CHAR_BIT)];
 extern const char *jl_timing_names[(int)JL_TIMING_LAST];
 
 struct _jl_timing_block_t { // typedef in julia.h
@@ -342,7 +342,7 @@ struct _jl_timing_block_t { // typedef in julia.h
 };
 
 STATIC_INLINE int _jl_timing_enabled(int subsystem) JL_NOTSAFEPOINT {
-    return (jl_atomic_load_relaxed(&jl_timing_disable_mask) & (1 << subsystem)) == 0;
+    return (jl_atomic_load_relaxed(jl_timing_disable_mask + subsystem / (sizeof(uint64_t) * CHAR_BIT)) & (1 << (subsystem % (sizeof(uint64_t) * CHAR_BIT)))) == 0;
 }
 
 STATIC_INLINE void jl_timing_block_start(jl_timing_block_t *block) {
