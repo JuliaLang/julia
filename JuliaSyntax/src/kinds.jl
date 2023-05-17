@@ -23,6 +23,8 @@ const _kind_names =
         "ErrorNumericOverflow"
         "ErrorInvalidEscapeSequence"
         "ErrorOverLongCharacter"
+        "ErrorInvalidUTF8"
+        "ErrorInvisibleChar"
         "ErrorUnknownCharacter"
         # Generic error
         "error"
@@ -1044,6 +1046,8 @@ const _nonunique_kind_names = Set([
     K"ErrorNumericOverflow"
     K"ErrorInvalidEscapeSequence"
     K"ErrorOverLongCharacter"
+    K"ErrorInvalidUTF8"
+    K"ErrorInvisibleChar"
     K"ErrorUnknownCharacter"
     K"ErrorInvalidOperator"
 
@@ -1091,6 +1095,8 @@ const _token_error_descriptions = Dict{Kind, String}(
     K"ErrorNumericOverflow"=>"overflow in numeric literal",
     K"ErrorInvalidEscapeSequence"=>"invalid string escape sequence",
     K"ErrorOverLongCharacter"=>"character literal contains multiple characters",
+    K"ErrorInvalidUTF8"=>"invalid UTF-8 character",
+    K"ErrorInvisibleChar"=>"invisible character",
     K"ErrorUnknownCharacter"=>"unknown unicode character",
     K"ErrorInvalidOperator" => "invalid operator",
     K"Error**" => "use `x^y` instead of `x**y` for exponentiation, and `x...` instead of `**x` for splatting",

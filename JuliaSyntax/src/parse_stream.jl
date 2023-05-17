@@ -947,8 +947,12 @@ function validate_tokens(stream::ParseStream)
             end
         elseif is_error(k) && k != K"error"
             # Emit messages for non-generic token errors
-            emit_diagnostic(stream, tokrange,
-                            error=_token_error_descriptions[k])
+            msg = if k in KSet"ErrorInvalidUTF8 ErrorInvisibleChar ErrorUnknownCharacter"
+                "$(_token_error_descriptions[k]) $(repr(text[fbyte]))"
+            else
+                _token_error_descriptions[k]
+            end
+            emit_diagnostic(stream, tokrange, error=msg)
         end
         if error_kind != K"None"
             toks[i] = SyntaxToken(SyntaxHead(error_kind, EMPTY_FLAGS),
