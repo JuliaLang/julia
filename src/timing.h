@@ -78,6 +78,8 @@ extern JL_DLLEXPORT uint32_t jl_timing_print_limit;
 #define jl_timing_show_method_instance(mi, b)
 #define jl_timing_show_method(mi, b)
 #define jl_timing_show_func_sig(tt, b)
+#define jl_timing_show_location(file, line, mod, b)
+#define jl_timing_show_macro(macro, lno, mod, b)
 #define jl_timing_printf(b, f, ...)
 #define jl_timing_puts(b, s)
 #define jl_timing_init_task(t)
@@ -126,6 +128,8 @@ JL_DLLEXPORT void jl_timing_show_filename(const char *path, jl_timing_block_t *c
 JL_DLLEXPORT void jl_timing_show_method_instance(jl_method_instance_t *mi, jl_timing_block_t *cur_block);
 JL_DLLEXPORT void jl_timing_show_method(jl_method_t *method, jl_timing_block_t *cur_block);
 JL_DLLEXPORT void jl_timing_show_func_sig(jl_value_t *v, jl_timing_block_t *cur_block);
+JL_DLLEXPORT void jl_timing_show_location(const char *file, int line, jl_module_t* mod, jl_timing_block_t *cur_block);
+JL_DLLEXPORT void jl_timing_show_macro(jl_method_instance_t *macro, jl_value_t* lno, jl_module_t* mod, jl_timing_block_t *cur_block);
 JL_DLLEXPORT void jl_timing_printf(jl_timing_block_t *cur_block, const char *format, ...);
 JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
 
