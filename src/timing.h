@@ -286,7 +286,7 @@ enum jl_timing_counter_types {
  * Implementation: Aggregated counts back-end
  **/
 
-extern JL_DLLEXPORT uint64_t jl_timing_counts[(int)JL_TIMING_LAST];
+extern JL_DLLEXPORT _Atomic(uint64_t) jl_timing_counts[(int)JL_TIMING_LAST];
 typedef struct _jl_timing_counts_t {
     uint64_t total;
     uint64_t t0;
@@ -319,7 +319,7 @@ STATIC_INLINE void _jl_timing_counts_ctor(jl_timing_counts_t *block) JL_NOTSAFEP
 }
 
 STATIC_INLINE void _jl_timing_counts_destroy(jl_timing_counts_t *block, int subsystem) JL_NOTSAFEPOINT {
-    jl_timing_counts[subsystem] += block->total;
+    jl_atomic_fetch_add_relaxed(jl_timing_counts + subsystem, block->total);
 }
 
 /**
