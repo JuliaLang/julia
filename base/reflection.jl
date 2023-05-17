@@ -1248,7 +1248,8 @@ function may_invoke_generator(method::Method, @nospecialize(atype), sparams::Sim
     generator = method.generator
     isa(generator, Core.GeneratedFunctionStub) || return false
     gen_mthds = _methods_by_ftype(Tuple{typeof(generator.gen), Vararg{Any}}, 1, method.primary_world)
-    (gen_mthds isa Vector && length(gen_mthds) == 1) || return false
+    gen_mthds isa Vector || return false
+    length(gen_mthds) == 1 || return false
 
     generator_method = first(gen_mthds).method
     nsparams = length(sparams)

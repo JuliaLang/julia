@@ -627,7 +627,7 @@ function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothi
         exts = get(d, "extensions", nothing)::Union{Dict{String, Any}, Nothing}
         if exts !== nothing
             # Check if `where` is an extension of the project
-            if where.name in keys(exts) && where.uuid == uuid5(proj.uuid, where.name)
+            if where.name in keys(exts) && where.uuid == uuid5(proj.uuid::String, where.name)
                 # Extensions can load weak deps...
                 weakdeps = get(d, "weakdeps", nothing)::Union{Dict{String, Any}, Nothing}
                 if weakdeps !== nothing
@@ -1209,7 +1209,9 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
             extensions = get(d_proj, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
             extensions === nothing && return
             weakdeps === nothing && return
-            return _insert_extension_triggers(pkg, extensions, weakdeps)
+            if weakdeps isa Dict{String, Any}
+                return _insert_extension_triggers(pkg, extensions, weakdeps)
+            end
         end
 
         # Now look in manifest
@@ -1231,7 +1233,7 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
                         return _insert_extension_triggers(pkg, extensions, weakdeps)
                     end
 
-                    d_weakdeps = Dict{String, String}()
+                    d_weakdeps = Dict{String, Any}()
                     for (dep_name, entries) in d
                         dep_name in weakdeps || continue
                         entries::Vector{Any}
@@ -1251,8 +1253,9 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
     return nothing
 end
 
-function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, <:Any}, weakdeps::Dict{String, <:Any})
-    for (ext::String, triggers::Union{String, Vector{String}}) in extensions
+function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}, weakdeps::Dict{String, Any})
+    for (ext, triggers) in extensions
+        triggers = triggers::Union{String, Vector{String}}
         triggers isa String && (triggers = [triggers])
         id = PkgId(uuid5(parent.uuid, ext), ext)
         if id in keys(EXT_PRIMED) || haskey(Base.loaded_modules, id)
