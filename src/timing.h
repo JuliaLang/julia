@@ -233,14 +233,14 @@ enum jl_timing_counter_types {
 
 #ifdef USE_TIMING_COUNTS
 #define _COUNTS_CTX_MEMBER jl_timing_counts_t counts_ctx;
-#define _COUNTS_CTOR(block) _jl_timing_counts_ctor(block)
-#define _COUNTS_DESTROY(block, subsystem) _jl_timing_counts_destroy(block, subsystem)
+#define _COUNTS_CTOR(block, t) _jl_timing_counts_ctor(block, t)
+#define _COUNTS_DESTROY(block, subsystem, t) _jl_timing_counts_destroy(block, subsystem, t)
 #define _COUNTS_START(block, t) _jl_timing_counts_start(block, t)
 #define _COUNTS_STOP(block, t) _jl_timing_counts_stop(block, t)
 #else
 #define _COUNTS_CTX_MEMBER
-#define _COUNTS_CTOR(block)
-#define _COUNTS_DESTROY(block, subsystem)
+#define _COUNTS_CTOR(block, t)
+#define _COUNTS_DESTROY(block, subsystem, t)
 #define _COUNTS_START(block, t)
 #define _COUNTS_STOP(block, t)
 #endif
@@ -286,9 +286,11 @@ enum jl_timing_counter_types {
  * Implementation: Aggregated counts back-end
  **/
 
-extern JL_DLLEXPORT _Atomic(uint64_t) jl_timing_counts[(int)JL_TIMING_LAST];
+extern JL_DLLEXPORT _Atomic(uint64_t) jl_timing_self_counts[(int)JL_TIMING_LAST];
+extern JL_DLLEXPORT _Atomic(uint64_t) jl_timing_full_counts[(int)JL_TIMING_LAST];
 typedef struct _jl_timing_counts_t {
     uint64_t total;
+    uint64_t start;
     uint64_t t0;
 #ifdef JL_DEBUG_BUILD
     uint8_t running;
@@ -300,7 +302,7 @@ STATIC_INLINE void _jl_timing_counts_stop(jl_timing_counts_t *block, uint64_t t)
     assert(block->running);
     block->running = 0;
 #endif
-    block->total += t - block->t0;
+    block->total += t - block->start;
 }
 
 STATIC_INLINE void _jl_timing_counts_start(jl_timing_counts_t *block, uint64_t t) JL_NOTSAFEPOINT {
@@ -308,18 +310,20 @@ STATIC_INLINE void _jl_timing_counts_start(jl_timing_counts_t *block, uint64_t t
     assert(!block->running);
     block->running = 1;
 #endif
-    block->t0 = t;
+    block->start = t;
 }
 
-STATIC_INLINE void _jl_timing_counts_ctor(jl_timing_counts_t *block) JL_NOTSAFEPOINT {
+STATIC_INLINE void _jl_timing_counts_ctor(jl_timing_counts_t *block, uint64_t t) JL_NOTSAFEPOINT {
     block->total = 0;
+    block->t0 = t;
 #ifdef JL_DEBUG_BUILD
     block->running = 0;
 #endif
 }
 
-STATIC_INLINE void _jl_timing_counts_destroy(jl_timing_counts_t *block, int subsystem) JL_NOTSAFEPOINT {
-    jl_atomic_fetch_add_relaxed(jl_timing_counts + subsystem, block->total);
+STATIC_INLINE void _jl_timing_counts_destroy(jl_timing_counts_t *block, int subsystem, uint64_t t) JL_NOTSAFEPOINT {
+    jl_atomic_fetch_add_relaxed(jl_timing_self_counts + subsystem, block->total);
+    jl_atomic_fetch_add_relaxed(jl_timing_full_counts + subsystem, t - block->t0);
 }
 
 /**
@@ -367,7 +371,7 @@ STATIC_INLINE void _jl_timing_block_ctor(jl_timing_block_t *block, int subsystem
     block->subsystem = subsystem;
     block->event = event;
     block->is_running = 0;
-    _COUNTS_CTOR(&block->counts_ctx);
+    _COUNTS_CTOR(&block->counts_ctx, cycleclock());
 }
 
 STATIC_INLINE void _jl_timing_block_destroy(jl_timing_block_t *block) JL_NOTSAFEPOINT {
@@ -386,7 +390,7 @@ STATIC_INLINE void _jl_timing_block_destroy(jl_timing_block_t *block) JL_NOTSAFE
         }
     }
 
-    _COUNTS_DESTROY(&block->counts_ctx, block->subsystem);
+    _COUNTS_DESTROY(&block->counts_ctx, block->subsystem, cycleclock());
 }
 
 typedef struct _jl_timing_suspend_t {

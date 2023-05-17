@@ -26,7 +26,8 @@ static uint64_t t0;
 
 JL_DLLEXPORT _Atomic(uint64_t) jl_timing_disable_mask[(JL_TIMING_LAST + sizeof(uint64_t) * CHAR_BIT - 1) / (sizeof(uint64_t) * CHAR_BIT)];
 
-JL_DLLEXPORT _Atomic(uint64_t) jl_timing_counts[(int)JL_TIMING_LAST] = {0};
+JL_DLLEXPORT _Atomic(uint64_t) jl_timing_self_counts[(int)JL_TIMING_LAST];
+JL_DLLEXPORT _Atomic(uint64_t) jl_timing_full_counts[(int)JL_TIMING_LAST];
 
 // Used to as an item limit when several strings of metadata can
 // potentially be associated with a single timing zone.
@@ -49,16 +50,17 @@ void jl_print_timings(void)
     uint64_t total_time = cycleclock() - t0;
     uint64_t root_time = total_time;
     for (int i = 0; i < JL_TIMING_LAST; i++) {
-        root_time -= jl_atomic_load_relaxed(jl_timing_counts + i);
+        root_time -= jl_atomic_load_relaxed(jl_timing_self_counts + i);
     }
-    jl_atomic_store_relaxed(jl_timing_counts, root_time);
+    jl_atomic_store_relaxed(jl_timing_self_counts, root_time);
     fprintf(stderr, "\nJULIA TIMINGS\n");
-    fprintf(stderr, "%-25s, %-30s\n", "Event", "Cycles (% of total)");
+    fprintf(stderr, "%-25s, %-30s, %-30s\n", "Event", "Self Cycles (% of Total)", "Total Cycles (% of Total)");
     for (int i = 0; i < JL_TIMING_LAST; i++) {
         int j = jl_timing_names_sorted[i];
-        uint64_t counts = jl_atomic_load_relaxed(jl_timing_counts + j);
-        if (counts != 0)
-            fprintf(stderr, "%-25s, %20" PRIu64 " (%5.2f %%)\n", jl_timing_names[j], counts, 100 * (((double)counts) / total_time));
+        uint64_t self = jl_atomic_load_relaxed(jl_timing_self_counts + j);
+        uint64_t total = jl_atomic_load_relaxed(jl_timing_full_counts + j);
+        if (total != 0)
+            fprintf(stderr, "%-25s, %20" PRIu64 " (%5.2f %%), %20" PRIu64 " (%5.2f %%)\n", jl_timing_names[j], self, 100 * (((double)self) / total_time), total, 100 * (((double)total) / total_time));
     }
 
     fprintf(stderr, "\nJULIA COUNTERS\n");
