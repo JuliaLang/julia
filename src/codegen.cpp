@@ -9182,6 +9182,13 @@ extern void jl_write_bitcode_module(void *M, char *fname) {
 #endif
 
 #include <llvm-c/Core.h>
+#include <llvm-c/Orc.h>
+#include <llvm-c/Types.h>
+#include <llvm-c/Error.h>
+#include <llvm-c/TargetMachine.h>
+#include <llvm-c/OrcEE.h>
+#include <llvm/Support/MemoryBuffer.h>
+#include <llvm/Support/CBindingWrapping.h>
 
 extern "C" JL_DLLEXPORT_CODEGEN jl_value_t *jl_get_libllvm_impl(void) JL_NOTSAFEPOINT
 {
@@ -9204,4 +9211,123 @@ extern "C" JL_DLLEXPORT_CODEGEN jl_value_t *jl_get_libllvm_impl(void) JL_NOTSAFE
         return jl_nothing;
     return (jl_value_t*) jl_symbol(dli.dli_fname);
 #endif
+}
+
+namespace llvm {
+namespace orc {
+class OrcV2CAPIHelper {
+public:
+    using PoolEntry = orc::SymbolStringPtr::PoolEntry;
+    using PoolEntryPtr = orc::SymbolStringPtr::PoolEntryPtr;
+
+    // Move from SymbolStringPtr to PoolEntryPtr (no change in ref count).
+    static PoolEntryPtr moveFromSymbolStringPtr(SymbolStringPtr S)
+    {
+        PoolEntryPtr Result = nullptr;
+        std::swap(Result, S.S);
+        return Result;
+    }
+};
+} // namespace orc
+} // namespace llvm
+
+
+typedef struct JLOpaqueJuliaOJIT *JuliaOJITRef;
+typedef struct LLVMOrcOpaqueIRCompileLayer *LLVMOrcIRCompileLayerRef;
+
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(JuliaOJIT, JuliaOJITRef)
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::JITDylib, LLVMOrcJITDylibRef)
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ExecutionSession, LLVMOrcExecutionSessionRef)
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::OrcV2CAPIHelper::PoolEntry,
+                                   LLVMOrcSymbolStringPoolEntryRef)
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::IRCompileLayer, LLVMOrcIRCompileLayerRef)
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::MaterializationResponsibility,
+                                   LLVMOrcMaterializationResponsibilityRef)
+extern "C" {
+
+JL_DLLEXPORT_CODEGEN JuliaOJITRef JLJITGetJuliaOJIT_impl(void) JL_NOTSAFEPOINT
+{
+    return wrap(jl_ExecutionEngine);
+}
+
+JL_DLLEXPORT_CODEGEN LLVMOrcExecutionSessionRef
+JLJITGetLLVMOrcExecutionSession_impl(JuliaOJITRef JIT) JL_NOTSAFEPOINT
+{
+    return wrap(&unwrap(JIT)->getExecutionSession());
+}
+
+JL_DLLEXPORT_CODEGEN LLVMOrcJITDylibRef JLJITGetExternalJITDylib_impl(JuliaOJITRef JIT)
+    JL_NOTSAFEPOINT
+{
+    return wrap(&unwrap(JIT)->getExternalJITDylib());
+}
+
+JL_DLLEXPORT_CODEGEN LLVMErrorRef JLJITAddObjectFile_impl(
+    JuliaOJITRef JIT, LLVMOrcJITDylibRef JD, LLVMMemoryBufferRef ObjBuffer) JL_NOTSAFEPOINT
+{
+    return wrap(unwrap(JIT)->addObjectFile(
+        *unwrap(JD), std::unique_ptr<MemoryBuffer>(unwrap(ObjBuffer))));
+}
+
+JL_DLLEXPORT_CODEGEN LLVMErrorRef JLJITAddLLVMIRModule_impl(
+    JuliaOJITRef JIT, LLVMOrcJITDylibRef JD, LLVMOrcThreadSafeModuleRef TSM) JL_NOTSAFEPOINT
+{
+    std::unique_ptr<orc::ThreadSafeModule> TmpTSM(unwrap(TSM));
+    return wrap(unwrap(JIT)->addExternalModule(*unwrap(JD), std::move(*TmpTSM)));
+}
+
+JL_DLLEXPORT_CODEGEN LLVMErrorRef JLJITLookup_impl(JuliaOJITRef JIT,
+                                                   LLVMOrcExecutorAddress *Result,
+                                                   const char *Name,
+                                                   int ExternalJDOnly) JL_NOTSAFEPOINT
+{
+    auto Sym = unwrap(JIT)->findExternalJDSymbol(Name, ExternalJDOnly);
+    if(Sym)
+    {
+        auto addr = Sym->getAddress();
+        *Result = orc::ExecutorAddr(addr).getValue();
+        return LLVMErrorSuccess;
+    }
+    else
+    {
+        *Result = 0;
+        return wrap(Sym.takeError());
+    }
+}
+
+JL_DLLEXPORT_CODEGEN LLVMOrcSymbolStringPoolEntryRef
+JLJITMangleAndIntern_impl(JuliaOJITRef JIT, const char *Name) JL_NOTSAFEPOINT
+{
+    return wrap(orc::OrcV2CAPIHelper::moveFromSymbolStringPtr(unwrap(JIT)->mangle(Name)));
+}
+
+JL_DLLEXPORT_CODEGEN const char *JLJITGetTripleString_impl(JuliaOJITRef JIT)
+{
+    return unwrap(JIT)->getTargetTriple().str().c_str();
+}
+
+JL_DLLEXPORT_CODEGEN const char JLJITGetGlobalPrefix_impl(JuliaOJITRef JIT)
+{
+    return unwrap(JIT)->getDataLayout().getGlobalPrefix();
+}
+
+JL_DLLEXPORT_CODEGEN const char *JLJITGetDataLayoutString_impl(JuliaOJITRef JIT)
+{
+    return unwrap(JIT)->getDataLayout().getStringRepresentation().c_str();
+}
+
+JL_DLLEXPORT_CODEGEN LLVMOrcIRCompileLayerRef JLJITGetIRCompileLayer_impl(JuliaOJITRef JIT)
+{
+    return wrap(&unwrap(JIT)->getIRCompileLayer());
+}
+
+JL_DLLEXPORT_CODEGEN void LLVMExtraOrcIRCompileLayerEmit_impl(LLVMOrcIRCompileLayerRef IRLayer,
+                                 LLVMOrcMaterializationResponsibilityRef MR,
+                                 LLVMOrcThreadSafeModuleRef TSM) {
+  std::unique_ptr<orc::ThreadSafeModule> TmpTSM(unwrap(TSM));
+  unwrap(IRLayer)->emit(
+      std::unique_ptr<orc::MaterializationResponsibility>(unwrap(MR)),
+      std::move(*TmpTSM));
+}
+
 }
