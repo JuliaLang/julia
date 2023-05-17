@@ -25,14 +25,14 @@ static uint64_t t0;
  * can generally keep up with that, those events also bloat the saved ".tracy"
  * files, so we disable them by default.
  **/
-JL_DLLEXPORT uint64_t jl_timing_enable_mask = ~((1ull << JL_TIMING_ROOT) |
+JL_DLLEXPORT _Atomic(uint64_t) jl_timing_enable_mask = ~((1ull << JL_TIMING_ROOT) |
                                               (1ull << JL_TIMING_TYPE_CACHE_LOOKUP) |
                                               (1ull << JL_TIMING_METHOD_MATCH) |
                                               (1ull << JL_TIMING_METHOD_LOOKUP_FAST) |
                                               (1ull << JL_TIMING_AST_COMPRESS) |
                                               (1ull << JL_TIMING_AST_UNCOMPRESS));
 #else
-JL_DLLEXPORT uint64_t jl_timing_enable_mask = ~0ull;
+JL_DLLEXPORT _Atomic(uint64_t) jl_timing_enable_mask = ~0ull;
 #endif
 
 JL_DLLEXPORT _Atomic(uint64_t) jl_timing_counts[(int)JL_TIMING_LAST] = {0};
@@ -333,9 +333,9 @@ JL_DLLEXPORT int jl_timing_set_enable(const char *subsystem, uint8_t enabled)
         if (strcmp(subsystem, jl_timing_names[i]) == 0) {
             uint64_t subsystem_bit = (1ul << i);
             if (enabled) {
-                jl_timing_enable_mask |= subsystem_bit;
+                jl_atomic_fetch_or_relaxed(&jl_timing_enable_mask, subsystem_bit);
             } else {
-                jl_timing_enable_mask &= ~subsystem_bit;
+                jl_atomic_fetch_and_relaxed(&jl_timing_enable_mask, ~subsystem_bit);
             }
             return 0;
         }
