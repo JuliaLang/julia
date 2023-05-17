@@ -73,7 +73,11 @@ end
 struct SemiConcreteResult <: ConstResult
     mi::MethodInstance
     ir::IRCode
+    rt
     effects::Effects
+    function SemiConcreteResult(mi::MethodInstance, ir::IRCode, @nospecialize(rt), effects::Effects)
+        return new(mi, ir, rt, effects)
+    end
 end
 
 """

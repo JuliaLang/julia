@@ -322,12 +322,17 @@ const var"@_noinline_meta" = var"@noinline"
 # Core.Compiler.is_inlineable and Core.Compiler.set_inlineable! move towards this direction,
 # but we need to keep these around for compat
 function getproperty(ci::CodeInfo, s::Symbol)
-    s === :inlineable && return Core.Compiler.is_inlineable(ci)
+    if s === :inlineable
+        return ci.inlining_cost ≤ Core.Compiler.OptimizationParams().inline_cost_threshold
+    end
     return getfield(ci, s)
 end
 
 function setproperty!(ci::CodeInfo, s::Symbol, v)
-    s === :inlineable && return Core.Compiler.set_inlineable!(ci, v)
+    if s === :inlineable
+        ci.inlining_cost = v ? Core.Compiler.DEFAULT_INLINEABLE_COST : Core.Compiler.MAX_INLINING_COST
+        return v
+    end
     return setfield!(ci, s, convert(fieldtype(CodeInfo, s), v))
 end
 

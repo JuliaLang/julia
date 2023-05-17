@@ -287,15 +287,11 @@ function CC.abstract_call(interp::NoinlineInterpreter,
     end
     return ret
 end
-function CC.inlining_policy(interp::NoinlineInterpreter,
-    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt8, mi::MethodInstance,
-    argtypes::Vector{Any})
-    if isa(info, NoinlineCallInfo)
+function CC.inlining_policy(interp::NoinlineInterpreter, @nospecialize(src), iinfo::CC.InliningInfo)
+    if isa(iinfo.info, NoinlineCallInfo)
         return nothing
     end
-    return @invoke CC.inlining_policy(interp::CC.AbstractInterpreter,
-        src::Any, info::CallInfo, stmt_flag::UInt8, mi::MethodInstance,
-        argtypes::Vector{Any})
+    return @invoke CC.inlining_policy(interp::CC.AbstractInterpreter, src::Any, iinfo::CC.InliningInfo)
 end
 
 @inline function inlined_usually(x, y, z)

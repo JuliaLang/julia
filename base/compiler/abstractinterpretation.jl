@@ -980,7 +980,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
                     # state = InliningState(interp)
                     # ir = ssa_inlining_pass!(irsv.ir, state, propagate_inbounds(irsv))
                     new_effects = Effects(result.effects; nothrow)
-                    return ConstCallResults(rt, SemiConcreteResult(mi, ir, new_effects), new_effects, mi)
+                    return ConstCallResults(rt, SemiConcreteResult(mi, ir, rt, new_effects), new_effects, mi)
                 end
             end
         end
@@ -1231,8 +1231,10 @@ function const_prop_methodinstance_heuristic(interp::AbstractInterpreter,
         code = get(code_cache(interp), mi, nothing)
         if isa(code, CodeInstance)
             inferred = @atomic :monotonic code.inferred
+            rt = code.rettype
             # TODO propagate a specific `CallInfo` that conveys information about this call
-            if inlining_policy(interp, inferred, NoCallInfo(), IR_FLAG_NULL, mi, arginfo.argtypes) !== nothing
+            iinfo = InliningInfo(rt, mi, arginfo.argtypes, NoCallInfo(), IR_FLAG_NULL)
+            if inlining_policy(interp, inferred, iinfo) !== nothing
                 return true
             end
         end
