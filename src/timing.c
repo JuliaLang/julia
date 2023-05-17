@@ -60,18 +60,19 @@ void jl_print_timings(void)
     }
     jl_atomic_store_relaxed(jl_timing_counts, root_time);
     fprintf(stderr, "\nJULIA TIMINGS\n");
+    fprintf(stderr, "%-25s, %-30s\n", "Event", "Cycles (%% of total)");
     for (int i = 0; i < JL_TIMING_LAST; i++) {
         uint64_t counts = jl_atomic_load_relaxed(jl_timing_counts + i);
         if (counts != 0)
-            fprintf(stderr, "%-25s : %5.2f %%   %" PRIu64 "\n", jl_timing_names[i],
-                    100 * (((double)counts) / total_time), counts);
+            fprintf(stderr, "%-25s, %20" PRIu64 " (%5.2f %%)\n", jl_timing_names[i], counts, 100 * (((double)counts) / total_time));
     }
 
     fprintf(stderr, "\nJULIA COUNTERS\n");
+    fprintf(stderr, "%-25s, %-20s\n", "Counter", "Value");
 #define X(name) do { \
         int64_t val = (int64_t) jl_atomic_load_relaxed(&jl_timing_counters[(int)JL_TIMING_COUNTER_##name].basic_counter); \
         if (val != 0) \
-            fprintf(stderr, "%-25s : %" PRIi64 "\n", #name, val); \
+            fprintf(stderr, "%-25s, %20" PRIi64 "\n", #name, val); \
     } while (0);
 
     JL_TIMING_COUNTERS
