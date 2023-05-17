@@ -1281,16 +1281,32 @@ false
 julia> istriu(a, -1)
 true
 
-julia> b = [1 im; 0 -1]
-2×2 Matrix{Complex{Int64}}:
- 1+0im   0+1im
- 0+0im  -1+0im
+julia> b = [1 1 1; 0 1 1; 0 0 1]
+3×3 Matrix{Int64}:
+ 1  1  1
+ 0  1  1
+ 0  0  1
 
 julia> istriu(b)
 true
 
 julia> istriu(b, 1)
 false
+
+julia> istriu(b, -1)
+true
+
+julia> c = [1 1 1; 1 1 1; 0 1 1]
+3×3 Matrix{Int64}:
+ 1  1  1
+ 1  1  1
+ 0  1  1
+
+julia> istriu(c)
+false
+
+julia> istriu(c, -1)
+true
 ```
 """
 function istriu(A::AbstractMatrix, k::Integer = 0)
@@ -1325,16 +1341,32 @@ false
 julia> istril(a, 1)
 true
 
-julia> b = [1 0; -im -1]
-2×2 Matrix{Complex{Int64}}:
- 1+0im   0+0im
- 0-1im  -1+0im
+julia> b = [1 0 0; 1 1 0; 1 1 1]
+3×3 Matrix{Int64}:
+ 1  0  0
+ 1  1  0
+ 1  1  1
 
 julia> istril(b)
 true
 
 julia> istril(b, -1)
 false
+
+julia> istril(b, 1)
+true
+
+julia> c = [1 1 0; 1 1 1; 1 1 1]
+3×3 Matrix{Int64}:
+ 1  1  0
+ 1  1  1
+ 1  1  1
+
+julia> istril(c)
+false
+
+julia> istril(c, 1)
+true
 ```
 """
 function istril(A::AbstractMatrix, k::Integer = 0)
