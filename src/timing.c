@@ -6,6 +6,10 @@
 #include "options.h"
 #include "stdio.h"
 
+#if defined(USE_TRACY) || defined(USE_ITTAPI)
+#define DISABLE_FREQUENT_EVENTS
+#endif
+
 jl_module_t *jl_module_root(jl_module_t *m);
 
 #ifdef __cplusplus
@@ -19,21 +23,8 @@ extern "C" {
 #endif
 
 static uint64_t t0;
-#if defined(USE_TRACY) || defined(USE_ITTAPI)
-/**
- * These sources often generate millions of events / minute. Although Tracy
- * can generally keep up with that, those events also bloat the saved ".tracy"
- * files, so we disable them by default.
- **/
-JL_DLLEXPORT _Atomic(uint64_t) jl_timing_enable_mask = ~((1ull << JL_TIMING_ROOT) |
-                                              (1ull << JL_TIMING_TYPE_CACHE_LOOKUP) |
-                                              (1ull << JL_TIMING_METHOD_MATCH) |
-                                              (1ull << JL_TIMING_METHOD_LOOKUP_FAST) |
-                                              (1ull << JL_TIMING_AST_COMPRESS) |
-                                              (1ull << JL_TIMING_AST_UNCOMPRESS));
-#else
-JL_DLLEXPORT _Atomic(uint64_t) jl_timing_enable_mask = ~0ull;
-#endif
+
+JL_DLLEXPORT _Atomic(uint64_t) jl_timing_disable_mask;
 
 JL_DLLEXPORT _Atomic(uint64_t) jl_timing_counts[(int)JL_TIMING_LAST] = {0};
 
@@ -108,6 +99,22 @@ void jl_init_timing(void)
     TracyCPlotConfig(jl_timing_counters[JL_TIMING_COUNTER_JITDataSize].tracy_counter.name, TracyPlotFormatMemory, /* rectilinear */ 0, /* fill */ 1, /* color */ 0);
     TracyCPlotConfig(jl_timing_counters[JL_TIMING_COUNTER_ImageSize].tracy_counter.name, TracyPlotFormatMemory, /* rectilinear */ 0, /* fill */ 1, /* color */ 0);
 #endif
+
+/**
+ * These sources often generate millions of events / minute. Although Tracy
+ * can generally keep up with that, those events also bloat the saved ".tracy"
+ * files, so we disable them by default.
+ **/
+#ifdef DISABLE_FREQUENT_EVENTS
+#define DISABLE_EVENT(event) jl_atomic_fetch_or_relaxed(&jl_timing_disable_mask, JL_TIMING_##event)
+    DISABLE_EVENT(ROOT);
+    DISABLE_EVENT(TYPE_CACHE_LOOKUP);
+    DISABLE_EVENT(METHOD_MATCH);
+    DISABLE_EVENT(METHOD_LOOKUP_FAST);
+    DISABLE_EVENT(AST_COMPRESS);
+    DISABLE_EVENT(AST_UNCOMPRESS);
+#endif
+
 }
 
 void jl_destroy_timing(void)
@@ -333,9 +340,9 @@ JL_DLLEXPORT int jl_timing_set_enable(const char *subsystem, uint8_t enabled)
         if (strcmp(subsystem, jl_timing_names[i]) == 0) {
             uint64_t subsystem_bit = (1ul << i);
             if (enabled) {
-                jl_atomic_fetch_or_relaxed(&jl_timing_enable_mask, subsystem_bit);
+                jl_atomic_fetch_and_relaxed(&jl_timing_disable_mask, ~subsystem_bit);
             } else {
-                jl_atomic_fetch_and_relaxed(&jl_timing_enable_mask, ~subsystem_bit);
+                jl_atomic_fetch_or_relaxed(&jl_timing_disable_mask, subsystem_bit);
             }
             return 0;
         }
