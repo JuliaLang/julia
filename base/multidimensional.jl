@@ -1577,7 +1577,7 @@ function isassigned(A::AbstractArray, i::Union{Integer, CartesianIndex}...)
     @boundscheck checkbounds(Bool, A, i...) || return false
     S = IndexStyle(A)
     ninds = length(i)
-    if (isa(S, IndexLinear) && ninds == 1)
+    if (isa(S, IndexLinear) && ninds != 1)
         return @inbounds isassigned(A, _to_linear_index(A, i...))
     elseif (!isa(S, IndexLinear) && ninds != ndims(A))
         return @inbounds isassigned(A, _to_subscript_indices(A, i...)...)
