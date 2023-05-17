@@ -52,7 +52,8 @@ void jl_print_timings(void)
     for (int i = 0; i < JL_TIMING_LAST; i++) {
         root_time -= jl_atomic_load_relaxed(jl_timing_self_counts + i);
     }
-    jl_atomic_store_relaxed(jl_timing_self_counts, root_time);
+    jl_atomic_store_relaxed(jl_timing_self_counts + JL_TIMING_ROOT, root_time);
+    jl_atomic_store_relaxed(jl_timing_total_counts + JL_TIMING_ROOT, total_time);
     fprintf(stderr, "\nJULIA TIMINGS\n");
     fprintf(stderr, "%-25s, %-30s, %-30s\n", "Event", "Self Cycles (% of Total)", "Total Cycles (% of Total)");
     for (int i = 0; i < JL_TIMING_LAST; i++) {
