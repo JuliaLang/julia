@@ -12,7 +12,13 @@ function diagnostic(str; only_first=false, allow_multiple=false)
 end
 
 @testset "token errors" begin
-    @test diagnostic(":⥻") == Diagnostic(2, 4, :error, "unknown unicode character")
+    @test diagnostic("a\xf5b") == Diagnostic(2, 2, :error, "invalid UTF-8 character '\\xf5'")
+    for c in ['\u00ad', '\u200b', '\u200c', '\u200d',
+              '\u200e', '\u200f', '\u2060', '\u2061']
+        @test diagnostic("a$(c)b") ==
+            Diagnostic(2, 1+sizeof(string(c)), :error, "invisible character $(repr(c))")
+    end
+    @test diagnostic(":⥻") == Diagnostic(2, 4, :error, "unknown unicode character '⥻'")
 end
 
 @testset "parser errors" begin

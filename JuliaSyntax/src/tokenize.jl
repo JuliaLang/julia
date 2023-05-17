@@ -25,6 +25,22 @@ function is_identifier_start_char(c::Char)
     return Base.is_id_start_char(c)
 end
 
+function is_invisible_char(c::Char)
+    # These are the chars considered invisible by the reference parser.
+    # TODO: There's others we could add? See for example
+    # https://invisible-characters.com/
+    return c == '\u00ad' || # soft hyphen
+           c == '\u200b' || # zero width space
+           c == '\u200c' || # zero width non-joiner
+           c == '\u200d' || # zero width joiner
+           c == '\u200e' || # left-to-right mark
+           c == '\u200f' || # right-to-left mark
+           c == '\u2060' || # word joiner
+           c == '\u2061'    # function application
+    # https://github.com/JuliaLang/julia/issues/49850
+    # c == '\u115f' || # Hangul Choseong filler
+end
+
 # Chars that we will never allow to be part of a valid non-operator identifier
 function is_never_id_char(ch::Char)
     Base.isvalid(ch) || return true
@@ -535,7 +551,10 @@ function _next_token(l::Lexer, c)
     elseif (k = get(_unicode_ops, c, K"error")) != K"error"
         return emit(l, k)
     else
-        emit_error(l, K"ErrorUnknownCharacter")
+        emit_error(l,
+            !isvalid(c)          ? K"ErrorInvalidUTF8"   :
+            is_invisible_char(c) ? K"ErrorInvisibleChar" :
+            K"ErrorUnknownCharacter")
     end
 end
 
