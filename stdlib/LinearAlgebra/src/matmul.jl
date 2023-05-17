@@ -68,24 +68,24 @@ end
 
 @inline mul!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector,
                 alpha::Number, beta::Number) =
-    generic_matvecmul!(y, adj_or_trans_char(A), _parent(A), x, MulAddMul(alpha, beta))
+    generic_matvecmul!(y, wrapper_char(A), _unwrap(A), x, MulAddMul(alpha, beta))
 # BLAS cases
 # equal eltypes
 @inline generic_matvecmul!(y::StridedVector{T}, tA, A::StridedVecOrMat{T}, x::StridedVector{T},
                 _add::MulAddMul=MulAddMul()) where {T<:BlasFloat} =
-    gemv!(y, tA, _parent(A), x, _add.alpha, _add.beta)
+    gemv!(y, tA, A, x, _add.alpha, _add.beta)
 # Real (possibly transposed) matrix times complex vector.
 # Multiply the matrix with the real and imaginary parts separately
 @inline generic_matvecmul!(y::StridedVector{Complex{T}}, tA, A::StridedVecOrMat{T}, x::StridedVector{Complex{T}},
                 _add::MulAddMul=MulAddMul()) where {T<:BlasReal} =
-    gemv!(y, tA, _parent(A), x, _add.alpha, _add.beta)
+    gemv!(y, tA, A, x, _add.alpha, _add.beta)
 # Complex matrix times real vector.
 # Reinterpret the matrix as a real matrix and do real matvec computation.
 # works only in cooperation with BLAS when A is untransposed (tA == 'N')
 # but that check is included in gemv! anyway
 @inline generic_matvecmul!(y::StridedVector{Complex{T}}, tA, A::StridedVecOrMat{Complex{T}}, x::StridedVector{T},
                 _add::MulAddMul=MulAddMul()) where {T<:BlasReal} =
-    gemv!(y, tA, _parent(A), x, _add.alpha, _add.beta)
+    gemv!(y, tA, A, x, _add.alpha, _add.beta)
 
 # Vector-Matrix multiplication
 (*)(x::AdjointAbsVec,   A::AbstractMatrix) = (A'*x')'
@@ -267,10 +267,10 @@ julia> C
 @inline mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number, β::Number) =
     generic_matmatmul!(
         C,
-        adj_or_trans_char(A),
-        adj_or_trans_char(B),
-        _parent(A),
-        _parent(B),
+        wrapper_char(A),
+        wrapper_char(B),
+        _unwrap(A),
+        _unwrap(B),
         MulAddMul(α, β)
     )
 
@@ -340,19 +340,32 @@ julia> lmul!(F.Q, B)
 """
 lmul!(A, B)
 
+# THE one big BLAS dispatch
 @inline function generic_matmatmul!(C::StridedMatrix{T}, tA, tB, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
-                            _add::MulAddMul=MulAddMul()) where {T<:BlasFloat}
-    if tA == 'T' && tB == 'N' && A === B
-        return syrk_wrapper!(C, 'T', A, _add)
-    elseif tA == 'N' && tB == 'T' && A === B
-        return syrk_wrapper!(C, 'N', A, _add)
-    elseif tA == 'C' && tB == 'N' && A === B
-        return herk_wrapper!(C, 'C', A, _add)
-    elseif tA == 'N' && tB == 'C' && A === B
-        return herk_wrapper!(C, 'N', A, _add)
-    else
-        return gemm_wrapper!(C, tA, tB, A, B, _add)
+                                    _add::MulAddMul=MulAddMul()) where {T<:BlasFloat}
+    alpha, beta = promote(_add.alpha, _add.beta, zero(T))
+    if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
+        if tA == 'T' && tB == 'N' && A === B
+            return syrk_wrapper!(C, 'T', A, _add)
+        elseif tA == 'N' && tB == 'T' && A === B
+            return syrk_wrapper!(C, 'N', A, _add)
+        elseif tA == 'C' && tB == 'N' && A === B
+            return herk_wrapper!(C, 'C', A, _add)
+        elseif tA == 'N' && tB == 'C' && A === B
+            return herk_wrapper!(C, 'N', A, _add)
+        elseif tA in ('N', 'T', 'C') && tB in ('N', 'T', 'C')
+            return gemm_wrapper!(C, tA, tB, A, B, _add)
+        elseif (tA == 'S' || tA == 's') && tB == 'N'
+            return BLAS.symm!('L', tA == 'S' ? 'U' : 'L', alpha, A, B, beta, C)
+        elseif (tB == 'S' || tB == 's') && tA == 'N'
+            return BLAS.symm!('R', tB == 'S' ? 'U' : 'L', alpha, B, A, beta, C)
+        elseif (tA == 'H' || tA == 'h') && tB == 'N'
+            return BLAS.hemm!('L', tA == 'H' ? 'U' : 'L', alpha, A, B, beta, C)
+        elseif (tB == 'H' || tB == 'h') && tA == 'N'
+            return BLAS.hemm!('R', tB == 'H' ? 'U' : 'L', alpha, B, A, beta, C)
+        end
     end
+    return _generic_matmatmul!(C, 'N', 'N', wrap(A, tA), wrap(B, tB), _add)
 end
 
 # Complex matrix times (transposed) real matrix. Reinterpret the first matrix to real for efficiency.
@@ -394,8 +407,19 @@ function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::
     alpha, beta = promote(α, β, zero(T))
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
         stride(A, 1) == 1 && abs(stride(A, 2)) >= size(A, 1) &&
-        !iszero(stride(x, 1)) # We only check input's stride here.
-        return BLAS.gemv!(tA, alpha, A, x, beta, y)
+        !iszero(stride(x, 1)) && # We only check input's stride here.
+        if tA in ('N', 'T', 'C')
+            return BLAS.gemv!(tA, alpha, A, x, beta, y)
+        elseif tA in ('S', 's')
+            return BLAS.symv!(tA == 'S' ? 'U' : 'L', alpha, A, x, beta, y)
+        elseif tA in ('H', 'h')
+            return BLAS.hemv!(tA == 'H' ? 'U' : 'L', alpha, A, x, beta, y)
+        end
+    end
+    if tA in ('S', 's', 'H', 'h')
+        # re-wrap again and use plain ('N') matvec mul algorithm,
+        # because _generic_matvecmul! can't handle the HermOrSym cases specifically
+        return _generic_matvecmul!(y, 'N', wrap(A, tA), x, MulAddMul(α, β))
     else
         return _generic_matvecmul!(y, tA, A, x, MulAddMul(α, β))
     end
@@ -645,9 +669,14 @@ end
 # NOTE: the generic version is also called as fallback for
 #       strides != 1 cases
 
-generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector,
-                    _add::MulAddMul = MulAddMul()) =
-    _generic_matvecmul!(C, tA, A, B, _add)
+@inline function generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector,
+                                    _add::MulAddMul = MulAddMul())
+    if tA in ('H', 'h', 'S', 's')
+        return _generic_matvecmul!(C, 'N', wrap(A, tA), B, _add)
+    else
+        return _generic_matvecmul!(C, tA, A, B, _add)
+    end
+end
 
 function _generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector,
                             _add::MulAddMul = MulAddMul())
@@ -731,21 +760,28 @@ function generic_matmatmul!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::Abs
     mB, nB = lapack_size(tB, B)
     mC, nC = size(C)
 
+    Anew, ta = tA in ('H', 'h', 'S', 's') ? (wrap(A, tA), 'N') : (A, tA)
+    Bnew, tb = tB in ('H', 'h', 'S', 's') ? (wrap(B, tB), 'N') : (B, tB)
+
     if iszero(_add.alpha)
         return _rmul_or_fill!(C, _add.beta)
     end
     if mA == nA == mB == nB == mC == nC == 2
-        return matmul2x2!(C, tA, tB, A, B, _add)
+        return matmul2x2!(C, ta, tb, Anew, Bnew, _add)
     end
     if mA == nA == mB == nB == mC == nC == 3
-        return matmul3x3!(C, tA, tB, A, B, _add)
+        return matmul3x3!(C, ta, tb, Anew, Bnew, _add)
     end
-    _generic_matmatmul!(C, tA, tB, A, B, _add)
+    _generic_matmatmul!(C, ta, tb, Anew, Bnew, _add)
 end
 
-generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::AbstractVecOrMat, B::AbstractVecOrMat, _add::MulAddMul) =
-    _generic_matmatmul!(C, tA, tB, A, B, _add)
-
+function generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::AbstractVecOrMat, B::AbstractVecOrMat, _add::MulAddMul)
+    if tA in ('H', 'h', 'S', 's')
+        return _generic_matmatmul!(C, 'N', 'N', wrap(A, tA), wrap(B, tB), _add)
+    else
+        return _generic_matmatmul!(C, tA, tB, A, B, _add)
+    end
+end
 function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S},
                              _add::MulAddMul) where {T,S,R}
     require_one_based_indexing(C, A, B)
