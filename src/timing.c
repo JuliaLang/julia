@@ -39,6 +39,8 @@ const char *jl_timing_names[(int)JL_TIMING_LAST] =
 #undef X
     };
 
+int jl_timing_names_sorted[(int)JL_TIMING_LAST];
+
 JL_DLLEXPORT jl_timing_counter_t jl_timing_counters[JL_TIMING_COUNTER_LAST];
 
 void jl_print_timings(void)
@@ -51,11 +53,12 @@ void jl_print_timings(void)
     }
     jl_atomic_store_relaxed(jl_timing_counts, root_time);
     fprintf(stderr, "\nJULIA TIMINGS\n");
-    fprintf(stderr, "%-25s, %-30s\n", "Event", "Cycles (%% of total)");
+    fprintf(stderr, "%-25s, %-30s\n", "Event", "Cycles (% of total)");
     for (int i = 0; i < JL_TIMING_LAST; i++) {
-        uint64_t counts = jl_atomic_load_relaxed(jl_timing_counts + i);
+        int j = jl_timing_names_sorted[i];
+        uint64_t counts = jl_atomic_load_relaxed(jl_timing_counts + j);
         if (counts != 0)
-            fprintf(stderr, "%-25s, %20" PRIu64 " (%5.2f %%)\n", jl_timing_names[i], counts, 100 * (((double)counts) / total_time));
+            fprintf(stderr, "%-25s, %20" PRIu64 " (%5.2f %%)\n", jl_timing_names[j], counts, 100 * (((double)counts) / total_time));
     }
 
     fprintf(stderr, "\nJULIA COUNTERS\n");
@@ -71,11 +74,22 @@ void jl_print_timings(void)
 #endif
 }
 
+int cmp_names(const void *a, const void *b) {
+    int ia = *(const int*)a;
+    int ib = *(const int*)b;
+    return strcmp(jl_timing_names[ia], jl_timing_names[ib]);
+}
+
 void jl_init_timing(void)
 {
     t0 = cycleclock();
 
     _Static_assert((int)JL_TIMING_LAST <= (int)JL_TIMING_EVENT_LAST, "More owners than events!");
+
+    for (int i = 0; i < JL_TIMING_LAST; i++) {
+        jl_timing_names_sorted[i] = i;
+    }
+    qsort(jl_timing_names_sorted, JL_TIMING_LAST, sizeof(int), cmp_names);
 
     int i __attribute__((unused)) = 0;
 #ifdef USE_ITTAPI
@@ -333,20 +347,23 @@ void jl_timing_init_task(jl_task_t *t)
 #endif
 }
 
+int cmp_name_idx(const void *name, const void *idx) {
+    return strcmp((const char *)name, jl_timing_names[*(const int *)idx]);
+}
+
 JL_DLLEXPORT int jl_timing_set_enable(const char *subsystem, uint8_t enabled)
 {
-    for (int i = 0; i < JL_TIMING_LAST; i++) {
-        if (strcmp(subsystem, jl_timing_names[i]) == 0) {
-            uint64_t subsystem_bit = 1ul << (i % (sizeof(uint64_t) * CHAR_BIT));
-            if (enabled) {
-                jl_atomic_fetch_and_relaxed(jl_timing_disable_mask + (i / (sizeof(uint64_t) * CHAR_BIT)), ~subsystem_bit);
-            } else {
-                jl_atomic_fetch_or_relaxed(jl_timing_disable_mask + (i / (sizeof(uint64_t) * CHAR_BIT)), subsystem_bit);
-            }
-            return 0;
-        }
+    const int *idx = (const int *)bsearch(subsystem, jl_timing_names_sorted, JL_TIMING_LAST, sizeof(int), cmp_name_idx);
+    if (idx == NULL)
+        return -1;
+    int i = *idx;
+    uint64_t subsystem_bit = 1ul << (i % (sizeof(uint64_t) * CHAR_BIT));
+    if (enabled) {
+        jl_atomic_fetch_and_relaxed(jl_timing_disable_mask + (i / (sizeof(uint64_t) * CHAR_BIT)), ~subsystem_bit);
+    } else {
+        jl_atomic_fetch_or_relaxed(jl_timing_disable_mask + (i / (sizeof(uint64_t) * CHAR_BIT)), subsystem_bit);
     }
-    return -1;
+    return 0;
 }
 
 static void jl_timing_set_enable_from_env(void)
