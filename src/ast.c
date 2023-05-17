@@ -1017,7 +1017,6 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
     margs[2] = (jl_value_t*)inmodule;
     for (i = 3; i < nargs; i++)
         margs[i] = jl_array_ptr_ref(args, i - 1);
-    jl_timing_show_macro(margs[0], margs[1], inmodule, JL_TIMING_DEFAULT_BLOCK);
 
     size_t last_age = ct->world_age;
     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
@@ -1032,6 +1031,7 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
             jl_method_error(margs[0], &margs[1], nargs, ct->world_age);
             // unreachable
         }
+        jl_timing_show_macro(mfunc, margs[1], inmodule, JL_TIMING_DEFAULT_BLOCK);
         *ctx = mfunc->def.method->module;
         result = jl_invoke(margs[0], &margs[1], nargs - 1, mfunc);
     }

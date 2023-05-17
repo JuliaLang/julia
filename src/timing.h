@@ -129,7 +129,7 @@ JL_DLLEXPORT void jl_timing_show_method_instance(jl_method_instance_t *mi, jl_ti
 JL_DLLEXPORT void jl_timing_show_method(jl_method_t *method, jl_timing_block_t *cur_block);
 JL_DLLEXPORT void jl_timing_show_func_sig(jl_value_t *v, jl_timing_block_t *cur_block);
 JL_DLLEXPORT void jl_timing_show_location(const char *file, int line, jl_module_t* mod, jl_timing_block_t *cur_block);
-JL_DLLEXPORT void jl_timing_show_macro(jl_value_t *macro, jl_value_t* lno, jl_module_t* mod, jl_timing_block_t *cur_block);
+JL_DLLEXPORT void jl_timing_show_macro(jl_method_instance_t *macro, jl_value_t* lno, jl_module_t* mod, jl_timing_block_t *cur_block);
 JL_DLLEXPORT void jl_timing_printf(jl_timing_block_t *cur_block, const char *format, ...);
 JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
 

@@ -254,15 +254,10 @@ JL_DLLEXPORT void jl_timing_show_func_sig(jl_value_t *v, jl_timing_block_t *cur_
 #endif
 }
 
-JL_DLLEXPORT void jl_timing_show_macro(jl_value_t *macro, jl_value_t* lno, jl_module_t* mod, jl_timing_block_t *cur_block)
+JL_DLLEXPORT void jl_timing_show_macro(jl_method_instance_t *macro, jl_value_t* lno, jl_module_t* mod, jl_timing_block_t *cur_block)
 {
 #ifdef USE_TRACY
-    if (jl_is_symbol(macro)) {
-        jl_timing_printf(cur_block, "%s", jl_symbol_name((jl_sym_t*)macro));
-    } else {
-        // TODO: render e.g. `Expr(:(:), :Mod, :(Symbol("@Macro")))` as `Mod.@Macro
-        jl_timing_show(macro, cur_block);
-    }
+    jl_timing_printf(cur_block, "%s", jl_symbol_name(macro->def.method->name));
     assert(jl_typetagis(lno, jl_linenumbernode_type));
     jl_timing_show_location(jl_symbol_name((jl_sym_t*)jl_fieldref(lno, 1)),
                             jl_unbox_int64(jl_fieldref(lno, 0)),
