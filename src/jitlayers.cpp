@@ -190,8 +190,7 @@ static jl_callptr_t _jl_compile_codeinst(
     JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
 #ifdef USE_TRACY
     if (is_recompile) {
-        TracyCZoneCtx ctx = *(JL_TIMING_CURRENT_BLOCK->tracy_ctx);
-        TracyCZoneColor(ctx, 0xFFA500);
+        TracyCZoneColor(JL_TIMING_DEFAULT_BLOCK->tracy_ctx, 0xFFA500);
     }
 #endif
     jl_callptr_t fptr = NULL;
@@ -213,35 +212,46 @@ static jl_callptr_t _jl_compile_codeinst(
 
         if (params._shared_module)
             jl_ExecutionEngine->addModule(orc::ThreadSafeModule(std::move(params._shared_module), params.tsctx));
-        StringMap<orc::ThreadSafeModule*> NewExports;
-        StringMap<void*> NewGlobals;
-        for (auto &global : params.globals) {
-            NewGlobals[global.second->getName()] = global.first;
-        }
-        for (auto &def : emitted) {
-            orc::ThreadSafeModule &TSM = std::get<0>(def.second);
-            //The underlying context object is still locked because params is not destroyed yet
-            auto M = TSM.getModuleUnlocked();
-            for (auto &F : M->global_objects()) {
-                if (!F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
-                    NewExports[F.getName()] = &TSM;
+        if (!params.imaging) {
+            StringMap<orc::ThreadSafeModule*> NewExports;
+            StringMap<void*> NewGlobals;
+            for (auto &global : params.globals) {
+                NewGlobals[global.second->getName()] = global.first;
+            }
+            for (auto &def : emitted) {
+                orc::ThreadSafeModule &TSM = std::get<0>(def.second);
+                //The underlying context object is still locked because params is not destroyed yet
+                auto M = TSM.getModuleUnlocked();
+                for (auto &F : M->global_objects()) {
+                    if (!F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
+                        NewExports[F.getName()] = &TSM;
+                    }
+                }
+                // Let's link all globals here also (for now)
+                for (auto &GV : M->globals()) {
+                    auto InitValue = NewGlobals.find(GV.getName());
+                    if (InitValue != NewGlobals.end()) {
+                        jl_link_global(&GV, InitValue->second);
+                    }
                 }
             }
-            // Let's link all globals here also (for now)
-            for (auto &GV : M->globals()) {
-                auto InitValue = NewGlobals.find(GV.getName());
-                if (InitValue != NewGlobals.end()) {
-                    jl_link_global(&GV, InitValue->second);
+            DenseMap<orc::ThreadSafeModule*, int> Queued;
+            std::vector<orc::ThreadSafeModule*> Stack;
+            for (auto &def : emitted) {
+                // Add the results to the execution engine now
+                orc::ThreadSafeModule &M = std::get<0>(def.second);
+                jl_add_to_ee(M, NewExports, Queued, Stack);
+                assert(Queued.empty() && Stack.empty() && !M);
+            }
+        } else {
+            jl_jit_globals(params.globals);
+            auto main = std::move(emitted[codeinst].first);
+            for (auto &def : emitted) {
+                if (def.first != codeinst) {
+                    jl_merge_module(main, std::move(def.second.first));
                 }
             }
-        }
-        DenseMap<orc::ThreadSafeModule*, int> Queued;
-        std::vector<orc::ThreadSafeModule*> Stack;
-        for (auto &def : emitted) {
-            // Add the results to the execution engine now
-            orc::ThreadSafeModule &M = std::get<0>(def.second);
-            jl_add_to_ee(M, NewExports, Queued, Stack);
-            assert(Queued.empty() && Stack.empty() && !M);
+            jl_ExecutionEngine->addModule(std::move(main));
         }
         ++CompiledCodeinsts;
         MaxWorkqueueSize.updateMax(emitted.size());
@@ -252,7 +262,7 @@ static jl_callptr_t _jl_compile_codeinst(
     for (auto &def : emitted) {
         jl_code_instance_t *this_code = def.first;
         if (i < jl_timing_print_limit)
-            jl_timing_show_func_sig(this_code->def->specTypes, JL_TIMING_CURRENT_BLOCK);
+            jl_timing_show_func_sig(this_code->def->specTypes, JL_TIMING_DEFAULT_BLOCK);
 
         jl_llvm_functions_t decls = std::get<1>(def.second);
         jl_callptr_t addr;
@@ -301,7 +311,7 @@ static jl_callptr_t _jl_compile_codeinst(
         i++;
     }
     if (i > jl_timing_print_limit)
-        jl_timing_printf(JL_TIMING_CURRENT_BLOCK, "... <%d methods truncated>", i - 10);
+        jl_timing_printf(JL_TIMING_DEFAULT_BLOCK, "... <%d methods truncated>", i - 10);
 
     uint64_t end_time = 0;
     if (timed)

@@ -3367,7 +3367,7 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_
 static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *image, jl_array_t *depmods, int completeinfo, const char *pkgname)
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Pkgimg);
-    jl_timing_printf(JL_TIMING_CURRENT_BLOCK, pkgname);
+    jl_timing_printf(JL_TIMING_DEFAULT_BLOCK, pkgname);
     uint64_t checksum = 0;
     int64_t dataendpos = 0;
     int64_t datastartpos = 0;

@@ -301,7 +301,7 @@ end
 # TODO: @deprecate peakflops to LinearAlgebra
 export peakflops
 """
-    peakflops(n::Integer=2000; parallel::Bool=false)
+    peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3, parallel::Bool=false)
 
 `peakflops` computes the peak flop rate of the computer by using double precision
 [`gemm!`](@ref LinearAlgebra.BLAS.gemm!). For more information see
@@ -311,12 +311,12 @@ export peakflops
     This function will be moved from `InteractiveUtils` to `LinearAlgebra` in the
     future. In Julia 1.1 and later it is available as `LinearAlgebra.peakflops`.
 """
-function peakflops(n::Integer=2000; parallel::Bool=false)
-    # Base.depwarn("`peakflop`s have moved to the LinearAlgebra module, " *
+function peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3, parallel::Bool=false)
+    # Base.depwarn("`peakflops` has moved to the LinearAlgebra module, " *
     #              "add `using LinearAlgebra` to your imports.", :peakflops)
     let LinearAlgebra = Base.require(Base.PkgId(
             Base.UUID((0x37e2e46d_f89d_539d,0xb4ee_838fcccc9c8e)), "LinearAlgebra"))
-        return LinearAlgebra.peakflops(n; parallel = parallel)
+        return LinearAlgebra.peakflops(n, eltype=eltype, ntrials=ntrials, parallel=parallel)
     end
 end
 

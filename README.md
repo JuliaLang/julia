@@ -1,10 +1,8 @@
+<a name="logo"/>
 <div align="center">
-    <a href="https://julialang.org/" target="_blank">
-        <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="doc/src/assets/julialogoheaderimage_dark.svg">
-          <img alt="The Julia logo" src="doc/src/assets/julialogoheaderimage_light.svg">
-        </picture>
-    </a>
+<a href="https://julialang.org/" target="_blank">
+<img src="doc/src/assets/logo.svg" alt="Julia Logo" width="210" height="142"></img>
+</a>
 </div>
 
 <table>
