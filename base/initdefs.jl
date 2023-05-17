@@ -378,18 +378,26 @@ LIFO order, "last called" is equivalent to "first registered".)
 atexit(f::Function) = Base.@lock _atexit_hooks_lock (pushfirst!(atexit_hooks, f); nothing)
 
 function _atexit(exitcode::Cint)
-    while !isempty(atexit_hooks)
-        f = popfirst!(atexit_hooks)
-        try
-            if hasmethod(f, (Cint,))
-                f(exitcode)
-            else
-                f()
+    # Don't hold the lock around the iteration, just in case any other thread executing in
+    # parallel tries to register a new atexit hook while this is running. We don't want to
+    # block that thread from proceeding, and we can allow it to register its hook which we
+    # will immediately run here.
+    # NOTE: There is a logical race condition where a Task that registers a hook after we
+    # have finished will never have its hook run. We make no guarantees about this.
+    while Base.@lock _atexit_hooks_lock !isempty(atexit_hooks)
+        Base.@lock _atexit_hooks_lock begin
+            f = popfirst!(atexit_hooks)
+            try
+                if hasmethod(f, (Cint,))
+                    f(exitcode)
+                else
+                    f()
+                end
+            catch ex
+                showerror(stderr, ex)
+                Base.show_backtrace(stderr, catch_backtrace())
+                println(stderr)
             end
-        catch ex
-            showerror(stderr, ex)
-            Base.show_backtrace(stderr, catch_backtrace())
-            println(stderr)
         end
     end
 end
