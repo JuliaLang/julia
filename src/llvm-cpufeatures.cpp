@@ -6,6 +6,7 @@
 //
 // The following intrinsics are supported:
 // - julia.cpu.have_fma.$typ: returns 1 if the platform supports hardware-accelerated FMA.
+// - julia.cpu.have_fminmax.$typ: returns 1 if the platform supports fmin/fmax.
 //
 // Some of these intrinsics are overloaded, i.e., they are suffixed with a type name.
 // To extend support, make sure codegen (in intrinsics.cpp) knows how to emit them.
@@ -34,6 +35,8 @@ using namespace llvm;
 
 STATISTIC(LoweredWithFMA, "Number of have_fma's that were lowered to true");
 STATISTIC(LoweredWithoutFMA, "Number of have_fma's that were lowered to false");
+STATISTIC(LoweredWithFMINMAX, "Number of have_fminmax's that were lowered to true");
+STATISTIC(LoweredWithoutFMINMAX, "Number of have_fminmax's that were lowered to false");
 
 extern JuliaOJIT *jl_ExecutionEngine;
 
@@ -62,15 +65,16 @@ static bool have_fma(Function &intr, Function &caller, const Triple &TT) JL_NOTS
 
     SmallVector<StringRef, 6> Features;
     FS.split(Features, ',');
-    for (StringRef Feature : Features)
-    if (TT.isARM()) {
-      if (Feature == "+vfp4")
-        return typ == "f32" || typ == "f64";
-      else if (Feature == "+vfp4sp")
-        return typ == "f32";
-    } else {
-      if (Feature == "+fma" || Feature == "+fma4")
-        return typ == "f32" || typ == "f64";
+    for (StringRef Feature : Features) {
+        if (TT.isARM()) {
+            if (Feature == "+vfp4")
+                return typ == "f32" || typ == "f64";
+            else if (Feature == "+vfp4sp")
+                return typ == "f32";
+        } else {
+            if (Feature == "+fma" || Feature == "+fma4")
+                return typ == "f32" || typ == "f64";
+        }
     }
 
     return false;
@@ -82,6 +86,49 @@ void lowerHaveFMA(Function &intr, Function &caller, const Triple &TT, CallInst *
         I->replaceAllUsesWith(ConstantInt::get(I->getType(), 1));
     } else {
         ++LoweredWithoutFMA;
+        I->replaceAllUsesWith(ConstantInt::get(I->getType(), 0));
+    }
+    return;
+}
+
+// whether this platform unconditionally support fmin/fmax
+Optional<bool> always_have_fminmax(Function &intr, const Triple &TT) JL_NOTSAFEPOINT {
+    if (TT.isAArch64()) {
+        auto intr_name = intr.getName();
+        auto typ = intr_name.substr(strlen("julia.cpu.have_fminmax."));
+        return typ == "f32" || typ == "f64";
+    } else {
+        return {};
+    }
+}
+
+static bool have_fminmax(Function &intr, Function &caller, const Triple &TT) JL_NOTSAFEPOINT {
+    auto unconditional = always_have_fminmax(intr, TT);
+    if (unconditional.hasValue())
+        return unconditional.getValue();
+
+    auto intr_name = intr.getName();
+    auto typ = intr_name.substr(strlen("julia.cpu.have_fminmax."));
+
+    Attribute FSAttr = caller.getFnAttribute("target-features");
+    StringRef FS =
+        FSAttr.isValid() ? FSAttr.getValueAsString() : jl_ExecutionEngine->getTargetFeatureString();
+
+    SmallVector<StringRef, 6> Features;
+    FS.split(Features, ',');
+    for (StringRef Feature : Features) {
+        // TODO
+    }
+
+    return false;
+}
+
+void lowerHaveFMINMAX(Function &intr, Function &caller, const Triple &TT, CallInst *I) JL_NOTSAFEPOINT {
+    if (have_fminmax(intr, caller, TT)) {
+        ++LoweredWithFMINMAX;
+        I->replaceAllUsesWith(ConstantInt::get(I->getType(), 1));
+    } else {
+        ++LoweredWithoutFMINMAX;
         I->replaceAllUsesWith(ConstantInt::get(I->getType(), 0));
     }
     return;
@@ -100,6 +147,15 @@ bool lowerCPUFeatures(Module &M) JL_NOTSAFEPOINT
                 User *RU = U.getUser();
                 CallInst *I = cast<CallInst>(RU);
                 lowerHaveFMA(F, *I->getParent()->getParent(), TT, I);
+                Materialized.push_back(I);
+            }
+        }
+
+        if (FN.startswith("julia.cpu.have_fminmax.")) {
+            for (Use &U: F.uses()) {
+                User *RU = U.getUser();
+                CallInst *I = cast<CallInst>(RU);
+                lowerHaveFMINMAX(F, *I->getParent()->getParent(), TT, I);
                 Materialized.push_back(I);
             }
         }

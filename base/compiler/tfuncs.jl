@@ -52,7 +52,7 @@ end
 
 const INT_INF = typemax(Int) # integer infinity
 
-const N_IFUNC = reinterpret(Int32, have_fma) + 1
+const N_IFUNC = reinterpret(Int32, have_fminmax) + 1
 const T_IFUNC = Vector{Tuple{Int, Int, Any}}(undef, N_IFUNC)
 const T_IFUNC_COST = Vector{Int}(undef, N_IFUNC)
 const T_FFUNC_KEY = Vector{Any}()
@@ -281,6 +281,7 @@ end
 add_tfunc(Core.Intrinsics.cglobal, 1, 2, cglobal_tfunc, 5)
 
 add_tfunc(Core.Intrinsics.have_fma, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Bool), 1)
+add_tfunc(Core.Intrinsics.have_fminmax, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Bool), 1)
 add_tfunc(Core.Intrinsics.arraylen, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Int), 4)
 
 # builtin functions
@@ -2254,6 +2255,7 @@ const _INCONSISTENT_INTRINSICS = Any[
     Intrinsics.pointerref,      # this one is volatile
     Intrinsics.sqrt_llvm_fast,  # this one may differ at runtime (by a few ulps)
     Intrinsics.have_fma,        # this one depends on the runtime environment
+    Intrinsics.have_fminmax,    # this one depends on the runtime environment
     Intrinsics.cglobal,         # cglobal lookup answer changes at runtime
     # ... and list fastmath intrinsics:
     # join(string.("Intrinsics.", sort(filter(endswith("_fast")∘string, names(Core.Intrinsics)))), ",\n")
@@ -2547,7 +2549,7 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Vector{Any})
         xty = widenconst(argtypes[2])
         return isconcrete && isprimitivetype(ty) && isprimitivetype(xty)
     end
-    if f === Intrinsics.have_fma
+    if f in (Intrinsics.have_fma, Intrinsics.have_fminmax)
         ty, isexact, isconcrete = instanceof_tfunc(argtypes[1])
         return isconcrete && isprimitivetype(ty)
     end
@@ -2573,6 +2575,7 @@ function is_pure_intrinsic_infer(f::IntrinsicFunction)
              f === Intrinsics.arraylen ||   # this one is volatile
              f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
              f === Intrinsics.have_fma ||  # this one depends on the runtime environment
+             f === Intrinsics.have_fminmax ||  # this one depends on the runtime environment
              f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime
 end
 
@@ -2580,6 +2583,7 @@ end
 function intrinsic_effect_free_if_nothrow(@nospecialize f)
     return f === Intrinsics.pointerref ||
            f === Intrinsics.have_fma ||
+           f === Intrinsics.have_fminmax ||
            is_pure_intrinsic_infer(f)
 end
 

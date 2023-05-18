@@ -103,6 +103,7 @@
     ADD_I(arraylen, 1) \
     /*  cpu feature tests */ \
     ADD_I(have_fma, 1) \
+    ADD_I(have_fminmax, 1) \
     /*  hidden intrinsics */ \
     ADD_HIDDEN(cglobal_auto, 1)
 

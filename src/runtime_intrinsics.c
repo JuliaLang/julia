@@ -1467,3 +1467,10 @@ JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *typ)
     // TODO: run-time feature check?
     return jl_false;
 }
+
+JL_DLLEXPORT jl_value_t *jl_have_fminmax(jl_value_t *typ)
+{
+    JL_TYPECHK(have_fminmax, datatype, typ);
+    // TODO: run-time feature check?
+    return jl_false;
+}
