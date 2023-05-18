@@ -83,10 +83,10 @@ so that readers of the source code can find them easily, as in
 
 ```jldoctest module_manual
 julia> module NiceStuff
-       export nice, DOG
-       struct Dog end      # singleton type, not exported
-       const DOG = Dog()   # named instance, exported
-       nice(x) = "nice $x" # function, exported
+         export nice, DOG
+         struct Dog end      # singleton type, not exported
+         const DOG = Dog()   # named instance, exported
+         nice(x) = "nice $x" # function, exported
        end;
 
 ```
@@ -263,13 +263,13 @@ Consider the situation where two (or more) packages export the same name, as in
 
 ```jldoctest module_manual
 julia> module A
-       export f
-       f() = 1
+         export f
+         f() = 1
        end
 A
 julia> module B
-       export f
-       f() = 2
+         export f
+         f() = 2
        end
 B
 ```
@@ -363,18 +363,22 @@ Consider the following example, where the submodule `SubA` defines a function, w
 
 ```jldoctest module_manual
 julia> module ParentModule
-       module SubA
-       export add_D  # exported interface
-       const D = 3
-       add_D(x) = x + D
-       end
-       using .SubA  # brings `add_D` into the namespace
-       export add_D # export it from ParentModule too
-       module SubB
-       import ..SubA: add_D # relative path for a “sibling” module
-       struct Infinity end
-       add_D(x::Infinity) = x
-       end
+
+         module SubA
+            export add_D  # exported interface
+            const D = 3
+            add_D(x) = x + D
+         end
+
+         using .SubA  # brings `add_D` into the namespace
+         export add_D # export it from ParentModule too
+
+         module SubB
+            import ..SubA: add_D # relative path for a “sibling” module
+            struct Infinity end
+            add_D(x::Infinity) = x
+         end
+
        end;
 
 ```
@@ -412,13 +416,13 @@ For similar reasons, you cannot use a cyclic ordering:
 ```julia
 module A
 
-module B
-using ..C # ERROR: UndefVarError: `C` not defined
-end
+   module B
+      using ..C # ERROR: UndefVarError: `C` not defined
+   end
 
-module C
-using ..B
-end
+   module C
+      using ..B
+   end
 
 end
 ```
