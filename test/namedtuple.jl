@@ -94,6 +94,12 @@ end
 
     conv_res = @test_throws MethodError convert(NamedTuple{(:a,),Tuple{I}} where I<:AbstractString, (;a=1))
     @test conv_res.value.f === convert && conv_res.value.args === (AbstractString, 1)
+
+    conv6 = convert(NamedTuple{(:a,),Tuple{NamedTuple{(:b,), Tuple{Int}}}}, ((1,),))
+    @test conv6 === (a = (b = 1,),)
+
+    conv7 = convert(Tuple{Int}, (a=1,))
+    @test conv7 === (1,)
 end
 
 @test NamedTuple{(:a,:c)}((b=1,z=2,c=3,aa=4,a=5)) === (a=5, c=3)

@@ -182,6 +182,7 @@ nextind(@nospecialize(t::NamedTuple), i::Integer) = Int(i)+1
 
 convert(::Type{NT}, nt::NT) where {names, NT<:NamedTuple{names}} = nt
 convert(::Type{NT}, nt::NT) where {names, T<:Tuple, NT<:NamedTuple{names,T}} = nt
+convert(::Type{NT}, t::Tuple) where {NT<:NamedTuple} = NT(t)
 
 function convert(::Type{NT}, nt::NamedTuple{names}) where {names, T<:Tuple, NT<:NamedTuple{names,T}}
     if !@isdefined T
@@ -199,6 +200,7 @@ end
 if nameof(@__MODULE__) === :Base
     Tuple(nt::NamedTuple) = (nt...,)
     (::Type{T})(nt::NamedTuple) where {T <: Tuple} = (t = Tuple(nt); t isa T ? t : convert(T, t)::T)
+    convert(::Type{T}, nt::NamedTuple) where {T <: Tuple} = T(nt)
 end
 
 function show(io::IO, t::NamedTuple)
