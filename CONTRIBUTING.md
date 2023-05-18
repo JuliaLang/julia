@@ -1,5 +1,9 @@
 # Notes for Julia Contributors
 
+<a href="https://github.com/monoclehq">
+    <img src="https://open-source-assets.middlewarehq.com/svgs/JuliaLang-julia-contributor-metrics-dark-widget.svg"></img>
+</a>
+
 Hi! If you are new to the Julia community: welcome, and thanks for trying Julia. Please be sure to respect our [community standards](https://julialang.org/community/standards) in all interactions.
 
 If you are already familiar with Julia itself, this blog post by Katharine Hyatt on [Making your first Julia pull request](https://kshyatt.github.io/post/firstjuliapr/) is a great way to get started.
