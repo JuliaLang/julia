@@ -2132,10 +2132,16 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
 
     # block with argument
     elseif head in (:for,:while,:function,:macro,:if,:elseif,:let) && nargs==2
-        if is_expr(args[2], :block)
-            show_block(IOContext(io, beginsym=>false), head, args[1], args[2], indent, quote_level)
+        if head === :function && is_expr(args[1], :...)
+            # fix printing of "function (x...) x end"
+            block_args = Expr(:tuple, args[1])
         else
-            show_block(IOContext(io, beginsym=>false), head, args[1], Expr(:block, args[2]), indent, quote_level)
+            block_args = args[1]
+        end
+        if is_expr(args[2], :block)
+            show_block(IOContext(io, beginsym=>false), head, block_args, args[2], indent, quote_level)
+        else
+            show_block(IOContext(io, beginsym=>false), head, block_args, Expr(:block, args[2]), indent, quote_level)
         end
         print(io, "end")
 
