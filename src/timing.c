@@ -205,23 +205,37 @@ JL_DLLEXPORT void jl_timing_show_filename(const char *path, jl_timing_block_t *c
 #endif
 }
 
+JL_DLLEXPORT void jl_timing_show_location(const char *file, int line, jl_module_t* mod, jl_timing_block_t *cur_block)
+{
+#ifdef USE_TRACY
+    jl_module_t *root = jl_module_root(mod);
+    if (root == mod || root == jl_main_module) {
+        jl_timing_printf(cur_block, "%s:%d in %s",
+                         gnu_basename(file),
+                         line,
+                         jl_symbol_name(mod->name));
+    } else {
+        // TODO: generalize to print the entire module hierarchy
+        jl_timing_printf(cur_block, "%s:%d in %s.%s",
+                         gnu_basename(file),
+                         line,
+                         jl_symbol_name(root->name),
+                         jl_symbol_name(mod->name));
+    }
+#endif
+}
+
 JL_DLLEXPORT void jl_timing_show_method_instance(jl_method_instance_t *mi, jl_timing_block_t *cur_block)
 {
     jl_timing_show_func_sig(mi->specTypes, cur_block);
     jl_method_t *def = mi->def.method;
-    jl_timing_printf(cur_block, "%s:%d in %s",
-                     gnu_basename(jl_symbol_name(def->file)),
-                     def->line,
-                     jl_symbol_name(def->module->name));
+    jl_timing_show_location(jl_symbol_name(def->file), def->line, def->module, cur_block);
 }
 
 JL_DLLEXPORT void jl_timing_show_method(jl_method_t *method, jl_timing_block_t *cur_block)
 {
     jl_timing_show((jl_value_t *)method, cur_block);
-    jl_timing_printf(cur_block, "%s:%d in %s",
-                    gnu_basename(jl_symbol_name(method->file)),
-                    method->line,
-                    jl_symbol_name(method->module->name));
+    jl_timing_show_location(jl_symbol_name(method->file), method->line, method->module, cur_block);
 }
 
 JL_DLLEXPORT void jl_timing_show_func_sig(jl_value_t *v, jl_timing_block_t *cur_block)
@@ -238,6 +252,15 @@ JL_DLLEXPORT void jl_timing_show_func_sig(jl_value_t *v, jl_timing_block_t *cur_
 
     TracyCZoneText(cur_block->tracy_ctx, buf.buf, buf.size);
 #endif
+}
+
+JL_DLLEXPORT void jl_timing_show_macro(jl_method_instance_t *macro, jl_value_t* lno, jl_module_t* mod, jl_timing_block_t *cur_block)
+{
+    jl_timing_printf(cur_block, "%s", jl_symbol_name(macro->def.method->name));
+    assert(jl_typetagis(lno, jl_linenumbernode_type));
+    jl_timing_show_location(jl_symbol_name((jl_sym_t*)jl_fieldref(lno, 1)),
+                            jl_unbox_int64(jl_fieldref(lno, 0)),
+                            mod, cur_block);
 }
 
 JL_DLLEXPORT void jl_timing_printf(jl_timing_block_t *cur_block, const char *format, ...)

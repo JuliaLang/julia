@@ -362,7 +362,7 @@ code_llvm(devnull, invoke_g10878, ())
 
 
 # issue #10930
-@test isa(code_typed(promote,(Any,Any,Vararg{Any})), Array)
+@test isa(Base.return_types(promote, (Any,Any,Vararg{Any})), Vector)
 find_tvar10930(sig::Type{T}) where {T<:Tuple} = 1
 function find_tvar10930(arg)
     if isa(arg, Type) && arg<:Tuple
@@ -2402,6 +2402,20 @@ from_interconditional_check22(::Union{Int,String}, y) = isa(y, Int)
     end
     return 0
 end |> only === Int
+
+# prioritize constraints on slot objects
+# https://github.com/aviatesk/JET.jl/issues/509
+struct JET509
+    list::Union{Tuple{},Vector{Int}}
+end
+jet509_hasitems(list) = length(list) >= 1
+@test Base.return_types((JET509,); interp=MustAliasInterpreter()) do ilist::JET509
+    list = ilist.list
+    if jet509_hasitems(list)
+        return list
+    end
+    error("list is empty")
+end |> only == Vector{Int}
 
 # === constraint
 # --------------
