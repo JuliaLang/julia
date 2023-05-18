@@ -33,6 +33,7 @@ convert(::Type{T}, x::T) where {T} = x
 
 # mostly used by compiler/methodtable.jl, but also by reflection.jl
 abstract type MethodTableView end
+abstract type AbstractInterpreter end
 
 # essential files and libraries
 include("essentials.jl")
