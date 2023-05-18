@@ -375,6 +375,11 @@ exit code `n` (instead of the original exit code). If more than one exit hook
 calls `exit(n)`, then Julia will exit with the exit code corresponding to the
 last called exit hook that calls `exit(n)`. (Because exit hooks are called in
 LIFO order, "last called" is equivalent to "first registered".)
+
+Note: Once all exit hooks have been called, no more exit hooks can be registered,
+and any call to `atexit(f)` after all hooks have completed will throw an exception.
+This situation may occur if you are registering exit hooks from background Tasks that
+may still be executing concurrently during shutdown.
 """
 function atexit(f::Function)
     Base.@lock _atexit_hooks_lock begin
