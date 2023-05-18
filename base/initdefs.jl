@@ -390,8 +390,9 @@ function _atexit(exitcode::Cint)
     # block that thread from proceeding, and we can allow it to register its hook which we
     # will immediately run here.
     while Base.@lock _atexit_hooks_lock !isempty(atexit_hooks)
-        Base.@lock _atexit_hooks_lock begin
-            f = popfirst!(atexit_hooks)
+        f = Base.@lock _atexit_hooks_lock begin
+            popfirst!(atexit_hooks)
+        end
             try
                 if hasmethod(f, (Cint,))
                     f(exitcode)
@@ -404,9 +405,12 @@ function _atexit(exitcode::Cint)
                 println(stderr)
             end
 
+        Base.@lock _atexit_hooks_lock begin
             # If this is the last iteration, atomically disable atexit hooks to prevent
             # someone from registering a hook that will never be run.
-            # (We do this inside the lock, so that it is atomic.)
+            # (We do this inside the loop, so that it is atomic: no one can have registered
+            #  a hook that never gets run, and we run all the hooks we know about until
+            #  the vector is empty.)
             isempty(atexit_hooks) && (_atexit_hooks_finished[] = true)
         end
     end
