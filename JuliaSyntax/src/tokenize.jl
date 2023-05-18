@@ -2,7 +2,7 @@ module Tokenize
 
 export tokenize, untokenize, Tokens
 
-using ..JuliaSyntax: JuliaSyntax, Kind, @K_str
+using ..JuliaSyntax: JuliaSyntax, Kind, @K_str, @KSet_str
 
 import ..JuliaSyntax: kind,
     is_literal, is_error, is_contextual_keyword, is_word_operator
@@ -382,9 +382,6 @@ end
 
 Returns the next character and increments the current position.
 """
-function readchar end
-
-
 function readchar(l::Lexer)
     c = readchar(l.io)
     l.chars = (l.chars[2], l.chars[3], l.chars[4], c)
@@ -445,17 +442,6 @@ function emit(l::Lexer, kind::Kind, maybe_op=true)
     l.last_token = kind
     return tok
 end
-
-"""
-    emit_error(l::Lexer, err::Kind)
-
-Returns an `K"error"` token with error `err` and starts a new `RawToken`.
-"""
-function emit_error(l::Lexer, err::Kind)
-    @assert is_error(err)
-    return emit(l, err)
-end
-
 
 """
     next_token(l::Lexer)
@@ -551,11 +537,31 @@ function _next_token(l::Lexer, c)
     elseif (k = get(_unicode_ops, c, K"error")) != K"error"
         return emit(l, k)
     else
-        emit_error(l,
+        emit(l,
             !isvalid(c)          ? K"ErrorInvalidUTF8"   :
             is_invisible_char(c) ? K"ErrorInvisibleChar" :
             K"ErrorUnknownCharacter")
     end
+end
+
+# UAX #9: Unicode Bidirectional Algorithm
+# https://unicode.org/reports/tr9/
+# Very partial implementation - just enough to check correct nesting in strings
+# and multiline comments.
+function update_bidi_state((embedding_nesting, isolate_nesting), c)
+    if c == '\n'
+        embedding_nesting = 0
+        isolate_nesting = 0
+    elseif c == '\U202A' || c == '\U202B' || c == '\U202D' || c == '\U202E' # LRE RLE LRO RLO
+        embedding_nesting += 1
+    elseif c == '\U202C' # PDF
+        embedding_nesting -= 1
+    elseif c == '\U2066' || c == '\U2067' || c == '\U2068' # LRI RLI FSI
+        isolate_nesting += 1
+    elseif c == '\U2069' # PDI
+        isolate_nesting -= 1
+    end
+    return (embedding_nesting, isolate_nesting)
 end
 
 # We're inside a string; possibly reading the string characters, or maybe in
@@ -565,6 +571,9 @@ function lex_string_chunk(l)
     if state.paren_depth > 0
         # Read normal Julia code inside an interpolation but track nesting of
         # parentheses.
+        # TODO: This stateful tracking should probably, somehow, be done by the
+        # parser instead? Especially for recovery of unbalanced parens inside
+        # interpolations?
         c = readchar(l)
         if c == '('
             l.string_states[end] = StringState(state.triplestr, state.raw, state.delim,
@@ -598,7 +607,7 @@ function lex_string_chunk(l)
         # Only allow certain characters after interpolated vars
         # https://github.com/JuliaLang/julia/pull/25234
         readchar(l)
-        return emit_error(l, K"ErrorInvalidInterpolationTerminator")
+        return emit(l, K"ErrorInvalidInterpolationTerminator")
     end
     if pc == EOF_CHAR
         return emit(l, K"EndMarker")
@@ -637,6 +646,8 @@ function lex_string_chunk(l)
         end
     end
     # Read a chunk of string characters
+    init_bidi_state = (0,0)
+    bidi_state = init_bidi_state
     if state.raw
         # Raw strings treat all characters as literals with the exception that
         # the closing quotes can be escaped with an odd number of \ characters.
@@ -647,7 +658,10 @@ function lex_string_chunk(l)
             elseif state.triplestr && (pc == '\n' || pc == '\r')
                 # triple quoted newline splitting
                 readchar(l)
-                if pc == '\r' && peekchar(l) == '\n'
+                if pc == '\n'
+                    bidi_state = init_bidi_state
+                elseif pc == '\r' && peekchar(l) == '\n'
+                    bidi_state = init_bidi_state
                     readchar(l)
                 end
                 break
@@ -663,6 +677,7 @@ function lex_string_chunk(l)
                     readchar(l)
                 end
             end
+            bidi_state = update_bidi_state(bidi_state, c)
         end
     else
         while true
@@ -672,16 +687,22 @@ function lex_string_chunk(l)
             elseif state.triplestr && (pc == '\n' || pc == '\r')
                 # triple quoted newline splitting
                 readchar(l)
-                if pc == '\r' && peekchar(l) == '\n'
+                if pc == '\n'
+                    bidi_state = init_bidi_state
+                elseif pc == '\r' && peekchar(l) == '\n'
                     readchar(l)
+                    bidi_state = init_bidi_state
                 end
                 break
             elseif pc == state.delim && string_terminates(l, state.delim, state.triplestr)
                 break
             elseif pc == '\\'
                 # Escaped newline
-                pc2 = dpeekchar(l)[2]
+                _, pc2, pc3 = peekchar3(l)
                 if pc2 == '\r' || pc2 == '\n'
+                    if pc2 == '\n' || pc3 == '\n'
+                        bidi_state = init_bidi_state
+                    end
                     break
                 end
             end
@@ -689,12 +710,16 @@ function lex_string_chunk(l)
             if c == '\\'
                 c = readchar(l)
                 c == EOF_CHAR && break
-                continue
             end
+            bidi_state = update_bidi_state(bidi_state, c)
         end
     end
-    return emit(l, state.delim == '"' ? K"String"    :
-                   state.delim == '`' ? K"CmdString" : K"Char")
+    outk = state.delim == '\''           ? K"Char"                :
+           bidi_state != init_bidi_state ? K"ErrorBidiFormatting" :
+           state.delim == '"'            ? K"String"              :
+           state.delim == '`'            ? K"CmdString"           :
+           (@assert(state.delim in KSet"' \" `"); K"error")
+    return emit(l, outk)
 end
 
 # Lex whitespace, a whitespace char `c` has been consumed
@@ -725,13 +750,16 @@ function lex_comment(l::Lexer)
         end
     else
         c = readchar(l) # consume the '='
+        init_bidi_state = (0,0)
+        bidi_state = init_bidi_state
         skip = true  # true => c was part of the prev comment marker pair
         nesting = 1
         while true
             if c == EOF_CHAR
-                return emit_error(l, K"ErrorEofMultiComment")
+                return emit(l, K"ErrorEofMultiComment")
             end
             nc = readchar(l)
+            bidi_state = update_bidi_state(bidi_state, nc)
             if skip
                 skip = false
             else
@@ -742,7 +770,9 @@ function lex_comment(l::Lexer)
                     nesting -= 1
                     skip = true
                     if nesting == 0
-                        return emit(l, K"Comment")
+                        outk = bidi_state == init_bidi_state ?
+                               K"Comment" : K"ErrorBidiFormatting"
+                        return emit(l, outk)
                     end
                 end
             end
@@ -791,12 +821,12 @@ function lex_less(l::Lexer)
     elseif dpeekchar(l) == ('-', '-')
         readchar(l); readchar(l)
         if accept(l, '-')
-            return emit_error(l, K"ErrorInvalidOperator")
+            return emit(l, K"ErrorInvalidOperator")
         else
             if accept(l, '>')
                 return emit(l, K"<-->")
             elseif accept(l, '-')
-                return emit_error(l, K"ErrorInvalidOperator")
+                return emit(l, K"ErrorInvalidOperator")
             else
                 return emit(l, K"<--")
             end
@@ -879,7 +909,7 @@ function lex_minus(l::Lexer)
         if accept(l, '>')
             return emit(l, K"-->")
         else
-            return emit_error(l, K"ErrorInvalidOperator") # "--" is an invalid operator
+            return emit(l, K"ErrorInvalidOperator") # "--" is an invalid operator
         end
     elseif !l.dotop && accept(l, '>')
         return emit(l, K"->")
@@ -891,7 +921,7 @@ end
 
 function lex_star(l::Lexer)
     if accept(l, '*')
-        return emit_error(l, K"Error**") # "**" is an invalid operator use ^
+        return emit(l, K"Error**") # "**" is an invalid operator use ^
     elseif accept(l, '=')
         return emit(l, K"*=")
     end
@@ -952,15 +982,15 @@ function lex_digit(l::Lexer, kind)
         elseif kind === K"Float"
             # If we enter the function with kind == K"Float" then a '.' has been parsed.
             readchar(l)
-            return emit_error(l, K"ErrorInvalidNumericConstant")
+            return emit(l, K"ErrorInvalidNumericConstant")
         elseif is_dottable_operator_start_char(ppc)
             readchar(l)
-            return emit_error(l, K"ErrorAmbiguousNumericConstant") # `1.+`
+            return emit(l, K"ErrorAmbiguousNumericConstant") # `1.+`
         end
         readchar(l)
 
         kind = K"Float"
-        accept(l, '_') && return emit_error(l, K"ErrorInvalidNumericConstant") # `1._`
+        accept(l, '_') && return emit(l, K"ErrorInvalidNumericConstant") # `1._`
         had_fraction_digs = accept_number(l, isdigit)
         pc, ppc = dpeekchar(l)
         if (pc == 'e' || pc == 'E' || pc == 'f') && (isdigit(ppc) || ppc == '+' || ppc == '-' || ppc == '−')
@@ -971,18 +1001,18 @@ function lex_digit(l::Lexer, kind)
                 pc,ppc = dpeekchar(l)
                 if pc === '.' && !is_dottable_operator_start_char(ppc)
                     readchar(l)
-                    return emit_error(l, K"ErrorInvalidNumericConstant") # `1.e1.`
+                    return emit(l, K"ErrorInvalidNumericConstant") # `1.e1.`
                 end
             else
-                return emit_error(l, K"ErrorInvalidNumericConstant") # `1.e`
+                return emit(l, K"ErrorInvalidNumericConstant") # `1.e`
             end
         elseif pc == '.' && ppc != '.' && !is_dottable_operator_start_char(ppc)
             readchar(l)
-            return emit_error(l, K"ErrorInvalidNumericConstant") # `1.1.`
+            return emit(l, K"ErrorInvalidNumericConstant") # `1.1.`
         elseif !had_fraction_digs && (is_identifier_start_char(pc) ||
                                       pc == '(' || pc == '[' || pc == '{' ||
                                       pc == '@' || pc == '`' || pc == '"')
-            return emit_error(l, K"ErrorAmbiguousNumericDotMultiply") # `1.(` `1.x`
+            return emit(l, K"ErrorAmbiguousNumericDotMultiply") # `1.(` `1.x`
         end
     elseif (pc == 'e' || pc == 'E' || pc == 'f') && (isdigit(ppc) || ppc == '+' || ppc == '-' || ppc == '−')
         kind = pc == 'f' ? K"Float32" : K"Float"
@@ -992,10 +1022,10 @@ function lex_digit(l::Lexer, kind)
             pc,ppc = dpeekchar(l)
             if pc === '.' && !is_dottable_operator_start_char(ppc)
                 accept(l, '.')
-                return emit_error(l, K"ErrorInvalidNumericConstant") # `1e1.`
+                return emit(l, K"ErrorInvalidNumericConstant") # `1e1.`
             end
         else
-            return emit_error(l, K"ErrorInvalidNumericConstant") # `1e+`
+            return emit(l, K"ErrorInvalidNumericConstant") # `1e+`
         end
     elseif position(l) - startpos(l) == 1 && l.chars[1] == '0'
         kind == K"Integer"
@@ -1015,10 +1045,10 @@ function lex_digit(l::Lexer, kind)
                 kind = K"Float"
                 accept(l, "+-−")
                 if !accept_number(l, isdigit) || !had_digits
-                    return emit_error(l, K"ErrorInvalidNumericConstant") # `0x1p` `0x.p0`
+                    return emit(l, K"ErrorInvalidNumericConstant") # `0x1p` `0x.p0`
                 end
             elseif isfloat
-                return emit_error(l, K"ErrorHexFloatMustContainP") # `0x.` `0x1.0`
+                return emit(l, K"ErrorHexFloatMustContainP") # `0x.` `0x1.0`
             end
             is_bin_oct_hex_int = !isfloat
         elseif pc == 'b'
@@ -1038,7 +1068,7 @@ function lex_digit(l::Lexer, kind)
                 accept_batch(l, c->isdigit(c) || is_identifier_start_char(c))
                 # `0x` `0xg` `0x_` `0x-`
                 # `0b123` `0o78p` `0xenomorph` `0xaα`
-                return emit_error(l, K"ErrorInvalidNumericConstant")
+                return emit(l, K"ErrorInvalidNumericConstant")
             end
         end
     end
@@ -1132,7 +1162,7 @@ function lex_dot(l::Lexer)
         else
             if is_dottable_operator_start_char(peekchar(l))
                 readchar(l)
-                return emit_error(l, K"ErrorInvalidOperator")
+                return emit(l, K"ErrorInvalidOperator")
             else
                 return emit(l, K"..")
             end
