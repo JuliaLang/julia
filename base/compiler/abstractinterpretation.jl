@@ -156,7 +156,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         all_effects = Effects(all_effects; nothrow=false)
     end
 
-    rettype = from_interprocedural!(𝕃ₚ, rettype, sv, arginfo, conditionals)
+    rettype = from_interprocedural!(interp, rettype, sv, arginfo, conditionals)
 
     # Also considering inferring the compilation signature for this method, so
     # it is available to the compiler in case it ends up needing it.
@@ -303,7 +303,8 @@ function find_matching_methods(𝕃::AbstractLattice,
 end
 
 """
-    from_interprocedural!(𝕃ₚ::AbstractLattice, rt, sv::AbsIntState, arginfo::ArgInfo, maybecondinfo) -> newrt
+    from_interprocedural!(interp::AbstractInterpreter, rt, sv::AbsIntState,
+                          arginfo::ArgInfo, maybecondinfo) -> newrt
 
 Converts inter-procedural return type `rt` into a local lattice element `newrt`,
 that is appropriate in the context of current local analysis frame `sv`, especially:
@@ -322,15 +323,16 @@ In such cases `maybecondinfo` should be either of:
 When we deal with multiple `MethodMatch`es, it's better to precompute `maybecondinfo` by
 `tmerge`ing argument signature type of each method call.
 """
-function from_interprocedural!(𝕃ₚ::AbstractLattice, @nospecialize(rt), sv::AbsIntState, arginfo::ArgInfo, @nospecialize(maybecondinfo))
+function from_interprocedural!(interp::AbstractInterpreter, @nospecialize(rt), sv::AbsIntState,
+                               arginfo::ArgInfo, @nospecialize(maybecondinfo))
     rt = collect_limitations!(rt, sv)
     if isa(rt, InterMustAlias)
         rt = from_intermustalias(rt, arginfo)
-    elseif is_lattice_bool(𝕃ₚ, rt)
+    elseif is_lattice_bool(ipo_lattice(interp), rt)
         if maybecondinfo === nothing
             rt = widenconditional(rt)
         else
-            rt = from_interconditional(𝕃ₚ, rt, sv, arginfo, maybecondinfo)
+            rt = from_interconditional(typeinf_lattice(interp), rt, sv, arginfo, maybecondinfo)
         end
     end
     @assert !(rt isa InterConditional || rt isa InterMustAlias) "invalid lattice element returned from inter-procedural context"
@@ -361,34 +363,32 @@ function from_intermustalias(rt::InterMustAlias, arginfo::ArgInfo)
     return widenmustalias(rt)
 end
 
-function from_interconditional(𝕃ₚ::AbstractLattice,
-    typ, sv::AbsIntState, arginfo::ArgInfo, maybecondinfo)
-    @nospecialize typ maybecondinfo
-    has_conditional(𝕃ₚ, sv) || return widenconditional(typ)
+function from_interconditional(𝕃ᵢ::AbstractLattice, @nospecialize(rt), sv::AbsIntState,
+                               arginfo::ArgInfo, @nospecialize(maybecondinfo))
+    has_conditional(𝕃ᵢ, sv) || return widenconditional(rt)
     (; fargs, argtypes) = arginfo
-    fargs === nothing && return widenconditional(typ)
-    𝕃 = widenlattice(𝕃ₚ)
+    fargs === nothing && return widenconditional(rt)
     slot = 0
     alias = nothing
     thentype = elsetype = Any
-    condval = maybe_extract_const_bool(typ)
+    condval = maybe_extract_const_bool(rt)
     for i in 1:length(fargs)
         # find the first argument which supports refinement,
         # and intersect all equivalent arguments with it
         argtyp = argtypes[i]
         if alias === nothing
-            if argtyp isa MustAlias
-                old = argtyp.fldtyp
-                id = argtyp.slot
-            elseif alias === nothing && argtyp isa Type
-                arg = ssa_def_slot(fargs[i], sv)
-                arg isa SlotNumber || continue # can't refine
+            arg = ssa_def_slot(fargs[i], sv)
+            if isa(arg, SlotNumber) && widenslotwrapper(argtyp) isa Type
                 old = argtyp
                 id = slot_id(arg)
+            elseif argtyp isa MustAlias
+                old = argtyp.fldtyp
+                id = argtyp.slot
             else
                 continue # unlikely to refine
             end
         elseif argtyp isa MustAlias && issubalias(argtyp, alias)
+            arg = nothing
             old = alias.fldtyp
             id = alias.slot
         else
@@ -401,32 +401,32 @@ function from_interconditional(𝕃ₚ::AbstractLattice,
                 new_elsetype = maybecondinfo[2][i]
             else
                 # otherwise compute it on the fly
-                cnd = conditional_argtype(typ, maybecondinfo, argtypes, i)
+                cnd = conditional_argtype(rt, maybecondinfo, argtypes, i)
                 new_thentype = cnd.thentype
                 new_elsetype = cnd.elsetype
             end
             if condval === false
                 thentype = Bottom
-            elseif ⊑(𝕃, new_thentype, thentype)
+            elseif ⊑(𝕃ᵢ, new_thentype, thentype)
                 thentype = new_thentype
             else
-                thentype = tmeet(𝕃, thentype, widenconst(new_thentype))
+                thentype = tmeet(𝕃ᵢ, thentype, widenconst(new_thentype))
             end
             if condval === true
                 elsetype = Bottom
-            elseif ⊑(𝕃, new_elsetype, elsetype)
+            elseif ⊑(𝕃ᵢ, new_elsetype, elsetype)
                 elsetype = new_elsetype
             else
-                elsetype = tmeet(𝕃, elsetype, widenconst(new_elsetype))
+                elsetype = tmeet(𝕃ᵢ, elsetype, widenconst(new_elsetype))
             end
-            if (slot > 0 || condval !== false) && ⋤(𝕃, thentype, old)
+            if (slot > 0 || condval !== false) && ⋤(𝕃ᵢ, thentype, old)
                 slot = id
-                if argtyp isa MustAlias
+                if !(arg isa SlotNumber) && argtyp isa MustAlias
                     alias = argtyp
                 end
-            elseif (slot > 0 || condval !== true) && ⋤(𝕃, elsetype, old)
+            elseif (slot > 0 || condval !== true) && ⋤(𝕃ᵢ, elsetype, old)
                 slot = id
-                if argtyp isa MustAlias
+                if !(arg isa SlotNumber) && argtyp isa MustAlias
                     alias = argtyp
                 end
             else # reset: no new useful information for this slot
@@ -444,7 +444,7 @@ function from_interconditional(𝕃ₚ::AbstractLattice,
         end
         return Conditional(slot, thentype, elsetype) # record a Conditional improvement to this slot
     end
-    return widenconditional(typ)
+    return widenconditional(rt)
 end
 
 function conditional_argtype(@nospecialize(rt), @nospecialize(sig), argtypes::Vector{Any}, i::Int)
@@ -1906,7 +1906,7 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
             (; rt, effects, const_result, edge) = const_call_result
         end
     end
-    rt = from_interprocedural!(𝕃ₚ, rt, sv, arginfo, sig)
+    rt = from_interprocedural!(interp, rt, sv, arginfo, sig)
     effects = Effects(effects; nonoverlayed=!overlayed)
     info = InvokeCallInfo(match, const_result)
     edge !== nothing && add_invoke_backedge!(sv, lookupsig, edge)
@@ -2053,7 +2053,7 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
             effects = Effects(effects; nothrow=false)
         end
     end
-    rt = from_interprocedural!(𝕃ₚ, rt, sv, arginfo, match.spec_types)
+    rt = from_interprocedural!(interp, rt, sv, arginfo, match.spec_types)
     info = OpaqueClosureCallInfo(match, const_result)
     edge !== nothing && add_backedge!(sv, edge)
     return CallMeta(rt, effects, info)
