@@ -204,8 +204,8 @@ Tooling Improvements
 Regressions
 -----------
 
-* Precompilation takes significantly longer, 2x-3x compilations are common
-* Some type-unstable code runs orders of magnitude slow ([#48612])
+* Precompilation takes significantly longer, 2x-3x compilations slowdowns are common
+* Some type-unstable code runs orders of magnitude slower ([#48612])
 * Inplace operations on high-dimensional array views may allocate ([#49332])
 * Compile cache gets excessively invalidated on clusters ([#48217])
 
