@@ -1510,6 +1510,9 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
 {
     int16_t oldRmore = e->Runions.more;
     int sub;
+    // fast-path for #49857
+    if (obviously_in_union(y, x))
+        return 1;
     int kindx = !jl_has_free_typevars(x);
     int kindy = !jl_has_free_typevars(y);
     if (kindx && kindy)
