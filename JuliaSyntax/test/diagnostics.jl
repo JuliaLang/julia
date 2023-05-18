@@ -19,6 +19,13 @@ end
             Diagnostic(2, 1+sizeof(string(c)), :error, "invisible character $(repr(c))")
     end
     @test diagnostic(":⥻") == Diagnostic(2, 4, :error, "unknown unicode character '⥻'")
+
+    @test diagnostic("\"X \u202a X\"") == Diagnostic(2, 8, :error, "unbalanced bidirectional unicode formatting \"X \\u202a X\"")
+    @test diagnostic("#= \u202a =#") == Diagnostic(1, 9, :error, "unbalanced bidirectional unicode formatting \"#= \\u202a =#\"")
+    @test diagnostic("\"X \u202a \$xx\u202c\"", allow_multiple=true) == [
+        Diagnostic(2, 7, :error, "unbalanced bidirectional unicode formatting \"X \\u202a \"")
+        Diagnostic(11, 13, :error, "unbalanced bidirectional unicode formatting \"\\u202c\"")
+    ]
 end
 
 @testset "parser errors" begin

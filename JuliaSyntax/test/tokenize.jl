@@ -17,16 +17,11 @@ using JuliaSyntax.Tokenize:
     untokenize,
     RawToken
 
+using ..Main: toks
+
 tok(str, i = 1) = collect(tokenize(str))[i]
 
 strtok(str) = untokenize.(collect(tokenize(str)), str)
-
-function toks(str)
-    ts = [untokenize(t, str)=>kind(t) for t in tokenize(str)]
-    @test ts[end] == (""=>K"EndMarker")
-    pop!(ts)
-    ts
-end
 
 function onlytok(str)
     ts = collect(tokenize(str))
@@ -990,6 +985,133 @@ end
         @test Tokenize.is_operator_start_char(c) == false
         @test Tokenize.iswhitespace(c) == false
         @test Tokenize.ishex(c) == false
+    end
+end
+
+@testset "unbalanced bidirectional unicode" begin
+    open_embedding = ['\U202A', '\U202B', '\U202D', '\U202E']
+    close_embedding = '\U202C'
+    open_isolate = ['\U2066', '\U2067', '\U2068']
+    close_isolate = '\U2069'
+    close_all = '\n'
+
+    all_bidi_codes = [open_embedding; close_embedding; open_isolate; close_isolate]
+
+    bidi_pairs = [Iterators.product(open_embedding, [close_embedding, close_all])...,
+                  Iterators.product(open_isolate,   [close_isolate, close_all])...]
+
+    @testset "delimiter $kd" for (kd, chunk_kind) in [
+            (K"\"",      K"String"),
+            (K"\"\"\"",  K"String"),
+            (K"`",       K"CmdString"),
+            (K"```",     K"CmdString")
+        ]
+        d = string(kd)
+        @testset "Single unbalanced codes" begin
+            for c in all_bidi_codes
+                @test toks("$d$c$d") ==
+                    [d=>kd, "$c"=>K"ErrorBidiFormatting", d=>kd]
+                @test toks("pfx$d$c$d") ==
+                    ["pfx"=>K"Identifier", d=>kd, "$c"=>K"ErrorBidiFormatting", d=>kd]
+            end
+        end
+        @testset "Balanced pairs" begin
+            for (openc, closec) in bidi_pairs
+                str = "$(openc)##$(closec)"
+                @test toks("$d$str$d") ==
+                    [d=>kd, str=>chunk_kind, d=>kd]
+                @test toks("pfx$d$str$d") ==
+                    ["pfx"=>K"Identifier", d=>kd, str=>chunk_kind, d=>kd]
+            end
+        end
+    end
+
+    @testset "multi line comments" begin
+        @testset "Single unbalanced codes" begin
+            for c in all_bidi_codes
+                comment = "#=$c=#"
+                @test toks(comment) == [comment=>K"ErrorBidiFormatting"]
+            end
+        end
+        @testset "Balanced pairs" begin
+            for (openc, closec) in bidi_pairs
+                str = "#=$(openc)zz$(closec)=#"
+                @test toks(str) == [str=>K"Comment"]
+            end
+        end
+    end
+
+    @testset "extended balanced/unbalanced bidi state" begin
+        @testset "delimiter $kd" for (kd, chunk_kind) in [
+                (K"\"",      K"String"),
+                (K"\"\"\"",  K"String"),
+                (K"`",       K"CmdString"),
+                (K"```",     K"CmdString")
+            ]
+            d = string(kd)
+            for balanced in [# Balanced pairs
+                             "\u202a\u202bzz\u202c\u202c"
+                             "\u2066\u2067zz\u2069\u2069"
+                             # Newline is complete bidi state reset
+                             "\u202a\u2067zz\n"
+                             "\u202a\u202azz\n"
+                             # \r\n and \n terminate a line
+                             "\u202azz\r\n"
+                             ]
+                @test toks("$d$balanced$d") == [
+                    d=>kd
+                    balanced=>chunk_kind
+                    d=>kd
+                ]
+            end
+            for unbalanced in ["\u202azz\u202c\u202c"
+                               "\u202a\u202bzz\u202c"
+                               # \r does not terminate a bidi line
+                               "\u202azz\r"
+                              ]
+                @test toks("$d$unbalanced$d") == [
+                    d=>kd
+                    unbalanced=>K"ErrorBidiFormatting"
+                    d=>kd
+                ]
+            end
+        end
+    end
+
+    # Interpolations reset bidi state
+    @test toks("\"\u202a\$zz\n\"") == [
+        "\""=>K"\""
+        "\u202a"=>K"ErrorBidiFormatting"
+        "\$"=>K"$"
+        "zz"=>K"Identifier"
+        "\n"=>K"String"
+        "\""=>K"\""
+    ]
+    @testset "newline escaping" begin
+        @test toks("\"a\u202a\\\n\"") == [
+             "\""=>K"\""
+             "a\u202a"=>K"String"
+             "\\\n"=>K"Whitespace"
+             "\""=>K"\""
+        ]
+        @test toks("\"a\u202a\\\r\n\"") == [
+             "\""=>K"\""
+             "a\u202a"=>K"String"
+             "\\\r\n"=>K"Whitespace"
+             "\""=>K"\""
+        ]
+        @test toks("\"a\u202a\\\r\"") == [
+             "\""=>K"\""
+             "a\u202a"=>K"ErrorBidiFormatting"
+             "\\\r"=>K"Whitespace"
+             "\""=>K"\""
+        ]
+    end
+
+    @testset "delimiter '" begin
+        for c in all_bidi_codes
+            @test toks("'$c'") == ["'"=>K"'", "$c"=>K"Char", "'"=>K"'"]
+        end
     end
 end
 

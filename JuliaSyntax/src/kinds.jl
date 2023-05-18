@@ -26,6 +26,7 @@ const _kind_names =
         "ErrorInvalidUTF8"
         "ErrorInvisibleChar"
         "ErrorUnknownCharacter"
+        "ErrorBidiFormatting"
         # Generic error
         "error"
     "END_ERRORS"
@@ -1049,6 +1050,7 @@ const _nonunique_kind_names = Set([
     K"ErrorInvalidUTF8"
     K"ErrorInvisibleChar"
     K"ErrorUnknownCharacter"
+    K"ErrorBidiFormatting"
     K"ErrorInvalidOperator"
 
     K"Integer"
@@ -1098,6 +1100,7 @@ const _token_error_descriptions = Dict{Kind, String}(
     K"ErrorInvalidUTF8"=>"invalid UTF-8 character",
     K"ErrorInvisibleChar"=>"invisible character",
     K"ErrorUnknownCharacter"=>"unknown unicode character",
+    K"ErrorBidiFormatting"=>"unbalanced bidirectional unicode formatting",
     K"ErrorInvalidOperator" => "invalid operator",
     K"Error**" => "use `x^y` instead of `x**y` for exponentiation, and `x...` instead of `**x` for splatting",
     K"error" => "unknown error token",

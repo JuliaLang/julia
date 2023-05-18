@@ -39,6 +39,14 @@ if VERSION < v"1.6"
     using JuliaSyntax: isnothing, only, peek
 end
 
+function toks(str)
+    ts = [JuliaSyntax.Tokenize.untokenize(t, str)=>kind(t)
+          for t in JuliaSyntax.Tokenize.tokenize(str)]
+    @test ts[end] == (""=>K"EndMarker")
+    pop!(ts)
+    ts
+end
+
 function remove_macro_linenums!(ex)
     if Meta.isexpr(ex, :macrocall)
         ex.args[2] = nothing

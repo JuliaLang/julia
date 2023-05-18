@@ -3282,6 +3282,9 @@ function parse_string(ps::ParseState, raw::Bool)
                 first_chunk = false
                 n_valid_chunks += 1
             end
+        elseif k == K"ErrorInvalidInterpolationTerminator" || k == K"ErrorBidiFormatting"
+            # Treat these errors as string chunks
+            bump(ps)
         else
             break
         end
@@ -3380,6 +3383,8 @@ function parse_atom(ps::ParseState, check_identifiers=true)
             bump_invisible(ps, K"error", error="unterminated character literal")
         else
             if k == K"Char"
+                bump(ps)
+            elseif is_error(k)
                 bump(ps)
             else
                 # FIXME: This case is actually a tokenization error.

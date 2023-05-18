@@ -949,6 +949,8 @@ function validate_tokens(stream::ParseStream)
             # Emit messages for non-generic token errors
             msg = if k in KSet"ErrorInvalidUTF8 ErrorInvisibleChar ErrorUnknownCharacter"
                 "$(_token_error_descriptions[k]) $(repr(text[fbyte]))"
+            elseif k == K"ErrorBidiFormatting"
+                "$(_token_error_descriptions[k]) $(repr(text[fbyte:prevind(text, nbyte)]))"
             else
                 _token_error_descriptions[k]
             end

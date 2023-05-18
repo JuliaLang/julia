@@ -1004,3 +1004,24 @@ end
     @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "a \u2212= b") == "(-= a b)"
     @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "a .\u2212= b") == "(.-= a b)"
 end
+
+@testset "Unbalanced bidirectional unicode" begin
+    # https://trojansource.codes
+    @test_throws JuliaSyntax.ParseError parsestmt(GreenNode, """
+    function checkUserAccess(u::User)
+        if u.accessLevel != "user\u202e \u2066# users are not allowed\u2069\u2066"
+            return true
+        end
+        return false
+    end
+    """)
+
+    @test_throws JuliaSyntax.ParseError parsestmt(GreenNode, """
+    function checkUserAccess(u::User)
+        #=\u202e \u2066if (u.isAdmin)\u2069 \u2066 begin admins only =#
+            return true
+        #= end admin only \u202e \u2066end\u2069 \u2066=#
+        return false
+    end
+    """)
+end
