@@ -1059,3 +1059,178 @@ function show(io::IO, c::StyledChar)
         show(io, c.char)
     end
 end
+
+"""
+A mapping between ANSI named colors and 8-bit colors for use in HTML
+representations.
+"""
+const HTML_BASIC_COLORS = Dict{Symbol, SimpleColor}(
+    :black => SimpleColor(0x00, 0x00, 0x00),
+    :red => SimpleColor(0x80, 0x00, 0x00),
+    :green => SimpleColor(0x00, 0x80, 0x00),
+    :yellow => SimpleColor(0x80, 0x80, 0x00),
+    :blue => SimpleColor(0x00, 0x00, 0x80),
+    :magenta => SimpleColor(0x80, 0x00, 0x80),
+    :cyan => SimpleColor(0x00, 0x80, 0x80),
+    :white => SimpleColor(0xc0, 0xc0, 0xc0),
+    :bright_black => SimpleColor(0x80, 0x80, 0x80),
+    :grey => SimpleColor(0x80, 0x80, 0x80),
+    :gray => SimpleColor(0x80, 0x80, 0x80),
+    :bright_red => SimpleColor(0xff, 0x00, 0x00),
+    :bright_green => SimpleColor(0x00, 0xff, 0x00),
+    :bright_yellow => SimpleColor(0xff, 0xff, 0x00),
+    :bright_blue => SimpleColor(0x00, 0x00, 0xff),
+    :bright_magenta => SimpleColor(0xff, 0x00, 0xff),
+    :bright_cyan => SimpleColor(0x00, 0xff, 0xff),
+    :bright_white => SimpleColor(0xff, 0xff, 0xff))
+
+function htmlcolor(io::IO, color::SimpleColor)
+    if color.value isa Symbol
+        if color.value === :default
+            print(io, "initial")
+        elseif (fg = get(FACES.current[], color.value, getface()).foreground) != SimpleColor(color.value)
+            htmlcolor(io, fg)
+        else
+            htmlcolor(io, get(HTML_BASIC_COLORS, color.value, SimpleColor(:default)))
+        end
+    else
+        (; r, g, b) = color.value
+        print(io, '#')
+        r < 0x10 && print(io, '0')
+        print(io, string(r, base=16))
+        g < 0x10 && print(io, '0')
+        print(io, string(g, base=16))
+        b < 0x10 && print(io, '0')
+        print(io, string(b, base=16))
+    end
+end
+
+const HTML_WEIGHT_MAP = Dict{Symbol, Int}(
+    :thin => 100,
+    :extralight => 200,
+    :light => 300,
+    :semilight => 300,
+    :normal => 400,
+    :medium => 500,
+    :semibold => 600,
+    :bold => 700,
+    :extrabold => 800,
+    :black => 900)
+
+function htmlstyle(io::IO, face::Face, lastface::Face=getface())
+    print(io, "<span style=\"")
+    face.font == lastface.font ||
+        print(io, "font-family: \"",
+              replace(face.font, '"' => "&quot;", ''' => "&#39;"), '"')
+    face.height == lastface.height ||
+        print(io, "font-size: ", string(face.height ÷ 10), "pt;")
+    face.weight == lastface.weight ||
+        print(io, "font-weight: ", get(HTML_WEIGHT_MAP, face.weight, 400), ';')
+    face.slant == lastface.slant ||
+        print(io, "font-style: ", String(face.slant), ';')
+    foreground, background =
+        ifelse(face.inverse === true,
+               (face.background, face.foreground),
+               (face.foreground, face.background))
+    lastforeground, lastbackground =
+        ifelse(lastface.inverse === true,
+               (lastface.background, lastface.foreground),
+               (lastface.foreground, lastface.background))
+    if foreground != lastforeground
+        print(io, "color: ")
+        htmlcolor(io, foreground)
+        print(io, ';')
+    end
+    if background != lastbackground
+        print(io, "background-color: ")
+        htmlcolor(io, background)
+        print(io, ';')
+    end
+    face.underline == lastface.underline ||
+        if face.underline isa Tuple # Color and style
+            color, style = face.underline
+            print(io, "text-decoration: ")
+            if !isnothing(color)
+                htmlcolor(io, color)
+                print(io, ' ')
+            end
+            print(io, if style == :straight "solid  "
+                  elseif style == :double   "double "
+                  elseif style == :curly    "wavy   "
+                  elseif style == :dotted   "dotted "
+                  elseif style == :dashed   "dashed "
+                  else "" end)
+            print(io, "underline;")
+        elseif face.underline isa SimpleColor
+            print(io, "text-decoration: ")
+            htmlcolor(io, face.underline)
+            if lastface.underline isa Tuple && last(lastface.underline) != :straight
+                print(io, " solid")
+            end
+            print(io, " underline;")
+        else # must be a Bool
+            print(io, "text-decoration: ")
+            if lastface.underline isa SimpleColor
+                print(io, "currentcolor ")
+            elseif lastface.underline isa Tuple
+                first(lastface.underline) isa SimpleColor &&
+                    print(io, "currentcolor ")
+                last(lastface.underline) != :straight &&
+                    print(io, "straight ")
+            end
+            print(io, ifelse(face.underline, "underline;", "none;"))
+        end
+    face.strikethrough == lastface.strikethrough ||
+        print(io, ifelse(face.strikethrough,
+                         "text-decoration: line-through",
+                         ifelse(face.underline === false,
+                                "text-decoration: none", "")))
+    print(io, "\">")
+end
+
+function show(io::IO, ::MIME"text/html", s::Union{<:StyledString, SubString{<:StyledString}}; wrap::Symbol=:pre)
+    htmlescape(str) = replace(str, '&' => "&amp;", '<' => "&lt;", '>' => "&gt;")
+    buf = IOBuffer() # Avoid potential overhead in repeatadly printing a more complex IO
+    wrap == :none ||
+        print(buf, '<', String(wrap), '>')
+    lastface::Face = getface()
+    stylestackdepth = 0
+    for (str, styles) in eachstyle(s)
+        face = getface(styles)
+        link = let idx=findfirst(==(:link) ∘ first, styles)
+            if !isnothing(idx)
+                string(last(styles[idx]))::String
+            end end
+        !isnothing(link) && print(buf, "<a href=\"", link, "\">")
+        if face == getface()
+            print(buf, "</span>" ^ stylestackdepth)
+            stylestackdepth = 0
+        elseif (lastface.inverse, lastface.foreground, lastface.background) !=
+            (face.inverse, face.foreground, face.background)
+            # We can't un-inherit colors well, so we just need to reset and apply
+            print(buf, "</span>" ^ stylestackdepth)
+            htmlstyle(buf, face, getface())
+            stylestackdepth = 1
+        else
+            htmlstyle(buf, face, lastface)
+            stylestackdepth += 1
+        end
+        if wrap == :p
+            newpara = false
+            for para in eachsplit(str, "\n\n")
+                newpara && print(buf, "</p>\n<p>")
+                print(buf, htmlescape(para))
+                newpara = true
+            end
+        else
+            print(buf, htmlescape(str))
+        end
+        !isnothing(link) && print(buf, "</a>")
+        lastface = face
+    end
+    print(buf, "</span>" ^ stylestackdepth)
+    wrap == :none ||
+        print(buf, "</", String(wrap), '>')
+    write(io, take!(buf))
+    nothing
+end
