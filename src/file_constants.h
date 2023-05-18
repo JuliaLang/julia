@@ -11,6 +11,11 @@ const JL_O_APPEND      = O_APPEND
 const JL_O_CREAT       = O_CREAT
 const JL_O_EXCL        = O_EXCL
 const JL_O_TRUNC       = O_TRUNC
+const JL_O_NONBLOCK    = O_NONBLOCK
+const JL_F_GETFL       = F_GETFL
+const JL_F_SETFL       = F_SETFL
+const JL_E_EINTR       = EINTR
+const JL_E_EAGAIN      = EAGAIN
 #ifdef O_TEMPORARY
 const JL_O_TEMPORARY   = O_TEMPORARY
 #endif
