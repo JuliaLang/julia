@@ -1097,7 +1097,7 @@ end
 # - smaller writes are buffered, final uv write on flush or when buffer full
 # - large isbits arrays are unbuffered and written directly
 
-function unsafe_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
+function libuv_unsafe_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     while true
         # try to add to the send buffer
         iolock_begin()
@@ -1130,6 +1130,48 @@ function flush(s::LibuvStream)
     end
     uv_write(s, Ptr{UInt8}(Base.eventloop()), UInt(0)) # zero write from a random pointer to flush current queue
     return
+end
+
+# TCP Sockets are usually opened with O_NONBLOCK.
+# This means that write syscall won't block.
+# It either writes to the kernel buffer directly or returns -1 and set errno to EAGAIN.
+# On Linux, we can optimistically call write ourselves without calling into libuv at all.
+# If the call fails with EAGAIN then we fallback to libuv and let it handle queueing the request.
+function Base.unsafe_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
+    # Write system call is only available on POSIX systems
+    (Sys.islinux() | Sys.isapple()) || return libuv_unsafe_write(s, p, n)
+    (s.sendbuf === nothing) || return libuv_unsafe_write(s, p, n)
+    # Avoid handling corner cases by making sure the socket is writeable
+    # We only want to optimize the hot and frequent write path
+    valid_status = s.status == StatusOpen || s.status == StatusActive
+    valid_status || return libuv_unsafe_write(s, p, n)
+    is_writeable = ccall(:uv_is_writable, Int32, (Ptr{Cvoid},), s) > 0
+    is_writeable || return libuv_unsafe_write(s, p, n)
+    # Get the socket file descriptor and its flags
+    file_fd = Base.cconvert(Int32, Base._fd(s))
+    flags = ccall(:fcntl, Int32, (Int32, Int32,), file_fd, Base.Filesystem.JL_F_GETFL)
+    is_nb = (flags & Base.Filesystem.JL_O_NONBLOCK) == Base.Filesystem.JL_O_NONBLOCK
+    # Check if the socket is open in O_NONBLOCK mode
+    is_nb || return libuv_unsafe_write(s, p, n)
+    # O_NONBLOCK means that write sys calls will either succeed immediately
+    # without blocking or return -1 with errono = EAGAIN.
+    # In the latter case, we fallback to the usual Libuv path
+    ret = ccall(:write, Int64, (Int32, Ptr{Cvoid}, UInt64, ), file_fd, p, n)
+    if ret == -1
+        errorno = Base.Libc.errno()
+        if errorno == Base.Filesystem.JL_E_EAGAIN || errorno == Base.Filesystem.JL_E_EINTR
+            return libuv_unsafe_write(s, p, n)
+        else
+            throw(Base._UVError("write", ret))
+        end
+    elseif ret >= 0
+        if ret < n
+            remaining = n - ret
+            return libuv_unsafe_write(s, p + ret, remaining)
+        else
+            return ret
+        end
+    end
 end
 
 function buffer_writes(s::LibuvStream, bufsize)
