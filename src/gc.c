@@ -1845,6 +1845,13 @@ STATIC_INLINE void gc_borrow_ws_ary(jl_ptls_t ptls)
     jl_atomic_store_relaxed(&mq->chunk_queue.array, mutator_chunk_ws_ary);
 }
 
+STATIC_INLINE void gc_return_ws_ary(jl_ptls_t ptls)
+{
+    jl_gc_markqueue_t *mq = &ptls->mark_queue;
+    mutator_ptr_ws_ary = jl_atomic_load_relaxed(&mq->ptr_queue.array);
+    mutator_chunk_ws_ary = jl_atomic_load_relaxed(&mq->chunk_queue.array);
+}
+
 // Push a work item to the queue
 STATIC_INLINE void gc_ptr_queue_push(jl_gc_markqueue_t *mq, jl_value_t *obj) JL_NOTSAFEPOINT
 {
@@ -3251,6 +3258,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         gc_mark_loop(ptls);
         gc_mark_loop_barrier();
         gc_mark_clean_reclaim_sets();
+        gc_return_ws_ary(ptls);
 
         // 4. check for objects to finalize
         clear_weak_refs();
