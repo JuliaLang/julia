@@ -3804,7 +3804,7 @@ end
             end
         end
     end
-    @test occursin("thunk from $(@__MODULE__) starting at $(@__FILE__):$((@__LINE__) - 5)", string(timingmod.children))
+    @test occursin("thunk from $(@__MODULE__) starting at $(@__FILE__):$((@__LINE__) - 6)", string(timingmod.children))
     # END LINE NUMBER SENSITIVITY
 
     # Recursive function
