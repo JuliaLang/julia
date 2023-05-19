@@ -32,7 +32,6 @@
     _Z22jl_malloc_data_pointerN4llvm9StringRefEi;
     LLVMExtra*;
     llvmGetPassPluginInfo;
-    JLJIT*;
 
     /* Make visible so that linker will merge duplicate definitions across DSO boundaries */
     _ZN4llvm3Any6TypeId*;

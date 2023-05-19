@@ -1389,6 +1389,8 @@ JuliaOJIT::JuliaOJIT()
 
     JD.addToLinkOrder(GlobalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
     JD.addToLinkOrder(ExternalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
+    ExternalJD.addToLinkOrder(GlobalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
+    ExternalJD.addToLinkOrder(JD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
 
 #if JULIA_FLOAT16_ABI == 1
     orc::SymbolAliasMap jl_crt = {
@@ -1509,7 +1511,7 @@ Error JuliaOJIT::addExternalModule(orc::JITDylib &JD, orc::ThreadSafeModule TSM,
 
 Error JuliaOJIT::addObjectFile(orc::JITDylib &JD, std::unique_ptr<MemoryBuffer> Obj) {
     assert(Obj && "Can not add null object");
-    return LockLayer.add(std::move(JD.getDefaultResourceTracker()), std::move(Obj));
+    return LockLayer.add(JD.getDefaultResourceTracker(), std::move(Obj));
 }
 
 JL_JITSymbol JuliaOJIT::findSymbol(StringRef Name, bool ExportedSymbolsOnly)
