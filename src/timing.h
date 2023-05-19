@@ -234,13 +234,13 @@ enum jl_timing_counter_types {
 #ifdef USE_TIMING_COUNTS
 #define _COUNTS_CTX_MEMBER jl_timing_counts_t counts_ctx;
 #define _COUNTS_CTOR(block, t) _jl_timing_counts_ctor(block, t)
-#define _COUNTS_DESTROY(block, subsystem, t) _jl_timing_counts_destroy(block, subsystem, t)
+#define _COUNTS_DESTROY(block, event, t) _jl_timing_counts_destroy(block, event, t)
 #define _COUNTS_START(block, t) _jl_timing_counts_start(block, t)
 #define _COUNTS_STOP(block, t) _jl_timing_counts_stop(block, t)
 #else
 #define _COUNTS_CTX_MEMBER
 #define _COUNTS_CTOR(block, t)
-#define _COUNTS_DESTROY(block, subsystem, t)
+#define _COUNTS_DESTROY(block, event, t)
 #define _COUNTS_START(block, t)
 #define _COUNTS_STOP(block, t)
 #endif
@@ -286,8 +286,8 @@ enum jl_timing_counter_types {
  * Implementation: Aggregated counts back-end
  **/
 
-extern JL_DLLEXPORT _Atomic(uint64_t) jl_timing_self_counts[(int)JL_TIMING_LAST];
-extern JL_DLLEXPORT _Atomic(uint64_t) jl_timing_full_counts[(int)JL_TIMING_LAST];
+extern JL_DLLEXPORT _Atomic(uint64_t) jl_timing_self_counts[(int)JL_TIMING_EVENT_LAST];
+extern JL_DLLEXPORT _Atomic(uint64_t) jl_timing_full_counts[(int)JL_TIMING_EVENT_LAST];
 typedef struct _jl_timing_counts_t {
     uint64_t total;
     uint64_t start;
@@ -321,9 +321,9 @@ STATIC_INLINE void _jl_timing_counts_ctor(jl_timing_counts_t *block, uint64_t t)
 #endif
 }
 
-STATIC_INLINE void _jl_timing_counts_destroy(jl_timing_counts_t *block, int subsystem, uint64_t t) JL_NOTSAFEPOINT {
-    jl_atomic_fetch_add_relaxed(jl_timing_self_counts + subsystem, block->total);
-    jl_atomic_fetch_add_relaxed(jl_timing_full_counts + subsystem, t - block->t0);
+STATIC_INLINE void _jl_timing_counts_destroy(jl_timing_counts_t *block, int event, uint64_t t) JL_NOTSAFEPOINT {
+    jl_atomic_fetch_add_relaxed(jl_timing_self_counts + event, block->total);
+    jl_atomic_fetch_add_relaxed(jl_timing_full_counts + event, t - block->t0);
 }
 
 /**
@@ -331,7 +331,6 @@ STATIC_INLINE void _jl_timing_counts_destroy(jl_timing_counts_t *block, int subs
  **/
 
 extern JL_DLLEXPORT _Atomic(uint64_t) jl_timing_disable_mask[(JL_TIMING_LAST + sizeof(uint64_t) * CHAR_BIT - 1) / (sizeof(uint64_t) * CHAR_BIT)];
-extern const char *jl_timing_names[(int)JL_TIMING_LAST];
 
 struct _jl_timing_block_t { // typedef in julia.h
     struct _jl_timing_block_t *prev;
@@ -390,7 +389,7 @@ STATIC_INLINE void _jl_timing_block_destroy(jl_timing_block_t *block) JL_NOTSAFE
         }
     }
 
-    _COUNTS_DESTROY(&block->counts_ctx, block->subsystem, cycleclock());
+    _COUNTS_DESTROY(&block->counts_ctx, block->event, cycleclock());
 }
 
 typedef struct _jl_timing_suspend_t {

@@ -26,21 +26,21 @@ static uint64_t t0;
 
 JL_DLLEXPORT _Atomic(uint64_t) jl_timing_disable_mask[(JL_TIMING_LAST + sizeof(uint64_t) * CHAR_BIT - 1) / (sizeof(uint64_t) * CHAR_BIT)];
 
-JL_DLLEXPORT _Atomic(uint64_t) jl_timing_self_counts[(int)JL_TIMING_LAST];
-JL_DLLEXPORT _Atomic(uint64_t) jl_timing_full_counts[(int)JL_TIMING_LAST];
+JL_DLLEXPORT _Atomic(uint64_t) jl_timing_self_counts[(int)JL_TIMING_EVENT_LAST];
+JL_DLLEXPORT _Atomic(uint64_t) jl_timing_full_counts[(int)JL_TIMING_EVENT_LAST];
 
 // Used to as an item limit when several strings of metadata can
 // potentially be associated with a single timing zone.
 JL_DLLEXPORT uint32_t jl_timing_print_limit = 10;
 
-const char *jl_timing_names[(int)JL_TIMING_LAST] =
+static const char *jl_timing_names[(int)JL_TIMING_EVENT_LAST] =
     {
 #define X(name) #name,
-        JL_TIMING_SUBSYSTEMS
+        JL_TIMING_EVENTS
 #undef X
     };
 
-int jl_timing_names_sorted[(int)JL_TIMING_LAST];
+static int jl_timing_names_sorted[(int)JL_TIMING_EVENT_LAST];
 
 JL_DLLEXPORT jl_timing_counter_t jl_timing_counters[JL_TIMING_COUNTER_LAST];
 
@@ -49,14 +49,14 @@ void jl_print_timings(void)
 #ifdef USE_TIMING_COUNTS
     uint64_t total_time = cycleclock() - t0;
     uint64_t root_time = total_time;
-    for (int i = 0; i < JL_TIMING_LAST; i++) {
+    for (int i = 0; i < JL_TIMING_EVENT_LAST; i++) {
         root_time -= jl_atomic_load_relaxed(jl_timing_self_counts + i);
     }
     jl_atomic_store_relaxed(jl_timing_self_counts + JL_TIMING_ROOT, root_time);
-    jl_atomic_store_relaxed(jl_timing_total_counts + JL_TIMING_ROOT, total_time);
+    jl_atomic_store_relaxed(jl_timing_full_counts + JL_TIMING_ROOT, total_time);
     fprintf(stderr, "\nJULIA TIMINGS\n");
     fprintf(stderr, "%-25s, %-30s, %-30s\n", "Event", "Self Cycles (% of Total)", "Total Cycles (% of Total)");
-    for (int i = 0; i < JL_TIMING_LAST; i++) {
+    for (int i = 0; i < JL_TIMING_EVENT_LAST; i++) {
         int j = jl_timing_names_sorted[i];
         uint64_t self = jl_atomic_load_relaxed(jl_timing_self_counts + j);
         uint64_t total = jl_atomic_load_relaxed(jl_timing_full_counts + j);
@@ -89,10 +89,10 @@ void jl_init_timing(void)
 
     _Static_assert((int)JL_TIMING_LAST <= (int)JL_TIMING_EVENT_LAST, "More owners than events!");
 
-    for (int i = 0; i < JL_TIMING_LAST; i++) {
+    for (int i = 0; i < JL_TIMING_EVENT_LAST; i++) {
         jl_timing_names_sorted[i] = i;
     }
-    qsort(jl_timing_names_sorted, JL_TIMING_LAST, sizeof(int), cmp_names);
+    qsort(jl_timing_names_sorted, JL_TIMING_EVENT_LAST, sizeof(int), cmp_names);
 
     int i __attribute__((unused)) = 0;
 #ifdef USE_ITTAPI
@@ -356,10 +356,14 @@ int cmp_name_idx(const void *name, const void *idx) {
 
 JL_DLLEXPORT int jl_timing_set_enable(const char *subsystem, uint8_t enabled)
 {
-    const int *idx = (const int *)bsearch(subsystem, jl_timing_names_sorted, JL_TIMING_LAST, sizeof(int), cmp_name_idx);
+    const int *idx = (const int *)bsearch(subsystem, jl_timing_names_sorted, JL_TIMING_EVENT_LAST, sizeof(int), cmp_name_idx);
     if (idx == NULL)
         return -1;
     int i = *idx;
+    // sorted names include events, so skip if we're looking at an event instead of a subsystem
+    // events are always at least JL_TIMING_LAST
+    if (i >= JL_TIMING_LAST)
+        return -1;
     uint64_t subsystem_bit = 1ul << (i % (sizeof(uint64_t) * CHAR_BIT));
     if (enabled) {
         jl_atomic_fetch_and_relaxed(jl_timing_disable_mask + (i / (sizeof(uint64_t) * CHAR_BIT)), ~subsystem_bit);
