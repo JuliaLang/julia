@@ -1777,14 +1777,37 @@ STATIC_INLINE uintptr_t gc_read_stack(void *_addr, uintptr_t offset,
     return *(uintptr_t*)real_addr;
 }
 
-JL_NORETURN NOINLINE void gc_assert_datatype_fail(jl_ptls_t ptls, jl_datatype_t *vt,
-                                                  jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
+STATIC_INLINE void gc_assert_parent_validity(jl_value_t *parent, jl_value_t *child) JL_NOTSAFEPOINT
 {
-    jl_safe_printf("GC error (probable corruption) :\n");
-    jl_gc_debug_print_status();
-    jl_(vt);
-    jl_gc_debug_critical_error();
-    abort();
+#ifdef GC_ASSERT_PARENT_VALIDITY
+    jl_taggedvalue_t *child_astagged = jl_astaggedvalue(child);
+    jl_taggedvalue_t *child_vtag = (jl_taggedvalue_t *)(child_astagged->header & ~(uintptr_t)0xf);
+    uintptr_t child_vt = (uintptr_t)child_vtag;
+    if (child_vt == (jl_datatype_tag << 4) ||
+        child_vt == (jl_unionall_tag << 4) ||
+        child_vt == (jl_uniontype_tag << 4) ||
+        child_vt == (jl_tvar_tag << 4) ||
+        child_vt == (jl_vararg_tag << 4)) {
+        // Skip, since these wouldn't hit the object assert anyway
+        return;
+    }
+    else if (child_vt < jl_max_tags << 4) {
+        // Skip, since these wouldn't hit the object assert anyway
+        return;
+    }
+    if (__unlikely(!jl_is_datatype((jl_datatype_t *)child_vt) || ((jl_datatype_t *)child_vt)->smalltag)) {
+        jl_safe_printf("GC error (probable corruption)\n");
+        jl_gc_debug_print_status();
+        jl_safe_printf("Parent %p\n", (void *)parent);
+        jl_safe_printf("of type:\n");
+        jl_(jl_typeof(parent));
+        jl_safe_printf("While marking child at %p\n", (void *)child);
+        jl_safe_printf("of type:\n");
+        jl_(child_vtag);
+        jl_gc_debug_critical_error();
+        abort();
+    }
+#endif
 }
 
 // Check if `nptr` is tagged for `old + refyoung`,
@@ -1884,6 +1907,7 @@ STATIC_INLINE jl_value_t *gc_mark_obj8(jl_ptls_t ptls, char *obj8_parent, uint8_
         if (new_obj != NULL) {
             verify_parent2("object", obj8_parent, slot, "field(%d)",
                             gc_slot_to_fieldidx(obj8_parent, slot, (jl_datatype_t*)jl_typeof(obj8_parent)));
+            gc_assert_parent_validity((jl_value_t *)obj8_parent, new_obj);
             if (obj8_begin + 1 != obj8_end) {
                 gc_try_claim_and_push(mq, new_obj, &nptr);
             }
@@ -1915,6 +1939,7 @@ STATIC_INLINE jl_value_t *gc_mark_obj16(jl_ptls_t ptls, char *obj16_parent, uint
         if (new_obj != NULL) {
             verify_parent2("object", obj16_parent, slot, "field(%d)",
                             gc_slot_to_fieldidx(obj16_parent, slot, (jl_datatype_t*)jl_typeof(obj16_parent)));
+            gc_assert_parent_validity((jl_value_t *)obj16_parent, new_obj);
             if (obj16_begin + 1 != obj16_end) {
                 gc_try_claim_and_push(mq, new_obj, &nptr);
             }
@@ -1946,6 +1971,7 @@ STATIC_INLINE jl_value_t *gc_mark_obj32(jl_ptls_t ptls, char *obj32_parent, uint
         if (new_obj != NULL) {
             verify_parent2("object", obj32_parent, slot, "field(%d)",
                             gc_slot_to_fieldidx(obj32_parent, slot, (jl_datatype_t*)jl_typeof(obj32_parent)));
+            gc_assert_parent_validity((jl_value_t *)obj32_parent, new_obj);
             if (obj32_begin + 1 != obj32_end) {
                 gc_try_claim_and_push(mq, new_obj, &nptr);
             }
@@ -2011,6 +2037,7 @@ STATIC_INLINE void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_v
         if (new_obj != NULL) {
             verify_parent2("obj array", obj_parent, obj_begin, "elem(%d)",
                         gc_slot_to_arrayidx(obj_parent, obj_begin));
+            gc_assert_parent_validity(obj_parent, new_obj);
             gc_try_claim_and_push(mq, new_obj, &nptr);
             gc_heap_snapshot_record_array_edge(obj_parent, &new_obj);
         }
@@ -2084,6 +2111,7 @@ STATIC_INLINE void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_va
             if (new_obj != NULL) {
                 verify_parent2("array", ary8_parent, &new_obj, "elem(%d)",
                                gc_slot_to_arrayidx(ary8_parent, ary8_begin));
+                gc_assert_parent_validity(ary8_parent, new_obj);
                 gc_try_claim_and_push(mq, new_obj, &nptr);
                 gc_heap_snapshot_record_array_edge(ary8_parent, &new_obj);
             }
@@ -2158,6 +2186,7 @@ STATIC_INLINE void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl_
             if (new_obj != NULL) {
                 verify_parent2("array", ary16_parent, &new_obj, "elem(%d)",
                                gc_slot_to_arrayidx(ary16_parent, ary16_begin));
+                gc_assert_parent_validity(ary16_parent, new_obj);
                 gc_try_claim_and_push(mq, new_obj, &nptr);
                 gc_heap_snapshot_record_array_edge(ary16_parent, &new_obj);
             }
@@ -2311,12 +2340,16 @@ STATIC_INLINE void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent
         if (b == (jl_binding_t *)jl_nothing)
             continue;
         verify_parent1("module", mb_parent, mb_begin, "binding_buff");
+        gc_assert_parent_validity((jl_value_t *)mb_parent, (jl_value_t *)b);
         gc_try_claim_and_push(mq, b, &nptr);
     }
     jl_value_t *bindings = (jl_value_t *)jl_atomic_load_relaxed(&mb_parent->bindings);
+    gc_assert_parent_validity((jl_value_t *)mb_parent, bindings);
     gc_try_claim_and_push(mq, bindings, &nptr);
     jl_value_t *bindingkeyset = (jl_value_t *)jl_atomic_load_relaxed(&mb_parent->bindingkeyset);
+    gc_assert_parent_validity((jl_value_t *)mb_parent, bindingkeyset);
     gc_try_claim_and_push(mq, bindingkeyset, &nptr);
+    gc_assert_parent_validity((jl_value_t *)mb_parent, (jl_value_t *)mb_parent->parent);
     gc_try_claim_and_push(mq, (jl_value_t *)mb_parent->parent, &nptr);
     size_t nusings = mb_parent->usings.len;
     if (nusings > 0) {
@@ -2346,7 +2379,7 @@ void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t *
     }
     for (; fl_begin < fl_end; fl_begin++) {
         new_obj = *fl_begin;
-        if (__unlikely(!new_obj))
+        if (__unlikely(new_obj == NULL))
             continue;
         if (gc_ptr_tag(new_obj, 1)) {
             new_obj = (jl_value_t *)gc_ptr_clear_tag(new_obj, 1);
@@ -2534,11 +2567,6 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     objprofile_count(vt, bits == GC_OLD_MARKED, dtsz);
             }
             return;
-        }
-        else {
-            jl_datatype_t *vt = (jl_datatype_t *)vtag;
-            if (__unlikely(!jl_is_datatype(vt) || vt->smalltag))
-                gc_assert_datatype_fail(ptls, vt, mq);
         }
         jl_datatype_t *vt = (jl_datatype_t *)vtag;
         if (vt->name == jl_array_typename) {
