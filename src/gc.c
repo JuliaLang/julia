@@ -1834,6 +1834,17 @@ STATIC_INLINE void gc_mark_push_remset(jl_ptls_t ptls, jl_value_t *obj,
     }
 }
 
+// Array used by mutator thread running GC
+ws_array_t *mutator_ptr_ws_ary;
+ws_array_t *mutator_chunk_ws_ary;
+
+STATIC_INLINE void gc_borrow_ws_ary(jl_ptls_t ptls)
+{
+    jl_gc_markqueue_t *mq = &ptls->mark_queue;
+    jl_atomic_store_relaxed(&mq->ptr_queue.array, mutator_ptr_ws_ary);
+    jl_atomic_store_relaxed(&mq->chunk_queue.array, mutator_chunk_ws_ary);
+}
+
 // Push a work item to the queue
 STATIC_INLINE void gc_ptr_queue_push(jl_gc_markqueue_t *mq, jl_value_t *obj) JL_NOTSAFEPOINT
 {
@@ -3199,6 +3210,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     JL_PROBE_GC_MARK_BEGIN();
     {
         JL_TIMING(GC, GC_Mark);
+        // 0. borrow arrays for GC mark-queue
+        gc_borrow_ws_ary(ptls);
 
         // 1. fix GC bits of objects in the remset.
         assert(gc_n_threads);
@@ -3629,20 +3642,22 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     gc_cache->scanned_bytes = 0;
     gc_cache->nbig_obj = 0;
 
-    // Initialize GC mark-queue
+    // Initialize mark-queue
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     ws_queue_t *cq = &mq->chunk_queue;
-    ws_array_t *wsa = create_ws_array(GC_CHUNK_QUEUE_INIT_SIZE, sizeof(jl_gc_chunk_t));
+    ws_queue_t *q = &mq->ptr_queue;
     jl_atomic_store_relaxed(&cq->top, 0);
     jl_atomic_store_relaxed(&cq->bottom, 0);
-    jl_atomic_store_relaxed(&cq->array, wsa);
-    ws_queue_t *q = &mq->ptr_queue;
-    ws_array_t *wsa2 = create_ws_array(GC_PTR_QUEUE_INIT_SIZE, sizeof(jl_value_t *));
     jl_atomic_store_relaxed(&q->top, 0);
     jl_atomic_store_relaxed(&q->bottom, 0);
-    jl_atomic_store_relaxed(&q->array, wsa2);
     arraylist_new(&mq->reclaim_set, 32);
-
+    // Only allocate arrays for GC threads
+    if (gc_first_tid <= ptls->tid && ptls->tid < gc_first_tid + jl_n_gcthreads) {
+        ws_array_t *wsa = create_ws_array(GC_CHUNK_QUEUE_INIT_SIZE, sizeof(jl_gc_chunk_t));
+        jl_atomic_store_relaxed(&cq->array, wsa);
+        ws_array_t *wsa2 = create_ws_array(GC_PTR_QUEUE_INIT_SIZE, sizeof(jl_value_t *));
+        jl_atomic_store_relaxed(&q->array, wsa2);
+    }
     memset(&ptls->gc_num, 0, sizeof(ptls->gc_num));
     jl_atomic_store_relaxed(&ptls->gc_num.allocd, -(int64_t)gc_num.interval);
 }
@@ -3669,6 +3684,12 @@ void jl_gc_init(void)
     gc_num.allocd = 0;
     gc_num.max_pause = 0;
     gc_num.max_memory = 0;
+
+    // Initialize mark-queue for mutator threads
+    ws_array_t *wsa = create_ws_array(GC_CHUNK_QUEUE_INIT_SIZE, sizeof(jl_gc_chunk_t));
+    mutator_chunk_ws_ary = wsa;
+    ws_array_t *wsa2 = create_ws_array(GC_PTR_QUEUE_INIT_SIZE, sizeof(jl_value_t *));
+    mutator_ptr_ws_ary = wsa2;
 
 #ifdef _P64
     total_mem = uv_get_total_memory();

@@ -376,7 +376,6 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     memset(bt_data, 0, sizeof(jl_bt_element_t) * (JL_MAX_BT_SIZE + 1));
     ptls->bt_data = bt_data;
     small_arraylist_new(&ptls->locks, 0);
-    jl_init_thread_heap(ptls);
 
     uv_mutex_init(&ptls->sleep_lock);
     uv_cond_init(&ptls->wake_signal);
@@ -402,7 +401,7 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
         jl_atomic_store_release(&jl_n_threads, tid + 1);
     jl_fence();
     uv_mutex_unlock(&tls_lock);
-
+    jl_init_thread_heap(ptls);
     return ptls;
 }
 
