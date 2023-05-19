@@ -239,8 +239,8 @@ enum jl_timing_counter_types {
 #define _COUNTS_STOP(block, t) _jl_timing_counts_stop(block, t)
 #else
 #define _COUNTS_CTX_MEMBER
-#define _COUNTS_CTOR(block, t)
-#define _COUNTS_DESTROY(block, event)
+#define _COUNTS_CTOR(block)
+#define _COUNTS_DESTROY(block, event, t)
 #define _COUNTS_START(block, t)
 #define _COUNTS_STOP(block, t)
 #endif
