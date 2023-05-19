@@ -187,7 +187,7 @@
 ;; a bound is #f if not specified
 (define (analyze-typevar e)
   (define (check-sym s)
-    (if (symbol? s)
+    (if (symbol? (unescape s)) ; unescape for macroexpand.scm use
         s
         (error (string "invalid type parameter name \"" (deparse s) "\""))))
   (cond ((atom? e) (list (check-sym e) #f #f))
