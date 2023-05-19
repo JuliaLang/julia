@@ -374,7 +374,11 @@ end
 # Complex matrix times (transposed) real matrix. Reinterpret the first matrix to real for efficiency.
 @inline function generic_matmatmul!(C::StridedVecOrMat{Complex{T}}, tA, tB, A::StridedVecOrMat{Complex{T}}, B::StridedVecOrMat{T},
                     _add::MulAddMul=MulAddMul()) where {T<:BlasReal}
-    gemm_wrapper!(C, tA, tB, A, B, _add)
+    if all(in(('N', 'T', 'C')), (tA, tB))
+        gemm_wrapper!(C, tA, tB, A, B, _add)
+    else
+        _generic_matmatmul!(C, 'N', 'N', wrap(A, tA), wrap(B, tB), _add)
+    end
 end
 
 
@@ -560,7 +564,11 @@ function gemm_wrapper(tA::AbstractChar, tB::AbstractChar,
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     C = similar(B, T, mA, nB)
-    gemm_wrapper!(C, tA, tB, A, B)
+    if all(in(('N', 'T', 'C')), (tA, tB))
+        gemm_wrapper!(C, tA, tB, A, B)
+    else
+        _generic_matmatmul!(C, 'N', 'N', wrap(A, tA), wrap(B, tB), _add)
+    end
 end
 
 function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar,
