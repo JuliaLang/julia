@@ -233,14 +233,14 @@ enum jl_timing_counter_types {
 
 #ifdef USE_TIMING_COUNTS
 #define _COUNTS_CTX_MEMBER jl_timing_counts_t counts_ctx;
-#define _COUNTS_CTOR(block, t) _jl_timing_counts_ctor(block, t)
+#define _COUNTS_CTOR(block) _jl_timing_counts_ctor(block)
 #define _COUNTS_DESTROY(block, event, t) _jl_timing_counts_destroy(block, event, t)
 #define _COUNTS_START(block, t) _jl_timing_counts_start(block, t)
 #define _COUNTS_STOP(block, t) _jl_timing_counts_stop(block, t)
 #else
 #define _COUNTS_CTX_MEMBER
 #define _COUNTS_CTOR(block, t)
-#define _COUNTS_DESTROY(block, event, t)
+#define _COUNTS_DESTROY(block, event)
 #define _COUNTS_START(block, t)
 #define _COUNTS_STOP(block, t)
 #endif
@@ -313,9 +313,8 @@ STATIC_INLINE void _jl_timing_counts_start(jl_timing_counts_t *block, uint64_t t
     block->start = t;
 }
 
-STATIC_INLINE void _jl_timing_counts_ctor(jl_timing_counts_t *block, uint64_t t) JL_NOTSAFEPOINT {
+STATIC_INLINE void _jl_timing_counts_ctor(jl_timing_counts_t *block) JL_NOTSAFEPOINT {
     block->total = 0;
-    block->t0 = t;
 #ifdef JL_DEBUG_BUILD
     block->running = 0;
 #endif
@@ -360,6 +359,7 @@ STATIC_INLINE void jl_timing_block_start(jl_timing_block_t *block) {
     jl_timing_block_t **prevp = &jl_current_task->ptls->timing_stack;
     block->prev = *prevp;
     block->is_running = 1;
+    block->t0 = t;
     if (block->prev) {
         _COUNTS_STOP(&block->prev->counts_ctx, t);
     }
@@ -370,7 +370,7 @@ STATIC_INLINE void _jl_timing_block_ctor(jl_timing_block_t *block, int subsystem
     block->subsystem = subsystem;
     block->event = event;
     block->is_running = 0;
-    _COUNTS_CTOR(&block->counts_ctx, cycleclock());
+    _COUNTS_CTOR(&block->counts_ctx);
 }
 
 STATIC_INLINE void _jl_timing_block_destroy(jl_timing_block_t *block) JL_NOTSAFEPOINT {
