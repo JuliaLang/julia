@@ -1323,34 +1323,16 @@ Base.getindex(sa::SimpleArray, idx...) = getindex(sa.els, idx...)
 Base.setindex!(sa::SimpleArray, v, idx...) = setindex!(sa.els, v, idx...)
 Base.resize!(sa::SimpleArray, n) = resize!(sa.els, n)
 
-@testset "Failing `push!` leaves size unchanged" begin
-    a = SimpleArray{String}(String[])
-    # single-arg case
-    try
-        push!(a, 1)
-    finally
-        @test isempty(a)
-    end
-    # multi-arg case
-    try
-        push!(a, 1, 2)
-    finally
-        @test isempty(a)
-    end
-end
-@testset "Failing `append!` should not grow the array" begin
-    A = SimpleArray{String}(String[])
-    # single-arg case
-    try
-        append!(A, [1,2])
-    finally
-        @test isempty(A)
-    end
-    # multi-arg case
-    try
-        append!(A, [1,2], [3,4])
-    finally
-        @test isempty(A)
+@testset "Failing `$f` should not grow the array" for f in (push!, append!)
+    for args in ((1,), (1,2))
+        a = SimpleArray{String}(String[])
+        try
+            f(a, args...)
+        catch
+            # If an error happens, we still want to catch it since it's an expected error
+        finally
+            @test isempty(a)
+        end
     end
 end
 
