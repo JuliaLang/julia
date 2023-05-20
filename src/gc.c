@@ -1886,8 +1886,8 @@ JL_NORETURN NOINLINE void gc_dump_queue_and_abort(jl_ptls_t ptls, jl_datatype_t 
         jl_safe_printf("~~~~~~~~~~ ptr queue top ~~~~~~~~~~\n");
         while ((new_obj = gc_ptr_queue_steal_from(mq)) != NULL) {
             jl_(new_obj);
+            jl_safe_printf("==========\n");
         }
-        jl_safe_printf("==========\n");
         jl_safe_printf("~~~~~~~~~~ ptr queue bottom ~~~~~~~~~~\n");
     }
     abort();
