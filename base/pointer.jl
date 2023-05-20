@@ -124,7 +124,7 @@ atomically loading the Julia type `T`.
 unsafe_load(p::Ptr, i::Integer=1) = pointerref(p, Int(i), 1)
 unsafe_load(p::Ptr, order::Symbol) = atomic_pointerref(p, order)
 function unsafe_load(p::Ptr, i::Integer, order::Symbol)
-    unsafe_load(p + (aligned_sizeof(eltype(p)) * (Int(i) - 1)), order)
+    unsafe_load(p + (elsize(typeof(p)) * (Int(i) - 1)), order)
 end
 
 """
