@@ -4,8 +4,10 @@ using Test, Random
 import Base64:
     Base64EncodePipe,
     base64encode,
+    base64urlencode,
     Base64DecodePipe,
     base64decode,
+    base64urldecode,
     stringmime
 
 const inputText = "Man is distinguished, not only by his reason, but by this singular passion from other animals, which is a lust of the mind, that by a perseverance of delight in the continued and indefatigable generation of knowledge, exceeds the short vehemence of any carnal pleasure."
@@ -102,13 +104,32 @@ const longDecodedText = "name = \"Genie\"\nuuid = \"c43c736e-a2d1-11e8-161f-af95
     # Bit padding should be ignored, which means that `jl` and `jk` should give the same result.
     @test base64decode("jl") == base64decode("jk") == base64decode("jk==") == [142]
     @test base64decode("Aa") == base64decode("AS") == base64decode("AS==") == [1]
+
+    # no padding
+    @test base64encode("abcd", padding=false) == "YWJjZA"
+    @test base64urlencode("abcde", padding=false) == "YWJjZGU"
 end
 
 @testset "Random data" begin
     mt = MersenneTwister(1234)
     for _ in 1:1000
         data = rand(mt, UInt8, rand(0:300))
-        @test hash(base64decode(base64encode(data))) == hash(data)
+        enc64 = base64encode(data)
+        hashv = hash(data)
+        @test hash(base64decode(enc64)) == hashv
+
+        # base64url
+        enc64url = base64urlencode(data)
+        @test enc64url == replace(enc64, '+' => '-', '/' => '_')
+        @test hash(base64urldecode(enc64url)) == hashv
+
+        # padding character should not appear
+        enc64nopad = base64encode(data, padding=false)
+        @test length(data) == 0 || !('=' in enc64nopad[end-1:end])
+        @test length(data) == 0 || !('=' in base64urlencode(data, padding=false)[end-1:end])
+
+        # encoded string without padding can be decoded
+        @test hashv == hash(base64decode(enc64nopad))
     end
 end
 
