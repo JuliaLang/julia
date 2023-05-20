@@ -333,7 +333,8 @@ static Constant *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
     StringRef localname;
     std::string gvname;
     if (!gv) {
-        raw_string_ostream(gvname) << cname << ctx.global_targets.size();
+        uint64_t id = ctx.emission_context.imaging ? jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1) : ctx.global_targets.size();
+        raw_string_ostream(gvname) << cname << id;
         localname = StringRef(gvname);
     }
     else {

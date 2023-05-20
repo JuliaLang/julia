@@ -1672,11 +1672,14 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
     }
     assert(dt->isconcretetype || dt->isdispatchtuple ? dt->maybe_subtype_of_cache : 1);
     if (dt->name == jl_type_typename) {
-        cacheable = 0; // n.b. the cache for Type ignores parameter normalization, so it can't be used to make a stable hash value
         jl_value_t *p = jl_tparam(dt, 0);
         if (!jl_is_type(p) && !jl_is_typevar(p)) // Type{v} has no subtypes, if v is not a Type
             dt->has_concrete_subtype = 0;
         dt->maybe_subtype_of_cache = 1;
+        jl_value_t *uw = jl_unwrap_unionall(p);
+        // n.b. the cache for Type ignores parameter normalization except for Typeofwrapper, so it can't be used to make a stable hash value
+        if (!jl_is_datatype(uw) || ((jl_datatype_t*)uw)->name->wrapper != p)
+            cacheable = 0;
     }
     dt->hash = typekey_hash(dt->name, jl_svec_data(dt->parameters), l, cacheable);
 }
@@ -1841,13 +1844,8 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     jl_typename_t *tn = dt->name;
     int istuple = (tn == jl_tuple_typename);
     int isnamedtuple = (tn == jl_namedtuple_typename);
-    if (check && tn != jl_type_typename) {
-        size_t i;
-        for (i = 0; i < ntp; i++)
-            iparams[i] = normalize_unionalls(iparams[i]);
-    }
 
-    // check type cache, if applicable
+    // check if type cache will be applicable
     int cacheable = 1;
     if (istuple) {
         size_t i;
@@ -1883,7 +1881,15 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             if (jl_has_free_typevars(iparams[i]))
                 cacheable = 0;
     }
+    // if applicable, check the cache first for a match
     if (cacheable) {
+        jl_value_t *lkup = (jl_value_t*)lookup_type(tn, iparams, ntp);
+        if (lkup != NULL)
+            return lkup;
+    }
+    // if some normalization might be needed, do that now
+    // it is probably okay to mutate iparams, and we only store globally rooted objects here
+    if (check && cacheable) {
         size_t i;
         for (i = 0; i < ntp; i++) {
             jl_value_t *pi = iparams[i];
@@ -1891,18 +1897,16 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
                 continue;
             if (jl_is_datatype(pi))
                 continue;
-            if (jl_is_vararg(pi)) {
-                pi = jl_unwrap_vararg(pi);
-                if (jl_has_free_typevars(pi))
-                    continue;
-            }
-            // normalize types equal to wrappers (prepare for wrapper_id)
+            if (jl_is_vararg(pi))
+                // This would require some special handling, but is not needed
+                // at the moment (and might be better handled in jl_wrap_vararg instead).
+                continue;
+            if (!cacheable && jl_has_free_typevars(pi))
+                continue;
+            // normalize types equal to wrappers (prepare for Typeofwrapper)
             jl_value_t *tw = extract_wrapper(pi);
             if (tw && tw != pi && (tn != jl_type_typename || jl_typeof(pi) == jl_typeof(tw)) &&
                     jl_types_equal(pi, tw)) {
-                // This would require some special handling, but is never used at
-                // the moment.
-                assert(!jl_is_vararg(iparams[i]));
                 iparams[i] = tw;
                 if (p) jl_gc_wb(p, tw);
             }
@@ -1912,6 +1916,9 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             // normalize Type{Type{Union{}}} to Type{TypeofBottom}
             iparams[0] = (jl_value_t*)jl_typeofbottom_type;
         }
+    }
+    // then check the cache again, if applicable
+    if (cacheable) {
         jl_value_t *lkup = (jl_value_t*)lookup_type(tn, iparams, ntp);
         if (lkup != NULL)
             return lkup;
@@ -1920,12 +1927,15 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     if (stack_lkup)
         return stack_lkup;
 
+    // check parameters against bounds in type definition
+    // for whether this is even valid
     if (check && !istuple) {
-        // check parameters against bounds in type definition
+        assert(ntp > 0);
         check_datatype_parameters(tn, iparams, ntp);
     }
     else if (ntp == 0 && jl_emptytuple_type != NULL) {
         // empty tuple type case
+        assert(istuple);
         return (jl_value_t*)jl_emptytuple_type;
     }
 
@@ -1969,6 +1979,42 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         p = jl_alloc_svec_uninit(ntp);
         for (size_t i = 0; i < ntp; i++)
             jl_svecset(p, i, iparams[i]);
+    }
+
+    // try to simplify some type parameters
+    if (check && tn != jl_type_typename) {
+        size_t i;
+        int changed = 0;
+        if (istuple) // normalization might change Tuple's, but not other types's, cacheable status
+            cacheable = 1;
+        for (i = 0; i < ntp; i++) {
+            jl_value_t *newp = normalize_unionalls(iparams[i]);
+            if (newp != iparams[i]) {
+                iparams[i] = newp;
+                jl_svecset(p, i, newp);
+                changed = 1;
+            }
+            if (istuple && cacheable && !jl_is_concrete_type(newp))
+                cacheable = 0;
+        }
+        if (changed) {
+            // If this changed something, we need to check the cache again, in
+            // case we missed the match earlier before the normalizations
+            //
+            // e.g. return inst_datatype_inner(dt, p, iparams, ntp, stack, env, 0);
+            if (cacheable) {
+                jl_value_t *lkup = (jl_value_t*)lookup_type(tn, iparams, ntp);
+                if (lkup != NULL) {
+                    JL_GC_POP();
+                    return lkup;
+                }
+            }
+            jl_value_t *stack_lkup = lookup_type_stack(stack, dt, ntp, iparams);
+            if (stack_lkup) {
+                JL_GC_POP();
+                return stack_lkup;
+            }
+        }
     }
 
     // acquire the write lock now that we know we need a new object

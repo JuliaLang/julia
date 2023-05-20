@@ -247,19 +247,28 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
                 any_refined = true
                 delete!(ssa_refined, idx)
             end
+            is_terminator_or_phi = isa(inst, PhiNode) || isa(inst, GotoNode) || isa(inst, GotoIfNot) || isa(inst, ReturnNode) || isexpr(inst, :enter)
+            if typ === Bottom && (idx != lstmt || !is_terminator_or_phi)
+                continue
+            end
             if any_refined && reprocess_instruction!(interp,
                     idx, bb, inst, typ, irsv, extra_reprocess)
                 push!(ssa_refined, idx)
                 inst = ir.stmts[idx][:inst]
                 typ = ir.stmts[idx][:type]
             end
+            if typ === Bottom && !is_terminator_or_phi
+                kill_terminator_edges!(irsv, lstmt, bb)
+                if idx != lstmt
+                    for idx2 in (idx+1:lstmt-1)
+                        ir[SSAValue(idx2)] = nothing
+                    end
+                    ir[SSAValue(lstmt)][:inst] = ReturnNode()
+                end
+                break
+            end
             if idx == lstmt
                 process_terminator!(ir, inst, idx, bb, all_rets, bb_ip) && @goto residual_scan
-                (isa(inst, GotoNode) || isa(inst, GotoIfNot) || isa(inst, ReturnNode) || isexpr(inst, :enter)) && continue
-            end
-            if typ === Bottom && !isa(inst, PhiNode)
-                kill_terminator_edges!(irsv, lstmt, bb)
-                break
             end
         end
     end

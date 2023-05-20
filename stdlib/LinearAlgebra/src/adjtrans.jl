@@ -97,6 +97,7 @@ inplace_adj_or_trans(::Type{<:Transpose}) = transpose!
 adj_or_trans_char(::T) where {T<:AbstractArray} = adj_or_trans_char(T)
 adj_or_trans_char(::Type{<:AbstractArray}) = 'N'
 adj_or_trans_char(::Type{<:Adjoint}) = 'C'
+adj_or_trans_char(::Type{<:Adjoint{<:Real}}) = 'T'
 adj_or_trans_char(::Type{<:Transpose}) = 'T'
 
 Base.dataids(A::Union{Adjoint, Transpose}) = Base.dataids(A.parent)

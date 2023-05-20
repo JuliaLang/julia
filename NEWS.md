@@ -94,6 +94,8 @@ Standard library changes
 
 #### REPL
 
+* When stack traces are printed, the printed depth of types in function signatures will be limited
+  to avoid overly verbose output ([#49795]).
 
 #### SuiteSparse
 
