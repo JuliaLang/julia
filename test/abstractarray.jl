@@ -1313,21 +1313,44 @@ Base.pushfirst!(tpa::TestPushArray{T}, a::T) where T = pushfirst!(tpa.data, a)
     tpa = TestPushArray{Int, 2}(a_orig)
     pushfirst!(tpa, 6, 5, 4, 3, 2)
     @test tpa.data == reverse(collect(1:6))
+end
 
-    @testset "Failing `push!` leaves size unchanged" begin
-        a = String[]
-        # single-arg case
-        try
-            push!(a, 1)
-        catch
-            @test isempty(a)
-        end
-        # multi-arg case
-        try
-            push!(a, 1, 2)
-        catch
-            @test isempty(a)
-        end
+mutable struct SimpleArray{T} <: AbstractVector{T}
+    els::Vector{T}
+end
+Base.size(sa::SimpleArray) = size(sa.els)
+Base.getindex(sa::SimpleArray, idx...) = getindex(sa.els, idx...)
+Base.setindex!(sa::SimpleArray, v, idx...) = setindex!(sa.els, v, idx...)
+Base.resize!(sa::SimpleArray, n) = resize!(sa.els, n)
+
+@testset "Failing `push!` leaves size unchanged" begin
+    a = SimpleArray{String}(String[])
+    # single-arg case
+    try
+        push!(a, 1)
+    catch
+        @test isempty(a)
+    end
+    # multi-arg case
+    try
+        push!(a, 1, 2)
+    catch
+        @test isempty(a)
+    end
+end
+@testset "Failing `append!` should not grow the array" begin
+    A = SimpleArray{String}(String[])
+    # single-arg case
+    try
+        append!(A, [1,2])
+    catch
+        @test isempty(A)
+    end
+    # multi-arg case
+    try
+        append!(A, [1,2], [3,4])
+    catch
+        @test isempty(A)
     end
 end
 

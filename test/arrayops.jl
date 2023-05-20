@@ -1773,22 +1773,6 @@ end
     # offset array
     @test append!([1,2], OffsetArray([9,8], (-3,))) == [1,2,9,8]
     @test prepend!([1,2], OffsetArray([9,8], (-3,))) == [9,8,1,2]
-
-    @testset "Failing `append!` should not grow the array" begin
-        A = String[]
-        # single-arg case
-        try
-            append!(A, [1,2])
-        catch
-            @test isempty(A)
-        end
-        # multi-arg case
-        try
-            append!(A, [1,2], [3,4])
-        catch
-            @test isempty(A)
-        end
-    end
 end
 
 let A = [1,2]
