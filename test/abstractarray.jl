@@ -1313,6 +1313,22 @@ Base.pushfirst!(tpa::TestPushArray{T}, a::T) where T = pushfirst!(tpa.data, a)
     tpa = TestPushArray{Int, 2}(a_orig)
     pushfirst!(tpa, 6, 5, 4, 3, 2)
     @test tpa.data == reverse(collect(1:6))
+
+    @testset "Failing `push!` leaves size unchanged" begin
+        a = String[]
+        # single-arg case
+        try
+            push!(a, 1)
+        catch
+            @test isempty(a)
+        end
+        # multi-arg case
+        try
+            push!(a, 1, 2)
+        catch
+            @test isempty(a)
+        end
+    end
 end
 
 @testset "splatting into hvcat" begin

@@ -1178,7 +1178,10 @@ function append!(a::Vector, items::AbstractVector)
 end
 
 append!(a::AbstractVector, iter) = _append!(a, IteratorSize(iter), iter)
-push!(a::AbstractVector, iter...) = append!(a, iter)
+function push!(a::AbstractVector{T}, iter...) where T
+    _iter = convert.(T, iter)
+    append!(a, _iter)
+end
 
 append!(a::AbstractVector, iter...) = foldl(append!, iter, init=a)
 
