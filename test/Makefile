@@ -14,7 +14,7 @@ unexport JULIA_BINDIR :=
 TESTGROUPS = unicode strings compiler
 TESTS = all default stdlib $(TESTGROUPS) \
 		$(patsubst $(STDLIBDIR)/%/,%,$(dir $(wildcard $(STDLIBDIR)/*/.))) \
-		$(filter-out runtests testdefs, \
+		$(filter-out runtests testdefs relocatedepot, \
 			$(patsubst $(SRCDIR)/%.jl,%,$(wildcard $(SRCDIR)/*.jl))) \
 		$(foreach group,$(TESTGROUPS), \
 			$(patsubst $(SRCDIR)/%.jl,%,$(wildcard $(SRCDIR)/$(group)/*.jl)))
@@ -34,6 +34,24 @@ $(addprefix revise-, $(TESTS)): revise-% :
 	@cd $(SRCDIR) && \
     $(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl --revise $*)
 
+relocatedepot:
+	@rm -rf $(SRCDIR)/relocatedepot
+	@cd $(SRCDIR) && \
+	$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl $@)
+	@mkdir $(SRCDIR)/relocatedepot
+	@cp -R $(build_datarootdir)/julia $(SRCDIR)/relocatedepot
+	@cd $(SRCDIR) && \
+	$(call PRINT_JULIA, $(call spawn,RELOCATEDEPOT="" JULIA_DEPOT_PATH=$(SRCDIR)/relocatedepot/julia $(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl $@)
+
+revise-relocatedepot: revise-% :
+	@rm -rf $(SRCDIR)/relocatedepot
+	@cd $(SRCDIR) && \
+	$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl --revise $*)
+	@mkdir $(SRCDIR)/relocatedepot
+	@cp -R $(build_datarootdir)/julia $(SRCDIR)/relocatedepot
+	@cd $(SRCDIR) && \
+	$(call PRINT_JULIA, $(call spawn,RELOCATEDEPOT="" JULIA_DEPOT_PATH=$(SRCDIR)/relocatedepot/julia $(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl --revise $*)
+
 embedding:
 	@$(MAKE) -C $(SRCDIR)/$@ check $(EMBEDDING_ARGS)
 
@@ -47,4 +65,4 @@ clean:
 	@$(MAKE) -C embedding $@ $(EMBEDDING_ARGS)
 	@$(MAKE) -C gcext $@ $(GCEXT_ARGS)
 
-.PHONY: $(TESTS) $(addprefix revise-, $(TESTS)) embedding gcext clangsa clean
+.PHONY: $(TESTS) $(addprefix revise-, $(TESTS)) relocatedepot revise-relocatedepot embedding gcext clangsa clean
