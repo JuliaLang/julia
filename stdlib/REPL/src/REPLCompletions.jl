@@ -576,6 +576,9 @@ end
 
 # `COMPLETION_WORLD[]` will be initialized within `__init__`
 # (to allow us to potentially remove REPL from the sysimage in the future).
+# Note that inference from the `code_typed` call below will use the current world age
+# rather than `typemax(UInt)`, since `Base.invoke_in_world` uses the current world age
+# when the given world age is higher than the current one.
 const COMPLETION_WORLD = Ref{UInt}(typemax(UInt))
 
 # Generate code cache for `REPLInterpreter` now:
