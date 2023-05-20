@@ -1114,6 +1114,8 @@ function push!(a::Vector{T}, item) where T
     return a
 end
 
+push!(a::AbstractVector, iter...) = append!(a, iter)
+
 # specialize and optimize the single argument case
 function push!(a::Vector{Any}, @nospecialize x)
     _growend!(a, 1)
@@ -1169,7 +1171,30 @@ and [`prepend!`](@ref) and [`pushfirst!`](@ref) for the opposite order.
 """
 function append! end
 
-function append!(a::Vector, items::AbstractVector)
+append!(a::AbstractVector, iter) = _append!(a, IteratorSize(iter), iter)
+append!(a::AbstractVector{T}, it1::T, it2::T, iter::Vararg{T}) where T = foldl(_append_converted!, (it1, it2, iter...); init=a)
+function append!(a::AbstractVector{T}, iter...) where T
+    isempty(iter) && return a
+    convert_buf = T[]
+
+    # attempt to do this buffered, but fall back to regular `append!` if that won't be possible
+    for itr in iter
+        iter_size = IteratorSize(itr)
+        if iter_size isa Union{HasLength, HasShape}
+            resize!(convert_buf, length(itr))
+            for (idx, el) in zip(eachindex(convert_buf), itr)
+                convert_buf[idx] = convert(T, el)
+            end
+            _append_converted!(a, convert_buf)
+        else # Doesn't have a shape - recurse
+            _append!(a, iter_size, itr)
+        end
+    end
+    a
+end
+
+# specialize for Vectors where `copyto!` will succeed without calling a failing `convert`
+function append!(a::Union{Vector{Any}, Vector{T}}, items::AbstractVector{T}) where T
     itemindices = eachindex(items)
     n = length(itemindices)
     _growend!(a, n)
@@ -1177,31 +1202,40 @@ function append!(a::Vector, items::AbstractVector)
     return a
 end
 
-append!(a::AbstractVector, iter) = _append!(a, IteratorSize(iter), iter)
-function push!(a::AbstractVector{T}, iter...) where T
-    _iter = convert.(T, iter)
-    append!(a, _iter)
+# most generic fallback can only assume iteration
+function _append!(a::AbstractVector, ::IteratorSize, iter)
+    for item in iter
+        push!(a, item)
+    end
+    a
 end
 
-append!(a::AbstractVector, iter...) = foldl(append!, iter, init=a)
+# `iter` has a length, so we can preemptively convert all elements before trying to
+# resize the incoming vector
+function _append!(a::AbstractVector{T}, ::Union{HasLength,HasShape}, iter) where T
+    converted_buf = Vector{T}(undef, length(iter))
+    for (idx, el) in zip(eachindex(converted_buf), iter)
+        converted_buf[idx] = convert(T, el)
+    end
+    _append_converted!(a, converted_buf)
+end
 
-function _append!(a::AbstractVector, ::Union{HasLength,HasShape}, iter)
+# `iter` is guaranteed to hold elements compatible with `T` (may be !== T)
+# but it's not a necessarily a vector
+function _append_converted!(a::AbstractVector{T}, iter) where T
     @_terminates_locally_meta
     n = length(a)
     i = lastindex(a)
-    resize!(a, n+Int(length(iter))::Int)
+    leniter = length(iter)
+
+    # the conversions succeeded, so we can safely resize the input
+    resize!(a, n+Int(leniter)::Int)
     for (i, item) in zip(i+1:lastindex(a), iter)
         if isa(a, Vector) # give better effects for builtin vectors
             @_safeindex a[i] = item
         else
             a[i] = item
         end
-    end
-    a
-end
-function _append!(a::AbstractVector, ::IteratorSize, iter)
-    for item in iter
-        push!(a, item)
     end
     a
 end
