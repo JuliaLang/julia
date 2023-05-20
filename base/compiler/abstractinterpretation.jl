@@ -788,7 +788,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     end
     eligibility = concrete_eval_eligible(interp, f, result, arginfo, sv)
     if eligibility === :concrete_eval
-        return concrete_eval_call(interp, f, result, arginfo, invokecall)
+        return concrete_eval_call(interp, f, result, arginfo, sv, invokecall)
     end
     mi = maybe_get_const_prop_profitable(interp, result, f, arginfo, si, match, sv)
     mi === nothing && return nothing
@@ -876,7 +876,8 @@ function collect_const_args(argtypes::Vector{Any}, start::Int)
 end
 
 function concrete_eval_call(interp::AbstractInterpreter,
-    @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, invokecall::Union{InvokeCall,Nothing})
+    @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo,
+    sv::AbsIntState, invokecall::Union{InvokeCall,Nothing})
     args = collect_const_args(arginfo, #=start=#2)
     if invokecall !== nothing
         # this call should be `invoke`d, rewrite `args` back now
