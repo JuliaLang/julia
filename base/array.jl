@@ -1183,7 +1183,7 @@ function append!(a::AbstractVector{T}, iter...) where T
         if iter_size isa Union{HasLength, HasShape}
             resize!(convert_buf, length(itr))
             for (idx, el) in zip(eachindex(convert_buf), itr)
-                convert_buf[idx] = convert(T, el)
+                convert_buf[idx] = convert(T, el)::T
             end
             _append_converted!(a, convert_buf)
         else # Doesn't have a shape - recurse
@@ -1215,13 +1215,19 @@ end
 function _append!(a::AbstractVector{T}, ::Union{HasLength,HasShape}, iter) where T
     converted_buf = Vector{T}(undef, length(iter))
     for (idx, el) in zip(eachindex(converted_buf), iter)
-        converted_buf[idx] = convert(T, el)
+        converted_buf[idx] = convert(T, el)::T
     end
     _append_converted!(a, converted_buf)
 end
 
+# tuples can be handled specially as well, saving the creation of an intermediary array
+function _append!(a::AbstractVector{T}, _::Union{HasLength,HasShape}, tup::Tuple) where T
+    conv_tup = ntuple(i -> convert(T, tup[i])::T, length(tup))
+    _append_converted!(a, conv_tup)
+end
+
 # `iter` is guaranteed to hold elements compatible with `T` (may be !== T)
-# but it's not a necessarily a vector
+# but it's not a necessarily a vector or indexable
 function _append_converted!(a::AbstractVector{T}, iter) where T
     @_terminates_locally_meta
     n = length(a)
