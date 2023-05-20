@@ -221,6 +221,15 @@ const RealHermSymComplexSym{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, S
 
 size(A::HermOrSym, d) = size(A.data, d)
 size(A::HermOrSym) = size(A.data)
+@inline function Base.isassigned(A::HermOrSym, i::Int, j::Int)
+    @boundscheck checkbounds(Bool, A, i, j) || return false
+    @inbounds if i == j || ((A.uplo == 'U') == (i < j))
+        return isassigned(A.data, i, j)
+    else
+        return isassigned(A.data, j, i)
+    end
+end
+
 @inline function getindex(A::Symmetric, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
     @inbounds if i == j
