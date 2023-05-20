@@ -51,13 +51,14 @@ static void eraseInstruction(Instruction &I,
 //Stolen and modified from LICM.cpp
 static void moveInstructionBefore(Instruction &I, Instruction &Dest,
                                   MemorySSAUpdater &MSSAU,
-                                  ScalarEvolution *SE) {
+                                  ScalarEvolution *SE,
+                                  MemorySSA::InsertionPlace Place = MemorySSA::BeforeTerminator) {
   I.moveBefore(&Dest);
   if (MSSAU.getMemorySSA())
     if (MemoryUseOrDef *OldMemAcc = cast_or_null<MemoryUseOrDef>(
             MSSAU.getMemorySSA()->getMemoryAccess(&I)))
       MSSAU.moveToPlace(OldMemAcc, Dest.getParent(),
-                         MemorySSA::BeforeTerminator);
+                         Place);
   if (SE)
     SE->forgetValue(&I);
 }
@@ -228,7 +229,7 @@ struct JuliaLICM : public JuliaPassContext {
                         continue;
                     }
                     ++SunkPreserveEnd;
-                    moveInstructionBefore(*call, *exit_pts[0], MSSAU, SE);
+                    moveInstructionBefore(*call, *exit_pts[0], MSSAU, SE, MemorySSA::Beginning);
                     for (unsigned i = 1; i < exit_pts.size(); i++) {
                         // Clone exit
                         auto CI = CallInst::Create(call, {}, exit_pts[i]);
