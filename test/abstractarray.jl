@@ -1328,13 +1328,13 @@ Base.resize!(sa::SimpleArray, n) = resize!(sa.els, n)
     # single-arg case
     try
         push!(a, 1)
-    catch
+    finally
         @test isempty(a)
     end
     # multi-arg case
     try
         push!(a, 1, 2)
-    catch
+    finally
         @test isempty(a)
     end
 end
@@ -1343,13 +1343,13 @@ end
     # single-arg case
     try
         append!(A, [1,2])
-    catch
+    finally
         @test isempty(A)
     end
     # multi-arg case
     try
         append!(A, [1,2], [3,4])
-    catch
+    finally
         @test isempty(A)
     end
 end
