@@ -353,13 +353,15 @@ STATIC_INLINE void jl_timing_block_start(jl_timing_block_t *block) {
 
     uint64_t t = cycleclock(); (void)t;
     _COUNTS_START(&block->counts_ctx, t);
+#ifdef USE_TIMING_COUNTS
+    block->counts_ctx.t0 = t;
+#endif
     _ITTAPI_START(block);
     _TRACY_START(block);
 
     jl_timing_block_t **prevp = &jl_current_task->ptls->timing_stack;
     block->prev = *prevp;
     block->is_running = 1;
-    block->t0 = t;
     if (block->prev) {
         _COUNTS_STOP(&block->prev->counts_ctx, t);
     }
