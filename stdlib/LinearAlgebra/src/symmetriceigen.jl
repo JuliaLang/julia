@@ -185,13 +185,13 @@ function _choleigen!(A, U; sortby)
 end
 
 # Perform U' \ A / U in-place, where U::Union{UpperTriangular,Diagonal}
-UtiAUi!(A::StridedMatrix, U) = _UtiAUi!(A, U)
+UtiAUi!(A, U) = _UtiAUi!(A, U)
 UtiAUi!(A::Symmetric, U) = Symmetric(_UtiAUi!(copytri!(parent(A), A.uplo), U), sym_uplo(A.uplo))
 UtiAUi!(A::Hermitian, U) = Hermitian(_UtiAUi!(copytri!(parent(A), A.uplo, true), U), sym_uplo(A.uplo))
 _UtiAUi!(A, U) = rdiv!(ldiv!(U', A), U)
 
 # Perform U \ A / U' in-place, where U::Union{UpperTriangular,Diagonal}
-UiAUti!(A::StridedMatrix, U) = _UiAUti!(A, U)
+UiAUti!(A, U) = _UiAUti!(A, U)
 UiAUti!(A::Symmetric, U) = Symmetric(_UiAUti!(copytri!(parent(A), A.uplo), U), sym_uplo(A.uplo))
 UiAUti!(A::Hermitian, U) = Hermitian(_UiAUti!(copytri!(parent(A), A.uplo, true), U), sym_uplo(A.uplo))
 _UiAUti!(A, U) = rdiv!(ldiv!(U, A), U')
@@ -226,11 +226,14 @@ end
 # Cholesky decomposition based eigenvalues
 _choleigvals!(A, U; sortby) = eigvals!(UtiAUi!(A, U); sortby)
 
-# Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues (proof of concept)
+# Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues
 function eigvals(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
+    eigvals!(copy(A), copy(B); sortby)
+end
+function eigvals!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     if B.uplo == 'U'
-        return eigvals!(copy(B.D) \ UiAUti!(A[B.p,B.p], copy(B.U)); sortby)
+        return eigvals!(ldiv(lu!(B.D), UiAUti!(@view(A[B.p,B.p]), B.U)); sortby)
     else # B.uplo == 'L'
-        return eigvals!(copy(B.D) \ UiAUti!(A[B.p,B.p], copy(B.L)); sortby)
+        return eigvals!(ldiv(lu!(B.D), UiAUti!(@view(A[B.p,B.p]), B.L)); sortby)
     end
 end

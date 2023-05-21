@@ -88,6 +88,7 @@ Base.iterate(S::BunchKaufman) = (S.D, Val(:UL))
 Base.iterate(S::BunchKaufman, ::Val{:UL}) = (S.uplo == 'L' ? S.L : S.U, Val(:p))
 Base.iterate(S::BunchKaufman, ::Val{:p}) = (S.p, Val(:done))
 Base.iterate(S::BunchKaufman, ::Val{:done}) = nothing
+copy(S::BunchKaufman) = BunchKaufman(copy(S.LD), copy(S.ipiv), S.uplo, S.symmetric, S.rook, S.info)
 
 
 """
