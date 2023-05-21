@@ -72,6 +72,26 @@ end
 
 ## FILE (not auto-finalized) ##
 
+"""
+    FILE(::Ptr)
+    FILE(::IO)
+
+A libc `FILE*`, representing an opened file.
+
+It can be passed as a `Ptr{FILE}` argument to [`ccall`](@ref) and also supports
+[`seek`](@ref), [`position`](@ref) and [`close`](@ref).
+
+A `FILE` can be constructed from an ordinary `IO` object, provided it is an open file. It
+must be closed afterward. For example:
+```
+using Libc
+open("example.txt", "w") do io
+    file = FILE(io)
+    ccall(:fputs, Cint, (Cstring, Ptr{FILE}), "hello world", file)
+    close(file)
+end
+```
+"""
 struct FILE
     ptr::Ptr{Cvoid}
 end
