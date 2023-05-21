@@ -326,6 +326,11 @@ function show_spec_linfo(io::IO, frame::StackFrame)
             linfo, linfo.sig
         end
         if def isa Method
+            if get(io, :limit, :false)::Bool
+                if !haskey(io, :displaysize)
+                    io = IOContext(io, :displaysize => displaysize(io))
+                end
+            end
             argnames = Base.method_argnames(def)
             argnames = replace(argnames, :var"#unused#" => :var"")
             if def.nkw > 0

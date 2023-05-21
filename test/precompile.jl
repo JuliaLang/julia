@@ -394,7 +394,7 @@ precompile_test_harness(false) do dir
             Dict(let m = Base.root_module(Base, s)
                      Base.PkgId(m) => Base.module_build_id(m)
                  end for s in
-                [:ArgTools, :Artifacts, :Base64, :CompilerSupportLibraries_jll, :CRC32c, :Dates,
+                [:ArgTools, :Artifacts, :Base64, :CRC32c, :Dates,
                  :Downloads, :FileWatching, :Future, :InteractiveUtils, :libblastrampoline_jll,
                  :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
                  :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :OpenBLAS_jll, :Pkg, :Printf,

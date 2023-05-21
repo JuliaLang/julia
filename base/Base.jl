@@ -596,6 +596,8 @@ function __init__()
         ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), PROFILE_PRINT_COND[].handle)
         errormonitor(Threads.@spawn(profile_printing_listener()))
     end
+    # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
+    delete!(ENV, "JULIA_WAIT_FOR_TRACY")
     nothing
 end
 

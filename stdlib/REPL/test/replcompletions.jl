@@ -811,7 +811,7 @@ end
 let s = "CompletionFoo.test11(3, 4,"
     c, r, res = test_complete(s)
     @test !res
-    @test length(c) == 4
+    @test length(c) == 2
     @test any(str->occursin("test11(x::$Int, y::$Int, z)", str), c)
     @test any(str->occursin("test11(::Any, ::Any, s::String)", str), c)
 end

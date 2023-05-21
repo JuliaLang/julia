@@ -374,15 +374,18 @@ LLT_ALIGN(x, sz) = (x + sz - 1) & -sz
 # amount of total space taken by T when stored in a container
 function aligned_sizeof(@nospecialize T::Type)
     @_foldable_meta
-    if isbitsunion(T)
-        _, sz, al = uniontype_layout(T)
-        return LLT_ALIGN(sz, al)
+    if isa(T, Union)
+        if allocatedinline(T)
+            # NOTE this check is equivalent to `isbitsunion(T)`, we can improve type
+            # inference in the second branch with the outer `isa(T, Union)` check
+            _, sz, al = uniontype_layout(T)
+            return LLT_ALIGN(sz, al)
+        end
     elseif allocatedinline(T)
         al = datatype_alignment(T)
         return LLT_ALIGN(Core.sizeof(T), al)
-    else
-        return Core.sizeof(Ptr{Cvoid})
     end
+    return Core.sizeof(Ptr{Cvoid})
 end
 
 gc_alignment(sz::Integer) = Int(ccall(:jl_alignment, Cint, (Csize_t,), sz))
@@ -1244,8 +1247,10 @@ function may_invoke_generator(method::Method, @nospecialize(atype), sparams::Sim
     # generator only has one method
     generator = method.generator
     isa(generator, Core.GeneratedFunctionStub) || return false
-    gen_mthds = _methods_by_ftype(Tuple{typeof(generator.gen), Vararg{Any}}, 1, method.primary_world)
-    (gen_mthds isa Vector && length(gen_mthds) == 1) || return false
+    tt = Tuple{typeof(generator.gen), Vararg{Any}}
+    gen_mthds = _methods_by_ftype(tt, #=lim=#1, method.primary_world)
+    gen_mthds isa Vector || return false
+    length(gen_mthds) == 1 || return false
 
     generator_method = first(gen_mthds).method
     nsparams = length(sparams)
@@ -1304,19 +1309,20 @@ generic function and type signature.
 
 # Keyword Arguments
 
-- `optimize=true`: controls whether additional optimizations, such as inlining, are also applied.
-- `debuginfo=:default`: controls the amount of code metadata present in the output,
-possible options are `:source` or `:none`.
+- `optimize::Bool = true`: optional, controls whether additional optimizations,
+  such as inlining, are also applied.
+- `debuginfo::Symbol = :default`: optional, controls the amount of code metadata present
+  in the output, possible options are `:source` or `:none`.
 
 # Internal Keyword Arguments
 
 This section should be considered internal, and is only for who understands Julia compiler
 internals.
 
-- `world=Base.get_world_counter()`: optional, controls the world age to use when looking up methods,
-use current world age if not specified.
-- `interp=Core.Compiler.NativeInterpreter(world)`: optional, controls the interpreter to use,
-use the native interpreter Julia uses if not specified.
+- `world::UInt = Base.get_world_counter()`: optional, controls the world age to use
+  when looking up methods, use current world age if not specified.
+- `interp::Core.Compiler.AbstractInterpreter = Core.Compiler.NativeInterpreter(world)`:
+  optional, controls the abstract interpreter to use, use the native interpreter if not specified.
 
 # Example
 
@@ -1331,16 +1337,12 @@ julia> code_typed(+, (Float64, Float64))
 ) => Float64
 ```
 """
-function code_typed(@nospecialize(f), @nospecialize(types=default_tt(f));
-                    optimize=true,
-                    debuginfo::Symbol=:default,
-                    world = get_world_counter(),
-                    interp = Core.Compiler.NativeInterpreter(world))
+function code_typed(@nospecialize(f), @nospecialize(types=default_tt(f)); kwargs...)
     if isa(f, Core.OpaqueClosure)
-        return code_typed_opaque_closure(f; optimize, debuginfo, interp)
+        return code_typed_opaque_closure(f; kwargs...)
     end
     tt = signature_type(f, types)
-    return code_typed_by_type(tt; optimize, debuginfo, world, interp)
+    return code_typed_by_type(tt; kwargs...)
 end
 
 # returns argument tuple type which is supposed to be used for `code_typed` and its family;
@@ -1362,10 +1364,10 @@ Similar to [`code_typed`](@ref), except the argument is a tuple type describing
 a full signature to query.
 """
 function code_typed_by_type(@nospecialize(tt::Type);
-                            optimize=true,
+                            optimize::Bool=true,
                             debuginfo::Symbol=:default,
-                            world = get_world_counter(),
-                            interp = Core.Compiler.NativeInterpreter(world))
+                            world::UInt=get_world_counter(),
+                            interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
         error("code reflection cannot be used from generated functions")
     if @isdefined(IRShow)
@@ -1377,7 +1379,7 @@ function code_typed_by_type(@nospecialize(tt::Type);
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     tt = to_tuple_type(tt)
-    matches = _methods_by_ftype(tt, -1, world)::Vector
+    matches = _methods_by_ftype(tt, #=lim=#-1, world)::Vector
     asts = []
     for match in matches
         match = match::Core.MethodMatch
@@ -1394,7 +1396,7 @@ function code_typed_by_type(@nospecialize(tt::Type);
 end
 
 function code_typed_opaque_closure(@nospecialize(oc::Core.OpaqueClosure);
-    debuginfo::Symbol=:default, __...)
+                                   debuginfo::Symbol=:default, _...)
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     m = oc.source
     if isa(m, Method)
@@ -1421,14 +1423,15 @@ See also: [`code_typed`](@ref)
 This section should be considered internal, and is only for who understands Julia compiler
 internals.
 
-- `world=Base.get_world_counter()`: optional, controls the world age to use when looking up
-  methods, use current world age if not specified.
-- `interp=Core.Compiler.NativeInterpreter(world)`: optional, controls the interpreter to
-  use, use the native interpreter Julia uses if not specified.
-- `optimize_until`: optional, controls the optimization passes to run.  If it is a string,
-  it specifies the name of the pass up to which the optimizer is run.  If it is an integer,
-  it specifies the number of passes to run.  If it is `nothing` (default), all passes are
-  run.
+- `world::UInt = Base.get_world_counter()`: optional, controls the world age to use
+  when looking up methods, use current world age if not specified.
+- `interp::Core.Compiler.AbstractInterpreter = Core.Compiler.NativeInterpreter(world)`:
+  optional, controls the abstract interpreter to use, use the native interpreter if not specified.
+- `optimize_until::Union{Integer,AbstractString,Nothing} = nothing`: optional,
+  controls the optimization passes to run.
+  If it is a string, it specifies the name of the pass up to which the optimizer is run.
+  If it is an integer, it specifies the number of passes to run.
+  If it is `nothing` (default), all passes are run.
 
 # Example
 
@@ -1450,18 +1453,12 @@ julia> Base.code_ircode(+, (Float64, Int64); optimize_until = "compact 1")
      => Float64
 ```
 """
-function code_ircode(
-    @nospecialize(f),
-    @nospecialize(types = default_tt(f));
-    world = get_world_counter(),
-    interp = Core.Compiler.NativeInterpreter(world),
-    optimize_until::Union{Integer,AbstractString,Nothing} = nothing,
-)
+function code_ircode(@nospecialize(f), @nospecialize(types = default_tt(f)); kwargs...)
     if isa(f, Core.OpaqueClosure)
         error("OpaqueClosure not supported")
     end
     tt = signature_type(f, types)
-    return code_ircode_by_type(tt; world, interp, optimize_until)
+    return code_ircode_by_type(tt; kwargs...)
 end
 
 """
@@ -1472,14 +1469,14 @@ a full signature to query.
 """
 function code_ircode_by_type(
     @nospecialize(tt::Type);
-    world = get_world_counter(),
-    interp = Core.Compiler.NativeInterpreter(world),
-    optimize_until::Union{Integer,AbstractString,Nothing} = nothing,
+    world::UInt=get_world_counter(),
+    interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world),
+    optimize_until::Union{Integer,AbstractString,Nothing}=nothing,
 )
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
         error("code reflection cannot be used from generated functions")
     tt = to_tuple_type(tt)
-    matches = _methods_by_ftype(tt, -1, world)::Vector
+    matches = _methods_by_ftype(tt, #=lim=#-1, world)::Vector
     asts = []
     for match in matches
         match = match::Core.MethodMatch
@@ -1534,8 +1531,8 @@ julia> Base.return_types(sum, (Union{Vector{Int},UnitRange{Int}},))
     doing so will result in an error.
 """
 function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
-                      world = get_world_counter(),
-                      interp = Core.Compiler.NativeInterpreter(world))
+                      world::UInt=get_world_counter(),
+                      interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
     (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
         error("code reflection cannot be used from generated functions")
     if isa(f, Core.OpaqueClosure)
@@ -1549,7 +1546,9 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
         return Any[Core.Compiler.widenconst(rt)]
     end
     rts = []
-    for match in _methods(f, types, -1, world)::Vector
+    tt = signature_type(f, types)
+    matches = _methods_by_ftype(tt, #=lim=#-1, world)::Vector
+    for match in matches
         match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, types, match.sparams)
         ty = Core.Compiler.typeinf_type(interp, meth, match.spec_types, match.sparams)
@@ -1640,9 +1639,10 @@ function print_statement_costs(io::IO, @nospecialize(f), @nospecialize(t); kwarg
 end
 
 function print_statement_costs(io::IO, @nospecialize(tt::Type);
-                               world = get_world_counter(),
-                               interp = Core.Compiler.NativeInterpreter(world))
-    matches = _methods_by_ftype(tt, -1, world)::Vector
+                               world::UInt=get_world_counter(),
+                               interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world))
+    tt = to_tuple_type(tt)
+    matches = _methods_by_ftype(tt, #=lim=#-1, world)::Vector
     params = Core.Compiler.OptimizationParams(interp)
     cst = Int[]
     for match in matches

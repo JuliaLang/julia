@@ -179,14 +179,9 @@
 
 ;; construct default definitions of `eval` for non-bare modules
 ;; called by jl_eval_module_expr
-(define (module-default-defs e)
+(define (module-default-defs name file line)
   (jl-expand-to-thunk
-   (let* ((name (caddr e))
-          (body (cadddr e))
-          (loc  (if (null? (cdr body)) () (cadr body)))
-          (loc  (if (and (pair? loc) (eq? (car loc) 'line))
-                    (list loc)
-                    '()))
+   (let* ((loc  (if (and (eq? file 'none) (eq? line 0)) '() `((line ,line ,file))))
           (x    (if (eq? name 'x) 'y 'x))
           (mex  (if (eq? name 'mapexpr) 'map_expr 'mapexpr)))
      `(block
@@ -202,7 +197,7 @@
           (block
            ,@loc
            (call (core _call_latest) (top include) ,mex ,name ,x)))))
-   'none 0))
+   file line))
 
 ; run whole frontend on a string. useful for testing.
 (define (fe str)

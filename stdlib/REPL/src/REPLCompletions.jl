@@ -409,7 +409,7 @@ const REPL_INTERPRETER_CACHE = REPLInterpreterCache()
 function get_code_cache()
     # XXX Avoid storing analysis results into the cache that persists across precompilation,
     #     as [sys|pkg]image currently doesn't support serializing externally created `CodeInstance`.
-    #     Otherwise, `CodeInstance`s created by `REPLInterpreter``, that are much less optimized
+    #     Otherwise, `CodeInstance`s created by `REPLInterpreter`, that are much less optimized
     #     that those produced by `NativeInterpreter`, will leak into the native code cache,
     #     potentially causing runtime slowdown.
     #     (see https://github.com/JuliaLang/julia/issues/48453).
@@ -524,9 +524,9 @@ function CC.concrete_eval_eligible(interp::REPLInterpreter, @nospecialize(f),
         result = CC.MethodCallResult(result.rt, result.edgecycle, result.edgelimited,
                                      result.edge, neweffects)
     end
-return @invoke CC.concrete_eval_eligible(interp::CC.AbstractInterpreter, f::Any,
-                                         result::CC.MethodCallResult, arginfo::CC.ArgInfo,
-                                         sv::CC.InferenceState)
+    return @invoke CC.concrete_eval_eligible(interp::CC.AbstractInterpreter, f::Any,
+                                             result::CC.MethodCallResult, arginfo::CC.ArgInfo,
+                                             sv::CC.InferenceState)
 end
 
 function resolve_toplevel_symbols!(mod::Module, src::Core.CodeInfo)
@@ -565,12 +565,27 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module)
     interp = REPLInterpreter(result)
     frame = CC.InferenceState(result, src, #=cache=#:no, interp)::CC.InferenceState
 
-    CC.typeinf(interp, frame)
+    # NOTE Use the fixed world here to make `REPLInterpreter` robust against
+    #      potential invalidations of `Core.Compiler` methods.
+    Base.invoke_in_world(COMPLETION_WORLD[], CC.typeinf, interp, frame)
 
     result = frame.result.result
     result === Union{} && return nothing # for whatever reason, callers expect this as the Bottom and/or Top type instead
     return result
 end
+
+# `COMPLETION_WORLD[]` will be initialized within `__init__`
+# (to allow us to potentially remove REPL from the sysimage in the future).
+# Note that inference from the `code_typed` call below will use the current world age
+# rather than `typemax(UInt)`, since `Base.invoke_in_world` uses the current world age
+# when the given world age is higher than the current one.
+const COMPLETION_WORLD = Ref{UInt}(typemax(UInt))
+
+# Generate code cache for `REPLInterpreter` now:
+# This code cache will be available at the world of `COMPLETION_WORLD`,
+# assuming no invalidation will happen before initializing REPL.
+# Once REPL is loaded, `REPLInterpreter` will be resilient against future invalidations.
+code_typed(CC.typeinf, (REPLInterpreter, CC.InferenceState))
 
 # Method completion on function call expression that look like :(max(1))
 MAX_METHOD_COMPLETIONS::Int = 40
@@ -1175,6 +1190,7 @@ end
 
 function __init__()
     Base.Experimental.register_error_hint(UndefVarError_hint, UndefVarError)
+    COMPLETION_WORLD[] = Base.get_world_counter()
     nothing
 end
 

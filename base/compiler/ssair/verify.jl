@@ -174,8 +174,16 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     end
                     isa(stmt, PhiNode) || break
                 end
-                @verify_error "Block $idx successors ($(block.succs)), does not match fall-through terminator ($terminator)"
-                error("")
+                termidx = last(block.stmts)
+                stmttyp = ir.stmts[termidx][:type]
+                if isempty(block.succs) && stmttyp == Union{}
+                    # Allow fallthrough terminators that are known to error to
+                    # be removed from the CFG. Ideally we'd add an unreachable
+                    # here, but that isn't always possible.
+                else
+                    @verify_error "Block $idx successors ($(block.succs)), does not match fall-through terminator %$termidx ($terminator)::$stmttyp"
+                    error("")
+                end
             end
         end
     end

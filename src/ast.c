@@ -745,7 +745,7 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v, int check_vali
     // GC Note: jl_fieldref(v, 0) allocates for GotoNode
     //          but we don't need a GC root here because julia_to_list2_noalloc
     //          shouldn't allocate in this case.
-    if (jl_typetagis(v, jl_linenumbernode_type)) {
+    if (jl_is_linenode(v)) {
         jl_value_t *file = jl_fieldref_noalloc(v,1);
         jl_value_t *line = jl_fieldref(v,0);
         value_t args = julia_to_list2_noalloc(fl_ctx, line, file, check_valid);
@@ -784,7 +784,7 @@ JL_DLLEXPORT jl_value_t *jl_fl_parse(const char *text, size_t text_len,
                                      size_t offset, jl_value_t *options)
 {
     JL_TIMING(PARSING, PARSING);
-    jl_timing_show_filename(jl_string_data(filename), JL_TIMING_CURRENT_BLOCK);
+    jl_timing_show_filename(jl_string_data(filename), JL_TIMING_DEFAULT_BLOCK);
     if (offset > text_len) {
         jl_value_t *textstr = jl_pchar_to_string(text, text_len);
         JL_GC_PUSH1(&textstr);
@@ -834,7 +834,7 @@ JL_DLLEXPORT jl_value_t *jl_fl_parse(const char *text, size_t text_len,
 }
 
 // returns either an expression or a thunk
-jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module_t *inmodule)
+static jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module_t *inmodule)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(inmodule);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -847,8 +847,8 @@ jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module
     return result;
 }
 
-static jl_value_t *jl_call_scm_on_ast_and_loc(const char *funcname, jl_value_t *expr,
-                                              jl_module_t *inmodule, const char *file, int line)
+jl_value_t *jl_call_scm_on_ast_and_loc(const char *funcname, jl_value_t *expr,
+                                       jl_module_t *inmodule, const char *file, int line)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(inmodule);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -1011,7 +1011,7 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
     // __source__ argument
     jl_value_t *lno = jl_array_ptr_ref(args, 1);
     margs[1] = lno;
-    if (!jl_typetagis(lno, jl_linenumbernode_type)) {
+    if (!jl_is_linenode(lno)) {
         margs[1] = jl_new_struct(jl_linenumbernode_type, jl_box_long(0), jl_nothing);
     }
     margs[2] = (jl_value_t*)inmodule;
@@ -1031,6 +1031,7 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
             jl_method_error(margs[0], &margs[1], nargs, ct->world_age);
             // unreachable
         }
+        jl_timing_show_macro(mfunc, margs[1], inmodule, JL_TIMING_DEFAULT_BLOCK);
         *ctx = mfunc->def.method->module;
         result = jl_invoke(margs[0], &margs[1], nargs - 1, mfunc);
     }
@@ -1178,6 +1179,7 @@ JL_DLLEXPORT jl_value_t *jl_expand_in_world(jl_value_t *expr, jl_module_t *inmod
                                             const char *file, int line, size_t world)
 {
     JL_TIMING(LOWERING, LOWERING);
+    jl_timing_show_location(file, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
     JL_GC_PUSH1(&expr);
     expr = jl_copy_ast(expr);
     expr = jl_expand_macros(expr, inmodule, NULL, 0, world, 1);
@@ -1191,6 +1193,7 @@ JL_DLLEXPORT jl_value_t *jl_expand_with_loc_warn(jl_value_t *expr, jl_module_t *
                                                  const char *file, int line)
 {
     JL_TIMING(LOWERING, LOWERING);
+    jl_timing_show_location(file, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
     jl_array_t *kwargs = NULL;
     JL_GC_PUSH2(&expr, &kwargs);
     expr = jl_copy_ast(expr);

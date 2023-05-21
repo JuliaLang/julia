@@ -97,6 +97,7 @@ inplace_adj_or_trans(::Type{<:Transpose}) = transpose!
 adj_or_trans_char(::T) where {T<:AbstractArray} = adj_or_trans_char(T)
 adj_or_trans_char(::Type{<:AbstractArray}) = 'N'
 adj_or_trans_char(::Type{<:Adjoint}) = 'C'
+adj_or_trans_char(::Type{<:Adjoint{<:Real}}) = 'T'
 adj_or_trans_char(::Type{<:Transpose}) = 'T'
 
 Base.dataids(A::Union{Adjoint, Transpose}) = Base.dataids(A.parent)
@@ -334,6 +335,8 @@ axes(v::AdjOrTransAbsVec) = (Base.OneTo(1), axes(v.parent)...)
 axes(A::AdjOrTransAbsMat) = reverse(axes(A.parent))
 IndexStyle(::Type{<:AdjOrTransAbsVec}) = IndexLinear()
 IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
+@propagate_inbounds Base.isassigned(v::AdjOrTransAbsVec, i::Int) = isassigned(v.parent, i-1+first(axes(v.parent)[1]))
+@propagate_inbounds Base.isassigned(v::AdjOrTransAbsMat, i::Int, j::Int) = isassigned(v.parent, j, i)
 @propagate_inbounds getindex(v::AdjOrTransAbsVec{T}, i::Int) where {T} = wrapperop(v)(v.parent[i-1+first(axes(v.parent)[1])])::T
 @propagate_inbounds getindex(A::AdjOrTransAbsMat{T}, i::Int, j::Int) where {T} = wrapperop(A)(A.parent[j, i])::T
 @propagate_inbounds setindex!(v::AdjOrTransAbsVec, x, i::Int) = (setindex!(v.parent, wrapperop(v)(x), i-1+first(axes(v.parent)[1])); v)

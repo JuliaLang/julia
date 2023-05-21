@@ -26,7 +26,7 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
 
     global reinterpret
 
-    """
+    @doc """
         reinterpret(T::DataType, A::AbstractArray)
 
     Construct a view of the array with the same binary data as the given
@@ -38,13 +38,13 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
     ```jldoctest
     julia> reinterpret(Float32, UInt32[1 2 3 4 5])
     1×5 reinterpret(Float32, ::Matrix{UInt32}):
-    1.0f-45  3.0f-45  4.0f-45  6.0f-45  7.0f-45
+     1.0f-45  3.0f-45  4.0f-45  6.0f-45  7.0f-45
 
     julia> reinterpret(Complex{Int}, 1:6)
     3-element reinterpret(Complex{$Int}, ::UnitRange{$Int}):
-    1 + 2im
-    3 + 4im
-    5 + 6im
+     1 + 2im
+     3 + 4im
+     5 + 6im
     ```
     """
     function reinterpret(::Type{T}, a::A) where {T,N,S,A<:AbstractArray{S, N}}

@@ -569,7 +569,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, siz
     JL_TIMING(STAGED_FUNCTION, STAGED_FUNCTION);
     jl_value_t *tt = linfo->specTypes;
     jl_method_t *def = linfo->def.method;
-    jl_timing_show_method_instance(linfo, JL_TIMING_CURRENT_BLOCK);
+    jl_timing_show_method_instance(linfo, JL_TIMING_DEFAULT_BLOCK);
     jl_value_t *generator = def->generator;
     assert(generator != NULL);
     assert(jl_is_method(def));
