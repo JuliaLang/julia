@@ -209,27 +209,88 @@ end
 end
 
 @testset "reductions" begin
-    @test @fastmath(maximum([1,2,3])) == 3
-    @test @fastmath(minimum([1,2,3])) == 1
-    @test @fastmath(maximum(abs2, [1,2,3+0im])) == 9
-    @test @fastmath(minimum(sqrt, [1,2,3])) == 1
-    @test @fastmath(maximum(Float32[4 5 6; 7 8 9])) == 9.0f0
-    @test @fastmath(minimum(Float32[4 5 6; 7 8 9])) == 4.0f0
+    for T in (Int, Float16, Float32, Float64)
+        S = T == Int ? Float64 : T
+        x = @fastmath(sum(T[1,2,3,4]))
+        @test x isa T && x == 10
+        x = @fastmath(prod(T[1,2,3,4]))
+        @test x isa T && x == 24
+        x = @fastmath(sum(abs2, T[1,2,3]))
+        @test x isa T && x == 14
+        x = @fastmath(prod(sqrt, T[1,4,9]))
+        @test x isa S && x == 6
+        x = @fastmath(sum(T[1 2 3; 4 5 6]))
+        @test x isa T && x == 21
+        x = @fastmath(prod(T[1 2 3; 4 5 6]))
+        @test x isa T && x == 720
 
-    @test @fastmath(maximum(Float32[4 5 6; 7 8 9]; dims=1)) == Float32[7.0 8.0 9.0]
-    @test @fastmath(minimum(Float32[4 5 6; 7 8 9]; dims=2)) == Float32[4.0; 7.0;;]
-    @test @fastmath(maximum(abs, [4+im -5 6-im; -7 8 -9]; dims=1)) == [7.0 8.0 9.0]
-    @test @fastmath(minimum(cbrt, [4 -5 6; -7 8 -9]; dims=2)) == cbrt.([-5; -9;;])
+        x = @fastmath(sum(T[4 5 6; 7 8 9]; dims=1))
+        @test x isa Matrix{T} && x == [11 13 15]
+        x = @fastmath(prod(T[4 5 6; 7 8 9]; dims=2))
+        @test x isa Matrix{T} && x == [120; 504;;]
+        x = @fastmath(sum(abs, Complex{T}[2im -2im 2im; -1 2 -3]; dims=1))
+        @test x isa Matrix{S} && x == [3 4 5]
+        x = @fastmath(prod(cbrt, T[1 -8 1; 8 1 -8]; dims=2))
+        @test x isa Matrix{S} && x == [-2; -4;;]
+    end
 
-    x = randn(3,4,5)
-    x1 = sum(x; dims=1)
-    x23 = sum(x; dims=(2,3))
-    @test @fastmath(maximum!(x1, x)) ≈ maximum(x; dims=1)
-    @test x1 ≈ maximum(x; dims=1)
-    @test @fastmath(minimum!(x23, x)) ≈ minimum(x; dims=(2,3))
-    @test x23 ≈ minimum(x; dims=(2,3))
-    @test @fastmath(maximum!(abs, x23, x .+ im)) ≈ maximum(abs, x .+ im; dims=(2,3))
-    @test @fastmath(minimum!(abs2, x1, x .+ im)) ≈ minimum(abs2, x .+ im; dims=1)
+    for T in (Int, Float16, Float32, Float64)
+        if T == Float16 ; continue end  # necessary until #49907 is fixed
+        S = T == Int ? Float64 : T
+        y = @fastmath(maximum(T[1,2,3]))
+        @test y isa T && y == 3
+        y = @fastmath(minimum(T[1,2,3]))
+        @test y isa T && y == 1
+        y = @fastmath(extrema(T[1,2,3]))
+        @test y isa Tuple{T,T} && y == (1,3)
+        y = @fastmath(maximum(abs2, Complex{T}[1,2,3im]))
+        @test y isa T && y == 9
+        y = @fastmath(minimum(sqrt, T[1,2,3]))
+        @test y isa S && y == 1
+        y = @fastmath(extrema(abs, T[-1,-2,3]))
+        @test y isa Tuple{T,T} && y == (1,3)
+        y = @fastmath(maximum(T[4 5 6; 7 8 9]))
+        @test y isa T && y == 9
+        y = @fastmath(minimum(T[4 5 6; 7 8 9]))
+        @test y isa T && y == 4
+        y = @fastmath(extrema(T[4 5 6; 7 8 9]))
+        @test y isa Tuple{T,T} && y == (4,9)
+
+        y = @fastmath(maximum(T[4 5 6; 7 8 9]; dims=1))
+        @test y isa Matrix{T} && y == [7 8 9]
+        y = @fastmath(minimum(T[4 5 6; 7 8 9]; dims=2))
+        @test y isa Matrix{T} && y == [4; 7;;]
+        y = @fastmath(extrema(T[4 5 6; 7 8 9]; dims=2))
+        @test y isa Matrix{Tuple{T,T}} && y == [(4,6);(7,9);;]
+        y = @fastmath(maximum(abs, Complex{T}[4+im -5 6-im; -7 8 -9]; dims=1))
+        @test y isa Matrix{S} && y == T[7 8 9]
+        y = @fastmath(minimum(cbrt, T[4 -5 6; -7 8 -9]; dims=2))
+        @test y isa Matrix{S} && y == cbrt.(T[-5; -9;;])
+        y = @fastmath(extrema(abs, T[-4 5 6; 7 -8 -9]; dims=1))
+        @test y isa Matrix{Tuple{T,T}} && y == [(4,7) (5,8) (6,9)]
+
+        x = rand(T, 3,4,5)
+        x1 = sum(x; dims=1)
+        x23 = sum(x; dims=(2,3))
+        y1 = map(z -> (z,z), x1)
+        y23 = map(z -> (z,z), x23)
+        y = @fastmath(maximum!(x1, x))
+        @test y ≈ maximum(x; dims=1)
+        @test y === x1
+        y = @fastmath(minimum!(x23, x))
+        @test y ≈ minimum(x; dims=(2,3))
+        @test y === x23
+        @test @fastmath(maximum!(abs, x23, x .+ im)) ≈ maximum(abs, x .+ im; dims=(2,3))
+        @test @fastmath(minimum!(abs2, x1, x .+ im)) ≈ minimum(abs2, x .+ im; dims=1)
+        y = @fastmath(extrema!(y1, x))
+        @test map(z -> z[1], y) ≈ minimum(x; dims=1)
+        @test map(z -> z[2], y) ≈ maximum(x; dims=1)
+        @test y === y1
+        y = @fastmath(extrema!(y23, x))
+        @test map(z -> z[1], y) ≈ minimum(x; dims=(2,3))
+        @test map(z -> z[2], y) ≈ maximum(x; dims=(2,3))
+        @test y === y23
+    end
 end
 
 @testset "issue #10544" begin
