@@ -1028,7 +1028,7 @@ function _string(x::BigFloat, fmt::String)::String
     isfinite(x) || return string(Float64(x))
     _prettify_bigfloat(string_mpfr(x, fmt))
 end
-_string(x::BigFloat) = _string(x, "%.Re")
+_string(x::BigFloat) = _string(x, "%Re")
 _string(x::BigFloat, k::Integer) = _string(x, "%.$(k)Re")
 
 string(b::BigFloat) = _string(b)
