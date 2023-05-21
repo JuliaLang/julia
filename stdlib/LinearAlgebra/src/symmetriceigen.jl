@@ -197,7 +197,7 @@ function _bkeigen!(A, B; sortby)
         vecs = (B.U' \ w)[invperm(B.p),:]
     else # B.uplo == 'L'
         vals, w = eigen!(ldiv(lu!(B.D), UiAUti!(@view(A[B.p,B.p]), B.L)); sortby)
-        vecs = (B.L' \ w)[B.p,:]
+        vecs = (B.L' \ w)[invperm(B.p),:]
     end
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
