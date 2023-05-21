@@ -171,16 +171,34 @@ function eigen!(A::AbstractMatrix{T}, B::RealHermSymComplexHerm{T,S}; sortby::Un
     return eigen!(A, Matrix{T}(B); sortby) ;
 end
 
+function eigen(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number} 
+    eigen!(copy(A), copy(C); sortby)
+end
 function eigen!(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     return _choleigen!(A, C.U; sortby)
-end
-function eigen(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number} 
-    eigen!(eigencopy_oftype(A, T), copy(C); sortby)
 end
 # Cholesky decomposition based eigenvalues and eigenvectors
 function _choleigen!(A, U; sortby)
     vals, w = eigen!(UtiAUi!(A, U))
     vecs = U \ w
+    GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
+end
+
+function eigen(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number} 
+    eigen!(copy(A), copy(B); sortby)
+end
+function eigen!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
+    return _bkeigen!(A, B; sortby)
+end
+# Bunchkaufman decomposition based eigenvalues and eigenvectors
+function _bkeigen!(A, B; sortby)
+    if B.uplo == 'U'
+        vals, w = eigen!(ldiv(lu!(B.D), UiAUti!(@view(A[B.p,B.p]), B.U)); sortby)
+        vecs = (B.U' \ w)[invperm(B.p),:]
+    else # B.uplo == 'L'
+        vals, w = eigen!(ldiv(lu!(B.D), UiAUti!(@view(A[B.p,B.p]), B.L)); sortby)
+        vecs = (B.L' \ w)[B.p,:]
+    end
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
 

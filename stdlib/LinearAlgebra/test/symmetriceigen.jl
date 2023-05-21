@@ -6,13 +6,26 @@ using Test, LinearAlgebra, Random
 
 Random.seed!(555)
 
-@testset "bk-eigenvals" begin
+@testset "bk-eigen-eigals" begin
+    # Bunchkaufman decomposition based
+
+    # Complex-valued random matrix
     N = 10
     A = complex.(randn(N,N),randn(N,N))
     B = complex.(randn(N,N),randn(N,N))
-    BH = (B+B')/2 ; 
-
+    BH = (B+B')/2 
     sf = x->(real(x),imag(x))
+
+    # eigen
+    e0 = eigvals(A,BH; sortby=sf)
+    e,v = eigen(A,bunchkaufman(Hermitian(BH,:L)); sortby=sf)
+    @test e0 ≈ e
+    @test A*v ≈ BH*v*Diagonal(e)
+    e,v = eigen(A,bunchkaufman(Hermitian(BH,:U)); sortby=sf)
+    @test e0 ≈ e
+    @test A*v ≈ BH*v*Diagonal(e)
+
+    # eigvals
     e0 = eigvals(A,BH; sortby=sf)
     el = eigvals(A,bunchkaufman(Hermitian(BH,:L)); sortby=sf)
     eu = eigvals(A,bunchkaufman(Hermitian(BH,:U)); sortby=sf)
@@ -24,28 +37,28 @@ end
     ## Cholesky decomposition based
 
     ## Complex valued
-    A =  [1.0+im 1.0+1.0im 0 0; 1.0+1.0im 2.0+3.0im 1.0+1.0im 0; 0 1.0+2.0im 3.0+4.0im 1.0+5.0im; 0 0 1.0+1.0im 4.0+4.0im] ;
-    AH = (A+A')/2 ;
-    B =  [2.0+2.0im 1.0+1.0im 4.0+4.0im 3.0+3.0im; 0 3.0+2.0im 1.0+1.0im 3.0+4.0im; 3.0+3.0im 1.0+4.0im 0 0; 0 1.0+2.0im 3.0+1.0im 1.0+1.0im];
-    BH = (B+B')/2 ; 
+    A =  [1.0+im 1.0+1.0im 0 0; 1.0+1.0im 2.0+3.0im 1.0+1.0im 0; 0 1.0+2.0im 3.0+4.0im 1.0+5.0im; 0 0 1.0+1.0im 4.0+4.0im]
+    AH = (A+A')/2
+    B =  [2.0+2.0im 1.0+1.0im 4.0+4.0im 3.0+3.0im; 0 3.0+2.0im 1.0+1.0im 3.0+4.0im; 3.0+3.0im 1.0+4.0im 0 0; 0 1.0+2.0im 3.0+1.0im 1.0+1.0im]
+    BH = (B+B')/2
 
     # eigenvalue sorting
     sf = x->(real(x),imag(x))
 
     # PD matrix
-    BPD = B*B' ;
+    BPD = B*B'
     # eigen
-    C = cholesky(BPD) ;
+    C = cholesky(BPD)
     e,v = eigen(A, C; sortby=sf)
-    @test A*v ≈ BPD*v*Diagonal(e) ;
+    @test A*v ≈ BPD*v*Diagonal(e)
     # eigvals
     @test eigvals(A, BPD; sortby=sf) ≈ eigvals(A, C; sortby=sf)  
 end
 
 @testset "issue #49533" begin
     ## Real valued
-    A = Float64[1 1 0 0; 1 2 1 0; 0 1 3 1; 0 0 1 4] ;
-    B = Matrix(Diagonal(Float64[1:4;])) ;
+    A = Float64[1 1 0 0; 1 2 1 0; 0 1 3 1; 0 0 1 4]
+    B = Matrix(Diagonal(Float64[1:4;]))
     # eigen
     e0,v0 = eigen(A, B)
     e1,v1 = eigen(A, Symmetric(B))
@@ -57,10 +70,10 @@ end
     @test eigvals(A, B) ≈ eigvals(Symmetric(A), B)
     
     ## Complex valued
-    A =  [1.0+im 1.0+1.0im 0 0; 1.0+1.0im 2.0+3.0im 1.0+1.0im 0; 0 1.0+2.0im 3.0+4.0im 1.0+5.0im; 0 0 1.0+1.0im 4.0+4.0im] ;
-    AH = (A+A')/2 ;
-    B =  [2.0+2.0im 1.0+1.0im 4.0+4.0im 3.0+3.0im; 0 3.0+2.0im 1.0+1.0im 3.0+4.0im; 3.0+3.0im 1.0+4.0im 0 0; 0 1.0+2.0im 3.0+1.0im 1.0+1.0im];
-    BH = (B+B')/2 ; 
+    A =  [1.0+im 1.0+1.0im 0 0; 1.0+1.0im 2.0+3.0im 1.0+1.0im 0; 0 1.0+2.0im 3.0+4.0im 1.0+5.0im; 0 0 1.0+1.0im 4.0+4.0im]
+    AH = (A+A')/2
+    B =  [2.0+2.0im 1.0+1.0im 4.0+4.0im 3.0+3.0im; 0 3.0+2.0im 1.0+1.0im 3.0+4.0im; 3.0+3.0im 1.0+4.0im 0 0; 0 1.0+2.0im 3.0+1.0im 1.0+1.0im]
+    BH = (B+B')/2
     # eigen
     sf = x->(real(x),imag(x))
     e1,v1 = eigen(A, Hermitian(BH))
