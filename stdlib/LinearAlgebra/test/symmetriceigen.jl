@@ -13,7 +13,7 @@ Random.seed!(555)
     N = 10
     A = complex.(randn(N,N),randn(N,N))
     B = complex.(randn(N,N),randn(N,N))
-    BH = (B+B')/2 
+    BH = (B+B')/2
     sf = x->(real(x),imag(x))
 
     # eigen
@@ -52,7 +52,7 @@ end
     e,v = eigen(A, C; sortby=sf)
     @test A*v ≈ BPD*v*Diagonal(e)
     # eigvals
-    @test eigvals(A, BPD; sortby=sf) ≈ eigvals(A, C; sortby=sf)  
+    @test eigvals(A, BPD; sortby=sf) ≈ eigvals(A, C; sortby=sf)
 end
 
 @testset "issue #49533" begin
@@ -68,7 +68,7 @@ end
     # eigvals
     @test eigvals(A, B) ≈ eigvals(A, Symmetric(B))
     @test eigvals(A, B) ≈ eigvals(Symmetric(A), B)
-    
+
     ## Complex valued
     A =  [1.0+im 1.0+1.0im 0 0; 1.0+1.0im 2.0+3.0im 1.0+1.0im 0; 0 1.0+2.0im 3.0+4.0im 1.0+5.0im; 0 0 1.0+1.0im 4.0+4.0im]
     AH = (A+A')/2
@@ -82,7 +82,7 @@ end
     @test Hermitian(AH)*v2 ≈ B*v2*Diagonal(e2)
     # eigvals
     @test eigvals(A, BH; sortby=sf) ≈ eigvals(A, Hermitian(BH); sortby=sf)
-    @test eigvals(AH, B; sortby=sf) ≈ eigvals(Hermitian(AH), B; sortby=sf)    
+    @test eigvals(AH, B; sortby=sf) ≈ eigvals(Hermitian(AH), B; sortby=sf)
 end
 
 end # module TestSymmetricEigen

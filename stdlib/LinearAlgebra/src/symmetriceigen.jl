@@ -171,7 +171,7 @@ function eigen!(A::AbstractMatrix{T}, B::RealHermSymComplexHerm{T,S}; sortby::Un
     return eigen!(A, Matrix{T}(B); sortby) ;
 end
 
-function eigen(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number} 
+function eigen(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     eigen!(copy(A), copy(C); sortby)
 end
 function eigen!(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
@@ -184,7 +184,7 @@ function _choleigen!(A, U; sortby)
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
 
-function eigen(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number} 
+function eigen(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     eigen!(copy(A), copy(B); sortby)
 end
 function eigen!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
@@ -238,7 +238,7 @@ end
 function eigvals!(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     return _choleigvals!(A, C.U; sortby)
 end
-function eigvals(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number} 
+function eigvals(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     eigvals!(eigencopy_oftype(A, T), copy(C); sortby)
 end
 # Cholesky decomposition based eigenvalues
