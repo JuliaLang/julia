@@ -223,6 +223,15 @@ function full!(A::UnitUpperTriangular)
     B
 end
 
+Base.isassigned(A::UnitLowerTriangular, i::Int, j::Int) =
+    i > j ? isassigned(A.data, i, j) : true
+Base.isassigned(A::LowerTriangular, i::Int, j::Int) =
+    i >= j ? isassigned(A.data, i, j) : true
+Base.isassigned(A::UnitUpperTriangular, i::Int, j::Int) =
+    i < j ? isassigned(A.data, i, j) : true
+Base.isassigned(A::UpperTriangular, i::Int, j::Int) =
+    i <= j ? isassigned(A.data, i, j) : true
+
 getindex(A::UnitLowerTriangular{T}, i::Integer, j::Integer) where {T} =
     i > j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
 getindex(A::LowerTriangular, i::Integer, j::Integer) =
