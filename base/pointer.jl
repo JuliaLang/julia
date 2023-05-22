@@ -96,10 +96,6 @@ unsafe_wrap(Atype::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}},
             p::Ptr{T}, dims::NTuple{N,<:Integer}; own::Bool = false) where {T,N} =
     unsafe_wrap(Atype, p, convert(Tuple{Vararg{Int}}, dims), own = own)
 
-const ATOMIC_PTR_DOCS = """
-
-"""
-
 """
     unsafe_load(p::Ptr{T}, i::Integer=1)
     unsafe_load(p::Ptr{T}, order::Symbol)
