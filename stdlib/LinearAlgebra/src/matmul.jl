@@ -782,14 +782,15 @@ function generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::AbstractVecOrMat, B:
     if mA == nA == mB == nB == mC == nC == 3
         return matmul3x3!(C, tA, tB, A, B, _add)
     end
+    A, tA = tA in ('H', 'h', 'S', 's') ? (wrap(A, tA), 'N') : (A, tA)
+    B, tB = tB in ('H', 'h', 'S', 's') ? (wrap(B, tB), 'N') : (B, tB)
     _generic_matmatmul!(C, tA, tB, A, B, _add)
 end
 
 function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S},
                              _add::MulAddMul) where {T,S,R}
+    @assert tA in ('N', 'T', 'C') && tB in ('N', 'T', 'C')
     require_one_based_indexing(C, A, B)
-    A, tA = tA in ('H', 'h', 'S', 's') ? (wrap(A, tA), 'N') : (A, tA)
-    B, tB = tB in ('H', 'h', 'S', 's') ? (wrap(B, tB), 'N') : (B, tB)
 
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
