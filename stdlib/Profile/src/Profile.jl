@@ -227,11 +227,15 @@ function print(io::IO,
         elseif Sys.iswindows() && in(groupby, [:thread, [:task, :thread], [:thread, :task]])
             @warn "Profiling on windows is limited to the main thread. Other threads have not been sampled and will not show in the report"
         end
-        any_nosamples = false
-        println(io, "Overhead ╎ [+additional indent] Count File:Line; Function")
-        println(io, "=========================================================")
+        any_nosamples = true
+        if format === :tree
+            Base.print(io, "Overhead ╎ [+additional indent] Count File:Line; Function\n")
+            Base.print(io, "=========================================================\n")
+        end
         if groupby == [:task, :thread]
-            for taskid in intersect(get_task_ids(data), tasks)
+            taskids = intersect(get_task_ids(data), tasks)
+            isempty(taskids) && (any_nosamples = true)
+            for taskid in taskids
                 threadids = intersect(get_thread_ids(data, taskid), threads)
                 if length(threadids) == 0
                     any_nosamples = true
@@ -247,7 +251,9 @@ function print(io::IO,
                 end
             end
         elseif groupby == [:thread, :task]
-            for threadid in intersect(get_thread_ids(data), threads)
+            threadids = intersect(get_thread_ids(data), threads)
+            isempty(threadids) && (any_nosamples = true)
+            for threadid in threadids
                 taskids = intersect(get_task_ids(data, threadid), tasks)
                 if length(taskids) == 0
                     any_nosamples = true
@@ -264,7 +270,9 @@ function print(io::IO,
             end
         elseif groupby === :task
             threads = 1:typemax(Int)
-            for taskid in intersect(get_task_ids(data), tasks)
+            taskids = intersect(get_task_ids(data), tasks)
+            isempty(taskids) && (any_nosamples = true)
+            for taskid in taskids
                 printstyled(io, "Task $(Base.repr(taskid)) "; bold=true, color=Base.debug_color())
                 nosamples = print(io, data, lidict, pf, format, threads, taskid, true)
                 nosamples && (any_nosamples = true)
@@ -272,7 +280,9 @@ function print(io::IO,
             end
         elseif groupby === :thread
             tasks = 1:typemax(UInt)
-            for threadid in intersect(get_thread_ids(data), threads)
+            threadids = intersect(get_thread_ids(data), threads)
+            isempty(threadids) && (any_nosamples = true)
+            for threadid in threadids
                 printstyled(io, "Thread $threadid "; bold=true, color=Base.info_color())
                 nosamples = print(io, data, lidict, pf, format, threadid, tasks, true)
                 nosamples && (any_nosamples = true)
@@ -387,6 +397,7 @@ function getdict!(dict::LineInfoDict, data::Vector{UInt})
     n_unique_ips = length(unique_ips)
     n_unique_ips == 0 && return dict
     iplookups = similar(unique_ips, Vector{StackFrame})
+    sort!(unique_ips) # help each thread to get a disjoint set of libraries, as much if possible
     @sync for indexes_part in Iterators.partition(eachindex(unique_ips), div(n_unique_ips, Threads.threadpoolsize(), RoundUp))
         Threads.@spawn begin
             for i in indexes_part
@@ -653,7 +664,7 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
     m = Int[]
     lilist_idx = Dict{T, Int}()
     recursive = Set{T}()
-    first = true
+    leaf = 0
     totalshots = 0
     startframe = length(data)
     skip = false
@@ -677,12 +688,16 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
             skip = false
             totalshots += 1
             empty!(recursive)
-            first = true
+            if leaf != 0
+                m[leaf] += 1
+            end
+            leaf = 0
             startframe = i
         elseif !skip
             frames = lidict[ip]
             nframes = (frames isa Vector ? length(frames) : 1)
-            for j = 1:nframes
+            # the last lookup is the non-inlined root frame, the first is the inlined leaf frame
+            for j = nframes:-1:1
                 frame = (frames isa Vector ? frames[j] : frames)
                 !C && frame.from_c && continue
                 key = (T === UInt64 ? ip : frame)
@@ -696,10 +711,7 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
                     push!(recursive, key)
                     n[idx] += 1
                 end
-                if first
-                    m[idx] += 1
-                    first = false
-                end
+                leaf = idx
             end
         end
     end
@@ -710,30 +722,31 @@ end
 function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, cols::Int, fmt::ProfileFormat,
                 threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}}, is_subsection::Bool)
     lilist, n, m, totalshots, nsleeping = parse_flat(fmt.combine ? StackFrame : UInt64, data, lidict, fmt.C, threads, tasks)
-    util_perc = (1 - (nsleeping / totalshots)) * 100
-    if isempty(lilist)
-        if is_subsection
-            Base.print(io, "Total snapshots: ")
-            printstyled(io, "$(totalshots)", color=Base.warn_color())
-            Base.println(io, " (", round(Int, util_perc), "% utilization)")
-        else
-            warning_empty()
-        end
-        return true
-    end
     if false # optional: drop the "non-interpretable" ones
         keep = map(frame -> frame != UNKNOWN && frame.line != 0, lilist)
         lilist = lilist[keep]
         n = n[keep]
         m = m[keep]
     end
+    util_perc = (1 - (nsleeping / totalshots)) * 100
     filenamemap = Dict{Symbol,String}()
-    print_flat(io, lilist, n, m, cols, filenamemap, fmt)
-    Base.print(io, "Total snapshots: ", totalshots, " (", round(Int, util_perc), "% utilization")
+    if isempty(lilist)
+        if is_subsection
+            Base.print(io, "Total snapshots: ")
+            printstyled(io, "$(totalshots)", color=Base.warn_color())
+            Base.print(io, ". Utilization: ", round(Int, util_perc), "%\n")
+        else
+            warning_empty()
+        end
+        return true
+    end
+    is_subsection || print_flat(io, lilist, n, m, cols, filenamemap, fmt)
+    Base.print(io, "Total snapshots: ", totalshots, ". Utilization: ", round(Int, util_perc), "%")
     if is_subsection
-        println(io, ")")
+        println(io)
+        print_flat(io, lilist, n, m, cols, filenamemap, fmt)
     else
-        println(io, " across all threads and tasks. Use the `groupby` kwarg to break down by thread and/or task)")
+        Base.print(io, " across all threads and tasks. Use the `groupby` kwarg to break down by thread and/or task.\n")
     end
     return false
 end
@@ -1054,8 +1067,8 @@ function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat
     filenamemap = Dict{Symbol,String}()
     worklist = [(bt, 0, 0, "")]
     if !is_subsection
-        println(io, "Overhead ╎ [+additional indent] Count File:Line; Function")
-        println(io, "=========================================================")
+        Base.print(io, "Overhead ╎ [+additional indent] Count File:Line; Function\n")
+        Base.print(io, "=========================================================\n")
     end
     while !isempty(worklist)
         (bt, level, noisefloor, str) = popfirst!(worklist)
@@ -1101,24 +1114,23 @@ function tree(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoFlatDict, Line
         root, nsleeping = tree!(StackFrameTree{UInt64}(), data, lidict, fmt.C, fmt.recur, threads, tasks)
     end
     util_perc = (1 - (nsleeping / root.count)) * 100
-    !is_subsection && print_tree(io, root, cols, fmt, is_subsection)
+    is_subsection || print_tree(io, root, cols, fmt, is_subsection)
     if isempty(root.down)
         if is_subsection
             Base.print(io, "Total snapshots: ")
             printstyled(io, "$(root.count)", color=Base.warn_color())
-            Base.println(io, ". Utilization: ", round(Int, util_perc), "%")
+            Base.print(io, ". Utilization: ", round(Int, util_perc), "%\n")
         else
             warning_empty()
         end
         return true
-    else
-        Base.print(io, "Total snapshots: ", root.count, ". Utilization: ", round(Int, util_perc), "%")
     end
+    Base.print(io, "Total snapshots: ", root.count, ". Utilization: ", round(Int, util_perc), "%")
     if is_subsection
-        println(io)
+        Base.println(io)
         print_tree(io, root, cols, fmt, is_subsection)
     else
-        println(io, " across all threads and tasks. Use the `groupby` kwarg to break down by thread and/or task")
+        Base.print(io, " across all threads and tasks. Use the `groupby` kwarg to break down by thread and/or task.\n")
     end
     return false
 end

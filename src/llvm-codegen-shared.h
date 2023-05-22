@@ -316,125 +316,73 @@ using namespace llvm;
 
 inline void addFnAttr(CallInst *Target, Attribute::AttrKind Attr)
 {
-#if JL_LLVM_VERSION >= 140000
     Target->addFnAttr(Attr);
-#else
-    Target->addAttribute(AttributeList::FunctionIndex, Attr);
-#endif
 }
 
 template<class T, class A>
 inline void addRetAttr(T *Target, A Attr)
 {
-#if JL_LLVM_VERSION >= 140000
     Target->addRetAttr(Attr);
-#else
-    Target->addAttribute(AttributeList::ReturnIndex, Attr);
-#endif
 }
 
 inline void addAttributeAtIndex(Function *F, unsigned Index, Attribute Attr)
 {
-#if JL_LLVM_VERSION >= 140000
     F->addAttributeAtIndex(Index, Attr);
-#else
-    F->addAttribute(Index, Attr);
-#endif
 }
 
 inline AttributeSet getFnAttrs(const AttributeList &Attrs)
 {
-#if JL_LLVM_VERSION >= 140000
     return Attrs.getFnAttrs();
-#else
-    return Attrs.getFnAttributes();
-#endif
 }
 
 inline AttributeSet getRetAttrs(const AttributeList &Attrs)
 {
-#if JL_LLVM_VERSION >= 140000
     return Attrs.getRetAttrs();
-#else
-    return Attrs.getRetAttributes();
-#endif
 }
 
 inline bool hasFnAttr(const AttributeList &L, Attribute::AttrKind Kind)
 {
-#if JL_LLVM_VERSION >= 140000
     return L.hasFnAttr(Kind);
-#else
-    return L.hasAttribute(AttributeList::FunctionIndex, Kind);
-#endif
 }
 
 inline AttributeList addAttributeAtIndex(const AttributeList &L, LLVMContext &C,
                                          unsigned Index, Attribute::AttrKind Kind)
 {
-#if JL_LLVM_VERSION >= 140000
     return L.addAttributeAtIndex(C, Index, Kind);
-#else
-    return L.addAttribute(C, Index, Kind);
-#endif
 }
 
 inline AttributeList addAttributeAtIndex(const AttributeList &L, LLVMContext &C,
                                          unsigned Index, Attribute Attr)
 {
-#if JL_LLVM_VERSION >= 140000
     return L.addAttributeAtIndex(C, Index, Attr);
-#else
-    return L.addAttribute(C, Index, Attr);
-#endif
 }
 
 inline AttributeList addAttributesAtIndex(const AttributeList &L, LLVMContext &C,
                                           unsigned Index, const AttrBuilder &Builder)
 {
-#if JL_LLVM_VERSION >= 140000
     return L.addAttributesAtIndex(C, Index, Builder);
-#else
-    return L.addAttributes(C, Index, Builder);
-#endif
 }
 
 inline AttributeList addFnAttribute(const AttributeList &L, LLVMContext &C,
                                     Attribute::AttrKind Kind)
 {
-#if JL_LLVM_VERSION >= 140000
     return L.addFnAttribute(C, Kind);
-#else
-    return L.addAttribute(C, AttributeList::FunctionIndex, Kind);
-#endif
 }
 
 inline AttributeList addRetAttribute(const AttributeList &L, LLVMContext &C,
                                      Attribute::AttrKind Kind)
 {
-#if JL_LLVM_VERSION >= 140000
     return L.addRetAttribute(C, Kind);
-#else
-    return L.addAttribute(C, AttributeList::ReturnIndex, Kind);
-#endif
 }
 
 inline bool hasAttributesAtIndex(const AttributeList &L, unsigned Index)
 {
-#if JL_LLVM_VERSION >= 140000
     return L.hasAttributesAtIndex(Index);
-#else
-    return L.hasAttributes(Index);
-#endif
 }
 
 inline Attribute getAttributeAtIndex(const AttributeList &L, unsigned Index, Attribute::AttrKind Kind)
 {
-#if JL_LLVM_VERSION >= 140000
     return L.getAttributeAtIndex(Index, Kind);
-#else
-    return L.getAttribute(Index, Kind);
-#endif
 }
 
 // Iterate through uses of a particular type.

@@ -295,3 +295,18 @@ if Sys.WORD_SIZE >= 64
         objectid(s)
     end
 end
+
+# Issue #49620
+let t1 = Tuple{AbstractVector,AbstractVector{<:Integer},UnitRange{<:Integer}},
+    t2 = Tuple{AbstractVector,AbstractVector{<:Integer},UnitRange{<:Integer}}
+    @test hash(t1) == hash(t2)
+    @test length(Set{Type}([t1, t2])) == 1
+end
+
+struct AUnionParam{T<:Union{Nothing,Float32,Float64}} end
+@test AUnionParam.body.hash == 0
+@test Type{AUnionParam}.hash != 0
+@test Type{AUnionParam{<:Union{Float32,Float64}}}.hash == 0
+@test Type{AUnionParam{<:Union{Nothing,Float32,Float64}}} === Type{AUnionParam}
+@test Type{AUnionParam.body}.hash == 0
+@test Type{Base.Broadcast.Broadcasted}.hash != 0

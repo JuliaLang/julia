@@ -362,7 +362,7 @@ code_llvm(devnull, invoke_g10878, ())
 
 
 # issue #10930
-@test isa(code_typed(promote,(Any,Any,Vararg{Any})), Array)
+@test isa(Base.return_types(promote, (Any,Any,Vararg{Any})), Vector)
 find_tvar10930(sig::Type{T}) where {T<:Tuple} = 1
 function find_tvar10930(arg)
     if isa(arg, Type) && arg<:Tuple
@@ -2402,6 +2402,20 @@ from_interconditional_check22(::Union{Int,String}, y) = isa(y, Int)
     end
     return 0
 end |> only === Int
+
+# prioritize constraints on slot objects
+# https://github.com/aviatesk/JET.jl/issues/509
+struct JET509
+    list::Union{Tuple{},Vector{Int}}
+end
+jet509_hasitems(list) = length(list) >= 1
+@test Base.return_types((JET509,); interp=MustAliasInterpreter()) do ilist::JET509
+    list = ilist.list
+    if jet509_hasitems(list)
+        return list
+    end
+    error("list is empty")
+end |> only == Vector{Int}
 
 # === constraint
 # --------------
@@ -4784,31 +4798,30 @@ fhasmethod(::Integer, ::Int32) = 3
 @test only(Base.return_types(()) do; Val(hasmethod(sin, Tuple{Int, Vararg{Int}})); end) == Val{false}
 @test only(Base.return_types(()) do; Val(hasmethod(sin, Tuple{Int, Int, Vararg{Int}})); end) === Val{false}
 
-# TODO (#48913) enable interprocedural call inference from irinterp
-# # interprocedural call inference from irinterp
-# @noinline Base.@assume_effects :total issue48679_unknown_any(x) = Base.inferencebarrier(x)
+# interprocedural call inference from irinterp
+@noinline Base.@assume_effects :total issue48679_unknown_any(x) = Base.inferencebarrier(x)
 
-# @noinline _issue48679(y::Union{Nothing,T}) where {T} = T::Type
-# Base.@constprop :aggressive function issue48679(x, b)
-#     if b
-#         x = issue48679_unknown_any(x)
-#     end
-#     return _issue48679(x)
-# end
-# @test Base.return_types((Float64,)) do x
-#     issue48679(x, false)
-# end |> only == Type{Float64}
+@noinline _issue48679(y::Union{Nothing,T}) where {T} = T::Type
+Base.@constprop :aggressive function issue48679(x, b)
+    if b
+        x = issue48679_unknown_any(x)
+    end
+    return _issue48679(x)
+end
+@test Base.return_types((Float64,)) do x
+    issue48679(x, false)
+end |> only == Type{Float64}
 
-# Base.@constprop :aggressive @noinline _issue48679_const(b, y::Union{Nothing,T}) where {T} = b ? nothing : T::Type
-# Base.@constprop :aggressive function issue48679_const(x, b)
-#     if b
-#         x = issue48679_unknown_any(x)
-#     end
-#     return _issue48679_const(b, x)
-# end
-# @test Base.return_types((Float64,)) do x
-#     issue48679_const(x, false)
-# end |> only == Type{Float64}
+Base.@constprop :aggressive @noinline _issue48679_const(b, y::Union{Nothing,T}) where {T} = b ? nothing : T::Type
+Base.@constprop :aggressive function issue48679_const(x, b)
+    if b
+        x = issue48679_unknown_any(x)
+    end
+    return _issue48679_const(b, x)
+end
+@test Base.return_types((Float64,)) do x
+    issue48679_const(x, false)
+end |> only == Type{Float64}
 
 # `invoke` call in irinterp
 @noinline _irinterp_invoke(x::Any) = :any
@@ -4859,3 +4872,63 @@ end) == Type{Nothing}
 @test Base.return_types() do
     Core.Compiler.return_type(Tuple{typeof(+), Int, Int})
 end |> only == Type{Int}
+
+# Test that NamedTuple abstract iteration works for PartialStruct/Const
+function nt_splat_const()
+    nt = (; x=1, y=2)
+    Val{tuple(nt...)[2]}()
+end
+@test @inferred(nt_splat_const()) == Val{2}()
+
+function nt_splat_partial(x::Int)
+    nt = (; x, y=2)
+    Val{tuple(nt...)[2]}()
+end
+@test @inferred(nt_splat_partial(42)) == Val{2}()
+
+# Test that irinterp refines based on discovered errors
+Base.@assume_effects :foldable Base.@constprop :aggressive function kill_error_edge(b1, b2, xs, x)
+    y = b1 ? "julia" : xs[]
+    if b2
+        a = length(y)
+    else
+        a = sin(y)
+    end
+    a + x
+end
+
+Base.@assume_effects :foldable Base.@constprop :aggressive function kill_error_edge(b1, b2, xs, ys, x)
+    y = b1 ? xs[] : ys[]
+    if b2
+        a = length(y)
+    else
+        a = sin(y)
+    end
+    a + x
+end
+
+let src = code_typed1((Bool,Base.RefValue{Any},Int,)) do b2, xs, x
+        kill_error_edge(true, b2, xs, x)
+    end
+    @test count(@nospecialize(x)->isa(x, Core.PhiNode), src.code) == 0
+end
+
+let src = code_typed1((Bool,Base.RefValue{String}, Base.RefValue{Any},Int,)) do b2, xs, ys, x
+        kill_error_edge(true, b2, xs, ys, x)
+    end
+    @test count(@nospecialize(x)->isa(x, Core.PhiNode), src.code) == 0
+end
+
+struct Issue49785{S, T<:S} end
+let 𝕃 = Core.Compiler.OptimizerLattice()
+    argtypes = Any[Core.Compiler.Const(Issue49785),
+        Union{Type{String},Type{Int}},
+        Union{Type{String},Type{Int}}]
+    rt = Type{Issue49785{<:Any, Int}}
+    # the following should not throw
+    @test !Core.Compiler.apply_type_nothrow(𝕃, argtypes, rt)
+    @test code_typed() do
+        S = Union{Type{String},Type{Int}}[Int][1]
+        map(T -> Issue49785{S,T}, (a = S,))
+    end isa Vector
+end

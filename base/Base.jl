@@ -597,6 +597,8 @@ function __init__()
         errormonitor(Threads.@spawn(profile_printing_listener()))
     end
     _require_world_age[] = get_world_counter()
+    # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
+    delete!(ENV, "JULIA_WAIT_FOR_TRACY")
     nothing
 end
 

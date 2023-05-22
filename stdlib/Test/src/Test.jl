@@ -64,9 +64,9 @@ function test_callsite(bt, file_ts, file_t)
     # For that, we retrieve locations from lower to higher stack elements
     # and only traverse parts of the backtrace which we haven't traversed before.
     # The order will always be <internal functions> -> `@test` -> `@testset`.
-    internal = macrocall_location(bt, @__FILE__)::Int
-    test = internal - 1 + findfirst(ip -> any(frame -> in_file(frame, file_t), StackTraces.lookup(ip)), @view bt[internal:end])::Int
-    testset = test - 1 + macrocall_location(@view(bt[test:end]), file_ts)::Int
+    internal = @something(macrocall_location(bt, @__FILE__), return nothing)
+    test = internal - 1 + @something(findfirst(ip -> any(frame -> in_file(frame, file_t), StackTraces.lookup(ip)), @view bt[internal:end]), return nothing)
+    testset = test - 1 + @something(macrocall_location(@view(bt[test:end]), file_ts), return nothing)
 
     # If stacktrace locations differ, include frames until the `@testset` appears.
     test != testset && return testset
@@ -74,7 +74,8 @@ function test_callsite(bt, file_ts, file_t)
     # This may happen if `@test` occurred directly in scope of the testset,
     # or if `@test` occurred in a function that has been inlined in the testset.
     frames = StackTraces.lookup(bt[testset])
-    outer_frame = findfirst(frame -> in_file(frame, file_ts) && frame.func == Symbol("macro expansion"), frames)::Int
+    outer_frame = findfirst(frame -> in_file(frame, file_ts) && frame.func == Symbol("macro expansion"), frames)
+    isnothing(outer_frame) && return nothing
     # The `@test` call occurred directly in scope of a `@testset`.
     # The __source__ from `@test` will be printed in the test message upon failure.
     # There is no need to include more frames, but always include at least the internal macrocall location in the stacktrace.

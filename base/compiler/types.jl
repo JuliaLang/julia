@@ -16,7 +16,8 @@ the following methods to satisfy the `AbstractInterpreter` API requirement:
 - `get_inference_cache(interp::NewInterpreter)` - return the local inference cache
 - `code_cache(interp::NewInterpreter)` - return the global inference cache
 """
-abstract type AbstractInterpreter end
+:(AbstractInterpreter)
+
 abstract type AbstractLattice end
 
 struct ArgInfo
@@ -466,8 +467,12 @@ typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.i
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
 optimizer_lattice(::AbstractInterpreter) = OptimizerLattice(SimpleInferenceLattice.instance)
 
-typeinf_lattice(interp::NativeInterpreter) = interp.irinterp ? optimizer_lattice(interp) : InferenceLattice(BaseInferenceLattice.instance)
-ipo_lattice(interp::NativeInterpreter) = interp.irinterp ? optimizer_lattice(interp) : InferenceLattice(IPOResultLattice.instance)
+typeinf_lattice(interp::NativeInterpreter) = interp.irinterp ?
+    OptimizerLattice(InferenceLattice(SimpleInferenceLattice.instance)) :
+    InferenceLattice(BaseInferenceLattice.instance)
+ipo_lattice(interp::NativeInterpreter) = interp.irinterp ?
+    InferenceLattice(SimpleInferenceLattice.instance) :
+    InferenceLattice(IPOResultLattice.instance)
 optimizer_lattice(interp::NativeInterpreter) = OptimizerLattice(SimpleInferenceLattice.instance)
 
 """
