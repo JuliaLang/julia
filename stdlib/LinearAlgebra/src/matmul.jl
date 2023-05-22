@@ -768,37 +768,29 @@ end
 
 const tilebufsize = 10800  # Approximately 32k/3
 
-function generic_matmatmul!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
-                            _add::MulAddMul=MulAddMul())
+function generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::AbstractVecOrMat, B::AbstractVecOrMat, _add::MulAddMul)
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     mC, nC = size(C)
-
-    Anew, ta = tA in ('H', 'h', 'S', 's') ? (wrap(A, tA), 'N') : (A, tA)
-    Bnew, tb = tB in ('H', 'h', 'S', 's') ? (wrap(B, tB), 'N') : (B, tB)
 
     if iszero(_add.alpha)
         return _rmul_or_fill!(C, _add.beta)
     end
     if mA == nA == mB == nB == mC == nC == 2
-        return matmul2x2!(C, ta, tb, Anew, Bnew, _add)
+        return matmul2x2!(C, tA, tB, A, B, _add)
     end
     if mA == nA == mB == nB == mC == nC == 3
-        return matmul3x3!(C, ta, tb, Anew, Bnew, _add)
+        return matmul3x3!(C, tA, tB, A, B, _add)
     end
-    _generic_matmatmul!(C, ta, tb, Anew, Bnew, _add)
+    _generic_matmatmul!(C, tA, tB, A, B, _add)
 end
 
-function generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::AbstractVecOrMat, B::AbstractVecOrMat, _add::MulAddMul)
-    Anew, ta = tA in ('H', 'h', 'S', 's') ? (wrap(A, tA), 'N') : (A, tA)
-    Bnew, tb = tB in ('H', 'h', 'S', 's') ? (wrap(B, tB), 'N') : (B, tB)
-    return _generic_matmatmul!(C, ta, tb, Anew, Bnew, _add)
-end
 function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S},
                              _add::MulAddMul) where {T,S,R}
     require_one_based_indexing(C, A, B)
-    @assert tA in ('N', 'C', 'T')
-    @assert tB in ('N', 'C', 'T')
+    A, tA = tA in ('H', 'h', 'S', 's') ? (wrap(A, tA), 'N') : (A, tA)
+    B, tB = tB in ('H', 'h', 'S', 's') ? (wrap(B, tB), 'N') : (B, tB)
+
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     if mB != nA
@@ -977,13 +969,13 @@ end
 function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
                     _add::MulAddMul = MulAddMul())
     require_one_based_indexing(C, A, B)
-    @assert tA in ('N', 'T', 'C')
-    @assert tB in ('N', 'T', 'C')
     if !(size(A) == size(B) == size(C) == (2,2))
         throw(DimensionMismatch(lazy"A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
     end
     @inbounds begin
-    if tA == 'T'
+    if tA == 'N'
+        A11 = A[1,1]; A12 = A[1,2]; A21 = A[2,1]; A22 = A[2,2]
+    elseif tA == 'T'
         # TODO making these lazy could improve perf
         A11 = copy(transpose(A[1,1])); A12 = copy(transpose(A[2,1]))
         A21 = copy(transpose(A[1,2])); A22 = copy(transpose(A[2,2]))
@@ -991,10 +983,23 @@ function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
         # TODO making these lazy could improve perf
         A11 = copy(A[1,1]'); A12 = copy(A[2,1]')
         A21 = copy(A[1,2]'); A22 = copy(A[2,2]')
-    else
-        A11 = A[1,1]; A12 = A[1,2]; A21 = A[2,1]; A22 = A[2,2]
+    elseif tA == 'S'
+        A11 = symmetric(A[1,1], :U); A12 = A[1,2]
+        A21 = copy(transpose(A[1,2])); A22 = symmetric(A[2,2], :U)
+    elseif tA == 's'
+        A11 = symmetric(A[1,1], :L); A12 = copy(transpose(A[2,1]))
+        A21 = A[2,1]; A22 = symmetric(A[2,2], :L)
+    elseif tA == 'H'
+        A11 = hermitian(A[1,1], :U); A12 = A[1,2]
+        A21 = copy(adjoint(A[1,2])); A22 = hermitian(A[2,2], :U)
+    else # if tA == 'h'
+        A11 = hermitian(A[1,1], :L); A12 = copy(adjoint(A[2,1]))
+        A21 = A[2,1]; A22 = hermitian(A[2,2], :L)
     end
-    if tB == 'T'
+    if tB == 'N'
+        B11 = B[1,1]; B12 = B[1,2];
+        B21 = B[2,1]; B22 = B[2,2]
+    elseif tB == 'T'
         # TODO making these lazy could improve perf
         B11 = copy(transpose(B[1,1])); B12 = copy(transpose(B[2,1]))
         B21 = copy(transpose(B[1,2])); B22 = copy(transpose(B[2,2]))
@@ -1002,9 +1007,18 @@ function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
         # TODO making these lazy could improve perf
         B11 = copy(B[1,1]'); B12 = copy(B[2,1]')
         B21 = copy(B[1,2]'); B22 = copy(B[2,2]')
-    else
-        B11 = B[1,1]; B12 = B[1,2];
-        B21 = B[2,1]; B22 = B[2,2]
+    elseif tA == 'S'
+        B11 = symmetric(A[1,1], :U); B12 = A[1,2]
+        B21 = copy(transpose(A[1,2])); B22 = symmetric(A[2,2], :U)
+    elseif tA == 's'
+        B11 = symmetric(A[1,1], :L); B12 = copy(transpose(A[2,1]))
+        B21 = A[2,1]; B22 = symmetric(A[2,2], :L)
+    elseif tA == 'H'
+        B11 = hermitian(A[1,1], :U); B12 = A[1,2]
+        B21 = copy(adjoint(A[1,2])); B22 = hermitian(A[2,2], :U)
+    else # if tA == 'h'
+        B11 = hermitian(A[1,1], :L); B12 = copy(adjoint(A[2,1]))
+        B21 = A[2,1]; B22 = hermitian(A[2,2], :L)
     end
     _modify!(_add, A11*B11 + A12*B21, C, (1,1))
     _modify!(_add, A11*B12 + A12*B22, C, (1,2))
@@ -1022,13 +1036,15 @@ end
 function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
                     _add::MulAddMul = MulAddMul())
     require_one_based_indexing(C, A, B)
-    @assert tA in ('N', 'T', 'C')
-    @assert tB in ('N', 'T', 'C')
     if !(size(A) == size(B) == size(C) == (3,3))
         throw(DimensionMismatch(lazy"A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
     end
     @inbounds begin
-    if tA == 'T'
+    if tA == 'N'
+        A11 = A[1,1]; A12 = A[1,2]; A13 = A[1,3]
+        A21 = A[2,1]; A22 = A[2,2]; A23 = A[2,3]
+        A31 = A[3,1]; A32 = A[3,2]; A33 = A[3,3]
+    elseif tA == 'T'
         # TODO making these lazy could improve perf
         A11 = copy(transpose(A[1,1])); A12 = copy(transpose(A[2,1])); A13 = copy(transpose(A[3,1]))
         A21 = copy(transpose(A[1,2])); A22 = copy(transpose(A[2,2])); A23 = copy(transpose(A[3,2]))
@@ -1038,13 +1054,29 @@ function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
         A11 = copy(A[1,1]'); A12 = copy(A[2,1]'); A13 = copy(A[3,1]')
         A21 = copy(A[1,2]'); A22 = copy(A[2,2]'); A23 = copy(A[3,2]')
         A31 = copy(A[1,3]'); A32 = copy(A[2,3]'); A33 = copy(A[3,3]')
-    else
-        A11 = A[1,1]; A12 = A[1,2]; A13 = A[1,3]
-        A21 = A[2,1]; A22 = A[2,2]; A23 = A[2,3]
-        A31 = A[3,1]; A32 = A[3,2]; A33 = A[3,3]
+    elseif tA == 'S'
+        A11 = symmetric(A[1,1], :U); A12 = A[1,2]; A13 = A[1,3]
+        A21 = copy(transpose(A[1,2])); A22 = symmetric(A[2,2], :U); A23 = A[2,3]
+        A31 = copy(transpose(A[1,3])); A32 = copy(transpose(A[2,3])); A33 = symmetric(A[3,3], :U)
+    elseif tA == 's'
+        A11 = symmetric(A[1,1], :L); A12 = copy(transpose(A[2,1])); A13 = copy(transpose(A[3,1]))
+        A21 = A[2,1]; A22 = symmetric(A[2,2], :L); A23 = copy(transpose(A[3,2]))
+        A31 = A[3,1]; A32 = A[3,2]; A33 = symmetric(A[3,3], :L)
+    elseif tA == 'H'
+        A11 = hermitian(A[1,1], :U); A12 = A[1,2]; A13 = A[1,3]
+        A21 = copy(adjoint(A[1,2])); A22 = hermitian(A[2,2], :U); A23 = A[2,3]
+        A31 = copy(adjoint(A[1,3])); A32 = copy(adjoint(A[2,3])); A33 = hermitian(A[3,3], :U)
+    else # if tA == 'h'
+        A11 = hermitian(A[1,1], :L); A12 = copy(adjoint(A[2,1])); A13 = copy(adjoint(A[3,1]))
+        A21 = A[2,1]; A22 = hermitian(A[2,2], :L); A23 = copy(adjoint(A[3,2]))
+        A31 = A[3,1]; A32 = A[3,2]; A33 = hermitian(A[3,3], :L)
     end
 
-    if tB == 'T'
+    if tB == 'N'
+        B11 = B[1,1]; B12 = B[1,2]; B13 = B[1,3]
+        B21 = B[2,1]; B22 = B[2,2]; B23 = B[2,3]
+        B31 = B[3,1]; B32 = B[3,2]; B33 = B[3,3]
+    elseif tB == 'T'
         # TODO making these lazy could improve perf
         B11 = copy(transpose(B[1,1])); B12 = copy(transpose(B[2,1])); B13 = copy(transpose(B[3,1]))
         B21 = copy(transpose(B[1,2])); B22 = copy(transpose(B[2,2])); B23 = copy(transpose(B[3,2]))
@@ -1054,10 +1086,22 @@ function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
         B11 = copy(B[1,1]'); B12 = copy(B[2,1]'); B13 = copy(B[3,1]')
         B21 = copy(B[1,2]'); B22 = copy(B[2,2]'); B23 = copy(B[3,2]')
         B31 = copy(B[1,3]'); B32 = copy(B[2,3]'); B33 = copy(B[3,3]')
-    else
-        B11 = B[1,1]; B12 = B[1,2]; B13 = B[1,3]
-        B21 = B[2,1]; B22 = B[2,2]; B23 = B[2,3]
-        B31 = B[3,1]; B32 = B[3,2]; B33 = B[3,3]
+    elseif tB == 'S'
+        B11 = symmetric(B[1,1], :U); B12 = B[1,2]; B13 = B[1,3]
+        B21 = copy(transpose(B[1,2])); B22 = symmetric(B[2,2], :U); B23 = B[2,3]
+        B31 = copy(transpose(B[1,3])); B32 = copy(transpose(B[2,3])); B33 = symmetric(B[3,3], :U)
+    elseif tB == 's'
+        B11 = symmetric(B[1,1], :L); B12 = copy(transpose(B[2,1])); B13 = copy(transpose(B[3,1]))
+        B21 = B[2,1]; B22 = symmetric(B[2,2], :L); B23 = copy(transpose(B[3,2]))
+        B31 = B[3,1]; B32 = B[3,2]; B33 = symmetric(B[3,3], :L)
+    elseif tB == 'H'
+        B11 = hermitian(B[1,1], :U); B12 = B[1,2]; B13 = B[1,3]
+        B21 = copy(adjoint(B[1,2])); B22 = hermitian(B[2,2], :U); B23 = B[2,3]
+        B31 = copy(adjoint(B[1,3])); B32 = copy(adjoint(B[2,3])); B33 = hermitian(B[3,3], :U)
+    else # if tB == 'h'
+        B11 = hermitian(B[1,1], :L); B12 = copy(adjoint(B[2,1])); B13 = copy(adjoint(B[3,1]))
+        B21 = B[2,1]; B22 = hermitian(B[2,2], :L); B23 = copy(adjoint(B[3,2]))
+        B31 = B[3,1]; B32 = B[3,2]; B33 = hermitian(B[3,3], :L)
     end
 
     _modify!(_add, A11*B11 + A12*B21 + A13*B31, C, (1,1))
