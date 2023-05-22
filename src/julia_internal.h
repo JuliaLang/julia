@@ -860,7 +860,7 @@ void jl_init_intrinsic_functions(void);
 void jl_init_intrinsic_properties(void);
 void jl_init_tasks(void) JL_GC_DISABLED;
 void jl_init_stack_limits(int ismaster, void **stack_hi, void **stack_lo) JL_NOTSAFEPOINT;
-jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi);
+jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi, int8_t initialize_signals);
 void jl_init_serializer(void);
 void jl_gc_init(void);
 void jl_init_uv(void);

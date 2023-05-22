@@ -829,7 +829,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 #pragma GCC diagnostic ignored "-Wdangling-pointer"
 #endif
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
-    jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
+    jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi, 1);
 #pragma GCC diagnostic pop
     JL_GC_PROMISE_ROOTED(ct);
     _finish_julia_init(rel, ptls, ct);

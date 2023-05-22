@@ -1618,7 +1618,7 @@ static char *jl_alloc_fiber(_jl_ucontext_t *t, size_t *ssize, jl_task_t *owner) 
 #endif
 
 // Initialize a root task using the given stack.
-jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
+jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi, int8_t initialize_signals)
 {
     assert(ptls->root_task == NULL);
     // We need `gcstack` in `Task` to allocate Julia objects; *including* the `Task` type.
@@ -1626,6 +1626,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     // we need the `Task` type itself. We use stack-allocated "raw" `jl_task_t` struct to
     // workaround this chicken-and-egg problem. Note that this relies on GC to be turned
     // off as GC fails because we don't/can't allocate the type tag.
+    // TODO: This is being executed from foreign-threads with GC running.
     struct {
         jl_value_t *type;
         jl_task_t value;
@@ -1719,7 +1720,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     }
 #endif
 
-    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
+    if (initialize_signals && jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_thread_signal_handler(ptls);
 
     return ct;

@@ -361,7 +361,14 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
         }
     }
 #endif
-    jl_atomic_store_relaxed(&ptls->gc_state, 0); // GC unsafe
+    // This is a foreign-thread and starts out in GC safe,
+    // We need to carefully transition it to GC unsafe.
+    if (tid == -1) {
+        jl_atomic_store_relaxed(&ptls->gc_state, 1); // GC safe
+    }
+    else {
+        jl_atomic_store_relaxed(&ptls->gc_state, 0); // GC unsafe
+    }
     // Conditionally initialize the safepoint address. See comment in
     // `safepoint.c`
     if (tid == 0) {
@@ -413,9 +420,13 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void) JL_NOTSAFEPOINT_LEAVE
     void *stack_lo, *stack_hi;
     jl_init_stack_limits(0, &stack_lo, &stack_hi);
 
+    // Setup signal handlers
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
+        jl_install_thread_signal_handler(ptls);
+
     (void)jl_gc_unsafe_enter(ptls);
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
-    jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
+    jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi, 0);
     JL_GC_PROMISE_ROOTED(ct);
     uv_random(NULL, NULL, &ct->rngState, sizeof(ct->rngState), 0, NULL);
     return &ct->gcstack;
