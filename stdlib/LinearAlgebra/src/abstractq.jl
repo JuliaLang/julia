@@ -35,6 +35,7 @@ convert(::Type{AbstractQ{T}}, adjQ::AdjointQ{T}) where {T} = adjQ
 convert(::Type{AbstractQ{T}}, adjQ::AdjointQ) where {T} = convert(AbstractQ{T}, adjQ.Q)'
 
 # ... to matrix
+collect(Q::AbstractQ) = copyto!(Matrix{eltype(Q)}(undef, size(Q)), Q)
 Matrix{T}(Q::AbstractQ) where {T} = convert(Matrix{T}, Q*I) # generic fallback, yields square matrix
 Matrix{T}(adjQ::AdjointQ{S}) where {T,S} = convert(Matrix{T}, lmul!(adjQ, Matrix{S}(I, size(adjQ))))
 Matrix(Q::AbstractQ{T}) where {T} = Matrix{T}(Q)
@@ -44,7 +45,6 @@ convert(::Type{T}, Q::AbstractQ) where {T<:AbstractArray} = T(Q)
 # legacy
 @deprecate(convert(::Type{AbstractMatrix{T}}, Q::AbstractQ) where {T},
     convert(LinearAlgebra.AbstractQ{T}, Q))
-@deprecate(collect(Q::AbstractQ), copyto!(Matrix{eltype(Q)}(undef, size(Q)), Q))
 
 function size(Q::AbstractQ, dim::Integer)
     if dim < 1
