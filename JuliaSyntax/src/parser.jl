@@ -3159,7 +3159,7 @@ function parse_string(ps::ParseState, raw::Bool)
     chunk_flags = raw ? RAW_STRING_FLAG : EMPTY_FLAGS
     bump(ps, TRIVIA_FLAG)
     first_chunk = true
-    n_valid_chunks = 0
+    n_nontrivia_chunks = 0
     removed_initial_newline = false
     had_interpolation = false
     prev_chunk_newline = false
@@ -3193,7 +3193,7 @@ function parse_string(ps::ParseState, raw::Bool)
                     error="identifier or parenthesized expression expected after \$ in string")
             end
             first_chunk = false
-            n_valid_chunks += 1
+            n_nontrivia_chunks += 1
             had_interpolation = true
             prev_chunk_newline = false
         elseif k == string_chunk_kind
@@ -3280,11 +3280,14 @@ function parse_string(ps::ParseState, raw::Bool)
                 end
                 bump(ps, chunk_flags)
                 first_chunk = false
-                n_valid_chunks += 1
+                n_nontrivia_chunks += 1
             end
-        elseif k == K"ErrorInvalidInterpolationTerminator" || k == K"ErrorBidiFormatting"
+        elseif  k == K"ErrorInvalidInterpolationTerminator" ||
+                k == K"ErrorBidiFormatting" ||
+                k == K"ErrorInvalidUTF8"
             # Treat these errors as string chunks
             bump(ps)
+            n_nontrivia_chunks += 1
         else
             break
         end
@@ -3302,13 +3305,13 @@ function parse_string(ps::ParseState, raw::Bool)
             if rhs_empty
                 # Empty chunks after dedent are removed
                 # """\n \n """        ==> (string-s "\n")
-                n_valid_chunks -= 1
+                n_nontrivia_chunks -= 1
             end
         end
     end
     release_positions(ps.stream, indent_chunks)
     if had_end_delim
-        if n_valid_chunks == 0
+        if n_nontrivia_chunks == 0
             # Empty strings, or empty after triple quoted processing
             # "" ==> (string "")
             # """\n  """ ==> (string-s "")

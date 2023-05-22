@@ -222,6 +222,31 @@ end
 end
 
 
+@testset "invalid UTF-8" begin
+    @test toks("#=\xf5b\n=#") == [
+        "#=\xf5b\n=#" => K"ErrorInvalidUTF8",
+    ]
+    @test toks("#\xf5b\n") == [
+        "#\xf5b" => K"ErrorInvalidUTF8",
+        "\n" => K"NewlineWs"
+    ]
+    @test toks("\"\xf5\"") == [
+        "\""   => K"\""
+        "\xf5" => K"ErrorInvalidUTF8"
+        "\""   => K"\""
+    ]
+    @test toks("'\xf5'") == [
+        "'"    => K"'"
+        "\xf5" => K"ErrorInvalidUTF8"
+        "'"    => K"'"
+    ]
+    @test toks("`\xf5`") == [
+        "`"    => K"`"
+        "\xf5" => K"ErrorInvalidUTF8"
+        "`"    => K"`"
+    ]
+end
+
 @testset "primes" begin
     str = """
     ImageMagick.save(fn, reinterpret(ARGB32, [0xf0884422]''))

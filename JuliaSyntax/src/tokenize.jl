@@ -15,13 +15,13 @@ const EOF_CHAR = typemax(Char)
 
 function is_identifier_char(c::Char)
     c == EOF_CHAR && return false
-    Base.isvalid(c) || return false
+    isvalid(c) || return false
     return Base.is_id_char(c)
 end
 
 function is_identifier_start_char(c::Char)
     c == EOF_CHAR && return false
-    Base.isvalid(c) || return false
+    isvalid(c) || return false
     return Base.is_id_start_char(c)
 end
 
@@ -43,7 +43,7 @@ end
 
 # Chars that we will never allow to be part of a valid non-operator identifier
 function is_never_id_char(ch::Char)
-    Base.isvalid(ch) || return true
+    isvalid(ch) || return true
     cat = Unicode.category_code(ch)
     c = UInt32(ch)
     return (
@@ -116,7 +116,7 @@ function _char_in_set_expr(varname, firstchars)
 end
 
 @eval function is_operator_start_char(c)
-   if c == EOF_CHAR || !Base.isvalid(c)
+   if c == EOF_CHAR || !isvalid(c)
        return false
    end
    u = UInt32(c)
@@ -132,7 +132,7 @@ end
 
 @eval function isopsuffix(c::Char)
     c == EOF_CHAR && return false
-    Base.isvalid(c) || return false
+    isvalid(c) || return false
     u = UInt32(c)
     if (u < 0xa1 || u > 0x10ffff)
         return false
@@ -226,7 +226,7 @@ end
 @inline ishex(c::Char) = isdigit(c) || ('a' <= c <= 'f') || ('A' <= c <= 'F')
 @inline isbinary(c::Char) = c == '0' || c == '1'
 @inline isoctal(c::Char) =  '0' ≤ c ≤ '7'
-@inline iswhitespace(c::Char) = (Base.isvalid(c) && Base.isspace(c)) || c === '\ufeff'
+@inline iswhitespace(c::Char) = (isvalid(c) && Base.isspace(c)) || c === '\ufeff'
 
 struct StringState
     triplestr::Bool
@@ -648,6 +648,7 @@ function lex_string_chunk(l)
     # Read a chunk of string characters
     init_bidi_state = (0,0)
     bidi_state = init_bidi_state
+    valid = true
     if state.raw
         # Raw strings treat all characters as literals with the exception that
         # the closing quotes can be escaped with an odd number of \ characters.
@@ -678,6 +679,7 @@ function lex_string_chunk(l)
                 end
             end
             bidi_state = update_bidi_state(bidi_state, c)
+            valid &= isvalid(c)
         end
     else
         while true
@@ -712,9 +714,11 @@ function lex_string_chunk(l)
                 c == EOF_CHAR && break
             end
             bidi_state = update_bidi_state(bidi_state, c)
+            valid &= isvalid(c)
         end
     end
-    outk = state.delim == '\''           ? K"Char"                :
+    outk = !valid                        ? K"ErrorInvalidUTF8"    :
+           state.delim == '\''           ? K"Char"                :
            bidi_state != init_bidi_state ? K"ErrorBidiFormatting" :
            state.delim == '"'            ? K"String"              :
            state.delim == '`'            ? K"CmdString"           :
@@ -741,11 +745,13 @@ end
 
 function lex_comment(l::Lexer)
     if peekchar(l) != '='
+        valid = true
         while true
             pc = peekchar(l)
             if pc == '\n' || pc == EOF_CHAR
-                return emit(l, K"Comment")
+                return emit(l, valid ? K"Comment" : K"ErrorInvalidUTF8")
             end
+            valid &= isvalid(pc)
             readchar(l)
         end
     else
@@ -754,12 +760,14 @@ function lex_comment(l::Lexer)
         bidi_state = init_bidi_state
         skip = true  # true => c was part of the prev comment marker pair
         nesting = 1
+        valid = true
         while true
             if c == EOF_CHAR
                 return emit(l, K"ErrorEofMultiComment")
             end
             nc = readchar(l)
             bidi_state = update_bidi_state(bidi_state, nc)
+            valid &= isvalid(nc)
             if skip
                 skip = false
             else
@@ -770,8 +778,9 @@ function lex_comment(l::Lexer)
                     nesting -= 1
                     skip = true
                     if nesting == 0
-                        outk = bidi_state == init_bidi_state ?
-                               K"Comment" : K"ErrorBidiFormatting"
+                        outk = !valid ? K"ErrorInvalidUTF8" :
+                               bidi_state != init_bidi_state ? K"ErrorBidiFormatting" :
+                               K"Comment"
                         return emit(l, outk)
                     end
                 end
