@@ -265,6 +265,8 @@ If the `optimize` keyword is unset, the code will be shown before LLVM optimizat
 All metadata and dbg.* calls are removed from the printed bitcode. For the full IR, set the `raw` keyword to true.
 To dump the entire module that encapsulates the function (with declarations), set the `dump_module` keyword to true.
 Keyword argument `debuginfo` may be one of source (default) or none, to specify the verbosity of code comments.
+
+See also: [`@code_llvm`](@ref), [`code_native`](@ref), [`code_typed`](@ref) and [`code_lowered`](@ref)
 """
 function code_llvm(io::IO, @nospecialize(f), @nospecialize(types), raw::Bool,
                    dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default)
@@ -281,7 +283,7 @@ code_llvm(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); raw=false, 
     code_llvm(stdout, f, types; raw, dump_module, optimize, debuginfo)
 
 """
-    code_native([io=stdout,], f, types; syntax=:intel, debuginfo=:default, binary=false, dump_module=true)
+    code_native([io=stdout,], f, types; syntax=:intel, debuginfo=:default, binary=false, dump_module=false)
 
 Prints the native assembly instructions generated for running the method matching the given
 generic function and type signature to `io`.
@@ -289,12 +291,12 @@ generic function and type signature to `io`.
 * Set assembly syntax by setting `syntax` to `:intel` (default) for intel syntax or `:att` for AT&T syntax.
 * Specify verbosity of code comments by setting `debuginfo` to `:source` (default) or `:none`.
 * If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
-* If `dump_module` is `false`, do not print metadata such as rodata or directives.
+* If `dump_module` is `true`, print metadata such as rodata or directives.
 
 See also: [`@code_native`](@ref), [`code_llvm`](@ref), [`code_typed`](@ref) and [`code_lowered`](@ref)
 """
 function code_native(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f));
-                     dump_module::Bool=true, syntax::Symbol=:intel, debuginfo::Symbol=:default, binary::Bool=false)
+                     dump_module::Bool=false, syntax::Symbol=:intel, debuginfo::Symbol=:default, binary::Bool=false)
     d = _dump_function(f, types, true, false, false, dump_module, syntax, true, debuginfo, binary)
     if highlighting[:native] && get(io, :color, false)::Bool
         print_native(io, d)
@@ -302,7 +304,7 @@ function code_native(io::IO, @nospecialize(f), @nospecialize(types=Base.default_
         print(io, d)
     end
 end
-code_native(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); dump_module::Bool=true, syntax::Symbol=:intel, debuginfo::Symbol=:default, binary::Bool=false) =
+code_native(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); dump_module::Bool=false, syntax::Symbol=:intel, debuginfo::Symbol=:default, binary::Bool=false) =
     code_native(stdout, f, types; dump_module, syntax, debuginfo, binary)
 code_native(::IO, ::Any, ::Symbol) = error("invalid code_native call") # resolve ambiguous call
 
