@@ -72,6 +72,18 @@ true
 """
 Ref
 
+# C NUL-terminated string pointers; these can be used in ccall
+# instead of Ptr{Cchar} and Ptr{Cwchar_t}, respectively, to enforce
+# a check for embedded NUL chars in the string (to avoid silent truncation).
+if Int === Int64
+    primitive type Cstring  64 end
+    primitive type Cwstring 64 end
+else
+    primitive type Cstring  32 end
+    primitive type Cwstring 32 end
+end
+
+
 ### General Methods for Ref{T} type
 
 eltype(x::Type{<:Ref{T}}) where {T} = @isdefined(T) ? T : Any
