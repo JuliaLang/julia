@@ -110,12 +110,10 @@ that referenced memory is not freed or garbage collected while invoking this fun
 Incorrect usage may segfault your program or return garbage answers. Unlike C, dereferencing
 memory region allocated as different type may be valid provided that the types are compatible.
 
-This is compatible with loading pointers declared with `_Atomic` and `std::atomic`
-type in C11 and C++23 respectively. An error may be thrown if there is not support for
-atomically loading the Julia type `T`.
-
 !!! compat "Julia 1.10"
      The `order` argument is available as of Julia 1.10.
+
+See also: [`atomic`](@ref)
 """
 unsafe_load(p::Ptr, i::Integer=1) = pointerref(p, Int(i), 1)
 unsafe_load(p::Ptr, order::Symbol) = atomic_pointerref(p, order)
@@ -138,12 +136,10 @@ that referenced memory is not freed or garbage collected while invoking this fun
 Incorrect usage may segfault your program. Unlike C, storing memory region allocated as
 different type may be valid provided that that the types are compatible.
 
-This is compatible with storing pointers declared with `_Atomic` and `std::atomic`
-type in C11 and C++23 respectively. An error may be thrown if there is not support for
-atomically storing the Julia type `T`.
-
 !!! compat "Julia 1.10"
      The `order` argument is available as of Julia 1.10.
+
+See also: [`atomic`](@ref)
 """
 unsafe_store!(p::Ptr{Any}, @nospecialize(x), i::Integer=1) = pointerset(p, x, Int(i), 1)
 unsafe_store!(p::Ptr{T}, x, i::Integer=1) where {T} = pointerset(p, convert(T,x), Int(i), 1)
@@ -170,14 +166,10 @@ pointer `p` to ensure that it is valid. Like C, the programmer is responsible fo
 that referenced memory is not freed or garbage collected while invoking this function.
 Incorrect usage may segfault your program.
 
-This is compatible with modifying pointers declared with `_Atomic` and `std::atomic`
-type in C11 and C++23 respectively. An error may be thrown if there is not support for
-atomically modifying the Julia type `T`.
-
 !!! compat "Julia 1.10"
      This function requires at least Julia 1.10.
 
-See also: [`modifyfield!`](@ref), [`modifyproperty!`](@ref)
+See also: [`modifyfield!`](@ref), [`modifyproperty!`](@ref), [`atomic`](@ref)
 """
 function unsafe_modify!(p::Ptr, op, x, order::Symbol=:not_atomic)
     return atomic_pointermodify(p, op, x, order)
@@ -203,14 +195,10 @@ pointer `p` to ensure that it is valid. Like C, the programmer is responsible fo
 that referenced memory is not freed or garbage collected while invoking this function.
 Incorrect usage may segfault your program.
 
-This is compatible with loading and storing pointers declared with `_Atomic` and
-`std::atomic` type in C11 and C++23 respectively. An error may be thrown if there is not
-support for atomically loading and storing the Julia type `T`.
-
 !!! compat "Julia 1.10"
      This function requires at least Julia 1.10.
 
-See also: [`replacefield!`](@ref), [`replaceproperty!`](@ref)
+See also: [`replacefield!`](@ref), [`replaceproperty!`](@ref), [`atomic`](@ref)
 """
 function unsafe_replace!(p::Ptr{T}, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order) where {T}
     @inline
@@ -237,14 +225,10 @@ pointer `p` to ensure that it is valid. Like C, the programmer is responsible fo
 that referenced memory is not freed or garbage collected while invoking this function.
 Incorrect usage may segfault your program.
 
-This is compatible with loading and storing pointers declared with `_Atomic` and
-`std::atomic` type in C11 and C++23 respectively. An error may be thrown if there is not
-support for atomically loading and storing the Julia type `T`.
-
 !!! compat "Julia 1.10"
      This function requires at least Julia 1.10.
 
-See also: [`swapfield!`](@ref), [`swapproperty!`](@ref)
+See also: [`swapfield!`](@ref), [`swapproperty!`](@ref), [`atomic`](@ref)
 """
 function unsafe_swap!(p::Ptr{Any}, x, order::Symbol=:not_atomic)
     return atomic_pointerswap(p, x, order)
