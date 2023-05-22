@@ -928,6 +928,9 @@ tests = [
         "\"\\xqqq\""  =>  "(string (ErrorInvalidEscapeSequence))"
         "'\\xq'"      =>  "(char (ErrorInvalidEscapeSequence))"
         "'ab'"        =>  "(char (ErrorOverLongCharacter))"
+        "\"\xf5\""    =>  "(string (ErrorInvalidUTF8))"
+        "'\xf5'"      =>  "(char (ErrorInvalidUTF8))"
+        "`\xf5`"      =>  "(macrocall core_@cmd (cmdstring-r (ErrorInvalidUTF8)))"
         "10.0e1000'"  =>  "(ErrorNumericOverflow)"
         "10.0f100'"   =>  "(ErrorNumericOverflow)"
     ],

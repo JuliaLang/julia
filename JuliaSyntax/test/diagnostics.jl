@@ -12,7 +12,8 @@ function diagnostic(str; only_first=false, allow_multiple=false)
 end
 
 @testset "token errors" begin
-    @test diagnostic("a\xf5b") == Diagnostic(2, 2, :error, "invalid UTF-8 character '\\xf5'")
+    @test diagnostic("a\xf5b") == Diagnostic(2, 2, :error, "invalid UTF-8 sequence \"\\xf5\"")
+    @test diagnostic("# a\xf5b") == Diagnostic(1, 5, :error, "invalid UTF-8 sequence \"# a\\xf5b\"")
     for c in ['\u00ad', '\u200b', '\u200c', '\u200d',
               '\u200e', '\u200f', '\u2060', '\u2061']
         @test diagnostic("a$(c)b") ==
