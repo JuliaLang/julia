@@ -193,10 +193,10 @@ end
 # Bunchkaufman decomposition based eigenvalues and eigenvectors
 function _bkeigen!(A, B; sortby)
     if B.uplo == 'U'
-        vals, w = eigen!(ldiv(lu!(B.D), UiAUti!(@view(A[B.p,B.p]), B.U)); sortby)
+        vals, w = eigen!(ldiv(lu!(B.D), UiAUti!(A[B.p,B.p], B.U)); sortby)
         vecs = (B.U' \ w)[invperm(B.p),:]
     else # B.uplo == 'L'
-        vals, w = eigen!(ldiv(lu!(B.D), UiAUti!(@view(A[B.p,B.p]), B.L)); sortby)
+        vals, w = eigen!(ldiv(lu!(B.D), UiAUti!(A[B.p,B.p], B.L)); sortby)
         vecs = (B.L' \ w)[invperm(B.p),:]
     end
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
@@ -250,8 +250,8 @@ function eigvals(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortb
 end
 function eigvals!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     if B.uplo == 'U'
-        return eigvals!(ldiv(lu!(B.D), UiAUti!(@view(A[B.p,B.p]), B.U)); sortby)
+        return eigvals!(ldiv(lu!(B.D), UiAUti!(A[B.p,B.p], B.U)); sortby)
     else # B.uplo == 'L'
-        return eigvals!(ldiv(lu!(B.D), UiAUti!(@view(A[B.p,B.p]), B.L)); sortby)
+        return eigvals!(ldiv(lu!(B.D), UiAUti!(A[B.p,B.p], B.L)); sortby)
     end
 end
