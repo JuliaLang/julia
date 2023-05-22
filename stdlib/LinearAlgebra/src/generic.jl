@@ -1270,7 +1270,7 @@ Test whether `A` is upper triangular starting from the `k`th superdiagonal.
 
 # Examples
 ```jldoctest
-julia> a = Int64[1 2; 2 -1]
+julia> a = [1 2; 2 -1]
 2×2 Matrix{Int64}:
  1   2
  2  -1
@@ -1281,7 +1281,7 @@ false
 julia> istriu(a, -1)
 true
 
-julia> b = Int64[1 1 1; 0 1 1; 0 0 1]
+julia> b = [1 1 1; 0 1 1; 0 0 1]
 3×3 Matrix{Int64}:
  1  1  1
  0  1  1
@@ -1296,7 +1296,7 @@ false
 julia> istriu(b, -1)
 true
 
-julia> c = Int64[1 1 1; 1 1 1; 0 1 1]
+julia> c = [1 1 1; 1 1 1; 0 1 1]
 3×3 Matrix{Int64}:
  1  1  1
  1  1  1
@@ -1330,7 +1330,7 @@ Test whether `A` is lower triangular starting from the `k`th superdiagonal.
 
 # Examples
 ```jldoctest
-julia> a = Int64[1 2; 2 -1]
+julia> a = [1 2; 2 -1]
 2×2 Matrix{Int64}:
  1   2
  2  -1
@@ -1341,7 +1341,7 @@ false
 julia> istril(a, 1)
 true
 
-julia> b = Int64[1 0 0; 1 1 0; 1 1 1]
+julia> b = [1 0 0; 1 1 0; 1 1 1]
 3×3 Matrix{Int64}:
  1  0  0
  1  1  0
@@ -1356,7 +1356,7 @@ false
 julia> istril(b, 1)
 true
 
-julia> c = Int64[1 1 0; 1 1 1; 1 1 1]
+julia> c = [1 1 0; 1 1 1; 1 1 1]
 3×3 Matrix{Int64}:
  1  1  0
  1  1  1
