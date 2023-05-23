@@ -372,7 +372,9 @@ function argextype(
         elseif x.head === :copyast
             return argextype(x.args[1], src, sptypes, slottypes)
         end
-        @assert false "argextype only works on argument-position values"
+        Core.println("argextype called on Expr with head ", x.head,
+                     " which is not valid for IR in argument-position.")
+        @assert false
     elseif isa(x, SlotNumber)
         return slottypes[x.id]
     elseif isa(x, TypedSlot)
