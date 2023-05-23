@@ -27,11 +27,19 @@ end
         Diagnostic(2, 7, :error, "unbalanced bidirectional unicode formatting \"X \\u202a \"")
         Diagnostic(11, 13, :error, "unbalanced bidirectional unicode formatting \"\\u202c\"")
     ]
+
+    @test diagnostic("0x") == Diagnostic(1, 2, :error, "invalid numeric constant")
+    @test diagnostic("0x0.1") == Diagnostic(1, 5, :error, "hex float literal must contain `p` or `P`")
 end
 
 @testset "parser errors" begin
 	@test diagnostic("+ #==# (a,b)") ==
         Diagnostic(2, 7, :error, "whitespace not allowed between prefix function call and argument list")
+    @test diagnostic("1 -+ (a=1, b=2)") ==
+        Diagnostic(5, 5, :error, "whitespace not allowed between prefix function call and argument list")
+    @test diagnostic("\n+ (x, y)") ==
+        Diagnostic(3, 3, :error, "whitespace not allowed between prefix function call and argument list")
+
 	@test diagnostic("A.@B.x", only_first=true) ==
         Diagnostic(3, 4, :error, "`@` must appear on first or last macro name component")
 	@test diagnostic("@M.(x)") ==
@@ -45,6 +53,49 @@ end
 
 	@test diagnostic("a, , b") ==
         Diagnostic(4, 3, :error, "unexpected `,`")
+
+    @test diagnostic("if\nfalse\nend") ==
+        Diagnostic(3, 3, :error, "missing condition in `if`")
+    @test diagnostic("if false\nelseif\nend") ==
+        Diagnostic(16, 16, :error, "missing condition in `elseif`")
+
+    @test diagnostic("f(x::V) where {V) = x", allow_multiple=true) == [
+        Diagnostic(17, 16, :error, "Expected `}`")
+        Diagnostic(17, 21, :error, "extra tokens after end of expression")
+    ]
+    @test diagnostic("[1)", allow_multiple=true) == [
+        Diagnostic(3, 2, :error, "Expected `]`")
+        Diagnostic(3, 3, :error, "extra tokens after end of expression")
+    ]
+
+    @test diagnostic("sin. (1)") ==
+        Diagnostic(5, 5, :error, "whitespace is not allowed here")
+    @test diagnostic("x [i]") ==
+        Diagnostic(2, 2, :error, "whitespace is not allowed here")
+    @test diagnostic("\nf() [i]") ==
+        Diagnostic(5, 5, :error, "whitespace is not allowed here")
+    @test diagnostic("\nf() (i)") ==
+        Diagnostic(5, 5, :error, "whitespace is not allowed here")
+    @test diagnostic("\nf() .i") ==
+        Diagnostic(5, 5, :error, "whitespace is not allowed here")
+    @test diagnostic("\nf() {i}") ==
+        Diagnostic(5, 5, :error, "whitespace is not allowed here")
+    @test diagnostic("\n@ m") ==
+        Diagnostic(3, 3, :error, "whitespace is not allowed here")
+    @test diagnostic("\nusing a .b") ==
+        Diagnostic(9, 9, :error, "whitespace is not allowed here")
+
+    @test diagnostic("const x") ==
+        Diagnostic(1, 7, :error, "expected assignment after `const`")
+    @test diagnostic("global const x") ==
+        Diagnostic(1, 14, :error, "expected assignment after `const`")
+
+    @test diagnostic("(for i=1; println())") ==
+        Diagnostic(20, 19, :error, "Expected `end`")
+    @test diagnostic("(try i=1; println())", allow_multiple=true) == [
+        Diagnostic(2, 19, :error, "try without catch or finally")
+        Diagnostic(20, 19, :error, "Expected `end`")
+    ]
 end
 
 @testset "parser warnings" begin
@@ -102,6 +153,25 @@ end
         Diagnostic(2, 2, :error, "invalid escape sequence"),
         Diagnostic(3, 2, :error, "unterminated character literal")
     ]
+    # Various cases from Base
+    @test diagnostic("'\\xff\\xff\\xff\\xff'") ==
+        Diagnostic(2, 17, :error, "character literal contains multiple characters")
+    @test diagnostic("'\\100\\42'") ==
+        Diagnostic(2, 8, :error, "character literal contains multiple characters")
+    @test diagnostic("'\\xff\\xff\\xff\\xff\\xff'") ==
+        Diagnostic(2, 21, :error, "character literal contains multiple characters")
+    @test diagnostic("'abcd'") ==
+        Diagnostic(2, 5, :error, "character literal contains multiple characters")
+    @test diagnostic("'\\uff\\xff'") ==
+        Diagnostic(2, 9, :error, "character literal contains multiple characters")
+    @test diagnostic("'\\xffa'") ==
+        Diagnostic(2, 6, :error, "character literal contains multiple characters")
+    @test diagnostic("'\\uffffa'") ==
+        Diagnostic(2, 8, :error, "character literal contains multiple characters")
+    @test diagnostic("'\\U00002014a'") ==
+        Diagnostic(2, 12, :error, "character literal contains multiple characters")
+    @test diagnostic("'\\1000'") ==
+        Diagnostic(2, 6, :error, "character literal contains multiple characters")
 
     # String
     @test diagnostic("x = \"abc\\xq\"") ==
@@ -118,6 +188,8 @@ end
         Diagnostic(9, 10, :error, "invalid escape sequence"),
         Diagnostic(12, 13, :error, "invalid escape sequence")
     ]
+    @test diagnostic("\"\$x෴  \"") ==
+        Diagnostic(4, 6, :error, "interpolated variable ends with invalid character; use `\$(...)` instead")
 end
 
 @testset "diagnostic printing" begin

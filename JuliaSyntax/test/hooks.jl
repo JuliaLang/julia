@@ -114,6 +114,9 @@
                 "1,\n"         => :other
                 "1, \n"        => :other
 
+                # Reference parser fails to detect incomplete exprs in this case
+                "(x for y"     => :other
+
                 # Syntax which may be an error but is not incomplete
                 ""             => :none
                 ")"            => :none
