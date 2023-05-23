@@ -422,6 +422,7 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void) JL_NOTSAFEPOINT_LEAVE
     jl_init_stack_limits(0, &stack_lo, &stack_hi);
 
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
+    // `jl_init_root_task` assumes that GC is disabled.
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
     JL_GC_PROMISE_ROOTED(ct);
     uv_random(NULL, NULL, &ct->rngState, sizeof(ct->rngState), 0, NULL);
