@@ -1632,6 +1632,10 @@ end
 
 typed_hcat(::Type{T}, A::AbstractVecOrMat...) where {T} = _typed_hcat(T, A)
 
+# Catch indexing errors like vec[i +1], where indexing is interpreted as typed a comprehension. (issue #49676)
+typed_hcat(::AbstractArray, other...) = throw(ArgumentError("First argument must be a type. Hint: if indexing, missing or misplaced operators can cause this (e.g. vec[i +1] instead of vec[i+1])."))
+
+
 hcat(A::AbstractVecOrMat...) = typed_hcat(promote_eltype(A...), A...)
 hcat(A::AbstractVecOrMat{T}...) where {T} = typed_hcat(T, A...)
 
