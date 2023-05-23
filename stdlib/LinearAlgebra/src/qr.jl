@@ -452,7 +452,7 @@ Array(F::QRPivoted) = Matrix(F)
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{QR, QRCompactWY, QRPivoted})
     summary(io, F); println(io)
-    println(io, "Q factor:")
+    print(io, "Q factor: ")
     show(io, mime, F.Q)
     println(io, "\nR factor:")
     show(io, mime, F.R)
