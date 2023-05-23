@@ -411,6 +411,7 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void) JL_NOTSAFEPOINT_LEAVE
     // jl_init_threadtls puts us in a GC unsafe region, so ensure GC isn't running.
     // we can't use a normal safepoint because we don't have signal handlers yet.
     // we also can't use jl_safepoint_wait_gc because that assumes we're in a task.
+    jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
     while (jl_atomic_load_relaxed(&jl_gc_running) || jl_atomic_load_acquire(&jl_gc_running)) {
         jl_cpu_pause();
     }
@@ -424,6 +425,7 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void) JL_NOTSAFEPOINT_LEAVE
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
     JL_GC_PROMISE_ROOTED(ct);
     uv_random(NULL, NULL, &ct->rngState, sizeof(ct->rngState), 0, NULL);
+    jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
     return &ct->gcstack;
 }
 
