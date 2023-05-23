@@ -76,10 +76,10 @@ function _incomplete_tag(n::SyntaxNode, codelen)
 end
 
 #-------------------------------------------------------------------------------
-if isdefined(Core, :_setparser!)
-    const _set_core_parse_hook = Core._setparser!
-else
-    function _set_core_parse_hook(parser)
+function _set_core_parse_hook(parser)
+    @static if isdefined(Core, :_setparser!)
+        Core._setparser!(parser)
+    else
         # HACK! Fool the runtime into allowing us to set Core._parse, even during
         # incremental compilation. (Ideally we'd just arrange for Core._parse to be
         # set to the JuliaSyntax parser. But how do we signal that to the dumping
@@ -100,26 +100,21 @@ else
     end
 end
 
-# Use caller's world age.
-const _latest_world = typemax(UInt)
-const _parser_world_age = Ref{UInt}(_latest_world)
 
-function core_parser_hook(code, filename, lineno, offset, options)
-    # NB: We need an inference barrier of one type or another here to prevent
-    # invalidations. The invokes provide this currently.
-    if _parser_world_age[] != _latest_world
-        Base.invoke_in_world(_parser_world_age[], _core_parser_hook,
-                             code, filename, lineno, offset, options)
+# Wrap the function `f` so that it's always invoked in the given `world_age`
+#
+# NB: We need an inference barrier of one type or another here to prevent
+# invalidations. The invokes provide this currently.
+function fix_world_age(f, world_age::UInt)
+    if world_age == typemax(UInt)
+        function invoke_latestworld(args...; kws...)
+            Base.invokelatest(f, args...; kws...)
+        end
     else
-        Base.invokelatest(_core_parser_hook, code, filename, lineno, offset, options)
+        function invoke_fixedworld(args...; kws...)
+            Base.invoke_in_world(world_age, f, args...; kws...)
+        end
     end
-end
-
-# Core._parse gained a `lineno` argument in
-# https://github.com/JuliaLang/julia/pull/43876
-# Prior to this, the following signature was needed:
-function core_parser_hook(code, filename, offset, options)
-    core_parser_hook(code, filename, 1, offset, options)
 end
 
 function _has_nested_error(ex)
@@ -137,7 +132,7 @@ end
 # Debug log file for dumping parsed code
 const _debug_log = Ref{Union{Nothing,IO}}(nothing)
 
-function _core_parser_hook(code, filename::String, lineno::Int, offset::Int, options::Symbol)
+function core_parser_hook(code, filename::String, lineno::Int, offset::Int, options::Symbol)
     try
         # TODO: Check that we do all this input wrangling without copying the
         # code buffer
@@ -266,6 +261,13 @@ function _core_parser_hook(code, filename::String, lineno::Int, offset::Int, opt
     end
 end
 
+# Core._parse gained a `lineno` argument in
+# https://github.com/JuliaLang/julia/pull/43876
+# Prior to this, the following signature was needed:
+function core_parser_hook(code, filename, offset, options)
+    core_parser_hook(code, filename, 1, offset, options)
+end
+
 # Hack:
 # Meta.parse() attempts to construct a ParseError from a string if it receives
 # `Expr(:error)`. Add an override to the ParseError constructor to prevent this.
@@ -293,14 +295,18 @@ function enable_in_core!(enable=true; freeze_world_age = true,
     if VERSION < v"1.6"
         error("Cannot use JuliaSyntax as the main Julia parser in Julia version $VERSION < 1.6")
     end
-    _parser_world_age[] = freeze_world_age ? Base.get_world_counter() : _latest_world
     if enable && !isnothing(debug_filename)
         _debug_log[] = open(debug_filename, "w")
     elseif !enable && !isnothing(_debug_log[])
         close(_debug_log[])
         _debug_log[] = nothing
     end
-    _set_core_parse_hook(enable ? core_parser_hook : _default_parser)
+    if enable
+        world_age = freeze_world_age ? Base.get_world_counter() : typemax(UInt)
+        _set_core_parse_hook(fix_world_age(core_parser_hook, world_age))
+    else
+        _set_core_parse_hook(_default_parser)
+    end
     nothing
 end
 

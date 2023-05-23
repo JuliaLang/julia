@@ -1,36 +1,36 @@
 @testset "Hooks for Core integration" begin
     @testset "whitespace parsing" begin
-        @test JuliaSyntax._core_parser_hook("", "somefile", 1, 0, :statement) == Core.svec(nothing, 0)
-        @test JuliaSyntax._core_parser_hook("", "somefile", 1, 0, :statement) == Core.svec(nothing, 0)
+        @test JuliaSyntax.core_parser_hook("", "somefile", 1, 0, :statement) == Core.svec(nothing, 0)
+        @test JuliaSyntax.core_parser_hook("", "somefile", 1, 0, :statement) == Core.svec(nothing, 0)
 
-        @test JuliaSyntax._core_parser_hook("  ", "somefile", 1, 2, :statement) == Core.svec(nothing,2)
-        @test JuliaSyntax._core_parser_hook(" #==# ", "somefile", 1, 6, :statement) == Core.svec(nothing,6)
+        @test JuliaSyntax.core_parser_hook("  ", "somefile", 1, 2, :statement) == Core.svec(nothing,2)
+        @test JuliaSyntax.core_parser_hook(" #==# ", "somefile", 1, 6, :statement) == Core.svec(nothing,6)
 
-        @test JuliaSyntax._core_parser_hook(" x \n", "somefile", 1, 0, :statement) == Core.svec(:x,4)
-        @test JuliaSyntax._core_parser_hook(" x \n", "somefile", 1, 0, :atom)      == Core.svec(:x,2)
+        @test JuliaSyntax.core_parser_hook(" x \n", "somefile", 1, 0, :statement) == Core.svec(:x,4)
+        @test JuliaSyntax.core_parser_hook(" x \n", "somefile", 1, 0, :atom)      == Core.svec(:x,2)
     end
 
     @testset "filename and lineno" begin
-        ex = JuliaSyntax._core_parser_hook("@a", "somefile", 1, 0, :statement)[1]
+        ex = JuliaSyntax.core_parser_hook("@a", "somefile", 1, 0, :statement)[1]
         @test Meta.isexpr(ex, :macrocall)
         @test ex.args[2] == LineNumberNode(1, "somefile")
 
-        ex = JuliaSyntax._core_parser_hook("@a", "otherfile", 2, 0, :statement)[1]
+        ex = JuliaSyntax.core_parser_hook("@a", "otherfile", 2, 0, :statement)[1]
         @test ex.args[2] == LineNumberNode(2, "otherfile")
 
         # Errors also propagate file & lineno
-        err = JuliaSyntax._core_parser_hook("[x)", "f1", 1, 0, :statement)[1].args[1]
+        err = JuliaSyntax.core_parser_hook("[x)", "f1", 1, 0, :statement)[1].args[1]
         @test err isa JuliaSyntax.ParseError
         @test err.source.filename == "f1"
         @test err.source.first_line == 1
-        err = JuliaSyntax._core_parser_hook("[x)", "f2", 2, 0, :statement)[1].args[1]
+        err = JuliaSyntax.core_parser_hook("[x)", "f2", 2, 0, :statement)[1].args[1]
         @test err isa JuliaSyntax.ParseError
         @test err.source.filename == "f2"
         @test err.source.first_line == 2
     end
 
     @testset "toplevel errors" begin
-        ex = JuliaSyntax._core_parser_hook("a\nb\n[x,\ny)", "somefile", 1, 0, :all)[1]
+        ex = JuliaSyntax.core_parser_hook("a\nb\n[x,\ny)", "somefile", 1, 0, :all)[1]
         @test ex.head == :toplevel
         @test ex.args[1:5] == [
             LineNumberNode(1, "somefile"),
@@ -129,6 +129,6 @@
         JuliaSyntax.enable_in_core!(false)
 
         # Should not throw
-        @test JuliaSyntax._core_parser_hook("+=", "somefile", 1, 0, :statement)[1] isa Expr
+        @test JuliaSyntax.core_parser_hook("+=", "somefile", 1, 0, :statement)[1] isa Expr
     end
 end
