@@ -415,6 +415,8 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void) JL_NOTSAFEPOINT_LEAVE
     while (jl_atomic_load_relaxed(&jl_gc_running) || jl_atomic_load_acquire(&jl_gc_running)) {
         jl_cpu_pause();
     }
+    // In `jl_safepoint_start_gc` we observe if a foreign thread has asked to disable the GC
+    // Guaranteeing the order of events. 
 
     // initialize this thread (assign tid, create heap, set up root task)
     jl_ptls_t ptls = jl_init_threadtls(-1);
