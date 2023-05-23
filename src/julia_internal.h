@@ -607,6 +607,7 @@ typedef struct {
     uint8_t inferred:1;
     uint8_t propagate_inbounds:1;
     uint8_t has_fcall:1;
+    uint8_t nospecializeinfer:1;
     uint8_t inlining:2; // 0 = use heuristic; 1 = aggressive; 2 = none
     uint8_t constprop:2; // 0 = use heuristic; 1 = aggressive; 2 = none
 } jl_code_info_flags_bitfield_t;
@@ -712,7 +713,7 @@ jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_module_t *module,
 jl_datatype_t *jl_new_uninitialized_datatype(void);
 void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable);
 JL_DLLEXPORT jl_datatype_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
-jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n);
+jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check);
 void jl_reinstantiate_inner_types(jl_datatype_t *t);
 jl_datatype_t *jl_lookup_cache_type_(jl_datatype_t *type);
 void jl_cache_type_(jl_datatype_t *type);
@@ -1553,6 +1554,7 @@ extern JL_DLLEXPORT jl_sym_t *jl_aggressive_constprop_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_no_constprop_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_purity_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_nospecialize_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_nospecializeinfer_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_macrocall_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_colon_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_hygienicscope_sym;

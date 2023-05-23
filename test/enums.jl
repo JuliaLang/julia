@@ -179,6 +179,11 @@ end
 @enum HashEnum2 Enum2_a=1
 @test hash(Enum1_a) != hash(Enum2_a)
 
+# PR #49777: Check that `Base.hash` can be specialized by the user without
+# overwriting a method definition.
+@enum HashEnum3 Enum3_a=1
+@test which(hash, (HashEnum3, UInt)).sig != Tuple{typeof(hash), HashEnum3, UInt64}
+
 @test (Vector{Fruit}(undef, 3) .= apple) == [apple, apple, apple]
 
 # long, discongruous

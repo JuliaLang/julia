@@ -526,12 +526,17 @@ void jl_gc_run_all_finalizers(jl_task_t *ct)
     jl_ptls_t* gc_all_tls_states;
     gc_n_threads = jl_atomic_load_acquire(&jl_n_threads);
     gc_all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
+    // this is called from `jl_atexit_hook`; threads could still be running
+    // so we have to guard the finalizers' lists
+    JL_LOCK_NOGC(&finalizers_lock);
     schedule_all_finalizers(&finalizer_list_marked);
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
         if (ptls2 != NULL)
             schedule_all_finalizers(&ptls2->finalizers);
     }
+    // unlock here because `run_finalizers` locks this
+    JL_UNLOCK_NOGC(&finalizers_lock);
     gc_n_threads = 0;
     gc_all_tls_states = NULL;
     run_finalizers(ct);
@@ -1871,6 +1876,28 @@ STATIC_INLINE jl_gc_chunk_t gc_chunkqueue_pop(jl_gc_markqueue_t *mq) JL_NOTSAFEP
     return c;
 }
 
+// Dump mark queue on critical error
+JL_NORETURN NOINLINE void gc_dump_queue_and_abort(jl_ptls_t ptls, jl_datatype_t *vt) JL_NOTSAFEPOINT
+{
+    jl_safe_printf("GC error (probable corruption)\n");
+    jl_gc_debug_print_status();
+    jl_(vt);
+    jl_gc_debug_critical_error();
+    if (jl_n_gcthreads == 0) {
+        jl_safe_printf("\n");
+        jl_value_t *new_obj;
+        jl_gc_markqueue_t *mq = &ptls->mark_queue;
+        jl_safe_printf("thread %d ptr queue:\n", ptls->tid);
+        jl_safe_printf("~~~~~~~~~~ ptr queue top ~~~~~~~~~~\n");
+        while ((new_obj = gc_ptr_queue_steal_from(mq)) != NULL) {
+            jl_(new_obj);
+            jl_safe_printf("==========\n");
+        }
+        jl_safe_printf("~~~~~~~~~~ ptr queue bottom ~~~~~~~~~~\n");
+    }
+    abort();
+}
+
 // Steal chunk from `mq2`
 STATIC_INLINE jl_gc_chunk_t gc_chunkqueue_steal_from(jl_gc_markqueue_t *mq2) JL_NOTSAFEPOINT
 {
@@ -2567,6 +2594,11 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     objprofile_count(vt, bits == GC_OLD_MARKED, dtsz);
             }
             return;
+        }
+        else {
+            jl_datatype_t *vt = (jl_datatype_t *)vtag;
+            if (__unlikely(!jl_is_datatype(vt) || vt->smalltag))
+                gc_dump_queue_and_abort(ptls, vt);
         }
         jl_datatype_t *vt = (jl_datatype_t *)vtag;
         if (vt->name == jl_array_typename) {
