@@ -57,6 +57,15 @@ function size(Q::AbstractQ, dim::Integer)
 end
 size(adjQ::AdjointQ) = reverse(size(adjQ.Q))
 
+# comparison
+(==)(Q::AbstractQ, A::AbstractMatrix) = lmul!(Q, Matrix{eltype(Q)}(I, size(A))) == A
+(==)(A::AbstractMatrix, Q::AbstractQ) = Q == A
+(==)(Q::AbstractQ, P::AbstractQ) = Matrix(Q) == Matrix(P)
+isapprox(Q::AbstractQ, A::AbstractMatrix; kwargs...) =
+    isapprox(lmul!(Q, Matrix{eltype(Q)}(I, size(A))), A, kwargs...)
+isapprox(A::AbstractMatrix, Q::AbstractQ; kwargs...) = isapprox(Q, A, kwargs...)
+isapprox(Q::AbstractQ, P::AbstractQ; kwargs...) = isapprox(Matrix(Q), Matrix(P), kwargs...)
+
 # pseudo-array behaviour, required for indexing with `begin` or `end`
 axes(Q::AbstractQ) = map(Base.oneto, size(Q))
 axes(Q::AbstractQ, d::Integer) = d in (1, 2) ? axes(Q)[d] : Base.OneTo(1)

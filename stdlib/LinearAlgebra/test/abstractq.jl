@@ -84,6 +84,17 @@ n = 5
         @test Q * x ≈ Q.Q * x
         @test Q' * x ≈ Q.Q' * x
     end
+    A = rand(Float64, 5, 3)
+    F = qr(A)
+    Q = MyQ(F.Q)
+    Prect = Matrix(F.Q)
+    Psquare = collect(F.Q)
+    @test Q == Prect
+    @test Q == Psquare
+    @test Q == F.Q*I
+    @test Q ≈ Prect
+    @test Q ≈ Psquare
+    @test Q ≈ F.Q*I
 end
 
 end # module
