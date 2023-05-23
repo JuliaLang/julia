@@ -682,6 +682,9 @@ function test_cat(::Type{TestAbstractArray})
     @test Base.typed_hcat(Float64, B, B) == TSlow(b2hcat)
     @test Base.typed_hcat(Float64, B, B, B) == TSlow(b3hcat)
 
+    # issue #49676
+    @test_throws ArgumentError Base.typed_hcat([1 2 3], 1, +1)
+
     @test vcat(B1, B2) == TSlow(vcat([1:24...], [1:25...]))
     @test hcat(C1, C2) == TSlow([1 2 1 2 3; 3 4 4 5 6])
     @test hcat(C1, C2, C1) == TSlow([1 2 1 2 3 1 2; 3 4 4 5 6 3 4])
