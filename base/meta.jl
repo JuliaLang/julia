@@ -236,7 +236,11 @@ function parse(str::AbstractString, pos::Integer; greedy::Bool=true, raise::Bool
                depwarn::Bool=true)
     ex, pos = _parse_string(str, "none", 1, pos, greedy ? :statement : :atom)
     if raise && isa(ex,Expr) && ex.head === :error
-        throw(ParseError(ex.args[1]))
+        err = ex.args[1]
+        if err isa String
+            err = ParseError(err) # For flisp parser
+        end
+        throw(err)
     end
     return ex, pos
 end
