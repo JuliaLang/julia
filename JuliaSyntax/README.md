@@ -36,9 +36,7 @@ The tree data structures are usable but their APIs will evolve as we try out
 various use cases. Converting to `Expr` is always possible and will be
 stable if that helps for your use case.
 
-A talk from JuliaCon 2022 covered some aspects of this package.
-
-[![Youtube video thumbnail](https://img.youtube.com/vi/CIiGng9Brrk/mqdefault.jpg)](https://youtu.be/CIiGng9Brrk)
+A [talk from JuliaCon 2022](https://youtu.be/CIiGng9Brrk) covered some aspects of this package.
 
 # Examples
 
