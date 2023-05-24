@@ -187,7 +187,10 @@ expression.
 """
 struct ParseError <: Exception
     msg::String
+    detail::Any
 end
+
+ParseError(msg::AbstractString) = ParseError(msg, nothing)
 
 function _parse_string(text::AbstractString, filename::AbstractString,
                        lineno::Integer, index::Integer, options)
