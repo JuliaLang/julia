@@ -156,7 +156,7 @@ void jl_timing_block_enter_task(jl_task_t *ct, jl_ptls_t ptls, jl_timing_block_t
 
         ptls->timing_stack = prev_blk;
         if (prev_blk != NULL) {
-            _COUNTS_START(&prev_blk->counts_ctx, cycleclock());
+            _COUNTS_RESUME(&prev_blk->counts_ctx, cycleclock());
         }
     }
 
@@ -189,7 +189,7 @@ jl_timing_block_t *jl_timing_block_exit_task(jl_task_t *ct, jl_ptls_t ptls)
     ptls->timing_stack = NULL;
 
     if (blk != NULL) {
-        _COUNTS_STOP(&blk->counts_ctx, cycleclock());
+        _COUNTS_PAUSE(&blk->counts_ctx, cycleclock());
     }
     return blk;
 }
