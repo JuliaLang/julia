@@ -53,32 +53,31 @@ DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::MaterializationResponsibility,
 extern "C" {
 
 JL_DLLEXPORT_CODEGEN JuliaOJITRef JLJITGetJuliaOJIT_impl(void)
-    JL_NOTSAFEPOINT
 {
     return wrap(jl_ExecutionEngine);
 }
 
 JL_DLLEXPORT_CODEGEN LLVMOrcExecutionSessionRef
-JLJITGetLLVMOrcExecutionSession_impl(JuliaOJITRef JIT) JL_NOTSAFEPOINT
+JLJITGetLLVMOrcExecutionSession_impl(JuliaOJITRef JIT)
 {
     return wrap(&unwrap(JIT)->getExecutionSession());
 }
 
 JL_DLLEXPORT_CODEGEN LLVMOrcJITDylibRef
-JLJITGetExternalJITDylib_impl(JuliaOJITRef JIT) JL_NOTSAFEPOINT
+JLJITGetExternalJITDylib_impl(JuliaOJITRef JIT)
 {
     return wrap(&unwrap(JIT)->getExternalJITDylib());
 }
 
 JL_DLLEXPORT_CODEGEN LLVMErrorRef JLJITAddObjectFile_impl(
-    JuliaOJITRef JIT, LLVMOrcJITDylibRef JD, LLVMMemoryBufferRef ObjBuffer) JL_NOTSAFEPOINT
+    JuliaOJITRef JIT, LLVMOrcJITDylibRef JD, LLVMMemoryBufferRef ObjBuffer)
 {
     return wrap(unwrap(JIT)->addObjectFile(
         *unwrap(JD), std::unique_ptr<MemoryBuffer>(unwrap(ObjBuffer))));
 }
 
 JL_DLLEXPORT_CODEGEN LLVMErrorRef JLJITAddLLVMIRModule_impl(
-    JuliaOJITRef JIT, LLVMOrcJITDylibRef JD, LLVMOrcThreadSafeModuleRef TSM) JL_NOTSAFEPOINT
+    JuliaOJITRef JIT, LLVMOrcJITDylibRef JD, LLVMOrcThreadSafeModuleRef TSM)
 {
     std::unique_ptr<orc::ThreadSafeModule> TmpTSM(unwrap(TSM));
     return wrap(unwrap(JIT)->addExternalModule(*unwrap(JD), std::move(*TmpTSM)));
@@ -86,7 +85,7 @@ JL_DLLEXPORT_CODEGEN LLVMErrorRef JLJITAddLLVMIRModule_impl(
 
 JL_DLLEXPORT_CODEGEN LLVMErrorRef
 JLJITLookup_impl(JuliaOJITRef JIT, LLVMOrcExecutorAddress *Result,
-                                   const char *Name, int ExternalJDOnly) JL_NOTSAFEPOINT
+                                   const char *Name, int ExternalJDOnly)
 {
     auto Sym = unwrap(JIT)->findExternalJDSymbol(Name, ExternalJDOnly);
     if (Sym) {
@@ -102,7 +101,7 @@ JLJITLookup_impl(JuliaOJITRef JIT, LLVMOrcExecutorAddress *Result,
 
 JL_DLLEXPORT_CODEGEN LLVMOrcSymbolStringPoolEntryRef
 JLJITMangleAndIntern_impl(JuliaOJITRef JIT,
-                                            const char *Name) JL_NOTSAFEPOINT
+                                            const char *Name)
 {
     return wrap(orc::OrcV2CAPIHelper::moveFromSymbolStringPtr(unwrap(JIT)->mangle(Name)));
 }
