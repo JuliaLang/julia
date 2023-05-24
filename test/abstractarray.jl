@@ -1323,7 +1323,7 @@ Base.getindex(sa::SimpleArray, idx...) = getindex(sa.els, idx...)
 Base.setindex!(sa::SimpleArray, v, idx...) = setindex!(sa.els, v, idx...)
 Base.resize!(sa::SimpleArray, n) = resize!(sa.els, n)
 
-@testset "Failing `$f` should not grow the array" for f in (push!, append!)
+@testset "Failing `$f` should not grow the array" for f in (push!, append!, pushfirst!, prepend!)
     for args in ((1,), (1,2))
         a = SimpleArray{String}(String[])
         try
