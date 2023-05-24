@@ -1,6 +1,9 @@
 # This file provides an adaptor to match the API expected by the Julia runtime
 # code in the binding Core._parse
 
+const _has_v1_6_hooks  = VERSION >= v"1.6"
+const _has_v1_10_hooks = isdefined(Core, :_setparser!)
+
 # Find the first error in a SyntaxNode tree, returning the index of the error
 # within its parent and the node itself.
 function _first_error(t::SyntaxNode)
@@ -77,7 +80,7 @@ end
 
 #-------------------------------------------------------------------------------
 function _set_core_parse_hook(parser)
-    @static if isdefined(Core, :_setparser!)
+    @static if _has_v1_10_hooks
         Core._setparser!(parser)
     else
         # HACK! Fool the runtime into allowing us to set Core._parse, even during
@@ -176,8 +179,15 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
                               wrap_toplevel_as_kind=K"None", first_line=lineno,
                               filename=filename)
             tag = _incomplete_tag(tree, lastindex(code))
-            if tag !== :none
-                # Here we replicate the particular messages 
+            if _has_v1_10_hooks
+                exc = ParseError(stream, filename=filename, first_line=lineno,
+                                 incomplete_tag=tag)
+                msg = sprint(showerror, exc)
+                error_ex = Expr(tag === :none ? :error : :incomplete,
+                                Meta.ParseError(msg, exc))
+            elseif tag !== :none
+                # Hack: For older Julia versions, replicate the messages which
+                # Base.incomplete_tag() will match
                 msg =
                     tag === :string  ? "incomplete: invalid string syntax"     :
                     tag === :comment ? "incomplete: unterminated multi-line comment #= ... =#" :
@@ -268,13 +278,16 @@ function core_parser_hook(code, filename, offset, options)
     core_parser_hook(code, filename, 1, offset, options)
 end
 
-# Hack:
-# Meta.parse() attempts to construct a ParseError from a string if it receives
-# `Expr(:error)`. Add an override to the ParseError constructor to prevent this.
-# FIXME: Improve this in Base somehow?
-Base.Meta.ParseError(e::JuliaSyntax.ParseError) = e
+if _has_v1_10_hooks
+    Base.incomplete_tag(e::JuliaSyntax.ParseError) = e.incomplete_tag
+else
+    # Hack: Meta.parse() attempts to construct a ParseError from a string if it
+    # receives `Expr(:error)`. Add an override to the ParseError constructor to
+    # prevent this.
+    Base.Meta.ParseError(e::JuliaSyntax.ParseError) = e
+end
 
-const _default_parser = VERSION < v"1.6" ? nothing : Core._parse
+const _default_parser = _has_v1_6_hooks ? Core._parse : nothing
 
 """
     enable_in_core!([enable=true; freeze_world_age, debug_filename])
@@ -292,7 +305,7 @@ Keyword arguments:
 """
 function enable_in_core!(enable=true; freeze_world_age = true,
         debug_filename   = get(ENV, "JULIA_SYNTAX_DEBUG_FILE", nothing))
-    if VERSION < v"1.6"
+    if !_has_v1_6_hooks
         error("Cannot use JuliaSyntax as the main Julia parser in Julia version $VERSION < 1.6")
     end
     if enable && !isnothing(debug_filename)
@@ -318,7 +331,7 @@ end
 function _fl_parse_hook(code, filename, lineno, offset, options)
     @static if VERSION >= v"1.8.0-DEV.1370" # https://github.com/JuliaLang/julia/pull/43876
         return Core.Compiler.fl_parse(code, filename, lineno, offset, options)
-    elseif VERSION >= v"1.6"
+    elseif _has_v1_6_hooks
         return Core.Compiler.fl_parse(code, filename, offset, options)
     else
         if options === :all
