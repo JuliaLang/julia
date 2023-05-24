@@ -1322,16 +1322,21 @@ Base.size(sa::SimpleArray) = size(sa.els)
 Base.getindex(sa::SimpleArray, idx...) = getindex(sa.els, idx...)
 Base.setindex!(sa::SimpleArray, v, idx...) = setindex!(sa.els, v, idx...)
 Base.resize!(sa::SimpleArray, n) = resize!(sa.els, n)
+Base.copy(sa::SimpleArray) = SimpleArray(copy(sa.els))
 
-@testset "Failing `$f` should not grow the array" for f in (push!, append!, pushfirst!, prepend!)
-    for args in ((1,), (1,2))
-        a = SimpleArray{String}(String[])
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
+@testset "Failing `$f` should not grow the array $a" for f in (push!, append!, pushfirst!, prepend!),
+                                                      a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1))
+    for args in ((1,), (1,2), ([1], [2]), [1])
+        orig = copy(a)
         try
             f(a, args...)
         catch
             # If an error happens, we still want to catch it since it's an expected error
         finally
-            @test isempty(a)
+            @test a == orig
         end
     end
 end
