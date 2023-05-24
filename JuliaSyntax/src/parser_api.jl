@@ -7,11 +7,12 @@
 struct ParseError <: Exception
     source::SourceFile
     diagnostics::Vector{Diagnostic}
+    incomplete_tag::Symbol # Used only for Base Expr(:incomplete) support
 end
 
-function ParseError(stream::ParseStream; kws...)
+function ParseError(stream::ParseStream; incomplete_tag=:none, kws...)
     source = SourceFile(sourcetext(stream); kws...)
-    ParseError(source, stream.diagnostics)
+    ParseError(source, stream.diagnostics, incomplete_tag)
 end
 
 function Base.showerror(io::IO, err::ParseError)

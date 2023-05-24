@@ -20,10 +20,22 @@
 
         # Errors also propagate file & lineno
         err = JuliaSyntax.core_parser_hook("[x)", "f1", 1, 0, :statement)[1].args[1]
+        if JuliaSyntax._has_v1_10_hooks
+            @test err isa Meta.ParseError
+            err = err.detail
+        else
+            @test err isa JuliaSyntax.ParseError
+        end
         @test err isa JuliaSyntax.ParseError
         @test err.source.filename == "f1"
         @test err.source.first_line == 1
         err = JuliaSyntax.core_parser_hook("[x)", "f2", 2, 0, :statement)[1].args[1]
+        if JuliaSyntax._has_v1_10_hooks
+            @test err isa Meta.ParseError
+            err = err.detail
+        else
+            @test err isa JuliaSyntax.ParseError
+        end
         @test err isa JuliaSyntax.ParseError
         @test err.source.filename == "f2"
         @test err.source.first_line == 2
@@ -55,16 +67,31 @@
         @test Meta.parse(" x#==#", 1) == (:x, 7)
         @test Meta.parse(" #==# ", 1) == (nothing, 7)
 
-        # Check that Meta.parse throws the JuliaSyntax.ParseError rather than
-        # Meta.ParseError when Core integration is enabled.
-        @test_throws JuliaSyntax.ParseError Meta.parse("[x)")
+        # Check the exception type that Meta.parse throws
+        if JuliaSyntax._has_v1_10_hooks
+            @test_throws Meta.ParseError Meta.parse("[x)")
+            @test_throws Meta.ParseError eval(Meta.parse("[x)", raise=false))
+            @test_throws Meta.ParseError eval(Meta.parse("(x")) # Expr(:incomplete)
+        else
+            @test_throws JuliaSyntax.ParseError Meta.parse("[x)")
+        end
 
         JuliaSyntax.enable_in_core!(false)
     end
 
     @testset "Expr(:incomplete)" begin
         JuliaSyntax.enable_in_core!()
-        @test Meta.isexpr(Meta.parse("[x"), :incomplete)
+        err = Meta.parse("\"")
+        @test Meta.isexpr(err, :incomplete)
+        if JuliaSyntax._has_v1_10_hooks
+            @test err.args[1] isa Meta.ParseError
+            exc = err.args[1]
+            @test exc.msg == "ParseError:\n# Error @ none:1:2\n\"\n#└ ── unterminated string literal"
+            @test exc.detail isa JuliaSyntax.ParseError
+            @test exc.detail.incomplete_tag === :string
+        else
+            @test err.args[1] isa String
+        end
 
         for (str, tag) in [
                 "\""           => :string
