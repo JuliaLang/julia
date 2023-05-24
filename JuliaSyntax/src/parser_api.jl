@@ -14,11 +14,6 @@ function ParseError(stream::ParseStream; kws...)
     ParseError(source, stream.diagnostics)
 end
 
-function Base.showerror(io::IO, err::ParseError, bt; backtrace=false)
-    println(io, "ParseError:")
-    show_diagnostics(io, err.diagnostics, err.source)
-end
-
 function Base.showerror(io::IO, err::ParseError)
     println(io, "ParseError:")
     show_diagnostics(io, err.diagnostics, err.source)

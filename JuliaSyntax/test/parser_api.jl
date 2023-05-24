@@ -119,6 +119,7 @@ end
             # Error @ somefile.jl:1:8
             a -- b -- c
             #      └┘ ── invalid operator"""
+        @test occursin("Stacktrace:\n", sprint(showerror, exc, catch_backtrace()))
         file_url = JuliaSyntax._file_url("somefile.jl")
         @test sprint(showerror, exc, context=:color=>true) == """
             ParseError:
