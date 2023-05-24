@@ -170,7 +170,8 @@ const OC_MISMATCH_WARNING =
 function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrapper::Bool,
                         strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol,
                         optimize::Bool, debuginfo::Symbol, binary::Bool,
-                        params::CodegenParams=CodegenParams(debug_info_kind=Cint(0)))
+                        params::CodegenParams=CodegenParams(debug_info_kind=Cint(0),
+                                                            safepoint_on_entry=false))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
