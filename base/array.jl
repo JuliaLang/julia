@@ -1172,7 +1172,7 @@ and [`prepend!`](@ref) and [`pushfirst!`](@ref) for the opposite order.
 function append! end
 
 append!(a::AbstractVector, iter) = _append!(a, IteratorSize(iter), iter)
-append!(a::AbstractVector{T}, it::T, iter::Vararg{T}) where T = foldl(_append_converted!, (it, iter...); init=a)
+append!(a::AbstractVector{T}, it1::T, iit2::T, iter::Vararg{T}) where T = foldl(_append_converted!, (it, iter...); init=a)
 function append!(a::AbstractVector{T}, iter...) where T
     isempty(iter) && return a
     convert_buf = T[]
@@ -1278,7 +1278,7 @@ julia> prepend!([6], [1, 2], [3, 4, 5])
 function prepend! end
 
 prepend!(a::AbstractVector, iter) = _prepend!(a, IteratorSize(iter), iter)
-prepend!(a::AbstractVector{T}, it::T, iter::Vararg{T}) where T = foldr((v,a) -> _prepend_converted!(a, v), reverse((it, iter...)); init=a)
+prepend!(a::AbstractVector{T}, it1::T, it2::T, iter::Vararg{T}) where T = foldr((v,a) -> _prepend_converted!(a, v), reverse((it1, it2, iter...)); init=a)
 function prepend!(a::AbstractVector{T}, iter...) where T
     isempty(iter) && return a
     convert_buf = T[]
