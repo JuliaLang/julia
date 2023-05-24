@@ -573,17 +573,17 @@
     YY(LLVMExtraAddGCInvariantVerifierPass) \
     YY(LLVMExtraAddDemoteFloat16Pass) \
     YY(LLVMExtraAddCPUFeaturesPass) \
-    YY(LLVMExtraJLJITGetLLVMOrcExecutionSession) \
-    YY(LLVMExtraJLJITGetJuliaOJIT) \
-    YY(LLVMExtraJLJITGetExternalJITDylib) \
-    YY(LLVMExtraJLJITAddObjectFile) \
-    YY(LLVMExtraJLJITAddLLVMIRModule) \
-    YY(LLVMExtraJLJITLookup) \
-    YY(LLVMExtraJLJITMangleAndIntern) \
-    YY(LLVMExtraJLJITGetTripleString) \
-    YY(LLVMExtraJLJITGetGlobalPrefix) \
-    YY(LLVMExtraJLJITGetDataLayoutString) \
-    YY(LLVMExtraJLJITGetIRCompileLayer) \
+    YY(JLJITGetLLVMOrcExecutionSession) \
+    YY(JLJITGetJuliaOJIT) \
+    YY(JLJITGetExternalJITDylib) \
+    YY(JLJITAddObjectFile) \
+    YY(JLJITAddLLVMIRModule) \
+    YY(JLJITLookup) \
+    YY(JLJITMangleAndIntern) \
+    YY(JLJITGetTripleString) \
+    YY(JLJITGetGlobalPrefix) \
+    YY(JLJITGetDataLayoutString) \
+    YY(JLJITGetIRCompileLayer) \
 
 
 // end of file

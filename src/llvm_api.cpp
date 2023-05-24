@@ -52,32 +52,32 @@ DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::MaterializationResponsibility,
                                    LLVMOrcMaterializationResponsibilityRef)
 extern "C" {
 
-JL_DLLEXPORT_CODEGEN JuliaOJITRef LLVMExtraJLJITGetJuliaOJIT_impl(void)
+JL_DLLEXPORT_CODEGEN JuliaOJITRef JLJITGetJuliaOJIT_impl(void)
     JL_NOTSAFEPOINT
 {
     return wrap(jl_ExecutionEngine);
 }
 
 JL_DLLEXPORT_CODEGEN LLVMOrcExecutionSessionRef
-LLVMExtraJLJITGetLLVMOrcExecutionSession_impl(JuliaOJITRef JIT) JL_NOTSAFEPOINT
+JLJITGetLLVMOrcExecutionSession_impl(JuliaOJITRef JIT) JL_NOTSAFEPOINT
 {
     return wrap(&unwrap(JIT)->getExecutionSession());
 }
 
 JL_DLLEXPORT_CODEGEN LLVMOrcJITDylibRef
-LLVMExtraJLJITGetExternalJITDylib_impl(JuliaOJITRef JIT) JL_NOTSAFEPOINT
+JLJITGetExternalJITDylib_impl(JuliaOJITRef JIT) JL_NOTSAFEPOINT
 {
     return wrap(&unwrap(JIT)->getExternalJITDylib());
 }
 
-JL_DLLEXPORT_CODEGEN LLVMErrorRef LLVMExtraJLJITAddObjectFile_impl(
+JL_DLLEXPORT_CODEGEN LLVMErrorRef JLJITAddObjectFile_impl(
     JuliaOJITRef JIT, LLVMOrcJITDylibRef JD, LLVMMemoryBufferRef ObjBuffer) JL_NOTSAFEPOINT
 {
     return wrap(unwrap(JIT)->addObjectFile(
         *unwrap(JD), std::unique_ptr<MemoryBuffer>(unwrap(ObjBuffer))));
 }
 
-JL_DLLEXPORT_CODEGEN LLVMErrorRef LLVMExtraJLJITAddLLVMIRModule_impl(
+JL_DLLEXPORT_CODEGEN LLVMErrorRef JLJITAddLLVMIRModule_impl(
     JuliaOJITRef JIT, LLVMOrcJITDylibRef JD, LLVMOrcThreadSafeModuleRef TSM) JL_NOTSAFEPOINT
 {
     std::unique_ptr<orc::ThreadSafeModule> TmpTSM(unwrap(TSM));
@@ -85,7 +85,7 @@ JL_DLLEXPORT_CODEGEN LLVMErrorRef LLVMExtraJLJITAddLLVMIRModule_impl(
 }
 
 JL_DLLEXPORT_CODEGEN LLVMErrorRef
-LLVMExtraJLJITLookup_impl(JuliaOJITRef JIT, LLVMOrcExecutorAddress *Result,
+JLJITLookup_impl(JuliaOJITRef JIT, LLVMOrcExecutorAddress *Result,
                                    const char *Name, int ExternalJDOnly) JL_NOTSAFEPOINT
 {
     auto Sym = unwrap(JIT)->findExternalJDSymbol(Name, ExternalJDOnly);
@@ -101,32 +101,32 @@ LLVMExtraJLJITLookup_impl(JuliaOJITRef JIT, LLVMOrcExecutorAddress *Result,
 }
 
 JL_DLLEXPORT_CODEGEN LLVMOrcSymbolStringPoolEntryRef
-LLVMExtraJLJITMangleAndIntern_impl(JuliaOJITRef JIT,
+JLJITMangleAndIntern_impl(JuliaOJITRef JIT,
                                             const char *Name) JL_NOTSAFEPOINT
 {
     return wrap(orc::OrcV2CAPIHelper::moveFromSymbolStringPtr(unwrap(JIT)->mangle(Name)));
 }
 
 JL_DLLEXPORT_CODEGEN const char *
-LLVMExtraJLJITGetTripleString_impl(JuliaOJITRef JIT)
+JLJITGetTripleString_impl(JuliaOJITRef JIT)
 {
     return unwrap(JIT)->getTargetTriple().str().c_str();
 }
 
 JL_DLLEXPORT_CODEGEN const char
-LLVMExtraJLJITGetGlobalPrefix_impl(JuliaOJITRef JIT)
+JLJITGetGlobalPrefix_impl(JuliaOJITRef JIT)
 {
     return unwrap(JIT)->getDataLayout().getGlobalPrefix();
 }
 
 JL_DLLEXPORT_CODEGEN const char *
-LLVMExtraJLJITGetDataLayoutString_impl(JuliaOJITRef JIT)
+JLJITGetDataLayoutString_impl(JuliaOJITRef JIT)
 {
     return unwrap(JIT)->getDataLayout().getStringRepresentation().c_str();
 }
 
 JL_DLLEXPORT_CODEGEN LLVMOrcIRCompileLayerRef
-LLVMExtraJLJITGetIRCompileLayer_impl(JuliaOJITRef JIT)
+JLJITGetIRCompileLayer_impl(JuliaOJITRef JIT)
 {
     return wrap(&unwrap(JIT)->getIRCompileLayer());
 }
