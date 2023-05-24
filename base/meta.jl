@@ -254,20 +254,22 @@ syntax errors will raise an error; otherwise, `parse` will return an expression 
 raise an error upon evaluation.  If `depwarn` is `false`, deprecation warnings will be
 suppressed.
 
-```jldoctest
+```jldoctest; filter=r"(?<=Expr\\(:error).*|(?<=Expr\\(:incomplete).*"
 julia> Meta.parse("x = 3")
 :(x = 3)
 
-julia> Meta.parse("x = ")
-:($(Expr(:incomplete, "incomplete: premature end of input")))
-
 julia> Meta.parse("1.0.2")
-ERROR: Base.Meta.ParseError("invalid numeric constant \\\"1.0.\\\"")
-Stacktrace:
+ERROR: ParseError:
+# Error @ none:1:1
+1.0.2
+└──┘ ── invalid numeric constant
 [...]
 
 julia> Meta.parse("1.0.2"; raise = false)
-:($(Expr(:error, "invalid numeric constant \"1.0.\"")))
+:(\$(Expr(:error, "invalid numeric constant \"1.0.\"")))
+
+julia> Meta.parse("x = ")
+:(\$(Expr(:incomplete, "incomplete: premature end of input")))
 ```
 """
 function parse(str::AbstractString; raise::Bool=true, depwarn::Bool=true)
