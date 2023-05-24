@@ -1277,7 +1277,30 @@ julia> prepend!([6], [1, 2], [3, 4, 5])
 """
 function prepend! end
 
-function prepend!(a::Vector, items::AbstractVector)
+prepend!(a::AbstractVector, iter) = _prepend!(a, IteratorSize(iter), iter)
+prepend!(a::AbstractVector{T}, it::T, iter::Vararg{T}) where T = foldr((v,a) -> _prepend_converted!(a, v), reverse((it, iter...)); init=a)
+function prepend!(a::AbstractVector{T}, iter...) where T
+    isempty(iter) && return a
+    convert_buf = T[]
+
+    # attempt to do this buffered, but fall back to regular `append!` if that won't be possible
+    for itr in reverse(iter)
+        iter_size = IteratorSize(itr)
+        if iter_size isa Union{HasLength, HasShape}
+            resize!(convert_buf, length(itr))
+            for (idx, el) in zip(eachindex(convert_buf), itr)
+                convert_buf[idx] = convert(T, el)::T
+            end
+            _prepend_converted!(a, convert_buf)
+        else # Doesn't have a shape - recurse
+            _prepend!(a, iter_size, itr)
+        end
+    end
+    a
+end
+
+# specialize for Vectors where `copyto!` will succeed without calling a failing `convert`
+function prepend!(a::Union{Vector{Any},Vector{T}}, items::AbstractVector{T}) where T
     itemindices = eachindex(items)
     n = length(itemindices)
     _growbeg!(a, n)
@@ -1289,29 +1312,43 @@ function prepend!(a::Vector, items::AbstractVector)
     return a
 end
 
-prepend!(a::Vector, iter) = _prepend!(a, IteratorSize(iter), iter)
-pushfirst!(a::Vector, iter...) = prepend!(a, iter)
-
-prepend!(a::AbstractVector, iter...) = foldr((v, a) -> prepend!(a, v), iter, init=a)
-
-function _prepend!(a::Vector, ::Union{HasLength,HasShape}, iter)
-    @_terminates_locally_meta
-    require_one_based_indexing(a)
-    n = length(iter)
-    _growbeg!(a, n)
-    i = 0
-    for item in iter
-        @_safeindex a[i += 1] = item
-    end
-    a
-end
-function _prepend!(a::Vector, ::IteratorSize, iter)
+# most generic fallback can only assume iteration
+function _prepend!(a::AbstractVector, ::IteratorSize, iter)
     n = 0
     for item in iter
         n += 1
         pushfirst!(a, item)
     end
     reverse!(a, 1, n)
+    a
+end
+
+# `iter` has a length, so we can preemptively convert all elements before trying to
+# resize the incoming vector
+function _prepend!(a::AbstractVector{T}, ::Union{HasLength,HasShape}, iter) where T
+    converted_buf = Vector{T}(undef, length(iter))
+    for (idx, el) in zip(eachindex(converted_buf), iter)
+        converted_buf[idx] = convert(T, el)::T
+    end
+    _prepend_converted!(a, converted_buf)
+end
+
+# tuples can be handled specially as well, saving the creation of an intermediary array
+function _prepend!(a::AbstractVector{T}, ::Union{HasLength,HasShape}, tup::Tuple) where T
+    conv_tup = ntuple(i -> convert(T, tup[i])::T, length(tup))
+    _prepend_converted!(a, conv_tup)
+end
+
+# `iter` is guaranteed to hold elements compatible with `T` (may be !== T)
+# but it's not a necessarily a vector or indexable
+function _prepend_converted!(a::Vector, iter)
+    @_terminates_locally_meta
+    n = length(iter)
+    _growbeg!(a, n)
+    i = 0
+    for item in iter
+        @_safeindex a[i += 1] = item
+    end
     a
 end
 
@@ -1511,6 +1548,8 @@ function pushfirst!(a::Vector{T}, item) where T
     @_safeindex a[1] = item
     return a
 end
+
+pushfirst!(a::Vector, iter...) = prepend!(a, iter)
 
 # specialize and optimize the single argument case
 function pushfirst!(a::Vector{Any}, @nospecialize x)
