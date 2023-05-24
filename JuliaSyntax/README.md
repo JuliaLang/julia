@@ -33,7 +33,7 @@ all of Base and the standard libraries correctly and most of the General
 registry. There's still a few known incompatibilities in the Base tests.
 
 The tree data structures are usable but their APIs will evolve as we try out
-various use cases. Converting to `Expr` is always be possible and will be
+various use cases. Converting to `Expr` is always possible and will be
 stable if that helps for your use case.
 
 A talk from JuliaCon 2022 covered some aspects of this package.
