@@ -346,9 +346,6 @@ See also: [`complex`](@ref), [`oftype`](@ref), [`convert`](@ref).
 
 # Examples
 ```jldoctest
-julia> float(1:1000)
-1.0:1.0:1000.0
-
 julia> float(typemax(Int32))
 2.147483647e9
 ```
@@ -1171,11 +1168,8 @@ of `A` in accordance with the behavior of `convert(T, A)` given output type `T`.
 
 # Examples
 ```jldoctest
-julia> float([1, 2, 3])
-3-element Vector{Float64}:
- 1.0
- 2.0
- 3.0
+julia> float(1:1000)
+1.0:1.0:1000.0
 ```
 """
 float(A::AbstractArray{<:AbstractFloat}) = A
