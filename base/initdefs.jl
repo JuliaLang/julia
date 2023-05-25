@@ -383,7 +383,7 @@ may still be executing concurrently during shutdown.
 """
 function atexit(f::Function)
     Base.@lock _atexit_hooks_lock begin
-        _atexit_hooks_finished[] && error("cannot register new atexit hook; already exiting.")
+        _atexit_hooks_finished && error("cannot register new atexit hook; already exiting.")
         pushfirst!(atexit_hooks, f)
         return nothing
     end
@@ -403,7 +403,7 @@ function _atexit(exitcode::Cint)
             #  a hook that never gets run, and we run all the hooks we know about until
             #  the vector is empty.)
             if isempty(atexit_hooks)
-                _atexit_hooks_finished[] = true
+                global _atexit_hooks_finished = true
                 break
             end
 
