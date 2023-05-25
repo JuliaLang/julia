@@ -470,7 +470,7 @@ end
 
 # run the optimization work
 function optimize(interp::AbstractInterpreter, opt::OptimizationState, caller::InferenceResult)
-    @timeit "optimizer" ir = run_passes(opt.src, opt, caller)
+    @zone "CC: OPTIMIZER" ir = run_passes(opt.src, opt, caller)
     return finish(interp, opt, ir, caller)
 end
 
@@ -503,8 +503,9 @@ null_escape_cache(linfo::Union{InferenceResult,MethodInstance}) = nothing
 macro pass(name, expr)
     optimize_until = esc(:optimize_until)
     stage = esc(:__stage__)
-    macrocall = :(@timeit $(esc(name)) $(esc(expr)))
-    macrocall.args[2] = __source__  # `@timeit` may want to use it
+    # TODO: string concatenation
+    macrocall = :(@zone $(name) $(esc(expr)))
+    macrocall.args[2] = __source__  # `@zone` may want to use it
     quote
         $macrocall
         matchpass($optimize_until, ($stage += 1), $(esc(name))) && $(esc(:(@goto __done__)))
@@ -535,7 +536,7 @@ function run_passes(
     @pass "type lift" ir = type_lift_pass!(ir)
     @pass "compact 3" ir = compact!(ir)
     if JLOptions().debug_level == 2
-        @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
+        @zone "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
     end
     @label __done__  # used by @pass
     return ir
@@ -641,10 +642,10 @@ function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
     svdef = sv.linfo.def
     nargs = isa(svdef, Method) ? Int(svdef.nargs) : 0
-    @timeit "domtree 1" domtree = construct_domtree(ir.cfg.blocks)
+    @zone "domtree 1" domtree = construct_domtree(ir.cfg.blocks)
     defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.inst)
     𝕃ₒ = optimizer_lattice(sv.inlining.interp)
-    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, sv.slottypes, 𝕃ₒ) # consumes `ir`
+    @zone "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, sv.slottypes, 𝕃ₒ) # consumes `ir`
     # NOTE now we have converted `ir` to the SSA form and eliminated slots
     # let's resize `argtypes` now and remove unnecessary types for the eliminated slots
     resize!(ir.argtypes, nargs)

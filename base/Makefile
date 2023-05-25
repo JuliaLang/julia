@@ -93,6 +93,11 @@ ifeq ($(OS), Darwin)
 	@echo "const MACOS_PLATFORM_VERSION = \"$(shell xcrun --show-sdk-version)\"" >> $@
 endif
 	@echo "const BUILD_TRIPLET = \"$(BB_TRIPLET_LIBGFORTRAN_CXXABI)\"" >> $@
+ifneq (,$(findstring 1,"$(WITH_TRACY)$(WITH_ITTAPI)$(WITH_TIMING_COUNTS)"))
+	@echo "const ENABLE_TIMINGS = true" >> $@
+else
+	@echo "const ENABLE_TIMINGS = false" >> $@
+endif
 
 	@# This to ensure that we always rebuild this file, but only when it is modified do we touch build_h.jl,
 	@# ensuring we rebuild the system image as infrequently as possible
