@@ -436,6 +436,8 @@ static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mo
     }
     JL_CATCH {
         // if expression cannot be converted, replace with error expr
+        //jl_(jl_current_exception());
+        //jlbacktrace();
         jl_expr_t *ex = jl_exprn(jl_error_sym, 1);
         v = (jl_value_t*)ex;
         jl_array_ptr_set(ex->args, 0, jl_cstr_to_string("invalid AST"));
@@ -1000,7 +1002,59 @@ int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT
     return 0;
 }
 
-static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule, jl_module_t **ctx, size_t world, int throw_load_error)
+// Utility function to return whether `e` is any of the special AST types or
+// will always evaluate to itself exactly unchanged. This corresponds to
+// `is_self_quoting` in Core.Compiler utilities.
+int jl_is_ast_node(jl_value_t *e) JL_NOTSAFEPOINT
+{
+    return jl_is_newvarnode(e)
+        || jl_is_code_info(e)
+        || jl_is_linenode(e)
+        || jl_is_gotonode(e)
+        || jl_is_gotoifnot(e)
+        || jl_is_returnnode(e)
+        || jl_is_ssavalue(e)
+        || jl_is_slotnumber(e)
+        || jl_is_argument(e)
+        || jl_is_quotenode(e)
+        || jl_is_globalref(e)
+        || jl_is_symbol(e)
+        || jl_is_pinode(e)
+        || jl_is_phinode(e)
+        || jl_is_phicnode(e)
+        || jl_is_upsilonnode(e)
+        || jl_is_expr(e);
+}
+
+static int is_self_quoting_expr(jl_expr_t *e) JL_NOTSAFEPOINT
+{
+    return (e->head == jl_inert_sym ||
+            e->head == jl_core_sym ||
+            e->head == jl_line_sym ||
+            e->head == jl_lineinfo_sym ||
+            e->head == jl_meta_sym ||
+            e->head == jl_boundscheck_sym ||
+            e->head == jl_inline_sym ||
+            e->head == jl_noinline_sym);
+}
+
+// any AST, except those that cannot contain symbols
+// and have no side effects
+int need_esc_node(jl_value_t *e) JL_NOTSAFEPOINT
+{
+    if (jl_is_linenode(e)
+        || jl_is_ssavalue(e)
+        || jl_is_slotnumber(e)
+        || jl_is_argument(e)
+        || jl_is_quotenode(e))
+        return 0;
+    if (jl_is_expr(e))
+        return !is_self_quoting_expr((jl_expr_t*)e);
+    // note: jl_is_globalref(e) is not included here, since we care a little about about having a line number for it
+    return jl_is_ast_node(e);
+}
+
+static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule, jl_module_t **ctx, jl_value_t **lineinfo, size_t world, int throw_load_error)
 {
     jl_task_t *ct = jl_current_task;
     JL_TIMING(MACRO_INVOCATION, MACRO_INVOCATION);
@@ -1012,10 +1066,9 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
     margs[0] = jl_array_ptr_ref(args, 0);
     // __source__ argument
     jl_value_t *lno = jl_array_ptr_ref(args, 1);
+    if (!jl_is_linenode(lno))
+        lno = jl_new_struct(jl_linenumbernode_type, jl_box_long(0), jl_nothing);
     margs[1] = lno;
-    if (!jl_is_linenode(lno)) {
-        margs[1] = jl_new_struct(jl_linenumbernode_type, jl_box_long(0), jl_nothing);
-    }
     margs[2] = (jl_value_t*)inmodule;
     for (i = 3; i < nargs; i++)
         margs[i] = jl_array_ptr_ref(args, i - 1);
@@ -1054,6 +1107,7 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
         }
     }
     ct->world_age = last_age;
+    *lineinfo = margs[1];
     JL_GC_POP();
     return result;
 }
@@ -1076,14 +1130,18 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
         JL_GC_POP();
         return expr;
     }
-    if (e->head == jl_hygienicscope_sym && jl_expr_nargs(e) == 2) {
+    if (e->head == jl_hygienicscope_sym && jl_expr_nargs(e) >= 2) {
         struct macroctx_stack newctx;
         newctx.m = (jl_module_t*)jl_exprarg(e, 1);
         JL_TYPECHK(hygienic-scope, module, (jl_value_t*)newctx.m);
         newctx.parent = macroctx;
         jl_value_t *a = jl_exprarg(e, 0);
         jl_value_t *a2 = jl_expand_macros(a, inmodule, &newctx, onelevel, world, throw_load_error);
-        if (a != a2)
+        if (jl_is_expr(a2) && ((jl_expr_t*)a2)->head == jl_escape_sym && !need_esc_node(jl_exprarg(a2, 0)))
+            expr = jl_exprarg(a2, 0);
+        else if (!need_esc_node(a2))
+            expr = a2;
+        else if (a != a2)
             jl_array_ptr_set(e->args, 0, a2);
         return expr;
     }
@@ -1091,21 +1149,28 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
         struct macroctx_stack newctx;
         newctx.m = macroctx ? macroctx->m : inmodule;
         newctx.parent = macroctx;
-        jl_value_t *result = jl_invoke_julia_macro(e->args, inmodule, &newctx.m, world, throw_load_error);
+        jl_value_t *lineinfo = NULL;
+        jl_value_t *result = jl_invoke_julia_macro(e->args, inmodule, &newctx.m, &lineinfo, world, throw_load_error);
+        if (!need_esc_node(result))
+            return result;
         jl_value_t *wrap = NULL;
-        JL_GC_PUSH3(&result, &wrap, &newctx.m);
+        JL_GC_PUSH4(&result, &wrap, &newctx.m, &lineinfo);
         // copy and wrap the result in `(hygienic-scope ,result ,newctx)
         if (jl_is_expr(result) && ((jl_expr_t*)result)->head == jl_escape_sym)
             result = jl_exprarg(result, 0);
         else
-            wrap = (jl_value_t*)jl_exprn(jl_hygienicscope_sym, 2);
+            wrap = (jl_value_t*)jl_exprn(jl_hygienicscope_sym, 3);
         result = jl_copy_ast(result);
         if (!onelevel)
             result = jl_expand_macros(result, inmodule, wrap ? &newctx : macroctx, onelevel, world, throw_load_error);
-        if (wrap) {
+        if (wrap && need_esc_node(result)) {
             jl_exprargset(wrap, 0, result);
             jl_exprargset(wrap, 1, newctx.m);
-            result = wrap;
+            jl_exprargset(wrap, 2, lineinfo);
+            if (jl_is_expr(result) && ((jl_expr_t*)result)->head == jl_escape_sym)
+                result = jl_exprarg(result, 0);
+            else
+                result = wrap;
         }
         JL_GC_POP();
         return result;
