@@ -17,8 +17,8 @@ See also [Multi-Threading](@ref man-multithreading).
 
 ## Atomic operations
 
-```
-Base.atomic
+```@docs
+atomic
 ```
 
 ```@docs
