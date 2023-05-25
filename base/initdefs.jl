@@ -354,7 +354,7 @@ const atexit_hooks = Callable[
     () -> Filesystem.temp_cleanup_purge(force=true)
 ]
 const _atexit_hooks_lock = ReentrantLock()
-const _atexit_hooks_finished = Ref(false)
+global _atexit_hooks_finished::Bool = false
 
 """
     atexit(f)
