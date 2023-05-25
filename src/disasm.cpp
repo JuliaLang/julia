@@ -1217,6 +1217,8 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char raw_mc, const 
                 if (f != &f2 && !f->isDeclaration())
                     f2.deleteBody();
             }
+            // add a nounwind attribute to get rid of cfi instructions
+            f->addFnAttr(Attribute::NoUnwind);
         });
         auto TMBase = jl_ExecutionEngine->cloneTargetMachine();
         LLVMTargetMachine *TM = static_cast<LLVMTargetMachine*>(TMBase.get());
