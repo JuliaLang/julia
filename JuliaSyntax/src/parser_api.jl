@@ -20,9 +20,6 @@ function Base.showerror(io::IO, err::ParseError)
     show_diagnostics(io, err.diagnostics, err.source)
 end
 
-Base.display_error(io::IO, err::ParseError, bt) = Base.showerror(io, err, bt)
-
-
 """
     parse!(stream::ParseStream; rule=:all)
 

@@ -15,3 +15,10 @@
     @test ps("XX", fgcolor=:red, bgcolor=:green, href="https://www.example.com") ==
         "\e]8;;https://www.example.com\e\\\e[31m\e[42mXX\e[0;0m\e]8;;\e\\"
 end
+
+@testset "ambiguities" begin
+    if VERSION >= v"1.8"
+        @test detect_ambiguities(JuliaSyntax) == []
+        @test detect_unbound_args(JuliaSyntax) == []
+    end
+end

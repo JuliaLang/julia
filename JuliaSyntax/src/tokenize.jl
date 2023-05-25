@@ -1,6 +1,6 @@
 module Tokenize
 
-export tokenize, untokenize, Tokens
+export tokenize, untokenize
 
 using ..JuliaSyntax: JuliaSyntax, Kind, @K_str, @KSet_str
 

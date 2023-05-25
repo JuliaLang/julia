@@ -7,6 +7,14 @@ mutable struct TreeNode{NodeData}   # ? prevent others from using this with Node
     parent::Union{Nothing,TreeNode{NodeData}}
     children::Union{Nothing,Vector{TreeNode{NodeData}}}
     data::Union{Nothing,NodeData}
+
+    # Use this constructor rather than the automatically generated one to pass
+    # Test.detect_unbound_args() test in Base.
+    function TreeNode{NodeData}(parent::Union{Nothing,TreeNode{NodeData}},
+                                children::Union{Nothing,Vector{TreeNode{NodeData}}},
+                                data::Union{Nothing,NodeData}) where {NodeData}
+        new{NodeData}(parent, children, data)
+    end
 end
 
 # Implement "pass-through" semantics for field access: access fields of `data`
