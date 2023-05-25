@@ -2327,6 +2327,19 @@ jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi, size_t world)
 
 jl_mutex_t precomp_statement_out_lock;
 
+static void jl_print_codeloc(JL_STREAM* io, const char* func_name, const char* file_name,
+                                  int line, int inlined) JL_NOTSAFEPOINT
+{
+    const char *inlined_str = inlined ? " [inlined]" : "";
+    if (line != -1) {
+        jl_printf(io, "%s at %s:%d%s\n", func_name, file_name, line, inlined_str);
+    }
+    else {
+        jl_printf(io, "%s at %s (unknown line)%s\n", func_name, file_name, inlined_str);
+    }
+}
+
+
 static void record_precompile_statement(jl_method_instance_t *mi)
 {
     static ios_t f_precompile;
@@ -2352,7 +2365,42 @@ static void record_precompile_statement(jl_method_instance_t *mi)
     if (!jl_has_free_typevars(mi->specTypes)) {
         jl_printf(s_precompile, "precompile(");
         jl_static_show(s_precompile, mi->specTypes);
-        jl_printf(s_precompile, ")\n");
+        jl_printf(s_precompile, ") # ");
+
+        jl_bt_element_t *bt = (jl_bt_element_t*)malloc(JL_MAX_BT_SIZE*sizeof(jl_bt_element_t));
+        size_t frame_ct = rec_backtrace(bt, JL_MAX_BT_SIZE, 0);
+        int found_call_site = 0;
+        for (int i = 0; i < frame_ct; i++){
+            jl_frame_t *frames = NULL;
+            int n = jl_getFunctionInfo(&frames, bt[i].uintptr, 0, 0);
+            int j;
+
+            for (j = 0; j < n; j++) {
+                jl_frame_t frame = frames[j];
+                if (jl_bt_is_native(&bt[i]) && frame.fromC == 0) {
+                    if (!frame.func_name) {
+                        jl_printf(s_precompile, "unknown function (ip: %p)\n", (void*)bt);
+                    }
+                    else {
+                        jl_print_codeloc(s_precompile, frame.func_name, frame.file_name, frame.line, frame.inlined);
+                        free(frame.func_name);
+                        free(frame.file_name);
+                    }
+                    found_call_site = 1;
+                    break;
+                } else if (jl_bt_entry_tag(bt) == JL_BT_INTERP_FRAME_TAG) {
+                    jl_print_codeloc(s_precompile, frame.func_name, frame.file_name, frame.line, frame.inlined);
+                    free(frame.func_name);
+                    free(frame.file_name);
+                    found_call_site = 1;
+                    break;
+                }
+            }
+            if (found_call_site == 1)
+                break;
+            free(frames);
+        }
+        free(bt);
         if (s_precompile != JL_STDERR)
             ios_flush(&f_precompile);
     }
