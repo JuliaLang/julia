@@ -1116,7 +1116,6 @@ big(::Type{Complex{T}}) where {T<:Real} = Complex{big(T)}
 big(z::Complex{T}) where {T<:Real} = Complex{big(T)}(z)
 
 ## Array operations on complex numbers ##
-
 """
     complex(A::AbstractArray)
 
