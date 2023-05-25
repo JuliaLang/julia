@@ -128,6 +128,7 @@ int jl_safepoint_start_gc(void)
     // introduce a race between it and this thread checking if the GC is enabled and only
     // then setting jl_gc_running. To avoid that, check again now that we won that race.
     if (jl_atomic_load_acquire(&jl_gc_disable_counter)) {
+        jl_atomic_store_release(&jl_gc_running, 0);
         uv_mutex_unlock(&safepoint_lock);
         return 0;
     }
