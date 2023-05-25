@@ -209,8 +209,13 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
             throw(ArgumentError("'syntax' must be either :intel or :att"))
         end
         if dump_module
+            # we want module metadata, so use LLVM to generate assembly output
             str = _dump_function_linfo_native(linfo, world, wrapper, syntax, debuginfo, binary, params)
         else
+            # if we don't want the module metadata, just disassemble what our JIT has.
+            # TODO: make it possible to hide the safepoint prologue here too.
+            #       once that works, it would be good to default to dump_module=false
+            #       just like code_llvm does.
             str = _dump_function_linfo_native(linfo, world, wrapper, syntax, debuginfo, binary)
         end
     else
@@ -291,20 +296,22 @@ generic function and type signature to `io`.
 * Specify verbosity of code comments by setting `debuginfo` to `:source` (default) or `:none`.
 * If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
 * If `dump_module` is `false`, do not print metadata such as rodata or directives.
+* If `raw` is `false`, unintesting instructions (like the safepoint function prologue) are elided.
 
 See also: [`@code_native`](@ref), [`code_llvm`](@ref), [`code_typed`](@ref) and [`code_lowered`](@ref)
 """
 function code_native(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f));
-                     dump_module::Bool=true, syntax::Symbol=:intel, debuginfo::Symbol=:default, binary::Bool=false)
-    d = _dump_function(f, types, true, false, false, dump_module, syntax, true, debuginfo, binary, dump_module)
+                     dump_module::Bool=true, syntax::Symbol=:intel, raw::Bool=false,
+                     debuginfo::Symbol=:default, binary::Bool=false)
+    d = _dump_function(f, types, true, false, false, dump_module, syntax, true, debuginfo, binary, raw)
     if highlighting[:native] && get(io, :color, false)::Bool
         print_native(io, d)
     else
         print(io, d)
     end
 end
-code_native(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); dump_module::Bool=true, syntax::Symbol=:intel, debuginfo::Symbol=:default, binary::Bool=false) =
-    code_native(stdout, f, types; dump_module, syntax, debuginfo, binary)
+code_native(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); dump_module::Bool=true, syntax::Symbol=:intel, raw::Bool=false, debuginfo::Symbol=:default, binary::Bool=false) =
+    code_native(stdout, f, types; dump_module, syntax, raw, debuginfo, binary)
 code_native(::IO, ::Any, ::Symbol) = error("invalid code_native call") # resolve ambiguous call
 
 ## colorized IR and assembly printing
