@@ -52,7 +52,7 @@ void jl_timing_apply_env(void);
 extern JL_DLLEXPORT uint32_t jl_timing_print_limit;
 
 JL_DLLEXPORT jl_timing_event_t *_jl_timing_event_create(const char *subsystem, const char *name, const char *function, const char *file, int line, int color);
-JL_DLLEXPORT void _jl_timing_block_init(jl_timing_block_t *block, jl_timing_event_t *event);
+JL_DLLEXPORT void _jl_timing_block_init(char *buf, size_t size, jl_timing_event_t *event);
 JL_DLLEXPORT void _jl_timing_block_start(jl_timing_block_t *cur_block);
 JL_DLLEXPORT void _jl_timing_block_end(jl_timing_block_t *cur_block);
 
@@ -89,7 +89,6 @@ JL_DLLEXPORT void _jl_timing_block_end(jl_timing_block_t *cur_block);
 #define jl_timing_puts(b, s)
 #define jl_timing_task_init(t)
 #define jl_timing_event_create(blk)
-#define jl_timing_block_init(blk)
 #define jl_timing_block_start(blk)
 #define jl_timing_block_task_enter(ct, ptls, blk)
 #define jl_timing_block_task_exit(ct, ptls) ((jl_timing_block_t *)NULL)
@@ -142,7 +141,6 @@ JL_DLLEXPORT void jl_timing_printf(jl_timing_block_t *cur_block, const char *for
 JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
 
 #define jl_timing_event_create(subsystem, name, function, file, line, color) _jl_timing_event_create(subsystem, name, function, file, line, color)
-#define jl_timing_block_init(blk, evt) _jl_timing_block_start(blk, evt)
 #define jl_timing_block_start(blk) _jl_timing_block_start(blk)
 #define jl_timing_block_end(blk) _jl_timing_block_end(blk)
 

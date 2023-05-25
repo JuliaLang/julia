@@ -26,8 +26,6 @@ static uint64_t t0;
 
 JL_DLLEXPORT _Atomic(uint64_t) jl_timing_disable_mask[(JL_TIMING_SUBSYSTEM_LAST + sizeof(uint64_t) * CHAR_BIT - 1) / (sizeof(uint64_t) * CHAR_BIT)];
 
-static arraylist_t jl_timing_counts_events;
-
 // Used to as an item limit when several strings of metadata can
 // potentially be associated with a single timing zone.
 JL_DLLEXPORT uint32_t jl_timing_print_limit = 10;
@@ -41,12 +39,23 @@ const char *jl_timing_subsystems[(int)JL_TIMING_SUBSYSTEM_LAST] =
 
 JL_DLLEXPORT jl_timing_counter_t jl_timing_counters[JL_TIMING_COUNTER_LAST];
 
+#ifdef USE_TIMING_COUNTS
+static arraylist_t jl_timing_counts_events;
+static jl_mutex_t jl_timing_counts_events_lock;
+#endif //USE_TIMING_COUNTS
+
+#ifdef USE_ITTAPI
+static arraylist_t jl_timing_ittapi_events;
+static jl_mutex_t jl_timing_ittapi_events_lock;
+#endif //USE_ITTAPI
+
 void jl_print_timings(void)
 {
 #ifdef USE_TIMING_COUNTS
+    JL_LOCK_NOGC(&jl_timing_counts_events_lock);
     uint64_t total_time = cycleclock() - t0;
     uint64_t root_time = total_time;
-    for (int i = 0; i < jl_timing_counts_events.len; i++) {
+    for (int i = 1; i < jl_timing_counts_events.len; i++) {
         jl_timing_counts_event_t *other_event = (jl_timing_counts_event_t *)jl_timing_counts_events.items[i];
         root_time -= jl_atomic_load_relaxed(&other_event->self);
     }
@@ -66,6 +75,7 @@ void jl_print_timings(void)
                     self, 100 * (((double)self) / total_time),
                     total, 100 * (((double)total) / total_time));
     }
+    JL_UNLOCK_NOGC(&jl_timing_counts_events_lock);
 
     fprintf(stderr, "\nJULIA COUNTERS\n");
     fprintf(stderr, "%-25s, %-20s\n", "Counter", "Value");
@@ -91,6 +101,8 @@ void jl_init_timing(void)
     _Static_assert(JL_TIMING_SUBSYSTEM_LAST < sizeof(uint64_t) * CHAR_BIT, "Too many timing subsystems!");
 
 #ifdef USE_TIMING_COUNTS
+    JL_MUTEX_INIT(&jl_timing_counts_events_lock, "jl_timing_counts_events_lock");
+
     // Create events list for counts backend
     arraylist_new(&jl_timing_counts_events, 1);
 
@@ -98,7 +110,14 @@ void jl_init_timing(void)
     arraylist_push(&jl_timing_counts_events, (void *)new_event);
 
     new_event->name = "ROOT";
+    jl_atomic_store_relaxed(&new_event->self, 0);
     jl_atomic_store_relaxed(&new_event->total, 0);
+#endif
+
+#ifdef USE_ITTAPI
+    // Create events list for ITTAPI backend
+    JL_MUTEX_INIT(&jl_timing_ittapi_events_lock, "jl_timing_ittapi_events_lock");
+    arraylist_new(&jl_timing_ittapi_events, 0);
 #endif
 
     // Sort the subsystem names for quick enable/disable lookups
@@ -171,24 +190,60 @@ static const int get_timing_subsystem(const char *subsystem) {
     return (int)(match - &jl_timing_subsystems[0]);
 }
 
+#ifdef USE_ITTAPI
+
+typedef struct {
+    __itt_event event;
+    const char *name;
+} cached_ittapi_event_t;
+
+static __itt_event _jl_timing_ittapi_event_create(const char *event) {
+    JL_LOCK_NOGC(&jl_timing_ittapi_events_lock);
+    const size_t n = jl_timing_ittapi_events.len;
+    for (size_t i = 0; i < n; i++) {
+        cached_ittapi_event_t *other_event = (cached_ittapi_event_t *)jl_timing_ittapi_events.items[i];
+        if (strcmp(event, other_event->name) == 0) {
+            JL_UNLOCK_NOGC(&jl_timing_ittapi_events_lock);
+            return other_event->event;
+        }
+    }
+
+    // No matching event found - create a new one
+    cached_ittapi_event_t *new_event = (cached_ittapi_event_t *)malloc(sizeof(cached_ittapi_event_t));
+    arraylist_push(&jl_timing_ittapi_events, (void *)new_event);
+    new_event->name = event;
+    new_event->event = __itt_event_create(event, strlen(event));
+    JL_UNLOCK_NOGC(&jl_timing_ittapi_events_lock);
+
+    return new_event->event;
+}
+
+#endif // USE_ITTAPI
+
 #ifdef USE_TIMING_COUNTS
 
 // This function is analogous to __itt_event_create but for the counts backend
 //
 // `event` is required to live forever
 static jl_timing_counts_event_t *_jl_timing_counts_event_create(const char *event) {
+    JL_LOCK_NOGC(&jl_timing_counts_events_lock);
     const size_t n = jl_timing_counts_events.len;
     for (size_t i = 0; i < n; i++) {
         jl_timing_counts_event_t *other_event = (jl_timing_counts_event_t *)jl_timing_counts_events.items[i];
-        if (strcmp(event, other_event->name) == 0)
+        if (strcmp(event, other_event->name) == 0) {
+            JL_UNLOCK_NOGC(&jl_timing_counts_events_lock);
             return other_event;
+        }
     }
 
     // No matching event found - create a new one
     jl_timing_counts_event_t *new_event = (jl_timing_counts_event_t *)malloc(sizeof(jl_timing_counts_event_t));
     arraylist_push(&jl_timing_counts_events, (void *)new_event);
     new_event->name = event;
+    jl_atomic_store_relaxed(&new_event->self, 0);
     jl_atomic_store_relaxed(&new_event->total, 0);
+    JL_UNLOCK_NOGC(&jl_timing_counts_events_lock);
+
     return new_event;
 }
 
@@ -244,6 +299,10 @@ JL_DLLEXPORT jl_timing_event_t *_jl_timing_event_create(const char *subsystem, c
     event->counts_event = _jl_timing_counts_event_create(name);
 #endif // USE_TIMING_COUNTS
 
+#ifdef USE_ITTAPI
+    event->ittapi_event = _jl_timing_ittapi_event_create(name);
+#endif // USE_ITTAPI
+
 #ifdef USE_TRACY
     event->tracy_srcloc.name = name;
     event->tracy_srcloc.function = function;
@@ -252,15 +311,17 @@ JL_DLLEXPORT jl_timing_event_t *_jl_timing_event_create(const char *subsystem, c
     event->tracy_srcloc.color = color;
 #endif // USE_TRACY
 
-#ifdef USE_ITTAPI
-    event->ittapi_event = __itt_event_create(name, strlen(name));
-#endif // USE_ITTAPI
-
     return event;
 }
 
-JL_DLLEXPORT void _jl_timing_block_init(jl_timing_block_t *block, jl_timing_event_t *event) {
-    memset(block, 0, sizeof(*block));
+JL_DLLEXPORT void _jl_timing_block_init(char *buf, size_t size, jl_timing_event_t *event) {
+    if (size < sizeof(jl_timing_block_t)) {
+        jl_errorf("jl_timing_block_t buffer must be at least %d bytes", sizeof(jl_timing_block_t));
+        return;
+    }
+
+    jl_timing_block_t *block = (jl_timing_block_t *)buf;
+    memset(block, 0, sizeof(jl_timing_block_t));
     block->event = event;
 }
 
@@ -592,7 +653,7 @@ void jl_destroy_timing(void) { }
 
 JL_DLLEXPORT jl_timing_event_t *_jl_timing_event_create(const char *subsystem, const char *name, const char *function, const char *file, int line, int color) { return NULL; }
 
-JL_DLLEXPORT void _jl_timing_block_init(jl_timing_block_t *block, jl_timing_event_t *event) { }
+JL_DLLEXPORT void _jl_timing_block_init(char *buf, size_t size, jl_timing_event_t *event) { }
 JL_DLLEXPORT void _jl_timing_block_start(jl_timing_block_t *block) { }
 JL_DLLEXPORT void _jl_timing_block_end(jl_timing_block_t *block) { }
 
