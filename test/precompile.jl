@@ -328,17 +328,20 @@ precompile_test_harness(false) do dir
     cachedir = joinpath(dir, "compiled", "v$(VERSION.major).$(VERSION.minor)")
     cachedir2 = joinpath(dir2, "compiled", "v$(VERSION.major).$(VERSION.minor)")
     cachefile = joinpath(cachedir, "$Foo_module.ji")
-    if Base.JLOptions().use_pkgimages == 1
-        ocachefile = Base.ocachefile_from_cachefile(cachefile)
-    else
-        ocachefile = nothing
-    end
-    # use _require_from_serialized to ensure that the test fails if
-    # the module doesn't reload from the image:
-    @test_warn "@ccallable was already defined for this method name" begin
-        @test_logs (:warn, "Replacing module `$Foo_module`") begin
-            m = Base._require_from_serialized(Base.PkgId(Foo), cachefile, ocachefile)
-            @test isa(m, Module)
+    do_pkgimg = Base.JLOptions().use_pkgimages == 1 && Base.JLOptions().permalloc_pkgimg == 1
+    if do_pkgimg ||  Base.JLOptions().use_pkgimages == 0
+        if do_pkgimg
+            ocachefile = Base.ocachefile_from_cachefile(cachefile)
+        else
+            ocachefile = nothing
+        end
+            # use _require_from_serialized to ensure that the test fails if
+            # the module doesn't reload from the image:
+        @test_warn "@ccallable was already defined for this method name" begin
+            @test_logs (:warn, "Replacing module `$Foo_module`") begin
+                m = Base._require_from_serialized(Base.PkgId(Foo), cachefile, ocachefile)
+                @test isa(m, Module)
+            end
         end
     end
 
