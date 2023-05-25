@@ -181,6 +181,7 @@ JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
         X(STACKWALK)             \
         X(DL_OPEN)               \
         X(JULIA_INIT)            \
+        X(CORE_COMPILER)         \
 
 
 #define JL_TIMING_COUNTERS \

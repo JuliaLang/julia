@@ -643,7 +643,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
     for (; leave_block) in catch_entry_blocks
         new_phic_nodes[leave_block] = NewPhiCNode[]
     end
-    @timeit "idf" for (idx, slot) in Iterators.enumerate(defuses)
+    @zone "idf" for (idx, slot) in Iterators.enumerate(defuses)
         # No uses => no need for phi nodes
         isempty(slot.uses) && continue
         # TODO: Restore this optimization
@@ -668,7 +668,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
             end
             continue
         end
-        @timeit "liveness" (live = compute_live_ins(cfg, slot))
+        @zone "liveness" (live = compute_live_ins(cfg, slot))
         for li in live.live_in_bbs
             cidx = findfirst(x::TryCatchRegion->x.leave_block==li, catch_entry_blocks)
             if cidx !== nothing
@@ -709,7 +709,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
     visited = BitSet()
     type_refine_phi = BitSet()
     new_nodes = ir.new_nodes
-    @timeit "SSA Rename" while !isempty(worklist)
+    @zone "SSA Rename" while !isempty(worklist)
         (item::Int, pred, incoming_vals) = pop!(worklist)
         # Rename existing phi nodes first, because their uses occur on the edge
         # TODO: This isn't necessary if inlining stops replacing arguments by slots.
@@ -934,6 +934,6 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
         local node = new_nodes.stmts[i]
         node[:inst] = new_to_regular(renumber_ssa!(node[:inst], ssavalmap), nstmts)
     end
-    @timeit "domsort" ir = domsort_ssa!(ir, domtree)
+    @zone "domsort" ir = domsort_ssa!(ir, domtree)
     return ir
 end
