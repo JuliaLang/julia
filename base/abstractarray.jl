@@ -1633,7 +1633,10 @@ end
 typed_hcat(::Type{T}, A::AbstractVecOrMat...) where {T} = _typed_hcat(T, A)
 
 # Catch indexing errors like v[i +1] (instead of v[i+1] or v[i + 1]), where indexing is interpreted as typed a comprehension. (issue #49676)
-typed_hcat(::AbstractArray, other...) = throw(ArgumentError("It is unclear whether you intend to perform an indexing operation or typed list comprehension. If you intend to perform indexing (v[1 + 2]) insert missing operator or adjust spacing to clarify. If you intend to perform typed list comprehension, (T[1 2]) ensure that T is a type."))
+typed_hcat(::AbstractArray, other...) = throw(ArgumentError("It is unclear whether you \
+    intend to perform an indexing operation or typed concatenation. If you intend to \
+    perform indexing (v[1 + 2]) insert missing operator or adjust spacing to clarify. \
+    If you intend to perform typed concatenation (T[1 2]) ensure that T is a type."))
 
 
 hcat(A::AbstractVecOrMat...) = typed_hcat(promote_eltype(A...), A...)
