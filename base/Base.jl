@@ -6,7 +6,7 @@ using Core.Intrinsics, Core.IR
 
 # to start, we're going to use a very simple definition of `include`
 # that doesn't require any function (except what we can get from the `Core` top-module)
-const _included_files = Array{Tuple{Module,String},1}()
+const _included_files = Array{Tuple{Module,String},1}(Core.undef, 1)
 function include(mod::Module, path::String)
     ccall(:jl_array_grow_end, Cvoid, (Any, UInt), _included_files, UInt(1))
     Core.arrayset(true, _included_files, (mod, ccall(:jl_prepend_cwd, Any, (Any,), path)), arraylen(_included_files))
@@ -607,5 +607,8 @@ end
 
 end
 
+# Ensure this file is also tracked
+@assert !isassigned(_included_files, 1)
+_included_files[1] = (parentmodule(Base), abspath(@__FILE__))
 
 end # baremodule Base
