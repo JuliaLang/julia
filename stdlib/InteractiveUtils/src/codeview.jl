@@ -169,9 +169,9 @@ const OC_MISMATCH_WARNING =
 # Printing code representations in IR and assembly
 function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrapper::Bool,
                         strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol,
-                        optimize::Bool, debuginfo::Symbol, binary::Bool,
+                        optimize::Bool, debuginfo::Symbol, binary::Bool, safepoints::Bool,
                         params::CodegenParams=CodegenParams(debug_info_kind=Cint(0),
-                                                            safepoint_on_entry=false))
+                                                            safepoint_on_entry=safepoints))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
@@ -269,7 +269,7 @@ Keyword argument `debuginfo` may be one of source (default) or none, to specify 
 """
 function code_llvm(io::IO, @nospecialize(f), @nospecialize(types), raw::Bool,
                    dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default)
-    d = _dump_function(f, types, false, false, !raw, dump_module, :intel, optimize, debuginfo, false)
+    d = _dump_function(f, types, false, false, !raw, dump_module, :intel, optimize, debuginfo, false, raw)
     if highlighting[:llvm] && get(io, :color, false)::Bool
         print_llvm(io, d)
     else
@@ -296,7 +296,7 @@ See also: [`@code_native`](@ref), [`code_llvm`](@ref), [`code_typed`](@ref) and 
 """
 function code_native(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f));
                      dump_module::Bool=true, syntax::Symbol=:intel, debuginfo::Symbol=:default, binary::Bool=false)
-    d = _dump_function(f, types, true, false, false, dump_module, syntax, true, debuginfo, binary)
+    d = _dump_function(f, types, true, false, false, dump_module, syntax, true, debuginfo, binary, dump_module)
     if highlighting[:native] && get(io, :color, false)::Bool
         print_native(io, d)
     else
