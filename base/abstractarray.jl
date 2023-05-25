@@ -1636,8 +1636,8 @@ typed_hcat(::Type{T}, A::AbstractVecOrMat...) where {T} = _typed_hcat(T, A)
 # interpreted as a typed concatenation. (issue #49676)
 typed_hcat(::AbstractArray, other...) = throw(ArgumentError("It is unclear whether you \
     intend to perform an indexing operation or typed concatenation. If you intend to \
-    perform indexing (v[1 + 2]) insert missing operator or adjust spacing to clarify. \
-    If you intend to perform typed concatenation (T[1 2]) ensure that T is a type."))
+    perform indexing (v[1 + 2]), adjust spacing or insert missing operator to clarify. \
+    If you intend to perform typed concatenation (T[1 2]), ensure that T is a type."))
 
 
 hcat(A::AbstractVecOrMat...) = typed_hcat(promote_eltype(A...), A...)
