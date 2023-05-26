@@ -13,16 +13,6 @@ void* get_mutator_from_ref(void* mutator) {
     return mutator;
 }
 
-int mutator_cursor = 0;
-
-void reset_mutator_count() {
-    mutator_cursor = 0;
-}
-
-int get_next_julia_mutator() {
-    return mutator_cursor++;
-}
-
 extern void start_spawned_worker_thread(void*, void*);
 extern void start_spawned_controller_thread(void*, void*);
 

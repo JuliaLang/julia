@@ -1,14 +1,48 @@
 use crate::JuliaVM;
-use crate::{
-    get_mutator_from_ref, get_next_julia_mutator, reset_mutator_count, MUTATORS, MUTATOR_TLS,
-    SINGLETON,
-};
+use crate::{get_mutator_from_ref, MUTATORS, MUTATOR_TLS, SINGLETON};
 use mmtk::util::opaque_pointer::*;
 use mmtk::util::Address;
 use mmtk::vm::ActivePlan;
 use mmtk::Mutator;
 use mmtk::Plan;
 use mmtk::{plan::ObjectQueue, scheduler::GCWorker, util::ObjectReference};
+
+use std::sync::RwLockReadGuard;
+
+pub struct JuliaMutatorIterator<'a> {
+    guard: RwLockReadGuard<'a, Vec<ObjectReference>>,
+    cursor: usize,
+}
+
+impl<'a> JuliaMutatorIterator<'a> {
+    fn new(guard: RwLockReadGuard<'a, Vec<ObjectReference>>) -> Self {
+        Self {
+            guard: guard,
+            cursor: 0,
+        }
+    }
+}
+
+impl<'a> Iterator for JuliaMutatorIterator<'a> {
+    type Item = &'a mut Mutator<JuliaVM>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let ref mutators = self.guard;
+
+        let mutator_idx = self.cursor;
+        self.cursor += 1;
+
+        let mutator = mutators.get(mutator_idx);
+
+        match mutator {
+            Some(m) => {
+                let mutator = unsafe { get_mutator_from_ref(*m) };
+                Some(unsafe { &mut *mutator })
+            }
+            None => None,
+        }
+    }
+}
 
 pub struct VMActivePlan {}
 
@@ -18,7 +52,7 @@ impl ActivePlan<JuliaVM> for VMActivePlan {
     }
 
     fn number_of_mutators() -> usize {
-        unimplemented!()
+        Self::mutators().count()
     }
 
     fn is_mutator(tls: VMThread) -> bool {
@@ -35,30 +69,9 @@ impl ActivePlan<JuliaVM> for VMActivePlan {
         unimplemented!()
     }
 
-    fn reset_mutator_iterator() {
-        unsafe { reset_mutator_count() }
-    }
-
-    fn get_next_mutator() -> Option<&'static mut Mutator<JuliaVM>> {
-        let mutators = MUTATORS.read().unwrap();
-        // println!("All mutators: {:?}", mutators.iter());
-
-        let mutator_idx = unsafe { get_next_julia_mutator() };
-
-        // println!("Next mutator is: {:?}", mutator_idx);
-
-        let mutator = mutators.get(mutator_idx);
-
-        let res = match mutator {
-            Some(m) => {
-                let mutator = unsafe { get_mutator_from_ref(*m) };
-                //    println!("Next mutator is: {:?}", mutator);
-                Some(unsafe { &mut *mutator })
-            }
-            None => None,
-        };
-
-        res
+    fn mutators<'a>() -> Box<dyn Iterator<Item = &'a mut Mutator<JuliaVM>> + 'a> {
+        let guard = MUTATORS.read().unwrap();
+        Box::new(JuliaMutatorIterator::new(guard))
     }
 
     fn vm_trace_object<Q: ObjectQueue>(
@@ -71,29 +84,24 @@ impl ActivePlan<JuliaVM> for VMActivePlan {
     }
 }
 
+// Expose the mutator iterator so they can be used in C.
+
 #[no_mangle]
-pub extern "C" fn get_next_mutator_tls() -> OpaquePointer {
-    let mutators = MUTATORS.read().unwrap();
-
-    let mutator_idx = unsafe { get_next_julia_mutator() };
-    let mutator = mutators.get(mutator_idx);
-
-    let res = match mutator {
-        Some(m) => {
-            let mutator = unsafe { get_mutator_from_ref(*m) };
-
-            unsafe { (*mutator).mutator_tls.0 .0 }
-        }
-        None => {
-            unsafe { reset_mutator_count() }
-            OpaquePointer::from_address(unsafe { Address::zero() })
-        }
-    };
-
-    res
+pub extern "C" fn new_mutator_iterator() -> *mut JuliaMutatorIterator<'static> {
+    let guard = MUTATORS.read().unwrap();
+    Box::into_raw(Box::new(JuliaMutatorIterator::new(guard)))
 }
 
 #[no_mangle]
-pub extern "C" fn reset_count_tls() {
-    unsafe { reset_mutator_count() }
+pub extern "C" fn get_next_mutator_tls(iter: *mut JuliaMutatorIterator<'static>) -> OpaquePointer {
+    match unsafe { iter.as_mut() }.unwrap().next() {
+        Some(m) => m.mutator_tls.0 .0,
+        None => OpaquePointer::from_address(Address::ZERO),
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn close_mutator_iterator(iter: *mut JuliaMutatorIterator<'static>) {
+    // The boxed pointer will get dropped
+    let _to_drop = unsafe { Box::from_raw(iter) };
 }
