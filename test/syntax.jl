@@ -3479,3 +3479,9 @@ end
     @test @_macroexpand(global (; x::S, $(esc(:y))::$(esc(:T))) = a) ==
         :(global (; x::$(GlobalRef(m, :S)), y::T) = $(GlobalRef(m, :a)))
 end
+
+let line1 = (quote end).args[1],
+    line2 = (quote end).args[1],
+    line3 = (quote end).args[1]
+    @test 1 === eval(Meta.lower(Main, Expr(:block, line1, 1, line2, line3)))
+end
