@@ -17,6 +17,9 @@ export
     Base64DecodePipe,
     base64decode,
     base64urldecode,
+    Base64Format,
+    BASE64,
+    BASE64URL,
     stringmime
 
 # Base64EncodePipe is a pipe-like IO object, which converts into base64 data

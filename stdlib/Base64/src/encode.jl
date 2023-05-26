@@ -3,18 +3,34 @@
 # Generate encode table.
 const BASE64_ENCODE = [UInt8(x) for x in append!(['A':'Z'; 'a':'z'; '0':'9'], ['+', '/'])]
 const BASE64URL_ENCODE = [UInt8(x) for x in append!(['A':'Z'; 'a':'z'; '0':'9'], ['-', '_'])]
+const TABLE_ENCODE = vcat(BASE64_ENCODE, BASE64URL_ENCODE)
 
-encodeonechar_base64(x::UInt8) = @inbounds return BASE64_ENCODE[(x & 0x3f) + 1]
-encodeonechar_base64url(x::UInt8) = @inbounds return BASE64URL_ENCODE[(x & 0x3f) + 1]
 const ENCODEPADDING  = UInt8('=')
 
 """
-    Base64EncodePipe(ostream)
+    Base64Format
+
+Enum to declare encoding and decoding format.
+
++ `BASE64`: Stands for Base64 format.
++ `BASE64URL`: Stands for Base64URL format.
+"""
+@enum Base64Format::UInt8 BASE64=0 BASE64URL=1
+
+encodeonechar(x::UInt8, encode::Base64Format) = @inbounds return TABLE_ENCODE[((x & 0x3f) | (UInt8(encode) << 6)) + 1]
+
+"""
+    Base64EncodePipe(ostream; encode=BASE64, padding::Bool=true)
 
 Return a new write-only I/O stream, which converts any bytes written to it into
 base64-encoded ASCII bytes written to `ostream`.  Calling [`close`](@ref) on the
 `Base64EncodePipe` stream is necessary to complete the encoding (but does not
 close `ostream`).
+
+By giving `encoding::Base64Format` as an argument, `Base64EncodePipe` stream
+encodes inputs into Base64 string or Base64URL string accordingly.
+
+See also [`Base64Format`](@ref).
 
 # Examples
 ```jldoctest
@@ -34,18 +50,16 @@ julia> String(base64decode(str))
 "Hello!"
 ```
 """
-struct Base64EncodePipe{F<:Function} <: IO
+struct Base64EncodePipe <: IO
     io::IO
     buffer::Buffer
-    encode::F
+    encode::Base64Format
     padding::Bool
 
-    function Base64EncodePipe(io::IO; encode::T=encodeonechar_base64, padding::Bool=true) where {T<:Function}
+    function Base64EncodePipe(io::IO; encode=BASE64, padding::Bool=true)
         # The buffer size must be at least 3.
         buffer = Buffer(512)
-        pipe = new{T}(io, buffer, encode, padding)
-        finalizer(_ -> close(pipe), buffer)
-        return pipe
+        return new(io, buffer, encode, padding)
     end
 end
 
@@ -74,10 +88,10 @@ function Base.unsafe_write(pipe::Base64EncodePipe, ptr::Ptr{UInt8}, n::UInt)::In
     i = 0
     p_end = ptr + n
     while true
-        buffer[i+1] = pipe.encode(b1 >> 2          )
-        buffer[i+2] = pipe.encode(b1 << 4 | b2 >> 4)
-        buffer[i+3] = pipe.encode(b2 << 2 | b3 >> 6)
-        buffer[i+4] = pipe.encode(          b3     )
+        buffer[i+1] = encodeonechar(b1 >> 2          , pipe.encode)
+        buffer[i+2] = encodeonechar(b1 << 4 | b2 >> 4, pipe.encode)
+        buffer[i+3] = encodeonechar(b2 << 2 | b3 >> 6, pipe.encode)
+        buffer[i+4] = encodeonechar(          b3     , pipe.encode)
         i += 4
         if p + 2 < p_end
             b1 = unsafe_load(p, 1)
@@ -119,35 +133,35 @@ function Base.close(pipe::Base64EncodePipe)
     elseif k == 1
         if (pipe.padding)
             write(pipe.io,
-                pipe.encode(b1 >> 2),
-                pipe.encode(b1 << 4),
+                encodeonechar(b1 >> 2, pipe.encode),
+                encodeonechar(b1 << 4, pipe.encode),
                 ENCODEPADDING,
                 ENCODEPADDING)
         else
             write(pipe.io,
-                pipe.encode(b1 >> 2),
-                pipe.encode(b1 << 4),)
+                encodeonechar(b1 >> 2, pipe.encode),
+                encodeonechar(b1 << 4, pipe.encode))
         end
     elseif k == 2
         if (pipe.padding)
             write(pipe.io,
-                pipe.encode(          b1 >> 2),
-                pipe.encode(b1 << 4 | b2 >> 4),
-                pipe.encode(b2 << 2          ),
+                encodeonechar(          b1 >> 2, pipe.encode),
+                encodeonechar(b1 << 4 | b2 >> 4, pipe.encode),
+                encodeonechar(b2 << 2          , pipe.encode),
                 ENCODEPADDING)
         else
             write(pipe.io,
-                pipe.encode(          b1 >> 2),
-                pipe.encode(b1 << 4 | b2 >> 4),
-                pipe.encode(b2 << 2          ))
+                encodeonechar(          b1 >> 2, pipe.encode),
+                encodeonechar(b1 << 4 | b2 >> 4, pipe.encode),
+                encodeonechar(b2 << 2          , pipe.encode))
         end
     else
         @assert k == 3
         write(pipe.io,
-              pipe.encode(b1 >> 2          ),
-              pipe.encode(b1 << 4 | b2 >> 4),
-              pipe.encode(b2 << 2 | b3 >> 6),
-              pipe.encode(          b3     ))
+              encodeonechar(b1 >> 2          , pipe.encode),
+              encodeonechar(b1 << 4 | b2 >> 4, pipe.encode),
+              encodeonechar(b2 << 2 | b3 >> 6, pipe.encode),
+              encodeonechar(          b3     , pipe.encode))
     end
     return nothing
 end
@@ -203,22 +217,9 @@ function loadtriplet!(buffer::Buffer, ptr::Ptr{UInt8}, n::UInt)
     return b1, b2, b3, k
 end
 
-# called internally both from base64encode and base64urlencode
-function base64encode_core(f::F, e::E, args...; context=nothing, padding=true) where {F<:Function,E<:Function}
-    s = IOBuffer()
-    b = Base64EncodePipe(s; encode=e, padding=padding)
-    if context === nothing
-        f(b, args...)
-    else
-        f(IOContext(b, context), args...)
-    end
-    close(b)
-    return String(take!(s))
-end
-
 """
-    base64encode(writefunc, args...; context=nothing, padding=true)
-    base64encode(args...; context=nothing, padding=true)
+    base64encode(writefunc, args...; context=nothing, encode=BASE64, padding=true)
+    base64encode(args...; context=nothing, encode=BASE64, padding=true)
 
 Given a [`write`](@ref)-like function `writefunc`, which takes an I/O stream as
 its first argument, `base64encode(writefunc, args...)` calls `writefunc` to
@@ -227,33 +228,26 @@ write `args...` to a base64-encoded string, and returns the string.
 converts its arguments into bytes using the standard [`write`](@ref) functions
 and returns the base64-encoded string.
 
-The optional keyword argument `context` can be set to `:key=>value` pair
+An optional keyword argument `context` can be set to `:key=>value` pair
 or an `IO` or [`IOContext`](@ref) object whose attributes are used for the I/O
 stream passed to `writefunc` or `write`.
 
-The other optional keyword argument `padding` can be set to `false` if
-padding, which occurs when the total length of bytes to encode is not a
-multiple of three, should be disabled.
+Other optional keyword arguments `encode` and `padding` are used to specify
+an encoding format. `encode::Base64Format` determines alphabets to be used
+in encoding inputs. `padding` can be set to `false` if padding, which occurs when
+the total length of bytes to encode is not a multiple of three, should be disabled.
 
-See also [`base64decode`](@ref).
+See also [`Base64Format`](@ref) and [`base64decode`](@ref).
 """
-function base64encode(f::F, args...; context=nothing, padding=true) where {F<:Function}
-    return base64encode_core(f, encodeonechar_base64, args...; context=context, padding=padding)
+function base64encode(f::F, args...; context=nothing, encode=BASE64, padding=true) where {F<:Function}
+    s = IOBuffer()
+    b = Base64EncodePipe(s; encode=encode, padding=padding)
+    if context === nothing
+        f(b, args...)
+    else
+        f(IOContext(b, context), args...)
+    end
+    close(b)
+    return String(take!(s))
 end
-base64encode(args...; context=nothing, padding=true) = base64encode(write, args...; context=context, padding=padding)
-
-"""
-    base64urlencode(writefunc, args...; context=nothing, padding=true)
-    base64urlencode(args...; context=nothing, padding=true)
-
-Encode input data into base64url format, where '+' and '/' in base64
-is replaced with '-' and '_', respectively.
-
-Arguments to be passed are the same as those for [`base64encode`](@ref).
-
-See also [`base64urldecode`](@ref) and [`base64encode`](@ref).
-"""
-function base64urlencode(f::F, args...; context=nothing, padding=true) where {F<:Function}
-    return base64encode_core(f, encodeonechar_base64url, args...; context=context, padding=padding)
-end
-base64urlencode(args...; context=nothing, padding=true) = base64urlencode(write, args...; context=context, padding=padding)
+base64encode(args...; context=nothing, encode=BASE64, padding=true) = base64encode(write, args...; context=context, encode=encode, padding=padding)

@@ -17,14 +17,21 @@ const PADIND_DECODE = Int(ENCODEPADDING)+1
 BASE64_DECODE[PADIND_DECODE] = BASE64_CODE_PAD
 BASE64URL_DECODE[PADIND_DECODE] = BASE64_CODE_PAD
 
-decodeonechar_base64(x::UInt8) = @inbounds return BASE64_DECODE[x + 1]
-decodeonechar_base64url(x::UInt8) = @inbounds return BASE64URL_DECODE[x + 1]
+const TABLE_DECODE = vcat(BASE64_DECODE, BASE64URL_DECODE)
+
+decodeonechar(x::UInt8, decode::Base64Format) = @inbounds return TABLE_DECODE[(x | (UInt16(decode) << 8)) + 1]
+decodeonechar(x::UInt8, decode::UInt8) = @inbounds return TABLE_DECODE[(x | (UInt16(decode) << 8)) + 1]
 
 """
-    Base64DecodePipe(istream)
+    Base64DecodePipe(istream; decode=BASE64)
 
 Return a new read-only I/O stream, which decodes base64-encoded data read from
 `istream`.
+
+`Base64Format` object given as `decode` determines whether this pipe decodes data
+encoded in Base64 or Base64URL.
+
+See also [`Base64Format`](@ref).
 
 # Examples
 ```jldoctest
@@ -41,15 +48,15 @@ julia> String(read(iob64_decode))
 "Hello!"
 ```
 """
-struct Base64DecodePipe{F<:Function} <: IO
+struct Base64DecodePipe <: IO
     io::IO
     buffer::Buffer
-    decode::F
+    decode::Base64Format
     rest::Vector{UInt8}
 
-    function Base64DecodePipe(io::IO; decode::T=decodeonechar_base64) where {T<:Function}
+    function Base64DecodePipe(io::IO; decode=BASE64)
         buffer = Buffer(512)
-        return new{T}(io, buffer, decode, UInt8[])
+        return new(io, buffer, decode, UInt8[])
     end
 end
 
@@ -84,17 +91,17 @@ function read_until_end(pipe::Base64DecodePipe, ptr::Ptr{UInt8}, n::UInt)
             unsafe_store!(p + 2, b3 << 6 | b4     )
             p += 3
         else
-            i, p, ended = decode_slow(pipe.decode, b1, b2, b3, b4, buffer, i, pipe.io, p, p_end - p, pipe.rest)
+            i, p, ended = decode_slow(UInt8(pipe.decode), b1, b2, b3, b4, buffer, i, pipe.io, p, p_end - p, pipe.rest)
             if ended
                 break
             end
         end
         if p < p_end
             if i + 4 ≤ lastindex(buffer)
-                b1 = pipe.decode(buffer[i+1])
-                b2 = pipe.decode(buffer[i+2])
-                b3 = pipe.decode(buffer[i+3])
-                b4 = pipe.decode(buffer[i+4])
+                b1 = decodeonechar(buffer[i+1], pipe.decode)
+                b2 = decodeonechar(buffer[i+2], pipe.decode)
+                b3 = decodeonechar(buffer[i+3], pipe.decode)
+                b4 = decodeonechar(buffer[i+4], pipe.decode)
                 i += 4
             else
                 consumed!(buffer, i)
@@ -140,7 +147,7 @@ Base.eof(pipe::Base64DecodePipe) = isempty(pipe.rest) && eof(pipe.io)::Bool
 Base.close(pipe::Base64DecodePipe) = nothing
 
 # Decode data from (b1, b2, b3, b5, buffer, input) into (ptr, rest).
-function decode_slow(decode::T, b1, b2, b3, b4, buffer, i, input, ptr, n, rest) where {T<:Function}
+function decode_slow(decode, b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
     # Skip ignore code.
     while true
         if b1 == BASE64_CODE_IGN
@@ -155,9 +162,9 @@ function decode_slow(decode::T, b1, b2, b3, b4, buffer, i, input, ptr, n, rest) 
             break
         end
         if i + 1 ≤ lastindex(buffer)
-            b4 = decode(buffer[i+=1])
+            b4 = decodeonechar(buffer[i+=1], decode)
         elseif !eof(input)
-            b4 = decode(read(input, UInt8))
+            b4 = decodeonechar(read(input, UInt8), decode)
         else
             b4 = BASE64_CODE_END
         end
@@ -198,12 +205,14 @@ function decode_slow(decode::T, b1, b2, b3, b4, buffer, i, input, ptr, n, rest) 
 end
 
 """
-    base64decode(string)
+    base64decode(string; decode=BASE64)
 
 Decode the base64-encoded `string` and returns a `Vector{UInt8}` of the decoded
 bytes.
 
-See also [`base64encode`](@ref).
+`decode::Base64Format` specifies an encoding format in which `string` is encoded.
+
+See also [`Base64Format`](@ref) and [`base64encode`](@ref).
 
 # Examples
 ```jldoctest
@@ -220,27 +229,10 @@ julia> String(b)
 "Hello!"
 ```
 """
-function base64decode(s)
+function base64decode(s; decode=BASE64)
     b = IOBuffer(s)
     try
-        return read(Base64DecodePipe(b))
-    finally
-        close(b)
-    end
-end
-
-"""
-    base64urldecode(s)
-
-Decode the base64url-encoded `string` and returns a `Vector{UInt8}` of the decoded
-bytes.
-
-See also [`base64urlencode`](@ref) and [`base64decode`](@ref).
-"""
-function base64urldecode(s)
-    b = IOBuffer(s)
-    try
-        return read(Base64DecodePipe(b, decode=decodeonechar_base64url))
+        return read(Base64DecodePipe(b; decode=decode))
     finally
         close(b)
     end
