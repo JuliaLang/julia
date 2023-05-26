@@ -267,7 +267,7 @@ function repeat(s::Union{String, SubString{String}}, r::Integer)
     out = _string_n(n*r)
     if n == 1 # common case: repeating a single-byte string
         @inbounds b = codeunit(s, 1)
-        ccall(:memset, Ptr{Cvoid}, (Ptr{UInt8}, Cint, Csize_t), out, b, r)
+        memset(unsafe_convert(Ptr{UInt8}, out), b, r)
     else
         for i = 0:r-1
             GC.@preserve s out unsafe_copyto!(pointer(out, i*n+1), pointer(s), n)
