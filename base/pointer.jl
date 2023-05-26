@@ -145,7 +145,7 @@ unsafe_store!(p::Ptr{Any}, @nospecialize(x), i::Integer=1) = pointerset(p, x, In
 unsafe_store!(p::Ptr{T}, x, i::Integer=1) where {T} = pointerset(p, convert(T,x), Int(i), 1)
 unsafe_store!(p::Ptr{T}, x, order::Symbol) where {T} = atomic_pointerset(p, x isa T ? x : convert(T,x), order)
 function unsafe_store!(p::Ptr, x, i::Integer, order::Symbol)
-    unsafe_store!(p + (Core.sizeof(eltype(p)) * (Int(i) - 1)), x, order)
+    unsafe_store!(p + (elsize(typeof(p)) * (Int(i) - 1)), x, order)
 end
 
 """
