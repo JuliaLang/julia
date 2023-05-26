@@ -495,6 +495,13 @@ macro NamedTuple(ex)
     return :(NamedTuple{($(vars...),), Tuple{$(types...)}})
 end
 
+macro Kwargs(ex)
+    return :(let
+        NT = @NamedTuple $ex
+        Base.Pairs{keytype(NT),eltype(NT),typeof(NT.parameters[1]),NT}
+    end)
+end
+
 @constprop :aggressive function split_rest(t::NamedTuple{names}, n::Int, st...) where {names}
     _check_length_split_rest(length(t), n)
     names_front, names_last_n = split_rest(names, n, st...)

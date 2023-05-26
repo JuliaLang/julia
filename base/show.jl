@@ -1057,10 +1057,27 @@ function show_type_name(io::IO, tn::Core.TypeName)
     nothing
 end
 
+function maybe_kws_nt(x::DataType)
+    x.name === typename(Pairs) || return nothing
+    length(x.parameters) == 4 || return nothing
+    x.parameters[1] === Symbol || return nothing
+    p4 = x.parameters[4]
+    if (isa(p4, DataType) && p4.name === typename(NamedTuple) && length(p4.parameters) == 2)
+        syms, types = p4.parameters
+        types isa DataType || return nothing
+        x.parameters[2] === eltype(p4) || return nothing
+        isa(syms, Tuple) || return nothing
+        x.parameters[3] === typeof(syms) || return nothing
+        return p4
+    end
+    return nothing
+end
+
 function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
     parameters = x.parameters::SimpleVector
     istuple = x.name === Tuple.name
     isnamedtuple = x.name === typename(NamedTuple)
+    kwsnt = maybe_kws_nt(x)
     n = length(parameters)
 
     # Print tuple types with homogeneous tails longer than max_n compactly using `NTuple` or `Vararg`
@@ -1094,28 +1111,37 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
         return
     elseif isnamedtuple
         syms, types = parameters
-        first = true
         if syms isa Tuple && types isa DataType
             print(io, "@NamedTuple{")
-            for i in 1:length(syms)
-                if !first
-                    print(io, ", ")
-                end
-                print(io, syms[i])
-                typ = types.parameters[i]
-                if typ !== Any
-                    print(io, "::")
-                    show(io, typ)
-                end
-                first = false
-            end
+            show_at_namedtuple(io, syms, types)
             print(io, "}")
             return
         end
+    elseif kwsnt !== nothing
+        print(io, "Base.@Kwargs{")
+        show_at_namedtuple(io, kwsnt.parameters...)
+        print(io, "}")
+        return
     end
 
     show_type_name(io, x.name)
     show_typeparams(io, parameters, (unwrap_unionall(x.name.wrapper)::DataType).parameters, wheres)
+end
+
+function show_at_namedtuple(io::IO, syms::Tuple, types::DataType)
+    first = true
+    for i in 1:length(syms)
+        if !first
+            print(io, ", ")
+        end
+        print(io, syms[i])
+        typ = types.parameters[i]
+        if typ !== Any
+            print(io, "::")
+            show(io, typ)
+        end
+        first = false
+    end
 end
 
 function show_supertypes(io::IO, typ::DataType)
