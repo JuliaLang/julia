@@ -537,7 +537,7 @@ end
 # comparison lifting
 # ==================
 
-let # lifting `===`
+let # lifting `===` through PhiNode
     src = code_typed1((Bool,Int,)) do c, x
         y = c ? x : nothing
         y === nothing # => ϕ(false, true)
@@ -557,7 +557,15 @@ let # lifting `===`
     end
 end
 
-let # lifting `isa`
+let # lifting `===` through Core.ifelse
+    src = code_typed1((Bool,Int,)) do c, x
+        y = Core.ifelse(c, x, nothing)
+        y === nothing # => Core.ifelse(c, false, true)
+    end
+    @test count(iscall((src, ===)), src.code) == 0
+end
+
+let # lifting `isa` through PhiNode
     src = code_typed1((Bool,Int,)) do c, x
         y = c ? x : nothing
         isa(y, Int) # => ϕ(true, false)
@@ -580,7 +588,16 @@ let # lifting `isa`
     end
 end
 
-let # lifting `isdefined`
+let # lifting `isa` through Core.ifelse
+    src = code_typed1((Bool,Int,)) do c, x
+        y = Core.ifelse(c, x, nothing)
+        isa(y, Int) # => Core.ifelse(c, true, false)
+    end
+    @test count(iscall((src, isa)), src.code) == 0
+end
+
+
+let # lifting `isdefined` through PhiNode
     src = code_typed1((Bool,Some{Int},)) do c, x
         y = c ? x : nothing
         isdefined(y, 1) # => ϕ(true, false)
@@ -601,6 +618,14 @@ let # lifting `isdefined`
     @test !any(src.code) do @nospecialize x
         iscall((src, isdefined), x) && argextype(x.args[2], src) isa Union
     end
+end
+
+let # lifting `isdefined` through Core.ifelse
+    src = code_typed1((Bool,Some{Int},)) do c, x
+        y = Core.ifelse(c, x, nothing)
+        isdefined(y, 1) # => Core.ifelse(c, true, false)
+    end
+    @test count(iscall((src, isdefined)), src.code) == 0
 end
 
 mutable struct Foo30594; x::Float64; end
