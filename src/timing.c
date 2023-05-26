@@ -49,17 +49,32 @@ static arraylist_t jl_timing_ittapi_events;
 static jl_mutex_t jl_timing_ittapi_events_lock;
 #endif //USE_ITTAPI
 
+#ifdef USE_TIMING_COUNTS
+static int cmp_counts_events(const void *a, const void *b) {
+    jl_timing_counts_event_t *event_a = *(jl_timing_counts_event_t **)a;
+    jl_timing_counts_event_t *event_b = *(jl_timing_counts_event_t **)b;
+    return strcmp(event_a->name, event_b->name);
+}
+#endif
+
 void jl_print_timings(void)
 {
 #ifdef USE_TIMING_COUNTS
+    qsort(jl_timing_counts_events.items, jl_timing_counts_events.len,
+          sizeof(jl_timing_counts_event_t *), cmp_counts_events);
+
     JL_LOCK_NOGC(&jl_timing_counts_events_lock);
     uint64_t total_time = cycleclock() - t0;
     uint64_t root_time = total_time;
-    for (int i = 1; i < jl_timing_counts_events.len; i++) {
+    jl_timing_counts_event_t *root_event;
+    for (int i = 0; i < jl_timing_counts_events.len; i++) {
         jl_timing_counts_event_t *other_event = (jl_timing_counts_event_t *)jl_timing_counts_events.items[i];
-        root_time -= jl_atomic_load_relaxed(&other_event->self);
+        if (strcmp(other_event->name, "ROOT") == 0) {
+            root_event = other_event;
+        } else {
+            root_time -= jl_atomic_load_relaxed(&other_event->self);
+        }
     }
-    jl_timing_counts_event_t *root_event = (jl_timing_counts_event_t *)jl_timing_counts_events.items[0];
     jl_atomic_store_relaxed(&root_event->self, root_time);
     jl_atomic_store_relaxed(&root_event->total, total_time);
 
@@ -90,7 +105,7 @@ void jl_print_timings(void)
 #endif
 }
 
-static const int indirect_strcmp(const void *a, const void *b) {
+static int indirect_strcmp(const void *a, const void *b) {
     return strcmp(*(const char **)a, *(const char **)b);
 }
 
@@ -106,12 +121,12 @@ void jl_init_timing(void)
     // Create events list for counts backend
     arraylist_new(&jl_timing_counts_events, 1);
 
-    jl_timing_counts_event_t *new_event = (jl_timing_counts_event_t *)malloc(sizeof(jl_timing_counts_event_t));
-    arraylist_push(&jl_timing_counts_events, (void *)new_event);
+    jl_timing_counts_event_t *root_event = (jl_timing_counts_event_t *)malloc(sizeof(jl_timing_counts_event_t));
+    arraylist_push(&jl_timing_counts_events, (void *)root_event);
 
-    new_event->name = "ROOT";
-    jl_atomic_store_relaxed(&new_event->self, 0);
-    jl_atomic_store_relaxed(&new_event->total, 0);
+    root_event->name = "ROOT";
+    jl_atomic_store_relaxed(&root_event->self, 0);
+    jl_atomic_store_relaxed(&root_event->total, 0);
 #endif
 
 #ifdef USE_ITTAPI
@@ -121,10 +136,8 @@ void jl_init_timing(void)
 #endif
 
     // Sort the subsystem names for quick enable/disable lookups
-    qsort(
-        jl_timing_subsystems, JL_TIMING_SUBSYSTEM_LAST,
-        sizeof(const char *), indirect_strcmp
-    );
+    qsort(jl_timing_subsystems, JL_TIMING_SUBSYSTEM_LAST,
+          sizeof(const char *), indirect_strcmp);
 
     int i __attribute__((unused)) = 0;
 #ifdef USE_ITTAPI
