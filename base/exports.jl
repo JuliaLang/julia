@@ -370,6 +370,7 @@ export
     ≉,
 
 # arrays
+    allassigned,
     axes,
     broadcast!,
     broadcast,

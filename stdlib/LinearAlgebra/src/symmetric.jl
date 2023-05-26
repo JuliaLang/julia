@@ -232,6 +232,7 @@ size(A::HermOrSym) = size(A.data)
         return isassigned(A.data, j, i)
     end
 end
+Base.allassigned(A::HermOrSym) = allassigned(A.data)
 
 @inline function getindex(A::Symmetric, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)

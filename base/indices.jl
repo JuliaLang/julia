@@ -505,6 +505,7 @@ IndexStyle(::Type{<:LinearIndices}) = IndexLinear()
 axes(iter::LinearIndices) = map(axes1, iter.indices)
 size(iter::LinearIndices) = map(length, iter.indices)
 isassigned(iter::LinearIndices, i::Int) = checkbounds(Bool, iter, i)
+allassigned(itre::LinearIndices) = true
 function getindex(iter::LinearIndices, i::Int)
     @inline
     @boundscheck checkbounds(iter, i)

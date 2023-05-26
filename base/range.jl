@@ -902,6 +902,7 @@ end
 ## indexing
 
 isassigned(r::AbstractRange, i::Int) = firstindex(r) <= i <= lastindex(r)
+allassigned(::AbstractRange) = true
 
 _in_unit_range(v::UnitRange, val, i::Integer) = i > 0 && val <= v.stop && val >= v.start
 

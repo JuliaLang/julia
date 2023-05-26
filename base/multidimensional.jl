@@ -350,6 +350,7 @@ module IteratorsMD
         end
         return true
     end
+    allassigned(::CartesianIndices) = true
 
     # getindex for a 0D CartesianIndices is necessary for disambiguation
     @propagate_inbounds function Base.getindex(iter::CartesianIndices{0,R}) where {R}

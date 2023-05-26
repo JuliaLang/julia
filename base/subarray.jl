@@ -384,6 +384,7 @@ function isassigned(V::FastContiguousSubArray{<:Any, 1}, i::Int)
     @inbounds r = isassigned(V.parent, V.offset1 + i)
     r
 end
+allassigned(V::SubArray) = allassigned(V.parent)
 
 IndexStyle(::Type{<:FastSubArray}) = IndexLinear()
 IndexStyle(::Type{<:SubArray}) = IndexCartesian()

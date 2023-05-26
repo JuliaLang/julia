@@ -148,6 +148,7 @@ end
     end
     r
 end
+Base.allassigned(D::Diagonal) = allassigned(D.diag)
 
 @inline function getindex(D::Diagonal, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)

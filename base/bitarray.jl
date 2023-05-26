@@ -110,6 +110,7 @@ size(B::BitArray) = B.dims
 end
 
 isassigned(B::BitArray, i::Int) = 1 <= i <= length(B)
+allassigned(B::BitArray) = true
 
 IndexStyle(::Type{<:BitArray}) = IndexLinear()
 

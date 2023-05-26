@@ -97,6 +97,7 @@ Base.getindex(::AbstractArray, ::Any...)
 Base.setindex!(::AbstractArray, ::Any, ::Any...)
 Base.copyto!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)
 Base.copy!
+Base.allassigned
 Base.isassigned
 Base.Colon
 Base.CartesianIndex

@@ -253,6 +253,7 @@ end
     @inbounds ret = parent(A)[index.parentindex]
     ret
 end
+allassigned(A::ReshapedArray) = allassigned(parent(A))
 
 @inline function _unsafe_getindex(A::ReshapedArray{T,N}, indices::Vararg{Int,N}) where {T,N}
     axp = axes(A.parent)

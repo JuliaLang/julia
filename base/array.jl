@@ -265,6 +265,16 @@ function isassigned(a::Array, i::Int...)
     ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
 end
 
+function allassigned(a::Array{T}) where {T}
+    (isbitstype(T) || isbitsunion(T)) && return true
+    i = 0
+    while i < length(a)
+        ccall(:jl_array_isassigned, Cint, (Any, UInt), a, i) == 1 || return false
+        i += 1
+    end
+    return true
+end
+
 ## copy ##
 
 """

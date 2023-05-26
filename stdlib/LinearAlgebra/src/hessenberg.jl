@@ -82,6 +82,7 @@ end
 
 Base.isassigned(H::UpperHessenberg, i::Int, j::Int) =
     i <= j+1 ? isassigned(H.data, i, j) : true
+Base.allassigned(H::UpperHessenberg) = allassigned(H.data)
 
 getindex(H::UpperHessenberg{T}, i::Integer, j::Integer) where {T} =
     i <= j+1 ? convert(T, H.data[i,j]) : zero(T)

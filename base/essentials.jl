@@ -805,6 +805,32 @@ function isassigned(v::SimpleVector, i::Int)
     return true
 end
 
+"""
+    allassigned(array, i) -> Bool
+
+Test whether each index in `array` has an assigned value. Return `false` if any index has
+an undefined reference.
+
+# Examples
+```jldoctest
+julia> allassigned(rand(3, 3))
+true
+
+julia> mutable struct Foo end
+
+julia> v = similar(rand(3), Foo)
+3-element Vector{Foo}:
+ #undef
+ #undef
+ #undef
+
+julia> allassigned(v)
+false
+```
+"""
+function allassigned end
+
+allassigned(v::SimpleVector) = true
 
 """
     Colon()
