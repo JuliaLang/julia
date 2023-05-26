@@ -207,9 +207,13 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
         headsym = :if
     elseif k == K"=" && !is_decorated(head)
         a2 = args[2]
-        if is_eventually_call(args[1]) && !@isexpr(a2, :block)
-            # Add block for short form function locations
-            args[2] = Expr(:block, loc, a2)
+        if is_eventually_call(args[1])
+            if @isexpr(a2, :block)
+                pushfirst!(a2.args, loc)
+            else
+                # Add block for short form function locations
+                args[2] = Expr(:block, loc, a2)
+            end
         end
     elseif k == K"macrocall"
         _reorder_parameters!(args, 2)

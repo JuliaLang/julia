@@ -169,6 +169,25 @@
                       LineNumberNode(1),
                       :xs))
 
+        @test parsestmt("f() =\n(a;b)") ==
+            Expr(:(=),
+                 Expr(:call, :f),
+                 Expr(:block,
+                      LineNumberNode(1),
+                      :a,
+                      LineNumberNode(2),
+                      :b))
+
+        @test parsestmt("f() =\nbegin\na\nb\nend") ==
+            Expr(:(=),
+                 Expr(:call, :f),
+                 Expr(:block,
+                      LineNumberNode(1),
+                      LineNumberNode(3),
+                      :a,
+                      LineNumberNode(4),
+                      :b))
+
         @test parsestmt("let f(x) =\ng(x)=1\nend") ==
             Expr(:let,
                  Expr(:(=),
