@@ -1281,21 +1281,6 @@ false
 julia> istriu(a, -1)
 true
 
-julia> b = [1 1 1; 0 1 1; 0 0 1]
-3×3 Matrix{Int64}:
- 1  1  1
- 0  1  1
- 0  0  1
-
-julia> istriu(b)
-true
-
-julia> istriu(b, 1)
-false
-
-julia> istriu(b, -1)
-true
-
 julia> c = [1 1 1; 1 1 1; 0 1 1]
 3×3 Matrix{Int64}:
  1  1  1
@@ -1339,21 +1324,6 @@ julia> istril(a)
 false
 
 julia> istril(a, 1)
-true
-
-julia> b = [1 0 0; 1 1 0; 1 1 1]
-3×3 Matrix{Int64}:
- 1  0  0
- 1  1  0
- 1  1  1
-
-julia> istril(b)
-true
-
-julia> istril(b, -1)
-false
-
-julia> istril(b, 1)
 true
 
 julia> c = [1 1 0; 1 1 1; 1 1 1]
