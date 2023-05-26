@@ -381,7 +381,7 @@ JL_DLLEXPORT void jl_postoutput_hook(void)
     return;
 }
 
-static void post_boot_hooks(void);
+void post_boot_hooks(void);
 
 JL_DLLEXPORT void *jl_libjulia_internal_handle;
 JL_DLLEXPORT void *jl_libjulia_handle;
@@ -892,80 +892,6 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
 
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_sigint_handler();
-}
-
-static jl_value_t *core(const char *name)
-{
-    return jl_get_global(jl_core_module, jl_symbol(name));
-}
-
-// fetch references to things defined in boot.jl
-static void post_boot_hooks(void)
-{
-    jl_char_type    = (jl_datatype_t*)core("Char");
-    jl_int8_type    = (jl_datatype_t*)core("Int8");
-    jl_int16_type   = (jl_datatype_t*)core("Int16");
-    jl_float16_type = (jl_datatype_t*)core("Float16");
-    jl_float32_type = (jl_datatype_t*)core("Float32");
-    jl_float64_type = (jl_datatype_t*)core("Float64");
-    jl_floatingpoint_type = (jl_datatype_t*)core("AbstractFloat");
-    jl_number_type  = (jl_datatype_t*)core("Number");
-    jl_signed_type  = (jl_datatype_t*)core("Signed");
-    jl_datatype_t *jl_unsigned_type = (jl_datatype_t*)core("Unsigned");
-    jl_datatype_t *jl_integer_type = (jl_datatype_t*)core("Integer");
-
-    jl_bool_type->super = jl_integer_type;
-    jl_uint8_type->super = jl_unsigned_type;
-    jl_uint16_type->super = jl_unsigned_type;
-    jl_uint32_type->super = jl_unsigned_type;
-    jl_uint64_type->super = jl_unsigned_type;
-    jl_int32_type->super = jl_signed_type;
-    jl_int64_type->super = jl_signed_type;
-
-    jl_errorexception_type = (jl_datatype_t*)core("ErrorException");
-    jl_stackovf_exception  = jl_new_struct_uninit((jl_datatype_t*)core("StackOverflowError"));
-    jl_diverror_exception  = jl_new_struct_uninit((jl_datatype_t*)core("DivideError"));
-    jl_undefref_exception  = jl_new_struct_uninit((jl_datatype_t*)core("UndefRefError"));
-    jl_undefvarerror_type  = (jl_datatype_t*)core("UndefVarError");
-    jl_atomicerror_type    = (jl_datatype_t*)core("ConcurrencyViolationError");
-    jl_interrupt_exception = jl_new_struct_uninit((jl_datatype_t*)core("InterruptException"));
-    jl_boundserror_type    = (jl_datatype_t*)core("BoundsError");
-    jl_memory_exception    = jl_new_struct_uninit((jl_datatype_t*)core("OutOfMemoryError"));
-    jl_readonlymemory_exception = jl_new_struct_uninit((jl_datatype_t*)core("ReadOnlyMemoryError"));
-    jl_typeerror_type      = (jl_datatype_t*)core("TypeError");
-    jl_argumenterror_type  = (jl_datatype_t*)core("ArgumentError");
-    jl_methoderror_type    = (jl_datatype_t*)core("MethodError");
-    jl_loaderror_type      = (jl_datatype_t*)core("LoadError");
-    jl_initerror_type      = (jl_datatype_t*)core("InitError");
-    jl_pair_type           = core("Pair");
-    jl_kwcall_func         = core("kwcall");
-    jl_kwcall_mt           = ((jl_datatype_t*)jl_typeof(jl_kwcall_func))->name->mt;
-    jl_atomic_store_relaxed(&jl_kwcall_mt->max_args, 0);
-
-    jl_weakref_type = (jl_datatype_t*)core("WeakRef");
-    jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;
-
-    jl_init_box_caches();
-
-    // set module field of primitive types
-    jl_svec_t *bindings = jl_atomic_load_relaxed(&jl_core_module->bindings);
-    jl_value_t **table = jl_svec_data(bindings);
-    for (size_t i = 0; i < jl_svec_len(bindings); i++) {
-        if (table[i] != jl_nothing) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
-            jl_value_t *v = jl_atomic_load_relaxed(&b->value);
-            if (v) {
-                if (jl_is_unionall(v))
-                    v = jl_unwrap_unionall(v);
-                if (jl_is_datatype(v)) {
-                    jl_datatype_t *tt = (jl_datatype_t*)v;
-                    tt->name->module = jl_core_module;
-                    if (tt->name->mt)
-                        tt->name->mt->module = jl_core_module;
-                }
-            }
-        }
-    }
 }
 
 #ifdef __cplusplus

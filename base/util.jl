@@ -604,7 +604,7 @@ macro kwdef(expr)
         kwdefs = nothing
     end
     return quote
-        Base.@__doc__ $(esc(expr))
+        $(esc(:($Base.@__doc__ $expr)))
         $kwdefs
     end
 end

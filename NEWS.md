@@ -4,11 +4,14 @@ Julia v1.10 Release Notes
 New language features
 ---------------------
 
+* `⥺` (U+297A, `\leftarrowsubset`) and `⥷` (U+2977, `\leftarrowless`)
+  may now be used as binary operators with arrow precedence. ([#45962])
+
 Language changes
 ----------------
 
 * When a task forks a child, the parent task's task-local RNG (random number generator) is no longer affected. The seeding of child based on the parent task also takes a more disciplined approach to collision resistance, using a design based on the SplitMix and DotMix splittable RNG schemes ([#49110]).
-* A new morespecific rule for methods resolves ambiguities containing Union{} in favor of
+* A new more-specific rule for methods resolves ambiguities containing Union{} in favor of
   the method defined explicitly to handle the Union{} argument. This makes it possible to
   define methods to explicitly handle Union{} without the ambiguities that commonly would
   result previously. This also lets the runtime optimize certain method lookups in a way
@@ -49,6 +52,7 @@ New library features
 * `binomial(x, k)` now supports non-integer `x` ([#48124]).
 * A `CartesianIndex` is now treated as a "scalar" for broadcasting ([#47044]).
 * `printstyled` now supports italic output ([#45164]).
+* `parent` and `parentindices` support `SubString`s
 
 Standard library changes
 ------------------------
@@ -58,10 +62,6 @@ Standard library changes
 
 #### Package Manager
 
-* "Package Extensions": support for loading a piece of code based on other
-  packages being loaded in the Julia session.
-  This has similar applications as the Requires.jl package but also
-  supports precompilation and setting compatibility.
 * `Pkg.precompile` now accepts `timing` as a keyword argument which displays per package timing information for precompilation (e.g. `Pkg.precompile(timing=true)`)
 
 #### LinearAlgebra
@@ -95,6 +95,8 @@ Standard library changes
 
 #### REPL
 
+* When stack traces are printed, the printed depth of types in function signatures will be limited
+  to avoid overly verbose output ([#49795]).
 
 #### SuiteSparse
 
@@ -107,6 +109,7 @@ Standard library changes
 
 * The `@test_broken` macro (or `@test` with `broken=true`) now complains if the test expression returns a
   non-boolean value in the same way as a non-broken test. ([#47804])
+* When a call to `@test` fails or errors inside a function, a larger stacktrace is now printed such that the location of the test within a `@testset` can be retrieved ([#49451])
 
 #### Dates
 

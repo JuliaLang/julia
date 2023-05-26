@@ -326,6 +326,8 @@ When only one argument is passed besides the optional `rng` and is a `Tuple`, it
 as a collection of values (`S`) and not as `dims`.
 
 
+See also [`randn`](@ref) for normally distributed numbers, and [`rand!`](@ref) and [`randn!`](@ref) for the in-place equivalents.
+
 !!! compat "Julia 1.1"
     Support for `S` as a tuple requires at least Julia 1.1.
 

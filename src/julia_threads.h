@@ -80,6 +80,7 @@ typedef struct {
     void *stacktop;
 } _jl_ucontext_t;
 #endif
+#pragma GCC visibility push(default)
 #if defined(JL_HAVE_UNW_CONTEXT)
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
@@ -89,6 +90,7 @@ typedef unw_context_t _jl_ucontext_t;
 #include <ucontext.h>
 typedef ucontext_t _jl_ucontext_t;
 #endif
+#pragma GCC visibility pop
 #endif
 
 typedef struct {
@@ -276,13 +278,13 @@ typedef struct _jl_tls_states_t {
     )
 
     // some hidden state (usually just because we don't have the type's size declaration)
-#ifdef LIBRARY_EXPORTS
+#ifdef JL_LIBRARY_EXPORTS
     uv_mutex_t sleep_lock;
     uv_cond_t wake_signal;
 #endif
 } jl_tls_states_t;
 
-#ifndef LIBRARY_EXPORTS
+#ifndef JL_LIBRARY_EXPORTS
 // deprecated (only for external consumers)
 JL_DLLEXPORT void *jl_get_ptls_states(void);
 #endif
@@ -290,23 +292,28 @@ JL_DLLEXPORT void *jl_get_ptls_states(void);
 // Update codegen version in `ccall.cpp` after changing either `pause` or `wake`
 #ifdef __MIC__
 #  define jl_cpu_pause() _mm_delay_64(100)
+#  define jl_cpu_suspend() _mm_delay_64(100)
 #  define jl_cpu_wake() ((void)0)
 #  define JL_CPU_WAKE_NOOP 1
 #elif defined(_CPU_X86_64_) || defined(_CPU_X86_)  /* !__MIC__ */
 #  define jl_cpu_pause() _mm_pause()
+#  define jl_cpu_suspend() _mm_pause()
 #  define jl_cpu_wake() ((void)0)
 #  define JL_CPU_WAKE_NOOP 1
 #elif defined(_CPU_AARCH64_) || (defined(_CPU_ARM_) && __ARM_ARCH >= 7)
-#  define jl_cpu_pause() __asm__ volatile ("wfe" ::: "memory")
+#  define jl_cpu_pause() __asm__ volatile ("isb" ::: "memory")
+#  define jl_cpu_suspend() __asm__ volatile ("wfe" ::: "memory")
 #  define jl_cpu_wake() __asm__ volatile ("sev" ::: "memory")
 #  define JL_CPU_WAKE_NOOP 0
 #else
 #  define jl_cpu_pause() ((void)0)
+#  define jl_cpu_suspend() ((void)0)
 #  define jl_cpu_wake() ((void)0)
 #  define JL_CPU_WAKE_NOOP 1
 #endif
 
 JL_DLLEXPORT void (jl_cpu_pause)(void);
+JL_DLLEXPORT void (jl_cpu_suspend)(void);
 JL_DLLEXPORT void (jl_cpu_wake)(void);
 
 #ifdef __clang_gcanalyzer__

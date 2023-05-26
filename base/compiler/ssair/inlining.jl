@@ -303,10 +303,17 @@ function finish_cfg_inline!(state::CFGInliningState)
 end
 
 # duplicated from IRShow
-normalize_method_name(m::Method) = m.name
-normalize_method_name(m::MethodInstance) = (m.def::Method).name
-normalize_method_name(m::Symbol) = m
-normalize_method_name(m) = Symbol("")
+function normalize_method_name(m)
+    if m isa Method
+        return m.name
+    elseif m isa MethodInstance
+        return (m.def::Method).name
+    elseif m isa Symbol
+        return m
+    else
+        return Symbol("")
+    end
+end
 @noinline method_name(m::LineInfoNode) = normalize_method_name(m.method)
 
 inline_node_is_duplicate(topline::LineInfoNode, line::LineInfoNode) =
@@ -937,7 +944,7 @@ end
 function may_have_fcalls(m::Method)
     isdefined(m, :source) || return true
     src = m.source
-    isa(src, CodeInfo) || isa(src, Vector{UInt8}) || return true
+    isa(src, MaybeCompressed) || return true
     return ccall(:jl_ir_flag_has_fcall, Bool, (Any,), src)
 end
 
@@ -975,8 +982,8 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
     return resolve_todo(mi, match, argtypes, info, flag, state; invokesig)
 end
 
-function retrieve_ir_for_inlining(mi::MethodInstance, src::Array{UInt8, 1})
-    src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, C_NULL, src::Vector{UInt8})::CodeInfo
+function retrieve_ir_for_inlining(mi::MethodInstance, src::String)
+    src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, C_NULL, src)::CodeInfo
     return inflate_ir!(src, mi)
 end
 retrieve_ir_for_inlining(mi::MethodInstance, src::CodeInfo) = inflate_ir(src, mi)

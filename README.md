@@ -1,10 +1,8 @@
+<a name="logo"/>
 <div align="center">
-    <a href="https://julialang.org/" target="_blank">
-        <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="doc/src/assets/julialogoheaderimage_dark.svg">
-          <img alt="The Julia logo" src="doc/src/assets/julialogoheaderimage_light.svg">
-        </picture>
-    </a>
+<a href="https://julialang.org/" target="_blank">
+<img src="doc/src/assets/logo.svg" alt="Julia Logo" width="210" height="142"></img>
+</a>
 </div>
 
 <table>
@@ -95,7 +93,7 @@ and then use the command prompt to change into the resulting julia directory. By
 Julia. However, most users should use the [most recent stable version](https://github.com/JuliaLang/julia/releases)
 of Julia. You can get this version by running:
 
-    git checkout v1.8.5
+    git checkout v1.9.0
 
 To build the `julia` executable, run `make` from within the julia directory.
 

@@ -178,7 +178,7 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
     int depth = stack->len;
     *bp = (void*)((char*)HT_NOTFOUND + 4 + depth); // preliminarily mark as in-progress
     size_t i = 0, n = jl_array_len(mi->backedges);
-    int cycle = 0;
+    int cycle = depth;
     while (i < n) {
         jl_method_instance_t *be;
         i = get_next_edge(mi->backedges, i, NULL, &be);
@@ -194,7 +194,7 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
             assert(cycle);
         }
     }
-    if (!found && cycle && cycle != depth)
+    if (!found && cycle != depth)
         return cycle + 3;
     // If we are the top of the current cycle, now mark all other parts of
     // our cycle with what we found.
@@ -949,7 +949,7 @@ static jl_array_t *jl_verify_methods(jl_array_t *edges, jl_array_t *maxvalids)
         jl_method_instance_t *caller = (jl_method_instance_t*)jl_array_ptr_ref(edges, 2 * i);
         assert(jl_is_method_instance(caller) && jl_is_method(caller->def.method));
         jl_array_t *callee_ids = (jl_array_t*)jl_array_ptr_ref(edges, 2 * i + 1);
-        assert(jl_typeis((jl_value_t*)callee_ids, jl_array_int32_type));
+        assert(jl_typetagis((jl_value_t*)callee_ids, jl_array_int32_type));
         if (callee_ids == NULL) {
             // serializing the edges had failed
             maxvalids2_data[i] = 0;
@@ -999,9 +999,10 @@ static int jl_verify_graph_edge(size_t *maxvalids2_data, jl_array_t *edges, size
     size_t depth = stack->len;
     visited->items[idx] = (void*)(1 + depth);
     jl_array_t *callee_ids = (jl_array_t*)jl_array_ptr_ref(edges, idx * 2 + 1);
-    assert(jl_typeis((jl_value_t*)callee_ids, jl_array_int32_type));
+    assert(jl_typetagis((jl_value_t*)callee_ids, jl_array_int32_type));
     int32_t *idxs = (int32_t*)jl_array_data(callee_ids);
     size_t i, n = jl_array_len(callee_ids);
+    cycle = depth;
     for (i = idxs[0] + 1; i < n; i++) {
         int32_t childidx = idxs[i];
         int child_cycle = jl_verify_graph_edge(maxvalids2_data, edges, childidx, visited, stack);
@@ -1020,7 +1021,7 @@ static int jl_verify_graph_edge(size_t *maxvalids2_data, jl_array_t *edges, size
         }
     }
     size_t max_valid = maxvalids2_data[idx];
-    if (max_valid != 0 && cycle && cycle != depth)
+    if (max_valid != 0 && cycle != depth)
         return cycle;
     // If we are the top of the current cycle, now mark all other parts of
     // our cycle with what we found.

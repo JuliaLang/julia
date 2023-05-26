@@ -604,20 +604,6 @@ end
 size_to_strides(s, d) = (s,)
 size_to_strides(s) = ()
 
-
-function isassigned(a::AbstractArray, i::Integer...)
-    try
-        a[i...]
-        true
-    catch e
-        if isa(e, BoundsError) || isa(e, UndefRefError)
-            return false
-        else
-            rethrow()
-        end
-    end
-end
-
 function isstored(A::AbstractArray{<:Any,N}, I::Vararg{Integer,N}) where {N}
     @boundscheck checkbounds(A, I...)
     return true
@@ -1442,7 +1428,7 @@ end
 """
     parent(A)
 
-Return the underlying "parent array”. This parent array of objects of types `SubArray`, `ReshapedArray`
+Return the underlying parent object of the view. This parent of objects of types `SubArray`, `SubString`, `ReshapedArray`
 or `LinearAlgebra.Transpose` is what was passed as an argument to `view`, `reshape`, `transpose`, etc.
 during object creation. If the input is not a wrapped object, return the input itself. If the input is
 wrapped multiple times, only the outermost wrapper will be removed.
@@ -1465,6 +1451,8 @@ julia> parent(V)
  3  4
 ```
 """
+function parent end
+
 parent(a::AbstractArray) = a
 
 ## rudimentary aliasing detection ##

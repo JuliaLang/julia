@@ -12,8 +12,8 @@ Base.size(F::Fill) = F.size
 @inline getindex_value(F::Fill) = F.value
 
 @inline function Base.getindex(F::Fill{<:Any,N}, i::Vararg{Int,N}) where {N}
-	@boundscheck checkbounds(F, i...)
-	getindex_value(F)
+    @boundscheck checkbounds(F, i...)
+    getindex_value(F)
 end
 
 @inline function Base.setindex!(F::Fill, v, k::Integer)

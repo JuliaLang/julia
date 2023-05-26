@@ -448,7 +448,8 @@
            ((hygienic-scope) ; TODO: move this lowering to resolve-scopes, instead of reimplementing it here badly
              (let ((parent-scope (cons (list env m) parent-scope))
                    (body (cadr e))
-                   (m (caddr e)))
+                   (m (caddr e))
+                   (lno  (cdddr e)))
               (resolve-expansion-vars-with-new-env body env m parent-scope inarg #t)))
            ((tuple)
             (cons (car e)
@@ -574,7 +575,8 @@
         ((eq? (car e) 'module) e)
         ((eq? (car e) 'hygienic-scope)
          (let ((form (cadr e)) ;; form is the expression returned from expand-macros
-               (modu (caddr e))) ;; m is the macro's def module
+               (modu (caddr e)) ;; m is the macro's def module
+               (lno  (cdddr e))) ;; lno is (optionally) the line number node
            (resolve-expansion-vars form modu)))
         (else
          (map julia-expand-macroscopes- e))))
@@ -585,8 +587,9 @@
    ((eq? (car e) 'hygienic-scope)
     (let ((parent-scope (list relabels parent-scope))
           (body (cadr e))
-          (m (caddr e)))
-      `(hygienic-scope ,(rename-symbolic-labels- (cadr e) (table) parent-scope) ,m)))
+          (m (caddr e))
+          (lno (cdddr e)))
+      `(hygienic-scope ,(rename-symbolic-labels- (cadr e) (table) parent-scope) ,m ,@lno)))
    ((and (eq? (car e) 'escape) (not (null? parent-scope)))
     `(escape ,(apply rename-symbolic-labels- (cadr e) parent-scope)))
    ((or (eq? (car e) 'symbolicgoto) (eq? (car e) 'symboliclabel))

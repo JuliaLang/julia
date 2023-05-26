@@ -170,8 +170,8 @@ DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 CODEGEN_OBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.o)
 CODEGEN_DOBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.dbg.obj)
 
-DEBUGFLAGS += $(FLAGS) -DLIBRARY_EXPORTS
-SHIPFLAGS += $(FLAGS) -DLIBRARY_EXPORTS
+SHIPFLAGS  += $(FLAGS)
+DEBUGFLAGS += $(FLAGS)
 
 # if not absolute, then relative to the directory of the julia executable
 SHIPFLAGS  += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys.$(SHLIB_EXT)\""
@@ -417,6 +417,12 @@ libjulia-codegen-release: $(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_MINOR_SH
 libjulia-codegen-debug: $(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
 libjulia-codegen-debug libjulia-codegen-release: $(PUBLIC_HEADER_TARGETS)
 
+# set the exports for the source files based on where they are getting linked
+$(OBJS): SHIPFLAGS += -DJL_LIBRARY_EXPORTS_INTERNAL
+$(DOBJS): DEBUGFLAGS += -DJL_LIBRARY_EXPORTS_INTERNAL
+$(CODEGEN_OBJS): SHIPFLAGS += -DJL_LIBRARY_EXPORTS_CODEGEN
+$(CODEGEN_DOBJS): DEBUGFLAGS += -DJL_LIBRARY_EXPORTS_CODEGEN
+
 clean:
 	-rm -fr $(build_shlibdir)/libjulia-internal* $(build_shlibdir)/libjulia-codegen* $(build_shlibdir)/libccalltest* $(build_shlibdir)/libllvmcalltest*
 	-rm -f $(BUILDDIR)/julia_flisp.boot $(BUILDDIR)/julia_flisp.boot.inc $(BUILDDIR)/jl_internal_funcs.inc
@@ -503,6 +509,8 @@ clang-tidy-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB
 		-load $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) --checks='-clang-analyzer-*$(COMMA)-clang-diagnostic-*$(COMMA)concurrency-implicit-atomics' --warnings-as-errors='*' \
 		-- $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(JL_CXXFLAGS) $(DEBUGFLAGS) -fcolor-diagnostics --system-header-prefix=llvm -Wno-deprecated-declarations -fno-caret-diagnostics -x c++)
 
+# set the exports for the source files based on where they are getting linked
+clang-sa-% clang-sagc-% clang-tidy-%: DEBUGFLAGS += -DJL_LIBRARY_EXPORTS
 
 # Add C files as a target of `analyzesrc` and `analyzegc` and `tidysrc`
 tidysrc: $(addprefix clang-tidy-,$(filter-out $(basename $(SKIP_IMPLICIT_ATOMICS)),$(CODEGEN_SRCS) $(SRCS)))

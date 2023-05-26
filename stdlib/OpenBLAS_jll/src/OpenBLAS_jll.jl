@@ -2,7 +2,17 @@
 
 ## dummy stub for https://github.com/JuliaBinaryWrappers/OpenBLAS_jll.jl
 baremodule OpenBLAS_jll
-using Base, Libdl, CompilerSupportLibraries_jll, Base.BinaryPlatforms
+using Base, Libdl, Base.BinaryPlatforms
+
+# We are explicitly NOT loading this at runtime, as it contains `libgomp`
+# which conflicts with `libiomp5`, breaking things like MKL.  In the future,
+# we hope to transition to a JLL interface that provides a more granular
+# interface than eagerly dlopen'ing all libraries provided in the JLL
+# which will eliminate issues like this, where we avoid loading a JLL
+# because we don't want to load a library that we don't even use yet.
+# using CompilerSupportLibraries_jll
+# Because of this however, we have to manually load the libraries we
+# _do_ care about, namely libgfortran
 Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
@@ -25,10 +35,13 @@ end
 
 if Sys.iswindows()
     const libopenblas = "libopenblas$(libsuffix).dll"
+    const _libgfortran = string("libgfortran-", libgfortran_version(HostPlatform()).major, ".dll")
 elseif Sys.isapple()
     const libopenblas = "@rpath/libopenblas$(libsuffix).dylib"
+    const _libgfortran = string("@rpath/", "libgfortran.", libgfortran_version(HostPlatform()).major, ".dylib")
 else
     const libopenblas = "libopenblas$(libsuffix).so"
+    const _libgfortran = string("libgfortran.so.", libgfortran_version(HostPlatform()).major)
 end
 
 function __init__()
@@ -49,6 +62,10 @@ function __init__()
         # to the true value in its `__init__()` function.
         ENV["OPENBLAS_DEFAULT_NUM_THREADS"] = "1"
     end
+
+    # As mentioned above, we are sneaking this in here so that we don't have to
+    # depend on CSL_jll and load _all_ of its libraries.
+    dlopen(_libgfortran)
 
     global libopenblas_handle = dlopen(libopenblas)
     global libopenblas_path = dlpath(libopenblas_handle)

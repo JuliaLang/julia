@@ -275,11 +275,16 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
     int n_extensions = endswith_extension(modname) ? 1 : N_EXTENSIONS;
     int ret;
 
+    // modname == NULL is a sentinel value requesting the handle of libjulia-internal
+    if (modname == NULL)
+        return jl_find_dynamic_library_by_addr(&jl_load_dynamic_library);
+
     abspath = jl_isabspath(modname);
     is_atpath = 0;
 
     JL_TIMING(DL_OPEN, DL_OPEN);
-    jl_timing_printf(JL_TIMING_CURRENT_BLOCK, gnu_basename(modname));
+    if (!(flags & JL_RTLD_NOLOAD))
+        jl_timing_puts(JL_TIMING_DEFAULT_BLOCK, modname);
 
     // Detect if our `modname` is something like `@rpath/libfoo.dylib`
 #ifdef _OS_DARWIN_
@@ -336,6 +341,8 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
                     if (i == 0) { // LoadLibrary already tested the extensions, we just need to check the `stat` result
 #endif
                         handle = jl_dlopen(path, flags);
+                        if (handle && !(flags & JL_RTLD_NOLOAD))
+                            jl_timing_puts(JL_TIMING_DEFAULT_BLOCK, jl_pathname_for_handle(handle));
                         if (handle)
                             return handle;
 #ifdef _OS_WINDOWS_
@@ -356,6 +363,8 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
         path[0] = '\0';
         snprintf(path, PATHBUF, "%s%s", modname, ext);
         handle = jl_dlopen(path, flags);
+        if (handle && !(flags & JL_RTLD_NOLOAD))
+            jl_timing_puts(JL_TIMING_DEFAULT_BLOCK, jl_pathname_for_handle(handle));
         if (handle)
             return handle;
 #ifdef _OS_WINDOWS_

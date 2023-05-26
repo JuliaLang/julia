@@ -171,10 +171,17 @@ function default_expr_type_printer(io::IO; @nospecialize(type), used::Bool, show
     return nothing
 end
 
-normalize_method_name(m::Method) = m.name
-normalize_method_name(m::MethodInstance) = (m.def::Method).name
-normalize_method_name(m::Symbol) = m
-normalize_method_name(m) = Symbol("")
+function normalize_method_name(m)
+    if m isa Method
+        return m.name
+    elseif m isa MethodInstance
+        return (m.def::Method).name
+    elseif m isa Symbol
+        return m
+    else
+        return Symbol("")
+    end
+end
 @noinline method_name(m::LineInfoNode) = normalize_method_name(m.method)
 
 # converts the linetable for line numbers
