@@ -571,7 +571,9 @@ PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 NewPM::NewPM(std::unique_ptr<TargetMachine> TM, OptimizationLevel O, OptimizationOptions options) :
     TM(std::move(TM)), SI(false), PIC(createPIC(SI)),
     PB(this->TM.get(), PipelineTuningOptions(), None, PIC.get()),
-    MPM(createMPM(PB, O, options)), O(O) {}
+    MPM(createMPM(PB, O, options)), O(O) {
+        registerCallbacks();
+    }
 
 NewPM::~NewPM() = default;
 
@@ -605,6 +607,48 @@ void NewPM::run(Module &M) {
 
 void NewPM::printTimers() {
     SI.getTimePasses().print();
+}
+
+void NewPM::registerCallbacks() {
+#ifdef ENABLE_TIMINGS
+    auto isMetaPass = [](StringRef PassID) {
+        auto pass_str = PassID.str();
+        if (pass_str.rfind("PassManager", 0) == 0) return true;
+        std::string end_str = "PassAdaptor";
+        if (pass_str.rfind(end_str) == pass_str.length() - end_str.length()) return true;
+        return false;
+    };
+
+    auto event = jl_timing_event_create("LLVM_OPT", "LLVM_OPT_PASS", "", __FILE__, __LINE__, 0);
+    PIC->registerBeforeNonSkippedPassCallback([event, isMetaPass](StringRef PassID, Any IR) {
+        if (isMetaPass(PassID)) return;
+        if (jl_get_pgcstack() == NULL) return;
+        jl_timing_block_t *block = (jl_timing_block_t *)malloc(sizeof(jl_timing_block_t));
+        _jl_timing_block_init((char *)block, sizeof(jl_timing_block_t), event);
+        _jl_timing_block_start(block);
+        std::string pass_str = PassID.str();
+        jl_timing_puts(block, pass_str.c_str());
+#ifdef USE_TRACY
+        TracyCZoneName(block->tracy_ctx, pass_str.c_str(), strlen(pass_str.c_str()));
+#endif
+    });
+    PIC->registerAfterPassCallback([isMetaPass](StringRef PassID, Any IR,
+                                          const PreservedAnalyses &PassPA) {
+        if (isMetaPass(PassID)) return;
+        if (jl_get_pgcstack() == NULL) return;
+        jl_timing_block_t *block = jl_current_task->ptls->timing_stack;
+        _jl_timing_block_end(block);
+        free(block);
+    });
+    PIC->registerAfterPassInvalidatedCallback([isMetaPass](StringRef PassID,
+                                                     const PreservedAnalyses &PassPA) {
+        if (isMetaPass(PassID)) return;
+        if (jl_get_pgcstack() == NULL) return;
+        jl_timing_block_t *block = jl_current_task->ptls->timing_stack;
+        _jl_timing_block_end(block);
+        free(block);
+    });
+#endif
 }
 
 OptimizationLevel getOptLevel(int optlevel) {
