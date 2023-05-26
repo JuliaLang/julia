@@ -888,7 +888,7 @@ julia> empty([1.0, 2.0, 3.0], String)
 String[]
 ```
 """
-empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
+empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = similar(a, U, 0)
 
 # like empty, but should return a mutable collection, a Vector by default
 emptymutable(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
