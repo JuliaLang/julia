@@ -2,6 +2,9 @@
 
 using Test, Random
 
+isdefined(Main, :MacroCalls) || @eval Main include("testhelpers/MacroCalls.jl")
+using Main.MacroCalls
+
 module TestBroadcastInternals
 
 using Base.Broadcast: check_broadcast_axes, check_broadcast_shape, newindex, _bcs
@@ -1133,3 +1136,12 @@ end
 import Base.Broadcast: BroadcastStyle, DefaultArrayStyle
 @test Base.infer_effects(BroadcastStyle, (DefaultArrayStyle{1},DefaultArrayStyle{2},)) |>
     Core.Compiler.is_foldable
+
+@testset "issue #49968, `@. vec = vec +1` gives unhelpful error" begin
+    v = [1 2 3]
+    @test_throws ArgumentError @macrocall @. v = v +1
+
+    # Check that more than one extra ambiguous argument is fine.
+    @test_throws ArgumentError @macrocall @. v = v +1 + v
+    @test_throws ArgumentError @macrocall @. v = v +1 +1.0
+end
