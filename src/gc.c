@@ -1,8 +1,14 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "gc.h"
+#include "julia.h"
 #include "julia_gcext.h"
 #include "julia_assert.h"
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 #ifdef __GLIBC__
 #include <malloc.h> // for malloc_trim
 #endif
@@ -21,6 +27,7 @@ int gc_first_tid;
 uv_mutex_t gc_threads_lock;
 uv_cond_t gc_threads_cond;
 
+size_t age_distribution[256];
 // Linked list of callback functions
 
 typedef void (*jl_gc_cb_func_t)(void);
@@ -1273,6 +1280,7 @@ STATIC_INLINE jl_taggedvalue_t *reset_page(jl_ptls_t ptls2, const jl_gc_pool_t *
     pg->nfree = (GC_PAGE_SZ - GC_PAGE_OFFSET) / p->osize;
     pg->pool_n = p - ptls2->heap.norm_pools;
     memset(pg->ages, 0, GC_PAGE_SZ / 8 / p->osize + 1);
+    memset(pg->perobject_age, 0, GC_PAGE_SZ / p->osize + 1);
     jl_taggedvalue_t *beg = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
     jl_taggedvalue_t *next = (jl_taggedvalue_t*)pg->data;
     if (fl == NULL) {
@@ -1307,6 +1315,7 @@ static NOINLINE jl_taggedvalue_t *add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
     jl_gc_pagemeta_t *pg = jl_gc_alloc_page();
     pg->osize = p->osize;
     pg->ages = (uint32_t*)malloc_s(LLT_ALIGN(GC_PAGE_SZ / 8 / p->osize + 1, sizeof(uint32_t)));
+    pg->perobject_age = (uint8_t*)malloc_s(LLT_ALIGN(GC_PAGE_SZ / p->osize + 1, sizeof(uint8_t)));
     pg->thread_n = ptls->tid;
     jl_taggedvalue_t *fl = reset_page(ptls, p, pg, NULL);
     p->newpages = fl;
@@ -1402,11 +1411,28 @@ int jl_gc_classify_pools(size_t sz, int *osize)
 
 int64_t lazy_freed_pages = 0;
 
+void increase_all_ages(uint8_t* perfobj_age, size_t len)
+{
+    for (size_t i = 0; i < len; i++) {
+        if (perfobj_age[i] < 255)
+            perfobj_age[i]++;
+    }
+}
+
+void add_up_ages(uint8_t* perfobj_age, size_t len)
+{
+    for (size_t i = 0; i < len; i++) {
+        uint8_t age = perfobj_age[i];
+        age_distribution[age]++;
+    }
+}
+
 // Returns pointer to terminal pointer of list rooted at *pfl.
 static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_taggedvalue_t **pfl, int sweep_full, int osize) JL_NOTSAFEPOINT
 {
     char *data = pg->data;
     uint32_t *ages = pg->ages;
+    uint8_t *per_objage = pg->perobject_age;
     jl_taggedvalue_t *v = (jl_taggedvalue_t*)(data + GC_PAGE_OFFSET);
     char *lim = (char*)v + GC_PAGE_SZ - GC_PAGE_OFFSET - osize;
     size_t old_nfree = pg->nfree;
@@ -1422,6 +1448,7 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
         // on quick sweeps, keep a few pages empty but allocated for performance
         if (!sweep_full && lazy_freed_pages <= default_collect_interval / GC_PAGE_SZ) {
             jl_ptls_t ptls2 = gc_all_tls_states[pg->thread_n];
+            add_up_ages(per_objage, GC_PAGE_SZ / p->osize + 1);
             jl_taggedvalue_t *begin = reset_page(ptls2, p, pg, p->newpages);
             p->newpages = begin;
             begin->next = (jl_taggedvalue_t*)0;
@@ -1446,6 +1473,7 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
             }
             freedall = 0;
             nfree = pg->nfree;
+            increase_all_ages(per_objage, GC_PAGE_SZ / p->osize + 1);
             goto done;
         }
     }
@@ -1459,6 +1487,7 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
         jl_taggedvalue_t **pfl_begin = NULL;
         uint32_t msk = 1; // mask for the age bit in the current age byte
         uint32_t age = *ages;
+        size_t index = 0;
         while ((char*)v <= lim) {
             if (!msk) {
                 msk = 1;
@@ -1469,6 +1498,8 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
             int bits = v->bits.gc;
             if (!gc_marked(bits)) {
                 *pfl = v;
+                age_distribution[per_objage[index]]++;
+                per_objage[index] = 0;
                 pfl = &v->next;
                 pfl_begin = pfl_begin ? pfl_begin : pfl;
                 pg_nfree++;
@@ -1490,6 +1521,8 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
                     bits = v->bits.gc = GC_CLEAN; // unmark
                     has_young = 1;
                 }
+                if (per_objage[index] < 255)
+                    per_objage[index]++;
                 has_marked |= gc_marked(bits);
                 age |= msk;
                 freedall = 0;
@@ -3182,6 +3215,7 @@ JL_DLLEXPORT int64_t jl_gc_live_bytes(void)
 
 size_t jl_maxrss(void);
 
+int printed_file = 0;
 // Only one thread should be running in this function
 static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 {
@@ -3392,7 +3426,34 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     uint64_t sweep_time = gc_end_time - start_sweep_time;
     gc_num.total_sweep_time += sweep_time;
     gc_num.sweep_time = sweep_time;
+    pid_t pid = getpid();
 
+    // Create a string to hold the filename
+    char filename[255];
+
+    // Format the filename with the PID
+    snprintf(filename, sizeof(filename), "distribution_%d.csv", pid);
+    if (!printed_file) {
+        jl_safe_printf("%s\n",filename);
+        printed_file = 1;
+    }
+    FILE *file = fopen(filename, "a");
+    if (file == NULL) {
+        perror("Error opening file!\n");
+        abort();
+    }
+
+    // Write the array to the file
+    for(int i = 0; i < 256; i++) {
+        fprintf(file, "%d", age_distribution[i]);
+        // Don't write a comma at the end of the line
+        if(i < 255) {
+            fprintf(file, ",");
+        }
+    }
+    fprintf(file, "\n");
+    // Always remember to close the file
+    fclose(file);
     // sweeping is over
     // 7. if it is a quick sweep, put back the remembered objects in queued state
     // so that we don't trigger the barrier again on them.

@@ -283,7 +283,8 @@ void jl_gc_free_page(void *p) JL_NOTSAFEPOINT
 
     free(info.meta->ages);
     info.meta->ages = NULL;
-
+    free(info.meta->perobject_age);
+    info.meta->perobject_age = NULL;
     // tell the OS we don't need these pages right now
     size_t decommit_size = GC_PAGE_SZ;
     if (GC_PAGE_SZ < jl_page_size) {
