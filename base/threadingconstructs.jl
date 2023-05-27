@@ -8,6 +8,20 @@ export threadid, nthreads, @threads, @spawn,
 
 Get the ID number of the current thread of execution. The master thread has
 ID `1`.
+
+# Examples
+```julia-repl
+julia> Threads.threadid()
+1
+
+julia> Threads.@threads for i in 1:4
+          println(Threads.threadid())
+       end
+4
+2
+5
+4
+```
 """
 threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
 
@@ -98,6 +112,13 @@ function threadpooltids(pool::Symbol)
         error("invalid threadpool specified")
     end
 end
+
+"""
+    Threads.ngcthreads() -> Int
+
+Returns the number of GC threads currently configured.
+"""
+ngcthreads() = Int(unsafe_load(cglobal(:jl_n_gcthreads, Cint))) + 1
 
 function threading_run(fun, static)
     ccall(:jl_enter_threaded_region, Cvoid, ())
@@ -345,6 +366,17 @@ the variable's value in the current task.
 
 !!! compat "Julia 1.9"
     A threadpool may be specified as of Julia 1.9.
+
+# Examples
+```julia-repl
+julia> t() = println("Hello from ", Threads.threadid());
+
+julia> tasks = fetch.([Threads.@spawn t() for i in 1:4]);
+Hello from 1
+Hello from 1
+Hello from 3
+Hello from 4
+```
 """
 macro spawn(args...)
     tp = :default
@@ -370,7 +402,7 @@ macro spawn(args...)
 
     letargs = Base._lift_one_interp!(ex)
 
-    thunk = esc(:(()->($ex)))
+    thunk = Base.replace_linenums!(:(()->($(esc(ex)))), __source__)
     var = esc(Base.sync_varname)
     quote
         let $(letargs...)

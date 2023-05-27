@@ -237,6 +237,9 @@ JL_PRIVATE_LIBS-$(USE_SYSTEM_CSL) += libwinpthread
 else
 JL_PRIVATE_LIBS-$(USE_SYSTEM_CSL) += libpthread
 endif
+ifeq ($(WITH_TRACY),1)
+JL_PRIVATE_LIBS-0 += libTracyClient
+endif
 
 
 ifeq ($(OS),Darwin)

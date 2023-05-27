@@ -2264,6 +2264,17 @@ end
 @test_throws InexactError convert(Int16, big(2)^100)
 @test_throws InexactError convert(Int, typemax(UInt))
 
+@testset "infinity to integer conversion" begin
+    for T in (
+        UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Int128, BigInt
+    )
+        for S in (Float16, Float32, Float64, BigFloat)
+            @test_throws InexactError convert(T, typemin(S))
+            @test_throws InexactError convert(T, typemax(S))
+        end
+    end
+end
+
 @testset "issue #9789" begin
     @test_throws InexactError convert(Int8, typemax(UInt64))
     @test_throws InexactError convert(Int16, typemax(UInt64))
@@ -2483,6 +2494,7 @@ Base.abs(x::TestNumber) = TestNumber(abs(x.inner))
             d == 0 && continue
             fastd = Base.multiplicativeinverse(d)
             for n in numrange
+                d == -1 && n == typemin(typeof(n)) && continue
                 @test div(n,d) == div(n,fastd)
             end
         end
@@ -2494,7 +2506,7 @@ Base.abs(x::TestNumber) = TestNumber(abs(x.inner))
     end
     for T in [UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Int128]
         testmi(map(T, typemax(T)-50:typemax(T)), map(T, 1:50))
-        testmi(filter(!iszero, rand(T, 50)), filter(!iszero, rand(T, 50)))
+        testmi(rand(T, 50), rand(T, 50))
         @test_throws ArgumentError Base.multiplicativeinverse(T(0))
     end
 
@@ -2710,11 +2722,15 @@ end
     @test rem2pi(T(-13), RoundUp)      ≈ -13+4π
 end
 
-@testset "PR #36420 $T" for T in (Float16, Float32, Float64)
+@testset "PR #36420 $T" for T in (Float16, Float32, Float64, BigFloat)
+    nan = reinterpret(Float64, reinterpret(UInt64, NaN) | rand(UInt64))
     for r in (RoundToZero, RoundNearest, RoundDown, RoundUp)
-        for x in (Inf, -Inf, NaN, -NaN)
+        for x in (Inf, -Inf, NaN, -NaN, nan)
             @test isnan(rem2pi(T(x), r))
             @test rem2pi(T(x), r) isa T
+            if isnan(x) && T !== BigFloat
+                @test rem2pi(T(x), r) === T(x)
+            end
         end
     end
 end
@@ -2960,6 +2976,20 @@ end
         @test true == ceil(Bool, 0.6)
         @test false == ceil(Bool, -0.7)
     end
+end
+
+Base.@irrational irrational_1548_pi 4863.185427757 1548big(pi)
+Base.@irrational irrational_inv_1548_pi 1/big(irrational_1548_pi)
+@testset "@irrational" begin
+    @test irrational_1548_pi ≈ 1548big(pi)
+    @test Float64(irrational_1548_pi) == 1548π
+    @test irrational_1548_pi ≈ 1548pi
+    @test irrational_1548_pi != 1548pi
+
+    @test irrational_inv_1548_pi ≈ inv(1548big(pi))
+    @test Float64(irrational_inv_1548_pi) == 1/(1548π)
+    @test irrational_inv_1548_pi ≈ inv(1548pi)
+    @test irrational_inv_1548_pi != inv(1548pi)
 end
 
 @testset "modf" begin

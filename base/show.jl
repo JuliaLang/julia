@@ -2470,15 +2470,16 @@ function print_within_stacktrace(io, s...; color=:normal, bold=false)
     end
 end
 
-function show_tuple_as_call(io::IO, name::Symbol, sig::Type;
+function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
                             demangle=false, kwargs=nothing, argnames=nothing,
                             qualified=false, hasfirst=true)
     # print a method signature tuple for a lambda definition
     if sig === Tuple
-        print(io, demangle ? demangle_function_name(name) : name, "(...)")
+        print(out, demangle ? demangle_function_name(name) : name, "(...)")
         return
     end
     tv = Any[]
+    io = IOContext(IOBuffer(), out)
     env_io = io
     while isa(sig, UnionAll)
         push!(tv, sig.var)
@@ -2516,7 +2517,113 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type;
     end
     print_within_stacktrace(io, ")", bold=true)
     show_method_params(io, tv)
+    str = String(take!(unwrapcontext(io)[1]))
+    if get(out, :limit, false)::Bool
+        sz = get(out, :displaysize, (typemax(Int), typemax(Int)))::Tuple{Int, Int}
+        str_lim = type_depth_limit(str, max(sz[2], 120))
+        if sizeof(str_lim) < sizeof(str)
+            typelimitflag = get(out, :stacktrace_types_limited, nothing)
+            if typelimitflag !== nothing
+                typelimitflag[] = true
+            end
+        end
+        str = str_lim
+    end
+    print(out, str)
     nothing
+end
+
+# limit nesting depth of `{ }` until string textwidth is less than `n`
+function type_depth_limit(str::String, n::Int; maxdepth = nothing)
+    depth = 0
+    width_at = Int[]                       # total textwidth at each nesting depth
+    depths = zeros(Int16, lastindex(str))  # depth at each character index
+    levelcount = Int[]                     # number of nodes at each level
+    strwid = 0
+    st_0, st_backslash, st_squote, st_dquote = 0,1,2,4
+    state::Int = st_0
+    stateis(s) = (state & s) != 0
+    quoted() = stateis(st_squote) || stateis(st_dquote)
+    enter(s) = (state |= s)
+    leave(s) = (state &= ~s)
+    for (i, c) in ANSIIterator(str)
+        if c isa ANSIDelimiter
+            depths[i] = depth
+            continue
+        end
+
+        if c == '\\' && quoted()
+            enter(st_backslash)
+        elseif c == '\''
+            if stateis(st_backslash) || stateis(st_dquote)
+            elseif stateis(st_squote)
+                leave(st_squote)
+            else
+                enter(st_squote)
+            end
+        elseif c == '"'
+            if stateis(st_backslash) || stateis(st_squote)
+            elseif stateis(st_dquote)
+                leave(st_dquote)
+            else
+                enter(st_dquote)
+            end
+        end
+        if c == '}' && !quoted()
+            depth -= 1
+        end
+
+        wid = textwidth(c)
+        strwid += wid
+        if depth > 0
+            width_at[depth] += wid
+        end
+        depths[i] = depth
+
+        if c == '{' && !quoted()
+            depth += 1
+            if depth > length(width_at)
+                push!(width_at, 0)
+                push!(levelcount, 0)
+            end
+            levelcount[depth] += 1
+        end
+        if c != '\\' && stateis(st_backslash)
+            leave(st_backslash)
+        end
+    end
+    if maxdepth === nothing
+        limit_at = length(width_at) + 1
+        while strwid > n
+            limit_at -= 1
+            limit_at <= 1 && break
+            # add levelcount[] to include space taken by `…`
+            strwid = strwid - width_at[limit_at] + levelcount[limit_at]
+            if limit_at < length(width_at)
+                # take away the `…` from the previous considered level
+                strwid -= levelcount[limit_at+1]
+            end
+        end
+    else
+        limit_at = maxdepth
+    end
+    output = IOBuffer()
+    prev = 0
+    for (i, c) in ANSIIterator(str)
+        di = depths[i]
+        if di < limit_at
+            if c isa ANSIDelimiter
+                write(output, c.del)
+            else
+                write(output, c)
+            end
+        end
+        if di > prev && di == limit_at
+            write(output, "…")
+        end
+        prev = di
+    end
+    return String(take!(output))
 end
 
 function print_type_bicolor(io, type; kwargs...)

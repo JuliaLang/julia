@@ -80,7 +80,7 @@ end
 function kwarg_decl(m::Method, kwtype = nothing)
     if m.sig !== Tuple # OpaqueClosure or Builtin
         kwtype = typeof(Core.kwcall)
-        sig = rewrap_unionall(Tuple{kwtype, Any, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
+        sig = rewrap_unionall(Tuple{kwtype, NamedTuple, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
         kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, get_world_counter())
         if kwli !== nothing
             kwli = kwli::Method
@@ -194,10 +194,11 @@ function functionloc(@nospecialize(f))
 end
 
 function sym_to_string(sym)
-    s = String(sym)
-    if s === :var"..."
+    if sym === :var"..."
         return "..."
-    elseif endswith(s, "...")
+    end
+    s = String(sym)
+    if endswith(s, "...")
         return string(sprint(show_sym, Symbol(s[1:end-3])), "...")
     else
         return sprint(show_sym, sym)

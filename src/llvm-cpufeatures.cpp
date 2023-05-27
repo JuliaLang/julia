@@ -150,7 +150,8 @@ Pass *createCPUFeaturesPass()
     return new CPUFeaturesLegacy();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddCPUFeaturesPass_impl(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddCPUFeaturesPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createCPUFeaturesPass());
 }
