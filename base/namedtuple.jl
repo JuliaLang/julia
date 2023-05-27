@@ -200,7 +200,6 @@ end
 if nameof(@__MODULE__) === :Base
     Tuple(nt::NamedTuple) = (nt...,)
     (::Type{T})(nt::NamedTuple) where {T <: Tuple} = (t = Tuple(nt); t isa T ? t : convert(T, t)::T)
-    convert(::Type{T}, nt::NamedTuple) where {T <: Tuple} = T(nt)
 end
 
 function show(io::IO, t::NamedTuple)
