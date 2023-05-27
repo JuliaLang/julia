@@ -1177,7 +1177,7 @@ let current_dir, forbidden
             catch e
                 e isa Base.IOError && occursin("ELOOP", e.msg)
             end
-            c, r = test_complete("\"$(joinpath(path, "selfsym"))")
+            c, r = test_complete("\""*escape_string(joinpath(path, "selfsym")))
             @test c == ["selfsymlink"]
         end
     end
@@ -1207,26 +1207,62 @@ end
 mktempdir() do path
     space_folder = randstring() * " α"
     dir = joinpath(path, space_folder)
-    dir_space = replace(space_folder, " " => "\\ ")
-
     mkdir(dir)
     cd(path) do
-        open(joinpath(space_folder, "space .file"),"w") do f
-            s = Sys.iswindows() ? "rm $dir_space\\\\space" : "cd $dir_space/space"
-            c, r = test_scomplete(s)
-            @test r == lastindex(s)-4:lastindex(s)
-            @test "space\\ .file" in c
+        touch(joinpath(space_folder, "space .file"))
 
-            s = Sys.iswindows() ? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
-            c, r = test_complete(s)
-            @test r == lastindex(s)-4:lastindex(s)
-            @test "space .file\"" in c
-        end
-        # Test for issue #10324
-        s = "cd(\"$dir_space"
+        dir_space = replace(space_folder, " " => "\\ ")
+        s = Sys.iswindows() ? "cd $dir_space\\\\space" : "cd $dir_space/space"
+        c, r = test_scomplete(s)
+        @test s[r] == "space"
+        @test "space\\ .file" in c
+        # Also use shell escape rules within cmd backticks
+        s = "`$s"
+        c, r = test_scomplete(s)
+        @test s[r] == "space"
+        @test "space\\ .file" in c
+
+        # escape string according to Julia escaping rules
+        julia_esc(str) = escape_string(str, ('\"','$'))
+
+        # For normal strings the string should be properly escaped according to
+        # the usual rules for Julia strings.
+        s = "cd(\"" * julia_esc(joinpath(path, space_folder, "space"))
         c, r = test_complete(s)
-        @test r == 5:15
-        @test s[r] ==  dir_space
+        @test s[r] == "space"
+        @test "space .file\"" in c
+
+        # '$' is the only character which can appear in a windows filename and
+        # which needs to be escaped in Julia strings (on unix we could do this
+        # test with all sorts of special chars)
+        touch(joinpath(space_folder, "needs_escape\$.file"))
+        escpath = julia_esc(joinpath(path, space_folder, "needs_escape\$"))
+        s = "cd(\"$escpath"
+        c, r = test_complete(s)
+        @test s[r] == "needs_escape\\\$"
+        @test "needs_escape\\\$.file\"" in c
+
+        if !Sys.iswindows()
+            touch(joinpath(space_folder, "needs_escape2\n\".file"))
+            escpath = julia_esc(joinpath(path, space_folder, "needs_escape2\n\""))
+            s = "cd(\"$escpath"
+            c, r = test_complete(s)
+            @test s[r] == "needs_escape2\\n\\\""
+            @test "needs_escape2\\n\\\".file\"" in c
+
+            touch(joinpath(space_folder, "needs_escape3\\.file"))
+            escpath = julia_esc(joinpath(path, space_folder, "needs_escape3\\"))
+            s = "cd(\"$escpath"
+            c, r = test_complete(s)
+            @test s[r] == "needs_escape3\\\\"
+            @test "needs_escape3\\\\.file\"" in c
+        end
+
+        # Test for issue #10324
+        s = "cd(\"$space_folder"
+        c, r = test_complete(s)
+        @test r == 5:14
+        @test s[r] == space_folder
 
         #Test for #18479
         for c in "'`@\$;&"
@@ -1240,8 +1276,9 @@ mktempdir() do path
                     @test c[1] == test_dir*(Sys.iswindows() ? "\\\\" : "/")
                     @test res
                 end
-                c, r, res = test_complete("\""*test_dir)
-                @test c[1] == test_dir*(Sys.iswindows() ? "\\\\" : "/")
+                escdir = julia_esc(test_dir)
+                c, r, res = test_complete("\""*escdir)
+                @test c[1] == escdir*(Sys.iswindows() ? "\\\\" : "/")
                 @test res
             finally
                 rm(joinpath(path, test_dir), recursive=true)
@@ -1285,7 +1322,7 @@ if Sys.iswindows()
         @test r == length(s)-1:length(s)
         @test file in c
 
-        s = "cd(\"..\\"
+        s = "cd(\"..\\\\"
         c,r = test_complete(s)
         @test r == length(s)+1:length(s)
         @test temp_name * "\\\\" in c
