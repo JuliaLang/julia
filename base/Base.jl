@@ -125,7 +125,7 @@ include("options.jl")
 
 # define invoke(f, T, args...; kwargs...), without kwargs wrapping
 # to forward to invoke
-function Core.kwcall(kwargs, ::typeof(invoke), f, T, args...)
+function Core.kwcall(kwargs::NamedTuple, ::typeof(invoke), f, T, args...)
     @inline
     # prepend kwargs and f to the invoked from the user
     T = rewrap_unionall(Tuple{Core.Typeof(kwargs), Core.Typeof(f), (unwrap_unionall(T)::DataType).parameters...}, T)
@@ -136,7 +136,7 @@ setfield!(typeof(invoke).name.mt, :max_args, 3, :monotonic) # invoke, f, T, args
 
 # define applicable(f, T, args...; kwargs...), without kwargs wrapping
 # to forward to applicable
-function Core.kwcall(kwargs, ::typeof(applicable), @nospecialize(args...))
+function Core.kwcall(kwargs::NamedTuple, ::typeof(applicable), @nospecialize(args...))
     @inline
     return applicable(Core.kwcall, kwargs, args...)
 end
@@ -163,6 +163,7 @@ include("int.jl")
 include("operators.jl")
 include("pointer.jl")
 include("refvalue.jl")
+include("cmem.jl")
 include("refpointer.jl")
 
 # now replace the Pair constructor (relevant for NamedTuples) with one that calls our Base.convert
@@ -316,7 +317,7 @@ include("version.jl")
 # system & environment
 include("sysinfo.jl")
 include("libc.jl")
-using .Libc: getpid, gethostname, time
+using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
 
 # These used to be in build_h.jl and are retained for backwards compatibility.
 # NOTE: keep in sync with `libblastrampoline_jll.libblastrampoline`.
@@ -559,7 +560,8 @@ function profile_printing_listener()
     try
         while true
             wait(PROFILE_PRINT_COND[])
-            profile = @something(profile, require(Base, :Profile))
+            profile = @something(profile, require(PkgId(UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile")))
+
             invokelatest(profile.peek_report[])
             if Base.get_bool_env("JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", false) === true
                 println(stderr, "Saving heap snapshot...")
@@ -595,6 +597,8 @@ function __init__()
         ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), PROFILE_PRINT_COND[].handle)
         errormonitor(Threads.@spawn(profile_printing_listener()))
     end
+    # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
+    delete!(ENV, "JULIA_WAIT_FOR_TRACY")
     nothing
 end
 

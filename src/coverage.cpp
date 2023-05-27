@@ -192,7 +192,7 @@ static void write_lcov_data(logdata_t &logData, const std::string &outfile)
     outf.close();
 }
 
-extern "C" JL_DLLEXPORT void jl_write_coverage_data(const char *output)
+extern "C" void jl_write_coverage_data(const char *output)
 {
     if (output) {
         StringRef output_pattern(output);
@@ -206,7 +206,7 @@ extern "C" JL_DLLEXPORT void jl_write_coverage_data(const char *output)
     }
 }
 
-extern "C" JL_DLLEXPORT void jl_write_malloc_log(void)
+extern "C" void jl_write_malloc_log(void)
 {
     std::string stm;
     raw_string_ostream(stm) << "." << uv_os_getpid() << ".mem";

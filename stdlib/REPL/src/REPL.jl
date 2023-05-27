@@ -261,7 +261,9 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
         if d.repl isa LineEditREPL
             mistate = d.repl.mistate
             mode = LineEdit.mode(mistate)
-            LineEdit.write_output_prefix(io, mode, get(io, :color, false)::Bool)
+            if mode isa LineEdit.Prompt
+                LineEdit.write_output_prefix(io, mode, get(io, :color, false)::Bool)
+            end
         end
         get(io, :color, false)::Bool && write(io, answer_color(d.repl))
         if isdefined(d.repl, :options) && isdefined(d.repl.options, :iocontext)

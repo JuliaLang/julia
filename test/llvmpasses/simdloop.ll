@@ -1,3 +1,5 @@
+; This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -LowerSIMDLoop -S %s | FileCheck %s
 ; RUN: opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='LowerSIMDLoop' -S %s | FileCheck %s
 

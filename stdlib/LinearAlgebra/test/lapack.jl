@@ -720,4 +720,13 @@ a = zeros(2,0), zeros(0)
 @test LinearAlgebra.LAPACK.geqrf!(a...) === a
 @test LinearAlgebra.LAPACK.gerqf!(a...) === a
 
+# Issue #49489: https://github.com/JuliaLang/julia/issues/49489
+# Dimension mismatch between A and ipiv causes segfaults
+@testset "issue #49489" begin
+    A = randn(23,23)
+    b = randn(23)
+    ipiv = collect(1:20)
+    @test_throws DimensionMismatch LinearAlgebra.LAPACK.getrs!('N', A, ipiv, b)
+end
+
 end # module TestLAPACK

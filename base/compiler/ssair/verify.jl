@@ -43,6 +43,12 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
                 error("")
             end
         end
+
+        use_inst = ir[op]
+        if isa(use_inst[:inst], Union{GotoIfNot, GotoNode, ReturnNode})
+            @verify_error "At statement %$use_idx: Invalid use of value statement or terminator %$(op.id)"
+            error("")
+        end
     elseif isa(op, GlobalRef)
         if !isdefined(op.mod, op.name) || !isconst(op.mod, op.name)
             @verify_error "Unbound GlobalRef not allowed in value position"
@@ -168,8 +174,16 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     end
                     isa(stmt, PhiNode) || break
                 end
-                @verify_error "Block $idx successors ($(block.succs)), does not match fall-through terminator ($terminator)"
-                error("")
+                termidx = last(block.stmts)
+                stmttyp = ir.stmts[termidx][:type]
+                if isempty(block.succs) && stmttyp == Union{}
+                    # Allow fallthrough terminators that are known to error to
+                    # be removed from the CFG. Ideally we'd add an unreachable
+                    # here, but that isn't always possible.
+                else
+                    @verify_error "Block $idx successors ($(block.succs)), does not match fall-through terminator %$termidx ($terminator)::$stmttyp"
+                    error("")
+                end
             end
         end
     end

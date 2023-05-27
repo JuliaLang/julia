@@ -815,7 +815,6 @@ function _sort!(v::AbstractVector, a::ComputeExtrema, o::Ordering, kw)
         lt(o, vi, mn) && (mn = vi)
         lt(o, mx, vi) && (mx = vi)
     end
-    mn, mx
 
     lt(o, mn, mx) || return scratch # all same
 
@@ -1171,15 +1170,6 @@ end
 
 maybe_unsigned(x::Integer) = x # this is necessary to avoid calling unsigned on BigInt
 maybe_unsigned(x::BitSigned) = unsigned(x)
-function _extrema(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
-    mn = mx = v[lo]
-    @inbounds for i in (lo+1):hi
-        vi = v[i]
-        lt(o, vi, mn) && (mn = vi)
-        lt(o, mx, vi) && (mx = vi)
-    end
-    mn, mx
-end
 function _issorted(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
     @boundscheck checkbounds(v, lo:hi)
     @inbounds for i in (lo+1):hi

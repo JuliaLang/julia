@@ -339,17 +339,20 @@ precompile_test_harness(false) do dir
     cachedir = joinpath(dir, "compiled", "v$(VERSION.major).$(VERSION.minor)")
     cachedir2 = joinpath(dir2, "compiled", "v$(VERSION.major).$(VERSION.minor)")
     cachefile = joinpath(cachedir, "$Foo_module.ji")
-    if Base.JLOptions().use_pkgimages == 1
-        ocachefile = Base.ocachefile_from_cachefile(cachefile)
-    else
-        ocachefile = nothing
-    end
-    # use _require_from_serialized to ensure that the test fails if
-    # the module doesn't reload from the image:
-    @test_warn "@ccallable was already defined for this method name" begin
-        @test_logs (:warn, "Replacing module `$Foo_module`") begin
-            m = Base._require_from_serialized(Base.PkgId(Foo), cachefile, ocachefile)
-            @test isa(m, Module)
+    do_pkgimg = Base.JLOptions().use_pkgimages == 1 && Base.JLOptions().permalloc_pkgimg == 1
+    if do_pkgimg ||  Base.JLOptions().use_pkgimages == 0
+        if do_pkgimg
+            ocachefile = Base.ocachefile_from_cachefile(cachefile)
+        else
+            ocachefile = nothing
+        end
+            # use _require_from_serialized to ensure that the test fails if
+            # the module doesn't reload from the image:
+        @test_warn "@ccallable was already defined for this method name" begin
+            @test_logs (:warn, "Replacing module `$Foo_module`") begin
+                m = Base._require_from_serialized(Base.PkgId(Foo), cachefile, ocachefile)
+                @test isa(m, Module)
+            end
         end
     end
 
@@ -394,7 +397,7 @@ precompile_test_harness(false) do dir
             Dict(let m = Base.root_module(Base, s)
                      Base.PkgId(m) => Base.module_build_id(m)
                  end for s in
-                [:ArgTools, :Artifacts, :Base64, :CompilerSupportLibraries_jll, :CRC32c, :Dates,
+                [:ArgTools, :Artifacts, :Base64, :CRC32c, :Dates,
                  :Downloads, :FileWatching, :Future, :InteractiveUtils, :libblastrampoline_jll,
                  :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
                  :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :OpenBLAS_jll, :Pkg, :Printf,
@@ -857,9 +860,13 @@ precompile_test_harness("code caching") do dir
 
         # This will be invalidated if StaleC is loaded
         useA() = $StaleA.stale("hello")
+        useA2() = useA()
 
         # force precompilation
-        useA()
+        begin
+            Base.Experimental.@force_compile
+            useA2()
+        end
 
         ## Reporting tests
         call_nbits(x::Integer) = $StaleA.nbits(x)
@@ -940,6 +947,10 @@ precompile_test_harness("code caching") do dir
     @test invalidations[j-1] == "insert_backedges_callee"
     @test isa(invalidations[j-2], Type)
     @test isa(invalidations[j+1], Vector{Any}) # [nbits(::UInt8)]
+    m = only(methods(MB.useA2))
+    mi = only(Base.specializations(m))
+    @test !hasvalid(mi, world)
+    @test mi ∈ invalidations
 
     m = only(methods(MB.map_nbits))
     @test !hasvalid(m.specializations::Core.MethodInstance, world+1) # insert_backedges invalidations also trigger their backedges
@@ -1672,9 +1683,9 @@ precompile_test_harness("PkgCacheInspector") do load_path
     end
 
     if ocachefile !== nothing
-        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint), ocachefile, depmods, true)
+        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring), ocachefile, depmods, true, "PCI")
     else
-        sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint), cachefile, depmods, true)
+        sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), cachefile, depmods, true, "PCI")
     end
 
     modules, init_order, external_methods, new_specializations, new_method_roots, external_targets, edges = sv

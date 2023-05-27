@@ -1016,19 +1016,19 @@ function platforms_match(a::AbstractPlatform, b::AbstractPlatform)
 
         # Throw an error if `a` and `b` have both set non-default comparison strategies for `k`
         # and they're not the same strategy.
-        if a_comp != compare_default && b_comp != compare_default && a_comp != b_comp
+        if a_comp !== compare_default && b_comp !== compare_default && a_comp !== b_comp
             throw(ArgumentError("Cannot compare Platform objects with two different non-default comparison strategies for the same key \"$(k)\""))
         end
 
         # Select the custom comparator, if we have one.
         comparator = a_comp
-        if b_comp != compare_default
+        if b_comp !== compare_default
             comparator = b_comp
         end
 
         # Call the comparator, passing in which objects requested this comparison (one, the other, or both)
         # For some comparators this doesn't matter, but for non-symmetrical comparisons, it does.
-        if !(comparator(ak, bk, a_comp == comparator, b_comp == comparator)::Bool)
+        if !(comparator(ak, bk, a_comp === comparator, b_comp === comparator)::Bool)
             return false
         end
     end
@@ -1068,21 +1068,29 @@ function select_platform(download_info::Dict, platform::AbstractPlatform = HostP
     end
 
     # At this point, we may have multiple possibilities.  We now engage a multi-
-    # stage selection algorithm, where we first choose simpler matches over more
-    # complex matches.  We define a simpler match as one that has fewer tags
-    # overall.  As these candidate matches have already been filtered to match
-    # the given platform, the only other tags that exist are ones that are in
-    # addition to the tags declared by the platform. Hence, selecting the
-    # minimum in number of tags is equivalent to selecting the closest match.
-    min_tag_count = minimum(length(tags(p)) for p in ps)
-    filter!(p -> length(tags(p)) == min_tag_count, ps)
+    # stage selection algorithm, where we first sort the matches by how complete
+    # the match is, e.g. preferring matches where the intersection of tags is
+    # equal to the union of the tags:
+    function match_loss(a, b)
+        a_tags = Set(keys(tags(a)))
+        b_tags = Set(keys(tags(b)))
+        return length(union(a_tags, b_tags)) - length(intersect(a_tags, b_tags))
+    end
 
-    # Now we _still_ may continue to have multiple matches, so we now simply sort
-    # the candidate matches by their triplets and take the last one, so as to
-    # generally choose the latest release (e.g. a `libgfortran5` tarball over a
-    # `libgfortran3` tarball).
-    p = last(sort(ps, by = p -> triplet(p)))
-    return download_info[p]
+    # We prefer these better matches, and secondarily reverse-sort by triplet so
+    # as to generally choose the latest release (e.g. a `libgfortran5` tarball
+    # over a `libgfortran3` tarball).
+    ps = sort(ps, lt = (a, b) -> begin
+        loss_a = match_loss(a, platform)
+        loss_b = match_loss(b, platform)
+        if loss_a != loss_b
+            return loss_a < loss_b
+        end
+        return triplet(a) > triplet(b)
+    end)
+
+    # @invokelatest here to not get invalidated by new defs of `==(::Function, ::Function)`
+    return @invokelatest getindex(download_info, first(ps))
 end
 
 # precompiles to reduce latency (see https://github.com/JuliaLang/julia/pull/43990#issuecomment-1025692379)

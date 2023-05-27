@@ -54,10 +54,12 @@ struct CPUFeatures : PassInfoMixin<CPUFeatures> {
 
 struct RemoveNI : PassInfoMixin<RemoveNI> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
+    static bool isRequired() { return true; }
 };
 
 struct LowerSIMDLoop : PassInfoMixin<LowerSIMDLoop> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
+    static bool isRequired() { return true; }
 };
 
 struct FinalLowerGCPass : PassInfoMixin<FinalLowerGCPass> {

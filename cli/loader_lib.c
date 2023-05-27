@@ -345,6 +345,8 @@ static char *libstdcxxprobe(void)
             free(path);
             return NULL;
         }
+        // Ensure that `path` is zero-terminated.
+        path[pathlen] = '\0';
         return path;
     }
 }
