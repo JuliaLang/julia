@@ -49,8 +49,8 @@ end
 
 function __init_lld_path()
     # Prefer our own bundled lld, but if we don't have one, pick it up off of the PATH
-    # If this is an in-tree build, `lld` will live in `tools`.  Otherwise, it'll be in `libexec`
-    for bundled_lld_path in (joinpath(Sys.BINDIR, Base.LIBEXECDIR, lld_exe),
+    # If this is an in-tree build, `lld` will live in `tools`.  Otherwise, it'll be in `private_libexecdir`
+    for bundled_lld_path in (joinpath(Sys.BINDIR, Base.PRIVATE_LIBEXECDIR, lld_exe),
                              joinpath(Sys.BINDIR, "..", "tools", lld_exe),
                              joinpath(Sys.BINDIR, lld_exe))
         if isfile(bundled_lld_path)
@@ -64,7 +64,7 @@ end
 
 function __init_dsymutil_path()
     #Same as with lld but for dsymutil
-    for bundled_dsymutil_path in (joinpath(Sys.BINDIR, Base.LIBEXECDIR, dsymutil_exe),
+    for bundled_dsymutil_path in (joinpath(Sys.BINDIR, Base.PRIVATE_LIBEXECDIR, dsymutil_exe),
                              joinpath(Sys.BINDIR, "..", "tools", dsymutil_exe),
                              joinpath(Sys.BINDIR, dsymutil_exe))
         if isfile(bundled_dsymutil_path)

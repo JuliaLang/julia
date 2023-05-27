@@ -235,14 +235,14 @@ end
 # system date in seconds
 
 """
-    time(t::TmStruct)
+    time(t::TmStruct) -> Float64
 
 Converts a `TmStruct` struct to a number of seconds since the epoch.
 """
 time(tm::TmStruct) = Float64(ccall(:mktime, Int, (Ref{TmStruct},), tm))
 
 """
-    time()
+    time() -> Float64
 
 Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
 """

@@ -50,6 +50,7 @@ private:
     Function *bigAllocFunc;
     Function *allocTypedFunc;
     Instruction *pgcstack;
+    Type *T_size;
 
     // Lowers a `julia.new_gc_frame` intrinsic.
     Value *lowerNewGCFrame(CallInst *target, Function &F);
@@ -125,10 +126,10 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
     IRBuilder<> builder(target->getContext());
     builder.SetInsertPoint(&*(++BasicBlock::iterator(target)));
     StoreInst *inst = builder.CreateAlignedStore(
-                ConstantInt::get(getSizeTy(F.getContext()), JL_GC_ENCODE_PUSHARGS(nRoots)),
+                ConstantInt::get(T_size, JL_GC_ENCODE_PUSHARGS(nRoots)),
                 builder.CreateBitCast(
                         builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 0),
-                        getSizeTy(F.getContext())->getPointerTo()),
+                        T_size->getPointerTo()),
                 Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     auto T_ppjlvalue = JuliaType::get_ppjlvalue_ty(F.getContext());
@@ -199,7 +200,6 @@ Value *FinalLowerGC::lowerSafepoint(CallInst *target, Function &F)
     assert(target->arg_size() == 1);
     IRBuilder<> builder(target->getContext());
     builder.SetInsertPoint(target);
-    auto T_size = getSizeTy(builder.getContext());
     Value* signal_page = target->getOperand(0);
     Value* load = builder.CreateLoad(T_size, signal_page, true);
     return load;
@@ -224,7 +224,7 @@ Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
         if (offset < 0) {
             newI = builder.CreateCall(
                 bigAllocFunc,
-                { ptls, ConstantInt::get(getSizeTy(F.getContext()), sz + sizeof(void*)) });
+                { ptls, ConstantInt::get(T_size, sz + sizeof(void*)) });
             derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), sz + sizeof(void*));
         }
         else {
@@ -234,8 +234,8 @@ Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
             derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), osize);
         }
     } else {
-        auto size = builder.CreateZExtOrTrunc(target->getArgOperand(1), getSizeTy(F.getContext()));
-        size = builder.CreateAdd(size, ConstantInt::get(getSizeTy(F.getContext()), sizeof(void*)));
+        auto size = builder.CreateZExtOrTrunc(target->getArgOperand(1), T_size);
+        size = builder.CreateAdd(size, ConstantInt::get(T_size, sizeof(void*)));
         newI = builder.CreateCall(allocTypedFunc, { ptls, size, ConstantPointerNull::get(Type::getInt8PtrTy(F.getContext())) });
         derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), sizeof(void*));
     }
@@ -254,6 +254,7 @@ bool FinalLowerGC::doInitialization(Module &M) {
     poolAllocFunc = getOrDeclare(jl_well_known::GCPoolAlloc);
     bigAllocFunc = getOrDeclare(jl_well_known::GCBigAlloc);
     allocTypedFunc = getOrDeclare(jl_well_known::GCAllocTyped);
+    T_size = M.getDataLayout().getIntPtrType(M.getContext());
 
     GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc, allocTypedFunc};
     unsigned j = 0;

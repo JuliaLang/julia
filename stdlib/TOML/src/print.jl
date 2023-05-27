@@ -171,7 +171,8 @@ function print_table(f::MbyFunc, io::IO, a::AbstractDict,
         end
         if is_table(value)
             push!(ks, String(key))
-            header = isempty(value) || !all(is_tabular(v) for v in values(value))::Bool
+            _values = @invokelatest values(value)
+            header = isempty(value) || !all(is_tabular(v) for v in _values)::Bool
             if header
                 # print table
                 first_block || println(io)

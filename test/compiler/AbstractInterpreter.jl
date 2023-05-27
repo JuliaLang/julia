@@ -2,45 +2,9 @@
 
 using Test
 const CC = Core.Compiler
-import Core: MethodInstance, CodeInstance
-import .CC: WorldRange, WorldView
 
 include("irutils.jl")
-
-"""
-    @newinterp NewInterpreter
-
-Defines new `NewInterpreter <: AbstractInterpreter` whose cache is separated
-from the native code cache, satisfying the minimum interface requirements.
-"""
-macro newinterp(name)
-    cachename = Symbol(string(name, "Cache"))
-    name = esc(name)
-    quote
-        struct $cachename
-            dict::IdDict{MethodInstance,CodeInstance}
-        end
-        struct $name <: CC.AbstractInterpreter
-            interp::CC.NativeInterpreter
-            cache::$cachename
-            meta # additional information
-            $name(world = Base.get_world_counter();
-                interp = CC.NativeInterpreter(world),
-                cache = $cachename(IdDict{MethodInstance,CodeInstance}()),
-                meta = nothing,
-                ) = new(interp, cache, meta)
-        end
-        CC.InferenceParams(interp::$name) = CC.InferenceParams(interp.interp)
-        CC.OptimizationParams(interp::$name) = CC.OptimizationParams(interp.interp)
-        CC.get_world_counter(interp::$name) = CC.get_world_counter(interp.interp)
-        CC.get_inference_cache(interp::$name) = CC.get_inference_cache(interp.interp)
-        CC.code_cache(interp::$name) = WorldView(interp.cache, WorldRange(CC.get_world_counter(interp)))
-        CC.get(wvc::WorldView{<:$cachename}, mi::MethodInstance, default) = get(wvc.cache.dict, mi, default)
-        CC.getindex(wvc::WorldView{<:$cachename}, mi::MethodInstance) = getindex(wvc.cache.dict, mi)
-        CC.haskey(wvc::WorldView{<:$cachename}, mi::MethodInstance) = haskey(wvc.cache.dict, mi)
-        CC.setindex!(wvc::WorldView{<:$cachename}, ci::CodeInstance, mi::MethodInstance) = setindex!(wvc.cache.dict, ci, mi)
-    end
-end
+include("newinterp.jl")
 
 # OverlayMethodTable
 # ==================
@@ -50,6 +14,14 @@ import Base.Experimental: @MethodTable, @overlay
 @newinterp MTOverlayInterp
 @MethodTable(OverlayedMT)
 CC.method_table(interp::MTOverlayInterp) = CC.OverlayMethodTable(CC.get_world_counter(interp), OverlayedMT)
+
+function CC.add_remark!(interp::MTOverlayInterp, ::CC.InferenceState, remark)
+    if interp.meta !== nothing
+        # Core.println(remark)
+        push!(interp.meta, remark)
+    end
+    return nothing
+end
 
 strangesin(x) = sin(x)
 @overlay OverlayedMT strangesin(x::Float64) = iszero(x) ? nothing : cos(x)
@@ -69,6 +41,21 @@ end |> !Core.Compiler.is_nonoverlayed
 @test Base.infer_effects((Any,); interp=MTOverlayInterp()) do x
     @invoke strangesin(x::Float64)
 end |> !Core.Compiler.is_nonoverlayed
+
+# account for overlay possibility in unanalyzed matching method
+callstrange(::Nothing) = Core.compilerbarrier(:type, nothing) # trigger inference bail out
+callstrange(::Float64) = strangesin(x)
+callstrange_entry(x) = callstrange(x) # needs to be defined here because of world age
+let interp = MTOverlayInterp(Set{Any}())
+    matches = Core.Compiler.findall(Tuple{typeof(callstrange),Any}, Core.Compiler.method_table(interp)).matches
+    @test Core.Compiler.length(matches) == 2
+    if Core.Compiler.getindex(matches, 1).method == which(callstrange, (Nothing,))
+        @test Base.infer_effects(callstrange_entry, (Any,); interp) |> !Core.Compiler.is_nonoverlayed
+        @test "Call inference reached maximally imprecise information. Bailing on." in interp.meta
+    else
+        @warn "`nonoverlayed` test for inference bailing out is skipped since the method match sort order is changed."
+    end
+end
 
 # but it should never apply for the native compilation
 @test Base.infer_effects((Float64,)) do x
@@ -119,6 +106,18 @@ Base.@assume_effects :total totalcall(f, args...) = f(args...)
         return missing
     end
 end |> only === Nothing
+
+# GPUCompiler needs accurate inference through kwfunc with the overlay of `Core.throw_inexacterror`
+# https://github.com/JuliaLang/julia/issues/48097
+@newinterp Issue48097Interp
+@MethodTable Issue48097MT
+CC.method_table(interp::Issue48097Interp) = CC.OverlayMethodTable(CC.get_world_counter(interp), Issue48097MT)
+CC.InferenceParams(::Issue48097Interp) = CC.InferenceParams(; unoptimize_throw_blocks=false)
+@overlay Issue48097MT @noinline Core.throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = return
+issue48097(; kwargs...) = return 42
+@test fully_eliminated(; interp=Issue48097Interp(), retval=42) do
+    issue48097(; a=1f0, b=1.0)
+end
 
 # AbstractLattice
 # ===============
@@ -267,35 +266,10 @@ end |> only === Any
 # CallInfo × inlining
 # ===================
 
+@newinterp NoinlineInterpreter
+noinline_modules(interp::NoinlineInterpreter) = interp.meta::Set{Module}
+
 import .CC: CallInfo
-
-struct NoinlineInterpreterCache
-    dict::IdDict{MethodInstance,CodeInstance}
-end
-
-"""
-    NoinlineInterpreter(noinline_modules::Set{Module}) <: AbstractInterpreter
-
-An `AbstractInterpreter` that has additional inlineability rules based on caller module context.
-"""
-struct NoinlineInterpreter <: CC.AbstractInterpreter
-    noinline_modules::Set{Module}
-    interp::CC.NativeInterpreter
-    cache::NoinlineInterpreterCache
-    NoinlineInterpreter(noinline_modules::Set{Module}, world = Base.get_world_counter();
-        interp = CC.NativeInterpreter(world),
-        cache = NoinlineInterpreterCache(IdDict{MethodInstance,CodeInstance}())
-        ) = new(noinline_modules, interp, cache)
-end
-CC.InferenceParams(interp::NoinlineInterpreter) = CC.InferenceParams(interp.interp)
-CC.OptimizationParams(interp::NoinlineInterpreter) = CC.OptimizationParams(interp.interp)
-CC.get_world_counter(interp::NoinlineInterpreter) = CC.get_world_counter(interp.interp)
-CC.get_inference_cache(interp::NoinlineInterpreter) = CC.get_inference_cache(interp.interp)
-CC.code_cache(interp::NoinlineInterpreter) = WorldView(interp.cache, WorldRange(CC.get_world_counter(interp)))
-CC.get(wvc::WorldView{<:NoinlineInterpreterCache}, mi::MethodInstance, default) = get(wvc.cache.dict, mi, default)
-CC.getindex(wvc::WorldView{<:NoinlineInterpreterCache}, mi::MethodInstance) = getindex(wvc.cache.dict, mi)
-CC.haskey(wvc::WorldView{<:NoinlineInterpreterCache}, mi::MethodInstance) = haskey(wvc.cache.dict, mi)
-CC.setindex!(wvc::WorldView{<:NoinlineInterpreterCache}, ci::CodeInstance, mi::MethodInstance) = setindex!(wvc.cache.dict, ci, mi)
 
 struct NoinlineCallInfo <: CallInfo
     info::CallInfo # wrapped call
@@ -308,7 +282,7 @@ function CC.abstract_call(interp::NoinlineInterpreter,
     arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Union{Int,Nothing})
     ret = @invoke CC.abstract_call(interp::CC.AbstractInterpreter,
         arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Union{Int,Nothing})
-    if sv.mod in interp.noinline_modules
+    if sv.mod in noinline_modules(interp)
         return CC.CallMeta(ret.rt, ret.effects, NoinlineCallInfo(ret.info))
     end
     return ret
@@ -349,7 +323,7 @@ let NoinlineModule = Module()
     # it should work for cached results
     method = only(methods(inlined_usually, (Float64,Float64,Float64,)))
     mi = CC.specialize_method(method, Tuple{typeof(inlined_usually),Float64,Float64,Float64}, Core.svec())
-    @test haskey(interp.cache.dict, mi)
+    @test haskey(interp.code_cache.dict, mi)
     let src = code_typed1((Float64,Float64,Float64); interp) do x, y, z
             inlined_usually(x, y, z)
         end

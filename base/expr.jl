@@ -75,6 +75,9 @@ function copy(c::CodeInfo)
     cnew.code = copy_exprargs(cnew.code)
     cnew.slotnames = copy(cnew.slotnames)
     cnew.slotflags = copy(cnew.slotflags)
+    if cnew.slottypes !== nothing
+        cnew.slottypes = copy(cnew.slottypes)
+    end
     cnew.codelocs  = copy(cnew.codelocs)
     cnew.linetable = copy(cnew.linetable::Union{Vector{Any},Vector{Core.LineInfoNode}})
     cnew.ssaflags  = copy(cnew.ssaflags)
@@ -919,6 +922,26 @@ function remove_linenums!(src::CodeInfo)
     return src
 end
 
+replace_linenums!(ex, ln::LineNumberNode) = ex
+function replace_linenums!(ex::Expr, ln::LineNumberNode)
+    if ex.head === :block || ex.head === :quote
+        # replace line number expressions from metadata (not argument literal or inert) position
+        map!(ex.args, ex.args) do @nospecialize(x)
+            isa(x, Expr) && x.head === :line && length(x.args) == 1 && return Expr(:line, ln.line)
+            isa(x, Expr) && x.head === :line && length(x.args) == 2 && return Expr(:line, ln.line, ln.file)
+            isa(x, LineNumberNode) && return ln
+            return x
+        end
+    end
+    # preserve any linenums inside `esc(...)` guards
+    if ex.head !== :escape
+        for subex in ex.args
+            subex isa Expr && replace_linenums!(subex, ln)
+        end
+    end
+    return ex
+end
+
 macro generated()
     return Expr(:generated)
 end
@@ -962,10 +985,7 @@ macro generated(f)
                          Expr(:block,
                               lno,
                               Expr(:if, Expr(:generated),
-                                   # https://github.com/JuliaLang/julia/issues/25678
-                                   Expr(:block,
-                                        :(local $tmp = $body),
-                                        :(if $tmp isa $(GlobalRef(Core, :CodeInfo)); return $tmp; else $tmp; end)),
+                                   body,
                                    Expr(:block,
                                         Expr(:meta, :generated_only),
                                         Expr(:return, nothing))))))

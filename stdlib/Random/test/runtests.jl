@@ -1018,3 +1018,50 @@ guardseed() do
         @test f42752(true) === val
     end
 end
+
+@testset "TaskLocalRNG: stream collision smoke test" begin
+    # spawn a trinary tree of tasks:
+    # - spawn three recursive child tasks in each
+    # - generate a random UInt64 in each before, after and between
+    # - collect and count all the generated random values
+    # these should all be distinct across all tasks
+    function gen(d)
+        r = rand(UInt64)
+        vals = [r]
+        if d ≥ 0
+            append!(vals, gent(d - 1))
+            isodd(r) && append!(vals, gent(d - 1))
+            push!(vals, rand(UInt64))
+            iseven(r) && append!(vals, gent(d - 1))
+        end
+        push!(vals, rand(UInt64))
+    end
+    gent(d) = fetch(@async gen(d))
+    seeds = rand(RandomDevice(), UInt64, 5)
+    for seed in seeds
+        Random.seed!(seed)
+        vals = gen(6)
+        @test allunique(vals)
+    end
+end
+
+@testset "TaskLocalRNG: child doesn't affect parent" begin
+    seeds = rand(RandomDevice(), UInt64, 5)
+    for seed in seeds
+        Random.seed!(seed)
+        x = rand(UInt64)
+        y = rand(UInt64)
+        n = 3
+        for i = 1:n
+            Random.seed!(seed)
+            @sync for j = 0:i
+                @async rand(UInt64)
+            end
+            @test x == rand(UInt64)
+            @sync for j = 0:(n-i)
+                @async rand(UInt64)
+            end
+            @test y == rand(UInt64)
+        end
+    end
+end

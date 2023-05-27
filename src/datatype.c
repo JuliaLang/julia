@@ -53,7 +53,7 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
     jl_atomic_store_relaxed(&mt->cache, jl_nothing);
     jl_atomic_store_relaxed(&mt->max_args, 0);
     mt->backedges = NULL;
-    JL_MUTEX_INIT(&mt->writelock);
+    JL_MUTEX_INIT(&mt->writelock, "methodtable->writelock");
     mt->offs = 0;
     mt->frozen = 0;
     return mt;
@@ -68,7 +68,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->name = name;
     tn->module = module;
     tn->wrapper = NULL;
-    jl_atomic_store_release(&tn->Typeofwrapper, NULL);
+    jl_atomic_store_relaxed(&tn->Typeofwrapper, NULL);
     jl_atomic_store_relaxed(&tn->cache, jl_emptysvec);
     jl_atomic_store_relaxed(&tn->linearcache, jl_emptysvec);
     tn->names = NULL;
@@ -103,9 +103,10 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->isprimitivetype = 0;
     t->zeroinit = 0;
     t->has_concrete_subtype = 1;
-    t->cached_by_hash = 0;
+    t->maybe_subtype_of_cache = 1;
     t->ismutationfree = 0;
     t->isidentityfree = 0;
+    t->padding = 0;
     t->name = NULL;
     t->super = NULL;
     t->parameters = NULL;
@@ -1400,6 +1401,9 @@ JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...)
 {
     jl_task_t *ct = jl_current_task;
     if (type->instance != NULL) return type->instance;
+    if (!jl_is_datatype(type) || !type->isconcretetype || type->layout == NULL) {
+        jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
+    }
     va_list args;
     size_t i, nf = jl_datatype_nfields(type);
     va_start(args, type);
@@ -1417,7 +1421,7 @@ JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...)
 JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uint32_t na)
 {
     jl_task_t *ct = jl_current_task;
-    if (!jl_is_datatype(type) || type->layout == NULL) {
+    if (!jl_is_datatype(type) || !type->isconcretetype || type->layout == NULL) {
         jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
     }
     size_t nf = jl_datatype_nfields(type);
@@ -1454,7 +1458,7 @@ JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup)
     jl_task_t *ct = jl_current_task;
     if (!jl_is_tuple(tup))
         jl_type_error("new", (jl_value_t*)jl_tuple_type, tup);
-    if (!jl_is_datatype(type) || type->layout == NULL)
+    if (!jl_is_datatype(type) || !type->isconcretetype || type->layout == NULL)
         jl_type_error("new", (jl_value_t *)jl_datatype_type, (jl_value_t *)type);
     size_t nargs = jl_nfields(tup);
     size_t nf = jl_datatype_nfields(type);
@@ -1500,6 +1504,9 @@ JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
 {
     jl_task_t *ct = jl_current_task;
     if (type->instance != NULL) return type->instance;
+    if (!jl_is_datatype(type) || type->layout == NULL) {
+        jl_type_error("new", (jl_value_t*)jl_datatype_type, (jl_value_t*)type);
+    }
     size_t size = jl_datatype_size(type);
     jl_value_t *jv = jl_gc_alloc(ct->ptls, size, type);
     if (size > 0)

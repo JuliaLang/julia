@@ -189,7 +189,7 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
             # OC was constructed from inferred source. There's only one
             # specialization and we can't infer anything more precise either.
             world = f.source.primary_world
-            linfo = f.source.specializations[1]
+            linfo = f.source.specializations::Core.MethodInstance
             Core.Compiler.hasintersect(typeof(f).parameters[1], t) || (warning = OC_MISMATCH_WARNING)
         else
             linfo = Core.Compiler.specialize_method(f.source, Tuple{typeof(f.captures), t.parameters...}, Core.svec())

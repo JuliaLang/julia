@@ -146,7 +146,7 @@ namespace {
             // Opts.Recover = CodeGenOpts.SanitizeRecover.has(Mask);
             // Opts.UseAfterScope = CodeGenOpts.SanitizeAddressUseAfterScope;
             // Opts.UseAfterReturn = CodeGenOpts.getSanitizeAddressUseAfterReturn();
-            MPM.addPass(RequireAnalysisPass<ASanGlobalsMetadataAnalysis, Module>());
+            // MPM.addPass(RequireAnalysisPass<ASanGlobalsMetadataAnalysis, Module>());
             // MPM.addPass(ModuleAddressSanitizerPass(
             //     Opts, UseGlobalGC, UseOdrIndicator, DestructorKind));
             //Let's assume the defaults are actually fine for our purposes
@@ -173,11 +173,13 @@ namespace {
         // }
     }
 
-    void addVerificationPasses(ModulePassManager &MPM, bool llvm_only) JL_NOTSAFEPOINT {
+#ifdef JL_DEBUG_BUILD
+    static inline void addVerificationPasses(ModulePassManager &MPM, bool llvm_only) JL_NOTSAFEPOINT {
         if (!llvm_only)
             MPM.addPass(llvm::createModuleToFunctionPassAdaptor(GCInvariantVerifierPass()));
         MPM.addPass(VerifierPass());
     }
+#endif
 
     auto basicSimplifyCFGOptions() JL_NOTSAFEPOINT {
         return SimplifyCFGOptions()
@@ -244,9 +246,9 @@ namespace {
 
 //Use for O1 and below
 static void buildBasicPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationLevel O, OptimizationOptions options) JL_NOTSAFEPOINT {
-// #ifdef JL_DEBUG_BUILD
+#ifdef JL_DEBUG_BUILD
     addVerificationPasses(MPM, options.llvm_only);
-// #endif
+#endif
     invokePipelineStartCallbacks(MPM, PB, O);
     MPM.addPass(ConstantMergePass());
     if (!options.dump_native) {
@@ -320,9 +322,9 @@ static void buildBasicPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimiza
 
 //Use for O2 and above
 static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationLevel O, OptimizationOptions options) JL_NOTSAFEPOINT {
-// #ifdef JL_DEBUG_BUILD
+#ifdef JL_DEBUG_BUILD
     addVerificationPasses(MPM, options.llvm_only);
-// #endif
+#endif
     invokePipelineStartCallbacks(MPM, PB, O);
     MPM.addPass(ConstantMergePass());
     {
@@ -382,7 +384,7 @@ static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimizat
 #endif
             LPM2.addPass(LICMPass(LICMOptions()));
             JULIA_PASS(LPM2.addPass(JuliaLICMPass()));
-            LPM2.addPass(SimpleLoopUnswitchPass());
+            LPM2.addPass(SimpleLoopUnswitchPass(true, true));
             LPM2.addPass(LICMPass(LICMOptions()));
             JULIA_PASS(LPM2.addPass(JuliaLICMPass()));
             //LICM needs MemorySSA now, so we must use it
@@ -399,7 +401,7 @@ static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimizat
             //We don't know if the loop end callbacks support MSSA
             FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA = */false));
         }
-        FPM.addPass(LoopUnrollPass());
+        FPM.addPass(LoopUnrollPass(LoopUnrollOptions().setRuntime(false)));
         JULIA_PASS(FPM.addPass(AllocOptPass()));
         FPM.addPass(SROAPass());
         FPM.addPass(InstSimplifyPass());
@@ -541,11 +543,8 @@ PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
         // Register the AA manager first so that our version is the one used.
         FAM.registerPass([&] JL_NOTSAFEPOINT {
             AAManager AA;
-            // TODO: Why are we only doing this for -O3?
-            if (O.getSpeedupLevel() >= 3) {
-                AA.registerFunctionAnalysis<BasicAA>();
-            }
             if (O.getSpeedupLevel() >= 2) {
+                AA.registerFunctionAnalysis<BasicAA>();
                 AA.registerFunctionAnalysis<ScopedNoAliasAA>();
                 AA.registerFunctionAnalysis<TypeBasedAA>();
             }
@@ -601,6 +600,10 @@ void NewPM::run(Module &M) {
 #ifndef __clang_gcanalyzer__ /* the analyzer cannot prove we have not added instrumentation callbacks with safepoints */
     MPM.run(M, AM.MAM);
 #endif
+}
+
+void NewPM::printTimers() {
+    SI.getTimePasses().print();
 }
 
 OptimizationLevel getOptLevel(int optlevel) {

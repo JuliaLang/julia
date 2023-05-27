@@ -293,6 +293,10 @@ has_mustalias(𝕃::AbstractLattice) = has_mustalias(widenlattice(𝕃))
 has_mustalias(::AnyMustAliasesLattice) = true
 has_mustalias(::JLTypeLattice) = false
 
+has_extended_unionsplit(𝕃::AbstractLattice) = has_extended_unionsplit(widenlattice(𝕃))
+has_extended_unionsplit(::AnyMustAliasesLattice) = true
+has_extended_unionsplit(::JLTypeLattice) = false
+
 # Curried versions
 ⊑(lattice::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⊑(lattice, a, b)
 ⊏(lattice::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⊏(lattice, a, b)
