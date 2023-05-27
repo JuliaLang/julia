@@ -1320,6 +1320,17 @@ macro __dot__(x)
     esc(__dot__(x))
 end
 
+# This catches cases where we thinks the user wants to call @. with more than
+# one argument.
+# For example this happens when writing `@. v = v +1`, the macro is called with
+# `@.(:(v = v), +1), instead the intention is `@. v = v + 1`.
+# (issue #49968)
+macro __dot__(x, bad_extras...)
+    throw(ArgumentError("Whitespace placement in this expression is ambiguous. \
+                         Add whitespace to clarify. For example, write @. v = v + 1 \
+                         instead of @. v = v +1 (which is parsed as @. v = v 1)."))
+end
+
 @inline function broadcasted_kwsyntax(f, args...; kwargs...)
     if isempty(kwargs) # some BroadcastStyles dispatch on `f`, so try to preserve its type
         return broadcasted(f, args...)
