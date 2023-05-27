@@ -188,10 +188,12 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test contains(v[2], r"enable-tail-merge + = 1")
         @test isempty(v[3])
     end
-    @testset let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -enable-tail-merge=1", "HOME" => homedir()))
-        @test !v[1]
-        @test isempty(v[2])
-        @test v[3] == "julia: for the --enable-tail-merge option: may only occur zero or one times!"
+    if Base.libllvm_version < v"15" #LLVM over 15 doesn't care for multiple options
+        @testset let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -enable-tail-merge=1", "HOME" => homedir()))
+            @test !v[1]
+            @test isempty(v[2])
+            @test v[3] == "julia: for the --enable-tail-merge option: may only occur zero or one times!"
+        end
     end
 end
 
@@ -339,6 +341,24 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     let p = run(`$exename --procs=1.0`, wait=false)
         wait(p)
         @test p.exitcode == 1 && p.termsignal == 0
+    end
+
+    # --gcthreads
+    code = "print(Threads.ngcthreads())"
+    cpu_threads = ccall(:jl_effective_threads, Int32, ())
+    @test (cpu_threads == 1 ? "1" : string(div(cpu_threads, 2))) ==
+          read(`$exename --threads auto -e $code`, String) ==
+          read(`$exename --threads=auto -e $code`, String) ==
+          read(`$exename -tauto -e $code`, String) ==
+          read(`$exename -t auto -e $code`, String)
+    for nt in (nothing, "1")
+        withenv("JULIA_NUM_GC_THREADS" => nt) do
+            @test read(`$exename --gcthreads=2 -e $code`, String) == "2"
+        end
+    end
+
+    withenv("JULIA_NUM_GC_THREADS" => 2) do
+        @test read(`$exename -e $code`, String) == "2"
     end
 
     # --machine-file
@@ -726,6 +746,37 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     end
 end
 
+# Object file with multiple cpu targets
+@testset "Object file for multiple microarchitectures" begin
+    julia_path = joinpath(Sys.BINDIR, Base.julia_exename())
+    outputo_file = tempname()
+    write(outputo_file, "1")
+    object_file = tempname() * ".o"
+
+    # This is to test that even with `pkgimages=no`, we can create object file
+    # with multiple cpu-targets
+    # The cmd is checked for `--object-o` as soon as it is run. So, to avoid long
+    # testing times, intentionally don't pass `--sysimage`; when we reach the
+    # corresponding error, we know that `check_cmdline` has already passed
+    let v = readchomperrors(`$julia_path
+        --cpu-target='native;native'
+        --output-o=$object_file $outputo_file
+        --pkgimages=no`)
+
+        @test v[1] == false
+        @test v[2] == ""
+        @test !contains(v[3], "More than one command line CPU targets specified")
+        @test v[3] == "ERROR: File \"boot.jl\" not found"
+    end
+
+    # This is to test that with `pkgimages=yes`, multiple CPU targets are parsed.
+    # We intentionally fail fast due to a lack of an `--output-o` flag.
+    let v = readchomperrors(`$julia_path --cpu-target='native;native' --pkgimages=yes`)
+        @test v[1] == false
+        @test v[2] == ""
+        @test contains(v[3], "More than one command line CPU targets specified")
+    end
+end
 
 # Find the path of libjulia (or libjulia-debug, as the case may be)
 # to use as a dummy shlib to open
@@ -901,4 +952,6 @@ end
         @test lines[3] == "foo"
         @test lines[4] == "bar"
     end
+#heap-size-hint
+@test readchomp(`$(Base.julia_cmd()) --startup-file=no --heap-size-hint=500M -e "println(@ccall jl_gc_get_max_memory()::UInt64)"`) == "524288000"
 end

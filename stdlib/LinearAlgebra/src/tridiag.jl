@@ -413,6 +413,19 @@ end
 det(A::SymTridiagonal; shift::Number=false) = det_usmani(A.ev, A.dv, A.ev, shift)
 logabsdet(A::SymTridiagonal; shift::Number=false) = logabsdet(ldlt(A; shift=shift))
 
+@inline function Base.isassigned(A::SymTridiagonal, i::Int, j::Int)
+    @boundscheck checkbounds(Bool, A, i, j) || return false
+    if i == j
+        return @inbounds isassigned(A.dv, i)
+    elseif i == j + 1
+        return @inbounds isassigned(A.ev, j)
+    elseif i + 1 == j
+        return @inbounds isassigned(A.ev, i)
+    else
+        return true
+    end
+end
+
 @inline function getindex(A::SymTridiagonal{T}, i::Integer, j::Integer) where T
     @boundscheck checkbounds(A, i, j)
     if i == j
@@ -601,6 +614,19 @@ function diag(M::Tridiagonal{T}, n::Integer=0) where T
     else
         throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
             "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
+    end
+end
+
+@inline function Base.isassigned(A::Tridiagonal, i::Int, j::Int)
+    @boundscheck checkbounds(A, i, j)
+    if i == j
+        return @inbounds isassigned(A.d, i)
+    elseif i == j + 1
+        return @inbounds isassigned(A.dl, j)
+    elseif i + 1 == j
+        return @inbounds isassigned(A.du, i)
+    else
+        return true
     end
 end
 

@@ -657,7 +657,7 @@ for important details on how to modify these fields safely.
     The ABI to use when calling `fptr`. Some significant ones include:
 
       * 0 - Not compiled yet
-      * 1 - JL_CALLABLE `jl_value_t *(*)(jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
+      * 1 - `JL_CALLABLE` `jl_value_t *(*)(jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
       * 2 - Constant (value stored in `rettype_const`)
       * 3 - With Static-parameters forwarded `jl_value_t *(*)(jl_svec_t *sparams, jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
       * 4 - Run in interpreter `jl_value_t *(*)(jl_method_instance_t *meth, jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
@@ -685,10 +685,10 @@ A (usually temporary) container for holding lowered source code.
 
     A `UInt8` array of slot properties, represented as bit flags:
 
-      * 2  - assigned (only false if there are *no* assignment statements with this var on the left)
-      * 8  - const (currently unused for local variables)
-      * 16 - statically assigned once
-      * 32 - might be used before assigned. This flag is only valid after type inference.
+      * 0x02 - assigned (only false if there are *no* assignment statements with this var on the left)
+      * 0x08 - used (if there is any read or write of the slot)
+      * 0x10 - statically assigned once
+      * 0x20 - might be used before assigned. This flag is only valid after type inference.
 
   * `ssavaluetypes`
 

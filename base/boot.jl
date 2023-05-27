@@ -109,7 +109,7 @@
 
 #struct LineInfoNode
 #    module::Module
-#    method::Symbol
+#    method::Any (Union{Symbol, Method, MethodInstance})
 #    file::Symbol
 #    line::Int32
 #    inlined_at::Int32
@@ -245,7 +245,6 @@ ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       (f::typeof(Typeof))(x) = ($(_expr(:meta,:nospecialize,:x)); isa(x,Type) ? Type{x} : typeof(x))
       end)
 
-
 macro nospecialize(x)
     _expr(:meta, :nospecialize, x)
 end
@@ -256,11 +255,25 @@ TypeVar(n::Symbol, @nospecialize(lb), @nospecialize(ub)) = _typevar(n, lb, ub)
 
 UnionAll(v::TypeVar, @nospecialize(t)) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
 
-const Vararg = ccall(:jl_toplevel_eval_in, Any, (Any, Any), Core, _expr(:new, TypeofVararg))
+# simple convert for use by constructors of types in Core
+# note that there is no actual conversion defined here,
+# so the methods and ccall's in Core aren't permitted to use convert
+convert(::Type{Any}, @nospecialize(x)) = x
+convert(::Type{T}, x::T) where {T} = x
+cconvert(::Type{T}, x) where {T} = convert(T, x)
+unsafe_convert(::Type{T}, x::T) where {T} = x
 
-# let the compiler assume that calling Union{} as a constructor does not need
-# to be considered ever (which comes up often as Type{<:T})
-Union{}(a...) = throw(MethodError(Union{}, a))
+# dispatch token indicating a kwarg (keyword sorter) call
+function kwcall end
+# deprecated internal functions:
+kwfunc(@nospecialize(f)) = kwcall
+kwftype(@nospecialize(t)) = typeof(kwcall)
+
+# Let the compiler assume that calling Union{} as a constructor does not need
+# to be considered ever (which comes up often as Type{<:T} inference, and
+# occasionally in user code from eltype).
+Union{}(a...) = throw(ArgumentError("cannot construct a value of type Union{} for return result"))
+kwcall(kwargs, ::Type{Union{}}, a...) = Union{}(a...)
 
 Expr(@nospecialize args...) = _expr(args...)
 
@@ -369,12 +382,6 @@ include(m::Module, fname::String) = ccall(:jl_load_, Any, (Any, Any), m, fname)
 
 eval(m::Module, @nospecialize(e)) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
 
-# dispatch token indicating a kwarg (keyword sorter) call
-function kwcall end
-# deprecated internal functions:
-kwfunc(@nospecialize(f)) = kwcall
-kwftype(@nospecialize(t)) = typeof(kwcall)
-
 mutable struct Box
     contents::Any
     Box(@nospecialize(x)) = new(x)
@@ -445,14 +452,6 @@ Module(name::Symbol=:anonymous, std_imports::Bool=true, default_names::Bool=true
 function _Task(@nospecialize(f), reserved_stack::Int, completion_future)
     return ccall(:jl_new_task, Ref{Task}, (Any, Any, Int), f, completion_future, reserved_stack)
 end
-
-# simple convert for use by constructors of types in Core
-# note that there is no actual conversion defined here,
-# so the methods and ccall's in Core aren't permitted to use convert
-convert(::Type{Any}, @nospecialize(x)) = x
-convert(::Type{T}, x::T) where {T} = x
-cconvert(::Type{T}, x) where {T} = convert(T, x)
-unsafe_convert(::Type{T}, x::T) where {T} = x
 
 _is_internal(__module__) = __module__ === Core
 # can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
@@ -534,11 +533,10 @@ import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, Return
 end # module IR
 
 # docsystem basics
-const unescape = Symbol("hygienic-scope")
 macro doc(x...)
     docex = atdoc(__source__, __module__, x...)
     isa(docex, Expr) && docex.head === :escape && return docex
-    return Expr(:escape, Expr(unescape, docex, typeof(atdoc).name.module))
+    return Expr(:escape, Expr(:var"hygienic-scope", docex, typeof(atdoc).name.module, __source__))
 end
 macro __doc__(x)
     return Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
@@ -590,28 +588,25 @@ println(@nospecialize a...) = println(stdout, a...)
 
 struct GeneratedFunctionStub
     gen
-    argnames::Array{Any,1}
-    spnames::Union{Nothing, Array{Any,1}}
-    line::Int
-    file::Symbol
-    expand_early::Bool
+    argnames::SimpleVector
+    spnames::SimpleVector
 end
 
-# invoke and wrap the results of @generated
-function (g::GeneratedFunctionStub)(@nospecialize args...)
+# invoke and wrap the results of @generated expression
+function (g::GeneratedFunctionStub)(world::UInt, source::LineNumberNode, @nospecialize args...)
+    # args is (spvals..., argtypes...)
     body = g.gen(args...)
-    if body isa CodeInfo
-        return body
-    end
-    lam = Expr(:lambda, g.argnames,
-               Expr(Symbol("scope-block"),
+    file = source.file
+    file isa Symbol || (file = :none)
+    lam = Expr(:lambda, Expr(:argnames, g.argnames...).args,
+               Expr(:var"scope-block",
                     Expr(:block,
-                         LineNumberNode(g.line, g.file),
-                         Expr(:meta, :push_loc, g.file, Symbol("@generated body")),
+                         source,
+                         Expr(:meta, :push_loc, file, :var"@generated body"),
                          Expr(:return, body),
                          Expr(:meta, :pop_loc))))
     spnames = g.spnames
-    if spnames === nothing
+    if spnames === svec()
         return lam
     else
         return Expr(Symbol("with-static-parameters"), lam, spnames...)

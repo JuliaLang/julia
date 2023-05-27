@@ -562,6 +562,13 @@ end
     end
 end
 
+@testset "Offset with missing (#48862)" begin
+    v = [-1.0, missing, 1.0, 0.0, missing, -0.5, 0.5, 1.0, -0.5, missing, 0.5, -0.8, 1.5, NaN]
+    vo = OffsetArray(v, (firstindex(v):lastindex(v)).+100)
+    @test issorted(sort!(vo))
+    @test issorted(v)
+end
+
 @testset "searchsortedfirst/last with generalized indexing" begin
     o = OffsetVector(1:3, -2)
     @test searchsortedfirst(o, 4) == lastindex(o) + 1

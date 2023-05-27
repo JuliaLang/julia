@@ -34,7 +34,7 @@ function sin(x::T) where T<:Union{Float32, Float64}
         end
         return sin_kernel(x)
     elseif isnan(x)
-        return T(NaN)
+        return x
     elseif isinf(x)
         sin_domain_error(x)
     end
@@ -103,7 +103,7 @@ function cos(x::T) where T<:Union{Float32, Float64}
         end
         return cos_kernel(x)
     elseif isnan(x)
-        return T(NaN)
+        return x
     elseif isinf(x)
         cos_domain_error(x)
     else
@@ -179,7 +179,7 @@ function sincos(x::T) where T<:Union{Float32, Float64}
         end
         return sincos_kernel(x)
     elseif isnan(x)
-        return T(NaN), T(NaN)
+        return x, x
     elseif isinf(x)
         sincos_domain_error(x)
     end
@@ -221,7 +221,7 @@ function tan(x::T) where T<:Union{Float32, Float64}
         end
         return tan_kernel(x)
     elseif isnan(x)
-        return T(NaN)
+        return x
     elseif isinf(x)
         tan_domain_error(x)
     end
@@ -582,8 +582,8 @@ function atan(y::T, x::T) where T<:Union{Float32, Float64}
     #    S8) ATAN2(+-INF,+INF ) is +-pi/4 ;
     #    S9) ATAN2(+-INF,-INF ) is +-3pi/4;
     #    S10) ATAN2(+-INF, (anything but,0,NaN, and INF)) is +-pi/2;
-    if isnan(x) || isnan(y) # S1 or S2
-        return T(NaN)
+    if isnan(x) | isnan(y) # S1 or S2
+        return isnan(x) ? x : y
     end
 
     if x == T(1.0) # then y/x = y and x > 0, see M2
@@ -1191,7 +1191,7 @@ function sind(x::Real)
     if isinf(x)
         return throw(DomainError(x, "`x` cannot be infinite."))
     elseif isnan(x)
-        return oftype(x,NaN)
+        return x
     end
 
     rx = copysign(float(rem(x,360)),x)
@@ -1222,7 +1222,7 @@ function cosd(x::Real)
     if isinf(x)
         return throw(DomainError(x, "`x` cannot be infinite."))
     elseif isnan(x)
-        return oftype(x,NaN)
+        return x
     end
 
     rx = abs(float(rem(x,360)))

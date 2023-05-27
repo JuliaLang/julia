@@ -253,6 +253,10 @@ end
     rational2 = Rational(-4500, 9000)
     @test sprint(show, rational1) == "1465//8593"
     @test sprint(show, rational2) == "-1//2"
+    @test sprint(show, -2//2) == "-1//1"
+    @test sprint(show, [-2//2,]) == "Rational{$Int}[-1]"
+    @test sprint(show, MIME"text/plain"(), Union{Int, Rational{Int}}[7 3//6; 6//3 2]) ==
+        "2×2 Matrix{Union{Rational{$Int}, $Int}}:\n  7    1//2\n 2//1   2"
     let
         io1 = IOBuffer()
         write(io1, rational1)
@@ -264,6 +268,9 @@ end
         io2.ptr = 1
         @test read(io2, typeof(rational2)) == rational2
     end
+end
+@testset "abs overflow for Rational" begin
+    @test_throws OverflowError abs(typemin(Int) // 1)
 end
 @testset "parse" begin
     # Non-negative Int in which parsing is expected to work

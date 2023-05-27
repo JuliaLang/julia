@@ -90,6 +90,9 @@ end
 @test  Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Type{Union{Float32,Float64}}, Core.svec(Union{Float32,Float64}), 1, 1, 1)
 @test  Core.Compiler.type_more_complex(Type{<:Union{Float32,Float64}}, Any, Core.svec(Union{Float32,Float64}), 1, 1, 1)
 
+# issue #49287
+@test !Core.Compiler.type_more_complex(Tuple{Vararg{Tuple{}}}, Tuple{Vararg{Tuple}}, Core.svec(), 0, 0, 0)
+@test  Core.Compiler.type_more_complex(Tuple{Vararg{Tuple}}, Tuple{Vararg{Tuple{}}}, Core.svec(), 0, 0, 0)
 
 let # 40336
     t = Type{Type{Int}}
@@ -359,7 +362,7 @@ code_llvm(devnull, invoke_g10878, ())
 
 
 # issue #10930
-@test isa(code_typed(promote,(Any,Any,Vararg{Any})), Array)
+@test isa(Base.return_types(promote, (Any,Any,Vararg{Any})), Vector)
 find_tvar10930(sig::Type{T}) where {T<:Tuple} = 1
 function find_tvar10930(arg)
     if isa(arg, Type) && arg<:Tuple
@@ -682,6 +685,7 @@ end
 # inference of `fieldtype`
 mutable struct UndefField__
     x::Union{}
+    UndefField__() = new()
 end
 f_infer_undef_field() = fieldtype(UndefField__, :x)
 @test Base.return_types(f_infer_undef_field, ()) == Any[Type{Union{}}]
@@ -945,7 +949,7 @@ end
 
 # issue #21410
 f21410(::V, ::Pair{V,E}) where {V, E} = E
-@test code_typed(f21410, Tuple{Ref, Pair{Ref{T},Ref{T}} where T<:Number})[1].second ==
+@test only(Base.return_types(f21410, Tuple{Ref, Pair{Ref{T},Ref{T}} where T<:Number})) ==
     Type{E} where E <: (Ref{T} where T<:Number)
 
 # issue #21369
@@ -1020,7 +1024,7 @@ end
 g21771(T) = T
 f21771(::Val{U}) where {U} = Tuple{g21771(U)}
 @test @inferred(f21771(Val{Int}())) === Tuple{Int}
-@test @inferred(f21771(Val{Union{}}())) === Tuple{Union{}}
+@test_throws ErrorException @inferred(f21771(Val{Union{}}()))
 @test @inferred(f21771(Val{Integer}())) === Tuple{Integer}
 
 # PR #28284, check that constants propagate through calls to new
@@ -1163,24 +1167,18 @@ let typeargs = Tuple{Type{Int},Type{Int},Type{Int},Type{Int},Type{Int},Type{Int}
     @test only(Base.return_types(promote_type, typeargs)) === Type{Int}
 end
 
-function count_specializations(method::Method)
-    specs = method.specializations
-    n = count(i -> isassigned(specs, i), 1:length(specs))
-    return n
-end
-
 # demonstrate that inference can complete without waiting for MAX_TYPE_DEPTH
 copy_dims_out(out) = ()
 copy_dims_out(out, dim::Int, tail...) =  copy_dims_out((out..., dim), tail...)
 copy_dims_out(out, dim::Colon, tail...) = copy_dims_out((out..., dim), tail...)
 @test Base.return_types(copy_dims_out, (Tuple{}, Vararg{Union{Int,Colon}})) == Any[Tuple{}, Tuple{}, Tuple{}]
-@test all(m -> 4 < count_specializations(m) < 15, methods(copy_dims_out)) # currently about 5
+@test all(m -> 4 < length(Base.specializations(m)) < 15, methods(copy_dims_out)) # currently about 5
 
 copy_dims_pair(out) = ()
 copy_dims_pair(out, dim::Int, tail...) =  copy_dims_pair(out => dim, tail...)
 copy_dims_pair(out, dim::Colon, tail...) = copy_dims_pair(out => dim, tail...)
 @test Base.return_types(copy_dims_pair, (Tuple{}, Vararg{Union{Int,Colon}})) == Any[Tuple{}, Tuple{}, Tuple{}]
-@test all(m -> 5 < count_specializations(m) < 15, methods(copy_dims_pair)) # currently about 7
+@test all(m -> 3 < length(Base.specializations(m)) < 15, methods(copy_dims_pair)) # currently about 5
 
 # splatting an ::Any should still allow inference to use types of parameters preceding it
 f22364(::Int, ::Any...) = 0
@@ -1590,7 +1588,7 @@ gg13183(x::X...) where {X} = (_false13183 ? gg13183(x, x) : 0)
 let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     world = UInt(23) # some small-numbered world that should be valid
     interp = Core.Compiler.NativeInterpreter()
-    opt = Core.Compiler.OptimizationState(linfo, Core.Compiler.OptimizationParams(interp), interp)
+    opt = Core.Compiler.OptimizationState(linfo, interp)
     # make sure the state of the properties look reasonable
     @test opt.src !== linfo.def.source
     @test length(opt.src.slotflags) == linfo.def.nargs <= length(opt.src.slotnames)
@@ -1787,9 +1785,17 @@ bar_22708(x) = f_22708(x)
 
 @test bar_22708(1) == "x"
 
+struct EarlyGeneratedFunctionStub
+    stub::Core.GeneratedFunctionStub
+end
+(stub::EarlyGeneratedFunctionStub)(args...) = (@nospecialize; stub.stub(args...))
+
 # mechanism for spoofing work-limiting heuristics and early generator expansion (#24852)
-function _generated_stub(gen::Symbol, args::Vector{Any}, params::Vector{Any}, line, file, expand_early)
-    stub = Expr(:new, Core.GeneratedFunctionStub, gen, args, params, line, file, expand_early)
+function _generated_stub(gen::Symbol, args::Core.SimpleVector, params::Core.SimpleVector, expand_early::Bool)
+    stub = Expr(:new, Core.GeneratedFunctionStub, gen, args, params)
+    if expand_early
+        stub = Expr(:new, EarlyGeneratedFunctionStub, stub)
+    end
     return Expr(:meta, :generated, stub)
 end
 
@@ -1798,10 +1804,21 @@ f24852_kernel2(x, y::Tuple) = f24852_kernel1(x, (y,))
 f24852_kernel3(x, y::Tuple) = f24852_kernel2(x, (y,))
 f24852_kernel(x, y::Number) = f24852_kernel3(x, (y,))
 
-function f24852_kernel_cinfo(fsig::Type)
-    world = typemax(UInt) # FIXME
-    match = Base._methods_by_ftype(fsig, -1, world)[1]
-    isdefined(match.method, :source) || return (nothing, :(f(x, y)))
+function f24852_kernel_cinfo(world::UInt, source, fsig::Type)
+    matches = Base._methods_by_ftype(fsig, -1, world)
+    if matches === nothing || length(matches) != 1
+        match = nothing
+    else
+        match = matches[1]
+        if !isdefined(match.method, :source)
+            match = nothing
+        end
+    end
+    if match === nothing
+        code_info = :(f(x, y))
+        code_info = Core.GeneratedFunctionStub(identity, Core.svec(:self, :f, :x, :y), Core.svec(:X, :Y))(world, source, code_info)
+        return (nothing, code_info)
+    end
     code_info = Base.uncompressed_ir(match.method)
     Meta.partially_inline!(code_info.code, Any[], match.spec_types, Any[match.sparams...], 1, 0, :propagate)
     if startswith(String(match.method.name), "f24852")
@@ -1816,21 +1833,23 @@ function f24852_kernel_cinfo(fsig::Type)
     end
     pushfirst!(code_info.slotnames, Symbol("#self#"))
     pushfirst!(code_info.slotflags, 0x00)
+    # TODO: this is mandatory: code_info.min_world = max(code_info.min_world, min_world[])
+    # TODO: this is mandatory: code_info.max_world = min(code_info.max_world, max_world[])
     return match.method, code_info
 end
 
-function f24852_gen_cinfo_uninflated(X, Y, _, f, x, y)
-    _, code_info = f24852_kernel_cinfo(Tuple{f, x, y})
+function f24852_gen_cinfo_uninflated(world::UInt, source, X, Y, _, f, x, y)
+    _, code_info = f24852_kernel_cinfo(world, source, Tuple{f, x, y})
     return code_info
 end
 
-function f24852_gen_cinfo_inflated(X, Y, _, f, x, y)
-    method, code_info = f24852_kernel_cinfo(Tuple{f, x, y})
+function f24852_gen_cinfo_inflated(world::UInt, source, X, Y, _, f, x, y)
+    method, code_info = f24852_kernel_cinfo(world, source, Tuple{f, x, y})
     code_info.method_for_inference_limit_heuristics = method
     return code_info
 end
 
-function f24852_gen_expr(X, Y, _, f, x, y) # deparse f(x::X, y::Y) where {X, Y}
+function f24852_gen_expr(X, Y, _, f, x, y) # deparse of f(x::X, y::Y) where {X, Y}
     if f === typeof(f24852_kernel)
         f2 = :f24852_kernel3
     elseif f === typeof(f24852_kernel3)
@@ -1847,20 +1866,8 @@ end
 
 @eval begin
     function f24852_late_expr(f, x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_expr, Any[:self, :f, :x, :y],
-                          Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), false))
-        $(Expr(:meta, :generated_only))
-        #= no body =#
-    end
-    function f24852_late_inflated(f, x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_cinfo_inflated, Any[:self, :f, :x, :y],
-                          Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), false))
-        $(Expr(:meta, :generated_only))
-        #= no body =#
-    end
-    function f24852_late_uninflated(f, x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_cinfo_uninflated, Any[:self, :f, :x, :y],
-                          Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), false))
+        $(_generated_stub(:f24852_gen_expr, Core.svec(:self, :f, :x, :y),
+                          Core.svec(:X, :Y), false))
         $(Expr(:meta, :generated_only))
         #= no body =#
     end
@@ -1868,20 +1875,18 @@ end
 
 @eval begin
     function f24852_early_expr(f, x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_expr, Any[:self, :f, :x, :y],
-                          Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), true))
+        $(_generated_stub(:f24852_gen_expr, Core.svec(:self, :f, :x, :y),
+                          Core.svec(:X, :Y), true))
         $(Expr(:meta, :generated_only))
         #= no body =#
     end
     function f24852_early_inflated(f, x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_cinfo_inflated, Any[:self, :f, :x, :y],
-                          Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), true))
+        $(Expr(:meta, :generated, f24852_gen_cinfo_inflated))
         $(Expr(:meta, :generated_only))
         #= no body =#
     end
     function f24852_early_uninflated(f, x::X, y::Y) where {X, Y}
-        $(_generated_stub(:f24852_gen_cinfo_uninflated, Any[:self, :f, :x, :y],
-                          Any[:X, :Y], @__LINE__, QuoteNode(Symbol(@__FILE__)), true))
+        $(Expr(:meta, :generated, f24852_gen_cinfo_uninflated))
         $(Expr(:meta, :generated_only))
         #= no body =#
     end
@@ -1892,10 +1897,6 @@ result = f24852_kernel(x, y)
 
 @test result === f24852_late_expr(f24852_kernel, x, y)
 @test Base.return_types(f24852_late_expr, typeof((f24852_kernel, x, y))) == Any[Any]
-@test result === f24852_late_uninflated(f24852_kernel, x, y)
-@test Base.return_types(f24852_late_uninflated, typeof((f24852_kernel, x, y))) == Any[Any]
-@test result === f24852_late_uninflated(f24852_kernel, x, y)
-@test Base.return_types(f24852_late_uninflated, typeof((f24852_kernel, x, y))) == Any[Any]
 
 @test result === f24852_early_expr(f24852_kernel, x, y)
 @test Base.return_types(f24852_early_expr, typeof((f24852_kernel, x, y))) == Any[Any]
@@ -1903,7 +1904,6 @@ result = f24852_kernel(x, y)
 @test Base.return_types(f24852_early_uninflated, typeof((f24852_kernel, x, y))) == Any[Any]
 @test result === @inferred f24852_early_inflated(f24852_kernel, x, y)
 @test Base.return_types(f24852_early_inflated, typeof((f24852_kernel, x, y))) == Any[Float64]
-
 # TODO: test that `expand_early = true` + inflated `method_for_inference_limit_heuristics`
 # can be used to tighten up some inference result.
 
@@ -2152,45 +2152,6 @@ end
 # =========================
 # `MustAlias` propagates constraints imposed on aliased fields
 
-import Core: MethodInstance, CodeInstance
-const CC = Core.Compiler
-import .CC: WorldRange, WorldView
-
-"""
-    @newinterp NewInterpreter
-
-Defines new `NewInterpreter <: AbstractInterpreter` whose cache is separated
-from the native code cache, satisfying the minimum interface requirements.
-"""
-macro newinterp(name)
-    cachename = Symbol(string(name, "Cache"))
-    name = esc(name)
-    quote
-        struct $cachename
-            dict::IdDict{MethodInstance,CodeInstance}
-        end
-        struct $name <: CC.AbstractInterpreter
-            interp::CC.NativeInterpreter
-            cache::$cachename
-            meta # additional information
-            $name(world = Base.get_world_counter();
-                interp = CC.NativeInterpreter(world),
-                cache = $cachename(IdDict{MethodInstance,CodeInstance}()),
-                meta = nothing,
-                ) = new(interp, cache, meta)
-        end
-        CC.InferenceParams(interp::$name) = CC.InferenceParams(interp.interp)
-        CC.OptimizationParams(interp::$name) = CC.OptimizationParams(interp.interp)
-        CC.get_world_counter(interp::$name) = CC.get_world_counter(interp.interp)
-        CC.get_inference_cache(interp::$name) = CC.get_inference_cache(interp.interp)
-        CC.code_cache(interp::$name) = WorldView(interp.cache, WorldRange(CC.get_world_counter(interp)))
-        CC.get(wvc::WorldView{<:$cachename}, mi::MethodInstance, default) = get(wvc.cache.dict, mi, default)
-        CC.getindex(wvc::WorldView{<:$cachename}, mi::MethodInstance) = getindex(wvc.cache.dict, mi)
-        CC.haskey(wvc::WorldView{<:$cachename}, mi::MethodInstance) = haskey(wvc.cache.dict, mi)
-        CC.setindex!(wvc::WorldView{<:$cachename}, ci::CodeInstance, mi::MethodInstance) = setindex!(wvc.cache.dict, ci, mi)
-    end
-end
-
 struct AliasableField{T}
     f::T
 end
@@ -2203,18 +2164,20 @@ mutable struct AliasableConstField{S,T}
     f2::T
 end
 
+import Core.Compiler:
+    InferenceLattice, OptimizerLattice, MustAliasesLattice, InterMustAliasesLattice,
+    BaseInferenceLattice, IPOResultLattice, typeinf_lattice, ipo_lattice, optimizer_lattice
+
+include("newinterp.jl")
+@newinterp MustAliasInterpreter
+let CC = Core.Compiler
+    CC.typeinf_lattice(::MustAliasInterpreter) = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance))
+    CC.ipo_lattice(::MustAliasInterpreter) = InferenceLattice(InterMustAliasesLattice(IPOResultLattice.instance))
+    CC.optimizer_lattice(::MustAliasInterpreter) = OptimizerLattice()
+end
+
 # lattice
 # -------
-
-import Core.Compiler:
-    AbstractLattice, ConstsLattice, PartialsLattice, InferenceLattice, OptimizerLattice,
-    MustAliasesLattice, InterMustAliasesLattice, BaseInferenceLattice, IPOResultLattice,
-    typeinf_lattice, ipo_lattice, optimizer_lattice
-
-@newinterp MustAliasInterpreter
-CC.typeinf_lattice(::MustAliasInterpreter) = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance))
-CC.ipo_lattice(::MustAliasInterpreter) = InferenceLattice(InterMustAliasesLattice(IPOResultLattice.instance))
-CC.optimizer_lattice(::MustAliasInterpreter) = OptimizerLattice()
 
 import Core.Compiler: MustAlias, Const, PartialStruct, ⊑, tmerge
 let 𝕃ᵢ = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance))
@@ -2432,6 +2395,20 @@ from_interconditional_check22(::Union{Int,String}, y) = isa(y, Int)
     end
     return 0
 end |> only === Int
+
+# prioritize constraints on slot objects
+# https://github.com/aviatesk/JET.jl/issues/509
+struct JET509
+    list::Union{Tuple{},Vector{Int}}
+end
+jet509_hasitems(list) = length(list) >= 1
+@test Base.return_types((JET509,); interp=MustAliasInterpreter()) do ilist::JET509
+    list = ilist.list
+    if jet509_hasitems(list)
+        return list
+    end
+    error("list is empty")
+end |> only == Vector{Int}
 
 # === constraint
 # --------------
@@ -2684,14 +2661,24 @@ end |> only === Int
 # https://github.com/JuliaLang/julia/issues/47089
 import Core: Const
 import Core.Compiler: apply_type_tfunc
-struct Issue47089{A,B} end
+struct Issue47089{A<:Number,B<:Number} end
 let 𝕃 = Core.Compiler.fallback_lattice
     A = Type{<:Integer}
     @test apply_type_tfunc(𝕃, Const(Issue47089), A, A) <: (Type{Issue47089{A,B}} where {A<:Integer, B<:Integer})
+    @test apply_type_tfunc(𝕃, Const(Issue47089), Const(Int), Const(Int), Const(Int)) === Union{}
+    @test apply_type_tfunc(𝕃, Const(Issue47089), Const(String)) === Union{}
+    @test apply_type_tfunc(𝕃, Const(Issue47089), Const(AbstractString)) === Union{}
+    @test apply_type_tfunc(𝕃, Const(Issue47089), Type{Ptr}, Type{Ptr{T}} where T) === Base.rewrap_unionall(Type{Issue47089.body.body}, Issue47089)
+    # check complexity size limiting
+    @test apply_type_tfunc(𝕃, Const(Val), Type{Pair{Pair{Pair{Pair{A,B},C},D},E}} where {A,B,C,D,E}) == Type{Val{Pair{A, B}}} where {A, B}
+    @test apply_type_tfunc(𝕃, Const(Pair), Base.rewrap_unionall(Type{Pair.body.body},Pair), Type{Pair{Pair{Pair{Pair{A,B},C},D},E}} where {A,B,C,D,E}) == Type{Pair{Pair{A, B}, Pair{C, D}}} where {A, B, C, D}
+    @test apply_type_tfunc(𝕃, Const(Val), Type{Union{Int,Pair{Pair{Pair{Pair{A,B},C},D},E}}} where {A,B,C,D,E}) == Type{Val{_A}} where _A
 end
 @test only(Base.return_types(keys, (Dict{String},))) == Base.KeySet{String, T} where T<:(Dict{String})
 @test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{Int}},))) == Vector{<:Array{Int}}
 @test only(Base.return_types((r)->similar(Array{typeof(r[])}, 1), (Base.RefValue{Array{<:Real}},))) == Vector{<:Array{<:Real}}
+# test complexity limit on apply_type on a function capturing functions returning functions
+@test only(Base.return_types(Base.afoldl, (typeof((m, n) -> () -> Returns(nothing)(m, n)), Function, Function, Vararg{Function}))) === Function
 
 let A = Tuple{A,B,C,D,E,F,G,H} where {A,B,C,D,E,F,G,H}
     B = Core.Compiler.rename_unionall(A)
@@ -2981,11 +2968,11 @@ end
 # issue #28356
 # unit test to make sure countunionsplit overflows gracefully
 # we don't care what number is returned as long as it's large
-@test Core.Compiler.unionsplitcost(Any[Union{Int32, Int64} for i=1:80]) > 100000
-@test Core.Compiler.unionsplitcost(Any[Union{Int8, Int16, Int32, Int64}]) == 2
-@test Core.Compiler.unionsplitcost(Any[Union{Int8, Int16, Int32, Int64}, Union{Int8, Int16, Int32, Int64}, Int8]) == 8
-@test Core.Compiler.unionsplitcost(Any[Union{Int8, Int16, Int32, Int64}, Union{Int8, Int16, Int32}, Int8]) == 6
-@test Core.Compiler.unionsplitcost(Any[Union{Int8, Int16, Int32}, Union{Int8, Int16, Int32, Int64}, Int8]) == 6
+@test Core.Compiler.unionsplitcost(Core.Compiler.JLTypeLattice(), Any[Union{Int32, Int64} for i=1:80]) > 100000
+@test Core.Compiler.unionsplitcost(Core.Compiler.JLTypeLattice(), Any[Union{Int8, Int16, Int32, Int64}]) == 2
+@test Core.Compiler.unionsplitcost(Core.Compiler.JLTypeLattice(), Any[Union{Int8, Int16, Int32, Int64}, Union{Int8, Int16, Int32, Int64}, Int8]) == 8
+@test Core.Compiler.unionsplitcost(Core.Compiler.JLTypeLattice(), Any[Union{Int8, Int16, Int32, Int64}, Union{Int8, Int16, Int32}, Int8]) == 6
+@test Core.Compiler.unionsplitcost(Core.Compiler.JLTypeLattice(), Any[Union{Int8, Int16, Int32}, Union{Int8, Int16, Int32, Int64}, Int8]) == 6
 
 # make sure compiler doesn't hang in union splitting
 
@@ -3817,7 +3804,7 @@ end
             end
         end
     end
-    @test occursin("thunk from $(@__MODULE__) starting at $(@__FILE__):$((@__LINE__) - 5)", string(timingmod.children))
+    @test occursin("thunk from $(@__MODULE__) starting at $(@__FILE__):$((@__LINE__) - 6)", string(timingmod.children))
     # END LINE NUMBER SENSITIVITY
 
     # Recursive function
@@ -3986,13 +3973,13 @@ end
 
     # argtypes
     let
-        tunion = Core.Compiler.switchtupleunion(Any[Union{Int32,Int64}, Core.Const(nothing)])
+        tunion = Core.Compiler.switchtupleunion(Core.Compiler.ConstsLattice(), Any[Union{Int32,Int64}, Core.Const(nothing)])
         @test length(tunion) == 2
         @test Any[Int32, Core.Const(nothing)] in tunion
         @test Any[Int64, Core.Const(nothing)] in tunion
     end
     let
-        tunion = Core.Compiler.switchtupleunion(Any[Union{Int32,Int64}, Union{Float32,Float64}, Core.Const(nothing)])
+        tunion = Core.Compiler.switchtupleunion(Core.Compiler.ConstsLattice(), Any[Union{Int32,Int64}, Union{Float32,Float64}, Core.Const(nothing)])
         @test length(tunion) == 4
         @test Any[Int32, Float32, Core.Const(nothing)] in tunion
         @test Any[Int32, Float64, Core.Const(nothing)] in tunion
@@ -4125,26 +4112,24 @@ function f_convert_me_to_ir(b, x)
     return a
 end
 
-let
-    # Test the presence of PhiNodes in lowered IR by taking the above function,
+let # Test the presence of PhiNodes in lowered IR by taking the above function,
     # running it through SSA conversion and then putting it into an opaque
     # closure.
     mi = Core.Compiler.specialize_method(first(methods(f_convert_me_to_ir)),
         Tuple{Bool, Float64}, Core.svec())
     ci = Base.uncompressed_ast(mi.def)
+    ci.slottypes = Any[ Any for i = 1:length(ci.slotflags) ]
     ci.ssavaluetypes = Any[Any for i = 1:ci.ssavaluetypes]
-    sv = Core.Compiler.OptimizationState(mi, Core.Compiler.OptimizationParams(),
-        Core.Compiler.NativeInterpreter())
+    sv = Core.Compiler.OptimizationState(mi, Core.Compiler.NativeInterpreter())
     ir = Core.Compiler.convert_to_ircode(ci, sv)
     ir = Core.Compiler.slot2reg(ir, ci, sv)
     ir = Core.Compiler.compact!(ir)
-    Core.Compiler.replace_code_newstyle!(ci, ir, 4)
-    ci.ssavaluetypes = length(ci.code)
+    Core.Compiler.replace_code_newstyle!(ci, ir)
+    ci.ssavaluetypes = length(ci.ssavaluetypes)
     @test any(x->isa(x, Core.PhiNode), ci.code)
     oc = @eval b->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any,
         Expr(:opaque_closure_method, nothing, 2, false, LineNumberNode(0, nothing), ci)))(b, 1.0)
     @test Base.return_types(oc, Tuple{Bool}) == Any[Float64]
-
     oc = @eval ()->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any,
         Expr(:opaque_closure_method, nothing, 2, false, LineNumberNode(0, nothing), ci)))(true, 1.0)
     @test Base.return_types(oc, Tuple{}) == Any[Float64]
@@ -4181,6 +4166,102 @@ Base.getproperty(x::Interface41024Extended, sym::Symbol) =
 @test Base.return_types((Interface41024Extended,)) do x
     x.x
 end |> only === Int
+
+function call_func_itr(func, itr)
+    local r = 0
+    r += func(itr[1])
+    r += func(itr[2])
+    r += func(itr[3])
+    r += func(itr[4])
+    r += func(itr[5])
+    r
+end
+
+global inline_checker = c -> c # untyped global, a call of this func will prevent inlining
+# if `f` is inlined, `GlobalRef(m, :inline_checker)` should appear within the body of `invokef`
+function is_inline_checker(@nospecialize stmt)
+    isa(stmt, GlobalRef) && stmt.name === :inline_checker
+end
+
+function func_nospecialized(@nospecialize a)
+    c = isa(a, Function)
+    inline_checker(c) # dynamic dispatch, preventing inlining
+end
+
+@inline function func_nospecialized_inline(@nospecialize a)
+    c = isa(a, Function)
+    inline_checker(c) # dynamic dispatch, preventing inlining (but forced by the annotation)
+end
+
+Base.@nospecializeinfer function func_nospecializeinfer(@nospecialize a)
+    c = isa(a, Function)
+    inline_checker(c) # dynamic dispatch, preventing inlining
+end
+
+Base.@nospecializeinfer @inline function func_nospecializeinfer_inline(@nospecialize a)
+    c = isa(a, Function)
+    inline_checker(c) # dynamic dispatch, preventing inlining (but forced by the annotation)
+end
+
+Base.@nospecializeinfer Base.@constprop :aggressive function func_nospecializeinfer_constprop(c::Bool, @nospecialize a)
+    if c
+        return inline_checker(a) # dynamic dispatch, preventing inlining/constprop (but forced by the annotation)
+    end
+    return false
+end
+Base.@nospecializeinfer func_nospecializeinfer_constprop(@nospecialize a) = func_nospecializeinfer_constprop(false, a)
+
+itr_dispatchonly = Any[sin, muladd, "foo", nothing, missing]   # untyped container can cause excessive runtime dispatch
+itr_withinfernce = tuple(sin, muladd, "foo", nothing, missing) # typed container can cause excessive inference
+
+@testset "compilation annotations" begin
+    @testset "@nospecialize" begin
+        # `@nospecialize` should suppress runtime dispatches of `nospecialize`
+        @test call_func_itr(func_nospecialized, itr_dispatchonly) == 2
+        @test length(Base.specializations(only(methods((func_nospecialized))))) == 1
+        # `@nospecialize` should allow inference to happen
+        @test call_func_itr(func_nospecialized, itr_withinfernce) == 2
+        @test length(Base.specializations(only(methods((func_nospecialized))))) == 6
+        @test count(is_inline_checker, @get_code call_func_itr(func_nospecialized, itr_dispatchonly)) == 0
+
+        # `@nospecialize` should allow inlinining
+        @test call_func_itr(func_nospecialized_inline, itr_dispatchonly) == 2
+        @test length(Base.specializations(only(methods((func_nospecialized_inline))))) == 1
+        @test call_func_itr(func_nospecialized_inline, itr_withinfernce) == 2
+        @test length(Base.specializations(only(methods((func_nospecialized_inline))))) == 6
+        @test count(is_inline_checker, @get_code call_func_itr(func_nospecialized_inline, itr_dispatchonly)) == 5
+    end
+
+    @testset "@nospecializeinfer" begin
+        # `@nospecialize` should suppress runtime dispatches of `nospecialize`
+        @test call_func_itr(func_nospecializeinfer, itr_dispatchonly) == 2
+        @test length(Base.specializations(only(methods((func_nospecializeinfer))))) == 1
+        # `@nospecializeinfer` suppresses inference also
+        @test call_func_itr(func_nospecializeinfer, itr_withinfernce) == 2
+        @test length(Base.specializations(only(methods((func_nospecializeinfer))))) == 1
+        @test !any(is_inline_checker, @get_code call_func_itr(func_nospecializeinfer, itr_dispatchonly))
+
+        # `@nospecializeinfer` should allow inlinining
+        @test call_func_itr(func_nospecializeinfer_inline, itr_dispatchonly) == 2
+        @test length(Base.specializations(only(methods((func_nospecializeinfer_inline))))) == 1
+        @test call_func_itr(func_nospecializeinfer_inline, itr_withinfernce) == 2
+        @test length(Base.specializations(only(methods((func_nospecializeinfer_inline))))) == 1
+        @test any(is_inline_checker, @get_code call_func_itr(func_nospecializeinfer_inline, itr_dispatchonly))
+
+        # `@nospecializeinfer` should allow constprop
+        @test Base.return_types((Any,)) do x
+            Val(func_nospecializeinfer_constprop(x))
+        end |> only == Val{false}
+        @test call_func_itr(func_nospecializeinfer_constprop, itr_dispatchonly) == 0
+        for m = methods(func_nospecializeinfer_constprop)
+            @test length(Base.specializations(m)) == 1
+        end
+        @test call_func_itr(func_nospecializeinfer_constprop, itr_withinfernce) == 0
+        for m = methods(func_nospecializeinfer_constprop)
+            @test length(Base.specializations(m)) == 1
+        end
+    end
+end
 
 @testset "fieldtype for unions" begin # e.g. issue #40177
     f40177(::Type{T}) where {T} = fieldtype(T, 1)
@@ -4426,18 +4507,18 @@ end
 
     init = Base.ImmutableDict{Number,Number}()
     a = Const(init)
-    b = Core.PartialStruct(typeof(init), Any[Const(init), Any, ComplexF64])
+    b = Core.Compiler.PartialStruct(typeof(init), Any[Const(init), Any, ComplexF64])
     c = Core.Compiler.tmerge(a, b)
     @test ⊑(a, c) && ⊑(b, c)
     @test c === typeof(init)
 
-    a = Core.PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
+    a = Core.Compiler.PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
     c = Core.Compiler.tmerge(a, b)
     @test ⊑(a, c) && ⊑(b, c)
     @test c.fields[2] === Any # or Number
     @test c.fields[3] === ComplexF64
 
-    b = Core.PartialStruct(typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
+    b = Core.Compiler.PartialStruct(typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
     c = Core.Compiler.tmerge(a, b)
     @test ⊑(a, c)
     @test ⊑(b, c)
@@ -4479,12 +4560,23 @@ end
     Core.Compiler.return_type(+, NTuple{2, Rational})
 end == Rational
 
-# vararg-tuple comparison within `PartialStruct`
+# vararg-tuple comparison within `Compiler.PartialStruct`
 # https://github.com/JuliaLang/julia/issues/44965
 let 𝕃ᵢ = Core.Compiler.fallback_lattice
-    t = Core.Compiler.tuple_tfunc(𝕃ᵢ, Any[Core.Const(42), Vararg{Any}])
+    t = Core.Compiler.tuple_tfunc(𝕃ᵢ, Any[Const(42), Vararg{Any}])
     @test Core.Compiler.issimplertype(𝕃ᵢ, t, t)
+
+    t = Core.Compiler.tuple_tfunc(𝕃ᵢ, Any[Const(42), Vararg{Union{}}])
+    @test t === Const((42,))
+    t = Core.Compiler.tuple_tfunc(𝕃ᵢ, Any[Const(42), Int, Vararg{Union{}}])
+    @test t.typ === Tuple{Int, Int}
+    @test t.fields == Any[Const(42), Int]
 end
+
+foo_empty_vararg(i...) = i[2]
+bar_empty_vararg(i) = foo_empty_vararg(10, 20, 30, i...)
+@test bar_empty_vararg(Union{}[]) === 20
+
 
 # check the inference convergence with an empty vartable:
 # the inference state for the toplevel chunk below will have an empty vartable,
@@ -4718,6 +4810,26 @@ unknown_sparam_nothrow2(x::Ref{Ref{T}}) where T = @isdefined(T) ? T::Type : noth
 @test only(Base.return_types(unknown_sparam_nothrow1, (Ref,))) === Type
 @test only(Base.return_types(unknown_sparam_nothrow2, (Ref{Ref{T}} where T,))) === Type
 
+struct Issue49027{Ty<:Number}
+    x::Ty
+end
+function issue49027(::Type{<:Issue49027{Ty}}) where Ty
+    if @isdefined Ty # should be false when `Ty` is given as a free type var.
+        return Ty::DataType
+    end
+    return nothing
+end
+@test only(Base.return_types(issue49027, (Type{Issue49027{TypeVar(:Ty)}},))) >: Nothing
+@test isnothing(issue49027(Issue49027{TypeVar(:Ty)}))
+function issue49027_integer(::Type{<:Issue49027{Ty}}) where Ty<:Integer
+    if @isdefined Ty # should be false when `Ty` is given as a free type var.
+        return Ty::DataType
+    end
+    nothing
+end
+@test only(Base.return_types(issue49027_integer, (Type{Issue49027{TypeVar(:Ty,Int)}},))) >: Nothing
+@test isnothing(issue49027_integer(Issue49027{TypeVar(:Ty,Int)}))
+
 function fapplicable end
 gapplicable() = Val(applicable(fapplicable))
 gapplicable(x) = Val(applicable(fapplicable; x))
@@ -4774,3 +4886,138 @@ fhasmethod(::Integer, ::Int32) = 3
 @test only(Base.return_types(()) do; Val(hasmethod(tuple, Tuple{Vararg{Int}})); end) === Val{true}
 @test only(Base.return_types(()) do; Val(hasmethod(sin, Tuple{Int, Vararg{Int}})); end) == Val{false}
 @test only(Base.return_types(()) do; Val(hasmethod(sin, Tuple{Int, Int, Vararg{Int}})); end) === Val{false}
+
+# interprocedural call inference from irinterp
+@noinline Base.@assume_effects :total issue48679_unknown_any(x) = Base.inferencebarrier(x)
+
+@noinline _issue48679(y::Union{Nothing,T}) where {T} = T::Type
+Base.@constprop :aggressive function issue48679(x, b)
+    if b
+        x = issue48679_unknown_any(x)
+    end
+    return _issue48679(x)
+end
+@test Base.return_types((Float64,)) do x
+    issue48679(x, false)
+end |> only == Type{Float64}
+
+Base.@constprop :aggressive @noinline _issue48679_const(b, y::Union{Nothing,T}) where {T} = b ? nothing : T::Type
+Base.@constprop :aggressive function issue48679_const(x, b)
+    if b
+        x = issue48679_unknown_any(x)
+    end
+    return _issue48679_const(b, x)
+end
+@test Base.return_types((Float64,)) do x
+    issue48679_const(x, false)
+end |> only == Type{Float64}
+
+# `invoke` call in irinterp
+@noinline _irinterp_invoke(x::Any) = :any
+@noinline _irinterp_invoke(x::T) where T = T
+Base.@constprop :aggressive Base.@assume_effects :foldable function irinterp_invoke(x::T, b) where T
+    return @invoke _irinterp_invoke(x::(b ? T : Any))
+end
+@test Base.return_types((Int,)) do x
+    irinterp_invoke(x, true)
+end |> only == Type{Int}
+
+# recursion detection for semi-concrete interpretation
+# avoid direct infinite loop via `concrete_eval_invoke`
+Base.@assume_effects :foldable function recur_irinterp1(x, y)
+    if rand(Bool)
+        return x, y
+    end
+    return recur_irinterp1(x+1, y)
+end
+@test Base.return_types((Symbol,)) do y
+    recur_irinterp1(0, y)
+end |> only === Tuple{Int,Symbol}
+@test last(recur_irinterp1(0, :y)) === :y
+# avoid indirect infinite loop via `concrete_eval_invoke`
+Base.@assume_effects :foldable function recur_irinterp2(x, y)
+    if rand(Bool)
+        return x, y
+    end
+    return _recur_irinterp2(x+1, y)
+end
+Base.@assume_effects :foldable _recur_irinterp2(x, y) = @noinline recur_irinterp2(x, y)
+@test Base.return_types((Symbol,)) do y
+    recur_irinterp2(0, y)
+end |> only === Tuple{Int,Symbol}
+@test last(recur_irinterp2(0, :y)) === :y
+
+# test Conditional Union splitting of info derived from fieldtype (e.g. in abstract setproperty! handling)
+@test only(Base.return_types((Int, Pair{Int,Nothing}, Symbol)) do a, x, s
+    T = fieldtype(typeof(x), s)
+    if a isa T
+        throw(a)
+    else
+        return T
+    end
+end) == Type{Nothing}
+
+# Test that Core.Compiler.return_type inference works for the 1-arg version
+@test Base.return_types() do
+    Core.Compiler.return_type(Tuple{typeof(+), Int, Int})
+end |> only == Type{Int}
+
+# Test that NamedTuple abstract iteration works for PartialStruct/Const
+function nt_splat_const()
+    nt = (; x=1, y=2)
+    Val{tuple(nt...)[2]}()
+end
+@test @inferred(nt_splat_const()) == Val{2}()
+
+function nt_splat_partial(x::Int)
+    nt = (; x, y=2)
+    Val{tuple(nt...)[2]}()
+end
+@test @inferred(nt_splat_partial(42)) == Val{2}()
+
+# Test that irinterp refines based on discovered errors
+Base.@assume_effects :foldable Base.@constprop :aggressive function kill_error_edge(b1, b2, xs, x)
+    y = b1 ? "julia" : xs[]
+    if b2
+        a = length(y)
+    else
+        a = sin(y)
+    end
+    a + x
+end
+
+Base.@assume_effects :foldable Base.@constprop :aggressive function kill_error_edge(b1, b2, xs, ys, x)
+    y = b1 ? xs[] : ys[]
+    if b2
+        a = length(y)
+    else
+        a = sin(y)
+    end
+    a + x
+end
+
+let src = code_typed1((Bool,Base.RefValue{Any},Int,)) do b2, xs, x
+        kill_error_edge(true, b2, xs, x)
+    end
+    @test count(@nospecialize(x)->isa(x, Core.PhiNode), src.code) == 0
+end
+
+let src = code_typed1((Bool,Base.RefValue{String}, Base.RefValue{Any},Int,)) do b2, xs, ys, x
+        kill_error_edge(true, b2, xs, ys, x)
+    end
+    @test count(@nospecialize(x)->isa(x, Core.PhiNode), src.code) == 0
+end
+
+struct Issue49785{S, T<:S} end
+let 𝕃 = Core.Compiler.OptimizerLattice()
+    argtypes = Any[Core.Compiler.Const(Issue49785),
+        Union{Type{String},Type{Int}},
+        Union{Type{String},Type{Int}}]
+    rt = Type{Issue49785{<:Any, Int}}
+    # the following should not throw
+    @test !Core.Compiler.apply_type_nothrow(𝕃, argtypes, rt)
+    @test code_typed() do
+        S = Union{Type{String},Type{Int}}[Int][1]
+        map(T -> Issue49785{S,T}, (a = S,))
+    end isa Vector
+end

@@ -36,6 +36,7 @@ julia> parse(Complex{Float64}, "3.2e-1 + 4.5im")
 ```
 """
 parse(T::Type, str; base = Int)
+parse(::Type{Union{}}, slurp...; kwargs...) = error("cannot parse a value as Union{}")
 
 function parse(::Type{T}, c::AbstractChar; base::Integer = 10) where T<:Integer
     a::Int = (base <= 36 ? 10 : 36)
@@ -209,9 +210,11 @@ function tryparse_internal(::Type{Bool}, sbuff::AbstractString,
     len = endpos - startpos + 1
     if sbuff isa Union{String, SubString{String}}
         p = pointer(sbuff) + startpos - 1
-        GC.@preserve sbuff begin
-            (len == 4) && (0 == _memcmp(p, "true", 4)) && (return true)
-            (len == 5) && (0 == _memcmp(p, "false", 5)) && (return false)
+        truestr = "true"
+        falsestr = "false"
+        GC.@preserve sbuff truestr falsestr begin
+            (len == 4) && (0 == memcmp(p, unsafe_convert(Ptr{UInt8}, truestr), 4)) && (return true)
+            (len == 5) && (0 == memcmp(p, unsafe_convert(Ptr{UInt8}, falsestr), 5)) && (return false)
         end
     else
         (len == 4) && (SubString(sbuff, startpos:startpos+3) == "true") && (return true)
@@ -251,6 +254,7 @@ function parse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = noth
     convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s),
                                  base===nothing ? 0 : check_valid_base(base), true))
 end
+tryparse(::Type{Union{}}, slurp...; kwargs...) = error("cannot parse a value as Union{}")
 
 ## string to float functions ##
 

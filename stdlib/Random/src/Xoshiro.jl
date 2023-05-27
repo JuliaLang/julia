@@ -113,12 +113,17 @@ struct TaskLocalRNG <: AbstractRNG end
 TaskLocalRNG(::Nothing) = TaskLocalRNG()
 rng_native_52(::TaskLocalRNG) = UInt64
 
-function setstate!(x::TaskLocalRNG, s0::UInt64, s1::UInt64, s2::UInt64, s3::UInt64)
+function setstate!(
+    x::TaskLocalRNG,
+    s0::UInt64, s1::UInt64, s2::UInt64, s3::UInt64, # xoshiro256 state
+    s4::UInt64 = 1s0 + 3s1 + 5s2 + 7s3, # internal splitmix state
+)
     t = current_task()
     t.rngState0 = s0
     t.rngState1 = s1
     t.rngState2 = s2
     t.rngState3 = s3
+    t.rngState4 = s4
     x
 end
 
@@ -128,11 +133,11 @@ end
     tmp = s0 + s3
     res = ((tmp << 23) | (tmp >> 41)) + s0
     t = s1 << 17
-    s2 = xor(s2, s0)
-    s3 = xor(s3, s1)
-    s1 = xor(s1, s2)
-    s0 = xor(s0, s3)
-    s2 = xor(s2, t)
+    s2 ⊻= s0
+    s3 ⊻= s1
+    s1 ⊻= s2
+    s0 ⊻= s3
+    s2 ⊻= t
     s3 = s3 << 45 | s3 >> 19
     task.rngState0, task.rngState1, task.rngState2, task.rngState3 = s0, s1, s2, s3
     res
@@ -159,7 +164,7 @@ seed!(rng::Union{TaskLocalRNG, Xoshiro}, seed::Integer) = seed!(rng, make_seed(s
 @inline function rand(rng::Union{TaskLocalRNG, Xoshiro}, ::SamplerType{UInt128})
     first = rand(rng, UInt64)
     second = rand(rng,UInt64)
-    second + UInt128(first)<<64
+    second + UInt128(first) << 64
 end
 
 @inline rand(rng::Union{TaskLocalRNG, Xoshiro}, ::SamplerType{Int128}) = rand(rng, UInt128) % Int128
@@ -178,14 +183,14 @@ end
 
 function copy!(dst::TaskLocalRNG, src::Xoshiro)
     t = current_task()
-    t.rngState0, t.rngState1, t.rngState2, t.rngState3 = src.s0, src.s1, src.s2, src.s3
-    dst
+    setstate!(dst, src.s0, src.s1, src.s2, src.s3)
+    return dst
 end
 
 function copy!(dst::Xoshiro, src::TaskLocalRNG)
     t = current_task()
-    dst.s0, dst.s1, dst.s2, dst.s3 = t.rngState0, t.rngState1, t.rngState2, t.rngState3
-    dst
+    setstate!(dst, t.rngState0, t.rngState1, t.rngState2, t.rngState3)
+    return dst
 end
 
 function ==(a::Xoshiro, b::TaskLocalRNG)
