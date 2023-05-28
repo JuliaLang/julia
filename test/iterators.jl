@@ -1001,7 +1001,7 @@ end
     end
     @test v == ()
 
-            @testset "Unfold" begin
+@testset "Unfold" begin
     @test isempty(Iterators.unfold(identity, nothing))
 
     unfold61 = Iterators.unfold(1) do x
