@@ -1002,7 +1002,7 @@ function setup_interface(
         on_enter = return_callback)
 
     # Setup help mode
-    help_mode = Prompt(contextual_prompt(repl, "help?> "),
+    help_mode = Prompt(contextual_prompt(repl, HELP_PROMPT),
         prompt_prefix = hascolor ? repl.help_color : "",
         prompt_suffix = hascolor ?
             (repl.envcolors ? Base.input_color : repl.input_color) : "",
