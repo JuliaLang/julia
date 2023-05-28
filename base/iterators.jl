@@ -1594,7 +1594,7 @@ julia> [count(Returns(true), frac(-0.835-0.2321im, (k+j*im)/6)) for j in -4:4, k
 
 The interface for `f` is very similar to the interface required by `iterate`, but `unfold` is simpler to use because it does not require you to define a type. You can use this to your advantage when prototyping or writing one-off iterators.
 
-You may want to define an iterator type instead if you'd like to define `IteratorSize` or `IteratorEltype`; for readability; or if you want to dispatch on the type of your iterator.
+You may want to define an iterator type instead if you'd like to define `IteratorSize`; or for readability; or if you want to dispatch on the type of your iterator.
 
 `unfold` is related to a `while` loop because:
 ```julia
