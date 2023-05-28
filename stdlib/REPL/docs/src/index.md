@@ -623,6 +623,7 @@ It is possible to get an interface which is similar to the IPython REPL and the 
 
 ```julia
 atreplinit() do repl
+    @eval import REPL
     if !isdefined(repl, :interface)
         repl.interface = REPL.setup_interface(repl)
     end
@@ -644,6 +645,13 @@ Out[3]: Dict{Int64, Any} with 2 entries:
   2 => 13
   1 => 8
 ```
+
+!!! note
+    Since all outputs from previous REPL evaluations are saved in the `Out` variable, one should be careful if they are returning many
+    large in-memory objects like arrays, since they will be protected from garbage collection so long as a reference to them remains in
+    `Out`. If you need to remove references to objects in `Out`, you can clear the entire history it stores with `empty!(Out)`, or clear
+    an individual entry with `Out[n] = nothing`.
+
 
 ## TerminalMenus
 
