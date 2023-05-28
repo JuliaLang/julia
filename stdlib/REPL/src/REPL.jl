@@ -74,10 +74,10 @@ include("docview.jl")
 
 answer_color(::AbstractREPL) = ""
 
-const JULIA_PROMPT = "julia> "
+const JULIA_PROMPT = "żbik> "
 const PKG_PROMPT = "pkg> "
 const SHELL_PROMPT = "shell> "
-const HELP_PROMPT = "help?> "
+const HELP_PROMPT = "zapytaj bartka> "
 
 mutable struct REPLBackend
     "channel for AST"

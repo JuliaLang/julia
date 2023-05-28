@@ -178,10 +178,10 @@ if Libdl !== nothing
 end
 
 
-const JULIA_PROMPT = "julia> "
+const JULIA_PROMPT = "żbik> "
 const PKG_PROMPT = "pkg> "
 const SHELL_PROMPT = "shell> "
-const HELP_PROMPT = "help?> "
+const HELP_PROMPT = "zapytaj bartka> "
 
 # Printing the current state
 let
