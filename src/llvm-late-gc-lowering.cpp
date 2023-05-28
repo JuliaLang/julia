@@ -1262,6 +1262,7 @@ static bool isLoadFromConstGV(LoadInst *LI, bool &task_local, PhiSet *seen)
     // We only emit single slot GV in codegen
     // but LLVM global merging can change the pointer operands to GEPs/bitcasts
     auto load_base = LI->getPointerOperand()->stripInBoundsOffsets();
+    assert(load_base); // Static analyzer
     auto gv = dyn_cast<GlobalVariable>(load_base);
     if (isTBAA(LI->getMetadata(LLVMContext::MD_tbaa),
                {"jtbaa_immut", "jtbaa_const", "jtbaa_datatype"})) {
@@ -2792,7 +2793,8 @@ Pass *createLateLowerGCFramePass() {
     return new LateLowerGCFrameLegacy();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddLateLowerGCFramePass_impl(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddLateLowerGCFramePass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createLateLowerGCFramePass());
 }

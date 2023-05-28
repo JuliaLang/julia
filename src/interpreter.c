@@ -698,7 +698,7 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     return r;
 }
 
-JL_DLLEXPORT jl_callptr_t jl_fptr_interpret_call_addr = &jl_fptr_interpret_call;
+JL_DLLEXPORT const jl_callptr_t jl_fptr_interpret_call_addr = &jl_fptr_interpret_call;
 
 jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
 {

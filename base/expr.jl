@@ -342,7 +342,6 @@ macro noinline(x)
     return annotate_meta_def_or_block(x, :noinline)
 end
 
-
 """
     @constprop setting [ex]
 
@@ -512,6 +511,13 @@ The `:consistent` setting asserts that for egal (`===`) inputs:
     because the optimizer may rewrite them causing the output to not be `:consistent`,
     even for the same world age (e.g. because one ran in the interpreter, while
     the other was optimized).
+
+!!! note
+    The `:consistent`-cy assertion currrently includes the assertion that the function
+    will not execute any undefined behavior (for any input). Note that undefined behavior
+    may technically cause the function to violate other effect assertions (such as
+    `:nothrow` or `:effect_free`) as well, but we do not model this, and all effects
+    except `:consistent` assume the absence of undefined behavior.
 
 !!! note
     If `:consistent` functions terminate by throwing an exception, that exception
@@ -754,6 +760,44 @@ function compute_assumed_setting(@nospecialize(setting), val::Bool=true)
     else
         return (setting, val)
     end
+end
+
+"""
+    Base.@nospecializeinfer function f(args...)
+        @nospecialize ...
+        ...
+    end
+    Base.@nospecializeinfer f(@nospecialize args...) = ...
+
+Tells the compiler to infer `f` using the declared types of `@nospecialize`d arguments.
+This can be used to limit the number of compiler-generated specializations during inference.
+
+# Example
+
+```julia
+julia> f(A::AbstractArray) = g(A)
+f (generic function with 1 method)
+
+julia> @noinline Base.@nospecializeinfer g(@nospecialize(A::AbstractArray)) = A[1]
+g (generic function with 1 method)
+
+julia> @code_typed f([1.0])
+CodeInfo(
+1 ─ %1 = invoke Main.g(_2::AbstractArray)::Any
+└──      return %1
+) => Any
+```
+
+In this example, `f` will be inferred for each specific type of `A`,
+but `g` will only be inferred once with the declared argument type `A::AbstractArray`,
+meaning that the compiler will not likely see the excessive inference time on it
+while it can not infer the concrete return type of it.
+Without the `@nospecializeinfer`, `f([1.0])` would infer the return type of `g` as `Float64`,
+indicating that inference ran for `g(::Vector{Float64})` despite the prohibition on
+specialized code generation.
+"""
+macro nospecializeinfer(ex)
+    esc(isa(ex, Expr) ? pushmeta!(ex, :nospecializeinfer) : ex)
 end
 
 """

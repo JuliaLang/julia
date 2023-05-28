@@ -547,7 +547,7 @@ let
 end
 
 # code_typed_by_type
-@test Base.code_typed_by_type(Tuple{Type{<:Val}})[1][2] == Val
+@test Base.code_typed_by_type(Tuple{Type{<:Val}})[2][2] == Val
 @test Base.code_typed_by_type(Tuple{typeof(sin), Float64})[1][2] === Float64
 
 # New reflection methods in 0.6
@@ -909,10 +909,9 @@ _test_at_locals2(1,1,0.5f0)
     f31687_parent() = f31687_child(0)
     params = Base.CodegenParams()
     _dump_function(f31687_parent, Tuple{},
-                   #=native=#false, #=wrapper=#false, #=strip=#false,
+                   #=native=#false, #=wrapper=#false, #=raw=#true,
                    #=dump_module=#true, #=syntax=#:att, #=optimize=#false, :none,
-                   #=binary=#false,
-                   params)
+                   #=binary=#false)
 end
 
 @test nameof(Any) === :Any

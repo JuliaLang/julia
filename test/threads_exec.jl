@@ -1070,4 +1070,24 @@ end
     end
 end
 
+# issue #49746, thread safety in `atexit(f)`
+@testset "atexit thread safety" begin
+    f = () -> nothing
+    before_len = length(Base.atexit_hooks)
+    @sync begin
+        for _ in 1:1_000_000
+            Threads.@spawn begin
+                atexit(f)
+            end
+        end
+    end
+    @test length(Base.atexit_hooks) == before_len + 1_000_000
+    @test all(hook -> hook === f, Base.atexit_hooks[1 : 1_000_000])
+
+    # cleanup
+    Base.@lock Base._atexit_hooks_lock begin
+        deleteat!(Base.atexit_hooks, 1:1_000_000)
+    end
+end
+
 end # main testset

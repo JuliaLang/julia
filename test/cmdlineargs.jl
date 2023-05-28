@@ -188,10 +188,12 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test contains(v[2], r"enable-tail-merge + = 1")
         @test isempty(v[3])
     end
-    @testset let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -enable-tail-merge=1", "HOME" => homedir()))
-        @test !v[1]
-        @test isempty(v[2])
-        @test v[3] == "julia: for the --enable-tail-merge option: may only occur zero or one times!"
+    if Base.libllvm_version < v"15" #LLVM over 15 doesn't care for multiple options
+        @testset let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -enable-tail-merge=1", "HOME" => homedir()))
+            @test !v[1]
+            @test isempty(v[2])
+            @test v[3] == "julia: for the --enable-tail-merge option: may only occur zero or one times!"
+        end
     end
 end
 

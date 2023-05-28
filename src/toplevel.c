@@ -65,7 +65,7 @@ static jl_function_t *jl_module_get_initializer(jl_module_t *m JL_PROPAGATES_ROO
 void jl_module_run_initializer(jl_module_t *m)
 {
     JL_TIMING(INIT_MODULE, INIT_MODULE);
-    jl_timing_show_module(m, JL_TIMING_CURRENT_BLOCK);
+    jl_timing_show_module(m, JL_TIMING_DEFAULT_BLOCK);
     jl_function_t *f = jl_module_get_initializer(m);
     if (f == NULL)
         return;
@@ -185,17 +185,28 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     size_t last_age = ct->world_age;
 
     // add standard imports unless baremodule
+    jl_array_t *exprs = ((jl_expr_t*)jl_exprarg(ex, 2))->args;
+    int lineno = 0;
+    const char *filename = "none";
+    if (jl_array_len(exprs) > 0) {
+        jl_value_t *lineex = jl_array_ptr_ref(exprs, 0);
+        if (jl_is_linenode(lineex)) {
+            lineno = jl_linenode_line(lineex);
+            jl_value_t *file = jl_linenode_file(lineex);
+            if (jl_is_symbol(file))
+                filename = jl_symbol_name((jl_sym_t*)file);
+        }
+    }
     if (std_imports) {
         if (jl_base_module != NULL) {
             jl_add_standard_imports(newm);
         }
         // add `eval` function
-        form = jl_call_scm_on_ast("module-default-defs", (jl_value_t*)ex, newm);
+        form = jl_call_scm_on_ast_and_loc("module-default-defs", (jl_value_t*)name, newm, filename, lineno);
         jl_toplevel_eval_flex(newm, form, 0, 1);
         form = NULL;
     }
 
-    jl_array_t *exprs = ((jl_expr_t*)jl_exprarg(ex, 2))->args;
     for (int i = 0; i < jl_array_len(exprs); i++) {
         // process toplevel form
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);

@@ -20,11 +20,7 @@
 
 // target machine computation
 #include <llvm/CodeGen/TargetSubtargetInfo.h>
-#if JL_LLVM_VERSION >= 140000
 #include <llvm/MC/TargetRegistry.h>
-#else
-#include <llvm/Support/TargetRegistry.h>
-#endif
 #include <llvm/Target/TargetOptions.h>
 #include <llvm/Support/Host.h>
 #include <llvm/Support/TargetSelect.h>
@@ -193,7 +189,7 @@ STATISTIC(GeneratedCCallables, "Number of C-callable functions generated");
 STATISTIC(GeneratedInvokeWrappers, "Number of invoke wrappers generated");
 STATISTIC(EmittedFunctions, "Number of functions emitted");
 
-extern "C" JL_DLLEXPORT
+extern "C" JL_DLLEXPORT_CODEGEN
 void jl_dump_emitted_mi_name_impl(void *s)
 {
     **jl_ExecutionEngine->get_dump_emitted_mi_name_stream() = (ios_t*)s;
@@ -1288,7 +1284,7 @@ static const auto &builtin_func_map() {
 
 static const auto jl_new_opaque_closure_jlcall_func = new JuliaFunction<>{XSTR(jl_new_opaque_closure_jlcall), get_func_sig, get_func_attrs};
 
-static _Atomic(int) globalUniqueGeneratedNames{1};
+static _Atomic(uint64_t) globalUniqueGeneratedNames{1};
 
 // --- code generation ---
 extern "C" {
@@ -1300,7 +1296,7 @@ extern "C" {
 #endif
         (int) DICompileUnit::DebugEmissionKind::FullDebug,
         1,
-        jl_rettype_inferred, NULL };
+        jl_rettype_inferred_addr, NULL };
 }
 
 
@@ -2338,7 +2334,7 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
         m->setOverrideStackAlignment(16);
     }
 
-#if defined(JL_DEBUG_BUILD) && JL_LLVM_VERSION >= 130000
+#if defined(JL_DEBUG_BUILD)
     m->setStackProtectorGuard("global");
 #endif
     return m;
@@ -2347,11 +2343,7 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
 static void jl_init_function(Function *F, const Triple &TT)
 {
     // set any attributes that *must* be set on all functions
-#if JL_LLVM_VERSION >= 140000
     AttrBuilder attr(F->getContext());
-#else
-    AttrBuilder attr;
-#endif
     if (TT.isOSWindows() && TT.getArch() == Triple::x86) {
         // tell Win32 to assume the stack is always 16-byte aligned,
         // and to ensure that it is 16-byte aligned for out-going calls,
@@ -2383,11 +2375,7 @@ static void jl_init_function(Function *F, const Triple &TT)
 #if defined(_COMPILER_MSAN_ENABLED_)
     attr.addAttribute(Attribute::SanitizeMemory);
 #endif
-#if JL_LLVM_VERSION >= 140000
     F->addFnAttrs(attr);
-#else
-    F->addAttributes(AttributeList::FunctionIndex, attr);
-#endif
 }
 
 static bool uses_specsig(jl_value_t *sig, bool needsparams, bool va, jl_value_t *rettype, bool prefer_specsig)
@@ -5239,7 +5227,7 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     sigtype = jl_apply_tuple_type_v(jl_svec_data(sig_args), nsig);
 
     jl_method_instance_t *mi = jl_specializations_get_linfo(closure_method, sigtype, jl_emptysvec);
-    jl_code_instance_t *ci = (jl_code_instance_t*)jl_rettype_inferred(mi, ctx.world, ctx.world);
+    jl_code_instance_t *ci = (jl_code_instance_t*)jl_rettype_inferred_addr(mi, ctx.world, ctx.world);
 
     if (ci == NULL || (jl_value_t*)ci == jl_nothing) {
         JL_GC_POP();
@@ -5978,13 +5966,8 @@ static Function* gen_cfun_wrapper(
         // we are adding the extra nest parameter after sret arg.
         std::vector<std::pair<unsigned, AttributeSet>> newAttributes;
         newAttributes.reserve(attributes.getNumAttrSets() + 1);
-#if JL_LLVM_VERSION >= 140000
         auto it = *attributes.indexes().begin();
         const auto it_end = *attributes.indexes().end();
-#else
-        auto it = attributes.index_begin();
-        const auto it_end = attributes.index_end();
-#endif
 
         // Skip past FunctionIndex
         if (it == AttributeList::AttrIndex::FunctionIndex) {
@@ -5999,11 +5982,7 @@ static Function* gen_cfun_wrapper(
         }
 
         // Add the new nest attribute
-#if JL_LLVM_VERSION >= 140000
         AttrBuilder attrBuilder(M->getContext());
-#else
-        AttrBuilder attrBuilder;
-#endif
         attrBuilder.addAttribute(Attribute::Nest);
         newAttributes.emplace_back(it, AttributeSet::get(M->getContext(), attrBuilder));
 
@@ -6680,6 +6659,8 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
     Function *w = Function::Create(get_func_sig(M->getContext()), GlobalVariable::ExternalLinkage, funcName, M);
     jl_init_function(w, params.TargetTriple);
     w->setAttributes(AttributeList::get(M->getContext(), {get_func_attrs(M->getContext()), w->getAttributes()}));
+    w->addFnAttr(Attribute::OptimizeNone);
+    w->addFnAttr(Attribute::NoInline);
     Function::arg_iterator AI = w->arg_begin();
     Value *funcArg = &*AI++;
     Value *argArray = &*AI++;
@@ -6868,11 +6849,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
     SmallVector<AttributeSet, 8> attrs; // function declaration attributes
     if (props.cc == jl_returninfo_t::SRet) {
         assert(srt);
-#if JL_LLVM_VERSION >= 140000
         AttrBuilder param(ctx.builder.getContext());
-#else
-        AttrBuilder param;
-#endif
         param.addStructRetAttr(srt);
         param.addAttribute(Attribute::NoAlias);
         param.addAttribute(Attribute::NoCapture);
@@ -6881,11 +6858,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
         assert(fsig.size() == 1);
     }
     if (props.cc == jl_returninfo_t::Union) {
-#if JL_LLVM_VERSION >= 140000
         AttrBuilder param(ctx.builder.getContext());
-#else
-        AttrBuilder param;
-#endif
         param.addAttribute(Attribute::NoAlias);
         param.addAttribute(Attribute::NoCapture);
         param.addAttribute(Attribute::NoUndef);
@@ -6894,11 +6867,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
     }
 
     if (props.return_roots) {
-#if JL_LLVM_VERSION >= 140000
         AttrBuilder param(ctx.builder.getContext());
-#else
-        AttrBuilder param;
-#endif
         param.addAttribute(Attribute::NoAlias);
         param.addAttribute(Attribute::NoCapture);
         param.addAttribute(Attribute::NoUndef);
@@ -6922,11 +6891,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
         }
         if (type_is_ghost(ty))
             continue;
-#if JL_LLVM_VERSION >= 140000
         AttrBuilder param(ctx.builder.getContext());
-#else
-        AttrBuilder param;
-#endif
         if (ty->isAggregateType()) { // aggregate types are passed by pointer
             param.addAttribute(Attribute::NoCapture);
             param.addAttribute(Attribute::ReadOnly);
@@ -7245,16 +7210,8 @@ static jl_llvm_functions_t
         declarations.functionObject = needsparams ? "jl_fptr_sparam" : "jl_fptr_args";
     }
 
-#if JL_LLVM_VERSION >= 140000
     AttrBuilder FnAttrs(ctx.builder.getContext(), f->getAttributes().getFnAttrs());
-#else
-    AttrBuilder FnAttrs(f->getAttributes().getFnAttributes());
-#endif
-#if JL_LLVM_VERSION >= 140000
     AttrBuilder RetAttrs(ctx.builder.getContext(), f->getAttributes().getRetAttrs());
-#else
-    AttrBuilder RetAttrs(f->getAttributes().getRetAttributes());
-#endif
 
     if (jlrettype == (jl_value_t*)jl_bottom_type)
         FnAttrs.addAttribute(Attribute::NoReturn);
@@ -7547,11 +7504,7 @@ static jl_llvm_functions_t
         }
         Argument *Arg = &*AI;
         ++AI;
-#if JL_LLVM_VERSION >= 140000
         AttrBuilder param(ctx.builder.getContext(), f->getAttributes().getParamAttrs(Arg->getArgNo()));
-#else
-        AttrBuilder param(f->getAttributes().getParamAttributes(Arg->getArgNo()));
-#endif
         jl_cgval_t theArg;
         if (llvmArgType->isAggregateType()) {
             maybe_mark_argument_dereferenceable(param, argType);
@@ -7571,11 +7524,7 @@ static jl_llvm_functions_t
     if (has_sret) {
         Argument *Arg = &*AI;
         ++AI;
-#if JL_LLVM_VERSION >= 140000
         AttrBuilder param(ctx.builder.getContext(), f->getAttributes().getParamAttrs(Arg->getArgNo()));
-#else
-        AttrBuilder param(f->getAttributes().getParamAttributes(Arg->getArgNo()));
-#endif
         if (returninfo.cc == jl_returninfo_t::Union) {
             param.addAttribute(Attribute::NonNull);
             // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
@@ -7597,11 +7546,7 @@ static jl_llvm_functions_t
     if (returninfo.return_roots) {
         Argument *Arg = &*AI;
         ++AI;
-#if JL_LLVM_VERSION >= 140000
         AttrBuilder param(ctx.builder.getContext(), f->getAttributes().getParamAttrs(Arg->getArgNo()));
-#else
-        AttrBuilder param(f->getAttributes().getParamAttributes(Arg->getArgNo()));
-#endif
         param.addAttribute(Attribute::NonNull);
         // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
         size_t size = returninfo.return_roots * sizeof(jl_value_t*);
@@ -8574,7 +8519,7 @@ jl_llvm_functions_t jl_emit_code(
         jl_codegen_params_t &params)
 {
     JL_TIMING(CODEGEN, CODEGEN_LLVM);
-    jl_timing_show_func_sig((jl_value_t *)li->specTypes, JL_TIMING_CURRENT_BLOCK);
+    jl_timing_show_func_sig((jl_value_t *)li->specTypes, JL_TIMING_DEFAULT_BLOCK);
     // caller must hold codegen_lock
     jl_llvm_functions_t decls = {};
     assert((params.params == &jl_default_cgparams /* fast path */ || !params.cache ||
@@ -8636,7 +8581,7 @@ jl_llvm_functions_t jl_emit_codeinst(
         jl_codegen_params_t &params)
 {
     JL_TIMING(CODEGEN, CODEGEN_Codeinst);
-    jl_timing_show_method_instance(codeinst->def, JL_TIMING_CURRENT_BLOCK);
+    jl_timing_show_method_instance(codeinst->def, JL_TIMING_DEFAULT_BLOCK);
     JL_GC_PUSH1(&src);
     if (!src) {
         src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
@@ -9073,15 +9018,23 @@ extern "C" void jl_init_llvm(void)
     clopt = llvmopts.lookup("unswitch-threshold");
     if (clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "100", 1);
-    clopt = llvmopts.lookup("enable-unswitch-cost-multiplier");
-    if (clopt->getNumOccurrences() == 0)
-        cl::ProvidePositionalOption(clopt, "false", 1);
 #endif
     // if the patch adding this option has been applied, lower its limit to provide
     // better DAGCombiner performance.
     clopt = llvmopts.lookup("combiner-store-merge-dependence-limit");
     if (clopt && clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "4", 1);
+
+#if JL_LLVM_VERSION >= 150000
+    clopt = llvmopts.lookup("opaque-pointers");
+    if (clopt && clopt->getNumOccurrences() == 0) {
+#ifdef JL_LLVM_OPAQUE_POINTERS
+        cl::ProvidePositionalOption(clopt, "true", 1);
+#else
+        cl::ProvidePositionalOption(clopt, "false", 1);
+#endif
+    }
+#endif
 
     jl_ExecutionEngine = new JuliaOJIT();
 
@@ -9145,7 +9098,7 @@ extern "C" void jl_init_llvm(void)
     cl::PrintOptionValues();
 }
 
-extern "C" JL_DLLEXPORT void jl_init_codegen_impl(void)
+extern "C" JL_DLLEXPORT_CODEGEN void jl_init_codegen_impl(void)
 {
     jl_init_llvm();
     // Now that the execution engine exists, initialize all modules
@@ -9155,10 +9108,12 @@ extern "C" JL_DLLEXPORT void jl_init_codegen_impl(void)
 #endif
 }
 
-extern "C" JL_DLLEXPORT void jl_teardown_codegen_impl() JL_NOTSAFEPOINT
+extern "C" JL_DLLEXPORT_CODEGEN void jl_teardown_codegen_impl() JL_NOTSAFEPOINT
 {
     // output LLVM timings and statistics
-    jl_ExecutionEngine->printTimers();
+    // Guard against exits before we have initialized the ExecutionEngine
+    if (jl_ExecutionEngine)
+        jl_ExecutionEngine->printTimers();
     PrintStatistics();
 }
 
@@ -9230,7 +9185,7 @@ extern void jl_write_bitcode_module(void *M, char *fname) {
 
 #include <llvm-c/Core.h>
 
-extern "C" JL_DLLEXPORT jl_value_t *jl_get_libllvm_impl(void) JL_NOTSAFEPOINT
+extern "C" JL_DLLEXPORT_CODEGEN jl_value_t *jl_get_libllvm_impl(void) JL_NOTSAFEPOINT
 {
 #if defined(_OS_WINDOWS_)
     HMODULE mod;

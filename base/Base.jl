@@ -163,6 +163,7 @@ include("int.jl")
 include("operators.jl")
 include("pointer.jl")
 include("refvalue.jl")
+include("cmem.jl")
 include("refpointer.jl")
 
 # now replace the Pair constructor (relevant for NamedTuples) with one that calls our Base.convert
@@ -316,7 +317,7 @@ include("version.jl")
 # system & environment
 include("sysinfo.jl")
 include("libc.jl")
-using .Libc: getpid, gethostname, time
+using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
 
 # These used to be in build_h.jl and are retained for backwards compatibility.
 # NOTE: keep in sync with `libblastrampoline_jll.libblastrampoline`.
@@ -596,6 +597,8 @@ function __init__()
         ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), PROFILE_PRINT_COND[].handle)
         errormonitor(Threads.@spawn(profile_printing_listener()))
     end
+    # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
+    delete!(ENV, "JULIA_WAIT_FOR_TRACY")
     nothing
 end
 

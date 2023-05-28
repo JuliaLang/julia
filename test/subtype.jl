@@ -2547,3 +2547,6 @@ let T = Tuple{Union{Type{T}, Type{S}}, Union{Val{T}, Val{S}}, Union{Val{T}, S}} 
     @test typeintersect(T, S) == Tuple{Type{A}, Union{Val{A}, Val{S} where S<:Union{Val, A}, Val{x} where x<:Val, Val{x} where x<:Union{Val, A}}, Val{A}} where A<:(Val{S} where S<:Val)
     @test typeintersect(S, T) == Tuple{Type{T}, Union{Val{T}, Val{S}}, Val{T}} where {T<:Val, S<:(Union{Val{A}, Val} where A)}
 end
+
+#issue #49857
+@test !<:(Type{Vector{Union{Base.BitInteger, Base.IEEEFloat, StridedArray, Missing, Nothing, Val{T}}}} where {T}, Type{Array{T}} where {T})

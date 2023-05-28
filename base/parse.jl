@@ -210,9 +210,11 @@ function tryparse_internal(::Type{Bool}, sbuff::AbstractString,
     len = endpos - startpos + 1
     if sbuff isa Union{String, SubString{String}}
         p = pointer(sbuff) + startpos - 1
-        GC.@preserve sbuff begin
-            (len == 4) && (0 == _memcmp(p, "true", 4)) && (return true)
-            (len == 5) && (0 == _memcmp(p, "false", 5)) && (return false)
+        truestr = "true"
+        falsestr = "false"
+        GC.@preserve sbuff truestr falsestr begin
+            (len == 4) && (0 == memcmp(p, unsafe_convert(Ptr{UInt8}, truestr), 4)) && (return true)
+            (len == 5) && (0 == memcmp(p, unsafe_convert(Ptr{UInt8}, falsestr), 5)) && (return false)
         end
     else
         (len == 4) && (SubString(sbuff, startpos:startpos+3) == "true") && (return true)

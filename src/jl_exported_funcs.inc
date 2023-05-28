@@ -21,7 +21,6 @@
     XX(jl_apply_type1) \
     XX(jl_apply_type2) \
     XX(jl_argument_datatype) \
-    XX(jl_argument_method_table) \
     XX(jl_arraylen) \
     XX(jl_arrayref) \
     XX(jl_arrayset) \
@@ -409,7 +408,6 @@
     XX(jl_restore_system_image_data) \
     XX(jl_rethrow) \
     XX(jl_rethrow_other) \
-    XX(jl_rettype_inferred) \
     XX(jl_running_on_valgrind) \
     XX(jl_safe_printf) \
     XX(jl_SC_CLK_TCK) \

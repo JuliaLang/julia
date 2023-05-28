@@ -558,7 +558,7 @@ end
 end
 
 @testset "peakflops" begin
-    @test LinearAlgebra.peakflops() > 0
+    @test LinearAlgebra.peakflops(1024, eltype=Float32, ntrials=2) > 0
 end
 
 @testset "NaN handling: Issue 28972" begin

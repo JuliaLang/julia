@@ -187,7 +187,7 @@
 ;; a bound is #f if not specified
 (define (analyze-typevar e)
   (define (check-sym s)
-    (if (symbol? s)
+    (if (symbol? (unescape s)) ; unescape for macroexpand.scm use
         s
         (error (string "invalid type parameter name \"" (deparse s) "\""))))
   (cond ((atom? e) (list (check-sym e) #f #f))
@@ -5090,8 +5090,8 @@ f(x) = yt(x)
 
 (define *current-desugar-loc* #f)
 
-(define (julia-expand0 ex file line)
-  (with-bindings ((*current-desugar-loc* `(line ,line ,file)))
+(define (julia-expand0 ex lno)
+  (with-bindings ((*current-desugar-loc* lno))
    (trycatch (expand-forms ex)
              (lambda (e)
                (if (and (pair? e) (eq? (car e) 'error))
@@ -5106,4 +5106,4 @@ f(x) = yt(x)
 (define (julia-expand ex (file 'none) (line 0))
   (julia-expand1
    (julia-expand0
-    (julia-expand-macroscope ex) file line) file line))
+    (julia-expand-macroscope ex) `(line ,line ,file)) file line))

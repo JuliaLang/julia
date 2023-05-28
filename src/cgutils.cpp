@@ -333,7 +333,8 @@ static Constant *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
     StringRef localname;
     std::string gvname;
     if (!gv) {
-        raw_string_ostream(gvname) << cname << ctx.global_targets.size();
+        uint64_t id = ctx.emission_context.imaging ? jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1) : ctx.global_targets.size();
+        raw_string_ostream(gvname) << cname << id;
         localname = StringRef(gvname);
     }
     else {
@@ -635,7 +636,7 @@ static Type *julia_type_to_llvm(jl_codectx_t &ctx, jl_value_t *jt, bool *isboxed
     return _julia_type_to_llvm(&ctx.emission_context, ctx.builder.getContext(), jt, isboxed);
 }
 
-extern "C" JL_DLLEXPORT
+extern "C" JL_DLLEXPORT_CODEGEN
 Type *jl_type_to_llvm_impl(jl_value_t *jt, LLVMContextRef ctxt, bool *isboxed)
 {
     return _julia_type_to_llvm(NULL, *unwrap(ctxt), jt, isboxed);
@@ -1768,12 +1769,8 @@ std::vector<unsigned> first_ptr(Type *T)
                 num_elements = AT->getNumElements();
             else {
                 VectorType *VT = cast<VectorType>(T);
-#if JL_LLVM_VERSION >= 120000
                 ElementCount EC = VT->getElementCount();
                 num_elements = EC.getKnownMinValue();
-#else
-                num_elements = VT->getNumElements();
-#endif
             }
             if (num_elements == 0)
                 return {};
@@ -2015,12 +2012,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         assert(Order != AtomicOrdering::NotAtomic && r);
         // we can't handle isboxed here as a workaround for really bad LLVM
         // design issue: plain Xchg only works with integers
-#if JL_LLVM_VERSION >= 130000
         auto *store = ctx.builder.CreateAtomicRMW(AtomicRMWInst::Xchg, ptr, r, Align(alignment), Order);
-#else
-        auto *store = ctx.builder.CreateAtomicRMW(AtomicRMWInst::Xchg, ptr, r, Order);
-        store->setAlignment(Align(alignment));
-#endif
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
         ai.noalias = MDNode::concatenate(aliasscope, ai.noalias);
         ai.decorateInst(store);
@@ -2170,12 +2162,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 FailOrder = AtomicOrdering::Monotonic;
             else if (FailOrder == AtomicOrdering::Unordered)
                 FailOrder = AtomicOrdering::Monotonic;
-#if JL_LLVM_VERSION >= 130000
             auto *store = ctx.builder.CreateAtomicCmpXchg(ptr, Compare, r, Align(alignment), Order, FailOrder);
-#else
-            auto *store = ctx.builder.CreateAtomicCmpXchg(ptr, Compare, r, Order, FailOrder);
-            store->setAlignment(Align(alignment));
-#endif
             jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
             ai.noalias = MDNode::concatenate(aliasscope, ai.noalias);
             ai.decorateInst(store);
@@ -3052,12 +3039,8 @@ static jl_value_t *static_constant_instance(const llvm::DataLayout &DL, Constant
     if (const auto *CC = dyn_cast<ConstantAggregate>(constant))
         nargs = CC->getNumOperands();
     else if (const auto *CAZ = dyn_cast<ConstantAggregateZero>(constant)) {
-#if JL_LLVM_VERSION >= 130000
         // SVE: Elsewhere we use `getMinKownValue`
         nargs = CAZ->getElementCount().getFixedValue();
-#else
-        nargs = CAZ->getNumElements();
-#endif
     }
     else if (const auto *CDS = dyn_cast<ConstantDataSequential>(constant))
         nargs = CDS->getNumElements();
