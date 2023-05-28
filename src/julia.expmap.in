@@ -35,13 +35,16 @@
     JLJIT*;
     llvmGetPassPluginInfo;
 
-    /* Make visible so that linker will merge duplicate definitions across DSO boundaries */
-    _ZN4llvm3Any6TypeId*;
-
     /* freebsd */
     environ;
     __progname;
 
   local:
     *;
+};
+
+JL_LLVM_15.0 {
+  global:
+    /* Make visible so that linker will merge duplicate definitions across DSO boundaries */
+    _ZN4llvm3Any6TypeId*;
 };
