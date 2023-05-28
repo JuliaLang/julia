@@ -1000,6 +1000,7 @@ end
         v = z
     end
     @test v == ()
+end
 
 @testset "Unfold" begin
     @test isempty(Iterators.unfold(identity, nothing))
