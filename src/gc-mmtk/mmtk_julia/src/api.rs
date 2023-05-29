@@ -135,7 +135,7 @@ pub extern "C" fn alloc(
     mutator: *mut Mutator<JuliaVM>,
     size: usize,
     align: usize,
-    offset: isize,
+    offset: usize,
     semantics: AllocationSemantics,
 ) -> Address {
     memory_manager::alloc::<JuliaVM>(unsafe { &mut *mutator }, size, align, offset, semantics)
@@ -146,7 +146,7 @@ pub extern "C" fn alloc_large(
     mutator: *mut Mutator<JuliaVM>,
     size: usize,
     align: usize,
-    offset: isize,
+    offset: usize,
 ) -> Address {
     memory_manager::alloc::<JuliaVM>(
         unsafe { &mut *mutator },
