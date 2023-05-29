@@ -290,7 +290,7 @@ end
 const _default_parser = _has_v1_6_hooks ? Core._parse : nothing
 
 """
-    enable_in_core!([enable=true; freeze_world_age, debug_filename])
+    enable_in_core!([enable=true; freeze_world_age=true, debug_filename=nothing])
 
 Connect the JuliaSyntax parser to the Julia runtime so that it replaces the
 flisp parser for all parsing work. That is, JuliaSyntax will be used for
