@@ -8,7 +8,6 @@ use crate::{ROOT_EDGES, ROOT_NODES, SINGLETON, UPCALLS};
 use mmtk::memory_manager;
 use mmtk::scheduler::*;
 use mmtk::util::opaque_pointer::*;
-use mmtk::util::Address;
 use mmtk::util::ObjectReference;
 use mmtk::vm::EdgeVisitor;
 use mmtk::vm::RootsWorkFactory;
@@ -112,11 +111,6 @@ pub fn process_object(object: ObjectReference, closure: &mut dyn EdgeVisitor<Jul
     unsafe {
         crate::julia_scanning::scan_julia_object(addr, closure);
     }
-}
-
-#[no_mangle]
-pub extern "C" fn object_is_managed_by_mmtk(addr: usize) -> bool {
-    crate::api::is_mapped_address(unsafe { Address::from_usize(addr) })
 }
 
 // Sweep malloced arrays work

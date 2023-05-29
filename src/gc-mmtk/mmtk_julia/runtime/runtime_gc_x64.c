@@ -13,8 +13,8 @@ void* get_mutator_from_ref(void* mutator) {
     return mutator;
 }
 
-extern void start_spawned_worker_thread(void*, void*);
-extern void start_spawned_controller_thread(void*, void*);
+extern void mmtk_start_spawned_worker_thread(void*, void*);
+extern void mmtk_start_spawned_controller_thread(void*, void*);
 
 struct thread_args {
     void* tls;
@@ -30,7 +30,7 @@ void *fn_spawn_worker_thread(void* args) {
     struct thread_args *ta = (struct thread_args *)  args;
     void* tls = (*ta).tls;
     void* ctx = (*ta).ctx;
-    start_spawned_worker_thread(tls, ctx);
+    mmtk_start_spawned_worker_thread(tls, ctx);
     return NULL;
 }
 
@@ -38,7 +38,7 @@ void *fn_spawn_controller_thread(void* args) {
     struct thread_args *ta = (struct thread_args *)  args;
     void* tls = (*ta).tls;
     void* ctx = (*ta).ctx;
-    start_spawned_controller_thread(tls, ctx);
+    mmtk_start_spawned_controller_thread(tls, ctx);
     return NULL;
 }
 
