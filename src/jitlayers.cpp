@@ -580,14 +580,14 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
 // get a native disassembly for a compiled method
 extern "C" JL_DLLEXPORT_CODEGEN
 jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
-        char raw_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary)
+        char emit_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary)
 {
     // printing via disassembly
     jl_code_instance_t *codeinst = jl_generate_fptr(mi, world);
     if (codeinst) {
         uintptr_t fptr = (uintptr_t)jl_atomic_load_acquire(&codeinst->invoke);
         if (getwrapper)
-            return jl_dump_fptr_asm(fptr, raw_mc, asm_variant, debuginfo, binary);
+            return jl_dump_fptr_asm(fptr, emit_mc, asm_variant, debuginfo, binary);
         uintptr_t specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
         if (fptr == (uintptr_t)jl_fptr_const_return_addr && specfptr == 0) {
             // normally we prevent native code from being generated for these functions,
@@ -635,7 +635,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
             }
         }
         if (specfptr != 0)
-            return jl_dump_fptr_asm(specfptr, raw_mc, asm_variant, debuginfo, binary);
+            return jl_dump_fptr_asm(specfptr, emit_mc, asm_variant, debuginfo, binary);
     }
 
     // whatever, that didn't work - use the assembler output instead
@@ -643,7 +643,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
     jl_get_llvmf_defn(&llvmf_dump, mi, world, getwrapper, true, jl_default_cgparams);
     if (!llvmf_dump.F)
         return jl_an_empty_string;
-    return jl_dump_function_asm(&llvmf_dump, raw_mc, asm_variant, debuginfo, binary);
+    return jl_dump_function_asm(&llvmf_dump, emit_mc, asm_variant, debuginfo, binary, false);
 }
 
 CodeGenOpt::Level CodeGenOptLevelFor(int optlevel)

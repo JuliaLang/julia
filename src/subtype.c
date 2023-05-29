@@ -953,7 +953,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     if (R && ans && e->envidx < e->envsz) {
         jl_value_t *val;
         if (vb.intvalued && vb.lb == (jl_value_t*)jl_any_type)
-            val = (jl_value_t*)jl_wrap_vararg(NULL, NULL); // special token result that represents N::Int in the envout
+            val = (jl_value_t*)jl_wrap_vararg(NULL, NULL, 0); // special token result that represents N::Int in the envout
         else if (!vb.occurs_inv && vb.lb != jl_bottom_type)
             val = is_leaf_bound(vb.lb) ? vb.lb : (jl_value_t*)jl_new_typevar(u->var->name, jl_bottom_type, vb.lb);
         else if (vb.lb == vb.ub)
@@ -3092,7 +3092,7 @@ static jl_value_t *intersect_varargs(jl_vararg_t *vmx, jl_vararg_t *vmy, ssize_t
             ii = (jl_value_t*)vmy;
         else {
             JL_GC_PUSH1(&ii);
-            ii = (jl_value_t*)jl_wrap_vararg(ii, NULL);
+            ii = (jl_value_t*)jl_wrap_vararg(ii, NULL, 1);
             JL_GC_POP();
         }
         return ii;
@@ -3133,7 +3133,7 @@ static jl_value_t *intersect_varargs(jl_vararg_t *vmx, jl_vararg_t *vmy, ssize_t
     else if (yp2 && obviously_egal(yp1, ii) && obviously_egal(yp2, i2))
         ii = (jl_value_t*)vmy;
     else
-        ii = (jl_value_t*)jl_wrap_vararg(ii, i2);
+        ii = (jl_value_t*)jl_wrap_vararg(ii, i2, 1);
     JL_GC_POP();
     return ii;
 }

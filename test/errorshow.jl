@@ -531,7 +531,7 @@ end
     ex = :(@nest2b 42)
     @test _macroexpand1(ex) != macroexpand(M,ex)
     @test _macroexpand1(_macroexpand1(ex)) == macroexpand(M, ex)
-    @test (@macroexpand1 @nest2b 42) == _macroexpand1(ex)
+    @test (@macroexpand1 @nest2b 42) == _macroexpand1(:(@nest2b 42))
 end
 
 foo_9965(x::Float64; w=false) = x

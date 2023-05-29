@@ -387,8 +387,6 @@ end
     end
 end
 
-@inline _memcpy!(dst, src, n) = ccall(:memcpy, Cvoid, (Ptr{UInt8}, Ptr{UInt8}, Csize_t), dst, src, n)
-
 @inline @propagate_inbounds function _getindex_ra(a::NonReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
@@ -434,7 +432,7 @@ end
                 while nbytes_copied < sizeof(T)
                     s[] = a.parent[ind_start + i, tailinds...]
                     nb = min(sizeof(S) - sidx, sizeof(T)-nbytes_copied)
-                    _memcpy!(tptr + nbytes_copied, sptr + sidx, nb)
+                    memcpy(tptr + nbytes_copied, sptr + sidx, nb)
                     nbytes_copied += nb
                     sidx = 0
                     i += 1
@@ -574,7 +572,7 @@ end
                 if sidx != 0
                     s[] = a.parent[ind_start + i, tailinds...]
                     nb = min((sizeof(S) - sidx) % UInt, sizeof(T) % UInt)
-                    _memcpy!(sptr + sidx, tptr, nb)
+                    memcpy(sptr + sidx, tptr, nb)
                     nbytes_copied += nb
                     a.parent[ind_start + i, tailinds...] = s[]
                     i += 1
@@ -583,7 +581,7 @@ end
                 # Deal with the main body of elements
                 while nbytes_copied < sizeof(T) && (sizeof(T) - nbytes_copied) > sizeof(S)
                     nb = min(sizeof(S), sizeof(T) - nbytes_copied)
-                    _memcpy!(sptr, tptr + nbytes_copied, nb)
+                    memcpy(sptr, tptr + nbytes_copied, nb)
                     nbytes_copied += nb
                     a.parent[ind_start + i, tailinds...] = s[]
                     i += 1
@@ -592,7 +590,7 @@ end
                 if nbytes_copied < sizeof(T)
                     s[] = a.parent[ind_start + i, tailinds...]
                     nb = min(sizeof(S), sizeof(T) - nbytes_copied)
-                    _memcpy!(sptr, tptr + nbytes_copied, nb)
+                    memcpy(sptr, tptr + nbytes_copied, nb)
                     a.parent[ind_start + i, tailinds...] = s[]
                 end
             end

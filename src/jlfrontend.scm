@@ -93,18 +93,38 @@
 
 ;; lowering entry points
 
+; find the first line number in this expression, before we might eliminate them
+(define (first-lineno blk)
+  (cond ((not (pair? blk)) #f)
+        ((eq? (car blk) 'line) blk)
+        ((and (eq? (car blk) 'hygienic-scope) (pair? (cdddr blk)) (pair? (cadddr blk)) (eq? (car (cadddr blk)) 'line))
+         (cadddr blk))
+        ((memq (car blk) '(escape hygienic-scope))
+         (first-lineno (cadr blk)))
+        ((memq (car blk) '(toplevel block))
+           (let loop ((xs (cdr blk)))
+             (and (pair? xs)
+               (let ((elt (first-lineno (car xs))))
+                 (or elt (loop (cdr xs)))))))
+        (else #f)))
+
 ;; return a lambda expression representing a thunk for a top-level expression
 ;; note: expansion of stuff inside module is delayed, so the contents obey
 ;; toplevel expansion order (don't expand until stuff before is evaluated).
 (define (expand-toplevel-expr-- e file line)
-  (let ((ex0 (julia-expand-macroscope e)))
+  (let ((lno (first-lineno e))
+        (ex0 (julia-expand-macroscope e)))
+    (if (and lno (or (not (length= lno 3)) (not (atom? (caddr lno))))) (set! lno #f))
     (if (toplevel-only-expr? ex0)
-        ex0
-        (let* ((ex (julia-expand0 ex0 file line))
+        (if (and (pair? e) (memq (car ex0) '(error incomplete)))
+            ex0
+            (if lno `(toplevel ,lno ,ex0) ex0))
+        (let* ((linenode (if (and lno (or (= line 0) (eq? file 'none))) lno `(line ,line ,file)))
+               (ex (julia-expand0 ex0 linenode))
                (th (julia-expand1
                     `(lambda () ()
                              (scope-block
-                              ,(blockify ex)))
+                              ,(blockify ex lno)))
                     file line)))
           (if (and (null? (cdadr (caddr th)))
                    (and (length= (lam:body th) 2)

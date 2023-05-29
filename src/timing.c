@@ -6,6 +6,10 @@
 #include "options.h"
 #include "stdio.h"
 
+#if defined(USE_TRACY) || defined(USE_ITTAPI)
+#define DISABLE_FREQUENT_EVENTS
+#endif
+
 jl_module_t *jl_module_root(jl_module_t *m);
 
 #ifdef __cplusplus
@@ -19,34 +23,24 @@ extern "C" {
 #endif
 
 static uint64_t t0;
-#if defined(USE_TRACY) || defined(USE_ITTAPI)
-/**
- * These sources often generate millions of events / minute. Although Tracy
- * can generally keep up with that, those events also bloat the saved ".tracy"
- * files, so we disable them by default.
- **/
-JL_DLLEXPORT uint64_t jl_timing_enable_mask = ~((1ull << JL_TIMING_ROOT) |
-                                              (1ull << JL_TIMING_TYPE_CACHE_LOOKUP) |
-                                              (1ull << JL_TIMING_METHOD_MATCH) |
-                                              (1ull << JL_TIMING_METHOD_LOOKUP_FAST) |
-                                              (1ull << JL_TIMING_AST_COMPRESS) |
-                                              (1ull << JL_TIMING_AST_UNCOMPRESS));
-#else
-JL_DLLEXPORT uint64_t jl_timing_enable_mask = ~0ull;
-#endif
 
-JL_DLLEXPORT uint64_t jl_timing_counts[(int)JL_TIMING_LAST] = {0};
+JL_DLLEXPORT _Atomic(uint64_t) jl_timing_disable_mask[(JL_TIMING_LAST + sizeof(uint64_t) * CHAR_BIT - 1) / (sizeof(uint64_t) * CHAR_BIT)];
+
+JL_DLLEXPORT _Atomic(uint64_t) jl_timing_self_counts[(int)JL_TIMING_EVENT_LAST];
+JL_DLLEXPORT _Atomic(uint64_t) jl_timing_full_counts[(int)JL_TIMING_EVENT_LAST];
 
 // Used to as an item limit when several strings of metadata can
 // potentially be associated with a single timing zone.
 JL_DLLEXPORT uint32_t jl_timing_print_limit = 10;
 
-const char *jl_timing_names[(int)JL_TIMING_LAST] =
+static const char *jl_timing_names[(int)JL_TIMING_EVENT_LAST] =
     {
 #define X(name) #name,
-        JL_TIMING_SUBSYSTEMS
+        JL_TIMING_EVENTS
 #undef X
     };
+
+static int jl_timing_names_sorted[(int)JL_TIMING_EVENT_LAST];
 
 JL_DLLEXPORT jl_timing_counter_t jl_timing_counters[JL_TIMING_COUNTER_LAST];
 
@@ -55,22 +49,27 @@ void jl_print_timings(void)
 #ifdef USE_TIMING_COUNTS
     uint64_t total_time = cycleclock() - t0;
     uint64_t root_time = total_time;
-    for (int i = 0; i < JL_TIMING_LAST; i++) {
-        root_time -= jl_timing_counts[i];
+    for (int i = 0; i < JL_TIMING_EVENT_LAST; i++) {
+        root_time -= jl_atomic_load_relaxed(jl_timing_self_counts + i);
     }
-    jl_timing_counts[0] = root_time;
+    jl_atomic_store_relaxed(jl_timing_self_counts + JL_TIMING_ROOT, root_time);
+    jl_atomic_store_relaxed(jl_timing_full_counts + JL_TIMING_ROOT, total_time);
     fprintf(stderr, "\nJULIA TIMINGS\n");
-    for (int i = 0; i < JL_TIMING_LAST; i++) {
-        if (jl_timing_counts[i] != 0)
-            fprintf(stderr, "%-25s : %5.2f %%   %" PRIu64 "\n", jl_timing_names[i],
-                    100 * (((double)jl_timing_counts[i]) / total_time), jl_timing_counts[i]);
+    fprintf(stderr, "%-25s, %-30s, %-30s\n", "Event", "Self Cycles (% of Total)", "Total Cycles (% of Total)");
+    for (int i = 0; i < JL_TIMING_EVENT_LAST; i++) {
+        int j = jl_timing_names_sorted[i];
+        uint64_t self = jl_atomic_load_relaxed(jl_timing_self_counts + j);
+        uint64_t total = jl_atomic_load_relaxed(jl_timing_full_counts + j);
+        if (total != 0)
+            fprintf(stderr, "%-25s, %20" PRIu64 " (%5.2f %%), %20" PRIu64 " (%5.2f %%)\n", jl_timing_names[j], self, 100 * (((double)self) / total_time), total, 100 * (((double)total) / total_time));
     }
 
     fprintf(stderr, "\nJULIA COUNTERS\n");
+    fprintf(stderr, "%-25s, %-20s\n", "Counter", "Value");
 #define X(name) do { \
         int64_t val = (int64_t) jl_atomic_load_relaxed(&jl_timing_counters[(int)JL_TIMING_COUNTER_##name].basic_counter); \
         if (val != 0) \
-            fprintf(stderr, "%-25s : %" PRIi64 "\n", #name, val); \
+            fprintf(stderr, "%-25s, %20" PRIi64 "\n", #name, val); \
     } while (0);
 
     JL_TIMING_COUNTERS
@@ -78,12 +77,22 @@ void jl_print_timings(void)
 #endif
 }
 
+int cmp_names(const void *a, const void *b) {
+    int ia = *(const int*)a;
+    int ib = *(const int*)b;
+    return strcmp(jl_timing_names[ia], jl_timing_names[ib]);
+}
+
 void jl_init_timing(void)
 {
     t0 = cycleclock();
 
-    _Static_assert(JL_TIMING_EVENT_LAST < sizeof(uint64_t) * CHAR_BIT, "Too many timing events!");
     _Static_assert((int)JL_TIMING_LAST <= (int)JL_TIMING_EVENT_LAST, "More owners than events!");
+
+    for (int i = 0; i < JL_TIMING_EVENT_LAST; i++) {
+        jl_timing_names_sorted[i] = i;
+    }
+    qsort(jl_timing_names_sorted, JL_TIMING_EVENT_LAST, sizeof(int), cmp_names);
 
     int i __attribute__((unused)) = 0;
 #ifdef USE_ITTAPI
@@ -106,6 +115,22 @@ void jl_init_timing(void)
     TracyCPlotConfig(jl_timing_counters[JL_TIMING_COUNTER_JITDataSize].tracy_counter.name, TracyPlotFormatMemory, /* rectilinear */ 0, /* fill */ 1, /* color */ 0);
     TracyCPlotConfig(jl_timing_counters[JL_TIMING_COUNTER_ImageSize].tracy_counter.name, TracyPlotFormatMemory, /* rectilinear */ 0, /* fill */ 1, /* color */ 0);
 #endif
+
+/**
+ * These sources often generate millions of events / minute. Although Tracy
+ * can generally keep up with that, those events also bloat the saved ".tracy"
+ * files, so we disable them by default.
+ **/
+#ifdef DISABLE_FREQUENT_EVENTS
+#define DISABLE_SUBSYSTEM(subsystem) jl_atomic_fetch_or_relaxed(jl_timing_disable_mask + (JL_TIMING_##subsystem / (sizeof(uint64_t) * CHAR_BIT)), 1 << (JL_TIMING_##subsystem % (sizeof(uint64_t) * CHAR_BIT)))
+    DISABLE_SUBSYSTEM(ROOT);
+    DISABLE_SUBSYSTEM(TYPE_CACHE_LOOKUP);
+    DISABLE_SUBSYSTEM(METHOD_MATCH);
+    DISABLE_SUBSYSTEM(METHOD_LOOKUP_FAST);
+    DISABLE_SUBSYSTEM(AST_COMPRESS);
+    DISABLE_SUBSYSTEM(AST_UNCOMPRESS);
+#endif
+
 }
 
 void jl_destroy_timing(void)
@@ -131,7 +156,7 @@ void jl_timing_block_enter_task(jl_task_t *ct, jl_ptls_t ptls, jl_timing_block_t
 
         ptls->timing_stack = prev_blk;
         if (prev_blk != NULL) {
-            _COUNTS_START(&prev_blk->counts_ctx, cycleclock());
+            _COUNTS_RESUME(&prev_blk->counts_ctx, cycleclock());
         }
     }
 
@@ -164,7 +189,7 @@ jl_timing_block_t *jl_timing_block_exit_task(jl_task_t *ct, jl_ptls_t ptls)
     ptls->timing_stack = NULL;
 
     if (blk != NULL) {
-        _COUNTS_STOP(&blk->counts_ctx, cycleclock());
+        _COUNTS_PAUSE(&blk->counts_ctx, cycleclock());
     }
     return blk;
 }
@@ -330,20 +355,27 @@ void jl_timing_init_task(jl_task_t *t)
 #endif
 }
 
+int cmp_name_idx(const void *name, const void *idx) {
+    return strcmp((const char *)name, jl_timing_names[*(const int *)idx]);
+}
+
 JL_DLLEXPORT int jl_timing_set_enable(const char *subsystem, uint8_t enabled)
 {
-    for (int i = 0; i < JL_TIMING_LAST; i++) {
-        if (strcmp(subsystem, jl_timing_names[i]) == 0) {
-            uint64_t subsystem_bit = (1ul << i);
-            if (enabled) {
-                jl_timing_enable_mask |= subsystem_bit;
-            } else {
-                jl_timing_enable_mask &= ~subsystem_bit;
-            }
-            return 0;
-        }
+    const int *idx = (const int *)bsearch(subsystem, jl_timing_names_sorted, JL_TIMING_EVENT_LAST, sizeof(int), cmp_name_idx);
+    if (idx == NULL)
+        return -1;
+    int i = *idx;
+    // sorted names include events, so skip if we're looking at an event instead of a subsystem
+    // events are always at least JL_TIMING_LAST
+    if (i >= JL_TIMING_LAST)
+        return -1;
+    uint64_t subsystem_bit = 1ul << (i % (sizeof(uint64_t) * CHAR_BIT));
+    if (enabled) {
+        jl_atomic_fetch_and_relaxed(jl_timing_disable_mask + (i / (sizeof(uint64_t) * CHAR_BIT)), ~subsystem_bit);
+    } else {
+        jl_atomic_fetch_or_relaxed(jl_timing_disable_mask + (i / (sizeof(uint64_t) * CHAR_BIT)), subsystem_bit);
     }
-    return -1;
+    return 0;
 }
 
 static void jl_timing_set_enable_from_env(void)

@@ -1,9 +1,6 @@
 const MANTISSA_MASK = Base.significand_mask(Float64)
 const EXP_MASK = Base.exponent_mask(Float64) >> Base.significand_bits(Float64)
 
-memcpy(d, doff, s, soff, n) = (ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), d + doff - 1, s + soff - 1, n); nothing)
-memmove(d, doff, s, soff, n) = (ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), d + doff - 1, s + soff - 1, n); nothing)
-
 # Note: these are smaller than the values given in Figure 4 from the paper
 # see https://github.com/ulfjack/ryu/issues/119
 pow5_bitcount(::Type{Float16}) = 30

@@ -526,12 +526,17 @@ void jl_gc_run_all_finalizers(jl_task_t *ct)
     jl_ptls_t* gc_all_tls_states;
     gc_n_threads = jl_atomic_load_acquire(&jl_n_threads);
     gc_all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
+    // this is called from `jl_atexit_hook`; threads could still be running
+    // so we have to guard the finalizers' lists
+    JL_LOCK_NOGC(&finalizers_lock);
     schedule_all_finalizers(&finalizer_list_marked);
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
         if (ptls2 != NULL)
             schedule_all_finalizers(&ptls2->finalizers);
     }
+    // unlock here because `run_finalizers` locks this
+    JL_UNLOCK_NOGC(&finalizers_lock);
     gc_n_threads = 0;
     gc_all_tls_states = NULL;
     run_finalizers(ct);
@@ -1871,6 +1876,28 @@ STATIC_INLINE jl_gc_chunk_t gc_chunkqueue_pop(jl_gc_markqueue_t *mq) JL_NOTSAFEP
     return c;
 }
 
+// Dump mark queue on critical error
+JL_NORETURN NOINLINE void gc_dump_queue_and_abort(jl_ptls_t ptls, jl_datatype_t *vt) JL_NOTSAFEPOINT
+{
+    jl_safe_printf("GC error (probable corruption)\n");
+    jl_gc_debug_print_status();
+    jl_(vt);
+    jl_gc_debug_critical_error();
+    if (jl_n_gcthreads == 0) {
+        jl_safe_printf("\n");
+        jl_value_t *new_obj;
+        jl_gc_markqueue_t *mq = &ptls->mark_queue;
+        jl_safe_printf("thread %d ptr queue:\n", ptls->tid);
+        jl_safe_printf("~~~~~~~~~~ ptr queue top ~~~~~~~~~~\n");
+        while ((new_obj = gc_ptr_queue_steal_from(mq)) != NULL) {
+            jl_(new_obj);
+            jl_safe_printf("==========\n");
+        }
+        jl_safe_printf("~~~~~~~~~~ ptr queue bottom ~~~~~~~~~~\n");
+    }
+    abort();
+}
+
 // Steal chunk from `mq2`
 STATIC_INLINE jl_gc_chunk_t gc_chunkqueue_steal_from(jl_gc_markqueue_t *mq2) JL_NOTSAFEPOINT
 {
@@ -2568,6 +2595,11 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             }
             return;
         }
+        else {
+            jl_datatype_t *vt = (jl_datatype_t *)vtag;
+            if (__unlikely(!jl_is_datatype(vt) || vt->smalltag))
+                gc_dump_queue_and_abort(ptls, vt);
+        }
         jl_datatype_t *vt = (jl_datatype_t *)vtag;
         if (vt->name == jl_array_typename) {
             jl_array_t *a = (jl_array_t *)new_obj;
@@ -3068,7 +3100,7 @@ static void sweep_finalizer_list(arraylist_t *list)
 }
 
 // collector entry point and control
-static _Atomic(uint32_t) jl_gc_disable_counter = 1;
+_Atomic(uint32_t) jl_gc_disable_counter = 1;
 
 JL_DLLEXPORT int jl_gc_enable(int on)
 {
@@ -3465,7 +3497,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
 
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
-    if (jl_atomic_load_relaxed(&jl_gc_disable_counter)) {
+    if (jl_atomic_load_acquire(&jl_gc_disable_counter)) {
         size_t localbytes = jl_atomic_load_relaxed(&ptls->gc_num.allocd) + gc_num.interval;
         jl_atomic_store_relaxed(&ptls->gc_num.allocd, -(int64_t)gc_num.interval);
         static_assert(sizeof(_Atomic(uint64_t)) == sizeof(gc_num.deferred_alloc), "");
@@ -3476,11 +3508,10 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
 
     int8_t old_state = jl_atomic_load_relaxed(&ptls->gc_state);
     jl_atomic_store_release(&ptls->gc_state, JL_GC_STATE_WAITING);
-    // `jl_safepoint_start_gc()` makes sure only one thread can
-    // run the GC.
+    // `jl_safepoint_start_gc()` makes sure only one thread can run the GC.
     uint64_t t0 = jl_hrtime();
     if (!jl_safepoint_start_gc()) {
-        // Multithread only. See assertion in `safepoint.c`
+        // either another thread is running GC, or the GC got disabled just now.
         jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
         return;
     }
@@ -3517,7 +3548,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     gc_invoke_callbacks(jl_gc_cb_pre_gc_t,
         gc_cblist_pre_gc, (collection));
 
-    if (!jl_atomic_load_relaxed(&jl_gc_disable_counter)) {
+    if (!jl_atomic_load_acquire(&jl_gc_disable_counter)) {
         JL_LOCK_NOGC(&finalizers_lock); // all the other threads are stopped, so this does not make sense, right? otherwise, failing that, this seems like plausibly a deadlock
 #ifndef __clang_gcanalyzer__
         if (_jl_gc_collect(ptls, collection)) {
