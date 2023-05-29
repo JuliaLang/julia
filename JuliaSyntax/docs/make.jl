@@ -12,12 +12,12 @@ makedocs(;
         ]
         "Design Discussion" => "design.md"
     ],
-    repo="https://github.com/c42f/JuliaSyntax.jl/blob/{commit}{path}#L{line}",
+    repo="https://github.com/JuliaLang/JuliaSyntax.jl/blob/{commit}{path}#L{line}",
     sitename="JuliaSyntax.jl",
-    authors = "Chris Foster and contributors: https://github.com/c42f/JuliaSyntax.jl/graphs/contributors"
+    authors = "Claire Foster and contributors: https://github.com/JuliaLang/JuliaSyntax.jl/graphs/contributors"
 )
 
 deploydocs(;
-    repo="github.com/c42f/JuliaSyntax.jl",
+    repo="github.com/JuliaLang/JuliaSyntax.jl",
     push_preview=true
 )
