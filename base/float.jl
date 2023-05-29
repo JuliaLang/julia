@@ -687,7 +687,7 @@ function hash(x::Real, h::UInt)
 
     # handle values representable as Int64, UInt64, Float64
     if den == 1
-        left = ndigits0z(num,2) + pow
+        left = top_set_bit(num) + pow
         right = trailing_zeros(num) + pow
         if -1074 <= right
             if 0 <= right && left <= 64
