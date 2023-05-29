@@ -49,7 +49,7 @@ endif
 
 FLAGS := -I$(LLTSRCDIR) $(JCFLAGS) $(HFILEDIRS:%=-I%) \
         -I$(LIBUV_INC) -I$(UTF8PROC_INC) -I$(build_includedir) $(LIBDIRS:%=-L%) \
-        -DLIBRARY_EXPORTS -DUTF8PROC_EXPORTS
+        -DJL_LIBRARY_EXPORTS_INTERNAL -DUTF8PROC_EXPORTS
 ifneq ($(OS), emscripten)
 FLAGS += -DUSE_COMPUTED_GOTO
 endif

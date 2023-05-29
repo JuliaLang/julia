@@ -361,7 +361,8 @@ static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimizat
     {
         FunctionPassManager FPM;
         FPM.addPass(SROAPass());
-        FPM.addPass(InstSimplifyPass());
+        // SROA can duplicate PHI nodes which can block LowerSIMD
+        FPM.addPass(InstCombinePass());
         FPM.addPass(JumpThreadingPass());
         FPM.addPass(CorrelatedValuePropagationPass());
         FPM.addPass(ReassociatePass());
@@ -384,7 +385,7 @@ static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimizat
 #endif
             LPM2.addPass(LICMPass(LICMOptions()));
             JULIA_PASS(LPM2.addPass(JuliaLICMPass()));
-            LPM2.addPass(SimpleLoopUnswitchPass(true, true));
+            LPM2.addPass(SimpleLoopUnswitchPass(/*NonTrivial*/true, true));
             LPM2.addPass(LICMPass(LICMOptions()));
             JULIA_PASS(LPM2.addPass(JuliaLICMPass()));
             //LICM needs MemorySSA now, so we must use it
@@ -397,11 +398,11 @@ static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimizat
             LPM.addPass(LoopIdiomRecognizePass());
             LPM.addPass(IndVarSimplifyPass());
             LPM.addPass(LoopDeletionPass());
+            LPM.addPass(LoopFullUnrollPass());
             invokeLoopOptimizerEndCallbacks(LPM, PB, O);
             //We don't know if the loop end callbacks support MSSA
             FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA = */false));
         }
-        FPM.addPass(LoopUnrollPass(LoopUnrollOptions().setRuntime(false)));
         JULIA_PASS(FPM.addPass(AllocOptPass()));
         FPM.addPass(SROAPass());
         FPM.addPass(InstSimplifyPass());
@@ -720,7 +721,7 @@ void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
         });
 }
 
-extern "C" JL_DLLEXPORT ::llvm::PassPluginLibraryInfo
-llvmGetPassPluginInfo() JL_NOTSAFEPOINT {
+extern "C" JL_DLLEXPORT_CODEGEN
+::llvm::PassPluginLibraryInfo llvmGetPassPluginInfo() JL_NOTSAFEPOINT {
       return {LLVM_PLUGIN_API_VERSION, "Julia", "1", registerCallbacks};
 }

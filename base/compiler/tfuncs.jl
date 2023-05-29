@@ -1665,7 +1665,7 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
                 end
             else
                 istype || return false
-                if !(T <: u.var.ub)
+                if isa(u.var.ub, TypeVar) || !(T <: u.var.ub)
                     return false
                 end
                 if exact ? !(u.var.lb <: T) : !(u.var.lb === Bottom)
@@ -2196,6 +2196,7 @@ const _CONSISTENT_BUILTINS = Any[
     typeassert,
     throw,
     setfield!,
+    donotdelete
 ]
 
 # known to be effect-free (but not necessarily nothrow)
@@ -2235,7 +2236,8 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     typeassert,
     typeof,
     compilerbarrier,
-    Core._typevar
+    Core._typevar,
+    donotdelete
 ]
 
 const _ARGMEM_BUILTINS = Any[

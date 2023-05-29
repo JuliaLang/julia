@@ -268,7 +268,7 @@ will always be called.
 function securezero! end
 @noinline securezero!(a::AbstractArray{<:Number}) = fill!(a, 0)
 @noinline unsafe_securezero!(p::Ptr{T}, len::Integer=1) where {T} =
-    ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
+    memset(p, 0, len*sizeof(T))
 unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
 """
@@ -604,7 +604,7 @@ macro kwdef(expr)
         kwdefs = nothing
     end
     return quote
-        Base.@__doc__ $(esc(expr))
+        $(esc(:($Base.@__doc__ $expr)))
         $kwdefs
     end
 end

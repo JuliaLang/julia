@@ -92,8 +92,15 @@ method_c2(x::Int32, y::Float64) = true
 method_c2(x::Int32, y::Int32, z::Int32) = true
 method_c2(x::T, y::T, z::T) where {T<:Real} = true
 
-Base.show_method_candidates(buf, Base.MethodError(method_c2,(1., 1., 2)))
-@test occursin( "\n\nClosest candidates are:\n  method_c2(!Matched::Int32, ::Float64, ::Any...)$cmod$cfile$(c2line+2)\n  method_c2(::T, ::T, !Matched::T) where T<:Real$cmod$cfile$(c2line+5)\n  method_c2(!Matched::Int32, ::Any...)$cmod$cfile$(c2line+1)\n  ...\n", String(take!(buf)))
+let s
+    Base.show_method_candidates(buf, Base.MethodError(method_c2, (1., 1., 2)))
+    s = String(take!(buf))
+    @test occursin("\n\nClosest candidates are:\n  ", s)
+    @test occursin("\n  method_c2(!Matched::Int32, ::Float64, ::Any...)$cmod$cfile$(c2line+2)\n  ", s)
+    @test occursin("\n  method_c2(::T, ::T, !Matched::T) where T<:Real$cmod$cfile$(c2line+5)\n  ", s)
+    @test occursin("\n  method_c2(!Matched::Int32, ::Any...)$cmod$cfile$(c2line+1)\n  ", s)
+    @test occursin("\n  ...\n", s)
+end
 
 c3line = @__LINE__() + 1
 method_c3(x::Float64, y::Float64) = true
@@ -524,7 +531,7 @@ end
     ex = :(@nest2b 42)
     @test _macroexpand1(ex) != macroexpand(M,ex)
     @test _macroexpand1(_macroexpand1(ex)) == macroexpand(M, ex)
-    @test (@macroexpand1 @nest2b 42) == _macroexpand1(ex)
+    @test (@macroexpand1 @nest2b 42) == _macroexpand1(:(@nest2b 42))
 end
 
 foo_9965(x::Float64; w=false) = x
@@ -989,9 +996,9 @@ bt_str = sprint(Base.show_backtrace, bt)
 @test !occursin("g_collapse_pos_kw(x::Float64)", bt_str)
 
 # Test Base.print_with_compare in convert MethodErrors
-struct TypeCompareError{A,B} end
-let e = try convert(TypeCompareError{Float64,1}, TypeCompareError{Float64,2}()); catch e e end
-    str = sprint(Base.showerror, e)
+struct TypeCompareError{A,B} <: Exception end
+let e = @test_throws MethodError convert(TypeCompareError{Float64,1}, TypeCompareError{Float64,2}())
+    str = sprint(Base.showerror, e.value)
     @test  occursin("TypeCompareError{Float64,2}", str)
     @test  occursin("TypeCompareError{Float64,1}", str)
     @test !occursin("TypeCompareError{Float64{},2}", str) # No {...} for types without params
