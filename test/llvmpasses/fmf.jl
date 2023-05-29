@@ -21,7 +21,7 @@ function dotf(a, b)
 # CHECK-NEXT:    vfmadd231pd
 # CHECK-NEXT:    vfmadd231pd
 # CHECK-NEXT:    vfmadd231pd
-        s += a[i] * b[i]
+        s = muladd(a[i], b[i], s)
     end
     s
 end
