@@ -29,10 +29,10 @@ function simdf(X)
         acc += x
 # CHECK: call void @julia.loopinfo_marker(), {{.*}}, !julia.loopinfo [[LOOPINFO:![0-9]+]]
 # LOWER-NOT: llvm.mem.parallel_loop_access
-# LOWER: fadd fast double
+# LOWER: fadd reassoc contract double
 # LOWER-NOT: call void @julia.loopinfo_marker()
 # LOWER: br {{.*}}, !llvm.loop [[LOOPID:![0-9]+]]
-# FINAL: fadd fast <{{(vscale x )?}}{{[0-9]+}} x double>
+# FINAL: fadd reassoc contract <{{(vscale x )?}}{{[0-9]+}} x double>
     end
     acc
 end
@@ -46,7 +46,7 @@ function simdf2(X)
 # CHECK: call void @julia.loopinfo_marker(), {{.*}}, !julia.loopinfo [[LOOPINFO2:![0-9]+]]
 # LOWER: llvm.mem.parallel_loop_access
 # LOWER-NOT: call void @julia.loopinfo_marker()
-# LOWER: fadd fast double
+# LOWER: fadd reassoc contract double
 # LOWER: br {{.*}}, !llvm.loop [[LOOPID2:![0-9]+]]
     end
     acc
