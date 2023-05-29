@@ -138,3 +138,26 @@ JL_DLLEXPORT void LLVMExtraAddGCInvariantVerifierPass_fallback(void *PM, bool_t 
 JL_DLLEXPORT void LLVMExtraAddDemoteFloat16Pass_fallback(void *PM) UNAVAILABLE
 
 JL_DLLEXPORT void LLVMExtraAddCPUFeaturesPass_fallback(void *PM) UNAVAILABLE
+
+//LLVM C api to the julia JIT
+JL_DLLEXPORT void* JLJITGetLLVMOrcExecutionSession_fallback(void* JIT) UNAVAILABLE
+
+JL_DLLEXPORT void* JLJITGetJuliaOJIT_fallback(void) UNAVAILABLE
+
+JL_DLLEXPORT void* JLJITGetExternalJITDylib_fallback(void* JIT) UNAVAILABLE
+
+JL_DLLEXPORT void* JLJITAddObjectFile_fallback(void* JIT, void* JD, void* ObjBuffer) UNAVAILABLE
+
+JL_DLLEXPORT void* JLJITAddLLVMIRModule_fallback(void* JIT, void* JD, void* TSM) UNAVAILABLE
+
+JL_DLLEXPORT void* JLJITLookup_fallback(void* JIT, void* Result, const char *Name) UNAVAILABLE
+
+JL_DLLEXPORT void* JLJITMangleAndIntern_fallback(void* JIT, const char *Name) UNAVAILABLE
+
+JL_DLLEXPORT const char *JLJITGetTripleString_fallback(void* JIT) UNAVAILABLE
+
+JL_DLLEXPORT const char JLJITGetGlobalPrefix_fallback(void* JIT) UNAVAILABLE
+
+JL_DLLEXPORT const char *JLJITGetDataLayoutString_fallback(void* JIT) UNAVAILABLE
+
+JL_DLLEXPORT void* JLJITGetIRCompileLayer_fallback(void* JIT) UNAVAILABLE
