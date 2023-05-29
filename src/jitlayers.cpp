@@ -1492,7 +1492,7 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 
 Error JuliaOJIT::addExternalModule(orc::JITDylib &JD, orc::ThreadSafeModule TSM, bool ShouldOptimize)
 {
-    if (auto Err = TSM.withModuleDo([&](Module &M) -> Error
+    if (auto Err = TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT -> Error
             {
             if (M.getDataLayout().isDefault())
                 M.setDataLayout(DL);

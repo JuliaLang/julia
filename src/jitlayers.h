@@ -482,8 +482,8 @@ public:
                         std::unique_ptr<MemoryBuffer> Obj) JL_NOTSAFEPOINT;
     Expected<JITEvaluatedSymbol> findExternalJDSymbol(StringRef Name, bool ExternalJDOnly) JL_NOTSAFEPOINT;
     orc::IRCompileLayer &getIRCompileLayer() JL_NOTSAFEPOINT { return ExternalCompileLayer; };
-    orc::ExecutionSession &getExecutionSession() { return ES; }
-    orc::JITDylib &getExternalJITDylib() { return ExternalJD; }
+    orc::ExecutionSession &getExecutionSession() JL_NOTSAFEPOINT { return ES; }
+    orc::JITDylib &getExternalJITDylib() JL_NOTSAFEPOINT { return ExternalJD; }
 
     JL_JITSymbol findSymbol(StringRef Name, bool ExportedSymbolsOnly) JL_NOTSAFEPOINT;
     JL_JITSymbol findUnmangledSymbol(StringRef Name) JL_NOTSAFEPOINT;
