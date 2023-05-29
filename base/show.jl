@@ -1117,7 +1117,7 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
             print(io, "}")
             return
         end
-    elseif get(io, :simplify_kwstype, false) && kwsnt !== nothing
+    elseif get(io, :simplify_kwstype, false)::Bool && kwsnt !== nothing
         # simplify the type representation of keyword arguments
         # when printing signature of keyword method
         print(io, "@Kwargs{")
@@ -2536,7 +2536,7 @@ function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
             print_within_stacktrace(io, argnames[i]; color=:light_black)
         end
         print(io, "::")
-        print_type_bicolor(env_io, sig[i]; use_color = get(io, :backtrace, false))
+        print_type_bicolor(env_io, sig[i]; use_color = get(io, :backtrace, false)::Bool)
     end
     if kwargs !== nothing
         print(io, "; ")
@@ -2546,7 +2546,7 @@ function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
             first = false
             print_within_stacktrace(io, k; color=:light_black)
             print(io, "::")
-            print_type_bicolor(io, t; use_color = get(io, :backtrace, false))
+            print_type_bicolor(io, t; use_color = get(io, :backtrace, false)::Bool)
         end
     end
     print_within_stacktrace(io, ")", bold=true)
