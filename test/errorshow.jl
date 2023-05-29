@@ -1006,7 +1006,7 @@ let bt
     end
     @test res
     bt_str = sprint(Base.show_backtrace, bt)
-    @test occursin("simplify_kwargs_type(pos::Int64; kws::@Kwargs{kw1::Float64, kw2::String})", bt_str)
+    @test occursin("simplify_kwargs_type(pos::$Int; kws::@Kwargs{kw1::Float64, kw2::String})", bt_str)
 end
 
 # Test Base.print_with_compare in convert MethodErrors

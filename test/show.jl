@@ -1370,7 +1370,7 @@ test_repr("(:).a")
 @test repr(@NamedTuple{a::Float64, b}) == "@NamedTuple{a::Float64, b}"
 
 # Test general printing of `Base.Pairs` (it should not use the `@Kwargs` macro syntax)
-@test repr(@Kwargs{init::Int}) == "Base.Pairs{Symbol, Int64, Tuple{Symbol}, @NamedTuple{init::Int64}}"
+@test repr(@Kwargs{init::Int}) == "Base.Pairs{Symbol, $Int, Tuple{Symbol}, @NamedTuple{init::$Int}}"
 
 @testset "issue #42931" begin
     @test repr(NTuple{4, :A}) == "NTuple{4, :A}"
