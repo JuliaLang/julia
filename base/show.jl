@@ -1118,7 +1118,7 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
             return
         end
     elseif kwsnt !== nothing
-        print(io, "Base.@Kwargs{")
+        print(io, "@Kwargs{")
         show_at_namedtuple(io, kwsnt.parameters...)
         print(io, "}")
         return

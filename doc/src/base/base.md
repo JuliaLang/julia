@@ -234,6 +234,7 @@ Core.Tuple
 Core.NTuple
 Core.NamedTuple
 Base.@NamedTuple
+Base.@Kwargs
 Base.Val
 Core.Vararg
 Core.Nothing
