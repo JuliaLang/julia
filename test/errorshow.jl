@@ -995,6 +995,20 @@ bt_str = sprint(Base.show_backtrace, bt)
 @test !occursin("g_collapse_pos_kw(x::Float64, y::Float64)", bt_str)
 @test !occursin("g_collapse_pos_kw(x::Float64)", bt_str)
 
+simplify_kwargs_type(pos; kws...) = (pos, sum(kws))
+let bt
+    res = try
+        simplify_kwargs_type(0; kw1=1.0, kw2="2.0")
+        false
+    catch
+        bt = catch_backtrace()
+        true
+    end
+    @test res
+    bt_str = sprint(Base.show_backtrace, bt)
+    @test occursin("simplify_kwargs_type(pos::Int64; kws::@Kwargs{kw1::Float64, kw2::String})", bt_str)
+end
+
 # Test Base.print_with_compare in convert MethodErrors
 struct TypeCompareError{A,B} <: Exception end
 let e = @test_throws MethodError convert(TypeCompareError{Float64,1}, TypeCompareError{Float64,2}())

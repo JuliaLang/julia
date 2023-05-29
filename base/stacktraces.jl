@@ -352,6 +352,7 @@ function show_spec_sig(io::IO, m::Method, @nospecialize(sig::Type))
                 kwnames[i] = Symbol(str[1:end-3])
             end
         end
+        io = IOContext(io, :simplify_kwstype=>true) # see the comment in `show_datatype`
         Base.show_tuple_as_call(io, m.name, pos_sig;
                                 demangle=true,
                                 kwargs=zip(kwnames, kwarg_types),
