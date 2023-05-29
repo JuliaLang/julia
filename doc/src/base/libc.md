@@ -4,6 +4,10 @@
 Base.Libc.malloc
 Base.Libc.calloc
 Base.Libc.realloc
+Base.Libc.memcpy
+Base.Libc.memmove
+Base.Libc.memset
+Base.Libc.memcmp
 Base.Libc.free
 Base.Libc.errno
 Base.Libc.strerror

@@ -167,7 +167,7 @@ abstract type AbstractMatch end
 """
     RegexMatch <: AbstractMatch
 
-A type representing a single match to a `Regex` found in a string.
+A type representing a single match to a [`Regex`](@ref) found in a string.
 Typically created from the [`match`](@ref) function.
 
 The `match` field stores the substring of the entire matched string.

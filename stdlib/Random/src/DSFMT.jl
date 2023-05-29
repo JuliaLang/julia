@@ -194,8 +194,11 @@ function dsfmt_jump(s::DSFMT_state, jp::GF2X)
     work = zeros(Int32, JN32)
     rwork = reinterpret(UInt64, work)
     dsfmt = Vector{UInt64}(undef, nval >> 1)
-    ccall(:memcpy, Ptr{Cvoid}, (Ptr{UInt64}, Ptr{Int32}, Csize_t),
-          dsfmt, val, (nval - 1) * sizeof(Int32))
+    GC.@preserve dsfmt val begin
+        pdsfmt = Base.unsafe_convert(Ptr{Cvoid}, dsfmt)
+        pval = Base.unsafe_convert(Ptr{Cvoid}, val)
+        Base.Libc.memcpy(pdsfmt, pval, (nval - 1) * sizeof(Int32))
+    end
     dsfmt[end] = UInt64(N*2)
 
     for i in 0:degree(jp)

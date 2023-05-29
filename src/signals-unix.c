@@ -299,8 +299,8 @@ int is_write_fault(void *context) {
 }
 #elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
 struct linux_aarch64_ctx_header {
-	uint32_t magic;
-	uint32_t size;
+    uint32_t magic;
+    uint32_t size;
 };
 const uint32_t linux_esr_magic = 0x45535201;
 
@@ -645,7 +645,7 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
 }
 
 const static int sigwait_sigs[] = {
-    SIGINT, SIGTERM, SIGABRT, SIGQUIT,
+    SIGINT, SIGTERM, SIGQUIT,
 #ifdef SIGINFO
     SIGINFO,
 #else
@@ -767,7 +767,7 @@ static void *signal_listener(void *arg)
         profile = (sig == SIGUSR1);
 #if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
         if (profile && !(info.si_code == SI_TIMER &&
-	            info.si_value.sival_ptr == &timerprof))
+                info.si_value.sival_ptr == &timerprof))
             profile = 0;
 #endif
 #endif

@@ -188,10 +188,12 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test contains(v[2], r"enable-tail-merge + = 1")
         @test isempty(v[3])
     end
-    @testset let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -enable-tail-merge=1", "HOME" => homedir()))
-        @test !v[1]
-        @test isempty(v[2])
-        @test v[3] == "julia: for the --enable-tail-merge option: may only occur zero or one times!"
+    if Base.libllvm_version < v"15" #LLVM over 15 doesn't care for multiple options
+        @testset let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -enable-tail-merge=1", "HOME" => homedir()))
+            @test !v[1]
+            @test isempty(v[2])
+            @test v[3] == "julia: for the --enable-tail-merge option: may only occur zero or one times!"
+        end
     end
 end
 
@@ -339,6 +341,24 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     let p = run(`$exename --procs=1.0`, wait=false)
         wait(p)
         @test p.exitcode == 1 && p.termsignal == 0
+    end
+
+    # --gcthreads
+    code = "print(Threads.ngcthreads())"
+    cpu_threads = ccall(:jl_effective_threads, Int32, ())
+    @test (cpu_threads == 1 ? "1" : string(div(cpu_threads, 2))) ==
+          read(`$exename --threads auto -e $code`, String) ==
+          read(`$exename --threads=auto -e $code`, String) ==
+          read(`$exename -tauto -e $code`, String) ==
+          read(`$exename -t auto -e $code`, String)
+    for nt in (nothing, "1")
+        withenv("JULIA_NUM_GC_THREADS" => nt) do
+            @test read(`$exename --gcthreads=2 -e $code`, String) == "2"
+        end
+    end
+
+    withenv("JULIA_NUM_GC_THREADS" => 2) do
+        @test read(`$exename -e $code`, String) == "2"
     end
 
     # --machine-file

@@ -353,6 +353,7 @@ end
 const atexit_hooks = Callable[
     () -> Filesystem.temp_cleanup_purge(force=true)
 ]
+const _atexit_hooks_lock = ReentrantLock()
 
 """
     atexit(f)
@@ -374,7 +375,7 @@ calls `exit(n)`, then Julia will exit with the exit code corresponding to the
 last called exit hook that calls `exit(n)`. (Because exit hooks are called in
 LIFO order, "last called" is equivalent to "first registered".)
 """
-atexit(f::Function) = (pushfirst!(atexit_hooks, f); nothing)
+atexit(f::Function) = Base.@lock _atexit_hooks_lock (pushfirst!(atexit_hooks, f); nothing)
 
 function _atexit(exitcode::Cint)
     while !isempty(atexit_hooks)
