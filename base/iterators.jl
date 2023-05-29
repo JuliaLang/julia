@@ -1569,7 +1569,7 @@ julia> reduce(hcat, Iterators.take(fib, 7))
 1×7 Matrix{Int64}:
  1  1  2  3  5  8  13
 
-julia> frac(c, z=0.0im) = Iterators.unfold((c, z), ComplexF64) do (c, z)
+julia> frac(c, z=0.0im) = Iterators.unfold((c, z), eltype=ComplexF64) do (c, z)
            if real(z * z') < 4
                z, (c, z^2 + c)
            else
@@ -1615,7 +1615,7 @@ But the `unfold` version may produce a more strictly typed vector and can be eas
 
 In Haskell and some other functional programming environments, this function is known as `unfoldr`.
 """
-function unfold(f, initialstate, eltype::Type{Eltype}) where {Eltype}
+function unfold(f, initialstate; eltype::Type{Eltype}) where {Eltype}
     Iterators.rest(Unfold{Eltype}(f), initialstate)
 end
 function unfold(f, initialstate)
