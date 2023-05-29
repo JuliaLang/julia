@@ -2,9 +2,8 @@
     GreenNode(head, span)
     GreenNode(head, children...)
 
-A "green tree" in Roslyn (C# compiler) terminology is a lossless syntax tree
-which overlays all the source text. The most basic properties of a green tree
-are that:
+A "green tree" is a lossless syntax tree which overlays all the source text.
+The most basic properties of a green tree are that:
 
 * Nodes cover a contiguous span of bytes in the text
 * Sibling nodes are ordered in the same order as the text
@@ -20,22 +19,6 @@ As implementation choices, we choose that:
 * For simplicity and uniformity, leaf nodes cover a single token in the source.
   This is like rust-analyzer, but different from Roslyn where leaves can
   include syntax trivia.
-
-Design principles:
-* Tree should remember what the lexer and parser knew about the source code
-* Be position-independent so nodes can be interned and reused
-* Be a low level textural overlay which is language independent.
-
-Design alternatives to explore:
-* Maybe allow some loss of local parser state if it can be derived again
-  quickly? Particularly in the ordering of children.
-* Store strings for tokens? (Surprisingly, rust-analyzer does this. It could be
-  efficient if the strings or nodes are interned for the parsing session?)
-* Never construct this tree? Instead serialize it to Vector{UInt8} in an
-  efficient but compact format? Could this be more flexible with storing parser
-  state and beat the interning approach? We could also store the source tokens
-  in the serialization and discard the source text. (Caveat - unclear that this
-  could deal with incremental parsing...)
 """
 struct GreenNode{Head}
     head::Head
