@@ -658,8 +658,23 @@ end
 hash(x::Float32, h::UInt) = hash(Float64(x), h)
 hash(x::Float16, h::UInt) = hash(Float64(x), h)
 
-## generic hashing for rational values ##
+function hash(x::Integer, h::UInt)
+    if typemin(Int64) <= x <= typemax(UInt64)
+        x <= typemax(Int64) && return hash(Int64(x), h)
+        return hash(UInt64(x), h)
+    end
+    # handle values representable as Float64
+    left = top_set_bit(abs(x))
+    pow = trailing_zeros(x)
+    left - pow <= 53 && left <= 1024 && return hash(Float64(x), h)
+    # decompose x as num*2^pow and hash as a rational
+    h = hash_integer(UInt(1), h)
+    h = hash_integer(pow, h)
+    h = hash_integer(x >> pow, h)
+    return h
+end
 
+## generic hashing for rational values ##
 function hash(x::Real, h::UInt)
     # decompose x as num*2^pow/den
     num, pow, den = decompose(x)
