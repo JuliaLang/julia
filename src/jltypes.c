@@ -1411,7 +1411,7 @@ jl_datatype_t *jl_apply_modify_type(jl_value_t *dt)
     return rettyp;
 }
 
-jl_datatype_t *jl_apply_cmpswap_type(jl_value_t *dt)
+jl_datatype_t *jl_apply_cmpswap_type(jl_value_t *ty)
 {
     jl_value_t *params[2];
     jl_value_t *names = jl_atomic_load_relaxed(&cmpswap_names);
@@ -1422,12 +1422,12 @@ jl_datatype_t *jl_apply_cmpswap_type(jl_value_t *dt)
         if (jl_atomic_cmpswap(&cmpswap_names, &names, lnames))
             names = jl_atomic_load_relaxed(&cmpswap_names); // == lnames
     }
-    params[0] = dt;
+    params[0] = ty;
     params[1] = (jl_value_t*)jl_bool_type;
-    jl_datatype_t *tuptyp = (jl_datatype_t*)jl_apply_tuple_type_v(params, 2);
-    JL_GC_PROMISE_ROOTED(tuptyp); // (JL_ALWAYS_LEAFTYPE)
-    jl_datatype_t *rettyp = (jl_datatype_t*)jl_apply_type2((jl_value_t*)jl_namedtuple_type, names, (jl_value_t*)tuptyp);
-    JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
+    jl_value_t *tuptyp = jl_apply_tuple_type_v(params, 2);
+    JL_GC_PUSH1(&tuptyp);
+    jl_datatype_t *rettyp = (jl_datatype_t*)jl_apply_type2((jl_value_t*)jl_namedtuple_type, names, tuptyp);
+    JL_GC_POP();
     return rettyp;
 }
 
