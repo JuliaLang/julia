@@ -608,7 +608,7 @@ count_ones_abs(x::BigInt) = iszero(x) ? 0 : MPZ.mpn_popcount(x)
 function top_set_bit(x::BigInt)
     isneg(x) && throw(DomainError(x, "top_set_bit only supports negative arguments when they have type BitSigned."))
     iszero(x) && return 0
-    Int(ccall((:__gmpz_sizeinbase, :libgmp), Csize_t, (Base.GMP.MPZ.mpz_t, Cint), x, 2))
+    x.size * sizeof(Limb) << 3 - leading_zeros(GC.@preserve x unsafe_load(x.d, x.size))
 end
 
 divrem(x::BigInt, y::BigInt) = MPZ.tdiv_qr(x, y)
