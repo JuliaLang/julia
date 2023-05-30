@@ -6,12 +6,14 @@ use mmtk::util::opaque_pointer::*;
 use mmtk::vm::{Collection, GCThreadContext};
 use mmtk::Mutator;
 use mmtk::MutatorContext;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use crate::{BLOCK_FOR_GC, STW_COND, WORLD_HAS_STOPPED};
 
 const GC_THREAD_KIND_CONTROLLER: libc::c_int = 0;
 const GC_THREAD_KIND_WORKER: libc::c_int = 1;
+
+static GC_START: AtomicU64 = AtomicU64::new(0);
 
 pub struct VMCollection {}
 
@@ -26,10 +28,21 @@ impl Collection<JuliaVM> for VMCollection {
             // FIXME add wait var
         }
 
-        trace!("Stopped the world!")
+        trace!("Stopped the world!");
+
+        // Record the start time of the GC
+        let now = unsafe { ((*UPCALLS).jl_hrtime)() };
+        trace!("gc_start = {}", now);
+        GC_START.store(now, Ordering::Relaxed);
     }
 
     fn resume_mutators(_tls: VMWorkerThread) {
+        // Get the end time of the GC
+        let end = unsafe { ((*UPCALLS).jl_hrtime)() };
+        trace!("gc_end = {}", end);
+        let gc_time = end - GC_START.load(Ordering::Relaxed);
+        unsafe { ((*UPCALLS).update_gc_time)(gc_time) }
+
         AtomicBool::store(&BLOCK_FOR_GC, false, Ordering::SeqCst);
         AtomicBool::store(&WORLD_HAS_STOPPED, false, Ordering::SeqCst);
 

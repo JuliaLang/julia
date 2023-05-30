@@ -100,6 +100,8 @@ typedef struct {
     void (* sweep_malloced_array) (void);
     void (* wait_in_a_safepoint) (void);
     void (* exit_from_safepoint) (int8_t old_state);
+    uint64_t (* jl_hrtime) (void);
+    void (* update_gc_time) (uint64_t);
 } Julia_Upcalls;
 
 /**

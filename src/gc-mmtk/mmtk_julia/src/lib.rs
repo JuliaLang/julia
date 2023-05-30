@@ -155,6 +155,8 @@ pub struct Julia_Upcalls {
     pub mmtk_sweep_malloced_array: extern "C" fn(),
     pub wait_in_a_safepoint: extern "C" fn(),
     pub exit_from_safepoint: extern "C" fn(old_state: i8),
+    pub jl_hrtime: extern "C" fn() -> u64,
+    pub update_gc_time: extern "C" fn(u64),
 }
 
 pub static mut UPCALLS: *const Julia_Upcalls = null_mut();

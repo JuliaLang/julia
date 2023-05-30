@@ -513,7 +513,7 @@ pub extern "C" fn mmtk_immortal_region_post_alloc(start: Address, size: usize) {
 
 #[cfg(feature = "stickyimmix")]
 fn set_side_log_bit_for_region(start: Address, size: usize) {
-    info!("Bulk set {} to {} ({} bytes)", start, start + size, size);
+    debug!("Bulk set {} to {} ({} bytes)", start, start + size, size);
     use crate::mmtk::vm::ObjectModel;
     match <JuliaVM as mmtk::vm::VMBinding>::VMObjectModel::GLOBAL_LOG_BIT_SPEC.as_spec() {
         mmtk::util::metadata::MetadataSpec::OnSide(side) => side.bset_metadata(start, size),
