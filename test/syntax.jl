@@ -3479,3 +3479,7 @@ end
     @test @_macroexpand(global (; x::S, $(esc(:y))::$(esc(:T))) = a) ==
         :(global (; x::$(GlobalRef(m, :S)), y::T) = $(GlobalRef(m, :a)))
 end
+
+# issue #49984
+macro z49984(s); :(let a; $(esc(s)); end); end
+@test let a = 1; @z49984(a) === 1; end
