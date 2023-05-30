@@ -1010,6 +1010,9 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T, N}, indices::Vararg{$Int, N})")
 @test sprint(show, :(function f end)) == ":(function f end)"
 @test_repr "function g end"
 
+# Printing of :(function (x...) end)
+@test startswith(replstr(Meta.parse("function (x...) end")), ":(function (x...,)")
+
 # Printing of macro definitions
 @test sprint(show, :(macro m end)) == ":(macro m end)"
 @test_repr "macro m end"
