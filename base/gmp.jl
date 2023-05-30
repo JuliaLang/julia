@@ -606,8 +606,8 @@ Number of ones in the binary representation of abs(x).
 count_ones_abs(x::BigInt) = iszero(x) ? 0 : MPZ.mpn_popcount(x)
 
 function top_set_bit(x::BigInt)
-    x < 0 && throw(DomainError(x, "top_set_bit only supports negative arguments when they have type BitSigned."))
-    x == 0 && return 0
+    isneg(x) && throw(DomainError(x, "top_set_bit only supports negative arguments when they have type BitSigned."))
+    iszero(x) && return 0
     Int(ccall((:__gmpz_sizeinbase, :libgmp), Csize_t, (Base.GMP.MPZ.mpz_t, Cint), x, 2))
 end
 
