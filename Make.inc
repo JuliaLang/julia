@@ -188,21 +188,17 @@ JULIA_MINOR_VERSION := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'.
 JULIA_PATCH_VERSION := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'+' -f 1 | cut -d'.' -f 3)
 
 # libjulia's SONAME will follow the format libjulia.so.$(SOMAJOR). Before v1.0.0,
-# SOMAJOR will be a two-decimal value, e.g. libjulia.so.0.5, whereas at and beyond
-# v1.0.0, SOMAJOR will be simply the major version number, e.g. libjulia.so.1
+# somajor was a two-decimal value (e.g. libjulia.so.0.5). During v1.0.x - v1.9.x,
+# somajor was simply the major version number (e.g. libjulia.so.1). Starting in
+# v1.10.0, somajor is major.minor again (e.g. libjulia.so.1.10)
 # The file itself will ultimately symlink to libjulia.so.$(SOMAJOR).$(SOMINOR)
-ifeq ($(JULIA_MAJOR_VERSION),0)
 SOMAJOR := $(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION)
 SOMINOR := $(JULIA_PATCH_VERSION)
-else
-SOMAJOR := $(JULIA_MAJOR_VERSION)
-SOMINOR := $(JULIA_MINOR_VERSION)
-endif
 
-# In order to load multiple libjulia's with different DEFAULT_SYMBOL_VERSION
-# each must have a unique SONAME
-ifdef DEFAULT_SYMBOL_VERSION
-SOMAJOR := "$(SOMAJOR)-$(DEFAULT_SYMBOL_VERSION)"
+# This suffix affects libjulia's SONAME and the symbol version associated with
+# all of its exported symbols.
+ifdef SYMBOL_VERSION_SUFFIX
+SOMAJOR := $(SOMAJOR)_$(SYMBOL_VERSION_SUFFIX)
 endif
 
 ifneq ($(NO_GIT), 1)
