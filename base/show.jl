@@ -1117,11 +1117,11 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
             print(io, "}")
             return
         end
-    elseif get(io, :simplify_kwstype, false)::Bool && kwsnt !== nothing
+    elseif get(io, :backtrace, false)::Bool && kwsnt !== nothing
         # simplify the type representation of keyword arguments
-        # when printing signature of keyword method
+        # when printing signature of keyword method in the stack trace
         print(io, "@Kwargs{")
-        show_at_namedtuple(io, kwsnt.parameters...)
+        show_at_namedtuple(io, kwsnt.parameters[1]::Tuple, kwsnt.parameters[2]::DataType)
         print(io, "}")
         return
     end
