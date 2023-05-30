@@ -54,13 +54,13 @@ function set_aux_root(n :: Int, x :: String)
     return ccall(:set_aux_root, Nothing, (UInt, String), n, x)
 end
 
-function internal_obj_scan(p :: Any)
-    if ccall(:internal_obj_scan, Cint, (Any,), p) == 0
-        global internal_obj_scan_failures += 1
-    end
-end
+# function internal_obj_scan(p :: Any)
+#     if ccall(:internal_obj_scan, Cint, (Any,), p) == 0
+#         global internal_obj_scan_failures += 1
+#     end
+# end
 
-global internal_obj_scan_failures = 0
+# global internal_obj_scan_failures = 0
 
 for i in 0:1000
     set_aux_root(i, string(i))
@@ -70,12 +70,12 @@ function test()
     local stack = make()
     for i in 1:100000
         push(stack, string(i, base=2))
-        internal_obj_scan(top(stack))
+        # internal_obj_scan(top(stack))
     end
     for i in 1:1000
         local stack2 = make()
-        internal_obj_scan(stack2)
-        internal_obj_scan(blob(stack2))
+        # internal_obj_scan(stack2)
+        # internal_obj_scan(blob(stack2))
         while !empty(stack)
             push(stack2, pop(stack))
         end
@@ -98,5 +98,5 @@ end
 print(gc_counter_full(), " full collections.\n")
 print(gc_counter_inc(), " partial collections.\n")
 print(num_obj_sweeps(), " object sweeps.\n")
-print(internal_obj_scan_failures, " internal object scan failures.\n")
+# print(internal_obj_scan_failures, " internal object scan failures.\n")
 print(corrupted_roots, " corrupted auxiliary roots.\n")

@@ -119,6 +119,11 @@ process affinity is not configured, it uses the number of CPU
 threads.
 
 .TP
+--gcthreads <n>
+Enable n GC threads; If unspecified is set to half of the
+compute worker threads.
+
+.TP
 -p, --procs {N|auto}
 Integer value N launches N additional local worker processes `auto` launches as many workers
 as the number of local CPU threads (logical cores)
@@ -215,6 +220,11 @@ Launch a bug report session. It can be used to start a REPL, run a script, or ev
 expressions. It first tries to use BugReporting.jl installed in current environment and
 fallbacks to the latest compatible BugReporting.jl if not. For more information, see
 --bug-report=help.
+
+.TP
+--heap-size-hint=<size>
+Forces garbage collection if memory usage is higher than that value. The memory hint might be
+specified in megabytes (500M) or gigabytes (1.5G)
 
 .TP
 --compile={yes*|no|all|min}

@@ -44,6 +44,9 @@ struct ABI_PPC64leLayout : AbiLayout {
 // count the homogeneous floating aggregate size (saturating at max count of 8)
 unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva) const
 {
+    if (jl_datatype_size(ty) > 128 || ty->layout->npointers || ty->layout->haspadding)
+        return 9;
+
     size_t i, l = ty->layout->nfields;
     // handle homogeneous float aggregates
     if (l == 0) {
@@ -52,7 +55,7 @@ unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva) const
         *hva = false;
         if (*ty0 == NULL)
             *ty0 = ty;
-        else if (*hva || ty->size != (*ty0)->size)
+        else if (*hva || jl_datatype_size(ty) != jl_datatype_size(*ty0))
             return 9;
         return 1;
     }
@@ -69,7 +72,7 @@ unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva) const
         *hva = true;
         if (*ty0 == NULL)
             *ty0 = ty;
-        else if (!*hva || ty->size != (*ty0)->size)
+        else if (!*hva || jl_datatype_size(ty) != jl_datatype_size(*ty0))
             return 9;
         for (i = 1; i < l; i++) {
             jl_datatype_t *fld = (jl_datatype_t*)jl_field_type(ty, i);

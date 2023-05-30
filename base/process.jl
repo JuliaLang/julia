@@ -413,7 +413,7 @@ process failed, or if the process attempts to print anything to stdout.
 """
 function open(f::Function, cmds::AbstractCmd, args...; kwargs...)
     P = open(cmds, args...; kwargs...)
-    function waitkill(P::Process)
+    function waitkill(P::Union{Process,ProcessChain})
         close(P)
         # 0.1 seconds after we hope it dies (from closing stdio),
         # we kill the process with SIGTERM (15)
@@ -430,7 +430,7 @@ function open(f::Function, cmds::AbstractCmd, args...; kwargs...)
         rethrow()
     end
     close(P.in)
-    if !eof(P.out)
+    if !(eof(P.out)::Bool)
         waitkill(P)
         throw(_UVError("open(do)", UV_EPIPE))
     end
@@ -447,7 +447,7 @@ function read(cmd::AbstractCmd)
     procs = open(cmd, "r", devnull)
     bytes = read(procs.out)
     success(procs) || pipeline_error(procs)
-    return bytes
+    return bytes::Vector{UInt8}
 end
 
 """
@@ -463,6 +463,9 @@ read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))::String
 Run a command object, constructed with backticks (see the [Running External Programs](@ref)
 section in the manual). Throws an error if anything goes wrong, including the process
 exiting with a non-zero status (when `wait` is true).
+
+The `args...` allow you to pass through file descriptors to the command, and are ordered
+like regular unix file descriptors (eg `stdin, stdout, stderr, FD(3), FD(4)...`).
 
 If `wait` is false, the process runs asynchronously. You can later wait for it and check
 its exit status by calling `success` on the returned process object.

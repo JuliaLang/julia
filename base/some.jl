@@ -29,15 +29,14 @@ end
 function nonnothingtype_checked(T::Type)
     R = nonnothingtype(T)
     R >: T && error("could not compute non-nothing type")
+    R <: Union{} && error("cannot convert a value to nothing for assignment")
     return R
 end
 
 convert(::Type{T}, x::T) where {T>:Nothing} = x
 convert(::Type{T}, x) where {T>:Nothing} = convert(nonnothingtype_checked(T), x)
-convert(::Type{Nothing}, x) = throw(MethodError(convert, (Nothing, x)))
-convert(::Type{Nothing}, ::Nothing) = nothing
 convert(::Type{Some{T}}, x::Some{T}) where {T} = x
-convert(::Type{Some{T}}, x::Some) where {T} = Some{T}(convert(T, x.value))
+convert(::Type{Some{T}}, x::Some) where {T} = Some{T}(convert(T, x.value))::Some{T}
 
 function show(io::IO, x::Some)
     if get(io, :typeinfo, Any) == typeof(x)
@@ -65,7 +64,7 @@ Return `true` if `x === nothing`, and return `false` if not.
 !!! compat "Julia 1.1"
     This function requires at least Julia 1.1.
 
-See also [`something`](@ref), [`notnothing`](@ref), [`ismissing`](@ref).
+See also [`something`](@ref), [`Base.notnothing`](@ref), [`ismissing`](@ref).
 """
 isnothing(x) = x === nothing
 
@@ -86,6 +85,9 @@ julia> something(nothing, 1)
 
 julia> something(Some(1), nothing)
 1
+
+julia> something(Some(nothing), 2) === nothing
+true
 
 julia> something(missing, nothing)
 missing

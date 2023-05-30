@@ -1,11 +1,17 @@
 ## UNWIND ##
+include $(SRCDIR)/unwind.version
+include $(SRCDIR)/llvmunwind.version
 
 ifneq ($(USE_BINARYBUILDER_LIBUNWIND),1)
-LIBUNWIND_CFLAGS := -U_FORTIFY_SOURCE $(fPIC) -lz
+LIBUNWIND_CFLAGS := -U_FORTIFY_SOURCE $(fPIC) -lz $(SANITIZE_OPTS)
 LIBUNWIND_CPPFLAGS :=
 
 ifeq ($(USE_SYSTEM_ZLIB),0)
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: | $(build_prefix)/manifest/zlib
+endif
+
+ifeq ($(USE_SYSTEM_LLVM),0)
+$(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured: | $(build_prefix)/manifest/llvm
 endif
 
 $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz: | $(SRCCACHE)
@@ -36,10 +42,17 @@ $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-dwarf-table.patch-applied: $(SRCCA
 	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f -u -l < $(SRCDIR)/patches/libunwind-dwarf-table.patch
 	echo 1 > $@
 
-$(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-dwarf-table.patch-applied
+$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-non-empty-structs.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-dwarf-table.patch-applied
+	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f -u -l < $(SRCDIR)/patches/libunwind-non-empty-structs.patch
+	echo 1 > $@
+
+# note minidebuginfo requires liblzma, which we do not have a source build for
+# (it will be enabled in BinaryBuilder-based downloads however)
+# since https://github.com/JuliaPackaging/Yggdrasil/commit/0149e021be9badcb331007c62442a4f554f3003c
+$(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-non-empty-structs.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(dir $<)/configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" --enable-shared --disable-minidebuginfo --disable-tests --enable-zlibdebuginfo
+	$(dir $<)/configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" --enable-shared --disable-minidebuginfo --disable-tests --enable-zlibdebuginfo --disable-conservative-checks
 	echo 1 > $@
 
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled: $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured
@@ -95,10 +108,18 @@ $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/llvm-libunwind-force-dwarf.patch-applie
 	cd $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER) && patch -p2 -f < $(SRCDIR)/patches/llvm-libunwind-force-dwarf.patch
 	echo 1 > $@
 
+$(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/llvm-libunwind-revert-monorepo-requirement.patch-applied: $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/llvm-libunwind-force-dwarf.patch-applied
+	cd $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER) && patch -p2 -f < $(SRCDIR)/patches/llvm-libunwind-revert-monorepo-requirement.patch
+	echo 1 > $@
+
+$(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/llvm-libunwind-freebsd-libgcc-api-compat.patch-applied: $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/llvm-libunwind-revert-monorepo-requirement.patch-applied
+	cd $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER) && patch -p2 -f < $(SRCDIR)/patches/llvm-libunwind-freebsd-libgcc-api-compat.patch
+	echo 1 > $@
+
 checksum-llvmunwind: $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER).tar.xz
 	$(JLCHECKSUM) $<
 
-$(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured: $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/source-extracted $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/llvm-libunwind-force-dwarf.patch-applied
+$(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured: $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/source-extracted $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/llvm-libunwind-freebsd-libgcc-api-compat.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(LLVMUNWIND_OPTS)

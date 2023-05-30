@@ -31,7 +31,8 @@ export GitError
             RETRY           = Cint(-32), # internal only
             EMISMATCH       = Cint(-33), # hashsum mismatch in object
             EINDEXDIRTY     = Cint(-34), # unsaved changes in the index would be overwritten
-            EAPPLYFAIL      = Cint(-35)) # patch application failed
+            EAPPLYFAIL      = Cint(-35), # patch application failed
+            EOWNER          = Cint(-36)) # the object is not owned by the current user
 
 @enum(Class, None,
              NoMemory,

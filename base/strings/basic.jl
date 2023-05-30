@@ -229,7 +229,7 @@ Symbol(s::AbstractString) = Symbol(String(s))
 Symbol(x...) = Symbol(string(x...))
 
 convert(::Type{T}, s::T) where {T<:AbstractString} = s
-convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)
+convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)::T
 
 ## summary ##
 
@@ -298,12 +298,13 @@ julia> cmp("b", "β")
 """
 function cmp(a::AbstractString, b::AbstractString)
     a === b && return 0
-    a, b = Iterators.Stateful(a), Iterators.Stateful(b)
-    for (c::AbstractChar, d::AbstractChar) in zip(a, b)
+    (iv1, iv2) = (iterate(a), iterate(b))
+    while iv1 !== nothing && iv2 !== nothing
+        (c, d) = (first(iv1)::AbstractChar, first(iv2)::AbstractChar)
         c ≠ d && return ifelse(c < d, -1, 1)
+        (iv1, iv2) = (iterate(a, last(iv1)), iterate(b, last(iv2)))
     end
-    isempty(a) && return ifelse(isempty(b), 0, -1)
-    return 1
+    return iv1 === nothing ? (iv2 === nothing ? 0 : -1) : 1
 end
 
 """
@@ -345,7 +346,9 @@ isless(a::AbstractString, b::AbstractString) = cmp(a, b) < 0
 
 # faster comparisons for symbols
 
-cmp(a::Symbol, b::Symbol) = Int(sign(ccall(:strcmp, Int32, (Cstring, Cstring), a, b)))
+@assume_effects :total function cmp(a::Symbol, b::Symbol)
+    Int(sign(ccall(:strcmp, Int32, (Cstring, Cstring), a, b)))
+end
 
 isless(a::Symbol, b::Symbol) = cmp(a, b) < 0
 
@@ -610,6 +613,38 @@ isascii(c::Char) = bswap(reinterpret(UInt32, c)) < 0x80
 isascii(s::AbstractString) = all(isascii, s)
 isascii(c::AbstractChar) = UInt32(c) < 0x80
 
+@inline function _isascii(code_units::AbstractVector{CU}, first, last) where {CU}
+    r = zero(CU)
+    for n = first:last
+        @inbounds r |= code_units[n]
+    end
+    return 0 ≤ r < 0x80
+end
+
+#The chunking algorithm makes the last two chunks overlap inorder to keep the size fixed
+@inline function  _isascii_chunks(chunk_size,cu::AbstractVector{CU}, first,last) where {CU}
+    n=first
+    while n <= last - chunk_size
+        _isascii(cu,n,n+chunk_size-1) || return false
+        n += chunk_size
+    end
+    return  _isascii(cu,last-chunk_size+1,last)
+end
+"""
+    isascii(cu::AbstractVector{CU}) where {CU <: Integer} -> Bool
+
+Test whether all values in the vector belong to the ASCII character set (0x00 to 0x7f).
+This function is intended to be used by other string implementations that need a fast ASCII check.
+"""
+function isascii(cu::AbstractVector{CU}) where {CU <: Integer}
+    chunk_size = 1024
+    chunk_threshold =  chunk_size + (chunk_size ÷ 2)
+    first = firstindex(cu);   last = lastindex(cu)
+    l = last - first + 1
+    l < chunk_threshold && return _isascii(cu,first,last)
+    return _isascii_chunks(chunk_size,cu,first,last)
+end
+
 ## string map, filter ##
 
 function map(f, s::AbstractString)
@@ -633,7 +668,7 @@ function filter(f, s::AbstractString)
     for c in s
         f(c) && write(out, c)
     end
-    String(take!(out))
+    String(_unsafe_take!(out))
 end
 
 ## string first and last ##
@@ -715,7 +750,7 @@ julia> repeat("ha", 3)
 repeat(s::AbstractString, r::Integer) = repeat(String(s), r)
 
 """
-    ^(s::Union{AbstractString,AbstractChar}, n::Integer)
+    ^(s::Union{AbstractString,AbstractChar}, n::Integer) -> AbstractString
 
 Repeat a string or character `n` times. This can also be written as `repeat(s, n)`.
 

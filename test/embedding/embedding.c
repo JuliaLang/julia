@@ -70,6 +70,14 @@ int main()
     }
 
     {
+        // Same as above but using `@cfunction`
+        double (*sqrt_jl)(double) = jl_unbox_voidpointer(jl_eval_string("@cfunction(sqrt, Float64, (Float64,))"));
+        double retDouble = sqrt_jl(2.0);
+        printf("sqrt(2.0) in C: %e\n", retDouble);
+        fflush(stdout);
+    }
+
+    {
         // 1D arrays
 
         jl_value_t* array_type = jl_apply_array_type((jl_value_t*)jl_float64_type, 1);

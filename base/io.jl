@@ -173,6 +173,19 @@ function will block to wait for more data if necessary, and then return `false`.
 it is always safe to read one byte after seeing `eof` return `false`. `eof` will return
 `false` as long as buffered data is still available, even if the remote end of a connection
 is closed.
+
+# Examples
+```jldoctest
+julia> b = IOBuffer("my buffer");
+
+julia> eof(b)
+false
+
+julia> seekend(b);
+
+julia> eof(b)
+true
+```
 """
 function eof end
 
@@ -206,6 +219,8 @@ julia> read(io, String)
 ```
 """
 read(stream, t)
+read(stream, ::Type{Union{}}, slurp...; kwargs...) = error("cannot read a value of type Union{}")
+
 
 """
     write(io::IO, x)
@@ -368,11 +383,9 @@ descriptor upon completion.
 
 # Examples
 ```jldoctest
-julia> open("myfile.txt", "w") do io
-           write(io, "Hello world!")
-       end;
+julia> write("myfile.txt", "Hello world!");
 
-julia> open(f->read(f, String), "myfile.txt")
+julia> open(io->read(io, String), "myfile.txt")
 "Hello world!"
 
 julia> rm("myfile.txt")
@@ -482,10 +495,7 @@ The text is assumed to be encoded in UTF-8.
 
 # Examples
 ```jldoctest
-julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
-       end
-57
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
 julia> readuntil("my_file.txt", 'L')
 "Julia"
@@ -511,10 +521,7 @@ line.
 
 # Examples
 ```jldoctest
-julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
-       end
-57
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
 julia> readline("my_file.txt")
 "JuliaLang is a GitHub organization."
@@ -562,10 +569,7 @@ arguments and saving the resulting lines as a vector of strings.  See also
 
 # Examples
 ```jldoctest
-julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
-       end
-57
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
 julia> readlines("my_file.txt")
 2-element Vector{String}:
@@ -948,9 +952,7 @@ if there is one. Equivalent to `chomp(read(x, String))`.
 
 # Examples
 ```jldoctest
-julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
-       end;
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
 julia> readchomp("my_file.txt")
 "JuliaLang is a GitHub organization.\\nIt has many members."
@@ -1001,7 +1003,7 @@ function read(s::IO, nb::Integer = typemax(Int))
     return resize!(b, nr)
 end
 
-read(s::IO, ::Type{String}) = String(read(s))
+read(s::IO, ::Type{String}) = String(read(s)::Vector{UInt8})
 read(s::IO, T::Type) = error("The IO stream does not support reading objects of type $T.")
 
 ## high-level iterator interfaces ##
@@ -1034,9 +1036,7 @@ lines, respectively.
 
 # Examples
 ```jldoctest
-julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\\n It has many members.\\n");
-       end;
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\n It has many members.\\n");
 
 julia> for line in eachline("my_file.txt")
            print(line)
@@ -1306,6 +1306,7 @@ end
 
 """
     countlines(io::IO; eol::AbstractChar = '\\n')
+    countlines(filename::AbstractString; eol::AbstractChar = '\\n')
 
 Read `io` until the end of the stream/file and count the number of lines. To specify a file
 pass the filename as the first argument. EOL markers other than `'\\n'` are supported by
@@ -1333,6 +1334,19 @@ julia> io = IOBuffer("JuliaLang is a GitHub organization.");
 
 julia> countlines(io, eol = '.')
 1
+```
+```jldoctest
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\n")
+36
+
+julia> countlines("my_file.txt")
+1
+
+julia> countlines("my_file.txt", eol = 'n')
+4
+
+julia> rm("my_file.txt")
+
 ```
 """
 function countlines(io::IO; eol::AbstractChar='\n')

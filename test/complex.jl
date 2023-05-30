@@ -44,7 +44,12 @@ end
     @testset for T in (Float16, Float32, Float64, BigFloat)
         t = true
         f = false
-
+        @testset "equality" begin
+            @test isequal(T(0.0)*im, T(0.0))
+            @test !isequal(T(0.0)*im, T(-0.0))
+            @test isequal(Complex(T(-0.0), T(0.0)), T(-0.0))
+            @test !isequal(T(-0.0)*im, T(-0.0))
+        end
         @testset "add and subtract" begin
             @test isequal(T(+0.0) + im, Complex(T(+0.0), T(+1.0)))
             @test isequal(T(-0.0) + im, Complex(T(-0.0), T(+1.0)))
@@ -935,6 +940,7 @@ end
     @test cispi(0.0+0.0im) == cispi(0)
     @test cispi(1.0+0.0im) == cispi(1)
     @test cispi(2.0+0.0im) == cispi(2)
+    @test cispi(5im) ≈ exp(-5pi) rtol=1e-10 # https://github.com/JuliaLang/julia/pull/45945
 end
 
 @testset "exp2" begin

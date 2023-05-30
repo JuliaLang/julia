@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using DelimitedFiles, Random, Sockets
+using Random, Sockets
 
 mktempdir() do dir
 
@@ -312,12 +312,6 @@ for (name, f) in l
 
         verbose && println("$name countlines...")
         @test countlines(io()) == countlines(IOBuffer(text))
-
-        verbose && println("$name readdlm...")
-        @test readdlm(io(), ',') == readdlm(IOBuffer(text), ',')
-        @test readdlm(io(), ',') == readdlm(filename, ',')
-
-        cleanup()
     end
 
     text = old_text

@@ -48,7 +48,7 @@ to a numeric value representing a
 [Unicode code point](https://en.wikipedia.org/wiki/Code_point).  (Julia packages may define
 other subtypes of `AbstractChar`, e.g. to optimize operations for other
 [text encodings](https://en.wikipedia.org/wiki/Character_encoding).) Here is how `Char` values are
-input and shown:
+input and shown (note that character literals are delimited with single quotes, not double quotes):
 
 ```jldoctest
 julia> c = 'x'
@@ -156,7 +156,7 @@ julia> 'A' + 1
 
 ## String Basics
 
-String literals are delimited by double quotes or triple double quotes:
+String literals are delimited by double quotes or triple double quotes (not single quotes):
 
 ```jldoctest helloworldstring
 julia> str = "Hello, world.\n"
@@ -535,7 +535,9 @@ Constructing strings using concatenation can become a bit cumbersome, however. T
 verbose calls to [`string`](@ref) or repeated multiplications, Julia allows interpolation into string literals
 using `$`, as in Perl:
 
-```jldoctest stringconcat
+```jldoctest
+julia> greet = "Hello"; whom = "world";
+
 julia> "$greet, $whom.\n"
 "Hello, world.\n"
 ```
@@ -770,9 +772,10 @@ are some examples of non-standard string literals. Users and packages may also d
 Further documentation is given in the [Metaprogramming](@ref meta-non-standard-string-literals) section.
 
 ## [Regular Expressions](@id man-regex-literals)
+Sometimes you are not looking for an exact string, but a particular *pattern*. For example, suppose you are trying to extract a single date from a large text file. You don’t know what that date is (that’s why you are searching for it), but you do know it will look something like `YYYY-MM-DD`. Regular expressions allow you to specify these patterns and search for them.
 
-Julia has Perl-compatible regular expressions (regexes), as provided by the [PCRE](https://www.pcre.org/)
-library (a description of the syntax can be found [here](https://www.pcre.org/current/doc/html/pcre2syntax.html)). Regular expressions are related to strings in two ways: the obvious connection is that
+Julia uses version 2 of Perl-compatible regular expressions (regexes), as provided by the [PCRE](https://www.pcre.org/)
+library (see the [PCRE2 syntax description](https://www.pcre.org/current/doc/html/pcre2syntax.html) for more details). Regular expressions are related to strings in two ways: the obvious connection is that
 regular expressions are used to find regular patterns in strings; the other connection is that
 regular expressions are themselves input as strings, which are parsed into a state machine that
 can be used to efficiently search for patterns in strings. In Julia, regular expressions are input
@@ -1037,8 +1040,11 @@ true
 ```
 
 Note the use of the `\Q...\E` escape sequence. All characters between the `\Q` and the `\E`
-are interpreted as literal characters (after string interpolation). This escape sequence can
-be useful when interpolating, possibly malicious, user input.
+are interpreted as literal characters. This is convenient for matching characters that
+would otherwise be regex metacharacters. However, caution is needed when using this feature
+together with string interpolation, since the interpolated string might itself contain
+the `\E` sequence, unexpectedly terminating literal matching. User inputs need to be sanitized
+before inclusion in a regex.
 
 ## [Byte Array Literals](@id man-byte-array-literals)
 

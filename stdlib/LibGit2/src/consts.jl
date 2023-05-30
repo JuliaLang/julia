@@ -258,6 +258,11 @@ const REMOTE_DOWNLOAD_TAGS_AUTO        = Cint(1)
 const REMOTE_DOWNLOAD_TAGS_NONE        = Cint(2)
 const REMOTE_DOWNLOAD_TAGS_ALL         = Cint(3)
 
+# remote_redirect
+const REMOTE_REDIRECT_NONE    = Cuint(1 << 0)
+const REMOTE_REDIRECT_INITIAL = Cuint(1 << 1)
+const REMOTE_REDIRECT_ALL     = Cuint(1 << 2)
+
 # clone
 const CLONE_LOCAL_AUTO     = Cint(0)
 const CLONE_LOCAL          = Cint(1)
@@ -441,7 +446,6 @@ These are used to select which global option to set or get and are used in `git_
                SET_TEMPLATE_PATH        = 11,
                SET_SSL_CERT_LOCATIONS   = 12)
 
-
 """
 Option flags for `GitProxy`.
 
@@ -452,5 +456,16 @@ Option flags for `GitProxy`.
 @enum(GIT_PROXY, PROXY_NONE,
                  PROXY_AUTO,
                  PROXY_SPECIFIED)
+
+# Available tracing levels.
+@enum GIT_TRACE_LEVEL begin
+    TRACE_NONE
+    TRACE_FATAL
+    TRACE_ERROR
+    TRACE_WARN
+    TRACE_INFO
+    TRACE_DEBUG
+    TRACE_TRACE
+end
 
 end

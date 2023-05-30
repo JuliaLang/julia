@@ -1,0 +1,7 @@
+## jll artifact
+# Objconv (we don't ship this, so no need for a fake JLL; therefore we specify the JLL_VER here instead of in a `stdlib/Objconv_jll/Project.toml` file)
+OBJCONV_JLL_NAME := Objconv
+OBJCONV_JLL_VER  := 2.49.1+0
+
+## source build
+OBJCONV_VER := 2.49.1

@@ -36,8 +36,15 @@ $(LIBSSH2_SRC_PATH)/libssh2-userauth-check.patch-applied: $(LIBSSH2_SRC_PATH)/so
 		patch -p1 -f < $(SRCDIR)/patches/libssh2-userauth-check.patch
 	echo 1 > $@
 
+# issue:   https://github.com/JuliaLang/julia/issues/45645#issuecomment-1153214379
+# fix pr:  https://github.com/libssh2/libssh2/pull/711
+$(LIBSSH2_SRC_PATH)/libssh2-fix-import-lib-name.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-userauth-check.patch-applied
+	cd $(LIBSSH2_SRC_PATH) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-fix-import-lib-name.patch
+	echo 1 > $@
+
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: \
-	$(LIBSSH2_SRC_PATH)/libssh2-userauth-check.patch-applied
+	$(LIBSSH2_SRC_PATH)/libssh2-fix-import-lib-name.patch-applied
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(LIBSSH2_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)

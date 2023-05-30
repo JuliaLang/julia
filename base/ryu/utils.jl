@@ -1,9 +1,6 @@
 const MANTISSA_MASK = Base.significand_mask(Float64)
 const EXP_MASK = Base.exponent_mask(Float64) >> Base.significand_bits(Float64)
 
-memcpy(d, doff, s, soff, n) = (ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), d + doff - 1, s + soff - 1, n); nothing)
-memmove(d, doff, s, soff, n) = (ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), d + doff - 1, s + soff - 1, n); nothing)
-
 # Note: these are smaller than the values given in Figure 4 from the paper
 # see https://github.com/ulfjack/ryu/issues/119
 pow5_bitcount(::Type{Float16}) = 30
@@ -49,7 +46,7 @@ pow5bits(e) = ((e * 1217359) >> 19) + 1
 
 Compute `(m * mul) >> j`, where `j >= 8*sizeof(U)`. The type of the results is the larger of `U` or `UInt32`.
 """
-@inline function mulshift(m::U, mul, j) where {U<:Unsigned}
+function mulshift(m::U, mul, j) where {U<:Unsigned}
     W = widen(U)
     nbits = 8*sizeof(U)
     return ((((W(m) * (mul % U)) >> nbits) + W(m) * (mul >> nbits)) >> (j - nbits)) % promote_type(U,UInt32)
@@ -64,16 +61,7 @@ lengthforindex(idx) = div(((Int64(16 * idx) * 1292913986) >> 32) + 1 + 16 + 8, 9
 
 Return `true` if `5^p` is a divisor of `x`.
 """
-@inline function pow5(x, p)
-    count = 0
-    while true
-        q = div(x, 5)
-        r = x - 5 * q
-        r != 0 && return count >= p
-        x = q
-        count += 1
-    end
-end
+pow5(x, p) = x % (UInt64(5)^p) == 0
 
 """
     Ryu.pow2(x, p)
@@ -87,7 +75,7 @@ pow2(x, p) = (x & ((Int64(1) << p) - 1)) == 0
 
 The number of decimal digits of the integer `v`.
 """
-@inline function decimallength(v)
+function decimallength(v)
     v >= 10000000000000000 && return 17
     v >= 1000000000000000 && return 16
     v >= 100000000000000 && return 15
@@ -106,7 +94,7 @@ The number of decimal digits of the integer `v`.
     v >= 10 && return 2
     return 1
 end
-@inline function decimallength(v::UInt32)
+function decimallength(v::UInt32)
     v >= 100000000 && return 9
     v >= 10000000 && return 8
     v >= 1000000 && return 7
@@ -117,7 +105,7 @@ end
     v >= 10 && return 2
     return 1
 end
-@inline function decimallength(v::UInt16)
+function decimallength(v::UInt16)
     v >= 10000 && return 5
     v >= 1000 && return 4
     v >= 100 && return 3
@@ -125,7 +113,7 @@ end
     return 1
 end
 
-@inline function mulshiftinvsplit(::Type{T}, mv, mp, mm, i, j) where {T}
+function mulshiftinvsplit(::Type{T}, mv, mp, mm, i, j) where {T}
     mul = pow5invsplit_lookup(T, i)
     vr = mulshift(mv, mul, j)
     vp = mulshift(mp, mul, j)
@@ -133,7 +121,7 @@ end
     return vr, vp, vm
 end
 
-@inline function mulshiftsplit(::Type{T}, mv, mp, mm, i, j) where {T}
+function mulshiftsplit(::Type{T}, mv, mp, mm, i, j) where {T}
     mul = pow5split_lookup(T, i)
     vr = mulshift(mv, mul, j)
     vp = mulshift(mp, mul, j)
@@ -146,7 +134,7 @@ end
 
 Compute `p = a*b` where `b = bLo + bHi<<64`, returning the result as `pLo, pHi` where `p = pLo + pHi<<128`.
 """
-@inline function umul256(a, bHi, bLo)
+function umul256(a, bHi, bLo)
     aLo = a % UInt64
     aHi = (a >> 64) % UInt64
 
@@ -176,14 +164,14 @@ end
 
 Compute `pHi = (a*b)>>128` where `b = bLo + bHi<<64`.
 """
-@inline umul256_hi(a, bHi, bLo) = umul256(a, bHi, bLo)[2]
+umul256_hi(a, bHi, bLo) = umul256(a, bHi, bLo)[2]
 
 """
     Ryu.mulshiftmod1e9(m, mula, mulb, mulc, j)::UInt32
 
 Compute `(m * mul) >> j % 10^9` where `mul = mula + mulb<<64 + mulc<<128`, and `j >= 128`.
 """
-@inline function mulshiftmod1e9(m, mula, mulb, mulc, j)
+function mulshiftmod1e9(m, mula, mulb, mulc, j)
     b0 = UInt128(m) * mula
     b1 = UInt128(m) * mulb
     b2 = UInt128(m) * mulc
@@ -195,7 +183,7 @@ Compute `(m * mul) >> j % 10^9` where `mul = mula + mulb<<64 + mulc<<128`, and `
     return (v % UInt32) - UInt32(1000000000) * shifted
 end
 
-@inline function append_sign(x, plus, space, buf, pos)
+function append_sign(x, plus, space, buf, pos)
     if signbit(x) && !isnan(x)  # suppress minus sign for signaling NaNs
         buf[pos] = UInt8('-')
         pos += 1
@@ -209,7 +197,7 @@ end
     return pos
 end
 
-@inline function append_n_digits(olength, digits, buf, pos)
+function append_n_digits(olength, digits, buf, pos)
     i = 0
     while digits >= 10000
         c = digits % 10000
@@ -237,7 +225,7 @@ end
     return pos + i
 end
 
-@inline function append_d_digits(olength, digits, buf, pos, decchar)
+function append_d_digits(olength, digits, buf, pos, decchar)
     i = 0
     while digits >= 10000
         c = digits % 10000
@@ -268,7 +256,7 @@ end
     return pos + i
 end
 
-@inline function append_c_digits(count, digits, buf, pos)
+function append_c_digits(count, digits, buf, pos)
     i = 0
     while i < count - 1
         c = (digits % 100) << 1
@@ -283,7 +271,7 @@ end
     return pos + i
 end
 
-@inline function append_nine_digits(digits, buf, pos)
+function append_nine_digits(digits, buf, pos)
     if digits == 0
         for _ = 1:9
             buf[pos] = UInt8('0')

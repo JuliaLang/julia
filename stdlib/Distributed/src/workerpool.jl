@@ -33,9 +33,9 @@ function WorkerPool()
 end
 
 """
-    WorkerPool(workers::Vector{Int})
+    WorkerPool(workers::Union{Vector{Int},AbstractRange{Int}})
 
-Create a `WorkerPool` from a vector of worker ids.
+Create a `WorkerPool` from a vector or range of worker ids.
 
 # Examples
 ```julia-repl
@@ -43,9 +43,12 @@ Create a `WorkerPool` from a vector of worker ids.
 
 julia> WorkerPool([2, 3])
 WorkerPool(Channel{Int64}(sz_max:9223372036854775807,sz_curr:2), Set([2, 3]), RemoteChannel{Channel{Any}}(1, 1, 6))
+
+julia> WorkerPool(2:4)
+WorkerPool(Channel{Int64}(sz_max:9223372036854775807,sz_curr:2), Set([4, 2, 3]), RemoteChannel{Channel{Any}}(1, 1, 7))
 ```
 """
-function WorkerPool(workers::Vector{Int})
+function WorkerPool(workers::Union{Vector{Int},AbstractRange{Int}})
     pool = WorkerPool()
     foreach(w->push!(pool, w), workers)
     return pool
@@ -70,7 +73,7 @@ wp_local_length(pool::AbstractWorkerPool) = length(pool.workers)
 wp_local_isready(pool::AbstractWorkerPool) = isready(pool.channel)
 
 function wp_local_put!(pool::AbstractWorkerPool, w::Int)
-    # In case of default_worker_pool, the master is implictly considered a worker, i.e.,
+    # In case of default_worker_pool, the master is implicitly considered a worker, i.e.,
     # it is not present in pool.workers.
     # Confirm the that the worker is part of a pool before making it available.
     w in pool.workers && put!(pool.channel, w)
@@ -236,12 +239,14 @@ perform a `remote_do` on it.
 """
 remote_do(f, pool::AbstractWorkerPool, args...; kwargs...) = remotecall_pool(remote_do, f, pool, args...; kwargs...)
 
-const _default_worker_pool = Ref{Union{WorkerPool, Nothing}}(nothing)
+const _default_worker_pool = Ref{Union{AbstractWorkerPool, Nothing}}(nothing)
 
 """
     default_worker_pool()
 
-[`WorkerPool`](@ref) containing idle [`workers`](@ref) - used by `remote(f)` and [`pmap`](@ref) (by default).
+[`AbstractWorkerPool`](@ref) containing idle [`workers`](@ref) - used by `remote(f)` and [`pmap`](@ref)
+(by default). Unless one is explicitly set via `default_worker_pool!(pool)`, the default worker pool is
+initialized to a [`WorkerPool`](@ref).
 
 # Examples
 ```julia-repl
@@ -262,6 +267,15 @@ function default_worker_pool()
         end
     end
     return _default_worker_pool[]
+end
+
+"""
+    default_worker_pool!(pool::AbstractWorkerPool)
+
+Set a [`AbstractWorkerPool`](@ref) to be used by `remote(f)` and [`pmap`](@ref) (by default).
+"""
+function default_worker_pool!(pool::AbstractWorkerPool)
+    _default_worker_pool[] = pool
 end
 
 """

@@ -20,9 +20,8 @@
 #define strchr loader_strchr
 #define malloc loader_malloc
 #define realloc loader_realloc
+#define free loader_free
 #endif
-
-#include <stdint.h>
 
 #ifdef _OS_WINDOWS_
 
@@ -46,24 +45,25 @@
 #include <libgen.h>
 #include <unistd.h>
 #include <dlfcn.h>
+#include <signal.h>
 
 #endif
 
+#include <stdint.h>
+
 // Borrow definition from `support/dtypes.h`
 #ifdef _OS_WINDOWS_
-# ifdef LIBRARY_EXPORTS
+# ifdef JL_LIBRARY_EXPORTS
 #  define JL_DLLEXPORT __declspec(dllexport)
-# else
-#  define JL_DLLEXPORT __declspec(dllimport)
 # endif
+#  define JL_DLLIMPORT __declspec(dllimport)
 #define JL_HIDDEN
 #else
-# if defined(LIBRARY_EXPORTS) && defined(_OS_LINUX_)
-#  define JL_DLLEXPORT __attribute__ ((visibility("protected")))
-# else
-#  define JL_DLLEXPORT __attribute__ ((visibility("default")))
-# endif
+# define JL_DLLIMPORT __attribute__ ((visibility("default")))
 #define JL_HIDDEN    __attribute__ ((visibility("hidden")))
+#endif
+#ifndef JL_DLLEXPORT
+#  define JL_DLLEXPORT JL_DLLIMPORT
 #endif
 /*
  * DEP_LIBS is our list of dependent libraries that must be loaded before `libjulia`.
@@ -92,8 +92,8 @@ static void * lookup_symbol(const void * lib_handle, const char * symbol_name);
 
 #ifdef _OS_WINDOWS_
 LPWSTR *CommandLineToArgv(LPWSTR lpCmdLine, int *pNumArgs);
-int wchar_to_utf8(const wchar_t * wstr, char *str, size_t maxlen);
-int utf8_to_wchar(const char * str, wchar_t *wstr, size_t maxlen);
+char *wchar_to_utf8(const wchar_t * wstr);
+wchar_t *utf8_to_wchar(const char * str);
 void setup_stdio(void);
 #endif
 

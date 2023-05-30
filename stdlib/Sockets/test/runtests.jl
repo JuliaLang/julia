@@ -136,7 +136,7 @@ defaultport = rand(2000:4000)
                 write(sock, "Hello World\n")
 
                 # test "locked" println to a socket
-                @Experimental.sync begin
+                Experimental.@sync begin
                     for i in 1:100
                         @async println(sock, "a", 1)
                     end
@@ -307,7 +307,7 @@ end
         bind(a, ip"127.0.0.1", randport)
         bind(b, ip"127.0.0.1", randport + 1)
 
-        @Experimental.sync begin
+        Experimental.@sync begin
             let i = 0
                 for _ = 1:30
                     @async let msg = String(recv(a))
@@ -387,7 +387,7 @@ end
         # connect to it
         client_sock = connect(addr, port)
         test_done = false
-        @Experimental.sync begin
+        Experimental.@sync begin
             @async begin
                 Base.wait_readnb(client_sock, 1)
                 test_done || error("Client disconnected prematurely.")

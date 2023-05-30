@@ -250,8 +250,8 @@ Create a timer that runs the function `callback` at each timer expiration.
 Waiting tasks are woken and the function `callback` is called after an initial delay of `delay`
 seconds, and then repeating with the given `interval` in seconds. If `interval` is equal to `0`, the
 callback is only run once. The function `callback` is called with a single argument, the timer
-itself. Stop a timer by calling `close`. The `cb` may still be run one final time, if the timer has
-already expired.
+itself. Stop a timer by calling `close`. The `callback` may still be run one final time, if the timer
+has already expired.
 
 # Examples
 
@@ -306,7 +306,7 @@ Waits until `testcb()` returns `true` or `timeout` seconds have passed, whicheve
 The test function is polled every `pollint` seconds. The minimum value for `pollint` is 0.001 seconds,
 that is, 1 millisecond.
 
-Returns :ok or :timed_out
+Return `:ok` or `:timed_out`.
 """
 function timedwait(testcb, timeout::Real; pollint::Real=0.1)
     pollint >= 1e-3 || throw(ArgumentError("pollint must be ≥ 1 millisecond"))

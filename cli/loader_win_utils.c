@@ -12,22 +12,28 @@ static FILE _stderr = { INVALID_HANDLE_VALUE };
 FILE *stdout = &_stdout;
 FILE *stderr = &_stderr;
 
-int loader_fwrite(const WCHAR *str, size_t nchars, FILE *out) {
+int loader_fwrite(const char *str, size_t nchars, FILE *out) {
     DWORD written;
     if (out->isconsole) {
-        if (WriteConsole(out->fd, str, nchars, &written, NULL))
+        // Windows consoles do not support UTF-8 (for reading input, though new Windows Terminal does for writing), only UTF-16.
+        wchar_t* wstr = utf8_to_wchar(str);
+        if (!wstr)
+            return -1;
+        if (WriteConsoleW(out->fd, wstr, wcslen(wstr), &written, NULL)) {
+            loader_free(wstr);
             return written;
+        }
+        loader_free(wstr);
     } else {
-        if (WriteFile(out->fd, str, sizeof(WCHAR) * nchars, &written, NULL))
+        // However, we want to print UTF-8 if the output is a file.
+        if (WriteFile(out->fd, str, nchars, &written, NULL))
             return written;
     }
     return -1;
 }
 
 int loader_fputs(const char *str, FILE *out) {
-    wchar_t wstr[1024];
-    utf8_to_wchar(str, wstr, 1024);
-    return fwrite(wstr, wcslen(wstr), out);
+    return loader_fwrite(str, loader_strlen(str), out);
 }
 
 void * loader_malloc(const size_t size) {
@@ -36,6 +42,10 @@ void * loader_malloc(const size_t size) {
 
 void * loader_realloc(void * mem, const size_t size) {
     return HeapReAlloc(GetProcessHeap(), HEAP_GENERATE_EXCEPTIONS, mem, size);
+}
+
+void loader_free(void* mem) {
+    HeapFree(GetProcessHeap(), 0, mem);
 }
 
 LPWSTR *CommandLineToArgv(LPWSTR lpCmdLine, int *pNumArgs) {
@@ -106,36 +116,36 @@ void loader_exit(int code) {
 
 
 /* Utilities to convert from Windows' wchar_t stuff to UTF-8 */
-int wchar_to_utf8(const wchar_t * wstr, char *str, size_t maxlen) {
+char *wchar_to_utf8(const wchar_t * wstr) {
     /* Fast-path empty strings, as WideCharToMultiByte() returns zero for them. */
     if (wstr[0] == L'\0') {
+        char *str = malloc(1);
         str[0] = '\0';
-        return 1;
+        return str;
     }
     size_t len = WideCharToMultiByte(CP_UTF8, 0, wstr, -1, NULL, 0, NULL, NULL);
     if (!len)
-        return 0;
-    if (len > maxlen)
-        return 0;
+        return NULL;
+    char *str = (char *)malloc(len);
     if (!WideCharToMultiByte(CP_UTF8, 0, wstr, -1, str, len, NULL, NULL))
-        return 0;
-    return 1;
+        return NULL;
+    return str;
 }
 
-int utf8_to_wchar(const char * str, wchar_t * wstr, size_t maxlen) {
-    /* Fast-path empty strings, as WideCharToMultiByte() returns zero for them. */
+wchar_t *utf8_to_wchar(const char * str) {
+    /* Fast-path empty strings, as MultiByteToWideChar() returns zero for them. */
     if (str[0] == '\0') {
+        wchar_t *wstr = malloc(sizeof(wchar_t));
         wstr[0] = L'\0';
-        return 1;
+        return wstr;
     }
     size_t len = MultiByteToWideChar(CP_UTF8, 0, str, -1, NULL, 0);
     if (!len)
-        return 0;
-    if (len > maxlen)
-        return 0;
+        return NULL;
+    wchar_t *wstr = (wchar_t *)malloc(len * sizeof(wchar_t));
     if (!MultiByteToWideChar(CP_UTF8, 0, str, -1, wstr, len))
-        return 0;
-    return 1;
+        return NULL;
+    return wstr;
 }
 
 size_t loader_strlen(const char * x) {

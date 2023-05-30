@@ -106,6 +106,9 @@ static unsigned select_pool(size_t nb) JL_NOTSAFEPOINT
 
 static void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz)
 {
+#ifdef _COMPILER_ASAN_ENABLED_
+    __asan_unpoison_stack_memory((uintptr_t)stkbuf, bufsz);
+#endif
     if (bufsz <= pool_sizes[JL_N_STACK_POOLS - 1]) {
         unsigned pool_id = select_pool(bufsz);
         if (pool_sizes[pool_id] == bufsz) {
@@ -135,6 +138,9 @@ void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task)
         unsigned pool_id = select_pool(bufsz);
         if (pool_sizes[pool_id] == bufsz) {
             task->stkbuf = NULL;
+#ifdef _COMPILER_ASAN_ENABLED_
+            __asan_unpoison_stack_memory((uintptr_t)stkbuf, bufsz);
+#endif
             arraylist_push(&ptls->heap.free_stacks[pool_id], stkbuf);
         }
     }
@@ -159,9 +165,11 @@ JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, jl_task_t *owner) JL_NOTSAFEPO
         ssize = LLT_ALIGN(ssize, jl_page_size);
     }
     if (stk == NULL) {
-        if (jl_atomic_load_relaxed(&num_stack_mappings) >= MAX_STACK_MAPPINGS)
+        if (jl_atomic_load_relaxed(&num_stack_mappings) >= MAX_STACK_MAPPINGS) {
             // we accept that this can go over by as much as nthreads since it's not a CAS
+            errno = ENOMEM;
             return NULL;
+        }
         // TODO: allocate blocks of stacks? but need to mprotect individually anyways
         stk = malloc_stack(ssize);
         if (stk == MAP_FAILED)
@@ -188,8 +196,9 @@ void sweep_stack_pools(void)
     //            bufsz = t->bufsz
     //            if (stkbuf)
     //                push(free_stacks[sz], stkbuf)
-    for (int i = 0; i < jl_n_threads; i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[i];
+    assert(gc_n_threads);
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
 
         // free half of stacks that remain unused since last sweep
         for (int p = 0; p < JL_N_STACK_POOLS; p++) {
