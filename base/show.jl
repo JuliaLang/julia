@@ -2545,8 +2545,13 @@ function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
             first || print(io, ", ")
             first = false
             print_within_stacktrace(io, k; color=:light_black)
-            print(io, "::")
-            print_type_bicolor(io, t; use_color = get(io, :backtrace, false)::Bool)
+            if t == pairs(NamedTuple)
+                # omit type annotation for splat keyword argument
+                print(io, "...")
+            else
+                print(io, "::")
+                print_type_bicolor(io, t; use_color = get(io, :backtrace, false)::Bool)
+            end
         end
     end
     print_within_stacktrace(io, ")", bold=true)
