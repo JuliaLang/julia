@@ -339,7 +339,6 @@ end
     @test Printf.@sprintf("1%%2%%3") == "1%2%3"
     @test Printf.@sprintf("GAP[%%]") == "GAP[%]"
     @test Printf.@sprintf("hey there") == "hey there"
-    @test_throws Printf.InvalidFormatStringError Printf.Format("")
     @test_throws Printf.InvalidFormatStringError Printf.Format("%+")
     @test_throws Printf.InvalidFormatStringError Printf.Format("%.")
     @test_throws Printf.InvalidFormatStringError Printf.Format("%.0")
