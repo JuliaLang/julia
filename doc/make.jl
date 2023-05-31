@@ -265,12 +265,6 @@ DocMeta.setdocmeta!(
     maybe_revise(:(using Base.BinaryPlatforms));
     recursive=true, warn=false,
 )
-DocMeta.setdocmeta!(
-    Pkg.LazilyInitializedFields,
-    :DocTestSetup,
-    maybe_revise(:(using Pkg.LazilyInitializedFields));
-    recursive=true, warn=false,
-)
 
 let r = r"buildroot=(.+)", i = findfirst(x -> occursin(r, x), ARGS)
     global const buildroot = i === nothing ? (@__DIR__) : first(match(r, ARGS[i]).captures)
