@@ -73,7 +73,7 @@ typedef struct jl_varbinding_t {
     // let ub = var.ub ∩ type
     // 0 - var.ub <: type ? var : ub
     // 1 - var.ub = ub; return var
-    // 2 - either (var.ub = ub; return var), or return ub
+    // 2 - var.lb = lb; return ub
     int8_t constraintkind;
     int8_t intvalued; // intvalued: must be integer-valued; i.e. occurs as N in Vararg{_,N}
     int8_t limited;
@@ -953,7 +953,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
     if (R && ans && e->envidx < e->envsz) {
         jl_value_t *val;
         if (vb.intvalued && vb.lb == (jl_value_t*)jl_any_type)
-            val = (jl_value_t*)jl_wrap_vararg(NULL, NULL); // special token result that represents N::Int in the envout
+            val = (jl_value_t*)jl_wrap_vararg(NULL, NULL, 0); // special token result that represents N::Int in the envout
         else if (!vb.occurs_inv && vb.lb != jl_bottom_type)
             val = is_leaf_bound(vb.lb) ? vb.lb : (jl_value_t*)jl_new_typevar(u->var->name, jl_bottom_type, vb.lb);
         else if (vb.lb == vb.ub)
@@ -1510,6 +1510,9 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
 {
     int16_t oldRmore = e->Runions.more;
     int sub;
+    // fast-path for #49857
+    if (obviously_in_union(y, x))
+        return 1;
     int kindx = !jl_has_free_typevars(x);
     int kindy = !jl_has_free_typevars(y);
     if (kindx && kindy)
@@ -1646,11 +1649,12 @@ static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, in
 static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
 {
     e->vars = NULL;
-    assert(env != NULL || envsz == 0);
     e->envsz = envsz;
     e->envout = env;
-    if (envsz)
+    if (envsz) {
+        assert(env != NULL);
         memset(env, 0, envsz*sizeof(void*));
+    }
     e->envidx = 0;
     e->invdepth = 0;
     e->ignore_free = 0;
@@ -2286,7 +2290,9 @@ int jl_has_intersect_kind_not_type(jl_value_t *t)
 
 JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
 {
-    if (jl_typeis(x,t) || t == (jl_value_t*)jl_any_type)
+    if (t == (jl_value_t*)jl_any_type || jl_typetagis(x,t))
+        return 1;
+    if (jl_typetagof(x) < (jl_max_tags << 4) && jl_is_datatype(t) && jl_typetagis(x,((jl_datatype_t*)t)->smalltag << 4))
         return 1;
     if (jl_is_type(x)) {
         if (t == (jl_value_t*)jl_type_type)
@@ -2646,14 +2652,24 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         return ub;
     }
     assert(bb->constraintkind == 2);
-    if (!jl_is_typevar(a)) {
-        if (ub == a && bb->lb != jl_bottom_type)
-            return ub;
-        else if (jl_egal(bb->ub, bb->lb))
-            return ub;
-        set_bound(&bb->ub, ub, b, e);
-    }
-    return (jl_value_t*)b;
+    if (ub == a && bb->lb != jl_bottom_type)
+        return ub;
+    if (jl_egal(bb->ub, bb->lb))
+        return ub;
+    if (is_leaf_bound(ub))
+        set_bound(&bb->lb, ub, b, e);
+    // TODO: can we improve this bound by pushing a new variable into the environment
+    // and adding that to the lower bound of our variable?
+    //jl_value_t *ntv = NULL;
+    //JL_GC_PUSH2(&ntv, &ub);
+    //if (bb->innervars == NULL)
+    //    bb->innervars = jl_alloc_array_1d(jl_array_any_type, 0);
+    //ntv = (jl_value_t*)jl_new_typevar(b->name, bb->lb, ub);
+    //jl_array_ptr_1d_push(bb->innervars, ntv);
+    //jl_value_t *lb = simple_join(b->lb, ntv);
+    //JL_GC_POP();
+    //bb->lb = lb;
+    return ub;
 }
 
 // test whether `var` occurs inside constructors. `want_inv` tests only inside
@@ -3076,7 +3092,7 @@ static jl_value_t *intersect_varargs(jl_vararg_t *vmx, jl_vararg_t *vmy, ssize_t
             ii = (jl_value_t*)vmy;
         else {
             JL_GC_PUSH1(&ii);
-            ii = (jl_value_t*)jl_wrap_vararg(ii, NULL);
+            ii = (jl_value_t*)jl_wrap_vararg(ii, NULL, 1);
             JL_GC_POP();
         }
         return ii;
@@ -3117,7 +3133,7 @@ static jl_value_t *intersect_varargs(jl_vararg_t *vmx, jl_vararg_t *vmy, ssize_t
     else if (yp2 && obviously_egal(yp1, ii) && obviously_egal(yp2, i2))
         ii = (jl_value_t*)vmy;
     else
-        ii = (jl_value_t*)jl_wrap_vararg(ii, i2);
+        ii = (jl_value_t*)jl_wrap_vararg(ii, i2, 1);
     JL_GC_POP();
     return ii;
 }

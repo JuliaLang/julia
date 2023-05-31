@@ -32,5 +32,5 @@ function run(maxsize)
 end
 
 # Memory usage 581 MB
-@time run(4)
+run(4)
 GC.gc()

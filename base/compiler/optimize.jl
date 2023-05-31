@@ -43,7 +43,7 @@ const TOP_TUPLE = GlobalRef(Core, :tuple)
 const InlineCostType = UInt16
 const MAX_INLINE_COST = typemax(InlineCostType)
 const MIN_INLINE_COST = InlineCostType(10)
-const MaybeCompressed = Union{CodeInfo, Vector{UInt8}}
+const MaybeCompressed = Union{CodeInfo, String}
 
 is_inlineable(@nospecialize src::MaybeCompressed) =
     ccall(:jl_ir_inlining_cost, InlineCostType, (Any,), src) != MAX_INLINE_COST
@@ -372,7 +372,9 @@ function argextype(
         elseif x.head === :copyast
             return argextype(x.args[1], src, sptypes, slottypes)
         end
-        @assert false "argextype only works on argument-position values"
+        Core.println("argextype called on Expr with head ", x.head,
+                     " which is not valid for IR in argument-position.")
+        @assert false
     elseif isa(x, SlotNumber)
         return slottypes[x.id]
     elseif isa(x, TypedSlot)

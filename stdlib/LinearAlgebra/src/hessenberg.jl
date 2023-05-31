@@ -80,6 +80,9 @@ function Matrix{T}(H::UpperHessenberg) where T
     return triu!(copyto!(Matrix{T}(undef, m, n), H.data), -1)
 end
 
+Base.isassigned(H::UpperHessenberg, i::Int, j::Int) =
+    i <= j+1 ? isassigned(H.data, i, j) : true
+
 getindex(H::UpperHessenberg{T}, i::Integer, j::Integer) where {T} =
     i <= j+1 ? convert(T, H.data[i,j]) : zero(T)
 
@@ -129,41 +132,29 @@ for T = (:Number, :UniformScaling, :Diagonal)
 end
 
 function *(H::UpperHessenberg, U::UpperOrUnitUpperTriangular)
-    T = typeof(oneunit(eltype(H))*oneunit(eltype(U)))
-    HH = copy_similar(H, T)
-    rmul!(HH, U)
+    HH = _mulmattri!(_initarray(*, eltype(H), eltype(U), H), H, U)
     UpperHessenberg(HH)
 end
 function *(U::UpperOrUnitUpperTriangular, H::UpperHessenberg)
-    T = typeof(oneunit(eltype(H))*oneunit(eltype(U)))
-    HH = copy_similar(H, T)
-    lmul!(U, HH)
+    HH = _multrimat!(_initarray(*, eltype(U), eltype(H), H), U, H)
     UpperHessenberg(HH)
 end
 
 function /(H::UpperHessenberg, U::UpperTriangular)
-    T = typeof(oneunit(eltype(H))/oneunit(eltype(U)))
-    HH = copy_similar(H, T)
-    rdiv!(HH, U)
+    HH = _rdiv!(_initarray(/, eltype(H), eltype(U), H), H, U)
     UpperHessenberg(HH)
 end
 function /(H::UpperHessenberg, U::UnitUpperTriangular)
-    T = typeof(oneunit(eltype(H))/oneunit(eltype(U)))
-    HH = copy_similar(H, T)
-    rdiv!(HH, U)
+    HH = _rdiv!(_initarray(/, eltype(H), eltype(U), H), H, U)
     UpperHessenberg(HH)
 end
 
 function \(U::UpperTriangular, H::UpperHessenberg)
-    T = typeof(oneunit(eltype(U))\oneunit(eltype(H)))
-    HH = copy_similar(H, T)
-    ldiv!(U, HH)
+    HH = ldiv!(_initarray(\, eltype(U), eltype(H), H), U, H)
     UpperHessenberg(HH)
 end
 function \(U::UnitUpperTriangular, H::UpperHessenberg)
-    T = typeof(oneunit(eltype(U))\oneunit(eltype(H)))
-    HH = copy_similar(H, T)
-    ldiv!(U, HH)
+    HH = ldiv!(_initarray(\, eltype(U), eltype(H), H), U, H)
     UpperHessenberg(HH)
 end
 

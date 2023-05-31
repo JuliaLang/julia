@@ -8006,3 +8006,7 @@ end
 # objectid for datatypes is inconsistant for types that have unbound type parameters.
 @test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (DataType,)))
 @test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Tuple{Vector{Int}},)))
+
+# donotdelete should not taint consistency of the containing function
+f_donotdete(x) = (Core.Compiler.donotdelete(x); 1)
+@test Core.Compiler.is_consistent(Base.infer_effects(f_donotdete, (Tuple{Float64},)))

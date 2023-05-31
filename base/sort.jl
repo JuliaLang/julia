@@ -5,7 +5,8 @@ module Sort
 using Base.Order
 
 using Base: copymutable, midpoint, require_one_based_indexing, uinttype,
-    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, top_set_bit
+    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, top_set_bit,
+    IteratorSize, HasShape, IsInfinite, tail
 
 import Base:
     sort,
@@ -815,7 +816,6 @@ function _sort!(v::AbstractVector, a::ComputeExtrema, o::Ordering, kw)
         lt(o, vi, mn) && (mn = vi)
         lt(o, mx, vi) && (mx = vi)
     end
-    mn, mx
 
     lt(o, mn, mx) || return scratch # all same
 
@@ -1171,15 +1171,6 @@ end
 
 maybe_unsigned(x::Integer) = x # this is necessary to avoid calling unsigned on BigInt
 maybe_unsigned(x::BitSigned) = unsigned(x)
-function _extrema(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
-    mn = mx = v[lo]
-    @inbounds for i in (lo+1):hi
-        vi = v[i]
-        lt(o, vi, mn) && (mn = vi)
-        lt(o, mx, vi) && (mx = vi)
-    end
-    mn, mx
-end
 function _issorted(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
     @boundscheck checkbounds(v, lo:hi)
     @inbounds for i in (lo+1):hi
@@ -1393,6 +1384,11 @@ end
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 
+Uses `Base.copymutable` to support immutable collections and iterables.
+
+!!! compat "Julia 1.10"
+    `sort` of arbitrary iterables requires at least Julia 1.10.
+
 # Examples
 ```jldoctest
 julia> v = [3, 1, 2];
@@ -1410,7 +1406,39 @@ julia> v
  2
 ```
 """
-sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
+function sort(v; kws...)
+    size = IteratorSize(v)
+    size == HasShape{0}() && throw(ArgumentError("$v cannot be sorted"))
+    size == IsInfinite() && throw(ArgumentError("infinite iterator $v cannot be sorted"))
+    sort!(copymutable(v); kws...)
+end
+sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...) # for method disambiguation
+sort(::AbstractString; kws...) =
+    throw(ArgumentError("sort(::AbstractString) is not supported"))
+sort(::Tuple; kws...) =
+    throw(ArgumentError("sort(::Tuple) is only supported for NTuples"))
+
+function sort(x::NTuple{N}; lt::Function=isless, by::Function=identity,
+              rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) where N
+    o = ord(lt,by,rev,order)
+    if N > 9
+        v = sort!(copymutable(x), DEFAULT_STABLE, o)
+        tuple((v[i] for i in 1:N)...)
+    else
+        _sort(x, o)
+    end
+end
+_sort(x::Union{NTuple{0}, NTuple{1}}, o::Ordering) = x
+function _sort(x::NTuple, o::Ordering)
+    a, b = Base.IteratorsMD.split(x, Val(length(x)>>1))
+    merge(_sort(a, o), _sort(b, o), o)
+end
+merge(x::NTuple, y::NTuple{0}, o::Ordering) = x
+merge(x::NTuple{0}, y::NTuple, o::Ordering) = y
+merge(x::NTuple{0}, y::NTuple{0}, o::Ordering) = x # Method ambiguity
+merge(x::NTuple, y::NTuple, o::Ordering) =
+    (lt(o, y[1], x[1]) ? (y[1], merge(x, tail(y), o)...) : (x[1], merge(tail(x), y, o)...))
+
 
 ## partialsortperm: the permutation to sort the first k elements of an array ##
 
