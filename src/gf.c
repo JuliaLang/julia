@@ -3576,9 +3576,9 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                               int intersections, size_t world, int cache_result,
                               size_t *min_valid, size_t *max_valid, int *ambig)
 {
-    JL_TIMING(METHOD_MATCH, METHOD_MATCH);
     if (world > jl_atomic_load_acquire(&jl_world_counter))
         return jl_nothing; // the future is not enumerable
+    JL_TIMING(METHOD_MATCH, METHOD_MATCH);
     int has_ambiguity = 0;
     jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)type);
     assert(jl_is_datatype(unw));
