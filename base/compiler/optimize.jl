@@ -66,26 +66,6 @@ is_declared_noinline(@nospecialize src::MaybeCompressed) =
 # OptimizationState #
 #####################
 
-struct EdgeTracker
-    edges::Vector{Any}
-    valid_worlds::RefValue{WorldRange}
-    EdgeTracker(edges::Vector{Any}, range::WorldRange) =
-        new(edges, RefValue{WorldRange}(range))
-end
-EdgeTracker() = EdgeTracker(Any[], 0:typemax(UInt))
-
-intersect!(et::EdgeTracker, range::WorldRange) =
-    et.valid_worlds[] = intersect(et.valid_worlds[], range)
-
-function add_backedge!(et::EdgeTracker, mi::MethodInstance)
-    push!(et.edges, mi)
-    return nothing
-end
-function add_invoke_backedge!(et::EdgeTracker, @nospecialize(invokesig), mi::MethodInstance)
-    push!(et.edges, invokesig, mi)
-    return nothing
-end
-
 is_source_inferred(@nospecialize src::MaybeCompressed) =
     ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
 
@@ -125,16 +105,16 @@ function inlining_policy(interp::AbstractInterpreter,
 end
 
 struct InliningState{Interp<:AbstractInterpreter}
-    et::Union{EdgeTracker,Nothing}
+    edges::Vector{Any}
     world::UInt
     interp::Interp
 end
 function InliningState(sv::InferenceState, interp::AbstractInterpreter)
-    et = EdgeTracker(sv.stmt_edges[1]::Vector{Any}, sv.valid_worlds)
-    return InliningState(et, sv.world, interp)
+    edges = sv.stmt_edges[1]::Vector{Any}
+    return InliningState(edges, sv.world, interp)
 end
 function InliningState(interp::AbstractInterpreter)
-    return InliningState(nothing, get_world_counter(interp), interp)
+    return InliningState(Any[], get_world_counter(interp), interp)
 end
 
 # get `code_cache(::AbstractInterpreter)` from `state::InliningState`
