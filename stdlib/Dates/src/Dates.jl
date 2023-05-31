@@ -14,13 +14,13 @@ For time zone functionality, see the TimeZones.jl package.
 julia> dt = DateTime(2017,12,31,23,59,59,999)
 2017-12-31T23:59:59.999
 
-julia> d1 = Date(Dates.Month(12), Dates.Year(2017))
+julia> d1 = Date(Month(12), Year(2017))
 2017-12-01
 
-julia> d2 = Date("2017-12-31", Dates.DateFormat("y-m-d"))
+julia> d2 = Date("2017-12-31", DateFormat("y-m-d"))
 2017-12-31
 
-julia> Dates.yearmonthday(d2)
+julia> yearmonthday(d2)
 (2017, 12, 31)
 
 julia> d2-d1

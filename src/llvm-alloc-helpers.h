@@ -6,6 +6,7 @@
 
 #include <llvm/ADT/SmallSet.h>
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/Analysis/OptimizationRemarkEmitter.h>
 #include <llvm/IR/Instructions.h>
 
 #include <utility>
@@ -87,6 +88,11 @@ namespace jl_alloc {
         // The object is used in an error function
         bool haserror:1;
 
+        // The alloc has a Julia object reference not in an explicit field.
+        bool has_unknown_objref:1;
+        // The alloc has an aggregate Julia object reference not in an explicit field.
+        bool has_unknown_objrefaggr:1;
+
         void reset()
         {
             escaped = false;
@@ -99,10 +105,13 @@ namespace jl_alloc {
             hasunknownmem = false;
             returned = false;
             haserror = false;
+            has_unknown_objref = false;
+            has_unknown_objrefaggr = false;
             uses.clear();
             preserves.clear();
             memops.clear();
         }
+        void dump(llvm::raw_ostream &OS);
         void dump();
         bool addMemOp(llvm::Instruction *inst, unsigned opno, uint32_t offset, llvm::Type *elty,
                       bool isstore, const llvm::DataLayout &DL);
@@ -129,11 +138,17 @@ namespace jl_alloc {
         //will not be considered. Defaults to nullptr, which means all uses of the allocation
         //are considered
         const llvm::SmallPtrSetImpl<const llvm::BasicBlock*> *valid_set;
+        llvm::OptimizationRemarkEmitter *ORE = nullptr;
 
         EscapeAnalysisOptionalArgs() = default;
 
         EscapeAnalysisOptionalArgs &with_valid_set(decltype(valid_set) valid_set) {
             this->valid_set = valid_set;
+            return *this;
+        }
+
+        EscapeAnalysisOptionalArgs &with_optimization_remark_emitter(decltype(ORE) ORE) {
+            this->ORE = ORE;
             return *this;
         }
     };

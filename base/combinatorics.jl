@@ -142,7 +142,10 @@ end
 Permute vector `v` in-place, according to permutation `p`. No checking is done
 to verify that `p` is a permutation.
 
-To return a new permutation, use `v[p]`. Note that this is faster than `permute!(v, p)`.
+To return a new permutation, use `v[p]`. This is generally faster than `permute!(v, p)`;
+it is even faster to write into a pre-allocated output array with `u .= @view v[p]`.
+(Even though `permute!` overwrites `v` in-place, it internally requires some allocation
+to keep track of which elements have been moved.)
 
 See also [`invpermute!`](@ref).
 
@@ -162,14 +165,16 @@ julia> A
  1
 ```
 """
-permute!(v, p::AbstractVector) = copyto!(v, v[p])
+permute!(v, p::AbstractVector) = (v .= v[p])
 
 """
     invpermute!(v, p)
 
 Like [`permute!`](@ref), but the inverse of the given permutation is applied.
 
-To return a new permutation, use `v[invperm(p)]`. Note that this is faster than `invpermute!(v, p)`.
+Note that if you have a pre-allocated output array (e.g. `u = similar(v)`),
+it is quicker to instead employ `u[p] = v`.  (`invpermute!` internally
+allocates a copy of the data.)
 
 # Examples
 ```jldoctest
@@ -187,7 +192,7 @@ julia> A
  1
 ```
 """
-invpermute!(v, p::AbstractVector) = copyto!(v, v[invperm(p)])
+invpermute!(v, p::AbstractVector) = (v[p] = v; v)
 
 """
     invperm(v)

@@ -79,12 +79,12 @@ let result = code_escapes((SafeRef{String},); optimize=false) do x
 end
 # InvokeCallInfo
 let result = code_escapes((SafeRef{String},); optimize=false) do x
-        return Base.@invoke noescape(x::Any)
+        return @invoke noescape(x::Any)
     end
     @test has_no_escape(ignore_argescape(result.state[Argument(2)]))
 end
 let result = code_escapes((SafeRef{String},); optimize=false) do x
-        return Base.@invoke conditional_escape!(false::Any, x::Any)
+        return @invoke conditional_escape!(false::Any, x::Any)
     end
     @test has_no_escape(ignore_argescape(result.state[Argument(2)]))
 end

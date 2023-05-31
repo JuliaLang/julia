@@ -70,6 +70,7 @@ end
     @test unsigned(Bool) === typeof(unsigned(true))
 end
 @testset "bswap" begin
+    @test bswap(true) == true
     @test bswap(Int8(3)) == 3
     @test bswap(UInt8(3)) === 0x3
     @test bswap(Int16(3)) == 256*3
@@ -198,6 +199,17 @@ end
                 @test val >> -scount === val << ucount
             end
         end
+        for T2 in Base.BitInteger_types
+            for op in (>>, <<, >>>)
+                if sizeof(T2)==sizeof(Int) || T <: Signed || (op==>>>) || T2 <: Unsigned
+                    @test Core.Compiler.is_foldable_nothrow(Base.infer_effects(op, (T, T2)))
+                else
+                    @test Core.Compiler.is_foldable(Base.infer_effects(op, (T, T2)))
+                    # #47835, TODO implement interval arithmetic analysis
+                    @test_broken Core.Compiler.is_nothrow(Base.infer_effects(op, (T, T2)))
+                end
+            end
+        end
     end
 end
 
@@ -288,6 +300,29 @@ end
     end
 end
 
+@testset "typemin typemax" begin
+    @test typemin(Int8   ) === Int8(-128)
+    @test typemax(Int8   ) === Int8(127)
+    @test typemin(UInt8  ) === UInt8(0)
+    @test typemax(UInt8  ) === UInt8(255)
+    @test typemin(Int16  ) === Int16(-32768)
+    @test typemax(Int16  ) === Int16(32767)
+    @test typemin(UInt16 ) === UInt16(0)
+    @test typemax(UInt16 ) === UInt16(65535)
+    @test typemin(Int32  ) === Int32(-2147483648)
+    @test typemax(Int32  ) === Int32(2147483647)
+    @test typemin(UInt32 ) === UInt32(0)
+    @test typemax(UInt32 ) === UInt32(4294967295)
+    @test typemin(Int64  ) === Int64(-9223372036854775808)
+    @test typemax(Int64  ) === Int64(9223372036854775807)
+    @test typemin(UInt64 ) === UInt64(0)
+    @test typemax(UInt64 ) === UInt64(0xffff_ffff_ffff_ffff)
+    @test typemin(UInt128) === UInt128(0)
+    @test typemax(UInt128) === UInt128(0xffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff)
+    @test typemin(Int128 ) === Int128(-170141183460469231731687303715884105728)
+    @test typemax(Int128 ) === Int128(170141183460469231731687303715884105727)
+end
+
 @testset "issue #15489" begin
     @test 0x00007ffea27edaa0 + (-40) === (-40) + 0x00007ffea27edaa0 === 0x00007ffea27eda78
     @test UInt64(1) * Int64(-1) === typemax(UInt64)
@@ -352,25 +387,28 @@ end
 @testset "rounding division" begin
     for x = -100:100
         for y = 1:100
-            for rnd in (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp)
+            for rnd in (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp, RoundFromZero)
                 @test div(x,y,rnd) == round(x/y,rnd)
                 @test div(x,-y,rnd) == round(x/-y,rnd)
             end
+            @test divrem(x,y,RoundFromZero) == (div(x,y,RoundFromZero), rem(x,y,RoundFromZero))
+            @test divrem(x,-y,RoundFromZero) == (div(x,-y,RoundFromZero), rem(x,-y,RoundFromZero))
         end
     end
-    for (a, b, nearest, away, up) in (
-            (3, 2, 2, 2, 2),
-            (5, 3, 2, 2, 2),
-            (-3, 2, -2, -2, -1),
-            (5, 2, 2, 3, 3),
-            (-5, 2, -2, -3, -2),
-            (-5, 3, -2, -2, -2),
-            (5, -3, -2, -2, -2))
+    for (a, b, nearest, away, up, from_zero) in (
+            (3, 2, 2, 2, 2, 2),
+            (5, 3, 2, 2, 2, 2),
+            (-3, 2, -2, -2, -1, -2),
+            (5, 2, 2, 3, 3, 3),
+            (-5, 2, -2, -3, -2, -3),
+            (-5, 3, -2, -2, -2, -2),
+            (5, -3, -2, -2, -2, -2))
         for sign in (+1, -1)
             (a, b) = (a*sign, b*sign)
             @test div(a, b, RoundNearest) === nearest
             @test div(a, b, RoundNearestTiesAway) === away
             @test div(a, b, RoundNearestTiesUp) === up
+            @test div(a, b, RoundFromZero) === from_zero
         end
     end
 
@@ -381,7 +419,7 @@ end
     @test div(typemax(Int)-2, typemax(Int), RoundNearest) === 1
 
     # Exhaustively test (U)Int8 to catch any overflow-style issues
-    for r in (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp)
+    for r in (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp, RoundFromZero)
         for T in (UInt8, Int8)
             for x in typemin(T):typemax(T)
                 for y in typemin(T):typemax(T)
@@ -405,30 +443,6 @@ end
     @test bitreverse(0x80) === 0x01
     @test bitreverse(Int64(456618293)) === Int64(-6012608040035942400)
     @test bitreverse(Int32(456618293)) === Int32(-1399919400)
-end
-
-@testset "min/max of datatype" begin
-    @test typemin(Int8) === Int8(-128)
-    @test typemin(UInt8) === UInt8(0)
-    @test typemin(Int16) === Int16(-32768)
-    @test typemin(UInt16) === UInt16(0)
-    @test typemin(Int32) === Int32(-2147483648)
-    @test typemin(UInt32) === UInt32(0)
-    @test typemin(Int64) === Int64(-9223372036854775808)
-    @test typemin(UInt64) === UInt64(0)
-    @test typemin(Int128) === Int128(-170141183460469231731687303715884105728)
-    @test typemin(UInt128) === UInt128(0)
-
-    @test typemax(Int8) === Int8(127)
-    @test typemax(UInt8) === UInt8(255)
-    @test typemax(Int16) === Int16(32767)
-    @test typemax(UInt16) === UInt16(65535)
-    @test typemax(Int32) === Int32(2147483647)
-    @test typemax(UInt32) === UInt32(4294967295)
-    @test typemax(Int64) === Int64(9223372036854775807)
-    @test typemax(UInt64) === UInt64(0xffffffffffffffff)
-    @test typemax(Int128) === Int128(170141183460469231731687303715884105727)
-    @test typemax(UInt128) === UInt128(0xffffffffffffffffffffffffffffffff)
 end
 
 @testset "BitIntegerType" begin

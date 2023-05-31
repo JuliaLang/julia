@@ -1,26 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
-    truncwidth = textwidth(truncmark)
-    (width <= 0 || width < truncwidth) && return ""
-
-    wid = truncidx = lastidx = 0
-    for (idx, c) in pairs(str)
-        lastidx = idx
-        wid += textwidth(c)
-        wid >= width - truncwidth && truncidx == 0 && (truncidx = lastidx)
-        (wid >= width || c in chars) && break
-    end
-
-    lastidx != 0 && str[lastidx] in chars && (lastidx = prevind(str, lastidx))
-    truncidx == 0 && (truncidx = lastidx)
-    if lastidx < lastindex(str)
-        return String(SubString(str, 1, truncidx) * truncmark)
-    else
-        return String(str)
-    end
-end
-
 function show(io::IO, t::AbstractDict{K,V}) where V where K
     recur_io = IOContext(io, :SHOWN_SET => t,
                              :typeinfo => eltype(t))
@@ -88,7 +67,7 @@ mutable struct Dict{K,V} <: AbstractDict{K,V}
 
     function Dict{K,V}() where V where K
         n = 16
-        new(zeros(UInt8,n), Vector{K}(undef, n), Vector{V}(undef, n), 0, 0, 0, 1, 0)
+        new(zeros(UInt8,n), Vector{K}(undef, n), Vector{V}(undef, n), 0, 0, 0, n, 0)
     end
     function Dict{K,V}(d::Dict{K,V}) where V where K
         new(copy(d.slots), copy(d.keys), copy(d.vals), d.ndel, d.count, d.age,
@@ -168,8 +147,7 @@ end
 empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
 
 # Gets 7 most significant bits from the hash (hsh), first bit is 1
-_shorthash7(hsh::UInt32) = (hsh >> UInt(25))%UInt8 | 0x80
-_shorthash7(hsh::UInt64) = (hsh >> UInt(57))%UInt8 | 0x80
+_shorthash7(hsh::UInt) = (hsh >> (8sizeof(UInt)-7))%UInt8 | 0x80
 
 # hashindex (key, sz) - computes optimal position and shorthash7
 #     idx - optimal position in the hash table
@@ -226,7 +204,7 @@ end
         end
     end
 
-    @assert h.age == age0 "Muliple concurent writes to Dict detected!"
+    @assert h.age == age0 "Multiple concurrent writes to Dict detected!"
     h.age += 1
     h.slots = slots
     h.keys = keys
@@ -240,16 +218,10 @@ end
 function sizehint!(d::Dict{T}, newsz) where T
     oldsz = length(d.slots)
     # limit new element count to max_values of the key type
-    newsz = min(newsz, max_values(T)::Int)
+    newsz = min(max(newsz, length(d)), max_values(T)::Int)
     # need at least 1.5n space to hold n elements
-    newsz = cld(3 * newsz, 2)
-    if newsz <= oldsz
-        # todo: shrink
-        # be careful: rehash!() assumes everything fits. it was only designed
-        # for growing.
-        return d
-    end
-    rehash!(d, newsz)
+    newsz = _tablesz(cld(3 * newsz, 2))
+    return newsz == oldsz ? d : rehash!(d, newsz)
 end
 
 """
@@ -280,16 +252,17 @@ function empty!(h::Dict{K,V}) where V where K
     h.ndel = 0
     h.count = 0
     h.age += 1
-    h.idxfloor = 1
+    h.idxfloor = sz
     return h
 end
 
 # get the index where a key is stored, or -1 if not present
-function ht_keyindex(h::Dict{K,V}, key) where V where K
+@assume_effects :terminates_locally function ht_keyindex(h::Dict{K,V}, key) where V where K
     isempty(h) && return -1
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
+    maxprobe < sz || throw(AssertionError()) # This error will never trigger, but is needed for terminates_locally to be valid
     index, sh = hashindex(key, sz)
     keys = h.keys
 
@@ -366,6 +339,7 @@ end
 ht_keyindex2!(h::Dict, key) = ht_keyindex2_shorthash!(h, key)[1]
 
 @propagate_inbounds function _setindex!(h::Dict, v, key, index, sh = _shorthash7(hash(key)))
+    h.ndel -= isslotmissing(h, index)
     h.slots[index] = sh
     h.keys[index] = key
     h.vals[index] = v
@@ -377,23 +351,27 @@ ht_keyindex2!(h::Dict, key) = ht_keyindex2_shorthash!(h, key)[1]
 
     sz = length(h.keys)
     # Rehash now if necessary
-    if h.ndel >= ((3*sz)>>2) || h.count*3 > sz*2
-        # > 3/4 deleted or > 2/3 full
+    if (h.count + h.ndel)*3 > sz*2
+        # > 2/3 full (including tombstones)
         rehash!(h, h.count > 64000 ? h.count*2 : h.count*4)
     end
     nothing
 end
 
 function setindex!(h::Dict{K,V}, v0, key0) where V where K
-    key = convert(K, key0)
-    if !isequal(key, key0)
-        throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
+    if key0 isa K
+        key = key0
+    else
+        key = convert(K, key0)::K
+        if !(isequal(key, key0)::Bool)
+            throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
+        end
     end
     setindex!(h, v0, key)
 end
 
 function setindex!(h::Dict{K,V}, v0, key::K) where V where K
-    v = convert(V, v0)
+    v = v0 isa V ? v0 : convert(V, v0)::V
     index, sh = ht_keyindex2_shorthash!(h, key)
 
     if index > 0
@@ -450,7 +428,7 @@ Dict{String, Int64} with 4 entries:
 get!(collection, key, default)
 
 """
-    get!(f::Function, collection, key)
+    get!(f::Union{Function, Type}, collection, key)
 
 Return the value stored for the given key, or if no mapping for the key is present, store
 `key => f()`, and return `f()`.
@@ -476,12 +454,16 @@ Dict{Int64, Int64} with 1 entry:
   2 => 4
 ```
 """
-get!(f::Function, collection, key)
+get!(f::Callable, collection, key)
 
 function get!(default::Callable, h::Dict{K,V}, key0) where V where K
-    key = convert(K, key0)
-    if !isequal(key, key0)
-        throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
+    if key0 isa K
+        key = key0
+    else
+        key = convert(K, key0)::K
+        if !isequal(key, key0)
+            throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
+        end
     end
     return get!(default, h, key)
 end
@@ -492,7 +474,10 @@ function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
     index > 0 && return h.vals[index]
 
     age0 = h.age
-    v = convert(V, default())
+    v = default()
+    if !isa(v, V)
+        v = convert(V, v)::V
+    end
     if h.age != age0
         index, sh = ht_keyindex2_shorthash!(h, key)
     end
@@ -539,7 +524,7 @@ function get(h::Dict{K,V}, key, default) where V where K
 end
 
 """
-    get(f::Function, collection, key)
+    get(f::Union{Function, Type}, collection, key)
 
 Return the value stored for the given key, or if no mapping for the key is present, return
 `f()`.  Use [`get!`](@ref) to also store the default value in the dictionary.
@@ -553,7 +538,7 @@ get(dict, key) do
 end
 ```
 """
-get(::Function, collection, key)
+get(::Callable, collection, key)
 
 function get(default::Callable, h::Dict{K,V}, key) where V where K
     index = ht_keyindex(h, key)
@@ -656,13 +641,30 @@ function pop!(h::Dict)
 end
 
 function _delete!(h::Dict{K,V}, index) where {K,V}
-    @inbounds h.slots[index] = 0x7f
-    @inbounds _unsetindex!(h.keys, index)
-    @inbounds _unsetindex!(h.vals, index)
-    h.ndel += 1
+    @inbounds begin
+    slots = h.slots
+    sz = length(slots)
+    _unsetindex!(h.keys, index)
+    _unsetindex!(h.vals, index)
+    # if the next slot is empty we don't need a tombstone
+    # and can remove all tombstones that were required by the element we just deleted
+    ndel = 1
+    nextind = (index & (sz-1)) + 1
+    if isslotempty(h, nextind)
+        while true
+            ndel -= 1
+            slots[index] = 0x00
+            index = ((index - 2) & (sz-1)) + 1
+            isslotmissing(h, index) || break
+        end
+    else
+        slots[index] = 0x7f
+    end
+    h.ndel += ndel
     h.count -= 1
     h.age += 1
     return h
+    end
 end
 
 """
@@ -765,10 +767,17 @@ function mergewith!(combine, d1::Dict{K, V}, d2::AbstractDict) where {K, V}
         if i > 0
             d1.vals[i] = combine(d1.vals[i], v)
         else
-            if !isequal(k, convert(K, k))
-                throw(ArgumentError("$(limitrepr(k)) is not a valid key for type $K"))
+            if !(k isa K)
+                k1 = convert(K, k)::K
+                if !isequal(k, k1)
+                    throw(ArgumentError("$(limitrepr(k)) is not a valid key for type $K"))
+                end
+                k = k1
             end
-            @inbounds _setindex!(d1, convert(V, v), k, -i, sh)
+            if !isa(v, V)
+                v = convert(V, v)::V
+            end
+            @inbounds _setindex!(d1, v, k, -i, sh)
         end
     end
     return d1

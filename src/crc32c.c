@@ -204,7 +204,11 @@ static crc32c_func_t crc32c_dispatch(void)
 #    define crc32c_dispatch_ifunc "crc32c_dispatch"
 #  endif
 #elif defined(_CPU_AARCH64_)
+#ifdef _COMPILER_CLANG_
+#define CRC_TARGET __attribute__((target("crc")))
+#else
 #define CRC_TARGET __attribute__((target("+crc")))
+#endif
 /* Compute CRC-32C using the ARMv8 CRC32 extension. */
 CRC_TARGET static inline uint32_t crc32cx(uint32_t crc, uint64_t val)
 {

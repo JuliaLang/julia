@@ -97,15 +97,14 @@ julia> round(357.913; sigdigits=4, base=2)
     Rounding to specified digits in bases other than 2 can be inexact when
     operating on binary floating point numbers. For example, the [`Float64`](@ref)
     value represented by `1.15` is actually *less* than 1.15, yet will be
-    rounded to 1.2.
+    rounded to 1.2. For example:
 
-    # Examples
-    ```jldoctest; setup = :(using Printf)
+    ```jldoctest
     julia> x = 1.15
     1.15
 
-    julia> @sprintf "%.20f" x
-    "1.14999999999999991118"
+    julia> big(1.15)
+    1.149999999999999911182158029987476766109466552734375
 
     julia> x < 115//100
     true
@@ -236,14 +235,18 @@ function round(x::T, ::RoundingMode{:NearestTiesUp}) where {T <: AbstractFloat}
     copysign(floor((x + (T(0.25) - eps(T(0.5)))) + (T(0.25) + eps(T(0.5)))), x)
 end
 
+function Base.round(x::AbstractFloat, ::typeof(RoundFromZero))
+    signbit(x) ? round(x, RoundDown) : round(x, RoundUp)
+end
+
 # isapprox: approximate equality of numbers
 """
     isapprox(x, y; atol::Real=0, rtol::Real=atol>0 ? 0 : √eps, nans::Bool=false[, norm::Function])
 
 Inexact equality comparison. Two numbers compare equal if their relative distance *or* their
 absolute distance is within tolerance bounds: `isapprox` returns `true` if
-`norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`. The default `atol` is zero and the
-default `rtol` depends on the types of `x` and `y`. The keyword argument `nans` determines
+`norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`. The default `atol` (absolute tolerance) is zero and the
+default `rtol` (relative tolerance) depends on the types of `x` and `y`. The keyword argument `nans` determines
 whether or not NaN values are considered equal (defaults to false).
 
 For real or complex floating-point values, if an `atol > 0` is not specified, `rtol` defaults to

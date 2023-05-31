@@ -15,6 +15,8 @@ Base.repeat(::AbstractChar, ::Integer)
 Base.repr(::Any)
 Core.String(::AbstractString)
 Base.SubString
+Base.LazyString
+Base.@lazy_str
 Base.transcode
 Base.unsafe_string
 Base.ncodeunits(::AbstractString)

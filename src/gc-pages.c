@@ -302,9 +302,24 @@ void jl_gc_free_page(void *p) JL_NOTSAFEPOINT
     }
 #ifdef _OS_WINDOWS_
     VirtualFree(p, decommit_size, MEM_DECOMMIT);
+#elif defined(MADV_FREE)
+    static int supports_madv_free = 1;
+    if (supports_madv_free) {
+        if (madvise(p, decommit_size, MADV_FREE) == -1) {
+            assert(errno == EINVAL);
+            supports_madv_free = 0;
+        }
+    }
+    if (!supports_madv_free) {
+        madvise(p, decommit_size, MADV_DONTNEED);
+    }
 #else
     madvise(p, decommit_size, MADV_DONTNEED);
 #endif
+    /* TODO: Should we leave this poisoned and rather allow the GC to read poisoned pointers from
+     *       the page when it sweeps pools?
+     */
+    msan_unpoison(p, decommit_size);
 
 no_decommit:
     // new pages are now available starting at max of lb and pagetable_i32

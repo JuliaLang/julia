@@ -14,7 +14,7 @@ extern "C" {
 // The public interface to call from Julia for allocations profiling
 // ---------------------------------------------------------------------
 
-// Forward-declaration to avoid depenency in header file.
+// Forward-declaration to avoid dependency in header file.
 struct jl_raw_alloc_t;  // Defined in gc-alloc-profiler.cpp
 
 typedef struct {

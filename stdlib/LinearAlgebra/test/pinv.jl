@@ -63,39 +63,23 @@ function tridiag(T::Type, m::Integer, n::Integer)
 end
 tridiag(m::Integer, n::Integer) = tridiag(Float64, m::Integer, n::Integer)
 
-function randn_float64(m::Integer, n::Integer)
-    a=randn(m,n)
-    b = Matrix{Float64}(undef, m, n)
-    for i=1:n
-        for j=1:m
-            b[j,i]=convert(Float64,a[j,i])
-        end
-    end
-    return b
-end
+function test_pinv(a,tol1,tol2)
+    m,n = size(a)
 
-function randn_float32(m::Integer, n::Integer)
-    a=randn(m,n)
-    b = Matrix{Float32}(undef, m, n)
-    for i=1:n
-        for j=1:m
-            b[j,i]=convert(Float32,a[j,i])
-        end
-    end
-    return b
-end
-
-
-function test_pinv(a,m,n,tol1,tol2,tol3)
     apinv = @inferred pinv(a)
-
+    @test size(apinv) == (n,m)
     @test norm(a*apinv*a-a)/norm(a) ≈ 0 atol=tol1
-    x0 = randn(n); b = a*x0; x = apinv*b
+    @test norm(apinv*a*apinv-apinv)/norm(apinv) ≈ 0 atol=tol1
+    b = a*randn(n)
+    x = apinv*b
     @test norm(a*x-b)/norm(b) ≈ 0 atol=tol1
-    apinv = pinv(a,sqrt(eps(real(one(eltype(a))))))
 
+    apinv = @inferred pinv(a,sqrt(eps(real(one(eltype(a))))))
+    @test size(apinv) == (n,m)
     @test norm(a*apinv*a-a)/norm(a) ≈ 0 atol=tol2
-    x0 = randn(n); b = a*x0; x = apinv*b
+    @test norm(apinv*a*apinv-apinv)/norm(apinv) ≈ 0 atol=tol2
+    b = a*randn(n)
+    x = apinv*b
     @test norm(a*x-b)/norm(b) ≈ 0 atol=tol2
 end
 
@@ -104,28 +88,25 @@ end
         default_tol = (real(one(eltya))) * max(m,n) * 10
         tol1 = 1e-2
         tol2 = 1e-5
-        tol3 = 1e-5
         if real(eltya) == Float32
             tol1 = 1e0
             tol2 = 1e-2
-            tol3 = 1e-2
         end
         @testset "dense/ill-conditioned matrix" begin
-        ###    a = randn_float64(m,n) * hilb(eltya,n)
             a = hilb(eltya, m, n)
-            test_pinv(a, m, n, tol1, tol2, tol3)
+            test_pinv(a, tol1, tol2)
         end
         @testset "dense/diagonal matrix" begin
             a = onediag(eltya, m, n)
-            test_pinv(a, m, n, default_tol, default_tol, default_tol)
+            test_pinv(a, default_tol, default_tol)
         end
         @testset "dense/tri-diagonal matrix" begin
             a = tridiag(eltya, m, n)
-            test_pinv(a, m, n, default_tol, tol2, default_tol)
+            test_pinv(a, default_tol, tol2)
         end
         @testset "Diagonal matrix" begin
             a = onediag_sparse(eltya, m)
-            test_pinv(a, m, m, default_tol, default_tol, default_tol)
+            test_pinv(a, default_tol, default_tol)
         end
         @testset "Vector" begin
             a = rand(eltya, m)
@@ -162,6 +143,18 @@ end
         Q = ones(2,2)
         C = pinv(Hermitian(Q))/0.25
         @test C ≈ ones(2,2)
+    end
+
+    @testset "non-square diagonal matrices" begin
+        A = eltya[1 0 ; 0 1 ; 0 0]
+        B = pinv(A)
+        @test A*B*A ≈ A
+        @test B*A*B ≈ B
+
+        A = eltya[1 0 0 ; 0 1 0]
+        B = pinv(A)
+        @test A*B*A ≈ A
+        @test B*A*B ≈ B
     end
 
     if eltya <: LinearAlgebra.BlasReal

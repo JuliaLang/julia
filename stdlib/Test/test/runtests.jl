@@ -162,7 +162,7 @@ let fails = @testset NoThrowTestSet begin
         @test_throws "A test" error("a test")
         @test_throws r"sqrt\([Cc]omplx" sqrt(-1)
         @test_throws str->occursin("a T", str) error("a test")
-        @test_throws ["BoundsError", "acess", "1-element", "at index [2]"] [1][2]
+        @test_throws ["BoundsError", "aquire", "1-element", "at index [2]"] [1][2]
     end
     for fail in fails
         @test fail isa Test.Fail
@@ -294,7 +294,7 @@ let fails = @testset NoThrowTestSet begin
     end
 
     let str = sprint(show, fails[26])
-        @test occursin("Expected: [\"BoundsError\", \"acess\", \"1-element\", \"at index [2]\"]", str)
+        @test occursin("Expected: [\"BoundsError\", \"aquire\", \"1-element\", \"at index [2]\"]", str)
         @test occursin(r"Message: \"BoundsError.* 1-element.*at index \[2\]", str)
     end
 
@@ -346,7 +346,7 @@ let retval_tests = @testset NoThrowTestSet begin
         @test Test.record(ts, pass_mock) isa Test.Pass
         error_mock = Test.Error(:test, 1, 2, 3, LineNumberNode(0, "An Error Mock"))
         @test Test.record(ts, error_mock) isa Test.Error
-        fail_mock = Test.Fail(:test, 1, 2, 3, LineNumberNode(0, "A Fail Mock"))
+        fail_mock = Test.Fail(:test, 1, 2, 3, nothing, LineNumberNode(0, "A Fail Mock"), false)
         @test Test.record(ts, fail_mock) isa Test.Fail
         broken_mock = Test.Broken(:test, LineNumberNode(0, "A Broken Mock"))
         @test Test.record(ts, broken_mock) isa Test.Broken
@@ -409,19 +409,19 @@ end
                 @test true
                 @test false
                 @test 1 == 1
-                @test 2 == :foo
+                @test 2 === :foo
                 @test 3 == 3
                 @testset "d" begin
                     @test 4 == 4
                 end
                 @testset begin
-                    @test :blank != :notblank
+                    @test :blank !== :notblank
                 end
             end
             @testset "inner1" begin
                 @test 1 == 1
                 @test 2 == 2
-                @test 3 == :bar
+                @test 3 === :bar
                 @test 4 == 4
                 @test_throws ErrorException 1+1
                 @test_throws ErrorException error()
@@ -720,6 +720,115 @@ end
     @test occursin("at " * f * ":3", msg)
     @test occursin("at " * f * ":4", msg)
     rm(f; force=true)
+end
+
+@testset "provide informative location in backtrace for test failures" begin
+    win2unix(filename) = replace(filename, "\\" => '/')
+    utils = win2unix(tempname())
+    write(utils,
+    """
+    function test_properties2(value)
+        @test isodd(value)
+    end
+    """)
+
+    included = win2unix(tempname())
+    write(included,
+    """
+    @testset "Other tests" begin
+        @test 1 + 1 == 3
+        test_properties2(2)
+    end
+    test_properties2(8)
+
+    # Test calls to `@test` and `@testset` with no file/lineno information (__source__ == nothing).
+    eval(Expr(:macrocall, Symbol("@test"), nothing, :false))
+    eval(Expr(:macrocall, Symbol("@testset"), nothing, "Testset without source", quote
+        @test false
+        @test error("failed")
+    end))
+    """)
+
+    runtests = win2unix(tempname())
+    write(runtests,
+    """
+    using Test
+
+    include("$utils")
+
+    function test_properties(value)
+        @test isodd(value)
+    end
+
+    @testset "Tests" begin
+        test_properties(8)
+        @noinline test_properties(8)
+        test_properties2(8)
+
+        include("$included")
+    end
+    """)
+    msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $runtests`), stderr=devnull), String)
+    msg = win2unix(msg)
+    regex = r"((?:Tests|Other tests|Testset without source): Test Failed (?:.|\n)*?)\n\nStacktrace:(?:.|\n)*?(?=\n(?:Tests|Other tests))"
+    failures = map(eachmatch(regex, msg)) do m
+        m = match(r"(Tests|Other tests|Testset without source): .*? at (.*?)\n  Expression: (.*)(?:.|\n)*\n+Stacktrace:\n((?:.|\n)*)", m.match)
+        (; testset = m[1], source = m[2], ex = m[3], stacktrace = m[4])
+    end
+    @test length(failures) == 8 # 8 failed tests
+    @test count(contains("Error During Test"), split(msg, '\n')) == 1 # 1 error
+    test_properties_macro_source = runtests * ":6"
+    test_properties2_macro_source = utils * ":2"
+
+    fail = failures[1]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 6
+    @test fail.testset == "Tests" && fail.source == test_properties_macro_source && fail.ex == "isodd(value)"
+    @test count(contains(runtests * ":10"), lines) == 2 # @testset + test
+
+    fail = failures[2]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 6
+    @test fail.testset == "Tests" && fail.source == test_properties_macro_source && fail.ex == "isodd(value)"
+    @test count(contains(runtests * ":10"), lines) == 1 # @testset
+    @test count(contains(runtests * ":11"), lines) == 1 # test
+
+    fail = failures[3]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 6
+    @test fail.testset == "Tests" && fail.source == test_properties2_macro_source && fail.ex == "isodd(value)"
+    @test count(contains(runtests * ":10"), lines) == 1 # @testset
+    @test count(contains(runtests * ":12"), lines) == 1 # test
+
+    fail = failures[4]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 5
+    @test fail.testset == "Other tests" && fail.source == included * ":2" && fail.ex == "1 + 1 == 3"
+    @test count(contains(included * ":2"), lines) == 2 # @testset + test
+    @test count(contains(runtests * ":10"), lines) == 0 # @testset (stop at the innermost testset)
+
+    fail = failures[5]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 6
+    @test fail.testset == "Other tests" && fail.source == test_properties2_macro_source && fail.ex == "isodd(value)"
+    @test count(contains(included * ":2"), lines) == 1 # @testset
+    @test count(contains(included * ":3"), lines) == 1 # test
+    @test count(contains(runtests * ":10"), lines) == 0 # @testset (stop at the innermost testset)
+
+    fail = failures[6]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 8
+    @test fail.testset == "Tests" && fail.source == test_properties2_macro_source && fail.ex == "isodd(value)"
+    @test count(contains(runtests * ":10"), lines) == 1 # @testset
+    @test count(contains(runtests * ":14"), lines) == 1 # include
+    @test count(contains(included * ":5"), lines) == 1 # test
+
+    fail = failures[7]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 9
+    @test fail.testset == "Tests" && fail.source == "none:0" && fail.ex == "false"
+    @test count(contains(runtests * ":10"), lines) == 1 # @testset
+    @test count(contains(runtests * ":14"), lines) == 1 # include
+    @test count(contains(included * ":8"), lines) == 1 # test
+
+    fail = failures[8]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 5
+    @test fail.testset == "Testset without source" && fail.source == included * ":10" && fail.ex == "false"
+    @test count(contains(included * ":10"), lines) == 2 # @testset + test
+    @test count(contains(runtests * ":10"), lines) == 0 # @testset (stop at the innermost testset)
 end
 
 let io = IOBuffer()
@@ -1160,6 +1269,111 @@ end
     end
 end
 
+@testset "failfast option" begin
+    @testset "non failfast (default)" begin
+        expected = r"""
+        Test Summary: | Pass  Fail  Error  Total  Time
+        Foo           |    1     2      1      4  \s*\d*.\ds
+          Bar         |    1     1             2  \s*\d*.\ds
+        """
+
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+
+            @testset "Foo" begin
+                @test false
+                @test error()
+                @testset "Bar" begin
+                    @test false
+                    @test true
+                end
+            end
+            """)
+            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin(expected, result)
+        end
+    end
+    @testset "failfast" begin
+        expected = r"""
+        Test Summary: | Fail  Total  Time
+        Foo           |    1      1  \s*\d*.\ds
+        """
+
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+
+            @testset "Foo" failfast=true begin
+                @test false
+                @test error()
+                @testset "Bar" begin
+                    @test false
+                    @test true
+                end
+            end
+            """)
+            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin(expected, result)
+        end
+    end
+    @testset "failfast passes to child testsets" begin
+        expected = r"""
+        Test Summary: | Fail  Total  Time
+        PackageName   |    1      1  \s*\d*.\ds
+          1           |    1      1  \s*\d*.\ds
+        """
+
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+
+            @testset "Foo" failfast=true begin
+                @testset "1" begin
+                   @test false
+                end
+                @testset "2" begin
+                   @test true
+                end
+            end
+            """)
+            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin(expected, result)
+        end
+    end
+    @testset "failfast via env var" begin
+        expected = r"""
+        Test Summary: | Fail  Total  Time
+        Foo           |    1      1  \s*\d*.\ds
+        """
+
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+            ENV["JULIA_TEST_FAILFAST"] = true
+            @testset "Foo" begin
+                @test false
+                @test error()
+                @testset "Bar" begin
+                    @test false
+                    @test true
+                end
+            end
+            """)
+            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin(expected, result)
+        end
+    end
+end
+
 # Non-booleans in @test (#35888)
 struct T35888 end
 Base.isequal(::T35888, ::T35888) = T35888()
@@ -1282,12 +1496,12 @@ Test.finish(ts::PassInformationTestSet) = ts
     end
     test_line_number = (@__LINE__) - 3
     test_throws_line_number =  (@__LINE__) - 3
-    @test ts.results[1].test_type == :test
+    @test ts.results[1].test_type === :test
     @test ts.results[1].orig_expr == :(1 == 1)
     @test ts.results[1].data == Expr(:comparison, 1, :(==), 1)
     @test ts.results[1].value == true
     @test ts.results[1].source == LineNumberNode(test_line_number, @__FILE__)
-    @test ts.results[2].test_type == :test_throws
+    @test ts.results[2].test_type === :test_throws
     @test ts.results[2].orig_expr == :(throw(ErrorException("Msg")))
     @test ts.results[2].data == ErrorException
     @test ts.results[2].value == ErrorException("Msg")

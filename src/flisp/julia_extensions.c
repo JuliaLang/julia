@@ -361,6 +361,55 @@ value_t fl_string2normsymbol(fl_context_t *fl_ctx, value_t *args, uint32_t nargs
     return symbol(fl_ctx, normalize(fl_ctx, (char*)cvalue_data(args[0])));
 }
 
+static uint32_t _iterate_continued(uint8_t *s, size_t n, size_t *i, uint32_t u) {
+    if (u < 0xc0000000) { ++*i; return u; }
+    uint8_t b;
+
+    if (++*i >= n) return u;
+    b = s[*i]; // cont byte 1
+    if ((b & 0xc0) != 0x80) return u;
+    u |= (uint32_t)b << 16;
+
+    if (++*i >= n || u < 0xe0000000) return u;
+    b = s[*i]; // cont byte 2
+    if ((b & 0xc0) != 0x80) return u;
+    u |= (uint32_t)b << 8;
+
+    if (++*i >= n || u < 0xf0000000) return u;
+    b = s[*i]; // cont byte 3
+    if ((b & 0xc0) != 0x80) return u;
+    u |= (uint32_t)b; ++*i;
+
+    return u;
+}
+
+static uint32_t _string_only_julia_char(uint8_t *s, size_t n) {
+    if (!(0 < n && n <= 4))
+        return -1;
+    size_t i = 0;
+    uint8_t b = s[i];
+    uint32_t u = (uint32_t)b << 24;
+    if (0x80 <= b && b <= 0xf7)
+        u = _iterate_continued(s, n, &i, u);
+    else
+        i = 1;
+    if (i < n)
+        return -1;
+    return u;
+}
+
+value_t fl_string_only_julia_char(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) {
+    argcount(fl_ctx, "string.only-julia-char", nargs, 1);
+    if (!fl_isstring(fl_ctx, args[0]))
+        type_error(fl_ctx, "string.only-julia-char", "string", args[0]);
+    uint8_t *s = (uint8_t*)cvalue_data(args[0]);
+    size_t len = cv_len((cvalue_t*)ptr(args[0]));
+    uint32_t u = _string_only_julia_char(s, len);
+    if (u == (uint32_t)-1)
+        return fl_ctx->F;
+    return fl_list2(fl_ctx, fl_ctx->jl_char_sym, mk_uint32(fl_ctx, u));
+}
+
 static const builtinspec_t julia_flisp_func_info[] = {
     { "skip-ws", fl_skipws },
     { "accum-julia-symbol", fl_accum_julia_symbol },
@@ -371,6 +420,7 @@ static const builtinspec_t julia_flisp_func_info[] = {
     { "strip-op-suffix", fl_julia_strip_op_suffix },
     { "underscore-symbol?", fl_julia_underscore_symbolp },
     { "string->normsymbol", fl_string2normsymbol },
+    { "string.only-julia-char", fl_string_only_julia_char },
     { NULL, NULL }
 };
 

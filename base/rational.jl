@@ -83,6 +83,11 @@ end
 
 function show(io::IO, x::Rational)
     show(io, numerator(x))
+
+    if isone(denominator(x)) && get(io, :typeinfo, Any) <: Rational
+        return
+    end
+
     print(io, "//")
     show(io, denominator(x))
 end
@@ -95,6 +100,20 @@ end
 function write(s::IO, z::Rational)
     write(s,numerator(z),denominator(z))
 end
+function parse(::Type{Rational{T}}, s::AbstractString) where T<:Integer
+    ss = split(s, '/'; limit = 2)
+    if isone(length(ss))
+        return Rational{T}(parse(T, s))
+    end
+    @inbounds ns, ds = ss[1], ss[2]
+    if startswith(ds, '/')
+        ds = chop(ds; head = 1, tail = 0)
+    end
+    n = parse(T, ns)
+    d = parse(T, ds)
+    return n//d
+end
+
 
 function Rational{T}(x::Rational) where T<:Integer
     unsafe_rational(T, convert(T, x.num), convert(T, x.den))
@@ -258,7 +277,7 @@ signbit(x::Rational) = signbit(x.num)
 copysign(x::Rational, y::Real) = unsafe_rational(copysign(x.num, y), x.den)
 copysign(x::Rational, y::Rational) = unsafe_rational(copysign(x.num, y.num), x.den)
 
-abs(x::Rational) = Rational(abs(x.num), x.den)
+abs(x::Rational) = unsafe_rational(checked_abs(x.num), x.den)
 
 typemin(::Type{Rational{T}}) where {T<:Signed} = unsafe_rational(T, -one(T), zero(T))
 typemin(::Type{Rational{T}}) where {T<:Integer} = unsafe_rational(T, zero(T), one(T))
@@ -526,7 +545,7 @@ function hash(x::Rational{<:BitInteger64}, h::UInt)
         pow = trailing_zeros(den)
         den >>= pow
         pow = -pow
-        if den == 1 && abs(num) < 9007199254740992
+        if den == 1 && uabs(num) < UInt64(maxintfloat(Float64))
             return hash(ldexp(Float64(num),pow),h)
         end
     end
@@ -537,7 +556,7 @@ function hash(x::Rational{<:BitInteger64}, h::UInt)
 end
 
 # These methods are only needed for performance. Since `first(r)` and `last(r)` have the
-# same denominator (because their difference is an integer), `length(r)` can be calulated
+# same denominator (because their difference is an integer), `length(r)` can be calculated
 # without calling `gcd`.
 function length(r::AbstractUnitRange{T}) where T<:Rational
     @inline

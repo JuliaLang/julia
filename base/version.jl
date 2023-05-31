@@ -80,6 +80,7 @@ VersionNumber(major::Integer, minor::Integer = 0, patch::Integer = 0,
         map(x->x isa Integer ? UInt64(x) : String(x), bld))
 
 VersionNumber(v::Tuple) = VersionNumber(v...)
+VersionNumber(v::VersionNumber) = v
 
 function print(io::IO, v::VersionNumber)
     v == typemax(VersionNumber) && return print(io, "∞")
@@ -288,7 +289,7 @@ function banner(io::IO = stdout)
 
     commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" : " ($(split(Base.GIT_VERSION_INFO.date_string)[1]))"
 
-    if get(io, :color, false)
+    if get(io, :color, false)::Bool
         c = text_colors
         tx = c[:normal] # text
         jl = c[:normal] # julia

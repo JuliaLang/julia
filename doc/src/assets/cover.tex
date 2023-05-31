@@ -1,0 +1,46 @@
+%% ============================================================================
+%% Custom tex styles, including this file, add a custom cover to the document.
+%%
+%% These custom styles include:
+%%  - `cover.tex`: This file, The main definition of the cover, 
+%%      used to replace the default `\maketitle` command.
+%%  - `custom.sty`: Load the macro package required for the cover, 
+%%      define the background image style, etc.
+%%  - `preamble.tex`: Replace the default preamble for inserting a custom cover.
+%%  - `logo.tex`: logo of julia.
+%%  - `cover-splash.tex`: Background image of the cover title, 
+%%      from julia's homepage.
+%% ============================================================================
+
+%% ---- reset page geometry for cover page
+\newgeometry{left=2cm,right=2cm,bottom=3cm}
+% ref: memman@v3.7q, P65, "4.1. Styling the titling"
+%   http://mirrors.ctan.org/macros/latex/contrib/memoir/memman.pdf
+\begin{titlingpage}
+    % set background image
+    \BgThispage
+    \vspace*{2.2cm}
+
+    %% Centering content
+    \begin{center}
+        %% Main Heading
+        \textcolor{black}{ \MainHeading  \DocMainTitle } 
+        \vfill
+        
+        %% logo
+        % logo scale factor
+        \newcommand{\scaleFactor}{0.5}
+        \input{./assets/logo} 
+        \\[1.5cm]
+        % git tag or doc version
+        { \SecondaryHeading V\JuliaVersion\ } 
+        \vfill
+        
+        { \HUGE \DocAuthors }
+        \\[0.5cm]
+        % build time
+        { \huge \today }
+    \end{center} 
+\end{titlingpage}
+\restoregeometry
+%% ---- restore geometry

@@ -7,8 +7,8 @@ const ThreadSynchronizer = GenericCondition{Threads.SpinLock}
     ReentrantLock()
 
 Creates a re-entrant lock for synchronizing [`Task`](@ref)s. The same task can
-acquire the lock as many times as required. Each [`lock`](@ref) must be matched
-with an [`unlock`](@ref).
+acquire the lock as many times as required (this is what the "Reentrant" part
+of the name means). Each [`lock`](@ref) must be matched with an [`unlock`](@ref).
 
 Calling 'lock' will also inhibit running of finalizers on that thread until the
 corresponding 'unlock'. Use of the standard lock pattern illustrated below
@@ -26,6 +26,9 @@ finally
     unlock(l)
 end
 ```
+
+If [`!islocked(lck::ReentrantLock)`](@ref islocked) holds, [`trylock(lck)`](@ref trylock)
+succeeds unless there are other tasks attempting to hold the lock "at the same time."
 """
 mutable struct ReentrantLock <: AbstractLock
     # offset = 16
@@ -88,7 +91,7 @@ function islocked end
 # `ReentrantLock`.
 
 function islocked(rl::ReentrantLock)
-    return rl.havelock != 0
+    return (@atomic :monotonic rl.havelock) != 0
 end
 
 """
@@ -478,8 +481,8 @@ end
 """
     reset(::Event)
 
-Reset an Event back into an un-set state. Then any future calls to `wait` will
-block until `notify` is called again.
+Reset an [`Event`](@ref) back into an un-set state. Then any future calls to `wait` will
+block until [`notify`](@ref) is called again.
 """
 function reset(e::Event)
     @atomic e.set = false # full barrier

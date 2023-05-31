@@ -1,2 +1,7 @@
+## jll artifact
+OPENLIBM_JLL_NAME := OpenLibm
+
+## source build
+OPENLIBM_VER := 0.8.1
 OPENLIBM_BRANCH=v0.8.1
 OPENLIBM_SHA1=ae2d91698508701c83cab83714d42a1146dccf85

@@ -53,7 +53,7 @@ Return a shortened version of the name of `ref` that's
 "human-readable".
 
 ```julia-repl
-julia> repo = LibGit2.GitRepo(path_to_repo);
+julia> repo = GitRepo(path_to_repo);
 
 julia> branch_ref = LibGit2.head(repo);
 

@@ -20,6 +20,8 @@ The `Base` module currently provides an implementation for the types
 [`Complex`](@ref) counterparts. When the type argument is complex, the values are drawn
 from the circularly symmetric complex normal distribution of variance 1 (corresponding to real and imaginary part having independent normal distribution with mean zero and variance `1/2`).
 
+See also [`randn!`](@ref) to act in-place.
+
 # Examples
 ```jldoctest
 julia> using Random
@@ -90,6 +92,15 @@ randn(rng::AbstractRNG, ::Type{Complex{T}}) where {T<:AbstractFloat} =
     Complex{T}(SQRT_HALF * randn(rng, T), SQRT_HALF * randn(rng, T))
 
 
+### fallback randn for float types defining rand:
+function randn(rng::AbstractRNG, ::Type{T}) where {T<:AbstractFloat}
+    # Marsaglia polar variant of Box–Muller transform:
+    while true
+        x, y = 2rand(rng, T)-1, 2rand(rng, T)-1
+        0 < (s = x^2 + y^2) < 1 && return x * sqrt(-2log(s)/s)
+    end
+end
+
 ## randexp
 
 """
@@ -137,6 +148,9 @@ end
     end
 end
 
+### fallback randexp for float types defining rand:
+randexp(rng::AbstractRNG, ::Type{T}) where {T<:AbstractFloat} =
+    -log1p(-rand(rng, T))
 
 ## arrays & other scalar methods
 

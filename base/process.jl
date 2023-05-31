@@ -56,7 +56,7 @@ function uv_return_spawn(p::Ptr{Cvoid}, exit_status::Int64, termsignal::Int32)
     proc = unsafe_pointer_to_objref(data)::Process
     proc.exitcode = exit_status
     proc.termsignal = termsignal
-    disassociate_julia_struct(proc) # ensure that data field is set to C_NULL
+    disassociate_julia_struct(proc.handle) # ensure that data field is set to C_NULL
     ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), proc.handle)
     proc.handle = C_NULL
     lock(proc.exitnotify)
@@ -70,7 +70,7 @@ end
 
 # called when the libuv handle is destroyed
 function _uv_hook_close(proc::Process)
-    proc.handle = C_NULL
+    Libc.free(@atomicswap :not_atomic proc.handle = C_NULL)
     nothing
 end
 
@@ -413,7 +413,7 @@ process failed, or if the process attempts to print anything to stdout.
 """
 function open(f::Function, cmds::AbstractCmd, args...; kwargs...)
     P = open(cmds, args...; kwargs...)
-    function waitkill(P::Process)
+    function waitkill(P::Union{Process,ProcessChain})
         close(P)
         # 0.1 seconds after we hope it dies (from closing stdio),
         # we kill the process with SIGTERM (15)
@@ -430,7 +430,7 @@ function open(f::Function, cmds::AbstractCmd, args...; kwargs...)
         rethrow()
     end
     close(P.in)
-    if !eof(P.out)
+    if !(eof(P.out)::Bool)
         waitkill(P)
         throw(_UVError("open(do)", UV_EPIPE))
     end
@@ -447,7 +447,7 @@ function read(cmd::AbstractCmd)
     procs = open(cmd, "r", devnull)
     bytes = read(procs.out)
     success(procs) || pipeline_error(procs)
-    return bytes
+    return bytes::Vector{UInt8}
 end
 
 """
@@ -463,6 +463,9 @@ read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))::String
 Run a command object, constructed with backticks (see the [Running External Programs](@ref)
 section in the manual). Throws an error if anything goes wrong, including the process
 exiting with a non-zero status (when `wait` is true).
+
+The `args...` allow you to pass through file descriptors to the command, and are ordered
+like regular unix file descriptors (eg `stdin, stdout, stderr, FD(3), FD(4)...`).
 
 If `wait` is false, the process runs asynchronously. You can later wait for it and check
 its exit status by calling `success` on the returned process object.
@@ -607,10 +610,10 @@ Get the child process ID, if it still exists.
     This function requires at least Julia 1.1.
 """
 function Libc.getpid(p::Process)
-    # TODO: due to threading, this method is no longer synchronized with the user application
+    # TODO: due to threading, this method is only weakly synchronized with the user application
     iolock_begin()
     ppid = Int32(0)
-    if p.handle != C_NULL
+    if p.handle != C_NULL # e.g. process_running
         ppid = ccall(:jl_uv_process_pid, Int32, (Ptr{Cvoid},), p.handle)
     end
     iolock_end()

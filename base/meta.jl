@@ -48,7 +48,7 @@ quot(ex) = Expr(:quote, ex)
 """
     Meta.isexpr(ex, head[, n])::Bool
 
-Return true if `ex` is an `Expr` with the given type `head` and optionally that
+Return `true` if `ex` is an `Expr` with the given type `head` and optionally that
 the argument list is of length `n`. `head` may be a `Symbol` or collection of
 `Symbol`s. For example, to check that a macro was passed a function call
 expression, you might use `isexpr(ex, :call)`.
@@ -74,8 +74,7 @@ julia> Meta.isexpr(ex, :call, 2)
 true
 ```
 """
-isexpr(@nospecialize(ex), heads) = isa(ex, Expr) && in(ex.head, heads)
-isexpr(@nospecialize(ex), heads, n::Int) = isa(ex, Expr) && in(ex.head, heads) && length(ex.args) == n
+isexpr
 
 """
     replace_sourceloc!(location, expr)
@@ -97,7 +96,7 @@ rather than line 2 where `@test` is used as an implementation detail.
 """
 function replace_sourceloc!(sourceloc, @nospecialize(ex))
     if ex isa Expr
-        if ex.head == :macrocall
+        if ex.head === :macrocall
             ex.args[2] = sourceloc
         end
         map!(e -> replace_sourceloc!(sourceloc, e), ex.args, ex.args)

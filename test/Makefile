@@ -6,12 +6,14 @@ VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
 STDLIBDIR := $(build_datarootdir)/julia/stdlib/$(VERSDIR)
 # TODO: this Makefile ignores BUILDDIR, except for computing JULIA_EXECUTABLE
 
+export JULIA_DEPOT_PATH := $(build_prefix)/share/julia
+export JULIA_LOAD_PATH := @stdlib
+unexport JULIA_PROJECT :=
+unexport JULIA_BINDIR :=
+
 TESTGROUPS = unicode strings compiler
 TESTS = all default stdlib $(TESTGROUPS) \
-		$(patsubst $(STDLIBDIR)/%/src/%.jl,%, \
-			$(foreach lib, \
-				$(patsubst $(STDLIBDIR)/%,%,$(wildcard $(STDLIBDIR/*))), \
-				$(wildcard $(STDLIBDIR)/$(lib)/src/$(lib).jl))) \
+		$(patsubst $(STDLIBDIR)/%/,%,$(dir $(wildcard $(STDLIBDIR)/*/.))) \
 		$(filter-out runtests testdefs, \
 			$(patsubst $(SRCDIR)/%.jl,%,$(wildcard $(SRCDIR)/*.jl))) \
 		$(foreach group,$(TESTGROUPS), \

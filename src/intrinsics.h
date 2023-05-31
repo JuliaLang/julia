@@ -19,7 +19,6 @@
     ADD_I(sub_float, 2) \
     ADD_I(mul_float, 2) \
     ADD_I(div_float, 2) \
-    ADD_I(rem_float, 2) \
     ADD_I(fma_float, 3) \
     ADD_I(muladd_float, 3) \
     /*  fast arithmetic */ \
@@ -28,7 +27,6 @@
     ALIAS(sub_float_fast, sub_float) \
     ALIAS(mul_float_fast, mul_float) \
     ALIAS(div_float_fast, div_float) \
-    ALIAS(rem_float_fast, rem_float) \
     /*  same-type comparisons */ \
     ADD_I(eq_int, 2) \
     ADD_I(ne_int, 2) \

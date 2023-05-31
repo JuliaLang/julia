@@ -9,7 +9,7 @@ const threadcall_restrictor = Semaphore(max_ccall_threads)
 
 The `@threadcall` macro is called in the same way as [`ccall`](@ref) but does the work
 in a different thread. This is useful when you want to call a blocking C
-function without causing the main `julia` thread to become blocked. Concurrency
+function without causing the current `julia` thread to become blocked. Concurrency
 is limited by size of the libuv thread pool, which defaults to 4 threads but
 can be increased by setting the `UV_THREADPOOL_SIZE` environment variable and
 restarting the `julia` process.
@@ -47,7 +47,7 @@ macro threadcall(f, rettype, argtypes, argvals...)
     push!(body, :(return Int(Core.sizeof($rettype))))
 
     # return code to generate wrapper function and send work request thread queue
-    wrapper = Expr(Symbol("hygienic-scope"), wrapper, @__MODULE__)
+    wrapper = Expr(:var"hygienic-scope", wrapper, @__MODULE__, __source__)
     return :(let fun_ptr = @cfunction($wrapper, Int, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}))
         # use cglobal to look up the function on the calling thread
         do_threadcall(fun_ptr, cglobal($f), $rettype, Any[$(argtypes...)], Any[$(argvals...)])

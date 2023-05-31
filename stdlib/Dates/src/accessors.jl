@@ -97,13 +97,13 @@ week of 2004.
 
 # Examples
 ```jldoctest
-julia> Dates.week(Date(1989, 6, 22))
+julia> week(Date(1989, 6, 22))
 25
 
-julia> Dates.week(Date(2005, 1, 1))
+julia> week(Date(2005, 1, 1))
 53
 
-julia> Dates.week(Date(2004, 12, 31))
+julia> week(Date(2004, 12, 31))
 53
 ```
 """

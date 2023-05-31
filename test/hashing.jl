@@ -60,6 +60,9 @@ end
 @test hash(nextfloat(2.0^63)) == hash(UInt64(nextfloat(2.0^63)))
 @test hash(prevfloat(2.0^64)) == hash(UInt64(prevfloat(2.0^64)))
 
+# issue #48744
+@test hash(typemin(Int)//1) === hash(big(typemin(Int)//1))
+
 # issue #9264
 @test hash(1//6,zero(UInt)) == invoke(hash, Tuple{Real, UInt}, 1//6, zero(UInt))
 @test hash(1//6) == hash(big(1)//big(6))
@@ -201,9 +204,9 @@ let a = QuoteNode(1), b = QuoteNode(1.0)
     @test (hash(a)==hash(b)) == (a==b)
 end
 
-let a = Expr(:block, Core.TypedSlot(1, Any)),
-    b = Expr(:block, Core.TypedSlot(1, Any)),
-    c = Expr(:block, Core.TypedSlot(3, Any))
+let a = Expr(:block, Core.SlotNumber(1)),
+    b = Expr(:block, Core.SlotNumber(1)),
+    c = Expr(:block, Core.SlotNumber(3))
     @test a == b && hash(a) == hash(b)
     @test a != c && hash(a) != hash(c)
     @test b != c && hash(b) != hash(c)
@@ -284,3 +287,26 @@ end
         end
     end
 end
+
+if Sys.WORD_SIZE >= 64
+    @testset "very large string" begin
+        N = 2^31+1
+        s = String('\0'^N);
+        objectid(s)
+    end
+end
+
+# Issue #49620
+let t1 = Tuple{AbstractVector,AbstractVector{<:Integer},UnitRange{<:Integer}},
+    t2 = Tuple{AbstractVector,AbstractVector{<:Integer},UnitRange{<:Integer}}
+    @test hash(t1) == hash(t2)
+    @test length(Set{Type}([t1, t2])) == 1
+end
+
+struct AUnionParam{T<:Union{Nothing,Float32,Float64}} end
+@test AUnionParam.body.hash == 0
+@test Type{AUnionParam}.hash != 0
+@test Type{AUnionParam{<:Union{Float32,Float64}}}.hash == 0
+@test Type{AUnionParam{<:Union{Nothing,Float32,Float64}}} === Type{AUnionParam}
+@test Type{AUnionParam.body}.hash == 0
+@test Type{Base.Broadcast.Broadcasted}.hash != 0

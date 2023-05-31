@@ -16,7 +16,7 @@ memory pools disabled.  The compile-time flag `MEMDEBUG` disables memory pools i
 `MEMDEBUG2` disables memory pools in FemtoLisp.  To build `julia` with both flags, add the following
 line to `Make.user`:
 
-```julia
+```make
 CFLAGS = -DMEMDEBUG -DMEMDEBUG2
 ```
 
@@ -54,6 +54,32 @@ valgrind --smc-check=all-non-file --trace-children=yes --suppressions=$PWD/../co
 
 If you would like to see a report of "definite" memory leaks, pass the flags `--leak-check=full --show-leak-kinds=definite`
 to `valgrind` as well.
+
+## Additional spurious warnings
+
+This section covers Valgrind warnings which cannot be added to the
+suppressions file yet are nonetheless safe to ignore.
+
+### Unhandled rr system calls
+
+Valgrind will emit a warning if it encounters any of the [system calls
+that are specific to
+rr](https://github.com/rr-debugger/rr/blob/master/src/preload/rrcalls.h),
+the [Record and Replay Framework](https://rr-project.org/).  In
+particular, a warning about an unhandled `1008` syscall will be shown
+when julia tries to detect whether it is running under rr:
+
+```
+--xxxxxx-- WARNING: unhandled amd64-linux syscall: 1008
+--xxxxxx-- You may be able to write your own handler.
+--xxxxxx-- Read the file README_MISSING_SYSCALL_OR_IOCTL.
+--xxxxxx-- Nevertheless we consider this a bug.  Please report
+--xxxxxx-- it at http://valgrind.org/support/bug_reports.html.
+```
+
+This issue
+[has been reported](https://bugs.kde.org/show_bug.cgi?id=446401)
+to the Valgrind developers as they have requested.
 
 ## Caveats
 

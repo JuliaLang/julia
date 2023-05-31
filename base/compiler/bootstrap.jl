@@ -7,9 +7,7 @@
 
 time() = ccall(:jl_clock_now, Float64, ())
 
-let
-    world = get_world_counter()
-    interp = NativeInterpreter(world)
+let interp = NativeInterpreter()
 
     analyze_escapes_tt = Tuple{typeof(analyze_escapes), IRCode, Int, Bool, typeof(null_escape_cache)}
     fs = Any[
@@ -38,8 +36,9 @@ let
         else
             tt = Tuple{typeof(f), Vararg{Any}}
         end
-        for m in _methods_by_ftype(tt, 10, typemax(UInt))
+        for m in _methods_by_ftype(tt, 10, get_world_counter())::Vector
             # remove any TypeVars from the intersection
+            m = m::MethodMatch
             typ = Any[m.spec_types.parameters...]
             for i = 1:length(typ)
                 typ[i] = unwraptv(typ[i])
