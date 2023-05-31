@@ -1836,7 +1836,7 @@ STATIC_INLINE void gc_mark_push_remset(jl_ptls_t ptls, jl_value_t *obj,
     }
 }
 
-STATIC_INLINE jl_value_t *gc_prequeue_pop_(jl_gc_markqueue_t *mq){
+STATIC_INLINE jl_value_t *gc_prequeue_pop_(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT{
     assert(mq->prequeue.enqueued > mq->prequeue.dequeued);
     jl_value_t * v = mq->prequeue.prefetch_buffer[mq->prequeue.dequeued & PREFETCH_BUFFER_MASK];
     mq->prequeue.dequeued += 1;
@@ -1844,21 +1844,21 @@ STATIC_INLINE jl_value_t *gc_prequeue_pop_(jl_gc_markqueue_t *mq){
 }
 
 
-STATIC_INLINE void gc_prequeue_push(jl_gc_markqueue_t *mq, jl_value_t *v){
+STATIC_INLINE void gc_prequeue_push(jl_gc_markqueue_t *mq, jl_value_t *v) JL_NOTSAFEPOINT{
     assert(mq->prequeue.enqueued - mq->prequeue.dequeued < PREFETCH_BUFFER_SIZE);
     mq->prequeue.prefetch_buffer[mq->prequeue.enqueued & PREFETCH_BUFFER_MASK] = v;
     mq->prequeue.enqueued += 1;
 }
 
-STATIC_INLINE size_t gc_prequeue_size(jl_gc_markqueue_t *mq){
+STATIC_INLINE size_t gc_prequeue_size(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT{
     return mq->prequeue.enqueued - mq->prequeue.dequeued;
 }
 
-STATIC_INLINE size_t gc_prequeue_free_space(jl_gc_markqueue_t *mq){
+STATIC_INLINE size_t gc_prequeue_free_space(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT{
     return PREFETCH_BUFFER_SIZE - gc_prequeue_size(mq) - 1;
 }
 
-STATIC_INLINE jl_value_t *gc_prequeue_pop(jl_ptls_t ptls, jl_gc_markqueue_t *mq){
+STATIC_INLINE jl_value_t *gc_prequeue_pop(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT{
     while (gc_prequeue_size(mq) > 0) {
         jl_value_t *obj = gc_prequeue_pop_(mq);
         if ((uintptr_t) obj & 0x1) { //Is a parent object
