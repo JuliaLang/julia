@@ -653,6 +653,9 @@ access a single file/directory within an artifact.  Example:
 
 !!! compat "Julia 1.6"
     Slash-indexing requires at least Julia 1.6.
+
+!!! compat "Julia 1.9"
+    The argument `artifacts_toml_path` requires at least Julia 1.9.
 """
 macro artifact_str(name, platform=nothing, artifacts_toml_path=nothing)
     # Find Artifacts.toml file we're going to load from
