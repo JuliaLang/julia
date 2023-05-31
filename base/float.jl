@@ -685,10 +685,10 @@ function hash(x::Real, h::UInt)
         right = pow
         if -1074 <= right
             if 0 <= right
-                left <= 63 && return hash(Int64(num) >> Int(den_z), h)
-                left <= 64 && !signbit(num) && return hash(UInt64(num) >> Int(den_z), h)
+                left <= 63 && return hash(Int64(num) << Int(pow-num_z), h)
+                left <= 64 && !signbit(num) && return hash(UInt64(num) << Int(pow-num_z), h)
             end # typemin(Int64) handled by Float64 case
-            left <= 1024 && left - right <= 53 && return hash(ldexp(Float64(num), -den_z), h)
+            left <= 1024 && left - right <= 53 && return hash(ldexp(Float64(num), pow-num_z), h)
         end
     end
 
