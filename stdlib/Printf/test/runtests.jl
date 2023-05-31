@@ -488,6 +488,10 @@ end
     @test @sprintf("%d", 3//1) == "3"
     @test @sprintf("%d", Inf) == "Inf"
     @test @sprintf(" %d", NaN) == " NaN"
+
+    # XXX
+    @test Printf.@sprintf("") == ""
+    @test Printf.format(Printf.Format("")) == ""
 end
 
 @testset "integers" begin
