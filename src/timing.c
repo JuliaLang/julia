@@ -125,12 +125,16 @@ void jl_init_timing(void)
 #define DISABLE_SUBSYSTEM(subsystem) jl_atomic_fetch_or_relaxed(jl_timing_disable_mask + (JL_TIMING_##subsystem / (sizeof(uint64_t) * CHAR_BIT)), 1 << (JL_TIMING_##subsystem % (sizeof(uint64_t) * CHAR_BIT)))
     DISABLE_SUBSYSTEM(ROOT);
     DISABLE_SUBSYSTEM(TYPE_CACHE_LOOKUP);
+    DISABLE_SUBSYSTEM(TYPE_CACHE_INSERT);
     DISABLE_SUBSYSTEM(METHOD_MATCH);
     DISABLE_SUBSYSTEM(METHOD_LOOKUP_FAST);
     DISABLE_SUBSYSTEM(AST_COMPRESS);
     DISABLE_SUBSYSTEM(AST_UNCOMPRESS);
 #endif
 
+    // Apply e.g. JULIA_TIMING_SUBSYSTEMS="+GC,-INFERENCE" and
+    //            JULIA_TIMING_METADATA_PRINT_LIMIT=20
+    jl_timing_apply_env();
 }
 
 void jl_destroy_timing(void)
