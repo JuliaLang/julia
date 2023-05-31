@@ -461,7 +461,7 @@ wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)::IO); wait_close(pipe
 """
     write(filename::AbstractString, content)
 
-Write `content` to a file, which will be created if it does not exist yet.
+Write the canonical binary representation of `content` to a file, which will be created if it does not exist yet or overwritten if it does exist.
 
 Return the number of bytes written into the stream.
 """
