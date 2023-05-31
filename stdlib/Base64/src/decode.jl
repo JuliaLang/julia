@@ -19,7 +19,6 @@ BASE64URL_DECODE[PADIND_DECODE] = BASE64_CODE_PAD
 const TABLE_DECODE = hcat(BASE64_DECODE, BASE64URL_DECODE)
 
 decodeonechar(x::UInt8, decode::Base64Format) = @inbounds return TABLE_DECODE[x + 1, UInt8(decode)]
-decodeonechar(x::UInt8, decode::UInt8) = @inbounds return TABLE_DECODE[x + 1, decode]
 
 """
     Base64DecodePipe(istream; decode::Base64Format=BASE64)
@@ -90,7 +89,8 @@ function read_until_end(pipe::Base64DecodePipe, ptr::Ptr{UInt8}, n::UInt)
             unsafe_store!(p + 2, b3 << 6 | b4     )
             p += 3
         else
-            i, p, ended = decode_slow(UInt8(pipe.decode), b1, b2, b3, b4, buffer, i, pipe.io, p, p_end - p, pipe.rest)
+            bs, i = skip_ignore(pipe.decode, b1, b2, b3, b4, buffer, i, pipe.io)
+            i, p, ended = decode_slow(bs..., i, p, p_end - p, pipe.rest)
             if ended
                 break
             end
@@ -145,9 +145,8 @@ end
 Base.eof(pipe::Base64DecodePipe) = isempty(pipe.rest) && eof(pipe.io)::Bool
 Base.close(pipe::Base64DecodePipe) = nothing
 
-# Decode data from (b1, b2, b3, b5, buffer, input) into (ptr, rest).
-function decode_slow(decode, b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
-    # Skip ignore code.
+# Skip ignore code in b1, b2, b3, b4.
+function skip_ignore(decode, b1, b2, b3, b4, buffer, i, input)
     while true
         if b1 == BASE64_CODE_IGN
             b1, b2, b3 = b2, b3, b4
@@ -169,6 +168,11 @@ function decode_slow(decode, b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
         end
     end
 
+    return (b1, b2, b3, b4), i
+end
+
+# Decode data from (b1, b2, b3, b5, buffer, input) into (ptr, rest).
+function decode_slow(b1, b2, b3, b4, i, ptr, n, rest)
     # Check the decoded quadruplet.
     k = 0
     if b1 < 0x40 && b2 < 0x40 && b3 < 0x40 && b4 < 0x40
