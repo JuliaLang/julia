@@ -231,7 +231,6 @@ Base.isassigned(A::UnitUpperTriangular, i::Int, j::Int) =
     i < j ? isassigned(A.data, i, j) : true
 Base.isassigned(A::UpperTriangular, i::Int, j::Int) =
     i <= j ? isassigned(A.data, i, j) : true
-Base.allassigned(A::AbstractTriangular) = allassigned(A.data)
 
 getindex(A::UnitLowerTriangular{T}, i::Integer, j::Integer) where {T} =
     i > j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))

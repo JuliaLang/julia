@@ -1595,6 +1595,12 @@ function isassigned(A::AbstractArray, i::Union{Integer, CartesianIndex}...)
         end
     end
 end
+function allassigned(a::AbstractArray)
+    for i in eachindex(a)
+        @inbounds(isassigned(a, i)) || return false
+    end
+    return true
+end
 
 ## permutedims
 
