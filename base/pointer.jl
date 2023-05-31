@@ -102,7 +102,8 @@ unsafe_wrap(Atype::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}},
     unsafe_load(p::Ptr{T}, i::Integer, order::Symbol)
 
 Load a value of type `T` from the address of the `i`th element (1-indexed) starting at `p`.
-This is equivalent to the C expression `p[i-1]`. Optionally, an ordering can be provided.
+This is equivalent to the C expression `p[i-1]`. Optionally, an atmoic memory ordering can
+be provided.
 
 The `unsafe` prefix on this function indicates that no validation is performed on the
 pointer `p` to ensure that it is valid. Like C, the programmer is responsible for ensuring
@@ -127,8 +128,8 @@ end
     unsafe_store!(p::Ptr{T}, x, i::Integer, order::Symbol)
 
 Store a value of type `T` to the address of the `i`th element (1-indexed) starting at `p`.
-This is equivalent to the C expression `p[i-1] = x`. Optionally, an ordering can be
-provided.
+This is equivalent to the C expression `p[i-1] = x`. Optionally, an atomic memory ordering
+can be provided.
 
 The `unsafe` prefix on this function indicates that no validation is performed on the
 pointer `p` to ensure that it is valid. Like C, the programmer is responsible for ensuring
