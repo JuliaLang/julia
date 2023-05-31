@@ -131,6 +131,9 @@ void jl_init_timing(void)
     DISABLE_SUBSYSTEM(AST_UNCOMPRESS);
 #endif
 
+    // Apply e.g. JULIA_TIMING_SUBSYSTEMS="+GC,-INFERENCE" and
+    //            JULIA_TIMING_METADATA_PRINT_LIMIT=20
+    jl_timing_apply_env();
 }
 
 void jl_destroy_timing(void)
