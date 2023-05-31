@@ -3,6 +3,7 @@
 #include "gc.h"
 #include "dtypes.h"
 #include "julia.h"
+#include "julia_atomics.h"
 #include "julia_gcext.h"
 #include "julia_assert.h"
 #ifdef __GLIBC__
@@ -17,6 +18,8 @@ extern "C" {
 _Atomic(int) gc_n_threads_marking;
 // `tid` of mutator thread that triggered GC
 _Atomic(int) gc_master_tid;
+// Number of thredas that entered the GC
+_Atomic(int) gc_n_threads_entered;
 // `tid` of first GC thread
 int gc_first_tid;
 // Mutex/cond used to synchronize sleep/wakeup of GC threads
@@ -2953,7 +2956,10 @@ void gc_mark_backoff(int *i)
 void gc_mark_loop_parallel(jl_ptls_t ptls, int master)
 {
     int backoff = GC_BACKOFF_MIN;
+    int entered = 0;
     if (master) {
+        jl_atomic_fetch_add(&gc_n_threads_entered, 1);
+        entered = 1;
         jl_atomic_store(&gc_master_tid, ptls->tid);
         // Wake threads up and try to do some work
         uv_mutex_lock(&gc_threads_lock);
@@ -2961,12 +2967,19 @@ void gc_mark_loop_parallel(jl_ptls_t ptls, int master)
         uv_cond_broadcast(&gc_threads_cond);
         uv_mutex_unlock(&gc_threads_lock);
         gc_mark_and_steal(ptls);
+        while(jl_atomic_load_acquire(&gc_n_threads_entered) < (jl_n_gcthreads + 1)){
+            jl_cpu_pause();
+        }
         jl_atomic_fetch_add(&gc_n_threads_marking, -1);
     }
     while (jl_atomic_load(&gc_n_threads_marking) > 0) {
         // Try to become a thief while other threads are marking
         jl_atomic_fetch_add(&gc_n_threads_marking, 1);
         if (jl_atomic_load(&gc_master_tid) != -1) {
+            if(!entered) {
+                jl_atomic_fetch_add(&gc_n_threads_entered, 1);
+                entered = 1;
+            }
             gc_mark_and_steal(ptls);
         }
         jl_atomic_fetch_add(&gc_n_threads_marking, -1);
@@ -3597,6 +3610,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     jl_fence();
     gc_n_threads = jl_atomic_load_acquire(&jl_n_threads);
     gc_all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
+    jl_atomic_store_release(&gc_n_threads_entered, 0);
     jl_gc_wait_for_the_world(gc_all_tls_states, gc_n_threads);
     JL_PROBE_GC_STOP_THE_WORLD();
 
