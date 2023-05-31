@@ -3,7 +3,7 @@
 # Generate encode table.
 const BASE64_ENCODE = [UInt8(x) for x in append!(['A':'Z'; 'a':'z'; '0':'9'], ['+', '/'])]
 const BASE64URL_ENCODE = [UInt8(x) for x in append!(['A':'Z'; 'a':'z'; '0':'9'], ['-', '_'])]
-const TABLE_ENCODE = vcat(BASE64_ENCODE, BASE64URL_ENCODE)
+const TABLE_ENCODE = hcat(BASE64_ENCODE, BASE64URL_ENCODE)
 
 const ENCODEPADDING  = UInt8('=')
 
@@ -15,12 +15,12 @@ Enum to declare encoding and decoding format.
 + `BASE64`: Stands for Base64 format.
 + `BASE64URL`: Stands for Base64URL format.
 """
-@enum Base64Format::UInt8 BASE64=0 BASE64URL=1
+@enum Base64Format::UInt8 BASE64=1 BASE64URL=2
 
-encodeonechar(x::UInt8, encode::Base64Format) = @inbounds return TABLE_ENCODE[((x & 0x3f) | (UInt8(encode) << 6)) + 1]
+encodeonechar(x::UInt8, encode::Base64Format) = @inbounds return TABLE_ENCODE[(x & 0x3f) + 1, UInt8(encode)]
 
 """
-    Base64EncodePipe(ostream; encode=BASE64, padding::Bool=true)
+    Base64EncodePipe(ostream; encode::Base64Format=BASE64, padding::Bool=true)
 
 Return a new write-only I/O stream, which converts any bytes written to it into
 base64-encoded ASCII bytes written to `ostream`.  Calling [`close`](@ref) on the
@@ -56,7 +56,7 @@ struct Base64EncodePipe <: IO
     encode::Base64Format
     padding::Bool
 
-    function Base64EncodePipe(io::IO; encode=BASE64, padding::Bool=true)
+    function Base64EncodePipe(io::IO; encode::Base64Format=BASE64, padding::Bool=true)
         # The buffer size must be at least 3.
         buffer = Buffer(512)
         return new(io, buffer, encode, padding)

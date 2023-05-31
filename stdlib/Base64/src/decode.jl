@@ -16,14 +16,13 @@ end
 const PADIND_DECODE = Int(ENCODEPADDING)+1
 BASE64_DECODE[PADIND_DECODE] = BASE64_CODE_PAD
 BASE64URL_DECODE[PADIND_DECODE] = BASE64_CODE_PAD
+const TABLE_DECODE = hcat(BASE64_DECODE, BASE64URL_DECODE)
 
-const TABLE_DECODE = vcat(BASE64_DECODE, BASE64URL_DECODE)
-
-decodeonechar(x::UInt8, decode::Base64Format) = @inbounds return TABLE_DECODE[(x | (UInt16(decode) << 8)) + 1]
-decodeonechar(x::UInt8, decode::UInt8) = @inbounds return TABLE_DECODE[(x | (UInt16(decode) << 8)) + 1]
+decodeonechar(x::UInt8, decode::Base64Format) = @inbounds return TABLE_DECODE[x + 1, UInt8(decode)]
+decodeonechar(x::UInt8, decode::UInt8) = @inbounds return TABLE_DECODE[x + 1, decode]
 
 """
-    Base64DecodePipe(istream; decode=BASE64)
+    Base64DecodePipe(istream; decode::Base64Format=BASE64)
 
 Return a new read-only I/O stream, which decodes base64-encoded data read from
 `istream`.
@@ -54,7 +53,7 @@ struct Base64DecodePipe <: IO
     decode::Base64Format
     rest::Vector{UInt8}
 
-    function Base64DecodePipe(io::IO; decode=BASE64)
+    function Base64DecodePipe(io::IO; decode::Base64Format=BASE64)
         buffer = Buffer(512)
         return new(io, buffer, decode, UInt8[])
     end
