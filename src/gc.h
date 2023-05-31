@@ -82,6 +82,7 @@ typedef struct {
     uint64_t    mark_time;
     uint64_t    total_sweep_time;
     uint64_t    total_mark_time;
+    uint64_t    last_full_sweep;
 } jl_gc_num_t;
 
 enum {
