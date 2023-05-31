@@ -461,6 +461,9 @@ static void body_attributes(jl_array_t *body, int *has_ccall, int *has_defs, int
 
 static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_ROOTED
 {
+    JL_TIMING(LOAD_IMAGE, LOAD_Require);
+    jl_timing_printf(JL_TIMING_DEFAULT_BLOCK, "%s", jl_symbol_name(var));
+
     static jl_value_t *require_func = NULL;
     int build_mode = jl_generating_output();
     jl_module_t *m = NULL;
