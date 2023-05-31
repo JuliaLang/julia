@@ -489,7 +489,7 @@ end
     @test @sprintf("%d", Inf) == "Inf"
     @test @sprintf(" %d", NaN) == " NaN"
 
-    # XXX
+    # 50011
     @test Printf.@sprintf("") == ""
     @test Printf.format(Printf.Format("")) == ""
 end
