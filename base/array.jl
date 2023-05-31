@@ -255,6 +255,7 @@ end
 # Deprecate this, as it seems to have no documented meaning and is unused here,
 # but is frequently accessed in packages
 elsize(@nospecialize _::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)
+elsize(@nospecialize T::Type{<:Ptr}) = aligned_sizeof(eltype(T))
 elsize(::Type{Union{}}, slurp...) = 0
 sizeof(a::Array) = Core.sizeof(a)
 
