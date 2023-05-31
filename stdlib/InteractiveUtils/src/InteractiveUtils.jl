@@ -12,7 +12,7 @@ import Base.Docs.apropos
 
 using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_unquoted, summarysize,
     signature_type, format_bytes
-
+using Base.Libc
 using Markdown
 
 include("editless.jl")
@@ -21,7 +21,7 @@ include("macros.jl")
 include("clipboard.jl")
 
 """
-    varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, recursive::Bool = false, sortby::Symbol = :name, minsize::Int = 0)
+    varinfo(m::Module=Main, pattern::Regex=r""; all=false, imported=false, recursive=false, sortby::Symbol=:name, minsize::Int=0)
 
 Return a markdown table giving information about exported global variables in a module, optionally restricted
 to those matching `pattern`.
@@ -37,7 +37,7 @@ The memory consumption estimate is an approximate lower bound on the size of the
 The output of `varinfo` is intended for display purposes only.  See also [`names`](@ref) to get an array of symbols defined in
 a module, which is suitable for more general manipulations.
 """
-function varinfo(m::Module=Base.active_module(), pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name, recursive::Bool = false, minsize::Int=0)
+function varinfo(m::Module=Base.active_module(), pattern::Regex=r""; all::Bool = false, imported::Bool = false, recursive::Bool = false, sortby::Symbol = :name, minsize::Int=0)
     sortby in (:name, :size, :summary) || throw(ArgumentError("Unrecognized `sortby` value `:$sortby`. Possible options are `:name`, `:size`, and `:summary`"))
     rows = Vector{Any}[]
     workqueue = [(m, ""),]
@@ -301,7 +301,7 @@ end
 # TODO: @deprecate peakflops to LinearAlgebra
 export peakflops
 """
-    peakflops(n::Integer=2000; parallel::Bool=false)
+    peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3, parallel::Bool=false)
 
 `peakflops` computes the peak flop rate of the computer by using double precision
 [`gemm!`](@ref LinearAlgebra.BLAS.gemm!). For more information see
@@ -311,12 +311,12 @@ export peakflops
     This function will be moved from `InteractiveUtils` to `LinearAlgebra` in the
     future. In Julia 1.1 and later it is available as `LinearAlgebra.peakflops`.
 """
-function peakflops(n::Integer=2000; parallel::Bool=false)
-    # Base.depwarn("`peakflop`s have moved to the LinearAlgebra module, " *
+function peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3, parallel::Bool=false)
+    # Base.depwarn("`peakflops` has moved to the LinearAlgebra module, " *
     #              "add `using LinearAlgebra` to your imports.", :peakflops)
     let LinearAlgebra = Base.require(Base.PkgId(
             Base.UUID((0x37e2e46d_f89d_539d,0xb4ee_838fcccc9c8e)), "LinearAlgebra"))
-        return LinearAlgebra.peakflops(n; parallel = parallel)
+        return LinearAlgebra.peakflops(n, eltype=eltype, ntrials=ntrials, parallel=parallel)
     end
 end
 

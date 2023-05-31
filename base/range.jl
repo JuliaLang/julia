@@ -901,6 +901,8 @@ end
 
 ## indexing
 
+isassigned(r::AbstractRange, i::Int) = firstindex(r) <= i <= lastindex(r)
+
 _in_unit_range(v::UnitRange, val, i::Integer) = i > 0 && val <= v.stop && val >= v.start
 
 function getindex(v::UnitRange{T}, i::Integer) where T

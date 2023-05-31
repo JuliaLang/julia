@@ -192,3 +192,57 @@ let bt
     end
     @test any(s->startswith(string(s), "f33065(x::Float32, y::Float32; b::Float64, a::String, c::"), bt)
 end
+
+struct F49231{a,b,c,d,e,f,g} end
+(::F49231)(a,b,c) = error("oops")
+
+@testset "type_depth_limit" begin
+    tdl = Base.type_depth_limit
+
+    str = repr(typeof(view([1, 2, 3], 1:2)))
+    @test tdl(str, 0, maxdepth = 1) == "SubArray{…}"
+    @test tdl(str, 0, maxdepth = 2) == "SubArray{$Int, 1, Vector{…}, Tuple{…}, true}"
+    @test tdl(str, 0, maxdepth = 3) == "SubArray{$Int, 1, Vector{$Int}, Tuple{UnitRange{…}}, true}"
+    @test tdl(str, 0, maxdepth = 4) == "SubArray{$Int, 1, Vector{$Int}, Tuple{UnitRange{$Int}}, true}"
+    @test tdl(str, 3) == "SubArray{…}"
+    @test tdl(str, 44) == "SubArray{…}"
+    @test tdl(str, 45) == "SubArray{$Int, 1, Vector{…}, Tuple{…}, true}"
+    @test tdl(str, 59) == "SubArray{$Int, 1, Vector{…}, Tuple{…}, true}"
+    @test tdl(str, 60) == "SubArray{$Int, 1, Vector{$Int}, Tuple{UnitRange{…}}, true}"
+    @test tdl(str, 100) == "SubArray{$Int, 1, Vector{$Int}, Tuple{UnitRange{$Int}}, true}"
+
+    str = repr(Vector{V} where V<:AbstractVector{T} where T<:Real)
+    @test tdl(str, 0, maxdepth = 1) == "Vector{…} where {…}"
+    @test tdl(str, 0, maxdepth = 2) == "Vector{V} where {T<:Real, V<:AbstractVector{…}}"
+    @test tdl(str, 0, maxdepth = 3) == "Vector{V} where {T<:Real, V<:AbstractVector{T}}"
+    @test tdl(str, 20) == "Vector{…} where {…}"
+    @test tdl(str, 46) == "Vector{…} where {…}"
+    @test tdl(str, 47) == "Vector{V} where {T<:Real, V<:AbstractVector{T}}"
+
+    str = "F49231{Vector,Val{('}','}')},Vector{Vector{Vector{Vector}}},Tuple{Int,Int,Int,Int,Int,Int,Int},Int,Int,Int}"
+    @test tdl(str, 105) == "F49231{Vector,Val{('}','}')},Vector{Vector{Vector{…}}},Tuple{Int,Int,Int,Int,Int,Int,Int},Int,Int,Int}"
+    @test tdl(str, 85) == "F49231{Vector,Val{…},Vector{…},Tuple{…},Int,Int,Int}"
+
+    # Stacktrace
+    a = UInt8(81):UInt8(160)
+    b = view(a, 1:64)
+    c = reshape(b, (8, 8))
+    d = reinterpret(reshape, Float64, c)
+    sqrteach(a) = [sqrt(x) for x in a]
+    st = try
+        sqrteach(d)
+    catch e
+        stacktrace(catch_backtrace())
+    end
+    str = sprint(Base.show_backtrace, st, context = (:limit=>true, :color=>true, :displaysize=>(50,105)))
+    @test endswith(str, "to see complete types.")
+    @test contains(str, "[5] \e[0m\e[1mcollect_to!\e[22m\e[0m\e[1m(\e[22m\e[90mdest\e[39m::\e[0mVector\e[90m{…}\e[39m, \e[90mitr\e[39m::\e[0mBase.Generator\e[90m{…}\e[39m, \e[90moffs\e[39m::\e[0m$Int, \e[90mst\e[39m::\e[0mTuple\e[90m{…}\e[39m\e[0m\e[1m)\e[22m\n\e[90m")
+
+    st = try
+        F49231{Vector,Val{'}'},Vector{Vector{Vector{Vector}}},Tuple{Int,Int,Int,Int,Int,Int,Int},Int,Int,Int}()(1,2,3)
+    catch e
+        stacktrace(catch_backtrace())
+    end
+    str = sprint(Base.show_backtrace, st, context = (:limit=>true, :color=>true, :displaysize=>(50,132)))
+    @test contains(str, "[2] \e[0m\e[1m(::$F49231{Vector, Val{…}, Vector{…}, NTuple{…}, $Int, $Int, $Int})\e[22m\e[0m\e[1m(\e[22m\e[90ma\e[39m::\e[0m$Int, \e[90mb\e[39m::\e[0m$Int, \e[90mc\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n\e[90m")
+end
