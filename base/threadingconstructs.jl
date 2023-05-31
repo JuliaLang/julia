@@ -185,11 +185,11 @@ function _threadsfor(iter, lbody, schedule)
             end
         end
         end
-        if $(schedule === :dynamic || schedule === :default)
+        if $(schedule === :dynamic)
             threading_run(threadsfor_fun, false)
         elseif ccall(:jl_in_threaded_region, Cint, ()) != 0 # :static
             error("`@threads :static` cannot be used concurrently or nested")
-        else # :static
+        elseif $(schedule === :static || schedule === :default) # :static
             threading_run(threadsfor_fun, true)
         end
         nothing
@@ -234,12 +234,12 @@ For example, the above conditions imply that:
 ## Schedulers
 
 Without the scheduler argument, the exact scheduling is unspecified and varies across Julia
-releases. Currently, `:dynamic` is used when the scheduler is not specified.
+releases. Currently, `:static` is used when the scheduler is not specified.
 
 !!! compat "Julia 1.5"
     The `schedule` argument is available as of Julia 1.5.
 
-### `:dynamic` (default)
+### `:dynamic`
 
 `:dynamic` scheduler executes iterations dynamically to available worker threads. Current
 implementation assumes that the workload for each iteration is uniform. However, this
@@ -256,9 +256,15 @@ smaller than the cost of spawning and synchronizing a task (typically less than 
 microseconds).
 
 !!! compat "Julia 1.8"
-    The `:dynamic` option for the `schedule` argument is available and the default as of Julia 1.8.
+    The `:dynamic` option for the `schedule` argument is available as of Julia 1.8.
 
-### `:static`
+!!! warning
+    If your code rely on indexing buffer with [`Threads.threadid()`](@ref), you should
+    use `:static` shcedule. For example, the now-discouraged pattern from 
+    [1.3 release blog post](https://julialang.org/blog/2019/07/multithreading/#thread-local_state)
+    Specifically, the use of `temps[Threads.threadid()]` is incorrect when using dynamic scheduler.
+
+### `:static` (default)
 
 `:static` scheduler creates one task per thread and divides the iterations equally among
 them, assigning each task specifically to each thread. In particular, the value of
@@ -267,9 +273,10 @@ Specifying `:static` is an error if used from inside another `@threads` loop or 
 thread other than 1.
 
 !!! note
-    `:static` scheduling exists for supporting transition of code written before Julia 1.3.
+    `:static` scheduling exists for supporting transition of code written earlier Julia.
     In newly written library functions, `:static` scheduling is discouraged because the
     functions using this option cannot be called from arbitrary worker threads.
+
 
 ## Example
 
