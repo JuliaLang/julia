@@ -818,9 +818,10 @@ FORCE_INLINE int gc_try_setmark_tag(jl_taggedvalue_t *o, uint8_t mark_mode) JL_N
         tag = tag | mark_mode;
         assert((tag & 0x3) == mark_mode);
     }
-    tag = jl_atomic_exchange_relaxed((_Atomic(uintptr_t)*)&o->header, tag);
+    uintptr_t curr = jl_atomic_load_relaxed((_Atomic(uintptr_t)*)&o->header);
+    jl_atomic_store_relaxed((_Atomic(uintptr_t)*)&o->header, tag);
     verify_val(jl_valueof(o));
-    return !gc_marked(tag);
+    return !gc_marked(curr);
 }
 
 // This function should be called exactly once during marking for each big
