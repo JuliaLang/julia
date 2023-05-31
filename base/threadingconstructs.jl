@@ -260,7 +260,7 @@ microseconds).
 
 !!! warning
     If your code rely on indexing buffer with [`Threads.threadid()`](@ref), you should
-    use `:static` shcedule. For example, the now-discouraged pattern from 
+    use `:static` shcedule. For example, the now-discouraged pattern from
     [1.3 release blog post](https://julialang.org/blog/2019/07/multithreading/#thread-local_state)
     Specifically, the use of `temps[Threads.threadid()]` is incorrect when using dynamic scheduler.
 
