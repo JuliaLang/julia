@@ -465,3 +465,7 @@ days(c::Year)        = 365.2425 * value(c)
 days(c::Quarter)     = 91.310625 * value(c)
 days(c::Month)       = 30.436875 * value(c)
 days(c::CompoundPeriod) = isempty(c.periods) ? 0.0 : Float64(sum(days, c.periods))
+seconds(x::Nanosecond) = value(x) / 1000000000
+seconds(x::Microsecond) = value(x) / 1000000
+seconds(x::Millisecond) = value(x) / 1000
+seconds(x::Period) = value(Second(x))
