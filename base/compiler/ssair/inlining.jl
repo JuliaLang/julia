@@ -892,28 +892,19 @@ function resolve_todo(mi::MethodInstance, result::Union{MethodMatch,InferenceRes
         (; src, effects) = cached_result
     end
 
-    # the duplicated check might have been done already within `analyze_method!`, but still
-    # we need it here too since we may come here directly using a constant-prop' result
-    if !OptimizationParams(state.interp).inlining || is_stmt_noinline(flag)
+    src = inlining_policy(state.interp, src, info, flag, mi, argtypes)
+
+    if src === nothing
         return compileable_specialization(mi, effects, et, info;
             compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
     end
 
-    src = inlining_policy(state.interp, src, info, flag, mi, argtypes)
-    src === nothing && return compileable_specialization(mi, effects, et, info;
-        compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
-
-    add_inlining_backedge!(et, mi)
     return InliningTodo(mi, retrieve_ir_for_inlining(mi, src), effects)
 end
 
 # the special resolver for :invoke-d call
 function resolve_todo(mi::MethodInstance, argtypes::Vector{Any},
     @nospecialize(info::CallInfo), flag::UInt8, state::InliningState)
-    if !OptimizationParams(state.interp).inlining || is_stmt_noinline(flag)
-        return nothing
-    end
-
     et = InliningEdgeTracker(state)
 
     cached_result = get_cached_result(state, mi)
@@ -1313,14 +1304,9 @@ function handle_any_const_result!(cases::Vector{InliningCase},
     allow_abstract::Bool, allow_typevars::Bool)
     if isa(result, ConcreteResult)
         return handle_concrete_result!(cases, result, info, state)
-    end
-    if isa(result, SemiConcreteResult)
-        result = inlining_policy(state.interp, result, info, flag, result.mi, argtypes)
-        if isa(result, SemiConcreteResult)
-            return handle_semi_concrete_result!(cases, result, info, flag, state; allow_abstract)
-        end
-    end
-    if isa(result, ConstPropResult)
+    elseif isa(result, SemiConcreteResult)
+        return handle_semi_concrete_result!(cases, result, info, flag, argtypes, state; allow_abstract)
+    elseif isa(result, ConstPropResult)
         return handle_const_prop_result!(cases, result, argtypes, info, flag, state; allow_abstract, allow_typevars)
     else
         @assert result === nothing
@@ -1485,25 +1471,25 @@ function handle_const_prop_result!(cases::Vector{InliningCase},
 end
 
 function semiconcrete_result_item(result::SemiConcreteResult,
-        @nospecialize(info::CallInfo), flag::UInt8, state::InliningState)
+        @nospecialize(info::CallInfo), flag::UInt8, argtypes::Vector{Any}, state::InliningState)
     mi = result.mi
-    if !OptimizationParams(state.interp).inlining || is_stmt_noinline(flag)
+    src = inlining_policy(state.interp, result, info, flag, mi, argtypes)
+    if src === nothing
         et = InliningEdgeTracker(state)
         return compileable_specialization(mi, result.effects, et, info;
             compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
-    else
-        return InliningTodo(mi, retrieve_ir_for_inlining(mi, result.ir), result.effects)
     end
+    return InliningTodo(mi, retrieve_ir_for_inlining(mi, src), result.effects)
 end
 
 function handle_semi_concrete_result!(cases::Vector{InliningCase}, result::SemiConcreteResult,
-        @nospecialize(info::CallInfo), flag::UInt8, state::InliningState;
+        @nospecialize(info::CallInfo), flag::UInt8, argtypes::Vector{Any}, state::InliningState;
         allow_abstract::Bool)
     mi = result.mi
     spec_types = mi.specTypes
     allow_abstract || isdispatchtuple(spec_types) || return false
     validate_sparams(mi.sparam_vals) || return false
-    item = semiconcrete_result_item(result, info, flag, state)
+    item = semiconcrete_result_item(result, info, flag, argtypes, state)
     item === nothing && return false
     push!(cases, InliningCase(spec_types, item))
     return true
@@ -1560,15 +1546,10 @@ function handle_opaque_closure_call!(todo::Vector{Pair{Int,Any}},
         item = resolve_todo(mi, result.result, sig.argtypes, info, flag, state)
     elseif isa(result, ConcreteResult)
         item = concrete_result_item(result, info, state)
+    elseif isa(result, SemiConcreteResult)
+        item = semiconcrete_result_item(result, info, flag, sig.argtypes, state)
     else
-        if isa(result, SemiConcreteResult)
-            result = inlining_policy(state.interp, result, info, flag, result.mi, sig.argtypes)
-        end
-        if isa(result, SemiConcreteResult)
-            item = semiconcrete_result_item(result, info, flag, state)
-        else
-            item = analyze_method!(info.match, sig.argtypes, info, flag, state; allow_typevars=false)
-        end
+        item = analyze_method!(info.match, sig.argtypes, info, flag, state; allow_typevars=false)
     end
     handle_single_case!(todo, ir, idx, stmt, item)
     return nothing

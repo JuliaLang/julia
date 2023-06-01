@@ -72,6 +72,8 @@ is_source_inferred(@nospecialize src::MaybeCompressed) =
 function inlining_policy(interp::AbstractInterpreter,
     @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt8, mi::MethodInstance,
     argtypes::Vector{Any})
+    OptimizationParams(interp).inlining || return nothing
+    is_stmt_noinline(stmt_flag) && return nothing
     if isa(src, MaybeCompressed)
         is_source_inferred(src) || return nothing
         src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
@@ -99,7 +101,7 @@ function inlining_policy(interp::AbstractInterpreter,
             # Suppress the inlining here.
             return nothing
         end
-        return src
+        return src.ir
     end
     return nothing
 end
