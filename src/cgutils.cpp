@@ -2021,7 +2021,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         instr = store;
     }
     else {
-        // replacefield, modifyfield, or swapfield (isboxed && atomic && LLVM < 13)
+        // replacefield, modifyfield, or swapfield (isboxed && atomic)
         DoneBB = BasicBlock::Create(ctx.builder.getContext(), "done_xchg", ctx.f);
         bool needloop;
         PHINode *Succ = nullptr, *Current = nullptr;
