@@ -118,6 +118,8 @@ if libgfortran_version == "blank_libgfortran":
             "9":  "libgfortran5",
             "10": "libgfortran5",
             "11": "libgfortran5",
+            "12": "libgfortran5",
+            "13": "libgfortran5",
         }[list(filter(lambda x: re.match("\d+\.\d+(\.\d+)?", x), sys.argv[2].split()))[-1].split('.')[0]]
 
 if cxx_abi == "blank_cxx_abi":
