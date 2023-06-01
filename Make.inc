@@ -871,6 +871,16 @@ else
 ISX86:=0
 endif
 
+
+#If nothing is set default to native
+ifeq ($(MARCH)$(MCPU)$(MTUNE)$(JULIA_CPU_TARGET),)
+MARCH=native
+MTUNE=native
+ifeq ($(USEGCC),0) # GCC deprecated mcpu
+MCPU=native
+endif
+endif
+
 # If we are running on powerpc64le or ppc64le, set certain options automatically
 ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 JCFLAGS += -fsigned-char
@@ -945,6 +955,14 @@ CC += -mcpu=$(MCPU)
 CXX += -mcpu=$(MCPU)
 FC += -mcpu=$(MCPU)
 JULIA_CPU_TARGET ?= $(MCPU)
+endif
+
+# Set MTUNE-specific flags
+ifneq ($(MTUNE),)
+CC += -mtune=$(MTUNE)
+CXX += -mtune=$(MTUNE)
+FC += -mtune=$(MTUNE)
+JULIA_CPU_TARGET ?= $(MTUNE)
 endif
 
 ifneq ($(MARCH)$(MCPU),)
