@@ -2008,11 +2008,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             emit_unbox_store(ctx, rhs, ptr, tbaa, alignment);
         }
     }
-#if JL_LLVM_VERSION >= 130000
     else if (isswapfield && isStrongerThanMonotonic(Order)) {
-#else
-    else if (isswapfield && !isboxed) {
-#endif
         assert(Order != AtomicOrdering::NotAtomic && r);
         auto *store = ctx.builder.CreateAtomicRMW(AtomicRMWInst::Xchg, ptr, r, Align(alignment), Order);
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
