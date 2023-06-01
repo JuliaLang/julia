@@ -363,10 +363,10 @@ function writeshortest(buf::Vector{UInt8}, pos, x::T,
         c1 = (c ÷ 100) << 1
         d0 = (d % 100) << 1
         d1 = (d ÷ 100) << 1
-        memcpy(ptr, pos + olength - 2, ptr2, c0 + 1, 2)
-        memcpy(ptr, pos + olength - 4, ptr2, c1 + 1, 2)
-        memcpy(ptr, pos + olength - 6, ptr2, d0 + 1, 2)
-        memcpy(ptr, pos + olength - 8, ptr2, d1 + 1, 2)
+        memcpy(ptr + pos + olength - 3, ptr2 + c0, 2)
+        memcpy(ptr + pos + olength - 5, ptr2 + c1, 2)
+        memcpy(ptr + pos + olength - 7, ptr2 + d0, 2)
+        memcpy(ptr + pos + olength - 9, ptr2 + d1, 2)
         i += 8
     end
     output2 = output % UInt32
@@ -375,14 +375,14 @@ function writeshortest(buf::Vector{UInt8}, pos, x::T,
         output2 = div(output2, UInt32(10000))
         c0 = (c % 100) << 1
         c1 = (c ÷ 100) << 1
-        memcpy(ptr, pos + olength - i - 2, ptr2, c0 + 1, 2)
-        memcpy(ptr, pos + olength - i - 4, ptr2, c1 + 1, 2)
+        memcpy(ptr + pos + olength - i - 3, ptr2 + c0, 2)
+        memcpy(ptr + pos + olength - i - 5, ptr2 + c1, 2)
         i += 4
     end
     if output2 >= 100
         c = (output2 % UInt32(100)) << 1
         output2 = div(output2, UInt32(100))
-        memcpy(ptr, pos + olength - i - 2, ptr2, c + 1, 2)
+        memcpy(ptr + pos + olength - i - 3, ptr2 + c, 2)
         i += 2
     end
     if output2 >= 10
@@ -425,7 +425,7 @@ function writeshortest(buf::Vector{UInt8}, pos, x::T,
             end
         else
             pointoff = olength - abs(nexp)
-            memmove(ptr, pos + pointoff + 1, ptr, pos + pointoff, olength - pointoff + 1)
+            memmove(ptr + pos + pointoff, ptr + pos + pointoff - 1, olength - pointoff + 1)
             buf[pos + pointoff] = decchar
             pos += olength + 1
             precision -= olength
@@ -470,11 +470,11 @@ function writeshortest(buf::Vector{UInt8}, pos, x::T,
 
         if exp2 >= 100
             c = exp2 % 10
-            memcpy(ptr, pos, ptr2, 2 * div(exp2, 10) + 1, 2)
+            memcpy(ptr + pos - 1, ptr2 + 2 * div(exp2, 10), 2)
             buf[pos + 2] = UInt8('0') + (c % UInt8)
             pos += 3
         elseif exp2 >= 10
-            memcpy(ptr, pos, ptr2, 2 * exp2 + 1, 2)
+            memcpy(ptr + pos - 1, ptr2 + 2 * exp2, 2)
             pos += 2
         else
             if padexp

@@ -926,7 +926,11 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl
         bool isboxed;
         Type *ptrty = julia_type_to_llvm(ctx, ety, &isboxed);
         assert(!isboxed);
-        Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
+        Value *thePtr;
+        if (!type_is_ghost(ptrty))
+            thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
+        else
+            thePtr = nullptr; // could use any value here, since typed_store will not use it
         jl_cgval_t ret = typed_store(ctx, thePtr, nullptr, x, y, ety, ctx.tbaa().tbaa_data, nullptr, nullptr, isboxed,
                     llvm_order, llvm_failorder, nb, false, issetfield, isreplacefield, isswapfield, ismodifyfield, false, modifyop, "atomic_pointermodify");
         if (issetfield)

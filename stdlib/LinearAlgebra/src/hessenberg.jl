@@ -80,6 +80,9 @@ function Matrix{T}(H::UpperHessenberg) where T
     return triu!(copyto!(Matrix{T}(undef, m, n), H.data), -1)
 end
 
+Base.isassigned(H::UpperHessenberg, i::Int, j::Int) =
+    i <= j+1 ? isassigned(H.data, i, j) : true
+
 getindex(H::UpperHessenberg{T}, i::Integer, j::Integer) where {T} =
     i <= j+1 ? convert(T, H.data[i,j]) : zero(T)
 

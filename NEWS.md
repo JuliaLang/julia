@@ -18,6 +18,9 @@ Language changes
   that significantly improves load and inference times for heavily overloaded methods that
   dispatch on Types (such as traits and constructors).
 * The "h bar" `ℏ` (`\hslash` U+210F) character is now treated as equivalent to `ħ` (`\hbar` U+0127).
+* When a method with keyword arguments is displayed in the stack trace view, the textual
+  representation of the keyword arguments' types is simplified using the new
+  `@Kwargs{key1::Type1, ...}` macro syntax ([#49959]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -44,6 +47,7 @@ New library functions
 * `tanpi` is now defined. It computes tan(πx) more accurately than `tan(pi*x)` ([#48575]).
 * `fourthroot(x)` is now defined in `Base.Math` and can be used to compute the fourth root of `x`.
    It can also be accessed using the unicode character `∜`, which can be typed by `\fourthroot<tab>` ([#48899]).
+* `Libc.memmove`, `Libc.memset`, and `Libc.memcpy` are now defined, whose functionality matches that of their respective C calls.
 
 New library features
 --------------------
@@ -52,6 +56,7 @@ New library features
 * `binomial(x, k)` now supports non-integer `x` ([#48124]).
 * A `CartesianIndex` is now treated as a "scalar" for broadcasting ([#47044]).
 * `printstyled` now supports italic output ([#45164]).
+* `parent` and `parentindices` support `SubString`s
 
 Standard library changes
 ------------------------

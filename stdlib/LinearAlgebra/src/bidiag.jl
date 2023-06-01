@@ -130,6 +130,19 @@ function bidiagzero(A::Bidiagonal{<:AbstractMatrix}, i, j)
     end
 end
 
+@inline function Base.isassigned(A::Bidiagonal, i::Int, j::Int)
+    @boundscheck checkbounds(Bool, A, i, j) || return false
+    if i == j
+        return @inbounds isassigned(A.dv, i)
+    elseif A.uplo == 'U' && (i == j - 1)
+        return @inbounds isassigned(A.ev, i)
+    elseif A.uplo == 'L' && (i == j + 1)
+        return @inbounds isassigned(A.ev, j)
+    else
+        return true
+    end
+end
+
 @inline function getindex(A::Bidiagonal{T}, i::Integer, j::Integer) where T
     @boundscheck checkbounds(A, i, j)
     if i == j

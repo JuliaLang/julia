@@ -226,6 +226,19 @@ end
 offset_if_vec(i::Integer, axs::Tuple{<:AbstractUnitRange}) = i + first(axs[1]) - 1
 offset_if_vec(i::Integer, axs::Tuple) = i
 
+@inline function isassigned(A::ReshapedArrayLF, index::Int)
+    @boundscheck checkbounds(Bool, A, index) || return false
+    @inbounds ret = isassigned(parent(A), index)
+    ret
+end
+@inline function isassigned(A::ReshapedArray{T,N}, indices::Vararg{Int, N}) where {T,N}
+    @boundscheck checkbounds(Bool, A, indices...) || return false
+    axp = axes(A.parent)
+    i = offset_if_vec(_sub2ind(size(A), indices...), axp)
+    I = ind2sub_rs(axp, A.mi, i)
+    @inbounds isassigned(A.parent, I...)
+end
+
 @inline function getindex(A::ReshapedArrayLF, index::Int)
     @boundscheck checkbounds(A, index)
     @inbounds ret = parent(A)[index]

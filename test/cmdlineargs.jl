@@ -134,10 +134,11 @@ end
 
 let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # tests for handling of ENV errors
-    let v = writereadpipeline("println(\"REPL: \", @which(less), @isdefined(InteractiveUtils))",
-                setenv(`$exename -i -E 'empty!(LOAD_PATH); @isdefined InteractiveUtils'`,
+    let v = writereadpipeline(
+            "println(\"REPL: \", @which(less), @isdefined(InteractiveUtils))",
+            setenv(`$exename -i -E '@assert isempty(LOAD_PATH); push!(LOAD_PATH, "@stdlib"); @isdefined InteractiveUtils'`,
                     "JULIA_LOAD_PATH" => "",
-                    "JULIA_DEPOT_PATH" => "",
+                    "JULIA_DEPOT_PATH" => ";:",
                     "HOME" => homedir()))
         @test v == ("false\nREPL: InteractiveUtilstrue\n", true)
     end
