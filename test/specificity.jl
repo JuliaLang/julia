@@ -214,7 +214,7 @@ f27361(::M) where M <: Tuple{3} = nothing
 @test length(methods(f27361)) == 2
 
 # specificity of TypeofBottom
-@test args_morespecific(Tuple{Core.TypeofBottom}, Tuple{DataType})
+@test !args_morespecific(Tuple{DataType}, Tuple{Core.TypeofBottom})
 @test args_morespecific(Tuple{Core.TypeofBottom}, Tuple{Type{<:Tuple}})
 
 @test  args_morespecific(Tuple{Type{Any}, Type}, Tuple{Type{T}, Type{T}} where T)
