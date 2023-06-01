@@ -107,6 +107,15 @@ end
 
 const ReplaceType = ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T
 
+@testset "elsize(::Type{<:Ptr})" begin
+    @test Base.elsize(Ptr{Any}) == 8
+    @test Base.elsize(Ptr{NTuple{3,Int8}}) == 3
+    @test Base.elsize(Ptr{Cvoid}) == 0
+    @test Base.elsize(Ptr{Base.RefValue{Any}}) == 8
+    @test Base.elsize(Ptr{Int}) == 8
+    @test_throws MethodError Base.elsize(Ptr)
+end
+
 # issue #29929
 let p = Ptr{Nothing}(0)
     @test unsafe_store!(p, nothing) === C_NULL
