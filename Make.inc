@@ -874,10 +874,11 @@ endif
 
 #If nothing is set default to native
 ifeq ($(MARCH)$(MCPU)$(MTUNE)$(JULIA_CPU_TARGET),)
+ifeq ($(ARCH),aarch64) #ARM recommends only setting MCPU for AArch64
+MCPU=native
+else
 MARCH=native
 MTUNE=native
-ifeq ($(USEGCC),0) # GCC deprecated mcpu
-MCPU=native
 endif
 endif
 
