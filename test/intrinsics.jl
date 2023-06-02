@@ -114,6 +114,9 @@ const ReplaceType = ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T
     @test Base.elsize(Ptr{Base.RefValue{Any}}) == sizeof(Int)
     @test Base.elsize(Ptr{Int}) == sizeof(Int)
     @test_throws MethodError Base.elsize(Ptr)
+    @test_throws ErrorException Base.elsize(Ptr{Ref{Int}})
+    @test_throws ErrorException Base.elsize(Ptr{Ref})
+    @test_throws ErrorException Base.elsize(Ptr{Complex})
 end
 
 # issue #29929
