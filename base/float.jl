@@ -674,34 +674,28 @@ function hash(x::Real, h::UInt)
         num = -num
         den = -den
     end
-    z = trailing_zeros(num)
-    if z != 0
-        num >>= z
-        pow += z
-    end
-    z = trailing_zeros(den)
-    if z != 0
-        den >>= z
-        pow -= z
-    end
+    num_z = trailing_zeros(num)
+    den_z = trailing_zeros(den)
+    den >>= den_z
+    pow += num_z - den_z
 
     # handle values representable as Int64, UInt64, Float64
     if den == 1
-        left = ndigits0z(num,2) + pow
-        right = trailing_zeros(num) + pow
+        left = top_set_bit(abs(num)) - den_z
+        right = pow
         if -1074 <= right
-            if 0 <= right && left <= 64
-                left <= 63                     && return hash(Int64(num) << Int(pow), h)
-                signbit(num) == signbit(den)   && return hash(UInt64(num) << Int(pow), h)
+            if 0 <= right
+                left <= 63 && return hash(Int64(num) << Int(pow-num_z), h)
+                left <= 64 && !signbit(num) && return hash(UInt64(num) << Int(pow-num_z), h)
             end # typemin(Int64) handled by Float64 case
-            left <= 1024 && left - right <= 53 && return hash(ldexp(Float64(num),pow), h)
+            left <= 1024 && left - right <= 53 && return hash(ldexp(Float64(num), pow-num_z), h)
         end
     end
 
     # handle generic rational values
     h = hash_integer(den, h)
     h = hash_integer(pow, h)
-    h = hash_integer(num, h)
+    h = hash_integer(num >> num_z, h)
     return h
 end
 
