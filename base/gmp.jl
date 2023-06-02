@@ -894,7 +894,6 @@ if Limb === UInt
             if nd <= 1024 && nd - pow <= 53
                 return hash(ldexp(flipsign(Float64(limb), sz), pow), h)
             end
-            h = hash_integer(1, h)
             h = hash_integer(pow, h)
             h ⊻= hash_uint(flipsign(limb, sz) ⊻ h)
             for idx = idx+1:asz

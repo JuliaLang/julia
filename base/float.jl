@@ -635,31 +635,38 @@ isinf(x::Real) = !isnan(x) & !isfinite(x)
 isinf(x::IEEEFloat) = abs(x) === oftype(x, Inf)
 
 const hx_NaN = hash_uint64(reinterpret(UInt64, NaN))
-let Tf = Float64, Tu = UInt64, Ti = Int64
-    @eval function hash(x::$Tf, h::UInt)
-        # see comments on trunc and hash(Real, UInt)
-        if $(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))
-            xi = fptosi($Ti, x)
-            if isequal(xi, x)
-                return hash(xi, h)
-            end
-        elseif $(Tf(typemin(Tu))) <= x < $(Tf(typemax(Tu)))
-            xu = fptoui($Tu, x)
-            if isequal(xu, x)
-                return hash(xu, h)
-            end
-        elseif isnan(x)
-            return hx_NaN ⊻ h # NaN does not have a stable bit pattern
+function hash(x::Float64, h::UInt)
+    # see comments on trunc and hash(Real, UInt)
+    if typemin(Int64) <= x < typemax(Int64)
+        xi = fptosi(Int64, x)
+        if isequal(xi, x)
+            return hash(xi, h)
         end
-        return hash_uint64(bitcast(UInt64, x)) - 3h
+    elseif typemin(UInt64) <= x < typemax(UInt64)
+        xu = fptoui(UInt64, x)
+        if isequal(xu, x)
+            return hash(xu, h)
+        end
+    elseif isnan(x)
+        return hx_NaN ⊻ h # NaN does not have a stable bit pattern
     end
+    return hash_uint64(bitcast(UInt64, x)) - 3h
 end
 
-hash(x::Float32, h::UInt) = hash(Float64(x), h)
-hash(x::Float16, h::UInt) = hash(Float64(x), h)
+function hash(x::Union{Float16, Float32}, h::UInt)
+    # see comments on trunc and hash(Real, UInt)
+    if isfinite(x) # all finite Float32/Float16 fit in Int64
+        xi = fptosi(Int64, x)
+        if isequal(xi, x)
+            return hash(xi, h)
+        end
+    elseif isnan(x)
+        return hx_NaN ⊻ h # NaN does not have a stable bit pattern
+    end
+    return hash_uint64(bitcast(UInt64, Float64(x))) - 3h
+end
 
 ## generic hashing for rational values ##
-
 function hash(x::Real, h::UInt)
     # decompose x as num*2^pow/den
     num, pow, den = decompose(x)
@@ -690,10 +697,11 @@ function hash(x::Real, h::UInt)
             end # typemin(Int64) handled by Float64 case
             left <= 1024 && left - right <= 53 && return hash(ldexp(Float64(num), pow-num_z), h)
         end
+    else
+        h = hash_integer(den, h)
     end
 
     # handle generic rational values
-    h = hash_integer(den, h)
     h = hash_integer(pow, h)
     h = hash_integer(num >> num_z, h)
     return h
