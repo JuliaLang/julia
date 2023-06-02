@@ -3392,6 +3392,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     uint64_t sweep_time = gc_end_time - start_sweep_time;
     gc_num.total_sweep_time += sweep_time;
     gc_num.sweep_time = sweep_time;
+    if (sweep_full) {
+        gc_num.last_full_sweep = gc_end_time;
+    }
 
     // sweeping is over
     // 7. if it is a quick sweep, put back the remembered objects in queued state

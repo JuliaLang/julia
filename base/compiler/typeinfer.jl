@@ -269,8 +269,7 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     for (caller, _, _) in results
         opt = caller.src
         if opt isa OptimizationState{typeof(interp)} # implies `may_optimize(interp) === true`
-            analyzed = optimize(interp, opt, caller)
-            caller.valid_worlds = (opt.inlining.et::EdgeTracker).valid_worlds[]
+            optimize(interp, opt, caller)
         end
     end
     for (caller, edges, cached) in results
