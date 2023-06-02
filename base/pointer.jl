@@ -170,7 +170,7 @@ Incorrect usage may segfault your program.
 !!! compat "Julia 1.10"
      This function requires at least Julia 1.10.
 
-See also: [`modifyfield!`](@ref), [`modifyproperty!`](@ref), [`atomic`](@ref)
+See also: [`modifyproperty!`](@ref Base.modifyproperty!), [`atomic`](@ref)
 """
 function unsafe_modify!(p::Ptr, op, x, order::Symbol=:not_atomic)
     return atomic_pointermodify(p, op, x, order)
@@ -199,7 +199,7 @@ Incorrect usage may segfault your program.
 !!! compat "Julia 1.10"
      This function requires at least Julia 1.10.
 
-See also: [`replacefield!`](@ref), [`replaceproperty!`](@ref), [`atomic`](@ref)
+See also: [`replaceproperty!`](@ref Base.replaceproperty!), [`atomic`](@ref)
 """
 function unsafe_replace!(p::Ptr{T}, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order) where {T}
     @inline
@@ -229,7 +229,7 @@ Incorrect usage may segfault your program.
 !!! compat "Julia 1.10"
      This function requires at least Julia 1.10.
 
-See also: [`swapfield!`](@ref), [`swapproperty!`](@ref), [`atomic`](@ref)
+See also: [`swapproperty!`](@ref Base.swapproperty!), [`atomic`](@ref)
 """
 function unsafe_swap!(p::Ptr{Any}, x, order::Symbol=:not_atomic)
     return atomic_pointerswap(p, x, order)
