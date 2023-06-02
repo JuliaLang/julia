@@ -267,8 +267,8 @@ for TT in (Int8, Int16, Int32, Int64, Int128, Int256, Int512, Complex{Int32}, Co
                 @test unsafe_load(p, :sequentially_consistent) === T(105)
             end
             if TT === Any
-                @test unsafe_modify!(p, swap, S(103), :sequentially_consistent) === Pair{TT,TT}(T(103), S(103))
-                @test unsafe_load(p, :sequentially_consistent) === S(103)
+                @test unsafe_modify!(p, swap, S(105), :sequentially_consistent) === Pair{TT,TT}(T(105), S(105))
+                @test unsafe_load(p, :sequentially_consistent) === S(105)
                 @test unsafe_store!(p, S(1), :sequentially_consistent) === p
                 @test unsafe_swap!(p, S(100), :sequentially_consistent) === S(1)
                 @test unsafe_replace!(p, T(100), S(2), :sequentially_consistent, :sequentially_consistent) === ReplaceType{TT}((S(100), false))
