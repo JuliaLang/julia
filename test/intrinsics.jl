@@ -108,11 +108,11 @@ end
 const ReplaceType = ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T
 
 @testset "elsize(::Type{<:Ptr})" begin
-    @test Base.elsize(Ptr{Any}) == 8
+    @test Base.elsize(Ptr{Any}) == sizeof(Int)
     @test Base.elsize(Ptr{NTuple{3,Int8}}) == 3
     @test Base.elsize(Ptr{Cvoid}) == 0
-    @test Base.elsize(Ptr{Base.RefValue{Any}}) == 8
-    @test Base.elsize(Ptr{Int}) == 8
+    @test Base.elsize(Ptr{Base.RefValue{Any}}) == sizeof(Int)
+    @test Base.elsize(Ptr{Int}) == sizeof(Int)
     @test_throws MethodError Base.elsize(Ptr)
 end
 
