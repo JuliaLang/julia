@@ -187,7 +187,7 @@ static bool demoteFloat16(Function &F)
 
 } // end anonymous namespace
 
-PreservedAnalyses DemoteFloat16::run(Function &F, FunctionAnalysisManager &AM)
+PreservedAnalyses DemoteFloat16Pass::run(Function &F, FunctionAnalysisManager &AM)
 {
     if (demoteFloat16(F)) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();
