@@ -13,11 +13,13 @@ JuliaSyntax.parseatom
 The `ParseStream` interface which provides a low-level stream-like I/O
 interface for writing the parser. The parser does not depend on or produce any
 concrete tree data structure as part of the parsing phase but the output spans
-can be post-processed into various tree data structures as required.
+can be post-processed into various tree data structures as required using
+[`JuliaSyntax.build_tree`](@ref).
 
 ```@docs
 JuliaSyntax.parse!
 JuliaSyntax.ParseStream
+JuliaSyntax.build_tree
 ```
 
 ## Tokenization
@@ -41,6 +43,8 @@ JuliaSyntax.source_location
 ## Expression heads/kinds
 
 ```@docs
+JuliaSyntax.Kind
+JuliaSyntax.SyntaxHead
 JuliaSyntax.@K_str
 JuliaSyntax.kind
 JuliaSyntax.head
