@@ -96,6 +96,12 @@ haschildren(node::TreeNode) = node.children !== nothing
 children(node::TreeNode) = (c = node.children; return c === nothing ? () : c)
 
 
+"""
+    head(x)
+
+Get the [`SyntaxHead`](@ref) of a node of a tree or other syntax-related data
+structure.
+"""
 head(node::AbstractSyntaxNode) = head(node.raw)
 
 span(node::AbstractSyntaxNode) = span(node.raw)

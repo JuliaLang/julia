@@ -69,12 +69,30 @@ end
 has_flags(flags::RawFlags, test_flags) = (flags & test_flags) != 0
 
 #-------------------------------------------------------------------------------
+"""
+    SyntaxHead(kind, flags)
+
+A `SyntaxHead` combines the [`Kind`](@ref) of a syntactic construct with a set
+of flags. The kind defines the broad "type" of the syntactic construct, while
+the flag bits compactly store more detailed information about the construct.
+"""
 struct SyntaxHead
     kind::Kind
     flags::RawFlags
 end
 
 kind(head::SyntaxHead) = head.kind
+
+"""
+    flags(x)
+
+Return the flag bits of a syntactic construct. Prefer to query these with the
+predicates `is_trivia`, `is_prefix_call`, `is_infix_op_call`,
+`is_prefix_op_call`, `is_postfix_op_call`, `is_dotted`, `is_suffixed`,
+`is_decorated`.
+
+Or extract numeric portion of the flags with `numeric_flags`.
+"""
 flags(head::SyntaxHead) = head.flags
 
 function Base.summary(head::SyntaxHead)

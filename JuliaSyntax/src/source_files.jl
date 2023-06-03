@@ -40,6 +40,10 @@ function _source_line_index(source::SourceFile, byte_index)
     return (lineidx < lastindex(source.line_starts)) ? lineidx : lineidx-1
 end
 _source_line(source::SourceFile, lineidx) = lineidx + source.first_line - 1
+
+"""
+Get the line number at the given byte index.
+"""
 source_line(source::SourceFile, byte_index) = _source_line(source, _source_line_index(source, byte_index))
 
 """
