@@ -361,8 +361,9 @@ the variable's value in the current task.
 
 !!! note
     The thread that the task runs on may change if the task yields, therefore `threadid()` should not
-    be treated as constant for a task. See [`Task Migration`](@ref man-task-migration), part of the [multi-threading](@ref man-multithreading)
-    manual for further important caveats. See also the chapter on [threadpools](@ref man-threadpools).
+    be treated as constant for a task. See [`Task Migration`](@ref man-task-migration), and the broader
+    [multi-threading](@ref man-multithreading) manual for further important caveats.
+    See also the chapter on [threadpools](@ref man-threadpools).
 
 !!! compat "Julia 1.3"
     This macro is available as of Julia 1.3.
