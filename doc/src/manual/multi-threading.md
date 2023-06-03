@@ -388,10 +388,10 @@ threads in Julia:
     This may require some transitional work across the ecosystem before threading
     can be widely adopted with confidence. See the next section for further details.
 
-## Task Migration
+## [Task Migration](@id man-task-migration)
 
-After a task starts running on a certain thread (e.g. via [`@spawn`](@ref) or [`@threads`](@ref)), it
-may move to a different thread if the task yields.
+After a task starts running on a certain thread (e.g. via [`@spawn`](@ref Threads.@spawn) or
+[`@threads`](@ref Threads.@threads)), it may move to a different thread if the task yields.
 
 This means that [`threadid()`](@ref Threads.threadid) should not be treated as constant within a task, and therefore
 should not be used to index into a vector of buffers or stateful objects.

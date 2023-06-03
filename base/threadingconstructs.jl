@@ -24,7 +24,7 @@ julia> Threads.@threads for i in 1:4
 ```
 
 !!! note
-    The thread that a task runs on may change if the task yields, which is known as [`Task Migration`](@ref).
+    The thread that a task runs on may change if the task yields, which is known as [`Task Migration`](@ref man-task-migration).
     For this reason in most cases it is not safe to use `threadid()` to index into, say, a vector of buffer or stateful objects.
 
 """
@@ -234,7 +234,7 @@ For example, the above conditions imply that:
 - Write only to locations not shared across iterations (unless a lock or atomic operation is
   used).
 - The value of [`threadid()`](@ref Threads.threadid) may change even within a single
-  iteration. See [`Task Migration`](@ref)
+  iteration. See [`Task Migration`](@ref man-task-migration)
 
 ## Schedulers
 
@@ -361,7 +361,7 @@ the variable's value in the current task.
 
 !!! note
     The thread that the task runs on may change if the task yields, therefore `threadid()` should not
-    be treated as constant for a task. See [`Task Migration`](@ref), part of the [multi-threading](@ref man-multithreading)
+    be treated as constant for a task. See [`Task Migration`](@ref man-task-migration), part of the [multi-threading](@ref man-multithreading)
     manual for further important caveats. See also the chapter on [threadpools](@ref man-threadpools).
 
 !!! compat "Julia 1.3"
