@@ -79,7 +79,7 @@ function _to_SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead},
             if !is_trivia(rawchild) || is_error(rawchild)
                 push!(cs, _to_SyntaxNode(source, rawchild, pos, keep_parens))
             end
-            pos += rawchild.span
+            pos += Int(rawchild.span)
         end
         if !keep_parens && kind(raw) == K"parens" && length(cs) == 1
             return cs[1]
