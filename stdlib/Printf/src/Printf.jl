@@ -122,7 +122,6 @@ end
 
 # parse format string
 function Format(f::AbstractString)
-    isempty(f) && throw(InvalidFormatStringError("Format string must not be empty", f, 1, 1))
     bytes = codeunits(f)
     len = length(bytes)
     pos = 1
