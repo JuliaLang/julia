@@ -158,6 +158,43 @@
                      )
                 )
         end
+
+        @testset "Loops" begin
+            @test parsestmt("for x=xs\n\nend") ==
+                Expr(:for,
+                     Expr(:(=), :x, :xs),
+                     Expr(:block,
+                          LineNumberNode(1),
+                          LineNumberNode(3)
+                     )
+                )
+            @test parsestmt("for x=xs\ny\nend") ==
+                Expr(:for,
+                     Expr(:(=), :x, :xs),
+                     Expr(:block,
+                          LineNumberNode(2),
+                          :y,
+                          LineNumberNode(3)
+                     )
+                )
+            @test parsestmt("while cond\n\nend") ==
+                Expr(:while,
+                     :cond,
+                     Expr(:block,
+                          LineNumberNode(1),
+                          LineNumberNode(3)
+                     )
+                )
+            @test parsestmt("while cond\ny\nend") ==
+                Expr(:while,
+                     :cond,
+                     Expr(:block,
+                          LineNumberNode(2),
+                          :y,
+                          LineNumberNode(3)
+                     )
+                )
+        end
     end
 
     @testset "Short form function line numbers" begin
@@ -213,7 +250,8 @@
                  Expr(:(=), :i, :is),
                  Expr(:block,
                      LineNumberNode(1),
-                     :body
+                     :body,
+                     LineNumberNode(1)
                  )
             )
         @test parsestmt("for i=is, j=js\nbody\nend") ==
@@ -224,7 +262,8 @@
                  ),
                  Expr(:block,
                      LineNumberNode(2),
-                     :body
+                     :body,
+                     LineNumberNode(3),
                  )
             )
     end
