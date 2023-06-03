@@ -121,23 +121,26 @@ Returns the number of GC threads currently configured.
 ngcthreads() = Int(unsafe_load(cglobal(:jl_n_gcthreads, Cint))) + 1
 
 function threading_run(fun, static)
-    ccall(:jl_enter_threaded_region, Cvoid, ())
     n = threadpoolsize()
     tid_offset = threadpoolsize(:interactive)
     tasks = Vector{Task}(undef, n)
-    for i = 1:n
-        t = Task(() -> fun(i)) # pass in tid
-        t.sticky = static
-        static && ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
-        tasks[i] = t
-        schedule(t)
-    end
     task_locals = Any[]
-    for i = 1:n
-        ret = fetch(tasks[i])
-        isnothing(ret) || push!(task_locals, ret)
+    try
+        ccall(:jl_enter_threaded_region, Cvoid, ())
+        for i = 1:n
+            t = Task(() -> fun(i)) # pass in tid
+            t.sticky = static
+            static && ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
+            tasks[i] = t
+            schedule(t)
+        end
+        for i = 1:n
+            ret = fetch(tasks[i])
+            isnothing(ret) || push!(task_locals, ret)
+        end
+    finally
+        ccall(:jl_exit_threaded_region, Cvoid, ())
     end
-    ccall(:jl_exit_threaded_region, Cvoid, ())
     failed_tasks = filter(istaskfailed, tasks)
     if !isempty(failed_tasks)
         throw(CompositeException(map(TaskFailedException, failed_tasks)))
