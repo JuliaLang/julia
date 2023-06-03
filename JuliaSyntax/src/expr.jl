@@ -195,6 +195,7 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
     end
 
     loc = source_location(LineNumberNode, source, first(srcrange))
+    endloc = source_location(LineNumberNode, source, last(srcrange))
 
     _fixup_Expr_children!(head, loc, args)
 
@@ -270,6 +271,12 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
         if @isexpr(a1, :cartesian_iterator)
             args[1] = Expr(:block, a1.args...)
         end
+        # Add extra line number node for the `end` of the block. This may seem
+        # useless but it affects code coverage.
+        push!(args[2].args, endloc)
+    elseif k == K"while"
+        # Line number node for the `end` of the block as in `for` loops.
+        push!(args[2].args, endloc)
     elseif k in KSet"tuple vect braces"
         # Move parameters blocks to args[1]
         _reorder_parameters!(args, 1)
