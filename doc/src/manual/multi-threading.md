@@ -396,6 +396,10 @@ After a task starts running on a certain thread (e.g. via [`@spawn`](@ref Thread
 This means that [`threadid()`](@ref Threads.threadid) should not be treated as constant within a task, and therefore
 should not be used to index into a vector of buffers or stateful objects.
 
+!!! compat "Julia 1.7"
+    Task migration was introduced in Julia 1.7. Before this tasks always remained on the same thread that they were
+    started on.
+
 ## Safe use of Finalizers
 
 Because finalizers can interrupt any code, they must be very careful in how
