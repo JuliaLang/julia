@@ -854,6 +854,9 @@ end
                 SB = SymHerm(B, Sym_uplo)
                 teststr = sprint(Base.print_matrix, Sym_uplo == B_uplo ? ST : D)
                 @test sprint(Base.print_matrix, SB) == teststr
+                SB = SymHerm(Transpose(B), Sym_uplo)
+                teststr = sprint(Base.print_matrix, Sym_uplo == B_uplo ? D : ST)
+                @test sprint(Base.print_matrix, SB) == teststr
             end
         end
     end
