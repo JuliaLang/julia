@@ -646,7 +646,7 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
     int finalizers_inhibited = ptls->finalizers_inhibited;
     ptls->finalizers_inhibited = 0;
 
-    jl_timing_block_t *blk = jl_timing_block_exit_task(ct, ptls);
+    jl_timing_block_t *blk = jl_timing_block_task_exit(ct, ptls);
     ctx_switch(ct);
 
 #ifdef MIGRATE_TASKS
@@ -666,7 +666,7 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
            0 != ct->ptls &&
            0 == ptls->finalizers_inhibited);
     ptls->finalizers_inhibited = finalizers_inhibited;
-    jl_timing_block_enter_task(ct, ptls, blk); (void)blk;
+    jl_timing_block_task_enter(ct, ptls, blk); (void)blk;
 
     sig_atomic_t other_defer_signal = ptls->defer_signal;
     ptls->defer_signal = defer_signal;
@@ -705,7 +705,7 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
 #define pop_timings_stack()                                                    \
         jl_timing_block_t *cur_block = ptls->timing_stack;                     \
         while (cur_block && eh->timing_stack != cur_block) {                   \
-            cur_block = jl_pop_timing_block(cur_block);                        \
+            cur_block = jl_timing_block_pop(cur_block);                        \
         }                                                                      \
         assert(cur_block == eh->timing_stack);
 #else
@@ -1084,7 +1084,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->ptls = NULL;
     t->world_age = ct->world_age;
     t->reentrant_timing = 0;
-    jl_timing_init_task(t);
+    jl_timing_task_init(t);
 
 #ifdef COPY_STACKS
     if (!t->copy_stack) {
@@ -1221,7 +1221,7 @@ CFI_NORETURN
 
     ct->started = 1;
     JL_PROBE_RT_START_TASK(ct);
-    jl_timing_block_enter_task(ct, ptls, NULL);
+    jl_timing_block_task_enter(ct, ptls, NULL);
     if (jl_atomic_load_relaxed(&ct->_isexception)) {
         record_backtrace(ptls, 0);
         jl_push_excstack(&ct->excstack, ct->result,
@@ -1693,7 +1693,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->ctx.asan_fake_stack = NULL;
 #endif
 
-    jl_timing_block_enter_task(ct, ptls, NULL);
+    jl_timing_block_task_enter(ct, ptls, NULL);
 
 #ifdef COPY_STACKS
     // initialize the base_ctx from which all future copy_stacks will be copies

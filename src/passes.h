@@ -10,16 +10,16 @@
 using namespace llvm;
 
 // Function Passes
-struct DemoteFloat16 : PassInfoMixin<DemoteFloat16> {
+struct DemoteFloat16Pass : PassInfoMixin<DemoteFloat16Pass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
     static bool isRequired() { return true; }
 };
 
-struct CombineMulAdd : PassInfoMixin<CombineMulAdd> {
+struct CombineMulAddPass : PassInfoMixin<CombineMulAddPass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
 };
 
-struct LateLowerGC : PassInfoMixin<LateLowerGC> {
+struct LateLowerGCPass : PassInfoMixin<LateLowerGCPass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
     static bool isRequired() { return true; }
 };
@@ -33,7 +33,7 @@ struct PropagateJuliaAddrspacesPass : PassInfoMixin<PropagateJuliaAddrspacesPass
     static bool isRequired() { return true; }
 };
 
-struct LowerExcHandlers : PassInfoMixin<LowerExcHandlers> {
+struct LowerExcHandlersPass : PassInfoMixin<LowerExcHandlersPass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
     static bool isRequired() { return true; }
 };
@@ -47,17 +47,17 @@ struct GCInvariantVerifierPass : PassInfoMixin<GCInvariantVerifierPass> {
 };
 
 // Module Passes
-struct CPUFeatures : PassInfoMixin<CPUFeatures> {
+struct CPUFeaturesPass : PassInfoMixin<CPUFeaturesPass> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
     static bool isRequired() { return true; }
 };
 
-struct RemoveNI : PassInfoMixin<RemoveNI> {
+struct RemoveNIPass : PassInfoMixin<RemoveNIPass> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
     static bool isRequired() { return true; }
 };
 
-struct LowerSIMDLoop : PassInfoMixin<LowerSIMDLoop> {
+struct LowerSIMDLoopPass : PassInfoMixin<LowerSIMDLoopPass> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
     static bool isRequired() { return true; }
 };
@@ -67,9 +67,9 @@ struct FinalLowerGCPass : PassInfoMixin<FinalLowerGCPass> {
     static bool isRequired() { return true; }
 };
 
-struct MultiVersioning : PassInfoMixin<MultiVersioning> {
+struct MultiVersioningPass : PassInfoMixin<MultiVersioningPass> {
     bool external_use;
-    MultiVersioning(bool external_use = false) : external_use(external_use) {}
+    MultiVersioningPass(bool external_use = false) : external_use(external_use) {}
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
     static bool isRequired() { return true; }
 };

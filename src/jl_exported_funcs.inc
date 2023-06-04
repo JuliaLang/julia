@@ -573,5 +573,17 @@
     YY(LLVMExtraAddGCInvariantVerifierPass) \
     YY(LLVMExtraAddDemoteFloat16Pass) \
     YY(LLVMExtraAddCPUFeaturesPass) \
+    YY(JLJITGetLLVMOrcExecutionSession) \
+    YY(JLJITGetJuliaOJIT) \
+    YY(JLJITGetExternalJITDylib) \
+    YY(JLJITAddObjectFile) \
+    YY(JLJITAddLLVMIRModule) \
+    YY(JLJITLookup) \
+    YY(JLJITMangleAndIntern) \
+    YY(JLJITGetTripleString) \
+    YY(JLJITGetGlobalPrefix) \
+    YY(JLJITGetDataLayoutString) \
+    YY(JLJITGetIRCompileLayer) \
+
 
 // end of file

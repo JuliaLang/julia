@@ -211,7 +211,7 @@ function normalize_typevars(method::Method, @nospecialize(atype), sparams::Simpl
 end
 
 # get a handle to the unique specialization object representing a particular instantiation of a call
-function specialize_method(method::Method, @nospecialize(atype), sparams::SimpleVector; preexisting::Bool=false)
+@inline function specialize_method(method::Method, @nospecialize(atype), sparams::SimpleVector; preexisting::Bool=false)
     if isa(atype, UnionAll)
         atype, sparams = normalize_typevars(method, atype, sparams)
     end

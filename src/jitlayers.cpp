@@ -1299,6 +1299,7 @@ JuliaOJIT::JuliaOJIT()
     ES(cantFail(orc::SelfExecutorProcessControl::Create())),
     GlobalJD(ES.createBareJITDylib("JuliaGlobals")),
     JD(ES.createBareJITDylib("JuliaOJIT")),
+    ExternalJD(ES.createBareJITDylib("JuliaExternal")),
     ContextPool([](){
         auto ctx = std::make_unique<LLVMContext>();
         return orc::ThreadSafeContext(std::move(ctx));
@@ -1323,7 +1324,9 @@ JuliaOJIT::JuliaOJIT()
         std::make_unique<PipelineT>(LockLayer, *TM, 2, PrintLLVMTimers),
         std::make_unique<PipelineT>(LockLayer, *TM, 3, PrintLLVMTimers),
     },
-    OptSelLayer(Pipelines)
+    OptSelLayer(Pipelines),
+    ExternalCompileLayer(ES, LockLayer,
+        std::make_unique<CompilerT>(orc::irManglingOptionsFromTargetOptions(TM->Options), *TM, 2))
 {
 #ifdef JL_USE_JITLINK
 # if defined(LLVM_SHLIB)
@@ -1395,6 +1398,9 @@ JuliaOJIT::JuliaOJIT()
     }
 
     JD.addToLinkOrder(GlobalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
+    JD.addToLinkOrder(ExternalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
+    ExternalJD.addToLinkOrder(GlobalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
+    ExternalJD.addToLinkOrder(JD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
 
 #if JULIA_FLOAT16_ABI == 1
     orc::SymbolAliasMap jl_crt = {
@@ -1494,10 +1500,34 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
     }
 }
 
+Error JuliaOJIT::addExternalModule(orc::JITDylib &JD, orc::ThreadSafeModule TSM, bool ShouldOptimize)
+{
+    if (auto Err = TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT -> Error
+            {
+            if (M.getDataLayout().isDefault())
+                M.setDataLayout(DL);
+            if (M.getDataLayout() != DL)
+                return make_error<StringError>(
+                    "Added modules have incompatible data layouts: " +
+                    M.getDataLayout().getStringRepresentation() + " (module) vs " +
+                    DL.getStringRepresentation() + " (jit)",
+                inconvertibleErrorCode());
+
+            return Error::success();
+            }))
+        return Err;
+    return ExternalCompileLayer.add(JD.getDefaultResourceTracker(), std::move(TSM));
+}
+
+Error JuliaOJIT::addObjectFile(orc::JITDylib &JD, std::unique_ptr<MemoryBuffer> Obj) {
+    assert(Obj && "Can not add null object");
+    return LockLayer.add(JD.getDefaultResourceTracker(), std::move(Obj));
+}
+
 JL_JITSymbol JuliaOJIT::findSymbol(StringRef Name, bool ExportedSymbolsOnly)
 {
-    orc::JITDylib* SearchOrders[2] = {&JD, &GlobalJD};
-    ArrayRef<orc::JITDylib*> SearchOrder = makeArrayRef(&SearchOrders[0], ExportedSymbolsOnly ? 2 : 1);
+    orc::JITDylib* SearchOrders[3] = {&JD, &GlobalJD, &ExternalJD};
+    ArrayRef<orc::JITDylib*> SearchOrder = makeArrayRef(&SearchOrders[0], ExportedSymbolsOnly ? 3 : 1);
     auto Sym = ES.lookup(SearchOrder, Name);
     if (Sym)
         return *Sym;
@@ -1507,6 +1537,14 @@ JL_JITSymbol JuliaOJIT::findSymbol(StringRef Name, bool ExportedSymbolsOnly)
 JL_JITSymbol JuliaOJIT::findUnmangledSymbol(StringRef Name)
 {
     return findSymbol(getMangledName(Name), true);
+}
+
+Expected<JITEvaluatedSymbol> JuliaOJIT::findExternalJDSymbol(StringRef Name, bool ExternalJDOnly)
+{
+    orc::JITDylib* SearchOrders[3] = {&ExternalJD, &GlobalJD, &JD};
+    ArrayRef<orc::JITDylib*> SearchOrder = makeArrayRef(&SearchOrders[0], ExternalJDOnly ? 1 : 3);
+    auto Sym = ES.lookup(SearchOrder, getMangledName(Name));
+    return Sym;
 }
 
 uint64_t JuliaOJIT::getGlobalValueAddress(StringRef Name)

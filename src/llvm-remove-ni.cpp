@@ -36,7 +36,7 @@ static bool removeNI(Module &M) JL_NOTSAFEPOINT
 }
 }
 
-PreservedAnalyses RemoveNI::run(Module &M, ModuleAnalysisManager &AM)
+PreservedAnalyses RemoveNIPass::run(Module &M, ModuleAnalysisManager &AM)
 {
     if (removeNI(M)) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();

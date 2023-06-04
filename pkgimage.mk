@@ -5,7 +5,16 @@ include $(JULIAHOME)/Make.inc
 
 VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
 
+# set some influential environment variables
 export JULIA_DEPOT_PATH := $(build_prefix)/share/julia
+export JULIA_LOAD_PATH := @stdlib
+unexport JULIA_PROJECT :=
+unexport JULIA_BINDIR :=
+
+default: release
+release: all-release
+debug: all-debug
+all: release debug
 
 $(JULIA_DEPOT_PATH):
 	mkdir -p $@

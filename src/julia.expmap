@@ -30,7 +30,9 @@
     _Z24jl_coverage_data_pointerN4llvm9StringRefEi;
     _Z22jl_coverage_alloc_lineN4llvm9StringRefEi;
     _Z22jl_malloc_data_pointerN4llvm9StringRefEi;
+    _jl_timing_*;
     LLVMExtra*;
+    JLJIT*;
     llvmGetPassPluginInfo;
 
     /* Make visible so that linker will merge duplicate definitions across DSO boundaries */

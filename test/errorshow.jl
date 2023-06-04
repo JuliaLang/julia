@@ -957,43 +957,73 @@ end
 
 f_internal_wrap(g, a; kw...) = error();
 @inline f_internal_wrap(a; kw...) = f_internal_wrap(identity, a; kw...);
-bt = try
-    f_internal_wrap(1)
-catch
-    catch_backtrace()
+let bt
+    @test try
+        f_internal_wrap(1)
+        false
+    catch
+        bt = catch_backtrace()
+        true
+    end
+    @test !occursin("#f_internal_wrap#", sprint(Base.show_backtrace, bt))
 end
-@test !occursin("#f_internal_wrap#", sprint(Base.show_backtrace, bt))
 
 g_collapse_pos(x, y=1.0, z=2.0) = error()
-bt = try
-    g_collapse_pos(1.0)
-catch
-    catch_backtrace()
+let bt
+    @test try
+        g_collapse_pos(1.0)
+        false
+    catch
+        bt = catch_backtrace()
+        true
+    end
+    bt_str = sprint(Base.show_backtrace, bt)
+    @test occursin("g_collapse_pos(x::Float64, y::Float64, z::Float64)", bt_str)
+    @test !occursin("g_collapse_pos(x::Float64)", bt_str)
 end
-bt_str = sprint(Base.show_backtrace, bt)
-@test occursin("g_collapse_pos(x::Float64, y::Float64, z::Float64)", bt_str)
-@test !occursin("g_collapse_pos(x::Float64)", bt_str)
 
 g_collapse_kw(x; y=2.0) = error()
-bt = try
-    g_collapse_kw(1.0)
-catch
-    catch_backtrace()
+let bt
+    @test try
+        g_collapse_kw(1.0)
+        false
+    catch
+        bt = catch_backtrace()
+        true
+    end
+    bt_str = sprint(Base.show_backtrace, bt)
+    @test occursin("g_collapse_kw(x::Float64; y::Float64)", bt_str)
+    @test !occursin("g_collapse_kw(x::Float64)", bt_str)
 end
-bt_str = sprint(Base.show_backtrace, bt)
-@test occursin("g_collapse_kw(x::Float64; y::Float64)", bt_str)
-@test !occursin("g_collapse_kw(x::Float64)", bt_str)
 
 g_collapse_pos_kw(x, y=1.0; z=2.0) = error()
-bt = try
-    g_collapse_pos_kw(1.0)
-catch
-    catch_backtrace()
+let bt
+    @test try
+        g_collapse_pos_kw(1.0)
+        false
+    catch
+        bt = catch_backtrace()
+        true
+    end
+    bt_str = sprint(Base.show_backtrace, bt)
+    @test occursin("g_collapse_pos_kw(x::Float64, y::Float64; z::Float64)", bt_str)
+    @test !occursin("g_collapse_pos_kw(x::Float64, y::Float64)", bt_str)
+    @test !occursin("g_collapse_pos_kw(x::Float64)", bt_str)
 end
-bt_str = sprint(Base.show_backtrace, bt)
-@test occursin("g_collapse_pos_kw(x::Float64, y::Float64; z::Float64)", bt_str)
-@test !occursin("g_collapse_pos_kw(x::Float64, y::Float64)", bt_str)
-@test !occursin("g_collapse_pos_kw(x::Float64)", bt_str)
+
+simplify_kwargs_type(pos; kws...) = (pos, sum(kws))
+let bt
+    res = try
+        simplify_kwargs_type(0; kw1=1.0, kw2="2.0")
+        false
+    catch
+        bt = catch_backtrace()
+        true
+    end
+    @test res
+    bt_str = sprint(Base.show_backtrace, bt)
+    @test occursin("simplify_kwargs_type(pos::$Int; kws::@Kwargs{kw1::Float64, kw2::String})", bt_str)
+end
 
 # Test Base.print_with_compare in convert MethodErrors
 struct TypeCompareError{A,B} <: Exception end

@@ -269,8 +269,7 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     for (caller, _, _) in results
         opt = caller.src
         if opt isa OptimizationState{typeof(interp)} # implies `may_optimize(interp) === true`
-            analyzed = optimize(interp, opt, caller)
-            caller.valid_worlds = (opt.inlining.et::EdgeTracker).valid_worlds[]
+            optimize(interp, opt, caller)
         end
     end
     for (caller, edges, cached) in results
@@ -370,10 +369,9 @@ end
 function transform_result_for_cache(interp::AbstractInterpreter,
     linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult)
     inferred_result = result.src
-    # If we decided not to optimize, drop the OptimizationState now.
-    # External interpreters can override as necessary to cache additional information
     if inferred_result isa OptimizationState{typeof(interp)}
-        inferred_result = ir_to_codeinf!(inferred_result)
+        # TODO respect must_be_codeinf setting here?
+        result.src = inferred_result = ir_to_codeinf!(inferred_result)
     end
     if inferred_result isa CodeInfo
         inferred_result.min_world = first(valid_worlds)
