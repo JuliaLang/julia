@@ -135,8 +135,12 @@ function threading_run(fun, static)
             schedule(t)
         end
         for i = 1:n
-            ret = fetch(tasks[i])
-            isnothing(ret) || push!(task_locals, ret)
+            t = tasks[i]
+            Base._wait(t)
+            if !istaskfailed(t)
+                ret = Base.task_result(t)
+                isnothing(ret) || push!(task_locals, ret)
+            end
         end
     finally
         ccall(:jl_exit_threaded_region, Cvoid, ())
