@@ -871,7 +871,7 @@ if Limb === UInt
         GC.@preserve x begin
             sz = x.size
             sz == 0 && return hash(0, h)
-            ptr = Ptr{UInt}(x.d)
+            ptr = Ptr{UInt64}(x.d)
             if sz == 1
                 return hash(unsafe_load(ptr), h)
             elseif sz == -1
