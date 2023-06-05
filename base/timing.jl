@@ -266,38 +266,25 @@ macro time(ex)
 end
 macro time(msg, ex)
     quote
-        Experimental.@force_compile
-        local stats = gc_num()
-        local elapsedtime = time_ns()
-        cumulative_compile_timing(true)
-        local compile_elapsedtimes = cumulative_compile_time_ns()
-        local val = @__tryfinally($(esc(ex)),
-            (elapsedtime = time_ns() - elapsedtime;
-            cumulative_compile_timing(false);
-            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes)
-        )
-        local diff = GC_Diff(gc_num(), stats)
-        local _msg = $(esc(msg))
-        local has_msg = !isnothing(_msg)
-        has_msg && print(_msg, ": ")
-        s = time_print_string(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), first(compile_elapsedtimes), last(compile_elapsedtimes), true, !has_msg)
+        local (s, val) = @time_str $(esc(ex))
         print(stdout, s)
         val
     end
 end
 
 """
-    @time_info expr
-    @time_info "description" expr
+    @time_str_val "description" expr
+    @time_str_val expr
 
-Similar to [`@time`](ref), but outputs to `@info`.
+Returns a tuple of the string printed in
+`@time`, and the returned value of `expr`.
 """
-macro time_info(ex)
+macro time_str_val(ex)
     quote
-        @time_info nothing $(esc(ex))
+        @time_str_val nothing $(esc(ex))
     end
 end
-macro time_info(msg, ex)
+macro time_str_val(msg, ex)
     quote
         Experimental.@force_compile
         local stats = gc_num()
@@ -312,15 +299,30 @@ macro time_info(msg, ex)
         local diff = GC_Diff(gc_num(), stats)
         local _msg = $(esc(msg))
         local has_msg = !isnothing(_msg)
-        has_msg && print(_msg, ": ")
-        s = time_print_string(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), first(compile_elapsedtimes), last(compile_elapsedtimes), true, !has_msg)
+        local s = time_print_string(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), first(compile_elapsedtimes), last(compile_elapsedtimes), true, !has_msg)
         if has_msg
-            @info "$_msg: $s"
+            ("$_msg: $s", val)
         else
-            @info "$s"
+            (s, val)
         end
-        print(stdout, s)
-        val
+    end
+end
+
+"""
+    @time_str expr
+    @time_str "description" expr
+
+Returns the string printed in `@time`.
+"""
+macro time_str(ex)
+    quote
+        @time_str nothing $(esc(ex))
+    end
+end
+macro time_str(msg, ex)
+    quote
+        local (s, val) = @time_str_val $(esc(ex))
+        s
     end
 end
 
