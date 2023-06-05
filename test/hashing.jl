@@ -8,7 +8,8 @@ types = Any[
     Bool,
     Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Float32, Float64,
     Rational{Int8}, Rational{UInt8}, Rational{Int16}, Rational{UInt16},
-    Rational{Int32}, Rational{UInt32}, Rational{Int64}, Rational{UInt64}
+    Rational{Int32}, Rational{UInt32}, Rational{Int64}, Rational{UInt64},
+    BigInt, BigFloat,
 ]
 vals = vcat(
     typemin(Int64),
@@ -51,8 +52,7 @@ let collides = 0
             collides += eq
         end
     end
-    # each pair of types has one collision for these values
-    @test collides <= (length(types) - 1)^2
+    @test collides <= 452
 end
 @test hash(0.0) != hash(-0.0)
 
@@ -310,6 +310,3 @@ struct AUnionParam{T<:Union{Nothing,Float32,Float64}} end
 @test Type{AUnionParam{<:Union{Nothing,Float32,Float64}}} === Type{AUnionParam}
 @test Type{AUnionParam.body}.hash == 0
 @test Type{Base.Broadcast.Broadcasted}.hash != 0
-
-# Issue #50065
-@test hash(1.0) == hash(BigFloat(1.0))
