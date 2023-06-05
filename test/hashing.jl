@@ -310,3 +310,6 @@ struct AUnionParam{T<:Union{Nothing,Float32,Float64}} end
 @test Type{AUnionParam{<:Union{Nothing,Float32,Float64}}} === Type{AUnionParam}
 @test Type{AUnionParam.body}.hash == 0
 @test Type{Base.Broadcast.Broadcasted}.hash != 0
+
+# Issue #50065
+@test hash(1.0) == hash(BigFloat(1.0))
