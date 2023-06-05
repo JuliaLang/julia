@@ -1652,6 +1652,10 @@ fake_repl() do stdin_write, stdout_read, repl
     @test !contains(s, "ERROR")
     @test contains(s, "Test Passed")
 
+    # Test for https://github.com/JuliaLang/julia/issues/49319
+    s = sendrepl2("# comment", "In [16]")
+    @test !contains(s, "ERROR")
+
     write(stdin_write, '\x04')
     Base.wait(repltask)
 end
