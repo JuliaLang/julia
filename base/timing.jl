@@ -136,9 +136,9 @@ function format_bytes(bytes) # also used by InteractiveUtils
     end
 end
 
-function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, recompile_time=0, newline=false, _lpad=true)
+function time_print_string(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, recompile_time=0, newline=false, _lpad=true)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
-    str = sprint() do io
+    return sprint() do io
         _lpad && print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
         print(io, timestr, " seconds")
         parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
@@ -172,15 +172,14 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, compile_ti
         parens && print(io, ")")
         newline && print(io, "\n")
     end
-    print(io, str)
-    nothing
 end
 
 function timev_print(elapsedtime, diff::GC_Diff, compile_times, _lpad)
     allocs = gc_alloc_count(diff)
     compile_time = first(compile_times)
     recompile_time = last(compile_times)
-    time_print(stdout, elapsedtime, diff.allocd, diff.total_time, allocs, compile_time, recompile_time, true, _lpad)
+    s = time_print_string(elapsedtime, diff.allocd, diff.total_time, allocs, compile_time, recompile_time, true, _lpad)
+    print(stdout, s)
     padded_nonzero_print(elapsedtime,       "elapsed time (ns)")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
@@ -281,7 +280,46 @@ macro time(msg, ex)
         local _msg = $(esc(msg))
         local has_msg = !isnothing(_msg)
         has_msg && print(_msg, ": ")
-        time_print(stdout, elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), first(compile_elapsedtimes), last(compile_elapsedtimes), true, !has_msg)
+        s = time_print_string(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), first(compile_elapsedtimes), last(compile_elapsedtimes), true, !has_msg)
+        print(stdout, s)
+        val
+    end
+end
+
+"""
+    @time_info expr
+    @time_info "description" expr
+
+Similar to [`@time`](ref), but outputs to `@info`.
+"""
+macro time_info(ex)
+    quote
+        @time_info nothing $(esc(ex))
+    end
+end
+macro time_info(msg, ex)
+    quote
+        Experimental.@force_compile
+        local stats = gc_num()
+        local elapsedtime = time_ns()
+        cumulative_compile_timing(true)
+        local compile_elapsedtimes = cumulative_compile_time_ns()
+        local val = @__tryfinally($(esc(ex)),
+            (elapsedtime = time_ns() - elapsedtime;
+            cumulative_compile_timing(false);
+            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes)
+        )
+        local diff = GC_Diff(gc_num(), stats)
+        local _msg = $(esc(msg))
+        local has_msg = !isnothing(_msg)
+        has_msg && print(_msg, ": ")
+        s = time_print_string(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), first(compile_elapsedtimes), last(compile_elapsedtimes), true, !has_msg)
+        if has_msg
+            @info "$_msg: $s"
+        else
+            @info "$s"
+        end
+        print(stdout, s)
         val
     end
 end
