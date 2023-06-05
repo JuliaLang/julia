@@ -3072,6 +3072,50 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint
     return _jl_invoke(F, args, nargs, mfunc, world);
 }
 
+JL_DLLEXPORT jl_value_t *jl_unsafe_apply_generic_stack(jl_value_t *F, jl_value_t* types, void **args, uint32_t nargs)
+{
+    size_t world = jl_current_task->world_age;
+
+    size_t min_valid;
+    size_t max_valid;
+
+    jl_printf(JL_STDERR, "world: %zu\n", world);
+    jl_method_match_t *match = _gf_invoke_lookup(types, jl_nothing, world, &min_valid, &max_valid);
+    jl_printf(JL_STDERR, "match: %p\n", match);
+    if (match == NULL) {
+        jl_printf(JL_STDERR, "No match\n");
+        return jl_nothing;
+    }
+    jl_method_instance_t *mfunc = jl_method_match_to_mi(match, world, world, world, 1);
+    jl_printf(JL_STDERR, "mfunc: %p\n", mfunc);
+    // jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs,
+    //                                                  jl_int32hash_fast(jl_return_address()),
+    //                                                  world);
+
+    // TODO: only if any args are nospecialized, box them.
+    jl_value_t** newargs = (jl_value_t**)alloca(sizeof(jl_value_t*) * nargs);
+    jl_printf(JL_STDERR, "newargs:\n");
+
+    jl_datatype_t* tt = (jl_datatype_t*)types;
+    for (size_t i = 0; i < nargs; i++) {
+        jl_datatype_t* typ = jl_svecref(tt->parameters, i+1); // skip the function
+        jl_printf(JL_STDERR, "arg type: %zu\n", i);
+        jl_(typ);
+        if (typ == jl_int64_type) {
+            // re-box the value
+            newargs[i] = jl_box_int64(*(int64_t*)args[i]);
+        } else if (typ == jl_float64_type) {
+            // re-box the value
+            newargs[i] = jl_box_float64(*(double*)args[i]);
+            break;
+        }
+        jl_(newargs[i]);
+    }
+    JL_GC_PROMISE_ROOTED(mfunc);
+    return _jl_invoke(F, newargs, nargs, mfunc, world);
+}
+
+
 static jl_method_match_t *_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT, jl_value_t *mt, size_t world, size_t *min_valid, size_t *max_valid)
 {
     jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)types);

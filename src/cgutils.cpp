@@ -1469,6 +1469,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, Value *v, bool maybenull, bool just
 }
 
 static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &v,  bool is_promotable=false);
+static Value *stack_boxed(jl_codectx_t &ctx, const jl_cgval_t &v,  bool is_promotable=false);
 
 static void just_emit_type_error(jl_codectx_t &ctx, const jl_cgval_t &x, Value *type, const std::string &msg)
 {
@@ -3518,6 +3519,92 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
     return box;
 }
 
+// TODO: comments
+static Value *stack_boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotable)
+{
+    jl_value_t *jt = vinfo.typ;
+    if (jt == jl_bottom_type || jt == NULL)
+        // We have an undef value on a (hopefully) dead branch
+        return UndefValue::get(ctx.types().T_prjlvalue);
+    if (vinfo.constant)
+        return track_pjlvalue(ctx, literal_pointer_val(ctx, vinfo.constant));
+    // This can happen in early bootstrap for `gc_preserve_begin` return value.
+    if (jt == (jl_value_t*)jl_nothing_type)
+        return track_pjlvalue(ctx, literal_pointer_val(ctx, jl_nothing));
+    if (vinfo.isboxed) {
+        assert(vinfo.V == vinfo.Vboxed && vinfo.V != nullptr);
+        assert(vinfo.V->getType() == ctx.types().T_prjlvalue);
+        return vinfo.V;
+    }
+
+    Value *box;
+    if (vinfo.TIndex) {
+        // TODO
+        jl_printf(JL_STDERR, "Boxing 'union' arg.\n");
+        SmallBitVector skip_none;
+        box = box_union(ctx, vinfo, skip_none);
+    }
+    else {
+        assert(vinfo.V && "Missing data for unboxed value.");
+        assert(jl_is_concrete_immutable(jt) && "This type shouldn't have been unboxed.");
+        Type *t = julia_type_to_llvm(ctx, jt);
+        assert(!type_is_ghost(t)); // ghost values should have been handled by vinfo.constant above!
+        // TODO: special
+        box = _boxed_special(ctx, vinfo, t);
+        if (box) {
+            jl_printf(JL_STDERR, "Boxed 'special' arg.\n");
+        } else {
+            bool do_promote = vinfo.promotion_point;
+            if (do_promote && is_promotable) {
+                jl_printf(JL_STDERR, "Boxed promote arg.\n");
+                auto IP = ctx.builder.saveIP();
+                ctx.builder.SetInsertPoint(vinfo.promotion_point);
+                box = emit_allocobj(ctx, (jl_datatype_t*)jt);
+                Value *decayed = decay_derived(ctx, box);
+                AllocaInst *originalAlloca = cast<AllocaInst>(vinfo.V);
+                decayed = maybe_bitcast(ctx, decayed, PointerType::getWithSamePointeeType(originalAlloca->getType(), AddressSpace::Derived));
+                // Warning: Very illegal IR here temporarily
+                originalAlloca->mutateType(decayed->getType());
+                recursively_adjust_ptr_type(originalAlloca, 0, AddressSpace::Derived);
+                originalAlloca->replaceAllUsesWith(decayed);
+                // end illegal IR
+                originalAlloca->eraseFromParent();
+                ctx.builder.restoreIP(IP);
+            } else {
+
+                // jl_cgval_t res = emit_new_struct(
+                //     ctx, (jl_datatype_t*)jt,
+                //     nargs - 1, argv.data() + 1, is_promotable);
+                // box = res.V;
+
+                jl_printf(JL_STDERR, "WE OUT HERE\n");
+
+                // TODO ?
+                bool isboxed = false;
+
+                Type *lt = julia_type_to_llvm(ctx, jt, &isboxed);
+                box = emit_static_alloca_unsafe_stack_value(ctx, lt);
+                isboxed = true;  // we are forcing this.
+
+                Value *header = ctx.builder.CreateBitOrPointerCast(box, getInt64PtrTy(ctx.builder.getContext()));
+
+                // Set the type in the header
+                jl_printf(JL_STDERR, "jt: %p\n", (void*)jt);
+                Value *type_val = ConstantExpr::getIntToPtr(
+                    ConstantInt::get(ctx.types().T_size, (uintptr_t)jt),
+                    getInt64PtrTy(ctx.builder.getContext()));
+                ctx.builder.CreateStore(type_val, header);
+                // Store the original value in the new stack allocated value object
+                Value *value_offset = ctx.builder.CreateGEP(ctx.types().T_prjlvalue, box, ConstantInt::get(ctx.types().T_size, 1));
+                ctx.builder.CreateStore(vinfo.V, value_offset);
+
+                init_bits_cgval(ctx, box, vinfo, jl_is_mutable(jt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut);
+            }
+        }
+    }
+    return box;
+}
+
 // copy src to dest, if src is justbits. if skip is true, the value of dest is undefined
 static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, const jl_cgval_t &src, Value *skip, bool isVolatile=false)
 {
@@ -3828,6 +3915,8 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
 
 static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t nargs, const jl_cgval_t *argv, bool is_promotable)
 {
+    jl_printf(JL_STDERR, "emit new struct:\n");
+    jl_(ty);
     ++EmittedNewStructs;
     assert(jl_is_datatype(ty));
     assert(jl_is_concrete_type(ty));
