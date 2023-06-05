@@ -139,6 +139,22 @@ JL_DLLEXPORT void LLVMExtraAddDemoteFloat16Pass_fallback(void *PM) UNAVAILABLE
 
 JL_DLLEXPORT void LLVMExtraAddCPUFeaturesPass_fallback(void *PM) UNAVAILABLE
 
+#define MODULE_PASS(NAME, CLASS, CREATE_PASS) \
+    JL_DLLEXPORT void LLVMExtraNewPMMPMAdd##CLASS##_fallback(void *PM) UNAVAILABLE
+#define CGSCC_PASS(NAME, CLASS, CREATE_PASS) \
+    JL_DLLEXPORT void LLVMExtraNewPMCGPMAdd##CLASS##_fallback(void *PM) UNAVAILABLE
+#define FUNCTION_PASS(NAME, CLASS, CREATE_PASS) \
+    JL_DLLEXPORT void LLVMExtraNewPMFPMAdd##CLASS##_fallback(void *PM) UNAVAILABLE
+#define LOOP_PASS(NAME, CLASS, CREATE_PASS) \
+    JL_DLLEXPORT void LLVMExtraNewPMLPMAdd##CLASS##_fallback(void *PM) UNAVAILABLE
+
+#include "llvm-julia-passes.inc"
+
+#undef MODULE_PASS
+#undef CGSCC_PASS
+#undef FUNCTION_PASS
+#undef LOOP_PASS
+
 //LLVM C api to the julia JIT
 JL_DLLEXPORT void* JLJITGetLLVMOrcExecutionSession_fallback(void* JIT) UNAVAILABLE
 

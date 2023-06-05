@@ -573,6 +573,22 @@
     YY(LLVMExtraAddGCInvariantVerifierPass) \
     YY(LLVMExtraAddDemoteFloat16Pass) \
     YY(LLVMExtraAddCPUFeaturesPass) \
+    YY(LLVMExtraNewPMMPMAddCPUFeaturesPass) \
+    YY(LLVMExtraNewPMMPMAddRemoveNIPass) \
+    YY(LLVMExtraNewPMMPMAddLowerSIMDLoopPass) \
+    YY(LLVMExtraNewPMMPMAddFinalLowerGCPass) \
+    YY(LLVMExtraNewPMMPMAddMultiVersioningPass) \
+    YY(LLVMExtraNewPMMPMAddRemoveJuliaAddrspacesPass) \
+    YY(LLVMExtraNewPMMPMAddRemoveAddrspacesPass) \
+    YY(LLVMExtraNewPMMPMAddLowerPTLSPass) \
+    YY(LLVMExtraNewPMFPMAddDemoteFloat16Pass) \
+    YY(LLVMExtraNewPMFPMAddCombineMulAddPass) \
+    YY(LLVMExtraNewPMFPMAddLateLowerGCPass) \
+    YY(LLVMExtraNewPMFPMAddAllocOptPass) \
+    YY(LLVMExtraNewPMFPMAddPropagateJuliaAddrspacesPass) \
+    YY(LLVMExtraNewPMFPMAddLowerExcHandlersPass) \
+    YY(LLVMExtraNewPMFPMAddGCInvariantVerifierPass) \
+    YY(LLVMExtraNewPMLPMAddJuliaLICMPass) \
     YY(JLJITGetLLVMOrcExecutionSession) \
     YY(JLJITGetJuliaOJIT) \
     YY(JLJITGetExternalJITDylib) \
