@@ -867,7 +867,8 @@ if Limb === UInt
     _divLimb(n) = UInt === UInt64 ? n >>> 6 : n >>> 5
     _modLimb(n) = UInt === UInt64 ? n & 63 : n & 31
 
-    function hash(x::BigInt, h::UInt)
+    if UInt === UInt64
+    @eval function hash(x::BigInt, h::UInt)
         GC.@preserve x begin
             sz = x.size
             sz == 0 && return hash(0, h)
@@ -914,6 +915,7 @@ if Limb === UInt
             end
             return h
         end
+    end
     end
 end
 
