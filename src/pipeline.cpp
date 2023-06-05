@@ -491,13 +491,13 @@ namespace {
     auto createPIC(StandardInstrumentations &SI) JL_NOTSAFEPOINT {
         auto PIC = std::make_unique<PassInstrumentationCallbacks>();
 //Borrowed from LLVM PassBuilder.cpp:386
-#define MODULE_PASS(NAME, CREATE_PASS)                                         \
+#define MODULE_PASS(NAME, CLASS, CREATE_PASS)                                         \
 PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 #define MODULE_PASS_WITH_PARAMS(NAME, CLASS, CREATE_PASS, PARSER, PARAMS)      \
 PIC->addClassToPassName(CLASS, NAME);
 #define MODULE_ANALYSIS(NAME, CREATE_PASS)                                     \
 PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
-#define FUNCTION_PASS(NAME, CREATE_PASS)                                       \
+#define FUNCTION_PASS(NAME, CLASS, CREATE_PASS)                                       \
 PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 #define FUNCTION_PASS_WITH_PARAMS(NAME, CLASS, CREATE_PASS, PARSER, PARAMS)    \
 PIC->addClassToPassName(CLASS, NAME);
@@ -505,13 +505,13 @@ PIC->addClassToPassName(CLASS, NAME);
 PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 #define LOOPNEST_PASS(NAME, CREATE_PASS)                                       \
 PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
-#define LOOP_PASS(NAME, CREATE_PASS)                                           \
+#define LOOP_PASS(NAME, CLASS, CREATE_PASS)                                           \
 PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 #define LOOP_PASS_WITH_PARAMS(NAME, CLASS, CREATE_PASS, PARSER, PARAMS)        \
 PIC->addClassToPassName(CLASS, NAME);
 #define LOOP_ANALYSIS(NAME, CREATE_PASS)                                       \
 PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
-#define CGSCC_PASS(NAME, CREATE_PASS)                                          \
+#define CGSCC_PASS(NAME, CLASS, CREATE_PASS)                                          \
 PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 #define CGSCC_PASS_WITH_PARAMS(NAME, CLASS, CREATE_PASS, PARSER, PARAMS)       \
 PIC->addClassToPassName(CLASS, NAME);
@@ -684,7 +684,7 @@ void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
     PB.registerPipelineParsingCallback(
         [](StringRef Name, FunctionPassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-#define FUNCTION_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
+#define FUNCTION_PASS(NAME, CLASS, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
 #include "llvm-julia-passes.inc"
 #undef FUNCTION_PASS
             return false;
@@ -693,7 +693,7 @@ void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
     PB.registerPipelineParsingCallback(
         [](StringRef Name, ModulePassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-#define MODULE_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
+#define MODULE_PASS(NAME, CLASS, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
 #include "llvm-julia-passes.inc"
 #undef MODULE_PASS
             //Add full pipelines here
@@ -714,7 +714,7 @@ void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
     PB.registerPipelineParsingCallback(
         [](StringRef Name, LoopPassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-#define LOOP_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
+#define LOOP_PASS(NAME, CLASS, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
 #include "llvm-julia-passes.inc"
 #undef LOOP_PASS
             return false;
