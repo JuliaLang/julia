@@ -221,7 +221,7 @@ function show(io::IO, ::MIME"text/plain", nt::NamedTuple)
     recur_io_k = IOContext(recur_io, :typeinfo=>keytype(nt))
     recur_io_v = IOContext(recur_io, :typeinfo=>valtype(nt))
 
-    print(io, "NamedTuple")
+    print(io, "NamedTuple with $(length(nt)) entries")
     isempty(nt) && return
     print(io, ":")
     show_circular(io, nt) && return
