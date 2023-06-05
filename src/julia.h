@@ -883,6 +883,8 @@ extern JL_DLLIMPORT jl_value_t *jl_false JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_nothing JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_kwcall_func JL_GLOBALLY_ROOTED;
 
+extern JL_DLLIMPORT jl_value_t    *jl_libdl_dlopen_func JL_GLOBALLY_ROOTED;
+
 // gc -------------------------------------------------------------------------
 
 struct _jl_gcframe_t {
@@ -1700,6 +1702,7 @@ extern JL_DLLIMPORT jl_module_t *jl_main_module JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_module_t *jl_core_module JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_module_t *jl_base_module JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_module_t *jl_top_module JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_module_t *jl_libdl_module JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name, jl_module_t *parent);
 JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on);
 JL_DLLEXPORT void jl_set_module_optlevel(jl_module_t *self, int lvl);

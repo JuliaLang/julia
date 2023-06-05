@@ -9,7 +9,7 @@ import Base.DL_LOAD_PATH
 
 export DL_LOAD_PATH, RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOCAL,
     RTLD_NODELETE, RTLD_NOLOAD, RTLD_NOW, dlclose, dlopen, dlopen_e, dlsym, dlsym_e,
-    dlpath, find_library, dlext, dllist
+    dlpath, find_library, dlext, dllist, LazyLibrary, LazyLibraryPath, BundledLazyLibraryPath
 
 """
     DL_LOAD_PATH
@@ -45,6 +45,9 @@ applicable.
 """
 (RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOCAL, RTLD_NODELETE, RTLD_NOLOAD, RTLD_NOW)
 
+# The default flags for `dlopen()`
+const default_rtld_flags = RTLD_LAZY | RTLD_DEEPBIND
+
 """
     dlsym(handle, sym; throw_error::Bool = true)
 
@@ -72,8 +75,8 @@ end
 Look up a symbol from a shared library handle, silently return `C_NULL` on lookup failure.
 This method is now deprecated in favor of `dlsym(handle, sym; throw_error=false)`.
 """
-function dlsym_e(hnd::Ptr, s::Union{Symbol,AbstractString})
-    return something(dlsym(hnd, s; throw_error=false), C_NULL)
+function dlsym_e(args...)
+    return something(dlsym(args...; throw_error=false), C_NULL)
 end
 
 """
@@ -110,10 +113,10 @@ If the library cannot be found, this method throws an error, unless the keyword 
 """
 function dlopen end
 
-dlopen(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND; kwargs...) =
+dlopen(s::Symbol, flags::Integer = default_rtld_flags; kwargs...) =
     dlopen(string(s), flags; kwargs...)
 
-function dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND; throw_error::Bool = true)
+function dlopen(s::AbstractString, flags::Integer = default_rtld_flags; throw_error::Bool = true)
     ret = ccall(:jl_load_dynamic_library, Ptr{Cvoid}, (Cstring,UInt32,Cint), s, flags, Cint(throw_error))
     if ret == C_NULL
         return nothing
@@ -138,10 +141,10 @@ vendor = dlopen("libblas") do lib
 end
 ```
 """
-function dlopen(f::Function, args...; kwargs...)
+function dlopen(f::Function, name, args...; kwargs...)
     hdl = nothing
     try
-        hdl = dlopen(args...; kwargs...)
+        hdl = dlopen(name, args...; kwargs...)
         f(hdl)
     finally
         dlclose(hdl)
@@ -314,4 +317,135 @@ function dllist()
     return dynamic_libraries
 end
 
+
+"""
+    LazyLibraryPath
+
+Helper type for lazily constructed library paths for use with `LazyLibrary`.
+Arguments are passed to `joinpath()`.  Arguments must be able to have
+`string()` called on them.
+
+```
+libfoo = LazyLibrary(LazyLibraryPath(prefix, "lib/libfoo.so.1.2.3"))
+```
+"""
+struct LazyLibraryPath
+    pieces::Vector
+    LazyLibraryPath(pieces::Vector) = new(pieces)
+end
+LazyLibraryPath(args...) = LazyLibraryPath(collect(args))
+Base.string(llp::LazyLibraryPath) = joinpath(string.(llp.pieces)...)
+Base.cconvert(::Type{Cstring}, llp::LazyLibraryPath) = Base.cconvert(Cstring, string(llp))
+# Define `print` so that we can wrap this in a `LazyString`
+Base.print(io::IO, llp::LazyLibraryPath) = print(io, string(llp))
+
+# Helper to get `Sys.BINDIR` at runtime
+struct SysBindirGetter; end
+Base.string(::SysBindirGetter) = dirname(Sys.BINDIR)
+
+"""
+    BundledLazyLibraryPath
+
+Helper type for lazily constructed library paths that are stored within the
+bundled Julia distribution, primarily for use by Base modules.
+
+```
+libfoo = LazyLibrary(BundledLazyLibraryPath("lib/libfoo.so.1.2.3"))
+```
+"""
+BundledLazyLibraryPath(subpath) = LazyLibraryPath(SysBindirGetter(), subpath)
+
+
+"""
+    LazyLibrary(name, flags = <default dlopen flags>,
+                dependencies = LazyLibrary[], on_load_callback = nothing)
+
+Represents a lazily-loaded library that opens itself and its dependencies on first usage
+in a `dlopen()`, `dlsym()`, or `ccall()` usage.  While this structure contains the
+ability to run arbitrary code on first load via `on_load_callback`, we caution that this
+should be used sparingly, as it is not expected that `ccall()` should result in large
+amounts of Julia code being run.  You may call `ccall()` from within the
+`on_load_callback` but only for the current library and its dependencies, and user should
+not call `wait()` on any tasks within the on load callback.
+"""
+mutable struct LazyLibrary
+    # Name and flags to open with
+    const path
+    const flags::UInt32
+
+    # Dependencies that must be loaded before we can load
+    dependencies::Vector{LazyLibrary}
+
+    # Function that get called once upon initial load
+    on_load_callback
+    const lock::Base.ReentrantLock
+
+    # Pointer that we eventually fill out upon first `dlopen()`
+    @atomic handle::Ptr{Cvoid}
+    function LazyLibrary(path; flags = default_rtld_flags, dependencies = LazyLibrary[],
+                         on_load_callback = nothing)
+        return new(
+            path,
+            UInt32(flags),
+            collect(dependencies),
+            on_load_callback,
+            Base.ReentrantLock(),
+            C_NULL,
+        )
+    end
+end
+
+# We support adding dependencies only because of very special situations
+# such as LBT needing to have OpenBLAS_jll added as a dependency dynamically.
+function add_dependency!(ll::LazyLibrary, dep::LazyLibrary)
+    @lock ll.lock begin
+        push!(ll.dependencies, dep)
+    end
+end
+
+# Register `jl_libdl_dlopen_func` so that `ccall()` lowering knows
+# how to call `dlopen()`, during bootstrap.
+# See  `post_image_load_hooks` for non-bootstrapping.
+Base.unsafe_store!(cglobal(:jl_libdl_dlopen_func, Any), dlopen)
+
+function dlopen(ll::LazyLibrary, flags::Integer = ll.flags; kwargs...)
+    handle = @atomic :acquire ll.handle
+    if handle == C_NULL
+        @lock ll.lock begin
+            # Check to see if another thread has already run this
+            if ll.handle == C_NULL
+                # Ensure that all dependencies are loaded
+                for dep in ll.dependencies
+                    dlopen(dep; kwargs...)
+                end
+
+                # Load our library
+                handle = dlopen(string(ll.path), flags; kwargs...)
+                @atomic :release ll.handle = handle
+
+                # Only the thread that loaded the library calls the `on_load_callback()`.
+                if ll.on_load_callback !== nothing
+                    ll.on_load_callback()
+                end
+            end
+        end
+    else
+        # Invoke our on load callback, if it exists
+        if ll.on_load_callback !== nothing
+            # This empty lock protects against the case where we have updated
+            # `ll.handle` in the branch above, but not exited the lock.  We want
+            # a second thread that comes in at just the wrong time to have to wait
+            # for that lock to be released (and thus for the on_load_callback to
+            # have finished), hence the empty lock here. But we want the
+            # on_load_callback thread to bypass this, which will be happen thanks
+            # to the fact that we're using a reentrant lock here.
+            @lock ll.lock begin end
+        end
+    end
+
+    return handle
+end
+dlopen(x::Any) = throw(TypeError(:dlopen, "", Union{Symbol,String,LazyLibrary}, x))
+dlsym(ll::LazyLibrary, args...; kwargs...) = dlsym(dlopen(ll), args...; kwargs...)
+dlpath(ll::LazyLibrary) = dlpath(dlopen(ll))
 end # module Libdl

@@ -3443,6 +3443,20 @@ void post_boot_hooks(void)
     }
     export_small_typeof();
 }
+
+void post_image_load_hooks(void) {
+    // Ensure that `Base` has been loaded.
+    assert(jl_base_module != NULL);
+
+    jl_libdl_module = (jl_module_t *)jl_get_global(
+        ((jl_module_t *)jl_get_global(jl_base_module, jl_symbol("Libc"))),
+        jl_symbol("Libdl")
+    );
+    jl_libdl_dlopen_func = jl_get_global(
+        jl_libdl_module,
+        jl_symbol("dlopen")
+    );
+}
 #undef XX
 
 #ifdef __cplusplus
