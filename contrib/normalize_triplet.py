@@ -2,8 +2,8 @@
 
 import re, sys
 
-# This script designed to mimick `src/PlatformNames.jl` in `BinaryProvider.jl`, which has
-# a method `platform_key_abi()` to parse uname-like output into something standarized.
+# This script designed to mimic `src/PlatformNames.jl` in `BinaryProvider.jl`, which has
+# a method `platform_key_abi()` to parse uname-like output into something standardized.
 
 if len(sys.argv) < 2:
     print("Usage: {} <host triplet> [<gcc version>] [<cxxabi11>]".format(sys.argv[0]))
@@ -113,9 +113,16 @@ if libgfortran_version == "blank_libgfortran":
         if not sys.argv[2]:
             libgfortran_version = "libgfortran5"
         else:
-            # Take the last thing that looks like a version number, and extract its major component
-            version_numbers = list(filter(lambda x: re.match("\d+\.\d+(\.\d+)?", x), sys.argv[2].split()))
-            major_ver = int(version_numbers[-1].split('.')[0])
+            # Grab the first number in the last word with a number
+            # This will be the major version number.
+            major_ver = -1
+            words = sys.argv[2].split()
+            for word in words[::-1]:
+                major_ver = re.search("[0-9]+", word)
+                if major_ver:
+                    major_ver = int(major_ver.group())
+                    break
+
             if major_ver <= 6:
                 libgfortran_version = "libgfortran3"
             elif major_ver <= 7:

@@ -24,7 +24,7 @@
             "licenseDeclared": "MIT",
             "copyrightText": "Copyright (c) 2009-2022: Jeff Bezanson, Stefan Karpinski, Viral B. Shah, and other contributors: https://github.com/JuliaLang/julia/contributors",
             "summary": "Julia is a high-level, high-performance dynamic language for technical computing.",
-            "comment": "In addition to the source code described by this package, Julia pulls in code from many other respositories, which are also described in this document. See relationships for details."
+            "comment": "In addition to the source code described by this package, Julia pulls in code from many other repositories, which are also described in this document. See relationships for details."
         },
         {
             "name": "Pkg.jl",
@@ -405,7 +405,7 @@
             "licenseDeclared": "GPL-3.0-or-later",
             "copyrightText": "Copyright (C) 2007 Free Software Foundation, Inc. <http://fsf.org/>",
             "summary": "A small utility to modify the dynamic linker and RPATH of ELF executables.",
-            "comment": "PATCHELF is not part of the Julia binary. It is a tool used as part of building the binary, a bit like a compiler. Julia chooses to build the tool from source during the build process as a convienence."
+            "comment": "PATCHELF is not part of the Julia binary. It is a tool used as part of building the binary, a bit like a compiler. Julia chooses to build the tool from source during the build process as a convenience."
         },
         {
             "name": "objconv",
@@ -417,7 +417,7 @@
             "licenseDeclared": "GPL-3.0-or-later",
             "copyrightText": "By Agner Fog © 2018",
             "summary": "A utility for cross-platform development of function libraries, for converting and modifying object files and for dumping and disassembling object and executable files for all x86 and x86-64 platforms.",
-            "comment": "OBJCONV is not part of the Julia binary. It is a tool used as part of building the binary, a bit like a compiler. Julia chooses to build the tool from source during the build process as a convienence."
+            "comment": "OBJCONV is not part of the Julia binary. It is a tool used as part of building the binary, a bit like a compiler. Julia chooses to build the tool from source during the build process as a convenience."
         },
         {
             "name": "libwhich",
@@ -430,7 +430,7 @@
             "licenseDeclared": "MIT",
             "copyrightText": "Copyright (c) 2017 Jameson Nash",
             "summary": "Like `which`, for dynamic libraries",
-            "comment": "LIBWHICH is not part of the Julia binary. It is a tool used as part of building the binary, a bit like a compiler. Julia chooses to build the tool from source during the build process as a convienence."
+            "comment": "LIBWHICH is not part of the Julia binary. It is a tool used as part of building the binary, a bit like a compiler. Julia chooses to build the tool from source during the build process as a convenience."
         }
     ],
     "hasExtractedLicensingInfos": [

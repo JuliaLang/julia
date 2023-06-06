@@ -43,7 +43,7 @@ function Base.steprange_last(start::T, step, stop) where T<:TimeType
         else
             diff = stop - start
             if (diff > zero(diff)) != (stop > start)
-                throw(OverflowError())
+                throw(OverflowError("Difference between stop and start overflowed"))
             end
             remain = stop - (start + step * len(start, stop, step))
             last = stop - remain

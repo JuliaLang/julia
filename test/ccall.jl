@@ -802,7 +802,7 @@ if cfunction_closure
 verbose && println("Testing cfunction closures: ")
 
 # helper Type for testing that constructors work
-# with cfucntion and that object identity is preserved
+# with cfunction and that object identity is preserved
 mutable struct IdentityTestKV{K, V}
     (T::Type{<:IdentityTestKV})(S) = (@test T === S; T)
 end
@@ -1020,7 +1020,7 @@ end
 
 else
 
-@test_broken "cfunction: no support for closures on this platform"
+@test_broken "cfunction: no support for closures on this platform" === nothing
 
 end
 
@@ -1516,6 +1516,12 @@ end
 @test_throws(ErrorException("ccall return type struct fields cannot contain a reference"),
              @eval ccall(:fn, typeof(Ref("")), ()))
 
+fn45187() = nothing
+
+@test_throws(TypeError, @eval ccall(nothing, Cvoid, ()))
+@test_throws(TypeError, @eval ccall(49142, Cvoid, ()))
+@test_throws(TypeError, @eval ccall((:fn, fn45187), Cvoid, ()))
+
 # test for malformed syntax errors
 @test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (), x)))
 @test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,), x, y)))
@@ -1793,7 +1799,7 @@ end
     @test_throws ArgumentError("args in @ccall need type annotations. 'x' doesn't have one.") ccall_macro_parse(:( foo(x)::Cint ))
     # missing type annotations on varargs arguments
     @test_throws ArgumentError("args in @ccall need type annotations. 'y' doesn't have one.") ccall_macro_parse(:( foo(x::Cint ; y)::Cint ))
-    # no reqired args on varargs call
+    # no required args on varargs call
     @test_throws ArgumentError("C ABI prohibits vararg without one required argument") ccall_macro_parse(:( foo(; x::Cint)::Cint ))
     # not a function pointer
     @test_throws ArgumentError("interpolated function `PROGRAM_FILE` was not a Ptr{Cvoid}, but String") @ccall $PROGRAM_FILE("foo"::Cstring)::Cvoid
@@ -1910,6 +1916,12 @@ end
     function cglobal33413_literal_notype()
         return cglobal(:sin)
     end
+    function cglobal49142_nothing()
+        return cglobal(nothing)
+    end
+    function cglobal45187fn()
+        return cglobal((:fn, fn45187))
+    end
     @test unsafe_load(cglobal33413_ptrvar()) == 1
     @test unsafe_load(cglobal33413_ptrinline()) == 1
     @test unsafe_load(cglobal33413_tupleliteral()) == 1
@@ -1918,10 +1930,14 @@ end
     @test unsafe_load(convert(Ptr{Cint}, cglobal33413_tupleliteral_notype())) == 1
     @test cglobal33413_literal() != C_NULL
     @test cglobal33413_literal_notype() != C_NULL
+    @test_throws(TypeError, cglobal49142_nothing())
+    @test_throws(TypeError, cglobal45187fn())
+    @test_throws(TypeError, @eval cglobal(nothing))
+    @test_throws(TypeError, @eval cglobal((:fn, fn45187)))
 end
 
 @testset "ccall_effects" begin
-    ctest_total(x) = @Base.assume_effects :total @ccall libccalltest.ctest(x::Complex{Int})::Complex{Int}
+    ctest_total(x) = Base.@assume_effects :total @ccall libccalltest.ctest(x::Complex{Int})::Complex{Int}
     ctest_total_const() = Val{ctest_total(1 + 2im)}()
     Core.Compiler.return_type(ctest_total_const, Tuple{}) == Val{2 + 0im}
 end

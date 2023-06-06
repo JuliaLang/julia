@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Checked: checked_length
+using InteractiveUtils: code_llvm
 
 @testset "range construction" begin
     @test_throws ArgumentError range(start=1, step=1, stop=2, length=10)
@@ -254,6 +255,45 @@ end
     @test x.hi/2 === PhysQuantity{1}(2.0)
     @test_throws ErrorException("Int is incommensurate with PhysQuantity") x/2
     @test zero(typeof(x)) === Base.TwicePrecision(PhysQuantity{1}(0.0))
+
+    function twiceprecision_roundtrip_is_not_lossy(
+        ::Type{S},
+        x::T,
+    ) where {S<:Number, T<:Union{Number,Base.TwicePrecision}}
+        tw = Base.TwicePrecision{S}(x)
+        @test x == T(tw)
+    end
+
+    function twiceprecision_is_normalized(tw::Tw) where {Tw<:Base.TwicePrecision}
+        (hi, lo) = (tw.hi, tw.lo)
+        normalized = Tw(Base.canonicalize2(hi, lo)...)
+        @test (abs(lo) ≤ abs(hi)) & (tw == normalized)
+    end
+
+    rand_twiceprecision(::Type{T}) where {T<:Number} = Base.TwicePrecision{T}(rand(widen(T)))
+
+    rand_twiceprecision_is_ok(::Type{T}) where {T<:Number} = @test !iszero(rand_twiceprecision(T).lo)
+
+    # For this test the `BigFloat` mantissa needs to be just a bit
+    # larger than the `Float64` mantissa
+    setprecision(BigFloat, 70) do
+        n = 10
+        @testset "rand twiceprecision is ok" for T ∈ (Float32, Float64), i ∈ 1:n
+            rand_twiceprecision_is_ok(T)
+        end
+        @testset "twiceprecision roundtrip is not lossy 1" for i ∈ 1:n
+            twiceprecision_roundtrip_is_not_lossy(Float64, rand(BigFloat))
+        end
+        @testset "twiceprecision roundtrip is not lossy 2" for i ∈ 1:n
+            twiceprecision_roundtrip_is_not_lossy(Float64, rand_twiceprecision(Float32))
+        end
+        @testset "twiceprecision normalization 1: Float64 to Float32" for i ∈ 1:n
+            twiceprecision_is_normalized(Base.TwicePrecision{Float32}(rand_twiceprecision(Float64)))
+        end
+        @testset "twiceprecision normalization 2: Float32 to Float64" for i ∈ 1:n
+            twiceprecision_is_normalized(Base.TwicePrecision{Float64}(rand_twiceprecision(Float32)))
+        end
+    end
 end
 @testset "ranges" begin
     @test size(10:1:0) == (0,)
@@ -887,7 +927,15 @@ function range_fuzztests(::Type{T}, niter, nrange) where {T}
         @test m == length(r)
         @test strt == first(r)
         @test Δ == step(r)
-        @test_skip stop ≈ last(r)
+        # potential floating point error:
+        #   stop = strt + (n-1)*Δ
+        #      *          error <= eps((n-1)*Δ)/2 <= abs((n-1)*Δ)/2 * eps(T)
+        #      +          error <= eps(stop)/2    <= abs(stop)/2    * eps(T)
+        #   last(r)
+        #     rat(strt)   error <= eps(strt)/2    <= abs(strt)/2    * eps(T)
+        #     rat(Δ)      error <= (n-1)*eps(Δ)/2 <= abs((n-1)*Δ)/2 * eps(T)
+        #     T(...)      error <= eps(last(r))/2 <= abs(stop)/2    * eps(T)
+        @test stop ≈ last(r) atol = (abs(strt)/2 + (n-1)*abs(Δ) + abs(stop)) * eps(T)
         l = range(strt, stop=stop, length=n)
         @test n == length(l)
         @test strt == first(l)
@@ -2391,4 +2439,41 @@ end
     end
     @test test_firstindex(StepRange{Union{Int64,Int128},Int}(Int64(1), 1, Int128(1)))
     @test test_firstindex(StepRange{Union{Int64,Int128},Int}(Int64(1), 1, Int128(0)))
+end
+
+@testset "PR 49516" begin
+    struct PR49516 <: Signed
+        n::Int
+    end
+    PR49516(f::PR49516) = f
+    Base.:*(x::Integer, f::PR49516) = PR49516(*(x, f.n))
+    Base.:+(f1::PR49516, f2::PR49516) = PR49516(+(f1.n, f2.n))
+    Base.show(io::IO, f::PR49516) = print(io, "PR49516(", f.n, ")")
+
+    srl = StepRangeLen(PR49516(1), PR49516(2), 10)
+    @test sprint(show, srl) == "PR49516(1):PR49516(2):PR49516(19)"
+end
+
+@testset "Inline StepRange Construction #49270" begin
+    x = rand(Float32, 80)
+    a = rand(round(Int, length(x) / 2):length(x), 10^6)
+
+    function test(x, a)
+        c = zero(Float32)
+
+        @inbounds for j in a
+            for i in 1:8:j
+                c += x[i]
+            end
+        end
+
+        return c
+    end
+
+    llvm_ir(f, args) = sprint((io, args...) -> code_llvm(io, args...; debuginfo=:none), f, Base.typesof(args...))
+
+    ir = llvm_ir(test, (x, a))
+    @test !occursin("steprange_last", ir)
+    @test !occursin("_colon", ir)
+    @test !occursin("StepRange", ir)
 end

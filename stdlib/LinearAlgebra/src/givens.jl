@@ -9,21 +9,16 @@ end
 
 transpose(R::AbstractRotation) = error("transpose not implemented for $(typeof(R)). Consider using adjoint instead of transpose.")
 
-function (*)(R::AbstractRotation{T}, A::AbstractVecOrMat{S}) where {T,S}
+(*)(R::AbstractRotation, A::AbstractVector) = _rot_mul_vecormat(R, A)
+(*)(R::AbstractRotation, A::AbstractMatrix) = _rot_mul_vecormat(R, A)
+function _rot_mul_vecormat(R::AbstractRotation{T}, A::AbstractVecOrMat{S}) where {T,S}
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     lmul!(convert(AbstractRotation{TS}, R), copy_similar(A, TS))
 end
-function (*)(adjR::AdjointRotation{T}, A::AbstractVecOrMat{S}) where {T,S}
-    TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    lmul!(convert(AbstractRotation{TS}, adjR.R)', copy_similar(A, TS))
-end
-(*)(A::AbstractVector, adjR::AdjointRotation) = _absvecormat_mul_adjrot(A, adjR)
-(*)(A::AbstractMatrix, adjR::AdjointRotation) = _absvecormat_mul_adjrot(A, adjR)
-function _absvecormat_mul_adjrot(A::AbstractVecOrMat{T}, adjR::AdjointRotation{S}) where {T,S}
-    TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    rmul!(copy_similar(A, TS), convert(AbstractRotation{TS}, adjR.R)')
-end
-function(*)(A::AbstractMatrix{T}, R::AbstractRotation{S}) where {T,S}
+
+(*)(A::AbstractVector, R::AbstractRotation) = _vecormat_mul_rot(A, R)
+(*)(A::AbstractMatrix, R::AbstractRotation) = _vecormat_mul_rot(A, R)
+function _vecormat_mul_rot(A::AbstractVecOrMat{T}, R::AbstractRotation{S}) where {T,S}
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     rmul!(copy_similar(A, TS), convert(AbstractRotation{TS}, R))
 end
@@ -51,6 +46,8 @@ end
 
 convert(::Type{T}, r::T) where {T<:AbstractRotation} = r
 convert(::Type{T}, r::AbstractRotation) where {T<:AbstractRotation} = T(r)::T
+convert(::Type{AbstractRotation{T}}, r::AdjointRotation) where {T} = convert(AbstractRotation{T}, r.R)'
+convert(::Type{AbstractRotation{T}}, r::AdjointRotation{T}) where {T} = r
 
 Givens(i1, i2, c, s) = Givens(i1, i2, promote(c, s)...)
 Givens{T}(G::Givens{T}) where {T} = G
@@ -316,7 +313,7 @@ B[i2,j] = 0
 See also [`LinearAlgebra.Givens`](@ref).
 """
 givens(A::AbstractMatrix, i1::Integer, i2::Integer, j::Integer) =
-    givens(A[i1,j], A[i2,j],i1,i2)
+    givens(A[i1,j], A[i2,j], i1, i2)
 
 
 """
@@ -383,30 +380,49 @@ function lmul!(G::Givens, R::Rotation)
     push!(R.rotations, G)
     return R
 end
-function lmul!(R::Rotation, A::AbstractMatrix)
-    @inbounds for i = 1:length(R.rotations)
+function rmul!(R::Rotation, G::Givens)
+    pushfirst!(R.rotations, G)
+    return R
+end
+
+function lmul!(R::Rotation, A::AbstractVecOrMat)
+    @inbounds for i in eachindex(R.rotations)
         lmul!(R.rotations[i], A)
     end
     return A
 end
 function rmul!(A::AbstractMatrix, R::Rotation)
-    @inbounds for i = 1:length(R.rotations)
+    @inbounds for i in eachindex(R.rotations)
         rmul!(A, R.rotations[i])
     end
     return A
 end
-function lmul!(adjR::AdjointRotation{<:Any,<:Rotation}, A::AbstractMatrix)
+
+function lmul!(adjR::AdjointRotation{<:Any,<:Rotation}, A::AbstractVecOrMat)
     R = adjR.R
-    @inbounds for i = 1:length(R.rotations)
+    @inbounds for i in eachindex(R.rotations)
         lmul!(adjoint(R.rotations[i]), A)
     end
     return A
 end
 function rmul!(A::AbstractMatrix, adjR::AdjointRotation{<:Any,<:Rotation})
     R = adjR.R
-    @inbounds for i = 1:length(R.rotations)
+    @inbounds for i in eachindex(R.rotations)
         rmul!(A, adjoint(R.rotations[i]))
     end
     return A
 end
-*(G1::Givens{T}, G2::Givens{T}) where {T} = Rotation([G2, G1])
+
+function *(G1::Givens{S}, G2::Givens{T}) where {S,T}
+    TS = promote_type(T, S)
+    Rotation{TS}([convert(AbstractRotation{TS}, G2), convert(AbstractRotation{TS}, G1)])
+end
+*(G::Givens{T}...) where {T} = Rotation([reverse(G)...])
+function *(G::Givens{S}, R::Rotation{T}) where {S,T}
+    TS = promote_type(T, S)
+    Rotation(vcat(convert(AbstractRotation{TS}, R).rotations, convert(AbstractRotation{TS}, G)))
+end
+function *(R::Rotation{S}, G::Givens{T}) where {S,T}
+    TS = promote_type(T, S)
+    Rotation(vcat(convert(AbstractRotation{TS}, G), convert(AbstractRotation{TS}, R).rotations))
+end

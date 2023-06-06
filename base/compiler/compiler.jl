@@ -6,7 +6,7 @@ using Core.Intrinsics, Core.IR
 
 import Core: print, println, show, write, unsafe_write, stdout, stderr,
              _apply_iterate, svec, apply_type, Builtin, IntrinsicFunction,
-             MethodInstance, CodeInstance, MethodMatch, PartialOpaque,
+             MethodInstance, CodeInstance, MethodTable, MethodMatch, PartialOpaque,
              TypeofVararg
 
 const getproperty = Core.getfield
@@ -31,6 +31,10 @@ macro noinline() Expr(:meta, :noinline) end
 convert(::Type{Any}, Core.@nospecialize x) = x
 convert(::Type{T}, x::T) where {T} = x
 
+# mostly used by compiler/methodtable.jl, but also by reflection.jl
+abstract type MethodTableView end
+abstract type AbstractInterpreter end
+
 # essential files and libraries
 include("essentials.jl")
 include("ctypes.jl")
@@ -47,7 +51,7 @@ ntuple(f, n) = (Any[f(i) for i = 1:n]...,)
 
 # core operations & types
 function return_type end # promotion.jl expects this to exist
-is_return_type(@Core.nospecialize(f)) = f === return_type
+is_return_type(Core.@nospecialize(f)) = f === return_type
 include("promotion.jl")
 include("tuple.jl")
 include("pair.jl")
@@ -96,6 +100,7 @@ add_with_overflow(x::T, y::T) where {T<:SignedInt}   = checked_sadd_int(x, y)
 add_with_overflow(x::T, y::T) where {T<:UnsignedInt} = checked_uadd_int(x, y)
 add_with_overflow(x::Bool, y::Bool) = (x+y, false)
 
+include("cmem.jl")
 include("strings/lazy.jl")
 
 # core array operations
@@ -121,12 +126,9 @@ import Core.Compiler.CoreDocs
 Core.atdoc!(CoreDocs.docm)
 
 # sorting
-function sort! end
-function issorted end
 include("ordering.jl")
 using .Order
-include("sort.jl")
-using .Sort
+include("compiler/sort.jl")
 
 # We don't include some.jl, but this definition is still useful.
 something(x::Nothing, y...) = something(y...)
@@ -152,7 +154,6 @@ include("compiler/ssair/domtree.jl")
 include("compiler/ssair/ir.jl")
 
 include("compiler/abstractlattice.jl")
-
 include("compiler/inferenceresult.jl")
 include("compiler/inferencestate.jl")
 

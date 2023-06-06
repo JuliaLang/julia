@@ -328,7 +328,7 @@ procs(S::SharedArray) = S.pids
 """
     indexpids(S::SharedArray)
 
-Returns the current worker's index in the list of workers
+Return the current worker's index in the list of workers
 mapping the `SharedArray` (i.e. in the same list returned by `procs(S)`), or
 0 if the `SharedArray` is not mapped locally.
 """
@@ -337,7 +337,7 @@ indexpids(S::SharedArray) = S.pidx
 """
     sdata(S::SharedArray)
 
-Returns the actual `Array` object backing `S`.
+Return the actual `Array` object backing `S`.
 """
 sdata(S::SharedArray) = S.s
 sdata(A::AbstractArray) = A
@@ -345,7 +345,7 @@ sdata(A::AbstractArray) = A
 """
     localindices(S::SharedArray)
 
-Returns a range describing the "default" indices to be handled by the
+Return a range describing the "default" indices to be handled by the
 current process.  This range should be interpreted in the sense of
 linear indexing, i.e., as a sub-range of `1:length(S)`.  In
 multi-process contexts, returns an empty range in the parent process

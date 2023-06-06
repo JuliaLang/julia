@@ -17,6 +17,8 @@ extern "C" {
 
 extern jl_value_t *jl_builtin_getfield;
 extern jl_value_t *jl_builtin_tuple;
+jl_methtable_t *jl_kwcall_mt;
+jl_method_t *jl_opaque_closure_method;
 
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
     int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva);
@@ -98,14 +100,16 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                     jl_error("opaque_closure_method: invalid syntax");
                 }
                 jl_value_t *name = jl_exprarg(e, 0);
-                jl_value_t *nargs = jl_exprarg(e, 1);
+                jl_value_t *oc_nargs = jl_exprarg(e, 1);
                 int isva = jl_exprarg(e, 2) == jl_true;
                 jl_value_t *functionloc = jl_exprarg(e, 3);
                 jl_value_t *ci = jl_exprarg(e, 4);
                 if (!jl_is_code_info(ci)) {
                     jl_error("opaque_closure_method: lambda should be a CodeInfo");
+                } else if (!jl_is_long(oc_nargs)) {
+                    jl_type_error("opaque_closure_method", (jl_value_t*)jl_long_type, oc_nargs);
                 }
-                jl_method_t *m = jl_make_opaque_closure_method(module, name, jl_unbox_long(nargs), functionloc, (jl_code_info_t*)ci, isva);
+                jl_method_t *m = jl_make_opaque_closure_method(module, name, jl_unbox_long(oc_nargs), functionloc, (jl_code_info_t*)ci, isva);
                 return (jl_value_t*)m;
             }
             if (e->head == jl_cfunction_sym) {
@@ -126,7 +130,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typeis(jl_current_exception(), jl_errorexception_type))
+                        if (jl_typetagis(jl_current_exception(), jl_errorexception_type))
                             jl_error("could not evaluate cfunction return type (it might depend on a local variable)");
                         else
                             jl_rethrow();
@@ -138,7 +142,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typeis(jl_current_exception(), jl_errorexception_type))
+                        if (jl_typetagis(jl_current_exception(), jl_errorexception_type))
                             jl_error("could not evaluate cfunction argument type (it might depend on a local variable)");
                         else
                             jl_rethrow();
@@ -159,7 +163,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typeis(jl_current_exception(), jl_errorexception_type))
+                        if (jl_typetagis(jl_current_exception(), jl_errorexception_type))
                             jl_error("could not evaluate ccall return type (it might depend on a local variable)");
                         else
                             jl_rethrow();
@@ -171,7 +175,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                         at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
                     }
                     JL_CATCH {
-                        if (jl_typeis(jl_current_exception(), jl_errorexception_type))
+                        if (jl_typetagis(jl_current_exception(), jl_errorexception_type))
                             jl_error("could not evaluate ccall argument type (it might depend on a local variable)");
                         else
                             jl_rethrow();
@@ -311,12 +315,14 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
             jl_array_t *meta = ((jl_expr_t*)st)->args;
             for (k = 0; k < na; k++) {
                 jl_value_t *ma = jl_array_ptr_ref(meta, k);
-                if (ma == (jl_value_t*)jl_pure_sym)
-                    li->pure = 1;
-                else if (ma == (jl_value_t*)jl_inline_sym)
-                    li->inlining_cost = 0x10; // This corresponds to MIN_INLINE_COST
+                if (ma == (jl_value_t*)jl_inline_sym)
+                    li->inlining = 1;
+                else if (ma == (jl_value_t*)jl_noinline_sym)
+                    li->inlining = 2;
                 else if (ma == (jl_value_t*)jl_propagate_inbounds_sym)
                     li->propagate_inbounds = 1;
+                else if (ma == (jl_value_t*)jl_nospecializeinfer_sym)
+                    li->nospecializeinfer = 1;
                 else if (ma == (jl_value_t*)jl_aggressive_constprop_sym)
                     li->constprop = 1;
                 else if (ma == (jl_value_t*)jl_no_constprop_sym)
@@ -435,19 +441,20 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
 JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
 {
     jl_task_t *ct = jl_current_task;
-    jl_method_instance_t *li =
+    jl_method_instance_t *mi =
         (jl_method_instance_t*)jl_gc_alloc(ct->ptls, sizeof(jl_method_instance_t),
                                            jl_method_instance_type);
-    li->def.value = NULL;
-    li->specTypes = NULL;
-    li->sparam_vals = jl_emptysvec;
-    li->uninferred = NULL;
-    li->backedges = NULL;
-    li->callbacks = NULL;
-    jl_atomic_store_relaxed(&li->cache, NULL);
-    li->inInference = 0;
-    li->precompiled = 0;
-    return li;
+    mi->def.value = NULL;
+    mi->specTypes = NULL;
+    mi->sparam_vals = jl_emptysvec;
+    jl_atomic_store_relaxed(&mi->uninferred, NULL);
+    mi->backedges = NULL;
+    mi->callbacks = NULL;
+    jl_atomic_store_relaxed(&mi->cache, NULL);
+    mi->inInference = 0;
+    mi->cache_with_orig = 0;
+    jl_atomic_store_relaxed(&mi->precompiled, 0);
+    return mi;
 }
 
 JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
@@ -470,13 +477,14 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->min_world = 1;
     src->max_world = ~(size_t)0;
     src->inferred = 0;
-    src->inlining_cost = UINT16_MAX;
     src->propagate_inbounds = 0;
-    src->pure = 0;
     src->has_fcall = 0;
+    src->nospecializeinfer = 0;
     src->edges = jl_nothing;
     src->constprop = 0;
+    src->inlining = 0;
     src->purity.bits = 0;
+    src->inlining_cost = UINT16_MAX;
     return src;
 }
 
@@ -490,42 +498,46 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
     return src;
 }
 
-void jl_add_function_name_to_lineinfo(jl_code_info_t *ci, jl_value_t *name)
+void jl_add_function_to_lineinfo(jl_code_info_t *ci, jl_value_t *func)
 {
+    // func may contain jl_symbol (function name), jl_method_t, or jl_method_instance_t
     jl_array_t *li = (jl_array_t*)ci->linetable;
     size_t i, n = jl_array_len(li);
     jl_value_t *rt = NULL, *lno = NULL, *inl = NULL;
     JL_GC_PUSH3(&rt, &lno, &inl);
     for (i = 0; i < n; i++) {
         jl_value_t *ln = jl_array_ptr_ref(li, i);
-        assert(jl_typeis(ln, jl_lineinfonode_type));
+        assert(jl_typetagis(ln, jl_lineinfonode_type));
         jl_value_t *mod = jl_fieldref_noalloc(ln, 0);
         jl_value_t *file = jl_fieldref_noalloc(ln, 2);
         lno = jl_fieldref(ln, 3);
         inl = jl_fieldref(ln, 4);
-        jl_value_t *ln_name = (jl_is_int32(inl) && jl_unbox_int32(inl) == 0) ? name : jl_fieldref_noalloc(ln, 1);
-        rt = jl_new_struct(jl_lineinfonode_type, mod, ln_name, file, lno, inl);
+        // respect a given linetable if available
+        jl_value_t *ln_func = jl_fieldref_noalloc(ln, 1);
+        if (jl_is_symbol(ln_func) && (jl_sym_t*)ln_func == jl_symbol("none") && jl_is_int32(inl) && jl_unbox_int32(inl) == 0)
+            ln_func = func;
+        rt = jl_new_struct(jl_lineinfonode_type, mod, ln_func, file, lno, inl);
         jl_array_ptr_set(li, i, rt);
     }
     JL_GC_POP();
 }
 
 // invoke (compiling if necessary) the jlcall function pointer for a method template
-STATIC_INLINE jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator, jl_svec_t *sparam_vals,
-                                         jl_value_t **args, uint32_t nargs)
+static jl_value_t *jl_call_staged(jl_method_t *def, jl_value_t *generator,
+        size_t world, jl_svec_t *sparam_vals, jl_value_t **args, uint32_t nargs)
 {
     size_t n_sparams = jl_svec_len(sparam_vals);
     jl_value_t **gargs;
-    size_t totargs = 1 + n_sparams + nargs + def->isva;
+    size_t totargs = 2 + n_sparams + def->nargs;
     JL_GC_PUSHARGS(gargs, totargs);
-    gargs[0] = generator;
-    memcpy(&gargs[1], jl_svec_data(sparam_vals), n_sparams * sizeof(void*));
-    memcpy(&gargs[1 + n_sparams], args, nargs * sizeof(void*));
-    if (def->isva) {
-        gargs[totargs-1] = jl_f_tuple(NULL, &gargs[1 + n_sparams + def->nargs - 1], nargs - (def->nargs - 1));
-        gargs[1 + n_sparams + def->nargs - 1] = gargs[totargs - 1];
-    }
-    jl_value_t *code = jl_apply(gargs, 1 + n_sparams + def->nargs);
+    gargs[0] = jl_box_ulong(world);
+    gargs[1] = jl_box_long(def->line);
+    gargs[1] = jl_new_struct(jl_linenumbernode_type, gargs[1], def->file);
+    memcpy(&gargs[2], jl_svec_data(sparam_vals), n_sparams * sizeof(void*));
+    memcpy(&gargs[2 + n_sparams], args, (def->nargs - def->isva) * sizeof(void*));
+    if (def->isva)
+        gargs[totargs - 1] = jl_f_tuple(NULL, &args[def->nargs - 1], nargs - def->nargs + 1);
+    jl_value_t *code = jl_apply_generic(generator, gargs, totargs);
     JL_GC_POP();
     return code;
 }
@@ -549,15 +561,18 @@ JL_DLLEXPORT jl_code_info_t *jl_expand_and_resolve(jl_value_t *ex, jl_module_t *
 
 // Return a newly allocated CodeInfo for the function signature
 // effectively described by the tuple (specTypes, env, Method) inside linfo
-JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
+JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, size_t world)
 {
-    if (linfo->uninferred) {
-        return (jl_code_info_t*)jl_copy_ast((jl_value_t*)linfo->uninferred);
+    jl_value_t *uninferred = jl_atomic_load_relaxed(&linfo->uninferred);
+    if (uninferred) {
+        assert(jl_is_code_info(uninferred)); // make sure this did not get `nothing` put here
+        return (jl_code_info_t*)jl_copy_ast((jl_value_t*)uninferred);
     }
 
-    JL_TIMING(STAGED_FUNCTION);
+    JL_TIMING(STAGED_FUNCTION, STAGED_FUNCTION);
     jl_value_t *tt = linfo->specTypes;
     jl_method_t *def = linfo->def.method;
+    jl_timing_show_method_instance(linfo, JL_TIMING_DEFAULT_BLOCK);
     jl_value_t *generator = def->generator;
     assert(generator != NULL);
     assert(jl_is_method(def));
@@ -571,13 +586,13 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 
     JL_TRY {
         ct->ptls->in_pure_callback = 1;
-        // and the right world
         ct->world_age = def->primary_world;
 
         // invoke code generator
         jl_tupletype_t *ttdt = (jl_tupletype_t*)jl_unwrap_unionall(tt);
-        ex = jl_call_staged(def, generator, linfo->sparam_vals, jl_svec_data(ttdt->parameters), jl_nparams(ttdt));
+        ex = jl_call_staged(def, generator, world, linfo->sparam_vals, jl_svec_data(ttdt->parameters), jl_nparams(ttdt));
 
+        // do some post-processing
         if (jl_is_code_info(ex)) {
             func = (jl_code_info_t*)ex;
             jl_array_t *stmts = (jl_array_t*)func->code;
@@ -586,7 +601,6 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         else {
             // Lower the user's expression and resolve references to the type parameters
             func = jl_expand_and_resolve(ex, def->module, linfo->sparam_vals);
-
             if (!jl_is_code_info(func)) {
                 if (jl_is_expr(func) && ((jl_expr_t*)func)->head == jl_error_sym) {
                     ct->ptls->in_pure_callback = 0;
@@ -595,14 +609,24 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
                 jl_error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure, a comprehension or a generator.");
             }
         }
+        jl_add_function_to_lineinfo(func, (jl_value_t*)def->name);
 
         // If this generated function has an opaque closure, cache it for
         // correctness of method identity
         for (int i = 0; i < jl_array_len(func->code); ++i) {
             jl_value_t *stmt = jl_array_ptr_ref(func->code, i);
             if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == jl_new_opaque_closure_sym) {
-                linfo->uninferred = jl_copy_ast((jl_value_t*)func);
-                jl_gc_wb(linfo, linfo->uninferred);
+                if (jl_options.incremental && jl_generating_output())
+                    jl_error("Impossible to correctly handle OpaqueClosure inside @generated returned during precompile process.");
+                jl_value_t *uninferred = jl_copy_ast((jl_value_t*)func);
+                jl_value_t *old = NULL;
+                if (jl_atomic_cmpswap(&linfo->uninferred, &old, uninferred)) {
+                    jl_gc_wb(linfo, uninferred);
+                }
+                else {
+                    assert(jl_is_code_info(old));
+                    func = (jl_code_info_t*)old;
+                }
                 break;
             }
         }
@@ -610,7 +634,6 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         ct->ptls->in_pure_callback = last_in;
         jl_lineno = last_lineno;
         ct->world_age = last_age;
-        jl_add_function_name_to_lineinfo(func, (jl_value_t*)def->name);
     }
     JL_CATCH {
         ct->ptls->in_pure_callback = last_in;
@@ -662,15 +685,15 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
         }
     }
     m->called = called;
-    m->pure = src->pure;
+    m->nospecializeinfer = src->nospecializeinfer;
     m->constprop = src->constprop;
     m->purity.bits = src->purity.bits;
-    jl_add_function_name_to_lineinfo(src, (jl_value_t*)m->name);
+    jl_add_function_to_lineinfo(src, (jl_value_t*)m->name);
 
     jl_array_t *copy = NULL;
     jl_svec_t *sparam_vars = jl_outer_unionall_vars(m->sig);
     JL_GC_PUSH3(&copy, &sparam_vars, &src);
-    assert(jl_typeis(src->code, jl_array_any_type));
+    assert(jl_typetagis(src->code, jl_array_any_type));
     jl_array_t *stmts = (jl_array_t*)src->code;
     size_t i, n = jl_array_len(stmts);
     copy = jl_alloc_vec_any(n);
@@ -684,7 +707,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
                 size_t j;
                 for (j = 1; j < nargs; j++) {
                     jl_value_t *aj = jl_exprarg(st, j);
-                    if (!jl_is_slot(aj) && !jl_is_argument(aj))
+                    if (!jl_is_slotnumber(aj) && !jl_is_argument(aj))
                         continue;
                     int sn = (int)jl_slot_number(aj) - 2;
                     if (sn < 0) // @nospecialize on self is valid but currently ignored
@@ -705,23 +728,33 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
             else if (nargs >= 1 && jl_exprarg(st, 0) == (jl_value_t*)jl_specialize_sym) {
                 if (nargs == 1) // bare `@specialize` is special: it causes specialization on all args
                     m->nospecialize = 0;
+                for (j = 1; j < nargs; j++) {
+                    jl_value_t *aj = jl_exprarg(st, j);
+                    if (!jl_is_slotnumber(aj) && !jl_is_argument(aj))
+                        continue;
+                    int sn = (int)jl_slot_number(aj) - 2;
+                    if (sn < 0) // @specialize on self is valid but currently ignored
+                        continue;
+                    if (sn > (m->nargs - 2)) {
+                        jl_error("@specialize annotation applied to a non-argument");
+                    }
+                    if (sn >= sizeof(m->nospecialize) * 8) {
+                        jl_printf(JL_STDERR,
+                                  "WARNING: @specialize annotation only supported on the first %d arguments.\n",
+                                  (int)(sizeof(m->nospecialize) * 8));
+                        continue;
+                    }
+                    m->nospecialize &= ~(1 << sn);
+                }
                 st = jl_nothing;
             }
             else if (nargs == 2 && jl_exprarg(st, 0) == (jl_value_t*)jl_generated_sym) {
-                m->generator = NULL;
+                if (m->generator != NULL)
+                    jl_error("duplicate @generated function body");
                 jl_value_t *gexpr = jl_exprarg(st, 1);
-                if (jl_expr_nargs(gexpr) == 7) {
-                    // expects (new (core GeneratedFunctionStub) funcname argnames sp line file expandearly)
-                    jl_value_t *funcname = jl_exprarg(gexpr, 1);
-                    assert(jl_is_symbol(funcname));
-                    if (jl_get_global(m->module, (jl_sym_t*)funcname) != NULL) {
-                        m->generator = jl_toplevel_eval(m->module, gexpr);
-                        jl_gc_wb(m, m->generator);
-                    }
-                }
-                if (m->generator == NULL) {
-                    jl_error("invalid @generated function; try placing it in global scope");
-                }
+                // the frontend would put (new (core GeneratedFunctionStub) funcname argnames sp) here, for example
+                m->generator = jl_toplevel_eval(m->module, gexpr);
+                jl_gc_wb(m, m->generator);
                 st = jl_nothing;
             }
             else if (nargs == 1 && jl_exprarg(st, 0) == (jl_value_t*)jl_generated_only_sym) {
@@ -756,7 +789,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     jl_task_t *ct = jl_current_task;
     jl_method_t *m =
         (jl_method_t*)jl_gc_alloc(ct->ptls, sizeof(jl_method_t), jl_method_type);
-    jl_atomic_store_relaxed(&m->specializations, jl_emptysvec);
+    jl_atomic_store_relaxed(&m->specializations, (jl_value_t*)jl_emptysvec);
     jl_atomic_store_relaxed(&m->speckeyset, (jl_array_t*)jl_an_empty_vec_any);
     m->sig = NULL;
     m->slot_syms = NULL;
@@ -782,8 +815,11 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->primary_world = 1;
     m->deleted_world = ~(size_t)0;
     m->is_for_opaque_closure = 0;
+    m->nospecializeinfer = 0;
     m->constprop = 0;
-    JL_MUTEX_INIT(&m->writelock);
+    m->purity.bits = 0;
+    m->max_varargs = UINT8_MAX;
+    JL_MUTEX_INIT(&m->writelock, "method->writelock");
     return m;
 }
 
@@ -861,53 +897,52 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
 JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
                                                  jl_module_t *module,
                                                  _Atomic(jl_value_t*) *bp,
-                                                 jl_value_t *bp_owner,
                                                  jl_binding_t *bnd)
 {
     jl_value_t *gf = NULL;
 
     assert(name && bp);
     if (bnd && jl_atomic_load_relaxed(&bnd->value) != NULL && !bnd->constp)
-        jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(bnd->name));
+        jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(name));
     gf = jl_atomic_load_relaxed(bp);
     if (gf != NULL) {
         if (!jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(gf)) && !jl_is_type(gf))
             jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(name));
     }
     if (bnd)
-        bnd->constp = 1;
+        bnd->constp = 1; // XXX: use jl_declare_constant and jl_checked_assignment
     if (gf == NULL) {
         gf = (jl_value_t*)jl_new_generic_function(name, module);
         jl_atomic_store(bp, gf); // TODO: fix constp assignment data race
-        if (bp_owner) jl_gc_wb(bp_owner, gf);
+        if (bnd) jl_gc_wb(bnd, gf);
     }
     return gf;
 }
 
-static jl_methtable_t *first_methtable(jl_value_t *a JL_PROPAGATES_ROOT, int got_tuple1) JL_NOTSAFEPOINT
+static jl_methtable_t *nth_methtable(jl_value_t *a JL_PROPAGATES_ROOT, int n) JL_NOTSAFEPOINT
 {
     if (jl_is_datatype(a)) {
-        if (got_tuple1) {
+        if (n == 0) {
             jl_methtable_t *mt = ((jl_datatype_t*)a)->name->mt;
             if (mt != NULL)
                 return mt;
         }
-        if (jl_is_tuple_type(a)) {
-            if (jl_nparams(a) >= 1)
-                return first_methtable(jl_tparam0(a), 1);
+        else if (jl_is_tuple_type(a)) {
+            if (jl_nparams(a) >= n)
+                return nth_methtable(jl_tparam(a, n - 1), 0);
         }
     }
     else if (jl_is_typevar(a)) {
-        return first_methtable(((jl_tvar_t*)a)->ub, got_tuple1);
+        return nth_methtable(((jl_tvar_t*)a)->ub, n);
     }
     else if (jl_is_unionall(a)) {
-        return first_methtable(((jl_unionall_t*)a)->body, got_tuple1);
+        return nth_methtable(((jl_unionall_t*)a)->body, n);
     }
     else if (jl_is_uniontype(a)) {
         jl_uniontype_t *u = (jl_uniontype_t*)a;
-        jl_methtable_t *m1 = first_methtable(u->a, got_tuple1);
+        jl_methtable_t *m1 = nth_methtable(u->a, n);
         if ((jl_value_t*)m1 != jl_nothing) {
-            jl_methtable_t *m2 = first_methtable(u->b, got_tuple1);
+            jl_methtable_t *m2 = nth_methtable(u->b, n);
             if (m1 == m2)
                 return m1;
         }
@@ -918,18 +953,20 @@ static jl_methtable_t *first_methtable(jl_value_t *a JL_PROPAGATES_ROOT, int got
 // get the MethodTable for dispatch, or `nothing` if cannot be determined
 JL_DLLEXPORT jl_methtable_t *jl_method_table_for(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
-    return first_methtable(argtypes, 0);
+    return nth_methtable(argtypes, 1);
+}
+
+jl_methtable_t *jl_kwmethod_table_for(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_methtable_t *kwmt = nth_methtable(argtypes, 3);
+    if ((jl_value_t*)kwmt == jl_nothing)
+        return NULL;
+    return kwmt;
 }
 
 JL_DLLEXPORT jl_methtable_t *jl_method_get_table(jl_method_t *method JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
     return method->external_mt ? (jl_methtable_t*)method->external_mt : jl_method_table_for(method->sig);
-}
-
-// get the MethodTable implied by a single given type, or `nothing`
-JL_DLLEXPORT jl_methtable_t *jl_argument_method_table(jl_value_t *argt JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
-{
-    return first_methtable(argt, 1);
 }
 
 jl_array_t *jl_all_methods JL_GLOBALLY_ROOTED;
@@ -943,11 +980,11 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     jl_svec_t *atypes = (jl_svec_t*)jl_svecref(argdata, 0);
     jl_svec_t *tvars = (jl_svec_t*)jl_svecref(argdata, 1);
     jl_value_t *functionloc = jl_svecref(argdata, 2);
-    size_t nargs = jl_svec_len(atypes);
-    int isva = jl_is_vararg(jl_svecref(atypes, nargs - 1));
     assert(jl_is_svec(atypes));
-    assert(nargs > 0);
     assert(jl_is_svec(tvars));
+    size_t nargs = jl_svec_len(atypes);
+    assert(nargs > 0);
+    int isva = jl_is_vararg(jl_svecref(atypes, nargs - 1));
     if (!jl_is_type(jl_svecref(atypes, 0)) || (isva && nargs == 1))
         jl_error("function type in method definition is not a type");
     jl_sym_t *name;
@@ -956,7 +993,9 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     JL_GC_PUSH3(&f, &m, &argtype);
     size_t i, na = jl_svec_len(atypes);
 
-    argtype = (jl_value_t*)jl_apply_tuple_type(atypes);
+    argtype = jl_apply_tuple_type(atypes);
+    if (!jl_is_datatype(argtype))
+        jl_error("invalid type in method definition (Union{})");
 
     jl_methtable_t *external_mt = mt;
     if (!mt)
@@ -973,11 +1012,13 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     int32_t line = jl_linenode_line(functionloc);
 
     // TODO: derive our debug name from the syntax instead of the type
-    name = mt->name;
-    if (mt == jl_type_type_mt || mt == jl_nonfunction_mt || external_mt) {
+    jl_methtable_t *kwmt = mt == jl_kwcall_mt ? jl_kwmethod_table_for(argtype) : mt;
+    // if we have a kwcall, try to derive the name from the callee argument method table
+    name = (kwmt ? kwmt : mt)->name;
+    if (kwmt == jl_type_type_mt || kwmt == jl_nonfunction_mt || external_mt) {
         // our value for `name` is bad, try to guess what the syntax might have had,
         // like `jl_static_show_func_sig` might have come up with
-        jl_datatype_t *dt = jl_first_argument_datatype(argtype);
+        jl_datatype_t *dt = jl_nth_argument_datatype(argtype, mt == jl_kwcall_mt ? 3 : 1);
         if (dt != NULL) {
             name = dt->name->name;
             if (jl_is_type_type((jl_value_t*)dt)) {
@@ -989,49 +1030,19 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
         }
     }
 
-    for (i = jl_svec_len(tvars); i > 0; i--) {
-        jl_value_t *tv = jl_svecref(tvars, i - 1);
-        if (!jl_is_typevar(tv))
-            jl_type_error("method signature", (jl_value_t*)jl_tvar_type, tv);
-        if (!jl_has_typevar(argtype, (jl_tvar_t*)tv)) // deprecate this to an error in v2
-            jl_printf(JL_STDERR,
-                      "WARNING: method definition for %s at %s:%d declares type variable %s but does not use it.\n",
-                      jl_symbol_name(name),
-                      jl_symbol_name(file),
-                      line,
-                      jl_symbol_name(((jl_tvar_t*)tv)->name));
-        argtype = jl_new_struct(jl_unionall_type, tv, argtype);
-    }
-    if (jl_has_free_typevars(argtype)) {
-        jl_exceptionf(jl_argumenterror_type,
-                      "method definition for %s at %s:%d has free type variables",
-                      jl_symbol_name(name),
-                      jl_symbol_name(file),
-                      line);
-    }
-
-
     if (!jl_is_code_info(f)) {
         // this occurs when there is a closure being added to an out-of-scope function
         // the user should only do this at the toplevel
         // the result is that the closure variables get interpolated directly into the IR
         f = jl_new_code_info_from_ir((jl_expr_t*)f);
     }
-    m = jl_new_method_uninit(module);
-    m->external_mt = (jl_value_t*)external_mt;
-    if (external_mt)
-        jl_gc_wb(m, external_mt);
-    m->sig = argtype;
-    m->name = name;
-    m->isva = isva;
-    m->nargs = nargs;
-    m->file = file;
-    m->line = line;
-    jl_method_set_source(m, f);
 
     for (i = 0; i < na; i++) {
         jl_value_t *elt = jl_svecref(atypes, i);
-        if (!jl_is_type(elt) && !jl_is_typevar(elt) && !jl_is_vararg(elt)) {
+        int isvalid = jl_is_type(elt) || jl_is_typevar(elt) || jl_is_vararg(elt);
+        if (elt == jl_bottom_type || (jl_is_vararg(elt) && jl_unwrap_vararg(elt) == jl_bottom_type))
+            isvalid = 0;
+        if (!isvalid) {
             jl_sym_t *argname = (jl_sym_t*)jl_array_ptr_ref(f->slotnames, i);
             if (argname == jl_unused_sym)
                 jl_exceptionf(jl_argumenterror_type,
@@ -1055,6 +1066,38 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
                           jl_symbol_name(file),
                           line);
     }
+    for (i = jl_svec_len(tvars); i > 0; i--) {
+        jl_value_t *tv = jl_svecref(tvars, i - 1);
+        if (!jl_is_typevar(tv))
+            jl_type_error("method signature", (jl_value_t*)jl_tvar_type, tv);
+        if (!jl_has_typevar(argtype, (jl_tvar_t*)tv)) // deprecate this to an error in v2
+            jl_printf(JL_STDERR,
+                      "WARNING: method definition for %s at %s:%d declares type variable %s but does not use it.\n",
+                      jl_symbol_name(name),
+                      jl_symbol_name(file),
+                      line,
+                      jl_symbol_name(((jl_tvar_t*)tv)->name));
+        argtype = jl_new_struct(jl_unionall_type, tv, argtype);
+    }
+    if (jl_has_free_typevars(argtype)) {
+        jl_exceptionf(jl_argumenterror_type,
+                      "method definition for %s at %s:%d has free type variables",
+                      jl_symbol_name(name),
+                      jl_symbol_name(file),
+                      line);
+    }
+
+    m = jl_new_method_uninit(module);
+    m->external_mt = (jl_value_t*)external_mt;
+    if (external_mt)
+        jl_gc_wb(m, external_mt);
+    m->sig = argtype;
+    m->name = name;
+    m->isva = isva;
+    m->nargs = nargs;
+    m->file = file;
+    m->line = line;
+    jl_method_set_source(m, f);
 
 #ifdef RECORD_METHOD_ORDER
     if (jl_all_methods == NULL)
@@ -1159,7 +1202,7 @@ JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_
     uint64_t modid = 0;
     if (mod) {
         assert(jl_is_module(mod));
-        modid = mod->build_id;
+        modid = mod->build_id.lo;
     }
     assert(jl_is_method(m));
     prepare_method_for_roots(m, modid);

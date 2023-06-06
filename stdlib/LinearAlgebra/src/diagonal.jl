@@ -24,13 +24,14 @@ end
 """
     Diagonal(V::AbstractVector)
 
-Construct a matrix with `V` as its diagonal.
+Construct a lazy matrix with `V` as its diagonal.
 
-See also [`diag`](@ref), [`diagm`](@ref).
+See also [`UniformScaling`](@ref) for the lazy identity matrix `I`,
+[`diagm`](@ref) to make a dense matrix, and [`diag`](@ref) to extract diagonal elements.
 
 # Examples
 ```jldoctest
-julia> Diagonal([1, 10, 100])
+julia> d = Diagonal([1, 10, 100])
 3×3 Diagonal{$Int, Vector{$Int}}:
  1   ⋅    ⋅
  ⋅  10    ⋅
@@ -40,6 +41,30 @@ julia> diagm([7, 13])
 2×2 Matrix{$Int}:
  7   0
  0  13
+
+julia> ans + I
+2×2 Matrix{Int64}:
+ 8   0
+ 0  14
+
+julia> I(2)
+2×2 Diagonal{Bool, Vector{Bool}}:
+ 1  ⋅
+ ⋅  1
+```
+
+Note that a one-column matrix is not treated like a vector, but instead calls the
+method `Diagonal(A::AbstractMatrix)` which extracts 1-element `diag(A)`:
+
+```jldoctest
+julia> A = transpose([7.0 13.0])
+2×1 transpose(::Matrix{Float64}) with eltype Float64:
+  7.0
+ 13.0
+
+julia> Diagonal(A)
+1×1 Diagonal{Float64, Vector{Float64}}:
+ 7.0
 ```
 """
 Diagonal(V::AbstractVector)
@@ -71,6 +96,11 @@ julia> diag(A, 2)
 ```
 """
 Diagonal(A::AbstractMatrix) = Diagonal(diag(A))
+Diagonal{T}(A::AbstractMatrix) where T = Diagonal{T}(diag(A))
+function convert(::Type{T}, A::AbstractMatrix) where T<:Diagonal
+    checksquare(A)
+    isdiag(A) ? T(A) : throw(InexactError(:convert, T, A))
+end
 
 Diagonal(D::Diagonal) = D
 Diagonal{T}(D::Diagonal{T}) where {T} = D
@@ -96,7 +126,7 @@ Construct an uninitialized `Diagonal{T}` of length `n`. See `undef`.
 Diagonal{T}(::UndefInitializer, n::Integer) where T = Diagonal(Vector{T}(undef, n))
 
 similar(D::Diagonal, ::Type{T}) where {T} = Diagonal(similar(D.diag, T))
-similar(::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = zeros(T, dims...)
+similar(D::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = similar(D.diag, T, dims)
 
 copyto!(D1::Diagonal, D2::Diagonal) = (copyto!(D1.diag, D2.diag); D1)
 
@@ -107,6 +137,16 @@ function size(D::Diagonal,d::Integer)
         throw(ArgumentError("dimension must be ≥ 1, got $d"))
     end
     return d<=2 ? length(D.diag) : 1
+end
+
+@inline function Base.isassigned(D::Diagonal, i::Int, j::Int)
+    @boundscheck checkbounds(Bool, D, i, j) || return false
+    if i == j
+        @inbounds r = isassigned(D.diag, i)
+    else
+        r = true
+    end
+    r
 end
 
 @inline function getindex(D::Diagonal, i::Int, j::Int)
@@ -245,33 +285,33 @@ function (*)(D::Diagonal, V::AbstractVector)
 end
 
 (*)(A::AbstractMatrix, D::Diagonal) =
+    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A, D)
+(*)(A::HermOrSym, D::Diagonal) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A, D)
 (*)(D::Diagonal, A::AbstractMatrix) =
+    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), D, A)
+(*)(D::Diagonal, A::HermOrSym) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), D, A)
 
 rmul!(A::AbstractMatrix, D::Diagonal) = @inline mul!(A, A, D)
 lmul!(D::Diagonal, B::AbstractVecOrMat) = @inline mul!(B, D, B)
 
-function *(A::AdjOrTransAbsMat, D::Diagonal)
+function (*)(A::AdjOrTransAbsMat, D::Diagonal)
     Ac = copy_similar(A, promote_op(*, eltype(A), eltype(D.diag)))
     rmul!(Ac, D)
 end
-
-*(D::Diagonal, adjQ::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
-    rmul!(Array{promote_type(eltype(D), eltype(adjQ))}(D), adjQ)
-
-function *(D::Diagonal, A::AdjOrTransAbsMat)
+function (*)(D::Diagonal, A::AdjOrTransAbsMat)
     Ac = copy_similar(A, promote_op(*, eltype(A), eltype(D.diag)))
     lmul!(D, Ac)
 end
 
-@inline function __muldiag!(out, D::Diagonal, B, alpha, beta)
-    require_one_based_indexing(B)
-    require_one_based_indexing(out)
+function __muldiag!(out, D::Diagonal, B, _add::MulAddMul{ais1,bis0}) where {ais1,bis0}
+    require_one_based_indexing(out, B)
+    alpha, beta = _add.alpha, _add.beta
     if iszero(alpha)
         _rmul_or_fill!(out, beta)
     else
-        if iszero(beta)
+        if bis0
             @inbounds for j in axes(B, 2)
                 @simd for i in axes(B, 1)
                     out[i,j] = D.diag[i] * B[i,j] * alpha
@@ -287,13 +327,13 @@ end
     end
     return out
 end
-@inline function __muldiag!(out, A, D::Diagonal, alpha, beta)
-    require_one_based_indexing(A)
-    require_one_based_indexing(out)
+function __muldiag!(out, A, D::Diagonal, _add::MulAddMul{ais1,bis0}) where {ais1,bis0}
+    require_one_based_indexing(out, A)
+    alpha, beta = _add.alpha, _add.beta
     if iszero(alpha)
         _rmul_or_fill!(out, beta)
     else
-        if iszero(beta)
+        if bis0
             @inbounds for j in axes(A, 2)
                 dja = D.diag[j] * alpha
                 @simd for i in axes(A, 1)
@@ -311,13 +351,14 @@ end
     end
     return out
 end
-@inline function __muldiag!(out::Diagonal, D1::Diagonal, D2::Diagonal, alpha, beta)
+function __muldiag!(out::Diagonal, D1::Diagonal, D2::Diagonal, _add::MulAddMul{ais1,bis0}) where {ais1,bis0}
     d1 = D1.diag
     d2 = D2.diag
+    alpha, beta = _add.alpha, _add.beta
     if iszero(alpha)
         _rmul_or_fill!(out.diag, beta)
     else
-        if iszero(beta)
+        if bis0
             @inbounds @simd for i in eachindex(out.diag)
                 out.diag[i] = d1[i] * d2[i] * alpha
             end
@@ -329,8 +370,9 @@ end
     end
     return out
 end
-@inline function __muldiag!(out, D1::Diagonal, D2::Diagonal, alpha, beta)
+function __muldiag!(out, D1::Diagonal, D2::Diagonal, _add::MulAddMul{ais1,bis0}) where {ais1,bis0}
     require_one_based_indexing(out)
+    alpha, beta = _add.alpha, _add.beta
     mA = size(D1, 1)
     d1 = D1.diag
     d2 = D2.diag
@@ -343,11 +385,22 @@ end
     return out
 end
 
-@inline function _muldiag!(out, A, B, alpha, beta)
+function _mul_diag!(out, A, B, _add)
     _muldiag_size_check(out, A, B)
-    __muldiag!(out, A, B, alpha, beta)
+    __muldiag!(out, A, B, _add)
     return out
 end
+
+_mul!(out::AbstractVecOrMat, D::Diagonal, V::AbstractVector, _add) =
+    _mul_diag!(out, D, V, _add)
+_mul!(out::AbstractMatrix, D::Diagonal, B::AbstractMatrix, _add) =
+    _mul_diag!(out, D, B, _add)
+_mul!(out::AbstractMatrix, A::AbstractMatrix, D::Diagonal, _add) =
+    _mul_diag!(out, A, D, _add)
+_mul!(C::Diagonal, Da::Diagonal, Db::Diagonal, _add) =
+    _mul_diag!(C, Da, Db, _add)
+_mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, _add) =
+    _mul_diag!(C, Da, Db, _add)
 
 function (*)(Da::Diagonal, A::AbstractMatrix, Db::Diagonal)
     _muldiag_size_check(Da, A)
@@ -355,33 +408,15 @@ function (*)(Da::Diagonal, A::AbstractMatrix, Db::Diagonal)
     return broadcast(*, Da.diag, A, permutedims(Db.diag))
 end
 
-# Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
-@inline mul!(out::AbstractVector, D::Diagonal, V::AbstractVector, alpha::Number, beta::Number) =
-    _muldiag!(out, D, V, alpha, beta)
-@inline mul!(out::AbstractMatrix, D::Diagonal, B::AbstractMatrix, alpha::Number, beta::Number) =
-    _muldiag!(out, D, B, alpha, beta)
-@inline mul!(out::AbstractMatrix, D::Diagonal, B::Adjoint{<:Any,<:AbstractVecOrMat},
-             alpha::Number, beta::Number) = _muldiag!(out, D, B, alpha, beta)
-@inline mul!(out::AbstractMatrix, D::Diagonal, B::Transpose{<:Any,<:AbstractVecOrMat},
-             alpha::Number, beta::Number) = _muldiag!(out, D, B, alpha, beta)
+function (*)(Da::Diagonal, Db::Diagonal, Dc::Diagonal)
+    _muldiag_size_check(Da, Db)
+    _muldiag_size_check(Db, Dc)
+    return Diagonal(Da.diag .* Db.diag .* Dc.diag)
+end
 
-@inline mul!(out::AbstractMatrix, A::AbstractMatrix, D::Diagonal, alpha::Number, beta::Number) =
-    _muldiag!(out, A, D, alpha, beta)
-@inline mul!(out::AbstractMatrix, A::Adjoint{<:Any,<:AbstractVecOrMat}, D::Diagonal,
-             alpha::Number, beta::Number) = _muldiag!(out, A, D, alpha, beta)
-@inline mul!(out::AbstractMatrix, A::Transpose{<:Any,<:AbstractVecOrMat}, D::Diagonal,
-             alpha::Number, beta::Number) = _muldiag!(out, A, D, alpha, beta)
-@inline mul!(C::Diagonal, Da::Diagonal, Db::Diagonal, alpha::Number, beta::Number) =
-    _muldiag!(C, Da, Db, alpha, beta)
+/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(similar(A, _init_eltype(/, eltype(A), eltype(D))), A, D)
+/(A::HermOrSym, D::Diagonal) = _rdiv!(similar(A, _init_eltype(/, eltype(A), eltype(D)), size(A)), A, D)
 
-mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, alpha::Number, beta::Number) =
-    _muldiag!(C, Da, Db, alpha, beta)
-
-_init(op, A::AbstractArray{<:Number}, B::AbstractArray{<:Number}) =
-    (_ -> zero(typeof(op(oneunit(eltype(A)), oneunit(eltype(B))))))
-_init(op, A::AbstractArray, B::AbstractArray) = promote_op(op, eltype(A), eltype(B))
-
-/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(_init(/, A, D).(A), A, D)
 rdiv!(A::AbstractVecOrMat, D::Diagonal) = @inline _rdiv!(A, A, D)
 # avoid copy when possible via internal 3-arg backend
 function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
@@ -406,8 +441,8 @@ function \(D::Diagonal, B::AbstractVector)
     isnothing(j) || throw(SingularException(j))
     return D.diag .\ B
 end
-\(D::Diagonal, B::AbstractMatrix) =
-    ldiv!(_init(\, D, B).(B), D, B)
+\(D::Diagonal, B::AbstractMatrix) = ldiv!(similar(B, _init_eltype(\, eltype(D), eltype(B))), D, B)
+\(D::Diagonal, B::HermOrSym) = ldiv!(similar(B, _init_eltype(\, eltype(D), eltype(B)), size(B)), D, B)
 
 ldiv!(D::Diagonal, B::AbstractVecOrMat) = @inline ldiv!(B, D, B)
 function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
@@ -544,22 +579,23 @@ for Tri in (:UpperTriangular, :LowerTriangular)
     # 3-arg ldiv!
     @eval ldiv!(C::$Tri, D::Diagonal, A::$Tri) = $Tri(ldiv!(C.data, D, A.data))
     @eval ldiv!(C::$Tri, D::Diagonal, A::$UTri) = $Tri(_setdiag!(ldiv!(C.data, D, A.data), inv, D.diag))
-    # 3-arg mul!: invoke 5-arg mul! rather than lmul!
-    @eval mul!(C::$Tri, A::Union{$Tri,$UTri}, D::Diagonal) = mul!(C, A, D, true, false)
+    # 3-arg mul! is disambiguated in special.jl
     # 5-arg mul!
-    @eval @inline mul!(C::$Tri, D::Diagonal, A::$Tri, α::Number, β::Number) = $Tri(mul!(C.data, D, A.data, α, β))
-    @eval @inline function mul!(C::$Tri, D::Diagonal, A::$UTri, α::Number, β::Number)
+    @eval _mul!(C::$Tri, D::Diagonal, A::$Tri, _add) = $Tri(mul!(C.data, D, A.data, _add.alpha, _add.beta))
+    @eval function _mul!(C::$Tri, D::Diagonal, A::$UTri, _add::MulAddMul{ais1,bis0}) where {ais1,bis0}
+        α, β = _add.alpha, _add.beta
         iszero(α) && return _rmul_or_fill!(C, β)
-        diag′ = iszero(β) ? nothing : diag(C)
+        diag′ = bis0 ? nothing : diag(C)
         data = mul!(C.data, D, A.data, α, β)
-        $Tri(_setdiag!(data, MulAddMul(α, β), D.diag, diag′))
+        $Tri(_setdiag!(data, _add, D.diag, diag′))
     end
-    @eval @inline mul!(C::$Tri, A::$Tri, D::Diagonal, α::Number, β::Number) = $Tri(mul!(C.data, A.data, D, α, β))
-    @eval @inline function mul!(C::$Tri, A::$UTri, D::Diagonal, α::Number, β::Number)
+    @eval _mul!(C::$Tri, A::$Tri, D::Diagonal, _add) = $Tri(mul!(C.data, A.data, D, _add.alpha, _add.beta))
+    @eval function _mul!(C::$Tri, A::$UTri, D::Diagonal, _add::MulAddMul{ais1,bis0}) where {ais1,bis0}
+        α, β = _add.alpha, _add.beta
         iszero(α) && return _rmul_or_fill!(C, β)
-        diag′ = iszero(β) ? nothing : diag(C)
+        diag′ = bis0 ? nothing : diag(C)
         data = mul!(C.data, A.data, D, α, β)
-        $Tri(_setdiag!(data, MulAddMul(α, β), D.diag, diag′))
+        $Tri(_setdiag!(data, _add, D.diag, diag′))
     end
 end
 
@@ -642,7 +678,8 @@ end
 conj(D::Diagonal) = Diagonal(conj(D.diag))
 transpose(D::Diagonal{<:Number}) = D
 transpose(D::Diagonal) = Diagonal(transpose.(D.diag))
-adjoint(D::Diagonal{<:Number}) = conj(D)
+adjoint(D::Diagonal{<:Number}) = Diagonal(vec(adjoint(D.diag)))
+adjoint(D::Diagonal{<:Number,<:Base.ReshapedArray{<:Number,1,<:Adjoint}}) = Diagonal(adjoint(parent(D.diag)))
 adjoint(D::Diagonal) = Diagonal(adjoint.(D.diag))
 permutedims(D::Diagonal) = D
 permutedims(D::Diagonal, perm) = (Base.checkdims_perm(D, D, perm); D)
@@ -787,12 +824,12 @@ function svd(D::Diagonal{T}) where {T<:Number}
 end
 
 # disambiguation methods: * and / of Diagonal and Adj/Trans AbsVec
-*(x::AdjointAbsVec, D::Diagonal) = Adjoint(map((t,s) -> t'*s, D.diag, parent(x)))
-*(x::TransposeAbsVec, D::Diagonal) = Transpose(map((t,s) -> transpose(t)*s, D.diag, parent(x)))
+*(u::AdjointAbsVec, D::Diagonal) = (D'u')'
+*(u::TransposeAbsVec, D::Diagonal) = transpose(transpose(D) * transpose(u))
 *(x::AdjointAbsVec,   D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
 *(x::TransposeAbsVec, D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
-/(u::AdjointAbsVec, D::Diagonal) = adjoint(adjoint(D) \ u.parent)
-/(u::TransposeAbsVec, D::Diagonal) = transpose(transpose(D) \ u.parent)
+/(u::AdjointAbsVec, D::Diagonal) = (D' \ u')'
+/(u::TransposeAbsVec, D::Diagonal) = transpose(transpose(D) \ transpose(u))
 # disambiguation methods: Call unoptimized version for user defined AbstractTriangular.
 *(A::AbstractTriangular, D::Diagonal) = @invoke *(A::AbstractMatrix, D::Diagonal)
 *(D::Diagonal, A::AbstractTriangular) = @invoke *(D::Diagonal, A::AbstractMatrix)
@@ -808,6 +845,9 @@ end
 dot(A::AbstractMatrix, B::Diagonal) = conj(dot(B, A))
 
 function _mapreduce_prod(f, x, D::Diagonal, y)
+    if !(length(x) == length(D.diag) == length(y))
+        throw(DimensionMismatch("x has length $(length(x)), D has size $(size(D)), and y has $(length(y))"))
+    end
     if isempty(x) && isempty(D) && isempty(y)
         return zero(promote_op(f, eltype(x), eltype(D), eltype(y)))
     else

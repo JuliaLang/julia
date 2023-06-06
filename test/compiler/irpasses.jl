@@ -387,6 +387,22 @@ let # should work with constant globals
     @test count(isnew, src.code) == 0
 end
 
+# don't SROA statement that may throw
+# https://github.com/JuliaLang/julia/issues/48067
+function issue48067(a::Int, b)
+   r = Ref(a)
+   try
+       setfield!(r, :x, b)
+       nothing
+   catch err
+       getfield(r, :x)
+   end
+end
+let src = code_typed1(issue48067, (Int,String))
+    @test any(iscall((src, setfield!)), src.code)
+end
+@test issue48067(42, "julia") == 42
+
 # should work nicely with inlining to optimize away a complicated case
 # adapted from http://wiki.luajit.org/Allocation-Sinking-Optimization#implementation%5B
 struct Point
@@ -440,7 +456,7 @@ let src = code_typed1() do
     @test count(isnew, src.code) == 1
 end
 
-# should eliminate allocation whose address isn't taked even if it has unintialized field(s)
+# should eliminate allocation whose address isn't taked even if it has uninitialized field(s)
 mutable struct BadRef
     x::String
     y::String
@@ -521,7 +537,7 @@ end
 # comparison lifting
 # ==================
 
-let # lifting `===`
+let # lifting `===` through PhiNode
     src = code_typed1((Bool,Int,)) do c, x
         y = c ? x : nothing
         y === nothing # => ϕ(false, true)
@@ -541,7 +557,15 @@ let # lifting `===`
     end
 end
 
-let # lifting `isa`
+let # lifting `===` through Core.ifelse
+    src = code_typed1((Bool,Int,)) do c, x
+        y = Core.ifelse(c, x, nothing)
+        y === nothing # => Core.ifelse(c, false, true)
+    end
+    @test count(iscall((src, ===)), src.code) == 0
+end
+
+let # lifting `isa` through PhiNode
     src = code_typed1((Bool,Int,)) do c, x
         y = c ? x : nothing
         isa(y, Int) # => ϕ(true, false)
@@ -564,7 +588,16 @@ let # lifting `isa`
     end
 end
 
-let # lifting `isdefined`
+let # lifting `isa` through Core.ifelse
+    src = code_typed1((Bool,Int,)) do c, x
+        y = Core.ifelse(c, x, nothing)
+        isa(y, Int) # => Core.ifelse(c, true, false)
+    end
+    @test count(iscall((src, isa)), src.code) == 0
+end
+
+
+let # lifting `isdefined` through PhiNode
     src = code_typed1((Bool,Some{Int},)) do c, x
         y = c ? x : nothing
         isdefined(y, 1) # => ϕ(true, false)
@@ -585,6 +618,14 @@ let # lifting `isdefined`
     @test !any(src.code) do @nospecialize x
         iscall((src, isdefined), x) && argextype(x.args[2], src) isa Union
     end
+end
+
+let # lifting `isdefined` through Core.ifelse
+    src = code_typed1((Bool,Some{Int},)) do c, x
+        y = Core.ifelse(c, x, nothing)
+        isdefined(y, 1) # => Core.ifelse(c, true, false)
+    end
+    @test count(iscall((src, isdefined)), src.code) == 0
 end
 
 mutable struct Foo30594; x::Float64; end
@@ -692,9 +733,10 @@ let m = Meta.@lower 1 + 1
         Any
     ]
     nstmts = length(src.code)
-    src.codelocs = fill(Int32(1), nstmts)
-    src.ssaflags = fill(Int32(0), nstmts)
-    ir = Core.Compiler.inflate_ir(src, Any[], Any[Any, Any])
+    src.codelocs = fill(one(Int32), nstmts)
+    src.ssaflags = fill(one(Int32), nstmts)
+    src.slotflags = fill(zero(UInt8), 3)
+    ir = Core.Compiler.inflate_ir(src)
     @test Core.Compiler.verify_ir(ir) === nothing
     ir = @test_nowarn Core.Compiler.sroa_pass!(ir)
     @test Core.Compiler.verify_ir(ir) === nothing
@@ -741,6 +783,94 @@ let m = Meta.@lower 1 + 1
     Core.Compiler.verify_ir(ir)
     ir = Core.Compiler.compact!(ir)
     @test length(ir.cfg.blocks) == 1 && Core.Compiler.length(ir.stmts) == 1
+end
+
+# Test cfg_simplify in complicated sequences of dropped and merged bbs
+using Core.Compiler: Argument, IRCode, GotoNode, GotoIfNot, ReturnNode, NoCallInfo, BasicBlock, StmtRange, SSAValue
+bb_term(ir, bb) = Core.Compiler.getindex(ir, SSAValue(Core.Compiler.last(ir.cfg.blocks[bb].stmts)))[:inst]
+
+function each_stmt_a_bb(stmts, preds, succs)
+    ir = IRCode()
+    empty!(ir.stmts.inst)
+    append!(ir.stmts.inst, stmts)
+    empty!(ir.stmts.type); append!(ir.stmts.type, [Nothing for _ = 1:length(stmts)])
+    empty!(ir.stmts.flag); append!(ir.stmts.flag, [0x0 for _ = 1:length(stmts)])
+    empty!(ir.stmts.line); append!(ir.stmts.line, [Int32(0) for _ = 1:length(stmts)])
+    empty!(ir.stmts.info); append!(ir.stmts.info, [NoCallInfo() for _ = 1:length(stmts)])
+    empty!(ir.cfg.blocks); append!(ir.cfg.blocks, [BasicBlock(StmtRange(i, i), preds[i], succs[i]) for i = 1:length(stmts)])
+    Core.Compiler.verify_ir(ir)
+    return ir
+end
+
+for gotoifnot in (false, true)
+    stmts = [
+        # BB 1
+        GotoIfNot(Argument(1), 8),
+        # BB 2
+        GotoIfNot(Argument(2), 4),
+        # BB 3
+        GotoNode(9),
+        # BB 4
+        GotoIfNot(Argument(3), 10),
+        # BB 5
+        GotoIfNot(Argument(4), 11),
+        # BB 6
+        GotoIfNot(Argument(5), 12),
+        # BB 7
+        GotoNode(13),
+        # BB 8
+        ReturnNode(1),
+        # BB 9
+        nothing,
+        # BB 10
+        nothing,
+        # BB 11
+        gotoifnot ? GotoIfNot(Argument(6), 13) : GotoNode(13),
+        # BB 12
+        ReturnNode(2),
+        # BB 13
+        ReturnNode(3),
+    ]
+    preds = Vector{Int}[Int[], [1], [2], [2], [4], [5], [6], [1], [3], [4, 9], [5, 10], gotoifnot ? [6,11] : [6], [7, 11]]
+    succs = Vector{Int}[[2, 8], [3, 4], [9], [5, 10], [6, 11], [7, 12], [13], Int[], [10], [11], gotoifnot ? [12, 13] : [13], Int[], Int[]]
+    ir = each_stmt_a_bb(stmts, preds, succs)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+
+    if gotoifnot
+        let term4 = bb_term(ir, 4), term5 = bb_term(ir, 5)
+            @test isa(term4, GotoIfNot) && bb_term(ir, term4.dest).val == 3
+            @test isa(term5, ReturnNode) && term5.val == 2
+        end
+    else
+        @test length(ir.cfg.blocks) == 10
+        let term = bb_term(ir, 3)
+            @test isa(term, GotoNode) && bb_term(ir, term.label).val == 3
+        end
+    end
+end
+
+let stmts = [
+        # BB 1
+        GotoIfNot(Argument(1), 4),
+        # BB 2
+        GotoIfNot(Argument(2), 5),
+        # BB 3
+        GotoNode(5),
+        # BB 4
+        ReturnNode(1),
+        # BB 5
+        ReturnNode(2)
+    ]
+    preds = Vector{Int}[Int[], [1], [2], [1], [2, 3]]
+    succs = Vector{Int}[[2, 4], [3, 5], [5], Int[], Int[]]
+    ir = each_stmt_a_bb(stmts, preds, succs)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+
+    @test length(ir.cfg.blocks) == 4
+    terms = map(i->bb_term(ir, i), 1:length(ir.cfg.blocks))
+    @test Set(term.val for term in terms if isa(term, ReturnNode)) == Set([1,2])
 end
 
 let m = Meta.@lower 1 + 1
@@ -794,6 +924,21 @@ let m = Meta.@lower 1 + 1
     ir = Core.Compiler.cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
     @test length(ir.cfg.blocks) == 1
+end
+
+# `cfg_simplify!` shouldn't error in a presence of `try/catch` block
+let ir = Base.code_ircode(; optimize_until="slot2ssa") do
+        v = try
+        catch
+        end
+        v
+    end |> only |> first
+    Core.Compiler.verify_ir(ir)
+    nb = length(ir.cfg.blocks)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+    na = length(ir.cfg.blocks)
+    @test na < nb
 end
 
 # Issue #29213
@@ -1065,3 +1210,63 @@ let sroa_no_forward() = begin
     end
     @test sroa_no_forward() == (1, 2.0)
 end
+
+@noinline function foo_defined_last_iter(n::Int)
+    local x
+    for i = 1:n
+        if i == 5
+            x = 1
+        end
+    end
+    if n > 2
+        return x + n
+    end
+    return 0
+end
+const_call_defined_last_iter() = foo_defined_last_iter(3)
+@test foo_defined_last_iter(2) == 0
+@test_throws UndefVarError foo_defined_last_iter(3)
+@test_throws UndefVarError const_call_defined_last_iter()
+@test foo_defined_last_iter(6) == 7
+
+let src = code_typed1(foo_defined_last_iter, Tuple{Int})
+    for i = 1:length(src.code)
+        e = src.code[i]
+        if isexpr(e, :throw_undef_if_not)
+            @assert !isa(e.args[2], Bool)
+        end
+    end
+end
+
+# Issue #47180, incorrect phi counts in CmdRedirect
+function a47180(b; stdout )
+    c = setenv(b, b.env)
+    if true
+        c = pipeline(c, stdout)
+    end
+    c
+end
+@test isa(a47180(``; stdout), Base.AbstractCmd)
+
+# Test that _compute_sparams can be eliminated for NamedTuple
+named_tuple_elim(name::Symbol, result) = NamedTuple{(name,)}(result)
+let src = code_typed1(named_tuple_elim, Tuple{Symbol, Tuple})
+    @test count(iscall((src, Core._compute_sparams)), src.code) == 0 &&
+          count(iscall((src, Core._svec_ref)), src.code) == 0 &&
+          count(iscall(x->!isa(argextype(x, src).val, Core.Builtin)), src.code) == 0
+end
+
+# Test that sroa works if the struct type is a PartialStruct
+mutable struct OneConstField
+    const a::Int
+    b::Int
+end
+
+@eval function one_const_field_partial()
+    # Use explicit :new here to avoid inlining messing with the type
+    strct = $(Expr(:new, OneConstField, 1, 2))
+    strct.b = 4
+    strct.b = 5
+    return strct.b
+end
+@test fully_eliminated(one_const_field_partial; retval=5)

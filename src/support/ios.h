@@ -19,13 +19,13 @@ extern "C" {
 typedef enum { bm_none=1000, bm_line, bm_block, bm_mem } bufmode_t;
 typedef enum { bst_none, bst_rd, bst_wr } bufstate_t;
 
-#define IOS_INLSIZE 54
+#define IOS_INLSIZE 83
 #define IOS_BUFSIZE 32768
 
 #ifdef _P64
-#define ON_P64(x) x
+#define IF_P64(x,y) x
 #else
-#define ON_P64(x)
+#define IF_P64(x,y) y
 #endif
 
 // We allow ios_t as a cvalue in flisp, which only guarantees pointer
@@ -36,10 +36,8 @@ JL_ATTRIBUTE_ALIGN_PTRSIZE(typedef struct {
     // in general, you can do any operation in any state.
     char *buf;        // start of buffer
 
-    int errcode;
-
-    ON_P64(int _pad_bm;)      // put bm at same offset as type field of uv_stream_s
-    bufmode_t bm;     //
+    IF_P64(int64_t userdata;, int errcode;)
+    bufmode_t bm;     // bm must be at same offset as type field of uv_stream_s
     bufstate_t state;
 
     int64_t maxsize;    // space allocated to buffer
@@ -50,6 +48,8 @@ JL_ATTRIBUTE_ALIGN_PTRSIZE(typedef struct {
     int64_t fpos;       // cached file pos
     size_t lineno;    // current line number
     size_t u_colno;     // current column number (in Unicode charwidths)
+
+    IF_P64(int errcode;, int64_t userdata;)
 
     // pointer-size integer to support platforms where it might have
     // to be a pointer
@@ -74,11 +74,14 @@ JL_ATTRIBUTE_ALIGN_PTRSIZE(typedef struct {
     // request durable writes (fsync)
     // unsigned char durable:1;
 
-    int64_t userdata;
+    // this declares that the buffer should not be (re-)alloc'd when
+    // attempting to write beyond its current maxsize.
+    unsigned char growable:1;
+
     char local[IOS_INLSIZE];
 } ios_t);
 
-#undef ON_P64
+#undef IF_P64
 
 extern void (*ios_set_io_wait_func)(int);
 /* low-level interface functions */
@@ -128,8 +131,8 @@ void ios_init_stdstreams(void);
 
 /* high-level functions - output */
 JL_DLLEXPORT int ios_pututf8(ios_t *s, uint32_t wc);
-JL_DLLEXPORT int ios_printf(ios_t *s, const char *format, ...);
-JL_DLLEXPORT int ios_vprintf(ios_t *s, const char *format, va_list args);
+JL_DLLEXPORT int ios_printf(ios_t *s, const char *format, ...) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int ios_vprintf(ios_t *s, const char *format, va_list args) JL_NOTSAFEPOINT;
 
 /* high-level stream functions - input */
 JL_DLLEXPORT int ios_getutf8(ios_t *s, uint32_t *pwc);

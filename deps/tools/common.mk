@@ -107,8 +107,8 @@ endif
 DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_includedir) $(build_sysconfdir) $(build_datarootdir) $(build_staging) $(build_prefix)/manifest)
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
-
 $(build_prefix): | $(DIRS)
+
 $(eval $(call dir_target,$(SRCCACHE)))
 
 
@@ -174,6 +174,7 @@ $$(build_prefix)/manifest/$(strip $1): $$(build_staging)/$2.tar | $(build_prefix
 	$(UNTAR) $$< -C $$(build_prefix)
 	$6
 	echo '$$(UNINSTALL_$(strip $1))' > $$@
+.PHONY: $(addsuffix -$(strip $1),stage install distclean uninstall reinstall)
 endef
 
 define staged-uninstaller
@@ -192,14 +193,18 @@ endef
 define symlink_install # (target-name, rel-from, abs-to)
 clean-$1: uninstall-$1
 install-$1: $$(build_prefix)/manifest/$1
-reinstall-$1: install-$1
+reinstall-$1:
+	+$$(MAKE) uninstall-$1
+	+$$(MAKE) stage-$1
+	+$$(MAKE) install-$1
+.PHONY: $(addsuffix -$1,clean install reinstall)
 
 UNINSTALL_$(strip $1) := $2 symlink-uninstaller $3
 
-$$(build_prefix)/manifest/$1: $$(BUILDDIR)/$2/build-compiled | $3 $$(build_prefix)/manifest
+$$(build_prefix)/manifest/$1: $$(BUILDDIR)/$2/build-compiled | $$(abspath $$(dir $3/$1)) $$(abspath $$(dir $$(build_prefix)/manifest/$1))
 	-+[ ! \( -e $3/$1 -o -h $3/$1 \) ] || $$(MAKE) uninstall-$1
 ifeq ($$(BUILD_OS), WINNT)
-	cmd //C mklink //J $$(call mingw_to_dos,$3/$1,cd $3 &&) $$(call mingw_to_dos,$$(BUILDDIR)/$2,)
+	cmd //C mklink //J $$(call mingw_to_dos,$3/$1,cd $3/$(dir $1) &&) $$(call mingw_to_dos,$$(BUILDDIR)/$2,)
 else ifneq (,$$(findstring CYGWIN,$$(BUILD_OS)))
 	cmd /C mklink /J $$(call cygpath_w,$3/$1) $$(call cygpath_w,$$(BUILDDIR)/$2)
 else ifdef JULIA_VAGRANT_BUILD
@@ -213,7 +218,7 @@ endef
 define symlink-uninstaller
 uninstall-$1:
 ifeq ($$(BUILD_OS), WINNT)
-	-cmd //C rmdir $$(call mingw_to_dos,$3/$1,cd $3 &&)
+	-cmd //C rmdir $$(call mingw_to_dos,$3/$1,cd $3/$(dir $1) &&)
 else
 	rm -rf $3/$1
 endif

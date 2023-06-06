@@ -17,7 +17,7 @@ environments provide a way to access documentation directly:
   You can also use the Julia panel in the sidebar to search for documentation.
 - In [Pluto](https://github.com/fonsp/Pluto.jl), open the "Live Docs" panel on the bottom right.
 - In [Juno](https://junolab.org) using `Ctrl-J, Ctrl-D` will show the documentation for the object
-under the cursor.
+  under the cursor.
 
 ## Writing Documentation
 
@@ -310,18 +310,18 @@ end
 @doc "`subtract(a,b)` subtracts `b` from `a`" subtract
 ```
 
-Documentation written in non-toplevel blocks, such as `begin`, `if`, `for`, and `let`, is
-added to the documentation system as blocks are evaluated. For example:
+Documentation in non-toplevel blocks, such as `begin`, `if`, `for`, and `let`, should be
+added to the documentation system via `@doc` as well. For example:
 
 ```julia
 if condition()
-    "..."
+    @doc "..."
     f(x) = x
 end
 ```
 
 will add documentation to `f(x)` when `condition()` is `true`. Note that even if `f(x)` goes
-out of scope at the end of the block, its documentation will remain.
+out of scope at the end of a block, its documentation will remain.
 
 It is possible to make use of metaprogramming to assist in the creation of documentation.
 When using string-interpolation within the docstring you will need to use an extra `$` as

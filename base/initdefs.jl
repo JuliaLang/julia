@@ -93,6 +93,7 @@ function append_default_depot_path!(DEPOT_PATH)
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
     path = abspath(Sys.BINDIR, "..", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
+    return DEPOT_PATH
 end
 
 function init_depot_path()
@@ -111,6 +112,7 @@ function init_depot_path()
     else
         append_default_depot_path!(DEPOT_PATH)
     end
+    nothing
 end
 
 ## LOAD_PATH & ACTIVE_PROJECT ##
@@ -220,9 +222,7 @@ function parse_load_path(str::String)
 end
 
 function init_load_path()
-    if Base.creating_sysimg
-        paths = ["@stdlib"]
-    elseif haskey(ENV, "JULIA_LOAD_PATH")
+    if haskey(ENV, "JULIA_LOAD_PATH")
         paths = parse_load_path(ENV["JULIA_LOAD_PATH"])
     else
         paths = filter!(env -> env !== nothing,
@@ -315,6 +315,9 @@ end
     set_active_project(projfile::Union{AbstractString,Nothing})
 
 Set the active `Project.toml` file to `projfile`. See also [`Base.active_project`](@ref).
+
+!!! compat "Julia 1.8"
+    This function requires at least Julia 1.8.
 """
 function set_active_project(projfile::Union{AbstractString,Nothing})
     ACTIVE_PROJECT[] = projfile
@@ -350,26 +353,68 @@ end
 const atexit_hooks = Callable[
     () -> Filesystem.temp_cleanup_purge(force=true)
 ]
+const _atexit_hooks_lock = ReentrantLock()
+global _atexit_hooks_finished::Bool = false
 
 """
     atexit(f)
 
-Register a zero-argument function `f()` to be called at process exit. `atexit()` hooks are
-called in last in first out (LIFO) order and run before object finalizers.
+Register a zero- or one-argument function `f()` to be called at process exit.
+`atexit()` hooks are called in last in first out (LIFO) order and run before
+object finalizers.
+
+If `f` has a method defined for one integer argument, it will be called as
+`f(n::Int32)`, where `n` is the current exit code, otherwise it will be called
+as `f()`.
+
+!!! compat "Julia 1.9"
+    The one-argument form requires Julia 1.9
 
 Exit hooks are allowed to call `exit(n)`, in which case Julia will exit with
 exit code `n` (instead of the original exit code). If more than one exit hook
 calls `exit(n)`, then Julia will exit with the exit code corresponding to the
 last called exit hook that calls `exit(n)`. (Because exit hooks are called in
 LIFO order, "last called" is equivalent to "first registered".)
-"""
-atexit(f::Function) = (pushfirst!(atexit_hooks, f); nothing)
 
-function _atexit()
-    while !isempty(atexit_hooks)
-        f = popfirst!(atexit_hooks)
+Note: Once all exit hooks have been called, no more exit hooks can be registered,
+and any call to `atexit(f)` after all hooks have completed will throw an exception.
+This situation may occur if you are registering exit hooks from background Tasks that
+may still be executing concurrently during shutdown.
+"""
+function atexit(f::Function)
+    Base.@lock _atexit_hooks_lock begin
+        _atexit_hooks_finished && error("cannot register new atexit hook; already exiting.")
+        pushfirst!(atexit_hooks, f)
+        return nothing
+    end
+end
+
+function _atexit(exitcode::Cint)
+    # Don't hold the lock around the iteration, just in case any other thread executing in
+    # parallel tries to register a new atexit hook while this is running. We don't want to
+    # block that thread from proceeding, and we can allow it to register its hook which we
+    # will immediately run here.
+    while true
+        local f
+        Base.@lock _atexit_hooks_lock begin
+            # If this is the last iteration, atomically disable atexit hooks to prevent
+            # someone from registering a hook that will never be run.
+            # (We do this inside the loop, so that it is atomic: no one can have registered
+            #  a hook that never gets run, and we run all the hooks we know about until
+            #  the vector is empty.)
+            if isempty(atexit_hooks)
+                global _atexit_hooks_finished = true
+                break
+            end
+
+            f = popfirst!(atexit_hooks)
+        end
         try
-            f()
+            if hasmethod(f, (Cint,))
+                f(exitcode)
+            else
+                f()
+            end
         catch ex
             showerror(stderr, ex)
             Base.show_backtrace(stderr, catch_backtrace())
