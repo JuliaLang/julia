@@ -843,8 +843,8 @@ Base.deepcopy_internal(x::BigInt, stackdict::IdDict) = get!(() -> MPZ.set(x), st
 
 ## streamlined hashing for BigInt, by avoiding allocation from shifts ##
 
-if Limb === UInt
-    # this condition is true most (all?) of the time, and in this case we can define
+if Limb === UInt64 === UInt
+    # On 64 bit systems we can define
     # an optimized version for BigInt of hash_integer (used e.g. for Rational{BigInt}),
     # and of hash
 
@@ -854,7 +854,7 @@ if Limb === UInt
         GC.@preserve n begin
             s = n.size
             s == 0 && return hash_integer(0, h)
-            p = convert(Ptr{UInt}, n.d)
+            p = convert(Ptr{UInt64}, n.d)
             b = unsafe_load(p)
             h ⊻= hash_uint(ifelse(s < 0, -b, b) ⊻ h)
             for k = 2:abs(s)
@@ -864,11 +864,7 @@ if Limb === UInt
         end
     end
 
-    _divLimb(n) = UInt === UInt64 ? n >>> 6 : n >>> 5
-    _modLimb(n) = UInt === UInt64 ? n & 63 : n & 31
-
-    if UInt === UInt64
-    @eval function hash(x::BigInt, h::UInt)
+    function hash(x::BigInt, h::UInt)
         GC.@preserve x begin
             sz = x.size
             sz == 0 && return hash(0, h)
@@ -881,8 +877,8 @@ if Limb === UInt
             end
             pow = trailing_zeros(x)
             nd = Base.ndigits0z(x, 2)
-            idx = _divLimb(pow) + 1
-            shift = _modLimb(pow) % UInt
+            idx = (pow >>> 6) + 1
+            shift = (pow & 63) % UInt
             upshift = BITS_PER_LIMB - shift
             asz = abs(sz)
             if shift == 0
@@ -915,7 +911,6 @@ if Limb === UInt
             end
             return h
         end
-    end
     end
 end
 
