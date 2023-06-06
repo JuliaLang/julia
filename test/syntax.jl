@@ -3,6 +3,7 @@
 # tests for parser and syntax lowering
 
 using Random
+using Base: remove_linenums!
 
 import Base.Meta.ParseError
 
@@ -38,13 +39,8 @@ end
 
 # issue #9704
 let a = :a
-    @test :(try
-            catch $a
-            end) == :(try
-                      catch a
-                      end)
-    @test :(module $a end) == :(module a
-                                end)
+    @test :(try catch $a end) == :(try catch a end)
+    @test :(module $a end) == :(module a end)
 end
 
 # string literals
@@ -547,7 +543,7 @@ end
 
 # meta nodes for optional positional arguments
 let src = Meta.lower(Main, :(@inline f(p::Int=2) = 3)).args[1].code[end-1].args[3]
-    @test Core.Compiler.is_inlineable(src)
+    @test Core.Compiler.is_declared_inline(src)
 end
 
 # issue #16096
@@ -706,7 +702,7 @@ m1_exprs = get_expr_list(Meta.lower(@__MODULE__, quote @m1 end))
 let low3 = Meta.lower(@__MODULE__, quote @m3 end)
     m3_exprs = get_expr_list(low3)
     ci = low3.args[1]::Core.CodeInfo
-    @test ci.codelocs == [3, 1]
+    @test ci.codelocs == [4, 2]
     @test is_return_ssavalue(m3_exprs[end])
 end
 
@@ -839,6 +835,8 @@ let ε=1, μ=2, x=3, î=4, ⋅=5, (-)=6
     @test Meta.parse("100.0f\u22122") === Meta.parse("100.0f-2")
     @test Meta.parse("0x100p\u22128") === Meta.parse("0x100P\u22128") === Meta.parse("0x100p-8")
     @test (−) == (-) == 6
+    # hbar ℏ to ħ - (#48870)
+    @test :ℏ === :ħ
 end
 
 # issue #8925
@@ -1184,10 +1182,13 @@ end
 @test Meta.parse("@Mdl.foo [1] + [2]") == Meta.parse("@Mdl.foo([1] + [2])")
 
 # issue #24289
+module M24289
 macro m24289()
     :(global $(esc(:x24289)) = 1)
 end
-@test (@macroexpand @m24289) == :(global x24289 = 1)
+end
+M24289.@m24289
+@test x24289 === 1
 
 # parsing numbers with _ and .
 @test Meta.parse("1_2.3_4") == 12.34
@@ -1558,9 +1559,8 @@ end
 
 # issue #27129
 f27129(x = 1) = (@inline; x)
-for meth in methods(f27129)
-    src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), meth, C_NULL, meth.source)
-    @test Core.Compiler.is_inlineable(src)
+for method in methods(f27129)
+    @test Core.Compiler.is_declared_inline(method)
 end
 
 # issue #27710
@@ -1663,10 +1663,12 @@ end
 macro foo28244(sym)
     x = :(bar())
     push!(x.args, Expr(sym))
-    x
+    esc(x)
 end
-@test (@macroexpand @foo28244(kw)) == Expr(:call, GlobalRef(@__MODULE__,:bar), Expr(:kw))
-@test eval(:(@macroexpand @foo28244($(Symbol("let"))))) == Expr(:error, "malformed expression")
+@test @macroexpand(@foo28244(kw)) == Expr(:call, :bar, Expr(:kw))
+let x = @macroexpand @foo28244(var"let")
+    @test Meta.lower(@__MODULE__, x) == Expr(:error, "malformed expression")
+end
 
 # #16356
 @test_throws ParseError Meta.parse("0xapi")
@@ -1931,8 +1933,8 @@ macro id28992(x) x end
 @test Meta.@lower(.+(a,b) = 0) == Expr(:error, "invalid function name \".+\"")
 @test Meta.@lower((.+)(a,b) = 0) == Expr(:error, "invalid function name \"(.+)\"")
 let m = @__MODULE__
-    @test Meta.lower(m, :($m.@id28992(.+(a,b) = 0))) == Expr(:error, "invalid function name \"$(nameof(m)).:.+\"")
-    @test Meta.lower(m, :($m.@id28992((.+)(a,b) = 0))) == Expr(:error, "invalid function name \"(.$(nameof(m)).+)\"")
+    @test Meta.lower(m, :($m.@id28992(.+(a,b) = 0))) == Expr(:error, "invalid function name \"$(nameof(m)).:.+\" around $(@__FILE__):$(@__LINE__)")
+    @test Meta.lower(m, :($m.@id28992((.+)(a,b) = 0))) == Expr(:error, "invalid function name \"(.$(nameof(m)).+)\" around $(@__FILE__):$(@__LINE__)")
 end
 @test @id28992([1] .< [2] .< [3]) == [true]
 @test @id28992(2 ^ -2) == 0.25
@@ -2008,7 +2010,7 @@ end
 @test Meta.parse("import Base.Foo.:(==).bar") == :(import Base.Foo.==.bar)
 
 # issue #33135
-function f33135(x::T) where {C1, T}
+@test_warn "declares type variable C1 but does not use it" @eval function f33135(x::T) where {C1, T}
     let C1 = 1, C2 = 2
         C1
     end
@@ -2227,6 +2229,14 @@ end
     @test Meta.parse("a ⫫ b") == Expr(:call, :⫫, :a, :b)
 end
 
+# issue 45962
+@testset "binary ⭄, ⥺, ⭃, and ⥷" begin
+    @test Meta.parse("a ⭄ b") == Expr(:call, :⭄, :a, :b)
+    @test Meta.parse("a ⥺ b") == Expr(:call, :⥺, :a, :b)
+    @test Meta.parse("a ⭃ b") == Expr(:call, :⭃, :a, :b)
+    @test Meta.parse("a ⥷ b") == Expr(:call, :⥷, :a, :b)
+end
+
 # only allow certain characters after interpolated vars (#25231)
 @test Meta.parse("\"\$x෴  \"",raise=false) == Expr(:error, "interpolated variable \$x ends with invalid character \"෴\"; use \"\$(x)\" instead.")
 @test Base.incomplete_tag(Meta.parse("\"\$foo", raise=false)) === :string
@@ -2331,7 +2341,7 @@ f35201(c) = h35201((;c...), k=true)
 f44343(;kw...) = NamedTuple(kw)
 @test f44343(u = (; :a => 1)) === (u = (; :a => 1),)
 
-@testset "issue #34544/35367" begin
+@testset "issue #34544/35367/35429" begin
     # Test these evals shouldn't segfault
     eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar1, Expr(:block)))))
     eval(Expr(:module, true, :bar2, Expr(:block)))
@@ -2339,6 +2349,11 @@ f44343(;kw...) = NamedTuple(kw)
     @test_throws ErrorException eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar4, Expr(:quote)))))
     @test_throws ErrorException eval(Expr(:module, true, :bar5, Expr(:foo)))
     @test_throws ErrorException eval(Expr(:module, true, :bar6, Expr(:quote)))
+
+    #35429
+    @test_throws ErrorException eval(Expr(:thunk, x->x+9))
+    @test_throws ErrorException eval(Expr(:thunk, Meta.parse("x=17")))
+    @test_throws ErrorException eval(Expr(:thunk, Meta.parse("17")))
 end
 
 # issue #35391
@@ -2537,7 +2552,8 @@ using Test
 
 module Mod
 const x = 1
-global maybe_undef
+global maybe_undef, always_undef
+export always_undef
 def() = (global maybe_undef = 0)
 func(x) = 2x + 1
 
@@ -2575,10 +2591,18 @@ import .Mod.maybe_undef as mu
 Mod.def()
 @test mu === 0
 
-using .Mod: func as f
-@test f(10) == 21
-@test !@isdefined(func)
-@test_throws ErrorException("error in method definition: function Mod.func must be explicitly imported to be extended") eval(:(f(x::Int) = x))
+module Mod3
+using ..Mod: func as f
+using ..Mod
+end
+@test Mod3.f(10) == 21
+@test !isdefined(Mod3, :func)
+@test_throws ErrorException("invalid method definition in Mod3: function Mod3.f must be explicitly imported to be extended") Core.eval(Mod3, :(f(x::Int) = x))
+@test !isdefined(Mod3, :always_undef) # resolve this binding now in Mod3
+@test_throws ErrorException("invalid method definition in Mod3: exported function Mod.always_undef does not exist") Core.eval(Mod3, :(always_undef(x::Int) = x))
+@test_throws ErrorException("cannot assign a value to imported variable Mod.always_undef from module Mod3") Core.eval(Mod3, :(const always_undef = 3))
+@test_throws ErrorException("cannot assign a value to imported variable Mod3.f") Core.eval(Mod3, :(const f = 3))
+@test_throws ErrorException("cannot declare Mod.maybe_undef constant; it already has a value") Core.eval(Mod, :(const maybe_undef = 3))
 
 z = 42
 import .z as also_z
@@ -2616,10 +2640,10 @@ import .TestImportAs.Mod2 as M2
 end
 
 @testset "issue #37393" begin
-    @test :(for outer i = 1:3; end) == Expr(:for, Expr(:(=), Expr(:outer, :i), :(1:3)), :(;;))
+    @test remove_linenums!(:(for outer i = 1:3; end)) == Expr(:for, Expr(:(=), Expr(:outer, :i), :(1:3)), :(;;))
     i = :i
-    @test :(for outer $i = 1:3; end) == Expr(:for, Expr(:(=), Expr(:outer, :i), :(1:3)), :(;;))
-    @test :(for outer = 1:3; end) == Expr(:for, Expr(:(=), :outer, :(1:3)), :(;;))
+    @test remove_linenums!(:(for outer $i = 1:3; end)) == Expr(:for, Expr(:(=), Expr(:outer, :i), :(1:3)), :(;;))
+    @test remove_linenums!(:(for outer = 1:3; end)) == Expr(:for, Expr(:(=), :outer, :(1:3)), :(;;))
     # TIL that this is possible
     for outer $ i = 1:3
         @test 1 $ 2 in 1:3
@@ -2866,7 +2890,7 @@ end
 @test eval(:(x = $(QuoteNode(Core.SSAValue(1))))) == Core.SSAValue(1)
 @test eval(:(x = $(QuoteNode(Core.SlotNumber(1))))) == Core.SlotNumber(1)
 @test_throws ErrorException("syntax: SSAValue objects should not occur in an AST") eval(:(x = $(Core.SSAValue(1))))
-@test_throws ErrorException("syntax: Slot objects should not occur in an AST") eval(:(x = $(Core.SlotNumber(1))))
+@test_throws ErrorException("syntax: SlotNumber objects should not occur in an AST") eval(:(x = $(Core.SlotNumber(1))))
 
 # juxtaposition of radical symbols (#40094)
 @test Meta.parse("2√3") == Expr(:call, :*, 2, Expr(:call, :√, 3))
@@ -2877,13 +2901,13 @@ macro m_underscore_hygiene()
     return :(_ = 1)
 end
 
-@test @macroexpand(@m_underscore_hygiene()) == :(_ = 1)
+@test Meta.@lower(@m_underscore_hygiene()) === 1
 
 macro m_begin_hygiene(a)
     return :($(esc(a))[begin])
 end
 
-@test @m_begin_hygiene([1, 2, 3]) == 1
+@test @m_begin_hygiene([1, 2, 3]) === 1
 
 # issue 40258
 @test "a $("b $("c")")" == "a b c"
@@ -3040,9 +3064,6 @@ end
 end
 
 # issue 25678
-@generated f25678(x::T) where {T} = code_lowered(sin, Tuple{x})[]
-@test f25678(pi/6) === sin(pi/6)
-
 @generated g25678(x) = return :x
 @test g25678(7) === 7
 
@@ -3206,8 +3227,14 @@ end
 @test Meta.parseatom("@foo", 1; filename="foo", lineno=7) == (Expr(:macrocall, :var"@foo", LineNumberNode(7, :foo)), 5)
 @test Meta.parseall("@foo"; filename="foo", lineno=3) == Expr(:toplevel, LineNumberNode(3, :foo), Expr(:macrocall, :var"@foo", LineNumberNode(3, :foo)))
 
-let ex = :(const $(esc(:x)) = 1; (::typeof(2))() = $(esc(:x)))
-    @test macroexpand(Main, Expr(:var"hygienic-scope", ex, Main)).args[3].args[1] == :((::$(GlobalRef(Main, :typeof))(2))())
+module M43993
+function foo43993 end
+const typeof = error
+end
+let ex = :(const $(esc(:x)) = 1; (::typeof($(esc(:foo43993))))() = $(esc(:x)))
+    Core.eval(M43993, Expr(:var"hygienic-scope", ex, Core))
+    @test M43993.x === 1
+    @test invokelatest(M43993.foo43993) === 1
 end
 
 struct Foo44013
@@ -3429,3 +3456,30 @@ end
              elseif false || (()->true)()
                  42
              end)) == 42
+
+macro _macroexpand(x, m=__module__)
+    :($__source__; macroexpand($m, Expr(:var"hygienic-scope", $(esc(Expr(:quote, x))), $m)))
+end
+
+@testset "unescaping in :global expressions" begin
+    m = @__MODULE__
+    @test @_macroexpand(global x::T) == :(global x::$(GlobalRef(m, :T)))
+    @test @_macroexpand(global (x, $(esc(:y)))) == :(global (x, y))
+    @test @_macroexpand(global (x::S, $(esc(:y))::$(esc(:T)))) ==
+        :(global (x::$(GlobalRef(m, :S)), y::T))
+    @test @_macroexpand(global (; x, $(esc(:y)))) == :(global (; x, y))
+    @test @_macroexpand(global (; x::S, $(esc(:y))::$(esc(:T)))) ==
+        :(global (; x::$(GlobalRef(m, :S)), y::T))
+
+    @test @_macroexpand(global x::T = a) == :(global x::$(GlobalRef(m, :T)) = $(GlobalRef(m, :a)))
+    @test @_macroexpand(global (x, $(esc(:y))) = a) == :(global (x, y) = $(GlobalRef(m, :a)))
+    @test @_macroexpand(global (x::S, $(esc(:y))::$(esc(:T))) = a) ==
+        :(global (x::$(GlobalRef(m, :S)), y::T) = $(GlobalRef(m, :a)))
+    @test @_macroexpand(global (; x, $(esc(:y))) = a) == :(global (; x, y) = $(GlobalRef(m, :a)))
+    @test @_macroexpand(global (; x::S, $(esc(:y))::$(esc(:T))) = a) ==
+        :(global (; x::$(GlobalRef(m, :S)), y::T) = $(GlobalRef(m, :a)))
+end
+
+# issue #49984
+macro z49984(s); :(let a; $(esc(s)); end); end
+@test let a = 1; @z49984(a) === 1; end

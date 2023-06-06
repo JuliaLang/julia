@@ -419,17 +419,18 @@ void jl_show_sigill(void *_ctx)
 // this is generally quite an foolish operation, but does free you up to do
 // arbitrary things on this stack now without worrying about corrupt state that
 // existed already on it
-void jl_task_frame_noreturn(jl_task_t *ct)
+void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT
 {
     jl_set_safe_restore(NULL);
     if (ct) {
         ct->gcstack = NULL;
         ct->eh = NULL;
-        ct->excstack = NULL;
+        ct->world_age = 1;
         ct->ptls->locks.len = 0;
         ct->ptls->in_pure_callback = 0;
         ct->ptls->in_finalizer = 0;
-        ct->world_age = 1;
+        ct->ptls->defer_signal = 0;
+        jl_atomic_store_release(&ct->ptls->gc_state, 0); // forceably exit GC (if we were in it) or safe into unsafe, without the mandatory safepoint
     }
 }
 

@@ -41,13 +41,7 @@ function code_escapes(@nospecialize(f), @nospecialize(types=Base.default_tt(f));
                       interp::Core.Compiler.AbstractInterpreter = Core.Compiler.NativeInterpreter(world),
                       debuginfo::Symbol = :none,
                       optimize::Bool = true)
-    ft = Core.Typeof(f)
-    if isa(types, Type)
-        u = unwrap_unionall(types)
-        tt = rewrap_unionall(Tuple{ft, u.parameters...}, types)
-    else
-        tt = Tuple{ft, types...}
-    end
+    tt = Base.signature_type(f, types)
     interp = EscapeAnalyzer(interp, tt, optimize)
     results = Base.code_typed_by_type(tt; optimize=true, world, interp)
     isone(length(results)) || throw(ArgumentError("`code_escapes` only supports single analysis result"))
@@ -147,9 +141,9 @@ function invalidate_cache!(replaced, max_world, depth = 0)
 end
 
 function CC.optimize(interp::EscapeAnalyzer,
-    opt::OptimizationState, params::OptimizationParams, caller::InferenceResult)
+    opt::OptimizationState, caller::InferenceResult)
     ir = run_passes_with_ea(interp, opt.src, opt, caller)
-    return CC.finish(interp, opt, params, ir, caller)
+    return CC.finish(interp, opt, ir, caller)
 end
 
 function CC.cache_result!(interp::EscapeAnalyzer, caller::InferenceResult)

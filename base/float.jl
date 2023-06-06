@@ -101,6 +101,8 @@ exponent_one(::Type{Float16}) =     0x3c00
 exponent_half(::Type{Float16}) =    0x3800
 significand_mask(::Type{Float16}) = 0x03ff
 
+mantissa(x::T) where {T} = reinterpret(Unsigned, x) & significand_mask(T)
+
 for T in (Float16, Float32, Float64)
     @eval significand_bits(::Type{$T}) = $(trailing_ones(significand_mask(T)))
     @eval exponent_bits(::Type{$T}) = $(sizeof(T)*8 - significand_bits(T) - 1)
@@ -219,7 +221,7 @@ end
 
 function Float32(x::UInt128)
     x == 0 && return 0f0
-    n = 128-leading_zeros(x) # ndigits0z(x,2)
+    n = top_set_bit(x) # ndigits0z(x,2)
     if n <= 24
         y = ((x % UInt32) << (24-n)) & 0x007f_ffff
     else
@@ -235,7 +237,7 @@ function Float32(x::Int128)
     x == 0 && return 0f0
     s = ((x >>> 96) % UInt32) & 0x8000_0000 # sign bit
     x = abs(x) % UInt128
-    n = 128-leading_zeros(x) # ndigits0z(x,2)
+    n = top_set_bit(x) # ndigits0z(x,2)
     if n <= 24
         y = ((x % UInt32) << (24-n)) & 0x007f_ffff
     else
@@ -308,6 +310,7 @@ Float64
 """
 float(::Type{T}) where {T<:Number} = typeof(float(zero(T)))
 float(::Type{T}) where {T<:AbstractFloat} = T
+float(::Type{Union{}}, slurp...) = Union{}(0.0)
 
 """
     unsafe_trunc(T, x)
@@ -414,7 +417,107 @@ muladd(x::T, y::T, z::T) where {T<:IEEEFloat} = muladd_float(x, y, z)
 # TODO: faster floating point fld?
 # TODO: faster floating point mod?
 
-rem(x::T, y::T) where {T<:IEEEFloat} = rem_float(x, y)
+function unbiased_exponent(x::T) where {T<:IEEEFloat}
+    return (reinterpret(Unsigned, x) & exponent_mask(T)) >> significand_bits(T)
+end
+
+function explicit_mantissa_noinfnan(x::T) where {T<:IEEEFloat}
+    m = mantissa(x)
+    issubnormal(x) || (m |= significand_mask(T) + uinttype(T)(1))
+    return m
+end
+
+function _to_float(number::U, ep) where {U<:Unsigned}
+    F = floattype(U)
+    S = signed(U)
+    epint = unsafe_trunc(S,ep)
+    lz::signed(U) = unsafe_trunc(S, Core.Intrinsics.ctlz_int(number) - U(exponent_bits(F)))
+    number <<= lz
+    epint -= lz
+    bits = U(0)
+    if epint >= 0
+        bits = number & significand_mask(F)
+        bits |= ((epint + S(1)) << significand_bits(F)) & exponent_mask(F)
+    else
+        bits = (number >> -epint) & significand_mask(F)
+    end
+    return reinterpret(F, bits)
+end
+
+@assume_effects :terminates_locally :nothrow function rem_internal(x::T, y::T) where {T<:IEEEFloat}
+    xuint = reinterpret(Unsigned, x)
+    yuint = reinterpret(Unsigned, y)
+    if xuint <= yuint
+        if xuint < yuint
+            return x
+        end
+        return zero(T)
+    end
+
+    e_x = unbiased_exponent(x)
+    e_y = unbiased_exponent(y)
+    # Most common case where |y| is "very normal" and |x/y| < 2^EXPONENT_WIDTH
+    if e_y > (significand_bits(T)) && (e_x - e_y) <= (exponent_bits(T))
+        m_x = explicit_mantissa_noinfnan(x)
+        m_y = explicit_mantissa_noinfnan(y)
+        d = urem_int((m_x << (e_x - e_y)),  m_y)
+        iszero(d) && return zero(T)
+        return _to_float(d, e_y - uinttype(T)(1))
+    end
+    # Both are subnormals
+    if e_x == 0 && e_y == 0
+        return reinterpret(T, urem_int(xuint, yuint) & significand_mask(T))
+    end
+
+    m_x = explicit_mantissa_noinfnan(x)
+    e_x -= uinttype(T)(1)
+    m_y = explicit_mantissa_noinfnan(y)
+    lz_m_y = uinttype(T)(exponent_bits(T))
+    if e_y > 0
+        e_y -= uinttype(T)(1)
+    else
+        m_y = mantissa(y)
+        lz_m_y = Core.Intrinsics.ctlz_int(m_y)
+    end
+
+    tz_m_y = Core.Intrinsics.cttz_int(m_y)
+    sides_zeroes_cnt = lz_m_y + tz_m_y
+
+    # n>0
+    exp_diff = e_x - e_y
+    # Shift hy right until the end or n = 0
+    right_shift = min(exp_diff, tz_m_y)
+    m_y >>= right_shift
+    exp_diff -= right_shift
+    e_y += right_shift
+    # Shift hx left until the end or n = 0
+    left_shift = min(exp_diff, uinttype(T)(exponent_bits(T)))
+    m_x <<= left_shift
+    exp_diff -= left_shift
+
+    m_x = urem_int(m_x, m_y)
+    iszero(m_x) && return zero(T)
+    iszero(exp_diff) && return _to_float(m_x, e_y)
+
+    while exp_diff > sides_zeroes_cnt
+        exp_diff -= sides_zeroes_cnt
+        m_x <<= sides_zeroes_cnt
+        m_x = urem_int(m_x, m_y)
+    end
+    m_x <<= exp_diff
+    m_x = urem_int(m_x, m_y)
+    return _to_float(m_x, e_y)
+end
+
+function rem(x::T, y::T) where {T<:IEEEFloat}
+    if isfinite(x) && !iszero(x) && isfinite(y) && !iszero(y)
+        return copysign(rem_internal(abs(x), abs(y)), x)
+    elseif isinf(x) || isnan(y) || iszero(y)  # y can still be Inf
+        return T(NaN)
+    else
+        return x
+    end
+end
 
 function mod(x::T, y::T) where T<:AbstractFloat
     if isinf(y) && isfinite(x)
@@ -520,7 +623,7 @@ See also: [`iszero`](@ref), [`isone`](@ref), [`isinf`](@ref), [`ismissing`](@ref
 isnan(x::AbstractFloat) = (x != x)::Bool
 isnan(x::Number) = false
 
-isfinite(x::AbstractFloat) = x - x == 0
+isfinite(x::AbstractFloat) = !isnan(x - x)
 isfinite(x::Real) = decompose(x)[3] != 0
 isfinite(x::Integer) = true
 
@@ -532,6 +635,7 @@ Test whether a number is infinite.
 See also: [`Inf`](@ref), [`iszero`](@ref), [`isfinite`](@ref), [`isnan`](@ref).
 """
 isinf(x::Real) = !isnan(x) & !isfinite(x)
+isinf(x::IEEEFloat) = abs(x) === oftype(x, Inf)
 
 const hx_NaN = hash_uint64(reinterpret(UInt64, NaN))
 let Tf = Float64, Tu = UInt64, Ti = Int64
@@ -573,27 +677,22 @@ function hash(x::Real, h::UInt)
         num = -num
         den = -den
     end
-    z = trailing_zeros(num)
-    if z != 0
-        num >>= z
-        pow += z
-    end
-    z = trailing_zeros(den)
-    if z != 0
-        den >>= z
-        pow -= z
-    end
+    num_z = trailing_zeros(num)
+    num >>= num_z
+    den_z = trailing_zeros(den)
+    den >>= den_z
+    pow += num_z - den_z
 
     # handle values representable as Int64, UInt64, Float64
     if den == 1
-        left = ndigits0z(num,2) + pow
-        right = trailing_zeros(num) + pow
+        left = top_set_bit(abs(num)) + pow
+        right = pow + den_z
         if -1074 <= right
-            if 0 <= right && left <= 64
-                left <= 63                     && return hash(Int64(num) << Int(pow), h)
-                signbit(num) == signbit(den)   && return hash(UInt64(num) << Int(pow), h)
+            if 0 <= right
+                left <= 63 && return hash(Int64(num) << Int(pow), h)
+                left <= 64 && !signbit(num) && return hash(UInt64(num) << Int(pow), h)
             end # typemin(Int64) handled by Float64 case
-            left <= 1024 && left - right <= 53 && return hash(ldexp(Float64(num),pow), h)
+            left <= 1024 && left - right <= 53 && return hash(ldexp(Float64(num), pow), h)
         end
     end
 
@@ -774,7 +873,7 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     end
                 end
                 function (::Type{$Ti})(x::$Tf)
-                    if ($(Tf(typemin(Ti))) <= x <= $(Tf(typemax(Ti)))) && (round(x, RoundToZero) == x)
+                    if ($(Tf(typemin(Ti))) <= x <= $(Tf(typemax(Ti)))) && isinteger(x)
                         return unsafe_trunc($Ti,x)
                     else
                         throw(InexactError($(Expr(:quote,Ti.name.name)), $Ti, x))
@@ -795,7 +894,7 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     end
                 end
                 function (::Type{$Ti})(x::$Tf)
-                    if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))) && (round(x, RoundToZero) == x)
+                    if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))) && isinteger(x)
                         return unsafe_trunc($Ti,x)
                     else
                         throw(InexactError($(Expr(:quote,Ti.name.name)), $Ti, x))
@@ -824,6 +923,7 @@ false
 
 julia> issubnormal(1.0f-38)
 true
+```
 """
 function issubnormal(x::T) where {T<:IEEEFloat}
     y = reinterpret(Unsigned, x)

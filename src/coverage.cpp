@@ -17,7 +17,7 @@ using namespace llvm;
 
 static int codegen_imaging_mode(void)
 {
-    return jl_options.image_codegen || (jl_generating_output() && !jl_options.incremental);
+    return jl_options.image_codegen || (jl_generating_output() && jl_options.use_pkgimages);
 }
 
 // Logging for code coverage and memory allocation
@@ -192,7 +192,7 @@ static void write_lcov_data(logdata_t &logData, const std::string &outfile)
     outf.close();
 }
 
-extern "C" JL_DLLEXPORT void jl_write_coverage_data(const char *output)
+extern "C" void jl_write_coverage_data(const char *output)
 {
     if (output) {
         StringRef output_pattern(output);
@@ -206,7 +206,7 @@ extern "C" JL_DLLEXPORT void jl_write_coverage_data(const char *output)
     }
 }
 
-extern "C" JL_DLLEXPORT void jl_write_malloc_log(void)
+extern "C" void jl_write_malloc_log(void)
 {
     std::string stm;
     raw_string_ostream(stm) << "." << uv_os_getpid() << ".mem";

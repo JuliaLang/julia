@@ -20,6 +20,9 @@ ifeq ($(SANITIZE),1)
 MPFR_CONFIGURE_OPTS += --host=none-unknown-linux
 endif
 
+ifeq ($(OS),emscripten)
+MPFR_CONFIGURE_OPTS += CFLAGS="-fPIC"
+endif
 
 $(SRCCACHE)/mpfr-$(MPFR_VER).tar.bz2: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ https://www.mpfr.org/mpfr-$(MPFR_VER)/$(notdir $@)
@@ -27,7 +30,6 @@ $(SRCCACHE)/mpfr-$(MPFR_VER).tar.bz2: | $(SRCCACHE)
 $(SRCCACHE)/mpfr-$(MPFR_VER)/source-extracted: $(SRCCACHE)/mpfr-$(MPFR_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) -jxf $<
-	cp $(SRCDIR)/patches/config.sub $(SRCCACHE)/mpfr-$(MPFR_VER)/config.sub
 	touch -c $(SRCCACHE)/mpfr-$(MPFR_VER)/configure # old target
 	echo 1 > $@
 

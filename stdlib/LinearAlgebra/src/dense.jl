@@ -344,7 +344,7 @@ diagm(m::Integer, n::Integer, v::AbstractVector) = diagm(m, n, 0 => v)
 function tr(A::Matrix{T}) where T
     n = checksquare(A)
     t = zero(T)
-    for i=1:n
+    @inbounds @simd for i in 1:n
         t += A[i,i]
     end
     t
@@ -907,14 +907,12 @@ sqrt(A::TransposeAbsMat) = transpose(sqrt(parent(A)))
 
 function inv(A::StridedMatrix{T}) where T
     checksquare(A)
-    S = typeof((oneunit(T)*zero(T) + oneunit(T)*zero(T))/oneunit(T))
-    AA = convert(AbstractArray{S}, A)
-    if istriu(AA)
-        Ai = triu!(parent(inv(UpperTriangular(AA))))
-    elseif istril(AA)
-        Ai = tril!(parent(inv(LowerTriangular(AA))))
+    if istriu(A)
+        Ai = triu!(parent(inv(UpperTriangular(A))))
+    elseif istril(A)
+        Ai = tril!(parent(inv(LowerTriangular(A))))
     else
-        Ai = inv!(lu(AA))
+        Ai = inv!(lu(A))
         Ai = convert(typeof(parent(Ai)), Ai)
     end
     return Ai

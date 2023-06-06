@@ -214,10 +214,10 @@ NOINLINE size_t rec_backtrace(jl_bt_element_t *bt_data, size_t maxsize, int skip
     int r = jl_unw_get(&context);
     if (r < 0)
         return 0;
-    jl_gcframe_t *pgcstack = jl_pgcstack;
     bt_cursor_t cursor;
-    if (!jl_unw_init(&cursor, &context))
+    if (!jl_unw_init(&cursor, &context) || maxsize == 0)
         return 0;
+    jl_gcframe_t *pgcstack = jl_pgcstack;
     size_t bt_size = 0;
     jl_unw_stepn(&cursor, bt_data, &bt_size, NULL, maxsize, skip + 1, &pgcstack, 0);
     return bt_size;
@@ -321,6 +321,7 @@ static void decode_backtrace(jl_bt_element_t *bt_data, size_t bt_size,
 
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
 {
+    JL_TIMING(STACKWALK, STACKWALK_Backtrace);
     jl_excstack_t *s = jl_current_task->excstack;
     jl_bt_element_t *bt_data = NULL;
     size_t bt_size = 0;
@@ -343,6 +344,7 @@ JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
 JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int max_entries)
 {
     JL_TYPECHK(current_exceptions, task, (jl_value_t*)task);
+    JL_TIMING(STACKWALK, STACKWALK_Excstack);
     jl_task_t *ct = jl_current_task;
     if (task != ct && jl_atomic_load_relaxed(&task->_state) == JL_TASK_STATE_RUNNABLE) {
         jl_error("Inspecting the exception stack of a task which might "
@@ -661,7 +663,7 @@ void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
         jl_value_t *code = jl_bt_entry_jlvalue(bt_entry, 0);
         if (jl_is_method_instance(code)) {
             // When interpreting a method instance, need to unwrap to find the code info
-            code = ((jl_method_instance_t*)code)->uninferred;
+            code = jl_atomic_load_relaxed(&((jl_method_instance_t*)code)->uninferred);
         }
         if (jl_is_code_info(code)) {
             jl_code_info_t *src = (jl_code_info_t*)code;
@@ -671,7 +673,7 @@ void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
             while (debuginfoloc != 0) {
                 jl_line_info_node_t *locinfo = (jl_line_info_node_t*)
                     jl_array_ptr_ref(src->linetable, debuginfoloc - 1);
-                assert(jl_typeis(locinfo, jl_lineinfonode_type));
+                assert(jl_typetagis(locinfo, jl_lineinfonode_type));
                 const char *func_name = "Unknown";
                 jl_value_t *method = locinfo->method;
                 if (jl_is_method_instance(method))
@@ -1126,7 +1128,7 @@ JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT
 // Print backtraces for all live tasks, for all threads.
 // WARNING: this is dangerous and can crash if used outside of gdb, if
 // all of Julia's threads are not stopped!
-JL_DLLEXPORT void jl_print_task_backtraces(void) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
 {
     size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
     jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
@@ -1146,9 +1148,13 @@ JL_DLLEXPORT void jl_print_task_backtraces(void) JL_NOTSAFEPOINT
         void **lst = live_tasks->items;
         for (size_t j = 0; j < live_tasks->len; j++) {
             jl_task_t *t = (jl_task_t *)lst[j];
+            int t_state = jl_atomic_load_relaxed(&t->_state);
+            if (!show_done && t_state == JL_TASK_STATE_DONE) {
+                continue;
+            }
             jl_safe_printf("     ---- Task %zu (%p)\n", j + 1, t);
             jl_safe_printf("          (sticky: %d, started: %d, state: %d, tid: %d)\n",
-                    t->sticky, t->started, jl_atomic_load_relaxed(&t->_state),
+                    t->sticky, t->started, t_state,
                     jl_atomic_load_relaxed(&t->tid) + 1);
             if (t->stkbuf != NULL)
                 jlbacktracet(t);

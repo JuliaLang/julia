@@ -23,7 +23,7 @@
 #include <llvm/Support/Debug.h>
 
 #include "passes.h"
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 
 #define DEBUG_TYPE "propagate_julia_addrspaces"
 
@@ -330,7 +330,8 @@ PreservedAnalyses PropagateJuliaAddrspacesPass::run(Function &F, FunctionAnalysi
     }
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddPropagateJuliaAddrspaces_impl(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddPropagateJuliaAddrspaces_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createPropagateJuliaAddrspaces());
 }

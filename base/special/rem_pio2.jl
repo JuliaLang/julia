@@ -109,7 +109,7 @@ function fromfraction(f::Int128)
     # 1. get leading term truncated to 26 bits
     s = ((f < 0) % UInt64) << 63     # sign bit
     x = abs(f) % UInt128             # magnitude
-    n1 = 128-leading_zeros(x)         # ndigits0z(x,2)
+    n1 = Base.top_set_bit(x)          # ndigits0z(x,2)
     m1 = ((x >> (n1-26)) % UInt64) << 27
     d1 = ((n1-128+1021) % UInt64) << 52
     z1 = reinterpret(Float64, s | (d1 + m1))
@@ -119,7 +119,7 @@ function fromfraction(f::Int128)
     if x2 == 0
         return (z1, 0.0)
     end
-    n2 = 128-leading_zeros(x2)
+    n2 = Base.top_set_bit(x2)
     m2 = (x2 >> (n2-53)) % UInt64
     d2 = ((n2-128+1021) % UInt64) << 52
     z2 = reinterpret(Float64,  s | (d2 + m2))

@@ -14,12 +14,13 @@ struct EACallInfo
 end
 
 function resolve_call(ir::IRCode, stmt::Expr, @nospecialize(info::CallInfo))
+    # TODO: if effect free, return true
     sig = call_sig(ir, stmt)
     if sig === nothing
         return missing
     end
     # TODO handle _apply_iterate
-    if is_builtin(sig) && sig.f !== invoke
+    if is_builtin(𝕃ₒ, sig) && sig.f !== invoke
         return false
     end
     # handling corresponding to late_inline_special_case!

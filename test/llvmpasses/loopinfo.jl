@@ -32,7 +32,7 @@ function simdf(X)
 # LOWER: fadd fast double
 # LOWER-NOT: call void @julia.loopinfo_marker()
 # LOWER: br {{.*}}, !llvm.loop [[LOOPID:![0-9]+]]
-# FINAL: fadd fast <{{[0-9]+}} x double>
+# FINAL: fadd fast <{{(vscale x )?}}{{[0-9]+}} x double>
     end
     acc
 end

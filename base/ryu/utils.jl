@@ -1,9 +1,6 @@
 const MANTISSA_MASK = Base.significand_mask(Float64)
 const EXP_MASK = Base.exponent_mask(Float64) >> Base.significand_bits(Float64)
 
-memcpy(d, doff, s, soff, n) = (ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), d + doff - 1, s + soff - 1, n); nothing)
-memmove(d, doff, s, soff, n) = (ccall(:memmove, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), d + doff - 1, s + soff - 1, n); nothing)
-
 # Note: these are smaller than the values given in Figure 4 from the paper
 # see https://github.com/ulfjack/ryu/issues/119
 pow5_bitcount(::Type{Float16}) = 30
@@ -64,7 +61,7 @@ lengthforindex(idx) = div(((Int64(16 * idx) * 1292913986) >> 32) + 1 + 16 + 8, 9
 
 Return `true` if `5^p` is a divisor of `x`.
 """
-pow5(x, p) = x % (5^p) == 0
+pow5(x, p) = x % (UInt64(5)^p) == 0
 
 """
     Ryu.pow2(x, p)

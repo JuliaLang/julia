@@ -410,31 +410,90 @@ d = parse(str)
 @test d["oct2"] == 0o755
 @test d["bin1"] == 0b11010110
 
+str = """
+hex1 = 0x6E # UInt8
+hex2 = 0x8f1e # UInt16
+hex3 = 0x765f3173 # UInt32
+hex4 = 0xc13b830a807cc7f4 # UInt64
+hex5 = 0x937efe0a4241edb24a04b97bd90ef363 # UInt128
+hex6 = 0x937efe0a4241edb24a04b97bd90ef3632 # BigInt
+"""
+@test roundtrip(str)
+d = parse(str)
+@test d["hex1"] isa UInt64
+@test d["hex2"] isa UInt64
+@test d["hex3"] isa UInt64
+@test d["hex4"] isa UInt64
+@test d["hex5"] isa UInt128
+@test d["hex6"] isa BigInt
+
+str = """
+oct1 = 0o140 # UInt8
+oct2 = 0o46244 # UInt16
+oct3 = 0o32542120656 # UInt32
+oct4 = 0o1526535761042630654411 # UInt64
+oct5 = 0o3467204325743773607311464533371572447656531 # UInt128
+oct6 = 0o34672043257437736073114645333715724476565312 # BigInt
+"""
+@test roundtrip(str)
+d = parse(str)
+@test d["oct1"] isa UInt64
+@test d["oct2"] isa UInt64
+@test d["oct3"] isa UInt64
+@test d["oct4"] isa UInt64
+@test d["oct5"] isa UInt128
+@test d["oct6"] isa BigInt
+
+str = """
+bin1 = 0b10001010 # UInt8
+bin2 = 0b11111010001100 # UInt16
+bin3 = 0b11100011110000010101000010101 # UInt32
+bin4 = 0b10000110100111011010001000000111110110000011111101101110011011 # UInt64
+bin5 = 0b1101101101101100110001010110111011101000111010101110011000011100110100101111110001010001011001000001000001010010011101100100111 # UInt128
+bin6 = 0b110110110110110011000101011011101110100011101010111001100001110011010010111111000101000101100100000100000101001001110110010011111 # BigInt
+"""
+
+@test roundtrip(str)
+d = parse(str)
+@test d["bin1"] isa UInt64
+@test d["bin2"] isa UInt64
+@test d["bin3"] isa UInt64
+@test d["bin4"] isa UInt64
+@test d["bin5"] isa UInt128
+@test d["bin6"] isa BigInt
+
 #Arbitrary 64-bit signed integers (from −2^63 to 2^63−1) should be accepted and
 #handled losslessly. If an integer cannot be represented losslessly, an error
 #must be thrown.
 str = """
-low = -9_223_372_036_854_775_808
-high = 9_223_372_036_854_775_807
+low = -170_141_183_460_469_231_731_687_303_715_884_105_728
+high = 170_141_183_460_469_231_731_687_303_715_884_105_727
 """
 @test roundtrip(str)
 d = parse(str)
-@test d["low"] == -9_223_372_036_854_775_808
-@test d["high"] == 9_223_372_036_854_775_807
+@test d["low"] == typemin(Int128)
+@test d["high"] == typemax(Int128)
+
+str = """
+low = -170_141_183_460_469_231_731_687_303_715_884_105_728_123
+high = 170_141_183_460_469_231_731_687_303_715_884_105_727_123
+"""
+@test roundtrip(str)
+d = parse(str)
+@test d["low"] == big"-170_141_183_460_469_231_731_687_303_715_884_105_728_123"
+@test d["high"] == big"170_141_183_460_469_231_731_687_303_715_884_105_727_123"
 
 str = """
 toolow = -9_223_372_036_854_775_809
 """
-err = tryparse(str)
-@test err isa ParserError
-@test err.type == Internals.ErrOverflowError
+d = parse(str)
+@test d["toolow"] == -9223372036854775809
 
 str = """
 toohigh = 9_223_372_036_854_775_808
 """
-err = tryparse(str)
-@test err isa ParserError
-@test err.type == Internals.ErrOverflowError
+d = parse(str)
+d["toohigh"] == 9_223_372_036_854_775_808
 
 end
 

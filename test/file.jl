@@ -598,6 +598,17 @@ close(s)
 # This section tests temporary file and directory creation.           #
 #######################################################################
 
+@testset "invalid read/write flags" begin
+    @test try
+        open("this file is not expected to exist", read=false, write=false)
+        false
+    catch e
+        isa(e, SystemError) || rethrow()
+        @test endswith(sprint(showerror, e), "Invalid argument")
+        true
+    end
+end
+
 @testset "quoting filenames" begin
     @test try
         open("this file is not expected to exist")
@@ -1253,7 +1264,7 @@ let f = open(file, "w")
     if Sys.iswindows()
         f = RawFD(ccall(:_open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
     else
-        f = RawFD(ccall(:open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
+        f = RawFD(ccall(:open, Cint, (Cstring, Cint, UInt32...), file, Base.Filesystem.JL_O_RDONLY))
     end
     test_LibcFILE(Libc.FILE(f, Libc.modestr(true, false)))
 end
@@ -1520,11 +1531,11 @@ if !Sys.iswindows()
             chmod(joinpath(d, "empty_outer", "empty_inner"), 0o333)
 
             # Test that an empty directory, even when we can't read its contents, is deletable
-            rm(joinpath(d, "empty_outer"); recursive=true, force=true)
+            rm(joinpath(d, "empty_outer"); recursive=true)
             @test !isdir(joinpath(d, "empty_outer"))
 
             # But a non-empty directory is not
-            @test_throws Base.IOError rm(joinpath(d, "nonempty"); recursive=true, force=true)
+            @test_throws Base.IOError rm(joinpath(d, "nonempty"); recursive=true)
             chmod(joinpath(d, "nonempty"), 0o777)
             rm(joinpath(d, "nonempty"); recursive=true, force=true)
             @test !isdir(joinpath(d, "nonempty"))
