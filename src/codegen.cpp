@@ -167,6 +167,13 @@ typedef Instruction TerminatorInst;
 #undef DEBUG_TYPE //LLVM occasionally likes to set DEBUG_TYPE in a header...
 #define DEBUG_TYPE "julia_irgen_codegen"
 
+void setName(jl_codegen_params_t &params, Value *V, const Twine &Name)
+{
+    if (params.names) {
+        V->setName(Name);
+    }
+}
+
 STATISTIC(EmittedAllocas, "Number of allocas emitted");
 STATISTIC(EmittedIntToPtrs, "Number of inttoptrs emitted");
 STATISTIC(ModulesCreated, "Number of LLVM Modules created");
