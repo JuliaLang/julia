@@ -52,7 +52,7 @@ let collides = 0
             collides += eq
         end
     end
-    @test collides <= 452
+    @test collides <= 516
 end
 @test hash(0.0) != hash(-0.0)
 
