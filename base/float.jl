@@ -653,9 +653,11 @@ function hash(x::Float64, h::UInt)
     return hash_uint64(bitcast(UInt64, x)) - 3h
 end
 
-function hash(x::Union{Float16, Float32}, h::UInt)
+hash(x::Float32, h::UInt) = hash(Float64(x), h)
+
+function hash(x::Float16, h::UInt)
     # see comments on trunc and hash(Real, UInt)
-    if isfinite(x) # all finite Float32/Float16 fit in Int64
+    if isfinite(x) # all finite Float16 fit in Int64
         xi = fptosi(Int64, x)
         if isequal(xi, x)
             return hash(xi, h)
