@@ -211,7 +211,7 @@ function find_source_in_path(basedir)
     src_list = String[]
     for (root, dirs, files) in walkdir(basedir)
         append!(src_list, (joinpath(root, f) for f in files
-                           if endswith(f, ".jl") && isfile(joinpath(root,f))))
+                           if endswith(f, ".jl") && (p = joinpath(root,f); !islink(p) && isfile(p))))
     end
     src_list
 end
