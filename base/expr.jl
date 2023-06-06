@@ -925,6 +925,7 @@ end
     @atomic order ex
 
 Mark `var` or `ex` as being performed atomically, if `ex` is a supported expression.
+If no `order` is specified it defaults to :sequentially_consistent.
 
     @atomic a.b.x = new
     @atomic a.b.x += addend
