@@ -1719,7 +1719,7 @@ jl_aliasinfo_t jl_aliasinfo_t::fromTBAA(jl_codectx_t &ctx, MDNode *tbaa) {
 }
 
 static Type *julia_type_to_llvm(jl_codectx_t &ctx, jl_value_t *jt, bool *isboxed = NULL);
-static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value *fval, StringRef name, jl_value_t *sig, jl_value_t *jlrettype, bool is_opaque_closure);
+static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value *fval, StringRef name, jl_value_t *sig, jl_value_t *jlrettype, bool is_opaque_closure, bool gcstack_arg);
 static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval = -1);
 static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t *s,
                                      jl_binding_t **pbnd, bool assign);
@@ -4107,7 +4107,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
 {
     ++EmittedSpecfunCalls;
     // emit specialized call site
-    jl_returninfo_t returninfo = get_specsig_function(ctx, jl_Module, callee, specFunctionObject, specTypes, jlretty, is_opaque_closure);
+    jl_returninfo_t returninfo = get_specsig_function(ctx, jl_Module, callee, specFunctionObject, specTypes, jlretty, is_opaque_closure, /*gcstack_arg*/ true);
     FunctionType *cft = returninfo.decl.getFunctionType();
     *cc = returninfo.cc;
     *return_roots = returninfo.return_roots;
@@ -4141,6 +4141,9 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
         argvals[idx] = return_roots;
         idx++;
     }
+
+    argvals[idx] = ctx.pgcstack;
+    idx++;
 
     for (size_t i = 0; i < nargs; i++) {
         jl_value_t *jt = jl_nth_slot_type(specTypes, i);
@@ -4204,6 +4207,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
         TheCallee = ai.decorateInst(ctx.builder.CreateAlignedLoad(TheCallee->getType(), GV, Align(sizeof(void*))));
     }
     CallInst *call = ctx.builder.CreateCall(cft, TheCallee, argvals);
+    call->setCallingConv(CallingConv::Swift);
     call->setAttributes(returninfo.attrs);
 
     jl_cgval_t retval;
@@ -5273,7 +5277,7 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
         specF = closure_m.getModuleUnlocked()->getFunction(closure_decls.specFunctionObject);
         if (specF) {
             jl_returninfo_t returninfo = get_specsig_function(ctx, jl_Module, NULL,
-                closure_decls.specFunctionObject, sigtype, rettype, true);
+                closure_decls.specFunctionObject, sigtype, rettype, true, false);
             specF = cast<Function>(returninfo.decl.getCallee());
         }
     }
@@ -5786,19 +5790,21 @@ static void emit_cfunc_invalidate(
     DebugLoc noDbg;
     ctx.builder.SetCurrentDebugLocation(noDbg);
     allocate_gc_frame(ctx, b0);
-
     Function::arg_iterator AI = gf_thunk->arg_begin();
     SmallVector<jl_cgval_t> myargs(nargs);
     if (cc == jl_returninfo_t::SRet || cc == jl_returninfo_t::Union)
         ++AI;
     if (return_roots)
         ++AI;
-    for (size_t i = 0; i < nargs; i++) {
+    if (!is_for_opaque_closure){
+        ++AI;
+    }
+    for (size_t i = 1; i < nargs; i++) {
         jl_value_t *jt = jl_nth_slot_type(calltype, i);
         // n.b. specTypes is required to be a datatype by construction for specsig
         bool isboxed = false;
         Type *et;
-        if (i == 0 && is_for_opaque_closure) {
+        if (i == 1 && is_for_opaque_closure) {
             et = PointerType::get(ctx.types().T_jlvalue, AddressSpace::Derived);
         }
         else if (deserves_argbox(jt)) {
@@ -6259,7 +6265,7 @@ static Function* gen_cfun_wrapper(
         assert(calltype == 3);
         // emit a specsig call
         StringRef protoname = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)callptr, codeinst);
-        jl_returninfo_t returninfo = get_specsig_function(ctx, M, NULL, protoname, lam->specTypes, astrt, is_opaque_closure);
+        jl_returninfo_t returninfo = get_specsig_function(ctx, M, NULL, protoname, lam->specTypes, astrt, is_opaque_closure, true);
         FunctionType *cft = returninfo.decl.getFunctionType();
         jlfunc_sret = (returninfo.cc == jl_returninfo_t::SRet);
 
@@ -6286,6 +6292,7 @@ static Function* gen_cfun_wrapper(
             AllocaInst *return_roots = emit_static_alloca(ctx, get_returnroots_type(ctx, returninfo.return_roots));
             args.push_back(return_roots);
         }
+        args.push_back(ctx.pgcstack);
         for (size_t i = 0; i < nargs + 1; i++) {
             // figure out how to repack the arguments
             jl_cgval_t &inputarg = inputargs[i];
@@ -6332,11 +6339,14 @@ static Function* gen_cfun_wrapper(
             emit_cfunc_invalidate(gf_thunk, returninfo.cc, returninfo.return_roots, lam->specTypes, codeinst->rettype, is_opaque_closure, nargs + 1, ctx.emission_context);
             theFptr = ctx.builder.CreateSelect(age_ok, theFptr, gf_thunk);
         }
+
         assert(cast<PointerType>(theFptr->getType())->isOpaqueOrPointeeTypeMatches(returninfo.decl.getFunctionType()));
         CallInst *call = ctx.builder.CreateCall(
             returninfo.decl.getFunctionType(),
             theFptr, ArrayRef<Value*>(args));
         call->setAttributes(returninfo.attrs);
+        call->setCallingConv(CallingConv::Swift);
+
         switch (returninfo.cc) {
             case jl_returninfo_t::Boxed:
                 retval = mark_julia_type(ctx, call, true, astrt);
@@ -6710,7 +6720,8 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
         args[idx] = return_roots;
         idx++;
     }
-
+    args[idx] = ctx.pgcstack;
+    idx++;
     bool is_opaque_closure = jl_is_method(lam->def.value) && lam->def.method->is_for_opaque_closure;
     for (size_t i = 0; i < jl_nparams(lam->specTypes) && idx < nfargs; ++i) {
         jl_value_t *ty = ((i == 0) && is_opaque_closure) ? (jl_value_t*)jl_any_type :
@@ -6747,6 +6758,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
         idx++;
     }
     CallInst *call = ctx.builder.CreateCall(f.decl, args);
+    call->setCallingConv(CallingConv::Swift);
     call->setAttributes(f.attrs);
 
     jl_cgval_t retval;
@@ -6790,7 +6802,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
     return w;
 }
 
-static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value *fval, StringRef name, jl_value_t *sig, jl_value_t *jlrettype, bool is_opaque_closure)
+static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value *fval, StringRef name, jl_value_t *sig, jl_value_t *jlrettype, bool is_opaque_closure, bool gcstack_arg)
 {
     jl_returninfo_t props = {};
     SmallVector<Type*, 8> fsig;
@@ -6875,6 +6887,13 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
         fsig.push_back(get_returnroots_type(ctx, props.return_roots)->getPointerTo(0));
     }
 
+    if (gcstack_arg){
+        AttrBuilder param(ctx.builder.getContext());
+        param.addAttribute(Attribute::SwiftSelf);
+        attrs.push_back(AttributeSet::get(ctx.builder.getContext(), param));
+        fsig.push_back(PointerType::get(JuliaType::get_ppjlvalue_ty(ctx.builder.getContext()), 0));
+    }
+
     for (size_t i = 0; i < jl_nparams(sig); i++) {
         jl_value_t *jt = jl_tparam(sig, i);
         bool isboxed = false;
@@ -6936,7 +6955,8 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
         else
             fval = emit_bitcast(ctx, fval, ftype->getPointerTo());
     }
-
+    if (gcstack_arg)
+        cast<Function>(fval)->setCallingConv(CallingConv::Swift);
     props.decl = FunctionCallee(ftype, fval);
     props.attrs = attributes;
     return props;
@@ -7163,7 +7183,7 @@ static jl_llvm_functions_t
     Function *f = NULL;
     bool has_sret = false;
     if (specsig) { // assumes !va and !needsparams
-        returninfo = get_specsig_function(ctx, M, NULL, declarations.specFunctionObject, lam->specTypes, jlrettype, ctx.is_opaque_closure);
+        returninfo = get_specsig_function(ctx, M, NULL, declarations.specFunctionObject, lam->specTypes, jlrettype, ctx.is_opaque_closure, !ctx.is_opaque_closure);
         f = cast<Function>(returninfo.decl.getCallee());
         has_sret = (returninfo.cc == jl_returninfo_t::SRet || returninfo.cc == jl_returninfo_t::Union);
         jl_init_function(f, ctx.emission_context.TargetTriple);
@@ -7348,7 +7368,6 @@ static jl_llvm_functions_t
             ctx.spvals_ptr = &*AI++;
         }
     }
-
     // step 6. set up GC frame
     allocate_gc_frame(ctx, b0);
     Value *last_age = NULL;
@@ -7553,6 +7572,12 @@ static jl_llvm_functions_t
         param.addDereferenceableAttr(size);
         param.addAlignmentAttr(Align(sizeof(jl_value_t*)));
         attrs.at(Arg->getArgNo()) = AttributeSet::get(Arg->getContext(), param); // function declaration attributes
+    }
+    if (specsig){
+        Argument *Arg = &*AI;
+        ++AI;
+        AttrBuilder param(ctx.builder.getContext());
+        attrs.at(Arg->getArgNo()) = AttributeSet::get(Arg->getContext(), param);
     }
     for (i = 0; i < nreq; i++) {
         jl_sym_t *s = slot_symbol(ctx, i);
@@ -8564,7 +8589,7 @@ static jl_llvm_functions_t jl_emit_oc_wrapper(orc::ThreadSafeModule &m, jl_codeg
     jl_llvm_functions_t declarations;
     declarations.functionObject = "jl_f_opaque_closure_call";
     if (uses_specsig(mi->specTypes, false, true, rettype, true)) {
-        jl_returninfo_t returninfo = get_specsig_function(ctx, M, NULL, funcName, mi->specTypes, rettype, 1);
+        jl_returninfo_t returninfo = get_specsig_function(ctx, M, NULL, funcName, mi->specTypes, rettype, true, false);
         Function *gf_thunk = cast<Function>(returninfo.decl.getCallee());
         jl_init_function(gf_thunk, ctx.emission_context.TargetTriple);
         size_t nrealargs = jl_nparams(mi->specTypes);
