@@ -8,8 +8,9 @@ using JuliaSyntax, Logging, TerminalLoggers, ProgressLogging, Serialization
 include("../test/test_utils.jl")
 include("../test/fuzz_test.jl")
 
-pkgspath = joinpath(@__DIR__, "pkgs")
-source_paths = find_source_in_path(pkgspath)
+srcpath = isempty(ARGS) ? joinpath(@__DIR__, "pkgs") : ARGS[1]
+source_paths = find_source_in_path(srcpath)
+
 file_count = length(source_paths)
 
 exception_count = 0
@@ -25,8 +26,12 @@ Logging.with_logger(TerminalLogger()) do
         @logprogress ifile/file_count time_ms=round((time() - t0)/ifile*1000, digits = 2)
         text = read(fpath, String)
         expr_cache = fpath*".Expr"
-        #e2 = JuliaSyntax.fl_parseall(text)
-        e2 = open(deserialize, fpath*".Expr")
+        e2 = if isfile(expr_cache)
+            open(deserialize, fpath*".Expr")
+        else
+            @warn "Expr cache not found, parsing using reference parser" expr_cache maxlog=1
+            JuliaSyntax.fl_parseall(text, filename=fpath)
+        end
         @assert Meta.isexpr(e2, :toplevel)
         try
             e1 = JuliaSyntax.parseall(Expr, text, filename=fpath, ignore_warnings=true)
