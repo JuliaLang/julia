@@ -9,6 +9,7 @@ TESTS_jl := $(patsubst $(SRCDIR)/%,%,$(wildcard $(SRCDIR)/*.jl))
 TESTS := $(TESTS_ll) $(TESTS_jl)
 
 . $(TESTS):
+	$(MAKE) -C $(JULIAHOME)/deps install-llvm-tools
 	PATH=$(build_bindir):$(build_depsbindir):$$PATH \
 	LD_LIBRARY_PATH=${build_libdir}:$$LD_LIBRARY_PATH \
 	$(build_depsbindir)/lit/lit.py -v "$(addprefix $(SRCDIR)/,$@)"
