@@ -1296,6 +1296,7 @@ extern "C" {
 #endif
         (int) DICompileUnit::DebugEmissionKind::FullDebug,
         1,
+        1,
         jl_rettype_inferred_addr, NULL };
 }
 
@@ -4107,7 +4108,8 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
 {
     ++EmittedSpecfunCalls;
     // emit specialized call site
-    jl_returninfo_t returninfo = get_specsig_function(ctx, jl_Module, callee, specFunctionObject, specTypes, jlretty, is_opaque_closure, /*gcstack_arg*/ true);
+    bool gcstack_arg = JL_FEAT_TEST(ctx, gcstack_arg);
+    jl_returninfo_t returninfo = get_specsig_function(ctx, jl_Module, callee, specFunctionObject, specTypes, jlretty, is_opaque_closure, gcstack_arg);
     FunctionType *cft = returninfo.decl.getFunctionType();
     *cc = returninfo.cc;
     *return_roots = returninfo.return_roots;
@@ -4141,10 +4143,10 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
         argvals[idx] = return_roots;
         idx++;
     }
-
-    argvals[idx] = ctx.pgcstack;
-    idx++;
-
+    if (gcstack_arg) {
+        argvals[idx] = ctx.pgcstack;
+        idx++;
+    }
     for (size_t i = 0; i < nargs; i++) {
         jl_value_t *jt = jl_nth_slot_type(specTypes, i);
         // n.b.: specTypes is required to be a datatype by construction for specsig
@@ -4207,8 +4209,9 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
         TheCallee = ai.decorateInst(ctx.builder.CreateAlignedLoad(TheCallee->getType(), GV, Align(sizeof(void*))));
     }
     CallInst *call = ctx.builder.CreateCall(cft, TheCallee, argvals);
-    call->setCallingConv(CallingConv::Swift);
     call->setAttributes(returninfo.attrs);
+    if (gcstack_arg)
+        call->setCallingConv(CallingConv::Swift);
 
     jl_cgval_t retval;
     switch (returninfo.cc) {
@@ -5796,8 +5799,8 @@ static void emit_cfunc_invalidate(
         ++AI;
     if (return_roots)
         ++AI;
-    if (!is_for_opaque_closure){
-        ++AI;
+    if (!is_for_opaque_closure && JL_FEAT_TEST(ctx,gcstack_arg)){
+        ++AI; // gcstack_arg
     }
     for (size_t i = 1; i < nargs; i++) {
         jl_value_t *jt = jl_nth_slot_type(calltype, i);
@@ -6264,8 +6267,9 @@ static Function* gen_cfun_wrapper(
         bool is_opaque_closure = jl_is_method(lam->def.value) && lam->def.method->is_for_opaque_closure;
         assert(calltype == 3);
         // emit a specsig call
+        bool gcstack_arg = JL_FEAT_TEST(ctx, gcstack_arg);
         StringRef protoname = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)callptr, codeinst);
-        jl_returninfo_t returninfo = get_specsig_function(ctx, M, NULL, protoname, lam->specTypes, astrt, is_opaque_closure, true);
+        jl_returninfo_t returninfo = get_specsig_function(ctx, M, NULL, protoname, lam->specTypes, astrt, is_opaque_closure, gcstack_arg);
         FunctionType *cft = returninfo.decl.getFunctionType();
         jlfunc_sret = (returninfo.cc == jl_returninfo_t::SRet);
 
@@ -6292,7 +6296,8 @@ static Function* gen_cfun_wrapper(
             AllocaInst *return_roots = emit_static_alloca(ctx, get_returnroots_type(ctx, returninfo.return_roots));
             args.push_back(return_roots);
         }
-        args.push_back(ctx.pgcstack);
+        if (gcstack_arg)
+            args.push_back(ctx.pgcstack);
         for (size_t i = 0; i < nargs + 1; i++) {
             // figure out how to repack the arguments
             jl_cgval_t &inputarg = inputargs[i];
@@ -6345,7 +6350,8 @@ static Function* gen_cfun_wrapper(
             returninfo.decl.getFunctionType(),
             theFptr, ArrayRef<Value*>(args));
         call->setAttributes(returninfo.attrs);
-        call->setCallingConv(CallingConv::Swift);
+        if (gcstack_arg)
+            call->setCallingConv(CallingConv::Swift);
 
         switch (returninfo.cc) {
             case jl_returninfo_t::Boxed:
@@ -6720,8 +6726,11 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
         args[idx] = return_roots;
         idx++;
     }
-    args[idx] = ctx.pgcstack;
-    idx++;
+    bool gcstack_arg = JL_FEAT_TEST(ctx, gcstack_arg);
+    if (gcstack_arg) {
+        args[idx] = ctx.pgcstack;
+        idx++;
+    }
     bool is_opaque_closure = jl_is_method(lam->def.value) && lam->def.method->is_for_opaque_closure;
     for (size_t i = 0; i < jl_nparams(lam->specTypes) && idx < nfargs; ++i) {
         jl_value_t *ty = ((i == 0) && is_opaque_closure) ? (jl_value_t*)jl_any_type :
@@ -6758,9 +6767,9 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
         idx++;
     }
     CallInst *call = ctx.builder.CreateCall(f.decl, args);
-    call->setCallingConv(CallingConv::Swift);
     call->setAttributes(f.attrs);
-
+    if (gcstack_arg)
+        call->setCallingConv(CallingConv::Swift);
     jl_cgval_t retval;
     if (retarg != -1) {
         Value *theArg;
@@ -7183,7 +7192,8 @@ static jl_llvm_functions_t
     Function *f = NULL;
     bool has_sret = false;
     if (specsig) { // assumes !va and !needsparams
-        returninfo = get_specsig_function(ctx, M, NULL, declarations.specFunctionObject, lam->specTypes, jlrettype, ctx.is_opaque_closure, !ctx.is_opaque_closure);
+        returninfo = get_specsig_function(ctx, M, NULL, declarations.specFunctionObject, lam->specTypes,
+                                          jlrettype, ctx.is_opaque_closure, JL_FEAT_TEST(ctx,gcstack_arg) && !ctx.is_opaque_closure);
         f = cast<Function>(returninfo.decl.getCallee());
         has_sret = (returninfo.cc == jl_returninfo_t::SRet || returninfo.cc == jl_returninfo_t::Union);
         jl_init_function(f, ctx.emission_context.TargetTriple);
@@ -7573,7 +7583,7 @@ static jl_llvm_functions_t
         param.addAlignmentAttr(Align(sizeof(jl_value_t*)));
         attrs.at(Arg->getArgNo()) = AttributeSet::get(Arg->getContext(), param); // function declaration attributes
     }
-    if (specsig){
+    if (specsig && JL_FEAT_TEST(ctx, gcstack_arg)){
         Argument *Arg = &*AI;
         ++AI;
         AttrBuilder param(ctx.builder.getContext());
