@@ -595,10 +595,11 @@ typedef struct _jl_binding_t {
     _Atomic(jl_value_t*) ty;  // binding type
     uint8_t constp:1;
     uint8_t exportp:1;
+    uint8_t scoped_exportp:1; // `scoped export foo` sets both `exportp` and `scoped_exportp`.
     uint8_t imported:1;
     uint8_t usingfailed:1;
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
-    uint8_t padding:2;
+    uint8_t padding:1;
 } jl_binding_t;
 
 typedef struct {
@@ -1736,7 +1737,7 @@ JL_DLLEXPORT void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
 JL_DLLEXPORT void jl_module_use_as(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname);
 JL_DLLEXPORT void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
 JL_DLLEXPORT void jl_module_import_as(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname);
-JL_DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s);
+JL_DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s, int scoped);
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s);
 JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m);

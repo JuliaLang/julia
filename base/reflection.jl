@@ -86,10 +86,10 @@ since it is not idiomatic to explicitly export names from `Main`.
 
 See also: [`@locals`](@ref Base.@locals), [`@__MODULE__`](@ref).
 """
-names(m::Module; all::Bool = false, imported::Bool = false) =
-    sort!(unsorted_names(m; all, imported))
-unsorted_names(m::Module; all::Bool = false, imported::Bool = false) =
-    ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported)
+names(m::Module; all::Bool = false, imported::Bool = false, scoped::Bool = true) =
+    sort!(unsorted_names(m; all, imported, scoped))
+unsorted_names(m::Module; all::Bool = false, imported::Bool = false, scoped::Bool = true) =
+    ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint, Cint), m, all, imported, scoped)
 
 isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s) != 0
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0

@@ -49,7 +49,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
     if (default_names) {
         jl_set_const(m, name, (jl_value_t*)m);
     }
-    jl_module_export(m, name);
+    jl_module_export(m, name, 0);
     JL_GC_POP();
     return m;
 }
@@ -641,10 +641,11 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
     }
 }
 
-JL_DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s)
+JL_DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s, int scoped)
 {
     jl_binding_t *b = jl_get_module_binding(from, s, 1);
-    b->exportp = 1;
+    b->exportp = !scoped;
+    b->scoped_exportp = scoped;
 }
 
 JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var)
@@ -902,7 +903,7 @@ JL_DLLEXPORT jl_value_t *jl_module_usings(jl_module_t *m)
     return (jl_value_t*)a;
 }
 
-JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
+JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported, int scoped)
 {
     jl_array_t *a = jl_alloc_array_1d(jl_array_symbol_type, 0);
     JL_GC_PUSH1(&a);
@@ -914,6 +915,7 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
         jl_sym_t *asname = b->globalref->name;
         int hidden = jl_symbol_name(asname)[0]=='#';
         if ((b->exportp ||
+             (scoped && b->scoped_exportp) ||
              (imported && b->imported) ||
              (jl_atomic_load_relaxed(&b->owner) == b && !b->imported && (all || m == jl_main_module))) &&
             (all || (!b->deprecated && !hidden))) {

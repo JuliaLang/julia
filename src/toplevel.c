@@ -838,11 +838,14 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         return jl_nothing;
     }
     else if (head == jl_export_sym) {
+        int scoped = 0;
         for (size_t i = 0; i < jl_array_len(ex->args); i++) {
             jl_sym_t *name = (jl_sym_t*)jl_array_ptr_ref(ex->args, i);
             if (!jl_is_symbol(name))
-                jl_eval_errorf(m, "syntax: malformed \"export\" statement");
-            jl_module_export(m, name);
+                // jl_eval_errorf(m, "syntax: malformed \"export\" statement");
+                scoped = 1; // TODO Make this much more strict
+            else
+                jl_module_export(m, name, scoped);
         }
         JL_GC_POP();
         return jl_nothing;
