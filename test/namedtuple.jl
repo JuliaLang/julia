@@ -342,6 +342,12 @@ end
     @test_throws LoadError include_string(Main, "@NamedTuple(a::Int, b)")
 end
 
+# @Kwargs
+@testset "@Kwargs" begin
+   @test @Kwargs{a::Int,b::String}  == typeof(pairs((;a=1,b="2")))
+   @test @Kwargs{} == typeof(pairs((;)))
+end
+
 # issue #29333, implicit names
 let x = 1, y = 2
     @test (;y) === (y = 2,)

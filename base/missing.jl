@@ -12,7 +12,7 @@ where it is not supported. The error message, in the `msg` field
 may provide more specific details.
 """
 struct MissingException <: Exception
-    msg::String
+    msg::AbstractString
 end
 
 showerror(io::IO, ex::MissingException) =
@@ -136,11 +136,14 @@ max(::Missing, ::Missing) = missing
 max(::Missing, ::Any)     = missing
 max(::Any,     ::Missing) = missing
 
+missing_conversion_msg(@nospecialize T) =
+    LazyString("cannot convert a missing value to type ", T, ": use Union{", T, ", Missing} instead")
+
 # Rounding and related functions
 round(::Missing, ::RoundingMode=RoundNearest; sigdigits::Integer=0, digits::Integer=0, base::Integer=0) = missing
 round(::Type{>:Missing}, ::Missing, ::RoundingMode=RoundNearest) = missing
 round(::Type{T}, ::Missing, ::RoundingMode=RoundNearest) where {T} =
-    throw(MissingException("cannot convert a missing value to type $T: use Union{$T, Missing} instead"))
+    throw(MissingException(missing_conversion_msg(T)))
 round(::Type{T}, x::Any, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype_checked(T), x, r)
 # to fix ambiguities
 round(::Type{T}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {T>:Missing,Tr} = round(nonmissingtype_checked(T), x, r)
@@ -151,8 +154,7 @@ for f in (:(ceil), :(floor), :(trunc))
     @eval begin
         ($f)(::Missing; sigdigits::Integer=0, digits::Integer=0, base::Integer=0) = missing
         ($f)(::Type{>:Missing}, ::Missing) = missing
-        ($f)(::Type{T}, ::Missing) where {T} =
-            throw(MissingException("cannot convert a missing value to type $T: use Union{$T, Missing} instead"))
+        ($f)(::Type{T}, ::Missing) where {T} = throw(MissingException(missing_conversion_msg(T)))
         ($f)(::Type{T}, x::Any) where {T>:Missing} = $f(nonmissingtype_checked(T), x)
         # to fix ambiguities
         ($f)(::Type{T}, x::Rational) where {T>:Missing} = $f(nonmissingtype_checked(T), x)
@@ -265,7 +267,7 @@ keys(itr::SkipMissing) =
     Iterators.filter(i -> @inbounds(itr.x[i]) !== missing, keys(itr.x))
 @propagate_inbounds function getindex(itr::SkipMissing, I...)
     v = itr.x[I...]
-    v === missing && throw(MissingException("the value at index $I is missing"))
+    v === missing && throw(MissingException(LazyString("the value at index ", I, " is missing")))
     v
 end
 

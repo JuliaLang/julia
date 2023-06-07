@@ -674,27 +674,22 @@ function hash(x::Real, h::UInt)
         num = -num
         den = -den
     end
-    z = trailing_zeros(num)
-    if z != 0
-        num >>= z
-        pow += z
-    end
-    z = trailing_zeros(den)
-    if z != 0
-        den >>= z
-        pow -= z
-    end
+    num_z = trailing_zeros(num)
+    num >>= num_z
+    den_z = trailing_zeros(den)
+    den >>= den_z
+    pow += num_z - den_z
 
     # handle values representable as Int64, UInt64, Float64
     if den == 1
-        left = ndigits0z(num,2) + pow
-        right = trailing_zeros(num) + pow
+        left = top_set_bit(abs(num)) + pow
+        right = pow + den_z
         if -1074 <= right
-            if 0 <= right && left <= 64
-                left <= 63                     && return hash(Int64(num) << Int(pow), h)
-                signbit(num) == signbit(den)   && return hash(UInt64(num) << Int(pow), h)
+            if 0 <= right
+                left <= 63 && return hash(Int64(num) << Int(pow), h)
+                left <= 64 && !signbit(num) && return hash(UInt64(num) << Int(pow), h)
             end # typemin(Int64) handled by Float64 case
-            left <= 1024 && left - right <= 53 && return hash(ldexp(Float64(num),pow), h)
+            left <= 1024 && left - right <= 53 && return hash(ldexp(Float64(num), pow), h)
         end
     end
 
@@ -875,7 +870,7 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     end
                 end
                 function (::Type{$Ti})(x::$Tf)
-                    if ($(Tf(typemin(Ti))) <= x <= $(Tf(typemax(Ti)))) && (round(x, RoundToZero) == x)
+                    if ($(Tf(typemin(Ti))) <= x <= $(Tf(typemax(Ti)))) && isinteger(x)
                         return unsafe_trunc($Ti,x)
                     else
                         throw(InexactError($(Expr(:quote,Ti.name.name)), $Ti, x))
@@ -896,7 +891,7 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     end
                 end
                 function (::Type{$Ti})(x::$Tf)
-                    if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))) && (round(x, RoundToZero) == x)
+                    if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))) && isinteger(x)
                         return unsafe_trunc($Ti,x)
                     else
                         throw(InexactError($(Expr(:quote,Ti.name.name)), $Ti, x))

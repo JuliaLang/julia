@@ -255,7 +255,7 @@ static void buildBasicPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimiza
     MPM.addPass(Annotation2MetadataPass());
     MPM.addPass(ConstantMergePass());
     if (!options.dump_native) {
-        JULIA_PASS(MPM.addPass(CPUFeatures()));
+        JULIA_PASS(MPM.addPass(CPUFeaturesPass()));
         if (O.getSpeedupLevel() > 0) {
             MPM.addPass(createModuleToFunctionPassAdaptor(InstSimplifyPass()));
         }
@@ -280,7 +280,7 @@ static void buildBasicPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimiza
         MPM.addPass(createModuleToPostOrderCGSCCPassAdaptor(std::move(CGPM)));
     }
     invokeOptimizerEarlyCallbacks(MPM, PB, O);
-    JULIA_PASS(MPM.addPass(LowerSIMDLoop()));
+    JULIA_PASS(MPM.addPass(LowerSIMDLoopPass()));
     {
         FunctionPassManager FPM;
         {
@@ -297,21 +297,21 @@ static void buildBasicPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimiza
         //TODO no barrier pass?
         {
             FunctionPassManager FPM;
-            JULIA_PASS(FPM.addPass(LowerExcHandlers()));
+            JULIA_PASS(FPM.addPass(LowerExcHandlersPass()));
             JULIA_PASS(FPM.addPass(GCInvariantVerifierPass(false)));
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
-        JULIA_PASS(MPM.addPass(RemoveNI()));
-        JULIA_PASS(MPM.addPass(createModuleToFunctionPassAdaptor(LateLowerGC())));
+        JULIA_PASS(MPM.addPass(RemoveNIPass()));
+        JULIA_PASS(MPM.addPass(createModuleToFunctionPassAdaptor(LateLowerGCPass())));
         JULIA_PASS(MPM.addPass(FinalLowerGCPass()));
         JULIA_PASS(MPM.addPass(LowerPTLSPass(options.dump_native)));
     } else {
-        JULIA_PASS(MPM.addPass(RemoveNI()));
+        JULIA_PASS(MPM.addPass(RemoveNIPass()));
     }
-    JULIA_PASS(MPM.addPass(LowerSIMDLoop())); // TODO why do we do this twice
+    JULIA_PASS(MPM.addPass(LowerSIMDLoopPass())); // TODO why do we do this twice
     if (options.dump_native) {
-        JULIA_PASS(MPM.addPass(MultiVersioning(options.external_use)));
-        JULIA_PASS(MPM.addPass(CPUFeatures()));
+        JULIA_PASS(MPM.addPass(MultiVersioningPass(options.external_use)));
+        JULIA_PASS(MPM.addPass(CPUFeaturesPass()));
         if (O.getSpeedupLevel() > 0) {
             FunctionPassManager FPM;
             FPM.addPass(InstSimplifyPass());
@@ -327,7 +327,7 @@ static void buildBasicPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimiza
         MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
     }
     addSanitizerPasses(MPM, O);
-    JULIA_PASS(MPM.addPass(createModuleToFunctionPassAdaptor(DemoteFloat16())));
+    JULIA_PASS(MPM.addPass(createModuleToFunctionPassAdaptor(DemoteFloat16Pass())));
 }
 
 //Use for O2 and above
@@ -371,9 +371,9 @@ static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimizat
         MPM.addPass(createModuleToPostOrderCGSCCPassAdaptor(std::move(CGPM)));
     }
     if (options.dump_native) {
-        JULIA_PASS(MPM.addPass(MultiVersioning(options.external_use)));
+        JULIA_PASS(MPM.addPass(MultiVersioningPass(options.external_use)));
     }
-    JULIA_PASS(MPM.addPass(CPUFeatures()));
+    JULIA_PASS(MPM.addPass(CPUFeaturesPass()));
     {
         FunctionPassManager FPM;
         FPM.addPass(SROAPass());
@@ -387,7 +387,7 @@ static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimizat
         invokePeepholeEPCallbacks(FPM, PB, O);
         MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
     }
-    MPM.addPass(LowerSIMDLoop());
+    JULIA_PASS(MPM.addPass(LowerSIMDLoopPass()));
     {
         FunctionPassManager FPM;
         {
@@ -468,14 +468,14 @@ static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimizat
         //TODO barrier pass?
         {
             FunctionPassManager FPM;
-            JULIA_PASS(FPM.addPass(LowerExcHandlers()));
+            JULIA_PASS(FPM.addPass(LowerExcHandlersPass()));
             JULIA_PASS(FPM.addPass(GCInvariantVerifierPass(false)));
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
         // Needed **before** LateLowerGCFrame on LLVM < 12
         // due to bug in `CreateAlignmentAssumption`.
-        JULIA_PASS(MPM.addPass(RemoveNI()));
-        JULIA_PASS(MPM.addPass(createModuleToFunctionPassAdaptor(LateLowerGC())));
+        JULIA_PASS(MPM.addPass(RemoveNIPass()));
+        JULIA_PASS(MPM.addPass(createModuleToFunctionPassAdaptor(LateLowerGCPass())));
         JULIA_PASS(MPM.addPass(FinalLowerGCPass()));
         {
             FunctionPassManager FPM;
@@ -492,11 +492,11 @@ static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimizat
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
     } else {
-        JULIA_PASS(MPM.addPass(RemoveNI()));
+        JULIA_PASS(MPM.addPass(RemoveNIPass()));
     }
     {
         FunctionPassManager FPM;
-        JULIA_PASS(FPM.addPass(CombineMulAdd()));
+        JULIA_PASS(FPM.addPass(CombineMulAddPass()));
         FPM.addPass(DivRemPairsPass());
         MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
     }
@@ -505,7 +505,7 @@ static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimizat
     addSanitizerPasses(MPM, O);
     {
         FunctionPassManager FPM;
-        JULIA_PASS(FPM.addPass(DemoteFloat16()));
+        JULIA_PASS(FPM.addPass(DemoteFloat16Pass()));
         FPM.addPass(GVNPass());
         MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
     }
@@ -517,13 +517,13 @@ namespace {
     auto createPIC(StandardInstrumentations &SI) JL_NOTSAFEPOINT {
         auto PIC = std::make_unique<PassInstrumentationCallbacks>();
 //Borrowed from LLVM PassBuilder.cpp:386
-#define MODULE_PASS(NAME, CREATE_PASS)                                         \
+#define MODULE_PASS(NAME, CLASS, CREATE_PASS)                                         \
 PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 #define MODULE_PASS_WITH_PARAMS(NAME, CLASS, CREATE_PASS, PARSER, PARAMS)      \
 PIC->addClassToPassName(CLASS, NAME);
 #define MODULE_ANALYSIS(NAME, CREATE_PASS)                                     \
 PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
-#define FUNCTION_PASS(NAME, CREATE_PASS)                                       \
+#define FUNCTION_PASS(NAME, CLASS, CREATE_PASS)                                       \
 PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 #define FUNCTION_PASS_WITH_PARAMS(NAME, CLASS, CREATE_PASS, PARSER, PARAMS)    \
 PIC->addClassToPassName(CLASS, NAME);
@@ -531,13 +531,13 @@ PIC->addClassToPassName(CLASS, NAME);
 PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 #define LOOPNEST_PASS(NAME, CREATE_PASS)                                       \
 PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
-#define LOOP_PASS(NAME, CREATE_PASS)                                           \
+#define LOOP_PASS(NAME, CLASS, CREATE_PASS)                                           \
 PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 #define LOOP_PASS_WITH_PARAMS(NAME, CLASS, CREATE_PASS, PARSER, PARAMS)        \
 PIC->addClassToPassName(CLASS, NAME);
 #define LOOP_ANALYSIS(NAME, CREATE_PASS)                                       \
 PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
-#define CGSCC_PASS(NAME, CREATE_PASS)                                          \
+#define CGSCC_PASS(NAME, CLASS, CREATE_PASS)                                          \
 PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 #define CGSCC_PASS_WITH_PARAMS(NAME, CLASS, CREATE_PASS, PARSER, PARAMS)       \
 PIC->addClassToPassName(CLASS, NAME);
@@ -710,7 +710,7 @@ void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
     PB.registerPipelineParsingCallback(
         [](StringRef Name, FunctionPassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-#define FUNCTION_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
+#define FUNCTION_PASS(NAME, CLASS, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
 #include "llvm-julia-passes.inc"
 #undef FUNCTION_PASS
             return false;
@@ -719,7 +719,7 @@ void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
     PB.registerPipelineParsingCallback(
         [](StringRef Name, ModulePassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-#define MODULE_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
+#define MODULE_PASS(NAME, CLASS, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
 #include "llvm-julia-passes.inc"
 #undef MODULE_PASS
             //Add full pipelines here
@@ -740,7 +740,7 @@ void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
     PB.registerPipelineParsingCallback(
         [](StringRef Name, LoopPassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-#define LOOP_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
+#define LOOP_PASS(NAME, CLASS, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
 #include "llvm-julia-passes.inc"
 #undef LOOP_PASS
             return false;

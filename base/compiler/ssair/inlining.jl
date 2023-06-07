@@ -57,18 +57,17 @@ struct UnionSplit
 end
 
 struct InliningEdgeTracker
-    et::Union{Nothing,EdgeTracker}
+    edges::Vector{Any}
     invokesig::Union{Nothing,Vector{Any}}
+    InliningEdgeTracker(state::InliningState, invokesig::Union{Nothing,Vector{Any}}=nothing) =
+        new(state.edges, invokesig)
 end
-InliningEdgeTracker(et::Union{Nothing,EdgeTracker}) = InliningEdgeTracker(et, nothing)
 
-function add_inlining_backedge!((; et, invokesig)::InliningEdgeTracker, mi::MethodInstance)
-    if et !== nothing
-        if invokesig === nothing
-            add_backedge!(et, mi)
-        else
-            add_invoke_backedge!(et, invoke_signature(invokesig), mi)
-        end
+function add_inlining_backedge!((; edges, invokesig)::InliningEdgeTracker, mi::MethodInstance)
+    if invokesig === nothing
+        push!(edges, mi)
+    else # invoke backedge
+        push!(edges, invoke_signature(invokesig), mi)
     end
     return nothing
 end
@@ -871,9 +870,8 @@ end
 function resolve_todo(mi::MethodInstance, result::Union{MethodMatch,InferenceResult},
         argtypes::Vector{Any}, @nospecialize(info::CallInfo), flag::UInt8,
         state::InliningState; invokesig::Union{Nothing,Vector{Any}}=nothing)
-    et = InliningEdgeTracker(state.et, invokesig)
+    et = InliningEdgeTracker(state, invokesig)
 
-    #XXX: update_valid_age!(min_valid[1], max_valid[1], sv)
     if isa(result, InferenceResult)
         src = result.src
         effects = result.ipo_effects
@@ -916,7 +914,7 @@ function resolve_todo(mi::MethodInstance, argtypes::Vector{Any},
         return nothing
     end
 
-    et = InliningEdgeTracker(state.et, nothing)
+    et = InliningEdgeTracker(state)
 
     cached_result = get_cached_result(state, mi)
     if cached_result isa ConstantCase
@@ -1003,7 +1001,7 @@ function flags_for_effects(effects::Effects)
 end
 
 function handle_single_case!(todo::Vector{Pair{Int,Any}},
-    ir::IRCode, idx::Int, stmt::Expr, @nospecialize(case), params::OptimizationParams,
+    ir::IRCode, idx::Int, stmt::Expr, @nospecialize(case),
     isinvoke::Bool = false)
     if isa(case, ConstantCase)
         ir[SSAValue(idx)][:inst] = case.val
@@ -1191,13 +1189,13 @@ function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
             validate_sparams(mi.sparam_vals) || return nothing
             if Union{} !== argtypes_to_type(argtypes) <: mi.def.sig
                 item = resolve_todo(mi, result.result, argtypes, info, flag, state; invokesig)
-                handle_single_case!(todo, ir, idx, stmt, item, OptimizationParams(state.interp), true)
+                handle_single_case!(todo, ir, idx, stmt, item, true)
                 return nothing
             end
         end
         item = analyze_method!(match, argtypes, info, flag, state; allow_typevars=false, invokesig)
     end
-    handle_single_case!(todo, ir, idx, stmt, item, OptimizationParams(state.interp), true)
+    handle_single_case!(todo, ir, idx, stmt, item, true)
     return nothing
 end
 
@@ -1451,7 +1449,7 @@ function handle_call!(todo::Vector{Pair{Int,Any}},
     cases === nothing && return nothing
     cases, all_covered, joint_effects = cases
     handle_cases!(todo, ir, idx, stmt, argtypes_to_type(sig.argtypes), cases,
-        all_covered, joint_effects, OptimizationParams(state.interp))
+        all_covered, joint_effects)
 end
 
 function handle_match!(cases::Vector{InliningCase},
@@ -1490,7 +1488,7 @@ function semiconcrete_result_item(result::SemiConcreteResult,
         @nospecialize(info::CallInfo), flag::UInt8, state::InliningState)
     mi = result.mi
     if !OptimizationParams(state.interp).inlining || is_stmt_noinline(flag)
-        et = InliningEdgeTracker(state.et, nothing)
+        et = InliningEdgeTracker(state)
         return compileable_specialization(mi, result.effects, et, info;
             compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
     else
@@ -1524,7 +1522,7 @@ may_inline_concrete_result(result::ConcreteResult) =
 function concrete_result_item(result::ConcreteResult, @nospecialize(info::CallInfo), state::InliningState;
     invokesig::Union{Nothing,Vector{Any}}=nothing)
     if !may_inline_concrete_result(result)
-        et = InliningEdgeTracker(state.et, invokesig)
+        et = InliningEdgeTracker(state, invokesig)
         return compileable_specialization(result.mi, result.effects, et, info;
             compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
     end
@@ -1534,12 +1532,12 @@ end
 
 function handle_cases!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stmt::Expr,
     @nospecialize(atype), cases::Vector{InliningCase}, fully_covered::Bool,
-    joint_effects::Effects, params::OptimizationParams)
+    joint_effects::Effects)
     # If we only have one case and that case is fully covered, we may either
     # be able to do the inlining now (for constant cases), or push it directly
     # onto the todo list
     if fully_covered && length(cases) == 1
-        handle_single_case!(todo, ir, idx, stmt, cases[1].item, params)
+        handle_single_case!(todo, ir, idx, stmt, cases[1].item)
     elseif length(cases) > 0
         isa(atype, DataType) || return nothing
         for case in cases
@@ -1572,7 +1570,7 @@ function handle_opaque_closure_call!(todo::Vector{Pair{Int,Any}},
             item = analyze_method!(info.match, sig.argtypes, info, flag, state; allow_typevars=false)
         end
     end
-    handle_single_case!(todo, ir, idx, stmt, item, OptimizationParams(state.interp))
+    handle_single_case!(todo, ir, idx, stmt, item)
     return nothing
 end
 
@@ -1584,7 +1582,7 @@ function handle_modifyfield!_call!(ir::IRCode, idx::Int, stmt::Expr, info::Modif
     length(info.results) == 1 || return nothing
     match = info.results[1]::MethodMatch
     match.fully_covers || return nothing
-    case = compileable_specialization(match, Effects(), InliningEdgeTracker(state.et), info;
+    case = compileable_specialization(match, Effects(), InliningEdgeTracker(state), info;
         compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
     case === nothing && return nothing
     stmt.head = :invoke_modify

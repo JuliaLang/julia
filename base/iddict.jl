@@ -134,7 +134,10 @@ end
 
 function empty!(d::IdDict)
     resize!(d.ht, 32)
-    ccall(:memset, Ptr{Cvoid}, (Ptr{Cvoid}, Cint, Csize_t), d.ht, 0, sizeof(d.ht))
+    ht = d.ht
+    t = @_gc_preserve_begin ht
+    memset(unsafe_convert(Ptr{Cvoid}, ht), 0, sizeof(ht))
+    @_gc_preserve_end t
     d.ndel = 0
     d.count = 0
     return d

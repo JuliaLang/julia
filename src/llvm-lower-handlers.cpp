@@ -236,7 +236,7 @@ static bool lowerExcHandlers(Function &F) {
 
 } // anonymous namespace
 
-PreservedAnalyses LowerExcHandlers::run(Function &F, FunctionAnalysisManager &AM)
+PreservedAnalyses LowerExcHandlersPass::run(Function &F, FunctionAnalysisManager &AM)
 {
     bool modified = lowerExcHandlers(F);
 #ifdef JL_VERIFY_PASSES
