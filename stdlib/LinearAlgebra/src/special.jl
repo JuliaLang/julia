@@ -138,6 +138,9 @@ function \(B::AbstractBandedMatrix, H::UpperHessenberg)
     return istriu(B) ? UpperHessenberg(A) : A
 end
 
+(\)(B::Bidiagonal, U::UpperHessenberg) = @invoke \(B::AbstractBandedMatrix, U::UpperHessenberg)
+(/)(U::UpperHessenberg, B::Bidiagonal) = @invoke /(U::UpperHessenberg, B::AbstractBandedMatrix)
+
 # specialized +/- for structured matrices. If these are removed, it falls
 # back to broadcasting which has ~2-10x speed regressions.
 # For the other structure matrix pairs, broadcasting works well.
