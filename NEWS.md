@@ -22,13 +22,6 @@ Language changes
   representation of the keyword arguments' types is simplified using the new
   `@Kwargs{key1::Type1, ...}` macro syntax ([#49959]).
 
-* New builtins `getglobal(::Module, ::Symbol[, order])` and `setglobal!(::Module, ::Symbol, x[, order])`
-  for reading from and writing to globals. `getglobal` should now be preferred for accessing globals over
-  `getfield`. ([#44137])
-* The `@invoke` macro introduced in 1.7 is now exported. Additionally, it now uses `Core.Typeof(x)`
-  rather than `Any` when a type annotation is omitted for an argument `x` so that types passed
-  as arguments are handled correctly. ([#45807])
-* The `invokelatest` function and `@invokelatest` macro introduced in 1.7 are now exported. ([#45831])
 * `mod(x::AbstractFloat, -Inf)` now returns `x` (as long as `x` is finite), this aligns with C standard and
 is considered a bug fix ([#47102])
 
