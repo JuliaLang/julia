@@ -216,7 +216,7 @@ namespace {
     template<typename PB> std::true_type hasInvokeCallbacks_helper(decltype(&PB::invokePipelineStartEPCallbacks)) JL_NOTSAFEPOINT;
     std::false_type hasInvokeCallbacks_helper(...) JL_NOTSAFEPOINT;
 
-    static constexpr bool hasInvokeCallbacks = decltype(hasInvokeCallbacks_helper<PassBuilder>(nullptr))::value;
+    // static constexpr bool hasInvokeCallbacks = decltype(hasInvokeCallbacks_helper<PassBuilder>(nullptr))::value;
 
     //If PB is a nullptr, don't invoke anything (this happens when running julia from opt)
     template<typename PB_t>
