@@ -325,7 +325,7 @@ please remove the `backport-X.Y` tag from the originating pull request for the c
  - use lower case with underscores for method names
  - it is generally preferred to use ASCII operators and identifiers over
    Unicode equivalents whenever possible
- - in docstring refer to the language as "Julia" and the executable as "`julia`"
+ - in docstrings refer to the language as "Julia" and the executable as "`julia`"
 
 #### General Formatting Guidelines For C code contributions
 
