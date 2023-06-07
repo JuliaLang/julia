@@ -5280,7 +5280,7 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
         specF = closure_m.getModuleUnlocked()->getFunction(closure_decls.specFunctionObject);
         if (specF) {
             jl_returninfo_t returninfo = get_specsig_function(ctx, jl_Module, NULL,
-                closure_decls.specFunctionObject, sigtype, rettype, true, false);
+                closure_decls.specFunctionObject, sigtype, rettype, true, JL_FEAT_TEST(ctx,gcstack_arg));
             specF = cast<Function>(returninfo.decl.getCallee());
         }
     }
@@ -5799,15 +5799,15 @@ static void emit_cfunc_invalidate(
         ++AI;
     if (return_roots)
         ++AI;
-    if (!is_for_opaque_closure && JL_FEAT_TEST(ctx,gcstack_arg)){
+    if (JL_FEAT_TEST(ctx,gcstack_arg)){
         ++AI; // gcstack_arg
     }
-    for (size_t i = 1; i < nargs; i++) {
+    for (size_t i = 0; i < nargs; i++) {
         jl_value_t *jt = jl_nth_slot_type(calltype, i);
         // n.b. specTypes is required to be a datatype by construction for specsig
         bool isboxed = false;
         Type *et;
-        if (i == 1 && is_for_opaque_closure) {
+        if (i == 0 && is_for_opaque_closure) {
             et = PointerType::get(ctx.types().T_jlvalue, AddressSpace::Derived);
         }
         else if (deserves_argbox(jt)) {
@@ -6899,6 +6899,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
     if (gcstack_arg){
         AttrBuilder param(ctx.builder.getContext());
         param.addAttribute(Attribute::SwiftSelf);
+        param.addAttribute(Attribute::NonNull);
         attrs.push_back(AttributeSet::get(ctx.builder.getContext(), param));
         fsig.push_back(PointerType::get(JuliaType::get_ppjlvalue_ty(ctx.builder.getContext()), 0));
     }
@@ -6964,7 +6965,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
         else
             fval = emit_bitcast(ctx, fval, ftype->getPointerTo());
     }
-    if (gcstack_arg)
+    if (gcstack_arg && isa<Function>(fval))
         cast<Function>(fval)->setCallingConv(CallingConv::Swift);
     props.decl = FunctionCallee(ftype, fval);
     props.attrs = attributes;
@@ -7193,7 +7194,7 @@ static jl_llvm_functions_t
     bool has_sret = false;
     if (specsig) { // assumes !va and !needsparams
         returninfo = get_specsig_function(ctx, M, NULL, declarations.specFunctionObject, lam->specTypes,
-                                          jlrettype, ctx.is_opaque_closure, JL_FEAT_TEST(ctx,gcstack_arg) && !ctx.is_opaque_closure);
+                                          jlrettype, ctx.is_opaque_closure, JL_FEAT_TEST(ctx,gcstack_arg));
         f = cast<Function>(returninfo.decl.getCallee());
         has_sret = (returninfo.cc == jl_returninfo_t::SRet || returninfo.cc == jl_returninfo_t::Union);
         jl_init_function(f, ctx.emission_context.TargetTriple);
@@ -8599,7 +8600,7 @@ static jl_llvm_functions_t jl_emit_oc_wrapper(orc::ThreadSafeModule &m, jl_codeg
     jl_llvm_functions_t declarations;
     declarations.functionObject = "jl_f_opaque_closure_call";
     if (uses_specsig(mi->specTypes, false, true, rettype, true)) {
-        jl_returninfo_t returninfo = get_specsig_function(ctx, M, NULL, funcName, mi->specTypes, rettype, true, false);
+        jl_returninfo_t returninfo = get_specsig_function(ctx, M, NULL, funcName, mi->specTypes, rettype, true, JL_FEAT_TEST(ctx,gcstack_arg));
         Function *gf_thunk = cast<Function>(returninfo.decl.getCallee());
         jl_init_function(gf_thunk, ctx.emission_context.TargetTriple);
         size_t nrealargs = jl_nparams(mi->specTypes);
