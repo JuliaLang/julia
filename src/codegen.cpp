@@ -2835,7 +2835,7 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
             if (bnd->constp)
                 return mark_julia_const(ctx, v);
             LoadInst *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*)));
-            setName(ctx.emission_context, v, "globalref");
+            setName(ctx.emission_context, v, jl_symbol_name(name));
             v->setOrdering(order);
             jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_binding);
             ai.decorateInst(v);
@@ -4618,7 +4618,7 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
         GlobalVariable *bindinggv = new GlobalVariable(*ctx.f->getParent(), ctx.types().T_pjlvalue,
                 false, GlobalVariable::PrivateLinkage, initnul);
         LoadInst *cachedval = ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue, bindinggv, Align(sizeof(void*)));
-        setName(ctx.emission_context, cachedval, "cached_binding");
+        setName(ctx.emission_context, cachedval, jl_symbol_name(m->name) + StringRef(".") + jl_symbol_name(s) + ".cached");
         cachedval->setOrdering(AtomicOrdering::Unordered);
         BasicBlock *have_val = BasicBlock::Create(ctx.builder.getContext(), "found");
         BasicBlock *not_found = BasicBlock::Create(ctx.builder.getContext(), "notfound");
@@ -4631,7 +4631,7 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
         Value *bval = ctx.builder.CreateCall(prepare_call(assign ? jlgetbindingwrorerror_func : jlgetbindingorerror_func),
                 { literal_pointer_val(ctx, (jl_value_t*)m),
                   literal_pointer_val(ctx, (jl_value_t*)s) });
-        setName(ctx.emission_context, bval, "found_binding");
+        setName(ctx.emission_context, bval, jl_symbol_name(m->name) + StringRef(".") + jl_symbol_name(s) + ".found");
         ctx.builder.CreateAlignedStore(bval, bindinggv, Align(sizeof(void*)))->setOrdering(AtomicOrdering::Release);
         ctx.builder.CreateBr(have_val);
         ctx.f->getBasicBlockList().push_back(have_val);
@@ -4639,7 +4639,7 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
         PHINode *p = ctx.builder.CreatePHI(ctx.types().T_pjlvalue, 2);
         p->addIncoming(cachedval, currentbb);
         p->addIncoming(bval, not_found);
-        setName(ctx.emission_context, p, "binding");
+        setName(ctx.emission_context, p, jl_symbol_name(m->name) + StringRef(".") + jl_symbol_name(s));
         return p;
     }
     if (assign) {
@@ -4663,7 +4663,7 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
 static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name, bool isvol, MDNode *tbaa)
 {
     LoadInst *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*)));
-    setName(ctx.emission_context, v, "checked_var");
+    setName(ctx.emission_context, v, jl_symbol_name(name) + StringRef(".checked"));
     if (isvol)
         v->setVolatile(true);
     v->setOrdering(AtomicOrdering::Unordered);

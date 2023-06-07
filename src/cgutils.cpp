@@ -520,7 +520,7 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p)
     auto load = ai.decorateInst(maybe_mark_load_dereferenceable(
             ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue, pgv, Align(sizeof(void*))),
             false, jl_typeof(p)));
-    setName(ctx.emission_context, load, "literal_pointer_val");
+    setName(ctx.emission_context, load, pgv->getName());
     return load;
 }
 
@@ -539,7 +539,7 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_binding_t *p)
     auto load = ai.decorateInst(maybe_mark_load_dereferenceable(
             ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue, pgv, Align(sizeof(void*))),
             false, sizeof(jl_binding_t), alignof(jl_binding_t)));
-    setName(ctx.emission_context, load, "binding_pointer_val");
+    setName(ctx.emission_context, load, pgv->getName());
     return load;
 }
 
@@ -580,7 +580,7 @@ static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
         Value *pgv = gr ? julia_pgv(ctx, "*", gr->name, gr->mod, b) : julia_pgv(ctx, "*jl_bnd#", b);
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
         auto load = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue, pgv, Align(sizeof(void*))));
-        setName(ctx.emission_context, load, "binding_global_val");
+        setName(ctx.emission_context, load, pgv->getName());
         return load;
     }
     else {
@@ -1047,6 +1047,7 @@ static LoadInst *emit_nthptr_recast(jl_codectx_t &ctx, Value *v, Value *idx, MDN
             ctx.types().T_prjlvalue,
             emit_bitcast(ctx, maybe_decay_tracked(ctx, v), ctx.types().T_pprjlvalue),
             idx);
+    setName(ctx.emission_context, vptr, "arraysize_ptr");
     LoadInst *load = ctx.builder.CreateLoad(type, emit_bitcast(ctx, vptr, PointerType::get(type, 0)));
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
     ai.decorateInst(load);
@@ -1058,7 +1059,7 @@ static Value *emit_tagfrom(jl_codectx_t &ctx, jl_datatype_t *dt)
     if (dt->smalltag)
         return ConstantInt::get(ctx.types().T_size, dt->smalltag << 4);
     auto tag = ctx.builder.CreatePtrToInt(literal_pointer_val(ctx, (jl_value_t*)dt), ctx.types().T_size);
-    setName(ctx.emission_context, tag, "tag");
+    setName(ctx.emission_context, tag, jl_symbol_name(dt->name->name));
     return tag;
 }
 
@@ -2808,6 +2809,7 @@ static Value *emit_arraylen_prim(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
     Value *addr = ctx.builder.CreateStructGEP(ctx.types().T_jlarray,
             emit_bitcast(ctx, decay_derived(ctx, t), ctx.types().T_pjlarray),
             1); //index (not offset) of length field in ctx.types().T_pjlarray
+    setName(ctx.emission_context, addr, "arraylen_ptr");
     LoadInst *len = ctx.builder.CreateAlignedLoad(ctx.types().T_size, addr, ctx.types().alignof_ptr);
     setName(ctx.emission_context, len, "arraylen");
     len->setOrdering(AtomicOrdering::NotAtomic);
@@ -2828,6 +2830,7 @@ static Value *emit_arrayptr_internal(jl_codectx_t &ctx, const jl_cgval_t &tinfo,
     ++EmittedArrayptr;
     Value *addr = ctx.builder.CreateStructGEP(ctx.types().T_jlarray,
                                               emit_bitcast(ctx, t, ctx.types().T_pjlarray), 0);
+    setName(ctx.emission_context, addr, "arrayptr_ptr");
     // Normally allocated array of 0 dimension always have a inline pointer.
     // However, we can't rely on that here since arrays can also be constructed from C pointers.
     PointerType *PT = cast<PointerType>(addr->getType());
@@ -2887,6 +2890,7 @@ static Value *emit_arrayflags(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
             ctx.types().T_jlarray,
             emit_bitcast(ctx, decay_derived(ctx, t), ctx.types().T_pjlarray),
             arrayflag_field);
+    setName(ctx.emission_context, addr, "arrayflags_ptr");
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_arrayflags);
     auto flags = ai.decorateInst(ctx.builder.CreateAlignedLoad(getInt16Ty(ctx.builder.getContext()), addr, Align(sizeof(int16_t))));
     setName(ctx.emission_context, flags, "arrayflags");
@@ -2912,6 +2916,7 @@ static Value *emit_arrayelsize(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
     Value *addr = ctx.builder.CreateStructGEP(ctx.types().T_jlarray,
             emit_bitcast(ctx, decay_derived(ctx, t), ctx.types().T_pjlarray),
             elsize_field);
+    setName(ctx.emission_context, addr, "arrayelsize_ptr");
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
     auto elsize = ai.decorateInst(ctx.builder.CreateAlignedLoad(getInt16Ty(ctx.builder.getContext()), addr, Align(sizeof(int16_t))));
     setName(ctx.emission_context, elsize, "arrayelsize");
@@ -2930,6 +2935,7 @@ static Value *emit_arrayoffset(jl_codectx_t &ctx, const jl_cgval_t &tinfo, int n
             ctx.types().T_jlarray,
             emit_bitcast(ctx, decay_derived(ctx, t), ctx.types().T_pjlarray),
             offset_field);
+    setName(ctx.emission_context, addr, "arrayoffset_ptr");
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_arrayoffset);
     auto offset = ai.decorateInst(ctx.builder.CreateAlignedLoad(getInt32Ty(ctx.builder.getContext()), addr, Align(sizeof(int32_t))));
     setName(ctx.emission_context, offset, "arrayoffset");

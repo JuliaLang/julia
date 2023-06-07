@@ -2083,7 +2083,8 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
         jl_codegen_params_t output(*ctx, std::move(target_info.first), std::move(target_info.second));
         output.world = world;
         output.params = &params;
-        output.imaging = imaging_default();
+        // Force imaging mode for names of pointers
+        output.imaging = true;
         // Force debug info for introspection
         output.debug_enabled = true;
         auto decls = jl_emit_code(m, mi, src, jlrettype, output);

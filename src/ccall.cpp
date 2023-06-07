@@ -135,7 +135,7 @@ static Value *runtime_sym_lookup(
     BasicBlock *ccall_bb = BasicBlock::Create(irbuilder.getContext(), "ccall");
     Constant *initnul = ConstantPointerNull::get(T_pvoidfunc);
     LoadInst *llvmf_orig = irbuilder.CreateAlignedLoad(T_pvoidfunc, llvmgv, Align(sizeof(void*)));
-    setName(emission_context, llvmf_orig, "cached_dylib_ptr");
+    setName(emission_context, llvmf_orig, f_name + StringRef(".cached"));
     // This in principle needs a consume ordering so that load from
     // this pointer sees a valid value. However, this is not supported by
     // LLVM (or agreed on in the C/C++ standard FWIW) and should be
@@ -173,6 +173,7 @@ static Value *runtime_sym_lookup(
         llvmf = irbuilder.CreateCall(prepare_call_in(jl_builderModule(irbuilder), jldlsym_func),
                     { libname, nameval, libptrgv });
     }
+    setName(emission_context, llvmf, f_name + StringRef(".found"));
     StoreInst *store = irbuilder.CreateAlignedStore(llvmf, llvmgv, Align(sizeof(void*)));
     store->setAtomic(AtomicOrdering::Release);
     irbuilder.CreateBr(ccall_bb);
@@ -182,7 +183,7 @@ static Value *runtime_sym_lookup(
     PHINode *p = irbuilder.CreatePHI(T_pvoidfunc, 2);
     p->addIncoming(llvmf_orig, enter_bb);
     p->addIncoming(llvmf, llvmf->getParent());
-    setName(emission_context, p, "dylib_ptr");
+    setName(emission_context, p, f_name);
     return irbuilder.CreateBitCast(p, funcptype);
 }
 
@@ -324,7 +325,7 @@ static Value *emit_plt(
     }
     GlobalVariable *got = prepare_global_in(jl_Module, sharedgot);
     LoadInst *got_val = ctx.builder.CreateAlignedLoad(got->getValueType(), got, Align(sizeof(void*)));
-    setName(ctx.emission_context, got_val, "global_offset_table");
+    setName(ctx.emission_context, got_val, f_name);
     // See comment in `runtime_sym_lookup` above. This in principle needs a
     // consume ordering too. This is even less likely to cause issues though
     // since the only thing we do to this loaded pointer is to call it
@@ -1265,7 +1266,7 @@ static bool verify_ref_type(jl_codectx_t &ctx, jl_value_t* ref, jl_unionall_t *u
                         Value *notany = ctx.builder.CreateICmpNE(
                                 boxed(ctx, runtime_sp),
                                 track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)jl_any_type)));
-                        setName(ctx.emission_context, notany, "not_any_type");
+                        setName(ctx.emission_context, notany, "any_type.not");
                         error_unless(ctx, notany, make_errmsg(fname, n, rt_err_msg_notany));
                         always_error = false;
                     }
@@ -1692,7 +1693,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                                                  ctx.f);
         BasicBlock *contBB = BasicBlock::Create(ctx.builder.getContext(), "cont");
         auto not_deferred = ctx.builder.CreateICmpEQ(defer_sig, ConstantInt::get(ctx.types().T_sigatomic, 0));
-        setName(ctx.emission_context, not_deferred, "not_deferred");
+        setName(ctx.emission_context, not_deferred, "deferred.not");
         ctx.builder.CreateCondBr(
                 not_deferred,
                 checkBB, contBB);
@@ -2128,7 +2129,6 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                 // since we aren't saving this code, there's no sense in
                 // putting anything complicated here: just JIT the function address
                 llvmf = literal_static_pointer_val(symaddr, funcptype);
-                setName(ctx.emission_context, llvmf, "jitptr");
             }
         }
     }
