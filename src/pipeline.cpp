@@ -34,17 +34,21 @@
 
 // NewPM needs to manually include all the pass headers
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
+#include <llvm/Transforms/IPO/Annotation2Metadata.h>
 #include <llvm/Transforms/IPO/ConstantMerge.h>
+#include <llvm/Transforms/IPO/ForceFunctionAttrs.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Instrumentation/AddressSanitizer.h>
 #include <llvm/Transforms/Instrumentation/MemorySanitizer.h>
 #include <llvm/Transforms/Instrumentation/ThreadSanitizer.h>
 #include <llvm/Transforms/Scalar/ADCE.h>
+#include <llvm/Transforms/Scalar/AnnotationRemarks.h>
 #include <llvm/Transforms/Scalar/CorrelatedValuePropagation.h>
 #include <llvm/Transforms/Scalar/DCE.h>
 #include <llvm/Transforms/Scalar/DeadStoreElimination.h>
 #include <llvm/Transforms/Scalar/DivRemPairs.h>
 #include <llvm/Transforms/Scalar/EarlyCSE.h>
+#include <llvm/Transforms/Scalar/Float2Int.h>
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/Scalar/IndVarSimplify.h>
 #include <llvm/Transforms/Scalar/InductiveRangeCheckElimination.h>
@@ -52,18 +56,23 @@
 #include <llvm/Transforms/Scalar/JumpThreading.h>
 #include <llvm/Transforms/Scalar/LICM.h>
 #include <llvm/Transforms/Scalar/LoopDeletion.h>
+#include <llvm/Transforms/Scalar/LoopDistribute.h>
 #include <llvm/Transforms/Scalar/LoopIdiomRecognize.h>
 #include <llvm/Transforms/Scalar/LoopInstSimplify.h>
 #include <llvm/Transforms/Scalar/LoopLoadElimination.h>
 #include <llvm/Transforms/Scalar/LoopRotation.h>
 #include <llvm/Transforms/Scalar/LoopSimplifyCFG.h>
 #include <llvm/Transforms/Scalar/LoopUnrollPass.h>
+#include <llvm/Transforms/Scalar/LowerConstantIntrinsics.h>
+#include <llvm/Transforms/Scalar/LowerExpectIntrinsic.h>
 #include <llvm/Transforms/Scalar/MemCpyOptimizer.h>
 #include <llvm/Transforms/Scalar/Reassociate.h>
 #include <llvm/Transforms/Scalar/SCCP.h>
 #include <llvm/Transforms/Scalar/SROA.h>
 #include <llvm/Transforms/Scalar/SimpleLoopUnswitch.h>
 #include <llvm/Transforms/Scalar/SimplifyCFG.h>
+#include <llvm/Transforms/Scalar/WarnMissedTransforms.h>
+#include <llvm/Transforms/Utils/InjectTLIMappings.h>
 #include <llvm/Transforms/Vectorize/LoopVectorize.h>
 #include <llvm/Transforms/Vectorize/SLPVectorizer.h>
 #include <llvm/Transforms/Vectorize/VectorCombine.h>
@@ -224,21 +233,12 @@ namespace {
 
 //The actual pipelines
 //TODO Things we might want to consider:
-//? annotation2metadata pass
-//? force function attributes pass
-//? annotation remarks pass
-//? infer function attributes pass
-//? lower expect intrinsic pass
-//? warn missed transformations pass
 //* For vectorization
 //? loop unroll/jam after loop vectorization
 //? optimization remarks pass
 //? cse/cvp/instcombine/bdce/sccp/licm/unswitch after loop vectorization (
 // cleanup as much as possible before trying to slp vectorize)
-//? vectorcombine pass
 //* For optimization
-//? float2int pass
-//? lower constant intrinsics pass
 //? loop sink pass
 //? hot-cold splitting pass
 
@@ -249,7 +249,10 @@ static void buildBasicPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimiza
 #ifdef JL_DEBUG_BUILD
     addVerificationPasses(MPM, options.llvm_only);
 #endif
+    // Place after verification in case we want to force it anyways
+    MPM.addPass(ForceFunctionAttrsPass());
     invokePipelineStartCallbacks(MPM, PB, O);
+    MPM.addPass(Annotation2MetadataPass());
     MPM.addPass(ConstantMergePass());
     if (!options.dump_native) {
         JULIA_PASS(MPM.addPass(CPUFeaturesPass()));
@@ -259,6 +262,7 @@ static void buildBasicPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimiza
     }
     {
         FunctionPassManager FPM;
+        FPM.addPass(LowerExpectIntrinsicPass());
         FPM.addPass(SimplifyCFGPass(basicSimplifyCFGOptions()));
         if (O.getSpeedupLevel() > 0) {
             FPM.addPass(SROAPass());
@@ -316,6 +320,12 @@ static void buildBasicPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimiza
         }
     }
     invokeOptimizerLastCallbacks(MPM, PB, O);
+    {
+        FunctionPassManager FPM;
+        FPM.addPass(WarnMissedTransformationsPass());
+        FPM.addPass(AnnotationRemarksPass());
+        MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
+    }
     addSanitizerPasses(MPM, O);
     JULIA_PASS(MPM.addPass(createModuleToFunctionPassAdaptor(DemoteFloat16Pass())));
 }
@@ -325,10 +335,14 @@ static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimizat
 #ifdef JL_DEBUG_BUILD
     addVerificationPasses(MPM, options.llvm_only);
 #endif
+    // Place after verification in case we want to force it anyways
+    MPM.addPass(ForceFunctionAttrsPass());
     invokePipelineStartCallbacks(MPM, PB, O);
+    MPM.addPass(Annotation2MetadataPass());
     MPM.addPass(ConstantMergePass());
     {
         FunctionPassManager FPM;
+        FPM.addPass(LowerExpectIntrinsicPass());
         JULIA_PASS(FPM.addPass(PropagateJuliaAddrspacesPass()));
         //TODO consider not using even basic simplification
         //options here, and adding a run of CVP to take advantage
@@ -348,6 +362,8 @@ static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimizat
         {
             FunctionPassManager FPM;
             JULIA_PASS(FPM.addPass(AllocOptPass()));
+            FPM.addPass(Float2IntPass());
+            FPM.addPass(LowerConstantIntrinsicsPass());
             FPM.addPass(InstCombinePass());
             FPM.addPass(SimplifyCFGPass(basicSimplifyCFGOptions()));
             CGPM.addPass(createCGSCCToFunctionPassAdaptor(std::move(FPM)));
@@ -398,6 +414,8 @@ static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimizat
             LPM.addPass(LoopIdiomRecognizePass());
             LPM.addPass(IndVarSimplifyPass());
             LPM.addPass(LoopDeletionPass());
+            // This unroll will only unroll loops when the trip count is known and small,
+            // so that no loop remains
             LPM.addPass(LoopFullUnrollPass());
             invokeLoopOptimizerEndCallbacks(LPM, PB, O);
             //We don't know if the loop end callbacks support MSSA
@@ -427,6 +445,8 @@ static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimizat
             LPM.addPass(LoopInstSimplifyPass());
             FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM)));
         }
+        FPM.addPass(LoopDistributePass());
+        FPM.addPass(InjectTLIMappings());
         invokeScalarOptimizerCallbacks(FPM, PB, O);
         //TODO look into loop vectorize options
         FPM.addPass(LoopVectorizePass());
@@ -435,8 +455,13 @@ static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimizat
         FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
         FPM.addPass(SLPVectorizerPass());
         invokeVectorizerCallbacks(FPM, PB, O);
+        FPM.addPass(VectorCombinePass());
         FPM.addPass(ADCEPass());
         //TODO add BDCEPass here?
+        // This unroll will unroll vectorized loops
+        // as well as loops that we tried but failed to vectorize
+        FPM.addPass(LoopUnrollPass(LoopUnrollOptions(O.getSpeedupLevel(), /*OnlyWhenForced = */ false, /*ForgetSCEV = */false)));
+        FPM.addPass(WarnMissedTransformationsPass());
         MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
     }
     if (options.lower_intrinsics) {
@@ -476,6 +501,7 @@ static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimizat
         MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
     }
     invokeOptimizerLastCallbacks(MPM, PB, O);
+    MPM.addPass(createModuleToFunctionPassAdaptor(AnnotationRemarksPass()));
     addSanitizerPasses(MPM, O);
     {
         FunctionPassManager FPM;
