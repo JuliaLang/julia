@@ -191,6 +191,9 @@ function doc(binding::Binding, sig::Type = Union{})
         end
         # Get parsed docs and concatenate them.
         md = catdoc(mapany(parsedoc, results)...)
+
+        Base.isinternal(binding.mod, binding.var) && pushfirst!(md.content, Markdown.Paragraph("INTERNAL"))
+
         # Save metadata in the generated markdown.
         if isa(md, Markdown.MD)
             md.meta[:results] = results

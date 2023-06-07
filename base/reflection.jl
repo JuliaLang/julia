@@ -92,6 +92,7 @@ unsorted_names(m::Module; all::Bool = false, imported::Bool = false, scoped::Boo
     ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint, Cint), m, all, imported, scoped)
 
 isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s) != 0
+isinternal(m::Module, s::Symbol) = !isexported(m, s) && ccall(:jl_module_scoped_exports_p, Cint, (Any, Any), m, s) == 0
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
 isbindingresolved(m::Module, var::Symbol) = ccall(:jl_binding_resolved_p, Cint, (Any, Any), m, var) != 0
 

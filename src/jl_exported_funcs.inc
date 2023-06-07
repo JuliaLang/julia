@@ -331,6 +331,7 @@
     XX(jl_module_name) \
     XX(jl_module_names) \
     XX(jl_module_parent) \
+    XX(jl_module_scoped_exports_p) \
     XX(jl_module_use) \
     XX(jl_module_using) \
     XX(jl_module_usings) \

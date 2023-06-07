@@ -666,6 +666,12 @@ JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var)
     return b && b->exportp;
 }
 
+JL_DLLEXPORT int jl_module_scoped_exports_p(jl_module_t *m, jl_sym_t *var)
+{
+    jl_binding_t *b = jl_get_module_binding(m, var, 0);
+    return b && b->scoped_exportp;
+}
+
 JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_module_binding(m, var, 0);
