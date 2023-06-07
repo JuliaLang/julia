@@ -670,6 +670,10 @@
         @test parsestmt("const x = 1") == Expr(:const, Expr(:(=), :x, 1))
         @test parsestmt("global x ~ 1") == Expr(:global, Expr(:call, :~, :x, 1))
         @test parsestmt("global x += 1") == Expr(:global, Expr(:+=, :x, 1))
+
+        # Parsing of global/local with 
+        @test parsestmt("global (x,y)") == Expr(:global, :x, :y)
+        @test parsestmt("local (x,y)") == Expr(:local, :x, :y)
     end
 
     @testset "tuples" begin

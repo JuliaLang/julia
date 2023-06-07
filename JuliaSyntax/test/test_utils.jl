@@ -133,10 +133,7 @@ function exprs_roughly_equal(fl_ex, ex)
         return false
     end
     h = ex.head
-    if (h == :global || h == :local) && length(args) == 1 && Meta.isexpr(args[1], :tuple)
-        # Allow invalid syntax like `global (x, y)`
-        args = args[1].args
-    elseif h == :function && Meta.isexpr(fl_args[1], :block)
+    if h == :function && Meta.isexpr(fl_args[1], :block)
         blockargs = filter(x->!(x isa LineNumberNode), fl_args[1].args)
         posargs = blockargs[1:max(0, length(blockargs))]
         kwargs = blockargs[2:end]

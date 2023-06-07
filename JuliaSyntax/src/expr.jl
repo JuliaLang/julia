@@ -411,10 +411,16 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
             end
         end
     elseif k == K"local" || k === K"global"
-        if length(args) == 1 && (a1 = args[1]; @isexpr(a1, :const))
-            # Normalize `local const` to `const local`
-            args[1] = Expr(headsym, (a1::Expr).args...)
-            headsym = :const
+        if length(args) == 1
+            a1 = args[1]
+            if @isexpr(a1, :const)
+                # Normalize `local const` to `const local`
+                args[1] = Expr(headsym, (a1::Expr).args...)
+                headsym = :const
+            elseif @isexpr(a1, :tuple)
+                # Normalize `global (x, y)` to `global x, y`
+                args = a1.args
+            end
         end
     elseif k == K"return" && isempty(args)
         push!(args, nothing)

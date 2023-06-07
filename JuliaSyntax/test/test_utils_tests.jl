@@ -1,11 +1,6 @@
 # Tests for the test_utils go here to allow the utils to be included on their
 # own without invoking the tests.
 @testset "Reference parser bugs" begin
-    # `global (x,y)`
-    @test exprs_roughly_equal(Expr(:global, :x, :y),
-                              Expr(:global, Expr(:tuple, :x, :y)))
-    @test exprs_roughly_equal(Expr(:local, :x, :y),
-                              Expr(:local, Expr(:tuple, :x, :y)))
     # `0x1.8p0f`
     @test exprs_roughly_equal(1.5,
                               Expr(:call, :*, 1.5, :f))
