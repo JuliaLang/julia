@@ -209,26 +209,105 @@ namespace {
             ;
     }
 
-    // TODO(vchuravy/maleadt):
-    // Since we are not using the PassBuilder fully and instead rolling our own, we are missing out on
-    // TargetMachine::registerPassBuilderCallbacks. We need to find a solution either in working with upstream
-    // or adapting PassBuilder (or subclassing it) to suite our needs. This is in particular important for
-    // BPF, NVPTX, and AMDGPU.
-    //TODO implement these once LLVM exposes
-    //the PassBuilder extension point callbacks
-    //For now we'll maintain the insertion points even though they don't do anything
-    //for the sake of documentation
+// At any given time exactly one of each pair of overloads is strictly unused
+#ifdef _COMPILER_GCC_
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#endif
+
+#ifdef _COMPILER_CLANG_
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
+#endif
+
+    // Version check for our patch to allow invoking pipeline callbacks
+    // won't work if built with our LLVM but linked with system LLVM
+    template<typename PB> std::true_type hasInvokeCallbacks_helper(decltype(&PB::invokePipelineStartEPCallbacks)) JL_NOTSAFEPOINT;
+    std::false_type hasInvokeCallbacks_helper(...) JL_NOTSAFEPOINT;
+
+    // static constexpr bool hasInvokeCallbacks = decltype(hasInvokeCallbacks_helper<PassBuilder>(nullptr))::value;
+
     //If PB is a nullptr, don't invoke anything (this happens when running julia from opt)
-    void invokePipelineStartCallbacks(ModulePassManager &MPM, PassBuilder *PB, OptimizationLevel O) JL_NOTSAFEPOINT {}
-    void invokePeepholeEPCallbacks(FunctionPassManager &MPM, PassBuilder *PB, OptimizationLevel O) JL_NOTSAFEPOINT {}
-    void invokeEarlySimplificationCallbacks(ModulePassManager &MPM, PassBuilder *PB, OptimizationLevel O) JL_NOTSAFEPOINT {}
-    void invokeCGSCCCallbacks(CGSCCPassManager &MPM, PassBuilder *PB, OptimizationLevel O) JL_NOTSAFEPOINT {}
-    void invokeOptimizerEarlyCallbacks(ModulePassManager &MPM, PassBuilder *PB, OptimizationLevel O) JL_NOTSAFEPOINT {}
-    void invokeLateLoopOptimizationCallbacks(LoopPassManager &MPM, PassBuilder *PB, OptimizationLevel O) JL_NOTSAFEPOINT {}
-    void invokeLoopOptimizerEndCallbacks(LoopPassManager &MPM, PassBuilder *PB, OptimizationLevel O) JL_NOTSAFEPOINT {}
-    void invokeScalarOptimizerCallbacks(FunctionPassManager &MPM, PassBuilder *PB, OptimizationLevel O) JL_NOTSAFEPOINT {}
-    void invokeVectorizerCallbacks(FunctionPassManager &MPM, PassBuilder *PB, OptimizationLevel O) JL_NOTSAFEPOINT {}
-    void invokeOptimizerLastCallbacks(ModulePassManager &MPM, PassBuilder *PB, OptimizationLevel O) JL_NOTSAFEPOINT {}
+    template<typename PB_t>
+    std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokePipelineStartCallbacks(ModulePassManager &MPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
+        static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
+        if (!PB) return;
+        PB->invokePipelineStartEPCallbacks(MPM, O);
+    }
+    template<typename PB_t>
+    std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokePeepholeEPCallbacks(FunctionPassManager &FPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
+        static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
+        if (!PB) return;
+        PB->invokePeepholeEPCallbacks(FPM, O);
+    }
+    template<typename PB_t>
+    std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeEarlySimplificationCallbacks(ModulePassManager &MPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
+        static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
+        if (!PB) return;
+        PB->invokePipelineEarlySimplificationEPCallbacks(MPM, O);
+    }
+    template<typename PB_t>
+    std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeCGSCCCallbacks(CGSCCPassManager &CGPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
+        static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
+        if (!PB) return;
+        PB->invokeCGSCCOptimizerLateEPCallbacks(CGPM, O);
+    }
+    template<typename PB_t>
+    std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeOptimizerEarlyCallbacks(ModulePassManager &MPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
+        static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
+        if (!PB) return;
+        PB->invokeOptimizerEarlyEPCallbacks(MPM, O);
+    }
+    template<typename PB_t>
+    std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeLateLoopOptimizationCallbacks(LoopPassManager &LPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
+        static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
+        if (!PB) return;
+        PB->invokeLateLoopOptimizationsEPCallbacks(LPM, O);
+    }
+    template<typename PB_t>
+    std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeLoopOptimizerEndCallbacks(LoopPassManager &LPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
+        static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
+        if (!PB) return;
+        PB->invokeLoopOptimizerEndEPCallbacks(LPM, O);
+    }
+    template<typename PB_t>
+    std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeScalarOptimizerCallbacks(FunctionPassManager &FPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
+        static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
+        if (!PB) return;
+        PB->invokeScalarOptimizerLateEPCallbacks(FPM, O);
+    }
+    template<typename PB_t>
+    std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeVectorizerCallbacks(FunctionPassManager &FPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
+        static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
+        if (!PB) return;
+        PB->invokeVectorizerStartEPCallbacks(FPM, O);
+    }
+    template<typename PB_t>
+    std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeOptimizerLastCallbacks(ModulePassManager &MPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
+        static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
+        if (!PB) return;
+        PB->invokeOptimizerLastEPCallbacks(MPM, O);
+    }
+
+    // Fallbacks
+    void invokePipelineStartCallbacks(...) {}
+    void invokePeepholeEPCallbacks(...) {}
+    void invokeEarlySimplificationCallbacks(...) {}
+    void invokeCGSCCCallbacks(...) {}
+    void invokeOptimizerEarlyCallbacks(...) {}
+    void invokeLateLoopOptimizationCallbacks(...) {}
+    void invokeLoopOptimizerEndCallbacks(...) {}
+    void invokeScalarOptimizerCallbacks(...) {}
+    void invokeVectorizerCallbacks(...) {}
+    void invokeOptimizerLastCallbacks(...) {}
+
+#ifdef _COMPILER_CLANG_
+#pragma clang diagnostic pop
+#endif
+
+#ifdef _COMPILER_GCC_
+#pragma GCC diagnostic pop
+#endif
 }
 
 //The actual pipelines
