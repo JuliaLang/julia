@@ -984,8 +984,10 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
             src = emit_bitcast(ctx, src, dstty);
         }
         if (directel) {
-            setName(ctx.emission_context, src, "memcpy_refined_src");
-            setName(ctx.emission_context, dst, "memcpy_refined_dst");
+            if (isa<Instruction>(src) && !src->hasName())
+                setName(ctx.emission_context, src, "memcpy_refined_src");
+            if (isa<Instruction>(dst) && !dst->hasName())
+                setName(ctx.emission_context, dst, "memcpy_refined_dst");
             auto val = src_ai.decorateInst(ctx.builder.CreateAlignedLoad(directel, src, Align(align), is_volatile));
             dst_ai.decorateInst(ctx.builder.CreateAlignedStore(val, dst, Align(align), is_volatile));
             ++SkippedMemcpys;
