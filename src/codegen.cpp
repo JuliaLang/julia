@@ -9076,7 +9076,6 @@ extern "C" void jl_init_llvm(void)
     }
 #endif
 
-#ifndef JL_USE_JITLINK
 #ifdef JL_USE_INTEL_JITEVENTS
     if (jl_using_intel_jitevents)
         jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createIntelJITEventListener());
@@ -9090,7 +9089,6 @@ extern "C" void jl_init_llvm(void)
 #ifdef JL_USE_PERF_JITEVENTS
     if (jl_using_perf_jitevents)
         jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createPerfJITEventListener());
-#endif
 #endif
 #endif
 #endif

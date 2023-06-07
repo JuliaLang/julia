@@ -39,16 +39,13 @@ using namespace llvm;
 #include "julia_assert.h"
 #include "processor.h"
 
-#ifdef JL_USE_JITLINK
 # include <llvm/ExecutionEngine/Orc/DebuggerSupportPlugin.h>
 # include <llvm/ExecutionEngine/JITLink/EHFrameSupport.h>
 # include <llvm/ExecutionEngine/JITLink/JITLinkMemoryManager.h>
 # if JL_LLVM_VERSION >= 150000
 # include <llvm/ExecutionEngine/Orc/MapperJITLinkMemoryManager.h>
 # endif
-#else
 # include <llvm/ExecutionEngine/SectionMemoryManager.h>
-#endif
 
 #define DEBUG_TYPE "julia_jitlayers"
 
@@ -694,8 +691,6 @@ void jl_register_jit_object(const object::ObjectFile &debugObj,
                             std::function<uint64_t(const StringRef &)> getLoadAddress,
                             std::function<void *(void *)> lookupWriteAddress) JL_NOTSAFEPOINT;
 
-#ifdef JL_USE_JITLINK
-
 namespace {
 
 using namespace llvm::orc;
@@ -871,6 +866,8 @@ public:
                 }
                 graph_size += secsize;
             }
+            (void) code_size;
+            (void) data_size;
             this->total_size.fetch_add(graph_size, std::memory_order_relaxed);
             jl_timing_counter_inc(JL_TIMING_COUNTER_JITSize, graph_size);
             jl_timing_counter_inc(JL_TIMING_COUNTER_JITCodeSize, code_size);
@@ -879,6 +876,17 @@ public:
         });
     }
 };
+
+// replace with [[maybe_unused]] when we get to C++17
+#ifdef _COMPILER_GCC_
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#endif
+
+#ifdef _COMPILER_CLANG_
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
+#endif
 
 // TODO: Port our memory management optimisations to JITLink instead of using the
 // default InProcessMemoryManager.
@@ -889,33 +897,28 @@ std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager() {
     return cantFail(orc::MapperJITLinkMemoryManager::CreateWithMapper<orc::InProcessMemoryMapper>());
 #endif
 }
+
+#ifdef _COMPILER_CLANG_
+#pragma clang diagnostic pop
+#endif
+
+#ifdef _COMPILER_GCC_
+#pragma GCC diagnostic pop
+#endif
 }
-
-# ifdef LLVM_SHLIB
-
-# define EHFRAME_RANGE(name) orc::ExecutorAddrRange name
-# define UNPACK_EHFRAME_RANGE(name) \
-        name.Start.toPtr<uint8_t *>(), \
-        static_cast<size_t>(name.size())
-
 
 class JLEHFrameRegistrar final : public jitlink::EHFrameRegistrar {
 public:
-    Error registerEHFrames(EHFRAME_RANGE(EHFrameSection)) override {
-        register_eh_frames(
-            UNPACK_EHFRAME_RANGE(EHFrameSection));
+    Error registerEHFrames(orc::ExecutorAddrRange EHFrameSection) override {
+        register_eh_frames(EHFrameSection.Start.toPtr<uint8_t *>(), static_cast<size_t>(EHFrameSection.size()));
         return Error::success();
     }
 
-    Error deregisterEHFrames(EHFRAME_RANGE(EHFrameSection)) override {
-        deregister_eh_frames(
-            UNPACK_EHFRAME_RANGE(EHFrameSection));
+    Error deregisterEHFrames(orc::ExecutorAddrRange EHFrameSection) override {
+        deregister_eh_frames(EHFrameSection.Start.toPtr<uint8_t *>(), static_cast<size_t>(EHFrameSection.size()));
         return Error::success();
     }
 };
-# endif
-
-#else // !JL_USE_JITLINK
 
 RTDyldMemoryManager* createRTDyldMemoryManager(void);
 
@@ -1015,7 +1018,6 @@ void registerRTDyldJITObject(const object::ObjectFile &Object,
 #endif
     );
 }
-#endif
 namespace {
     static std::unique_ptr<TargetMachine> createTargetMachine() JL_NOTSAFEPOINT {
         TargetOptions options = TargetOptions();
