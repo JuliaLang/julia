@@ -89,7 +89,27 @@ Here are example settings using `bash` syntax:
   * `-print-after=PASS`: prints the IR after any execution of `PASS`, useful for checking changes done by a pass.
   * `-print-before=PASS`: prints the IR before any execution of `PASS`, useful for checking the input to a pass.
   * `-print-changed`: prints the IR whenever a pass changes the IR, useful for narrowing down which passes are causing problems.
-  * `-print-(before|after)=MARKER-PASS`: the Julia pipeline ships with a number of marker passes in the pipeline, which can be used to identify where problems or optimizations are occurring.
+  * `-print-(before|after)=MARKER-PASS`: the Julia pipeline ships with a number of marker passes in the pipeline, which can be used to identify where problems or optimizations are occurring. A marker pass is defined as a pass which appears once in the pipeline and performs no transformations on the IR, and is only useful for targeting print-before/print-after. Currently, the following marker passes exist in the pipeline:
+    * BeforeOptimization
+    * BeforeEarlySimplification
+    * AfterEarlySimplification
+    * BeforeEarlyOptimization
+    * AfterEarlyOptimization
+    * BeforeLoopOptimization
+    * BeforeLICM
+    * AfterLICM
+    * BeforeLoopSimplification
+    * AfterLoopSimplification
+    * AfterLoopOptimization
+    * BeforeScalarOptimization
+    * AfterScalarOptimization
+    * BeforeVectorization
+    * AfterVectorization
+    * BeforeIntrinsicLowering
+    * AfterIntrinsicLowering
+    * BeforeCleanup
+    * AfterCleanup
+    * AfterOptimization
   * `-time-passes`: prints the time spent in each pass, useful for identifying which passes are taking a long time.
   * `-print-module-scope`: used in conjunction with `-print-(before|after)`, gets the entire module rather than the IR unit received by the pass
   * `-debug`: prints out a lot of debugging information throughout LLVM
