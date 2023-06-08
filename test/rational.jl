@@ -729,3 +729,10 @@ end
     @test rationalize(1.192 + 2.233im) == 149//125 + 2233//1000*im
     @test rationalize(Int8, 1.192 + 2.233im) == 118//99 + 67//30*im
 end
+@testset "rationalize(Complex) with tol" begin
+    # test: rationalize(x::Complex; kvs...)
+    precise_next = 7205759403792795//72057594037927936
+    @assert Float64(precise_next) == nextfloat(0.1)
+    @test rationalize(nextfloat(0.1) * im; tol=0) == precise_next * im
+    @test rationalize(0.1im; tol=eps(0.1)) == rationalize(0.1im)
+end
