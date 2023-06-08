@@ -574,35 +574,35 @@ static void buildPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationL
 #undef JULIA_PASS
 
 namespace {
-    auto createPIC(StandardInstrumentations &SI) JL_NOTSAFEPOINT {
-        auto PIC = std::make_unique<PassInstrumentationCallbacks>();
+
+    void adjustPIC(PassInstrumentationCallbacks &PIC) JL_NOTSAFEPOINT {
 //Borrowed from LLVM PassBuilder.cpp:386
 #define MODULE_PASS(NAME, CLASS, CREATE_PASS)                                         \
-PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
+PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 #define MODULE_PASS_WITH_PARAMS(NAME, CLASS, CREATE_PASS, PARSER, PARAMS)      \
-PIC->addClassToPassName(CLASS, NAME);
+PIC.addClassToPassName(CLASS, NAME);
 #define MODULE_ANALYSIS(NAME, CREATE_PASS)                                     \
-PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
+PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 #define FUNCTION_PASS(NAME, CLASS, CREATE_PASS)                                       \
-PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
+PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 #define FUNCTION_PASS_WITH_PARAMS(NAME, CLASS, CREATE_PASS, PARSER, PARAMS)    \
-PIC->addClassToPassName(CLASS, NAME);
+PIC.addClassToPassName(CLASS, NAME);
 #define FUNCTION_ANALYSIS(NAME, CREATE_PASS)                                   \
-PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
+PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 #define LOOPNEST_PASS(NAME, CREATE_PASS)                                       \
-PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
+PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 #define LOOP_PASS(NAME, CLASS, CREATE_PASS)                                           \
-PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
+PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 #define LOOP_PASS_WITH_PARAMS(NAME, CLASS, CREATE_PASS, PARSER, PARAMS)        \
-PIC->addClassToPassName(CLASS, NAME);
+PIC.addClassToPassName(CLASS, NAME);
 #define LOOP_ANALYSIS(NAME, CREATE_PASS)                                       \
-PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
+PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 #define CGSCC_PASS(NAME, CLASS, CREATE_PASS)                                          \
-PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
+PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 #define CGSCC_PASS_WITH_PARAMS(NAME, CLASS, CREATE_PASS, PARSER, PARAMS)       \
-PIC->addClassToPassName(CLASS, NAME);
+PIC.addClassToPassName(CLASS, NAME);
 #define CGSCC_ANALYSIS(NAME, CREATE_PASS)                                      \
-PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
+PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 
 #include "llvm-julia-passes.inc"
 
@@ -620,27 +620,31 @@ PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 #undef CGSCC_PASS_WITH_PARAMS
 #undef CGSCC_ANALYSIS
         // Marker passes are set separately so that we don't export them by accident
-        PIC->addClassToPassName("BeforeOptimizationMarkerPass", "BeforeOptimization");
-        PIC->addClassToPassName("BeforeEarlySimplificationMarkerPass", "BeforeEarlySimplification");
-        PIC->addClassToPassName("AfterEarlySimplificationMarkerPass", "AfterEarlySimplification");
-        PIC->addClassToPassName("BeforeEarlyOptimizationMarkerPass", "BeforeEarlyOptimization");
-        PIC->addClassToPassName("AfterEarlyOptimizationMarkerPass", "AfterEarlyOptimization");
-        PIC->addClassToPassName("BeforeLoopOptimizationMarkerPass", "BeforeLoopOptimization");
-        PIC->addClassToPassName("BeforeLICMMarkerPass", "BeforeLICM");
-        PIC->addClassToPassName("AfterLICMMarkerPass", "AfterLICM");
-        PIC->addClassToPassName("BeforeLoopSimplificationMarkerPass", "BeforeLoopSimplification");
-        PIC->addClassToPassName("AfterLoopSimplificationMarkerPass", "AfterLoopSimplification");
-        PIC->addClassToPassName("AfterLoopOptimizationMarkerPass", "AfterLoopOptimization");
-        PIC->addClassToPassName("BeforeScalarOptimizationMarkerPass", "BeforeScalarOptimization");
-        PIC->addClassToPassName("AfterScalarOptimizationMarkerPass", "AfterScalarOptimization");
-        PIC->addClassToPassName("BeforeVectorizationMarkerPass", "BeforeVectorization");
-        PIC->addClassToPassName("AfterVectorizationMarkerPass", "AfterVectorization");
-        PIC->addClassToPassName("BeforeIntrinsicLoweringMarkerPass", "BeforeIntrinsicLowering");
-        PIC->addClassToPassName("AfterIntrinsicLoweringMarkerPass", "AfterIntrinsicLowering");
-        PIC->addClassToPassName("BeforeCleanupMarkerPass", "BeforeCleanup");
-        PIC->addClassToPassName("AfterCleanupMarkerPass", "AfterCleanup");
-        PIC->addClassToPassName("AfterOptimizationMarkerPass", "AfterOptimization");
+        PIC.addClassToPassName("BeforeOptimizationMarkerPass", "BeforeOptimization");
+        PIC.addClassToPassName("BeforeEarlySimplificationMarkerPass", "BeforeEarlySimplification");
+        PIC.addClassToPassName("AfterEarlySimplificationMarkerPass", "AfterEarlySimplification");
+        PIC.addClassToPassName("BeforeEarlyOptimizationMarkerPass", "BeforeEarlyOptimization");
+        PIC.addClassToPassName("AfterEarlyOptimizationMarkerPass", "AfterEarlyOptimization");
+        PIC.addClassToPassName("BeforeLoopOptimizationMarkerPass", "BeforeLoopOptimization");
+        PIC.addClassToPassName("BeforeLICMMarkerPass", "BeforeLICM");
+        PIC.addClassToPassName("AfterLICMMarkerPass", "AfterLICM");
+        PIC.addClassToPassName("BeforeLoopSimplificationMarkerPass", "BeforeLoopSimplification");
+        PIC.addClassToPassName("AfterLoopSimplificationMarkerPass", "AfterLoopSimplification");
+        PIC.addClassToPassName("AfterLoopOptimizationMarkerPass", "AfterLoopOptimization");
+        PIC.addClassToPassName("BeforeScalarOptimizationMarkerPass", "BeforeScalarOptimization");
+        PIC.addClassToPassName("AfterScalarOptimizationMarkerPass", "AfterScalarOptimization");
+        PIC.addClassToPassName("BeforeVectorizationMarkerPass", "BeforeVectorization");
+        PIC.addClassToPassName("AfterVectorizationMarkerPass", "AfterVectorization");
+        PIC.addClassToPassName("BeforeIntrinsicLoweringMarkerPass", "BeforeIntrinsicLowering");
+        PIC.addClassToPassName("AfterIntrinsicLoweringMarkerPass", "AfterIntrinsicLowering");
+        PIC.addClassToPassName("BeforeCleanupMarkerPass", "BeforeCleanup");
+        PIC.addClassToPassName("AfterCleanupMarkerPass", "AfterCleanup");
+        PIC.addClassToPassName("AfterOptimizationMarkerPass", "AfterOptimization");
+    }
 
+    auto createPIC(StandardInstrumentations &SI) JL_NOTSAFEPOINT {
+        auto PIC = std::make_unique<PassInstrumentationCallbacks>();
+        adjustPIC(*PIC);
         SI.registerCallbacks(*PIC);
         return PIC;
     }
@@ -785,6 +789,10 @@ static llvm::Optional<std::pair<OptimizationLevel, OptimizationOptions>> parseJu
 // forward the callbacks to the respective passes. LLVM seems to prefer this,
 // and when we add the full pass builder having them directly will be helpful.
 void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
+    auto PIC = PB.getPassInstrumentationCallbacks();
+    if (PIC) {
+        adjustPIC(*PIC);
+    }
     PB.registerPipelineParsingCallback(
         [](StringRef Name, FunctionPassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
