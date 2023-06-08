@@ -1875,7 +1875,7 @@ function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{An
         ret = canconst ? Const(body) : Type{body}
         return CallMeta(ret, Effects(EFFECTS_TOTAL; nothrow), NoCallInfo())
     end
-    return CallMeta(Any, EFFECTS_UNKNOWN, NoCallInfo())
+    return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
 end
 
 function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, si::StmtInfo, sv::AbsIntState)
@@ -1987,7 +1987,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     elseif f === TypeVar
         # Manually look through the definition of TypeVar to
         # make sure to be able to get `PartialTypeVar`s out.
-        (la < 2 || la > 4) && return CallMeta(Union{}, EFFECTS_UNKNOWN, NoCallInfo())
+        (la < 2 || la > 4) && return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
         n = argtypes[2]
         ub_var = Const(Any)
         lb_var = Const(Union{})
@@ -2301,7 +2301,7 @@ end
 
 function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable,Nothing},
                                       sv::AbsIntState)
-    effects = EFFECTS_UNKNOWN
+    effects = Effects()
     ehead = e.head
     𝕃ᵢ = typeinf_lattice(interp)
     ⊑ᵢ = ⊑(𝕃ᵢ)
