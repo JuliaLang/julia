@@ -834,21 +834,27 @@ end
 
 function concrete_eval_eligible(interp::AbstractInterpreter,
     @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, sv::AbsIntState)
+    (;effects) = result
     if inbounds_option() === :off
-        # Disable concrete evaluation in `--check-bounds=no` mode, since we cannot be sure
-        # that inferred effects are accurate.
-        return :none
-    elseif !result.effects.noinbounds && stmt_taints_inbounds_consistency(sv)
+        if !is_nothrow(effects)
+            # Disable concrete evaluation in `--check-bounds=no` mode,
+            # unless it is known to not throw.
+            return :none
+        end
+    end
+    if !effects.noinbounds && stmt_taints_inbounds_consistency(sv)
         # If the current statement is @inbounds or we propagate inbounds, the call's consistency
         # is tainted and not consteval eligible.
         add_remark!(interp, sv, "[constprop] Concrete evel disabled for inbounds")
         return :none
-    elseif isoverlayed(method_table(interp)) && !is_nonoverlayed(result.effects)
-        # disable all concrete-evaluation if this function call is tainted by some overlayed
+    end
+    if isoverlayed(method_table(interp)) && !is_nonoverlayed(effects)
+        # disable concrete-evaluation if this function call is tainted by some overlayed
         # method since currently there is no direct way to execute overlayed methods
+        add_remark!(interp, sv, "[constprop] Concrete evel disabled for overlayed methods")
         return :none
     end
-    if result.edge !== nothing && is_foldable(result.effects)
+    if result.edge !== nothing && is_foldable(effects)
         if f !== nothing && is_all_const_arg(arginfo, #=start=#2)
             return :concrete_eval
         elseif !any_conditional(arginfo)
