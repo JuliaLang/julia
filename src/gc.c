@@ -804,7 +804,7 @@ STATIC_INLINE void gc_queue_big_marked(jl_ptls_t ptls, bigval_t *hdr,
 FORCE_INLINE int gc_try_setmark_tag(jl_taggedvalue_t *o, uint8_t mark_mode) JL_NOTSAFEPOINT
 {
     assert(gc_marked(mark_mode));
-    uintptr_t tag = o->header;
+    uintptr_t tag = jl_atomic_load_relaxed((_Atomic(uintptr_t)*)&o->header);
     if (gc_marked(tag))
         return 0;
     if (mark_reset_age) {
@@ -818,9 +818,9 @@ FORCE_INLINE int gc_try_setmark_tag(jl_taggedvalue_t *o, uint8_t mark_mode) JL_N
         tag = tag | mark_mode;
         assert((tag & 0x3) == mark_mode);
     }
-    tag = jl_atomic_exchange_relaxed((_Atomic(uintptr_t)*)&o->header, tag);
-    verify_val(jl_valueof(o));
-    return !gc_marked(tag);
+    jl_atomic_store_relaxed((_Atomic(uintptr_t)*)&o->header, tag); //xchg here was slower than
+    verify_val(jl_valueof(o));                                     //potentially redoing work because of a stale tag.
+    return 1;
 }
 
 // This function should be called exactly once during marking for each big

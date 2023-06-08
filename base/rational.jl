@@ -545,11 +545,14 @@ function hash(x::Rational{<:BitInteger64}, h::UInt)
         pow = trailing_zeros(den)
         den >>= pow
         pow = -pow
-        if den == 1 && uabs(num) < UInt64(maxintfloat(Float64))
-            return hash(ldexp(Float64(num),pow),h)
+        if den == 1
+            if uabs(num) < UInt64(maxintfloat(Float64))
+                return hash(ldexp(Float64(num),pow),h)
+            end
+        else
+            h = hash_integer(den, h)
         end
     end
-    h = hash_integer(den, h)
     h = hash_integer(pow, h)
     h = hash_integer(num, h)
     return h
