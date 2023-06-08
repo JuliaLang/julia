@@ -76,6 +76,19 @@
             @test_throws JuliaSyntax.ParseError Meta.parse("[x)")
         end
 
+        # Check custom string types defined in a world age later than
+        # enable_in_core!() can be passed to Meta.parse()
+        mystr = @eval begin
+            struct MyString <: AbstractString
+                x::String
+            end
+            Base.String(s::MyString) = s.x
+            Base.ncodeunits(s::MyString) = ncodeunits(s.x)
+
+            MyString("hi")
+        end
+        @test Meta.parse(mystr) == :hi
+
         JuliaSyntax.enable_in_core!(false)
     end
 
