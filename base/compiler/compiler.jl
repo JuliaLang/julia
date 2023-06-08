@@ -6,7 +6,7 @@ using Core.Intrinsics, Core.IR
 
 import Core: print, println, show, write, unsafe_write, stdout, stderr,
              _apply_iterate, svec, apply_type, Builtin, IntrinsicFunction,
-             MethodInstance, CodeInstance, MethodMatch, PartialOpaque,
+             MethodInstance, CodeInstance, MethodTable, MethodMatch, PartialOpaque,
              TypeofVararg
 
 const getproperty = Core.getfield
@@ -33,6 +33,7 @@ convert(::Type{T}, x::T) where {T} = x
 
 # mostly used by compiler/methodtable.jl, but also by reflection.jl
 abstract type MethodTableView end
+abstract type AbstractInterpreter end
 
 # essential files and libraries
 include("essentials.jl")
@@ -99,6 +100,7 @@ add_with_overflow(x::T, y::T) where {T<:SignedInt}   = checked_sadd_int(x, y)
 add_with_overflow(x::T, y::T) where {T<:UnsignedInt} = checked_uadd_int(x, y)
 add_with_overflow(x::Bool, y::Bool) = (x+y, false)
 
+include("cmem.jl")
 include("strings/lazy.jl")
 
 # core array operations
@@ -152,7 +154,6 @@ include("compiler/ssair/domtree.jl")
 include("compiler/ssair/ir.jl")
 
 include("compiler/abstractlattice.jl")
-
 include("compiler/inferenceresult.jl")
 include("compiler/inferencestate.jl")
 

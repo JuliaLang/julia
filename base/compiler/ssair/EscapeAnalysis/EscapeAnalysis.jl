@@ -791,6 +791,7 @@ function compute_frameinfo(ir::IRCode, call_resolved::Bool)
             check_effect_free!(ir, idx, stmt, inst[:type], 𝕃ₒ)
         end
         if callinfo !== nothing && isexpr(stmt, :call)
+            # TODO: pass effects here
             callinfo[idx] = resolve_call(ir, stmt, inst[:info])
         elseif isexpr(stmt, :enter)
             @assert idx ≤ nstmts "try/catch inside new_nodes unsupported"

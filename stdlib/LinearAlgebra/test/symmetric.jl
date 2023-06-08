@@ -790,4 +790,38 @@ end
     end
 end
 
+@testset "hermitian part" begin
+    for T in [Float32, Complex{Float32}, Int32, Rational{Int32},
+              Complex{Int32}, Complex{Rational{Int32}}]
+        f, f!, t = hermitianpart, hermitianpart!, T <: Real ? transpose : adjoint
+        X = T[1 2 3; 4 5 6; 7 8 9]
+        T <: Complex && (X .+= im .* X)
+        Xc = copy(X)
+        Y = (X + t(X)) / 2
+        U = f(X)
+        L = f(X, :L)
+        @test U isa Hermitian
+        @test L isa Hermitian
+        @test U.uplo == 'U'
+        @test L.uplo == 'L'
+        @test U == L == Y
+        if T <: AbstractFloat || real(T) <: AbstractFloat
+            HU = f!(X)
+            @test HU == Y
+            @test triu(X) == triu(Y)
+            HL = f!(Xc, :L)
+            @test HL == Y
+            @test tril(Xc) == tril(Y)
+        end
+    end
+    @test_throws DimensionMismatch hermitianpart(ones(1,2))
+    for T in (Float64, ComplexF64), uplo in (:U, :L)
+        A = [randn(T, 2, 2) for _ in 1:2, _ in 1:2]
+        Aherm = hermitianpart(A, uplo)
+        @test Aherm == Aherm.data == (A + A')/2
+        @test Aherm isa Hermitian
+        @test Aherm.uplo == LinearAlgebra.char_uplo(uplo)
+    end
+end
+
 end # module TestSymmetric

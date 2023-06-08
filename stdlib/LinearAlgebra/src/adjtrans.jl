@@ -1,8 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base: @propagate_inbounds
-import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, convert, similar
-
 ### basic definitions (types, aliases, constructors, abstractarray interface, sundry similar)
 
 # note that Adjoint and Transpose must be able to wrap not only vectors and matrices
@@ -12,7 +9,7 @@ import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, c
     Adjoint
 
 Lazy wrapper type for an adjoint view of the underlying linear algebra object,
-usually an `AbstractVector`/`AbstractMatrix`, but also some `Factorization`, for instance.
+usually an `AbstractVector`/`AbstractMatrix`.
 Usually, the `Adjoint` constructor should not be called directly, use [`adjoint`](@ref)
 instead. To materialize the view use [`copy`](@ref).
 
@@ -39,7 +36,7 @@ end
     Transpose
 
 Lazy wrapper type for a transpose view of the underlying linear algebra object,
-usually an `AbstractVector`/`AbstractMatrix`, but also some `Factorization`, for instance.
+usually an `AbstractVector`/`AbstractMatrix`.
 Usually, the `Transpose` constructor should not be called directly, use [`transpose`](@ref)
 instead. To materialize the view use [`copy`](@ref).
 
@@ -66,6 +63,39 @@ end
 # basic outer constructors
 Adjoint(A) = Adjoint{Base.promote_op(adjoint,eltype(A)),typeof(A)}(A)
 Transpose(A) = Transpose{Base.promote_op(transpose,eltype(A)),typeof(A)}(A)
+
+"""
+    adj_or_trans(::AbstractArray) -> adjoint|transpose|identity
+    adj_or_trans(::Type{<:AbstractArray}) -> adjoint|transpose|identity
+
+Return [`adjoint`](@ref) from an `Adjoint` type or object and
+[`transpose`](@ref) from a `Transpose` type or object. Otherwise,
+return [`identity`](@ref). Note that `Adjoint` and `Transpose` have
+to be the outer-most wrapper object for a non-`identity` function to be
+returned.
+"""
+adj_or_trans(::T) where {T<:AbstractArray} = adj_or_trans(T)
+adj_or_trans(::Type{<:AbstractArray}) = identity
+adj_or_trans(::Type{<:Adjoint}) = adjoint
+adj_or_trans(::Type{<:Transpose}) = transpose
+
+"""
+    inplace_adj_or_trans(::AbstractArray) -> adjoint!|transpose!|copyto!
+    inplace_adj_or_trans(::Type{<:AbstractArray}) -> adjoint!|transpose!|copyto!
+
+Return [`adjoint!`](@ref) from an `Adjoint` type or object and
+[`transpose!`](@ref) from a `Transpose` type or object. Otherwise,
+return [`copyto!`](@ref). Note that `Adjoint` and `Transpose` have
+to be the outer-most wrapper object for a non-`identity` function to be
+returned.
+"""
+inplace_adj_or_trans(::T) where {T <: AbstractArray} = inplace_adj_or_trans(T)
+inplace_adj_or_trans(::Type{<:AbstractArray}) = copyto!
+inplace_adj_or_trans(::Type{<:Adjoint}) = adjoint!
+inplace_adj_or_trans(::Type{<:Transpose}) = transpose!
+
+_unwrap(A::Adjoint)   = parent(A)
+_unwrap(A::Transpose) = parent(A)
 
 Base.dataids(A::Union{Adjoint, Transpose}) = Base.dataids(A.parent)
 Base.unaliascopy(A::Union{Adjoint,Transpose}) = typeof(A)(Base.unaliascopy(A.parent))
@@ -291,6 +321,9 @@ wrapperop(_) = identity
 wrapperop(::Adjoint) = adjoint
 wrapperop(::Transpose) = transpose
 
+# the following fallbacks can be removed if Adjoint/Transpose are restricted to AbstractVecOrMat
+size(A::AdjOrTrans) = reverse(size(A.parent))
+axes(A::AdjOrTrans) = reverse(axes(A.parent))
 # AbstractArray interface, basic definitions
 length(A::AdjOrTrans) = length(A.parent)
 size(v::AdjOrTransAbsVec) = (1, length(v.parent))
@@ -299,6 +332,8 @@ axes(v::AdjOrTransAbsVec) = (Base.OneTo(1), axes(v.parent)...)
 axes(A::AdjOrTransAbsMat) = reverse(axes(A.parent))
 IndexStyle(::Type{<:AdjOrTransAbsVec}) = IndexLinear()
 IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
+@propagate_inbounds Base.isassigned(v::AdjOrTransAbsVec, i::Int) = isassigned(v.parent, i-1+first(axes(v.parent)[1]))
+@propagate_inbounds Base.isassigned(v::AdjOrTransAbsMat, i::Int, j::Int) = isassigned(v.parent, j, i)
 @propagate_inbounds getindex(v::AdjOrTransAbsVec{T}, i::Int) where {T} = wrapperop(v)(v.parent[i-1+first(axes(v.parent)[1])])::T
 @propagate_inbounds getindex(A::AdjOrTransAbsMat{T}, i::Int, j::Int) where {T} = wrapperop(A)(A.parent[j, i])::T
 @propagate_inbounds setindex!(v::AdjOrTransAbsVec, x, i::Int) = (setindex!(v.parent, wrapperop(v)(x), i-1+first(axes(v.parent)[1])); v)

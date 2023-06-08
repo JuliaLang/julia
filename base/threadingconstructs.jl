@@ -8,6 +8,25 @@ export threadid, nthreads, @threads, @spawn,
 
 Get the ID number of the current thread of execution. The master thread has
 ID `1`.
+
+# Examples
+```julia-repl
+julia> Threads.threadid()
+1
+
+julia> Threads.@threads for i in 1:4
+          println(Threads.threadid())
+       end
+4
+2
+5
+4
+```
+
+!!! note
+    The thread that a task runs on may change if the task yields, which is known as [`Task Migration`](@ref man-task-migration).
+    For this reason in most cases it is not safe to use `threadid()` to index into, say, a vector of buffer or stateful objects.
+
 """
 threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
 
@@ -32,20 +51,19 @@ See also `BLAS.get_num_threads` and `BLAS.set_num_threads` in the [`LinearAlgebr
 man-linalg) standard library, and `nprocs()` in the [`Distributed`](@ref man-distributed)
 standard library and [`Threads.maxthreadid()`](@ref).
 """
-function nthreads(pool::Symbol)
-    if pool === :default
-        tpid = Int8(0)
-    elseif pool === :interactive
-        tpid = Int8(1)
-    else
-        error("invalid threadpool specified")
-    end
-    return _nthreads_in_pool(tpid)
-end
+nthreads(pool::Symbol) = threadpoolsize(pool)
 
 function _nthreads_in_pool(tpid::Int8)
     p = unsafe_load(cglobal(:jl_n_threads_per_pool, Ptr{Cint}))
     return Int(unsafe_load(p, tpid + 1))
+end
+
+function _tpid_to_sym(tpid::Int8)
+    return tpid == 0 ? :interactive : :default
+end
+
+function _sym_to_tpid(tp::Symbol)
+    return tp === :interactive ? Int8(0) : Int8(1)
 end
 
 """
@@ -55,7 +73,7 @@ Returns the specified thread's threadpool; either `:default` or `:interactive`.
 """
 function threadpool(tid = threadid())
     tpid = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1)
-    return tpid == 0 ? :default : :interactive
+    return _tpid_to_sym(tpid)
 end
 
 """
@@ -66,24 +84,56 @@ Returns the number of threadpools currently configured.
 nthreadpools() = Int(unsafe_load(cglobal(:jl_n_threadpools, Cint)))
 
 """
-    Threads.threadpoolsize()
+    Threads.threadpoolsize(pool::Symbol = :default) -> Int
 
-Get the number of threads available to the Julia default worker-thread pool.
+Get the number of threads available to the default thread pool (or to the
+specified thread pool).
 
 See also: `BLAS.get_num_threads` and `BLAS.set_num_threads` in the
 [`LinearAlgebra`](@ref man-linalg) standard library, and `nprocs()` in the
 [`Distributed`](@ref man-distributed) standard library.
 """
-threadpoolsize() = Threads._nthreads_in_pool(Int8(0))
+function threadpoolsize(pool::Symbol = :default)
+    if pool === :default || pool === :interactive
+        tpid = _sym_to_tpid(pool)
+    else
+        error("invalid threadpool specified")
+    end
+    return _nthreads_in_pool(tpid)
+end
+
+"""
+    threadpooltids(pool::Symbol)
+
+Returns a vector of IDs of threads in the given pool.
+"""
+function threadpooltids(pool::Symbol)
+    ni = _nthreads_in_pool(Int8(0))
+    if pool === :interactive
+        return collect(1:ni)
+    elseif pool === :default
+        return collect(ni+1:ni+_nthreads_in_pool(Int8(1)))
+    else
+        error("invalid threadpool specified")
+    end
+end
+
+"""
+    Threads.ngcthreads() -> Int
+
+Returns the number of GC threads currently configured.
+"""
+ngcthreads() = Int(unsafe_load(cglobal(:jl_n_gcthreads, Cint))) + 1
 
 function threading_run(fun, static)
     ccall(:jl_enter_threaded_region, Cvoid, ())
     n = threadpoolsize()
+    tid_offset = threadpoolsize(:interactive)
     tasks = Vector{Task}(undef, n)
     for i = 1:n
         t = Task(() -> fun(i)) # pass in tid
         t.sticky = static
-        static && ccall(:jl_set_task_tid, Cint, (Any, Cint), t, i-1)
+        static && ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
         tasks[i] = t
         schedule(t)
     end
@@ -184,7 +234,7 @@ For example, the above conditions imply that:
 - Write only to locations not shared across iterations (unless a lock or atomic operation is
   used).
 - The value of [`threadid()`](@ref Threads.threadid) may change even within a single
-  iteration.
+  iteration. See [`Task Migration`](@ref man-task-migration)
 
 ## Schedulers
 
@@ -286,6 +336,15 @@ macro threads(args...)
     return _threadsfor(ex.args[1], ex.args[2], sched)
 end
 
+function _spawn_set_thrpool(t::Task, tp::Symbol)
+    tpid = _sym_to_tpid(tp)
+    if _nthreads_in_pool(tpid) == 0
+        tpid = _sym_to_tpid(:default)
+    end
+    ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, tpid)
+    nothing
+end
+
 """
     Threads.@spawn [:default|:interactive] expr
 
@@ -301,8 +360,10 @@ the _value_ of a variable, isolating the asynchronous code from changes to
 the variable's value in the current task.
 
 !!! note
-    See the manual chapter on [multi-threading](@ref man-multithreading)
-    for important caveats. See also the chapter on [threadpools](@ref man-threadpools).
+    The thread that the task runs on may change if the task yields, therefore `threadid()` should not
+    be treated as constant for a task. See [`Task Migration`](@ref man-task-migration), and the broader
+    [multi-threading](@ref man-multithreading) manual for further important caveats.
+    See also the chapter on [threadpools](@ref man-threadpools).
 
 !!! compat "Julia 1.3"
     This macro is available as of Julia 1.3.
@@ -312,9 +373,20 @@ the variable's value in the current task.
 
 !!! compat "Julia 1.9"
     A threadpool may be specified as of Julia 1.9.
+
+# Examples
+```julia-repl
+julia> t() = println("Hello from ", Threads.threadid());
+
+julia> tasks = fetch.([Threads.@spawn t() for i in 1:4]);
+Hello from 1
+Hello from 1
+Hello from 3
+Hello from 4
+```
 """
 macro spawn(args...)
-    tpid = Int8(0)
+    tp = :default
     na = length(args)
     if na == 2
         ttype, ex = args
@@ -324,9 +396,9 @@ macro spawn(args...)
             # TODO: allow unquoted symbols
             ttype = nothing
         end
-        if ttype === :interactive
-            tpid = Int8(1)
-        elseif ttype !== :default
+        if ttype === :interactive || ttype === :default
+            tp = ttype
+        else
             throw(ArgumentError("unsupported threadpool in @spawn: $ttype"))
         end
     elseif na == 1
@@ -337,13 +409,13 @@ macro spawn(args...)
 
     letargs = Base._lift_one_interp!(ex)
 
-    thunk = esc(:(()->($ex)))
+    thunk = Base.replace_linenums!(:(()->($(esc(ex)))), __source__)
     var = esc(Base.sync_varname)
     quote
         let $(letargs...)
             local task = Task($thunk)
             task.sticky = false
-            ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), task, $tpid)
+            _spawn_set_thrpool(task, $(QuoteNode(tp)))
             if $(Expr(:islocal, var))
                 put!($var, task)
             end

@@ -19,6 +19,9 @@ ifeq ($(BUILD_OS),WINNT)
 GMP_CONFIGURE_OPTS += --srcdir="$(subst \,/,$(call mingw_to_dos,$(SRCCACHE)/gmp-$(GMP_VER)))"
 endif
 
+ifeq ($(OS),emscripten)
+GMP_CONFIGURE_OPTS += CFLAGS="-fPIC"
+endif
 
 $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ https://gmplib.org/download/gmp/$(notdir $@)

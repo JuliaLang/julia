@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # RUN: julia --startup-file=no -O0 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s
 # RUN: julia --startup-file=no -O1 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s
 # RUN: julia --startup-file=no -O2 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s

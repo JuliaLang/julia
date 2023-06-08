@@ -59,14 +59,16 @@ However, you can create variables with names:
 Finally:
 `where` is parsed as an infix operator for writing parametric method and type definitions;
 `in` and `isa` are parsed as infix operators;
-and `outer` is parsed as a keyword when used to modify the scope of a variable in an iteration specification of a `for` loop.
-Creation of variables named `where`, `in`, `isa` or `outer` is allowed though.
+`outer` is parsed as a keyword when used to modify the scope of a variable in an iteration specification of a `for` loop;
+and `as` is used as a keyword to rename an identifier brought into scope by `import` or `using`.
+Creation of variables named `where`, `in`, `isa`, `outer` and `as` is allowed, though.
 
 ```@docs
 module
 export
 import
 using
+as
 baremodule
 function
 macro
@@ -139,10 +141,16 @@ Base.copy
 Base.deepcopy
 Base.getproperty
 Base.setproperty!
+Base.replaceproperty!
+Base.swapproperty!
+Base.modifyproperty!
 Base.propertynames
 Base.hasproperty
 Core.getfield
 Core.setfield!
+Core.modifyfield!
+Core.replacefield!
+Core.swapfield!
 Core.isdefined
 Core.getglobal
 Core.setglobal!
@@ -152,6 +160,7 @@ Base.promote
 Base.oftype
 Base.widen
 Base.identity
+Base.WeakRef
 ```
 
 ## Properties of Types
@@ -231,6 +240,7 @@ Core.Tuple
 Core.NTuple
 Core.NamedTuple
 Base.@NamedTuple
+Base.@Kwargs
 Base.Val
 Core.Vararg
 Core.Nothing
@@ -282,6 +292,8 @@ Base.@inline
 Base.@noinline
 Base.@nospecialize
 Base.@specialize
+Base.@nospecializeinfer
+Base.@constprop
 Base.gensym
 Base.@gensym
 var"name"
@@ -290,7 +302,6 @@ Base.@label
 Base.@simd
 Base.@polly
 Base.@generated
-Base.@pure
 Base.@assume_effects
 Base.@deprecate
 ```

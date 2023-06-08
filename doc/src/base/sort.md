@@ -168,9 +168,11 @@ Base.Sort.defalg(::AbstractArray{<:Union{SmallInlineStrings, Missing}}) = Inline
 By default, `sort` and related functions use [`isless`](@ref) to compare two
 elements in order to determine which should come first. The
 [`Base.Order.Ordering`](@ref) abstract type provides a mechanism for defining
-alternate orderings on the same set of elements. Instances of `Ordering` define
-a [total order](https://en.wikipedia.org/wiki/Total_order) on a set of elements,
-so that for any elements `a`, `b`, `c` the following hold:
+alternate orderings on the same set of elements: when calling a sorting function like
+`sort`, an instance of `Ordering` can be provided with the keyword argument `order`.
+
+Instances of `Ordering` define a [total order](https://en.wikipedia.org/wiki/Total_order)
+on a set of elements, so that for any elements `a`, `b`, `c` the following hold:
 
 * Exactly one of the following is true: `a` is less than `b`, `b` is less than
   `a`, or `a` and `b` are equal (according to [`isequal`](@ref)).

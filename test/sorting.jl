@@ -84,6 +84,22 @@ end
         @test issorted(sort(1:2000, alg=Alg, by=x->0))
         @test issorted(sort(1:2000, alg=Alg, by=x->x÷100))
     end
+    @test sort(1:2000, by=x->x÷100, rev=true) == sort(1:2000, by=x->-x÷100) ==
+        vcat(2000, (x:x+99 for x in 1900:-100:100)..., 1:99)
+end
+
+function tuple_sort_test(x)
+    @test issorted(sort(x))
+    length(x) > 9 && return # length > 9 uses a vector fallback
+    @test 0 == @allocated sort(x)
+end
+@testset "sort(::NTuple)" begin
+    @test sort((9,8,3,3,6,2,0,8)) == (0,2,3,3,6,8,8,9)
+    @test sort((9,8,3,3,6,2,0,8), by=x->x÷3) == (2,0,3,3,8,6,8,9)
+    for i in 1:40
+        tuple_sort_test(tuple(rand(i)...))
+    end
+    @test_throws ArgumentError sort((1,2,3.0))
 end
 
 @testset "partialsort" begin
@@ -528,6 +544,23 @@ end
     @test isequal(a, [8,6,7,NaN,5,3,0,9])
 end
 
+@testset "sort!(iterable)" begin
+    gen = (x % 7 + 0.1x for x in 1:50)
+    @test sort(gen) == sort!(collect(gen))
+    gen = (x % 7 + 0.1y for x in 1:10, y in 1:5)
+    @test sort(gen; dims=1) == sort!(collect(gen); dims=1)
+    @test sort(gen; dims=2) == sort!(collect(gen); dims=2)
+
+    @test_throws ArgumentError("dimension out of range") sort(gen; dims=3)
+
+    @test_throws UndefKeywordError(:dims) sort(gen)
+    @test_throws UndefKeywordError(:dims) sort(collect(gen))
+    @test_throws UndefKeywordError(:dims) sort!(collect(gen))
+
+    @test_throws ArgumentError sort("string")
+    @test_throws ArgumentError("1 cannot be sorted") sort(1)
+end
+
 @testset "sort!(::AbstractVector{<:Integer}) with short int range" begin
     a = view([9:-1:0;], :)::SubArray
     sort!(a)
@@ -558,6 +591,13 @@ end
     for i in axes(x, 2)
         @test issorted(x[:,i])
     end
+end
+
+@testset "Offset with missing (#48862)" begin
+    v = [-1.0, missing, 1.0, 0.0, missing, -0.5, 0.5, 1.0, -0.5, missing, 0.5, -0.8, 1.5, NaN]
+    vo = OffsetArray(v, (firstindex(v):lastindex(v)).+100)
+    @test issorted(sort!(vo))
+    @test issorted(v)
 end
 
 @testset "searchsortedfirst/last with generalized indexing" begin
@@ -764,6 +804,18 @@ end
 @testset "Unions with missing" begin
     @test issorted(sort(shuffle!(vcat(fill(missing, 10), rand(Int, 100)))))
     @test issorted(sort(vcat(rand(Int8, 600), [missing])))
+
+    # Because we define defalg(::AbstractArray{Missing})
+    @test all(fill(missing, 10) .=== sort(fill(missing, 10)))
+
+    # Unit tests for WithoutMissingVector
+    a = [1,7,missing,4]
+    @test_throws ArgumentError Base.Sort.WithoutMissingVector(a)
+    @test eltype(a[[1,2,4]]) == eltype(a)
+    @test eltype(Base.Sort.WithoutMissingVector(a[[1,2,4]])) == Int
+    am = Base.Sort.WithoutMissingVector(a, unsafe=true)
+    @test am[2] == 7
+    @test eltype(am) == Int
 end
 
 @testset "Specific algorithms" begin
@@ -946,6 +998,31 @@ function test_allocs()
 end
 @testset "Small calls do not unnecessarily allocate" begin
     test_allocs()
+end
+
+@testset "Presorted and reverse-presorted" begin
+    for len in [7, 92, 412, 780]
+        x = sort(randn(len))
+        for _ in 1:2
+            @test issorted(sort(x))
+            @test issorted(sort(x), by=x -> x+7)
+            reverse!(x)
+        end
+    end
+end
+
+struct MyArray49392{T, N} <: AbstractArray{T, N}
+    data::Array{T, N}
+end
+Base.size(A::MyArray49392) = size(A.data)
+Base.getindex(A::MyArray49392, i...) = getindex(A.data, i...)
+Base.setindex!(A::MyArray49392, v, i...) = setindex!(A.data, v, i...)
+Base.similar(A::MyArray49392, ::Type{T}, dims::Dims{N}) where {T, N} = MyArray49392(similar(A.data, T, dims))
+
+@testset "Custom matrices (#49392)" begin
+    x = rand(10, 10)
+    y = MyArray49392(copy(x))
+    @test all(sort!(y, dims=2) .== sort!(x,dims=2))
 end
 
 # This testset is at the end of the file because it is slow.

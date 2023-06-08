@@ -483,11 +483,15 @@ void jl_install_default_signal_handlers(void)
 
 void jl_install_thread_signal_handler(jl_ptls_t ptls)
 {
-    size_t ssize = sig_stack_size;
-    void *stk = jl_malloc_stack(&ssize, NULL);
-    collect_backtrace_fiber.uc_stack.ss_sp = (void*)stk;
-    collect_backtrace_fiber.uc_stack.ss_size = ssize;
-    jl_makecontext(&collect_backtrace_fiber, start_backtrace_fiber);
-    uv_mutex_init(&backtrace_lock);
-    have_backtrace_fiber = 1;
+    if (!have_backtrace_fiber) {
+        size_t ssize = sig_stack_size;
+        void *stk = jl_malloc_stack(&ssize, NULL);
+        if (stk == NULL)
+            jl_errorf("fatal error allocating signal stack: mmap: %s", strerror(errno));
+        collect_backtrace_fiber.uc_stack.ss_sp = (void*)stk;
+        collect_backtrace_fiber.uc_stack.ss_size = ssize;
+        jl_makecontext(&collect_backtrace_fiber, start_backtrace_fiber);
+        uv_mutex_init(&backtrace_lock);
+        have_backtrace_fiber = 1;
+    }
 }
