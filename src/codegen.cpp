@@ -1847,9 +1847,7 @@ static Value *emit_inttoptr(jl_codectx_t &ctx, Value *v, Type *ty)
             return ctx.builder.CreateAddrSpaceCast(ptr, ty);
     }
     ++EmittedIntToPtrs;
-    auto ptr = ctx.builder.CreateIntToPtr(v, ty);
-    setName(ctx.emission_context, ptr, "inttoptr");
-    return ptr;
+    return ctx.builder.CreateIntToPtr(v, ty);
 }
 
 static inline jl_cgval_t ghostValue(jl_codectx_t &ctx, jl_value_t *typ)
@@ -3529,7 +3527,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, offset);
                     ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), ptindex, idx);
                     *ret = emit_unionload(ctx, data, ptindex, ety, elsz, al, ctx.tbaa().tbaa_arraybuf, true, union_max, ctx.tbaa().tbaa_arrayselbyte);
-                    setName(ctx.emission_context, ret->V, "arrayref");
+                    if (ret->V)
+                        setName(ctx.emission_context, ret->V, "arrayref");
                 }
                 else {
                     MDNode *aliasscope = (f == jl_builtin_const_arrayref) ? ctx.noalias().aliasscope.current : nullptr;
@@ -3540,7 +3539,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                             aliasscope,
                             isboxed,
                             AtomicOrdering::NotAtomic);
-                    setName(ctx.emission_context, ret->V, "arrayref");
+                    if (ret->V)
+                        setName(ctx.emission_context, ret->V, "arrayref");
                 }
                 return true;
             }
@@ -3968,7 +3968,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 elsize = ctx.builder.CreateZExt(emit_arrayelsize(ctx, obj), ctx.types().T_size);
             }
             *ret = mark_julia_type(ctx, ctx.builder.CreateMul(len, elsize), false, jl_long_type);
-            setName(ctx.emission_context, ret->V, "sizeof");
+            if (ret->V)
+                setName(ctx.emission_context, ret->V, "sizeof");
             return true;
         }
     }
