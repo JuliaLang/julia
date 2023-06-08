@@ -1140,7 +1140,7 @@ void multiversioning_preannotate(Module &M)
     M.addModuleFlag(Module::ModFlagBehavior::Error, "julia.mv.enable", 1);
 }
 
-PreservedAnalyses MultiVersioning::run(Module &M, ModuleAnalysisManager &AM)
+PreservedAnalyses MultiVersioningPass::run(Module &M, ModuleAnalysisManager &AM)
 {
     if (runMultiVersioning(M, external_use)) {
         auto preserved = PreservedAnalyses::allInSet<CFGAnalyses>();

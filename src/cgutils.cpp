@@ -2008,10 +2008,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             emit_unbox_store(ctx, rhs, ptr, tbaa, alignment);
         }
     }
-    else if (isswapfield && !isboxed) {
+    else if (isswapfield && isStrongerThanMonotonic(Order)) {
         assert(Order != AtomicOrdering::NotAtomic && r);
-        // we can't handle isboxed here as a workaround for really bad LLVM
-        // design issue: plain Xchg only works with integers
         auto *store = ctx.builder.CreateAtomicRMW(AtomicRMWInst::Xchg, ptr, r, Align(alignment), Order);
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
         ai.noalias = MDNode::concatenate(aliasscope, ai.noalias);
