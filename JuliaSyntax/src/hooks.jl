@@ -143,6 +143,10 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
             # The C entry points will pass us this form.
             (ptr,len) = code
             code = String(unsafe_wrap(Array, ptr, len))
+        elseif !(code isa String || code isa SubString || code isa Vector{UInt8})
+            # For non-Base string types, convert to UTF-8 encoding, using an
+            # invokelatest to avoid world age issues.
+            code = Base.invokelatest(String, code)
         end
         if !isnothing(_debug_log[])
             print(_debug_log[], """
