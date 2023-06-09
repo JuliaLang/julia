@@ -3180,11 +3180,16 @@ function parse_string(ps::ParseState, raw::Bool)
                 # "a $(x + y) b"  ==>  (string "a " (parens (call-i x + y)) " b")
                 # "hi$("ho")"     ==>  (string "hi" (parens (string "ho")))
                 m = position(ps)
-                parse_atom(ps)
-                if peek_behind(ps, skip_parens=false).kind != K"parens"
-                    # "$(x,y)" ==> (string (error (tuple-p x y)))
+                bump(ps, TRIVIA_FLAG)
+                opts = parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
+                    return (needs_parameters=false,
+                            simple_interp=!had_commas && num_semis == 0 && num_subexprs == 1)
+                end
+                if !opts.simple_interp || peek_behind(ps, skip_parens=false).kind == K"generator"
+                    # "$(x,y)" ==> (string (parens (error x y)))
                     emit(ps, m, K"error", error="invalid interpolation syntax")
                 end
+                emit(ps, m, K"parens")
             elseif k == K"var"
                 # var identifiers disabled in strings
                 # "$var"  ==>  (string var)
