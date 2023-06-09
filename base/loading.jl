@@ -1653,6 +1653,8 @@ end
 # require always works in Main scope and loads files from node 1
 const toplevel_load = Ref(true)
 
+const _require_world_age = Ref{UInt}(typemax(UInt))
+
 """
     require(into::Module, module::Symbol)
 
@@ -1675,6 +1677,14 @@ For more details regarding code loading, see the manual sections on [modules](@r
 [parallel computing](@ref code-availability).
 """
 function require(into::Module, mod::Symbol)
+    if _require_world_age[] != typemax(UInt)
+        Base.invoke_in_world(_require_world_age[], __require, into, mod)
+    else
+        @invokelatest __require(into, mod)
+    end
+end
+
+function __require(into::Module, mod::Symbol)
     @lock require_lock begin
     LOADING_CACHE[] = LoadingCache()
     try
@@ -1724,6 +1734,14 @@ require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
 const REPL_PKGID = PkgId(UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL")
 
 function _require_prelocked(uuidkey::PkgId, env=nothing)
+    if _require_world_age[] != typemax(UInt)
+        Base.invoke_in_world(_require_world_age[], __require_prelocked, uuidkey, env)
+    else
+        @invokelatest __require_prelocked(uuidkey, env)
+    end
+end
+
+function __require_prelocked(uuidkey::PkgId, env=nothing)
     assert_havelock(require_lock)
     if !root_module_exists(uuidkey)
         newm = _require(uuidkey, env)

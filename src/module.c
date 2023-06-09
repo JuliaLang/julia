@@ -239,7 +239,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_
         }
         // TODO: we might want to require explicitly importing types to add constructors
         //       or we might want to drop this error entirely
-        if (!b->imported && (!b2->constp || !jl_is_type(f))) {
+        if (!b->imported && !(b2->constp && jl_is_type(f) && strcmp(jl_symbol_name(var), "=>") != 0)) {
             jl_errorf("invalid method definition in %s: function %s.%s must be explicitly imported to be extended",
                       jl_symbol_name(m->name), jl_symbol_name(from->name), jl_symbol_name(var));
         }

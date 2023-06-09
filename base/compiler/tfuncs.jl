@@ -1374,7 +1374,7 @@ function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any
     nargs = length(argtypes)
     if !isempty(argtypes) && isvarargtype(argtypes[nargs])
         nargs - 1 <= 6 || return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
-        nargs > 3 || return CallMeta(Any, EFFECTS_UNKNOWN, NoCallInfo())
+        nargs > 3 || return CallMeta(Any, Effects(), NoCallInfo())
     else
         5 <= nargs <= 6 || return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
     end
@@ -2681,7 +2681,7 @@ end
 # a simplified model of abstract_call_gf_by_type for applicable
 function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
                              sv::AbsIntState, max_methods::Int)
-    length(argtypes) < 2 && return CallMeta(Union{}, EFFECTS_UNKNOWN, NoCallInfo())
+    length(argtypes) < 2 && return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
     isvarargtype(argtypes[2]) && return CallMeta(Bool, EFFECTS_UNKNOWN, NoCallInfo())
     argtypes = argtypes[2:end]
     atype = argtypes_to_type(argtypes)
