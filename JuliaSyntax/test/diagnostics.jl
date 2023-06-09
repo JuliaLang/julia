@@ -96,6 +96,9 @@ end
         Diagnostic(2, 19, :error, "try without catch or finally")
         Diagnostic(20, 19, :error, "Expected `end`")
     ]
+
+    @test diagnostic("\"\$(x,y)\"") ==
+        Diagnostic(3, 7, :error, "invalid interpolation syntax")
 end
 
 @testset "parser warnings" begin
