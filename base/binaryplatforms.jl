@@ -186,7 +186,7 @@ end
 function Base.show(io::IO, p::Platform)
     str = string(platform_name(p), " ", arch(p))
     # Add on all the other tags not covered by os/arch:
-    other_tags = sort!(collect(filter(kv -> kv[1] ∉ ("os", "arch"), tags(p))))
+    other_tags = sort(filter(kv -> kv[1] ∉ ("os", "arch"), tags(p))))
     if !isempty(other_tags)
         str = string(str, " {", join([string(k, "=", v) for (k, v) in other_tags], ", "), "}")
     end
