@@ -2097,7 +2097,8 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
             is_empty_tuple = peek(ps, skip_newlines=true) == K")"
             opts = parse_brackets(ps, K")") do _, _, _, _
                 _parsed_call = was_eventually_call(ps)
-                _is_anon_func = peek(ps, 2) ∉ KSet"( ." && !_parsed_call
+                t2 = peek_token(ps, 2)
+                _is_anon_func = kind(t2) ∉ KSet"( ." && !_parsed_call
                 return (needs_parameters = _is_anon_func,
                         is_anon_func     = _is_anon_func,
                         parsed_call      = _parsed_call)
@@ -3178,7 +3179,12 @@ function parse_string(ps::ParseState, raw::Bool)
             if k == K"("
                 # "a $(x + y) b"  ==>  (string "a " (parens (call-i x + y)) " b")
                 # "hi$("ho")"     ==>  (string "hi" (parens (string "ho")))
+                m = position(ps)
                 parse_atom(ps)
+                if peek_behind(ps, skip_parens=false).kind != K"parens"
+                    # "$(x,y)" ==> (string (error (tuple-p x y)))
+                    emit(ps, m, K"error", error="invalid interpolation syntax")
+                end
             elseif k == K"var"
                 # var identifiers disabled in strings
                 # "$var"  ==>  (string var)

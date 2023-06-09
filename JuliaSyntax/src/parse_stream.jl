@@ -534,7 +534,7 @@ function peek_full_token(stream::ParseStream, n::Integer=1;
 end
 
 """
-    peek_behind(ps; skip_trivia=true)
+    peek_behind(ps; skip_trivia=true, skip_parens=true)
     peek_behind(ps, pos::ParseStreamPosition)
 
 Return information about a span which was previously inserted into the output,
