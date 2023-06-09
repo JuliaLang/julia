@@ -8,7 +8,7 @@ export
 
 import
     .Base: *, +, -, /, <, <=, ==, >, >=, ^, ceil, cmp, convert, copysign, div,
-        inv, exp, exp2, exponent, factorial, floor, fma, hypot, isinteger,
+        inv, exp, exp2, exponent, factorial, floor, fma, muladd, hypot, isinteger,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show, float,
         sum, sqrt, string, print, trunc, precision, _precision, exp10, expm1, log1p,
@@ -19,6 +19,8 @@ import
         isone, big, _string_n, decompose, minmax,
         sinpi, cospi, sincospi, tanpi, sind, cosd, tand, asind, acosd, atand
 
+
+using .Base.Libc
 import ..Rounding: rounding_raw, setrounding_raw
 
 import ..GMP: ClongMax, CulongMax, CdoubleMax, Limb, libgmp
@@ -535,6 +537,8 @@ function fma(x::BigFloat, y::BigFloat, z::BigFloat)
     ccall(("mpfr_fma",libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode), r, x, y, z, ROUNDING_MODE[])
     return r
 end
+
+muladd(x::BigFloat, y::BigFloat, z::BigFloat) = fma(x, y, z)
 
 # div
 # BigFloat
@@ -1138,7 +1142,7 @@ function decompose(x::BigFloat)::Tuple{BigInt, Int, Int}
     s.size = cld(x.prec, 8*sizeof(Limb)) # limbs
     b = s.size * sizeof(Limb)            # bytes
     ccall((:__gmpz_realloc2, libgmp), Cvoid, (Ref{BigInt}, Culong), s, 8b) # bits
-    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), s.d, x.d, b) # bytes
+    memcpy(s.d, x.d, b)
     s, x.exp - 8b, x.sign
 end
 

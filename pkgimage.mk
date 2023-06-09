@@ -5,7 +5,16 @@ include $(JULIAHOME)/Make.inc
 
 VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
 
+# set some influential environment variables
 export JULIA_DEPOT_PATH := $(build_prefix)/share/julia
+export JULIA_LOAD_PATH := @stdlib
+unexport JULIA_PROJECT :=
+unexport JULIA_BINDIR :=
+
+default: release
+release: all-release
+debug: all-debug
+all: release debug
 
 $(JULIA_DEPOT_PATH):
 	mkdir -p $@
@@ -83,7 +92,7 @@ $(eval $(call sysimg_builder,libblastrampoline_jll,Artifacts Libdl))
 $(eval $(call sysimg_builder,OpenBLAS_jll,Artifacts Libdl))
 $(eval $(call sysimg_builder,Markdown,Base64))
 $(eval $(call sysimg_builder,Printf,Unicode))
-$(eval $(call sysimg_builder,Random,Serialization SHA))
+$(eval $(call sysimg_builder,Random,SHA))
 $(eval $(call sysimg_builder,Tar,ArgTools,SHA))
 $(eval $(call pkgimg_builder,DelimitedFiles,Mmap))
 

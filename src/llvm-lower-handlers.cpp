@@ -8,6 +8,7 @@
 
 #include <llvm/ADT/DepthFirstIterator.h>
 #include <llvm/ADT/Statistic.h>
+#include <llvm/ADT/Triple.h>
 #include <llvm/Analysis/CFG.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
@@ -235,7 +236,7 @@ static bool lowerExcHandlers(Function &F) {
 
 } // anonymous namespace
 
-PreservedAnalyses LowerExcHandlers::run(Function &F, FunctionAnalysisManager &AM)
+PreservedAnalyses LowerExcHandlersPass::run(Function &F, FunctionAnalysisManager &AM)
 {
     bool modified = lowerExcHandlers(F);
 #ifdef JL_VERIFY_PASSES
@@ -271,7 +272,8 @@ Pass *createLowerExcHandlersPass()
     return new LowerExcHandlersLegacy();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddLowerExcHandlersPass_impl(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddLowerExcHandlersPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createLowerExcHandlersPass());
 }

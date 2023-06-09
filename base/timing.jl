@@ -12,7 +12,6 @@ struct GC_Num
     freecall        ::Int64
     total_time      ::Int64
     total_allocd    ::Int64 # GC internal
-    since_sweep     ::Int64 # GC internal
     collect         ::Csize_t # GC internal
     pause           ::Cint
     full_sweep      ::Cint
@@ -25,6 +24,7 @@ struct GC_Num
     mark_time       ::Int64
     total_sweep_time  ::Int64
     total_mark_time   ::Int64
+    last_full_sweep ::Int64
 end
 
 gc_num() = ccall(:jl_gc_num, GC_Num, ())
@@ -136,7 +136,7 @@ function format_bytes(bytes) # also used by InteractiveUtils
     end
 end
 
-function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, recompile_time=0, newline=false, _lpad=true)
+function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, recompile_time=0, newline=false, _lpad=true)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
     str = sprint() do io
         _lpad && print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
@@ -170,8 +170,9 @@ function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, re
             print(io, ": ", perc < 1 ? "<1" : Ryu.writefixed(perc, 0), "% of which was recompilation")
         end
         parens && print(io, ")")
+        newline && print(io, "\n")
     end
-    newline ? println(str) : print(str)
+    print(io, str)
     nothing
 end
 
@@ -179,7 +180,7 @@ function timev_print(elapsedtime, diff::GC_Diff, compile_times, _lpad)
     allocs = gc_alloc_count(diff)
     compile_time = first(compile_times)
     recompile_time = last(compile_times)
-    time_print(elapsedtime, diff.allocd, diff.total_time, allocs, compile_time, recompile_time, true, _lpad)
+    time_print(stdout, elapsedtime, diff.allocd, diff.total_time, allocs, compile_time, recompile_time, true, _lpad)
     padded_nonzero_print(elapsedtime,       "elapsed time (ns)")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
@@ -280,7 +281,7 @@ macro time(msg, ex)
         local _msg = $(esc(msg))
         local has_msg = !isnothing(_msg)
         has_msg && print(_msg, ": ")
-        time_print(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), first(compile_elapsedtimes), last(compile_elapsedtimes), true, !has_msg)
+        time_print(stdout, elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), first(compile_elapsedtimes), last(compile_elapsedtimes), true, !has_msg)
         val
     end
 end

@@ -112,7 +112,7 @@ void jl_init_uv(void)
 {
     uv_async_init(jl_io_loop, &signal_async, jl_signal_async_cb);
     uv_unref((uv_handle_t*)&signal_async);
-    JL_MUTEX_INIT(&jl_uv_mutex); // a file-scope initializer can be used instead
+    JL_MUTEX_INIT(&jl_uv_mutex, "jl_uv_mutex"); // a file-scope initializer can be used instead
 }
 
 _Atomic(int) jl_uv_n_waiters = 0;

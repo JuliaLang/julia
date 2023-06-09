@@ -204,9 +204,9 @@ If set to `true`, record per-method-instance timings within type inference in th
 __set_measure_typeinf(onoff::Bool) = __measure_typeinf__[] = onoff
 const __measure_typeinf__ = fill(false)
 
-# Wrapper around _typeinf that optionally records the exclusive time for each invocation.
-function typeinf(interp::AbstractInterpreter, frame::InferenceState)
-    interp = switch_from_irinterp(interp)
+# Wrapper around `_typeinf` that optionally records the exclusive time for
+# each inference performed by `NativeInterpreter`.
+function typeinf(interp::NativeInterpreter, frame::InferenceState)
     if __measure_typeinf__[]
         Timings.enter_new_timer(frame)
         v = _typeinf(interp, frame)
@@ -216,6 +216,7 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
         return _typeinf(interp, frame)
     end
 end
+typeinf(interp::AbstractInterpreter, frame::InferenceState) = _typeinf(interp, frame)
 
 function finish!(interp::AbstractInterpreter, caller::InferenceResult)
     # If we didn't transform the src for caching, we may have to transform
@@ -242,6 +243,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceResult)
 end
 
 function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
+    interp = switch_from_irinterp(interp)
     typeinf_nocycle(interp, frame) || return false # frame is now part of a higher cycle
     # with no active ip's, frame is done
     frames = frame.callers_in_cycle
@@ -267,8 +269,7 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     for (caller, _, _) in results
         opt = caller.src
         if opt isa OptimizationState{typeof(interp)} # implies `may_optimize(interp) === true`
-            analyzed = optimize(interp, opt, caller)
-            caller.valid_worlds = (opt.inlining.et::EdgeTracker).valid_worlds[]
+            optimize(interp, opt, caller)
         end
     end
     for (caller, edges, cached) in results
@@ -323,14 +324,20 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult,
             const_flags = 0x00
         end
     end
-    relocatability = isa(inferred_result, Vector{UInt8}) ? inferred_result[end] :
-                     inferred_result === nothing ? UInt8(1) : UInt8(0)
-    # relocatability = isa(inferred_result, Vector{UInt8}) ? inferred_result[end] : UInt8(0)
+    relocatability = 0x0
+    if isa(inferred_result, String)
+        t = @_gc_preserve_begin inferred_result
+        relocatability = unsafe_load(unsafe_convert(Ptr{UInt8}, inferred_result), Core.sizeof(inferred_result))
+        @_gc_preserve_end t
+    elseif inferred_result === nothing
+        relocatability = 0x1
+    end
+    # relocatability = isa(inferred_result, String) ? inferred_result[end] : UInt8(0)
     return CodeInstance(result.linfo,
         widenconst(result_type), rettype_const, inferred_result,
         const_flags, first(valid_worlds), last(valid_worlds),
         # TODO: Actually do something with non-IPO effects
-	    encode_effects(result.ipo_effects), encode_effects(result.ipo_effects), result.argescapes,
+        encode_effects(result.ipo_effects), encode_effects(result.ipo_effects), result.argescapes,
         relocatability)
 end
 
@@ -350,7 +357,7 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInsta
             nslots = length(ci.slotflags)
             resize!(ci.slottypes::Vector{Any}, nslots)
             resize!(ci.slotnames, nslots)
-            return ccall(:jl_compress_ir, Vector{UInt8}, (Any, Any), def, ci)
+            return ccall(:jl_compress_ir, String, (Any, Any), def, ci)
         else
             return ci
         end
@@ -362,10 +369,9 @@ end
 function transform_result_for_cache(interp::AbstractInterpreter,
     linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult)
     inferred_result = result.src
-    # If we decided not to optimize, drop the OptimizationState now.
-    # External interpreters can override as necessary to cache additional information
     if inferred_result isa OptimizationState{typeof(interp)}
-        inferred_result = ir_to_codeinf!(inferred_result)
+        # TODO respect must_be_codeinf setting here?
+        result.src = inferred_result = ir_to_codeinf!(inferred_result)
     end
     if inferred_result isa CodeInfo
         inferred_result.min_world = first(valid_worlds)
@@ -1009,7 +1015,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
             tree.slotflags = fill(IR_FLAG_NULL, nargs)
             tree.ssavaluetypes = 1
             tree.codelocs = Int32[1]
-            tree.linetable = LineInfoNode[LineInfoNode(method.module, method.name, method.file, method.line, Int32(0))]
+            tree.linetable = LineInfoNode[LineInfoNode(method.module, mi, method.file, method.line, Int32(0))]
             tree.ssaflags = UInt8[0]
             set_inlineable!(tree, true)
             tree.parent = mi
@@ -1029,7 +1035,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
                 inf.rettype = code.rettype
             end
             return inf
-        elseif isa(inf, Vector{UInt8})
+        elseif isa(inf, String)
             ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
             inf = _uncompressed_ir(code, inf)
             return inf

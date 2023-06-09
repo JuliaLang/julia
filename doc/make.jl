@@ -118,6 +118,7 @@ BaseDocs = [
     "base/punctuation.md",
     "base/sort.md",
     "base/iterators.md",
+    "base/reflection.md",
     "base/c.md",
     "base/libc.md",
     "base/stacktraces.md",
@@ -127,7 +128,6 @@ BaseDocs = [
 StdlibDocs = [stdlib.targetfile for stdlib in STDLIB_DOCS]
 
 DevDocs = [
-    "devdocs/reflection.md",
     "Documentation of Julia's Internals" => [
         "devdocs/init.md",
         "devdocs/ast.md",
@@ -159,6 +159,7 @@ DevDocs = [
         "devdocs/backtraces.md",
         "devdocs/debuggingtips.md",
         "devdocs/valgrind.md",
+        "devdocs/external_profilers.md",
         "devdocs/sanitizers.md",
         "devdocs/probes.md",
     ],
@@ -262,12 +263,6 @@ DocMeta.setdocmeta!(
     Base.BinaryPlatforms,
     :DocTestSetup,
     maybe_revise(:(using Base.BinaryPlatforms));
-    recursive=true, warn=false,
-)
-DocMeta.setdocmeta!(
-    Pkg.LazilyInitializedFields,
-    :DocTestSetup,
-    maybe_revise(:(using Pkg.LazilyInitializedFields));
     recursive=true, warn=false,
 )
 

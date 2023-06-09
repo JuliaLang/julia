@@ -21,7 +21,6 @@
     XX(jl_apply_type1) \
     XX(jl_apply_type2) \
     XX(jl_argument_datatype) \
-    XX(jl_argument_method_table) \
     XX(jl_arraylen) \
     XX(jl_arrayref) \
     XX(jl_arrayset) \
@@ -120,7 +119,7 @@
     XX(jl_check_pkgimage_clones) \
     XX(jl_egal) \
     XX(jl_egal__bits) \
-    XX(jl_egal__special) \
+    XX(jl_egal__bitstag) \
     XX(jl_eh_restore_state) \
     XX(jl_enter_handler) \
     XX(jl_enter_threaded_region) \
@@ -258,7 +257,7 @@
     XX(jl_infer_thunk) \
     XX(jl_init) \
     XX(jl_init_options) \
-    XX(jl_init_restored_modules) \
+    XX(jl_init_restored_module) \
     XX(jl_init_with_image) \
     XX(jl_init_with_image__threading) \
     XX(jl_init__threading) \
@@ -409,7 +408,6 @@
     XX(jl_restore_system_image_data) \
     XX(jl_rethrow) \
     XX(jl_rethrow_other) \
-    XX(jl_rettype_inferred) \
     XX(jl_running_on_valgrind) \
     XX(jl_safe_printf) \
     XX(jl_SC_CLK_TCK) \
@@ -546,6 +544,7 @@
     YY(jl_register_fptrs) \
     YY(jl_generate_fptr) \
     YY(jl_generate_fptr_for_unspecialized) \
+    YY(jl_generate_fptr_for_oc_wrapper) \
     YY(jl_compile_extern_c) \
     YY(jl_teardown_codegen) \
     YY(jl_jit_total_bytes) \
@@ -574,5 +573,33 @@
     YY(LLVMExtraAddGCInvariantVerifierPass) \
     YY(LLVMExtraAddDemoteFloat16Pass) \
     YY(LLVMExtraAddCPUFeaturesPass) \
+    YY(LLVMExtraMPMAddCPUFeaturesPass) \
+    YY(LLVMExtraMPMAddRemoveNIPass) \
+    YY(LLVMExtraMPMAddLowerSIMDLoopPass) \
+    YY(LLVMExtraMPMAddFinalLowerGCPass) \
+    YY(LLVMExtraMPMAddMultiVersioningPass) \
+    YY(LLVMExtraMPMAddRemoveJuliaAddrspacesPass) \
+    YY(LLVMExtraMPMAddRemoveAddrspacesPass) \
+    YY(LLVMExtraMPMAddLowerPTLSPass) \
+    YY(LLVMExtraFPMAddDemoteFloat16Pass) \
+    YY(LLVMExtraFPMAddCombineMulAddPass) \
+    YY(LLVMExtraFPMAddLateLowerGCPass) \
+    YY(LLVMExtraFPMAddAllocOptPass) \
+    YY(LLVMExtraFPMAddPropagateJuliaAddrspacesPass) \
+    YY(LLVMExtraFPMAddLowerExcHandlersPass) \
+    YY(LLVMExtraFPMAddGCInvariantVerifierPass) \
+    YY(LLVMExtraLPMAddJuliaLICMPass) \
+    YY(JLJITGetLLVMOrcExecutionSession) \
+    YY(JLJITGetJuliaOJIT) \
+    YY(JLJITGetExternalJITDylib) \
+    YY(JLJITAddObjectFile) \
+    YY(JLJITAddLLVMIRModule) \
+    YY(JLJITLookup) \
+    YY(JLJITMangleAndIntern) \
+    YY(JLJITGetTripleString) \
+    YY(JLJITGetGlobalPrefix) \
+    YY(JLJITGetDataLayoutString) \
+    YY(JLJITGetIRCompileLayer) \
+
 
 // end of file

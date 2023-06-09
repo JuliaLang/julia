@@ -1,3 +1,5 @@
+; This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -JuliaLICM -S %s | FileCheck %s
 ; RUN: opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaLICM' -S %s | FileCheck %s
 
@@ -7,6 +9,8 @@ declare void @julia.write_barrier({}*, ...)
 
 declare {}*** @julia.get_pgcstack()
 
+; COM: check basic allocation hoisting functionality
+; CHECK-LABEL: @julia_allocation_hoist
 define nonnull {} addrspace(10)* @julia_allocation_hoist(i64 signext %0) #0 {
 top:
   %1 = call {}*** @julia.get_pgcstack()
@@ -25,19 +29,43 @@ L4:                                               ; preds = %top
   %current_task112 = getelementptr inbounds {}**, {}*** %1, i64 -12
   %current_task1 = bitcast {}*** %current_task112 to {}**
   ; CHECK: %3 = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task1, i64 8, {} addrspace(10)* @tag)
+  ; CHECK-NEXT: %4 = bitcast {} addrspace(10)* %3 to i8 addrspace(10)*
+  ; CHECK-NEXT: call void @llvm.memset.p10i8.i64(i8 addrspace(10)* align {{[0-9]+}} %4, i8 0, i64 8, i1 false)
   ; CHECK-NEXT: br label %L22
   br label %L22
 
 L22:                                              ; preds = %L4, %L22
   %value_phi5 = phi i64 [ 1, %L4 ], [ %5, %L22 ]
-  ; CHECK: %value_phi5 = phi i64 [ 1, %L4 ], [ %5, %L22 ]
-  ; CHECK-NEXT %4 = bitcast {} addrspace(10)* %3 to i64 addrspace(10)*
+  ; CHECK: %value_phi5 = phi i64 [ 1, %L4 ], [ %6, %L22 ]
+  ; CHECK-NEXT %5 = bitcast {} addrspace(10)* %3 to i64 addrspace(10)*
   %3 = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task1, i64 8, {} addrspace(10)* @tag) #1
   %4 = bitcast {} addrspace(10)* %3 to i64 addrspace(10)*
   store i64 %value_phi5, i64 addrspace(10)* %4, align 8, !tbaa !2
   %.not = icmp eq i64 %value_phi5, %0
   %5 = add i64 %value_phi5, 1
   br i1 %.not, label %L3.loopexit, label %L22
+}
+
+; COM: check that we hoist the allocation out of the loop despite returning the allocation
+; CHECK-LABEL: @julia_hoist_returned
+define nonnull {} addrspace(10)* @julia_hoist_returned(i64 signext %n, i1 zeroext %ret) {
+top:
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %current_task = bitcast {}*** %pgcstack to {}**
+; CHECK: br label %preheader
+  br label %preheader
+; CHECK: preheader:
+preheader:
+; CHECK-NEXT: %alloc = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task, i64 8, {} addrspace(10)* @tag)
+; CHECK-NEXT: [[casted:%.*]] = bitcast {} addrspace(10)* %alloc to i8 addrspace(10)*
+; CHECK-NEXT: call void @llvm.memset.p10i8.i64(i8 addrspace(10)* align {{[0-9]+}} [[casted]], i8 0, i64 8, i1 false)
+; CHECK-NEXT: br label %loop
+  br label %loop
+loop:
+  %alloc = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task, i64 8, {} addrspace(10)* @tag)
+  br i1 %ret, label %return, label %loop
+return:
+  ret {} addrspace(10)* %alloc
 }
 
 ; Function Attrs: allocsize(1)

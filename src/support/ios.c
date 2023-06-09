@@ -196,6 +196,9 @@ static char *_buf_realloc(ios_t *s, size_t sz)
 
     if (sz <= s->maxsize) return s->buf;
 
+    if (!s->growable)
+        return NULL;
+
     if (s->ownbuf && s->buf != &s->local[0]) {
         // if we own the buffer we're free to resize it
         temp = (char*)LLT_REALLOC(s->buf, sz);
@@ -892,6 +895,7 @@ static void _ios_init(ios_t *s)
     s->readable = 1;
     s->writable = 1;
     s->rereadable = 0;
+    s->growable = 1;
 }
 
 /* stream object initializers. we do no allocation. */

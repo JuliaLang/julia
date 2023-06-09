@@ -108,8 +108,8 @@ const auto &float_func() {
     return float_funcs.float_func;
 }
 
-extern "C"
-JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION_impl(void)
+extern "C" JL_DLLEXPORT_CODEGEN
+uint32_t jl_get_LLVM_VERSION_impl(void)
 {
     return 10000 * LLVM_VERSION_MAJOR + 100 * LLVM_VERSION_MINOR
 #ifdef LLVM_VERSION_PATCH
@@ -514,7 +514,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
     bool isboxed;
     Type *vxt = julia_type_to_llvm(ctx, v.typ, &isboxed);
     if (!jl_is_primitivetype(v.typ) || jl_datatype_size(v.typ) != nb) {
-        Value *typ = emit_typeof_boxed(ctx, v);
+        Value *typ = emit_typeof(ctx, v, false, false);
         if (!jl_is_primitivetype(v.typ)) {
             if (jl_is_datatype(v.typ) && !jl_is_abstracttype(v.typ)) {
                 emit_error(ctx, "bitcast: value not a primitive type");
@@ -678,8 +678,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
     else if (!jl_isbits(ety)) {
         assert(jl_is_datatype(ety));
         uint64_t size = jl_datatype_size(ety);
-        Value *strct = emit_allocobj(ctx, size,
-                                     literal_pointer_val(ctx, ety));
+        Value *strct = emit_allocobj(ctx, (jl_datatype_t*)ety);
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(ctx.types().T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
         Value *thePtr = emit_unbox(ctx, getInt8PtrTy(ctx.builder.getContext()), e, e.typ);
@@ -823,9 +822,7 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
 
     if (!jl_isbits(ety)) {
         assert(jl_is_datatype(ety));
-        uint64_t size = jl_datatype_size(ety);
-        Value *strct = emit_allocobj(ctx, size,
-                                     literal_pointer_val(ctx, ety));
+        Value *strct = emit_allocobj(ctx, (jl_datatype_t*)ety);
         Value *thePtr = emit_unbox(ctx, getInt8PtrTy(ctx.builder.getContext()), e, e.typ);
         Type *loadT = Type::getIntNTy(ctx.builder.getContext(), nb * 8);
         thePtr = emit_bitcast(ctx, thePtr, loadT->getPointerTo());
@@ -929,7 +926,11 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl
         bool isboxed;
         Type *ptrty = julia_type_to_llvm(ctx, ety, &isboxed);
         assert(!isboxed);
-        Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
+        Value *thePtr;
+        if (!type_is_ghost(ptrty))
+            thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
+        else
+            thePtr = nullptr; // could use any value here, since typed_store will not use it
         jl_cgval_t ret = typed_store(ctx, thePtr, nullptr, x, y, ety, ctx.tbaa().tbaa_data, nullptr, nullptr, isboxed,
                     llvm_order, llvm_failorder, nb, false, issetfield, isreplacefield, isswapfield, ismodifyfield, false, modifyop, "atomic_pointermodify");
         if (issetfield)
