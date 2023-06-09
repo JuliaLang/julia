@@ -2603,11 +2603,9 @@ function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, sv::
     nothrow = false
     if isa(rt, Const)
         consistent = ALWAYS_TRUE
+        nothrow = true
         if is_mutation_free_argtype(rt)
             inaccessiblememonly = ALWAYS_TRUE
-            nothrow = true
-        else
-            nothrow = true
         end
     elseif isdefined_globalref(g)
         nothrow = true
