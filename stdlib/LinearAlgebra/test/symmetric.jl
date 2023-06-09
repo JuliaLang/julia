@@ -824,4 +824,61 @@ end
     end
 end
 
+@testset "Structured display" begin
+    @testset "Diagonal" begin
+        d = 10:13
+        D = Diagonal(d)
+        for uplo in (:L, :U), SymHerm in (Symmetric, Hermitian)
+            S = SymHerm(D, uplo)
+            @test sprint(Base.print_matrix, S) == sprint(Base.print_matrix, D)
+        end
+
+        d = (10:13) .+ 2im
+        D = Diagonal(d)
+        DR = Diagonal(complex.(real.(d)))
+        for uplo in (:L, :U)
+            H = Hermitian(D, uplo)
+            @test sprint(Base.print_matrix, H) == sprint(Base.print_matrix, DR)
+
+            S = Symmetric(D, uplo)
+            @test sprint(Base.print_matrix, S) == sprint(Base.print_matrix, D)
+        end
+    end
+    @testset "Bidiagonal" begin
+        dv, ev = 1:4, 1:3
+        ST = SymTridiagonal(dv, ev)
+        D = Diagonal(dv)
+        for B_uplo in (:L, :U)
+            B = Bidiagonal(dv, ev, B_uplo)
+            for Sym_uplo in (:L, :U), SymHerm in (Symmetric, Hermitian)
+                SB = SymHerm(B, Sym_uplo)
+                teststr = sprint(Base.print_matrix, Sym_uplo == B_uplo ? ST : D)
+                @test sprint(Base.print_matrix, SB) == teststr
+                SB = SymHerm(Transpose(B), Sym_uplo)
+                teststr = sprint(Base.print_matrix, Sym_uplo == B_uplo ? D : ST)
+                @test sprint(Base.print_matrix, SB) == teststr
+            end
+        end
+    end
+    @testset "Tridiagonal" begin
+        superd, d, subd = 3:5, 10:13, 1:3
+        for uplo in (:U, :L), SymHerm in (Symmetric, Hermitian)
+            S = SymHerm(Tridiagonal(subd, d, superd), uplo)
+            ST = SymTridiagonal(d, uplo == :U ? superd : subd)
+            @test sprint(Base.print_matrix, S) == sprint(Base.print_matrix, ST)
+        end
+
+        superd, d, subd = collect((3:5)*im), collect(Complex{Int}, 10:13), collect((1:3)*im)
+        for uplo in (:U, :L)
+            S = Symmetric(Tridiagonal(subd, d, superd), uplo)
+            ST = SymTridiagonal(d, uplo == :U ? superd : subd)
+            @test sprint(Base.print_matrix, S) == sprint(Base.print_matrix, ST)
+
+            H = Hermitian(Tridiagonal(subd, d, superd), uplo)
+            T = Tridiagonal(uplo == :L ? subd : conj(superd), d, uplo == :U ? superd : conj(subd))
+            @test sprint(Base.print_matrix, H) == sprint(Base.print_matrix, T)
+        end
+    end
+end
+
 end # module TestSymmetric
