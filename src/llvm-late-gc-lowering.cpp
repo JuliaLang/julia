@@ -2764,7 +2764,7 @@ bool LateLowerGCFrameLegacy::runOnFunction(Function &F) {
     return modified;
 }
 
-PreservedAnalyses LateLowerGC::run(Function &F, FunctionAnalysisManager &AM)
+PreservedAnalyses LateLowerGCPass::run(Function &F, FunctionAnalysisManager &AM)
 {
     auto GetDT = [&AM, &F]() -> DominatorTree & {
         return AM.getResult<DominatorTreeAnalysis>(F);

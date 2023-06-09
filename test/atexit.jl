@@ -202,15 +202,11 @@ using Test
                 # This will run in a concurrent task, testing that we can register atexit
                 # hooks from another task while running atexit hooks.
                 Threads.@spawn begin
-                    Core.println("INSIDE")
                     take!(c) # block on c
-                    Core.println("go")
                     atexit() do
-                        Core.println("exit11")
                         exit(11)
                     end
                     take!(c) # keep the _atexit() loop alive until we've added another item.
-                    Core.println("done")
                 end
             end
             exit(0)
@@ -224,7 +220,6 @@ using Test
                     # Block until the atexit hooks have all finished. We use a manual "spin
                     # lock" because task switch is disallowed inside the finalizer, below.
                     while !atexit_has_finished[] end
-                    Core.println("done")
                     try
                         # By the time this runs, all the atexit hooks will be done.
                         # So this will throw.
@@ -241,13 +236,10 @@ using Test
             # task above gets a chance to run.
             x = []
             finalizer(x) do x
-                Core.println("FINALIZER")
                 # Allow the spawned task to finish
                 atexit_has_finished[] = true
-                Core.println("ready")
                 # Then spin forever to prevent exit.
                 while atexit_has_finished[] end
-                Core.println("exiting")
             end
             exit(0)
             """ => 22,

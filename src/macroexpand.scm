@@ -447,7 +447,7 @@
                                                               newenv m parent-scope inarg))
                                ;; expand initial values in old env
                                (resolve-expansion-vars- (caddr bind) env m parent-scope inarg))
-                              (resolve-expansion-vars- bind env m parent-scope inarg)))
+                              (resolve-expansion-vars- bind newenv m parent-scope inarg)))
                         binds))
                  ,body)))
            ((hygienic-scope) ; TODO: move this lowering to resolve-scopes, instead of reimplementing it here badly

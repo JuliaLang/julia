@@ -31,7 +31,7 @@ your program, so the `finalizer` does not reclaim it early.
 Optional keyword arguments:
  - `mode`: file access mode (modified by the process umask). Defaults to world-readable.
  - `poll_interval`: Specify the maximum time to between attempts (if `watch_file` doesn't work)
- - `stale_age`: Delete an existing pidfile (ignoring the lock) if its mtime is older than this.
+ - `stale_age`: Delete an existing pidfile (ignoring the lock) if it is older than this many seconds, based on its mtime.
      The file won't be deleted until 25x longer than this if the pid in the file appears that it may be valid.
      By default this is disabled (`stale_age` = 0), but a typical recommended value would be about 3-5x an
      estimated normal completion time.

@@ -3479,3 +3479,13 @@ end
     @test @_macroexpand(global (; x::S, $(esc(:y))::$(esc(:T))) = a) ==
         :(global (; x::$(GlobalRef(m, :S)), y::T) = $(GlobalRef(m, :a)))
 end
+
+# issue #49984
+macro z49984(s); :(let a; $(esc(s)); end); end
+@test let a = 1; @z49984(a) === 1; end
+
+# issues #37783, #39929, #42552, #43379, and #48332
+let x = 1 => 2
+    @test_throws ErrorException @eval a => b = 2
+    @test_throws "function Base.=> must be explicitly imported to be extended" @eval a => b = 2
+end
