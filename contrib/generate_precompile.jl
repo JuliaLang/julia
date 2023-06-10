@@ -88,6 +88,7 @@ f(x) = x03
 f(1,2)
 [][1]
 cd("complet_path\t\t$CTRL_C
+randn(10, 10) * randn(10, 10)
 """
 
 precompile_script = """

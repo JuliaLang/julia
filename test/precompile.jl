@@ -400,11 +400,11 @@ precompile_test_harness(false) do dir
                  end for s in
                 [:ArgTools, :Artifacts, :Base64, :CRC32c, :Dates,
                  :Downloads, :FileWatching, :Future, :InteractiveUtils, :libblastrampoline_jll,
-                 :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
+                 :LibCURL, :LibCURL_jll, :MbedTLS_jll, :LibSSH2_jll, :LibGit2, :Libdl, :LinearAlgebra,
                  :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :OpenBLAS_jll, :Pkg, :Printf,
                  :p7zip_jll, :REPL, :Random, :SHA, :Serialization, :Sockets,
                  :TOML, :Tar, :Test, :UUIDs, :Unicode,
-                 :nghttp2_jll]
+                 :nghttp2_jll, :Zlib_jll]
             ),
         )
         @test discard_module.(deps) == deps1

@@ -3,29 +3,7 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/OpenBLAS_jll.jl
 baremodule OpenBLAS_jll
 using Base, Libdl, Base.BinaryPlatforms
-
-# We are explicitly NOT loading this at runtime, as it contains `libgomp`
-# which conflicts with `libiomp5`, breaking things like MKL.  In the future,
-# we hope to transition to a JLL interface that provides a more granular
-# interface than eagerly dlopen'ing all libraries provided in the JLL
-# which will eliminate issues like this, where we avoid loading a JLL
-# because we don't want to load a library that we don't even use yet.
-# using CompilerSupportLibraries_jll
-# Because of this however, we have to manually load the libraries we
-# _do_ care about, namely libgfortran
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
-
-const PATH_list = String[]
-const LIBPATH_list = String[]
-
 export libopenblas
-
-# These get calculated in __init__()
-const PATH = Ref("")
-const LIBPATH = Ref("")
-artifact_dir::String = ""
-libopenblas_handle::Ptr{Cvoid} = C_NULL
-libopenblas_path::String = ""
 
 if Base.USE_BLAS64
     const libsuffix = "64_"
@@ -34,15 +12,21 @@ else
 end
 
 if Sys.iswindows()
-    const libopenblas = "libopenblas$(libsuffix).dll"
-    const _libgfortran = string("libgfortran-", libgfortran_version(HostPlatform()).major, ".dll")
+    const libopenblas_name = "bin/libopenblas$(libsuffix).dll"
+    const libgfortran_name = string("libgfortran-", libgfortran_version(HostPlatform()).major, ".dll")
 elseif Sys.isapple()
-    const libopenblas = "@rpath/libopenblas$(libsuffix).dylib"
-    const _libgfortran = string("@rpath/", "libgfortran.", libgfortran_version(HostPlatform()).major, ".dylib")
+    const libopenblas_name = "lib/libopenblas$(libsuffix).dylib"
+    const libgfortran_name = string("lib/libgfortran.", libgfortran_version(HostPlatform()).major, ".dylib")
 else
-    const libopenblas = "libopenblas$(libsuffix).so"
-    const _libgfortran = string("libgfortran.so.", libgfortran_version(HostPlatform()).major)
+    const libopenblas_name = "lib/libopenblas$(libsuffix).so"
+    const libgfortran_name = string("lib/libgfortran.so.", libgfortran_version(HostPlatform()).major)
 end
+
+const libgfortran_path = BundledLazyLibraryPath(libgfortran_name)
+const libgfortran = LazyLibrary(libgfortran_path)
+
+const libopenblas_path = BundledLazyLibraryPath(libopenblas_name)
+const libopenblas = LazyLibrary(libopenblas_path; dependencies=[libgfortran])
 
 function __init__()
     # make sure OpenBLAS does not set CPU affinity (#1070, #9639)
@@ -62,25 +46,6 @@ function __init__()
         # to the true value in its `__init__()` function.
         ENV["OPENBLAS_DEFAULT_NUM_THREADS"] = "1"
     end
-
-    # As mentioned above, we are sneaking this in here so that we don't have to
-    # depend on CSL_jll and load _all_ of its libraries.
-    dlopen(_libgfortran)
-
-    global libopenblas_handle = dlopen(libopenblas)
-    global libopenblas_path = dlpath(libopenblas_handle)
-    global artifact_dir = dirname(Sys.BINDIR)
-    LIBPATH[] = dirname(libopenblas_path)
-    push!(LIBPATH_list, LIBPATH[])
 end
-
-# JLLWrappers API compatibility shims.  Note that not all of these will really make sense.
-# For instance, `find_artifact_dir()` won't actually be the artifact directory, because
-# there isn't one.  It instead returns the overall Julia prefix.
-is_available() = true
-find_artifact_dir() = artifact_dir
-dev_jll() = error("stdlib JLLs cannot be dev'ed")
-best_wrapper = nothing
-get_libopenblas_path() = libopenblas_path
 
 end  # module OpenBLAS_jll

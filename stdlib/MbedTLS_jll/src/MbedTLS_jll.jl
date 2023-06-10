@@ -4,59 +4,29 @@
 
 baremodule MbedTLS_jll
 using Base, Libdl
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
-
-const PATH_list = String[]
-const LIBPATH_list = String[]
-
 export libmbedcrypto, libmbedtls, libmbedx509
 
-# These get calculated in __init__()
-const PATH = Ref("")
-const LIBPATH = Ref("")
-artifact_dir::String = ""
-libmbedcrypto_handle::Ptr{Cvoid} = C_NULL
-libmbedcrypto_path::String = ""
-libmbedtls_handle::Ptr{Cvoid} = C_NULL
-libmbedtls_path::String = ""
-libmbedx509_handle::Ptr{Cvoid} = C_NULL
-libmbedx509_path::String = ""
-
 if Sys.iswindows()
-    const libmbedcrypto = "libmbedcrypto.dll"
-    const libmbedtls = "libmbedtls.dll"
-    const libmbedx509 = "libmbedx509.dll"
+    const libmbedcrypto_name = "bin/libmbedcrypto.dll"
+    const libmbedx509_name = "bin/libmbedx509.dll"
+    const libmbedtls_name = "bin/libmbedtls.dll"
 elseif Sys.isapple()
-    const libmbedcrypto = "@rpath/libmbedcrypto.7.dylib"
-    const libmbedtls = "@rpath/libmbedtls.14.dylib"
-    const libmbedx509 = "@rpath/libmbedx509.1.dylib"
+    const libmbedcrypto_name = "lib/libmbedcrypto.7.dylib"
+    const libmbedx509_name = "lib/libmbedx509.1.dylib"
+    const libmbedtls_name = "lib/libmbedtls.14.dylib"
 else
-    const libmbedcrypto = "libmbedcrypto.so.7"
-    const libmbedtls = "libmbedtls.so.14"
-    const libmbedx509 = "libmbedx509.so.1"
+    const libmbedcrypto_name = "lib/libmbedcrypto.so.7"
+    const libmbedx509_name = "lib/libmbedx509.so.1"
+    const libmbedtls_name = "lib/libmbedtls.so.14"
 end
 
-function __init__()
-    global libmbedcrypto_handle = dlopen(libmbedcrypto)
-    global libmbedcrypto_path = dlpath(libmbedcrypto_handle)
-    global libmbedtls_handle = dlopen(libmbedtls)
-    global libmbedtls_path = dlpath(libmbedtls_handle)
-    global libmbedx509_handle = dlopen(libmbedx509)
-    global libmbedx509_path = dlpath(libmbedx509_handle)
-    global artifact_dir = dirname(Sys.BINDIR)
-    LIBPATH[] = dirname(libmbedtls_path)
-    push!(LIBPATH_list, LIBPATH[])
-end
+const libmbedcrypto_path = BundledLazyLibraryPath(libmbedcrypto_name)
+const libmbedtls_path = BundledLazyLibraryPath(libmbedtls_name)
+const libmbedx509_path = BundledLazyLibraryPath(libmbedx509_name)
 
-# JLLWrappers API compatibility shims.  Note that not all of these will really make sense.
-# For instance, `find_artifact_dir()` won't actually be the artifact directory, because
-# there isn't one.  It instead returns the overall Julia prefix.
-is_available() = true
-find_artifact_dir() = artifact_dir
-dev_jll() = error("stdlib JLLs cannot be dev'ed")
-best_wrapper = nothing
-get_libmbedcrypto_path() =libmbedcrypto_path
-get_libmbedtls_path() = libmbedtls_path
-get_libmbedx509_path() = libmbedx509_path
+const libmbedcrypto = LazyLibrary(libmbedcrypto_path)
+const libmbedx509 = LazyLibrary(libmbedx509_path; dependencies=[libmbedcrypto])
+libmbedtls_stack = Any[]
+const libmbedtls = LazyLibrary(libmbedtls_path; dependencies=[libmbedcrypto, libmbedx509], on_load_callback = () -> push!(libmbedtls_stack, stacktrace()))
 
 end  # module MbedTLS_jll
