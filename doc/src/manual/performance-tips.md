@@ -1631,3 +1631,21 @@ will not require this degree of programmer annotation to attain performance.
 In the mean time, some user-contributed packages like
 [FastClosures](https://github.com/c42f/FastClosures.jl) automate the
 insertion of `let` statements as in `abmult3`.
+
+## [Multithreading and linear algebra](@id man-multithreading-linear-algebra)
+
+This section applies to multithreaded Julia code which, in each thread, performs linear algebra operations.
+Indeed, these linear algebra operations involve BLAS / LAPACK calls, which are themselves multithreaded.
+In this case, one must ensure that cores aren't oversubscribed due to the two different types of multithreading.
+
+Julia compiles and uses its own copy of OpenBLAS for linear algebra, whose number of threads is controlled by the environment variable `OPENBLAS_NUM_THREADS`.
+It can either be set as a command line option when launching Julia, or modified during the Julia session with `BLAS.set_num_threads(N)` (the submodule `BLAS` is exported by `using LinearAlgebra`).
+Its current value can be accessed with `BLAS.get_num_threads()`.
+When the user does not specify anything, the default setting is `OPENBLAS_NUM_THREADS=8` (for Julia version < 1.8) or `OPENBLAS_NUM_THREADS=Sys.CPU_THREADS` (for Julia version ≥ 1.8).
+
+- If `OPENBLAS_NUM_THREADS=1`, OpenBLAS uses the calling Julia thread(s) to run BLAS computations, i.e. it "reuses" the Julia thread that runs a computation.
+- If `OPENBLAS_NUM_THREADS=N>1`, OpenBLAS creates and manages its own pool of BLAS threads (`N` in total). There is one BLAS thread pool (for all Julia threads).
+
+When you start Julia in multithreaded mode with `JULIA_NUM_THREADS=X`, it is generally recommended to set `OPENBLAS_NUM_THREADS=1`. 
+Given the behavior described above, increasing the number of BLAS threads to `N>1` can very easily lead to worse performance, in particular when `N<<X`.
+However this is just a rule of thumb, and the best way to set each number of threads is to experiment on your specific application.
