@@ -2490,8 +2490,8 @@ end
 
 @testset "checkbounds overflow (#26623)" begin
     # the reported issue:
-    @test (1:3:4)[typemax(Int)÷3*2+3]
+    @test_throws BoundsError (1:3:4)[typemax(Int)÷3*2+3]
 
     # a case that using mul_with_overflow & add_with_overflow might get wrong:
     @test (-10:2:typemax(Int))[typemax(Int)÷2+2] == typemax(Int)-9
-true
+end
