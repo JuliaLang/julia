@@ -1459,8 +1459,8 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt JL_PROPAGATE
     size_t min_valid = 0;
     size_t max_valid = ~(size_t)0;
 
-    jl_printf(JL_STDERR, "\nNATHAN: gf invoke lookup: ");
-    jl_(tt);
+    //jl_printf(JL_STDERR, "\nNATHAN: gf invoke lookup: ");
+    //jl_(tt);
     jl_method_match_t *matc = _gf_invoke_lookup((jl_value_t*)tt, jl_nothing, world, &min_valid, &max_valid);
     jl_method_instance_t *nf = NULL;
     if (matc) {
@@ -3090,7 +3090,7 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic_stack(jl_value_t *F, void **args, uint
     jl_printf(JL_STDERR, "nargs: %d\n", nargs);
 
     nargs = nargs / 2;
-    jl_value_t** types = &args[nargs];
+    jl_value_t** types = (jl_value_t**)&args[nargs];
     size_t ntypes = nargs + 1;
 
     jl_printf(JL_STDERR, "world: %zu\n", world);
@@ -3112,21 +3112,34 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic_stack(jl_value_t *F, void **args, uint
     }
     jl_method_instance_t *mfunc = jl_method_match_to_mi(match, world, world, world, 1);
     jl_printf(JL_STDERR, "mfunc: %p\n", mfunc);
+    jl_printf(JL_STDERR, "spectypes: "); jl_(mfunc->specTypes);
     // jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs,
     //                                                  jl_int32hash_fast(jl_return_address()),
     //                                                  world);
 
-    // TODO: only if any args are nospecialized, box them.
-    jl_value_t** newargs = (jl_value_t**)alloca(sizeof(jl_value_t*) * nargs);
-    jl_printf(JL_STDERR, "newargs:\n");
+    //jl_value_t** newargs = (jl_value_t**)alloca(sizeof(jl_value_t*) * nargs);
+    jl_printf(JL_STDERR, "new args:\n");
+
+    // Matched specialized types
+    jl_svec_t *spec_types = ((jl_datatype_t*)mfunc->specTypes)->parameters;
+
+    // Reuse the array of args, but point to the newly boxed args when reboxed.
+    jl_value_t** newargs = (jl_value_t**)args;
 
     //jl_datatype_t* tt = (jl_datatype_t*)types;
     for (size_t i = 0; i < nargs; i++) {
         jl_datatype_t* typ = jl_svecref(tt->parameters, i+1); // skip the function
         jl_printf(JL_STDERR, "arg type %zu: ", i);
         jl_(typ);
-        // re-box the value
-        newargs[i] = rebox_type_and_bytes((jl_datatype_t*)typ, args[i]);
+        // If the function is expecting a boxed value (because it's not specialized)
+        // we need to ensure the value is boxed.
+        if (!jl_is_concrete_type(jl_svecref(spec_types, i+1))) {
+            // re-box the value
+            jl_printf(JL_STDERR, "reboxing arg %zu\n", i);
+            newargs[i] = rebox_type_and_bytes((jl_datatype_t*)typ, args[i]);
+        } else {
+            newargs[i] = args[i];
+        }
         jl_printf(JL_STDERR, "new arg %zu: ", i);
         jl_(newargs[i]);
     }
