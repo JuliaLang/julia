@@ -3193,6 +3193,8 @@ static Value *address_of_stack(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type 
     auto &builder = ctx.builder;
 
     // Convert the type to a _pointer to lt_ type
+    // TODO: what is AddressSpace::Derived?
+    //Type *pt = PointerType::get(t, AddressSpace::Derived);
     Type *pt = PointerType::get(t, 0);
 
     // Create the alloca instruction for the stack-allocated value
@@ -3244,8 +3246,8 @@ static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t
     if (nobox_stack) {
         // TODO: Cover a bunch of types here.
         if (jb == jl_int64_type || jb == jl_uint64_type) {
-            jl_printf(JL_STDERR, "NATHAN: Creating stack allocated ptr for %p, of type\n", vinfo.V);
-            jl_(vinfo.typ);
+            //jl_printf(JL_STDERR, "NATHAN: Creating stack allocated ptr for %p, of type\n", vinfo.V);
+            //jl_(vinfo.typ);
             //box = vinfo.V;
 
             box = address_of_stack(ctx, vinfo, t);

@@ -3087,38 +3087,38 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic_stack(jl_value_t *F, void **args, uint
     size_t min_valid;
     size_t max_valid;
 
-    jl_printf(JL_STDERR, "nargs: %d\n", nargs);
+    //jl_printf(JL_STDERR, "nargs: %d\n", nargs);
 
     nargs = nargs / 2;
     jl_value_t** types = (jl_value_t**)&args[nargs];
     size_t ntypes = nargs + 1;
 
-    jl_printf(JL_STDERR, "world: %zu\n", world);
-    jl_printf(JL_STDERR, "F: ");
-    jl_(F);
-    for (int i = 0; i < ntypes; ++i) {
-        jl_printf(JL_STDERR, "\ntypes[%d]: ", i);
-        jl_(types[i]);
-    }
+    //jl_printf(JL_STDERR, "world: %zu\n", world);
+    //jl_printf(JL_STDERR, "F: ");
+    //jl_(F);
+    //for (int i = 0; i < ntypes; ++i) {
+    //    jl_printf(JL_STDERR, "\ntypes[%d]: ", i);
+    //    jl_(types[i]);
+    //}
 
     jl_datatype_t* tt = (jl_datatype_t*)jl_apply_tuple_type_v(types, ntypes);
-    jl_(tt);
+    //jl_(tt);
 
     jl_method_match_t *match = _gf_invoke_lookup((jl_value_t*)tt, jl_nothing, world, &min_valid, &max_valid);
-    jl_printf(JL_STDERR, "match: %p\n", match);
+    //jl_printf(JL_STDERR, "match: %p\n", match);
     if (match == NULL) {
-        jl_printf(JL_STDERR, "No match\n");
+        //jl_printf(JL_STDERR, "No match\n");
         return jl_nothing;
     }
     jl_method_instance_t *mfunc = jl_method_match_to_mi(match, world, world, world, 1);
-    jl_printf(JL_STDERR, "mfunc: %p\n", mfunc);
-    jl_printf(JL_STDERR, "spectypes: "); jl_(mfunc->specTypes);
+    //jl_printf(JL_STDERR, "mfunc: %p\n", mfunc);
+    //jl_printf(JL_STDERR, "spectypes: "); jl_(mfunc->specTypes);
     // jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs,
     //                                                  jl_int32hash_fast(jl_return_address()),
     //                                                  world);
 
     //jl_value_t** newargs = (jl_value_t**)alloca(sizeof(jl_value_t*) * nargs);
-    jl_printf(JL_STDERR, "new args:\n");
+    //jl_printf(JL_STDERR, "new args:\n");
 
     // Matched specialized types
     jl_svec_t *spec_types = ((jl_datatype_t*)mfunc->specTypes)->parameters;
@@ -3129,32 +3129,32 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic_stack(jl_value_t *F, void **args, uint
     //jl_datatype_t* tt = (jl_datatype_t*)types;
     for (size_t i = 0; i < nargs; i++) {
         jl_datatype_t* typ = jl_svecref(tt->parameters, i+1); // skip the function
-        jl_printf(JL_STDERR, "arg type %zu: ", i);
-        jl_(typ);
+        //jl_printf(JL_STDERR, "arg type %zu: ", i);
+        //jl_(typ);
         // If the function is expecting a boxed value (because it's not specialized)
         // we need to ensure the value is boxed.
         if (jl_is_concrete_type(jl_svecref(spec_types, i+1))) {
             // re-box the value
-            jl_printf(JL_STDERR, "reboxing arg %zu\n", i);
+            //jl_printf(JL_STDERR, "reboxing arg %zu\n", i);
             newargs[i] = rebox_type_and_bytes((jl_datatype_t*)typ, args[i]);
         } else {
             newargs[i] = args[i];
         }
-        jl_printf(JL_STDERR, "new arg %zu: ", i);
-        jl_(newargs[i]);
+        //jl_printf(JL_STDERR, "new arg %zu: ", i);
+        //jl_(newargs[i]);
     }
     JL_GC_PROMISE_ROOTED(mfunc);
     return _jl_invoke(F, newargs, nargs, mfunc, world);
 }
 
 static jl_value_t* rebox_type_and_bytes(jl_datatype_t* typ, void* data) {
-    jl_(typ);
-    jl_(jl_int64_type);
+    //jl_(typ);
+    //jl_(jl_int64_type);
     // TODO: this is the problem!!
     if (typ == jl_int64_type) {
         return jl_box_int64(*(int64_t*)data);
     } else if (typ == jl_uint64_type) {
-        jl_printf(JL_STDERR, "reboxing uint64: %d\n", *(uint64_t*)data);
+        //jl_printf(JL_STDERR, "reboxing uint64: %d\n", *(uint64_t*)data);
         return jl_box_uint64(*(uint64_t*)data);
     } else if (typ == jl_float64_type) {
         return jl_box_float64(*(double*)data);
