@@ -249,7 +249,8 @@ end
 #  @ tuple.jl:200
 # [4] eltype(t::Type{<:Tuple})
 #  @ tuple.jl:209
-typeof(function eltype end).name.max_methods = UInt8(4)
+function eltype end
+typeof(eltype).name.max_methods = UInt8(4)
 
 # version of tail that doesn't throw on empty tuples (used in array indexing)
 safe_tail(t::Tuple) = tail(t)

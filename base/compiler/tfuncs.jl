@@ -2640,16 +2640,21 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
         return CallMeta(Const(Union{}), EFFECTS_TOTAL, NoCallInfo())
     end
 
-    # Run the abstract_call without restricting abstract call
-    # sites. Otherwise, our behavior model of abstract_call
-    # below will be wrong.
+    # NOTE We need to sync the implementation here with that of `Core.Compiler.return_type`.
+    # In particular, this tfunc should not use the module-wide `max_methods` setting
+    # until we refactor the `Core.Compiler.return_type` API so that it can observe
+    # the caller module context.
+    f = singleton_type(argtypes_vec[1])
+    max_methods = get_max_methods(interp, f)
     if isa(sv, InferenceState)
+        # Run the abstract_call without restricting abstract call sites.
+        # Otherwise, our behavior model of abstract_call below will be wrong.
         old_restrict = sv.restrict_abstract_call_sites
         sv.restrict_abstract_call_sites = false
-        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, -1)
+        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, max_methods)
         sv.restrict_abstract_call_sites = old_restrict
     else
-        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, -1)
+        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, max_methods)
     end
     info = verbose_stmt_info(interp) ? MethodResultPure(ReturnTypeCallInfo(call.info)) : MethodResultPure()
     rt = widenslotwrapper(call.rt)

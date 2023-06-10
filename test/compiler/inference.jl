@@ -3209,15 +3209,27 @@ j30385(T, y) = k30385(f30385(T, y))
 @test Base.return_types(Tuple, (NamedTuple{<:Any,Tuple{Any,Int}},)) == Any[Tuple{Any,Int}]
 @test Base.return_types(Base.splat(tuple), (typeof((a=1,)),)) == Any[Tuple{Int}]
 
-# test that return_type_tfunc isn't affected by max_methods differently than return_type
-_rttf_test(::Int8) = 0
-_rttf_test(::Int16) = 0
-_rttf_test(::Int32) = 0
-_rttf_test(::Int64) = 0
-_rttf_test(::Int128) = 0
-_call_rttf_test() = Core.Compiler.return_type(_rttf_test, Tuple{Any})
-@test Core.Compiler.return_type(_rttf_test, Tuple{Any}) === Int
-@test _call_rttf_test() === Int
+# test that return_type_tfunc uses the same `max_methods` configuration as
+# the dynamic implementation
+Base.Experimental.@max_methods 1 function _rttf_test1 end
+_rttf_test1(::Int8) = 0
+_rttf_test1(::Int16) = 0
+_rttf_test1(::Int32) = 0
+@test Core.Compiler.return_type(_rttf_test1, Tuple{Any}) === Any
+@test Base.return_types() do
+    Core.Compiler.return_type(_rttf_test1, Tuple{Any})
+end |> only === Type{Any}
+
+Base.Experimental.@max_methods 5 function _rttf_test5 end
+_rttf_test5(::Int8) = 0
+_rttf_test5(::Int16) = 0
+_rttf_test5(::Int32) = 0
+_rttf_test5(::Int64) = 0
+_rttf_test5(::Int128) = 0
+@test Core.Compiler.return_type(_rttf_test5, Tuple{Any}) === Int
+@test Base.return_types() do
+    Core.Compiler.return_type(_rttf_test5, Tuple{Any})
+end |> only === Type{Int}
 
 f_with_Type_arg(::Type{T}) where {T} = T
 @test Base.return_types(f_with_Type_arg, (Any,)) == Any[Type]

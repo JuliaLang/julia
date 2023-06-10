@@ -324,7 +324,11 @@ julia> merge((a=1, b=2), (b=3, c=(d=1,)), (c=(d=2,),))
 (a = 1, b = 3, c = (d = 2,))
 ```
 """
-function merge(a::NamedTuple{an}, b::NamedTuple{bn}) where {an, bn}
+merge(a::NamedTuple, b::NamedTuple) = _merge_nt(a, b)::NamedTuple
+
+function _merge_nt end
+typeof(_merge_nt).name.max_methods = UInt8(4)
+function _merge_nt(a::NamedTuple{an}, b::NamedTuple{bn}) where {an, bn}
     if @generated
         names = merge_names(an, bn)
         types = merge_types(names, a, b)
@@ -334,10 +338,9 @@ function merge(a::NamedTuple{an}, b::NamedTuple{bn}) where {an, bn}
         merge_fallback(a, b, an, bn)
     end
 end
-
-merge(a::NamedTuple,     b::NamedTuple{()}) = a
-merge(a::NamedTuple{()}, b::NamedTuple{()}) = a
-merge(a::NamedTuple{()}, b::NamedTuple)     = b
+_merge_nt(a::NamedTuple,     b::NamedTuple{()}) = a
+_merge_nt(a::NamedTuple{()}, b::NamedTuple{()}) = a
+_merge_nt(a::NamedTuple{()}, b::NamedTuple)     = b
 
 merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple}) = merge(a, getfield(b, :data))
 
