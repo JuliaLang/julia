@@ -568,6 +568,7 @@ tests = [
         "function (::g(x))() end" => "(function (call (parens (::-pre (call g x)))) (block))"
         "function (f::T{g(i)})() end" => "(function (call (parens (::-i f (curly T (call g i))))) (block))"
         "function (::T)() end" =>  "(function (call (parens (::-pre T))) (block))"
+        "function (:*=(f))() end" => "(function (call (parens (call (quote-: *=) f))) (block))"
         "function begin() end" =>  "(function (call (error begin)) (block))"
         "function f() end"     =>  "(function (call f) (block))"
         "function type() end"  =>  "(function (call type) (block))"

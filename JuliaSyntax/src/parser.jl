@@ -2064,6 +2064,7 @@ end
 function parse_function_signature(ps::ParseState, is_function::Bool)
     is_anon_func = false
     parsed_call = false
+    needs_parse_call = true
 
     mark = position(ps)
     if !is_function
@@ -2082,29 +2083,28 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
         end
     else
         if peek(ps) != K"("
+            # function f() end  ==> (function (call f))
             parse_unary_prefix(ps)
         else
-            # When an initial parenthesis is present, we might either have
-            # * the function name in parens, followed by (args...)
-            # * an anonymous function argument list in parens
-            # * the whole function declaration in parens
-            #
-            # This should somewhat parse as in parse_paren() (this is what
-            # the flisp parser does), but that results in weird parsing of
-            # keyword parameters. So we peek at a following `(` instead to
-            # distinguish the cases here.
+            # When an initial parenthesis is present, we need to distinguish
+            # between
+            # * The function name in parens, followed by (args...)
+            # * An anonymous function argument list in parens
+            # * The whole function declaration, in parens
             bump(ps, TRIVIA_FLAG)
             is_empty_tuple = peek(ps, skip_newlines=true) == K")"
             opts = parse_brackets(ps, K")") do _, _, _, _
                 _parsed_call = was_eventually_call(ps)
-                t2 = peek_token(ps, 2)
-                _is_anon_func = kind(t2) ∉ KSet"( ." && !_parsed_call
+                _needs_parse_call = peek(ps, 2) ∈ KSet"( ."
+                _is_anon_func = !_needs_parse_call && !_parsed_call
                 return (needs_parameters = _is_anon_func,
                         is_anon_func     = _is_anon_func,
-                        parsed_call      = _parsed_call)
+                        parsed_call      = _parsed_call,
+                        needs_parse_call = _needs_parse_call)
             end
             is_anon_func = opts.is_anon_func
             parsed_call = opts.parsed_call
+            needs_parse_call = opts.needs_parse_call
             if is_anon_func
                 # function (x) body end ==>  (function (tuple-p x) (block body))
                 # function (x::f()) end ==>  (function (tuple-p (::-i x (call f))) (block))
@@ -2122,6 +2122,7 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
                 # function (:)() end    ==> (function (call (parens :)) (block))
                 # function (x::T)() end ==> (function (call (parens (::-i x T))) (block))
                 # function (::T)() end  ==> (function (call (parens (::-pre T))) (block))
+                # function (:*=(f))() end  ==> (function (call (parens (call (quote-: *=) f))) (block))
                 emit(ps, mark, K"parens", PARENS_FLAG)
             end
         end
@@ -2142,7 +2143,7 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
     if peek(ps, skip_newlines=true) == K"end" && !is_anon_func && !parsed_call
         return false
     end
-    if !is_anon_func && !parsed_call
+    if needs_parse_call
         # Parse function argument list
         # function f(x,y)  end    ==>  (function (call f x y) (block))
         # function f{T}()  end    ==>  (function (call (curly f T)) (block))
