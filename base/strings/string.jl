@@ -27,6 +27,15 @@ function Base.showerror(io::IO, exc::StringIndexError)
     end
 end
 
+function describe_valid_indices(io::IO, a::AbstractString, i=nothing)
+    print(io,
+          ", valid indices are between ",
+          firstindex(a),
+          " and ",
+          lastindex(a)
+         )
+end
+
 const ByteArray = Union{CodeUnits{UInt8,String}, Vector{UInt8},Vector{Int8}, FastContiguousSubArray{UInt8,1,CodeUnits{UInt8,String}}, FastContiguousSubArray{UInt8,1,Vector{UInt8}}, FastContiguousSubArray{Int8,1,Vector{Int8}}}
 
 @inline between(b::T, lo::T, hi::T) where {T<:Integer} = (lo ≤ b) & (b ≤ hi)

@@ -482,7 +482,7 @@ julia> prevind("α", 1)
 0
 
 julia> prevind("α", 0)
-ERROR: BoundsError: attempt to access 2-codeunit String at index [0]
+ERROR: BoundsError: attempt to access 2-codeunit String at index [0], by default indices start from 1
 [...]
 
 julia> prevind("α", 2, 2)

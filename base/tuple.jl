@@ -616,6 +616,7 @@ function sym_in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}})
 end
 in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}}) = sym_in(x, itr)
 
+describe_valid_indices(io::IO, a::Tuple, i=nothing) = iszero(i) && return print(io, ", tuple indices start from 1")
 
 """
     empty(x::Tuple)

@@ -236,6 +236,7 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 | `axes(A)`                                    | `map(OneTo, size(A))`                  | Return a tuple of `AbstractUnitRange{<:Integer}` of valid indices. The axes should be their own axes, that is `axes.(axes(A),1) == axes(A)` should be satisfied. |
 | `similar(A, ::Type{S}, inds)`              | `similar(A, S, Base.to_shape(inds))`   | Return a mutable array with the specified indices `inds` (see below)                  |
 | `similar(T::Union{Type,Function}, inds)`   | `T(Base.to_shape(inds))`               | Return an array similar to `T` with the specified indices `inds` (see below)          |
+| `describe_valid_indices(io, A, i)` |  | Human readable version of the sentence "Valid indices are ...", for the `BoundsError` message |
 
 If a type is defined as a subtype of `AbstractArray`, it inherits a very large set of rich behaviors
 including iteration and multidimensional indexing built on top of single-element access.  See
@@ -399,6 +400,37 @@ something other than 1), you should specialize [`axes`](@ref). You should also s
 so that the `dims` argument (ordinarily a `Dims` size-tuple) can accept `AbstractUnitRange` objects,
 perhaps range-types `Ind` of your own design. For more information, see
 [Arrays with custom indices](@ref man-custom-indices).
+
+When a user indexes into an array using an invalid index, a 'BoundsError' is
+thrown. Along with this error, a hint can be printed telling the user which
+indices they *could* have used. If there is a more intuitive description of your
+type's valid indices than the default, which uses `axes(A)`, you can define a
+method to `describe_valid_indices(io::IO, A, i)`. If, for instance, we wanted to
+protect our `SparseArray` from bounds errors, we could redefine `getindex`:
+
+```jldoctest squarevectype
+julia> function Base.getindex(A::SparseArray{T,N}, I::Vararg{Int,N}) where {T,N}
+           any(I .> A.dims) && throw(BoundsError(A, I))
+           get(A.data, I, zero(T))
+       end
+
+julia> A[4, 3]
+ERROR: BoundsError: attempt to access 3×3 SparseArray{Float64, 2} at index [4, 3]
+```
+
+This message could be made more informative. We implemented a check for indices
+above the maxima, but `A[0, 0]` will happily evaluate. If this is by intention,
+we can update the error message:
+
+```jldoctest squarevectype
+julia> Base.describe_valid_indices(io::IO, A::SparseArray, i=nothing) = print(io, ", valid indices are <= ", A.dims)
+
+julia> A[0, 0]
+0.0
+
+julia> A[4, 3]
+ERROR: BoundsError: attempt to access 3×3 SparseArray{Float64, 2} at index [4, 3], valid indices are <= (3, 3)
+```
 
 ## [Strided Arrays](@id man-interface-strided-arrays)
 

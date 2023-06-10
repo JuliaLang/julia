@@ -34,7 +34,15 @@ show_index(io::IO, x::Slice) = show_index(io, x.indices)
 show_index(io::IO, x::LogicalIndex) = summary(io, x.mask)
 show_index(io::IO, x::OneTo) = print(io, "1:", x.stop)
 show_index(io::IO, x::Colon) = print(io, ':')
-
+function show_index(io::IO, x::Tuple)
+    print(io, '[')
+    show_index(io, first(x))
+    for el in x[2:end]
+        print(io, ", ")
+        show_index(io, el)
+    end
+    print(io, ']')
+end
 
 function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
@@ -58,6 +66,23 @@ function showerror(io::IO, ex::BoundsError)
     end
     Experimental.show_error_hints(io, ex)
 end
+
+Experimental.register_error_hint(BoundsError) do io, ex
+    isdefined(ex, :a) || return nothing
+    isdefined(ex, :i) && return describe_valid_indices(io, ex.a, ex.i)
+    describe_valid_indices(io, ex.a)
+end
+
+"""
+    describe_valid_indices(io, a, i)
+
+Describe valid ways to index `a` in human-readable form. This should typically be a full
+clause starting ", valid indices are ". Will be shown to the user upon `BoundsError`.
+
+`i` may be ignored, but could be used to determine what information to show.
+"""
+describe_valid_indices(io::IO, a, i) = nothing
+
 
 function showerror(io::IO, ex::TypeError)
     print(io, "TypeError: ")
