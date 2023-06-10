@@ -3133,7 +3133,7 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic_stack(jl_value_t *F, void **args, uint
         jl_(typ);
         // If the function is expecting a boxed value (because it's not specialized)
         // we need to ensure the value is boxed.
-        if (!jl_is_concrete_type(jl_svecref(spec_types, i+1))) {
+        if (jl_is_concrete_type(jl_svecref(spec_types, i+1))) {
             // re-box the value
             jl_printf(JL_STDERR, "reboxing arg %zu\n", i);
             newargs[i] = rebox_type_and_bytes((jl_datatype_t*)typ, args[i]);
@@ -3148,7 +3148,12 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic_stack(jl_value_t *F, void **args, uint
 }
 
 static jl_value_t* rebox_type_and_bytes(jl_datatype_t* typ, void* data) {
+    jl_(typ);
+    jl_(jl_int64_type);
+    // TODO: this is the problem!!
     if (typ == jl_int64_type) {
+        jl_printf(JL_STDERR, "reboxing int pointer: %p\n", data);
+        jl_printf(JL_STDERR, "reboxing int: %d\n", *(int64_t*)data);
         return jl_box_int64(*(int64_t*)data);
     } else if (typ == jl_float64_type) {
         return jl_box_float64(*(double*)data);

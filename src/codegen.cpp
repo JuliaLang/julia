@@ -4204,10 +4204,10 @@ static CallInst *emit_jlcall_stack(jl_codectx_t &ctx, FunctionCallee theFptr, Va
     if (theF)
         theArgs.push_back(theF);
     for (size_t i = 0; i < nargs; i++) {
-        // jl_printf(JL_STDERR, "NATHAN arg:\n");
-        // jl_((argv[i]).typ);
-        // Value *arg = stack_boxed(ctx, argv[i]);
-        Value *arg = boxed(ctx, argv[i]);
+        jl_printf(JL_STDERR, "NATHAN arg:\n");
+        jl_((argv[i]).typ);
+        Value *arg = stack_boxed(ctx, argv[i]);
+        // Value *arg = boxed(ctx, argv[i]);
         theArgs.push_back(arg);
     }
     // emit types

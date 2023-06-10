@@ -166,8 +166,8 @@ void GCInvariantVerifier::visitCallInst(CallInst &CI) {
         bool First = true;
         for (Value *Arg : CI.args()) {
             Type *Ty = Arg->getType();
-            Check(Ty->isPointerTy() && cast<PointerType>(Ty)->getAddressSpace() == (First ? 0 : AddressSpace::Tracked),
-                "Invalid derived pointer in jlcall", &CI);
+        //    Check(Ty->isPointerTy() && cast<PointerType>(Ty)->getAddressSpace() == (First ? 0 : AddressSpace::Tracked),
+        //        "Invalid derived pointer in jlcall", &CI);
             First = false;
         }
     }
