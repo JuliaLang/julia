@@ -1458,6 +1458,9 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt JL_PROPAGATE
 
     size_t min_valid = 0;
     size_t max_valid = ~(size_t)0;
+
+    jl_printf(JL_STDERR, "\nNATHAN: gf invoke lookup: ");
+    jl_(tt);
     jl_method_match_t *matc = _gf_invoke_lookup((jl_value_t*)tt, jl_nothing, world, &min_valid, &max_valid);
     jl_method_instance_t *nf = NULL;
     if (matc) {
@@ -3064,6 +3067,9 @@ have_entry:
 
 JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 {
+    //jl_printf(JL_STDERR, "nargs: %d\n", nargs);
+
+
     size_t world = jl_current_task->world_age;
     jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs,
                                                      jl_int32hash_fast(jl_return_address()),
@@ -3072,15 +3078,33 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint
     return _jl_invoke(F, args, nargs, mfunc, world);
 }
 
-JL_DLLEXPORT jl_value_t *jl_unsafe_apply_generic_stack(jl_value_t *F, jl_value_t* types, void **args, uint32_t nargs)
+static jl_value_t* rebox_type_and_bytes(jl_datatype_t* typ, void* data);
+
+JL_DLLEXPORT jl_value_t *jl_apply_generic_stack(jl_value_t *F, void **args, uint32_t nargs)
 {
     size_t world = jl_current_task->world_age;
 
     size_t min_valid;
     size_t max_valid;
 
+    jl_printf(JL_STDERR, "nargs: %d\n", nargs);
+
+    nargs = nargs / 2;
+    jl_value_t** types = &args[nargs];
+    size_t ntypes = nargs + 1;
+
     jl_printf(JL_STDERR, "world: %zu\n", world);
-    jl_method_match_t *match = _gf_invoke_lookup(types, jl_nothing, world, &min_valid, &max_valid);
+    jl_printf(JL_STDERR, "F: ");
+    jl_(F);
+    for (int i = 0; i < ntypes; ++i) {
+        jl_printf(JL_STDERR, "\ntypes[%d]: ", i);
+        jl_(types[i]);
+    }
+
+    jl_datatype_t* tt = (jl_datatype_t*)jl_apply_tuple_type_v(types, ntypes);
+    jl_(tt);
+
+    jl_method_match_t *match = _gf_invoke_lookup((jl_value_t*)tt, jl_nothing, world, &min_valid, &max_valid);
     jl_printf(JL_STDERR, "match: %p\n", match);
     if (match == NULL) {
         jl_printf(JL_STDERR, "No match\n");
@@ -3096,23 +3120,29 @@ JL_DLLEXPORT jl_value_t *jl_unsafe_apply_generic_stack(jl_value_t *F, jl_value_t
     jl_value_t** newargs = (jl_value_t**)alloca(sizeof(jl_value_t*) * nargs);
     jl_printf(JL_STDERR, "newargs:\n");
 
-    jl_datatype_t* tt = (jl_datatype_t*)types;
+    //jl_datatype_t* tt = (jl_datatype_t*)types;
     for (size_t i = 0; i < nargs; i++) {
         jl_datatype_t* typ = jl_svecref(tt->parameters, i+1); // skip the function
-        jl_printf(JL_STDERR, "arg type: %zu\n", i);
+        jl_printf(JL_STDERR, "arg type %zu: ", i);
         jl_(typ);
-        if (typ == jl_int64_type) {
-            // re-box the value
-            newargs[i] = jl_box_int64(*(int64_t*)args[i]);
-        } else if (typ == jl_float64_type) {
-            // re-box the value
-            newargs[i] = jl_box_float64(*(double*)args[i]);
-            break;
-        }
+        // re-box the value
+        newargs[i] = rebox_type_and_bytes((jl_datatype_t*)typ, args[i]);
+        jl_printf(JL_STDERR, "new arg %zu: ", i);
         jl_(newargs[i]);
     }
     JL_GC_PROMISE_ROOTED(mfunc);
     return _jl_invoke(F, newargs, nargs, mfunc, world);
+}
+
+static jl_value_t* rebox_type_and_bytes(jl_datatype_t* typ, void* data) {
+    if (typ == jl_int64_type) {
+        return jl_box_int64(*(int64_t*)data);
+    } else if (typ == jl_float64_type) {
+        return jl_box_float64(*(double*)data);
+    } else {
+        // Assume it's already boxed
+        return (jl_value_t*)data;
+    }
 }
 
 

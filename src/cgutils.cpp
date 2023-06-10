@@ -3579,8 +3579,7 @@ static Value *stack_boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_pr
 
                 jl_printf(JL_STDERR, "WE OUT HERE\n");
 
-                // TODO ?
-                bool isboxed = false;
+                bool isboxed = false; // unused
 
                 Type *lt = julia_type_to_llvm(ctx, jt, &isboxed);
                 box = emit_static_alloca_unsafe_stack_value(ctx, lt);
