@@ -7,6 +7,8 @@ using Test, Random, InteractiveUtils
 @enum BCOption bc_default bc_on bc_off
 bc_opt = BCOption(Base.JLOptions().check_bounds)
 
+include("./compiler/irutils.jl")
+
 # test for boundscheck block eliminated at same level
 @inline function A1()
     r = 0
@@ -28,6 +30,9 @@ function A1_inbounds()
     return r
 end
 A1_wrap() = @inbounds return A1_inbounds()
+
+# local `@inbounds`/`@boundscheck` expression should not prohibit concrete-evaluation
+@test Core.Compiler.is_foldable(Base.infer_effects(A1_inbounds))
 
 if bc_opt == bc_default
     @test A1() == 1
@@ -297,5 +302,41 @@ end
 @test Base.return_types() do
     typeintersect(Int, Integer)
 end |> only === Type{Int}
+
+# a method containing `@boundscheck` should not be concrete-evaluated from a `@inbounds` context
+function f_boundscheck_inconsistent(i)
+    @boundscheck i += 1
+    return i
+end
+f_boundscheck_wrap1() = f_boundscheck_inconsistent(0)
+f_boundscheck_wrap2() = @inbounds f_boundscheck_inconsistent(0)
+if bc_opt == bc_default
+    @test !Base.infer_effects(f_boundscheck_inconsistent, (Int,)).noinbounds
+    @test fully_eliminated(; retval=1) do
+        f_boundscheck_wrap1()
+    end
+    @test f_boundscheck_wrap1() == 1
+    @test f_boundscheck_wrap2() == 0
+elseif bc_opt == bc_off
+    @test Base.infer_effects(f_boundscheck_inconsistent, (Int,)).noinbounds
+    @test fully_eliminated(; retval=0) do
+        f_boundscheck_wrap1()
+    end
+    @test fully_eliminated(; retval=0) do
+        f_boundscheck_wrap2()
+    end
+    @test f_boundscheck_wrap1() == 0
+    @test f_boundscheck_wrap2() == 0
+else
+    @test Base.infer_effects(f_boundscheck_inconsistent, (Int,)).noinbounds
+    @test fully_eliminated(; retval=1) do
+        f_boundscheck_wrap1()
+    end
+    @test fully_eliminated(; retval=1) do
+        f_boundscheck_wrap2()
+    end
+    @test f_boundscheck_wrap1() == 1
+    @test f_boundscheck_wrap2() == 1
+end
 
 end

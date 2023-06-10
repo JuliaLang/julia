@@ -216,12 +216,14 @@ is_stmt_noinline(stmt_flag::UInt8)    = stmt_flag & IR_FLAG_NOINLINE    ≠ 0
 is_stmt_throw_block(stmt_flag::UInt8) = stmt_flag & IR_FLAG_THROW_BLOCK ≠ 0
 
 """
-    stmt_effect_flags(stmt, rt, src::Union{IRCode,IncrementalCompact}) ->
+    stmt_effect_flags(𝕃ₒ::AbstractLattice, stmt, rt,
+                      src::Union{IRCode,IncrementalCompact}, flag::UInt8) ->
         (consistent::Bool, effect_free_and_nothrow::Bool, nothrow::Bool)
 
 Returns a tuple of `(:consistent, :effect_free_and_nothrow, :nothrow)` flags for a given statement.
 """
-function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospecialize(rt), src::Union{IRCode,IncrementalCompact})
+function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospecialize(rt),
+                           src::Union{IRCode,IncrementalCompact}, flag::UInt8=IR_FLAG_NULL)
     # TODO: We're duplicating analysis from inference here.
     isa(stmt, PiNode) && return (true, true, true)
     isa(stmt, PhiNode) && return (true, true, true)
@@ -247,7 +249,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             if f === UnionAll
                 # TODO: This is a weird special case - should be determined in inference
                 argtypes = Any[argextype(args[arg], src) for arg in 2:length(args)]
-                nothrow = _builtin_nothrow(𝕃ₒ, f, argtypes, rt)
+                nothrow = _builtin_nothrow(Bool, 𝕃ₒ, f, argtypes, rt)
                 return (true, nothrow, nothrow)
             end
             if f === Intrinsics.cglobal
@@ -261,6 +263,9 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             effects = builtin_effects(𝕃ₒ, f, ArgInfo(args, argtypes), rt)
             consistent = is_consistent(effects)
             effect_free = is_effect_free(effects)
+            if is_nothrow_if_inbounds(effects) && !iszero(flag & IR_FLAG_INBOUNDS)
+                effects = Effects(effects; nothrow=ALWAYS_TRUE)
+            end
             nothrow = is_nothrow(effects)
             return (consistent, effect_free & nothrow, nothrow)
         elseif head === :new

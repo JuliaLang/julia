@@ -122,46 +122,12 @@ const DenseVecOrMat{T} = Union{DenseVector{T}, DenseMatrix{T}}
 
 using Core: arraysize, arrayset, const_arrayref
 
-"""
-    @_safeindex
-
-This internal macro converts:
-- `getindex(xs::Tuple, )` -> `__inbounds_getindex(args...)`
-- `setindex!(xs::Vector, args...)` -> `__inbounds_setindex!(xs, args...)`
-to tell the compiler that indexing operations within the applied expression are always
-inbounds and do not need to taint `:consistent` and `:nothrow`.
-"""
-macro _safeindex(ex)
-    return esc(_safeindex(__module__, ex))
-end
-function _safeindex(__module__, ex)
-    isa(ex, Expr) || return ex
-    if ex.head === :(=)
-        lhs = arrayref(true, ex.args, 1)
-        if isa(lhs, Expr) && lhs.head === :ref # xs[i] = x
-            rhs = arrayref(true, ex.args, 2)
-            xs = arrayref(true, lhs.args, 1)
-            args = Vector{Any}(undef, length(lhs.args)-1)
-            for i = 2:length(lhs.args)
-                arrayset(true, args, _safeindex(__module__, arrayref(true, lhs.args, i)), i-1)
-            end
-            return Expr(:call, GlobalRef(__module__, :__inbounds_setindex!), xs, _safeindex(__module__, rhs), args...)
-        end
-    elseif ex.head === :ref # xs[i]
-        return Expr(:call, GlobalRef(__module__, :__inbounds_getindex), ex.args...)
-    end
-    args = Vector{Any}(undef, length(ex.args))
-    for i = 1:length(ex.args)
-        arrayset(true, args, _safeindex(__module__, arrayref(true, ex.args, i)), i)
-    end
-    return Expr(ex.head, args...)
-end
-
 vect() = Vector{Any}()
 function vect(X::T...) where T
     @_terminates_locally_meta
-    vec = Vector{T}(undef, length(X))
-    @_safeindex for i = 1:length(X)
+    n = length(X)
+    vec = Vector{T}(undef, n)
+    @inbounds for i = 1:n
         vec[i] = X[i]
     end
     return vec
@@ -443,9 +409,10 @@ julia> getindex(Int8, 1, 2, 3)
 function getindex(::Type{T}, vals...) where T
     @inline
     @_effect_free_terminates_locally_meta
-    a = Vector{T}(undef, length(vals))
+    n = length(vals)
+    a = Vector{T}(undef, n)
     if vals isa NTuple
-        @_safeindex for i in 1:length(vals)
+        @inbounds for i in 1:n
             a[i] = vals[i]
         end
     else
@@ -460,8 +427,9 @@ end
 
 function getindex(::Type{Any}, @nospecialize vals...)
     @_effect_free_terminates_locally_meta
-    a = Vector{Any}(undef, length(vals))
-    @_safeindex for i = 1:length(vals)
+    n = length(vals)
+    a = Vector{Any}(undef, n)
+    @inbounds for i = 1:n
         a[i] = vals[i]
     end
     return a
@@ -1021,11 +989,6 @@ function setindex! end
 @eval setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T} =
     (@inline; arrayset($(Expr(:boundscheck)), A, x isa T ? x : convert(T,x)::T, i1, i2, I...))
 
-__inbounds_setindex!(A::Array{T}, x, i1::Int) where {T} =
-    arrayset(false, A, convert(T,x)::T, i1)
-__inbounds_setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T} =
-    (@inline; arrayset(false, A, convert(T,x)::T, i1, i2, I...))
-
 # This is redundant with the abstract fallbacks but needed and helpful for bootstrap
 function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
     @_propagate_inbounds_meta
@@ -1115,14 +1078,14 @@ function push!(a::Vector{T}, item) where T
     # convert first so we don't grow the array if the assignment won't work
     itemT = item isa T ? item : convert(T, item)::T
     _growend!(a, 1)
-    @_safeindex a[length(a)] = itemT
+    @inbounds a[length(a)] = itemT
     return a
 end
 
 # specialize and optimize the single argument case
 function push!(a::Vector{Any}, @nospecialize x)
     _growend!(a, 1)
-    @_safeindex a[length(a)] = x
+    @inbounds a[length(a)] = x
     return a
 end
 function push!(a::Vector{Any}, @nospecialize x...)
@@ -1130,7 +1093,7 @@ function push!(a::Vector{Any}, @nospecialize x...)
     na = length(a)
     nx = length(x)
     _growend!(a, nx)
-    @_safeindex for i = 1:nx
+    @inbounds for i = 1:nx
         a[na+i] = x[i]
     end
     return a
@@ -1194,7 +1157,7 @@ function _append!(a::AbstractVector, ::Union{HasLength,HasShape}, iter)
     resize!(a, n+Int(length(iter))::Int)
     for (i, item) in zip(i+1:lastindex(a), iter)
         if isa(a, Vector) # give better effects for builtin vectors
-            @_safeindex a[i] = item
+            @inbounds a[i] = item
         else
             a[i] = item
         end
@@ -1263,7 +1226,7 @@ function _prepend!(a::Vector, ::Union{HasLength,HasShape}, iter)
     _growbeg!(a, n)
     i = 0
     for item in iter
-        @_safeindex a[i += 1] = item
+        @inbounds a[i += 1] = item
     end
     a
 end
@@ -1470,14 +1433,14 @@ julia> pushfirst!([1, 2, 3, 4], 5, 6)
 function pushfirst!(a::Vector{T}, item) where T
     item = item isa T ? item : convert(T, item)::T
     _growbeg!(a, 1)
-    @_safeindex a[1] = item
+    @inbounds a[1] = item
     return a
 end
 
 # specialize and optimize the single argument case
 function pushfirst!(a::Vector{Any}, @nospecialize x)
     _growbeg!(a, 1)
-    @_safeindex a[1] = x
+    @inbounds a[1] = x
     return a
 end
 function pushfirst!(a::Vector{Any}, @nospecialize x...)
@@ -1485,7 +1448,7 @@ function pushfirst!(a::Vector{Any}, @nospecialize x...)
     na = length(a)
     nx = length(x)
     _growbeg!(a, nx)
-    @_safeindex for i = 1:nx
+    @inbounds for i = 1:nx
         a[i] = x[i]
     end
     return a

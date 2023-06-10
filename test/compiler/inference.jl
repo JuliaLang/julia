@@ -729,17 +729,17 @@ let fieldtype_tfunc(@nospecialize args...) =
     @test TypeVar <: fieldtype_tfunc(Any, Any)
 end
 
-import Core.Compiler: MaybeUndef, builtin_nothrow
+using Core.Compiler: MaybeUndef, builtin_nothrow
 let 𝕃ₒ = Core.Compiler.OptimizerLattice()
-    @test !builtin_nothrow(𝕃ₒ, setfield!, Any[Base.RefValue{String}, Core.Const(:x), MaybeUndef(String)], Any)
-    @test !builtin_nothrow(𝕃ₒ, setfield!, Any[Base.RefValue{String}, Core.Const(:x), MaybeUndef(String), Core.Const(:not_atomic)], Any)
-    @test !builtin_nothrow(𝕃ₒ, isdefined, Any[Any,MaybeUndef(Symbol)], Bool)
-    @test !builtin_nothrow(𝕃ₒ, fieldtype, Any[MaybeUndef(Any),Symbol], Any)
-    @test !builtin_nothrow(𝕃ₒ, isa, Any[Type,MaybeUndef(Type)], Any)
-    @test !builtin_nothrow(𝕃ₒ, <:, Any[MaybeUndef(Any),MaybeUndef(Any)], Any)
-    @test !builtin_nothrow(𝕃ₒ, Core.ifelse, Any[MaybeUndef(Bool),Any,Any], Any)
-    @test !builtin_nothrow(𝕃ₒ, typeassert, Any[MaybeUndef(Any),Type{Symbol}], Any)
-    @test !builtin_nothrow(𝕃ₒ, Core.get_binding_type, Any[Module,MaybeUndef(Symbol)], Any)
+    @test !builtin_nothrow(Bool, 𝕃ₒ, setfield!, Any[Base.RefValue{String}, Core.Const(:x), MaybeUndef(String)], Any)
+    @test !builtin_nothrow(Bool, 𝕃ₒ, setfield!, Any[Base.RefValue{String}, Core.Const(:x), MaybeUndef(String), Core.Const(:not_atomic)], Any)
+    @test !builtin_nothrow(Bool, 𝕃ₒ, isdefined, Any[Any,MaybeUndef(Symbol)], Bool)
+    @test !builtin_nothrow(Bool, 𝕃ₒ, fieldtype, Any[MaybeUndef(Any),Symbol], Any)
+    @test !builtin_nothrow(Bool, 𝕃ₒ, isa, Any[Type,MaybeUndef(Type)], Any)
+    @test !builtin_nothrow(Bool, 𝕃ₒ, <:, Any[MaybeUndef(Any),MaybeUndef(Any)], Any)
+    @test !builtin_nothrow(Bool, 𝕃ₒ, Core.ifelse, Any[MaybeUndef(Bool),Any,Any], Any)
+    @test !builtin_nothrow(Bool, 𝕃ₒ, typeassert, Any[MaybeUndef(Any),Type{Symbol}], Any)
+    @test !builtin_nothrow(Bool, 𝕃ₒ, Core.get_binding_type, Any[Module,MaybeUndef(Symbol)], Any)
 end
 
 # issue #11480
