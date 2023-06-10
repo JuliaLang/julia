@@ -3189,6 +3189,35 @@ static Value *load_i8box(jl_codectx_t &ctx, Value *v, jl_datatype_t *ty)
             (jl_value_t*)ty));
 }
 
+static Value *address_of_stack(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t) {
+    auto &builder = ctx.builder;
+
+    // Convert the type to a _pointer to lt_ type
+    Type *pt = PointerType::get(t, 0);
+
+    // Create the alloca instruction for the stack-allocated value
+    llvm::AllocaInst* allocaInst = builder.CreateAlloca(t);
+
+    // Create the alloca instruction for the pointer to the stack-allocated value
+    llvm::AllocaInst* allocaPtrInst = builder.CreateAlloca(pt);
+
+    // Store the value %0 into the stack-allocated value (%2)
+    builder.CreateStore(vinfo.V, allocaInst);
+
+    // Store the address of the stack-allocated value (%2) into the pointer (%3)
+    builder.CreateStore(allocaInst, allocaPtrInst, true);
+
+    // Load the value from the pointer (%3)
+    llvm::LoadInst* loadInst = builder.CreateLoad(pt, allocaPtrInst);
+
+    // The resulting load instruction (%4) can be used further in your code
+    return loadInst;
+}
+
+
+
+
+
 // some types have special boxing functions with small-value caches
 // Returns ctx.types().T_prjlvalue
 static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t, bool nobox_stack = false)
@@ -3213,25 +3242,30 @@ static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t
     assert(jl_is_datatype(jb));
     Value *box = NULL;
     if (nobox_stack) {
-        if (jb == jl_int64_type) {
-            jl_printf(JL_STDERR, "NATHAN: Creating stack allocated ptr for %p\n", vinfo.V);
-            box = vinfo.V;
+        // TODO: Cover a bunch of types here.
+        if (jb == jl_int64_type || jb == jl_uint64_type) {
+            jl_printf(JL_STDERR, "NATHAN: Creating stack allocated ptr for %p, of type\n", vinfo.V);
+            jl_(vinfo.typ);
+            //box = vinfo.V;
+
+            box = address_of_stack(ctx, vinfo, t);
+
 
 
             // Create an instruction to return a pointer to the stack slot
             // containing the unboxed value.
-
-               // Get the llvm type from the julia type
-               Type *lt = julia_type_to_llvm(ctx, jt);
-               // Convert the type to a _pointer to lt_ type
-               Type *lpt = PointerType::get(lt, AddressSpace::Derived);
-
-               Value *ptr = ctx.builder.CreateAlloca(lpt);
-               ctx.builder.CreateStore(
-                   ctx.builder.CreatePtrToInt(vinfo.V, lpt),
-                   ptr);
-
-                box = ptr;
+//
+//               // Get the llvm type from the julia type
+//               Type *lt = julia_type_to_llvm(ctx, jt);
+//               // Convert the type to a _pointer to lt_ type
+//               Type *lpt = PointerType::get(lt, 0);
+//
+//               Value *ptr = ctx.builder.CreateAlloca(lpt);
+//               ctx.builder.CreateStore(
+//                   ctx.builder.CreatePtrToInt(vinfo.V, lpt),
+//                   ptr);
+//
+//                box = ptr;
 
                 // // Create an alloca to hold the pointer to the stack slot.
                 // // This alloca will be returned.

@@ -3152,9 +3152,10 @@ static jl_value_t* rebox_type_and_bytes(jl_datatype_t* typ, void* data) {
     jl_(jl_int64_type);
     // TODO: this is the problem!!
     if (typ == jl_int64_type) {
-        jl_printf(JL_STDERR, "reboxing int pointer: %p\n", data);
-        jl_printf(JL_STDERR, "reboxing int: %d\n", *(int64_t*)data);
         return jl_box_int64(*(int64_t*)data);
+    } else if (typ == jl_uint64_type) {
+        jl_printf(JL_STDERR, "reboxing uint64: %d\n", *(uint64_t*)data);
+        return jl_box_uint64(*(uint64_t*)data);
     } else if (typ == jl_float64_type) {
         return jl_box_float64(*(double*)data);
     } else {
