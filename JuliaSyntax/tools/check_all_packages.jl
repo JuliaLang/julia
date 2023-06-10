@@ -8,8 +8,8 @@ using JuliaSyntax, Logging, TerminalLoggers, ProgressLogging, Serialization
 include("../test/test_utils.jl")
 include("../test/fuzz_test.jl")
 
-srcpath = isempty(ARGS) ? joinpath(@__DIR__, "pkgs") : ARGS[1]
-source_paths = find_source_in_path(srcpath)
+srcpaths = isempty(ARGS) ? [joinpath(@__DIR__, "pkgs")] : abspath.(ARGS)
+source_paths = vcat(find_source_in_path.(srcpaths)...)
 
 file_count = length(source_paths)
 
