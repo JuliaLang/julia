@@ -4689,10 +4689,10 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
     // emit function and arguments
     Value *callval;
     if (jlcall_stack) {
-        jl_printf(JL_STDERR, "emitting jlapplygeneric_stack:\n");
+        //jl_printf(JL_STDERR, "emitting jlapplygeneric_stack:\n");
         callval = emit_jlcall_stack(ctx, jlapplygeneric_stack_func, nullptr, generic_argv.data(), n_generic_args, julia_call);
     } else {
-        jl_printf(JL_STDERR, "emitting normal apply generic:\n");
+        //jl_printf(JL_STDERR, "emitting normal apply generic:\n");
         callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, generic_argv.data(), n_generic_args, julia_call);
     }
     return mark_julia_type(ctx, callval, true, rt);

@@ -3144,11 +3144,12 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic_stack(jl_value_t *F, void **args, uint
     //jl_datatype_t* tt = (jl_datatype_t*)types;
     for (size_t i = 0; i < nargs; i++) {
         jl_datatype_t* typ = jl_svecref(tt->parameters, i+1); // skip the function
-        jl_printf(JL_STDERR, "Expecting type %zu: ", i);
-        jl_(jl_svecref(spec_types, i+1));
+        //jl_printf(JL_STDERR, "Expecting type %zu: ", i);
+        //jl_(jl_svecref(spec_types, i+1));
         // If the function is expecting a boxed value (because it's not specialized)
         // we need to ensure the value is boxed.
         if (!jl_is_concrete_type(jl_svecref(spec_types, i+1)) &&
+            // Does this need to be "and isbits"? I don't _think_ so?
             jl_is_concrete_type(jl_typeof(args[i]))) {
             // re-box the value
             jl_printf(JL_STDERR, "reboxing arg %zu\n", i);
@@ -3174,8 +3175,10 @@ static jl_value_t* rebox_type_and_bytes(jl_datatype_t* typ, void* data) {
     } else if (typ == jl_float64_type) {
         return jl_box_float64(*(double*)data);
     } else {
-        // Assume it's already boxed
-        return (jl_value_t*)data;
+        jl_printf(JL_STDERR, "STILL NEED TO HANDLE THIS TYPE: ");
+        jl_(typ);
+        // this will crash :)
+        return 0;
     }
 }
 

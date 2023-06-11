@@ -3245,7 +3245,9 @@ static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t
     Value *box = NULL;
     if (nobox_stack) {
         // TODO: Cover a bunch of types here.
-        if (jb == jl_int64_type || jb == jl_uint64_type) {
+        // Is this type check needed at all? Can we do it for all things?
+        //if (jb == jl_int64_type || jb == jl_uint64_type || jb == jl_pointer_type) {
+        if (jl_is_concrete_type(jt) && jl_isbits(jt)) {
             //jl_printf(JL_STDERR, "NATHAN: Creating stack allocated ptr for %p, of type\n", vinfo.V);
 
             box = address_of_stack(ctx, vinfo, t);
