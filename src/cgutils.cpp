@@ -3247,62 +3247,8 @@ static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t
         // TODO: Cover a bunch of types here.
         if (jb == jl_int64_type || jb == jl_uint64_type) {
             //jl_printf(JL_STDERR, "NATHAN: Creating stack allocated ptr for %p, of type\n", vinfo.V);
-            //jl_(vinfo.typ);
-            //box = vinfo.V;
 
             box = address_of_stack(ctx, vinfo, t);
-
-
-
-            // Create an instruction to return a pointer to the stack slot
-            // containing the unboxed value.
-//
-//               // Get the llvm type from the julia type
-//               Type *lt = julia_type_to_llvm(ctx, jt);
-//               // Convert the type to a _pointer to lt_ type
-//               Type *lpt = PointerType::get(lt, 0);
-//
-//               Value *ptr = ctx.builder.CreateAlloca(lpt);
-//               ctx.builder.CreateStore(
-//                   ctx.builder.CreatePtrToInt(vinfo.V, lpt),
-//                   ptr);
-//
-//                box = ptr;
-
-                // // Create an alloca to hold the pointer to the stack slot.
-                // // This alloca will be returned.
-                // box = ctx.builder.CreateAlloca(ctx.types().T_prjlvalue);
-                // ctx.builder.CreateStore(
-                //     ctx.builder.CreateBitCast(ptr, ctx.types().T_pjlvalue),
-                //     box);
-
-
-                //return ptr;
-
-
-
-
-
-
-            // Type *t = julia_type_to_llvm(ctx, jt);
-            // box = ctx.builder.CreateAddrSpaceCast(vinfo.V, t);
-            // box = ctx.builder.CreateAddrSpaceCast(vinfo.V, getInt64Ty(ctx.builder.getContext()));
-            // box = track_pjlvalue(ctx, as_value(ctx, t, vinfo));
-
-            // TODO: I think the issue is that we need to cast the ptr to a jl_value_t*
-            // to make the llvm checker happy?
-            // Get the pointer to the stack value (`V`)
-            // and cast it to a jl_value_t*, to pass into jl_apply_generic_stack().
-            // box = vinfo.V;
-
-            // Firsta alloca the new pointer value
-            // AllocaInst *ptr = ctx.builder.CreateAlloca(ctx.types().T_pjlvalue);
-            // AllocaInst *ptr = ctx.builder.CreateAlloca(ctx.types().T_);
-            // Now, store V's address into the pointer
-            // Value *ptr = ctx.builder.CreateAddrSpaceCast(vinfo.V, ctx.types().T_pjlvalue);
-            // box = track_pjlvalue(ctx, ptr);
-            // box = ptr;
-
 
             return box;
         }
