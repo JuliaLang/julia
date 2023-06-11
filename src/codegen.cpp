@@ -4634,12 +4634,7 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
     }
 
     jl_value_t *context = ctx.params->generic_context == jl_nothing ? nullptr : ctx.params->generic_context;
-   size_t n_generic_args;
-//    if (jlcall_stack) {
-//        n_generic_args = (nargs * 2) + (context ? 1 : 0);
-//    } else {
-       n_generic_args = nargs + (context ? 1 : 0);
-//    }
+   size_t n_generic_args = nargs + (context ? 1 : 0);
 
     SmallVector<jl_cgval_t> generic_argv(n_generic_args);
     jl_cgval_t *argv = generic_argv.data();
@@ -4694,8 +4689,10 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
     // emit function and arguments
     Value *callval;
     if (jlcall_stack) {
+        jl_printf(JL_STDERR, "emitting jlapplygeneric_stack:\n");
         callval = emit_jlcall_stack(ctx, jlapplygeneric_stack_func, nullptr, generic_argv.data(), n_generic_args, julia_call);
     } else {
+        jl_printf(JL_STDERR, "emitting normal apply generic:\n");
         callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, generic_argv.data(), n_generic_args, julia_call);
     }
     return mark_julia_type(ctx, callval, true, rt);
