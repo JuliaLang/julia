@@ -3119,13 +3119,23 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic_stack(jl_value_t *F, void **args, uint
     jl_datatype_t* tt = (jl_datatype_t*)jl_apply_tuple_type_v(types, ntypes);
     //jl_(tt);
 
-    jl_method_match_t *match = _gf_invoke_lookup((jl_value_t*)tt, jl_nothing, world, &min_valid, &max_valid);
-    //jl_printf(JL_STDERR, "match: %p\n", match);
-    if (match == NULL) {
-        //jl_printf(JL_STDERR, "No match\n");
-        return jl_nothing;
-    }
-    jl_method_instance_t *mfunc = jl_method_match_to_mi(match, world, world, world, 1);
+    //jl_method_match_t *match = _gf_invoke_lookup((jl_value_t*)tt, jl_nothing, world, &min_valid, &max_valid);
+    ////jl_printf(JL_STDERR, "match: %p\n", match);
+    //if (match == NULL) {
+    //    //jl_printf(JL_STDERR, "No match\n");
+    //    return jl_nothing;
+    //}
+    //jl_method_instance_t *mfunc = jl_method_match_to_mi(match, world, world, world, 1);
+
+
+    // TODO: Share the method caching from jl_apply_generic.
+    // cache miss case
+    JL_TIMING(METHOD_LOOKUP_SLOW, METHOD_LOOKUP_SLOW);
+    jl_methtable_t *mt = jl_gf_mtable(F);
+    jl_method_instance_t *mfunc = jl_mt_assoc_by_type(mt, tt, world);
+
+
+
     //jl_printf(JL_STDERR, "mfunc: %p\n", mfunc);
     //jl_printf(JL_STDERR, "spectypes: "); jl_(mfunc->specTypes);
     // jl_method_instance_t *mfunc = jl_lookup_generic_(F, args, nargs,
