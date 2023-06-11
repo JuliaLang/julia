@@ -3134,6 +3134,14 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic_stack(jl_value_t *F, void **args, uint
     jl_methtable_t *mt = jl_gf_mtable(F);
     jl_method_instance_t *mfunc = jl_mt_assoc_by_type(mt, tt, world);
 
+    if (mfunc == NULL) {
+#ifdef JL_TRACE
+        if (error_en)
+            show_call(F, args, nargs);
+#endif
+        jl_method_error(F, args, nargs, world);
+        // unreachable
+    }
 
 
     //jl_printf(JL_STDERR, "mfunc: %p\n", mfunc);
