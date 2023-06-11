@@ -3096,10 +3096,19 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic_stack(jl_value_t *F, void **args, uint
     //jl_printf(JL_STDERR, "world: %zu\n", world);
     //jl_printf(JL_STDERR, "F: ");
     //jl_(F);
-    //for (int i = 0; i < ntypes; ++i) {
-    //    jl_printf(JL_STDERR, "\ntypes[%d]: ", i);
-    //    jl_(types[i]);
-    //}
+
+    // To get the true dynamic types tuple, we need to fetch the typeof from any boxes.
+    for (int i = 1; i < ntypes; ++i) {
+        //jl_printf(JL_STDERR, "\ntypes[%d]: ", i);
+        //jl_(types[i]);
+        //jl_printf(JL_STDERR, "\n is concrete: %d\n", jl_is_concrete_type(types[i]));
+        if (!jl_is_concrete_type(types[i])) {
+            //jl_(args[i-1]);
+            // Get the runtime type
+            types[i] = jl_typeof(args[i-1]);
+        }
+        //jl_(types[i]);
+    }
 
     jl_datatype_t* tt = (jl_datatype_t*)jl_apply_tuple_type_v(types, ntypes);
     //jl_(tt);

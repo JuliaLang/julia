@@ -4225,13 +4225,13 @@ static CallInst *emit_jlcall_stack(jl_codectx_t &ctx, FunctionCallee theFptr, Va
       //jl_((argv[i]).typ);
       //Value *arg = boxed(ctx, argv[i]);
         Value *arg;
-        if (argv[i].isboxed) {
-            Value *datatype = emit_typeof(ctx, argv[i].V, false, false);
+        // if (argv[i].isboxed) {
+            //Value *datatype = emit_typeof(ctx, argv[i].V, false, false);
             //arg = track_pjlvalue(ctx, datatype);
-            arg = datatype;
-        } else {
+            //arg = datatype;
+        // } else {
             arg = track_pjlvalue(ctx, literal_pointer_val(ctx, (argv[i]).typ));
-        }
+        // }
     //   Value *arg = literal_pointer_val(ctx, (jl_value_t*)(argv[i]).typ);
       theArgs.push_back(arg);
     }
