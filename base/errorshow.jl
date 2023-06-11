@@ -664,7 +664,7 @@ function show_reduced_backtrace(io::IO, t::Vector)
             repetitions = repeated_cycle[1][3]
             popfirst!(repeated_cycle)
             printstyled(io,
-                "--- the last ", cycle_length, " lines are repeated ",
+                "--- the above ", cycle_length, " lines are repeated ",
                   repetitions, " more time", repetitions>1 ? "s" : "", " ---", color = :light_black)
             if i < length(displayed_stackframes)
                 println(io)
