@@ -1641,11 +1641,16 @@ In this case, one must ensure that cores aren't oversubscribed due to the two di
 Julia compiles and uses its own copy of OpenBLAS for linear algebra, whose number of threads is controlled by the environment variable `OPENBLAS_NUM_THREADS`.
 It can either be set as a command line option when launching Julia, or modified during the Julia session with `BLAS.set_num_threads(N)` (the submodule `BLAS` is exported by `using LinearAlgebra`).
 Its current value can be accessed with `BLAS.get_num_threads()`.
-When the user does not specify anything, the default setting is `OPENBLAS_NUM_THREADS=8` (for Julia version < 1.8) or `OPENBLAS_NUM_THREADS=Sys.CPU_THREADS` (for Julia version ≥ 1.8).
 
-- If `OPENBLAS_NUM_THREADS=1`, OpenBLAS uses the calling Julia thread(s) to run BLAS computations, i.e. it "reuses" the Julia thread that runs a computation.
-- If `OPENBLAS_NUM_THREADS=N>1`, OpenBLAS creates and manages its own pool of BLAS threads (`N` in total). There is one BLAS thread pool (for all Julia threads).
+When the user does not specify anything, Julia tries to choose a reasonable value for the number of OpenBLAS threads.
+This choice depends on the platform and the Julia version, but checking and setting the value manually is typically a better idea, and here's why:
 
-When you start Julia in multithreaded mode with `JULIA_NUM_THREADS=X`, it is generally recommended to set `OPENBLAS_NUM_THREADS=1`. 
+* If `OPENBLAS_NUM_THREADS=1`, OpenBLAS uses the calling Julia thread(s), i.e. it "lives in" the Julia thread that runs the computation.
+* If `OPENBLAS_NUM_THREADS=N>1`, OpenBLAS creates and manages its own pool of threads (`N` in total). There is just one OpenBLAS thread pool shared among all Julia threads.
+
+When you start Julia in multithreaded mode with `JULIA_NUM_THREADS=X`, it is generally recommended to set `OPENBLAS_NUM_THREADS=1`.
 Given the behavior described above, increasing the number of BLAS threads to `N>1` can very easily lead to worse performance, in particular when `N<<X`.
 However this is just a rule of thumb, and the best way to set each number of threads is to experiment on your specific application.
+
+Note that there are other linear algebra backends that can replace OpenBLAS, sometimes with added performance: [MKL](https://github.com/JuliaLinearAlgebra/MKL.jl) and [Octavian](https://github.com/JuliaLinearAlgebra/Octavian.jl) are two examples.
+Their behavior _vis-à-vis_ threads is very different, we refer readers to their respective documentations for more details.
