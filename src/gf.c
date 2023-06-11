@@ -3082,6 +3082,12 @@ static jl_value_t* rebox_type_and_bytes(jl_datatype_t* typ, void* data);
 
 JL_DLLEXPORT jl_value_t *jl_apply_generic_stack(jl_value_t *F, void **args, uint32_t nargs)
 {
+    //static jl_value_t* ans = 0;
+    //if (ans == NULL) {
+    //    jl_box_uint64(10);
+    //}
+    //return ans;
+
     size_t world = jl_current_task->world_age;
 
     size_t min_valid;
@@ -3138,13 +3144,14 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic_stack(jl_value_t *F, void **args, uint
     //jl_datatype_t* tt = (jl_datatype_t*)types;
     for (size_t i = 0; i < nargs; i++) {
         jl_datatype_t* typ = jl_svecref(tt->parameters, i+1); // skip the function
-        //jl_printf(JL_STDERR, "arg type %zu: ", i);
-        //jl_(typ);
+        jl_printf(JL_STDERR, "Expecting type %zu: ", i);
+        jl_(jl_svecref(spec_types, i+1));
         // If the function is expecting a boxed value (because it's not specialized)
         // we need to ensure the value is boxed.
-        if (jl_is_concrete_type(jl_svecref(spec_types, i+1))) {
+        if (!jl_is_concrete_type(jl_svecref(spec_types, i+1)) &&
+            jl_is_concrete_type(jl_typeof(args[i]))) {
             // re-box the value
-            //jl_printf(JL_STDERR, "reboxing arg %zu\n", i);
+            jl_printf(JL_STDERR, "reboxing arg %zu\n", i);
             newargs[i] = rebox_type_and_bytes((jl_datatype_t*)typ, args[i]);
         } else {
             newargs[i] = args[i];
@@ -3159,7 +3166,6 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic_stack(jl_value_t *F, void **args, uint
 static jl_value_t* rebox_type_and_bytes(jl_datatype_t* typ, void* data) {
     //jl_(typ);
     //jl_(jl_int64_type);
-    // TODO: this is the problem!!
     if (typ == jl_int64_type) {
         return jl_box_int64(*(int64_t*)data);
     } else if (typ == jl_uint64_type) {

@@ -3612,65 +3612,12 @@ static Value *stack_boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_pr
                 originalAlloca->eraseFromParent();
                 ctx.builder.restoreIP(IP);
             } else {
+                // TODO: This here too?
+                // box = address_of_stack(ctx, vinfo, t);
+                // TODO: Maybe we just replace this whole function even?? Not clear to me yet.
 
-                // jl_cgval_t res = emit_new_struct(
-                //     ctx, (jl_datatype_t*)jt,
-                //     nargs - 1, argv.data() + 1, is_promotable);
-                // box = res.V;
-
-                jl_printf(JL_STDERR, "WE OUT HERE\n");
-
-
-                // Create an instruction to return a pointer to the stack slot
-                // containing the unboxed value.
-
-
-                // Create an instruction to return a pointer to the stack slot
-                // containing the unboxed value.
-
-               // Get the llvm type from the julia type
-               Type *lt = julia_type_to_llvm(ctx, jt);
-               // Convert the type to a _pointer to lt_ type
-               Type *lpt = PointerType::get(lt, AddressSpace::Derived);
-               Type *lppt = PointerType::get(lpt, AddressSpace::Derived);
-
-               Value *ptr = ctx.builder.CreateAlloca(lppt);
-               ctx.builder.CreateStore(vinfo.V, ptr);
-
-                // // Create an alloca to hold the pointer to the stack slot.
-                // // This alloca will be returned.
-                // box = ctx.builder.CreateAlloca(ctx.types().T_prjlvalue);
-                // ctx.builder.CreateStore(
-                //     ctx.builder.CreateBitCast(ptr, ctx.types().T_pjlvalue),
-                //     box);
-
-                jl_printf(JL_STDERR, "CREATED ALLOCA ptr: %p\n", (void*)ptr);
-
-                box = ptr;
-
-
-                // Yooooo just return the original value???
-                // return track_pjlvalue(ctx, vinfo.V);
-
-                // bool isboxed = false; // unused
-
-                // Type *lt = julia_type_to_llvm(ctx, jt, &isboxed);
-                // box = emit_static_alloca_unsafe_stack_value(ctx, lt);
-                // isboxed = true;  // we are forcing this.
-
-                // Value *header = ctx.builder.CreateBitOrPointerCast(box, getInt64PtrTy(ctx.builder.getContext()));
-
-                // // Set the type in the header
-                // jl_printf(JL_STDERR, "jt: %p\n", (void*)jt);
-                // Value *type_val = ConstantExpr::getIntToPtr(
-                //     ConstantInt::get(ctx.types().T_size, (uintptr_t)jt),
-                //     getInt64PtrTy(ctx.builder.getContext()));
-                // ctx.builder.CreateStore(type_val, header);
-                // // Store the original value in the new stack allocated value object
-                // Value *value_offset = ctx.builder.CreateGEP(ctx.types().T_prjlvalue, box, ConstantInt::get(ctx.types().T_size, 1));
-                // ctx.builder.CreateStore(vinfo.V, value_offset);
-
-                // init_bits_cgval(ctx, box, vinfo, jl_is_mutable(jt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut);
+                box = emit_allocobj(ctx, (jl_datatype_t*)jt);
+                init_bits_cgval(ctx, box, vinfo, jl_is_mutable(jt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut);
             }
         }
     }
