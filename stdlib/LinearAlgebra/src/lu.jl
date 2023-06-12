@@ -78,7 +78,7 @@ transpose(F::LU) = Transpose(F)
 # the following method is meant to catch calls to lu!(A::LAPACKArray) without a pivoting stategy
 lu!(A::StridedMatrix{<:BlasFloat}; check::Bool = true) = lu!(A, RowMaximum(); check=check)
 function lu!(A::StridedMatrix{T}, ::RowMaximum; check::Bool = true) where {T<:BlasFloat}
-    lpt = LAPACK.getrf!(A)
+    lpt = LAPACK.getrf!(A; check)
     check && checknonsingular(lpt[3])
     return LU{T,typeof(lpt[1]),typeof(lpt[2])}(lpt[1], lpt[2], lpt[3])
 end
