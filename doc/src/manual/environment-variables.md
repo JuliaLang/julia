@@ -376,6 +376,12 @@ should have at the terminal.
 The formatting `Base.answer_color()` (default: normal, `"\033[0m"`) that output
 should have at the terminal.
 
+## System and Package Image Building
+
+### `JULIA_CPU_TARGET`
+
+Modify the target machine architecture for (pre)compiling system and package images. See [`System image optimized for multiple microarchitectures`](@ref sysimg-multi-versioning)
+
 ## Debugging and profiling
 
 ### `JULIA_DEBUG`
