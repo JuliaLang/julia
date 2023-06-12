@@ -121,7 +121,7 @@ is typical for such functions to also return the modified array for convenience.
 
 Functions related to IO or making use of random number generators (RNG) are notable exceptions:
 Since these functions almost invariably must mutate the IO or RNG, respectively, functions ending with `!` are used to signify that an argument _other_ than the IO or RNG is mutated.
-For example, `rand(x)` mutate the RNG, whereas `rand!(x)` mutate the RNG and `x`, and similarly, `read(io)` mutates `io`, whereas `read!(io, x)` mutates both arguments.
+For example, `rand(x)` mutates the RNG, whereas `rand!(x)` mutates the RNG and `x`; similarly, `read(io)` mutates `io`, whereas `read!(io, x)` mutates both arguments.
 
 ## Avoid strange type `Union`s
 
