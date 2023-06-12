@@ -124,8 +124,9 @@ AbstractMatrix{T}(S::SymTridiagonal) where {T} =
                    convert(AbstractVector{T}, S.ev)::AbstractVector{T})
 function Matrix{T}(M::SymTridiagonal) where T
     n = size(M, 1)
-    Mf = zeros(T, n, n)
+    Mf = Matrix{T}(undef, n, n)
     n == 0 && return Mf
+    n > 2 && fill!(Mf, zero(T))
     @inbounds for i = 1:n-1
         Mf[i,i] = symmetric(M.dv[i], :U)
         Mf[i+1,i] = transpose(M.ev[i])
@@ -556,9 +557,10 @@ function size(M::Tridiagonal, d::Integer)
 end
 
 function Matrix{T}(M::Tridiagonal) where {T}
-    A = zeros(T, size(M))
+    A = Matrix{T}(undef, size(M))
     n = length(M.d)
     n == 0 && return A
+    n > 2 && fill!(A, zero(T))
     for i in 1:n-1
         A[i,i] = M.d[i]
         A[i+1,i] = M.dl[i]

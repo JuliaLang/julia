@@ -83,6 +83,7 @@ else
     primitive type Cwstring 32 end
 end
 
+
 ### General Methods for Ref{T} type
 
 eltype(x::Type{<:Ref{T}}) where {T} = @isdefined(T) ? T : Any

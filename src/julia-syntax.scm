@@ -187,7 +187,7 @@
 ;; a bound is #f if not specified
 (define (analyze-typevar e)
   (define (check-sym s)
-    (if (symbol? s)
+    (if (symbol? (unescape s)) ; unescape for macroexpand.scm use
         s
         (error (string "invalid type parameter name \"" (deparse s) "\""))))
   (cond ((atom? e) (list (check-sym e) #f #f))
@@ -1097,7 +1097,7 @@
 
 ;; insert calls to convert() in ccall, and pull out expressions that might
 ;; need to be rooted before conversion.
-(define (lower-ccall name RT atypes args cconv)
+(define (lower-ccall name RT atypes args cconv nreq)
   (let loop ((F atypes)  ;; formals
              (A args)    ;; actuals
              (stmts '()) ;; initializers
@@ -1114,13 +1114,15 @@
       (if (null? A)
           `(block
             ,.(reverse! stmts)
-            (foreigncall ,name ,RT (call (core svec) ,@(reverse! T))
-                         ,(if isseq (- (length atypes) 1) 0) ; 0 or number of arguments before ... in definition
+            (foreigncall ,(expand-forms name) ,(expand-forms RT) (call (core svec) ,@(reverse! T))
+                         ;; 0 or number of arguments before ... in definition
+                         ,(or nreq
+                              (if isseq (- (length atypes) 1) 0))
                          ',cconv
                          ,.(reverse! C)
                          ,@GC)) ; GC root ordering is arbitrary
-          (let* ((a     (car A))
-                 (ty    (if isseq (cadar F) (car F))))
+          (let* ((a     (expand-forms (car A)))
+                 (ty    (expand-forms (if isseq (cadar F) (car F)))))
             (if (and isseq (not (null? (cdr F)))) (error "only the trailing ccall argument type should have \"...\""))
             (if (eq? ty 'Any)
                 (loop (if isseq F (cdr F)) (cdr A) stmts (list* '(core Any) T) (list* a C) GC)
@@ -2616,7 +2618,9 @@
                  ((eq? f 'ccall)
                   (if (not (length> e 4)) (error "too few arguments to ccall"))
                   (let* ((cconv (cadddr e))
-                         (have-cconv (memq cconv '(cdecl stdcall fastcall thiscall llvmcall)))
+                         (have-cconv-expr (and (pair? cconv) (eq? (car cconv) 'cconv)))
+                         (have-cconv (or have-cconv-expr
+                                         (memq cconv '(cdecl stdcall fastcall thiscall llvmcall))))
                          (after-cconv (if have-cconv (cddddr e) (cdddr e)))
                          (name (caddr e))
                          (RT   (car after-cconv))
@@ -2629,9 +2633,13 @@
                                        (eq? (car RT) 'tuple))
                                   (error "ccall argument types must be a tuple; try \"(T,)\" and check if you specified a correct return type")
                                   (error "ccall argument types must be a tuple; try \"(T,)\"")))
-                          (expand-forms
-                           (lower-ccall name RT (cdr argtypes) args
-                                        (if have-cconv cconv 'ccall))))))
+                          (lower-ccall name RT (cdr argtypes) args
+                                       (if have-cconv
+                                           (if have-cconv-expr
+                                               (cadr cconv)
+                                               cconv)
+                                           'ccall)
+                                       (and have-cconv-expr (caddr cconv))))))
                  ((any kwarg? (cddr e))       ;; f(..., a=b, ...)
                   (expand-forms (lower-kw-call f (cddr e))))
                  ((has-parameters? (cddr e))  ;; f(...; ...)

@@ -692,7 +692,9 @@ mktempdir() do dir
     mkpath(vpath)
     script = "@assert startswith(Base.active_project(), $(repr(vpath)))"
     cmd = `$(Base.julia_cmd()) --startup-file=no -e $(script)`
-    cmd = addenv(cmd, "JULIA_DEPOT_PATH" => dir)
+    cmd = addenv(cmd,
+        "JULIA_DEPOT_PATH" => dir,
+        "JULIA_LOAD_PATH" => Sys.iswindows() ? ";" : ":")
     cmd = pipeline(cmd; stdout, stderr)
     @test success(cmd)
 end

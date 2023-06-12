@@ -224,7 +224,6 @@ read(stream, ::Type{Union{}}, slurp...; kwargs...) = error("cannot read a value 
 
 """
     write(io::IO, x)
-    write(filename::AbstractString, x)
 
 Write the canonical binary representation of a value to the given I/O stream or file.
 Return the number of bytes written into the stream. See also [`print`](@ref) to
@@ -458,17 +457,29 @@ wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)::IO); wait_close(pipe
 
 # Exception-safe wrappers (io = open(); try f(io) finally close(io))
 
+
+"""
+    write(filename::AbstractString, content)
+
+Write the canonical binary representation of `content` to a file, which will be created if it does not exist yet or overwritten if it does exist.
+
+Return the number of bytes written into the file.
+"""
 write(filename::AbstractString, a1, args...) = open(io->write(io, a1, args...), convert(String, filename)::String, "w")
 
 """
-    read(filename::AbstractString, args...)
+    read(filename::AbstractString)
 
-Open a file and read its contents. `args` is passed to `read`: this is equivalent to
-`open(io->read(io, args...), filename)`.
+Read the entire contents of a file as a `Vector{UInt8}`.
 
     read(filename::AbstractString, String)
 
 Read the entire contents of a file as a string.
+
+    read(filename::AbstractString, args...)
+
+Open a file and read its contents. `args` is passed to `read`: this is equivalent to
+`open(io->read(io, args...), filename)`.
 """
 read(filename::AbstractString, args...) = open(io->read(io, args...), convert(String, filename)::String)
 

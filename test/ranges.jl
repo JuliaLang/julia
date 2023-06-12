@@ -2477,3 +2477,13 @@ end
     @test !occursin("_colon", ir)
     @test !occursin("StepRange", ir)
 end
+
+# DimensionMismatch and LazyString
+function check_ranges(rx, ry)
+    if length(rx) != length(ry)
+        throw(DimensionMismatch(lazy"length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
+    end
+    rx, ry
+end
+@test Core.Compiler.is_foldable(Base.infer_effects(check_ranges, (UnitRange{Int},UnitRange{Int})))
+# TODO JET.@test_opt check_ranges(1:2, 3:4)
