@@ -73,6 +73,15 @@ LLVM_CPPFLAGS :=
 LLVM_LDFLAGS :=
 LLVM_CMAKE :=
 
+ifeq ($(USECCACHE), 1)
+# When USECCACHE is set to 1 we can't use `CC` and `CXX` as compilers because they include
+# `ccache` at the beginning and CMake would think that's the actual compiler, but we can use
+# `CC_ARG`/`CXX_ARG` in their place.
+LLVM_CMAKE += -DCMAKE_C_COMPILER_LAUNCHER=ccache
+LLVM_CMAKE += -DCMAKE_C_COMPILER="$(CC_ARG)"
+LLVM_CMAKE += -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+LLVM_CMAKE += -DCMAKE_CXX_COMPILER="$(CXX_ARG)"
+endif
 LLVM_CMAKE += -DLLVM_ENABLE_PROJECTS="$(LLVM_ENABLE_PROJECTS)"
 LLVM_CMAKE += -DLLVM_EXTERNAL_PROJECTS="$(LLVM_EXTERNAL_PROJECTS)"
 LLVM_CMAKE += -DLLVM_ENABLE_RUNTIMES="$(LLVM_ENABLE_RUNTIMES)"
