@@ -1652,5 +1652,10 @@ When you start Julia in multithreaded mode with `JULIA_NUM_THREADS=X`, it is gen
 Given the behavior described above, increasing the number of BLAS threads to `N>1` can very easily lead to worse performance, in particular when `N<<X`.
 However this is just a rule of thumb, and the best way to set each number of threads is to experiment on your specific application.
 
-Note that there are other linear algebra backends that can replace OpenBLAS, sometimes with added performance: [MKL](https://github.com/JuliaLinearAlgebra/MKL.jl) and [Octavian](https://github.com/JuliaLinearAlgebra/Octavian.jl) are two examples.
-Their behavior _vis-à-vis_ threads is very different, we refer readers to their respective documentations for more details.
+## [Alternative linear algebra backends](@id man-backends-linear-algebra)
+
+As an alternative to OpenBLAS, there exist several other backends that can help with linear algebra performance.
+Prominent examples include [MKL.jl](https://github.com/JuliaLinearAlgebra/MKL.jl), [AppleAccelerate.jl](https://github.com/JuliaMath/AppleAccelerate.jl) and [Octavian.jl](https://github.com/JuliaLinearAlgebra/Octavian.jl).
+
+These are external packages, so we will not discuss them in detail here.
+Please refer to their respective documentations (especially because they have different behaviors than OpenBLAS _vis-à-vis_ multithreading).
