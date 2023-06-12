@@ -56,7 +56,7 @@ CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop llvm
 	llvm-final-gc-lowering llvm-pass-helpers llvm-late-gc-lowering llvm-ptls \
 	llvm-lower-handlers llvm-gc-invariant-verifier llvm-propagate-addrspaces \
 	llvm-multiversioning llvm-alloc-opt llvm-alloc-helpers cgmemmgr llvm-remove-addrspaces \
-	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures pipeline
+	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures pipeline llvm_api
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 CG_LLVM_LIBS := all
 ifeq ($(USE_POLLY),1)
@@ -170,16 +170,18 @@ DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 CODEGEN_OBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.o)
 CODEGEN_DOBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.dbg.obj)
 
-DEBUGFLAGS += $(FLAGS) -DLIBRARY_EXPORTS
-SHIPFLAGS += $(FLAGS) -DLIBRARY_EXPORTS
-
-# if not absolute, then relative to the directory of the julia executable
-SHIPFLAGS  += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys.$(SHLIB_EXT)\""
-DEBUGFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys-debug.$(SHLIB_EXT)\""
-
 # Add SONAME defines so we can embed proper `dlopen()` calls.
-SHIPFLAGS  += "-DJL_LIBJULIA_SONAME=\"$(LIBJULIA_PATH_REL).$(JL_MAJOR_SHLIB_EXT)\""
-DEBUGFLAGS += "-DJL_LIBJULIA_SONAME=\"$(LIBJULIA_PATH_REL)-debug.$(JL_MAJOR_SHLIB_EXT)\""
+ADDL_SHIPFLAGS  := "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys.$(SHLIB_EXT)\"" \
+                   "-DJL_LIBJULIA_SONAME=\"$(LIBJULIA_PATH_REL).$(JL_MAJOR_SHLIB_EXT)\""
+ADDL_DEBUGFLAGS := "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys-debug.$(SHLIB_EXT)\"" \
+                   "-DJL_LIBJULIA_SONAME=\"$(LIBJULIA_PATH_REL)-debug.$(JL_MAJOR_SHLIB_EXT)\""
+
+SHIPFLAGS         += $(FLAGS) $(ADDL_SHIPFLAGS)
+DEBUGFLAGS        += $(FLAGS) $(ADDL_DEBUGFLAGS)
+SHIPFLAGS_GCC     += $(FLAGS) $(ADDL_SHIPFLAGS)
+DEBUGFLAGS_GCC    += $(FLAGS) $(ADDL_DEBUGFLAGS)
+SHIPFLAGS_CLANG   += $(FLAGS) $(ADDL_SHIPFLAGS)
+DEBUGFLAGS_CLANG  += $(FLAGS) $(ADDL_DEBUGFLAGS)
 
 ifeq ($(USE_CROSS_FLISP), 1)
 FLISPDIR := $(BUILDDIR)/flisp/host
@@ -417,6 +419,12 @@ libjulia-codegen-release: $(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_MINOR_SH
 libjulia-codegen-debug: $(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
 libjulia-codegen-debug libjulia-codegen-release: $(PUBLIC_HEADER_TARGETS)
 
+# set the exports for the source files based on where they are getting linked
+$(OBJS): SHIPFLAGS += -DJL_LIBRARY_EXPORTS_INTERNAL
+$(DOBJS): DEBUGFLAGS += -DJL_LIBRARY_EXPORTS_INTERNAL
+$(CODEGEN_OBJS): SHIPFLAGS += -DJL_LIBRARY_EXPORTS_CODEGEN
+$(CODEGEN_DOBJS): DEBUGFLAGS += -DJL_LIBRARY_EXPORTS_CODEGEN
+
 clean:
 	-rm -fr $(build_shlibdir)/libjulia-internal* $(build_shlibdir)/libjulia-codegen* $(build_shlibdir)/libccalltest* $(build_shlibdir)/libllvmcalltest*
 	-rm -f $(BUILDDIR)/julia_flisp.boot $(BUILDDIR)/julia_flisp.boot.inc $(BUILDDIR)/jl_internal_funcs.inc
@@ -475,34 +483,36 @@ clang-sagc-%: $(SRCDIR)/%.c $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) .F
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text --analyzer-no-default-checks \
 		-Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker \
 		$(SA_EXCEPTIONS-$(notdir $<)) \
-		$(CLANGSA_FLAGS) $(JCPPFLAGS) $(JCFLAGS) $(JL_CFLAGS) $(DEBUGFLAGS) -fcolor-diagnostics -x c $<)
+		$(CLANGSA_FLAGS) $(JCPPFLAGS_CLANG) $(JCFLAGS_CLANG) $(JL_CFLAGS) $(DEBUGFLAGS_CLANG) -fcolor-diagnostics -x c $<)
 clang-sagc-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text --analyzer-no-default-checks \
 		-Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker \
 		$(SA_EXCEPTIONS-$(notdir $<)) \
-		$(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(JL_CXXFLAGS) $(DEBUGFLAGS) -fcolor-diagnostics -x c++ $<)
+		$(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS_CLANG) $(JCXXFLAGS_CLANG) $(JL_CXXFLAGS) $(DEBUGFLAGS_CLANG) -fcolor-diagnostics -x c++ $<)
 
 clang-sa-%: JL_CXXFLAGS += -UNDEBUG
 clang-sa-%: $(SRCDIR)/%.c .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text \
 		-Xanalyzer -analyzer-disable-checker=deadcode.DeadStores \
 		$(SA_EXCEPTIONS-$(notdir $<)) \
-		$(CLANGSA_FLAGS) $(JCPPFLAGS) $(JCFLAGS) $(JL_CFLAGS) $(DEBUGFLAGS) -fcolor-diagnostics -Werror -x c $<)
+		$(CLANGSA_FLAGS) $(JCPPFLAGS_CLANG) $(JCFLAGS_CLANG) $(JL_CFLAGS) $(DEBUGFLAGS_CLANG) -fcolor-diagnostics -Werror -x c $<)
 clang-sa-%: $(SRCDIR)/%.cpp .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text \
 		-Xanalyzer -analyzer-disable-checker=deadcode.DeadStores \
 		$(SA_EXCEPTIONS-$(notdir $<)) \
-		$(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(JL_CXXFLAGS) $(DEBUGFLAGS) -fcolor-diagnostics -Werror -x c++ $<)
+		$(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS_CLANG) $(JCXXFLAGS_CLANG) $(JL_CXXFLAGS) $(DEBUGFLAGS_CLANG) -fcolor-diagnostics -Werror -x c++ $<)
 
 clang-tidy-%: $(SRCDIR)/%.c $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang-tidy $< -header-filter='.*' --quiet \
 		-load $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) --checks='-clang-analyzer-*$(COMMA)-clang-diagnostic-*$(COMMA)concurrency-implicit-atomics' --warnings-as-errors='*' \
-		-- $(CLANGSA_FLAGS) $(JCPPFLAGS) $(JCFLAGS) $(JL_CFLAGS) $(DEBUGFLAGS) -fcolor-diagnostics -fno-caret-diagnostics -x c)
+		-- $(CLANGSA_FLAGS) $(JCPPFLAGS_CLANG) $(JCFLAGS_CLANG) $(JL_CFLAGS) $(DEBUGFLAGS_CLANG) -fcolor-diagnostics -fno-caret-diagnostics -x c)
 clang-tidy-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang-tidy $< -header-filter='.*' --quiet \
 		-load $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) --checks='-clang-analyzer-*$(COMMA)-clang-diagnostic-*$(COMMA)concurrency-implicit-atomics' --warnings-as-errors='*' \
-		-- $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(JL_CXXFLAGS) $(DEBUGFLAGS) -fcolor-diagnostics --system-header-prefix=llvm -Wno-deprecated-declarations -fno-caret-diagnostics -x c++)
+		-- $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS_CLANG) $(JCXXFLAGS_CLANG) $(JL_CXXFLAGS) $(DEBUGFLAGS_CLANG) -fcolor-diagnostics --system-header-prefix=llvm -Wno-deprecated-declarations -fno-caret-diagnostics -x c++)
 
+# set the exports for the source files based on where they are getting linked
+clang-sa-% clang-sagc-% clang-tidy-%: DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS
 
 # Add C files as a target of `analyzesrc` and `analyzegc` and `tidysrc`
 tidysrc: $(addprefix clang-tidy-,$(filter-out $(basename $(SKIP_IMPLICIT_ATOMICS)),$(CODEGEN_SRCS) $(SRCS)))

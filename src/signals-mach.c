@@ -36,6 +36,9 @@ extern int _keymgr_set_lockmode_processwide_ptr(unsigned int key, unsigned int m
 extern void _dyld_atfork_prepare(void) __attribute__((weak_import));
 extern void _dyld_atfork_parent(void) __attribute__((weak_import));
 //extern void _dyld_fork_child(void) __attribute__((weak_import));
+extern void _dyld_dlopen_atfork_prepare(void) __attribute__((weak_import));
+extern void _dyld_dlopen_atfork_parent(void) __attribute__((weak_import));
+//extern void _dyld_dlopen_atfork_child(void) __attribute__((weak_import));
 
 static void attach_exception_port(thread_port_t thread, int segv_only);
 
@@ -564,7 +567,12 @@ static int jl_lock_profile_mach(int dlsymlock)
     // workaround for old keymgr bugs
     void *unused = NULL;
     int keymgr_locked = _keymgr_get_and_lock_processwide_ptr_2(KEYMGR_GCC3_DW2_OBJ_LIST, &unused) == 0;
-    // workaround for new dlsym4 bugs (API and bugs introduced in macOS 12.1)
+    // workaround for new dlsym4 bugs in the workaround for dlsym bugs: _dyld_atfork_prepare
+    // acquires its locks in the wrong order, but fortunately we happen to able to guard it
+    // with this call to force it to prevent that TSAN violation from causing a deadlock
+    if (dlsymlock && _dyld_dlopen_atfork_prepare != NULL && _dyld_dlopen_atfork_parent != NULL)
+        _dyld_dlopen_atfork_prepare();
+    // workaround for new dlsym4 bugs (API and bugs introduced circa macOS 12.1)
     if (dlsymlock && _dyld_atfork_prepare != NULL && _dyld_atfork_parent != NULL)
         _dyld_atfork_prepare();
     return keymgr_locked;
@@ -572,8 +580,10 @@ static int jl_lock_profile_mach(int dlsymlock)
 
 static void jl_unlock_profile_mach(int dlsymlock, int keymgr_locked)
 {
-    if (dlsymlock && _dyld_atfork_prepare != NULL && _dyld_atfork_parent != NULL) \
-        _dyld_atfork_parent(); \
+    if (dlsymlock && _dyld_atfork_prepare != NULL && _dyld_atfork_parent != NULL)
+        _dyld_atfork_parent();
+    if (dlsymlock && _dyld_dlopen_atfork_prepare != NULL && _dyld_dlopen_atfork_parent != NULL)
+        _dyld_dlopen_atfork_parent();
     if (keymgr_locked)
         _keymgr_unlock_processwide_ptr(KEYMGR_GCC3_DW2_OBJ_LIST);
     jl_unlock_profile();
@@ -611,6 +621,8 @@ void *mach_profile_listener(void *arg)
                 break;
             }
 
+            if (_dyld_dlopen_atfork_prepare != NULL && _dyld_dlopen_atfork_parent != NULL)
+                _dyld_dlopen_atfork_prepare();
             if (_dyld_atfork_prepare != NULL && _dyld_atfork_parent != NULL)
                 _dyld_atfork_prepare(); // briefly acquire the dlsym lock
             host_thread_state_t state;
@@ -618,6 +630,8 @@ void *mach_profile_listener(void *arg)
             unw_context_t *uc = (unw_context_t*)&state;
             if (_dyld_atfork_prepare != NULL && _dyld_atfork_parent != NULL)
                 _dyld_atfork_parent(); // quickly release the dlsym lock
+            if (_dyld_dlopen_atfork_prepare != NULL && _dyld_dlopen_atfork_parent != NULL)
+                _dyld_dlopen_atfork_parent();
             if (!valid_thread)
                 continue;
             if (running) {

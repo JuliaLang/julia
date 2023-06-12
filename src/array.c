@@ -1161,7 +1161,7 @@ JL_DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz)
     if (sz <= a->maxsize) {
         size_t dec = a->maxsize - sz;
         //if we don't save at least an eighth of maxsize then its not worth it to shrink
-        if (dec < a->maxsize / 8) return;
+        if (dec <= a->maxsize / 8) return;
         jl_array_shrink(a, dec);
     }
     else {

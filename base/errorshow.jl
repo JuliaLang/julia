@@ -761,6 +761,9 @@ function show_backtrace(io::IO, t::Vector)
     if haskey(io, :last_shown_line_infos)
         empty!(io[:last_shown_line_infos])
     end
+    # this will be set to true if types in the stacktrace are truncated
+    limitflag = Ref(false)
+    io = IOContext(io, :stacktrace_types_limited => limitflag)
 
     # t is a pre-processed backtrace (ref #12856)
     if t isa Vector{Any}
@@ -781,12 +784,15 @@ function show_backtrace(io::IO, t::Vector)
     if length(filtered) > BIG_STACKTRACE_SIZE
         show_reduced_backtrace(IOContext(io, :backtrace => true), filtered)
         return
+    else
+        try invokelatest(update_stackframes_callback[], filtered) catch end
+        # process_backtrace returns a Vector{Tuple{Frame, Int}}
+        show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
     end
-
-    try invokelatest(update_stackframes_callback[], filtered) catch end
-    # process_backtrace returns a Vector{Tuple{Frame, Int}}
-    show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
-    return
+    if limitflag[]
+        print(io, "\nSome type information was truncated. Use `show(err)` to see complete types.")
+    end
+    nothing
 end
 
 

@@ -16,7 +16,8 @@ the following methods to satisfy the `AbstractInterpreter` API requirement:
 - `get_inference_cache(interp::NewInterpreter)` - return the local inference cache
 - `code_cache(interp::NewInterpreter)` - return the global inference cache
 """
-abstract type AbstractInterpreter end
+:(AbstractInterpreter)
+
 abstract type AbstractLattice end
 
 struct ArgInfo

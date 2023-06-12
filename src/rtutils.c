@@ -1269,7 +1269,7 @@ JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_N
     return jl_static_show_func_sig_(s, type, ctx);
 }
 
-JL_DLLEXPORT size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_config_t ctx) JL_NOTSAFEPOINT
+size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_config_t ctx) JL_NOTSAFEPOINT
 {
     size_t n = 0;
     size_t i;

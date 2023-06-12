@@ -176,8 +176,11 @@ end
     x = "abcdefg"
     @testset "basic unit range" begin
         @test SubString(x, 2:4) == "bcd"
-        @test view(x, 2:4) == "bcd"
-        @test view(x, 2:4) isa SubString
+        sx = view(x, 2:4)
+        @test sx == "bcd"
+        @test sx isa SubString
+        @test parent(sx) === x
+        @test parentindices(sx) == (2:4,)
         @test (@view x[4:end]) == "defg"
         @test (@view x[4:end]) isa SubString
     end

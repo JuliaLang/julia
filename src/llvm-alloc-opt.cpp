@@ -1138,9 +1138,12 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                     ref->setOrdering(AtomicOrdering::NotAtomic);
                     operands.push_back(ref);
                 }
+#ifndef __clang_analyzer__
+                // FIXME: SA finds "Called C++ object pointer is null" inside the LLVM code.
                 auto new_call = builder.CreateCall(pass.gc_preserve_begin_func, operands);
                 new_call->takeName(call);
                 call->replaceAllUsesWith(new_call);
+#endif
                 call->eraseFromParent();
                 return;
             }
@@ -1286,7 +1289,8 @@ PreservedAnalyses AllocOptPass::run(Function &F, FunctionAnalysisManager &AM) {
     }
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddAllocOptPass_impl(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddAllocOptPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createAllocOptPass());
 }

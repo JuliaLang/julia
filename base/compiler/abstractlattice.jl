@@ -161,7 +161,7 @@ If `𝕃` is `JLTypeLattice`, this is equivalent to subtyping.
 """
 function ⊑ end
 
-⊑(::JLTypeLattice, @nospecialize(a::Type), @nospecialize(b::Type)) = a <: b
+@nospecializeinfer ⊑(::JLTypeLattice, @nospecialize(a::Type), @nospecialize(b::Type)) = a <: b
 
 """
     ⊏(𝕃::AbstractLattice, a, b) -> Bool
@@ -169,7 +169,7 @@ function ⊑ end
 The strict partial order over the type inference lattice.
 This is defined as the irreflexive kernel of `⊑`.
 """
-⊏(𝕃::AbstractLattice, @nospecialize(a), @nospecialize(b)) = ⊑(𝕃, a, b) && !⊑(𝕃, b, a)
+@nospecializeinfer ⊏(𝕃::AbstractLattice, @nospecialize(a), @nospecialize(b)) = ⊑(𝕃, a, b) && !⊑(𝕃, b, a)
 
 """
     ⋤(𝕃::AbstractLattice, a, b) -> Bool
@@ -177,7 +177,7 @@ This is defined as the irreflexive kernel of `⊑`.
 This order could be used as a slightly more efficient version of the strict order `⊏`,
 where we can safely assume `a ⊑ b` holds.
 """
-⋤(𝕃::AbstractLattice, @nospecialize(a), @nospecialize(b)) = !⊑(𝕃, b, a)
+@nospecializeinfer ⋤(𝕃::AbstractLattice, @nospecialize(a), @nospecialize(b)) = !⊑(𝕃, b, a)
 
 """
     is_lattice_equal(𝕃::AbstractLattice, a, b) -> Bool
@@ -186,7 +186,7 @@ Check if two lattice elements are partial order equivalent.
 This is basically `a ⊑ b && b ⊑ a` in the lattice of `𝕃`
 but (optionally) with extra performance optimizations.
 """
-function is_lattice_equal(𝕃::AbstractLattice, @nospecialize(a), @nospecialize(b))
+@nospecializeinfer function is_lattice_equal(𝕃::AbstractLattice, @nospecialize(a), @nospecialize(b))
     a === b && return true
     return ⊑(𝕃, a, b) && ⊑(𝕃, b, a)
 end
@@ -197,14 +197,14 @@ end
 Determines whether the given lattice element `t` of `𝕃` has non-trivial extended lattice
 information that would not be available from the type itself.
 """
-has_nontrivial_extended_info(𝕃::AbstractLattice, @nospecialize t) =
+@nospecializeinfer has_nontrivial_extended_info(𝕃::AbstractLattice, @nospecialize t) =
     has_nontrivial_extended_info(widenlattice(𝕃), t)
-function has_nontrivial_extended_info(𝕃::PartialsLattice, @nospecialize t)
+@nospecializeinfer function has_nontrivial_extended_info(𝕃::PartialsLattice, @nospecialize t)
     isa(t, PartialStruct) && return true
     isa(t, PartialOpaque) && return true
     return has_nontrivial_extended_info(widenlattice(𝕃), t)
 end
-function has_nontrivial_extended_info(𝕃::ConstsLattice, @nospecialize t)
+@nospecializeinfer function has_nontrivial_extended_info(𝕃::ConstsLattice, @nospecialize t)
     isa(t, PartialTypeVar) && return true
     if isa(t, Const)
         val = t.val
@@ -212,7 +212,7 @@ function has_nontrivial_extended_info(𝕃::ConstsLattice, @nospecialize t)
     end
     return has_nontrivial_extended_info(widenlattice(𝕃), t)
 end
-has_nontrivial_extended_info(::JLTypeLattice, @nospecialize(t)) = false
+@nospecializeinfer has_nontrivial_extended_info(::JLTypeLattice, @nospecialize(t)) = false
 
 """
     is_const_prop_profitable_arg(𝕃::AbstractLattice, t) -> Bool
@@ -220,9 +220,9 @@ has_nontrivial_extended_info(::JLTypeLattice, @nospecialize(t)) = false
 Determines whether the given lattice element `t` of `𝕃` has new extended lattice information
 that should be forwarded along with constant propagation.
 """
-is_const_prop_profitable_arg(𝕃::AbstractLattice, @nospecialize t) =
+@nospecializeinfer is_const_prop_profitable_arg(𝕃::AbstractLattice, @nospecialize t) =
     is_const_prop_profitable_arg(widenlattice(𝕃), t)
-function is_const_prop_profitable_arg(𝕃::PartialsLattice, @nospecialize t)
+@nospecializeinfer function is_const_prop_profitable_arg(𝕃::PartialsLattice, @nospecialize t)
     if isa(t, PartialStruct)
         return true # might be a bit aggressive, may want to enable some check like follows:
         # for i = 1:length(t.fields)
@@ -236,7 +236,7 @@ function is_const_prop_profitable_arg(𝕃::PartialsLattice, @nospecialize t)
     isa(t, PartialOpaque) && return true
     return is_const_prop_profitable_arg(widenlattice(𝕃), t)
 end
-function is_const_prop_profitable_arg(𝕃::ConstsLattice, @nospecialize t)
+@nospecializeinfer function is_const_prop_profitable_arg(𝕃::ConstsLattice, @nospecialize t)
     if isa(t, Const)
         # don't consider mutable values useful constants
         val = t.val
@@ -245,24 +245,24 @@ function is_const_prop_profitable_arg(𝕃::ConstsLattice, @nospecialize t)
     isa(t, PartialTypeVar) && return false # this isn't forwardable
     return is_const_prop_profitable_arg(widenlattice(𝕃), t)
 end
-is_const_prop_profitable_arg(::JLTypeLattice, @nospecialize t) = false
+@nospecializeinfer is_const_prop_profitable_arg(::JLTypeLattice, @nospecialize t) = false
 
-is_forwardable_argtype(𝕃::AbstractLattice, @nospecialize(x)) =
+@nospecializeinfer is_forwardable_argtype(𝕃::AbstractLattice, @nospecialize(x)) =
     is_forwardable_argtype(widenlattice(𝕃), x)
-function is_forwardable_argtype(𝕃::ConditionalsLattice, @nospecialize x)
+@nospecializeinfer function is_forwardable_argtype(𝕃::ConditionalsLattice, @nospecialize x)
     isa(x, Conditional) && return true
     return is_forwardable_argtype(widenlattice(𝕃), x)
 end
-function is_forwardable_argtype(𝕃::PartialsLattice, @nospecialize x)
+@nospecializeinfer function is_forwardable_argtype(𝕃::PartialsLattice, @nospecialize x)
     isa(x, PartialStruct) && return true
     isa(x, PartialOpaque) && return true
     return is_forwardable_argtype(widenlattice(𝕃), x)
 end
-function is_forwardable_argtype(𝕃::ConstsLattice, @nospecialize x)
+@nospecializeinfer function is_forwardable_argtype(𝕃::ConstsLattice, @nospecialize x)
     isa(x, Const) && return true
     return is_forwardable_argtype(widenlattice(𝕃), x)
 end
-function is_forwardable_argtype(::JLTypeLattice, @nospecialize x)
+@nospecializeinfer function is_forwardable_argtype(::JLTypeLattice, @nospecialize x)
     return false
 end
 
@@ -281,9 +281,9 @@ External lattice `𝕃ᵢ::ExternalLattice` may overload:
 """
 function widenreturn end, function widenreturn_noslotwrapper end
 
-is_valid_lattice(𝕃::AbstractLattice, @nospecialize(elem)) =
+@nospecializeinfer is_valid_lattice(𝕃::AbstractLattice, @nospecialize(elem)) =
     is_valid_lattice_norec(𝕃, elem) && is_valid_lattice(widenlattice(𝕃), elem)
-is_valid_lattice(𝕃::JLTypeLattice, @nospecialize(elem)) = is_valid_lattice_norec(𝕃, elem)
+@nospecializeinfer is_valid_lattice(𝕃::JLTypeLattice, @nospecialize(elem)) = is_valid_lattice_norec(𝕃, elem)
 
 has_conditional(𝕃::AbstractLattice) = has_conditional(widenlattice(𝕃))
 has_conditional(::AnyConditionalsLattice) = true
@@ -306,12 +306,12 @@ has_extended_unionsplit(::JLTypeLattice) = false
 const fallback_lattice = InferenceLattice(BaseInferenceLattice.instance)
 const fallback_ipo_lattice = InferenceLattice(IPOResultLattice.instance)
 
-⊑(@nospecialize(a), @nospecialize(b)) = ⊑(fallback_lattice, a, b)
-tmeet(@nospecialize(a), @nospecialize(b)) = tmeet(fallback_lattice, a, b)
-tmerge(@nospecialize(a), @nospecialize(b)) = tmerge(fallback_lattice, a, b)
-⊏(@nospecialize(a), @nospecialize(b)) = ⊏(fallback_lattice, a, b)
-⋤(@nospecialize(a), @nospecialize(b)) = ⋤(fallback_lattice, a, b)
-is_lattice_equal(@nospecialize(a), @nospecialize(b)) = is_lattice_equal(fallback_lattice, a, b)
+@nospecializeinfer @nospecialize(a) ⊑ @nospecialize(b) = ⊑(fallback_lattice, a, b)
+@nospecializeinfer @nospecialize(a) ⊏ @nospecialize(b) = ⊏(fallback_lattice, a, b)
+@nospecializeinfer @nospecialize(a) ⋤ @nospecialize(b) = ⋤(fallback_lattice, a, b)
+@nospecializeinfer tmeet(@nospecialize(a), @nospecialize(b)) = tmeet(fallback_lattice, a, b)
+@nospecializeinfer tmerge(@nospecialize(a), @nospecialize(b)) = tmerge(fallback_lattice, a, b)
+@nospecializeinfer is_lattice_equal(@nospecialize(a), @nospecialize(b)) = is_lattice_equal(fallback_lattice, a, b)
 
 # Widenlattice with argument
 widenlattice(::JLTypeLattice, @nospecialize(t)) = widenconst(t)

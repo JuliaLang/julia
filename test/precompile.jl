@@ -4,6 +4,7 @@ original_depot_path = copy(Base.DEPOT_PATH)
 original_load_path = copy(Base.LOAD_PATH)
 
 using Test, Distributed, Random
+using REPL # doc lookup function
 
 Foo_module = :Foo4b3a94a1a081a8cb
 Foo2_module = :F2oo4b3a94a1a081a8cb
@@ -339,17 +340,20 @@ precompile_test_harness(false) do dir
     cachedir = joinpath(dir, "compiled", "v$(VERSION.major).$(VERSION.minor)")
     cachedir2 = joinpath(dir2, "compiled", "v$(VERSION.major).$(VERSION.minor)")
     cachefile = joinpath(cachedir, "$Foo_module.ji")
-    if Base.JLOptions().use_pkgimages == 1
-        ocachefile = Base.ocachefile_from_cachefile(cachefile)
-    else
-        ocachefile = nothing
-    end
-    # use _require_from_serialized to ensure that the test fails if
-    # the module doesn't reload from the image:
-    @test_warn "@ccallable was already defined for this method name" begin
-        @test_logs (:warn, "Replacing module `$Foo_module`") begin
-            m = Base._require_from_serialized(Base.PkgId(Foo), cachefile, ocachefile)
-            @test isa(m, Module)
+    do_pkgimg = Base.JLOptions().use_pkgimages == 1 && Base.JLOptions().permalloc_pkgimg == 1
+    if do_pkgimg ||  Base.JLOptions().use_pkgimages == 0
+        if do_pkgimg
+            ocachefile = Base.ocachefile_from_cachefile(cachefile)
+        else
+            ocachefile = nothing
+        end
+            # use _require_from_serialized to ensure that the test fails if
+            # the module doesn't reload from the image:
+        @test_warn "@ccallable was already defined for this method name" begin
+            @test_logs (:warn, "Replacing module `$Foo_module`") begin
+                m = Base._require_from_serialized(Base.PkgId(Foo), cachefile, ocachefile)
+                @test isa(m, Module)
+            end
         end
     end
 
@@ -394,7 +398,7 @@ precompile_test_harness(false) do dir
             Dict(let m = Base.root_module(Base, s)
                      Base.PkgId(m) => Base.module_build_id(m)
                  end for s in
-                [:ArgTools, :Artifacts, :Base64, :CompilerSupportLibraries_jll, :CRC32c, :Dates,
+                [:ArgTools, :Artifacts, :Base64, :CRC32c, :Dates,
                  :Downloads, :FileWatching, :Future, :InteractiveUtils, :libblastrampoline_jll,
                  :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
                  :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :OpenBLAS_jll, :Pkg, :Printf,

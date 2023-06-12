@@ -263,8 +263,6 @@ convert(::Type{T}, x::T) where {T} = x
 cconvert(::Type{T}, x) where {T} = convert(T, x)
 unsafe_convert(::Type{T}, x::T) where {T} = x
 
-const Vararg = ccall(:jl_wrap_vararg, Any, (Int, Int), 0, 0)
-
 # dispatch token indicating a kwarg (keyword sorter) call
 function kwcall end
 # deprecated internal functions:
@@ -535,11 +533,10 @@ import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, Return
 end # module IR
 
 # docsystem basics
-const unescape = Symbol("hygienic-scope")
 macro doc(x...)
     docex = atdoc(__source__, __module__, x...)
     isa(docex, Expr) && docex.head === :escape && return docex
-    return Expr(:escape, Expr(unescape, docex, typeof(atdoc).name.module))
+    return Expr(:escape, Expr(:var"hygienic-scope", docex, typeof(atdoc).name.module, __source__))
 end
 macro __doc__(x)
     return Expr(:escape, Expr(:block, Expr(:meta, :doc), x))

@@ -187,7 +187,7 @@ static bool demoteFloat16(Function &F)
 
 } // end anonymous namespace
 
-PreservedAnalyses DemoteFloat16::run(Function &F, FunctionAnalysisManager &AM)
+PreservedAnalyses DemoteFloat16Pass::run(Function &F, FunctionAnalysisManager &AM)
 {
     if (demoteFloat16(F)) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();
@@ -220,7 +220,8 @@ Pass *createDemoteFloat16Pass()
     return new DemoteFloat16Legacy();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddDemoteFloat16Pass_impl(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddDemoteFloat16Pass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createDemoteFloat16Pass());
 }

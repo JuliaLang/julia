@@ -1374,7 +1374,7 @@ function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any
     nargs = length(argtypes)
     if !isempty(argtypes) && isvarargtype(argtypes[nargs])
         nargs - 1 <= 6 || return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
-        nargs > 3 || return CallMeta(Any, EFFECTS_UNKNOWN, NoCallInfo())
+        nargs > 3 || return CallMeta(Any, Effects(), NoCallInfo())
     else
         5 <= nargs <= 6 || return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
     end
@@ -1665,7 +1665,7 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
                 end
             else
                 istype || return false
-                if !(T <: u.var.ub)
+                if isa(u.var.ub, TypeVar) || !(T <: u.var.ub)
                     return false
                 end
                 if exact ? !(u.var.lb <: T) : !(u.var.lb === Bottom)
@@ -2196,6 +2196,7 @@ const _CONSISTENT_BUILTINS = Any[
     typeassert,
     throw,
     setfield!,
+    donotdelete
 ]
 
 # known to be effect-free (but not necessarily nothrow)
@@ -2235,7 +2236,8 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     typeassert,
     typeof,
     compilerbarrier,
-    Core._typevar
+    Core._typevar,
+    donotdelete
 ]
 
 const _ARGMEM_BUILTINS = Any[
@@ -2679,7 +2681,7 @@ end
 # a simplified model of abstract_call_gf_by_type for applicable
 function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
                              sv::AbsIntState, max_methods::Int)
-    length(argtypes) < 2 && return CallMeta(Union{}, EFFECTS_UNKNOWN, NoCallInfo())
+    length(argtypes) < 2 && return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
     isvarargtype(argtypes[2]) && return CallMeta(Bool, EFFECTS_UNKNOWN, NoCallInfo())
     argtypes = argtypes[2:end]
     atype = argtypes_to_type(argtypes)

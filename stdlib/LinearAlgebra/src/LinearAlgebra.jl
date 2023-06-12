@@ -457,6 +457,34 @@ const ⋅ = dot
 const × = cross
 export ⋅, ×
 
+wrapper_char(::AbstractArray) = 'N'
+wrapper_char(::Adjoint) = 'C'
+wrapper_char(::Adjoint{<:Real}) = 'T'
+wrapper_char(::Transpose) = 'T'
+wrapper_char(A::Hermitian) = A.uplo == 'U' ? 'H' : 'h'
+wrapper_char(A::Hermitian{<:Real}) = A.uplo == 'U' ? 'S' : 's'
+wrapper_char(A::Symmetric) = A.uplo == 'U' ? 'S' : 's'
+
+function wrap(A::AbstractVecOrMat, tA::AbstractChar)
+    if tA == 'N'
+        return A
+    elseif tA == 'T'
+        return transpose(A)
+    elseif tA == 'C'
+        return adjoint(A)
+    elseif tA == 'H'
+        return Hermitian(A, :U)
+    elseif tA == 'h'
+        return Hermitian(A, :L)
+    elseif tA == 'S'
+        return Symmetric(A, :U)
+    else # tA == 's'
+        return Symmetric(A, :L)
+    end
+end
+
+_unwrap(A::AbstractVecOrMat) = A
+
 ## convenience methods
 ## return only the solution of a least squares problem while avoiding promoting
 ## vectors to matrices.
@@ -557,13 +585,19 @@ end
     ldiv(F, B)
 
 """
-    LinearAlgebra.peakflops(n::Integer=2000; parallel::Bool=false)
+    LinearAlgebra.peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3, parallel::Bool=false)
 
 `peakflops` computes the peak flop rate of the computer by using double precision
 [`gemm!`](@ref LinearAlgebra.BLAS.gemm!). By default, if no arguments are specified, it
-multiplies a matrix of size `n x n`, where `n = 2000`. If the underlying BLAS is using
+multiplies two `Float64` matrices of size `n x n`, where `n = 4096`. If the underlying BLAS is using
 multiple threads, higher flop rates are realized. The number of BLAS threads can be set with
 [`BLAS.set_num_threads(n)`](@ref).
+
+If the keyword argument `eltype` is provided, `peakflops` will construct matrices with elements
+of type `eltype` for calculating the peak flop rate.
+
+By default, `peakflops` will use the best timing from 3 trials. If the `ntrials` keyword argument
+is provided, `peakflops` will use those many trials for picking the best timing.
 
 If the keyword argument `parallel` is set to `true`, `peakflops` is run in parallel on all
 the worker processors. The flop rate of the entire parallel computer is returned. When
@@ -574,19 +608,21 @@ of the problem that is solved on each processor.
     This function requires at least Julia 1.1. In Julia 1.0 it is available from
     the standard library `InteractiveUtils`.
 """
-function peakflops(n::Integer=2000; parallel::Bool=false)
-    a = fill(1.,100,100)
-    t = @elapsed a2 = a*a
-    a = fill(1.,n,n)
-    t = @elapsed a2 = a*a
-    @assert a2[1,1] == n
+function peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3, parallel::Bool=false)
+    t = zeros(Float64, ntrials)
+    for i=1:ntrials
+        a = ones(eltype,n,n)
+        t[i] = @elapsed a2 = a*a
+        @assert a2[1,1] == n
+    end
+
     if parallel
         let Distributed = Base.require(Base.PkgId(
                 Base.UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
             return sum(Distributed.pmap(peakflops, fill(n, Distributed.nworkers())))
         end
     else
-        return 2*Float64(n)^3 / t
+        return 2*Float64(n)^3 / minimum(t)
     end
 end
 
