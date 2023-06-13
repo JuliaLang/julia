@@ -55,11 +55,11 @@ cmove(x, y) = cmove(Base.active_repl.t, x, y)
     csave()
     csave(t)
 
-Save the cursor position in TextTerminal `t`. If 
+Save the cursor position in TextTerminal `t`. If
 `t` is not provided, it defaults to `Base.active_repl.t`.
 
-Note that if this is run in the REPL, the cursor moves as it is run, 
-and the final position is the one saved. This means that 
+Note that if this is run in the REPL, the cursor moves as it is run,
+and the final position is the one saved. This means that
 the saved position is just after "julia>" on the next line.
 """
 csave(t::TextTerminal=Base.active_repl.t) = error("Unimplemented")
@@ -67,11 +67,11 @@ csave(t::TextTerminal=Base.active_repl.t) = error("Unimplemented")
     crestore()
     crestore(t)
 
-Restore the the cursor position in TextTerminal `t`to the 
-position set by `csave`. If `t` is not provided, it defaults 
+Restore the the cursor position in TextTerminal `t`to the
+position set by `csave`. If `t` is not provided, it defaults
 to `Base.active_repl.t`.
 
-Note that after the cursor position is restores, anything 
+Note that after the cursor position is restores, anything
 to the right it on the same line is cleared.
 """
 crestore(t::TextTerminal=Base.active_repl.t) = error("Unimplemented")
