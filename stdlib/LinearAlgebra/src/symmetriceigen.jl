@@ -165,7 +165,7 @@ function eigen!(A::Hermitian{T,S}, B::Hermitian{T,S}; sortby::Union{Function,Not
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
 function eigen!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, B::AbstractMatrix{T}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    return eigen!(Matrix{T}(A), B; sortby) ;
+    return eigen!(Matrix{T}(A), B; sortby)
 end
 function eigen!(A::StridedMatrix{T}, B::Union{RealHermSymComplexHerm{T},Diagonal{T}}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     return eigen!(A, Matrix{T}(B); sortby) ;
