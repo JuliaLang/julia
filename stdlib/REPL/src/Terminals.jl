@@ -43,61 +43,65 @@ abstract type AbstractTerminal <: Base.AbstractPipe end
 abstract type TextTerminal <: AbstractTerminal end
 
 # Terminal interface:
-pipe_reader(::TextTerminal) = error("Unimplemented")
-pipe_writer(::TextTerminal) = error("Unimplemented")
-displaysize(::TextTerminal) = error("Unimplemented")
+pipe_reader(::TextTerminal=Base.active_repl.t) = error("Unimplemented")
+pipe_writer(::TextTerminal=Base.active_repl.t) = error("Unimplemented")
+displaysize(::TextTerminal=Base.active_repl.t) = error("Unimplemented")
 cmove(t::TextTerminal, x, y) = error("Unimplemented")
-getX(t::TextTerminal) = error("Unimplemented")
-getY(t::TextTerminal) = error("Unimplemented")
-pos(t::TextTerminal) = (getX(t), getY(t))
+cmove(x, y) = cmove(Base.active_repl.t, x, y)
+getX(t::TextTerminal=Base.active_repl.t) = error("Unimplemented")
+getY(t::TextTerminal=Base.active_repl.t) = error("Unimplemented")
+pos(t::TextTerminal=Base.active_repl.t) = (getX(t), getY(t))
 
-# Relative moves (Absolute position fallbacks)
-cmove_up(t::TextTerminal, n) = cmove(getX(t), max(1, getY(t)-n))
-cmove_up(t) = cmove_up(t, 1)
+# Absolute fallbacks are provided for relative movements
+cmove_up(t::TextTerminal, n=1) = cmove(getX(t), max(1, getY(t)-n))
+cmove_up(n=1) cmove_up(Base.current_repl.t, n)
 
-cmove_down(t::TextTerminal, n) = cmove(getX(t), max(height(t), getY(t)+n))
-cmove_down(t) = cmove_down(t, 1)
+cmove_down(t::TextTerminal, n=1) = cmove(getX(t), max(height(t), getY(t)+n))
+cmove_down(n=1) cmove_down(Base.current_repl.t, n)
 
-cmove_left(t::TextTerminal, n) = cmove(max(1, getX(t)-n), getY(t))
-cmove_left(t) = cmove_left(t, 1)
+cmove_left(t::TextTerminal, n=1) = cmove(max(1, getX(t)-n), getY(t))
+cmove_left(n=1) cmove_left(Base.current_repl.t, n)
 
-cmove_right(t::TextTerminal, n) = cmove(max(width(t), getX(t)+n), getY(t))
-cmove_right(t) = cmove_right(t, 1)
+cmove_right(t::TextTerminal, n=1) = cmove(max(width(t), getX(t)+n), getY(t))
+cmove_right(n=1) cmove_right(Base.current_repl.t, n)
 
-cmove_line_up(t::TextTerminal, n) = cmove(1, max(1, getY(t)-n))
-cmove_line_up(t) = cmove_line_up(t, 1)
+cmove_line_up(t::TextTerminal, n=1) = cmove(1, max(1, getY(t)-n))
+cmove_line_up(n=1) cmove_line_up(Base.current_repl.t, n)
 
-cmove_line_down(t::TextTerminal, n) = cmove(1, max(height(t), getY(t)+n))
-cmove_line_down(t) = cmove_line_down(t, 1)
+cmove_line_down(t::TextTerminal, n=1) = cmove(1, max(height(t), getY(t)+n))
+cmove_line_down(n=1) cmove_line_down(Base.current_repl.t, n)
 
 cmove_col(t::TextTerminal, c) = cmove(c, getY(t))
+cmove_col(c) = cmove_col(Base.current_repl.t, n)
 
 # Defaults
-hascolor(::TextTerminal) = false
+hascolor(::TextTerminal=Base.active_repl.t) = false
 
 # Utility Functions
-width(t::TextTerminal) = (displaysize(t)::Tuple{Int,Int})[2]
-height(t::TextTerminal) = (displaysize(t)::Tuple{Int,Int})[1]
+width(t::TextTerminal=Base.active_repl.t) = (displaysize(t)::Tuple{Int,Int})[2]
+height(t::TextTerminal=Base.active_repl.t) = (displaysize(t)::Tuple{Int,Int})[1]
 
 # For terminals with buffers
-flush(t::TextTerminal) = nothing
+flush(t::TextTerminal=Base.active_repl.t) = nothing
 
-clear(t::TextTerminal) = error("Unimplemented")
+clear(t::TextTerminal=Base.active_repl.t) = error("Unimplemented")
 clear_line(t::TextTerminal, row) = error("Unimplemented")
-clear_line(t::TextTerminal) = error("Unimplemented")
+clear_line(row) = clear_line(Base.active_repl.t, row)
+clear_line(t::TextTerminal=Base.active_repl.t) = error("Unimplemented")
 
 raw!(t::TextTerminal, raw::Bool) = error("Unimplemented")
+raw!(raw::Bool) = raw!(Base.active_repl.t, raw)
 
-beep(t::TextTerminal) = nothing
-enable_bracketed_paste(t::TextTerminal) = nothing
-disable_bracketed_paste(t::TextTerminal) = nothing
+beep(t::TextTerminal=Base.active_repl.t) = nothing
+enable_bracketed_paste(t::TextTerminal=Base.active_repl.t) = nothing
+disable_bracketed_paste(t::TextTerminal=Base.active_repl.t) = nothing
 
 ## UnixTerminal ##
 
 abstract type UnixTerminal <: TextTerminal end
 
-pipe_reader(t::UnixTerminal) = t.in_stream::IO
-pipe_writer(t::UnixTerminal) = t.out_stream::IO
+pipe_reader(t::UnixTerminal=Base.active_repl.t) = t.in_stream::IO
+pipe_writer(t::UnixTerminal=Base.active_repl.t) = t.out_stream::IO
 
 mutable struct TerminalBuffer <: UnixTerminal
     out_stream::IO
