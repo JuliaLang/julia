@@ -175,7 +175,7 @@
               ,(if (equal? rett '(core Any))
                    body
                    (let ((meta (take-while (lambda (x) (and (pair? x)
-                                                            (memq (car x) '(line meta))))
+                                                            (memq (car x) '(lineinfo line meta))))
                                            (cdr body)))
                          (R (make-ssavalue)))
                      `(,(car body) ,@meta
@@ -3652,12 +3652,22 @@ f(x) = yt(x)
               (loop (cdr xs))
               elt)))))
 
+; try to ignore some metadata expressions for implicit return sometimes
+(define (only-meta? blk)
+  (let loop ((xs blk))
+    (if (null? xs)
+        #t
+        (let ((elt (car xs)))
+          (if (and (pair? elt) (memq (car elt) '(lineinfo line loopinfo)))
+              (loop (cdr xs))
+              #f)))))
+
 ;; return `body` with `stmts` inserted after any meta nodes
 (define (insert-after-meta body stmts)
   (if (null? stmts)
       body
       (let ((meta (take-while (lambda (x) (and (pair? x)
-                                               (memq (car x) '(line meta))))
+                                               (memq (car x) '(lineinfo line meta))))
                               (cdr body))))
         `(,(car body)
           ,@meta
@@ -3689,7 +3699,7 @@ f(x) = yt(x)
                    (lambda (x) (and (pair? x) (not (eq? (car x) 'lambda)))))))
 
 (define lambda-opt-ignored-exprs
-  (Set '(quote top core line inert local-def unnecessary copyast
+  (Set '(quote top core lineinfo line inert local-def unnecessary copyast
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          thunk with-static-parameters toplevel-only
          global globalref outerref const-if-global thismodule
@@ -3919,7 +3929,7 @@ f(x) = yt(x)
        ((atom? e) e)
        (else
         (case (car e)
-          ((quote top core globalref outerref thismodule line break inert module toplevel null true false meta) e)
+          ((quote top core globalref outerref thismodule lineinfo line break inert module toplevel null true false meta) e)
           ((toplevel-only)
            ;; hack to avoid generating a (method x) expr for struct types
            (if (eq? (cadr e) 'struct)
@@ -4553,12 +4563,14 @@ f(x) = yt(x)
                     (file-diff  (not (eq? fname last-fname)))
                     ;; don't need a filename node for start of function
                     (need-meta  (and file-diff last-fname
-                                     (not (eq? e (lam:body lam))))))
+                                     (not (eq? e (lam:body lam)))))
+                    (emit-final-meta (lambda ())))
                (if file-diff (set! filename fname))
                (if need-meta (emit `(meta push_loc ,fname)))
                (let ((v (let loop ((xs (cdr e)))
-                  (if (null? (cdr xs))
-                      (compile (car xs) break-labels value tail)
+                  (if (only-meta? (cdr xs))
+                      (begin (set! emit-final-meta (lambda () (map (lambda (v) (compile v break-labels #f #f)) (cdr xs))))
+                             (compile (car xs) break-labels value tail))
                       (begin (compile (car xs) break-labels #f #f)
                              (loop (cdr xs)))))))
                   (if need-meta
@@ -4574,6 +4586,7 @@ f(x) = yt(x)
                                    (let ((tmp (make-ssavalue)))
                                      (emit `(= ,tmp ,retv))
                                      (set! retv tmp)))
+                                 (emit-final-meta)
                                  (emit '(meta pop_loc))
                                  (emit `(return ,retv)))
                                (emit '(meta pop_loc))))
@@ -4581,9 +4594,12 @@ f(x) = yt(x)
                            (let ((tmp (make-ssavalue)))
                              (emit `(= ,tmp ,v))
                              (set! v tmp)
+                             (emit-final-meta)
                              (emit `(meta pop_loc))))
                           (else
-                           (emit `(meta pop_loc)))))
+                           (emit-final-meta)
+                           (emit `(meta pop_loc))))
+                    (emit-final-meta))
                   (if file-diff (set! filename last-fname))
                   v)))
             ((return)
@@ -4829,7 +4845,7 @@ f(x) = yt(x)
                (cons (car e) args)))
 
             ;; metadata expressions
-            ((line meta inbounds loopinfo gc_preserve_end aliasscope popaliasscope inline noinline)
+            ((lineinfo line meta inbounds loopinfo gc_preserve_end aliasscope popaliasscope inline noinline)
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
                (cond ((eq? (car e) 'line)
                       (set! current-loc e)
