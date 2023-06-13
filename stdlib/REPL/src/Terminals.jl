@@ -16,6 +16,8 @@ export
     cmove_line_up,
     cmove_right,
     cmove_up,
+    csave,
+    crestore,
     disable_bracketed_paste,
     enable_bracketed_paste,
     end_keypad_transmit_mode,
@@ -32,7 +34,8 @@ import Base:
     pipe_reader,
     pipe_writer,
     read,
-    readuntil
+    readuntil,
+    active_repl
 
 ## AbstractTerminal: abstract supertype of all terminals ##
 
@@ -48,27 +51,51 @@ pipe_writer(::TextTerminal=Base.active_repl.t) = error("Unimplemented")
 displaysize(::TextTerminal=Base.active_repl.t) = error("Unimplemented")
 cmove(t::TextTerminal, x, y) = error("Unimplemented")
 cmove(x, y) = cmove(Base.active_repl.t, x, y)
+"""
+    csave()
+    csave(t)
+
+Save the cursor position in TextTerminal `t`. If 
+`t` is not provided, it defaults to `Base.active_repl.t`.
+
+Note that if this is run in the REPL, the cursor moves as it is run, 
+and the final position is the one saved. This means that 
+the saved position is just after "julia>" on the next line.
+"""
+csave(t::TextTerminal=Base.active_repl.t) = error("Unimplemented")
+"""
+    crestore()
+    crestore(t)
+
+Restore the the cursor position in TextTerminal `t`to the 
+position set by `csave`. If `t` is not provided, it defaults 
+to `Base.active_repl.t`.
+
+Note that after the cursor position is restores, anything 
+to the right it on the same line is cleared.
+"""
+crestore(t::TextTerminal=Base.active_repl.t) = error("Unimplemented")
 getX(t::TextTerminal=Base.active_repl.t) = error("Unimplemented")
 getY(t::TextTerminal=Base.active_repl.t) = error("Unimplemented")
 pos(t::TextTerminal=Base.active_repl.t) = (getX(t), getY(t))
 
 # Absolute fallbacks are provided for relative movements
-cmove_up(t::TextTerminal, n=1) = cmove(getX(t), max(1, getY(t)-n))
+cmove_up(t::TextTerminal, n=1) = cmove(getX(t), max(1, getY(t) - n))
 cmove_up(n=1) = cmove_up(Base.current_repl.t, n)
 
-cmove_down(t::TextTerminal, n=1) = cmove(getX(t), max(height(t), getY(t)+n))
+cmove_down(t::TextTerminal, n=1) = cmove(getX(t), max(height(t), getY(t) + n))
 cmove_down(n=1) = cmove_down(Base.current_repl.t, n)
 
-cmove_left(t::TextTerminal, n=1) = cmove(max(1, getX(t)-n), getY(t))
+cmove_left(t::TextTerminal, n=1) = cmove(max(1, getX(t) - n), getY(t))
 cmove_left(n=1) = cmove_left(Base.current_repl.t, n)
 
-cmove_right(t::TextTerminal, n=1) = cmove(max(width(t), getX(t)+n), getY(t))
+cmove_right(t::TextTerminal, n=1) = cmove(max(width(t), getX(t) + n), getY(t))
 cmove_right(n=1) = cmove_right(Base.current_repl.t, n)
 
-cmove_line_up(t::TextTerminal, n=1) = cmove(1, max(1, getY(t)-n))
+cmove_line_up(t::TextTerminal, n=1) = cmove(1, max(1, getY(t) - n))
 cmove_line_up(n=1) = cmove_line_up(Base.current_repl.t, n)
 
-cmove_line_down(t::TextTerminal, n=1) = cmove(1, max(height(t), getY(t)+n))
+cmove_line_down(t::TextTerminal, n=1) = cmove(1, max(height(t), getY(t) + n))
 cmove_line_down(n=1) = cmove_line_down(Base.current_repl.t, n)
 
 cmove_col(t::TextTerminal, c) = cmove(c, getY(t))
@@ -122,11 +149,13 @@ cmove_right(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)C")
 cmove_left(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)D")
 cmove_line_up(t::UnixTerminal, n) = (cmove_up(t, n); cmove_col(t, 1))
 cmove_line_down(t::UnixTerminal, n) = (cmove_down(t, n); cmove_col(t, 1))
-cmove_col(t::UnixTerminal, n) = (write(t.out_stream, '\r'); n > 1 && cmove_right(t, n-1))
+cmove_col(t::UnixTerminal, n) = (write(t.out_stream, '\r'); n > 1 && cmove_right(t, n - 1))
+csave(t::UnixTerminal) = print(t.out_stream, "$(CSI)s")
+crestore(t::UnixTerminal) = print(t.out_stream, "$(CSI)u")
 
 const is_precompiling = Ref(false)
 if Sys.iswindows()
-    function raw!(t::TTYTerminal,raw::Bool)
+    function raw!(t::TTYTerminal, raw::Bool)
         is_precompiling[] && return true
         check_open(t.in_stream)
         if Base.ispty(t.in_stream)
@@ -134,13 +163,13 @@ if Sys.iswindows()
                 t.in_stream, t.out_stream, t.err_stream)
             true
         else
-            ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), t.in_stream.handle::Ptr{Cvoid}, raw) != -1
+            ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid}, Int32), t.in_stream.handle::Ptr{Cvoid}, raw) != -1
         end
     end
 else
     function raw!(t::TTYTerminal, raw::Bool)
         check_open(t.in_stream)
-        ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid},Int32), t.in_stream.handle::Ptr{Cvoid}, raw) != -1
+        ccall(:jl_tty_set_mode, Int32, (Ptr{Cvoid}, Int32), t.in_stream.handle::Ptr{Cvoid}, raw) != -1
     end
 end
 
@@ -152,7 +181,7 @@ end
 
 @eval clear(t::UnixTerminal) = write(t.out_stream, $"$(CSI)H$(CSI)2J")
 @eval clear_line(t::UnixTerminal) = write(t.out_stream, $"\r$(CSI)0K")
-beep(t::UnixTerminal) = write(t.err_stream,"\x7")
+beep(t::UnixTerminal) = write(t.err_stream, "\x7")
 
 Base.displaysize(t::UnixTerminal) = displaysize(t.out_stream)
 
