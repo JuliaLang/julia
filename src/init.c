@@ -349,7 +349,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
     // TODO: Destroy threads?
 
     jl_destroy_timing(); // cleans up the current timing_stack for noreturn
-#ifdef ENABLE_TIMINGS
+#ifdef USE_TIMING_COUNTS
     jl_print_timings();
 #endif
     jl_teardown_codegen(); // prints stats
@@ -381,7 +381,7 @@ JL_DLLEXPORT void jl_postoutput_hook(void)
     return;
 }
 
-static void post_boot_hooks(void);
+void post_boot_hooks(void);
 
 JL_DLLEXPORT void *jl_libjulia_internal_handle;
 JL_DLLEXPORT void *jl_libjulia_handle;
@@ -705,6 +705,9 @@ static void jl_set_io_wait(int v)
 }
 
 extern jl_mutex_t jl_modules_mutex;
+extern jl_mutex_t precomp_statement_out_lock;
+extern jl_mutex_t newly_inferred_mutex;
+extern jl_mutex_t global_roots_lock;
 
 static void restore_fp_env(void)
 {
@@ -716,6 +719,15 @@ static void restore_fp_env(void)
 static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_task_t *ct);
 
 JL_DLLEXPORT int jl_default_debug_info_kind;
+
+static void init_global_mutexes(void) {
+    JL_MUTEX_INIT(&jl_modules_mutex, "jl_modules_mutex");
+    JL_MUTEX_INIT(&precomp_statement_out_lock, "precomp_statement_out_lock");
+    JL_MUTEX_INIT(&newly_inferred_mutex, "newly_inferred_mutex");
+    JL_MUTEX_INIT(&global_roots_lock, "global_roots_lock");
+    JL_MUTEX_INIT(&jl_codegen_lock, "jl_codegen_lock");
+    JL_MUTEX_INIT(&typecache_lock, "typecache_lock");
+}
 
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 {
@@ -746,7 +758,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     jl_safepoint_init();
     jl_page_size = jl_getpagesize();
     htable_new(&jl_current_modules, 0);
-    JL_MUTEX_INIT(&jl_modules_mutex);
+    init_global_mutexes();
     jl_precompile_toplevel_module = NULL;
     ios_set_io_wait_func = jl_set_io_wait;
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
@@ -754,22 +766,24 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     jl_init_uv();
     init_stdio();
     restore_fp_env();
-    restore_signals();
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
+        restore_signals();
+
     jl_init_intrinsic_properties();
+
+    // Important offset for external codegen.
+    jl_task_gcstack_offset = offsetof(jl_task_t, gcstack);
+    jl_task_ptls_offset = offsetof(jl_task_t, ptls);
 
     jl_prep_sanitizers();
     void *stack_lo, *stack_hi;
     jl_init_stack_limits(1, &stack_lo, &stack_hi);
 
-    jl_libjulia_internal_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT, 1);
+    jl_libjulia_internal_handle = jl_find_dynamic_library_by_addr(&jl_load_dynamic_library);
+    jl_libjulia_handle = jl_find_dynamic_library_by_addr(&jl_any_type);
 #ifdef _OS_WINDOWS_
     jl_exe_handle = GetModuleHandleA(NULL);
     jl_RTLD_DEFAULT_handle = jl_libjulia_internal_handle;
-    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                            (LPCWSTR)&jl_any_type,
-                            (HMODULE*)&jl_libjulia_handle)) {
-        jl_error("could not load base module");
-    }
     jl_ntdll_handle = jl_dlopen("ntdll.dll", JL_RTLD_NOLOAD); // bypass julia's pathchecking for system dlls
     jl_kernel32_handle = jl_dlopen("kernel32.dll", JL_RTLD_NOLOAD);
     jl_crtdll_handle = jl_dlopen(jl_crtdll_name, JL_RTLD_NOLOAD);
@@ -804,6 +818,10 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 
     arraylist_new(&jl_linkage_blobs, 0);
     arraylist_new(&jl_image_relocs, 0);
+    arraylist_new(&eytzinger_image_tree, 0);
+    arraylist_new(&eytzinger_idxs, 0);
+    arraylist_push(&eytzinger_idxs, (void*)0);
+    arraylist_push(&eytzinger_image_tree, (void*)1); // outside image
 
     jl_ptls_t ptls = jl_init_threadtls(0);
 #pragma GCC diagnostic push
@@ -819,6 +837,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 
 static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_task_t *ct)
 {
+    JL_TIMING(JULIA_INIT, JULIA_INIT);
     jl_resolve_sysimg_location(rel);
     // loads sysimg if available, and conditionally sets jl_options.cpu_target
     if (jl_options.image_file)
@@ -853,6 +872,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
     if (jl_base_module == NULL) {
         // nthreads > 1 requires code in Base
         jl_atomic_store_relaxed(&jl_n_threads, 1);
+        jl_n_gcthreads = 0;
     }
     jl_start_threads();
 
@@ -872,80 +892,6 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
 
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_sigint_handler();
-}
-
-static jl_value_t *core(const char *name)
-{
-    return jl_get_global(jl_core_module, jl_symbol(name));
-}
-
-// fetch references to things defined in boot.jl
-static void post_boot_hooks(void)
-{
-    jl_char_type    = (jl_datatype_t*)core("Char");
-    jl_int8_type    = (jl_datatype_t*)core("Int8");
-    jl_int16_type   = (jl_datatype_t*)core("Int16");
-    jl_float16_type = (jl_datatype_t*)core("Float16");
-    jl_float32_type = (jl_datatype_t*)core("Float32");
-    jl_float64_type = (jl_datatype_t*)core("Float64");
-    jl_floatingpoint_type = (jl_datatype_t*)core("AbstractFloat");
-    jl_number_type  = (jl_datatype_t*)core("Number");
-    jl_signed_type  = (jl_datatype_t*)core("Signed");
-    jl_datatype_t *jl_unsigned_type = (jl_datatype_t*)core("Unsigned");
-    jl_datatype_t *jl_integer_type = (jl_datatype_t*)core("Integer");
-
-    jl_bool_type->super = jl_integer_type;
-    jl_uint8_type->super = jl_unsigned_type;
-    jl_uint16_type->super = jl_unsigned_type;
-    jl_uint32_type->super = jl_unsigned_type;
-    jl_uint64_type->super = jl_unsigned_type;
-    jl_int32_type->super = jl_signed_type;
-    jl_int64_type->super = jl_signed_type;
-
-    jl_errorexception_type = (jl_datatype_t*)core("ErrorException");
-    jl_stackovf_exception  = jl_new_struct_uninit((jl_datatype_t*)core("StackOverflowError"));
-    jl_diverror_exception  = jl_new_struct_uninit((jl_datatype_t*)core("DivideError"));
-    jl_undefref_exception  = jl_new_struct_uninit((jl_datatype_t*)core("UndefRefError"));
-    jl_undefvarerror_type  = (jl_datatype_t*)core("UndefVarError");
-    jl_atomicerror_type    = (jl_datatype_t*)core("ConcurrencyViolationError");
-    jl_interrupt_exception = jl_new_struct_uninit((jl_datatype_t*)core("InterruptException"));
-    jl_boundserror_type    = (jl_datatype_t*)core("BoundsError");
-    jl_memory_exception    = jl_new_struct_uninit((jl_datatype_t*)core("OutOfMemoryError"));
-    jl_readonlymemory_exception = jl_new_struct_uninit((jl_datatype_t*)core("ReadOnlyMemoryError"));
-    jl_typeerror_type      = (jl_datatype_t*)core("TypeError");
-    jl_argumenterror_type  = (jl_datatype_t*)core("ArgumentError");
-    jl_methoderror_type    = (jl_datatype_t*)core("MethodError");
-    jl_loaderror_type      = (jl_datatype_t*)core("LoadError");
-    jl_initerror_type      = (jl_datatype_t*)core("InitError");
-    jl_pair_type           = core("Pair");
-    jl_kwcall_func         = core("kwcall");
-    jl_kwcall_mt           = ((jl_datatype_t*)jl_typeof(jl_kwcall_func))->name->mt;
-    jl_atomic_store_relaxed(&jl_kwcall_mt->max_args, 0);
-
-    jl_weakref_type = (jl_datatype_t*)core("WeakRef");
-    jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;
-
-    jl_init_box_caches();
-
-    // set module field of primitive types
-    jl_svec_t *bindings = jl_atomic_load_relaxed(&jl_core_module->bindings);
-    jl_value_t **table = jl_svec_data(bindings);
-    for (size_t i = 0; i < jl_svec_len(bindings); i++) {
-        if (table[i] != jl_nothing) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
-            jl_value_t *v = jl_atomic_load_relaxed(&b->value);
-            if (v) {
-                if (jl_is_unionall(v))
-                    v = jl_unwrap_unionall(v);
-                if (jl_is_datatype(v)) {
-                    jl_datatype_t *tt = (jl_datatype_t*)v;
-                    tt->name->module = jl_core_module;
-                    if (tt->name->mt)
-                        tt->name->mt->module = jl_core_module;
-                }
-            }
-        }
-    }
 }
 
 #ifdef __cplusplus

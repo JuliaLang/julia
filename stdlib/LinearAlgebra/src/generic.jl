@@ -1591,7 +1591,11 @@ end
     ξ1/ν
 end
 
-# apply reflector from left
+"""
+    reflectorApply!(x, τ, A)
+
+Multiplies `A` in-place by a Householder reflection on the left. It is equivalent to `A .= (I - τ*[1; x] * [1; x]')*A`.
+"""
 @inline function reflectorApply!(x::AbstractVector, τ::Number, A::AbstractVecOrMat)
     require_one_based_indexing(x)
     m, n = size(A, 1), size(A, 2)
@@ -1804,21 +1808,18 @@ function normalize!(a::AbstractArray, p::Real=2)
     __normalize!(a, nrm)
 end
 
-@inline function __normalize!(a::AbstractArray, nrm::Real)
+@inline function __normalize!(a::AbstractArray, nrm)
     # The largest positive floating point number whose inverse is less than infinity
     δ = inv(prevfloat(typemax(nrm)))
-
     if nrm ≥ δ # Safe to multiply with inverse
         invnrm = inv(nrm)
         rmul!(a, invnrm)
-
     else # scale elements to avoid overflow
         εδ = eps(one(nrm))/δ
         rmul!(a, εδ)
         rmul!(a, inv(nrm*εδ))
     end
-
-    a
+    return a
 end
 
 """

@@ -451,7 +451,8 @@ Pass *createFinalLowerGCPass()
     return new FinalLowerGCLegacy();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddFinalLowerGCPass_impl(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddFinalLowerGCPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createFinalLowerGCPass());
 }

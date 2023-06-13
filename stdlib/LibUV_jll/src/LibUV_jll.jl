@@ -14,9 +14,9 @@ export libuv
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libuv_handle = C_NULL
-libuv_path = ""
+artifact_dir::String = ""
+libuv_handle::Ptr{Cvoid} = C_NULL
+libuv_path::String = ""
 
 if Sys.iswindows()
     const libuv = "libuv-2.dll"

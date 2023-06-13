@@ -124,8 +124,9 @@ AbstractMatrix{T}(S::SymTridiagonal) where {T} =
                    convert(AbstractVector{T}, S.ev)::AbstractVector{T})
 function Matrix{T}(M::SymTridiagonal) where T
     n = size(M, 1)
-    Mf = zeros(T, n, n)
+    Mf = Matrix{T}(undef, n, n)
     n == 0 && return Mf
+    n > 2 && fill!(Mf, zero(T))
     @inbounds for i = 1:n-1
         Mf[i,i] = symmetric(M.dv[i], :U)
         Mf[i+1,i] = transpose(M.ev[i])
@@ -413,6 +414,19 @@ end
 det(A::SymTridiagonal; shift::Number=false) = det_usmani(A.ev, A.dv, A.ev, shift)
 logabsdet(A::SymTridiagonal; shift::Number=false) = logabsdet(ldlt(A; shift=shift))
 
+@inline function Base.isassigned(A::SymTridiagonal, i::Int, j::Int)
+    @boundscheck checkbounds(Bool, A, i, j) || return false
+    if i == j
+        return @inbounds isassigned(A.dv, i)
+    elseif i == j + 1
+        return @inbounds isassigned(A.ev, j)
+    elseif i + 1 == j
+        return @inbounds isassigned(A.ev, i)
+    else
+        return true
+    end
+end
+
 @inline function getindex(A::SymTridiagonal{T}, i::Integer, j::Integer) where T
     @boundscheck checkbounds(A, i, j)
     if i == j
@@ -543,9 +557,10 @@ function size(M::Tridiagonal, d::Integer)
 end
 
 function Matrix{T}(M::Tridiagonal) where {T}
-    A = zeros(T, size(M))
+    A = Matrix{T}(undef, size(M))
     n = length(M.d)
     n == 0 && return A
+    n > 2 && fill!(A, zero(T))
     for i in 1:n-1
         A[i,i] = M.d[i]
         A[i+1,i] = M.dl[i]
@@ -601,6 +616,19 @@ function diag(M::Tridiagonal{T}, n::Integer=0) where T
     else
         throw(ArgumentError(string("requested diagonal, $n, must be at least $(-size(M, 1)) ",
             "and at most $(size(M, 2)) for an $(size(M, 1))-by-$(size(M, 2)) matrix")))
+    end
+end
+
+@inline function Base.isassigned(A::Tridiagonal, i::Int, j::Int)
+    @boundscheck checkbounds(A, i, j)
+    if i == j
+        return @inbounds isassigned(A.d, i)
+    elseif i == j + 1
+        return @inbounds isassigned(A.dl, j)
+    elseif i + 1 == j
+        return @inbounds isassigned(A.du, i)
+    else
+        return true
     end
 end
 

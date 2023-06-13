@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # RUN: julia --startup-file=no -O2 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL
 # RUN: julia --startup-file=no -O3 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL
 
@@ -76,21 +78,21 @@ end
 # COM: memset checks
 
 # COM: INT64
-# ALL-LABEL: define nonnull {} addrspace(10)* @julia_zeros
+# ALL: define {{.*}} @julia_zeros
 # ALL-NOT: bounds_error
 # COM: memset is not used with bounds checks on (too late in the pipeline)
 # BC_OFF: llvm.memset
 # BC_AUTO: llvm.memset
 
 # COM: INT32
-# ALL-LABEL: define nonnull {} addrspace(10)* @julia_zeros
+# ALL: define {{.*}} @julia_zeros
 # ALL-NOT: bounds_error
 # COM: memset is not used with bounds checks on (too late in the pipeline)
 # BC_OFF: llvm.memset
 # BC_AUTO: llvm.memset
 
 # COM: INT16
-# ALL-LABEL: define nonnull {} addrspace(10)* @julia_zeros
+# ALL: define {{.*}} @julia_zeros
 # ALL-NOT: bounds_error
 # COM: memset is not used with bounds checks on (too late in the pipeline)
 # BC_OFF: llvm.memset

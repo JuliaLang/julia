@@ -94,6 +94,10 @@ WITH_ITTAPI := 0
 
 # Enable Tracy support
 WITH_TRACY := 0
+WITH_TRACY_CALLSTACKS := 0
+
+# Enable Timing Counts support
+WITH_TIMING_COUNTS := 0
 
 # Prevent picking up $ARCH from the environment variables
 ARCH:=
@@ -455,10 +459,12 @@ endif
 
 # Compiler specific stuff
 
+ifeq (default,$(origin CC))
 CC := $(CROSS_COMPILE)$(CC) # attempt to add cross-compiler prefix, if the user
                             # is not overriding the default, to form target-triple-cc (which
                             # may not exist), and use that to decide what compiler the user
                             # is using for the target build (or default to gcc)
+endif
 CC_VERSION_STRING = $(shell $(CC) --version 2>/dev/null)
 ifneq (,$(findstring clang,$(CC_VERSION_STRING)))
 USECLANG := 1
@@ -474,43 +480,67 @@ FC := $(CROSS_COMPILE)gfortran
 ifeq ($(OS), Darwin)
 APPLE_ARCH := $(shell uname -m)
 ifneq ($(APPLE_ARCH),arm64)
-MACOSX_VERSION_MIN := 10.10
+MACOSX_VERSION_MIN := 10.14
 else
 MACOSX_VERSION_MIN := 11.0
 endif
 endif
 
-ifeq ($(USEGCC),1)
-CC := $(CROSS_COMPILE)gcc
-CXX := $(CROSS_COMPILE)g++
-JCFLAGS := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
+JCFLAGS_COMMON    := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
+JCFLAGS_CLANG     := $(JCFLAGS_COMMON)
+JCFLAGS_GCC       := $(JCFLAGS_COMMON)
+
 # AArch64 needs this flag to generate the .eh_frame used by libunwind
-JCPPFLAGS := -fasynchronous-unwind-tables
-JCXXFLAGS := -pipe $(fPIC) -fno-rtti -std=c++14
+JCPPFLAGS_COMMON  := -fasynchronous-unwind-tables
+JCPPFLAGS_CLANG   := $(JCPPFLAGS_COMMON)
+JCPPFLAGS_GCC     := $(JCPPFLAGS_COMMON)
+
+JCXXFLAGS_COMMON  := -pipe $(fPIC) -fno-rtti -std=c++14
+JCXXFLAGS_CLANG   := $(JCXXFLAGS_COMMON) -pedantic
+JCXXFLAGS_GCC     := $(JCXXFLAGS_COMMON)
+
+DEBUGFLAGS_COMMON := -O0 -DJL_DEBUG_BUILD -fstack-protector
+DEBUGFLAGS_CLANG  := $(DEBUGFLAGS_COMMON) -g
+DEBUGFLAGS_GCC    := $(DEBUGFLAGS_COMMON) -ggdb2
+
+SHIPFLAGS_COMMON  := -O3
+SHIPFLAGS_CLANG   := $(SHIPFLAGS_COMMON) -g
+SHIPFLAGS_GCC     := $(SHIPFLAGS_COMMON) -ggdb2 -falign-functions
+
+ifeq ($(OS), Darwin)
+JCPPFLAGS_CLANG   += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
+endif
+
 ifneq ($(OS), WINNT)
 # Do not enable on windows to avoid warnings from libuv.
-JCXXFLAGS += -pedantic
+JCXXFLAGS_GCC     += -pedantic
 endif
-DEBUGFLAGS := -O0 -ggdb2 -DJL_DEBUG_BUILD -fstack-protector
-SHIPFLAGS := -O3 -ggdb2 -falign-functions
+
+ifeq ($(USEGCC),1)
+CC         := $(CROSS_COMPILE)gcc
+CXX        := $(CROSS_COMPILE)g++
+JCFLAGS    := $(JCFLAGS_GCC)
+JCPPFLAGS  := $(JCPPFLAGS_GCC)
+JCXXFLAGS  := $(JCXXFLAGS_GCC)
+DEBUGFLAGS := $(DEBUGFLAGS_GCC)
+SHIPFLAGS  := $(SHIPFLAGS_GCC)
 endif
 
 ifeq ($(USECLANG),1)
-CC := $(CROSS_COMPILE)clang
-CXX := $(CROSS_COMPILE)clang++
-JCFLAGS := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
-# AArch64 needs this flag to generate the .eh_frame used by libunwind
-JCPPFLAGS := -fasynchronous-unwind-tables
-JCXXFLAGS := -pipe $(fPIC) -fno-rtti -pedantic -std=c++14
-DEBUGFLAGS := -O0 -g -DJL_DEBUG_BUILD -fstack-protector
-SHIPFLAGS := -O3 -g
+CC         := $(CROSS_COMPILE)clang
+CXX        := $(CROSS_COMPILE)clang++
+JCFLAGS    := $(JCFLAGS_CLANG)
+JCPPFLAGS  := $(JCPPFLAGS_CLANG)
+JCXXFLAGS  := $(JCXXFLAGS_CLANG)
+DEBUGFLAGS := $(DEBUGFLAGS_CLANG)
+SHIPFLAGS  := $(SHIPFLAGS_CLANG)
+
 ifeq ($(OS), Darwin)
 CC += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
 CXX += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
 FC += -mmacosx-version-min=$(MACOSX_VERSION_MIN)
 # export MACOSX_DEPLOYMENT_TARGET so that ld picks it up, especially for deps
 export MACOSX_DEPLOYMENT_TARGET=$(MACOSX_VERSION_MIN)
-JCPPFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
 
@@ -546,8 +576,8 @@ CC_BASE := $(shell echo $(CC) | cut -d' ' -f1)
 CC_ARG := $(shell echo $(CC) | cut -s -d' ' -f2-)
 CXX_BASE := $(shell echo $(CXX) | cut -d' ' -f1)
 CXX_ARG := $(shell echo $(CXX) | cut -s -d' ' -f2-)
-FC_BASE := $(shell echo $(FC) | cut -d' ' -f1)
-FC_ARG := $(shell echo $(FC) | cut -s -d' ' -f2-)
+FC_BASE := $(shell echo $(FC) 2>/dev/null | cut -d' ' -f1)
+FC_ARG := $(shell echo $(FC) 2>/dev/null | cut -s -d' ' -f2-)
 endif
 
 JFFLAGS := -O2 $(fPIC)
@@ -738,9 +768,19 @@ LIBITTAPI:=-littnotify
 endif
 
 ifeq ($(WITH_TRACY), 1)
-JCXXFLAGS += -DUSE_TRACY -DTRACY_ENABLE
-JCFLAGS += -DUSE_TRACY -DTRACY_ENABLE
+JCXXFLAGS += -DUSE_TRACY -DTRACY_ENABLE -DTRACY_FIBERS
+JCFLAGS += -DUSE_TRACY -DTRACY_ENABLE -DTRACY_FIBERS
 LIBTRACYCLIENT:=-lTracyClient
+endif
+ifeq ($(WITH_TRACY_CALLSTACKS), 1)
+JCXXFLAGS += -DTRACY_CALLSTACK=32
+JCFLAGS += -DTRACY_CALLSTACK=32
+LIBTRACYCLIENT:=-lTracyClient
+endif
+
+ifeq ($(WITH_TIMING_COUNTS), 1)
+JCXXFLAGS += -DUSE_TIMING_COUNTS
+JCFLAGS += -DUSE_TIMING_COUNTS
 endif
 
 # ===========================================================================

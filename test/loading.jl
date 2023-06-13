@@ -692,7 +692,9 @@ mktempdir() do dir
     mkpath(vpath)
     script = "@assert startswith(Base.active_project(), $(repr(vpath)))"
     cmd = `$(Base.julia_cmd()) --startup-file=no -e $(script)`
-    cmd = addenv(cmd, "JULIA_DEPOT_PATH" => dir)
+    cmd = addenv(cmd,
+        "JULIA_DEPOT_PATH" => dir,
+        "JULIA_LOAD_PATH" => Sys.iswindows() ? ";" : ":")
     cmd = pipeline(cmd; stdout, stderr)
     @test success(cmd)
 end
@@ -1006,23 +1008,29 @@ end
     try
         proj = joinpath(@__DIR__, "project", "Extensions", "HasDepWithExtensions.jl")
 
-        function gen_extension_cmd(compile)
-            ```$(Base.julia_cmd()) $compile --startup-file=no -e '
-                begin
-                    push!(empty!(DEPOT_PATH), '$(repr(depot_path))')
-                    using HasExtensions
-                    Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly got an extension")
-                    HasExtensions.ext_loaded && error("ext_loaded set")
-                    using HasDepWithExtensions
-                    Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
-                    HasExtensions.ext_loaded || error("ext_loaded not set")
-                    HasExtensions.ext_folder_loaded && error("ext_folder_loaded set")
-                    HasDepWithExtensions.do_something() || error("do_something errored")
-                    using ExtDep2
-                    HasExtensions.ext_folder_loaded || error("ext_folder_loaded not set")
-                end
-                '
-            ```
+        function gen_extension_cmd(compile, distr=false)
+            load_distr = distr ? "using Distributed; addprocs(1)" : ""
+            ew = distr ? "@everywhere" : ""
+            cmd = """
+            $load_distr
+            begin
+                $ew push!(empty!(DEPOT_PATH), $(repr(depot_path)))
+                using HasExtensions
+                $ew using HasExtensions
+                $ew Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly got an extension")
+                $ew HasExtensions.ext_loaded && error("ext_loaded set")
+                using HasDepWithExtensions
+                $ew using HasDepWithExtensions
+                $ew Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
+                $ew HasExtensions.ext_loaded || error("ext_loaded not set")
+                $ew HasExtensions.ext_folder_loaded && error("ext_folder_loaded set")
+                $ew HasDepWithExtensions.do_something() || error("do_something errored")
+                using ExtDep2
+                $ew using ExtDep2
+                $ew HasExtensions.ext_folder_loaded || error("ext_folder_loaded not set")
+            end
+            """
+            return `$(Base.julia_cmd()) $compile --startup-file=no -e $cmd`
         end
 
         for compile in (`--compiled-modules=no`, ``, ``) # Once when requiring precompilation, once where it is already precompiled
@@ -1034,6 +1042,12 @@ end
 
         sep = Sys.iswindows() ? ';' : ':'
 
+        cmd = gen_extension_cmd(``, true)
+        cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([proj, "@stdlib"], sep))
+        str = read(cmd, String)
+        @test !occursin("Error during loading of extension", str)
+        @test !occursin("ConcurrencyViolationError", str)
+
         # 48351
         cmd = gen_extension_cmd(``)
         cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([mktempdir(), proj], sep))
@@ -1044,8 +1058,6 @@ end
         envs = [joinpath(@__DIR__, "project", "Extensions", "EnvWithHasExtensionsv2"), joinpath(@__DIR__, "project", "Extensions", "EnvWithHasExtensions")]
         cmd = addenv(```$(Base.julia_cmd()) --startup-file=no -e '
         begin
-
-
             push!(empty!(DEPOT_PATH), '$(repr(depot_path))')
             using HasExtensions
             using ExtDep
@@ -1055,6 +1067,22 @@ end
         '
         ```, "JULIA_LOAD_PATH" => join(envs, sep))
         @test success(cmd)
+
+        test_ext_proj = """
+        begin
+            using HasExtensions
+            using ExtDep
+            Base.get_extension(HasExtensions, :Extension) isa Module || error("expected extension to load")
+            using ExtDep2
+            Base.get_extension(HasExtensions, :ExtensionFolder) isa Module || error("expected extension to load")
+        end
+        """
+        for compile in (`--compiled-modules=no`, ``)
+            cmd_proj_ext = `$(Base.julia_cmd()) $compile --startup-file=no -e $test_ext_proj`
+            proj = joinpath(@__DIR__, "project", "Extensions")
+            cmd_proj_ext = addenv(cmd_proj_ext, "JULIA_LOAD_PATH" => join([joinpath(proj, "HasExtensions.jl"), joinpath(proj, "EnvWithDeps")], sep))
+            run(cmd_proj_ext)
+        end
     finally
         try
             rm(depot_path, force=true, recursive=true)
@@ -1089,15 +1117,14 @@ end
     for (P, D, C, I, O) in Iterators.product(0:1, 0:2, 0:2, 0:1, 0:3)
         julia = joinpath(Sys.BINDIR, Base.julia_exename())
         script = """
-        using Test
         let
             cf = Base.CacheFlags()
             opts = Base.JLOptions()
-            @test cf.use_pkgimages == opts.use_pkgimages == $P
-            @test cf.debug_level == opts.debug_level == $D
-            @test cf.check_bounds == opts.check_bounds == $C
-            @test cf.inline == opts.can_inline == $I
-            @test cf.opt_level == opts.opt_level == $O
+            cf.use_pkgimages == opts.use_pkgimages == $P || error("use_pkgimages")
+            cf.debug_level == opts.debug_level == $D || error("debug_level")
+            cf.check_bounds == opts.check_bounds == $C || error("check_bounds")
+            cf.inline == opts.can_inline == $I || error("inline")
+            cf.opt_level == opts.opt_level == $O || error("opt_level")
         end
         """
         cmd = `$julia $(pkgimage(P)) $(opt_level(O)) $(debug_level(D)) $(check_bounds(C)) $(inline(I)) -e $script`

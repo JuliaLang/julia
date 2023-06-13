@@ -1,3 +1,5 @@
+; This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -LateLowerGCFrame -S %s | FileCheck %s
 ; RUN: opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LateLowerGCFrame)' -S %s | FileCheck %s
 
@@ -45,7 +47,7 @@ top:
     %0 = bitcast {}*** %pgcstack to {}**
     %current_task = getelementptr inbounds {}*, {}** %0, i64 -12
 ; CHECK: %current_task = getelementptr inbounds {}*, {}** %0, i64 -12
-; CHECK-NEXT: [[ptls_field:%.*]] = getelementptr inbounds {}*, {}** %current_task, i64 15
+; CHECK-NEXT: [[ptls_field:%.*]] = getelementptr inbounds {}*, {}** %current_task, i64 16
 ; CHECK-NEXT: [[ptls_load:%.*]] = load {}*, {}** [[ptls_field]], align 8, !tbaa !0
 ; CHECK-NEXT: [[ppjl_ptls:%.*]] = bitcast {}* [[ptls_load]] to {}**
 ; CHECK-NEXT: [[ptls_i8:%.*]] = bitcast {}** [[ppjl_ptls]] to i8*
@@ -70,7 +72,7 @@ top:
     %0 = bitcast {}*** %pgcstack to {}**
     %current_task = getelementptr inbounds {}*, {}** %0, i64 -12
 ; CHECK: %current_task = getelementptr inbounds {}*, {}** %0, i64 -12
-; CHECK-NEXT: [[ptls_field:%.*]] = getelementptr inbounds {}*, {}** %current_task, i64 15
+; CHECK-NEXT: [[ptls_field:%.*]] = getelementptr inbounds {}*, {}** %current_task, i64 16
 ; CHECK-NEXT: [[ptls_load:%.*]] = load {}*, {}** [[ptls_field]], align 8, !tbaa !0
 ; CHECK-NEXT: [[ppjl_ptls:%.*]] = bitcast {}* [[ptls_load]] to {}**
 ; CHECK-NEXT: [[ptls_i8:%.*]] = bitcast {}** [[ppjl_ptls]] to i8*

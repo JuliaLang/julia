@@ -108,7 +108,32 @@ void jl_init_threadinginfra(void)
 
 void JL_NORETURN jl_finish_task(jl_task_t *t);
 
-// thread function: used by all except the main thread
+// gc thread function
+void jl_gc_threadfun(void *arg)
+{
+    jl_threadarg_t *targ = (jl_threadarg_t*)arg;
+
+    // initialize this thread (set tid and create heap)
+    jl_ptls_t ptls = jl_init_threadtls(targ->tid);
+
+    // wait for all threads
+    jl_gc_state_set(ptls, JL_GC_STATE_WAITING, 0);
+    uv_barrier_wait(targ->barrier);
+
+    // free the thread argument here
+    free(targ);
+
+    while (1) {
+        uv_mutex_lock(&gc_threads_lock);
+        while (jl_atomic_load(&gc_n_threads_marking) == 0) {
+            uv_cond_wait(&gc_threads_cond, &gc_threads_lock);
+        }
+        uv_mutex_unlock(&gc_threads_lock);
+        gc_mark_loop_parallel(ptls, 0);
+    }
+}
+
+// thread function: used by all mutator threads except the main thread
 void jl_threadfun(void *arg)
 {
     jl_threadarg_t *targ = (jl_threadarg_t*)arg;
@@ -268,7 +293,7 @@ static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q)
 {
     jl_gc_safepoint();
     jl_task_t *task = (jl_task_t*)jl_apply_generic(trypoptask, &q, 1);
-    if (jl_typeis(task, jl_task_type)) {
+    if (jl_is_task(task)) {
         int self = jl_atomic_load_relaxed(&jl_current_task->tid);
         jl_set_task_tid(task, self);
         return task;
@@ -448,7 +473,6 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                     break;
                 }
                 uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
-                // TODO: help with gc work here, if applicable
             }
             assert(jl_atomic_load_relaxed(&ptls->sleep_check_state) == not_sleeping);
             uv_mutex_unlock(&ptls->sleep_lock);

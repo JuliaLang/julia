@@ -100,14 +100,11 @@ function isvalid(s::SubString, i::Integer)
     @inbounds return ib && isvalid(s.string, s.offset + i)::Bool
 end
 
-byte_string_classify(s::SubString{String}) =
-    ccall(:u8_isvalid, Int32, (Ptr{UInt8}, Int), s, sizeof(s))
-
-isvalid(::Type{String}, s::SubString{String}) = byte_string_classify(s) ≠ 0
-isvalid(s::SubString{String}) = isvalid(String, s)
-
 thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)
 nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
+
+parent(s::SubString) = s.string
+parentindices(s::SubString) = (s.offset + 1 : thisind(s.string, s.offset + s.ncodeunits),)
 
 function ==(a::Union{String, SubString{String}}, b::Union{String, SubString{String}})
     sizeof(a) == sizeof(b) && _memcmp(a, b) == 0
@@ -270,7 +267,7 @@ function repeat(s::Union{String, SubString{String}}, r::Integer)
     out = _string_n(n*r)
     if n == 1 # common case: repeating a single-byte string
         @inbounds b = codeunit(s, 1)
-        ccall(:memset, Ptr{Cvoid}, (Ptr{UInt8}, Cint, Csize_t), out, b, r)
+        memset(unsafe_convert(Ptr{UInt8}, out), b, r)
     else
         for i = 0:r-1
             GC.@preserve s out unsafe_copyto!(pointer(out, i*n+1), pointer(s), n)

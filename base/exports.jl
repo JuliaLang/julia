@@ -979,8 +979,11 @@ export
     reenable_sigint,
     unsafe_copyto!,
     unsafe_load,
+    unsafe_modify!,
     unsafe_pointer_to_objref,
+    unsafe_replace!,
     unsafe_store!,
+    unsafe_swap!,
 
 # implemented in Random module
     rand,
@@ -1004,6 +1007,7 @@ export
     @v_str,    # version number
     @raw_str,  # raw string with no interpolation/unescaping
     @NamedTuple,
+    @Kwargs,
     @lazy_str, # lazy string
 
     # documentation

@@ -791,6 +791,14 @@ let ms = methods(S45879)
     @test sprint(show, Base.MethodList(Method[], typeof(S45879).name.mt)) isa String
 end
 
+function f49475(a=12.0; b) end
+let ms = methods(f49475)
+    @test length(ms) == 2
+    repr1 = sprint(show, "text/plain", ms[1])
+    repr2 = sprint(show, "text/plain", ms[2])
+    @test occursin("f49475(; ...)", repr1) || occursin("f49475(; ...)", repr2)
+end
+
 if isempty(Base.GIT_VERSION_INFO.commit)
     @test occursin("https://github.com/JuliaLang/julia/tree/v$VERSION/base/special/trig.jl#L", Base.url(which(sin, (Float64,))))
 else
@@ -1001,6 +1009,9 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T, N}, indices::Vararg{$Int, N})")
 # Printing of :(function f end)
 @test sprint(show, :(function f end)) == ":(function f end)"
 @test_repr "function g end"
+
+# Printing of :(function (x...) end)
+@test startswith(replstr(Meta.parse("function (x...) end")), ":(function (x...,)")
 
 # Printing of macro definitions
 @test sprint(show, :(macro m end)) == ":(macro m end)"
@@ -1358,6 +1369,8 @@ test_repr("(:).a")
 @test repr(@NamedTuple{kw::NTuple{7, Int64}}) == "@NamedTuple{kw::NTuple{7, Int64}}"
 @test repr(@NamedTuple{a::Float64, b}) == "@NamedTuple{a::Float64, b}"
 
+# Test general printing of `Base.Pairs` (it should not use the `@Kwargs` macro syntax)
+@test repr(@Kwargs{init::Int}) == "Base.Pairs{Symbol, $Int, Tuple{Symbol}, @NamedTuple{init::$Int}}"
 
 @testset "issue #42931" begin
     @test repr(NTuple{4, :A}) == "NTuple{4, :A}"
@@ -2069,6 +2082,13 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     Base.IRShow.show_ir(io, ir, Base.IRShow.default_config(ir; verbose_linetable=true))
     seekstart(io)
     @test count(contains(r"@ a{80}:\d+ within `my_fun28173"), eachline(io)) == 10
+
+    # Test that a bad :invoke doesn't cause an error during printing
+    Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(Expr(:invoke, nothing, sin), Any), false)
+    io = IOBuffer()
+    Base.IRShow.show_ir(io, ir)
+    seekstart(io)
+    @test contains(String(take!(io)), "Expr(:invoke, nothing")
 end
 
 # Verify that extra instructions at the end of the IR

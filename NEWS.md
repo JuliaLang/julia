@@ -4,17 +4,35 @@ Julia v1.10 Release Notes
 New language features
 ---------------------
 
+* `⥺` (U+297A, `\leftarrowsubset`) and `⥷` (U+2977, `\leftarrowless`)
+  may now be used as binary operators with arrow precedence. ([#45962])
+
 Language changes
 ----------------
 
+* When a task forks a child, the parent task's task-local RNG (random number generator) is no longer affected. The seeding of child based on the parent task also takes a more disciplined approach to collision resistance, using a design based on the SplitMix and DotMix splittable RNG schemes ([#49110]).
+* A new more-specific rule for methods resolves ambiguities containing Union{} in favor of
+  the method defined explicitly to handle the Union{} argument. This makes it possible to
+  define methods to explicitly handle Union{} without the ambiguities that commonly would
+  result previously. This also lets the runtime optimize certain method lookups in a way
+  that significantly improves load and inference times for heavily overloaded methods that
+  dispatch on Types (such as traits and constructors).
+* The "h bar" `ℏ` (`\hslash` U+210F) character is now treated as equivalent to `ħ` (`\hbar` U+0127).
+* When a method with keyword arguments is displayed in the stack trace view, the textual
+  representation of the keyword arguments' types is simplified using the new
+  `@Kwargs{key1::Type1, ...}` macro syntax ([#49959]).
 
 Compiler/Runtime improvements
 -----------------------------
+
 * The `@pure` macro is now deprecated. Use `Base.@assume_effects :foldable` instead ([#48682]).
+* The mark phase of the Garbage Collector is now multi-threaded ([#48600]).
 
 Command-line option changes
 ---------------------------
 
+* New option `--gcthreads` to set how many threads will be used by the Garbage Collector ([#48600]).
+  The default is set to `N/2` where `N` is the amount of worker threads (`--threads`) used by Julia.
 
 Multi-threading changes
 -----------------------
@@ -29,6 +47,7 @@ New library functions
 * `tanpi` is now defined. It computes tan(πx) more accurately than `tan(pi*x)` ([#48575]).
 * `fourthroot(x)` is now defined in `Base.Math` and can be used to compute the fourth root of `x`.
    It can also be accessed using the unicode character `∜`, which can be typed by `\fourthroot<tab>` ([#48899]).
+* `Libc.memmove`, `Libc.memset`, and `Libc.memcpy` are now defined, whose functionality matches that of their respective C calls.
 
 New library features
 --------------------
@@ -37,6 +56,7 @@ New library features
 * `binomial(x, k)` now supports non-integer `x` ([#48124]).
 * A `CartesianIndex` is now treated as a "scalar" for broadcasting ([#47044]).
 * `printstyled` now supports italic output ([#45164]).
+* `parent` and `parentindices` support `SubString`s
 
 Standard library changes
 ------------------------
@@ -46,10 +66,6 @@ Standard library changes
 
 #### Package Manager
 
-* "Package Extensions": support for loading a piece of code based on other
-  packages being loaded in the Julia session.
-  This has similar applications as the Requires.jl package but also
-  supports precompilation and setting compatibility.
 * `Pkg.precompile` now accepts `timing` as a keyword argument which displays per package timing information for precompilation (e.g. `Pkg.precompile(timing=true)`)
 
 #### LinearAlgebra
@@ -83,6 +99,8 @@ Standard library changes
 
 #### REPL
 
+* When stack traces are printed, the printed depth of types in function signatures will be limited
+  to avoid overly verbose output ([#49795]).
 
 #### SuiteSparse
 
@@ -95,6 +113,7 @@ Standard library changes
 
 * The `@test_broken` macro (or `@test` with `broken=true`) now complains if the test expression returns a
   non-boolean value in the same way as a non-broken test. ([#47804])
+* When a call to `@test` fails or errors inside a function, a larger stacktrace is now printed such that the location of the test within a `@testset` can be retrieved ([#49451])
 
 #### Dates
 
@@ -111,6 +130,7 @@ Standard library changes
 #### InteractiveUtils
 
  * `code_native` and `@code_native` now default to intel syntax instead of AT&T.
+ * `@time_imports` now shows the timing of any module `__init__()`s that are run ([#49529])
 
 Deprecated or removed
 ---------------------
