@@ -43,14 +43,6 @@ function abstract_eval_phi_stmt(interp::AbstractInterpreter, phi::PhiNode, ::Int
     return abstract_eval_phi(interp, phi, nothing, irsv)
 end
 
-function propagate_control_effects!(interp::AbstractInterpreter, idx::Int, stmt::GotoIfNot,
-        irsv::IRInterpretationState, extra_reprocess::Union{Nothing,BitSet,BitSetBoundedMinPrioritySet})
-    # Nothing to do for most abstract interpreters, but if the abstract
-    # interpreter has control-dependent lattice effects, it can override
-    # this method.
-    return false
-end
-
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, irsv::IRInterpretationState)
     si = StmtInfo(true) # TODO better job here?
     (; rt, effects, info) = abstract_call(interp, arginfo, si, irsv)
@@ -102,8 +94,7 @@ function kill_terminator_edges!(irsv::IRInterpretationState, term_idx::Int, bb::
 end
 
 function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union{Int,Nothing},
-    @nospecialize(inst), @nospecialize(typ), irsv::IRInterpretationState,
-    extra_reprocess::Union{Nothing,BitSet,BitSetBoundedMinPrioritySet})
+    @nospecialize(inst), @nospecialize(typ), irsv::IRInterpretationState)
     ir = irsv.ir
     if isa(inst, GotoIfNot)
         cond = inst.cond
@@ -126,7 +117,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union
             end
             return true
         end
-        return propagate_control_effects!(interp, idx, inst, irsv, extra_reprocess)
+        return false
     end
     rt = nothing
     if isa(inst, Expr)
@@ -204,9 +195,8 @@ function process_terminator!(ir::IRCode, @nospecialize(inst), idx::Int, bb::Int,
     end
 end
 
-default_reprocess(::AbstractInterpreter, ::IRInterpretationState) = nothing
 function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState;
-    extra_reprocess::Union{Nothing,BitSet} = default_reprocess(interp, irsv))
+        externally_refined::Union{Nothing,BitSet} = nothing)
     interp = switch_to_irinterp(interp)
 
     (; ir, tpdum, ssa_refined) = irsv
@@ -227,12 +217,11 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
             irsv.curridx = idx
             inst = ir.stmts[idx][:inst]
             typ = ir.stmts[idx][:type]
+            flag = ir.stmts[idx][:flag]
             any_refined = false
-            if extra_reprocess !== nothing
-                if idx in extra_reprocess
-                    pop!(extra_reprocess, idx)
-                    any_refined = true
-                end
+            if (flag & IR_FLAG_REFINED) != 0
+                any_refined = true
+                ir.stmts[idx][:flag] &= ~IR_FLAG_REFINED
             end
             for ur in userefs(inst)
                 val = ur[]
@@ -251,8 +240,9 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
             if typ === Bottom && (idx != lstmt || !is_terminator_or_phi)
                 continue
             end
-            if any_refined && reprocess_instruction!(interp,
-                    idx, bb, inst, typ, irsv, extra_reprocess)
+            if (any_refined && reprocess_instruction!(interp,
+                    idx, bb, inst, typ, irsv)) ||
+               (externally_refined !== nothing && idx in externally_refined)
                 push!(ssa_refined, idx)
                 inst = ir.stmts[idx][:inst]
                 typ = ir.stmts[idx][:type]
@@ -277,9 +267,6 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
     # Slow path
     begin @label residual_scan
         stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))
-        if extra_reprocess !== nothing
-            append!(stmt_ip, extra_reprocess)
-        end
 
         # Slow Path Phase 1.A: Complete use scanning
         while !isempty(bb_ip)
@@ -289,6 +276,11 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
             for idx = stmts
                 irsv.curridx = idx
                 inst = ir.stmts[idx][:inst]
+                flag = ir.stmts[idx][:flag]
+                if (flag & IR_FLAG_REFINED) != 0
+                    ir.stmts[idx][:flag] &= ~IR_FLAG_REFINED
+                    push!(stmt_ip, idx)
+                end
                 for ur in userefs(inst)
                     val = ur[]
                     if isa(val, Argument)
@@ -335,7 +327,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
             inst = ir.stmts[idx][:inst]
             typ = ir.stmts[idx][:type]
             if reprocess_instruction!(interp,
-                idx, nothing, inst, typ, irsv, stmt_ip)
+                idx, nothing, inst, typ, irsv)
                 append!(stmt_ip, tpdum[idx])
             end
         end
