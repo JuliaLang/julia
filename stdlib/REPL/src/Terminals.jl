@@ -54,22 +54,22 @@ pos(t::TextTerminal=Base.active_repl.t) = (getX(t), getY(t))
 
 # Absolute fallbacks are provided for relative movements
 cmove_up(t::TextTerminal, n=1) = cmove(getX(t), max(1, getY(t)-n))
-cmove_up(n=1) cmove_up(Base.current_repl.t, n)
+cmove_up(n=1) = cmove_up(Base.current_repl.t, n)
 
 cmove_down(t::TextTerminal, n=1) = cmove(getX(t), max(height(t), getY(t)+n))
-cmove_down(n=1) cmove_down(Base.current_repl.t, n)
+cmove_down(n=1) = cmove_down(Base.current_repl.t, n)
 
 cmove_left(t::TextTerminal, n=1) = cmove(max(1, getX(t)-n), getY(t))
-cmove_left(n=1) cmove_left(Base.current_repl.t, n)
+cmove_left(n=1) = cmove_left(Base.current_repl.t, n)
 
 cmove_right(t::TextTerminal, n=1) = cmove(max(width(t), getX(t)+n), getY(t))
-cmove_right(n=1) cmove_right(Base.current_repl.t, n)
+cmove_right(n=1) = cmove_right(Base.current_repl.t, n)
 
 cmove_line_up(t::TextTerminal, n=1) = cmove(1, max(1, getY(t)-n))
-cmove_line_up(n=1) cmove_line_up(Base.current_repl.t, n)
+cmove_line_up(n=1) = cmove_line_up(Base.current_repl.t, n)
 
 cmove_line_down(t::TextTerminal, n=1) = cmove(1, max(height(t), getY(t)+n))
-cmove_line_down(n=1) cmove_line_down(Base.current_repl.t, n)
+cmove_line_down(n=1) = cmove_line_down(Base.current_repl.t, n)
 
 cmove_col(t::TextTerminal, c) = cmove(c, getY(t))
 cmove_col(c) = cmove_col(Base.current_repl.t, n)
