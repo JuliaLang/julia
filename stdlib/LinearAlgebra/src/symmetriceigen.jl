@@ -172,7 +172,7 @@ function eigen!(A::StridedMatrix{T}, B::Union{RealHermSymComplexHerm{T},Diagonal
 end
 
 function eigen(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    eigen!(copy(A), copy(C); sortby)
+    eigen!(copy(A), C; sortby)
 end
 function eigen!(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     return _choleigen!(A, C.U; sortby)
