@@ -527,7 +527,7 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     }
     void *fptr = lookup_symbol(RTLD_DEFAULT, "jl_get_pgcstack_static");
     void *(*key)(void) = lookup_symbol(RTLD_DEFAULT, "jl_pgcstack_addr_static");
-    _Atomic char *semaphore = lookup_symbol(RTLD_DEFAULT, "jl_pgcstack_static_semaphore");
+    _Atomic(char) *semaphore = lookup_symbol(RTLD_DEFAULT, "jl_pgcstack_static_semaphore");
     if (fptr != NULL && key != NULL && semaphore != NULL) {
         char already_used = 0;
         atomic_compare_exchange_strong(semaphore, &already_used, 1);
