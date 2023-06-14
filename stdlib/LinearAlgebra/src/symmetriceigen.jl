@@ -175,12 +175,9 @@ function eigen(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::U
     eigen!(copy(A), C; sortby)
 end
 function eigen!(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    return _choleigen!(A, C.U; sortby)
-end
-# Cholesky decomposition based eigenvalues and eigenvectors
-function _choleigen!(A, U; sortby)
-    vals, w = eigen!(UtiAUi!(A, U))
-    vecs = U \ w
+    # Cholesky decomposition based eigenvalues and eigenvectors
+    vals, w = eigen!(UtiAUi!(A, C.U))
+    vecs = C.U \ w
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
 
@@ -188,10 +185,7 @@ function eigen(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby:
     eigen!(copy(A), copy(B); sortby)
 end
 function eigen!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    return _bkeigen!(A, B; sortby)
-end
-# Bunchkaufman decomposition based eigenvalues and eigenvectors
-function _bkeigen!(A, B; sortby)
+    # Bunchkaufman decomposition based eigenvalues and eigenvectors
     if B.uplo == 'U'
         vals, w = eigen!(ldiv(lu!(B.D), UiAUti!(A[B.p,B.p], B.U)); sortby)
         vecs = (B.U' \ w)[invperm(B.p),:]
