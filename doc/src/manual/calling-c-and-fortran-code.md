@@ -1000,7 +1000,7 @@ A table of translations between the macro and function interfaces is given below
 
 ## [Calling Convention](@id calling-convention)
 
-The second argument to `ccall` (immediatel preceding return type) can optionally
+The second argument to `ccall` (immediately preceding return type) can optionally
 be a calling convention specifier (the `@ccall` macro currently does not support
 giving a calling convention). Without any specifier, the platform-default C
 calling convention is used. Other supported conventions are: `stdcall`, `cdecl`,

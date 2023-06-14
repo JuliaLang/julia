@@ -281,9 +281,6 @@ void jl_gc_free_page(void *p) JL_NOTSAFEPOINT
     if ((memory_map.freemap1[info.pagetable_i32] & msk) == 0)
         memory_map.freemap1[info.pagetable_i32] |= msk;
 
-    free(info.meta->ages);
-    info.meta->ages = NULL;
-
     // tell the OS we don't need these pages right now
     size_t decommit_size = GC_PAGE_SZ;
     if (GC_PAGE_SZ < jl_page_size) {

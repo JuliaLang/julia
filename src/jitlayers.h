@@ -41,7 +41,7 @@
 // However, JITLink is a relatively young library and lags behind in platform
 // and feature support (e.g. Windows, JITEventListeners for various profilers,
 // etc.). Thus, we currently only use JITLink where absolutely required, that is,
-// for Mac/aarch64.
+// for Mac/aarch64 and Linux/aarch64.
 // #define JL_FORCE_JITLINK
 
 #if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
@@ -49,8 +49,16 @@
 #endif
 // The sanitizers don't play well with our memory manager
 
-#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_) || defined(JL_FORCE_JITLINK) || JL_LLVM_VERSION >= 150000 && defined(HAS_SANITIZER)
+#if defined(JL_FORCE_JITLINK) || JL_LLVM_VERSION >= 150000 && defined(HAS_SANITIZER)
 # define JL_USE_JITLINK
+#else
+# if defined(_CPU_AARCH64_)
+#  if defined(_OS_LINUX_) && JL_LLVM_VERSION < 150000
+#   pragma message("On aarch64-gnu-linux, LLVM version >= 15 is required for JITLink; fallback suffers from occasional segfaults")
+#  else
+#   define JL_USE_JITLINK
+#  endif
+# endif
 #endif
 
 #ifdef JL_USE_JITLINK

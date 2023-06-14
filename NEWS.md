@@ -27,6 +27,8 @@ Compiler/Runtime improvements
 
 * The `@pure` macro is now deprecated. Use `Base.@assume_effects :foldable` instead ([#48682]).
 * The mark phase of the Garbage Collector is now multi-threaded ([#48600]).
+* [JITLink](https://llvm.org/docs/JITLink.html) is enabled by default on Linux aarch64 when Julia is linked to LLVM 15 or later versions ([#49745]).
+  This should resolve many segmentation faults previously observed on this platform.
 
 Command-line option changes
 ---------------------------
