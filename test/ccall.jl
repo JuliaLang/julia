@@ -1757,37 +1757,11 @@ end
     )::Cstring))...)
     @test call == Base.remove_linenums!(
         quote
-        local arg1root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cstring)), $(Expr(:escape, :str)))
-        local arg1 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cstring)), arg1root)
-        local arg2root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cint)), $(Expr(:escape, :num1)))
-        local arg2 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cint)), arg2root)
-        local arg3root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cint)), $(Expr(:escape, :num2)))
-        local arg3 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cint)), arg3root)
-        $(Expr(:foreigncall,
-               :($(Expr(:escape, :((:func, libstring))))),
-               :($(Expr(:escape, :Cstring))),
-               :($(Expr(:escape, :(($(Expr(:core, :svec)))(Cstring, Cint, Cint))))),
-               0,
-               :(:ccall),
-               :arg1, :arg2, :arg3, :arg1root, :arg2root, :arg3root))
+        ccall($(Expr(:escape, :((:func, libstring)))), $(Expr(:cconv, :ccall, 0)), $(Expr(:escape, :Cstring)), ($(Expr(:escape, :Cstring)), $(Expr(:escape, :Cint)), $(Expr(:escape, :Cint))), $(Expr(:escape, :str)), $(Expr(:escape, :num1)), $(Expr(:escape, :num2)))
         end)
 
-    # pointer interpolation
-    call = ccall_macro_lower(:ccall, ccall_macro_parse(:( $(Expr(:$, :fptr))("bar"::Cstring)::Cvoid ))...)
-    @test Base.remove_linenums!(call) == Base.remove_linenums!(
-    quote
-        func = $(Expr(:escape, :fptr))
-        begin
-            if !(func isa Ptr{Cvoid})
-                name = :fptr
-                throw(ArgumentError("interpolated function `$(name)` was not a Ptr{Cvoid}, but $(typeof(func))"))
-            end
-        end
-        local arg1root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cstring)), $(Expr(:escape, "bar")))
-        local arg1 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cstring)), arg1root)
-        $(Expr(:foreigncall, :func, :($(Expr(:escape, :Cvoid))), :($(Expr(:escape, :(($(Expr(:core, :svec)))(Cstring))))), 0, :(:ccall), :arg1, :arg1root))
-    end)
-
+    local fptr = :x
+    @test_throws ArgumentError("interpolated function `fptr` was not a Ptr{Cvoid}, but Symbol") @ccall $fptr()::Cvoid
 end
 
 @testset "check error paths" begin

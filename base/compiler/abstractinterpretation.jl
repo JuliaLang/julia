@@ -834,21 +834,27 @@ end
 
 function concrete_eval_eligible(interp::AbstractInterpreter,
     @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, sv::AbsIntState)
+    (;effects) = result
     if inbounds_option() === :off
-        # Disable concrete evaluation in `--check-bounds=no` mode, since we cannot be sure
-        # that inferred effects are accurate.
-        return :none
-    elseif !result.effects.noinbounds && stmt_taints_inbounds_consistency(sv)
+        if !is_nothrow(effects)
+            # Disable concrete evaluation in `--check-bounds=no` mode,
+            # unless it is known to not throw.
+            return :none
+        end
+    end
+    if !effects.noinbounds && stmt_taints_inbounds_consistency(sv)
         # If the current statement is @inbounds or we propagate inbounds, the call's consistency
         # is tainted and not consteval eligible.
         add_remark!(interp, sv, "[constprop] Concrete evel disabled for inbounds")
         return :none
-    elseif isoverlayed(method_table(interp)) && !is_nonoverlayed(result.effects)
-        # disable all concrete-evaluation if this function call is tainted by some overlayed
+    end
+    if isoverlayed(method_table(interp)) && !is_nonoverlayed(effects)
+        # disable concrete-evaluation if this function call is tainted by some overlayed
         # method since currently there is no direct way to execute overlayed methods
+        add_remark!(interp, sv, "[constprop] Concrete evel disabled for overlayed methods")
         return :none
     end
-    if result.edge !== nothing && is_foldable(result.effects)
+    if result.edge !== nothing && is_foldable(effects)
         if f !== nothing && is_all_const_arg(arginfo, #=start=#2)
             return :concrete_eval
         elseif !any_conditional(arginfo)
@@ -1875,7 +1881,7 @@ function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{An
         ret = canconst ? Const(body) : Type{body}
         return CallMeta(ret, Effects(EFFECTS_TOTAL; nothrow), NoCallInfo())
     end
-    return CallMeta(Any, EFFECTS_UNKNOWN, NoCallInfo())
+    return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
 end
 
 function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, si::StmtInfo, sv::AbsIntState)
@@ -1987,7 +1993,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     elseif f === TypeVar
         # Manually look through the definition of TypeVar to
         # make sure to be able to get `PartialTypeVar`s out.
-        (la < 2 || la > 4) && return CallMeta(Union{}, EFFECTS_UNKNOWN, NoCallInfo())
+        (la < 2 || la > 4) && return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
         n = argtypes[2]
         ub_var = Const(Any)
         lb_var = Const(Union{})
@@ -2301,7 +2307,7 @@ end
 
 function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable,Nothing},
                                       sv::AbsIntState)
-    effects = EFFECTS_UNKNOWN
+    effects = Effects()
     ehead = e.head
     𝕃ᵢ = typeinf_lattice(interp)
     ⊑ᵢ = ⊑(𝕃ᵢ)
@@ -2603,11 +2609,9 @@ function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, sv::
     nothrow = false
     if isa(rt, Const)
         consistent = ALWAYS_TRUE
+        nothrow = true
         if is_mutation_free_argtype(rt)
             inaccessiblememonly = ALWAYS_TRUE
-            nothrow = true
-        else
-            nothrow = true
         end
     elseif isdefined_globalref(g)
         nothrow = true

@@ -1351,11 +1351,11 @@ function _check_testset(testsettype, testsetname)
 end
 
 """
-    @testset [CustomTestSet] [option=val  ...] ["description"] begin ... end
-    @testset [CustomTestSet] [option=val  ...] ["description \$v"] for v in (...) ... end
-    @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] for v in (...), w in (...) ... end
-    @testset [CustomTestSet] [option=val  ...] ["description"] foo()
-    @testset let v = (...) ... end
+    @testset [CustomTestSet] [options...] ["description"] begin test_ex end
+    @testset [CustomTestSet] [options...] ["description \$v"] for v in itr test_ex end
+    @testset [CustomTestSet] [options...] ["description \$v, \$w"] for v in itrv, w in itrw test_ex end
+    @testset [CustomTestSet] [options...] ["description"] test_func()
+    @testset let v = v, w = w; test_ex; end
 
 # With begin/end or function call
 
@@ -1380,7 +1380,7 @@ accepts three boolean options:
   This can also be set globally via the env var `JULIA_TEST_FAILFAST`.
 
 !!! compat "Julia 1.8"
-    `@testset foo()` requires at least Julia 1.8.
+    `@testset test_func()` requires at least Julia 1.8.
 
 !!! compat "Julia 1.9"
     `failfast` requires at least Julia 1.9.
@@ -1436,6 +1436,9 @@ parent test set (with the context object appended to any failing tests.)
 !!! compat "Julia 1.9"
     `@testset let` requires at least Julia 1.9.
 
+!!! compat "Julia 1.10"
+    Multiple `let` assignements are supported since Julia 1.10.
+
 ## Examples
 ```jldoctest
 julia> @testset let logi = log(im)
@@ -1445,6 +1448,17 @@ julia> @testset let logi = log(im)
 Test Failed at none:3
   Expression: !(iszero(real(logi)))
      Context: logi = 0.0 + 1.5707963267948966im
+
+ERROR: There was an error during testing
+
+julia> @testset let logi = log(im), op = !iszero
+           @test imag(logi) == π/2
+           @test op(real(logi))
+       end
+Test Failed at none:3
+  Expression: op(real(logi))
+     Context: logi = 0.0 + 1.5707963267948966im
+              op = !iszero
 
 ERROR: There was an error during testing
 ```
@@ -1477,7 +1491,7 @@ trigger_test_failure_break(@nospecialize(err)) =
 """
 Generate the code for an `@testset` with a `let` argument.
 """
-function testset_context(args, tests, source)
+function testset_context(args, ex, source)
     desc, testsettype, options = parse_testset_args(args[1:end-1])
     if desc !== nothing || testsettype !== nothing
         # Reserve this syntax if we ever want to allow this, but for now,
@@ -1485,22 +1499,38 @@ function testset_context(args, tests, source)
         error("@testset with a `let` argument cannot be customized")
     end
 
-    assgn = tests.args[1]
-    if !isa(assgn, Expr) || assgn.head !== :(=)
-        error("`@testset let` must have exactly one assignment")
-    end
-    assignee = assgn.args[1]
+    let_ex = ex.args[1]
 
-    tests.args[2] = quote
-        $push_testset($(ContextTestSet)($(QuoteNode(assignee)), $assignee; $options...))
+    if Meta.isexpr(let_ex, :(=))
+        contexts = Any[let_ex.args[1]]
+    elseif Meta.isexpr(let_ex, :block)
+        contexts = Any[]
+        for assign_ex in let_ex.args
+            if Meta.isexpr(assign_ex, :(=))
+                push!(contexts, assign_ex.args[1])
+            else
+                error("Malformed `let` expression is given")
+            end
+        end
+    else
+        error("Malformed `let` expression is given")
+    end
+    reverse!(contexts)
+
+    test_ex = ex.args[2]
+
+    ex.args[2] = quote
+        $(map(contexts) do context
+            :($push_testset($(ContextTestSet)($(QuoteNode(context)), $context; $options...)))
+        end...)
         try
-            $(tests.args[2])
+            $(test_ex)
         finally
-            $pop_testset()
+            $(map(_->:($pop_testset()), contexts)...)
         end
     end
 
-    return esc(tests)
+    return esc(ex)
 end
 
 """

@@ -3480,6 +3480,19 @@ end
         :(global (; x::$(GlobalRef(m, :S)), y::T) = $(GlobalRef(m, :a)))
 end
 
+# issue #49920
+let line1 = (quote end).args[1],
+    line2 = (quote end).args[1],
+    line3 = (quote end).args[1]
+    @test 1 === eval(Meta.lower(Main, Expr(:block, line1, 1, line2, line3)))
+end
+
 # issue #49984
 macro z49984(s); :(let a; $(esc(s)); end); end
 @test let a = 1; @z49984(a) === 1; end
+
+# issues #37783, #39929, #42552, #43379, and #48332
+let x = 1 => 2
+    @test_throws ErrorException @eval a => b = 2
+    @test_throws "function Base.=> must be explicitly imported to be extended" @eval a => b = 2
+end

@@ -18,12 +18,17 @@ Language changes
   that significantly improves load and inference times for heavily overloaded methods that
   dispatch on Types (such as traits and constructors).
 * The "h bar" `ℏ` (`\hslash` U+210F) character is now treated as equivalent to `ħ` (`\hbar` U+0127).
+* When a method with keyword arguments is displayed in the stack trace view, the textual
+  representation of the keyword arguments' types is simplified using the new
+  `@Kwargs{key1::Type1, ...}` macro syntax ([#49959]).
 
 Compiler/Runtime improvements
 -----------------------------
 
 * The `@pure` macro is now deprecated. Use `Base.@assume_effects :foldable` instead ([#48682]).
 * The mark phase of the Garbage Collector is now multi-threaded ([#48600]).
+* [JITLink](https://llvm.org/docs/JITLink.html) is enabled by default on Linux aarch64 when Julia is linked to LLVM 15 or later versions ([#49745]).
+  This should resolve many segmentation faults previously observed on this platform.
 
 Command-line option changes
 ---------------------------

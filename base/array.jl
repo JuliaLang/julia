@@ -9,7 +9,7 @@ The objects called do not have matching dimensionality. Optional argument `msg` 
 descriptive error string.
 """
 struct DimensionMismatch <: Exception
-    msg::String
+    msg::AbstractString
 end
 DimensionMismatch() = DimensionMismatch("")
 
@@ -252,9 +252,14 @@ function bitsunionsize(u::Union)
     return sz
 end
 
-# Deprecate this, as it seems to have no documented meaning and is unused here,
-# but is frequently accessed in packages
 elsize(@nospecialize _::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)
+function elsize(::Type{Ptr{T}}) where T
+    # this only must return something valid for values which satisfy is_valid_intrinsic_elptr(T),
+    # which includes Any and most concrete datatypes
+    T === Any && return sizeof(Ptr{Any})
+    T isa DataType || sizeof(Any) # throws
+    return LLT_ALIGN(Core.sizeof(T), datatype_alignment(T))
+end
 elsize(::Type{Union{}}, slurp...) = 0
 sizeof(a::Array) = Core.sizeof(a)
 
@@ -723,7 +728,7 @@ _array_for(::Type{T}, itr, isz) where {T} = _array_for(T, isz, _similar_shape(it
     collect(collection)
 
 Return an `Array` of all items in a collection or iterator. For dictionaries, returns
-`Pair{KeyType, ValType}`. If the argument is array-like or is an iterator with the
+`Vector{Pair{KeyType, ValType}}`. If the argument is array-like or is an iterator with the
 [`HasShape`](@ref IteratorSize) trait, the result will have the same shape
 and number of dimensions as the argument.
 

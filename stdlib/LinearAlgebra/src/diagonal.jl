@@ -111,7 +111,8 @@ Matrix(D::Diagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(D)
 Array(D::Diagonal{T}) where {T} = Matrix(D)
 function Matrix{T}(D::Diagonal) where {T}
     n = size(D, 1)
-    B = zeros(T, n, n)
+    B = Matrix{T}(undef, n, n)
+    n > 1 && fill!(B, zero(T))
     @inbounds for i in 1:n
         B[i,i] = D.diag[i]
     end
