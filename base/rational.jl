@@ -173,11 +173,10 @@ julia> typeof(numerator(a))
 BigInt
 ```
 """
-function rationalize(::Type{T}, x::Union{AbstractFloat, Rational}, tol::Real) where T<:Integer
+function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
     if tol < 0
         throw(ArgumentError("negative tolerance $tol"))
     end
-
     T<:Unsigned && x < 0 && __throw_negate_unsigned()
     isnan(x) && return T(x)//one(T)
     isinf(x) && return unsafe_rational(x < 0 ? -one(T) : one(T), zero(T))
@@ -189,6 +188,7 @@ function rationalize(::Type{T}, x::Union{AbstractFloat, Rational}, tol::Real) wh
     a = trunc(x)
     r = x-a
     y = one(x)
+
     tolx = oftype(x, tol)
     nt, t, tt = tolx, zero(tolx), tolx
     ia = np = nq = zero(T)
@@ -233,21 +233,10 @@ function rationalize(::Type{T}, x::Union{AbstractFloat, Rational}, tol::Real) wh
         return p // q
     end
 end
-rationalize(::Type{T}, x::AbstractFloat; tol::Real = eps(x)) where {T<:Integer} = rationalize(T, x, tol)
+rationalize(::Type{T}, x::AbstractFloat; tol::Real = eps(x)) where {T<:Integer} = rationalize(T, x, tol)::Rational{T}
 rationalize(x::AbstractFloat; kvs...) = rationalize(Int, x; kvs...)
-rationalize(::Type{T}, x::Complex; kvs...) where {T<:Integer} = Complex(rationalize(T, x.re; kvs...), rationalize(T, x.im; kvs...))
-rationalize(x::Complex; kvs...) = Complex(rationalize(Int, x.re; kvs...), rationalize(Int, x.im; kvs...))
-rationalize(::Type{T}, x::Rational; tol::Real = 0) where {T<:Integer} = rationalize(T, x, tol)
-rationalize(x::Rational; kvs...) = x
-rationalize(x::Integer; kvs...) = Rational(x)
-function rationalize(::Type{T}, x::Integer; kvs...) where {T<:Integer}
-    if Base.hastypemax(T) # BigInt doesn't
-        x < typemin(T) && return unsafe_rational(-one(T), zero(T))
-        x > typemax(T) && return unsafe_rational(one(T), zero(T))
-    end
-    return Rational{T}(x)
-end
-
+rationalize(::Type{T}, x::Complex; kvs...) where {T<:Integer} = Complex(rationalize(T, x.re, kvs...)::Rational{T}, rationalize(T, x.im, kvs...)::Rational{T})
+rationalize(x::Complex; kvs...) = Complex(rationalize(Int, x.re, kvs...), rationalize(Int, x.im, kvs...))
 
 """
     numerator(x)
