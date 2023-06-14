@@ -856,3 +856,10 @@ function _hermitianpart!(A::AbstractMatrix)
     end
     return A
 end
+
+## structured matrix printing ##
+function Base.replace_in_print_matrix(A::HermOrSym,i::Integer,j::Integer,s::AbstractString)
+    ijminmax = minmax(i, j)
+    inds = A.uplo == 'U' ? ijminmax : reverse(ijminmax)
+    Base.replace_in_print_matrix(parent(A), inds..., s)
+end

@@ -342,7 +342,6 @@ void *jl_gc_perm_alloc_nolock(size_t sz, int zero,
     unsigned align, unsigned offset) JL_NOTSAFEPOINT;
 void *jl_gc_perm_alloc(size_t sz, int zero,
     unsigned align, unsigned offset) JL_NOTSAFEPOINT;
-void jl_gc_force_mark_old(jl_ptls_t ptls, jl_value_t *v);
 void gc_sweep_sysimg(void);
 
 

@@ -1122,10 +1122,10 @@ end
 function renumber_ssa2(val::SSAValue, ssanums::Vector{Any}, used_ssas::Vector{Int},
         new_new_used_ssas::Vector{Int}, do_rename_ssa::Bool)
     id = val.id
-    if id > length(ssanums)
-        return val
-    end
     if do_rename_ssa
+        if id > length(ssanums)
+            return val
+        end
         val = ssanums[id]
     end
     if isa(val, SSAValue)
