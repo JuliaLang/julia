@@ -33,6 +33,11 @@ using Test
 
     @test @inferred(rationalize(Int, 3.0, 0.0)) === 3//1
     @test @inferred(rationalize(Int, 3.0, 0)) === 3//1
+    @test @inferred(rationalize(Int, 33//100; tol=0.1)) === 1//3 # because tol
+    @test @inferred(rationalize(Int, 3; tol=0.0)) === 3//1
+    @test @inferred(rationalize(Int8, 1000//333)) === Rational{Int8}(3//1)
+    @test @inferred(rationalize(Int8, 1000//3)) === Rational{Int8}(1//0)
+    @test @inferred(rationalize(Int8, 1000)) === Rational{Int8}(1//0)
     @test_throws OverflowError rationalize(UInt, -2.0)
     @test_throws ArgumentError rationalize(Int, big(3.0), -1.)
     # issue 26823
@@ -726,4 +731,11 @@ end
     @test rationalize(Int8, float(pi)im) == 0//1 + 22//7*im
     @test rationalize(1.192 + 2.233im) == 149//125 + 2233//1000*im
     @test rationalize(Int8, 1.192 + 2.233im) == 118//99 + 67//30*im
+end
+@testset "rationalize(Complex) with tol" begin
+    # test: rationalize(x::Complex; kvs...)
+    precise_next = 7205759403792795//72057594037927936
+    @assert Float64(precise_next) == nextfloat(0.1)
+    @test rationalize(nextfloat(0.1) * im; tol=0) == precise_next * im
+    @test rationalize(0.1im; tol=eps(0.1)) == rationalize(0.1im)
 end
