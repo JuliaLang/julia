@@ -236,13 +236,12 @@ function eigvals!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, B::AbstractMatri
 end
 
 function eigvals!(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    return _choleigvals!(A, C.U; sortby)
+    # Cholesky decomposition based eigenvalues
+    return eigvals!(UtiAUi!(A, C.U); sortby)
 end
 function eigvals(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    eigvals!(eigencopy_oftype(A, T), copy(C); sortby)
+    eigvals!(eigencopy_oftype(A, T), C; sortby)
 end
-# Cholesky decomposition based eigenvalues
-_choleigvals!(A, U; sortby) = eigvals!(UtiAUi!(A, U); sortby)
 
 # Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues
 function eigvals(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
