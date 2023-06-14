@@ -720,12 +720,12 @@ function perform_lifting!(compact::IncrementalCompact,
             lifted_philikes[i] = LiftedPhilike(ssa, new_node, true)
         else
             @assert is_known_call(old_node, Core.ifelse, compact)
-            ifelse_func, condition, then_result, else_result = old_node.args
+            ifelse_func, condition = old_node.args
             if is_old(compact, old_ssa) && isa(condition, SSAValue)
                 condition = OldSSAValue(condition.id)
             end
 
-            new_node = Expr(:call, ifelse_func, condition, then_result, else_result)
+            new_node = Expr(:call, ifelse_func, condition) # Renamed then_result, else_result added below
             new_inst = NewInstruction(new_node, result_t, NoCallInfo(), old_inst[:line], old_inst[:flag])
 
             ssa = insert_node!(compact, old_ssa, new_inst)
@@ -757,20 +757,24 @@ function perform_lifting!(compact::IncrementalCompact,
                 end
             end
         elseif isa(lfnode, IfElseCall)
-            then_result, else_result = lfnode.call.args[3], lfnode.call.args[4]
+            old_node = compact[old_node_ssa][:inst]::Expr
+            then_result, else_result = old_node.args[3], old_node.args[4]
 
             then_result = lifted_value(compact, old_node_ssa, then_result,
                                        lifted_philikes, lifted_leaves, reverse_mapping)
             else_result = lifted_value(compact, old_node_ssa, else_result,
                                        lifted_philikes, lifted_leaves, reverse_mapping)
 
-            should_count && _count_added_node!(compact, then_result)
-            should_count && _count_added_node!(compact, else_result)
-
             @assert then_result !== SKIP_TOKEN && then_result !== UNDEF_TOKEN
             @assert else_result !== SKIP_TOKEN && else_result !== UNDEF_TOKEN
 
-            lfnode.call.args[3], lfnode.call.args[4] = then_result, else_result
+            if should_count
+                _count_added_node!(compact, then_result)
+                _count_added_node!(compact, else_result)
+            end
+
+            push!(lfnode.call.args, then_result)
+            push!(lfnode.call.args, else_result)
         end
     end
 
