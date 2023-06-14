@@ -2168,7 +2168,7 @@ function _sort!(v::AbstractVector, a::Algorithm, o::Ordering, kw)
         scratch
     else
         # This error prevents infinite recursion for unknown algorithms
-        throw(ArgumentError("Base.Sort._sort!(::$(typeof(v)), ::$(typeof(a)), ::$(typeof(o))) is not defined"))
+        throw(ArgumentError("Base.Sort._sort!(::$(typeof(v)), ::$(typeof(a)), ::$(typeof(o)), ::Any) is not defined"))
     end
 end
 
