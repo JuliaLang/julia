@@ -525,12 +525,12 @@ struct WithoutMissingVector{T, U} <: AbstractVector{T}
     end
 end
 Base.@propagate_inbounds function Base.getindex(v::WithoutMissingVector, i::Integer)
-    out = v.data[i::Integer]
+    out = v.data[i]
     @assert !(out isa Missing)
     out::eltype(v)
 end
 Base.@propagate_inbounds function Base.setindex!(v::WithoutMissingVector, x, i::Integer)
-    v.data[i::Integer] = x
+    v.data[i] = x
     v
 end
 Base.size(v::WithoutMissingVector) = size(v.data)
