@@ -524,13 +524,13 @@ struct WithoutMissingVector{T, U} <: AbstractVector{T}
         new{nonmissingtype(eltype(data)), typeof(data)}(data)
     end
 end
-Base.@propagate_inbounds function Base.getindex(v::WithoutMissingVector, i)
-    out = v.data[i]
+Base.@propagate_inbounds function Base.getindex(v::WithoutMissingVector, i::Integer)
+    out = v.data[i::Integer]
     @assert !(out isa Missing)
     out::eltype(v)
 end
-Base.@propagate_inbounds function Base.setindex!(v::WithoutMissingVector, x, i)
-    v.data[i] = x
+Base.@propagate_inbounds function Base.setindex!(v::WithoutMissingVector, x, i::Integer)
+    v.data[i::Integer] = x
     v
 end
 Base.size(v::WithoutMissingVector) = size(v.data)
@@ -590,8 +590,9 @@ function _sort!(v::AbstractVector, a::MissingOptimization, o::Ordering, kw)
         # we can assume v is equal to eachindex(o.data) which allows a copying partition
         # without allocations.
         lo_i, hi_i = lo, hi
-        for i in eachindex(o.data) # equal to copy(v)
-            x = o.data[i]
+        cv = eachindex(o.data) # equal to copy(v)
+        for i in lo:hi
+            x = o.data[cv[i]]
             if ismissing(x) == (o.order == Reverse) # should x go at the beginning/end?
                 v[lo_i] = i
                 lo_i += 1
