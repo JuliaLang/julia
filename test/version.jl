@@ -223,7 +223,7 @@ end
 let v = v"4.2.1-1.x+a.9"
     @test v.major isa Integer
     @test v.minor isa Integer
-    @test v.micro isa Integer
+    @test v.patch isa Integer
     @test v.prerelease isa Tuple{Vararg{Union{Integer, AbstractString}}}
     @test v.build isa Tuple{Vararg{Union{Integer, AbstractString}}}
 end
