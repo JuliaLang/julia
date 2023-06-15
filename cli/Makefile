@@ -5,7 +5,7 @@ include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/deps/llvm-ver.make
 
 
-HEADERS := $(addprefix $(SRCDIR)/,jl_exports.h loader.h) $(addprefix $(JULIAHOME)/src/,julia_fasttls.h support/platform.h support/dirpath.h jl_exported_data.inc jl_exported_funcs.inc)
+HEADERS := $(addprefix $(SRCDIR)/,jl_exports.h loader.h toml/toml.h) $(addprefix $(JULIAHOME)/src/,julia_fasttls.h support/platform.h support/dirpath.h jl_exported_data.inc jl_exported_funcs.inc)
 
 LOADER_CFLAGS = $(JCFLAGS) -I$(BUILDROOT)/src -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir) -ffreestanding
 LOADER_LDFLAGS = $(JLDFLAGS) -ffreestanding -L$(build_shlibdir) -L$(build_libdir)
@@ -41,8 +41,8 @@ endif # MSYS2
 
 EXE_OBJS := $(BUILDDIR)/loader_exe.o
 EXE_DOBJS := $(BUILDDIR)/loader_exe.dbg.obj
-LIB_OBJS := $(BUILDDIR)/loader_lib.o
-LIB_DOBJS := $(BUILDDIR)/loader_lib.dbg.obj
+LIB_OBJS := $(BUILDDIR)/loader_lib.o $(BUILDDIR)/toml.o
+LIB_DOBJS := $(BUILDDIR)/loader_lib.dbg.obj $(BUILDDIR)/toml.dbg.obj
 
 # If this is an architecture that supports dynamic linking, link in a trampoline definition
 ifneq (,$(wildcard $(SRCDIR)/trampolines/trampolines_$(ARCH).S))
@@ -64,6 +64,10 @@ $(BUILDDIR)/loader_exe.dbg.obj : $(SRCDIR)/loader_exe.c $(HEADERS) $(JULIAHOME)/
 	@$(call PRINT_CC, $(CC) $(DEBUGFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
 $(BUILDDIR)/loader_trampolines.o : $(SRCDIR)/trampolines/trampolines_$(ARCH).S $(HEADERS) $(SRCDIR)/trampolines/common.h
 	@$(call PRINT_CC, $(CC) $(SHIPFLAGS) $(LOADER_CFLAGS) $< -c -o $@)
+$(BUILDDIR)/toml.o : $(SRCDIR)/toml/toml.c $(HEADERS) $(JULIAHOME)/VERSION
+	@$(call PRINT_CC, $(CC) $(SHIPFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
+$(BUILDDIR)/toml.dbg.obj : $(SRCDIR)/toml/toml.c $(HEADERS) $(JULIAHOME)/VERSION
+	@$(call PRINT_CC, $(CC) $(DEBUGFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
 
 # Debugging target to help us see what kind of code is being generated for our trampolines
 dump-trampolines: $(SRCDIR)/trampolines/trampolines_$(ARCH).S

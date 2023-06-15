@@ -2,6 +2,7 @@
 
 // This file defines an RPATH-style relative path loader for all platforms
 #include "loader.h"
+#include "toml/toml.h"
 
 #ifdef __cplusplus
 extern "C" {
