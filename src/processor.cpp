@@ -297,12 +297,6 @@ static inline void append_ext_features(std::vector<std::string> &features,
  * Target specific type/constant definitions, always enable.
  */
 
-struct FeatureName {
-    const char *name;
-    uint32_t bit; // bit index into a `uint32_t` array;
-    uint32_t llvmver; // 0 if it is available on the oldest LLVM version we support
-};
-
 template<typename CPU, size_t n>
 struct CPUSpec {
     const char *name;
@@ -946,3 +940,33 @@ static inline void dump_cpu_spec(uint32_t cpu, const FeatureList<n> &features,
 #include "processor_fallback.cpp"
 
 #endif
+
+extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() {
+    auto specs = jl_get_llvm_clone_targets();
+    const uint32_t base_flags = 0;
+    std::vector<uint8_t> data;
+    auto push_i32 = [&] (uint32_t v) {
+        uint8_t buff[4];
+        memcpy(buff, &v, 4);
+        data.insert(data.end(), buff, buff + 4);
+    };
+    push_i32(specs.size());
+    for (uint32_t i = 0; i < specs.size(); i++) {
+        push_i32(base_flags | (specs[i].flags & JL_TARGET_UNKNOWN_NAME));
+        auto &specdata = specs[i].data;
+        data.insert(data.end(), specdata.begin(), specdata.end());
+    }
+
+    jl_value_t *arr = nullptr;
+    JL_GC_PUSH1(&arr);
+    arr = (jl_value_t*)jl_alloc_array_1d(jl_array_uint8_type, data.size());
+    uint8_t *out = (uint8_t*)jl_array_data(arr);
+    memcpy(out, data.data(), data.size());
+    JL_GC_POP();
+    return arr;
+}
+
+extern "C" JL_DLLEXPORT void jl_reflect_feature_names(const FeatureName **fnames, size_t *nf) {
+    *fnames = feature_names;
+    *nf = nfeature_names;
+}

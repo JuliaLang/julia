@@ -2877,6 +2877,84 @@ function show(io::IO, cf::CacheFlags)
     print(io, ", opt_level = ", cf.opt_level)
 end
 
+struct ImageTarget
+    name::String
+    flags::Int32
+    ext_features::String
+    features_en::Vector{UInt8}
+    features_dis::Vector{UInt8}
+end
+
+function parse_image_target(io::IO)
+    flags = read(io, Int32)
+    nfeature = read(io, Int32)
+    feature_en = read(io, 4*nfeature)
+    feature_dis = read(io, 4*nfeature)
+    name_len = read(io, Int32)
+    name = String(read(io, name_len))
+    ext_features_len = read(io, Int32)
+    ext_features = String(read(io, ext_features_len))
+    ImageTarget(name, flags, ext_features, feature_en, feature_dis)
+end
+
+function parse_image_targets(targets::Vector{UInt8})
+    io = IOBuffer(targets)
+    ntargets = read(io, Int32)
+    targets = Vector{ImageTarget}(undef, ntargets)
+    for i in 1:ntargets
+        targets[i] = parse_image_target(io)
+    end
+    return targets
+end
+
+function current_image_targets()
+    targets = @ccall jl_reflect_clone_targets()::Vector{UInt8}
+    return parse_image_targets(targets)
+end
+
+struct FeatureName
+    name::Cstring
+    bit::UInt32 # bit index into a `uint32_t` array;
+    llvmver::UInt32 # 0 if it is available on the oldest LLVM version we support
+end
+
+function feature_names()
+    fnames = Ref{Ptr{FeatureName}}()
+    nf = Ref{Csize_t}()
+    @ccall jl_reflect_feature_names(fnames::Ptr{Ptr{FeatureName}}, nf::Ptr{Csize_t})::Cvoid
+    Base.unsafe_wrap(Array, fnames[], nf[], own=false)
+end
+
+function test_feature(features::Vector{UInt8}, feat::FeatureName)
+    bitidx = feat.bit
+    u8idx = div(bitidx, 8) + 1
+    bit = bitidx % 8
+    return (features[u8idx] & (1 << bit)) != 0
+end
+
+function show(io::IO, it::ImageTarget)
+    print(io, it.name)
+    if !isempty(it.ext_features)
+        print(io, ",", it.ext_features)
+    end
+    print(io, "; flags=", it.flags)
+    print(io, "; features_en=(")
+    first = true
+    for feat in feature_names()
+        if test_feature(it.features_en, feat)
+            name =  Base.unsafe_string(feat.name)
+            if first
+                first = false
+                print(io, name)
+            else
+                print(io, ", ", name)
+            end
+        end
+    end
+    print(io, ")")
+    # Is feature_dis useful?
+end
+
 # Set by FileWatching.__init__()
 global mkpidlock_hook
 global trymkpidlock_hook
@@ -2914,7 +2992,6 @@ function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=300)
         f()
     end
 end
-
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
 @constprop :none function stale_cachefile(modpath::String, cachefile::String; ignore_loaded::Bool = false)
@@ -2949,7 +3026,9 @@ end
                 return true
             end
             if !check_clone_targets(clone_targets)
-                @debug "Rejecting cache file $cachefile for $modkey since pkgimage can't be loaded on this target"
+                image_targets = parse_image_targets(clone_targets)
+                curr_targets = current_image_targets()
+                @debug "Rejecting cache file $cachefile for $modkey since pkgimage can't be loaded on this target" image_targets curr_targets
                 return true
             end
             if !isfile(ocachefile)
