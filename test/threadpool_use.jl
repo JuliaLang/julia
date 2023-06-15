@@ -13,5 +13,7 @@ tp = :default
 @test fetch(Threads.@spawn tp Threads.threadpool()) === :default
 tp = :interactive
 @test fetch(Threads.@spawn tp Threads.threadpool()) === :interactive
+tp = :foo
+@test_throws ArgumentError Threads.@spawn tp Threads.threadpool()
 @test Threads.threadpooltids(:interactive) == [1]
 @test Threads.threadpooltids(:default) == [2]

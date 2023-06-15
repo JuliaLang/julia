@@ -59,11 +59,23 @@ function _nthreads_in_pool(tpid::Int8)
 end
 
 function _tpid_to_sym(tpid::Int8)
-    return tpid == 0 ? :interactive : :default
+    if tpid == 0
+        return :interactive
+    elseif tpid === 1
+        return :default
+    else
+        throw(ArgumentError("Unrecognized threadpool id $tpid"))
+    end
 end
 
 function _sym_to_tpid(tp::Symbol)
-    return tp === :interactive ? Int8(0) : Int8(1)
+    if tp === :interactive
+        return Int8(0)
+    elseif tp === :default
+        return Int8(1)
+    else
+        throw(ArgumentError("Unrecognized threadpool name `$(repr(tp))`"))
+    end
 end
 
 """
