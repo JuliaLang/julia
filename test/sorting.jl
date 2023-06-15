@@ -1032,8 +1032,8 @@ end
     @test issorted(v[ix[1:10]])
 end
 
-struct NonScalarIndexingOfWithoutMissingVectorAlgorithm <: Base.Sort.Algorithm end
-function Base.Sort._sort!(v::AbstractVector, ::NonScalarIndexingOfWithoutMissingVectorAlgorithm, o::Base.Order.Ordering, kw)
+struct NonScalarIndexingOfWithoutMissingVectorAlg <: Base.Sort.Algorithm end
+function Base.Sort._sort!(v::AbstractVector, ::NonScalarIndexingOfWithoutMissingVectorAlg, o::Base.Order.Ordering, kw)
     Base.Sort.@getkw lo hi
     first_half = v[lo:lo+(hi-lo)÷2]
     second_half = v[lo+(hi-lo)÷2+1:hi]
@@ -1051,10 +1051,18 @@ end
         @test wmv[1:3] == [1, 7, 2]
     end
     @testset "End to end" begin
-        alg = Base.Sort.InitialOptimizations(NonScalarIndexingOfWithoutMissingVectorAlgorithm())
+        alg = Base.Sort.InitialOptimizations(NonScalarIndexingOfWithoutMissingVectorAlg())
         @test issorted(sort(rand(100); alg))
         @test issorted(sort([rand() < .5 ? missing : randstring() for _ in 1:100]; alg))
     end
+end
+
+struct DispatchLoopTestAlg <: Base.Sort.Algorithm end
+function Base.sort!(v::AbstractVector, lo::Integer, hi::Integer, ::DispatchLoopTestAlg, order::Base.Order.Ordering)
+    sort!(view(v, lo:hi); order)
+end
+@testset "Support dispatch from the old style to the new style and back" begin
+    @test issorted(sort!(rand(100), Base.Sort.InitialOptimizations(DispatchLoopTestAlg()), Base.Order.Forward))
 end
 
 # This testset is at the end of the file because it is slow.
