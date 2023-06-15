@@ -126,28 +126,43 @@ Returns the number of GC threads currently configured.
 ngcthreads() = Int(unsafe_load(cglobal(:jl_n_gcthreads, Cint))) + 1
 
 function threading_run(fun, static)
-    ccall(:jl_enter_threaded_region, Cvoid, ())
     n = threadpoolsize()
     tid_offset = threadpoolsize(:interactive)
     tasks = Vector{Task}(undef, n)
-    for i = 1:n
-        t = Task(() -> fun(i)) # pass in tid
-        t.sticky = static
-        static && ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
-        tasks[i] = t
-        schedule(t)
+    task_locals = Any[]
+    try
+        ccall(:jl_enter_threaded_region, Cvoid, ())
+        for i = 1:n
+            t = Task(() -> fun(i)) # pass in tid
+            t.sticky = static
+            static && ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
+            tasks[i] = t
+            schedule(t)
+        end
+        for i = 1:n
+            t = tasks[i]
+            Base._wait(t)
+            if !istaskfailed(t)
+                ret = Base.task_result(t)
+                isnothing(ret) || push!(task_locals, ret)
+            end
+        end
+    finally
+        ccall(:jl_exit_threaded_region, Cvoid, ())
     end
-    for i = 1:n
-        Base._wait(tasks[i])
-    end
-    ccall(:jl_exit_threaded_region, Cvoid, ())
     failed_tasks = filter(istaskfailed, tasks)
     if !isempty(failed_tasks)
         throw(CompositeException(map(TaskFailedException, failed_tasks)))
     end
+    if isempty(task_locals) || isnothing(task_locals[1])
+        return nothing
+    else
+        return Tuple(collect(zip(task_locals...)))
+    end
 end
 
-function _threadsfor(iter, lbody, schedule)
+function _threadsfor(iter, task_locals, lbody, schedule)
+    # @show task_locals, isempty(task_locals)
     lidx = iter.args[1]         # index
     range = iter.args[2]
     quote
@@ -183,11 +198,17 @@ function _threadsfor(iter, lbody, schedule)
                     l = l + rem
                 end
             end
+            $((esc(e) for e in task_locals)...)
             # run this thread's iterations
             for i = f:l
                 local $(esc(lidx)) = @inbounds r[i]
                 $(esc(lbody))
             end
+            $(if isempty(task_locals)
+                :nothing
+            else
+                Expr(:tuple, (esc(e.args[1]) for e in task_locals)...) # returns
+            end)
         end
         end
         if $(schedule === :dynamic || schedule === :default)
@@ -197,12 +218,11 @@ function _threadsfor(iter, lbody, schedule)
         else # :static
             threading_run(threadsfor_fun, true)
         end
-        nothing
     end
 end
 
 """
-    Threads.@threads [schedule] for ... end
+    Threads.@threads [schedule] [task local vars] for ... end
 
 A macro to execute a `for` loop in parallel. The iteration space is distributed to
 coarse-grained tasks. This policy can be specified by the `schedule` argument. The
@@ -310,17 +330,23 @@ to run two of the 1-second iterations to complete the for loop.
 """
 macro threads(args...)
     na = length(args)
-    if na == 2
-        sched, ex = args
-        if sched isa QuoteNode
-            sched = sched.value
-        elseif sched isa Symbol
-            # for now only allow quoted symbols
-            sched = nothing
+    task_locals = Expr[]
+    if na > 1
+        sched = :default
+        if args[1] isa QuoteNode
+            sched = args[1].value
+            if !in(sched, (:static, :dynamic))
+                throw(ArgumentError("unsupported schedule argument `$(sched)` in @threads"))
+            end
         end
-        if sched !== :static && sched !== :dynamic
-            throw(ArgumentError("unsupported schedule argument in @threads"))
+        m = sched == :default ? 1 : 2
+        for i = m:na-1
+            if !isa(args[i], Expr) || args[i].head !== :(=)
+                throw(ArgumentError("Bad local variable arguments. Local variable declarations must have initializers"))
+            end
+            push!(task_locals, args[i])
         end
+        ex = args[end]
     elseif na == 1
         sched = :default
         ex = args[1]
@@ -330,10 +356,12 @@ macro threads(args...)
     if !(isa(ex, Expr) && ex.head === :for)
         throw(ArgumentError("@threads requires a `for` loop expression"))
     end
-    if !(ex.args[1] isa Expr && ex.args[1].head === :(=))
+    iter = ex.args[1]
+    lbody = ex.args[2]
+    if !(iter isa Expr && iter.head === :(=))
         throw(ArgumentError("nested outer loops are not currently supported by @threads"))
     end
-    return _threadsfor(ex.args[1], ex.args[2], sched)
+    return _threadsfor(iter, task_locals, lbody, sched)
 end
 
 function _spawn_set_thrpool(t::Task, tp::Symbol)
