@@ -386,20 +386,18 @@ Hello from 4
 ```
 """
 macro spawn(args...)
-    tp = :default
+    tp = QuoteNode(:default)
     na = length(args)
     if na == 2
         ttype, ex = args
         if ttype isa QuoteNode
             ttype = ttype.value
-        elseif ttype isa Symbol
-            # TODO: allow unquoted symbols
-            ttype = nothing
-        end
-        if ttype === :interactive || ttype === :default
-            tp = ttype
+            if ttype !== :interactive && ttype !== :default
+                throw(ArgumentError("unsupported threadpool in @spawn: $ttype"))
+            end
+            tp = QuoteNode(ttype)
         else
-            throw(ArgumentError("unsupported threadpool in @spawn: $ttype"))
+            tp = ttype
         end
     elseif na == 1
         ex = args[1]
@@ -415,7 +413,7 @@ macro spawn(args...)
         let $(letargs...)
             local task = Task($thunk)
             task.sticky = false
-            _spawn_set_thrpool(task, $(QuoteNode(tp)))
+            _spawn_set_thrpool(task, $(esc(tp)))
             if $(Expr(:islocal, var))
                 put!($var, task)
             end
