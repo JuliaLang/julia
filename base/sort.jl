@@ -436,7 +436,7 @@ for (sym, exp, type) in [
         (:mn, :(throw(ArgumentError("mn is needed but has not been computed"))), :(eltype(v))),
         (:mx, :(throw(ArgumentError("mx is needed but has not been computed"))), :(eltype(v))),
         (:scratch, nothing, :(Union{Nothing, Vector})), # could have different eltype
-        (:allow_legacy_dispatch, true, Bool)]
+        (:legacy_dispatch_entry, nothing, Union{Nothing, Algorithm})]
     usym = Symbol(:_, sym)
     @eval function $usym(v, o, kw)
         # using missing instead of nothing because scratch could === nothing.
@@ -2150,25 +2150,25 @@ end
 # Support 3-, 5-, and 6-argument versions of sort! for calling into the internals in the old way
 sort!(v::AbstractVector, a::Algorithm, o::Ordering) = sort!(v, firstindex(v), lastindex(v), a, o)
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering)
-    _sort!(v, a, o, (; lo, hi, allow_legacy_dispatch=false))
+    _sort!(v, a, o, (; lo, hi, legacy_dispatch_entry=a))
     v
 end
 sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering, _) = sort!(v, lo, hi, a, o)
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering, scratch::Vector)
-    _sort!(v, a, o, (; lo, hi, scratch, allow_legacy_dispatch=false))
+    _sort!(v, a, o, (; lo, hi, scratch, legacy_dispatch_entry=a))
     v
 end
 
 # Support dispatch on custom algorithms in the old way
 # sort!(::AbstractVector, ::Integer, ::Integer, ::MyCustomAlgorithm, ::Ordering) = ...
 function _sort!(v::AbstractVector, a::Algorithm, o::Ordering, kw)
-    @getkw lo hi scratch allow_legacy_dispatch
-    if allow_legacy_dispatch
-        sort!(v, lo, hi, a, o)
-        scratch
-    else
+    @getkw lo hi scratch legacy_dispatch_entry
+    if legacy_dispatch_entry === a
         # This error prevents infinite recursion for unknown algorithms
         throw(ArgumentError("Base.Sort._sort!(::$(typeof(v)), ::$(typeof(a)), ::$(typeof(o)), ::Any) is not defined"))
+    else
+        sort!(v, lo, hi, a, o)
+        scratch
     end
 end
 
