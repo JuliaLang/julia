@@ -44,6 +44,7 @@ export # not exported by Base
     SMALL_ALGORITHM,
     SMALL_THRESHOLD
 
+abstract type Algorithm end
 
 ## functions requiring only ordering ##
 
@@ -498,8 +499,6 @@ may be be a `Vector{T}` due to `MissingOptimization` changing the eltype of `v` 
 internal or recursive calls.
 """
 function _sort! end
-
-abstract type Algorithm end
 
 
 """
