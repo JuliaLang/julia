@@ -736,6 +736,6 @@ end
     # test: rationalize(x::Complex; kvs...)
     precise_next = 7205759403792795//72057594037927936
     @assert Float64(precise_next) == nextfloat(0.1)
-    @test rationalize(nextfloat(0.1) * im; tol=0) == precise_next * im
+    @test rationalize(Int64, nextfloat(0.1) * im; tol=0) == precise_next * im
     @test rationalize(0.1im; tol=eps(0.1)) == rationalize(0.1im)
 end

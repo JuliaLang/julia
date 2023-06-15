@@ -141,7 +141,7 @@ function threading_run(fun, static)
         Base._wait(tasks[i])
     end
     ccall(:jl_exit_threaded_region, Cvoid, ())
-    failed_tasks = filter(istaskfailed, tasks)
+    failed_tasks = filter!(istaskfailed, tasks)
     if !isempty(failed_tasks)
         throw(CompositeException(map(TaskFailedException, failed_tasks)))
     end

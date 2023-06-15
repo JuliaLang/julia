@@ -348,3 +348,8 @@ let NoinlineModule = Module()
         @test count(iscall((src, inlined_usually)), src.code) == 0
     end
 end
+
+# Make sure that Core.Compiler has enough NamedTuple infrastructure
+# to properly give error messages for basic kwargs...
+Core.eval(Core.Compiler, quote f(;a=1) = a end)
+@test_throws MethodError Core.Compiler.f(;b=2)

@@ -103,4 +103,47 @@ struct JuliaLICMPass : PassInfoMixin<JuliaLICMPass> {
                           LoopStandardAnalysisResults &AR, LPMUpdater &U) JL_NOTSAFEPOINT;
 };
 
+#define MODULE_MARKER_PASS(NAME) \
+    struct NAME##MarkerPass : PassInfoMixin<NAME##MarkerPass> { \
+        PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT { return PreservedAnalyses::all(); } \
+        static bool isRequired() { return true; } \
+    };
+
+#define FUNCTION_MARKER_PASS(NAME) \
+    struct NAME##MarkerPass : PassInfoMixin<NAME##MarkerPass> { \
+        PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT { return PreservedAnalyses::all(); } \
+        static bool isRequired() { return true; } \
+    };
+
+#define LOOP_MARKER_PASS(NAME) \
+    struct NAME##MarkerPass : PassInfoMixin<NAME##MarkerPass> { \
+        PreservedAnalyses run(Loop &L, LoopAnalysisManager &AM, \
+                              LoopStandardAnalysisResults &AR, LPMUpdater &U) JL_NOTSAFEPOINT { \
+            return PreservedAnalyses::all(); \
+        } \
+        static bool isRequired() { return true; } \
+    };
+
+// These are useful for debugging with --print-before/after
+MODULE_MARKER_PASS(BeforeOptimization)
+MODULE_MARKER_PASS(BeforeEarlySimplification)
+MODULE_MARKER_PASS(AfterEarlySimplification)
+MODULE_MARKER_PASS(BeforeEarlyOptimization)
+MODULE_MARKER_PASS(AfterEarlyOptimization)
+FUNCTION_MARKER_PASS(BeforeLoopOptimization)
+LOOP_MARKER_PASS(BeforeLICM)
+LOOP_MARKER_PASS(AfterLICM)
+LOOP_MARKER_PASS(BeforeLoopSimplification)
+LOOP_MARKER_PASS(AfterLoopSimplification)
+FUNCTION_MARKER_PASS(AfterLoopOptimization)
+FUNCTION_MARKER_PASS(BeforeScalarOptimization)
+FUNCTION_MARKER_PASS(AfterScalarOptimization)
+FUNCTION_MARKER_PASS(BeforeVectorization)
+FUNCTION_MARKER_PASS(AfterVectorization)
+MODULE_MARKER_PASS(BeforeIntrinsicLowering)
+MODULE_MARKER_PASS(AfterIntrinsicLowering)
+MODULE_MARKER_PASS(BeforeCleanup)
+MODULE_MARKER_PASS(AfterCleanup)
+MODULE_MARKER_PASS(AfterOptimization)
+
 #endif
