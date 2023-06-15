@@ -61,7 +61,7 @@ end
 function _tpid_to_sym(tpid::Int8)
     if tpid == 0
         return :interactive
-    elseif tpid === 1
+    elseif tpid == 1
         return :default
     else
         throw(ArgumentError("Unrecognized threadpool id $tpid"))
