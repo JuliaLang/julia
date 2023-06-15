@@ -94,6 +94,9 @@ When a file is run as the main script using `julia file.jl` one might want to ac
 functionality like command line argument handling. A way to determine that a file is run in
 this fashion is to check if `abspath(PROGRAM_FILE) == @__FILE__` is `true`.
 
+However, it is recommended to not write files that double as a script and as an importable library.
+If one needs functionality both available as a library and a script, it is better to write is as a library, then import the functionality into a distinct script.
+
 ### [How do I catch CTRL-C in a script?](@id catch-ctrl-c)
 
 Running a Julia script using `julia file.jl` does not throw
@@ -154,7 +157,7 @@ while x < 10
 end
 ```
 and notice that it works fine in an interactive environment (like the Julia REPL),
-but gives `UndefVarError: x not defined` when you try to run it in script or other
+but gives ```UndefVarError: `x` not defined``` when you try to run it in script or other
 file.   What is going on is that Julia generally requires you to **be explicit about assigning to global variables in a local scope**.
 
 Here, `x` is a global variable, `while` defines a [local scope](@ref scope-of-variables), and `x += 1` is
@@ -402,7 +405,7 @@ Certain operations make mathematical sense but result in errors:
 ```jldoctest
 julia> sqrt(-2.0)
 ERROR: DomainError with -2.0:
-sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+sqrt was called with a negative real argument but will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
 [...]
 ```
@@ -705,7 +708,7 @@ julia> module Foo
 
 julia> Foo.foo()
 ERROR: On worker 2:
-UndefVarError: Foo not defined
+UndefVarError: `Foo` not defined
 Stacktrace:
 [...]
 ```
@@ -726,7 +729,7 @@ julia> @everywhere module Foo
 
 julia> Foo.foo()
 ERROR: On worker 2:
-UndefVarError: gvar not defined
+UndefVarError: `gvar` not defined
 Stacktrace:
 [...]
 ```
@@ -762,7 +765,7 @@ bar (generic function with 1 method)
 
 julia> remotecall_fetch(bar, 2)
 ERROR: On worker 2:
-UndefVarError: #bar not defined
+UndefVarError: `#bar` not defined
 [...]
 
 julia> anon_bar  = ()->1
@@ -818,10 +821,13 @@ to strings); similarly, `repeat` can be used instead of `^` to repeat strings. T
 
 ### What is the difference between "using" and "import"?
 
-There is only one difference, and on the surface (syntax-wise) it may seem very minor. The difference
-between `using` and `import` is that with `using` you need to say `function Foo.bar(..` to
-extend module Foo's function bar with a new method, but with `import Foo.bar`,
-you only need to say `function bar(...` and it automatically extends module Foo's function bar.
+There are several differences between `using` and `import`
+(see the [Modules section](https://docs.julialang.org/en/v1/manual/modules/#modules)),
+but there is an important difference that may not seem intuitive at first glance,
+and on the surface (i.e. syntax-wise) it may seem very minor. When loading modules with `using`,
+you need to say `function Foo.bar(...` to extend module `Foo`'s function `bar` with a new method,
+but with `import Foo.bar`, you only need to say `function bar(...` and it automatically extends
+module `Foo`'s function `bar`.
 
 The reason this is important enough to have been given separate syntax is that you don't want
 to accidentally extend a function that you didn't know existed, because that could easily cause
@@ -1049,7 +1055,7 @@ The Stable version of Julia is the latest released version of Julia, this is the
 It has the latest features, including improved performance.
 The Stable version of Julia is versioned according to [SemVer](https://semver.org/) as v1.x.y.
 A new minor release of Julia corresponding to a new Stable version is made approximately every 4-5 months after a few weeks of testing as a release candidate.
-Unlike the LTS version the a Stable version will not normally receive bugfixes after another Stable version of Julia has been released.
+Unlike the LTS version the Stable version will not normally receive bugfixes after another Stable version of Julia has been released.
 However, upgrading to the next Stable release will always be possible as each release of Julia v1.x will continue to run code written for earlier versions.
 
 You may prefer the LTS (Long Term Support) version of Julia if you are looking for a very stable code base.

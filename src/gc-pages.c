@@ -281,9 +281,6 @@ void jl_gc_free_page(void *p) JL_NOTSAFEPOINT
     if ((memory_map.freemap1[info.pagetable_i32] & msk) == 0)
         memory_map.freemap1[info.pagetable_i32] |= msk;
 
-    free(info.meta->ages);
-    info.meta->ages = NULL;
-
     // tell the OS we don't need these pages right now
     size_t decommit_size = GC_PAGE_SZ;
     if (GC_PAGE_SZ < jl_page_size) {
@@ -316,6 +313,10 @@ void jl_gc_free_page(void *p) JL_NOTSAFEPOINT
 #else
     madvise(p, decommit_size, MADV_DONTNEED);
 #endif
+    /* TODO: Should we leave this poisoned and rather allow the GC to read poisoned pointers from
+     *       the page when it sweeps pools?
+     */
+    msan_unpoison(p, decommit_size);
 
 no_decommit:
     // new pages are now available starting at max of lb and pagetable_i32

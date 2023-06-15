@@ -78,6 +78,12 @@ end
     val
 end
 
+function Base.isassigned(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm}
+    @boundscheck checkbounds(Bool, A, I...) || return false
+    @inbounds x = isassigned(A.parent, genperm(I, iperm)...)
+    x
+end
+
 @inline genperm(I::NTuple{N,Any}, perm::Dims{N}) where {N} = ntuple(d -> I[perm[d]], Val(N))
 @inline genperm(I, perm::AbstractVector{Int}) = genperm(I, (perm...,))
 
@@ -132,6 +138,7 @@ julia> size(B)
 
 julia> size(A)[perm] == ans
 true
+```
 """
 function permutedims(A::AbstractArray, perm)
     dest = similar(A, genperm(axes(A), perm))
@@ -275,11 +282,21 @@ end
     P
 end
 
-function Base._mapreduce_dim(f, op, init::Base._InitialValue, A::PermutedDimsArray, dims::Colon)
+const CommutativeOps = Union{typeof(+),typeof(Base.add_sum),typeof(min),typeof(max),typeof(Base._extrema_rf),typeof(|),typeof(&)}
+
+function Base._mapreduce_dim(f, op::CommutativeOps, init::Base._InitialValue, A::PermutedDimsArray, dims::Colon)
+    Base._mapreduce_dim(f, op, init, parent(A), dims)
+end
+function Base._mapreduce_dim(f::typeof(identity), op::Union{typeof(Base.mul_prod),typeof(*)}, init::Base._InitialValue, A::PermutedDimsArray{<:Union{Real,Complex}}, dims::Colon)
     Base._mapreduce_dim(f, op, init, parent(A), dims)
 end
 
-function Base.mapreducedim!(f, op, B::AbstractArray{T,N}, A::PermutedDimsArray{T,N,perm,iperm}) where {T,N,perm,iperm}
+function Base.mapreducedim!(f, op::CommutativeOps, B::AbstractArray{T,N}, A::PermutedDimsArray{S,N,perm,iperm}) where {T,S,N,perm,iperm}
+    C = PermutedDimsArray{T,N,iperm,perm,typeof(B)}(B) # make the inverse permutation for the output
+    Base.mapreducedim!(f, op, C, parent(A))
+    B
+end
+function Base.mapreducedim!(f::typeof(identity), op::Union{typeof(Base.mul_prod),typeof(*)}, B::AbstractArray{T,N}, A::PermutedDimsArray{<:Union{Real,Complex},N,perm,iperm}) where {T,N,perm,iperm}
     C = PermutedDimsArray{T,N,iperm,perm,typeof(B)}(B) # make the inverse permutation for the output
     Base.mapreducedim!(f, op, C, parent(A))
     B

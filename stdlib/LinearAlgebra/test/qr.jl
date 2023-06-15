@@ -21,8 +21,8 @@ breal = randn(n,2)/2
 bimg  = randn(n,2)/2
 
 # helper functions to unambiguously recover explicit forms of an implicit QR Q
-squareQ(Q::LinearAlgebra.AbstractQ) = (sq = size(Q.factors, 1); lmul!(Q, Matrix{eltype(Q)}(I, sq, sq)))
-rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
+squareQ(Q::LinearAlgebra.AbstractQ) = Q*I
+rectangularQ(Q::LinearAlgebra.AbstractQ) = Matrix(Q)
 
 @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, BigFloat, Int)
     raw_a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
@@ -62,7 +62,7 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 sq = size(q.factors, 2)
                 @test *(Matrix{eltyb}(I, sq, sq), adjoint(q)) * squareQ(q) ≈ Matrix(I, sq, sq) atol=5000ε
                 if eltya != Int
-                    @test Matrix{eltyb}(I, a_1, a_1)*q ≈ convert(AbstractMatrix{tab}, q)
+                    @test Matrix{eltyb}(I, a_1, a_1)*q ≈ squareQ(convert(LinearAlgebra.AbstractQ{tab}, q))
                     ac = copy(a)
                     @test qr!(a[:, 1:5])\b == qr!(view(ac, :, 1:5))\b
                 end
@@ -86,14 +86,14 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test q*b[1:n1] ≈ rectangularQ(q)*b[1:n1] atol=100ε
                 @test q*b ≈ squareQ(q)*b atol=100ε
                 if eltya != Int
-                    @test Array{eltya}(q) ≈ Matrix(q)
+                    @test Array{eltya}(q) ≈ rectangularQ(q)
                 end
                 @test_throws DimensionMismatch q*b[1:n1 + 1]
                 @test_throws DimensionMismatch b[1:n1 + 1]*q'
                 sq = size(q.factors, 2)
                 @test *(UpperTriangular(Matrix{eltyb}(I, sq, sq)), adjoint(q))*squareQ(q) ≈ Matrix(I, n1, a_1) atol=5000ε
                 if eltya != Int
-                    @test Matrix{eltyb}(I, a_1, a_1)*q ≈ convert(AbstractMatrix{tab},q)
+                    @test Matrix{eltyb}(I, a_1, a_1)*q ≈ squareQ(convert(LinearAlgebra.AbstractQ{tab},q))
                 end
                 # iterate
                 q, r = qra
@@ -123,7 +123,7 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test_throws DimensionMismatch q*b[1:n1+1]
                 @test_throws DimensionMismatch b[1:n1+1]*q'
                 if eltya != Int
-                    @test Matrix{eltyb}(I, n1, n1)*q ≈ convert(AbstractMatrix{tab},q)
+                    @test Matrix{eltyb}(I, n1, n1)*q ≈ squareQ(convert(LinearAlgebra.AbstractQ{tab},q))
                 end
                 # iterate
                 q, r, p = qrpa
@@ -149,7 +149,7 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 sq = size(q.factors, 2)
                 @test *(UpperTriangular(Matrix{eltyb}(I, sq, sq)), adjoint(q))*squareQ(q) ≈ Matrix(I, n1, a_1) atol=5000ε
                 if eltya != Int
-                    @test Matrix{eltyb}(I, a_1, a_1)*q ≈ convert(AbstractMatrix{tab},q)
+                    @test Matrix{eltyb}(I, a_1, a_1)*q ≈ squareQ(convert(LinearAlgebra.AbstractQ{tab},q))
                 end
                 qrstring = sprint((t, s) -> show(t, "text/plain", s), qrpa)
                 rstring  = sprint((t, s) -> show(t, "text/plain", s), r)
@@ -205,15 +205,22 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test mul!(c, b, q) ≈ b*q
                 @test mul!(c, b, q') ≈ b*q'
                 @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n), q, b)
+
+                b = similar(a[:,1]); rand!(b)
+                c = similar(a[:,1])
+                d = similar(a[:,1])
+                @test mul!(c, q, b) ≈ q*b
+                @test mul!(c, q', b) ≈ q'*b
+                @test_throws DimensionMismatch mul!(Vector{eltya}(undef, n+1), q, b)
             end
         end
     end
 end
 
 @testset "transpose errors" begin
-    @test_throws MethodError transpose(qr(randn(3,3)))
-    @test_throws MethodError transpose(qr(randn(3,3), NoPivot()))
-    @test_throws MethodError transpose(qr(big.(randn(3,3))))
+    @test_throws ArgumentError transpose(qr(randn(ComplexF64,3,3)))
+    @test_throws ArgumentError transpose(qr(randn(ComplexF64,3,3), NoPivot()))
+    @test_throws ArgumentError transpose(qr(big.(randn(ComplexF64,3,3))))
 end
 
 @testset "Issue 7304" begin
@@ -228,7 +235,7 @@ end
         for T in (Tr, Complex{Tr})
             v = convert(Vector{T}, vr)
             nv, nm = qr(v)
-            @test norm(nv - [-0.6 -0.8; -0.8 0.6], Inf) < eps(Tr)
+            @test norm(nv*Matrix(I, (2,2)) - [-0.6 -0.8; -0.8 0.6], Inf) < eps(Tr)
             @test nm == fill(-5.0, 1, 1)
         end
     end
@@ -261,7 +268,7 @@ end
 
 @testset "Issue 24589. Promotion of rational matrices" begin
     A = rand(1//1:5//5, 4,3)
-    @test first(qr(A)) == first(qr(float(A)))
+    @test Matrix(first(qr(A))) == Matrix(first(qr(float(A))))
 end
 
 @testset "Issue Test Factorization fallbacks for rectangular problems" begin
@@ -303,7 +310,7 @@ end
             @testset for k in 0:min(n, m, 5)
                 A = cat(Array(I(k)), randn(n - k, m - k); dims=(1, 2))
                 Q, = qr(A, pivot)
-                @test det(Q) ≈ det(collect(Q))
+                @test det(Q) ≈ det(Q*Matrix(I, size(Q, 1), size(Q, 1)))
                 @test abs(det(Q)) ≈ 1
             end
         end
@@ -311,7 +318,7 @@ end
             @testset for k in 0:min(n, m, 5)
                 A = cat(Array(I(k)), randn(ComplexF64, n - k, m - k); dims=(1, 2))
                 Q, = qr(A, pivot)
-                @test det(Q) ≈ det(collect(Q))
+                @test det(Q) ≈ det(Q*Matrix(I, size(Q, 1), size(Q, 1)))
                 @test abs(det(Q)) ≈ 1
             end
         end
@@ -322,6 +329,7 @@ end
     for T in (Float64, ComplexF64)
         Q = qr(randn(T,5,5)).Q
         @test inv(Q) === Q'
+        @test inv(Q)' === inv(Q') === Q
     end
 end
 
@@ -329,7 +337,7 @@ end
     for T in (Float32, Float64, ComplexF32, ComplexF64)
         Q1, R1 = qr(randn(T,5,5))
         Q2, R2 = qr(Q1)
-        @test Q1 ≈ Q2
+        @test Matrix(Q1) ≈ Matrix(Q2)
         @test R2 ≈ I
     end
 end
@@ -362,13 +370,13 @@ end
         n = 5
         Q, R = qr(randn(T,n,n))
         Qmat = Matrix(Q)
-        dest1 = similar(Q)
+        dest1 = Matrix{T}(undef, size(Q))
         copyto!(dest1, Q)
         @test dest1 ≈ Qmat
-        dest2 = PermutedDimsArray(similar(Q), (1, 2))
+        dest2 = PermutedDimsArray(Matrix{T}(undef, size(Q)), (1, 2))
         copyto!(dest2, Q)
         @test dest2 ≈ Qmat
-        dest3 = PermutedDimsArray(similar(Q), (2, 1))
+        dest3 = PermutedDimsArray(Matrix{T}(undef, size(Q)), (2, 1))
         copyto!(dest3, Q)
         @test dest3 ≈ Qmat
     end
@@ -419,8 +427,8 @@ end
     A = qr(ones(3, 1))
     B = I(3)
     C = B*A.Q'
-    @test C ≈ A.Q
-    @test A.Q' * B ≈ A.Q
+    @test C ≈ A.Q * Matrix(I, 3, 3)
+    @test A.Q' * B ≈ A.Q * Matrix(I, 3, 3)
 end
 
 @testset "convert between eltypes" begin
@@ -464,6 +472,36 @@ end
     Base.copy(J::MyIdentity) = J
     LinearAlgebra.lmul!(::MyIdentity{T}, M::Array{T}) where {T} = M
     @test MyIdentity{Float64}()[1,:] == [1.0, 0.0]
+end
+
+@testset "issue #48911" begin
+    # testcase in the original issue
+    # test ldiv!(::QRPivoted, ::AbstractVector)
+    A = Complex{BigFloat}[1+im 1-im]
+    b = Complex{BigFloat}[3+im]
+    x = A\b
+    AF = Complex{Float64}[1+im 1-im]
+    bf = Complex{Float64}[3+im]
+    xf = AF\bf
+    @test x ≈ xf
+
+    # test ldiv!(::QRPivoted, ::AbstractVector)
+    A = Complex{BigFloat}[1+im 2-2im 3+3im; 4-4im 5+5im 6-6im]
+    b = Complex{BigFloat}[1+im; 0]
+    x = A\b
+    AF = Complex{Float64}[1+im 2-2im 3+3im; 4-4im 5+5im 6-6im]
+    bf = Complex{Float64}[1+im; 0]
+    xf = AF\bf
+    @test x ≈ xf
+
+    # test ldiv!(::QRPivoted, ::AbstractMatrix)
+    C = Complex{BigFloat}[1+im 2-2im 3+3im; 4-4im 5+5im 6-6im]
+    D = Complex{BigFloat}[1+im 1-im; 0 0]
+    x = C\D
+    CF = Complex{Float64}[1+im 2-2im 3+3im; 4-4im 5+5im 6-6im]
+    DF = Complex{Float64}[1+im 1-im; 0 0]
+    xf = CF\DF
+    @test x ≈ xf
 end
 
 end # module TestQR

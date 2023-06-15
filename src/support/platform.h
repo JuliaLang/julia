@@ -56,7 +56,7 @@
 #if __has_feature(memory_sanitizer)
 #define _COMPILER_MSAN_ENABLED_
 #undef JL_NO_MSAN
-#define JL_NO_MSAN __attribute__((no_sanitize("mempry")))
+#define JL_NO_MSAN __attribute__((no_sanitize("memory")))
 #endif
 #if __has_feature(thread_sanitizer)
 #if __clang_major__ < 11

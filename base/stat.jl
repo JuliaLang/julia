@@ -186,7 +186,7 @@ get_stat_buf() = zeros(UInt8, Int(ccall(:jl_sizeof_stat, Int32, ())))
 """
     stat(file)
 
-Returns a structure whose fields contain information about the file.
+Return a structure whose fields contain information about the file.
 The fields of the structure are:
 
 | Name    | Description                                                        |
@@ -480,22 +480,16 @@ end
 islink(path...) = islink(lstat(path...))
 
 # samefile can be used for files and directories: #11145#issuecomment-99511194
-samefile(a::StatStruct, b::StatStruct) = a.device==b.device && a.inode==b.inode
+function samefile(a::StatStruct, b::StatStruct)
+    ispath(a) && ispath(b) && a.device == b.device && a.inode == b.inode
+end
 
 """
     samefile(path_a::AbstractString, path_b::AbstractString)
 
 Check if the paths `path_a` and `path_b` refer to the same existing file or directory.
 """
-function samefile(a::AbstractString, b::AbstractString)
-    infoa = stat(a)
-    infob = stat(b)
-    if ispath(infoa) && ispath(infob)
-        samefile(infoa, infob)
-    else
-        return false
-    end
-end
+samefile(a::AbstractString, b::AbstractString) = samefile(stat(a), stat(b))
 
 """
     ismount(path) -> Bool

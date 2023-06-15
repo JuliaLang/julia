@@ -39,7 +39,7 @@ const TAGS = Any[
     Float16, Float32, Float64, Char, DataType, Union, UnionAll, Core.TypeName, Tuple,
     Array, Expr, LineNumberNode, :__LabelNode__, GotoNode, QuoteNode, CodeInfo, TypeVar,
     Core.Box, Core.MethodInstance, Module, Task, String, SimpleVector, Method,
-    GlobalRef, SlotNumber, TypedSlot, NewvarNode, SSAValue,
+    GlobalRef, SlotNumber, Const, NewvarNode, SSAValue,
 
     # dummy entries for tags that don't correspond directly to types
     Symbol, # UNDEFREF_TAG
@@ -77,14 +77,13 @@ const TAGS = Any[
     (Int64(0):Int64(n_int_literals-1))...
 ]
 
-@assert length(TAGS) == 255
+const NTAGS = length(TAGS)
+@assert NTAGS == 255
 
-const ser_version = 19 # do not make changes without bumping the version #!
+const ser_version = 24 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
-
-const NTAGS = length(TAGS)
 
 function sertag(@nospecialize(v))
     # NOTE: we use jl_value_ptr directly since we know at least one of the arguments
@@ -194,7 +193,7 @@ serialize(s::AbstractSerializer, ::Tuple{}) = writetag(s.io, EMPTYTUPLE_TAG)
 
 function serialize(s::AbstractSerializer, t::Tuple)
     l = length(t)
-    if l <= 255
+    if l <= NTAGS
         writetag(s.io, TUPLE_TAG)
         write(s.io, UInt8(l))
     else
@@ -224,7 +223,7 @@ function serialize(s::AbstractSerializer, x::Symbol)
     if len > 7
         serialize_cycle(s, x) && return
     end
-    if len <= 255
+    if len <= NTAGS
         writetag(s.io, SYMBOL_TAG)
         write(s.io, UInt8(len))
     else
@@ -295,7 +294,7 @@ function serialize(s::AbstractSerializer, ss::String)
         serialize_cycle(s, ss) && return
         writetag(s.io, SHARED_REF_TAG)
     end
-    if len <= 255
+    if len <= NTAGS
         writetag(s.io, STRING_TAG)
         write(s.io, UInt8(len))
     else
@@ -327,7 +326,7 @@ end
 function serialize(s::AbstractSerializer, ex::Expr)
     serialize_cycle(s, ex) && return
     l = length(ex.args)
-    if l <= 255
+    if l <= NTAGS
         writetag(s.io, EXPR_TAG)
         write(s.io, UInt8(l))
     else
@@ -364,7 +363,8 @@ function serialize_mod_names(s::AbstractSerializer, m::Module)
     p = parentmodule(m)
     if p === m || m === Base
         key = Base.root_module_key(m)
-        serialize(s, key.uuid === nothing ? nothing : key.uuid.value)
+        uuid = key.uuid
+        serialize(s, uuid === nothing ? nothing : uuid.value)
         serialize(s, Symbol(key.name))
     else
         serialize_mod_names(s, p)
@@ -418,6 +418,7 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.nargs)
     serialize(s, meth.isva)
     serialize(s, meth.is_for_opaque_closure)
+    serialize(s, meth.nospecializeinfer)
     serialize(s, meth.constprop)
     serialize(s, meth.purity)
     if isdefined(meth, :source)
@@ -519,10 +520,11 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
         serialize(s, t.mt.name)
         serialize(s, collect(Base.MethodList(t.mt)))
         serialize(s, t.mt.max_args)
-        if isdefined(t.mt, :kwsorter)
-            serialize(s, t.mt.kwsorter)
-        else
+        kws = collect(methods(Core.kwcall, (Any, t.wrapper, Vararg)))
+        if isempty(kws)
             writetag(s.io, UNDEFREF_TAG)
+        else
+            serialize(s, kws)
         end
     else
         writetag(s.io, UNDEFREF_TAG)
@@ -564,10 +566,8 @@ function serialize_type_data(s, @nospecialize(t::DataType))
         serialize(s, t.name)
     else
         writetag(s.io, DATATYPE_TAG)
-        tname = t.name.name
-        serialize(s, tname)
-        mod = t.name.module
-        serialize(s, mod)
+        serialize(s, nameof(t))
+        serialize(s, parentmodule(t))
     end
     if !isempty(t.parameters)
         if iswrapper
@@ -660,8 +660,7 @@ function serialize_any(s::AbstractSerializer, @nospecialize(x))
         return write_as_tag(s.io, tag)
     end
     t = typeof(x)::DataType
-    nf = nfields(x)
-    if nf == 0 && t.size > 0
+    if isprimitivetype(t)
         serialize_type(s, t)
         write(s.io, x)
     else
@@ -671,6 +670,7 @@ function serialize_any(s::AbstractSerializer, @nospecialize(x))
         else
             serialize_type(s, t, false)
         end
+        nf = nfields(x)
         for i in 1:nf
             if isdefined(x, i)
                 serialize(s, getfield(x, i))
@@ -1027,11 +1027,14 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     nargs = deserialize(s)::Int32
     isva = deserialize(s)::Bool
     is_for_opaque_closure = false
-    constprop = 0x00
-    purity = 0x00
+    nospecializeinfer = false
+    constprop = purity = 0x00
     template_or_is_opaque = deserialize(s)
     if isa(template_or_is_opaque, Bool)
         is_for_opaque_closure = template_or_is_opaque
+        if format_version(s) >= 24
+            nospecializeinfer = deserialize(s)::Bool
+        end
         if format_version(s) >= 14
             constprop = deserialize(s)::UInt8
         end
@@ -1056,12 +1059,12 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.nargs = nargs
         meth.isva = isva
         meth.is_for_opaque_closure = is_for_opaque_closure
+        meth.nospecializeinfer = nospecializeinfer
         meth.constprop = constprop
         meth.purity = purity
         if template !== nothing
             # TODO: compress template
             meth.source = template::CodeInfo
-            meth.pure = template.pure
             if !@isdefined(slot_syms)
                 slot_syms = ccall(:jl_compress_argnames, Ref{String}, (Any,), meth.source.slotnames)
             end
@@ -1089,7 +1092,7 @@ function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
     deserialize_cycle(s, linfo)
     tag = Int32(read(s.io, UInt8)::UInt8)
     if tag != UNDEFREF_TAG
-        linfo.uninferred = handle_deserialize(s, tag)::CodeInfo
+        setfield!(linfo, :uninferred, handle_deserialize(s, tag)::CodeInfo, :monotonic)
     end
     tag = Int32(read(s.io, UInt8)::UInt8)
     if tag != UNDEFREF_TAG
@@ -1183,19 +1186,35 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
         end
     end
     ci.inferred = deserialize(s)
-    inlining = deserialize(s)
-    if isa(inlining, Bool)
-        Core.Compiler.set_inlineable!(ci, inlining)
-    else
-        ci.inlining_cost = inlining
+    if format_version(s) < 22
+        inlining_cost = deserialize(s)
+        if isa(inlining_cost, Bool)
+            Core.Compiler.set_inlineable!(ci, inlining_cost)
+        else
+            ci.inlining_cost = inlining_cost
+        end
     end
     ci.propagate_inbounds = deserialize(s)
-    ci.pure = deserialize(s)
+    if format_version(s) < 23
+        deserialize(s) # `pure` field has been removed
+    end
+    if format_version(s) >= 20
+        ci.has_fcall = deserialize(s)
+    end
+    if format_version(s) >= 24
+        ci.nospecializeinfer = deserialize(s)::Bool
+    end
+    if format_version(s) >= 21
+        ci.inlining = deserialize(s)::UInt8
+    end
     if format_version(s) >= 14
         ci.constprop = deserialize(s)::UInt8
     end
     if format_version(s) >= 17
         ci.purity = deserialize(s)::UInt8
+    end
+    if format_version(s) >= 22
+        ci.inlining_cost = deserialize(s)::UInt16
     end
     return ci
 end
@@ -1320,7 +1339,7 @@ function deserialize_typename(s::AbstractSerializer, number)
         tn.max_methods = maxm
         if has_instance
             ty = ty::DataType
-            if !isdefined(ty, :instance)
+            if !Base.issingletontype(ty)
                 singleton = ccall(:jl_new_struct, Any, (Any, Any...), ty)
                 # use setfield! directly to avoid `fieldtype` lowering expecting to see a Singleton object already on ty
                 ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), ty, Base.fieldindex(DataType, :instance)-1, singleton)
@@ -1339,7 +1358,7 @@ function deserialize_typename(s::AbstractSerializer, number)
                 mt.offs = 0
             end
             mt.name = mtname
-            mt.max_args = maxa
+            setfield!(mt, :max_args, maxa, :monotonic)
             ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), tn, Base.fieldindex(Core.TypeName, :mt)-1, mt)
             for def in defs
                 if isdefined(def, :sig)
@@ -1351,7 +1370,15 @@ function deserialize_typename(s::AbstractSerializer, number)
         if tag != UNDEFREF_TAG
             kws = handle_deserialize(s, tag)
             if makenew
-                tn.mt.kwsorter = kws
+                if kws isa Vector{Method}
+                    for def in kws
+                        kwmt = typeof(Core.kwcall).name.mt
+                        ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, def, C_NULL)
+                    end
+                else
+                    # old object format -- try to forward from old to new
+                    @eval Core.kwcall(kwargs::NamedTuple, f::$ty, args...) = $kws(kwargs, f, args...)
+                end
             end
         end
     elseif makenew
@@ -1463,8 +1490,7 @@ end
 # default DataType deserializer
 function deserialize(s::AbstractSerializer, t::DataType)
     nf = length(t.types)
-    if nf == 0 && t.size > 0
-        # bits type
+    if isprimitivetype(t)
         return read(s.io, t)
     elseif ismutabletype(t)
         x = ccall(:jl_new_struct_uninit, Any, (Any,), t)

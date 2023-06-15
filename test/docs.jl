@@ -642,7 +642,7 @@ macro m1_11993()
 end
 
 macro m2_11993()
-    Symbol("@m1_11993")
+    esc(Symbol("@m1_11993"))
 end
 
 @doc "This should document @m1... since its the result of expansion" @m2_11993
@@ -970,6 +970,7 @@ abstract type $(curmod_prefix)Undocumented.at1{T>:Integer, N}
 
 ```
 $(curmod_prefix)Undocumented.mt6{Integer, N}
+$(curmod_prefix)Undocumented.st5{T>:Integer, N}
 ```
 
 # Supertype Hierarchy

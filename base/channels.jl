@@ -183,7 +183,8 @@ Close a channel. An exception (optionally given by `excp`), is thrown by:
 * [`put!`](@ref) on a closed channel.
 * [`take!`](@ref) and [`fetch`](@ref) on an empty, closed channel.
 """
-function close(c::Channel, excp::Exception=closed_exception())
+close(c::Channel) = close(c, closed_exception()) # nospecialize on default arg seems to confuse makedocs
+function close(c::Channel, @nospecialize(excp::Exception))
     lock(c)
     try
         c.excp = excp
@@ -252,6 +253,7 @@ Stacktrace:
 """
 function bind(c::Channel, task::Task)
     T = Task(() -> close_chnl_on_taskdone(task, c))
+    T.sticky = false
     _wait2(task, T)
     return c
 end
@@ -380,7 +382,7 @@ end
 """
     fetch(c::Channel)
 
-Waits for and returns (with removing) the first available item from the `Channel`.
+Waits for and returns (without removing) the first available item from the `Channel`.
 Note: `fetch` is unsupported on an unbuffered (0-size) `Channel`.
 
 # Examples

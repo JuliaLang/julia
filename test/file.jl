@@ -42,7 +42,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     # creation of symlink to directory that does not yet exist
     new_dir = joinpath(subdir, "new_dir")
     foo_file = joinpath(subdir, "new_dir", "foo")
-    nedlink = joinpath(subdir, "non_existant_dirlink")
+    nedlink = joinpath(subdir, "nonexistent_dirlink")
     symlink("new_dir", nedlink; dir_target=true)
     try
         readdir(nedlink)
@@ -598,6 +598,17 @@ close(s)
 # This section tests temporary file and directory creation.           #
 #######################################################################
 
+@testset "invalid read/write flags" begin
+    @test try
+        open("this file is not expected to exist", read=false, write=false)
+        false
+    catch e
+        isa(e, SystemError) || rethrow()
+        @test endswith(sprint(showerror, e), "Invalid argument")
+        true
+    end
+end
+
 @testset "quoting filenames" begin
     @test try
         open("this file is not expected to exist")
@@ -771,13 +782,13 @@ end
 mktempdir() do tmpdir
     # rename file
     file = joinpath(tmpdir, "afile.txt")
-    files_stat = stat(file)
     close(open(file, "w")) # like touch, but lets the operating system update
+    files_stat = stat(file)
     # the timestamp for greater precision on some platforms (windows)
 
     newfile = joinpath(tmpdir, "bfile.txt")
     mv(file, newfile)
-    newfile_stat = stat(file)
+    newfile_stat = stat(newfile)
 
     @test !ispath(file)
     @test isfile(newfile)
@@ -1253,7 +1264,7 @@ let f = open(file, "w")
     if Sys.iswindows()
         f = RawFD(ccall(:_open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
     else
-        f = RawFD(ccall(:open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
+        f = RawFD(ccall(:open, Cint, (Cstring, Cint, UInt32...), file, Base.Filesystem.JL_O_RDONLY))
     end
     test_LibcFILE(Libc.FILE(f, Libc.modestr(true, false)))
 end
@@ -1453,7 +1464,7 @@ rm(dir)
 ####################
 mktempdir() do dir
     name1 = joinpath(dir, "apples")
-    name2 = joinpath(dir, "bannanas")
+    name2 = joinpath(dir, "bananas")
     @test !ispath(name1)
     @test touch(name1) == name1
     @test isfile(name1)
@@ -1520,11 +1531,11 @@ if !Sys.iswindows()
             chmod(joinpath(d, "empty_outer", "empty_inner"), 0o333)
 
             # Test that an empty directory, even when we can't read its contents, is deletable
-            rm(joinpath(d, "empty_outer"); recursive=true, force=true)
+            rm(joinpath(d, "empty_outer"); recursive=true)
             @test !isdir(joinpath(d, "empty_outer"))
 
             # But a non-empty directory is not
-            @test_throws Base.IOError rm(joinpath(d, "nonempty"); recursive=true, force=true)
+            @test_throws Base.IOError rm(joinpath(d, "nonempty"); recursive=true)
             chmod(joinpath(d, "nonempty"), 0o777)
             rm(joinpath(d, "nonempty"); recursive=true, force=true)
             @test !isdir(joinpath(d, "nonempty"))
@@ -1651,7 +1662,7 @@ end
 
 if Sys.iswindows()
 @testset "mkdir/rm permissions" begin
-    # test delete permission in system folders (i.e. impliclty test chmod permissions)
+    # test delete permission in system folders (i.e. implicitly test chmod permissions)
     # issue #38433
     @test withenv("TMP" => "C:\\") do
         mktempdir() do dir end

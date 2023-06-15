@@ -29,13 +29,14 @@ end
 function nonnothingtype_checked(T::Type)
     R = nonnothingtype(T)
     R >: T && error("could not compute non-nothing type")
+    R <: Union{} && error("cannot convert a value to nothing for assignment")
     return R
 end
 
 convert(::Type{T}, x::T) where {T>:Nothing} = x
 convert(::Type{T}, x) where {T>:Nothing} = convert(nonnothingtype_checked(T), x)
 convert(::Type{Some{T}}, x::Some{T}) where {T} = x
-convert(::Type{Some{T}}, x::Some) where {T} = Some{T}(convert(T, x.value))
+convert(::Type{Some{T}}, x::Some) where {T} = Some{T}(convert(T, x.value))::Some{T}
 
 function show(io::IO, x::Some)
     if get(io, :typeinfo, Any) == typeof(x)
@@ -84,6 +85,9 @@ julia> something(nothing, 1)
 
 julia> something(Some(1), nothing)
 1
+
+julia> something(Some(nothing), 2) === nothing
+true
 
 julia> something(missing, nothing)
 missing

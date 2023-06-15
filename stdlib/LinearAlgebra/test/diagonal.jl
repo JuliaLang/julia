@@ -12,6 +12,12 @@ using .Main.Furlongs
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
+isdefined(Main, :InfiniteArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "InfiniteArrays.jl"))
+using .Main.InfiniteArrays
+
+isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
+using .Main.FillArrays
+
 const n=12 # Size of matrix problem to test
 Random.seed!(1)
 
@@ -37,11 +43,14 @@ Random.seed!(1)
         end
         @test eltype(Diagonal{elty}([1,2,3,4])) == elty
         @test isa(Diagonal{elty,Vector{elty}}(GenericArray([1,2,3,4])), Diagonal{elty,Vector{elty}})
+        @test isa(Diagonal{elty}(rand(Int,n,n)), Diagonal{elty,Vector{elty}})
         DI = Diagonal([1,2,3,4])
         @test Diagonal(DI) === DI
         @test isa(Diagonal{elty}(DI), Diagonal{elty})
         # issue #26178
-        @test_throws MethodError convert(Diagonal, [1, 2, 3, 4])
+        @test_throws MethodError convert(Diagonal, [1,2,3,4])
+        @test_throws DimensionMismatch convert(Diagonal, [1 2 3 4])
+        @test_throws InexactError convert(Diagonal, ones(2,2))
     end
 
     @testset "Basic properties" begin
@@ -372,9 +381,17 @@ Random.seed!(1)
 
     @testset "conj and transpose" begin
         @test transpose(D) == D
-        if elty <: BlasComplex
+        if elty <: Real
+            @test transpose(D) === D
+            @test adjoint(D) === D
+        elseif elty <: BlasComplex
             @test Array(conj(D)) ≈ conj(DM)
             @test adjoint(D) == conj(D)
+            local D2 = copy(D)
+            local D2adj = adjoint(D2)
+            D2adj[1,1] = rand(eltype(D2adj))
+            @test D2[1,1] == adjoint(D2adj[1,1])
+            @test D2adj' === D2
         end
         # Translates to Ac/t_mul_B, which is specialized after issue 21286
         @test(D' * vv == conj(D) * vv)
@@ -460,6 +477,43 @@ end
     Ad = Diagonal(A);
     @test kron(Ad, Ad).diag isa KronTestArray
     @test kron(Ad, Ad).diag == kron([1, 2, 3], [1, 2, 3])
+end
+
+# Define a vector type that does not support `deleteat!`, to ensure that `kron` handles this
+struct SimpleVector{T} <: AbstractVector{T}
+    vec::Vector{T}
+end
+SimpleVector(x::SimpleVector) = SimpleVector(Vector(x.vec))
+SimpleVector{T}(::UndefInitializer, n::Integer) where {T} = SimpleVector(Vector{T}(undef, n))
+Base.:(==)(x::SimpleVector, y::SimpleVector) = x == y
+Base.axes(x::SimpleVector) = axes(x.vec)
+Base.convert(::Type{Vector{T}}, x::SimpleVector) where {T} = convert(Vector{T}, x.vec)
+Base.convert(::Type{Vector}, x::SimpleVector{T}) where {T} = convert(Vector{T}, x)
+Base.convert(::Type{Array{T}}, x::SimpleVector) where {T} = convert(Vector{T}, x)
+Base.convert(::Type{Array}, x::SimpleVector) = convert(Vector, x)
+Base.copyto!(x::SimpleVector, y::SimpleVector) = (copyto!(x.vec, y.vec); x)
+Base.eltype(::Type{SimpleVector{T}}) where {T} = T
+Base.getindex(x::SimpleVector, ind...) = getindex(x.vec, ind...)
+Base.kron(x::SimpleVector, y::SimpleVector) = SimpleVector(kron(x.vec, y.vec))
+Base.promote_rule(::Type{<:AbstractVector{T}}, ::Type{SimpleVector{U}}) where {T,U} = Vector{promote_type(T, U)}
+Base.promote_rule(::Type{SimpleVector{T}}, ::Type{SimpleVector{U}}) where {T,U} = SimpleVector{promote_type(T, U)}
+Base.setindex!(x::SimpleVector, val, ind...) = (setindex!(x.vec, val, ind...), x)
+Base.similar(x::SimpleVector, ::Type{T}) where {T} = SimpleVector(similar(x.vec, T))
+Base.similar(x::SimpleVector, ::Type{T}, dims::Dims{1}) where {T} = SimpleVector(similar(x.vec, T, dims))
+Base.size(x::SimpleVector) = size(x.vec)
+
+@testset "kron (issue #46456)" for repr in Any[identity, SimpleVector]
+    A = Diagonal(repr(randn(10)))
+    BL = Bidiagonal(repr(randn(10)), repr(randn(9)), :L)
+    BU = Bidiagonal(repr(randn(10)), repr(randn(9)), :U)
+    C = SymTridiagonal(repr(randn(10)), repr(randn(9)))
+    Cl = SymTridiagonal(repr(randn(10)), repr(randn(10)))
+    D = Tridiagonal(repr(randn(9)), repr(randn(10)), repr(randn(9)))
+    @test kron(A, BL)::Bidiagonal == kron(Array(A), Array(BL))
+    @test kron(A, BU)::Bidiagonal == kron(Array(A), Array(BU))
+    @test kron(A, C)::SymTridiagonal == kron(Array(A), Array(C))
+    @test kron(A, Cl)::SymTridiagonal == kron(Array(A), Array(Cl))
+    @test kron(A, D)::Tridiagonal == kron(Array(A), Array(D))
 end
 
 @testset "svdvals and eigvals (#11120/#11247)" begin
@@ -653,6 +707,16 @@ end
     @test D2 == D * D
 end
 
+@testset "multiplication of 2 Diagonal and a Matrix (#46400)" begin
+    A = randn(10, 10)
+    D = Diagonal(randn(10))
+    D2 = Diagonal(randn(10))
+    @test D * A * D2 ≈ D * (A * D2)
+    @test D * A * D2 ≈ (D * A) * D2
+    @test_throws DimensionMismatch Diagonal(ones(9)) * A * D2
+    @test_throws DimensionMismatch D * A * Diagonal(ones(9))
+end
+
 @testset "multiplication of QR Q-factor and Diagonal (#16615 spot test)" begin
     D = Diagonal(randn(5))
     Q = qr(randn(5, 5)).Q
@@ -691,6 +755,12 @@ end
 
     @test tr(D) == 10
     @test det(D) == 4
+
+    M = [1 2; 3 4]
+    for n in 0:1
+        D = Diagonal(fill(M, n))
+        @test D == Matrix{eltype(D)}(D)
+    end
 end
 
 @testset "linear solve for block diagonal matrices" begin
@@ -930,10 +1000,14 @@ end
     @test s1 == prod(sign, d)
 end
 
-@testset "Empty (#35424)" begin
+@testset "Empty (#35424) & size checks (#47060)" begin
     @test zeros(0)'*Diagonal(zeros(0))*zeros(0) === 0.0
     @test transpose(zeros(0))*Diagonal(zeros(Complex{Int}, 0))*zeros(0) === 0.0 + 0.0im
     @test dot(zeros(Int32, 0), Diagonal(zeros(Int, 0)), zeros(Int16, 0)) === 0
+    @test_throws DimensionMismatch zeros(2)' * Diagonal(zeros(2)) * zeros(3)
+    @test_throws DimensionMismatch zeros(3)' * Diagonal(zeros(2)) * zeros(2)
+    @test_throws DimensionMismatch dot(zeros(2), Diagonal(zeros(2)), zeros(3))
+    @test_throws DimensionMismatch dot(zeros(3), Diagonal(zeros(2)), zeros(2))
 end
 
 @testset "Diagonal(undef)" begin
@@ -1057,6 +1131,53 @@ end
     @test outTri === mul!(outTri, D, UTriA, 2, 1)::Tri == mul!(out, D, Matrix(UTriA), 2, 1)
     @test outTri === mul!(outTri, TriA, D, 2, 1)::Tri == mul!(out, Matrix(TriA), D, 2, 1)
     @test outTri === mul!(outTri, UTriA, D, 2, 1)::Tri == mul!(out, Matrix(UTriA), D, 2, 1)
+end
+
+struct SMatrix1{T} <: AbstractArray{T,2}
+    elt::T
+end
+Base.:(==)(A::SMatrix1, B::SMatrix1) = A.elt == B.elt
+Base.zero(::Type{SMatrix1{T}}) where {T} = SMatrix1(zero(T))
+Base.iszero(A::SMatrix1) = iszero(A.elt)
+Base.getindex(A::SMatrix1, inds...) = A.elt
+Base.size(::SMatrix1) = (1, 1)
+@testset "map for Diagonal matrices (#46292)" begin
+    A = Diagonal([1])
+    @test A isa Diagonal{Int,Vector{Int}}
+    @test 2*A isa Diagonal{Int,Vector{Int}}
+    @test A.+1 isa Matrix{Int}
+    # Numeric element types remain diagonal
+    B = map(SMatrix1, A)
+    @test B == fill(SMatrix1(1), 1, 1)
+    @test B isa Diagonal{SMatrix1{Int},Vector{SMatrix1{Int}}}
+    # Non-numeric element types become dense
+    C = map(a -> SMatrix1(string(a)), A)
+    @test C == fill(SMatrix1(string(1)), 1, 1)
+    @test C isa Matrix{SMatrix1{String}}
+end
+
+@testset "copyto! with UniformScaling" begin
+    @testset "Fill" begin
+        for len in (4, InfiniteArrays.Infinity())
+            d = FillArrays.Fill(1, len)
+            D = Diagonal(d)
+            @test copyto!(D, I) === D
+        end
+    end
+    D = Diagonal(fill(2, 2))
+    copyto!(D, I)
+    @test all(isone, diag(D))
+end
+
+@testset "diagonal triple multiplication (#49005)" begin
+    n = 10
+    @test *(Diagonal(ones(n)), Diagonal(1:n), Diagonal(ones(n))) isa Diagonal
+    @test_throws DimensionMismatch (*(Diagonal(ones(n)), Diagonal(1:n), Diagonal(ones(n+1))))
+    @test_throws DimensionMismatch (*(Diagonal(ones(n)), Diagonal(1:n+1), Diagonal(ones(n+1))))
+    @test_throws DimensionMismatch (*(Diagonal(ones(n+1)), Diagonal(1:n), Diagonal(ones(n))))
+
+    # currently falls back to two-term *
+    @test *(Diagonal(ones(n)), Diagonal(1:n), Diagonal(ones(n)), Diagonal(1:n)) isa Diagonal
 end
 
 end # module TestDiagonal

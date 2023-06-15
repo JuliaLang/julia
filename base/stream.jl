@@ -105,7 +105,7 @@ function eof(s::LibuvStream)
     bytesavailable(s) > 0 && return false
     wait_readnb(s, 1)
     # This function is race-y if used from multiple threads, but we guarantee
-    # it to never return false until the stream is definitively exhausted
+    # it to never return true until the stream is definitively exhausted
     # and that we won't return true if there's a readerror pending (it'll instead get thrown).
     # This requires some careful ordering here (TODO: atomic loads)
     bytesavailable(s) > 0 && return false
@@ -457,7 +457,7 @@ function closewrite(s::LibuvStream)
         # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
         sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
         if uv_req_data(req) != C_NULL
             # req is still alive,
             # so make sure we won't get spurious notifications later
@@ -1050,7 +1050,7 @@ function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
         # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
         sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
         if uv_req_data(uvw) != C_NULL
             # uvw is still alive,
             # so make sure we won't get spurious notifications later
@@ -1361,7 +1361,7 @@ julia> io1 = open("same/path", "w")
 
 julia> io2 = open("same/path", "w")
 
-julia> redirect_stdio(f, stdout=io1, stderr=io2) # not suppored
+julia> redirect_stdio(f, stdout=io1, stderr=io2) # not supported
 ```
 Also the `stdin` argument may not be the same descriptor as `stdout` or `stderr`.
 ```julia-repl

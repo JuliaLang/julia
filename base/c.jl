@@ -129,7 +129,7 @@ A C-style string composed of the native wide character type
 [`Cwchar_t`](@ref)s. `Cwstring`s are NUL-terminated. For
 C-style strings composed of the native character
 type, see [`Cstring`](@ref). For more information
-about string interopability with C, see the
+about string interoperability with C, see the
 [manual](@ref man-bits-types).
 
 """
@@ -142,7 +142,7 @@ A C-style string composed of the native character type
 [`Cchar`](@ref)s. `Cstring`s are NUL-terminated. For
 C-style strings composed of the native wide character
 type, see [`Cwstring`](@ref). For more information
-about string interopability with C, see the
+about string interoperability with C, see the
 [manual](@ref man-bits-types).
 """
 Cstring
@@ -565,9 +565,9 @@ end
 """
     ccall_macro_parse(expression)
 
-`ccall_macro_parse` is an implementation detail of `@ccall
+`ccall_macro_parse` is an implementation detail of `@ccall`.
 
-it takes an expression like `:(printf("%d"::Cstring, value::Cuint)::Cvoid)`
+It takes an expression like `:(printf("%d"::Cstring, value::Cuint)::Cvoid)`
 returns: a tuple of `(function_name, return_type, arg_types, args)`
 
 The above input outputs this:
@@ -640,13 +640,11 @@ end
 
 
 function ccall_macro_lower(convention, func, rettype, types, args, nreq)
-    lowering = []
-    realargs = []
-    gcroots = []
+    statements = []
 
-    # if interpolation was used, ensure  variable is a function pointer at runtime.
+    # if interpolation was used, ensure the value is a function pointer at runtime.
     if Meta.isexpr(func, :$)
-        push!(lowering, Expr(:(=), :func, esc(func.args[1])))
+        push!(statements, Expr(:(=), :func, esc(func.args[1])))
         name = QuoteNode(func.args[1])
         func = :func
         check = quote
@@ -655,31 +653,14 @@ function ccall_macro_lower(convention, func, rettype, types, args, nreq)
                 throw(ArgumentError("interpolated function `$name` was not a Ptr{Cvoid}, but $(typeof(func))"))
             end
         end
-        push!(lowering, check)
+        push!(statements, check)
     else
         func = esc(func)
     end
 
-    for (i, (arg, type)) in enumerate(zip(args, types))
-        sym = Symbol(string("arg", i, "root"))
-        sym2 = Symbol(string("arg", i, ))
-        earg, etype = esc(arg), esc(type)
-        push!(lowering, :(local $sym = $(GlobalRef(Base, :cconvert))($etype, $earg)))
-        push!(lowering, :(local $sym2 = $(GlobalRef(Base, :unsafe_convert))($etype, $sym)))
-        push!(realargs, sym2)
-        push!(gcroots, sym)
-    end
-    etypes = Expr(:call, Expr(:core, :svec), types...)
-    exp = Expr(:foreigncall,
-               func,
-               esc(rettype),
-               esc(etypes),
-               nreq,
-               QuoteNode(convention),
-               realargs..., gcroots...)
-    push!(lowering, exp)
-
-    return Expr(:block, lowering...)
+    return Expr(:block, statements...,
+                Expr(:call, :ccall, func, Expr(:cconv, convention, nreq), esc(rettype),
+                     Expr(:tuple, map(esc, types)...), map(esc, args)...))
 end
 
 """

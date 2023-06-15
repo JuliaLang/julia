@@ -227,6 +227,7 @@ let a, b
     @test 0 == sum(BigInt[]) isa BigInt
     @test prod(b) == foldl(*, b)
     @test 1 == prod(BigInt[]) isa BigInt
+    @test prod(BigInt[0, 0, 0]) == 0 # issue #46665
 end
 
 @testset "Iterated arithmetic" begin
@@ -335,11 +336,13 @@ end
 @testset "digits" begin
     n = Int64(2080310129088201558)
     N = big(n)
-    for base in (2,7,10,11,16,30,50,62,64,100), pad in (0,1,10,100)
-        @test digits(n; base, pad) == digits(N; base, pad)
+    for base in (2,7,10,11,16,30,50,62,64,100,128), pad in (0,1,10,100)
+        @test digits(n; base, pad) == digits(N; base, pad) == digits(UInt8, N; base, pad)
         @test digits(-n; base, pad) == digits(-N; base, pad)
         @test digits!(Vector{Int}(undef, pad), n; base) == digits!(Vector{Int}(undef, pad), N; base)
     end
+    @test digits(UInt8, n; base=1<<8) == digits(UInt8, N; base=1<<8)
+    @test digits(UInt16, n; base=1<<16) == digits(UInt16, N; base=1<<16)
 end
 
 # serialization (#5133)

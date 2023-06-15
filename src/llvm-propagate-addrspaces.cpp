@@ -22,9 +22,8 @@
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
 
-#include "codegen_shared.h"
-#include "julia.h"
 #include "passes.h"
+#include "llvm-codegen-shared.h"
 
 #define DEBUG_TYPE "propagate_julia_addrspaces"
 
@@ -303,7 +302,11 @@ struct PropagateJuliaAddrspacesLegacy : FunctionPass {
 
     PropagateJuliaAddrspacesLegacy() : FunctionPass(ID) {}
     bool runOnFunction(Function &F) override {
-        return propagateJuliaAddrspaces(F);
+        bool modified = propagateJuliaAddrspaces(F);
+#ifdef JL_VERIFY_PASSES
+        assert(!verifyFunction(F, &errs()));
+#endif
+        return modified;
     }
 };
 
@@ -315,14 +318,20 @@ Pass *createPropagateJuliaAddrspaces() {
 }
 
 PreservedAnalyses PropagateJuliaAddrspacesPass::run(Function &F, FunctionAnalysisManager &AM) {
-    if (propagateJuliaAddrspaces(F)) {
+    bool modified = propagateJuliaAddrspaces(F);
+
+#ifdef JL_VERIFY_PASSES
+    assert(!verifyFunction(F, &errs()));
+#endif
+    if (modified) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();
     } else {
         return PreservedAnalyses::all();
     }
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddPropagateJuliaAddrspaces_impl(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT_CODEGEN
+void LLVMExtraAddPropagateJuliaAddrspaces_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createPropagateJuliaAddrspaces());
 }

@@ -4,7 +4,7 @@
 
 # Numbers are convertible
 convert(::Type{T}, x::T)      where {T<:Number} = x
-convert(::Type{T}, x::Number) where {T<:Number} = T(x)
+convert(::Type{T}, x::Number) where {T<:Number} = T(x)::T
 
 """
     isinteger(x) -> Bool
@@ -95,12 +95,12 @@ keys(::Number) = OneTo(1)
 getindex(x::Number) = x
 function getindex(x::Number, i::Integer)
     @inline
-    @boundscheck i == 1 || throw(BoundsError())
+    @boundscheck i == 1 || throw(BoundsError(x, i))
     x
 end
 function getindex(x::Number, I::Integer...)
     @inline
-    @boundscheck all(isone, I) || throw(BoundsError())
+    @boundscheck all(isone, I) || throw(BoundsError(x, I))
     x
 end
 get(x::Number, i::Integer, default) = isone(i) ? x : default
@@ -115,7 +115,7 @@ copy(x::Number) = x # some code treats numbers as collection-like
 """
     signbit(x)
 
-Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
+Return `true` if the value of the sign of `x` is negative, otherwise `false`.
 
 See also [`sign`](@ref) and [`copysign`](@ref).
 
@@ -307,6 +307,7 @@ julia> zero(rand(2,2))
 """
 zero(x::Number) = oftype(x,0)
 zero(::Type{T}) where {T<:Number} = convert(T,0)
+zero(::Type{Union{}}, slurp...) = Union{}(0)
 
 """
     one(x)
@@ -345,6 +346,7 @@ julia> import Dates; one(Dates.Day(1))
 """
 one(::Type{T}) where {T<:Number} = convert(T,1)
 one(x::T) where {T<:Number} = one(T)
+one(::Type{Union{}}, slurp...) = Union{}(1)
 # note that convert(T, 1) should throw an error if T is dimensionful,
 # so this fallback definition should be okay.
 
@@ -352,7 +354,7 @@ one(x::T) where {T<:Number} = one(T)
     oneunit(x::T)
     oneunit(T::Type)
 
-Returns `T(one(x))`, where `T` is either the type of the argument or
+Return `T(one(x))`, where `T` is either the type of the argument or
 (if a type is passed) the argument.  This differs from [`one`](@ref) for
 dimensionful quantities: `one` is dimensionless (a multiplicative identity)
 while `oneunit` is dimensionful (of the same type as `x`, or of type `T`).
@@ -368,6 +370,7 @@ julia> import Dates; oneunit(Dates.Day)
 """
 oneunit(x::T) where {T} = T(one(x))
 oneunit(::Type{T}) where {T} = T(one(T))
+oneunit(::Type{Union{}}, slurp...) = Union{}(1)
 
 """
     big(T::Type)
@@ -388,3 +391,4 @@ Complex{BigInt}
 ```
 """
 big(::Type{T}) where {T<:Number} = typeof(big(zero(T)))
+big(::Type{Union{}}, slurp...) = Union{}(0)

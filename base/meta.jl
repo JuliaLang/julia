@@ -48,7 +48,7 @@ quot(ex) = Expr(:quote, ex)
 """
     Meta.isexpr(ex, head[, n])::Bool
 
-Return true if `ex` is an `Expr` with the given type `head` and optionally that
+Return `true` if `ex` is an `Expr` with the given type `head` and optionally that
 the argument list is of length `n`. `head` may be a `Symbol` or collection of
 `Symbol`s. For example, to check that a macro was passed a function call
 expression, you might use `isexpr(ex, :call)`.

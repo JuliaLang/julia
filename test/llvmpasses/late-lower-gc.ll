@@ -1,3 +1,5 @@
+; This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -LateLowerGCFrame -S %s | FileCheck %s
 ; RUN: opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LateLowerGCFrame)' -S %s | FileCheck %s
 
@@ -42,7 +44,7 @@ top:
     %0 = bitcast {}*** %pgcstack to {}**
     %current_task = getelementptr inbounds {}*, {}** %0, i64 -12
 ; CHECK: %current_task = getelementptr inbounds {}*, {}** %0, i64 -12
-; CHECK-NEXT: [[ptls_field:%.*]] = getelementptr inbounds {}*, {}** %current_task, i64 15
+; CHECK-NEXT: [[ptls_field:%.*]] = getelementptr inbounds {}*, {}** %current_task, i64 16
 ; CHECK-NEXT: [[ptls_load:%.*]] = load {}*, {}** [[ptls_field]], align 8, !tbaa !0
 ; CHECK-NEXT: [[ppjl_ptls:%.*]] = bitcast {}* [[ptls_load]] to {}**
 ; CHECK-NEXT: [[ptls_i8:%.*]] = bitcast {}** [[ppjl_ptls]] to i8*
@@ -67,7 +69,7 @@ top:
     %0 = bitcast {}*** %pgcstack to {}**
     %current_task = getelementptr inbounds {}*, {}** %0, i64 -12
 ; CHECK: %current_task = getelementptr inbounds {}*, {}** %0, i64 -12
-; CHECK-NEXT: [[ptls_field:%.*]] = getelementptr inbounds {}*, {}** %current_task, i64 15
+; CHECK-NEXT: [[ptls_field:%.*]] = getelementptr inbounds {}*, {}** %current_task, i64 16
 ; CHECK-NEXT: [[ptls_load:%.*]] = load {}*, {}** [[ptls_field]], align 8, !tbaa !0
 ; CHECK-NEXT: [[ppjl_ptls:%.*]] = bitcast {}* [[ptls_load]] to {}**
 ; CHECK-NEXT: [[ptls_i8:%.*]] = bitcast {}** [[ppjl_ptls]] to i8*
@@ -124,6 +126,48 @@ top:
   ret i32 %v11
 ; CHECK: ret i32
 }
+
+; COM: the bugs here may be caught by death-by-verify-assertion
+define {} addrspace(10)* @gclift_switch({} addrspace(13)* addrspace(10)* %input, i1 %unpredictable) {
+  top:
+  %0 = call {}*** @julia.get_pgcstack()
+  br i1 %unpredictable, label %mid1, label %mid2
+  mid1:
+  br label %mid2
+  mid2:
+  %root = phi {} addrspace(13)* addrspace(10)* [ %input, %top ], [ %input, %mid1 ]
+  %unrelated = phi i1 [ %unpredictable, %top ], [ %unpredictable, %mid1 ]
+  %1 = addrspacecast {} addrspace(13)* addrspace(10)* %root to {} addrspace(13)* addrspace(11)*
+  %2 = bitcast {} addrspace(13)* addrspace(11)* %1 to {} addrspace(11)*
+  switch i1 %unpredictable, label %end [
+    i1 1, label %end
+    i1 0, label %end
+  ]
+  end:
+  %phi = phi {} addrspace(11)* [ %2, %mid2 ], [ %2, %mid2 ], [ %2, %mid2 ]
+  %ret = bitcast {} addrspace(13)* addrspace(10)* %input to {} addrspace(10)*
+  ; CHECK: %gclift
+  ret {} addrspace(10)* %ret
+}
+
+define void @decayar([2 x {} addrspace(10)* addrspace(11)*] %ar) {
+  %v2 = call {}*** @julia.get_pgcstack()
+  %e0 = extractvalue [2 x {} addrspace(10)* addrspace(11)*] %ar, 0
+  %l0 = load {} addrspace(10)*, {} addrspace(10)* addrspace(11)* %e0
+  %e1 = extractvalue [2 x {} addrspace(10)* addrspace(11)*] %ar, 1
+  %l1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(11)* %e1
+  %r = call i32 @callee_root({} addrspace(10)* %l0, {} addrspace(10)* %l1) 
+  ret void
+}
+
+; CHECK-LABEL: @decayar
+; CHECK:  %gcframe = call {} addrspace(10)** @julia.new_gc_frame(i32 2)
+; CHECK:  %1 = call {} addrspace(10)** @julia.get_gc_frame_slot({} addrspace(10)** %gcframe, i32 1)
+; CHECK:  store {} addrspace(10)* %l0, {} addrspace(10)** %1, align 8
+; CHECK:  %2 = call {} addrspace(10)** @julia.get_gc_frame_slot({} addrspace(10)** %gcframe, i32 0)
+; CHECK: store {} addrspace(10)* %l1, {} addrspace(10)** %2, align 8
+; CHECK: %r = call i32 @callee_root({} addrspace(10)* %l0, {} addrspace(10)* %l1)
+; CHECK: call void @julia.pop_gc_frame({} addrspace(10)** %gcframe)
 
 !0 = !{i64 0, i64 23}
 !1 = !{!1}

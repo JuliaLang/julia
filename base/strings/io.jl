@@ -113,7 +113,7 @@ function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
     else
         f(s, args...)
     end
-    String(resize!(s.data, s.size))
+    String(_unsafe_take!(s))
 end
 
 function _str_sizehint(x)
@@ -125,6 +125,10 @@ function _str_sizehint(x)
         return sizeof(x)
     elseif x isa Char
         return ncodeunits(x)
+    elseif x isa UInt64 || x isa UInt32
+        return ndigits(x)
+    elseif x isa Int64 || x isa Int32
+        return ndigits(x) + (x < zero(x))
     else
         return 8
     end
@@ -143,7 +147,7 @@ function print_to_string(xs...)
     for x in xs
         print(s, x)
     end
-    String(resize!(s.data, s.size))
+    String(_unsafe_take!(s))
 end
 
 function string_with_env(env, xs...)
@@ -160,7 +164,7 @@ function string_with_env(env, xs...)
     for x in xs
         print(env_io, x)
     end
-    String(resize!(s.data, s.size))
+    String(_unsafe_take!(s))
 end
 
 """
@@ -201,7 +205,7 @@ function show(
 )
     # compute limit in default case
     if limit === nothing
-        get(io, :limit, false) || return show(io, str)
+        get(io, :limit, false)::Bool || return show(io, str)
         limit = max(20, displaysize(io)[2])
         # one line in collection, seven otherwise
         get(io, :typeinfo, nothing) === nothing && (limit *= 7)
@@ -233,7 +237,7 @@ function show(
     if 4t ≤ n || t ≤ n && t ≤ length(str, head, tail-1)
         skip = skip_text(n)
         show(io, SubString(str, 1:prevind(str, head)))
-        print(io, skip) # TODO: bold styled
+        printstyled(io, skip; color=:light_yellow, bold=true)
         show(io, SubString(str, tail))
     else
         show(io, str)

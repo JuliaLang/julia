@@ -11,7 +11,7 @@ import Base: show, ==, hash, string, Symbol, isless, length, eltype,
 """
     isvalid(value) -> Bool
 
-Returns `true` if the given value is valid for its type, which currently can be either
+Return `true` if the given value is valid for its type, which currently can be either
 `AbstractChar` or `String` or `SubString{String}`.
 
 # Examples
@@ -31,7 +31,7 @@ isvalid(value)
 """
     isvalid(T, value) -> Bool
 
-Returns `true` if the given value is valid for that type. Types currently can
+Return `true` if the given value is valid for that type. Types currently can
 be either `AbstractChar` or `String`. Values for `AbstractChar` can be of type `AbstractChar` or [`UInt32`](@ref).
 Values for `String` can be of that type, `SubString{String}`, `Vector{UInt8}`,
 or a contiguous subarray thereof.
@@ -468,7 +468,7 @@ A character is classified as numeric if it belongs to the Unicode general catego
 i.e. a character whose category code begins with 'N'.
 
 Note that this broad category includes characters such as ¾ and ௰.
-Use [`isdigit`](@ref) to check whether a character a decimal digit between 0 and 9.
+Use [`isdigit`](@ref) to check whether a character is a decimal digit between 0 and 9.
 
 # Examples
 ```jldoctest

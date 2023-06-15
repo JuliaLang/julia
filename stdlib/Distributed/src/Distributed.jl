@@ -7,7 +7,7 @@ module Distributed
 
 # imports for extension
 import Base: getindex, wait, put!, take!, fetch, isready, push!, length,
-             hash, ==, kill, close, isopen, showerror
+             hash, ==, kill, close, isopen, showerror, iterate, IteratorSize
 
 # imports for use
 using Base: Process, Semaphore, JLOptions, buffer_writes, @async_unwrap,
@@ -76,6 +76,9 @@ function _require_callback(mod::Base.PkgId)
         # broadcast top-level (e.g. from Main) import/using from node 1 (only)
         @sync for p in procs()
             p == 1 && continue
+            # Extensions are already loaded on workers by their triggers being loaded
+            # so no need to fire the callback upon extension being loaded on master.
+            Base.loading_extension && continue
             @async_unwrap remotecall_wait(p) do
                 Base.require(mod)
                 nothing
@@ -107,6 +110,7 @@ include("macros.jl")      # @spawn and friends
 include("workerpool.jl")
 include("pmap.jl")
 include("managers.jl")    # LocalManager and SSHManager
+include("precompile.jl")
 
 function __init__()
     init_parallel()

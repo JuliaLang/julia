@@ -9,6 +9,12 @@ const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
 using .Main.Quaternions
 
+isdefined(Main, :InfiniteArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "InfiniteArrays.jl"))
+using .Main.InfiniteArrays
+
+isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
+using .Main.FillArrays
+
 include("testutils.jl") # test_approx_eq_modphase
 
 #Test equivalence of eigenvectors/singular vectors taking into account possible phase (sign) differences
@@ -71,11 +77,13 @@ end
             @test ST == Matrix(ST)
             @test ST.dv === x
             @test ST.ev === y
+            @test typeof(ST)(ST) === ST
             TT = (Tridiagonal(y, x, y))::Tridiagonal{elty, typeof(x)}
             @test TT == Matrix(TT)
             @test TT.dl === y
             @test TT.d  === x
             @test TT.du === y
+            @test typeof(TT)(TT) === TT
         end
         ST = SymTridiagonal{elty}([1,2,3,4], [1,2,3])
         @test eltype(ST) == elty
@@ -261,6 +269,13 @@ end
             @test (@inferred diag(GA))::typeof(GenericArray(d)) == GenericArray(d)
             @test (@inferred diag(GA, -1))::typeof(GenericArray(d)) == GenericArray(dl)
         end
+        @testset "trace" begin
+            if real(elty) <: Integer
+                @test tr(A) == tr(fA)
+            else
+                @test tr(A) ≈ tr(fA) rtol=2eps(real(elty))
+            end
+        end
         @testset "Idempotent tests" begin
             for func in (conj, transpose, adjoint)
                 @test func(func(A)) == A
@@ -434,12 +449,16 @@ end
         @testset "generalized dot" begin
             x = fill(convert(elty, 1), n)
             y = fill(convert(elty, 1), n)
-            @test dot(x, A, y) ≈ dot(A'x, y)
+            @test dot(x, A, y) ≈ dot(A'x, y) ≈ dot(x, A*y)
+            @test dot([1], SymTridiagonal([1], Int[]), [1]) == 1
+            @test dot([1], Tridiagonal(Int[], [1], Int[]), [1]) == 1
+            @test dot(Int[], SymTridiagonal(Int[], Int[]), Int[]) === 0
+            @test dot(Int[], Tridiagonal(Int[], Int[], Int[]), Int[]) === 0
         end
     end
 end
 
-@testset "SymTridiagonal block matrix" begin
+@testset "SymTridiagonal/Tridiagonal block matrix" begin
     M = [1 2; 2 4]
     n = 5
     A = SymTridiagonal(fill(M, n), fill(M, n-1))
@@ -453,6 +472,27 @@ end
     @test_throws ArgumentError diag(A, 2)
     @test_throws ArgumentError diag(A, n+1)
     @test_throws ArgumentError diag(A, -n-1)
+
+    A = Tridiagonal(fill(M, n-1), fill(M, n), fill(M, n-1))
+    @test @inferred A[1,1] == M
+    @test @inferred A[1,2] == M
+    @test @inferred A[2,1] == M
+    @test @inferred diag(A, 1) == fill(M, n-1)
+    @test @inferred diag(A, 0) == fill(M, n)
+    @test @inferred diag(A, -1) == fill(M, n-1)
+    @test_throws MethodError diag(A, -2)
+    @test_throws MethodError diag(A, 2)
+    @test_throws ArgumentError diag(A, n+1)
+    @test_throws ArgumentError diag(A, -n-1)
+
+    for n in 0:2
+        dv, ev = fill(M, n), fill(M, max(n-1,0))
+        A = SymTridiagonal(dv, ev)
+        @test A == Matrix{eltype(A)}(A)
+
+        A = Tridiagonal(ev, dv, ev)
+        @test A == Matrix{eltype(A)}(A)
+    end
 end
 
 @testset "Issue 12068" begin
@@ -725,4 +765,38 @@ using .Main.SizedArrays
         @test S !== Tridiagonal(diag(Sdense, 1), diag(Sdense),  diag(Sdense, 1)) !== S
     end
 end
+
+@testset "copyto! with UniformScaling" begin
+    @testset "Tridiagonal" begin
+        @testset "Fill" begin
+            for len in (4, InfiniteArrays.Infinity())
+                d = FillArrays.Fill(1, len)
+                ud = FillArrays.Fill(0, len-1)
+                T = Tridiagonal(ud, d, ud)
+                @test copyto!(T, I) === T
+            end
+        end
+        T = Tridiagonal(fill(3, 3), fill(2, 4), fill(3, 3))
+        copyto!(T, I)
+        @test all(isone, diag(T))
+        @test all(iszero, diag(T, 1))
+        @test all(iszero, diag(T, -1))
+    end
+    @testset "SymTridiagonal" begin
+        @testset "Fill" begin
+            for len in (4, InfiniteArrays.Infinity())
+                d = FillArrays.Fill(1, len)
+                ud = FillArrays.Fill(0, len-1)
+                ST = SymTridiagonal(d, ud)
+                @test copyto!(ST, I) === ST
+            end
+        end
+        ST = SymTridiagonal(fill(2, 4), fill(3, 3))
+        copyto!(ST, I)
+        @test all(isone, diag(ST))
+        @test all(iszero, diag(ST, 1))
+        @test all(iszero, diag(ST, -1))
+    end
+end
+
 end # module TestTridiagonal

@@ -194,6 +194,7 @@ end
     # Inline tables
     ErrExpectedCommaBetweenItemsInlineTable
     ErrTrailingCommaInlineTable
+    ErrInlineTableRedefine
 
     # Numbers
     ErrUnderscoreNotSurroundedByDigits
@@ -202,6 +203,7 @@ end
     ErrLeadingDot
     ErrNoTrailingDigitAfterDot
     ErrTrailingUnderscoreNumber
+    ErrSignInNonBase10Number
 
     # DateTime
     ErrParsingDateTime
@@ -229,6 +231,7 @@ const err_message = Dict(
     ErrUnexpectedEndString                  => "string literal ended unexpectedly",
     ErrExpectedEndOfTable                   => "expected end of table ']'",
     ErrAddKeyToInlineTable                  => "tried to add a new key to an inline table",
+    ErrInlineTableRedefine                  => "inline table overwrote key from other table",
     ErrArrayTreatedAsDictionary             => "tried to add a key to an array",
     ErrAddArrayToStaticArray                => "tried to append to a statically defined array",
     ErrGenericValueError                    => "failed to parse value",
@@ -244,7 +247,8 @@ const err_message = Dict(
     ErrOverflowError                        => "overflowed when parsing integer",
     ErrInvalidUnicodeScalar                 => "invalid unicode scalar",
     ErrInvalidEscapeCharacter               => "invalid escape character",
-    ErrUnexpectedEofExpectedValue           => "unexpected end of file, expected a value"
+    ErrUnexpectedEofExpectedValue           => "unexpected end of file, expected a value",
+    ErrSignInNonBase10Number                => "number not in base 10 is not allowed to have a sign",
 )
 
 for err in instances(ErrorType)
@@ -326,7 +330,7 @@ function Base.showerror(io::IO, err::ParserError)
     str1, err1 = point_to_line(err.str::String, pos, pos, io)
     @static if VERSION <= v"1.6.0-DEV.121"
         # See https://github.com/JuliaLang/julia/issues/36015
-        format_fixer = get(io, :color, false) == true ? "\e[0m" : ""
+        format_fixer = get(io, :color, false)::Bool == true ? "\e[0m" : ""
         println(io, "$format_fixer  ", str1)
         print(io, "$format_fixer  ", err1)
     else
@@ -467,7 +471,7 @@ function parse_toplevel(l::Parser)::Err{Nothing}
         l.active_table = l.root
         @try parse_table(l)
         skip_ws_comment(l)
-        if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == EOF_CHAR)
+        if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == '#' || peek(l) == EOF_CHAR)
             eat_char(l)
             return ParserError(ErrExpectedNewLineKeyValue)
         end
@@ -475,7 +479,7 @@ function parse_toplevel(l::Parser)::Err{Nothing}
         @try parse_entry(l, l.active_table)
         skip_ws_comment(l)
         # SPEC: "There must be a newline (or EOF) after a key/value pair."
-        if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == EOF_CHAR)
+        if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == '#' || peek(l) == EOF_CHAR)
             c = eat_char(l)
             return ParserError(ErrExpectedNewLineKeyValue)
         end
@@ -563,6 +567,10 @@ function parse_entry(l::Parser, d)::Union{Nothing, ParserError}
 
     skip_ws(l)
     value = @try parse_value(l)
+    # Not allowed to overwrite a value with an inline dict
+    if value isa Dict && haskey(d, last_key_part)
+        return ParserError(ErrInlineTableRedefine)
+    end
     # TODO: Performance, hashing `last_key_part` again here
     d[last_key_part] = value
     return
@@ -789,9 +797,11 @@ function parse_number_or_date_start(l::Parser)
 
     set_marker!(l)
     sgn = 1
+    parsed_sign = false
     if accept(l, '+')
-        # do nothing
+        parsed_sign = true
     elseif accept(l, '-')
+        parsed_sign = true
         sgn = -1
     end
     if accept(l, 'i')
@@ -811,14 +821,17 @@ function parse_number_or_date_start(l::Parser)
         if ok_end_value(peek(l))
             return Int64(0)
         elseif accept(l, 'x')
+            parsed_sign && return ParserError(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_hex)
-            ate && return parse_int(l, contains_underscore)
+            ate && return parse_hex(l, contains_underscore)
         elseif accept(l, 'o')
+            parsed_sign && return ParserError(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_oct)
-            ate && return parse_int(l, contains_underscore)
+            ate && return parse_oct(l, contains_underscore)
         elseif accept(l, 'b')
+            parsed_sign && return ParserError(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_binary)
-            ate && return parse_int(l, contains_underscore)
+            ate && return parse_bin(l, contains_underscore)
         elseif accept(l, isdigit)
             return parse_local_time(l)
         end
@@ -886,15 +899,28 @@ function parse_float(l::Parser, contains_underscore)::Err{Float64}
     return v
 end
 
-function parse_int(l::Parser, contains_underscore, base=nothing)::Err{Int64}
-    s = take_string_or_substring(l, contains_underscore)
-    v = try
-        Base.parse(Int64, s; base=base)
-    catch e
-        e isa Base.OverflowError && return(ParserError(ErrOverflowError))
-        error("internal parser error: did not correctly discredit $(repr(s)) as an int")
+for (name, T1, T2, n1, n2) in (("int", Int64,  Int128,  17,  33),
+                               ("hex", UInt64, UInt128, 18,  34),
+                               ("oct", UInt64, UInt128, 24,  45),
+                               ("bin", UInt64, UInt128, 66, 130),
+                               )
+    @eval function $(Symbol("parse_", name))(l::Parser, contains_underscore, base=nothing)::Err{Union{$(T1), $(T2), BigInt}}
+        s = take_string_or_substring(l, contains_underscore)
+        len = length(s)
+        v = try
+            if len ≤ $(n1)
+                Base.parse($(T1), s; base)
+            elseif $(n1) < len ≤ $(n2)
+                Base.parse($(T2), s; base)
+            else
+                Base.parse(BigInt, s; base)
+            end
+        catch e
+            e isa Base.OverflowError && return(ParserError(ErrOverflowError))
+            error("internal parser error: did not correctly discredit $(repr(s)) as an int")
+        end
+        return v
     end
-    return v
 end
 
 

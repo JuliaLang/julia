@@ -708,7 +708,7 @@ end
     ap = PermutedDimsArray(Array(a), (2,1,3))
     @test strides(ap) == (3,1,12)
 
-    for A in [rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1)]
+    for A in [rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1), [rand(ComplexF64, 2,2) for _ in 1:2, _ in 1:3, _ in 1:2, _ in 1:4]]
         perm = randperm(4)
         @test isequal(A,permutedims(permutedims(A,perm),invperm(perm)))
         @test isequal(A,permutedims(permutedims(A,invperm(perm)),perm))
@@ -716,6 +716,10 @@ end
         @test sum(permutedims(A,perm)) ≈ sum(PermutedDimsArray(A,perm))
         @test sum(permutedims(A,perm), dims=2) ≈ sum(PermutedDimsArray(A,perm), dims=2)
         @test sum(permutedims(A,perm), dims=(2,4)) ≈ sum(PermutedDimsArray(A,perm), dims=(2,4))
+
+        @test prod(permutedims(A,perm)) ≈ prod(PermutedDimsArray(A,perm))
+        @test prod(permutedims(A,perm), dims=2) ≈ prod(PermutedDimsArray(A,perm), dims=2)
+        @test prod(permutedims(A,perm), dims=(2,4)) ≈ prod(PermutedDimsArray(A,perm), dims=(2,4))
     end
 
     m = [1 2; 3 4]
@@ -765,6 +769,18 @@ end
     @test circshift(src, 1) == src
     src = zeros(Bool, (4,0))
     @test circshift(src, 1) == src
+
+    # 1d circshift! (https://github.com/JuliaLang/julia/issues/46533)
+    a = [1:5;]
+    @test circshift!(a, 1) === a
+    @test a == circshift([1:5;], 1) == [5, 1, 2, 3, 4]
+    a = [1:5;]
+    @test circshift!(a, -2) === a
+    @test a == circshift([1:5;], -2) == [3, 4, 5, 1, 2]
+    a = [1:5;]
+    oa = OffsetVector(copy(a), -1)
+    @test circshift!(oa, 1) === oa
+    @test oa == circshift(OffsetVector(a, -1), 1)
 end
 
 @testset "circcopy" begin
@@ -1136,7 +1152,7 @@ end
     @test isequal(setdiff([1,2,3,4], [7,8,9]), [1,2,3,4])
     @test isequal(setdiff([1,2,3,4], Int64[]), Int64[1,2,3,4])
     @test isequal(setdiff([1,2,3,4], [1,2,3,4,5]), Int64[])
-    @test isequal(symdiff([1,2,3], [4,3,4]), [1,2])
+    @test isequal(symdiff([1,2,3], [4,3,4]), [1,2,4])
     @test isequal(symdiff(['e','c','a'], ['b','a','d']), ['e','c','b','d'])
     @test isequal(symdiff([1,2,3], [4,3], [5]), [1,2,4,5])
     @test isequal(symdiff([1,2,3,4,5], [1,2,3], [3,4]), [3,5])
@@ -1203,10 +1219,9 @@ end
     @test o == fill(1, 3, 4)
 
     # issue #18524
-    # m = mapslices(x->tuple(x), [1 2; 3 4], dims=1) # see variations of this below
-    # ERROR: fatal error in type inference (type bound), https://github.com/JuliaLang/julia/issues/43064
-    # @test m[1,1] == ([1,3],)
-    # @test m[1,2] == ([2,4],)
+    m = mapslices(x->tuple(x), [1 2; 3 4], dims=1) # see variations of this below
+    @test m[1,1] == ([1,3],)
+    @test m[1,2] == ([2,4],)
 
     r = rand(Int8, 4,5,2)
     @test vec(mapslices(repr, r, dims=(2,1))) == map(repr, eachslice(r, dims=3))
@@ -1216,8 +1231,6 @@ end
     # failures
     @test_broken @inferred(mapslices(tuple, [1 2; 3 4], dims=1)) == [([1, 3],)  ([2, 4],)]
     @test_broken @inferred(mapslices(transpose, r, dims=(1,3))) == permutedims(r, (3,2,1))
-    # ERROR: fatal error in type inference (type bound), https://github.com/JuliaLang/julia/issues/43064
-    @test_broken @inferred(mapslices(x -> tuple(x), [1 2; 3 4], dims=1)) == [([1, 3],)  ([2, 4],)]
 
     # re-write, #40996
     @test_throws ArgumentError mapslices(identity, rand(2,3), dims=0) # previously BoundsError
@@ -1488,6 +1501,9 @@ end
     @test isempty(eoa)
 end
 
+@testset "filter curried #41173" begin
+    @test -5:5 |> filter(iseven) == -4:2:4
+end
 @testset "logical keepat!" begin
     # Vector
     a = Vector(1:10)
@@ -1687,6 +1703,39 @@ end
     @test !isdiag([1 0 0; 0 4 1])
     @test !istril([1 0 0; 3 4 1])
     @test istriu([1 2 0; 0 4 1])
+end
+
+#issue 49021
+@testset "reverse cartesian indices" begin
+    @test reverse(CartesianIndices((2, 3))) === CartesianIndices((2:-1:1, 3:-1:1))
+    @test reverse(CartesianIndices((2:5, 3:7))) === CartesianIndices((5:-1:2, 7:-1:3))
+    @test reverse(CartesianIndices((5:-1:2, 7:-1:3))) === CartesianIndices((2:1:5, 3:1:7))
+end
+
+@testset "reverse cartesian indices dim" begin
+    A = CartesianIndices((2, 3, 5:-1:1))
+    @test reverse(A, dims=1) === CartesianIndices((2:-1:1, 3, 5:-1:1))
+    @test reverse(A, dims=3) === CartesianIndices((2, 3, 1:1:5))
+    @test_throws ArgumentError reverse(A, dims=0)
+    @test_throws ArgumentError reverse(A, dims=4)
+end
+
+@testset "reverse cartesian indices multiple dims" begin
+    A = CartesianIndices((2, 3, 5:-1:1))
+    @test reverse(A, dims=(1, 3)) === CartesianIndices((2:-1:1, 3, 1:1:5))
+    @test reverse(A, dims=(3, 1)) === CartesianIndices((2:-1:1, 3, 1:1:5))
+    @test_throws ArgumentError reverse(A, dims=(1, 2, 4))
+    @test_throws ArgumentError reverse(A, dims=(0, 1, 2))
+    @test_throws ArgumentError reverse(A, dims=(1, 1))
+end
+
+@testset "stability of const propagation" begin
+    A = CartesianIndices((2, 3, 5:-1:1))
+    f1(x) = reverse(x; dims=1)
+    f2(x) = reverse(x; dims=(1, 3))
+    @test @inferred(f1(A)) === CartesianIndices((2:-1:1, 3, 5:-1:1))
+    @test @inferred(f2(A)) === CartesianIndices((2:-1:1, 3, 1:1:5))
+    @test @inferred(reverse(A; dims=())) === A
 end
 
 # issue 4228
@@ -2276,6 +2325,15 @@ end
         @test (@inferred f1(a)) == eachrow(a)
         f2(a) = eachslice(a, dims=2)
         @test (@inferred f2(a)) == eachcol(a)
+    end
+
+    @testset "eachslice bounds checking" begin
+        # https://github.com/JuliaLang/julia/pull/32310#issuecomment-1146911510
+        A = eachslice(rand(2,3), dims = 2, drop = false)
+        @test_throws BoundsError A[2, 1]
+        @test_throws BoundsError A[4]
+        @test_throws BoundsError A[2,3] = [4,5]
+        @test_throws BoundsError A[2,3] .= [4,5]
     end
 end
 

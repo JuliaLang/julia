@@ -1,13 +1,21 @@
-import Core: CodeInfo, ReturnNode, MethodInstance
-import Core.Compiler: IRCode, IncrementalCompact, argextype, singleton_type
-import Base.Meta: isexpr
+using Core: CodeInfo, ReturnNode, MethodInstance
+using Core.Compiler: IRCode, IncrementalCompact, singleton_type, VarState
+using Base.Meta: isexpr
+using InteractiveUtils: gen_call_with_extracted_types_and_kwargs
 
-argextype(@nospecialize args...) = argextype(args..., Any[])
+argextype(@nospecialize args...) = Core.Compiler.argextype(args..., VarState[])
 code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::CodeInfo
+macro code_typed1(ex0...)
+    return gen_call_with_extracted_types_and_kwargs(__module__, :code_typed1, ex0)
+end
 get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
+macro get_code(ex0...)
+    return gen_call_with_extracted_types_and_kwargs(__module__, :get_code, ex0)
+end
 
 # check if `x` is a statement with a given `head`
 isnew(@nospecialize x) = isexpr(x, :new)
+issplatnew(@nospecialize x) = isexpr(x, :splatnew)
 isreturn(@nospecialize x) = isa(x, ReturnNode)
 
 # check if `x` is a dynamic call of a given function
@@ -17,7 +25,12 @@ function iscall((src, f)::Tuple{IR,Base.Callable}, @nospecialize(x)) where IR<:U
         singleton_type(argextype(x, src)) === f
     end
 end
-iscall(pred::Base.Callable, @nospecialize(x)) = isexpr(x, :call) && pred(x.args[1])
+function iscall(pred::Base.Callable, @nospecialize(x))
+    if isexpr(x, :(=))
+        x = x.args[2]
+    end
+    return isexpr(x, :call) && pred(x.args[1])
+end
 
 # check if `x` is a statically-resolved call of a function whose name is `sym`
 isinvoke(y) = @nospecialize(x) -> isinvoke(y, x)
@@ -38,4 +51,7 @@ function fully_eliminated(@nospecialize args...; retval=(@__FILE__), kwargs...)
     else
         return length(code) == 1 && isreturn(code[1])
     end
+end
+macro fully_eliminated(ex0...)
+    return gen_call_with_extracted_types_and_kwargs(__module__, :fully_eliminated, ex0)
 end

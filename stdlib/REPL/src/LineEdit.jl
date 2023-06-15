@@ -49,6 +49,9 @@ mutable struct Prompt <: TextInterface
     prompt_prefix::Union{String,Function}
     # Same as prefix except after the prompt
     prompt_suffix::Union{String,Function}
+    output_prefix::Union{String,Function}
+    output_prefix_prefix::Union{String,Function}
+    output_prefix_suffix::Union{String,Function}
     keymap_dict::Dict{Char,Any}
     repl::Union{AbstractREPL,Nothing}
     complete::CompletionProvider
@@ -320,25 +323,38 @@ function common_prefix(completions::Vector{String})
     end
 end
 
+# This is the maximum number of completions that will be displayed in a single
+# column, anything above that and multiple columns will be used. Note that this
+# does not restrict column length when multiple columns are used.
+const MULTICOLUMN_THRESHOLD = 5
+
 # Show available completions
 function show_completions(s::PromptState, completions::Vector{String})
-    colmax = maximum(map(length, completions))
-    num_cols = max(div(width(terminal(s)), colmax+2), 1)
-    entries_per_col, r = divrem(length(completions), num_cols)
-    entries_per_col += r != 0
     # skip any lines of input after the cursor
     cmove_down(terminal(s), input_string_newlines_aftercursor(s))
     println(terminal(s))
-    for row = 1:entries_per_col
-        for col = 0:num_cols
-            idx = row + col*entries_per_col
-            if idx <= length(completions)
-                cmove_col(terminal(s), (colmax+2)*col+1)
+    if any(Base.Fix1(occursin, '\n'), completions)
+        foreach(Base.Fix1(println, terminal(s)), completions)
+    else
+        n = length(completions)
+        colmax = 2 + maximum(length, completions; init=1) # n.b. length >= textwidth
+
+        num_cols = min(cld(n, MULTICOLUMN_THRESHOLD),
+                       max(div(width(terminal(s)), colmax), 1))
+
+        entries_per_col = cld(n, num_cols)
+        idx = 0
+        for _ in 1:entries_per_col
+            for col = 0:(num_cols-1)
+                idx += 1
+                idx > n && break
+                cmove_col(terminal(s), colmax*col+1)
                 print(terminal(s), completions[idx])
             end
+            println(terminal(s))
         end
-        println(terminal(s))
     end
+
     # make space for the prompt
     for i = 1:input_string_newlines(s)
         println(terminal(s))
@@ -444,7 +460,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     # Write out the prompt string
     lindent = write_prompt(termbuf, prompt, hascolor(terminal))::Int
     # Count the '\n' at the end of the line if the terminal emulator does (specific to DOS cmd prompt)
-    miscountnl = @static Sys.iswindows() ? (isa(Terminals.pipe_reader(terminal), Base.TTY) && !Base.ispty(Terminals.pipe_reader(terminal))) : false
+    miscountnl = @static Sys.iswindows() ? (isa(Terminals.pipe_reader(terminal), Base.TTY) && !(Base.ispty(Terminals.pipe_reader(terminal)))::Bool) : false
 
     # Now go through the buffer line by line
     seek(buf, 0)
@@ -753,10 +769,11 @@ function edit_splice!(s::BufferLike, r::Region=region(s), ins::String = ""; rigi
     elseif buf.mark >= B
         buf.mark += sizeof(ins) - B + A
     end
+    ensureroom(buf, B) # handle !buf.reinit from take!
     ret = splice!(buf.data, A+1:B, codeunits(String(ins))) # position(), etc, are 0-indexed
     buf.size = buf.size + sizeof(ins) - B + A
     adjust_pos && seek(buf, position(buf) + sizeof(ins))
-    return String(ret)
+    return String(copy(ret))
 end
 
 edit_splice!(s::MIState, ins::AbstractString) = edit_splice!(s, region(s), ins)
@@ -1093,7 +1110,7 @@ end
 
 function edit_transpose_chars(buf::IOBuffer)
     # Moving left but not transpoing anything is intentional, and matches Emacs's behavior
-    eof(buf) && char_move_left(buf)
+    eof(buf) && position(buf) !== 0 && char_move_left(buf)
     position(buf) == 0 && return false
     char_move_left(buf)
     pos = position(buf)
@@ -1273,7 +1290,7 @@ end
 # compute the number of spaces from b till the next non-space on the right
 # (which can also be "end of line" or "end of buffer")
 function leadingspaces(buf::IOBuffer, b::Int)
-    ls = something(findnext(_notspace, buf.data, b+1), 0)-1
+    @views ls = something(findnext(_notspace, buf.data[1:buf.size], b+1), 0)-1
     ls == -1 && (ls = buf.size)
     ls -= b
     return ls
@@ -1349,19 +1366,22 @@ function edit_input(s, f = (filename, line, column) -> InteractiveUtils.edit(fil
         col += 1
     end
 
+    # Write current input to temp file, edit, read back
     write(filename, str)
     f(filename, line, col)
     str_mod = readchomp(filename)
     rm(filename)
-    if str != str_mod # something was changed, run the input
-        write(buf, str_mod)
-        commit_line(s)
-        :done
-    else # no change, the edit session probably unsuccessful
-        write(buf, str)
-        seek(buf, pos) # restore state from before edit
-        refresh_line(s)
+
+    # Write updated content
+    write(buf, str_mod)
+    if str == str_mod
+        # If input was not modified: reset cursor
+        seek(buf, pos)
+    else
+        # If input was modified: move cursor to end
+        move_input_end(s)
     end
+    refresh_line(s)
 end
 
 # return the identifier under the cursor, possibly with other words concatenated
@@ -1447,7 +1467,6 @@ default_completion_cb(::IOBuffer) = []
 default_enter_cb(_) = true
 
 write_prompt(terminal::AbstractTerminal, s::PromptState, color::Bool) = write_prompt(terminal, s.p, color)
-
 function write_prompt(terminal::AbstractTerminal, p::Prompt, color::Bool)
     prefix = prompt_string(p.prompt_prefix)
     suffix = prompt_string(p.prompt_suffix)
@@ -1456,6 +1475,17 @@ function write_prompt(terminal::AbstractTerminal, p::Prompt, color::Bool)
     width = write_prompt(terminal, p.prompt, color)
     color && write(terminal, Base.text_colors[:normal])
     write(terminal, suffix)
+    return width
+end
+
+function write_output_prefix(io::IO, p::Prompt, color::Bool)
+    prefix = prompt_string(p.output_prefix_prefix)
+    suffix = prompt_string(p.output_prefix_suffix)
+    print(io, prefix)
+    color && write(io, Base.text_colors[:bold])
+    width = write_prompt(io, p.output_prefix, color)
+    color && write(io, Base.text_colors[:normal])
+    print(io, suffix)
     return width
 end
 
@@ -1490,7 +1520,7 @@ end
 end
 
 # returns the width of the written prompt
-function write_prompt(terminal, s::Union{AbstractString,Function}, color::Bool)
+function write_prompt(terminal::Union{IO, AbstractTerminal}, s::Union{AbstractString,Function}, color::Bool)
     @static Sys.iswindows() && _reset_console_mode()
     promptstr = prompt_string(s)::String
     write(terminal, promptstr)
@@ -1548,7 +1578,7 @@ function normalize_keys(keymap::Union{Dict{Char,Any},AnyDict})
     return ret
 end
 
-function add_nested_key!(keymap::Dict, key::Union{String, Char}, value; override = false)
+function add_nested_key!(keymap::Dict{Char, Any}, key::Union{String, Char}, value; override::Bool = false)
     y = iterate(key)
     while y !== nothing
         c, i = y
@@ -1563,7 +1593,7 @@ function add_nested_key!(keymap::Dict, key::Union{String, Char}, value; override
         elseif !(c in keys(keymap) && isa(keymap[c], Dict))
             keymap[c] = Dict{Char,Any}()
         end
-        keymap = keymap[c]
+        keymap = keymap[c]::Dict{Char, Any}
     end
 end
 
@@ -1708,7 +1738,7 @@ end
 function getEntry(keymap::Dict{Char,Any},key::Union{String,Char})
     v = keymap
     for c in key
-        if !haskey(v,c)
+        if !(haskey(v,c)::Bool)
             return nothing
         end
         v = v[c]
@@ -2217,7 +2247,7 @@ end
 
 function move_line_end(buf::IOBuffer)
     eof(buf) && return
-    pos = findnext(isequal(UInt8('\n')), buf.data, position(buf)+1)
+    @views pos = findnext(isequal(UInt8('\n')), buf.data[1:buf.size], position(buf)+1)
     if pos === nothing
         move_input_end(buf)
         return
@@ -2586,6 +2616,9 @@ function Prompt(prompt
     ;
     prompt_prefix = "",
     prompt_suffix = "",
+    output_prefix = "",
+    output_prefix_prefix = "",
+    output_prefix_suffix = "",
     keymap_dict = default_keymap_dict,
     repl = nothing,
     complete = EmptyCompletionProvider(),
@@ -2594,8 +2627,8 @@ function Prompt(prompt
     hist = EmptyHistoryProvider(),
     sticky = false)
 
-    return Prompt(prompt, prompt_prefix, prompt_suffix, keymap_dict, repl,
-        complete, on_enter, on_done, hist, sticky)
+    return Prompt(prompt, prompt_prefix, prompt_suffix, output_prefix, output_prefix_prefix, output_prefix_suffix,
+                   keymap_dict, repl, complete, on_enter, on_done, hist, sticky)
 end
 
 run_interface(::Prompt) = nothing

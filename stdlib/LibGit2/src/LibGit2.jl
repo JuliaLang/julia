@@ -477,7 +477,7 @@ current changes. Note that this detaches the current HEAD.
 
 # Examples
 ```julia
-repo = LibGit2.init(repo_path)
+repo = LibGit2.GitRepo(repo_path)
 open(joinpath(LibGit2.path(repo), "file1"), "w") do f
     write(f, "111\n")
 end
@@ -848,7 +848,7 @@ function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractSt
             end
         finally
             if !isempty(newbase)
-                close(onto_ann)
+                close(onto_ann::GitAnnotated)
             end
             close(upst_ann)
             close(head_ann)

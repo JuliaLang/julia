@@ -122,7 +122,7 @@ lt(o::Lt,                    a, b) = o.lt(a,b)
 @propagate_inbounds function lt(p::Perm, a::Integer, b::Integer)
     da = p.data[a]
     db = p.data[b]
-    lt(p.order, da, db) | (!lt(p.order, db, da) & (a < b))
+    (lt(p.order, da, db)::Bool) | (!(lt(p.order, db, da)::Bool) & (a < b))
 end
 
 _ord(lt::typeof(isless), by::typeof(identity), order::Ordering) = order

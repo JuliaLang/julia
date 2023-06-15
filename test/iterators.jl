@@ -336,21 +336,25 @@ let a = 1:2,
     c = Int32(1):Int32(0)
 
     # length
+    @test length(product())        == 1
     @test length(product(a))       == 2
     @test length(product(a, b))    == 20
     @test length(product(a, b, c)) == 0
 
     # size
+    @test size(product())          == tuple()
     @test size(product(a))         == (2,)
     @test size(product(a, b))      == (2, 10)
     @test size(product(a, b, c))   == (2, 10, 0)
 
     # eltype
+    @test eltype(product())        == Tuple{}
     @test eltype(product(a))       == Tuple{Int}
     @test eltype(product(a, b))    == Tuple{Int, Float64}
     @test eltype(product(a, b, c)) == Tuple{Int, Float64, Int32}
 
     # ndims
+    @test ndims(product())         == 0
     @test ndims(product(a))        == 1
     @test ndims(product(a, b))     == 2
     @test ndims(product(a, b, c))  == 3
@@ -425,6 +429,8 @@ let a = 1:2,
         @test_throws ArgumentError   size(product(itr))
         @test_throws ArgumentError  ndims(product(itr))
     end
+
+    @test_throws OverflowError length(product(1:typemax(Int), 1:typemax(Int)))
 end
 
 # IteratorSize trait business
@@ -612,7 +618,7 @@ end
             @test length(I) == iterate_length(I) == simd_iterate_length(I) == simd_trip_count(I)
             @test collect(I) == iterate_elements(I) == simd_iterate_elements(I) == index_elements(I)
         end
-        @test all(Base.Splat(==), zip(Iterators.flatten(map(collect, P)), iter))
+        @test all(Base.splat(==), zip(Iterators.flatten(map(collect, P)), iter))
     end
 end
 @testset "empty/invalid partitions" begin
@@ -843,6 +849,8 @@ end
         v, s = iterate(z)
         @test Base.isdone(z, s)
     end
+    # Stateful wrapping mutable iterators of known length (#43245)
+    @test length(Iterators.Stateful(Iterators.Stateful(1:5))) == 5
 end
 
 @testset "pair for Svec" begin
@@ -961,7 +969,7 @@ end
     @test Base.IteratorSize(zip(1:5, (1,2,3)) ) == Base.HasLength()         # for zip of ::HasShape and ::HasLength
 end
 
-@testset "proper patition for non-1-indexed vector" begin
+@testset "proper partition for non-1-indexed vector" begin
     @test partition(IdentityUnitRange(11:19), 5) |> collect == [11:15,16:19] # IdentityUnitRange
 end
 
@@ -984,4 +992,12 @@ end
     @test !isempty(gen)
     @test !Base.isdone(gen)
     @test collect(gen) == ["foo"]
+end
+
+@testset "empty product iterators" begin
+    v = nothing
+    for (z,) in zip(Iterators.product())
+        v = z
+    end
+    @test v == ()
 end

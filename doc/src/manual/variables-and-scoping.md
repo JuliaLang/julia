@@ -33,7 +33,7 @@ Notably missing from this table are
 which do *not* introduce new scopes.
 The three types of scopes follow somewhat different rules which will be explained below.
 
-Julia uses [lexical scoping](https://en.wikipedia.org/wiki/Scope_%28computer_science%29#Lexical_scoping_vs._dynamic_scoping),
+Julia uses [lexical scoping](https://en.wikipedia.org/wiki/Scope_(computer_science)#Lexical_scope_vs._dynamic_scope),
 meaning that a function's scope does not inherit from its caller's scope, but from the scope in
 which the function was defined. For example, in the following code the `x` inside `foo` refers
 to the `x` in the global scope of its module `Bar`:
@@ -90,7 +90,7 @@ julia> module B
 julia> module D
            b = a # errors as D's global scope is separate from A's
        end;
-ERROR: UndefVarError: a not defined
+ERROR: UndefVarError: `a` not defined
 ```
 
 If a top-level expression contains a variable declaration with keyword `local`,
@@ -111,7 +111,7 @@ x = 1
 
 Note that the interactive prompt (aka REPL) is in the global scope of the module `Main`.
 
-## Local Scope
+## [Local Scope](@id local-scope)
 
 A new local scope is introduced by most code blocks (see above [table](@ref
 man-scope-table) for a complete list). If such a block is syntactically nested
@@ -187,7 +187,7 @@ julia> greet()
 hello
 
 julia> x # global
-ERROR: UndefVarError: x not defined
+ERROR: UndefVarError: `x` not defined
 ```
 
 Inside of the `greet` function, the assignment `x = "hello"` causes `x` to be a new local variable
@@ -256,7 +256,7 @@ julia> sum_to(10)
 55
 
 julia> s # global
-ERROR: UndefVarError: s not defined
+ERROR: UndefVarError: `s` not defined
 ```
 
 Since `s` is local to the function `sum_to`, calling the function has no effect on the global
@@ -343,7 +343,7 @@ hello
 hello
 
 julia> x
-ERROR: UndefVarError: x not defined
+ERROR: UndefVarError: `x` not defined
 ```
 
 Since the global `x` is not defined when the `for` loop is evaluated, the first clause of the soft
@@ -408,7 +408,7 @@ julia> code = """
 julia> include_string(Main, code)
 ┌ Warning: Assignment to `s` in soft scope is ambiguous because a global variable by the same name exists: `s` will be treated as a new local. Disambiguate by using `local s` to suppress this warning or `global s` to assign to the existing global variable.
 └ @ string:4
-ERROR: LoadError: UndefVarError: s not defined
+ERROR: LoadError: UndefVarError: `s` not defined
 ```
 
 Here we use [`include_string`](@ref), to evaluate `code` as though it were the contents of a file.
@@ -559,7 +559,7 @@ julia> let x = 1, z
            println("z: $z") # errors as z has not been assigned yet but is local
        end
 x: 1, y: -1
-ERROR: UndefVarError: z not defined
+ERROR: UndefVarError: `z` not defined
 ```
 
 The assignments are evaluated in order, with each right-hand side evaluated in the scope before
