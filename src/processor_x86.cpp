@@ -291,7 +291,7 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
 
     {"znver1", CPU::amd_znver1, CPU::generic, 0, Feature::znver1},
     {"znver2", CPU::amd_znver2, CPU::generic, 0, Feature::znver2},
-    {"znver3", CPU::amd_znver3, CPU::amd_znver2, 120000, Feature::znver3},
+    {"znver3", CPU::amd_znver3, CPU::generic, 120000, Feature::znver3},
 };
 static constexpr size_t ncpu_names = sizeof(cpus) / sizeof(cpus[0]);
 
