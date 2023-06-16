@@ -105,10 +105,14 @@ function get_inlinetable(mi::MethodInstance)
 end
 
 get_method_instance_roots(::Any) = nothing
-function get_method_instance_roots(mi::Union{Method, MethodInstance})
+function get_method_instance_roots(mi::Method)
     m = mi isa MethodInstance ? mi.def : mi
     m isa Method && isdefined(m, :roots) || return nothing
     return filter(x -> x isa MethodInstance, m.roots)
+end
+function get_method_instance_roots(mi::MethodInstance)
+    isdefined(mi, :roots) || return nothing
+    return mi.roots
 end
 
 function lookup_inline_frame_info(func::Symbol, file::Symbol, linenum::Int, inlinetable::Vector{Core.LineInfoNode})
@@ -204,6 +208,13 @@ Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
                 linfo = lookup_inline_frame_info(func, file, linenum, inlinetable)
             elseif miroots !== nothing
                 linfo = lookup_inline_frame_info(func, file, miroots)
+                if linfo === nothing
+                    # fallback to method roots
+                    methodroots = get_method_instance_roots(parent_linfo.def)
+                    if methodroots !== nothing
+                        linfo = lookup_inline_frame_info(func, file, methodroots)
+                    end
+                end
             end
             linfo = linfo === nothing ? parentmodule(res[i + 1]) : linfo # e.g. `macro expansion`
         end
