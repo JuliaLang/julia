@@ -15,7 +15,8 @@ use mmtk::Mutator;
 use mmtk::MMTK;
 use reference_glue::JuliaFinalizableObject;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::ptr::null_mut;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
@@ -91,8 +92,6 @@ pub static DISABLED_GC: AtomicBool = AtomicBool::new(false);
 pub static USER_TRIGGERED_GC: AtomicBool = AtomicBool::new(false);
 
 lazy_static! {
-    pub static ref ARE_MUTATORS_BLOCKED: RwLock<HashMap<usize, AtomicBool>> =
-        RwLock::new(HashMap::new());
     pub static ref STW_COND: Arc<(Mutex<usize>, Condvar)> =
         Arc::new((Mutex::new(0), Condvar::new()));
     pub static ref STOP_MUTATORS: Arc<(Mutex<usize>, Condvar)> =
@@ -101,8 +100,12 @@ lazy_static! {
     pub static ref ROOT_EDGES: Mutex<HashSet<Address>> = Mutex::new(HashSet::new());
     pub static ref FINALIZER_ROOTS: RwLock<HashSet<JuliaFinalizableObject>> =
         RwLock::new(HashSet::new());
-    pub static ref MUTATOR_TLS: RwLock<HashSet<String>> = RwLock::new(HashSet::new());
-    pub static ref MUTATORS: RwLock<Vec<ObjectReference>> = RwLock::new(vec![]);
+
+    // We create a boxed mutator with MMTk core, and we mem copy its content to jl_tls_state_t (shallow copy).
+    // This map stores the pair of the mutator address in jl_tls_state_t and the original boxed mutator.
+    // As we only do a shallow copy, we should not free the original boxed mutator, until the thread is getting destroyed.
+    // Otherwise, we will have dangling pointers.
+    pub static ref MUTATORS: RwLock<HashMap<Address, Address>> = RwLock::new(HashMap::new());
 }
 
 #[link(name = "runtime_gc_c")]
@@ -157,6 +160,7 @@ pub struct Julia_Upcalls {
     pub exit_from_safepoint: extern "C" fn(old_state: i8),
     pub jl_hrtime: extern "C" fn() -> u64,
     pub update_gc_time: extern "C" fn(u64),
+    pub get_abi_structs_checksum_c: extern "C" fn() -> usize,
 }
 
 pub static mut UPCALLS: *const Julia_Upcalls = null_mut();

@@ -1,5 +1,5 @@
 use crate::JuliaVM;
-use crate::{get_mutator_from_ref, MUTATORS, MUTATOR_TLS, SINGLETON};
+use crate::{MUTATORS, SINGLETON};
 use mmtk::util::opaque_pointer::*;
 use mmtk::util::Address;
 use mmtk::vm::ActivePlan;
@@ -7,17 +7,22 @@ use mmtk::Mutator;
 use mmtk::Plan;
 use mmtk::{plan::ObjectQueue, scheduler::GCWorker, util::ObjectReference};
 
+use std::collections::HashMap;
 use std::sync::RwLockReadGuard;
 
 pub struct JuliaMutatorIterator<'a> {
-    guard: RwLockReadGuard<'a, Vec<ObjectReference>>,
+    // We do not use this field, but this lock guard makes sure that no concurrent access to MUTATORS.
+    _guard: RwLockReadGuard<'a, HashMap<Address, Address>>,
+    vec: Vec<Address>,
     cursor: usize,
 }
 
 impl<'a> JuliaMutatorIterator<'a> {
-    fn new(guard: RwLockReadGuard<'a, Vec<ObjectReference>>) -> Self {
+    fn new(guard: RwLockReadGuard<'a, HashMap<Address, Address>>) -> Self {
+        let vec = guard.keys().map(|addr| *addr).collect();
         Self {
-            guard: guard,
+            _guard: guard,
+            vec,
             cursor: 0,
         }
     }
@@ -27,20 +32,12 @@ impl<'a> Iterator for JuliaMutatorIterator<'a> {
     type Item = &'a mut Mutator<JuliaVM>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let ref mutators = self.guard;
-
         let mutator_idx = self.cursor;
         self.cursor += 1;
 
-        let mutator = mutators.get(mutator_idx);
-
-        match mutator {
-            Some(m) => {
-                let mutator = unsafe { get_mutator_from_ref(*m) };
-                Some(unsafe { &mut *mutator })
-            }
-            None => None,
-        }
+        self.vec
+            .get(mutator_idx)
+            .map(|addr| unsafe { &mut *(addr.to_mut_ptr::<Mutator<JuliaVM>>()) })
     }
 }
 
@@ -57,12 +54,7 @@ impl ActivePlan<JuliaVM> for VMActivePlan {
 
     fn is_mutator(tls: VMThread) -> bool {
         // FIXME have a tls field to check whether it is a mutator tls
-        let tls_str = format!("{:?}", tls);
-        let is_mutator = MUTATOR_TLS.read().unwrap().contains(&tls_str);
-        if !is_mutator {
-            println!("Is the tls {:?} a mutator? {}", tls_str, is_mutator);
-        }
-        is_mutator
+        MUTATORS.read().unwrap().keys().find(|mutator_addr| unsafe { &*mutator_addr.to_mut_ptr::<Mutator<JuliaVM>>() }.mutator_tls.0 == tls).is_some()
     }
 
     fn mutator(_tls: VMMutatorThread) -> &'static mut Mutator<JuliaVM> {

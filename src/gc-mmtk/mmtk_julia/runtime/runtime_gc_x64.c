@@ -5,14 +5,6 @@
 
 long JULIA_HEADER_SIZE = 0;
 
-void* get_mutator_ref(void* mutator) {
-    return mutator;
-}
-
-void* get_mutator_from_ref(void* mutator) {
-    return mutator;
-}
-
 extern void mmtk_start_spawned_worker_thread(void*, void*);
 extern void mmtk_start_spawned_controller_thread(void*, void*);
 

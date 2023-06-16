@@ -34,3 +34,8 @@ impl RootLabel {
         }
     }
 }
+
+pub(crate) fn get_abi_structs_checksum_rust() -> usize {
+    use std::mem;
+    return mem::size_of::<mmtk::Mutator<crate::JuliaVM>>();
+}

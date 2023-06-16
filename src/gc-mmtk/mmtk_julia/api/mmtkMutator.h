@@ -15,11 +15,12 @@ typedef struct {
 } RustDynPtr;
 
 // These constants should match the constants defind in mmtk::util::alloc::allocators
-// const int MAX_BUMP_ALLOCATORS = 6;
-// const int MAX_LARGE_OBJECT_ALLOCATORS = 2;
-// const int MAX_MALLOC_ALLOCATORS = 1;
-// const int MAX_IMMIX_ALLOCATORS = 1;
-// const int MAX_MARK_COMPACT_ALLOCATORS = 1;
+#define MAX_BUMP_ALLOCATORS 6
+#define MAX_LARGE_OBJECT_ALLOCATORS 2
+#define MAX_MALLOC_ALLOCATORS 1
+#define MAX_IMMIX_ALLOCATORS 1
+#define MAX_FREE_LIST_ALLOCATORS 2
+#define MAX_MARK_COMPACT_ALLOCATORS 1
 
 // The following types should have the same layout as the types with the same name in MMTk core (Rust)
 
@@ -51,25 +52,46 @@ typedef struct {
   uint8_t _align[7];
   uint8_t line_opt_tag;
   uintptr_t line_opt;
-  uint8_t alloc_slow_for_stress;
 } ImmixAllocator;
+
+typedef struct {
+  void* Address;
+} FLBlock;
+
+typedef struct {
+  FLBlock first;
+  FLBlock last;
+  size_t size;
+  char lock;
+} FLBlockList;
 
 typedef struct {
   void* tls;
   void* space;
   RustDynPtr plan;
-} MMTkMallocAllocator;
+  FLBlockList* available_blocks;
+  FLBlockList* available_blocks_stress;
+  FLBlockList* unswept_blocks;
+  FLBlockList* consumed_blocks;
+} FreeListAllocator;
+
+typedef struct {
+  void* tls;
+  void* space;
+  RustDynPtr plan;
+} MMTkMallocAllocator; // Prefix with MMTk to avoid name clash
 
 typedef struct {
   BumpAllocator bump_allocator;
 } MarkCompactAllocator;
 
 typedef struct {
-  BumpAllocator bump_pointer[6];
-  LargeObjectAllocator large_object[2];
-  MMTkMallocAllocator malloc[1];
-  ImmixAllocator immix[1];
-  MarkCompactAllocator markcompact[1];
+  BumpAllocator bump_pointer[MAX_BUMP_ALLOCATORS];
+  LargeObjectAllocator large_object[MAX_LARGE_OBJECT_ALLOCATORS];
+  MMTkMallocAllocator malloc[MAX_MALLOC_ALLOCATORS];
+  ImmixAllocator immix[MAX_IMMIX_ALLOCATORS];
+  FreeListAllocator free_list[MAX_FREE_LIST_ALLOCATORS];
+  MarkCompactAllocator markcompact[MAX_MARK_COMPACT_ALLOCATORS];
 } Allocators;
 
 typedef struct {
@@ -81,9 +103,10 @@ typedef struct {
 
 typedef struct {
   Allocators allocators;
-  void* barrier;
+  RustDynPtr barrier;
   void* mutator_tls;
   RustDynPtr plan;
   MutatorConfig config;
 } MMTkMutatorContext;
+
 #endif // MMTK_MUTATOR_HPP

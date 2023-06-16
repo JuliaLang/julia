@@ -10,8 +10,8 @@ use crate::JULIA_HEADER_SIZE;
 use crate::SINGLETON;
 use crate::UPCALLS;
 use crate::{
-    get_mutator_ref, set_julia_obj_header_size, ARE_MUTATORS_BLOCKED, BUILDER, DISABLED_GC,
-    FINALIZERS_RUNNING, MUTATORS, MUTATOR_TLS, USER_TRIGGERED_GC,
+    set_julia_obj_header_size, BUILDER, DISABLED_GC, FINALIZERS_RUNNING, MUTATORS,
+    USER_TRIGGERED_GC,
 };
 use crate::{ROOT_EDGES, ROOT_NODES};
 
@@ -24,10 +24,8 @@ use mmtk::util::opaque_pointer::*;
 use mmtk::util::{Address, ObjectReference, OpaquePointer};
 use mmtk::AllocationSemantics;
 use mmtk::Mutator;
-use std::collections::HashMap;
 use std::ffi::CStr;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::RwLockWriteGuard;
 
 #[no_mangle]
 pub extern "C" fn mmtk_gc_init(
@@ -41,6 +39,12 @@ pub extern "C" fn mmtk_gc_init(
         UPCALLS = calls;
         set_julia_obj_header_size(header_size);
     };
+
+    // Assert to make sure our ABI is correct
+    assert_eq!(
+        unsafe { ((*UPCALLS).get_abi_structs_checksum_c)() },
+        crate::util::get_abi_structs_checksum_rust()
+    );
 
     {
         let mut builder = BUILDER.lock().unwrap();
@@ -118,32 +122,40 @@ pub extern "C" fn mmtk_start_control_collector(
 
 #[no_mangle]
 pub extern "C" fn mmtk_bind_mutator(tls: VMMutatorThread, tid: usize) -> *mut Mutator<JuliaVM> {
-    let mut are_mutators_blocked: RwLockWriteGuard<HashMap<usize, AtomicBool>> =
-        ARE_MUTATORS_BLOCKED.write().unwrap();
-    are_mutators_blocked.insert(tid, AtomicBool::new(false));
     let mutator_box = memory_manager::bind_mutator(&SINGLETON, tls);
 
     let res = Box::into_raw(mutator_box);
 
-    let mutator_ref = unsafe { get_mutator_ref(res) };
-
     info!("Binding mutator {:?} to thread id = {}", res, tid);
-
-    MUTATORS.write().unwrap().push(mutator_ref);
-
-    let tls_str = format!("{:?}", tls.0);
-    MUTATOR_TLS.write().unwrap().insert(tls_str);
     res
 }
 
 #[no_mangle]
-pub extern "C" fn mmtk_add_mutator_ref(mutator_ref: ObjectReference) {
-    MUTATORS.write().unwrap().push(mutator_ref);
+pub extern "C" fn mmtk_post_bind_mutator(
+    mutator: *mut Mutator<JuliaVM>,
+    original_box_mutator: *mut Mutator<JuliaVM>,
+) {
+    // We have to store the original boxed mutator. Otherwise, we may have dangling pointers in mutator.
+    MUTATORS.write().unwrap().insert(
+        Address::from_mut_ptr(mutator),
+        Address::from_mut_ptr(original_box_mutator),
+    );
 }
 
 #[no_mangle]
 pub extern "C" fn mmtk_destroy_mutator(mutator: *mut Mutator<JuliaVM>) {
-    memory_manager::destroy_mutator(unsafe { &mut *mutator })
+    // destroy the mutator with MMTk.
+    memory_manager::destroy_mutator(unsafe { &mut *mutator });
+
+    let mut mutators = MUTATORS.write().unwrap();
+    let key = Address::from_mut_ptr(mutator);
+
+    // Clear the original boxed mutator
+    let orig_mutator = mutators.get(&key).unwrap();
+    let _ = unsafe { Box::from_raw(orig_mutator.to_mut_ptr::<Mutator<JuliaVM>>()) };
+
+    // Remove from our hashmap
+    mutators.remove(&key);
 }
 
 #[no_mangle]
@@ -394,6 +406,7 @@ pub extern "C" fn mmtk_malloc_aligned(size: usize, align: usize) -> Address {
 
     let extra = (align - 1) + ptr_size + size_size;
     let mem = memory_manager::counted_malloc(&SINGLETON, size + extra);
+
     let result = (mem + extra) & !(align - 1);
     let result = unsafe { Address::from_usize(result) };
 
