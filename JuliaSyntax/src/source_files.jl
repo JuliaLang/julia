@@ -1,24 +1,30 @@
 """
-    SourceFile(code [; filename=nothing, first_line=1])
+    SourceFile(code [; filename=nothing, first_line=1, first_index=1])
 
-A UTF-8 source code string with associated file name and line number.
+UTF-8 source text with associated file name and line number, storing the
+character indices of the start of each line. `first_line` and `first_index`
+can be used to specify the line number and index of the first character of
+`code` within a larger piece of source text.
 
-`SourceFile` stores the character positions of line starts to facilitate indexing.
+`SourceFile` may be indexed via `getindex` or `view` to get a string.  Line
+information for a byte offset can be looked up via the `source_line`,
+`source_location` and `source_line_range` functions.
 """
 struct SourceFile
-    # We use `code::String` for now but it could be some other UTF-8 based
-    # string data structure with byte-based indexing.
-    #
-    # For example a rope data structure may be good for incremental editing
-    # https://en.wikipedia.org/wiki/Rope_(data_structure)
-    code::String
+    # TODO: Rename SourceFile -> SourceText / SourceChunk / SourceIndex / SourceLineIndex ?
+    # See https://github.com/JuliaLang/JuliaSyntax.jl/issues/190
+    code::SubString
+    # Offset of `code` within a larger chunk of source text
+    byte_offset::Int
     filename::Union{Nothing,String}
+    # first_column::Int ??
     first_line::Int
     # String index of start of every line
     line_starts::Vector{Int}
 end
 
-function SourceFile(code::AbstractString; filename=nothing, first_line=1)
+function SourceFile(code::AbstractString; filename=nothing, first_line=1,
+                    first_index=1)
     line_starts = Int[1]
     for i in eachindex(code)
         # The line is considered to start after the `\n`
@@ -27,7 +33,7 @@ function SourceFile(code::AbstractString; filename=nothing, first_line=1)
     if isempty(code) || last(code) != '\n'
         push!(line_starts, ncodeunits(code)+1)
     end
-    SourceFile(code, filename, first_line, line_starts)
+    SourceFile(code, first_index-1, filename, first_line, line_starts)
 end
 
 function SourceFile(; filename, kwargs...)
@@ -36,7 +42,7 @@ end
 
 # Get line number of the given byte within the code
 function _source_line_index(source::SourceFile, byte_index)
-    lineidx = searchsortedlast(source.line_starts, byte_index)
+    lineidx = searchsortedlast(source.line_starts, byte_index - source.byte_offset)
     return (lineidx < lastindex(source.line_starts)) ? lineidx : lineidx-1
 end
 _source_line(source::SourceFile, lineidx) = lineidx + source.first_line - 1
@@ -44,7 +50,8 @@ _source_line(source::SourceFile, lineidx) = lineidx + source.first_line - 1
 """
 Get the line number at the given byte index.
 """
-source_line(source::SourceFile, byte_index) = _source_line(source, _source_line_index(source, byte_index))
+source_line(source::SourceFile, byte_index) =
+    _source_line(source, _source_line_index(source, byte_index))
 
 """
 Get line number and character within the line at the given byte index.
@@ -53,7 +60,7 @@ function source_location(source::SourceFile, byte_index)
     lineidx = _source_line_index(source, byte_index)
     i = source.line_starts[lineidx]
     column = 1
-    while i < byte_index
+    while i < byte_index - source.byte_offset
         i = nextind(source.code, i)
         column += 1
     end
@@ -92,32 +99,32 @@ function Base.show(io::IO, ::MIME"text/plain", source::SourceFile)
 end
 
 function Base.getindex(source::SourceFile, rng::AbstractUnitRange)
-    i = first(rng)
+    i = first(rng) - source.byte_offset
     # Convert byte range into unicode String character range.
     # Assumes valid unicode! (SubString doesn't give us a reliable way to opt
     # out of the valid unicode check. The SubString{String} inner constructor
     # has some @boundscheck, but using @inbounds depends on inlining choices.)
-    j = prevind(source.code, last(rng)+1)
+    j = prevind(source.code, last(rng) + 1 - source.byte_offset)
     source.code[i:j]
 end
 
 # TODO: Change view() here to `sourcetext` ?
 function Base.view(source::SourceFile, rng::AbstractUnitRange)
-    i = first(rng)
-    j = prevind(source.code, last(rng)+1)
+    i = first(rng) - source.byte_offset
+    j = prevind(source.code, last(rng) + 1 - source.byte_offset)
     SubString(source.code, i, j)
 end
 
 function Base.getindex(source::SourceFile, i::Int)
-    source.code[i]
+    source.code[i - source.byte_offset]
 end
 
 function Base.thisind(source::SourceFile, i::Int)
-    thisind(source.code, i)
+    thisind(source.code, i - source.byte_offset)
 end
 
-Base.firstindex(source::SourceFile) = firstindex(source.code)
-Base.lastindex(source::SourceFile) = lastindex(source.code)
+Base.firstindex(source::SourceFile) = firstindex(source.code) + source.byte_offset
+Base.lastindex(source::SourceFile)  = lastindex(source.code)  + source.byte_offset
 
 """
     sourcetext(source::SourceFile)

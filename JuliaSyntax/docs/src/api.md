@@ -38,6 +38,7 @@ JuliaSyntax.highlight
 JuliaSyntax.sourcetext
 JuliaSyntax.source_line
 JuliaSyntax.source_location
+JuliaSyntax.source_line_range
 ```
 
 ## Expression heads/kinds

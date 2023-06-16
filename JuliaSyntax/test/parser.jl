@@ -1,22 +1,14 @@
 """
 Parse string to SyntaxNode tree and show as an sexpression
 """
-function parse_to_sexpr_str(production, code::AbstractString; v=v"1.6", expr=false)
+function parse_to_sexpr_str(production, code::AbstractString; v=v"1.6")
     stream = ParseStream(code, version=v)
     production(ParseState(stream))
     JuliaSyntax.validate_tokens(stream)
-    t = build_tree(GreenNode, stream, wrap_toplevel_as_kind=K"None")
+    t = build_tree(GreenNode, stream)
     source = SourceFile(code)
     s = SyntaxNode(source, t, keep_parens=true)
-    if expr
-        JuliaSyntax.remove_linenums!(Expr(s))
-    else
-        if kind(s) == K"None"
-            join([sprint(show, MIME("text/x.sexpression"), c) for c in children(s)], ' ')
-        else
-            sprint(show, MIME("text/x.sexpression"), s)
-        end
-    end
+    return sprint(show, MIME("text/x.sexpression"), s)
 end
 
 function test_parse(production, input, output)
@@ -55,7 +47,7 @@ tests = [
         "a;;;b;;" => "(toplevel-; a b)"
         """ "x" a ; "y" b """ =>
             """(toplevel-; (doc (string "x") a) (doc (string "y") b))"""
-        "x y"  =>  "x (error-t y)"
+        "x y"  =>  "(wrapper x (error-t y))"
     ],
     JuliaSyntax.parse_eq => [
         # parse_assignment
@@ -411,7 +403,7 @@ tests = [
         "A.@x a"    =>  "(macrocall (. A (quote @x)) a)"
         "@A.B.@x a" =>  "(macrocall (. (. A (quote B)) (quote (error-t) @x)) a)"
         # .' discontinued
-        "f.'"    =>  "f (error-t ')"
+        "f.'"    =>  "(wrapper f (error-t '))"
         # Field/property syntax
         "f.x.y"  =>  "(. (. f (quote x)) (quote y))"
         "x .y"   =>  "(. x (error-t) (quote y))"
@@ -812,6 +804,7 @@ tests = [
         "`cmd`"      =>  "(macrocall core_@cmd (cmdstring-r \"cmd\"))"
         "```cmd```"  =>  "(macrocall core_@cmd (cmdstring-s-r \"cmd\"))"
         # literals
+        "true" => "true"
         "42"   => "42"
         "1.0e-1000"   => "0.0"
         "0x123456789abcdefp+0" => "8.19855292164869e16"
@@ -975,7 +968,7 @@ parsestmt_test_specs = [
 
     # The following are currently broken but at least the parser shouldn't
     # crash.
-    "x in' '" => "(call-i x in (char (error))) (error-t ')"
+    "x in' '" => "(wrapper (call-i x in (char (error))) (error-t '))"
 ]
 
 @testset "Parser does not crash on broken code" begin

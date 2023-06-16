@@ -74,7 +74,6 @@ function _parse(rule::Symbol, need_eof::Bool, ::Type{T}, text, index=1; version=
     stream = ParseStream(text, index; version=version)
     if ignore_trivia && rule != :all
         bump_trivia(stream, skip_newlines=true)
-        empty!(stream)
     end
     parse!(stream; rule=rule)
     if need_eof
@@ -87,12 +86,7 @@ function _parse(rule::Symbol, need_eof::Bool, ::Type{T}, text, index=1; version=
           (!ignore_warnings && !isempty(stream.diagnostics))
         throw(ParseError(stream, filename=filename, first_line=first_line))
     end
-    # TODO: Figure out a more satisfying solution to the wrap_toplevel_as_kind
-    # mess that we've got here.
-    # * It's kind of required for GreenNode, as GreenNode only records spans,
-    #   not absolute positions.
-    # * Dropping it would be ok for SyntaxNode and Expr...
-    tree = build_tree(T, stream; wrap_toplevel_as_kind=K"toplevel", filename=filename, first_line=first_line, kws...)
+    tree = build_tree(T, stream; filename=filename, first_line=first_line, kws...)
     tree, last_byte(stream) + 1
 end
 

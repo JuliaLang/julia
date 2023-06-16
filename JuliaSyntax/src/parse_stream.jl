@@ -905,7 +905,7 @@ end
 # ParseStream Post-processing
 
 function validate_tokens(stream::ParseStream)
-    text = sourcetext(stream)
+    txtbuf = textbuf(stream)
     toks = stream.tokens
     charbuf = IOBuffer()
     for i = 2:length(toks)
@@ -922,13 +922,13 @@ function validate_tokens(stream::ParseStream)
         elseif k == K"Float" || k == K"Float32"
             underflow0 = false
             if k == K"Float"
-                x, code = parse_float_literal(Float64, text, fbyte, nbyte)
+                x, code = parse_float_literal(Float64, txtbuf, fbyte, nbyte)
                 # jl_strtod_c can return "underflow" even for valid cases such
                 # as `5e-324` where the source is an exact representation of
                 # `x`. So only warn when underflowing to zero.
                 underflow0 = code === :underflow && x == 0
             else
-                x, code = parse_float_literal(Float32, text, fbyte, nbyte)
+                x, code = parse_float_literal(Float32, txtbuf, fbyte, nbyte)
                 underflow0 = code === :underflow && x == 0
             end
             if code === :ok
@@ -944,7 +944,7 @@ function validate_tokens(stream::ParseStream)
         elseif k == K"Char"
             @assert fbyte < nbyte # Already handled in the parser
             truncate(charbuf, 0)
-            had_error = unescape_julia_string(charbuf, text, fbyte,
+            had_error = unescape_julia_string(charbuf, txtbuf, fbyte,
                                               nbyte, stream.diagnostics)
             if had_error
                 error_kind = K"ErrorInvalidEscapeSequence"
@@ -958,19 +958,18 @@ function validate_tokens(stream::ParseStream)
                 end
             end
         elseif k == K"String" && !has_flags(t, RAW_STRING_FLAG)
-            had_error = unescape_julia_string(devnull, text, fbyte,
+            had_error = unescape_julia_string(devnull, txtbuf, fbyte,
                                               nbyte, stream.diagnostics)
             if had_error
                 error_kind = K"ErrorInvalidEscapeSequence"
             end
         elseif is_error(k) && k != K"error"
             # Emit messages for non-generic token errors
-            #
-            textrange = fbyte:prevind(text, nbyte)
+            tokstr = String(txtbuf[tokrange])
             msg = if k in KSet"ErrorInvisibleChar ErrorUnknownCharacter"
-                "$(_token_error_descriptions[k]) $(repr(text[fbyte]))"
+                "$(_token_error_descriptions[k]) $(repr(tokstr[1]))"
             elseif k in KSet"ErrorInvalidUTF8 ErrorBidiFormatting"
-                "$(_token_error_descriptions[k]) $(repr(text[textrange]))"
+                "$(_token_error_descriptions[k]) $(repr(tokstr))"
             else
                 _token_error_descriptions[k]
             end
@@ -990,8 +989,7 @@ end
 # API for extracting results from ParseStream
 
 """
-    build_tree(make_node::Function, ::Type{StackEntry}, stream::ParseStream;
-               wrap_toplevel_as_kind=nothing, kws...)
+    build_tree(make_node::Function, ::Type{StackEntry}, stream::ParseStream; kws...)
 
 Construct a tree from a ParseStream using depth-first traversal. `make_node`
 must have the signature
@@ -1002,14 +1000,13 @@ where `children` is either `nothing` for leaf nodes or an iterable of the
 children of type `StackEntry` for internal nodes. `StackEntry` may be a node
 type, but also may include other information required during building the tree.
 
-A single node which covers the input is expected, but if the ParseStream has
-multiple nodes at the top level, `wrap_toplevel_as_kind` may be used to wrap
-them in a single node.
+If the ParseStream has multiple nodes at the top level, `K"wrapper"` is used to
+wrap them in a single node.
 
 The tree here is constructed depth-first in postorder.
 """
 function build_tree(make_node::Function, ::Type{NodeType}, stream::ParseStream;
-                    wrap_toplevel_as_kind=nothing, kws...) where NodeType
+                    kws...) where NodeType
     stack = Vector{NamedTuple{(:first_token,:node),Tuple{Int,NodeType}}}()
 
     tokens = stream.tokens
@@ -1068,15 +1065,11 @@ function build_tree(make_node::Function, ::Type{NodeType}, stream::ParseStream;
     end
     if length(stack) == 1
         return only(stack).node
-    elseif !isnothing(wrap_toplevel_as_kind)
-        # Mostly for debugging
+    else
         srcrange = (stream.tokens[1].next_byte:
                     stream.tokens[end].next_byte - 1)
         children = (x.node for x in stack)
-        return make_node(SyntaxHead(wrap_toplevel_as_kind, EMPTY_FLAGS),
-                         srcrange, children)
-    else
-        error("Found multiple nodes at top level")
+        return make_node(SyntaxHead(K"wrapper", EMPTY_FLAGS), srcrange, children)
     end
 end
 
@@ -1092,21 +1085,22 @@ state for further parsing.
 """
 function sourcetext(stream::ParseStream; steal_textbuf=false)
     root = stream.text_root
-    # The following works for SubString but makes the return type of this
-    # method type unstable.
+    # The following kinda works but makes the return type of this method type
+    # unstable. (Also codeunit(root) == UInt8 doesn't imply UTF-8 encoding?)
     # if root isa AbstractString && codeunit(root) == UInt8
     #     return root
-    if root isa String
-        return root
+    str = if root isa String || root isa SubString
+        root
     elseif steal_textbuf
-        return String(stream.textbuf)
+        String(stream.textbuf)
     else
         # Safe default for other cases is to copy the buffer. Technically this
         # could possibly be avoided in some situations, but might have side
         # effects such as mutating stream.text_root or stealing the storage of
         # stream.textbuf
-        return String(copy(stream.textbuf))
+        String(copy(stream.textbuf))
     end
+    SubString(str, first_byte(stream), thisind(str, last_byte(stream)))
 end
 
 """

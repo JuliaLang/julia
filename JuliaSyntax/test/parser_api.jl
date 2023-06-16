@@ -85,6 +85,16 @@
         @test parsestmt(Expr, SubString("α+x\ny"), 1)  == (:(α+x), 5)
         @test parseatom(Expr, SubString("x+y"), 1) == (:x, 2)
         @test parseatom(Expr, SubString("x+y"), 3) == (:y, 4)
+
+        @test parseatom(Expr, SubString("x+1.0"), 3) == (1.0, 6)
+        @test parseatom(Expr, SubString("x+\"\n\""), 3) == ("\n", 6)
+
+        # Line numbers are relative to the start of the string we're currently
+        # parsing
+        @test JuliaSyntax.parsestmt(Expr, "begin\na\nend\nbegin\nb\nend", 1) ==
+            (Expr(:block, LineNumberNode(2), :a), 12)
+        @test JuliaSyntax.parsestmt(Expr, "begin\na\nend\nbegin\nb\nend", 12) ==
+            (Expr(:block, LineNumberNode(3), :b), 24)
     end
 
     @testset "error/warning handling" begin

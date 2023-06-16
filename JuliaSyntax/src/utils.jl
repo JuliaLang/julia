@@ -3,7 +3,7 @@ if VERSION < v"1.1"
     isnothing(x) = x === nothing
 end
 if VERSION < v"1.4"
-    function only(x::AbstractVector)
+    function only(x::Union{AbstractVector,AbstractString})
         if length(x) != 1
             error("Collection must contain exactly 1 element")
         end
@@ -13,6 +13,8 @@ end
 if VERSION < v"1.5"
     import Base.peek
 end
+
+_unsafe_wrap_substring(s) = (s.offset, unsafe_wrap(Vector{UInt8}, s.string))
 
 #--------------------------------------------------
 #
@@ -48,6 +50,12 @@ function remove_linenums!(ex::Expr)
     return ex
 end
 
+# String macro to get the UInt8 code of an ascii character
+macro u8_str(str)
+    c = str == "\\" ? '\\' : only(unescape_string(str))
+    isascii(c) || error("Non-ascii character in u8_str")
+    codepoint(c) % UInt8
+end
 
 #-------------------------------------------------------------------------------
 # Text printing/display utils

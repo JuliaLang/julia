@@ -157,10 +157,7 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
             write(_debug_log[], code)
         end
 
-        io = IOBuffer(code)
-        seek(io, offset)
-
-        stream = ParseStream(io)
+        stream = ParseStream(code, offset+1)
         if options === :statement || options === :atom
             # To copy the flisp parser driver:
             # * Parsing atoms      consumes leading trivia
@@ -179,9 +176,7 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
         end
 
         if any_error(stream)
-            tree = build_tree(SyntaxNode, stream,
-                              wrap_toplevel_as_kind=K"None", first_line=lineno,
-                              filename=filename)
+            tree = build_tree(SyntaxNode, stream, first_line=lineno, filename=filename)
             tag = _incomplete_tag(tree, lastindex(code))
             if _has_v1_10_hooks
                 exc = ParseError(stream, filename=filename, first_line=lineno,
@@ -233,13 +228,7 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
             #
             # show_diagnostics(stdout, stream.diagnostics, code)
             #
-            ex = build_tree(Expr, stream; filename=filename,
-                            wrap_toplevel_as_kind=K"None", first_line=lineno)
-            if @isexpr(ex, :None)
-                # The None wrapping is only to give somewhere for trivia to be
-                # attached; unwrap!
-                ex = only(ex.args)
-            end
+            ex = build_tree(Expr, stream; filename=filename, first_line=lineno)
         end
 
         # Note the next byte in 1-based indexing is `last_byte(stream) + 1` but
@@ -291,15 +280,13 @@ else
     Base.Meta.ParseError(e::JuliaSyntax.ParseError) = e
 end
 
-const _default_parser = _has_v1_6_hooks ? Core._parse : nothing
-
 """
     enable_in_core!([enable=true; freeze_world_age=true, debug_filename=nothing])
 
 Connect the JuliaSyntax parser to the Julia runtime so that it replaces the
 flisp parser for all parsing work. That is, JuliaSyntax will be used for
-`include()` `Meta.parse()`, the REPL, etc. To disable, set use
-`enable_in_core!(false)`.
+`include()` `Meta.parse()`, the REPL, etc. To reset to the reference parser,
+use `enable_in_core!(false)`.
 
 Keyword arguments:
 * `freeze_world_age` - Use a fixed world age for the parser to prevent
@@ -322,7 +309,7 @@ function enable_in_core!(enable=true; freeze_world_age = true,
         world_age = freeze_world_age ? Base.get_world_counter() : typemax(UInt)
         _set_core_parse_hook(fix_world_age(core_parser_hook, world_age))
     else
-        _set_core_parse_hook(_default_parser)
+        _set_core_parse_hook(Core.Compiler.fl_parse)
     end
     nothing
 end

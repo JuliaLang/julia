@@ -61,15 +61,18 @@ Base.show(io::IO, ::ErrorVal) = printstyled(io, "✘", color=:light_red)
 
 function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead};
                     keep_parens=false, position::Integer=1)
-    _to_SyntaxNode(source, raw, convert(Int, position), keep_parens)
+    offset, txtbuf = _unsafe_wrap_substring(sourcetext(source))
+    _to_SyntaxNode(source, txtbuf, offset, raw, convert(Int, position), keep_parens)
 end
 
-function _to_SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead},
+function _to_SyntaxNode(source::SourceFile, txtbuf::Vector{UInt8}, offset::Int,
+                        raw::GreenNode{SyntaxHead},
                         position::Int, keep_parens::Bool)
     if !haschildren(raw) && !(is_syntax_kind(raw) || is_keyword(raw))
         # Here we parse the values eagerly rather than representing them as
         # strings. Maybe this is good. Maybe not.
-        val = parse_julia_literal(source, head(raw), position:position + span(raw) - 1)
+        valrange = position:position + span(raw) - 1
+        val = parse_julia_literal(txtbuf, head(raw), valrange .+ offset)
         return SyntaxNode(nothing, nothing, SyntaxData(source, raw, position, val))
     else
         cs = SyntaxNode[]
@@ -77,11 +80,14 @@ function _to_SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead},
         for (i,rawchild) in enumerate(children(raw))
             # FIXME: Allowing trivia is_error nodes here corrupts the tree layout.
             if !is_trivia(rawchild) || is_error(rawchild)
-                push!(cs, _to_SyntaxNode(source, rawchild, pos, keep_parens))
+                push!(cs, _to_SyntaxNode(source, txtbuf, offset, rawchild, pos, keep_parens))
             end
             pos += Int(rawchild.span)
         end
         if !keep_parens && kind(raw) == K"parens" && length(cs) == 1
+            return cs[1]
+        end
+        if kind(raw) == K"wrapper" && length(cs) == 1
             return cs[1]
         end
         node = SyntaxNode(nothing, cs, SyntaxData(source, raw, position, nothing))
@@ -130,7 +136,8 @@ function interpolate_literal(node::SyntaxNode, val)
     SyntaxNode(node.source, node.raw, node.position, node.parent, true, val)
 end
 
-function _show_syntax_node(io, current_filename, node::AbstractSyntaxNode, indent, show_byte_offsets)
+function _show_syntax_node(io, current_filename, node::AbstractSyntaxNode,
+                           indent, show_byte_offsets)
     fname = node.source.filename
     line, col = source_location(node.source, node.position)
     posstr = "$(lpad(line, 4)):$(rpad(col,3))│"
@@ -216,7 +223,7 @@ function build_tree(::Type{SyntaxNode}, stream::ParseStream;
                     filename=nothing, first_line=1, keep_parens=false, kws...)
     green_tree = build_tree(GreenNode, stream; kws...)
     source = SourceFile(sourcetext(stream), filename=filename, first_line=first_line)
-    SyntaxNode(source, green_tree, position=first_byte(stream), keep_parens=keep_parens)
+    SyntaxNode(source, green_tree, position=1, keep_parens=keep_parens)
 end
 
 #-------------------------------------------------------------------------------

@@ -914,6 +914,8 @@ const _kind_names =
         "cartesian_iterator"
         "comprehension"
         "typed_comprehension"
+        # Container for a single statement/atom plus any trivia and errors
+        "wrapper"
     "END_SYNTAX_KINDS"
 ]
 
