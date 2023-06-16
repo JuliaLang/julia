@@ -627,6 +627,7 @@ using Base.Experimental: @opaque
     function test_worldage_error(f)
         ex = try; f(); error("Should not have been reached") catch ex; ex; end
         @test occursin("The applicable method may be too new", sprint(Base.showerror, ex))
+        @test !occursin("!Matched::", sprint(Base.showerror, ex))
     end
 
     global callback50200
