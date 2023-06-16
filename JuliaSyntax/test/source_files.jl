@@ -26,19 +26,37 @@
         @test source_location(SourceFile(; filename=path), 1) == (1,1)
         @test source_location(SourceFile(; filename=path, first_line=7), 1) == (7,1)
     end
+
+    # byte offset
+    @test source_location(SourceFile("a\nbb\nccc\ndddd", first_index=10), 13) == (2,2)
+    @test source_line(SourceFile("a\nbb\nccc\ndddd", first_index=10), 15) == 3
+
+    # source_line convenience function
+    @test source_line(SourceFile("a\nb\n"), 2) == 1
+    @test source_line(SourceFile("a\nb\n"), 3) == 2
 end
 
 @testset "SourceFile position indexing" begin
     @test SourceFile("a\nb\n")[1:2] == "a\n"
     @test SourceFile("a\nb\n")[3:end] == "b\n"
-    if Base.VERSION >= v"1.4"
-        # Protect the `[begin` from being viewed by the parser on older Julia versions
-        @test eval(Meta.parse("""SourceFile("a\nb\n")[begin:end]""")) == "a\nb\n"
-    end
 
     # unicode
     @test SourceFile("αβ")[1:2] == "α"
     @test SourceFile("αβ")[3] == 'β'
+
+    # offsets
+    sf = SourceFile("abcd", first_index=10)
+    @test firstindex(sf) == 10
+    @test lastindex(sf) == 13
+    @test sf[10] == 'a'
+    @test sf[10:11] == "ab"
+    @test view(sf, 10:11) == "ab"
+
+    if Base.VERSION >= v"1.4"
+        # Protect the `[begin` from being viewed by the parser on older Julia versions
+        @test eval(Meta.parse("SourceFile(\"a\nb\n\")[begin:end]")) == "a\nb\n"
+        @test eval(Meta.parse("SourceFile(\"abcd\", first_index=10)[begin+1:end-1]")) == "bc"
+    end
 end
 
 @testset "SourceFile printing and text extraction" begin

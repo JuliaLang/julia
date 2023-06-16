@@ -153,7 +153,7 @@ end
 function unesc(str, firstind=firstindex(str), endind=lastindex(str)+1; diagnostics=false)
     io = IOBuffer()
     ds = JuliaSyntax.Diagnostic[]
-    unescape_julia_string(io, str, firstind, endind, ds)
+    unescape_julia_string(io, Vector{UInt8}(str), firstind, endind, ds)
     if diagnostics
         ds
     else
@@ -204,7 +204,8 @@ end
 
 function unesc_raw(str, is_cmd)
     io = IOBuffer()
-    JuliaSyntax.unescape_raw_string(io, str, is_cmd)
+    JuliaSyntax.unescape_raw_string(io, Vector{UInt8}(str),
+                                    firstindex(str), lastindex(str)+1, is_cmd)
     return String(take!(io))
 end
 

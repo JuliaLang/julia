@@ -140,7 +140,7 @@ end
 function parse_and_show(production::Function, code)
     st = ParseStream(code)
     production(st)
-    t = JuliaSyntax.build_tree(GreenNode, st, wrap_toplevel_as_kind=K"error")
+    t = JuliaSyntax.build_tree(GreenNode, st)
     show(stdout, MIME"text/plain"(), t, code, show_trivia=true)
     if !isempty(st.diagnostics)
         println()

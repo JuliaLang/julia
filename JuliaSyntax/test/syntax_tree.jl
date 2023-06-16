@@ -73,4 +73,11 @@ end
        1:5  │     5:5     │    b
        2:3  │    10:10    │  c
     """
+
+    t,_ = parsestmt(SyntaxNode, "begin a end\nbegin b end", 13)
+    @test sprint(show, MIME("text/plain"), t) == """
+    line:col│ tree                                   │ file_name
+       1:1  │[block]
+       1:7  │  b
+    """
 end

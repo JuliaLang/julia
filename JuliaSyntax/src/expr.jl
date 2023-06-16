@@ -68,7 +68,7 @@ function _strip_parens(ex)
     end
 end
 
-function _leaf_to_Expr(source, head, srcrange, node)
+function _leaf_to_Expr(source, txtbuf, head, srcrange, node)
     k = kind(head)
     if k == K"core_@cmd"
         return GlobalRef(Core, Symbol("@cmd"))
@@ -79,7 +79,7 @@ function _leaf_to_Expr(source, head, srcrange, node)
             Expr(:error) :
             Expr(:error, "$(_token_error_descriptions[k]): `$(source[srcrange])`")
     else
-        val = isnothing(node) ? parse_julia_literal(source, head, srcrange) : node.val
+        val = isnothing(node) ? parse_julia_literal(txtbuf, head, srcrange) : node.val
         if val isa Union{Int128,UInt128,BigInt}
             # Ignore the values of large integers and convert them back to
             # symbolic/textural form for compatibility with the Expr
@@ -457,7 +457,9 @@ end
 
 function build_tree(::Type{Expr}, stream::ParseStream;
                     filename=nothing, first_line=1, kws...)
-    source = SourceFile(sourcetext(stream), filename=filename, first_line=first_line)
+    source = SourceFile(sourcetext(stream), first_index=first_byte(stream),
+                        filename=filename, first_line=first_line)
+    txtbuf = textbuf(stream)
     args = Any[]
     childranges = UnitRange{Int}[]
     childheads = SyntaxHead[]
@@ -467,7 +469,7 @@ function build_tree(::Type{Expr}, stream::ParseStream;
         end
         k = kind(head)
         if isnothing(nodechildren)
-            ex = _leaf_to_Expr(source, head, srcrange, nothing)
+            ex = _leaf_to_Expr(source, txtbuf, head, srcrange, nothing)
         else
             resize!(childranges, length(nodechildren))
             resize!(childheads, length(nodechildren))
@@ -487,7 +489,8 @@ end
 
 function _to_expr(node::SyntaxNode)
     if !haschildren(node)
-        return _leaf_to_Expr(node.source, head(node), range(node), node)
+        offset, txtbuf = _unsafe_wrap_substring(sourcetext(node.source))
+        return _leaf_to_Expr(node.source, txtbuf, head(node), range(node) .+ offset, node)
     end
     cs = children(node)
     args = Any[_to_expr(c) for c in cs]

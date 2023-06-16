@@ -8,6 +8,7 @@ using .JuliaSyntax:
     Diagnostic,
     SourceFile,
     source_location,
+    source_line,
     parse!,
     parsestmt,
     parseall,

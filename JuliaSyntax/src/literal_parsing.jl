@@ -68,7 +68,7 @@ Like `Base.parse(Union{Float64,Float32}, str)`, but permits float underflow
 Parse a Float64. str[firstind:lastind] must be a valid floating point literal
 string. If the value is outside Float64 range.
 """
-function parse_float_literal(::Type{T}, str::String,
+function parse_float_literal(::Type{T}, str::Union{String,SubString,Vector{UInt8}},
         firstind::Integer, endind::Integer) where {T} # force specialize with where {T}
     strsize = endind - firstind
     bufsz = 50
@@ -172,70 +172,68 @@ end
 
 
 #-------------------------------------------------------------------------------
-is_indentation(c) = c == ' ' || c == '\t'
-
 """
 Process Julia source code escape sequences for raw strings
 """
-function unescape_raw_string(io::IO, str::AbstractString, is_cmd::Bool)
-    delim = is_cmd ? '`' : '"'
-    i = firstindex(str)
-    lastidx = lastindex(str)
-    while i <= lastidx
-        c = str[i]
-        if c != '\\'
-            if c == '\r'
+function unescape_raw_string(io::IO, txtbuf::Vector{UInt8},
+                             firstind, endind, is_cmd::Bool)
+    delim = is_cmd ? u8"`" : u8"\""
+    i = firstind
+    while i < endind
+        c = txtbuf[i]
+        if c != u8"\\"
+            if c == u8"\r"
                 # convert literal \r and \r\n in strings to \n (issue #11988)
-                if i+1 <= lastidx && str[i+1] == '\n'
+                if i+1 < endind && txtbuf[i+1] == u8"\n"
                     i += 1
                 end
-                c = '\n'
+                c = u8"\n"
             end
             write(io, c)
-            i = nextind(str, i)
+            i += 1
             continue
         end
         # Process \ escape sequences
         j = i
-        while j <= lastidx && str[j] == '\\'
+        while j < endind && txtbuf[j] == u8"\\"
             j += 1
         end
         nbackslash = j - i
-        if (j <= lastidx && str[j] == delim) || j > lastidx
+        if (j < endind && txtbuf[j] == delim) || j >= endind
             # Backslashes before a delimiter must also be escaped
             nbackslash = div(nbackslash,2)
         end
         for k = 1:nbackslash
-            write(io, '\\')
+            write(io, u8"\\")
         end
         i = j
-        if i <= lastidx
-            write(io, str[i])
-            i = nextind(str, i)
+        if i < endind
+            write(io, txtbuf[i])
+            i += 1
         end
     end
 end
 
 """
 Process Julia source code escape sequences for non-raw strings.
-`str` should be passed without delimiting quotes.
+`txtbuf` should be passed without delimiting quotes.
 """
-function unescape_julia_string(io::IO, str::AbstractString,
+function unescape_julia_string(io::IO, txtbuf::Vector{UInt8},
                                firstind, endind, diagnostics)
     had_error = false
     i = firstind
     while i < endind
-        c = str[i]
-        if c != '\\'
-            if c == '\r'
+        c = txtbuf[i]
+        if c != u8"\\"
+            if c == u8"\r"
                 # convert literal \r and \r\n in strings to \n (issue #11988)
-                if i+1 < endind && str[i+1] == '\n'
+                if i+1 < endind && txtbuf[i+1] == u8"\n"
                     i += 1
                 end
-                c = '\n'
+                c = u8"\n"
             end
             write(io, c)
-            i = nextind(str, i)
+            i = nextind(txtbuf, i)
             continue
         end
         # Process \ escape sequences.  See also Base.unescape_string which some
@@ -248,20 +246,20 @@ function unescape_julia_string(io::IO, str::AbstractString,
             had_error = true
             break
         end
-        c = str[i]
-        if c == 'x' || c == 'u' || c == 'U'
+        c = txtbuf[i]
+        if c == u8"x" || c == u8"u" || c == u8"U"
             n = k = 0
-            m = c == 'x' ? 2 :
-                c == 'u' ? 4 : 8
+            m = c == u8"x" ? 2 :
+                c == u8"u" ? 4 : 8
             while (k += 1) <= m && i+1 < endind
-                nc = str[i+1]
-                n = '0' <= nc <= '9' ? n<<4 + (nc-'0') :
-                    'a' <= nc <= 'f' ? n<<4 + (nc-'a'+10) :
-                    'A' <= nc <= 'F' ? n<<4 + (nc-'A'+10) : break
+                nc = txtbuf[i+1]
+                n = u8"0" <= nc <= u8"9" ? n<<4 + (nc-u8"0") :
+                    u8"a" <= nc <= u8"f" ? n<<4 + (nc-u8"a"+10) :
+                    u8"A" <= nc <= u8"F" ? n<<4 + (nc-u8"A"+10) : break
                 i += 1
             end
             if k == 1 || n > 0x10ffff
-                u = m == 4 ? 'u' : 'U'
+                u = m == 4 ? u8"u" : u8"U"
                 msg = (m == 2) ? "invalid hex escape sequence" :
                                  "invalid unicode escape sequence"
                 emit_diagnostic(diagnostics, escstart:i, error=msg)
@@ -273,12 +271,12 @@ function unescape_julia_string(io::IO, str::AbstractString,
                     print(io, Char(n))
                 end
             end
-        elseif '0' <= c <= '7'
+        elseif u8"0" <= c <= u8"7"
             k = 1
-            n = c-'0'
+            n = Int(c - u8"0")
             while (k += 1) <= 3 && i+1 < endind
-                c = str[i+1]
-                n = ('0' <= c <= '7') ? n<<3 + c-'0' : break
+                c = txtbuf[i+1]
+                n = (u8"0" <= c <= u8"7") ? n<<3 + c-u8"0" : break
                 i += 1
             end
             if n > 255
@@ -290,20 +288,20 @@ function unescape_julia_string(io::IO, str::AbstractString,
             end
         else
             u = # C escapes
-                c == 'n' ? '\n' :
-                c == 't' ? '\t' :
-                c == 'r' ? '\r' :
-                c == 'e' ? '\e' :
-                c == 'b' ? '\b' :
-                c == 'f' ? '\f' :
-                c == 'v' ? '\v' :
-                c == 'a' ? '\a' :
+                c == u8"n" ? u8"\n" :
+                c == u8"t" ? u8"\t" :
+                c == u8"r" ? u8"\r" :
+                c == u8"e" ? u8"\e" :
+                c == u8"b" ? u8"\b" :
+                c == u8"f" ? u8"\f" :
+                c == u8"v" ? u8"\v" :
+                c == u8"a" ? u8"\a" :
                 # Literal escapes allowed in Julia source
-                c == '\\' ? '\\' :
-                c == '\'' ? '\'' :
-                c == '"' ? '"' :
-                c == '$' ? '$' :
-                c == '`' ? '`' :
+                c == u8"\\" ? u8"\\" :
+                c == u8"'" ? u8"'" :
+                c == u8"\"" ? u8"\"" :
+                c == u8"$" ? u8"$" :
+                c == u8"`" ? u8"`" :
                 nothing
             if isnothing(u)
                 emit_diagnostic(diagnostics, escstart:i,
@@ -313,7 +311,10 @@ function unescape_julia_string(io::IO, str::AbstractString,
                 write(io, u)
             end
         end
-        i = nextind(str, i)
+        # For non-ascii characters we may not be in the middle of the UTF-8
+        # encoding for that char, but this doesn't matter because unescaping
+        # only relies on the ascii subset.
+        i += 1
     end
     return had_error
 end
@@ -362,43 +363,56 @@ end
 
 
 #-------------------------------------------------------------------------------
-function parse_julia_literal(source, head::SyntaxHead, srcrange)
+function parse_julia_literal(txtbuf::Vector{UInt8}, head::SyntaxHead, srcrange)
     # Leaf node
     k = kind(head)
-    val_str = view(source, srcrange)
     # Any errors parsing literals are represented as ErrorVal() - this can
     # happen when the user sets `ignore_errors=true` during parsing.
-    val = if k == K"Integer"
-        parse_int_literal(val_str)
-    elseif k == K"Float"
-        v, code = parse_float_literal(Float64, source.code, first(srcrange),
+    if k == K"Float"
+        v, code = parse_float_literal(Float64, txtbuf, first(srcrange),
                                       last(srcrange)+1)
-        (code === :ok || code === :underflow) ? v : ErrorVal()
+        return (code === :ok || code === :underflow) ? v : ErrorVal()
     elseif k == K"Float32"
-        v, code = parse_float_literal(Float32, source.code, first(srcrange),
+        v, code = parse_float_literal(Float32, txtbuf, first(srcrange),
                                       last(srcrange)+1)
-        (code === :ok || code === :underflow) ? v : ErrorVal()
-    elseif k in KSet"BinInt OctInt HexInt"
-        parse_uint_literal(val_str, k)
-    elseif k == K"true"
-        true
-    elseif k == K"false"
-        false
+        return (code === :ok || code === :underflow) ? v : ErrorVal()
     elseif k == K"Char"
         io = IOBuffer()
-        had_error = unescape_julia_string(io, source.code, first(srcrange),
+        had_error = unescape_julia_string(io, txtbuf, first(srcrange),
                                           last(srcrange)+1, Diagnostic[])
         if had_error
-            ErrorVal()
+            return ErrorVal()
         else
             seek(io, 0)
             c = read(io, Char)
-            eof(io) ? c : ErrorVal()
+            return eof(io) ? c : ErrorVal()
         end
+    elseif k in KSet"String CmdString"
+        io = IOBuffer()
+        had_error = false
+        if has_flags(head, RAW_STRING_FLAG)
+            unescape_raw_string(io, txtbuf, first(srcrange), last(srcrange)+1,
+                                k == K"CmdString")
+        else
+            had_error = unescape_julia_string(io, txtbuf, first(srcrange),
+                                              last(srcrange)+1, Diagnostic[])
+        end
+        return had_error ? ErrorVal() : String(take!(io))
+    elseif k == K"true"
+        return true
+    elseif k == K"false"
+        return false
+    end
+
+    val_str = String(txtbuf[srcrange])
+    if k == K"Integer"
+        parse_int_literal(val_str)
+    elseif k in KSet"BinInt OctInt HexInt"
+        parse_uint_literal(val_str, k)
     elseif k == K"Identifier"
         if has_flags(head, RAW_STRING_FLAG)
             io = IOBuffer()
-            unescape_raw_string(io, val_str, false)
+            unescape_raw_string(io, txtbuf, first(srcrange), last(srcrange)+1, false)
             Symbol(normalize_identifier(String(take!(io))))
         else
             Symbol(normalize_identifier(val_str))
@@ -406,16 +420,6 @@ function parse_julia_literal(source, head::SyntaxHead, srcrange)
     elseif is_keyword(k)
         # This should only happen for tokens nested inside errors
         Symbol(val_str)
-    elseif k in KSet"String CmdString"
-        io = IOBuffer()
-        had_error = false
-        if has_flags(head, RAW_STRING_FLAG)
-            unescape_raw_string(io, val_str, k == K"CmdString")
-        else
-            had_error = unescape_julia_string(io, source.code, first(srcrange),
-                                              last(srcrange)+1, Diagnostic[])
-        end
-        had_error ? ErrorVal() : String(take!(io))
     elseif is_operator(k)
         isempty(srcrange)  ?
             Symbol(untokenize(k)) : # synthetic invisible tokens
