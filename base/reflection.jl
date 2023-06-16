@@ -820,9 +820,19 @@ julia> Base.fieldindex(Foo, :z, false)
 ```
 """
 function fieldindex(T::DataType, name::Symbol, err::Bool=true)
+    return err ? _fieldindex_maythrow(T, name) : _fieldindex_nothrow(T, name)
+end
+
+function _fieldindex_maythrow(T::DataType, name::Symbol)
     @_foldable_meta
     @noinline
-    return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
+    return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, true)+1)
+end
+
+function _fieldindex_nothrow(T::DataType, name::Symbol)
+    @_total_meta
+    @noinline
+    return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, false)+1)
 end
 
 function fieldindex(t::UnionAll, name::Symbol, err::Bool=true)
