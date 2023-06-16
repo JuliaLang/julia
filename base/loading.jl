@@ -1902,8 +1902,17 @@ function _require(pkg::PkgId, env=nothing)
                     @goto load_from_cache
                 end
                 # spawn off a new incremental pre-compile task for recursive `require` calls
-                cachefile = compilecache(pkg, path)
-                if isa(cachefile, Exception)
+                cachefile_or_module = maybe_cachefile_lock(pkg, path) do
+                    # double-check now that we have lock
+                    m = _require_search_from_serialized(pkg, path, UInt128(0))
+                    m isa Module && return m
+                    compilecache(pkg, path)
+                end
+                cachefile_or_module isa Module && return cachefile_or_module::Module
+                cachefile = cachefile_or_module
+                if isnothing(cachefile) # maybe_cachefile_lock returns nothing if it had to wait for another process
+                    @goto load_from_cache # the new cachefile will have the newest mtime so will come first in the search
+                elseif isa(cachefile, Exception)
                     if precompilableerror(cachefile)
                         verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
                         @logmsg verbosity "Skipping precompilation since __precompile__(false). Importing $pkg."
@@ -2803,6 +2812,35 @@ function show(io::IO, cf::CacheFlags)
     print(io, ", check_bounds = ", cf.check_bounds)
     print(io, ", inline = ", cf.inline)
     print(io, ", opt_level = ", cf.opt_level)
+end
+
+# Set by FileWatching.__init__()
+global mkpidlock_hook
+global trymkpidlock_hook
+global parse_pidfile_hook
+
+# allows processes to wait if another process is precompiling a given source already
+function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String)
+    if @isdefined(mkpidlock_hook) && @isdefined(trymkpidlock_hook) && @isdefined(parse_pidfile_hook)
+        pidfile = string(srcpath, ".pidlock")
+        cachefile = invokelatest(trymkpidlock_hook, f, pidfile)
+        if cachefile === false
+            pid, hostname, age = invokelatest(parse_pidfile_hook, pidfile)
+            verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+            if isempty(hostname) || hostname == gethostname()
+                @logmsg verbosity "Waiting for another process (pid: $pid) to finish precompiling $pkg"
+            else
+                @logmsg verbosity "Waiting for another machine (hostname: $hostname, pid: $pid) to finish precompiling $pkg"
+            end
+            # wait until the lock is available, but don't actually acquire it
+            # returning nothing indicates a process waited for another
+            return invokelatest(mkpidlock_hook, Returns(nothing), pidfile)
+        end
+        return cachefile
+    else
+        # for packages loaded before FileWatching.__init__()
+        f()
+    end
 end
 
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
