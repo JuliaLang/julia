@@ -981,7 +981,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     JL_LOCK(&m->writelock); // protect the roots array (Might GC)
     assert(jl_is_method(m));
     assert(jl_is_string(data));
-    assert(jl_is_code_instance(metadata));
+    assert(metadata == NULL || jl_is_code_instance(metadata));
     jl_method_instance_t *mi = NULL;
     if (metadata != NULL && jl_is_method_instance(metadata->def)) {
         mi = metadata->def;
