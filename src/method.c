@@ -1219,6 +1219,7 @@ JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_
         assert(jl_is_module(mod));
         modid = mod->build_id.lo;
     }
+    assert(jl_is_method(m));
     prepare_method_for_roots(m, modid);
     if (current_root_id(m->root_blocks) != modid)
         add_root_block(m->root_blocks, modid, jl_array_len(m->roots));
@@ -1235,6 +1236,7 @@ JL_DLLEXPORT void jl_add_method_instance_root(jl_method_instance_t *m, jl_module
         assert(jl_is_module(mod));
         modid = mod->build_id.lo;
     }
+    assert(jl_is_method_instance(m));
     prepare_method_instance_for_roots(m, modid);
     if (current_root_id(m->root_blocks) != modid)
         add_root_block(m->root_blocks, modid, jl_array_len(m->roots));
