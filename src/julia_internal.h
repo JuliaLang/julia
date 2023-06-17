@@ -647,6 +647,7 @@ int get_root_reference_method_instance(rle_reference *rr, jl_method_instance_t *
 jl_value_t *lookup_root(jl_method_t *m, uint64_t key, int index) JL_NOTSAFEPOINT;
 jl_value_t *lookup_root_method_instance(jl_method_instance_t *m, uint64_t key, int index) JL_NOTSAFEPOINT;
 int nroots_with_key(jl_method_t *m, uint64_t key) JL_NOTSAFEPOINT;
+int nroots_with_key_method_instance(jl_method_instance_t *m, uint64_t key) JL_NOTSAFEPOINT;
 
 int jl_valid_type_param(jl_value_t *v);
 

@@ -1463,10 +1463,11 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             }
             else if (jl_is_method_instance(v)) {
                 assert(f == s->s);
+                jl_method_instance_t *mi = (jl_method_instance_t*)v;
                 jl_method_instance_t *newmi = (jl_method_instance_t*)&f->buf[reloc_offset];
                 jl_atomic_store_relaxed(&newmi->precompiled, 0);
                  if (!(s->incremental)) {
-                    newmi->nroots_sysimg = newmi->roots ? jl_array_len(newmi->roots) : 0;
+                    newmi->nroots_sysimg = mi->roots ? jl_array_len(mi->roots) : 0;
                 }
             }
             else if (jl_is_code_instance(v)) {

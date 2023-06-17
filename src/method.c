@@ -1324,6 +1324,23 @@ int nroots_with_key(jl_method_t *m, uint64_t key)
     return nwithkey;
 }
 
+int nroots_with_key_method_instance(jl_method_instance_t *m, uint64_t key)
+{
+    size_t nroots = 0;
+    if (m->roots)
+        nroots = jl_array_len(m->roots);
+    if (!m->root_blocks)
+        return key == 0 ? nroots : 0;
+    uint64_t *rletable = (uint64_t*)jl_array_data(m->root_blocks);
+    size_t j, nblocks2 = jl_array_len(m->root_blocks);
+    int nwithkey = 0;
+    for (j = 0; j < nblocks2; j+=2) {
+        if (rletable[j] == key)
+            nwithkey += (j+3 < nblocks2 ? rletable[j+3] : nroots) - rletable[j+1];
+    }
+    return nwithkey;
+}
+
 #ifdef __cplusplus
 }
 #endif

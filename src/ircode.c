@@ -141,51 +141,44 @@ static void jl_encode_as_indexed_root(jl_ircode_state *s, jl_value_t *v)
     }
 }
 
+// Encode a method instance for storing with its method instance, as well as the method name
+// as a method root as a fallback for when the method instance is not available. Intended
+// mainly for storage of method instances associated with linetable entries.
 static void jl_encode_as_indexed_root_method_instance(jl_ircode_state *s, jl_value_t *v)
 {
-    // store the def name as fallback if method instance root table is not available
-
     assert(jl_is_method_instance(v));
+
     rle_reference rr;
-    rle_reference rr_def;
 
     literal_val_id_method_instance(&rr, s, v);
-    
-    jl_value_t *def = ((jl_method_instance_t*)v)->def.value;
-    jl_sym_t *name = NULL;
-    if (jl_is_method(def))
-        name = ((jl_method_t*)def)->name;
-    else if (jl_is_module(def))
-        name = ((jl_module_t*)def)->name;
-    assert(name);
-    literal_val_id(&rr_def, s, (jl_value_t*)name);
+
     int id = rr.index;
-    int id_def = rr_def.index;
     assert(id >= 0);
-    assert(id_def >= 0);
     if (rr.key) {
-        write_uint8(s->s, TAG_RELOC_METHODINSTANCEROOT);
+        write_uint8(s->s, TAG_RELOC_METHODINSTROOT);
         write_uint64(s->s, rr.key);
-        write_uint64(s->s, rr_def.key);
     }
     if (id <= UINT8_MAX) {
-        write_uint8(s->s, TAG_METHODINSTANCEROOT);
+        write_uint8(s->s, TAG_METHODINSTROOT);
         write_uint8(s->s, id);
     }
     else {
         assert(id <= UINT32_MAX);
-        write_uint8(s->s, TAG_LONG_METHODINSTANCEROOT);
+        write_uint8(s->s, TAG_LONG_METHODINSTROOT);
         write_uint32(s->s, id);
     }
-    if (id_def <= UINT8_MAX) {
-        write_uint8(s->s, TAG_METHODROOT);
-        write_uint8(s->s, id_def);
+
+    jl_method_instance_t *mi = (jl_method_instance_t*)v;
+    jl_value_t* name = NULL;
+    if (jl_is_module(mi->def.value)) {
+        name = (jl_value_t*)mi->def.module->name;
     }
-    else {
-        assert(id_def <= UINT32_MAX);
-        write_uint8(s->s, TAG_LONG_METHODROOT);
-        write_uint32(s->s, id_def);
+    else if (jl_is_method(mi->def.value)) {
+        name = (jl_value_t*)mi->def.method->name;
     }
+    assert(name != NULL);
+
+    jl_encode_as_indexed_root(s, name);
 }
 
 static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) JL_GC_DISABLED
@@ -737,65 +730,40 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
         return lookup_root(s->method, 0, read_uint8(s->s));
     case TAG_LONG_METHODROOT:
         return lookup_root(s->method, 0, read_uint32(s->s));
-    case TAG_RELOC_METHODINSTANCEROOT:
+    case TAG_RELOC_METHODINSTROOT:
         key = read_uint64(s->s);
-        uint64_t key_def = read_uint64(s->s);
         tag = read_uint8(s->s);
-        assert(tag == TAG_METHODINSTANCEROOT || tag == TAG_LONG_METHODINSTANCEROOT);
+        assert(tag == TAG_METHODINSTROOT || tag == TAG_LONG_METHODINSTROOT);
         index = -1;
-        if (tag == TAG_METHODINSTANCEROOT)
+        if (tag == TAG_METHODINSTROOT)
             index = read_uint8(s->s);
-        else if (tag == TAG_LONG_METHODINSTANCEROOT)
+        else if (tag == TAG_LONG_METHODINSTROOT)
             index = read_uint32(s->s);
         assert(index >= 0);
-        int index_def = -1;
-        tag = read_uint8(s->s);
-        assert(tag == TAG_METHODROOT || tag == TAG_LONG_METHODROOT);
-        if (tag == TAG_METHODROOT)
-            index_def = read_uint8(s->s);
-        else if (tag == TAG_LONG_METHODROOT)
-            index_def = read_uint32(s->s);
-        assert(index_def >= 0);
-        if (s->method_instance != NULL) {
+        jl_value_t *name = jl_decode_value(s);
+        assert(jl_is_symbol(name));
+        if (s->method_instance != NULL)
             return lookup_root_method_instance(s->method_instance, key, index);
-        }
-        else {
-            return lookup_root(s->method, key_def, index_def);
-        }
-    case TAG_METHODINSTANCEROOT:
+        else
+            return name;
+    case TAG_METHODINSTROOT:
         index = read_uint8(s->s);
         assert(index >= 0);
-        tag = read_uint8(s->s);
-        assert(tag == TAG_METHODROOT || tag == TAG_LONG_METHODROOT);
-        index_def = -1;
-        if (tag == TAG_METHODROOT)
-            index_def = read_uint8(s->s);
-        else if (tag == TAG_LONG_METHODROOT)
-            index_def = read_uint32(s->s);
-        assert(index_def >= 0);
-        if (s->method_instance != NULL) {
-            return lookup_root_method_instance(s->method_instance, 0, index);
-        }
-        else {
-            return lookup_root(s->method, 0, index_def);
-        }
-    case TAG_LONG_METHODINSTANCEROOT:
+        name = jl_decode_value(s);
+        assert(jl_is_symbol(name));
+        if (s->method_instance != NULL)
+            return lookup_root_method_instance(s->method_instance, key, index);
+        else
+            return name;
+    case TAG_LONG_METHODINSTROOT:
         index = read_uint32(s->s);
         assert(index >= 0);
-        tag = read_uint8(s->s);
-        assert(tag == TAG_METHODROOT || tag == TAG_LONG_METHODROOT);
-        index_def = -1;
-        if (tag == TAG_METHODROOT)
-            index_def = read_uint8(s->s);
-        else if (tag == TAG_LONG_METHODROOT)
-            index_def = read_uint32(s->s);
-        assert(index_def >= 0);
-        if (s->method_instance != NULL) {
-            return lookup_root_method_instance(s->method_instance, 0, index);
-        }
-        else {
-            return lookup_root(s->method, 0, index_def);
-        }
+        name = jl_decode_value(s);
+        assert(jl_is_symbol(name));
+        if (s->method_instance != NULL)
+            return lookup_root_method_instance(s->method_instance, key, index);
+        else
+            return name;
     case TAG_SVEC: JL_FALLTHROUGH; case TAG_LONG_SVEC:
         return jl_decode_value_svec(s, tag);
     case TAG_COMMONSYM:
