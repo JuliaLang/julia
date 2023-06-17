@@ -1,3 +1,6 @@
+jl_symbol("undef"),
+jl_symbol("sizeof"),
+jl_symbol("String"),
 jl_symbol("namedtuple.jl"),
 jl_symbol("pop"),
 jl_symbol("inbounds"),
