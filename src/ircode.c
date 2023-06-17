@@ -752,7 +752,7 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
         name = jl_decode_value(s);
         assert(jl_is_symbol(name));
         if (s->method_instance != NULL)
-            return lookup_root_method_instance(s->method_instance, key, index);
+            return lookup_root_method_instance(s->method_instance, 0, index);
         else
             return name;
     case TAG_LONG_METHODINSTROOT:
@@ -761,7 +761,7 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
         name = jl_decode_value(s);
         assert(jl_is_symbol(name));
         if (s->method_instance != NULL)
-            return lookup_root_method_instance(s->method_instance, key, index);
+            return lookup_root_method_instance(s->method_instance, 0, index);
         else
             return name;
     case TAG_SVEC: JL_FALLTHROUGH; case TAG_LONG_SVEC:
