@@ -571,7 +571,7 @@ static void buildPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationL
     MPM.addPass(AfterOptimizationMarkerPass());
 }
 
-JL_DLLEXPORT_CODEGEN void jl_build_newpm_pipeline_impl(void *MPM, void *PB, int Speedup, int Size,
+extern "C" JL_DLLEXPORT_CODEGEN void jl_build_newpm_pipeline_impl(void *MPM, void *PB, int Speedup, int Size,
     int lower_intrinsics, int dump_native, int external_use, int llvm_only) JL_NOTSAFEPOINT
 {
     OptimizationLevel O;
