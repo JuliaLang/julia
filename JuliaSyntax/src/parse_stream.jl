@@ -901,11 +901,16 @@ function emit_diagnostic(stream::ParseStream, mark::ParseStreamPosition,
     emit_diagnostic(stream, fbyte:lbyte; kws...)
 end
 
+function emit_diagnostic(diagnostics::AbstractVector{Diagnostic},
+                         byterange::AbstractUnitRange; kws...)
+    push!(diagnostics, Diagnostic(first(byterange), last(byterange); kws...))
+end
+
 #-------------------------------------------------------------------------------
 # ParseStream Post-processing
 
 function validate_tokens(stream::ParseStream)
-    txtbuf = textbuf(stream)
+    txtbuf = unsafe_textbuf(stream)
     toks = stream.tokens
     charbuf = IOBuffer()
     for i = 2:length(toks)
@@ -1104,11 +1109,14 @@ function sourcetext(stream::ParseStream; steal_textbuf=false)
 end
 
 """
-    textbuf(stream)
+    unsafe_textbuf(stream)
 
 Return the `Vector{UInt8}` text buffer being parsed by this `ParseStream`.
+
+!!! warning
+    The caller must hold a reference to `stream` while using textbuf
 """
-textbuf(stream) = stream.textbuf
+unsafe_textbuf(stream) = stream.textbuf
 
 first_byte(stream::ParseStream) = first(stream.tokens).next_byte # Use sentinel token
 last_byte(stream::ParseStream) = _next_byte(stream)-1
