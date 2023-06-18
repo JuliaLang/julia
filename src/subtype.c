@@ -3014,6 +3014,39 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
     return res;
 }
 
+static int always_occurs_cov(jl_value_t *v, jl_tvar_t *var, int param) JL_NOTSAFEPOINT
+{
+    if (param > 1) {
+        return 0;
+    }
+    else if (v == (jl_value_t*)var) {
+        return param == 1;
+    }
+    else if (jl_is_uniontype(v)) {
+        return always_occurs_cov(((jl_uniontype_t*)v)->a, var, param) ||
+               always_occurs_cov(((jl_uniontype_t*)v)->b, var, param);
+    }
+    else if (jl_is_unionall(v)) {
+        jl_unionall_t *ua = (jl_unionall_t*)v;
+        return ua->var != var && (
+            always_occurs_cov(ua->var->lb, var, 0) ||
+            always_occurs_cov(ua->var->ub, var, 0) ||
+            always_occurs_cov(ua->body, var, param));
+    }
+    else if (jl_is_vararg(v)) {
+        jl_vararg_t *vm = (jl_vararg_t*)v;
+        return vm->T && always_occurs_cov(vm->T, var, param);
+    }
+    else if (jl_is_datatype(v)) {
+        int nparam = jl_is_tuple_type(v) ? 1 : param;
+        for (size_t i = 0; i < jl_nparams(v); i++) {
+            if (always_occurs_cov(jl_tparam(v, i), var, nparam))
+                return 1;
+        }
+    }
+    return 0;
+}
+
 static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, int param)
 {
     jl_value_t *res = NULL;
@@ -3022,7 +3055,8 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
                            e->invdepth, NULL, e->vars };
     JL_GC_PUSH4(&res, &vb.lb, &vb.ub, &vb.innervars);
     save_env(e, &se, 1);
-    if (is_leaf_typevar(u->var) && !var_occurs_invariant(u->body, u->var))
+    int noinv = !var_occurs_invariant(u->body, u->var);
+    if (is_leaf_typevar(u->var) && noinv && always_occurs_cov(u->body, u->var, param))
         vb.constraintkind = 1;
     res = intersect_unionall_(t, u, e, R, param, &vb);
     if (vb.limited) {
@@ -3036,7 +3070,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
             vb.constraintkind = vb.concrete ? 1 : 2;
         else if (u->var->lb != jl_bottom_type)
             vb.constraintkind = 2;
-        else if (vb.occurs_cov && !var_occurs_invariant(u->body, u->var))
+        else if (vb.occurs_cov && noinv)
             vb.constraintkind = 1;
         int reintersection = constraint1 != vb.constraintkind || vb.concrete;
         if (reintersection) {
