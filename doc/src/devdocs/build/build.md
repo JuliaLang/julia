@@ -62,6 +62,14 @@ To run julia from anywhere you can:
 
 Some of the options you can set to control the build of Julia are listed and documented at the beginning of the file `Make.inc`, but you should never edit it for this purpose, use `Make.user` instead.
 
+Julia's Makefiles define convenient automatic rules called `print-<VARNAME>` for printing the value of variables, replacing `<VARNAME>` with the name of the variable to print the value of.
+For example
+```console
+$ make print-JULIA_PRECOMPILE
+JULIA_PRECOMPILE=1
+```
+These rules are useful for debugging purposes.
+
 Now you should be able to run Julia like this:
 
     julia
