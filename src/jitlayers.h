@@ -83,10 +83,6 @@ static inline bool imaging_default() JL_NOTSAFEPOINT {
     return jl_options.image_codegen || (jl_generating_output() && (!jl_options.incremental || jl_options.use_pkgimages));
 }
 
-static inline bool debug_default() JL_NOTSAFEPOINT {
-    return jl_options.debug_level > 0;
-}
-
 struct OptimizationOptions {
     bool lower_intrinsics;
     bool dump_native;
@@ -241,7 +237,7 @@ typedef struct _jl_codegen_params_t {
     bool cache = false;
     bool external_linkage = false;
     bool imaging;
-    bool debug_enabled;
+    int debug_level;
     _jl_codegen_params_t(orc::ThreadSafeContext ctx, DataLayout DL, Triple triple)
         : tsctx(std::move(ctx)), tsctx_lock(tsctx.getLock()),
             DL(std::move(DL)), TargetTriple(std::move(triple)), imaging(imaging_default()) {}

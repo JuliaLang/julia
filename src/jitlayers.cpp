@@ -196,7 +196,7 @@ static jl_callptr_t _jl_compile_codeinst(
     params.cache = true;
     params.world = world;
     params.imaging = imaging_default();
-    params.debug_enabled = debug_default();
+    params.debug_level = jl_options.debug_level;
     jl_workqueue_t emitted;
     {
         orc::ThreadSafeModule result_m =
@@ -361,7 +361,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
     });
     jl_codegen_params_t params(into->getContext(), std::move(target_info.first), std::move(target_info.second));
     params.imaging = imaging_default();
-    params.debug_enabled = debug_default();
+    params.debug_level = jl_options.debug_level;
     if (pparams == NULL)
         pparams = &params;
     assert(pparams->tsctx.getContext() == into->getContext().getContext());

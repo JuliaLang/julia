@@ -169,7 +169,7 @@ typedef Instruction TerminatorInst;
 
 void setName(jl_codegen_params_t &params, Value *V, const Twine &Name)
 {
-    if (params.debug_enabled) {
+    if (params.debug_level) {
         V->setName(Name);
     }
 }
@@ -7192,9 +7192,9 @@ static jl_llvm_functions_t
     // jl_printf(JL_STDERR, "\n*** compiling %s at %s:%d\n\n",
     //           jl_symbol_name(ctx.name), ctx.file.str().c_str(), toplineno);
 
-    bool debug_enabled = ctx.emission_context.debug_enabled;
+    bool debug_enabled = ctx.emission_context.debug_level != 0;
     if (dbgFuncName.empty()) // Should never happen anymore?
-        debug_enabled = 0;
+        debug_enabled = false;
 
     // step 2. process var-info lists to see what vars need boxing
     int n_ssavalues = jl_is_long(src->ssavaluetypes) ? jl_unbox_long(src->ssavaluetypes) : jl_array_len(src->ssavaluetypes);
@@ -7375,7 +7375,7 @@ static jl_llvm_functions_t
     if (debug_enabled) {
         topfile = dbuilder.createFile(ctx.file, ".");
         DISubroutineType *subrty;
-        if (jl_options.debug_level <= 1)
+        if (ctx.emission_context.debug_level <= 1)
             subrty = debuginfo.jl_di_func_null_sig;
         else if (!specsig)
             subrty = debuginfo.jl_di_func_sig;
@@ -7396,7 +7396,7 @@ static jl_llvm_functions_t
                                      );
         topdebugloc = DILocation::get(ctx.builder.getContext(), toplineno, 0, SP, NULL);
         f->setSubprogram(SP);
-        if (jl_options.debug_level >= 2) {
+        if (ctx.emission_context.debug_level >= 2) {
             const bool AlwaysPreserve = true;
             // Go over all arguments and local variables and initialize their debug information
             for (i = 0; i < nreq; i++) {
@@ -8754,6 +8754,7 @@ jl_llvm_functions_t jl_emit_codeinst(
                 if (// keep code when keeping everything
                     !(JL_DELETE_NON_INLINEABLE) ||
                     // aggressively keep code when debugging level >= 2
+                    // note that this uses the global jl_options.debug_level, not the local emission_ctx.debug_level
                     jl_options.debug_level > 1) {
                     // update the stored code
                     if (inferred != (jl_value_t*)src) {
