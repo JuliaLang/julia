@@ -239,6 +239,21 @@ endif
 # declare that all patches must be applied before running ./configure
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(LLVM_PATCH_PREV)
 
+# Apply Julia's specific patches if requested, e.g. if not using Julia's fork of LLVM.
+ifeq ($(LLVM_APPLY_JULIA_PATCHES), 1)
+# Download Julia's patchset.
+$(BUILDDIR)/julia-patches.patch:
+	$(JLDOWNLOAD) $@ $(LLVM_JULIA_DIFF_GITHUB_REPO)/compare/$(LLVM_BASE_REF)...$(LLVM_JULIA_REF).diff
+
+# Apply the patch.
+$(SRCCACHE)/$(LLVM_SRC_DIR)/julia-patches.patch-applied: $(BUILDDIR)/julia-patches.patch $(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted
+	cd $(SRCCACHE)/$(LLVM_SRC_DIR) && patch -p1 < $(realpath $<)
+	echo 1 > $@
+
+# Require application of Julia's patchset before configuring LLVM.
+$(LLVM_BUILDDIR_withtype)/build-configured: | $(SRCCACHE)/$(LLVM_SRC_DIR)/julia-patches.patch-applied
+endif
+
 $(LLVM_BUILDDIR_withtype)/build-configured: $(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
