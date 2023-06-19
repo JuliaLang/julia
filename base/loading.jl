@@ -2819,10 +2819,15 @@ global mkpidlock_hook
 global trymkpidlock_hook
 global parse_pidfile_hook
 
+# The preferences hash is only known after precompilation so just assume no preferences
+# meaning that if all other conditions are equal, the same package cannot be precompiled
+# with different preferences at the same time.
+compilecache_pidfile_path(pkg::PkgId) = compilecache_path(pkg, UInt64(0)) * ".pidfile"
+
 # allows processes to wait if another process is precompiling a given source already
 function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String)
     if @isdefined(mkpidlock_hook) && @isdefined(trymkpidlock_hook) && @isdefined(parse_pidfile_hook)
-        pidfile = string(srcpath, ".pidlock")
+        pidfile = compilecache_pidfile_path(pkg)
         cachefile = invokelatest(trymkpidlock_hook, f, pidfile)
         if cachefile === false
             pid, hostname, age = invokelatest(parse_pidfile_hook, pidfile)
