@@ -17,11 +17,11 @@ mutable struct WSBuffer{T}
     const capacity::Int64
     const mask::Int64
     @noinline function WSBuffer{T}(capacity::Int64) where T
-        if nextpow(capacity, 2) != capacity
-            throw(ArgumentError("Capacity must be a power of two"))
-        end
-        if capacity == 0
+        if __unlikely(capacity == 0)
             throw(ArgumentError("Capacity can't be zero"))
+        end
+        if __unlikely(count_ones(capacity) != 1)
+            throw(ArgumentError("Capacity must be a power of two"))
         end
         buffer = Vector{T}(undef, capacity)
         mask = capacity - 1
@@ -29,14 +29,22 @@ mutable struct WSBuffer{T}
     end
 end
 
-function Base.getindex(buf::WSBuffer{T}, idx::Int64) where T
+function getindex(buf::WSBuffer{T}, idx::Int64) where T
     @inbounds buf.buffer[idx & buf.capacity]
 end
 
-function Base.setindex!(buf::WSBuffer{T}, val::T, idx::Int64) where T
+function setindex!(buf::WSBuffer{T}, val::T, idx::Int64) where T
     @inbounds buf.buffer[idx & buf.capacity] = val
 end
 
+"""
+    WSQueue{T}
+
+Work-stealing queue after Chase & Le.
+
+!!! note
+    popfirst! and push! are only allowed to be called from owner.
+"""
 mutable struct WSQueue{T}
     @atomic top::Int64
     @atomic bottom::Int64
@@ -46,7 +54,7 @@ mutable struct WSQueue{T}
     end
 end
 
-function Base.push!(q::WSQueue{T}, v::T) where T
+function push!(q::WSQueue{T}, v::T) where T
     bottom = @atomic :monotonic q.bottom
     top    = @atomic :acquire   q.top
     buffer = @atomic :monotonic q.buffer
@@ -65,7 +73,7 @@ function Base.push!(q::WSQueue{T}, v::T) where T
     return nothing
 end
 
-function Base.pop!(q::WSQueue{T}) where T
+function popfirst!(q::WSQueue{T}) where T
     bottom = (@atomic :monotonic q.bottom) - 1
     buffer =  @atomic :monotonic q.buffer
     @atomic :monotonic q.bottom = bottom
@@ -74,7 +82,6 @@ function Base.pop!(q::WSQueue{T}) where T
 
     top = @atomic :monotonic q.top
 
-    # todo add likely
     if __likely(top <= bottom)
         v = buffer[bottom]
         if top == bottom
@@ -109,3 +116,5 @@ end
 
 @inline __likely(cond::Bool) = ccall("llvm.expect", llvmcall, Bool, (Bool, Bool), cond, true)
 @inline __unlikely(cond::Bool) = ccall("llvm.expect", llvmcall, Bool, (Bool, Bool), cond, false)
+
+isempty(q::WSQueue) = q.top == q.bottom
