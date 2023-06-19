@@ -571,6 +571,37 @@ static void buildPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationL
     MPM.addPass(AfterOptimizationMarkerPass());
 }
 
+extern "C" JL_DLLEXPORT_CODEGEN void jl_build_newpm_pipeline_impl(void *MPM, void *PB, int Speedup, int Size,
+    int lower_intrinsics, int dump_native, int external_use, int llvm_only) JL_NOTSAFEPOINT
+{
+    OptimizationLevel O;
+    switch (Size) {
+        case 1:
+            O = OptimizationLevel::Os;
+            break;
+        default:
+            O = OptimizationLevel::Oz;
+            break;
+        case 0:
+            switch (Speedup) {
+                case 0:
+                    O = OptimizationLevel::O0;
+                    break;
+                case 1:
+                    O = OptimizationLevel::O1;
+                    break;
+                case 2:
+                    O = OptimizationLevel::O2;
+                    break;
+                default:
+                    O = OptimizationLevel::O3;
+                    break;
+            }
+    }
+    buildPipeline(*reinterpret_cast<ModulePassManager*>(MPM), reinterpret_cast<PassBuilder*>(PB), O,
+                    OptimizationOptions{!!lower_intrinsics, !!dump_native, !!external_use, !!llvm_only});
+}
+
 #undef JULIA_PASS
 
 namespace {
