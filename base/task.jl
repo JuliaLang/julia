@@ -774,15 +774,15 @@ end
 pushfirst!(wq::Workqueue, task::Task) = pushfirst!(wq.public, task)
 list_deletefirst!(wq::Workqueue) = list_deletefirst!(wq.public)
 function push!(wq::Workqueue, task::Task)
-    # if Threads.threadid(task) == Threads.threadid()
-        # push!(wq.private, task)
-    # else
+    if Threads.threadid(task) == Threads.threadid()
+        push!(wq.private, task)
+    else
         push!(wq.public, task)
-    # end
+    end
 end
-steal!(wq::Workqueue) = popfirst!(wq.public) # pop! is O(N) #nothing # steal!(wq.private)
+steal!(wq::Workqueue) = steal!(wq.private)
 
-isempty(wq::Workqueue) = isempty(wq.public) #&& isempty(wq.private)
+isempty(wq::Workqueue) = isempty(wq.public) && isempty(wq.private)
 
 function enq_work(t::Task)
     (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
@@ -975,15 +975,15 @@ end
 
 function trypoptask(W::Workqueue)
     # Move public tasks into private queue
-    # while !isempty(W.public)
-    #     t = popfirst!(W.public)
-    #     push!(W.private, t)
-    # end
-
-    # while !isempty(W.private)
-    #     t = popfirst!(W.private)
     while !isempty(W.public)
         t = popfirst!(W.public)
+        push!(W.private, t)
+    end
+
+    while !isempty(W.private)
+        t = popfirst!(W.private)
+    # while !isempty(W.public)
+    #     t = popfirst!(W.public)
     
         if t._state !== task_state_runnable
             # assume this somehow got queued twice,
@@ -1030,7 +1030,7 @@ function checktaskempty()
 
     for tid in 1:N
         W = workqueue_for(offset+tid)
-        if !isempty(W.public) #!isempty(W.private)
+        if !isempty(W.private)
             return false
         end
     end

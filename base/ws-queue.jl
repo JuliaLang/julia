@@ -48,9 +48,9 @@ Work-stealing queue after Chase & Le.
 mutable struct WSQueue{T}
     @atomic top::Int64
     @atomic bottom::Int64
-    @atomic buffer::WSBuffer{T}
+    @atomic buffer::WSBuffer{Union{T,Nothing}}
     function WSQueue{T}(capacity = 64) where T 
-        new(1, 1, WSBuffer{T}(capacity))
+        new(1, 1, WSBuffer{Union{T,Nothing}}(capacity))
     end
 end
 
@@ -62,7 +62,7 @@ function Base.push!(q::WSQueue{T}, v::T) where T
     # add unlikely
     if __unlikely(bottom - top > (buffer.capacity - 1))
         # @debug "Growing WS buffer" bottom top capacity = buffer.capacity
-        new_buffer = WSBuffer{T}(2*buffer.capacity)
+        new_buffer = WSBuffer{Union{T,Nothing}}(2*buffer.capacity)
         copyto!(new_buffer.buffer, buffer.buffer) # TODO only copy active range?
         @atomic :release q.buffer = new_buffer
         buffer = new_buffer
@@ -91,6 +91,7 @@ function Base.popfirst!(q::WSQueue{T}) where T
                 return nothing # failed
             end
         end
+        buffer[bottom] = nothing # This is not legal
         return v
     else
         @atomic :monotonic q.bottom = bottom + 1
@@ -109,6 +110,7 @@ function steal!(q::WSQueue{T}) where T
         if !success
             return nothing # failed
         end
+        buffer[top] = nothing # This is not legal
         return v
     end
     return nothing # failed 
