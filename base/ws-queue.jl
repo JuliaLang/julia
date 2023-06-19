@@ -29,12 +29,12 @@ mutable struct WSBuffer{T}
     end
 end
 
-function getindex(buf::WSBuffer{T}, idx::Int64) where T
-    @inbounds buf.buffer[idx & buf.capacity]
+function Base.getindex(buf::WSBuffer{T}, idx::Int64) where T
+    @inbounds buf.buffer[idx & buf.mask]
 end
 
-function setindex!(buf::WSBuffer{T}, val::T, idx::Int64) where T
-    @inbounds buf.buffer[idx & buf.capacity] = val
+function Base.setindex!(buf::WSBuffer{T}, val::T, idx::Int64) where T
+    @inbounds buf.buffer[idx & buf.mask] = val
 end
 
 """
@@ -54,7 +54,7 @@ mutable struct WSQueue{T}
     end
 end
 
-function push!(q::WSQueue{T}, v::T) where T
+function Base.push!(q::WSQueue{T}, v::T) where T
     bottom = @atomic :monotonic q.bottom
     top    = @atomic :acquire   q.top
     buffer = @atomic :monotonic q.buffer
@@ -73,7 +73,7 @@ function push!(q::WSQueue{T}, v::T) where T
     return nothing
 end
 
-function popfirst!(q::WSQueue{T}) where T
+function Base.popfirst!(q::WSQueue{T}) where T
     bottom = (@atomic :monotonic q.bottom) - 1
     buffer =  @atomic :monotonic q.buffer
     @atomic :monotonic q.bottom = bottom

@@ -782,6 +782,8 @@ function push!(wq::Workqueue, task::Task)
 end
 steal!(wq::Workqueue) = steal!(wq.private)
 
+isempty(wq::Workqueue) = isempty(wq.public) && isempty(wq.private)
+
 function enq_work(t::Task)
     (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
 
