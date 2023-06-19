@@ -823,10 +823,9 @@ function compileable_specialization(mi::MethodInstance, effects::Effects,
         new_atype === nothing && return nothing
         if atype !== new_atype
             sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), new_atype, method.sig)::SimpleVector
-            if sparams === sp_[2]::SimpleVector
-                mi_invoke = specialize_method(method, new_atype, sparams)
-                mi_invoke === nothing && return nothing
-            end
+            @assert sparams === sp_[2]::SimpleVector
+            mi_invoke = specialize_method(method, new_atype, sparams)
+            mi_invoke === nothing && return nothing
         end
     else
         # If this caller does not want us to optimize calls to use their
