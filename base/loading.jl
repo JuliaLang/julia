@@ -2824,11 +2824,15 @@ global parse_pidfile_hook
 # with different preferences at the same time.
 compilecache_pidfile_path(pkg::PkgId) = compilecache_path(pkg, UInt64(0)) * ".pidfile"
 
-# allows processes to wait if another process is precompiling a given source already
-function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String)
+# Allows processes to wait if another process is precompiling a given source already.
+# The lock file is deleted and precompilation will proceed after `stale_age` seconds if
+#  - the locking process no longer exists
+#  - the lock is held by another host, since processes cannot be checked remotely
+# or after `stale_age * 25` seconds if it does still exist.
+function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=60)
     if @isdefined(mkpidlock_hook) && @isdefined(trymkpidlock_hook) && @isdefined(parse_pidfile_hook)
         pidfile = compilecache_pidfile_path(pkg)
-        cachefile = invokelatest(trymkpidlock_hook, f, pidfile)
+        cachefile = invokelatest(trymkpidlock_hook, f, pidfile; stale_age)
         if cachefile === false
             pid, hostname, age = invokelatest(parse_pidfile_hook, pidfile)
             verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
@@ -2839,7 +2843,7 @@ function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String)
             end
             # wait until the lock is available, but don't actually acquire it
             # returning nothing indicates a process waited for another
-            return invokelatest(mkpidlock_hook, Returns(nothing), pidfile)
+            return invokelatest(mkpidlock_hook, Returns(nothing), pidfile; stale_age)
         end
         return cachefile
     else
