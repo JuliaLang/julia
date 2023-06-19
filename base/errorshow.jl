@@ -243,7 +243,7 @@ function showerror(io::IO, ex::MethodError)
         ft = typeof(f)
         arg_types_param = arg_types_param[3:end]
         kwargs = pairs(ex.args[1])
-        ex = MethodError(f, ex.args[3:end::Int])
+        ex = MethodError(f, ex.args[3:end::Int], ex.world)
     end
     name = ft.name.mt.name
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
@@ -490,7 +490,11 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                         if !((min(length(t_i), length(sig)) == 0) && k==1)
                             print(iob, ", ")
                         end
-                        if get(io, :color, false)::Bool
+                        if k == 1 && Base.isvarargtype(sigtype)
+                            # There wasn't actually a mismatch - the method match failed for
+                            # some other reason, e.g. world age. Just print the sigstr.
+                            print(iob, sigstr...)
+                        elseif get(io, :color, false)::Bool
                             let sigstr=sigstr
                                 Base.with_output_color(Base.error_color(), iob) do iob
                                     print(iob, "::", sigstr...)
