@@ -91,11 +91,6 @@ function show_diagnostics(io::IO, diagnostics::AbstractVector{Diagnostic}, text:
     show_diagnostics(io, diagnostics, SourceFile(text))
 end
 
-function emit_diagnostic(diagnostics::AbstractVector{Diagnostic},
-                         byterange::AbstractUnitRange; kws...)
-    push!(diagnostics, Diagnostic(first(byterange), last(byterange); kws...))
-end
-
 function any_error(diagnostics::AbstractVector{Diagnostic})
     any(is_error(d) for d in diagnostics)
 end

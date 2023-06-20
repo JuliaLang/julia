@@ -457,9 +457,8 @@ end
 
 function build_tree(::Type{Expr}, stream::ParseStream;
                     filename=nothing, first_line=1, kws...)
-    source = SourceFile(sourcetext(stream), first_index=first_byte(stream),
-                        filename=filename, first_line=first_line)
-    txtbuf = textbuf(stream)
+    source = SourceFile(stream, filename=filename, first_line=first_line)
+    txtbuf = unsafe_textbuf(stream)
     args = Any[]
     childranges = UnitRange{Int}[]
     childheads = SyntaxHead[]

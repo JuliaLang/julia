@@ -49,6 +49,12 @@
     @test length(children(node)) == 2
     node[2] = parsestmt(SyntaxNode, "y")
     @test sourcetext(child(node, 2)) == "y"
+
+    # SyntaxNode with offsets
+    t,_ = parsestmt(SyntaxNode, "begin a end\nbegin b end", 13)
+    @test t.position == 13
+    @test child(t,1).position == 19
+    @test child(t,1).val == :b
 end
 
 @testset "SyntaxNode pretty printing" begin
