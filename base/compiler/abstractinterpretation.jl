@@ -1588,7 +1588,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
         call = abstract_call(interp, ArgInfo(nothing, ct), si, sv, max_methods)
         seen += 1
         push!(retinfos, ApplyCallInfo(call.info, arginfo))
-        res = tmerge(res, call.rt)
+        res = tmerge(typeinf_lattice(interp), res, call.rt)
         effects = merge_effects(effects, call.effects)
         if bail_out_apply(interp, InferenceLoopState(ct, res, effects), sv)
             add_remark!(interp, sv, "_apply_iterate inference reached maximally imprecise information. Bailing on.")

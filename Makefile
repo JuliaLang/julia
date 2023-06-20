@@ -365,6 +365,10 @@ endif
 	# Remove various files which should not be installed
 	-rm -f $(DESTDIR)$(datarootdir)/julia/base/version_git.sh
 	-rm -f $(DESTDIR)$(datarootdir)/julia/test/Makefile
+	-rm -f $(DESTDIR)$(datarootdir)/julia/base/*/source-extracted
+	-rm -f $(DESTDIR)$(datarootdir)/julia/base/*/build-configured
+	-rm -f $(DESTDIR)$(datarootdir)/julia/base/*/build-compiled
+	-rm -f $(DESTDIR)$(datarootdir)/julia/base/*/build-checked
 	-rm -f $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/*/source-extracted
 	-rm -f $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/*/build-configured
 	-rm -f $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/*/build-compiled

@@ -250,8 +250,6 @@ end
     @test string(sym) == string(Char(0xdcdb))
     @test String(sym) == string(Char(0xdcdb))
     @test Meta.lower(Main, sym) === sym
-    @test Meta.parse(string(Char(0xe0080)," = 1"), 1, raise=false)[1] ==
-        Expr(:error, "invalid character \"\Ue0080\" near column 1")
 end
 
 @testset "Symbol and gensym" begin
@@ -760,11 +758,6 @@ function getData(dic)
         "," * getString(dic,"") * "," * getString(dic,"") * "," * getString(dic,"")
 end
 @test getData(Dict()) == ",,,,,,,,,,,,,,,,,,"
-
-@testset "unrecognized escapes in string/char literals" begin
-    @test_throws Meta.ParseError Meta.parse("\"\\.\"")
-    @test_throws Meta.ParseError Meta.parse("\'\\.\'")
-end
 
 @testset "thisind" begin
     let strs = Any["∀α>β:α+1>β", s"∀α>β:α+1>β",

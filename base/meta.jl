@@ -187,7 +187,10 @@ expression.
 """
 struct ParseError <: Exception
     msg::String
+    detail::Any
 end
+
+ParseError(msg::AbstractString) = ParseError(msg, nothing)
 
 function _parse_string(text::AbstractString, filename::AbstractString,
                        lineno::Integer, index::Integer, options)
@@ -233,7 +236,11 @@ function parse(str::AbstractString, pos::Integer; greedy::Bool=true, raise::Bool
                depwarn::Bool=true)
     ex, pos = _parse_string(str, "none", 1, pos, greedy ? :statement : :atom)
     if raise && isa(ex,Expr) && ex.head === :error
-        throw(ParseError(ex.args[1]))
+        err = ex.args[1]
+        if err isa String
+            err = ParseError(err) # For flisp parser
+        end
+        throw(err)
     end
     return ex, pos
 end
@@ -247,20 +254,22 @@ syntax errors will raise an error; otherwise, `parse` will return an expression 
 raise an error upon evaluation.  If `depwarn` is `false`, deprecation warnings will be
 suppressed.
 
-```jldoctest
+```jldoctest; filter=r"(?<=Expr\\(:error).*|(?<=Expr\\(:incomplete).*"
 julia> Meta.parse("x = 3")
 :(x = 3)
 
-julia> Meta.parse("x = ")
-:($(Expr(:incomplete, "incomplete: premature end of input")))
-
 julia> Meta.parse("1.0.2")
-ERROR: Base.Meta.ParseError("invalid numeric constant \\\"1.0.\\\"")
-Stacktrace:
+ERROR: ParseError:
+# Error @ none:1:1
+1.0.2
+└──┘ ── invalid numeric constant
 [...]
 
 julia> Meta.parse("1.0.2"; raise = false)
-:($(Expr(:error, "invalid numeric constant \"1.0.\"")))
+:(\$(Expr(:error, "invalid numeric constant \"1.0.\"")))
+
+julia> Meta.parse("x = ")
+:(\$(Expr(:incomplete, "incomplete: premature end of input")))
 ```
 """
 function parse(str::AbstractString; raise::Bool=true, depwarn::Bool=true)
