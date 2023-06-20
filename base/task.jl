@@ -740,12 +740,34 @@ function list_deletefirst!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     return W
 end
 
-struct Workqueue
-    public::IntrusiveLinkedListSynchronized{Task}
-    private::WSQueue{Task}
-    Workqueue() = new(IntrusiveLinkedListSynchronized{Task}(), WSQueue{Task}())
+function trypop!(W::IntrusiveLinkedListSynchronized)
+    lock(W.lock)
+    try
+        if isempty(W.queue)
+            return nothing
+        else
+            return pop!(W.queue)
+        end
+    finally
+        unlock(W.lock)
+    end
 end
 
+function trypopfirst!(W::IntrusiveLinkedListSynchronized)
+    lock(W.lock)
+    try
+        if isempty(W.queue)
+            return nothing
+        else
+            return popfirst!(W.queue)
+        end
+    finally
+        unlock(W.lock)
+    end
+end
+
+
+const Workqueue = IntrusiveLinkedListSynchronized{Task}
 global Workqueues::Vector{Workqueue} = [Workqueue()]
 const FirstWorkqueue = Workqueues[1] # default work queue is thread 1 // TODO: deprecate this variable
 const Workqueues_lock = Threads.SpinLock()
@@ -771,19 +793,6 @@ function workqueue_for(tid::Int)
     end
 end
 
-pushfirst!(wq::Workqueue, task::Task) = pushfirst!(wq.public, task)
-list_deletefirst!(wq::Workqueue) = list_deletefirst!(wq.public)
-function push!(wq::Workqueue, task::Task)
-    if Threads.threadid(task) == Threads.threadid()
-        push!(wq.private, task)
-    else
-        push!(wq.public, task)
-    end
-end
-steal!(wq::Workqueue) = steal!(wq.private)
-
-isempty(wq::Workqueue) = isempty(wq.public) && isempty(wq.private)
-
 function enq_work(t::Task)
     (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
 
@@ -805,7 +814,7 @@ function enq_work(t::Task)
         mytp = Threads.threadpool()
         if tp == mytp
             tid = Threads.threadid()
-            push!(workqueue_for(tid), t) # push to private
+            push!(workqueue_for(tid), t)
         else
             # pick a tid in the threadpool to push work to,
             # must use the sticky-wq
@@ -816,7 +825,7 @@ function enq_work(t::Task)
             else
                 tid = offset + 1
             end
-            push!(workqueue_for(tid), t) # push to public
+            push!(workqueue_for(tid), t)
         end
     end
     ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
@@ -974,17 +983,13 @@ function ensure_rescheduled(othertask::Task)
 end
 
 function trypoptask(W::Workqueue)
-    # Move public tasks into private queue
-    while !isempty(W.public)
-        t = popfirst!(W.public)
-        push!(W.private, t)
-    end
-
-    while !isempty(W.private)
-        t = popfirst!(W.private)
-    # while !isempty(W.public)
-    #     t = popfirst!(W.public)
-    
+    while !isempty(W)
+        t = trypopfirst!(W)
+        if !(t isa Task)
+            continue
+        end
+        t::Task
+ 
         if t._state !== task_state_runnable
             # assume this somehow got queued twice,
             # probably broken now, but try discarding this switch and keep going
@@ -1011,14 +1016,14 @@ function trypoptask(W::Workqueue)
         if othertid == tid
             continue
         end
-        t = steal!(workqueue_for(othertid))
+        t = trypop!(workqueue_for(othertid)) # Steal from the back
         if t isa Task
             return t
         end
         attempts += 1
     end
     # TODO linear scan?
-    
+
     return nothing
 end
 
@@ -1030,7 +1035,7 @@ function checktaskempty()
 
     for tid in 1:N
         W = workqueue_for(offset+tid)
-        if !isempty(W.private)
+        if !isempty(W)
             return false
         end
     end
