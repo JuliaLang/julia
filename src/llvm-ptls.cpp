@@ -314,6 +314,19 @@ bool LowerPTLS::run(bool *CFGModified)
         for (auto it = pgcstack_getter->user_begin(); it != pgcstack_getter->user_end();) {
             auto call = cast<CallInst>(*it);
             ++it;
+            auto f = call->getCaller();
+            Value *pgcstack = NULL;
+            for (Function::arg_iterator arg = f->arg_begin(); arg != f->arg_end();++arg) {
+                if (arg->hasSwiftSelfAttr()){
+                    pgcstack = &*arg;
+                    break;
+                }
+            }
+            if (pgcstack) {
+                call->replaceAllUsesWith(pgcstack);
+                call->eraseFromParent();
+                continue;
+            }
             assert(call->getCalledOperand() == pgcstack_getter);
             fix_pgcstack_use(call, pgcstack_getter, or_new, CFGModified);
         }

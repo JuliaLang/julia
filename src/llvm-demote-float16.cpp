@@ -51,8 +51,12 @@ namespace {
 
 static bool have_fp16(Function &caller, const Triple &TT) {
     Attribute FSAttr = caller.getFnAttribute("target-features");
-    StringRef FS =
-        FSAttr.isValid() ? FSAttr.getValueAsString() : jl_ExecutionEngine->getTargetFeatureString();
+    StringRef FS = "";
+    if (FSAttr.isValid())
+        FS = FSAttr.getValueAsString();
+    else if (jl_ExecutionEngine)
+        FS = jl_ExecutionEngine->getTargetFeatureString();
+    // else probably called from opt, just do nothing
     if (TT.isAArch64()) {
         if (FS.find("+fp16fml") != llvm::StringRef::npos || FS.find("+fullfp16") != llvm::StringRef::npos){
             return true;

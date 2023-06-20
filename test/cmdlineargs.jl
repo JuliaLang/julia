@@ -519,29 +519,34 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # -g
     @test readchomp(`$exename -E "Base.JLOptions().debug_level" -g`) == "2"
-    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), raw=true, dump_module=true)", `$exename -g0`)
-        @test code[2]
-        code = code[1]
-        @test occursin("llvm.module.flags", code)
-        @test !occursin("llvm.dbg.cu", code)
-        @test !occursin("int.jl", code)
-        @test !occursin("Int64", code)
-    end
-    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), raw=true, dump_module=true)", `$exename -g1`)
-        @test code[2]
-        code = code[1]
-        @test occursin("llvm.module.flags", code)
-        @test occursin("llvm.dbg.cu", code)
-        @test occursin("int.jl", code)
-        @test !occursin("Int64", code)
-    end
-    let code = writereadpipeline("code_llvm(stdout, +, (Int64, Int64), raw=true, dump_module=true)", `$exename -g2`)
-        @test code[2]
-        code = code[1]
-        @test occursin("llvm.module.flags", code)
-        @test occursin("llvm.dbg.cu", code)
-        @test occursin("int.jl", code)
-        @test occursin("\"Int64\"", code)
+    # --print-before/--print-after with pass names is broken on Windows due to no-gnu-unique issues
+    if !Sys.iswindows()
+        withenv("JULIA_LLVM_ARGS" => "--print-before=FinalLowerGC") do
+            let code = readchomperrors(`$exename -g0 -E "@eval Int64(1)+Int64(1)"`)
+                @test code[1]
+                code = code[3]
+                @test occursin("llvm.module.flags", code)
+                @test !occursin("llvm.dbg.cu", code)
+                @test !occursin("int.jl", code)
+                @test !occursin("\"Int64\"", code)
+            end
+            let code = readchomperrors(`$exename -g1 -E "@eval Int64(1)+Int64(1)"`)
+                @test code[1]
+                code = code[3]
+                @test occursin("llvm.module.flags", code)
+                @test occursin("llvm.dbg.cu", code)
+                @test occursin("int.jl", code)
+                @test !occursin("\"Int64\"", code)
+            end
+            let code = readchomperrors(`$exename -g2 -E "@eval Int64(1)+Int64(1)"`)
+                @test code[1]
+                code = code[3]
+                @test occursin("llvm.module.flags", code)
+                @test occursin("llvm.dbg.cu", code)
+                @test occursin("int.jl", code)
+                @test occursin("\"Int64\"", code)
+            end
+        end
     end
 
     # --check-bounds
@@ -924,7 +929,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     close(in)
     close(err.in)
     txt = readline(err)
-    @test startswith(txt, "ERROR: syntax: incomplete")
+    @test startswith(txt, r"ERROR: (syntax: incomplete|ParseError:)")
 end
 
 # Issue #29855

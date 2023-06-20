@@ -305,6 +305,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     jl_codegen_params_t params(ctxt, std::move(target_info.first), std::move(target_info.second));
     params.params = cgparams;
     params.imaging = imaging;
+    params.debug_level = jl_options.debug_level;
     params.external_linkage = _external_linkage;
     size_t compile_for[] = { jl_typeinf_world, _world };
     for (int worlds = 0; worlds < 2; worlds++) {
@@ -2082,6 +2083,16 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
         jl_codegen_params_t output(*ctx, std::move(target_info.first), std::move(target_info.second));
         output.world = world;
         output.params = &params;
+        output.imaging = imaging_default();
+        // This would be nice, but currently it causes some assembly regressions that make printed output
+        // differ very significantly from the actual non-imaging mode code.
+        // // Force imaging mode for names of pointers
+        // output.imaging = true;
+        // This would also be nice, but it seems to cause OOMs on the windows32 builder
+        // // Force at least medium debug info for introspection
+        // No debug info = no variable names,
+        // max debug info = llvm.dbg.declare/value intrinsics which clutter IR output
+        output.debug_level = jl_options.debug_level;
         auto decls = jl_emit_code(m, mi, src, jlrettype, output);
         JL_UNLOCK(&jl_codegen_lock); // Might GC
 

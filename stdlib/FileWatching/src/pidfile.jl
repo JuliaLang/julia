@@ -1,7 +1,7 @@
 module Pidfile
 
 
-export mkpidlock
+export mkpidlock, trymkpidlock
 
 using Base:
     IOError, UV_EEXIST, UV_ESRCH,
@@ -41,6 +41,16 @@ Optional keyword arguments:
 """
 function mkpidlock end
 
+"""
+    trymkpidlock([f::Function], at::String, [pid::Cint, proc::Process]; kwopts...)
+
+Like `mkpidlock` except returns `false` instead of waiting if the file is already locked.
+
+!!! compat "Julia 1.10"
+    This function requires at least Julia 1.10.
+
+"""
+function trymkpidlock end
 
 # mutable only because we want to add a finalizer
 mutable struct LockMonitor
@@ -93,6 +103,18 @@ function mkpidlock(at::String, proc::Process; kwopts...)
     end
     isdefined(Base, :errormonitor) && Base.errormonitor(closer)
     return lock
+end
+
+function trymkpidlock(args...; kwargs...)
+    try
+        mkpidlock(args...; kwargs..., wait=false)
+    catch ex
+        if ex isa PidlockedError
+            return false
+        else
+            rethrow()
+        end
+    end
 end
 
 """
@@ -192,8 +214,12 @@ function tryopen_exclusive(path::String, mode::Integer = 0o444)
     return nothing
 end
 
+struct PidlockedError <: Exception
+    msg::AbstractString
+end
+
 """
-    open_exclusive(path::String; mode, poll_interval, stale_age) :: File
+    open_exclusive(path::String; mode, poll_interval, wait, stale_age) :: File
 
 Create a new a file for read-write advisory-exclusive access.
 If `wait` is `false` then error out if the lock files exist
@@ -218,7 +244,7 @@ function open_exclusive(path::String;
             file = tryopen_exclusive(path, mode)
         end
         if file === nothing
-            error("Failed to get pidfile lock for $(repr(path)).")
+            throw(PidlockedError("Failed to get pidfile lock for $(repr(path))."))
         else
             return file
         end

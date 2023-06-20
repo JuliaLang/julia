@@ -385,7 +385,7 @@ function tmerge(lattice::OptimizerLattice, @nospecialize(typea), @nospecialize(t
 
     # type-lattice for MaybeUndef wrapper
     if isa(typea, MaybeUndef) || isa(typeb, MaybeUndef)
-        return MaybeUndef(tmerge(
+        return MaybeUndef(tmerge(widenlattice(lattice),
             isa(typea, MaybeUndef) ? typea.typ : typea,
             isa(typeb, MaybeUndef) ? typeb.typ : typeb))
     end
