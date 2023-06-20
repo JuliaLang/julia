@@ -182,7 +182,7 @@ function eigen!(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::
 end
 
 function eigen(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    eigen!(copy(A), copy(B); sortby)
+    eigen!(copy(A), B; sortby)
 end
 function eigen!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     # Bunchkaufman decomposition based eigenvalues and eigenvectors
@@ -239,7 +239,7 @@ end
 
 # Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues
 function eigvals(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
-    eigvals!(copy(A), copy(B); sortby)
+    eigvals!(copy(A), B; sortby)
 end
 function eigvals!(A::AbstractMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     if B.uplo == 'U'
