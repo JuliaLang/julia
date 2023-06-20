@@ -299,6 +299,8 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"znver1", CPU::amd_znver1, CPU::generic, 0, Feature::znver1},
     {"znver2", CPU::amd_znver2, CPU::generic, 0, Feature::znver2},
     {"znver3", CPU::amd_znver3, CPU::amd_znver2, 120000, Feature::znver3},
+    // LLVM Reference for zen4
+    // https://github.com/llvm/llvm-project/blob/efacdfc235e327341d2b8a733d9963fb526cf17b/llvm/lib/Target/X86/X86.td#L1427
     {"znver4", CPU::amd_znver4, CPU::amd_znver3, 160000, Feature::znver4},
 };
 static constexpr size_t ncpu_names = sizeof(cpus) / sizeof(cpus[0]);
