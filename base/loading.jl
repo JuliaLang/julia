@@ -2727,7 +2727,7 @@ end
 
 function get_preferences(uuid::Union{UUID,Nothing} = nothing)
     merged_prefs = Dict{String,Any}()
-    for env in reverse!(load_path())
+    for env in reverse(load_path())
         project_toml = env_project_file(env)
         if !isa(project_toml, String)
             continue
