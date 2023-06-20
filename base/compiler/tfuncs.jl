@@ -2041,8 +2041,9 @@ function array_type_undefable(@nospecialize(arytype))
     end
 end
 
-function array_builtin_common_nothrow(argtypes::Vector{Any}, first_idx_idx::Int, isarrayref::Bool)
-    length(argtypes) >= 4 || return false
+function array_builtin_common_nothrow(argtypes::Vector{Any}, isarrayref::Bool)
+    first_idx_idx = isarrayref ? 3 : 4
+    length(argtypes) ≥ first_idx_idx || return false
     boundscheck = argtypes[1]
     arytype = argtypes[2]
     array_builtin_common_typecheck(boundscheck, arytype, argtypes, first_idx_idx) || return false
@@ -2086,11 +2087,11 @@ end
 @nospecs function _builtin_nothrow(𝕃::AbstractLattice, f, argtypes::Vector{Any}, rt)
     ⊑ = Core.Compiler.:⊑(𝕃)
     if f === arrayset
-        array_builtin_common_nothrow(argtypes, 4, #=isarrayref=#false) || return false
+        array_builtin_common_nothrow(argtypes, #=isarrayref=#false) || return false
         # Additionally check element type compatibility
         return arrayset_typecheck(argtypes[2], argtypes[3])
     elseif f === arrayref || f === const_arrayref
-        return array_builtin_common_nothrow(argtypes, 3, #=isarrayref=#true)
+        return array_builtin_common_nothrow(argtypes, #=isarrayref=#true)
     elseif f === Core._expr
         length(argtypes) >= 1 || return false
         return argtypes[1] ⊑ Symbol

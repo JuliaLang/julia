@@ -82,8 +82,38 @@ Here are example settings using `bash` syntax:
   * `export JULIA_LLVM_ARGS=-debug-only=loop-vectorize` dumps LLVM `DEBUG(...)` diagnostics for
     loop vectorizer. If you get warnings about "Unknown command line argument", rebuild LLVM with
     `LLVM_ASSERTIONS = 1`.
-  * `export JULIA_LLVM_ARGS=-help` shows a list of available options.
+  * `export JULIA_LLVM_ARGS=-help` shows a list of available options. `export JULIA_LLVM_ARGS=-help-hidden` shows even more.
   * `export JULIA_LLVM_ARGS="-fatal-warnings -print-options"` is an example how to use multiple options.
+
+### Useful `JULIA_LLVM_ARGS` parameters
+  * `-print-after=PASS`: prints the IR after any execution of `PASS`, useful for checking changes done by a pass.
+  * `-print-before=PASS`: prints the IR before any execution of `PASS`, useful for checking the input to a pass.
+  * `-print-changed`: prints the IR whenever a pass changes the IR, useful for narrowing down which passes are causing problems.
+  * `-print-(before|after)=MARKER-PASS`: the Julia pipeline ships with a number of marker passes in the pipeline, which can be used to identify where problems or optimizations are occurring. A marker pass is defined as a pass which appears once in the pipeline and performs no transformations on the IR, and is only useful for targeting print-before/print-after. Currently, the following marker passes exist in the pipeline:
+    * BeforeOptimization
+    * BeforeEarlySimplification
+    * AfterEarlySimplification
+    * BeforeEarlyOptimization
+    * AfterEarlyOptimization
+    * BeforeLoopOptimization
+    * BeforeLICM
+    * AfterLICM
+    * BeforeLoopSimplification
+    * AfterLoopSimplification
+    * AfterLoopOptimization
+    * BeforeScalarOptimization
+    * AfterScalarOptimization
+    * BeforeVectorization
+    * AfterVectorization
+    * BeforeIntrinsicLowering
+    * AfterIntrinsicLowering
+    * BeforeCleanup
+    * AfterCleanup
+    * AfterOptimization
+  * `-time-passes`: prints the time spent in each pass, useful for identifying which passes are taking a long time.
+  * `-print-module-scope`: used in conjunction with `-print-(before|after)`, gets the entire module rather than the IR unit received by the pass
+  * `-debug`: prints out a lot of debugging information throughout LLVM
+  * `-debug-only=NAME`, prints out debugging statements from files with `DEBUG_TYPE` defined to `NAME`, useful for getting additional context about a problem
 
 ## Debugging LLVM transformations in isolation
 

@@ -656,19 +656,28 @@ static void check_macro_rename(jl_sym_t *from, jl_sym_t *to, const char *keyword
         jl_errorf("cannot rename non-macro \"%s\" to macro \"%s\" in \"%s\"", n1, n2, keyword);
 }
 
-// Format msg and eval `throw(ErrorException(msg)))` in module `m`.
-// Used in `jl_toplevel_eval_flex` instead of `jl_errorf` so that the error
+// Eval `throw(ErrorException(msg)))` in module `m`.
+// Used in `jl_toplevel_eval_flex` instead of `jl_throw` so that the error
 // location in julia code gets into the backtrace.
-static void jl_eval_errorf(jl_module_t *m, const char* fmt, ...)
+static void jl_eval_throw(jl_module_t *m, jl_value_t *exc)
 {
     jl_value_t *throw_ex = (jl_value_t*)jl_exprn(jl_call_sym, 2);
     JL_GC_PUSH1(&throw_ex);
     jl_exprargset(throw_ex, 0, jl_builtin_throw);
+    jl_exprargset(throw_ex, 1, exc);
+    jl_toplevel_eval_flex(m, throw_ex, 0, 0);
+    JL_GC_POP();
+}
+
+// Format error message and call jl_eval
+static void jl_eval_errorf(jl_module_t *m, const char* fmt, ...)
+{
     va_list args;
     va_start(args, fmt);
-    jl_exprargset(throw_ex, 1, jl_vexceptionf(jl_errorexception_type, fmt, args));
+    jl_value_t *exc = jl_vexceptionf(jl_errorexception_type, fmt, args);
     va_end(args);
-    jl_toplevel_eval_flex(m, throw_ex, 0, 0);
+    JL_GC_PUSH1(&exc);
+    jl_eval_throw(m, exc);
     JL_GC_POP();
 }
 
@@ -875,7 +884,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
             jl_eval_errorf(m, "malformed \"%s\" expression", jl_symbol_name(head));
         if (jl_is_string(jl_exprarg(ex, 0)))
             jl_eval_errorf(m, "syntax: %s", jl_string_data(jl_exprarg(ex, 0)));
-        jl_throw(jl_exprarg(ex, 0));
+        jl_eval_throw(m, jl_exprarg(ex, 0));
     }
     else if (jl_is_symbol(ex)) {
         JL_GC_POP();
