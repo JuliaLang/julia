@@ -1655,7 +1655,7 @@ However this is just a rule of thumb, and the best way to set each number of thr
 ## [Alternative linear algebra backends](@id man-backends-linear-algebra)
 
 As an alternative to OpenBLAS, there exist several other backends that can help with linear algebra performance.
-Prominent examples include [MKL.jl](https://github.com/JuliaLinearAlgebra/MKL.jl), [AppleAccelerate.jl](https://github.com/JuliaMath/AppleAccelerate.jl) and [Octavian.jl](https://github.com/JuliaLinearAlgebra/Octavian.jl).
+Prominent examples include [MKL.jl](https://github.com/JuliaLinearAlgebra/MKL.jl) and [AppleAccelerate.jl](https://github.com/JuliaMath/AppleAccelerate.jl).
 
 These are external packages, so we will not discuss them in detail here.
-Please refer to their respective documentations (especially because they have different behaviors than OpenBLAS _vis-à-vis_ multithreading).
+Please refer to their respective documentations (especially because they have different behaviors than OpenBLAS with respect to multithreading).
