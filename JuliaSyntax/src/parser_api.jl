@@ -11,7 +11,7 @@ struct ParseError <: Exception
 end
 
 function ParseError(stream::ParseStream; incomplete_tag=:none, kws...)
-    source = SourceFile(sourcetext(stream); kws...)
+    source = SourceFile(stream; kws...)
     ParseError(source, stream.diagnostics, incomplete_tag)
 end
 

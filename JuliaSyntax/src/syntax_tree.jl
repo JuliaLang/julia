@@ -61,8 +61,11 @@ Base.show(io::IO, ::ErrorVal) = printstyled(io, "✘", color=:light_red)
 
 function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead};
                     keep_parens=false, position::Integer=1)
-    offset, txtbuf = _unsafe_wrap_substring(sourcetext(source))
-    _to_SyntaxNode(source, txtbuf, offset, raw, convert(Int, position), keep_parens)
+    GC.@preserve source begin
+        raw_offset, txtbuf = _unsafe_wrap_substring(source.code)
+        offset = raw_offset - source.byte_offset
+        _to_SyntaxNode(source, txtbuf, offset, raw, convert(Int, position), keep_parens)
+    end
 end
 
 function _to_SyntaxNode(source::SourceFile, txtbuf::Vector{UInt8}, offset::Int,
@@ -222,8 +225,8 @@ Base.copy(data::SyntaxData) = SyntaxData(data.source, data.raw, data.position, d
 function build_tree(::Type{SyntaxNode}, stream::ParseStream;
                     filename=nothing, first_line=1, keep_parens=false, kws...)
     green_tree = build_tree(GreenNode, stream; kws...)
-    source = SourceFile(sourcetext(stream), filename=filename, first_line=first_line)
-    SyntaxNode(source, green_tree, position=1, keep_parens=keep_parens)
+    source = SourceFile(stream, filename=filename, first_line=first_line)
+    SyntaxNode(source, green_tree, position=first_byte(stream), keep_parens=keep_parens)
 end
 
 #-------------------------------------------------------------------------------

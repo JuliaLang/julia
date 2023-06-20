@@ -76,7 +76,8 @@ function source_line_range(source::SourceFile, byte_index;
     lineidx = _source_line_index(source, byte_index)
     fbyte = source.line_starts[max(lineidx-context_lines_before, 1)]
     lbyte = source.line_starts[min(lineidx+1+context_lines_after, end)] - 1
-    fbyte,lbyte
+    return (fbyte + source.byte_offset,
+            lbyte + source.byte_offset)
 end
 
 function source_location(::Type{LineNumberNode}, source::SourceFile, byte_index)
@@ -120,7 +121,7 @@ function Base.getindex(source::SourceFile, i::Int)
 end
 
 function Base.thisind(source::SourceFile, i::Int)
-    thisind(source.code, i - source.byte_offset)
+    thisind(source.code, i - source.byte_offset) + source.byte_offset
 end
 
 Base.firstindex(source::SourceFile) = firstindex(source.code) + source.byte_offset
