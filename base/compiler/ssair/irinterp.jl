@@ -154,7 +154,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, idx::Int, bb::Union
     if rt !== nothing
         if isa(rt, Const)
             ir.stmts[idx][:type] = rt
-            if is_inlineable_constant(rt.val) && (ir.stmts[idx][:flag] & IR_FLAG_EFFECT_FREE) != 0
+            if is_inlineable_constant(rt.val) && !isa(inst, PhiNode) && (ir.stmts[idx][:flag] & IR_FLAG_EFFECT_FREE) != 0
                 ir.stmts[idx][:inst] = quoted(rt.val)
             end
             return true
